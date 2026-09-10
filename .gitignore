@@ -62,6 +62,7 @@ yarn-error.log*
 ACCESSI.txt
 ADMINER.txt
 appsettings*.json
+**/ipconfig*.json
 *.env
 *.pre-*
 *.prima-*
