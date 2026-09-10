@@ -1,0 +1,94 @@
+# Operating system and editor files
+.DS_Store
+Thumbs.db
+.vs/
+.idea/
+.vscode/
+
+# .NET build output and user-specific files
+**/[Bb]in/
+**/[Oo]bj/
+**/[Ll]ogs/
+**/[Dd]ebug/
+**/[Rr]elease/
+**/[Tt]est[Rr]esults/
+**/.vs/
+*.user
+*.suo
+*.rsuser
+*.userosscache
+*.sln.docstates
+
+# Frontend build output, caches, and test reports
+**/[Bb]uild/
+**/[Dd]ist/
+**/[Oo]ut/
+**/[Cc]overage/
+**/.cache/
+**/.vite/
+**/.next/
+**/.turbo/
+**/.nyc_output/
+*.tsbuildinfo
+
+# JavaScript dependencies and local logs
+**/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Generic build, publish, and deployment output
+**/[Aa]rtifacts/
+**/[Pp]ublish/
+**/[Pp]ublished/
+**/[Pp]ubblicato/
+
+# Databases, dumps, backups, and local runtime data
+**/[Bb]ackup*/
+*.dump
+*.bak
+*.tmp
+*.db
+*.sqlite
+*.sqlite3
+*.log
+*.pid
+*.pid.lock
+**/[Tt]mp/
+**/[Tt]emp/
+**/[Uu]ploads/
+
+# Local configuration and configuration backups
+ACCESSI.txt
+ADMINER.txt
+appsettings*.json
+*.env
+*.pre-*
+*.prima-*
+*.originale
+*.SBAGLIATO
+*.pubxml.user
+*.local
+*.secret
+*.secrets
+*.secret.*
+*.secrets.*
+secrets.json
+credentials.json
+credentials.local.*
+*.key
+*.pem
+*.pfx
+*.p12
+*.cer
+
+# Local environment configuration files
+**/.env.*
+*.config.local.*
+*.config.*.local
+
+# Preserve safe configuration templates when they are provided
+!appsettings*.example.json
+!appsettings*.template.json
+!.env.example
+!.env.template
