@@ -1,0 +1,137 @@
+﻿@page
+@model Istanta.Views.SyncFoto.RegistroModel
+@{
+}
+
+<h5>Registro delle sincronizzazoini</h5>
+
+<nav class="navbar navbar-light bg-light">
+    <form class="container-fluid justify-content-start">
+        <div class="container" id="commandBar">
+            <div class="row" id="stepScan">
+                <div class="col-3" id="div_titolo">
+                    <div class="input-group mt-1" style="max-width:500px;">
+                        <label class="input-group-text" for="nome_cartella">Nome</label>
+                        <input type="text" class="form-control" id="nome_cartella">
+                    </div>
+                </div>
+                <div class="col-3" id="div_inizio">
+                    <div class="input-group mt-1" style="max-width:500px;">
+                        <label class="input-group-text" for="data_da">Data da</label>
+                        <input type="datetime-local" class="form-control" id="data_da" step="0" value="2025-11-01T19:30">
+                    </div>
+                </div>
+                <div class="col-3" id="div_fine">
+                    <div class="input-group mt-1" style="max-width:500px;">
+                        <label class="input-group-text" for="data_da">Data a</label>
+                        <input type="datetime-local" class="form-control" id="data_a" step="0" value="2025-11-05T19:30">
+                    </div>
+                </div>
+                <div class="col-3">                    
+                    <button class="btn btn-outline-success me-2" id="bSearch" type="button">Cerca</button>
+                </div>
+            </div>
+        </div>
+    </form>
+</nav>
+<div class="accordion" id="tblResult">
+</div>
+
+<template id="template">
+
+    <div class="accordion-item">
+        <h2 class="accordion-header" id="headingOne">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne" aria-expanded="false" aria-controls="collapseOne">                
+            </button>
+        </h2>
+        <div id="collapseOne" class="accordion-collapse collapse" aria-labelledby="headingOne" data-bs-parent="#accordionExample">
+            <div class="accordion-body">
+                <div class="container" style="margin-bottom:10px;">
+                    <div class="row">
+                        <div class="col-3">
+                            <strong>Filename:</strong> 
+                            <input type="text" class="fileNameFilterText" />
+                        </div>
+                        <div class="col-3">
+                            <strong>Stato:</strong> 
+                            <select class="statoFilterCmb">
+                                <option value="0">Tutti</option>
+                                <option value="1">Foto nuove</option>
+                                <option value="2">Foto cambiate</option>
+                                <option value="3">Foto inalterate</option>
+                                <option value="4">Non corrispondenti</option>
+                                <option value="5">Ancora da post produrre</option>
+                            </select>
+                        </div>
+                        <div class="col-6 text-end">
+                            <img src="../images/download.svg" class="btnDownloadFiles" style="cursor:pointer;width:40px;writing-mode: vertical-rl;" title="Download files" alt="" />
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col">
+                            <span class="labCounterFiltroRegistro"></span>
+                        </div>
+                    </div>
+                    <hr />
+                    <div class="row">
+                        <div class="col">
+                            <div class="container containerRecords">
+
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
+<template id="template_file">
+    <div class="row recordFileSync">
+        <div class="col-8 nomeFileLabel" style="font-weight:bold; font-size:15px;"></div>
+        <div class="col-4 statoFilelabel"></div>
+        <hr />
+    </div>
+</template>
+
+@inject Microsoft.AspNetCore.Http.IHttpContextAccessor HttpContextAccessor
+<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]">
+    
+    let syncInstance;
+
+    function documentReady() 
+    {
+        syncInstance = new SyncFoto();
+
+        $("#bSearch").on("click", function(){
+            let nomeCartella = $("#nome_cartella").val();
+            let dataDa = $("#data_da").val();
+            let dataA = $("#data_a").val();
+            //syncInstance.cercaNelRegistro(nomeCartella, dataDa, dataA);
+            let obj = {
+                nomeCartella: nomeCartella,
+                dataDa: dataDa,
+                dataA: dataA
+            }
+            syncInstance.cercaNelRegistro(obj);
+
+        });
+        
+        //Set datapicker defaul value
+        const date_a = new Date();
+        const date_da = new Date();
+        date_da.setDate(date_a.getDate() - 30);
+
+        console.log(date_da);
+        console.log(date_a);
+
+        let strDataDa=date_da.getFullYear()+"-"+ rappresenteNumeroADueCifreAncheSeMinoreDi10(date_da.getMonth()+1) +"-"+ rappresenteNumeroADueCifreAncheSeMinoreDi10(date_da.getDate()) +"T"+rappresenteNumeroADueCifreAncheSeMinoreDi10(date_da.getHours())+":"+rappresenteNumeroADueCifreAncheSeMinoreDi10(date_da.getMinutes());
+        let strDataA=date_a.getFullYear()+"-"+ rappresenteNumeroADueCifreAncheSeMinoreDi10(date_a.getMonth()+1) +"-"+ rappresenteNumeroADueCifreAncheSeMinoreDi10(date_a.getDate()) +"T"+rappresenteNumeroADueCifreAncheSeMinoreDi10(date_a.getHours())+":"+rappresenteNumeroADueCifreAncheSeMinoreDi10(date_a.getMinutes());
+
+        console.log(strDataDa);
+        console.log(strDataA);
+
+        $("#data_da").val(strDataDa);
+        $("#data_a").val(strDataA);
+    }
+
+</script>

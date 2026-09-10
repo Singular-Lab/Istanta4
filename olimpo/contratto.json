@@ -1,0 +1,118 @@
+{
+  "dictionary": {
+    "TO": "TOSCANA",
+    "LA": "LAZIO",
+    "LI": "LIGURIA",
+    "LO": "LOMBARDIA",
+    "SC": "SPAZIO",
+    "EM": "EMILIA",
+    "PI": "PISA"
+  },
+  "root": "Andersen",
+  "root_file_tree": [
+    {
+      "priority": 1,
+      "conditions": [],
+      "on_respect_condition": {
+        "commands": [
+          "mkdir"
+        ],
+        "dirname": [
+          "{{promo}}"
+        ],
+        "permissions": "0755",
+        "meta": {
+          "description": "Creazione cartella promo generica",
+          "timestamp": "2025-02-25T00:00:00Z",
+          "version": "1.0"
+        }
+      },
+      "on_error": {
+        "commands": [
+          "notify"
+        ],
+        "log": "Errore nella creazione della cartella promo generica"
+      },
+      "fallback": {
+        "action": "default_folder",
+        "dirname": [
+          "default_promo"
+        ]
+      },
+      "filetree": [
+        {
+          "conditions": [],
+          "on_respect_condition": {
+            "commands": [
+              "mkdir"
+            ],
+            "dirname": [
+              "{{canale}}"
+            ],
+            "permissions": "0755",
+            "meta": {
+              "description": "Creazione sottocartella canale",
+              "timestamp": "2025-02-25T00:00:00Z",
+              "version": "1.0"
+            }
+          },
+          "on_error": {
+            "commands": [
+              "notify"
+            ],
+            "log": "Errore nella creazione della sottocartella canale"
+          },
+          "filetree": [
+            {
+              "conditions": [],
+              "on_respect_condition": {
+                "commands": [
+                  "deposit"
+                ],
+                "dirname": [
+                  "{{area}}"
+                ],
+                "permissions": "0755",
+                "meta": {
+                  "description": "Deposito file nell'area",
+                  "timestamp": "2025-02-25T00:00:00Z",
+                  "version": "1.0"
+                }
+              },
+              "on_error": {
+                "commands": [
+                  "notify"
+                ],
+                "log": "Errore durante il deposito nell'area"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "priority": 3,
+      "conditions": [],
+      "on_respect_condition": {
+        "commands": [
+          "deposit",
+          "warn"
+        ],
+        "meta": {
+          "description": "Deposito dati e invio di avviso",
+          "timestamp": "2025-02-25T00:00:00Z",
+          "version": "1.0"
+        }
+      },
+      "on_error": {
+        "commands": [
+          "notify"
+        ],
+        "log": "Errore durante il deposito dati o l'invio dell'avviso"
+      },
+      "fallback": {
+        "action": "none"
+      }
+    }
+  ]
+}

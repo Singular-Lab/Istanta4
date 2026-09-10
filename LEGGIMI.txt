@@ -1,0 +1,26 @@
+PROVA DI MIGRAZIONE A POSTGRESQL - notte fra il 5 e il 6 settembre 2026
+
+Cosa c'e qui dentro
+  Istanta/ IstantaLib/ AgenziaLib/   copia dei sorgenti di port10 con il provider Npgsql
+  pubblicato/                        la copia in esecuzione, porta 5090
+  GenSchema/                         genera il DDL PostgreSQL dal modello EF
+  CopiaDati/                         travasa i dati da SQL Server a PostgreSQL
+  ProvaModello/                      smoke test: legge tutti i DbSet, scrive e cancella
+
+Come guardarla
+  http://192.168.1.240:5090      utente: l'email di pippo, password come sul demo
+  Il demo vero resta su http://192.168.1.240 e sulla 5076: non e stato toccato.
+
+Servizio
+  systemctl status  istanta4-pgtest
+  systemctl stop    istanta4-pgtest      (non parte da sola al riavvio)
+  log: /var/log/istanta4-pgtest.log e pg-spike/pubblicato/logs/
+
+Database
+  istanta4_pg su istanta4-postgres, collation ICU it-IT, schema public + legacy (vuoto)
+  DDL rigenerabile: /tmp/schema-pg.sql (prodotto dal catalogo di SQL Server)
+
+Isolamento
+  Nella configurazione della copia, ogni chiamata verso fidelity, olimpo, Correggo e
+  l'upload gate e deviata su 127.0.0.1:59999 (porta morta), per non toccare il demo.
+  Per un collaudo end-to-end vero vanno rimesse le URL vere.

@@ -1,0 +1,1221 @@
+﻿@page
+@model Istanta.Views.Revisore.IndexModel
+@{
+    var Tracc = new List<Istanta.Models_2.PromoTracciati>();//ViewBag.Tracciato as Istanta.Models_2.PromoTracciati;
+    var idTracc = 0;//ViewBag.Tracciato as Istanta.Models_2.PromoTracciati;
+    var idPromo = 0;
+    var nomePromo = "";
+    var siglaTracc = "";
+    var idOlimpo = "";
+    var listAree = new List<string>();
+    var listCanali = new List<string>();
+    if (ViewBag.Tracciato != null)
+    {
+        var tItem = (ViewBag.Tracciato as List<Istanta.Models_2.PromoTracciati>);
+        Tracc = tItem;
+        if (Tracc!.Count == 1)
+        {
+            idTracc = Tracc[0].Id;
+            siglaTracc = Tracc[0].Sigla;
+        }
+
+
+        foreach (var trac in Tracc)
+        {
+            if (!listAree.Contains(trac.Area!))
+            {
+                listAree.Add(trac.Area!);
+            }
+
+            if (!listCanali.Contains(trac.Canale!))
+            {
+                listCanali.Add(trac.Canale!);
+            }
+        }
+
+    }
+    if (ViewBag.Promo != null)
+    {
+        var pItem = (ViewBag.Promo as Istanta.Models_2.Promo);
+        idPromo = pItem!.Id;
+        nomePromo = pItem.NomePromo;
+
+        foreach (var trac in pItem.PromoTracciatis)
+        {
+            if (!listAree.Contains(trac.Area!))
+            {
+                listAree.Add(trac.Area!);
+            }
+
+            if (!listCanali.Contains(trac.Canale!))
+            {
+                listCanali.Add(trac.Canale!);
+            }
+        }
+    }
+    idOlimpo = @ViewBag.ipOlympus as string;
+}
+
+<style>
+  /* Contenitore con look “input” Bootstrap */
+  .origini-switch{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    border:1px solid #ced4da;
+    border-radius:.375rem;             /* ~ .form-select rounded */
+    background:#fff;
+    height:calc(2.25rem + 2px);        /* ~ altezza .form-select */
+    padding:0 .25rem;
+    background-color:transparent;
+  }
+
+  /* Frecce “attaccate” al testo */
+  .origini-switch .arrow{
+    background:transparent;
+    border:0;
+    padding:0;                         /* niente padding = attaccate */
+    margin:0;
+    line-height:1;
+    font-size:30px;
+    cursor:pointer;
+    user-select:none;
+    width:40px;
+  }
+
+   .origini-switch .origine {
+        display: inline-block;
+        padding: 0; /* niente padding = attaccata alle frecce */
+        margin: 0 .125rem; /* opzionale, quasi zero */
+        font-weight: 500;
+        white-space: nowrap;
+        min-width: 20ch; /* evita “saltelli” con stringhe corte */
+        text-align: center;
+        width: fit-content; /* si adatta al contenuto sopra x */
+        max-width: 100%;
+   }
+
+  /* Accessibilità focus */
+  .origini-switch .arrow:focus-visible{
+    outline:2px solid #0d6efd;
+    outline-offset:2px;
+    border-radius:.25rem;
+  }
+</style>
+
+<input type="hidden" id="ipOlympus" value="@idOlimpo" />
+<input type="hidden"
+       id="datiTracciato"
+       data-aree='@Html.Raw(System.Text.Json.JsonSerializer.Serialize(listAree))'
+       data-canali='@Html.Raw(System.Text.Json.JsonSerializer.Serialize(listCanali))' />
+
+<div id="revMainContainer" class="container  mb-3">
+
+    <input type="hidden" id="Tracciato" value="@idTracc" />
+    <input type="hidden" id="ListTracciati" value="@Tracc" />
+    <input type="hidden" id="Promo" value="@idPromo" />
+    <div class="row">
+        <div class="col-6"><h3>@nomePromo</h3></div>
+        <div class="col-3">
+                <div class="accordion" id="accordionExample">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne" aria-expanded="false" aria-controls="collapseOne">
+                                Seleziona Tracciato
+                            </button>
+                        </h2>
+                        <div id="collapseOne" class="accordion-collapse collapse" data-bs-parent="#accordionExample">
+                            <div class="accordion-body">
+                                <select id="CmbTracciato" name="CmbTracciato" class="form-select form-select-sm" multiple>
+                                    <option value="0" selected>Tutti i tracciati</option>
+                                    <!-- Altri option se necessario -->
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+        </div>
+        <div class="col-3 mt-2">
+            <div>
+                <input type="checkbox" class="form-check-input me-2" id="propagaSottogruppi" name="chPropagaSottogruppi">Propaga sottogruppi
+            </div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col"><b>Filtro di ricerca</b></div>
+    </div>
+    <div class="container p-2" style="background-color:#c9d0d6; border-radius:8px">
+        <div id="FiltriAnchor">
+        </div>
+        <div class="row">
+            <div class="col">
+                <label for="serach_label" class="form-label">Etichetta</label>
+                <select class="form-select form-select-sm" id="serach_label" name="serach_label" value="">
+                    <option value="">Tutte</option>
+                </select>
+            </div>
+            <div class="col">
+                <label for="serach_codice" class="form-label">Codice</label>
+                <input type="text" class="form-control" style="font-family:monospace" id="search_codice" name="search_codice" value="" />
+            </div>
+            <div class="col">
+                <label for="serach_nome" class="form-label">Nome</label>
+                <input type="text" class="form-control" style="font-family:monospace" id="search_nome" name="search_nome" value="@ViewBag.search_nome" />
+            </div>
+            <div class="col">
+                <label for="serach_brand" class="form-label">Brand</label>
+                <input type="text" class="form-control" style="font-family:monospace" id="search_brand" name="search_brand" value="@ViewBag.search_brand" />
+            </div>
+            <div class="col">
+                <label for="serach_tipogusto" class="form-label">Tipo/Gusto</label>
+                <input type="text" class="form-control" style="font-family:monospace" id="search_tipogusto" name="search_tipogusto" value="@ViewBag.search_tipogusto" />
+            </div>
+            <div class="col">
+                <label for="serach_gramm" class="form-label">Grammatura</label>
+                <input type="text" class="form-control" style="font-family:monospace" id="search_gramm" name="search_gramm" value="@ViewBag.search_gramm" />
+            </div>
+            <div class="col">
+                <label for="serach_segmento" class="form-label">Segmento</label>
+                <input type="text" class="form-control" style="font-family:monospace" id="search_segmento" name="search_segmento" value="@ViewBag.search_segmento" />
+            </div>
+        </div>
+        <div class="row mt-4">
+            <div class="col">
+                <div class="row">
+                    <div class="col d-flex justify-content-between align-items-center">
+                        <input type="submit" id="btnPreparaLista" value="Cerca" class="btn btn-primary me-3" style="width:150px;"/>
+                        <input type="button" id="btnReset" value="Reset" class="btn btn-primary" style="width:150px;"/>
+                    </div><div class="col">
+                        <span class="ms-3">
+                            <input type="checkbox" class="form-check-input me-2" id="chCercaInArchivio" name="chCercaInArchivio">Cerca in archivio
+                        </span>
+                    </div><div class="col">
+                        <span class="ms-3">
+                            <input type="checkbox" class="form-check-input me-2" id="chCercaInteroGruppo" checked name="chCercaInteroGruppo">Cerca intero gruppo
+                        </span>
+                    </div><div class="col">
+                        <span class="form-check">
+                            <input class="form-check-input" type="checkbox" id="nascondiGruppo">
+                            <label class="form-check-label" for="nascondiGruppo">
+                                Nascondi elemento gruppo
+                            </label>
+                        </span>
+                    </div>
+                    <div class="col">
+                        <select id="filtraPerGruppiOSingoli" name="filtraPerGruppiOSingoli">
+                            <option value="tutti">Vedi tutto</option>
+                            <option value="singoli">Solo singoli</option>
+                            <option value="gruppi">Solo gruppi</option>
+                            <option value="sottogruppi">Sottogruppi</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-2">
+<div class="col">
+    <div class="col">
+        <input type="hidden" id="idTracciato" name="idTracciato" value="idTracc" />
+        <div class="btn-group" role="group" aria-label="Basic radio toggle button group">
+            <input type="radio" class="btn-check" name="ch_tipo" id="ch_articoli_da_revisionare" autocomplete="off" checked>
+            <label class="btn btn-outline-primary" for="ch_articoli_da_revisionare">Articoli da revisionare</label>
+            <input type="radio" class="btn-check" name="ch_tipo" id="ch_articoli_revisionati" autocomplete="off">
+            <label class="btn btn-outline-primary" for="ch_articoli_revisionati">Articoli revisionati</label>
+        </div>
+    </div>
+</div>
+
+<div class="col">
+    <input type="hidden" id="Page" name="Page" />
+    <nav aria-label="Page navigation example">
+        <ul class="pagination">
+            <li class="page-item"><input type="submit" class="page-link btnPagPrec" value="Precedente"></li>
+            <li class="page-item active">
+                    <textarea class="form-control currentPage" style="width: 80px; height: 34px; resize: none" id="currentPage" rows="1"></textarea>
+            </li>
+            <li>
+                <div class="card" style="width: 50px; height: 39px; border: 0px;">
+                    <div class="card-body" readonly="" style="margin-top: -7px;">
+                        di
+                    </div>
+                </div>
+            </li>
+            <li class="page-item active">
+                    <textarea class="form-control totPage" style="width: 80px; height: 34px; resize: none" id="totPage" rows="1" readonly></textarea>
+            </li>
+            <li class="page-item"><input type="submit" class="page-link btnPagSucc" value="Successiva"></li>
+        </ul>
+    </nav>
+</div>
+</div>
+
+    <div class="row mt-2">
+
+        <div class="col"><b>siglaTracc</b></div>
+        <div class="col"><b>ARCHIVIO</b></div>
+    </div>
+    <div class="row mt-4" id="_list" name="_list">
+        <div class="col" id="_list_container" name="_list_container">
+            <!--for-->                
+            
+            <!--end for-->
+        </div>
+        <div class="col" style="display:none" id="_list_container_sottogruppi" name="_list_container_sottogruppi">
+            <!--for-->                
+            
+            <!--end for-->
+        </div>
+    </div>
+
+<div style="height: 36px;">
+    <input type="hidden" id="Page" name="Page" />
+    <nav class="d-flex float-end" aria-label="Page navigation example">
+        <ul class="pagination">
+            <li class="page-item"><input type="submit" class="page-link btnPagPrec" value="Precedente"></li>
+            <li class="page-item active">
+                <textarea class="form-control currentPage" style="width: 80px; height: 34px; resize: none" id="currentPage" rows="1"></textarea>
+            </li>
+            <li>
+                <div class="card" style="width: 50px; height: 39px; border: 0px;">
+                    <div class="card-body" readonly="" style="margin-top: -7px;">
+                        di
+                    </div>
+                </div>
+            </li>
+            <li class="page-item active">
+                <textarea class="form-control totPage" style="width: 80px; height: 34px; resize: none" id="totPage" rows="1" readonly></textarea>
+            </li>
+            <li class="page-item"><input type="submit" class="page-link btnPagSucc" value="Successiva"></li>
+            <li class="page-item ms-3"><input type="submit" id="btnTornaSu" class="page-link" value="Torna su"></li>
+            <li class="page-item position-relative end-0 mx-5 ms-auto">
+                <input id="floatingSalvaGruppo" type="submit" class="page-link" value="Salva selezionati" style="position: fixed; bottom: 20px; right: 20px; display: none; justify-content: center; align-items: center; padding: 10px; z-index:9999999">
+            </li>
+
+        </ul>
+    </nav>
+</div>
+@*</div>*@
+
+<template id ="template">
+    <div class="container border-bottom pb-4 record-revisione">
+        <!--Riga di riepilogo dell'articolo-->
+        <div id="riga_revisione" class="row">
+            <div class="col-4 colImg">
+                <img id="img_principale" @*src="~/Thumb?codice=&w=40&h=40" *@ style="float:left;vertical-align:middle;" />
+                <div class="me-1">
+                    <div class="row">
+                        <div class="col-1">
+                            <i class='fas fa-copy'></i>
+                        </div>
+                        <div class="col-10">
+                            <div class="row">
+                                <a id="a_scheda_articolo" href="SchedaArticolo?id=" target="_blank"><b>COD REF</b></a>
+                            </div>
+                            <div class="row">
+                                <a id="xls_file" style="font-size:8px;"><b>XLS</b></a>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-12 fst-italic inVolList" style="font-size:10px"></div>
+                        <div class="col-12 fst-italic FuoriVolList" style="font-size:10px"></div>
+                    </div>
+                </div>
+                <input type="hidden" id="firma_tracciato" />
+                <span class="me-1" id="dtl_agenzia_stato"></span>
+            </div>
+@*            <div class="col">
+                <span id="revisionato_flag">Revisione error</span>
+            </div>*@
+@*            <div class="col">
+                <span id="lab_data_ultima_revisione">Data ultima revisione: Data ultima revisione</span>
+            </div>*@
+            <div style="display:flex;" class="col">
+            <div class="col" style="align-content:center; justify-content:center;">
+                <div class="origini-switch" id="selettore_regionale" style="align-content:center; justify-content:center;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="orange" aria-label="avviso"><path d="M1 21h22L12 2 1 21zm12-3h-2v2h2v-2zm0-8h-2v6h2V10z"/></svg>
+                    <button type="button" class="arrow left" aria-label="Precedente">‹</button>
+                    <span class="origine">ERR</span>
+                    <button type="button" class="arrow right" aria-label="Successivo">›</button>
+                </div>
+            </div>
+            </div>
+            <div class="col text-center d-flex">
+                <div class="justify-content-center" style="margin:auto;">
+                    <input id="alberoSottogruppi" type="submit" value="Albero sottogruppi" class="mx-auto btn btn-primary me-3" style="width:150px; display:none; font-size:12px;" />
+                    <input id="sottogruppoButton" type="submit" value="Struttura sottogruppo" class="mx-auto btn btn-primary me-3" style="width:150px; font-size:12px;" />
+                    <div id="testoSottogruppo" class="text-center text-primary" style="cursor:pointer"></div>
+                </div>
+            </div>
+
+
+        </div>
+        <!--Riga foto secondarie-->
+        <div class="row mt-3" id="lista_foto_secondarie">
+            <!--for foto secondarie-->
+
+            <!--end for-->
+        </div>
+        <!--Riga di descrizioni-->
+        <button type="button"
+                class="btn btn-primary"
+                id="btnToggleDescr"
+                style="position:relative;left:0;top:50%;transform:translate(-50%,-50%);border-top-left-radius:.25rem;border-bottom-left-radius:.25rem;">
+            <i class="bi bi-chevron-left"></i>
+        </button>
+
+        <div id="dettaglioArchivioCustomContainer">
+            <div class="card card-body dettaglioArchivioCustomDiv">
+            </div>
+        </div>
+        
+
+        <div class="row mt-3">
+            <div class="col-5 colonnaTracciato">
+                <div class="dettaglioTracciatoCustom overflow-auto" style="display:none">
+                </div>
+                <div class="container">
+                    <div class="row  mb-1" id="rowMismatchStatoSelezione" style="display:none">
+                        <div class="col">
+                            <label for="CodPrimario" class="form-label">Primario</label>
+                            <textarea class="form-control" readonly style="height:20px; font-family:monospace" id="CodPrimario" name="CodPrimario"></textarea>
+                        </div>
+                        <div class="col">
+                            <label for="CodSecondari" class="form-label">Secondari</label>
+                            <textarea class="form-control" readonly style="height:20px; font-family:monospace" id="CodSecondari" name="CodSecondari"></textarea>
+                        </div>
+                    </div>
+                    <div class="row d-flex justify-content-end">
+                        <input type="button" class="btn btn-primary" id="btnCopiaValoreGruppo" value="Duplica" />
+                    </div>
+                    <div class="row">
+                        <div class="col">
+                            <label for="Nome" class="form-label">Descrizione1</label>
+                            <textarea class="form-control" readonly style="height:40px; font-family:monospace" id="Descrizione1Tracciato" name="Descrizione1Tracciato"></textarea>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col">
+                            <label for="Brand" class="form-label">Descrizione2</label>
+                            <textarea class="form-control" readonly style="height:40px; font-family:monospace" id="Descrizione2Tracciato" name="Descrizione2Tracciato"></textarea>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col">
+                            <label for="Tipo" class="form-label">Descrizione3</label>
+                            <textarea class="form-control" readonly style="height:40px; font-family:monospace" id="Descrizione3Tracciato" name="Descrizione3Tracciato"></textarea>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col">
+                            <label for="Grammatura" class="form-label">Descrizione4</label>
+                            <textarea class="form-control" readonly style="height:40px; font-family:monospace" id="Descrizione4Tracciato" name="Descrizione4Tracciato"></textarea>
+                        </div>
+                    </div>
+                    <div class="row mt-4">
+                        <div class="col">
+                            <div class="input-group">
+                                <span class="input-group-text" style="font-size:small;">Peso totale</span>
+                                <input type="text" readonly class="form-control" style="font-family:monospace" id="PesoTracciato" name="PesoTracciato" value="" />
+                            </div>
+                        </div>
+                        <div class="col">
+                            <div class="input-group">
+                                <span class="input-group-text" style="font-size:small;">Unità di misura</span>
+                                <input type="text" readonly class="form-control" style="font-family:monospace" id="UmTracciato" name="UmTracciato" value="" />
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row mt-4">
+                        <div class="col">
+                            <label for="Firmatrac" class="form-label">Firma tracciato</label>
+                            <textarea class="form-control" readonly style="height:40px; font-family:monospace" id="Firmatrac" name="Firmatrac"></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-5 dettaglioGruppo overflow-auto" style="height:400px; display:none">
+            </div>
+            <div class="col-7 dettaglioCampiElemento">
+                <div class="d-flex justify-content-between align-items-center">
+                    <ul class="nav nav-tabs flex-grow-1" id="tabHeader" style="border-bottom: 1px solid #9f9a9a !important" role="tablist">
+                        <!-- Le tab verranno qui -->
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="tab-Naz-tab" data-bs-toggle="tab" data-bs-target="#tab-Naz" type="button" role="tab" aria-controls="tab-Naz" aria-selected="true">
+                                Naz
+                            </button>
+                        </li>
+                    </ul>
+                    <button id="addTabButton" class="btn btn-outline-primary ms-2" style="height:38px; line-height:1; padding: 0 10px;">+</button>
+                </div>
+
+                <!-- Tabs content -->
+                <div class="tab-content border-start border-end border-bottom p-3" style="border-color: #9f9a9a !important;" id="tabContent">
+                    <div class="tab-pane fade show active content" area="" canale="" id="tab-Naz" role="tabpanel" aria-labelledby="tab-Naz-tab">
+                        <div class="container">
+                            <div class="row" id="riga_revisione">
+                                <div class="col">
+                                    <span id="revisionato_flag">Revisione error</span>
+                                </div>
+                                <div class="col">
+                                    <span id="lab_data_ultima_revisione">Data ultima revisione: Data ultima revisione</span>
+                                </div>
+                            </div>
+                            <br/>
+                            <div class="row">
+                                <div class="col">
+                                    <label for="Nome" class="form-label">Descrizione1</label>
+                                    <textarea class="form-control inputDescrArchivio" style="height:115px; font-family:monospace" id="Descrizione1" name="Descrizione1"></textarea>
+                                </div>
+                                <div class="col">
+                                    <label for="Tipo" class="form-label">Descrizione3</label>
+                                    <textarea class="form-control inputDescrArchivio" style="height:115px; font-family:monospace" id="Descrizione3" name="Descrizione3"></textarea>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col">
+                                    <label for="Brand" class="form-label">Descrizione2</label>
+                                    <textarea class="form-control inputDescrArchivio" style="height:115px; font-family:monospace" id="Descrizione2" name="Descrizione2"></textarea>
+                                </div>
+                                <div class="col">
+                                    <label for="Grammatura" class="form-label">Descrizione4</label>
+                                    <textarea class="form-control inputDescrArchivio" style="height:115px; font-family:monospace" id="Descrizione4" name="Descrizione4"></textarea>
+                                </div>
+                            </div>
+                            <div class="row mt-4">
+                                <div class="col">
+                                    <div class="input-group float-start w-50">
+                                        <span class="input-group-text" style="font-size:small;">Peso totale</span>
+                                        <input type="text" style="font-family:monospace" class="form-control inputDescrArchivio" id="Peso" name="Peso" />
+                                    </div>
+                                    <div class="input-group float-start w-50">
+                                        <span class="input-group-text" style="font-size:small;">Unità di misura</span>
+                                        <input type="text" style="font-family:monospace" class="form-control inputDescrArchivio" id="Um" name="Um" />
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row mt-3" id="rowRevFirma" style="display:none">
+                                <div class="col">
+                                    <div class="w-100">
+                                        <label for="RevFirma" class="form-label">Firma revisionato</label>
+                                        <textarea readonly class="form-control" style="height:40px;font-family:monospace" id="RevFirma" name="RevFirma"></textarea>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row mt-4">
+                                <div class="col text-start px-3">
+                                    <input id="vediUltimeModifiche" type="button" class="btn btn-primary" value="Cronologia modifiche" />
+                                </div>
+                                <div class="col text-end px-3">
+                                    <input id="bottoneSalva" type="button" class="btn btn-primary" value="Salva" />
+                                </div>
+                                <div class="col text-end">
+                                    <input type="checkbox" class="form-check-input checkbox-salva-gruppo" id="ch_salva_gruppo" name="ch_salva_gruppo" />
+                                    <label class="form-check-label" id="labBtnSalvaGruppo" style="font-size:small;" for="">Salva in gruppo</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Nuovi contenuti tab verranno inseriti qui da JS -->
+                </div>         
+            </div>
+        </div>
+    </div>
+</template>
+
+<template id="contenutoDescrizioneArchivio">
+    <div class="container">
+        <div class="row" id="riga_revisione">
+            <div class="col">
+                <span id="revisionato_flag">Revisione error</span>
+            </div>
+            <div class="col">
+                <span id="lab_data_ultima_revisione">Data ultima revisione: Data ultima revisione</span>
+            </div>
+        </div>
+        <br/>
+        <div class="row">
+            <div class="col">
+                <label for="Nome" class="form-label">Descrizione1</label>
+                <textarea class="form-control inputDescrArchivio" style="height:115px; font-family:monospace" id="Descrizione1" name="Descrizione1"></textarea>
+            </div>
+            <div class="col">
+                <label for="Tipo" class="form-label">Descrizione3</label>
+                <textarea class="form-control inputDescrArchivio" style="height:115px; font-family:monospace" id="Descrizione3" name="Descrizione3"></textarea>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <label for="Brand" class="form-label">Descrizione2</label>
+                <textarea class="form-control inputDescrArchivio" style="height:115px; font-family:monospace" id="Descrizione2" name="Descrizione2"></textarea>
+            </div>
+            <div class="col">
+                <label for="Grammatura" class="form-label">Descrizione4</label>
+                <textarea class="form-control inputDescrArchivio" style="height:115px; font-family:monospace" id="Descrizione4" name="Descrizione4"></textarea>
+            </div>
+        </div>
+        <div class="row mt-4">
+            <div class="col">
+                <div class="input-group float-start w-50">
+                    <span class="input-group-text" style="font-size:small;">Peso totale</span>
+                    <input type="text" style="font-family:monospace" class="form-control inputDescrArchivio" id="Peso" name="Peso" />
+                </div>
+                <div class="input-group float-start w-50">
+                    <span class="input-group-text" style="font-size:small;">Unità di misura</span>
+                    <input type="text" style="font-family:monospace" class="form-control inputDescrArchivio" id="Um" name="Um" />
+                </div>
+            </div>
+        </div>
+        <div class="row mt-3" id="rowRevFirma" style="display:none">
+            <div class="col">
+                <div class="w-100">
+                    <label for="RevFirma" class="form-label">Firma revisionato</label>
+                    <textarea readonly class="form-control" style="height:40px; font-family:monospace" id="RevFirma" name="RevFirma"></textarea>
+                </div>
+            </div>
+        </div>
+        <div class="row mt-4">
+            <div class="col text-start px-3">
+                <input id="vediUltimeModifiche" type="button" class="btn btn-primary" value="Cronologia modifiche" />
+            </div>
+            <div class="col text-end px-3">
+                <input id="bottoneSalva" type="button" class="btn btn-primary" value="Salva" />
+            </div>
+            <div class="col text-end">
+                <input type="checkbox" class="form-check-input checkbox-salva-gruppo" id="ch_salva_gruppo" name="ch_salva_gruppo" />
+                <label id="lblBtnSalvaGruppo" class="form-check-label" style="font-size:small;" for="">Salva in gruppo</label>
+            </div>
+        </div>
+    </div>
+</template>
+
+<div class="modal fade" id="costruisciSottogruppoModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h1 class="modal-title fs-5" id="costruisciSottogruppoTitle">Modal title</h1>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+            </div>
+            <div class="modal-footer">
+            <div class="container" style="width:100%" id="liveAlertPlaceholder"></div>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="visualizzaSottogruppoModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h1 class="modal-title fs-5" id="visualizzaSottogruppoTitle">Modal title</h1>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Principale -->
+<div class="modal fade" id="operazioniModal" tabindex="-1" aria-labelledby="operazioniModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="operazioniModalLabel"></h5>
+                <select id="rangeDateSelect" class="form-select w-auto ms-3">
+                    <option value="1">Ultime 24 ore</option>
+                    <option value="7" selected>Ultimi 7 giorni</option>
+                    <option value="30">Ultimo mese</option>
+                    <option value="all">Sempre</option>
+                </select>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Chiudi"></button>
+            </div>
+            <div class="modal-body" id="operazioniModalBody"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal per formData -->
+<div class="modal fade" id="formDataModal" tabindex="-1" aria-labelledby="formDataModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="formDataModalLabel">Dati del form</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Chiudi"></button>
+            </div>
+            <div class="modal-body" id="formDataModalBody"></div>
+        </div>
+    </div>
+</div>
+
+
+<template id="recordModalTemplate">
+    <div class="container recordModal" id="recordModal">
+        <div class="row">
+            <div class="col">
+                <input class="form-check-input" type="checkbox" value="" id="checkboxSottogruppo">
+                <label id="singolaRefSottoGruppo" class="form-check-label" for="flexCheckDefault">
+                    Default checkbox
+                </label>
+            </div>
+        </div>
+    </div>
+</template>
+
+<div class="modal fade" id="modalAddDescrReg" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h1 class="modal-title fs-5" id="">Seleziona canale/area</h1>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="container p-3" style="width:400px;">
+                    <div class="row">
+                        <div class="col">
+                            <label for="selectCanale" class="form-label">Canale</label>
+                            <select id="selectCanale" class="form-select">
+                                <option value="">-- Seleziona --</option>
+                            </select>
+                        </div>
+                        <div class="col">
+                            <label for="selectArea" class="form-label">Area</label>
+                            <select id="selectArea" class="form-select">
+                                <option value="">-- Seleziona --</option>
+                            </select>
+                        </div>
+                    </div>
+                    <input type="hidden" id="combinazioniEsistenti" />
+                </div>
+                <div class="modal-footer">
+                    <button id="btnAddModalDescrReg" type="button" class="btn btn-primary">Aggiungi</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<template id="templateDettaglioSottogruppo">
+    <div class="container border-bottom pb-4 mb-5 record-revisione bg-warning bg-opacity-50 rounded" is_gruppo="true" codice_gruppo="">
+        <!--Riga di riepilogo dell'articolo-->
+        <div class="row">
+            <div class="col fw-bold fs-5 mb-3">
+                <span id="codici_sottogruppo"></span>
+            </div>
+            <input type="hidden" id="firma_tracciato" />
+            <span class="me-1" id="dtl_agenzia_stato"></span>
+        </div>
+
+        <div class="row">
+@*            <div class="col">
+                <span id="lab_data_ultima_revisione" style="display:none">Data ultima revisione: Data ultima revisione</span>
+            </div>*@
+            <div class="col" style="align-content:center; justify-content:center;">
+                <div class="origini-switch" id="selettore_regionale" style="align-content:center; justify-content:center;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="orange" aria-label="avviso"><path d="M1 21h22L12 2 1 21zm12-3h-2v2h2v-2zm0-8h-2v6h2V10z"/></svg>
+                    <button type="button" class="arrow left" aria-label="Precedente">‹</button>
+                    <span class="origine">ERR</span>
+                    <button type="button" class="arrow right" aria-label="Successivo">›</button>
+                </div>
+            </div>
+        </div>
+        <!--Riga di descrizioni-->
+        <div class="row mt-3">
+            <div class="col-5">
+                <div class="container overflow-auto dettagliOggettiSottogruppo" style="height: 500px;">
+                </div>
+            </div>
+            <div class="col-7">
+                <!-- Tabs header -->
+                <ul class="nav nav-tabs" id="tabHeader" style="border-bottom: 1px solid #9f9a9a !important" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="tab-Naz-tab" data-bs-toggle="tab" data-bs-target="#tab-Naz" type="button" role="tab" aria-controls="tab-Naz" aria-selected="true">
+                            Naz
+                        </button>
+                    </li>
+                    <!-- Qui verranno aggiunti nuovi tab via JS -->
+                </ul>
+                <div class="tab-content border-start border-end border-bottom p-3" style="border-color: #9f9a9a !important;" id="tabContent">
+                    <div class="tab-pane fade show active" id="tab-Naz" role="tabpanel" aria-labelledby="tab-Naz-tab">
+                        <div class="container">
+                             <div class="row" id="riga_revisione">
+                                <div class="col">
+                                    <span id="revisionato_flag">Revisione error</span>
+                                </div>
+                                <div class="col">
+                                    <span id="lab_data_ultima_revisione">Data ultima revisione: Data ultima revisione</span>
+                                </div>
+                            </div>
+                            <br/>
+                            <div class="row">
+                                <div class="col">
+                                    <label for="Descrizione1" class="form-label">Nome</label>
+                                    <textarea class="form-control" style="height:115px; font-family:monospace" id="Descrizione1" name="Descrizione1"></textarea>
+                                </div>
+                                <div class="col">
+                                    <label for="Descrizione3" class="form-label">Tipo/Gusto</label>
+                                    <textarea class="form-control" style="height:115px; font-family:monospace" id="Descrizione3" name="Descrizione3"></textarea>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col">
+                                    <label for="Descrizione2" class="form-label">Brand</label>
+                                    <textarea class="form-control" style="height:115px; font-family:monospace" id="Descrizione2" name="Descrizione2"></textarea>
+                                </div>
+                                <div class="col">
+                                    <label for="Descrizione4" class="form-label">Grammatura</label>
+                                    <textarea class="form-control" style="height:115px; font-family:monospace" id="Descrizione4" name="Descrizione4"></textarea>
+                                </div>
+                            </div>
+                            <div class="row indd" style="display:block;">
+                                <div class="col">
+                                    <label for="DescrizioneIndd" class="form-label">Descrizione proveniente da InDesign</label>
+                                    <textarea class="form-control" style="height:115px; font-family:monospace" id="DescrizioneIndd" name="DescrizioneIndd"></textarea>
+                                </div>
+                            </div>
+                            <div class="row mt-4">
+                                <div class="col">
+                                    <div class="input-group float-start w-50">
+                                        <span class="input-group-text" style="font-size:small;">Peso totale</span>
+                                        <input type="text" class="form-control" style="font-family:monospace" id="Peso" name="Peso" />
+                                    </div>
+                                    <div class="input-group float-start w-50">
+                                        <span class="input-group-text" style="font-size:small;">Unità di misura</span>
+                                        <input type="text" class="form-control" style="font-family:monospace" id="Um" name="Um" />
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row mt-4">
+                                <div class="text-end px-3">
+                                    <input id="bottoneSalva" type="button" class="btn btn-primary" value="Salva" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
+
+<template id="oggetto_sottogruppo">
+    <div class="oggetto_sottogruppo_container">
+        <div class="row">
+            <div class="col">
+                <label class="form-label codiceReferenzaSottogruppo fw-bold">Inserire codice</label>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <label for="Nome" class="form-label">Nome</label>
+                <textarea class="form-control" readonly style="height:40px; font-family:monospace" id="Descrizione1Sottogruppo" name="Descrizione1Sottogruppo"></textarea>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <label for="Brand" class="form-label">Brand</label>
+                <textarea class="form-control" readonly style="height:40px; font-family:monospace" id="Descrizione2Sottogruppo" name="Descrizione2Sottogruppo"></textarea>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <label for="Tipo" class="form-label">Tipo/Gusto</label>
+                <textarea class="form-control" readonly style="height:40px; font-family:monospace" id="Descrizione3Sottogruppo" name="Descrizione3Sottogruppo"></textarea>
+            </div>
+        </div>
+        <div class="row mb-3">
+            <div class="col">
+                <label for="Grammatura" class="form-label">Grammatura</label>
+                <textarea class="form-control" readonly style="height:40px; font-family:monospace" id="Descrizione4Sottogruppo" name="Descrizione4Sottogruppo"></textarea>
+            </div>
+        </div>
+        <div class="row inddOggSottogruppo mb-3" style="display:block;">
+            <div class="col">
+                <label for="DescrizioneIndd" class="form-label">Descrizione proveniente da InDesign</label>
+                <textarea class="form-control" style="height:80px; font-family:monospace" id="DescrizioneInddSottogruppo" name="DescrizioneInddSottogruppo"></textarea>
+            </div>
+        </div>
+    </div>
+</template>
+
+<template id ="templateDettaglio">
+    <div class="container border-bottom pb-4 mb-5 record-revisione">
+        <!--Riga di riepilogo dell'articolo-->
+        <div class="row">
+            <div class="col" id="spazioSelezione">
+                <select class="form-select form-select-sm" aria-label=".form-select-sm example" id="cmbStatoSelezione">                    
+                    <option value="1">Primaria</option>
+                    <option value="2">Secondaria</option>
+                    <option value="3" selected>Non specificato</option>
+                </select>
+            </div>
+            <div class="col">
+                <img id="img_principale"@* src="~/Thumb?codice=&w=40&h=40"*@ style="float:left;vertical-align:middle;" />
+                <div class="me-1">
+                    <div class="row">
+                        <div class="col-1">
+                            <i class='fas fa-copy'></i>
+                        </div>
+                        <div class="col-10">
+                            <div class="row">
+                                <a id="a_scheda_articolo" href="SchedaArticolo?id=" target="_blank"><b>COD REF</b></a>
+                            </div>
+                            <div class="row">
+                                <a id="xls_file" style="font-size:8px;"><b>XLS</b></a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <input type="hidden" id="firma_tracciato" /> 
+                <span class="me-1" id="dtl_agenzia_stato"></span>
+            </div>
+            <div class="col">
+                <span id="lab_data_ultima_revisione">Data ultima revisione: Data ultima revisione</span>
+            </div>
+            <div class="col" style="align-content:center; justify-content:center;">
+                <div class="origini-switch" id="selettore_regionale" style="align-content:center; justify-content:center;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="orange" aria-label="avviso"><path d="M1 21h22L12 2 1 21zm12-3h-2v2h2v-2zm0-8h-2v6h2V10z"/></svg>
+                    <button type="button" class="arrow left" aria-label="Precedente">‹</button>
+                    <span class="origine">ERR</span>
+                    <button type="button" class="arrow right" aria-label="Successivo">›</button>
+                </div>
+            </div>
+        </div>
+        <!--Riga foto secondarie-->
+        <div class="row mt-3" id="lista_foto_secondarie">
+            <!--for foto secondarie-->
+
+            <!--end for-->
+        </div>
+        <!--Riga di descrizioni-->
+        <div class="row mt-3">
+            <div class="col-5">
+                <div class="container">
+                    <div class="row">
+                        <div class="col">
+                            <label for="Nome" class="form-label">Descrizione1</label>
+                            <textarea class="form-control" readonly style="height:40px; font-family:monospace" id="Descrizione1Tracciato" name="Descrizione1Tracciato"></textarea>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col">
+                            <label for="Brand" class="form-label">Descrizione2</label>
+                            <textarea class="form-control" readonly style="height:40px; font-family:monospace" id="Descrizione2Tracciato" name="Descrizione2Tracciato"></textarea>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col">
+                            <label for="Tipo" class="form-label">Descrizione3</label>
+                            <textarea class="form-control" readonly style="height:40px; font-family:monospace" id="Descrizione3Tracciato" name="Descrizione3Tracciato"></textarea>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col">
+                            <label for="Grammatura" class="form-label">Descrizione4</label>
+                            <textarea class="form-control" readonly style="height:40px; font-family:monospace" id="Descrizione4Tracciato" name="Descrizione4Tracciato"></textarea>
+                        </div>
+                    </div>
+                    <div class="row mt-4">
+                        <div class="col">
+                            <div class="input-group">
+                                <span class="input-group-text" style="font-size:small;">Peso totale</span>
+                                <input type="text" readonly class="form-control" style="font-family:monospace" id="PesoTracciato" name="PesoTracciato" value="" />
+                            </div>
+                        </div>
+                        <div class="col">
+                            <div class="input-group">
+                                <span class="input-group-text" style="font-size:small;">Unità di misura</span>
+                                <input type="text" readonly class="form-control" style="font-family:monospace" id="UmTracciato" name="UmTracciato" value="" />
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row mt-4">
+                        <div class="col">
+                            <input type="button" class="btn btn-primary" value="Approva descrizioni" />
+                        </div>
+                    </div>
+                    <div class="row mt-4">
+                        <div class="col" id="extraCampi"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-7">
+                <div class="container">
+                    <div class="row">
+                        <div class="col">
+                            <label for="Descrizione1" class="form-label">Descrizione1</label>
+                            <textarea class="form-control" style="height:115px; font-family:monospace" id="Descrizione1" name="Descrizione1"></textarea>
+                        </div>
+                        <div class="col">
+                            <label for="Descrizione3" class="form-label">Descrizione3</label>
+                            <textarea class="form-control" style="height:115px; font-family:monospace" id="Descrizione3" name="Descrizione3"></textarea>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col">
+                            <label for="Descrizione2" class="form-label">Descrizione2</label>
+                            <textarea class="form-control" style="height:115px; font-family:monospace" id="Descrizione2" name="Descrizione2"></textarea>
+                        </div>
+                        <div class="col">
+                            <label for="Descrizione4" class="form-label">Descrizione4</label>
+                            <textarea class="form-control" style="height:115px; font-family:monospace" id="Descrizione4" name="Descrizione4"></textarea>
+                        </div>
+                    </div>
+                    <div class="row indd" style="display:none;">
+                         <div class="col">
+                            <label for="DescrizioneIndd" class="form-label">Descrizione proveniente da InDesign</label>
+                            <textarea class="form-control" style="height:115px; font-family:monospace" id="DescrizioneIndd" name="DescrizioneIndd"></textarea>
+                        </div>
+                    </div>
+                    <div class="row mt-4">
+                        <div class="col">
+                            <div class="input-group float-start w-50">
+                                <span class="input-group-text" style="font-size:small;">Peso totale</span>
+                                <input type="text" class="form-control" id="Peso" name="Peso" />
+                            </div>
+                            <div class="input-group float-start w-50">
+                                <span class="input-group-text" style="font-size:small;">Unità di misura</span>
+                                <input type="text" class="form-control" id="Um" name="Um" />
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row mt-4">
+                        <div class="text-end px-3">
+                            <input type="button" id="btnSalvaRevisione" class="btn btn-primary" value="Salva" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
+
+<template id="recapElementGruppo">
+    <div class="container bg-warning bg-opacity-50 mb-2">
+        <div class="row">
+            <div class="col-9">
+                <div class="row codice text-primary fw-bold"></div>
+                <div class="row areeInDettaglio fst-italic" style="font-size:8px"></div>
+                <div class="row fuoriAreeInDettaglio fst-italic" style="font-size:8px"></div>
+            </div>            
+            <div class="col-3 d-flex justify-content-end">
+                <input type="button" class="btn btn-primary" id="btnDuplica" value="Duplica" />
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <label for="Nome" class="form-label">Descrizione1</label>
+                <textarea class="form-control" readonly style="height:40px; font-family:monospace" id="Descrizione1Tracciato" name="Descrizione1Tracciato"></textarea>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <label for="Brand" class="form-label">Descrizione2</label>
+                <textarea class="form-control" readonly style="height:40px; font-family:monospace" id="Descrizione2Tracciato" name="Descrizione2Tracciato"></textarea>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <label for="Tipo" class="form-label">Descrizione3</label>
+                <textarea class="form-control" readonly style="height:40px; font-family:monospace" id="Descrizione3Tracciato" name="Descrizione3Tracciato"></textarea>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <label for="Grammatura" class="form-label">Descrizione4</label>
+                <textarea class="form-control" readonly style="height:40px; font-family:monospace" id="Descrizione4Tracciato" name="Descrizione4Tracciato"></textarea>
+            </div>
+        </div>
+        <div class="row mt-4">
+            <div class="col">
+                <div class="input-group">
+                    <span class="input-group-text" style="font-size:small;">Peso totale</span>
+                    <input type="text" readonly class="form-control" style="font-family:monospace" id="PesoTracciato" name="PesoTracciato" value="" />
+                </div>
+            </div>
+            <div class="col">
+                <div class="input-group">
+                    <span class="input-group-text" style="font-size:small;">Unità di misura</span>
+                    <input type="text" readonly class="form-control" style="font-family:monospace" id="UmTracciato" name="UmTracciato" value="" />
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
+
+<template id="gruppoDelSottogruppo">
+    <ul class="padreGruppoSottogruppi list-group border border-primary border-4 mb-4 p-1">
+        <li class="list-group-item bg-light bg-opacity-25 mb-2" aria-current="true">
+            <div class="container pb-1 record-revisione" codice_gruppo="" is_gruppo="true">
+                <!--Riga di riepilogo dell'articolo-->
+                <div id="riga_revisione" class="row bg-success bg-opacity-25">
+                    <div class="col-4">
+                        <div class="me-1">
+                            <div class="row">
+                                <div class="col-1">
+                                    <i class="fas fa-copy"></i>
+                                </div>
+                                <div class="col-10">
+                                    <div class="row">
+                                        <a id="a_scheda_articolo" href="SchedaArticolo?id=" target="_blank"><b>COD REF</b></a>
+                                    </div>
+                                    <div class="row">
+                                        <a id="xls_file" style="font-size:8px;"><b>XLS</b></a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-1">
+                    </div>
+                    <div class="col">
+                        <span id="">Gruppo Padre</span>
+                    </div>
+                </div>
+            </div>
+        </li>
+    </ul>
+</template>
+
+<template id="singoloDelSottogruppo">
+    <li class="list-group-item bg-secondary bg-opacity-25" aria-current="true">
+            <div class="container border-bottom pb-4" is_gruppo="false">
+                <!--Riga di riepilogo dell'articolo-->
+            <div id="riga_revisione" class="row bg-secondary bg-opacity-25">
+                    <div class="col-4">
+                        <div class="me-1">
+                            <div class="row">
+                                <div class="col-1">
+                                    <i class="fas fa-copy"></i>
+                                </div>
+                            <div class="col-10">
+                                <div class="row">
+                                    <a id="a_scheda_articolo" href="SchedaArticolo?id=" target="_blank"><b>COD REF</b></a>
+                                </div>
+                                <div class="row">
+                                    <a id="xls_file" style="font-size:8px;"><b>XLS</b></a>
+                                </div>
+                            </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-1">
+                    </div>
+                    <div class="col">
+                        <span id="">Nessun sottogruppo</span>
+                    </div>
+                </div>
+            </div>
+        </li>    
+</template>
+
+@inject Microsoft.AspNetCore.Http.IHttpContextAccessor HttpContextAccessor
+<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]" src="~/js/mySocket.js?v=1.0.0.15"></script>
+<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]" type="text/javascript">
+
+    let revInstance;
+    let ordInstance;
+    let socket;
+
+    function documentReady()
+    {
+        revInstance = new Revisore();
+        ordInstance = new Ordinamento();
+        revInstance.olimpoIp = $("#ipOlympus").val();
+        let el = $("#datiTracciato")[0]; // ottieni il DOM element puro
+        const aree = JSON.parse(el.dataset.aree);
+        const canali = JSON.parse(el.dataset.canali);
+        revInstance.areePromo = aree;
+        revInstance.canaliPromo = canali;
+        let tracciati = @Html.Raw(Json.Serialize(Tracc));
+        let listaIdTracciatiIniziali = [];
+        tracciati.forEach(function(item){
+            listaIdTracciatiIniziali.push(item.id);
+        });
+        revInstance.listIdTracciatiPartenza = listaIdTracciatiIniziali;
+        revInstance.listIdTracciatiRichiesti = listaIdTracciatiIniziali;
+        revInstance.compilaTracciati();
+        revInstance.loadLabel();
+
+        $("#CmbTracciato").on("change", function(){
+            revInstance.cerca(0);
+        });
+
+        $("#nascondiGruppo").on("change", function(){
+            revInstance.nascondiGruppi(this.checked);
+        });
+
+        $("#filtraPerGruppiOSingoli").on("change", function(){
+            revInstance.controllaModalita();
+        });
+
+
+        $("#btnPreparaLista").on("click", function(){
+            revInstance.preparaListaDaCaricare(0);
+        });
+
+        $("#btnReset").on("click", function(){
+            reset();
+        });
+
+        $("#ch_articoli_da_revisionare").on("click", function(){
+            revInstance.preparaListaDaCaricare(0);
+        });
+
+         $("#ch_articoli_revisionati").on("click", function(){
+            revInstance.preparaListaDaCaricare(0);
+        });
+
+
+        $(".btnPagPrec").on("click", function(){
+            revInstance.checkPageRequest(revInstance.getCurrentPage()-1);
+            window.scrollTo(0,0);
+        });
+
+        $(".btnPagSucc").on("click", function(){
+            revInstance.checkPageRequest(revInstance.getCurrentPage()+1);
+            window.scrollTo(0,0);
+        });
+        
+        $("#btnTornaSu").on("click", function(){
+            window.scrollTo(0,0);
+        });
+        
+        $("#floatingSalvaGruppo").on("click", function(){
+            revInstance.salvaTuttoRevisioni();
+        });
+
+        $("#btnAddModalDescrReg").on("click", function(){
+            revInstance.aggiungiCombinazione($(this).closest('.modal'));
+        });
+
+        $(".currentPage").on("input", function(){
+            revInstance.checkPageRequest(this.value);
+        });
+        $(".currentPage").on("keypress", function(){
+            return event.charCode != 13;
+        });
+        
+        socket=new MySocket(revInstance.socketOnMessage,function(){},function(){},function(){});
+        
+    }
+
+
+
+    function reset()
+    {
+        $("#search_codice").val("");
+        $("#search_nome").val("");
+        $("#search_brand").val("");
+        $("#search_tipogusto").val("");
+        $("#search_gramm").val("");
+        $("#search_segmento").val("");
+    }
+
+</script>

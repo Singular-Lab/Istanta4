@@ -1,0 +1,495 @@
+@page
+@model Istanta.Views.FrameWorkCss.IndexModel
+@{
+}
+@if (ViewBag.error != null)
+{
+    <div id="error_panel" class="alert alert-danger" style="position:fixed; width:100%;">
+        <strong>Attenzione</strong>: @ViewBag.error
+    </div>
+}
+
+@{
+    var listLivelli = ((List<Istanta.Models.livelloCssFramework>)ViewBag.lista_livelli).OrderBy(x => x.ordine).ToList();
+    var totDefinizioni = listLivelli.Sum(l => l.definizioni.Count);
+    var prossimoLivello = listLivelli.Count > 0 ? listLivelli.Max(l => l.ordine) + 1 : 1;
+}
+
+<h3 style="margin-bottom:6px;">Framework CSS</h3>
+<p class="text-muted" style="max-width:56rem;">
+    I <strong>livelli</strong> si valutano in ordine crescente. Dentro ogni livello, le
+    <strong>definizioni</strong> vengono provate secondo il loro ordine: la prima le cui regole
+    sono soddisfatte assegna il box. Se nessuna corrisponde si applica il box di default.
+</p>
+
+<div class="btn-group mb-3">
+    <a href="#" id="aMenuCssFw" class="btn btn-primary toggleCssFw active" aria-current="page">CssFramework</a>
+    <a href="#" id="aMenuVisual" class="btn btn-primary toggleVisual">Livelli</a>
+    <a href="#" id="aMenuSource" class="btn btn-primary toggleSource">Source</a>
+</div>
+
+<div class="container-fluid px-0" id="container">
+
+    <div id="contentCssFw" class="pt-1">
+        <div id="cssfwBody"></div>
+    </div>
+
+    <div id="contentVisual" class="pt-1" style="display:none;">
+        <div class="alert alert-secondary py-2" role="alert" style="font-size:.9rem;">
+            Secondo la <em>Guida all’uso del Css framework</em> questa sezione
+            (<code>defaultBox</code> e <code>livelli</code>) è da considerarsi superata:
+            la configurazione che conta sta nella scheda <strong>CssFramework</strong>.
+        </div>
+
+        <div class="row bg-light rounded py-3 mb-4 mx-0">
+            <div class="col text-center border-end">
+                <div class="fw-semibold" style="font-size:1.75rem; line-height:1.2;">@listLivelli.Count</div>
+                <div class="text-muted text-uppercase" style="font-size:.8rem; letter-spacing:.04em;">Livelli</div>
+            </div>
+            <div class="col text-center border-end">
+                <div class="fw-semibold" style="font-size:1.75rem; line-height:1.2;">@totDefinizioni</div>
+                <div class="text-muted text-uppercase" style="font-size:.8rem; letter-spacing:.04em;">Definizioni</div>
+            </div>
+            <div class="col text-center">
+                <div class="fw-semibold" style="font-size:1.35rem; line-height:1.5;">
+                    <code>@(ViewBag.defaultBox ?? "—")</code>
+                </div>
+                <div class="text-muted text-uppercase" style="font-size:.8rem; letter-spacing:.04em;">Box di default</div>
+            </div>
+        </div>
+
+        @if (listLivelli.Count == 0)
+        {
+            <div class="alert alert-secondary" role="alert">
+                Nessun livello definito. Creane uno qui sotto per iniziare.
+            </div>
+        }
+
+        @foreach (var livello in listLivelli)
+        {
+            <div class="card mb-3 livello-card" data-liv-id="@livello.id" data-liv-ordine="@livello.ordine">
+                <div class="card-header bg-white d-flex align-items-center flex-wrap gap-2 py-2">
+
+                    <button class="btn btn-link text-decoration-none p-0 me-2 apri-livello" type="button"
+                            data-bs-toggle="collapse" data-bs-target="#livello_@livello.ordine"
+                            aria-expanded="false" title="Mostra o nascondi le definizioni">
+                        <span class="fs-5 fw-semibold text-dark">Livello @livello.ordine</span>
+                    </button>
+
+                    <span class="badge bg-secondary">
+                        @livello.definizioni.Count @(livello.definizioni.Count == 1 ? "definizione" : "definizioni")
+                    </span>
+
+                    <div class="ms-auto d-flex align-items-center gap-2">
+                        <label class="text-muted mb-0" style="font-size:.85rem;" for="ordineLiv_@livello.id">
+                            Ordine
+                        </label>
+                        <input type="number" class="form-control form-control-sm ordine-livello"
+                               id="ordineLiv_@livello.id" style="width:5rem;" value="@livello.ordine">
+                        <button class="btn btn-outline-primary btn-sm btn-salva-livello" type="button">
+                            Salva ordine
+                        </button>
+                        <button class="btn btn-outline-danger btn-sm btn-elimina-livello" type="button"
+                                title="Elimina il livello e tutte le sue definizioni">
+                            Elimina livello
+                        </button>
+                    </div>
+                </div>
+
+                <div id="livello_@livello.ordine" class="collapse">
+                    <div class="card-body pt-3">
+
+                        @if (livello.definizioni.Count > 0)
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th style="width:16rem;">Box assegnato</th>
+                                            <th>Descrizione</th>
+                                            <th style="width:7rem;">Ordine</th>
+                                            <th style="width:11rem;">Regole</th>
+                                            <th style="width:13rem;" class="text-end">Azioni</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var item in livello.definizioni.OrderBy(f => f.ordine))
+                                        {
+                                            <tr class="definizioneFrame" data-def-id="@item.id">
+                                                <td>
+                                                    <input type="text" class="form-control form-control-sm def-nome"
+                                                           value="@item.result" placeholder="es. BOX_STD">
+                                                </td>
+                                                <td>
+                                                    <input type="text" class="form-control form-control-sm def-descrizione"
+                                                           value="@item.descrizione" placeholder="a cosa serve">
+                                                </td>
+                                                <td>
+                                                    <input type="number" class="form-control form-control-sm def-ordine"
+                                                           value="@item.ordine">
+                                                </td>
+                                                <td>
+                                                    <button class="btn btn-outline-secondary btn-sm btn-regole" type="button">
+                                                        Regole
+                                                        <span class="badge bg-secondary ms-1">@item.regole.Count</span>
+                                                    </button>
+                                                </td>
+                                                <td class="text-end">
+                                                    <button class="btn btn-primary btn-sm btn-salva-def" type="button">Salva</button>
+                                                    <button class="btn btn-outline-danger btn-sm btn-elimina-def" type="button">Elimina</button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="text-muted fst-italic">Nessuna definizione in questo livello.</p>
+                        }
+
+                        <div class="border-top mt-3 pt-3 nuova-definizione">
+                            <div class="text-muted text-uppercase mb-2" style="font-size:.8rem; letter-spacing:.04em;">
+                                Aggiungi una definizione
+                            </div>
+                            <div class="row g-2 align-items-end">
+                                <div class="col-md-3">
+                                    <label class="form-label mb-1" style="font-size:.85rem;">Box assegnato</label>
+                                    <input type="text" class="form-control form-control-sm nd-nome" placeholder="es. BOX_STD">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label mb-1" style="font-size:.85rem;">Descrizione</label>
+                                    <input type="text" class="form-control form-control-sm nd-descrizione" placeholder="a cosa serve">
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label mb-1" style="font-size:.85rem;">Livello</label>
+                                    <input type="number" class="form-control form-control-sm nd-livello" value="@livello.ordine" readonly>
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label mb-1" style="font-size:.85rem;">Ordine</label>
+                                    <input type="number" class="form-control form-control-sm nd-ordine" value="@(livello.definizioni.Count + 1)">
+                                </div>
+                                <div class="col-md-1">
+                                    <button class="btn btn-primary btn-sm w-100 btn-aggiungi-def" type="button">Aggiungi</button>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        }
+
+        <div class="card mb-3">
+            <div class="card-body py-3">
+                <div class="row g-2 align-items-end">
+                    <div class="col-auto">
+                        <label class="form-label mb-1" style="font-size:.85rem;">Ordine del nuovo livello</label>
+                        <input type="number" id="ordineNuovoLivello" class="form-control form-control-sm"
+                               style="width:8rem;" value="@prossimoLivello">
+                    </div>
+                    <div class="col-auto">
+                        <button class="btn btn-primary btn-sm" type="button" id="btnNuovoLivello">
+                            Inserisci nuovo livello
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal fade" tabindex="-1" id="modalModificaRegole" data-bs-backdrop="static">
+            <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Set regole</h5>
+                        <div id="livDeep" class="d-flex align-items-center ms-3 me-3">
+                        </div>
+                        <button type="button" data-bs-dismiss="modal" class="btn-close" aria-label="Close"></button>
+                    </div>
+                    <div>
+                        <div id="liveAlertPlaceholder"></div>
+                    </div>
+                    <div class="modal-body">
+                        <div id="regoleContainer">
+                        </div>
+                    </div>
+                    <div class="modal-footer d-flex justify-content-between">
+                        <button class="btn btn-primary" type="button" id="btnAggiungiSetRegole">Aggiungi Set regole</button>
+                        <button class="btn btn-success" type="button" id="btnSalvaRegole">Salva</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+    <div id="contentSource" class="pt-3" style="display:none;">
+        <div class="container">
+            <div class="row">
+                <div class="col-12 mb-3" style="text-align:right;">
+                    <button class="btn btn-primary" value="Salva" id="btnSourceSave">Salva</button>
+                </div>
+            </div>
+            <div id="editor"></div>
+        </div>
+    </div>
+</div>
+
+
+<template id="setRegole">
+    <div class="setRegole bg-warning bg-opacity-25 mb-1 position-relative">
+        <span id="nomeSet">SET</span>
+        <button type="button" class="btn-close position-absolute top-0 end-0 btn-elimina-set" aria-label="Close"></button>
+    </div>
+</template>
+
+<template id="addRegola">
+    <div class="addRegola mb-1 d-flex justify-content-center align-items-center">
+        <button type="button" class="btn btn-primary me-1 btn-aggiungi-regola">Aggiungi regola</button>
+        <button type="button" id="gestisciRegoleAnnidate" class="btn btn-primary btn-regole-annidate">Gestisci regole annidate</button>
+    </div>
+</template>
+
+<template id="regola">
+    <div class="regola row mb-1">
+        <div class="col d-flex flex-column">
+            <label for="percorso">Percorso</label>
+            <select id="percorso" class="form-select sel-percorso" aria-label="Menu a tendina">
+                <option value="recordInTracciato">Record in tracciato</option>
+                <option value="recordRevisionato">Record revisionato</option>
+                <option value="recordImpaginato">Record impaginato</option>
+                <option value="promoTracciati">Promo tracciato</option>
+                <option value="promo">Promo</option>
+                <option value="allEtichette">Etichette</option>
+                <option value="context">Contesto</option>
+            </select>
+            <label for="campo">Campo</label>
+            <select id="campo" class="form-select" aria-label="Menu a tendina">
+                <option value="0">Seleziona campo</option>
+            </select>
+        </div>
+        <div class="col d-flex flex-column">
+            <label for="operator">Operatore</label>
+            <select id="operator" class="form-select" aria-label="Menu a tendina">
+                <option value="0">Seleziona operatore</option>
+            </select>
+        </div>
+        <div class="col d-flex flex-column ">
+            <label for="value">Valore</label>
+            <input type="text" id="value" name="value" class="form-control">
+        </div>
+        <div class="col-1 d-flex align-items-end">
+            <button type="button" class="btn btn-danger btn-sm btn-elimina-regola" style="height:100px">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div>
+            <hr class="mt-1">
+        </div>
+    </div>
+</template>
+
+<style>
+    .livello-card .card-header .apri-livello::after {
+        content: "\25BE";
+        margin-left: .5rem;
+        display: inline-block;
+        transition: transform .15s ease;
+        color: #6c757d;
+    }
+
+    .livello-card .card-header .apri-livello[aria-expanded="true"]::after {
+        transform: rotate(180deg);
+    }
+
+    .nuova-definizione {
+        background-color: #f8f9fa;
+        margin-left: -1rem;
+        margin-right: -1rem;
+        padding-left: 1rem;
+        padding-right: 1rem;
+        padding-bottom: 1rem;
+    }
+
+    .btn-custom {
+        background-color: transparent;
+        border: none;
+        color: #007bff;
+        text-decoration: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .btn-custom:hover {
+        text-decoration: underline;
+        color: #0056b3;
+    }
+
+    .separator {
+        margin: 0 10px;
+        color: #000;
+    }
+</style>
+
+
+@inject Microsoft.AspNetCore.Http.IHttpContextAccessor HttpContextAccessor
+<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]" type="text/javascript">
+
+    let frameInstance;
+    let cssFwInstance;
+
+    function documentReady() {
+        frameInstance = new FrameworkCss();
+        frameInstance.boxDefault = @Html.Raw(Json.Serialize(ViewBag.defaultBox));
+        frameInstance.sourceFramework = @Html.Raw(Json.Serialize(ViewBag.lista_livelli));
+
+        $("#btnSourceSave").on("click", function () {
+            exSourceEditor.save('FrameworkCssController');
+        });
+
+        $("#aMenuCssFw").on("click", function () { menuCssFw(); });
+        $("#aMenuVisual").on("click", function () { menuVisual(); });
+        $("#aMenuSource").on("click", function () { menuSource(); });
+
+        cssFwInstance = new CssFramework("cssfwBody");
+        cssFwInstance.carica();
+
+        // Evita di perdere modifiche non salvate cambiando pagina.
+        $(window).on("beforeunload", function () {
+            if (cssFwInstance && cssFwInstance.sporco) {
+                return "Ci sono modifiche al CssFramework non salvate.";
+            }
+        });
+
+        // Tutti i comandi sono agganciati qui invece che con onclick inline:
+        // la Content-Security-Policy della pagina blocca gli handler inline,
+        // quindi con onclick i bottoni non facevano assolutamente nulla.
+        const doc = $(document);
+
+        // --- livelli ---
+        doc.on("click", ".btn-salva-livello", function () {
+            const card = $(this).closest(".livello-card");
+            frameInstance.editOrdineLivello(card.find(".ordine-livello").val(), card.attr("data-liv-id"));
+        });
+
+        doc.on("click", ".btn-elimina-livello", function () {
+            const card = $(this).closest(".livello-card");
+            const n = card.find("tr.definizioneFrame").length;
+            const avviso = n > 0
+                ? "Eliminare il livello " + card.attr("data-liv-ordine") + " e le sue " + n + " definizioni?"
+                : "Eliminare il livello " + card.attr("data-liv-ordine") + "?";
+            if (window.confirm(avviso)) {
+                frameInstance.eliminaLivello(card.attr("data-liv-id"));
+            }
+        });
+
+        $("#btnNuovoLivello").on("click", function () {
+            frameInstance.nuovoLivello($("#ordineNuovoLivello").val());
+        });
+
+        // --- definizioni ---
+        doc.on("click", ".btn-salva-def", function () {
+            const r = $(this).closest("tr");
+            frameInstance.editDefinizione(
+                r.find(".def-nome").val(),
+                r.find(".def-ordine").val(),
+                r.attr("data-def-id"),
+                r.find(".def-descrizione").val());
+        });
+
+        doc.on("click", ".btn-elimina-def", function () {
+            const r = $(this).closest("tr");
+            if (window.confirm("Eliminare la definizione \"" + r.find(".def-nome").val() + "\"?")) {
+                frameInstance.eliminaDefinizione(r.attr("data-def-id"));
+            }
+        });
+
+        doc.on("click", ".btn-regole", function () {
+            frameInstance.openModal($(this).closest("tr").attr("data-def-id"));
+        });
+
+        doc.on("click", ".btn-aggiungi-def", function () {
+            const b = $(this).closest(".nuova-definizione");
+            const nome = $.trim(b.find(".nd-nome").val());
+            if (nome === "") {
+                b.find(".nd-nome").focus();
+                return;
+            }
+            frameInstance.addDefinizione(
+                b.find(".nd-livello").val(),
+                b.find(".nd-ordine").val(),
+                nome,
+                b.find(".nd-descrizione").val());
+        });
+
+        // --- modale delle regole ---
+        $("#btnAggiungiSetRegole").on("click", function () {
+            frameInstance.aggiungiNuovoSetRegole($("#modalModificaRegole").find("#regoleContainer"));
+        });
+
+        $("#btnSalvaRegole").on("click", function () {
+            frameInstance.salvaEModifica();
+        });
+
+        doc.on("click", ".btn-elimina-set", function () {
+            frameInstance.eliminaSetRegole($(this).closest(".setRegole"));
+        });
+
+        doc.on("click", ".btn-aggiungi-regola", function () {
+            frameInstance.aggiungiRegola($(this).closest(".addRegola"));
+        });
+
+        doc.on("click", ".btn-regole-annidate", function () {
+            const modale = $("#modalModificaRegole");
+            frameInstance.openModal(
+                modale.attr("idDefinizione"),
+                modale.attr("percorso") + "$" + $(this).closest(".setRegole").attr("idSet"),
+                true);
+        });
+
+        doc.on("click change", ".sel-percorso", function () {
+            frameInstance.appendiCampiOptions($(this).closest(".col").find("#campo"), null, $(this).val());
+        });
+    }
+
+</script>
+
+
+<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]" src="~/js/cssFramework.js?v=1"></script>
+<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]" src="~/js/sourceEditor.js"></script>
+<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]" src="https://unpkg.com/monaco-editor@latest/min/vs/loader.js"></script>
+
+<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]">
+
+    let exSourceEditor = new ExternalSourceEditor();
+
+    function mostraSolo(quale) {
+        ["contentCssFw", "contentVisual", "contentSource"].forEach(function (id) {
+            document.getElementById(id).style.display = (id === quale) ? "block" : "none";
+        });
+        $(".toggleCssFw, .toggleVisual, .toggleSource").removeClass("active");
+    }
+
+    function menuCssFw() {
+        mostraSolo("contentCssFw");
+        $(".toggleCssFw").addClass("active");
+    }
+
+    function menuVisual() {
+        mostraSolo("contentVisual");
+        $(".toggleVisual").addClass("active");
+    }
+
+    function menuSource() {
+        mostraSolo("contentSource");
+        $(".toggleSource").addClass("active");
+
+        //prima ridimensiono l'editor
+        $("#editor").css("width", $("#container").css("width"));
+        //atezza quanto la pagina
+        $("#editor").css("height", $(window).height() - 100 + "px");
+
+        exSourceEditor.init("SourceFrameworkCss");
+
+    }
+</script>

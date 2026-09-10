@@ -1,0 +1,26 @@
+[
+  {
+    "nome_field": "idAddestramento",
+    "titolo_field": "Scegli l'addestramento",
+    "tipo_field": "cmb",
+    "chiamata_runtime": {
+      "metodo": "GET",
+      "url": "http://192.168.178.111:5076/FicoProcess/getAddestramenti/false",
+      "body": null
+    },
+    "valore": [],
+    "dipendenze": []
+  },
+  {
+    "nome_field": "idLabel",
+    "titolo_field": "Scegli la label",
+    "tipo_field": "cmb",
+    "chiamata_runtime": {
+      "metodo": "GET",
+      "url": "http://192.168.178.111:5076/FicoProcess/getLabels",
+      "body": null
+    },
+    "valore": [],
+    "dipendenze": []
+  }
+]

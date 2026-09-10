@@ -1,0 +1,281 @@
+[
+    {
+      "nome_stile": "default",
+      "condizioni": "default",
+      "struttura": {
+        "id": 3,
+        "tag": "div",
+        "classi_css": [
+          "wp-product-card"
+        ],
+        "figli": [
+          {
+            "tag": "div",
+            "classi_css": [
+              "wp-pc__img-wrapper"
+            ],
+            "figli": [
+              {
+                "tag": "img",
+                "classi_css": [
+                  "p-[30px]",
+                  "wp-pc__img",
+                  "wp-object-contain"
+                ],
+                "attributi": {
+                  "loading": "lazy",
+                  "src": "{foto}",
+                  "width": "330",
+                  "height": "400",
+                  "alt": "{descrizione}"
+                }
+              }
+            ]
+          },
+          {
+            "deleted_field": [
+              "txt_sconto",
+              "box_sconto"
+            ],
+            "tag": "p",
+            "classi_css": [
+              "wp-pc__desc",
+              "sconto_norm"
+            ],
+            "style": "padding: 4px !important",
+            "contenuto": "{sconto}"
+          },
+          {
+            "tag": "div",
+            "classi_css": [
+              "wp-pc__info",
+              "text-justify"
+            ],
+            "figli": [
+              {
+                "tag": "div",
+                "deleted_field": [
+                  "prezzo_promo"
+                ],
+                "classi_css": [
+                  "boxref_price"
+                ],
+                "figli": [
+                  {
+                    "tag": "span",
+                    "classi_css": [
+                      "ref_price_euro_size",
+                      "text-dark",
+                      "font_color"
+                    ],
+                    "contenuto": "€",
+                    "deleted_field": [
+                      "prezzo_promo"
+                    ]
+                  },
+                  "&nbsp;",
+                  {
+                    "tag": "prezzo-euro",
+                    "deleted_field": [
+                      "prezzo_promo"
+                    ],
+                    "classi_css": [
+                      "text-dark",
+                      "font_color"
+                    ],
+                    "contenuto": "{prezzo}",
+                    "html_puro": true,
+                    "divisione_contenuto": {
+                      "actions": [
+                        {
+                          "comportamento": "untilFind",
+                          "charachter": ",",
+                          "tag": "prezzo_intero"
+                        },
+                        {
+                          "comportamento": "getChar",
+                          "charachter": ",",
+                          "tag": "separatore_decimale"
+                        },
+                        {
+                          "comportamento": "rest",
+                          "tag": "prezzo_centesimi"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              },
+              {
+                "tag": "span",
+                "deleted_field": [
+                  "prezzo_promo_kgl"
+                ],
+                "classi_css": [
+                  "ref_descrizionegrammatura text-justify"
+                ],
+                "contenuto": "{prezzo_promo_kgl}",
+                "html_puro": true
+              },
+              {
+                "tag": "br",
+                "html_puro": true,
+                "deleted_field": [
+                  "prezzo_continuo"
+                ]
+              },
+              {
+                "tag": "span",
+                "deleted_field": [
+                  "prezzo_continuo"
+                ],
+                "classi_css": [
+                  "ref_descrizionegrammatura text-justify"
+                ],
+                "contenuto": "{prezzo_continuo}",
+                "html_puro": true
+              },
+              {
+                "tag": "descrizione-referenza",
+                "classi_css": [
+                  "text-dark",
+                  "wp-pc__desc",
+                  "boxref_descrizione",
+                  "text-justify"
+                ],
+                "inietta_classi_css": [
+                  {
+                    "tag": "des_descr_nome_sc",
+                    "classi_css": []
+                  }
+                ],
+                "contenuto": "{descrizione}",
+                "filtri_html": [
+                  "dicitura-rep-31",
+                  "dicitura-rep-25",
+                  "dicitura-rep-33",
+                  "dicitura-rep-29",
+                  "dicitura-rep-21",
+                  "dicitura-rep-27"
+                ],
+                "html_puro": true,
+                "inietta_tag": [
+                  {
+                    "tag_to_find": "descrizione_grammatura",
+                    "tag_to_insert": "br"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "azioni": [],
+      "_id": "68b04afcda52b9b7aefcf46b"
+    },
+    {
+      "nome_stile": "error",
+      "condizioni": [
+        {
+          "nome_campo": "codiceBox",
+          "valori": [
+            "BOX1"
+          ]
+        }
+      ],
+      "struttura": {
+        "id": 4,
+        "tag": "div",
+        "classi_css": [
+          "wp-product-card"
+        ],
+        "figli": [
+          {
+            "tag": "div",
+            "classi_css": [
+              "wp-pc__img-wrapper"
+            ],
+            "figli": [
+              {
+                "tag": "div",
+                "figli": [
+                  {
+                    "tag": "img",
+                    "classi_css": [
+                      "wp-pc__img",
+                      "object-contain"
+                    ],
+                    "attributi": {
+                      "loading": "lazy",
+                      "src": "{foto}",
+                      "width": "330",
+                      "height": "400",
+                      "alt": "{descrizione}"
+                    }
+                  }
+                ]
+              },
+              {
+                "tag": "button",
+                "classi_css": [
+                  "wp-pc__btn-wl",
+                  "wp-position-absolute",
+                  "wp-bg-body",
+                  "wp-rounded-circle",
+                  "wp-border-0",
+                  "wp-text-primary",
+                  "wp-js-add-wishlist"
+                ],
+                "attributi": {
+                  "title": "Add To Wishlist"
+                },
+                "figli": [
+                  {
+                    "tag": "svg",
+                    "attributi": {
+                      "width": "16",
+                      "height": "16",
+                      "viewBox": "0 0 24 24",
+                      "fill": "none",
+                      "stroke": "black",
+                      "xmlns": "http://www.w3.org/2000/svg"
+                    },
+                    "figli": [
+                      {
+                        "tag": "path",
+                        "attributi": {
+                          "d": "M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z",
+                          "fill": "none",
+                          "stroke": "black",
+                          "strokeWidth": "2"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "tag": "div",
+            "classi_css": [
+              "wp-pc__info text-justify"
+            ],
+            "figli": [
+              {
+                "tag": "div",
+                "classi_css": [
+                  "text-justify",
+                  "font-large"
+                ],
+                "html_puro": true,
+                "contenuto": "<p style=\"color:red\">ERRORE: STRUTTURA MANCANTE</p>"
+              }
+            ]
+          }
+        ]
+      },
+      "azioni": [],
+      "_id": "68b04afcda52b9b7aefcf46c"
+    }
+  ]

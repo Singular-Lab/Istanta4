@@ -1,0 +1,165 @@
+# name: Matrice CI/CD
+
+# on:
+#   push:
+#     branches: ['main']
+#   pull_request:
+#     branches: ['main']
+
+# # Evita esecuzioni parallele sullo stesso branch
+# concurrency:
+#   group: ${{ github.workflow }}-${{ github.ref }}
+#   cancel-in-progress: true
+
+# jobs:
+#   controlli-qualita:
+#     name: Controlli di Qualità (Node ${{ matrix.node-version }} su ${{ matrix.os }})
+#     runs-on: ${{ matrix.os }}
+#     strategy:
+#       fail-fast: false
+#       matrix:
+#         os: [ubuntu-latest, windows-latest, macos-latest]
+#         node-version: [16, 18, 20]
+#         exclude:
+#           - os: windows-latest
+#             node-version: 16
+#           - os: macos-latest
+#             node-version: 16
+
+#     steps:
+#       - name: Checkout del repository
+#         uses: actions/checkout@v4
+
+#       - name: Configura Node.js ${{ matrix.node-version }}
+#         uses: actions/setup-node@v4
+#         with:
+#           node-version: ${{ matrix.node-version }}
+#           cache: 'npm'
+
+#       - name: Cache di node_modules
+#         uses: actions/cache@v4
+#         with:
+#           path: |
+#             ~/.npm
+#             node_modules
+#             */*/node_modules
+#           key: ${{ runner.os }}-node-${{ matrix.node-version }}-${{ hashFiles('**/package-lock.json') }}
+#           restore-keys: |
+#             ${{ runner.os }}-node-${{ matrix.node-version }}-
+
+#       - name: Installa le dipendenze
+#         run: npm ci
+
+#       - name: Controllo dei tipi
+#         run: npm run type-check
+
+#       - name: Lint del codice client
+#         run: npm run lint
+#         env:
+#           ESLINT_USE_FLAT_CONFIG: true
+
+#       - name: Verifica vulnerabilità di sicurezza
+#         run: npm run security-check
+
+#   build-test:
+#     name: Test di Build (Node ${{ matrix.node-version }} su ${{ matrix.os }})
+#     runs-on: ${{ matrix.os }}
+#     strategy:
+#       fail-fast: false
+#       matrix:
+#         os: [ubuntu-latest, windows-latest, macos-latest]
+#         node-version: [18, 20]
+#         exclude:
+#           - os: windows-latest
+#             node-version: 16
+#           - os: macos-latest
+#             node-version: 16
+
+#     steps:
+#       - name: Checkout del repository
+#         uses: actions/checkout@v4
+
+#       - name: Configura Node.js ${{ matrix.node-version }}
+#         uses: actions/setup-node@v4
+#         with:
+#           node-version: ${{ matrix.node-version }}
+#           cache: 'npm'
+
+#       - name: Cache di node_modules
+#         uses: actions/cache@v4
+#         with:
+#           path: |
+#             ~/.npm
+#             node_modules
+#             */*/node_modules
+#           key: ${{ runner.os }}-node-${{ matrix.node-version }}-${{ hashFiles('**/package-lock.json') }}
+#           restore-keys: |
+#             ${{ runner.os }}-node-${{ matrix.node-version }}-
+
+#       - name: Installa le dipendenze
+#         run: npm ci
+
+#       - name: Build del progetto
+#         run: npm run build
+
+#   analisi-dipendenze:
+#     name: Analisi Dipendenze
+#     runs-on: ubuntu-latest
+#     needs: [controlli-qualita, build-test]
+#     if: github.event_name == 'pull_request'
+
+#     steps:
+#       - name: Checkout del repository
+#         uses: actions/checkout@v4
+
+#       - name: Configura Node.js
+#         uses: actions/setup-node@v4
+#         with:
+#           node-version: '18'
+#           cache: 'npm'
+
+#       - name: Installa le dipendenze
+#         run: npm ci
+
+#       - name: Controlla dipendenze obsolete
+#         run: npm run deps-update
+
+#       - name: Controlla dipendenze non utilizzate
+#         run: npm run deps-check
+
+#   aggrega-risultati:
+#     name: Aggrega Risultati
+#     runs-on: ubuntu-latest
+#     needs: [controlli-qualita, build-test, analisi-dipendenze]
+#     if: always()
+
+#     steps:
+#       - name: Genera report riepilogativo
+#         shell: bash
+#         run: |
+#           echo "## 🧩 Matrice CI/CD – Risultati" >> "$GITHUB_STEP_SUMMARY"
+#           echo "**Workflow:** ${{ github.workflow }}" >> "$GITHUB_STEP_SUMMARY"
+#           echo "**Branch:** \`${{ github.ref_name }}\`" >> "$GITHUB_STEP_SUMMARY"
+#           echo "**Commit:** \`${{ github.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+#           echo "" >> "$GITHUB_STEP_SUMMARY"
+#           echo "| Job | Esito |" >> "$GITHUB_STEP_SUMMARY"
+#           echo "| :--- | :---: |" >> "$GITHUB_STEP_SUMMARY"
+
+#           stampa_riga () {
+#             local nome_job="$1"
+#             local risultato="$2"
+#             local icona="❔"
+#             case "$risultato" in
+#               success)   icona="✅"; risultato="Successo"   ;;
+#               failure)   icona="❌"; risultato="Fallito"     ;;
+#               cancelled) icona="⚠️"; risultato="Annullato"  ;;
+#               skipped)   icona="⏭️"; risultato="Saltato"    ;;
+#             esac
+#             printf '| **%s** | %s %s |\n' "$nome_job" "$icona" "$risultato" >> "$GITHUB_STEP_SUMMARY"
+#           }
+
+#           stampa_riga "Controlli di Qualità" "${{ needs.controlli-qualita.result }}"
+#           stampa_riga "Test di Build"        "${{ needs.build-test.result }}"
+#           stampa_riga "Analisi Dipendenze"   "${{ needs.analisi-dipendenze.result }}"
+
+#           echo -e "\n_Generato il $(date -u +'%Y-%m-%d %H:%M UTC')_" >> "$GITHUB_STEP_SUMMARY"

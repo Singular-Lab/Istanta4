@@ -1,0 +1,232 @@
+{
+  "lib": "AgenziaLib.Trea.getAlterazioniTracciatoFromIndd(gruppo,articoloIndd)",
+  "syncRevisione": [
+    {
+      "type": "element",
+      "name": "pagina",
+      "children": [
+        {
+          "type": "element",
+          "name": "referenza",
+          "children": [
+            {
+              "type": "element",
+              "name": "descrizione",
+              "bind": "descrizione1",
+              "children": [
+
+              ],
+              "take": true
+            },
+            {
+              "type": "element",
+              "name": "descrizione2",
+              "bind": "descrizione2",
+              "children": [
+
+              ],
+              "take": true
+            },
+            {
+              "type": "element",
+              "name": "descrizione3",
+              "bind": "descrizione3",
+              "children": [
+
+              ],
+              "take": true
+            },
+            {
+              "type": "element",
+              "name": "descrizione4",
+              "bind": "descrizione4",
+              "children": [
+
+              ],
+              "take": true
+            },
+            {
+              "type": "element",
+              "name": "descrizione_html",
+              "bind": "descrizione_indd",
+              "children": [
+
+              ],
+              "take": true
+            },
+            {
+              "type": "element",
+              "name": "codice",
+              "bind": "codice",
+              "children": [
+
+              ],
+              "take": true
+            },
+            {
+              "type": "element",
+              "name": "codice_gruppo",
+              "bind": "codice_gruppo",
+              "children": [
+
+              ],
+              "take": true
+            },
+            {
+              "type": "element",
+              "name": "reparto_codificato",
+              "bind": "reparto_codificato",
+              "children": [
+
+              ],
+              "take": true
+            },
+            {
+              "type": "element",
+              "name": "prezzo",
+              "bind": "prezzo",
+              "children": [
+
+              ],
+              "take": true
+            },
+            {
+              "type": "element",
+              "name": "prezzo_promo",
+              "bind": "prezzo_promo",
+              "children": [
+
+              ],
+              "take": true
+            },
+            {
+              "type": "element",
+              "name": "prezzo_promo_kgl",
+              "bind": "prezzo_promo_kgl",
+              "children": [
+
+              ],
+              "take": true
+            },
+            {
+              "type": "element",
+              "name": "prima_di_prezzo2",
+              "bind": "prima_di_prezzo2",
+              "children": [
+
+              ],
+              "take": true
+            },
+            {
+              "type": "element",
+              "name": "scritta_allacassa",
+              "bind": "scritta_allacassa",
+              "children": [
+
+              ],
+              "take": true
+            },
+            {
+              "type": "element",
+              "name": "scritta_1_1",
+              "bind": "scritta_1_1",
+              "children": [
+
+              ],
+              "take": true
+            },
+            {
+              "type": "element",
+              "name": "scritta_sconto",
+              "bind": "scritta_sconto",
+              "children": [
+
+              ],
+              "take": true
+            },
+            {
+              "type": "element",
+              "name": "speciale_1_1",
+              "bind": "speciale_1_1",
+              "children": [
+
+              ],
+              "take": true
+            },
+            {
+              "type": "element",
+              "name": "mastro",
+              "bind": "mastro",
+              "children": [
+
+              ],
+              "take": true
+            },
+            {
+              "type": "element",
+              "name": "dna",
+              "bind": "dna",
+              "children": [
+
+              ],
+              "take": true
+            },
+            {
+              "type": "element",
+              "name": "foto_primaria",
+              "bind": "foto_primaria",
+              "children": [
+
+              ],
+              "take": true
+            },
+            {
+              "type": "element",
+              "name": "foto",
+              "bind": "lista_foto",
+              "children": [
+
+              ],
+              "take": true
+            },
+            {
+              "type": "element",
+              "name": "label",
+              "bind": "label",
+              "children": [
+
+              ],
+              "take": true
+            },
+            {
+              "type": "element",
+              "name": "bollini",
+              "bind": "extra",
+              "children": [
+
+              ],
+              "take": true,
+              "integrativo": true
+            },
+            {
+              "type": "element",
+              "name": "foto_ambientate",
+              "bind": "extra",
+              "children": [
+
+              ],
+              "take": true,
+              "integrativo": true,
+              "separatoreDiValore": ",",
+              "indicaFoto": true
+            }
+          ],
+          "take": false,
+          "itemTag": true
+        }
+      ],
+      "take": false,
+      "itemTag": false
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "uid": "fidelity_email_alerts",
+  "name": "fidelity-email-alerts",
+  "type": "email",
+  "settings": {
+    "addresses": "niccolo.posarelli@singularlab.it",
+    "singleEmail": false
+  },
+  "disableResolveMessage": false
+}

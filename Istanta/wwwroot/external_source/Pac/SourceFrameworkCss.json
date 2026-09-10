@@ -1,0 +1,129 @@
+{
+  "defaultBox": "BOX_STD",
+  "livelli": [
+    {
+      "id": 1,
+      "ordine": 1,
+      "definizioni": [
+        {
+          "id": 1,
+          "virtualElement": false,
+          "result": "BOX_STD",
+          "descrizione": "",
+          "ordine": 11,
+          "regole": []
+        },
+        {
+          "id": 7,
+          "virtualElement": false,
+          "result": "BOX_1+1",
+          "descrizione": "",
+          "ordine": 7,
+          "regole": [
+            {
+              "id": 1,
+              "deepness": 0,
+              "regole": [
+                {
+                  "Value": "1+1",
+                  "campo": "allEtichette.allEtichette",
+                  "Operatore": "IN"
+                }
+              ],
+              "regoleAnnidate": []
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "virtualElement": false,
+          "result": "BOX_FG",
+          "descrizione": "",
+          "ordine": 8,
+          "regole": [
+            {
+              "id": 1,
+              "deepness": 0,
+              "regole": [
+                {
+                  "Value": "FG",
+                  "campo": "allEtichette.allEtichette",
+                  "Operatore": "IN"
+                }
+              ],
+              "regoleAnnidate": []
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "virtualElement": false,
+          "result": "BOX_B&F",
+          "descrizione": "",
+          "ordine": 4,
+          "regole": [
+            {
+              "id": 1,
+              "deepness": 0,
+              "regole": [
+                {
+                  "Value": "B&F",
+                  "campo": "allEtichette.allEtichette",
+                  "Operatore": "IN"
+                }
+              ],
+              "regoleAnnidate": []
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "virtualElement": false,
+          "result": "BOX_COLLECTION",
+          "descrizione": "",
+          "ordine": 6,
+          "regole": [
+            {
+              "id": 1,
+              "deepness": 0,
+              "regole": [
+                {
+                  "Value": "COLLECTION",
+                  "campo": "allEtichette.allEtichette",
+                  "Operatore": "IN"
+                }
+              ],
+              "regoleAnnidate": []
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "virtualElement": false,
+          "result": "BOX_NOFOOD",
+          "descrizione": "",
+          "ordine": 1,
+          "regole": [
+            {
+              "id": 1,
+              "deepness": 0,
+              "regole": [
+                {
+                  "Value": "NOFOOD",
+                  "campo": "allEtichette.allEtichette",
+                  "Operatore": "IN"
+                }
+              ],
+              "regoleAnnidate": []
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "dbRidimensionamentiAllineamenti": {
+    "modificheCssPerKit": [],
+    "noteLegacy": "",
+    "rawLegacy": ""
+  }
+}

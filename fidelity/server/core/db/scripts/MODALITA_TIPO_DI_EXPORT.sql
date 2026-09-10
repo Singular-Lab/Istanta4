@@ -1,0 +1,10 @@
+-- Type: MODALITA_TIPO_DI_EXPORT
+
+-- Rimozione tipo esistente (ATTENZIONE: Verificare dipendenze prima di eseguire)
+-- DROP TYPE IF EXISTS public."MODALITA_TIPO_DI_EXPORT" CASCADE;
+
+CREATE TYPE public."MODALITA_TIPO_DI_EXPORT" AS ENUM
+    ('ESPORTA_TUTTO_INSIEME', 'ESPORTA_PER_PAGINA');
+
+ALTER TYPE public."MODALITA_TIPO_DI_EXPORT"
+    OWNER TO postgres;

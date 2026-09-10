@@ -1,0 +1,9 @@
+-- Type: FICO_ORIGIN
+
+DROP TYPE IF EXISTS public."FICO_ORIGIN";
+
+CREATE TYPE public."FICO_ORIGIN" AS ENUM
+    ('FP', 'IS', 'CO', 'OL');
+
+ALTER TYPE public."FICO_ORIGIN"
+    OWNER TO postgres;

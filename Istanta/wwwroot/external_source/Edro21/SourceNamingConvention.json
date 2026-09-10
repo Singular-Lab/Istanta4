@@ -1,0 +1,162 @@
+{
+    "components": [
+        {
+            "Id": "614eb6a6-8852-4aa3-8bc9-285f24a438af",
+            "Nome": "Tracciato.GuidArea",
+            "NomeVisual": "Codice Area",
+            "Descrizione": "Sigla dell'area"
+        },
+        {
+            "Id": "438d9c0b-46ea-4522-90c9-5e868274487b",
+            "Nome": "Tracciato.GuidCanale",
+            "NomeVisual": "Codice Canale",
+            "Descrizione": "Sigla del canale"
+        },
+        {
+            "Id": "d2b703d7-6bc0-4137-934d-27a64124edbb",
+            "Nome": "AgenziaLib.codiceCanalexPoP",
+            "NomeVisual": "Codice canale per il PoP",
+            "Descrizione": "Chiamata dinamica per la scrittura del canale"
+        },
+        {
+            "Id": "d94b65ca-7759-43a1-87c2-41a3790b5bc9",
+            "Nome": "Tracciato.GuidPV",
+            "NomeVisual": "Codice PV",
+            "Descrizione": "Sigla del PV"
+        },
+        {
+            "Id": "83fa0ec0-11b0-45ce-a916-a041c79e2aee",
+            "Nome": "Referenza.Codice",
+            "NomeVisual": "Codice Referenza",
+            "Descrizione": "Codice referenza del prodotto"
+        },
+        {
+            "Id": "2c0a235d-d87b-424d-95f5-0fb22824fdc4",
+            "Nome": "AgenziaLib.isGruppo",
+            "NomeVisual": "Sei un gruppo?",
+            "Descrizione": "G o A"
+        },
+        {
+            "Id": "cde1a2a6-e476-45e7-adc3-45cec2437644",
+            "Nome": "Kit.Formato",
+            "NomeVisual": "Sigla del formato",
+            "Descrizione": "Sigla del formato"
+        },
+        {
+            "Id": "1609b471-1043-4281-919a-fb105f625540",
+            "Nome": "Referenza.data_da",
+            "NomeVisual": "Data della ref",
+            "Descrizione": "Data della ref"
+        },
+        {
+            "Id": "275e24d9-9ebb-498a-8170-970b19ce317a",
+            "Nome": "AgenziaLib.tematica",
+            "NomeVisual": "Tematica promo",
+            "Descrizione": "Tematica promo"
+        },
+        {
+            "Id": "6aa33c4f-969e-40e1-b536-1cc93b681a81",
+            "Nome": "Referenza.sigla_reparto",
+            "NomeVisual": "Sigla del reparto",
+            "Descrizione": "Sigla del reparto"
+        },
+        {
+            "Id": "57a2ca9a-ee6f-4aad-807c-ad3b6a13228d",
+            "Nome": "{contatore}",
+            "NomeVisual": "Contatore di impaginazione",
+            "Descrizione": "Contatore di impaginazione"
+        },
+        {
+            "Id": "4ee53e80-e240-443b-b7b0-1b3c84d7c646",
+            "Nome": "Referenza.iniziativa",
+            "NomeVisual": "Codice promo",
+            "Descrizione": "Contatore promo"
+        },
+        {
+            "Id": "0cb9e423-ebca-4b94-a134-bf4b96826073",
+            "Nome": "Referenza.id_gruppo",
+            "NomeVisual": "Codice Gruppo PoP",
+            "Descrizione": "Codice Gruppo PoP"
+        },
+        {
+            "Id": "2278a99d-ff67-4789-b0ec-1c319583b0d3",
+            "Nome": "AgenziaLib.id_pop",
+            "NomeVisual": "ID PoP",
+            "Descrizione": "ID PoP"
+        },
+        {
+            "Id": "feab05eb-4623-4fff-9182-43193c0156db",
+            "Nome": "Kit.Declinazioni.tipo",
+            "NomeVisual": "Sigla della declinazione",
+            "Descrizione": "Sigla della declinazione se si tratta di declinato"
+        }
+    ],
+    "combinazioni": [
+        {
+            "guidId": "75334798-f1aa-4a1f-a7b5-e662b822289a",
+            "combinazione": [
+                "VOL",
+                "438d9c0b-46ea-4522-90c9-5e868274487b",
+                "614eb6a6-8852-4aa3-8bc9-285f24a438af"
+            ]
+        },
+        {
+            "guidId": "66649643-92d6-4c49-b26c-1c84799ee705",
+            "combinazione": [
+                "WEB"
+            ]
+        },
+        {
+            "guidId": "ea023aa8-7ded-485a-81c6-226cd07bb873",
+            "combinazione": [
+                "cde1a2a6-e476-45e7-adc3-45cec2437644",
+                "_",
+                "d2b703d7-6bc0-4137-934d-27a64124edbb",
+                "_",
+                "614eb6a6-8852-4aa3-8bc9-285f24a438af",
+                "_",
+                "1609b471-1043-4281-919a-fb105f625540",
+                "_",
+                "275e24d9-9ebb-498a-8170-970b19ce317a",
+                "_",
+                "6aa33c4f-969e-40e1-b536-1cc93b681a81",
+                "_",
+                "57a2ca9a-ee6f-4aad-807c-ad3b6a13228d",
+                "_",
+                "4ee53e80-e240-443b-b7b0-1b3c84d7c646",
+                "_",
+                "0cb9e423-ebca-4b94-a134-bf4b96826073",
+                "_",
+                "2c0a235d-d87b-424d-95f5-0fb22824fdc4",
+                "feab05eb-4623-4fff-9182-43193c0156db"
+            ]
+        },
+        {
+            "guidId": "b5bc2d08-7173-4fbb-91ee-d07669d51e0f",
+            "combinazione": [
+                "cde1a2a6-e476-45e7-adc3-45cec2437644",
+                "_",
+                "d2b703d7-6bc0-4137-934d-27a64124edbb",
+                "_",
+                "614eb6a6-8852-4aa3-8bc9-285f24a438af",
+                "_",
+                "1609b471-1043-4281-919a-fb105f625540",
+                "_",
+                "275e24d9-9ebb-498a-8170-970b19ce317a",
+                "_",
+                "6aa33c4f-969e-40e1-b536-1cc93b681a81",
+                "_",
+                "57a2ca9a-ee6f-4aad-807c-ad3b6a13228d",
+                "_",
+                "4ee53e80-e240-443b-b7b0-1b3c84d7c646",
+                "_",
+                "0cb9e423-ebca-4b94-a134-bf4b96826073",
+                "_",
+                "2c0a235d-d87b-424d-95f5-0fb22824fdc4",
+                "_[",
+                "2278a99d-ff67-4789-b0ec-1c319583b0d3",
+                "]"
+            ]
+        }
+    ]
+}

@@ -1,0 +1,69 @@
+﻿@page
+@model Istanta.Views.SyncFoto.LoghiBolliModel
+@{
+}
+
+<input type="hidden" id="ipOlympus" value="@ViewBag.ipOlympus" />
+
+<div class="container">
+    <div class="row" id="headerResult">
+        <div class="col p-2">
+            <h5>Loghi e bolli</h5>
+        </div>
+    </div>
+    <table class="table" id="tblResult">
+        <thead>
+            <tr>
+                <th scope="col" style="width:10%;"></th>
+                <th scope="col" style="width:10%;text-align:left !important;">Sigla</th>
+                <th scope="col" style="width:10%;text-align:left !important;">Tipo</th>
+                <th scope="col" style="width:50%;text-align:left !important;">Nome file</th>
+                <th scope="col" style="width:20%;"></th>
+                <th scope="col" style="width:20%;"></th>
+            </tr>
+        </thead>
+        <tbody>
+        </tbody>
+    </table>
+</div>
+
+<template id="template">
+    <tr>
+        <td class="text-center" scope="row" style="text-align:left !important"><img id="preview" src="~/images/download_ico.png" style="width:30px;" /><input type="file" style="display:none;" id="fileUpload" class="fileUpload" /></td>
+        <td class="text-center" scope="row" style="text-align:left !important"><input type="text" id="sigla" /></td>
+        <td class="text-center" scope="row" style="text-align:left !important"><select id="cmbTipo"><option value="3">Logo</option><option value="2">Bollo</option><option value="5">Sfondo</option></select></td>
+        <td><span id="nomeFile"></span></td>
+        <td style="text-align:right;"><button id="btnSalvaLogo" class="btn btn-primary">Salva</button></td>
+        <td><button id="btnEliminaLogo" class="btn btn-danger">Elimina</button></td>
+    </tr>
+</template>
+
+<template id="templateNew">
+    <tr>
+        <td class="text-center" scope="row" style="text-align:left !important"><img id="previewNew" src="~/images/download_ico.png" style="width:30px;" /><input type="file" id="fileNew" style="display:none;" /></td>
+        <td class="text-center" scope="row" style="text-align:left !important"><input type="text" placeholder="Sigla" id="siglaNew" /></td>
+        <td class="text-center" scope="row" style="text-align:left !important"><select id="cmbTipoNew"><option value="0" selected>Seleziona tipo</option><option value="3">Logo</option><option value="2">Bollo</option><option value="5">Sfondo</option></select></td>
+        <td><span id="nomeNew" /></td>
+        <td><button class="btn btn-primary" id="btnAggiungiLogo">Aggiungi</button></td>
+        <td></td>
+    </tr>
+</template>
+
+
+@inject Microsoft.AspNetCore.Http.IHttpContextAccessor HttpContextAccessor
+<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]">
+    
+
+    let loghiBolliInstance;
+
+    function documentReady() {
+        loghiBolliInstance = new LoghiBolli();
+        loghiBolliInstance.get();
+
+     
+
+
+
+
+    }
+</script>

@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "declaration": true,
+    "removeComments": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "allowSyntheticDefaultImports": true,
+    "target": "ES2021",
+    "sourceMap": true,
+    "outDir": "./dist",
+    "baseUrl": "./",
+    "incremental": true,
+    "skipLibCheck": true,
+    "strictNullChecks": false,
+    "noImplicitAny": false,
+    "strictBindCallApply": false,
+    "forceConsistentCasingInFileNames": false,
+    "noFallthroughCasesInSwitch": false,
+    "paths": {
+      "@server_types*": ["server_types*"],
+      "@enums*": ["enums*"],
+      "@lib/*": ["./lib/*"],
+    },
+    "resolveJsonModule": true,
+    "allowJs": true,
+  },
+  "include": ["src", "enums", "lib", "server_types"],
+  "exclude": ["node_modules", "dist", "ui", "private-ui"]
+}

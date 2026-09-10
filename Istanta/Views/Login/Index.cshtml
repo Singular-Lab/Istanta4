@@ -1,0 +1,96 @@
+﻿@page
+@model Istanta.Views.Login.IndexModel
+@{
+    Layout = "_LayoutLogin";
+}
+@if (ViewBag.error != null)
+{
+    <div id="error_panel" class="alert alert-danger" style="position:fixed; width:100%;">
+        <strong>Attenzione</strong>: @ViewBag.error
+    </div>
+}
+
+<div style="display: flex; justify-content:center; align-items: center; width:100%; margin-top:15%;">
+    <div style="width: 100%; max-width: 400px; padding: 20px; border: 1px solid #ddd; border-radius: 10px; background-color: #fff; box-shadow: 0 0 10px rgba(0,0,0,0.1);">
+        <form action="LoginController/login" method="post">
+            @Html.AntiForgeryToken()
+            <div style="width:100%;font-size:11px;font-family:monospace;" class="text-center">v @ViewBag.versione - Lib v @ViewBag.versioneAgenziaLib</div>
+            <h2 class="text-center mb-4">Login</h2>
+            <div class="mb-3">
+                <label for="username" class="form-label">Email o Nome utente</label>
+                <input type="text" class="form-control" id="username" name="username" placeholder="Inserisci la tua email o nome utente">
+            </div>
+            <div class="mb-3">
+                <label for="password" class="form-label">Password</label>
+                <div class="input-group">
+                    <input type="password" name="password" class="form-control" id="password" placeholder="Inserisci la tua password">
+                    <span class="input-group-text" id="toggle-password" style="cursor: pointer;">
+                        <i class="bi bi-eye" id="eye-icon"></i>
+                    </span>
+                </div>
+            </div>
+            <div style="display: grid;">
+                <button type="submit" class="btn btn-primary">Accedi</button>
+            </div>
+            @if (ViewBag.ADLoginUrl!=null)
+            {
+                <div style="text-align:center;">
+                    <span style="font-size:12px;">oppure</span>
+                    <p><a href="@ViewBag.ADLoginUrl">Accedi tramite AD se sei un account GDO</a></p>
+                </div>
+            }
+                <div style="margin-top:20px;text-align:center;">
+                <span>Hai dimenticato la password?</span><br />
+                <button type="button" class="btn btn-link" id="btnRecuperaPwd">Recupera password</button>
+            </div>
+            <div id="panelRecuperoPwd" style="margin-top:20px;text-align:center;display:none;">
+                <label for="email_recovery" class="form-label">E-mail dove ricevere il link del cambio password</label>
+                <input type="text" id="email_recovery" class="form-control" />
+                <button type="submit" class="btn btn-primary mt-2" id="email_recovery_button">Invia</button>
+            </div>
+
+        </form>
+    </div>
+
+    @inject Microsoft.AspNetCore.Http.IHttpContextAccessor HttpContextAccessor
+    <script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]">
+         function documentReady() {
+            $('#toggle-password').on('mousedown', function () {
+                $('#password').attr('type', 'text');
+                $('#eye-icon').removeClass('bi-eye').addClass('bi-eye-slash');
+            });
+
+            $('#toggle-password').on('mouseup mouseout', function () {
+                $('#password').attr('type', 'password');
+                $('#eye-icon').removeClass('bi-eye-slash').addClass('bi-eye');
+            });
+
+            $("#btnRecuperaPwd").on("click", function () {
+                $("#panelRecuperoPwd").css("display","block");
+            });
+
+            $("#email_recovery_button").on("click", function (e) {
+                e.preventDefault();
+                var email = $("#email_recovery").val();
+                if (email.trim() === "") {
+                    alert("Per favore, inserisci un'email valida.");
+                    return;
+                }
+                $.ajax({
+                    type: "POST",
+                    url: "/LoginController/InviaEmailPerRecuperaPassword",
+                    data: { email: email },
+                    success: function (response) {
+                        if (response.esito)
+                            alert("Ok, riceverai un link per il recupero della password.");
+                        else
+                            alert("Errore processo di recupero: " + response.error);
+                    },
+                    error: function () {
+                        alert("Si è verificato un errore durante l'invio della richiesta. Riprova più tardi.");
+                    }
+                });
+            });
+        }
+    </script>
+</div>

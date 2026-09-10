@@ -1,0 +1,2774 @@
+{
+  "version": 1,
+  "source": "coopfi-agenzia-lib",
+  "generatedAt": "2026-03-30T10:21:49.738Z",
+  "ruoli": [
+    {
+      "code": "ALD",
+      "description": "ALLIEVO DIRETTORE  ( Punti Vendita )",
+      "codificaFico": "ALD"
+    },
+    {
+      "code": "ALH",
+      "description": "ALLIEVO ASSISTENTE DIRETTORE ( Punti Vendita)",
+      "codificaFico": "ALH"
+    },
+    {
+      "code": "ALI",
+      "description": "ALLIEVO ISPETTORE",
+      "codificaFico": "ALI"
+    },
+    {
+      "code": "ALL",
+      "description": "ALLIEVO CAPO REPARTO ( Magazzino )",
+      "codificaFico": "ALL"
+    },
+    {
+      "code": "ALM",
+      "description": "ALLIEVO CATEGORY MANAGER REPARTO",
+      "codificaFico": "ALM"
+    },
+    {
+      "code": "ALN",
+      "description": "ALLIEVO CAPO SQUADRA MAGAZZINO",
+      "codificaFico": "ALN"
+    },
+    {
+      "code": "ALO",
+      "description": "ALLIEVO COORDINATORE",
+      "codificaFico": "ALO"
+    },
+    {
+      "code": "ALP",
+      "description": "ALLIEVO",
+      "codificaFico": "ALP"
+    },
+    {
+      "code": "ALQ",
+      "description": "ALLIEVO ADDETTO QUALIFICATO",
+      "codificaFico": "ALQ"
+    },
+    {
+      "code": "ALR",
+      "description": "ALLIEVO RESPONSABILE",
+      "codificaFico": "ALR"
+    },
+    {
+      "code": "ALS",
+      "description": "ALLIEVO ADDETTO SPECIALIZZATO",
+      "codificaFico": "ALS"
+    },
+    {
+      "code": "ALT",
+      "description": "ALLIEVO ASSISTE CATEGORY MANAGER",
+      "codificaFico": "ALT"
+    },
+    {
+      "code": "ASC",
+      "description": "ASSISTENTE DIRETTORE ( Punti Vendita )",
+      "codificaFico": "ASC"
+    },
+    {
+      "code": "ASD",
+      "description": "ASSISTENTE DIREZIONE ( Sede )",
+      "codificaFico": "ASD"
+    },
+    {
+      "code": "ASM",
+      "description": "ASSISTENTE CATEGORY MANAGER REPARTO",
+      "codificaFico": "ASM"
+    },
+    {
+      "code": "ASN",
+      "description": "ASSISTENTE MANUTENZIONE",
+      "codificaFico": "ASN"
+    },
+    {
+      "code": "ASQ",
+      "description": "ASSISTENTE CONTROLLO QUALITA'",
+      "codificaFico": "ASQ"
+    },
+    {
+      "code": "ASR",
+      "description": "ASSISTENTE RESPONSABILE",
+      "codificaFico": "ASR"
+    },
+    {
+      "code": "ASS",
+      "description": "ASSISTENTE",
+      "codificaFico": "ASS"
+    },
+    {
+      "code": "AVC",
+      "description": "AVVICENDAMENTO CAPO REPARTO ( Punti Vendita )",
+      "codificaFico": "AVC"
+    },
+    {
+      "code": "AVD",
+      "description": "AVVICENDAMENTO DIRETTORE ( Punti Vendita )",
+      "codificaFico": "AVD"
+    },
+    {
+      "code": "AVM",
+      "description": "AVVICENDAMENTO CATEGORY MANAGER REPARTO",
+      "codificaFico": "AVM"
+    },
+    {
+      "code": "AVR",
+      "description": "AVVICENDAMENTO RESPONSABILE",
+      "codificaFico": "AVR"
+    },
+    {
+      "code": "AVV",
+      "description": "AVVICENDAMENTO",
+      "codificaFico": "AVV"
+    },
+    {
+      "code": "BMR",
+      "description": "BUSINESS MANAGER",
+      "codificaFico": "BMR"
+    },
+    {
+      "code": "BMS",
+      "description": "BUONO DA MANGIARE SUBITO",
+      "codificaFico": "BMS"
+    },
+    {
+      "code": "BYR",
+      "description": "BAYER",
+      "codificaFico": "BYR"
+    },
+    {
+      "code": "CMC",
+      "description": "CATEGORY MANAGER CANALE",
+      "codificaFico": "CMC"
+    },
+    {
+      "code": "CMR",
+      "description": "CATEGORY MANAGER REPARTO",
+      "codificaFico": "CMR"
+    },
+    {
+      "code": "CMS",
+      "description": "CATEGORY MANAGER SETTORE",
+      "codificaFico": "CMS"
+    },
+    {
+      "code": "CMT",
+      "description": "COORDINATORE MANUTENZIONE",
+      "codificaFico": "CMT"
+    },
+    {
+      "code": "COC",
+      "description": "COORDINATORE ORDINI CEDI",
+      "codificaFico": "COC"
+    },
+    {
+      "code": "COO",
+      "description": "COORDINATORE",
+      "codificaFico": "COO"
+    },
+    {
+      "code": "COOSGD",
+      "description": "COORDINATORE SEGRETERIA DIREZIONE",
+      "codificaFico": "COOSGD"
+    },
+    {
+      "code": "COS",
+      "description": "COORDINATORE SPECIALIZZATO",
+      "codificaFico": "COS"
+    },
+    {
+      "code": "CSF",
+      "description": "COORDINATORE SEGRETERIA",
+      "codificaFico": "CSF"
+    },
+    {
+      "code": "CSM",
+      "description": "CAPO SQUADRA MAGAZZINO",
+      "codificaFico": "CSM"
+    },
+    {
+      "code": "DIR",
+      "description": "DIRETTORE",
+      "codificaFico": "DIR"
+    },
+    {
+      "code": "DST",
+      "description": "DISTACCATO",
+      "codificaFico": "DST"
+    },
+    {
+      "code": "IMP",
+      "description": "IMPIEGATO",
+      "codificaFico": "IMP"
+    },
+    {
+      "code": "IMR",
+      "description": "RESPONSABILE",
+      "codificaFico": "IMR"
+    },
+    {
+      "code": "ISP",
+      "description": "ISPETTORE",
+      "codificaFico": "ISP"
+    },
+    {
+      "code": "PRS",
+      "description": "PRESIDENTE",
+      "codificaFico": "PRS"
+    },
+    {
+      "code": "REP",
+      "description": "CAPO REPARTO  ( Punti Vendita )",
+      "codificaFico": "REP"
+    },
+    {
+      "code": "RES",
+      "description": "RESPONSABILE",
+      "codificaFico": "RES"
+    },
+    {
+      "code": "RAP",
+      "description": "RESPONSABILE",
+      "codificaFico": "RAP"
+    },
+    {
+      "code": "CRR",
+      "description": "CATEGORY MANAGER DI RIFERIMENTO",
+      "codificaFico": "CRR"
+    },
+    {
+      "code": "CRP",
+      "description": "CATEGORY MANAGER FORMATI DI PROSSIMITA",
+      "codificaFico": "CRP"
+    },
+    {
+      "code": "RAR",
+      "description": "RESPONSABILE ACQUISTI E ASSORTIMENTO",
+      "codificaFico": "RAR"
+    },
+    {
+      "code": "RMA",
+      "description": "CAPO REPARTO MAGAZZINO",
+      "codificaFico": "RMA"
+    },
+    {
+      "code": "RNV",
+      "description": "RESPONSABILE NEGOZIO VENDITE SU PRENOTAZIONE",
+      "codificaFico": "RNV"
+    },
+    {
+      "code": "RPD",
+      "description": "DIRETTORE ( Punti Vendita )",
+      "codificaFico": "RPD"
+    },
+    {
+      "code": "SGD",
+      "description": "SEGRETARIA DIREZIONE",
+      "codificaFico": "SGD"
+    },
+    {
+      "code": "SGF",
+      "description": "SEGRETARIA",
+      "codificaFico": "SGF"
+    },
+    {
+      "code": "SPC",
+      "description": "SPECIALISTA",
+      "codificaFico": "SPC"
+    },
+    {
+      "code": "RAA",
+      "description": "RESPONSABILE ACQUISTO E ASSORTIMENTO",
+      "codificaFico": "RAA"
+    },
+    {
+      "code": "RIO",
+      "description": "RIORDINATORE ORTOFRUTTA",
+      "codificaFico": "RIO"
+    }
+  ],
+  "aree": [
+    {
+      "code": "A1",
+      "description": "AREA 1",
+      "codificaFico": "A1"
+    },
+    {
+      "code": "A2",
+      "description": "AREA 2",
+      "codificaFico": "A2"
+    },
+    {
+      "code": "A3",
+      "description": "AREA 3",
+      "codificaFico": "A3"
+    },
+    {
+      "code": "A4",
+      "description": "AREA 4",
+      "codificaFico": "A4"
+    },
+    {
+      "code": "ATT",
+      "description": "ATTREZZATURE",
+      "codificaFico": "ATT"
+    },
+    {
+      "code": "AU",
+      "description": "AUTISTA",
+      "codificaFico": "AU"
+    },
+    {
+      "code": "CF",
+      "description": "CENTRO FRESCHI",
+      "codificaFico": "CF"
+    },
+    {
+      "code": "CLR",
+      "description": "CONTROLLO LAVORAZIONI E RESE",
+      "codificaFico": "CLR"
+    },
+    {
+      "code": "CNPL",
+      "description": "CONTROLLO PALLETTIZAZIONE",
+      "codificaFico": "CNPL"
+    },
+    {
+      "code": "CON",
+      "description": "CONFEZIONAMENTO",
+      "codificaFico": "CON"
+    },
+    {
+      "code": "CPF",
+      "description": "CONTROLLO PIATTAFORMA FRESCHI",
+      "codificaFico": "CPF"
+    },
+    {
+      "code": "CTR",
+      "description": "CONTROLLO",
+      "codificaFico": "CTR"
+    },
+    {
+      "code": "DIS",
+      "description": "DISOSSO",
+      "codificaFico": "DIS"
+    },
+    {
+      "code": "DRM",
+      "description": "DOCROMA",
+      "codificaFico": "DRM"
+    },
+    {
+      "code": "EDI",
+      "description": "EDILIZIA",
+      "codificaFico": "EDI"
+    },
+    {
+      "code": "EVA",
+      "description": "EVASIONE MERCI",
+      "codificaFico": "EVA"
+    },
+    {
+      "code": "FAT",
+      "description": "FATTURE",
+      "codificaFico": "FAT"
+    },
+    {
+      "code": "GST",
+      "description": "GRANDI STRUTTURE",
+      "codificaFico": "GST"
+    },
+    {
+      "code": "IMKGST",
+      "description": "IPER E GRANDI STRUTTURE",
+      "codificaFico": "IMKGST"
+    },
+    {
+      "code": "IMT",
+      "description": "IMPIANTI",
+      "codificaFico": "IMT"
+    },
+    {
+      "code": "IND",
+      "description": "INDIRETTO",
+      "codificaFico": "IND"
+    },
+    {
+      "code": "MMK",
+      "description": "MINIPERCATI",
+      "codificaFico": "MMK"
+    },
+    {
+      "code": "MMT",
+      "description": "TRADIZIONALE",
+      "codificaFico": "MMT"
+    },
+    {
+      "code": "PRE",
+      "description": "PREPARAZ./MOVIM.",
+      "codificaFico": "PRE"
+    },
+    {
+      "code": "PRU",
+      "description": "PREPARAZ./UFFICIO",
+      "codificaFico": "PRU"
+    },
+    {
+      "code": "PUL",
+      "description": "PULIZIE DI REPARTO",
+      "codificaFico": "PUL"
+    },
+    {
+      "code": "PV",
+      "description": "PUNTO DI VENDITA",
+      "codificaFico": "PV"
+    },
+    {
+      "code": "RIC",
+      "description": "RICEVIM./MOVIM.",
+      "codificaFico": "RIC"
+    },
+    {
+      "code": "RIOS",
+      "description": "RIORDINO/SPEDIZIONE",
+      "codificaFico": "RIOS"
+    },
+    {
+      "code": "RPZ",
+      "description": "RICONOSCIMENTO PEZZI",
+      "codificaFico": "RPZ"
+    },
+    {
+      "code": "SER",
+      "description": "SERVIZI",
+      "codificaFico": "SER"
+    },
+    {
+      "code": "SMK",
+      "description": "SUPERMERCATI",
+      "codificaFico": "SMK"
+    },
+    {
+      "code": "SPE",
+      "description": "SPEDIZIONI",
+      "codificaFico": "SPE"
+    },
+    {
+      "code": "SPT",
+      "description": "SUPERETTE",
+      "codificaFico": "SPT"
+    },
+    {
+      "code": "TRA",
+      "description": "TRASPORTI",
+      "codificaFico": "TRA"
+    },
+    {
+      "code": "UFF",
+      "description": "UFFICIO",
+      "codificaFico": "UFF"
+    },
+    {
+      "code": "TDM",
+      "description": "TERRE DI MEZZO",
+      "codificaFico": "TDM"
+    }
+  ],
+  "settoriFinali": [
+    {
+      "code": "marketing",
+      "description": "Marketing",
+      "codificaFico": "marketing"
+    },
+    {
+      "code": "ortofrutta",
+      "description": "Ortofrutta",
+      "codificaFico": "ortofrutta"
+    },
+    {
+      "code": "macelleria",
+      "description": "Macelleria",
+      "codificaFico": "macelleria"
+    },
+    {
+      "code": "gastronomia",
+      "description": "Gastronomia",
+      "codificaFico": "gastronomia"
+    },
+    {
+      "code": "pescheria",
+      "description": "Pescheria",
+      "codificaFico": "pescheria"
+    },
+    {
+      "code": "forneria",
+      "description": "Forneria",
+      "codificaFico": "forneria"
+    },
+    {
+      "code": "surgelati",
+      "description": "Surgelati",
+      "codificaFico": "surgelati"
+    },
+    {
+      "code": "freschi_pls",
+      "description": "Freschi PLS",
+      "codificaFico": "freschi_pls"
+    },
+    {
+      "code": "drogheria_1",
+      "description": "Drogheria 1",
+      "codificaFico": "drogheria_1"
+    },
+    {
+      "code": "drogheria_2",
+      "description": "Drogheria 2",
+      "codificaFico": "drogheria_2"
+    },
+    {
+      "code": "liquidi",
+      "description": "Liquidi",
+      "codificaFico": "liquidi"
+    },
+    {
+      "code": "chimica",
+      "description": "Chimica",
+      "codificaFico": "chimica"
+    },
+    {
+      "code": "pet_food",
+      "description": "Pet Food",
+      "codificaFico": "pet_food"
+    },
+    {
+      "code": "no_food",
+      "description": "No Food",
+      "codificaFico": "no_food"
+    }
+  ],
+  "settori": [
+    {
+      "code": "OCFOPLSGS",
+      "description": "ORDINI CEDI FORNERIA SALUMI LATTICINI GASTRONOMIA",
+      "codificaFico": "OCFOPLSGS",
+      "settoriFinali": [
+        "gastronomia"
+      ]
+    },
+    {
+      "code": "GVPNABOX",
+      "description": "GENERI VARI NO FOOD E CASSE",
+      "codificaFico": "GVPNABOX",
+      "settoriFinali": [
+        "drogheria_1",
+        "drogheria_2",
+        "no_food"
+      ]
+    },
+    {
+      "code": "MKTGANAP",
+      "description": "MARKETING ANALITICO, ASSORTIMENTI E POSIZIONAMENTO",
+      "codificaFico": "MKTGANAP",
+      "settoriFinali": []
+    },
+    {
+      "code": "CHPETSU",
+      "description": "CHIMICA, PETFOOD E SURGELATI",
+      "codificaFico": "CHPETSU",
+      "settoriFinali": [
+        "chimica",
+        "pet_food",
+        "surgelati"
+      ]
+    },
+    {
+      "code": "DIGMKTG",
+      "description": "DIGITAL MARKETING",
+      "codificaFico": "DIGMKTG",
+      "settoriFinali": []
+    },
+    {
+      "code": "FOGSPLS",
+      "description": "FORNERIA GASTRONOMIA E LIBERO SERVIZIO",
+      "codificaFico": "FOGSPLS",
+      "settoriFinali": [
+        "forneria",
+        "gastronomia",
+        "freschi_pls"
+      ]
+    },
+    {
+      "code": "GVPLSSU",
+      "description": "GENERI VARI, PRODOTTI LIBERO SERVIZIO E SURGELATI",
+      "codificaFico": "GVPLSSU",
+      "settoriFinali": [
+        "drogheria_1",
+        "drogheria_2",
+        "surgelati",
+        "freschi_pls"
+      ]
+    },
+    {
+      "code": "OCPLSGS",
+      "description": "ORDINI CEDI SALUMI LATTICINI GASTRONOMIA",
+      "codificaFico": "OCPLSGS",
+      "settoriFinali": [
+        "gastronomia"
+      ]
+    },
+    {
+      "code": "OFPLSSU",
+      "description": "ORTOFRUTTA SALUMI LATTICINI E SURGELATI",
+      "codificaFico": "OFPLSSU",
+      "settoriFinali": [
+        "ortofrutta",
+        "freschi_pls",
+        "surgelati"
+      ]
+    },
+    {
+      "code": "PLSCAOF",
+      "description": "PRODOTTI LIBERO SERVIZIO CARNI E ORFTOFRUTTA",
+      "codificaFico": "PLSCAOF",
+      "settoriFinali": [
+        "freschi_pls",
+        "macelleria",
+        "ortofrutta"
+      ]
+    },
+    {
+      "code": "PPCMZCC",
+      "description": "PROG. POSIZ. E COMMERCIALIZZAZIONE C.C.",
+      "codificaFico": "PPCMZCC",
+      "settoriFinali": []
+    },
+    {
+      "code": "PRFICOM",
+      "description": "PROMO, FIDELIZZAZIONE E COMUNICAZIONE COMMERCIALE",
+      "codificaFico": "PRFICOM",
+      "settoriFinali": [
+        "marketing"
+      ]
+    },
+    {
+      "code": "VGVSUNA",
+      "description": "VENDITE GENERI VARI /SURGELATI/NO FOOD",
+      "codificaFico": "VGVSUNA",
+      "settoriFinali": [
+        "drogheria_1",
+        "drogheria_2",
+        "no_food",
+        "surgelati"
+      ]
+    },
+    {
+      "code": "VPCDSLC",
+      "description": "VICE PRESIDENTE E CONSIGLIERE DELEGATO AREA SVILUPPO, LOGISTICA E CONTROLLO",
+      "codificaFico": "VPCDSLC",
+      "settoriFinali": []
+    },
+    {
+      "code": "AFFGIU",
+      "description": "AFFARI GIURIDICI",
+      "codificaFico": "AFFGIU",
+      "settoriFinali": []
+    },
+    {
+      "code": "ANLORG",
+      "description": "ANALISTA ORGANIZZAZIONE PROJECT MANAGEMENT",
+      "codificaFico": "ANLORG",
+      "settoriFinali": []
+    },
+    {
+      "code": "ASSOCI",
+      "description": "ASSEMBLEA SOCI",
+      "codificaFico": "ASSOCI",
+      "settoriFinali": []
+    },
+    {
+      "code": "CASPER",
+      "description": "CASA PERSONA",
+      "codificaFico": "CASPER",
+      "settoriFinali": [
+        "chimica"
+      ]
+    },
+    {
+      "code": "CEASUN",
+      "description": "CENTRO ASSISTENZA UNIFICATA",
+      "codificaFico": "CEASUN",
+      "settoriFinali": []
+    },
+    {
+      "code": "CGSVIL",
+      "description": "CONTROLLO GESTIONE AREA SVILUPPO",
+      "codificaFico": "CGSVIL",
+      "settoriFinali": []
+    },
+    {
+      "code": "COITBO",
+      "description": "COOP ITALIA BOLOGNA",
+      "codificaFico": "COITBO",
+      "settoriFinali": []
+    },
+    {
+      "code": "COITPO",
+      "description": "COOP ITALIA PRATO",
+      "codificaFico": "COITPO",
+      "settoriFinali": []
+    },
+    {
+      "code": "COMSER",
+      "description": "COMMERCIALE - SERVICE",
+      "codificaFico": "COMSER",
+      "settoriFinali": []
+    },
+    {
+      "code": "CONCOM",
+      "description": "CONTROLLING COMMERCIALE",
+      "codificaFico": "CONCOM",
+      "settoriFinali": []
+    },
+    {
+      "code": "CONGEN",
+      "description": "CONTABILITA' GENERALE",
+      "codificaFico": "CONGEN",
+      "settoriFinali": []
+    },
+    {
+      "code": "DA2PET",
+      "description": "DROGHERIA ALIMENTARE 2 E PET",
+      "codificaFico": "DA2PET",
+      "settoriFinali": [
+        "drogheria_2",
+        "pet_food"
+      ]
+    },
+    {
+      "code": "FORPDV",
+      "description": "FORMAZIONE PDV",
+      "codificaFico": "FORPDV",
+      "settoriFinali": []
+    },
+    {
+      "code": "GSPEFO",
+      "description": "GASTRONOMIA PESCHERIA E FORNERIA",
+      "codificaFico": "GSPEFO",
+      "settoriFinali": [
+        "gastronomia",
+        "pescheria",
+        "forneria"
+      ]
+    },
+    {
+      "code": "GSSALA",
+      "description": "GASTRONOMIA, SALUMI E LATTICINI",
+      "codificaFico": "GSSALA",
+      "settoriFinali": [
+        "gastronomia"
+      ]
+    },
+    {
+      "code": "GVCASS",
+      "description": "GENERI VARI E CASSE",
+      "codificaFico": "GVCASS",
+      "settoriFinali": [
+        "drogheria_1",
+        "drogheria_2"
+      ]
+    },
+    {
+      "code": "GVNASU",
+      "description": "GENERI VARI NO FOOD E SURGELATI",
+      "codificaFico": "GVNASU",
+      "settoriFinali": [
+        "drogheria_1",
+        "drogheria_2",
+        "no_food",
+        "surgelati"
+      ]
+    },
+    {
+      "code": "GVSUNA",
+      "description": "GENERI VARI SURGELATI NO FOOD",
+      "codificaFico": "GVSUNA",
+      "settoriFinali": [
+        "drogheria_1",
+        "drogheria_2",
+        "no_food",
+        "surgelati"
+      ]
+    },
+    {
+      "code": "IMKGST",
+      "description": "IPER E GRANDI STRUTTURE",
+      "codificaFico": "IMKGST",
+      "settoriFinali": []
+    },
+    {
+      "code": "INCOOP",
+      "description": "INCOOP",
+      "codificaFico": "INCOOP",
+      "settoriFinali": []
+    },
+    {
+      "code": "PRGFAC",
+      "description": "PROGETTO MAXIMO",
+      "codificaFico": "PRGFAC",
+      "settoriFinali": []
+    },
+    {
+      "code": "PRGPDV",
+      "description": "PROGETTAZIONE PDV",
+      "codificaFico": "PRGPDV",
+      "settoriFinali": []
+    },
+    {
+      "code": "SEGSER",
+      "description": "SEGRETERIA SERVICE",
+      "codificaFico": "SEGSER",
+      "settoriFinali": []
+    },
+    {
+      "code": "SGRCOM",
+      "description": "SEGRETERIA COMMERCIALE",
+      "codificaFico": "SGRCOM",
+      "settoriFinali": []
+    },
+    {
+      "code": "SWAMFS",
+      "description": "SW APPLICATIVO AREA MERCI PDV & FUNZ. SUPPORTO",
+      "codificaFico": "SWAMFS",
+      "settoriFinali": []
+    },
+    {
+      "code": "SWSDBI",
+      "description": "SW APPLICATIVO AREA SISTEMI DIR. E B.I.",
+      "codificaFico": "SWSDBI",
+      "settoriFinali": []
+    },
+    {
+      "code": "UOGVSU",
+      "description": "UFFICIO ORDINI GENERI VARI/SURGELATI",
+      "codificaFico": "UOGVSU",
+      "settoriFinali": []
+    },
+    {
+      "code": "VIMKGS",
+      "description": "VENDITE IPER E GRANDI SUPERFICI",
+      "codificaFico": "VIMKGS",
+      "settoriFinali": []
+    },
+    {
+      "code": "VPNUPC",
+      "description": "VALORIZZAZIONE DEL PATRIMONIO NON U.P.C.",
+      "codificaFico": "VPNUPC",
+      "settoriFinali": []
+    },
+    {
+      "code": "ACQBI",
+      "description": "ACQUISTO BENI INTERNI",
+      "codificaFico": "ACQBI",
+      "settoriFinali": []
+    },
+    {
+      "code": "AMMOS",
+      "description": "SERVIZI AMMINISTRATIVI ORGANIZAZIONE E SISTEMI",
+      "codificaFico": "AMMOS",
+      "settoriFinali": []
+    },
+    {
+      "code": "ASPRV",
+      "description": "ASSISTENTE PDV DI VICINATO",
+      "codificaFico": "ASPRV",
+      "settoriFinali": []
+    },
+    {
+      "code": "ASSPR",
+      "description": "ASSISTENTE PRODUZIONE",
+      "codificaFico": "ASSPR",
+      "settoriFinali": []
+    },
+    {
+      "code": "BOXOF",
+      "description": "BOX OFFICE",
+      "codificaFico": "BOXOF",
+      "settoriFinali": []
+    },
+    {
+      "code": "CASCE",
+      "description": "CASSA CENTRALE",
+      "codificaFico": "CASCE",
+      "settoriFinali": []
+    },
+    {
+      "code": "CDAMM",
+      "description": "CONSIGLIERE DELEGATO AREA AMMINISTRAZIONE",
+      "codificaFico": "CDAMM",
+      "settoriFinali": []
+    },
+    {
+      "code": "CDCOM",
+      "description": "CONSIGLIERE DELEGATO AREA COMMERCIALE",
+      "codificaFico": "CDCOM",
+      "settoriFinali": []
+    },
+    {
+      "code": "CDSSI",
+      "description": "CONSIGLIERE DELEGATO AREA VENDITE SUPERMERCATI, IPERMERCATI E GRANDI SUPERFICI",
+      "codificaFico": "CDSSI",
+      "settoriFinali": []
+    },
+    {
+      "code": "COASS",
+      "description": "COOPERATIVE ASSOCIATE",
+      "codificaFico": "COASS",
+      "settoriFinali": []
+    },
+    {
+      "code": "CQPDV",
+      "description": "CONTROLLO QUALITA PDV",
+      "codificaFico": "CQPDV",
+      "settoriFinali": []
+    },
+    {
+      "code": "FORIS",
+      "description": "FORNERIA E RISTORO",
+      "codificaFico": "FORIS",
+      "settoriFinali": [
+        "forneria"
+      ]
+    },
+    {
+      "code": "GSPLS",
+      "description": "GASTRONOMIA E LIBERO SERVIZIO",
+      "codificaFico": "GSPLS",
+      "settoriFinali": [
+        "gastronomia",
+        "freschi_pls"
+      ]
+    },
+    {
+      "code": "GVPLS",
+      "description": "GENERI VARI E PRODOTTI LIBERO SERVIZIO",
+      "codificaFico": "GVPLS",
+      "settoriFinali": [
+        "drogheria_1",
+        "drogheria_2",
+        "freschi_pls"
+      ]
+    },
+    {
+      "code": "IGQUA",
+      "description": "IGENE E QUALITA",
+      "codificaFico": "IGQUA",
+      "settoriFinali": []
+    },
+    {
+      "code": "MKTOP",
+      "description": "MARKETING OPERATIVO",
+      "codificaFico": "MKTOP",
+      "settoriFinali": [
+        "marketing"
+      ]
+    },
+    {
+      "code": "MPTES",
+      "description": "MAGAZZINO E PIATTAFORME ESTERNE",
+      "codificaFico": "MPTES",
+      "settoriFinali": []
+    },
+    {
+      "code": "MTRGV",
+      "description": "MAGAZZINO TRASPORTI DIR - AUTISTI GV",
+      "codificaFico": "MTRGV",
+      "settoriFinali": []
+    },
+    {
+      "code": "MUCAS",
+      "description": "MULTIMEDIA E CASA",
+      "codificaFico": "MUCAS",
+      "settoriFinali": [
+        "no_food"
+      ]
+    },
+    {
+      "code": "OGVSU",
+      "description": "ORDINI GENERI VARI/SURGELATI",
+      "codificaFico": "OGVSU",
+      "settoriFinali": [
+        "drogheria_1",
+        "drogheria_2",
+        "surgelati"
+      ]
+    },
+    {
+      "code": "ONLUS",
+      "description": "ONLUS",
+      "codificaFico": "ONLUS",
+      "settoriFinali": []
+    },
+    {
+      "code": "OPSEL",
+      "description": "OPERATIVO SELEZIONE",
+      "codificaFico": "OPSEL",
+      "settoriFinali": []
+    },
+    {
+      "code": "PLSGS",
+      "description": "PRODOTTI LIBERO SERVIZIO E GASTRONOMIA",
+      "codificaFico": "PLSGS",
+      "settoriFinali": [
+        "gastronomia",
+        "freschi_pls"
+      ]
+    },
+    {
+      "code": "PLSSU",
+      "description": "SALUMI, LATTICINI E SURG.",
+      "codificaFico": "PLSSU",
+      "settoriFinali": [
+        "gastronomia",
+        "surgelati"
+      ]
+    },
+    {
+      "code": "PPCMA",
+      "description": "PIANIFICAZIONE PRODUZIONE E CONTROLLO MAGAZINO AUTOMATICO",
+      "codificaFico": "PPCMA",
+      "settoriFinali": []
+    },
+    {
+      "code": "PRGCC",
+      "description": "PROGETTAZIONE C.C.",
+      "codificaFico": "PRGCC",
+      "settoriFinali": []
+    },
+    {
+      "code": "PRGLO",
+      "description": "PROGETTAZIONE LAYOUT",
+      "codificaFico": "PRGLO",
+      "settoriFinali": []
+    },
+    {
+      "code": "PRGSP",
+      "description": "PROGETTI SPECIALI",
+      "codificaFico": "PRGSP",
+      "settoriFinali": []
+    },
+    {
+      "code": "PRGTA",
+      "description": "PROGETTO T. A.",
+      "codificaFico": "PRGTA",
+      "settoriFinali": []
+    },
+    {
+      "code": "PRLOG",
+      "description": "PROGETTI LOGISTICI",
+      "codificaFico": "PRLOG",
+      "settoriFinali": []
+    },
+    {
+      "code": "PRNCC",
+      "description": "PROGETTAZIONE NUOVI C.C. E POSIZIONAMENTI",
+      "codificaFico": "PRNCC",
+      "settoriFinali": []
+    },
+    {
+      "code": "PRSCL",
+      "description": "PROGETTI SOCIALI",
+      "codificaFico": "PRSCL",
+      "settoriFinali": []
+    },
+    {
+      "code": "PRSOC",
+      "description": "PRESTITO SOCI",
+      "codificaFico": "PRSOC",
+      "settoriFinali": []
+    },
+    {
+      "code": "PRVOL",
+      "description": "PROGETTO VOLTERRA",
+      "codificaFico": "PRVOL",
+      "settoriFinali": []
+    },
+    {
+      "code": "STPER",
+      "description": "STAGIONALE E PERSONA",
+      "codificaFico": "STPER",
+      "settoriFinali": [
+        "no_food",
+        "chimica"
+      ]
+    },
+    {
+      "code": "SUPET",
+      "description": "SERGELATI E PETFOOD",
+      "codificaFico": "SUPET",
+      "settoriFinali": [
+        "surgelati",
+        "pet_food"
+      ]
+    },
+    {
+      "code": "SWMTG",
+      "description": "SW APPLICATIVO AREA MARKETING",
+      "codificaFico": "SWMTG",
+      "settoriFinali": [
+        "marketing"
+      ]
+    },
+    {
+      "code": "TRAPO",
+      "description": "TRASPORTI PONTEDERA",
+      "codificaFico": "TRAPO",
+      "settoriFinali": []
+    },
+    {
+      "code": "UCOAM",
+      "description": "UFFICIO CONTABILITA' AUSILIARIA MERCI",
+      "codificaFico": "UCOAM",
+      "settoriFinali": []
+    },
+    {
+      "code": "VGVSU",
+      "description": "VENDITE  GENERI VARI/SURGELATI",
+      "codificaFico": "VGVSU",
+      "settoriFinali": [
+        "drogheria_1",
+        "drogheria_2",
+        "surgelati"
+      ]
+    },
+    {
+      "code": "ANME",
+      "description": "ANALISI DI MERCATO",
+      "codificaFico": "ANME",
+      "settoriFinali": []
+    },
+    {
+      "code": "ANST",
+      "description": "ANALISI STRATEGICA",
+      "codificaFico": "ANST",
+      "settoriFinali": []
+    },
+    {
+      "code": "ASBZ",
+      "description": "ASSETTO BAZAR",
+      "codificaFico": "ASBZ",
+      "settoriFinali": []
+    },
+    {
+      "code": "ASFR",
+      "description": "ASSETTO FRESCHI",
+      "codificaFico": "ASFR",
+      "settoriFinali": []
+    },
+    {
+      "code": "ASGV",
+      "description": "ASSETTO GENERI VARI",
+      "codificaFico": "ASGV",
+      "settoriFinali": []
+    },
+    {
+      "code": "ASRU",
+      "description": "AMMINISTRAZIONE E SVILUPPO RU",
+      "codificaFico": "ASRU",
+      "settoriFinali": []
+    },
+    {
+      "code": "ASTE",
+      "description": "ASSETTO TESSILE",
+      "codificaFico": "ASTE",
+      "settoriFinali": []
+    },
+    {
+      "code": "ATES",
+      "description": "ATTIVITA ESTERNE",
+      "codificaFico": "ATES",
+      "settoriFinali": []
+    },
+    {
+      "code": "BRST",
+      "description": "BRICO E STAGIONALE",
+      "codificaFico": "BRST",
+      "settoriFinali": [
+        "no_food"
+      ]
+    },
+    {
+      "code": "CABI",
+      "description": "CARNI BIANCHE",
+      "codificaFico": "CABI",
+      "settoriFinali": [
+        "macelleria"
+      ]
+    },
+    {
+      "code": "CAPE",
+      "description": "CARNI E  PESCHERIA",
+      "codificaFico": "CAPE",
+      "settoriFinali": [
+        "macelleria",
+        "pescheria"
+      ]
+    },
+    {
+      "code": "CARO",
+      "description": "CARNI ROSSE",
+      "codificaFico": "CARO",
+      "settoriFinali": [
+        "macelleria"
+      ]
+    },
+    {
+      "code": "CASS",
+      "description": "CASSE",
+      "codificaFico": "CASS",
+      "settoriFinali": []
+    },
+    {
+      "code": "CDRU",
+      "description": "CONSIGLIERE DELEGATO AREA RISORSE UMANE",
+      "codificaFico": "CDRU",
+      "settoriFinali": []
+    },
+    {
+      "code": "CEDI",
+      "description": "CENTRI DISTRIBUZIONE",
+      "codificaFico": "CEDI",
+      "settoriFinali": []
+    },
+    {
+      "code": "CGPR",
+      "description": "CO.GES. RU E POLITICHE RETRIBUTIVE",
+      "codificaFico": "CGPR",
+      "settoriFinali": []
+    },
+    {
+      "code": "CHSU",
+      "description": "CHIMICA SURGELATI",
+      "codificaFico": "CHSU",
+      "settoriFinali": [
+        "chimica",
+        "surgelati"
+      ]
+    },
+    {
+      "code": "CIRU",
+      "description": "COMUNICAZIONE INTERNA E RELAZIONI RU",
+      "codificaFico": "CIRU",
+      "settoriFinali": []
+    },
+    {
+      "code": "COAN",
+      "description": "CONTABILITA' ANALITICA",
+      "codificaFico": "COAN",
+      "settoriFinali": []
+    },
+    {
+      "code": "COAS",
+      "description": "COORDINATORE AREA SOCI",
+      "codificaFico": "COAS",
+      "settoriFinali": []
+    },
+    {
+      "code": "COGE",
+      "description": "CONTROLLO DI GESTIONE",
+      "codificaFico": "COGE",
+      "settoriFinali": []
+    },
+    {
+      "code": "COIS",
+      "description": "COMUNICAZIONE ISTITUZIONALE",
+      "codificaFico": "COIS",
+      "settoriFinali": []
+    },
+    {
+      "code": "COIT",
+      "description": "CORDINATORE IT",
+      "codificaFico": "COIT",
+      "settoriFinali": []
+    },
+    {
+      "code": "COME",
+      "description": "CONTABILITA' MERCI",
+      "codificaFico": "COME",
+      "settoriFinali": []
+    },
+    {
+      "code": "COOP",
+      "description": "CORDINATORE OPERATING",
+      "codificaFico": "COOP",
+      "settoriFinali": []
+    },
+    {
+      "code": "CPDV",
+      "description": "EVENTI COMUNICAZIONE PDV",
+      "codificaFico": "CPDV",
+      "settoriFinali": []
+    },
+    {
+      "code": "CQFR",
+      "description": "CONTROLLO QUALITA' FRESCHI",
+      "codificaFico": "CQFR",
+      "settoriFinali": []
+    },
+    {
+      "code": "CQOF",
+      "description": "CONTROLLO QUALITA' ORTOFRUTTA",
+      "codificaFico": "CQOF",
+      "settoriFinali": []
+    },
+    {
+      "code": "CQPE",
+      "description": "CONTROLLO QUALITA' PESCE",
+      "codificaFico": "CQPE",
+      "settoriFinali": []
+    },
+    {
+      "code": "CROP",
+      "description": "COORDINAMENTO OPERATIVO",
+      "codificaFico": "CROP",
+      "settoriFinali": []
+    },
+    {
+      "code": "DALI",
+      "description": "DROGHERIA ALIMENTARI E LIQUIDI",
+      "codificaFico": "DALI",
+      "settoriFinali": [
+        "drogheria_1",
+        "drogheria_2",
+        "liquidi"
+      ]
+    },
+    {
+      "code": "FISB",
+      "description": "STAFF FISCALE E BILANCIO",
+      "codificaFico": "FISB",
+      "settoriFinali": []
+    },
+    {
+      "code": "FMAI",
+      "description": "UFFICIO FATTURE MERCI ALIMENTARI INDUSTRIALI",
+      "codificaFico": "FMAI",
+      "settoriFinali": []
+    },
+    {
+      "code": "FMEA",
+      "description": "UFFICIO FATTURE MERCI EXTRA ALIMENTARI",
+      "codificaFico": "FMEA",
+      "settoriFinali": []
+    },
+    {
+      "code": "FMFR",
+      "description": "UFFICIO FATTURE MERCI FRESCHI",
+      "codificaFico": "FMFR",
+      "settoriFinali": []
+    },
+    {
+      "code": "FOCO",
+      "description": "FORMAZIONE E CAMBIAMENTO ORGANIZZATIVO",
+      "codificaFico": "FOCO",
+      "settoriFinali": []
+    },
+    {
+      "code": "FOPA",
+      "description": "FORNERIA E PASTICCERIA",
+      "codificaFico": "FOPA",
+      "settoriFinali": [
+        "forneria"
+      ]
+    },
+    {
+      "code": "FORM",
+      "description": "FORMAZIONE",
+      "codificaFico": "FORM",
+      "settoriFinali": []
+    },
+    {
+      "code": "FRSS",
+      "description": "FRESCHISSIMI",
+      "codificaFico": "FRSS",
+      "settoriFinali": [
+        "ortofrutta",
+        "macelleria",
+        "pescheria",
+        "forneria"
+      ]
+    },
+    {
+      "code": "GCAF",
+      "description": "GESTIONE CESPITI E AFFITTI",
+      "codificaFico": "GCAF",
+      "settoriFinali": []
+    },
+    {
+      "code": "GEAS",
+      "description": "GESTIONE ASSOCIATE",
+      "codificaFico": "GEAS",
+      "settoriFinali": []
+    },
+    {
+      "code": "GECA",
+      "description": "GESTIONE CARBURANTE",
+      "codificaFico": "GECA",
+      "settoriFinali": []
+    },
+    {
+      "code": "GOOL",
+      "description": "GESTIONE ORGANICI E ORGANIZZAZIONE DEL LAVORO",
+      "codificaFico": "GOOL",
+      "settoriFinali": []
+    },
+    {
+      "code": "GSFO",
+      "description": "GASTRONOMIA E FORNERIA",
+      "codificaFico": "GSFO",
+      "settoriFinali": [
+        "gastronomia",
+        "forneria"
+      ]
+    },
+    {
+      "code": "GSRO",
+      "description": "GASTRONOMIA E ROSTICCERIA",
+      "codificaFico": "GSRO",
+      "settoriFinali": [
+        "gastronomia"
+      ]
+    },
+    {
+      "code": "GSRV",
+      "description": "GESTIONE SERVIZI",
+      "codificaFico": "GSRV",
+      "settoriFinali": []
+    },
+    {
+      "code": "GVNA",
+      "description": "GENERI VARI E EXTRA ALIM.",
+      "codificaFico": "GVNA",
+      "settoriFinali": []
+    },
+    {
+      "code": "GVSU",
+      "description": "GENERI VARI SURGELATI",
+      "codificaFico": "GVSU",
+      "settoriFinali": [
+        "drogheria_1",
+        "drogheria_2",
+        "surgelati"
+      ]
+    },
+    {
+      "code": "ICTO",
+      "description": "INFRASTRUTTURE ICT E OPERATING",
+      "codificaFico": "ICTO",
+      "settoriFinali": []
+    },
+    {
+      "code": "MRSC",
+      "description": "MONITORAGGI E RICERCHE SOCI E CONSUMATORI",
+      "codificaFico": "MRSC",
+      "settoriFinali": []
+    },
+    {
+      "code": "OPCM",
+      "description": "OPERATIVO COMMESSE",
+      "codificaFico": "OPCM",
+      "settoriFinali": []
+    },
+    {
+      "code": "OPCO",
+      "description": "OPERATORE CONTEGGIO",
+      "codificaFico": "OPCO",
+      "settoriFinali": []
+    },
+    {
+      "code": "OSOC",
+      "description": "ORGANIZZAZIONE SOCI",
+      "codificaFico": "OSOC",
+      "settoriFinali": []
+    },
+    {
+      "code": "PACO",
+      "description": "GESTIONE PATRIMONIO E CONTRATTUALISTICA",
+      "codificaFico": "PACO",
+      "settoriFinali": []
+    },
+    {
+      "code": "PCDG",
+      "description": "PRESIDENTE CONSIGLIO DI GESTIONE",
+      "codificaFico": "PCDG",
+      "settoriFinali": []
+    },
+    {
+      "code": "PERM",
+      "description": "PRESIDIO PIATTAFORME ESTERNE/ROMA",
+      "codificaFico": "PERM",
+      "settoriFinali": []
+    },
+    {
+      "code": "PFAT",
+      "description": "POSTA/FATTORINO",
+      "codificaFico": "PFAT",
+      "settoriFinali": []
+    },
+    {
+      "code": "PRFI",
+      "description": "PROMO E FIDELIZZAZIONE",
+      "codificaFico": "PRFI",
+      "settoriFinali": []
+    },
+    {
+      "code": "PRIS",
+      "description": "PROGETTI DI INNOVAZIONE SOCI",
+      "codificaFico": "PRIS",
+      "settoriFinali": []
+    },
+    {
+      "code": "PRLI",
+      "description": "PRENOTAZIONE LIBRI SCOLASTICI",
+      "codificaFico": "PRLI",
+      "settoriFinali": []
+    },
+    {
+      "code": "PROF",
+      "description": "PROFUMI",
+      "codificaFico": "PROF",
+      "settoriFinali": [
+        "chimica"
+      ]
+    },
+    {
+      "code": "PSRC",
+      "description": "PREMI SCONTI E RECUPERO CREDITI",
+      "codificaFico": "PSRC",
+      "settoriFinali": []
+    },
+    {
+      "code": "RFRU",
+      "description": "RELAZIONI E FORMAZIONE RU",
+      "codificaFico": "RFRU",
+      "settoriFinali": []
+    },
+    {
+      "code": "RTRA",
+      "description": "REPARTO TRASPORTI",
+      "codificaFico": "RTRA",
+      "settoriFinali": []
+    },
+    {
+      "code": "RUPR",
+      "description": "COTROLO GESTIONE RU E POLITICHE RETRIBUTIVE",
+      "codificaFico": "RUPR",
+      "settoriFinali": []
+    },
+    {
+      "code": "SAAV",
+      "description": "SERVIZI AMMINISTRATIVI AREA SVILUPPO",
+      "codificaFico": "SAAV",
+      "settoriFinali": []
+    },
+    {
+      "code": "SALA",
+      "description": "SALUMI E LATTICINI",
+      "codificaFico": "SALA",
+      "settoriFinali": []
+    },
+    {
+      "code": "SARU",
+      "description": "SERVIZI AMMINISTRATIVI RU",
+      "codificaFico": "SARU",
+      "settoriFinali": []
+    },
+    {
+      "code": "SLPP",
+      "description": "SICUREZZA DEL LAVORO, PROTEZIONE E PREVENZIONE",
+      "codificaFico": "SLPP",
+      "settoriFinali": []
+    },
+    {
+      "code": "SOST",
+      "description": "SOCI E STRATEGIE",
+      "codificaFico": "SOST",
+      "settoriFinali": []
+    },
+    {
+      "code": "SRCL",
+      "description": "SERVIZI AL CLIENTE",
+      "codificaFico": "SRCL",
+      "settoriFinali": []
+    },
+    {
+      "code": "SSCA",
+      "description": "SERVIZI ALLE COOPERATIVE ASSOCIATE",
+      "codificaFico": "SSCA",
+      "settoriFinali": []
+    },
+    {
+      "code": "SSPC",
+      "description": "SUPERETTES E SERVIZI PICCOLE COOPERATIVE",
+      "codificaFico": "SSPC",
+      "settoriFinali": []
+    },
+    {
+      "code": "SSRM",
+      "description": "SETTORE SVILUPPO ROMA",
+      "codificaFico": "SSRM",
+      "settoriFinali": []
+    },
+    {
+      "code": "SSTS",
+      "description": "SETTORE SVILUPPO TOSCANA",
+      "codificaFico": "SSTS",
+      "settoriFinali": []
+    },
+    {
+      "code": "SWDI",
+      "description": "SOFTWARE APPLICATIVO DISTRETTUALE/IPER",
+      "codificaFico": "SWDI",
+      "settoriFinali": []
+    },
+    {
+      "code": "SWSC",
+      "description": "SW APPLICATIVO AREA SUPPLY CHAIN",
+      "codificaFico": "SWSC",
+      "settoriFinali": []
+    },
+    {
+      "code": "SWSC",
+      "description": "SOFTWARE APPLICATIVO AREA SUPPLY CHAIN",
+      "codificaFico": "SWSC",
+      "settoriFinali": []
+    },
+    {
+      "code": "SWSC",
+      "description": "SW APPLICATIVO AREA SUPPLY CHAIN",
+      "codificaFico": "SWSC",
+      "settoriFinali": []
+    },
+    {
+      "code": "SWSP",
+      "description": "SOFTWARE SISTEMI POS",
+      "codificaFico": "SWSP",
+      "settoriFinali": []
+    },
+    {
+      "code": "UCTS",
+      "description": "CONTRATTUALISTICA",
+      "codificaFico": "UCTS",
+      "settoriFinali": []
+    },
+    {
+      "code": "UFEA",
+      "description": "UFF. FORNITORI EXTRA ALIMENTARI",
+      "codificaFico": "UFEA",
+      "settoriFinali": []
+    },
+    {
+      "code": "UFFR",
+      "description": "UFF. FORNITORI FRESCHI",
+      "codificaFico": "UFFR",
+      "settoriFinali": []
+    },
+    {
+      "code": "UFIN",
+      "description": "UFFICIO FINANZA",
+      "codificaFico": "UFIN",
+      "settoriFinali": []
+    },
+    {
+      "code": "UISP",
+      "description": "UFFICIO ISPETTIVO",
+      "codificaFico": "UISP",
+      "settoriFinali": []
+    },
+    {
+      "code": "UMAG",
+      "description": "UFFICIO MAGAZZINO",
+      "codificaFico": "UMAG",
+      "settoriFinali": []
+    },
+    {
+      "code": "UODO",
+      "description": "UOMO E DONNA",
+      "codificaFico": "UODO",
+      "settoriFinali": [
+        "no_food"
+      ]
+    },
+    {
+      "code": "UTRA",
+      "description": "UFFICIO TRASPORTI",
+      "codificaFico": "UTRA",
+      "settoriFinali": []
+    },
+    {
+      "code": "VMMK",
+      "description": "VENDITE MINIMERCATI",
+      "codificaFico": "VMMK",
+      "settoriFinali": []
+    },
+    {
+      "code": "VMMT",
+      "description": "VENDITE TRADIZIONALE E SUPPORTO \"BISENZIO OMBRONE\"",
+      "codificaFico": "VMMT",
+      "settoriFinali": []
+    },
+    {
+      "code": "VMRC",
+      "description": "VISUAL MERCHANDISING",
+      "codificaFico": "VMRC",
+      "settoriFinali": []
+    },
+    {
+      "code": "VPCD",
+      "description": "VICE PRESIDENTE CONSIGLIERE DELELEGATO",
+      "codificaFico": "VPCD",
+      "settoriFinali": []
+    },
+    {
+      "code": "VSMK",
+      "description": "VENDITE SUPERMERCATI",
+      "codificaFico": "VSMK",
+      "settoriFinali": []
+    },
+    {
+      "code": "VSOC",
+      "description": "VOTAZIONE SOCI",
+      "codificaFico": "VSOC",
+      "settoriFinali": []
+    },
+    {
+      "code": "ACQ",
+      "description": "ACQUISTI",
+      "codificaFico": "ACQ",
+      "settoriFinali": []
+    },
+    {
+      "code": "ADT",
+      "description": "AUDIT",
+      "codificaFico": "ADT",
+      "settoriFinali": []
+    },
+    {
+      "code": "AEC",
+      "description": "ANALISI E CONTROLLO",
+      "codificaFico": "AEC",
+      "settoriFinali": []
+    },
+    {
+      "code": "ALT",
+      "description": "ALLESTIMENTO",
+      "codificaFico": "ALT",
+      "settoriFinali": []
+    },
+    {
+      "code": "AMM",
+      "description": "AMMINISTRAZIONE",
+      "codificaFico": "AMM",
+      "settoriFinali": []
+    },
+    {
+      "code": "ANL",
+      "description": "ANALISTA",
+      "codificaFico": "ANL",
+      "settoriFinali": []
+    },
+    {
+      "code": "APP",
+      "description": "APPROVVIGIONAMENTO",
+      "codificaFico": "APP",
+      "settoriFinali": []
+    },
+    {
+      "code": "ASS",
+      "description": "REPARTO ASSOCIATE",
+      "codificaFico": "ASS",
+      "settoriFinali": []
+    },
+    {
+      "code": "AT1",
+      "description": "AREA TERRITORIALE 1",
+      "codificaFico": "AT1",
+      "settoriFinali": []
+    },
+    {
+      "code": "AT2",
+      "description": "AREA TERRITORIALE 2",
+      "codificaFico": "AT2",
+      "settoriFinali": []
+    },
+    {
+      "code": "AT3",
+      "description": "AREA TERRITORIALE 3",
+      "codificaFico": "AT3",
+      "settoriFinali": []
+    },
+    {
+      "code": "AT4",
+      "description": "AREA TERRITORIALE 4",
+      "codificaFico": "AT4",
+      "settoriFinali": []
+    },
+    {
+      "code": "BBC",
+      "description": "SVILUPPO BBC",
+      "codificaFico": "BBC",
+      "settoriFinali": []
+    },
+    {
+      "code": "BOX",
+      "description": "SERVIZIO CLIENTI",
+      "codificaFico": "BOX",
+      "settoriFinali": []
+    },
+    {
+      "code": "CAL",
+      "description": "CARRELLISTA",
+      "codificaFico": "CAL",
+      "settoriFinali": []
+    },
+    {
+      "code": "CAM",
+      "description": "CAPO ASSETTO MERCI",
+      "codificaFico": "CAM",
+      "settoriFinali": []
+    },
+    {
+      "code": "CAS",
+      "description": "CASA",
+      "codificaFico": "CAS",
+      "settoriFinali": []
+    },
+    {
+      "code": "CCI",
+      "description": "COOP CENTRO ITALIA",
+      "codificaFico": "CCI",
+      "settoriFinali": []
+    },
+    {
+      "code": "CCO",
+      "description": "CAPO COMMESSA",
+      "codificaFico": "CCO",
+      "settoriFinali": []
+    },
+    {
+      "code": "CDG",
+      "description": "CONSIGLIO DI GESTIONE",
+      "codificaFico": "CDG",
+      "settoriFinali": []
+    },
+    {
+      "code": "CDS",
+      "description": "CONSIGLIO DI SORVEGLIANZA",
+      "codificaFico": "CDS",
+      "settoriFinali": []
+    },
+    {
+      "code": "CLR",
+      "description": "CONTROLLO LAVORAZIONI E RESE",
+      "codificaFico": "CLR",
+      "settoriFinali": []
+    },
+    {
+      "code": "CMZ",
+      "description": "COMUNICAZIONI",
+      "codificaFico": "CMZ",
+      "settoriFinali": []
+    },
+    {
+      "code": "COM",
+      "description": "COMMERCIALE",
+      "codificaFico": "COM",
+      "settoriFinali": []
+    },
+    {
+      "code": "CON",
+      "description": "MATERIALE DA CONFEZIONAMENTO",
+      "codificaFico": "CON",
+      "settoriFinali": []
+    },
+    {
+      "code": "CPF",
+      "description": "CONTROLLO PIATTAFORMA FRESCHI",
+      "codificaFico": "CPF",
+      "settoriFinali": []
+    },
+    {
+      "code": "CRC",
+      "description": "CARICHI",
+      "codificaFico": "CRC",
+      "settoriFinali": []
+    },
+    {
+      "code": "CSG",
+      "description": "CASALINGO",
+      "codificaFico": "CSG",
+      "settoriFinali": [
+        "no_food"
+      ]
+    },
+    {
+      "code": "DA1",
+      "description": "DROGHERIA ALIMENTARE 1",
+      "codificaFico": "DA1",
+      "settoriFinali": [
+        "drogheria_1"
+      ]
+    },
+    {
+      "code": "DA2",
+      "description": "DROGHERIA ALIMENTARE 2",
+      "codificaFico": "DA2",
+      "settoriFinali": [
+        "drogheria_2"
+      ]
+    },
+    {
+      "code": "DEC",
+      "description": "DECORAZIONE",
+      "codificaFico": "DEC",
+      "settoriFinali": []
+    },
+    {
+      "code": "DRM",
+      "description": "DOCROMA",
+      "codificaFico": "DRM",
+      "settoriFinali": []
+    },
+    {
+      "code": "DSG",
+      "description": "DISEGNATORE",
+      "codificaFico": "DSG",
+      "settoriFinali": []
+    },
+    {
+      "code": "FAI",
+      "description": "FORNITORI ALIMENTARI INDUSTRIALI",
+      "codificaFico": "FAI",
+      "settoriFinali": []
+    },
+    {
+      "code": "FAR",
+      "description": "FARMACISTA",
+      "codificaFico": "FAR",
+      "settoriFinali": []
+    },
+    {
+      "code": "FBS",
+      "description": "FATTURE BENI E SERVIZI",
+      "codificaFico": "FBS",
+      "settoriFinali": []
+    },
+    {
+      "code": "FIN",
+      "description": "FINANZIARIO",
+      "codificaFico": "FIN",
+      "settoriFinali": []
+    },
+    {
+      "code": "GAS",
+      "description": "GESTIONE ANAGRAFICA SOCI",
+      "codificaFico": "GAS",
+      "settoriFinali": []
+    },
+    {
+      "code": "GCC",
+      "description": "GESTIONE CENTRI COMM.",
+      "codificaFico": "GCC",
+      "settoriFinali": []
+    },
+    {
+      "code": "GFC",
+      "description": "GESTIONE FATTURE CLIENTI",
+      "codificaFico": "GFC",
+      "settoriFinali": []
+    },
+    {
+      "code": "GRD",
+      "description": "GUARDIANIA",
+      "codificaFico": "GRD",
+      "settoriFinali": []
+    },
+    {
+      "code": "GSP",
+      "description": "GESTIONE SISTEMI POS",
+      "codificaFico": "GSP",
+      "settoriFinali": []
+    },
+    {
+      "code": "GST",
+      "description": "GRANDI STRUTTURE",
+      "codificaFico": "GST",
+      "settoriFinali": []
+    },
+    {
+      "code": "GUA",
+      "description": "GUARDIANIA",
+      "codificaFico": "GUA",
+      "settoriFinali": []
+    },
+    {
+      "code": "IMK",
+      "description": "IPERMERCATO",
+      "codificaFico": "IMK",
+      "settoriFinali": []
+    },
+    {
+      "code": "INF",
+      "description": "INFORMATICA",
+      "codificaFico": "INF",
+      "settoriFinali": []
+    },
+    {
+      "code": "INV",
+      "description": "INVESTIMENTI",
+      "codificaFico": "INV",
+      "settoriFinali": []
+    },
+    {
+      "code": "ITF",
+      "description": "ISOLA TELEFONIA",
+      "codificaFico": "ITF",
+      "settoriFinali": []
+    },
+    {
+      "code": "LEG",
+      "description": "LEGALE",
+      "codificaFico": "LEG",
+      "settoriFinali": []
+    },
+    {
+      "code": "LOG",
+      "description": "LOGISTICA",
+      "codificaFico": "LOG",
+      "settoriFinali": []
+    },
+    {
+      "code": "LRS",
+      "description": "LEGALE E RELAZIONI SINDACALI",
+      "codificaFico": "LRS",
+      "settoriFinali": []
+    },
+    {
+      "code": "LTA",
+      "description": "LICENZE TASSE E ASSICURAZIONI",
+      "codificaFico": "LTA",
+      "settoriFinali": []
+    },
+    {
+      "code": "MAG",
+      "description": "MAGAZZINO",
+      "codificaFico": "MAG",
+      "settoriFinali": []
+    },
+    {
+      "code": "MAN",
+      "description": "MANUTENZIONE",
+      "codificaFico": "MAN",
+      "settoriFinali": []
+    },
+    {
+      "code": "MER",
+      "description": "MERCI",
+      "codificaFico": "MER",
+      "settoriFinali": []
+    },
+    {
+      "code": "MGR",
+      "description": "MAGAZZINIERE",
+      "codificaFico": "MGR",
+      "settoriFinali": []
+    },
+    {
+      "code": "MMK",
+      "description": "MINIMERCATO",
+      "codificaFico": "MMK",
+      "settoriFinali": []
+    },
+    {
+      "code": "MMT",
+      "description": "TRADIZIONALE",
+      "codificaFico": "MMT",
+      "settoriFinali": []
+    },
+    {
+      "code": "MNS",
+      "description": "MENSA",
+      "codificaFico": "MNS",
+      "settoriFinali": []
+    },
+    {
+      "code": "MON",
+      "description": "MONETICA",
+      "codificaFico": "MON",
+      "settoriFinali": []
+    },
+    {
+      "code": "MSR",
+      "description": "MANUTENZIONE E SERVIZI ROMA",
+      "codificaFico": "MSR",
+      "settoriFinali": []
+    },
+    {
+      "code": "NET",
+      "description": "NETWORKING & TLC",
+      "codificaFico": "NET",
+      "settoriFinali": []
+    },
+    {
+      "code": "ORG",
+      "description": "ORGANIZZAZIONE",
+      "codificaFico": "ORG",
+      "settoriFinali": []
+    },
+    {
+      "code": "OSI",
+      "description": "CONSIGLIERE DELEGATO AREA ORG. SISTEMI E SERV. GEN.",
+      "codificaFico": "OSI",
+      "settoriFinali": []
+    },
+    {
+      "code": "PAF",
+      "description": "PROGETTI AREA FRESCHI",
+      "codificaFico": "PAF",
+      "settoriFinali": []
+    },
+    {
+      "code": "PAG",
+      "description": "UFFICIO PAGHE",
+      "codificaFico": "PAG",
+      "settoriFinali": []
+    },
+    {
+      "code": "PCK",
+      "description": "PAKAGING",
+      "codificaFico": "PCK",
+      "settoriFinali": []
+    },
+    {
+      "code": "PDV",
+      "description": "PUNTO VENDITA",
+      "codificaFico": "PDV",
+      "settoriFinali": []
+    },
+    {
+      "code": "PER",
+      "description": "PERSONE",
+      "codificaFico": "PER",
+      "settoriFinali": []
+    },
+    {
+      "code": "PET",
+      "description": "PETFOOD",
+      "codificaFico": "PET",
+      "settoriFinali": [
+        "pet_food"
+      ]
+    },
+    {
+      "code": "PLS",
+      "description": "PRODOTTI LIBERO SERVIZIO",
+      "codificaFico": "PLS",
+      "settoriFinali": [
+        "freschi_pls"
+      ]
+    },
+    {
+      "code": "PLX",
+      "description": "PLANEXA",
+      "codificaFico": "PLX",
+      "settoriFinali": []
+    },
+    {
+      "code": "POS",
+      "description": "SISTEMI POS",
+      "codificaFico": "POS",
+      "settoriFinali": []
+    },
+    {
+      "code": "POS",
+      "description": "GESTIONE SISTEMI POS",
+      "codificaFico": "POS",
+      "settoriFinali": []
+    },
+    {
+      "code": "PRG",
+      "description": "PROGETTAZIONE",
+      "codificaFico": "PRG",
+      "settoriFinali": []
+    },
+    {
+      "code": "PRN",
+      "description": "UFFICIO PERSONALE",
+      "codificaFico": "PRN",
+      "settoriFinali": []
+    },
+    {
+      "code": "PUB",
+      "description": "PUBBLICITA'",
+      "codificaFico": "PUB",
+      "settoriFinali": [
+        "marketing"
+      ]
+    },
+    {
+      "code": "QUA",
+      "description": "QUALITA",
+      "codificaFico": "QUA",
+      "settoriFinali": []
+    },
+    {
+      "code": "RIS",
+      "description": "RISTORO",
+      "codificaFico": "RIS",
+      "settoriFinali": []
+    },
+    {
+      "code": "RSC",
+      "description": "RESPONSABILE SERVIZIO CLIENTI",
+      "codificaFico": "RSC",
+      "settoriFinali": []
+    },
+    {
+      "code": "RTC",
+      "description": "RESPONSABILE TURNO CASSE",
+      "codificaFico": "RTC",
+      "settoriFinali": []
+    },
+    {
+      "code": "SAI",
+      "description": "SICUREZZA & AUDITING IT",
+      "codificaFico": "SAI",
+      "settoriFinali": []
+    },
+    {
+      "code": "SEL",
+      "description": "SELEZIONE",
+      "codificaFico": "SEL",
+      "settoriFinali": []
+    },
+    {
+      "code": "SIS",
+      "description": "SISTEMISTA",
+      "codificaFico": "SIS",
+      "settoriFinali": []
+    },
+    {
+      "code": "SMK",
+      "description": "SUPERMERCATO",
+      "codificaFico": "SMK",
+      "settoriFinali": []
+    },
+    {
+      "code": "SOR",
+      "description": "SOCI ORDINARI",
+      "codificaFico": "SOR",
+      "settoriFinali": []
+    },
+    {
+      "code": "SPS",
+      "description": "SVILUPPO PROGETTI SPECIALI",
+      "codificaFico": "SPS",
+      "settoriFinali": []
+    },
+    {
+      "code": "SPT",
+      "description": "SUPERETTE",
+      "codificaFico": "SPT",
+      "settoriFinali": []
+    },
+    {
+      "code": "SVI",
+      "description": "SVILUPO",
+      "codificaFico": "SVI",
+      "settoriFinali": []
+    },
+    {
+      "code": "SWA",
+      "description": "SOFTWARE APPLICATIVO",
+      "codificaFico": "SWA",
+      "settoriFinali": []
+    },
+    {
+      "code": "SWA",
+      "description": "SOFTWARE APPLICATIVO",
+      "codificaFico": "SWA",
+      "settoriFinali": []
+    },
+    {
+      "code": "TAL",
+      "description": "TECNICO AREA LOGISTICA",
+      "codificaFico": "TAL",
+      "settoriFinali": []
+    },
+    {
+      "code": "TEC",
+      "description": "TECNICO",
+      "codificaFico": "TEC",
+      "settoriFinali": []
+    },
+    {
+      "code": "TER",
+      "description": "TERZO DI SALA",
+      "codificaFico": "TER",
+      "settoriFinali": []
+    },
+    {
+      "code": "TRA",
+      "description": "TRASPORTI",
+      "codificaFico": "TRA",
+      "settoriFinali": []
+    },
+    {
+      "code": "TSR",
+      "description": "TESORERIA",
+      "codificaFico": "TSR",
+      "settoriFinali": []
+    },
+    {
+      "code": "TUR",
+      "description": "ATTIVITA' TURISTICA PER I SOCI",
+      "codificaFico": "TUR",
+      "settoriFinali": []
+    },
+    {
+      "code": "TVC",
+      "description": "TRASPORTO VALORI E CONTAZIONE",
+      "codificaFico": "TVC",
+      "settoriFinali": []
+    },
+    {
+      "code": "UFM",
+      "description": "UFFICIO CONTABILITA' MERCI",
+      "codificaFico": "UFM",
+      "settoriFinali": []
+    },
+    {
+      "code": "UIQ",
+      "description": "UFFICIO IGENE QUALITA",
+      "codificaFico": "UIQ",
+      "settoriFinali": []
+    },
+    {
+      "code": "VFR",
+      "description": "VENDITE FRESCHI",
+      "codificaFico": "VFR",
+      "settoriFinali": []
+    },
+    {
+      "code": "VNA",
+      "description": "VENDITE NO FOOD",
+      "codificaFico": "VNA",
+      "settoriFinali": []
+    },
+    {
+      "code": "WDC",
+      "description": "WEBDOC",
+      "codificaFico": "WDC",
+      "settoriFinali": []
+    },
+    {
+      "code": "AB",
+      "description": "ANALISTA DI BUSINESS",
+      "codificaFico": "AB",
+      "settoriFinali": []
+    },
+    {
+      "code": "AR",
+      "description": "ARCHIVIO",
+      "codificaFico": "AR",
+      "settoriFinali": []
+    },
+    {
+      "code": "AS",
+      "description": "AREA SOCI",
+      "codificaFico": "AS",
+      "settoriFinali": []
+    },
+    {
+      "code": "AV",
+      "description": "AVICUNICOLO",
+      "codificaFico": "AV",
+      "settoriFinali": []
+    },
+    {
+      "code": "BI",
+      "description": "BUSINESS INTELLIGENCE",
+      "codificaFico": "BI",
+      "settoriFinali": []
+    },
+    {
+      "code": "BP",
+      "description": "BAZAR PESANTE",
+      "codificaFico": "BP",
+      "settoriFinali": []
+    },
+    {
+      "code": "BR",
+      "description": "BRICO",
+      "codificaFico": "BR",
+      "settoriFinali": []
+    },
+    {
+      "code": "BS",
+      "description": "BENI E SERVIZI",
+      "codificaFico": "BS",
+      "settoriFinali": []
+    },
+    {
+      "code": "CA",
+      "description": "CARNI",
+      "codificaFico": "CA",
+      "settoriFinali": [
+        "macelleria"
+      ]
+    },
+    {
+      "code": "CF",
+      "description": "CENTRO FRESCHI",
+      "codificaFico": "CF",
+      "settoriFinali": []
+    },
+    {
+      "code": "CH",
+      "description": "CHIMICA",
+      "codificaFico": "CH",
+      "settoriFinali": [
+        "chimica"
+      ]
+    },
+    {
+      "code": "DA",
+      "description": "DROGHERIA ALIMENTARI",
+      "codificaFico": "DA",
+      "settoriFinali": [
+        "drogheria_1",
+        "drogheria_2"
+      ]
+    },
+    {
+      "code": "DO",
+      "description": "DONNA",
+      "codificaFico": "DO",
+      "settoriFinali": [
+        "no_food"
+      ]
+    },
+    {
+      "code": "FI",
+      "description": "FONTI E IMPIEGHI",
+      "codificaFico": "FI",
+      "settoriFinali": []
+    },
+    {
+      "code": "FO",
+      "description": "FORNERIA",
+      "codificaFico": "FO",
+      "settoriFinali": [
+        "forneria"
+      ]
+    },
+    {
+      "code": "FR",
+      "description": "FRESCHI",
+      "codificaFico": "FR",
+      "settoriFinali": [
+        "gastronomia",
+        "freschi_pls",
+        "surgelati"
+      ]
+    },
+    {
+      "code": "GB",
+      "description": "GESTIONE BENI",
+      "codificaFico": "GB",
+      "settoriFinali": []
+    },
+    {
+      "code": "GC",
+      "description": "GRUPPO DI CONTROLLO",
+      "codificaFico": "GC",
+      "settoriFinali": []
+    },
+    {
+      "code": "GE",
+      "description": "GELATERIA",
+      "codificaFico": "GE",
+      "settoriFinali": [
+        "surgelati"
+      ]
+    },
+    {
+      "code": "GS",
+      "description": "GASTRONOMIA E ROSTICCERIA",
+      "codificaFico": "GS",
+      "settoriFinali": [
+        "gastronomia"
+      ]
+    },
+    {
+      "code": "GV",
+      "description": "GENERI VARI",
+      "codificaFico": "GV",
+      "settoriFinali": [
+        "drogheria_1",
+        "drogheria_2"
+      ]
+    },
+    {
+      "code": "IA",
+      "description": "IGENE AMBIENTI",
+      "codificaFico": "IA",
+      "settoriFinali": [
+        "chimica"
+      ]
+    },
+    {
+      "code": "IP",
+      "description": "IGENE PERSONA",
+      "codificaFico": "IP",
+      "settoriFinali": [
+        "chimica"
+      ]
+    },
+    {
+      "code": "IT",
+      "description": "IT",
+      "codificaFico": "IT",
+      "settoriFinali": []
+    },
+    {
+      "code": "LI",
+      "description": "LIQUIIDI",
+      "codificaFico": "LI",
+      "settoriFinali": [
+        "liquidi"
+      ]
+    },
+    {
+      "code": "MA",
+      "description": "",
+      "codificaFico": "MA",
+      "settoriFinali": []
+    },
+    {
+      "code": "MU",
+      "description": "MULTIMEDIA",
+      "codificaFico": "MU",
+      "settoriFinali": [
+        "no_food"
+      ]
+    },
+    {
+      "code": "MU1",
+      "description": "MULTIMEDIA UNO",
+      "codificaFico": "MU1",
+      "settoriFinali": [
+        "no_food"
+      ]
+    },
+    {
+      "code": "MU2",
+      "description": "MULTIMEDIA DUE",
+      "codificaFico": "MU2",
+      "settoriFinali": [
+        "no_food"
+      ]
+    },
+    {
+      "code": "NA",
+      "description": "NON ALIMENTARI",
+      "codificaFico": "NA",
+      "settoriFinali": [
+        "no_food"
+      ]
+    },
+    {
+      "code": "OF",
+      "description": "ORTOFRUTTA",
+      "codificaFico": "OF",
+      "settoriFinali": [
+        "ortofrutta"
+      ]
+    },
+    {
+      "code": "OP",
+      "description": "OPERATING",
+      "codificaFico": "OP",
+      "settoriFinali": []
+    },
+    {
+      "code": "OT",
+      "description": "OTTICA",
+      "codificaFico": "OT",
+      "settoriFinali": []
+    },
+    {
+      "code": "PA",
+      "description": "PASTICCERIA",
+      "codificaFico": "PA",
+      "settoriFinali": [
+        "forneria"
+      ]
+    },
+    {
+      "code": "PE",
+      "description": "PESCHERIA",
+      "codificaFico": "PE",
+      "settoriFinali": [
+        "pescheria"
+      ]
+    },
+    {
+      "code": "PF",
+      "description": "ORTOFRUTTA (INDUSTRIALE)",
+      "codificaFico": "PF",
+      "settoriFinali": [
+        "ortofrutta"
+      ]
+    },
+    {
+      "code": "PI",
+      "description": "PATRIMONIO IMMOBILIARE",
+      "codificaFico": "PI",
+      "settoriFinali": []
+    },
+    {
+      "code": "PR",
+      "description": "PROFUMERIA",
+      "codificaFico": "PR",
+      "settoriFinali": [
+        "chimica"
+      ]
+    },
+    {
+      "code": "PS",
+      "description": "PRESTITO SOCIALE",
+      "codificaFico": "PS",
+      "settoriFinali": []
+    },
+    {
+      "code": "PZ",
+      "description": "PIZZERIA",
+      "codificaFico": "PZ",
+      "settoriFinali": []
+    },
+    {
+      "code": "RA",
+      "description": "RISORSE AMBIENTALI",
+      "codificaFico": "RA",
+      "settoriFinali": []
+    },
+    {
+      "code": "RC",
+      "description": "RECEPTION / CENTRALINO",
+      "codificaFico": "RC",
+      "settoriFinali": []
+    },
+    {
+      "code": "RE",
+      "description": "RELAZIONI ESTERNE",
+      "codificaFico": "RE",
+      "settoriFinali": []
+    },
+    {
+      "code": "RO",
+      "description": "ROSTICCERIA",
+      "codificaFico": "RO",
+      "settoriFinali": [
+        "gastronomia"
+      ]
+    },
+    {
+      "code": "RR",
+      "description": "RIORDINO",
+      "codificaFico": "RR",
+      "settoriFinali": []
+    },
+    {
+      "code": "RU",
+      "description": "RISORSE UMANE",
+      "codificaFico": "RU",
+      "settoriFinali": []
+    },
+    {
+      "code": "SA",
+      "description": "SERVIZI AMMINISTRATIVI",
+      "codificaFico": "SA",
+      "settoriFinali": []
+    },
+    {
+      "code": "SF",
+      "description": "SERVIZI FINANZIARI",
+      "codificaFico": "SF",
+      "settoriFinali": []
+    },
+    {
+      "code": "SG",
+      "description": "SERVIZI GENERALI",
+      "codificaFico": "SG",
+      "settoriFinali": []
+    },
+    {
+      "code": "SS",
+      "description": "SELEZIONE E SVILUPPO",
+      "codificaFico": "SS",
+      "settoriFinali": []
+    },
+    {
+      "code": "ST",
+      "description": "STAGIONALE",
+      "codificaFico": "ST",
+      "settoriFinali": [
+        "no_food"
+      ]
+    },
+    {
+      "code": "SU",
+      "description": "SURGELATI",
+      "codificaFico": "SU",
+      "settoriFinali": [
+        "surgelati"
+      ]
+    },
+    {
+      "code": "TC",
+      "description": "TURNAZIONE CASSE ( PLANEXA )",
+      "codificaFico": "TC",
+      "settoriFinali": []
+    },
+    {
+      "code": "TE",
+      "description": "TESSILE",
+      "codificaFico": "TE",
+      "settoriFinali": [
+        "no_food"
+      ]
+    },
+    {
+      "code": "UO",
+      "description": "UOMO",
+      "codificaFico": "UO",
+      "settoriFinali": [
+        "no_food"
+      ]
+    },
+    {
+      "code": "VP",
+      "description": "VENDITE SU PRENOTAZIONE",
+      "codificaFico": "VP",
+      "settoriFinali": []
+    },
+    {
+      "code": "VU",
+      "description": "VUOTI",
+      "codificaFico": "VU",
+      "settoriFinali": []
+    }
+  ]
+}

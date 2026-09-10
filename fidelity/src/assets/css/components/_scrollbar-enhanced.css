@@ -1,0 +1,71 @@
+/* Global SimpleBar-like scrollbar styles */
+
+/* Firefox */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(148, 163, 184, 0.4) transparent;
+}
+
+/* WebKit browsers (Chrome, Safari, Edge) */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.4);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(148, 163, 184, 0.6);
+}
+
+::-webkit-scrollbar-thumb:active {
+    background: rgba(100, 116, 139, 0.7);
+}
+
+::-webkit-scrollbar-corner {
+    background: transparent;
+}
+
+/* Enhanced scrollbar (explicit class for larger scrollbars) */
+
+/* Firefox */
+.scrollbar-enhanced {
+    scrollbar-width: auto;
+    scrollbar-color: #cbd5e1 #f1f5f9;
+}
+
+/* WebKit browsers (Chrome, Safari, Edge) */
+.scrollbar-enhanced::-webkit-scrollbar {
+    width: 14px;
+    height: 14px;
+}
+
+.scrollbar-enhanced::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 8px;
+}
+
+.scrollbar-enhanced::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 8px;
+    border: 3px solid #f1f5f9;
+}
+
+.scrollbar-enhanced::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+.scrollbar-enhanced::-webkit-scrollbar-thumb:active {
+    background: #64748b;
+}
+
+.scrollbar-enhanced::-webkit-scrollbar-corner {
+    background: #f1f5f9;
+}

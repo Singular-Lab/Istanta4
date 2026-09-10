@@ -1,0 +1,34 @@
+[
+  {
+    "titoloField": "Scegli Area 1 di confronto",
+    "idField": "guidIdAreaPrimaria",
+    "binding": "aree",
+    "visible": true,
+    "tipoField": "cmb",
+    "nullable": true
+  },
+  {
+    "titoloField": "Scegli Canale 1 di confronto",
+    "idField": "guidIdCanalePrimario",
+    "binding": "canali",
+    "visible": true,
+    "tipoField": "cmb",
+    "nullable": true
+  },
+  {
+    "titoloField": "Scegli Area 2 di confronto",
+    "idField": "guidIdAreaSecondaria",
+    "binding": "aree",
+    "visible": true,
+    "tipoField": "cmb",
+    "nullable": true
+  },
+  {
+    "titoloField": "Scegli Canale 2 di confronto",
+    "idField": "guidIdCanaleSecondario",
+    "binding": "canali",
+    "visible": true,
+    "tipoField": "cmb",
+    "nullable": true
+  }
+]

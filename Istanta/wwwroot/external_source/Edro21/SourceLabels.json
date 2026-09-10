@@ -1,0 +1,19 @@
+{
+  "source": [
+    {
+      "Id": 1,
+      "Codice": "main",
+      "Nome": "Lista Origine"
+    },
+    {
+      "Id": 2,
+      "Codice": "speciale",
+      "Nome": "Speciale"
+    },
+    {
+      "Id": 3,
+      "Codice": "tecnica",
+      "Nome": "Tecnica"
+    }
+  ]
+}

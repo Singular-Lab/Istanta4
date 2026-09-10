@@ -1,0 +1,221 @@
+import { twMerge } from "tailwind-merge";
+import { Tab as HeadlessTab, TabGroup, TabList, TabPanel, TabPanels, Transition } from "@headlessui/react";
+import { Fragment, createContext, useContext } from "react";
+
+type Variant = "tabs" | "pills" | "boxed-tabs" | "link-tabs";
+
+const tabContext = createContext<{
+  selected: boolean;
+  disabled: boolean;
+}>({
+  selected: false,
+  disabled: false,
+});
+
+const listContext = createContext<{
+  variant: Variant;
+}>({
+  variant: "tabs",
+});
+
+function Tab({
+  children,
+  className,
+  fullWidth = true,
+  ...props
+}: Omit<
+  ExtractProps<typeof HeadlessTab> & {
+    fullWidth?: boolean;
+  },
+  "ref"
+>) {
+  const list = useContext(listContext);
+  return (
+    <HeadlessTab as={Fragment}>
+      {({ selected, disabled }) => (
+        <li
+          className={twMerge([
+            "focus-visible:outline-none",
+            fullWidth && "flex-1",
+            list.variant == "tabs" && "-mb-px",
+            className,
+          ])}
+          {...props}
+        >
+          <tabContext.Provider
+            value={{
+              selected,
+              disabled,
+            }}
+          >
+            {typeof children === "function"
+              ? children({
+                  selected,
+                  disabled,
+                  hover: false,
+                  focus: false,
+                  active: false,
+                  autofocus: false,
+                })
+              : children}
+          </tabContext.Provider>
+        </li>
+      )}
+    </HeadlessTab>
+  );
+}
+
+// Refactoring Tab.Button come componente React con nome maiuscolo
+function TabButton<C extends React.ElementType = "a">({
+  children,
+  className,
+  as,
+  ...props
+}: {
+  as?: C;
+} & React.PropsWithChildren &
+  React.ComponentPropsWithoutRef<C>) {
+  const tab = useContext(tabContext);
+  const list = useContext(listContext);
+  const Component = as || "a";
+
+  return (
+    <Component
+      className={twMerge([
+        "cursor-pointer block appearance-none px-3 py-2 border border-transparent text-slate-600 transition-colors dark:text-slate-400",
+        tab.selected && "text-slate-700 dark:text-white",
+
+        // Default
+        list.variant == "tabs" &&
+          "block border-transparent rounded-t-md dark:border-transparent",
+        list.variant == "tabs" &&
+          tab.selected &&
+          "bg-white border-slate-200 border-b-transparent font-medium dark:bg-transparent dark:border-t-darkmode-400 dark:border-b-darkmode-600 dark:border-x-darkmode-400",
+        list.variant == "tabs" &&
+          !tab.selected &&
+          "hover:bg-slate-100 dark:hover:bg-darkmode-400 dark:hover:border-transparent",
+
+        // Pills
+        list.variant == "pills" && "rounded-md border-0",
+        list.variant == "pills" &&
+          tab.selected &&
+          "bg-primary text-white font-medium",
+
+        // Boxed tabs
+        list.variant == "boxed-tabs" &&
+          "rounded-md py-1.5 dark:border-transparent",
+        list.variant == "boxed-tabs" &&
+          tab.selected &&
+          "text-slate-700 border shadow-sm font-medium border-slate-200 bg-white dark:text-slate-300 dark:bg-darkmode-400 dark:border-darkmode-400",
+
+        // Link tabs
+        list.variant == "link-tabs" &&
+          "border-b-2 border-transparent dark:border-transparent",
+        list.variant == "link-tabs" &&
+          tab.selected &&
+          "border-b-primary font-medium dark:border-b-primary",
+
+        className,
+      ])}
+      {...props}
+    >
+      {children}
+    </Component>
+  );
+}
+Tab.Button = TabButton;
+
+Tab.Group = ({
+  children,
+  ...props
+}: ExtractProps<typeof HeadlessTab.Group>) => {
+  return (
+    <TabGroup as="div" {...props}>
+      {children}
+    </TabGroup>
+  );
+};
+
+Tab.List = ({
+  children,
+  className,
+  variant = "tabs",
+  ...props
+}: ExtractProps<typeof TabList> & {
+  variant?: Variant;
+}) => {
+  return (
+    <listContext.Provider
+      value={{
+        variant,
+      }}
+    >
+      <TabList
+        as="ul"
+        className={twMerge([
+          variant == "tabs" &&
+            "border-b border-slate-200 dark:border-darkmode-400",
+          variant == "boxed-tabs" &&
+            "p-0.5 border bg-slate-50/70 border-slate-200/70 rounded-lg dark:border-darkmode-400",
+          // Aggiunta delle classi responsive
+          "w-full flex overflow-x-auto whitespace-nowrap scrollbar-hide",
+          // Stack verticalmente sui piccoli schermi
+          "flex-wrap md:flex-nowrap",
+          className,
+        ])}
+        {...props}
+      >
+        {children}
+      </TabList>
+    </listContext.Provider>
+  );
+};
+
+Tab.Panels = ({
+  children,
+  className,
+  ...props
+}: ExtractProps<typeof TabPanels>) => {
+  return (
+    <TabPanels as="div" className={className} {...props}>
+      {children}
+    </TabPanels>
+  );
+};
+
+Tab.Panel = ({
+  children,
+  className,
+  ...props
+}: ExtractProps<typeof TabPanel>) => {
+  return (
+    <TabPanel as={Fragment}>
+      {({ selected }) => (
+        <Transition
+          appear
+          as="div"
+          show={selected}
+          enter="transition-opacity duration-300"
+          enterFrom="opacity-0"
+          enterTo="opacity-100"
+          leave="transition-opacity duration-300"
+          leaveFrom="opacity-100"
+          leaveTo="opacity-0"
+          className={className}
+          {...props}
+        >
+          <>
+            {typeof children === "function"
+              ? children({
+                  selected,
+                  focus: false,
+                })
+              : children}
+          </>
+        </Transition>
+      )}
+    </TabPanel>
+  );
+};
+
+export default Tab;

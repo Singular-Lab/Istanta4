@@ -1,0 +1,16 @@
+Copyright (c) 2025 Singularlab
+
+All rights reserved.
+
+This software is proprietary and confidential.
+Unauthorized copying, modification, distribution, or use of this software,
+via any medium, is strictly prohibited.
+
+This package may be used only by parties explicitly authorized in writing
+by the copyright holder.
+
+Reverse engineering, decompilation, and disassembly are prohibited
+unless explicitly permitted by applicable law or by written authorization.
+
+Use of this software is subject to a separate commercial license agreement,
+if applicable.

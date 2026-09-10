@@ -1,0 +1,63 @@
+/* Custom Toast Styling */
+.Toastify__toast {
+  animation: toast-slide-in 0.3s ease forwards !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+}
+
+.Toastify__toast-body {
+  font-family: 'Public Sans', sans-serif;
+}
+
+.Toastify__progress-bar {
+  animation: toast-progress 5s linear forwards !important;
+  transform-origin: left;
+}
+
+/* Animations */
+@keyframes toast-slide-in {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes toast-progress {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
+/* Custom hover effect */
+.Toastify__toast:hover {
+  transform: translateY(-2px);
+  transition: transform 0.2s ease;
+}
+
+/* Custom close button hover */
+.Toastify__close-button:hover {
+  opacity: 1;
+}
+
+/* Add subtle gradient background to toasts */
+.Toastify__toast.toast-success {
+  background: linear-gradient(135deg, rgba(var(--color-success), 0.05), rgba(var(--color-success), 0.02)) !important;
+}
+
+.Toastify__toast.toast-error {
+  background: linear-gradient(135deg, rgba(var(--color-danger), 0.05), rgba(var(--color-danger), 0.02)) !important;
+}
+
+.Toastify__toast.toast-warning {
+  background: linear-gradient(135deg, rgba(var(--color-warning), 0.05), rgba(var(--color-warning), 0.02)) !important;
+}
+
+.Toastify__toast.toast-info {
+  background: linear-gradient(135deg, rgba(var(--color-primary), 0.05), rgba(var(--color-primary), 0.02)) !important;
+} 

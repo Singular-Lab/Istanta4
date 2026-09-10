@@ -1,0 +1,58 @@
+{
+  "compilerOptions": {
+    "target": "ES6",
+    "useDefineForClassFields": true,
+    "lib": [
+      "DOM",
+      "DOM.Iterable",
+      "ES6",
+      "WebWorker"
+    ],
+    "allowJs": false,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "allowImportingTsExtensions": true,
+    "typeRoots": [
+      "../node_modules/@types"
+    ],
+    "composite": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "baseUrl": "..",
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ],
+      "@types/*": [
+        "./types/*"
+      ],
+      "@global_types/*": [
+        "./lib/*"
+      ],
+      "@lib/*": [
+        "./lib/*"
+      ]
+    },
+    "sourceMap": true
+  },
+  "include": [
+    "./**/*",
+    "../lib/**/*.ts",
+    "../lib/**/*.d.ts",
+  ],
+  "exclude": [
+    "../node_modules",
+    "../dist",
+    "../build",
+    "../plugin/**/*",
+    "../deprecati/**/*",
+    "../vite.config.ts"
+  ]
+}

@@ -1,0 +1,161 @@
+#
+# Variabili consigliate per evitare collisioni tra più istanze (porte host):
+# - DOCKER_CLIENT_PORT
+# - DOCKER_HTTP_PORT
+# - DOCKER_WS_PORT
+# - DOCKER_REDIS_PORT
+# - DOCKER_GRAFANA_PORT
+# - DOCKER_PROMETHEUS_PORT
+# - DOCKER_LOKI_PORT
+#
+# Nota: le variabili applicative restano separate e non vanno mischiate:
+# - PORTA_VITE, NODE_PORT, WS_PORT, DB_POSTGRESQL_PORT ...
+#
+# PostgreSQL gira sulla macchina host (non in questo compose).
+# Il server lo raggiunge tramite host.docker.internal.
+#
+services:
+  client:
+    build:
+      context: .
+      dockerfile: docker/client.dev.Dockerfile
+    ports:
+      - "${DOCKER_CLIENT_PORT:-3009}:${PORTA_VITE:-3009}"
+    env_file:
+      - .env
+    depends_on:
+      - server
+    volumes:
+      - ./src:/app/src
+      - ./public:/app/public
+      - ./config:/app/config
+      # Named volume: persiste tra i rebuild, evita di ricreare 700MB ogni volta
+      - client_node_modules:/app/node_modules
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  server:
+    build:
+      context: .
+      dockerfile: docker/server.dev.Dockerfile
+    labels:
+      prometheus.scrape: "true"
+      prometheus.port: "${NODE_PORT:-3010}"
+      prometheus.path: "/metrics"
+      prometheus.client_id: "${CLIENT_ID}"
+    ports:
+      - "${DOCKER_HTTP_PORT:-3010}:${NODE_PORT:-3010}"
+      - "${DOCKER_WS_PORT:-3600}:${WS_PORT:-3600}"
+    env_file:
+      - .env
+    environment:
+      # Sovrascrive solo le variabili infrastrutturali Docker-specifiche.
+      # Tutto il resto (segreti, API key, etc.) viene letto dal .env locale.
+      NODE_ENV: development
+      # PostgreSQL sul host: host.docker.internal risolve all'IP del host grazie a extra_hosts
+      DB_POSTGRESQL_HOST: host.docker.internal
+      DB_POSTGRESQL_PORT: ${DB_POSTGRESQL_PORT:-5432}
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      redis:
+        condition: service_started
+    # Permette al container di raggiungere i servizi sul host (PostgreSQL, MongoDB, ecc.)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./server:/app/server
+      - ./lib:/app/lib
+      - ./config:/app/config
+      # Named volume: persiste tra i rebuild, evita di ricreare 700MB ogni volta
+      - server_node_modules:/app/node_modules
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    ports:
+      # Esposta sul host per permettere connessioni da tool esterni (RedisInsight, etc.)
+      - "${DOCKER_REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_dev_data:/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  prometheus:
+    image: prom/prometheus:latest
+    user: root
+    ports:
+      - "${DOCKER_PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./docker/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "${DOCKER_GRAFANA_PORT:-3001}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      # Disabilita il login obbligatorio in sviluppo locale
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/fidelity-platform-overview.json
+      # SMTP per invio email alert
+      GF_SMTP_ENABLED: ${GRAFANA_SMTP_ENABLED:-false}
+      GF_SMTP_HOST: ${GRAFANA_SMTP_HOST:-}
+      GF_SMTP_USER: ${GRAFANA_SMTP_USER:-}
+      GF_SMTP_PASSWORD: ${GRAFANA_SMTP_PASSWORD:-}
+      GF_SMTP_FROM_ADDRESS: ${GRAFANA_SMTP_FROM_ADDRESS:-admin@grafana.localhost}
+      GF_SMTP_FROM_NAME: ${GRAFANA_SMTP_FROM_NAME:-Grafana}
+      GF_SMTP_SKIP_VERIFY: ${GRAFANA_SMTP_SKIP_VERIFY:-false}
+      GF_SMTP_STARTTLS_POLICY: ${GRAFANA_SMTP_STARTTLS_POLICY:-}
+      GF_SMTP_EHLO_IDENTITY: ${GRAFANA_SMTP_EHLO_IDENTITY:-}
+      # Datasource PostgreSQL: punta al database sul host tramite host.docker.internal
+      GRAFANA_POSTGRES_HOST: host.docker.internal:${DB_POSTGRESQL_PORT:-5432}
+      GRAFANA_POSTGRES_DB: ${DB_POSTGRESQL_NAME:-FIDELITY_PROMOTION}
+      GRAFANA_POSTGRES_USER: ${DB_POSTGRESQL_USER:-fidelity}
+      GRAFANA_POSTGRES_PASSWORD: ${DB_POSTGRESQL_PASSWORD:-fidelity}
+    # Necessario perché Grafana deve risolvere host.docker.internal per il datasource PostgreSQL
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - grafana_dev_data:/var/lib/grafana
+      # Provisioning automatico: datasource Prometheus + Loki e dashboard al primo avvio
+      - ./docker/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./docker/observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+
+  loki:
+    image: grafana/loki:3
+    ports:
+      - "${DOCKER_LOKI_PORT:-3100}:3100"
+    volumes:
+      - ./docker/observability/loki.yml:/etc/loki/local-config.yaml:ro
+
+  promtail:
+    image: grafana/promtail:latest
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+    user: "0:0"
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./docker/observability/promtail.yml:/etc/promtail/config.yml:ro
+
+volumes:
+  redis_dev_data:
+  grafana_dev_data:
+  # Named volumes per node_modules: creati una volta sola, non ricreati sui rebuild
+  server_node_modules:
+  client_node_modules:

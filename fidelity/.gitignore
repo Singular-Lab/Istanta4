@@ -1,0 +1,53 @@
+# Logs
+.vs/*
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+public/uploads/*
+coverage/*
+public/images/custom
+public/images/icone_insegna
+dist/images/icone_insegna
+icone_insegne
+node_modules
+dist/
+dist_server
+deprecati
+.cursor/
+.cursor/
+*.local
+yarn.lock
+# Editor directories and files
+
+.vscode
+.claude
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Environment files
+.env
+config/menu.json
+/config
+CLAUDE.md
+AGENTS.md
+package-lock.json
+.local_docs/
+
+# Client-specific assets (per-client customization)
+server/core/assets/plugin-styles.css
+.codex
+
+# Docker dump files (generati da npm run db:export, non committare)
+docker/data/*.dump
+docker/data/*.sql
+.env.docker

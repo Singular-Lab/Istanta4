@@ -1,0 +1,519 @@
+﻿@page
+@model Istanta.Views.Register.IndexModel
+
+@if (ViewBag.error != null)
+{
+    <div id="error_panel" class="alert alert-danger" style="position:fixed; width:100%;">
+        <strong>Attenzione</strong>: @ViewBag.error
+    </div>
+}
+
+<div class="container-fluid py-4">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="mb-1">Registro operazioni e logs di sistema</h3>
+            <div class="text-muted">Consulta i log applicativi e gli audit degli utenti</div>
+        </div>
+    </div>
+
+    <!-- Switch principale -->
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-body">
+            <div class="btn-group w-100" role="group">
+                <button type="button" class="btn btn-primary active" id="btnLogs">
+                    Logs di sistema
+                </button>
+                <button type="button" class="btn btn-outline-primary" id="btnAudits">
+                    Audit utenti
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SEZIONE LOGS -->
+    <div id="sectionLogs">
+
+        <!-- Lista file log -->
+        <div id="logsListPanel" class="card shadow-sm border-0">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <strong>File di log disponibili</strong>
+                <span class="badge bg-secondary">Log files</span>
+            </div>
+
+            <div class="card-body">
+
+                <div class="list-group">
+
+                    @* Esempio dinamico *@
+                    @* foreach (var file in Model.LogFiles) { ... } *@
+                    
+@*                     <button type="button" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center bOpenLogFile"
+                            >
+                        <div>
+                            <strong>system-2026-05-07.log</strong>
+                            <div class="text-muted small">Ultima modifica: 07/05/2026 10:42</div>
+                        </div>
+                        <span class="badge bg-primary rounded-pill">Apri</span>
+                    </button>
+
+                    <button type="button" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center bOpenLogFile"
+                           >
+                        <div>
+                            <strong>errors-2026-05-07.log</strong>
+                            <div class="text-muted small">Ultima modifica: 07/05/2026 09:18</div>
+                        </div>
+                        <span class="badge bg-danger rounded-pill">Errori</span>
+                    </button> *@
+                    
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Lettura file log -->
+        <div id="logViewerPanel" class="card shadow-sm border-0 d-none">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <div>
+                    <strong>Contenuto log</strong>
+                    <div class="text-muted small" id="selectedLogFile">Nessun file selezionato</div>
+                </div>
+
+                <button type="button" id="bBackToLogList" class="btn btn-outline-secondary btn-sm">
+                    ← Torna alla lista
+                </button>
+            </div>
+
+            <div class="card-body">
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Numero righe</label>
+                        <select class="form-select" id="logRows">
+                            <option value="100">Ultime 100 righe</option>
+                            <option value="500">Ultime 500 righe</option>
+                            <option value="1000">Ultime 1.000 righe</option>
+                            <option value="all">Tutte</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-2 d-flex align-items-end d-none">
+                        <button type="button" id="bLoadLogs" class="btn btn-primary w-100">
+                            Carica
+                        </button>
+                    </div>
+                </div>
+
+                <pre id="logContent" class="bg-dark text-light rounded p-3"
+                     style="height:600px; overflow:auto; font-size:13px;">Seleziona un file log...</pre>
+
+            </div>
+        </div>
+
+    </div>
+
+    <!-- SEZIONE AUDIT -->
+    <div id="sectionAudits" class="d-none">
+
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white">
+                <strong>Audit operazioni utenti</strong>
+            </div>
+
+            <div class="card-body">
+
+                <!-- Filtri -->
+                <div class="row g-3 mb-4">
+                    <div class="col-md-2">
+                        <label class="form-label">Da</label>
+                        <input type="date" class="form-control" id="auditDateFrom" />
+                    </div>
+
+                    <div class="col-md-2">
+                        <label class="form-label">A</label>
+                        <input type="date" class="form-control" id="auditDateTo" />
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label">Utente</label>
+                        <select class="form-select" id="auditUser">
+                            <option value="0">Tutti</option>
+                            @foreach (var utente in ViewBag.Utenti)
+                            {
+                                <option value="@utente.Id">@utente.NomeUtente</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label">Tipo operazione</label>
+                        <select class="form-select" id="auditOperation">
+                            <option value="all">Tutte</option>
+                            @foreach (var op in ViewBag.TipiOperazione)
+                            {
+                                <option value="@op.Id">@op.Nome</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="button" id="bFiltraAudits" class="btn btn-primary w-100">
+                            Filtra
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Page size -->
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="text-muted small">
+                        Risultati audit
+                    </div>
+
+                    <div class="d-flex align-items-center gap-2">
+                        <label class="form-label mb-0 small">Righe per pagina</label>
+                        <select class="form-select form-select-sm" id="auditPageSize" style="width:100px;">
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                            <option value="500">500</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Tabella audit -->
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Data</th>
+                                <th>Utente</th>
+                                <th>Operazione</th>
+                                <th>Oggetto</th>
+                                <th>Dettaglio</th>
+                            </tr>
+                        </thead>
+                        <tbody id="auditTableBody">
+                            <tr>
+                                <td colspan="6" class="text-center text-muted py-4">
+                                    Nessun dato caricato
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Paging -->
+                <nav class="d-flex justify-content-end">
+                    <ul class="pagination mb-0" id="auditPagination">
+                        <li class="page-item disabled">
+                            <span class="page-link">Pagina 1</span>
+                        </li>
+                    </ul>
+                </nav>
+
+            </div>
+        </div>
+
+    </div>
+
+</div>
+
+
+
+@inject Microsoft.AspNetCore.Http.IHttpContextAccessor HttpContextAccessor
+<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]" type="text/javascript">
+
+    let frameInstance;
+    let currentLogFile = null;
+   
+
+    function documentReady() {
+        
+        $("#btnLogs").on("click", function () {
+            showSection('logs');
+        });
+        $("#btnAudits").on("click", function () {
+            showSection('audits');
+        });
+
+        $("#bBackToLogList").on("click", function () {
+            backToLogList();
+        }); 
+
+        $("#logRows").on("change", function () {
+            //loadLogContent();
+            openLogFile(currentLogFile);
+        });
+
+        
+
+        $("#auditPageSize").on("change", function () {
+            loadAudits(1)
+        });
+
+        $("#bFiltraAudits").on("click", function () {
+            loadAudits(1);
+        });
+
+        let me = this;
+        //Recupero i log files
+        Call.do("RegisterController", "getLogFiles", "GET", null, null, function (result) {
+
+            if (result.error == null || result.error == "")
+            {
+                let _container = $("#logsListPanel .list-group");
+                _container.empty();
+
+                for (let i = 0; i < result.content.length; i++) {
+                    let file = result.content[i];
+
+                    let item = $(`
+                            <button type="button" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center bOpenLogFile"
+                                data-file-name="${file.nome}">
+                                <div>
+                                    <strong>${file.nome}</strong>
+                                    <div class="text-muted">${file.lastModifiedDate}</div>
+                                </div>
+                            </button>
+                        `);
+                    _container.append(item);
+                }
+
+                //on click register
+                $(".bOpenLogFile").on("click", function () {
+                    me.openLogFile($(this).data("file-name"));
+                });
+
+                me.showSection("logs");
+            }
+
+            hideLoading();
+
+        });
+
+        
+
+    }
+
+
+    function showSection(section) {
+        const logs = document.getElementById('sectionLogs');
+        const audits = document.getElementById('sectionAudits');
+
+        const btnLogs = document.getElementById('btnLogs');
+        const btnAudits = document.getElementById('btnAudits');
+
+        if (section === 'logs') {
+            logs.classList.remove('d-none');
+            audits.classList.add('d-none');
+
+            btnLogs.className = 'btn btn-primary active';
+            btnAudits.className = 'btn btn-outline-primary';
+        } else {
+            audits.classList.remove('d-none');
+            logs.classList.add('d-none');
+
+            btnAudits.className = 'btn btn-primary active';
+            btnLogs.className = 'btn btn-outline-primary';
+        }
+    }
+
+    function openLogFile(fileName) {
+        currentLogFile = fileName;
+
+        document.getElementById('logsListPanel').classList.add('d-none');
+        document.getElementById('logViewerPanel').classList.remove('d-none');
+        document.getElementById('selectedLogFile').innerText = fileName;
+        
+        let rows = document.getElementById('logRows').value;
+
+        if (rows=="all")
+        {
+            rows = 1_000_000;
+        }
+        showLoading();
+        Call.do("RegisterController", "ricercaLogs/" + fileName.replace(".txt","") + "/" + rows , "GET", null, null, function (result) {
+
+            if (result.error == null || result.error == "") {
+
+
+                let _container = document.getElementById('logContent');
+                _container.innerText = '';
+                console.log("result.lista.length " + result.lista.length);
+                let _content = "";
+
+                for (let i = 0; i < result.lista.length; i++) {
+                    let row = result.lista[i];
+                    console.log("row " + i);
+                    
+                    _content += row + "\n";
+                }
+                _container.innerText += _content;
+
+                hideLoading();
+            }
+
+
+            hideLoading();
+
+        });
+
+        
+    }
+
+    function backToLogList() {
+        currentLogFile = null;
+
+        document.getElementById('logViewerPanel').classList.add('d-none');
+        document.getElementById('logsListPanel').classList.remove('d-none');
+        document.getElementById('logContent').innerText = 'Seleziona un file log...';
+    }
+
+    function loadLogContent() {
+        const rows = document.getElementById('logRows').value;
+
+        document.getElementById('logContent').innerText =
+            'Qui chiamerai il backend per leggere il file: ' + currentLogFile +
+            '\nRighe richieste: ' + rows;
+    }
+
+    function loadAudits(page) {
+        const filters = {
+            dataInizio: document.getElementById('auditDateFrom').value,
+            dataFine: document.getElementById('auditDateTo').value,
+            idUtente: document.getElementById('auditUser').value,
+            tipoOperazione: document.getElementById('auditOperation').value,
+            pageSize: document.getElementById('auditPageSize').value,
+            page: page
+        };
+
+
+        const utenti = [...document.querySelector("#auditUser").options]
+            .map(o => ({
+                id: o.value,
+                nome: o.text
+            }));
+
+        showLoading();
+
+
+        Call.do("RegisterController", "ricercaAudits", "POST", filters, null, function (result) {
+
+            let container = document.getElementById('auditTableBody');
+
+            if (result.error == null || result.error == "") {
+
+
+                let _container = document.getElementById('auditTableBody');
+                _container.innerHTML = '';
+                
+                let _content = "";
+
+                let total = result.totalCount;
+                let pages = Math.ceil(total / filters.pageSize);
+                let visualRange = 5;
+                let da = Math.max(1, page - visualRange);
+                let a = Math.min(pages, page + visualRange);
+
+                //Paging manager
+                if (pages > 1) 
+                { 
+                    let contentPagination = `<li class="page-item ${(page == 1) ? "disabled" : ""}" >
+                        <a class="page-link" data-pageIndex=1> Inizio </a>
+                     </li>
+                    `;
+
+                    if (da > 1)
+                    {
+                        contentPagination += `<li class="page-item disabled">
+                            <span class="page-link">...</span>
+                            </li>`;
+                    }
+
+
+                    for (let i = da; i <= a; i++) {
+                        contentPagination += `<li class="page-item ${(page == i) ? "active" : ""}" >
+                                <a class="page-link" data-pageIndex=${i}> ${i} </a>
+                             </li>
+                            `;
+                    }
+
+                    if (a < pages)
+                    {
+                        contentPagination += `<li class="page-item disabled">
+                            <span class="page-link">...</span>
+                            </li>`;
+                    }
+
+                    contentPagination += `<li class="page-item ${(page == pages) ? "disabled" : ""}" >
+                            <a class="page-link" data-pageIndex=${pages}> Fine </a>
+                         </li>
+                        `;
+
+                    $("#auditPagination").html(contentPagination);
+
+                    $("a.page-link").css({ "cursor": "pointer" });
+                    $("a.page-link").click(function () {
+                        const pageIndex = $(this).data("pageindex");
+                        loadAudits(pageIndex);
+                    });
+                }
+                else
+                {
+                    $("#auditPagination").html('');
+                }
+
+
+                //Estraggo utenti da select
+                let _datasourceUtenti = [];
+                $("#auditUser option").each(function () {
+                    _datasourceUtenti.push({
+                        id: $(this).val(),
+                        nome: $(this).text()
+                    });
+                }); 
+                
+                //console.log(_datasourceUtenti);
+
+                for (let i = 0; i < result.lista.length; i++) {
+                    let row = result.lista[i];
+                    console.log("row " + i);
+                    let _nomeUtente = _datasourceUtenti.find(u => u.id == row.idUtente)?.nome || "N/A";
+                    _content += `
+                    <tr id="${row.id}">
+                        <td>${row.dataRegistrazione}</td>
+                        <td>${_nomeUtente}</td>
+                        <td><span class="badge bg-success">${row.tipoOperazione}</span></td>
+                        <td>${row.codiceAssociato}</td>
+                    </tr>`;
+                }
+                //console.log(_content);
+
+                _container.innerHTML = _content;
+
+                hideLoading();
+            }
+            else 
+            { 
+            
+                alert(result.error);
+                hideLoading();
+            }
+
+
+            
+
+        });
+
+        // document.getElementById('auditTableBody').innerHTML = `
+        //         <tr>
+        //             <td>07/05/2026 10:45</td>
+        //             <td>mario.rossi@example.com</td>
+        //             <td><span class="badge bg-success">LOGIN</span></td>
+        //             <td>Sistema</td>
+        //             <td>Accesso effettuato correttamente</td>
+        //             <td>192.168.1.10</td>
+        //         </tr>
+        //     `;
+    }
+
+</script>

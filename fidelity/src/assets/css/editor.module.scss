@@ -1,0 +1,476 @@
+/* Stili per il contenitore principale dell'editor */
+.editorContainer {
+    position: relative;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    margin-top: 0.5rem;
+    overflow: visible;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  }
+  
+  /* Stili per il contenitore interno dell'editor */
+  .editorInner {
+    position: relative;
+    padding: 1rem;
+  }
+  
+  /* Stili per l'input dell'editor */
+  .editorInput {
+    min-height: 200px;
+    width: 100%;
+    outline: none;
+    line-height: 1.5;
+  }
+  
+  /* Stili per il placeholder dell'editor */
+  .editorPlaceholder {
+    position: absolute;
+    color: #a0aec0;
+    pointer-events: none;
+    top: 1.2rem;
+    left: 1rem;
+    line-height: 1.5;
+    user-select: none;
+  }
+  
+  /* Stili per la toolbar */
+  .toolbar {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    border-bottom: 1px solid #e5e7eb;
+    padding: 0.5rem;
+    background-color: #f9fafb;
+    position: relative;
+    z-index: 10;
+    scrollbar-width: none; /* Per Firefox */
+  }
+  
+  /* Nascondi scrollbar orizzontale ma mantieni funzionalità di scroll */
+  .toolbar::-webkit-scrollbar {
+    height: 0;
+    display: none;
+  }
+  
+  /* Contenitore per la toolbar */
+  .toolbarContainer {
+    position: sticky;
+    top: 0;
+    background-color: white;
+    z-index: 20;
+  }
+  
+  /* Stili per il bottone della toolbar */
+  .toolbarItem {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.375rem;
+    margin: 0 0.125rem;
+    border-radius: 0.25rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+  
+  .toolbarItem:hover {
+    background-color: #e5e7eb;
+  }
+  
+  .toolbarItem.active {
+    background-color: #e5e7eb;
+  }
+  
+  .toolbarItem:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  
+  /* Divider per la toolbar */
+  .divider {
+    width: 1px;
+    background-color: #e5e7eb;
+    margin: 0 0.25rem;
+    align-self: stretch;
+  }
+  
+  /* Stili per il menu dei colori */
+  .colorMenu {
+    position: relative;
+    display: inline-block;
+  }
+  
+  .colorMenuItems {
+    position: absolute;
+    z-index: 9999;
+    top: 100%;
+    left: 0;
+    margin-top: 0.5rem;
+    width: 10rem;
+    background-color: white;
+    border-radius: 0.375rem;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    border: 1px solid #e5e7eb;
+    overflow: hidden;
+  }
+  
+  .colorMenuItem {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 0.5rem;
+    cursor: pointer;
+  }
+  
+  .colorMenuItem:hover {
+    background-color: #f3f4f6;
+  }
+  
+  .colorSwatch {
+    width: 1.5rem;
+    height: 1.5rem;
+    border: 1px solid #e5e7eb;
+    margin-right: 0.5rem;
+  }
+  
+  /* Stili per il bottone di toggle su mobile */
+  .toolbarToggle {
+    display: none;
+    width: 100%;
+    padding: 0.5rem;
+    background-color: #f3f4f6;
+    border-radius: 0.25rem;
+    text-align: center;
+    margin-bottom: 0.25rem;
+    font-size: 0.875rem;
+    cursor: pointer;
+  }
+  
+  /* Stili per dispositivi mobili */
+  @media (max-width: 767px) {
+    .toolbarToggle {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+  
+    .mobileToolbar {
+      flex-wrap: wrap;
+      justify-content: center;
+      overflow-x: auto;
+      padding: 0.25rem 0;
+    }
+  
+    .toolbarItem {
+      padding: 0.25rem;
+      margin: 0.125rem;
+    }
+    
+    .selectFontSize {
+      max-width: 100px;
+      font-size: 0.75rem;
+    }
+  }
+
+/* Stili per il tema dell'editor */
+.editor-code {
+    font-family: monospace;
+    background-color: #f7fafc;
+    padding: 0.5rem;
+    border-radius: 0.25rem;
+    border: 1px solid #e2e8f0;
+    margin: 0.5rem 0;
+    white-space: pre-wrap;
+    overflow-x: auto;
+}
+
+.editor-heading-h1 {
+    font-size: 2rem;
+    font-weight: bold;
+    margin: 1rem 0 0.5rem 0;
+    line-height: 1.2;
+}
+
+.editor-heading-h2 {
+    font-size: 1.5rem;
+    font-weight: bold;
+    margin: 0.875rem 0 0.5rem 0;
+    line-height: 1.3;
+}
+
+.editor-heading-h3 {
+    font-size: 1.25rem;
+    font-weight: bold;
+    margin: 0.75rem 0 0.5rem 0;
+    line-height: 1.4;
+}
+
+.editor-heading-h4 {
+    font-size: 1.125rem;
+    font-weight: bold;
+    margin: 0.625rem 0 0.5rem 0;
+    line-height: 1.4;
+}
+
+.editor-heading-h5 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0.5rem 0 0.25rem 0;
+    line-height: 1.5;
+}
+
+.editor-heading-h6 {
+    font-size: 0.875rem;
+    font-weight: 600;
+    margin: 0.5rem 0 0.25rem 0;
+    line-height: 1.5;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* Stili per le quote */
+.editor-quote {
+    border-left: 4px solid #3b82f6;
+    padding-left: 1rem;
+    margin: 1rem 0;
+    font-style: italic;
+    background-color: #f8fafc;
+    padding: 1rem;
+    border-radius: 0.25rem;
+}
+
+/* Stili per i link */
+.editor-link {
+    color: #3b82f6;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.editor-link:hover {
+    color: #1d4ed8;
+}
+
+/* Stili per le liste */
+.editor-list-ol {
+    padding-left: 1.5rem;
+    margin: 0.5rem 0;
+}
+
+.editor-list-ul {
+    padding-left: 1.5rem;
+    margin: 0.5rem 0;
+}
+
+.editor-listitem {
+    margin: 0.25rem 0;
+}
+
+.editor-nested-listitem {
+    margin: 0.125rem 0;
+}
+
+/* Stili per la formattazione del testo */
+.editor-text-bold {
+    font-weight: bold;
+}
+
+.editor-text-italic {
+    font-style: italic;
+}
+
+.editor-text-underline {
+    text-decoration: underline;
+}
+
+.editor-text-strikethrough {
+    text-decoration: line-through;
+}
+
+.editor-text-underlineStrikethrough {
+    text-decoration: underline line-through;
+}
+
+.editor-text-code {
+    font-family: monospace;
+    background-color: #f1f5f9;
+    padding: 0.125rem 0.25rem;
+    border-radius: 0.125rem;
+    font-size: 0.875em;
+}
+
+.editor-text-subscript {
+    font-size: 0.75em;
+    vertical-align: sub;
+}
+
+.editor-text-superscript {
+    font-size: 0.75em;
+    vertical-align: super;
+}
+
+/* Stili per le tabelle */
+.editor-table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 1rem 0;
+    border: 1px solid #e2e8f0;
+}
+
+.editor-tableCell {
+    border: 1px solid #e2e8f0;
+    padding: 0.5rem;
+    min-width: 50px;
+    vertical-align: top;
+}
+
+.editor-tableCellHeader {
+    border: 1px solid #e2e8f0;
+    padding: 0.5rem;
+    background-color: #f8fafc;
+    font-weight: 600;
+    min-width: 50px;
+    vertical-align: top;
+}
+
+/* Stili per la riga orizzontale */
+.editor-hr {
+    border: none;
+    height: 2px;
+    background-color: #e2e8f0;
+    margin: 1.5rem 0;
+    border-radius: 1px;
+}
+
+/* Stili per il syntax highlighting del codice */
+.editor-tokenComment {
+    color: #6b7280;
+    font-style: italic;
+}
+
+.editor-tokenPunctuation {
+    color: #374151;
+}
+
+.editor-tokenProperty {
+    color: #059669;
+}
+
+.editor-tokenSelector {
+    color: #dc2626;
+}
+
+.editor-tokenOperator {
+    color: #d97706;
+}
+
+.editor-tokenAttr {
+    color: #7c3aed;
+}
+
+.editor-tokenVariable {
+    color: #0891b2;
+}
+
+.editor-tokenFunction {
+    color: #ea580c;
+}
+
+/* Stili per il form di inserimento link */
+.link-form-container {
+    background-color: #f9fafb;
+    border-top: 1px solid #e5e7eb;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.link-input {
+    padding: 0.5rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.25rem;
+    font-size: 0.875rem;
+    width: 100%;
+}
+
+.link-input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.link-form-buttons {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
+}
+
+.link-submit {
+    background-color: #3b82f6;
+    color: white;
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 0.25rem;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.link-submit:hover {
+    background-color: #2563eb;
+}
+
+.link-cancel {
+    background-color: #6b7280;
+    color: white;
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 0.25rem;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.link-cancel:hover {
+    background-color: #4b5563;
+}
+
+/* Stili per direzione del testo */
+.ltr {
+    direction: ltr;
+}
+
+.rtl {
+    direction: rtl;
+}
+
+/* Stili per placeholder allineato */
+.aligned-placeholder {
+    text-align: left;
+}
+
+/* Stili per immagini nell'editor */
+.editor-image {
+    max-width: 100%;
+    height: auto;
+    border-radius: 0.25rem;
+    margin: 0.5rem 0;
+}
+
+/* Stili per testo overflow */
+.editor-text-overflowed {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Stili per hashtag */
+.editor-text-hashtag {
+    color: #3b82f6;
+    font-weight: 500;
+}
+
+/* Stili per il paragrafo dell'editor */
+.editor-paragraph {
+    margin: 0.5rem 0;
+    line-height: 1.6;
+}

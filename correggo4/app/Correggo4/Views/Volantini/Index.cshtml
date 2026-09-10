@@ -1,0 +1,69 @@
+@model List<Correggo4.Controllers.RigaVolantino>
+@{
+    ViewData["Title"] = "Volantini";
+}
+
+<div class="d-flex align-items-baseline justify-content-between mb-3">
+    <div>
+        <h1 class="h4 mb-0">Correggo4</h1>
+        <span class="text-muted small">@Model.Count volantini</span>
+    </div>
+    <div class="small text-muted">
+        @User.Identity?.Name
+        <span class="badge bg-secondary-subtle text-secondary-emphasis ms-1">
+            @(User.IsInRole("GDO") ? "GDO" : "Agenzia")
+        </span>
+        <form method="post" action="/Account/Logout" class="d-inline ms-2">
+            @Html.AntiForgeryToken()
+            <button class="btn btn-link btn-sm p-0 align-baseline">esci</button>
+        </form>
+    </div>
+</div>
+
+@if (Model.Count == 0)
+{
+    <div class="alert alert-light border">Nessun volantino pubblicato.</div>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead>
+                <tr class="text-uppercase small text-muted">
+                    <th>Titolo</th>
+                    <th>Promo</th>
+                    <th class="text-center">Ver.</th>
+                    <th class="text-center">Pagine</th>
+                    <th class="text-center">Box</th>
+                    <th class="text-center">Correzioni</th>
+                    <th>Validit&agrave;</th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var v in Model)
+            {
+                <tr>
+                    <td class="fw-semibold">
+                        <a href="/Volantini/Dettaglio/@v.Id" class="text-decoration-none">@v.Titolo</a>
+                    </td>
+                    <td class="small">@v.Classificazione</td>
+                    <td class="text-center small">@v.Versione</td>
+                    <td class="text-center">@v.Pagine</td>
+                    <td class="text-center">@v.Box</td>
+                    <td class="text-center">
+                        @if (v.Note > 0)
+                        {
+                            <span class="badge bg-warning-subtle text-warning-emphasis">@v.Note</span>
+                        }
+                        else
+                        {
+                            <span class="text-muted">0</span>
+                        }
+                    </td>
+                    <td class="small">@v.ValiditaInizio.ToString("dd/MM/yy") &ndash; @v.ValiditaFine.ToString("dd/MM/yy")</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+}

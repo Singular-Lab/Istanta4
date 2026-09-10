@@ -1,0 +1,121 @@
+{
+  "id": "IST-ge6ntl",
+  "name": "IstantaImpaginazione",
+  "version": "1.6.7",
+  "main": "index.html",
+  "manifestVersion": 5,
+  "host": [
+    {
+      "app": "ID",
+      "minVersion": "19.0.0"
+    }
+  ],
+  "permissions": {
+    "fileSystem": true
+  },
+  "requiredPermissions": {
+    "localFileSystem": "fullAccess",
+    "webview": {
+      "allow": "yes",
+      "domains": [
+        "http://127.0.0.1:7724"
+      ],
+      "enableMessageBridge": "localAndRemote"
+    },
+    "network": { 
+      "domains": "all"
+    },
+    "clipboard": "readAndWrite"
+  },
+  "entrypoints": [
+    {
+      "type": "panel",
+      "id": "mainPanel",
+      "label": "Istanta",
+      "minimumSize": {
+        "width": 524,
+        "height": 628
+      },
+      "maximumSize": {
+        "width": 2000,
+        "height": 2000
+      },
+      "preferredDockedSize": {
+        "width": 300,
+        "height": 300
+      },
+      "preferredFloatingSize": {
+        "width": 300,
+        "height": 300
+      },
+      "icons": [
+        {
+          "width": 32,
+          "height": 32,
+          "path": "images/icon@1x.png",
+          "scale": [
+            1,
+            2
+          ],
+          "theme": [
+            "dark",
+            "darkest"
+          ],
+          "species": [
+            "generic"
+          ]
+        },
+        {
+          "width": 32,
+          "height": 32,
+          "path": "images/icon@2x.png",
+          "scale": [
+            1,
+            2
+          ],
+          "theme": [
+            "lightest",
+            "light"
+          ],
+          "species": [
+            "generic"
+          ]
+        }
+      ]
+    }
+  ],
+  "icons": [
+    {
+      "width": 32,
+      "height": 32,
+      "path": "images/icon@1x.png",
+      "scale": [
+        1,
+        2
+      ],
+      "theme": [
+        "dark",
+        "darkest"
+      ],
+      "species": [
+        "generic"
+      ]
+    },
+    {
+      "width": 32,
+      "height": 32,
+      "path": "images/icon@2x.png",
+      "scale": [
+        1,
+        2
+      ],
+      "theme": [
+        "lightest",
+        "light"
+      ],
+      "species": [
+        "generic"
+      ]
+    }
+  ]
+}

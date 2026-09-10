@@ -1,0 +1,48 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: docker-containers
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+    relabel_configs:
+      # Tieni solo i container con service = app o server (dev/test/prod)
+      - source_labels: [__meta_docker_container_label_com_docker_compose_service]
+        regex: (app|server)
+        action: keep
+      # Path del log file del container
+      - source_labels: [__meta_docker_container_id]
+        target_label: __path__
+        replacement: /var/lib/docker/containers/$1/*-json.log
+      # Label utili in Loki
+      - source_labels: [__meta_docker_container_label_com_docker_compose_service]
+        target_label: service
+      - source_labels: [__meta_docker_container_label_com_docker_compose_project]
+        target_label: project
+      # Default job name (senza suffisso) come fallback
+      - target_label: job
+        replacement: fidelity-server
+      # Espone client_id come label log, normalizzando eventuali virgolette
+      - source_labels: [__meta_docker_container_label_prometheus_client_id]
+        regex: '^"?([A-Za-z0-9_-]+)"?$'
+        target_label: client_id
+        replacement: '$1'
+      # Se presente CLIENT_ID nel container, il job diventa fidelity-server-<client_id>
+      - source_labels: [__meta_docker_container_label_prometheus_client_id]
+        regex: '^"?([A-Za-z0-9_-]+)"?$'
+        target_label: job
+        replacement: fidelity-server-$1
+    pipeline_stages:
+      - docker: {}
+      - labels:
+          stream:
+      - output:
+          source: output

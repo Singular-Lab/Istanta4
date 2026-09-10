@@ -1,0 +1,1420 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <!--<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>-->
+  <script src="js/jquery.min.js"></script>
+  <script src="indexNew.js"></script>
+  <!-- <script src="https://cdn.jsdelivr.net/npm/@spectrum-web-components/popover/sp-popover.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@spectrum-web-components/overlay/sp-overlay.js"></script> -->
+</head>
+<style>
+  .jq-tooltip {
+  position: fixed;
+  z-index: 2147483647;
+  background: #000;
+  color: #fff;
+  border: 1px solid #444;
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 12px;
+  line-height: 1.4;
+
+  display: none;
+  pointer-events: none;
+
+  resize: none;            /* niente resize manuale */
+  overflow: hidden;        /* niente scrollbar: cresce in altezza */
+  white-space: pre-wrap;   /* wrap + mantiene newline */
+  word-break: break-word;
+}
+
+
+  .jq-tooltip .row {
+    margin-bottom: 5px;
+  }
+
+  .jq-tooltip .row:last-child {
+    margin-bottom: 0;
+  }
+
+  .wrapper {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    overflow: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+  }
+
+
+  .wrapper>* {
+    flex: 0 0 auto;
+    margin: 4px 0;
+  }
+
+  .row {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-end;
+  }
+
+  .row>* {
+    margin: 0 8px;
+  }
+
+  .row>*:first-child {
+    margin-left: 0;
+  }
+
+  .row>*:last-child {
+    margin-right: 0;
+  }
+
+  .row sp-textfield,
+  .row sp-checkbox,
+  .row sp-detail {
+    flex: 1 1 auto;
+  }
+
+  .row sp-button {
+    flex: 0 0 auto;
+  }
+
+  .infoRow {
+    display: flex;
+    flex-direction: row;
+    align-items: baseline;
+  }
+
+  .webview-result {
+    background-color: gray;
+    margin-top: 30px;
+  }
+
+  #logWebview {
+    padding: 14px;
+    border-radius: 4px;
+    border: 1px solid;
+    font-family: 'Source Code Pro', 'Menlo', 'Courier New', Courier, monospace;
+    white-space: pre-wrap;
+  }
+
+  /* HTML: <div class="loader"></div> */
+  .loader {
+    font-weight: bold;
+    font-family: sans-serif;
+    font-size: 14px;
+    animation: l1 1s linear infinite alternate;
+  }
+
+  .loader:before {
+    content: "Loading..."
+  }
+
+  .artworkGroupListed
+  {
+    text-overflow: ellipsis;
+    overflow: hidden;
+    width: 380px;
+    white-space: nowrap;
+  }
+  sp-switch:checked {
+    background-color: #b21d1d;
+  }
+
+
+  #TracciatoRecords {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    min-width: 0;
+    overflow: hidden;
+}
+
+#rowSyncTracciato,
+#areaFiltri {
+    flex: 0 0 auto;
+}
+
+#Tab1Viewport {
+    flex: 1 1 auto;
+    min-height: 0;
+    min-width: 0;
+    overflow: auto;
+    position: relative;
+}
+
+#Tab1Table {
+    display: block;
+    min-width: 100%;
+    width: max-content;
+}
+
+.tracciato-header,
+.tracciato-row {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    min-width: max-content;
+    box-sizing: border-box;
+}
+
+.tracciato-header {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: #3f3f3f;
+    border-bottom: 1px solid #555;
+}
+
+.tracciato-row {
+    border-bottom: 1px solid black;
+    color: white;
+    min-height: 50px;
+}
+
+.tracciato-cell {
+    flex: 0 0 auto;
+    box-sizing: border-box;
+    padding: 8px 10px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+}
+
+.tracciato-cell.wrap {
+    white-space: normal;
+    word-break: break-word;
+    align-items: flex-start;
+}
+
+.tracciato-cell.pag {
+    justify-content: center;
+}
+
+  @keyframes l1 {
+    to {
+      opacity: 0
+    }
+  }
+
+  .singular-inputTextfield {
+    background-color: #333333; /* Il tuo colore */
+    color: white;
+    border: 1px solid #555555;
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+</style>
+<header>
+
+</header>
+
+<body style="width: 100%; height: 100%;">
+
+  <!-- <script src="sp-popover.mjs"></script> -->
+<div id="loadingPanel"
+  style="position: fixed; width: 100%; height: 100%; background-color: rgba(0,0,0,0.7); z-index: 9999; display: none; justify-content: center; align-items: center; color:white; margin: 0px; padding-top: 200px; text-align:center;">
+  <h1>Messaggio</h1>
+</div>
+<div id="istantaDownAlert" style="display:none;position: fixed; width: 100%; height: 100%; background-color: rgba(0,0,0,0.7); z-index: 9999; justify-content: center; align-items: center; color:white; margin: 10px; padding-top: 200px; text-align:center;">
+  <div style="width:100%"><h1>Documento non legato a KIT</h1></div>
+  <div style="width:100%"><h3>Istanta2 è al momento non disponibile e per poter procedere con l'elaborazione è necessario attendere che Istanta2 sia di nuovo funzionante</h3></div>
+</div>
+
+<div id="wrapper" class="wrapper" style="display: flex; margin: 0px; padding: 0px; width: 100%; height: 100%;">
+    <div id="header" style="margin: 0px; padding: 0px; position: fixed; width: 100%; background-color: #4d4c4c;">
+      <div id="narrow" style="position: absolute;width: 530px;height: 60px;background: #4d4c4cb0;z-index: 999;top: 58px;cursor: none; display : none; ">
+        <h3 style="color: white;margin-top: 70px;" id="narrow_talker"></h3>
+        <div style="margin-top: 10px;" id="narrow_buttons"></div>
+      </div>
+
+      <div class="row" style="display: flex; align-items: center; margin-top: 8px; margin-left: 8px; margin-bottom: 10px; margin-right: 25px;">
+        <div style="display: flex; justify-self: self-start; width: 40%;">
+          <img src="images/logo_istanta2.png" style="width: 161px;">
+        </div>
+        <div id="UserAndTracciato" style="display: flex; flex-direction: column; align-items: flex-end; width: 60%;">
+          <div id="user" style="background-color: #333; width: 66%; display: flex; justify-content: space-between; align-items: center; padding: 0px; margin-bottom: 3px;">
+            <div style="display: flex; align-items: center;">
+              <img src="images/icon_small_utente.png" style="width: 15px; margin-right: 5px; margin-left:2px;">
+              <sp-label style="color: white;" slot="label" id="nomeUtente"><h6>Offline</h6></sp-label>
+            </div>
+            <img src="images/icon_small_logout.png" style="width: 15px; margin-left: auto; cursor: pointer; margin-right:2px;" onclick="logout()">
+          </div>
+        
+
+          
+          <div id="rigaSelezioneTracciato" style="width: 100%; display: flex; justify-content: flex-end; margin:0px; align-items: center;">
+            <h5 id="nomeKitInLavorazione" style="color:white; font-size: 10px;"></h5>
+          </div>
+          <div id="kitSelezionato" style="width: 100%; display: flex; justify-content: flex-end; margin:0px; align-items: center;">
+            
+          </div>
+        </div>
+        <div class="row" id="messaggiUtente" style="position: fixed; width:95%; align-self: self-start;">
+        </div>
+      </div>
+      <!-- Qui inserisco il tab -->
+      <div class="row" style="display: flex; margin: 0px; padding: 0px;">
+        <div class="col" style="display: flex; margin-left: 7px; margin-bottom: 0px; padding-bottom: 0px;">
+          <div id="barraTab" class="tab" style="display: flex; margin-left: 0px; margin-bottom: 0px; padding-bottom: 0px;">
+            <img id="homeImage" src="images/header_home_button_active.png" active="true" subTab="Tab7" style="cursor:pointer;"
+              onclick="changeImage($(this)), changeSubMenu('Tab7')">
+            <img id="refImage" src="images/header_ref_button.png" active="false" subTab="Tab5" style="cursor:pointer; padding-left: 2px; display: none;"
+              onclick="changeImage($(this)), changeSubMenu('Tab5')">
+              <img id="raggruppaImage" src="images/header_raggruppa_button.png" active="false" subTab="Tab10" style="cursor:pointer; padding-left: 2px; display: none;" 
+              onclick="changeImage($(this)), changeSubMenu('Tab10')">
+            <img id="menaboTab" src="images/header_menabo_button.png" active="false" subTab="Tab1"
+                style="cursor:pointer; padding-left: 2px;" onclick="changeImage($(this)), changeSubMenu('Tab1')">
+            <img id="grigliaTab" src="images/header_griglia_button.png" active="false" subTab="TabGriglia"
+              style="cursor:pointer; padding-left: 2px; display: none;" onclick="changeImage($(this)), changeSubMenu('TabGriglia')">
+            <img id="utilityImage" src="images/header_utility_button.png" active="false" subTab="Tab12" style="cursor:pointer; padding-left: 2px;"
+              onclick="changeImage($(this)), changeSubMenu('Tab12')">
+            <img id="artworkTab" src="images/header_artwork_button.png" active="false" subTab="Tab9" style="cursor:pointer; padding-left: 2px;  display: none;"
+              onclick="changeImage($(this)), changeSubMenu('Tab9')">
+          </div>
+        </div>
+      </div>
+      <div class="row subMenuTabs"
+        style="display: flex; margin: 0px; padding: 0px; background: linear-gradient(to bottom, #333 97%, #cfc9ce 100%,);">
+        <div class="col"
+          style="display: flex; margin-left: 0px; margin-top: 0px; padding-top: 0px; margin-bottom: 0px;">
+          <div class="subTab7" defaultTab="Tab1" style="display: flex; margin-left: 0px; margin-top: 0px; padding-top: 0px;">
+            <img src="images/SubMenu_ConsultaTracciato_active.png" tab="Tab1" style="cursor:pointer;"
+              onclick="openTab(event, 'Tab1'), changeImage($(this))">
+            <img id="aggiungiReferenzaMenuImg" src="images/SubMenu_AggiungiReferenza.png" tab="Tab2" style="cursor:pointer; display: block;"
+              onclick="openTab(event, 'Tab2'), changeImage($(this))">
+            <img src="images/SubMenu_SyncFoto.png" tab="TabSync" style="cursor:pointer;"
+              onclick="openTab(event, 'TabSync'), changeImage($(this))">
+            <img src="images/SubMenu_Esporta.png" tab="TabEsporta" style="cursor:pointer;"
+              onclick="openTab(event, 'TabEsporta'), changeImage($(this))">
+          </div>
+          <div class="subTab1" defaultTab="Tab3" style="display: none; margin-left: 0px; margin-top: 0px; padding-top: 0px;">
+            <img id="menuFiltri" class="tablinksSync" src="images/SubMenu_Filtri.png" tab="filtriTab" style="cursor:pointer;" 
+              data-method="filtriJs.visualizzaHomePageFiltri" 
+              onclick="openTab(event, 'filtriTab', filtriJs.visualizzaHomePageFiltri()), changeImage($(this))">
+              <img id="menuMenaboExtra" src="images/SubMenu_Extra.png" tab="Tab4" style="cursor:pointer;"
+              onclick="openTab(event, 'Tab4'), changeImage($(this))">
+              <!-- <img id="menuGriglia" src="images/SubMenu_Griglia.png" tab="TabGriglia" style="cursor:pointer; display: none;"
+                onclick="openTab(event, 'TabGriglia'), changeImage($(this))"> 
+              <img id="menuRefAvanzate" src="images/SubMenu_RefAvanzate.png" tab="Tab11" style="cursor:pointer; display: none;"
+                onclick="openTab(event, 'Tab11'), changeImage($(this))"> -->
+          </div>
+          <div class="subTab5" defaultTab="Tab5" style="display: none; margin-left: 0px; margin-top: 0px; padding-top: 0px; margin-bottom: 0px; padding-bottom: 0px;">
+            <img src="images/SubMenu_Edit_active.png" tab="Tab5" style="cursor:pointer;"
+              onclick="openTab(event, 'Tab5'), changeImage($(this)), selectSchedaRef(1)">
+            <img src="images/SubMenu_Primariasecondaria.png" tab="Tab6" style="cursor:pointer;"
+              onclick="openTab(event, 'Tab6'), changeImage($(this)), selectSchedaRef(2)">
+            <img src="images/SubMenu_Fotoextra.png" tab="Tab7" style="cursor:pointer;"
+              onclick="openTab(event, 'Tab7'), changeImage($(this)), selectSchedaRef(3)">
+            <img id="sgruppa" src="images/SubMenu_Sgruppa.png" tab="Tab8" style="cursor:pointer;"
+              onclick="openTab(event, 'Tab8'), changeImage($(this)), selectSchedaRef(4)">
+            <img src="images/SubMenu_CambioStrutturale.png" tab="Tab13" style="cursor:pointer;"
+              onclick="openTab(event, 'Tab13'), changeImage($(this)), selectSchedaRef(5)">
+          </div>
+          <div class="subTab9" defaultTab="Tab9" style="display: none; margin-left: 0px; margin-top: 0px; padding-top: 0px;">
+            <img src="images/SubMenu_Impostazioni_active.png" tab="Tab9" style="cursor:pointer;"
+              onclick="openTab(event, 'Tab9'), changeImage($(this)), clearSubmenu()">
+          </div>
+          <div class="subTab10" defaultTab="Tab10" style="display: none; margin-left: 0px; margin-top: 0px; padding-top: 0px;">
+            <img src="images/SubMenu_Impostazioni_active.png" tab="Tab10" style="cursor:pointer;"
+              onclick="openTab(event, 'Tab10'), changeImage($(this)), raggruppa()">
+          </div>
+          <div class="subTab12" defaultTab="Tab12" style="display: none; margin-left: 0px; margin-top: 0px; padding-top: 0px;">
+            <img src="images/SubMenu_Console_active.png" tab="Tab12" style="cursor:pointer;"
+              onclick="openTab(event, 'Tab12'), changeImage($(this))">
+          </div>          
+          <div class="subTabGriglia" defaultTab="TabGriglia" style="display: none; margin-left: 0px; margin-top: 0px; padding-top: 0px;">
+              <img id="menuGriglia" src="images/SubMenu_Griglia_active.png" tab="TabGriglia" style="cursor:pointer;"
+                onclick="openTab(event, 'TabGriglia'), changeImage($(this))"> 
+              <img id="menuRefAvanzate" src="images/SubMenu_RefAvanzate.png" tab="Tab11" style="cursor:pointer;"
+                onclick="openTab(event, 'Tab11'), changeImage($(this))">
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="mainContent" class="row" style="background-color: #4d4c4c; margin: 0px; padding: 0px; display: block; height: 100%; overflow-y: hidden;">
+      <div id="spazioHeader" style="width: 100%; display: flex; margin: 0px; padding: 0px; height: 120px;"></div>
+      <div id="contenitoreTab" style="margin: 0px; padding: 0px; display: flex; padding-left:8px; height: 480px; width:100%; overflow: auto;">
+        <!-- tabHome -->
+        <div style="margin: 0px; padding: 0px; width: 100%; display: block;">
+          <div id="Tab1" class="tabcontent active" style="display: flex; width: 100%; overflow-y: hidden;">
+            <!-- <div class="panel" id="TracciatoRecords" style="margin-top: 15px; display: block; width: 100%; overflow-y: hidden;">
+              <div id="Tab1Container" style="display: block; width:100%; margin:0px; padding: 0px; overflow-x: auto; overflow-y: hidden;">
+                <div id="Tab1Tracciato" class="tabcontentTracciato" style="display: block; height:300px; margin:0px; padding: 0px; overflow-y: auto;">
+                  <div class="panel" id="ElementiTracciato" style="margin:0px; padding: 0px; overflow-y: hidden;">
+                  </div>
+                </div>
+              </div>
+            </div> -->
+            <div class="panel" id="TracciatoRecords"
+              style="margin-top:15px; display:flex; flex-direction:column; width:100%; height:100%; min-height:0; overflow:hidden;">
+              <div id="Tab1Viewport" style="flex:1 1 auto; min-height:0; min-width:0; overflow:auto;">
+                <div id="Tab1Table" style="min-width:100%; width:max-content;">
+                  <div id="Tab1Intestazione"></div>
+                  <div id="ElementiTracciato"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div id="Tab2" class="tabcontent" style="display: none; width: 100%;">
+            <div class="panel" id="EditTracciato">
+              <div class="row">
+                <sp-textfield id="codiceEdit" class="hideble" style="width: 100%; color: white;"><sp-label style="color: white;"
+                    slot="label">Codice</sp-label></sp-textfield>
+                <sp-action-button id="cercaRecordInTracciato" name="cercaTracciato" style="margin-top: 24px;"
+                  onclick="cercaRecordInTracciato($('#codiceEdit').val())"><img style="width: 18px;" slot="icon"
+                    src="images/search.png" alt="Cerca"></sp-action-button>
+                <sp-picker id="tendinaEditTracciato" style="display: none;"
+                  onchange="selezionatoTracciatoEdit($(this).val())">
+                  <sp-label slot="label">Seleziona tracciato</sp-label>
+                  <sp-menu slot="options">
+                  </sp-menu>
+                </sp-picker>
+              </div>
+              <div class="row" id="campiRecord" style="display: block; width: 100%;">
+              </div>
+            </div>
+          </div>
+          <div id="TabSync" class="tabcontent" style="display: none; width: 100%;">
+            <div class="panel" id="SyncTracciato">
+              <div class="row">
+                <sp-action-button id="ScaricaPacchettoFoto" name="downloadFoto" style="margin-top: 24px;"
+                  onclick="apriSchermataSyncPacchettoFoto(0)">Scarica Pacchetto Foto</sp-action-button><hr>
+                  <sp-action-button id="SyncFotoMassivo" name="SyncFotoMassivo" style="margin-top: 24px;"
+                  onclick="Utility.apriModal('dialogSyncFotoMassivo','Impagina');">Sync massivo foto</sp-action-button><hr>
+                  <!-- <sp-action-button id="ScaricaLoghiBolli" name="ScaricaLoghiBolli" style="margin-top: 24px; color: green;"
+                  onclick="apriSchermataSyncPacchettoFoto(1)">Scarica Loghi/Bolli</sp-action-button><hr> -->
+                <sp-action-button id="syncRimaste" name="syncRimaste" style="margin-top: 24px; color: lightcoral; display: none;"
+                  onclick="apriSchermataSyncModifiche()">Sync rimaste</sp-action-button><hr>
+                <sp-action-button id="svuotaCodaSync" name="svuotaCodaSync" style="margin-top: 24px; color: lightcoral; display: none;"
+                  onclick="svuotaCodaSync()">Svuota coda sync</sp-action-button>
+              </div>
+            </div> 
+          </div>
+          <div id="TabEsporta" class="tabcontent" style="display: none; width: 100%;">
+            <div class="panel" id="SyncTracciato">
+              <div class="row" style="margin-top:20px;">
+                <sp-picker id="cmbTipiDiExport" name="cmbTipiDiExport" onchange="ficoProcess.selezionatoTipoDiExport();">
+                  <sp-menu slot="options">
+                    
+                  </sp-menu>
+                </sp-picker>
+              </div>
+              <div class="row">
+                <sp-action-button id="esportaButton" name="esportaButton" style="margin-top: 24px; color: green;"
+                  onclick="esportaMateriale($(this))">Esporta WebPliant (test)</sp-action-button>
+                <div id="exportProfileMissingBanner" style="display: flex;">
+                </div>  
+              </div>
+            </div> 
+          </div>
+        </div>
+        <!-- tabMenabo -->
+        <div style="margin: 0px; padding: 0px; width: 100%; display: none;">
+          <div id="Tab3" style="width: 100%; display: none;" class="tabcontent">
+            <div class="panel" id="grigliaController" style="margin-top: 15px; margin-right: 8px;">
+              <div class="row" id="comandiInterfaccia"
+                style="width: 100%; display: flex; justify-content:start; margin-bottom:6px;">
+                <sp-action-button id="bOpt1" name="bOpt1" style="font-size: 12px; margin:1px;" onclick="conteggia();"><span style="display:flex;align-items:center;gap:6px;"><img src="images/conteggio.png" style="width:16px;height:16px;object-fit:contain;"><span>Conteggio</span></span></sp-action-button>
+                <sp-action-button id="bOpt2" name="bOpt2" style="font-size: 12px; margin:1px;"><span style="display:flex;align-items:center;gap:6px;"><img src="images/impagina.png" style="width:16px;height:16px;object-fit:contain;"><span>Impagina</span></span></sp-action-button>
+                <div style="width: 100%; align-items: center; display: flex;">
+                  <input type="checkbox" id="cacheCheck"> <label style="color: white;">Utilizza cache se disponibile</label>
+                </div>
+              </div>
+              <div class="row" id="opzioniAddizionali" style="width: 100%; margin-bottom: 8px;">
+                <sp-picker id="impaginazioneMode" name="impaginazioneMode"
+                  onchange="if($(this).val() == 1) { $('#pagineRange').css('display', ''); } else { $('#pagineRange').css('display', 'none'); }">
+                  <sp-menu slot="options">
+                    <sp-menu-item selected value="0">Tutte le pagine</sp-menu-item>
+                    <sp-menu-item value="1">Range</sp-menu-item>
+                  </sp-menu>
+                </sp-picker>
+                <sp-textfield placeholder="Es: 2-5,7,9,14-18" id="pagineRange"
+                  style="color: white; display: none;"></sp-textfield>
+              </div>
+            </div>
+          </div>
+          <div id="Tab4" style="width: 100%; display: none;" class="tabcontent">
+            <div class="panel" id="comandiExtraMenabo" style="margin-top: 15px; margin-right: 8px;">
+              <div class="row" id="comandiInterfacciaExtra" style="width: 100%; padding-right: 8px; margin-bottom: 8px;">
+                <div>
+                  <sp-action-button style="display: flex; color: lightcoral; font-size: 12px; margin:1px;" pag=""
+                    id="svuotaPagina" name="svuotaPagina" onclick="apriModalSvuotamento('0')">Svuota pagina</sp-action-button>
+                  <sp-action-button style="display: flex; color: lightcoral; font-size: 12px; margin:1px;" pag=""
+                    id="svuotaMenabo" name="svuotaMenabo" onclick="apriModalSvuotamento('1')">Svuota menabo</sp-action-button>
+                  <sp-action-button style="display: none; color: lightcoral; font-size: 12px; margin:1px;" pag="" id="resetIdRec"
+                    name="svuotaMenabo" onclick="resetIdRec()">Reset idRec</sp-action-button>
+                </div>
+                <div>
+                  <sp-action-button style="display: flex; color: white; font-size: 12px; margin:1px;" id="Disattiva bolli"
+                    name="svuotaMenabo" onclick="apriModalBolli('0')">Disattiva bolli</sp-action-button>
+                  <sp-action-button style="display: flex; color: white; font-size: 12px; margin:1px;" id="Attiva bolli"
+                    name="svuotaMenabo" onclick="apriModalBolli('1')">Attiva bolli</sp-action-button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div id="Tab11" style="width: 100%; display: none;" class="tabcontent">
+            <div class="panel" id="mostraAvanzate" style="margin-top: 15px;">
+            </div>
+          </div>
+          <!-- <div id="TabGriglia" style="width: 100%; display: none;" class="tabcontent">
+            <sp-label size="l" slot="label">Opzioni Griglia</sp-label>
+            <div class="row" id="comandiGriglia" style="width: 100%; display: flex; margin-bottom:6px;">
+              <sp-slider id="sliderTrasparenzaGriglia" variant="filled" fill-offset="left" min="0" max="100" value="50"
+                style="width: 25%;" onchange="grigliaJs.setOpacityGriglia($(this).val(), $('#TabGriglia').data('griglia'))">
+                <sp-label slot="label">Trasparenza Griglia</sp-label>
+              </sp-slider>
+              <sp-action-button style="font-size: 12px; margin:1px;" id="ricalcaGriglia"
+                onclick="grigliaJs.svuotaConteggio($('#TabGriglia').data('griglia'))">Svuota conteggio</sp-action-button>
+            </div>
+            <sp-label size="l" slot="label">Opzioni ricalco</sp-label>
+            <div class="row" id="comandiGriglia" style="width: 100%; display: flex; margin-bottom:6px;">
+              <sp-action-button style="font-size: 12px; margin:1px;" id="ricalcaGriglia"
+                onclick="grigliaJs.ricalcaConteggio($('#TabGriglia').data('griglia'))">Conteggio ricalco</sp-action-button>
+              <sp-action-button style="font-size: 12px; margin:1px;" id="ricalcaGriglia"
+                onclick="grigliaJs.ricalca($('#TabGriglia').data('griglia'))">Ricalco</sp-action-button>
+              <div style="display: flex; flex-direction: column; align-items: center;">
+                <sp-label size="m" slot="label" style="margin-bottom: -10px;">Modalità</sp-label>
+                <div style="display: flex; align-items: center;">
+                  <sp-label size="s" style="margin-right: 5px;">Magnetico</sp-label>
+                  <sp-switch id="toggleMode"></sp-switch>
+                  <sp-label size="s" style="margin-left: 5px;">Sequenziale</sp-label>
+                </div>
+              </div>
+            </div>
+            <div class="panel" id="GrigliaEdit" style="margin-top: 15px;">
+            </div>
+          </div> -->
+          <div id="filtriTab" style="width: 100%; display: none; overflow:hidden " class="tabcontent">
+            <div class="row" id="comandiInterfacciaAdvanced" style="width: 100%; display: flex; justify-content:start; height: 10%;">
+              <sp-action-button id="bOpt1Advanced" name="bOpt1Advanced" style="font-size: 12px; margin:1px;"
+                onclick="conteggia();"><span style="display:flex;align-items:center;gap:6px;"><img src="images/conteggio.png" style="width:16px;height:16px;object-fit:contain;"><span>Conteggio</span></span></sp-action-button>
+              <sp-action-button id="bOpt2Advanced" name="bOpt2" style="font-size: 12px; margin:1px;"><span style="display:flex;align-items:center;gap:6px;"><img src="images/impagina.png" style="width:16px;height:16px;object-fit:contain;"><span>Impagina</span></span></sp-action-button>
+              
+              <div style="width: 100%; align-items: center; display: flex;">
+                <input type="checkbox" id="cacheCheckAdvanced"> <label style="color: white;">Utilizza cache se disponibile</label>
+              </div>
+            </div>
+            <div id="filtriBody" style="height: 90%; overflow: hidden;">
+          
+            </div>
+          </div>
+          
+        </div>
+        <!-- tabRef -->
+        <div style="margin: 0px; padding: 0px; width: 100%; display: none; ">
+          <div id="referenza" class="referenza" style="background-color:#333; margin: 0px; padding: 0px; margin-left:-8px; height: 25px;">
+            <h3 id="codiceRef" style="margin: 0px; padding: 5px; color:white;"></h3>
+          </div>
+          <div id="Tab5" style="width: 100%; position: flex; display: none; margin: 0px; padding-top: 6px; height: 405px; overflow-y: scroll;" class="tabcontent">
+            <div class="panel" id="panelElementiArtwork">
+            </div>
+            <div class="panel" id="editReferenza">
+            </div>
+          </div>
+          <div id="Tab6" style="width: 100%; display: none; margin: 0px; padding-top: 6px; height: 405px; overflow-y: scroll;" class="tabcontent">
+            <div class="panel" id="cambiaPS">
+            </div>
+          </div>
+          <div id="Tab7" style="width: 100%; display: none; margin: 0px; padding-top: 6px; height: 405px; overflow-y: scroll;" class="tabcontent">
+            <div class="panel" id="FotoExtra">
+            </div>
+          </div>
+          <div id="Tab8" style="width: 100%; display: none; margin: 0px; padding-top: 6px; height: 405px; overflow-y: scroll;" class="tabcontent">
+            <div class="panel" id="gruppiFormati">
+            </div>
+            <div class="panel" id="alterazioneGruppo">
+            </div>
+          </div>
+          <div id="Tab13" style="width: 100%; display: none; margin: 0px; padding-top: 6px; height: 405px; overflow-y: scroll;" class="tabcontent" onscroll="schedaRef.onScrollingSetterCambioStrtturale()">
+            <div id="rowAddSetCambioStruttturale" style="border: 2px solid white;padding: 5px;border-radius: 2%;position:fixed;background-color:aliceblue;width:500px;">              
+              <sp-picker id="cmbCodiceCambioStrutturale" name="cmbCodiceCambioStrutturale">
+                  <sp-menu slot="options">
+
+                  </sp-menu>
+                </sp-picker>
+                <div style="position: absolute;width: 35px;height: 40px;right: 16px;margin-top : -36px;"><sp-action-button onclick="schedaRef.aggiungiSetDiCambioStrutturale()" style="/* margin-left : 5px; *//* margin-bottom : -36px; */position: absolute;top: 0px;/* left : 2px; */font-size: 20px;background: white;color: #0e0e0e;border: 0px;height: 40px;border-radius: 6px; cursor: pointer;">+</sp-action-button></div>
+            </div>
+            <div class="panel" id="CambioStrutturale" style="margin-top:60px;">
+
+            </div>            
+          </div>
+          <div id="footerRef"
+            style="margin: 0px; padding: 0px; position: fixed; width: 100%; height: 50px; margin-left: -8px; background-color: #888888; display: flex; align-items: center;bottom:20px;">
+            <div style="width: 8%;  display: flex; justify-content: center; align-items: center;">
+              <img src="images/icon_small_cestino.png" title="Rimuovi box" style="height: 30px; cursor:pointer;"
+                onclick="rimuoviRefImpaginata()">
+            </div>
+            <div style="width: 8%; display: flex; justify-content: center; align-items: center;">
+              <img src="images/fix.png" title="Fix referenza" style="height: 30px; cursor:pointer;" onclick="fixRefImpaginata()">
+            </div>
+            <div style="width: 8%; display: flex; justify-content: center; align-items: center;">
+              <img src="images/reimpaginaFix.png" title="Reimpagina box" style="height: 30px; cursor:pointer;" onclick="schedaRef.applicaReimpaginazione()">
+            </div>
+            <div style="width: 8%; display: flex; justify-content: center; align-items: center;">
+                <img id="infoRefImg" src="images/info.png" style="height: 24px; cursor: pointer;"
+                  data-bs-toggle="tooltip" data-bs-html="true" data-bs-placement="bottom" title="Informazioni referenza"
+                  onclick="schedaRef.apriModalInfoReferenza()">
+            </div>
+            <div style="width: 30%; display: block; justify-items: start;">
+              
+            </div>
+            <div id="pulsantiExtra" style="width: 38%; justify-self: right; align-items: center; display: flex; justify-content: end;">
+              
+            </div>
+          </div>
+        </div>
+        <!-- tabArtwork -->
+        <div style="margin: 0px; padding: 0px; width: 100%; display: none;">
+          <div id="Tab9" style="width: 100%; display: none; margin: 0px; padding-top: 5px;" class="tabcontent">
+            <div style="width:100%; margin-bottom:10px; color:white;" id="listaGruppiArtwork">
+            </div>            
+            <sp-action-button style="font-size: 12px;" id="collegaAdArtwork" name="collegaAdArtwork"
+            aggiungiElementi="false" onclick="raggruppaSottoArtwork()">Crea</sp-action-button>
+            <sp-action-button style="font-size: 12px; color: lightcoral;" id="scollegTuttoArtwork"
+            name="scollegTuttoArtwork" onclick="eliminaArtwork()">Elimina</sp-action-button>
+          </div>
+        </div>
+        <!-- tabRaggruppa -->
+        <div style="margin: 0px; padding: 0px; width: 100%; display: none;">
+          <div id="Tab10" style="width: 100%; display: none; margin: 0px; padding-top: 10px;" class="tabcontent">
+            <div id="gruppiSelezionati" class="panel" style="margin-top: 15px; margin-right: 8px;">
+
+            </div>
+            <sp-action-button style="font-size: 12px;" id="raggruppa" codiciConId=""
+          name="raggruppa" onclick="schedaRef.raggruppa($(this).attr('codiciConId'))">Raggruppa</sp-action-button>
+          </div>
+        </div>
+        <!-- tabUtility -->
+        <div style="margin: 0px; padding: 0px; width: 100%; display: none;">
+          <div id="Tab12" style="width: 100%; display: none; margin: 0px; padding-top: 10px;" class="tabcontent">
+            <div class="row" id="comandiDebug" style="display: flex; flex-direction: row; align-items: center; width:100%">
+              <sp-action-button id="svuotaConsole" name="svuotaConsole" style="color: white;" onclick="svuotaConsole()"><img
+                  style="background-color: rgb(205, 25, 25); width: 18px;" slot="icon" src="images/clearConsole.png"
+                  alt="svuotaConsole" onclick="svuotaConsole()"></sp-action-button>
+              <sp-action-button id="leggiLog" name="leggiLog" style="color: white;" onclick="leggiLog()"><img
+                  style="background-color: white; width: 18px;" slot="icon" src="images/leggiLog.png" alt="leggiLog"
+                  ></sp-action-button>
+              <div style="display: flex; flex-direction: row; align-items: center;"><input style="color: red;" type="checkbox" id="logErrori" name="errori" checked onchange="cambioVisualizzazioneConsole()"> 
+                <label style="color: red; font-weight: bold;">Errori</label></div>
+              <div style="display: flex; flex-direction: row; align-items: center;"><input style="color: darkorange;" type="checkbox" id="logWarning" name="warning" checked onchange="cambioVisualizzazioneConsole()"> 
+                <label style="color: darkorange; font-weight: bold;">Warning</label></div>
+              <div style="display: flex; flex-direction: row; align-items: center;"><input style="color: green;" type="checkbox" id="logInfo" name="info" checked onchange="cambioVisualizzazioneConsole()"> 
+                <label style="color: green; font-weight: bold;">Info</label></div>
+            </div>
+            <div class="row" id="debugLogs" style="display: block; width: 100%;">
+            </div>           
+          </div>
+        </div>
+        <!-- tab libro -->
+        <div style="margin: 0px; padding: 0px; width: 100%; display: none;">
+          <div id="Tab14" style="width: 100%; display: none; margin: 0px; padding-top: 10px;" class="tabcontent">
+            <div style="margin-top:30px;width:100%;color: white;font-size: 12px;" id="contanierRiepilogoLibro">
+              Questo è lo spazio dove dobbiamo fare il riepilogo del libro
+            </div>
+            <div style="width:100%;text-align: center;margin-top:10px;">
+              <input type="checkbox" id="chPacchettoFotoPerImpaginazioneMassiva" style="vertical-align:middle;"> <label style="color: white;">Scarica tutto il pacchetto foto</label>
+            </div>
+            <div id="impaginaLibroContainer" style="width:100%;text-align: center;margin-top:10px;">
+              <button style="width:200px; height:50px;" id="impaginaLibroPoP" onclick="impaginaLibro()">IMPAGINA</button>
+            </div>
+            <div id="esportaLibroContainer" style="width:100%;text-align: center;margin-top:10px; display: none;">
+              <button style="width:200px; height:50px;" onclick="apriModalEsportaLibro()">ESPORTA</button>
+            </div>
+            <div id="continuaEsportaLibroContainer" style="width:100%;text-align: center;margin-top:10px; display: none;">
+              <button style="width:200px; height:50px;" onclick="esportaLibro()">CONTINUA ESPORTAZIONE</button>
+            </div>
+          </div>
+        </div>
+        <!-- tabGriglia -->
+        <div style="margin: 0px; padding: 0px; width: 100%; display: none;">
+          <div id="TabGriglia" style="width: 100%; display: none;" class="tabcontent">
+            <sp-label size="l" slot="label">Opzioni Griglia</sp-label>
+            <div class="row" id="comandiGriglia" style="width: 100%; display: flex; margin-bottom:6px;">
+              <sp-slider id="sliderTrasparenzaGriglia" variant="filled" fill-offset="left" min="0" max="100" value="50"
+                style="width: 25%;" onchange="grigliaJs.setOpacityGriglia($(this).val(), $('#TabGriglia').data('griglia'))">
+                <sp-label slot="label">Trasparenza Griglia</sp-label>
+              </sp-slider>
+              <sp-action-button style="font-size: 12px; margin:1px;" id="ricalcaGriglia"
+                onclick="grigliaJs.svuotaConteggio($('#TabGriglia').data('griglia'))">Svuota conteggio</sp-action-button>
+            </div>
+            <sp-label size="l" slot="label">Opzioni ricalco</sp-label>
+            <div class="row" id="comandiGriglia" style="width: 100%; display: flex; margin-bottom:6px;">
+              <sp-action-button style="font-size: 12px; margin:1px;" id="ricalcaGriglia"
+                onclick="grigliaJs.ricalcaConteggio($('#TabGriglia').data('griglia'))">Conteggio ricalco</sp-action-button>
+              <sp-action-button style="font-size: 12px; margin:1px;" id="ricalcaGriglia"
+                onclick="grigliaJs.ricalca($('#TabGriglia').data('griglia'))">Ricalco</sp-action-button>
+              <div style="display: flex; flex-direction: column; align-items: center;">
+                <sp-label size="m" slot="label" style="margin-bottom: -10px;">Modalità</sp-label>
+                <div style="display: flex; align-items: center;">
+                  <sp-label size="s" style="margin-right: 5px;">Magnetico</sp-label>
+                  <sp-switch id="toggleMode"></sp-switch>
+                  <sp-label size="s" style="margin-left: 5px;">Sequenziale</sp-label>
+                </div>
+              </div>
+            </div>
+            <div class="panel" id="GrigliaEdit" style="margin-top: 15px;">
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+    <div id="footer" style="margin: 0px; position:fixed; display:flex; width:100%; bottom:0px; padding: 5px; height: 20px; background-color:rgb(0, 0, 0); border-top: 1px solid #ffffff; color: #ffffff; align-items: center; z-index:999999;">
+      <div style="display: flex; align-items:start; width: 50%;">
+        <span id="timestamp" style="margin-top:2px;margin-right:5px;"></span><h5 id="versionePlugin"></h5>
+      </div>
+      <div style="display: flex; justify-content:end; width: 50%; align-items: center;">
+        <h5 id="modalita"></h5>
+        <h5 id="istantaState">-</h5>
+        <button id="tornaOnlineButton" style="display: none;" onclick="apriSchermataSyncModifiche()">Torna Online</button>
+        <img src="images/wake.png" style="margin-left:5px; width:25px; cursor:pointer;" stato="wake" onclick="clickOnSleepAwake($(this));"  />
+      </div>
+    </div>
+    <div id="loginPanel" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgb(0, 149, 255); z-index: 999; display: none; justify-content: center; align-items: center; color:white;">
+      <div
+        style="width: 300px; height: 300px; background-color: rgba(33, 33, 75, 0.8); display: flex; flex-direction: column; justify-content: center; align-items: center; border-radius: 5%;">
+        <img src="images/LOGO_ISTANTA.png" style="width: 80%;">
+        <label for="username" style="color: white; align-self: self-start; margin-left:10%;">Username</label>
+        <input type="text" id="username" placeholder="Inserire Username o Email"
+          style="width: 80%;height: 40px; border-radius: 1%;background-color: black;">
+        <label for="password" style="color: white; align-self: self-start; margin-left:10%;">Password</label>
+        <input type="password" id="password" placeholder="Inserire Password"
+          style="width: 80%;height: 40px; border-radius: 1%;background-color: black;">
+        <sp-action-button id="login" name="login" style="color: white; margin-top: 5px;"
+          onclick="login($('#username').val(),$('#password').val())">
+          <h3 id="loginText">Login</h3>
+        </sp-action-button>
+        <span id="statusLoginOp"></span>
+    
+      </div>
+    </div>
+    <div id="overlayModal"
+      style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); display: none; justify-content: center; align-items: center; z-index: 5000;"
+      class="overlayModal">
+      <div
+        style="background-color: white; width: 80%; height: 80%; padding: 10px; border-radius: 10px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.5); display: flex; flex-direction: column;">
+    
+        <!-- Header -->
+        <div id="headerModal" style="display: flex; height: 5%; justify-content: space-between; align-items: center; border-bottom: 1px solid #ccc; padding-bottom: 10px;">
+          <div class="row" id="messaggiUtenteModal" style="position: fixed; width:76%; align-self: self-start; z-index: 9999;">
+          </div>
+          <h2 id="modalTitle" style="margin: 0; display: block;">Titolo</h2>
+          <button id="closeModal" onclick="Utility.chiudiModal()" style="height: 25px;cursor: pointer;">&times;</button>
+        </div>
+    
+        <!-- Body -->
+        <div id="bodyModal" style="flex-grow: 1; margin: 0; padding: 0; overflow-y: auto; height: 95%;">
+          
+        </div>
+      </div>
+    </div>
+    <div id="overlayModalDownloadFoto"
+    style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); display: none; justify-content: center; align-items: center; z-index: 5000;"
+    class="overlayModal">
+    <div
+      style="background-color: white; width: 80%; height: 80%; padding: 10px; border-radius: 10px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.5); display: flex; flex-direction: column;">
+  
+      <!-- Header -->
+      <div id="headerModal" style="display: flex; height: 5%; justify-content: space-between; align-items: center; border-bottom: 1px solid #ccc; padding-bottom: 10px;">
+        <div class="row" id="messaggiUtenteModal" style="position: fixed; width:76%; align-self: self-start; z-index: 9999;">
+        </div>
+        <h2 id="modalTitle" style="margin: 0; display: block;">Titolo</h2>
+        <button id="closeModal" onclick="Utility.chiudiModalCustom('DownloadFoto')" style="height: 25px;cursor: pointer;">&times;</button>
+      </div>
+  
+      <!-- Body -->
+      <div id="bodyModal" style="flex-grow: 1; margin: 0; padding: 0; overflow-y: auto; height: 95%;">
+        
+      </div>
+    </div>
+  </div>
+
+      <!-- Qui inserisco lo script per il tab -->
+      <script>
+        //ondocument ready
+        const functionMap = {
+          "filtriJs.visualizzaHomePageFiltri": filtriJs.visualizzaHomePageFiltri
+        };
+
+        function openTab(evt, tabName, functionToCall = null) {
+          var i, tabcontent, tablinks;
+          tabcontent = document.getElementsByClassName("tabcontent");
+          for (i = 0; i < tabcontent.length; i++) {
+            tabcontent[i].style.display = "none";
+            tabcontent[i].parentNode.style.display = "none";
+          }
+          tablinks = document.getElementsByClassName("tablinks");
+          for (i = 0; i < tablinks.length; i++) {
+            tablinks[i].className = tablinks[i].className.replace(" active", "");
+          }
+          document.getElementById(tabName).style.display = "block";
+          document.getElementById(tabName).parentNode.style.display = "block";
+          //evt.currentTarget.className += " active";
+          //creiamo un eccezione per le tab della ref
+          switch(tabName) {
+              case 'Tab1':
+              mostraTracciato();
+              break;
+            case 'Tab5':
+              $("#salvaButton").css('display', 'block');
+              $("#confermaButton").css('display', 'none');
+              break;
+            case 'Tab6':
+              $("#salvaButton").css('display', 'none');
+              $("#confermaButton").css('display', 'block');
+              break;
+            case 'Tab7':
+              $("#salvaButton").css('display', 'none');
+              $("#confermaButton").css('display', 'none');
+              break;
+            case 'Tab8':
+              $("#salvaButton").css('display', 'none');
+              $("#confermaButton").css('display', 'none');
+            case 'Tab13':
+              $("#salvaButton").css('display', 'none');
+              $("#confermaButton").css('display', 'none');
+              break;
+            default:
+              break;
+          }
+          console.warn("opentab " + tabName);
+
+          if (functionToCall && typeof functionToCall === 'function') {
+            functionToCall();
+          }
+          onresizeWindow();
+        }
+
+        function openTabTracciato(evt, tabName) {
+          var i, tabcontent, tablinks;
+          tabcontent = document.getElementsByClassName("tabcontentTracciato");
+          for (i = 0; i < tabcontent.length; i++) {
+            tabcontent[i].style.display = "none";
+          }
+          tablinks = document.getElementsByClassName("tablinksTracciato");
+          for (i = 0; i < tablinks.length; i++) {
+            tablinks[i].className = tablinks[i].className.replace(" active", "");
+          }
+          document.getElementById(tabName).style.display = "block";
+          //evt.currentTarget.className += " active";
+        }
+
+        function changeImage(sender) {
+          //il sender è un oggetto di tipo img, noi dobbiamo eseguire due passaggi, il primo tornare dal sender al padre e cercare l'oggetto con l'immagine il cui nome contiene _active e sostituire l'immagine con l'immagine che non contiene _active, poi sostituire l'immagine del sender con l'immagine che contiene _active, usiamo il jquery per fare questo
+          var parent = $(sender).parent();
+          var img = $(parent).find('img[src*="active"]');
+          var src = $(img).attr('src');
+
+          if (img.length > 0 && img.attr('src') != sender.attr('src')) {
+            console.log('cambio immagine');
+            console.log(img);
+            console.log(sender);
+            console.log(src);
+            var newSrc = src.replace('_active', '');
+            $(img).attr('src', newSrc);
+            $(img).attr('active', "false");
+          }
+
+          if (img == null || img.attr('src') != sender.attr('src')) {
+            src = $(sender).attr('src');
+            console.log(src);
+            var newSrc = src.replace('.png', '_active.png');
+            $(sender).attr('src', newSrc);
+            $(sender).attr('active', "true");
+          }
+
+        }
+
+        function clearSubmenu()
+        {
+          $(".subMenuTabs").find('div[class*="subTab"]').each(function () {
+            $(this).css('display', 'none');
+          });
+        }
+
+        function changeSubMenu(tabName) {
+          console.warn('changeSubMenu ' + tabName);
+          var subMenu = $(".sub" + tabName);
+
+          //cerchiamo tutti gli elementi la cui classe contiene subTab e li nascondiamo
+          // $(".subMenuTabs").find('div[class*="subTab"]').each(function () {
+          //   $(this).css('display', 'none');
+          // });
+          clearSubmenu();
+
+          //mostraimo il subMenu selezionato
+          $(subMenu).css('display', 'flex');
+          //simuliamo un click sul primo elemento del submenu
+          // $(subMenu).find('img').first().click();
+          //troviamo tra i figli del subMenu il primo elemento che non sia a display none e simuliamo un click su di esso
+          $(subMenu).find('img').each(function () {
+            if ($(this).css('display') != 'none') {
+              //leggiamo il suo attributo tab
+  
+              var tab = $(this).attr('tab');
+              //leggiamo nei suoi data se ha un metodo da chiamare
+              const method = $(this).data("method");
+              const fn = functionMap[method];
+
+              if (typeof fn === "function") {
+                openTab(null, tab, fn);
+              } else {
+                openTab(null, tab);
+              }
+              changeImage($(this));
+              return false;
+            }
+          });
+        }
+
+        function resolveFunctionFromString(path) {
+          return path.split('.').reduce((obj, key) => obj && obj[key], window);
+        }
+
+        function toggleAdvancedMode(isChecked) {
+          const advancedModeCheckbox = $('#advancedMode');
+          if (isChecked) {
+            advancedModeCheckbox.parent().css('display', 'flex');
+          } else {
+            advancedModeCheckbox[0].checked = false;
+            advancedModeCheckbox.parent().css('display', 'none');
+          }
+        }
+      </script>
+
+
+</div>
+
+
+<div id="pulsantiTestataConfronto" style="width:60%; display: none; justify-content: end;">
+  <button id="closeModalConfrontoPerEsportazione" title="Esegui esportazione" style="height: 25px;cursor: pointer; display: none;">Esegui esportazione</button>
+  <button id="closeModalConfronto" onclick="(async () => {
+    if (await Utility.confirm('Sicuro di voler interrompere il processo di controllo integrità?')) {
+        indesignEvents.setBusy(false);
+        Utility.chiudiModal();
+    }
+})()" title="Chiudi report confronto" style="height: 25px;cursor: pointer;">&times;</button>
+</div>
+
+
+<div id="dialogSelectKit" myname="dialogSelectKit" style="width:100%; display: none; overflow: none; z-index:9999998;">
+  <div id="container" id="selezionaKit" style="background-color: white; padding: 20px; border-radius: 5px; border-color: #333; justify-content: center; align-items: center; height: 10%; width: 100%;">
+    <div style="width:100%;padding:10px;text-align: center; margin-bottom:10px;">
+      <h3>Seleziona Kit</h3>
+    </div>
+    <div style="width:100%; text-align:center;">
+      <div style="width:100%;margin-bottom:10px;">
+        <sp-picker id="kitPromoCmb" name="kitPromoCmb">
+          <sp-menu slot="options">
+          </sp-menu>  
+        </sp-picker>
+      </div>
+      <div style="width:100%;margin-bottom:10px;">
+        <sp-picker id="kitFormatiCmb" name="kitFormatoCmb">
+          <sp-menu slot="options">
+
+          </sp-menu>  
+        </sp-picker>
+      </div>
+      <div id="kitCanaliDiv" style="width:100%;display:none;margin-bottom:10px;">
+        <sp-picker id="kitCanaliCmb">
+          <sp-menu slot="options">
+            
+          </sp-menu>       
+        </sp-picker>
+      </div>
+      <div id="kitAreeDiv" style="width:100%;margin-bottom:10px;display:none;">
+        <sp-picker id="kitAreeCmb">
+          <sp-menu slot="options">
+            
+          </sp-menu>    
+        </sp-picker>
+      </div>
+      <div style="margin-top: 20px; text-align:center;">
+        <button onclick="ficoProcess.cercaKit()" style="height:40px; width:100px; border-radius: 0px;">Cerca Kit</button>
+      </div>
+    </div>        
+    <div style="width:100%;visibility: hidden;" id="kitRicercaResult">
+      <hr>
+      <div style="width:100%;text-align:center;"><h2>Risultati di ricerca</h2></div>
+      <div style="width:100%;height: 500px; overflow-y:auto;" id="listaKitTrovati">            
+      </div>
+      <div style="width:100%;height: 500px; overflow-y:auto;text-align:center;" id="actMassivaSuKit">
+        <button style="height:40px; width:250px; border-radius: 0px; margin-top:10px;" onclick="ficoProcess.lavoraKitMassivo()">
+          Inizia lavorazione
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="dialogSleepLock" myname="dialogSleepLock" style="width:100%; display: none; overflow: none; z-index:9999999;">
+  <div id="container" style="background-color: white; padding: 20px; border-radius: 5px; border-color: #333; justify-content: center; align-items: center; height: 10%; width: 100%;">
+    <div style="width:100%;padding:10px;text-align: center; margin-bottom:10px;">
+      <h3>Modalità Sleep Lock</h3>
+    </div>
+    <div style="width:100%;padding:10px;text-align: center; margin-bottom:10px;">
+      <img src="images/sleep.png" style="width: 50px; margin-bottom: -15px;">
+    </div>
+    <div style="width:100%; text-align:center;">
+        <h6>Per rimuovere la modalità Sleep Lock premere l'icona in basso a destra.</h6>
+    </div>
+  </div>
+</div>
+
+</body>
+<div id="dialogImpagina" myname="dialogImpagina" style="display: none; height: 100%; width: 100%;">
+  <div style="height: 90%;">
+    <div style="width: 100%; align-items: center; display: none;">
+      <input type="checkbox" id="reimpostaPS"> <label>Sovrascrivi e rielabora primarie e
+        secondarie.</label>
+    </div>
+    <div style="width: 100%; align-items: center; display: flex;">
+      <input type="checkbox" id="confrontaVolantino"> <label>Applica un confronto tra l'impaginazione richiesta e quella
+        attuale. Impossibile applicare il range pagine a questa opzione.</label>
+    </div>
+  </div>
+  <div>
+    <button onclick="Utility.chiudiModal();">Annulla</button>
+    <button
+      onclick="impagina($('#reimpostaPS').is(':checked'), $('#confrontaVolantino').is(':checked'))">Impagina</button>
+  </div>
+</div>
+
+<div id="dialogSvuotaPagina" myname="dialogSvuotaPagina" style="display: none; height: 100%; width: 100%;">
+  <div style="height: 90%;">
+    <sp-picker id="svuotaImpaginazioneMode" name="svuotaImpaginazioneMode"
+      onchange="if($(this).val() == '0') { $('#pagineRangeSvuotatura').show(); console.log('mostro') } else { $('#pagineRangeSvuotatura').hide(); console.log('nascondo'); }">
+      <sp-menu slot="options">
+        <sp-menu-item selected value="0">Svuota pagina</sp-menu-item>
+        <sp-menu-item value="1">Svuota tutto</sp-menu-item>
+      </sp-menu>
+    </sp-picker>
+    <sp-textfield placeholder="Es: 2-5,7,9,14-18" id="pagineRangeSvuotatura"
+    style="color: white; display: none;"></sp-textfield>
+  </div>
+  <div>
+    <button onclick="Utility.chiudiModal();">Annulla</button>
+    <button
+      onclick="selectionModalSvuota($('#svuotaImpaginazioneMode').val())">Procedi</button>
+  </div>
+</div>
+
+<div id="dialogAttivaDisattivaBolli" myname="dialogAttivaDisattivaBolli" style="display: none; height: 100%; width: 100%;">
+  <div style="height: 90%;">
+    <sp-picker id="attivaDisattivaBolliMode" name="attivaDisattivaBolliMode"
+      onchange="if($(this).val() == '0') { $('#pagineRangeAttivaDisattivaBolli').show(); console.log('mostro') } else { $('#pagineRangeAttivaDisattivaBolli').hide(); console.log('nascondo'); }">
+      <sp-menu slot="options">
+        <sp-menu-item selected value="0">Da pagina/e</sp-menu-item>
+        <sp-menu-item value="1">Tutte le pagine</sp-menu-item>
+      </sp-menu>
+    </sp-picker>
+    <sp-textfield placeholder="Es: 2-5,7,9,14-18" id="pagineRangeAttivaDisattivaBolli"
+    style="color: white;"></sp-textfield>
+  </div>
+  <div>
+    <button onclick="Utility.chiudiModal();">Annulla</button>
+    <button id="bottoneAttivaDisattivaBolli" modalita="false"
+      onclick="selectionAttivaDisattivaBolli($('#attivaDisattivaBolliMode').val(), $('#bottoneAttivaDisattivaBolli').attr('attiva'))">Procedi</button>
+  </div>
+</div>
+
+<div id="dialogSyncFotoMassivo" myname="dialogSyncFotoMassivo" style="display: none; height: 100%; width: 100%;">
+  <div style="height: 90%;">
+    <div style="width: 100%; align-items: center; display: flex;">
+      <input type="checkbox" id="ricollegaFotoPresentiModificate" onclick="console.log('ciao'), toggleAdvancedMode(this.checked)">
+      <label>Ricollega tutte le foto che presentano modifiche incluse quelle presenti.</label>
+    </div>
+    <div style="width: 100%; align-items: center; display: none;">
+      <input type="checkbox" id="advancedMode"> <label>AdvancedMode: Rimuovi foto rimosse e impagina foto nuove.</label>
+    </div>
+  </div>
+  <div>
+    <button onclick="Utility.chiudiModal();">Annulla</button>
+    <button
+      onclick="ricollegaFotoMassivo($('#ricollegaFotoPresentiModificate').is(':checked'), $('#advancedMode').is(':checked'))">Avvia Sync</button>
+  </div>
+</div>
+
+<div id="dialogCambiaGriglia" myname="dialogCambiaGriglia" style="overflow: auto; display: none; height: 100%; width: 100%;">
+
+  <div style="height: 90%;">
+    <div class="container" id="bodyCambioGriglia">
+
+    </div>
+  </div>
+    <div>
+      <button onclick="Utility.chiudiModal();">Annulla</button>
+    </div>
+</div>
+
+<div id="dialogCambioMeccanica" myname="dialogCambioMeccanica" style="overflow: auto; display: none; height: 100%; width: 100%;">
+
+  <div style="height: 90%;">
+    <div class="container" id="bodyCambioMeccanica">
+      <sp-picker size="s" id="meccanicheModal" class="meccaniche" style="width: 100%; text-align: center;" initialized="false"
+      codice="" impagina="">
+      <sp-menu id="meccanicheMenu" class="meccanicheMenu" slot="options">
+
+      </sp-menu>
+      </sp-picker>
+    </div>
+  </div>
+    <div>
+      <button onclick="Utility.chiudiModal();">Annulla</button>
+      <button codice="" id="confermaCambioMeccanica" onclick="confermatoCambioMeccanica($('#meccanicheModal').attr('codice'), $('#meccanicheModal').val(), true) ; Utility.chiudiModal()">Conferma</button>
+    </div>
+</div>
+
+<!-- <div id="dialogIncludiEscludi" myname="dialogIncludiEscludi" style="overflow: auto; display: none; height: 100%; width: 100%;"> -->
+<div id="dialogIncludiEscludi" myname="dialogIncludiEscludi" style="overflow-x: hidden; display: none; height: 100%; width: 100%; z-index: 2000;">
+  <div id="headerIncludiEscludi" style="height: 10%; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ccc; padding-bottom: 10px;">
+  </div>
+  <div id="bodyIncludiEscludi" codiceEscluso="" codiceIncluso="" style="overflow-y: auto; overflow-x: hidden; height: 80%;">
+  </div>
+  <div style="height: 10%;">
+    <button onclick="Utility.chiudiModal();">Annulla</button>
+    <button style="visibility: hidden;" id="confermaIncludiEscludi" onclick=" grigliaJs.confermatoIncludiEscludi($('#bodyIncludiEscludi').attr('codiceEscluso'), $('#bodyIncludiEscludi').attr('codiceIncluso')) ; Utility.chiudiModal()">Conferma</button>
+  </div>
+</div>
+
+<div id="dialogSwap" myname="dialogSwap" style="overflow-x: hidden; display: none; height: 100%; width: 100%; z-index: 2000;">
+  <div id="elementoDiPartenzaSwap" style="height: 35%; width: 100%; display: block; padding-bottom: 5px;">
+  </div>
+  <div style="height: 20%; display: flex; justify-content: center; align-items: center; padding-bottom: 5px;">
+    <img src="images/swap.png" style="height: 50px; margin-left: 8px;">
+  </div>
+  <div id="elementoDiSelezioneSwap" style="height: 35%; display: block; border-bottom: 1px solid #ccc; padding-bottom: 5px;">
+  </div>
+  <div style="height: 10%;">
+    <button onclick="grigliaJs.setVariabiliSwap(false, true)">Annulla</button>
+    <button style="visibility: hidden;" id="confermaSwap" onclick="grigliaJs.setVariabiliSwap(true, false)">Conferma</button>
+  </div>
+</div>
+
+<div id="dialogFiltri" myname="dialogFiltri" style="overflow-x: hidden; display: none; height: 100%; width: 100%; z-index: 2000;">
+  <div id="advancedOptionsFiltro" style="height: 20%; display: none; border-bottom: 2px solid #ccc; padding-top: 2px; overflow-y: auto;">
+    <div style="width: 100%; display: flex; justify-content: space-between; align-items: center; padding-top: 10px;">
+      <button id="scorriAvantiFiltri" onclick="filtriJs.scorriFiltri(true)">Scorri avanti</button> 
+      <button id="scorriIndietroFiltri" onclick="filtriJs.scorriFiltri(false)">Scorri indietro</button>
+      <input type="checkbox" id="fermaAPaginaBloccata"> <label>Ferma a pagina bloccata</label>
+      <input type="checkbox" id="fermaAPaginaVuota" selected> <label>Ferma a filtro vuoto</label>
+    </div>
+    <div style="width: 100%; display: flex; justify-content: space-between; align-items: center;">
+      <button id="mandaPaginaFiltro" onclick="filtriJs.scambiaFiltri(0)">Manda a:</button> 
+      <button id="duplicaPaginaFiltro" onclick="filtriJs.duplicaFiltri(0)">Duplica a:</button> 
+      <button id="scambiaFiltro" onclick="filtriJs.scambiaFiltri(1)">Scambia con:</button> 
+      <label for="paginaInvioFiltro" style="font-size: small;">Pag:</label>
+      <textarea style="width:20%" class="hideble" id="paginaInvioFiltro"></textarea>
+    </div>
+  </div>
+  <img src="images/sbloccaPaginaGrande.png" id="lockIcon" style="height: 100%; cursor:pointer; display: none;" onclick="filtriJs.bloccaSblocca()">
+  <div id="bodyFiltri" style="height: 90%; display: block; border-bottom: 1px solid #ccc; padding-bottom: 5px; overflow-y: auto;">
+  </div>
+  <div id="buttonsFiltri" style="height: 10%; display: flex; padding-bottom: 5px;">
+    <button id="addFiltro" onclick="filtriJs.addNewFiltro()">Aggiungi Filtro</button>
+    <button id="blocca/sbloccaPagina" onclick="filtriJs.bloccaSblocca()">Blocca pagina</button>
+    <button id="confermaFiltri" onclick="filtriJs.salvaFiltri()">Conferma</button> 
+  </div>
+</div>
+
+<div id="pulsantiTestataSync" style="width:60%; display: none; justify-content: end;">
+  <button id="iniziaSincronizzazione" onclick="sincronizzaModificheOffline()">Sincronizza</button>
+  <button id="fermaSincronizzazione" style="display: none;">Ferma sincronizzazione</button>
+  <button id="continuaOffline" onclick="continuaOffline()">Continua offline</button>
+</div>
+
+<div id="pulsantiTestataSyncOnline" style="width:60%; display: none; justify-content: end;">
+  <button id="iniziaSincronizzazione" onclick="sincronizzaModificheOffline()">Sincronizza</button>
+  <button id="fermaSincronizzazione" style="display: none;">Ferma sincronizzazione</button>
+  <button id="chiudiModalSync" onclick="chiudiModalSync()">Chiudi e Aggiorna</button>
+</div>
+
+<div id="pulsanteAdvancedOptionFiltro" style="width:20%; display: none; justify-content: end;">
+  <button name="advancedOptionFiltro" onclick="$('#advancedOptionsFiltro').toggle();
+  if ($('#advancedOptionsFiltro').css('display') == 'block') {
+      $('#lockIcon').css('height', '80%');
+      $('#bodyFiltri').css('height', '70%');
+  } else {
+      $('#lockIcon').css('height', '100%');
+      $('#bodyFiltri').css('height', '90%');
+  }">Opzioni avanzate</button>
+</div>
+
+<div id="riduciIconaRow" style="width:20%; display: none; justify-content: end;">
+  <button id="riduciIcona" onclick="$(this).closest('.overlayModal').hide(), $('#mainContent').show()" style="font-size: 16px; border: none; background: none; cursor: pointer;">
+    &#x25BC; <!-- Unicode character for a downward triangle -->
+  </button>
+  <!-- creiamo un bottone che chiama abortSyncPacchettoFotoFunction quando viene cliccato -->
+  <button id="abortSyncPacchettoFoto" onclick="abortSyncPacchettoFotoFunction()" style="font-size: 16px; border: none; background: none; cursor: pointer;">
+    &#x2716; <!-- Unicode character for a cross -->
+  </button>
+</div>
+
+<div id="dialogSyncModifiche" myname="dialogSyncModifiche"
+  style="overflow: auto; display: none; height: 100%; width: 100%;">
+  <div style="height: 90%;">
+    <div class="container" id="bodySincronizzaModifiche" style="height: 100%;">
+
+      <div id="tabContainer" style="display: block; width: 100%; height: 100%;">
+        <div id="tabButtons" style="display: flex; background-color: #333; width: 100%;">
+          <img class="tablinksSync" src="images/SubMenu_Impaginazione_active.png" style="cursor:pointer; width:33%;"
+            onclick="openTabSync(null, 'processiRimastiTab'), changeImage($(this))">
+          <img class="tablinksSync" src="images/SubMenu_RefAvanzate.png" style="cursor:pointer; width:33%;"
+            onclick="openTabSync(null, 'processiTerminatiTab'), changeImage($(this))">
+          <img class="tablinksSync" src="images/SubMenu_Extra.png" style="cursor:pointer; width:34%;"
+            onclick="openTabSync(null, 'processiFallitiTab'), changeImage($(this))">
+        </div>
+        <div style="height: 100%; overflow: auto;">
+          <div id="processiRimastiTab" class="tabcontentSync"
+            style="display: block; background-color: #4d4c4c; height: 100%; overflow: auto;">
+
+          </div>
+          <div id="processiTerminatiTab" class="tabcontentSync"
+            style="display: none; background-color: #4d4c4c; height: 100%; overflow: auto;">
+
+          </div>
+          <div id="processiFallitiTab" class="tabcontentSync"
+            style="display: none; background-color: #4d4c4c; height: 100%; overflow: auto;">
+
+          </div>
+        </div>
+      </div>
+
+      <script>
+        function openTabSync(evt, tabName) {
+          var i, tabcontent, tablinks;
+          tabcontent = document.getElementsByClassName("tabcontentSync");
+          for (i = 0; i < tabcontent.length; i++) {
+            tabcontent[i].style.display = "none";
+          }
+          document.getElementById(tabName).style.display = "block";
+        }
+      </script>
+    </div>
+  </div>
+</div>
+
+<div id="dialogCambiaMastro" myname="dialogCambiaMastro" style="width:100%; height: 100%; display: none;">
+  <div style="height: 90%;">
+    <sp-picker id="mastroMenuPicker" style="width: 100%;">
+      <sp-label slot="label">Seleziona Mastro</sp-label>
+      <sp-menu id="mastroMenu" slot="options">
+        <sp-menu-item value="0">Seleziona mastro</sp-menu-item>
+      </sp-menu>
+    </sp-picker>
+    <div style="width: 100%; align-items: center; display: flex;">
+      <input type="checkbox" id="impostaMastroPagina"> <label>Imposta mastro anche alla pagina</label>
+    </div>
+    <div style="width: 100%; align-items: center; display: flex;">
+      <input type="checkbox" id="impostaMastroAllBox"> <label>Imposta mastro a tutti i box in pagina</label>
+    </div>
+  </div>
+  <div>
+    <button onclick="Utility.chiudiModal()" style="height: 25px;">Annulla</button>
+    <button onclick="cambiaMastro($('#mastroMenuPicker').val(), $('#impostaMastroPagina').prop('checked'), $('#impostaMastroAllBox').prop('checked')); Utility.chiudiModal();" style="height: 25px;">Procedi</button>
+  </div>
+</div>
+
+<div id="dialogSyncPacchettoFoto" myname="dialogSyncPacchettoFoto" style="width:100%; display: none; overflow: none;">
+  <div style="height: 90%;" id="avvioOperazioneSyncFoto" style="overflow: none; display: block;">
+    <button id="ScaricaPacchettoFoto" name="downloadFoto" style="margin-top: 24px;"
+    onclick="avviaSyncPacchettoFoto(0)">Avvia sync completo</button><hr>
+    <button id="ScaricaPacchettoFoto" name="downloadFoto" style="margin-top: 24px;"
+    onclick="avviaSyncPacchettoFoto(1)">Avvia sync loghi</button><hr>
+  </div>
+  <div style="height: 90%;" id="bodySyncPacchettoFoto" style="overflow: none; display: none;">
+    <div id="loadingBox" style="display: flex; justify-content: center; align-items: center; height: 10%; width: 100%; margin-top: 10%;">
+      <div style="background-color: white; padding: 20px; border-radius: 5px; border-color: #333;">
+        <h2 id="messageOperazione" style="text-align: center; color: #333;">Attendere...</h2>
+      </div>
+    </div>
+    <div id="containerProgress"
+      style="display: flex; width: 100%; justify-content: center; align-items: center; overflow: none; flex-direction: column;">
+      <div id="progressText"
+        style="display: flex; width: 100%; overflow: none; flex-direction: row; justify-content: center; align-items: center;">
+        <p style="color: black; font-size: 14px;"><span id="completedCount">0</span> di <span id="totalCount">?</span>
+          completato</p>
+      </div>
+      <div id="progressBarContainer"
+        style="display: block; width: 50%; height: 15px; overflow: none; flex-direction: row; background-color: #888888;">
+        <div id="progressBar"
+          style="display: flex; width: 1%; height: 100%; overflow: none; flex-direction: row; background-color: rgb(3, 58, 255);">
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- <div id="dialogPathLinksLoghi" myname="dialogPathLinksLoghi"
+  style="overflow: auto; display: none; height: 100%; width: 100%;">
+  <div style="height: 90%;">
+    <div class="container" id="bodyPaths">
+      <div style="display: block;">
+    
+
+        <div style="margin-bottom: 1rem; margin-top: 1 rem;">
+          <button onclick="impostaPercorsiDiSistema(0)">Imposta percorso foto</button>
+          <div id="pathFoto"
+            style="margin-top: 0.5rem; padding: 0.4rem 0.6rem; background-color: #e0e0e0; border-radius: 4px; user-select: none; height: 2rem;">
+          </div>
+        </div>
+    
+
+        <div>
+          <button onclick="impostaPercorsiDiSistema(1)">Imposta percorso loghi</button>
+          <div id="pathLoghi"
+            style="margin-top: 0.5rem; padding: 0.4rem 0.6rem; background-color: #e0e0e0; border-radius: 4px; user-select: none; height: 2rem;">
+          </div>
+        </div>
+      </div>
+    </div>
+    
+  </div>
+  <div>
+    <button codice="" id="confermaPercorsi" style="display: none;"
+      onclick="indesignEvents.checkStatus(indesignEvents.checkStatusResonse); Utility.chiudiModal()">Conferma</button>
+  </div>
+</div> -->
+
+<div id="dialogPathDiSistema" myname="dialogPathDiSistema"
+  style="overflow: auto; display: none; height: 100%; width: 100%;">
+  <div style="height: 90%;">
+    <div class="container" id="bodyPaths">
+      <div style="display: block;">
+    
+        <!-- Riga 1: Foto -->
+        <div style="margin-bottom: 1rem; margin-top: 1 rem;">
+          <button onclick="impostaPercorsiDiSistema(2)">Imposta percorso per i log di sistema</button>
+          <div id="pathLogs"
+            style="margin-top: 0.5rem; padding: 0.4rem 0.6rem; background-color: #e0e0e0; border-radius: 4px; user-select: none; height: 2rem;">
+          </div>
+        </div>
+    
+        <!-- Riga 2: Loghi -->
+        <div>
+          <button onclick="impostaPercorsiDiSistema(3)">Imposta percorso per le esportazioni</button>
+          <div id="pathEsportazione"
+            style="margin-top: 0.5rem; padding: 0.4rem 0.6rem; background-color: #e0e0e0; border-radius: 4px; user-select: none; height: 2rem;">
+          </div>
+        </div>
+
+        <!-- Riga 1: Foto -->
+        <div style="margin-bottom: 1rem; margin-top: 1 rem;">
+          <button onclick="impostaPercorsiDiSistema(0)">Imposta percorso foto</button>
+          <div id="pathFoto"
+            style="margin-top: 0.5rem; padding: 0.4rem 0.6rem; background-color: #e0e0e0; border-radius: 4px; user-select: none; height: 2rem;">
+          </div>
+        </div>
+    
+        <!-- Riga 2: Loghi -->
+        <div>
+          <button onclick="impostaPercorsiDiSistema(1)">Imposta percorso loghi</button>
+          <div id="pathLoghi"
+            style="margin-top: 0.5rem; padding: 0.4rem 0.6rem; background-color: #e0e0e0; border-radius: 4px; user-select: none; height: 2rem;">
+          </div>
+        </div>
+      </div>
+    </div>
+    
+  </div>
+  <div>
+    <button codice="" id="confermaPercorsi" style="display: none;"
+      onclick="indesignEvents.checkStatus(indesignEvents.checkStatusResonse); Utility.chiudiModal()">Conferma</button>
+  </div>
+</div>
+
+<div id="dialogEsportaLibro" myname="dialogEsportaLibro"
+  style="overflow: auto; display: none; height: 100%; width: 100%;">
+  <div style="height: 90%;">
+    <div class="container" id="bodyEsportazioniLibro">
+
+    </div>
+  </div>
+  <div>
+    <button id="esportaLibro" style="display: block;"
+      onclick="esportaLibro();">Esporta</button>
+  </div>
+</div>
+
+<div id="dialogConfrontoReport" myname="dialogConfrontoReport"
+  style="overflow: auto; display: none; height: 100%; width: 100%;">
+  <div style="height: 90%;">
+    <div class="container" id="bodyConfrontoReport">
+
+    </div>
+  </div>
+  <div id="footerConfrontoReport" style="height: 10%; width: 100%;">
+
+  </div>
+</div>
+
+<div id="infoPerLeggiInfoRef"></div>
+
+<div id="dialogLeggiInfoRef" myname="dialogLeggiInfoRef"
+  style="overflow: none; display: none; height: 100%; width: 100%;">
+  <div style="height: 90%; overflow: scroll;">
+    <div class="container" id="bodyIspezionaDatiRef">
+
+    </div>
+  </div>
+  <div style="display: flex;">
+    <button id="vediTuttoInspezioneDelDato" style="display: block;"
+      onclick="schedaRef.visibilitaCampiIspezioneDelDato(false);">Vedi tutto</button>
+
+    <button id="vediMenoInspezioneDelDato" style="display: none;"
+      onclick="schedaRef.visibilitaCampiIspezioneDelDato(true);">Vedi meno</button>
+
+    <button id="scaricaJsonCompleto" style="display: block;"
+      onclick="schedaRef.scaricaJson();">Scarica dato</button>
+  </div>
+</div>
+
+<div id="dialogLinkLogoBollo" myname="dialogLinkLogoBollo"
+  style="overflow: auto; display: none; height: 100%; width: 100%;">
+  <div style="height: 90%;">
+    <div class="container" id="bodyLinkLogoBollo">
+
+    </div>
+  </div>
+  <div id="footerLinkLogoBollo" style="height: 10%; width: 100%;">
+  </div>
+</div>
+
+<div id="dialogCambiaFoto" myname="dialogCambiaFoto"
+  style="overflow: hidden; display: none; height: 100%; width: 100%;">
+  
+  <div style="height: 90%; overflow: hidden;">
+    <div class="container" id="bodyCambiaFoto" style="height: 100%; overflow: hidden;">
+    </div>
+  </div>
+
+  <div id="footerCambiaFoto" style="height: 10%; width: 100%; overflow: hidden;">
+  </div>
+</div>
+
+<div id="dialogClonaRecord" myname="dialogClonaRecord"
+  style="overflow: hidden; display: none; height: 100%; width: 100%;">
+  
+  <div style="height: 90%; overflow: hidden;">
+    <div class="container" id="bodyClonaRecord" style="height: 100%; overflow: hidden;">
+    </div>
+  </div>
+
+  <div id="footerClonaRecord" style="height: 10%; width: 100%; overflow: hidden;">
+  </div>
+</div>
+
+</html>

@@ -1,0 +1,741 @@
+@model Correggo4.Models.Vista.VolantinoInCorrezione
+@using System.Globalization
+@{
+    ViewData["Title"] = Model.Titolo;
+    Layout = null;
+    var ci = CultureInfo.InvariantCulture;
+    bool puoCorreggere = User.IsInRole("GDO");
+    int pagAttiva = int.TryParse(Context.Request.Query["pag"], out int pq) ? pq : 1;
+    var img = "/immagini-correggo";
+}
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>@Model.Titolo &middot; Correggo4</title>
+<style>
+    /* Misure e colori presi dal sorgente vero (Correggo/Main.aspx), non stimati:
+       barra 80px #60cabb, rail 100px #9cdcd8 con bordo 2px #46a9a2,
+       cassetto pagine 300px aliceblue bordo nero 2px, .pag_selected 4px nero,
+       .pag_notifica_errori 35px rosso, sfondo pattern-background.png. */
+    * { box-sizing: border-box; }
+    body {
+        margin: 0; overflow: hidden;
+        background-image: url('@img/pattern-background.png');
+        font-family: 'Lucida Sans', 'Lucida Sans Regular', 'Lucida Grande',
+                     'Lucida Sans Unicode', Geneva, Verdana, sans-serif;
+    }
+    input:focus, textarea:focus, select:focus { outline: 0; }
+    button { font-family: inherit; }
+
+    /* ---------- barra alta (80px, #60cabb) ---------- */
+    .barra_alta {
+        position: fixed; left: 0; right: 0; top: 0; height: 80px; z-index: 100;
+        background-color: #60cabb; color: #fff;
+    }
+    .barra_alta .logo { float: left; width: 80px; margin-right: 10px; cursor: pointer; }
+    .barra_alta .titolo_zona {
+        float: left; margin-top: 20px; margin-left: 12px;
+        display: flex; align-items: center; font-size: 20px;
+    }
+    .barra_alta .titolo_zona .dropdown { width: 20px; margin-right: 5px; cursor: pointer; }
+    .barra_alta .postit { width: 50px; margin-left: 15px; margin-top: -5px; cursor: pointer; }
+    .barra_alta .destra { float: right; display: flex; align-items: center; height: 80px; }
+    .barra_alta .pagine_btn { width: 100px; margin: 5px; cursor: pointer; }
+    .barra_alta .utente { font-size: 14px; font-weight: bold; margin-right: 20px; }
+    .chiudi_bar {
+        background: none; border: 0; padding: 0; cursor: pointer; color: #fff;
+        font-size: 14px; font-weight: bold; margin-right: 20px;
+    }
+    .chiudi_bar:hover { text-decoration: underline; }
+
+    /* ---------- rail strumenti (100px, #9cdcd8) ---------- */
+    .barra {
+        position: fixed; left: 0; top: 80px; width: 100px; bottom: 0;
+        background-color: #9cdcd8; text-align: center; padding: 5px 0;
+        border-top: 2px solid #46a9a2; z-index: 99; overflow-y: auto;
+    }
+    .strumento {
+        background-color: transparent; border: 0; cursor: pointer; display: block;
+        margin: 0 auto; background-repeat: no-repeat; background-position: center;
+    }
+    .s_note  { width: 100px; height: 60px; background-image: url('@img/tool_noteoff.png'); background-size: cover; }
+    .s_note.acceso { background-image: url('@img/tool_noteon.png'); }
+    .s_board { width: 100px; height: 60px; background-image: url('@img/boardoff.png'); background-size: cover; }
+    .s_board.acceso { background-image: url('@img/boardon.png'); }
+    .s_ok    { width: 50px;  height: 54px; margin-top: 15px;
+               background-image: url('@img/okoff.png'); background-size: contain; }
+    .s_ok.acceso { background-image: url('@img/okon.png'); }
+    .s_report { width: 100px; height: 66px; margin-left: 10px;
+                background-image: url('@img/reportoff.png'); background-size: contain; }
+    .s_scala { width: 50px; height: 50px; background-size: contain; }
+    .s_100 { background-image: url('@img/scale_100.png'); }
+    .s_fit { background-image: url('@img/scale_fit.png'); }
+
+    /* gli interruttori: immagine di fondo + rullino sovrapposto */
+    .gruppo_toggle { position: relative; }
+    .toggle_base {
+        width: 100px; height: 80px; border: 0; cursor: pointer; background-color: transparent;
+        background-image: url('@img/toggle_correzioni.png'); background-size: contain;
+        background-repeat: no-repeat; background-position: center;
+    }
+    .toggle_base.spento { filter: grayscale(1) opacity(.75); }
+    .rullino { position: absolute; margin-top: 24px; margin-left: 9px; pointer-events: none; }
+    .occhietto {
+        width: 60px; height: 40px; border: 0; cursor: pointer; background-color: transparent;
+        background-size: contain; background-repeat: no-repeat; background-position: center;
+    }
+    .oc_fatte { background-image: url('@img/Correzioni-FATTE-vedo.png'); }
+    .oc_fatte.spento { background-image: url('@img/Correzioni-FATTE-NON-vedo.png'); }
+    .oc_sugg { background-image: url('@img/Suggerimenti-vedo.png'); }
+    .oc_sugg.spento { background-image: url('@img/Suggerimenti-NON-vedo.png'); }
+
+    .zona_zoom { width: 100%; margin-top: 30px; }
+    .zona_zoom input[type=range] { width: 75px; margin-left: 7px; }
+    .zoomval { width: 100%; text-align: center; font-size: 12px;
+               margin: 5px 0; color: #275653; }
+
+    /* cassetto note: left 100, width 60, #68a7a3 */
+    .cassetto {
+        position: fixed; left: 100px; top: 80px; width: 60px; bottom: 0;
+        background-color: #68a7a3; text-align: center; padding: 5px 0;
+        border-top: 2px solid #46a9a2; z-index: 99; display: none;
+    }
+    .cassetto.aperto { display: block; }
+    .cassetto .fbtn {
+        width: 44px; height: 38px; background: #fff; border: 1px solid #46a9a2;
+        cursor: pointer; font-size: 14px; color: #1d5b55; display: block;
+        margin: 0 auto 6px auto;
+    }
+    /* la lavagna dei timbri sta nello stesso posto ma e' larga due colonne */
+    .cassetto.lavagna { width: 116px; }
+    .griglia_timbri { display: grid; grid-template-columns: repeat(2, 50px); gap: 4px; justify-content: center; }
+    .timbro {
+        height: 44px; border: 0; border-radius: 3px; cursor: pointer; color: #fff;
+        font-size: 8px; font-weight: bold; line-height: 1.05; padding: 3px 1px;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+    }
+    .timbro .glifo { font-size: 15px; }
+
+    /* ---------- area di lavoro ---------- */
+    .area {
+        position: fixed; left: 100px; right: 0; top: 80px; bottom: 0;
+        overflow: auto; padding: 10px 12px 40px 12px;
+    }
+    .foglio { position: relative; display: inline-block; background: #fff;
+              box-shadow: 0 1px 6px rgba(0,0,0,.22); vertical-align: top; }
+    .foglio img.pagina { display: block; width: 100%; height: auto; }
+
+    /* I box non si disegnano: la pagina si vede pulita. */
+    .zona { position: absolute; cursor: pointer; background: transparent; }
+    .zona:hover { background: rgba(255,255,0,.20); outline: 1px solid rgba(0,0,0,.30); }
+    .zona.aperta { outline: 2px solid red; }
+
+    /* La nota di correzione: etichetta gialla calamitata al prodotto,
+       col megafono della propagazione a sinistra (prop.gif). */
+    .nota_chiusa {
+        position: absolute; background-color: yellow; border: 1px solid #333; z-index: 5;
+        font-size: 11px; line-height: 1.2; padding: 2px 6px; cursor: pointer;
+        max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        box-shadow: 1px 1px 2px rgba(0,0,0,.3); color: #000;
+    }
+    .nota_chiusa .megafono { position: absolute; margin-left: -31px; margin-top: -3px; width: 30px; }
+    .nascosto { display: none !important; }
+
+    /* ---------- cassetto pagine ---------- */
+    .pannello_pagine {
+        position: fixed; right: 10px; top: 90px; width: 300px; height: 85%;
+        background-color: aliceblue; border: 2px solid black; z-index: 98;
+        display: flex; flex-direction: column;
+    }
+    .pannello_pagine .testa {
+        width: 100%; background-color: black; height: 37px; display: flex; align-items: center;
+    }
+    .pannello_pagine .testa .sx { width: 50%; text-align: left; padding-left: 5px;
+                                  display: flex; align-items: center; gap: 8px; }
+    .pannello_pagine .testa .dx { width: 50%; text-align: right; }
+    .pannello_pagine .testa .dx a {
+        cursor: pointer; color: #fff; margin-right: 10px; font-family: inherit; font-size: 13px;
+    }
+    .pannello_pagine .griglia {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+        padding: 10px 5px; overflow-y: scroll; overflow-x: hidden; height: 94%;
+    }
+    .pannello_pagine .cella { text-align: center; font-size: 11px; cursor: pointer; position: relative; }
+    .pannello_pagine .cella img { width: 100%; display: block; border: 0 solid; }
+    .pannello_pagine .cella.pag_selected img { border: 4px solid Black; }
+    .pannello_pagine .cella .didascalia { margin-bottom: 15px; margin-top: 3px; }
+    .pag_notifica_errori {
+        width: 35px; height: 35px; border-radius: 15px; background-color: red;
+        position: absolute; left: 10px; top: 10px; color: white; font-weight: bold;
+        margin-top: -22px; margin-left: -14px; line-height: 35px; font-size: 15px; z-index: 2;
+    }
+
+    /* ---------- modale di edit avanzato ---------- */
+    .velo { position: fixed; inset: 0; background: rgba(0,0,0,.30); z-index: 100; display: none; }
+    .velo.visibile { display: block; }
+    .modale {
+        position: fixed; left: 112px; right: 16px; top: 90px; bottom: 22px; z-index: 101;
+        background: #bbbbbb; border: 1px solid #7a7a7a; display: none; flex-direction: column;
+        font-size: 12px;
+    }
+    .modale.visibile { display: flex; }
+    .modale .testa {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 4px 8px; font-size: 11px; font-weight: bold;
+        background: #d3d3d3; border-bottom: 1px solid #9a9a9a;
+    }
+    .modale .testa .chiudi {
+        font-weight: normal; border: 1px solid #888; background: #efefef;
+        padding: 1px 8px; cursor: pointer; font-size: 11px;
+    }
+    .modale .reset_valori { text-align: center; padding: 4px 0; }
+    .modale .colonne { display: flex; flex: 1; overflow: hidden; }
+    .modale .colonna { padding: 10px 12px; overflow-y: auto; }
+    /* Le due macro-aree del manuale: descrizione prodotto | prezzi e meccaniche */
+    .meta_destra { border-left: 2px dashed #7f7f7f; }
+    .c1 { width: 22%; } .c2 { width: 30%; } .c3 { width: 24%; } .c4 { width: 24%; }
+    .modale .etichetta { margin-bottom: 4px; }
+    .intestazione_sez { margin: 14px 0 4px; }
+
+    .ritaglio { width: 100%; aspect-ratio: 3/4; overflow: hidden; position: relative;
+                border: 2px solid red; background: #fff; }
+    .ritaglio img { position: absolute; max-width: none; }
+
+    .fascia { padding: 5px 8px; border-radius: 10px; margin-bottom: 7px; }
+    .DESCRIZIONE_TITOLO { background-color: rgba(255,255,0,0.5); font-weight: bold; }
+    .DESCRIZIONE_BRAND { background-color: rgba(255,0,255,0.5); }
+    .DESCRIZIONE_GRAMMATURA { background-color: rgba(220,89,255,0.5); }
+    .DESCRIZIONE_TIPO { background-color: rgba(0,255,255,0.5); }
+    .fascia.senza { background: #d0d0d0; }
+
+    .scheda_foto { background: #cbcbcb; border-radius: 8px; padding: 7px; display: flex; gap: 7px;
+                   margin-bottom: 8px; align-items: flex-start; }
+    .scheda_foto.primaria { background: #a4bc9a; }
+    .scheda_foto img { width: 60px; height: 60px; object-fit: contain; background: #fff; }
+    .scheda_foto .ps { font-size: 10px; display: flex; flex-direction: column; gap: 1px; }
+    .scheda_foto .dati { font-size: 9px; line-height: 1.3; flex: 1; }
+    .scheda_foto .codice { font-size: 11px; font-weight: bold; color: #2f5b2f; margin-bottom: 2px; }
+    .scheda_foto .pulsanti { margin-top: 5px; display: flex; gap: 5px; }
+    .scheda_foto .pulsanti .bottone { padding: 0 5px; font-size: 9px; }
+
+    .linguette { display: flex; margin-top: 6px; }
+    .linguette .ling { flex: 1; text-align: center; font-size: 11px; padding: 3px 0;
+                       border: 1px solid #999; background: #cfcfcf; cursor: pointer; }
+    .linguette .ling.attiva { background: #fff; }
+    .riquadro_vuoto { border: 1px solid #999; background: #d6d6d6; padding: 5px 8px; margin-top: 5px; }
+
+    .rigaEl { margin-bottom: 7px; }
+    .nome_campo { margin-bottom: 2px; color: #1a1a1a; }
+    .elInputVal { padding: 3px 6px; border: 1px solid #9a9a9a; border-radius: 3px;
+                  width: 100%; font-family: inherit; font-size: 12px; background: #fff; }
+    .conLucchetto { display: flex; align-items: center; gap: 5px; }
+    .lockiconCampo { flex: 0 0 auto; }
+
+    .card_prop { background: #cbcbcb; border: 1px solid #9a9a9a; border-radius: 8px;
+                 padding: 5px 9px; font-weight: bold; margin-bottom: 6px; color: #1c4e78; }
+    .testa_note { background: #1c1c1c; display: flex; justify-content: space-between;
+                  align-items: center; padding: 3px 4px; gap: 6px; }
+    .testa_note select { font-family: inherit; font-size: 11px; }
+    .riquadro_note { background: #fff; border: 1px solid #9a9a9a; border-top: 0; padding: 6px; }
+    .nota_elenco { background: yellow; border: 1px solid #333; padding: 5px 7px; margin-bottom: 6px; }
+    .nota_elenco .meta { color: #555; font-size: 10px; margin-top: 3px; }
+
+    .bottone { border: 1px solid #888; background: #efefef; padding: 2px 14px; cursor: pointer;
+               font-family: inherit; font-size: 11px; }
+    .bottone.primario { background: #1c1c1c; color: #fff; border-color: #1c1c1c; }
+    .vuoto { color: #555; font-style: italic; }
+</style>
+</head>
+<body>
+
+<div class="barra_alta">
+    <img class="logo" src="@img/Icon_Correggo.png" alt="Correggo" onclick="location.href='/Volantini'">
+    <div class="titolo_zona">
+        <img class="dropdown" src="@img/dropdown_titvol.png" alt="" title="Cambia volantino">
+        <span>@Model.Titolo &ndash; VERSIONE N&deg; @Model.Versione</span>
+        <img class="postit" src="@img/post-it.png" alt="" title="APPUNTI">
+    </div>
+    <div class="destra">
+        <span class="utente">@User.Identity?.Name</span>
+        <form method="post" action="/Account/Logout" style="margin:0;">
+            @Html.AntiForgeryToken()
+            <button type="submit" class="chiudi_bar">ESCI</button>
+        </form>
+        <img class="pagine_btn" id="riapriLibro" src="@img/pages.png" alt="pagine" title="Mostra le pagine">
+    </div>
+</div>
+
+<div class="barra">
+    <button class="strumento s_note" id="tNote" title="NOTE"></button>
+    <button class="strumento s_board" id="tTimbri" title="ICONE DI CORREZIONE"></button>
+
+    <div class="gruppo_toggle" style="margin-top:-10px;">
+        <img class="rullino" src="@img/toggle_roll.png" alt="">
+        <button class="toggle_base" id="tVisNote" title="Mostra o nascondi le correzioni"></button>
+    </div>
+    <div style="margin-top:-14px;">
+        <button class="occhietto oc_sugg" id="tSugg" title="Mostra o nascondi i suggerimenti"></button>
+    </div>
+    <div>
+        <button class="occhietto oc_fatte" id="tFatte" title="Mostra o nascondi le correzioni fatte dall'agenzia"></button>
+    </div>
+
+    <button class="strumento s_ok" id="tOk" title="OK VISTO"></button>
+    <div class="gruppo_toggle" style="margin-top:-15px;">
+        <img class="rullino" src="@img/toggle_roll_ok.png" alt="">
+        <button class="toggle_base" id="tVisOk" title="Mostra o nascondi i timbri OK"></button>
+    </div>
+
+    <button class="strumento s_report" id="tReport" title="REPORT CORREZIONI"></button>
+
+    <div class="zona_zoom">
+        <input type="range" id="zoom" min="20" max="200" value="63">
+        <div class="zoomval" id="zoomval">63%</div>
+        <button class="strumento s_scala s_100" id="zoom100" title="Dimensioni reali"></button>
+        <button class="strumento s_scala s_fit" id="zoomFit" title="Adatta alla finestra"></button>
+    </div>
+</div>
+
+<div class="cassetto" id="flyNote">
+    <button class="fbtn" title="Nota di correzione semplice">T&hellip;</button>
+    <button class="fbtn" title="Edit avanzato della referenza">T|</button>
+</div>
+
+<div class="cassetto lavagna" id="flyTimbri">
+    <div class="griglia_timbri">
+        <button class="timbro" style="background:#d32f2f;"><span class="glifo">&#8631;</span>FuoriVol</button>
+        <button class="timbro" style="background:#c62828;"><span class="glifo">&#10006;</span>Elimina</button>
+        <button class="timbro" style="background:#f57c00;"><span class="glifo">&#128444;</span>ArtWork</button>
+        <button class="timbro" style="background:#ef6c00;"><span class="glifo">&#9734;</span>STAR</button>
+        <button class="timbro" style="background:#ef6c00;"><span class="glifo">G1</span>Gruppo</button>
+        <button class="timbro" style="background:#ef6c00;"><span class="glifo">G2</span>Gruppo</button>
+        <button class="timbro" style="background:#ef6c00;"><span class="glifo">G3</span>Gruppo</button>
+        <button class="timbro" style="background:#ef6c00;"><span class="glifo">G4</span>Gruppo</button>
+        <button class="timbro" style="background:#1565c0;"><span class="glifo">Conf</span></button>
+        <button class="timbro" style="background:#1565c0;"><span class="glifo">KG</span></button>
+        <button class="timbro" style="background:#1565c0;"><span class="glifo">CAD</span></button>
+        <button class="timbro" style="background:#1565c0;"><span class="glifo">PZ</span></button>
+        <button class="timbro" style="background:#e91e63;">FOTO<span class="glifo">&#8635;</span>CAMBIA</button>
+        <button class="timbro" style="background:#e91e63;">FOTO<span class="glifo">&#9993;</span>E-MAIL</button>
+    </div>
+</div>
+
+<div class="area" id="area">
+    @foreach (var p in Model.Pagine)
+    {
+        <div class="foglio" id="pagina-@p.Numero" data-numero="@p.Numero"
+             data-larghezza="@p.Larghezza.ToString(ci)" data-altezza="@p.Altezza.ToString(ci)"
+             style="width:63%; display:@(p.Numero == pagAttiva ? "inline-block" : "none");">
+            <img class="pagina" src="@p.UrlImmagine" alt="pagina @p.Numero">
+            @foreach (var b in p.Box)
+            {
+                if (p.Larghezza > 0 && p.Altezza > 0)
+                {
+                    var l = ((double)(b.X / p.Larghezza) * 100).ToString("0.###", ci);
+                    var t = ((double)(b.Y / p.Altezza) * 100).ToString("0.###", ci);
+                    var w = ((double)(b.Larghezza / p.Larghezza) * 100).ToString("0.###", ci);
+                    var h = ((double)(b.Altezza / p.Altezza) * 100).ToString("0.###", ci);
+                    <div class="zona" data-box="@b.Id" title="@b.Basecode"
+                         style="left:@(l)%;top:@(t)%;width:@(w)%;height:@(h)%;"></div>
+                }
+                foreach (var n in b.Note)
+                {
+                    if (p.Larghezza > 0 && p.Altezza > 0)
+                    {
+                        var nl = ((double)(n.Posx / (double)p.Larghezza) * 100).ToString("0.###", ci);
+                        var nt = ((double)(n.Posy / (double)p.Altezza) * 100).ToString("0.###", ci);
+                        <div class="nota_chiusa" data-box="@b.Id" title="@n.Descrizione"
+                             style="left:@(nl)%;top:@(nt)%;">
+                            <img class="megafono" src="@img/prop.gif" alt="" title="Propaga la nota">@n.Descrizione
+                        </div>
+                    }
+                }
+            }
+        </div>
+    }
+</div>
+
+<div class="pannello_pagine" id="pannelloPagine">
+    <div class="testa">
+        <div class="sx">
+            <img src="@img/ico_visione_affiancata.png" alt="" title="Lettura affiancata" style="cursor:pointer;">
+            <span style="position:relative; display:inline-block;">
+                <img src="@img/toggle_roll.png" alt=""
+                     style="position:absolute; margin-top:4px; margin-left:19px; pointer-events:none; width:22px;">
+                <button id="soloCorreggibili" title="Solo le pagine con prodotti correggibili"
+                        style="background-image:url('@img/toggle_policypag.png'); width:78px; height:60px;
+                               background-size:contain; background-repeat:no-repeat; border:0;
+                               cursor:pointer; background-color:transparent; margin-left:10px; margin-top:-13px;"></button>
+            </span>
+        </div>
+        <div class="dx"><a id="chiudiPagine">CHIUDI</a></div>
+    </div>
+    <div class="griglia">
+        @foreach (var p in Model.Pagine)
+        {
+            <div class="cella @(p.Numero == pagAttiva ? "pag_selected" : "")" data-pagina="@p.Numero">
+                @if (p.Correzioni > 0)
+                {
+                    <div class="pag_notifica_errori">@p.Correzioni</div>
+                }
+                <img src="@p.UrlMiniatura" alt="pag @p.Numero">
+                <div class="didascalia">Pag. @p.Numero</div>
+            </div>
+        }
+    </div>
+</div>
+
+<div class="velo" id="velo"></div>
+<div class="modale" id="modale">
+    <div class="testa">
+        <span id="mTitolo"></span>
+        <span class="chiudi" id="mChiudi">CHIUDI</span>
+    </div>
+    <div class="reset_valori"><button class="bottone" type="button" id="mReset">RESET VALORI</button></div>
+    <div class="colonne">
+        <div class="colonna c1">
+            <div class="ritaglio" id="mRitaglio"><img id="mRitaglioImg" src="" alt=""></div>
+            <div class="linguette">
+                <div class="ling attiva">Loghi/Bolli</div>
+                <div class="ling">Aggiungi/rimuovi</div>
+            </div>
+            <div class="riquadro_vuoto" id="mLoghi">Nessuno</div>
+        </div>
+
+        <div class="colonna c2">
+            <div class="etichetta">Descrizione</div>
+            <div id="mDescrizione"></div>
+            <div class="intestazione_sez">Foto e primario/secondari</div>
+            <div id="mFoto"></div>
+            <div style="text-align:center; margin-top:10px;">
+                <button class="bottone" type="button">SALVA</button>
+            </div>
+        </div>
+
+        <div class="colonna c3 meta_destra">
+            <div id="mCampi"></div>
+            <div style="text-align:center; margin-top:26px;">
+                <div style="font-weight:bold; margin-bottom:6px;">Altre azioni</div>
+                <select id="mAzioni" class="elInputVal" style="width:auto;">
+                    <option>Seleziona un'azione</option>
+                </select>
+                <div style="margin-top:24px;">
+                    <button class="bottone" type="button">SALVA</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="colonna c4">
+            <div class="etichetta">Propagazioni</div>
+            <div id="mPropagazioni"></div>
+
+            <div class="intestazione_sez" style="margin-top:26px;">Note:</div>
+            @if (puoCorreggere)
+            {
+                <form method="post" action="/Volantini/AggiungiNota" style="margin:0;">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="idVolantino" value="@Model.Id" />
+                    <input type="hidden" name="idElemento" id="fIdElemento" />
+                    <input type="hidden" name="posx" id="fPosx" value="0" />
+                    <input type="hidden" name="posy" id="fPosy" value="0" />
+                    <input type="hidden" name="pagina" id="fPagina" value="@pagAttiva" />
+                    <div class="testa_note">
+                        <select name="azione" id="mSceltaAzione">
+                            <option value="">Seleziona un'azione</option>
+                        </select>
+                        <button class="bottone" type="reset" style="padding:0 8px;">RESET</button>
+                    </div>
+                    <div class="riquadro_note">
+                        <div id="mNote"></div>
+                        <textarea name="descrizione" rows="6" class="elInputVal"
+                                  placeholder="Scrivi nota..."></textarea>
+                        <div style="margin-top:8px; text-align:right;">
+                            <button class="bottone primario">SALVA</button>
+                        </div>
+                    </div>
+                </form>
+            }
+            else
+            {
+                <div class="testa_note"><span style="color:#fff; font-size:11px;">sola lettura</span></div>
+                <div class="riquadro_note">
+                    <div id="mNote"></div>
+                    <div class="vuoto">Ruolo Agenzia: le correzioni si leggono, non si aggiungono.</div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@{
+    // Il JSON si costruisce qui: Razor non legge lambda multi-riga dentro @Html.Raw(...).
+    var mappaBox = Model.Pagine
+        .SelectMany(p => p.Box.Select(b => new { p, b }))
+        .ToDictionary(
+            x => x.b.Id.ToString(),
+            x => (object)new
+            {
+                nomeBox = x.b.NomeBox,
+                basecode = x.b.Basecode,
+                gruppo = x.b.Gruppo,
+                descrizione = x.b.Descrizione.Select(d => new { tag = d.Tag, testo = d.Testo }),
+                foto = x.b.GuidFoto,
+                campi = x.b.Campi.Select(c => new { c.Etichetta, c.Valore }),
+                tracciato = x.b.Tracciato.Select(c => new { c.Etichetta, c.Valore }),
+                azioni = x.b.Azioni,
+                note = x.b.Note.Select(n => new { n.Descrizione, n.Autore, data = n.Data.ToString("dd/MM/yy HH:mm") }),
+                pagina = x.p.Numero,
+                urlPagina = x.p.UrlImmagine,
+                px = (double)x.b.X,
+                py = (double)x.b.Y,
+                pw = (double)x.b.Larghezza,
+                ph = (double)x.b.Altezza,
+                pagW = (double)x.p.Larghezza,
+                pagH = (double)x.p.Altezza
+            });
+    var jsonBox = System.Text.Json.JsonSerializer.Serialize(mappaBox);
+    var jsonUrlFoto = System.Text.Json.JsonSerializer.Serialize(Model.UrlFoto);
+}
+<script id="datiBox" type="application/json">@Html.Raw(jsonBox)</script>
+
+<script>
+(function () {
+    var dati = JSON.parse(document.getElementById('datiBox').textContent);
+    var urlFoto = @Html.Raw(jsonUrlFoto);
+
+    function esc(s) {
+        return (s === null || s === undefined) ? '' : String(s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    /* ---------- zoom ---------- */
+    var zoom = document.getElementById('zoom');
+    function applicaZoom(v) {
+        document.querySelectorAll('.foglio').forEach(function (f) { f.style.width = v + '%'; });
+        document.getElementById('zoomval').textContent = v + '%';
+        zoom.value = v;
+    }
+    zoom.addEventListener('input', function () { applicaZoom(parseInt(zoom.value, 10)); });
+    document.getElementById('zoom100').addEventListener('click', function () { applicaZoom(100); });
+    document.getElementById('zoomFit').addEventListener('click', function () { applicaZoom(63); });
+
+    /* ---------- pagine ---------- */
+    function vaiAPagina(n) {
+        document.querySelectorAll('.foglio').forEach(function (f) {
+            f.style.display = (f.dataset.numero === String(n)) ? 'inline-block' : 'none';
+        });
+        document.querySelectorAll('.pannello_pagine .cella').forEach(function (c) {
+            c.classList.toggle('pag_selected', c.dataset.pagina === String(n));
+        });
+        var f = document.getElementById('fPagina');
+        if (f) f.value = n;
+        document.getElementById('area').scrollTop = 0;
+    }
+    document.querySelectorAll('.pannello_pagine .cella').forEach(function (c) {
+        c.addEventListener('click', function () { vaiAPagina(c.dataset.pagina); });
+    });
+
+    var pannello = document.getElementById('pannelloPagine');
+    function mostraPannello(v) { pannello.style.display = v ? 'flex' : 'none'; }
+    document.getElementById('chiudiPagine').addEventListener('click', function () { mostraPannello(false); });
+    document.getElementById('riapriLibro').addEventListener('click', function () {
+        mostraPannello(pannello.style.display === 'none');
+    });
+
+    /* ---------- interruttori di visibilita' ---------- */
+    function collegaInterruttore(id, azione) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('click', function () {
+            el.classList.toggle('spento');
+            azione(!el.classList.contains('spento'));
+        });
+    }
+    collegaInterruttore('tVisNote', function (visibile) {
+        document.querySelectorAll('.nota_chiusa').forEach(function (n) {
+            n.classList.toggle('nascosto', !visibile);
+        });
+    });
+    collegaInterruttore('tSugg', function () { /* i suggerimenti non sono ancora portati */ });
+    collegaInterruttore('tFatte', function () { /* distinzione per autore: da portare */ });
+    collegaInterruttore('tVisOk', function () { /* i timbri OK non sono ancora portati */ });
+    collegaInterruttore('soloCorreggibili', function () { /* filtro pagine: da portare */ });
+
+    /* ---------- cassetti degli strumenti ---------- */
+    function collegaCassetto(bottone, cassettoId) {
+        var b = document.getElementById(bottone), f = document.getElementById(cassettoId);
+        b.addEventListener('click', function () {
+            var apri = !f.classList.contains('aperto');
+            document.querySelectorAll('.cassetto').forEach(function (x) { x.classList.remove('aperto'); });
+            document.querySelectorAll('.strumento').forEach(function (x) { x.classList.remove('acceso'); });
+            if (apri) { f.classList.add('aperto'); b.classList.add('acceso'); }
+        });
+    }
+    collegaCassetto('tNote', 'flyNote');
+    collegaCassetto('tTimbri', 'flyTimbri');
+    document.getElementById('tOk').addEventListener('click', function () {
+        this.classList.toggle('acceso');
+    });
+
+    /* ---------- modale ---------- */
+    var velo = document.getElementById('velo');
+    var modale = document.getElementById('modale');
+    function chiudiModale() {
+        velo.classList.remove('visibile');
+        modale.classList.remove('visibile');
+        document.querySelectorAll('.zona.aperta').forEach(function (z) { z.classList.remove('aperta'); });
+    }
+    document.getElementById('mChiudi').addEventListener('click', chiudiModale);
+    velo.addEventListener('click', chiudiModale);
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') chiudiModale(); });
+
+    // Il ritaglio: la pagina intera, spostata e scalata perche' si veda solo il box.
+    function ritaglia(b) {
+        var cont = document.getElementById('mRitaglio');
+        var im = document.getElementById('mRitaglioImg');
+        if (!b.pagW || !b.pagH || !b.pw || !b.ph) { im.removeAttribute('src'); return; }
+        var lc = cont.clientWidth, hc = cont.clientHeight;
+        var s = Math.min(lc / b.pw, hc / b.ph);
+        im.src = b.urlPagina;
+        im.style.width = (b.pagW * s) + 'px';
+        im.style.height = (b.pagH * s) + 'px';
+        im.style.left = (-b.px * s + (lc - b.pw * s) / 2) + 'px';
+        im.style.top = (-b.py * s + (hc - b.ph * s) / 2) + 'px';
+    }
+
+    function apri(id, clickX, clickY) {
+        var b = dati[id];
+        if (!b) return;
+
+        document.querySelectorAll('.zona.aperta').forEach(function (z) { z.classList.remove('aperta'); });
+        var zona = document.querySelector('.zona[data-box="' + id + '"]');
+        if (zona) zona.classList.add('aperta');
+
+        document.getElementById('mTitolo').textContent =
+            (b.nomeBox || '(box)') + ' – ' + (b.basecode || '');
+
+        document.getElementById('mDescrizione').innerHTML = (b.descrizione.length === 0)
+            ? '<div class="fascia senza">nessuna descrizione</div>'
+            : b.descrizione.map(function (d) {
+                return '<div class="fascia ' + (d.tag || 'senza') + '">' + esc(d.testo) + '</div>';
+              }).join('');
+
+        // Una scheda per codice del basecode: la prima e' la primaria.
+        var codici = (b.basecode || '').split(',').filter(function (c) { return c !== ''; });
+        if (codici.length === 0) codici = ['(senza codice)'];
+        var sintesi = b.campi.map(function (c) {
+            return esc(c.Etichetta) + ':' + esc(c.Valore);
+        }).join('<br>');
+        var titoloRef = (b.descrizione[0] || {}).testo || '';
+        document.getElementById('mFoto').innerHTML = codici.map(function (cod, i) {
+            var primaria = (i === 0);
+            return '<div class="scheda_foto' + (primaria ? ' primaria' : '') + '">' +
+                   (b.foto
+                     ? '<img src="' + urlFoto + '?width=88&guidId=' + encodeURIComponent(b.foto) + '" alt="">'
+                     : '<div style="width:60px;height:60px;background:#fff;"></div>') +
+                   '<div class="ps">' +
+                     '<label><input type="checkbox" ' + (primaria ? 'checked ' : '') + 'disabled> P</label>' +
+                     '<label><input type="checkbox" disabled> S</label>' +
+                   '</div>' +
+                   '<div class="dati">' +
+                     '<div class="codice">' + esc(cod) + ' &ndash; ' + esc(titoloRef) + '</div>' +
+                     sintesi +
+                     '<div class="pulsanti">' +
+                       '<button type="button" class="bottone" disabled>Cambia</button>' +
+                       '<button type="button" class="bottone" disabled>Carica nuova foto</button>' +
+                     '</div>' +
+                   '</div></div>';
+        }).join('');
+
+        // I valori: quelli del tracciato, con le etichette del Correggo vero.
+        var etichette = {
+            prezzo_promo: 'Prezzo Promo',
+            prezzo_promo_kgl: 'Prezzo al Kg/Lt',
+            prezzo_continuo: 'Prezzo Continuo',
+            azione_pubblico: 'Sconto',
+            peso: 'Peso',
+            n_pezzi_soci: 'N_pezzi_soci'
+        };
+        var ordine = ['prezzo_promo', 'prezzo_promo_kgl', 'prezzo_continuo',
+                      'azione_pubblico', 'peso', 'n_pezzi_soci'];
+        var valori = {};
+        b.tracciato.forEach(function (c) { valori[c.Etichetta] = c.Valore; });
+        var lucchetto =
+            '<svg class="lockiconCampo" viewBox="0 0 16 20" width="11" height="14">' +
+            '<path d="M4 9V6a4 4 0 0 1 7.7-1.5" fill="none" stroke="#2e8b2e" stroke-width="2"/>' +
+            '<rect x="1" y="9" width="12" height="10" rx="1.5" fill="#2e8b2e"/></svg>';
+        document.getElementById('mCampi').innerHTML = ordine.map(function (k) {
+            return '<div class="rigaEl"><div class="nome_campo">' + esc(etichette[k]) + '</div>' +
+                   '<div class="conLucchetto">' + lucchetto +
+                   '<input class="elInputVal" value="' + esc(valori[k] || '') + '" readonly></div></div>';
+        }).join('');
+
+        var sel = document.getElementById('mAzioni');
+        sel.innerHTML = '<option>Seleziona un azione</option>' +
+            b.azioni.map(function (a) { return '<option>' + esc(a) + '</option>'; }).join('');
+        var sel2 = document.getElementById('mSceltaAzione');
+        if (sel2) {
+            sel2.innerHTML = '<option value="">Seleziona un azione</option>' +
+                b.azioni.map(function (a) { return '<option>' + esc(a) + '</option>'; }).join('');
+        }
+
+        // Propagazioni: il motore vero non e' ancora portato; qui i box gemelli.
+        var gemelli = [];
+        Object.keys(dati).forEach(function (k) {
+            if (k !== id && dati[k].basecode === b.basecode) gemelli.push(dati[k].nomeBox);
+        });
+        document.getElementById('mPropagazioni').innerHTML = gemelli.length
+            ? gemelli.map(function (g) {
+                return '<div class="card_prop">&#9432; ' + esc(g) + '</div>';
+              }).join('')
+            : '<div class="vuoto">nessuna propagazione</div>';
+
+        document.getElementById('mNote').innerHTML = (b.note.length === 0)
+            ? ''
+            : b.note.map(function (n) {
+                return '<div class="nota_elenco">' + esc(n.Descrizione) +
+                       '<div class="meta">' + esc(n.Autore) + ' &middot; ' + esc(n.data) + '</div></div>';
+              }).join('');
+
+        var campoId = document.getElementById('fIdElemento');
+        if (campoId) {
+            campoId.value = id;
+            document.getElementById('fPosx').value = (clickX !== undefined ? clickX : b.px).toFixed(2);
+            document.getElementById('fPosy').value = (clickY !== undefined ? clickY : b.py).toFixed(2);
+            document.getElementById('fPagina').value = b.pagina;
+        }
+
+        velo.classList.add('visibile');
+        modale.classList.add('visibile');
+        ritaglia(b);
+    }
+
+    function posizioneNelFoglio(el, ev) {
+        var foglio = el.closest('.foglio');
+        var r = foglio.getBoundingClientRect();
+        var lp = parseFloat(foglio.dataset.larghezza) || 0;
+        var ap = parseFloat(foglio.dataset.altezza) || 0;
+        if (!r.width || !r.height) return {};
+        return { x: (ev.clientX - r.left) / r.width * lp, y: (ev.clientY - r.top) / r.height * ap };
+    }
+
+    document.querySelectorAll('.zona').forEach(function (el) {
+        el.addEventListener('click', function (ev) {
+            var p = posizioneNelFoglio(el, ev);
+            apri(el.dataset.box, p.x, p.y);
+        });
+    });
+    document.querySelectorAll('.nota_chiusa').forEach(function (el) {
+        el.addEventListener('click', function (ev) {
+            ev.stopPropagation();
+            apri(el.dataset.box);
+        });
+    });
+
+    applicaZoom(63);
+})();
+</script>
+</body>
+</html>

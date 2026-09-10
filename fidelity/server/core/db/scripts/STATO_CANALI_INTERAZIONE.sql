@@ -1,0 +1,10 @@
+-- Type: STATO_CANALI_INTERAZIONE
+
+-- Rimozione tipo esistente (ATTENZIONE: Verificare dipendenze prima di eseguire)
+-- DROP TYPE IF EXISTS public."STATO_CANALI_INTERAZIONE" CASCADE;
+
+CREATE TYPE public."STATO_CANALI_INTERAZIONE" AS ENUM
+    ('ATTIVO', 'DISATTIVO', 'SOSPESO', 'ELIMINATO');
+
+ALTER TYPE public."STATO_CANALI_INTERAZIONE"
+    OWNER TO postgres;

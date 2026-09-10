@@ -1,0 +1,915 @@
+﻿@page
+@model Istanta.Views.DeclinazioniMeccaniche.IndexModel
+@{
+}
+@if (ViewBag.error != null)
+{
+    <div id="error_panel" class="alert alert-danger" style="position:fixed; width:100%;">
+        <strong>Attenzione</strong>: @ViewBag.error
+    </div>
+}
+
+
+
+<h3 style="margin-bottom:25px;">Lista meccaniche</h3>
+@{
+    // Raggruppa gli elementi per livello
+    var groupedItems = ((List<Istanta.Models.DeclinazioneMeccanica>)ViewBag.lista_declinazione_meccaniche)
+                        .GroupBy(x => x.Livello);
+    var groupedItemsMeccanicheAvanzate = ((List<Istanta.Models.DeclinazioneMeccanicaAvanzata>)ViewBag.lista_meccaniche_avanzate)
+    .GroupBy(x => x.LivelloEsternoMeccanicaAvanzata).OrderBy(x=>x.Key);
+    var groupedItemsRimozioneMeccanicheAvanzate = ((List<Istanta.Models.RimozioneDeclinazioneMeccanica>)ViewBag.lista_meccanicheInRimozione)
+    .GroupBy(x => x.LivelloEsternoMeccanicaAvanzata).OrderBy(x=>x.Key);
+
+}
+<div id="msg_container" style="display:none;">
+</div>
+
+<div class="btn-group">
+    <a href="#" id="aMenuVisual" class="btn btn-primary toggleVisual active" aria-current="page">Visual</a>
+    <a href="#" id="aMenuSource" class="btn btn-primary toggleSource">Source</a>
+</div>
+
+
+<div class="container" id="container">
+    <div id="contentVisual" class="pt-3">
+@*         <button class="btn btn-primary mb-3" id="vediCombMeccaniche" type="button">
+            Vedi combinazioni meccaniche
+        </button> *@
+
+        <ul class="nav nav-tabs mb-3" id="schede">
+
+
+            <li class="nav-item">
+
+                <a class="nav-link active testata" style="cursor:pointer;" id="headerMeccanicheAvanzate1" data-toggle="tab">Declinazioni meccaniche</a>
+
+            </li>
+
+            <li class="nav-item">
+
+                <a class="nav-link testata" id="headerMeccanicheAvanzate" style="cursor:pointer;" data-toggle="tab">Meccaniche avanzate</a>
+
+            </li>
+
+        </ul>
+
+        <div class="tab-content">
+
+            <div id="schedaDeclMeccaniche" class="container tab-pane scheda active">
+                @foreach (var group in groupedItems)
+                {
+                    var adaptedKey = group.Key.ToString().Replace(",", "_");
+                    adaptedKey = adaptedKey.Replace(".", "_");
+                    <div class="accordion" id="accordionLivello_@adaptedKey">
+                        <div class="accordion-item">
+                            <div class="accordion-header" id="headingLivello@adaptedKey">
+                                <h2 class="mb-0">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseLivello_@adaptedKey" aria-expanded="false" aria-controls="collapseLivello_@adaptedKey">
+                                        Livello @adaptedKey
+                                    </button>
+                                </h2>
+                            </div>
+                            <div id="collapseLivello_@adaptedKey" class="accordion-collapse collapse" aria-labelledby="headingLivello_@adaptedKey" data-parent="#accordionLivello_@adaptedKey">
+                                <div class="accordion-body">
+                                    <table>
+                                        <thead>
+                                            <tr>
+                                                <td>
+                                                    <table>
+                                                        <tr>
+                                                            <td style="width:200px;">
+                                                                Nome
+                                                            </td>
+                                                            <td style="width:200px;">
+                                                                Livello
+                                                            </td>
+                                                            <td style="width:200px;">
+                                                                Formato
+                                                            </td>
+                                                            <td style="width:200px;">
+                                                                Regole
+                                                            </td>
+                                                            <td style="padding-left:30px;">
+                                                            </td>
+                                                        </tr>
+                                                    </table>
+                                                </td>
+                                            </tr>
+                                        </thead>
+                                        @foreach (var item in group)
+                                        {
+
+                                            <tr class="rowTable">
+                                                <td>
+                                            
+                                                        <table>
+                                                            <tr>
+                                                                <!-- Nessun ID duplicato, usiamo classi per differenziare -->
+                                                                <td style="width:200px; display:none">
+                                                                    <input type="text" class="Id" name="Id" value="@item.Id">
+                                                                </td>
+                                                                <td style="width:200px;">
+                                                                    <input type="text" class="Nome" name="Nome" value="@item.Nome">
+                                                                </td>
+                                                                <td style="width:200px;">
+                                                                    <input type="text" class="Livello" name="Livello" value="@item.Livello">
+                                                                </td>
+                                                                <td style="width:200px;">
+                                                                    <input type="text" class="Formato" name="Formato" value="@item.Formato">
+                                                                </td>
+                                                                <td>
+                                                                    <button style="margin-right:50px;" class="btn-primary regoleBtn" type="button" id="regole" name="regole">Vedi regole</button>
+                                                                </td>
+                                                                <td>
+                                                                    <button class="salvaDeclinazione" type="button">
+                                                                        Salva
+                                                                    </button>
+                                                                </td>
+                                                                <td style="padding-left:30px;">
+                                                                <button class="btn btn-danger btn-sm eliminaDeclinazione" idItem="@item.Id">Elimina</button>
+                                                                </td>
+                                                            </tr>
+                                                        </table>
+                                            
+
+
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td><hr /></td>
+                                            </tr>
+
+                                        }
+                                        <tr>
+                                            <td>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+                <p></p>
+                <form method="POST">
+                    <table>
+                        <tr>
+                            <td style="width:200px;">
+                                Nome
+                            </td>
+                            <td style="width:200px;">
+                                Livello
+                            </td>
+                            <td style="width:200px;">
+                                Formato
+                            </td>
+                            <td style="padding-left:30px;">
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="width:200px;">
+                                <input type="text" id="Nome" name="Nome">
+                            </td>
+                            <td>
+                                <input type="text" id="Livello" name="Livello" />
+                            </td>
+                            <td>
+                                <input type="text" id="Formato" name="Formato" />
+                            </td>
+                            <td style="vertical-align: middle; text-align: center;">
+                                <input type="submit" value="Salva">
+                            </td>
+                            <td style="padding-left:30px;">
+                            </td>
+                        </tr>
+                    </table>
+                </form>
+            </div>
+        </div>
+        <div class="tab-content">
+
+            <div id="schedaMeccanicheAvanzate" class="container tab-pane scheda">
+                @foreach (var groupEsterno in groupedItemsMeccanicheAvanzate)
+                {
+                    <div class="accordion" id="accordionLivello_@groupEsterno.Key">
+                        <div class="accordion-item">
+                            <div class="accordion-header" id="headingLivello_@groupEsterno.Key">
+                                <h2 class="mb-0">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseLivelloEsterno_@groupEsterno.Key" aria-expanded="false" aria-controls="collapseLivello_@groupEsterno.Key">
+                                        Livello Esterno @groupEsterno.Key
+                                    </button>
+                                </h2>
+                            </div>
+                            <div style="width:90%; margin-left: auto;" id="collapseLivelloEsterno_@groupEsterno.Key" class="accordion-collapse collapse" aria-labelledby="headingLivelloEsterno_@groupEsterno.Key" data-parent="#accordionLivello_@groupEsterno.Key">
+                                @foreach (var group in groupEsterno.GroupBy(x=>x.LivelloMeccanica))
+                                {
+                                    var adaptedKey = group.Key.ToString().Replace(",", "_");
+                                    adaptedKey = adaptedKey.Replace(".", "_");
+                                    <div class="accordion" id="accordionLivello_@(groupEsterno.Key)_@(adaptedKey)">
+                                        <div class="accordion-item">
+                                            <div class="accordion-header" id="headingLivello_@(groupEsterno.Key)_@(adaptedKey)">
+                                                <h2 class="mb-0">
+                                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseLivello_@(groupEsterno.Key)_@(adaptedKey)" aria-expanded="false" aria-controls="collapseLivello_@(groupEsterno.Key)_@(adaptedKey)">
+                                                        Livello @adaptedKey
+                                                    </button>
+                                                </h2>
+                                            </div>
+                                            <div id="collapseLivello_@(groupEsterno.Key)_@(adaptedKey)" class="accordion-collapse collapse" aria-labelledby="headingLivello_@(groupEsterno.Key)_@(adaptedKey)" data-parent="#accordionLivello_@(groupEsterno.Key)_@(adaptedKey)">
+                                                <div class="accordion-body">
+                                                    <table>
+                                                        <thead>
+                                                            <tr>
+                                                                <td>
+                                                                    <table>
+                                                                        <tr>
+                                                                            <td style="width:150px;">
+                                                                                Nome
+                                                                            </td>
+                                                                            <td style="width:150px;">
+                                                                                Livello Meccanica
+                                                                            </td>
+                                                                            <td style="width:150px;">
+                                                                                Livello Esterno
+                                                                            </td>
+                                                                            <td style="width:150px;">
+                                                                                Formato
+                                                                            </td>
+
+                                                                            <td style="width:150px;">
+                                                                                Regole
+                                                                            </td>
+                                                                            <td style="padding-left:30px;">
+                                                                            </td>
+                                                                        </tr>
+                                                                    </table>
+                                                                </td>
+                                                            </tr>
+                                                        </thead>
+                                                        @foreach (var item in group)
+                                                        {
+
+                                                            <tr class="rowTable">
+                                                                <td>
+                                                            
+                                                                        <table>
+                                                                            <tr>
+                                                                                <!-- Nessun ID duplicato, usiamo classi per differenziare -->
+                                                                                <td style="width:150px; display:none">
+                                                                                    <input style="width:150px;" type="text" class="Id" name="Id" value="@item.Id">
+                                                                                </td>
+                                                                                <td style="width:150px;">
+                                                                                    <input style="width:150px;" type="text" class="Nome" name="Nome" value="@item.Nome">
+                                                                                </td>
+                                                                                <td style="width:150px;">
+                                                                                    <input style="width:150px;" type="text" class="LivelloMeccanica" name="LivelloMeccanica" value="@item.LivelloMeccanica">
+                                                                                </td>
+                                                                                <td style="width:150px;">
+                                                                                    <input style="width:150px;" type="text" class="LivelloEsternoMeccanicaAvanzata" name="LivelloEsternoMeccanicaAvanzata" value="@item.LivelloEsternoMeccanicaAvanzata">
+                                                                                </td>
+                                                                                <td style="width:150px;">
+                                                                                    <input style="width:150px;" type="text" class="Formato" name="Formato" value="@item.Formato">
+                                                                                </td>
+                                                                                <td>
+                                                                                <button style="margin-right:50px;" class="btn-primary regoleMeccanicheAvanzate" type="button" id="regole" name="regole">Vedi regole</button>
+                                                                                </td>
+                                                                                <td>
+                                                                                    <button class="salvaDeclinazioneMeccanicaAvanzata" type="button">
+                                                                                        Salva
+                                                                                    </button>
+                                                                                </td>
+                                                                                <td style="padding-left:30px;">
+                                                                                <button class="btn btn-danger btn-sm eliminaDeclinazioneMeccanicaAvanzata" idItem="@item.Id">Elimina</button>
+                                                                                </td>
+                                                                            </tr>
+                                                                        </table>
+                                                            
+
+
+                                                                </td>
+                                                            </tr>
+                                                            <tr>
+                                                                <td><hr /></td>
+                                                            </tr>
+
+                                                        }
+                                                        <tr>
+                                                            <td>
+                                                            </td>
+                                                        </tr>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+                <p></p>
+                @foreach (var groupEsterno in groupedItemsRimozioneMeccanicheAvanzate)
+                {
+                    <div class="accordion" id="accordionLivelloRimozione_@groupEsterno.Key">
+                        <div class="accordion-item">
+                            <div class="accordion-header" id="headingLivelloRimozione_@groupEsterno.Key">
+                                <h2 class="mb-0">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseLivelloEsternoRimozione_@groupEsterno.Key" aria-expanded="false" aria-controls="collapseLivelloRimozione_@groupEsterno.Key">
+                                        Remove - Livello Esterno @groupEsterno.Key
+                                    </button>
+                                </h2>
+                            </div>
+                            <div style="width:90%; margin-left: auto;" id="collapseLivelloEsternoRimozione_@groupEsterno.Key" class="accordion-collapse collapse" aria-labelledby="headingLivelloEsternoRimozione_@groupEsterno.Key" data-parent="#accordionLivelloRimozione_@groupEsterno.Key">
+                                @foreach (var group in groupEsterno.GroupBy(x => x.LivelloMeccanica))
+                                {
+                                    var adaptedKey = group.Key.ToString().Replace(",", "_");
+                                    adaptedKey = adaptedKey.Replace(".", "_");
+                                    <div class="accordion" id="accordionLivelloRemove_@(groupEsterno.Key)_@(adaptedKey)">
+                                        <div class="accordion-item">
+                                            <div class="accordion-header" id="headingLivelloRemove_@(groupEsterno.Key)_@(adaptedKey)">
+                                                <h2 class="mb-0">
+                                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseLivelloRemove_@(groupEsterno.Key)_@(adaptedKey)" aria-expanded="false" aria-controls="collapseLivelloRemove_@(groupEsterno.Key)_@(adaptedKey)">
+                                                        Livello @adaptedKey
+                                                    </button>
+                                                </h2>
+                                            </div>
+                                            <div id="collapseLivelloRemove_@(groupEsterno.Key)_@(adaptedKey)" class="accordion-collapse collapse" aria-labelledby="headingLivelloRemove_@(groupEsterno.Key)_@(adaptedKey)" data-parent="#accordionLivelloRemove_@(groupEsterno.Key)_@(adaptedKey)">
+                                                <div class="accordion-body">
+                                                    <table>
+                                                        <thead>
+                                                            <tr>
+                                                                <td>
+                                                                    <table>
+                                                                        <tr>
+                                                                            <td style="width:150px;">
+                                                                                Nome
+                                                                            </td>
+                                                                            <td style="width:150px;">
+                                                                                Livello Meccanica
+                                                                            </td>
+                                                                            <td style="width:150px;">
+                                                                                Livello Esterno
+                                                                            </td>
+                                                                            <td style="width:150px;">
+                                                                                Applicazione prioritaria
+                                                                            </td>
+
+                                                                            <td style="width:150px;">
+                                                                                Regole
+                                                                            </td>
+                                                                            <td style="padding-left:30px;">
+                                                                            </td>
+                                                                        </tr>
+                                                                    </table>
+                                                                </td>
+                                                            </tr>
+                                                        </thead>
+                                                        @foreach (var item in group)
+                                                        {
+
+                                                            <tr class="rowTable">
+                                                                <td>
+
+                                                                    <table>
+                                                                        <tr>
+                                                                            <!-- Nessun ID duplicato, usiamo classi per differenziare -->
+                                                                            <td style="width:150px; display:none">
+                                                                                <input style="width:150px;" type="text" class="Id" name="Id" value="@item.Id">
+                                                                            </td>
+                                                                            <td style="width:150px;">
+                                                                                <input style="width:150px;" type="text" class="Nome" name="Nome" value="@item.Nome">
+                                                                            </td>
+                                                                            <td style="width:150px;">
+                                                                                <input style="width:150px;" type="text" class="LivelloMeccanica" name="LivelloMeccanica" value="@item.LivelloMeccanica">
+                                                                            </td>
+                                                                            <td style="width:150px;">
+                                                                                <input style="width:150px;" type="text" class="LivelloEsternoMeccanicaAvanzata" name="LivelloEsternoMeccanicaAvanzata" value="@item.LivelloEsternoMeccanicaAvanzata">
+                                                                            </td>
+                                                                            <td style="width:150px; align-items:center; justify-content:center; display:flex;">
+                                                                                <input class="form-check-input applyBeforeExecution" @(item.timeToApply == timeToApplyOperation.applyBefore ? "checked" : "") type="checkbox" name="applyBeforeExecution" data-bs-toggle="tooltip" data-bs-placement="top" title="Questa flag se abilitata farà si che la meccanica in rimozione venga tolta prima del calcolo delle altre meccaniche Avanzate">
+
+                                                                            </td>
+                                                                            <td>
+                                                                                <button style="margin-right:50px;" class="btn-primary regoleRimozioniMeccanicheAvanzate" type="button" id="regole" name="regole">Vedi regole</button>
+                                                                            </td>
+                                                                            <td>
+                                                                                <button type="button" class="salvaRimozioneMeccanicaAvanzata">
+                                                                                    Salva
+                                                                                </button>
+                                                                            </td>
+                                                                            <td style="padding-left:30px;">
+                                                                                <button class="btn btn-danger btn-sm eliminaRimozioneMeccanicaAvanzata" idItem="@item.Id">Elimina</button>
+                                                                            </td>
+                                                                        </tr>
+                                                                    </table>
+
+
+
+                                                                </td>
+                                                            </tr>
+                                                            <tr>
+                                                                <td><hr /></td>
+                                                            </tr>
+
+                                                        }
+                                                        <tr>
+                                                            <td>
+                                                            </td>
+                                                        </tr>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+                <p></p>
+                <form>
+                    <table>
+                        <tr>
+                            <td style="width:200px;">
+                                Tipo meccanica
+                            </td>
+                            <td style="width:200px;">
+                                Nome
+                            </td>
+                            <td style="width:200px;">
+                                Livello Meccanica
+                            </td>
+                            <td style="width:200px;">
+                                Livello Esterno
+                            </td>
+                            <td id="formatoAvLabel" style="width:200px;">
+                                Formato
+                            </td>
+                            <td style="padding-left:30px;">
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="width:200px;">
+                                <select id="tipoMeccanica" class="form-select" aria-label="Menu a tendina" >
+                                    <option value="1">AddMeccanica</option>
+                                    <option value="2">RemoveMeccanica</option>
+                                </select>
+                            </td>
+                            <td style="width:200px;">
+                                <input type="text" id="Nome" name="Nome">
+                            </td>
+                            <td>
+                                <input type="text" id="LivelloMeccanica" name="LivelloMeccanica" />
+                            </td>
+                            <td>
+                                <input type="text" id="LivelloEsternoMeccanicaAvanzata" name="LivelloEsternoMeccanicaAvanzata" />
+                            </td>
+                            <td>
+                                <input type="text" id="FormatoAv" name="FormatoAv" />
+                            </td>
+                            <td style="display:none;">
+                                <input class="form-check-input" type="checkbox" id="applyBeforeExecution" name="applyBeforeExecution" data-bs-toggle="tooltip" data-bs-placement="top" title="Questa flag se abilitata farà si che la meccanica in rimozione venga tolta prima del calcolo delle altre meccaniche Avanzate">
+                                <label class="form-check-label" for="applyBeforeExecution" data-bs-toggle="tooltip" data-bs-placement="top" title="Questa flag se abilitata farà si che la meccanica in rimozione venga tolta prima del calcolo delle altre meccaniche Avanzate">
+                                    Applicazione prioritaria
+                                </label>
+                            </td>
+                            <td id="tdSalvaAvanzate"  style="vertical-align: middle; text-align: center;">
+                                <button type="button">
+                                    Salva
+                                </button>
+                            </td>
+                            <td id="tdSalvaRimozioniAvanzate" style="vertical-align: middle; text-align: center; display:none;">
+                                <button type="button">
+                                    Salva
+                                </button>
+                            </td>
+                            <td style="padding-left:30px;">
+                            </td>
+                        </tr>
+                    </table>
+                </form>
+            </div>
+        </div>
+
+    </div>
+    <div id="contentSource" class="pt-3" style="display:none;">
+        <div class="container">
+            <div class="row">
+                <div class="col-12 mb-3" style="text-align:right;">
+                    <button class="btn btn-primary" id="btnSourceSave" value="Salva">Salva</button>
+                </div>
+            </div>
+            <div id="editor"></div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" tabindex="-1" id="modalModificaRegole" data-bs-backdrop="static">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Set Etichette</h5>
+                <button type="button" data-bs-dismiss="modal" class="btn-close" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="liveAlertPlaceholder"></div>
+                <div id="regoleContainer">
+                </div>
+            </div>
+            <div class="modal-footer d-flex justify-content-between">
+                <button id="addSetEtichette" class="btn btn-primary" type="button">Aggiungi Set etichette</button>
+                <button id="salvaRegole" class="btn btn-success" type="button">Salva</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" tabindex="-1" id="modalModificaRegoleMeccanicaAvanzata" data-bs-backdrop="static">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Set Etichette</h5>
+                <button type="button" data-bs-dismiss="modal" class="btn-close" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="liveAlertPlaceholder"></div>
+                <div id="regoleAvanzateContainer">
+                </div>
+            </div>
+            <div class="modal-footer d-flex justify-content-between">
+                <button class="btn btn-primary" id="addSetRegoleButton" rimozione="false" type="button" >Aggiungi Set</button>
+                <button class="btn btn-success" id="salvaRegoleAvanzate" type="button">Salva</button>
+                <button class="btn btn-success" id="salvaRimozioneRegoleAvanzate" style="display:none" type="button" >Salva</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<template id="setEtichette">
+    <div class="setEtichette bg-warning bg-opacity-25 mb-1 position-relative">
+        SET
+        <button id="setEtichetteBtn" type="button" class="btn-close position-absolute top-0 end-0 setEtichetteBtn" aria-label="Close"></button>
+    </div>
+</template>
+
+<template id="setMeccaniche">
+    <div class="setMeccaniche bg-warning bg-opacity-25 mb-1 position-relative">
+        SET
+        <div class="form-check">
+            <input class="form-check-input meccanicaEsclusiva" type="checkbox" id="meccanicaEsclusiva" name="meccanicaEsclusiva" data-bs-toggle="tooltip" data-bs-placement="top" title="Questa opzione abilitata richiede che, perchè il set sia valido, non ci siano altre meccaniche assegnate al record oltre a quelle richieste dal set.">
+            <label class="form-check-label" for="meccanicaEsclusiva" data-bs-toggle="tooltip" data-bs-placement="top" title="Questa opzione abilitata richiede che, perchè il set sia valido, non ci siano altre meccaniche assegnate al record oltre a quelle richieste dal set.">
+                Meccaniche esclusive
+            </label>
+            <span data-bs-toggle="tooltip" data-bs-placement="top" title="Questa opzione abilitata richiede che, perchè il set sia valido, non ci siano altre meccaniche assegnate al record oltre a quelle richieste dal set.">
+                <i class="bi bi-info-circle ms-2"></i>
+            </span>
+        </div>
+        <button id="eliminaSetRegole" type="button" class="btn-close position-absolute top-0 end-0 eliminaSetRegole" aria-label="Close"></button>
+    </div>
+</template>
+
+<template id="addEtichetta">
+    <div class="addEtichetta mb-1 d-flex justify-content-center align-items-center">
+        <button type="button" class="btn btn-primary addEtichettaBtn" id="addEtichettaBtn">Aggiungi etichetta</button>
+    </div>
+</template>
+
+<template id="addMeccanica">
+    <div class="addMeccanica mb-1 d-flex justify-content-center align-items-center">
+        <button id="addMeccanicaBtn" type="button" rimozione="false" class="addButton btn btn-primary addMeccanicaBtn" idMeccanica="0">Aggiungi meccanica</button>
+    </div>
+</template>
+
+<template id="etichetta">
+    <div class="etichetta row mb-1">
+        <div class="col d-flex flex-column">
+            <label for="etichettaVal">Etichetta</label>
+            <select id="etichettaVal" class="form-select" aria-label="Menu a tendina">
+            </select>
+        </div>
+        <div class="col d-flex justify-content-center align-items-center">
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="presente" name="presente">
+                <label class="form-check-label" for="presente">
+                    Presente
+                </label>
+            </div>
+        </div>
+
+        <div class="col-1 d-flex align-items-end">
+            <button id="eliminaRegolaBtn" type="button" class="btn btn-danger btn-sm eliminaRegolaBtn" style="height:40px">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div>
+            <hr class="mt-1">
+        </div>
+    </div>
+</template>
+
+<template id="meccanica">
+    <div class="meccanica row mb-1">
+        <div class="col d-flex flex-column">
+            <label for="meccanicaVal">Meccanica</label>
+            <select id="meccanicaVal" class="form-select meccanicaVal" aria-label="Menu a tendina">
+            </select>
+        </div>
+        <div class="col d-flex justify-content-center align-items-center">
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="searchByName" name="searchByName">
+                <label class="form-check-label" for="searchByName">
+                    Cerca per nome invece che Id
+                </label>
+            </div>
+        </div>
+        <div class="col d-flex justify-content-center align-items-center">
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="presente" name="presente">
+                <label class="form-check-label" for="presente">
+                    Presente
+                </label>
+            </div>
+        </div>
+
+        <div class="col-1 d-flex align-items-end">
+            <button id="eliminaRegolaMeccanicaBtn" type="button" class="btn btn-danger btn-sm eliminaRegolaMeccanicaBtn" style="height:40px">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div>
+            <hr class="mt-1">
+        </div>
+    </div>
+</template>
+
+@* <div class="modal fade" tabindex="-1" id="modalCombinazioniMeccaniche" data-bs-backdrop="static">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Combinazioni</h5>
+                <button type="button" data-bs-dismiss="modal" class="btn-close" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="liveAlertPlaceholder"></div>
+                <div id="combinazioniContainer">
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<template id="rowCombinazione">
+    <div class="row combinazioneAdd bg-warning bg-opacity-25 mt-1 mb-1 position-relative">
+        <div class="col-8 mt-2">
+            <div class="row rowComb">
+
+            </div>
+        </div>
+        <div class="col-3 mt-2">
+            <label class="form-check-label" for="formatoComb">
+                Formato
+            </label>
+            <input class="form-text" type="text" id="formatoComb" name="formatoComb">
+        </div>
+        <div class="col-1 d-flex align-items-end">
+            <button type="button" class="btn btn-primary btn-sm" style="height:40px" onclick="declMeccanicheInstance.AggiungiCombinazioneMeccanica($(this).closest('.combinazioneAdd'))">
+                Aggiungi
+            </button>
+        </div>
+    </div>
+</template>
+
+<template id="rowMeccCombinazione">
+    <div class="row combinazione bg-warning bg-opacity-25 mb-2 position-relative" idComb="">
+        <div class="col-4 mt-2">
+            <label class="form-check-label" for="meccanicaComb">
+                Meccanica
+            </label>
+            <input readonly type="text" id="meccanicaComb" name="meccanicaComb">
+        </div>
+        <div class="col-4 mt-2">
+            <label class="form-check-label" for="formatoComb">
+                Formato
+            </label>
+            <input type="text" id="formatoComb" name="formatoComb">
+        </div>
+        <div class="col-3 mt-2">
+            <button type="button" class="btn btn-primary btn-sm" style="height:40px" onclick="declMeccanicheInstance.ModificaCombinazioneMeccanica($(this).closest('.combinazione'))">
+                Modifica
+            </button>
+        </div>
+        <div class="col-1 d-flex align-items-end">
+            <button type="button" class="btn btn-danger btn-sm" style="height:40px" onclick="declMeccanicheInstance.EliminaCombinazione($(this).closest('.combinazione').attr('idComb'))">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    </div>
+</template> *@
+
+
+
+
+@inject Microsoft.AspNetCore.Http.IHttpContextAccessor HttpContextAccessor
+<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]" src="~/js/sourceEditor.js"></script>
+
+<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]" type="text/javascript">
+
+    let declMeccanicheInstance;
+    
+    
+
+    function documentReady() {
+    declMeccanicheInstance = new DeclinazioneMeccaniche();
+
+    $("#btnSourceSave").on("click", function() {
+    exSourceEditor.save('DeclinazioniMeccaniche');
+    });
+
+    $("#aMenuVisual").on("click", function() {
+    menuVisual();
+    });
+
+    $("#aMenuSource").on("click", function() {
+    menuSource();
+    });
+
+@*     $("#vediCombMeccaniche").on("click", function() {
+    declMeccanicheInstance.openModalCombinazioni();
+    }); *@
+
+    $("#headerMeccanicheAvanzate1").on("click", function() {
+        console.log("testata1");
+    declMeccanicheInstance.setScheda(1,$(this));
+    });
+    $("#headerMeccanicheAvanzate").on("click", function() {
+    declMeccanicheInstance.setScheda(2,$(this));
+    });
+    $(".regoleBtn").on("click", function() {
+    declMeccanicheInstance.openModal($(this).closest('tr').find('.Id').val());
+    });
+    $(".eliminaDeclinazione").on("click", function() {
+        declMeccanicheInstance.deleteDeclMeccanica($(this).attr('idItem'), $(this).closest('tr'), $(this));
+    });
+    $(".salvaDeclinazione").on("click", function() {
+    
+    var row = $(this).closest('tr');
+    declMeccanicheInstance.update(
+    row.find('.Id').val(),
+    row.find('.Nome').val(),
+    row.find('.Livello').val(),
+    row.find('.Formato').val(),
+    $(this))
+    });
+
+    $(".regoleMeccanicheAvanzate").on("click", function() {
+        declMeccanicheInstance.openModalMeccanicaAvanzata(parseInt($(this).closest('tr').find('.Id').val()));
+    });
+    $(".eliminaDeclinazioneMeccanicaAvanzata").on("click", function() {
+        declMeccanicheInstance.deleteDeclMeccanicaAvanzata($(this).attr('idItem'), $(this).closest('tr'), $(this));
+    });
+    $(".salvaDeclinazioneMeccanicaAvanzata").on("click", function() {
+    
+    var row = $(this).closest('tr');
+    declMeccanicheInstance.updateMeccanicaAvanzata(
+    row.find('.Id').val(),
+    row.find('.Nome').val(),
+    row.find('.LivelloMeccanica').val(),
+    row.find('.LivelloEsternoMeccanicaAvanzata').val(),
+    row.find('.Formato').val(),
+    $(this)
+    )
+    
+    });
+
+    $(".regoleRimozioniMeccanicheAvanzate").on("click", function() {
+        declMeccanicheInstance.openModalRimozioneMeccanicaAvanzata(parseInt($(this).closest('tr').find('.Id').val()));
+    });
+
+    $(".salvaRimozioneMeccanicaAvanzata").on("click", function() {
+    var row = $(this).closest('tr');
+    declMeccanicheInstance.updateRimozioneMeccanicaAvanzata(
+    row.find('.Id').val(),
+    row.find('.Nome').val(),
+    row.find('.LivelloMeccanica').val(),
+    row.find('.LivelloEsternoMeccanicaAvanzata').val(),
+    row.find('.applyBeforeExecution').prop('checked'),
+    $(this)
+    )
+    });
+
+    $(".eliminaRimozioneMeccanicaAvanzata").on("click", function() {
+        declMeccanicheInstance.deleteRimozioneDeclMeccanicaAvanzata($(this).attr('idItem'), $(this).closest('tr'), $(this));
+    });
+
+    $("#tdSalvaAvanzate").on("click", function() {
+    var row = $(this).closest('tr');
+    declMeccanicheInstance.addMeccanicaAvanzata(
+    row.find('#Nome').val(),
+    row.find('#LivelloMeccanica').val(),
+    row.find('#LivelloEsternoMeccanicaAvanzata').val(),
+    row.find('#FormatoAv').val(),
+    $(this))
+    });
+
+    $("#tdSalvaRimozioniAvanzate").on("click", function() {
+    var row = $(this).closest('tr');
+    declMeccanicheInstance.addRimozioneMeccanicaAvanzata(
+    row.find('#Nome').val(),
+    row.find('#LivelloMeccanica').val(),
+    row.find('#LivelloEsternoMeccanicaAvanzata').val(),
+    row.find('#applyBeforeExecution').prop('checked'),
+    $(this))
+    });
+
+    $("#addSetEtichette").on("click", function() {
+        declMeccanicheInstance.aggiungiNuovoSetRegole($('#modalModificaRegole').find('#regoleContainer'));
+    });
+    $("#salvaRegole").on("click", function() {
+        declMeccanicheInstance.salvaEModifica();
+    });
+    $("#addSetRegoleButton").on("click", function() {
+        declMeccanicheInstance.aggiungiNuovoSet($('#modalModificaRegoleMeccanicaAvanzata').find('#regoleAvanzateContainer'), $(this).attr('rimozione') === 'true')
+    });
+    $("#salvaRegoleAvanzate").on("click", function() {
+        declMeccanicheInstance.salvaEModificaAvanzate();
+    });
+    $("#salvaRimozioneRegoleAvanzate").on("click", function() {
+        declMeccanicheInstance.salvaEModificaRimozioneAvanzate();
+    });
+
+    $("#tipoMeccanica").on("change", function() {
+        declMeccanicheInstance.checkTipoMeccanica($(this));
+    });
+
+    $("#modalModificaRegoleMeccanicaAvanzata, #modalModificaRegole").on("click", ".setEtichetteBtn", function () {
+    declMeccanicheInstance.eliminaSetRegole($(this).closest('.setEtichette'));
+    });
+
+    $("#modalModificaRegoleMeccanicaAvanzata, #modalModificaRegole").on("click", ".eliminaSetRegole", function () {
+    declMeccanicheInstance.eliminaSetRegole($(this).closest('.setMeccaniche'));
+    });
+
+    $("#modalModificaRegoleMeccanicaAvanzata, #modalModificaRegole").on("click", ".addEtichettaBtn", function () {
+    declMeccanicheInstance.aggiungiRegola($(this).closest('.container-riga'), false);
+    });
+
+    $("#modalModificaRegoleMeccanicaAvanzata, #modalModificaRegole").on("click", ".addMeccanicaBtn", function () {
+    declMeccanicheInstance.aggiungiRegola(
+    $(this).closest('.container-riga'),
+    true,
+    $(this).attr('rimozione') === 'true'
+    );
+    });
+
+    $("#modalModificaRegoleMeccanicaAvanzata, #modalModificaRegole").on("click", ".eliminaRegolaBtn", function () {
+    declMeccanicheInstance.eliminaRegola($(this).closest('.etichetta'));
+    });
+
+    $("#modalModificaRegoleMeccanicaAvanzata, #modalModificaRegole").on("click", ".eliminaRegolaMeccanicaBtn", function () {
+    declMeccanicheInstance.eliminaRegola($(this).closest('.meccanica'));
+    });
+
+    $("#modalModificaRegoleMeccanicaAvanzata, #modalModificaRegole").on("change", ".meccanicaVal", function () {
+        declMeccanicheInstance.checkSelection($(this));
+    });
+
+
+
+
+    }
+
+</script>
+
+
+
+<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]" src="https://unpkg.com/monaco-editor@latest/min/vs/loader.js"></script>
+
+<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]">
+
+    let exSourceEditor = new ExternalSourceEditor();
+
+    function menuVisual() {
+        document.getElementById("contentSource").style.display = "none";
+        document.getElementById("contentVisual").style.display = "block";
+
+        $(".toggleVisual").addClass("active");
+        $(".toggleSource").removeClass("active");
+
+    }
+    function menuSource() {
+        document.getElementById("contentSource").style.display = "block";
+        document.getElementById("contentVisual").style.display = "none";
+
+        $(".toggleSource").addClass("active");
+        $(".toggleVisual").removeClass("active");
+
+        //prima ridimensiono l'editor
+        $("#editor").css("width", $("#container").css("width"));
+        //atezza quanto la pagina
+        $("#editor").css("height", $(window).height() - 100 + "px");
+
+        exSourceEditor.init("SourceDeclinazioneMeccaniche");
+
+    }
+</script>

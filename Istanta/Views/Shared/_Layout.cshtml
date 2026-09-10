@@ -1,0 +1,377 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - Istanta</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <!--<link rel="stylesheet" href="~/lib/bootstrap-4.0.0/dist/css/bootstrap.min.css" />-->
+    <!--bootstrap datepicker-->
+    <link nonce="@Context.Items["ScriptNonce"]" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css" type="text/css" integrity="sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN" crossorigin="anonymous" />
+    <link nonce="@Context.Items["ScriptNonce"]" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-datepicker/1.9.0/css/bootstrap-datepicker.min.css" type="text/css" integrity="sha384-5IbgsdqrjF6rAX1mxBZkKRyUOgEr0/xCGkteJIaRKpvW0Ag0tf6lru4oL2ZhcMvo" crossorigin="anonymous" />
+    <link nonce="@Context.Items["ScriptNonce"]" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" integrity="sha384-SZXxX4whJ79/gErwcOYf+zWLeJdY/qpuqC4cAa9rOGUstPomtqpuNWT9wdPEn2fk" crossorigin="anonymous" />
+    <!--bootstrap datepicker-->
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/Istanta.styles.css" asp-append-version="true" />
+    <script src="~/js/system.js?id=2.0.2"></script>
+    <input type="hidden" id="utenteLoggato" value="@SessionIstantaObject.GetSessionName(this.Context)" />
+
+    @inject Microsoft.AspNetCore.Http.IHttpContextAccessor HttpContextAccessor
+    <script nonce ="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]" type="module">
+        
+        function loadScript(src) {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = src;
+                script.onload = () => resolve();
+                script.onerror = () => reject(new Error(`Errore nel caricamento: ${src}`));
+                document.head.appendChild(script);
+            });
+        }
+        
+
+        async function loadScriptsInOrder() {
+
+            const dynamicId = uuidv4();
+
+            await loadScript(`${webRootFolder}/js/IAgenzia.js?id=${dynamicId}`);
+            await loadScript(`${webRootFolder}/js/utility.js?id=${dynamicId}`); // dipende da lib1
+            await loadScript(`${webRootFolder}/js/call.js?id=${dynamicId}`); // dipende da lib2
+            await loadScript(`${webRootFolder}/js/agenzia.js?id=${dynamicId}`); // dipende da lib2
+            await loadScript(`${webRootFolder}/js/menabo.js?id=${dynamicId}`);
+            await loadScript(`${webRootFolder}/js/revisore.js?id=${dynamicId}`); // dipende da lib2
+            await loadScript(`${webRootFolder}/js/components.js?id=${dynamicId}`); // dipende da lib2
+            await loadScript(`${webRootFolder}/js/archivio.js?id=${dynamicId}`); // dipende da lib2
+            await loadScript(`${webRootFolder}/js/ordinamento.js?id=${dynamicId}`); // dipende da lib2
+            await loadScript(`${webRootFolder}/js/taskManager.js?id=${dynamicId}`);
+            await loadScript(`${webRootFolder}/js/addestramento.js?id=${dynamicId}`);
+            await loadScript(`${webRootFolder}/js/promo.js?id=${dynamicId}`);
+            await loadScript(`${webRootFolder}/js/syncfoto.js?id=${dynamicId}`);
+            await loadScript(`${webRootFolder}/js/declinazioneMeccaniche.js?id=${dynamicId}`);
+            await loadScript(`${webRootFolder}/js/etichette.js?id=${dynamicId}`);
+            await loadScript(`${webRootFolder}/js/frameworkCss.js?id=${dynamicId}`);
+            await loadScript(`${webRootFolder}/js/loghibolli.js?id=${dynamicId}`);  
+            await loadScript(`${webRootFolder}/js/confronti.js?id=${dynamicId}`);
+            setTimeout(() => {
+                loadScript(`${webRootFolder}/js/site.js?id=${dynamicId}`);
+            }, 1000);
+            
+
+
+        }
+
+        loadScriptsInOrder();
+
+
+
+    </script>
+
+
+</head>
+<body style="">
+    <input type="hidden" value="@ViewBag.ExternalSourceCustom" id="ExternalSourceCustom" />
+    <div id="loading" style="position:fixed; width:100%; height:100%; background-color:rgb(255 255 255 / 58%); z-index:9999; text-align:center;">
+        <img src="~/images/loading.gif" style="margin: 0px auto;" alt="Loading..." />        
+    </div>
+    <header>
+        <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
+            <div class="container-fluid">
+                <a class="navbar-brand" href="~/Tracciati"><img src="~/images/Icon_Istanta.png" style="width:65px;" /></a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
+                        aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
+                    <div class="mynavbar-nav flex-grow-1">
+                        <div class="nav-item">
+                            <a class="nav-link text-dark" href="~/Tracciati">Tracciati</a>
+                        </div>
+                        <myhr></myhr>
+                        <div class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle text-dark" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                Confronti
+                            </a>
+                            <ul class="dropdown-menu" style="width:300px;">
+                                <li><a class="dropdown-item" href="~/Confronti">Esegui</a></li>
+                                <li><a class="nav-link text-dark" asp-area="" asp-controller="Confronti" asp-action="Settings">Parametri Confronto</a></li>
+                            </ul>
+                        </div>
+                        <myhr></myhr>
+                        <div class="nav-item">
+                            <a class="nav-link text-dark" href="~/Tracciati/Training">Addestramento lista</a>
+                        </div>
+                        <myhr></myhr>
+                        <div class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle text-dark" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                Sincronizzazione
+                            </a>
+                            <ul class="dropdown-menu">
+                                <li><a class="dropdown-item" href="~/SyncFoto">Sincronizzazione foto</a></li>
+                                <li><a class="dropdown-item" href="~/SyncFoto/LoghiBolli">Sincronizzazione loghi/bolli</a></li>
+                                <li><a class="dropdown-item" href="~/SyncFoto/Registro">Registro sincronizzazioni foto</a></li>
+                            </ul>
+                        </div>
+                        <myhr></myhr>
+                        <div class="nav-item">
+                            <a class="nav-link text-dark" href="~/Archivio">Archivio</a>
+                        </div>
+                        <myhr></myhr>
+                         <div class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle text-dark" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                Settings
+                            </a>
+                            <ul class="dropdown-menu" style="width:300px;">
+                                <li><a class="nav-link text-dark" href="~/Aree">Aree/Canali</a></li>
+                                <li><a class="nav-link text-dark" asp-area="" asp-controller="Tracciati" asp-action="FicoContexts">Form Contexts</a></li>
+                                <li><a class="nav-link text-dark" asp-area="" asp-controller="MenaboSettings" asp-action="Ordinamento">Ordinamento</a></li>
+                                <li><a class="nav-link text-dark" asp-area="" asp-controller="MenaboSettings" asp-action="Formati">Formati</a></li>
+                                <li><a class="nav-link text-dark" asp-area="" asp-controller="MenaboSettings" asp-action="TipiDiExport">Tipi di Export</a></li>
+                                <li><a class="nav-link text-dark" asp-area="" asp-controller="MenaboSettings" asp-action="NamingConventions">Naming Conventions</a></li>
+                                <li><a class="nav-link text-dark" asp-area="" asp-controller="Etichette" asp-action="Index">Etichette</a></li>
+                                <li><a class="nav-link text-dark" asp-area="" asp-controller="DeclinazioniMeccaniche" asp-action="Index">Declinazioni Meccaniche</a></li>
+                                <li><a class="nav-link text-dark" asp-area="" asp-controller="FrameworkCss" asp-action="Index">Framework css</a></li>
+                                <li><a class="nav-link text-dark" asp-area="" asp-controller="FrameworkCss" asp-action="MappaStili">Mappa Stili</a></li>                                
+                                <li><a class="nav-link text-dark" asp-area="" asp-controller="CustomPlugin" asp-action="Index">Plugin Agenzia</a></li>                                
+                            </ul>
+                        </div>    
+                        <myhr></myhr>
+                        <div class="nav-item">
+                            <a class="nav-link text-dark" href="~/Register">Registro</a>
+                        </div>
+                        <myhr></myhr>
+                        <div class="nav-item">
+                            <a id="link_download_plugin" target="_blank"><img src="~/images/pluginIcon.png" style="width:50px; margin-left:10px;cursor:pointer;" /></a>
+                        </div>
+                    </div>
+                </div>
+                <div style="margin-right:10px;">
+                    <div class="row">
+                        <div class="col" style="text-align:center;">                            
+                            <button type="button" class="btn btn-link" id="btnUser">@SessionIstantaObject.GetSessionName(this.Context)</button>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col">
+                            @if (SessionIstantaObject.GetSession(this.Context) != null)
+                            {
+                                <a class="nav-link text-dark" href="~/LoginController/logoutFromPage">Logout</a>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </nav>
+    </header>
+    <div class="container masterBodySpread" style="height:100%;">
+        <main role="main" class="pb-3">
+            @RenderBody()
+        </main>
+    </div>
+    <div class="toast position-fixed" role="alert" aria-live="assertive" aria-atomic="true" id="clipToast" data-bs-delay="2000" style="top:10px;right:10px;background:#a1e3be;z-index:9999999">
+        <div class="d-flex">
+            <div class="toast-body">
+                Token copiato!
+            </div>
+        </div>
+    </div>
+    <footer class="border-top footer text-muted">
+        <div class="container">
+            &copy; 2022 - Istanta - <a asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
+        </div>
+    </footer>
+
+
+    <script nonce="@Context.Items["ScriptNonce"]" src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-datepicker/1.9.0/js/bootstrap-datepicker.min.js" type="text/javascript"></script>
+
+    <script nonce="@Context.Items["ScriptNonce"]">
+        $("#btnUser").on("click", function () {
+
+            //Apri modal
+            showUserInfoModal();
+
+            //Disegno panello per creazione token di accesso
+            Call.do("LoginController", "getTokenDiAccesso", "GET", null, this, function (result, sender) {
+
+                let container = $(".modal-body").find("#tokenContainer");
+                let tokenDiv = $(`<div class="container" style="
+                    width: 95%;
+                    border: 2px solid blue;
+                    padding: 6px;
+                    margin: 10px;
+                    border-radius: 17px;
+                    ">
+                    <div class="row">
+                    <div class="col-8" style="
+                    padding-left: 30px;
+                    padding-top: 16px;
+                    ">
+                    <span><strong>Token di accesso</strong></span>
+                    <p style="margin:3px;"><button type="button" id="btnCopyToken" class="btn btn-primary btn-sm me-2">Copia</button><span id="idAccessToken">-</span></p>
+                    </div>
+                    <div class="col-4 text-center">
+                    <span style="
+                    font-size: 10px;
+                    ">Scade tra</span><br>
+                    <strong id="durationAccessToken" style="
+                    font-size: 30px;
+                    ">-</strong><br>
+                    <span style="
+                    font-size: 10px;
+                    ">sec.</span>
+                    </div>
+                    </div>
+                    </div>`);
+
+                
+
+                if (result.error != "user_no_need_token") {
+                    container.append(tokenDiv);
+                    $("#btnCopyToken").on("click", function () {
+                    // Copia il token negli appunti
+                    console.log("click to copy token");
+                    const token = $("#idAccessToken").text();
+
+                    navigator.clipboard.writeText(token).then(function () {
+                    var toastLiveExample = document.getElementById('clipToast')
+                    var toast = new bootstrap.Toast(toastLiveExample);
+                    toast.show();
+
+                    }, function (err) {
+                    alert("Errore nel copiare il token: ", err);
+                    });
+                    });
+
+                    if (result.error == null || result.error == "") {
+                    // Mostra il token di accesso
+                    $("#idAccessToken").text(result.token);
+                    // Avvia il conto alla rovescia per la scadenza del token
+                    let duration = result.duration;
+                    $("#durationAccessToken").text(parseInt(duration / 1000));
+                    const countdownInterval = setInterval(function () {
+                    duration -= 1000;
+                    $("#durationAccessToken").text(parseInt(duration / 1000));
+                    if (duration <= 0) {
+                    clearInterval(countdownInterval);
+                    $("#durationAccessToken").text("-");
+                    $("#idAccessToken").text("Il token è scaduto");
+                    $("#btnCopyToken").css("display", "none");
+                    }
+                    }, 1000);
+                    }
+                    else {
+                    //Errore da riportare a video perchè non previsto
+                    $("#idAccessToken").text("Errore: " + result.error);
+                    }
+                }
+
+               
+
+            });
+
+        });
+
+        function showUserInfoModal() {
+            const userName = $("#utenteLoggato").val();
+            const modalHtml = `
+            <div class="modal fade
+            " id="userInfoModal" tabindex="-1" aria-labelledby="userInfoModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="userInfoModalLabel">Cambio password</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div>
+                                <p><strong>Nome:</strong> ${userName}</p>
+                            </div>
+                            <div id="tokenContainer">
+
+                            </div>
+                            <div>
+                                <label for="oldPassword" class="form-label">Password attuale:</label>
+                                <input type="password" class="form-control" id="oldPassword" />
+                            </div>
+                            <div>
+                                <label for="newPassword" class="form-label">Conferma Password:</label>
+                                <input type="password" class="form-control" id="confirmPassword" />
+                            </div>
+                            <div>
+                                <label for="repeatNewPassword" class="form-label">Ripeti Nuova Password:</label>
+                                <input type="password" class="form-control" id="repeatNewPassword" />
+                            </div>
+                            <div style="margin-top:10px;font-size:11px;color:red;">
+                                <span>La password deve contenere almeno 8 caratteri, di cui una maiuscola, una minuscola, un numero e un carattere speciale tra questi (&#64;,!,=,%,$,^,_,-)</span>
+                            </div>
+                            <div>
+                                <button type="button" class="btn btn-primary mt-3" id="changePasswordBtn">Cambia Password</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            `;            
+
+            $("body").append(modalHtml);
+
+            $("#changePasswordBtn").on("click", function () {
+                const oldPassword = $("#oldPassword").val();
+                const newPassword = $("#confirmPassword").val();
+                const repeatNewPassword = $("#repeatNewPassword").val();
+                if (newPassword !== repeatNewPassword) {
+                    alert("La nuova password e la ripetizione non corrispondono.");
+                    return;
+                }
+                // Esegui la chiamata AJAX per cambiare la password
+                $.ajax({
+                    url: '/LoginController/ChangePassword',
+                    type: 'POST',
+                    data: {
+                        oldPassword: oldPassword,
+                        newPassword: newPassword
+                    },
+                    success: function (response) {
+                        
+                        if (response.esito) {
+                            alert("Password cambiata con successo");
+                            $('#userInfoModal').modal('hide');
+                        }
+                        else
+                        {
+                            alert("Errore: " + response.error);
+                        }
+                    },
+                    error: function () {
+                        alert("Si è verificato un errore durante il cambio della password.");
+                    }
+                });
+
+            });
+
+            const userInfoModal = new bootstrap.Modal(document.getElementById('userInfoModal'));
+            userInfoModal.show();
+            $('#userInfoModal').on('hidden.bs.modal', function () {
+                $(this).remove();
+            });
+            
+
+        }
+             
+        $(".navbar-brand.fp").on("click", function () {
+            showLoading();
+            apriLinkEsterno("fp");
+        });
+
+        $(".navbar-brand.correggo").on("click", function () {
+            showLoading();
+            apriLinkEsterno("correggo");
+        });
+
+    </script>
+
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

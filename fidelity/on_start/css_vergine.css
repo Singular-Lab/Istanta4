@@ -1,0 +1,908 @@
+@import url(https://fonts.googleapis.com/css2?family=Oswald:wght@200..700&display=swap);
+@import url(https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400..800;1,400..800&display=swap);
+@import url(https://fonts.googleapis.com/css2?family=Jost:ital,wght@0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap);
+
+:root {
+  --font-webpliant: Oswald, sans-serif !important;
+  --black-color: rgb(1, 1, 1);
+  --white-color: rgb(255, 255, 255);
+  --yellow-color: rgb(255, 255, 0);
+  --red-color: rgb(227, 6, 19);
+  --soci-color: rgb(87, 191, 235);
+  --carni-color: rgb(222, 75, 84);
+  --pescheria-color: rgb(70, 125, 192);
+  --gastronomia-color: rgb(175, 144, 98);
+  --ortofrutta-color: rgb(141, 191, 33);
+  --cantina-color: rgb(117, 41, 110);
+  --surgelati-color: rgb(2, 41, 114);
+  --pet-color: rgb(253, 107, 165);
+  --11-color: rgb(110, 34, 107);
+  --ori-color: rgb(115, 66, 41)
+}
+
+[data-tipo="3"] {
+  width: 115px;
+  height: auto;
+  display: block;
+  position: absolute;
+  bottom: 0;
+  left: 0
+}
+
+[data-tipo="2"] {
+  width: 50px;
+  height: auto;
+  display: block;
+  position: absolute;
+  bottom: 0;
+  left: 68%
+}
+
+.webpliant {
+  font-family: var(--font-webpliant)
+}
+
+.skin-blue .topbar {
+  background: red
+}
+
+.float-right {
+  float: right
+}
+
+.float-left {
+  float: left
+}
+
+.float-none {
+  float: none
+}
+
+.float-inline-start {
+  float: inline-start
+}
+
+.float-inline-end {
+  float: inline-end
+}
+
+.text-center {
+  text-align: center
+}
+
+.text-left {
+  text-align: left
+}
+
+.text-right {
+  text-align: right
+}
+
+.text-justify {
+  text-align: justify
+}
+
+.text-nowrap {
+  white-space: nowrap
+}
+
+.CardContainer_icon {
+  height: 25px;
+  width: 30px;
+  float: left;
+  margin-right: 6px
+}
+
+.boxref_textarea {
+  position: absolute;
+  height: 100px;
+  bottom: 0;
+  width: 100%
+}
+
+.boxref_textarea_fondo {
+  position: absolute;
+  background-color: #fff;
+  height: 100%;
+  width: 100%;
+  opacity: 1
+}
+
+.boxref_textarea_text {
+  position: absolute;
+  height: 100%;
+  width: 88%;
+  left: 0;
+  color: #000;
+  padding-top: 10px;
+  padding-left: 10px;
+  padding-right: 10px
+}
+
+.boxref_descrizione {
+  position: relative;
+  line-height: 1.2;
+  padding-top: 8px;
+  padding-bottom: 3px
+}
+
+.boxref_sconto {
+  position: absolute;
+  width: 100px;
+  height: 100px;
+  top: 5px;
+  right: 25px;
+  text-align: right
+}
+
+.boxref_sconto_cassa {
+  position: absolute;
+  width: 160px;
+  height: 35px;
+  left: 10px;
+  top: 101px;
+  border: 2px solid #fff;
+  text-align: center
+}
+
+.boxref_price {
+  font-family: var(--font-webpliant);
+  position: relative;
+  line-height: 1
+}
+
+.boxref_pricearea_fondo {
+  position: absolute;
+  height: 100%;
+  width: 100%;
+  opacity: .8;
+  font-family: var(--font-webpliant)
+}
+
+.tileBollini {
+  position: relative;
+  height: auto;
+  width: 100%;
+  z-index: 7;
+  padding-top: 4px
+}
+
+.tileBollini_IMG {
+  height: 30px;
+  width: 30px;
+  margin-left: 3px;
+  margin-bottom: 3px
+}
+
+.Loghi_ref_box {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: auto;
+  display: flex;
+  align-items: flex-end;
+  background-color: rgb(255 255 255 / .7)
+}
+
+.Loghi_ref_box_trasp {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: auto;
+  display: flex;
+  align-items: flex-end
+}
+
+.Bollone_ref_box {
+  position: absolute;
+  bottom: 0;
+  right: 20px;
+  height: auto;
+  text-align: right
+}
+
+.boxref_card_sconto {
+  position: absolute;
+  width: 120px;
+  height: 70px;
+  left: 5px;
+  top: 5px;
+  border: 2px solid #fff;
+  text-align: center
+}
+
+.boxref_card_sconto_cassa {
+  position: absolute;
+  width: 120px;
+  height: 26px;
+  left: 5px;
+  top: 78px;
+  border: 2px solid #fff;
+  text-align: center
+}
+
+.ref_card_sconto_cassa_txt {
+  color: #fff;
+  text-align: center;
+  font-weight: 600;
+  letter-spacing: 1px;
+  font-size: .9em;
+  text-transform: uppercase
+}
+
+.sconto_norm {
+  font-size: -webkit-xxx-large;
+  font-size: xxx-large;
+  color: #fff;
+  float: right;
+  font-weight: 700;
+  position: absolute;
+  top: 1rem;
+  background-color: #cd0505;
+  padding: .5rem;
+  padding-top: 1.5rem;
+  padding-bottom: 1.5rem;
+  z-index: 9999999;
+  font-family: var(--font-webpliant)
+}
+
+.sconto_norm_no_right {
+  font-size: -webkit-xxx-large;
+  font-size: xxx-large;
+  color: red;
+  font-weight: 700
+}
+
+.refCard_Logo_Container {
+  width: 35%;
+  height: 110px;
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  align-content: flex-end;
+  text-align: center
+}
+
+.mnu_ico_img {
+  height: 20px;
+  width: 20px;
+  float: left;
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 6px
+}
+
+.txt_h7 {
+  font-size: .675rem
+}
+
+.title_carousel_3 {
+  color: var(--white-color)
+}
+
+.ref_descrizionetitolo {
+  color: var(--black-color);
+  font-weight: 600;
+  text-transform: uppercase;
+  line-height: 1.2
+}
+
+.ref_descrizionegrammatura {
+  color: var(--black-color);
+  font-family: var(--font-webpliant)
+}
+
+.ref_descrizioneLimitazioneCarta {
+  position: relative;
+  color: var(--soci-color);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: -1px;
+  line-height: 1.2
+}
+
+.ref_sconto_txt {
+  color: #fff;
+  text-align: center;
+  font-weight: 400;
+  letter-spacing: 1px;
+  font-size: 1.8em;
+  text-transform: uppercase
+}
+
+.ref_sconto_cassa_txt {
+  color: #fff;
+  text-align: center;
+  font-weight: 800;
+  letter-spacing: 1px;
+  font-size: 1.3em;
+  text-transform: uppercase
+}
+
+.ref_sconto_val {
+  color: #fff;
+  text-align: center;
+  font-weight: 900;
+  line-height: .7;
+  font-size: 4em;
+  text-transform: uppercase
+}
+
+.ref_price_kglt {
+  position: relative;
+  font-size: 1em;
+  text-align: left;
+  text-transform: lowercase;
+  line-height: 1.6
+}
+
+.ref_price {
+  text-align: right;
+  text-transform: lowercase
+}
+
+.ref_price_invecedi {
+  color: #000;
+  position: relative;
+  font-size: 1em;
+  text-align: left;
+  font-weight: 700;
+  text-transform: lowercase;
+  text-decoration: line-through
+}
+
+.ref_price_invecedi_dietro {
+  color: #000;
+  position: relative;
+  font-size: 1em;
+  text-align: left;
+  font-weight: 500;
+  text-transform: lowercase;
+  text-decoration: line-through
+}
+
+.ref_price_size {
+  font-size: 6em;
+  font-weight: 900;
+  letter-spacing: .5
+}
+
+prezzo-promo {
+  font-size: 4em;
+  font-weight: 800
+}
+
+prezzo-promo-sconto {
+  font-size: 4em;
+  font-weight: 800
+}
+
+prezzo-promo-sconto-titolari {
+  font-size: 4em;
+  font-weight: 800
+}
+
+.ref_price_size_small {
+  font-size: 3.5em;
+  font-weight: 900;
+  letter-spacing: .5
+}
+
+.ref_price_euro_size {
+  font-size: 1.2em
+}
+
+.ref_sconto_small {
+  color: #000;
+  position: relative;
+  font-size: 1.3em;
+  text-align: left;
+  font-weight: 800;
+  text-transform: lowercase;
+  font-family: var(--font-webpliant)
+}
+
+.ref_11_conf_1 {
+  color: #000;
+  position: relative;
+  font-size: 1em;
+  text-align: left;
+  font-weight: 500;
+  text-transform: lowercase
+}
+
+.ref_11_2_pezzi {
+  color: var(--11-color);
+  position: relative;
+  font-size: 1.5em;
+  text-align: left;
+  font-weight: 800;
+  text-transform: uppercase
+}
+
+.txtFlash_sopra {
+  text-align: center;
+  text-transform: uppercase;
+  font-size: 1em;
+  line-height: .1;
+  font-weight: 600
+}
+
+.txtFlash_sotto {
+  text-align: center;
+  text-transform: uppercase;
+  font-size: 2.3em;
+  line-height: .4;
+  font-weight: 800;
+  letter-spacing: .4
+}
+
+.ref_card_price {
+  text-align: left;
+  font-size: 2.4rem;
+  font-weight: 700;
+  line-height: 1
+}
+
+.ref_card_price_invecedi {
+  text-align: left;
+  font-weight: 400;
+  line-height: 1
+}
+
+.ref_card_price_kglt {
+  text-align: left;
+  font-weight: 400;
+  line-height: 1
+}
+
+.ref_card_descrizionetitolo {
+  font-weight: 600;
+  text-transform: uppercase;
+  line-height: 1;
+  font-size: .9rem
+}
+
+.ref_card_descrizionegrammatura {
+  text-transform: lowercase;
+  line-height: 1;
+  font-size: .8rem
+}
+
+.ref_card_descrizioneLimitazioneCarta {
+  font-weight: 400;
+  text-transform: uppercase;
+  line-height: 1;
+  font-size: .8rem
+}
+
+.flash_container {
+  width: 80px;
+  height: 80px;
+  position: absolute;
+  bottom: 240px;
+  right: 20px;
+  z-index: 6
+}
+
+.flash {
+  background: var(--yellow-color);
+  width: 80px;
+  height: 80px
+}
+
+.flash:after,
+.flash:before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 80px;
+  width: 80px;
+  background: var(--yellow-color)
+}
+
+.flash:before {
+  -webkit-transform: rotate(30deg);
+  -moz-transform: rotate(30deg);
+  -ms-transform: rotate(30deg);
+  -o-transform: rotate(30deg)
+}
+
+.flash:after {
+  -webkit-transform: rotate(60deg);
+  -moz-transform: rotate(60deg);
+  -ms-transform: rotate(60deg);
+  -o-transform: rotate(60deg)
+}
+
+.flashTileText {
+  position: absolute;
+  padding-top: 20px;
+  top: 2px;
+  left: 2px;
+  height: 76px;
+  width: 76px
+}
+
+.TileSpecialConteiner {
+  position: absolute;
+  height: 40px;
+  width: 180px;
+  bottom: 215px;
+  left: 10px
+}
+
+.TileHeartLike {
+  position: absolute;
+  right: 20px;
+  top: 10px;
+  height: 56px;
+  width: 50px
+}
+
+.ico_wish {
+  top: 1rem !important;
+  background-color: red
+}
+
+.ico_wish_special {
+  top: 6rem !important;
+  background-color: red
+}
+
+.ico_ricetta {
+  top: 4.25rem !important;
+  background-color: red
+}
+
+.ico_ricetta_special {
+  top: 8.7rem !important;
+  background-color: red
+}
+
+.pezzconf {
+  text-transform: uppercase;
+  font-weight: 700;
+  font-size: x-large;
+  font-family: var(--font-webpliant)
+}
+
+.boxref_descrizione.wp-pc__desc {
+  display: flex;
+  flex-direction: column;
+  font-size: x-small;
+  font-family: var(--font-webpliant);
+  letter-spacing: -.5px;
+  text-align: left
+}
+
+.boxref_descrizione.wp-pc__desc dicitura-rep-33 {
+  display: block;
+  color: var(--ortofrutta-color);
+  text-transform: uppercase;
+  text-align: left;
+  margin-right: 0;
+  letter-spacing: -.5px
+}
+
+.boxref_descrizione.wp-pc__desc boxref-descrizione .boxref_descrizione.wp-pc__desc,
+.boxref_descrizione.wp-pc__desc des-descr-marca,
+.boxref_descrizione.wp-pc__desc des-descr-marca .boxref_descrizione.wp-pc__desc descr-nome,
+.boxref_descrizione.wp-pc__desc des-descr-marca-sc,
+.boxref_descrizione.wp-pc__desc des-descr-marca-sc .boxref_descrizione.wp-pc__desc descr-nome,
+.boxref_descrizione.wp-pc__desc des-descr-nome,
+.boxref_descrizione.wp-pc__desc des-descr-nome-sc,
+.boxref_descrizione.wp-pc__desc descr-marca,
+.boxref_descrizione.wp-pc__desc descr-tipo,
+.boxref_descrizione.wp-pc__desc dicitura-rep-29,
+.boxref_descrizione.wp-pc__desc reparto-21,
+.boxref_descrizione.wp-pc__desc reparto-29 {
+  display: contents;
+  font-size: small;
+  color: var(--black-color);
+  font-weight: 600;
+  text-transform: uppercase;
+  text-align: left;
+  margin-right: 0;
+  letter-spacing: -.5px;
+  font-family: Jost, sans-serif
+}
+
+.boxref_descrizione.wp-pc__desc descr-gr {
+  display: block;
+  margin-top: 5px;
+  font-size: medium;
+  color: var(--black-color);
+  letter-spacing: -.5px
+}
+
+.boxref_descrizione.wp-pc__desc descrizione-brand,
+.boxref_descrizione.wp-pc__desc descrizione-grammatura,
+.boxref_descrizione.wp-pc__desc descrizione-tipo,
+.boxref_descrizione.wp-pc__desc descrizione-titolo {
+  display: inline;
+  margin-top: 0;
+  font-size: small;
+  color: var(--black-color);
+  font-weight: 600;
+  text-transform: uppercase;
+  text-align: left;
+  margin-right: 0;
+  letter-spacing: -.5px;
+  font-family: Jost, sans-serif
+}
+
+des-descr-gr,
+des-descr-gr-sc,
+des-descr-tipo,
+des-descr-tipo-sc {
+  font-size: 14px;
+  font-family: Jost, sans-serif;
+  font-weight: 500
+}
+
+prezzo-centesimi {
+  font-size: 3.5em;
+  font-weight: 900;
+  letter-spacing: .5
+}
+
+separatore-decimale {
+  font-size: 3.5em;
+  font-weight: 900;
+  letter-spacing: .5
+}
+
+prezzo-intero {
+  font-size: 6em;
+  font-weight: 900;
+  letter-spacing: .5
+}
+
+.flip_container_group {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 100%;
+  padding: 10px
+}
+
+.flip_container_group_record {
+  width: 100%;
+  padding: 10px 5px;
+  background-color: #f2f3f5;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 5px
+}
+
+.flip_container_group .left {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  flex: 1
+}
+
+.flip_container_group .right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start
+}
+
+.flip_container_group .price {
+  font-size: 1.5em;
+  font-weight: 700;
+  color: #5e5353;
+  margin-top: 5px
+}
+
+.flip_container_group .wishlist-button {
+  background: 0 0;
+  border: none;
+  cursor: pointer;
+  padding: 5px
+}
+
+.flip_container_value {
+  margin-top: 5px;
+  padding-top: 10px;
+  padding-bottom: 5px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 90px;
+  padding-bottom: 8px;
+  background-color: #fffeef;
+  text-align: center
+}
+
+.flip_container_value p {
+  margin: 5px 0;
+  line-height: 1.2;
+  font-size: 1.1em;
+  padding-left: 10px;
+  padding-right: 10px
+}
+
+.flip_container_value a {
+  color: #00f;
+  text-decoration: underline;
+  font-weight: 400
+}
+
+.flip_container_value img {
+  height: 70px;
+  display: block;
+  margin: 0 auto
+}
+
+.flip_container_focus {
+  margin-top: 5px;
+  padding-top: 10px;
+  padding-bottom: 5px;
+  padding-left: 10px;
+  padding-right: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 90px;
+  padding-bottom: 8px;
+  background-color: #fffeef;
+  text-align: center
+}
+
+.flip_container_focus img {
+  height: 50px;
+  display: block;
+  margin: 0 auto
+}
+
+.flip_container_focus p {
+  margin: 5px 0;
+  line-height: 1.2;
+  font-size: 1.1em
+}
+
+.flip_container_wish_wrapper {
+  position: absolute;
+  bottom: 20px;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center
+}
+
+.flip_container_wish {
+  width: 90%
+}
+
+.flip_container_wish a {
+  display: block;
+  width: 100%;
+  text-align: center
+}
+
+.flip_container_wish button {
+  border: none;
+  background-color: #5e5353;
+  color: #fff;
+  cursor: pointer;
+  width: 100%;
+  padding: 20px 0;
+  display: block;
+  text-align: center
+}
+
+.flip_container_ricetta {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 100%
+}
+
+.flip_container_ricetta_record {
+  width: 100%;
+  text-align: center;
+  padding: 10px 0;
+  min-height: 90px
+}
+
+.flip_container_ricetta_record img {
+  width: 100%;
+  height: 100px;
+  object-fit: cover;
+  object-position: center;
+  display: block
+}
+
+.flip_container_ricetta_record span {
+  display: block;
+  width: 100%;
+  margin-top: 5px;
+  font-weight: 700
+}
+
+.flip_wish_button_big {
+  display: block;
+  margin: 0 auto;
+  border: none;
+  background-color: #9c8f8f;
+  color: #fff;
+  cursor: pointer;
+  padding: 10px;
+  text-align: center;
+  font-size: 1.3em;
+  line-height: 1.1;
+  width: 100%
+}
+
+.ref_prezzo_flip {
+  color: red;
+  font-size: 1rem;
+  font-weight: 800;
+  text-transform: lowercase
+}
+
+.ref_sconto_flip {
+  color: #000;
+  position: relative;
+  font-size: 1em;
+  text-align: left;
+  font-weight: 800;
+  text-transform: lowercase
+}
+
+prez-campoofferta,
+prez-campoofferta-descr2-boxetto,
+prez-campoofferta-descr2-boxetto-sc,
+prez-campoofferta-sc {
+  font-size: 1.4em;
+  font-family: Jost, sans-serif;
+  font-weight: 500
+}
+
+.LBL_Titolari {
+  position: absolute;
+  top: 0;
+  left: 20px;
+  height: auto;
+  text-align: right;
+  width: 35%;
+  margin-top: 20px;
+  z-index: 99999999
+}
+
+.header_subpages {
+  min-height: 10vh
+}
+
+.desktop-header {
+  width: 100%;
+  display: block
+}
+
+.mobile-header {
+  display: none;
+  width: 100%
+}
+
+@media screen and (max-width:768px) {
+  .desktop-header {
+    display: none
+  }
+
+  .mobile-header {
+    display: block
+  }
+}
+
+.icon-gdo {
+  width: 50px;
+  height: 30px;
+  display: inline-block;
+  vertical-align: middle;
+  image-rendering: auto;
+  pointer-events: none
+}

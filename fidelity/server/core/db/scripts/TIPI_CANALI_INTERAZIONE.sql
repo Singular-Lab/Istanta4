@@ -1,0 +1,10 @@
+-- Type: TIPI_CANALI_INTERAZIONE
+
+-- Rimozione tipo esistente (ATTENZIONE: Verificare dipendenze prima di eseguire)
+-- DROP TYPE IF EXISTS public."TIPI_CANALI_INTERAZIONE" CASCADE;
+
+CREATE TYPE public."TIPI_CANALI_INTERAZIONE" AS ENUM
+    ('WHATSAPP', 'LINKEDIN', 'FACEBOOK', 'GOOGLE', 'INSTAGRAM', 'APPLE');
+
+ALTER TYPE public."TIPI_CANALI_INTERAZIONE"
+    OWNER TO postgres;

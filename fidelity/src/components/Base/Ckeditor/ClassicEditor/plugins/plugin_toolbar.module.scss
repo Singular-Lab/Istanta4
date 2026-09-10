@@ -1,0 +1,334 @@
+.toolbar {
+    display: flex;
+    background: #fff;
+    padding: 4px;
+    padding-bottom: 0px;
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+    vertical-align: middle;
+    z-index: 49;
+    scroll-behavior: smooth;
+    overflow: visible;
+
+}
+
+.toolbar button.toolbar-item {
+    border: 0;
+    display: flex;
+    background: none;
+    border-radius: 10px;
+    padding: 8px;
+    cursor: pointer;
+    vertical-align: middle;
+}
+
+.toolbar button.toolbar-item:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.toolbar button.toolbar-item:disabled svg {
+    color: #9ca3af;
+}
+
+.toolbar button.toolbar-item.spaced {
+    margin-right: 2px;
+}
+
+.toolbar button.toolbar-item i.format {
+    background-size: contain;
+    display: inline-block;
+    height: 18px;
+    width: 18px;
+    margin-top: 2px;
+    vertical-align: -0.25em;
+    display: flex;
+    opacity: 0.6;
+}
+
+.toolbar button.toolbar-item:disabled i.format {
+    opacity: 0.2;
+}
+
+.toolbar button.toolbar-item.active {
+    background-color: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.toolbar button.toolbar-item.active svg {
+    color: #3b82f6;
+    opacity: 1;
+}
+
+.toolbar button.toolbar-item.active:hover {
+    background-color: rgba(59, 130, 246, 0.15);
+}
+
+.toolbar .toolbar-item:hover:not([disabled]) {
+    background-color: rgba(0, 0, 0, 0.05);
+    transition: background-color 0.2s ease;
+}
+
+.toolbar .toolbar-item svg {
+    color: #374151;
+    transition: color 0.2s ease;
+}
+
+.toolbar .toolbar-item:hover:not([disabled]) svg {
+    color: #1f2937;
+}
+
+.toolbar .divider {
+    width: 1px;
+    background-color: #eee;
+    margin: 0 4px;
+}
+
+.toolbar .toolbar-item .text {
+    display: flex;
+    line-height: 20px;
+    width: 200px;
+    vertical-align: middle;
+    font-size: 14px;
+    color: #777;
+    text-overflow: ellipsis;
+    width: 70px;
+    overflow: hidden;
+    height: 20px;
+    text-align: left;
+}
+
+.toolbar .toolbar-item.color-picker {
+    border: 0;
+    display: flex;
+    background: none;
+    border-radius: 10px;
+    padding: 8px;
+    cursor: pointer;
+    vertical-align: middle;
+    position: relative;
+    /* Necessario per il picker */
+}
+
+.toolbar .toolbar-item.color-picker i {
+    display: flex;
+    width: 50px;
+    height: 50px;
+    user-select: none;
+    margin-right: 8px;
+    line-height: 16px;
+    background-size: contain;
+    opacity: 0.6;
+    /* Icona per il color picker */
+}
+
+.toolbar .toolbar-item.color-picker.active {
+    background-color: rgba(223, 232, 250, 0.3);
+}
+
+.toolbar .toolbar-item.color-picker:hover:not([disabled]) {
+    background-color: #eee;
+}
+
+.toolbar .toolbar-item.color-picker input[type="color"] {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+    z-index: 2;
+    /* Garantisce che il picker sia cliccabile */
+}
+
+.toolbar .toolbar-item .icon {
+    display: flex;
+    width: 20px;
+    height: 20px;
+    user-select: none;
+    margin-right: 8px;
+    line-height: 16px;
+    background-size: contain;
+}
+
+.toolbar select.toolbar-item {
+    border: 1px solid #ccc;
+    display: inline-block;
+    background: #fff;
+    border-radius: 5px;
+    padding: 4px 8px;
+    cursor: pointer;
+    vertical-align: middle;
+    position: relative;
+    font-size: 14px;
+    color: #333;
+    appearance: none;
+    /* Custom arrow for select (inline SVG, no external file needed) */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    background-size: 12px;
+}
+
+.toolbar select.toolbar-item:focus {
+    border: 1px solid #5a5a5a;
+    outline: none;
+    box-shadow: 0 0 5px rgba(90, 90, 90, 0.5);
+}
+
+.toolbar select.toolbar-item:disabled {
+    background-color: #f5f5f5;
+    color: #a1a1a1;
+    cursor: not-allowed;
+}
+
+.toolbar select.toolbar-item:hover:not(:disabled) {
+    border: 1px solid #333;
+    background-color: #f0f0f0;
+}
+
+i.undo {
+    background-image: url(./icons/arrow-counterclockwise.svg);
+}
+
+i.redo {
+    background-image: url(./icons/arrow-clockwise.svg);
+}
+
+i.bold {
+    background-image: url(./icons/type-bold.svg);
+}
+
+i.italic {
+    background-image: url(./icons/type-italic.svg);
+}
+
+i.underline {
+    background-image: url(./icons/type-underline.svg);
+}
+
+i.strikethrough {
+    background-image: url(./icons/type-strikethrough.svg);
+}
+
+i.left-align {
+    background-image: url(./icons/text-left.svg);
+}
+
+i.center-align {
+    background-image: url(./icons/text-center.svg);
+}
+
+i.right-align {
+    background-image: url(./icons/text-right.svg);
+}
+
+i.justify-align {
+    background-image: url(icons/justify.svg);
+}
+i.link {
+    background-image: url(./icons/link.svg);
+}
+
+.highlighted-component {
+    border: 0.2px solid #03045e;
+    color: #03045e;
+    animation: highlightanim 1.5s ease-in-out infinite;
+    transition: transform 0.3s ease-in-out;
+}
+
+.highlighted-component:hover {
+    transform: scale(1.05);
+}
+
+/* Animation */
+@keyframes highlightanim {
+    0% {
+        box-shadow: 0 0 0px rgba(3, 4, 94, 0.5);
+    }
+
+    50% {
+        box-shadow: 0 0 15px rgba(3, 4, 94, 0.8);
+    }
+
+    100% {
+        box-shadow: 0 0 0px rgba(3, 4, 94, 0.5);
+    }
+}
+
+.link-form-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    margin: 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    z-index: 1001;
+}
+
+.link-input {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+    color: #333;
+    outline: none;
+    transition: border-color 0.2s ease-in-out;
+}
+
+.link-input:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 4px rgba(0, 123, 255, 0.5);
+}
+
+.link-form-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.link-submit {
+    padding: 8px 16px;
+    background-color: #007bff;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.2s ease-in-out;
+}
+
+.link-submit:hover {
+    background-color: #0056b3;
+}
+
+.link-cancel {
+    padding: 8px 16px;
+    background-color: #f5f5f5;
+    color: #333;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.2s ease-in-out;
+}
+
+.link-cancel:hover {
+    background-color: #e0e0e0;
+}
+
+.toolbar-toggle {
+    transition: background-color 0.2s ease;
+}
+
+.toolbar-toggle:hover {
+    background-color: rgba(0, 0, 0, 0.05) !important;
+}
+
+.toolbar-container {
+    position: relative;
+    z-index: 50;
+}

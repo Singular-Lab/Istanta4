@@ -1,0 +1,212 @@
+﻿@page
+@model Istanta.Views.SyncFoto.IndexModel
+@{
+}
+
+@inject Microsoft.AspNetCore.Http.IHttpContextAccessor HttpContextAccessor
+<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]" src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" integrity="sha512-XMVd28F1oH/O71fzwBnV7HucLxVwtxf26XV8P4wPk26EDxuGZ91N8bsOttmnomcCD3CS5ZMRL50H0GgOHvegtg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+<input type="hidden" id="ipUploadGate" value="@ViewBag.ipUploadGate" />
+<input type="hidden" id="ipOlympus" value="@ViewBag.ipOlympus" />
+<input type="hidden" id="dirOperatore"  />
+
+<h5>Sincronizzazione massiva delle foto</h5>
+
+<nav class="navbar navbar-light bg-light">
+    <form class="container-fluid justify-content-start">
+        <div class="container" id="commandBar">
+            <div class="row" id="stepScan">
+                <div class="col-9" id="div_upload">
+                    <div class="input-group mt-1" style="max-width:500px;">
+                        <label class="input-group-text" for="fileZip">Upload</label>
+                        <input type="file" class="form-control" id="fileZip" webkitdirectory multiple>
+                        <button id="btnCreaZip" class="btn btn-sm btn-outline-secondary" type="button">Scan</button>
+                    </div>
+                </div>
+                <div class="col-3" style="display:flex;">
+                    <select class="form-select form-select-lg" id="cmbFiltroTracciato" name="cmbFiltroTracciato">
+                        <option value="0" selected>Filtro Tracciato/Promo</option>
+@*                         @foreach(Istanta.Models_2.PromoTracciati tItem in ViewBag.TracciatiAperti)
+                        {
+                            <option value="@($"t{tItem.Id}")">Tracciato - @tItem.Sigla</option>
+                        } *@
+                        @foreach (Istanta.Models_2.Promo pItem in ViewBag.PromoAperte)
+                        {
+                            <option value="@($"p{pItem.Id}")" tipo="p">Promo - @pItem.NomePromo</option>
+                        }                        
+                    </select>
+                    <button class="btn btn-outline-success me-2" id="bScanByUri" type="button" style="display:none;">Scan by URI</button>
+                </div>
+            </div>
+            <div class="row" id="rowOptDiretto">
+                <div class="col" style="margin-left:-22px;">
+                    <input type="checkbox" id="ChBypassCheck" checked name="ChBypassCheck" class="form-check-input ms-4" />
+                    <label for="ChBypassCheck" class="form-label ms-2">Esegui Sync diretto</label>
+                </div>
+            </div>
+            <div class="row" id="stepSceltaOverwrite">
+                <div class="col" style="margin-left:-22px;">
+                    <input type="checkbox" id="ChOverwrite" checked name="ChOverwrite" class="form-check-input ms-4" style="margin-top:10px;" />
+                    <label for="ChOverwrite" class="form-label ms-2" style="margin-top:5px;">Sovrascrivi già esistenti</label>
+                </div>
+            </div>
+            <div class="row" id="stepSync" style="display:none;">
+                <div class="col">
+                    <button class="btn btn-outline-success me-2" id="bFirstSync" type="button">Esegui Sync</button>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-12">
+                    <div class="progress mt-2" id="progress" style="display:none;">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" style="width: 0%; height:20px;"></div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+        <div class="container" id="commandBarPostJob" style="display:none;">
+            <div class="row">
+                <div style="display:flex;width:120px;margin-left:25px;margin-right:-22px;" id="div_rescan">
+                    <button class="btn btn-sm btn-primary" type="button" id="btnRescan" style="width:85px;">Scan again</button>                   
+                </div>
+                <div style="display:flex;width:120px;" id="div_resync">
+                    <button class="btn btn-sm btn-primary" type="button" id="btnResync">Sync</button>
+                </div>
+            </div>
+        </div>
+    </form>
+</nav>
+<div class="container">
+    <div class="row" id="headerResult" style="visibility:hidden;">
+        <div class="col p-2">
+            <h5>Risultato della scansione</h5>
+        </div>
+        <div class="col mt-4" style="text-align:right;">
+            <select id="cmbFiltroStato">
+                <option value="0">Mostra tutto</option>
+                <option value="1">Foto nuove</option>
+                <option value="2">Foto cambiate</option>
+                <option value="3">Foto inalterate</option>
+                <option value="4">Non corrispondenti</option>
+                <option value="5">Ancora da post produrre</option>
+            </select>
+        </div>
+        <div class="col mt-4" style="text-align:right;">
+            <button id="btnDownloadPerStato" class="btn btn-primary">Scarica pacchetto</button>
+        </div>
+        <div class="col mt-4" style="text-align:right;display:none">
+            <button id="btnDownloadPerPP" class="btn btn-warning">Scarica pacchetto da post produrre</button>
+        </div>
+    </div>
+    <div class="row" id="countResult" style="visibility:hidden;background: beige;border-radius: 8px;padding: 7px;margin-top: 10px;">
+        <div class="col">
+            <h6>Trovate xx foto</h6>
+        </div>
+    </div>
+    <div id="alertNoMatch" class="alert alert-danger mt-3" role="alert" style="display:none;">
+        Sono state trovate foto non corrispondenti!
+    </div>
+    <div id="alertPP" class="alert alert-warning mt-3" role="alert" style="display:none;">
+        Sono state trovate foto da post produrre
+    </div>
+    <table class="table" id="tblResult" style="visibility:hidden;">
+        <thead>
+            <tr>
+                <th scope="col" style="width:5%;">Seleziona<br /><input type="checkbox" id="chAll" checked></th>
+                <th scope="col" style="width:10%;"></th>
+                <th scope="col" style="width:35%;">Nome file</th>
+                <th scope="col" style="width:35%;">Dettagli</th>
+                <th scope="col" style="width:15%;"></th>
+            </tr>
+        </thead>
+        <tbody>
+            
+        </tbody>
+    </table>
+</div>
+
+<template id="template">
+    <tr>
+        <td class="text-center" scope="row"><input id="chSync" type="checkbox" /></td>
+        <td class="text-center" scope="row" id="colIcon"><img id="preview" src="~/images/download_ico.png" style="width:30px;" /></td>
+        <td><span id="lab_filename"></span></td>
+        <td><span id="lab_result"></span></td>
+        <td>
+            <div class="container">
+                <div class="row">
+                    <div id="statoFile" class="col">
+                        <div id="status" class="text-center status_circle" style="width:30px;height:30px;background-color:#cad3d0; border-radius:15px; float:right; padding-top:2px;"></div>
+                    </div>
+                </div>
+            </div>
+        </td>
+    </tr>
+</template>
+
+
+
+<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]" type="text/javascript">
+
+    let syncInstance;
+
+    function documentReady() {
+        syncInstance = new SyncFoto();
+
+        $("#chAll").on("change", function(){
+            syncInstance.selezionaDeselezionaTutti();
+        });
+
+
+        $("#ChOverwrite").on("change", function(){
+            syncInstance.selezionataOpzioneSovrascrittura($(this));
+        });
+
+        $("#cmbFiltroStato").on("change", function(){
+            syncInstance.filtraPerStato();
+        });
+
+        $("#ChBypassCheck").on("click", function(){
+            $(this).prop('checked')?$('#stepSceltaOverwrite').css('display','block'):$('#stepSceltaOverwrite').css('display','none');
+        });
+
+        $("#btnCreaZip").on("click", function(){
+           syncInstance.creaZipDaCartella();
+        });
+
+        $("#bScanByUri").on("click", function(){
+            syncInstance.scanFotoByUri();
+        });
+
+        $("#bFirstSync").on("click", function(){
+            syncInstance.startSyncZip();
+        });
+
+        $("#btnRescan").on("click", function(){
+           syncInstance.rescan();
+        });
+
+
+        $("#btnResync").on("click", function(){
+            syncInstance.startSyncZip();
+        });
+
+
+        $("#btnDownloadPerStato").on("click", function(){
+            syncInstance.downloadPerStato();
+        });
+
+        $("#btnDownloadPerPP").on("click", function(){
+            syncInstance.downloadPerStato(5);
+        });
+
+        $("#chSync").on("click", function(){
+            syncInstance.selezionaDeselezionaSingolo($(this))
+        });
+
+        $("#cmbFiltroTracciato").on("change", function(){
+            syncInstance.filtraPerTracciatoPromo($(this));
+        });
+
+    }  
+
+</script>

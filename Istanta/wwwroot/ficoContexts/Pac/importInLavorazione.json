@@ -1,0 +1,28 @@
+[
+
+  {
+    "nome_field": "tema",
+    "titolo_field": "Tematica",
+    "tipo_field": "cmb",
+    "nullable": true,
+    "valore": [
+      {
+        "titolo": "MZ",
+        "valore": "MZ"
+      },
+      {
+        "titolo": "BB",
+        "valore": "BB"
+      },
+      {
+        "titolo": "MC",
+        "valore": "MC"
+      },
+      {
+        "titolo": "LOC",
+        "valore": "LOC"
+      }
+    ],
+    "dipendenze": []
+  }
+]

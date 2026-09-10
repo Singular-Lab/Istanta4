@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "Istanta": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "https://localhost:58301;http://localhost:58302"
+    }
+  }
+}

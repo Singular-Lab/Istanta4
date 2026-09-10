@@ -1,0 +1,100 @@
+﻿@page
+@model Istanta.Views.Confronti.Settings
+@{
+
+    //Breve appunto
+    /*
+     
+    Al momento i contesti sono due: Form e Trcciato messi in due files separati.
+    Sarebbe opportuno metterli tutti e due nello stesso file che quindi espone due macro oggetti
+    - Lavorazione
+    - Tracciato
+    Così almeno si gestisce da un'unica sorgente anche da qui    
+
+     */
+
+}
+@if (ViewBag.error != null)
+{
+    <div id="error_panel" class="alert alert-danger" style="position:fixed; width:100%;">
+        <strong>Attenzione</strong>: @ViewBag.error
+    </div>
+}
+
+
+<h3 style="margin-bottom:25px;">Settings dei campi di confronto</h3>
+
+<div class="btn-group">
+    <a href="#" id="aMenuVisual" class="btn btn-primary toggleVisual active" aria-current="page">Visual</a>
+    <a href="#" id="aMenuSource" class="btn btn-primary toggleSource">Source</a>
+</div>
+
+
+<div class="container" id="container">
+    <div id="contentVisual" class="pt-3">
+        <div class="alert alert-warning" role="alert">
+            <strong>Attenzione</strong>: Nessuna interfaccia implementata
+        </div>
+    </div>
+    <div id="contentSource" class="pt-3" style="display:none;">
+        <div class="container">
+            <div class="row">
+                <div class="col-12 mb-3" style="text-align:right;">
+                    <button class="btn btn-primary" value="Salva" id="btnSourceSave">Salva</button>
+                </div>
+            </div>
+            <div id="editor"></div>
+        </div>
+    </div>
+</div>
+
+
+
+@inject Microsoft.AspNetCore.Http.IHttpContextAccessor HttpContextAccessor
+<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]" src="~/js/sourceEditor.js?v=3"></script>
+<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]" src="https://unpkg.com/monaco-editor@latest/min/vs/loader.js"></script>
+
+<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]">
+
+    let exSourceEditor = new ExternalSourceEditor();
+
+    function documentReady() {
+
+        $("#btnSourceSave").on("click", function() {
+            exSourceEditor.save('Confronti');
+        });
+
+        $("#aMenuVisual").on("click", function() {
+            menuVisual();
+        });
+
+        $("#aMenuSource").on("click", function() {
+            menuSource();
+        });
+
+    }
+
+    function menuVisual() {
+        document.getElementById("contentSource").style.display = "none";
+        document.getElementById("contentVisual").style.display = "block";
+
+        $(".toggleVisual").addClass("active");
+        $(".toggleSource").removeClass("active");
+
+    }
+    function menuSource() {
+        document.getElementById("contentSource").style.display = "block";
+        document.getElementById("contentVisual").style.display = "none";
+
+        $(".toggleSource").addClass("active");
+        $(".toggleVisual").removeClass("active");
+
+        //prima ridimensiono l'editor
+        $("#editor").css("width", $("#container").css("width"));
+        //atezza quanto la pagina
+        $("#editor").css("height", $(window).height() - 100 + "px");
+
+        exSourceEditor.init("SourceConfronto");
+
+    }
+</script>

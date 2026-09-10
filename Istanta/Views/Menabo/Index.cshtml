@@ -1,0 +1,1257 @@
+﻿@*
+    For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
+*@
+@{
+}
+
+<div class="row">
+    <div class="col">
+        <div id="tracciato_title" style="display: inline;" class="d-flex justify-content-end my-3 fs-2 text">
+            <button id="CompilaMenaboButton" type="button" class="btn btn-primary mt-2 me-3" style="height:60%; display:none;" onclick="menaboInstance.compilazioneAutomatica()">
+                Compilazione Automatica
+            </button>
+            <button id="DuplicaMenaboButton" type="button" class="btn btn-primary mt-2 me-3" style="height:60%; display:none;" onclick="menaboInstance.ApriModalControlloDuplicazione()">
+                Duplica
+            </button>
+            <i id="ApriCorrezioneErrori" style="display:none" class="fas fa-exclamation-triangle me-3 mt-2" data-toggle="modal" data-target="#ModalCorrezioneErrori" onclick="menaboInstance.ShowErrorModal()"></i>
+            @ViewBag.Titolo
+        </div>
+    </div>
+</div>
+<div id="msg_container" style="display:none;">
+</div>
+<canvas id="myCanvas" style="position:absolute; top:0; bottom:0; left:0; right:0; pointer-events:none; z-index:2000"></canvas>
+<ul class="nav justify-content-end">
+    <div id="customButtons" style="display:none">
+
+    </div>
+    <button id="scaricaTracciatoManualmente" class="btn btn-primary mb-3 mx-2" style="display:none" type="button" onclick="menaboInstance.bindManuale()">Scarica Tracciato</button>
+    <button class="btn btn-primary mb-3 mx-2" style="display:none" type="button" onclick="menaboInstance.creaCsv()">Crea csv</button>
+    <button class="btn btn-primary mb-3 mx-2" style="display:none" type="button" onclick="menaboInstance.leggiCsv()">Leggi csv</button>
+    <button class="btn btn-primary mb-3 mx-2" style="display:none;" type="button" onclick="menaboInstance.impostaPrimarieSecondarie()">Imposta P/S</button>
+    <Div class="mb-3">
+        <img id="spostaPaginaIcon" style="display:none; position:absolute; cursor:pointer" width="25" src="images/MovePage.png" alt="Sposta tutte le referenze di pagina a pagina x" title="Sposta tutte le referenze di pagina a pagina x" onclick="menaboInstance.MandaTuttaPaginaButton()">
+    </Div>
+    <!--<button class="btn btn-primary mb-3 mx-2" type="button" data-bs-toggle="modal" data-bs-target="#modalEsportazione">Esporta menabo</button>-->
+    <div class="btn-group me-2" role="group" style="height:40px;">
+        <button id="btnExportGroup" type="button" class="btn btn-primary dropdown-toggle" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+            Esporta
+        </button>
+        <div class="dropdown-menu" aria-labelledby="btnExportGroup" role="menu">
+            <a onclick="menaboInstance.abilitaODisabilitaEsporta()" class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#modalEsportazione">Esporta Menabò</a>
+            <a onclick="menaboInstance.finestraEsportaPopInApertura()" class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#modalEsportazionePoP">Esporta PoP</a>
+            <a id="ScaricaPacchettoFotoButton" class="dropdown-item" onclick="menaboInstance.scaricaPacchettoFoto()">Scarica Pacchetto Foto</a>
+        </div>
+    </div>
+    <button class="btn btn-primary mb-3" id="consultaTracciato" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasTracciato" aria-controls="offcanvasTracciato" onclick="setTimeout(menaboInstance.adattaGriglia, 600);">Consulta tracciato</button>
+    <button class="btn btn-primary mb-3 mx-2" style="display:none;" type="button" onclick="menaboInstance.svuotaPagina()">Svuota pagina</button>
+    <Div id="goToButton" class="mb-3 mx-2" style="display:none;">
+        <img width="25" style="cursor:pointer" src="images/goTo.png" alt="Attiva manda referenza ad altra pagina" title="Attiva manda referenza ad altra pagina" onclick="menaboInstance.ToggleMandaAPaginaButton()">
+    </Div>
+    
+    <li class="nav-item mb-3 ms-3">
+        <select style="width:170px" class="form-select" aria-label="Default select example" id="cmb_pags" onchange="menaboInstance.selezionataPagina()">            
+        </select>
+    </li>
+
+    <li class="nav-item mb-3 ms-3">
+        <select class="form-select" style="display:none;" aria-label="Default select example" id="cmb_mastro" onchange="menaboInstance.selezionataMastro()">
+            <option value="0" selected>Seleziona mastro</option>
+        </select>
+    </li>
+
+    <li class="nav-item mb-3 ms-3">
+        <select class="form-select" style="display:none;" aria-label="Default select example" id="cmb_formato_griglia" onchange="menaboInstance.selezionatoFormato()">
+            <option value="1x1" selected>Seleziona formato</option>
+        </select>
+    </li>
+
+</ul>
+
+<div id="imageBox" style="z-index:9999; position:fixed; display:none;">
+    <img class="border border-5 border-dark" id="imageFoto" src="" alt="Immagine" onload="menaboInstance.centraFoto($(this))">
+</div>
+
+
+<div class="offcanvas offcanvas-start" style="width:550px;" data-bs-backdrop="false" tabindex="-1" id="offcanvasTracciato" aria-labelledby="offcanvasTracciatoLabel">
+    <div class="offcanvas-header">
+        <div class="container">
+            <div class="row">
+                <i class="bi bi-plus-square-fill"></i>
+                <div class="col-11">
+                    <h5 class="offcanvas-title align-top" id="offcanvasExampleLabel">Tracciato</h5>
+                </div>
+                <div class="col-1">
+                    <button type="button" class="btn-close text-reset float-end" data-bs-dismiss="offcanvas" aria-label="Close" onclick="setTimeout(menaboInstance.adattaGriglia, 600)"></button>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col">
+                    <div class="form-check form-switch">
+                        <label class="form-check-label" for="switchModalitaAutomatica">Modalità manuale</label>
+                        <input class="form-check-input" type="checkbox" role="switch" id="switchModalitaAutomatica" onchange="menaboInstance.CambioModalita($(this).prop('checked'))">
+                    </div>
+                </div>
+            </div>
+            <div class="row mt-2" style="display:none;" id="aggiungiFiltriRow">
+                <div class="col">
+                    <button type="button" @*style="font-size: 12px;"*@ class="btn btn-primary" onclick="menaboInstance.aggiungiParametroRicerca()">Aggiungi filtro</button>
+                </div>
+                <div class="col">
+
+                    <button type="button" @*style="font-size: 12px;"*@ class="btn btn-primary" onclick="menaboInstance.rimuoviTuttiParametriRicerca()">Rimuovi filtri</button>
+                </div>
+            </div>
+            <div class="row mt-2" style="display:flex;" id="opzioniAggiungiATracciato">
+                <div class="col">
+                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#inserisciArticoloInDB">
+                        Inserisci articolo
+                    </button>
+                </div>
+                <div class="col align-content-end" style="text-align:end;">
+                    <button type="button" style="font-size: 8px;" class="btn btn-primary align-content-end" onclick="menaboInstance.SetAllPoP(false)">Escludi tutti da PoP</button>
+                    <button type="button" style="font-size: 8px;" class="btn btn-primary" onclick="menaboInstance.SetAllPoP(true)">Includi tutti in PoP</button>
+                </div>
+            </div>
+            <div class="row mt-2">
+                <div class="col">
+                    <div class="row" id="ricercaAgenzia">                        
+                        <div class="col-9" id="filterAgenzia">
+@*                            <div class="input-group input-group-sm">
+                            <select class="form-select form-select-sm" id="ricercaTracciato" name="ricercaTracciato" style="width: 40%;" onchange="menaboInstance.ricercaInTracciatoMenabo($(this)); this.classList.remove('bg-success', 'bg-opacity-25'); this.classList.remove('bg-danger');" onclick="this.classList.remove('bg-danger')">
+                                    <option value="0" selected>Filtro</option>
+                            </select>
+                            <input type="text" id="ricercaText" class="form-control ricercaText" aria-label="Sizing example input" aria-describedby="inputGroup-sizing-sm" style="width: 50%;" onkeypress="menaboInstance.ricercaInTracciatoMenabo($(this))">
+                            <img src="images/trashcanIcon.png" class="mx-1" id="trashIcon" style="width:20px;" onclick="menaboInstance.rimuoviParametroRicerca($(this))" />                         
+                            </div>*@
+                        </div>
+                        <div class="col-3">
+                            <div class="form-check form-switch">
+                                <label class="form-check-label" style="font-size:9px" for="">Nascondi Impaginati</label>
+                                <input class="form-check-input" type="checkbox" role="switch" id="switchNascondiImpaginati" onchange="menaboInstance.ricercaInTracciatoMenabo($(this))">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div id="numeroArticoliTrovati" class="row bg-info rounded bg-opacity-25 mt-2">
+                0 referenze trovate, 0 singoli, 0 gruppi
+            </div>
+        </div>
+
+    </div>
+    <div class="offcanvas-body">
+        <div class="container" id="container_tracciato">
+            
+        </div>
+    </div>
+    <div id="footerImpaginazioneRapida" class="offcanvas-footer" style="display:none;">
+        <div class="container mb-1" id="container_tracciato">
+            Impaginazione Rapida Ricerca
+            <div class="row mt-2 ms-2" id="impaginazioneRapida">
+                <div class="col-2 align-content-center justify-content-center d-flex">
+                    <button type="button" style="height:37px" class="btn btn-primary" onclick="menaboInstance.ImpaginazioneRapida($('#numeroInput').val(),$('#rangeIndiceInizio').val())">Impagina</button>
+                </div>
+                <div class="col-3 align-content-center justify-content-center d-flex">
+                    <div class="form-group row">
+                        <label for="numeroInput" class="col-sm-5 col-form-label">Prime:</label>
+                        <input type="number" class="form-control col ms-2" id="numeroInput">
+                    </div>
+                </div>
+                <div class="col-3 align-content-center justify-content-center d-flex">
+                    <div class="form-group row">
+                        <div for="rangeIndiceInizio" style="font-size:11px" class="col-sm-3 align-content-center justify-content-center">Da Indice</div>
+                        <div class="col-sm-9">
+                            <input type="number" class="form-control" id="rangeIndiceInizio" placeholder="Inizio" value="1">
+                        </div>
+                    </div>
+                </div>
+                <div class="col-4 align-content-center justify-content-center d-flex">
+                    <div class="form-group row">
+                        <div class="col">
+                            <select class="form-select" id="selezionaMeccanica">
+                                <option value="0" selected>Auto</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="griglia" class="container w-100" style="background-color:#e4e6eb;">
+   
+</div>
+
+<div class="modal fade show" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" id="modalDtl" aria-modal="true" role="dialog">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Dettaglio</h5>
+                <button type="button" class="btn-close" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="container" style="position:fixed; width:auto; z-index:99" id="liveAlertPlaceholder"></div>
+                <div class="container" id="content"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" tabindex="-1" id="modalDtlTracciato">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Dettaglio</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="container" id="content"></div>
+                <div class="container" id="removeButton">
+                    <button type="button" class="btn bg-danger bg-opacity-50 mt-2" aria-label="Elimina" onclick="menaboInstance.ApriModalEliminazioneManuale($(this).closest('#modalDtlTracciato').attr('id_rec'))">Elimina</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" tabindex="-1" id="modalEsportazione">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Esportazione da menabò</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="container" style="z-index:99" id="liveAlertEsportazione"></div>
+                <div class="container" id="content">
+                    <div class="mb-3">
+                        <label for="CartellaDiEsportazione" class="form-label">Cartella di esportazione</label>
+                        <input type="email" class="form-control" id="CartellaDiEsportazione" placeholder="Digitare percorso relativo">
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" value="" id="ChEsportaDaArchivio">
+                        <label class="form-check-label" for="ChEsportaDaArchivio">
+                            Esporta descrizioni da archivio
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" value="" id="ChEsportaFoto">
+                        <label class="form-check-label" for="ChEsportaFoto">
+                            Esporta foto
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" value="" id="ChEsportaTutto">
+                        <label class="form-check-label" for="ChEsportaTutto">
+                            Esporta tutto
+                        </label>
+                    </div>
+                    <div class="mb-3 mt-3">
+                        <label for="FiltroPagine" class="form-label">Filtro pagine</label>
+                        <input type="text" class="form-control" id="FiltroPagine" placeholder="Filtra le pagine es 1,4,5 o 1-4" oninput="menaboInstance.abilitaODisabilitaEsporta()">
+                    </div>
+
+                    <button type="submit" id="esportaMenaboButton" class="btn btn-primary mt-2" onclick="menaboInstance.esporta()">Esporta</button>
+                    <div class="row mt-4 progressBar" id="row_progress_export" style="display:none;">
+                        <div class="container">
+                            <div class="row">
+                                <div class="col mb-2">
+                                    <div class="progress">
+                                        <div class="progress-bar progress-bar-striped progress-bar-animated progressBar" id="progressbar" role="progressbar" style="width:0%;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col text-center text-secondary">
+                                    <p class="progressMsg" id="progressMsg"></p>
+                                </div>
+                            </div>
+
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" tabindex="-1" id="modalEsportazionePoP">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Esportazione  PoP</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="container" id="content">
+                    <div class="mb-3">
+                        <label for="CartellaDiEsportazione" class="form-label">Cartella di esportazione</label>
+                        <input type="email" class="form-control" id="CartellaDiEsportazionePoP" placeholder="Digitare percorso relativo">
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" value="" id="ChEsportaDaArchivioPoP">
+                        <label class="form-check-label" for="ChEsportaDaArchivioPoP">
+                            Esporta descrizioni da archivio
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" value="" id="ChEsportaFotoPoP">
+                        <label class="form-check-label" for="ChEsportaFotoPoP">
+                            Esporta foto
+                        </label>
+                    </div>
+                    <div id="divEsportaPopAgenzia" class="mt-3" style="display:none;">
+
+                    </div>
+
+                    <button type="submit" class="btn btn-primary mt-2" onclick="menaboInstance.esportaPoP()">Esporta</button>
+                    <div class="row mt-4 progressBar" id="row_progress_exportPoP" style="display:none;">
+                        <div class="container">
+                            <div class="row">
+                                <div class="col mb-2">
+                                    <div class="progress">
+                                        <div class="progress-bar progress-bar-striped progress-bar-animated progressBar" id="progressbarPoP" role="progressbar" style="width:0%;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col text-center text-secondary">
+                                    <p class="progressMsg" id="progressMsgPoP"></p>
+                                </div>
+                            </div>
+
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalspostapag" tabindex="-1" aria-labelledby="spostapag" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h1 class="modal-title fs-5" id="spostapagTitle">Sposta ref a pagina</h1>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                <div class="d-flex justify-content-left align-items-left">
+                    Seleziona pagina:
+                    <select id="pagModal" style="width:100px; margin-left:10px; margin-right:50px;" class="form-select form-select-sm" aria-label=".form-select-sm example" onchange="menaboInstance.modalSetPage(this.value)"> </select>
+                    Invia ad indice:
+                    <select id="cmbPosModal" style="width:70px;margin-left:10px; margin-right:10px;" class="form-select form-select-sm" aria-label=".form-select-sm example" ></select>
+                    Dimensioni box:
+                    <select id="cmbDimModal" style="width:70px;margin-left:10px;" class="form-select form-select-sm" aria-label=".form-select-sm example" onchange="menaboInstance.modalSetPage(pagModal.value)">
+                    <option value="1x1" selected>1x1</option>
+                    <option value="2x1">2x1</option>
+                    <option value="1x2">Vedette</option>
+                    <option value="2x2">2x2</option>
+                </select>
+                </div>
+                <div id="grigliaModal" class="container w-80" style="background-color:#e4e6eb;">
+                </div>
+            </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal" onclick="menaboInstance.sendToPage()">Save changes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+<div class="modal fade" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true" id="modalVisualizzaBox">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title me-5">Ref visualizzata in box menabò</h5>
+                <div class="d-flex justify-content-center align-items-left">
+                    <select class="list-group" id="list_ref_modal" onchange="menaboInstance.PortaInPrimoPianoRef($(this))">
+                    </select>
+@*                        <a style="cursor:pointer;" class="list-group-item list-group-item-action">Opzione 1</a>*@
+                </div>  
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="container bg-danger bg-opacity-25 fw-bolder mb-3" style="display:none" id="primarieWarning">Primarie errore</div>
+                <div class="container" style="position:fixed; width:auto; z-index:99" id="liveAlertPlaceholder"></div>
+                <div class="container" id="content"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<div class="modal fade" id="modalspostatuttapag" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Seleziona pagina di destinazione</h5>
+                <button type="button" data-bs-dismiss="modal" class="btn-close" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <select id="selezionaPaginaACuiMandarePagina">
+                </select>
+            </div>
+            <div class="modal-footer">
+                <button id="inviaPaginaAPagina" class="btn btn-primary" type="button" data-bs-dismiss="modal" onclick="menaboInstance.spostaTuttoAPagina($('#selezionaPaginaACuiMandarePagina'))">Invia</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" tabindex="-1" id="modalWarningVersione">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Report</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal" onclick="menaboInstance.CorreggiErroriModal($(this))">Correggi errori</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<div class="modal fade" tabindex="-1" id="modalDuplicaMenabo">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Duplicazione menabo</h5>
+                <select class="ms-3" id="selezionaMenaboSuCuiDuplicare" onchange="menaboInstance.ControlloPresenzaPagineInMenabooDuplicazione($(this))">
+                </select>
+                <button type="button" data-bs-dismiss="modal" class="btn-close" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                Seleziona menabò su cui duplicare
+            </div>
+            <div class="modal-footer">
+                <button id="iniziaDuplicazione" class="btn btn-primary" type="button" onclick="menaboInstance.DuplicaMenabo()" disabled >Duplica</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<template id="template">
+    <div class="container mb-1 record_menabo" style="width:400px;">
+        <div id="intestazioneRowSingoloTracciato" style="display:none"></div>
+        <div class="row align-items-center bg-success text-light p-2">
+
+            <div class="col-2">
+                <div class="row">
+                    <div class="col-2 py-1">
+                        <svg id="addToOrdinamento" style="margin-left:-20px; margin-top:-23px; background-color:red; cursor:pointer" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-border-width" viewBox="0 0 16 16" onclick="menaboInstance.aggiungiAdOrdinamentoModal($(this).closest('.record_menabo'))">
+                            <path d="M0 3.5A.5.5 0 0 1 .5 3h15a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-.5.5H.5a.5.5 0 0 1-.5-.5zm0 5A.5.5 0 0 1 .5 8h15a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5H.5a.5.5 0 0 1-.5-.5zm0 4a.5.5 0 0 1 .5-.5h15a.5.5 0 0 1 0 1H.5a.5.5 0 0 1-.5-.5" />
+                        </svg>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-2 py-1">
+                        <img class="fotoIcon" src="images/foto.png" style="width:20px;" onmouseover="menaboInstance.showFoto($(this))" onmouseout="menaboInstance.hideFoto()" onwheel="menaboInstance.hideFoto()" />
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-2 py-1">
+                        <img class="htmlImg" src="images/html.png" style="width:20px; visibility:hidden" />
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-2 py-1">
+                        <input class="form-check-input SelezionePilotaGruppo border border-primary border-3" type="checkbox" id="SelezionePilotaGruppo" onchange="menaboInstance.cambioSelezioneCheckbox($(this))">
+                    </div>
+                    <div class="col-2 py-1">                    
+                        <input class="form-check-input SelezioneSecondarioGruppo border border-warning border-3 border-opacity-25" type="checkbox" id="SelezioneSecondarioGruppo" onchange="menaboInstance.cambioSelezioneCheckbox($(this))">
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-5">
+                <div class="row">
+                    <div class="col fw-bold" id="codice_ref">
+                        Codice
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col" style="font-size: 12px;" id="descr_ref">
+                        Descr
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col text-center">
+                        <div class="row">
+                            <div class="col text-center">
+                                <div class="form-check form-switch text-start">
+                                    <input class="form-check-input chImpaginato mt-2" type="checkbox" role="switch" id="onoff_impaginato" onchange="menaboInstance.DisattivaIconaPilota($(this))">
+                                    <label class="form-check-label" for="flexSwitchCheckDefault" id="lab_onoff_impaginato" style="font-size:10px;"></label>
+                                    <img class="targetImg" src="images/target.png" style="width:15px; visibility:visible; cursor:pointer" onclick="menaboInstance.drawline($(this))" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-2">
+                <div class="row mb-1" id="agenziaRow0" style="display:none">
+                    <div class="col text-center" style="font-size: 14px">
+                        13.45
+                    </div>
+                </div>
+                <div class="row" id="agenziaRow1">
+                    <div class="col text-center" style="font-size: 14px">
+                        3
+                    </div>
+                </div>
+                <div class="row" id="agenziaRow2">
+                    <div class="col text-center" style="font-size: 14px">
+                        1.99
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-3">
+                <div class="row labelEAvvisi" >
+                    <div class="col d-flex justify-content-end mb-5">
+                        <img class="warningImg" src="images/warning_icon.png" style="width:20px; visibility:hidden" />
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="form-check form-switch">
+                        <label class="form-check-label" style="font-size:10px" for="InPoPSwitch">In PoP</label>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="form-check form-switch d-flex justify-content-center">
+                        <input class="form-check-input" type="checkbox" id="InPoPSwitch" style="margin-left:-16px" checked onchange="menaboInstance.TogglePoP($(this))">
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col text-center">
+                        <button type="button" class="btn btn-outline-light btn-sm" data-bs-toggle="modal" data-bs-target="#modalDtlTracciato" onclick="menaboInstance.DettagliTracciato($(this))">Dettagli</button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</template>
+
+<template id="templateBox">
+    <div class="single_box">
+    <select id="cmbPos" style="position:absolute;width:60px;margin-top:2px;margin-left:-9px;" class="form-select form-select-sm" aria-label=".form-select-sm example" onchange="menaboInstance.cambioIndice($(this))">
+    </select>
+        <select id="cmbDim" style="position:absolute;width:120px;margin-left:55px;margin-top:2px;" class="form-select form-select-sm" aria-label=".form-select-sm example" onchange="menaboInstance.ridimensionaRef($(this))">
+    </select>
+    <div class="container refInMenabo" style="background-image:url('images/Icon_Istanta.png');background-repeat: no-repeat;background-size: contain;background-position-x:right;padding:0px;">
+        <div class="row" style="height:20%;">
+            <div class="col text-end">
+                    <span id="stato_revisione" class="badge bg-danger stato_revisione" style="cursor:pointer;" onclick="menaboInstance.apriDettaglio($(this), 'modalDtl')" data-bs-toggle="modal" data-bs-target="#modalDtl">Da revisionare</span>
+                <img id="goto_img" class="rounded float-end goto_img" src="images/goTo.png" style="width: 50px; height: 50px; display: none; cursor:pointer;" data-bs-toggle="modal" data-bs-target="#modalspostapag" onclick="menaboInstance.bindModalSpostaAPag($(this))">
+            </div>
+        </div>
+        <div class="row" style="height:30%;" >
+            <div class="col align-self-end mt-2"><span id="boxTitle" class="bg-info"></span></div>
+        </div>
+        <div class="row" style="height:50%;">
+                <div class="col"><span id="boxDescr" style="font-size: 10px;" class="bg-info"></span></div>
+            </div>
+        </div>
+    </div>
+</template>
+
+<template id="multiplex">
+    <div id="multiplexSelection" class="multiplexSelection" onclick="menaboInstance.modalBoxSovrapposto($(this)), menaboInstance.apriDettaglio($(this), 'modalVisualizzaBox' )" data-bs-toggle="modal" data-bs-target="#modalVisualizzaBox" style="position:absolute; cursor:pointer; display:block; width: 100px; height: 25px; background-color: red;  left: 0px; top: 0px; border-radius: 10px 0px 0px 0px; text-align: center; color: white; font-weight: bold; vertical-align: revert;">
+    </div>
+</template>
+
+<template id ="templateDettaglio">
+    <div class="container border-bottom pb-4 mb-5 record-revisione">
+        <!--Riga di riepilogo dell'articolo-->
+        <div class="row">
+            <div class="col" id="spazioSelezione">
+                <select class="form-select form-select-sm" aria-label=".form-select-sm example" id="cmbStatoSelezione" onchange="menaboInstance.cambioSelezione($(this))">                    
+                    <option value="1">Primaria</option>
+                    <option value="2">Secondaria</option>
+                    <option value="3" selected>Non specificato</option>
+                </select>
+            </div>
+            <div class="col">
+                <img id="img_principale" src="~/Thumb?codice=&w=40&h=40" style="float:left;vertical-align:middle;" />
+                <span class="me-1"><a id="a_scheda_articolo" href="SchedaArticolo?id=" target="_blank"><b>COD REF</b></a></span>
+            </div>
+            <div class="col">
+                <input type="hidden" id="firma_tracciato"></input>
+                <span class="me-1" id="dtl_agenzia_stato"></span>
+            </div>
+            <div class="col">
+                <span id="lab_data_ultima_revisione">Data ultima revisione: Data ultima revisione</span>
+            </div>
+            <div class="col">
+                <select class="form-select" aria-label="Default select example" id="selettore_regionale">
+                    <option selected>Tutte le aree</option>
+                </select>
+            </div>
+        </div>
+        <!--Riga foto secondarie-->
+        <div class="row mt-3" id="lista_foto_secondarie">
+            <!--for foto secondarie-->
+
+            <!--end for-->
+        </div>
+        <!--Riga di descrizioni-->
+        <div class="row mt-3">
+            <div class="col-5">
+                <div class="container">
+                    <div class="row">
+                        <div class="col">
+                            <label for="Nome" class="form-label">Descrizione1</label>
+                            <textarea class="form-control" readonly style="height:40px;" id="Descrizione1Tracciato" name="Descrizione1Tracciato"></textarea>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col">
+                            <label for="Brand" class="form-label">Descrizione2</label>
+                            <textarea class="form-control" readonly style="height:40px;" id="Descrizione2Tracciato" name="Descrizione2Tracciato"></textarea>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col">
+                            <label for="Tipo" class="form-label">Descrizione3</label>
+                            <textarea class="form-control" readonly style="height:40px;" id="Descrizione3Tracciato" name="Descrizione3Tracciato"></textarea>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col">
+                            <label for="Grammatura" class="form-label">Descrizione4</label>
+                            <textarea class="form-control" readonly style="height:40px;" id="Descrizione4Tracciato" name="Descrizione4Tracciato"></textarea>
+                        </div>
+                    </div>
+                    <div class="row mt-4">
+                        <div class="col">
+                            <div class="input-group">
+                                <span class="input-group-text" style="font-size:small;">Peso totale</span>
+                                <input type="text" readonly class="form-control" id="PesoTracciato" name="PesoTracciato" value="" />
+                            </div>
+                        </div>
+                        <div class="col">
+                            <div class="input-group">
+                                <span class="input-group-text" style="font-size:small;">Unità di misura</span>
+                                <input type="text" readonly class="form-control" id="UmTracciato" name="UmTracciato" value="" />
+                            </div>
+                        </div>
+                    </div>
+                    <div id="rigaPrezziGruppo" class="row mt-4" style="display:none">
+                        <div class="col">
+                            <div class="input-group">
+                                <span class="input-group-text" style="font-size:small;">Prezzo Min</span>
+                                <input type="text" readonly class="form-control" id="PrezzoMinGruppo" name="PrezzoMin" value="" />
+                            </div>
+                        </div>
+                        <div class="col">
+                            <div class="input-group">
+                                <span class="input-group-text" style="font-size:small;">Prezzo Max</span>
+                                <input type="text" readonly class="form-control" id="PrezzoMaxGruppo" name="PrezzoMax" value="" />
+                            </div>
+                        </div>
+                    </div>
+                    <div id="rigaPrezzoSingolo" class="row mt-4" style="display:none">
+                        <div class="col">
+                            <div class="input-group">
+                                <span class="input-group-text" style="font-size:small;">Prezzo</span>
+                                <input type="text" readonly class="form-control PrezzoSingle" id="PrezzoSingle" name="PrezzoSingle" value="" />
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row mt-4">
+                        <div class="col" id="extraCampi"></div>
+                    </div>
+                    <div class="row mt-4">
+                        <div class="col">
+                            <input type="button" class="btn btn-primary" value="Approva descrizioni" style="display:none;" />
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+            <div class="col-7">
+                <div class="container">
+                    <div class="row">
+                        <div class="col">
+                            <label for="Descrizione1" class="form-label">Descrizione1</label>
+                            <textarea class="form-control" style="height:115px;" id="Descrizione1" name="Descrizione1"></textarea>
+                        </div>
+                        <div class="col">
+                            <label for="Descrizione3" class="form-label">Descrizione3</label>
+                            <textarea class="form-control" style="height:115px;" id="Descrizione3" name="Descrizione3"></textarea>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col">
+                            <label for="Descrizione2" class="form-label">Descrizione2</label>
+                            <textarea class="form-control" style="height:115px;" id="Descrizione2" name="Descrizione2"></textarea>
+                        </div>
+                        <div class="col">
+                            <label for="Descrizione4" class="form-label">Descrizione4</label>
+                            <textarea class="form-control" style="height:115px;" id="Descrizione4" name="Descrizione4"></textarea>
+                        </div>
+                    </div>
+                    <div class="row indd">
+                         <div class="col">
+                            <label for="DescrizioneIndd" class="form-label">Descrizione proveniente da InDesign</label>
+                            <textarea class="form-control" style="height:115px;" id="DescrizioneIndd" name="DescrizioneIndd"></textarea>
+                        </div>
+                    </div>
+                    <div class="row mt-4">
+                        <div class="col">
+                            <div class="input-group float-start w-50">
+                                <span class="input-group-text" style="font-size:small;">Peso totale</span>
+                                <input type="text" class="form-control" id="Peso" name="Peso" />
+                            </div>
+                            <div class="input-group float-start w-50">
+                                <span class="input-group-text" style="font-size:small;">Unità di misura</span>
+                                <input type="text" class="form-control" id="Um" name="Um" />
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row mt-4">
+                        <div class="text-end px-3">
+                            <input type="button" class="btn btn-primary" value="Salva" onclick="revInstance.salvaRevisione($(this), '', '', menaboInstance.onSalvataRevisione)" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
+
+<template id="templateDettaglioMultiplex">
+    <div class="container border-bottom pb-4 mb-5 record-revisione bg-warning bg-opacity-50 rounded" is_gruppo="true" codice_gruppo="">
+        <!--Riga di riepilogo dell'articolo-->
+        <div class="row">
+            <div class="col fw-bold fs-5 mb-3">
+                <span id="codici_multiplex"></span>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col">
+                <input type="hidden" id="firma_tracciato"></input>
+                <span class="me-1" id="dtl_agenzia_stato"></span>
+            </div>
+            <div class="col">
+                <span id="lab_data_ultima_revisione" style="display:none">Data ultima revisione: Data ultima revisione</span>
+            </div>
+            <div class="col">
+                <select class="form-select" aria-label="Default select example" id="selettore_regionale">
+                    <option selected>Tutte le aree</option>
+                </select>
+            </div>
+        </div>
+        <!--Riga di descrizioni-->
+        <div class="row mt-3">
+            <div class="col-5">
+                <div class="container overflow-auto dettagliOggettiMultiplex" style="height: 500px;">
+                    
+                </div>
+            </div>
+            <div class="col-7">
+                <div class="container">
+                    <div class="row">
+                        <div class="col">
+                            <label for="Descrizione1" class="form-label">Nome</label>
+                            <textarea class="form-control" style="height:115px;" id="Descrizione1" name="Descrizione1"></textarea>
+                        </div>
+                        <div class="col">
+                            <label for="Descrizione3" class="form-label">Tipo/Gusto</label>
+                            <textarea class="form-control" style="height:115px;" id="Descrizione3" name="Descrizione3"></textarea>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col">
+                            <label for="Descrizione2" class="form-label">Brand</label>
+                            <textarea class="form-control" style="height:115px;" id="Descrizione2" name="Descrizione2"></textarea>
+                        </div>
+                        <div class="col">
+                            <label for="Descrizione4" class="form-label">Grammatura</label>
+                            <textarea class="form-control" style="height:115px;" id="Descrizione4" name="Descrizione4"></textarea>
+                        </div>
+                    </div>
+                    <div class="row indd" style="display:block;">
+                        <div class="col">
+                            <label for="DescrizioneIndd" class="form-label">Descrizione proveniente da InDesign</label>
+                            <textarea class="form-control" style="height:115px;" id="DescrizioneIndd" name="DescrizioneIndd"></textarea>
+                        </div>
+                    </div>
+                    <div class="row mt-4">
+                        <div class="col">
+                            <div class="input-group float-start w-50">
+                                <span class="input-group-text" style="font-size:small;">Peso totale</span>
+                                <input type="text" class="form-control" id="Peso" name="Peso" />
+                            </div>
+                            <div class="input-group float-start w-50">
+                                <span class="input-group-text" style="font-size:small;">Unità di misura</span>
+                                <input type="text" class="form-control" id="Um" name="Um" />
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row mt-4">
+                        <div class="text-end px-3">
+                            <input type="button" class="btn btn-primary" value="Salva" onclick="revInstance.salvaRevisione($(this),'', '', menaboInstance.onSalvataRevisione)" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
+
+<template id="oggetto_multiplex">
+    <div class="oggetto_multiplex_container">
+        <div class="row">
+            <div class="col">
+                <label class="form-label codiceReferenzaMultiplex fw-bold">Inserire codice</label>
+            </div>
+            <div class="col" id="spazioSelezioneMultiplex">
+                <select class="form-select form-select-sm" aria-label=".form-select-sm example" id="cmbStatoSelezioneMultiplex" onchange="menaboInstance.cambioSelezione($(this))">
+                    <option value="1">Primaria</option>
+                    <option value="2">Secondaria</option>
+                    <option value="3" selected>Non specificato</option>
+                </select>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <label for="Nome" class="form-label">Nome</label>
+                <textarea class="form-control" readonly style="height:40px;" id="Descrizione1Mult" name="Descrizione1Multiplex"></textarea>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <label for="Brand" class="form-label">Brand</label>
+                <textarea class="form-control" readonly style="height:40px;" id="Descrizione2Mult" name="Descrizione2Multiplex"></textarea>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <label for="Tipo" class="form-label">Tipo/Gusto</label>
+                <textarea class="form-control" readonly style="height:40px;" id="Descrizione3Mult" name="Descrizione3Multiplex"></textarea>
+            </div>
+        </div>
+        <div class="row mb-3">
+            <div class="col">
+                <label for="Grammatura" class="form-label">Grammatura</label>
+                <textarea class="form-control" readonly style="height:40px;" id="Descrizione4Mult" name="Descrizione4Multiplex"></textarea>
+            </div>
+        </div>
+        <div class="row inddOggMultiplex mb-3" style="display:block;">
+            <div class="col">
+                <label for="DescrizioneIndd" class="form-label">Descrizione proveniente da InDesign</label>
+                <textarea class="form-control" style="height:80px;" id="DescrizioneInddMult" name="DescrizioneInddMultiplex"></textarea>
+            </div>
+        </div>
+    </div>
+</template>
+
+<div class="modal fade" id="ModalCorrezioneErrori">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <!-- Modal Header -->
+            <div class="modal-header">
+                <h5 class="modal-title">Correzioni</h5>
+                <button type="button" data-bs-dismiss="modal" class="btn-close" aria-label="Close"></button>
+            </div>
+            <!-- Modal Body -->
+            <div class="modal-body">
+                <p>Attualmente non è stato effettuato nessuno rilevamento errori.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="inserisciArticoloInDB" tabindex="-1" role="dialog" aria-labelledby="inserisciArticoloInDB" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable" role="document">
+
+        <!-- Contenuto del modal -->
+        <div class="modal-content">
+            <div class="modal-header">
+                Inserimento articolo
+                <button type="button" data-bs-dismiss="modal" class="btn-close" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Input di testo per il codice -->
+                <div class="form-group mb-2">
+                    <label id="labelInserimentoCodice" for="codice">Codice</label>
+                    <input type="text" class="form-control" id="codiceArticoloDaInserire" placeholder="Inserisci codice o codice gruppo">
+                </div>
+                <div class="content" style="display:none">
+                    <!-- Input di testo per il codice del gruppo -->
+                    <div id="InserimentoInGruppo" class="form-group mb-3" style="display:none">
+                        <label for="codiceGruppo">Inserisci come elemento del gruppo:</label>
+                        <input type="text" class="form-control" id="codiceGruppo" CodGr="0" placeholder="Inserire codice gruppo">                    
+                    </div>
+                    <select class="form-select mb-3" aria-label="Default select example" id="selectAddestramento" onchange="menaboInstance.selezionatoAddestramento($(this).val()), menaboInstance.compilaCampiInserimentoArticoloInGruppo()">
+                        <option value="0" selected>Seleziona addestramento</option>
+                    </select>
+                    <select class="form-select mb-3" aria-label="Default select example" id="cmbLabel">
+                        <option value="0" selected>Seleziona label</option>
+                    </select>
+                    <!-- Contenuto del corpo del modal (se necessario) -->
+                    <div id="CardsArticolo">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">                    
+                <div class="row messageContainer">
+                </div>
+                <button type="button" id="CreaNuovoArticolo" class="btn btn-primary" style="display:none" onclick="menaboInstance.CreaArticoloManualmente()">Crea articolo</button>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<template id="segnaposto_template">
+    <div id="segnaposto" class="row segnaposto">
+        <div class="row">
+            <div id="labelSegna" class="red-box bg-danger bg-opacity-25 col-auto" style="width: 65%; border-top-left-radius: 5px; border-bottom-left-radius: 5px;">
+                label
+            </div>
+            <div id="valueSegna" class="red-box bg-danger bg-opacity-25 col-auto" style="width: 35%; border-top-right-radius: 10px;">
+                1
+            </div>
+        </div>
+    </div>
+</template>
+
+<div class="modal fade" tabindex="-1" id="modalEliminazioneTracciato">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Eliminazione</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="container" id="contentModalEliminazione"></div>
+            </div>
+            <div class="modal-footer">
+                <div class="container text-end" id="removeButtonModal">
+                    <button type="button" class="btn bg-danger bg-opacity-50 mt-2" aria-label="Elimina" onclick="menaboInstance.EliminaArticoloManualmente($(this).closest('#modalEliminazioneTracciato'))">Elimina selezionati</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" tabindex="-1" id="modalReportAutoMenabo">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Report</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" onclick="menaboInstance.selezionataPagina()"></button>
+            </div>
+            <div class="modal-body">
+                <div class="container" id="contentModalReportAutoMenabo">
+                    Menabò correttamente impaginato
+                </div>
+            </div>
+            <div class="modal-footer">
+                <div class="container text-end">
+                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal" aria-label="Close" onclick="menaboInstance.selezionataPagina()">Chiudi</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" tabindex="-1" id="modalDettaglioReportAutoMenabo">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 id="titleDettaglioReport" class="modal-title">Report</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="container" id="contentModalDettaglioReportAutoMenabo">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <div class="container text-end">
+                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal" aria-label="Close">Chiudi</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" tabindex="-1" id="modalSwapOrMultiplex" data-bs-backdrop="static">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 id="titleDettaglioReport" class="modal-title">Attenzione</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" onclick="menaboInstance.AnnullaCambioIndice($('#modalSwapOrMultiplex').attr('idMenaboRef'))"></button>
+            </div>
+            <div class="modal-body">
+                <div class="container" id="">
+                    <p><span class='fw-bold'>Si sta cercando di inserire un elemento in un box già occupato, seleziona l'operazione:</span></p>
+                    <p><span class='text-danger fw-bold'>- Forma Multiplex</span>: Verrà formato un multiplex degli elementi a tale indice </p>
+                    <p><span class='text-danger fw-bold'>- Scorri</span>: Gli elementi a partire da quell'indice fino al primo spazio vuoto verranno fatti sccorrere</p>
+                    <p><span class='text-danger fw-bold'>- Scambia</span>: Il nuovo elemento si scambierà di posto con quelli già posizionati</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <div class="container text-end">
+                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal" aria-label="Close" onclick="menaboInstance.FormaMultiplex($('#modalSwapOrMultiplex').attr('idMenaboRef'), $('#modalSwapOrMultiplex').attr('codiceGruppoOIdRec'), $('#modalSwapOrMultiplex').attr('newInx'))">Forma multiplex</button>
+                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal" aria-label="Close" onclick="menaboInstance.ScorriRef($('#modalSwapOrMultiplex').attr('idMenaboRef'), $('#modalSwapOrMultiplex').attr('codiceGruppoOIdRec'), $('#modalSwapOrMultiplex').attr('newInx'))">Scorri</button>
+                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal" aria-label="Close" onclick="menaboInstance.ScambiaRef($('#modalSwapOrMultiplex').attr('idMenaboRef'), $('#modalSwapOrMultiplex').attr('codiceGruppoOIdRec'), $('#modalSwapOrMultiplex').attr('newInx'))">Scambia</button>
+                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal" aria-label="Close" onclick="menaboInstance.AnnullaCambioIndice($('#modalSwapOrMultiplex').attr('idMenaboRef'), $('#modalSwapOrMultiplex').attr('codiceGruppoOIdRec'))">Annulla</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<template id="filtroTemplate">
+    <div class="input-group input-group-sm">
+        <select class="form-select form-select-sm" id="ricercaTracciato" name="ricercaTracciato" style="width: 40%;" onchange="menaboInstance.ricercaInTracciatoMenabo($(this)); this.classList.remove('bg-success', 'bg-opacity-25'); this.classList.remove('bg-danger');" onclick="this.classList.remove('bg-danger')">
+            <option value="0" selected>Filtro</option>
+        </select>
+        <input type="text" id="ricercaText" class="form-control ricercaText" aria-label="Sizing example input" aria-describedby="inputGroup-sizing-sm" style="width: 50%;" onkeypress="menaboInstance.ricercaInTracciatoMenabo($(this))">
+        <img src="images/trashcanIcon.png" class="mx-1" id="trashIcon" style="width:20px;" onclick="menaboInstance.rimuoviParametroRicerca($(this))" />
+    </div>
+</template>
+
+<div class="modal fade" tabindex="-1" id="modalAggiungiAdOrdinamento">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Aggiungere i seguenti campi all'ordinamento?</h5>
+                <button type="button" data-bs-dismiss="modal" class="btn-close" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <label class="form-check-label" for="areaVal">Area</label>
+                <input type="text" id="areaVal" areaVal="" class="form-control" aria-label="" aria-describedby="" readonly>
+
+                <label class="form-check-label" for="settoreVal">Settore</label>
+                <input type="text" id="settoreVal" settoreVal="" class="form-control" aria-label="" aria-describedby="" readonly>
+
+                <label class="form-check-label" for="repartoVal">Reparto</label>
+                <input type="text" id="repartoVal" repartoVal="" class="form-control" aria-label="" aria-describedby="" readonly>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" type="button" onclick="menaboInstance.aggiungiRecordAdOrdinamento($('#modalAggiungiAdOrdinamento').attr('idRec'))">Aggiungi</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@inject Microsoft.AspNetCore.Http.IHttpContextAccessor HttpContextAccessor
+<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]" src="~/js/menabo.js?v=1.0.0.99"></script>
+<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]" src="~/js/mySocket.js?v=1.0.0.0"></script>
+
+<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]" type="text/javascript">
+
+    let menaboInstance;
+    let ordInstance;
+    let revInstance;
+    let taskManager;
+
+    function documentReady() {
+
+        let actualCode = ""; //codice che sta venendo inserito
+        let actualGrpCode = ""; //codice gruppo che sta venendo inserito
+        taskManager=new TaskManager();
+
+        menaboInstance = new Menabo(@ViewBag.IdTracciato, @Html.Raw(Json.Serialize(ViewBag.PagineSource)), @Html.Raw(Json.Serialize(ViewBag.MastroSource)), @Html.Raw(Json.Serialize(ViewBag.MaccanicheSource)));
+        menaboInstance.adattaGriglia();
+
+        revInstance = new Revisore();
+        ordInstance = new Ordinamento();
+        
+        $( window ).resize(function() {
+            menaboInstance.adattaGriglia();
+
+        });
+
+        let canvas = $("#myCanvas");
+        canvas.attr("width", $(window).width());
+        canvas.attr("height", $(window).height());
+
+
+        taskManager.addListener(menaboInstance);
+
+        const modal = $("#modalVisualizzaBox");
+        const btn = modal.find(".btn-close");
+        modal.click(function (event) {
+            // Verifica se l'elemento cliccato è all'esterno del modal
+            if (modal.is(event.target) && modal.has(event.target).length === 0 && modal.hasClass("show")) {
+                // L'evento di click è avvenuto all'esterno del modal, mostra il messaggio di conferma
+                if (menaboInstance.ControllaPrimarie(modal).message != "")
+                {
+                    const result = confirm(menaboInstance.ControllaPrimarie(modal).message);
+                    if (result) {
+                        console.log("chiudo");
+                        closeModal(modal);
+                    }
+                }
+                else
+                {
+                    closeModal(modal);
+                }
+
+            }
+        });
+
+        btn.click(function (event) {
+            console.log("modal");
+            // Verifica se l'elemento cliccato è all'esterno del modal
+            if (modal.hasClass("show")) {
+                if (menaboInstance.ControllaPrimarie(modal).message != "") {
+                    const result = confirm(menaboInstance.ControllaPrimarie(modal).message);
+                    if (result) {
+                        console.log("chiudo2");
+                        closeModal(modal);
+                    }
+                }
+                else {
+                    closeModal(modal);
+                }
+
+            }
+        });
+
+        const modal2 = $("#modalDtl");
+        const btn2 = modal2.find(".btn-close");
+        modal2.click(function (event) {
+            // Verifica se l'elemento cliccato è all'esterno del modal
+            if (modal2.is(event.target) && modal2.has(event.target).length === 0 && modal2.hasClass("show")) {
+                // L'evento di click è avvenuto all'esterno del modal, mostra il messaggio di conferma
+                if (menaboInstance.ControllaPrimarie(modal2).message != "") {
+                    const result = confirm(menaboInstance.ControllaPrimarie(modal2).message);
+                    if (result) {
+                        console.log("chiudo3");
+                        closeModal(modal2);
+                    }
+                }
+                else {
+                    closeModal(modal2);
+                }
+
+            }
+        });
+
+
+        btn2.click(function (event) {
+            // Verifica se l'elemento cliccato è all'esterno del modal
+
+            if (modal2.hasClass("show")) {
+                if (menaboInstance.ControllaPrimarie(modal2).message != "") {
+                    const result = confirm(menaboInstance.ControllaPrimarie(modal2).message);
+                    if (result) {
+                        console.log("chiudo4");
+                        closeModal(modal2);
+                    }
+                }
+                else {
+                    closeModal(modal2);
+                }
+
+            }
+        });
+
+        $("#codiceArticoloDaInserire").keyup(function(event) {
+            if ($(this).val() != actualCode || ($(this).val() == "" && actualCode == ""))
+            {
+                if ($(this).val() != "") {
+                    $(this).addClass("bg-danger bg-opacity-25");
+                }
+                $(this).removeClass("bg-success");
+            }
+            else
+            {
+                $(this).removeClass("bg-danger");
+            }
+
+            if (event.which === 13) {                         
+                let result = menaboInstance.leggiCodiceRichiesto();
+                if (result != false)
+                {
+                    $(this).addClass("bg-success bg-opacity-25");
+                    $(this).removeClass("bg-danger");
+                    actualCode = $(this).val();      
+                }
+                else{
+                    actualCode = "";
+                    $(this).addClass("bg-danger bg-opacity-25");
+                    $(this).removeClass("bg-success");
+                }
+
+            }
+        });
+
+        $("#InserimentoInGruppo").find("#codiceGruppo").keyup(function (event) {
+            actualGrpCode = "0";
+            $("#InserimentoInGruppo").find("#codiceGruppo").attr("CodGr", "0");
+            if ($(this).val() == "")
+            {
+                $("#InserimentoInGruppo").find("#codiceGruppo").attr("CodGr", "0");
+                menaboInstance.svuotaCampiInserimentoInGruppo();
+            }
+            if ($(this).val() != actualGrpCode || ($(this).val() == "" && actualGrpCode == "0")) {
+                if ($(this).val() != "") {
+                    $(this).addClass("bg-danger bg-opacity-25");
+                }
+                $(this).removeClass("bg-success"); 
+                menaboInstance.svuotaCampiInserimentoInGruppo();
+            }
+            else
+            {
+                $(this).removeClass("bg-danger");
+            }
+
+            if (event.which === 13) {   
+                console.log($(this).val());
+                let valore = $("#codiceGruppo").val();
+                $("#codiceGruppo").val($("#codiceGruppo").val() + "0");
+                $("#codiceGruppo").val(valore);
+                let result = menaboInstance.leggiCodiceGruppoRichiesto($(this).val());
+                console.log(result);
+                if (result != false)
+                {
+                    console.log("ok");
+                    console.log($(this));
+                    $(this).removeClass("bg-danger");
+                    $(this).addClass("bg-success bg-opacity-25");                    
+                    actualGrpCode = $(this).val();      
+                }
+                else{
+                    actualGrpCode = "0";
+                    $(this).addClass("bg-danger bg-opacity-25");
+                    $(this).removeClass("bg-success");
+                }
+
+            }
+        });
+
+        //$("#ScaricaPacchettoFotoButton").attr("href", "Menabo/donwloadPacchettoFoto/"+@ViewBag.IdTracciato);
+        
+    }
+
+    function closeModal(modal) {
+    // Logica per chiudere il modal
+        modal.modal("hide");
+        //$('.modal-backdrop').remove();
+    }
+
+    function onSalvataRevisione(result) {
+        menaboInstance.onSalvataRevisione(result);
+    }
+</script>

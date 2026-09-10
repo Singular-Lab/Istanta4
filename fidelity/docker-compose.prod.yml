@@ -1,0 +1,198 @@
+# Variabili richieste nel .env di ogni istanza:
+#
+#   CLIENT_ID=coopfi                        # identificativo istanza
+#   COMPOSE_PROJECT_NAME=fidelity-coopfi    # isola volumi e rete per istanza
+#   NODE_PORT=3010                          # porta HTTP app esposta sull'host
+#   WS_PORT=3400                            # porta WebSocket app esposta sull'host
+#   DOCKER_PROMETHEUS_PORT=9090             # porta Prometheus host (diversa per ogni istanza)
+#   DOCKER_LOKI_PORT=3100                   # porta Loki host (diversa per ogni istanza)
+#   DOCKER_GRAFANA_PORT=3000                # porta Grafana host (diversa per ogni istanza)
+#   GRAFANA_ADMIN_PASSWORD=<password-robusta-obbligatoria-in-prod>
+#
+# PostgreSQL gira sulla macchina host (non in questo compose).
+# Il container lo raggiunge tramite host.docker.internal.
+#
+# Avvio produzione:   docker compose -f docker-compose.prod.yml up -d --build
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/server.prod.Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL}
+        VITE_WS_URL: ${VITE_WS_URL}
+    # Build locale: nessuna immagine da pubblicare su registry per avviare la produzione.
+    # Se vuoi comunque taggare localmente, puoi usare:
+    # image: fidelity-${CLIENT_ID}:local
+    pull_policy: never
+    labels:
+      prometheus.scrape: "true"
+      prometheus.port: "${NODE_PORT:-3010}"
+      prometheus.path: "/metrics"
+      prometheus.client_id: "${CLIENT_ID}"
+    restart: unless-stopped
+    user: "node"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    ports:
+      - "${NODE_PORT:-3010}:${NODE_PORT:-3010}"
+      - "${WS_PORT:-3400}:${WS_PORT:-3400}"
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      # PostgreSQL sul host: host.docker.internal risolve all'IP del host grazie a extra_hosts
+      DB_POSTGRESQL_HOST: host.docker.internal
+      DB_POSTGRESQL_PORT: ${DB_POSTGRESQL_PORT:-5432}
+      REDIS_URL: redis://redis:6379
+      # In produzione il container non può scrivere percorsi host arbitrari:
+      # usiamo un path interno persistente via named volume.
+      ICONE_INSEGNA_DIR: /home/node/insegne
+    extra_hosts:
+      # Permette al container di raggiungere PostgreSQL, MongoDB e altri servizi sul host
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - insegne_data:/home/node/insegne
+      - ./config:/app/config
+    depends_on:
+      redis:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 ${NODE_PORT:-3010} || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    # Porta NON esposta all'esterno in produzione
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  prometheus:
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    user: root
+    ports:
+      - "127.0.0.1:${DOCKER_PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./docker/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  grafana:
+    image: grafana/grafana:latest
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "127.0.0.1:${DOCKER_GRAFANA_PORT:-3000}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env for production}
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SECURITY_DISABLE_GRAVATAR: "true"
+      # Grafana dietro reverse proxy su sottopercorso (/grafana)
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-https://www.istantademo.it:83/grafana/}
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/fidelity-platform-overview.json
+      # SMTP per invio email alert
+      GF_SMTP_ENABLED: ${GRAFANA_SMTP_ENABLED:-false}
+      GF_SMTP_HOST: ${GRAFANA_SMTP_HOST:-}
+      GF_SMTP_USER: ${GRAFANA_SMTP_USER:-}
+      GF_SMTP_PASSWORD: ${GRAFANA_SMTP_PASSWORD:-}
+      GF_SMTP_FROM_ADDRESS: ${GRAFANA_SMTP_FROM_ADDRESS:-admin@grafana.localhost}
+      GF_SMTP_FROM_NAME: ${GRAFANA_SMTP_FROM_NAME:-Grafana}
+      GF_SMTP_SKIP_VERIFY: ${GRAFANA_SMTP_SKIP_VERIFY:-false}
+      GF_SMTP_STARTTLS_POLICY: ${GRAFANA_SMTP_STARTTLS_POLICY:-}
+      GF_SMTP_EHLO_IDENTITY: ${GRAFANA_SMTP_EHLO_IDENTITY:-}
+      # Datasource PostgreSQL: punta al database sul host tramite host.docker.internal
+      GRAFANA_POSTGRES_HOST: host.docker.internal:${DB_POSTGRESQL_PORT:-5432}
+      GRAFANA_POSTGRES_DB: ${DB_POSTGRESQL_NAME}
+      GRAFANA_POSTGRES_USER: ${DB_POSTGRESQL_USER}
+      GRAFANA_POSTGRES_PASSWORD: ${DB_POSTGRESQL_PASSWORD}
+    # Necessario perché Grafana deve risolvere host.docker.internal per il datasource PostgreSQL
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./docker/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./docker/observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+      - loki
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  loki:
+    image: grafana/loki:3
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "127.0.0.1:${DOCKER_LOKI_PORT:-3100}:3100"
+    volumes:
+      - ./docker/observability/loki.yml:/etc/loki/local-config.yaml:ro
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  promtail:
+    image: grafana/promtail:latest
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+    user: "0:0"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./docker/observability/promtail.yml:/etc/promtail/config.yml:ro
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  # I nomi dei volumi ricevono automaticamente il prefisso COMPOSE_PROJECT_NAME
+  # → fidelity-coopfi_redis_data, fidelity-conadcno_redis_data, ecc.
+  redis_data:
+  grafana_data:
+  insegne_data:

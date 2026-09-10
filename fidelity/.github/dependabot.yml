@@ -1,0 +1,37 @@
+version: 2
+
+updates:
+  # --- npm (solo security updates) ---
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"   # richiesto sintatticamente, ma ignorato dal security-bot
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 0      # << abilita SOLO security updates
+    assignees: ["@me"]
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    labels: ["dependencies", "npm"]
+    ignore:                          # continua a ignorare i major indicati
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+
+  # --- GitHub Actions (solo security updates) ---
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 0      # << abilita SOLO security updates
+    assignees: ["@me"]
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    labels: ["dependencies", "github-actions"]

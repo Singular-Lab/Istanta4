@@ -1,0 +1,56 @@
+{
+  "components": [
+    {
+      "Id": "614eb6a6-8852-4aa3-8bc9-285f24a438af",
+      "Nome": "Tracciato.GuidArea",
+      "NomeVisual": "Codice Area",
+      "Descrizione": "Sigla dell'area"
+    },
+    {
+      "Id": "438d9c0b-46ea-4522-90c9-5e868274487b",
+      "Nome": "Tracciato.GuidCanale",
+      "NomeVisual": "Codice Canale",
+      "Descrizione": "Sigla del canale"
+    },
+    {
+      "Id": "d94b65ca-7759-43a1-87c2-41a3790b5bc9",
+      "Nome": "Tracciato.GuidPV",
+      "NomeVisual": "Codice PV",
+      "Descrizione": "Sigla del PV"
+    },
+    {
+      "Id": "83fa0ec0-11b0-45ce-a916-a041c79e2aee",
+      "Nome": "Referenza.Codice",
+      "NomeVisual": "Codice Referenza",
+      "Descrizione": "Codice referenza del prodotto"
+    },
+    {
+      "Id": "2c0a235d-d87b-424d-95f5-0fb22824fdc4",
+      "Nome": "isGruppo",
+      "NomeVisual": "Sei un gruppo?",
+      "Descrizione": "G o A"
+    },
+    {
+      "Id": "6cb20302-a941-4b39-b018-3003fd543883",
+      "Nome": "pag",
+      "NomeVisual": "Numero pagina della prestazione",
+      "Descrizione": "Numero pagina della prestazione"
+    },
+    {
+      "Id": "b7b70c95-7d7b-411f-96c6-a970b106d94b",
+      "Nome": "Kit.Formato",
+      "NomeVisual": "Formato del Kit",
+      "Descrizione": "Formato del Kit"
+    }
+  ],
+  "combinazioni": [
+    {
+      "guidId": "d2a806e2-f6f4-4323-a4b4-af5079c6c30e",
+      "combinazione": [ "VOL", "614eb6a6-8852-4aa3-8bc9-285f24a438af", "438d9c0b-46ea-4522-90c9-5e868274487b" ]
+    },
+    {
+      "guidId": "82d30f61-4100-4c6a-9b37-eac2fb8ecf33",
+      "combinazione": [ "POP", "b7b70c95-7d7b-411f-96c6-a970b106d94b", "83fa0ec0-11b0-45ce-a916-a041c79e2aee", "6cb20302-a941-4b39-b018-3003fd543883" ]
+    }
+  ]
+}

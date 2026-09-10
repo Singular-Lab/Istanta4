@@ -1,0 +1,282 @@
+﻿@page
+@model Istanta.Views.Mastro.IndexModel
+@{
+}
+@if(ViewBag.error!=null)
+{
+    <div id="error_panel" class="alert alert-danger" style="position:fixed; width:100%;">
+        <strong>Attenzione</strong>: @ViewBag.error
+    </div>
+}
+<h3 style="margin-bottom:25px;">Lista Mastro</h3>
+<table>
+    <thead>
+        <tr>
+            <td style="width:300px;">Nome della mastro</td>
+        </tr>
+    </thead>
+
+    @foreach (var mastro in (ViewBag.lista as List<Istanta.Models.DbMastroItem>)!)
+    {
+        string associazione = "";
+        if (!mastro.Active)
+        {
+            continue;
+        }
+        <tr>
+                <td>
+                
+                <form method="POST" action="Mastro/Update/@mastro.Id">
+                    <table>
+                        <tr>
+                            <td>
+                                <input type="hidden" value="@mastro.Id">
+                                <input type="text" id="Nome" name="Nome" value="@mastro.Nome">
+                            </td>
+                            <td>
+                                <select class="form-select" style="width:150px;" aria-label="Default select example" id="Formato" name="Formato">
+                                    @foreach (var formato in (ViewBag.formati as List<string>)!)
+                                    {
+                                        if (mastro.Formato == formato && mastro.Active)
+                                        {
+                                            <option value="@formato" selected>@formato</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@formato">@formato</option>
+                                        }
+
+                                    }
+                                </select>
+                            </td>
+                            <td>
+                                <label class="form-check-label" style="font-size:9px" for="meccanicaDefault">Meccanica Default</label>
+                                <select class="form-select mb-4" style="width:150px;" aria-label="Default select example" id="meccanicaDefault" name="MeccanicaDefault">
+                                    @foreach (var mecc in (ViewBag.meccanicheSource as List<Meccaniche>)!)
+                                    {
+                                        if (mastro.MeccanicaDefault == mecc.NomeTraduzione && mastro.Active)
+                                        {
+                                            string nomeTraduzione = mecc.NomeTraduzione;
+                                            <option value="@nomeTraduzione" selected>@nomeTraduzione</option>
+                                        }
+                                        else
+                                        {
+                                            string nomeTraduzione = mecc.NomeTraduzione;
+                                            <option value="@nomeTraduzione">@nomeTraduzione</option>
+                                        }
+
+                                    }
+                                </select>
+                            </td>
+                            <td>
+                                @foreach (var assoc in mastro.Associazioni)
+                                {
+                                    associazione += assoc + ",";
+                                }
+                                @if (mastro.Associazioni.Count > 0)
+                                {
+                                    associazione = associazione.Substring(0, associazione.Length - 1);
+                                }
+                                else
+                                {
+                                    associazione = "";
+                                }
+                                <label class="form-check-label" style="font-size:9px" for="Associazioni">Associazioni Meccaniche</label>
+                                <textarea type="text" id="Associazioni" style="width:400px" name="Associazioni">@associazione</textarea>
+                               @* <input type="button" value="Associazioni" onclick="openModalAssociazioni(@mastro.Id)">*@
+                            </td>
+                            <td>
+
+                                <input type="submit" value="Salva">   
+                            </td>
+                            <td style="padding-left:30px;">
+                                <a class="btn btn-danger btn-sm" href="#" onclick="confirmAndDelete('@mastro.Id')">Elimina</a>
+@*                                <a class="btn btn-danger btn-sm" href="Mastro/Delete/@mastro.Id" onclick="return confirm('Sicuro di voler eliminare?')">Elimina</a>*@                            </td>
+                        </tr>
+                    </table>
+                </form>
+                </td>
+            </tr>
+            <tr>
+                <td><hr /></td>
+            </tr>
+        
+      }
+</table>
+<div class="container" style="margin-top:50px">
+    <h2>Aggiungi Mastro</h2>
+    <div class="panel-body"> 
+        <form method="POST">
+        <div class="form-group">
+            <label for="Nome">Nome della mastro</label>
+                <input type="text" style="width:200px;" class="form-control" id="Nome" name="Nome" aria-describedby="emailHelp">
+        </div>
+        <div class="form-group">
+            <label for="Formato">Formato della mastro</label>
+            <select class="form-select" style="width:200px;" aria-label="Default select example" id="Formato" name="Formato">
+                <option value="0" selected>Seleziona formato</option>
+                @foreach (var formato in (ViewBag.formati as List<string>)!)
+                {
+                    <option value="@formato">@formato</option>
+                }
+            </select>
+        </div>
+        <div class="mt-3">
+                <input type="submit" class="btn btn-primary" value="Aggiungi">
+            </div>
+        </form>
+    </div>
+</div>
+
+
+<div class="modal fade" id="associazioniModal" tabindex="-1" aria-labelledby="associazioniModal" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4>Associazioni
+                    <i class="fas fa-info-circle" style="cursor:pointer" onclick="mostraInformazioni()"></i>
+                </h4>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary align-self-start" onclick="appendAssociazione()">Aggiungi associazione</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal" onclick="salvaAssociazioni()">Salva</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@inject Microsoft.AspNetCore.Http.IHttpContextAccessor HttpContextAccessor
+<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]">
+    function confirmAndDelete(mastroId) {
+        console.log("confirmAndDelete");
+        if (confirm('Sicuro di voler eliminare?')) {
+            Call.do("Mastro", "Delete/" + mastroId, "GET", null, this, function (result, sender2) {
+                // Gestisci la risposta di successo
+                console.log(result);
+                if (result.esito){
+                    console.log("Elemento eliminato con successo");
+                    window.location.reload();
+                }
+                else
+                {
+                    console.log("Errore: "+result.error);
+                    showAlert("danger", result.error, 0);
+                }
+
+            });
+        }
+    }
+
+    function showAlert(esito, message, secondDuration) {
+
+        const appendAlert = (message, type) => {
+            const wrapper = $('<div></div>').addClass(`alert alert-${type} alert-dismissible`).attr('role', 'alert')
+            const content = $('<div></div>').text(message)
+            const closeButton = $('<button></button>').addClass('btn-close').attr({
+                'type': 'button',
+                'data-bs-dismiss': 'alert',
+                'aria-label': 'Close'
+            })
+            wrapper.append(content, closeButton)
+            $('#msg_container').css("display", "block");
+            $('#msg_container').append(wrapper)
+
+            // Chiude automaticamente l'alert dopo 1 secondo
+            if (secondDuration > 0) {
+                setTimeout(function () {
+                    wrapper.alert('close')
+                    if (sender != null) { sender.prop("disabled", false); }
+                }, secondDuration * 1000);
+            }
+        }
+
+        appendAlert(message, esito);
+    }
+
+    //function openModalAssociazioni(idMastro){
+    //    console.log(idMastro);
+    //    $("#associazioniModal").find(".modal-body").empty();
+    //    $("#associazioniModal").modal("show");
+    //    $("#associazioniModal").attr("idMastro", idMastro);
+
+    //    let mastro = @Html.Raw(Json.Serialize(ViewBag.lista));
+    //    console.log(mastro);
+    //    mastro = mastro.find(f=>f.id == idMastro);
+    //    console.log(mastro);
+    //    mastro.associazioni.forEach(function (item) {
+    //        let associazione = appendAssociazione();
+    //        let text = "";
+    //        item.note.forEach(function (nota){
+    //            text+=nota+",";
+    //        });
+    //        text = text.substring(0, text.length-1);
+    //        associazione.find("#Note").val(text);
+    //        associazione.find("#meccanicaAssociazione").val(item.nomeMeccanica);
+    //        console.log($(associazione));
+    //    });
+    //}
+
+    //function appendAssociazione() {
+    //    let associazione = '<div id="associazione" class="associazione"><div class="row"><div class="col-4">Meccanica</div><div class="col-4">Note</div></div>';
+    //    associazione += '<div class="row"><div class="col-4"><select class="form-select" style="width:150px;" aria-label="Default select example" id="meccanicaAssociazione" name="meccanicaAssociazione">';
+    //    let meccaniche = @Html.Raw(Json.Serialize(ViewBag.meccanicheSource));
+    //    console.log(meccaniche);
+    //    meccaniche.forEach(function (item) {
+    //        associazione += '<option value="' + item.nomeTraduzione + '">' + item.nomeTraduzione + '</option>'
+    //    });
+    //    associazione += '</select></div>'
+        
+    //    associazione += '<div class="col-6"><input type="text" id="Note" name="Note" value=""></div>';
+    //    associazione += '<div class="col-2"><button type="button" class="btn btn-danger" id="EliminaAssociazione" name="EliminaAssociazione" onclick="$(this).closest(\'#associazione\').remove();">Elimina</div></div></div>';
+    //    let riferiment=$(associazione);
+    //    $("#associazioniModal").find(".modal-body").append(riferiment);
+    //    return $(riferiment);
+    //}
+
+    //function mostraInformazioni() {
+    //    alert('In Meccanica va specificata la meccanica che si vuole, in note tutti i termini che il campo note deve contenere per essere valido, i termini devono essere separati da , e non devono essere lasciati spazi non voluti.\nÈ importante l\'ordinamento, le note che ne contengono altre devono essere prima (ES: Bomba,Fid deve essere prima di Bomba e di Fid)\n\nIl campo di default è note ma agenzia può cambiare il campo in cui cercare, la chiamata getMeccanicaCustom deve essere comunque implementata in agenzia, non basta aggiornare solo qui.');
+    //}
+
+    //function salvaAssociazioni(){
+    //    let idMastro = parseInt($("#associazioniModal").attr("idMastro"));
+    //    if (idMastro == null || idMastro == 0)
+    //    {
+    //        showAlert("danger", "errore di id mastro assegnato al modal", 5)
+    //        return;
+    //    }
+
+    //    let mastroAssociazioni = {
+    //        Associazioni: [],
+    //    }
+
+    //    $("#associazioniModal").find(".modal-body").find(".associazione").each(function () {
+    //        let associazione = {
+    //            nomeMeccanica: "",
+    //            Note : []
+    //        }
+
+    //        associazione.nomeMeccanica = $(this).find("#meccanicaAssociazione").val();
+    //        associazione.Note = $(this).find("#Note").val().split(",");
+    //        mastroAssociazioni.Associazioni.push(associazione);
+    //    });
+
+    //    console.log(mastroAssociazioni);
+
+    //    Call.do("Mastro", "UpdateAssociazioni/" + idMastro, "PUT", mastroAssociazioni, this, function (result, me) {
+    //        console.log(result);
+    //        if (result.esito) {
+    //            console.log("Elemento aggiornato con successo");
+    //            window.location.reload();
+    //        }
+    //        else {
+    //            console.log("Errore: " + result.error);
+    //            showAlert("danger", result.error, 0);
+    //        }
+    //    });
+    //}
+</script>

@@ -1,0 +1,275 @@
+﻿@page
+@model Istanta.Views.Tracciati.IndexModel
+@{
+}
+
+<h2>Promo in lavorazione</h2>
+
+<div class="accordion mb-4" id="promoList">
+</div>
+
+<div id="formPromoContainer" class="container bg-light p-3 rounded-3 shadow-sm mb-3" style="display:none;">
+    <div class="row">
+        <div class="col-3">
+            <h5>Crea nuova promo</h5>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-3">
+            <label for="MzApName" class="form-label">Nome:</label>
+            <input type="text" id="PromoName" name="PromoName" class="form-control" />
+        </div>
+    </div>
+    <div class="row mt-4">
+        <div class="col">
+            <label for="date" class="col col-form-label">Data inizio validità</label>
+            <div class="col-2">
+                <div class="input-group date" id="container_data_inizio_validita">
+                    <input type="text" class="form-control" id="data_inizio_validita" autocomplete="off" />
+                    <span class="input-group-append">
+                        <span class="input-group-text bg-light d-block">
+                            <i class="fa fa-calendar"></i>
+                        </span>
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="row mt-4">
+        <div class="col">
+            <label for="date" class="col col-form-label">Data fine validità</label>
+            <div class="col-2">
+                <div class="input-group date" id="container_data_fine_validita">
+                    <input type="text" class="form-control" id="data_fine_validita" autocomplete="off" />
+                    <span class="input-group-append">
+                        <span class="input-group-text bg-light d-block">
+                            <i class="fa fa-calendar"></i>
+                        </span>
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="row mt-4">
+        <div class="col">
+            <label for="date" class="col col-form-label">Data scadenza</label>
+            <div class="col-2">
+                <div class="input-group date" id="container_data_scadenza">
+                    <input type="text" class="form-control" id="data_scadenza" autocomplete="off" />
+                    <span class="input-group-append">
+                        <span class="input-group-text bg-light d-block">
+                            <i class="fa fa-calendar"></i>
+                        </span>
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="row mt-4">
+        <div class="col-4">
+            <input type="button" class="btn btn-primary" value="Crea" onclick="promoCtrl.crea();">
+        </div>
+    </div>
+</div>
+
+<div class="modal" id="RevisioniModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Seleziona tracciati</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+            </div>
+            <div class="modal-footer">
+                <a id="aperturaTracciatiSelezionati" disabled type="button" class="btn btn-primary">Apri tracciati selezionati</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal" id="ReportAttivita" tabindex="-1">
+    <div class="modal-dialog modal-dialog-scrollable modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Report</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal" id="ReportErrorsAttivita" tabindex="-1">
+    <div class="modal-dialog modal-dialog-scrollable modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Report errori</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<div class="modal" id="modalImportazioneTracciato" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Importa nuovo tracciato</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row border bg-light mb-2 p-2">
+            <div class="col">
+                    <select class="tendinaAddestramenti form-select form-select-lg mb-3 mt-4" id="cmbAddestramenti" name="cmbAddestramenti">
+                    <option value="0" selected>Seleziona schema</option>
+                </select>
+                <input type="hidden" id="idPromo" />
+            </div>
+        </div>
+        <div class="row border bg-light mb-2 p-2">
+            <div class="col">
+                <label for="cmbLabels" class="form-label">Etichetta</label>
+                <select class="form-select form-select-lg mb-3 mt-4" id="cmbLabels" name="cmbLabels">
+                    <option value="0" selected>Seleziona etichetta</option>
+                </select>
+            </div>
+        </div>
+        <div class="row mt-3">
+            <div class="col-4">
+                <label for="FileTracciato" class="form-label">File del tracciato</label>
+                <input type="file" id="FileTracciato" name="FileTracciato" class="form-control" />
+            </div>
+        </div>
+        <div class="row mt-3" id="containerOpzioneAutoRevisione">
+            <div class="col-4">
+                <input type="checkbox" id="OpzioneAutoRevisione" name="OpzioneAutoRevisione" class="form-check-input" />
+                <label for="OpzioneAutoRevisione" class="form-label">Auto-Revisione da lista</label>                        
+            </div>
+        </div>
+        <div class="container" id="agenziaTracciatoForm">
+
+        </div>
+      </div>
+      <div class="modal-footer">
+          <div class="container">
+              <div class="row mt-4">
+                  <div class="col-4">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                            <input type="button" class="btn btn-primary" value="Importa" onclick="promoCtrl.importaTracciato();">
+                  </div>
+              </div>
+            <div class="row mt-4 progressBar" id="row_progress" style="display:none;">
+                <div class="container">
+                    <div class="row">
+                         <div class="col mb-2">
+                            <div class="progress">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated progressBar" id="progressbar" role="progressbar" style="width:0%;"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col text-center text-secondary">
+                            <p class="progressMsg" id="progressMsg"></p>
+                        </div>
+                    </div>
+
+            </div>
+          </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+    <tamplate id="promoItem">
+        <div class="accordion-item">
+            <h2 class="accordion-header" id="headingOne">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne" aria-expanded="true" aria-controls="collapseOne">
+                </button>
+            </h2>
+            <div id="collapseOne" class="accordion-collapse collapse" aria-labelledby="headingOne" data-bs-parent="#accordionExample">
+                <div class="accordion-body">
+                </div>
+            </div>
+        </div>
+    </tamplate>
+
+<template id="promoItemNew">
+    <div class="accordion-item">
+        <h2 class="accordion-header" id="headingTwo">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseTwo" aria-expanded="false" aria-controls="collapseTwo">
+                Crea nuova promo
+            </button>
+        </h2>
+        <div id="collapseTwo" class="accordion-collapse collapse" aria-labelledby="headingTwo" data-bs-parent="#accordionExample">
+            <div class="accordion-body">
+                FORM di inserimento
+            </div>
+        </div>
+    </div>
+</template>
+
+<template id="tracciatoItem">
+        <div class="row border bg-light mb-2 p-2 record_tracciato" id_tracciato="0">
+            <div class="container">
+                <div class="row">
+                    <div class="col-8">
+                        <p id="labNomeArea">{Nome area}</p>
+                    </div>                  
+                    <div class="col-4" style="text-align:right;display:ruby">
+                        <div id="counter_tracciato">                            
+                        </div>
+                        <a id="aRev" href="Revisore?id_promo={0}&id_tracciato={1}" title="Vai al revisore" class="link-primary mx-2">
+                            <img src="images/revisore.png" style="width:30px;">
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+</template>
+
+
+
+<!--Agenzia selezionata-->
+@inject Microsoft.AspNetCore.Http.IHttpContextAccessor HttpContextAccessor
+<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]" type="text/javascript">
+    let promoCtrl;
+    let taskManager;
+
+    function documentReady()
+    {
+
+        // $('#data_inizio_validita').datepicker({
+        //     changeMonth: true,
+        //     changeYear: true,
+        //     format: "dd/mm/yyyy",
+        //     language: "tr"
+        // });
+
+        // $('#data_fine_validita').datepicker({
+        //     changeMonth: true,
+        //     changeYear: true,
+        //     format: "dd/mm/yyyy",
+        //     language: "tr"
+        // });
+
+        // $('#data_scadenza').datepicker({
+        //     changeMonth: true,
+        //     changeYear: true,
+        //     format: "dd/mm/yyyy",
+        //     language: "tr"
+        // });
+
+        taskManager = new TaskManager();
+        promoCtrl = new Promo();
+        taskManager.addListener(promoCtrl);
+            
+    }
+
+
+</script>

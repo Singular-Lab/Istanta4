@@ -1,0 +1,19 @@
+COME SI COMPILA QUI
+
+  dotnet build   Istanta/Istanta.csproj
+  dotnet publish Istanta/Istanta.csproj -o pubblicato
+
+SEMPRE indicando il .csproj, MAI la solution.
+
+Perche: Istanta.sln referenzia ..\IstantaLib\AgenziaLib\AgenziaLib.csproj.
+Quel percorso e CORRETTO sul PC del team, dove la cartella AgenziaLib sta
+dentro IstantaLib. Qui sul server, quando i sorgenti sono stati estratti,
+AgenziaLib e finita accanto a Istanta invece che dentro IstantaLib: quindi
+la sln non trova il progetto.
+
+Non e un difetto del loro codice: in Visual Studio si apre e parte.
+E' la nostra disposizione delle cartelle a essere diversa.
+
+E comunque qui AgenziaLib non si compila dalla solution: e una DLL prodotta
+a parte dalla pipeline e caricata a runtime per nome
+(AgenziaLib.<Cliente>.<funzione>).

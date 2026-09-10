@@ -1,0 +1,62 @@
+# name: Cleanup
+
+# on:
+#   schedule:
+#     # Esegui ogni domenica alle 2:00 UTC
+#     - cron: '0 2 * * 0'
+#   workflow_dispatch:
+
+# jobs:
+#   cleanup:
+#     runs-on: ubuntu-latest
+
+#     steps:
+#     - name: Cleanup old artifacts
+#       uses: actions/github-script@v7
+#       with:
+#         script: |
+#           const artifacts = await github.rest.actions.listArtifactsForRepo({
+#             owner: context.repo.owner,
+#             repo: context.repo.repo,
+#             per_page: 100
+#           });
+
+#           const cutoff = new Date();
+#           cutoff.setDate(cutoff.getDate() - 30); // 30 giorni fa
+
+#           for (const artifact of artifacts.data.artifacts) {
+#             const createdAt = new Date(artifact.created_at);
+#             if (createdAt < cutoff) {
+#               console.log(`Deleting old artifact: ${artifact.name} (created: ${artifact.created_at})`);
+#               await github.rest.actions.deleteArtifact({
+#                 owner: context.repo.owner,
+#                 repo: context.repo.repo,
+#                 artifact_id: artifact.id
+#               });
+#             }
+#           }
+
+#     - name: Cleanup old workflow runs
+#       uses: actions/github-script@v7
+#       with:
+#         script: |
+#           const workflows = await github.rest.actions.listWorkflowRunsForRepo({
+#             owner: context.repo.owner,
+#             repo: context.repo.repo,
+#             per_page: 100
+#           });
+
+#           const cutoff = new Date();
+#           cutoff.setDate(cutoff.getDate() - 90); // 90 giorni fa
+
+#           for (const run of workflows.data.workflow_runs) {
+#             const createdAt = new Date(run.created_at);
+#             if (createdAt < cutoff && run.status === 'completed') {
+#               console.log(`Deleting old workflow run: ${run.id} (created: ${run.created_at})`);
+#               await github.rest.actions.deleteWorkflowRun({
+#                 owner: context.repo.owner,
+#                 repo: context.repo.repo,
+#                 run_id: run.id
+#               });
+#             }
+#           }

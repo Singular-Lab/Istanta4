@@ -1,0 +1,40 @@
+{
+    "auth": {
+        "login": "Accedi",
+        "logout": "Esci",
+        "user_greeting": "Ciao {{name}}, ben tornato!"
+    },
+    "workspace": {
+        "available_title": "Workspaces disponibili"
+    },
+    "messages": {
+        "new_one": "Hai un nuovo messaggio",
+        "new_other": "Hai {{count}} nuovi messaggi"
+    },
+    "errors": {
+        "generic": "Si è verificato un errore imprevisto.",
+        "network": "Si è verificato un errore di rete. Riprova più tardi.",
+        "unauthorized": "Non hai i permessi per accedere a questa pagina.",
+        "forbidden": "Accesso negato.",
+        "not_found": "Pagina non trovata."
+    },
+    "http": {
+        "401": "Non autorizzato",
+        "403": "Accesso negato",
+        "404": "Non trovato",
+        "500": "Errore interno del server"
+    },
+    "categories": {
+        "DEPERIBILI_LIBERO_SERVIZIO": "LIBERO SERVIZIO",
+        "PROFUMERIA": "BELLEZZA E IGIENE",
+        "NON_FOOD": "OCCASIONI EXTRA",
+        "IGIENE_CASA": "PULIZIA",
+        "MDD_S_D": "SAPORI E DINTORNI",
+        "MMDD_S_I": "SAPORI E IDEE",
+        "MDD_ESSENLAB": "CONAD ESSENTIAE",
+        "LS": "Libero Servizio"
+    },
+    "actions": {
+        "go_first_page": "Vai alla pagina principale"
+    }
+}

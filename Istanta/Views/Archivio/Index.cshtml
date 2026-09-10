@@ -1,0 +1,740 @@
+@page
+@model Istanta.Views.Archivio.IndexModel
+@{
+    var olimpoIp = (ViewBag.ipOlympus as string);
+
+    var merceologia = ViewBag.merceologia as Dictionary<string, string[]> ?? new Dictionary<string, string[]>();
+    var elencoReparti = ViewBag.elencoReparti as List<string> ?? new List<string>();
+    var elencoSettori = ViewBag.elencoSettori as List<string> ?? new List<string>();
+    var elencoCategorie = ViewBag.elencoCategorie as List<string> ?? new List<string>();
+
+    string selReparto = (ViewBag.search_reparto as string) ?? "";
+    string selSettore = (ViewBag.search_settore as string) ?? "";
+    string selCategoria = (ViewBag.search_categoria as string) ?? "";
+    string selFoto = (ViewBag.search_foto as string) ?? "";
+    string selOrd = (ViewBag.ordinamento as string) ?? "codice";
+
+    bool altriFiltriAttivi =
+        !string.IsNullOrEmpty(ViewBag.search_nome as string) ||
+        !string.IsNullOrEmpty(ViewBag.search_brand as string) ||
+        !string.IsNullOrEmpty(ViewBag.search_tipogusto as string) ||
+        !string.IsNullOrEmpty(ViewBag.search_gramm as string) ||
+        !string.IsNullOrEmpty(selFoto);
+}
+
+<style>
+    .arch { --bordo: #e3e6ea; --tenue: #6c757d; }
+    .arch .barra-ricerca {
+        background: #fff;
+        border: 1px solid var(--bordo);
+        border-radius: .5rem;
+        padding: 1rem 1rem .75rem 1rem;
+    }
+    .arch .kpi { display: flex; gap: .5rem; flex-wrap: wrap; }
+    .arch .kpi .voce {
+        border: 1px solid var(--bordo);
+        border-radius: .4rem;
+        padding: .35rem .7rem;
+        background: #fff;
+        line-height: 1.15;
+        min-width: 6.5rem;
+    }
+    .arch .kpi .voce .numero { font-size: 1.15rem; font-weight: 600; }
+    .arch .kpi .voce .etichetta {
+        font-size: .68rem; text-transform: uppercase;
+        letter-spacing: .04em; color: var(--tenue);
+    }
+    .arch .kpi .voce.attenzione .numero { color: #b02a37; }
+
+    .arch table.lista { font-size: .875rem; }
+    .arch table.lista thead th {
+        font-size: .7rem; text-transform: uppercase; letter-spacing: .04em;
+        color: var(--tenue); font-weight: 600; border-bottom: 2px solid var(--bordo);
+        white-space: nowrap;
+    }
+    .arch table.lista td { vertical-align: middle; }
+    .arch table.lista tbody tr.riga:hover { background: #f6f8fa; }
+    .arch .cod { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; }
+    .arch .descr { max-width: 32rem; }
+    .arch .merc { font-size: .78rem; line-height: 1.2; }
+    .arch .merc .sotto { color: var(--tenue); }
+    .arch .nulla { color: #adb5bd; }
+    .arch .miniatura { width: 44px; height: 44px; object-fit: contain; background: #fff; }
+    .arch .cella-editor { background: #f8f9fa; }
+    .arch .btn-dettagli { white-space: nowrap; }
+    .arch .btn-dettagli[aria-expanded="true"] .verso { transform: rotate(180deg); display: inline-block; }
+</style>
+
+<form method="POST">
+    <div class="container-fluid px-4 arch">
+
+        <div class="d-flex justify-content-between align-items-end flex-wrap gap-3 mt-3 mb-3">
+            <h3 class="mb-0">Archivio</h3>
+            <div class="kpi">
+                <div class="voce">
+                    <div class="numero">@ViewBag.totaleArchivio</div>
+                    <div class="etichetta">In archivio</div>
+                </div>
+                <div class="voce">
+                    <div class="numero">@ViewBag.conteggio</div>
+                    <div class="etichetta">Risultati</div>
+                </div>
+                <div class="voce">
+                    <div class="numero">@ViewBag.kpiConFoto</div>
+                    <div class="etichetta">Con foto</div>
+                </div>
+                <div class="voce @(((int?)ViewBag.kpiSenzaFoto ?? 0) > 0 ? "attenzione" : "")">
+                    <div class="numero">@ViewBag.kpiSenzaFoto</div>
+                    <div class="etichetta">Senza foto</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="barra-ricerca mb-4">
+            <div class="row g-2 align-items-end">
+                <div class="col-12 col-md-2">
+                    <label for="search_codice" class="form-label mb-1 small text-muted">Codice</label>
+                    <input type="text" class="form-control form-control-sm" id="search_codice" name="search_codice" value="@ViewBag.search_codice" placeholder="es. 121174-1" />
+                </div>
+                <div class="col-12 col-md-3">
+                    <label for="search_generic" class="form-label mb-1 small text-muted">Cerca ovunque</label>
+                    <input type="text" class="form-control form-control-sm" id="search_generic" name="search_generic" value="@ViewBag.search_generic" placeholder="codice o descrizione" />
+                </div>
+                <div class="col-6 col-md-2">
+                    <label for="search_reparto" class="form-label mb-1 small text-muted">Reparto</label>
+                    <select class="form-select form-select-sm" id="search_reparto" name="search_reparto" @(elencoReparti.Count == 0 ? "disabled" : "")>
+                        <option value="">Tutti</option>
+                        @foreach (var r in elencoReparti)
+                        {
+                            <option value="@r" selected="@(r == selReparto)">@r</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-6 col-md-2">
+                    <label for="search_settore" class="form-label mb-1 small text-muted">Settore</label>
+                    <select class="form-select form-select-sm" id="search_settore" name="search_settore" @(elencoSettori.Count == 0 ? "disabled" : "")>
+                        <option value="">Tutti</option>
+                        @foreach (var s in elencoSettori)
+                        {
+                            <option value="@s" selected="@(s == selSettore)">@s</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-6 col-md-2">
+                    <label for="search_categoria" class="form-label mb-1 small text-muted">Categoria</label>
+                    <select class="form-select form-select-sm" id="search_categoria" name="search_categoria" @(elencoCategorie.Count == 0 ? "disabled" : "")>
+                        <option value="">Tutte</option>
+                        @foreach (var c in elencoCategorie)
+                        {
+                            <option value="@c" selected="@(c == selCategoria)">@c</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-6 col-md-1 d-grid">
+                    <input type="submit" value="Cerca" class="btn btn-primary btn-sm" />
+                </div>
+            </div>
+
+            <div class="collapse @(altriFiltriAttivi ? "show" : "")" id="altriFiltri">
+                <hr class="my-3" />
+                <div class="row g-2 align-items-end">
+                    <div class="col-6 col-md-2">
+                        <label for="search_nome" class="form-label mb-1 small text-muted">Nome</label>
+                        <input type="text" class="form-control form-control-sm" id="search_nome" name="search_nome" value="@ViewBag.search_nome" />
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <label for="search_brand" class="form-label mb-1 small text-muted">Brand</label>
+                        <input type="text" class="form-control form-control-sm" id="search_brand" name="search_brand" value="@ViewBag.search_brand" />
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <label for="search_tipogusto" class="form-label mb-1 small text-muted">Tipo / Gusto</label>
+                        <input type="text" class="form-control form-control-sm" id="search_tipogusto" name="search_tipogusto" value="@ViewBag.search_tipogusto" />
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <label for="search_gramm" class="form-label mb-1 small text-muted">Grammatura</label>
+                        <input type="text" class="form-control form-control-sm" id="search_gramm" name="search_gramm" value="@ViewBag.search_gramm" />
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <label for="search_foto" class="form-label mb-1 small text-muted">Foto</label>
+                        <select class="form-select form-select-sm" id="search_foto" name="search_foto">
+                            <option value="" selected="@(selFoto == "")">Indifferente</option>
+                            <option value="con" selected="@(selFoto == "con")">Solo con foto</option>
+                            <option value="senza" selected="@(selFoto == "senza")">Solo senza foto</option>
+                        </select>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <label for="ordinamento" class="form-label mb-1 small text-muted">Ordina per</label>
+                        <select class="form-select form-select-sm" id="ordinamento" name="ordinamento">
+                            <option value="codice" selected="@(selOrd == "codice")">Codice A → Z</option>
+                            <option value="codice_desc" selected="@(selOrd == "codice_desc")">Codice Z → A</option>
+                            <option value="descrizione" selected="@(selOrd == "descrizione")">Descrizione A → Z</option>
+                            <option value="recenti" selected="@(selOrd == "recenti")">Modificati di recente</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex gap-3 mt-3">
+                <button class="btn btn-link btn-sm p-0 text-decoration-none" type="button"
+                        data-bs-toggle="collapse" data-bs-target="#altriFiltri" aria-expanded="@(altriFiltriAttivi ? "true" : "false")" aria-controls="altriFiltri">
+                    Altri filtri
+                </button>
+                <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none text-muted reset">Azzera</button>
+            </div>
+
+            <input type="hidden" id="any_changed" name="any_changed" value="0" />
+        </div>
+
+        @if (ViewBag.lista_ricerca != null)
+        {
+            var lista_ricerca = ViewBag.lista_ricerca as List<Articoli>;
+            foreach (var itemBind in lista_ricerca!)
+            {
+                foreach (var d in itemBind.ArticoliDescrizionis!)
+                    d.IdArticoloNavigation = null;
+                foreach (var f in itemBind.ArticoliFotos!)
+                    f.IdArticoloNavigation = null;
+            }
+
+            if (lista_ricerca!.Count <= 0)
+            {
+                <div class="alert alert-light border" role="alert">
+                    <strong>Nessuna referenza trovata.</strong>
+                    <span class="text-muted">Prova ad allargare la ricerca o ad azzerare i filtri.</span>
+                </div>
+            }
+            else
+            {
+                <div id="lista">
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle lista mb-0">
+                            <thead>
+                                <tr>
+                                    <th style="width:56px;"></th>
+                                    <th style="width:9rem;">Codice</th>
+                                    <th>Descrizione</th>
+                                    <th style="width:7rem;">Peso</th>
+                                    <th style="width:16rem;">Reparto / Settore</th>
+                                    <th style="width:5rem;" class="text-center">Foto</th>
+                                    <th style="width:7rem;" class="text-end"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var art in lista_ricerca)
+                                {
+                                    string link = "SchedaArticolo?codice=" + @art.Codice;
+                                    var itemDescr = art.ArticoliDescrizionis!.FirstOrDefault(x => x.Canale == null && x.Area == null)
+                                                    ?? art.ArticoliDescrizionis!.FirstOrDefault();
+                                    var fotoPrimaria = art.ArticoliFotos!.Where(f => !f.Tipo.HasValue || f.Tipo == (Byte)IstantaLib.TipoFoto.Foto).OrderByDescending(o => o.DataModifica).FirstOrDefault();
+                                    int nFoto = art.ArticoliFotos!.Count;
+                                    string idEditor = "editor-" + art.Id;
+
+                                    string[] merc = merceologia.ContainsKey(art.Codice ?? "") ? merceologia[art.Codice!] : new string[] { "", "", "" };
+
+                                    // Istanta4: sceglie, per una data coppia Area/Canale, la foto piu' specifica
+                                    // compatibile (stessa logica di GetSpecificity/IsCompatibleWithCurrentBranch
+                                    // usata da SyncFotoController per decidere quale foto va davvero in stampa).
+                                    Func<string?, string?, ArticoliFoto?> migliorFotoPerScope = (areaTarget, canaleTarget) =>
+                                        art.ArticoliFotos!
+                                            .Where(f => !f.Tipo.HasValue || f.Tipo == (Byte)IstantaLib.TipoFoto.Foto)
+                                            .Where(f => (string.IsNullOrWhiteSpace(f.Area) || f.Area == areaTarget) && (string.IsNullOrWhiteSpace(f.Canale) || f.Canale == canaleTarget))
+                                            .OrderByDescending(f => (string.IsNullOrWhiteSpace(f.Area) ? 0 : 1) + (string.IsNullOrWhiteSpace(f.Canale) ? 0 : 1))
+                                            .ThenByDescending(f => f.DataModifica)
+                                            .FirstOrDefault();
+
+                                    <tr class="riga record_articolo" id_articolo="@art.Id">
+                                        <td>
+                                            @if (fotoPrimaria != null)
+                                            {
+                                                string thumbnail = olimpoIp + "/foto/getThumbNailOnDemand?width=88&guidId=" + fotoPrimaria.GuidId;
+                                                string bigImage = olimpoIp + "/foto/getThumbNailOnDemand?width=800&guidId=" + fotoPrimaria.GuidId;
+                                                <img src="@thumbnail"
+                                                     class="rounded border miniatura img-preview-hover"
+                                                     data-bigimg="@bigImage"
+                                                     alt="@fotoPrimaria!.NomeReale"
+                                                     style="cursor:pointer;">
+                                            }
+                                            else
+                                            {
+                                                <img src="images/NoFoto.png" class="rounded border miniatura" alt="nessuna foto" style="opacity:.5;">
+                                            }
+                                        </td>
+                                        <td>
+                                            <a class="cod a_scheda_articolo text-decoration-none" href="@link">@art.Codice</a>
+                                        </td>
+                                        <td class="descr">
+                                            @if (itemDescr != null && !string.IsNullOrWhiteSpace(itemDescr.Descrizione1))
+                                            {
+                                                <span title="@itemDescr.Descrizione1">@itemDescr.Descrizione1</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="nulla fst-italic">senza descrizione</span>
+                                            }
+                                            @if (itemDescr != null && !string.IsNullOrWhiteSpace(itemDescr.Descrizione2))
+                                            {
+                                                <span class="text-muted small ms-2">@itemDescr.Descrizione2</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (itemDescr != null && itemDescr.Peso != null)
+                                            {
+                                                <span>@itemDescr.Peso.ToString()!.Replace(".", ",") <span class="text-muted">@itemDescr.Um</span></span>
+                                            }
+                                            else
+                                            {
+                                                <span class="nulla">—</span>
+                                            }
+                                        </td>
+                                        <td class="merc">
+                                            @if (merc[0] != "")
+                                            {
+                                                <div>@merc[0]</div>
+                                                <div class="sotto">@merc[1]</div>
+                                            }
+                                            else
+                                            {
+                                                <span class="nulla">—</span>
+                                            }
+                                        </td>
+                                        <td class="text-center">
+                                            @if (nFoto > 0)
+                                            {
+                                                <span class="badge bg-secondary-subtle text-secondary-emphasis border">@nFoto</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-warning-subtle text-warning-emphasis border">0</span>
+                                            }
+                                        </td>
+                                        <td class="text-end">
+                                            <button class="btn btn-outline-secondary btn-sm btn-dettagli" type="button"
+                                                    data-bs-toggle="collapse" data-bs-target="#@idEditor"
+                                                    aria-expanded="false" aria-controls="@idEditor">
+                                                Dettagli <span class="verso">&#9662;</span>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td colspan="7" class="p-0 border-0">
+                                            <div class="collapse" id="@idEditor">
+                                                <div class="cella-editor border-top border-bottom py-3">
+
+                                                    <div class="container dettaglioCampiElemento">
+
+                                                        <div class="d-flex justify-content-between align-items-center">
+                                                            <ul class="nav nav-tabs flex-grow-1" id="tabHeader" style="border-bottom: 1px solid #9f9a9a !important" role="tablist">
+                                                                <li class="nav-item" role="presentation">
+                                                                    <button class="nav-link active" id="tab-Naz-@art.Id-tab" data-bs-toggle="tab" data-bs-target="#tab-Naz-@art.Id" type="button" role="tab" aria-controls="tab-Naz-@art.Id" aria-selected="true">
+                                                                        Naz
+                                                                    </button>
+                                                                </li>
+                                                                @foreach (var item in art.ArticoliDescrizionis!)
+                                                                {
+                                                                    if (item.Canale == null && item.Area == null)
+                                                                    {
+                                                                        continue;
+                                                                    }
+                                                                    var nome = @item.Canale + @item.Area;
+                                                                    var tabId = "tab-" + nome + (art.Codice);
+                                                                    <li class="nav-item" role="presentation">
+                                                                        <button class="nav-link" area="@item.Area" canale="@item.Canale" id="@tabId-tab" data-bs-toggle="tab" data-bs-target="#@tabId" type="button" role="tab" aria-controls="@tabId" aria-selected="true">@nome</button>
+                                                                    </li>
+                                                                }
+                                                            </ul>
+                                                        </div>
+
+                                                        <div class="tab-content border-start border-end border-bottom p-3" style="border-color: #9f9a9a !important;" id="tabContent">
+                                                            <div class="tab-pane fade show active content" area="" canale="" id="tab-Naz-@art.Id" role="tabpanel" aria-labelledby="tab-Naz-@art.Id-tab">
+                                                                <div class="container">
+                                                                    @{
+                                                                        var fotoTabNaz = migliorFotoPerScope(null, null);
+                                                                    }
+                                                                    <div class="row align-items-center mb-3 pb-3 border-bottom foto-archivio" data-codice="@art.Codice" data-id-articolo="@art.Id" data-area="" data-canale="">
+                                                                        <div class="col-auto">
+                                                                            @if (fotoTabNaz != null)
+                                                                            {
+                                                                                string thumbFotoTabNaz = olimpoIp + "/foto/getThumbNailOnDemand?width=88&guidId=" + fotoTabNaz.GuidId;
+                                                                                <img src="@thumbFotoTabNaz" class="rounded border foto-archivio-thumb" alt="@fotoTabNaz.NomeReale" style="width:64px;height:64px;object-fit:cover;">
+                                                                            }
+                                                                            else
+                                                                            {
+                                                                                <img src="images/NoFoto.png" class="rounded border foto-archivio-thumb" alt="nessuna foto" style="width:64px;height:64px;object-fit:cover;opacity:.5;">
+                                                                            }
+                                                                        </div>
+                                                                        <div class="col">
+                                                                            <div class="small text-muted">Foto in archivio (generica)</div>
+                                                                            <div class="small foto-archivio-nome">@(fotoTabNaz != null ? fotoTabNaz.NomeReale : "nessuna foto caricata")</div>
+                                                                            <div class="small text-danger foto-archivio-errore" style="display:none;"></div>
+                                                                        </div>
+                                                                        <div class="col-auto">
+                                                                            <input type="file" class="d-none input-foto-archivio" accept=".jpg,.jpeg,.png,.tif,.tiff,.psd,.eps,.ai,.pdf">
+                                                                            <button type="button" class="btn btn-outline-secondary btn-sm btn-carica-foto-archivio">Carica foto</button>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div class="row" id="riga_revisione">
+                                                                        <div class="col small text-muted">
+                                                                            @if (itemDescr != null)
+                                                                            {
+                                                                                <span id="lab_data_ultima_revisione">Data ultima revisione: @itemDescr.DataUltimaRicezione</span>
+                                                                            }
+                                                                        </div>
+                                                                    </div>
+                                                                    <br />
+                                                                    <div class="row">
+                                                                        <div class="col">
+                                                                            <label for="Descrizione1" class="form-label">Descrizione1</label>
+                                                                            <textarea class="form-control" style="height:100px; font-family:monospace" id="Descrizione1" name="Descrizione1">@(itemDescr != null ? itemDescr.Descrizione1 : "")</textarea>
+                                                                        </div>
+                                                                        <div class="col">
+                                                                            <label for="Descrizione3" class="form-label">Descrizione3</label>
+                                                                            <textarea class="form-control" style="height:100px; font-family:monospace" id="Descrizione3" name="Descrizione3">@(itemDescr != null ? itemDescr.Descrizione3 : "")</textarea>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div class="row">
+                                                                        <div class="col">
+                                                                            <label for="Descrizione2" class="form-label">Descrizione2</label>
+                                                                            <textarea class="form-control" style="height:100px; font-family:monospace" id="Descrizione2" name="Descrizione2">@(itemDescr != null ? itemDescr.Descrizione2 : "")</textarea>
+                                                                        </div>
+                                                                        <div class="col">
+                                                                            <label for="Descrizione4" class="form-label">Descrizione4</label>
+                                                                            <textarea class="form-control" style="height:100px; font-family:monospace" id="Descrizione4" name="Descrizione4">@(itemDescr != null ? itemDescr.Descrizione4 : "")</textarea>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div class="row mt-4">
+                                                                        <div class="col">
+                                                                            <div class="input-group float-start w-50">
+                                                                                <span class="input-group-text" style="font-size:small;">Peso totale</span>
+                                                                                <input type="text" style="font-family:monospace" class="form-control" id="Peso" name="Peso" value="@(itemDescr != null && itemDescr.Peso != null ? itemDescr.Peso.ToString()!.Replace(".", ",") : "")" />
+                                                                            </div>
+                                                                            <div class="input-group float-start w-50">
+                                                                                <span class="input-group-text" style="font-size:small;">Unità di misura</span>
+                                                                                <input type="text" style="font-family:monospace" class="form-control" id="Um" name="Um" value="@(itemDescr != null ? itemDescr.Um : "")" />
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+
+                                                                <div class="accordion mt-2" id="accordionExtra-@art.Id">
+                                                                    <div class="accordion-item">
+                                                                        <h2 class="accordion-header" id="headingOne-@art.Id">
+                                                                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne-@art.Id" aria-expanded="false" aria-controls="collapseOne-@art.Id">
+                                                                                Extra
+                                                                            </button>
+                                                                        </h2>
+                                                                        <div id="collapseOne-@art.Id" class="accordion-collapse collapse" aria-labelledby="headingOne-@art.Id" data-bs-parent="#accordionExtra-@art.Id">
+                                                                            <div class="accordion-body">
+                                                                                <div class="row mt-3 rowExtra" data='@Html.Raw(System.Text.Json.JsonSerializer.Serialize(art))' id="rowExtra">
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+
+                                                                <div class="row mt-4">
+                                                                    <div class="col text-start px-3">
+                                                                        <input id="vediUltimeModifiche" data-target-cod="@art.Codice" type="button" class="btn btn-outline-secondary btn-sm vediUltimeModifiche" value="Cronologia modifiche" />
+                                                                    </div>
+                                                                    <div class="col text-end px-3">
+                                                                        <input id="bottoneSalva" data-target-cod="@art.Codice" type="button" class="btn btn-primary btn-sm bottoneSalva" value="Salva" />
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            @foreach (var item in art.ArticoliDescrizionis)
+                                                            {
+                                                                var id = $"art-{item.Id}";
+                                                                var accId = $"accordionExtra-{id}";
+                                                                var headingId = $"heading-{id}";
+                                                                var collapseId = $"collapse-{id}";
+
+                                                                if (item.Canale == null && item.Area == null)
+                                                                {
+                                                                    continue;
+                                                                }
+
+                                                                var nome = @item.Canale + @item.Area;
+                                                                var tabId = "tab-" + nome + (art.Codice);
+
+                                                                <div class="tab-pane fade hide content" area="@item.Area" canale="@item.Canale" id="@tabId" role="tabpanel" aria-labelledby="@tabId-tab">
+                                                                    <div class="container">
+                                                                        @{
+                                                                            var fotoTabScope = migliorFotoPerScope(item.Area, item.Canale);
+                                                                            bool fotoTabEreditata = fotoTabScope != null && !(fotoTabScope.Area == item.Area && fotoTabScope.Canale == item.Canale);
+                                                                        }
+                                                                        <div class="row align-items-center mb-3 pb-3 border-bottom foto-archivio" data-codice="@art.Codice" data-id-articolo="@art.Id" data-area="@item.Area" data-canale="@item.Canale">
+                                                                            <div class="col-auto">
+                                                                                @if (fotoTabScope != null)
+                                                                                {
+                                                                                    string thumbFotoTabScope = olimpoIp + "/foto/getThumbNailOnDemand?width=88&guidId=" + fotoTabScope.GuidId;
+                                                                                    <img src="@thumbFotoTabScope" class="rounded border foto-archivio-thumb" alt="@fotoTabScope.NomeReale" style="width:64px;height:64px;object-fit:cover;@(fotoTabEreditata ? "opacity:.7;" : "")">
+                                                                                }
+                                                                                else
+                                                                                {
+                                                                                    <img src="images/NoFoto.png" class="rounded border foto-archivio-thumb" alt="nessuna foto" style="width:64px;height:64px;object-fit:cover;opacity:.5;">
+                                                                                }
+                                                                            </div>
+                                                                            <div class="col">
+                                                                                <div class="small text-muted">
+                                                                                    Foto in archivio
+                                                                                    @if (fotoTabEreditata)
+                                                                                    {
+                                                                                        <span class="badge bg-light text-muted border foto-archivio-badge-ereditata">ereditata dalla generica</span>
+                                                                                    }
+                                                                                </div>
+                                                                                <div class="small foto-archivio-nome">@(fotoTabScope != null ? fotoTabScope.NomeReale : "nessuna foto caricata")</div>
+                                                                                <div class="small text-danger foto-archivio-errore" style="display:none;"></div>
+                                                                            </div>
+                                                                            <div class="col-auto">
+                                                                                <input type="file" class="d-none input-foto-archivio" accept=".jpg,.jpeg,.png,.tif,.tiff,.psd,.eps,.ai,.pdf">
+                                                                                <button type="button" class="btn btn-outline-secondary btn-sm btn-carica-foto-archivio">Carica foto</button>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div class="row" id="riga_revisione">
+                                                                            <div class="col small text-muted">
+                                                                                <span id="lab_data_ultima_revisione">Data ultima revisione: @item.DataUltimaRicezione</span>
+                                                                            </div>
+                                                                        </div>
+                                                                        <br />
+                                                                        <div class="row">
+                                                                            <div class="col">
+                                                                                <label for="Descrizione1" class="form-label">Descrizione1</label>
+                                                                                <textarea class="form-control" style="height:100px; font-family:monospace" id="Descrizione1" name="Descrizione1">@item.Descrizione1</textarea>
+                                                                            </div>
+                                                                            <div class="col">
+                                                                                <label for="Descrizione3" class="form-label">Descrizione3</label>
+                                                                                <textarea class="form-control" style="height:100px; font-family:monospace" id="Descrizione3" name="Descrizione3">@item.Descrizione3</textarea>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div class="row">
+                                                                            <div class="col">
+                                                                                <label for="Descrizione2" class="form-label">Descrizione2</label>
+                                                                                <textarea class="form-control" style="height:100px; font-family:monospace" id="Descrizione2" name="Descrizione2">@item.Descrizione2</textarea>
+                                                                            </div>
+                                                                            <div class="col">
+                                                                                <label for="Descrizione4" class="form-label">Descrizione4</label>
+                                                                                <textarea class="form-control" style="height:100px; font-family:monospace" id="Descrizione4" name="Descrizione4">@item.Descrizione4</textarea>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div class="row mt-4">
+                                                                            <div class="col">
+                                                                                <div class="input-group float-start w-50">
+                                                                                    <span class="input-group-text" style="font-size:small;">Peso totale</span>
+                                                                                    <input type="text" style="font-family:monospace" class="form-control" id="Peso" name="Peso" value="@item.Peso" />
+                                                                                </div>
+                                                                                <div class="input-group float-start w-50">
+                                                                                    <span class="input-group-text" style="font-size:small;">Unità di misura</span>
+                                                                                    <input type="text" style="font-family:monospace" class="form-control" id="Um" name="Um" value="@item.Um" />
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        <div class="accordion mb-2 mt-2" id="@accId">
+                                                                            <div class="accordion-item">
+                                                                                <h2 class="accordion-header" id="@headingId">
+                                                                                    <button class="accordion-button collapsed" type="button"
+                                                                                            data-bs-toggle="collapse"
+                                                                                            data-bs-target="#@collapseId"
+                                                                                            aria-expanded="false"
+                                                                                            aria-controls="@collapseId">
+                                                                                        Extra
+                                                                                    </button>
+                                                                                </h2>
+                                                                                <div id="@collapseId"
+                                                                                     class="accordion-collapse collapse"
+                                                                                     aria-labelledby="@headingId"
+                                                                                     data-bs-parent="#@accId">
+                                                                                    <div class="accordion-body">
+                                                                                        <div class="row mt-3" id="rowExtra">
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        <div class="row mt-4">
+                                                                            <div class="col text-start px-3">
+                                                                                <input id="vediUltimeModifiche" data-target-cod="@art.Codice" type="button" class="btn btn-outline-secondary btn-sm vediUltimeModifiche" value="Cronologia modifiche" />
+                                                                            </div>
+                                                                            <div class="col text-end px-3">
+                                                                                <input id="bottoneSalva" data-target-cod="@art.Codice" area="@item.Area" canale="@item.Canale" type="button" class="btn btn-primary btn-sm bottoneSalva" value="Salva" />
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            }
+                                                        </div>
+                                                    </div>
+
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                @if (ViewBag.TotPagine > 1)
+                {
+                    <nav aria-label="Navigazione risultati" class="mt-3">
+                        <ul class="pagination pagination-sm">
+                            <input type="hidden" id="Page" name="Page">
+                            @if (ViewBag.CurrentPage > 1)
+                            {
+                                <li class="page-item">
+                                    <button type="submit" class="page-link js-page-btn" data-target-page="@(ViewBag.CurrentPage - 1)">Precedente</button>
+                                </li>
+                            }
+
+                            @for (int i = Math.Max(1, ViewBag.CurrentPage - 5); i <= Math.Min(ViewBag.CurrentPage + 5, ViewBag.TotPagine); i++)
+                            {
+                                if (i == ViewBag.CurrentPage)
+                                {
+                                    <li class="page-item active">
+                                        <button type="submit" class="page-link js-page-btn" data-target-page="@i.ToString()">@i</button>
+                                    </li>
+                                }
+                                else
+                                {
+                                    <li class="page-item">
+                                        <button type="submit" class="page-link js-page-btn" data-target-page="@i.ToString()">@i</button>
+                                    </li>
+                                }
+                            }
+
+                            @if (ViewBag.CurrentPage < ViewBag.TotPagine)
+                            {
+                                <li class="page-item">
+                                    <button type="submit" class="page-link js-page-btn" data-target-page="@(ViewBag.CurrentPage + 1)">Successiva</button>
+                                </li>
+                            }
+                        </ul>
+                    </nav>
+                }
+            }
+        }
+    </div>
+</form>
+
+<!-- Modal Principale -->
+<div class="modal fade" id="operazioniModal" tabindex="-1" aria-labelledby="operazioniModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="operazioniModalLabel"></h5>
+                <select id="rangeDateSelect" class="form-select w-auto ms-3">
+                    <option value="1">Ultime 24 ore</option>
+                    <option value="7" selected>Ultimi 7 giorni</option>
+                    <option value="30">Ultimo mese</option>
+                    <option value="all">Sempre</option>
+                </select>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Chiudi"></button>
+            </div>
+            <div class="modal-body" id="operazioniModalBody"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal per formData -->
+<div class="modal fade" id="formDataModal" tabindex="-1" aria-labelledby="formDataModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="formDataModalLabel">Dati del form</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Chiudi"></button>
+            </div>
+            <div class="modal-body" id="formDataModalBody"></div>
+        </div>
+    </div>
+</div>
+
+@inject Microsoft.AspNetCore.Http.IHttpContextAccessor HttpContextAccessor
+<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]" type="text/javascript">
+    let ArchivioItem;
+    var agenzia;
+    function documentReady() {
+
+        ArchivioItem = new Archivio();
+        agenzia = new Agenzia();
+
+        $("#btnCaricaDump").on("click", function () {
+            ArchivioItem.startDump();
+        });
+
+        $("#preview").on("click", function () {
+            $('#fileDumpUpload').click();
+        });
+
+        $(".reset").on("click", function () {
+            $("#search_codice").val("");
+            $("#search_generic").val("");
+            $("#search_nome").val("");
+            $("#search_brand").val("");
+            $("#search_tipogusto").val("");
+            $("#search_gramm").val("");
+            $("#search_reparto").val("");
+            $("#search_settore").val("");
+            $("#search_categoria").val("");
+            $("#search_foto").val("");
+            $("#ordinamento").val("codice");
+            $("#any_changed").val("1");
+            $("#Page").val("");
+        });
+
+        // Cambiare un filtro riporta alla prima pagina: restare sulla pagina 7
+        // di una ricerca diversa e' il modo piu' rapido per non trovare niente.
+        $(".barra-ricerca").on("change", "input, select", function () {
+            $("#any_changed").val("1");
+        });
+
+        $(document).on("mouseenter", ".img-preview-hover", function () {
+            const bigImg = $(this).data("bigimg");
+            $("#image-hover-preview img").attr("src", bigImg);
+            $("#image-hover-preview").css("display", "flex");
+        });
+
+        $(document).on("mouseleave", ".img-preview-hover", function () {
+            $("#image-hover-preview").hide();
+            $("#image-hover-preview img").attr("src", "");
+        });
+
+        $("#lista").on("click", ".vediUltimeModifiche", function () {
+            ArchivioItem.checkLastModifica($(this).attr('data-target-cod'), $(this).closest('.row').find('#bottoneSalva').attr('canale'), $(this).closest('.row').find('#bottoneSalva').attr('area'))
+        });
+
+        $("#lista").on("click", ".bottoneSalva", function () {
+            ArchivioItem.salvaRevisione($(this), $(this).attr('data-target-cod'), $(this).attr('canale'), $(this).attr('area'))
+        });
+
+        $("#lista").on("click", ".btn-carica-foto-archivio", function () {
+            $(this).closest(".foto-archivio").find(".input-foto-archivio").trigger("click");
+        });
+
+        $("#lista").on("change", ".input-foto-archivio", function () {
+            if (this.files.length > 0) {
+                ArchivioItem.caricaFotoManuale($(this), this.files[0]);
+            }
+        });
+
+        $(document).on('click', '.js-page-btn', function () {
+            const target = $(this).data('target-page');
+            $('#Page').val(target);
+            $("#any_changed").val("0");
+        });
+
+        // I campi Extra dell'agenzia si costruiscono solo quando la riga viene
+        // aperta: costruirli tutti in partenza allunga il caricamento per
+        // niente, visto che quasi sempre se ne apre una sola.
+        $(document).on('show.bs.collapse', '.collapse', function () {
+            $(this).find(".rowExtra").each(function () {
+                if ($(this).attr("data-costruito") === "1") return;
+                if (agenzia.aggiungiCampiExtraSchedaArticolo != null) {
+                    agenzia.aggiungiCampiExtraSchedaArticolo($(this), JSON.parse($(this).attr("data")));
+                    $(this).attr("data-costruito", "1");
+                }
+            });
+        });
+    }
+</script>

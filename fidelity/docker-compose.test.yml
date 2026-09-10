@@ -1,0 +1,181 @@
+# Ambiente di test locale in modalità produzione (senza HTTPS).
+#
+# Stessi servizi di prod ma:
+#   - CLIENT_URL usa http:// → cookie.secure = false, nessun redirect HTTPS
+#   - GRAFANA_ADMIN_PASSWORD non obbligatorio (default "admin")
+#   - Porte osservabilità leggermente diverse per non collidere con dev
+#   - Volumi con suffisso _test: non collidono con i dati di produzione/dev
+#   - MONGO_URL punta a host.docker.internal (MongoDB sul host)
+#   - PostgreSQL sul host: raggiunto tramite host.docker.internal
+#
+# Avvio:
+#   docker compose -f docker-compose.test.yml up --build
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/server.prod.Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL}
+        VITE_WS_URL: ${VITE_WS_URL}
+    pull_policy: never
+    restart: unless-stopped
+    user: "node"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    ports:
+      - "${NODE_PORT:-3010}:${NODE_PORT:-3010}"
+      - "${WS_PORT:-3400}:${WS_PORT:-3400}"
+    labels:
+      prometheus.scrape: "true"
+      prometheus.port: "${NODE_PORT:-3010}"
+      prometheus.path: "/metrics"
+    env_file: .env
+    environment:
+      NODE_ENV: test
+      # PostgreSQL e MongoDB sul host: raggiungibili tramite host.docker.internal
+      DB_POSTGRESQL_HOST: host.docker.internal
+      DB_POSTGRESQL_PORT: ${DB_POSTGRESQL_PORT:-5432}
+      MONGO_URL: "mongodb://host.docker.internal:27017/${MONGO_DB_NAME}"
+      REDIS_URL: redis://redis:6379
+      ICONE_INSEGNA_DIR: /home/node/insegne
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - insegne_test_data:/home/node/insegne
+      - ./config:/app/config
+    depends_on:
+      redis:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 ${NODE_PORT:-3010} || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_test_data:/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  prometheus:
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    user: root
+    ports:
+      - "${DOCKER_PROMETHEUS_PORT:-9091}:9090"
+    volumes:
+      - ./docker/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+
+  grafana:
+    image: grafana/grafana:latest
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "${DOCKER_GRAFANA_PORT:-3002}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SECURITY_DISABLE_GRAVATAR: "true"
+      # SMTP per invio email alert
+      GF_SMTP_ENABLED: ${GRAFANA_SMTP_ENABLED:-false}
+      GF_SMTP_HOST: ${GRAFANA_SMTP_HOST:-}
+      GF_SMTP_USER: ${GRAFANA_SMTP_USER:-}
+      GF_SMTP_PASSWORD: ${GRAFANA_SMTP_PASSWORD:-}
+      GF_SMTP_FROM_ADDRESS: ${GRAFANA_SMTP_FROM_ADDRESS:-admin@grafana.localhost}
+      GF_SMTP_FROM_NAME: ${GRAFANA_SMTP_FROM_NAME:-Grafana}
+      GF_SMTP_SKIP_VERIFY: ${GRAFANA_SMTP_SKIP_VERIFY:-false}
+      GF_SMTP_STARTTLS_POLICY: ${GRAFANA_SMTP_STARTTLS_POLICY:-}
+      GF_SMTP_EHLO_IDENTITY: ${GRAFANA_SMTP_EHLO_IDENTITY:-}
+      # Datasource PostgreSQL: punta al database sul host tramite host.docker.internal
+      GRAFANA_POSTGRES_HOST: host.docker.internal:${DB_POSTGRESQL_PORT:-5432}
+      GRAFANA_POSTGRES_DB: ${DB_POSTGRESQL_NAME:-FIDELITY_TEST}
+      GRAFANA_POSTGRES_USER: ${DB_POSTGRESQL_USER:-fidelity}
+      GRAFANA_POSTGRES_PASSWORD: ${DB_POSTGRESQL_PASSWORD:-fidelity}
+    # Necessario perché Grafana deve risolvere host.docker.internal per il datasource PostgreSQL
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - grafana_test_data:/var/lib/grafana
+      - ./docker/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./docker/observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+      - loki
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  loki:
+    image: grafana/loki:3
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "${DOCKER_LOKI_PORT:-3101}:3100"
+    volumes:
+      - ./docker/observability/loki.yml:/etc/loki/local-config.yaml:ro
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  promtail:
+    image: grafana/promtail:latest
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+    user: "0:0"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./docker/observability/promtail.yml:/etc/promtail/config.yml:ro
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  redis_test_data:
+  grafana_test_data:
+  insegne_test_data:
