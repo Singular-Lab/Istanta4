@@ -15,6 +15,6 @@
     <PackageReference Include="System.Drawing.Common" Version="6.0.0" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="../Istanta/Istanta.csproj" />
+    <ProjectReference Include="../IstantaLib/IstantaLib/IstantaLib.csproj" />
   </ItemGroup>
 </Project>

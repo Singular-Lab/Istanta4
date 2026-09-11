@@ -1,0 +1,270 @@
+name: Build and publish Istanta suite
+run-name: Istanta suite ${{ inputs.version }} - release ${{ inputs.release_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      version: { description: Versione semantica senza prefisso v, required: true, type: string }
+      release_id: { description: Identificativo release ControlPlane, required: true, type: string }
+      source_sha: { description: SHA completo del commit da compilare, required: true, type: string }
+      components_json: { description: Configurazione componenti fornita da ControlPlane, required: true, type: string }
+      previous_source_sha: { description: SHA della precedente release, required: false, default: '', type: string }
+      previous_artifacts_json: { description: Artefatti della precedente release, required: false, default: '', type: string }
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: istanta-suite-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Validate release inputs
+        id: metadata
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+          RELEASE_ID: ${{ inputs.release_id }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          COMPONENTS_JSON: ${{ inputs.components_json }}
+          PREVIOUS_SOURCE_SHA: ${{ inputs.previous_source_sha }}
+          PREVIOUS_ARTIFACTS_JSON: ${{ inputs.previous_artifacts_json }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" = refs/heads/main ]] || { echo '::error::Dispatch must use main.'; exit 1; }
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || { echo '::error::Invalid version.'; exit 1; }
+          [[ "$RELEASE_ID" =~ ^[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,127}$ ]] || { echo '::error::Invalid release_id.'; exit 1; }
+          [[ "$SOURCE_SHA" =~ ^[a-fA-F0-9]{40}$ ]] || { echo '::error::Invalid source_sha.'; exit 1; }
+          printf '%s' "$COMPONENTS_JSON" | jq -e '
+            length == 2 and
+            any(.[]; .key == "istanta" and .artifactKind == "ContainerImage") and
+            any(.[]; .key == "agenzialib" and .artifactKind == "File" and .artifactFileName == "AgenziaLib.dll")
+          ' >/dev/null
+          istanta_image=$(printf '%s' "$COMPONENTS_JSON" | jq -er '.[] | select(.key == "istanta") | .imageName')
+          agenzialib_repository=$(printf '%s' "$COMPONENTS_JSON" | jq -er '.[] | select(.key == "agenzialib") | .imageName')
+          [[ "$istanta_image" =~ ^ghcr\.io/[a-z0-9._/-]+$ ]] || exit 1
+          [[ "$agenzialib_repository" =~ ^ghcr\.io/[a-z0-9._/-]+$ ]] || exit 1
+
+          has_previous=false
+          if [[ -n "$PREVIOUS_SOURCE_SHA" || -n "$PREVIOUS_ARTIFACTS_JSON" ]]; then
+            [[ "$PREVIOUS_SOURCE_SHA" =~ ^[a-fA-F0-9]{40}$ ]] || { echo '::error::Invalid previous_source_sha.'; exit 1; }
+            printf '%s' "$PREVIOUS_ARTIFACTS_JSON" | jq -e '
+              length == 2 and
+              any(.[]; .component == "istanta" and .artifactKind == "ContainerImage") and
+              any(.[]; .component == "agenzialib" and .artifactKind == "File") and
+              all(.[]; (.digest | test("^sha256:[a-f0-9]{64}$")) and .imageReference == (.image + "@" + .digest))
+            ' >/dev/null
+            has_previous=true
+          fi
+          echo "sha=${SOURCE_SHA,,}" >> "$GITHUB_OUTPUT"
+          echo "previous_sha=${PREVIOUS_SOURCE_SHA,,}" >> "$GITHUB_OUTPUT"
+          echo "has_previous=$has_previous" >> "$GITHUB_OUTPUT"
+          echo "istanta_image=$istanta_image" >> "$GITHUB_OUTPUT"
+          echo "agenzialib_repository=$agenzialib_repository" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout requested source commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.metadata.outputs.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify source commit
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ steps.metadata.outputs.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test -f Istanta/Dockerfile
+          test -f AgenziaLib/AgenziaLib.csproj
+
+      - name: Detect affected components
+        id: changes
+        shell: bash
+        env:
+          COMPONENTS_JSON: ${{ inputs.components_json }}
+          SOURCE_SHA: ${{ steps.metadata.outputs.sha }}
+          PREVIOUS_SOURCE_SHA: ${{ steps.metadata.outputs.previous_sha }}
+          HAS_PREVIOUS: ${{ steps.metadata.outputs.has_previous }}
+        run: |
+          set -euo pipefail
+          declare -A build
+          mapfile -t keys < <(printf '%s' "$COMPONENTS_JSON" | jq -r '.[].key')
+          if [[ "$HAS_PREVIOUS" != true ]] || ! git cat-file -e "$PREVIOUS_SOURCE_SHA^{commit}"; then
+            for key in "${keys[@]}"; do build[$key]=true; done
+          else
+            mapfile -t changed_files < <(git diff --name-only "$PREVIOUS_SOURCE_SHA" "$SOURCE_SHA")
+            printf '%s\n' "${changed_files[@]}" > "$RUNNER_TEMP/changed-files.txt"
+            for key in "${keys[@]}"; do
+              build[$key]=false
+              mapfile -t paths < <(printf '%s' "$COMPONENTS_JSON" | jq -r --arg key "$key" '.[] | select(.key == $key) | (.changePaths // [])[]')
+              if [[ ${#paths[@]} -eq 0 ]]; then
+                build[$key]=true
+                continue
+              fi
+              for file in "${changed_files[@]}"; do
+                for prefix in "${paths[@]}"; do
+                  prefix=${prefix%/}
+                  if [[ "$file" == "$prefix" || "$file" == "$prefix/"* ]]; then build[$key]=true; fi
+                done
+              done
+            done
+            updated=true
+            while [[ "$updated" == true ]]; do
+              updated=false
+              for key in "${keys[@]}"; do
+                [[ "${build[$key]}" == true ]] && continue
+                mapfile -t dependencies < <(printf '%s' "$COMPONENTS_JSON" | jq -r --arg key "$key" '.[] | select(.key == $key) | (.dependsOn // [])[]')
+                for dependency in "${dependencies[@]}"; do
+                  if [[ "${build[$dependency]:-false}" == true ]]; then build[$key]=true; updated=true; fi
+                done
+              done
+            done
+          fi
+          echo "istanta=${build[istanta]:-true}" >> "$GITHUB_OUTPUT"
+          echo "agenzialib=${build[agenzialib]:-true}" >> "$GITHUB_OUTPUT"
+          printf '### Componenti interessati\n\n- Istanta: `%s`\n- AgenziaLib: `%s`\n' \
+            "${build[istanta]:-true}" "${build[agenzialib]:-true}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Set up Docker Buildx
+        if: steps.changes.outputs.istanta == 'true' || steps.changes.outputs.agenzialib == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        if: steps.changes.outputs.istanta == 'true' || steps.changes.outputs.agenzialib == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Istanta image
+        if: steps.changes.outputs.istanta == 'true'
+        id: istanta
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Istanta/Dockerfile
+          target: final
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ steps.metadata.outputs.istanta_image }}:${{ inputs.version }}
+            ${{ steps.metadata.outputs.istanta_image }}:latest
+            ${{ steps.metadata.outputs.istanta_image }}:sha-${{ steps.metadata.outputs.sha }}
+          labels: |
+            org.opencontainers.image.title=Istanta
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.version=${{ inputs.version }}
+            org.opencontainers.image.revision=${{ steps.metadata.outputs.sha }}
+            company.ai.release.id=${{ inputs.release_id }}
+          cache-from: type=gha,scope=istanta
+          cache-to: type=gha,mode=max,scope=istanta
+
+      - name: Export AgenziaLib.dll
+        if: steps.changes.outputs.agenzialib == 'true'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Istanta/Dockerfile
+          target: agenzialib-export
+          platforms: linux/amd64
+          push: false
+          outputs: type=local,dest=${{ runner.temp }}/agenzialib
+          cache-from: type=gha,scope=agenzialib
+          cache-to: type=gha,mode=max,scope=agenzialib
+
+      - name: Set up ORAS
+        if: steps.changes.outputs.agenzialib == 'true'
+        uses: oras-project/setup-oras@v1
+
+      - name: Publish AgenziaLib.dll as OCI artifact
+        if: steps.changes.outputs.agenzialib == 'true'
+        id: agenzialib
+        shell: bash
+        env:
+          REGISTRY_REPOSITORY: ${{ steps.metadata.outputs.agenzialib_repository }}
+          VERSION: ${{ inputs.version }}
+          SOURCE_SHA: ${{ steps.metadata.outputs.sha }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$GH_TOKEN" | oras login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          cd "$RUNNER_TEMP/agenzialib"
+          test -f AgenziaLib.dll
+          file_sha256=$(sha256sum AgenziaLib.dll); file_sha256=${file_sha256%% *}
+          oras push "$REGISTRY_REPOSITORY:$VERSION,sha-$SOURCE_SHA,latest" \
+            --artifact-type application/vnd.company.ai.dotnet-assembly.v1 \
+            "AgenziaLib.dll:application/vnd.microsoft.portable-executable" \
+            --annotation "org.opencontainers.image.version=$VERSION" \
+            --annotation "org.opencontainers.image.revision=$SOURCE_SHA" \
+            --format json > "$RUNNER_TEMP/agenzialib-oci.json"
+          digest=$(jq -er '.digest' "$RUNNER_TEMP/agenzialib-oci.json")
+          [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]] || exit 1
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          echo "file_sha256=$file_sha256" >> "$GITHUB_OUTPUT"
+
+      - name: Create ControlPlane release manifest v2
+        shell: bash
+        env:
+          RELEASE_ID: ${{ inputs.release_id }}
+          VERSION: ${{ inputs.version }}
+          SOURCE_SHA: ${{ steps.metadata.outputs.sha }}
+          PREVIOUS_ARTIFACTS_JSON: ${{ inputs.previous_artifacts_json }}
+          ISTANTA_BUILT: ${{ steps.changes.outputs.istanta }}
+          ISTANTA_IMAGE: ${{ steps.metadata.outputs.istanta_image }}
+          ISTANTA_NEW_DIGEST: ${{ steps.istanta.outputs.digest }}
+          AGENZIALIB_BUILT: ${{ steps.changes.outputs.agenzialib }}
+          AGENZIALIB_REPOSITORY: ${{ steps.metadata.outputs.agenzialib_repository }}
+          AGENZIALIB_NEW_DIGEST: ${{ steps.agenzialib.outputs.digest }}
+          AGENZIALIB_NEW_FILE_SHA256: ${{ steps.agenzialib.outputs.file_sha256 }}
+        run: |
+          set -euo pipefail
+          if [[ "$ISTANTA_BUILT" == true ]]; then
+            istanta_digest="$ISTANTA_NEW_DIGEST"
+          else
+            istanta_digest=$(printf '%s' "$PREVIOUS_ARTIFACTS_JSON" | jq -er '.[] | select(.component == "istanta") | .digest')
+          fi
+          if [[ "$AGENZIALIB_BUILT" == true ]]; then
+            agenzialib_digest="$AGENZIALIB_NEW_DIGEST"
+            agenzialib_file_sha="$AGENZIALIB_NEW_FILE_SHA256"
+          else
+            agenzialib_digest=$(printf '%s' "$PREVIOUS_ARTIFACTS_JSON" | jq -er '.[] | select(.component == "agenzialib") | .digest')
+            agenzialib_file_sha=$(printf '%s' "$PREVIOUS_ARTIFACTS_JSON" | jq -er '.[] | select(.component == "agenzialib") | .fileSha256')
+          fi
+          [[ "$istanta_digest" =~ ^sha256:[a-f0-9]{64}$ ]] || exit 1
+          [[ "$agenzialib_digest" =~ ^sha256:[a-f0-9]{64}$ ]] || exit 1
+          [[ "$agenzialib_file_sha" =~ ^[a-f0-9]{64}$ ]] || exit 1
+          jq -n \
+            --arg releaseId "$RELEASE_ID" --arg version "$VERSION" --arg sourceCommit "$SOURCE_SHA" \
+            --arg istantaImage "$ISTANTA_IMAGE" --arg istantaDigest "$istanta_digest" --argjson istantaBuilt "$ISTANTA_BUILT" \
+            --arg agenziaImage "$AGENZIALIB_REPOSITORY" --arg agenziaDigest "$agenzialib_digest" \
+            --arg agenziaFileSha "$agenzialib_file_sha" --argjson agenziaBuilt "$AGENZIALIB_BUILT" \
+            '{schemaVersion: 2, releaseId: $releaseId, version: $version, sourceCommit: $sourceCommit,
+              artifacts: [
+                {component: "istanta", artifactKind: "ContainerImage", image: $istantaImage,
+                 digest: $istantaDigest, imageReference: ($istantaImage + "@" + $istantaDigest), builtForThisRelease: $istantaBuilt},
+                {component: "agenzialib", artifactKind: "File", image: $agenziaImage,
+                 digest: $agenziaDigest, imageReference: ($agenziaImage + "@" + $agenziaDigest),
+                 fileName: "AgenziaLib.dll", fileSha256: $agenziaFileSha, builtForThisRelease: $agenziaBuilt}
+              ]}' > "$RUNNER_TEMP/release-manifest.json"
+
+      - name: Upload ControlPlane release manifest
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-manifest-${{ inputs.release_id }}
+          path: ${{ runner.temp }}/release-manifest.json
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Write release summary
+        shell: bash
+        run: |
+          printf '\n### Istanta suite pubblicata\n\n- Istanta ricostruita: `%s`\n- AgenziaLib ricostruita: `%s`\n- Release ID: `%s`\n' \
+            '${{ steps.changes.outputs.istanta }}' '${{ steps.changes.outputs.agenzialib }}' '${{ inputs.release_id }}' >> "$GITHUB_STEP_SUMMARY"

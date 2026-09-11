@@ -96,10 +96,18 @@ docker run -d --name istanta -p 8080:8080 \
   --env-file /srv/istanta/istanta.env \
   --mount type=bind,src=/srv/istanta/appsettings.json,dst=/app/appsettings.json,readonly \
   --mount type=bind,src=/srv/istanta/data,dst=/data \
+  --mount type=bind,src=/srv/istanta/external_lib,dst=/app/external_lib,readonly \
   --mount type=volume,src=istanta-logs,dst=/app/logs \
   --mount type=volume,src=istanta-keys,dst=/home/app/.aspnet/DataProtection-Keys \
   istanta:local
 ```
+
+Prima dell'avvio, inizializzare `external_lib` come descritto in
+[AGENZIALIB.md](AGENZIALIB.md). E disponibile anche `Istanta/compose.yml`, con
+lo stesso mount e immagine selezionata tramite `ISTANTA_IMAGE`.
+La directory montata nasconde la DLL inclusa nell'immagine: deve contenere la
+versione compatibile prima dell'avvio. Il workflow completo mantiene il proprio
+manifest; il nuovo workflow `agenzialib.yml` serve solo per distribuire la DLL.
 
 Il file env esterno al repository deve definire almeno le connessioni:
 
