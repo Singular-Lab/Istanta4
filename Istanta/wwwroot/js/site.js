@@ -101,14 +101,6 @@ function getStringFromDate(date) {
     return result;
 }
 
-function attivaTolltips() {
-
-    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
-    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-        console.log("triggered");
-        return new bootstrap.Tooltip(tooltipTriggerEl)
-    });
-}
 
 function scaricaUltimaVersioneDelPlugin(sender)
 {

@@ -126,43 +126,6 @@ class Agenzia extends IAgenzia {
     }
 
     addCustomDettagli(itemHtml, groupElements) {
-    //    let htmlGroupElement = `
-    //<div class="container bg-warning bg-opacity-50 pb-1 mb-2">
-    //    <div class="row">
-    //        <div class="col">
-    //            <label for="Esempio" class="form-label">Note Esempio</label>
-    //            <textarea class="form-control" readonly style="height:40px;" id="Esempio" name="Esempio"></textarea>
-    //        </div>
-    //    </div>
-    //</div>`;
-    //    let htmlGroupeElementObject = $(htmlGroupElement);
-
-    //    itemHtml.prepend(htmlGroupeElementObject);
-
-        //htmlItem.find(".dettaglioCampiElemento").prepend(htmlSingleElement);
-        //let pilota = groupElements.find(f => f.recordInTracciato.referenza_pilota == "S" && f.recordInTracciato.referenza_pilota != null);
-        //if (pilota == null) {
-        //    pilota = groupElements[0];
-        //}
-
-
-
-        //let infoEsempio = pilota.recordInTracciato.nota_esempio;
-        //let evidenzia = false;
-        //if (infoEsempio.toLowerCase().includes("esempio") && !infoEsempio.toLowerCase().includes("non")) {
-        //    evidenzia = true;
-        //}
-
-        //while (infoEsempio.includes("<br>")) {
-        //    infoEsempio = infoEsempio.replace("<br>", " ");
-
-        //}
-
-        //htmlGroupeElementObject.find("#Esempio").val(infoEsempio);
-        //if (evidenzia) {
-        //    htmlGroupeElementObject.find("#Esempio").css("font-weight", "bold");
-        //    htmlGroupeElementObject.find("#Esempio").css("color", "red");
-        //}
     }
 
     aggiungiAreeInAreeOutDettaglio(htmlItem, dataItem) {
@@ -224,63 +187,6 @@ class Agenzia extends IAgenzia {
 
                 htmlItem.find(".FuoriVolList").text("Fuori vol: " + areeOrdinate.join(", "));
             }
-        //}
-        //else {
-
-        //    var gruppo = this.listGruppiInOut.find(f => f.codiceGruppo == dataItem.recordInTracciato[(revInstance.modalitaSottogruppi ? keyScattoCodiceSottogruppo : keyScattoCodiceGruppo)]);
-        //    var areeIn = gruppo.areeIn;
-        //    var areeOut = gruppo.areeOut;
-
-        //    if (htmlItem.find(".areeInDettaglio").length > 0) {
-        //        let areeText = "";
-        //        if (areeIn != null) {
-        //            areeIn.forEach(function (itemArea) {
-        //                areeText += itemArea + ",";
-        //            });
-        //            areeText = areeText.slice(0, -1);
-        //        }
-        //        var aree = areeText.split(",");
-        //        var areeOrdinate = this.applicaSchemaDiOrdinamentoTracciati(aree, "");
-        //        htmlItem.find(".areeInDettaglio").text("In vol: " + areeOrdinate.join(", "));
-
-        //        areeText = "";
-        //        if (areeOut != null) {
-        //            areeOut.forEach(function (itemArea) {
-        //                areeText += itemArea + ",";
-        //            });
-        //            areeText = areeText.slice(0, -1);
-        //        }
-        //        aree = areeText.split(",");
-        //        areeOrdinate = this.applicaSchemaDiOrdinamentoTracciati(aree, "");
-
-        //        htmlItem.find(".fuoriAreeInDettaglio").text("Fuori vol: " + areeOrdinate.join(", "));
-        //    }
-        //    else {
-        //        let areeText = "";
-        //        if (areeIn != null) {
-        //            areeIn.forEach(function (item) {
-        //                areeText += item + ",";
-        //            });
-        //        }
-        //        areeText = areeText.slice(0, -1);
-        //        var aree = areeText.split(",");
-        //        var areeOrdinate = this.applicaSchemaDiOrdinamentoTracciati(aree, "");
-        //        htmlItem.find(".inVolList").text("In vol: " + areeOrdinate.join(", "));
-        //        areeText = "";
-        //        if (areeOut != null) {
-        //            areeOut.forEach(function (item) {
-        //                areeText += item + ",";
-        //            });
-        //        }
-
-        //        areeText = areeText.slice(0, -1);
-        //        aree = areeText.split(",");
-        //        areeOrdinate = this.applicaSchemaDiOrdinamentoTracciati(aree, "");
-
-        //        htmlItem.find(".FuoriVolList").text("Fuori vol: " + areeOrdinate.join(", "));
-        //    }
-
-        //}
     }
 
     getForm_ricercaTracciato() {
@@ -389,72 +295,6 @@ class Agenzia extends IAgenzia {
     }
 
 
-    //getForm_importazioneTracciato(callback) {
-    //    let result = this.Form_importazioneTracciato;
-    //    let materialiLoaded = false;
-    //    let areeLoaded = false;
-
-    //    let ME = this;
-
-    //    //console.log("sync 1");
-    //    $.getJSON("/" + getWebAppRootFolder() + 'external_source/SourceTipiMateriale.json', function (data) {
-    //        //console.log(data);
-    //        //console.log("sync 2");
-
-    //        let _bind_materialeVol = data.source.filter(m => m.Associazione === 1 || m.Associazione === 3);
-    //        let _bind_materialePoP = data.source.filter(m => m.Associazione === 2 || m.Associazione === 3);
-    //        let _bind_materialeManif = data.source.filter(m => m.Codice === "BB");
-
-
-    //        let _bind_materialeVolHtml = "";
-    //        for (let i = 0; i < _bind_materialeVol.length; i++) {
-    //            let item = _bind_materialeVol[i];
-    //            _bind_materialeVolHtml += "<option value=\"" + item.Codice + "\">" + item.Nome + "</option>";
-    //        }
-
-    //        let _bind_materialePoPHtml = "";
-    //        for (let i = 0; i < _bind_materialePoP.length; i++) {
-    //            let item = _bind_materialePoP[i];
-    //            _bind_materialePoPHtml += "<option value=\"" + item.Codice + "\">" + item.Nome + "</option>";
-    //        }
-
-    //        let _bind_materialeManifHtml = "";
-    //        for (let i = 0; i < _bind_materialeManif.length; i++) {
-    //            let item = _bind_materialeManif[i];
-    //            _bind_materialeManifHtml += "<option value=\"" + item.Codice + "\">" + item.Nome + "</option>";
-    //        }
-
-    //        result = result.replace("$source_materiale_vol", _bind_materialeVolHtml);
-    //        result = result.replace("$source_materiale_pop", _bind_materialePoPHtml);
-    //        result = result.replace("$source_materiale_manifesto", _bind_materialeManifHtml);
-
-    //        materialiLoaded = true;
-    //        if (areeLoaded) {
-    //            callback(result);
-    //            ME.listen();
-    //        }
-    //    });
-
-    //    $.getJSON("/" + getWebAppRootFolder() + 'external_source/SourceAree.json', function (data) {
-
-    //        let _bind_areeHtml = "";
-    //        for (let i = 0; i < data.source.length; i++) {
-    //            let item = data.source[i];
-    //            _bind_areeHtml += "<option value=\"" + item.Id + "\">" + item.Codice + "</option>";
-    //        }
-
-    //        result = result.replace("$source_aree", _bind_areeHtml);
-
-    //        areeLoaded = true;
-    //        if (materialiLoaded) {
-    //            callback(result);
-    //            ME.listen();
-    //        }
-
-    //    });
-
-    //    //console.log("sync 4");
-    //}
 
     listen()
     {
@@ -845,44 +685,6 @@ class Agenzia extends IAgenzia {
             }
 
             let mismatchNotaEsempio = pilota.recordInTracciato.metaKeyInMismatch.find(f => f.key == "nota_esempio");
-//            if (mismatchNotaEsempio != null) {
-//                const dataAree = (pilota.recordInTracciato.ACComuni ?? []).map(f => f.nomeAC);
-//                htmlGroupeElementObject.find("#Esempio").attr("mismatch", "val-style");
-//                const label = htmlGroupeElementObject.find(`label[for='Esempio']`);
-
-//                const svg = `
-//<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="orange" aria-label="avviso">
-//  <path d="M1 21h22L12 2 1 21zm12-3h-2v2h2v-2zm0-8h-2v6h2V10z"></path>
-//</svg>
-//`;
-
-//                // aggiunge l’SVG *prima del contenuto testuale* senza rimuoverlo
-//                label.prepend(svg + ' ');
-//                for (var i = 0; i < dataAree.length; i++) {
-//                    let area = dataAree[i];
-//                    let elArea = mismatchNotaEsempio.values.find(f => f.origins.includes(area));
-
-//                    let style = ["font-weight", "", "color", ""];
-//                    if (elArea) {
-//                        let valore = elArea.value;
-//                        evidenzia = false;
-//                        if (valore.toLowerCase().includes("esempio") && !valore.toLowerCase().includes("non")) {
-//                            evidenzia = true;
-//                        }
-
-//                        while (valore.includes("<br>")) {
-//                            valore = valore.replace("<br>", " ");
-//                        }
-
-//                        if (evidenzia) {
-//                            style = ["font-weight", "bold", "color", "red"];
-//                        }
-
-//                        htmlGroupeElementObject.find("#Esempio").attr(area + "-style", style);
-//                        htmlGroupeElementObject.find("#Esempio").attr(area + "-val", valore);
-//                    }
-//                }
-//            }
             var mode = $("#filtraPerGruppiOSingoli").val();
             if (mismatchNotaEsempio) {
                 var itemToModify = htmlGroupeElementObject.find("#Esempio");
@@ -918,94 +720,6 @@ class Agenzia extends IAgenzia {
         }
     }
 
-    //aggiungiCampiRevisioneArchivio(htmlItem, dataItem) {
-    //    let htmlSingleElement = `
-    //<div class="container">
-    //    <div class="row">
-    //        <div class="col-2">
-    //            Meccanica
-    //            <textarea class="form-control" readonly style="height:33.5px;" id="Meccanica" name="Meccanica"></textarea>
-    //        </div>
-    //        <div class="col-3">
-    //            Localismo
-    //            <textarea class="form-control" readonly style="height:33.5px;" id="Localismo" name="Localismo"></textarea>
-    //        </div>
-    //        <div class="col-3">
-    //            Distintività
-    //            <textarea class="form-control" readonly style="height:33.5px;" id="Distintivita" name="Distintivita"></textarea>
-    //        </div>
-    //        <div class="col-4">
-    //            Territorialità
-    //            <textarea class="form-control" readonly style="height:33.5px;" id="Territorialita" name="Territorialita"></textarea>
-    //        </div>
-
-    //    </div>
-    //    <div class="row">
-
-    //    </div>
-    //    <div class="row">
-    //        <div class="col">
-    //            Tema
-    //            <textarea class="form-control" readonly style="height:33.5px;" id="Tema" name="Tema"></textarea>
-    //        </div>
-    //        <div class="col">
-    //            Tipo_tema
-    //            <textarea class="form-control" readonly style="height:33.5px;" id="Tipo_tema" name="Tipo_tema"></textarea>
-    //        </div>
-    //        <div class="col">
-    //            Sez. Volantino
-    //            <textarea class="form-control" readonly style="height:33.5px;" id="SezVolantino" name="SezVolantino"></textarea>
-    //        </div>
-    //        <div class="col">
-    //            Ruolo
-    //            <textarea class="form-control" readonly style="height:33.5px;" id="Ruolo" name="Ruolo"></textarea>
-    //        </div>
-
-    //    </div>
-    //    <div class="row">
-    //        <div class="col">
-    //            Note Category
-    //            <textarea class="form-control" readonly style="height:33.5px;" id="NoteCat" name="NoteCat"></textarea>
-    //        </div>
-    //    </div>
-    //    <div class="row">
-    //        <div class="col-10">
-    //            NOTE PER IMPAGINATO
-    //            <textarea class="form-control" style="height:33.5px;" id="NoteImpaginato" name="NOTE PER IMPAGINATO"></textarea>
-    //        </div>
-    //        <div class="col d-flex align-items-end">
-    //            <input id="salvaNoteImpaginato" type="button" class="btn btn-primary" value="Salva" onclick="revInstance.salvaCampoInDatoTracciatoFromSender('noteImpaginato', $('#NoteImpaginato').val(), $(this))" />
-    //        </div>
-    //    </div>
-    //</div>`;
-
-    //    let htmlSingleElementObject = $(htmlSingleElement);
-    //    // Aggiungi l'oggetto jQuery come primo figlio di ".dettaglioCampiElemento"
-    //    htmlItem.find(".dettaglioArchivioCustomDiv").append(htmlSingleElementObject);
-    //    htmlItem.find(".dettaglioArchivioCustom").show();
-    //    if (!dataItem.isGruppo) {
-    //        htmlItem.find("#dettaglioArchivioCustomContainer").css('display', 'none');
-    //    }
-    //    let elementiGruppo = revInstance.List.filter(f => !f.isGruppo && f.recordInTracciato[(revInstance.modalitaSottogruppi ? keyScattoCodiceSottogruppo : keyScattoCodiceGruppo)] == dataItem.recordInTracciato[keyScattoCodiceGruppo]);
-    //    let pilota = elementiGruppo.find(f => f.recordInTracciato.referenza_pilota == "S" && f.recordInTracciato.referenza_pilota != null);
-    //    if (pilota == null) {
-    //        pilota = elementiGruppo[0];
-    //    }
-    //    // Ora puoi utilizzare il metodo find sull'oggetto jQuery
-    //    htmlSingleElementObject.find("#Meccanica").val(pilota.recordInTracciato.meccanica_origine);
-    //    htmlSingleElementObject.find("#SezVolantino").val(pilota.recordInTracciato.sezione);
-    //    htmlSingleElementObject.find("#Distintivita").val(pilota.recordInTracciato.distintivita);
-    //    htmlSingleElementObject.find("#Territorialita").val(pilota.recordInTracciato.territorialita);
-    //    htmlSingleElementObject.find("#Localismo").val(pilota.recordInTracciato.localismo);
-    //    htmlSingleElementObject.find("#Ruolo").val(pilota.recordInTracciato.ruolo);
-    //    htmlSingleElementObject.find("#NoteCat").val(pilota.recordInTracciato.note_category);
-    //    htmlSingleElementObject.find("#Tema").val(pilota.recordInTracciato.tema);
-    //    htmlSingleElementObject.find("#Tipo_tema").val(pilota.recordInTracciato.tipo_tema);
-    //    htmlSingleElementObject.find("#NoteImpaginato").val(pilota.recordInTracciato.noteImpaginato);
-
-    //    // Imposta l'altezza dell'elemento .dettaglioGruppo
-    //    htmlItem.find(".dettaglioGruppo").css("height", "600px")
-    //}
 
     regoleDiVisualizzazioneCampiInMismatch(recordInTracciato) {
         var mode = $("#filtraPerGruppiOSingoli").val();
@@ -1343,42 +1057,6 @@ class Agenzia extends IAgenzia {
 
     }
 
-    //ordinaListaSelezioneTracciato() {
-    //    const $select = $("#CmbTracciato");
-    //    const $options = $select.find("option");
-
-    //    // Tieni da parte l'opzione con value = "0"
-    //    const $firstOption = $options.filter('[value="0"]');
-
-    //    const gerarchia = ["SC", "SS", "CN", "CY"];
-    //    const suffissi = ["TO", "SA", "LA", "EM", "LI", "PI"];
-
-    //    function getPeso(text) {
-    //        if ($firstOption.length && text === $firstOption.text()) return -1;
-
-    //        const match = text.match(/^(SC|SS|CN|CY)([A-Z]{2})$/);
-    //        if (!match) return 9999; // Caso non riconosciuto
-
-    //        const [_, prefix, suffix] = match;
-    //        const base = gerarchia.indexOf(prefix);
-    //        if (base === -1) return 9999;
-
-    //        const ordine = suffissi.indexOf(suffix);
-    //        return base * 100 + (ordine !== -1 ? ordine : 99);
-    //    }
-
-    //    // Ordina tutte le option (escludendo quella con val=0 se presente)
-    //    const $sorted = $options.not('[value="0"]').sort(function (a, b) {
-    //        const pesoA = getPeso($(a).text());
-    //        const pesoB = getPeso($(b).text());
-    //        return pesoA - pesoB;
-    //    });
-
-    //    // Svuota e reinserisce le option
-    //    $select.empty();
-    //    if ($firstOption.length) $select.append($firstOption);
-    //    $select.append($sorted);
-    //}
 
     applicaSchemaDiOrdinamentoTracciati(_lista, field) {
 
@@ -1558,78 +1236,6 @@ class Agenzia extends IAgenzia {
     }
 
 
-    //calcolaAreaInAreaOutGruppi(list) {
-    //    this.listGruppiInOut = [];
-
-    //    let gruppi = list.filter(f => f.isGruppo);
-    //    let me = this;
-    //    gruppi.forEach(gruppo => {
-
-    //        if (gruppo.recordInTracciato[keyScattoCodiceGruppo].includes("392236,392260,4696660,6205367")) {
-    //            console.log("");
-    //        }
-
-    //        var elementiGruppo = list.filter(f => f.recordInTracciato[(revInstance.modalitaSottogruppi ? keyScattoCodiceSottogruppo : keyScattoCodiceGruppo)] == gruppo.recordInTracciato[keyScattoCodiceGruppo] && !f.isGruppo);
-    //        if (elementiGruppo.length === 0) {
-    //            console.log(list.find(f => !f.isGruppo && f.recordInTracciato[keyRefCodice] == "1511255"));
-    //            console.log(list.find(f => !f.isGruppo && f.recordInTracciato[keyRefCodice] == "1511236"));
-    //            return;
-    //        }
-
-    //        var areeIn = elementiGruppo
-    //            .map(e => e.recordInTracciato.ACComuni.filter(a => a.inVol).map(a => a.canale + a.area))
-    //            .reduce((acc, curr) => acc.filter(area => curr.includes(area)));
-
-    //        var areeOut = elementiGruppo
-    //            .map(e => e.recordInTracciato.ACComuni.filter(a => !a.inVol).map(a => a.canale + a.area))
-    //            .reduce((acc, curr) => acc.filter(area => curr.includes(area)));
-
-    //        const codiciSingoliDelGruppo = gruppo.recordInTracciato[keyScattoCodiceGruppo].split(",");
-
-    //        const gruppiPiuGrandi = me.listGruppiInOut.filter(gr => {
-    //            const codiciGruppo = gr.codiceGruppo.split(",");
-    //            return codiciSingoliDelGruppo.every(c => codiciGruppo.includes(c));
-    //        });
-
-    //        gruppiPiuGrandi.forEach(gg => {
-    //            gg.areeIn.forEach(area => {
-    //                var indexArea = areeIn.indexOf(area);
-    //                if (indexArea >= 0) {
-    //                    areeIn.splice(indexArea, 1);
-    //                }
-    //            });
-
-    //            gg.areeOut.forEach(area => {
-    //                var indexArea = areeOut.indexOf(area);
-    //                if (indexArea >= 0) {
-    //                    areeOut.splice(indexArea, 1);
-    //                }
-    //            });
-    //        });
-
-
-    //        gruppo.recordInTracciato.areeIn = areeIn;
-    //        gruppo.recordInTracciato.areeOut = areeOut;
-
-
-    //        this.listGruppiInOut.push( {
-    //            codiceGruppo: gruppo.recordInTracciato[keyScattoCodiceGruppo],
-    //            areeIn: areeIn,
-    //            areeOut: areeOut
-    //        })
-    //    })
-
-
-    //    list.sort((a, b) => a._origIdx - b._origIdx);
-
-    //    // 5) Rimuovo il campo temporaneo da ciascun oggetto
-    //    list.forEach(el => {
-    //        delete el._origIdx;
-    //    });
-
-
-    //    return list;
-    //}
 
     aggiungiCampiExtra(htmlItem, extra, isGruppo) {
         console.log(htmlItem);

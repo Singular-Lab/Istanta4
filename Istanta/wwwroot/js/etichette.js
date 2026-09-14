@@ -331,41 +331,6 @@
                 tendina.val(campoVal);
             }
         }
-        //else {
-        //    Call.do("Tracciati", "getAddestramenti", "GET", null, this, function (result, senderOwn) {
-        //        result.forEach(function (addestramento) {
-        //            let campi = addestramento.schemaCampiExcels;
-        //            campi = campi.sort(function (a, b) {
-        //                return (a.indice < b.indice) ? -1 : ((a.indice > b.indice) ? 1 : 0);
-        //            });
-
-        //            for (let $va = 0; $va < campi.length; $va++) {
-
-        //                let item = campi[$va];
-        //                tendina.append("<option  value=\"" + item.nomeColonna + "\">" + item.nomeColonnaOriginale + "</option>");
-        //            }
-        //        });
-        //        for (let $va = 0; $va < chiaviTracciato.length; $va++) {
-
-        //            let item = chiaviTracciato[$va];
-        //            tendina.append("<option  value=\"" + item + "\">" + item + "</option>");
-        //        }
-        //        var values = {};
-        //        tendina.children('option').each(function () {
-        //            var optionValue = $(this).val();
-        //            if (values[optionValue]) {
-        //                $(this).remove();
-        //            } else {
-        //                values[optionValue] = true;
-        //            }
-        //        });
-        //        tendina.closest(".col").find("#percorso").val("recordInTracciato");
-        //        if (campo != null) {
-        //            let campoVal = campo.replace(/^recordInTracciato\./, "");
-        //            tendina.val(campoVal);
-        //        }
-        //    });
-        //}
         
     }
 

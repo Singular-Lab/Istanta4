@@ -603,93 +603,6 @@ class SyncFoto {
         this.firstJob = false;
         this.scanZip(null, this.syncOp, this.syncOp.originDir);
     }
-    /*
-    scan(withSync) {
-
-        
-        if (withSync) {
-            if (!confirm("Conferma sincronizzazione dei file in SYNC?"))
-                return;
-        }
-
-        showLoading();
-
-        Call.do("SyncFoto", "Scan/" + withSync + "/" + $("#ChOverwrite").is(':checked') + "/" + $("#cmbFiltroTracciato").val(), "GET", null, this, function (result, me) {
-
-            console.log(result);
-
-            let tblBody = $("#tblResult > tbody");
-            tblBody.empty();
-            $("#headerResult").find("h5").text(!withSync?"Report scansione":"Report sync");
-            $("#tblResult").css("visibility", "visible");
-            $("#headerResult").css("visibility", "visible");
-
-            if (result.error == null)
-            {                
-                let template = $("#template").clone();
-                
-                for (let i = 0; i < result.length; i++) {
-                    let item = result[i];
-                    let itemHtml = $(template.html());
-
-                    itemHtml.find("#lab_filename").text(item.filename);
-                    let _circle = itemHtml.find("#status");
-
-                    _circle.attr("stato", item.stato);
-
-                    if (item.stato == 9) {
-                        _circle.css("background-color", ColorSyncStatoNoMatch);
-
-                    }
-                    else if (item.stato == 2 || item.stato == 4){
-                        _circle.css("background-color", ColorSyncStatoError);
-
-                    }
-                    else if (item.stato == 1 || item.stato == 5 || item.stato == 6) {
-                        _circle.css("background-color", ColorSyncStatoOk);    
-                        if (item.stato == 6) {
-                            _circle.text("N");
-
-                        }
-                    }
-                    else if (item.stato == 7) {
-                        if (withSync) {
-                            _circle.css("background-color", ColorSyncStatoOk);
-                            _circle.text("O");
-                        }
-                        else {
-                            _circle.css("background-color", ColorSyncStatoConWarning);
-                        }
-                    }
-                    else if (item.stato == 8) {
-                        _circle.css("background-color", ColorSyncStatoConWarning2);
-                        
-                    }
-
-                    if (item.details != null) {
-                        _circle.attr("title", item.details);
-                        itemHtml.find("#lab_result").text(item.details);
-                    }
-
-                    if (withSync) {
-                        if (item.stato == 1 || item.stato == 6 || item.stato == 7) {
-                            //Sync avvenuto con successo
-                            //Posso chiedere di mostrare preview della foto
-                            itemHtml.find("#preview").attr("src", "Thumb?id_foto=" + item.id + "&w=40&h=40");       
-                        }
-                    }
-
-                    tblBody.append(itemHtml);
-                }
-            }
-            else {
-                mostraMessaggio(result.error, "danger");
-            }
-
-            hideLoading();
-        });
-    }
-    */
 
     syncAsSingle(sender) {
 
@@ -914,54 +827,6 @@ class SyncFoto {
             hideLoading();
         }
 
-        //FUNZOINANTE MA SENZA PROGRESS
-        //$.ajax({
-        //    //dataType: 'json',
-        //    type: "PUT",
-        //    url: "/" + getWebAppRootFolder() + "SyncFoto/downloadPacchettoFoto",
-        //    contentType: "application/json; charset=utf-8",
-        //    data: JSON.stringify(objReq),
-        //    xhrFields: {
-        //        responseType: 'blob'  // Assicura che la risposta sia gestita come Blob
-        //    },
-        //    success: function (data, textStatus, xhr) {
-
-        //        let disposition = xhr.getResponseHeader('Content-Disposition');;
-        //        let fileName = "pacchetto_foto.zip";//Nome generico
-
-        //        if (disposition && disposition.indexOf('filename=') !== -1) {
-        //            var match = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
-        //            if (match != null && match[1]) {
-        //                fileName = match[1].replace(/['"]/g, '');
-        //            }
-        //        }
-
-        //        if (confirm("Confermi download del file " + fileName + "?")) {
-
-
-
-        //            var blob = new Blob([data], { type: 'application/zip' });
-        //            var downloadUrl = URL.createObjectURL(blob);
-        //            var a = document.createElement("a");
-        //            a.href = downloadUrl;
-        //            a.download = fileName;
-        //            document.body.appendChild(a);
-        //            a.click();
-        //            a.remove();
-        //            hideLoading();
-        //        }
-        //        else {
-        //            alert("Downoad annullato!");
-        //            hideLoading();
-        //        }
-                
-        //    },
-        //    error: function (xhr, textStatus, errorThrown) {
-
-        //        console.log('Errore nella richiesta PUT: ' + errorThrown);
-        //    },
-
-        //});
     }
 
     downloadFile(url, fileName, onProgress)
@@ -1357,46 +1222,6 @@ class SyncFoto {
 
         });
 
-        //$.ajax({
-        //    //dataType: 'json',
-        //    type: "PUT",
-        //    url: "/" + getWebAppRootFolder() + "SyncFoto/downloadPacchettoFoto",
-        //    contentType: "application/json; charset=utf-8",
-        //    data: JSON.stringify(objReq),
-        //    xhrFields: {
-        //        responseType: 'blob'  // Assicura che la risposta sia gestita come Blob
-        //    },
-        //    success: function (data, textStatus, xhr) {
-
-        //        let disposition = xhr.getResponseHeader('Content-Disposition');                    ;
-        //        let fileName = "pacchetto_foto.zip";//Nome generico
-
-        //        if (disposition && disposition.indexOf('filename=') !== -1) {
-        //            var match = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
-        //            if (match != null && match[1]) {
-        //                fileName = match[1].replace(/['"]/g, '');
-        //            }
-        //        }
-
-        //        var blob = new Blob([data], { type: 'application/zip' });
-        //        var downloadUrl = URL.createObjectURL(blob);
-        //        var a = document.createElement("a");
-        //        a.href = downloadUrl;
-        //        a.download = fileName;
-        //        document.body.appendChild(a);
-        //        a.click();
-        //        a.remove(); 
-
-
-        //        hideLoading();
-
-        //    },
-        //    error: function (xhr, textStatus, errorThrown) {
-
-        //        console.log('Errore nella richiesta PUT: ' + errorThrown);
-        //    },
-
-        //});
 
     }
 

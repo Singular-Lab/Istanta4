@@ -2,31 +2,6 @@
 
     static do(controller, address, method, params, sender, callback, callbackError) {
 
-        /*
-        var xhr = new XMLHttpRequest();
-
-        xhr.open(method, controller + "/" + address, true);
-        xhr.setRequestHeader("Content-Type", "application/json");
-        xhr.me = this;
-        xhr.onload = function () {
-
-            if (xhr.status === 200) {
-
-                var obj = JSON.parse(xhr.response);
-                callback(obj, sender);
-            }
-            else {
-                callback({ info: xhr, error: "uknown" });
-            }
-
-        }
-
-        if (params === null) {
-            xhr.send();
-        }
-        else {
-            xhr.send(JSON.stringify(params));
-        }*/
 
 
         //console.log("HOSTNAME " + document.location.hostnam);
@@ -79,31 +54,6 @@
 
     static doWithUpload(controller, address, method, params, sender, callback) {
 
-        /*
-        var xhr = new XMLHttpRequest();
-
-        xhr.open(method, controller + "/" + address, true);
-        xhr.setRequestHeader("Content-Type", "application/json");
-        xhr.me = this;
-        xhr.onload = function () {
-
-            if (xhr.status === 200) {
-
-                var obj = JSON.parse(xhr.response);
-                callback(obj, sender);
-            }
-            else {
-                callback({ info: xhr, error: "uknown" });
-            }
-
-        }
-
-        if (params === null) {
-            xhr.send();
-        }
-        else {
-            xhr.send(JSON.stringify(params));
-        }*/
 
         //let controller_link = controller + "/";
         let controller_link = getWebAppRootFolder() + controller + "/";

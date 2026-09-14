@@ -266,27 +266,6 @@
             }
         }
 
-        /*
-        <div style="
-    width: 98%;
-    height: 100px;
-    background: #ed143d57;
-    position: absolute;
-    top: 0px;
-
-        margin: 0px auto;
-        display: flex;
-        padding - top: 16px;
-        "><div style="
-        width: 50 %;
-        text - align: right;
-        "><img src="images / revScaduta.svg" style="width: 60px; "></div><div style="
-        margin - top: 16px;
-        margin - left: 20px;
-        font - size: 18px;
-        font - weight: bold;
-        ">Valeria Bonelli</div></div>
-        */
 
 
     }
@@ -1994,37 +1973,6 @@
         if ($("#ch_articoli_revisionati").prop('checked')) {
             list.forEach(function (item) {
                 let itemValido = true;
-                //if (item.isGruppo && item.recordRevisionato != null) /*&& (item.recordRevisionato.firmaTracciato == null || (item.recordRevisionato.firmaTracciato != null && item.recordInTracciato != null && item.recordRevisionato.firmaTracciato == item.recordInTracciato[keyTracciatoFirma]))*/ {
-                //    let itemOfGroup = list.filter(f => f.recordInTracciato[(revInstance.modalitaSottogruppi ? keyScattoCodiceSottogruppo : keyScattoCodiceGruppo)] == item.recordInTracciato[(revInstance.modalitaSottogruppi ? keyScattoCodiceSottogruppo : keyScattoCodiceGruppo)]);
-                //    itemOfGroup.forEach(function (item2) {
-                //        //if (item2.isGruppo && item2.recordRevisionato != null && (item2.recordRevisionato.firmaTracciato != null && item2.recordInTracciato != null && item2.recordRevisionato.firmaTracciato == item2.recordInTracciato[keyTracciatoFirma])) {
-                //        //}
-                //        if (item2.recordRevisionato != null && item2.recordRevisionato.firmaTracciato != null && item2.recordInTracciato != null && item2.recordRevisionato.firmaTracciato == item2.recordInTracciato[keyTracciatoFirma]) {
-                //        }
-                //        else {
-                //            itemValido = false;
-                //        }
-                //    })
-                //    if (itemValido) {
-                //        tmpList.push(item);
-                //    }
-                //    //console.log("Salvo gruppo " + item.recordRevisionato[(revInstance.modalitaSottogruppi ? keyScattoCodiceSottogruppo : keyScattoCodiceGruppo)]);
-                //}
-                //else if (!item.isGruppo && item.recordRevisionato != null && item.recordRevisionato.firmaTracciato != null && item.recordInTracciato != null && item.recordRevisionato.firmaTracciato == item.recordInTracciato[keyTracciatoFirma]) {
-                //    let itemOfGroup = list.filter(f => f.recordInTracciato[(revInstance.modalitaSottogruppi ? keyScattoCodiceSottogruppo : keyScattoCodiceGruppo)] == item.recordInTracciato[(revInstance.modalitaSottogruppi ? keyScattoCodiceSottogruppo : keyScattoCodiceGruppo)]);
-                //    itemOfGroup.forEach(function (item2) {
-                //        //if (item2.isGruppo && item2.recordRevisionato != null) /*&& (item2.recordRevisionato.firmaTracciato == null || (item2.recordRevisionato.firmaTracciato != null && item2.recordInTracciato != null && item2.recordRevisionato.firmaTracciato == item2.recordInTracciato[keyTracciatoFirma]))*/ {
-                //        //}
-                //        if (item2.recordRevisionato != null && item2.recordRevisionato.firmaTracciato != null && item2.recordInTracciato != null && item2.recordRevisionato.firmaTracciato == item2.recordInTracciato[keyTracciatoFirma]) {
-                //        }
-                //        else {
-                //            itemValido = false;
-                //        }
-                //    })
-                //    if (itemValido) {
-                //        tmpList.push(item);
-                //    }
-                //}
 
                 if (item.recordRevisionato != null && item.recordRevisionato.firmaTracciato != null && item.recordInTracciato != null && item.recordRevisionato.firmaTracciato == item.recordInTracciato[keyTracciatoFirma]) {
                     var listGroupAnalized = [];
@@ -2910,38 +2858,6 @@
                         me.ListSottogruppi.push(sottogruppoItem);
                     }
 
-                    //for (let i = 0; i < codiciList.stringhe.length; i++) {
-                    //    let codiceSottGruppo = codiciList.stringhe[i];
-                    //    let items = result.filter(f => f.codiceGruppo == codiceSottGruppo);
-                    //    let naz = items.find(f => f.area == null && f.canale == null);
-                    //    let regionali = items.filter(f => !(f.area == null && f.canale == null));
-                    //    let sottogruppoItem = {
-                    //        hasFoto: 0,
-                    //        idRec: 0,
-                    //        inxOrd: 999999,
-                    //        isGruppo: true,
-                    //        isObsoleto: false,
-                    //        label: null,
-                    //        recordImpaginato: null,
-                    //        recordInTracciato: {},
-                    //        recordRevisionato: naz,
-                    //        recordRevisionatiRegionali: regionali,
-                    //        statoSelezione: 0
-                    //    };
-
-                    //    //sottogruppoItem.recordRevisionato = item;
-                    //    sottogruppoItem.recordInTracciato[keyScattoCodiceGruppo] = codiceSottGruppo;
-                    //    sottogruppoItem.recordInTracciato[keyScattoCodiceSottogruppo] = codiceSottGruppo;
-                    //    sottogruppoItem.recordInTracciato.metaKeyInMismatch = [];
-
-                    //    // Trova il gruppo originale di appartenenza
-                    //    sottogruppoItem.recordInTracciato.gruppoOriginaleAppartenenza = me.List.find(f => !f.isGruppo && f.recordInTracciato[keyScattoCodiceSottogruppo] != null && f.recordInTracciato[keyScattoCodiceSottogruppo] == codiceSottGruppo).recordInTracciato[keyScattoCodiceGruppo];
-
-                    //    let groupItems = me.List.filter(f => f.recordInTracciato[keyScattoCodiceSottogruppo] != null && f.recordInTracciato[keyScattoCodiceSottogruppo] == codiceSottGruppo && !f.isGruppo);
-
-                    //    me.ListSottogruppi = me.ListSottogruppi.concat(groupItems);
-                    //    me.ListSottogruppi.push(sottogruppoItem);
-                    //}
 
                     let listaOrdinata = [];
 
@@ -3017,64 +2933,6 @@
         }
     }
 
-    //onMessageRevisore(message) {
-    //    let me = revInstance;
-    //    console.log(message);
-    //    if (message.areaOperativa == 3) {
-
-    //    }
-    //    else if (message.areaOperativa == 4) {
-    //        switch (message.messageId) {
-    //            case 101:
-    //                let codiciList = {
-    //                    stringhe: message.codici,
-    //                };
-    //                me.aggiornaRevisioni(codiciList);
-    //                break; // Aggiungi l'istruzione break per terminare il caso 101
-
-    //            default:
-    //                // Inserisci eventuali istruzioni per il caso predefinito
-    //                break; // Aggiungi l'istruzione break per il caso predefinito
-    //        }
-    //    }
-    //}
-
-    //aggiornaRevisioni(codiciList) {
-    //    let me = this;
-    //    Call.do("Revisore", "getArticoliDescrizioni", "PUT", codiciList, this, function (result, sender) {
-    //        console.log(result);
-    //        result.forEach(function (item) {
-    //            let element = null;
-    //            if (me.List.find(f => (item.codiceGruppo != null ? f.isGruppo && f.recordInTracciato[keyScattoCodiceGruppo] == item.codiceGruppo : !f.isGruppo && f.recordInTracciato[keyRefCodice] == item.idArticoloNavigation.codice)) != null) {
-    //                element = me.List.find(f => (item.codiceGruppo != null ? f.isGruppo && f.recordInTracciato[keyScattoCodiceGruppo] == item.codiceGruppo : !f.isGruppo && f.recordInTracciato[keyRefCodice] == item.idArticoloNavigation.codice));
-    //                element.recordRevisionato = item;
-    //            }
-    //            if (me.ListSottogruppi.find(f => (item.codiceGruppo != null ? f.isGruppo && f.recordInTracciato[keyScattoCodiceGruppo] == item.codiceGruppo : !f.isGruppo && f.recordInTracciato[keyRefCodice] == item.idArticoloNavigation.codice)) != null) {
-    //                element = me.ListSottogruppi.find(f => (item.codiceGruppo != null ? f.isGruppo && f.recordInTracciato[keyScattoCodiceGruppo] == item.codiceGruppo : !f.isGruppo && f.recordInTracciato[keyRefCodice] == item.idArticoloNavigation.codice));
-    //                element.recordRevisionato = item;
-    //            }
-    //            if (element != null) {
-    //                let recHtml = null;
-    //                if (element.isGruppo) {
-    //                    recHtml = $("#_list_container").find(".record-revisione[codice_gruppo='" + element.recordInTracciato[keyScattoCodiceGruppo] + "']");
-    //                }
-    //                else {
-    //                    recHtml = $("#_list_container").find(".record-revisione[referenzaCodice='" + item.idArticoloNavigation.codice + "']");
-    //                }
-    //                if (recHtml != null) {
-    //                    recHtml.find("#lab_data_ultima_revisione").text("Ultima revisione: " + getStringFromDate(new Date(item.dataUltimaRicezione)));
-    //                    recHtml.find("#Descrizione1").val(item.descrizione1 == null ? "" : item.descrizione1);
-    //                    recHtml.find("#Descrizione2").val(item.descrizione2 == null ? "" : item.descrizione2);
-    //                    recHtml.find("#Descrizione3").val(item.descrizione3 == null ? "" : item.descrizione3);
-    //                    recHtml.find("#Descrizione4").val(item.descrizione4 == null ? "" : item.descrizione4);
-    //                    recHtml.find("#Peso").val(rappresenteDecimaleInCulturaItaliana(item.peso == null ? "" : item.peso));
-    //                    recHtml.find("#Um").val(item.um == null ? "" : item.um);
-    //                }
-    //            }
-    //        });
-    //        sender.preparaListaDaCaricare(sender.currentPage - 1);
-    //    });
-    //}
 
     checkLastModificaFromButton(sender, canale = null, area = null) {
 
@@ -3358,56 +3216,6 @@
         }
     }
 
-    //mostraOperazioniModal(data) {
-    //    const operazioni = data.risultati[0].operazioniResult.operazioni;
-    //    const codice = data.risultati[0].codice;
-    //    const canale = operazioni[0]?.operazione?.canale || '—';
-    //    const area = operazioni[0]?.operazione?.area || '—';
-
-    //    $('#operazioniModalLabel').text(`${codice.length > 40 ? codice.slice(0, 40) + `...` : codice} | ${canale} | ${area}`);
-
-    //    function render() {
-    //        const giorni = $('#rangeDateSelect').val();
-    //        const ora = new Date();
-
-    //        const filtrate = operazioni.filter(op => {
-    //            const dataOp = new Date(op.operazione.data_Esecuzione);
-    //            if (giorni === 'all') return true;
-    //            const diff = (ora - dataOp) / (1000 * 60 * 60 * 24); // giorni
-    //            return diff <= parseInt(giorni);
-    //        });
-
-    //        filtrate.sort((a, b) => new Date(b.operazione.data_Esecuzione) - new Date(a.operazione.data_Esecuzione));
-
-    //        const corpo = filtrate.map((op, idx) => {
-    //            const o = op.operazione;
-    //            const esecuzione = new Date(o.data_Esecuzione);
-    //            const dataString = `${esecuzione.getDate().toString().padStart(2, '0')}/${(esecuzione.getMonth() + 1).toString().padStart(2, '0')}/${esecuzione.getFullYear()} ${esecuzione.getHours().toString().padStart(2, '0')}:${esecuzione.getMinutes().toString().padStart(2, '0')}:${esecuzione.getSeconds().toString().padStart(2, '0')}`;
-
-    //            const utenteHtml = (o.autore === o.esecutore)
-    //                ? `<p><strong>Utente:</strong> ${op.nomeUtenteEsecutore}</p>`
-    //                : `<p><strong>Richiedente:</strong> ${op.nomeUtenteRichiedente}</p><p><strong>Approvato da:</strong> ${op.nomeUtenteEsecutore}</p>`;
-
-    //            const formDataBtn = o.formData
-    //                ? `<button class="btn btn-outline-primary btn-sm" onclick='revInstance.mostraFormData(${JSON.stringify(o.formData)})'>Form Data</button>`
-    //                : `<span class="text-muted">Nessun formData</span>`;
-
-    //            return `<div class="border rounded p-3 mb-3 ${idx === 0 ? 'bg-light border-primary' : ''}">
-    //    ${idx === 0 ? '<span class="badge bg-primary mb-2">Ultima operazione</span>' : ''}
-    //    ${utenteHtml}
-    //    <p><strong>Data esecuzione:</strong> ${dataString}</p>
-    //    ${formDataBtn}
-    //  </div>`;
-    //        }).join('');
-
-    //        $('#operazioniModalBody').html(corpo || '<p class="text-muted">Nessuna operazione trovata per il range selezionato.</p>');
-    //    }
-
-    //    $('#rangeDateSelect').off('change').on('change', render);
-    //    render();
-
-    //    $('#operazioniModal').modal('show');
-    //}
 
     mostraOperazioniModal(data) {
         const operazioni = data.risultati[0].operazioniResult.operazioni;

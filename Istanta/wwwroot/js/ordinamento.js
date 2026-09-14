@@ -169,46 +169,6 @@
 
     }
 
-    //startTimeoutToSaveNewOrder(sender)
-    //{
-    //    if (this.timeoutOperation != null)
-    //        clearTimeout(this.timeoutOperation);
-
-    //    let me = this;
-
-    //    sender.css("background-color", "#ebb1b1");        
-
-    //    this.timeoutOperation = setTimeout(function () {
-    //        me.execCambioIndiceOrdinamento(sender);
-    //    }, 100);
-
-    //}
-
-    //execCambioIndiceOrdinamento(sender)
-    //{
-    //    //console.log("-----Eseguo chiamata------");
-    //    let _row = sender.closest(".row");
-    //    let areaIndex = _row.find("#area").attr("index");
-    //    let settoreIndex = _row.find("#settore").attr("index");
-    //    let repartoIndex = _row.find("#reparto").attr("index");
-
-
-    //    let obj = {
-    //        areaIndex: areaIndex,
-    //        settoreIndex: settoreIndex,
-    //        repartoIndex: repartoIndex,
-    //        newGlobalOrderIndex: parseInt(sender.val())
-    //    };
-
-    //    Call.do("MenaboSettings", "editOrdinamentoUniversale", "PUT", obj, null, function (result) {
-
-    //        //console.log(result);
-    //        if (result.esito) {
-    //            sender.css("background-color", "#b1ebb5");
-    //        }
-
-    //    });
-    //}
 
     execAddRule(sender)
     {
@@ -431,60 +391,6 @@
         });
     }
 
-    //ordinaRecordsTracciato(list, agenzia, cb) {
-    //    console.log("Ciao list");
-    //    console.log(list);
-    //    let rndVersion = Math.floor(Math.random() * 999999);
-    //    $.getJSON('external_source/SourceOrdinamentoLista.json?v=' + rndVersion, function (data) {
-
-    //        if (data.universale != null && data.universale) {
-    //            console.log("");
-    //            let chiaveArea = data.bindings.area.campoMeta;
-    //            let chiaveSettore = data.bindings.settore.campoMeta;
-    //            let chiaveReparto = data.bindings.reparto.campoMeta;
-
-    //            for (let i = 0; i < list.length; i++) {
-    //                var itemLista = list[i];
-    //                if (itemLista.isGruppo) {
-    //                    itemLista.orderedIndice = 99999999;
-    //                    itemLista.ordered = false;
-    //                    continue;
-    //                }
-    //                var itemListaRecord = itemLista.recordInTracciato;
-    //                itemLista.orderedIndice = 0;
-    //                itemLista.ordered = false;
-
-    //                try {
-    //                    let corrispondenza = data.lista.find(f => f.area.toLowerCase() == itemListaRecord[chiaveArea].toLowerCase() && f.settore.toLowerCase() == itemListaRecord[chiaveSettore].toLowerCase() && f.reparto.toLowerCase() == itemListaRecord[chiaveReparto].toLowerCase());
-
-    //                    if (corrispondenza == null) {
-    //                        continue;
-    //                    }
-    //                    if (corrispondenza.orderIndex >= 0) {
-    //                        itemLista.orderedIndice = corrispondenza.orderIndex;
-    //                        itemLista.ordered = true;
-    //                    }
-    //                }
-    //                catch {
-    //                    continue
-    //                }
-
-    //            }
-
-    //            let _list_ordinata_per_speciale = list.sort(function (a, b) {
-    //                var inxA = a.orderedIndice;
-    //                var inxB = b.orderedIndice;
-    //                //console.log("sor check " + [textA,textB]);
-    //                return (inxA < inxB) ? -1 : (inxA > inxB) ? 1 : 0;
-    //            });
-
-    //            cb(_list_ordinata_per_speciale);
-    //        }
-    //        else {
-    //            agenzia.ordinaRecordsTracciatoInMenabo(list, cb);
-    //        }
-    //    });
-    //}
 
     addRecordToOrdinamento(record) {
         let rndVersion = Math.floor(Math.random() * 999999);

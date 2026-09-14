@@ -659,94 +659,6 @@ class Agenzia extends IAgenzia {
         
     }
 
-    //aggiungiCampiRevisioneArchivio(htmlItem, dataItem) {
-    //    let htmlSingleElement = `
-    //<div class="container">
-    //    <div class="row">
-    //        <div class="col-2">
-    //            Meccanica
-    //            <textarea class="form-control" readonly style="height:33.5px;" id="Meccanica" name="Meccanica"></textarea>
-    //        </div>
-    //        <div class="col-3">
-    //            Localismo
-    //            <textarea class="form-control" readonly style="height:33.5px;" id="Localismo" name="Localismo"></textarea>
-    //        </div>
-    //        <div class="col-3">
-    //            Distintività
-    //            <textarea class="form-control" readonly style="height:33.5px;" id="Distintivita" name="Distintivita"></textarea>
-    //        </div>
-    //        <div class="col-4">
-    //            Territorialità
-    //            <textarea class="form-control" readonly style="height:33.5px;" id="Territorialita" name="Territorialita"></textarea>
-    //        </div>
-
-    //    </div>
-    //    <div class="row">
-
-    //    </div>
-    //    <div class="row">
-    //        <div class="col">
-    //            Tema
-    //            <textarea class="form-control" readonly style="height:33.5px;" id="Tema" name="Tema"></textarea>
-    //        </div>
-    //        <div class="col">
-    //            Tipo_tema
-    //            <textarea class="form-control" readonly style="height:33.5px;" id="Tipo_tema" name="Tipo_tema"></textarea>
-    //        </div>
-    //        <div class="col">
-    //            Sez. Volantino
-    //            <textarea class="form-control" readonly style="height:33.5px;" id="SezVolantino" name="SezVolantino"></textarea>
-    //        </div>
-    //        <div class="col">
-    //            Ruolo
-    //            <textarea class="form-control" readonly style="height:33.5px;" id="Ruolo" name="Ruolo"></textarea>
-    //        </div>
-
-    //    </div>
-    //    <div class="row">
-    //        <div class="col">
-    //            Note Category
-    //            <textarea class="form-control" readonly style="height:33.5px;" id="NoteCat" name="NoteCat"></textarea>
-    //        </div>
-    //    </div>
-    //    <div class="row">
-    //        <div class="col-10">
-    //            NOTE PER IMPAGINATO
-    //            <textarea class="form-control" style="height:33.5px;" id="NoteImpaginato" name="NOTE PER IMPAGINATO"></textarea>
-    //        </div>
-    //        <div class="col d-flex align-items-end">
-    //            <input id="salvaNoteImpaginato" type="button" class="btn btn-primary" value="Salva" onclick="revInstance.salvaCampoInDatoTracciatoFromSender('noteImpaginato', $('#NoteImpaginato').val(), $(this))" />
-    //        </div>
-    //    </div>
-    //</div>`;
-
-    //    let htmlSingleElementObject = $(htmlSingleElement);
-    //    // Aggiungi l'oggetto jQuery come primo figlio di ".dettaglioCampiElemento"
-    //    htmlItem.find(".dettaglioArchivioCustomDiv").append(htmlSingleElementObject);
-    //    htmlItem.find(".dettaglioArchivioCustom").show();
-    //    if (!dataItem.isGruppo) {
-    //        htmlItem.find("#dettaglioArchivioCustomContainer").css('display', 'none');
-    //    }
-    //    let elementiGruppo = revInstance.List.filter(f => !f.isGruppo && f.recordInTracciato[(revInstance.modalitaSottogruppi ? keyScattoCodiceSottogruppo : keyScattoCodiceGruppo)] == dataItem.recordInTracciato[keyScattoCodiceGruppo]);
-    //    let pilota = elementiGruppo.find(f => f.recordInTracciato.referenza_pilota == "S" && f.recordInTracciato.referenza_pilota != null);
-    //    if (pilota == null) {
-    //        pilota = elementiGruppo[0];
-    //    }
-    //    // Ora puoi utilizzare il metodo find sull'oggetto jQuery
-    //    htmlSingleElementObject.find("#Meccanica").val(pilota.recordInTracciato.meccanica_origine);
-    //    htmlSingleElementObject.find("#SezVolantino").val(pilota.recordInTracciato.sezione);
-    //    htmlSingleElementObject.find("#Distintivita").val(pilota.recordInTracciato.distintivita);
-    //    htmlSingleElementObject.find("#Territorialita").val(pilota.recordInTracciato.territorialita);
-    //    htmlSingleElementObject.find("#Localismo").val(pilota.recordInTracciato.localismo);
-    //    htmlSingleElementObject.find("#Ruolo").val(pilota.recordInTracciato.ruolo);
-    //    htmlSingleElementObject.find("#NoteCat").val(pilota.recordInTracciato.note_category);
-    //    htmlSingleElementObject.find("#Tema").val(pilota.recordInTracciato.tema);
-    //    htmlSingleElementObject.find("#Tipo_tema").val(pilota.recordInTracciato.tipo_tema);
-    //    htmlSingleElementObject.find("#NoteImpaginato").val(pilota.recordInTracciato.noteImpaginato);
-
-    //    // Imposta l'altezza dell'elemento .dettaglioGruppo
-    //    htmlItem.find(".dettaglioGruppo").css("height", "600px")
-    //}
 
 
     aggiungiCampiRevisioneArchivio(htmlItem, dataItem) {
@@ -1225,43 +1137,6 @@ class Agenzia extends IAgenzia {
 
             gruppo.recordInTracciato.areeIn = areeIn;
             gruppo.recordInTracciato.areeOut = areeOut;
-            //for (var i = 0; i < elementiGruppo.length; i++) {
-            //    var el = elementiGruppo[i];
-
-            //    var gemelli = list.filter(f =>
-            //        f.recordInTracciato[keyRefCodice] == el.recordInTracciato[keyRefCodice]
-            //        && !f.isGruppo)
-
-            //    gemelli.forEach(f => {
-            //        if (f.recordInTracciato[keyScattoCodiceGruppo] != gruppo.recordInTracciato[keyScattoCodiceGruppo]) {
-            //            let areeValide = [];
-            //            f.recordInTracciato.areeIn.forEach(ar => {
-            //                if (areeIn.find(ar2=> ar2 == ar)) {
-            //                    areeValide.push(ar);
-            //                }
-            //            });
-            //            areeIn = areeValide;
-
-            //            let areeValideOut = [];
-            //            f.recordInTracciato.areeOut.forEach(ar => {
-            //                if (areeOut.find(ar2=>ar2 == ar) != null) {
-            //                    areeValideOut.push(ar);
-            //                }
-            //            });
-            //            areeOut = areeValideOut;
-            //        }
-
-            //        let gruppiPiuGrandi = me.listGruppiInOut.filter(gr => gr.codiceGruppo.split(",").includes(f.recordInTracciato[keyRefCodice]));
-            //        gruppiPiuGrandi.forEach(gg => {
-            //            gg.areeIn.forEach(area => {
-            //                var indexArea = areeIn.indexOf(area);
-            //                if (indexArea >= 0) {
-            //                    areeIn.splice(indexArea, 1);
-            //                }
-            //            });
-            //        });
-            //    });
-            //}
 
 
 
