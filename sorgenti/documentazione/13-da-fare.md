@@ -41,7 +41,20 @@ Da guardare e decidere. Non è stato toccato apposta.
 
 Residui di una sessione di debug. Da capire se servono ancora.
 
-### 6. `ADMINER.txt` e `ACCESSI.txt`
+### 6. `AuthController.cs` non contiene un controller
+
+Sta in `Istanta/Controllers/`, si chiama `AuthController.cs`, ma dentro c'e soltanto
+l'interfaccia `IExternalUserValidator` e due implementazioni (`NoExternalValidator` e
+`EntraIDUserValidator`). Nessuna classe che erediti da `Controller`, nessuna rotta.
+
+Non e un problema di funzionamento — e un file nel posto sbagliato con il nome sbagliato, che fa
+inciampare chiunque ci passi, compresi gli strumenti automatici. Andrebbe spostato fuori da
+`Controllers/` e rinominato per quello che contiene.
+
+Ha senso guardarlo insieme alla domanda su Entra ID: se quella strada di autenticazione e viva,
+questi tipi contano; se e morta, contano ancora meno.
+
+### 7. `ADMINER.txt` e `ACCESSI.txt`
 
 In `soluzione/`, entrambi ignorati da git, entrambi di inizio settembre. **Contengono credenziali e
 vanno considerati vecchi.** Da verificare e, se superati, eliminare: un file di credenziali

@@ -71,6 +71,10 @@ for f in file_cs:
             if "Controller" in c[1]: mc = c; break
     if mc is None: mc = candidate[0]     # 4. e se no, la prima
     nome_cls, base, k_cls = mc
+    # se la classe scelta non e un controller, il file non ne contiene uno:
+    # succede per AuthController.cs, che ha solo IExternalUserValidator e le
+    # sue implementazioni. Meglio dirlo che far finta.
+    non_e_controller = not (nome_cls.endswith("Controller") or "Controller" in base)
 
     att_cls = []
     j = k_cls - 1
@@ -123,7 +127,8 @@ for f in file_cs:
                            firma=re.sub(r'\s+', ' ', firma), viste=viste, lib=lib,
                            lib_var=lib_var, http=http, ctx=ctx))
     dati.append(dict(file=f, cls=nome_cls, base=base, righe=len(LG),
-                     att_cls=att_cls, dip=dip, azioni=azioni))
+                     att_cls=att_cls, dip=dip, azioni=azioni,
+                     non_e_controller=non_e_controller))
 
 P("## Indice")
 P()
@@ -133,8 +138,9 @@ for d in sorted(dati, key=lambda x: -x["righe"]):
     ctx = sorted(set(c for a in d["azioni"] for c in a["ctx"]))
     lib = sum(len(a["lib"]) + a["lib_var"] for a in d["azioni"])
     http = sorted(set(h for a in d["azioni"] for h in a["http"]))
+    etichetta = d["cls"] + (" *(non e un controller)*" if d["non_e_controller"] else "")
     P("| [%s](#%s) | %d | %d | %s | %s | %s |" % (
-        d["cls"], d["cls"].lower(), d["righe"], len(d["azioni"]),
+        etichetta, d["cls"].lower(), d["righe"], len(d["azioni"]),
         ", ".join(ctx) or "—", (str(lib) if lib else "—"), ", ".join(http) or "—"))
 P()
 P("**Totale: %d controller, %d azioni pubbliche, %d righe.**" % (
@@ -155,6 +161,11 @@ for d in sorted(dati, key=lambda x: x["cls"]):
     P("`Istanta/Controllers/%s` — %d righe, %d azioni pubbliche." % (d["file"], d["righe"], len(d["azioni"])))
     if d["base"]: P(" Eredita da `%s`." % d["base"])
     P()
+    if d["non_e_controller"]:
+        P("> **Questo file non contiene un controller.** La classe qui sopra e la prima")
+        P("> dichiarata nel file, ma non eredita da `Controller` e non si chiama come il")
+        P("> file. Le \"azioni\" elencate sono metodi pubblici ordinari, non rotte HTTP.")
+        P()
     for a in d["att_cls"]: P("Attributo di classe: `%s`" % a)
     if d["att_cls"]: P()
     if d["dip"]:

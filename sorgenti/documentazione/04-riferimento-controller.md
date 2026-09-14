@@ -4,7 +4,7 @@
 > `strumenti/genera-riferimento.sh` leggendo `Istanta/Controllers/`.
 > Non modificarlo: rilancia lo script.
 >
-> Generato il 14/09/2026 alle 19:27.
+> Generato il 14/09/2026 alle 19:30.
 
 ## Indice
 
@@ -31,7 +31,7 @@
 | [EtichetteController](#etichettecontroller) | 193 | 8 | — | — | — |
 | [MastroController](#mastrocontroller) | 181 | 4 | ctx | — | — |
 | [MeccanicheController](#meccanichecontroller) | 114 | 4 | — | — | — |
-| [NoExternalValidator](#noexternalvalidator) | 95 | 5 | — | — | — |
+| [NoExternalValidator *(non e un controller)*](#noexternalvalidator) | 95 | 5 | — | — | — |
 | [CustomPlugin](#customplugin) | 81 | 3 | — | — | — |
 | [HomeController](#homecontroller) | 78 | 3 | — | — | — |
 | [TaskManagerController](#taskmanagercontroller) | 31 | 1 | — | — | — |
@@ -615,6 +615,10 @@ Attributo di classe: `[Route("[controller]/")]`
 
 `Istanta/Controllers/AuthController.cs` — 95 righe, 5 azioni pubbliche.
  Eredita da `IExternalUserValidator`.
+
+> **Questo file non contiene un controller.** La classe qui sopra e la prima
+> dichiarata nel file, ma non eredita da `Controller` e non si chiama come il
+> file. Le "azioni" elencate sono metodi pubblici ordinari, non rotte HTTP.
 
 | azione | riga | righe | rotta | ritorna | vista | AgenziaLib | db |
 |---|---:|---:|---|---|---|---|---|
