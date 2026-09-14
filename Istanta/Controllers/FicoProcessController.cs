@@ -28,7 +28,6 @@ using Newtonsoft.Json.Linq;
 using System.Buffers.Text;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Drawing.Printing;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -614,61 +613,6 @@ namespace Istanta.Controllers
 
             return Ok(bRes);
         }
-
-        //[HttpGet]
-        //[Route("FicoProcess/getLabelsByGuidId/{guidId}")]
-        //public async Task<IActionResult> getLabelsByGuidId(string guidId)
-        //{
-        //    FicoDataSourceResult bRes = new FicoDataSourceResult();
-
-
-        //    FICOAccessLevel acLevel = await getAccesslevel();
-
-        //    if (acLevel != FICOAccessLevel.noSession)
-        //    {
-        //        //La chiamata arriva da circuito FICO.
-        //        //Esego l'azione
-        //        try
-        //        {
-        //            var _default = await getLabels();
-        //            OkObjectResult res = (OkObjectResult)_default;
-        //            bRes= (FicoDataSourceResult)res.Value!;
-        //            bRes.idField = "idLabel";
-        //            bRes.visible = true;
-        //            //Concateno anche il groupby delle etihcette della promo
-        //            List<int> tracciati = await this.ctx2.PromoTracciatis.Include(i => i.IdPromoNavigation).Where(p => p.IdPromoNavigation.guidID == guidId).Select(s => s.Id).ToListAsync();
-        //            var etichetteCaricate = await this.ctx2.PromoTracciatiRecords.Where(tr => tracciati.Contains(tr.IdTracciato)).GroupBy(g => g.Label).Select(s=>s.Key).ToListAsync();
-
-        //            List<FicoDataSourceItem> etichetteNonPresenti = etichetteCaricate
-        //            .Where(etichetta => !bRes.content!.Any(a => a.valore == etichetta))
-        //            .Select(etichetta => new FicoDataSourceItem() { titolo = etichetta, valore = etichetta }).ToList();
-
-        //            if (etichetteNonPresenti.Count>0)
-        //                bRes.content!.AddRange(etichetteNonPresenti);
-
-        //            bRes.esito = true;
-        //        }
-        //        catch (Exception ex)
-        //        {
-        //            bRes.error = ex.Message;
-        //            bRes.esito = false;
-        //            return BadRequest(bRes);
-        //        }
-
-
-
-
-        //    }
-        //    else
-        //    {
-        //        bRes.error = "no_login";
-        //        bRes.esito = false;
-        //        return Unauthorized(bRes);
-        //    }
-
-
-        //    return Ok(bRes);
-        //}
 
         [HttpGet]
         [Route("FicoProcess/getAddestramenti/{all}")]
@@ -2921,104 +2865,6 @@ namespace Istanta.Controllers
 
                     swat.ToString();
 
-                    //Commentata MA da riprendere per il discorso KIT POP
-                    //Adesso devo prendere in considerazione anche le declinazioni
-                    //if (kit.declinazioni != null && kit.declinazioni.Count > 0)
-                    //{
-
-                    //    foreach (var itemPreparato in recordsFiltrati)
-                    //    {
-
-                    //        List<Dictionary<string, object>> recordsFiltratiDeclinazioni = new List<Dictionary<string, object>>();
-
-                    //        foreach (var declinazione in kit.declinazioni)
-                    //        {
-                    //            if (checkFiltro(itemPreparato.recordInTracciato, declinazione.filtri))
-                    //            {
-                    //                recordsFiltratiDeclinazioni.Add(itemPreparato.recordInTracciato);
-                    //            }
-                    //        }
-
-                    //        Dictionary<string, object> objParamsDecl = new Dictionary<string, object>();
-                    //        objParamsDecl.Add("promoContext", promoContext);
-                    //        objParamsDecl.Add("tracciatoContext", JsonConvert.DeserializeObject<List<FicoContextField>>(tracciato.Context));
-                    //        objParamsDecl.Add("tracciato", recordsFiltratiDeclinazioni);
-                    //        objParamsDecl.Add("kit", kit);
-
-
-
-                    //        if (objFormato.tipo == TipoLavorazione.PoP)
-                    //        {
-                    //            //POP
-                    //            try
-                    //            {
-
-                    //                TracciatoResultKit resultExternal = icItem.execLibFunction("AgenziaLib."+ this.ficoConf.Value.nomeCliente + ".esportaPoP", objParamsDecl) as TracciatoResultKit;
-
-                    //                if (resultExternal.errors != "")
-                    //                {
-                    //                    error_report += $"Promo Esport error: " + resultExternal.errors + "\n";
-                    //                    continue;
-                    //                }
-
-                    //                foreach (var itemLista in resultExternal.liste)
-                    //                {
-                    //                    //Sovrascrivo il recordInTracciato con quello elaborato da Agenzia
-                    //                    //foreach (ArticoloInKit aKit in itemLista.Records)
-                    //                    //{
-                    //                    //    ArticoloInRevisione aRev = resultPreparazione.records.FirstOrDefault(f2 => f2.idRec == aKit.IdRec);
-                    //                    //    aRev.recordInTracciato = aKit.recordInTracciato;
-                    //                    //    aRev.names = aKit.names;
-                    //                    //}
-
-
-                    //                    resultGlobale.records.AddRange(resultPreparazione.records);
-                    //                }
-
-
-                    //            }
-                    //            catch (Exception ex)
-                    //            {
-                    //                error_report += $"Error on export PoP (guid ID {kit.guidFormato} Kit ID {kit.guidId}) : {ex.ToString()}\n";
-                    //            }
-
-                    //        }
-                    //        else if (objFormato.tipo == TipoLavorazione.Volantino)
-                    //        {
-                    //            //VOL
-                    //            try
-                    //            {
-                    //                TracciatoResultKit resultExternal = icItem.execLibFunction("AgenziaLib."+this.ficoConf.Value.nomeCliente+".esportaVolantino", objParamsDecl) as TracciatoResultKit;
-                    //                if (resultExternal.errors != "")
-                    //                {
-                    //                    error_report += $"Promo Esport error: " + resultExternal.errors + "\n";
-                    //                    continue;
-                    //                }
-
-                    //                foreach (var itemLista in resultExternal.liste)
-                    //                {
-                    //                    //Sovrascrivo il recordInTracciato con quello elaborato da Agenzia
-                    //                    //foreach (ArticoloInKit aKit in itemLista.Records)
-                    //                    //{
-                    //                    //    ArticoloInRevisione aRev = resultPreparazione.records.FirstOrDefault(f2 => f2.idRec == aKit.IdRec);
-                    //                    //    aRev.recordInTracciato = aKit.recordInTracciato;
-                    //                    //    aRev.names = aKit.names;
-                    //                    //}
-
-
-                    //                    resultGlobale.records.AddRange(resultPreparazione.records);
-                    //                }
-
-                    //            }
-                    //            catch (Exception ex)
-                    //            {
-                    //                error_report += $"Error on export VOL (guid ID {kit.guidFormato} Kit ID {kit.guidId}) : {ex.ToString()}\n";
-                    //            }
-                    //        }
-                    //    }
-                    //}
-
-
                 }
 
                 resultGlobale.archivio_descr_gruppo = archivio_descr_gruppo;
@@ -3116,7 +2962,10 @@ namespace Istanta.Controllers
                             {
                                 decProp.chiaveCompilata = SingletonConfiguration.DbDeclinazioniKit!.source.FirstOrDefault(d => d.Id == decProp.idChiave)!.Codice;
                             }
-                            catch { }
+                            catch (Exception exSilenzioso)
+                            {
+                                Console.WriteLine($"[catch muto] FicoProcessController.cs riga ~2966: {exSilenzioso.Message}");
+                            }
                         }
                     }
 
@@ -3745,80 +3594,6 @@ namespace Istanta.Controllers
                     }
                 }
 
-                //if (lista_descrGruppo.Count > 0)
-                //{
-
-                //Prendo quella più vicina all'area/canale
-
-                //ArticoliDescrizioni descrGruppo = lista_descrGruppo.Where(g => g.Area == tItem.Area && g.Canale == tItem.Canale).OrderByDescending(o => o.DataUltimaRicezione).FirstOrDefault();
-                //if (descrGruppo == null)
-                //{
-                //    descrGruppo = lista_descrGruppo.Where(g => g.Area == tItem.Area).OrderByDescending(o => o.DataUltimaRicezione).FirstOrDefault();
-                //    if (descrGruppo == null)
-                //    {
-                //        descrGruppo = lista_descrGruppo.OrderByDescending(o => o.DataUltimaRicezione).FirstOrDefault();
-                //    }
-                //}
-
-
-                //bool found_descr_gruppo = (descrGruppo != null);
-
-                //if (found_descr_gruppo)
-                //{
-                //    //Vado a salvare nel dato preparato la descrizione revisionata più appropriata per questa ref
-                //    dictDescrGruppo = new Dictionary<string, object>();
-                //    dictDescrGruppo[descr1Key] = descrGruppo.Descrizione1;
-                //    dictDescrGruppo[descr2Key] = descrGruppo.Descrizione2;
-                //    dictDescrGruppo[descr3Key] = descrGruppo.Descrizione3;
-                //    dictDescrGruppo[descr4Key] = descrGruppo.Descrizione4;
-
-                //    dictDescrGruppo[GLOBAL_VARIABLES.keyFirmaRevisione] = descrGruppo.FirmaTracciato;
-
-
-
-                //    if (descrGruppo.DescrizioneIndd != null)
-                //        dictDescrGruppo[descrInddKey] = descrGruppo.DescrizioneIndd;
-                //    if (descrGruppo.Peso != null)
-                //        dictDescrGruppo[Enum.GetName(AddestramentoRuoli.Descrizioni) + "." + GLOBAL_VARIABLES.keyDescrPeso] = descrGruppo.Peso.Value;
-                //    if (descrGruppo.Um != null)
-                //        dictDescrGruppo[Enum.GetName(AddestramentoRuoli.Descrizioni) + "." + GLOBAL_VARIABLES.keyDescrUm] = descrGruppo.Um;
-
-                //}
-
-
-
-                //    foreach (var itemGruppo in itemsGruppo)
-                //    {
-                //        //item.Dato[GLOBAL_VARIABLES.keyXMLDescrizioneGruppo] = dictDescrGruppo;ù
-                //        Dictionary<string, object> itemGruppoData = itemGruppo.recordInTracciato;
-                //        //Quando esce una descrizione di gruppo, propago le info PESO e UM su tutte le ref del gruppo
-                //        string kUmGruppo = Enum.GetName(AddestramentoRuoli.Descrizioni) + "." + GLOBAL_VARIABLES.keyDescrUmGruppo;
-                //        string kPesoGruppo = Enum.GetName(AddestramentoRuoli.Descrizioni) + "." + GLOBAL_VARIABLES.keyDescrPesoGruppo;
-                //        string kPeso = Enum.GetName(AddestramentoRuoli.Descrizioni) + "." + GLOBAL_VARIABLES.keyDescrPeso;
-                //        string kUm = Enum.GetName(AddestramentoRuoli.Descrizioni) + "." + GLOBAL_VARIABLES.keyDescrUm;
-                //        if (rec.recordInTracciato.ContainsKey(kPeso))
-                //            itemGruppoData[kPesoGruppo] = rec.recordInTracciato[kPeso];
-                //        if (rec.recordInTracciato.ContainsKey(kUm))
-                //            itemGruppoData[kUmGruppo] = rec.recordInTracciato[kUm];
-
-                //        itemGruppoData[GLOBAL_VARIABLES.keyXMLSelezione] = itemGruppo.statoSelezione;
-                //    }
-
-                //}
-                //else
-                //{
-                //    foreach (var itemGruppo in itemsGruppo)
-                //    {
-                //        Dictionary<string, object> itemGruppoData = itemGruppo.recordInTracciato;
-                //        //item.Dato[GLOBAL_VARIABLES.keyXMLDescrizioneGruppo] = dictDescrGruppo;ù
-                //        itemGruppoData[GLOBAL_VARIABLES.keyXMLSelezione] = itemGruppo.statoSelezione;
-
-                //    }
-
-                //}
-
-                //if (dictDescrGruppo!=null)
-                //    rec.recordInTracciato[GLOBAL_VARIABLES.keyXMLDescrizioneGruppo] = dictDescrGruppo;
             }
             else
             {

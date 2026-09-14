@@ -605,7 +605,19 @@
                 htmlItem.find("#lab_data_ultima_revisione").text("Mai revisionato");
             }
             
-            htmlItem.find("#img_principale").attr("src", "/Thumb?codice=" + obj.codice + "&w=40&h=40");                
+            // Le miniature passano da olimpo: System.Drawing (usato da /Thumb) non funziona su Linux.
+            // Se il record porta il guid della foto uso getThumbNailOnDemand, altrimenti resta il segnaposto.
+            {
+                const guidFoto = obj.recordInTracciato != null ? obj.recordInTracciato["Foto.guidid"] : null;
+                const imgPrinc = htmlItem.find("#img_principale");
+                if (guidFoto != null && guidFoto !== "") {
+                    imgPrinc.attr("src", olimpoIp + "/foto/getThumbNailOnDemand?width=40&guidId=" + guidFoto);
+                } else {
+                    let _uriFallback = getWebAppRootFolder();
+                    if (_uriFallback != "") _uriFallback = "/" + _uriFallback;   // stessa condizione della riga 283
+                    imgPrinc.attr("src", _uriFallback + "images/NoFoto.png");
+                }
+            }
             htmlItem.find("#a_scheda_articolo").html("<b>" + obj.codice + "</b>");
             htmlItem.find("#xls_file").html(obj.recordInTracciato[keyTracciatoXlsx]);
 

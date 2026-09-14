@@ -35,136 +35,6 @@ namespace Istanta.Utility
     {
         const int limit_char_length_indd = 18;
 
-        public static string UppercaseFirst(string s)
-        {
-            // Check for empty string.
-            if (string.IsNullOrEmpty(s))
-            {
-                return string.Empty;
-            }
-            // Return char and concat substring.
-            return char.ToUpper(s[0]) + s.Substring(1);
-        }
-
-        public static string StringToCSVCell(string str)
-        {
-            bool mustQuote = (str.Contains(",") || str.Contains("\"") || str.Contains("\r") || str.Contains("\n"));
-            if (mustQuote)
-            {
-                StringBuilder sb = new StringBuilder();
-                sb.Append("\"");
-                foreach (char nextChar in str)
-                {
-                    sb.Append(nextChar);
-                    if (nextChar == '"')
-                        sb.Append("\"");
-                }
-                sb.Append("\"");
-                return sb.ToString();
-            }
-
-            return str;
-        }
-
-        public static string? RemoveTroublesomeCharacters(string inString)
-        {
-            if (inString == null) return null;
-
-            StringBuilder newString = new StringBuilder();
-            char ch;
-
-            for (int i = 0; i < inString.Length; i++)
-            {
-
-                ch = inString[i];
-                // remove any characters outside the valid UTF-8 range as well as all control characters
-                // except tabs and new lines
-                //if ((ch < 0x00FD && ch > 0x001F) || ch == '\t' || ch == '\n' || ch == '\r')
-                //if using .NET version prior to 4, use above logic
-                if (System.Xml.XmlConvert.IsXmlChar(ch)) //this method is new in .NET 4
-                {
-                    newString.Append(ch);
-                }
-            }
-            return newString.ToString();
-
-        }
-
-        public static string formatAsInDD(string descrizione, int limit = 18)
-        {
-            if (limit > 0 && descrizione.Length > limit && descrizione.IndexOf(Environment.NewLine) < 0)
-            {
-                string new_desc = "";
-                int counter = 0;
-                string[] blocchi = descrizione.Split(' ');
-                for (int i = 0; i < blocchi.Length; i++)
-                {
-                    counter += blocchi[i].Length;
-                    if (counter > limit && i > 0)
-                    {
-                        new_desc += Environment.NewLine;
-                        counter = blocchi[i].Length;
-                    }
-                    new_desc += blocchi[i];
-
-                    if (i + 1 < blocchi.Length)
-                        new_desc += " ";
-
-                    counter++;
-                }
-
-                return new_desc;
-            }
-            else
-            {
-                //Controllo solo che priam della NewLine ci sia lo spazio
-                //Se non c'è ce lo forzo
-                string desc = "";
-                int inx = 0;
-                int nl = 0;
-                try
-                {
-                    while (true)
-                    {
-                        nl = descrizione.IndexOf(Environment.NewLine, inx);
-                        if (nl < 0)
-                        {
-                            if (inx > 0)
-                                desc += descrizione.Substring(inx);
-                            else
-                                desc += descrizione.Substring(0);
-
-                            break;
-                        }
-                        else
-                        {
-                            string ch = descrizione[nl - 1].ToString();
-
-                            if (ch != " " &&
-                                ch != "\n")//Questa è per l'intervento manuale
-                                desc += descrizione.Substring(inx, nl - inx) + " " + Environment.NewLine;
-                            //if (ch == " " )//Questa è per il DEMONE 
-                            //desc += descrizione.Substring(inx, (nl-1) - inx) +  Environment.NewLine;
-                            else if (ch == "\n")
-                                desc += Environment.NewLine;
-                            else
-                                desc += descrizione.Substring(inx, nl - inx) + Environment.NewLine;
-
-                            inx = nl + 2;
-                        }
-                    }
-
-                }
-                catch (Exception ex)
-                {
-                    ex.ToString();
-
-                }
-                return desc;
-
-            }
-        }
-
         public static Dictionary<string, object>? getJsonObject(string json_string)
         {
 
@@ -181,22 +51,6 @@ namespace Istanta.Utility
             return obj;
         }
 
-        public static RevisioneMetaPromoLavorazioni getRevisioneMetaPromoLavorazioni(string json_string)
-        {
-
-            RevisioneMetaPromoLavorazioni obj = new RevisioneMetaPromoLavorazioni();
-            try
-            {
-                if (json_string!=null && json_string!="")
-                    obj = Newtonsoft.Json.JsonConvert.DeserializeObject<RevisioneMetaPromoLavorazioni>(json_string);
-            }
-            catch (Exception ex)
-            {
-                ex.ToString();
-            }
-
-            return obj;
-        }
         public static FicoRuntimeKit getFicoRuntimeKit(string json_string)
         {
 
@@ -235,20 +89,6 @@ namespace Istanta.Utility
 
             return "";
         }
-        public static bool stringIsPartOfABiggerString(string stringa, string catch_key)
-        {
-            int inx = stringa.ToLower().IndexOf(catch_key);
-            if (inx <= 0)
-                return false;
-            else if (char.IsLetterOrDigit(stringa[inx - 1]))
-            {
-                return true;
-            }
-
-
-            return false;
-        }
-
         public static string getFirmaTracciato(Dictionary<string,object> rec)
         {
             string firma = "#";
@@ -558,162 +398,9 @@ namespace Istanta.Utility
         }
 
 
-        public static string DecimalRoundToString(decimal val)
-        {
-            string result = val.ToString();
-
-            if (result.LastIndexOf(".") > 0)
-            {
-                if (result.Substring(result.LastIndexOf(".") + 1).Length <= 1)
-                    result += "0";
-            }
-            else if (result.LastIndexOf(",") > 0)
-            {
-                if (result.Substring(result.LastIndexOf(",") + 1).Length <= 1)
-                    result += "0";
-            }
-            else
-            {
-                result += ",00";
-            }
-
-            return result;
-        }
-
-        public static string DecimalOrIntToString(decimal val)
-        {
-            string result = val.ToString();
-
-            if (val == (int)val)
-            {
-                result = ((int)val).ToString();
-            }
-
-            return result;
-        }
-
-        public static string generateComplexName(Byte length)
-        {
-            string result = "";
-
-            string[] combinazioni = new string[] { "q", "w", "e", "r", "t", "y", "u", "i", "o", "p", "a", "s", "d", "f", "g", "h", "j", "k", "l", "z", "x", "c", "v", "b", "n", "m", "1", "2", "3", "4", "5", "6", "7", "8", "9" };
-            int num_combinazioni = combinazioni.Length;
-            Random rnd = new Random();
-
-            for (int i = 0; i < length; i++)
-            {
-                result += combinazioni[rnd.Next(num_combinazioni)].ToString().ToUpper();
-            }
-
-            return result;
-        }
 
 
 
-
-    }
-
-    public class NetworkConnection : IDisposable
-    {
-        readonly string _networkName;
-
-        public NetworkConnection(string networkName, NetworkCredential credentials)
-        {
-            _networkName = networkName;
-
-            var netResource = new NetResource
-            {
-                Scope = ResourceScope.GlobalNetwork,
-                ResourceType = ResourceType.Disk,
-                DisplayType = ResourceDisplaytype.Share,
-                RemoteName = networkName
-            };
-
-            var userName = string.IsNullOrEmpty(credentials.Domain)
-                ? credentials.UserName
-                : string.Format(@"{0}\{1}", credentials.Domain, credentials.UserName);
-
-            var result = WNetAddConnection2(
-                netResource,
-                credentials.Password,
-                userName,
-                0);
-
-            if (result != 0)
-            {
-                throw new Win32Exception(result, "Error connecting to remote share");
-            }
-        }
-
-        ~NetworkConnection()
-        {
-            Dispose(false);
-        }
-
-        public void Dispose()
-        {
-            Dispose(true);
-            GC.SuppressFinalize(this);
-        }
-
-        protected virtual void Dispose(bool disposing)
-        {
-            WNetCancelConnection2(_networkName, 0, true);
-        }
-
-        [DllImport("mpr.dll")]
-        private static extern int WNetAddConnection2(NetResource netResource,
-            string password, string username, int flags);
-
-        [DllImport("mpr.dll")]
-        private static extern int WNetCancelConnection2(string name, int flags,
-            bool force);
-
-        [StructLayout(LayoutKind.Sequential)]
-        public class NetResource
-        {
-            public ResourceScope Scope;
-            public ResourceType ResourceType;
-            public ResourceDisplaytype DisplayType;
-            public int Usage;
-            public string? LocalName;
-            public string? RemoteName;
-            public string? Comment;
-            public string? Provider;
-        }
-
-        public enum ResourceScope : int
-        {
-            Connected = 1,
-            GlobalNetwork,
-            Remembered,
-            Recent,
-            Context
-        };
-
-        public enum ResourceType : int
-        {
-            Any = 0,
-            Disk = 1,
-            Print = 2,
-            Reserved = 8,
-        }
-
-        public enum ResourceDisplaytype : int
-        {
-            Generic = 0x0,
-            Domain = 0x01,
-            Server = 0x02,
-            Share = 0x03,
-            File = 0x04,
-            Group = 0x05,
-            Network = 0x06,
-            Root = 0x07,
-            Shareadmin = 0x08,
-            Directory = 0x09,
-            Tree = 0x0a,
-            Ndscontainer = 0x0b
-        }
     }
 
 
@@ -730,8 +417,6 @@ namespace Istanta.Utility
     /// 
     public class ImpersonateHelper
     {
-        [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
-        public static extern bool LogonUser(String Username, String Domain, String Password, int LogonType, int LogonProvider, out SafeAccessTokenHandle Token);
 
         public string nomePrima="";
         public string nomeDopo="";
@@ -905,16 +590,6 @@ namespace Istanta.Utility
         //}
 
 
-
-        public static void SaveACPV()
-        {
-            DBACPV!.SaveChanges();
-        }
-
-        public static void SaveFormati()
-        {
-            DBFORMATI!.SaveChanges();
-        }
 
         public static void SaveLoghiBolli()
         {

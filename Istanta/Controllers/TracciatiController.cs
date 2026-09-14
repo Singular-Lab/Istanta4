@@ -214,161 +214,6 @@ namespace Istanta.Controllers
         }
 
 
-        //[HttpPost]
-        //[Route("Tracciati/Upload")]
-        //public async Task<IActionResult> Upload([FromForm] InputFormTracciato request)
-        //{
-
-        //    string pop_folder_name = "pop_nodata";//"pop" + DateTime.Now.ToString("dd-MMM-yy-HH-mm");
-        //    string pop_path_export = path_to_import + "\\" + pop_folder_name;
-
-
-        //    AttivitaResult result = new AttivitaResult();
-
-
-        //    try
-        //    {
-        //        //string _f = request.files[0];
-
-        //        if (request.file != null)//_f != String.Empty)
-        //        {
-        //            IFormFile _f = request.file;
-
-        //            request.filename = _f.FileName;
-
-        //            //string file_xls = path_to_import + request.filenames[0];
-        //            string file_xls = path_to_import + _f.FileName;
-
-        //            request.fields = new Dictionary<string, string>();
-        //            string[] _params = request.requestForms!.Split('&', StringSplitOptions.RemoveEmptyEntries);
-        //            foreach (string _p in _params)
-        //            {
-        //                string[] _pKV = _p.Split('=');
-        //                //if (_pKV[0] == "cmbTipoTracciato")
-        //                //request.cmbTipoTracciato = Byte.Parse(_pKV[1]);
-        //                //if (_pKV[0] == "cmbAddestramenti")
-        //                //    request.cmbAddestramenti = Int32.Parse(_pKV[1]);
-        //                //else if (_pKV[0] == "cmbLabels")
-        //                //    request.cmbLabels = _pKV[1];
-        //                if (_pKV[0] == "OpzioneAutoRevisione")
-        //                    request.AutoRevisione = Boolean.Parse(_pKV[1]);
-        //                else if (_pKV[0] == "idPromo")
-        //                {
-        //                    request.idPromo = Int32.Parse(_pKV[1]);
-        //                    request.nomePromo = this.ctx2.Promos.Find(request.idPromo)!.NomePromo;
-        //                    request.fields["nomePromo"] = request.nomePromo;
-        //                }
-
-        //                request.fields[_pKV[0]] = _pKV[1];
-
-        //            }
-
-        //            try
-        //            {
-        //                //System.IO.File.WriteAllBytes(file_xls, Convert.FromBase64String(_f.Substring(_f.IndexOf(",") + 1)));
-        //                using (FileStream fs = new FileStream(file_xls, FileMode.Create))
-        //                {
-        //                    await _f.CopyToAsync(fs);
-        //                }
-
-
-
-
-
-        //                //file.ToString();
-        //            }
-        //            catch (Exception ex)
-        //            {
-        //                result.errorCode = ErrorCodes.Generic;
-        //                result.error = ex.ToString();
-        //                return Ok(result);
-        //            }
-
-        //            int idImp = 0;
-
-        //            System.IO.FileInfo fi = new FileInfo(file_xls);
-        //            if (fi.Extension.ToLower() != ".xls" && fi.Extension.ToLower() != ".xlsx")
-        //            {
-        //                result.errorCode = ErrorCodes.FormatoIncorretto;
-        //                result.error = "Formato del file non corretto";
-        //                return Ok(result);
-        //            }
-        //            else
-        //            {
-        //                //Creo importazione
-        //                PromoImportazioni pImp = new PromoImportazioni();
-        //                pImp.DataCaricamento = DateTime.Now;
-        //                pImp.ParamsRequest = JsonConvert.SerializeObject(request.requestForms);
-        //                pImp.IdPromo = request.idPromo;
-        //                pImp.IdAddestramento = Int32.Parse(request.fields["idAddestramento"]);//request.cmbAddestramenti;
-        //                pImp.NomeFile = request.filename;
-        //                this.ctx2.Add(pImp);
-        //                this.ctx2.SaveChanges();
-
-        //                idImp = pImp.Id;
-        //            }
-
-        //            //request.file = new string[]{ };
-        //            OperationRequest op = new OperationRequest();
-        //            //if ((Byte)request.cmbTipoTracciato == (Byte)TipoImportazione.Vol)
-        //            op.Command = OperationCommand.ImportazioneVol;
-        //            //else
-        //            //op.Command = OperationCommand.ImportazionePoP;
-
-        //            //request.files = new string[]{ };//Azzero i files per non far pesare troppo l'oggetto inutilmente quando verrà salvato su db
-        //            request.file = null;//Azzero i files per non far pesare troppo l'oggetto inutilmente quando verrà salvato su db
-        //            request.idImportazione = idImp;
-
-        //            op.Packet = request;
-
-        //            //Registro l'operazione, Ottengo così l'ID e preparo la cartella per l'elaborazione
-        //            OperationsController op_ctrl = new OperationsController(_config.GetConnectionString("IstandaConnectionDb")!, path_to_import, path_to_export);
-        //            var actionResult = await op_ctrl.Add(op);
-
-        //            try
-        //            {
-        //                OkObjectResult res = (OkObjectResult)actionResult;
-        //                if (res.Value is Attivitum)
-        //                {
-        //                    Attivitum obj = (Attivitum)res.Value!;
-
-        //                    string op_folder = path_to_import + obj.Id.ToString() + "\\";
-        //                    Directory.CreateDirectory(op_folder);
-        //                    System.IO.File.Move(file_xls, op_folder + request.filename);
-
-        //                    result.Attivita = obj;
-
-        //                }
-        //                else if (res.Value is BoolResult)
-        //                {
-        //                    BoolResult obj = (BoolResult)res.Value!;
-        //                }
-
-        //            }
-        //            catch (Exception ex)
-        //            {
-        //                result.errorCode = ErrorCodes.Generic;
-        //                result.error = ex.ToString();
-        //                return Ok(result);
-        //            }
-
-        //        }
-        //        else
-        //        {
-        //            result.errorCode = ErrorCodes.FileNotFound;
-        //            result.error = "File excel non presente";
-        //            return Ok(result);
-        //        }
-        //    }
-        //    catch (Exception exErr)
-        //    {
-        //        return Ok(exErr.ToString());
-        //    }
-
-        //    return Ok(result);
-        //}
-
-
         private void Bind()
         {
             //ExternalSourceClass exSource = new ExternalSourceClass(this.path_external_source);
@@ -1059,8 +904,9 @@ namespace Istanta.Controllers
                 
                 return Ok(await this.ctx2.AddestramentoExcels.Include(i => i.SchemaCampiExcels).ThenInclude(i2=>i2.AddestramentoExcelRelazionis).Where(a=>a.Id==id).FirstOrDefaultAsync());
             }
-            catch
+            catch (Exception exSilenzioso)
             {
+                _logger.LogWarning(exSilenzioso, "eccezione ingoiata in TracciatiController.cs riga ~907");
 
             }
 
@@ -1081,8 +927,9 @@ namespace Istanta.Controllers
 
                 return Ok(await this.ctx2.AddestramentoExcels.Include(i => i.SchemaCampiExcels).ThenInclude(i2 => i2.AddestramentoExcelRelazionis).Where(a => a.Id == idAdd).FirstOrDefaultAsync());
             }
-            catch
+            catch (Exception exSilenzioso)
             {
+                _logger.LogWarning(exSilenzioso, "eccezione ingoiata in TracciatiController.cs riga ~929");
 
             }
 
@@ -1145,8 +992,9 @@ namespace Istanta.Controllers
                 }
 
             }
-            catch
+            catch (Exception exSilenzioso)
             {
+                _logger.LogWarning(exSilenzioso, "eccezione ingoiata in TracciatiController.cs riga ~993");
 
             }
 
@@ -1206,8 +1054,9 @@ namespace Istanta.Controllers
 
                 return Ok(result);
             }
-            catch
+            catch (Exception exSilenzioso)
             {
+                _logger.LogWarning(exSilenzioso, "eccezione ingoiata in TracciatiController.cs riga ~1054");
 
             }
 
@@ -1295,8 +1144,9 @@ namespace Istanta.Controllers
 
                 return Ok(result);
             }
-            catch
+            catch (Exception exSilenzioso)
             {
+                _logger.LogWarning(exSilenzioso, "eccezione ingoiata in TracciatiController.cs riga ~1143");
 
             }
 

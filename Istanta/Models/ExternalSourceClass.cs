@@ -1192,46 +1192,6 @@ namespace Istanta.Models
             return mastroDB!;
         }
 
-        public RegoleMastro getRegoleMastroById(int id)
-        {
-            var _source = getDbRegoleMastro().source;
-            return _source.Find(m => m.Id == id)!;
-        }
-        public RegoleMastro getRegoleMastroByName(string name)
-        {
-            var _source = getDbRegoleMastro().source;
-            return _source.Find(m => m.Nome == name)!;
-        }
-
-        public void addRegoleMastro(RegoleMastro item)
-        {
-            var db = getDbRegoleMastro();
-            var _source = db.source;
-            var _last = _source.OrderByDescending(o => o.Id).FirstOrDefault();
-            item.Id = _last != null ? _last.Id + 1 : 1;
-            _source.Add(item);
-            saveRegoleMastro(db);
-        }
-
-        public void editRegoleMastro(RegoleMastro item)
-        {
-            var db = getDbRegoleMastro();
-            var itemDb = db.source.Find(m => m.Id == item.Id);
-            itemDb!.Nome = item.Nome;
-            itemDb.Specifiche = item.Specifiche;
-            itemDb.Regole = item.Regole;
-
-            saveRegoleMastro(db);
-        }
-
-        public void deleteRegoleMastro(RegoleMastro item)
-        {
-            var db = getDbRegoleMastro();
-            db.source.Remove(db.source.Find(m => m.Id == item.Id)!);
-
-            saveRegoleMastro(db);
-        }
-
         void saveRegoleMastro(DbRegoleMastro db)
         {
             string jsonStr = JsonConvert.SerializeObject(db);
@@ -1244,71 +1204,6 @@ namespace Istanta.Models
         #endregion
 
         #region Framework css
-        //public DbFrameworkCss getFrameworkCss()
-        //{
-        //    JObject o1 = JObject.Parse(System.IO.File.ReadAllText(this.pathExternal + "SourceFrameworkCss.json"));
-        //    DbFrameworkCss frameworkDB = o1.ToObject<DbFrameworkCss>();
-        //    if (frameworkDB.livelli == null)
-        //    {
-        //        frameworkDB.livelli = new List<livelloCssFramework>();
-        //    }
-        //    for (int i = 0; i < frameworkDB.livelli.Count; i++)
-        //    {
-        //        var item = frameworkDB.livelli[i].definizioni;
-        //        if (item == null)
-        //        {
-        //            item = new List<DefinizioniCssFramework>();
-        //        }
-        //        else
-        //        {
-        //            for (int j = 0; j < item.Count; j++)
-        //            {
-        //                var regole = item[j].regole;
-        //                if (regole == null)
-        //                {
-        //                    regole = new List<List<regolaCssFramework>>();
-        //                }
-
-        //            }
-        //        }
-        //    }
-        //    return frameworkDB;
-        //}
-
-        //public DbFrameworkCss getFrameworkCss()
-        //{
-        //    JObject o1 = JObject.Parse(System.IO.File.ReadAllText(this.pathExternal + "SourceFrameworkCss.json"));
-        //    DbFrameworkCss frameworkDB = o1.ToObject<DbFrameworkCss>();
-        //    if (frameworkDB.livelli == null)
-        //    {
-        //        frameworkDB.livelli = new List<livelloCssFramework>();
-        //    }
-        //    for (int i = 0; i < frameworkDB.livelli.Count; i++)
-        //    {
-        //        var item = frameworkDB.livelli[i].definizioni;
-        //        if (item == null)
-        //        {
-        //            item = new List<DefinizioniCssFramework>();
-        //        }
-        //        else
-        //        {
-        //            for (int j = 0; j < item.Count; j++)
-        //            {
-        //                var regole = item[j].regole;
-        //                if (regole == null)
-        //                {
-        //                    regole = new List<macroRegolaCssFramework>();
-        //                }
-
-        //            }
-        //        }
-        //    }
-
-        //    frameworkDB.SetExternalPath(this.pathExternal);
-
-        //    return frameworkDB;
-        //}
-
         public DbFrameworkCss getFrameworkCss()
         {
             var db = DbFrameworkCss.Load(this.pathExternal);
@@ -3058,62 +2953,6 @@ namespace Istanta.Models
         applyAfter,
     }
 
-    //public class DbFrameworkCss
-    //{
-    //    public string defaultBox { get; set; }
-    //    public List<livelloCssFramework> livelli { get; set; }
-    //}
-
-    //public class DbFrameworkCss
-    //{
-    //    public static readonly string dbSourceName = "FrameworkCss.json";
-
-    //    private string pathExternalSource;
-
-    //    public void SetExternalPath(string pathExternalSource)
-    //    {
-    //        this.pathExternalSource = pathExternalSource + "Source" + DbFrameworkCss.dbSourceName;
-    //    }
-
-    //    public BoolResult SetJsonSource(string jsonStr)
-    //    {
-    //        BoolResult br = new BoolResult();
-    //        try
-    //        {
-    //            var db = JsonConvert.DeserializeObject<DbFrameworkCss>(jsonStr);
-    //            this.livelli = db.livelli;
-    //            this.defaultBox = db.defaultBox;
-    //            this.SaveChanges();
-
-    //            br.Esito = true;
-    //        }
-    //        catch (Exception ex)
-    //        {
-    //            br.Esito = false;
-    //            br.error = ex.ToString();
-    //            return br;
-    //        }
-
-    //        return br;
-    //    }
-
-
-    //    public bool SaveChanges()
-    //    {
-    //        string jsonStr = JsonConvert.SerializeObject(this);
-
-    //        using (StreamWriter sw = new StreamWriter(this.pathExternalSource, false))
-    //        {
-    //            sw.WriteLine(jsonStr);
-    //        }
-
-    //        return true;
-    //    }
-
-    //    public string defaultBox { get; set; }
-    //    public List<livelloCssFramework> livelli { get; set; } = new List<livelloCssFramework>();
-    //}
-
     public class DbFrameworkCss
     {
         public static readonly string dbSourceName = "SourceFrameworkCss.json";
@@ -3458,65 +3297,6 @@ namespace Istanta.Models
         public string jsoncode { get; set; } = "";
         public string origin { get; set; } = "";
     }
-
-    //public class DbAllineamenti
-    //{
-    //    public static readonly string dbSourceName = "Allineamenti.json";
-
-    //    public List<dbModifiche> DbModificheCss = new List<dbModifiche>();
-    //    public string pathExternalSource { get; set; }
-    //    public string freeSource { get; set; }
-
-    //    public string version = "1.0.0.0";
-
-
-    //    public void SetExternalPath(string pathExternalSource)
-    //    {
-    //        this.pathExternalSource = pathExternalSource + "Source" + DbAllineamenti.dbSourceName;
-    //    }
-
-    //    public BoolResult SetJsonSource(string jsonStr)
-    //    {
-    //        BoolResult br = new BoolResult();
-    //        try
-    //        {
-    //            if (jsonStr == null || jsonStr.Trim() == "")
-    //            {
-    //                br.Esito = false;
-    //                br.error = "Il JSON fornito è vuoto o nullo.";
-    //                return br;
-    //            }
-
-
-    //            this.freeSource = jsonStr.Replace("\n", "").Replace("\t", "").Replace("\t", "");
-
-    //            this.SaveChanges();
-
-    //            br.Esito = true;
-    //        }
-    //        catch (Exception ex)
-    //        {
-    //            br.Esito = false;
-    //            br.error = ex.ToString();
-    //            return br;
-    //        }
-
-    //        return br;
-    //    }
-
-    //    public bool SaveChanges()
-    //    {
-    //        string jsonStr = this.freeSource;
-
-    //        using (StreamWriter sw = new StreamWriter(this.pathExternalSource, false))
-    //        {
-    //            sw.WriteLine(jsonStr);
-    //        }
-
-    //        return true;
-    //    }
-
-    //}
 
     public class dbModifiche
     {

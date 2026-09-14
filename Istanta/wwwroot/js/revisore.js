@@ -961,6 +961,15 @@
         Call.do("Revisore", "salva/" + IdTracciato + "/0/0", "PUT", { coda: listAct, idPromo: idPromo }, ME, function (result, sender) {
             console.log("Risultato")
             console.log(result);
+            // Se il server ha fallito, adesso lo dice: prima tornava 200 con [] e non si capiva niente.
+            if (result == null || !Array.isArray(result)) {
+                let _msg = (result && result.error) ? result.error : "Salvataggio non riuscito";
+                console.error("Salvataggio fallito:", result);
+                if (typeof mostraMessaggio === "function") mostraMessaggio(_msg, "danger");
+                else alert("Salvataggio non riuscito: " + _msg);
+                hideLoading();
+                return;
+            }
             //creo il messaggio
 
             //Cerco il record nella lista master

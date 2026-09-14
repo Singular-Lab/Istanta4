@@ -319,51 +319,6 @@ namespace Istanta.Controllers
         }
 
 
-        //[HttpGet]
-        //[Route("FrameworkCssController/convertiFramework")]
-        //public async Task<IActionResult> convertiFramework()
-        //{
-        //    try
-        //    {
-        //        var _list = exClass.getFrameworkCss();
-        //        newDbFrameworkCss nuovoDb = new newDbFrameworkCss();
-        //        nuovoDb.defaultBox = _list.defaultBox;
-        //        foreach (var liv in _list.livelli)
-        //        {
-        //            newlivelloCssFramework newLiv = new newlivelloCssFramework();
-        //            newLiv.id = liv.id;
-        //            newLiv.ordine = liv.ordine;
-        //            foreach (var def in liv.definizioni)
-        //            {
-        //                newDefinizioniCssFramework newDef = new newDefinizioniCssFramework();
-        //                newDef.id = def.id;
-        //                newDef.descrizione = def.descrizione;
-        //                newDef.ordine = def.ordine;
-        //                newDef.result = def.result;
-        //                int id = 1;
-        //                foreach (var setRegole in def.regole)
-        //                {
-        //                    macroRegolaCssFramework macro = new macroRegolaCssFramework();
-        //                    macro.id = id;
-        //                    macro.deepness = 0;
-        //                    macro.regole = setRegole;
-        //                    newDef.regole.Add(macro);
-        //                    id++;
-        //                }
-        //                newLiv.definizioni.Add(newDef);
-        //            }
-        //            nuovoDb.livelli.Add(newLiv);
-        //        }
-        //        exClass.saveFrameworkCss(nuovoDb);
-        //        return Ok(true);
-        //    }
-        //    catch
-        //    {
-        //        return Ok(false);
-        //    }
-
-        //}
-
 
         private async Task Bind()
         {

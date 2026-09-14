@@ -4,7 +4,6 @@ using IstantaLib;
 using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
 using Microsoft.AspNetCore.SignalR.Protocol;
 using System.ComponentModel.DataAnnotations;
-using System.Drawing;
 using System.Reflection.Metadata;
 using System.Security.Cryptography;
 using System.Text;

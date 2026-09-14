@@ -962,12 +962,15 @@ namespace AgenziaLib
 
         public List<CambioStrutturale> GetCambioStrutturalePath()
         {
-            throw new NotImplementedException();
+            // Coopfi ha un catalogo di 379 righe di regole SUE. Per Famila non esistono ancora:
+            // restituisco una lista vuota invece di lanciare, cosi il plugin riceve "nessuna regola"
+            // invece di un errore silenzioso.
+            return new List<CambioStrutturale>();
         }
 
         public string MetaPerRevisione(List<Dictionary<string, object>> recordsGruppo, int idPromo, int idTracciato, string siglaTracciato)
         {
-            throw new NotImplementedException();
+            return null;   // come Coopfi: Famila non usa il meta di revisione
         }
 
         public EsitoFirmaGarantita CheckFirmaGarantita(List<Dictionary<string, object>> recordsGruppo, string meta)
@@ -977,22 +980,22 @@ namespace AgenziaLib
 
         public string GetMetaPerRevisioneDaGruppiMultipli(WrapperPerGetGarante wrap)
         {
-            throw new NotImplementedException();
+            return null;   // come Coopfi
         }
 
         public string GetMetaPerRevisioneDaGruppiMultipliBatch(WrapperBatchPerGetGarante batch)
         {
-            throw new NotImplementedException();
+            return null;   // come Coopfi
         }
 
         public List<Dictionary<string, object>> FiltraRecordsPerConteggioRevisione(List<Dictionary<string, object>> records)
         {
-            throw new NotImplementedException();
+            return records;   // come Coopfi: nessun filtro specifico per Famila
         }
 
         public string CheckFirmaPluginGarantitaBatch(WrapperBatchCheckFirmaPlugin batch)
         {
-            throw new NotImplementedException();
+            return null;   // come Coopfi
         }
     }
 }

@@ -1001,7 +1001,7 @@ namespace Istanta.Controllers
         [Route("LoginController/logoutFromPage")]
         public async Task<IActionResult> logoutFromPage()
         {
-            logout();
+            await logout();   // era senza await: il Redirect poteva partire prima della chiusura sessione
             return Redirect(HttpContext.Request.PathBase + "/Login");
         }
 
@@ -1083,72 +1083,6 @@ namespace Istanta.Controllers
             {
                 return Ok(ex.Message);
             }
-        }
-
-        [HttpGet]
-        [Route("LoginController/secretDoor")]
-        public async Task<IActionResult> secretDoor()
-        {
-
-            //var lista_revisioni = this.ctx.ArticoliDescrizionis.Where(art => !art.IdArticolo.HasValue && art.CodiceGruppo != null).ToList();
-
-            //string result = "";
-            //try
-            //{
-            //    foreach (var rev in lista_revisioni)
-            //    {
-            //        string cod = rev.CodiceGruppo;
-            //        //Prendo l'ultima verisione importata
-            //        var ptrAnyItem = this.ctx2.PromoTracciatiRecords.Include(i1 => i1.IdTracciatoNavigation).ThenInclude(i2 => i2.PromoTracciatiRecords).Where(ptr => ptr.CodiceGruppo == cod).OrderByDescending(ord => ord.DataRegistrazione).FirstOrDefault();
-
-            //        if (ptrAnyItem != null)
-            //        {
-            //            List<Dictionary<string, object>> dictList = new List<Dictionary<string, object>>();
-            //            this.ctx2.PromoTracciatiRecords.Where(ptr => ptr.CodiceGruppo == cod && ptr.IdTracciato == ptrAnyItem.IdTracciato).ToList().ForEach(ptr =>
-            //            {
-            //                dictList.Add(Utility.Main.getJsonObject(ptr.Dato));
-            //            });
-
-
-            //            string hash = Utility.Main.getFirmaTracciatoGruppo(dictList);
-            //            rev.FirmaTracciato = hash;
-            //            result += $"Revisioni codice gruppo {cod} aggiornato con firma {hash}\n";
-            //        }
-            //        else
-            //        {
-            //            result += $"ERR codice gruppo {cod} non associato ad alcun tracciato\n";
-            //        }
-
-
-            //    }
-            //    this.ctx.SaveChanges();
-
-            //}catch
-            //(Exception ex) {
-            //    result = ex.ToString();
-            //}
-
-            string result = "";
-            //try
-            //{
-            //    List<ArticoliFoto> _arts = this.ctx.ArticoliFotos.Where(f=>!f.NomeReale.Contains("_")).ToList();
-            //    result += $"Trovate {_arts.Count} foto senza underscore nel nome reale\n";
-            //    foreach (var art in _arts)
-            //    {
-            //        //string pathFoto = art.PathFoto;
-            //        result += $"Rimuovo foto {art.Id} = {art.NomeReale}\n";
-            //        this.ctx.ArticoliFotos.Remove(art);
-            //    }
-
-            //    _ = await this.ctx.SaveChangesAsync();
-            //}
-            //catch (Exception ex)
-            //{
-            //    result = ex.ToString();
-            //}
-
-            return Ok($"{result}");
-
         }
 
 
