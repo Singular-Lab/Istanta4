@@ -1597,65 +1597,6 @@ double.TryParse(percorso.ToString(), out double valore16))
             }
         }
 
-        bool TryConvertValue(object originalValue, string targetValue, out object? convertedValue)
-        {
-            try
-            {
-                // Prova a convertire regola.Value nel tipo di record.RecordInTracciato[regola.Campo]
-                // Esempio: se record.RecordInTracciato[regola.Campo] è di tipo int, converti regola.Value in int
-                if (originalValue is int)
-                {
-                    convertedValue = int.Parse(targetValue);
-                    return true;
-                }
-                else if (originalValue is Int64)
-                {
-                    convertedValue = Int64.Parse(targetValue);
-                    return true;
-                }
-                else if (originalValue is double)
-                {
-                    convertedValue = double.Parse(targetValue);
-                    return true;
-                }
-                else if (originalValue is bool)
-                {
-                    convertedValue = bool.Parse(targetValue);
-                    return true;
-                }
-                else if (originalValue is string)
-                {
-                    convertedValue = targetValue;
-                    return true;
-                }
-                else if (originalValue is Int16)
-                {
-                    convertedValue = Int16.Parse(targetValue);
-                    return true;
-                }
-                else if (originalValue is Byte)
-                {
-                    convertedValue = Int16.Parse(targetValue);
-                    return true;
-                }
-                else if (originalValue is DateTime)
-                {
-                    convertedValue = DateTime.Parse(targetValue);
-                    return true;
-                }
-                // Altre conversioni necessarie per altri tipi di dati
-
-                // Conversione non supportata per il tipo
-                convertedValue = null;
-                return false;
-            }
-            catch (FormatException)
-            {
-                // Gestisci errore di formato
-                convertedValue = null;
-                return false;
-            }
-        }
         private bool returnHasFoto(Dictionary<string, object> result)
         {
             string? referenza = Enum.GetName(AddestramentoRuoli.Referenza);

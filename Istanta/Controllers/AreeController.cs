@@ -1034,54 +1034,6 @@ namespace Istanta.Controllers
             return true;
         }
 
-        async Task<ACPVFicoOperationResult> doActionOnFP(string pubKey, string callName, StringContent content)
-        {
-            ACPVFicoOperationResult result = new ACPVFicoOperationResult();
-
-            //var client = new HttpClient();
-            httpClient.DefaultRequestHeaders.Clear();
-            httpClient.DefaultRequestHeaders.Add("Authorization", "Bearer " + pubKey);
-            string url = $"{fpUrl}/ACPV/"+callName;
-            var response = await httpClient.PutAsync(url, content);
-
-            if (response.IsSuccessStatusCode)
-            {
-
-                var contentResponse = await response.Content.ReadAsStringAsync();
-                result = JsonConvert.DeserializeObject<ACPVFicoOperationResult>(contentResponse)!;                
-            }
-            else
-            {
-                result.esito = false;
-                result.error = await response.Content.ReadAsStringAsync();
-            }
-
-            return result;
-        }
-        async Task<ACPVFicoOperationResult> doActionOnFP(string pubKey, string callName)
-        {
-            ACPVFicoOperationResult result = new ACPVFicoOperationResult();
-
-            //var client = new HttpClient();
-            httpClient.DefaultRequestHeaders.Clear();
-            httpClient.DefaultRequestHeaders.Add("Authorization", "Bearer " + pubKey);
-            string url = $"{fpUrl}/ACPV/" + callName;
-            var response = await httpClient.GetAsync(url);
-
-            if (response.IsSuccessStatusCode)
-            {
-
-                var contentResponse = await response.Content.ReadAsStringAsync();
-                result = JsonConvert.DeserializeObject<ACPVFicoOperationResult>(contentResponse)!;
-            }
-            else
-            {
-                result.esito = false;
-                result.error = await response.Content.ReadAsStringAsync();
-            }
-
-            return result;
-        }
 
         [HttpPut]
         [Route("ACPV/salvaSourceJsonCode")]
