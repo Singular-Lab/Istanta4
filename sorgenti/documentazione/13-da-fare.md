@@ -43,16 +43,16 @@ Residui di una sessione di debug. Da capire se servono ancora.
 
 ### 6. `AuthController.cs` non contiene un controller
 
-Sta in `Istanta/Controllers/`, si chiama `AuthController.cs`, ma dentro c'e soltanto
+Sta in `Istanta/Controllers/`, si chiama `AuthController.cs`, ma dentro c'è soltanto
 l'interfaccia `IExternalUserValidator` e due implementazioni (`NoExternalValidator` e
 `EntraIDUserValidator`). Nessuna classe che erediti da `Controller`, nessuna rotta.
 
-Non e un problema di funzionamento — e un file nel posto sbagliato con il nome sbagliato, che fa
+Non è un problema di funzionamento — è un file nel posto sbagliato con il nome sbagliato, che fa
 inciampare chiunque ci passi, compresi gli strumenti automatici. Andrebbe spostato fuori da
 `Controllers/` e rinominato per quello che contiene.
 
-Ha senso guardarlo insieme alla domanda su Entra ID: se quella strada di autenticazione e viva,
-questi tipi contano; se e morta, contano ancora meno.
+Ha senso guardarlo insieme alla domanda su Entra ID: se quella strada di autenticazione è viva,
+questi tipi contano; se è morta, contano ancora meno.
 
 ### 7. `ADMINER.txt` e `ACCESSI.txt`
 
@@ -64,7 +64,7 @@ obsoleto è peggio di nessun file, perché qualcuno ci proverà.
 
 ## Da decidere
 
-### 7. I metodi che il database può chiamare per nome
+### 8. I metodi che il database può chiamare per nome
 
 Questo è il nodo più importante rimasto sulla pulizia, e **non si scioglie con l'analisi del
 codice**.
@@ -92,7 +92,7 @@ select distinct "algoritmo"                from public.addestramento_excel_relaz
 
 Finché quella risposta non c'è, in AgenziaLib **non si toglie nient'altro**.
 
-### 8. L'ordine di `UseAuthorization` e `UseAuthentication`
+### 9. L'ordine di `UseAuthorization` e `UseAuthentication`
 
 In `Program.cs`, `UseAuthorization()` (riga 308) sta **prima** di `UseAuthentication()` (riga 309).
 È l'ordine invertito rispetto a quello corretto. L'applicazione funziona perché l'autenticazione
@@ -102,7 +102,7 @@ usasse `[Authorize]` sul serio, non funzionerebbe.
 **Non l'ho invertito**: è un cambiamento che va provato con l'autenticazione vera, non fatto di
 notte. Ma va sistemato prima che qualcuno ci costruisca sopra.
 
-### 9. `app.UseResponseCompression()` è commentato
+### 10. `app.UseResponseCompression()` è commentato
 
 La compressione è configurata (Brotli + Gzip, righe 239-252) ma il middleware non è attivo (riga
 287 commentata). Al suo posto c'è un handler su `UseStaticFiles` che mette a mano
@@ -111,13 +111,13 @@ La compressione è configurata (Brotli + Gzip, righe 239-252) ma il middleware n
 Funziona, ma è una soluzione parallela a una configurazione inerte. O si attiva il middleware o si
 toglie la configurazione: tenerle entrambe confonde chi legge.
 
-### 10. La persistenza delle chiavi di DataProtection
+### 11. La persistenza delle chiavi di DataProtection
 
 Nel log compaiono `Error unprotecting the session cookie`. Il sintomo tipico è che a ogni riavvio le
 sessioni esistenti diventano illeggibili, perché le chiavi sono rigenerate. Con Redis già in casa,
 persistere lì le chiavi è la strada naturale.
 
-### 11. Il javascript dentro le viste
+### 12. Il javascript dentro le viste
 
 **1.629 righe, il 21% delle viste.** `Register/Index.cshtml` è per il 54% javascript,
 `_Layout.cshtml` per il 55%. Non è sporcizia — funziona — ma è codice che nessuno strumento
@@ -126,14 +126,14 @@ javascript vede, che non si può riutilizzare, e che si trova solo cercando nell
 Spostarlo in `wwwroot/js` renderebbe le viste leggibili. È un lavoro di ore, non di minuti, e va
 fatto con qualcuno che possa provare le schermate.
 
-### 12. `Maiora`, `craiOvest`, `navcove`
+### 13. `Maiora`, `craiOvest`, `navcove`
 
 Hanno una cartella `wwwroot/js/<cliente>/` ma **nessuna classe in AgenziaLib** e nessuna
 `external_source/<Cliente>/`. Sono clienti che non hanno mai avuto bisogno di logica lato server, o
 la cui classe è stata tolta in passato? La risposta la sa solo chi conosce la storia commerciale, e
 decide se quelle tre cartelle restano o vanno.
 
-### 13. Trea è dismesso
+### 14. Trea è dismesso
 
 La classe (3.165 righe), la cartella js e `external_source/Trea/` restano dove sono per scelta.
 A `external_source/Trea/` manca `SourceMeccaniche.json` e **non lo aggiungiamo**. Se un giorno si
@@ -143,7 +143,7 @@ decide di chiudere davvero quel cliente, sono 3.165 righe più una cartella.
 
 ## Il lavoro grosso, se un giorno si vuole affrontare
 
-### 14. I metodi da duemila righe
+### 15. I metodi da duemila righe
 
 | righe | dove |
 |---|---|
@@ -160,14 +160,14 @@ modo per provare il risultato: cioè senza un volantino vero da esportare e con 
 **Prima di rifattorizzare, servirebbe un modo di provare.** Oggi non c'è: nessun test automatico in
 tutto il progetto.
 
-### 15. `MenaboController`, 12.919 righe
+### 16. `MenaboController`, 12.919 righe
 
 Da solo è un terzo di tutto il codice dei controller. Ha `IdentificaMeccanicaRecord` dichiarato
 **tre volte** con firme diverse (righe 2683, 3567, 3265), `Etichettatura` **due volte** (339 e 325
 righe), e `ImpaginaFromInDesignNew` con **tre `[Route]`** sulla stessa azione. È cresciuto per
 accumulo, e si vede.
 
-### 16. Il workflow GHCR con i Dockerfile per servizio
+### 17. Il workflow GHCR con i Dockerfile per servizio
 
 Rimasto in sospeso da prima del 14/09.
 
