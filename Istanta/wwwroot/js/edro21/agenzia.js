@@ -827,20 +827,21 @@ class Agenzia extends IAgenzia {
             
 
             let infoEsempio = pilota.recordInTracciato.nota_esempio;
+            if (infoEsempio != null) {
+                if (infoEsempio.toLowerCase().includes("esempio") && !infoEsempio.toLowerCase().includes("non")) {
+                    evidenzia = true;
+                }
 
-            if (infoEsempio!=null && infoEsempio.toLowerCase().includes("esempio") && !infoEsempio.toLowerCase().includes("non")) {
-                evidenzia = true;
-            }
+                while (infoEsempio.includes("<br>")) {
+                    infoEsempio = infoEsempio.replace("<br>", " ");
 
-            while (infoEsempio.includes("<br>")) {
-                infoEsempio = infoEsempio.replace("<br>", " ");
+                }
 
-            }
-
-            htmlGroupeElementObject.find("#Esempio").val(infoEsempio);
-            if (evidenzia) {
-                htmlGroupeElementObject.find("#Esempio").css("font-weight", "bold");
-                htmlGroupeElementObject.find("#Esempio").css("color", "red");
+                htmlGroupeElementObject.find("#Esempio").val(infoEsempio);
+                if (evidenzia) {
+                    htmlGroupeElementObject.find("#Esempio").css("font-weight", "bold");
+                    htmlGroupeElementObject.find("#Esempio").css("color", "red");
+                }
             }
 
             let mismatchNotaEsempio = pilota.recordInTracciato.metaKeyInMismatch.find(f => f.key == "nota_esempio");
