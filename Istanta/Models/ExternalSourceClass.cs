@@ -1969,7 +1969,7 @@ namespace Istanta.Models
 
         public void SetExternalPath(string pathExternalSource)
         {
-            this.pathExternalSource = pathExternalSource + "Source" + DbACPV.dbSourceName;
+            this.pathExternalSource = pathExternalSource + "Source" + DbLabels.dbSourceName;
         }
 
         public bool SaveChanges()
