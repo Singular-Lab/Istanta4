@@ -181,11 +181,6 @@ namespace Istanta.Models
             return _source.Find(m => m.Area == area && m.Canale == canale)!;
         }
 
-        public Aree getAreaByGruppoSiti(Int16 id)
-        {
-            var _source = getAree().source;
-            return _source.Find(m => m.GruppoSiti == id)!;
-        }
         public void addArea(Aree item)
         {
             var db = getAree();
@@ -247,11 +242,6 @@ namespace Istanta.Models
         {
             var _source = getMastro().source;
             return _source.Find(m => m.Id == id)!;
-        }
-        public DbMastroItem getMastroByName(string id)
-        {
-            var _source = getMastro().source;
-            return _source.Find(m => m.Nome == id)!;
         }
 
         public DbMastroItem getMastroByNameAndFormato(string id, string formato)
@@ -383,12 +373,6 @@ namespace Istanta.Models
             return (meccanicaItem != null ? meccanicaItem.Formato : "1x1")!;
         }
 
-        public List<string> getAreeMeccanica(string meccanica)
-        {
-            var db = getMeccaniche();
-            var meccanicaItem = db.source.Find(f => f.NomeTraduzione == meccanica);
-            return (meccanicaItem != null ? meccanicaItem.Aree : new List<string>())!;
-        }
         #endregion
 
         #region Combinazioni PoP
@@ -534,19 +518,6 @@ namespace Istanta.Models
 
 
 
-        public bool addSchemaMenabo(DbMenaboPagineItem item)
-        {
-            item.Id = getIdMenaboSchemaProgressivo();
-
-            JObject? o2 = this.Sources["SourceMenaboPagine"];
-            DbMenaboPagine? menaboPagineDb = o2.ToObject<DbMenaboPagine>();
-
-
-            menaboPagineDb!.source.Add(item);
-            saveSchemaMenabo(menaboPagineDb);
-
-            return true;
-        }
         public bool editSchemaMenabo(DbMenaboPagineItem item)
         {
 
@@ -566,30 +537,6 @@ namespace Istanta.Models
         }
 
 
-        public Int64 getIdMenaboProgressivo()
-        {
-            JObject? o1 = this.Sources["SourceMenabo"];
-            DbMenabo? _db = o1.ToObject<DbMenabo>();
-
-            if (_db!.source.Count > 0)
-            {
-                return _db.source.OrderByDescending(s => s.Id).FirstOrDefault()!.Id + 1;
-            }
-
-            return 1;
-        }
-        public Int64 getIdMenaboSchemaProgressivo()
-        {
-            JObject? o1 = this.Sources["SourceMenaboPagine"];
-            DbMenaboPagine? _db = o1.ToObject<DbMenaboPagine>();
-
-            if (_db!.source.Count > 0)
-            {
-                return _db.source.OrderByDescending(s => s.Id).FirstOrDefault()!.Id + 1;
-            }
-
-            return 1;
-        }
 
         public void saveMenabo(DbMenabo db)
         {
@@ -1192,15 +1139,6 @@ namespace Istanta.Models
             return mastroDB!;
         }
 
-        void saveRegoleMastro(DbRegoleMastro db)
-        {
-            string jsonStr = JsonConvert.SerializeObject(db);
-
-            using (StreamWriter sw = new StreamWriter(this.pathExternal + "SourceRegoleMastro.json", false))
-            {
-                sw.WriteLine(jsonStr);
-            }
-        }
         #endregion
 
         #region Framework css
@@ -1239,15 +1177,6 @@ namespace Istanta.Models
         }
 
 
-        public DefinizioniCssFramework getDefinizioneById(int id)
-        {
-            var _source = getFrameworkCss().livelli;
-            var livello = _source.Find(m => m.definizioni.Find(f2 => f2.id == id) != null);
-            if (livello == null)
-                return new DefinizioniCssFramework();
-            else
-                return livello.definizioni.Find(f2 => f2.id == id)!;
-        }
 
         public livelloCssFramework getLivelloById(int id)
         {
@@ -1256,19 +1185,6 @@ namespace Istanta.Models
             return livello!;
         }
 
-        public List<DefinizioniCssFramework> getDefinizioneByName(string name)
-        {
-            var _source = getFrameworkCss().livelli;
-            List<DefinizioniCssFramework> definizioniInteressate = new List<DefinizioniCssFramework>();
-            foreach (var liv in _source)
-            {
-                if (liv.definizioni.Find(f => f.result == name) != null)
-                {
-                    definizioniInteressate.AddRange(liv.definizioni.Where(f => f.result == name).ToList());
-                }
-            }
-            return definizioniInteressate;
-        }
 
         public livelloCssFramework getLivelloByDefinizioneId(int id)
         {
@@ -1277,19 +1193,6 @@ namespace Istanta.Models
             return livello!;
         }
 
-        public List<livelloCssFramework> getLivelloyNameDefinizione(string name)
-        {
-            var _source = getFrameworkCss().livelli;
-            List<livelloCssFramework> livelliInteressati = new List<livelloCssFramework>();
-            foreach (var liv in _source)
-            {
-                if (liv.definizioni.Find(f => f.result == name) != null)
-                {
-                    livelliInteressati.Add(liv);
-                }
-            }
-            return livelliInteressati;
-        }
 
         public BoolResult addLivello(livelloCssFramework item)
         {
@@ -3001,28 +2904,6 @@ namespace Istanta.Models
         }
 
         // NUOVO: usato dalla pagina "Allineamenti" (editor di sezione)
-        public BoolResult SetAllineamentiJsonSource(string jsonStr)
-        {
-            var br = new BoolResult();
-            try
-            {
-                if (string.IsNullOrWhiteSpace(jsonStr))
-                    throw new Exception("JSON nullo o vuoto.");
-
-                var incoming = JsonConvert.DeserializeObject<DbRidimensionamentiAllineamenti>(jsonStr);
-                if (incoming == null) throw new Exception("JSON non compatibile con DbAllineamentiData.");
-
-                this.dbRidimensionamentiAllineamenti = incoming;
-                SaveChanges();
-                br.Esito = true;
-            }
-            catch (Exception ex)
-            {
-                br.Esito = false;
-                br.error = ex.ToString();
-            }
-            return br;
-        }
 
         public void SaveChanges()
         {
@@ -3060,40 +2941,6 @@ namespace Istanta.Models
             return loaded;
         }
 
-        private void TryMigrateLegacy(string basePath)
-        {
-            // Framework legacy: SourceFrameworkCss.json (già il nome giusto)
-            var fwPath = Path.Combine(basePath, "SourceFrameworkCss.json");
-            if (File.Exists(fwPath))
-            {
-                var j = JObject.Parse(File.ReadAllText(fwPath));
-                var fw = j.ToObject<DbFrameworkCss>();
-                if (fw != null)
-                {
-                    this.defaultBox = fw.defaultBox;
-                    this.livelli = fw.livelli ?? new List<livelloCssFramework>();
-                }
-            }
-
-            // Allineamenti legacy: SourceAllineamenti.json
-            var alPath = Path.Combine(basePath, "SourceAllineamenti.json");
-            if (File.Exists(alPath))
-            {
-                // PRIMA avevi raw → ora pretendo JSON valido della sezione
-                // Se in passato salvavi un oggetto già JSON, lo deserializza; altrimenti gestiscilo come serve qui.
-                var raw = File.ReadAllText(alPath);
-                try
-                {
-                    var al = JsonConvert.DeserializeObject<DbRidimensionamentiAllineamenti>(raw);
-                    if (al != null) this.dbRidimensionamentiAllineamenti = al;
-                }
-                catch
-                {
-                    // Se proprio fosse raw non compatibile, lo metto in una nota per non perdere dati
-                    this.dbRidimensionamentiAllineamenti = new DbRidimensionamentiAllineamenti { noteLegacy = "Contenuto legacy non JSON valido", rawLegacy = raw };
-                }
-            }
-        }
     }
 
     // Sezione allineamenti serializzata nel file unico
