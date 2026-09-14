@@ -4,7 +4,7 @@
 > `strumenti/genera-riferimento.sh` leggendo `Istanta/Controllers/`.
 > Non modificarlo: rilancia lo script.
 >
-> Generato il 14/09/2026 alle 19:21.
+> Generato il 14/09/2026 alle 19:27.
 
 ## Indice
 
@@ -17,7 +17,7 @@
 | [TracciatiController](#tracciaticontroller) | 2125 | 32 | ctx, ctx2 | 1 | — |
 | [OperationsController](#operationscontroller) | 1855 | 3 | ctx | — | — |
 | [ConfrontiController](#confronticontroller) | 1631 | 7 | ctx, ctx2 | 1 | — |
-| [ChangePasswordAction](#changepasswordaction) | 1356 | 24 | ctx | — | olympusServerUrl |
+| [LoginController](#logincontroller) | 1356 | 24 | ctx | — | olympusServerUrl |
 | [AreeController](#areecontroller) | 1069 | 16 | ctx | — | — |
 | [ArchivioController](#archiviocontroller) | 876 | 9 | ctx | — | olympusServerUrl |
 | [MenaboSettingsController](#menabosettingscontroller) | 667 | 20 | ctx2 | — | — |
@@ -136,38 +136,6 @@ Attributo di classe: `[Route("[controller]/")]`
 | **salvaPV** | 665 | 70 | `[HttpPut]`<br>`[Route("ACPV/salvaPV")]` | `Task<IActionResult>` | — | — | — |
 | **eliminaPV** | 738 | 72 | `[HttpDelete]`<br>`[Route("ACPV/eliminaPV/{guidID}")]` | `Task<IActionResult>` | — | — | — |
 | **salvaSourceJsonCode** | 1040 | 25 | `[HttpPut]`<br>`[Route("ACPV/salvaSourceJsonCode")]` | `Task<IActionResult>` | — | — | — |
-
-
-## ChangePasswordAction
-
-`Istanta/Controllers/LoginController.cs` — 1356 righe, 24 azioni pubbliche.
-
-| azione | riga | righe | rotta | ritorna | vista | AgenziaLib | db |
-|---|---:|---:|---|---|---|---|---|
-| **Index** | 97 | 28 | — | `IActionResult` | (omonima) | — | — |
-| **Index** | 129 | 245 | `[HttpPost]`<br>`[Route("LoginController/login")]` | `IActionResult` | — | — | ctx |
-| **Start** | 378 | 15 | `[HttpGet]`<br>`[Route("LoginController/auth/entra")]` | `IActionResult` | — | — | — |
-| **Complete** | 395 | 100 | `[HttpGet("/LoginController/oauth/complete")]` | `Task<IActionResult>` | (omonima) | — | ctx |
-| **OAuthLanded** | 497 | 131 | `[HttpGet("/LoginController/oauth/landed")]` | `Task<IActionResult>` | — | — | ctx |
-| **ChangePassword** | 632 | 51 | `[HttpPost]`<br>`[Route("LoginController/ChangePassword")]` | `Task<IActionResult>` | — | — | ctx |
-| **ResetPassword** | 687 | 56 | `[HttpPost]`<br>`[Route("LoginController/ResetPassword")]` | `Task<IActionResult>` | — | — | ctx |
-| **InviaEmailPerRecuperaPassword** | 747 | 53 | `[HttpPost]`<br>`[Route("LoginController/InviaEmailPerRecuperaPassword")]` | `Task<IActionResult>` | — | — | ctx |
-| **RecuperoPassword** | 804 | 47 | `[HttpGet]`<br>`[Route("LoginController/recuperoPassword/{codifica}")]` | `IActionResult` | (omonima) | — | ctx |
-| **getTokenDiAccesso** | 854 | 70 | `[HttpGet]`<br>`[Route("LoginController/getTokenDiAccesso")]` | `Task<IActionResult>` | — | — | ctx |
-| **getSession** | 937 | 40 | `[HttpGet]`<br>`[Route("LoginController/getSession")]` | `Task<IActionResult>` | — | — | ctx |
-| **setSession** | 980 | 5 | — | `Task<IActionResult>` | — | — | — |
-| **setSessionName** | 986 | 5 | — | `Task<IActionResult>` | — | — | — |
-| **setRecoverySession** | 992 | 5 | — | `Task<IActionResult>` | — | — | — |
-| **logoutFromPage** | 1000 | 5 | `[HttpGet]`<br>`[Route("LoginController/logoutFromPage")]` | `Task<IActionResult>` | — | — | — |
-| **logout** | 1008 | 10 | `[HttpGet]`<br>`[Route("LoginController/logout")]` | `Task<IActionResult>` | — | — | — |
-| **register** | 1021 | 64 | `[HttpPost]`<br>`[Route("LoginController/register")]` | `Task<IActionResult>` | — | — | ctx |
-| **IsConsecutive** | 1087 | 17 | — | `bool` | — | — | — |
-| **ping** | 1107 | 4 | `[HttpGet]`<br>`[Route("LoginController/ping")]` | `Task<IActionResult>` | — | — | — |
-| **Upgrade** | 1116 | 49 | `[HttpPost]`<br>`[Route("LoginController/Upgrade")]` | `Task<IActionResult>` | — | — | — |
-| **UpgradeCheck** | 1168 | 50 | `[HttpGet]`<br>`[Route("LoginController/UpgradeCheck/{sessionId}")]` | `Task<IActionResult>` | — | — | — |
-| **getVersion** | 1221 | 8 | `[HttpGet]`<br>`[Route("LoginController/getVersion")]` | `Task<IActionResult>` | — | — | — |
-| **getAgenziaLibVersion** | 1254 | 5 | `[HttpGet]`<br>`[Route("LoginController/getAgenziaLibVersion")]` | `Task<IActionResult>` | — | — | — |
-| **getDownloadLinkOfPlugin** | 1293 | 58 | `[HttpGet]`<br>`[Route("LoginController/getDownloadLinkOfPlugin")]` | `Task<IActionResult>` | — | — | — |
 
 
 ## ConfrontiController
@@ -435,6 +403,50 @@ Attributo di classe: `[Route("[controller]/")]`
 | **parseAddesttramentoValue** | 127 | 116 | — | `object` | — | — | — |
 | **getParameterInfo** | 244 | 21 | — | `ParameterInfo[]` | — | — | — |
 | **execLibFunction** | 267 | 52 | — | `object` | — | 1 a runtime | — |
+
+
+## LoginController
+
+`Istanta/Controllers/LoginController.cs` — 1356 righe, 24 azioni pubbliche.
+ Eredita da `Controller`.
+
+**Dipendenze iniettate** (8):
+
+- `IConfiguration configuration`
+- `ILogger<LoginController> logger`
+- `IDbContextFactory<edro21_dbContext> dbContextFactory`
+- `IOptions<PathExternal> external_lib`
+- `IOptions<AuthADOptions> authAD_options`
+- `IOptions<FicoConfig>fico_config`
+- `IHttpClientFactory httpClientFactory`
+- `IDbContextFactory<Edro21_DbContext2> dbContextFactory2`
+
+| azione | riga | righe | rotta | ritorna | vista | AgenziaLib | db |
+|---|---:|---:|---|---|---|---|---|
+| **Index** | 97 | 28 | — | `IActionResult` | (omonima) | — | — |
+| **Index** | 129 | 245 | `[HttpPost]`<br>`[Route("LoginController/login")]` | `IActionResult` | — | — | ctx |
+| **Start** | 378 | 15 | `[HttpGet]`<br>`[Route("LoginController/auth/entra")]` | `IActionResult` | — | — | — |
+| **Complete** | 395 | 100 | `[HttpGet("/LoginController/oauth/complete")]` | `Task<IActionResult>` | (omonima) | — | ctx |
+| **OAuthLanded** | 497 | 131 | `[HttpGet("/LoginController/oauth/landed")]` | `Task<IActionResult>` | — | — | ctx |
+| **ChangePassword** | 632 | 51 | `[HttpPost]`<br>`[Route("LoginController/ChangePassword")]` | `Task<IActionResult>` | — | — | ctx |
+| **ResetPassword** | 687 | 56 | `[HttpPost]`<br>`[Route("LoginController/ResetPassword")]` | `Task<IActionResult>` | — | — | ctx |
+| **InviaEmailPerRecuperaPassword** | 747 | 53 | `[HttpPost]`<br>`[Route("LoginController/InviaEmailPerRecuperaPassword")]` | `Task<IActionResult>` | — | — | ctx |
+| **RecuperoPassword** | 804 | 47 | `[HttpGet]`<br>`[Route("LoginController/recuperoPassword/{codifica}")]` | `IActionResult` | (omonima) | — | ctx |
+| **getTokenDiAccesso** | 854 | 70 | `[HttpGet]`<br>`[Route("LoginController/getTokenDiAccesso")]` | `Task<IActionResult>` | — | — | ctx |
+| **getSession** | 937 | 40 | `[HttpGet]`<br>`[Route("LoginController/getSession")]` | `Task<IActionResult>` | — | — | ctx |
+| **setSession** | 980 | 5 | — | `Task<IActionResult>` | — | — | — |
+| **setSessionName** | 986 | 5 | — | `Task<IActionResult>` | — | — | — |
+| **setRecoverySession** | 992 | 5 | — | `Task<IActionResult>` | — | — | — |
+| **logoutFromPage** | 1000 | 5 | `[HttpGet]`<br>`[Route("LoginController/logoutFromPage")]` | `Task<IActionResult>` | — | — | — |
+| **logout** | 1008 | 10 | `[HttpGet]`<br>`[Route("LoginController/logout")]` | `Task<IActionResult>` | — | — | — |
+| **register** | 1021 | 64 | `[HttpPost]`<br>`[Route("LoginController/register")]` | `Task<IActionResult>` | — | — | ctx |
+| **IsConsecutive** | 1087 | 17 | — | `bool` | — | — | — |
+| **ping** | 1107 | 4 | `[HttpGet]`<br>`[Route("LoginController/ping")]` | `Task<IActionResult>` | — | — | — |
+| **Upgrade** | 1116 | 49 | `[HttpPost]`<br>`[Route("LoginController/Upgrade")]` | `Task<IActionResult>` | — | — | — |
+| **UpgradeCheck** | 1168 | 50 | `[HttpGet]`<br>`[Route("LoginController/UpgradeCheck/{sessionId}")]` | `Task<IActionResult>` | — | — | — |
+| **getVersion** | 1221 | 8 | `[HttpGet]`<br>`[Route("LoginController/getVersion")]` | `Task<IActionResult>` | — | — | — |
+| **getAgenziaLibVersion** | 1254 | 5 | `[HttpGet]`<br>`[Route("LoginController/getAgenziaLibVersion")]` | `Task<IActionResult>` | — | — | — |
+| **getDownloadLinkOfPlugin** | 1293 | 58 | `[HttpGet]`<br>`[Route("LoginController/getDownloadLinkOfPlugin")]` | `Task<IActionResult>` | — | — | — |
 
 
 ## MastroController

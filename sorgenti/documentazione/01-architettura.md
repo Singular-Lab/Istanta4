@@ -227,7 +227,7 @@ Il `OnModelCreating` del secondo contesto è lungo **557 righe**, il primo 527.
 `Istanta/BackgroundCodeService.cs` è un `IHostedService` registrato alla riga 144 di `Program.cs`.
 Il suo `ExecuteAsync` è lungo 289 righe, apre il proprio contesto con
 `_dbContextFactory.CreateDbContextAsync` e lavora in ciclo. **Cosa faccia esattamente non è
-verificato**: è uno dei punti da guardare (vedi [12-da-fare.md](12-da-fare.md)).
+verificato**: è uno dei punti da guardare (vedi [13-da-fare.md](13-da-fare.md)).
 
 Accanto a lui, `Istanta/Utility/Propagatore.cs::ElaboraRegistro` (299 righe) legge il registro delle
 operazioni e propaga le modifiche fra lavorazioni, chiamando

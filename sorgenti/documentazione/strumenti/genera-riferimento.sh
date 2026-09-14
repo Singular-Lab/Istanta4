@@ -49,12 +49,27 @@ for f in file_cs:
     grezzo = open(p, encoding="utf-8", errors="replace").read().replace("\r\n", "\n")
     t = nudo(grezzo); L = t.split("\n"); LG = grezzo.split("\n")
 
-    mc = None
+    # Alcuni file dichiarano una classe di servizio PRIMA del controller
+    # (LoginController.cs dichiara ChangePasswordAction, AuthController.cs
+    # dichiara NoExternalValidator). Prendere la prima classe del file da il
+    # nome sbagliato: preferisco quella che e davvero un controller.
+    candidate = []
     for k, x in enumerate(L):
         m = re.match(r'\s*(?:public|internal)\s+(?:partial\s+|sealed\s+|abstract\s+)*class\s+(\w+)\s*(?::\s*([\w\s,<>]+))?', x)
         if m:
-            mc = (m.group(1), (m.group(2) or "").strip(), k); break
-    if not mc: continue
+            candidate.append((m.group(1), (m.group(2) or "").strip(), k))
+    if not candidate: continue
+    atteso = f[:-3]                      # il nome del file senza .cs
+    mc = None
+    for c in candidate:                  # 1. quella che si chiama come il file
+        if c[0] == atteso: mc = c; break
+    if mc is None:                       # 2. quella che finisce per Controller
+        for c in candidate:
+            if c[0].endswith("Controller"): mc = c; break
+    if mc is None:                       # 3. quella che eredita da un Controller
+        for c in candidate:
+            if "Controller" in c[1]: mc = c; break
+    if mc is None: mc = candidate[0]     # 4. e se no, la prima
     nome_cls, base, k_cls = mc
 
     att_cls = []

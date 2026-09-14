@@ -5,7 +5,7 @@ riga invecchiano: i **nomi** no, e sono quelli la chiave per ritrovare le cose.
 
 > **Un avviso metodologico.** I numeri di riga qui sotto vengono da un'estrazione automatica fatta
 > sul codice del 14/09. Se cerchi un metodo e alla riga indicata trovi altro, cerca per nome: non
-> fidarti del numero. Vedi [11-trappole.md](11-trappole.md), voce «ancorarsi al numero di riga».
+> fidarti del numero. Vedi [12-trappole.md](12-trappole.md), voce «ancorarsi al numero di riga».
 
 ---
 

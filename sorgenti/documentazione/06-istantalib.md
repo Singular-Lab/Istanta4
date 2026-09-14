@@ -16,7 +16,7 @@ Pacchetti: `System.Configuration.ConfigurationManager`, `System.Security.Cryptog
 
 > `Magick.NET-Q8-AnyCPU 13.9.1` ha **vulnerabilità note** (`NU1901`, `NU1902`, `NU1903` — quattro di
 > gravità moderata, una bassa). Non è stato aggiornato: la regola concordata è che i pacchetti non
-> si toccano finché non c'è un momento dedicato. È in [12-da-fare.md](12-da-fare.md).
+> si toccano finché non c'è un momento dedicato. È in [13-da-fare.md](13-da-fare.md).
 
 ---
 
@@ -61,7 +61,7 @@ sono **ventidue classi `AgenziaCustomPlugin_*`** che insieme descrivono la forma
 
 > **Non cercare chi le nomina.** Sono proprietà annidate dentro un tipo padre: chi deserializza il
 > padre non scrive mai il nome del figlio. Un'analisi che cerca il nome della classe nei file
-> consumatori le dichiara tutte morte, e sbaglia. Vedi [11-trappole.md](11-trappole.md).
+> consumatori le dichiara tutte morte, e sbaglia. Vedi [12-trappole.md](12-trappole.md).
 
 Altri tipi degni di nota: `FicoCombinazioneKit`, `FicoRuntimeKit`, `FicoContextField`,
 `FicoContextSchemeFieldValue`, `FileDesignInKit`, `BoxIndd`, `Istruzione`,
