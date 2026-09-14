@@ -6,7 +6,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Istanta", "Istanta.csproj",
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "IstantaLib", "..\IstantaLib\IstantaLib\IstantaLib.csproj", "{9837AC2A-6E4A-4F8C-A1AC-170D668A8D4B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgenziaLib", "..\IstantaLib\AgenziaLib\AgenziaLib.csproj", "{C3201BEB-0A26-44BC-860F-4C1C56B8785C}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgenziaLib", "..\AgenziaLib\AgenziaLib.csproj", "{C3201BEB-0A26-44BC-860F-4C1C56B8785C}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
