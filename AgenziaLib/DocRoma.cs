@@ -17,118 +17,6 @@ namespace AgenziaLib
     internal class DocRoma
     {
 
-        //public string importaVolantino_OLD(Dictionary<string, string> formRequest, List<Dictionary<string, object>> tracciato, string pathAree)
-        //{
-
-        //    ImportResult impResult = new ImportResult();
-
-        //    string errors = "";
-
-        //    try
-        //    {
-        //        JObject o1 = JObject.Parse(File.ReadAllText(pathAree));
-        //        DbAree areeDB = o1.ToObject<DbAree>();
-        //        List<AreaItem> aree = areeDB.source;
-
-        //        //sappiamo che Doc importa per singola area.
-        //        //Qui ci sarà MARKET,ORO,PROSSIMITA o FRATTINI
-        //        int id_area = Int32.Parse(formRequest["cmbCanaleArea"]);
-
-        //        AreaItem aItem = aree.Where(a => a.Id == id_area).FirstOrDefault();
-        //        if (aItem == null)
-        //            throw new Exception("area not found");
-
-        //        string area = aItem.nomeArea;
-
-        //        Tracciato tItem = new Tracciato();
-        //        tItem.Area = area;
-        //        tItem.NomeEsportazione = formRequest["nomePromo"].ToString() + "_" + area;
-
-
-        //        for (int i = 0; i < tracciato.Count; i++)
-        //        {
-        //            DateTime inizio_processo_item = DateTime.Now;
-
-        //            try
-        //            {
-
-        //                Dictionary<string, object> item = tracciato[i];
-
-        //                List<string> aree_coinvolte = checkArea(item["rm"].ToString(), item["rv"].ToString(), item["rp"].ToString());
-
-        //                bool check_area = aree_coinvolte.Where(ac => ac == area).Count() > 0;
-
-        //                if (check_area)
-        //                {
-        //                    //Il record è valido per i parametri di importazione richiesti
-        //                    string cod_scatto = getCodiceScatto(item);
-        //                    item[Tipi.GLOBAL_VARIABLES.keyScattoCodice] = cod_scatto;
-
-        //                    string _bollini = getBollini(item);
-
-        //                    item["isInArea"] = check_area;
-        //                    item["bollini"] = _bollini;
-
-
-        //                    tItem.Records.Add(item);
-
-        //                }
-        //            }
-        //            catch (Exception ex)
-        //            {
-        //                errors += ex.ToString() + "\n";
-        //            }
-
-        //        }
-
-        //        List<string> cod_scatti = tItem.Records.Select(s => s[GLOBAL_VARIABLES.keyScattoCodice].ToString()).ToList();
-
-        //        //Adesso devo ciclare tutto per stabilire i codici gruppi secondo assegnazione scatto
-        //        cod_scatti.ForEach(x =>
-        //        {
-        //            try
-        //            {
-        //                var _gruppo = tItem.Records.Where(s => s[GLOBAL_VARIABLES.keyScattoCodice].ToString() == x).ToList();
-        //                List<string> codici_gruppo = new List<string>();
-        //                _gruppo.ForEach(g =>
-        //                {
-
-        //                    if (g.ContainsKey(GLOBAL_VARIABLES.keyRefCodice))
-        //                    {
-        //                        codici_gruppo.Add(g[GLOBAL_VARIABLES.keyRefCodice].ToString());
-        //                    }
-        //                });
-
-        //                string codice_gruppo = String.Join(",", codici_gruppo.OrderBy(o => o).ToArray());
-
-        //                _gruppo.ForEach(g =>
-        //                {
-
-        //                    g[GLOBAL_VARIABLES.keyScattoCodiceGruppo] = codice_gruppo;
-        //                });
-
-
-        //            }
-        //            catch (Exception ex)
-        //            {
-        //                errors += ex.ToString() + "\n";
-        //            }
-        //        });
-
-        //        //Esguo ordinamento secondo schema, che per doc al momento è semplicemente per SCATTO
-        //        tItem.Records = tItem.Records.OrderBy(o => o[GLOBAL_VARIABLES.keyScattoCodice]).ToList();
-        //        impResult.liste.Add(tItem);
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        errors += ex.ToString();
-        //    }
-
-        //    impResult.errors = errors;
-
-        //    return JsonConvert.SerializeObject(impResult);
-
-        //}
 
 
         public string importaVolantino(Dictionary<string, string> formRequest, List<Dictionary<string, object>> tracciato, string pathAree)
@@ -1422,53 +1310,6 @@ namespace AgenziaLib
 
                 _db = tracciato;// new List<Dictionary<string, object>>();
 
-                //for (int x = 0; x < tracciato.Count; x++)
-                //{
-
-                //    Dictionary<string, object> recItemGroup = tracciato[x];
-
-                //    if (!recItemGroup.ContainsKey("refs"))
-                //        continue;
-
-                //    List<Dictionary<string, object>> myGroup = recItemGroup["refs"] as List<Dictionary<string, object>>;
-                //    _db.AddRange(myGroup);
-                //}
-
-                /*
-                List<Dictionary<string, object>> ordered_db = new List<Dictionary<string, object>>();
-                for (int i = 0; i < schemaOrd.Count; i++)
-                {
-                    OrdinamentoDocRoma rule = schemaOrd[i];
-                    List<Dictionary<string, object>> _myList = new List<Dictionary<string, object>>();
-                    ordinamentoRecursive(rule, _db, ref _myList);
-
-
-                    //Metto i rimasti secondo la macro regola
-                    if (rule.valore.Contains("!="))
-                    {
-                        string val = rule.valore.Split(new string[] { "!=" }, StringSplitOptions.None)[1];
-                        List<Dictionary<string, object>> _rest = _db.Where(t => t.ContainsKey(rule.chiave) && t[rule.chiave].ToString() != val).ToList();
-                        _myList.AddRange(_rest);
-                        foreach (Dictionary<string, object> d in _rest)
-                            _db.Remove(d);
-                    }
-                    else
-                    {
-                        List<Dictionary<string, object>> _rest = _db.Where(t => t.ContainsKey(rule.chiave) && t[rule.chiave].ToString() == rule.valore).ToList();
-                        _myList.AddRange(_rest);
-                        foreach (Dictionary<string, object> d in _rest)
-                            _db.Remove(d);
-                    }
-
-
-                    //Qui faccio una forzatura temporanea sull'ordinamento perchè c'è fretta. 
-                    //Appena c'è quiete va risolto dinamicamente dal JSON
-                    ordered_db.AddRange(_myList);//.OrderBy(o => o["speciale"]));
-                }
-
-                if (_db.Count > 0)
-                    ordered_db.AddRange(_db);
-                */
 
                 List<Dictionary<string, object>> lista_con_categoria = _db.Where(f => f.ContainsKey("settore") && f.ContainsKey("reparto") && f.ContainsKey("categoria")).ToList();
                 List<Dictionary<string, object>> ordered_db = lista_con_categoria.OrderBy(ord1 => ord1["settore"].ToString()).ThenBy(ord2 => ord2["reparto"].ToString()).ThenBy(ord3 => ord3["categoria"]).ToList();
@@ -1777,54 +1618,6 @@ namespace AgenziaLib
                     {
                         ordered_db[i]["Scatto.CodiceSottogruppo"] = "";
                     }
-                    //ordered_db[i]["indexOrdinamento"] = i;
-                    //if (lastCodiceGruppo != ordered_db[i]["Scatto.CodiceGruppo"].ToString() && lastCodiceGruppo != "")
-                    //{
-                    //    foreach (var sottogrup in listaSottogruppi)
-                    //    {
-                    //        string codice = "";
-                    //        foreach (var element in sottogrup)
-                    //        {
-                    //            codice += element["Referenza.Codice"] + ",";
-                    //        }
-
-                    //        codice = codice.Trim(',');
-
-                    //        foreach (var element in sottogrup)
-                    //        {
-                    //            element["keyScattoCodiceSottogruppo"] = codice;
-                    //            ordered_db[(int)element["indexOrdinamento"]] = element; 
-                    //        }
-                    //    }
-
-                    //    listaSottogruppi.Clear();
-                    //}
-                    //lastCodiceGruppo = ordered_db[i]["Scatto.CodiceGruppo"].ToString();
-                    //if (listaSottogruppi.Count == 0)
-                    //{
-                    //    List<Dictionary<string, object>> sottogruppo = new List<Dictionary<string, object>>();
-                    //    sottogruppo.Add(ordered_db[i]);
-                    //    listaSottogruppi.Add(sottogruppo);
-                    //}
-                    //else
-                    //{
-                    //    bool founded = false;
-                    //    foreach (var sottogrup in listaSottogruppi)
-                    //    {
-                    //        if (sottogrup[0]["descrizione_gruppo"].ToString() == ordered_db[i]["prezzo_promo"].ToString())
-                    //        {
-                    //            sottogrup.Add(ordered_db[i]);
-                    //            founded = true;
-                    //            break;
-                    //        }
-                    //    }
-                    //    if (!founded)
-                    //    {
-                    //        List<Dictionary<string, object>> sottogruppo = new List<Dictionary<string, object>>();
-                    //        sottogruppo.Add(ordered_db[i]);
-                    //        listaSottogruppi.Add(sottogruppo);
-                    //    }
-                    //}
                 }
                     
 
@@ -1963,55 +1756,6 @@ namespace AgenziaLib
 
 
 
-            //string um = "";
-            //if (objDb.ContainsKey("Descrizioni.Um"))
-            //    um = objDb["Descrizioni.Um"].ToString();
-            //string sett = objDb.ContainsKey("settore")? objDb["settore"].ToString():"";
-            //string gramm = "";
-            //if (objDb.ContainsKey("Descrizioni.Descrizione4"))
-            //    gramm = objDb["Descrizioni.Descrizione4"].ToString();
-            //if (gramm == "")
-            //{
-            //    if (objDb.ContainsKey("Descrizioni.DescrizioneIndd") && objDb["Descrizioni.DescrizioneIndd"].ToString() != "")
-            //    {
-            //        List<Tag> _tags = getDescrizioneHtmlTags(objDb["Descrizioni.DescrizioneIndd"].ToString());
-            //        for (int t = 0; t < _tags.Count; t++)
-            //        {
-            //            Tag tagItem = _tags[t];
-            //            if (tagItem.stile == "DESCRIZIONE GRAMMATURA")
-            //            {
-            //                gramm += tagItem.content;
-            //            }
-            //        }
-            //    }
-            //}
-
-            //if (sett.ToLower() != "chimica" &&
-            //    um.ToLower() != "pz"
-            //)
-            //{
-            //    if (gramm.IndexOf("circa") >= 0 ||
-            //        ((sett.ToLower() == "freschi" || sett.ToLower() == "freschissimi") && gramm == ""))
-            //    {
-            //        return "";
-            //    }
-            //    else
-            //    {
-            //        if (objDb.ContainsKey("prezzo_kgl" + quale) && Decimal.TryParse(objDb["prezzo_kgl" + quale].ToString(), out decimal num))
-            //        {
-            //            return "al " + um + " " + MathExt.DecimalRoundMidpoint(num) + " €";
-            //        }
-            //        else
-            //        {
-            //            return "";
-            //        }
-
-            //    }
-            //}
-            //else
-            //{
-            //    return "";
-            //}
         }
 
         private string getPrimaDiPrezzo2(Dictionary<string, object> objDb)
@@ -2519,44 +2263,6 @@ namespace AgenziaLib
         {
             string keyRefCodice = GLOBAL_VARIABLES.keyRefCodice;
             string keyXMLSelezione = GLOBAL_VARIABLES.keyXMLSelezione;
-            //Dictionary<string, object> meta = JsonConvert.DeserializeObject<Dictionary<string, object>>(tracciatoFieldsStringfy);
-            //double prezzoMaggiore = 0;
-            //var elPrezzoMaggiore = gruppo[0];
-            //foreach (var item in gruppo)
-            //{
-            //    double prezzo = 0;
-            //    //trovo il prezzo maggiore
-            //    if (meta["Area"].ToString() == "ORO")
-            //    {
-            //        prezzo = (double)item["prezzo_oro"];
-            //    }
-            //    else if (meta["Area"].ToString() == "MARKET")
-            //    {
-            //        prezzo = (double)item["prezzo"];
-            //    }
-            //    else if (meta["Area"].ToString() == "PROSSIMITA")
-            //    {
-            //        prezzo = (double)item["prezzo_frattini"];
-            //    }
-
-            //    if (prezzo > prezzoMaggiore)
-            //    {
-            //        prezzoMaggiore = prezzo;
-            //        elPrezzoMaggiore = item;
-            //    }
-            //}
-
-            //foreach (var item in gruppo)
-            //{ 
-            //    if (item == elPrezzoMaggiore)
-            //    {
-            //        item[keyXMLSelezione] = (Byte)TipoSelezioneMenabo.Primaria;
-            //    }
-            //    else
-            //    {
-            //        item[keyXMLSelezione] = (Byte)TipoSelezioneMenabo.Secondaria;
-            //    }
-            //}
 
             if (ghost != null && ghost.Count > 0)
             {

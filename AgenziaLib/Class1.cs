@@ -589,51 +589,6 @@ namespace AgenziaLib
             return cod;
         }
 
-        //xCoop.FI
-        /*
-        public string getBollini(Dictionary<string, object> rec)
-        {
-            string boll = "";
-
-            string segmento = rec["segmento"].ToString().ToLower();
-            string descrizione = rec["descrizione"].ToString().ToLower();
-            string sottomarchio = rec["sottomarchio"].ToString().ToLower();
-            string reparto = rec["reparto"].ToString().ToLower();
-
-            bool sl = (rec["is_senzalattosio"].ToString().ToLower()=="x");
-            bool sg = (rec["is_senzaglut"].ToString().ToLower()=="x" || rec["is_senzaglut2"].ToString().ToLower() == "x" || rec["is_senzaglut3"].ToString().ToLower() == "x");
-            bool vg = (rec["is_vegano"].ToString().ToLower()=="x");
-            bool pt = (rec["is_prod_toscana"].ToString().ToLower()=="x" || rec["is_prod_toscana2"].ToString().ToLower() == "x");
-
-            if (segmento.Contains("senza glutine"))
-                boll += "senza glutine,";
-            if (descrizione.Contains("igp"))
-                boll += "igp,";
-            if (descrizione.Contains(" dop "))
-                boll += "dop,";
-            if (descrizione.Contains(" no palma"))
-                boll += "no palma,";
-            if (sottomarchio.Contains("vivi verde"))
-                boll += "viviverde,";
-            if (reparto.Contains("surgelati"))
-                boll += "surgelati,";
-            if (sl)
-                boll += "senza lattosio,";
-            if (sg)
-                boll += "senza glutine,";
-            if (vg)
-                boll += "vegano,";
-            if (pt)
-                boll += "prodotto in toscana,";
-
-            if (boll != "")
-                boll = boll.Substring(0, boll.LastIndexOf(","));
-
-            return boll;
-        }
-
-        */
-        //xDOC ROMA
         public List<string> checkArea(string rm, string rv, string rp)
         {
             List<string> result = new List<string>();
@@ -1392,45 +1347,6 @@ namespace AgenziaLib
 
                                 tr_item["indice"] = indice;
 
-                                /*
-                                if (imp_tipo_tracciato != (Byte)TipoImportazione.PoP)
-                                {
-                                    int count_cs = rs_item.indici[indice].Where(s => s.CodiceScatto == cod_scatto).Count();
-                                    if (count_cs <= 0)
-                                    {
-                                        if (!cod_scatto_index.ContainsKey(seg_ordinamento + "_" + cod_scatto))
-                                            cod_scatto_index.Add(seg_ordinamento + "_" + cod_scatto, rs_item.indici[indice].Count);
-                                        else
-                                            cod_scatto_index[seg_ordinamento + "_" + cod_scatto] = rs_item.indici[indice].Count;
-                                    }
-
-                                    if (cod_scatto != "" && tr_item.Segmento == seg_ordinamento)
-                                    {
-                                        int inx_offset = cod_scatto_index[seg_ordinamento + "_" + cod_scatto];
-                                        //deve essere il primo
-                                        int c = rs_item.indici[indice].Where(s => s.Segmento == seg_ordinamento && s.Foto).Count();
-                                        if (tr_item.Esempio)//c == rs_item.indici[indice].Count)
-                                            rs_item.indici[indice].Insert(inx_offset, tr_item);
-                                        else if (tr_item.Foto)
-                                            rs_item.indici[indice].Insert(inx_offset + count_cs, tr_item);
-                                        else
-                                        {
-                                            rs_item.indici[indice].Insert(inx_offset + count_cs, tr_item);
-
-                                        }
-
-                                        //rs_item.indici[indice].Insert(0, tr_item);
-                                    }
-                                    else
-                                    {
-                                        rs_item.indici[indice].Add(tr_item);
-                                    }
-                                }
-                                else
-                                {
-                                    rs_item.indici[indice].Add(tr_item);
-                                }  
-                                */
                             }
                             else
                             {
@@ -1443,85 +1359,6 @@ namespace AgenziaLib
 
                         #region inserisco la lista ordinata nel DB
 
-                        /*
-                        Dictionary<string, List<TracciatiRecord>> tracciati_items_pop = new Dictionary<string, List<TracciatiRecord>>();
-
-                        tracciati_items_pop.Add("classic", new List<TracciatiRecord>());
-
-
-                        res.Attivita.StatoMsg = "Importazione " + tracciato_item.Area;
-                        this.ctx.SaveChanges();
-
-
-                        int prog_rec = 0;
-                        int prog_perc = 0;
-                        Int16 start_prog_attivita = res.Attivita.Progress;
-
-                        for (int b = 0; b < lista_ordinata.Count; b++)
-                        {
-                            for (int z = 0; z < lista_ordinata[b].indici.Count; z++)
-                            {
-
-                                List<TracciatiRecord> list_items = lista_ordinata[b].indici[z].OrderByDescending(o => o.Esempio).ThenByDescending(o => o.Foto).ToList();
-                                if (pkg.cmbTipoTracciato == 2)
-                                {
-                                    list_items = new List<TracciatiRecord>();
-                                    if (lista_ordinata[b].indici[z].Count > 0)
-                                    {
-                                        TracciatiRecord capo = lista_ordinata[b].indici[z].FirstOrDefault();
-                                        List<TracciatiRecord> capi = lista_ordinata[b].indici[z].Where(s => s.Segmento == capo.Segmento).ToList();
-                                        list_items.AddRange(capi);
-                                        list_items.AddRange(lista_ordinata[b].indici[z].Skip(capi.Count).OrderByDescending(o => o.Esempio).ThenByDescending(o => o.Foto).ToList());
-                                    }
-                                }
-
-
-                                for (int y = 0; y < list_items.Count; y++)
-                                {
-                                    TracciatiRecord t_item = list_items[y];
-                                    if (pkg.cmbTipoTracciato == (Byte)TipoImportazione.Vol || pkg.cmbTipoTracciato != (Byte)TipoImportazione.PoP)
-                                    {
-                                        //Aggiorno percentuale solo per importazione lista classica
-                                        //Nel POP partono sub processi con esportazioni annesse
-                                        this.ctx.TracciatiRecords.Add(t_item);
-                                    }
-                                    else
-                                    {
-                                        // Per il POP il dato non si deposita, viene però lavorato subito andando in esportazione
-
-                                        //response.write("tracciato item " + tracciato_item.importazioni.tipo_materiale.tolower() + "<br>");
-                                        if (tracciato_item.IdImportazioneNavigation!.TipoMateriale.ToLower() == "vol" ||
-                                            tracciato_item.IdImportazioneNavigation!.TipoMateriale.ToLower() == "ap")
-                                        {
-                                            #region faccio lo split degli articoli a seconda di sapori e sottocosto
-                                            //questa regola si applica al momento alla colonna tema in attesa di nuove istruzioni
-
-                                            string tipo_lista = icItem.getTipoListaPerTema(t_item);
-
-                                            if (tipo_lista != "SAP")
-                                            {
-                                                if (!tracciati_items_pop.ContainsKey(tipo_lista))
-                                                    tracciati_items_pop.Add(tipo_lista, new List<TracciatiRecord>());
-
-                                                tracciati_items_pop[tipo_lista].Add(t_item);
-                                            }
-
-                                            #endregion
-                                        }
-                                        else
-                                        {
-                                            tracciati_items_pop["classic"].Add(t_item);
-                                        }
-
-                                    }
-
-
-                                    prog_rec++;
-                                }
-
-                            }
-                        }
-                        */
 
                         #endregion
                         
