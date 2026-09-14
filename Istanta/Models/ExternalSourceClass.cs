@@ -8,6 +8,8 @@ using DocumentFormat.OpenXml.Office2010.Excel;
 using DocumentFormat.OpenXml.Wordprocessing;
 using System.Reflection;
 using Istanta.Utility;
+using System.Linq;
+using System.IO;
 
 namespace Istanta.Models
 {
@@ -18,6 +20,98 @@ namespace Istanta.Models
         private string pathExternal;
 
         private Dictionary<string, JObject> Sources = new Dictionary<string, JObject>();
+
+        #region Sorgenti da compilare
+
+        // external_source/vergine/ e il modello: ogni cliente deve avere gli stessi
+        // Source*.json, compilati con i propri dati. Qui teniamo l'elenco di quelli che
+        // al cliente mancano, piu quelli che un getter ha fabbricato vuoti perche non
+        // c'erano. _Layout li mostra in una fascia in cima a ogni pagina.
+        private static readonly object _lucchettoSorgenti = new object();
+        private static readonly Dictionary<string, long> _createVuote = new Dictionary<string, long>();
+        private static List<string> _mancanti = new List<string>();
+        private static DateTime _ultimoControllo = DateTime.MinValue;
+
+        /// <summary>
+        /// Chiamata da un getter che ha dovuto creare il file perche non esisteva.
+        /// Registriamo anche la dimensione, cosi l'avviso sparisce da solo quando
+        /// qualcuno ci mette dentro i dati.
+        /// </summary>
+        public static void SegnalaCreataVuota(string nomeFile, string pathSource)
+        {
+            lock (_lucchettoSorgenti)
+            {
+                try
+                {
+                    var f = new FileInfo(Path.Combine(pathSource, nomeFile));
+                    _createVuote[nomeFile] = f.Exists ? f.Length : 0;
+                }
+                catch { _createVuote[nomeFile] = 0; }
+            }
+        }
+
+        /// <summary>
+        /// I Source*.json che il cliente non ha rispetto a vergine, piu quelli creati
+        /// vuoti e ancora intatti. Ricalcolato al massimo una volta al minuto: cosi la
+        /// fascia sparisce da sola appena i file vengono messi a posto, senza riavviare.
+        /// Non solleva mai eccezioni: se vergine non si trova, l'elenco resta vuoto.
+        /// </summary>
+        public static List<string> SorgentiDaCompilare(string pathSource)
+        {
+            lock (_lucchettoSorgenti)
+            {
+                if ((DateTime.UtcNow - _ultimoControllo).TotalSeconds > 60)
+                {
+                    _ultimoControllo = DateTime.UtcNow;
+                    _mancanti = CalcolaMancanti(pathSource);
+                    foreach (var nome in _createVuote.Keys.ToList())
+                    {
+                        try
+                        {
+                            var f = new FileInfo(Path.Combine(pathSource, nome));
+                            if (!f.Exists || f.Length != _createVuote[nome]) _createVuote.Remove(nome);
+                        }
+                        catch { }
+                    }
+                }
+                return _mancanti.Concat(_createVuote.Keys).Distinct().OrderBy(x => x).ToList();
+            }
+        }
+
+        private static List<string> CalcolaMancanti(string pathSource)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(pathSource) || !Directory.Exists(pathSource))
+                    return new List<string>();
+
+                // vergine e sorella della cartella del cliente
+                string? padre = Directory.GetParent(pathSource.TrimEnd('/', '\\'))?.FullName;
+                if (padre == null) return new List<string>();
+                string modello = Path.Combine(padre, "vergine");
+                if (!Directory.Exists(modello) ||
+                    string.Equals(Path.GetFullPath(modello).TrimEnd('/', '\\'),
+                                  Path.GetFullPath(pathSource).TrimEnd('/', '\\'),
+                                  StringComparison.OrdinalIgnoreCase))
+                    return new List<string>();
+
+                var mancano = new List<string>();
+                foreach (var f in Directory.GetFiles(modello, "Source*.json"))
+                {
+                    string nome = Path.GetFileName(f);
+                    if (!File.Exists(Path.Combine(pathSource, nome))) mancano.Add(nome);
+                }
+                return mancano;
+            }
+            catch
+            {
+                // un avviso mancato non deve mai far cadere una pagina
+                return new List<string>();
+            }
+        }
+
+        #endregion
+
 
         public ExternalSourceClass(string pathExternalSource)
         {
@@ -90,6 +184,7 @@ namespace Istanta.Models
                 DbFormati crea = new DbFormati();
                 crea.SetExternalPath(this.pathExternal);
                 crea.SaveChanges();
+                SegnalaCreataVuota("Source" + DbFormati.dbSourceName, this.pathExternal);
             }
 
             JObject? o1 = JObject.Parse(System.IO.File.ReadAllText(this.pathExternal + "Source" + DbFormati.dbSourceName));
@@ -106,6 +201,7 @@ namespace Istanta.Models
                 DbLoghiBolli crea = new DbLoghiBolli();
                 crea.SetExternalPath(this.pathExternal);
                 crea.SaveChanges();
+                SegnalaCreataVuota("Source" + DbLoghiBolli.dbSourceName, this.pathExternal);
             }
 
             JObject? o1 = JObject.Parse(System.IO.File.ReadAllText(this.pathExternal + "Source" + DbLoghiBolli.dbSourceName));
@@ -121,6 +217,7 @@ namespace Istanta.Models
                 DbTipoDiExport crea = new DbTipoDiExport();
                 crea.SetExternalPath(this.pathExternal);
                 crea.SaveChanges();
+                SegnalaCreataVuota("Source" + DbTipoDiExport.dbSourceName, this.pathExternal);
             }
 
             JObject? o1 = JObject.Parse(System.IO.File.ReadAllText(this.pathExternal + "Source" + DbTipoDiExport.dbSourceName));
@@ -136,6 +233,7 @@ namespace Istanta.Models
                 DbDeclinazioniKit crea = new DbDeclinazioniKit();
                 crea.SetExternalPath(this.pathExternal);
                 crea.SaveChanges();
+                SegnalaCreataVuota("Source" + DbDeclinazioniKit.dbSourceName, this.pathExternal);
             }
 
             JObject? o1 = JObject.Parse(System.IO.File.ReadAllText(this.pathExternal + "Source" + DbDeclinazioniKit.dbSourceName));
@@ -151,6 +249,7 @@ namespace Istanta.Models
                 DbNamingConvention crea = new DbNamingConvention();
                 crea.SetExternalPath(this.pathExternal);
                 crea.SaveChanges();
+                SegnalaCreataVuota("Source" + DbNamingConvention.dbSourceName, this.pathExternal);
             }
 
             JObject? o1 = JObject.Parse(System.IO.File.ReadAllText(this.pathExternal + "Source" + DbNamingConvention.dbSourceName));

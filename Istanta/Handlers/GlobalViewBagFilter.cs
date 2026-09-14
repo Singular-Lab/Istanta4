@@ -28,6 +28,12 @@ public class CustomViewBagFilter : IActionFilter
                 : "";
             string relPath = pathSuffix != "" ? "/" + pathSuffix : "";// this.nomeCliente;
             controller.ViewBag.ExternalSourceCustom = relPath;
+
+            // I Source*.json che mancano al cliente, o che sono stati creati vuoti.
+            // _Layout li mostra in una fascia gialla in cima alla pagina.
+            controller.ViewBag.NomeCliente = this.nomeCliente;
+            controller.ViewBag.SorgentiDaCompilare =
+                Istanta.Models.ExternalSourceClass.SorgentiDaCompilare(this.pathExternalSource);
         }
         else
         {
