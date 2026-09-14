@@ -1325,7 +1325,6 @@ out var mismatch);
                 //Dictionary<string, ArticoloInRevisione> dictCache = new Dictionary<string, ArticoloInRevisione>();
                 List<string> codesCache = new List<string>();
                 //int debug_count_gruppi = 0;
-                string debug_last_cod_gruppo = "4696706,4696730";
                 List<string> q_records_codici = q_records.Select(s => s.Dato[key_codice_ref].ToString()!).ToList();
                 List<string> q_records_codiciGruppi = q_records.Select(s => s.Dato[key_codice_gruppo].ToString()!).ToList();
 
@@ -2443,8 +2442,6 @@ out var mismatch);
 
                         List<PromoTracciatiRecord> promoRecordsArt = new List<PromoTracciatiRecord>();
                         var idPromoItem = 0;
-                        var idTracciatoItem = 0;
-                        var siglaTracciatoItem = 0;
                         if (idTracciato <= 0 && acts.idPromo > 0)
                         {
                             idPromoItem = acts.idPromo;

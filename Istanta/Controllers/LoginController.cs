@@ -13,7 +13,6 @@ using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
@@ -511,7 +510,6 @@ namespace Istanta.Controllers
                 string url = $"{ficoConfig.olympusServerUrl}/auth/checkIdentity";
                 try
                 {
-                    StringContent? content = null;
                     var response = await httpClient.GetAsync(url);
 
                     if (response.IsSuccessStatusCode)

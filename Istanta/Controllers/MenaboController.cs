@@ -10977,7 +10977,6 @@ double.TryParse(percorso.ToString(), out double valore16))
 
                         //Prima vediamo se il codice analizzato è presente all'interno di questa lavorazione ma in altre forme
                         //Per farlo devo scomporre il codice in tutti i suoi singoli e controllarne uno ad uno
-                        bool formaDiversa = false;
                         List<string> codiciCambioFormaPresenti = new List<string>();
                         foreach (string codSingolo in listCodici)
                         {
