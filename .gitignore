@@ -22,6 +22,14 @@ Thumbs.db
 # Frontend build output, caches, and test reports
 **/[Bb]uild/
 **/[Dd]ist/
+# ...ma NON le librerie client. La riga qui sopra e' pensata per l'output di
+# build; wwwroot/lib/<pacchetto>/dist/ e' un'altra cosa, e finche' e' stata
+# ignorata bootstrap, jQuery e jquery-validation non sono mai finiti in git:
+# chi clonava si ritrovava le pagine senza stile. Le due righe seguenti li
+# riammettono (serve riammettere prima la cartella, poi il contenuto: git non
+# puo' recuperare un file dentro una cartella esclusa).
+!Istanta/wwwroot/lib/**/dist/
+!Istanta/wwwroot/lib/**/dist/**
 **/[Oo]ut/
 **/[Cc]overage/
 **/.cache/
