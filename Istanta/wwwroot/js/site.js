@@ -77,6 +77,14 @@ function mostraMessaggio(msg,tipo) {
     $("#msg_container").css("display", "block");
 }
 
+// Toglie il messaggio mostrato da mostraMessaggio. Serve perche' l'avviso resta
+// finche' qualcuno non lo chiude: senza questa, dopo un errore corretto dall'utente
+// la fascia rossa resterebbe li' anche a operazione riuscita.
+function nascondiMessaggio() {
+    $("#msg_container").empty();
+    $("#msg_container").css("display", "none");
+}
+
 function getStringFromDate(date) {
 
 

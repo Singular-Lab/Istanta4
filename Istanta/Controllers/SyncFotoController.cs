@@ -2852,6 +2852,40 @@ namespace Istanta.Controllers
 
         }
 
+        /// <summary>
+        /// Controlla i campi obbligatori PRIMA di toccare Olimpo o il Source.
+        /// Ritorna null se va tutto bene, altrimenti il messaggio da mostrare all'utente.
+        /// Non solleva eccezioni: qui i problemi sono previsti, non eccezionali.
+        /// Il controllo c'e' anche nel javascript, ma questo endpoint e' raggiungibile
+        /// direttamente, quindi la validazione che conta e' questa.
+        /// </summary>
+        private string? validaLogoBollo(InputLogoBollo obj, bool fileObbligatorio)
+        {
+            if (string.IsNullOrWhiteSpace(obj.Sigla))
+                return "La sigla e' obbligatoria.";
+
+            // La tendina parte da "Seleziona tipo", che vale 0: senza questo controllo
+            // un tipo fuori elenco arrivava in fondo al metodo senza che nessun ramo lo
+            // gestisse, e la risposta era esito=true pur non avendo salvato niente.
+            if (obj.Tipo != TipoFoto.Logo && obj.Tipo != TipoFoto.Bollino &&
+                obj.Tipo != TipoFoto.Sfondo && obj.Tipo != TipoFoto.Artwork)
+                return "Tipo non valido: scegliere Logo, Bollo o Sfondo.";
+
+            if (obj.file == null)
+                return fileObbligatorio ? "Nessuna immagine caricata." : null;
+
+            if (obj.file.Length == 0)
+                return $"Il file '{obj.file.FileName}' e' vuoto.";
+
+            // Il FORMATO non si controlla: da qui si accetta qualunque tipo di file, e
+            // se non va bene e' Olimpo a rifiutarlo. L'errore che torna da lui arriva
+            // comunque all'utente, con il prefisso "Caricamento dell'immagine su Olimpo
+            // non riuscito". Qui si ferma solo il file vuoto, che non e' una questione
+            // di formato ma di caricamento andato storto.
+
+            return null;
+        }
+
         [HttpPost]
         [Route("LoghiBolli/salva")]
         public async Task<IActionResult> salvaLogoBollo([FromForm] InputLogoBollo obj)
@@ -2865,6 +2899,18 @@ namespace Istanta.Controllers
             try
             {
                 DbLoghiBolli objLoghiBolli = Utility.SingletonConfiguration.DBLOGHIBOLLI!;
+
+                // Si valida prima di tutto: se qualcosa non va, l'utente deve saperlo
+                // senza che sia gia' finito un file su Olimpo. Per un elemento nuovo il
+                // file e' obbligatorio, per uno esistente e' facoltativo (si puo' voler
+                // cambiare solo sigla o tipo).
+                bool isNuovo = string.IsNullOrEmpty(obj.Id);
+                string? erroreValidazione = validaLogoBollo(obj, isNuovo);
+                if (erroreValidazione != null)
+                {
+                    result.error = erroreValidazione;
+                    return Ok(result);
+                }
 
                 if (obj.Id != null && obj.Id != "")
                 {
@@ -2883,7 +2929,7 @@ namespace Istanta.Controllers
                         StringResult resUpload = await uploadLogoBollo(obj);
                         if (!resUpload.boolEsito)
                         {
-                            throw new Exception(resUpload.error);
+                            throw new Exception("Caricamento dell'immagine su Olimpo non riuscito: " + resUpload.error);
                         }
                         else
                         {
@@ -2901,14 +2947,7 @@ namespace Istanta.Controllers
                 }
                 else
                 {
-                    if (obj.file == null)
-                    {
-                        if (result.item == null)
-                        {
-                            throw new Exception("file required");
-                        }
-                    }
-
+                    // (il file obbligatorio per il nuovo elemento lo verifica validaLogoBollo)
                     //E' nuovo
                     LogoBollo item = new LogoBollo();
 
@@ -2918,7 +2957,7 @@ namespace Istanta.Controllers
                     {
                         if (!resUpload.boolEsito)
                         {
-                            throw new Exception(resUpload.error);
+                            throw new Exception("Caricamento dell'immagine su Olimpo non riuscito: " + resUpload.error);
                         }
 
                         item.guidId = resUpload.Esito;
@@ -2939,9 +2978,21 @@ namespace Istanta.Controllers
                     }
                     else if (obj.Tipo == TipoFoto.Artwork)
                     {
+                        if (!resUpload.boolEsito)
+                        {
+                            throw new Exception("Caricamento dell'immagine su Olimpo non riuscito: " + resUpload.error);
+                        }
+
                         item.guidId = resUpload.Esito;
 
                         result.item = item;
+                    }
+                    else
+                    {
+                        // Non dovrebbe accadere, perche' validaLogoBollo ammette solo i
+                        // quattro tipi gestiti qui sopra. Prima questo ramo non c'era e un
+                        // tipo fuori elenco usciva con esito=true senza aver salvato nulla.
+                        throw new Exception($"Tipo non gestito: {obj.Tipo}.");
                     }
 
                 }
@@ -2950,7 +3001,11 @@ namespace Istanta.Controllers
             }
             catch(Exception ex)
             {
-                result.error = ex.ToString();
+                // Il dettaglio completo va nel log (la Console e' dirottata su Serilog),
+                // all'utente il solo messaggio: prima in interfaccia arrivava lo stack
+                // trace intero, illeggibile e inutile per chi sta caricando un logo.
+                Console.WriteLine("Errore in LoghiBolli/salva: " + ex.ToString());
+                result.error = ex.Message;
             }
             
             return Ok(result);
@@ -3027,8 +3082,9 @@ namespace Istanta.Controllers
 
             }
             catch (Exception ex)
-            {                
-                result.error = ex.ToString();
+            {
+                Console.WriteLine("Errore nel caricamento su Olimpo: " + ex.ToString());
+                result.error = ex.Message;
             }
 
             return result;

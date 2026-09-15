@@ -179,6 +179,13 @@
         </nav>
     </header>
     <div class="container masterBodySpread" style="height:100%;">
+        @* Contenitore dei messaggi a video, riempito da mostraMessaggio() in site.js.
+           Sta qui e non nelle singole viste perche' mostraMessaggio e' una funzione
+           globale: finche' il div e' esistito solo in DeclinazioniMeccaniche, tutte le
+           altre pagine chiamavano mostraMessaggio e non compariva nulla, senza nemmeno
+           un errore in console. Lo usano loghibolli.js, syncfoto.js, revisore.js,
+           Etichette e Mastro. *@
+        <div id="msg_container" class="mt-2" style="display:none;"></div>
         <main role="main" class="pb-3">
             @RenderBody()
         </main>
