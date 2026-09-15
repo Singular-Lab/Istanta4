@@ -254,13 +254,33 @@ namespace Istanta.Controllers
 
             string dllFile = this.pathExternalLib + _dllNamespace + ".dll";
 
+            var ty = caricaTipoAgenzia(dllFile, _dllNamespace + "." + _dllTipo);
+            var mth = ty.GetMethod(_dllMth);
+            if (mth == null)
+                throw new Exception($"Metodo '{_dllMth}' non trovato in {ty.FullName} ({dllFile}).");
+
+            return mth.GetParameters();
+        }
+
+        // Carica la dll del cliente e ne ritrova la classe, dicendo cosa manca quando
+        // non c'e'. Prima i due chiamanti facevano "ty!.GetMethod(...)": se il tipo non
+        // c'era, il ! zittiva il compilatore e usciva un NullReferenceException nudo,
+        // che non dice ne' quale classe si cercava ne' da quale file. La causa vera e'
+        // quasi sempre una sola: la dll in external_lib e' un build precedente
+        // all'aggiunta di quel cliente, perche' dotnet publish NON la aggiorna e va
+        // ricopiata a mano. Vedi 02-modello-multicliente.md, punto 6.
+        private Type caricaTipoAgenzia(string dllFile, string nomeCompleto)
+        {
             var dll = Assembly.Load(System.IO.File.ReadAllBytes(dllFile));
-            var ty = dll.GetType(_dllNamespace + "." + _dllTipo);
-            var mth = ty!.GetMethod(_dllMth);
-            var obj = Activator.CreateInstance(ty);
+            var ty = dll.GetType(nomeCompleto);
 
+            if (ty == null)
+                throw new Exception(
+                    $"Classe '{nomeCompleto}' non trovata in {dllFile}. " +
+                    "Di solito la dll e' un build precedente all'aggiunta del cliente: " +
+                    "ricompila AgenziaLib e ricopia AgenziaLib.dll in " + this.pathExternalLib + ".");
 
-            return mth!.GetParameters();
+            return ty;
         }
 
 
@@ -276,20 +296,19 @@ namespace Istanta.Controllers
 
             string dllFile = this.pathExternalLib+ _dllNamespace + ".dll";
 
-            var dll = Assembly.Load(System.IO.File.ReadAllBytes(dllFile));
-            var ty = dll.GetType(_dllNamespace + "." + _dllTipo);
-            var mth = ty!.GetMethod(_dllMth);
+            var ty = caricaTipoAgenzia(dllFile, _dllNamespace + "." + _dllTipo);
+            var mth = ty.GetMethod(_dllMth);
             var obj = Activator.CreateInstance(ty);
 
-            ////Console.WriteLine($"Esecuzione LOGICA AGENZIA tramite {algor
-            //itmo} presente in {dllFile}");
-            //if (obj==null)
-            //    //Console.WriteLine($"ERRORE: costruttore non trovto");
-            //if (mth==null)
-            //    //Console.WriteLine($"ERRORE: metodo non trovato");
-
             if (mth == null)
+            {
+                // Comportamento storico, lasciato com'e': metodo assente vuol dire che
+                // per questo cliente quella logica non esiste, e si tira dritto. Prima
+                // pero' non lo diceva nessuno e il chiamante riceveva "" senza sapere
+                // perche'; adesso almeno finisce nel log.
+                Console.WriteLine($"AVVISO AgenziaLib: metodo '{_dllMth}' non trovato in {ty.FullName} ({dllFile}). La chiamata restituisce stringa vuota.");
                 return "";
+            }
 
             ParameterInfo[] myParams = mth!.GetParameters();            
             object[] _objP = new object[myParams.Count()];

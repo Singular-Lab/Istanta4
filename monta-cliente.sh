@@ -130,6 +130,35 @@ for d in "Istanta/wwwroot/external_source/$CLIENTE" "Istanta/wwwroot/ficoContext
     [ -d "$d" ] && echo "  c'e'    $d/" || echo "  MANCA   $d/"
 done
 
+# La classe del cliente dentro AgenziaLib.dll. E' il controllo che sfugge sempre:
+# la dll viene letta dal disco per riflessione a ogni chiamata, e "dotnet publish"
+# NON la aggiorna. Se e' un build precedente all'aggiunta del cliente, Istanta
+# compila, parte, e si rompe solo al primo scaricamento della lista, con un errore
+# che (prima della correzione in IstantaController) non diceva nemmeno quale classe
+# mancasse. Meglio saperlo adesso.
+DLL="Istanta/wwwroot/external_lib/AgenziaLib.dll"
+if [ ! -f "$DLL" ]; then
+    echo "  MANCA   $DLL"
+    esito=1
+else
+    # Non si guarda DENTRO la dll: nei metadati .NET i nomi condividono il suffisso,
+    # quindi un nome di classe puo' non comparire mai come stringa a se' (se c'e'
+    # "areaFamila", "Famila" e' la sua coda) e qualunque grep darebbe una risposta
+    # inventata. Si confronta invece la data: una dll piu' vecchia dell'ultimo
+    # sorgente modificato e' stantia, ed e' esattamente il caso che fa danno.
+    PIU_RECENTE=$(ls -t AgenziaLib/*.cs 2>/dev/null | head -1)
+    if [ -n "$PIU_RECENTE" ] && [ "$PIU_RECENTE" -nt "$DLL" ]; then
+        echo "  ATTENZIONE: $DLL e' piu' vecchia di $PIU_RECENTE."
+        echo "              La dll si carica dal disco per riflessione e dotnet publish NON la aggiorna."
+        echo "              Ricompila e ricopia a mano:"
+        echo "                dotnet build AgenziaLib/AgenziaLib.csproj -c Debug"
+        echo "                cp AgenziaLib/bin/Debug/net10.0/AgenziaLib.dll $DLL"
+        esito=1
+    else
+        echo "  c'e'    $DLL, piu' recente dei sorgenti di AgenziaLib"
+    fi
+fi
+
 echo
 echo "ISTANTA_CLIENTE=$SUFFISSO e' impostata nel profilo di avvio di Visual Studio."
 echo "Se lanci da terminale o da un altro IDE, impostala li':"
