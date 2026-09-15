@@ -74,6 +74,15 @@
     <div id="loading" style="position:fixed; width:100%; height:100%; background-color:rgb(255 255 255 / 58%); z-index:9999; text-align:center;">
         <img src="~/images/loading.gif" style="margin: 0px auto;" alt="Loading..." />        
     </div>
+    @* Contenitore dei messaggi a video, riempito da mostraMessaggio() in site.js.
+       Sta nel layout e non nelle singole viste perche' mostraMessaggio e' una funzione
+       globale: finche' il div e' esistito solo in DeclinazioniMeccaniche, tutte le altre
+       pagine lo chiamavano e non compariva nulla, senza nemmeno un errore in console.
+       Lo usano loghibolli.js, syncfoto.js, revisore.js, Etichette e Mastro.
+       E' fuori da qualunque contenitore perche' si posiziona in modo fisso: vedi
+       site.css. *@
+    <div id="msg_container" style="display:none;"></div>
+
     @{
         var _sorgentiDaCompilare = ViewBag.SorgentiDaCompilare as List<string>;
     }
@@ -179,13 +188,6 @@
         </nav>
     </header>
     <div class="container masterBodySpread" style="height:100%;">
-        @* Contenitore dei messaggi a video, riempito da mostraMessaggio() in site.js.
-           Sta qui e non nelle singole viste perche' mostraMessaggio e' una funzione
-           globale: finche' il div e' esistito solo in DeclinazioniMeccaniche, tutte le
-           altre pagine chiamavano mostraMessaggio e non compariva nulla, senza nemmeno
-           un errore in console. Lo usano loghibolli.js, syncfoto.js, revisore.js,
-           Etichette e Mastro. *@
-        <div id="msg_container" class="mt-2" style="display:none;"></div>
         <main role="main" class="pb-3">
             @RenderBody()
         </main>

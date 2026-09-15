@@ -59,3 +59,27 @@ myhr {
 .rounded-3 {
     border-radius:1.3rem !important;
 }
+
+/* Messaggi a video, riempiti da mostraMessaggio() in site.js.
+   In sovrimpressione e in posizione fissa: schermate come la sincronizzazione
+   loghi/bolli sono lunghe, e un avviso in cima alla pagina costringeva a risalire
+   tutta la lista per leggerlo.
+   z-index 1045: sopra la fascia degli avvisi sorgenti (1030) e sotto le modali di
+   Bootstrap (1055), cosi' un messaggio non copre una modale aperta.
+   L'ombra sta sull'alert e NON sul contenitore: chiudendo l'avviso col suo tasto
+   resta il contenitore vuoto, e con l'ombra addosso si vedrebbe un riquadro
+   fluttuante senza contenuto. */
+#msg_container {
+    position: fixed;
+    top: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1045;
+    width: 90%;
+    max-width: 640px;
+}
+
+#msg_container .alert {
+    margin-bottom: 0;
+    box-shadow: 0 .5rem 1rem rgba(0, 0, 0, .25);
+}
