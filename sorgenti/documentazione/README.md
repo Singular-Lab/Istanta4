@@ -54,8 +54,11 @@ Poi, quando ti serve:
    non la aggiorna.
 5. **I log dell'applicazione non sono nel journal di systemd.** `Program.cs` dirotta la Console su
    Serilog: tutto finisce in `pubblicato/logs/log-AAAAMMGG.txt`.
-6. **Il cliente si sceglie in `appsettings.json`** (`fico/nomeCliente` + `external_paths/pathSource`)
-   e quella scelta si propaga per riflessione fino a AgenziaLib. Vedi
+6. **Il cliente si sceglie con la variabile d'ambiente `ISTANTA_CLIENTE`**, che dice quale
+   `appsettings.<cliente>.json` sovrapporre; dentro quel file contano `fico/nomeCliente` e
+   `external_paths/pathSource`, e quella scelta si propaga per riflessione fino a AgenziaLib. I
+   file che dicono quale cliente è montato **non stanno in git**: dopo un clone o un pull si lancia
+   `./monta-cliente.sh <Cliente>`. Vedi
    [02-modello-multicliente.md](02-modello-multicliente.md).
 7. **`execLibFunction` lega gli argomenti per NOME del parametro, non per posizione.** Rinominare un
    parametro in `IAgenzia` rompe i chiamanti in silenzio, a runtime.

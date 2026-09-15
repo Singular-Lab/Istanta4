@@ -11,21 +11,51 @@ Ogni istanza di Istanta è configurata per **un** cliente. Se lavori su Edro21, 
 al database di Edro21, carica le configurazioni di Edro21 e usa la classe `Edro21` di AgenziaLib.
 Un'altra istanza, sulla stessa base di codice, può essere configurata per Famila.
 
-## Le quattro cose che cambiano
+## Le cinque cose che cambiano
 
-La scelta del cliente parte da **due righe** di `appsettings.json`:
+**Dal 15/09/2026 il cliente si sceglie con la variabile d'ambiente `ISTANTA_CLIENTE`.**
+`Program.cs` la legge all'avvio e sovrappone `appsettings.<cliente>.json` ad `appsettings.json`:
 
-```json
-"external_paths": {
-  "pathSource": ".../pubblicato/wwwroot/external_source/Famila/"
-},
-"fico": {
-  "nomeCliente": "Famila",
-  "contextsPath": ".../pubblicato/wwwroot/ficoContexts/Famila/"
+```csharp
+var chosenConfig = Environment.GetEnvironmentVariable("ISTANTA_CLIENTE");
+if (!string.IsNullOrWhiteSpace(chosenConfig))
+{
+    builder.Configuration
+        .AddJsonFile($"appsettings.{chosenConfig}.json", optional: false, reloadOnChange: true)
+        .AddEnvironmentVariables()
+        .AddCommandLine(args);
 }
 ```
 
-e da lì si propaga in quattro direzioni.
+Tre dettagli che contano, tutti e tre nati da altrettanti difetti della versione precedente:
+
+- **`optional: false`.** Se la variabile nomina un file che non c'è, l'avvio si ferma. Prima era
+  `optional: true`: un nome sbagliato passava in silenzio e l'applicazione partiva sul database
+  del file base.
+- **Variabili d'ambiente e riga di comando sono rimesse in coda**, dopo il json. Nella
+  configurazione di .NET una sorgente aggiunta dopo vince su quelle prima: senza quelle due righe
+  il json del cliente scavalcherebbe `ConnectionStrings__IstandaConnectionDb`, che è il modo in cui
+  il server demo riceve le stringhe di connessione (`/etc/istanta4-pgtest.env`).
+- **Vale in Debug e in Release.** Prima il blocco stava dentro un `#if DEBUG`, e in Release la
+  sovrapposizione non avveniva affatto.
+
+Il nome del cliente **non è più scritto nel sorgente**: `Program.cs` è identico su tutte le
+macchine. Chi lavora in Visual Studio trova `ISTANTA_CLIENTE` nel profilo di avvio
+(`Istanta/Properties/launchSettings.json`, che non sta in git — vedi più sotto).
+
+Dentro `appsettings.<cliente>.json` le righe che scelgono il cliente restano tre:
+
+```json
+"external_paths": {
+  "pathSource": "wwwroot/external_source/Edro21/"
+},
+"fico": {
+  "nomeCliente": "Edro21",
+  "contextsPath": "wwwroot/ficoContexts/Edro21/"
+}
+```
+
+e da lì si propaga in cinque direzioni.
 
 ### 1. La classe di AgenziaLib — per riflessione
 
@@ -118,9 +148,13 @@ js/coop/  js/craiOvest/  js/edro21/  js/famila/  js/gross/
 js/Maiora/  js/navcove/  js/pac/  js/trea/
 ```
 
-sono **l'archivio**, e **non sono codice morto**: al cambio cliente si copia a mano il file giusto
+sono **l'archivio**, e **non sono codice morto**: al cambio cliente il file giusto viene copiato
 nella radice. Chi cerca "chi carica `js/trea/agenzia.js`" non trova nessuno, e ha ragione: non lo
 carica nessuno finché non diventa la radice.
+
+**Dal 15/09/2026 la copia la fa `./monta-cliente.sh <Cliente>`, e `js/agenzia.js` non è più in
+git.** Il motivo è che quel file dice quale cliente è montato su *quella* macchina: finché era
+tracciato, il cliente di uno finiva nei diff di tutti. L'archivio resta in git ed è la fonte.
 
 Come si riconosce chi c'è adesso nella radice: **la prima riga del file è un commento con il nome
 del cliente** (`//Famila`, `//Edro21`, …).
@@ -132,12 +166,71 @@ Le due copie non sono sempre allineate: la radice può aver ricevuto correzioni 
 ha. Il 14/09 la radice aveva una guardia `if (infoEsempio != null)` che `edro21/agenzia.js` non
 aveva, e una copia futura dall'archivio avrebbe reintrodotto un `TypeError`. **Quando correggi il
 file nella radice, porta la correzione anche nell'archivio del cliente**, o la perderai al prossimo
-cambio.
+cambio — e adesso che la radice non è più in git, la perderesti per davvero, senza modo di
+recuperarla. Per questo `monta-cliente.sh` si rifiuta di sovrascrivere una radice che differisce
+dall'archivio, finché non gli si passa `--forza`.
 
 ### 4. I contesti FICO — `ficoContexts/<Cliente>/`
 
 `fico/contextsPath` punta a una cartella per cliente. **Il contenuto non è verificato** in questa
 documentazione.
+
+### 5. Il plugin InDesign — `plugin/Agenzie/<Cliente>/custom.js`
+
+Il plugin ripete **esattamente lo schema del front-end**: un solo file in radice, caricato da
+`indexNew.js:6` con `require('./custom')`, e le cartelle `plugin/Agenzie/<Cliente>/` come archivio,
+che nessuno legge mai. Anche qui la prima riga del file dice chi è montato (`//EDRO21`,
+`//Coop.fi`, …), anche qui la copia la fa `./monta-cliente.sh`, e anche qui `plugin/custom.js` non
+è in git dal 15/09/2026.
+
+Attenzione a una differenza di grafia, che è una trappola quando si copia a mano: il cliente si
+chiama `Coopfi` in `AgenziaLib` e in `plugin/Agenzie/`, ma la sua cartella javascript si chiama
+`js/coop/`. La mappa completa sta dentro `monta-cliente.sh`.
+
+Come si riconosce un `custom.js` di generazione recente: **ha `callCustom: false`**. Le versioni
+vecchie ce l'hanno a `true` o non ce l'hanno affatto. Al 15/09/2026 solo la radice e
+`Agenzie/Edro21/` erano aggiornate; gli altri cinque archivi sono di generazione precedente.
+
+Il plugin ha poi una sua configurazione locale, `plugin/ipconfig.json`, con gli indirizzi di
+Istanta e di Olimpo e l'interruttore `testMode`. **Non è in git** (`.gitignore`:
+`**/ipconfig*.json`) e va procurato a parte: senza, il `require` della riga 19 di `indexNew.js`
+fallisce e il plugin non si carica affatto.
+
+---
+
+## I quattro file che non stanno in git
+
+Dicono tutti la stessa cosa — **quale cliente è montato su questa macchina** — e per questo nessuno
+dei quattro è tracciato: se lo fossero, il cliente montato da uno comparirebbe nei diff di tutti, e
+un `git pull` cambierebbe il cliente sotto i piedi a chi sta lavorando.
+
+| file | cosa sceglie | da dove si ottiene |
+|---|---|---|
+| `Istanta/appsettings.<cliente>.json` | database, servizi, le tre righe del cliente | a mano, o dal responsabile del cliente |
+| `Istanta/Properties/launchSettings.json` | `ISTANTA_CLIENTE` per Visual Studio | generato da `monta-cliente.sh` dal modello `launchSettings.template.json` |
+| `Istanta/wwwroot/js/agenzia.js` | il front-end del cliente | copiato da `monta-cliente.sh` da `js/<cliente>/` |
+| `plugin/custom.js` | la logica InDesign del cliente | copiato da `monta-cliente.sh` da `plugin/Agenzie/<Cliente>/` |
+
+Più `plugin/ipconfig.json`, che non sceglie il cliente ma gli indirizzi, e vale la stessa regola.
+
+**Le fonti restano tutte in git**: gli archivi per cliente e il modello del profilo di avvio. Quello
+che non passa è solo la *scelta*.
+
+```bash
+./monta-cliente.sh Edro21           # monta i file del cliente e scrive ISTANTA_CLIENTE
+./monta-cliente.sh Edro21 --forza   # sovrascrive anche una radice divergente dall'archivio
+```
+
+Lo script si ferma da solo in due casi: se un file in radice differisce dal suo archivio (per non
+cancellare una correzione che lì non è recuperabile, non essendo più in git), e se il montaggio è
+fallito, nel qual caso **non** tocca `launchSettings.json` — perché una macchina con il server su un
+cliente e i file di un altro è la situazione più difficile da diagnosticare.
+
+> **Quando questo cambiamento arriva sulle altre macchine.** Al primo `git pull` che contiene la
+> rimozione dal tracciamento, git **cancella** `js/agenzia.js`, `plugin/custom.js` e
+> `launchSettings.json` dalla copia di lavoro, perché non sono più file tracciati. Chi tira deve
+> lanciare `./monta-cliente.sh <Cliente>` subito dopo, o si ritrova front-end e plugin senza il file
+> del cliente.
 
 ---
 
@@ -180,14 +273,18 @@ ma i punti da toccare sono tutti e soli questi:
 
 1. `AgenziaLib/NuovoCliente.cs` — `public class NuovoCliente : IAgenzia`, e implementa i 24 metodi
    del contratto. Il modo più rapido è partire da `Coopfi.cs`, che è la più lineare.
-2. `wwwroot/js/nuovocliente/agenzia.js` — copia da un cliente simile, cambia la prima riga in
-   `//NuovoCliente`, e ricordati di copiarla nella **radice** al momento del deploy.
+2. `wwwroot/js/nuovocliente/agenzia.js` — copia da un cliente simile e cambia la prima riga in
+   `//NuovoCliente`. In radice ci finisce con `./monta-cliente.sh`, non a mano.
 3. `external_source/NuovoCliente/` — copia **tutti e quattordici** i file da `vergine/` e
    **compilali**. La fascia gialla ti dirà quali mancano, ma non può dirti se il contenuto è giusto.
 4. `ficoContexts/NuovoCliente/`.
-5. `appsettings.json` — `fico/nomeCliente`, `external_paths/pathSource`, `fico/contextsPath`, e la
-   stringa di connessione al database di quel cliente.
-6. Ricompila AgenziaLib e **copia a mano** `AgenziaLib.dll` in `pubblicato/wwwroot/external_lib/`.
+5. `plugin/Agenzie/NuovoCliente/custom.js` — se il cliente usa il plugin InDesign. Parti da
+   `Agenzie/Edro21/custom.js`, che è l'unico archivio di generazione recente.
+6. `Istanta/appsettings.nuovocliente.json` — `fico/nomeCliente`, `external_paths/pathSource`,
+   `fico/contextsPath`, e la stringa di connessione al database di quel cliente. Il nome del file
+   deve corrispondere a quello che si mette in `ISTANTA_CLIENTE`.
+7. La riga nella mappa dentro `monta-cliente.sh`: cliente, cartella js, cartella del plugin.
+8. Ricompila AgenziaLib e **copia a mano** `AgenziaLib.dll` in `pubblicato/wwwroot/external_lib/`.
 
-Il punto 6 è quello che si dimentica sempre, e il sintomo è sconcertante: il codice nuovo c'è nei
+L'ultimo punto è quello che si dimentica sempre, e il sintomo è sconcertante: il codice nuovo c'è nei
 sorgenti, la build è pulita, e a runtime continua a girare quello vecchio.

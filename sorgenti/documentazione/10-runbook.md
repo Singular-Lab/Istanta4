@@ -19,9 +19,17 @@ lavora d'ora in poi.
 ```bash
 git clone https://github.com/rapidmind/Istanta4.git
 cd Istanta4
+./monta-cliente.sh Edro21
 ```
 
-## 2. Crea `appsettings.json` — il passo che blocca tutti
+**La seconda riga non è facoltativa.** Dal 15/09/2026 i file che dicono quale cliente è montato non
+stanno in git — clonando non ce li hai, e senza di loro il front-end e il plugin non hanno il file
+del cliente. `monta-cliente.sh` li copia dagli archivi, scrive `ISTANTA_CLIENTE` nel profilo di
+avvio e ti elenca quello che manca ancora. I clienti riconosciuti sono `Edro21`, `Coopfi`, `Pac`,
+`Trea`, `Famila` e `Gross`; dettagli in
+[02-modello-multicliente.md](02-modello-multicliente.md).
+
+## 2. Crea `appsettings.<cliente>.json` — il passo che blocca tutti
 
 **`appsettings.json` non è in git.** Il `.gitignore` ha la riga `appsettings*.json`, quindi
 clonando non ce l'hai e l'applicazione non parte.
@@ -88,6 +96,13 @@ La struttura completa, campo per campo:
 `fico/contextsPath`. Devono essere coerenti fra loro: se `nomeCliente` è `Edro21` ma `pathSource`
 punta a `Famila/`, l'applicazione carica la classe di Edro21 e le configurazioni di Famila, e i
 sintomi sono incomprensibili.
+
+**Quale file venga letto lo decide `ISTANTA_CLIENTE`.** `Program.cs` sovrappone
+`appsettings.<cliente>.json` ad `appsettings.json`, quindi con `ISTANTA_CLIENTE=edro21` conta
+`appsettings.edro21.json`. Se la variabile non è impostata vale il solo `appsettings.json`; se
+nomina un file che non c'è, **l'avvio si ferma** invece di partire sul database sbagliato. In
+Visual Studio la variabile sta nel profilo di avvio, che `monta-cliente.sh` scrive per te; da
+terminale va esportata a mano.
 
 Sul server demo le stringhe di connessione **non stanno in `appsettings.json`**: le sovrascrive
 `/etc/istanta4-pgtest.env` con le variabili
@@ -161,9 +176,17 @@ sorgenti, la build è pulita, e a runtime gira quello vecchio.
 
 ## 7. Il front-end del cliente
 
+Se hai lanciato `./monta-cliente.sh <Cliente>` al passo 1 è già a posto, e lo stesso vale per
+`plugin/custom.js`. La copia a mano equivalente sarebbe:
+
 ```bash
-cp soluzione/Istanta/wwwroot/js/<cliente>/agenzia.js soluzione/Istanta/wwwroot/js/agenzia.js
+cp Istanta/wwwroot/js/<cliente>/agenzia.js Istanta/wwwroot/js/agenzia.js
+cp plugin/Agenzie/<Cliente>/custom.js      plugin/custom.js
 ```
+
+ma lo script è preferibile: conosce la mappa dei nomi (il cliente `Coopfi` ha la cartella
+javascript `js/coop/`) e si rifiuta di sovrascrivere una radice che differisce dall'archivio,
+il che eviterebbe di perdere una correzione che lì non è più recuperabile.
 
 Controlla la prima riga del file nella radice: dev'essere `//<NomeCliente>`.
 Poi ricopia i file statici in `pubblicato/wwwroot/js/`.

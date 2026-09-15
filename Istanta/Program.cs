@@ -72,16 +72,31 @@ System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Inst
 
 var builder = WebApplication.CreateBuilder(args);
 
-#if DEBUG
-
-var chosenConfig = "coopfi";
-
-builder.Configuration
-    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-    .AddJsonFile($"appsettings.{chosenConfig}.json", optional: true, reloadOnChange: true);
-
-
-#endif
+// IL CLIENTE MONTATO SU QUESTA MACCHINA
+// Si sceglie con la variabile d'ambiente ISTANTA_CLIENTE (es. ISTANTA_CLIENTE=edro21),
+// che sovrappone appsettings.<cliente>.json a appsettings.json.
+// Il nome del cliente NON sta piu nel sorgente: ogni postazione ne monta uno diverso,
+// e Program.cs deve restare identico per tutti o quella riga torna in ogni diff.
+// Prima era "var chosenConfig" cablato dentro un #if DEBUG, con due difetti:
+// in Release la sovrapposizione non avveniva affatto, e un nome sbagliato passava
+// in silenzio per via di optional:true. Adesso vale in Debug e in Release, e se la
+// variabile nomina un file che non c'e l'avvio si ferma, invece di partire sul
+// database sbagliato.
+// appsettings.json lo carica gia CreateBuilder: qui si aggiunge solo la sovrapposizione.
+var chosenConfig = Environment.GetEnvironmentVariable("ISTANTA_CLIENTE");
+if (!string.IsNullOrWhiteSpace(chosenConfig))
+{
+    builder.Configuration
+        .AddJsonFile($"appsettings.{chosenConfig}.json", optional: false, reloadOnChange: true)
+        // Variabili d'ambiente e riga di comando vanno RIMESSE in coda, dopo il json.
+        // Una sorgente aggiunta dopo vince su quelle prima, e CreateBuilder le aveva
+        // gia messe: senza queste due righe il json del cliente le scavalcherebbe.
+        // Sul server demo e' proprio da li che arrivano le stringhe di connessione
+        // (/etc/istanta4-pgtest.env, ConnectionStrings__IstandaConnectionDb e
+        // ConnectionStrings__IstantaSession), che devono continuare a vincere.
+        .AddEnvironmentVariables()
+        .AddCommandLine(args);
+}
 
 
 builder.Services.AddHttpClient();
