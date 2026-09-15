@@ -1315,6 +1315,50 @@ out var mismatch);
                 sw.Stop();
                 Console.WriteLine($"STEP 5: {sw.ElapsedMilliseconds.ToString()}");
 
+                // ORIGINI DELLE REFERENZE
+                // Area, canale e file xlsx di TUTTE le istanze, non solo di quella del
+                // record che finira' in riga. Serve perche' quando area e canale non
+                // distinguono le righe (e capita: la chiave di deduplica qui sotto e'
+                // "codice|area_canale"), una referenza presente in piu' tracciati compare
+                // una volta sola, con il nome file del solo rappresentante: un nome vero
+                // ma parziale, che non dice da quali altri tracciati arriva il prodotto.
+                var originiPerRef = new Dictionary<string, List<OrigineTracciato>>();
+                var originiPerGruppo = new Dictionary<string, List<OrigineTracciato>>();
+
+                void aggiungiOrigine(Dictionary<string, List<OrigineTracciato>> mappa, string chiave, OrigineTracciato origine)
+                {
+                    if (string.IsNullOrEmpty(chiave))
+                        return;
+
+                    if (!mappa.TryGetValue(chiave, out var elenco))
+                    {
+                        elenco = new List<OrigineTracciato>();
+                        mappa[chiave] = elenco;
+                    }
+
+                    // Stessa area, stesso canale, stesso file: e' la stessa origine. Senza
+                    // questo controllo l'elenco sarebbe lungo quanto i record del tracciato.
+                    if (!elenco.Any(o => o.Area == origine.Area && o.Canale == origine.Canale && o.Xlsx == origine.Xlsx))
+                        elenco.Add(origine);
+                }
+
+                foreach (var qItemOrigine in q_records)
+                {
+                    string xlsxOrigine = qItemOrigine.Dato.TryGetValue(GLOBAL_VARIABLES_FICO.keyXlsxTracciato, out var valXlsx)
+                        ? valXlsx?.ToString() ?? ""
+                        : "";
+
+                    var origine = new OrigineTracciato
+                    {
+                        Area = qItemOrigine.Area ?? "",
+                        Canale = qItemOrigine.Canale ?? "",
+                        Xlsx = xlsxOrigine
+                    };
+
+                    aggiungiOrigine(originiPerRef, qItemOrigine.Dato.TryGetValue(key_codice_ref, out var vRef) ? vRef?.ToString() ?? "" : "", origine);
+                    aggiungiOrigine(originiPerGruppo, qItemOrigine.Dato.TryGetValue(key_codice_gruppo, out var vGrp) ? vGrp?.ToString() ?? "" : "", origine);
+                }
+
                 DateTime d5 = DateTime.Now;
 
                 sw = new Stopwatch();
@@ -1412,8 +1456,6 @@ out var mismatch);
                         }
                         item.isGruppo = false;
                         item.customLabelForDescrizioneRegionale = antlrController.ParseInputByPattern(item.recordInTracciato);
-
-
 
                         result.Data.Add(item);
 
@@ -2222,6 +2264,31 @@ out var mismatch);
                 //var soloRecordGruppi = finalList.Where(f => f.isGruppo).ToList();
                 //result.Data = finalList.Where(f => !f.isGruppo).ToList();
                 //result.Data.AddRange(soloRecordGruppi);
+                // ORIGINI: si assegnano QUI, a lista finale composta, non quando le righe
+                // vengono create. Poco sopra i doppioni per codice vengono tolti e alcune
+                // righe sostituite dal rappresentante garante, che e' un oggetto NUOVO
+                // (CreaSingoloRappresentanteDaGarante): assegnandole prima, su quelle righe
+                // andavano perse. La chiave e' il codice della riga che sopravvive.
+                foreach (var itemFinale in finalList)
+                {
+                    if (itemFinale.recordInTracciato == null)
+                        continue;
+
+                    // Il valore si legge GREZZO dal record, esattamente come si e' fatto
+                    // costruendo le mappe qui sopra. GetDatoValueOrNull passa da
+                    // NormalizeForCompare e restituirebbe un valore normalizzato, che con
+                    // quelle chiavi non combacerebbe: avrebbe compilato senza trovare nulla.
+                    string campoChiave = itemFinale.isGruppo ? key_codice_gruppo : key_codice_ref;
+                    string chiaveOrigini = itemFinale.recordInTracciato.TryGetValue(campoChiave, out var valChiave)
+                        ? valChiave?.ToString() ?? ""
+                        : "";
+
+                    var mappaOrigini = itemFinale.isGruppo ? originiPerGruppo : originiPerRef;
+                    itemFinale.origini = mappaOrigini.TryGetValue(chiaveOrigini, out var elencoOrigini)
+                        ? elencoOrigini
+                        : null;
+                }
+
                 result.Data = finalList;
 
                 // Ora selezioni come facevi tu il primo per gruppo

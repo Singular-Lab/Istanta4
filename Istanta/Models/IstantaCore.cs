@@ -1002,6 +1002,19 @@ namespace Istanta.Models
         public ArticoloImpaginato[]? articoli { get; set; }
         public string? prova { get; set; }
     }
+    /// <summary>
+    /// Da dove arriva un'istanza di una referenza: area, canale e nome del file xlsx
+    /// importato. La stessa referenza puo' esistere in piu' aree/canali, ognuna con il
+    /// suo file di origine. In riga se ne vedeva uno solo, quello del record scelto
+    /// come rappresentante, che quindi mentiva su tutte le altre istanze.
+    /// </summary>
+    public class OrigineTracciato
+    {
+        public string Area { get; set; } = "";
+        public string Canale { get; set; } = "";
+        public string Xlsx { get; set; } = "";
+    }
+
     public class ArticoloInRevisione
     {
         public Int64? idRec;
@@ -1022,6 +1035,9 @@ namespace Istanta.Models
         public List<string>? allEtichette;
         public List<string>? etichetteVisual;
         public List<RegoleMastro> regoleMastro = new List<RegoleMastro>();
+        // Tutte le origini della referenza (o del gruppo): una voce per area/canale.
+        // Il Revisore ci costruisce sopra l'elenco che si apre dal bottone XLS.
+        public List<OrigineTracciato>? origini;
         public string? customLabelForDescrizioneRegionale;
 
         public ArticoloInRevisione Clona()

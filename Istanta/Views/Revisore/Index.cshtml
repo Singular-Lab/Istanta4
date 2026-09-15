@@ -641,6 +641,22 @@
     </div>
 </div>
 
+<!-- Modal con l'elenco dei tracciati da cui arriva una referenza.
+     Si apre dal bottone XLS della riga, che compare al posto del nome del file
+     quando le istanze sono piu' d'una. Il corpo lo riempie mostraOriginiXls()
+     in components.js. -->
+<div class="modal fade" id="originiXlsModal" tabindex="-1" aria-labelledby="originiXlsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="originiXlsModalLabel">Tracciati di origine</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Chiudi"></button>
+            </div>
+            <div class="modal-body" id="originiXlsBody"></div>
+        </div>
+    </div>
+</div>
+
 <!-- Modal per formData -->
 <div class="modal fade" id="formDataModal" tabindex="-1" aria-labelledby="formDataModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-scrollable">

@@ -288,13 +288,13 @@
                 //htmlItem.find("#a_scheda_articolo").attr("href", "SchedaArticolo?id=" + ref_id);
                 htmlItem.find("#a_scheda_articolo").attr("href", "SchedaArticolo?codice=" + ref_cod);
                 htmlItem.find("#a_scheda_articolo").html("<b>" + ref_cod + "</b>");
-                htmlItem.find("#xls_file").html(obj.recordInTracciato[keyTracciatoXlsx]);
+                renderOrigineXls(htmlItem, obj);
 
                 htmlItem.find("#lista_foto_secondarie").css("display", "none");
             }
             else {
                 htmlItem.find("#a_scheda_articolo").html("<b>" + (codGruppo.length > 50 ? codGruppo.slice(0, 50) + "..." : codGruppo) + "</b>");
-                htmlItem.find("#xls_file").html(obj.recordInTracciato[keyTracciatoXlsx]);
+                renderOrigineXls(htmlItem, obj);
             }
 
             //}
@@ -619,7 +619,7 @@
                 }
             }
             htmlItem.find("#a_scheda_articolo").html("<b>" + obj.codice + "</b>");
-            htmlItem.find("#xls_file").html(obj.recordInTracciato[keyTracciatoXlsx]);
+            renderOrigineXls(htmlItem, obj);
 
 
         }
@@ -742,7 +742,7 @@ function renderGruppiModalitaSottogruppo(templateName, listaGruppiNonCorrisponde
                 let template = $("#singoloDelSottogruppo").clone();
                 htmlItemSingolo = $(template.html());
                 htmlItemSingolo.find("#a_scheda_articolo").html("<b>" + singolo.recordInTracciato[keyRefCodice] + "</b>")
-                htmlItemSingolo.find("#xls_file").html(singolo.recordInTracciato[keyTracciatoXlsx])
+                renderOrigineXls(htmlItemSingolo, singolo)
 
                 htmlItemSingolo.find(".fas").on("click", function () {
                     revInstance.copyCodice($(this));
@@ -808,4 +808,73 @@ function addMismatchKeyVisual(keyInMismatch, itemToModify, style, ignoraValue, f
             }
         }
     }
+}
+
+// ============================================================================
+// ORIGINE DEL DATO: da quale file xlsx arriva la referenza
+// ============================================================================
+
+// Riempie il campo XLS della riga. Quando le istanze sono piu' d'una - la stessa
+// referenza importata in aree o canali diversi, ognuno con il suo file - scrivere
+// il nome di UN file solo dice una mezza verita': e' il file del record scelto
+// come rappresentante, e non dice niente degli altri. In quel caso al posto del
+// nome compare un bottone che apre l'elenco completo. Con una sola istanza resta
+// il nome scritto, che si legge senza dover cliccare.
+// L'elenco arriva dal server in obj.origini (RevisoreController.getListaRevisione2).
+function renderOrigineXls(htmlItem, obj) {
+    let campo = htmlItem.find("#xls_file");
+    if (campo.length === 0)
+        return;
+
+    let origini = obj.origini || [];
+
+    if (origini.length > 1) {
+        campo.html("<b>XLS (" + origini.length + ")</b>");
+        campo.attr("title", "Referenza presente in " + origini.length + " tracciati: clicca per l'elenco");
+        campo.css("cursor", "pointer");
+        campo.off("click").on("click", function (e) {
+            e.preventDefault();
+            mostraOriginiXls(origini);
+        });
+    }
+    else {
+        // Una sola origine (o nessuna informazione): il comportamento di prima.
+        // Attenzione ai nomi: in C# la classe OrigineTracciato ha Area, Canale e Xlsx
+        // con l'iniziale maiuscola, ma la serializzazione li manda in minuscolo. Qui
+        // vanno letti come arrivano sul filo, altrimenti si legge undefined in silenzio.
+        let nome = origini.length === 1
+            ? origini[0].xlsx
+            : (obj.recordInTracciato ? obj.recordInTracciato[keyTracciatoXlsx] : "");
+        campo.text(nome != null ? nome : "");
+        campo.off("click");
+        campo.css("cursor", "");
+    }
+}
+
+// Riempie e apre la modale con l'elenco delle origini: una riga per area/canale,
+// con il file da cui quell'istanza e' stata importata.
+function mostraOriginiXls(origini) {
+    let corpo = $("#originiXlsBody");
+    corpo.empty();
+
+    let tabella = $("<table class='table table-sm mb-0'><thead><tr>" +
+        "<th>Area / Canale</th><th>File xlsx</th></tr></thead><tbody></tbody></table>");
+    let tbody = tabella.find("tbody");
+
+    for (let i = 0; i < origini.length; i++) {
+        let o = origini[i];
+        let areaCanale = [o.area, o.canale]
+            .filter(function (v) { return v != null && v !== ""; })
+            .join(" / ");
+
+        let tr = $("<tr></tr>");
+        // .text() e non .html(): i nomi dei file arrivano dai dati importati e non
+        // devono poter iniettare markup nella pagina.
+        tr.append($("<td></td>").text(areaCanale !== "" ? areaCanale : "-"));
+        tr.append($("<td></td>").text(o.xlsx != null && o.xlsx !== "" ? o.xlsx : "-"));
+        tbody.append(tr);
+    }
+
+    corpo.append(tabella);
+    new bootstrap.Modal(document.getElementById("originiXlsModal")).show();
 }
