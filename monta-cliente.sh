@@ -40,7 +40,7 @@ case "$CLIENTE" in
     Coopfi) JS=coop;   PLG=Coopfi ;;
     Pac)    JS=pac;    PLG=Pac    ;;
     Trea)   JS=trea;   PLG=Trea   ;;
-    Famila) JS=famila; PLG=""     ;;
+    Famila) JS=famila; PLG=Famila ;;
     Gross)  JS=gross;  PLG=""     ;;
     *)
         echo "Uso: $0 <Cliente> [--forza]"

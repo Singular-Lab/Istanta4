@@ -112,3 +112,6 @@ Istanta/Properties/launchSettings.json
 !appsettings*.template.json
 !.env.example
 !.env.template
+# I modelli di configurazione invece passano: sono senza credenziali e servono
+# a chi clona per costruirsi il proprio appsettings.<cliente>.json.
+!Istanta/appsettings.*.template.json
