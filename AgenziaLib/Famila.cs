@@ -373,11 +373,19 @@ namespace AgenziaLib
                 DbTipoDiExport tipiExportDB = JObject.Parse(File.ReadAllText(pathTipiDiExport)).ToObject<DbTipoDiExport>();
                 FicoNamingConvention ncDB = JObject.Parse(File.ReadAllText(pathNamingConvention)).ToObject<FicoNamingConvention>();
 
-                // Sigla area (Famila: unica) e prefisso stile per area (convenzione COOP:
-                // nessun prefisso per "A", altrimenti "<sigla>.").
-                Area areaKit = areeDB.aree.FirstOrDefault(a => a.guidID == kit.guidArea) ?? areeDB.aree.FirstOrDefault();
-                string siglaAreaKit = areaKit?.sigla ?? "";
-                string prefixFolder = (siglaAreaKit == "A") ? "" : $"{(siglaAreaKit != "B1" ? siglaAreaKit : "B")}.";
+                // NIENTE prefisso di cartella sugli stili di paragrafo.
+                // Qui c'era la convenzione di Coop, arrivata copiando Coopfi.cs: per le aree
+                // diverse da "A" anteponeva "<sigla>." al nome dello stile, perche' nei
+                // documenti di Coop ogni area ha un suo gruppo di stili di paragrafo.
+                // Famila non funziona cosi': ha una sola area, "TOS" (Toscana), e nei suoi
+                // documenti gli stili stanno tutti nella radice. Il plugin (utility.js,
+                // parseStile) interpreta il punto come "gruppo.stile", quindi il nome
+                // "TOS.SCONTO" veniva cercato in un gruppo TOS inesistente: parseStile
+                // restituiva null e la preanalisi segnalava un mismatch di stile su ogni box
+                // con txt_sconto. Il prefisso per giunta era applicato a uno solo dei dieci
+                // campi compilati, quindi gli stili sarebbero finiti meta' nel gruppo e meta'
+                // nella radice. Se un domani Famila avesse piu' aree con i rispettivi gruppi,
+                // il prefisso va rimesso su TUTTI gli stili di paragrafo, non su uno.
 
                 // Chiave del campo "codice box" sul record: è il valore che l'impaginazione
                 // usa per scegliere il box. NON basta calcolare la meccanica in una locale:
@@ -674,7 +682,7 @@ namespace AgenziaLib
                                         int scontoInt = (int)Math.Floor(scontoDec);
                                         // BOX_SOTTOCOSTO: sconto con "-" davanti; altrimenti senza segno.
                                         string segnoSconto = (codiceBox == "BOX_SOTTOCOSTO") ? "-" : "";
-                                        interprete.assignCompiledField("txt_sconto", prefixFolder + stileParagSconto, $"{segnoSconto}{scontoInt}%");
+                                        interprete.assignCompiledField("txt_sconto", stileParagSconto, $"{segnoSconto}{scontoInt}%");
                                     }
 
                                     // prezzo_continuo: "invece di € X".
