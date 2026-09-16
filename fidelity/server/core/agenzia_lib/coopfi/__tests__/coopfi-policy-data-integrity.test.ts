@@ -8,9 +8,9 @@ function sha256(value: string): string {
 
 describe("coopfi policy catalog integrity", () => {
   it("keeps legacy counts and mandatory sections", () => {
-    expect(catalog.ruoli.length).toBe(52);
+    expect(catalog.ruoli.length).toBe(57);
     expect(catalog.aree.length).toBe(37);
-    expect(catalog.settori.length).toBe(335);
+    expect(catalog.settori.length).toBe(337);
     expect(catalog.settoriFinali.length).toBe(14);
   });
 
@@ -23,9 +23,9 @@ describe("coopfi policy catalog integrity", () => {
         .join("|")
     );
 
-    expect(roleDigest).toBe("920dc743d809ef18155f5c45ef6c679976789d43974cc45f229be96bb50cca9f");
+    expect(roleDigest).toBe("64bc1ed3f1f38f77faf1b49507db6b4fdf6bb77d99f69bf95b169886792cd318");
     expect(areaDigest).toBe("78c38b6bdc0f62e8b339ca4e0ad2a8c8e73ffc0c8f82d47b2f475a2452064b22");
-    expect(settoreDigest).toBe("0ffbd33e9a0414e0ef660b97696dd7e46ec7aa6042cba820869e92bd4675fb34");
+    expect(settoreDigest).toBe("2bd7c17c0f8d9a3d9df490024d2792e2df5fb41427dcfdde99849f7d56a69655");
   });
 
   it("keeps known duplicates and critical reparto mappings", () => {

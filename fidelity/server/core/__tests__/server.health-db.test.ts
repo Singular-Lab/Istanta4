@@ -19,7 +19,7 @@ vi.mock('../session', () => ({
 }));
 vi.mock('../logger', () => ({
   httpLogger: (_req: any, _res: any, next: any) => next(),
-  log: { info: vi.fn(), error: vi.fn() },
+  log: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
   tryCatch: vi.fn(async (fn: () => Promise<void> | void) => fn())
 }));
 
@@ -29,7 +29,7 @@ describe('GET /api/health/db', () => {
   it('ritorna 503 se il monitor non e inizializzato', async () => {
     monitoringMock.getConnectionMonitor.mockReturnValue(undefined);
 
-    const app = createHttpApp();
+    const app = await createHttpApp();
     const res = await request(app).get('/api/health/db');
 
     expect(res.status).toBe(503);
@@ -46,7 +46,7 @@ describe('GET /api/health/db', () => {
       getAverageMetrics: vi.fn().mockReturnValue({ queryMs: 12 })
     });
 
-    const app = createHttpApp();
+    const app = await createHttpApp();
     const res = await request(app).get('/api/health/db');
 
     expect(res.status).toBe(200);
