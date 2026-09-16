@@ -75,6 +75,12 @@ jobs:
                 AgenziaLib/*)
                   agenzialib=true
                   ;;
+                tests/*)
+                  # La suite di test .NET copre Istanta e AgenziaLib: sono quelli
+                  # da verificare, non l'intera suite.
+                  istanta=true
+                  agenzialib=true
+                  ;;
                 fidelity/*)
                   fidelity=true
                   ;;
@@ -137,6 +143,10 @@ jobs:
         if: steps.changes.outputs.agenzialib == 'true'
         run: dotnet build AgenziaLib/AgenziaLib.csproj -c Release
 
+      - name: Test suite .NET
+        if: steps.changes.outputs.istanta == 'true' || steps.changes.outputs.agenzialib == 'true'
+        run: dotnet test tests/Istanta.Suite.Tests/Istanta.Suite.Tests.csproj -c Release
+
       - name: Build Correggo4
         if: steps.changes.outputs.correggo4 == 'true'
         run: dotnet build correggo4/app/Correggo4/Correggo4.csproj -c Release
@@ -147,10 +157,33 @@ jobs:
         with:
           node-version: 26
 
+      # The server currently declares Express 4 types. Transitive middleware
+      # dependencies otherwise hoist Express 5 types alongside the server copy.
+      - name: Align Fidelity Express types
+        if: steps.changes.outputs.fidelity == 'true'
+        working-directory: fidelity
+        shell: bash
+        run: |
+          node --input-type=commonjs <<'NODE'
+          const fs = require('node:fs');
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          pkg.overrides = {
+            ...pkg.overrides,
+            '@types/express': '4.17.21',
+            '@types/express-serve-static-core': '4.19.6'
+          };
+          fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          NODE
+
       - name: Install Fidelity dependencies
         if: steps.changes.outputs.fidelity == 'true'
         working-directory: fidelity
         run: npm install --install-strategy=hoisted --legacy-peer-deps --no-audit --no-fund
+
+      - name: Inspect Fidelity Express types
+        if: steps.changes.outputs.fidelity == 'true'
+        working-directory: fidelity
+        run: npm ls @types/express @types/express-serve-static-core
 
       - name: Type-check Fidelity client
         if: steps.changes.outputs.fidelity == 'true'
