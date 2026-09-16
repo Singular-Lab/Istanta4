@@ -1,4 +1,4 @@
-using CsvHelper;
+﻿using CsvHelper;
 using CsvHelper.Configuration;
 using CsvHelper.TypeConversion;
 using DocumentFormat.OpenXml.Bibliography;
@@ -9917,7 +9917,8 @@ double.TryParse(percorso.ToString(), out double valore16))
                     }
 
 
-                    var listeModificate = ficoController.updateDatiFromMetaPromoLavorazioni(prepLista.records, idLavorazione, kit!);
+                    Dictionary<string, bool> noRenderPerRef = new Dictionary<string, bool>();
+                    var listeModificate = ficoController.updateDatiFromMetaPromoLavorazioni(prepLista.records, idLavorazione, kit!, noRenderPerRef);
                     prepLista.records = listeModificate;
                     //logAss.WriteLine("GET SCHEDA REF >> step9");
 
@@ -9935,7 +9936,9 @@ double.TryParse(percorso.ToString(), out double valore16))
                     {
                         foreach (var itemLista in resultAgenzia.liste)
                         {
-
+                            //membriGruppoFoto esiste solo dopo l'export di agenzia: e' qui che
+                            //l'opzione di rendering letta dai meta puo' essere applicata alle foto.
+                            FicoProcessController.applicaNoRenderAiMembriGruppoFoto(itemLista.Records, noRenderPerRef);
                             resultGlobale.records.AddRange(itemLista.Records);
                         }
 

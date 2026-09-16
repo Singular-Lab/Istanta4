@@ -4693,6 +4693,8 @@ async function impaginaBox(meccanica, pagCoinvolta, bounds, itemRef, pathLavoraz
                                                         try {
                                                             var label = (pluginMiddleware.getCampo("nomeFotoSecondaria") !== null ? pluginMiddleware.getCampo("nomeFotoSecondaria") + "$" : "foto_secondaria$") + elemento.codRef;
                                                             FotoPlacer.placeFoto(nomeFoto, photo);
+                                                            //Impaginata comunque, resa invisibile se richiesto dai meta della lavorazione
+                                                            FotoPlacer.applicaNoRender(photo, elemento.noRender);
                                                             secondarie++;
                                                             //mettiamo foto sul livello InPagina
                                                             photo.label = label;
@@ -4713,6 +4715,10 @@ async function impaginaBox(meccanica, pagCoinvolta, bounds, itemRef, pathLavoraz
                                                     var nomeFoto = itemRef["Foto.Nome"];
                                                     field.label = (pluginMiddleware.getCampo("nomeFotoPrimaria") !== null ? pluginMiddleware.getCampo("nomeFotoPrimaria")+"$" :"immagine$") + itemRef["Referenza.Codice"];
                                                     FotoPlacer.placeFoto(nomeFoto, field);
+                                                    //L'opzione di rendering della primaria viaggia dentro membriGruppoFoto,
+                                                    //non sul record contenitore del box.
+                                                    var membroPrimaria = itemRef.membriGruppoFoto.find(m => m.statoSelezione == 1);
+                                                    FotoPlacer.applicaNoRender(field, membroPrimaria != null && membroPrimaria.noRender);
                                                     listElementToSendBack.push(field);
                                                 } catch (err) {
                                                     console.log(err);

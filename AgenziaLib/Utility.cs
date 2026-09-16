@@ -574,7 +574,10 @@ namespace AgenziaLib
                 if (dict.ContainsKey(Edro21Context.Meta.keyStatoSelezione))
                 {
                     byte statoSel = Convert.ToByte(dict[Edro21Context.Meta.keyStatoSelezione]);
-                    if (statoSel == (Byte)2)
+                    //La primaria viaggia nella stessa lista delle secondarie perche' anch'essa
+                    //porta l'opzione di rendering del box. I consumatori che impaginano solo le
+                    //secondarie continuano a filtrare su statoSelezione == 2.
+                    if (statoSel == (Byte)1 || statoSel == (Byte)2)
                     {
                         _list.Add(new FotoElementoGruppo()
                         {
@@ -582,6 +585,8 @@ namespace AgenziaLib
                             nomeFoto = dict[GLOBAL_VARIABLES_FICO.keyFotoNome].ToString(),
                             statoSelezione = statoSel,
                             hash = dict[GLOBAL_VARIABLES_FICO.keyFotoHash].ToString(),
+                            //noRender non e' un dato del record: viene valorizzato da Istanta
+                            //dai meta della lavorazione dopo l'export di agenzia.
                         });
                     }
                 }

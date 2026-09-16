@@ -71,6 +71,11 @@ namespace IstantaLib
         public string nomeFoto { get; set; }
         public Byte statoSelezione { get; set; }
         public string hash { get; set; }
+        /// <summary>
+        /// Quando true il Plugin impagina comunque questa foto ma la rende invisibile
+        /// nel documento. L'assenza del valore equivale a false.
+        /// </summary>
+        public bool noRender { get; set; }
     }
     public class FicoContextField
     {

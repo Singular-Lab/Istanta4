@@ -2722,9 +2722,23 @@ const FotoPlacer=
         return warningMessage;
     },
 
-    updateFoto:function(nomeFoto, box, fotoRectangle, codice, statoSelezione = null)
+    applicaNoRender:function(fotoRectangle, noRender)
+    {
+        if (fotoRectangle == null) {
+            return;
+        }
+        try {
+            fotoRectangle.visible = noRender ? false : true;
+        }
+        catch (err) {
+            console.log("Impossibile applicare l'opzione di rendering alla foto: " + err);
+        }
+    },
+
+    updateFoto:function(nomeFoto, box, fotoRectangle, codice, statoSelezione = null, noRender = false)
     {
         //Se nomeFoto viene passato come null, allora si tratta di istruire la funzione a RIMUOVERE il rectangle se trovato
+        //noRender true: la foto viene comunque impaginata e posizionata, ma resa invisibile nel documento
 
         var lastFoto = null;
         var primaria = null;
@@ -2782,6 +2796,10 @@ const FotoPlacer=
                 }
                 
                 FotoPlacer.placeFoto(nomeFoto, fotoRectangle, null);
+
+                //L'opzione di rendering non altera geometria ne' posizionamento: la foto occupa
+                //lo stesso spazio di prima, cambia solo la sua visibilita'.
+                FotoPlacer.applicaNoRender(fotoRectangle, noRender);
 
                 if (fotoCreata) {
                     //sfacciamo il box salvandoci l'etichetta e i suoi elementi, poi ricomponiamo un nuovo box con la foto, i vecchi elementi e assegnamo l'etichetta

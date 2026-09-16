@@ -3511,6 +3511,16 @@ const schedaRef = {
         }
         var codice_gruppo = schedaRef[0].recordInTracciato["Scatto.CodiceGruppo"];
         let me = this;
+        //L'opzione di rendering non sta sul record del box ma sulle sue foto primarie/secondarie,
+        //che il server consegna dentro membriGruppoFoto del primario.
+        var primarioDelGruppo = schedaRef.find(f => f.recordInTracciato.StatoSelezione == 1);
+        var membriGruppoFoto = (primarioDelGruppo != null && primarioDelGruppo.recordInTracciato.membriGruppoFoto != null)
+            ? primarioDelGruppo.recordInTracciato.membriGruppoFoto
+            : [];
+        var noRenderDiCodice = function (cod) {
+            var membro = membriGruppoFoto.find(m => m.codRef == cod);
+            return membro != null && membro.noRender === true;
+        };
         me.resetFotoPS();
         var listFotoImpaginate = [];
         var listRectangles = [];
@@ -3575,6 +3585,8 @@ const schedaRef = {
                 var label1 = $('<label for="checkbox1">P:</label>'); // Crea l'etichetta per il primo checkbox
                 var checkbox2 = $('<input class="secondary-check" codice="' + objItem["Referenza.Codice"] + '" type="checkbox" ' + (objItem["StatoSelezione"] == 2 ? ' checked ' : ' ') + ' style="vertical-align: middle;">'); // Crea il secondo checkbox
                 var label2 = $('<label for="checkbox2">S:</label>'); // Crea l'etichetta per il secondo checkbox
+                var checkbox3 = $('<input class="norender-check" codice="' + objItem["Referenza.Codice"] + '" type="checkbox" ' + (noRenderDiCodice(objItem["Referenza.Codice"]) ? ' checked ' : ' ') + ' style="vertical-align: middle;" title="Impagina la foto ma non renderizzarla">'); // Opzione di rendering
+                var label3 = $('<label for="checkbox3">NR:</label>'); // Crea l'etichetta per il checkbox di rendering
                 var text = $('<span>(' + objItem['Referenza.Codice'] + ') ' + objItem["Descrizioni.Descrizione1"] + '</span>'); // Crea il testo
 
                 // Imposta lo stile
@@ -3582,10 +3594,12 @@ const schedaRef = {
                 checkbox1.css("background-color", "blue");
                 label2.css({ "font-size": "12px", "color": "yellow", "margin-left": "5px" });
                 checkbox2.css("background-color", "yellow");
+                label3.css({ "font-size": "12px", "color": "lightgray", "margin-left": "5px" });
+                checkbox3.css("background-color", "gray");
                 text.css({ "font-size": "12px", "color": "white" });
 
                 //checkboxCol.append(label1, checkbox1, label2, checkbox2); // Aggiunge i checkbox alla colonna dei checkbox
-                checkBoxCol_r2_c.append(label1, checkbox1, label2, checkbox2, text); // Aggiunge i checkbox alla colonna dei checkbox
+                checkBoxCol_r2_c.append(label1, checkbox1, label2, checkbox2, label3, checkbox3, text); // Aggiunge i checkbox alla colonna dei checkbox
 
                 //textCol.append(text); // Aggiunge il testo alla colonna del testo
             }
@@ -3788,7 +3802,8 @@ const schedaRef = {
         if (objItem["Scatto.CodiceGruppo"].split(",").length > 1) {
             var confermaButton = $('<sp-action-button id="confermaButton" style="color:lightgreen; margin-right:10px;">Applica</sp-action-button>');
             confermaButton.on('click', function () {
-                var checkboxes = $("#cambiaPS").find("input[type='checkbox']:checked");
+                //Solo i checkbox di selezione: quello di rendering non concorre a primaria/secondaria
+                var checkboxes = $("#cambiaPS").find("input.primary-check:checked, input.secondary-check:checked");
                 var checkboxesArray = Array.from(checkboxes);
                 var listaSingoli = checkboxesArray.map(function (checkbox) {
                     var statoSelezione = $(checkbox).hasClass('primary-check') ? 1 : 2;
@@ -3804,7 +3819,7 @@ const schedaRef = {
                 });
 
                 //ora aggiungiamo alla lista tutti i checkbox non selezionati e mettiamo lo stato selezione a 3
-                var checkboxesNotSelected = $("#cambiaPS").find("input[type='checkbox']:not(:checked)");
+                var checkboxesNotSelected = $("#cambiaPS").find("input.primary-check:not(:checked), input.secondary-check:not(:checked)");
                 var checkboxesNotSelectedArray = Array.from(checkboxesNotSelected);
                 var listaSingoliNotSelected = checkboxesNotSelectedArray.map(function (checkbox) {
                     var cod = $(checkbox).attr('codice');
@@ -3892,7 +3907,8 @@ const schedaRef = {
                     //if (item.StatoSelezione != objItem.StatoSelezione) {
                         objToSend.ps.push({
                             codRef: cod,
-                            stato: item.StatoSelezione
+                            stato: item.StatoSelezione,
+                            noRender: $("#cambiaPS").find("input.norender-check[codice='" + cod + "']").is(':checked')
                         });
                     //}
                 }
@@ -3945,10 +3961,17 @@ const schedaRef = {
                             if (item != null && objToSend.ps.find(f => f.codRef == cod) != null) {
                                 //cerchiamo in listfotoimpaginate l'elemento con l'immagine uguale a objItem["Foto.Nome"]
                                 objItem.StatoSelezione = item.StatoSelezione;
+                                var psSalvato = objToSend.ps.find(f => f.codRef == cod);
+                                var noRenderSalvato = psSalvato != null && psSalvato.noRender === true;
+                                //teniamo allineato il dato locale: la schermata viene ridisegnata da qui
+                                var membroLocale = membriGruppoFoto.find(m => m.codRef == cod);
+                                if (membroLocale != null) {
+                                    membroLocale.noRender = noRenderSalvato;
+                                }
                                 var fotoFound = listFotoImpaginate.find(f => f.imgName == objItem["Foto.Nome"])
                                 let imgRectangle = fotoFound != null ? fotoFound.rectangle : null;
                                 //box = me.placeFoto(objItem.StatoSelezione != 3 ? objItem["Foto.Nome"] : null, box, imgRectangle, objItem["Referenza.Codice"], objItem.StatoSelezione);
-                                let result = FotoPlacer.updateFoto(objItem.StatoSelezione != 3 ? objItem["Foto.Nome"] : null, box, imgRectangle, objItem["Referenza.Codice"], objItem.StatoSelezione);
+                                let result = FotoPlacer.updateFoto(objItem.StatoSelezione != 3 ? objItem["Foto.Nome"] : null, box, imgRectangle, objItem["Referenza.Codice"], objItem.StatoSelezione, noRenderSalvato);
                                 box = result.box;
                                 imgRectangle = result.fotoRectangle;
                                 if(objItem.StatoSelezione == 1){
