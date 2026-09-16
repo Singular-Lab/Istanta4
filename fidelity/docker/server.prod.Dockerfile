@@ -7,8 +7,9 @@ COPY package*.json ./
 COPY server/package*.json ./server/
 COPY src/package*.json ./src/
 
-# Install deterministico da lockfile
-RUN npm ci --install-strategy=hoisted --no-audit --no-fund
+# Il repository storico non versiona package-lock.json: installa i workspace
+# senza dipendere da un lockfile assente.
+RUN npm install --install-strategy=hoisted --legacy-peer-deps --no-audit --no-fund
 
 # Copia il sorgente completo per la build del client
 COPY . .

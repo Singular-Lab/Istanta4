@@ -1,0 +1,261 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verification:
+    name: verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Detect affected components
+        id: changes
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          istanta=false
+          agenzialib=false
+          fidelity=false
+          olimpo=false
+          correggo4=false
+          plugin=false
+
+          mark_all() {
+            istanta=true
+            agenzialib=true
+            fidelity=true
+            olimpo=true
+            correggo4=true
+            plugin=true
+          }
+
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]] \
+            || [[ -z "$BASE_SHA" ]] \
+            || [[ "$BASE_SHA" =~ ^0+$ ]] \
+            || ! git cat-file -e "$BASE_SHA^{commit}"; then
+            mark_all
+            printf '%s\n' 'Full verification requested.' > "$RUNNER_TEMP/changed-files.txt"
+          else
+            git diff --name-only "$BASE_SHA" "$HEAD_SHA" > "$RUNNER_TEMP/changed-files.txt"
+
+            while IFS= read -r file; do
+              case "$file" in
+                Istanta/*)
+                  istanta=true
+                  ;;
+                IstantaLib/*)
+                  istanta=true
+                  agenzialib=true
+                  ;;
+                AgenziaLib/*)
+                  agenzialib=true
+                  ;;
+                fidelity/*)
+                  fidelity=true
+                  ;;
+                olimpo/*)
+                  olimpo=true
+                  ;;
+                correggo4/*)
+                  correggo4=true
+                  ;;
+                plugin/*)
+                  plugin=true
+                  ;;
+                .github/workflows/*|global.json|Directory.Build.*|Directory.Packages.props|NuGet.Config)
+                  mark_all
+                  ;;
+                AGENTS.md|*/AGENTS.md|*.md|docs/*|artifacts/*)
+                  ;;
+                *)
+                  # Un file condiviso o non ancora classificato potrebbe influire
+                  # su qualunque componente: scegli la verifica conservativa.
+                  mark_all
+                  ;;
+              esac
+            done < "$RUNNER_TEMP/changed-files.txt"
+          fi
+
+          {
+            echo "istanta=$istanta"
+            echo "agenzialib=$agenzialib"
+            echo "fidelity=$fidelity"
+            echo "olimpo=$olimpo"
+            echo "correggo4=$correggo4"
+            echo "plugin=$plugin"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            printf '### Componenti verificati\n\n'
+            printf -- '- Istanta: `%s`\n' "$istanta"
+            printf -- '- AgenziaLib: `%s`\n' "$agenzialib"
+            printf -- '- Fidelity: `%s`\n' "$fidelity"
+            printf -- '- Olimpo: `%s`\n' "$olimpo"
+            printf -- '- Correggo4: `%s`\n' "$correggo4"
+            printf -- '- Plugin: `%s`\n\n' "$plugin"
+            printf '<details><summary>File modificati</summary>\n\n```text\n'
+            cat "$RUNNER_TEMP/changed-files.txt"
+            printf '```\n</details>\n'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Set up .NET
+        if: steps.changes.outputs.istanta == 'true' || steps.changes.outputs.agenzialib == 'true' || steps.changes.outputs.correggo4 == 'true'
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build Istanta
+        if: steps.changes.outputs.istanta == 'true'
+        run: dotnet build Istanta/Istanta.csproj -c Release
+
+      - name: Build AgenziaLib
+        if: steps.changes.outputs.agenzialib == 'true'
+        run: dotnet build AgenziaLib/AgenziaLib.csproj -c Release
+
+      - name: Build Correggo4
+        if: steps.changes.outputs.correggo4 == 'true'
+        run: dotnet build correggo4/app/Correggo4/Correggo4.csproj -c Release
+
+      - name: Set up Node.js for Fidelity
+        if: steps.changes.outputs.fidelity == 'true'
+        uses: actions/setup-node@v6
+        with:
+          node-version: 26
+
+      - name: Install Fidelity dependencies
+        if: steps.changes.outputs.fidelity == 'true'
+        working-directory: fidelity
+        run: npm install --install-strategy=hoisted --legacy-peer-deps --no-audit --no-fund
+
+      - name: Type-check Fidelity client
+        if: steps.changes.outputs.fidelity == 'true'
+        working-directory: fidelity
+        run: npm run type-check
+
+      - name: Type-check Fidelity server
+        if: steps.changes.outputs.fidelity == 'true'
+        working-directory: fidelity
+        run: npm run type-check:server
+
+      - name: Test Fidelity
+        if: steps.changes.outputs.fidelity == 'true'
+        working-directory: fidelity
+        run: npm run test:server
+
+      - name: Build Fidelity
+        if: steps.changes.outputs.fidelity == 'true'
+        working-directory: fidelity
+        run: npm run build
+
+      - name: Set up Node.js for Olimpo
+        if: steps.changes.outputs.olimpo == 'true'
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Install Olimpo dependencies
+        if: steps.changes.outputs.olimpo == 'true'
+        working-directory: olimpo
+        run: npm install --legacy-peer-deps --no-audit --no-fund
+
+      - name: Test Olimpo
+        if: steps.changes.outputs.olimpo == 'true'
+        working-directory: olimpo
+        run: npm test -- --runInBand
+
+      - name: Build Olimpo
+        if: steps.changes.outputs.olimpo == 'true'
+        working-directory: olimpo
+        run: npm run build
+
+      - name: Validate Plugin manifest
+        if: steps.changes.outputs.plugin == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -e '
+            (.id | type == "string" and length > 0) and
+            (.name | type == "string" and length > 0) and
+            (.version | type == "string" and length > 0)
+          ' plugin/manifest.json > /dev/null
+
+      - name: Set up Docker Buildx
+        if: steps.changes.outputs.istanta == 'true' || steps.changes.outputs.agenzialib == 'true' || steps.changes.outputs.fidelity == 'true' || steps.changes.outputs.olimpo == 'true' || steps.changes.outputs.correggo4 == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Validate Istanta production image
+        if: steps.changes.outputs.istanta == 'true'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Istanta/Dockerfile
+          target: final
+          push: false
+          cache-from: type=gha,scope=ci-istanta
+          cache-to: type=gha,mode=max,scope=ci-istanta
+
+      - name: Validate AgenziaLib artifact
+        if: steps.changes.outputs.agenzialib == 'true'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Istanta/Dockerfile
+          target: agenzialib-export
+          push: false
+          cache-from: type=gha,scope=ci-agenzialib
+          cache-to: type=gha,mode=max,scope=ci-agenzialib
+
+      - name: Validate Fidelity production image
+        if: steps.changes.outputs.fidelity == 'true'
+        uses: docker/build-push-action@v7
+        with:
+          context: ./fidelity
+          file: ./fidelity/docker/server.prod.Dockerfile
+          push: false
+          cache-from: type=gha,scope=ci-fidelity
+          cache-to: type=gha,mode=max,scope=ci-fidelity
+
+      - name: Validate Olimpo production image
+        if: steps.changes.outputs.olimpo == 'true'
+        uses: docker/build-push-action@v7
+        with:
+          context: ./olimpo
+          file: ./olimpo/Dockerfile
+          push: false
+          cache-from: type=gha,scope=ci-olimpo
+          cache-to: type=gha,mode=max,scope=ci-olimpo
+
+      - name: Validate Correggo4 production image
+        if: steps.changes.outputs.correggo4 == 'true'
+        uses: docker/build-push-action@v7
+        with:
+          context: ./correggo4
+          file: ./correggo4/Dockerfile
+          push: false
+          cache-from: type=gha,scope=ci-correggo4
+          cache-to: type=gha,mode=max,scope=ci-correggo4
