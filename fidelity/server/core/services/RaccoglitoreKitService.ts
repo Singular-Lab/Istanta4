@@ -581,9 +581,9 @@ export class RaccoglitoreKitService implements IRaccoglitoreKitService {
       if (data.filtro == undefined || Array.isArray(data.filtro) == false) {
         data.filtro = [];
       }
-      log.debug("filtro", data.filtro);
-      log.debug("declinazioni", data.declinazioni);
-      log.debug("tipiDiExportInKit", data.tipiDiExportInKit);
+      log.debug("filtro", { filtro: data.filtro });
+      log.debug("declinazioni", { declinazioni: data.declinazioni });
+      log.debug("tipiDiExportInKit", { tipiDiExportInKit: data.tipiDiExportInKit });
 
       const sortedData = {
         ...data,

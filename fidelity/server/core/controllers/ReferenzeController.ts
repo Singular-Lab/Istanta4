@@ -107,7 +107,7 @@ export class ReferenzeController extends BaseController {
             id: uuidv4(),
           });
         }
-        const log: FileItemKitLog = {
+        const fileLog: FileItemKitLog = {
           id: uuidv4(),
           guid_kit_runtime: idKitRuntime,
           nome_file: "main.json",
@@ -145,7 +145,7 @@ export class ReferenzeController extends BaseController {
           }
         }
         await this.referenzeService.bulkCreateReferenze(referenze);
-        await container.get<IKitRuntimeService>(TYPES.KitRuntimeService).insertNewFileRuntimeLog(log);
+        await container.get<IKitRuntimeService>(TYPES.KitRuntimeService).insertNewFileRuntimeLog(fileLog);
         res.status(HttpStatusCode.OK).json({ esito: true, content: referenze, error: "" });
       }
     } catch (error: any) {
