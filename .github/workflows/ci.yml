@@ -143,8 +143,10 @@ jobs:
         if: steps.changes.outputs.agenzialib == 'true'
         run: dotnet build AgenziaLib/AgenziaLib.csproj -c Release
 
+      # Il progetto di test puo' non essere presente sul ref in verifica: in quel
+      # caso lo step viene saltato invece di fallire con MSB1009.
       - name: Test suite .NET
-        if: steps.changes.outputs.istanta == 'true' || steps.changes.outputs.agenzialib == 'true'
+        if: (steps.changes.outputs.istanta == 'true' || steps.changes.outputs.agenzialib == 'true') && hashFiles('tests/Istanta.Suite.Tests/Istanta.Suite.Tests.csproj') != ''
         run: dotnet test tests/Istanta.Suite.Tests/Istanta.Suite.Tests.csproj -c Release
 
       - name: Build Correggo4
