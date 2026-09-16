@@ -118,6 +118,7 @@ namespace Istanta.Utility
                                 else
                                 {
                                     fieldGiaEsistente.stato = upPSField.stato;
+                                    fieldGiaEsistente.noRender = upPSField.noRender;
                                 }
                             }
                         }

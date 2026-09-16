@@ -961,6 +961,12 @@ namespace Istanta.Models
     {
         public string? codRef { get; set; }//Codice della referenza di cui è stata alterata la foto o la selezione
         public StatoSelezioneFoto stato { get; set; }
+        /// <summary>
+        /// Opzione di rendering della foto primaria/secondaria del box. Quando true il
+        /// Plugin impagina l'immagine ma la rende invisibile in fase di impaginazione.
+        /// I meta gia' salvati non contengono la chiave: l'assenza vale false.
+        /// </summary>
+        public bool noRender { get; set; } = false;
     }
 
 

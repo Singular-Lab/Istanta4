@@ -1,4 +1,4 @@
-using Antlr4.Runtime.Tree;
+﻿using Antlr4.Runtime.Tree;
 using DocumentFormat.OpenXml.Bibliography;
 using DocumentFormat.OpenXml.Drawing;
 using DocumentFormat.OpenXml.Drawing.Charts;
@@ -2765,9 +2765,11 @@ namespace Istanta.Controllers
                             agenziaFunc = "esportaVolantino";
                         }
 
+                        Dictionary<string, bool> noRenderPerRef = new Dictionary<string, bool>();
+
                         if (mode == FicoCombinazioneKitReadMode.Advanced)
                         {
-                            var listeModificate = updateDatiFromMetaPromoLavorazioni(recordsFiltrati, idLavorazione, kit/*, confronto*/);
+                            var listeModificate = updateDatiFromMetaPromoLavorazioni(recordsFiltrati, idLavorazione, kit/*, confronto*/, noRenderPerRef);
                             recordsFiltrati = listeModificate;
                         }
 
@@ -2784,6 +2786,9 @@ namespace Istanta.Controllers
                         {
                             foreach (var itemLista in resultAgenzia.liste)
                             {
+                                //membriGruppoFoto esiste solo dopo l'export di agenzia: e' qui che
+                                //l'opzione di rendering letta dai meta puo' essere applicata alle foto.
+                                applicaNoRenderAiMembriGruppoFoto(itemLista.Records, noRenderPerRef);
                                 resultGlobale.records.AddRange(itemLista.Records);
                             }
 
@@ -4118,7 +4123,52 @@ namespace Istanta.Controllers
             return result;
         }
 
-        public List<ArticoloInKit> updateDatiFromMetaPromoLavorazioni(List<ArticoloInKit> artInkit, int idLavorazione, FicoRuntimeKit kit/*, bool confronto = false*/)
+        /// <summary>
+        /// Chiave della mappa noRender: l'opzione appartiene alla singola foto primaria/secondaria
+        /// di un box, quindi va qualificata dal codice gruppo oltre che dal codice referenza.
+        /// </summary>
+        private static string chiaveNoRenderFoto(string? codiceGruppo, string? codRef)
+        {
+            return (codiceGruppo ?? "") + "|" + (codRef ?? "");
+        }
+
+        /// <summary>
+        /// Riporta l'opzione noRender letta dai meta della lavorazione sulle voci foto del box.
+        /// noRender non e' un dato del record: vive solo dentro membriGruppoFoto, cioe' sulle
+        /// primarie/secondarie contenute nel box, mai sul record contenitore.
+        /// </summary>
+        public static void applicaNoRenderAiMembriGruppoFoto(List<ArticoloInKit>? records, Dictionary<string, bool>? noRenderPerRef)
+        {
+            if (records == null || noRenderPerRef == null || noRenderPerRef.Count == 0)
+                return;
+
+            var keyCodGruppo = Enum.GetName(AddestramentoRuoli.Scatto) + "." + GLOBAL_VARIABLES.keyScattoCodiceGruppo;
+
+            foreach (var record in records)
+            {
+                if (record?.recordInTracciato == null)
+                    continue;
+
+                if (!record.recordInTracciato.TryGetValue(GLOBAL_VARIABLES.keyMembriGruppoFoto, out var membriObj))
+                    continue;
+
+                if (membriObj is not List<FotoElementoGruppo> membri)
+                    continue;
+
+                record.recordInTracciato.TryGetValue(keyCodGruppo, out var codGruppoObj);
+                var codGruppo = codGruppoObj?.ToString();
+
+                foreach (var membro in membri)
+                {
+                    if (noRenderPerRef.TryGetValue(chiaveNoRenderFoto(codGruppo, membro.codRef), out var noRender))
+                    {
+                        membro.noRender = noRender;
+                    }
+                }
+            }
+        }
+
+        public List<ArticoloInKit> updateDatiFromMetaPromoLavorazioni(List<ArticoloInKit> artInkit, int idLavorazione, FicoRuntimeKit kit/*, bool confronto = false*/, Dictionary<string, bool>? noRenderPerRef = null)
         {
             var keyCodGruppo = Enum.GetName(AddestramentoRuoli.Scatto) + "." + GLOBAL_VARIABLES.keyScattoCodiceGruppo;
             var keyRefCodice = Enum.GetName(AddestramentoRuoli.Referenza) + "." + GLOBAL_VARIABLES.keyRefCodice;
@@ -4230,6 +4280,10 @@ namespace Istanta.Controllers
                                         if (psItem != null)
                                         {
                                             item.recordInTracciato[keyStatoSelezione] = (int)psItem.stato;
+                                            if (noRenderPerRef != null)
+                                            {
+                                                noRenderPerRef[chiaveNoRenderFoto(group.Key.CodiceGruppo, psItem.codRef)] = psItem.noRender;
+                                            }
                                         }
                                     }
 
@@ -4292,6 +4346,10 @@ namespace Istanta.Controllers
                         if (fieldGiaEsistente != null)
                         {
                             item.recordInTracciato[keyStatoSelezione] = (int)fieldGiaEsistente.stato;
+                            if (noRenderPerRef != null)
+                            {
+                                noRenderPerRef[chiaveNoRenderFoto(group.Key.CodiceGruppo, fieldGiaEsistente.codRef)] = fieldGiaEsistente.noRender;
+                            }
                         }
                     }
                     if (storeField.foto != null)
