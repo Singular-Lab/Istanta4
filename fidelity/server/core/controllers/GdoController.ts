@@ -26,7 +26,6 @@ export class GdoController extends BaseController {
     // GDO Management
     this.router.get('/getGDOById/:id', authMiddleware, this.getGDOById.bind(this));
     this.router.get('/getGDOByUtenteId', authMiddleware, this.getGDOByUtenteId.bind(this));
-    this.router.put('/saveGestionePagineSingular', authMiddleware, permissionGuard('impostazioni.gestisci_pagine_singular'), this.saveGestionePagineSingular.bind(this));
     this.router.get('/get_all_ruoli_gdo', authMiddleware, this.getAllRuoliGDO.bind(this));
     this.router.get('/get_all_gdo', authMiddleware, this.getAllGDO.bind(this));
     this.router.get('/get_all_aree_canali_combinazioni', authMiddleware, permissionGuard('gdo.gestisci_aree_canali'), this.getAllAreeCanaliECombinazioni.bind(this));
@@ -171,22 +170,6 @@ export class GdoController extends BaseController {
       this.handleError(res, error);
     }
   }
-
-  private async saveGestionePagineSingular(req: Request, res: Response): Promise<void> {
-    try {
-      const { idGdo, gestionePagineSingulari } = req.body;
-      if (!idGdo || !gestionePagineSingulari) {
-        this.sendResponse(res, HttpStatusCode.BAD_REQUEST, { message: "Dati mancanti" });
-        return;
-      }
-
-      const result = await this.gdoService.saveGestionePagineSingular(idGdo, gestionePagineSingulari);
-      this.sendResponse(res, HttpStatusCode.OK, result);
-    } catch (error: any) {
-      this.handleError(res, error);
-    }
-  }
-
 
   private async getTuttiIWorkspaceDaGDO(req: Request, res: Response): Promise<void> {
     try {

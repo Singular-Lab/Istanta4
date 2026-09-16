@@ -134,7 +134,7 @@ export class ConnectionMonitor {
 
       const health = await this.healthCheck();
       if (health.status !== 'healthy') {
-        log.warn('Database health check degraded', health);
+        log.warn('Database health check degraded', { health });
       }
     }, this.config.checkIntervalMs);
 

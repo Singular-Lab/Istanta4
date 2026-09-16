@@ -7,5 +7,4 @@ export interface IGdoService {
   getGDOByUtenteId(id: string): Promise<GDOResponseDTO | null>;
   getAllRuoliGDO(): Promise<RuoloUtenteGDOResponseDTO[]>;
   getAllGDO(): Promise<GDOResponseDTO[]>;
-  //saveGestionePagineSingular(...args: unknown[]): Promise<unknown>;
 }

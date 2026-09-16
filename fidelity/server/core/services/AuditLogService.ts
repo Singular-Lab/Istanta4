@@ -728,7 +728,7 @@ export class AuditLogService {
         })
       };
     } catch (error) {
-      log.warn('AuditLogService: impossibile arricchire nome/cognome utente', error instanceof Error ? error : new Error(String(error)));
+      log.warn('AuditLogService: impossibile arricchire nome/cognome utente', { err: error instanceof Error ? error : new Error(String(error)) });
       return {
         ...result,
         items: result.items.map(item => this.sanitizeAuditItemForFrontend({
