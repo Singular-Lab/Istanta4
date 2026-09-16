@@ -320,7 +320,9 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
                 if (!format1Value || !format1Value.includes("+")) continue;
 
                 const valoreTema = String(record[this.CHIAVE_CAMPO_MENABO] ?? "").trim();
-                if (!this.isTemaExcludedFromFormatPlusSubgroups(valoreTema)) continue;
+                //I temi in TEMI_ESCLUSI_DA_FORMAT_PLUS restano nel proprio gruppo tema:
+                //la condizione era invertita rispetto al nome, e ci finivano dentro soltanto loro.
+                if (this.isTemaExcludedFromFormatPlusSubgroups(valoreTema)) continue;
 
                 addGroupRecord("format1", "FORMAT+", record);
             }

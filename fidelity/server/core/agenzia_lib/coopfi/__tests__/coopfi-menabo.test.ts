@@ -25,13 +25,15 @@ describe("coopfi menabo", () => {
       buildTracciato("canale-1", "area-1", [ortoRecord, { ...ortoRecord }, viniRecord]),
       buildTracciato("canale-1", "area-2", [ortoDuplicate]),
       buildTracciato("canale-2", "area-1", [viniRecord]),
-    ], { tipoDivisione: "canale", filtroCanale: "canale-1" });
+    ], { tipoDivisione: "canale", dataDivisione: [] });
 
     expect(result.tipoDivisione).toBe("canale");
-    expect(result.risultati).toHaveLength(1);
-    expect(result.risultati.map(s => s.guidCanale)).toEqual(["canale-1"]);
+    //Il contratto identifica la sezione con id (guid lowercase) e label, non con guidCanale.
+    expect(result.risultati).toHaveLength(2);
+    expect(result.risultati.map(s => s.id)).toEqual(["canale-1", "canale-2"]);
 
-    const canale1 = result.risultati[0];
+    const canale1 = result.risultati.find(s => s.id === "canale-1")!;
+    expect(canale1.label).toBe("canale-1");
     expect(canale1.raggruppamento.map(g => [g.valore_campo, g.conteggio])).toEqual([
       ["Ortofrutta", 1],
       ["Vini", 1],
@@ -52,11 +54,12 @@ describe("coopfi menabo", () => {
       buildTracciato("canale-1", "area-1", [record]),
       buildTracciato("canale-2", "area-1", [{ ...record, "Scatto.CodiceGruppo": "G002" }]),
       buildTracciato("canale-1", "area-2", [{ ...record, "Scatto.CodiceGruppo": "G003" }]),
-    ], { tipoDivisione: "area" });
+    ], { tipoDivisione: "area", dataDivisione: [] });
 
     expect(result.tipoDivisione).toBe("area");
     expect(result.risultati).toHaveLength(2);
-    expect(result.risultati.map(s => s.guidArea)).toEqual(["area-1", "area-2"]);
+    expect(result.risultati.map(s => s.id)).toEqual(["area-1", "area-2"]);
+    expect(result.risultati.map(s => s.label)).toEqual(["area-1", "area-2"]);
   });
 
   it("splits results by area_e_canale", async () => {
@@ -66,14 +69,19 @@ describe("coopfi menabo", () => {
       buildTracciato("canale-1", "area-1", [record]),
       buildTracciato("canale-1", "area-2", [{ ...record, "Scatto.CodiceGruppo": "G002" }]),
       buildTracciato("canale-2", "area-1", [{ ...record, "Scatto.CodiceGruppo": "G003" }]),
-    ], { tipoDivisione: "area_e_canale" });
+    ], { tipoDivisione: "area_e_canale", dataDivisione: [] });
 
     expect(result.tipoDivisione).toBe("area_e_canale");
     expect(result.risultati).toHaveLength(3);
-    expect(result.risultati.map(s => `${s.guidCanale}:${s.guidArea}`)).toEqual([
+    expect(result.risultati.map(s => s.id)).toEqual([
       "canale-1:area-1",
       "canale-1:area-2",
       "canale-2:area-1",
+    ]);
+    expect(result.risultati.map(s => s.label)).toEqual([
+      "canale-1 / area-1",
+      "canale-1 / area-2",
+      "canale-2 / area-1",
     ]);
   });
 
@@ -89,7 +97,7 @@ describe("coopfi menabo", () => {
         { tema: "Dispensa", format1: "X+Y", "Scatto.CodiceGruppo": "G003", codice_referenza: "003" },
         { tema: "Cantina", format1: "SenzaPlus", "Scatto.CodiceGruppo": "G004", codice_referenza: "004" },
       ]),
-    ], { tipoDivisione: "canale" });
+    ], { tipoDivisione: "canale", dataDivisione: [] });
 
     const sezioneA = result.risultati.find((r) => r.id === "a");
     const sezioneB = result.risultati.find((r) => r.id === "b");

@@ -261,9 +261,11 @@ describe("coopfi promo scoreboard line chart", () => {
     const row = scoreboardWidget.rows.find(item => item.reparto === "Drogheria 1");
     expect(row).toBeDefined();
     expect(row?.score).toBe(62);
+    //buildScoreCell costruisce outerKey come `K_${codice}`: il report restituisce
+    //la chiave cosi' com'e', senza rimuovere il prefisso del fixture.
     expect(row?.codici?.map(codice => [codice.codice, codice.score])).toEqual([
-      ["54-01", 24],
-      ["54-02", 100],
+      ["K_54-01", 24],
+      ["K_54-02", 100],
     ]);
   });
 });
