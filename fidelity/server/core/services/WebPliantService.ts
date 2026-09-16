@@ -563,7 +563,7 @@ export class WebPliantService implements IWebPliantService {
         })
       ]);
 
-      log.debug("combinazioni_runtime dato massivo per webpliant", combinazioni_runtime)
+      log.debug("combinazioni_runtime dato massivo per webpliant", { combinazioni_runtime })
 
       if (!combinazioni_runtime || !workspaces) {
         throw wrapDatabaseError(new Error("Errore durante il recupero dei dati massivi per webpliant"), {
@@ -754,7 +754,7 @@ export class WebPliantService implements IWebPliantService {
           }
         });
         const result = Array.from(new Set(uniqueValues)).map((value) => String(value));
-        log.debug('Risultato:', result);
+        log.debug('Risultato:', { result });
         return result;
       } else {
         console.error('Nessuna referenza trovata per il workspace:', idWorkspace);
