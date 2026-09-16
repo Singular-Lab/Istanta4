@@ -75,6 +75,12 @@ jobs:
                 AgenziaLib/*)
                   agenzialib=true
                   ;;
+                tests/*)
+                  # La suite di test .NET copre Istanta e AgenziaLib: sono quelli
+                  # da verificare, non l'intera suite.
+                  istanta=true
+                  agenzialib=true
+                  ;;
                 fidelity/*)
                   fidelity=true
                   ;;
@@ -136,6 +142,10 @@ jobs:
       - name: Build AgenziaLib
         if: steps.changes.outputs.agenzialib == 'true'
         run: dotnet build AgenziaLib/AgenziaLib.csproj -c Release
+
+      - name: Test suite .NET
+        if: steps.changes.outputs.istanta == 'true' || steps.changes.outputs.agenzialib == 'true'
+        run: dotnet test tests/Istanta.Suite.Tests/Istanta.Suite.Tests.csproj -c Release
 
       - name: Build Correggo4
         if: steps.changes.outputs.correggo4 == 'true'
