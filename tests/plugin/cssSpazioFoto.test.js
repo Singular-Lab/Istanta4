@@ -151,3 +151,69 @@ test('a pari area vince il primo spazio, come faceva il confronto originale', ()
 
     assert.strictEqual(scelta.candidato, primo);
 });
+
+test('col criterio centrato uno spazio che attraversa il centro viene usato solo nella sua parte simmetrica', () => {
+    //Spazio libero da x 20 a x 90: le foto centrate li' starebbero in 55, non in 50.
+    const sbilanciato = { x: 20, y: 0, width: 70, height: 40 };
+
+    const scelta = cssSpazioFoto.scegli([sbilanciato], gruppoFoto, {
+        modo: 'centrato',
+        asseCentratura: 'x'
+    }, larghezzaBase, altezzaBase);
+
+    //Il gruppo e' alto: comanda l'altezza, quindi la parte simmetrica non costa nulla in area.
+    assert.strictEqual(scelta.candidato.x + scelta.candidato.width / 2, 50);
+    assert.strictEqual(scelta.candidato.x, 20);
+    assert.strictEqual(scelta.candidato.width, 60);
+    assert.strictEqual(scelta.candidato.derivatoDa, sbilanciato);
+});
+
+test('la parte simmetrica di uno spazio non attraversa mai la tolleranza al contrario', () => {
+    //Colonna a destra che parte dal centro: e' il caso della foto col lato sinistro a meta' box.
+    const colonnaDestra = { x: 50, y: 0, width: 50, height: 100 };
+    //Fascia larga sopra a un ostacolo basso: attraversa il centro ma e' bassa.
+    const fasciaAlta = { x: 0, y: 0, width: 100, height: 30 };
+
+    //Con tolleranza 0.7 la fascia (30 di altezza contro 100) non basta: resta la colonna.
+    const stretta = cssSpazioFoto.scegli([colonnaDestra, fasciaAlta], gruppoFoto, {
+        modo: 'centrato',
+        tolleranzaArea: 0.7,
+        asseCentratura: 'x'
+    }, larghezzaBase, altezzaBase);
+    assert.strictEqual(stretta.candidato, colonnaDestra);
+
+    //Abbassando la soglia si accetta la foto piccola pur di averla al centro.
+    const larga = cssSpazioFoto.scegli([colonnaDestra, fasciaAlta], gruppoFoto, {
+        modo: 'centrato',
+        tolleranzaArea: 0.05,
+        asseCentratura: 'x'
+    }, larghezzaBase, altezzaBase);
+    assert.strictEqual(larga.candidato.x + larga.candidato.width / 2, 50);
+});
+
+test('la parte centrata esiste solo per gli spazi che attraversano il centro', () => {
+    assert.strictEqual(cssSpazioFoto.parteCentrata({ x: 50, y: 0, width: 50, height: 100 }, 100, 100, 'x'), null);
+    assert.strictEqual(cssSpazioFoto.parteCentrata({ x: 0, y: 0, width: 50, height: 100 }, 100, 100, 'x'), null);
+    //Gia' simmetrico: nessuna variante da aggiungere.
+    assert.strictEqual(cssSpazioFoto.parteCentrata({ x: 30, y: 0, width: 40, height: 100 }, 100, 100, 'x'), null);
+
+    const suDueAssi = cssSpazioFoto.parteCentrata({ x: 10, y: 20, width: 80, height: 70 }, 100, 100, 'xy');
+    assert.deepStrictEqual([suDueAssi.x, suDueAssi.y, suDueAssi.width, suDueAssi.height], [10, 20, 80, 60]);
+});
+
+test('senza criterio centrato nessuna parte simmetrica entra in gioco', () => {
+    const sbilanciato = { x: 20, y: 0, width: 70, height: 40 };
+    const scelta = cssSpazioFoto.scegli([sbilanciato], gruppoFoto, null, larghezzaBase, altezzaBase);
+
+    assert.strictEqual(scelta.candidato, sbilanciato);
+});
+
+test('la descrizione per il log dice cosa c\'era e cosa si e\' scelto', () => {
+    const scelta = cssSpazioFoto.scegli([centrale, laterale], gruppoFoto, { modo: 'centrato', asseCentratura: 'x' }, larghezzaBase, altezzaBase);
+    const testo = cssSpazioFoto.descriviScelta([centrale, laterale], scelta, { modo: 'centrato', asseCentratura: 'x' }, larghezzaBase, altezzaBase);
+
+    assert.match(testo, /modo centrato/);
+    assert.match(testo, /candidati \[x30 y30 40x40; x60 y27 40x46\]/);
+    assert.match(testo, /scelto x30 y30 40x40/);
+    assert.match(cssSpazioFoto.descriviScelta([], null, null, 100, 100), /scelto nessuno/);
+});

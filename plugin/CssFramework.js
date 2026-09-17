@@ -1014,7 +1014,10 @@ const CssFramework =
         let larghezzaBase = base != null ? base.geometricBounds[3] - base.geometricBounds[1] : 0;
         let altezzaBase = base != null ? base.geometricBounds[2] - base.geometricBounds[0] : 0;
 
-        let sceltaSpazio = cssSpazioFoto.scegli(candidateRects, boundsGruppo, this.getSceltaSpazioFoto(box), larghezzaBase, altezzaBase);
+        let preferenzaSpazio = this.getSceltaSpazioFoto(box);
+        let sceltaSpazio = cssSpazioFoto.scegli(candidateRects, boundsGruppo, preferenzaSpazio, larghezzaBase, altezzaBase);
+
+        console.log("fixFoto " + box.label + ": " + cssSpazioFoto.descriviScelta(candidateRects, sceltaSpazio, preferenzaSpazio, larghezzaBase, altezzaBase));
 
         if (sceltaSpazio != null) {
             bestCandidate = sceltaSpazio.candidato;
@@ -6185,6 +6188,7 @@ const CssFramework =
             if (regoleDuplicazioni.length > 0) {
                 var elementi = me.getElementiComposizione(box);
                 var piano = cssComposizioneBox.pianificaDuplicazioni(regoleDuplicazioni, elementi, corrisponde);
+                var copieCreate = [];
 
                 for (var c = 0; c < piano.copie.length; c++) {
                     var copia = piano.copie[c];
@@ -6193,16 +6197,13 @@ const CssFramework =
                         continue;
                     }
                     try {
-                        //Senza destinazione InDesign appoggia la copia sullo spread, fuori dal
-                        //gruppo: li' non la vedrebbe piu' nessuno, ne' gli allineamenti ne' il
-                        //passaggio successivo che deve riportarla sotto alla propria foto.
-                        var nuovo = me.duplicaDentroAlBox(modello.item, box);
-                        if (nuovo == null) {
-                            continue;
-                        }
+                        //La copia nasce sullo spread, fuori dal gruppo: InDesign non permette di
+                        //aggiungere un elemento a un gruppo esistente. Si rientra dopo, tutte insieme.
+                        var nuovo = modello.item.duplicate();
                         nuovo.label = copia.etichetta;
                         nuovo.geometricBounds = copia.bounds;
                         adattaContenuto(nuovo, copia.fitContenuto);
+                        copieCreate.push(nuovo);
                     }
                     catch (e) {
                         console.error("Code CSF-10: duplicazione di " + copia.etichettaModello + " non riuscita: " + e);
@@ -6237,6 +6238,11 @@ const CssFramework =
                         console.error("Code CSF-11: rimozione di " + piano.rimozioni[r] + " non riuscita: " + e);
                     }
                 }
+
+                //Fuori dal gruppo le copie non le vedrebbe piu' nessuno: ne' gli allineamenti,
+                //ne' il passaggio successivo che deve riportarle sotto alla propria foto.
+                //Da qui in avanti "box" puo' essere un oggetto nuovo.
+                box = me.riportaDentroAlBox(box, copieCreate);
             }
 
             if (regoleOrdiniZ.length > 0) {
@@ -6291,46 +6297,53 @@ const CssFramework =
     },
 
     /*
-     * Duplica un elemento dentro al gruppo del box.
+     * Porta dentro al gruppo del box elementi che stanno fuori.
      *
-     * InDesign accetta la destinazione come argomento di duplicate(); se non la accettasse si
-     * ripiega sulla duplicazione semplice seguita da un rientro nel gruppo, e se nemmeno quello
-     * riesce lo dice, perche' una copia fuori dal gruppo resta invisibile a tutto il resto.
+     * InDesign non permette di aggiungere un elemento a un gruppo esistente, ne' passando il
+     * gruppo a duplicate() ne' a move(). La tecnica usata in tutto il plugin (bollini, foto
+     * extra) e': raggruppare il box con i nuovi elementi, sciogliere il gruppo interno e dare
+     * al gruppo esterno l'etichetta del box. Il box che torna e' un oggetto nuovo, con gli
+     * stessi figli: chi lo riceve deve usare quello e non il vecchio riferimento.
      */
-    duplicaDentroAlBox(item, box) {
-        var copia = null;
+    riportaDentroAlBox(box, elementi) {
+        if (box == null || !box.isValid || elementi == null || elementi.length === 0) {
+            return box;
+        }
+
+        var daInserire = elementi.filter(el => el != null && el.isValid && !this.elementoDentroAlBox(el, box));
+        if (daInserire.length === 0) {
+            return box;
+        }
+
+        var etichetta = box.label;
+        var nuovoGruppo = null;
 
         try {
-            copia = item.duplicate(box);
+            var contenitore = box.parentPage != null ? box.parentPage : box.parent;
+            nuovoGruppo = contenitore.groups.add([box].concat(daInserire));
         }
         catch (e) {
-            copia = null;
+            console.error("Code CSF-15: impossibile raggruppare il box " + etichetta + " con i suoi elementi derivati: " + e);
+            return box;
         }
 
-        if (copia == null || !copia.isValid) {
+        try {
+            box.ungroup();
+        }
+        catch (e) {
+            //Il box e' rimasto intero dentro a un gruppo anonimo: meglio scioglierlo e tornare com'era.
+            console.error("Code CSF-15: impossibile sciogliere il gruppo interno del box " + etichetta + ": " + e);
             try {
-                copia = item.duplicate();
+                nuovoGruppo.ungroup();
             }
-            catch (e) {
-                console.error("Code CSF-15: duplicazione di " + item.label + " non riuscita: " + e);
-                return null;
+            catch (e2) {
+                console.error("Code CSF-15: il box " + etichetta + " e' rimasto annidato in un gruppo senza etichetta: " + e2);
             }
+            return box;
         }
 
-        if (!this.elementoDentroAlBox(copia, box)) {
-            try {
-                copia.move(box);
-            }
-            catch (e) {
-                console.warn("Code CSF-15: la copia di " + item.label + " non e' rientrata nel gruppo del box: " + e);
-            }
-
-            if (!this.elementoDentroAlBox(copia, box)) {
-                console.warn("Code CSF-15: la copia di " + item.label + " e' rimasta fuori dal gruppo del box.");
-            }
-        }
-
-        return copia;
+        nuovoGruppo.label = etichetta;
+        return nuovoGruppo;
     },
 
     elementoDentroAlBox(item, box) {

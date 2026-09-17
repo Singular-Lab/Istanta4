@@ -94,8 +94,48 @@ const cssSpazioFoto = {
     },
 
     /*
+     * La parte di un candidato simmetrica rispetto al centro della base.
+     *
+     * Uno spazio libero che attraversa il centro e' spesso piu' largo da una parte che
+     * dall'altra: le foto centrate in quello spazio non sono centrate nel box. Se dello
+     * spazio si usa solo la parte simmetrica, il centro delle foto coincide con quello del
+     * box. Ritorna null se il candidato non attraversa il centro sugli assi richiesti.
+     */
+    parteCentrata(candidato, larghezzaBase, altezzaBase, asse) {
+        let x = candidato.x, y = candidato.y, width = candidato.width, height = candidato.height;
+
+        if (asse === "x" || asse === "xy") {
+            const centroX = larghezzaBase / 2;
+            const meta = Math.min(centroX - x, (x + width) - centroX);
+            if (!(meta > 0)) {
+                return null;
+            }
+            x = centroX - meta;
+            width = meta * 2;
+        }
+
+        if (asse === "y" || asse === "xy") {
+            const centroY = altezzaBase / 2;
+            const meta = Math.min(centroY - y, (y + height) - centroY);
+            if (!(meta > 0)) {
+                return null;
+            }
+            y = centroY - meta;
+            height = meta * 2;
+        }
+
+        if (x === candidato.x && y === candidato.y && width === candidato.width && height === candidato.height) {
+            //Gia' simmetrico: non serve una variante.
+            return null;
+        }
+
+        return { x: x, y: y, width: width, height: height, direction: "centrato", derivatoDa: candidato };
+    },
+
+    /*
      * Ritorna { candidato, area, useXaxisForReference } oppure null se nessuno spazio
-     * riesce a contenere il gruppo.
+     * riesce a contenere il gruppo. Col criterio centrato il candidato puo' essere una
+     * parte di uno spazio libero, ritagliata attorno al centro della base.
      */
     scegli(candidati, boundsGruppo, preferenza, larghezzaBase, altezzaBase) {
         if (candidati == null || candidati.length === 0) {
@@ -107,17 +147,23 @@ const cssSpazioFoto = {
         const ammessi = [];
         let migliore = null;
 
-        for (const candidato of candidati) {
+        const valuta = function (candidato) {
             const valutazione = cssSpazioFoto.valutaCandidato(candidato, boundsGruppo);
             if (valutazione == null || !(valutazione.area > 0)) {
-                continue;
+                return null;
             }
-
-            const voce = {
+            return {
                 candidato: candidato,
                 area: valutazione.area,
                 useXaxisForReference: valutazione.useXaxisForReference
             };
+        };
+
+        for (const candidato of candidati) {
+            const voce = valuta(candidato);
+            if (voce == null) {
+                continue;
+            }
             ammessi.push(voce);
 
             //A parita' d'area vince il primo, come faceva il confronto originale.
@@ -128,6 +174,19 @@ const cssSpazioFoto = {
 
         if (migliore == null || opzioni.modo !== cssSpazioFoto.centrato) {
             return migliore;
+        }
+
+        //Le parti centrate degli spazi che attraversano il centro concorrono come gli altri:
+        //valgono meno area, ma stanno esattamente al centro.
+        for (const candidato of candidati) {
+            const centrata = cssSpazioFoto.parteCentrata(candidato, larghezzaBase, altezzaBase, opzioni.asseCentratura);
+            if (centrata == null) {
+                continue;
+            }
+            const voce = valuta(centrata);
+            if (voce != null) {
+                ammessi.push(voce);
+            }
         }
 
         const sogliaArea = migliore.area * opzioni.tolleranzaArea;
@@ -148,6 +207,27 @@ const cssSpazioFoto = {
         }
 
         return scelto;
+    },
+
+    /*
+     * Una riga per il log: cosa c'era da scegliere e cosa si e' scelto.
+     * Serve al collaudo, dove l'unica cosa che si vede e' dove e' finita la foto.
+     */
+    descriviScelta(candidati, scelta, preferenza, larghezzaBase, altezzaBase) {
+        const opzioni = cssSpazioFoto.normalizzaPreferenza(preferenza);
+        const arrotonda = function (n) { return Math.round(n * 10) / 10; };
+        const rettangolo = function (c) {
+            return (c.direction ? c.direction + " " : "") + "x" + arrotonda(c.x) + " y" + arrotonda(c.y) + " " + arrotonda(c.width) + "x" + arrotonda(c.height);
+        };
+
+        let testo = "modo " + opzioni.modo;
+        if (opzioni.modo === cssSpazioFoto.centrato) {
+            testo += " (tolleranza " + opzioni.tolleranzaArea + ", asse " + opzioni.asseCentratura + ")";
+        }
+        testo += ", base " + arrotonda(larghezzaBase) + "x" + arrotonda(altezzaBase);
+        testo += ", candidati [" + (candidati || []).map(rettangolo).join("; ") + "]";
+        testo += ", scelto " + (scelta == null ? "nessuno" : rettangolo(scelta.candidato) + " area " + arrotonda(scelta.area));
+        return testo;
     }
 
 }
