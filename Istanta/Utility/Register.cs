@@ -107,20 +107,7 @@ namespace Istanta.Utility
                         else if (operazione.TipoOperazione == (Byte)tipoOperazione.updatePS)
                         {
                             List<RevisioneSelezioneFotoFromIndd>? upPSFieldList = MetaPromoLavorazioni.leggiSelezioniFoto(operazione.FormData!);
-                            foreach (var upPSField in upPSFieldList!)
-                            {
-                                var fieldGiaEsistente = storeField!.ps!.FirstOrDefault(s => s.codRef == upPSField.codRef);
-
-                                if (fieldGiaEsistente == null)
-                                {
-                                    storeField.ps!.Add(upPSField);
-                                }
-                                else
-                                {
-                                    fieldGiaEsistente.stato = upPSField.stato;
-                                    fieldGiaEsistente.noRender = upPSField.noRender;
-                                }
-                            }
+                            MetaPromoLavorazioni.applicaSelezioniFoto(storeField!, upPSFieldList);
                         }
                         else if (operazione.TipoOperazione == (Byte)tipoOperazione.updateNoRender)
                         {

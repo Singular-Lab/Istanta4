@@ -973,6 +973,36 @@ namespace Istanta.Models
         {
             return (elementi != null && elementi.Count > 0) ? elementi : null;
         }
+
+        /// <summary>
+        /// Fonde nel meta le selezioni foto arrivate dal Plugin: aggiorna le voci esistenti
+        /// e aggiunge quelle nuove. La lista ps puo' mancare del tutto, perche' un meta puo'
+        /// essere stato scritto da un'altra operazione: in quel caso va creata, non dereferenziata,
+        /// altrimenti l'aggiornamento delle foto si perde senza lasciare traccia.
+        /// </summary>
+        public static void applicaSelezioniFoto(RevisioneMetaPromoLavorazioni meta, List<RevisioneSelezioneFotoFromIndd>? selezioni)
+        {
+            if (meta == null || selezioni == null || selezioni.Count == 0)
+            {
+                return;
+            }
+
+            meta.ps ??= new List<RevisioneSelezioneFotoFromIndd>();
+
+            foreach (var selezione in selezioni)
+            {
+                var giaEsistente = meta.ps.FirstOrDefault(s => s.codRef == selezione.codRef);
+                if (giaEsistente == null)
+                {
+                    meta.ps.Add(selezione);
+                }
+                else
+                {
+                    giaEsistente.stato = selezione.stato;
+                    giaEsistente.noRender = selezione.noRender;
+                }
+            }
+        }
     }
 
     //Legata esclusivamente al dato di revisione articolo su Istanta

@@ -475,3 +475,30 @@ test("l'applicazione riporta quanti elementi ha reso invisibili", () => {
         sorgente.includes("elementi resi invisibili su"),
         "serve a distinguere l'elenco che non arriva dalle label che non corrispondono");
 });
+
+// Le due chiamate scrivono sulla stessa riga di meta: partendo insieme leggono lo stesso
+// stato iniziale e l'ultima cancella il lavoro dell'altra. Devono andare in sequenza.
+test("il salvataggio delle foto parte dopo la risposta di quello degli elementi", () => {
+    const sorgente = sorgentePlugin("schedaRef.js");
+    const inizio = sorgente.indexOf("salvaNoRender() {");
+    const fine = sorgente.indexOf("salvaNoRenderDelleFoto(codice_gruppo, idRec, foto) {");
+    const blocco = sorgente.slice(inizio, fine);
+
+    const chiamataFoto = blocco.indexOf("me.salvaNoRenderDelleFoto(codice_gruppo, idRec, foto);");
+    const invioElementi = blocco.indexOf('xhr.send("Menabo/modificaNoRender"');
+
+    assert.ok(chiamataFoto > 0, "il salvataggio delle foto deve avvenire dentro la risposta");
+    assert.ok(invioElementi > 0);
+    assert.ok(
+        chiamataFoto < invioElementi,
+        "la chiamata sulle foto deve stare nel gestore onload, quindi prima dell'invio nel sorgente");
+});
+
+test("un fallimento nel salvataggio delle foto viene segnalato", () => {
+    const sorgente = sorgentePlugin("schedaRef.js");
+    const inizio = sorgente.indexOf("salvaNoRenderDelleFoto(codice_gruppo, idRec, foto) {");
+    const blocco = sorgente.slice(inizio, inizio + 2000);
+
+    assert.ok(blocco.includes("xhr.onload"), "la risposta va letta, non ignorata");
+    assert.ok(blocco.includes("SRF-56"), "un rifiuto del server deve arrivare all'operatore");
+});

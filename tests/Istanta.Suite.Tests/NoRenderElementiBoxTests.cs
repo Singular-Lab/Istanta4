@@ -180,3 +180,104 @@ public class ApplicaNoRenderElementiTests
         Assert.False(box.recordInTracciato.ContainsKey(GLOBAL_VARIABLES.keyNoRenderElementi));
     }
 }
+
+/// <summary>
+/// Fusione delle selezioni foto nei meta. Le foto primarie/secondarie hanno un canale
+/// separato da quello degli elementi del box: scrivere l'uno non deve cancellare l'altro,
+/// e la lista ps puo' mancare del tutto perche' il meta puo' venire da un'altra operazione.
+/// </summary>
+public class ApplicaSelezioniFotoTests
+{
+    private static RevisioneSelezioneFotoFromIndd Selezione(string codRef, StatoSelezioneFoto stato, bool noRender)
+    {
+        return new RevisioneSelezioneFotoFromIndd { codRef = codRef, stato = stato, noRender = noRender };
+    }
+
+    [Fact]
+    public void Un_meta_senza_lista_ps_accoglie_la_selezione_invece_di_esplodere()
+    {
+        // Un meta scritto dal flusso noRender puo' arrivare senza la chiave ps: prima qui
+        // si sollevava NullReferenceException e l'aggiornamento delle foto si perdeva.
+        var meta = MetaPromoLavorazioni.leggi("{\"noRender\":[{\"tipo\":2,\"chiave\":\"logo_bio\"}]}")!;
+        Assert.Null(meta.ps);
+
+        MetaPromoLavorazioni.applicaSelezioniFoto(meta, new List<RevisioneSelezioneFotoFromIndd>
+        {
+            Selezione("3150596", StatoSelezioneFoto.Primaria, true)
+        });
+
+        var voce = Assert.Single(meta.ps!);
+        Assert.Equal("3150596", voce.codRef);
+        Assert.True(voce.noRender);
+    }
+
+    [Fact]
+    public void Una_voce_gia_presente_viene_aggiornata_non_duplicata()
+    {
+        var meta = new RevisioneMetaPromoLavorazioni
+        {
+            ps = new List<RevisioneSelezioneFotoFromIndd> { Selezione("3150596", StatoSelezioneFoto.Primaria, false) }
+        };
+
+        MetaPromoLavorazioni.applicaSelezioniFoto(meta, new List<RevisioneSelezioneFotoFromIndd>
+        {
+            Selezione("3150596", StatoSelezioneFoto.Selezionata, true)
+        });
+
+        var voce = Assert.Single(meta.ps!);
+        Assert.Equal(StatoSelezioneFoto.Selezionata, voce.stato);
+        Assert.True(voce.noRender);
+    }
+
+    [Fact]
+    public void Salvare_le_foto_non_cancella_gli_elementi_del_box()
+    {
+        // E' il difetto che si vedeva: i due canali scrivono sullo stesso meta e uno dei due
+        // spariva. Qui si verifica che la fusione lasci intatta l'altra struttura.
+        var meta = new RevisioneMetaPromoLavorazioni
+        {
+            noRender = new List<RevisioneNoRenderFromIndd>
+            {
+                new() { tipo = TipoElementoBox.Logo, chiave = "logo_bio", nome = "Logo biologico" }
+            }
+        };
+
+        MetaPromoLavorazioni.applicaSelezioniFoto(meta, new List<RevisioneSelezioneFotoFromIndd>
+        {
+            Selezione("3150596", StatoSelezioneFoto.Primaria, true)
+        });
+
+        Assert.True(Assert.Single(meta.ps!).noRender);
+        Assert.Equal("logo_bio", Assert.Single(meta.noRender!).chiave);
+    }
+
+    [Fact]
+    public void Salvare_gli_elementi_non_cancella_le_foto()
+    {
+        var meta = new RevisioneMetaPromoLavorazioni
+        {
+            ps = new List<RevisioneSelezioneFotoFromIndd> { Selezione("3150596", StatoSelezioneFoto.Primaria, true) }
+        };
+
+        meta.noRender = MetaPromoLavorazioni.normalizzaElementiNoRender(new List<RevisioneNoRenderFromIndd>
+        {
+            new() { tipo = TipoElementoBox.Logo, chiave = "logo_bio" }
+        });
+
+        var riletto = MetaPromoLavorazioni.leggi(JsonConvert.SerializeObject(meta))!;
+
+        Assert.True(Assert.Single(riletto.ps!).noRender);
+        Assert.Equal("logo_bio", Assert.Single(riletto.noRender!).chiave);
+    }
+
+    [Fact]
+    public void Selezioni_assenti_o_vuote_non_toccano_il_meta()
+    {
+        var meta = new RevisioneMetaPromoLavorazioni();
+
+        MetaPromoLavorazioni.applicaSelezioniFoto(meta, null);
+        MetaPromoLavorazioni.applicaSelezioniFoto(meta, new List<RevisioneSelezioneFotoFromIndd>());
+
+        Assert.Null(meta.ps);
+    }
+}

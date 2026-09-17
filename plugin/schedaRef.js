@@ -7625,6 +7625,7 @@ const schedaRef = {
     /// Salva l'opzione di rendering del box. Gli elementi viaggiano sul nuovo endpoint, le foto
     /// primarie/secondarie restano sul canale P/S di I20-965: sono due dati distinti.
     salvaNoRender() {
+        let me = this;
         var schedaRef = this.schedeRefDati;
         if (schedaRef == null || schedaRef.length < 1) {
             return;
@@ -7667,15 +7668,19 @@ const schedaRef = {
                 messaggioUtente("Code SRF-53 noRender: il server ha rifiutato il salvataggio", "error");
                 return;
             }
-            messaggioUtente("noRender: modifiche salvate", "success", false, 5);
+
+            //Le foto del box mantengono il loro canale, ma la loro chiamata scrive sulla
+            //stessa riga di meta: parte solo adesso, altrimenti le due scritture si leggono
+            //lo stesso stato iniziale e l'ultima cancella il lavoro dell'altra.
+            if (foto.length > 0) {
+                me.salvaNoRenderDelleFoto(codice_gruppo, idRec, foto);
+            }
+            else {
+                messaggioUtente("noRender: modifiche salvate", "success", false, 5);
+            }
         };
 
         xhr.send("Menabo/modificaNoRender" + "/" + 0, formData, "PUT");
-
-        //Le foto del box mantengono il loro canale: l'opzione viaggia dentro ps.
-        if (foto.length > 0) {
-            this.salvaNoRenderDelleFoto(codice_gruppo, idRec, foto);
-        }
 
         this.aggiornaNoRenderNeiRecord(elementi, foto);
         this.applicaNoRenderAlDocumento();
@@ -7732,6 +7737,23 @@ const schedaRef = {
         formData.append("ps", JSON.stringify(ps));
 
         const xhr = new XMLHttpRequestClient();
+        xhr.onload = async (objResult, parsed) => {
+            if (!parsed) {
+                try {
+                    objResult = JSON.parse(objResult);
+                }
+                catch (e) {
+                    messaggioUtente("Code SRF-55 noRender: errore nel salvataggio delle foto: " + e, "error");
+                    return;
+                }
+            }
+            if (objResult != null && objResult.esito === false) {
+                messaggioUtente("Code SRF-56 noRender: il server ha rifiutato l'opzione sulle foto", "error");
+                return;
+            }
+            messaggioUtente("noRender: modifiche salvate", "success", false, 5);
+        };
+
         xhr.send("Menabo/modificaPrimarieSecondarie" + "/" + 0, formData, "PUT");
     },
 
