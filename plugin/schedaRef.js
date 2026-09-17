@@ -1,6 +1,7 @@
 ﻿
 const InputEditController = require('./InputEditController');
 const XMLHttpRequestClient = require('./XMLHttpRequestClient');
+const DataCaricamentoFoto = require('./dataCaricamentoFoto');
 const NoRenderElementi = require('./noRenderElementi');
 
 const schedaRef = {
@@ -4738,6 +4739,20 @@ const schedaRef = {
                             const thumbUrl = olimpoIp + 'getThumbNailOnDemand?width=80&guidId=' + encodeURIComponent(item.GuidId);
                             const scopeText = getPhotoScopeText(item);
                             const contextText = getPhotoContextText(item);
+                            //I20-971: data di caricamento della foto. Quando manca o non e'
+                            //plausibile il badge non viene disegnato affatto.
+                            const dataCaricamento = DataCaricamentoFoto.dataDaMostrare(item);
+                            const dataBadgeHtml = dataCaricamento === '' ? '' : `
+                                <div style="
+                                    margin-top:4px;
+                                    font-size:10px;
+                                    color:#333;
+                                    background:#e8e8e8;
+                                    border:1px solid #ccc;
+                                    border-radius:10px;
+                                    padding:1px 8px;
+                                " title="Data di caricamento della foto">${dataCaricamento}</div>
+                            `;
                             const isActive = item.Attiva !== false;
                             const isDisabledItem = item.Attiva === false;
 
@@ -4847,6 +4862,8 @@ const schedaRef = {
                             word-break:break-word;
                             width:100%;
                         ">${item.Nome}</div>
+
+                        ${dataBadgeHtml}
 
                         <div style="
                             margin-top:4px;
