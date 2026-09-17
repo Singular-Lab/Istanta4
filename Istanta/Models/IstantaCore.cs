@@ -91,6 +91,9 @@ namespace Istanta.Models
         public static readonly string keyStatoRevisioneSingolo = "statoRevisioneSingolo";
         public static readonly string keyStatoRevisioneGruppo = "statoRevisioneGruppo";
         public static readonly string keyMembriGruppoFoto = "membriGruppoFoto";
+        //Elementi del box (campi, loghi, foto extra) che il Plugin deve impaginare ma non rendere visibili.
+        //Le foto primarie/secondarie non passano di qui: viaggiano dentro membriGruppoFoto.
+        public static readonly string keyNoRenderElementi = "noRenderElementi";
 
 
         //Con queste combinazioni di chiave, si chiede al core di recuperare la descrizione dall'archivio per far uscire le ref indicate con questo attributo
@@ -955,6 +958,21 @@ namespace Istanta.Models
         {
             return Newtonsoft.Json.JsonConvert.DeserializeObject<List<RevisioneSelezioneFotoFromIndd>>(ps, settings);
         }
+
+        public static List<RevisioneNoRenderFromIndd>? leggiElementiNoRender(string elementi)
+        {
+            return Newtonsoft.Json.JsonConvert.DeserializeObject<List<RevisioneNoRenderFromIndd>>(elementi, settings);
+        }
+
+        /// <summary>
+        /// Nei meta si conservano solo gli elementi effettivamente in noRender: un elenco vuoto
+        /// significa che l'operatore li ha liberati tutti, e in quel caso la chiave sparisce
+        /// invece di restare a vuoto.
+        /// </summary>
+        public static List<RevisioneNoRenderFromIndd>? normalizzaElementiNoRender(List<RevisioneNoRenderFromIndd>? elementi)
+        {
+            return (elementi != null && elementi.Count > 0) ? elementi : null;
+        }
     }
 
     //Legata esclusivamente al dato di revisione articolo su Istanta
@@ -963,6 +981,40 @@ namespace Istanta.Models
         public List<RevisioneCampiOffertaFromIndd>? campiOfferta { get; set; }
         public List<RevisioneFotoFromIndd>? foto { get; set; }
         public List<RevisioneSelezioneFotoFromIndd>? ps { get; set; }
+        /// <summary>
+        /// Elementi del box messi in noRender dall'operatore: campi, loghi, foto extra.
+        /// Contiene solo gli elementi effettivamente marcati, cosi' la struttura resta piccola:
+        /// togliere il noRender a un elemento ne rimuove la voce, non scrive false.
+        /// Le foto primarie/secondarie non stanno qui, hanno la loro opzione dentro ps.
+        /// </summary>
+        public List<RevisioneNoRenderFromIndd>? noRender { get; set; }
+    }
+
+    /// <summary>
+    /// Categoria dell'elemento del box a cui si riferisce l'opzione di rendering.
+    /// Serve a distinguere due elementi che condividono la chiave ma non la natura.
+    /// </summary>
+    public enum TipoElementoBox
+    {
+        Campo = 1,
+        Logo = 2,
+        FotoExtra = 3,
+        Etichetta = 4,
+        Altro = 99
+    }
+
+    /// <summary>
+    /// Un elemento del box che il Plugin impagina ma non rende visibile.
+    /// L'elemento e' identificato da tipo + chiave logica (sigla per loghi e foto extra,
+    /// nome del campo per campi ed etichette), non dalla label InDesign: la label incorpora
+    /// il codice della ref e viene ricostruita a ogni impaginazione.
+    /// </summary>
+    public class RevisioneNoRenderFromIndd
+    {
+        public TipoElementoBox tipo { get; set; }
+        public string? chiave { get; set; }
+        /// <summary>Nome leggibile mostrato dal Plugin: nome del logo, nome della foto.</summary>
+        public string? nome { get; set; }
     }
 
     //Legato al campo LABEL della rappresentazione grafica
@@ -2419,7 +2471,8 @@ namespace Istanta.Models
         cambioMeta = 10,
         cambioPagina = 11,
         rimuoviMetaFoto = 12,
-        login=13
+        login=13,
+        updateNoRender = 14
     }
 
     public enum senderOperazione

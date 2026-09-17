@@ -1,4 +1,4 @@
-
+﻿
 const InputEditController = require('./InputEditController');
 const XMLHttpRequestClient = require('./XMLHttpRequestClient');
 
@@ -6,6 +6,8 @@ const schedaRef = {
     refSelected: null,
     multiSelection: null,
     schedeRefDati: [],
+    //Stato del modal noRender: la lista degli elementi del box con la loro opzione di rendering.
+    elementiNoRenderDelBox: null,
     multiSchedeRef: [],
     editRefFieldController: null,
     idRecordLavorazione: 0,
@@ -1848,7 +1850,9 @@ const schedaRef = {
                     deletedFields,
                     listaFoto,
                     fotoExtra,
-                    fotoExtraAuto
+                    fotoExtraAuto,
+                    true,
+                    NoRenderElementi.elencoPerSegnalazioni(primario.recordInTracciato.noRenderElementi, primario.recordInTracciato.membriGruppoFoto)
                 );
 
                 console.log(preAnalisi);
@@ -3585,8 +3589,7 @@ const schedaRef = {
                 var label1 = $('<label for="checkbox1">P:</label>'); // Crea l'etichetta per il primo checkbox
                 var checkbox2 = $('<input class="secondary-check" codice="' + objItem["Referenza.Codice"] + '" type="checkbox" ' + (objItem["StatoSelezione"] == 2 ? ' checked ' : ' ') + ' style="vertical-align: middle;">'); // Crea il secondo checkbox
                 var label2 = $('<label for="checkbox2">S:</label>'); // Crea l'etichetta per il secondo checkbox
-                var checkbox3 = $('<input class="norender-check" codice="' + objItem["Referenza.Codice"] + '" type="checkbox" ' + (noRenderDiCodice(objItem["Referenza.Codice"]) ? ' checked ' : ' ') + ' style="vertical-align: middle;" title="Impagina la foto ma non renderizzarla">'); // Opzione di rendering
-                var label3 = $('<label for="checkbox3">NR:</label>'); // Crea l'etichetta per il checkbox di rendering
+                //I20-968: l'opzione di rendering non si imposta piu' da qui, ma dal modal noRender.
                 var text = $('<span>(' + objItem['Referenza.Codice'] + ') ' + objItem["Descrizioni.Descrizione1"] + '</span>'); // Crea il testo
 
                 // Imposta lo stile
@@ -3594,12 +3597,11 @@ const schedaRef = {
                 checkbox1.css("background-color", "blue");
                 label2.css({ "font-size": "12px", "color": "yellow", "margin-left": "5px" });
                 checkbox2.css("background-color", "yellow");
-                label3.css({ "font-size": "12px", "color": "lightgray", "margin-left": "5px" });
-                checkbox3.css("background-color", "gray");
+
                 text.css({ "font-size": "12px", "color": "white" });
 
                 //checkboxCol.append(label1, checkbox1, label2, checkbox2); // Aggiunge i checkbox alla colonna dei checkbox
-                checkBoxCol_r2_c.append(label1, checkbox1, label2, checkbox2, label3, checkbox3, text); // Aggiunge i checkbox alla colonna dei checkbox
+                checkBoxCol_r2_c.append(label1, checkbox1, label2, checkbox2, text); // Aggiunge i checkbox alla colonna dei checkbox
 
                 //textCol.append(text); // Aggiunge il testo alla colonna del testo
             }
@@ -3908,7 +3910,9 @@ const schedaRef = {
                         objToSend.ps.push({
                             codRef: cod,
                             stato: item.StatoSelezione,
-                            noRender: $("#cambiaPS").find("input.norender-check[codice='" + cod + "']").is(':checked')
+                            //L'opzione di rendering si governa dal modal noRender: qui va
+                            //riportata com'e', altrimenti un salvataggio P/S la cancellerebbe.
+                            noRender: noRenderDiCodice(cod)
                         });
                     //}
                 }
@@ -7412,6 +7416,221 @@ const schedaRef = {
         this.schedeRefDati = null;
     },
 
+    /// I20-968: elenco di tutti gli elementi del box, ciascuno con il suo interruttore di
+    /// rendering. Sostituisce la checkbox NR che stava nella scheda primarie/secondarie.
+    apriModalNoRender() {
+        let me = this;
+        var schedaRef = this.schedeRefDati;
+        if (schedaRef == null || schedaRef.length < 1 || this.refSelected == null) {
+            messaggioUtente("Code SRF-50 Nessun box selezionato per l'opzione di rendering", "error");
+            return;
+        }
+
+        var primario = schedaRef.find(f => f.recordInTracciato.StatoSelezione == 1);
+        if (primario == null) {
+            messaggioUtente("Code SRF-51 Nessun elemento primario trovato", "error");
+            return;
+        }
+
+        this.elementiNoRenderDelBox = this.leggiElementiDelBox(this.refSelected.item, primario);
+        this.disegnaListaNoRender();
+        Utility.apriModal('dialogNoRender', 'Elementi non renderizzati', true, [], true);
+    },
+
+    /// Compone la lista mostrata dal modal: gli elementi vivi nel box uniti a quelli che i meta
+    /// danno per messi in noRender ma che dal documento sono spariti.
+    leggiElementiDelBox(box, primario) {
+        var nomePrimaria = pluginMiddleware.getCampo("nomeFotoPrimaria");
+        var nomeSecondaria = pluginMiddleware.getCampo("nomeFotoSecondaria");
+        var fotoExtra = primario.recordInTracciato["Foto.Extra"] || [];
+        var membriGruppoFoto = primario.recordInTracciato.membriGruppoFoto || [];
+        var vivi = [];
+
+        try {
+            for (var i = 0; i < box.allPageItems.length; i++) {
+                var item = box.allPageItems[i];
+                var classificato = NoRenderElementi.classificaLabel(Utility.parseLabel(item.label), nomePrimaria, nomeSecondaria);
+                if (classificato == null || classificato.chiave === "") {
+                    continue;
+                }
+
+                var nome = classificato.chiave;
+                var marcatoNelDocumento = false;
+
+                if (classificato.tipo === NoRenderElementi.TIPO_FOTO) {
+                    //Per le immagini il campo da mostrare e' il nome della foto.
+                    var membro = membriGruppoFoto.find(m => m.codRef == classificato.chiave);
+                    if (membro != null && membro.nomeFoto) {
+                        nome = membro.nomeFoto;
+                    }
+                    marcatoNelDocumento = membro != null && membro.noRender === true;
+                }
+                else if (classificato.tipo === NoRenderElementi.TIPO.logo || classificato.tipo === NoRenderElementi.TIPO.fotoExtra) {
+                    //Per i loghi il campo da mostrare e' nome e sigla.
+                    var extra = fotoExtra.find(f => f.sigla == classificato.chiave);
+                    if (extra != null && extra.nome) {
+                        nome = extra.nome;
+                    }
+                }
+
+                vivi.push({ tipo: classificato.tipo, chiave: classificato.chiave, nome: nome, noRender: marcatoNelDocumento });
+            }
+        }
+        catch (e) {
+            console.error("Impossibile leggere gli elementi del box per il modal noRender", e);
+        }
+
+        var marcatiNeiMeta = primario.recordInTracciato.noRenderElementi || [];
+        return NoRenderElementi.componiLista(vivi, marcatiNeiMeta);
+    },
+
+    disegnaListaNoRender() {
+        let me = this;
+        var lista = this.elementiNoRenderDelBox || [];
+        $("#bodyNoRender").empty();
+
+        if (lista.length == 0) {
+            $("#bodyNoRender").append($('<span style="color:white; font-size:12px;">Nessun elemento nel box.</span>'));
+            return;
+        }
+
+        for (var i = 0; i < lista.length; i++) {
+            var elemento = lista[i];
+            var row = $('<div class="row align-items-center" style="margin-bottom:8px; display:flex; align-items:center;"></div>');
+
+            var bottone = $('<button class="norender-toggle" indice="' + i + '" style="width:28px; height:28px; margin-right:8px;"><img src="images/immagineNonPresente.png" style="width:16px; height:16px;"></button>');
+            bottone.css("background-color", elemento.noRender ? "gray" : "transparent");
+            bottone.attr("title", elemento.noRender ? "Elemento in norender: clicca per renderizzarlo" : "Clicca per non renderizzare l'elemento");
+            bottone.on('click', function () {
+                var indice = parseInt($(this).attr("indice"), 10);
+                me.elementiNoRenderDelBox[indice].noRender = !me.elementiNoRenderDelBox[indice].noRender;
+                me.disegnaListaNoRender();
+            });
+
+            var descrizione = NoRenderElementi.descriviElemento(elemento);
+            if (!elemento.presente) {
+                //Elemento marcato ma non piu' nel documento: resta in elenco per poterlo liberare.
+                descrizione += " (non presente nel box)";
+            }
+            var testo = $('<span style="font-size:12px; color:white;"></span>').text(descrizione);
+
+            row.append(bottone, testo);
+            $("#bodyNoRender").append(row);
+        }
+    },
+
+    /// Salva l'opzione di rendering del box. Gli elementi viaggiano sul nuovo endpoint, le foto
+    /// primarie/secondarie restano sul canale P/S di I20-965: sono due dati distinti.
+    salvaNoRender() {
+        var schedaRef = this.schedeRefDati;
+        if (schedaRef == null || schedaRef.length < 1) {
+            return;
+        }
+
+        var codice_gruppo = schedaRef[0].recordInTracciato["Scatto.CodiceGruppo"];
+        var lista = this.elementiNoRenderDelBox || [];
+        var elementi = NoRenderElementi.elementiDaSalvare(lista);
+        var foto = NoRenderElementi.fotoDaSalvare(lista);
+
+        var idRec = 0;
+        try {
+            var dna = Utility.getDnaOfBox(this.refSelected.item);
+            if (dna != null && dna.idRec != null && dna.idRec !== "" && !isNaN(parseInt(dna.idRec))) {
+                idRec = parseInt(dna.idRec);
+            }
+        }
+        catch (e) {
+            console.warn("Impossibile recuperare idRec dal box durante il salvataggio noRender", e);
+        }
+
+        var formData = new FormData();
+        formData.append("idLavorazione", idKitLavorazione);
+        formData.append("CodiceGruppo", codice_gruppo);
+        formData.append("idRec", idRec);
+        formData.append("elementi", JSON.stringify(elementi));
+
+        const xhr = new XMLHttpRequestClient();
+        xhr.onload = async (objResult, parsed) => {
+            if (!parsed) {
+                try {
+                    objResult = JSON.parse(objResult);
+                }
+                catch (e) {
+                    messaggioUtente("Code SRF-52 noRender: errore durante il salvataggio: " + e, "error");
+                    return;
+                }
+            }
+            if (objResult != null && objResult.esito === false) {
+                messaggioUtente("Code SRF-53 noRender: il server ha rifiutato il salvataggio", "error");
+                return;
+            }
+            messaggioUtente("noRender: modifiche salvate", "success", false, 5);
+        };
+
+        xhr.send("Menabo/modificaNoRender" + "/" + 0, formData, "PUT");
+
+        //Le foto del box mantengono il loro canale: l'opzione viaggia dentro ps.
+        if (foto.length > 0) {
+            this.salvaNoRenderDelleFoto(codice_gruppo, idRec, foto);
+        }
+
+        this.applicaNoRenderAlDocumento();
+    },
+
+    salvaNoRenderDelleFoto(codice_gruppo, idRec, foto) {
+        var schedaRef = this.schedeRefDati;
+        var ps = [];
+
+        for (var i = 0; i < foto.length; i++) {
+            var voce = schedaRef.find(f => f.recordInTracciato["Referenza.Codice"] == foto[i].codRef);
+            if (voce == null) {
+                continue;
+            }
+            ps.push({ codRef: foto[i].codRef, stato: voce.recordInTracciato.StatoSelezione, noRender: foto[i].noRender });
+        }
+
+        if (ps.length == 0) {
+            return;
+        }
+
+        var formData = new FormData();
+        formData.append("idLavorazione", idKitLavorazione);
+        formData.append("CodiceGruppo", codice_gruppo);
+        formData.append("idRec", idRec);
+        formData.append("ps", JSON.stringify(ps));
+
+        const xhr = new XMLHttpRequestClient();
+        xhr.send("Menabo/modificaPrimarieSecondarie" + "/" + 0, formData, "PUT");
+    },
+
+    /// Riflette subito nel documento quanto scelto nel modal, senza attendere una reimpaginazione.
+    applicaNoRenderAlDocumento() {
+        var box = this.refSelected != null ? this.refSelected.item : null;
+        var lista = this.elementiNoRenderDelBox || [];
+        if (box == null) {
+            return;
+        }
+
+        var nomePrimaria = pluginMiddleware.getCampo("nomeFotoPrimaria");
+        var nomeSecondaria = pluginMiddleware.getCampo("nomeFotoSecondaria");
+
+        try {
+            for (var i = 0; i < box.allPageItems.length; i++) {
+                var item = box.allPageItems[i];
+                var classificato = NoRenderElementi.classificaLabel(Utility.parseLabel(item.label), nomePrimaria, nomeSecondaria);
+                if (classificato == null) {
+                    continue;
+                }
+                var scelta = lista.find(e => e.tipo === classificato.tipo && e.chiave === classificato.chiave);
+                if (scelta != null) {
+                    FotoPlacer.applicaNoRender(item, scelta.noRender === true);
+                }
+            }
+        }
+        catch (e) {
+            console.error("Impossibile applicare l'opzione di rendering agli elementi del box", e);
+        }
+    },
     apriModalInfoReferenza() {
         var schedaRef = this.schedeRefDati;
         if (schedaRef != null && schedaRef.length > 0) {
