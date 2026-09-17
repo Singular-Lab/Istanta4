@@ -57,7 +57,7 @@ namespace AgenziaLib
         string GetMetaPerRevisioneDaGruppiMultipli(WrapperPerGetGarante wrap);
 
         string GetMetaPerRevisioneDaGruppiMultipliBatch(WrapperBatchPerGetGarante batch);
-        List<Dictionary<string, object>> FiltraRecordsPerConteggioRevisione(List<Dictionary<string, object>> records);
+        List<Dictionary<string, object>> FiltraRecordsPerConteggioRevisione(List<Dictionary<string, object>> records, string utente);
         string CheckFirmaPluginGarantitaBatch(WrapperBatchCheckFirmaPlugin batch);
     }
 }

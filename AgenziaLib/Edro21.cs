@@ -14205,36 +14205,14 @@ Descrizione3.EndsWith("\r\n");
             return JsonConvert.SerializeObject(result);
         }
 
+        /// Records che il conteggio delle revisioni deve considerare, con la stessa regola
+        /// della pagina del revisore: vedere FiltroRevisioneReparto. Chiamata da Istanta per
+        /// nome tramite execLibFunction, che lega i parametri per nome: "records" e "utente".
         public List<Dictionary<string, object>> FiltraRecordsPerConteggioRevisione(
-    List<Dictionary<string, object>> records)
+    List<Dictionary<string, object>> records,
+    string utente)
         {
-            if (records == null || records.Count == 0)
-            {
-                return new List<Dictionary<string, object>>();
-            }
-
-            return records
-                .Where(r =>
-                {
-                    if (r == null)
-                    {
-                        return false;
-                    }
-
-                    if (!r.ContainsKey(GLOBAL_VARIABLES.keySiglaReparto))
-                    {
-                        return true;
-                    }
-
-                    var siglaReparto = r[GLOBAL_VARIABLES.keySiglaReparto]?.ToString();
-
-                    return !string.Equals(
-                        siglaReparto,
-                        "EX",
-                        StringComparison.OrdinalIgnoreCase
-                    );
-                })
-                .ToList();
+            return FiltroRevisioneReparto.Filtra(records, utente);
         }
 
 
