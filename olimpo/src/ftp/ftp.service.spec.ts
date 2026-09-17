@@ -62,7 +62,20 @@ describe('FtpService (SFTP mode)', () => {
     );
   });
 
-  it('connects with expected credentials and uploads without using contratto.root', async () => {
+  /*
+   * Questo test chiedeva il deposito SENZA contratto.root e falliva da sempre:
+   * creaPathFromContrattoTipografia crea la root del contratto e ci fa partire
+   * l'albero, e getVirtualDirectories costruisce il suo albero virtuale sulla
+   * stessa root, tanto che una virtual_dir scelta in Fidelity la contiene gia'
+   * (per questo il ramo merged non la riaggiunge). Il test ora fissa il
+   * comportamento reale, root compresa.
+   *
+   * Resta aperta per chi governa il contratto tipografia una domanda che nessun
+   * test puo' decidere: se l'utenza SFTP e' gia' confinata nella cartella del
+   * cliente, prefissare la root creerebbe una cartella annidata di troppo sul
+   * server della tipografia. In quel caso va corretto il servizio, non questo test.
+   */
+  it('connects with expected credentials and uploads under contratto.root', async () => {
     const contratto: any = {
       root: 'ROOT_CONTRATTO',
       dictionary: { AREA: 'A1' },
@@ -111,10 +124,17 @@ describe('FtpService (SFTP mode)', () => {
     const connectOptions = mockConnect.mock.calls[0][0];
     expect(connectOptions.hostVerifier('any-key')).toBe(true);
 
-    const targetCall = mockPut.mock.calls.find((call) => call[1] === 'folder_AREA/folder_AREA/file-A1.pdf');
+    //La root del contratto viene creata prima di percorrere l'albero.
+    expect(mockMkdir).toHaveBeenCalledWith('ROOT_CONTRATTO', true);
+
+    const targetCall = mockPut.mock.calls.find(
+      (call) => call[1] === 'ROOT_CONTRATTO/folder_AREA/folder_AREA/file-A1.pdf',
+    );
     expect(targetCall).toBeDefined();
     expect(targetCall[0]).toBe(path.join('C:/materiali', 'source.pdf'));
-    expect(targetCall[1]).not.toContain('ROOT_CONTRATTO');
+    //Un solo deposito e nessuna root ripetuta lungo il path.
+    expect(mockPut).toHaveBeenCalledTimes(1);
+    expect(targetCall[1].split('ROOT_CONTRATTO')).toHaveLength(2);
     expect(mockEnd).toHaveBeenCalledTimes(1);
   });
 
