@@ -93,3 +93,108 @@ test("la schermata di cambio foto disegna il badge", () => {
     assert.ok(schedaRef.includes("${dataBadgeHtml}"),
         "il badge va inserito nella scheda della foto");
 });
+
+// Le foto vanno dalla piu' nuova alla piu' vecchia, per data di caricamento.
+test("le foto si ordinano dalla piu' nuova alla piu' vecchia", () => {
+    const lista = [
+        { Nome: "vecchia.psd", DataInserimento: "2024-03-01T10:00:00" },
+        { Nome: "nuova.psd", DataInserimento: "2026-09-10T10:00:00" },
+        { Nome: "media.psd", DataInserimento: "2025-06-15T10:00:00" }
+    ];
+
+    const ordinata = DataCaricamentoFoto.ordinaDallaPiuNuova(lista);
+
+    assert.deepStrictEqual(ordinata.map(f => f.Nome), ["nuova.psd", "media.psd", "vecchia.psd"]);
+});
+
+test("senza data di inserimento l'ordinamento usa quella di modifica", () => {
+    const lista = [
+        { Nome: "a.psd", DataInserimento: null, DataModifica: "2024-01-01T10:00:00" },
+        { Nome: "b.psd", DataInserimento: null, DataModifica: "2026-01-01T10:00:00" }
+    ];
+
+    assert.deepStrictEqual(
+        DataCaricamentoFoto.ordinaDallaPiuNuova(lista).map(f => f.Nome),
+        ["b.psd", "a.psd"]);
+});
+
+test("le foto senza data finiscono in fondo, nell'ordine in cui sono arrivate", () => {
+    const lista = [
+        { Nome: "senzaData1.psd" },
+        { Nome: "datata.psd", DataInserimento: "2025-05-05T10:00:00" },
+        { Nome: "senzaData2.psd", DataInserimento: "0001-01-01T00:00:00" }
+    ];
+
+    assert.deepStrictEqual(
+        DataCaricamentoFoto.ordinaDallaPiuNuova(lista).map(f => f.Nome),
+        ["datata.psd", "senzaData1.psd", "senzaData2.psd"]);
+});
+
+test("a parita' di data l'ordine di partenza non cambia", () => {
+    const lista = [
+        { Nome: "prima.psd", DataInserimento: "2026-02-02T09:00:00" },
+        { Nome: "seconda.psd", DataInserimento: "2026-02-02T09:00:00" },
+        { Nome: "terza.psd", DataInserimento: "2026-02-02T09:00:00" }
+    ];
+
+    assert.deepStrictEqual(
+        DataCaricamentoFoto.ordinaDallaPiuNuova(lista).map(f => f.Nome),
+        ["prima.psd", "seconda.psd", "terza.psd"]);
+});
+
+test("l'ordinamento non altera la lista ricevuta", () => {
+    const lista = [
+        { Nome: "vecchia.psd", DataInserimento: "2024-03-01T10:00:00" },
+        { Nome: "nuova.psd", DataInserimento: "2026-09-10T10:00:00" }
+    ];
+
+    DataCaricamentoFoto.ordinaDallaPiuNuova(lista);
+
+    assert.strictEqual(lista[0].Nome, "vecchia.psd");
+});
+
+// La foto in uso si mostra in cima a tutta la schermata, e una sola volta.
+test("la foto attuale esce dalla sua lista", () => {
+    const lista = [
+        { Id: 1, Nome: "a.psd" },
+        { Id: 2, Nome: "attuale.psd" },
+        { Id: 3, Nome: "c.psd" }
+    ];
+
+    const esito = DataCaricamentoFoto.estraiAttuale(lista, 2);
+
+    assert.strictEqual(esito.attuale.Nome, "attuale.psd");
+    assert.deepStrictEqual(esito.resto.map(f => f.Nome), ["a.psd", "c.psd"]);
+});
+
+test("senza foto attuale la lista resta intatta", () => {
+    const lista = [{ Id: 1, Nome: "a.psd" }, { Id: 2, Nome: "b.psd" }];
+
+    assert.strictEqual(DataCaricamentoFoto.estraiAttuale(lista, null).attuale, null);
+    assert.deepStrictEqual(DataCaricamentoFoto.estraiAttuale(lista, null).resto.map(f => f.Nome), ["a.psd", "b.psd"]);
+    assert.strictEqual(DataCaricamentoFoto.estraiAttuale(lista, 99).attuale, null);
+    assert.deepStrictEqual(DataCaricamentoFoto.estraiAttuale(lista, 99).resto.length, 2);
+});
+
+test("la schermata disegna la foto attuale prima delle altre sezioni", () => {
+    const schedaRef = sorgente("schedaRef.js");
+
+    const sezioneAttuale = schedaRef.indexOf('<div id="sectionFotoAttualeWrapper"');
+    const sezioneEsistenti = schedaRef.indexOf('<div id="sectionFotoEsistenti"></div>');
+
+    assert.ok(sezioneAttuale > 0 && sezioneEsistenti > 0);
+    assert.ok(sezioneAttuale < sezioneEsistenti, "la foto attuale va in cima a tutta la schermata");
+    assert.ok(schedaRef.includes("DataCaricamentoFoto.estraiAttuale("),
+        "la foto attuale va estratta dal suo gruppo per non comparire due volte");
+    assert.ok(schedaRef.includes("DataCaricamentoFoto.ordinaDallaPiuNuova("),
+        "le liste vanno ordinate dalla piu' nuova");
+});
+
+test("caricando un file dal disco sparisce anche la sezione della foto attuale", () => {
+    const schedaRef = sorgente("schedaRef.js");
+    const ramoUpload = schedaRef.indexOf("$('#sectionFotoEsistenti').hide();");
+    const blocco = schedaRef.slice(ramoUpload - 400, ramoUpload + 200);
+
+    assert.ok(blocco.includes("$('#sectionFotoAttualeWrapper').hide();"),
+        "altrimenti resterebbe l'unica sezione visibile sotto l'anteprima del file");
+});

@@ -4662,6 +4662,17 @@ const schedaRef = {
                     font-weight:bold;
                 ">Oppure</div>
 
+                <div id="sectionFotoAttualeWrapper" style="
+                    margin-bottom:12px;
+                    display:none;
+                ">
+                    <div style="
+                        margin-bottom:8px;
+                        font-weight:bold;
+                    ">Foto attuale</div>
+                    <div id="sectionFotoAttuale"></div>
+                </div>
+
                 <div id="sectionFotoEsistenti"></div>
 
                 <div id="sectionFotoDisattivateWrapper" style="
@@ -4906,17 +4917,56 @@ const schedaRef = {
                 }
 
                 function renderPhotoSections() {
-                    const fotoAttiveCompatibili = fotoList.filter(x =>
+                    //I20-971: dentro ogni gruppo le foto vanno dalla piu' nuova alla piu' vecchia.
+                    let fotoAttiveCompatibili = DataCaricamentoFoto.ordinaDallaPiuNuova(fotoList.filter(x =>
                         x.Attiva !== false && isSelectableForCurrentContext(x)
-                    );
+                    ));
 
-                    const fotoDisattivateCompatibili = fotoList.filter(x =>
+                    let fotoDisattivateCompatibili = DataCaricamentoFoto.ordinaDallaPiuNuova(fotoList.filter(x =>
                         x.Attiva === false && isSelectableForCurrentContext(x)
-                    );
+                    ));
 
-                    const fotoAltre = fotoList.filter(x =>
+                    let fotoAltre = DataCaricamentoFoto.ordinaDallaPiuNuova(fotoList.filter(x =>
                         !isSelectableForCurrentContext(x)
-                    );
+                    ));
+
+                    //La foto in uso si mostra per prima, sopra a tutte le sezioni. Esce dal suo
+                    //gruppo per non comparire due volte, ma conserva le opzioni di quel gruppo,
+                    //cosi' selezionabilita' e resa restano quelle di prima.
+                    const idAttuale = state.currentActivePhoto != null ? state.currentActivePhoto.Id : null;
+                    let fotoAttuale = null;
+                    let opzioniAttuale = { isOtherSection: false, isDisabledSection: false };
+
+                    const daAttive = DataCaricamentoFoto.estraiAttuale(fotoAttiveCompatibili, idAttuale);
+                    if (daAttive.attuale != null) {
+                        fotoAttuale = daAttive.attuale;
+                        fotoAttiveCompatibili = daAttive.resto;
+                    }
+                    else {
+                        const daDisattivate = DataCaricamentoFoto.estraiAttuale(fotoDisattivateCompatibili, idAttuale);
+                        if (daDisattivate.attuale != null) {
+                            fotoAttuale = daDisattivate.attuale;
+                            fotoDisattivateCompatibili = daDisattivate.resto;
+                            opzioniAttuale = { isOtherSection: false, isDisabledSection: true };
+                        }
+                        else {
+                            const daAltre = DataCaricamentoFoto.estraiAttuale(fotoAltre, idAttuale);
+                            if (daAltre.attuale != null) {
+                                fotoAttuale = daAltre.attuale;
+                                fotoAltre = daAltre.resto;
+                                opzioniAttuale = { isOtherSection: true, isDisabledSection: false };
+                            }
+                        }
+                    }
+
+                    if (fotoAttuale != null) {
+                        $('#sectionFotoAttualeWrapper').show();
+                        buildPhotoGrid($('#sectionFotoAttuale'), [fotoAttuale], opzioniAttuale);
+                    }
+                    else {
+                        $('#sectionFotoAttualeWrapper').hide();
+                        $('#sectionFotoAttuale').empty();
+                    }
 
                     buildPhotoGrid($('#sectionFotoEsistenti'), fotoAttiveCompatibili, {
                         isOtherSection: false,
@@ -5251,6 +5301,7 @@ const schedaRef = {
                             $('#previewUploadFoto').show();
                             $('#btnResetFotoScelta').show();
 
+                            $('#sectionFotoAttualeWrapper').hide();
                             $('#sectionFotoEsistenti').hide();
                             $('#sectionFotoDisattivateWrapper').hide();
                             $('#sectionAltreFotoWrapper').hide();
@@ -5310,6 +5361,11 @@ const schedaRef = {
                         $('#txtNomeUploadFoto').text('');
                         $('#btnResetFotoScelta').hide();
 
+                        //La sezione della foto attuale torna visibile solo se ha una scheda:
+                        //senza foto in uso non deve comparire un riquadro vuoto.
+                        if ($('#sectionFotoAttuale .foto-item').length > 0) {
+                            $('#sectionFotoAttualeWrapper').show();
+                        }
                         $('#sectionFotoEsistenti').show();
                         $('#sectionFotoDisattivateWrapper').show();
                         if ($('#sectionAltreFoto .foto-item').length > 0) {

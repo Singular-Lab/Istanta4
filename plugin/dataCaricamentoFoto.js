@@ -48,9 +48,78 @@ var DataCaricamentoFoto = (function () {
         return formattaDataCaricamento(foto.DataModifica);
     }
 
+    /// Momento di caricamento di una foto come numero confrontabile. Le foto senza data
+    /// utilizzabile tornano null e vanno tenute in fondo: non si inventa loro una data.
+    function istanteDiCaricamento(foto) {
+        if (foto == null) {
+            return null;
+        }
+
+        var valori = [foto.DataInserimento, foto.DataModifica];
+        for (var i = 0; i < valori.length; i++) {
+            if (formattaDataCaricamento(valori[i]) === "") {
+                continue;
+            }
+            var data = valori[i] instanceof Date ? valori[i] : new Date(valori[i]);
+            return data.getTime();
+        }
+
+        return null;
+    }
+
+    /// Ordina le foto dalla piu' nuova alla piu' vecchia. Quelle senza data finiscono in fondo
+    /// nell'ordine in cui sono arrivate, che dal server e' gia' per data di modifica
+    /// decrescente. L'ordine fra foto di pari data resta quello di partenza: si confrontano
+    /// gli indici, cosi' l'esito non dipende dalla stabilita' di sort del motore.
+    function ordinaDallaPiuNuova(lista) {
+        var elementi = (lista || []).slice();
+        var conIndice = elementi.map(function (foto, indice) {
+            return { foto: foto, indice: indice, istante: istanteDiCaricamento(foto) };
+        });
+
+        conIndice.sort(function (a, b) {
+            if (a.istante == null && b.istante == null) {
+                return a.indice - b.indice;
+            }
+            if (a.istante == null) {
+                return 1;
+            }
+            if (b.istante == null) {
+                return -1;
+            }
+            if (a.istante === b.istante) {
+                return a.indice - b.indice;
+            }
+            return b.istante - a.istante;
+        });
+
+        return conIndice.map(function (voce) { return voce.foto; });
+    }
+
+    /// Separa dalla lista la foto attualmente in uso, che va mostrata in cima alla schermata.
+    /// Estrarla, invece di lasciarla dov'e', evita che compaia due volte: due schede cliccabili
+    /// per la stessa foto confonderebbero piu' del problema che stiamo risolvendo.
+    function estraiAttuale(lista, idAttuale) {
+        var elementi = lista || [];
+        var attuale = null;
+        var resto = [];
+
+        for (var i = 0; i < elementi.length; i++) {
+            if (attuale == null && idAttuale != null && elementi[i] != null && elementi[i].Id === idAttuale) {
+                attuale = elementi[i];
+                continue;
+            }
+            resto.push(elementi[i]);
+        }
+
+        return { attuale: attuale, resto: resto };
+    }
+
     return {
         formattaDataCaricamento: formattaDataCaricamento,
-        dataDaMostrare: dataDaMostrare
+        dataDaMostrare: dataDaMostrare,
+        ordinaDallaPiuNuova: ordinaDallaPiuNuova,
+        estraiAttuale: estraiAttuale
     };
 })();
 
