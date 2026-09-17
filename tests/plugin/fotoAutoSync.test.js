@@ -4,7 +4,7 @@
  * Il modulo sotto test e' plugin/fotoAutoSync.js, scritto senza dipendenze da UXP/InDesign
  * proprio per poter essere verificato qui. Le operazioni concrete sono sostituite da doppi.
  *
- * Esecuzione: node --test tests/plugin
+ * Esecuzione: node --test tests/plugin/*.test.js
  */
 
 const test = require('node:test');

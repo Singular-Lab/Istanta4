@@ -249,7 +249,7 @@ jobs:
       # test runner di Node: la suite non richiede dipendenze ne' package.json.
       - name: Test suite Plugin
         if: steps.changes.outputs.plugin == 'true' && hashFiles('tests/plugin/*.test.js') != ''
-        run: node --test tests/plugin
+        run: node --test tests/plugin/*.test.js
 
       - name: Set up Docker Buildx
         if: steps.changes.outputs.istanta == 'true' || steps.changes.outputs.agenzialib == 'true' || steps.changes.outputs.fidelity == 'true' || steps.changes.outputs.olimpo == 'true' || steps.changes.outputs.correggo4 == 'true'
