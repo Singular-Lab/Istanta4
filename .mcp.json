@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "SingularAiFactory2": {
+      "type": "http",
+      "url": "https://controlplane.singularlab.it:81/mcp",
+      "oauth": {
+        "clientId": "controlplane-local-agent",
+        "callbackPort": 3000
+      }
+    }
+  }
+}
