@@ -91,6 +91,9 @@ namespace Istanta.Models
         public static readonly string keyStatoRevisioneSingolo = "statoRevisioneSingolo";
         public static readonly string keyStatoRevisioneGruppo = "statoRevisioneGruppo";
         public static readonly string keyMembriGruppoFoto = "membriGruppoFoto";
+        //Elementi del box (campi, loghi, foto extra) che il Plugin deve impaginare ma non rendere visibili.
+        //Le foto primarie/secondarie non passano di qui: viaggiano dentro membriGruppoFoto.
+        public static readonly string keyNoRenderElementi = "noRenderElementi";
 
 
         //Con queste combinazioni di chiave, si chiede al core di recuperare la descrizione dall'archivio per far uscire le ref indicate con questo attributo
@@ -948,12 +951,92 @@ namespace Istanta.Models
 
         public static RevisioneMetaPromoLavorazioni? leggi(string meta)
         {
-            return Newtonsoft.Json.JsonConvert.DeserializeObject<RevisioneMetaPromoLavorazioni>(meta, settings);
+            var letto = Newtonsoft.Json.JsonConvert.DeserializeObject<RevisioneMetaPromoLavorazioni>(meta, settings);
+            //I meta storici marcano le foto dentro ps: si convertono alla prima lettura, cosi'
+            //il resto del codice conosce una sola struttura.
+            migraNoRenderDelleFoto(letto);
+            return letto;
         }
 
         public static List<RevisioneSelezioneFotoFromIndd>? leggiSelezioniFoto(string ps)
         {
             return Newtonsoft.Json.JsonConvert.DeserializeObject<List<RevisioneSelezioneFotoFromIndd>>(ps, settings);
+        }
+
+        public static List<RevisioneNoRenderFromIndd>? leggiElementiNoRender(string elementi)
+        {
+            return Newtonsoft.Json.JsonConvert.DeserializeObject<List<RevisioneNoRenderFromIndd>>(elementi, settings);
+        }
+
+        /// <summary>
+        /// Nei meta si conservano solo gli elementi effettivamente in noRender: un elenco vuoto
+        /// significa che l'operatore li ha liberati tutti, e in quel caso la chiave sparisce
+        /// invece di restare a vuoto.
+        /// </summary>
+        public static List<RevisioneNoRenderFromIndd>? normalizzaElementiNoRender(List<RevisioneNoRenderFromIndd>? elementi)
+        {
+            return (elementi != null && elementi.Count > 0) ? elementi : null;
+        }
+
+        /// <summary>
+        /// Porta nella struttura noRender le foto che i meta storici marcavano dentro ps.
+        /// Serve a non perdere le marcature gia' fatte dagli operatori quando le foto sono
+        /// passate alla struttura unica: la voce si crea solo se non c'e' gia'.
+        /// </summary>
+        public static void migraNoRenderDelleFoto(RevisioneMetaPromoLavorazioni? meta)
+        {
+            if (meta?.ps == null)
+            {
+                return;
+            }
+
+            foreach (var selezione in meta.ps.Where(s => s.noRender && !string.IsNullOrEmpty(s.codRef)))
+            {
+                meta.noRender ??= new List<RevisioneNoRenderFromIndd>();
+
+                bool giaPresente = meta.noRender.Any(e =>
+                    e.tipo == TipoElementoBox.Foto && e.chiave == selezione.codRef);
+
+                if (!giaPresente)
+                {
+                    meta.noRender.Add(new RevisioneNoRenderFromIndd
+                    {
+                        tipo = TipoElementoBox.Foto,
+                        chiave = selezione.codRef,
+                        nome = selezione.codRef
+                    });
+                }
+            }
+        }
+
+        /// <summary>
+        /// Fonde nel meta le selezioni foto arrivate dal Plugin: aggiorna le voci esistenti
+        /// e aggiunge quelle nuove. La lista ps puo' mancare del tutto, perche' un meta puo'
+        /// essere stato scritto da un'altra operazione: in quel caso va creata, non dereferenziata,
+        /// altrimenti l'aggiornamento delle foto si perde senza lasciare traccia.
+        /// </summary>
+        public static void applicaSelezioniFoto(RevisioneMetaPromoLavorazioni meta, List<RevisioneSelezioneFotoFromIndd>? selezioni)
+        {
+            if (meta == null || selezioni == null || selezioni.Count == 0)
+            {
+                return;
+            }
+
+            meta.ps ??= new List<RevisioneSelezioneFotoFromIndd>();
+
+            foreach (var selezione in selezioni)
+            {
+                var giaEsistente = meta.ps.FirstOrDefault(s => s.codRef == selezione.codRef);
+                if (giaEsistente == null)
+                {
+                    meta.ps.Add(selezione);
+                }
+                else
+                {
+                    giaEsistente.stato = selezione.stato;
+                    giaEsistente.noRender = selezione.noRender;
+                }
+            }
         }
     }
 
@@ -963,6 +1046,46 @@ namespace Istanta.Models
         public List<RevisioneCampiOffertaFromIndd>? campiOfferta { get; set; }
         public List<RevisioneFotoFromIndd>? foto { get; set; }
         public List<RevisioneSelezioneFotoFromIndd>? ps { get; set; }
+        /// <summary>
+        /// Elementi del box messi in noRender dall'operatore: campi, loghi, foto extra.
+        /// Contiene solo gli elementi effettivamente marcati, cosi' la struttura resta piccola:
+        /// togliere il noRender a un elemento ne rimuove la voce, non scrive false.
+        /// Le foto primarie/secondarie non stanno qui, hanno la loro opzione dentro ps.
+        /// </summary>
+        public List<RevisioneNoRenderFromIndd>? noRender { get; set; }
+    }
+
+    /// <summary>
+    /// Categoria dell'elemento del box a cui si riferisce l'opzione di rendering.
+    /// Serve a distinguere due elementi che condividono la chiave ma non la natura.
+    /// </summary>
+    public enum TipoElementoBox
+    {
+        Campo = 1,
+        Logo = 2,
+        FotoExtra = 3,
+        Etichetta = 4,
+        /// <summary>
+        /// Foto primaria o secondaria del box, identificata dal codice referenza.
+        /// Prima l'opzione di rendering delle foto stava dentro ps: due strutture volevano
+        /// dire due salvataggi sullo stesso meta e due applicazioni in impaginazione.
+        /// </summary>
+        Foto = 5,
+        Altro = 99
+    }
+
+    /// <summary>
+    /// Un elemento del box che il Plugin impagina ma non rende visibile.
+    /// L'elemento e' identificato da tipo + chiave logica (sigla per loghi e foto extra,
+    /// nome del campo per campi ed etichette), non dalla label InDesign: la label incorpora
+    /// il codice della ref e viene ricostruita a ogni impaginazione.
+    /// </summary>
+    public class RevisioneNoRenderFromIndd
+    {
+        public TipoElementoBox tipo { get; set; }
+        public string? chiave { get; set; }
+        /// <summary>Nome leggibile mostrato dal Plugin: nome del logo, nome della foto.</summary>
+        public string? nome { get; set; }
     }
 
     //Legato al campo LABEL della rappresentazione grafica
@@ -988,9 +1111,9 @@ namespace Istanta.Models
         public string? codRef { get; set; }//Codice della referenza di cui è stata alterata la foto o la selezione
         public StatoSelezioneFoto stato { get; set; }
         /// <summary>
-        /// Opzione di rendering della foto primaria/secondaria del box. Quando true il
-        /// Plugin impagina l'immagine ma la rende invisibile in fase di impaginazione.
-        /// I meta gia' salvati non contengono la chiave: l'assenza vale false.
+        /// Superata: l'opzione di rendering delle foto vive nella struttura noRender del meta,
+        /// insieme agli altri elementi del box. Questa proprieta' resta solo per leggere i meta
+        /// storici e convertirli, e non viene piu' scritta dal Plugin.
         /// </summary>
         public bool noRender { get; set; } = false;
     }
@@ -2419,7 +2542,8 @@ namespace Istanta.Models
         cambioMeta = 10,
         cambioPagina = 11,
         rimuoviMetaFoto = 12,
-        login=13
+        login=13,
+        updateNoRender = 14
     }
 
     public enum senderOperazione

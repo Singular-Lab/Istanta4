@@ -53,6 +53,8 @@ namespace Istanta.Controllers
                         return "Revisione articolo";
                     case "updatePS":
                         return "Aggiornamento primario/secondario";
+                    case "updateNoRender":
+                        return "Aggiornamento elementi in norender";
                     case "updateFoto":
                         return "Aggiornamento foto";
                     case "gruppa":

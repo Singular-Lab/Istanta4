@@ -1,10 +1,11 @@
-const InputEditController = require('./InputEditController');
+﻿const InputEditController = require('./InputEditController');
 const XMLHttpRequestClient = require('./XMLHttpRequestClient');
 const { app, PDFExportOptions, CompressionQuality } = require('indesign');
 const fs = require('fs');
 const { parse } = require('path');
 const GarbageCollector = require('./garbageCollector');
 const { ref } = require('process');
+const NoRenderElementi = require('./noRenderElementi');
 
 const confronti = {
     async confrontoBox(box1, box2, forzaReimpaginazione = false){ //mode 0 -> cambio strutturale, mode 1 -> confrontoMassivo
@@ -313,7 +314,9 @@ const confronti = {
         }
     },
 
-    async confrontoBoxCompiledFieldPreAnalisi(box1, compiledFields, deletedFields, listFoto, fotoExtra, fotoExtraAuto, checkMD5 = true) { //mode 0 -> cambio strutturale, mode 1 -> confrontoMassivo
+    //elementiNoRender: elenco degli elementi che l'operatore ha messo in noRender (I20-968).
+    //Un elemento marcato e poi cancellato dai livelli non e' un file perso: va detto, non gridato.
+    async confrontoBoxCompiledFieldPreAnalisi(box1, compiledFields, deletedFields, listFoto, fotoExtra, fotoExtraAuto, checkMD5 = true, elementiNoRender = null) { //mode 0 -> cambio strutturale, mode 1 -> confrontoMassivo
         let differenze = [];
         let errors = [];
         let me = this;
@@ -346,7 +349,12 @@ const confronti = {
                 let campoBox1 = box1campi.find(campo => campo.isValid && Utility.parseLabel(campo.label) == Utility.parseLabel(compiledField.labelName));
                 if (campoBox1 == undefined) {
                     //se il campo compilato non è presente nel box1 allora lo aggiungiamo alle differenze
-                    differenze.push({ label: Utility.parseLabel(compiledField.labelName), difference: "non presente" });
+                    var labelCampo = Utility.parseLabel(compiledField.labelName);
+                    var classificatoCampo = NoRenderElementi.classificaLabel(labelCampo);
+                    //Un elemento in noRender che non c'e' piu' e' un'assenza voluta: non si segnala.
+                    if (NoRenderElementi.daSegnalareComeMancante(elementiNoRender, classificatoCampo.tipo, classificatoCampo.chiave)) {
+                        differenze.push({ label: labelCampo, difference: "non presente" });
+                    }
                     return;
                 }
 
@@ -541,7 +549,9 @@ const confronti = {
             if (listFoto && listFoto.length > 0) {
                 listFoto.forEach(foto => {
                     if (foto.nomeFoto != "" && listFotoBox1.find(f => f.nomeFoto == foto.nomeFoto) == undefined) {
-                        differenze.push({ label: foto.nomeFoto, difference: "foto mancante nel box: " + foto.nomeFoto });
+                        if (NoRenderElementi.daSegnalareComeMancante(elementiNoRender, NoRenderElementi.TIPO_FOTO, foto.nomeFoto)) {
+                            differenze.push({ label: foto.nomeFoto, difference: "foto mancante nel box: " + foto.nomeFoto });
+                        }
                         //controlliamo se la foto c'è nella cartella di lavorazione
                         var path = /*pathLavorazione +*/ percorsoLinks + foto.nomeFoto;
                         try{
@@ -595,7 +605,10 @@ const confronti = {
                         if (!foto.attiva) {
                             return;
                         }
-                        differenze.push({ label: foto.nome, difference: "foto extra mancante nel box: " + foto.nome });
+                        var tipoExtra = foto.tipo == 3 ? NoRenderElementi.TIPO.logo : NoRenderElementi.TIPO.fotoExtra;
+                        if (NoRenderElementi.daSegnalareComeMancante(elementiNoRender, tipoExtra, foto.sigla)) {
+                            differenze.push({ label: foto.nome, difference: "foto extra mancante nel box: " + foto.nome });
+                        }
                     }
                     else {
                         //togliamo la foto dalla lista
@@ -647,6 +660,26 @@ const confronti = {
             listFotoExtraBox1.forEach(foto => {
                 differenze.push({ label: foto, difference: "foto extra in più nel box originale: " + foto });
             });
+
+            //I20-968, caso opposto: l'elemento e' in noRender ma nel documento qualcuno lo ha
+            //rimesso visibile. Qui la segnalazione serve: il box non rispetta piu' la scelta.
+            if (elementiNoRender && elementiNoRender.length > 0) {
+                var nomePrimariaBox = pluginMiddleware.getCampo("nomeFotoPrimaria");
+                var nomeSecondariaBox = pluginMiddleware.getCampo("nomeFotoSecondaria");
+
+                box1campi.forEach(campo => {
+                    var classificatoCampo = NoRenderElementi.classificaLabel(campo.label, nomePrimariaBox, nomeSecondariaBox);
+                    if (classificatoCampo == null) {
+                        return;
+                    }
+                    if (NoRenderElementi.daSegnalareComeRiattivato(elementiNoRender, classificatoCampo.tipo, classificatoCampo.chiave, campo.visible)) {
+                        differenze.push({
+                            label: classificatoCampo.chiave,
+                            difference: NoRenderElementi.segnalazioneElementoRiattivato(classificatoCampo.chiave)
+                        });
+                    }
+                });
+            }
 
         } catch (error) {
             console.error(error);

@@ -107,20 +107,15 @@ namespace Istanta.Utility
                         else if (operazione.TipoOperazione == (Byte)tipoOperazione.updatePS)
                         {
                             List<RevisioneSelezioneFotoFromIndd>? upPSFieldList = MetaPromoLavorazioni.leggiSelezioniFoto(operazione.FormData!);
-                            foreach (var upPSField in upPSFieldList!)
-                            {
-                                var fieldGiaEsistente = storeField!.ps!.FirstOrDefault(s => s.codRef == upPSField.codRef);
-
-                                if (fieldGiaEsistente == null)
-                                {
-                                    storeField.ps!.Add(upPSField);
-                                }
-                                else
-                                {
-                                    fieldGiaEsistente.stato = upPSField.stato;
-                                    fieldGiaEsistente.noRender = upPSField.noRender;
-                                }
-                            }
+                            MetaPromoLavorazioni.applicaSelezioniFoto(storeField!, upPSFieldList);
+                        }
+                        else if (operazione.TipoOperazione == (Byte)tipoOperazione.updateNoRender)
+                        {
+                            //Il Plugin manda l'elenco completo degli elementi in noRender del box:
+                            //sostituisce quello nei meta. Elenco vuoto significa nessun elemento
+                            //marcato, e in quel caso la chiave sparisce invece di restare a vuoto.
+                            List<RevisioneNoRenderFromIndd>? elementiNoRender = MetaPromoLavorazioni.leggiElementiNoRender(operazione.FormData!);
+                            storeField!.noRender = MetaPromoLavorazioni.normalizzaElementiNoRender(elementiNoRender);
                         }
                         else if (operazione.TipoOperazione == (Byte)tipoOperazione.rimuoviMetaFoto)
                         {
