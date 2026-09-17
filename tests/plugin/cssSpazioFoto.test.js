@@ -217,3 +217,57 @@ test('la descrizione per il log dice cosa c\'era e cosa si e\' scelto', () => {
     assert.match(testo, /scelto x30 y30 40x40/);
     assert.match(cssSpazioFoto.descriviScelta([], null, null, 100, 100), /scelto nessuno/);
 });
+
+test('le estensioni tolgono spazio ai candidati lato per lato, senza scalare con la foto', () => {
+    const candidato = { x: 10, y: 20, width: 50, height: 60, direction: 'sopra' };
+
+    const ristretti = cssSpazioFoto.restringiCandidati([candidato], { alto: 1, sinistra: 2, basso: 3, destra: 4 });
+
+    assert.strictEqual(ristretti.length, 1);
+    assert.deepStrictEqual(
+        [ristretti[0].x, ristretti[0].y, ristretti[0].width, ristretti[0].height],
+        [12, 21, 44, 56]);
+    assert.strictEqual(ristretti[0].derivatoDa, candidato);
+    assert.strictEqual(ristretti[0].direction, 'sopra');
+});
+
+test('con l\'ombra sotto la foto viene piu\' bassa di quanto sporge l\'ombra e il suo lato basso resta libero', () => {
+    //Spazio 40 x 40, foto alta: comanda l'altezza. Con 3 di estensione sotto la foto puo' essere alta 37.
+    const ristretti = cssSpazioFoto.restringiCandidati([centrale], { basso: 3 });
+    const scelta = cssSpazioFoto.scegli(ristretti, gruppoFoto, null, larghezzaBase, altezzaBase);
+
+    assert.strictEqual(scelta.candidato.height, 37);
+    //Il bordo basso dello spazio ristretto lascia esattamente i 3 mm all'ombra.
+    assert.strictEqual(scelta.candidato.y + scelta.candidato.height, centrale.y + centrale.height - 3);
+});
+
+test('senza estensioni i candidati sono gli stessi oggetti di prima', () => {
+    const candidati = [centrale, laterale];
+
+    assert.strictEqual(cssSpazioFoto.restringiCandidati(candidati, null), candidati);
+    assert.strictEqual(cssSpazioFoto.restringiCandidati(candidati, { alto: 0, basso: 0 }), candidati);
+    assert.strictEqual(cssSpazioFoto.restringiCandidati(candidati, { basso: 'niente' }), candidati);
+});
+
+test('uno spazio che non regge le estensioni sparisce dalla scelta', () => {
+    const basso = { x: 0, y: 0, width: 40, height: 5 };
+    const ristretti = cssSpazioFoto.restringiCandidati([basso, centrale], { basso: 6 });
+
+    assert.strictEqual(ristretti.length, 1);
+    assert.strictEqual(ristretti[0].derivatoDa, centrale);
+});
+
+test('le estensioni negative o non numeriche valgono zero', () => {
+    assert.deepStrictEqual(
+        cssSpazioFoto.normalizzaEstensioni({ alto: -2, sinistra: 'x', basso: '2.5', destra: null }),
+        { alto: 0, sinistra: 0, basso: 2.5, destra: 0 });
+    assert.deepStrictEqual(cssSpazioFoto.normalizzaEstensioni(null), { alto: 0, sinistra: 0, basso: 0, destra: 0 });
+});
+
+test('la descrizione per il log riporta le estensioni quando ci sono', () => {
+    const conEstensioni = cssSpazioFoto.descriviScelta([centrale], null, null, 100, 100, { basso: 3 });
+    assert.match(conEstensioni, /estensioni alto 0 sinistra 0 basso 3 destra 0/);
+
+    const senza = cssSpazioFoto.descriviScelta([centrale], null, null, 100, 100, null);
+    assert.doesNotMatch(senza, /estensioni/);
+});
