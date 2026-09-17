@@ -11168,7 +11168,7 @@ double.TryParse(percorso.ToString(), out double valore16))
             try
             {
                 List<RevisioneSelezioneFotoFromIndd> ps =
-                    JsonConvert.DeserializeObject<List<RevisioneSelezioneFotoFromIndd>>(dato.ps!)!;
+                    MetaPromoLavorazioni.leggiSelezioniFoto(dato.ps!)!;
 
                 PromoLavorazioniRecord? plrItem = null;
 

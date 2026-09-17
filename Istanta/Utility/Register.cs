@@ -59,7 +59,7 @@ namespace Istanta.Utility
                         if (plrItem.Meta != null)
                         {
                             //storeField = JsonConvert.DeserializeObject<List<RevisioneCampiOffertaFromIndd>>(plrItem.Meta);
-                            storeField = JsonConvert.DeserializeObject<RevisioneMetaPromoLavorazioni>(plrItem.Meta!);
+                            storeField = MetaPromoLavorazioni.leggi(plrItem.Meta!);
                         }
                         else
                         {
@@ -106,7 +106,7 @@ namespace Istanta.Utility
                         }
                         else if (operazione.TipoOperazione == (Byte)tipoOperazione.updatePS)
                         {
-                            List<RevisioneSelezioneFotoFromIndd>? upPSFieldList = JsonConvert.DeserializeObject<List<RevisioneSelezioneFotoFromIndd>>(operazione.FormData!);
+                            List<RevisioneSelezioneFotoFromIndd>? upPSFieldList = MetaPromoLavorazioni.leggiSelezioniFoto(operazione.FormData!);
                             foreach (var upPSField in upPSFieldList!)
                             {
                                 var fieldGiaEsistente = storeField!.ps!.FirstOrDefault(s => s.codRef == upPSField.codRef);

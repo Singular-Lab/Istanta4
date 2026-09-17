@@ -58,6 +58,46 @@ public class NoRenderMetaTests
     }
 
     [Fact]
+    public void Meta_con_noRender_null_non_fa_fallire_la_lettura()
+    {
+        // SRF-04: meta salvati con la chiave esplicitamente a null. Prima la lettura
+        // dell'intera scheda falliva con
+        // "Error converting value {null} to type 'System.Boolean'. Path 'ps[0].noRender'".
+        const string meta =
+            "{\"campiOfferta\":[],\"foto\":[],\"ps\":[{\"codRef\":\"3150596\",\"stato\":1,\"noRender\":null}]}";
+
+        var letto = MetaPromoLavorazioni.leggi(meta);
+
+        var voce = Assert.Single(letto!.ps!);
+        Assert.Equal(StatoSelezioneFoto.Primaria, voce.stato);
+        Assert.False(voce.noRender);
+    }
+
+    [Fact]
+    public void Meta_con_stato_null_non_fa_fallire_la_lettura()
+    {
+        // Stesso difetto sull'altro tipo valore della voce ps.
+        const string meta = "{\"ps\":[{\"codRef\":\"3150599\",\"stato\":null,\"noRender\":true}]}";
+
+        var letto = MetaPromoLavorazioni.leggi(meta);
+
+        var voce = Assert.Single(letto!.ps!);
+        Assert.Equal(default(StatoSelezioneFoto), voce.stato);
+        Assert.True(voce.noRender);
+    }
+
+    [Fact]
+    public void Selezioni_foto_dal_client_con_noRender_null_valgono_false()
+    {
+        // Stessa tolleranza sul payload di Menabo/modificaPrimarieSecondarie.
+        const string ps = "[{\"codRef\":\"3150596\",\"stato\":1,\"noRender\":null}]";
+
+        var lista = MetaPromoLavorazioni.leggiSelezioniFoto(ps);
+
+        Assert.False(Assert.Single(lista!).noRender);
+    }
+
+    [Fact]
     public void Meta_legacy_completo_resta_leggibile()
     {
         // Meta realistico prodotto dalla versione precedente: campiOfferta + foto + ps.
