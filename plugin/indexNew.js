@@ -172,6 +172,8 @@ function applicaNoRenderAgliElementiDelBox(box, elementiNoRender) {
         return;
     }
 
+    var resiInvisibili = 0;
+
     var nomePrimaria = pluginMiddleware.getCampo("nomeFotoPrimaria");
     var nomeSecondaria = pluginMiddleware.getCampo("nomeFotoSecondaria");
 
@@ -184,8 +186,13 @@ function applicaNoRenderAgliElementiDelBox(box, elementiNoRender) {
             }
             if (NoRenderElementi.inNoRender(elementiNoRender, classificato.tipo, classificato.chiave)) {
                 FotoPlacer.applicaNoRender(item, true);
+                resiInvisibili++;
             }
         }
+
+        //Se i marcati sono piu' di quelli resi invisibili, l'elenco arriva ma le label del
+        //box non corrispondono alle chiavi salvate: sono due guasti diversi e vanno distinti.
+        console.log("noRender: " + resiInvisibili + " elementi resi invisibili su " + elementiNoRender.length + " marcati");
     }
     catch (e) {
         console.error("Impossibile applicare il noRender agli elementi del box", e);
@@ -5018,10 +5025,6 @@ async function impaginaBox(meccanica, pagCoinvolta, bounds, itemRef, pathLavoraz
                                     boxImpaginato = newGroup;
                                 }
 
-                                //I20-968: gli elementi del box messi in noRender dall'operatore vengono
-                                //impaginati comunque e poi resi invisibili. Le foto primarie/secondarie
-                                //non passano di qui: la loro opzione arriva da membriGruppoFoto.
-                                applicaNoRenderAgliElementiDelBox(boxImpaginato, itemRef.noRenderElementi);
     
     
                                 let mastroCompiledData = itemRef.compiledFields.find(f => f.labelName == "Mastro");
@@ -5284,6 +5287,11 @@ async function impaginaBox(meccanica, pagCoinvolta, bounds, itemRef, pathLavoraz
                 idRec: idRec != null && !isNaN(parseInt(idRec)) ? parseInt(idRec) : 0
             });
         }
+
+        //I20-968: qui il box e' composto per intero, qualunque ramo abbia creato i suoi
+        //elementi. Gli elementi in noRender sono impaginati e poi resi invisibili; le foto
+        //primarie/secondarie non passano di qui, la loro opzione arriva da membriGruppoFoto.
+        applicaNoRenderAgliElementiDelBox(boxImpaginato, itemRef.noRenderElementi);
 
         boxImpaginato = finalizzaSegnalazioni(reportImpaginazioneObj, itemRef["Scatto.CodiceGruppo"], boxImpaginato);
     }
@@ -7271,6 +7279,13 @@ async function impaginazioneSingoloIndd(records, pagina, cercaInPaginaPerConfron
             stampaSegnalazioni(reportImpaginazioneObj);
             rimuoviSimboli();
         }
+
+        //Ricollegamento, confronto e rimozione dei simboli possono rifare elementi del box,
+        //e un elemento rifatto nasce visibile: si riapplica, l'operazione e' idempotente.
+        if (box != null && box.boxAggiunto != null) {
+            applicaNoRenderAgliElementiDelBox(box.boxAggiunto, tracciatoPrimario.noRenderElementi);
+        }
+
         return box;
     } catch (e) {
         console.error(e);

@@ -245,13 +245,38 @@ var NoRenderElementi = (function () {
     /// perche' ogni riga deve portarsi i propri: un indirizzo condiviso fra le righe mostrava
     /// sempre l'ultima immagine.
     function datiRiga(elemento, indirizzoBase) {
+        var marcato = elemento != null && elemento.noRender === true;
+
         return {
             descrizione: descriviElemento(elemento),
             urlMiniatura: urlMiniatura(elemento, indirizzoBase, 50),
             urlIngrandita: urlMiniatura(elemento, indirizzoBase, 300),
             presente: elemento != null && elemento.presente !== false,
-            noRender: elemento != null && elemento.noRender === true
+            noRender: marcato,
+            //Lo stato deve leggersi dalla riga: chi apre il modal deve sapere cosa e' gia'
+            //nascosto senza andare a controllare il box in InDesign.
+            barrato: marcato,
+            etichettaStato: marcato ? "NON RENDERIZZATO" : "",
+            testoBottone: marcato ? "Ripristina" : "Nascondi"
         };
+    }
+
+    /// Riepilogo in testa all'elenco: quanti elementi del box sono nascosti.
+    function riepilogo(lista) {
+        var elementi = lista || [];
+        var marcati = 0;
+
+        for (var i = 0; i < elementi.length; i++) {
+            if (elementi[i] != null && elementi[i].noRender === true) {
+                marcati++;
+            }
+        }
+
+        if (marcati === 0) {
+            return "Nessun elemento nascosto: " + elementi.length + " element" + (elementi.length === 1 ? "o" : "i") + " nel box.";
+        }
+
+        return marcati + " element" + (marcati === 1 ? "o" : "i") + " su " + elementi.length + " non renderizzat" + (marcati === 1 ? "o" : "i") + ".";
     }
 
     function inNoRender(elementiMarcati, tipo, chiave) {
@@ -283,6 +308,7 @@ var NoRenderElementi = (function () {
         fotoDaSalvare: fotoDaSalvare,
         datiExtraDiSigla: datiExtraDiSigla,
         datiRiga: datiRiga,
+        riepilogo: riepilogo,
         urlMiniatura: urlMiniatura,
         elencoPerSegnalazioni: elencoPerSegnalazioni,
         inNoRender: inNoRender,

@@ -7548,16 +7548,26 @@ const schedaRef = {
             return;
         }
 
+        //Quanti elementi sono nascosti, senza doverli contare a occhio nell'elenco.
+        $("#bodyNoRender").append(
+            $('<div style="font-size:12px; font-weight:600; margin-bottom:10px;"></div>').text(NoRenderElementi.riepilogo(lista)));
+
         for (var i = 0; i < lista.length; i++) {
             var elemento = lista[i];
-            var row = $('<div class="row align-items-center" style="margin-bottom:8px; display:flex; align-items:center;"></div>');
+            var indirizzoOlimpo = typeof olimpoIp !== "undefined" ? olimpoIp : "";
+            var datiRiga = NoRenderElementi.datiRiga(elemento, indirizzoOlimpo);
 
-            var bottone = $('<button class="norender-toggle" indice="' + i + '" style="width:28px; height:28px; margin-right:8px; border:1px solid #999; border-radius:4px; cursor:pointer;"><img src="images/immagineNonPresente.png" style="width:16px; height:16px;"></button>');
-            //Su fondo bianco la differenza fra grigio e trasparente si coglie poco: l'elemento
-            //in noRender si riconosce dal fondo pieno e dal bordo scuro.
-            bottone.css("background-color", elemento.noRender ? "#b0b0b0" : "#f2f2f2");
-            bottone.css("border-color", elemento.noRender ? "#444" : "#999");
-            bottone.attr("title", elemento.noRender ? "Elemento in norender: clicca per renderizzarlo" : "Clicca per non renderizzare l'elemento");
+            var row = $('<div class="row align-items-center" style="margin-bottom:8px; display:flex; align-items:center; padding:4px 6px; border-radius:4px;"></div>');
+            //La riga nascosta si distingue a colpo d'occhio: fondo, bordo e nome barrato.
+            if (datiRiga.noRender) {
+                row.css({ "background-color": "#ececec", "border-left": "3px solid #b00" });
+            }
+
+            var bottone = $('<button class="norender-toggle" indice="' + i + '" style="min-width:74px; height:26px; margin-right:8px; border:1px solid #999; border-radius:4px; cursor:pointer; font-size:11px;"></button>');
+            //Il bottone dice cosa fa, non come sta: e' l'azione che l'operatore sta per compiere.
+            bottone.text(datiRiga.testoBottone);
+            bottone.css("background-color", datiRiga.noRender ? "#d8d8d8" : "#f2f2f2");
+            bottone.attr("title", datiRiga.noRender ? "Elemento non renderizzato: clicca per farlo tornare visibile" : "Impagina l'elemento ma non renderizzarlo");
             bottone.on('click', function () {
                 var indice = parseInt($(this).attr("indice"), 10);
                 me.elementiNoRenderDelBox[indice].noRender = !me.elementiNoRenderDelBox[indice].noRender;
@@ -7566,12 +7576,12 @@ const schedaRef = {
 
             row.append(bottone);
 
-            var indirizzoOlimpo = typeof olimpoIp !== "undefined" ? olimpoIp : "";
-            var datiRiga = NoRenderElementi.datiRiga(elemento, indirizzoOlimpo);
             if (datiRiga.urlMiniatura !== "") {
                 //La cornice rende visibile anche una miniatura che non si carica: cosi' si
                 //distingue un'immagine assente da una riga senza immagine.
                 var miniatura = $('<img src="' + datiRiga.urlMiniatura + '" urlIngrandita="' + datiRiga.urlIngrandita + '" style="width:32px; height:32px; object-fit:contain; margin-right:8px; border:1px solid #ddd; background-color:#fafafa; cursor:zoom-in;">');
+                //Attenuata quando l'elemento e' nascosto: e' cosi' che apparira' nel documento.
+                miniatura.css("opacity", datiRiga.noRender ? "0.4" : "1");
 
                 //L'indirizzo dell'ingrandimento sta sull'immagine e si legge da li', come
                 //l'indice sul bottone: una variabile del ciclo sarebbe condivisa da tutte le
@@ -7593,7 +7603,15 @@ const schedaRef = {
             }
 
             var testo = $('<span style="font-size:12px;"></span>').text(datiRiga.descrizione);
+            if (datiRiga.barrato) {
+                testo.css({ "text-decoration": "line-through", "color": "#666" });
+            }
             row.append(testo);
+
+            if (datiRiga.etichettaStato !== "") {
+                row.append($('<span style="font-size:10px; font-weight:600; color:#b00; margin-left:8px; border:1px solid #b00; border-radius:3px; padding:1px 4px;"></span>')
+                    .text(datiRiga.etichettaStato));
+            }
 
             if (!elemento.presente) {
                 //Elemento marcato ma non piu' nel documento: resta in elenco per poterlo liberare.

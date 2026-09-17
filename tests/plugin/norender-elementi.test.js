@@ -402,3 +402,76 @@ test("impaginando dal sottogruppo la chiave viene portata avanti", () => {
         sorgente.includes("tracciatoPrimario.noRenderElementi = primario.recordInTracciato.noRenderElementi;"),
         "il sottogruppo non porta noRenderElementi: va copiata dal record");
 });
+
+// Aprendo il modal si deve capire cosa e' gia' nascosto senza andare a guardare il box.
+test("una riga nascosta si dichiara tale", () => {
+    const riga = NoRenderElementi.datiRiga(
+        { tipo: NoRenderElementi.TIPO.logo, chiave: "logo_bio", nome: "Logo biologico", guidId: "g", noRender: true },
+        "http://olimpo/");
+
+    assert.strictEqual(riga.noRender, true);
+    assert.strictEqual(riga.barrato, true);
+    assert.strictEqual(riga.etichettaStato, "NON RENDERIZZATO");
+    assert.strictEqual(riga.testoBottone, "Ripristina");
+});
+
+test("una riga visibile non porta segni di stato e il bottone propone di nasconderla", () => {
+    const riga = NoRenderElementi.datiRiga(
+        { tipo: NoRenderElementi.TIPO.logo, chiave: "logo_bio", nome: "Logo biologico", guidId: "g", noRender: false },
+        "http://olimpo/");
+
+    assert.strictEqual(riga.barrato, false);
+    assert.strictEqual(riga.etichettaStato, "");
+    assert.strictEqual(riga.testoBottone, "Nascondi");
+});
+
+test("un elemento nascosto e sparito dal documento resta annullabile", () => {
+    const riga = NoRenderElementi.datiRiga(
+        { tipo: NoRenderElementi.TIPO.fotoExtra, chiave: "sfondo_vn", nome: "Sfondo", noRender: true, presente: false },
+        "http://olimpo/");
+
+    assert.strictEqual(riga.presente, false);
+    assert.strictEqual(riga.testoBottone, "Ripristina");
+    assert.strictEqual(riga.etichettaStato, "NON RENDERIZZATO");
+});
+
+test("il riepilogo conta gli elementi nascosti", () => {
+    const lista = [
+        { tipo: NoRenderElementi.TIPO.logo, chiave: "a", noRender: true },
+        { tipo: NoRenderElementi.TIPO.logo, chiave: "b", noRender: false },
+        { tipo: NoRenderElementi.TIPO.campo, chiave: "c", noRender: true }
+    ];
+
+    assert.strictEqual(NoRenderElementi.riepilogo(lista), "2 elementi su 3 non renderizzati.");
+});
+
+test("il riepilogo distingue il singolare e l'elenco senza nascosti", () => {
+    assert.strictEqual(
+        NoRenderElementi.riepilogo([{ chiave: "a", noRender: true }, { chiave: "b", noRender: false }]),
+        "1 elemento su 2 non renderizzato.");
+    assert.strictEqual(
+        NoRenderElementi.riepilogo([{ chiave: "a", noRender: false }]),
+        "Nessun elemento nascosto: 1 elemento nel box.");
+});
+
+// Il noRender si perdeva reimpaginando perche' veniva applicato a meta' composizione del box.
+test("il noRender si applica a box composto e dopo le operazioni che lo rifanno", () => {
+    const sorgente = sorgentePlugin("indexNew.js");
+
+    assert.ok(
+        sorgente.includes("applicaNoRenderAgliElementiDelBox(boxImpaginato, itemRef.noRenderElementi);\r\n\r\n        boxImpaginato = finalizzaSegnalazioni") ||
+        sorgente.includes("applicaNoRenderAgliElementiDelBox(boxImpaginato, itemRef.noRenderElementi);\n\n        boxImpaginato = finalizzaSegnalazioni"),
+        "l'applicazione deve stare in coda a impaginaBox, non dentro il ramo della foto");
+
+    assert.ok(
+        sorgente.includes("applicaNoRenderAgliElementiDelBox(box.boxAggiunto, tracciatoPrimario.noRenderElementi);"),
+        "va riapplicato dopo ricollegamento, confronto e rimozione dei simboli");
+});
+
+test("l'applicazione riporta quanti elementi ha reso invisibili", () => {
+    const sorgente = sorgentePlugin("indexNew.js");
+
+    assert.ok(
+        sorgente.includes("elementi resi invisibili su"),
+        "serve a distinguere l'elenco che non arriva dalle label che non corrispondono");
+});
