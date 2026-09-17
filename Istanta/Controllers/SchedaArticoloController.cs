@@ -94,7 +94,11 @@ namespace Istanta.Controllers
                     Nome = s.NomeReale,
                     Area = s.Area,
                     Canale = s.Canale,
-                    Attiva = s.Attiva
+                    Attiva = s.Attiva,
+                    //I20-971: la schermata di cambio foto mostra la data di caricamento su ogni
+                    //foto. DataModifica viaggia perche' e' il criterio con cui l'elenco e' ordinato.
+                    DataInserimento = s.DataInserimento,
+                    DataModifica = s.DataModifica
                 });
 
                 result.result = JsonConvert.SerializeObject(obj);
