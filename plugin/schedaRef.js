@@ -1,6 +1,7 @@
 ﻿
 const InputEditController = require('./InputEditController');
 const XMLHttpRequestClient = require('./XMLHttpRequestClient');
+const NoRenderElementi = require('./noRenderElementi');
 
 const schedaRef = {
     refSelected: null,
@@ -7432,9 +7433,18 @@ const schedaRef = {
             return;
         }
 
-        this.elementiNoRenderDelBox = this.leggiElementiDelBox(this.refSelected.item, primario);
-        this.disegnaListaNoRender();
-        Utility.apriModal('dialogNoRender', 'Elementi non renderizzati', true, [], true);
+        try {
+            this.elementiNoRenderDelBox = this.leggiElementiDelBox(this.refSelected.item, primario);
+            //apriModal clona il dialog dentro bodyModal: la lista va disegnata dopo l'apertura,
+            //cosi' si scrive nel clone e i gestori dei bottoni restano vivi.
+            Utility.apriModal('dialogNoRender', 'Elementi non renderizzati', true, [], true);
+            this.disegnaListaNoRender();
+        }
+        catch (e) {
+            //Un modal vuoto non dice niente a chi lo guarda: meglio un errore leggibile.
+            console.error("Errore nell'apertura del modal noRender", e);
+            messaggioUtente("Code SRF-54 noRender: impossibile leggere gli elementi del box: " + e, "error");
+        }
     },
 
     /// Compone la lista mostrata dal modal: gli elementi vivi nel box uniti a quelli che i meta
@@ -7449,12 +7459,15 @@ const schedaRef = {
         try {
             for (var i = 0; i < box.allPageItems.length; i++) {
                 var item = box.allPageItems[i];
-                var classificato = NoRenderElementi.classificaLabel(Utility.parseLabel(item.label), nomePrimaria, nomeSecondaria);
+                //La label si classifica grezza: Utility.parseLabel troncherebbe al primo $
+                //e un simbolo finirebbe fra i campi.
+                var classificato = NoRenderElementi.classificaLabel(item.label, nomePrimaria, nomeSecondaria);
                 if (classificato == null || classificato.chiave === "") {
                     continue;
                 }
 
                 var nome = classificato.chiave;
+                var guidId = "";
                 var marcatoNelDocumento = false;
 
                 if (classificato.tipo === NoRenderElementi.TIPO_FOTO) {
@@ -7463,17 +7476,19 @@ const schedaRef = {
                     if (membro != null && membro.nomeFoto) {
                         nome = membro.nomeFoto;
                     }
+                    guidId = this.guidFotoDiRef(classificato.chiave);
                     marcatoNelDocumento = membro != null && membro.noRender === true;
                 }
                 else if (classificato.tipo === NoRenderElementi.TIPO.logo || classificato.tipo === NoRenderElementi.TIPO.fotoExtra) {
                     //Per i loghi il campo da mostrare e' nome e sigla.
                     var extra = fotoExtra.find(f => f.sigla == classificato.chiave);
-                    if (extra != null && extra.nome) {
-                        nome = extra.nome;
+                    if (extra != null) {
+                        nome = extra.nome ? extra.nome : nome;
+                        guidId = extra.guidId ? extra.guidId : "";
                     }
                 }
 
-                vivi.push({ tipo: classificato.tipo, chiave: classificato.chiave, nome: nome, noRender: marcatoNelDocumento });
+                vivi.push({ tipo: classificato.tipo, chiave: classificato.chiave, nome: nome, guidId: guidId, noRender: marcatoNelDocumento });
             }
         }
         catch (e) {
@@ -7481,7 +7496,31 @@ const schedaRef = {
         }
 
         var marcatiNeiMeta = primario.recordInTracciato.noRenderElementi || [];
-        return NoRenderElementi.componiLista(vivi, marcatiNeiMeta);
+        var lista = NoRenderElementi.componiLista(vivi, marcatiNeiMeta);
+
+        //Gli elementi marcati e poi cancellati dal documento non portano il guid nei meta:
+        //lo recuperiamo dai dati della ref, cosi' mostrano comunque la loro miniatura.
+        for (var e = 0; e < lista.length; e++) {
+            if (lista[e].guidId) {
+                continue;
+            }
+            if (lista[e].tipo === NoRenderElementi.TIPO_FOTO) {
+                lista[e].guidId = this.guidFotoDiRef(lista[e].chiave);
+            }
+            else {
+                var extraMarcato = fotoExtra.find(f => f.sigla == lista[e].chiave);
+                lista[e].guidId = extraMarcato != null && extraMarcato.guidId ? extraMarcato.guidId : "";
+            }
+        }
+
+        return lista;
+    },
+
+    /// Guid della foto di una ref del box, per la miniatura del modal noRender.
+    guidFotoDiRef(codRef) {
+        var schedaRef = this.schedeRefDati || [];
+        var voce = schedaRef.find(f => f.recordInTracciato["Referenza.Codice"] == codRef);
+        return voce != null && voce.recordInTracciato["Foto.guidid"] ? voce.recordInTracciato["Foto.guidid"] : "";
     },
 
     disegnaListaNoRender() {
@@ -7490,6 +7529,7 @@ const schedaRef = {
         $("#bodyNoRender").empty();
 
         if (lista.length == 0) {
+            console.log("Modal noRender: nessun elemento trovato nel box selezionato");
             $("#bodyNoRender").append($('<span style="color:white; font-size:12px;">Nessun elemento nel box.</span>'));
             return;
         }
@@ -7506,6 +7546,15 @@ const schedaRef = {
                 me.elementiNoRenderDelBox[indice].noRender = !me.elementiNoRenderDelBox[indice].noRender;
                 me.disegnaListaNoRender();
             });
+
+            var urlMiniatura = NoRenderElementi.urlMiniatura(elemento, typeof olimpoIp !== "undefined" ? olimpoIp : "");
+            if (urlMiniatura !== "") {
+                row.append($('<img src="' + urlMiniatura + '" style="width:32px; height:32px; object-fit:contain; margin-right:8px;">'));
+            }
+            else {
+                //Campi ed etichette non hanno una miniatura: lo spazio resta per tenere allineate le righe.
+                row.append($('<span style="display:inline-block; width:32px; margin-right:8px;"></span>'));
+            }
 
             var descrizione = NoRenderElementi.descriviElemento(elemento);
             if (!elemento.presente) {
@@ -7617,7 +7666,7 @@ const schedaRef = {
         try {
             for (var i = 0; i < box.allPageItems.length; i++) {
                 var item = box.allPageItems[i];
-                var classificato = NoRenderElementi.classificaLabel(Utility.parseLabel(item.label), nomePrimaria, nomeSecondaria);
+                var classificato = NoRenderElementi.classificaLabel(item.label, nomePrimaria, nomeSecondaria);
                 if (classificato == null) {
                     continue;
                 }

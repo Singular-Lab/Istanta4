@@ -18,6 +18,7 @@ const schedaArtwork = require('./schedaArtwork');
 const manifesto = require("./manifest.json");
 const ipconfig = require("./ipconfig.json");
 const confronti = require('./confronti');
+const NoRenderElementi = require('./noRenderElementi');
 const ficoProcess = require('./ficoProcess');
 const grigliaJs = require('./griglia');
 const filtriJs = require('./filtri');
@@ -177,7 +178,7 @@ function applicaNoRenderAgliElementiDelBox(box, elementiNoRender) {
     try {
         for (var i = 0; i < box.allPageItems.length; i++) {
             var item = box.allPageItems[i];
-            var classificato = NoRenderElementi.classificaLabel(Utility.parseLabel(item.label), nomePrimaria, nomeSecondaria);
+            var classificato = NoRenderElementi.classificaLabel(item.label, nomePrimaria, nomeSecondaria);
             if (classificato == null || classificato.tipo === NoRenderElementi.TIPO_FOTO) {
                 continue;
             }

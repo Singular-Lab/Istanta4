@@ -5,6 +5,7 @@ const fs = require('fs');
 const { parse } = require('path');
 const GarbageCollector = require('./garbageCollector');
 const { ref } = require('process');
+const NoRenderElementi = require('./noRenderElementi');
 
 const confronti = {
     async confrontoBox(box1, box2, forzaReimpaginazione = false){ //mode 0 -> cambio strutturale, mode 1 -> confrontoMassivo

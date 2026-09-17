@@ -1,4 +1,6 @@
 ﻿//Logica dell'opzione noRender sugli elementi di un box.
+//Modulo CommonJS come gli altri del Plugin: si carica con require('./noRenderElementi'),
+//non con un tag script. I consumatori sono schedaRef, confronti e indexNew.
 //Qui dentro non si tocca InDesign: si ragiona solo su label, meta e liste, cosi' il
 //comportamento e' verificabile con il test runner di Node come gli altri moduli puri.
 //
@@ -52,7 +54,10 @@ var NoRenderElementi = (function () {
             return { tipo: TIPO.etichetta, chiave: testo.substring("etichetta_".length) };
         }
 
-        return { tipo: TIPO.campo, chiave: testo };
+        //Caso generico: il campo si identifica con la parte di label prima del $,
+        //come fa Utility.parseLabel. Qui la label arriva grezza, cosi' i prefissi noti
+        //sopra restano riconoscibili: parseLabel troncherebbe simbolo$sigla$tipo_2 a simbolo.
+        return { tipo: TIPO.campo, chiave: testo.split("$")[0] };
     }
 
     /// Nome mostrato nel modal: per i loghi nome e sigla, per le immagini il nome della foto.
@@ -103,6 +108,7 @@ var NoRenderElementi = (function () {
                 tipo: vivo.tipo,
                 chiave: pulisci(vivo.chiave),
                 nome: pulisci(vivo.nome) !== "" ? pulisci(vivo.nome) : (marcato != null ? pulisci(marcato.nome) : ""),
+                guidId: pulisci(vivo.guidId) !== "" ? pulisci(vivo.guidId) : (marcato != null ? pulisci(marcato.guidId) : ""),
                 presente: true,
                 noRender: marcato != null || vivo.noRender === true
             });
@@ -125,6 +131,7 @@ var NoRenderElementi = (function () {
                     tipo: marcatoSolo.tipo,
                     chiave: pulisci(marcatoSolo.chiave),
                     nome: pulisci(marcatoSolo.nome),
+                    guidId: pulisci(marcatoSolo.guidId),
                     presente: false,
                     noRender: true
                 });
@@ -182,6 +189,23 @@ var NoRenderElementi = (function () {
         return elenco;
     }
 
+    /// Miniatura dell'elemento, quando ne ha una: immagini e loghi hanno un guid in archivio,
+    /// campi ed etichette no. L'indirizzo di base e' quello di Olimpo, che il Plugin conosce.
+    function urlMiniatura(elemento, indirizzoBase) {
+        if (elemento == null) {
+            return "";
+        }
+
+        var haMiniatura = elemento.tipo === TIPO_FOTO || elemento.tipo === TIPO.logo || elemento.tipo === TIPO.fotoExtra;
+        var guid = pulisci(elemento.guidId);
+
+        if (!haMiniatura || guid === "" || pulisci(indirizzoBase) === "") {
+            return "";
+        }
+
+        return pulisci(indirizzoBase) + "getThumbNailOnDemand?width=50&guidId=" + encodeURIComponent(guid);
+    }
+
     function inNoRender(elementiMarcati, tipo, chiave) {
         var marcati = elementiMarcati || [];
         for (var i = 0; i < marcati.length; i++) {
@@ -209,13 +233,11 @@ var NoRenderElementi = (function () {
         componiLista: componiLista,
         elementiDaSalvare: elementiDaSalvare,
         fotoDaSalvare: fotoDaSalvare,
+        urlMiniatura: urlMiniatura,
         elencoPerSegnalazioni: elencoPerSegnalazioni,
         inNoRender: inNoRender,
         segnalazioneElementoMancante: segnalazioneElementoMancante
     };
 })();
 
-//Il Plugin lo usa come global, la suite di test di Node lo importa.
-if (typeof module !== "undefined" && module.exports) {
-    module.exports = NoRenderElementi;
-}
+module.exports = NoRenderElementi;
