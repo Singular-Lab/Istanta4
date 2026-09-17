@@ -258,3 +258,18 @@ test("campi ed etichette non hanno miniatura, e senza guid nemmeno le foto", () 
         NoRenderElementi.urlMiniatura({ tipo: NoRenderElementi.TIPO_FOTO, chiave: "3150596", guidId: "guid" }, ""),
         "");
 });
+
+// Il modal ha il fondo bianco (plugin/index.html, pannello interno di #overlayModal):
+// scriverci in bianco rende le righe invisibili, che e' come il difetto si e' presentato.
+// La CI non rende la UI, quindi questa guardia sui sorgenti e' l'unico presidio automatico.
+test("le righe del modal non forzano il testo bianco", () => {
+    const sorgente = sorgentePlugin("schedaRef.js");
+    const inizio = sorgente.indexOf("disegnaListaNoRender() {");
+    const fine = sorgente.indexOf("salvaNoRender() {");
+
+    assert.ok(inizio > 0 && fine > inizio, "le funzioni del modal noRender devono esistere");
+
+    const blocco = sorgente.slice(inizio, fine);
+    assert.ok(!blocco.includes("color:white"), "il testo del modal non deve essere bianco su fondo bianco");
+    assert.ok(!blocco.includes("color: white"), "il testo del modal non deve essere bianco su fondo bianco");
+});

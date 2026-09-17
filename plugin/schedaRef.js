@@ -7528,9 +7528,11 @@ const schedaRef = {
         var lista = this.elementiNoRenderDelBox || [];
         $("#bodyNoRender").empty();
 
+        //Il modal ha il fondo bianco: qui non si forza il colore del testo, come fanno
+        //gli altri modal. Il bianco delle schede vale nei tab scuri del pannello, non qui.
         if (lista.length == 0) {
             console.log("Modal noRender: nessun elemento trovato nel box selezionato");
-            $("#bodyNoRender").append($('<span style="color:white; font-size:12px;">Nessun elemento nel box.</span>'));
+            $("#bodyNoRender").append($('<span style="font-size:12px;">Nessun elemento nel box.</span>'));
             return;
         }
 
@@ -7538,8 +7540,11 @@ const schedaRef = {
             var elemento = lista[i];
             var row = $('<div class="row align-items-center" style="margin-bottom:8px; display:flex; align-items:center;"></div>');
 
-            var bottone = $('<button class="norender-toggle" indice="' + i + '" style="width:28px; height:28px; margin-right:8px;"><img src="images/immagineNonPresente.png" style="width:16px; height:16px;"></button>');
-            bottone.css("background-color", elemento.noRender ? "gray" : "transparent");
+            var bottone = $('<button class="norender-toggle" indice="' + i + '" style="width:28px; height:28px; margin-right:8px; border:1px solid #999; border-radius:4px; cursor:pointer;"><img src="images/immagineNonPresente.png" style="width:16px; height:16px;"></button>');
+            //Su fondo bianco la differenza fra grigio e trasparente si coglie poco: l'elemento
+            //in noRender si riconosce dal fondo pieno e dal bordo scuro.
+            bottone.css("background-color", elemento.noRender ? "#b0b0b0" : "#f2f2f2");
+            bottone.css("border-color", elemento.noRender ? "#444" : "#999");
             bottone.attr("title", elemento.noRender ? "Elemento in norender: clicca per renderizzarlo" : "Clicca per non renderizzare l'elemento");
             bottone.on('click', function () {
                 var indice = parseInt($(this).attr("indice"), 10);
@@ -7547,23 +7552,27 @@ const schedaRef = {
                 me.disegnaListaNoRender();
             });
 
+            row.append(bottone);
+
             var urlMiniatura = NoRenderElementi.urlMiniatura(elemento, typeof olimpoIp !== "undefined" ? olimpoIp : "");
             if (urlMiniatura !== "") {
-                row.append($('<img src="' + urlMiniatura + '" style="width:32px; height:32px; object-fit:contain; margin-right:8px;">'));
+                //La cornice rende visibile anche una miniatura che non si carica: cosi' si
+                //distingue un'immagine assente da una riga senza immagine.
+                row.append($('<img src="' + urlMiniatura + '" style="width:32px; height:32px; object-fit:contain; margin-right:8px; border:1px solid #ddd; background-color:#fafafa;">'));
             }
             else {
                 //Campi ed etichette non hanno una miniatura: lo spazio resta per tenere allineate le righe.
                 row.append($('<span style="display:inline-block; width:32px; margin-right:8px;"></span>'));
             }
 
-            var descrizione = NoRenderElementi.descriviElemento(elemento);
+            var testo = $('<span style="font-size:12px;"></span>').text(NoRenderElementi.descriviElemento(elemento));
+            row.append(testo);
+
             if (!elemento.presente) {
                 //Elemento marcato ma non piu' nel documento: resta in elenco per poterlo liberare.
-                descrizione += " (non presente nel box)";
+                row.append($('<span style="font-size:11px; color:#777; margin-left:6px;">(non presente nel box)</span>'));
             }
-            var testo = $('<span style="font-size:12px; color:white;"></span>').text(descrizione);
 
-            row.append(bottone, testo);
             $("#bodyNoRender").append(row);
         }
     },
