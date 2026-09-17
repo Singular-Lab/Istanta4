@@ -235,6 +235,27 @@ var NoRenderElementi = (function () {
         return pulisci(indirizzoBase) + "getThumbNailOnDemand?width=" + larghezzaRichiesta + "&guidId=" + encodeURIComponent(guid);
     }
 
+    /// Porta in cima gli elementi in noRender, conservando l'ordine relativo dentro i due
+    /// gruppi. Si usa solo quando la lista si costruisce, cioe' all'apertura del modal: durante
+    /// l'uso una riga appena nascosta deve restare dov'e', non saltare via da sotto il cursore.
+    /// La partizione e' esplicita per non dipendere dalla stabilita' di sort.
+    function conNascostiInCima(lista) {
+        var elementi = lista || [];
+        var nascosti = [];
+        var visibili = [];
+
+        for (var i = 0; i < elementi.length; i++) {
+            if (elementi[i] != null && elementi[i].noRender === true) {
+                nascosti.push(elementi[i]);
+            }
+            else {
+                visibili.push(elementi[i]);
+            }
+        }
+
+        return nascosti.concat(visibili);
+    }
+
     /// Dati di una riga del modal: descrizione e i due indirizzi della miniatura, piccola
     /// per la riga e grande per l'ingrandimento. Stanno qui, e non nel disegno della lista,
     /// perche' ogni riga deve portarsi i propri: un indirizzo condiviso fra le righe mostrava
@@ -309,6 +330,7 @@ var NoRenderElementi = (function () {
         componiLista: componiLista,
         elementiDaSalvare: elementiDaSalvare,
         datiExtraDiSigla: datiExtraDiSigla,
+        conNascostiInCima: conNascostiInCima,
         datiRiga: datiRiga,
         riepilogo: riepilogo,
         urlMiniatura: urlMiniatura,

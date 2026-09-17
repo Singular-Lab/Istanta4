@@ -540,3 +540,54 @@ test("i confronti non producono piu' la vecchia dicitura in norender", () => {
     assert.ok(sorgente.includes("daSegnalareComeRiattivato"),
         "il caso opposto va controllato nella pre analisi");
 });
+
+// All'apertura del modal i nascosti stanno in cima. Durante l'uso no: una riga appena
+// nascosta deve restare dov'e', altrimenti salta via da sotto il cursore a ogni click.
+test("gli elementi nascosti vanno in cima", () => {
+    const lista = [
+        { chiave: "a", noRender: false },
+        { chiave: "b", noRender: true },
+        { chiave: "c", noRender: false },
+        { chiave: "d", noRender: true }
+    ];
+
+    const ordinata = NoRenderElementi.conNascostiInCima(lista);
+
+    assert.deepStrictEqual(ordinata.map(e => e.chiave), ["b", "d", "a", "c"]);
+});
+
+test("dentro i due gruppi l'ordine originale non cambia", () => {
+    const lista = [
+        { chiave: "primo", noRender: true },
+        { chiave: "secondo", noRender: false },
+        { chiave: "terzo", noRender: true },
+        { chiave: "quarto", noRender: false }
+    ];
+
+    const ordinata = NoRenderElementi.conNascostiInCima(lista);
+
+    assert.deepStrictEqual(ordinata.map(e => e.chiave), ["primo", "terzo", "secondo", "quarto"]);
+});
+
+test("una lista tutta visibile o tutta nascosta resta com'era", () => {
+    const visibili = [{ chiave: "a", noRender: false }, { chiave: "b", noRender: false }];
+    const nascosti = [{ chiave: "a", noRender: true }, { chiave: "b", noRender: true }];
+
+    assert.deepStrictEqual(NoRenderElementi.conNascostiInCima(visibili).map(e => e.chiave), ["a", "b"]);
+    assert.deepStrictEqual(NoRenderElementi.conNascostiInCima(nascosti).map(e => e.chiave), ["a", "b"]);
+    assert.deepStrictEqual(NoRenderElementi.conNascostiInCima([]), []);
+    assert.deepStrictEqual(NoRenderElementi.conNascostiInCima(null), []);
+});
+
+test("l'ordinamento sta dove la lista si costruisce, non dove si ridisegna", () => {
+    const sorgente = sorgentePlugin("schedaRef.js");
+
+    const lettura = sorgente.indexOf("leggiElementiDelBox(box, primario) {");
+    const disegno = sorgente.indexOf("disegnaListaNoRender() {");
+    const ordinamento = sorgente.indexOf("NoRenderElementi.conNascostiInCima(");
+
+    assert.ok(lettura > 0 && disegno > lettura, "le due funzioni devono esistere in quest'ordine");
+    assert.ok(
+        ordinamento > lettura && ordinamento < disegno,
+        "l'ordinamento va fatto all'apertura: nel disegno farebbe saltare la riga a ogni click");
+});

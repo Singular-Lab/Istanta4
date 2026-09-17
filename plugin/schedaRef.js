@@ -7520,7 +7520,9 @@ const schedaRef = {
             }
         }
 
-        return lista;
+        //Gli elementi gia' nascosti stanno in cima. L'ordine si fissa qui, che e' il momento
+        //dell'apertura: ridisegnando la lista dopo un click l'ordine non cambia piu'.
+        return NoRenderElementi.conNascostiInCima(lista);
     },
 
     /// Guid della foto di una ref del box, per la miniatura del modal noRender.
