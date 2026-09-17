@@ -247,6 +247,17 @@ test("immagini e loghi con guid hanno la miniatura", () => {
     assert.strictEqual(logo, "http://olimpo/getThumbNailOnDemand?width=50&guidId=guid-logo");
 });
 
+test("la stessa miniatura si chiede piccola per la riga e grande per l'ingrandimento", () => {
+    const elemento = { tipo: NoRenderElementi.TIPO.fotoExtra, chiave: "sfondo_vn", guidId: "guid-sfondo" };
+
+    assert.strictEqual(
+        NoRenderElementi.urlMiniatura(elemento, "http://olimpo/", 50),
+        "http://olimpo/getThumbNailOnDemand?width=50&guidId=guid-sfondo");
+    assert.strictEqual(
+        NoRenderElementi.urlMiniatura(elemento, "http://olimpo/", 300),
+        "http://olimpo/getThumbNailOnDemand?width=300&guidId=guid-sfondo");
+});
+
 test("campi ed etichette non hanno miniatura, e senza guid nemmeno le foto", () => {
     assert.strictEqual(
         NoRenderElementi.urlMiniatura({ tipo: NoRenderElementi.TIPO.campo, chiave: "PIEDE", guidId: "guid" }, "http://olimpo/"),
@@ -272,4 +283,63 @@ test("le righe del modal non forzano il testo bianco", () => {
     const blocco = sorgente.slice(inizio, fine);
     assert.ok(!blocco.includes("color:white"), "il testo del modal non deve essere bianco su fondo bianco");
     assert.ok(!blocco.includes("color: white"), "il testo del modal non deve essere bianco su fondo bianco");
+});
+
+// Gli extra del box stanno in due collezioni del record: cercarne una sola lasciava quelli
+// automatici senza nome, senza sigla e senza guid, quindi senza miniatura.
+test("un extra automatico porta comunque nome, sigla e guid", () => {
+    const fotoExtra = [{ nome: "Logo biologico", sigla: "logo_bio", guidId: "guid-bio" }];
+    const fotoExtraAuto = [{ nome: "Sfondo volantino", sigla: "sfondo_vn", guidId: "guid-sfondo" }];
+
+    const automatico = NoRenderElementi.datiExtraDiSigla("sfondo_vn", fotoExtra, fotoExtraAuto);
+
+    assert.strictEqual(automatico.nome, "Sfondo volantino");
+    assert.strictEqual(automatico.sigla, "sfondo_vn");
+    assert.strictEqual(automatico.guidId, "guid-sfondo");
+});
+
+test("l'extra dell'operatore continua a essere trovato", () => {
+    const dati = NoRenderElementi.datiExtraDiSigla(
+        "logo_bio",
+        [{ nome: "Logo biologico", sigla: "logo_bio", guidId: "guid-bio" }],
+        [{ nome: "Sfondo volantino", sigla: "sfondo_vn", guidId: "guid-sfondo" }]);
+
+    assert.strictEqual(dati.guidId, "guid-bio");
+});
+
+test("una sigla presente in entrambe le collezioni da' un solo risultato, quello dell'operatore", () => {
+    const dati = NoRenderElementi.datiExtraDiSigla(
+        "logo_bio",
+        [{ nome: "Logo operatore", sigla: "logo_bio", guidId: "guid-operatore" }],
+        [{ nome: "Logo automatico", sigla: "logo_bio", guidId: "guid-auto" }]);
+
+    assert.strictEqual(dati.nome, "Logo operatore");
+    assert.strictEqual(dati.guidId, "guid-operatore");
+});
+
+test("una sigla sconosciuta non inventa dati", () => {
+    assert.strictEqual(NoRenderElementi.datiExtraDiSigla("logo_mai_visto", [], []), null);
+    assert.strictEqual(NoRenderElementi.datiExtraDiSigla("", [{ sigla: "" }], []), null);
+});
+
+test("la sigla di un extra si vede anche quando manca il nome", () => {
+    assert.strictEqual(
+        NoRenderElementi.descriviElemento({ tipo: NoRenderElementi.TIPO.fotoExtra, chiave: "sfondo_vn", nome: "" }),
+        "sfondo_vn");
+    assert.strictEqual(
+        NoRenderElementi.descriviElemento({ tipo: NoRenderElementi.TIPO.logo, chiave: "logo_bio", nome: "Logo biologico" }),
+        "Logo biologico (logo_bio)");
+});
+
+// L'ingrandimento e' interazione: la CI non la puo' provare, ma almeno si controlla
+// che le miniature del modal restino agganciate all'anteprima.
+test("le miniature del modal reagiscono al passaggio del mouse", () => {
+    const sorgente = sorgentePlugin("schedaRef.js");
+    const inizio = sorgente.indexOf("disegnaListaNoRender() {");
+    const fine = sorgente.indexOf("salvaNoRender() {");
+    const blocco = sorgente.slice(inizio, fine);
+
+    assert.ok(blocco.includes("norender-anteprima"), "il modal deve avere il riquadro dell'ingrandimento");
+    assert.ok(blocco.includes("mouseenter"), "la miniatura deve mostrare l'ingrandimento");
+    assert.ok(blocco.includes("mouseleave"), "la miniatura deve nasconderlo quando il mouse esce");
 });

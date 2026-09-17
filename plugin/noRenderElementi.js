@@ -70,10 +70,12 @@ var NoRenderElementi = (function () {
         var chiave = pulisci(elemento.chiave);
 
         if (elemento.tipo === TIPO.logo || elemento.tipo === TIPO.fotoExtra) {
+            //La sigla di un extra si mostra sempre: e' il nome con cui l'operatore lo riconosce
+            //nel documento e nelle segnalazioni. Il nome esteso la accompagna quando c'e'.
             if (nome !== "" && chiave !== "" && nome !== chiave) {
                 return nome + " (" + chiave + ")";
             }
-            return nome !== "" ? nome : chiave;
+            return chiave !== "" ? chiave : nome;
         }
 
         //Foto, campi ed etichette: il nome quando c'e', altrimenti la chiave.
@@ -189,9 +191,36 @@ var NoRenderElementi = (function () {
         return elenco;
     }
 
+    /// Dati di una foto extra a partire dalla sigla. Gli extra del box stanno in due
+    /// collezioni del record: Foto.Extra, gestita dall'operatore, e Foto.ExtraAuto, piazzata
+    /// dall'automatismo del cliente. Vanno cercate entrambe, altrimenti gli extra automatici
+    /// restano senza nome e senza guid, quindi senza miniatura.
+    function datiExtraDiSigla(sigla, fotoExtra, fotoExtraAuto) {
+        var siglaCercata = pulisci(sigla);
+        if (siglaCercata === "") {
+            return null;
+        }
+
+        var collezioni = [fotoExtra || [], fotoExtraAuto || []];
+        for (var c = 0; c < collezioni.length; c++) {
+            for (var i = 0; i < collezioni[c].length; i++) {
+                var voce = collezioni[c][i];
+                if (voce != null && pulisci(voce.sigla) === siglaCercata) {
+                    return {
+                        nome: pulisci(voce.nome),
+                        sigla: siglaCercata,
+                        guidId: pulisci(voce.guidId)
+                    };
+                }
+            }
+        }
+
+        return null;
+    }
+
     /// Miniatura dell'elemento, quando ne ha una: immagini e loghi hanno un guid in archivio,
     /// campi ed etichette no. L'indirizzo di base e' quello di Olimpo, che il Plugin conosce.
-    function urlMiniatura(elemento, indirizzoBase) {
+    function urlMiniatura(elemento, indirizzoBase, larghezza) {
         if (elemento == null) {
             return "";
         }
@@ -203,7 +232,12 @@ var NoRenderElementi = (function () {
             return "";
         }
 
-        return pulisci(indirizzoBase) + "getThumbNailOnDemand?width=50&guidId=" + encodeURIComponent(guid);
+        var larghezzaRichiesta = parseInt(larghezza, 10);
+        if (isNaN(larghezzaRichiesta) || larghezzaRichiesta <= 0) {
+            larghezzaRichiesta = 50;
+        }
+
+        return pulisci(indirizzoBase) + "getThumbNailOnDemand?width=" + larghezzaRichiesta + "&guidId=" + encodeURIComponent(guid);
     }
 
     function inNoRender(elementiMarcati, tipo, chiave) {
@@ -233,6 +267,7 @@ var NoRenderElementi = (function () {
         componiLista: componiLista,
         elementiDaSalvare: elementiDaSalvare,
         fotoDaSalvare: fotoDaSalvare,
+        datiExtraDiSigla: datiExtraDiSigla,
         urlMiniatura: urlMiniatura,
         elencoPerSegnalazioni: elencoPerSegnalazioni,
         inNoRender: inNoRender,

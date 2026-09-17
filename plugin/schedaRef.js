@@ -7452,7 +7452,11 @@ const schedaRef = {
     leggiElementiDelBox(box, primario) {
         var nomePrimaria = pluginMiddleware.getCampo("nomeFotoPrimaria");
         var nomeSecondaria = pluginMiddleware.getCampo("nomeFotoSecondaria");
+        //Gli extra del box stanno in due collezioni: quella dell'operatore e quella
+        //piazzata dall'automatismo. Cercarne una sola lascia gli extra automatici senza
+        //nome, senza sigla e senza guid, quindi senza miniatura.
         var fotoExtra = primario.recordInTracciato["Foto.Extra"] || [];
+        var fotoExtraAuto = primario.recordInTracciato["Foto.ExtraAuto"] || [];
         var membriGruppoFoto = primario.recordInTracciato.membriGruppoFoto || [];
         var vivi = [];
 
@@ -7481,10 +7485,10 @@ const schedaRef = {
                 }
                 else if (classificato.tipo === NoRenderElementi.TIPO.logo || classificato.tipo === NoRenderElementi.TIPO.fotoExtra) {
                     //Per i loghi il campo da mostrare e' nome e sigla.
-                    var extra = fotoExtra.find(f => f.sigla == classificato.chiave);
+                    var extra = NoRenderElementi.datiExtraDiSigla(classificato.chiave, fotoExtra, fotoExtraAuto);
                     if (extra != null) {
                         nome = extra.nome ? extra.nome : nome;
-                        guidId = extra.guidId ? extra.guidId : "";
+                        guidId = extra.guidId;
                     }
                 }
 
@@ -7508,8 +7512,11 @@ const schedaRef = {
                 lista[e].guidId = this.guidFotoDiRef(lista[e].chiave);
             }
             else {
-                var extraMarcato = fotoExtra.find(f => f.sigla == lista[e].chiave);
-                lista[e].guidId = extraMarcato != null && extraMarcato.guidId ? extraMarcato.guidId : "";
+                var extraMarcato = NoRenderElementi.datiExtraDiSigla(lista[e].chiave, fotoExtra, fotoExtraAuto);
+                if (extraMarcato != null) {
+                    lista[e].guidId = extraMarcato.guidId;
+                    lista[e].nome = lista[e].nome ? lista[e].nome : extraMarcato.nome;
+                }
             }
         }
 
@@ -7527,6 +7534,11 @@ const schedaRef = {
         let me = this;
         var lista = this.elementiNoRenderDelBox || [];
         $("#bodyNoRender").empty();
+
+        //Riquadro dell'ingrandimento, stesso schema del modal di conferma foto: sta sopra
+        //a tutto, non intercetta il mouse e mostra la miniatura grande della riga puntata.
+        var anteprima = $('<div class="norender-anteprima" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); background:#fff; border:1px solid #999; padding:10px; z-index:99999; box-shadow:0 2px 10px rgba(0,0,0,0.35); pointer-events:none;"><img src="" style="max-width:300px; max-height:300px; display:block;"></div>');
+        $("#bodyNoRender").append(anteprima);
 
         //Il modal ha il fondo bianco: qui non si forza il colore del testo, come fanno
         //gli altri modal. Il bianco delle schede vale nei tab scuri del pannello, non qui.
@@ -7554,11 +7566,24 @@ const schedaRef = {
 
             row.append(bottone);
 
-            var urlMiniatura = NoRenderElementi.urlMiniatura(elemento, typeof olimpoIp !== "undefined" ? olimpoIp : "");
+            var indirizzoOlimpo = typeof olimpoIp !== "undefined" ? olimpoIp : "";
+            var urlMiniatura = NoRenderElementi.urlMiniatura(elemento, indirizzoOlimpo, 50);
             if (urlMiniatura !== "") {
                 //La cornice rende visibile anche una miniatura che non si carica: cosi' si
                 //distingue un'immagine assente da una riga senza immagine.
-                row.append($('<img src="' + urlMiniatura + '" style="width:32px; height:32px; object-fit:contain; margin-right:8px; border:1px solid #ddd; background-color:#fafafa;">'));
+                var miniatura = $('<img src="' + urlMiniatura + '" style="width:32px; height:32px; object-fit:contain; margin-right:8px; border:1px solid #ddd; background-color:#fafafa; cursor:zoom-in;">');
+                var urlIngrandita = NoRenderElementi.urlMiniatura(elemento, indirizzoOlimpo, 300);
+
+                miniatura.on('mouseenter', function () {
+                    anteprima.find("img").attr("src", urlIngrandita);
+                    anteprima.css("display", "block");
+                });
+                miniatura.on('mouseleave', function () {
+                    anteprima.css("display", "none");
+                    anteprima.find("img").attr("src", "");
+                });
+
+                row.append(miniatura);
             }
             else {
                 //Campi ed etichette non hanno una miniatura: lo spazio resta per tenere allineate le righe.
