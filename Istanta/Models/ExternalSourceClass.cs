@@ -3260,6 +3260,78 @@ namespace Istanta.Models
         public List<PostRidimensionamentoObj> postRidimensionamenti = new();
         public List<Allineamento> allineamenti { get; set; } = new();
         public List<SegnalazioniConflitti> segnalazioniConflitti { get; set; } = new();
+
+        /// I20-970: elementi creati duplicandone uno gia' presente, uno per ogni bersaglio.
+        public List<DuplicazioneObj> duplicazioni { get; set; } = new();
+
+        /// I20-970: chi sta davanti e chi dietro dentro il box.
+        public List<OrdineZObj> ordiniZ { get; set; } = new();
+    }
+
+    /// Duplica un elemento del box una volta per ogni bersaglio, dando a ogni copia
+    /// un'etichetta univoca: quella della sorgente piu' il suffisso del bersaglio
+    /// (sy_ombra + immagine$3150596 -> sy_ombra$3150596). Serve perche' gli allineamenti
+    /// lavorano per etichetta e due elementi omonimi non sarebbero distinguibili.
+    public class DuplicazioneObj
+    {
+        public string nomeGruppo { get; set; } = "";
+
+        /// Etichetta dell'elemento da duplicare.
+        public string etichettaSorgente { get; set; } = "";
+
+        /// Etichette dei bersagli, un elemento per copia. Ammette l'asterisco.
+        public List<string> bersagli { get; set; } = new();
+
+        /// Come la copia si adatta al proprio bersaglio. Null: copia identica, centrata sul bersaglio.
+        public AdattamentoAlBersaglio? adattaAlBersaglio { get; set; }
+
+        /// Di norma la sorgente viene rimossa dopo le copie: resterebbe un elemento spaiato.
+        public bool mantieniSorgente { get; set; } = false;
+
+        public List<SetCondizioni> listSetCondizioni { get; set; } = new List<SetCondizioni>();
+    }
+
+    /// Misure e ancoraggio della copia rispetto al bersaglio.
+    public class AdattamentoAlBersaglio
+    {
+        /// "bersaglio" per prendere la larghezza del bersaglio; altrimenti resta quella della sorgente.
+        public string? larghezza { get; set; }
+
+        /// "bersaglio" per prendere l'altezza del bersaglio; altrimenti resta quella della sorgente.
+        public string? altezza { get; set; }
+
+        /// "centro" (default), "sinistra", "destra".
+        public string? ancoraX { get; set; }
+
+        /// "centro" (default), "alto", "basso", "centroSuLatoBasso", "centroSuLatoAlto".
+        /// Con centroSuLatoBasso il centro della copia cade sul lato basso del bersaglio:
+        /// meta' resta visibile sotto, meta' finisce dietro al bersaglio.
+        public string? ancoraY { get; set; }
+
+        /// Scostamenti finali in millimetri.
+        public double offsetX { get; set; } = 0;
+        public double offsetY { get; set; } = 0;
+
+        /// Allargare il riquadro non allarga il grafico che contiene: "riquadro" lo fa
+        /// seguire esattamente, "proporzionale" lo adatta senza deformarlo, null lo lascia com'e'.
+        public string? fitContenuto { get; set; }
+    }
+
+    /// Ordine di sovrapposizione: porta delle etichette dietro o davanti ad altre.
+    public class OrdineZObj
+    {
+        public string nomeGruppo { get; set; } = "";
+
+        /// Etichette da spostare. Ammette l'asterisco.
+        public List<string> etichette { get; set; } = new();
+
+        /// "dietro" (default) oppure "davanti".
+        public string posizione { get; set; } = "dietro";
+
+        /// Etichette di riferimento. Vuoto: in fondo o in cima al box.
+        public List<string> rispettoA { get; set; } = new();
+
+        public List<SetCondizioni> listSetCondizioni { get; set; } = new List<SetCondizioni>();
     }
 
 

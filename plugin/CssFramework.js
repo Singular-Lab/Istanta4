@@ -1,5 +1,6 @@
 const { app, FitOptions, LocationOptions, Justification, VerticalJustification, NestedStyleDelimiters, Leading } = require('indesign');
 const { ClippingPathType, ClippingPathSettings, Image } = require('indesign');
+const cssComposizioneBox = require('./cssComposizioneBox');
 
 const CssFramework =
 {
@@ -5489,6 +5490,8 @@ const CssFramework =
                 var DBDefault = fileModificheDef ? fileModificheDef.operazioniPerBox : null;
                 me.preparaSegnalazioniConflitti(box, DB, DBDefault);
                 box = me.allineamenti(box, boundsBoxImpaginato, mappaBoxOriginale, itemRef, DB, DBDefault);
+                //Dopo gli allineamenti: le copie derivano dalla posizione definitiva degli elementi.
+                box = me.applicaComposizioneBox(box, mappaBoxOriginale, itemRef, DB, DBDefault);
                 return box;
             }
         }
@@ -5973,6 +5976,206 @@ const CssFramework =
     //     let regexStr = '^' + escaped.replace(/\*/g, '.*') + '$';
     //     return new RegExp(regexStr);
     // },
+
+    /*
+     * I20-970: elementi derivati e ordine di sovrapposizione.
+     *
+     * Il framework sapeva spostare, ridimensionare e allineare quello che gia' esisteva nel box,
+     * non crearne di nuovi ne' decidere chi sta davanti a chi. Le due regole vivono nel DB come
+     * tutte le altre, cosi' il comportamento resta dato e non finisce in custom.js.
+     *
+     * Le decisioni (quali copie, con che etichetta, con che bounds, cosa mandare dietro a cosa)
+     * stanno in cssComposizioneBox, verificabile fuori da InDesign; qui si esegue soltanto.
+     */
+    getElementiComposizione(box) {
+        var elementi = [];
+        for (var i = 0; i < box.allPageItems.length; i++) {
+            var item = box.allPageItems[i];
+            if (item == null || !item.isValid || item.label == null || item.label === "") {
+                continue;
+            }
+            elementi.push({ etichetta: item.label, bounds: item.geometricBounds, item: item });
+        }
+        return elementi;
+    },
+
+    regoleComposizioneAttive(regole, mappaBoxOriginale, itemRef, box) {
+        var attive = [];
+        if (regole == null) {
+            return attive;
+        }
+        for (var i = 0; i < regole.length; i++) {
+            var regola = regole[i];
+            if (regola == null) {
+                continue;
+            }
+            if (regola.listSetCondizioni != null && regola.listSetCondizioni.length > 0
+                && !this.checkAllConditions(mappaBoxOriginale, itemRef, regola.listSetCondizioni, box)) {
+                continue;
+            }
+            attive.push(regola);
+        }
+        return attive;
+    },
+
+    //Contesto dell'ultimo box passato dal CSS: serve a ricomporre dopo la sistemazione delle foto,
+    //che avviene piu' tardi e sposta le immagini da cui gli elementi derivati prendono le misure.
+    contestoComposizione: null,
+
+    applicaComposizioneBox(box, mappaBoxOriginale, itemRef, DBallineamenti, DBDefault) {
+        try {
+            var me = this;
+            var meccanica = box.label;
+
+            var elementoBox = DBallineamenti ? DBallineamenti.find(el => el.nomiBox.includes(meccanica)) : null;
+            if (elementoBox == null) {
+                elementoBox = DBDefault ? DBDefault.find(el => el.nomiBox.includes(meccanica)) : null;
+            }
+            if (elementoBox == null) {
+                return box;
+            }
+
+            var regoleDuplicazioni = me.regoleComposizioneAttive(elementoBox.duplicazioni, mappaBoxOriginale, itemRef, box);
+            var regoleOrdiniZ = me.regoleComposizioneAttive(elementoBox.ordiniZ, mappaBoxOriginale, itemRef, box);
+
+            if (regoleDuplicazioni.length === 0 && regoleOrdiniZ.length === 0) {
+                return box;
+            }
+
+            me.contestoComposizione = {
+                mappaBoxOriginale: mappaBoxOriginale,
+                itemRef: itemRef,
+                DBallineamenti: DBallineamenti,
+                DBDefault: DBDefault
+            };
+
+            var corrisponde = function (etichetta, spec) {
+                return me.makeRegexFromGroupName(spec).test(etichetta);
+            };
+
+            var adattaContenuto = function (item, fitContenuto) {
+                //Ridimensionare il riquadro non ridimensiona il grafico che contiene.
+                if (fitContenuto == null || item.graphics == null || item.graphics.length === 0) {
+                    return;
+                }
+                item.fit(fitContenuto === "proporzionale" ? FitOptions.PROPORTIONALLY : FitOptions.CONTENT_TO_FRAME);
+            };
+
+            if (regoleDuplicazioni.length > 0) {
+                var elementi = me.getElementiComposizione(box);
+                var piano = cssComposizioneBox.pianificaDuplicazioni(regoleDuplicazioni, elementi, corrisponde);
+
+                for (var c = 0; c < piano.copie.length; c++) {
+                    var copia = piano.copie[c];
+                    var modello = elementi.find(el => el.etichetta === copia.etichettaModello);
+                    if (modello == null || !modello.item.isValid) {
+                        continue;
+                    }
+                    try {
+                        var nuovo = modello.item.duplicate();
+                        nuovo.label = copia.etichetta;
+                        nuovo.geometricBounds = copia.bounds;
+                        adattaContenuto(nuovo, copia.fitContenuto);
+                    }
+                    catch (e) {
+                        console.error("Code CSF-10: duplicazione di " + copia.etichettaModello + " non riuscita: " + e);
+                    }
+                }
+
+                for (var a = 0; a < piano.aggiornamenti.length; a++) {
+                    var aggiornamento = piano.aggiornamenti[a];
+                    var daAggiornare = elementi.find(el => el.etichetta === aggiornamento.etichetta);
+                    if (daAggiornare == null || !daAggiornare.item.isValid) {
+                        continue;
+                    }
+                    try {
+                        daAggiornare.item.geometricBounds = aggiornamento.bounds;
+                        adattaContenuto(daAggiornare.item, aggiornamento.fitContenuto);
+                    }
+                    catch (e) {
+                        console.error("Code CSF-14: aggiornamento di " + aggiornamento.etichetta + " non riuscito: " + e);
+                    }
+                }
+
+                //Le rimozioni per ultime: il modello serve finche' ci sono copie da creare.
+                for (var r = 0; r < piano.rimozioni.length; r++) {
+                    var daRimuovere = elementi.find(el => el.etichetta === piano.rimozioni[r]);
+                    if (daRimuovere == null || !daRimuovere.item.isValid) {
+                        continue;
+                    }
+                    try {
+                        daRimuovere.item.remove();
+                    }
+                    catch (e) {
+                        console.error("Code CSF-11: rimozione di " + piano.rimozioni[r] + " non riuscita: " + e);
+                    }
+                }
+            }
+
+            if (regoleOrdiniZ.length > 0) {
+                //La lista va riletta: le copie appena create partecipano all'ordinamento.
+                var elementiAggiornati = me.getElementiComposizione(box);
+                var operazioni = cssComposizioneBox.pianificaOrdineZ(regoleOrdiniZ, elementiAggiornati, corrisponde);
+
+                for (var o = 0; o < operazioni.length; o++) {
+                    var operazione = operazioni[o];
+                    var elemento = elementiAggiornati.find(el => el.etichetta === operazione.etichetta);
+                    if (elemento == null || !elemento.item.isValid) {
+                        continue;
+                    }
+                    try {
+                        var riferimenti = operazione.riferimenti
+                            .map(et => elementiAggiornati.find(el => el.etichetta === et))
+                            .filter(el => el != null && el.item.isValid);
+
+                        if (riferimenti.length === 0) {
+                            if (operazione.posizione === "davanti") {
+                                elemento.item.bringToFront();
+                            }
+                            else {
+                                elemento.item.sendToBack();
+                            }
+                            continue;
+                        }
+
+                        //Dietro a tutti i riferimenti, o davanti a tutti: si applica a ciascuno,
+                        //l'ultimo spostamento e' quello che soddisfa anche i precedenti.
+                        for (var k = 0; k < riferimenti.length; k++) {
+                            if (operazione.posizione === "davanti") {
+                                elemento.item.bringToFront(riferimenti[k].item);
+                            }
+                            else {
+                                elemento.item.sendToBack(riferimenti[k].item);
+                            }
+                        }
+                    }
+                    catch (e) {
+                        console.error("Code CSF-12: ordinamento di " + operazione.etichetta + " non riuscito: " + e);
+                    }
+                }
+            }
+        }
+        catch (error) {
+            console.error("Code CSF-13: errore nella composizione del box " + box.label);
+            console.error(error);
+        }
+
+        return box;
+    },
+
+    /*
+     * Ricompone il box col contesto dell'ultima applicazione del CSS.
+     * Va chiamata dopo la sistemazione delle foto: gli elementi derivati prendono le misure
+     * dalle immagini, che fino a quel momento possono ancora spostarsi.
+     * Il piano e' rieseguibile, quindi ripassare non duplica nulla due volte.
+     */
+    riapplicaComposizioneBox(box) {
+        if (box == null || !box.isValid || this.contestoComposizione == null) {
+            return box;
+        }
+        var contesto = this.contestoComposizione;
+        return this.applicaComposizioneBox(box, contesto.mappaBoxOriginale, contesto.itemRef, contesto.DBallineamenti, contesto.DBDefault);
+    },
 
     makeRegexFromGroupName(groupName) {
         // rimuovo un eventuale [itemLink] finale (case-insensitive)

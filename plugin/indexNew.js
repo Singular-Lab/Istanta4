@@ -4415,6 +4415,10 @@ async function callAllOperationFixBox(boxImpaginato, bounds, itemRef, garbageKey
         CssFramework.sospendiControlloSegnalazioniConflitti = false;
     }
 
+    //I20-970: la sistemazione delle foto ha appena spostato le immagini. Gli elementi derivati,
+    //come le ombre, prendono le misure dalle foto: vanno ricomposti ora, non prima.
+    boxImpaginato = CssFramework.riapplicaComposizioneBox(boxImpaginato);
+
     CssFramework.controllaSegnalazioniConflittiPendenti(boxImpaginato);
 
     return boxImpaginato;
