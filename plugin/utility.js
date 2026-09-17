@@ -2795,7 +2795,9 @@ const FotoPlacer=
                     fotoRectangle.label = (pluginMiddleware.getCampo("nomeFotoPrimaria") !== null ? pluginMiddleware.getCampo("nomeFotoPrimaria") : "immagine") + "$" + codice;
                 }
                 
-                FotoPlacer.placeFoto(nomeFoto, fotoRectangle, null);
+                //I20-967: il chiamante deve poter sapere se il place e' andato a vuoto,
+                //perche' un file appena scaricato puo' non essere ancora visibile a InDesign.
+                var warningImpaginazione = FotoPlacer.placeFoto(nomeFoto, fotoRectangle, null);
 
                 //L'opzione di rendering non altera geometria ne' posizionamento: la foto occupa
                 //lo stesso spazio di prima, cambia solo la sua visibilita'.
@@ -2840,9 +2842,11 @@ const FotoPlacer=
                     box = masterGroup;
                 }
 
-                return { box: box, fotoRectangle: fotoRectangle };
+                return { box: box, fotoRectangle: fotoRectangle, warning: warningImpaginazione };
             } catch (err) {
                 console.log(err);
+                //Anche qui la foto non e' finita in pagina: il chiamante deve poterlo sapere.
+                return { box: box, fotoRectangle: fotoRectangle, warning: "Errore durante l'impaginazione: " + err };
             }
         }
         else {
@@ -2851,7 +2855,7 @@ const FotoPlacer=
                 fotoRectangle.remove();
             }
         }
-        return { box: box, fotoRectangle: null };
+        return { box: box, fotoRectangle: null, warning: "" };
     },
 
 }

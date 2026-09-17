@@ -132,3 +132,71 @@ test('un download concluso ma senza file in cartella non viene dato per riuscito
     assert.strictEqual(esito.scaricata, false);
     assert.strictEqual(esito.motivo, fotoAutoSync.esiti.fotoAncoraAssente);
 });
+
+/*
+ * impaginaConRitentativo: un file appena scaricato puo' non essere ancora visibile a
+ * InDesign quando parte il place, e al suo posto finisce il segnaposto.
+ */
+function impaginazione(esiti) {
+    const chiamate = { impagina: 0, attesa: 0 };
+    return {
+        chiamate,
+        deps: {
+            impagina: async function () {
+                const esito = esiti[Math.min(chiamate.impagina, esiti.length - 1)];
+                chiamate.impagina++;
+                return esito;
+            },
+            attendi: async function () {
+                chiamate.attesa++;
+            }
+        }
+    };
+}
+
+test('impaginazione riuscita al primo colpo: nessuna attesa e nessun secondo tentativo', async () => {
+    const op = impaginazione([{ box: 'box', fotoRectangle: 'rect', warning: '' }]);
+
+    const esito = await fotoAutoSync.impaginaConRitentativo(op.deps);
+
+    assert.strictEqual(esito.fotoRectangle, 'rect');
+    assert.strictEqual(esito.ritentata, undefined);
+    assert.strictEqual(op.chiamate.impagina, 1);
+    assert.strictEqual(op.chiamate.attesa, 0);
+});
+
+test('se il primo place cade sul segnaposto si attende e si ritenta una volta', async () => {
+    const op = impaginazione([
+        { box: 'box', fotoRectangle: 'rect', warning: 'Foto non trovata, e\' stata inserita fotoNoFound.png' },
+        { box: 'box', fotoRectangle: 'rect', warning: '' }
+    ]);
+
+    const esito = await fotoAutoSync.impaginaConRitentativo(op.deps);
+
+    assert.strictEqual(esito.warning, '');
+    assert.strictEqual(esito.ritentata, true);
+    assert.strictEqual(op.chiamate.impagina, 2);
+    assert.strictEqual(op.chiamate.attesa, 1);
+});
+
+test('il ritentativo e\' uno solo: se fallisce ancora si restituisce l\'esito con il warning', async () => {
+    const op = impaginazione([{ box: 'box', fotoRectangle: 'rect', warning: 'Foto non trovata' }]);
+
+    const esito = await fotoAutoSync.impaginaConRitentativo(op.deps);
+
+    assert.strictEqual(esito.warning, 'Foto non trovata');
+    assert.strictEqual(esito.ritentata, true);
+    assert.strictEqual(op.chiamate.impagina, 2);
+    assert.strictEqual(op.chiamate.attesa, 1);
+});
+
+test('la rimozione della foto non viene scambiata per un fallimento', async () => {
+    //updateFoto con nomeFoto null rimuove il rectangle e torna senza warning.
+    const op = impaginazione([{ box: 'box', fotoRectangle: null, warning: '' }]);
+
+    const esito = await fotoAutoSync.impaginaConRitentativo(op.deps);
+
+    assert.strictEqual(esito.fotoRectangle, null);
+    assert.strictEqual(op.chiamate.impagina, 1);
+    assert.strictEqual(op.chiamate.attesa, 0);
+});
