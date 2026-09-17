@@ -4415,6 +4415,11 @@ async function callAllOperationFixBox(boxImpaginato, bounds, itemRef, garbageKey
         CssFramework.sospendiControlloSegnalazioniConflitti = false;
     }
 
+    //La sistemazione delle foto ha appena spostato le immagini. Qui vanno le operazioni che
+    //devono inseguirle: le regole dichiarate per il momento dopoFixFoto e gli elementi derivati,
+    //come le ombre, che prendono le misure dalle foto.
+    boxImpaginato = CssFramework.applicaOperazioniDopoFixFoto(boxImpaginato, bounds);
+
     CssFramework.controllaSegnalazioniConflittiPendenti(boxImpaginato);
 
     return boxImpaginato;

@@ -1,5 +1,8 @@
 const { app, FitOptions, LocationOptions, Justification, VerticalJustification, NestedStyleDelimiters, Leading } = require('indesign');
 const { ClippingPathType, ClippingPathSettings, Image } = require('indesign');
+const cssComposizioneBox = require('./cssComposizioneBox');
+const cssSequenzaOperazioni = require('./cssSequenzaOperazioni');
+const cssSpazioFoto = require('./cssSpazioFoto');
 
 const CssFramework =
 {
@@ -1000,37 +1003,26 @@ const CssFramework =
         var boundsGruppo = res.boundsGruppo;
         fotos = res.fotos;
 
-        //ora che abbiamo i bounds del gruppo cerchiamo fra i candidati che possono contenere il gruppo meglio
+        //ora che abbiamo i bounds del gruppo cerchiamo fra i candidati quello che lo ospita meglio.
+        //Di norma "meglio" vuol dire piu' grande; il box puo' chiedere di privilegiare la
+        //centratura, e allora si accetta qualche millimetro in meno per non finire di lato.
+        //La scelta vive in cssSpazioFoto, fuori da InDesign e quindi verificabile.
         var bestCandidate = null;
         var bestArea = 0;
         let useXaxisForReference = false;
-        for (let i = 0; i < candidateRects.length; i++) {
-            let candidate = candidateRects[i];
-            //guardiamo se il bounds del gruppo si estende più in altezza o larghezza
 
-            
-                //calcoliamo come sarebbero le misure proporzionali del gruppo se la sua altezza fosse uguale a quella del candidato
-                let ratioY = candidate.height / (boundsGruppo[2] - boundsGruppo[0]);
-                let newWidth = (boundsGruppo[3] - boundsGruppo[1]) * ratioY;
-                //controlliamo se il candidato ha abbastanza spazio per contenere il gruppo
-                let area = newWidth * candidate.height;
-                if (area > bestArea && newWidth <= candidate.width) {
-                    useXaxisForReference = false;
-                    bestCandidate = candidate;
-                    bestArea = area;
-                }else{
-                    let ratioX = candidate.width / (boundsGruppo[3] - boundsGruppo[1]);
-                    let newHeight = (boundsGruppo[2] - boundsGruppo[0]) * ratioX;
-                    //controlliamo se il candidato ha abbastanza spazio per contenere il gruppo
-                    area = newHeight * candidate.width;
-                    if (area > bestArea && newHeight <= candidate.height) {
-                        useXaxisForReference = true;
-                        bestCandidate = candidate;
-                        bestArea = area;
-                    }
-                }
+        let larghezzaBase = base != null ? base.geometricBounds[3] - base.geometricBounds[1] : 0;
+        let altezzaBase = base != null ? base.geometricBounds[2] - base.geometricBounds[0] : 0;
 
-            
+        let preferenzaSpazio = this.getSceltaSpazioFoto(box);
+        let sceltaSpazio = cssSpazioFoto.scegli(candidateRects, boundsGruppo, preferenzaSpazio, larghezzaBase, altezzaBase);
+
+        console.log("fixFoto " + box.label + ": " + cssSpazioFoto.descriviScelta(candidateRects, sceltaSpazio, preferenzaSpazio, larghezzaBase, altezzaBase));
+
+        if (sceltaSpazio != null) {
+            bestCandidate = sceltaSpazio.candidato;
+            bestArea = sceltaSpazio.area;
+            useXaxisForReference = sceltaSpazio.useXaxisForReference;
         }
 
         if (bestCandidate == null) {
@@ -1949,7 +1941,16 @@ const CssFramework =
 
     },
 
-    creaMappaturaBoxOriginale(box) {
+    /*
+     * Mappa degli elementi del box indicizzata per etichetta: e' cio' su cui lavorano
+     * ridimensionamenti e allineamenti.
+     *
+     * L'etichetta viene normalizzata togliendo quello che segue il $, cosi' "descrizione$1"
+     * e "descrizione" sono la stessa cosa. Per le copie delle duplicazioni quel taglio sarebbe
+     * rovinoso: due ombre finirebbero sulla stessa chiave e la seconda cancellerebbe la prima.
+     * Le foto sono gia' un'eccezione dentro Utility.parseLabel per lo stesso motivo.
+     */
+    creaMappaturaBoxOriginale(box, prefissiDerivati) {
         var mappaElementi = {};
         try {
             //facciamo una mappatura degli elementi del box di cui la chiave di ricerca sarà la label
@@ -1969,9 +1970,13 @@ const CssFramework =
                     relativeBounds[2] = Math.min(relativeBounds[2], box.geometricBounds[2] - box.geometricBounds[0]);
                     relativeBounds[3] = Math.min(relativeBounds[3], box.geometricBounds[3] - box.geometricBounds[1]);
 
-                    mappaElementi[Utility.parseLabel(item.label)] = {
+                    var chiaveElemento = cssComposizioneBox.etichettaDerivata(item.label, prefissiDerivati)
+                        ? item.label
+                        : Utility.parseLabel(item.label);
+
+                    mappaElementi[chiaveElemento] = {
                         item: item,
-                        label: Utility.parseLabel(item.label),
+                        label: chiaveElemento,
                         bounds: relativeBounds, // Adjusted bounds relative to the box
                         eliminato: false
                     };
@@ -1996,6 +2001,111 @@ const CssFramework =
         }
 
         return mappaBoxOriginale;
+    },
+
+    /*
+     * Aggiunge alla mappa gli elementi comparsi dopo che e' stata creata.
+     * Le copie delle duplicazioni nascono a valle degli allineamenti: senza questo passaggio
+     * le regole eseguite in un momento successivo non le vedrebbero affatto.
+     */
+    aggiungiNuoviElementiAllaMappa(box, mappaBoxOriginale, prefissiDerivati) {
+        if (box == null || !box.isValid || mappaBoxOriginale == null) {
+            return mappaBoxOriginale;
+        }
+
+        try {
+            for (var i = 0; i < box.allPageItems.length; i++) {
+                var item = box.allPageItems[i];
+                if (item == null || !item.isValid || !item.label) {
+                    continue;
+                }
+
+                var chiaveElemento = cssComposizioneBox.etichettaDerivata(item.label, prefissiDerivati)
+                    ? item.label
+                    : Utility.parseLabel(item.label);
+
+                var gia = mappaBoxOriginale[chiaveElemento];
+                if (gia != null && gia.item != null && gia.item.isValid) {
+                    continue;
+                }
+
+                var relativeBounds = [
+                    item.geometricBounds[0] - box.geometricBounds[0],
+                    item.geometricBounds[1] - box.geometricBounds[1],
+                    item.geometricBounds[2] - box.geometricBounds[0],
+                    item.geometricBounds[3] - box.geometricBounds[1]
+                ];
+
+                mappaBoxOriginale[chiaveElemento] = {
+                    item: item,
+                    label: chiaveElemento,
+                    bounds: relativeBounds,
+                    eliminato: false
+                };
+            }
+        }
+        catch (err) {
+            console.log(err);
+        }
+
+        return mappaBoxOriginale;
+    },
+
+    /*
+     * Le regole del box, cercate prima fra quelle del kit e poi fra quelle di default.
+     * La stessa ricerca serviva in piu' punti: tenerla in un posto solo evita che divergano.
+     */
+    getElementoBoxDB(box, DBallineamenti, DBDefault) {
+        if (box == null) {
+            return null;
+        }
+
+        var meccanica = box.label;
+        var elementoBox = DBallineamenti ? DBallineamenti.find(el => el.nomiBox != null && el.nomiBox.includes(meccanica)) : null;
+        if (elementoBox == null) {
+            elementoBox = DBDefault ? DBDefault.find(el => el.nomiBox != null && el.nomiBox.includes(meccanica)) : null;
+        }
+
+        return elementoBox;
+    },
+
+    getPrefissiDerivati(box, DBallineamenti, DBDefault) {
+        var elementoBox = this.getElementoBoxDB(box, DBallineamenti, DBDefault);
+        return elementoBox != null ? cssComposizioneBox.prefissiDerivati(elementoBox.duplicazioni) : [];
+    },
+
+    /*
+     * Preferenza del box su come scegliere lo spazio delle foto. Null: area massima, come sempre.
+     */
+    getSceltaSpazioFoto(box) {
+        var contesto = this.contestoCss;
+        if (contesto == null || box == null) {
+            return null;
+        }
+
+        var elementoBox = this.getElementoBoxDB(box, contesto.DBallineamenti, contesto.DBDefault);
+        return elementoBox != null ? elementoBox.sceltaSpazioFoto : null;
+    },
+
+    /*
+     * Contesto dell'ultima applicazione del CSS a un box: consente ai passaggi successivi
+     * (scelta dello spazio foto, operazioni del momento dopoFixFoto, ricomposizione) di
+     * lavorare senza rileggere il file delle regole a ogni box.
+     */
+    contestoCss: null,
+
+    memorizzaContestoCss(box, boundsBoxImpaginato, mappaBoxOriginale, itemRef, DBallineamenti, DBDefault) {
+        this.contestoCss = {
+            etichettaBox: box != null ? box.label : null,
+            boundsBoxImpaginato: boundsBoxImpaginato,
+            mappaBoxOriginale: mappaBoxOriginale,
+            itemRef: itemRef,
+            DBallineamenti: DBallineamenti,
+            DBDefault: DBDefault,
+            prefissiDerivati: this.getPrefissiDerivati(box, DBallineamenti, DBDefault)
+        };
+
+        return this.contestoCss;
     },
 
     applicaRidimensionamento(box, boxInGrigliaBounds, mappaBoxOriginale, itemRef, DBallineamenti, DBDef) {
@@ -3201,7 +3311,7 @@ const CssFramework =
         return haTerminiValidi ? totale : null;
     },
 
-    async applicaRidimensionamentoCss(box, boxInGrigliaBounds, itemRef, garbageKey, modalitaOperazioni = 0) {
+    async applicaRidimensionamentoCss(box, boxInGrigliaBounds, itemRef, garbageKey, modalitaOperazioni = 0, momento = cssSequenzaOperazioni.standard) {
         try {
             //modalità operazioni: 0 = tutto, 1 = solo ridimensionamentoBase, 2 = escludi ridimensionamentoBase
             let me = this;
@@ -3308,9 +3418,18 @@ const CssFramework =
 
                     var DB = fileModifiche ? fileModifiche.operazioniPerBox : null;
                     var DBDef = fileModificheDef ? fileModificheDef.operazioniPerBox : null;
+
+                    //Le copie generate dalle duplicazioni vanno riconosciute per etichetta prima
+                    //di costruire la mappa, altrimenti due omonime collassano in una sola voce.
+                    var prefissiDerivati = me.getPrefissiDerivati(box, DB, DBDef);
+                    //Il motore riceve le sole regole del momento richiesto: una regola senza fase
+                    //appartiene al momento standard, quindi l'ordine di sempre non cambia.
+                    DB = cssSequenzaOperazioni.filtraDBPerMomento(DB, momento);
+                    DBDef = cssSequenzaOperazioni.filtraDBPerMomento(DBDef, momento);
+
                     var mappaBoxOriginale = null;
                     if (modalitaOperazioni != 2){
-                        mappaBoxOriginale = me.creaMappaturaBoxOriginale(box);
+                        mappaBoxOriginale = me.creaMappaturaBoxOriginale(box, prefissiDerivati);
                         me.applicaRidimensionamento(box, boxInGrigliaBounds, mappaBoxOriginale, itemRef, DB, DBDef);
     
                         if (modalitaOperazioni == 1) {
@@ -3322,7 +3441,7 @@ const CssFramework =
                         }
                     }
 
-                    mappaBoxOriginale = me.creaMappaturaBoxOriginale(box);
+                    mappaBoxOriginale = me.creaMappaturaBoxOriginale(box, prefissiDerivati);
                     if(garbageKey!=null){
                         activateKeyForGarbage(garbageKey);
                     }
@@ -3446,11 +3565,17 @@ const CssFramework =
                 var DB = fileModifiche ? fileModifiche.operazioniPerBox : null;
                 var DBDef = fileModificheDef ? fileModificheDef.operazioniPerBox : null;
 
-                var DB = fileModifiche ? fileModifiche.operazioniPerBox : null;
-                var DBDef = fileModificheDef ? fileModificheDef.operazioniPerBox : null;
+                //Le copie generate dalle duplicazioni vanno riconosciute per etichetta prima
+                //di costruire la mappa, altrimenti due omonime collassano in una sola voce.
+                var prefissiDerivati = me.getPrefissiDerivati(box, DB, DBDef);
+                //Il motore riceve le sole regole del momento richiesto: una regola senza fase
+                //appartiene al momento standard, quindi l'ordine di sempre non cambia.
+                DB = cssSequenzaOperazioni.filtraDBPerMomento(DB, momento);
+                DBDef = cssSequenzaOperazioni.filtraDBPerMomento(DBDef, momento);
+
                 var mappaBoxOriginale = null;
                 if (modalitaOperazioni != 2) {
-                    mappaBoxOriginale = me.creaMappaturaBoxOriginale(box);
+                    mappaBoxOriginale = me.creaMappaturaBoxOriginale(box, prefissiDerivati);
                     me.applicaRidimensionamento(box, boxInGrigliaBounds, mappaBoxOriginale, itemRef, DB, DBDef);
                     if (modalitaOperazioni == 1) {
                         result = {
@@ -3460,7 +3585,7 @@ const CssFramework =
                         return;
                     }
                 }
-                mappaBoxOriginale = me.creaMappaturaBoxOriginale(box);
+                mappaBoxOriginale = me.creaMappaturaBoxOriginale(box, prefissiDerivati);
                 if (garbageKey != null) {
                     activateKeyForGarbage(garbageKey);
                 }
@@ -5283,7 +5408,7 @@ const CssFramework =
     },
     
 
-    applicaAllineamentoCss(box, boundsBoxImpaginato, mappaBoxOriginale, itemRef, bypassDownload = true) {
+    applicaAllineamentoCss(box, boundsBoxImpaginato, mappaBoxOriginale, itemRef, bypassDownload = true, momento = cssSequenzaOperazioni.standard) {
         try {
             let me = this;
 
@@ -5390,8 +5515,16 @@ const CssFramework =
 
                     var DB = fileModifiche ? fileModifiche.operazioniPerBox : null;
                     var DBDefault = fileModificheDef ? fileModificheDef.operazioniPerBox : null;
+
+                    me.memorizzaContestoCss(box, boundsBoxImpaginato, mappaBoxOriginale, itemRef, DB, DBDefault);
+
+                    var DBMomento = cssSequenzaOperazioni.filtraDBPerMomento(DB, momento);
+                    var DBDefaultMomento = cssSequenzaOperazioni.filtraDBPerMomento(DBDefault, momento);
+
                     me.preparaSegnalazioniConflitti(box, DB, DBDefault);
-                    box = me.allineamenti(box, boundsBoxImpaginato, mappaBoxOriginale, itemRef, DB, DBDefault);
+                    box = me.allineamenti(box, boundsBoxImpaginato, mappaBoxOriginale, itemRef, DBMomento, DBDefaultMomento);
+                    //Dopo gli allineamenti: le copie derivano dalla posizione definitiva degli elementi.
+                    box = me.applicaComposizioneBox(box, mappaBoxOriginale, itemRef, DB, DBDefault);
                     return box;
                 });
             }
@@ -5487,8 +5620,18 @@ const CssFramework =
 
                 var DB = fileModifiche ? fileModifiche.operazioniPerBox : null;
                 var DBDefault = fileModificheDef ? fileModificheDef.operazioniPerBox : null;
+
+                //Il contesto resta a disposizione dei passaggi successivi: la scelta dello spazio
+                //foto e le operazioni del momento dopoFixFoto non rileggono il file per ogni box.
+                me.memorizzaContestoCss(box, boundsBoxImpaginato, mappaBoxOriginale, itemRef, DB, DBDefault);
+
+                var DBMomento = cssSequenzaOperazioni.filtraDBPerMomento(DB, momento);
+                var DBDefaultMomento = cssSequenzaOperazioni.filtraDBPerMomento(DBDefault, momento);
+
                 me.preparaSegnalazioniConflitti(box, DB, DBDefault);
-                box = me.allineamenti(box, boundsBoxImpaginato, mappaBoxOriginale, itemRef, DB, DBDefault);
+                box = me.allineamenti(box, boundsBoxImpaginato, mappaBoxOriginale, itemRef, DBMomento, DBDefaultMomento);
+                //Dopo gli allineamenti: le copie derivano dalla posizione definitiva degli elementi.
+                box = me.applicaComposizioneBox(box, mappaBoxOriginale, itemRef, DB, DBDefault);
                 return box;
             }
         }
@@ -5973,6 +6116,317 @@ const CssFramework =
     //     let regexStr = '^' + escaped.replace(/\*/g, '.*') + '$';
     //     return new RegExp(regexStr);
     // },
+
+    /*
+     * I20-970: elementi derivati e ordine di sovrapposizione.
+     *
+     * Il framework sapeva spostare, ridimensionare e allineare quello che gia' esisteva nel box,
+     * non crearne di nuovi ne' decidere chi sta davanti a chi. Le due regole vivono nel DB come
+     * tutte le altre, cosi' il comportamento resta dato e non finisce in custom.js.
+     *
+     * Le decisioni (quali copie, con che etichetta, con che bounds, cosa mandare dietro a cosa)
+     * stanno in cssComposizioneBox, verificabile fuori da InDesign; qui si esegue soltanto.
+     */
+    getElementiComposizione(box) {
+        var elementi = [];
+        for (var i = 0; i < box.allPageItems.length; i++) {
+            var item = box.allPageItems[i];
+            if (item == null || !item.isValid || item.label == null || item.label === "") {
+                continue;
+            }
+            elementi.push({ etichetta: item.label, bounds: item.geometricBounds, item: item });
+        }
+        return elementi;
+    },
+
+    regoleComposizioneAttive(regole, mappaBoxOriginale, itemRef, box) {
+        var attive = [];
+        if (regole == null) {
+            return attive;
+        }
+        for (var i = 0; i < regole.length; i++) {
+            var regola = regole[i];
+            if (regola == null) {
+                continue;
+            }
+            if (regola.listSetCondizioni != null && regola.listSetCondizioni.length > 0
+                && !this.checkAllConditions(mappaBoxOriginale, itemRef, regola.listSetCondizioni, box)) {
+                continue;
+            }
+            attive.push(regola);
+        }
+        return attive;
+    },
+
+    applicaComposizioneBox(box, mappaBoxOriginale, itemRef, DBallineamenti, DBDefault) {
+        try {
+            var me = this;
+            var elementoBox = me.getElementoBoxDB(box, DBallineamenti, DBDefault);
+            if (elementoBox == null) {
+                return box;
+            }
+
+            var regoleDuplicazioni = me.regoleComposizioneAttive(elementoBox.duplicazioni, mappaBoxOriginale, itemRef, box);
+            var regoleOrdiniZ = me.regoleComposizioneAttive(elementoBox.ordiniZ, mappaBoxOriginale, itemRef, box);
+
+            if (regoleDuplicazioni.length === 0 && regoleOrdiniZ.length === 0) {
+                return box;
+            }
+
+            var corrisponde = function (etichetta, spec) {
+                return me.makeRegexFromGroupName(spec).test(etichetta);
+            };
+
+            var adattaContenuto = function (item, fitContenuto) {
+                //Ridimensionare il riquadro non ridimensiona il grafico che contiene.
+                if (fitContenuto == null || item.graphics == null || item.graphics.length === 0) {
+                    return;
+                }
+                item.fit(fitContenuto === "proporzionale" ? FitOptions.PROPORTIONALLY : FitOptions.CONTENT_TO_FRAME);
+            };
+
+            if (regoleDuplicazioni.length > 0) {
+                var elementi = me.getElementiComposizione(box);
+                var piano = cssComposizioneBox.pianificaDuplicazioni(regoleDuplicazioni, elementi, corrisponde);
+                var copieCreate = [];
+
+                for (var c = 0; c < piano.copie.length; c++) {
+                    var copia = piano.copie[c];
+                    var modello = elementi.find(el => el.etichetta === copia.etichettaModello);
+                    if (modello == null || !modello.item.isValid) {
+                        continue;
+                    }
+                    try {
+                        //La copia nasce sullo spread, fuori dal gruppo: InDesign non permette di
+                        //aggiungere un elemento a un gruppo esistente. Si rientra dopo, tutte insieme.
+                        var nuovo = modello.item.duplicate();
+                        nuovo.label = copia.etichetta;
+                        nuovo.geometricBounds = copia.bounds;
+                        adattaContenuto(nuovo, copia.fitContenuto);
+                        copieCreate.push(nuovo);
+                    }
+                    catch (e) {
+                        console.error("Code CSF-10: duplicazione di " + copia.etichettaModello + " non riuscita: " + e);
+                    }
+                }
+
+                for (var a = 0; a < piano.aggiornamenti.length; a++) {
+                    var aggiornamento = piano.aggiornamenti[a];
+                    var daAggiornare = elementi.find(el => el.etichetta === aggiornamento.etichetta);
+                    if (daAggiornare == null || !daAggiornare.item.isValid) {
+                        continue;
+                    }
+                    try {
+                        daAggiornare.item.geometricBounds = aggiornamento.bounds;
+                        adattaContenuto(daAggiornare.item, aggiornamento.fitContenuto);
+                    }
+                    catch (e) {
+                        console.error("Code CSF-14: aggiornamento di " + aggiornamento.etichetta + " non riuscito: " + e);
+                    }
+                }
+
+                //Le rimozioni per ultime: il modello serve finche' ci sono copie da creare.
+                for (var r = 0; r < piano.rimozioni.length; r++) {
+                    var daRimuovere = elementi.find(el => el.etichetta === piano.rimozioni[r]);
+                    if (daRimuovere == null || !daRimuovere.item.isValid) {
+                        continue;
+                    }
+                    try {
+                        daRimuovere.item.remove();
+                    }
+                    catch (e) {
+                        console.error("Code CSF-11: rimozione di " + piano.rimozioni[r] + " non riuscita: " + e);
+                    }
+                }
+
+                //Fuori dal gruppo le copie non le vedrebbe piu' nessuno: ne' gli allineamenti,
+                //ne' il passaggio successivo che deve riportarle sotto alla propria foto.
+                //Da qui in avanti "box" puo' essere un oggetto nuovo.
+                box = me.riportaDentroAlBox(box, copieCreate);
+            }
+
+            if (regoleOrdiniZ.length > 0) {
+                //La lista va riletta: le copie appena create partecipano all'ordinamento.
+                var elementiAggiornati = me.getElementiComposizione(box);
+                var operazioni = cssComposizioneBox.pianificaOrdineZ(regoleOrdiniZ, elementiAggiornati, corrisponde);
+
+                for (var o = 0; o < operazioni.length; o++) {
+                    var operazione = operazioni[o];
+                    var elemento = elementiAggiornati.find(el => el.etichetta === operazione.etichetta);
+                    if (elemento == null || !elemento.item.isValid) {
+                        continue;
+                    }
+                    try {
+                        var riferimenti = operazione.riferimenti
+                            .map(et => elementiAggiornati.find(el => el.etichetta === et))
+                            .filter(el => el != null && el.item.isValid);
+
+                        if (riferimenti.length === 0) {
+                            if (operazione.posizione === "davanti") {
+                                elemento.item.bringToFront();
+                            }
+                            else {
+                                elemento.item.sendToBack();
+                            }
+                            continue;
+                        }
+
+                        //Dietro a tutti i riferimenti, o davanti a tutti: si applica a ciascuno,
+                        //l'ultimo spostamento e' quello che soddisfa anche i precedenti.
+                        for (var k = 0; k < riferimenti.length; k++) {
+                            if (operazione.posizione === "davanti") {
+                                elemento.item.bringToFront(riferimenti[k].item);
+                            }
+                            else {
+                                elemento.item.sendToBack(riferimenti[k].item);
+                            }
+                        }
+                    }
+                    catch (e) {
+                        console.error("Code CSF-12: ordinamento di " + operazione.etichetta + " non riuscito: " + e);
+                    }
+                }
+            }
+        }
+        catch (error) {
+            console.error("Code CSF-13: errore nella composizione del box " + box.label);
+            console.error(error);
+        }
+
+        return box;
+    },
+
+    /*
+     * Porta dentro al gruppo del box elementi che stanno fuori.
+     *
+     * InDesign non permette di aggiungere un elemento a un gruppo esistente, ne' passando il
+     * gruppo a duplicate() ne' a move(). La tecnica usata in tutto il plugin (bollini, foto
+     * extra) e': raggruppare il box con i nuovi elementi, sciogliere il gruppo interno e dare
+     * al gruppo esterno l'etichetta del box. Il box che torna e' un oggetto nuovo, con gli
+     * stessi figli: chi lo riceve deve usare quello e non il vecchio riferimento.
+     */
+    riportaDentroAlBox(box, elementi) {
+        if (box == null || !box.isValid || elementi == null || elementi.length === 0) {
+            return box;
+        }
+
+        var daInserire = elementi.filter(el => el != null && el.isValid && !this.elementoDentroAlBox(el, box));
+        if (daInserire.length === 0) {
+            return box;
+        }
+
+        var etichetta = box.label;
+        var nuovoGruppo = null;
+
+        try {
+            var contenitore = box.parentPage != null ? box.parentPage : box.parent;
+            nuovoGruppo = contenitore.groups.add([box].concat(daInserire));
+        }
+        catch (e) {
+            console.error("Code CSF-15: impossibile raggruppare il box " + etichetta + " con i suoi elementi derivati: " + e);
+            return box;
+        }
+
+        try {
+            box.ungroup();
+        }
+        catch (e) {
+            //Il box e' rimasto intero dentro a un gruppo anonimo: meglio scioglierlo e tornare com'era.
+            console.error("Code CSF-15: impossibile sciogliere il gruppo interno del box " + etichetta + ": " + e);
+            try {
+                nuovoGruppo.ungroup();
+            }
+            catch (e2) {
+                console.error("Code CSF-15: il box " + etichetta + " e' rimasto annidato in un gruppo senza etichetta: " + e2);
+            }
+            return box;
+        }
+
+        nuovoGruppo.label = etichetta;
+        return nuovoGruppo;
+    },
+
+    elementoDentroAlBox(item, box) {
+        try {
+            if (item == null || !item.isValid || box == null) {
+                return false;
+            }
+
+            var contenitore = item.parent;
+            while (contenitore != null) {
+                if (contenitore === box || (contenitore.id != null && box.id != null && contenitore.id === box.id)) {
+                    return true;
+                }
+                if (contenitore.constructorName === "Spread" || contenitore.constructorName === "Page" || contenitore.constructorName === "Layer") {
+                    return false;
+                }
+                contenitore = contenitore.parent;
+            }
+        }
+        catch (e) {
+            //Non poter rispondere vale come "non lo so": si tenta comunque il rientro nel gruppo.
+        }
+
+        return false;
+    },
+
+    /*
+     * Ricompone il box col contesto dell'ultima applicazione del CSS.
+     * Va chiamata dopo la sistemazione delle foto: gli elementi derivati prendono le misure
+     * dalle immagini, che fino a quel momento possono ancora spostarsi.
+     * Il piano e' rieseguibile, quindi ripassare non duplica nulla due volte.
+     */
+    riapplicaComposizioneBox(box) {
+        if (box == null || !box.isValid || this.contestoCss == null) {
+            return box;
+        }
+        var contesto = this.contestoCss;
+        return this.applicaComposizioneBox(box, contesto.mappaBoxOriginale, contesto.itemRef, contesto.DBallineamenti, contesto.DBDefault);
+    },
+
+    /*
+     * Operazioni dichiarate per il momento dopoFixFoto, seguite dalla ricomposizione del box.
+     *
+     * E' il punto in cui le immagini hanno preso la loro posizione definitiva: chi si era
+     * allineato a loro prima stava seguendo una posizione provvisoria. Lavora sul contesto
+     * dell'ultima applicazione del CSS, quindi non rilegge il file delle regole.
+     */
+    applicaOperazioniDopoFixFoto(box, boundsBoxImpaginato) {
+        if (box == null || !box.isValid) {
+            return box;
+        }
+
+        var contesto = this.contestoCss;
+
+        try {
+            if (contesto != null) {
+                var momento = cssSequenzaOperazioni.dopoFixFoto;
+
+                if (cssSequenzaOperazioni.esistonoRegole(contesto.DBallineamenti, momento) ||
+                    cssSequenzaOperazioni.esistonoRegole(contesto.DBDefault, momento)) {
+
+                    var bounds = boundsBoxImpaginato != null ? boundsBoxImpaginato : contesto.boundsBoxImpaginato;
+
+                    //Le copie sono nate dopo la mappa: senza questo passaggio non esisterebbero
+                    //per le regole che stanno per essere eseguite.
+                    var mappa = this.aggiungiNuoviElementiAllaMappa(box, this.updateMap(contesto.mappaBoxOriginale), contesto.prefissiDerivati);
+
+                    var DB = cssSequenzaOperazioni.filtraDBPerMomento(contesto.DBallineamenti, momento);
+                    var DBDefault = cssSequenzaOperazioni.filtraDBPerMomento(contesto.DBDefault, momento);
+
+                    this.applicaRidimensionamento(box, bounds, mappa, contesto.itemRef, DB, DBDefault);
+                    this.applicaPostRidimensionamento(box, mappa, contesto.itemRef, DB, DBDefault);
+                    box = this.allineamenti(box, bounds, mappa, contesto.itemRef, DB, DBDefault);
+                }
+            }
+        }
+        catch (error) {
+            console.error("Code CSF-16: errore nelle operazioni successive alla sistemazione delle foto del box " + box.label);
+            console.error(error);
+        }
+
+        return this.riapplicaComposizioneBox(box);
+    },
 
     makeRegexFromGroupName(groupName) {
         // rimuovo un eventuale [itemLink] finale (case-insensitive)

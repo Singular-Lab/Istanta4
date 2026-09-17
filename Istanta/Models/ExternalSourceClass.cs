@@ -3260,6 +3260,101 @@ namespace Istanta.Models
         public List<PostRidimensionamentoObj> postRidimensionamenti = new();
         public List<Allineamento> allineamenti { get; set; } = new();
         public List<SegnalazioniConflitti> segnalazioniConflitti { get; set; } = new();
+
+        /// I20-970: elementi creati duplicandone uno gia' presente, uno per ogni bersaglio.
+        public List<DuplicazioneObj> duplicazioni { get; set; } = new();
+
+        /// I20-970: chi sta davanti e chi dietro dentro il box.
+        public List<OrdineZObj> ordiniZ { get; set; } = new();
+
+        /// Come scegliere, fra gli spazi liberi, quello in cui mettere le foto.
+        /// Null: vince lo spazio piu' ampio, il criterio di sempre.
+        public SceltaSpazioFotoObj? sceltaSpazioFoto { get; set; }
+    }
+
+    /// Criterio di scelta dello spazio delle foto dentro al box.
+    ///
+    /// Serve ai box in cui le foto vivono dentro un disegno fisso, come le parentesi del BOX41:
+    /// li' una foto spostata di lato per guadagnare qualche millimetro risulta vistosamente
+    /// scentrata, e conviene accettare qualche millimetro in meno restando al centro.
+    public class SceltaSpazioFotoObj
+    {
+        /// "areaMassima" (predefinito) oppure "centrato".
+        public string modo { get; set; } = "areaMassima";
+
+        /// Quanta area si e' disposti a perdere per stare piu' al centro, come frazione
+        /// dell'area migliore: 0.7 accetta uno spazio che valga almeno il 70% del migliore.
+        /// Sopra quella soglia vince la centratura, sotto torna a vincere l'area.
+        public double tolleranzaArea { get; set; } = 0.7;
+
+        /// Su quale asse si misura la centratura: "x", "y" oppure "xy" (predefinito).
+        public string asseCentratura { get; set; } = "xy";
+    }
+
+    /// Duplica un elemento del box una volta per ogni bersaglio, dando a ogni copia
+    /// un'etichetta univoca: quella della sorgente piu' il suffisso del bersaglio
+    /// (sy_ombra + immagine$3150596 -> sy_ombra$3150596). Serve perche' gli allineamenti
+    /// lavorano per etichetta e due elementi omonimi non sarebbero distinguibili.
+    public class DuplicazioneObj
+    {
+        public string nomeGruppo { get; set; } = "";
+
+        /// Etichetta dell'elemento da duplicare.
+        public string etichettaSorgente { get; set; } = "";
+
+        /// Etichette dei bersagli, un elemento per copia. Ammette l'asterisco.
+        public List<string> bersagli { get; set; } = new();
+
+        /// Come la copia si adatta al proprio bersaglio. Null: copia identica, centrata sul bersaglio.
+        public AdattamentoAlBersaglio? adattaAlBersaglio { get; set; }
+
+        /// Di norma la sorgente viene rimossa dopo le copie: resterebbe un elemento spaiato.
+        public bool mantieniSorgente { get; set; } = false;
+
+        public List<SetCondizioni> listSetCondizioni { get; set; } = new List<SetCondizioni>();
+    }
+
+    /// Misure e ancoraggio della copia rispetto al bersaglio.
+    public class AdattamentoAlBersaglio
+    {
+        /// "bersaglio" per prendere la larghezza del bersaglio; altrimenti resta quella della sorgente.
+        public string? larghezza { get; set; }
+
+        /// "bersaglio" per prendere l'altezza del bersaglio; altrimenti resta quella della sorgente.
+        public string? altezza { get; set; }
+
+        /// "centro" (default), "sinistra", "destra".
+        public string? ancoraX { get; set; }
+
+        /// "centro" (default), "alto", "basso", "centroSuLatoBasso", "centroSuLatoAlto".
+        /// Con centroSuLatoBasso il centro della copia cade sul lato basso del bersaglio:
+        /// meta' resta visibile sotto, meta' finisce dietro al bersaglio.
+        public string? ancoraY { get; set; }
+
+        /// Scostamenti finali in millimetri.
+        public double offsetX { get; set; } = 0;
+        public double offsetY { get; set; } = 0;
+
+        /// Allargare il riquadro non allarga il grafico che contiene: "riquadro" lo fa
+        /// seguire esattamente, "proporzionale" lo adatta senza deformarlo, null lo lascia com'e'.
+        public string? fitContenuto { get; set; }
+    }
+
+    /// Ordine di sovrapposizione: porta delle etichette dietro o davanti ad altre.
+    public class OrdineZObj
+    {
+        public string nomeGruppo { get; set; } = "";
+
+        /// Etichette da spostare. Ammette l'asterisco.
+        public List<string> etichette { get; set; } = new();
+
+        /// "dietro" (default) oppure "davanti".
+        public string posizione { get; set; } = "dietro";
+
+        /// Etichette di riferimento. Vuoto: in fondo o in cima al box.
+        public List<string> rispettoA { get; set; } = new();
+
+        public List<SetCondizioni> listSetCondizioni { get; set; } = new List<SetCondizioni>();
     }
 
 
@@ -3268,6 +3363,10 @@ namespace Istanta.Models
     public class RidimensionamentoObj
     {
         public string nomeGruppo { get; set; } = "";
+
+        /// Momento in cui la regola viene eseguita. Vuoto: l'ordine di sempre.
+        /// Vedere il commento su fase in Allineamento.
+        public string fase { get; set; } = "";
         /// Etichette che si muovono come un blocco.
         public List<string> gruppoEtichette { get; set; } = new();
 
@@ -3287,6 +3386,9 @@ namespace Istanta.Models
     {
         public string nomeGruppo { get; set; } = "";
         public int ordine { get; set; } = 999999;
+
+        /// Momento in cui la regola viene eseguita. Vuoto: l'ordine di sempre.
+        public string fase { get; set; } = "";
 
         /// Etichette che si muovono come un blocco.
         public List<string> gruppoEtichette { get; set; } = new();
@@ -3331,6 +3433,10 @@ namespace Istanta.Models
         /// Nome usato per riferirsi al gruppo.
         public string nomeGruppo { get; set; } = "";
         public int ordine { get; set; } = 999999;
+
+        /// Momento in cui l'allineamento viene eseguito. Vuoto: prima della sistemazione
+        /// delle foto, come e' sempre stato. "dopoFixFoto" per chi deve inseguire le immagini.
+        public string fase { get; set; } = "";
 
         /// Etichette che si muovono come un blocco.
         public List<string> gruppoEtichette { get; set; } = new();
