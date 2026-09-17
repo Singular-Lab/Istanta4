@@ -931,6 +931,32 @@ namespace Istanta.Models
 
     }
 
+    /// <summary>
+    /// Lettura dei meta di una promo lavorazione.
+    /// I meta gia' salvati, e i payload dei client, possono portare una chiave valorizzata
+    /// a null su una proprieta' che qui e' un tipo valore, ad esempio noRender o stato.
+    /// Un null va letto come chiave assente, cioe' come il default: non deve far fallire
+    /// la lettura dell'intera scheda.
+    /// </summary>
+    public static class MetaPromoLavorazioni
+    {
+        private static readonly Newtonsoft.Json.JsonSerializerSettings settings =
+            new Newtonsoft.Json.JsonSerializerSettings
+            {
+                NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore
+            };
+
+        public static RevisioneMetaPromoLavorazioni? leggi(string meta)
+        {
+            return Newtonsoft.Json.JsonConvert.DeserializeObject<RevisioneMetaPromoLavorazioni>(meta, settings);
+        }
+
+        public static List<RevisioneSelezioneFotoFromIndd>? leggiSelezioniFoto(string ps)
+        {
+            return Newtonsoft.Json.JsonConvert.DeserializeObject<List<RevisioneSelezioneFotoFromIndd>>(ps, settings);
+        }
+    }
+
     //Legata esclusivamente al dato di revisione articolo su Istanta
     public class RevisioneMetaPromoLavorazioni
     {
