@@ -239,6 +239,18 @@ jobs:
             (.version | type == "string" and length > 0)
           ' plugin/manifest.json > /dev/null
 
+      - name: Set up Node.js for Plugin
+        if: steps.changes.outputs.plugin == 'true' && hashFiles('tests/plugin/*.test.js') != ''
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      # I moduli del Plugin che non dipendono da UXP/InDesign sono verificati con il
+      # test runner di Node: la suite non richiede dipendenze ne' package.json.
+      - name: Test suite Plugin
+        if: steps.changes.outputs.plugin == 'true' && hashFiles('tests/plugin/*.test.js') != ''
+        run: node --test tests/plugin/*.test.js
+
       - name: Set up Docker Buildx
         if: steps.changes.outputs.istanta == 'true' || steps.changes.outputs.agenzialib == 'true' || steps.changes.outputs.fidelity == 'true' || steps.changes.outputs.olimpo == 'true' || steps.changes.outputs.correggo4 == 'true'
         uses: docker/setup-buildx-action@v3

@@ -6,6 +6,10 @@ const fs = uxp.storage.localFileSystem;
 
 const cmd = {
 
+    //I20-967: sotto questa soglia i file gia' presenti si cercano per nome invece di elencare
+    //l'intera cartella di destinazione.
+    SOGLIA_LETTURA_MIRATA: 25,
+
     async downloadImages(listImagesRequired, objProcess, cartella, idOperazione)
     {
         const folder = cartella;
@@ -16,73 +20,73 @@ const cmd = {
         }
     
     
-        const entries = await folder.getEntries(); // Ottieni le voci (file e cartelle) nella cartella
-    
+        //I20-967: i nomi richiesti in una mappa, cosi' la cartella si scorre una volta sola
+        //e senza una ricerca lineare per ogni file presente.
+        const nomiRichiesti = new Map();
+        for (const richiesta of listImagesRequired) {
+            if (richiesta != null && richiesta.fileName != null) {
+                nomiRichiesti.set(richiesta.fileName, richiesta);
+            }
+        }
+
         let md5GIaScaricati= [];
         if (objProcess != null && objProcess.onProgress != null) {
             await objProcess.onProgress(0, "Calcolo Md5 già scaricati");
         }
-        var countTotal = 0;
         var count = 0;
         console.log("------------------------------- INIZIO CALCOLO MD5 -------------------------------");
-        if (objProcess != null && objProcess.onProgress != null) {
-            await objProcess.onProgress(count, "Calcolo Md5 già scaricati");
-        }
-        
-        console.log(entries);
-    
-        for (const entry of entries) {
-            if (entry.isFile) {
-                //controlliamo se entry.name è presente in un oggetto listImagesRequired sotto la chiave fileName
-    
-                let item = listImagesRequired.find(x => x.fileName === entry.name);
-                if(item != null){              
-                    countTotal++;
+
+        //I20-967: per poche foto (tipicamente una sola, dal cambio foto della scheda ref) chiediamo
+        //i file per nome: elencare una cartella Links con migliaia di immagini costerebbe molto di piu'.
+        let entriesDaControllare = null;
+        if (nomiRichiesti.size > 0 && nomiRichiesti.size <= cmd.SOGLIA_LETTURA_MIRATA && typeof folder.getEntry === "function") {
+            entriesDaControllare = [];
+            for (const nomeRichiesto of nomiRichiesti.keys()) {
+                try {
+                    const entry = await folder.getEntry(nomeRichiesto);
+                    if (entry != null && entry.isFile) {
+                        entriesDaControllare.push(entry);
+                    }
+                }
+                catch (err) {
+                    //Il file non c'è: va scaricato, non è un errore.
                 }
             }
         }
-    
-    
+
+        if (entriesDaControllare == null) {
+            const entries = await folder.getEntries(); // Ottieni le voci (file e cartelle) nella cartella
+            entriesDaControllare = [];
+            for (const entry of entries) {
+                if (entry.isFile && nomiRichiesti.has(entry.name)) {
+                    entriesDaControllare.push(entry);
+                }
+            }
+        }
+
+        var countTotal = entriesDaControllare.length;
+
         if (objProcess != null && objProcess.onTotalCount != null) {
             await objProcess.onTotalCount(countTotal);
         }
-    
-        for (const entry of entries) {
+
+        for (const entry of entriesDaControllare) {
             if(abortedSyncFoto.includes(idOperazione)){
                 objProcess.onAbort("Operazione annullata dall'utente");
                 return;
             }
 
-            if (entry.isFile) {
-                //controlliamo se entry.name è presente in un oggetto listImagesRequired sotto la chiave fileName
-    
-                let item = listImagesRequired.find(x => x.fileName === entry.name);
-                if(item == null){              
-                    continue;
-                }
-    
-                const data = await entry.read({ format: uxp.storage.formats.binary });
-                //console.log("File data (binary):", data);
-                const byteArray = new Uint8Array(data);
-                //console.log("MD5 Hash:", md5ArrayBuffer(byteArray));
-                md5GIaScaricati.push(cmd.md5ArrayBuffer(byteArray));
-    
-                count++;
-    
-                console.log(`File: ${entry.name}`);
-                console.log(count);
-    
-                            
-                if (objProcess != null && objProcess.onProgress != null) {
-                    objProcess.onProgress(count, "Calcolo Md5 già scaricati");
-                }
-    
-    
-    
-                // Qui puoi elaborare ogni file come desideri
-            } else if (entry.isFolder) {
-                console.log(`Cartella: ${entry.name}`);
-                // Puoi anche gestire eventuali sottocartelle se lo desideri
+            const data = await entry.read({ format: uxp.storage.formats.binary });
+            const byteArray = new Uint8Array(data);
+            md5GIaScaricati.push(cmd.md5ArrayBuffer(byteArray));
+
+            count++;
+
+            console.log(`File: ${entry.name}`);
+            console.log(count);
+
+            if (objProcess != null && objProcess.onProgress != null) {
+                objProcess.onProgress(count, "Calcolo Md5 già scaricati");
             }
         }
         console.log("------------------------------- FINE CALCOLO MD5 -------------------------------");

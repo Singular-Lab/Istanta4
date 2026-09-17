@@ -6417,9 +6417,28 @@ const schedaRef = {
                     console.log(data);
                     //inserisco nella cartella links la foto
 
-                    fs.copyFile(fd.filePath, /*pathLavorazione +*/ (obj.tipo != 1 ? percorsoLoghi : percorsoLinks) + data.nomeReale, function () {
-                        console.log("fine copia");
+                    //I20-967: l'impaginazione deve partire a copia conclusa, altrimenti il file non e'
+                    //ancora nella cartella e viene impaginato il segnaposto di foto non trovata.
+                    var copiaRiuscita = await new Promise((resolve) => {
+                        try {
+                            fs.copyFile(fd.filePath, /*pathLavorazione +*/ (obj.tipo != 1 ? percorsoLoghi : percorsoLinks) + data.nomeReale, function (err) {
+                                if (err != null) {
+                                    console.log("Copia della foto nella cartella fallita: " + err);
+                                }
+                                console.log("fine copia");
+                                resolve(err == null);
+                            });
+                        }
+                        catch (e) {
+                            console.log("Copia della foto nella cartella fallita: " + e);
+                            resolve(false);
+                        }
                     });
+
+                    if (!copiaRiuscita && obj.tipo == 1) {
+                        //La copia locale non e' riuscita: recuperiamo comunque il file dal server prima di impaginare.
+                        await assicuraFotoNeiLinks(data.nomeReale, data.guidId);
+                    }
 
                     if (obj.tipo != 1) {
                         //cerchiamo se l'immagine è già presente nel box, se lo è non eseguiamo l'impaginazione
@@ -6580,6 +6599,10 @@ const schedaRef = {
                         //agiorniamo il nome della foto in element
                         if (element != null) {
                             if (element.recordInTracciato.StatoSelezione != 3) {
+                                //I20-967: la foto scelta dall'archivio puo' non essere nei Links. La scarichiamo
+                                //qui, prima di impaginarla, cosi' all'operatore non resta nessun passaggio manuale.
+                                await assicuraFotoNeiLinks(objResult.nomeReale, objResult.guidId);
+
                                 let result = FotoPlacer.updateFoto(objResult.nomeReale, box, FotoImpaginata, codice);
                                 box = result.box;
                                 FotoImpaginata = result.fotoRectangle;
