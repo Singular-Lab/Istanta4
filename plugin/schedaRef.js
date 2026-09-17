@@ -6417,23 +6417,19 @@ const schedaRef = {
                     console.log(data);
                     //inserisco nella cartella links la foto
 
-                    //I20-967: l'impaginazione deve partire a copia conclusa, altrimenti il file non e'
+                    //I20-967: l'impaginazione deve partire a scrittura conclusa, altrimenti il file non e'
                     //ancora nella cartella e viene impaginato il segnaposto di foto non trovata.
-                    var copiaRiuscita = await new Promise((resolve) => {
-                        try {
-                            fs.copyFile(fd.filePath, /*pathLavorazione +*/ (obj.tipo != 1 ? percorsoLoghi : percorsoLinks) + data.nomeReale, function (err) {
-                                if (err != null) {
-                                    console.log("Copia della foto nella cartella fallita: " + err);
-                                }
-                                console.log("fine copia");
-                                resolve(err == null);
-                            });
-                        }
-                        catch (e) {
-                            console.log("Copia della foto nella cartella fallita: " + e);
-                            resolve(false);
-                        }
-                    });
+                    //Il file va scritto col nome deciso dal server: con uploadMethod "mantieni" il server
+                    //rinomina la foto, e copiarla col nome locale lascerebbe in cartella la vecchia omonima.
+                    var copiaRiuscita = false;
+                    try {
+                        await scriviFileInCartella(fd.file, /*pathLavorazione +*/ (obj.tipo != 1 ? percorsoLoghi : percorsoLinks), data.nomeReale);
+                        copiaRiuscita = true;
+                        console.log("fine copia");
+                    }
+                    catch (e) {
+                        console.log("Copia della foto nella cartella fallita: " + e);
+                    }
 
                     if (!copiaRiuscita && obj.tipo == 1) {
                         //La copia locale non e' riuscita: recuperiamo comunque il file dal server prima di impaginare.
@@ -6460,7 +6456,10 @@ const schedaRef = {
                         //agiorniamo il nome della foto in element
                         if (element != null) {
                             if(element.recordInTracciato.StatoSelezione!=3){
-                                let result = FotoPlacer.updateFoto(obj.nomeFile, box, FotoImpaginata, codice, element.recordInTracciato.StatoSelezione);
+                                //I20-967: si impagina il nome deciso dal server, non quello del file locale:
+                                //quando il server rinomina, il nome locale punta alla vecchia foto omonima
+                                //rimasta in cartella e sulla pagina resterebbe l'immagine precedente.
+                                let result = await impaginaFotoAppenaDisponibile(data.nomeReale, box, FotoImpaginata, codice, element.recordInTracciato.StatoSelezione);
                                 box = result.box;
                                 FotoImpaginata = result.fotoRectangle;
                             }
@@ -6603,7 +6602,7 @@ const schedaRef = {
                                 //qui, prima di impaginarla, cosi' all'operatore non resta nessun passaggio manuale.
                                 await assicuraFotoNeiLinks(objResult.nomeReale, objResult.guidId);
 
-                                let result = FotoPlacer.updateFoto(objResult.nomeReale, box, FotoImpaginata, codice);
+                                let result = await impaginaFotoAppenaDisponibile(objResult.nomeReale, box, FotoImpaginata, codice);
                                 box = result.box;
                                 FotoImpaginata = result.fotoRectangle;
                             }

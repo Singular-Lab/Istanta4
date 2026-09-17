@@ -82,6 +82,34 @@ const fotoAutoSync = {
         esito.scaricata = esito.presente;
         esito.motivo = esito.presente ? fotoAutoSync.esiti.scaricata : fotoAutoSync.esiti.fotoAncoraAssente;
         return esito;
+    },
+
+    /*
+     * Impagina ritentando una volta sola.
+     *
+     * Un file appena scritto nella cartella Links puo' non essere ancora visibile a
+     * InDesign quando place() parte subito dopo: il place fallisce e al suo posto
+     * finisce il segnaposto di foto non trovata. Prima questo non si vedeva perche'
+     * fra lo scaricamento e l'impaginazione c'era il tempo di premere un pulsante.
+     *
+     * operazioni:
+     *  - impagina() -> risultato di FotoPlacer.updateFoto, con warning valorizzato se non ce l'ha fatta
+     *  - attendi()  -> pausa fra il primo tentativo e il secondo
+     */
+    async impaginaConRitentativo(operazioni) {
+        let esito = await operazioni.impagina();
+
+        if (esito == null || esito.warning == null || esito.warning === "") {
+            return esito;
+        }
+
+        await operazioni.attendi();
+        const secondo = await operazioni.impagina();
+
+        if (secondo != null) {
+            secondo.ritentata = true;
+        }
+        return secondo;
     }
 
 }

@@ -9821,18 +9821,56 @@ async function apriSchermataSyncPacchettoFoto(){
 var abortedSyncFoto = [];
 var syncFotoInCorso = [];
 
-//I20-967: presenza del file nella cartella Links, senza leggerne il contenuto.
-async function fotoPresenteNeiLinks(nomeFoto) {
+//I20-967: presenza del file nella cartella Links. Usa la stessa lettura con cui la
+//scheda ref decide se una foto e' in cartella, cosi' i due controlli non possono discordare.
+function fotoPresenteNeiLinks(nomeFoto) {
     if (nomeFoto == null || nomeFoto == "") {
         return false;
     }
     try {
-        await fs2.getEntryWithUrl("file://" + /*pathLavorazione +*/ percorsoLinks + nomeFoto);
-        return true;
+        var contenuto = fs.readFileSync(/*pathLavorazione +*/ percorsoLinks + nomeFoto);
+        if (contenuto == null) {
+            return false;
+        }
+        //Un file troncato o vuoto non e' impaginabile: vale come assente. La lettura puo'
+        //restituire un buffer (byteLength) oppure una stringa (length): valgono entrambi.
+        var dimensione = contenuto.byteLength != null ? contenuto.byteLength : contenuto.length;
+        return dimensione == null || dimensione > 0;
     }
     catch (e) {
         return false;
     }
+}
+
+//I20-967: scrive nella cartella indicata i byte di un file scelto dall'operatore.
+//Attende davvero la scrittura, con la stessa API usata dallo scaricamento foto.
+async function scriviFileInCartella(bytes, cartella, nomeFile) {
+    const folder = await fs2.getEntryWithUrl("file://" + cartella);
+    const file = await folder.createFile(nomeFile, { overwrite: true });
+    const dati = (bytes instanceof ArrayBuffer) ? new Uint8Array(bytes) : bytes;
+    await file.write(dati);
+}
+
+//I20-967: impagina una foto appena arrivata in cartella, concedendo a InDesign un
+//secondo tentativo se il primo place e' caduto sul segnaposto di foto non trovata.
+async function impaginaFotoAppenaDisponibile(nomeFoto, box, fotoRectangle, codice, statoSelezione = null, noRender = false) {
+    var esito = await fotoAutoSync.impaginaConRitentativo({
+        impagina: async function () {
+            return FotoPlacer.updateFoto(nomeFoto, box, fotoRectangle, codice, statoSelezione, noRender);
+        },
+        attendi: async function () {
+            await Utility.sleep(700);
+        }
+    });
+
+    if (esito != null && esito.ritentata) {
+        console.log("impaginaFotoAppenaDisponibile: secondo tentativo per " + nomeFoto + " -> " + (esito.warning ? esito.warning : "riuscito"));
+    }
+    if (esito != null && esito.warning) {
+        console.warn("Code IDX-154 impaginazione di " + nomeFoto + " non riuscita: " + esito.warning);
+    }
+
+    return esito;
 }
 
 //I20-967: dati di download della singola foto, chiesti per guid cosi' da avere esattamente
@@ -9904,7 +9942,7 @@ async function scaricaFotoSingolaNeiLinks(recordFoto) {
 //Ritorna true se il file e' nei Links; false lascia proseguire col comportamento precedente.
 async function assicuraFotoNeiLinks(nomeFoto, guidId) {
     var esito = await fotoAutoSync.assicuraFotoNeiLinks(nomeFoto, guidId, {
-        fotoPresente: fotoPresenteNeiLinks,
+        fotoPresente: async function (nome) { return fotoPresenteNeiLinks(nome); },
         infoFoto: getInfoFotoDalServer,
         scarica: scaricaFotoSingolaNeiLinks
     });
