@@ -4217,7 +4217,7 @@ namespace Istanta.Controllers
                 if (promoLavorazione != null && promoLavorazione.Meta != null)
                 {
                     //storeField = JsonConvert.DeserializeObject<List<RevisioneCampiOffertaFromIndd>>(plrItem.Meta);
-                    storeField = JsonConvert.DeserializeObject<RevisioneMetaPromoLavorazioni>(promoLavorazione.Meta)!;
+                    storeField = MetaPromoLavorazioni.leggi(promoLavorazione.Meta)!;
                 }
                 else
                 {
@@ -4271,7 +4271,7 @@ namespace Istanta.Controllers
                                     Console.WriteLine($"Trovata roba");
 
                                 //Prendo la foto e anche per le P/S da questo
-                                RevisioneMetaPromoLavorazioni recPassato = JsonConvert.DeserializeObject<RevisioneMetaPromoLavorazioni>(plrInAC.Meta)!;
+                                RevisioneMetaPromoLavorazioni recPassato = MetaPromoLavorazioni.leggi(plrInAC.Meta)!;
                                 foreach (var item in group)
                                 {
                                     if (recPassato.ps != null && recPassato.ps.Count > 0)
