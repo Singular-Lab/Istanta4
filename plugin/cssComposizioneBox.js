@@ -203,6 +203,48 @@ const cssComposizioneBox = {
     },
 
     /*
+     * Prefissi delle etichette che nascono da una duplicazione ("sy_ombra$").
+     *
+     * Servono a riconoscere una copia dalla sola etichetta. Altrove nel plugin l'etichetta
+     * viene normalizzata tagliando quello che segue il $: per le copie quel taglio le
+     * renderebbe tutte omonime, e due ombre diventerebbero un elemento solo.
+     */
+    prefissiDerivati(regole) {
+        const prefissi = [];
+
+        if (regole == null) {
+            return prefissi;
+        }
+
+        for (const regola of regole) {
+            if (regola == null || regola.etichettaSorgente == null || regola.etichettaSorgente === "") {
+                continue;
+            }
+            const prefisso = regola.etichettaSorgente + cssComposizioneBox.separatoreSuffisso;
+            if (prefissi.indexOf(prefisso) < 0) {
+                prefissi.push(prefisso);
+            }
+        }
+
+        return prefissi;
+    },
+
+    etichettaDerivata(etichetta, prefissi) {
+        if (etichetta == null || prefissi == null) {
+            return false;
+        }
+
+        for (const prefisso of prefissi) {
+            //Il suffisso deve esserci: "sy_ombra$" da solo non e' una copia.
+            if (etichetta.indexOf(prefisso) === 0 && etichetta.length > prefisso.length) {
+                return true;
+            }
+        }
+
+        return false;
+    },
+
+    /*
      * Piano dell'ordine di sovrapposizione.
      *
      * Ogni regola sposta le etichette indicate dietro o davanti a un insieme di riferimento.

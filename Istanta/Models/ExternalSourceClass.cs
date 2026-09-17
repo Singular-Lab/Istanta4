@@ -3266,6 +3266,29 @@ namespace Istanta.Models
 
         /// I20-970: chi sta davanti e chi dietro dentro il box.
         public List<OrdineZObj> ordiniZ { get; set; } = new();
+
+        /// Come scegliere, fra gli spazi liberi, quello in cui mettere le foto.
+        /// Null: vince lo spazio piu' ampio, il criterio di sempre.
+        public SceltaSpazioFotoObj? sceltaSpazioFoto { get; set; }
+    }
+
+    /// Criterio di scelta dello spazio delle foto dentro al box.
+    ///
+    /// Serve ai box in cui le foto vivono dentro un disegno fisso, come le parentesi del BOX41:
+    /// li' una foto spostata di lato per guadagnare qualche millimetro risulta vistosamente
+    /// scentrata, e conviene accettare qualche millimetro in meno restando al centro.
+    public class SceltaSpazioFotoObj
+    {
+        /// "areaMassima" (predefinito) oppure "centrato".
+        public string modo { get; set; } = "areaMassima";
+
+        /// Quanta area si e' disposti a perdere per stare piu' al centro, come frazione
+        /// dell'area migliore: 0.7 accetta uno spazio che valga almeno il 70% del migliore.
+        /// Sopra quella soglia vince la centratura, sotto torna a vincere l'area.
+        public double tolleranzaArea { get; set; } = 0.7;
+
+        /// Su quale asse si misura la centratura: "x", "y" oppure "xy" (predefinito).
+        public string asseCentratura { get; set; } = "xy";
     }
 
     /// Duplica un elemento del box una volta per ogni bersaglio, dando a ogni copia
@@ -3340,6 +3363,10 @@ namespace Istanta.Models
     public class RidimensionamentoObj
     {
         public string nomeGruppo { get; set; } = "";
+
+        /// Momento in cui la regola viene eseguita. Vuoto: l'ordine di sempre.
+        /// Vedere il commento su fase in Allineamento.
+        public string fase { get; set; } = "";
         /// Etichette che si muovono come un blocco.
         public List<string> gruppoEtichette { get; set; } = new();
 
@@ -3359,6 +3386,9 @@ namespace Istanta.Models
     {
         public string nomeGruppo { get; set; } = "";
         public int ordine { get; set; } = 999999;
+
+        /// Momento in cui la regola viene eseguita. Vuoto: l'ordine di sempre.
+        public string fase { get; set; } = "";
 
         /// Etichette che si muovono come un blocco.
         public List<string> gruppoEtichette { get; set; } = new();
@@ -3403,6 +3433,10 @@ namespace Istanta.Models
         /// Nome usato per riferirsi al gruppo.
         public string nomeGruppo { get; set; } = "";
         public int ordine { get; set; } = 999999;
+
+        /// Momento in cui l'allineamento viene eseguito. Vuoto: prima della sistemazione
+        /// delle foto, come e' sempre stato. "dopoFixFoto" per chi deve inseguire le immagini.
+        public string fase { get; set; } = "";
 
         /// Etichette che si muovono come un blocco.
         public List<string> gruppoEtichette { get; set; } = new();

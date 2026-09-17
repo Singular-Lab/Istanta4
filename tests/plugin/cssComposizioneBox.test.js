@@ -256,3 +256,81 @@ test('anche gli aggiornamenti portano il fit: la foto puo\' aver cambiato larghe
 
     assert.strictEqual(piano.aggiornamenti[0].fitContenuto, 'riquadro');
 });
+
+test('due foto secondarie omonime prima del $ ricevono ognuna la propria ombra', () => {
+    //Le secondarie condividono l'etichetta fino al $: e' il suffisso del bersaglio a tenere
+    //appaiata ogni ombra alla propria foto, non la posizione nell'elenco.
+    const regole = [{
+        etichettaSorgente: 'sy_ombra',
+        bersagli: ['foto_secondaria*'],
+        adattaAlBersaglio: { larghezza: 'bersaglio', ancoraY: 'centroSuLatoBasso' }
+    }];
+    const primaSecondaria = { etichetta: 'foto_secondaria$111', bounds: [10, 0, 30, 20] };
+    const secondaSecondaria = { etichetta: 'foto_secondaria$222', bounds: [40, 50, 90, 130] };
+
+    const piano = cssComposizioneBox.pianificaDuplicazioni(regole, [primaSecondaria, secondaSecondaria, ombra], corrisponde);
+
+    assert.deepStrictEqual(piano.copie.map(c => c.etichetta), ['sy_ombra$111', 'sy_ombra$222']);
+    //Ogni ombra prende le misure e la posizione dalla propria foto, non da quella accanto.
+    assert.strictEqual(piano.copie[0].bounds[3] - piano.copie[0].bounds[1], 20);
+    assert.strictEqual((piano.copie[0].bounds[0] + piano.copie[0].bounds[2]) / 2, 30);
+    assert.strictEqual(piano.copie[1].bounds[3] - piano.copie[1].bounds[1], 80);
+    assert.strictEqual((piano.copie[1].bounds[0] + piano.copie[1].bounds[2]) / 2, 90);
+});
+
+test('a ogni passaggio ogni ombra ritrova la propria foto anche se le foto si sono scambiate di posto', () => {
+    const regole = [{
+        etichettaSorgente: 'sy_ombra',
+        bersagli: ['foto_secondaria*'],
+        adattaAlBersaglio: { larghezza: 'bersaglio', ancoraY: 'centroSuLatoBasso' }
+    }];
+    //Dopo la sistemazione delle foto la $222 e' finita a sinistra e la $111 a destra.
+    const elementi = [
+        { etichetta: 'foto_secondaria$222', bounds: [0, 0, 20, 40] },
+        { etichetta: 'foto_secondaria$111', bounds: [0, 60, 10, 80] },
+        { etichetta: 'sy_ombra$111', bounds: [27, 0, 33, 20] },
+        { etichetta: 'sy_ombra$222', bounds: [87, 50, 93, 130] }
+    ];
+
+    const piano = cssComposizioneBox.pianificaDuplicazioni(regole, elementi, corrisponde);
+
+    assert.deepStrictEqual(piano.copie, []);
+    assert.deepStrictEqual(piano.rimozioni, []);
+    const perLaPrima = piano.aggiornamenti.find(a => a.etichetta === 'sy_ombra$111');
+    const perLaSeconda = piano.aggiornamenti.find(a => a.etichetta === 'sy_ombra$222');
+    assert.strictEqual(perLaPrima.etichettaBersaglio, 'foto_secondaria$111');
+    assert.strictEqual(perLaSeconda.etichettaBersaglio, 'foto_secondaria$222');
+    //La $111 e' quella a destra, larga 20: la sua ombra la segue li'.
+    assert.strictEqual(perLaPrima.bounds[1], 60);
+    assert.strictEqual(perLaPrima.bounds[3], 80);
+    assert.strictEqual(perLaSeconda.bounds[1], 0);
+    assert.strictEqual(perLaSeconda.bounds[3], 40);
+});
+
+test('le etichette delle copie si riconoscono dai prefissi delle regole', () => {
+    //Serve alla mappa degli elementi del box: senza, due copie collasserebbero sulla stessa
+    //chiave perche' altrove l'etichetta viene tagliata al $.
+    const prefissi = cssComposizioneBox.prefissiDerivati([
+        { etichettaSorgente: 'sy_ombra' },
+        { etichettaSorgente: 'sy_ombra' },
+        { etichettaSorgente: '' },
+        null
+    ]);
+
+    assert.deepStrictEqual(prefissi, ['sy_ombra$']);
+    assert.ok(cssComposizioneBox.etichettaDerivata('sy_ombra$3150596', prefissi));
+    assert.ok(cssComposizioneBox.etichettaDerivata('sy_ombra$111', prefissi));
+    //La sorgente non e' una copia, e nemmeno il prefisso senza suffisso.
+    assert.ok(!cssComposizioneBox.etichettaDerivata('sy_ombra', prefissi));
+    assert.ok(!cssComposizioneBox.etichettaDerivata('sy_ombra$', prefissi));
+    //Un elemento che non c'entra resta fuori.
+    assert.ok(!cssComposizioneBox.etichettaDerivata('immagine$3150596', prefissi));
+    assert.ok(!cssComposizioneBox.etichettaDerivata('sy_ombra$1', []));
+});
+
+test('senza regole di duplicazione non esiste nessuna etichetta derivata', () => {
+    assert.deepStrictEqual(cssComposizioneBox.prefissiDerivati(null), []);
+    assert.deepStrictEqual(cssComposizioneBox.prefissiDerivati([]), []);
+    assert.ok(!cssComposizioneBox.etichettaDerivata('sy_ombra$1', null));
+    assert.ok(!cssComposizioneBox.etichettaDerivata(null, ['sy_ombra$']));
+});
