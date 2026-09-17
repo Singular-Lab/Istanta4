@@ -23,6 +23,7 @@ const grigliaJs = require('./griglia');
 const filtriJs = require('./filtri');
 const CssFramework = require('./CssFramework');
 const pluginMiddleware = require('./pluginMiddleware');
+const fotoAutoSync = require('./fotoAutoSync');
 Utility.registerDateMenuPicker();
 showLoading("Inizializzazione...");
 
@@ -9819,6 +9820,103 @@ async function apriSchermataSyncPacchettoFoto(){
 
 var abortedSyncFoto = [];
 var syncFotoInCorso = [];
+
+//I20-967: presenza del file nella cartella Links, senza leggerne il contenuto.
+async function fotoPresenteNeiLinks(nomeFoto) {
+    if (nomeFoto == null || nomeFoto == "") {
+        return false;
+    }
+    try {
+        await fs2.getEntryWithUrl("file://" + /*pathLavorazione +*/ percorsoLinks + nomeFoto);
+        return true;
+    }
+    catch (e) {
+        return false;
+    }
+}
+
+//I20-967: dati di download della singola foto, chiesti per guid cosi' da avere esattamente
+//quella appena assegnata alla ref e non quella che la risoluzione area/canale ritiene corrente.
+function getInfoFotoDalServer(guidId) {
+    return new Promise((resolve) => {
+        var xhr = new XMLHttpRequestClient();
+
+        xhr.onload = (data, parsed) => {
+            try {
+                if (!parsed) {
+                    data = JSON.parse(data);
+                }
+            }
+            catch (e) {
+                console.log("Code IDX-152 info foto non interpretabile: " + e);
+                resolve(null);
+                return;
+            }
+
+            if (data == null) {
+                resolve(null);
+                return;
+            }
+            if (data.error != null && data.error != "") {
+                console.log("Code IDX-152 info foto non disponibile: " + data.error);
+                resolve(null);
+                return;
+            }
+            resolve(data.record != null ? data.record : null);
+        };
+
+        xhr.onreadystatechange = function () { };
+        xhr.onerror = function () { resolve(null); };
+        xhr.onNoConnection = async function () { resolve(null); };
+
+        xhr.send("SyncFoto/getInfoFoto/" + guidId, null, "GET", null);
+    });
+}
+
+//I20-967: scaricamento silenzioso della singola foto. Non apre la modale del pacchetto foto:
+//l'operatore ha gia' confermato il cambio foto e non deve chiudere altre finestre.
+async function scaricaFotoSingolaNeiLinks(recordFoto) {
+    const folder = await fs2.getEntryWithUrl("file://" + /*pathLavorazione +*/ percorsoLinks);
+    var idOperazione = Utility.generateId();
+    syncFotoInCorso.push(idOperazione);
+
+    var objProcess = {
+        onTotalCount: async function (count) { },
+        onProgress: async function (progress, message = null) {
+            if (message != null) {
+                showLoading(message);
+            }
+        },
+        onAbort: async function (message = null) { },
+        onComplete: async function (message = null) { }
+    };
+
+    try {
+        await cmd.downloadImages([recordFoto], objProcess, folder, idOperazione);
+    }
+    finally {
+        syncFotoInCorso = syncFotoInCorso.filter(id => id !== idOperazione);
+        abortedSyncFoto = abortedSyncFoto.filter(id => id !== idOperazione);
+    }
+}
+
+//I20-967: usata dalla scheda ref subito prima di impaginare una foto appena cambiata.
+//Ritorna true se il file e' nei Links; false lascia proseguire col comportamento precedente.
+async function assicuraFotoNeiLinks(nomeFoto, guidId) {
+    var esito = await fotoAutoSync.assicuraFotoNeiLinks(nomeFoto, guidId, {
+        fotoPresente: fotoPresenteNeiLinks,
+        infoFoto: getInfoFotoDalServer,
+        scarica: scaricaFotoSingolaNeiLinks
+    });
+
+    console.log("assicuraFotoNeiLinks " + nomeFoto + " -> " + esito.motivo);
+
+    if (!esito.presente) {
+        console.warn("Code IDX-153 foto " + nomeFoto + " non disponibile nei Links: " + esito.motivo);
+    }
+
+    return esito.presente;
+}
 
 async function avviaSyncPacchettoFoto(mode, callback, codici = []){
     // var idTracciato = parseInt($("#idTracciato").val());

@@ -2745,11 +2745,23 @@ namespace Istanta.Controllers
 
         [HttpGet]
         [Route("SyncFoto/getInfoFoto/{guid}")]
+        //I20-967: l'endpoint risponde sempre 200 con { record, error }. Il Plugin lo interroga durante
+        //il cambio foto e un 204 o un 400 gli farebbe mostrare un errore di comunicazione all'operatore,
+        //mentre qui una foto non risolvibile e' un caso previsto: si ricade sul flusso manuale.
         public async Task<IActionResult> getInfoFoto(string guid)
         {
-            ArticoliFoto? afItem =  this.ctx.ArticoliFotos.Where(f=>f.GuidId==guid).FirstOrDefault();
-            if (afItem != null)
+            FileOlympoOperazioneSingola result = new FileOlympoOperazioneSingola();
+
+            try
             {
+                ArticoliFoto? afItem = this.ctx.ArticoliFotos.Where(f => f.GuidId == guid).FirstOrDefault();
+
+                if (afItem == null)
+                {
+                    result.error = $"Nessuna foto trovata con guid {guid}";
+                    return Ok(result);
+                }
+
                 List<FileOlympoSync> fotoRichieste = new List<FileOlympoSync>();
                 fotoRichieste.Add(new FileOlympoSync
                 {
@@ -2770,20 +2782,28 @@ namespace Istanta.Controllers
                 if (response.IsSuccessStatusCode)
                 {
                     var responseBody = await response.Content.ReadAsStringAsync();
-                    var dataOlympo = JsonConvert.DeserializeObject<List<FileOlympoSync>>(responseBody)!;
-                    if (dataOlympo.Count > 0)
-                        return Ok(dataOlympo.FirstOrDefault());
-                    ////Console.WriteLine(responseBody);
+                    var dataOlympo = JsonConvert.DeserializeObject<List<FileOlympoSync>>(responseBody);
+
+                    result.record = dataOlympo != null ? dataOlympo.FirstOrDefault() : null;
+
+                    if (result.record == null)
+                    {
+                        result.error = $"Olympo non ha restituito informazioni per la foto {guid}";
+                    }
+
+                    return Ok(result);
                 }
-                else
-                {
-                    ////Console.WriteLine("Error: " + response.StatusCode);
-                    return BadRequest(response.StatusCode);
-                }
+
+                ////Console.WriteLine("Error: " + response.StatusCode);
+                result.error = "Olympo error " + response.StatusCode;
+                return Ok(result);
             }
-
-            return NoContent();
-
+            catch (Exception ex)
+            {
+                result.record = null;
+                result.error = ex.Message;
+                return Ok(result);
+            }
         }
 
         #region Loghi/Bolli
