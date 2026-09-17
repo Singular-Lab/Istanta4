@@ -285,12 +285,20 @@ var NoRenderElementi = (function () {
     }
 
     /// Un elemento assente dal box non e' un difetto se l'operatore lo ha messo in noRender e
-    /// poi lo ha cancellato dai livelli: la segnalazione lo dice invece di gridare al file perso.
-    function segnalazioneElementoMancante(segnalazioneOriginale, elementiMarcati, tipo, chiave) {
-        if (inNoRender(elementiMarcati, tipo, chiave)) {
-            return "in norender";
-        }
-        return segnalazioneOriginale;
+    /// poi lo ha cancellato dai livelli: quella mancanza e' voluta e non va segnalata affatto.
+    function daSegnalareComeMancante(elementiMarcati, tipo, chiave) {
+        return !inNoRender(elementiMarcati, tipo, chiave);
+    }
+
+    /// Il caso opposto: l'elemento e' in noRender ma nel documento qualcuno lo ha rimesso
+    /// visibile. Qui la segnalazione serve, perche' il documento non rispetta piu' la scelta.
+    function daSegnalareComeRiattivato(elementiMarcati, tipo, chiave, visibile) {
+        return visibile === true && inNoRender(elementiMarcati, tipo, chiave);
+    }
+
+    /// Testo della segnalazione per un elemento disattivato tornato visibile.
+    function segnalazioneElementoRiattivato(descrizione) {
+        return "elemento disattivato ma presente nel box: " + pulisci(descrizione);
     }
 
     return {
@@ -306,7 +314,9 @@ var NoRenderElementi = (function () {
         urlMiniatura: urlMiniatura,
         elencoPerSegnalazioni: elencoPerSegnalazioni,
         inNoRender: inNoRender,
-        segnalazioneElementoMancante: segnalazioneElementoMancante
+        daSegnalareComeMancante: daSegnalareComeMancante,
+        daSegnalareComeRiattivato: daSegnalareComeRiattivato,
+        segnalazioneElementoRiattivato: segnalazioneElementoRiattivato
     };
 })();
 

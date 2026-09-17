@@ -142,47 +142,8 @@ test("una foto non marcata non entra nel payload", () => {
     assert.strictEqual(elementi[0].chiave, "3150596");
 });
 
-test("un elemento in norender cancellato dai livelli non e' segnalato come mancante", () => {
-    const marcati = [{ tipo: NoRenderElementi.TIPO.logo, chiave: "logo_bio", nome: "Logo biologico" }];
 
-    const segnalazione = NoRenderElementi.segnalazioneElementoMancante(
-        "foto extra mancante nel box: Logo biologico", marcati, NoRenderElementi.TIPO.logo, "logo_bio");
 
-    assert.strictEqual(segnalazione, "in norender");
-});
-
-test("un elemento mancante e non marcato conserva la segnalazione originale", () => {
-    const marcati = [{ tipo: NoRenderElementi.TIPO.logo, chiave: "logo_bio", nome: "Logo biologico" }];
-
-    const segnalazione = NoRenderElementi.segnalazioneElementoMancante(
-        "foto extra mancante nel box: Logo conv", marcati, NoRenderElementi.TIPO.logo, "logo_conv");
-
-    assert.strictEqual(segnalazione, "foto extra mancante nel box: Logo conv");
-});
-
-test("le foto in norender entrano nell'elenco delle segnalazioni col nome del file", () => {
-    // Nei meta la foto ha per chiave il codice referenza, nei report il nome del file.
-    const membri = [
-        { codRef: "3150596", nomeFoto: "primaria.psd" },
-        { codRef: "3150599", nomeFoto: "secondaria.psd" }
-    ];
-    const elementi = [
-        { tipo: NoRenderElementi.TIPO.logo, chiave: "logo_bio", nome: "Logo biologico" },
-        { tipo: NoRenderElementi.TIPO_FOTO, chiave: "3150596", nome: "3150596" }
-    ];
-
-    const elenco = NoRenderElementi.elencoPerSegnalazioni(elementi, membri);
-
-    assert.strictEqual(elenco.length, 3);
-    assert.strictEqual(
-        NoRenderElementi.segnalazioneElementoMancante(
-            "foto mancante nel box: primaria.psd", elenco, NoRenderElementi.TIPO_FOTO, "primaria.psd"),
-        "in norender");
-    assert.strictEqual(
-        NoRenderElementi.segnalazioneElementoMancante(
-            "foto mancante nel box: secondaria.psd", elenco, NoRenderElementi.TIPO_FOTO, "secondaria.psd"),
-        "foto mancante nel box: secondaria.psd");
-});
 
 // Il modal restava vuoto perche' il modulo era caricato con un tag script, mentre il Plugin
 // carica i suoi moduli con require: NoRenderElementi non esisteva nello scope di schedaRef.
@@ -504,4 +465,78 @@ test("il modal salva una volta sola", () => {
         "il canale separato delle foto non esiste piu'");
     assert.ok(!sorgente.includes("fotoDaSalvare"),
         "le foto entrano nel payload degli elementi");
+});
+
+// Un elemento messo in noRender e poi cancellato dai livelli e' un'assenza voluta: la
+// segnalazione non deve proprio nascere, altrimenti la scheda ref apre il popup delle
+// differenze per una cosa che l'operatore ha deciso.
+test("un elemento in norender e assente dal box non va segnalato", () => {
+    const marcati = [{ tipo: NoRenderElementi.TIPO.logo, chiave: "logo_bio", nome: "Logo biologico" }];
+
+    assert.strictEqual(
+        NoRenderElementi.daSegnalareComeMancante(marcati, NoRenderElementi.TIPO.logo, "logo_bio"),
+        false);
+});
+
+test("un elemento assente e non marcato continua a essere segnalato", () => {
+    const marcati = [{ tipo: NoRenderElementi.TIPO.logo, chiave: "logo_bio", nome: "Logo biologico" }];
+
+    assert.strictEqual(
+        NoRenderElementi.daSegnalareComeMancante(marcati, NoRenderElementi.TIPO.logo, "logo_conv"),
+        true);
+    assert.strictEqual(
+        NoRenderElementi.daSegnalareComeMancante([], NoRenderElementi.TIPO.campo, "PIEDE_Titolari"),
+        true);
+});
+
+test("la regola vale per qualunque tipo di elemento, foto comprese", () => {
+    const marcati = [
+        { tipo: NoRenderElementi.TIPO_FOTO, chiave: "primaria.psd" },
+        { tipo: NoRenderElementi.TIPO.campo, chiave: "PIEDE_Titolari" },
+        { tipo: NoRenderElementi.TIPO.fotoExtra, chiave: "sfondo_vn" }
+    ];
+
+    assert.strictEqual(NoRenderElementi.daSegnalareComeMancante(marcati, NoRenderElementi.TIPO_FOTO, "primaria.psd"), false);
+    assert.strictEqual(NoRenderElementi.daSegnalareComeMancante(marcati, NoRenderElementi.TIPO.campo, "PIEDE_Titolari"), false);
+    assert.strictEqual(NoRenderElementi.daSegnalareComeMancante(marcati, NoRenderElementi.TIPO.fotoExtra, "sfondo_vn"), false);
+});
+
+// Il caso opposto: marcato ma qualcuno lo ha rimesso visibile a mano.
+test("un elemento in norender tornato visibile va segnalato", () => {
+    const marcati = [{ tipo: NoRenderElementi.TIPO.logo, chiave: "logo_bio" }];
+
+    assert.strictEqual(
+        NoRenderElementi.daSegnalareComeRiattivato(marcati, NoRenderElementi.TIPO.logo, "logo_bio", true),
+        true);
+});
+
+test("un elemento in norender e invisibile non va segnalato: e' il caso normale", () => {
+    const marcati = [{ tipo: NoRenderElementi.TIPO.logo, chiave: "logo_bio" }];
+
+    assert.strictEqual(
+        NoRenderElementi.daSegnalareComeRiattivato(marcati, NoRenderElementi.TIPO.logo, "logo_bio", false),
+        false);
+});
+
+test("un elemento visibile e non marcato non genera la segnalazione opposta", () => {
+    const marcati = [{ tipo: NoRenderElementi.TIPO.logo, chiave: "logo_bio" }];
+
+    assert.strictEqual(
+        NoRenderElementi.daSegnalareComeRiattivato(marcati, NoRenderElementi.TIPO.logo, "logo_conv", true),
+        false);
+});
+
+test("la segnalazione dell'elemento riattivato nomina l'elemento", () => {
+    assert.strictEqual(
+        NoRenderElementi.segnalazioneElementoRiattivato("logo_bio"),
+        "elemento disattivato ma presente nel box: logo_bio");
+});
+
+test("i confronti non producono piu' la vecchia dicitura in norender", () => {
+    const sorgente = sorgentePlugin("confronti.js");
+
+    assert.ok(!sorgente.includes("segnalazioneElementoMancante"),
+        "la segnalazione non va riscritta: non deve nascere");
+    assert.ok(sorgente.includes("daSegnalareComeRiattivato"),
+        "il caso opposto va controllato nella pre analisi");
 });
