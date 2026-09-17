@@ -1,4 +1,4 @@
-const uxp = require('uxp');
+﻿const uxp = require('uxp');
 const { storage } = require('uxp');
 const fs = require('fs');
 const fs2 = require('uxp').storage.localFileSystem;
@@ -18,6 +18,7 @@ const schedaArtwork = require('./schedaArtwork');
 const manifesto = require("./manifest.json");
 const ipconfig = require("./ipconfig.json");
 const confronti = require('./confronti');
+const NoRenderElementi = require('./noRenderElementi');
 const ficoProcess = require('./ficoProcess');
 const grigliaJs = require('./griglia');
 const filtriJs = require('./filtri');
@@ -164,6 +165,41 @@ function checkForLoghiCore(){
 
 let indesignEvents = new InddEvents();
 const gC = new garbageCollector();
+//I20-968: rende invisibili gli elementi del box che l'operatore ha messo in noRender.
+//L'elenco arriva dal record consegnato da Istanta, letto dai meta della lavorazione.
+function applicaNoRenderAgliElementiDelBox(box, elementiNoRender) {
+    if (box == null || elementiNoRender == null || elementiNoRender.length == 0) {
+        return;
+    }
+
+    var resiInvisibili = 0;
+
+    var nomePrimaria = pluginMiddleware.getCampo("nomeFotoPrimaria");
+    var nomeSecondaria = pluginMiddleware.getCampo("nomeFotoSecondaria");
+
+    try {
+        for (var i = 0; i < box.allPageItems.length; i++) {
+            var item = box.allPageItems[i];
+            var classificato = NoRenderElementi.classificaLabel(item.label, nomePrimaria, nomeSecondaria);
+            //Le foto non fanno piu' eccezione: stanno nella stessa struttura degli altri
+            //elementi, e questa e' l'unica applicazione, in coda alla composizione del box.
+            if (classificato == null) {
+                continue;
+            }
+            if (NoRenderElementi.inNoRender(elementiNoRender, classificato.tipo, classificato.chiave)) {
+                FotoPlacer.applicaNoRender(item, true);
+                resiInvisibili++;
+            }
+        }
+
+        //Se i marcati sono piu' di quelli resi invisibili, l'elenco arriva ma le label del
+        //box non corrispondono alle chiavi salvate: sono due guasti diversi e vanno distinti.
+        console.log("noRender: " + resiInvisibili + " elementi resi invisibili su " + elementiNoRender.length + " marcati");
+    }
+    catch (e) {
+        console.error("Impossibile applicare il noRender agli elementi del box", e);
+    }
+}
 function addToGarbageCollector(element, keyToDelete = null) {
     gC.Add(element, keyToDelete);
 }
@@ -4995,6 +5031,7 @@ async function impaginaBox(meccanica, pagCoinvolta, bounds, itemRef, pathLavoraz
                                     newGroup.label = oldLabel;
                                     boxImpaginato = newGroup;
                                 }
+
     
     
                                 let mastroCompiledData = itemRef.compiledFields.find(f => f.labelName == "Mastro");
@@ -5257,6 +5294,11 @@ async function impaginaBox(meccanica, pagCoinvolta, bounds, itemRef, pathLavoraz
                 idRec: idRec != null && !isNaN(parseInt(idRec)) ? parseInt(idRec) : 0
             });
         }
+
+        //I20-968: qui il box e' composto per intero, qualunque ramo abbia creato i suoi
+        //elementi. Gli elementi in noRender sono impaginati e poi resi invisibili; le foto
+        //primarie/secondarie non passano di qui, la loro opzione arriva da membriGruppoFoto.
+        applicaNoRenderAgliElementiDelBox(boxImpaginato, itemRef.noRenderElementi);
 
         boxImpaginato = finalizzaSegnalazioni(reportImpaginazioneObj, itemRef["Scatto.CodiceGruppo"], boxImpaginato);
     }
@@ -7100,6 +7142,13 @@ async function impaginazioneSingoloIndd(records, pagina, cercaInPaginaPerConfron
         // }
 
         var tracciatoPrimario = primario.sottogruppo && agenziaUsaSottogruppi ? primario.sottogruppo : primario.recordInTracciato;
+
+        //I20-968: gli elementi in noRender stanno sul record, non sul sottogruppo. Se si
+        //impagina a partire dal sottogruppo la chiave va portata avanti, altrimenti una
+        //reimpaginazione riporta visibili gli elementi che l'operatore aveva nascosto.
+        if (tracciatoPrimario != null && tracciatoPrimario.noRenderElementi == null) {
+            tracciatoPrimario.noRenderElementi = primario.recordInTracciato.noRenderElementi;
+        }
         //i bounds avranno l'angolo sinistro superiore in 0,0 e l'angolo inferiore destro in larghezza,altezza pari ad 1/3 della pagina
         //[0, 0, (docInLavorazione.documentPreferences.pageHeight / 4), docInLavorazione.documentPreferences.pageWidth / 4];
         let tipo_lavorazione_corrente = ficoProcess.getTipoLavorazioneCorrente();
@@ -7196,7 +7245,8 @@ async function impaginazioneSingoloIndd(records, pagina, cercaInPaginaPerConfron
                 });
             }
 
-            var preAnalisi = await confronti.confrontoBoxCompiledFieldPreAnalisi(originalBox, compiledField, deletedFields, listaFoto, fotoExtra, fotoExtraAuto);
+            var preAnalisi = await confronti.confrontoBoxCompiledFieldPreAnalisi(originalBox, compiledField, deletedFields, listaFoto, fotoExtra, fotoExtraAuto, true,
+                NoRenderElementi.elencoPerSegnalazioni(tracciatoPrimario.noRenderElementi, tracciatoPrimario.membriGruppoFoto));
 
             if(getPreAnalisi){
                 return preAnalisi;
@@ -7236,6 +7286,13 @@ async function impaginazioneSingoloIndd(records, pagina, cercaInPaginaPerConfron
             stampaSegnalazioni(reportImpaginazioneObj);
             rimuoviSimboli();
         }
+
+        //Ricollegamento, confronto e rimozione dei simboli possono rifare elementi del box,
+        //e un elemento rifatto nasce visibile: si riapplica, l'operazione e' idempotente.
+        if (box != null && box.boxAggiunto != null) {
+            applicaNoRenderAgliElementiDelBox(box.boxAggiunto, tracciatoPrimario.noRenderElementi);
+        }
+
         return box;
     } catch (e) {
         console.error(e);

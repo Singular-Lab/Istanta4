@@ -9918,7 +9918,8 @@ double.TryParse(percorso.ToString(), out double valore16))
 
 
                     Dictionary<string, bool> noRenderPerRef = new Dictionary<string, bool>();
-                    var listeModificate = ficoController.updateDatiFromMetaPromoLavorazioni(prepLista.records, idLavorazione, kit!, noRenderPerRef);
+                    Dictionary<string, List<RevisioneNoRenderFromIndd>> noRenderElementiPerGruppo = new Dictionary<string, List<RevisioneNoRenderFromIndd>>();
+                    var listeModificate = ficoController.updateDatiFromMetaPromoLavorazioni(prepLista.records, idLavorazione, kit!, noRenderPerRef, noRenderElementiPerGruppo);
                     prepLista.records = listeModificate;
                     //logAss.WriteLine("GET SCHEDA REF >> step9");
 
@@ -9939,6 +9940,7 @@ double.TryParse(percorso.ToString(), out double valore16))
                             //membriGruppoFoto esiste solo dopo l'export di agenzia: e' qui che
                             //l'opzione di rendering letta dai meta puo' essere applicata alle foto.
                             FicoProcessController.applicaNoRenderAiMembriGruppoFoto(itemLista.Records, noRenderPerRef);
+                            FicoProcessController.applicaNoRenderAgliElementiDelBox(itemLista.Records, noRenderElementiPerGruppo);
                             resultGlobale.records.AddRange(itemLista.Records);
                         }
 
@@ -11170,90 +11172,8 @@ double.TryParse(percorso.ToString(), out double valore16))
                 List<RevisioneSelezioneFotoFromIndd> ps =
                     MetaPromoLavorazioni.leggiSelezioniFoto(dato.ps!)!;
 
-                PromoLavorazioniRecord? plrItem = null;
-
-                long idRec = dato.idRec;
-
-                var query = this.ctx2.PromoLavorazioniRecords
-                    .Include(i1 => i1.IdPromoTracciatiRecordNavigation)
-                    .Where(plr =>
-                        plr.IdLavorazione == dato.idLavorazione &&
-                        plr.CodiceGruppo == dato.CodiceGruppo);
-
-                if (idRec > 0)
-                {
-                    // 1. Match esatto.
-                    plrItem = query.FirstOrDefault(plr =>
-                        plr.IdRecordTracciato == idRec);
-
-                    // 2. Fallback fratello.
-                    if (plrItem == null)
-                    {
-                        var candidati = query.ToList();
-
-                        if (candidati.Count > 0)
-                        {
-                            var recordTarget = this.ctx2.PromoTracciatiRecords
-                                .AsNoTracking()
-                                .Where(r => r.Id == idRec)
-                                .Select(r => new
-                                {
-                                    r.Id,
-                                    r.IdTracciato,
-                                    r.CodiceGruppo,
-                                    r.Label,
-                                    r.Versione
-                                })
-                                .FirstOrDefault();
-
-                            if (recordTarget != null)
-                            {
-                                var idsCandidati = candidati
-                                    .Select(c => c.IdRecordTracciato)
-                                    .Distinct()
-                                    .ToList();
-
-                                var recordsCandidati = this.ctx2.PromoTracciatiRecords
-                                    .AsNoTracking()
-                                    .Where(r => idsCandidati.Contains(r.Id))
-                                    .Select(r => new
-                                    {
-                                        r.Id,
-                                        r.IdTracciato,
-                                        r.CodiceGruppo,
-                                        r.Label,
-                                        r.Versione
-                                    })
-                                    .ToList();
-
-                                var fratello = recordsCandidati.FirstOrDefault(r =>
-                                    r.IdTracciato == recordTarget.IdTracciato &&
-                                    r.Versione == recordTarget.Versione &&
-                                    r.Label == recordTarget.Label &&
-                                    string.Equals(r.CodiceGruppo, recordTarget.CodiceGruppo, StringComparison.OrdinalIgnoreCase)
-                                );
-
-                                if (fratello != null)
-                                {
-                                    plrItem = candidati.FirstOrDefault(c =>
-                                        c.IdRecordTracciato == fratello.Id);
-                                }
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    // Legacy: vecchi client senza idRec.
-                    plrItem = query.FirstOrDefault();
-                }
-
-                if (plrItem == null)
-                {
-                    throw new Exception(
-                        $"Nessun elemento trovato, Codice {dato.CodiceGruppo} non disponibile"
-                    );
-                }
+                PromoLavorazioniRecord? plrItem = trovaRecordDellaLavorazione(
+                    dato.idLavorazione, dato.CodiceGruppo, dato.idRec);
 
                 registraAttivitaMenabo(
                     idOperazione,
@@ -11275,7 +11195,169 @@ double.TryParse(percorso.ToString(), out double valore16))
             }
         }
 
+        public class InddObjNoRenderRequest
+        {
+            public int idLavorazione { get; set; }
+            public string? CodiceGruppo { get; set; }
+
+            public int idRec { get; set; } = 0;
+            /// <summary>
+            /// Elenco completo degli elementi del box in noRender, serializzato dal Plugin.
+            /// Sostituisce quello nei meta: contiene solo gli elementi marcati, quindi un
+            /// elenco vuoto toglie il noRender a tutto il box.
+            /// </summary>
+            public string? elementi { get; set; }
+        }
+
+        [HttpPut]
+        [Route("Menabo/modificaNoRender/{idOperazione}")]
+        public async Task<IActionResult> modificaNoRender(
+    InddObjNoRenderRequest dato,
+    int idOperazione)
+        {
+            BoolResult result = new BoolResult();
+
+            try
+            {
+                List<RevisioneNoRenderFromIndd> elementi =
+                    MetaPromoLavorazioni.leggiElementiNoRender(dato.elementi!) ?? new List<RevisioneNoRenderFromIndd>();
+
+                PromoLavorazioniRecord? plrItem = trovaRecordDellaLavorazione(
+                    dato.idLavorazione, dato.CodiceGruppo, dato.idRec);
+
+                registraAttivitaMenabo(
+                    idOperazione,
+                    dato.CodiceGruppo!,
+                    "modificaNoRender",
+                    tipoOperazione.updateNoRender,
+                    elementi,
+                    plrItem.Id
+                );
+
+                result.Esito = true;
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                result.error = ex.ToString();
+                result.Esito = false;
+                return Ok(result);
+            }
+        }
+        /// <summary>
+        /// Trova il record della lavorazione su cui registrare una modifica dell'operatore.
+        /// Cerca il match esatto su idRec, poi ripiega sul record fratello (stesso tracciato,
+        /// versione, label e codice gruppo) e infine, per i client vecchi senza idRec, sul primo
+        /// record del codice gruppo.
+        /// </summary>
+        private PromoLavorazioniRecord trovaRecordDellaLavorazione(int idLavorazione, string? codiceGruppo, long idRecRichiesto)
+        {
+            PromoLavorazioniRecord? plrItem = null;
+
+            long idRec = idRecRichiesto;
+
+            var query = this.ctx2.PromoLavorazioniRecords
+                .Include(i1 => i1.IdPromoTracciatiRecordNavigation)
+                .Where(plr =>
+                    plr.IdLavorazione == idLavorazione &&
+                    plr.CodiceGruppo == codiceGruppo);
+
+            if (idRec > 0)
+            {
+                // 1. Match esatto.
+                plrItem = query.FirstOrDefault(plr =>
+                    plr.IdRecordTracciato == idRec);
+
+                // 2. Fallback fratello.
+                if (plrItem == null)
+                {
+                    var candidati = query.ToList();
+
+                    if (candidati.Count > 0)
+                    {
+                        var recordTarget = this.ctx2.PromoTracciatiRecords
+                            .AsNoTracking()
+                            .Where(r => r.Id == idRec)
+                            .Select(r => new
+                            {
+                                r.Id,
+                                r.IdTracciato,
+                                r.CodiceGruppo,
+                                r.Label,
+                                r.Versione
+                            })
+                            .FirstOrDefault();
+
+                        if (recordTarget != null)
+                        {
+                            var idsCandidati = candidati
+                                .Select(c => c.IdRecordTracciato)
+                                .Distinct()
+                                .ToList();
+
+                            var recordsCandidati = this.ctx2.PromoTracciatiRecords
+                                .AsNoTracking()
+                                .Where(r => idsCandidati.Contains(r.Id))
+                                .Select(r => new
+                                {
+                                    r.Id,
+                                    r.IdTracciato,
+                                    r.CodiceGruppo,
+                                    r.Label,
+                                    r.Versione
+                                })
+                                .ToList();
+
+                            var fratello = recordsCandidati.FirstOrDefault(r =>
+                                r.IdTracciato == recordTarget.IdTracciato &&
+                                r.Versione == recordTarget.Versione &&
+                                r.Label == recordTarget.Label &&
+                                string.Equals(r.CodiceGruppo, recordTarget.CodiceGruppo, StringComparison.OrdinalIgnoreCase)
+                            );
+
+                            if (fratello != null)
+                            {
+                                plrItem = candidati.FirstOrDefault(c =>
+                                    c.IdRecordTracciato == fratello.Id);
+                            }
+                        }
+                    }
+                }
+            }
+            else
+            {
+                // Legacy: vecchi client senza idRec.
+                plrItem = query.FirstOrDefault();
+            }
+
+            if (plrItem == null)
+            {
+                throw new Exception(
+                    $"Nessun elemento trovato, Codice {codiceGruppo} non disponibile"
+                );
+            }
+
+            return plrItem;
+        }
         private string registraAttivitaMenabo(int id_operazione, string codRef, string url, tipoOperazione tipo, List<RevisioneSelezioneFotoFromIndd>? listaCambiamenti = null, Int64 id_lavorazione_record = 0)
+        {
+            return registraAttivitaMenabo(id_operazione, codRef, url, tipo,
+                listaCambiamenti != null ? JsonConvert.SerializeObject(listaCambiamenti) : null,
+                id_lavorazione_record);
+        }
+
+        /// <summary>
+        /// Registra gli elementi del box in noRender. L'elenco vuoto e' un dato e va registrato:
+        /// significa che l'operatore ha tolto il noRender a tutti gli elementi del box.
+        /// </summary>
+        private string registraAttivitaMenabo(int id_operazione, string codRef, string url, tipoOperazione tipo, List<RevisioneNoRenderFromIndd>? elementiNoRender, Int64 id_lavorazione_record = 0)
+        {
+            return registraAttivitaMenabo(id_operazione, codRef, url, tipo,
+                elementiNoRender != null ? JsonConvert.SerializeObject(elementiNoRender) : null,
+                id_lavorazione_record);
+        }
+
+        private string registraAttivitaMenabo(int id_operazione, string codRef, string url, tipoOperazione tipo, string? formData, Int64 id_lavorazione_record)
         {
             var register = new Register(_config.GetConnectionString("IstandaConnectionDb")!, this._dbContextFactory, dbContextFactory2: this._dbContextFactory2);
             var session = SessionIstantaObject.GetSession(HttpContext);
@@ -11287,9 +11369,9 @@ double.TryParse(percorso.ToString(), out double valore16))
                 nuovaOperazione.TipoOperazione = (byte)tipo;// tipoOperazione.updateFoto;
                 nuovaOperazione.CodiceAssociato = codRef;
                 nuovaOperazione.Url = url;
-                if (listaCambiamenti != null)
+                if (formData != null)
                 {
-                    nuovaOperazione.FormData = JsonConvert.SerializeObject(listaCambiamenti);
+                    nuovaOperazione.FormData = formData;
                 }
                 if (id_lavorazione_record > 0)
                 {

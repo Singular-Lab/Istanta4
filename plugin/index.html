@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html>
 
 <head>
@@ -566,6 +566,11 @@
                 <img id="infoRefImg" src="images/info.png" style="height: 24px; cursor: pointer;"
                   data-bs-toggle="tooltip" data-bs-html="true" data-bs-placement="bottom" title="Informazioni referenza"
                   onclick="schedaRef.apriModalInfoReferenza()">
+            </div>
+            <div style="width: 8%; display: flex; justify-content: center; align-items: center;">
+                <img id="noRenderRefImg" src="images/immagineNonPresente.png" style="height: 24px; cursor: pointer;"
+                  data-bs-toggle="tooltip" data-bs-html="true" data-bs-placement="bottom" title="Elementi non renderizzati"
+                  onclick="schedaRef.apriModalNoRender()">
             </div>
             <div style="width: 30%; display: block; justify-items: start;">
               
@@ -1379,6 +1384,19 @@
 
     <button id="scaricaJsonCompleto" style="display: block;"
       onclick="schedaRef.scaricaJson();">Scarica dato</button>
+  </div>
+</div>
+
+<div id="dialogNoRender" myname="dialogNoRender"
+  style="overflow: none; display: none; height: 100%; width: 100%;">
+  <div style="height: 90%; overflow: scroll;">
+    <div class="container" id="bodyNoRender">
+
+    </div>
+  </div>
+  <div style="display: flex;">
+    <button id="salvaNoRender" style="display: block;"
+      onclick="schedaRef.salvaNoRender();">Salva</button>
   </div>
 </div>
 

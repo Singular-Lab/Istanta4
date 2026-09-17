@@ -1,11 +1,14 @@
-
+﻿
 const InputEditController = require('./InputEditController');
 const XMLHttpRequestClient = require('./XMLHttpRequestClient');
+const NoRenderElementi = require('./noRenderElementi');
 
 const schedaRef = {
     refSelected: null,
     multiSelection: null,
     schedeRefDati: [],
+    //Stato del modal noRender: la lista degli elementi del box con la loro opzione di rendering.
+    elementiNoRenderDelBox: null,
     multiSchedeRef: [],
     editRefFieldController: null,
     idRecordLavorazione: 0,
@@ -1848,7 +1851,9 @@ const schedaRef = {
                     deletedFields,
                     listaFoto,
                     fotoExtra,
-                    fotoExtraAuto
+                    fotoExtraAuto,
+                    true,
+                    NoRenderElementi.elencoPerSegnalazioni(primario.recordInTracciato.noRenderElementi, primario.recordInTracciato.membriGruppoFoto)
                 );
 
                 console.log(preAnalisi);
@@ -3585,8 +3590,7 @@ const schedaRef = {
                 var label1 = $('<label for="checkbox1">P:</label>'); // Crea l'etichetta per il primo checkbox
                 var checkbox2 = $('<input class="secondary-check" codice="' + objItem["Referenza.Codice"] + '" type="checkbox" ' + (objItem["StatoSelezione"] == 2 ? ' checked ' : ' ') + ' style="vertical-align: middle;">'); // Crea il secondo checkbox
                 var label2 = $('<label for="checkbox2">S:</label>'); // Crea l'etichetta per il secondo checkbox
-                var checkbox3 = $('<input class="norender-check" codice="' + objItem["Referenza.Codice"] + '" type="checkbox" ' + (noRenderDiCodice(objItem["Referenza.Codice"]) ? ' checked ' : ' ') + ' style="vertical-align: middle;" title="Impagina la foto ma non renderizzarla">'); // Opzione di rendering
-                var label3 = $('<label for="checkbox3">NR:</label>'); // Crea l'etichetta per il checkbox di rendering
+                //I20-968: l'opzione di rendering non si imposta piu' da qui, ma dal modal noRender.
                 var text = $('<span>(' + objItem['Referenza.Codice'] + ') ' + objItem["Descrizioni.Descrizione1"] + '</span>'); // Crea il testo
 
                 // Imposta lo stile
@@ -3594,12 +3598,11 @@ const schedaRef = {
                 checkbox1.css("background-color", "blue");
                 label2.css({ "font-size": "12px", "color": "yellow", "margin-left": "5px" });
                 checkbox2.css("background-color", "yellow");
-                label3.css({ "font-size": "12px", "color": "lightgray", "margin-left": "5px" });
-                checkbox3.css("background-color", "gray");
+
                 text.css({ "font-size": "12px", "color": "white" });
 
                 //checkboxCol.append(label1, checkbox1, label2, checkbox2); // Aggiunge i checkbox alla colonna dei checkbox
-                checkBoxCol_r2_c.append(label1, checkbox1, label2, checkbox2, label3, checkbox3, text); // Aggiunge i checkbox alla colonna dei checkbox
+                checkBoxCol_r2_c.append(label1, checkbox1, label2, checkbox2, text); // Aggiunge i checkbox alla colonna dei checkbox
 
                 //textCol.append(text); // Aggiunge il testo alla colonna del testo
             }
@@ -3908,7 +3911,9 @@ const schedaRef = {
                         objToSend.ps.push({
                             codRef: cod,
                             stato: item.StatoSelezione,
-                            noRender: $("#cambiaPS").find("input.norender-check[codice='" + cod + "']").is(':checked')
+                            //L'opzione di rendering si governa dal modal noRender: qui va
+                            //riportata com'e', altrimenti un salvataggio P/S la cancellerebbe.
+                            noRender: noRenderDiCodice(cod)
                         });
                     //}
                 }
@@ -7412,6 +7417,324 @@ const schedaRef = {
         this.schedeRefDati = null;
     },
 
+    /// I20-968: elenco di tutti gli elementi del box, ciascuno con il suo interruttore di
+    /// rendering. Sostituisce la checkbox NR che stava nella scheda primarie/secondarie.
+    apriModalNoRender() {
+        let me = this;
+        var schedaRef = this.schedeRefDati;
+        if (schedaRef == null || schedaRef.length < 1 || this.refSelected == null) {
+            messaggioUtente("Code SRF-50 Nessun box selezionato per l'opzione di rendering", "error");
+            return;
+        }
+
+        var primario = schedaRef.find(f => f.recordInTracciato.StatoSelezione == 1);
+        if (primario == null) {
+            messaggioUtente("Code SRF-51 Nessun elemento primario trovato", "error");
+            return;
+        }
+
+        try {
+            this.elementiNoRenderDelBox = this.leggiElementiDelBox(this.refSelected.item, primario);
+            //apriModal clona il dialog dentro bodyModal: la lista va disegnata dopo l'apertura,
+            //cosi' si scrive nel clone e i gestori dei bottoni restano vivi.
+            Utility.apriModal('dialogNoRender', 'Elementi non renderizzati', true, [], true);
+            this.disegnaListaNoRender();
+        }
+        catch (e) {
+            //Un modal vuoto non dice niente a chi lo guarda: meglio un errore leggibile.
+            console.error("Errore nell'apertura del modal noRender", e);
+            messaggioUtente("Code SRF-54 noRender: impossibile leggere gli elementi del box: " + e, "error");
+        }
+    },
+
+    /// Compone la lista mostrata dal modal: gli elementi vivi nel box uniti a quelli che i meta
+    /// danno per messi in noRender ma che dal documento sono spariti.
+    leggiElementiDelBox(box, primario) {
+        var nomePrimaria = pluginMiddleware.getCampo("nomeFotoPrimaria");
+        var nomeSecondaria = pluginMiddleware.getCampo("nomeFotoSecondaria");
+        //Gli extra del box stanno in due collezioni: quella dell'operatore e quella
+        //piazzata dall'automatismo. Cercarne una sola lascia gli extra automatici senza
+        //nome, senza sigla e senza guid, quindi senza miniatura.
+        var fotoExtra = primario.recordInTracciato["Foto.Extra"] || [];
+        var fotoExtraAuto = primario.recordInTracciato["Foto.ExtraAuto"] || [];
+        var membriGruppoFoto = primario.recordInTracciato.membriGruppoFoto || [];
+        var vivi = [];
+
+        try {
+            for (var i = 0; i < box.allPageItems.length; i++) {
+                var item = box.allPageItems[i];
+                //La label si classifica grezza: Utility.parseLabel troncherebbe al primo $
+                //e un simbolo finirebbe fra i campi.
+                var classificato = NoRenderElementi.classificaLabel(item.label, nomePrimaria, nomeSecondaria);
+                if (classificato == null || classificato.chiave === "") {
+                    continue;
+                }
+
+                var nome = classificato.chiave;
+                var guidId = "";
+                var marcatoNelDocumento = false;
+
+                if (classificato.tipo === NoRenderElementi.TIPO_FOTO) {
+                    //Per le immagini il campo da mostrare e' il nome della foto.
+                    var membro = membriGruppoFoto.find(m => m.codRef == classificato.chiave);
+                    if (membro != null && membro.nomeFoto) {
+                        nome = membro.nomeFoto;
+                    }
+                    guidId = this.guidFotoDiRef(classificato.chiave);
+                    marcatoNelDocumento = membro != null && membro.noRender === true;
+                }
+                else if (classificato.tipo === NoRenderElementi.TIPO.logo || classificato.tipo === NoRenderElementi.TIPO.fotoExtra) {
+                    //Per i loghi il campo da mostrare e' nome e sigla.
+                    var extra = NoRenderElementi.datiExtraDiSigla(classificato.chiave, fotoExtra, fotoExtraAuto);
+                    if (extra != null) {
+                        nome = extra.nome ? extra.nome : nome;
+                        guidId = extra.guidId;
+                    }
+                }
+
+                vivi.push({ tipo: classificato.tipo, chiave: classificato.chiave, nome: nome, guidId: guidId, noRender: marcatoNelDocumento });
+            }
+        }
+        catch (e) {
+            console.error("Impossibile leggere gli elementi del box per il modal noRender", e);
+        }
+
+        var marcatiNeiMeta = primario.recordInTracciato.noRenderElementi || [];
+        var lista = NoRenderElementi.componiLista(vivi, marcatiNeiMeta);
+
+        //Gli elementi marcati e poi cancellati dal documento non portano il guid nei meta:
+        //lo recuperiamo dai dati della ref, cosi' mostrano comunque la loro miniatura.
+        for (var e = 0; e < lista.length; e++) {
+            if (lista[e].guidId) {
+                continue;
+            }
+            if (lista[e].tipo === NoRenderElementi.TIPO_FOTO) {
+                lista[e].guidId = this.guidFotoDiRef(lista[e].chiave);
+            }
+            else {
+                var extraMarcato = NoRenderElementi.datiExtraDiSigla(lista[e].chiave, fotoExtra, fotoExtraAuto);
+                if (extraMarcato != null) {
+                    lista[e].guidId = extraMarcato.guidId;
+                    lista[e].nome = lista[e].nome ? lista[e].nome : extraMarcato.nome;
+                }
+            }
+        }
+
+        //Gli elementi gia' nascosti stanno in cima. L'ordine si fissa qui, che e' il momento
+        //dell'apertura: ridisegnando la lista dopo un click l'ordine non cambia piu'.
+        return NoRenderElementi.conNascostiInCima(lista);
+    },
+
+    /// Guid della foto di una ref del box, per la miniatura del modal noRender.
+    guidFotoDiRef(codRef) {
+        var schedaRef = this.schedeRefDati || [];
+        var voce = schedaRef.find(f => f.recordInTracciato["Referenza.Codice"] == codRef);
+        return voce != null && voce.recordInTracciato["Foto.guidid"] ? voce.recordInTracciato["Foto.guidid"] : "";
+    },
+
+    disegnaListaNoRender() {
+        let me = this;
+        var lista = this.elementiNoRenderDelBox || [];
+        $("#bodyNoRender").empty();
+
+        //Riquadro dell'ingrandimento, stesso schema del modal di conferma foto: sta sopra
+        //a tutto, non intercetta il mouse e mostra la miniatura grande della riga puntata.
+        var anteprima = $('<div class="norender-anteprima" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); background:#fff; border:1px solid #999; padding:10px; z-index:99999; box-shadow:0 2px 10px rgba(0,0,0,0.35); pointer-events:none;"><img src="" style="max-width:300px; max-height:300px; display:block;"></div>');
+        $("#bodyNoRender").append(anteprima);
+
+        //Il modal ha il fondo bianco: qui non si forza il colore del testo, come fanno
+        //gli altri modal. Il bianco delle schede vale nei tab scuri del pannello, non qui.
+        if (lista.length == 0) {
+            console.log("Modal noRender: nessun elemento trovato nel box selezionato");
+            $("#bodyNoRender").append($('<span style="font-size:12px;">Nessun elemento nel box.</span>'));
+            return;
+        }
+
+        //Quanti elementi sono nascosti, senza doverli contare a occhio nell'elenco.
+        $("#bodyNoRender").append(
+            $('<div style="font-size:12px; font-weight:600; margin-bottom:10px;"></div>').text(NoRenderElementi.riepilogo(lista)));
+
+        for (var i = 0; i < lista.length; i++) {
+            var elemento = lista[i];
+            var indirizzoOlimpo = typeof olimpoIp !== "undefined" ? olimpoIp : "";
+            var datiRiga = NoRenderElementi.datiRiga(elemento, indirizzoOlimpo);
+
+            var row = $('<div class="row align-items-center" style="margin-bottom:8px; display:flex; align-items:center; padding:4px 6px; border-radius:4px;"></div>');
+            //La riga nascosta si distingue a colpo d'occhio: fondo, bordo e nome barrato.
+            if (datiRiga.noRender) {
+                row.css({ "background-color": "#ececec", "border-left": "3px solid #b00" });
+            }
+
+            var bottone = $('<button class="norender-toggle" indice="' + i + '" style="min-width:74px; height:26px; margin-right:8px; border:1px solid #999; border-radius:4px; cursor:pointer; font-size:11px;"></button>');
+            //Il bottone dice cosa fa, non come sta: e' l'azione che l'operatore sta per compiere.
+            bottone.text(datiRiga.testoBottone);
+            bottone.css("background-color", datiRiga.noRender ? "#d8d8d8" : "#f2f2f2");
+            bottone.attr("title", datiRiga.noRender ? "Elemento non renderizzato: clicca per farlo tornare visibile" : "Impagina l'elemento ma non renderizzarlo");
+            bottone.on('click', function () {
+                var indice = parseInt($(this).attr("indice"), 10);
+                me.elementiNoRenderDelBox[indice].noRender = !me.elementiNoRenderDelBox[indice].noRender;
+                me.disegnaListaNoRender();
+            });
+
+            row.append(bottone);
+
+            if (datiRiga.urlMiniatura !== "") {
+                //La cornice rende visibile anche una miniatura che non si carica: cosi' si
+                //distingue un'immagine assente da una riga senza immagine.
+                var miniatura = $('<img src="' + datiRiga.urlMiniatura + '" urlIngrandita="' + datiRiga.urlIngrandita + '" style="width:32px; height:32px; object-fit:contain; margin-right:8px; border:1px solid #ddd; background-color:#fafafa; cursor:zoom-in;">');
+                //Attenuata quando l'elemento e' nascosto: e' cosi' che apparira' nel documento.
+                miniatura.css("opacity", datiRiga.noRender ? "0.4" : "1");
+
+                //L'indirizzo dell'ingrandimento sta sull'immagine e si legge da li', come
+                //l'indice sul bottone: una variabile del ciclo sarebbe condivisa da tutte le
+                //righe e mostrerebbe sempre l'ultima immagine.
+                miniatura.on('mouseenter', function () {
+                    anteprima.find("img").attr("src", $(this).attr("urlIngrandita"));
+                    anteprima.css("display", "block");
+                });
+                miniatura.on('mouseleave', function () {
+                    anteprima.css("display", "none");
+                    anteprima.find("img").attr("src", "");
+                });
+
+                row.append(miniatura);
+            }
+            else {
+                //Campi ed etichette non hanno una miniatura: lo spazio resta per tenere allineate le righe.
+                row.append($('<span style="display:inline-block; width:32px; margin-right:8px;"></span>'));
+            }
+
+            var testo = $('<span style="font-size:12px;"></span>').text(datiRiga.descrizione);
+            if (datiRiga.barrato) {
+                testo.css({ "text-decoration": "line-through", "color": "#666" });
+            }
+            row.append(testo);
+
+            if (datiRiga.etichettaStato !== "") {
+                row.append($('<span style="font-size:10px; font-weight:600; color:#b00; margin-left:8px; border:1px solid #b00; border-radius:3px; padding:1px 4px;"></span>')
+                    .text(datiRiga.etichettaStato));
+            }
+
+            if (!elemento.presente) {
+                //Elemento marcato ma non piu' nel documento: resta in elenco per poterlo liberare.
+                row.append($('<span style="font-size:11px; color:#777; margin-left:6px;">(non presente nel box)</span>'));
+            }
+
+            $("#bodyNoRender").append(row);
+        }
+    },
+
+    /// Salva l'opzione di rendering del box. Gli elementi viaggiano sul nuovo endpoint, le foto
+    /// primarie/secondarie restano sul canale P/S di I20-965: sono due dati distinti.
+    salvaNoRender() {
+        let me = this;
+        var schedaRef = this.schedeRefDati;
+        if (schedaRef == null || schedaRef.length < 1) {
+            return;
+        }
+
+        var codice_gruppo = schedaRef[0].recordInTracciato["Scatto.CodiceGruppo"];
+        var lista = this.elementiNoRenderDelBox || [];
+        //Le foto viaggiano nella stessa struttura degli altri elementi: una sola chiamata,
+        //quindi una sola scrittura sul meta e nessuna corsa fra due salvataggi.
+        var elementi = NoRenderElementi.elementiDaSalvare(lista);
+
+        var idRec = 0;
+        try {
+            var dna = Utility.getDnaOfBox(this.refSelected.item);
+            if (dna != null && dna.idRec != null && dna.idRec !== "" && !isNaN(parseInt(dna.idRec))) {
+                idRec = parseInt(dna.idRec);
+            }
+        }
+        catch (e) {
+            console.warn("Impossibile recuperare idRec dal box durante il salvataggio noRender", e);
+        }
+
+        var formData = new FormData();
+        formData.append("idLavorazione", idKitLavorazione);
+        formData.append("CodiceGruppo", codice_gruppo);
+        formData.append("idRec", idRec);
+        formData.append("elementi", JSON.stringify(elementi));
+
+        const xhr = new XMLHttpRequestClient();
+        xhr.onload = async (objResult, parsed) => {
+            if (!parsed) {
+                try {
+                    objResult = JSON.parse(objResult);
+                }
+                catch (e) {
+                    messaggioUtente("Code SRF-52 noRender: errore durante il salvataggio: " + e, "error");
+                    return;
+                }
+            }
+            if (objResult != null && objResult.esito === false) {
+                messaggioUtente("Code SRF-53 noRender: il server ha rifiutato il salvataggio", "error");
+                return;
+            }
+            messaggioUtente("noRender: modifiche salvate", "success", false, 5);
+        };
+
+        xhr.send("Menabo/modificaNoRender" + "/" + 0, formData, "PUT");
+
+        this.aggiornaNoRenderNeiRecord(elementi);
+        this.applicaNoRenderAlDocumento();
+    },
+
+    /// Riporta sui record in memoria quanto appena salvato. La reimpaginazione impagina a
+    /// partire da schedeRefDati, che non viene ricaricata dal server: senza questo passaggio
+    /// un elemento appena messo in noRender tornerebbe visibile alla prima reimpaginazione.
+    aggiornaNoRenderNeiRecord(elementi) {
+        var schedaRef = this.schedeRefDati || [];
+
+        for (var i = 0; i < schedaRef.length; i++) {
+            var record = schedaRef[i].recordInTracciato;
+            if (record == null) {
+                continue;
+            }
+
+            record.noRenderElementi = elementi;
+
+            //membriGruppoFoto resta allineato: lo legge l'impaginazione della foto e lo
+            //consuma chi esporta. La fonte ora e' la struttura unica.
+            var membri = record.membriGruppoFoto;
+            if (membri == null) {
+                continue;
+            }
+            for (var m = 0; m < membri.length; m++) {
+                membri[m].noRender = (elementi || []).some(
+                    e => e.tipo === NoRenderElementi.TIPO.foto && e.chiave == membri[m].codRef);
+            }
+        }
+    },
+
+    /// Riflette subito nel documento quanto scelto nel modal, senza attendere una reimpaginazione.
+    applicaNoRenderAlDocumento() {
+        var box = this.refSelected != null ? this.refSelected.item : null;
+        var lista = this.elementiNoRenderDelBox || [];
+        if (box == null) {
+            return;
+        }
+
+        var nomePrimaria = pluginMiddleware.getCampo("nomeFotoPrimaria");
+        var nomeSecondaria = pluginMiddleware.getCampo("nomeFotoSecondaria");
+
+        try {
+            for (var i = 0; i < box.allPageItems.length; i++) {
+                var item = box.allPageItems[i];
+                var classificato = NoRenderElementi.classificaLabel(item.label, nomePrimaria, nomeSecondaria);
+                if (classificato == null) {
+                    continue;
+                }
+                var scelta = lista.find(e => e.tipo === classificato.tipo && e.chiave === classificato.chiave);
+                if (scelta != null) {
+                    FotoPlacer.applicaNoRender(item, scelta.noRender === true);
+                }
+            }
+        }
+        catch (e) {
+            console.error("Impossibile applicare l'opzione di rendering agli elementi del box", e);
+        }
+    },
     apriModalInfoReferenza() {
         var schedaRef = this.schedeRefDati;
         if (schedaRef != null && schedaRef.length > 0) {
