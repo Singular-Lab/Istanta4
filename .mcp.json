@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "SingularAiFactory2": {
+    "SingularAiFactory": {
       "type": "http",
       "url": "https://controlplane.singularlab.it:81/mcp",
       "oauth": {
