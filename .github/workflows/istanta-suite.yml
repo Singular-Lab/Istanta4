@@ -40,6 +40,20 @@ jobs:
           [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || { echo '::error::Invalid version.'; exit 1; }
           [[ "$RELEASE_ID" =~ ^[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,127}$ ]] || { echo '::error::Invalid release_id.'; exit 1; }
           [[ "$SOURCE_SHA" =~ ^[a-fA-F0-9]{40}$ ]] || { echo '::error::Invalid source_sha.'; exit 1; }
+
+          component_path() {
+            local key="$1" field="$2" root value
+            root=$(printf '%s' "$COMPONENTS_JSON" | jq -er --arg key "$key" \
+              '.[] | select(.key == $key) | .relativePath')
+            value=$(printf '%s' "$COMPONENTS_JSON" | jq -er --arg key "$key" --arg field "$field" \
+              '.[] | select(.key == $key) | .[$field]')
+            if [[ "$value" == "." ]]; then
+              printf '%s' "${root%/}"
+            else
+              printf '%s/%s' "${root%/}" "${value#./}"
+            fi
+          }
+
           printf '%s' "$COMPONENTS_JSON" | jq -e '
             length == 5 and
             ([.[].key] | unique | length) == 5 and
@@ -54,12 +68,12 @@ jobs:
           fidelity_image=$(printf '%s' "$COMPONENTS_JSON" | jq -er '.[] | select(.key == "fidelity") | .imageName')
           olimpo_image=$(printf '%s' "$COMPONENTS_JSON" | jq -er '.[] | select(.key == "olimpo") | .imageName')
           correggo4_image=$(printf '%s' "$COMPONENTS_JSON" | jq -er '.[] | select(.key == "correggo") | .imageName')
-          fidelity_context=$(printf '%s' "$COMPONENTS_JSON" | jq -er '.[] | select(.key == "fidelity") | .buildContext')
-          fidelity_dockerfile=$(printf '%s' "$COMPONENTS_JSON" | jq -er '.[] | select(.key == "fidelity") | .dockerfilePath')
-          olimpo_context=$(printf '%s' "$COMPONENTS_JSON" | jq -er '.[] | select(.key == "olimpo") | .buildContext')
-          olimpo_dockerfile=$(printf '%s' "$COMPONENTS_JSON" | jq -er '.[] | select(.key == "olimpo") | .dockerfilePath')
-          correggo4_context=$(printf '%s' "$COMPONENTS_JSON" | jq -er '.[] | select(.key == "correggo") | .buildContext')
-          correggo4_dockerfile=$(printf '%s' "$COMPONENTS_JSON" | jq -er '.[] | select(.key == "correggo") | .dockerfilePath')
+          fidelity_context=$(component_path fidelity buildContext)
+          fidelity_dockerfile=$(component_path fidelity dockerfilePath)
+          olimpo_context=$(component_path olimpo buildContext)
+          olimpo_dockerfile=$(component_path olimpo dockerfilePath)
+          correggo4_context=$(component_path correggo buildContext)
+          correggo4_dockerfile=$(component_path correggo dockerfilePath)
           for image in "$istanta_image" "$agenzialib_repository" "$fidelity_image" "$olimpo_image" "$correggo4_image"; do
             [[ "$image" =~ ^ghcr\.io/[a-z0-9._/-]+$ ]] || { echo "::error::Invalid OCI repository $image"; exit 1; }
           done
@@ -104,14 +118,23 @@ jobs:
         shell: bash
         env:
           SOURCE_SHA: ${{ steps.metadata.outputs.sha }}
+          FIDELITY_CONTEXT: ${{ steps.metadata.outputs.fidelity_context }}
+          FIDELITY_DOCKERFILE: ${{ steps.metadata.outputs.fidelity_dockerfile }}
+          OLIMPO_CONTEXT: ${{ steps.metadata.outputs.olimpo_context }}
+          OLIMPO_DOCKERFILE: ${{ steps.metadata.outputs.olimpo_dockerfile }}
+          CORREGGO4_CONTEXT: ${{ steps.metadata.outputs.correggo4_context }}
+          CORREGGO4_DOCKERFILE: ${{ steps.metadata.outputs.correggo4_dockerfile }}
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           test -f Istanta/Dockerfile
           test -f AgenziaLib/AgenziaLib.csproj
-          test -f fidelity/docker/server.prod.Dockerfile
-          test -f olimpo/Dockerfile
-          test -f correggo4/Dockerfile
+          test -d "$FIDELITY_CONTEXT"
+          test -f "$FIDELITY_DOCKERFILE"
+          test -d "$OLIMPO_CONTEXT"
+          test -f "$OLIMPO_DOCKERFILE"
+          test -d "$CORREGGO4_CONTEXT"
+          test -f "$CORREGGO4_DOCKERFILE"
 
       - name: Detect affected components
         id: changes
