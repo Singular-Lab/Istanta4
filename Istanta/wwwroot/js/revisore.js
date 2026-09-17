@@ -1974,7 +1974,9 @@
             list.forEach(function (item) {
                 let itemValido = true;
 
-                if (item.recordRevisionato != null && item.recordRevisionato.firmaTracciato != null && item.recordInTracciato != null && item.recordRevisionato.firmaTracciato == item.recordInTracciato[keyTracciatoFirma]) {
+                //Revisionato anche quando la firma e' garantita da un altro tracciato, non solo
+                //quando coincide: e' la regola della resa delle righe, ora unica (statoRevisione).
+                if (statoRevisione.eRevisionato(item)) {
                     var listGroupAnalized = [];
                     var listGroupAdded = [];
                     if (listGroupAnalized.includes(item.recordInTracciato[(revInstance.modalitaSottogruppi ? keyScattoCodiceSottogruppo : keyScattoCodiceGruppo)])) {
@@ -1990,7 +1992,7 @@
                         else {
                             let itemOfGroup = list.filter(f => f.recordInTracciato[(revInstance.modalitaSottogruppi ? keyScattoCodiceSottogruppo : keyScattoCodiceGruppo)] == item.recordInTracciato[(revInstance.modalitaSottogruppi ? keyScattoCodiceSottogruppo : keyScattoCodiceGruppo)]);
                             itemOfGroup.forEach(function (item2) {
-                                if (item2.recordRevisionato != null && item2.recordRevisionato.firmaTracciato != null && item2.recordInTracciato != null && item2.recordRevisionato.firmaTracciato == item2.recordInTracciato[keyTracciatoFirma]) {
+                                if (statoRevisione.eRevisionato(item2)) {
                                 }
                                 else {
                                     itemValido = false;
@@ -2022,7 +2024,7 @@
                 }
                 else {
                     if (mode == "singoli") {
-                        if (item.recordRevisionato == null || (item.recordRevisionato != null && item.recordRevisionato.firmaTracciato == null) || (item.recordRevisionato != null && item.recordRevisionato.firmaTracciato != null && item.recordInTracciato != null && item.recordRevisionato.firmaTracciato != item.recordInTracciato[keyTracciatoFirma])) {
+                        if (!statoRevisione.eRevisionato(item)) {
                             itemValido = true;
                         }
                     }
@@ -2030,7 +2032,7 @@
                         listGroupAnalized.push(item.recordInTracciato[(revInstance.modalitaSottogruppi ? keyScattoCodiceSottogruppo : keyScattoCodiceGruppo)]);
                         let itemOfGroup = list.filter(f => f.recordInTracciato[(revInstance.modalitaSottogruppi ? keyScattoCodiceSottogruppo : keyScattoCodiceGruppo)] == item.recordInTracciato[(revInstance.modalitaSottogruppi ? keyScattoCodiceSottogruppo : keyScattoCodiceGruppo)]);
                         itemOfGroup.forEach(function (item2) {
-                            if (item2.recordRevisionato == null || (item2.recordRevisionato != null && item2.recordRevisionato.firmaTracciato == null) || (item2.recordRevisionato != null && item2.recordRevisionato.firmaTracciato != null && item2.recordInTracciato != null && item2.recordRevisionato.firmaTracciato != item2.recordInTracciato[keyTracciatoFirma])) {
+                            if (!statoRevisione.eRevisionato(item2)) {
                                 itemValido = true;
                                 return;
                             }
@@ -2127,10 +2129,11 @@
             else {
                 listaCodiciProcessati.push(codice);
             }
-            if (item.recordRevisionato == null || item.recordRevisionato.firmaTracciato == null || (item.recordInTracciato[keyTracciatoFirma] != item.recordRevisionato.firmaTracciato)) {
-                if (item.recordInTracciato["FirmaGarantita"] == null) {
-                    value++;
-                }
+            //Una regola sola con le schede e con la resa (statoRevisione): prima qui si guardava
+            //FirmaGarantita == null, che salta anche la firma garantita vuota, cioe' "garante
+            //valutato, non garantisce", e quella riga restava visibile ma non contata.
+            if (!statoRevisione.eRevisionato(item)) {
+                value++;
             }
         });
         // Rimuovi eventuali segnaposti già presenti
