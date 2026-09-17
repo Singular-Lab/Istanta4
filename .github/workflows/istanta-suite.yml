@@ -44,22 +44,22 @@ jobs:
             length == 5 and
             ([.[].key] | unique | length) == 5 and
             any(.[]; .key == "istanta" and .artifactKind == "ContainerImage") and
-            any(.[]; .key == "agenzialib" and .artifactKind == "File" and .artifactFileName == "AgenziaLib.dll") and
+            any(.[]; .key == "agenzia-lib" and .artifactKind == "File" and .artifactFileName == "AgenziaLib.dll") and
             any(.[]; .key == "fidelity" and .artifactKind == "ContainerImage") and
             any(.[]; .key == "olimpo" and .artifactKind == "ContainerImage") and
-            any(.[]; .key == "correggo4" and .artifactKind == "ContainerImage")
+            any(.[]; .key == "correggo" and .artifactKind == "ContainerImage")
           ' >/dev/null
           istanta_image=$(printf '%s' "$COMPONENTS_JSON" | jq -er '.[] | select(.key == "istanta") | .imageName')
-          agenzialib_repository=$(printf '%s' "$COMPONENTS_JSON" | jq -er '.[] | select(.key == "agenzialib") | .imageName')
+          agenzialib_repository=$(printf '%s' "$COMPONENTS_JSON" | jq -er '.[] | select(.key == "agenzia-lib") | .imageName')
           fidelity_image=$(printf '%s' "$COMPONENTS_JSON" | jq -er '.[] | select(.key == "fidelity") | .imageName')
           olimpo_image=$(printf '%s' "$COMPONENTS_JSON" | jq -er '.[] | select(.key == "olimpo") | .imageName')
-          correggo4_image=$(printf '%s' "$COMPONENTS_JSON" | jq -er '.[] | select(.key == "correggo4") | .imageName')
+          correggo4_image=$(printf '%s' "$COMPONENTS_JSON" | jq -er '.[] | select(.key == "correggo") | .imageName')
           fidelity_context=$(printf '%s' "$COMPONENTS_JSON" | jq -er '.[] | select(.key == "fidelity") | .buildContext')
           fidelity_dockerfile=$(printf '%s' "$COMPONENTS_JSON" | jq -er '.[] | select(.key == "fidelity") | .dockerfilePath')
           olimpo_context=$(printf '%s' "$COMPONENTS_JSON" | jq -er '.[] | select(.key == "olimpo") | .buildContext')
           olimpo_dockerfile=$(printf '%s' "$COMPONENTS_JSON" | jq -er '.[] | select(.key == "olimpo") | .dockerfilePath')
-          correggo4_context=$(printf '%s' "$COMPONENTS_JSON" | jq -er '.[] | select(.key == "correggo4") | .buildContext')
-          correggo4_dockerfile=$(printf '%s' "$COMPONENTS_JSON" | jq -er '.[] | select(.key == "correggo4") | .dockerfilePath')
+          correggo4_context=$(printf '%s' "$COMPONENTS_JSON" | jq -er '.[] | select(.key == "correggo") | .buildContext')
+          correggo4_dockerfile=$(printf '%s' "$COMPONENTS_JSON" | jq -er '.[] | select(.key == "correggo") | .dockerfilePath')
           for image in "$istanta_image" "$agenzialib_repository" "$fidelity_image" "$olimpo_image" "$correggo4_image"; do
             [[ "$image" =~ ^ghcr\.io/[a-z0-9._/-]+$ ]] || { echo "::error::Invalid OCI repository $image"; exit 1; }
           done
@@ -70,10 +70,10 @@ jobs:
             printf '%s' "$PREVIOUS_ARTIFACTS_JSON" | jq -e '
               length == 5 and
               any(.[]; .component == "istanta" and .artifactKind == "ContainerImage") and
-              any(.[]; .component == "agenzialib" and .artifactKind == "File") and
+              any(.[]; .component == "agenzia-lib" and .artifactKind == "File") and
               any(.[]; .component == "fidelity" and .artifactKind == "ContainerImage") and
               any(.[]; .component == "olimpo" and .artifactKind == "ContainerImage") and
-              any(.[]; .component == "correggo4" and .artifactKind == "ContainerImage") and
+              any(.[]; .component == "correggo" and .artifactKind == "ContainerImage") and
               all(.[]; (.digest | test("^sha256:[a-f0-9]{64}$")) and .imageReference == (.image + "@" + .digest))
             ' >/dev/null
             has_previous=true
@@ -157,13 +157,13 @@ jobs:
             done
           fi
           echo "istanta=${build[istanta]:-true}" >> "$GITHUB_OUTPUT"
-          echo "agenzialib=${build[agenzialib]:-true}" >> "$GITHUB_OUTPUT"
+          echo "agenzialib=${build[agenzia-lib]:-true}" >> "$GITHUB_OUTPUT"
           echo "fidelity=${build[fidelity]:-true}" >> "$GITHUB_OUTPUT"
           echo "olimpo=${build[olimpo]:-true}" >> "$GITHUB_OUTPUT"
-          echo "correggo4=${build[correggo4]:-true}" >> "$GITHUB_OUTPUT"
+          echo "correggo4=${build[correggo]:-true}" >> "$GITHUB_OUTPUT"
           printf '### Componenti interessati\n\n- Istanta: `%s`\n- AgenziaLib: `%s`\n- Fidelity: `%s`\n- Olimpo: `%s`\n- Correggo4: `%s`\n' \
-            "${build[istanta]:-true}" "${build[agenzialib]:-true}" "${build[fidelity]:-true}" \
-            "${build[olimpo]:-true}" "${build[correggo4]:-true}" >> "$GITHUB_STEP_SUMMARY"
+            "${build[istanta]:-true}" "${build[agenzia-lib]:-true}" "${build[fidelity]:-true}" \
+            "${build[olimpo]:-true}" "${build[correggo]:-true}" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Set up Docker Buildx
         if: steps.changes.outputs.istanta == 'true' || steps.changes.outputs.agenzialib == 'true' || steps.changes.outputs.fidelity == 'true' || steps.changes.outputs.olimpo == 'true' || steps.changes.outputs.correggo4 == 'true'
@@ -351,13 +351,13 @@ jobs:
           istanta_digest=$(image_digest istanta "$ISTANTA_BUILT" "$ISTANTA_NEW_DIGEST")
           fidelity_digest=$(image_digest fidelity "$FIDELITY_BUILT" "$FIDELITY_NEW_DIGEST")
           olimpo_digest=$(image_digest olimpo "$OLIMPO_BUILT" "$OLIMPO_NEW_DIGEST")
-          correggo4_digest=$(image_digest correggo4 "$CORREGGO4_BUILT" "$CORREGGO4_NEW_DIGEST")
+          correggo4_digest=$(image_digest correggo "$CORREGGO4_BUILT" "$CORREGGO4_NEW_DIGEST")
           if [[ "$AGENZIALIB_BUILT" == true ]]; then
             agenzialib_digest="$AGENZIALIB_NEW_DIGEST"
             agenzialib_file_sha="$AGENZIALIB_NEW_FILE_SHA256"
           else
-            agenzialib_digest=$(printf '%s' "$PREVIOUS_ARTIFACTS_JSON" | jq -er '.[] | select(.component == "agenzialib") | .digest')
-            agenzialib_file_sha=$(printf '%s' "$PREVIOUS_ARTIFACTS_JSON" | jq -er '.[] | select(.component == "agenzialib") | .fileSha256')
+            agenzialib_digest=$(printf '%s' "$PREVIOUS_ARTIFACTS_JSON" | jq -er '.[] | select(.component == "agenzia-lib") | .digest')
+            agenzialib_file_sha=$(printf '%s' "$PREVIOUS_ARTIFACTS_JSON" | jq -er '.[] | select(.component == "agenzia-lib") | .fileSha256')
           fi
           for digest in "$istanta_digest" "$agenzialib_digest" "$fidelity_digest" "$olimpo_digest" "$correggo4_digest"; do
             [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]] || { echo "::error::Invalid component digest"; exit 1; }
@@ -375,14 +375,14 @@ jobs:
               artifacts: [
                 {component: "istanta", artifactKind: "ContainerImage", image: $istantaImage,
                  digest: $istantaDigest, imageReference: ($istantaImage + "@" + $istantaDigest), builtForThisRelease: $istantaBuilt},
-                {component: "agenzialib", artifactKind: "File", image: $agenziaImage,
+                {component: "agenzia-lib", artifactKind: "File", image: $agenziaImage,
                  digest: $agenziaDigest, imageReference: ($agenziaImage + "@" + $agenziaDigest),
                  fileName: "AgenziaLib.dll", fileSha256: $agenziaFileSha, builtForThisRelease: $agenziaBuilt},
                 {component: "fidelity", artifactKind: "ContainerImage", image: $fidelityImage,
                  digest: $fidelityDigest, imageReference: ($fidelityImage + "@" + $fidelityDigest), builtForThisRelease: $fidelityBuilt},
                 {component: "olimpo", artifactKind: "ContainerImage", image: $olimpoImage,
                  digest: $olimpoDigest, imageReference: ($olimpoImage + "@" + $olimpoDigest), builtForThisRelease: $olimpoBuilt},
-                {component: "correggo4", artifactKind: "ContainerImage", image: $correggo4Image,
+                {component: "correggo", artifactKind: "ContainerImage", image: $correggo4Image,
                  digest: $correggo4Digest, imageReference: ($correggo4Image + "@" + $correggo4Digest), builtForThisRelease: $correggo4Built}
               ]}' > "$RUNNER_TEMP/release-manifest.json"
 
