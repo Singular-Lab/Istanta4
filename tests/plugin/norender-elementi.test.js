@@ -106,7 +106,7 @@ test("la lista unisce gli elementi vivi e quelli marcati spariti dal documento",
     assert.strictEqual(sparito.noRender, true);
 });
 
-test("il payload porta solo gli elementi marcati e non le foto", () => {
+test("il payload porta gli elementi marcati, foto comprese", () => {
     const lista = [
         { tipo: NoRenderElementi.TIPO.logo, chiave: "logo_bio", nome: "Logo biologico", noRender: true },
         { tipo: NoRenderElementi.TIPO.campo, chiave: "PIEDE_Titolari", nome: "PIEDE_Titolari", noRender: false },
@@ -115,8 +115,10 @@ test("il payload porta solo gli elementi marcati e non le foto", () => {
 
     const elementi = NoRenderElementi.elementiDaSalvare(lista);
 
-    assert.strictEqual(elementi.length, 1);
-    assert.strictEqual(elementi[0].chiave, "logo_bio");
+    // Le foto non hanno piu' un canale a parte: viaggiano con gli altri elementi.
+    assert.strictEqual(elementi.length, 2);
+    assert.ok(elementi.some(e => e.chiave === "logo_bio"));
+    assert.ok(elementi.some(e => e.tipo === NoRenderElementi.TIPO_FOTO && e.chiave === "3150596"));
     assert.strictEqual(elementi[0].noRender, undefined);
 });
 
@@ -128,19 +130,16 @@ test("senza elementi marcati il payload e' vuoto", () => {
     assert.deepStrictEqual(NoRenderElementi.elementiDaSalvare(lista), []);
 });
 
-test("le foto viaggiano a parte, col loro stato di rendering", () => {
+test("una foto non marcata non entra nel payload", () => {
     const lista = [
         { tipo: NoRenderElementi.TIPO_FOTO, chiave: "3150596", nome: "primaria.psd", noRender: true },
-        { tipo: NoRenderElementi.TIPO_FOTO, chiave: "3150599", nome: "secondaria.psd", noRender: false },
-        { tipo: NoRenderElementi.TIPO.logo, chiave: "logo_bio", nome: "Logo biologico", noRender: true }
+        { tipo: NoRenderElementi.TIPO_FOTO, chiave: "3150599", nome: "secondaria.psd", noRender: false }
     ];
 
-    const foto = NoRenderElementi.fotoDaSalvare(lista);
+    const elementi = NoRenderElementi.elementiDaSalvare(lista);
 
-    assert.deepStrictEqual(foto, [
-        { codRef: "3150596", noRender: true },
-        { codRef: "3150599", noRender: false }
-    ]);
+    assert.strictEqual(elementi.length, 1);
+    assert.strictEqual(elementi[0].chiave, "3150596");
 });
 
 test("un elemento in norender cancellato dai livelli non e' segnalato come mancante", () => {
@@ -162,15 +161,19 @@ test("un elemento mancante e non marcato conserva la segnalazione originale", ()
 });
 
 test("le foto in norender entrano nell'elenco delle segnalazioni col nome del file", () => {
+    // Nei meta la foto ha per chiave il codice referenza, nei report il nome del file.
     const membri = [
-        { codRef: "3150596", nomeFoto: "primaria.psd", noRender: true },
-        { codRef: "3150599", nomeFoto: "secondaria.psd", noRender: false }
+        { codRef: "3150596", nomeFoto: "primaria.psd" },
+        { codRef: "3150599", nomeFoto: "secondaria.psd" }
     ];
-    const elementi = [{ tipo: NoRenderElementi.TIPO.logo, chiave: "logo_bio", nome: "Logo biologico" }];
+    const elementi = [
+        { tipo: NoRenderElementi.TIPO.logo, chiave: "logo_bio", nome: "Logo biologico" },
+        { tipo: NoRenderElementi.TIPO_FOTO, chiave: "3150596", nome: "3150596" }
+    ];
 
     const elenco = NoRenderElementi.elencoPerSegnalazioni(elementi, membri);
 
-    assert.strictEqual(elenco.length, 2);
+    assert.strictEqual(elenco.length, 3);
     assert.strictEqual(
         NoRenderElementi.segnalazioneElementoMancante(
             "foto mancante nel box: primaria.psd", elenco, NoRenderElementi.TIPO_FOTO, "primaria.psd"),
@@ -389,7 +392,7 @@ test("l'ingrandimento legge l'indirizzo dalla miniatura puntata", () => {
 test("il salvataggio riporta lo stato sui record in memoria", () => {
     const sorgente = sorgentePlugin("schedaRef.js");
 
-    assert.ok(sorgente.includes("aggiornaNoRenderNeiRecord(elementi, foto)"),
+    assert.ok(sorgente.includes("aggiornaNoRenderNeiRecord(elementi)"),
         "salvaNoRender deve aggiornare i record in memoria");
     assert.ok(sorgente.includes("record.noRenderElementi = elementi;"),
         "l'elenco degli elementi va riportato sul record");
@@ -476,29 +479,29 @@ test("l'applicazione riporta quanti elementi ha reso invisibili", () => {
         "serve a distinguere l'elenco che non arriva dalle label che non corrispondono");
 });
 
-// Le due chiamate scrivono sulla stessa riga di meta: partendo insieme leggono lo stesso
-// stato iniziale e l'ultima cancella il lavoro dell'altra. Devono andare in sequenza.
-test("il salvataggio delle foto parte dopo la risposta di quello degli elementi", () => {
-    const sorgente = sorgentePlugin("schedaRef.js");
-    const inizio = sorgente.indexOf("salvaNoRender() {");
-    const fine = sorgente.indexOf("salvaNoRenderDelleFoto(codice_gruppo, idRec, foto) {");
-    const blocco = sorgente.slice(inizio, fine);
 
-    const chiamataFoto = blocco.indexOf("me.salvaNoRenderDelleFoto(codice_gruppo, idRec, foto);");
-    const invioElementi = blocco.indexOf('xhr.send("Menabo/modificaNoRender"');
 
-    assert.ok(chiamataFoto > 0, "il salvataggio delle foto deve avvenire dentro la risposta");
-    assert.ok(invioElementi > 0);
-    assert.ok(
-        chiamataFoto < invioElementi,
-        "la chiamata sulle foto deve stare nel gestore onload, quindi prima dell'invio nel sorgente");
+// Le foto sono un tipo di elemento come gli altri, allineato all'enum del server.
+test("la foto ha un tipo numerico, non piu' un tipo speciale", () => {
+    assert.strictEqual(NoRenderElementi.TIPO_FOTO, NoRenderElementi.TIPO.foto);
+    assert.strictEqual(NoRenderElementi.TIPO.foto, 5);
 });
 
-test("un fallimento nel salvataggio delle foto viene segnalato", () => {
-    const sorgente = sorgentePlugin("schedaRef.js");
-    const inizio = sorgente.indexOf("salvaNoRenderDelleFoto(codice_gruppo, idRec, foto) {");
-    const blocco = sorgente.slice(inizio, inizio + 2000);
+test("l'applicazione in impaginazione non salta piu' le foto", () => {
+    const sorgente = sorgentePlugin("indexNew.js");
+    const inizio = sorgente.indexOf("function applicaNoRenderAgliElementiDelBox(");
+    const blocco = sorgente.slice(inizio, inizio + 1500);
 
-    assert.ok(blocco.includes("xhr.onload"), "la risposta va letta, non ignorata");
-    assert.ok(blocco.includes("SRF-56"), "un rifiuto del server deve arrivare all'operatore");
+    assert.ok(
+        !blocco.includes("classificato.tipo === NoRenderElementi.TIPO_FOTO"),
+        "le foto devono essere trattate come gli altri elementi del box");
+});
+
+test("il modal salva una volta sola", () => {
+    const sorgente = sorgentePlugin("schedaRef.js");
+
+    assert.ok(!sorgente.includes("salvaNoRenderDelleFoto"),
+        "il canale separato delle foto non esiste piu'");
+    assert.ok(!sorgente.includes("fotoDaSalvare"),
+        "le foto entrano nel payload degli elementi");
 });

@@ -7633,8 +7633,9 @@ const schedaRef = {
 
         var codice_gruppo = schedaRef[0].recordInTracciato["Scatto.CodiceGruppo"];
         var lista = this.elementiNoRenderDelBox || [];
+        //Le foto viaggiano nella stessa struttura degli altri elementi: una sola chiamata,
+        //quindi una sola scrittura sul meta e nessuna corsa fra due salvataggi.
         var elementi = NoRenderElementi.elementiDaSalvare(lista);
-        var foto = NoRenderElementi.fotoDaSalvare(lista);
 
         var idRec = 0;
         try {
@@ -7668,28 +7669,19 @@ const schedaRef = {
                 messaggioUtente("Code SRF-53 noRender: il server ha rifiutato il salvataggio", "error");
                 return;
             }
-
-            //Le foto del box mantengono il loro canale, ma la loro chiamata scrive sulla
-            //stessa riga di meta: parte solo adesso, altrimenti le due scritture si leggono
-            //lo stesso stato iniziale e l'ultima cancella il lavoro dell'altra.
-            if (foto.length > 0) {
-                me.salvaNoRenderDelleFoto(codice_gruppo, idRec, foto);
-            }
-            else {
-                messaggioUtente("noRender: modifiche salvate", "success", false, 5);
-            }
+            messaggioUtente("noRender: modifiche salvate", "success", false, 5);
         };
 
         xhr.send("Menabo/modificaNoRender" + "/" + 0, formData, "PUT");
 
-        this.aggiornaNoRenderNeiRecord(elementi, foto);
+        this.aggiornaNoRenderNeiRecord(elementi);
         this.applicaNoRenderAlDocumento();
     },
 
     /// Riporta sui record in memoria quanto appena salvato. La reimpaginazione impagina a
     /// partire da schedeRefDati, che non viene ricaricata dal server: senza questo passaggio
     /// un elemento appena messo in noRender tornerebbe visibile alla prima reimpaginazione.
-    aggiornaNoRenderNeiRecord(elementi, foto) {
+    aggiornaNoRenderNeiRecord(elementi) {
         var schedaRef = this.schedeRefDati || [];
 
         for (var i = 0; i < schedaRef.length; i++) {
@@ -7700,61 +7692,17 @@ const schedaRef = {
 
             record.noRenderElementi = elementi;
 
-            //Le foto portano la loro opzione dentro membriGruppoFoto, non fra gli elementi.
+            //membriGruppoFoto resta allineato: lo legge l'impaginazione della foto e lo
+            //consuma chi esporta. La fonte ora e' la struttura unica.
             var membri = record.membriGruppoFoto;
             if (membri == null) {
                 continue;
             }
             for (var m = 0; m < membri.length; m++) {
-                var scelta = (foto || []).find(f => f.codRef == membri[m].codRef);
-                if (scelta != null) {
-                    membri[m].noRender = scelta.noRender === true;
-                }
+                membri[m].noRender = (elementi || []).some(
+                    e => e.tipo === NoRenderElementi.TIPO.foto && e.chiave == membri[m].codRef);
             }
         }
-    },
-
-    salvaNoRenderDelleFoto(codice_gruppo, idRec, foto) {
-        var schedaRef = this.schedeRefDati;
-        var ps = [];
-
-        for (var i = 0; i < foto.length; i++) {
-            var voce = schedaRef.find(f => f.recordInTracciato["Referenza.Codice"] == foto[i].codRef);
-            if (voce == null) {
-                continue;
-            }
-            ps.push({ codRef: foto[i].codRef, stato: voce.recordInTracciato.StatoSelezione, noRender: foto[i].noRender });
-        }
-
-        if (ps.length == 0) {
-            return;
-        }
-
-        var formData = new FormData();
-        formData.append("idLavorazione", idKitLavorazione);
-        formData.append("CodiceGruppo", codice_gruppo);
-        formData.append("idRec", idRec);
-        formData.append("ps", JSON.stringify(ps));
-
-        const xhr = new XMLHttpRequestClient();
-        xhr.onload = async (objResult, parsed) => {
-            if (!parsed) {
-                try {
-                    objResult = JSON.parse(objResult);
-                }
-                catch (e) {
-                    messaggioUtente("Code SRF-55 noRender: errore nel salvataggio delle foto: " + e, "error");
-                    return;
-                }
-            }
-            if (objResult != null && objResult.esito === false) {
-                messaggioUtente("Code SRF-56 noRender: il server ha rifiutato l'opzione sulle foto", "error");
-                return;
-            }
-            messaggioUtente("noRender: modifiche salvate", "success", false, 5);
-        };
-
-        xhr.send("Menabo/modificaPrimarieSecondarie" + "/" + 0, formData, "PUT");
     },
 
     /// Riflette subito nel documento quanto scelto nel modal, senza attendere una reimpaginazione.

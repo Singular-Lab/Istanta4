@@ -181,7 +181,9 @@ function applicaNoRenderAgliElementiDelBox(box, elementiNoRender) {
         for (var i = 0; i < box.allPageItems.length; i++) {
             var item = box.allPageItems[i];
             var classificato = NoRenderElementi.classificaLabel(item.label, nomePrimaria, nomeSecondaria);
-            if (classificato == null || classificato.tipo === NoRenderElementi.TIPO_FOTO) {
+            //Le foto non fanno piu' eccezione: stanno nella stessa struttura degli altri
+            //elementi, e questa e' l'unica applicazione, in coda alla composizione del box.
+            if (classificato == null) {
                 continue;
             }
             if (NoRenderElementi.inNoRender(elementiNoRender, classificato.tipo, classificato.chiave)) {

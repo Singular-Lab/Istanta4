@@ -15,12 +15,13 @@ var NoRenderElementi = (function () {
         logo: 2,
         fotoExtra: 3,
         etichetta: 4,
+        foto: 5,
         altro: 99
     };
 
-    //Le foto primarie/secondarie non stanno nella struttura noRender dei meta: la loro
-    //opzione vive dentro ps, come da I20-965. Le distinguiamo per instradare il salvataggio.
-    var TIPO_FOTO = "foto";
+    //Le foto primarie/secondarie stanno nella stessa struttura degli altri elementi, con il
+    //codice referenza per chiave: un solo salvataggio e una sola applicazione in impaginazione.
+    var TIPO_FOTO = TIPO.foto;
 
     //tipo_N nelle label rimanda a TipoFoto di IstantaLib: 3 e' il logo.
     var TIPO_FOTO_LOGO = 3;
@@ -143,15 +144,15 @@ var NoRenderElementi = (function () {
         return lista;
     }
 
-    /// Payload per il server: solo gli elementi effettivamente in noRender e non foto, senza
-    /// flag ne' stato di presenza. Se non ce n'e' nessuno l'elenco e' vuoto, e il server in
-    /// quel caso toglie del tutto la chiave dai meta.
+    /// Payload per il server: solo gli elementi effettivamente in noRender, foto comprese,
+    /// senza flag ne' stato di presenza. Se non ce n'e' nessuno l'elenco e' vuoto, e il server
+    /// in quel caso toglie del tutto la chiave dai meta.
     function elementiDaSalvare(lista) {
         var risultato = [];
         var elementi = lista || [];
         for (var i = 0; i < elementi.length; i++) {
             var elemento = elementi[i];
-            if (elemento == null || elemento.noRender !== true || elemento.tipo === TIPO_FOTO) {
+            if (elemento == null || elemento.noRender !== true) {
                 continue;
             }
             risultato.push({
@@ -163,31 +164,25 @@ var NoRenderElementi = (function () {
         return risultato;
     }
 
-    /// Le foto del box restano sul canale di I20-965: le raccogliamo a parte per l'invio a
-    /// Menabo/modificaPrimarieSecondarie.
-    function fotoDaSalvare(lista) {
-        var risultato = [];
-        var elementi = lista || [];
-        for (var i = 0; i < elementi.length; i++) {
-            var elemento = elementi[i];
-            if (elemento != null && elemento.tipo === TIPO_FOTO) {
-                risultato.push({ codRef: pulisci(elemento.chiave), noRender: elemento.noRender === true });
-            }
-        }
-        return risultato;
-    }
-
     /// Elenco usato dalle segnalazioni: agli elementi del box unisce le foto in noRender,
     /// che vivono in membriGruppoFoto. Le foto sono indicizzate per nome file perche' e' cosi'
     /// che compaiono nei report di confronto.
     function elencoPerSegnalazioni(elementiNoRender, membriGruppoFoto) {
         var elenco = (elementiNoRender || []).slice();
         var membri = membriGruppoFoto || [];
-        for (var i = 0; i < membri.length; i++) {
-            if (membri[i] != null && membri[i].noRender === true) {
-                elenco.push({ tipo: TIPO_FOTO, chiave: pulisci(membri[i].nomeFoto), nome: pulisci(membri[i].nomeFoto) });
+
+        //Nei meta la foto ha per chiave il codice referenza, nei report il nome del file:
+        //si aggiunge la voce tradotta, altrimenti la segnalazione non riconosce l'immagine.
+        for (var i = 0; i < elenco.length; i++) {
+            if (elenco[i] == null || elenco[i].tipo !== TIPO_FOTO) {
+                continue;
+            }
+            var membro = membri.find(m => m != null && m.codRef == elenco[i].chiave);
+            if (membro != null && pulisci(membro.nomeFoto) !== "") {
+                elenco.push({ tipo: TIPO_FOTO, chiave: pulisci(membro.nomeFoto), nome: pulisci(membro.nomeFoto) });
             }
         }
+
         return elenco;
     }
 
@@ -305,7 +300,6 @@ var NoRenderElementi = (function () {
         descriviElemento: descriviElemento,
         componiLista: componiLista,
         elementiDaSalvare: elementiDaSalvare,
-        fotoDaSalvare: fotoDaSalvare,
         datiExtraDiSigla: datiExtraDiSigla,
         datiRiga: datiRiga,
         riepilogo: riepilogo,

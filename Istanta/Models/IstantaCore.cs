@@ -951,7 +951,11 @@ namespace Istanta.Models
 
         public static RevisioneMetaPromoLavorazioni? leggi(string meta)
         {
-            return Newtonsoft.Json.JsonConvert.DeserializeObject<RevisioneMetaPromoLavorazioni>(meta, settings);
+            var letto = Newtonsoft.Json.JsonConvert.DeserializeObject<RevisioneMetaPromoLavorazioni>(meta, settings);
+            //I meta storici marcano le foto dentro ps: si convertono alla prima lettura, cosi'
+            //il resto del codice conosce una sola struttura.
+            migraNoRenderDelleFoto(letto);
+            return letto;
         }
 
         public static List<RevisioneSelezioneFotoFromIndd>? leggiSelezioniFoto(string ps)
@@ -972,6 +976,37 @@ namespace Istanta.Models
         public static List<RevisioneNoRenderFromIndd>? normalizzaElementiNoRender(List<RevisioneNoRenderFromIndd>? elementi)
         {
             return (elementi != null && elementi.Count > 0) ? elementi : null;
+        }
+
+        /// <summary>
+        /// Porta nella struttura noRender le foto che i meta storici marcavano dentro ps.
+        /// Serve a non perdere le marcature gia' fatte dagli operatori quando le foto sono
+        /// passate alla struttura unica: la voce si crea solo se non c'e' gia'.
+        /// </summary>
+        public static void migraNoRenderDelleFoto(RevisioneMetaPromoLavorazioni? meta)
+        {
+            if (meta?.ps == null)
+            {
+                return;
+            }
+
+            foreach (var selezione in meta.ps.Where(s => s.noRender && !string.IsNullOrEmpty(s.codRef)))
+            {
+                meta.noRender ??= new List<RevisioneNoRenderFromIndd>();
+
+                bool giaPresente = meta.noRender.Any(e =>
+                    e.tipo == TipoElementoBox.Foto && e.chiave == selezione.codRef);
+
+                if (!giaPresente)
+                {
+                    meta.noRender.Add(new RevisioneNoRenderFromIndd
+                    {
+                        tipo = TipoElementoBox.Foto,
+                        chiave = selezione.codRef,
+                        nome = selezione.codRef
+                    });
+                }
+            }
         }
 
         /// <summary>
@@ -1030,6 +1065,12 @@ namespace Istanta.Models
         Logo = 2,
         FotoExtra = 3,
         Etichetta = 4,
+        /// <summary>
+        /// Foto primaria o secondaria del box, identificata dal codice referenza.
+        /// Prima l'opzione di rendering delle foto stava dentro ps: due strutture volevano
+        /// dire due salvataggi sullo stesso meta e due applicazioni in impaginazione.
+        /// </summary>
+        Foto = 5,
         Altro = 99
     }
 
@@ -1070,9 +1111,9 @@ namespace Istanta.Models
         public string? codRef { get; set; }//Codice della referenza di cui è stata alterata la foto o la selezione
         public StatoSelezioneFoto stato { get; set; }
         /// <summary>
-        /// Opzione di rendering della foto primaria/secondaria del box. Quando true il
-        /// Plugin impagina l'immagine ma la rende invisibile in fase di impaginazione.
-        /// I meta gia' salvati non contengono la chiave: l'assenza vale false.
+        /// Superata: l'opzione di rendering delle foto vive nella struttura noRender del meta,
+        /// insieme agli altri elementi del box. Questa proprieta' resta solo per leggere i meta
+        /// storici e convertirli, e non viene piu' scritta dal Plugin.
         /// </summary>
         public bool noRender { get; set; } = false;
     }

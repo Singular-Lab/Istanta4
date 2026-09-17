@@ -4171,6 +4171,21 @@ namespace Istanta.Controllers
         }
 
         /// <summary>
+        /// Le foto stanno nella stessa struttura degli altri elementi, con il codice referenza
+        /// per chiave: da li' si ricava la mappa che alimenta membriGruppoFoto.
+        /// </summary>
+        private static void raccogliNoRenderDelleFoto(string? codiceGruppo, List<RevisioneNoRenderFromIndd>? elementi, Dictionary<string, bool>? noRenderPerRef)
+        {
+            if (elementi == null || noRenderPerRef == null)
+                return;
+
+            foreach (var elemento in elementi.Where(e => e.tipo == TipoElementoBox.Foto && !string.IsNullOrEmpty(e.chiave)))
+            {
+                noRenderPerRef[chiaveNoRenderFoto(codiceGruppo, elemento.chiave)] = true;
+            }
+        }
+
+        /// <summary>
         /// Riporta sul box gli elementi messi in noRender dall'operatore: campi, loghi, foto extra.
         /// A differenza delle foto primarie/secondarie, che viaggiano dentro membriGruppoFoto,
         /// questi elementi non hanno un contenitore proprio nel record: li consegniamo al Plugin
@@ -4306,9 +4321,13 @@ namespace Istanta.Controllers
                                 RevisioneMetaPromoLavorazioni recPassato = MetaPromoLavorazioni.leggi(plrInAC.Meta)!;
                                 //Gli elementi in noRender sono del box, non della singola ref: si
                                 //ereditano una volta sola per codice gruppo.
-                                if (noRenderElementiPerGruppo != null && recPassato.noRender != null && recPassato.noRender.Count > 0)
+                                if (recPassato.noRender != null && recPassato.noRender.Count > 0)
                                 {
-                                    noRenderElementiPerGruppo[group.Key.CodiceGruppo] = recPassato.noRender;
+                                    if (noRenderElementiPerGruppo != null)
+                                    {
+                                        noRenderElementiPerGruppo[group.Key.CodiceGruppo] = recPassato.noRender;
+                                    }
+                                    raccogliNoRenderDelleFoto(group.Key.CodiceGruppo, recPassato.noRender, noRenderPerRef);
                                 }
                                 foreach (var item in group)
                                 {
@@ -4318,10 +4337,6 @@ namespace Istanta.Controllers
                                         if (psItem != null)
                                         {
                                             item.recordInTracciato[keyStatoSelezione] = (int)psItem.stato;
-                                            if (noRenderPerRef != null)
-                                            {
-                                                noRenderPerRef[chiaveNoRenderFoto(group.Key.CodiceGruppo, psItem.codRef)] = psItem.noRender;
-                                            }
                                         }
                                     }
 
@@ -4376,9 +4391,13 @@ namespace Istanta.Controllers
                     //}
                 }
 
-                if (noRenderElementiPerGruppo != null && storeField.noRender != null && storeField.noRender.Count > 0)
+                if (storeField.noRender != null && storeField.noRender.Count > 0)
                 {
-                    noRenderElementiPerGruppo[group.Key.CodiceGruppo] = storeField.noRender;
+                    if (noRenderElementiPerGruppo != null)
+                    {
+                        noRenderElementiPerGruppo[group.Key.CodiceGruppo] = storeField.noRender;
+                    }
+                    raccogliNoRenderDelleFoto(group.Key.CodiceGruppo, storeField.noRender, noRenderPerRef);
                 }
 
                 foreach (var item in group)
@@ -4389,10 +4408,6 @@ namespace Istanta.Controllers
                         if (fieldGiaEsistente != null)
                         {
                             item.recordInTracciato[keyStatoSelezione] = (int)fieldGiaEsistente.stato;
-                            if (noRenderPerRef != null)
-                            {
-                                noRenderPerRef[chiaveNoRenderFoto(group.Key.CodiceGruppo, fieldGiaEsistente.codRef)] = fieldGiaEsistente.noRender;
-                            }
                         }
                     }
                     if (storeField.foto != null)

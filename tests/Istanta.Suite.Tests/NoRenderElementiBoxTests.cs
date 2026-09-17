@@ -60,10 +60,10 @@ public class NoRenderElementiMetaTests
     }
 
     [Fact]
-    public void Le_due_strutture_non_si_toccano()
+    public void La_selezione_della_foto_resta_su_ps_ma_il_noRender_confluisce_negli_elementi()
     {
-        // Le foto primarie/secondarie restano su ps, gli altri elementi sulla nuova struttura:
-        // scrivere l'una non deve alterare l'altra.
+        // ps continua a portare la selezione primaria/secondaria: quello che se ne va e'
+        // soltanto l'opzione di rendering, che ora vive con gli altri elementi del box.
         var meta = new RevisioneMetaPromoLavorazioni
         {
             ps = new List<RevisioneSelezioneFotoFromIndd>
@@ -78,8 +78,10 @@ public class NoRenderElementiMetaTests
 
         var riletto = MetaPromoLavorazioni.leggi(JsonConvert.SerializeObject(meta));
 
-        Assert.True(riletto!.ps!.Single().noRender);
-        Assert.Equal("logo_bio", Assert.Single(riletto.noRender!).chiave);
+        Assert.Equal(StatoSelezioneFoto.Primaria, riletto!.ps!.Single().stato);
+        Assert.Equal(2, riletto.noRender!.Count);
+        Assert.Contains(riletto.noRender!, e => e.tipo == TipoElementoBox.Logo && e.chiave == "logo_bio");
+        Assert.Contains(riletto.noRender!, e => e.tipo == TipoElementoBox.Foto && e.chiave == "3150596");
     }
 }
 
@@ -254,20 +256,20 @@ public class ApplicaSelezioniFotoTests
     [Fact]
     public void Salvare_gli_elementi_non_cancella_le_foto()
     {
-        var meta = new RevisioneMetaPromoLavorazioni
+        // Con il canale unico foto e altri elementi stanno nella stessa lista, che si scrive
+        // intera: nessuno dei due puo' piu' sovrascrivere il lavoro dell'altro.
+        var elementi = MetaPromoLavorazioni.normalizzaElementiNoRender(new List<RevisioneNoRenderFromIndd>
         {
-            ps = new List<RevisioneSelezioneFotoFromIndd> { Selezione("3150596", StatoSelezioneFoto.Primaria, true) }
-        };
-
-        meta.noRender = MetaPromoLavorazioni.normalizzaElementiNoRender(new List<RevisioneNoRenderFromIndd>
-        {
-            new() { tipo = TipoElementoBox.Logo, chiave = "logo_bio" }
+            new() { tipo = TipoElementoBox.Logo, chiave = "logo_bio" },
+            new() { tipo = TipoElementoBox.Foto, chiave = "3150596", nome = "primaria.psd" }
         });
 
-        var riletto = MetaPromoLavorazioni.leggi(JsonConvert.SerializeObject(meta))!;
+        var riletto = MetaPromoLavorazioni.leggi(
+            JsonConvert.SerializeObject(new RevisioneMetaPromoLavorazioni { noRender = elementi }));
 
-        Assert.True(Assert.Single(riletto.ps!).noRender);
-        Assert.Equal("logo_bio", Assert.Single(riletto.noRender!).chiave);
+        Assert.Equal(2, riletto!.noRender!.Count);
+        Assert.Contains(riletto.noRender!, e => e.tipo == TipoElementoBox.Foto && e.chiave == "3150596");
+        Assert.Contains(riletto.noRender!, e => e.tipo == TipoElementoBox.Logo && e.chiave == "logo_bio");
     }
 
     [Fact]
@@ -279,5 +281,88 @@ public class ApplicaSelezioniFotoTests
         MetaPromoLavorazioni.applicaSelezioniFoto(meta, new List<RevisioneSelezioneFotoFromIndd>());
 
         Assert.Null(meta.ps);
+    }
+}
+
+/// <summary>
+/// Le foto primarie/secondarie sono passate dalla struttura ps a quella degli elementi del
+/// box. I meta gia' salvati marcano le foto dentro ps: vanno convertiti alla lettura, o le
+/// marcature fatte dagli operatori andrebbero perse.
+/// </summary>
+public class MigrazioneNoRenderDelleFotoTests
+{
+    [Fact]
+    public void Un_meta_storico_porta_la_foto_nella_struttura_unica()
+    {
+        const string metaStorico = "{\"ps\":[{\"codRef\":\"3150596\",\"stato\":1,\"noRender\":true}]}";
+
+        var meta = MetaPromoLavorazioni.leggi(metaStorico);
+
+        var elemento = Assert.Single(meta!.noRender!);
+        Assert.Equal(TipoElementoBox.Foto, elemento.tipo);
+        Assert.Equal("3150596", elemento.chiave);
+    }
+
+    [Fact]
+    public void Una_foto_non_marcata_non_genera_nulla()
+    {
+        const string metaStorico = "{\"ps\":[{\"codRef\":\"3150596\",\"stato\":1,\"noRender\":false}]}";
+
+        var meta = MetaPromoLavorazioni.leggi(metaStorico);
+
+        Assert.Null(meta!.noRender);
+    }
+
+    [Fact]
+    public void La_voce_non_viene_duplicata_se_gia_presente()
+    {
+        const string meta =
+            "{\"ps\":[{\"codRef\":\"3150596\",\"stato\":1,\"noRender\":true}]," +
+            "\"noRender\":[{\"tipo\":5,\"chiave\":\"3150596\",\"nome\":\"primaria.psd\"}]}";
+
+        var letto = MetaPromoLavorazioni.leggi(meta);
+
+        var elemento = Assert.Single(letto!.noRender!);
+        Assert.Equal("primaria.psd", elemento.nome);
+    }
+
+    [Fact]
+    public void La_migrazione_non_tocca_gli_altri_elementi()
+    {
+        const string meta =
+            "{\"ps\":[{\"codRef\":\"3150596\",\"stato\":1,\"noRender\":true}]," +
+            "\"noRender\":[{\"tipo\":2,\"chiave\":\"logo_bio\"}]}";
+
+        var letto = MetaPromoLavorazioni.leggi(meta);
+
+        Assert.Equal(2, letto!.noRender!.Count);
+        Assert.Contains(letto.noRender!, e => e.tipo == TipoElementoBox.Logo && e.chiave == "logo_bio");
+        Assert.Contains(letto.noRender!, e => e.tipo == TipoElementoBox.Foto && e.chiave == "3150596");
+    }
+
+    [Fact]
+    public void Una_foto_marcata_sopravvive_al_giro_completo_del_meta()
+    {
+        var meta = new RevisioneMetaPromoLavorazioni
+        {
+            noRender = new List<RevisioneNoRenderFromIndd>
+            {
+                new() { tipo = TipoElementoBox.Foto, chiave = "3150596", nome = "primaria.psd" }
+            }
+        };
+
+        var riletto = MetaPromoLavorazioni.leggi(JsonConvert.SerializeObject(meta));
+
+        var elemento = Assert.Single(riletto!.noRender!);
+        Assert.Equal(TipoElementoBox.Foto, elemento.tipo);
+        Assert.Equal("3150596", elemento.chiave);
+    }
+
+    [Fact]
+    public void Un_meta_senza_ps_non_disturba_la_migrazione()
+    {
+        var meta = MetaPromoLavorazioni.leggi("{\"noRender\":[{\"tipo\":2,\"chiave\":\"logo_bio\"}]}");
+
+        Assert.Single(meta!.noRender!);
     }
 }
