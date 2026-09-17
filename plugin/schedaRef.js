@@ -7567,15 +7567,17 @@ const schedaRef = {
             row.append(bottone);
 
             var indirizzoOlimpo = typeof olimpoIp !== "undefined" ? olimpoIp : "";
-            var urlMiniatura = NoRenderElementi.urlMiniatura(elemento, indirizzoOlimpo, 50);
-            if (urlMiniatura !== "") {
+            var datiRiga = NoRenderElementi.datiRiga(elemento, indirizzoOlimpo);
+            if (datiRiga.urlMiniatura !== "") {
                 //La cornice rende visibile anche una miniatura che non si carica: cosi' si
                 //distingue un'immagine assente da una riga senza immagine.
-                var miniatura = $('<img src="' + urlMiniatura + '" style="width:32px; height:32px; object-fit:contain; margin-right:8px; border:1px solid #ddd; background-color:#fafafa; cursor:zoom-in;">');
-                var urlIngrandita = NoRenderElementi.urlMiniatura(elemento, indirizzoOlimpo, 300);
+                var miniatura = $('<img src="' + datiRiga.urlMiniatura + '" urlIngrandita="' + datiRiga.urlIngrandita + '" style="width:32px; height:32px; object-fit:contain; margin-right:8px; border:1px solid #ddd; background-color:#fafafa; cursor:zoom-in;">');
 
+                //L'indirizzo dell'ingrandimento sta sull'immagine e si legge da li', come
+                //l'indice sul bottone: una variabile del ciclo sarebbe condivisa da tutte le
+                //righe e mostrerebbe sempre l'ultima immagine.
                 miniatura.on('mouseenter', function () {
-                    anteprima.find("img").attr("src", urlIngrandita);
+                    anteprima.find("img").attr("src", $(this).attr("urlIngrandita"));
                     anteprima.css("display", "block");
                 });
                 miniatura.on('mouseleave', function () {
@@ -7590,7 +7592,7 @@ const schedaRef = {
                 row.append($('<span style="display:inline-block; width:32px; margin-right:8px;"></span>'));
             }
 
-            var testo = $('<span style="font-size:12px;"></span>').text(NoRenderElementi.descriviElemento(elemento));
+            var testo = $('<span style="font-size:12px;"></span>').text(datiRiga.descrizione);
             row.append(testo);
 
             if (!elemento.presente) {
@@ -7657,7 +7659,36 @@ const schedaRef = {
             this.salvaNoRenderDelleFoto(codice_gruppo, idRec, foto);
         }
 
+        this.aggiornaNoRenderNeiRecord(elementi, foto);
         this.applicaNoRenderAlDocumento();
+    },
+
+    /// Riporta sui record in memoria quanto appena salvato. La reimpaginazione impagina a
+    /// partire da schedeRefDati, che non viene ricaricata dal server: senza questo passaggio
+    /// un elemento appena messo in noRender tornerebbe visibile alla prima reimpaginazione.
+    aggiornaNoRenderNeiRecord(elementi, foto) {
+        var schedaRef = this.schedeRefDati || [];
+
+        for (var i = 0; i < schedaRef.length; i++) {
+            var record = schedaRef[i].recordInTracciato;
+            if (record == null) {
+                continue;
+            }
+
+            record.noRenderElementi = elementi;
+
+            //Le foto portano la loro opzione dentro membriGruppoFoto, non fra gli elementi.
+            var membri = record.membriGruppoFoto;
+            if (membri == null) {
+                continue;
+            }
+            for (var m = 0; m < membri.length; m++) {
+                var scelta = (foto || []).find(f => f.codRef == membri[m].codRef);
+                if (scelta != null) {
+                    membri[m].noRender = scelta.noRender === true;
+                }
+            }
+        }
     },
 
     salvaNoRenderDelleFoto(codice_gruppo, idRec, foto) {

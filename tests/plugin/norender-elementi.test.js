@@ -343,3 +343,62 @@ test("le miniature del modal reagiscono al passaggio del mouse", () => {
     assert.ok(blocco.includes("mouseenter"), "la miniatura deve mostrare l'ingrandimento");
     assert.ok(blocco.includes("mouseleave"), "la miniatura deve nasconderlo quando il mouse esce");
 });
+
+// L'ingrandimento mostrava sempre l'ultima immagine della lista: l'indirizzo era in una
+// variabile del ciclo, condivisa da tutti i gestori. Ogni riga deve portarsi i propri.
+test("ogni riga porta gli indirizzi della propria immagine", () => {
+    const elementi = [
+        { tipo: NoRenderElementi.TIPO.logo, chiave: "logo_bio", nome: "Logo biologico", guidId: "guid-bio" },
+        { tipo: NoRenderElementi.TIPO.logo, chiave: "logo_conv", nome: "Logo convenzionale", guidId: "guid-conv" },
+        { tipo: NoRenderElementi.TIPO_FOTO, chiave: "3150596", nome: "primaria.psd", guidId: "guid-foto" }
+    ];
+
+    const righe = elementi.map(e => NoRenderElementi.datiRiga(e, "http://olimpo/"));
+
+    assert.strictEqual(righe[0].urlIngrandita, "http://olimpo/getThumbNailOnDemand?width=300&guidId=guid-bio");
+    assert.strictEqual(righe[1].urlIngrandita, "http://olimpo/getThumbNailOnDemand?width=300&guidId=guid-conv");
+    assert.strictEqual(righe[2].urlIngrandita, "http://olimpo/getThumbNailOnDemand?width=300&guidId=guid-foto");
+
+    // La piccola e la grande sono la stessa immagine a due misure, mai quella di un'altra riga.
+    assert.strictEqual(righe[0].urlMiniatura, "http://olimpo/getThumbNailOnDemand?width=50&guidId=guid-bio");
+    assert.strictEqual(new Set(righe.map(r => r.urlIngrandita)).size, 3);
+});
+
+test("una riga senza immagine non produce indirizzi", () => {
+    const riga = NoRenderElementi.datiRiga(
+        { tipo: NoRenderElementi.TIPO.campo, chiave: "PIEDE_Titolari", nome: "PIEDE_Titolari" }, "http://olimpo/");
+
+    assert.strictEqual(riga.urlMiniatura, "");
+    assert.strictEqual(riga.urlIngrandita, "");
+    assert.strictEqual(riga.descrizione, "PIEDE_Titolari");
+});
+
+test("l'ingrandimento legge l'indirizzo dalla miniatura puntata", () => {
+    const sorgente = sorgentePlugin("schedaRef.js");
+    const inizio = sorgente.indexOf("disegnaListaNoRender() {");
+    const fine = sorgente.indexOf("salvaNoRender() {");
+    const blocco = sorgente.slice(inizio, fine);
+
+    assert.ok(
+        blocco.includes('$(this).attr("urlIngrandita")'),
+        "il gestore deve leggere l'indirizzo dall'elemento, non da una variabile del ciclo");
+});
+
+// Reimpaginare parte dai record in memoria: se il salvataggio non li aggiorna, un elemento
+// appena messo in noRender torna visibile alla prima reimpaginazione.
+test("il salvataggio riporta lo stato sui record in memoria", () => {
+    const sorgente = sorgentePlugin("schedaRef.js");
+
+    assert.ok(sorgente.includes("aggiornaNoRenderNeiRecord(elementi, foto)"),
+        "salvaNoRender deve aggiornare i record in memoria");
+    assert.ok(sorgente.includes("record.noRenderElementi = elementi;"),
+        "l'elenco degli elementi va riportato sul record");
+});
+
+test("impaginando dal sottogruppo la chiave viene portata avanti", () => {
+    const sorgente = sorgentePlugin("indexNew.js");
+
+    assert.ok(
+        sorgente.includes("tracciatoPrimario.noRenderElementi = primario.recordInTracciato.noRenderElementi;"),
+        "il sottogruppo non porta noRenderElementi: va copiata dal record");
+});

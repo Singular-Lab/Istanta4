@@ -240,6 +240,20 @@ var NoRenderElementi = (function () {
         return pulisci(indirizzoBase) + "getThumbNailOnDemand?width=" + larghezzaRichiesta + "&guidId=" + encodeURIComponent(guid);
     }
 
+    /// Dati di una riga del modal: descrizione e i due indirizzi della miniatura, piccola
+    /// per la riga e grande per l'ingrandimento. Stanno qui, e non nel disegno della lista,
+    /// perche' ogni riga deve portarsi i propri: un indirizzo condiviso fra le righe mostrava
+    /// sempre l'ultima immagine.
+    function datiRiga(elemento, indirizzoBase) {
+        return {
+            descrizione: descriviElemento(elemento),
+            urlMiniatura: urlMiniatura(elemento, indirizzoBase, 50),
+            urlIngrandita: urlMiniatura(elemento, indirizzoBase, 300),
+            presente: elemento != null && elemento.presente !== false,
+            noRender: elemento != null && elemento.noRender === true
+        };
+    }
+
     function inNoRender(elementiMarcati, tipo, chiave) {
         var marcati = elementiMarcati || [];
         for (var i = 0; i < marcati.length; i++) {
@@ -268,6 +282,7 @@ var NoRenderElementi = (function () {
         elementiDaSalvare: elementiDaSalvare,
         fotoDaSalvare: fotoDaSalvare,
         datiExtraDiSigla: datiExtraDiSigla,
+        datiRiga: datiRiga,
         urlMiniatura: urlMiniatura,
         elencoPerSegnalazioni: elencoPerSegnalazioni,
         inNoRender: inNoRender,

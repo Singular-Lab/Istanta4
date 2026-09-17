@@ -7127,6 +7127,13 @@ async function impaginazioneSingoloIndd(records, pagina, cercaInPaginaPerConfron
         // }
 
         var tracciatoPrimario = primario.sottogruppo && agenziaUsaSottogruppi ? primario.sottogruppo : primario.recordInTracciato;
+
+        //I20-968: gli elementi in noRender stanno sul record, non sul sottogruppo. Se si
+        //impagina a partire dal sottogruppo la chiave va portata avanti, altrimenti una
+        //reimpaginazione riporta visibili gli elementi che l'operatore aveva nascosto.
+        if (tracciatoPrimario != null && tracciatoPrimario.noRenderElementi == null) {
+            tracciatoPrimario.noRenderElementi = primario.recordInTracciato.noRenderElementi;
+        }
         //i bounds avranno l'angolo sinistro superiore in 0,0 e l'angolo inferiore destro in larghezza,altezza pari ad 1/3 della pagina
         //[0, 0, (docInLavorazione.documentPreferences.pageHeight / 4), docInLavorazione.documentPreferences.pageWidth / 4];
         let tipo_lavorazione_corrente = ficoProcess.getTipoLavorazioneCorrente();
