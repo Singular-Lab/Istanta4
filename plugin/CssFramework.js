@@ -1015,9 +1015,16 @@ const CssFramework =
         let altezzaBase = base != null ? base.geometricBounds[2] - base.geometricBounds[0] : 0;
 
         let preferenzaSpazio = this.getSceltaSpazioFoto(box);
-        let sceltaSpazio = cssSpazioFoto.scegli(candidateRects, boundsGruppo, preferenzaSpazio, larghezzaBase, altezzaBase);
 
-        console.log("fixFoto " + box.label + ": " + cssSpazioFoto.descriviScelta(candidateRects, sceltaSpazio, preferenzaSpazio, larghezzaBase, altezzaBase));
+        //Cio' che sta attaccato alla foto e sporge (un'ombra) non e' un ostacolo, ma occupa
+        //spazio: lo si toglie ai candidati prima di adattarvi il gruppo, cosi' la foto viene
+        //quel poco piu' piccola che serve e la sporgenza non finisce sugli altri elementi.
+        let estensioniFoto = this.getEstensioniFoto(box);
+        let candidatiUtili = cssSpazioFoto.restringiCandidati(candidateRects, estensioniFoto);
+
+        let sceltaSpazio = cssSpazioFoto.scegli(candidatiUtili, boundsGruppo, preferenzaSpazio, larghezzaBase, altezzaBase);
+
+        console.log("fixFoto " + box.label + ": " + cssSpazioFoto.descriviScelta(candidatiUtili, sceltaSpazio, preferenzaSpazio, larghezzaBase, altezzaBase, estensioniFoto));
 
         if (sceltaSpazio != null) {
             bestCandidate = sceltaSpazio.candidato;
@@ -2085,6 +2092,55 @@ const CssFramework =
 
         var elementoBox = this.getElementoBoxDB(box, contesto.DBallineamenti, contesto.DBDefault);
         return elementoBox != null ? elementoBox.sceltaSpazioFoto : null;
+    },
+
+    /*
+     * Spazio da riservare attorno alle foto, per lato, in millimetri.
+     *
+     * La regola del box (estensioniFoto) usa le stesse espressioni dei post ridimensionamenti:
+     * un numero, oppure un'etichetta con le sue specifiche, come "sy_ombra*[H][50%]" per meta'
+     * dell'altezza dell'ombra. Si misura sul box com'e' adesso, non sulla mappa d'origine,
+     * perche' gli elementi derivati nascono dopo quella mappa. Un'etichetta che nel box non
+     * c'e', o che c'e' ma e' invisibile, azzera il lato: non c'e' nulla per cui fare spazio.
+     */
+    getEstensioniFoto(box) {
+        var vuote = { alto: 0, sinistra: 0, basso: 0, destra: 0 };
+        var contesto = this.contestoCss;
+        if (contesto == null || box == null || !box.isValid) {
+            return vuote;
+        }
+
+        var elementoBox = this.getElementoBoxDB(box, contesto.DBallineamenti, contesto.DBDefault);
+        var regola = elementoBox != null ? elementoBox.estensioniFoto : null;
+        if (regola == null) {
+            return vuote;
+        }
+
+        try {
+            var mappaCorrente = this.creaMappaturaBoxOriginale(box, contesto.prefissiDerivati);
+            for (var chiave in mappaCorrente) {
+                var voce = mappaCorrente[chiave];
+                if (voce == null || voce.item == null || !voce.item.isValid || voce.item.visible === false) {
+                    delete mappaCorrente[chiave];
+                }
+            }
+
+            var valuta = function (espressione, asse) {
+                var valore = CssFramework.calcolaValoreDimensione(espressione, asse, mappaCorrente, box);
+                return valore != null && isFinite(valore) && valore > 0 ? valore : 0;
+            };
+
+            return {
+                alto: valuta(regola.alto, "height"),
+                sinistra: valuta(regola.sinistra, "width"),
+                basso: valuta(regola.basso, "height"),
+                destra: valuta(regola.destra, "width")
+            };
+        }
+        catch (e) {
+            console.error("Code CSF-17: estensioni foto del box " + box.label + " non calcolate: " + e);
+            return vuote;
+        }
     },
 
     /*

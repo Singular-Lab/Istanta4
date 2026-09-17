@@ -3270,6 +3270,26 @@ namespace Istanta.Models
         /// Come scegliere, fra gli spazi liberi, quello in cui mettere le foto.
         /// Null: vince lo spazio piu' ampio, il criterio di sempre.
         public SceltaSpazioFotoObj? sceltaSpazioFoto { get; set; }
+
+        /// Spazio da riservare attorno alle foto, per lato. Null: nessuno.
+        public EstensioniFotoObj? estensioniFoto { get; set; }
+    }
+
+    /// Spazio riservato attorno al gruppo foto quando il fixFoto lo colloca, in millimetri
+    /// e per lato. Serve a cio' che sta attaccato alla foto e sporge oltre i suoi bordi,
+    /// come un'ombra: la foto viene un po' piu' piccola e la sporgenza non finisce sugli
+    /// altri elementi.
+    ///
+    /// Ogni lato e' un'espressione con la sintassi dei post ridimensionamenti: un numero
+    /// ("3"), oppure un'etichetta del box con le sue specifiche ("sy_ombra*[H][50%]" per
+    /// meta' dell'altezza dell'ombra). Se l'etichetta non e' nel box, o l'elemento e'
+    /// invisibile, quel lato vale zero. Null o vuoto: zero.
+    public class EstensioniFotoObj
+    {
+        public string? alto { get; set; }
+        public string? sinistra { get; set; }
+        public string? basso { get; set; }
+        public string? destra { get; set; }
     }
 
     /// Criterio di scelta dello spazio delle foto dentro al box.

@@ -94,6 +94,58 @@ const cssSpazioFoto = {
     },
 
     /*
+     * Spazio da riservare attorno al gruppo foto, per lato, in millimetri.
+     * Serve a cio' che sta attaccato alla foto e sporge oltre i suoi bordi, come un'ombra:
+     * la foto viene un po' piu' piccola e la sporgenza non finisce sugli altri elementi.
+     * Valori assenti o non numerici valgono zero; i negativi non hanno senso e valgono zero.
+     */
+    normalizzaEstensioni(estensioni) {
+        const leggi = function (v) {
+            const n = Number(v);
+            return isFinite(n) && n > 0 ? n : 0;
+        };
+        const e = estensioni || {};
+        return { alto: leggi(e.alto), sinistra: leggi(e.sinistra), basso: leggi(e.basso), destra: leggi(e.destra) };
+    },
+
+    /*
+     * I candidati ristretti delle estensioni. Le estensioni non scalano con la foto, quindi
+     * si tolgono dallo spazio prima di adattarvi il gruppo: centrare la foto nel candidato
+     * ristretto equivale a centrare nel candidato intero la foto piu' le sue sporgenze.
+     * Uno spazio che non regge le estensioni sparisce dalla scelta.
+     */
+    restringiCandidati(candidati, estensioni) {
+        const e = cssSpazioFoto.normalizzaEstensioni(estensioni);
+        if (candidati == null) {
+            return [];
+        }
+        if (e.alto === 0 && e.sinistra === 0 && e.basso === 0 && e.destra === 0) {
+            return candidati;
+        }
+
+        const ristretti = [];
+        for (const c of candidati) {
+            if (c == null) {
+                continue;
+            }
+            const width = c.width - e.sinistra - e.destra;
+            const height = c.height - e.alto - e.basso;
+            if (!(width > 0) || !(height > 0)) {
+                continue;
+            }
+            ristretti.push({
+                x: c.x + e.sinistra,
+                y: c.y + e.alto,
+                width: width,
+                height: height,
+                direction: c.direction,
+                derivatoDa: c
+            });
+        }
+        return ristretti;
+    },
+
+    /*
      * La parte di un candidato simmetrica rispetto al centro della base.
      *
      * Uno spazio libero che attraversa il centro e' spesso piu' largo da una parte che
@@ -213,8 +265,9 @@ const cssSpazioFoto = {
      * Una riga per il log: cosa c'era da scegliere e cosa si e' scelto.
      * Serve al collaudo, dove l'unica cosa che si vede e' dove e' finita la foto.
      */
-    descriviScelta(candidati, scelta, preferenza, larghezzaBase, altezzaBase) {
+    descriviScelta(candidati, scelta, preferenza, larghezzaBase, altezzaBase, estensioni) {
         const opzioni = cssSpazioFoto.normalizzaPreferenza(preferenza);
+        const e = cssSpazioFoto.normalizzaEstensioni(estensioni);
         const arrotonda = function (n) { return Math.round(n * 10) / 10; };
         const rettangolo = function (c) {
             return (c.direction ? c.direction + " " : "") + "x" + arrotonda(c.x) + " y" + arrotonda(c.y) + " " + arrotonda(c.width) + "x" + arrotonda(c.height);
@@ -225,6 +278,9 @@ const cssSpazioFoto = {
             testo += " (tolleranza " + opzioni.tolleranzaArea + ", asse " + opzioni.asseCentratura + ")";
         }
         testo += ", base " + arrotonda(larghezzaBase) + "x" + arrotonda(altezzaBase);
+        if (e.alto || e.sinistra || e.basso || e.destra) {
+            testo += ", estensioni alto " + arrotonda(e.alto) + " sinistra " + arrotonda(e.sinistra) + " basso " + arrotonda(e.basso) + " destra " + arrotonda(e.destra);
+        }
         testo += ", candidati [" + (candidati || []).map(rettangolo).join("; ") + "]";
         testo += ", scelto " + (scelta == null ? "nessuno" : rettangolo(scelta.candidato) + " area " + arrotonda(scelta.area));
         return testo;
