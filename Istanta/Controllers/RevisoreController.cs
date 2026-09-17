@@ -284,14 +284,11 @@ namespace Istanta.Controllers
     })
     .ToList();
 
-                lista = lista
-    .GroupBy(x => x.label)
-    .SelectMany(g =>
-    {
-        var maxV = g.Max(x => x.versione);
-        return g.Where(x => x.versione == maxV);
-    })
-    .ToList();
+                //Ultima versione per label e tracciato, come fa getListaRevisione2: con la sola
+                //label, due tracciati con versioni diverse della stessa label si scartavano a vicenda.
+                lista = RevisioneConteggio
+                    .UltimaVersionePerTracciato(lista, x => x.label, x => x.idTracciato, x => x.versione)
+                    .ToList();
 
                 var listaDizionariPerFiltroAgenzia = lista
     .Where(x => x.RecInTracciato != null)
@@ -300,6 +297,9 @@ namespace Istanta.Controllers
 
                 Dictionary<string, object> passFiltroAgenzia = new Dictionary<string, object>();
                 passFiltroAgenzia["records"] = listaDizionariPerFiltroAgenzia;
+                //La pagina del revisore salta il filtro di agenzia per l'utente "gg": il conteggio
+                //deve fare lo stesso, altrimenti per quell'utente i due numeri divergono al contrario.
+                passFiltroAgenzia["utente"] = SessionIstantaObject.GetSessionName(HttpContext) ?? "";
 
                 var listaFiltrataAgenzia = icCtrl.execLibFunction(
                     $"AgenziaLib.{this._fico_conf.Value.nomeCliente}.FiltraRecordsPerConteggioRevisione",
@@ -350,6 +350,10 @@ namespace Istanta.Controllers
                 //singoli
 
                 var articoli = this.ctx.Articolis.AsSplitQuery().Include(f=>f.ArticoliDescrizionis).Where(f => codici.Contains(f.Codice)).ToList();
+                //Un codice che in anagrafica non c'e' la pagina lo mostra da revisionare: qui
+                //spariva e basta, perche' si contava solo cio' che la query aveva trovato.
+                var codiciArticoli = articoli.Select(a => a.Codice).ToHashSet();
+                var codiciSenzaArticolo = codici.Where(c => !codiciArticoli.Contains(c)).ToList();
                 var articoliConRevisioni = articoli.Where(f => f.ArticoliDescrizionis != null && f.ArticoliDescrizionis.Count > 0).ToList();
                 var articoliSenzaRevisioni = articoli.Where(f => f.ArticoliDescrizionis == null || f.ArticoliDescrizionis.Count == 0).ToList();
                 counterRevisioniAssenti += articoli.Count - articoliConRevisioni.Count();
@@ -487,6 +491,11 @@ namespace Istanta.Controllers
                     });
                 }
 
+                foreach (var codiceSenzaArticolo in codiciSenzaArticolo)
+                {
+                    IncrementaConteggioSingolo(codiceSenzaArticolo);
+                }
+
                 bool spaccato = false;
                 foreach (var item in articoliConRevisioni)
                 {
@@ -504,7 +513,10 @@ namespace Istanta.Controllers
                         throw new Exception("Errore, codice non trovato in lista");
                     }
                     var firma = primaCorrispondenza.RecInTracciato[Enum.GetName(AddestramentoRuoli.Tracciato) + "." + GLOBAL_VARIABLES.keyTracciatoFirma]!.ToString()!;
-                    var descrNaz = item.ArticoliDescrizionis.FirstOrDefault(f => f.Area == null && f.Canale == null);
+                    //Stessa scelta della pagina: prima la descrizione con la firma del record.
+                    //Con FirstOrDefault, un articolo con piu' nazionali poteva risultare da confermare
+                    //qui e revisionato in pagina.
+                    var descrNaz = RevisioneConteggio.ScegliDescrizioneNazionale(item.ArticoliDescrizionis, firma);
 
                     if (spaccato)
                         Console.WriteLine($"Step4_0_2 {sw.ElapsedMilliseconds}");
@@ -605,7 +617,7 @@ namespace Istanta.Controllers
                     {
                         throw new Exception("Errore, elementi del gruppo "+ cod +" non trovati");
                     }
-                    var descrizioneNazDelGruppo = descrGruppi.FirstOrDefault(f => f.Area == null && f.Canale == null && f.CodiceGruppo == cod);
+                    var descrizioneNazDelGruppo = RevisioneConteggio.ScegliDescrizioneNazionaleGruppo(descrGruppi.Where(f => f.CodiceGruppo == cod));
                     if (descrizioneNazDelGruppo == null)
                     {
                         counterRevisioniAssenti++;
@@ -702,7 +714,7 @@ namespace Istanta.Controllers
                     {
                         throw new Exception("Errore, elementi del sottogruppo " + cod + " non trovati");
                     }
-                    var descrizioneNazDelGruppo = descrSottogruppi.FirstOrDefault(f => f.Area == null && f.Canale == null && f.CodiceGruppo == cod);
+                    var descrizioneNazDelGruppo = RevisioneConteggio.ScegliDescrizioneNazionaleGruppo(descrSottogruppi.Where(f => f.CodiceGruppo == cod));
                     if (descrizioneNazDelGruppo == null)
                     {
                         counterRevisioniAssentiSottogruppi++;

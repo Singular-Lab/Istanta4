@@ -103,7 +103,7 @@
                     htmlItem.find("#riga_revisione").addClass("bg-opacity-25");
                     htmlItem.find("#revisionato_flag").text("Da revisionare, nuovo elemento");
                 }
-                else if (obj.recordInTracciato["FirmaGarantita"] != null && obj.recordInTracciato["FirmaGarantita"] != "") {
+                else if (statoRevisione.firmaGarantitaSpecificata(obj)) {
                     htmlItem.find("#riga_revisione").addClass("bg-success");
                     htmlItem.find("#riga_revisione").addClass("bg-opacity-25");
                     htmlItem.find("#revisionato_flag").text("Revisionato con garante: " + obj.recordInTracciato["FirmaGarantita"]);
@@ -342,7 +342,7 @@
                     htmlItem.find("#riga_revisione").addClass("bg-danger");
                     htmlItem.find("#riga_revisione").addClass("bg-opacity-25");
                 }
-                else if (obj.recordInTracciato["FirmaGarantita"] != null && obj.recordInTracciato["FirmaGarantita"] != "") {
+                else if (statoRevisione.firmaGarantitaSpecificata(obj)) {
                     htmlItem.find("#riga_revisione").addClass("bg-success");
                     htmlItem.find("#riga_revisione").addClass("bg-opacity-25");
                     htmlItem.find("#revisionato_flag").text("Revisionato con garante: " + obj.recordInTracciato["FirmaGarantita"]);

@@ -40,6 +40,7 @@
             await loadScript(`${webRootFolder}/js/utility.js?id=${dynamicId}`); // dipende da lib1
             await loadScript(`${webRootFolder}/js/call.js?id=${dynamicId}`); // dipende da lib2
             await loadScript(`${webRootFolder}/js/agenzia.js?id=${dynamicId}`); // dipende da lib2
+            await loadScript(`${webRootFolder}/js/statoRevisione.js?id=${dynamicId}`); // regola di revisione condivisa da revisore.js e components.js
             await loadScript(`${webRootFolder}/js/revisore.js?id=${dynamicId}`); // dipende da lib2
             await loadScript(`${webRootFolder}/js/components.js?id=${dynamicId}`); // dipende da lib2
             await loadScript(`${webRootFolder}/js/archivio.js?id=${dynamicId}`); // dipende da lib2

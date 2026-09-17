@@ -251,6 +251,18 @@ jobs:
         if: steps.changes.outputs.plugin == 'true' && hashFiles('tests/plugin/*.test.js') != ''
         run: node --test tests/plugin/*.test.js
 
+      # Gli script della web app che non dipendono dal browser (wwwroot/js con export
+      # condizionato per Node) hanno la loro suite, con lo stesso runner e nessuna dipendenza.
+      - name: Set up Node.js for Istanta web
+        if: steps.changes.outputs.istanta == 'true' && hashFiles('tests/istanta-web/*.test.js') != ''
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Test suite Istanta web
+        if: steps.changes.outputs.istanta == 'true' && hashFiles('tests/istanta-web/*.test.js') != ''
+        run: node --test tests/istanta-web/*.test.js
+
       - name: Set up Docker Buildx
         if: steps.changes.outputs.istanta == 'true' || steps.changes.outputs.agenzialib == 'true' || steps.changes.outputs.fidelity == 'true' || steps.changes.outputs.olimpo == 'true' || steps.changes.outputs.correggo4 == 'true'
         uses: docker/setup-buildx-action@v3
