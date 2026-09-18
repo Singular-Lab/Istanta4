@@ -5402,6 +5402,29 @@ const CssFramework =
                 " | " + elementoA.label + " usati [" + arrotonda(misuraA) + "] riquadro [" + arrotonda(elementoA.item.geometricBounds) + "]" +
                 " | " + elementoB.label + " usati [" + arrotonda(misuraB) + "] riquadro [" + arrotonda(elementoB.item.geometricBounds) + "]";
 
+            //Con la misura sul testo la decisione la prendono le righe, non i rettangoli qui
+            //sopra: senza saperlo non si distingue una riga che tocca davvero da una lettura
+            //delle righe fallita, che fa ricadere il confronto sul rettangolo unico.
+            if (useTextBounds) {
+                var righeA = this.righeDiTesto(elementoA.item);
+                var righeB = this.righeDiTesto(elementoB.item);
+                riga += " | righe lette: " + elementoA.label + " " + righeA.length + ", " + elementoB.label + " " + righeB.length;
+
+                var colpevole = "";
+                for (var i = 0; i < righeA.length && colpevole === ""; i++) {
+                    if (cssRegoleConflitti.contattoConLeRighe(righeA[i], righeB, misuraB)) {
+                        colpevole = elementoA.label + " riga " + (i + 1) + " [" + arrotonda(righeA[i]) + "]";
+                    }
+                }
+                for (var j = 0; j < righeB.length && colpevole === ""; j++) {
+                    if (cssRegoleConflitti.contattoConLeRighe(righeB[j], righeA, misuraA)) {
+                        colpevole = elementoB.label + " riga " + (j + 1) + " [" + arrotonda(righeB[j]) + "]";
+                    }
+                }
+
+                riga += " | in contatto: " + (colpevole !== "" ? colpevole : "nessuna riga, deciso sul rettangolo unico");
+            }
+
             //Va scritta dove l'operatore legge la segnalazione, cioe' nella console del
             //pannello: console.log finisce negli strumenti di sviluppo, che nessuno tiene aperti.
             console.log(riga);
