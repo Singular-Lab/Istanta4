@@ -25,6 +25,21 @@ const filtriJs = require('./filtri');
 const CssFramework = require('./CssFramework');
 const pluginMiddleware = require('./pluginMiddleware');
 const fotoAutoSync = require('./fotoAutoSync');
+const credenzialiSalvateModulo = require('./credenzialiSalvate');
+
+//I20-956: le credenziali ricordate vivono nell'archivio cifrato del sistema operativo.
+//Se questa versione di UXP non lo espone, l'oggetto resta senza archivio e il Plugin
+//continua a chiedere le credenziali a mano, senza mai scriverle su disco in chiaro.
+const credenzialiSalvate = credenzialiSalvateModulo.crea((function () {
+    try {
+        return require('uxp').storage.secureStorage;
+    }
+    catch (e) {
+        console.log('Archivio sicuro non disponibile: le credenziali non verranno ricordate');
+        return null;
+    }
+})());
+
 Utility.registerDateMenuPicker();
 showLoading("Inizializzazione...");
 
@@ -1489,9 +1504,19 @@ function leggiContenutoKit(idKit, skipMostraTracciato = false)
 // #endregion
 
 
-function showLogin()
+async function showLogin()
 {
     console.log("Devo mostrare il form di login");
+
+    //I20-956: se l'operatore ha chiesto di ricordare le credenziali, le ritrova gia'
+    //scritte nei campi. Il Plugin non entra da solo: l'accesso resta un gesto suo.
+    //Dopo un logout non c'e' nulla da rimettere, perche' il logout le dimentica.
+    var ricordate = await credenzialiSalvate.leggi();
+    if (ricordate != null) {
+        $("#username").val(ricordate.username);
+        $("#password").val(ricordate.password);
+        $("#ricordami").prop("checked", true);
+    }
 
     hideLoading();
     $("#loginPanel").css("display", "flex");
@@ -8607,7 +8632,7 @@ async function leggiLog() {
 }
 
 var currentTimeoutIdLogin = null;
-async function login(username, password){
+async function login(username, password, ricordami = false){
 
     //cambiamo il testo del pulsante in un ciclo di "Connessione", "Connessione.","Connessione..","Connessione...","Connessione"
     var pulsante = $("#loginText");
@@ -8639,6 +8664,15 @@ async function login(username, password){
                 hideLoading();
                 if (objResult.esito) {
                     console.log("Login avvenuto con successo");
+
+                    //I20-956: si ricorda solo se l'operatore lo ha chiesto, e si dimentica
+                    //appena toglie la spunta, altrimenti la scelta precedente resterebbe viva.
+                    if (ricordami) {
+                        await credenzialiSalvate.salva(username, password);
+                    }
+                    else {
+                        await credenzialiSalvate.dimentica();
+                    }
 
                     indesignEvents.checkStatus(indesignEvents.checkStatusResonse);
                 }
@@ -8925,7 +8959,7 @@ async function logout(){
     showLoading("Logout in corso...");
     //facciamo la chiamata xhr per settare la sessione
     var xhr = new XMLHttpRequestClient();
-    xhr.onload = (objResult, parsed) => {
+    xhr.onload = async (objResult, parsed) => {
         try {
             try {
                 if (!parsed) {
@@ -8946,6 +8980,14 @@ async function logout(){
                     nomeUtente = "";
                     idUtente = 0;
                     cambiStrutturaliJs.cambiStrutturaliDB = [];
+
+                    //I20-956: uscire deve uscire davvero. Le credenziali ricordate si
+                    //dimenticano, cosi' il form che ricompare e' vuoto.
+                    await credenzialiSalvate.dimentica();
+                    $("#username").val("");
+                    $("#password").val("");
+                    $("#ricordami").prop("checked", false);
+
                     hideLoading();
                     showLogin();
 
