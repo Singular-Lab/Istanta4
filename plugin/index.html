@@ -697,8 +697,12 @@
         <label for="password" style="color: white; align-self: self-start; margin-left:10%;">Password</label>
         <input type="password" id="password" placeholder="Inserire Password"
           style="width: 80%;height: 40px; border-radius: 1%;background-color: black;">
+        <div style="width: 80%; display: flex; align-items: center; margin-top: 8px;">
+          <input type="checkbox" id="ricordami" style="vertical-align: middle; margin-right: 6px;">
+          <label for="ricordami" style="color: white; font-size: 11px;">Ricordami su questo computer</label>
+        </div>
         <sp-action-button id="login" name="login" style="color: white; margin-top: 5px;"
-          onclick="login($('#username').val(),$('#password').val())">
+          onclick="login($('#username').val(),$('#password').val(),$('#ricordami').is(':checked'))">
           <h3 id="loginText">Login</h3>
         </sp-action-button>
         <span id="statusLoginOp"></span>
