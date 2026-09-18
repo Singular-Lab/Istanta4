@@ -1,0 +1,122 @@
+/*
+ * I20-974: regole di segnalazione conflitti del CSS framework.
+ *
+ * Qui vive solo la lettura delle regole, senza toccare InDesign, cosi' il comportamento e'
+ * verificabile con il test runner di Node come per gli altri moduli css estratti.
+ *
+ * Una regola dice quali elementi non devono toccarsi. Ha due forme:
+ *   - un solo lato: gli elementi che corrispondono non devono toccarsi fra loro;
+ *   - due lati: nessun elemento del primo lato deve toccare un elemento del secondo.
+ *
+ * useTextBounds sceglie su cosa si misura il contatto: il riquadro dell'oggetto oppure il
+ * testo che contiene davvero. Per un campo di testo i due valori sono molto diversi, ed e'
+ * la ragione per cui nascevano segnalazioni che l'occhio non vedeva.
+ */
+var CssRegoleConflitti = (function () {
+
+    /// Un lato di una regola: "descrizione, prezzo" diventa ["descrizione", "prezzo"].
+    function splitSpec(spec) {
+        if (spec == null || typeof spec !== "string") {
+            return [];
+        }
+
+        return spec.split(",")
+            .map(function (el) { return el.trim(); })
+            .filter(function (el) { return el !== ""; });
+    }
+
+    function leggiUseTextBounds(regola) {
+        if (regola == null || Array.isArray(regola)) {
+            return false;
+        }
+
+        return regola.useTextBounds === true;
+    }
+
+    /// Porta una regola alla forma con cui il controllo lavora: i due lati e la scelta dei
+    /// bounds. Torna null quando non c'e' nulla da controllare.
+    function normalizzaRegola(regola) {
+        if (regola == null) {
+            return null;
+        }
+
+        var segnalazioni = null;
+        if (Array.isArray(regola)) {
+            segnalazioni = regola;
+        }
+        else if (regola.segnalazioni != null) {
+            segnalazioni = Array.isArray(regola.segnalazioni) ? regola.segnalazioni : [regola.segnalazioni];
+        }
+
+        if (!segnalazioni || segnalazioni.length == 0) {
+            return null;
+        }
+
+        var latoA = splitSpec(segnalazioni[0]);
+        var latoB = splitSpec(segnalazioni.length > 1 ? segnalazioni[1] : "");
+
+        //Un solo lato valorizzato vale come "questi elementi non si tocchino fra loro",
+        //qualunque dei due sia stato scritto.
+        if (latoA.length == 0 && latoB.length > 0) {
+            latoA = latoB;
+            latoB = [];
+        }
+
+        if (latoA.length == 0) {
+            return null;
+        }
+
+        return {
+            latoA: latoA,
+            latoB: latoB,
+            useTextBounds: leggiUseTextBounds(regola)
+        };
+    }
+
+    /// Tutte le regole di un elemento della configurazione. Accetta sia l'elenco di regole
+    /// sia la scorciatoia di una regola sola scritta come coppia di stringhe.
+    function getListaRegole(segnalazioniConflitti) {
+        if (segnalazioniConflitti == null) {
+            return [];
+        }
+
+        var regoleInput = [];
+        if (Array.isArray(segnalazioniConflitti)) {
+            var isRegolaDiretta = segnalazioniConflitti.length <= 2 &&
+                segnalazioniConflitti.every(function (el) { return typeof el === "string"; });
+            regoleInput = isRegolaDiretta ? [segnalazioniConflitti] : segnalazioniConflitti;
+        }
+        else {
+            regoleInput = [segnalazioniConflitti];
+        }
+
+        var regole = [];
+        for (var i = 0; i < regoleInput.length; i++) {
+            var regola = normalizzaRegola(regoleInput[i]);
+            if (regola) {
+                regole.push(regola);
+            }
+        }
+
+        return regole;
+    }
+
+    /// Chiave con cui si riconosce una regola gia' raccolta. Comprende la scelta dei bounds:
+    /// la stessa coppia di lati misurata in due modi diversi e' un controllo diverso.
+    function chiaveRegola(regola) {
+        if (regola == null) {
+            return "";
+        }
+
+        return regola.latoA.join(",") + "|" + regola.latoB.join(",") + "|" + (regola.useTextBounds ? "text" : "geom");
+    }
+
+    return {
+        splitSpec: splitSpec,
+        normalizzaRegola: normalizzaRegola,
+        getListaRegole: getListaRegole,
+        chiaveRegola: chiaveRegola
+    };
+})();
+
+module.exports = CssRegoleConflitti;

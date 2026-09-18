@@ -3490,6 +3490,15 @@ namespace Istanta.Models
     public class SegnalazioniConflitti
     {
         public string[] segnalazioni { get; set; } = new string[2];
+
+        /// <summary>
+        /// I20-974: su cosa si misura il contatto fra gli elementi. Con false vale il riquadro
+        /// dell'oggetto, con true il testo che contiene davvero: per un campo di testo i due
+        /// valori sono molto diversi ed e' la ragione per cui nascevano segnalazioni che
+        /// l'occhio non vede. Senza questa proprieta' la scelta scritta nella configurazione
+        /// veniva scartata qui, nel passaggio verso il Plugin.
+        /// </summary>
+        public bool useTextBounds { get; set; } = false;
     }
     /// Come reagiscono X e Y al ridimensionamento.
     public class Ridimensionamento
