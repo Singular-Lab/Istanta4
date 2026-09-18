@@ -1,0 +1,138 @@
+# Deployment set "fidelity-olimpo" della suite Istanta4.
+#
+# Lo applica Company.AI.Runner sul target, eseguendo dalla working directory:
+#   docker compose --env-file release.env -f compose.production.yaml pull fidelity olimpo
+#   docker compose --env-file release.env -f compose.production.yaml up -d --wait fidelity olimpo
+#
+# FIDELITY_IMAGE e OLIMPO_IMAGE le scrive il Runner in release.env a ogni
+# release, pinnate a digest. Non vanno mai impostate a mano.
+#
+# PostgreSQL non sta qui: gira sull'host, come nel compose di produzione di
+# fidelity. I container lo raggiungono via host.docker.internal.
+#
+# Lo stack di osservabilita' (prometheus, grafana, loki, promtail) e' escluso
+# di proposito: richiede i file di configurazione di fidelity/docker/observability
+# montati accanto al compose. Si aggiunge come secondo passo, quando questo
+# deployment e' verificato.
+
+name: ${COMPOSE_PROJECT_NAME:-istanta4}
+
+services:
+  fidelity:
+    image: ${FIDELITY_IMAGE:?FIDELITY_IMAGE viene scritta dal Runner in release.env}
+    pull_policy: always
+    restart: unless-stopped
+    user: "node"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    ports:
+      - "${FIDELITY_HTTP_PORT:-3010}:${FIDELITY_HTTP_PORT:-3010}"
+      - "${FIDELITY_WS_PORT:-3400}:${FIDELITY_WS_PORT:-3400}"
+    env_file:
+      - fidelity.env
+    environment:
+      NODE_ENV: production
+      # `environment` vince su `env_file`: queste due tengono allineate la porta
+      # su cui ascolta il processo e quella pubblicata sopra. Non ridefinirle
+      # in fidelity.env, verrebbero ignorate.
+      NODE_PORT: ${FIDELITY_HTTP_PORT:-3010}
+      WS_PORT: ${FIDELITY_WS_PORT:-3400}
+      DB_POSTGRESQL_HOST: host.docker.internal
+      DB_POSTGRESQL_PORT: ${DB_POSTGRESQL_PORT:-5432}
+      REDIS_URL: redis://redis:6379
+      ICONE_INSEGNA_DIR: /home/node/insegne
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ${FIDELITY_CONFIG_DIR:-./fidelity-config}:/app/config
+      - fidelity_insegne:/home/node/insegne
+      - fidelity_materiali:/app/public/uploads/materiali_POP
+      - fidelity_uploads:/app/uploads
+      - fidelity_logs:/app/logs
+    depends_on:
+      redis:
+        condition: service_started
+    healthcheck:
+      # node e' sempre presente nell'immagine; wget/curl no. status < 500
+      # significa "il processo risponde", anche se la rotta richiede login.
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:'+process.env.NODE_PORT).then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      # L'entrypoint esegue models:sync prima di avviare il server.
+      start_period: 120s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  olimpo:
+    image: ${OLIMPO_IMAGE:?OLIMPO_IMAGE viene scritta dal Runner in release.env}
+    pull_policy: always
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      # Nell'immagine la porta e' fissata a 3000 dal Dockerfile.
+      - "${OLIMPO_HTTP_PORT:-3300}:3000"
+    env_file:
+      - olimpo.env
+    environment:
+      NODE_ENV: production
+      DB_HOST: host.docker.internal
+      DB_PORT: ${DB_POSTGRESQL_PORT:-5432}
+      # Deve restare dentro il volume olimpo_uploads, altrimenti i file
+      # depositati via FTP spariscono al primo aggiornamento.
+      FTP_ROOT: /app/uploads/FTP
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - olimpo_uploads:/app/uploads
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  redis:
+    # Dipendenza interna di fidelity, non un componente della release: il
+    # ControlPlane non la aggiorna e il Runner non la tocca.
+    image: redis:7-alpine
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  fidelity_insegne:
+  fidelity_materiali:
+  fidelity_uploads:
+  fidelity_logs:
+  olimpo_uploads:
+  redis_data:
