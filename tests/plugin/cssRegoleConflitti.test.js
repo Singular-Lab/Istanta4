@@ -159,3 +159,81 @@ test('la segnalazione dichiara su quali rettangoli e\' stata decisa', () => {
     assert.ok(segnalazioni.every(c => c.includes('regola.useTextBounds')),
         'entrambi devono dire quale misura hanno usato, altrimenti la diagnostica mente');
 });
+
+/* ---- geometria del contatto, con i numeri del collaudo su BOX1 di Edro ----
+ * Convenzione InDesign: [alto, sinistra, basso, destra].
+ */
+
+// Rettangoli del collaudo: la descrizione misurata come rettangolo unico e la foto extra.
+const descrizioneRettangoloUnico = [149.16, 70.26, 186.7, 101.8];
+const fotoExtra = [148, 36.5, 162.99, 71.38];
+
+test('con il rettangolo unico i due elementi risultano in contatto', () => {
+    // E' la situazione che segnalava: si sovrappongono per 1.12 punti in orizzontale.
+    assert.strictEqual(
+        cssRegoleConflitti.rettangoliInContatto(descrizioneRettangoloUnico, fotoExtra),
+        true);
+});
+
+test('due elementi che si sfiorano al bordo non si toccano', () => {
+    // La foto finisce esattamente dove comincia il testo: nessuna sovrapposizione.
+    const testoAccostato = [149.16, 71.38, 186.7, 101.8];
+
+    assert.strictEqual(cssRegoleConflitti.rettangoliInContatto(testoAccostato, fotoExtra), false);
+});
+
+test('la riga che sta accanto alla foto decide, non quella lunga piu' + "' in basso", () => {
+    // Prima riga corta, nella fascia verticale della foto, che comincia oltre il suo bordo.
+    const rigaCorta = [150, 74, 158, 88];
+    // Riga lunga piu' in basso: e' lei che allargava il rettangolo unico fino a 70.26.
+    const rigaLunga = [168, 70.26, 178, 101.8];
+
+    assert.strictEqual(
+        cssRegoleConflitti.contattoConLeRighe(fotoExtra, [rigaCorta, rigaLunga], descrizioneRettangoloUnico),
+        false,
+        'nessuna riga tocca la foto: non e\' un conflitto');
+});
+
+test('se una riga tocca davvero la foto il conflitto resta', () => {
+    const rigaCheTocca = [150, 70.26, 158, 101.8];
+    const rigaLontana = [168, 74, 178, 101.8];
+
+    assert.strictEqual(
+        cssRegoleConflitti.contattoConLeRighe(fotoExtra, [rigaCheTocca, rigaLontana], descrizioneRettangoloUnico),
+        true);
+});
+
+test('lo spazio fra due righe non e\' testo', () => {
+    // Foto stretta infilata fra la prima e la seconda riga.
+    const fotoFraLeRighe = [159, 74, 167, 90];
+    const prima = [150, 70, 158, 101];
+    const seconda = [168, 70, 176, 101];
+
+    assert.strictEqual(
+        cssRegoleConflitti.contattoConLeRighe(fotoFraLeRighe, [prima, seconda], [150, 70, 176, 101]),
+        false);
+});
+
+test('senza righe leggibili si torna al rettangolo unico', () => {
+    // Un campo senza righe non permette una misura precisa: meglio il comportamento di prima
+    // che un silenzio arbitrario.
+    assert.strictEqual(
+        cssRegoleConflitti.contattoConLeRighe(fotoExtra, [], descrizioneRettangoloUnico),
+        true);
+});
+
+test('rettangoli malformati non producono contatti inventati', () => {
+    assert.strictEqual(cssRegoleConflitti.rettangoliInContatto(null, fotoExtra), false);
+    assert.strictEqual(cssRegoleConflitti.rettangoliInContatto([1, 2], fotoExtra), false);
+});
+
+test('il confronto sul testo passa dalle righe reali', () => {
+    const framework = sorgente('plugin/CssFramework.js');
+    const inizio = framework.indexOf('elementsTouching(item1, item2, useTextBounds = false) {');
+    const blocco = framework.slice(inizio, inizio + 2000);
+
+    assert.ok(blocco.includes('righeDiTesto('),
+        'con la misura sul testo si confrontano le righe, non il rettangolo che le ingloba');
+    assert.ok(blocco.includes('cssRegoleConflitti.rettangoliInContatto('),
+        'la sovrapposizione fra rettangoli vive nel modulo verificabile');
+});
