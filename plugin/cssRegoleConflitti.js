@@ -101,6 +101,54 @@ var CssRegoleConflitti = (function () {
         return regole;
     }
 
+    /// Due rettangoli si toccano? Convenzione InDesign: [alto, sinistra, basso, destra].
+    /// Il contatto e' sovrapposizione vera: due elementi che si sfiorano al bordo, con un
+    /// lato che finisce dove l'altro comincia, non si toccano.
+    function rettangoliInContatto(a, b) {
+        if (!Array.isArray(a) || !Array.isArray(b) || a.length < 4 || b.length < 4) {
+            return false;
+        }
+
+        if (a[0] >= b[2] || b[0] >= a[2]) {
+            return false;
+        }
+        if (a[1] >= b[3] || b[1] >= a[3]) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /// Rettangolo occupato da una riga di testo. L'altezza va dalla cima dei caratteri alla
+    /// coda di quelli che scendono sotto la linea di base: ascent e descent bastano, perche'
+    /// l'ascent gia' misura quanto il carattere sale sopra la base. Sommarci anche il corpo
+    /// del carattere allungherebbe la riga verso l'alto di circa un'interlinea, prendendosi
+    /// lo spazio bianco sopra il testo e facendolo passare per testo.
+    function rettangoloDiRiga(baseline, ascent, descent, sinistra, destra) {
+        return [baseline - ascent, sinistra, baseline + descent, destra];
+    }
+
+    /// Contatto con un campo di testo: conta quello che il testo occupa davvero, riga per
+    /// riga, non il rettangolo che le ingloba tutte. Una riga corta non deve ereditare la
+    /// larghezza di una riga lunga che sta da un'altra parte del campo, e lo spazio fra le
+    /// righe non e' testo. Senza righe non si puo' dire nulla di preciso: si risponde con
+    /// il rettangolo ricevuto, cosi' il comportamento resta quello di prima.
+    function contattoConLeRighe(rettangolo, righe, rettangoloIntero) {
+        var elenco = righe || [];
+
+        if (elenco.length === 0) {
+            return rettangoliInContatto(rettangolo, rettangoloIntero);
+        }
+
+        for (var i = 0; i < elenco.length; i++) {
+            if (rettangoliInContatto(rettangolo, elenco[i])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /// Chiave con cui si riconosce una regola gia' raccolta. Comprende la scelta dei bounds:
     /// la stessa coppia di lati misurata in due modi diversi e' un controllo diverso.
     function chiaveRegola(regola) {
@@ -115,6 +163,9 @@ var CssRegoleConflitti = (function () {
         splitSpec: splitSpec,
         normalizzaRegola: normalizzaRegola,
         getListaRegole: getListaRegole,
+        rettangoloDiRiga: rettangoloDiRiga,
+        rettangoliInContatto: rettangoliInContatto,
+        contattoConLeRighe: contattoConLeRighe,
         chiaveRegola: chiaveRegola
     };
 })();
