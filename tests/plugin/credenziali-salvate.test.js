@@ -149,27 +149,33 @@ test('il logout dimentica le credenziali', () => {
         'altrimenti il comando non farebbe uscire davvero');
 });
 
-test('l\'accesso automatico si tenta una volta sola', () => {
+// Il Plugin non entra da solo: rimette le credenziali nei campi e lascia premere il
+// pulsante a chi sta davanti allo schermo.
+test('le credenziali ricordate tornano nei campi, non nel Plugin', () => {
     const plugin = sorgente('plugin/indexNew.js');
+    const inizio = plugin.indexOf('async function showLogin()');
 
-    assert.ok(plugin.includes('var accessoAutomaticoTentato = false;'));
-    assert.ok(plugin.includes('accessoAutomaticoTentato = true;'),
-        'un accesso fallito non deve ripetersi a ogni richiamo del form');
+    assert.ok(inizio > 0, 'showLogin non deve piu\' ricevere il permesso di entrare da sola');
+    const blocco = plugin.slice(inizio, plugin.indexOf('hideLoading();', inizio));
+
+    assert.ok(blocco.includes('await credenzialiSalvate.leggi();'),
+        'le credenziali si rileggono all\'apertura del form');
+    assert.ok(blocco.includes('$("#username").val(ricordate.username);'));
+    assert.ok(blocco.includes('$("#password").val(ricordate.password);'),
+        'anche la password va rimessa, altrimenti l\'operatore la deve riscrivere');
+    assert.ok(!blocco.includes('login(ricordate'),
+        'compilare i campi non deve far entrare nessuno');
 });
 
-// Quando Istanta non risponde il form si apre lo stesso, per dirlo all'operatore. Un
-// accesso automatico li' fallirebbe per rete assente, con un messaggio che non c'entra,
-// e brucerebbe l'unico tentativo previsto per la sessione.
-test('con Istanta irraggiungibile non si tenta l\'accesso automatico', () => {
+// Senza accesso automatico non esiste piu\' un tentativo fatto dal Plugin: un login
+// fallito e\' un errore di battitura di una persona, e cancellargli le credenziali
+// salvate sarebbe una punizione sproporzionata.
+test('un login fallito non cancella le credenziali salvate', () => {
     const plugin = sorgente('plugin/indexNew.js');
+    const inizio = plugin.indexOf('console.log("Login fallito");');
 
-    assert.ok(plugin.includes('async function showLogin(permettiAccessoAutomatico = true)'),
-        'chi apre il form deve poter escludere il tentativo');
+    assert.ok(inizio > 0, 'il ramo del login fallito deve esistere');
+    const blocco = plugin.slice(inizio, inizio + 800);
 
-    const inizio = plugin.indexOf('else if (istantaState == IstantaState.IstantaDown)');
-    assert.ok(inizio > 0, 'il ramo del server irraggiungibile deve esistere');
-    const blocco = plugin.slice(inizio, inizio + 2000);
-
-    assert.ok(blocco.includes('showLogin(false);'),
-        'il form aperto per dire "Istanta non disponibile" non deve tentare l\'accesso');
+    assert.ok(!blocco.includes('credenzialiSalvate.dimentica();'));
 });

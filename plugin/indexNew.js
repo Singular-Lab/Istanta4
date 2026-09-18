@@ -40,8 +40,6 @@ const credenzialiSalvate = credenzialiSalvateModulo.crea((function () {
     }
 })());
 
-//Un solo tentativo di accesso automatico per sessione: se fallisce si torna al form.
-var accessoAutomaticoTentato = false;
 Utility.registerDateMenuPicker();
 showLoading("Inizializzazione...");
 
@@ -743,7 +741,7 @@ async function cambioDiStatoDelSistema()
             //altrimenti login
             if (idKitLavorazione==0)
             {
-                showLogin(false);
+                showLogin();
 
                 $("#statusLoginOp").text("Istanta non disponibile");
                 $("#login").css("display","none");
@@ -1506,25 +1504,18 @@ function leggiContenutoKit(idKit, skipMostraTracciato = false)
 // #endregion
 
 
-/// permettiAccessoAutomatico resta falso quando il form si apre perche' Istanta non
-/// risponde: li' un tentativo fallirebbe per rete assente, mostrerebbe un messaggio che
-/// non c'entra e consumerebbe l'unico tentativo previsto, impedendolo al ritorno del server.
-async function showLogin(permettiAccessoAutomatico = true)
+async function showLogin()
 {
     console.log("Devo mostrare il form di login");
 
-    //I20-956: prima di chiedere le credenziali si guarda se l'operatore ha scelto di
-    //farsele ricordare. Un tentativo solo per sessione: se fallisce si torna al form.
-    if (permettiAccessoAutomatico && !accessoAutomaticoTentato) {
-        accessoAutomaticoTentato = true;
-
-        var ricordate = await credenzialiSalvate.leggi();
-        if (ricordate != null) {
-            $("#username").val(ricordate.username);
-            $("#ricordami").prop("checked", true);
-            login(ricordate.username, ricordate.password, true);
-            return;
-        }
+    //I20-956: se l'operatore ha chiesto di ricordare le credenziali, le ritrova gia'
+    //scritte nei campi. Il Plugin non entra da solo: l'accesso resta un gesto suo.
+    //Dopo un logout non c'e' nulla da rimettere, perche' il logout le dimentica.
+    var ricordate = await credenzialiSalvate.leggi();
+    if (ricordate != null) {
+        $("#username").val(ricordate.username);
+        $("#password").val(ricordate.password);
+        $("#ricordami").prop("checked", true);
     }
 
     hideLoading();
@@ -8688,12 +8679,6 @@ async function login(username, password, ricordami = false){
                 else {
                     console.log("Login fallito");
 
-                    //Credenziali ricordate ma non piu' valide, per esempio dopo un cambio
-                    //password: si dimenticano, altrimenti ogni avvio ritenterebbe invano.
-                    if (accessoAutomaticoTentato) {
-                        await credenzialiSalvate.dimentica();
-                    }
-
                     $("#messaggioUtenteLoginComposto").remove();
                     var color = "red";
                     var html = '<div class="row" id="messaggioUtenteLogin" style="background-color: ' + color + '; width:90%; display: flex; padding:2px; z-index:9999; position:fixed; margin-top: 5%; align-self: self-start;"> <div class="col" style="color: white; padding-left: 10px; font-size:10px; width:90%;"><h4 style="margin: 0; display: flex; align-items: center;width: 100%;">' + objResult.error + '</h4></div>';
@@ -8997,10 +8982,8 @@ async function logout(){
                     cambiStrutturaliJs.cambiStrutturaliDB = [];
 
                     //I20-956: uscire deve uscire davvero. Le credenziali ricordate si
-                    //dimenticano, e l'accesso automatico si riarma solo al prossimo avvio,
-                    //altrimenti il form tornerebbe a rientrare da solo.
+                    //dimenticano, cosi' il form che ricompare e' vuoto.
                     await credenzialiSalvate.dimentica();
-                    accessoAutomaticoTentato = true;
                     $("#username").val("");
                     $("#password").val("");
                     $("#ricordami").prop("checked", false);
