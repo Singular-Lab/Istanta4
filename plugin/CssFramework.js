@@ -5355,9 +5355,14 @@ const CssFramework =
             var misuraA = useTextBounds ? this.getRealBounds(elementoA.item) : elementoA.item.geometricBounds;
             var misuraB = useTextBounds ? this.getRealBounds(elementoB.item) : elementoB.item.geometricBounds;
 
-            console.log("CSF-013 diagnostica | misura: " + (useTextBounds ? "testo" : "riquadro") +
+            var riga = "CSF-013 diagnostica | misura: " + (useTextBounds ? "testo" : "riquadro") +
                 " | " + elementoA.label + " usati [" + arrotonda(misuraA) + "] riquadro [" + arrotonda(elementoA.item.geometricBounds) + "]" +
-                " | " + elementoB.label + " usati [" + arrotonda(misuraB) + "] riquadro [" + arrotonda(elementoB.item.geometricBounds) + "]");
+                " | " + elementoB.label + " usati [" + arrotonda(misuraB) + "] riquadro [" + arrotonda(elementoB.item.geometricBounds) + "]";
+
+            //Va scritta dove l'operatore legge la segnalazione, cioe' nella console del
+            //pannello: console.log finisce negli strumenti di sviluppo, che nessuno tiene aperti.
+            console.log(riga);
+            messaggioUtente(riga, "info", false, 0);
         }
         catch (e) {
             console.log("CSF-013 diagnostica non disponibile: " + e);
