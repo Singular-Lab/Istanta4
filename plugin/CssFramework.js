@@ -5387,56 +5387,7 @@ const CssFramework =
         return result;
     },
 
-    /// Diagnostica del conflitto: dice su quali rettangoli e' stata presa la decisione.
-    /// Serve perche' dall'esterno una segnalazione giusta e una sbagliata si somigliano:
-    /// cambia solo cosa e' stato misurato.
-    tracciaConfrontoConflitto(elementoA, elementoB, useTextBounds) {
-        try {
-            var arrotonda = function (b) {
-                return Array.isArray(b) ? b.map(function (v) { return Math.round(v * 100) / 100; }).join(", ") : "non disponibile";
-            };
-
-            var misuraA = useTextBounds ? this.getRealBounds(elementoA.item) : elementoA.item.geometricBounds;
-            var misuraB = useTextBounds ? this.getRealBounds(elementoB.item) : elementoB.item.geometricBounds;
-
-            var riga = "CSF-013 diagnostica | misura: " + (useTextBounds ? "testo" : "riquadro") +
-                " | " + elementoA.label + " usati [" + arrotonda(misuraA) + "] riquadro [" + arrotonda(elementoA.item.geometricBounds) + "]" +
-                " | " + elementoB.label + " usati [" + arrotonda(misuraB) + "] riquadro [" + arrotonda(elementoB.item.geometricBounds) + "]";
-
-            //Con la misura sul testo la decisione la prendono le righe, non i rettangoli qui
-            //sopra: senza saperlo non si distingue una riga che tocca davvero da una lettura
-            //delle righe fallita, che fa ricadere il confronto sul rettangolo unico.
-            if (useTextBounds) {
-                var righeA = this.righeDiTesto(elementoA.item);
-                var righeB = this.righeDiTesto(elementoB.item);
-                riga += " | righe lette: " + elementoA.label + " " + righeA.length + ", " + elementoB.label + " " + righeB.length;
-
-                var colpevole = "";
-                for (var i = 0; i < righeA.length && colpevole === ""; i++) {
-                    if (cssRegoleConflitti.contattoConLeRighe(righeA[i], righeB, misuraB)) {
-                        colpevole = elementoA.label + " riga " + (i + 1) + " [" + arrotonda(righeA[i]) + "]";
-                    }
-                }
-                for (var j = 0; j < righeB.length && colpevole === ""; j++) {
-                    if (cssRegoleConflitti.contattoConLeRighe(righeB[j], righeA, misuraA)) {
-                        colpevole = elementoB.label + " riga " + (j + 1) + " [" + arrotonda(righeB[j]) + "]";
-                    }
-                }
-
-                riga += " | in contatto: " + (colpevole !== "" ? colpevole : "nessuna riga, deciso sul rettangolo unico");
-            }
-
-            //Va scritta dove l'operatore legge la segnalazione, cioe' nella console del
-            //pannello: console.log finisce negli strumenti di sviluppo, che nessuno tiene aperti.
-            console.log(riga);
-            messaggioUtente(riga, "info", false, 0);
-        }
-        catch (e) {
-            console.log("CSF-013 diagnostica non disponibile: " + e);
-        }
-    },
-
-    segnalaConflittoElementi(box, elementoA, elementoB, pendente, useTextBounds = false) {
+    segnalaConflittoElementi(box, elementoA, elementoB, pendente) {
         var labels = [elementoA.label, elementoB.label].sort();
         var pairKey = labels[0] + "|" + labels[1] + "|" + [elementoA.key, elementoB.key].sort().join("|");
         if (pendente.chiaviSegnalate.indexOf(pairKey) >= 0) {
@@ -5444,8 +5395,6 @@ const CssFramework =
         }
 
         pendente.chiaviSegnalate.push(pairKey);
-
-        this.tracciaConfrontoConflitto(elementoA, elementoB, useTextBounds);
 
         var boxLabel = box && box.label ? box.label : "senza etichetta";
         var msg = "Code CSF-013: Conflitto tra elementi nel box " + boxLabel + ": " + elementoA.label + " non dovrebbe toccare " + elementoB.label + ".";
@@ -5473,7 +5422,7 @@ const CssFramework =
                     for (var a = 0; a < elementiA.length; a++) {
                         for (var b = a + 1; b < elementiA.length; b++) {
                             if (this.elementsTouching(elementiA[a].item, elementiA[b].item, regola.useTextBounds)) {
-                                this.segnalaConflittoElementi(box, elementiA[a], elementiA[b], pendente, regola.useTextBounds);
+                                this.segnalaConflittoElementi(box, elementiA[a], elementiA[b], pendente);
                             }
                         }
                     }
@@ -5488,7 +5437,7 @@ const CssFramework =
                         }
 
                         if (this.elementsTouching(elementiA[a].item, elementiB[b].item, regola.useTextBounds)) {
-                            this.segnalaConflittoElementi(box, elementiA[a], elementiB[b], pendente, regola.useTextBounds);
+                            this.segnalaConflittoElementi(box, elementiA[a], elementiB[b], pendente);
                         }
                     }
                 }
