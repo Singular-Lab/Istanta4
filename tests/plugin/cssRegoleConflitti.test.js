@@ -237,3 +237,41 @@ test('il confronto sul testo passa dalle righe reali', () => {
     assert.ok(blocco.includes('cssRegoleConflitti.rettangoliInContatto('),
         'la sovrapposizione fra rettangoli vive nel modulo verificabile');
 });
+
+/* ---- altezza della riga, dal collaudo del 18 settembre ----
+ * La riga 7 della descrizione risultava [150.06, 80.21, 163.59, 110.15]: 13.5 punti di
+ * altezza per una riga sola, perche' al rettangolo veniva sommato anche il corpo del
+ * carattere oltre all'ascent. Quello spazio bianco sopra il testo toccava la foto extra.
+ */
+
+test('la riga e\' alta quanto il testo, non un\'interlinea di piu\'', () => {
+    // Valori compatibili con la riga del collaudo: base 161.1, ascent 5.6, descent 2.49.
+    const riga = cssRegoleConflitti.rettangoloDiRiga(161.1, 5.6, 2.49, 80.21, 110.15);
+
+    assert.deepStrictEqual(riga.map(v => Math.round(v * 100) / 100), [155.5, 80.21, 163.59, 110.15]);
+    assert.ok(riga[2] - riga[0] < 9, 'una riga non puo\' essere alta come due');
+});
+
+test('con la riga giusta la foto del collaudo non tocca piu\' il testo', () => {
+    const fotoDelCollaudo = [138, 46.5, 152.99, 81.38];
+    const rigaGonfiata = [150.06, 80.21, 163.59, 110.15];
+    const rigaReale = cssRegoleConflitti.rettangoloDiRiga(161.1, 5.6, 2.49, 80.21, 110.15);
+
+    assert.strictEqual(
+        cssRegoleConflitti.rettangoliInContatto(rigaGonfiata, fotoDelCollaudo), true,
+        'con lo spazio bianco in cima il contatto risultava');
+    assert.strictEqual(
+        cssRegoleConflitti.rettangoliInContatto(rigaReale, fotoDelCollaudo), false,
+        'con l\'altezza reale del testo la foto resta sopra la riga');
+});
+
+test('il rettangolo della riga non usa il corpo del carattere', () => {
+    const framework = sorgente('plugin/CssFramework.js');
+    const inizio = framework.indexOf('righeDiTesto(item) {');
+    const blocco = framework.slice(inizio, inizio + 1200);
+
+    assert.ok(blocco.includes('cssRegoleConflitti.rettangoloDiRiga('),
+        'la geometria della riga vive nel modulo verificabile');
+    assert.ok(!blocco.includes('pointSize'),
+        'il corpo del carattere non entra nell\'altezza della riga');
+});

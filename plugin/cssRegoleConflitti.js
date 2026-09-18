@@ -119,6 +119,15 @@ var CssRegoleConflitti = (function () {
         return true;
     }
 
+    /// Rettangolo occupato da una riga di testo. L'altezza va dalla cima dei caratteri alla
+    /// coda di quelli che scendono sotto la linea di base: ascent e descent bastano, perche'
+    /// l'ascent gia' misura quanto il carattere sale sopra la base. Sommarci anche il corpo
+    /// del carattere allungherebbe la riga verso l'alto di circa un'interlinea, prendendosi
+    /// lo spazio bianco sopra il testo e facendolo passare per testo.
+    function rettangoloDiRiga(baseline, ascent, descent, sinistra, destra) {
+        return [baseline - ascent, sinistra, baseline + descent, destra];
+    }
+
     /// Contatto con un campo di testo: conta quello che il testo occupa davvero, riga per
     /// riga, non il rettangolo che le ingloba tutte. Una riga corta non deve ereditare la
     /// larghezza di una riga lunga che sta da un'altra parte del campo, e lo spazio fra le
@@ -154,6 +163,7 @@ var CssRegoleConflitti = (function () {
         splitSpec: splitSpec,
         normalizzaRegola: normalizzaRegola,
         getListaRegole: getListaRegole,
+        rettangoloDiRiga: rettangoloDiRiga,
         rettangoliInContatto: rettangoliInContatto,
         contattoConLeRighe: contattoConLeRighe,
         chiaveRegola: chiaveRegola

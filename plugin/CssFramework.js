@@ -5203,11 +5203,12 @@ const CssFramework =
             }
 
             var righe = [];
-            for (var i = 0; i < item.lines.length; i++) {
-                var bounds = this.getBoundsLineByIndex(item, i);
-                if (bounds) {
-                    righe.push(bounds);
-                }
+            var elenco = item.lines.everyItem().getElements();
+            for (var i = 0; i < elenco.length; i++) {
+                var linea = elenco[i];
+                righe.push(cssRegoleConflitti.rettangoloDiRiga(
+                    linea.baseline, linea.ascent, linea.descent,
+                    linea.horizontalOffset, linea.endHorizontalOffset));
             }
 
             return righe;
