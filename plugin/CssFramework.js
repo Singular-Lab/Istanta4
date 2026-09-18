@@ -5343,7 +5343,28 @@ const CssFramework =
         return result;
     },
 
-    segnalaConflittoElementi(box, elementoA, elementoB, pendente) {
+    /// Diagnostica del conflitto: dice su quali rettangoli e' stata presa la decisione.
+    /// Serve perche' dall'esterno una segnalazione giusta e una sbagliata si somigliano:
+    /// cambia solo cosa e' stato misurato.
+    tracciaConfrontoConflitto(elementoA, elementoB, useTextBounds) {
+        try {
+            var arrotonda = function (b) {
+                return Array.isArray(b) ? b.map(function (v) { return Math.round(v * 100) / 100; }).join(", ") : "non disponibile";
+            };
+
+            var misuraA = useTextBounds ? this.getRealBounds(elementoA.item) : elementoA.item.geometricBounds;
+            var misuraB = useTextBounds ? this.getRealBounds(elementoB.item) : elementoB.item.geometricBounds;
+
+            console.log("CSF-013 diagnostica | misura: " + (useTextBounds ? "testo" : "riquadro") +
+                " | " + elementoA.label + " usati [" + arrotonda(misuraA) + "] riquadro [" + arrotonda(elementoA.item.geometricBounds) + "]" +
+                " | " + elementoB.label + " usati [" + arrotonda(misuraB) + "] riquadro [" + arrotonda(elementoB.item.geometricBounds) + "]");
+        }
+        catch (e) {
+            console.log("CSF-013 diagnostica non disponibile: " + e);
+        }
+    },
+
+    segnalaConflittoElementi(box, elementoA, elementoB, pendente, useTextBounds = false) {
         var labels = [elementoA.label, elementoB.label].sort();
         var pairKey = labels[0] + "|" + labels[1] + "|" + [elementoA.key, elementoB.key].sort().join("|");
         if (pendente.chiaviSegnalate.indexOf(pairKey) >= 0) {
@@ -5351,6 +5372,8 @@ const CssFramework =
         }
 
         pendente.chiaviSegnalate.push(pairKey);
+
+        this.tracciaConfrontoConflitto(elementoA, elementoB, useTextBounds);
 
         var boxLabel = box && box.label ? box.label : "senza etichetta";
         var msg = "Code CSF-013: Conflitto tra elementi nel box " + boxLabel + ": " + elementoA.label + " non dovrebbe toccare " + elementoB.label + ".";
@@ -5378,7 +5401,7 @@ const CssFramework =
                     for (var a = 0; a < elementiA.length; a++) {
                         for (var b = a + 1; b < elementiA.length; b++) {
                             if (this.elementsTouching(elementiA[a].item, elementiA[b].item, regola.useTextBounds)) {
-                                this.segnalaConflittoElementi(box, elementiA[a], elementiA[b], pendente);
+                                this.segnalaConflittoElementi(box, elementiA[a], elementiA[b], pendente, regola.useTextBounds);
                             }
                         }
                     }
@@ -5393,7 +5416,7 @@ const CssFramework =
                         }
 
                         if (this.elementsTouching(elementiA[a].item, elementiB[b].item, regola.useTextBounds)) {
-                            this.segnalaConflittoElementi(box, elementiA[a], elementiB[b], pendente);
+                            this.segnalaConflittoElementi(box, elementiA[a], elementiB[b], pendente, regola.useTextBounds);
                         }
                     }
                 }

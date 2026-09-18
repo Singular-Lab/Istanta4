@@ -140,3 +140,22 @@ test('Edro21 chiede che la descrizione non tocchi le foto extra, misurando il te
     assert.ok(descrizione.every(r => r.useTextBounds === true),
         'va misurata sul testo reale, altrimenti torna a segnalare il riquadro vuoto');
 });
+
+// Una segnalazione giusta e una sbagliata, dall'esterno, si somigliano: cambia solo cosa
+// e' stato misurato. La diagnostica lo rende visibile in console.
+test('la segnalazione dichiara su quali rettangoli e\' stata decisa', () => {
+    const framework = sorgente('plugin/CssFramework.js');
+
+    assert.ok(framework.includes('tracciaConfrontoConflitto('),
+        'deve esistere la diagnostica del confronto');
+    assert.ok(framework.includes('CSF-013 diagnostica'),
+        'la riga di console va riconosciuta a colpo d\'occhio insieme al codice della segnalazione');
+
+    const inizio = framework.indexOf('controllaSegnalazioniConflittiPendenti(box) {');
+    const blocco = framework.slice(inizio, inizio + 2500);
+    const segnalazioni = blocco.match(/segnalaConflittoElementi\([^)]*\)/g) || [];
+
+    assert.strictEqual(segnalazioni.length, 2, 'i punti che segnalano sono due');
+    assert.ok(segnalazioni.every(c => c.includes('regola.useTextBounds')),
+        'entrambi devono dire quale misura hanno usato, altrimenti la diagnostica mente');
+});
