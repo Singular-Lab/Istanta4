@@ -1,4 +1,4 @@
-/*
+﻿/*
  * I20-956: credenziali ricordate fra un avvio e l'altro del Plugin.
  *
  * Il modulo sotto test e' plugin/credenzialiSalvate.js. L'archivio si passa da fuori, quindi
@@ -155,4 +155,21 @@ test('l\'accesso automatico si tenta una volta sola', () => {
     assert.ok(plugin.includes('var accessoAutomaticoTentato = false;'));
     assert.ok(plugin.includes('accessoAutomaticoTentato = true;'),
         'un accesso fallito non deve ripetersi a ogni richiamo del form');
+});
+
+// Quando Istanta non risponde il form si apre lo stesso, per dirlo all'operatore. Un
+// accesso automatico li' fallirebbe per rete assente, con un messaggio che non c'entra,
+// e brucerebbe l'unico tentativo previsto per la sessione.
+test('con Istanta irraggiungibile non si tenta l\'accesso automatico', () => {
+    const plugin = sorgente('plugin/indexNew.js');
+
+    assert.ok(plugin.includes('async function showLogin(permettiAccessoAutomatico = true)'),
+        'chi apre il form deve poter escludere il tentativo');
+
+    const inizio = plugin.indexOf('else if (istantaState == IstantaState.IstantaDown)');
+    assert.ok(inizio > 0, 'il ramo del server irraggiungibile deve esistere');
+    const blocco = plugin.slice(inizio, inizio + 2000);
+
+    assert.ok(blocco.includes('showLogin(false);'),
+        'il form aperto per dire "Istanta non disponibile" non deve tentare l\'accesso');
 });

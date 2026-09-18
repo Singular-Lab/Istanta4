@@ -743,7 +743,7 @@ async function cambioDiStatoDelSistema()
             //altrimenti login
             if (idKitLavorazione==0)
             {
-                showLogin();
+                showLogin(false);
 
                 $("#statusLoginOp").text("Istanta non disponibile");
                 $("#login").css("display","none");
@@ -1506,13 +1506,16 @@ function leggiContenutoKit(idKit, skipMostraTracciato = false)
 // #endregion
 
 
-async function showLogin()
+/// permettiAccessoAutomatico resta falso quando il form si apre perche' Istanta non
+/// risponde: li' un tentativo fallirebbe per rete assente, mostrerebbe un messaggio che
+/// non c'entra e consumerebbe l'unico tentativo previsto, impedendolo al ritorno del server.
+async function showLogin(permettiAccessoAutomatico = true)
 {
     console.log("Devo mostrare il form di login");
 
     //I20-956: prima di chiedere le credenziali si guarda se l'operatore ha scelto di
     //farsele ricordare. Un tentativo solo per sessione: se fallisce si torna al form.
-    if (!accessoAutomaticoTentato) {
+    if (permettiAccessoAutomatico && !accessoAutomaticoTentato) {
         accessoAutomaticoTentato = true;
 
         var ricordate = await credenzialiSalvate.leggi();
