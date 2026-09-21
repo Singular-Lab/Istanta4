@@ -1,5 +1,6 @@
 const { app, FitOptions, LocationOptions, Justification, VerticalJustification, NestedStyleDelimiters } = require('indesign');
 const XMLHttpRequestClient = require('./XMLHttpRequestClient');
+const cacheHashFoto = require('./cacheHashFoto');
 
 const Utility=
 {
@@ -2008,14 +2009,34 @@ const Utility=
             }
     
             const filePath = link.filePath;
-    
+
             const fs = require("uxp").storage.localFileSystem;
             const fileEntry = await fs.getEntryWithUrl("file://" + filePath);
-    
-            const data = await fileEntry.read({ format: require("uxp").storage.formats.binary });
-            const byteArray = new Uint8Array(data);
-    
-            result.hash = cmd.md5ArrayBuffer(byteArray);
+
+            //I20-981: leggere il file e calcolarne l'md5 e' il costo dominante del Report
+            //Integrita', che lo fa per ogni foto di ogni box. La chiave della cache porta
+            //dentro dimensione e data di modifica, quindi una foto sostituita non puo'
+            //riusare l'hash vecchio. Se i metadati non si leggono si calcola e non si
+            //conserva nulla.
+            let chiaveCache = null;
+            try {
+                chiaveCache = cacheHashFoto.chiave(filePath, await fileEntry.getMetadata());
+            }
+            catch (exMeta) {
+                chiaveCache = null;
+            }
+
+            const hashInCache = cacheHashFoto.ottieni(chiaveCache);
+            if (hashInCache != null) {
+                result.hash = hashInCache;
+            }
+            else {
+                const data = await fileEntry.read({ format: require("uxp").storage.formats.binary });
+                const byteArray = new Uint8Array(data);
+
+                result.hash = cmd.md5ArrayBuffer(byteArray);
+                cacheHashFoto.memorizza(chiaveCache, result.hash);
+            }
     
             if (link.status.toString() == "LINK_OUT_OF_DATE") {
                 result.error = "Immagine non aggiornata: " + link.status.toString();

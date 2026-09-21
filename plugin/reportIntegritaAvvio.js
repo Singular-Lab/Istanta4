@@ -1,0 +1,137 @@
+/*
+ * I20-981 (Lotto 1): le regole con cui il Report Integrita' decide come partire e quando
+ * smettere di valere.
+ *
+ * Stavano dentro il gestore del bottone "Avvia" in indexNew.js e dentro
+ * richiediAzioneReportIntegritaEsistente in confronti.js, mescolate all'interfaccia.
+ * Nessuno dei due file si carica sotto Node (require('indesign')), quindi le soglie non
+ * erano verificabili: qui restano solo le decisioni, senza InDesign e senza DOM.
+ *
+ * Esecuzione dei test: node --test tests/plugin/reportIntegritaAvvio.test.js
+ */
+
+//La lista scaricata da meno di un'ora si puo' riusare senza riscaricarla.
+const MINUTI_LISTA_RECENTE = 60;
+//Oltre le quattro ore un report esistente e' troppo vecchio: si rifa' senza chiedere.
+const ORE_REPORT_DA_CHIEDERE = 4;
+//Oltre le due ore si chiede ancora, ma la data va mostrata in evidenza.
+const ORE_REPORT_VECCHIO = 2;
+
+/// Legge "21/09/2026, 09:20:33" come lo scrive toLocaleString('it-IT'), tollerando la
+/// virgola, lo spazio o qualunque altro separatore fra data e ora.
+/// Restituisce null se il testo non e' una data italiana completa con anno a quattro cifre:
+/// chi chiama tratta il null come "non recente", cioe' riscarica. Meglio un download in piu'
+/// che un confronto fatto su una lista di cui non sappiamo l'eta'.
+function leggiDataItaliana(testo) {
+    if (testo == null) {
+        return null;
+    }
+
+    const numeri = String(testo).match(/\d+/g);
+    if (numeri == null || numeri.length < 3) {
+        return null;
+    }
+
+    if (numeri[2].length !== 4) {
+        return null;
+    }
+
+    const giorno = parseInt(numeri[0], 10);
+    const mese = parseInt(numeri[1], 10);
+    const anno = parseInt(numeri[2], 10);
+    const ore = numeri.length > 3 ? parseInt(numeri[3], 10) : 0;
+    const minuti = numeri.length > 4 ? parseInt(numeri[4], 10) : 0;
+    const secondi = numeri.length > 5 ? parseInt(numeri[5], 10) : 0;
+
+    const data = new Date(anno, mese - 1, giorno, ore, minuti, secondi);
+    if (isNaN(data.getTime())) {
+        return null;
+    }
+
+    //Date fa scorrere il 31/02 al primo marzo: se i pezzi non tornano il testo non era una data.
+    if (data.getDate() !== giorno || data.getMonth() !== mese - 1 || data.getFullYear() !== anno) {
+        return null;
+    }
+
+    return data;
+}
+
+/// Vero se la lista del kit e' stata scaricata da meno di `minuti`, e quindi si puo' proporre
+/// all'operatore di riusarla. Una data nel futuro (orologio spostato) non e' considerata
+/// recente: si riscarica, che e' il lato sicuro.
+function listaERecente(dataScaricamento, adesso = new Date(), minuti = MINUTI_LISTA_RECENTE) {
+    const data = leggiDataItaliana(dataScaricamento);
+    if (data == null) {
+        return false;
+    }
+
+    const differenzaMinuti = (adesso.getTime() - data.getTime()) / (1000 * 60);
+    if (differenzaMinuti < 0) {
+        return false;
+    }
+
+    return differenzaMinuti < minuti;
+}
+
+/// Decide cosa fare quando esiste gia' un report integrita' salvato in locale.
+///  - chiedi: mostrare la scelta fra Riapri, Nuovo report e Annulla;
+///  - vecchio: la data va scritta in evidenza perche' il report ha piu' di due ore;
+///  - data: la data di creazione interpretata, null se illeggibile.
+/// Se la data e' illeggibile o il report ha piu' di quattro ore non si chiede nulla e si fa
+/// un report nuovo: quello vecchio non descrive piu' il documento che l'operatore ha davanti.
+function decidiReportEsistente(createdAt, adesso = new Date()) {
+    if (createdAt == null || createdAt === "") {
+        return { chiedi: false, vecchio: false, data: null };
+    }
+
+    const data = new Date(createdAt);
+    if (isNaN(data.getTime())) {
+        return { chiedi: false, vecchio: false, data: null };
+    }
+
+    const ore = (adesso.getTime() - data.getTime()) / (1000 * 60 * 60);
+    if (ore > ORE_REPORT_DA_CHIEDERE) {
+        return { chiedi: false, vecchio: true, data: data };
+    }
+
+    return { chiedi: true, vecchio: ore > ORE_REPORT_VECCHIO, data: data };
+}
+
+/// Il range di pagine da mappare, nel formato che vuole mappaturaImpaginato ("1,2,3").
+/// Le pagine con nome non numerico (copertine, pagine di servizio) restano fuori, come prima.
+function componiRangePagine(nomiPagine) {
+    const pagine = [];
+
+    (nomiPagine || []).forEach(nome => {
+        const numero = parseInt(nome, 10);
+        if (!isNaN(numero)) {
+            pagine.push(numero);
+        }
+    });
+
+    return pagine.join(",");
+}
+
+/// Vero se il report aperto non parla piu' del documento che si ha davanti, e quindi va
+/// chiuso. Vale anche quando non resta aperto nessun documento: un report senza il suo
+/// impaginato sotto e' un elenco di segnalazioni che non si possono piu' verificare.
+/// Se non sappiamo su quale documento il report e' nato non si chiude niente.
+function deveChiudereReport(documentoDelReport, documentoAttuale) {
+    if (documentoDelReport == null || documentoDelReport === "") {
+        return false;
+    }
+
+    const attuale = documentoAttuale == null ? "" : String(documentoAttuale);
+    return attuale !== String(documentoDelReport);
+}
+
+module.exports = {
+    MINUTI_LISTA_RECENTE,
+    ORE_REPORT_DA_CHIEDERE,
+    ORE_REPORT_VECCHIO,
+    leggiDataItaliana,
+    listaERecente,
+    decidiReportEsistente,
+    componiRangePagine,
+    deveChiudereReport
+};

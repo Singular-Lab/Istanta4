@@ -6,6 +6,7 @@ const { parse } = require('path');
 const GarbageCollector = require('./garbageCollector');
 const { ref } = require('process');
 const NoRenderElementi = require('./noRenderElementi');
+const reportIntegritaAvvio = require('./reportIntegritaAvvio');
 
 const confronti = {
     async confrontoBox(box1, box2, forzaReimpaginazione = false){ //mode 0 -> cambio strutturale, mode 1 -> confrontoMassivo
@@ -1390,20 +1391,18 @@ const confronti = {
     },
 
     async richiediAzioneReportIntegritaEsistente(wrapper) {
+        //I20-981: le soglie (oltre quattro ore si rifa' senza chiedere, oltre due la data va
+        //in evidenza) stanno in reportIntegritaAvvio, dove si possono verificare.
         const createdAt = wrapper?.createdAt || wrapper?.createdAtLabel;
-        const createdDate = new Date(createdAt);
-        if (isNaN(createdDate.getTime())) {
+        const decisione = reportIntegritaAvvio.decidiReportEsistente(createdAt);
+
+        if (!decisione.chiedi) {
             return "new";
         }
 
-        const ageHours = (new Date() - createdDate) / (1000 * 60 * 60);
-        if (ageHours > 4) {
-            return "new";
-        }
-
-        const oldStyle = ageHours > 2 ? "color:#b00020;font-weight:700;" : "color:#111;";
+        const oldStyle = decisione.vecchio ? "color:#b00020;font-weight:700;" : "color:#111;";
         const message = "Esiste già un report integrità creato in data "
-            + "<span style=\"" + oldStyle + "\">" + this._formatReportDate(createdDate) + "</span>.";
+            + "<span style=\"" + oldStyle + "\">" + this._formatReportDate(decisione.data) + "</span>.";
 
         return await this._confirmTreAzioniReport(message, [
             { value: "open", label: "Riapri", color: "#007bff" },
@@ -1450,6 +1449,48 @@ const confronti = {
 
     //#region  UI integrità
 
+    //I20-981: il report resta aperto su un documento preciso e tiene isBusy per se'.
+    //Chi lo chiude, a mano o perche' il documento e' cambiato, passa da qui: cosi' lo stato,
+    //il busy e le finestre restano coerenti.
+    _reportIntegritaAperto: false,
+    _documentoDelReport: "",
+
+    reportIntegritaAperto() {
+        return this._reportIntegritaAperto === true;
+    },
+
+    documentoDelReport() {
+        return this._documentoDelReport || "";
+    },
+
+    chiudiReportIntegrita(motivo = null) {
+        if (!this.reportIntegritaAperto()) {
+            return false;
+        }
+
+        this._reportIntegritaAperto = false;
+        this._documentoDelReport = "";
+
+        try {
+            $("#confrontoInfoOverlay").remove();
+            Utility.chiudiModal();
+        }
+        catch (err) {
+            console.error("Errore durante la chiusura del report integrità:", err);
+        }
+
+        if (typeof indesignEvents !== "undefined" && indesignEvents?.setBusy) {
+            indesignEvents.setBusy(false);
+        }
+
+        if (motivo != null) {
+            messaggioUtente("Report integrità chiuso: " + motivo, "warning", false, 6);
+        }
+
+        return true;
+    },
+
+
     compilaReportConfronto(report, options = {}) {
         const wrapper = this._normalizeReportIntegritaWrapper(options.wrapper || null);
         const createdAt = options.createdAt || wrapper?.createdAt || new Date().toISOString();
@@ -1489,6 +1530,13 @@ const confronti = {
         }
 
         Utility.apriModal("dialogConfrontoReport", "Report Confronto", false, ["pulsantiTestataConfronto"]);
+
+        //Il documento su cui questo report vale: se l'operatore ne apre un altro, il report
+        //si chiude da solo (il controllo sta in events.js).
+        this._reportIntegritaAperto = true;
+        this._documentoDelReport = typeof indesignEvents !== "undefined" && indesignEvents != null
+            ? (indesignEvents.lastActiveDocument || "")
+            : "";
 
         const headerActions = document.getElementById("pulsantiTestataConfronto");
         if (headerActions) {
@@ -3277,8 +3325,7 @@ const confronti = {
                 numeroPagina,
                 true,
                 elementoPaginaMappa,
-                true,
-                false
+                true
             );
 
             rimuoviSimboli();
@@ -3795,7 +3842,6 @@ const confronti = {
                             false,
                             null,
                             true,
-                            false,
                             boxBounds,
                             true
                         );
@@ -4598,7 +4644,6 @@ const confronti = {
                 pagina,
                 false,
                 null,
-                false,
                 false,
                 null,
                 true
