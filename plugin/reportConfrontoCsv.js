@@ -220,24 +220,6 @@ function componiCsv(voci) {
         .join(FINE_RIGA) + FINE_RIGA;
 }
 
-/// Il nome corto della cartella dei csv, quello da scrivere sul pulsante: l'ultimo pezzo del
-/// percorso, accorciato se lungo. Il percorso intero resta nel suggerimento del pulsante.
-function etichettaCartella(percorso, massimo = 14) {
-    const testo = String(percorso == null ? "" : percorso).replace(/[\\/]+$/, "");
-    if (testo === "") {
-        return "cartella";
-    }
-
-    const pezzi = testo.split(/[\\/]/);
-    const ultimo = pezzi[pezzi.length - 1] || testo;
-
-    if (ultimo.length <= massimo) {
-        return ultimo;
-    }
-
-    return ultimo.substring(0, massimo - 1) + "\u2026";
-}
-
 /// I byte utf8 di un testo, calcolati qui e non lasciati a chi scrive il file.
 /// I20-981: il csv usciva con le accentate rotte, e chi lo apriva in Excel al posto di "e'
 /// accentata" trovava segni che non c'entravano nulla. Scrivendo byte, l'unica cosa che conta
@@ -300,6 +282,5 @@ module.exports = {
     ordinaPerPagina,
     campoCsv,
     componiCsv,
-    bytesUtf8,
-    etichettaCartella
+    bytesUtf8
 };

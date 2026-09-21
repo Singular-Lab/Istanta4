@@ -2147,6 +2147,7 @@ const Utility=
     _riquadroTooltip: null,
     _timerTooltip: null,
     RITARDO_TOOLTIP: 350,
+    ATTRIBUTO_TOOLTIP: "data-tooltip",
 
     abilitaTooltipGlobali() {
         if (this._tooltipGlobaliAttivi) {
@@ -2156,16 +2157,16 @@ const Utility=
         this._tooltipGlobaliAttivi = true;
         const me = this;
 
-        $(document).on("mouseenter", "[title]", function (evento) {
+        $(document).on("mouseenter", "[" + this.ATTRIBUTO_TOOLTIP + "], [title]", function (evento) {
             try {
-                //Con elementi annidati che hanno entrambi un title vince il piu' interno,
+                //Con elementi annidati che hanno entrambi un suggerimento vince il piu' interno,
                 //quello che il mouse sta davvero toccando.
-                const piuInterno = $(evento.target).closest("[title]")[0];
+                const piuInterno = $(evento.target).closest("[" + me.ATTRIBUTO_TOOLTIP + "], [title]")[0];
                 if (piuInterno != null && piuInterno !== this) {
                     return;
                 }
 
-                const testo = tooltipPosizione.testoTooltip(this.getAttribute("title"));
+                const testo = me._testoDelTooltip(this);
                 if (testo == null) {
                     return;
                 }
@@ -2182,7 +2183,7 @@ const Utility=
             }
         });
 
-        $(document).on("mouseleave", "[title]", function () {
+        $(document).on("mouseleave", "[" + this.ATTRIBUTO_TOOLTIP + "], [title]", function () {
             me.nascondiTooltip();
         });
 
@@ -2192,6 +2193,42 @@ const Utility=
         $(document).on("click", function () {
             me.nascondiTooltip();
         });
+    },
+
+    /// Il testo da mostrare, e al primo passaggio del mouse il trasloco del vecchio title.
+    /// InDesign un suggerimento suo per l'attributo title lo mostra, e sarebbe il doppione di
+    /// questo: portando il testo su un attributo nostro resta un suggerimento solo.
+    _testoDelTooltip(elemento) {
+        const titolo = tooltipPosizione.testoTooltip(elemento.getAttribute("title"));
+        if (titolo != null) {
+            this.impostaTooltip(elemento, titolo);
+            return titolo;
+        }
+
+        return tooltipPosizione.testoTooltip(elemento.getAttribute(this.ATTRIBUTO_TOOLTIP));
+    },
+
+    /// Il modo giusto di dare un suggerimento a un elemento creato da codice.
+    /// In UXP scrivere elemento.title come proprieta' non crea l'attributo, e chi guarda
+    /// l'attributo (il suggerimento di InDesign e questo gestore) non vede niente: e' per
+    /// questo che i pulsanti del report erano muti. Qui si scrive l'attributo, sempre.
+    impostaTooltip(elemento, testo) {
+        if (elemento == null || elemento.setAttribute == null) {
+            return;
+        }
+
+        const pulito = tooltipPosizione.testoTooltip(testo);
+
+        if (pulito == null) {
+            elemento.removeAttribute(this.ATTRIBUTO_TOOLTIP);
+        }
+        else {
+            elemento.setAttribute(this.ATTRIBUTO_TOOLTIP, pulito);
+        }
+
+        if (elemento.removeAttribute != null) {
+            elemento.removeAttribute("title");
+        }
     },
 
     nascondiTooltip() {

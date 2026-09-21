@@ -238,9 +238,11 @@ test('la cartella dei csv si cambia dalla schermata del report', () => {
     assert.match(scelta, /scaricaReportConfrontoCsv\(report, \{ automatico: true \}\)/);
     assert.match(scelta, /this\._eliminaFile\(precedente\)/);
 
-    //Il title del pulsantino dice dove stanno andando i csv.
+    //Il suggerimento del pulsantino dice dove stanno andando i csv, e il testo del pulsante
+    //non cambia: cambiarlo spostava la testata a ogni scelta.
     const titolo = corpoFunzione(confronti, '_aggiornaTitoloCartellaCsv() {');
-    assert.match(titolo, /"Scegli cartella\. Attualmente impostata: "/);
+    assert.match(titolo, /Utility\.impostaTooltip\(bottone, "Scegli cartella\. Attualmente impostata: "/);
+    assert.doesNotMatch(titolo, /textContent/);
 
     //La memoria dura quanto il codice del plugin: e' un campo del modulo, non un file.
     assert.match(confronti, /_cartellaCsvSessione: null/);
@@ -262,9 +264,10 @@ test('i title del plugin si vedono, tutti', () => {
     const utility = sorgente('utility.js');
     const abilita = corpoFunzione(utility, 'abilitaTooltipGlobali() {');
 
-    assert.match(abilita, /\$\(document\)\.on\("mouseenter", "\[title\]"/);
-    assert.match(abilita, /\$\(document\)\.on\("mouseleave", "\[title\]"/);
-    assert.match(abilita, /tooltipPosizione\.testoTooltip/);
+    //Il gestore ascolta sia il nostro attributo sia i title rimasti in giro.
+    assert.match(abilita, /\$\(document\)\.on\("mouseenter", "\[" \+ this\.ATTRIBUTO_TOOLTIP \+ "\], \[title\]"/);
+    assert.match(abilita, /\$\(document\)\.on\("mouseleave", "\[" \+ this\.ATTRIBUTO_TOOLTIP \+ "\], \[title\]"/);
+    assert.match(abilita, /me\._testoDelTooltip\(this\)/);
 
     //Acceso una volta sola, all'avvio del plugin.
     assert.match(indexNew, /Utility\.abilitaTooltipGlobali\(\);/);
@@ -275,8 +278,19 @@ test('i title del plugin si vedono, tutti', () => {
     assert.match(crea, /className = "jq-tooltip"/);
     assert.match(indexHtml, /\.jq-tooltip \{/);
 
-    //E il pulsante della cartella dice dove vanno i csv anche senza passarci sopra.
-    const aggiorna = corpoFunzione(confronti, '_aggiornaTitoloCartellaCsv() {');
-    assert.match(aggiorna, /reportConfrontoCsv\.etichettaCartella\(cartella\)/);
-    assert.match(aggiorna, /"Scegli cartella\. Attualmente impostata: "/);
+    //Il vecchio title viene portato via al primo passaggio del mouse, cosi' InDesign non
+    //mostra il suo suggerimento sopra al nostro.
+    const testo = corpoFunzione(utility, '_testoDelTooltip(elemento) {');
+    assert.match(testo, /getAttribute\("title"\)/);
+    assert.match(testo, /this\.impostaTooltip\(elemento, titolo\)/);
+
+    //Un suggerimento si da' scrivendo l'attributo: la proprieta' .title in UXP non lo crea,
+    //ed e' per questo che i pulsanti del report erano muti.
+    const imposta = corpoFunzione(utility, 'impostaTooltip(elemento, testo) {');
+    assert.match(imposta, /setAttribute\(this\.ATTRIBUTO_TOOLTIP, pulito\)/);
+    assert.match(imposta, /removeAttribute\("title"\)/);
+
+    //E in confronti.js non deve restare nessun .title =, altrimenti il prossimo pulsante
+    //aggiunto nasce muto senza che nessuno se ne accorga.
+    assert.doesNotMatch(senzaCommenti(confronti), /\.title\s*=/);
 });

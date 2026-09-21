@@ -198,12 +198,3 @@ test('la codifica utf8 regge anche senza TextEncoder', () => {
     }
 });
 
-test('il pulsante della cartella porta scritto l\'ultimo pezzo del percorso', () => {
-    assert.strictEqual(csv.etichettaCartella('/Volumi/Lavori/Export/'), 'Export');
-    assert.strictEqual(csv.etichettaCartella('/Volumi/Lavori/Export'), 'Export');
-    assert.strictEqual(csv.etichettaCartella('C:\\Lavori\\Export'), 'Export');
-    //Un nome lungo si accorcia: il percorso intero resta nel suggerimento.
-    assert.strictEqual(csv.etichettaCartella('/Volumi/Volantini Esportati 2026'), 'Volantini Esp\u2026');
-    assert.strictEqual(csv.etichettaCartella(''), 'cartella');
-    assert.strictEqual(csv.etichettaCartella(null), 'cartella');
-});

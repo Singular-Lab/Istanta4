@@ -1547,7 +1547,7 @@ const confronti = {
                 btnScaricaCsv.id = "scaricaReportConfrontoCsv";
                 btnScaricaCsv.type = "button";
                 btnScaricaCsv.textContent = "Scarica CSV";
-                btnScaricaCsv.title = "Scarica il report confronto in formato CSV";
+                Utility.impostaTooltip(btnScaricaCsv, "Scarica il report confronto in formato CSV");
                 btnScaricaCsv.style.height = "25px";
                 btnScaricaCsv.style.cursor = "pointer";
                 btnScaricaCsv.style.marginRight = "8px";
@@ -1560,7 +1560,7 @@ const confronti = {
                 }
             }
 
-            btnScaricaCsv.title = "Scarica il report confronto in formato CSV";
+            Utility.impostaTooltip(btnScaricaCsv, "Scarica il report confronto in formato CSV");
             btnScaricaCsv.onclick = async () => await this.scaricaReportConfrontoCsv(this._confrontoReportState?.report || reportData);
 
             //I20-981: il pulsantino accanto cambia la cartella dei csv. Il title dice dove
@@ -1570,13 +1570,10 @@ const confronti = {
                 btnCartellaCsv = document.createElement("button");
                 btnCartellaCsv.id = "cartellaReportConfrontoCsv";
                 btnCartellaCsv.type = "button";
+                btnCartellaCsv.textContent = "...";
                 btnCartellaCsv.style.height = "25px";
-                btnCartellaCsv.style.minWidth = "26px";
-                btnCartellaCsv.style.maxWidth = "120px";
-                btnCartellaCsv.style.overflow = "hidden";
-                btnCartellaCsv.style.whiteSpace = "nowrap";
-                btnCartellaCsv.style.textOverflow = "ellipsis";
-                btnCartellaCsv.style.padding = "0 6px";
+                btnCartellaCsv.style.width = "26px";
+                btnCartellaCsv.style.padding = "0";
                 btnCartellaCsv.style.cursor = "pointer";
                 btnCartellaCsv.style.marginRight = "8px";
 
@@ -1604,7 +1601,7 @@ const confronti = {
             const btnFixMassivo = document.createElement("button");
             btnFixMassivo.type = "button";
             btnFixMassivo.textContent = "Fix massivo";
-            btnFixMassivo.title = "Applica il fix massivo al report";
+            Utility.impostaTooltip(btnFixMassivo, "Applica il fix massivo al report");
             btnFixMassivo.style.padding = "8px 18px";
             btnFixMassivo.style.cursor = "pointer";
             btnFixMassivo.style.border = "1px solid #a22";
@@ -1845,9 +1842,7 @@ const confronti = {
         }
     },
 
-    //I20-981: il pulsante porta scritto il nome della cartella e, nel suggerimento, il
-    //percorso intero. Il suggerimento da solo non bastava: in UXP il title non si vedeva, e
-    //adesso che si vede resta comunque piu' comodo leggere a colpo d'occhio dove vanno i file.
+    //I20-981: il percorso completo della cartella dei csv vive nel suggerimento del pulsante.
     _aggiornaTitoloCartellaCsv() {
         const bottone = document.getElementById("cartellaReportConfrontoCsv");
         if (bottone == null) {
@@ -1862,12 +1857,10 @@ const confronti = {
             cartella = "";
         }
 
-        bottone.textContent = cartella !== ""
-            ? reportConfrontoCsv.etichettaCartella(cartella)
-            : "cartella";
-
-        bottone.title = "Scegli cartella. Attualmente impostata: "
-            + (cartella !== "" ? cartella : "nessuna (configura i percorsi di sistema)");
+        //Il testo del pulsante non cambia: cambiarlo spostava tutta la testata a ogni scelta,
+        //e una cartella dal nome lungo non ci stava comunque. Il percorso sta nel suggerimento.
+        Utility.impostaTooltip(bottone, "Scegli cartella. Attualmente impostata: "
+            + (cartella !== "" ? cartella : "nessuna (configura i percorsi di sistema)"));
     },
 
     _buildReportConfrontoCsv(report) {
@@ -2155,7 +2148,7 @@ const confronti = {
         label.style.overflowWrap = "anywhere";
 
         const next = this._crButton(">");
-        next.title = "Vai alla prossima istanza duplicata";
+        Utility.impostaTooltip(next, "Vai alla prossima istanza duplicata");
         next.style.minWidth = "24px";
         next.style.minHeight = "22px";
         next.style.padding = "2px 6px";
@@ -2652,7 +2645,7 @@ const confronti = {
 
                     const codice = document.createElement("div");
                     codice.textContent = this._truncate(item.codiceGruppo || "-", 20);
-                    codice.title = item.codiceGruppo || "";
+                    Utility.impostaTooltip(codice, item.codiceGruppo || "");
                     codice.style.fontWeight = "600";
                     codice.style.whiteSpace = "nowrap";
                     codice.style.overflow = "hidden";
@@ -2825,7 +2818,7 @@ const confronti = {
 
                     const codice = document.createElement("div");
                     codice.textContent = this._truncate(item.codiceGruppo || "-", 20);
-                    codice.title = item.codiceGruppo || "";
+                    Utility.impostaTooltip(codice, item.codiceGruppo || "");
                     codice.style.flex = "1 1 auto";
                     codice.style.minWidth = "0";
                     codice.style.fontWeight = "600";
@@ -3039,7 +3032,7 @@ const confronti = {
 
         if (iconEl) {
             iconEl.src = payload.hidden ? "images/sleep.png" : "images/wake.png";
-            iconEl.title = payload.hidden ? "Nascosto" : "Visibile";
+            Utility.impostaTooltip(iconEl, payload.hidden ? "Nascosto" : "Visibile");
         }
 
         this._refreshCambiatiVisibility();
@@ -3608,7 +3601,7 @@ const confronti = {
         const btn = document.createElement("button");
         btn.textContent = label;
         btn.type = "button";
-        btn.title = "Mostra " + String(label || "").toLowerCase();
+        Utility.impostaTooltip(btn, "Mostra " + String(label || "").toLowerCase());
         btn.style.padding = "6px 10px";
         btn.style.border = "1px solid #666";
         btn.style.borderRadius = "4px";
@@ -3708,7 +3701,7 @@ const confronti = {
     _crButton(label, iconPath = null) {
         const btn = document.createElement("button");
         btn.type = "button";
-        btn.title = label;
+        Utility.impostaTooltip(btn, label);
         btn.style.cursor = "pointer";
         btn.style.padding = "4px";
         btn.style.display = "flex";
@@ -3722,11 +3715,11 @@ const confronti = {
             const img = document.createElement("img");
             img.src = iconPath;
             img.alt = label;
-            img.title = label;
+            Utility.impostaTooltip(img, label);
             img.style.height = "16px";
             img.style.width = "auto";
             img.style.display = "block";
-            btn.title = label;
+            Utility.impostaTooltip(btn, label);
             btn.appendChild(img);
         } else {
             btn.textContent = label;
@@ -3749,7 +3742,7 @@ const confronti = {
 
         img.src = iconPath;
         img.alt = label;
-        img.title = label;
+        Utility.impostaTooltip(img, label);
         img.onerror = () => {
             if (iconPath.indexOf("risolviSegnalazioni.png") >= 0) img.src = "images/check.png";
             else if (iconPath.indexOf("whitelist.png") >= 0) img.src = "images/wake.png";
@@ -3779,7 +3772,7 @@ const confronti = {
         const topbar = this._crTabTopbar();
 
         const btnImpaginaTutti = this._crButton("Impagina in coda");
-        btnImpaginaTutti.title = "Impagina tutto in coda al documento";
+        Utility.impostaTooltip(btnImpaginaTutti, "Impagina tutto in coda al documento");
 
         const pickerLibreria = document.createElement("sp-picker");
         pickerLibreria.style.minWidth = "220px";
@@ -4523,7 +4516,7 @@ const confronti = {
         }
 
         cell.textContent = label;
-        cell.title = col.label;
+        Utility.impostaTooltip(cell, col.label);
 
         if (col.sortable) {
             cell.style.cursor = "pointer";
@@ -4584,7 +4577,7 @@ const confronti = {
         cell.style.maxHeight = "42px";
 
         const btn = this._crButton("Imp.");
-        btn.title = "Impagina questo nuovo record";
+        Utility.impostaTooltip(btn, "Impagina questo nuovo record");
         btn.style.padding = "4px 6px";
         btn.style.minWidth = "0";
         btn.style.fontSize = "10px";
@@ -4636,7 +4629,7 @@ const confronti = {
 
         const text = document.createElement("div");
         text.textContent = value || "";
-        text.title = value || "";
+        Utility.impostaTooltip(text, value || "");
         text.style.width = "100%";
         text.style.overflow = "hidden";
         text.style.whiteSpace = "nowrap";
@@ -4644,7 +4637,7 @@ const confronti = {
         text.style.lineHeight = "1.2";
         text.style.fontSize = small ? "11px" : "12px";
 
-        cell.title = value || "";
+        Utility.impostaTooltip(cell, value || "");
 
         cell.addEventListener("click", () => {
             navigator.clipboard.writeText(String(value || "")).then(() => {
