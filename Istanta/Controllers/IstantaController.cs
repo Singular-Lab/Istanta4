@@ -262,6 +262,20 @@ namespace Istanta.Controllers
             return mth.GetParameters();
         }
 
+        // La dll del cliente, tenuta in cache finche' il file non cambia.
+        //
+        // Prima ogni chiamata faceva Assembly.Load(File.ReadAllBytes(...)), e non e' un
+        // modo di dire: due caricamenti dello stesso file producono due assembly distinti,
+        // con tipi e statici separati. Due conseguenze, entrambe indesiderate. Gli assembly
+        // si accumulavano nel processo senza essere mai scaricati, uno per chiamata. E una
+        // cache statica dentro AgenziaLib non sarebbe servita a nulla, perche' ogni
+        // chiamata ripartiva da statici vuoti: e' il motivo per cui questa cache viene
+        // prima di quella dei source del cliente.
+        //
+        // L'invalidazione guarda data di modifica e dimensione del file, quindi ricopiare
+        // AgenziaLib.dll a mano continua a fare effetto senza riavviare l'applicazione.
+        private static readonly IstantaLib.CacheFilePerPercorso<Assembly> cacheAssemblyAgenzia = new();
+
         // Carica la dll del cliente e ne ritrova la classe, dicendo cosa manca quando
         // non c'e'. Prima i due chiamanti facevano "ty!.GetMethod(...)": se il tipo non
         // c'era, il ! zittiva il compilatore e usciva un NullReferenceException nudo,
@@ -271,7 +285,7 @@ namespace Istanta.Controllers
         // ricopiata a mano. Vedi 02-modello-multicliente.md, punto 6.
         private Type caricaTipoAgenzia(string dllFile, string nomeCompleto)
         {
-            var dll = Assembly.Load(System.IO.File.ReadAllBytes(dllFile));
+            var dll = cacheAssemblyAgenzia.Ottieni(dllFile, percorso => Assembly.Load(System.IO.File.ReadAllBytes(percorso)));
             var ty = dll.GetType(nomeCompleto);
 
             if (ty == null)
