@@ -82,6 +82,14 @@ class Promo {
             let template = $("#promoItem");
 
             console.log(result);
+
+            //I20-973: le promo appena registrate vanno in cima. Come per i tracciati, il
+            //modulo arriva da uno script a parte: se manca, l'elenco resta nell'ordine del
+            //server invece di non comparire.
+            if (typeof ordinamentoTracciati !== "undefined") {
+                result = ordinamentoTracciati.promoDallaPiuRecente(result);
+            }
+
             me.lista_promo_scaricate = result;
 
             for (let i = 0; i < result.length; i++) {
@@ -168,6 +176,17 @@ class Promo {
                 if (me.agenzia.applicaSchemaDiOrdinamentoTracciati != null) {
 
                     item.promoTracciatis = me.agenzia.applicaSchemaDiOrdinamentoTracciati(item.promoTracciatis, "sigla");
+                }
+
+                //I20-973: i tracciati appena importati vanno in cima. Va dopo l'ordinamento
+                //per sigla, ed e' stabile, cosi' la data comanda e la sigla decide fra quelli
+                //arrivati con la stessa importazione.
+                //Il modulo sta in uno script a parte, caricato dal layout, che e' una view
+                //compilata nell'assembly: fra una pubblicazione dei soli file statici e
+                //quella dell'applicazione c'e' una finestra in cui questo file e' nuovo e il
+                //layout ancora vecchio. Senza questa guardia l'elenco spariva del tutto.
+                if (typeof ordinamentoTracciati !== "undefined") {
+                    item.promoTracciatis = ordinamentoTracciati.dalPiuRecente(item.promoTracciatis, item.promoImportazionis);
                 }
 
                 for (let t = 0; t < item.promoTracciatis.length; t++) {

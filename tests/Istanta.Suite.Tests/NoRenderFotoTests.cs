@@ -83,7 +83,10 @@ public class NoRenderMetaTests
 
         var voce = Assert.Single(letto!.ps!);
         Assert.Equal(default(StatoSelezioneFoto), voce.stato);
-        Assert.True(voce.noRender);
+        //I20-977: la marcatura non si perde, cambia posto. La conversione la porta nella
+        //struttura noRender e spegne il flag storico, che da qui in poi non serve piu'.
+        Assert.False(voce.noRender);
+        Assert.Equal("3150599", Assert.Single(letto.noRender!).chiave);
     }
 
     [Fact]

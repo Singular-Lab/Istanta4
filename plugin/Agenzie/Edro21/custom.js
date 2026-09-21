@@ -1131,6 +1131,12 @@ const customAgenzia={
 
 
         var items = box.allPageItems;
+        //L'etichetta va sempre normalizzata prima di confrontarla: Utility.setCampoDNA appende
+        //"$DNA$..." al primo campo visibile fra quelli in regoleApplicazioneDNA, e per Edro in
+        //quella lista ci sono prezzo_offerta, sconto_fid e descrizione. Con il confronto sulla
+        //etichetta grezza il campo che porta il DNA spariva da questo giro: in un box con solo
+        //prezzo_offerta_gruppo e descrizione restava il solo sy_euro a decidere minLeft, e la
+        //descrizione finiva allineata a lui invece che al gruppo prezzo (I20-979).
         var minLeft = box.geometricBounds[3];
         var originalBoxBounds = box.geometricBounds;
         var descrizione = null;
@@ -1138,11 +1144,13 @@ const customAgenzia={
         var logoUsoAntibiotici = null;
         for (var i = 0; i < items.length; i++) {
             var item = items[i];
-            if (item.label == "descrizione" && box.label != "BOX7") {
+            var etichetta = Utility.parseLabel(item.label);
+
+            if (etichetta == "descrizione" && box.label != "BOX7") {
                 descrizione = item;
                 continue;
             }
-            else if (item.label == "gruppo_descrizione_BIS" && box.label == "BOX7") {
+            else if (etichetta == "gruppo_descrizione_BIS" && box.label == "BOX7") {
                 descrizione = item;
                 continue;
             }
@@ -1157,7 +1165,7 @@ const customAgenzia={
                 continue;
             }
 
-            if (!getElements.some(el => item.label == el) || item.label == "") {
+            if (!getElements.some(el => etichetta == el) || etichetta == "") {
                 continue;
             }
 
@@ -1244,7 +1252,7 @@ const customAgenzia={
                 if (box.label == "BOX7" && descrizione.allPageItems != null) {
                     for (var d = 0; d < descrizione.allPageItems.length; d++) {
                         var itemDescrizioneBox7 = descrizione.allPageItems[d];
-                        if (itemDescrizioneBox7.label == "Descrizione") {
+                        if (Utility.parseLabel(itemDescrizioneBox7.label) == "Descrizione") {
                             descrizioneDaRidurre = itemDescrizioneBox7;
                             break;
                         }
