@@ -1564,45 +1564,32 @@ function setFiltroButtonsDefaultMarkup() {
 /// risolve si ripiega sulla cartella che lo contiene, e se non si risolve nemmeno quella il
 /// dialogo si apre come si e' sempre aperto.
 async function puntoDiAperturaFile(percorso) {
-    //DIAGNOSTICA TEMPORANEA I20-980: da togliere. La console di UXP non e' comoda da leggere,
-    //e serve sapere se il file non si risolve oppure se e' il dialogo a ridurlo alla cartella.
-    var diagnostica = function (riga) {
-        console.log(riga);
-        try { messaggioUtente(riga, "info", false, 0); } catch (e) { }
-    };
-
     var url = schedaRef.urlDiPercorso(percorso);
-    diagnostica("Code IDX-146 apertura foto: percorso [" + percorso + "] url [" + url + "]");
-
     if (url == null) {
-        diagnostica("Code IDX-146 apertura foto: nessun percorso, dialogo come sempre");
         return undefined;
     }
 
     try {
-        var entry = await storage.localFileSystem.getEntryWithUrl(url);
-        diagnostica("Code IDX-146 apertura foto: file risolto [" + (entry != null ? entry.name : "null") +
-            "], isFile [" + (entry != null ? entry.isFile : "?") + "]");
-        return { initialLocation: entry };
+        //Il file si risolve e viene passato, ma il dialogo di sistema ne usa solo la cartella:
+        //si apre nel posto giusto senza selezionare la foto. Verificato in esercizio su Mac
+        //con InDesign 19 (I20-980).
+        return { initialLocation: await storage.localFileSystem.getEntryWithUrl(url) };
     }
     catch (e) {
         //Il file puo' non esserci piu': rinominato, spostato, o mai arrivato in cartella.
-        diagnostica("Code IDX-146 apertura foto: file NON risolto, si prova la cartella. Errore: " + e);
+        console.log("Punto di apertura non risolto, si prova la cartella: " + e);
     }
 
     var urlCartella = schedaRef.urlDiPercorso(schedaRef.cartellaDiPercorso(percorso));
     if (urlCartella == null) {
-        diagnostica("Code IDX-146 apertura foto: nessuna cartella da cui ripartire");
         return undefined;
     }
 
     try {
-        var entryCartella = await storage.localFileSystem.getEntryWithUrl(urlCartella);
-        diagnostica("Code IDX-146 apertura foto: ripiego sulla cartella [" + urlCartella + "]");
-        return { initialLocation: entryCartella };
+        return { initialLocation: await storage.localFileSystem.getEntryWithUrl(urlCartella) };
     }
     catch (e) {
-        diagnostica("Code IDX-146 apertura foto: cartella NON risolta. Errore: " + e);
+        console.log("Cartella di apertura non risolta: " + e);
         return undefined;
     }
 }
