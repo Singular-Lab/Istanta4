@@ -252,25 +252,14 @@ export class ModelliManager {
     }
 
     // Applica mixins ai modelli (se disponibile)
+    // Il ciclo e' sincrono: con forEach e callback async le promesse venivano
+    // scartate e il catch qui sotto non poteva intercettarle. Il seed dei ruoli
+    // GDO, che era annidato qui dentro, e' stato spostato dopo la creazione
+    // delle tabelle.
     try {
-      Object.values(MODELLI_SEQUELIZE).forEach(async ({ model, nome }) => {
+      for (const { model } of Object.values(MODELLI_SEQUELIZE)) {
         applyMixins(model, ['fullTextSearch', 'validation', 'statistics']);
-        //log.info(Colorize.blue(`🔧 Mixins applicati a: ${nome}`));
-        if (nome == 'RuoloUtenteGDO') {
-          const allRuoliGDO = await RuoloUtenteGDO.findAll();
-          const ruoliGDO = Object.values(RUOLO_UTENTE_GDO).filter(ruolo => !allRuoliGDO.some(r => r.ruolo_ruolo_utente_gdo === ruolo)).map(ruolo => {
-            return {
-              createdat: new Date(),
-              updatedat: new Date(),
-              ruolo_ruolo_utente_gdo: ruolo
-            }
-          })
-
-          await RuoloUtenteGDO.bulkCreate(ruoliGDO, {
-            ignoreDuplicates: false
-          })
-        }
-      });
+      }
       //log.info(Colorize.blue('🔧 Applicazione mixins ai modelli...'));
     } catch (errore) {
       log.warn(Colorize.yellow('⚠️ Errore applicazione mixins:', errore));
@@ -336,6 +325,28 @@ export class ModelliManager {
       }
     }
 
+    // Seed dei ruoli GDO: qui le tabelle esistono, sia quelle create dai modelli
+    // sia quelle toccate dagli script SQL. Girava prima della sincronizzazione,
+    // quindi su un database incompleto interrogava una tabella inesistente; e
+    // non essendo atteso, il rigetto arrivava a process.on('unhandledRejection')
+    // e spegneva il processo prima che il server si alzasse.
+    try {
+      const allRuoliGDO = await RuoloUtenteGDO.findAll();
+      const mancanti = Object.values(RUOLO_UTENTE_GDO)
+        .filter(ruolo => !allRuoliGDO.some(r => r.ruolo_ruolo_utente_gdo === ruolo))
+        .map(ruolo => ({
+          createdat: new Date(),
+          updatedat: new Date(),
+          ruolo_ruolo_utente_gdo: ruolo
+        }));
+
+      if (mancanti.length > 0) {
+        await RuoloUtenteGDO.bulkCreate(mancanti, { ignoreDuplicates: false });
+      }
+    } catch (errore) {
+      log.warn(Colorize.yellow('⚠️ Errore seed ruoli GDO:', errore));
+    }
+
     this._ultimaSincronizzazione = new Date();
     const tempoTotale = Date.now() - startTime;
 
@@ -362,16 +373,6 @@ export class ModelliManager {
     if (!config) {
       throw new Error(`Modello '${nomeModello}' non trovato`);
     }
-    if (nomeModello == 'RuoloUtenteGDO') {
-      const ruoliGDO = Object.values(RUOLO_UTENTE_GDO).map(ruolo => {
-        return {
-          ruolo_ruolo_utente_gdo: ruolo
-        }
-      })
-      await RuoloUtenteGDO.bulkCreate(ruoliGDO, {
-        updateOnDuplicate: ['ruolo_ruolo_utente_gdo']
-      })
-    }
     const startTime = Date.now();
 
     try {
@@ -383,6 +384,16 @@ export class ModelliManager {
         logging: false,
         ...options
       });
+
+      //Seed dopo la sync, non prima: la tabella potrebbe non esistere ancora.
+      if (nomeModello == 'RuoloUtenteGDO') {
+        const ruoliGDO = Object.values(RUOLO_UTENTE_GDO).map(ruolo => ({
+          ruolo_ruolo_utente_gdo: ruolo
+        }));
+        await RuoloUtenteGDO.bulkCreate(ruoliGDO, {
+          updateOnDuplicate: ['ruolo_ruolo_utente_gdo']
+        });
+      }
 
       const tempo_ms = Date.now() - startTime;
       this._modelliSincronizzati.add(nomeModello);
