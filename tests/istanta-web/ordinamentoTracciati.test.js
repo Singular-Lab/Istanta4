@@ -134,6 +134,20 @@ test('la pagina ordina per data dopo aver ordinato per sigla', () => {
     assert.ok(perData > perSigla, 'la data deve essere applicata dopo la sigla');
 });
 
+// Il modulo arriva da uno script a parte, caricato dal layout, che e' una view compilata
+// nell'assembly: pubblicando i soli file statici si ottiene un promo.js nuovo con un layout
+// vecchio, e senza guardia la pagina perdeva l'intero elenco invece di una riga d'ordine.
+test('senza il modulo l\'elenco si disegna comunque', () => {
+    const promo = sorgente('Istanta/wwwroot/js/promo.js');
+
+    const guardia = promo.indexOf('typeof ordinamentoTracciati !== "undefined"');
+    const chiamata = promo.indexOf('ordinamentoTracciati.dalPiuRecente(');
+
+    assert.ok(guardia > 0, 'l\'uso del modulo deve essere protetto');
+    assert.ok(guardia < chiamata, 'la protezione deve precedere la chiamata');
+    assert.ok(chiamata - guardia < 200, 'la chiamata deve stare dentro la protezione');
+});
+
 test('il layout carica il modulo prima di promo.js', () => {
     const layout = sorgente('Istanta/Views/Shared/_Layout.cshtml');
 

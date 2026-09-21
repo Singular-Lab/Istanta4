@@ -173,7 +173,13 @@ class Promo {
                 //I20-973: i tracciati appena importati vanno in cima. Va dopo l'ordinamento
                 //per sigla, ed e' stabile, cosi' la data comanda e la sigla decide fra quelli
                 //arrivati con la stessa importazione.
-                item.promoTracciatis = ordinamentoTracciati.dalPiuRecente(item.promoTracciatis, item.promoImportazionis);
+                //Il modulo sta in uno script a parte, caricato dal layout, che e' una view
+                //compilata nell'assembly: fra una pubblicazione dei soli file statici e
+                //quella dell'applicazione c'e' una finestra in cui questo file e' nuovo e il
+                //layout ancora vecchio. Senza questa guardia l'elenco spariva del tutto.
+                if (typeof ordinamentoTracciati !== "undefined") {
+                    item.promoTracciatis = ordinamentoTracciati.dalPiuRecente(item.promoTracciatis, item.promoImportazionis);
+                }
 
                 for (let t = 0; t < item.promoTracciatis.length; t++) {
                     let trItem = item.promoTracciatis[t];
