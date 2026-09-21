@@ -3909,12 +3909,12 @@ const schedaRef = {
                     }
 
                     //if (item.StatoSelezione != objItem.StatoSelezione) {
+                        //I20-977: il noRender non viaggia piu' di qui. Vive nella sua struttura,
+                        //e mandarlo dentro ps lo riscriverebbe nel posto da cui la migrazione dei
+                        //meta storici lo ripesca, resuscitando una foto appena riattivata.
                         objToSend.ps.push({
                             codRef: cod,
-                            stato: item.StatoSelezione,
-                            //L'opzione di rendering si governa dal modal noRender: qui va
-                            //riportata com'e', altrimenti un salvataggio P/S la cancellerebbe.
-                            noRender: noRenderDiCodice(cod)
+                            stato: item.StatoSelezione
                         });
                     //}
                 }
@@ -3967,8 +3967,9 @@ const schedaRef = {
                             if (item != null && objToSend.ps.find(f => f.codRef == cod) != null) {
                                 //cerchiamo in listfotoimpaginate l'elemento con l'immagine uguale a objItem["Foto.Nome"]
                                 objItem.StatoSelezione = item.StatoSelezione;
-                                var psSalvato = objToSend.ps.find(f => f.codRef == cod);
-                                var noRenderSalvato = psSalvato != null && psSalvato.noRender === true;
+                                //La scelta sul rendering si legge dove vive davvero, non dal
+                                //payload P/S, che non la porta piu'.
+                                var noRenderSalvato = noRenderDiCodice(cod);
                                 //teniamo allineato il dato locale: la schermata viene ridisegnata da qui
                                 var membroLocale = membriGruppoFoto.find(m => m.codRef == cod);
                                 if (membroLocale != null) {

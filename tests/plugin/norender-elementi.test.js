@@ -591,3 +591,30 @@ test("l'ordinamento sta dove la lista si costruisce, non dove si ridisegna", () 
         ordinamento > lettura && ordinamento < disegno,
         "l'ordinamento va fatto all'apertura: nel disegno farebbe saltare la riga a ogni click");
 });
+
+// I20-977: il noRender delle foto vive in una struttura sola. Il salvataggio P/S lo
+// riportava dentro ps, cioe' nel posto da cui la conversione dei meta storici lo ripesca:
+// bastava un salvataggio di primarie e secondarie perche' una foto appena riattivata
+// tornasse disattivata.
+test("il salvataggio P/S non manda piu' il noRender dentro ps", () => {
+    const sorgente = sorgentePlugin("schedaRef.js");
+
+    const inizio = sorgente.indexOf("objToSend.ps.push({");
+    assert.ok(inizio > 0, "il payload P/S deve esistere");
+
+    const payload = sorgente.slice(inizio, sorgente.indexOf("});", inizio));
+
+    assert.ok(payload.includes("codRef:") && payload.includes("stato:"),
+        "codice referenza e stato di selezione restano");
+    assert.ok(!payload.includes("noRender"),
+        "il noRender non deve viaggiare con le primarie e secondarie");
+});
+
+test("la visibilita' della foto si legge dalla struttura noRender, non dal payload", () => {
+    const sorgente = sorgentePlugin("schedaRef.js");
+
+    assert.ok(sorgente.includes("var noRenderSalvato = noRenderDiCodice(cod);"),
+        "la scelta si legge dove vive davvero");
+    assert.ok(!sorgente.includes("psSalvato.noRender"),
+        "leggerla dal payload P/S la legherebbe di nuovo alla vecchia struttura");
+});

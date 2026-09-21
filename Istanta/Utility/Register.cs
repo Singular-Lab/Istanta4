@@ -116,10 +116,6 @@ namespace Istanta.Utility
                             //marcato, e in quel caso la chiave sparisce invece di restare a vuoto.
                             List<RevisioneNoRenderFromIndd>? elementiNoRender = MetaPromoLavorazioni.leggiElementiNoRender(operazione.FormData!);
                             storeField!.noRender = MetaPromoLavorazioni.normalizzaElementiNoRender(elementiNoRender);
-                            //I20-977: le foto portano ancora il flag nella vecchia struttura ps, e la
-                            //lettura dei meta lo ritiene un dato da migrare. Senza questo allineamento
-                            //una foto appena riattivata tornerebbe fra gli elementi disattivati.
-                            MetaPromoLavorazioni.allineaNoRenderDelleFoto(storeField);
                         }
                         else if (operazione.TipoOperazione == (Byte)tipoOperazione.rimuoviMetaFoto)
                         {
