@@ -32,6 +32,9 @@ services:
       # Solo su localhost, per diagnosi dall'host: il traffico vero passa da nginx.
       - "127.0.0.1:${ISTANTA_LOCAL_PORT:-18080}:8080"
     env_file:
+      # Configurazione completa dell'applicazione: nell'immagine non c'e' alcun
+      # appsettings.json, perche' appsettings*.json e' gitignorato e la CI
+      # costruisce da un clone pulito. Questo file e' l'unica fonte.
       - istanta.env
     environment:
       ASPNETCORE_ENVIRONMENT: Production
@@ -46,12 +49,29 @@ services:
       # release: la directory corrisponde alla DestinationPath configurata nel
       # catalogo ControlPlane, dentro la working directory del progetto.
       - ${ISTANTA_EXTERNAL_LIB_DIR:?Impostare ISTANTA_EXTERNAL_LIB_DIR in release.env, percorso assoluto sull'host}:/app/external_lib:ro
-      # Configurazione del cliente: percorsi, chiavi FICO, indirizzi dei servizi.
-      - ${ISTANTA_APPSETTINGS_FILE:?Impostare ISTANTA_APPSETTINGS_FILE in release.env, percorso assoluto sull'host}:/app/appsettings.json:ro
       # Dati persistenti del cliente: jpg, estrazioni, file importati ed esportati.
       - ${ISTANTA_DATA_DIR:?Impostare ISTANTA_DATA_DIR in release.env, percorso assoluto sull'host}:/data
+      # I Source*.json del cliente, che l'applicazione crea e popola a runtime.
+      # Volume NOMINATO sul percorso dell'immagine, non bind mount: alla prima
+      # creazione Docker lo semina con il contenuto che l'immagine ha in quel
+      # punto — la cartella di ogni cliente e la `vergine` con i modelli, gia'
+      # di proprieta' dell'utente app — e dalle release successive lo preserva
+      # intatto. Verificato: un file scritto a runtime sopravvive, e uno
+      # modificato non viene sovrascritto dall'immagine nuova.
+      - istanta_external_source:/app/wwwroot/external_source
       - istanta_logs:/app/logs
       - istanta_keys:/home/app/.aspnet/DataProtection-Keys
+      # BackgroundCodeService scrive i campioni di addestramento in
+      # AppContext.BaseDirectory/ai_models, cioe' dentro l'immagine: senza questo
+      # volume andrebbero persi a ogni release. Il percorso e' nel codice, non
+      # configurabile, quindi si persiste dove lui scrive.
+      - istanta_ai_models:/app/ai_models
+    extra_hosts:
+      # Olimpo e Fidelity vivono in un altro deployment set, quindi in un'altra
+      # rete Compose: non sono raggiungibili per nome di servizio. Con questo
+      # alias, fico__olympusServerUrl e fico__fpServerUrl in istanta.env possono
+      # puntare a host.docker.internal quando girano sulla stessa macchina.
+      - "host.docker.internal:host-gateway"
     depends_on:
       postgres:
         condition: service_healthy
@@ -214,6 +234,8 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  istanta_external_source:
   istanta_logs:
   istanta_keys:
+  istanta_ai_models:
   correggo_volantini:

@@ -10,7 +10,7 @@ Runner riscrivendo le sole variabili immagine in `release.env`.
 | --- | --- |
 | `compose.production.yaml` | I servizi. Lo esegue il Runner, non va lanciato a mano. |
 | `release.env.example` | Variabili di sostituzione del compose. Il Runner ci scrive `ISTANTA_IMAGE` e `CORREGGO4_IMAGE`. |
-| `istanta.env.example` | Ambiente aggiuntivo del container Istanta. |
+| `istanta.env.example` | Configurazione completa di Istanta: nell'immagine non c'è un appsettings.json. |
 | `correggo4.env.example` | Ambiente aggiuntivo del container Correggo4. |
 | `postgres-init/` | Script eseguito al primo avvio di PostgreSQL: database di Correggo4 e applicazione degli schemi. |
 | `proxy-templates/` | Configurazione di nginx: due origini TLS, una per applicazione. |
@@ -116,19 +116,85 @@ sudo chmod 600 release.env istanta.env correggo4.env
 sudo mkdir -p external_lib istanta-data proxy-certs
 ```
 
-Gli schemi arrivano con il bundle e non vanno copiati a mano. Resta la
-configurazione del cliente:
+Gli schemi arrivano con il bundle e non vanno copiati a mano.
 
-```bash
-# appsettings.json del cliente, sul modello di Istanta/appsettings.famila.template.json
-sudo cp appsettings.<cliente>.json istanta-appsettings.json
+### La configurazione di Istanta vive tutta in `istanta.env`
+
+Non c'è nessun `appsettings.json` da montare, e non è una semplificazione: in
+`.gitignore` `appsettings*.json` è escluso — restano solo i `.template.json` —
+quindi la CI costruisce da un clone pulito e **l'immagine non contiene alcun
+appsettings.json**. Il container parte senza valori di default, e ogni chiave
+che serve va dichiarata come variabile d'ambiente.
+
+`istanta.env.example` contiene l'intera configurazione del modello
+`Istanta/appsettings.famila.template.json` già tradotta, con la convenzione .NET:
+doppio underscore al posto dei due punti, indice numerico per gli elementi di un
+array.
+
+```
+fico.secretKey                     ->  fico__secretKey
+sync_options.extPreLavorazione[0]  ->  sync_options__extPreLavorazione__0
+fico.userDataPolicy[1].dest        ->  fico__userDataPolicy__1__dest
 ```
 
-Nell'`appsettings.json` i percorsi vanno riscritti su `/data`, che è dove il
-compose monta `ISTANTA_DATA_DIR`: `jpg_path_foto.path`, `sync_options.extractPath`
-e simili. E gli indirizzi dei servizi della suite vanno espressi con i nomi dei
-servizi, non con `127.0.0.1`: dentro un container il localhost è il container
-stesso. `fico.correggoServerUrl` diventa `http://correggo4:8080`.
+Due accortezze che il file ricorda riga per riga. I percorsi dei dati vanno su
+`/data`, dove il compose monta `ISTANTA_DATA_DIR`: un percorso relativo come
+`wwwroot/exported_files/` finisce nel filesystem dell'immagine e si perde a ogni
+release. E `Urls` non va impostata: in container la porta la governano
+`ASPNETCORE_HTTP_PORTS` e il mapping del compose.
+
+Per gli indirizzi dei servizi, dentro la rete del progetto si usa il nome del
+servizio — `fico__correggoServerUrl=http://correggo4:8080` — mentre Olimpo e
+Fidelity stanno in un altro deployment set, quindi in un'altra rete: per loro si
+usa `host.docker.internal`, l'alias che il compose aggiunge al container di
+Istanta, o l'indirizzo di rete della macchina che li ospita.
+
+### I dati di runtime di `external_source`
+
+I `Source*.json` del cliente non sono contenuto statico: l'applicazione li
+**crea e li popola progressivamente**. `ExternalSourceClass.CalcolaMancanti`
+risale al padre di `pathSource`, cerca la cartella sorella `vergine` con i
+modelli, e crea i file che mancano.
+
+Il compose vi monta sopra un **volume nominato**, `istanta_external_source`, sul
+percorso dell'immagine `/app/wwwroot/external_source`. Non è un dettaglio
+arbitrario: un volume nominato, alla prima creazione, viene seminato da Docker
+con il contenuto che l'immagine ha in quel punto — tutte le cartelle dei clienti
+e la `vergine`, già di proprietà dell'utente `app` perché il Dockerfile copia con
+`--chown=app:app`. Dalle release successive il volume viene preservato.
+
+Il comportamento è stato verificato provandolo, non dedotto:
+
+| | |
+| --- | --- |
+| file scritto a runtime | sopravvive alla release |
+| file modificato a runtime | non viene sovrascritto dall'immagine nuova |
+| file aggiunto nell'immagine nuova | **non arriva** nel volume esistente |
+
+Non serve quindi nessuna semina manuale, e `external_paths__pathSource` resta il
+percorso relativo `wwwroot/external_source/<Cliente>/`.
+
+L'ultima riga della tabella è la controindicazione da conoscere: se una release
+aggiunge un modello in `vergine` o la cartella di un cliente nuovo, quelli non
+entrano da soli in un'installazione esistente. Si copiano a mano:
+
+```bash
+seed=$(docker create "$ISTANTA_IMAGE")
+docker cp "$seed:/app/wwwroot/external_source/vergine/."   "$(docker volume inspect istanta-correggo_istanta_external_source -f '{{.Mountpoint}}')/vergine/"
+docker rm "$seed"
+```
+
+Con un bind mount su `/data` questo non sarebbe servito, ma si sarebbe perso il
+vantaggio opposto: la semina automatica alla prima installazione, che è il caso
+frequente, e che a mano è facile dimenticare — con il risultato che l'
+applicazione non trova `vergine`, non crea nulla, e `CalcolaMancanti` restituisce
+una lista vuota dentro un `catch` silenzioso.
+
+Per `ai_models` il compose monta un volume per la stessa ragione:
+`BackgroundCodeService` vi scrive i campioni di addestramento usando
+`AppContext.BaseDirectory`, percorso nel codice e non configurabile. È materia da
+dismettere lato applicazione, ma finché scrive lì il volume evita di perdere
+quei file a ogni release.
 
 Il certificato del proxy, con l'indirizzo IP nel SAN — senza, i browser lo
 rifiutano a prescindere:
