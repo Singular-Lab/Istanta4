@@ -186,7 +186,7 @@ CREATE TABLE articoli_foto (
     puntatore boolean NOT NULL,
     data_inserimento timestamp without time zone NOT NULL,
     stato_selezione smallint NULL DEFAULT (((1))),
-    attiva boolean NOT NULL DEFAULT (((1))),
+    attiva boolean NOT NULL DEFAULT true,
     hash character varying(200) NULL,
     data_modifica timestamp without time zone NULL,
     tipo smallint NULL,
@@ -263,7 +263,7 @@ CREATE TABLE utenti_fico (
     user_data text NOT NULL,
     last_access timestamp without time zone NOT NULL,
     CONSTRAINT "PK_utenti_fico" PRIMARY KEY (id),
-    CONSTRAINT "PK_utenti_fico" FOREIGN KEY (id_utente) REFERENCES utenti (id)
+    CONSTRAINT "FK_utenti_fico_utenti" FOREIGN KEY (id_utente) REFERENCES utenti (id)
 );
 
 

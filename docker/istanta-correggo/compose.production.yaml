@@ -1,0 +1,219 @@
+# Deployment set "istanta-correggo" della suite Istanta4.
+#
+# Lo applica Company.AI.Runner sul target, eseguendo dalla working directory:
+#   docker compose --env-file release.env -f compose.production.yaml pull istanta correggo4
+#   docker compose --env-file release.env -f compose.production.yaml up -d --wait istanta correggo4
+#
+# ISTANTA_IMAGE e CORREGGO4_IMAGE le scrive il Runner in release.env a ogni
+# release, pinnate a digest. Non vanno mai impostate a mano.
+#
+# Tutti i servizi sono in container: oltre alle due applicazioni ci sono
+# PostgreSQL (un database per componente), Redis (cache di sessione di Istanta:
+# la connection string IstantaSession alimenta AddStackExchangeRedisCache, non
+# un database SQL) e nginx, che termina il TLS e da' a ciascuna applicazione la
+# propria origine.
+#
+# IMPORTANTE: ogni bind mount indica un percorso ASSOLUTO dell'host. Il Runner
+# esegue docker compose da dentro il proprio container, parlando con il daemon
+# dell'host: un percorso relativo verrebbe risolto nel filesystem del Runner
+# (/deployments/...), che sull'host non esiste, e Docker lo creerebbe vuoto
+# invece di dare errore.
+
+name: ${COMPOSE_PROJECT_NAME:-istanta-correggo}
+
+services:
+  istanta:
+    image: ${ISTANTA_IMAGE:?ISTANTA_IMAGE viene scritta dal Runner in release.env}
+    pull_policy: always
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      # Solo su localhost, per diagnosi dall'host: il traffico vero passa da nginx.
+      - "127.0.0.1:${ISTANTA_LOCAL_PORT:-18080}:8080"
+    env_file:
+      - istanta.env
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_HTTP_PORTS: "8080"
+      # Definite qui e non in istanta.env: devono restare identiche a quelle con
+      # cui il container PostgreSQL e' stato inizializzato.
+      ConnectionStrings__IstandaConnectionDb: Host=postgres;Port=5432;Database=${ISTANTA_DB_NAME:-istanta};Username=${ISTANTA_DB_USER:-istanta};Password=${ISTANTA_DB_PASSWORD:?Impostare ISTANTA_DB_PASSWORD in release.env}
+      ConnectionStrings__IstantaSession: redis:6379
+      external_paths__pathLib: /app/external_lib/
+    volumes:
+      # Qui il Runner installa AgenziaLib.dll, artifact di tipo File della
+      # release: la directory corrisponde alla DestinationPath configurata nel
+      # catalogo ControlPlane, dentro la working directory del progetto.
+      - ${ISTANTA_EXTERNAL_LIB_DIR:?Impostare ISTANTA_EXTERNAL_LIB_DIR in release.env, percorso assoluto sull'host}:/app/external_lib:ro
+      # Configurazione del cliente: percorsi, chiavi FICO, indirizzi dei servizi.
+      - ${ISTANTA_APPSETTINGS_FILE:?Impostare ISTANTA_APPSETTINGS_FILE in release.env, percorso assoluto sull'host}:/app/appsettings.json:ro
+      # Dati persistenti del cliente: jpg, estrazioni, file importati ed esportati.
+      - ${ISTANTA_DATA_DIR:?Impostare ISTANTA_DATA_DIR in release.env, percorso assoluto sull'host}:/data
+      - istanta_logs:/app/logs
+      - istanta_keys:/home/app/.aspnet/DataProtection-Keys
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    healthcheck:
+      # Nell'immagine .NET non ci sono curl, wget o nc. Bash c'e', e /dev/tcp
+      # basta a sapere se la porta accetta connessioni.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  correggo4:
+    image: ${CORREGGO4_IMAGE:?CORREGGO4_IMAGE viene scritta dal Runner in release.env}
+    pull_policy: always
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "127.0.0.1:${CORREGGO_LOCAL_PORT:-18081}:8080"
+    env_file:
+      - correggo4.env
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_HTTP_PORTS: "8080"
+      ConnectionStrings__Correggo4Db: Host=postgres;Port=5432;Database=${CORREGGO_DB_NAME:-correggo4};Username=${CORREGGO_DB_USER:-correggo4};Password=${CORREGGO_DB_PASSWORD:?Impostare CORREGGO_DB_PASSWORD in release.env}
+      Storage__VolantiniPath: /data/volantini
+    volumes:
+      - correggo_volantini:/data/volantini
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  postgres:
+    # Nessuna delle due applicazioni crea il proprio schema all'avvio: li applica
+    # postgres-init/01-init-databases.sh leggendo i file SQL montati in /schemas.
+    image: postgres:17
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      # L'immagine crea database e ruolo di Istanta al primo avvio.
+      POSTGRES_DB: ${ISTANTA_DB_NAME:-istanta}
+      POSTGRES_USER: ${ISTANTA_DB_USER:-istanta}
+      POSTGRES_PASSWORD: ${ISTANTA_DB_PASSWORD:?Impostare ISTANTA_DB_PASSWORD in release.env}
+      # Letti dallo script di init, che crea quelli di Correggo4.
+      CORREGGO_DB_NAME: ${CORREGGO_DB_NAME:-correggo4}
+      CORREGGO_DB_USER: ${CORREGGO_DB_USER:-correggo4}
+      CORREGGO_DB_PASSWORD: ${CORREGGO_DB_PASSWORD:?Impostare CORREGGO_DB_PASSWORD in release.env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ${POSTGRES_INIT_DIR:?Impostare POSTGRES_INIT_DIR in release.env, percorso assoluto sull'host}:/docker-entrypoint-initdb.d:ro
+      - ${SCHEMAS_DIR:?Impostare SCHEMAS_DIR in release.env, percorso assoluto sull'host}:/schemas:ro
+    ports:
+      # Solo su localhost, per manutenzione: psql, pg_dump. La 5434 per non
+      # collidere con un PostgreSQL gia' presente sulla macchina.
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5434}:5432"
+    healthcheck:
+      # Tre controlli, e nessuno e' superfluo.
+      #
+      # `pg_isready` su TCP e non sul socket: durante l'inizializzazione
+      # l'immagine avvia un server temporaneo solo su socket, e con il socket il
+      # servizio risulterebbe sano mentre gli script stanno ancora girando.
+      #
+      # Il conteggio delle tabelle nei due database verifica che gli schemi
+      # siano stati applicati davvero. Controllare solo l'esistenza del ruolo
+      # non basta: il ruolo viene creato prima degli schemi, quindi un init
+      # interrotto a meta' lo lascerebbe presente e il servizio passerebbe per
+      # sano con i database vuoti. E un init interrotto non viene mai piu'
+      # rieseguito, perche' PostgreSQL lo salta quando il volume esiste gia'.
+      test:
+        - CMD-SHELL
+        - >-
+          pg_isready -h 127.0.0.1 -U ${ISTANTA_DB_USER:-istanta} -d ${ISTANTA_DB_NAME:-istanta}
+          && psql -U ${ISTANTA_DB_USER:-istanta} -d ${ISTANTA_DB_NAME:-istanta} -tAc
+          "select count(*) from pg_tables where schemaname='public'" | grep -qxv 0
+          && psql -U ${ISTANTA_DB_USER:-istanta} -d ${CORREGGO_DB_NAME:-correggo4} -tAc
+          "select count(*) from pg_tables where schemaname='public'" | grep -qxv 0
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  redis:
+    # Cache di sessione di Istanta (ConnectionStrings:IstantaSession).
+    # Dipendenza interna, non un componente della release: il ControlPlane non
+    # la conosce e il Runner non la aggiorna.
+    image: redis:7-alpine
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  proxy:
+    # Termina il TLS e da' a ciascuna applicazione la propria origine, su due
+    # porte distinte: niente prefissi di percorso, che richiederebbero alle
+    # applicazioni di conoscere il proprio path base.
+    #
+    # Non e' una dipendenza delle applicazioni ma il contrario, quindi il
+    # deployment selettivo del Runner non lo avvia: si avvia una volta a mano
+    # con `docker compose up -d proxy` e resta su anche fra una release e
+    # l'altra, perche' instrada per nome di servizio.
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      APP_ISTANTA_PORT: "8080"
+      APP_CORREGGO_PORT: "8080"
+      # Limita la sostituzione alle nostre variabili: senza filtro envsubst
+      # intaccherebbe le variabili di nginx presenti nel template.
+      NGINX_ENVSUBST_FILTER: "^APP_"
+    volumes:
+      - ${PROXY_TEMPLATE_DIR:?Impostare PROXY_TEMPLATE_DIR in release.env, percorso assoluto sull'host}:/etc/nginx/templates:ro
+      - ${PROXY_CERT_DIR:?Impostare PROXY_CERT_DIR in release.env, percorso assoluto sull'host}:/etc/nginx/certs:ro
+    ports:
+      - "${ISTANTA_HTTPS_PORT:-8443}:443"
+      - "${CORREGGO_HTTPS_PORT:-8444}:444"
+    depends_on:
+      istanta:
+        condition: service_started
+      correggo4:
+        condition: service_started
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  postgres_data:
+  redis_data:
+  istanta_logs:
+  istanta_keys:
+  correggo_volantini:
