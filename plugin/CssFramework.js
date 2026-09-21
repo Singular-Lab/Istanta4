@@ -3,6 +3,7 @@ const { ClippingPathType, ClippingPathSettings, Image } = require('indesign');
 const cssComposizioneBox = require('./cssComposizioneBox');
 const cssSequenzaOperazioni = require('./cssSequenzaOperazioni');
 const cssSpazioFoto = require('./cssSpazioFoto');
+const cssRegoleConflitti = require('./cssRegoleConflitti');
 
 const CssFramework =
 {
@@ -5191,21 +5192,65 @@ const CssFramework =
         }
     },
 
+    /// Rettangoli delle righe di un campo di testo, uno per riga. Sono la geometria vera
+    /// del testo: baseline, ascent e descent per l'altezza, gli offset orizzontali per la
+    /// larghezza, senza i margini interni del riquadro. Per quel che non e' testo, o quando
+    /// le righe non si possono leggere, l'elenco resta vuoto e si torna al rettangolo unico.
+    righeDiTesto(item) {
+        try {
+            if (item == null || item.constructorName != "TextFrame" || !item.lines) {
+                return [];
+            }
+
+            var righe = [];
+            var elenco = item.lines.everyItem().getElements();
+            for (var i = 0; i < elenco.length; i++) {
+                var linea = elenco[i];
+                righe.push(cssRegoleConflitti.rettangoloDiRiga(
+                    linea.baseline, linea.ascent, linea.descent,
+                    linea.horizontalOffset, linea.endHorizontalOffset));
+            }
+
+            return righe;
+        }
+        catch (e) {
+            console.log("Impossibile leggere le righe di " + (item != null ? item.label : "elemento nullo") + ": " + e);
+            return [];
+        }
+    },
+
     elementsTouching(item1, item2, useTextBounds = false) {
         //controlliamo se i due item si toccano
         var b1 = useTextBounds ? this.getRealBounds(item1) : item1.geometricBounds;
         var b2 = useTextBounds ? this.getRealBounds(item2) : item2.geometricBounds;
 
-        //controllo di non sovrapposizione
-        if (b1[0] >= b2[2] || b2[0] >= b1[2]) {
-            return false;
+        if (!useTextBounds) {
+            return cssRegoleConflitti.rettangoliInContatto(b1, b2);
         }
-        if (b1[1] >= b2[3] || b2[1] >= b1[3]) {
+
+        //Sul testo il rettangolo unico non basta: ingloba tutte le righe, quindi una riga
+        //lunga presta la sua larghezza alla fascia dove c'e' solo una riga corta, e lo
+        //spazio fra le righe conta come testo. Si confronta riga per riga.
+        var righe1 = this.righeDiTesto(item1);
+        var righe2 = this.righeDiTesto(item2);
+
+        if (righe1.length == 0 && righe2.length == 0) {
+            return cssRegoleConflitti.rettangoliInContatto(b1, b2);
+        }
+
+        if (righe1.length > 0 && righe2.length > 0) {
+            for (var i = 0; i < righe1.length; i++) {
+                if (cssRegoleConflitti.contattoConLeRighe(righe1[i], righe2, b2)) {
+                    return true;
+                }
+            }
             return false;
         }
 
-        //se siamo arrivati qui i due item si toccano
-        return true;
+        //Uno solo dei due e' testo: l'altro si confronta con le sue righe.
+        return righe1.length > 0
+            ? cssRegoleConflitti.contattoConLeRighe(b2, righe1, b1)
+            : cssRegoleConflitti.contattoConLeRighe(b1, righe2, b2);
     },
 
     segnalazioniConflittiPendenti: null,
@@ -5221,74 +5266,17 @@ const CssFramework =
         return box && box.label ? box.label : "";
     },
 
+    //La lettura delle regole vive in cssRegoleConflitti: li' e' verificabile dalla suite.
     splitSegnalazioniConflittiSpec(spec) {
-        if (spec == null || typeof spec !== "string") {
-            return [];
-        }
-
-        return spec.split(",")
-            .map(el => el.trim())
-            .filter(el => el !== "");
+        return cssRegoleConflitti.splitSpec(spec);
     },
 
     normalizzaRegolaSegnalazioniConflitti(regola) {
-        if (regola == null) {
-            return null;
-        }
-
-        var segnalazioni = null;
-        if (Array.isArray(regola)) {
-            segnalazioni = regola;
-        }
-        else if (regola.segnalazioni != null) {
-            segnalazioni = Array.isArray(regola.segnalazioni) ? regola.segnalazioni : [regola.segnalazioni];
-        }
-
-        if (!segnalazioni || segnalazioni.length == 0) {
-            return null;
-        }
-
-        var latoA = this.splitSegnalazioniConflittiSpec(segnalazioni[0]);
-        var latoB = this.splitSegnalazioniConflittiSpec(segnalazioni.length > 1 ? segnalazioni[1] : "");
-
-        if (latoA.length == 0 && latoB.length > 0) {
-            latoA = latoB;
-            latoB = [];
-        }
-
-        if (latoA.length == 0) {
-            return null;
-        }
-
-        return {
-            latoA: latoA,
-            latoB: latoB
-        };
+        return cssRegoleConflitti.normalizzaRegola(regola);
     },
 
     getListaRegoleSegnalazioniConflitti(segnalazioniConflitti) {
-        if (segnalazioniConflitti == null) {
-            return [];
-        }
-
-        var regoleInput = [];
-        if (Array.isArray(segnalazioniConflitti)) {
-            var isRegolaDiretta = segnalazioniConflitti.length <= 2 && segnalazioniConflitti.every(el => typeof el === "string");
-            regoleInput = isRegolaDiretta ? [segnalazioniConflitti] : segnalazioniConflitti;
-        }
-        else {
-            regoleInput = [segnalazioniConflitti];
-        }
-
-        var regole = [];
-        for (var i = 0; i < regoleInput.length; i++) {
-            var regola = this.normalizzaRegolaSegnalazioniConflitti(regoleInput[i]);
-            if (regola) {
-                regole.push(regola);
-            }
-        }
-
-        return regole;
+        return cssRegoleConflitti.getListaRegole(segnalazioniConflitti);
     },
 
     aggiungiRegoleSegnalazioniConflitti(listRegole, elementDB, chiaviRegole) {
@@ -5299,7 +5287,7 @@ const CssFramework =
         var regole = this.getListaRegoleSegnalazioniConflitti(elementDB.segnalazioniConflitti);
         for (var i = 0; i < regole.length; i++) {
             var regola = regole[i];
-            var key = regola.latoA.join(",") + "|" + regola.latoB.join(",");
+            var key = cssRegoleConflitti.chiaveRegola(regola);
             if (chiaviRegole.indexOf(key) >= 0) {
                 continue;
             }
@@ -5433,7 +5421,7 @@ const CssFramework =
                 if (regola.latoB.length == 0) {
                     for (var a = 0; a < elementiA.length; a++) {
                         for (var b = a + 1; b < elementiA.length; b++) {
-                            if (this.elementsTouching(elementiA[a].item, elementiA[b].item)) {
+                            if (this.elementsTouching(elementiA[a].item, elementiA[b].item, regola.useTextBounds)) {
                                 this.segnalaConflittoElementi(box, elementiA[a], elementiA[b], pendente);
                             }
                         }
@@ -5448,7 +5436,7 @@ const CssFramework =
                             continue;
                         }
 
-                        if (this.elementsTouching(elementiA[a].item, elementiB[b].item)) {
+                        if (this.elementsTouching(elementiA[a].item, elementiB[b].item, regola.useTextBounds)) {
                             this.segnalaConflittoElementi(box, elementiA[a], elementiB[b], pendente);
                         }
                     }
