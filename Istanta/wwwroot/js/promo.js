@@ -82,6 +82,14 @@ class Promo {
             let template = $("#promoItem");
 
             console.log(result);
+
+            //I20-973: le promo appena registrate vanno in cima. Come per i tracciati, il
+            //modulo arriva da uno script a parte: se manca, l'elenco resta nell'ordine del
+            //server invece di non comparire.
+            if (typeof ordinamentoTracciati !== "undefined") {
+                result = ordinamentoTracciati.promoDallaPiuRecente(result);
+            }
+
             me.lista_promo_scaricate = result;
 
             for (let i = 0; i < result.length; i++) {

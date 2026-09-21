@@ -1,9 +1,12 @@
 ﻿/*
- * I20-973: ordine con cui compaiono i tracciati di una promo.
+ * I20-973: ordine con cui compaiono le promo e i loro tracciati nella pagina Tracciati.
  *
- * Il server restituisce i tracciati nell'ordine in cui sono stati inseriti, cioe' dal piu'
- * vecchio, e chi importa un tracciato se lo ritrovava in fondo all'elenco. Qui i tracciati
- * tornano dal piu' recente.
+ * Il server non ordina nulla: promo e tracciati arrivano nell'ordine in cui sono stati
+ * inseriti, cioe' dal piu' vecchio, e chi importava del materiale se lo ritrovava in fondo.
+ * Qui gli elenchi tornano dal piu' recente.
+ *
+ * Le due date non sono la stessa cosa: una promo ha la sua data di registrazione, mentre un
+ * tracciato non porta nessuna data e prende quella dell'importazione da cui viene.
  *
  * L'ordinamento e' stabile e si applica dopo quello per sigla di agenzia.js: la data
  * comanda, e fra tracciati arrivati con la stessa importazione, che e' il caso normale
@@ -70,20 +73,55 @@ const ordinamentoTracciati = {
             return { tracciato: tracciato, istante: ordinamentoTracciati.istanteDiCaricamento(tracciato, importazioni) };
         });
 
-        conIstante.sort(function (a, b) {
-            if (a.istante == null && b.istante == null) {
-                return 0;
-            }
-            if (a.istante == null) {
-                return 1;
-            }
-            if (b.istante == null) {
-                return -1;
-            }
-            return b.istante - a.istante;
-        });
+        conIstante.sort(ordinamentoTracciati.confrontaIstanti);
 
         return conIstante.map(function (voce) { return voce.tracciato; });
+    },
+
+    /// Quando la promo e' stata registrata, in millisecondi, oppure null se non si sa.
+    istanteDiRegistrazione(promo) {
+        if (promo == null) {
+            return null;
+        }
+
+        const data = promo.dataRegistrazione != null ? promo.dataRegistrazione : promo.DataRegistrazione;
+        if (data == null || data === "") {
+            return null;
+        }
+
+        const istante = new Date(data).getTime();
+        return isNaN(istante) ? null : istante;
+    },
+
+    /// Le promo dalla piu' recente. L'elenco ricevuto non viene toccato.
+    /// Una promo senza data di registrazione finisce in fondo, come i tracciati senza data.
+    promoDallaPiuRecente(promo) {
+        if (!Array.isArray(promo)) {
+            return promo;
+        }
+
+        const conIstante = promo.map(function (voce) {
+            return { promo: voce, istante: ordinamentoTracciati.istanteDiRegistrazione(voce) };
+        });
+
+        conIstante.sort(ordinamentoTracciati.confrontaIstanti);
+
+        return conIstante.map(function (voce) { return voce.promo; });
+    },
+
+    /// Dal piu' recente, con le date ignote in fondo. Chi non sa quando e' arrivato non
+    /// puo' pretendere la cima, e due date uguali lasciano l'ordine come l'hanno trovato.
+    confrontaIstanti(a, b) {
+        if (a.istante == null && b.istante == null) {
+            return 0;
+        }
+        if (a.istante == null) {
+            return 1;
+        }
+        if (b.istante == null) {
+            return -1;
+        }
+        return b.istante - a.istante;
     }
 
 };

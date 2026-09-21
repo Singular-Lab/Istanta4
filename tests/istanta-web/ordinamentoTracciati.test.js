@@ -119,7 +119,69 @@ test('il server puo\' scrivere i nomi con l\'iniziale maiuscola', () => {
     assert.deepStrictEqual(ordinati.map(t => t.IdImportazione), [3, 1]);
 });
 
+/* ---- l'elenco delle promo ---- */
+
+// Una promo porta la sua data di registrazione, mentre un tracciato prende quella
+// dell'importazione: sono due elenchi e due date diverse.
+test('le promo registrate per ultime stanno in cima', () => {
+    const promo = [
+        { id: 1, nomePromo: 'vecchia', dataRegistrazione: '2026-08-01T10:00:00' },
+        { id: 2, nomePromo: 'nuova', dataRegistrazione: '2026-09-18T10:00:00' },
+        { id: 3, nomePromo: 'mezzana', dataRegistrazione: '2026-09-01T10:00:00' }
+    ];
+
+    assert.deepStrictEqual(
+        ordinamentoTracciati.promoDallaPiuRecente(promo).map(p => p.nomePromo),
+        ['nuova', 'mezzana', 'vecchia']);
+});
+
+test('una promo senza data di registrazione finisce in fondo', () => {
+    const promo = [
+        { id: 1, nomePromo: 'senza data' },
+        { id: 2, nomePromo: 'con data', dataRegistrazione: '2026-09-18T10:00:00' }
+    ];
+
+    assert.deepStrictEqual(
+        ordinamentoTracciati.promoDallaPiuRecente(promo).map(p => p.nomePromo),
+        ['con data', 'senza data']);
+});
+
+test('l\'elenco delle promo ricevuto non viene toccato', () => {
+    const promo = [
+        { id: 1, dataRegistrazione: '2026-08-01T10:00:00' },
+        { id: 2, dataRegistrazione: '2026-09-18T10:00:00' }
+    ];
+    const copia = promo.slice();
+
+    ordinamentoTracciati.promoDallaPiuRecente(promo);
+
+    assert.deepStrictEqual(promo, copia);
+});
+
+test('senza elenco delle promo non si rompe nulla', () => {
+    assert.strictEqual(ordinamentoTracciati.promoDallaPiuRecente(null), null);
+    assert.deepStrictEqual(ordinamentoTracciati.promoDallaPiuRecente([]), []);
+    assert.deepStrictEqual(
+        ordinamentoTracciati.promoDallaPiuRecente([{ id: 1, DataRegistrazione: '2026-09-18T10:00:00' }]).map(p => p.id),
+        [1]);
+});
+
 /* ---- come la pagina usa il modulo ---- */
+
+// La pagina scorre lista_promo_scaricate per indice quando cerca le importazioni in attesa:
+// l'elenco memorizzato e quello disegnato devono essere lo stesso, nello stesso ordine.
+test('la pagina ordina le promo prima di disegnarle e di memorizzarle', () => {
+    const promo = sorgente('Istanta/wwwroot/js/promo.js');
+
+    const ordina = promo.indexOf('ordinamentoTracciati.promoDallaPiuRecente(result)');
+    const memorizza = promo.indexOf('me.lista_promo_scaricate = result;');
+    const disegna = promo.indexOf('for (let i = 0; i < result.length; i++)');
+
+    assert.ok(ordina > 0, 'le promo devono essere ordinate');
+    assert.ok(ordina < memorizza, 'si memorizza l\'elenco gia\' ordinato');
+    assert.ok(memorizza < disegna, 'e si disegna quello stesso elenco');
+});
+
 
 // L'ordine per data si vede solo se arriva dopo quello per sigla: invertendo i due passaggi
 // la sigla tornerebbe a comandare e la modifica sarebbe invisibile.
@@ -137,15 +199,19 @@ test('la pagina ordina per data dopo aver ordinato per sigla', () => {
 // Il modulo arriva da uno script a parte, caricato dal layout, che e' una view compilata
 // nell'assembly: pubblicando i soli file statici si ottiene un promo.js nuovo con un layout
 // vecchio, e senza guardia la pagina perdeva l'intero elenco invece di una riga d'ordine.
-test('senza il modulo l\'elenco si disegna comunque', () => {
+test('senza il modulo gli elenchi si disegnano comunque', () => {
     const promo = sorgente('Istanta/wwwroot/js/promo.js');
+    const guardia = 'typeof ordinamentoTracciati !== "undefined"';
 
-    const guardia = promo.indexOf('typeof ordinamentoTracciati !== "undefined"');
-    const chiamata = promo.indexOf('ordinamentoTracciati.dalPiuRecente(');
+    const usi = [...promo.matchAll(/ordinamentoTracciati\.\w+\(/g)].map(trovato => trovato.index);
 
-    assert.ok(guardia > 0, 'l\'uso del modulo deve essere protetto');
-    assert.ok(guardia < chiamata, 'la protezione deve precedere la chiamata');
-    assert.ok(chiamata - guardia < 200, 'la chiamata deve stare dentro la protezione');
+    assert.strictEqual(usi.length, 2, 'due usi del modulo: le promo e i tracciati');
+
+    for (const uso of usi) {
+        const protezione = promo.lastIndexOf(guardia, uso);
+        assert.ok(protezione > 0, 'ogni uso del modulo deve essere protetto');
+        assert.ok(uso - protezione < 200, 'la chiamata deve stare dentro la protezione che la precede');
+    }
 });
 
 test('il layout carica il modulo prima di promo.js', () => {
