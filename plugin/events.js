@@ -3,6 +3,7 @@ const XMLHttpRequestClient = require('./XMLHttpRequestClient');
 const {Utility} = require('./utility');
 const { refSelected } = require('./schedaRef');
 const {Logger} = require('./logger');
+const reportIntegritaAvvio = require('./reportIntegritaAvvio');
 
 class InddEvents {
     mainInterval = null;
@@ -38,6 +39,14 @@ class InddEvents {
 
     isBusy=false;
     asleep=false;
+
+    //I20-981: il Report Integrita' tiene isBusy per tutto il tempo in cui resta aperto, e
+    //con isBusy questo ciclo si fermava prima di accorgersi del cambio di documento. Il
+    //controllo che chiude il report vive fuori da quel cancello, rallentato perche' chiedere
+    //il percorso del documento attivo costa una chiamata a InDesign.
+    INTERVALLO_CONTROLLO_REPORT = 500;
+    timeStampControlloReport = 0;
+    controlloReportInCorso = false;
 
     //Lista eventi
     EVENT_NEW_DOCUMENT_SELECTED = "newDocumentSelected";//Cambio di selezione di un documento
@@ -105,6 +114,8 @@ class InddEvents {
                 if(document.getElementById("wrapper").clientWidth != lastWidthDimension || document.getElementById("wrapper").clientHeight != lastHeightDimension){
                     onresizeWindow();
                 }
+
+                await me.controllaChiusuraReportIntegrita();
 
                 if (me.isBusy){
                     //console.warn("IsBusy: "+me.isBusy)
@@ -511,6 +522,47 @@ class InddEvents {
             }
         }
             , 100);
+    }
+
+    /// I20-981: il report integrita' descrive un documento preciso. Se l'operatore passa a un
+    /// altro file, o li chiude tutti, quelle segnalazioni non si possono piu' verificare e il
+    /// report va chiuso senza chiedere niente: la domanda "sicuro di voler interrompere?"
+    /// resta per la chiusura fatta a mano.
+    async controllaChiusuraReportIntegrita() {
+        if (this.controlloReportInCorso) {
+            return;
+        }
+
+        if (Date.now() - this.timeStampControlloReport < this.INTERVALLO_CONTROLLO_REPORT) {
+            return;
+        }
+
+        this.timeStampControlloReport = Date.now();
+
+        if (typeof confronti === "undefined" || confronti == null || !confronti.reportIntegritaAperto()) {
+            return;
+        }
+
+        this.controlloReportInCorso = true;
+
+        try {
+            let documentoAttuale = null;
+
+            if (app.documents.length > 0) {
+                const nomeCompleto = await app.activeDocument.fullName;
+                documentoAttuale = nomeCompleto != null ? nomeCompleto.nativePath : null;
+            }
+
+            if (reportIntegritaAvvio.deveChiudereReport(confronti.documentoDelReport(), documentoAttuale)) {
+                confronti.chiudiReportIntegrita("il documento non e' piu' quello del report");
+            }
+        }
+        catch (err) {
+            console.error("Errore durante il controllo di chiusura del report integrita':", err);
+        }
+        finally {
+            this.controlloReportInCorso = false;
+        }
     }
 
     resetLastSelection(){
