@@ -287,3 +287,40 @@ test("l'hash si calcola solo quando il nome coincide", () => {
     assert.ok(guardia > 0 && calcolo > guardia && calcolo - guardia < 400,
         "leggere un psd da centinaia di megabyte quando non serve l'hash sarebbe un costo inutile");
 });
+
+/* ---- quando l'anteprima non si puo' mostrare ---- */
+
+// Il pannello non sa disegnare i psd, che sono proprio i file a cui diamo la precedenza. Un
+// riquadro vuoto, o un'immagine rotta, sembrerebbe un guasto: si dice perche' non c'e'.
+test("il pannello sa disegnare solo alcuni formati", () => {
+    assert.strictEqual(schedaRef.tipoAnteprimaDi("foto.jpg"), "image/jpeg");
+    assert.strictEqual(schedaRef.tipoAnteprimaDi("foto.JPEG"), "image/jpeg");
+    assert.strictEqual(schedaRef.tipoAnteprimaDi("foto.png"), "image/png");
+    assert.strictEqual(schedaRef.tipoAnteprimaDi("foto.webp"), "image/webp");
+    assert.strictEqual(schedaRef.tipoAnteprimaDi("foto.gif"), "image/gif");
+    assert.strictEqual(schedaRef.tipoAnteprimaDi("foto.psd"), null);
+    assert.strictEqual(schedaRef.tipoAnteprimaDi("foto.tif"), null);
+    assert.strictEqual(schedaRef.tipoAnteprimaDi("senza_estensione"), null);
+});
+
+test("il testo sostitutivo dice di che formato si tratta", () => {
+    assert.strictEqual(schedaRef.testoAnteprimaNonDisponibile("6119227_1.psd"),
+        "Anteprima non disponibile per i file PSD");
+    assert.strictEqual(schedaRef.testoAnteprimaNonDisponibile("senza_estensione"),
+        "Anteprima non disponibile");
+});
+
+test("il riquadro sostitutivo esiste nel markup e viene governato in tutti i punti", () => {
+    const sorgente = sorgentePlugin("schedaRef.js");
+
+    assert.ok(sorgente.includes('id="txtAnteprimaNonDisponibile"'),
+        "il riquadro sostitutivo deve stare accanto all'immagine");
+    assert.ok(sorgente.includes("me.mostraAnteprimaCaricamento(fd.nomeFile, previewUrl);"),
+        "l'anteprima del file scelto passa di li'");
+    assert.ok(!sorgente.includes("$('#imgPreviewUploadFoto').attr('src', previewUrl);"),
+        "l'immagine non va piu' impostata alla cieca");
+
+    const ripristino = sorgente.indexOf("$('#previewUploadFoto').hide();");
+    assert.ok(sorgente.slice(ripristino, ripristino + 400).includes("$('#txtAnteprimaNonDisponibile').hide()"),
+        "il ripristino deve pulire anche il riquadro sostitutivo");
+});

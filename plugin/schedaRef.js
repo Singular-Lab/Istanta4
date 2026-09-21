@@ -4625,6 +4625,45 @@ const schedaRef = {
         return { base: testo.substring(0, punto), estensione: testo.substring(punto + 1).toLowerCase() };
     },
 
+    /// I20-980: il tipo con cui il pannello sa disegnare questo file, oppure null se non lo sa
+    /// disegnare affatto. Un psd e' il caso che capita: il webview non lo rende, e i psd sono
+    /// proprio i file a cui diamo la precedenza.
+    tipoAnteprimaDi(nome) {
+        var mostrabili = {
+            jpg: "image/jpeg",
+            jpeg: "image/jpeg",
+            png: "image/png",
+            webp: "image/webp",
+            gif: "image/gif"
+        };
+
+        var estensione = this.partiDelNomeFile(nome).estensione;
+        return mostrabili[estensione] != null ? mostrabili[estensione] : null;
+    },
+
+    /// Cosa scrivere al posto dell'immagine quando non si puo' mostrare.
+    testoAnteprimaNonDisponibile(nome) {
+        var estensione = this.partiDelNomeFile(nome).estensione;
+        return estensione === ""
+            ? "Anteprima non disponibile"
+            : "Anteprima non disponibile per i file " + estensione.toUpperCase();
+    },
+
+    /// I20-980: mostra l'anteprima del file scelto, oppure dice perche' non c'e'. Un riquadro
+    /// vuoto, o peggio un'immagine rotta, sembrerebbe un guasto del Plugin.
+    mostraAnteprimaCaricamento(nomeFile, url) {
+        var tipo = this.tipoAnteprimaDi(nomeFile);
+
+        if (tipo != null && url) {
+            $('#imgPreviewUploadFoto').attr('src', url).show();
+            $('#txtAnteprimaNonDisponibile').hide().text('');
+            return;
+        }
+
+        $('#imgPreviewUploadFoto').attr('src', '').hide();
+        $('#txtAnteprimaNonDisponibile').text(this.testoAnteprimaNonDisponibile(nomeFile)).show();
+    },
+
     /// I file della cartella che possono essere la foto di questa referenza: il nome comincia
     /// con il suo codice, seguito da un separatore.
     ///
@@ -4813,22 +4852,26 @@ const schedaRef = {
             psdSoloInCartella: "Nella cartella di lavorazione c'e' il psd, su Istanta no."
         };
 
-        var estensione = this.partiDelNomeFile(candidato.nome).estensione;
-        var mostrabili = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", gif: "image/gif" };
+        var tipo = this.tipoAnteprimaDi(candidato.nome);
 
         var riquadro = $('<div style="display:flex; flex-direction:column; align-items:center; gap:8px; text-align:center;"></div>');
         riquadro.append($('<h3 style="margin:0;">E\' questa la foto che stai cercando?</h3>'));
         riquadro.append($('<div style="font-size:11px;"></div>').text(spiegazioni[motivo] || ""));
 
-        if (mostrabili[estensione] != null) {
+        var immagine = null;
+        if (tipo != null) {
             try {
-                var url = URL.createObjectURL(new Blob([contenuto], { type: mostrabili[estensione] }));
-                riquadro.append($('<img style="max-width:180px; max-height:180px; border:1px solid #ddd;">').attr("src", url));
+                var url = URL.createObjectURL(new Blob([contenuto], { type: tipo }));
+                immagine = $('<img style="max-width:180px; max-height:180px; border:1px solid #ddd;">').attr("src", url);
             }
             catch (e) {
-                console.log("Anteprima non disponibile: " + e);
+                console.log("Anteprima non costruita: " + e);
             }
         }
+
+        //Un riquadro vuoto sembrerebbe un guasto: meglio dire perche' non c'e' l'immagine.
+        riquadro.append(immagine != null ? immagine : $('<div style="min-width:120px; min-height:80px; display:flex; align-items:center; justify-content:center; padding:10px; border:1px dashed #bbb; background:#f8f8f8; color:#777; font-size:11px;"></div>')
+            .text(this.testoAnteprimaNonDisponibile(candidato.nome)));
 
         var descrizione = candidato.nome;
         if (candidato.dimensione) {
@@ -5203,6 +5246,7 @@ const schedaRef = {
                             background:#f8f8f8;
                         ">
                             <img id="imgPreviewUploadFoto" src="" style="max-width:120px; max-height:120px;">
+                            <div id="txtAnteprimaNonDisponibile" style="display:none; color:#777; font-size:11px; text-align:center;"></div>
                         </div>
                         <div id="txtNomeUploadFoto" style="margin-top:6px; font-size:11px; word-break:break-word;"></div>
                     </div>
@@ -5862,7 +5906,7 @@ const schedaRef = {
                             setScopeSelection('globale');
                             updateConfirmButtonState();
 
-                            $('#imgPreviewUploadFoto').attr('src', previewUrl);
+                            me.mostraAnteprimaCaricamento(fd.nomeFile, previewUrl);
                             $('#txtNomeUploadFoto').text(fd.nomeFile || '');
                             $('#previewUploadFoto').show();
                             $('#btnResetFotoScelta').show();
@@ -5923,7 +5967,8 @@ const schedaRef = {
                         state.selectedUploadPreviewUrl = null;
 
                         $('#previewUploadFoto').hide();
-                        $('#imgPreviewUploadFoto').attr('src', '');
+                        $('#imgPreviewUploadFoto').attr('src', '').show();
+                        $('#txtAnteprimaNonDisponibile').hide().text('');
                         $('#txtNomeUploadFoto').text('');
                         $('#btnResetFotoScelta').hide();
 
