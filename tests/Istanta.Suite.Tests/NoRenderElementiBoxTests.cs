@@ -366,3 +366,132 @@ public class MigrazioneNoRenderDelleFotoTests
         Assert.Single(meta!.noRender!);
     }
 }
+
+/// <summary>
+/// I20-977: una foto riattivata dal modal tornava fra gli elementi disattivati.
+///
+/// Le foto portano il noRender in due posti: la struttura nuova del box e il vecchio flag
+/// dentro ps, che la lettura dei meta considera un dato storico da migrare. Il modal riscrive
+/// solo la struttura nuova, quindi la foto liberata veniva riportata indietro dalla migrazione
+/// alla prima rilettura, e la pre analisi la segnalava come disattivata mentre il box la
+/// mostrava. Questi casi guardano la scrittura, che ora allinea i due posti.
+/// </summary>
+public class AllineamentoNoRenderDelleFotoTests
+{
+    /// Quello che fa il server quando applica updateNoRender: sostituisce l'elenco e allinea.
+    private static RevisioneMetaPromoLavorazioni salvaDalModal(
+        RevisioneMetaPromoLavorazioni meta, List<RevisioneNoRenderFromIndd> elementi)
+    {
+        meta.noRender = MetaPromoLavorazioni.normalizzaElementiNoRender(elementi);
+        MetaPromoLavorazioni.allineaNoRenderDelleFoto(meta);
+        return meta;
+    }
+
+    private static RevisioneMetaPromoLavorazioni metaConFotoDisattivata() => new()
+    {
+        ps = new List<RevisioneSelezioneFotoFromIndd>
+        {
+            new() { codRef = "3150596", stato = StatoSelezioneFoto.Primaria, noRender = true }
+        },
+        noRender = new List<RevisioneNoRenderFromIndd>
+        {
+            new() { tipo = TipoElementoBox.Foto, chiave = "3150596", nome = "primaria.psd" }
+        }
+    };
+
+    // Il caso del difetto, dal salvataggio alla rilettura.
+    [Fact]
+    public void Una_foto_riattivata_non_torna_disattivata_alla_lettura_successiva()
+    {
+        var meta = salvaDalModal(metaConFotoDisattivata(), new List<RevisioneNoRenderFromIndd>());
+
+        var riletto = MetaPromoLavorazioni.leggi(JsonConvert.SerializeObject(meta));
+
+        Assert.True(riletto!.noRender == null || riletto.noRender.Count == 0);
+    }
+
+    [Fact]
+    public void Riattivare_una_foto_libera_anche_il_flag_storico()
+    {
+        var meta = salvaDalModal(metaConFotoDisattivata(), new List<RevisioneNoRenderFromIndd>());
+
+        Assert.False(Assert.Single(meta.ps!).noRender);
+    }
+
+    // L'allineamento non deve liberare quello che l'operatore ha appena marcato.
+    [Fact]
+    public void Una_foto_marcata_dal_modal_resta_marcata_anche_in_ps()
+    {
+        var meta = new RevisioneMetaPromoLavorazioni
+        {
+            ps = new List<RevisioneSelezioneFotoFromIndd>
+            {
+                new() { codRef = "3150596", stato = StatoSelezioneFoto.Primaria, noRender = false },
+                new() { codRef = "3150597", stato = StatoSelezioneFoto.Selezionata, noRender = false }
+            }
+        };
+
+        salvaDalModal(meta, new List<RevisioneNoRenderFromIndd>
+        {
+            new() { tipo = TipoElementoBox.Foto, chiave = "3150596", nome = "primaria.psd" }
+        });
+
+        Assert.True(meta.ps!.Single(s => s.codRef == "3150596").noRender);
+        Assert.False(meta.ps!.Single(s => s.codRef == "3150597").noRender);
+
+        var riletto = MetaPromoLavorazioni.leggi(JsonConvert.SerializeObject(meta));
+        Assert.Single(riletto!.noRender!);
+    }
+
+    // Gli altri elementi del box non hanno nulla dentro ps: l'allineamento non deve toccarli.
+    [Fact]
+    public void Loghi_e_campi_non_vengono_sfiorati_dall_allineamento()
+    {
+        var meta = new RevisioneMetaPromoLavorazioni
+        {
+            ps = new List<RevisioneSelezioneFotoFromIndd>
+            {
+                new() { codRef = "3150596", stato = StatoSelezioneFoto.Primaria, noRender = true }
+            }
+        };
+
+        salvaDalModal(meta, new List<RevisioneNoRenderFromIndd>
+        {
+            new() { tipo = TipoElementoBox.Logo, chiave = "logo_bio", nome = "Logo bio" }
+        });
+
+        Assert.False(Assert.Single(meta.ps!).noRender);
+        Assert.Equal(TipoElementoBox.Logo, Assert.Single(meta.noRender!).tipo);
+    }
+
+    [Fact]
+    public void Un_meta_senza_ps_non_fa_fallire_l_allineamento()
+    {
+        var meta = new RevisioneMetaPromoLavorazioni
+        {
+            noRender = new List<RevisioneNoRenderFromIndd>
+            {
+                new() { tipo = TipoElementoBox.Foto, chiave = "3150596" }
+            }
+        };
+
+        MetaPromoLavorazioni.allineaNoRenderDelleFoto(meta);
+        MetaPromoLavorazioni.allineaNoRenderDelleFoto(null);
+
+        Assert.Single(meta.noRender!);
+    }
+
+    // La migrazione serve ancora ai meta che dal modal non sono mai passati: allineare in
+    // scrittura non deve togliere le marcature storiche a chi non ha ancora salvato.
+    [Fact]
+    public void I_meta_storici_mai_passati_dal_modal_continuano_a_migrare()
+    {
+        var storico = "{\"ps\":[{\"codRef\":\"3150596\",\"stato\":1,\"noRender\":true}]}";
+
+        var riletto = MetaPromoLavorazioni.leggi(storico);
+
+        var elemento = Assert.Single(riletto!.noRender!);
+        Assert.Equal(TipoElementoBox.Foto, elemento.tipo);
+        Assert.Equal("3150596", elemento.chiave);
+    }
+}

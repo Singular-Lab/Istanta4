@@ -1010,6 +1010,33 @@ namespace Istanta.Models
         }
 
         /// <summary>
+        /// Allinea alla struttura noRender il flag storico che le foto portano dentro ps.
+        /// Il modal del Plugin riscrive soltanto noRender: una foto liberata li' resterebbe
+        /// marcata dentro ps, e migraNoRenderDelleFoto la ritroverebbe alla lettura successiva
+        /// rimettendola fra gli elementi disattivati mentre nel box e' tornata visibile.
+        /// Allineando in scrittura la verita' resta una sola, l'elenco noRender, e il meta si
+        /// ripara da se' al primo salvataggio dal modal.
+        /// </summary>
+        public static void allineaNoRenderDelleFoto(RevisioneMetaPromoLavorazioni? meta)
+        {
+            if (meta?.ps == null)
+            {
+                return;
+            }
+
+            foreach (var selezione in meta.ps)
+            {
+                if (selezione == null || string.IsNullOrEmpty(selezione.codRef))
+                {
+                    continue;
+                }
+
+                selezione.noRender = meta.noRender != null && meta.noRender.Any(e =>
+                    e != null && e.tipo == TipoElementoBox.Foto && e.chiave == selezione.codRef);
+            }
+        }
+
+        /// <summary>
         /// Fonde nel meta le selezioni foto arrivate dal Plugin: aggiorna le voci esistenti
         /// e aggiunge quelle nuove. La lista ps puo' mancare del tutto, perche' un meta puo'
         /// essere stato scritto da un'altra operazione: in quel caso va creata, non dereferenziata,
