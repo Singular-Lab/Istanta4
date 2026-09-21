@@ -153,3 +153,61 @@ test('il codice lungo si tronca con i puntini e resta leggibile per intero', () 
     assert.ok(!/\.substring\(|\.slice\(0/.test(metodo),
         'il taglio a caratteri fissi non sa quanto spazio c\'e\' e taglierebbe a caso');
 });
+
+/* ---- il campo Descrizione1 che si adatta al testo ---- */
+
+const schedaAltezza = (contenuto, riga, righe, spazio) =>
+    Revisore.altezzaCampoDescrizione(contenuto, riga, righe, spazio);
+
+// Il template fissa il campo a 40 pixel: una descrizione lunga si legge solo scorrendo dentro
+// una finestrella alta una riga e mezza. Ora il campo cresce col testo, ma non oltre tre
+// righe, altrimenti una descrizione lunga spingerebbe fuori vista il resto della colonna.
+test('un testo corto lascia il campo basso', () => {
+    assert.strictEqual(schedaAltezza(24, 16, 3, 8), 24);
+});
+
+test('un testo lungo si ferma a tre righe', () => {
+    assert.strictEqual(schedaAltezza(500, 16, 3, 8), 56);
+});
+
+test('il testo che sta esatto in tre righe non viene tagliato', () => {
+    assert.strictEqual(schedaAltezza(56, 16, 3, 8), 56);
+});
+
+test('lo spazio interno del campo si somma al tetto, non si perde', () => {
+    assert.strictEqual(schedaAltezza(500, 16, 3, 0), 48);
+    assert.strictEqual(schedaAltezza(500, 16, 3, 12), 60);
+});
+
+test('le righe frazionarie si arrotondano per eccesso, cosi\' la terza ci sta tutta', () => {
+    assert.strictEqual(schedaAltezza(500, 16.5, 3, 0), 50);
+});
+
+// Misure illeggibili: meglio lasciare il campo com'e' che dargli un'altezza inventata.
+test('senza misure valide non si tocca il campo', () => {
+    assert.strictEqual(schedaAltezza(0, 16, 3, 8), null);
+    assert.strictEqual(schedaAltezza(100, 0, 3, 8), null);
+    assert.strictEqual(schedaAltezza(100, 16, 0, 8), null);
+    assert.strictEqual(schedaAltezza(NaN, 16, 3, 8), null);
+    assert.strictEqual(schedaAltezza(100, NaN, 3, 8), null);
+});
+
+test('uno spazio interno assurdo vale zero invece di rompere il calcolo', () => {
+    assert.strictEqual(schedaAltezza(500, 16, 3, NaN), 48);
+    assert.strictEqual(schedaAltezza(500, 16, 3, -10), 48);
+});
+
+test('l\'adattamento avviene dopo che la scheda e\' nella pagina', () => {
+    const revisore = sorgente('Istanta/wwwroot/js/revisore.js');
+
+    const inizio = revisore.indexOf('sostituisciColonnaSinistraGruppo() {');
+    const metodo = revisore.slice(inizio, revisore.indexOf('copiaValoriNelGruppo(', inizio));
+
+    const adattamenti = (metodo.match(/Revisore\.adattaDescrizioneAlTesto\(/g) || []).length;
+    assert.strictEqual(adattamenti, 2, 'vale per la scheda del padre e per quelle dei singoli');
+
+    const primoAdattamento = metodo.indexOf('Revisore.adattaDescrizioneAlTesto(');
+    const primoAppend = metodo.indexOf('.dettaglioGruppo").append(htmlItem)');
+    assert.ok(primoAppend > 0 && primoAppend < primoAdattamento,
+        'prima dell\'inserimento nella pagina l\'altezza del contenuto non e\' misurabile');
+});

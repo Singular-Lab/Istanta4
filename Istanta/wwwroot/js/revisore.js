@@ -2675,6 +2675,65 @@
         };
     }
 
+    /// I20-982: quanto alto fare un campo perche' il testo ci stia, senza passare il massimo
+    /// di righe concesso. Oltre quel tetto il campo scorre invece di crescere, altrimenti una
+    /// descrizione lunga spingerebbe fuori vista tutto il resto della colonna.
+    ///
+    /// Torna null quando le misure non si leggono: in quel caso il campo resta com'e', che e'
+    /// meglio di un'altezza inventata.
+    static altezzaCampoDescrizione(altezzaContenuto, altezzaRiga, massimoRighe, spazioInterno) {
+        var contenuto = Number(altezzaContenuto);
+        var riga = Number(altezzaRiga);
+        var righe = Number(massimoRighe);
+        var spazio = Number(spazioInterno);
+
+        if (!isFinite(contenuto) || contenuto <= 0 || !isFinite(riga) || riga <= 0 ||
+            !isFinite(righe) || righe <= 0) {
+            return null;
+        }
+
+        if (!isFinite(spazio) || spazio < 0) {
+            spazio = 0;
+        }
+
+        return Math.min(contenuto, Math.ceil(riga * righe) + spazio);
+    }
+
+    /// Adatta al testo il campo Descrizione1 della scheda. Va chiamato dopo che la scheda e'
+    /// nella pagina: prima l'altezza del contenuto non e' misurabile.
+    static adattaDescrizioneAlTesto(htmlItem, massimoRighe = 3) {
+        try {
+            var campo = htmlItem.find("#Descrizione1Tracciato")[0];
+            if (campo == null) {
+                return;
+            }
+
+            var stile = window.getComputedStyle(campo);
+            var riga = parseFloat(stile.lineHeight);
+            if (!isFinite(riga) || riga <= 0) {
+                //line-height normal non si legge in pixel: si stima dal corpo del carattere.
+                riga = parseFloat(stile.fontSize) * 1.2;
+            }
+            var spazio = (parseFloat(stile.paddingTop) || 0) + (parseFloat(stile.paddingBottom) || 0);
+
+            //Si azzera prima di misurare, altrimenti si legge l'altezza imposta e non quella
+            //che il testo chiede.
+            campo.style.height = "auto";
+            var altezza = Revisore.altezzaCampoDescrizione(campo.scrollHeight, riga, massimoRighe, spazio);
+
+            if (altezza == null) {
+                campo.style.height = "";
+                return;
+            }
+
+            campo.style.height = altezza + "px";
+            campo.style.overflowY = "auto";
+        }
+        catch (e) {
+            console.log("Altezza della descrizione non adattata: " + e);
+        }
+    }
+
     /// Riempie una scheda della colonna con i campi di un record.
     static riempiSchedaColonna(htmlItem, record, codice) {
         var campi = Revisore.campiPerLaColonna(record, Revisore.chiaviDellaColonna());
@@ -2752,6 +2811,7 @@
                             Revisore.riempiSchedaColonna(htmlItem, gruppoPadre, gruppoPadre.recordInTracciato[keyScattoCodiceGruppo]);
 
                             groupElement.find(".dettaglioGruppo").append(htmlItem);
+                            Revisore.adattaDescrizioneAlTesto(htmlItem);
                         }
                     }
                 }
@@ -2763,6 +2823,7 @@
                         Revisore.riempiSchedaColonna(htmlItem, item, item.recordInTracciato[keyRefCodice]);
 
                         groupElement.find(".dettaglioGruppo").append(htmlItem);
+                        Revisore.adattaDescrizioneAlTesto(htmlItem);
                     });
                 }
             }
