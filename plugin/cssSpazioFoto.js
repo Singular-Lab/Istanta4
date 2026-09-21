@@ -284,6 +284,44 @@ const cssSpazioFoto = {
         testo += ", candidati [" + (candidati || []).map(rettangolo).join("; ") + "]";
         testo += ", scelto " + (scelta == null ? "nessuno" : rettangolo(scelta.candidato) + " area " + arrotonda(scelta.area));
         return testo;
+    },
+
+    /// I20-978: quanto va ingrandita o rimpicciolita ogni foto perche' tutte tornino alla
+    /// stessa scala.
+    ///
+    /// Il fix foto non decide la grandezza delle foto: prende quella che hanno e conserva le
+    /// proporzioni fra loro. Basta pero' che giri una volta su un gruppo ridotto, perche'
+    /// l'operatore ne ha nascosta una, e le foto rimaste vengono ingrandite mentre quella
+    /// nascosta resta com'era: riattivandola, la proporzione fra le due non vuol dire piu'
+    /// niente e la foto tornata visibile appare piu' piccola.
+    ///
+    /// Si riportano quindi tutte alla scala della prima, che e' la primaria. Dove le scale
+    /// sono gia' uguali, e cioe' ovunque non sia successo nulla del genere, i fattori valgono
+    /// uno e non cambia niente.
+    ///
+    /// Una foto senza immagine, o con scala illeggibile, non si tocca: non sappiamo a che
+    /// scala sia, e inventarne una la deformerebbe.
+    fattoriDiNormalizzazione(scale) {
+        const elenco = scale || [];
+        const utilizzabile = function (valore) {
+            return typeof valore === "number" && isFinite(valore) && valore > 0;
+        };
+
+        let riferimento = null;
+        for (const scala of elenco) {
+            if (utilizzabile(scala)) {
+                riferimento = scala;
+                break;
+            }
+        }
+
+        if (riferimento == null) {
+            return elenco.map(function () { return 1; });
+        }
+
+        return elenco.map(function (scala) {
+            return utilizzabile(scala) ? riferimento / scala : 1;
+        });
     }
 
 }

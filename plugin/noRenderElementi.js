@@ -322,6 +322,63 @@ var NoRenderElementi = (function () {
         return "elemento disattivato ma presente nel box: " + pulisci(descrizione);
     }
 
+    /// Stato di rendering delle sole foto del box, per chiave. Serve a confrontare com'era
+    /// il box quando il modal si e' aperto con com'e' dopo il salvataggio.
+    function statoDelleFoto(lista) {
+        var stato = {};
+        var elementi = lista || [];
+
+        for (var i = 0; i < elementi.length; i++) {
+            var elemento = elementi[i];
+            if (elemento == null || elemento.tipo !== TIPO_FOTO || elemento.chiave == null) {
+                continue;
+            }
+            stato[elemento.chiave] = elemento.noRender === true;
+        }
+
+        return stato;
+    }
+
+    /// Quante foto restano da mostrare nel box.
+    function fotoAncoraVisibili(lista) {
+        var stato = statoDelleFoto(lista);
+        var visibili = 0;
+
+        for (var chiave in stato) {
+            if (Object.prototype.hasOwnProperty.call(stato, chiave) && stato[chiave] === false) {
+                visibili++;
+            }
+        }
+
+        return visibili;
+    }
+
+    /// Almeno una foto ha cambiato stato fra l'apertura del modal e il salvataggio. Le foto
+    /// sparite dal box non contano: se non c'e' piu', non c'e' niente da reimpaginare.
+    function fotoCambiate(prima, dopo) {
+        var statoPrima = prima || {};
+        var statoDopo = dopo || {};
+
+        for (var chiave in statoDopo) {
+            if (!Object.prototype.hasOwnProperty.call(statoDopo, chiave)) {
+                continue;
+            }
+            if (statoPrima[chiave] !== statoDopo[chiave]) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// I20-978: dopo il salvataggio si propone il fix foto solo quando serve davvero, cioe'
+    /// quando una foto ha cambiato stato e nel box ne resta almeno una da mostrare. Se sono
+    /// cambiati solo loghi o campi il fix foto non c'entra, e se non resta nessuna foto
+    /// visibile non c'e' niente da sistemare.
+    function proporreFixFoto(statoPrima, listaDopo) {
+        return fotoCambiate(statoPrima, statoDelleFoto(listaDopo)) && fotoAncoraVisibili(listaDopo) > 0;
+    }
+
     return {
         TIPO: TIPO,
         TIPO_FOTO: TIPO_FOTO,
@@ -338,7 +395,11 @@ var NoRenderElementi = (function () {
         inNoRender: inNoRender,
         daSegnalareComeMancante: daSegnalareComeMancante,
         daSegnalareComeRiattivato: daSegnalareComeRiattivato,
-        segnalazioneElementoRiattivato: segnalazioneElementoRiattivato
+        segnalazioneElementoRiattivato: segnalazioneElementoRiattivato,
+        statoDelleFoto: statoDelleFoto,
+        fotoAncoraVisibili: fotoAncoraVisibili,
+        fotoCambiate: fotoCambiate,
+        proporreFixFoto: proporreFixFoto
     };
 })();
 

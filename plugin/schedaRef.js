@@ -10,6 +10,9 @@ const schedaRef = {
     schedeRefDati: [],
     //Stato del modal noRender: la lista degli elementi del box con la loro opzione di rendering.
     elementiNoRenderDelBox: null,
+    //I20-978: com'erano le foto quando il modal si e' aperto, per sapere al salvataggio se
+    //qualcosa e' cambiato e vale la pena proporre il fix foto.
+    statoFotoAllApertura: null,
     multiSchedeRef: [],
     editRefFieldController: null,
     idRecordLavorazione: 0,
@@ -7762,6 +7765,7 @@ const schedaRef = {
 
         try {
             this.elementiNoRenderDelBox = this.leggiElementiDelBox(this.refSelected.item, primario);
+            this.statoFotoAllApertura = NoRenderElementi.statoDelleFoto(this.elementiNoRenderDelBox);
             //apriModal clona il dialog dentro bodyModal: la lista va disegnata dopo l'apertura,
             //cosi' si scrive nel clone e i gestori dei bottoni restano vivi.
             Utility.apriModal('dialogNoRender', 'Elementi non renderizzati', true, [], true);
@@ -8005,6 +8009,37 @@ const schedaRef = {
 
         this.aggiornaNoRenderNeiRecord(elementi);
         this.applicaNoRenderAlDocumento();
+        this.proponiFixFotoSeServe();
+    },
+
+    /// I20-978: nascondere o rimettere una foto cambia quante ne restano da mostrare, e la
+    /// loro disposizione nel box va rifatta. Si propone, non si esegue d'ufficio: il fix foto
+    /// muove gli elementi, e chi sta lavorando deve poter dire di no.
+    async proponiFixFotoSeServe() {
+        var box = this.refSelected != null ? this.refSelected.item : null;
+
+        if (box == null || !NoRenderElementi.proporreFixFoto(this.statoFotoAllApertura, this.elementiNoRenderDelBox)) {
+            return;
+        }
+
+        //Quello appena salvato diventa il nuovo punto di partenza: se l'operatore rifiuta e
+        //poi risalva senza toccare le foto, non gli si ripropone la stessa cosa.
+        this.statoFotoAllApertura = NoRenderElementi.statoDelleFoto(this.elementiNoRenderDelBox);
+
+        try {
+            var procedi = await Utility.confirm("Le foto mostrate nel box sono cambiate. Applicare il Fix Foto automatico?");
+            if (!procedi) {
+                return;
+            }
+
+            var obs = CssFramework.getSpazioImpaginazione(box);
+            CssFramework.fixFoto(box, obs.candidate, obs.obstacles);
+            messaggioUtente("Fix Foto automatico applicato", "success", false, 3);
+        }
+        catch (ex) {
+            console.error(ex);
+            messaggioUtente("Code SRF-55 Fix Foto non applicato: " + ex, "error");
+        }
     },
 
     /// Riporta sui record in memoria quanto appena salvato. La reimpaginazione impagina a

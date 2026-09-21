@@ -1,4 +1,4 @@
-const { app, FitOptions, LocationOptions, Justification, VerticalJustification, NestedStyleDelimiters, Leading } = require('indesign');
+﻿const { app, FitOptions, LocationOptions, Justification, VerticalJustification, NestedStyleDelimiters, Leading } = require('indesign');
 const { ClippingPathType, ClippingPathSettings, Image } = require('indesign');
 const cssComposizioneBox = require('./cssComposizioneBox');
 const cssSequenzaOperazioni = require('./cssSequenzaOperazioni');
@@ -934,6 +934,14 @@ const CssFramework =
         //cerchiamo nel box le foto
         for (let k = 0; k < box.rectangles.length; k++) {
             let rect = box.rectangles.item(k);
+
+            //I20-978: una foto in noRender e' impaginata ma invisibile, e resta un rettangolo
+            //del box. Contandola, il fix foto sceglieva la disposizione per una foto in piu' e
+            //ne spostava una che nessuno vede: l'unica visibile finiva nel posto sbagliato e
+            //restava un buco. Le foto invisibili non partecipano.
+            if (rect.visible === false) {
+                continue;
+            }
             if (Utility.parseLabel(rect.label).startsWith(pluginMiddleware.getCampo("nomeFotoPrimaria") !== null ? pluginMiddleware.getCampo("nomeFotoPrimaria") : "immagine") ||
                 Utility.parseLabel(rect.label).startsWith(pluginMiddleware.getCampo("nomeFotoSecondaria") !== null ? pluginMiddleware.getCampo("nomeFotoSecondaria") : "foto_secondaria")) {
                 //la mettiamo da parte, se è la primaria la mettiamo in testa
@@ -999,6 +1007,11 @@ const CssFramework =
             //     })
             // }
         }
+
+        //I20-978: prima di disporle, le foto tornano tutte alla stessa scala. Senza questo, un
+        //fix foto girato su un gruppo ridotto lascia ingrandite le foto rimaste e la foto
+        //riattivata dopo, mai toccata, risulta piu' piccola per sempre.
+        this.normalizzaScalaDelleFoto(fotos);
 
         var res = this.getRaggruppamentoFoto(fotos, distanzFoto)
         var boundsGruppo = res.boundsGruppo;
@@ -1155,6 +1168,61 @@ const CssFramework =
             this.controllaSegnalazioniConflittiPendenti(box);
         }
         return areaFinale;
+    },
+
+    /// La scala a cui e' inserita l'immagine di una foto, in percentuale, oppure null se la
+    /// foto e' vuota o la scala non si legge.
+    scalaDellaFoto(rect) {
+        try {
+            var grafica = null;
+            if (rect.images != null && rect.images.length > 0) {
+                grafica = rect.images.item(0);
+            }
+            else if (rect.graphics != null && rect.graphics.length > 0) {
+                grafica = rect.graphics.item(0);
+            }
+
+            if (grafica == null) {
+                return null;
+            }
+
+            return grafica.horizontalScale;
+        }
+        catch (e) {
+            //Una scala illeggibile non deve fermare il fix foto: quella foto resta com'e'.
+            console.log("Scala della foto non leggibile: " + e);
+            return null;
+        }
+    },
+
+    /// Riporta le foto alla scala della prima, che e' la primaria. La regola vive in
+    /// cssSpazioFoto, fuori da InDesign e quindi verificabile.
+    normalizzaScalaDelleFoto(fotos) {
+        var scale = [];
+        for (var i = 0; i < fotos.length; i++) {
+            scale.push(this.scalaDellaFoto(fotos[i].object));
+        }
+
+        var fattori = cssSpazioFoto.fattoriDiNormalizzazione(scale);
+
+        for (var f = 0; f < fotos.length; f++) {
+            var fattore = fattori[f];
+            if (fattore === 1) {
+                continue;
+            }
+
+            var foto = fotos[f];
+            foto.altezzaFoto *= fattore;
+            foto.larghezzaFoto *= fattore;
+            foto.bounds = [
+                foto.bounds[0] * fattore,
+                foto.bounds[1] * fattore,
+                foto.bounds[2] * fattore,
+                foto.bounds[3] * fattore
+            ];
+        }
+
+        return fattori;
     },
 
     getRaggruppamentoFoto(fotos, distanzFoto){
