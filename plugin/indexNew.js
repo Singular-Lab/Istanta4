@@ -1557,9 +1557,47 @@ function setFiltroButtonsDefaultMarkup() {
 
 
 
-async function selectFile() {
+/// I20-980: il dialogo di scelta file puo' aprirsi su un punto preciso, di norma la foto che
+/// si sta sostituendo dentro la cartella Links della lavorazione.
+///
+/// Niente di tutto questo puo' impedire di scegliere un file a mano: se il percorso non si
+/// risolve si ripiega sulla cartella che lo contiene, e se non si risolve nemmeno quella il
+/// dialogo si apre come si e' sempre aperto.
+async function puntoDiAperturaFile(percorso) {
+    var url = schedaRef.urlDiPercorso(percorso);
+    if (url == null) {
+        return undefined;
+    }
+
+    try {
+        //Il file si risolve e viene passato, ma il dialogo di sistema ne usa solo la cartella:
+        //si apre nel posto giusto senza selezionare la foto. Verificato in esercizio su Mac
+        //con InDesign 19 (I20-980).
+        return { initialLocation: await storage.localFileSystem.getEntryWithUrl(url) };
+    }
+    catch (e) {
+        //Il file puo' non esserci piu': rinominato, spostato, o mai arrivato in cartella.
+        console.log("Punto di apertura non risolto, si prova la cartella: " + e);
+    }
+
+    var urlCartella = schedaRef.urlDiPercorso(schedaRef.cartellaDiPercorso(percorso));
+    if (urlCartella == null) {
+        return undefined;
+    }
+
+    try {
+        return { initialLocation: await storage.localFileSystem.getEntryWithUrl(urlCartella) };
+    }
+    catch (e) {
+        console.log("Cartella di apertura non risolta: " + e);
+        return undefined;
+    }
+}
+
+async function selectFile(percorsoDiPartenza = null) {
     // Ottieni il file tramite un dialogo
-    const fileEntry = await storage.localFileSystem.getFileForOpening();
+    const fileEntry = await storage.localFileSystem.getFileForOpening(
+        await puntoDiAperturaFile(percorsoDiPartenza));
     if (!fileEntry) {
         console.log("Nessun file selezionato");
         return;

@@ -13,6 +13,8 @@ const schedaRef = {
     //I20-978: com'erano le foto quando il modal si e' aperto, per sapere al salvataggio se
     //qualcosa e' cambiato e vale la pena proporre il fix foto.
     statoFotoAllApertura: null,
+    //I20-980: indirizzo della miniatura estratta da un psd, da liberare alla scelta successiva.
+    urlAnteprimaPsd: null,
     multiSchedeRef: [],
     editRefFieldController: null,
     idRecordLavorazione: 0,
@@ -4613,6 +4615,451 @@ const schedaRef = {
         }
     },
 
+    /// I20-980: il nome di un file diviso in radice ed estensione, quest'ultima in minuscolo.
+    partiDelNomeFile(nome) {
+        var testo = typeof nome === "string" ? nome.trim() : "";
+        var punto = testo.lastIndexOf(".");
+
+        if (punto <= 0) {
+            return { base: testo, estensione: "" };
+        }
+
+        return { base: testo.substring(0, punto), estensione: testo.substring(punto + 1).toLowerCase() };
+    },
+
+    /// I20-980: il tipo con cui il pannello sa disegnare questo file, oppure null se non lo sa
+    /// disegnare affatto. Un psd e' il caso che capita: il webview non lo rende, e i psd sono
+    /// proprio i file a cui diamo la precedenza.
+    tipoAnteprimaDi(nome) {
+        var mostrabili = {
+            jpg: "image/jpeg",
+            jpeg: "image/jpeg",
+            png: "image/png",
+            webp: "image/webp",
+            gif: "image/gif"
+        };
+
+        var estensione = this.partiDelNomeFile(nome).estensione;
+        return mostrabili[estensione] != null ? mostrabili[estensione] : null;
+    },
+
+    /// I20-980: la miniatura che un psd si porta dentro, in byte JPEG, oppure null.
+    ///
+    /// Il pannello non sa disegnare un psd, ma Photoshop dentro al file ci salva gia' una
+    /// piccola JPEG della composizione finale, e quella si puo' mostrare.
+    ///
+    /// Struttura del file: firma 8BPS, intestazione di 26 byte, blocco del colore (lunghezza
+    /// piu' dati), blocco delle risorse (lunghezza piu' voci). Ogni voce comincia con 8BIM,
+    /// ha un identificativo, un nome in stile Pascal portato a lunghezza pari e i dati, anche
+    /// quelli portati a lunghezza pari. La risorsa 1036 e' la miniatura: 28 byte che la
+    /// descrivono e poi la JPEG vera.
+    ///
+    /// Si legge solo la 1036 e non la 1033, che e' la miniatura delle versioni antiche con
+    /// rosso e blu invertiti: mostrarla darebbe una foto dai colori sbagliati.
+    ///
+    /// La miniatura c'e' se il file e' stato salvato con l'anteprima. Quando manca si torna
+    /// null e resta il riquadro che lo dice.
+    anteprimaDaPsd(byte) {
+        try {
+            var dati = byte instanceof Uint8Array ? byte : new Uint8Array(byte);
+
+            //Firma 8BPS.
+            if (dati.length < 30 || dati[0] !== 0x38 || dati[1] !== 0x42 || dati[2] !== 0x50 || dati[3] !== 0x53) {
+                return null;
+            }
+
+            var leggi32 = function (posizione) {
+                return (dati[posizione] * 16777216) + (dati[posizione + 1] * 65536) +
+                    (dati[posizione + 2] * 256) + dati[posizione + 3];
+            };
+            var leggi16 = function (posizione) {
+                return (dati[posizione] * 256) + dati[posizione + 1];
+            };
+
+            var posizione = 26;
+            posizione += 4 + leggi32(posizione);
+
+            var fineRisorse = posizione + 4 + leggi32(posizione);
+            posizione += 4;
+
+            while (posizione + 12 <= fineRisorse && posizione + 12 <= dati.length) {
+                //8BIM: fuori sincrono non si prosegue a tentoni.
+                if (dati[posizione] !== 0x38 || dati[posizione + 1] !== 0x42 ||
+                    dati[posizione + 2] !== 0x49 || dati[posizione + 3] !== 0x4D) {
+                    return null;
+                }
+
+                var identificativo = leggi16(posizione + 4);
+
+                var posizioneNome = posizione + 6;
+                var saltoNome = 1 + dati[posizioneNome];
+                if (saltoNome % 2 !== 0) {
+                    saltoNome++;
+                }
+
+                var posizioneDimensione = posizioneNome + saltoNome;
+                var dimensione = leggi32(posizioneDimensione);
+                var posizioneDati = posizioneDimensione + 4;
+
+                if (identificativo === 1036) {
+                    if (dimensione <= 28 || posizioneDati + dimensione > dati.length) {
+                        return null;
+                    }
+                    return dati.slice(posizioneDati + 28, posizioneDati + dimensione);
+                }
+
+                posizione = posizioneDati + dimensione + (dimensione % 2);
+            }
+
+            return null;
+        }
+        catch (e) {
+            console.log("Miniatura del psd non leggibile: " + e);
+            return null;
+        }
+    },
+
+    /// Cosa scrivere al posto dell'immagine quando non si puo' mostrare.
+    testoAnteprimaNonDisponibile(nome) {
+        var estensione = this.partiDelNomeFile(nome).estensione;
+        return estensione === ""
+            ? "Anteprima non disponibile"
+            : "Anteprima non disponibile per i file " + estensione.toUpperCase();
+    },
+
+    /// I20-980: mostra l'anteprima del file scelto, oppure dice perche' non c'e'. Un riquadro
+    /// vuoto, o peggio un'immagine rotta, sembrerebbe un guasto del Plugin.
+    mostraAnteprimaCaricamento(nomeFile, url, contenuto) {
+        //L'indirizzo della miniatura estratta dal psd si butta a ogni scelta nuova: e' roba
+        //che vive in memoria finche' qualcuno non la libera.
+        if (this.urlAnteprimaPsd) {
+            try { URL.revokeObjectURL(this.urlAnteprimaPsd); } catch (e) { }
+            this.urlAnteprimaPsd = null;
+        }
+
+        var daMostrare = this.tipoAnteprimaDi(nomeFile) != null ? url : null;
+
+        if (daMostrare == null && contenuto != null &&
+            this.partiDelNomeFile(nomeFile).estensione === "psd") {
+            var miniatura = this.anteprimaDaPsd(contenuto);
+            if (miniatura != null) {
+                try {
+                    this.urlAnteprimaPsd = URL.createObjectURL(new Blob([miniatura], { type: "image/jpeg" }));
+                    daMostrare = this.urlAnteprimaPsd;
+                }
+                catch (e) {
+                    console.log("Miniatura del psd non mostrabile: " + e);
+                }
+            }
+        }
+
+        if (daMostrare) {
+            $('#imgPreviewUploadFoto').attr('src', daMostrare).show();
+            $('#txtAnteprimaNonDisponibile').hide().text('');
+            return;
+        }
+
+        $('#imgPreviewUploadFoto').attr('src', '').hide();
+        $('#txtAnteprimaNonDisponibile').text(this.testoAnteprimaNonDisponibile(nomeFile)).show();
+    },
+
+    /// I file della cartella che possono essere la foto di questa referenza: il nome comincia
+    /// con il suo codice, seguito da un separatore.
+    ///
+    /// Il separatore non e' un dettaglio: senza, il codice 6119227 pescherebbe anche
+    /// 61192271_1.psd, che e' un altro articolo, e proporremmo la foto sbagliata.
+    candidatiPerReferenza(fileInCartella, codiceReferenza) {
+        var codice = codiceReferenza != null ? String(codiceReferenza).trim() : "";
+        var elenco = Array.isArray(fileInCartella) ? fileInCartella : [];
+
+        if (codice === "") {
+            return [];
+        }
+
+        return elenco.filter(function (file) {
+            if (file == null || typeof file.nome !== "string" || file.nome.indexOf(codice) !== 0) {
+                return false;
+            }
+
+            var seguito = file.nome.charAt(codice.length);
+            //Fine del nome, estensione o separatore: tutto tranne un'altra cifra.
+            return seguito === "" || !/[0-9]/.test(seguito);
+        });
+    },
+
+    /// Fra i candidati vince sempre il psd, e a parita' di formato il piu' recente.
+    scegliCandidatoFoto(fileInCartella, codiceReferenza) {
+        var me = this;
+        var candidati = this.candidatiPerReferenza(fileInCartella, codiceReferenza);
+
+        if (candidati.length === 0) {
+            return null;
+        }
+
+        var ordinati = candidati.slice().sort(function (a, b) {
+            var psdA = me.partiDelNomeFile(a.nome).estensione === "psd";
+            var psdB = me.partiDelNomeFile(b.nome).estensione === "psd";
+
+            if (psdA !== psdB) {
+                return psdA ? -1 : 1;
+            }
+
+            return (b.modificato || 0) - (a.modificato || 0);
+        });
+
+        return ordinati[0];
+    },
+
+    /// Perche' proporre il candidato invece di aprire subito lo sfoglia, oppure null se non
+    /// c'e' motivo. I tre casi sono quelli chiesti dall'operatore, valutati in quest'ordine.
+    ///
+    /// hashLocale va calcolato solo quando il nome del candidato coincide con quello della
+    /// foto del box: leggere un psd da centinaia di megabyte a ogni clic, per gli altri due
+    /// casi che si decidono sui soli nomi, sarebbe un costo inutile.
+    motivoPropostaFoto(candidato, fotoDelBox, fotoDelServer, hashLocale) {
+        if (candidato == null || typeof candidato.nome !== "string" || candidato.nome === "") {
+            return null;
+        }
+
+        var elencoServer = Array.isArray(fotoDelServer) ? fotoDelServer : [];
+        var nomeBox = fotoDelBox != null && fotoDelBox.nome != null ? String(fotoDelBox.nome) : "";
+        var maiuscolo = function (testo) { return testo != null ? String(testo).toUpperCase() : ""; };
+
+        //Uno: stesso nome, ma il file in cartella non e' piu' quello impaginato.
+        if (nomeBox !== "" && candidato.nome === nomeBox && hashLocale != null && hashLocale !== "") {
+            var hashBox = fotoDelBox.hash;
+            if (hashBox != null && hashBox !== "" && maiuscolo(hashBox) !== maiuscolo(hashLocale)) {
+                return "hashDiverso";
+            }
+        }
+
+        //Due: il server non conosce questa foto, o il box non ne ha nessuna, ma in cartella c'e'.
+        var conosciutaDalServer = nomeBox !== "" && elencoServer.some(function (foto) {
+            return foto != null && String(foto.nome) === nomeBox;
+        });
+
+        if (nomeBox === "" || !conosciutaDalServer) {
+            return "nonSulServer";
+        }
+
+        //Tre: in cartella c'e' il psd, sul server no.
+        //
+        //A fermare la proposta e' solo il psd della stessa foto, non un psd qualsiasi: un altro
+        //scatto della stessa referenza salvato in psd non c'entra nulla con quello che
+        //l'operatore sta sostituendo, e bloccherebbe la proposta proprio quando serve.
+        if (this.partiDelNomeFile(candidato.nome).estensione === "psd") {
+            var radiceBox = this.partiDelNomeFile(nomeBox).base.toUpperCase();
+            var psdGiaSulServer = elencoServer.some(function (foto) {
+                if (foto == null) {
+                    return false;
+                }
+                var parti = schedaRef.partiDelNomeFile(foto.nome);
+                return parti.estensione === "psd" && parti.base.toUpperCase() === radiceBox;
+            });
+
+            if (!psdGiaSulServer) {
+                return "psdSoloInCartella";
+            }
+        }
+
+        return null;
+    },
+
+    /// I20-980: il file della cartella Links che potrebbe essere la foto cercata, proposto
+    /// all'operatore prima di aprire lo sfoglia.
+    ///
+    /// Torna lo stesso oggetto che tornerebbe la scelta dal dialogo, cosi' chi lo riceve non
+    /// distingue fra una foto confermata qui e una scelta a mano. Torna null quando non c'e'
+    /// niente da proporre, quando l'operatore risponde di no, e ogni volta che qualcosa va
+    /// storto: in tutti quei casi si apre lo sfoglia, che e' la strada di sempre.
+    async fotoDaProporreDallaCartella(codiceReferenza, fotoDelBox, fotoDelServer) {
+        try {
+            var urlCartella = this.urlDiPercorso(percorsoLinks);
+            if (urlCartella == null) {
+                return null;
+            }
+
+            var cartella = await fs2.getEntryWithUrl(urlCartella);
+            var voci = await cartella.getEntries();
+            var fileInCartella = [];
+
+            for (var i = 0; i < voci.length; i++) {
+                var voce = voci[i];
+                if (!voce.isFile) {
+                    continue;
+                }
+
+                var quando = 0;
+                var quanto = 0;
+                try {
+                    var dati = await voce.getMetadata();
+                    quando = dati != null && dati.dateModified != null ? new Date(dati.dateModified).getTime() : 0;
+                    quanto = dati != null && dati.size != null ? dati.size : 0;
+                }
+                catch (e) {
+                    //Senza metadati il file resta candidato, semplicemente non vince per data.
+                }
+
+                fileInCartella.push({ nome: voce.name, modificato: quando, dimensione: quanto, voce: voce });
+            }
+
+            var candidato = this.scegliCandidatoFoto(fileInCartella, codiceReferenza);
+            if (candidato == null) {
+                return null;
+            }
+
+            var nomeBox = fotoDelBox != null && fotoDelBox.nome != null ? String(fotoDelBox.nome) : "";
+            var contenuto = null;
+            var hashLocale = null;
+
+            //Il file si legge solo quando serve l'hash, cioe' quando il nome coincide: negli
+            //altri casi la decisione si prende sui soli nomi e un psd grosso non va letto.
+            if (candidato.nome === nomeBox) {
+                contenuto = await candidato.voce.read({ format: uxp.storage.formats.binary });
+                hashLocale = cmd.md5ArrayBuffer(new Uint8Array(contenuto));
+            }
+
+            var motivo = this.motivoPropostaFoto(candidato, fotoDelBox, fotoDelServer, hashLocale);
+            if (motivo == null) {
+                return null;
+            }
+
+            if (contenuto == null) {
+                contenuto = await candidato.voce.read({ format: uxp.storage.formats.binary });
+            }
+
+            var conferma = await Utility.confirm(
+                this.riquadroPropostaFoto(candidato, contenuto, motivo));
+
+            if (!conferma) {
+                return null;
+            }
+
+            return {
+                nomeFile: candidato.nome,
+                file: contenuto,
+                filePath: candidato.voce.nativePath
+            };
+        }
+        catch (e) {
+            //Nessun intoppo qui deve impedire di caricare una foto a mano.
+            console.log("Proposta della foto dalla cartella non riuscita: " + e);
+            return null;
+        }
+    },
+
+    /// Il contenuto del riquadro di proposta: la domanda, cosa si e' trovato e perche'.
+    ///
+    /// L'anteprima si mostra solo per i formati che il pannello sa disegnare. Un psd non lo
+    /// sa disegnare, e proprio il psd e' il formato a cui diamo la precedenza: in quel caso
+    /// si mostrano nome, dimensione e data, che sono cio' che serve per riconoscerlo.
+    riquadroPropostaFoto(candidato, contenuto, motivo) {
+        var spiegazioni = {
+            hashDiverso: "Nella cartella di lavorazione c'e' un file con lo stesso nome, ma diverso da quello impaginato.",
+            nonSulServer: "Questa foto non risulta su Istanta, ma nella cartella di lavorazione c'e'.",
+            psdSoloInCartella: "Nella cartella di lavorazione c'e' il psd, su Istanta no."
+        };
+
+        var tipo = this.tipoAnteprimaDi(candidato.nome);
+
+        var riquadro = $('<div style="display:flex; flex-direction:column; align-items:center; gap:8px; text-align:center;"></div>');
+        riquadro.append($('<h3 style="margin:0;">E\' questa la foto che stai cercando?</h3>'));
+        riquadro.append($('<div style="font-size:11px;"></div>').text(spiegazioni[motivo] || ""));
+
+        //Un psd non si disegna, ma la miniatura che si porta dentro si': e' una JPEG.
+        var daMostrare = contenuto;
+        if (tipo == null && this.partiDelNomeFile(candidato.nome).estensione === "psd") {
+            var miniatura = this.anteprimaDaPsd(contenuto);
+            if (miniatura != null) {
+                daMostrare = miniatura;
+                tipo = "image/jpeg";
+            }
+        }
+
+        var immagine = null;
+        if (tipo != null) {
+            try {
+                var url = URL.createObjectURL(new Blob([daMostrare], { type: tipo }));
+                immagine = $('<img style="max-width:180px; max-height:180px; border:1px solid #ddd;">').attr("src", url);
+            }
+            catch (e) {
+                console.log("Anteprima non costruita: " + e);
+            }
+        }
+
+        //Un riquadro vuoto sembrerebbe un guasto: meglio dire perche' non c'e' l'immagine.
+        riquadro.append(immagine != null ? immagine : $('<div style="min-width:120px; min-height:80px; display:flex; align-items:center; justify-content:center; padding:10px; border:1px dashed #bbb; background:#f8f8f8; color:#777; font-size:11px;"></div>')
+            .text(this.testoAnteprimaNonDisponibile(candidato.nome)));
+
+        var descrizione = candidato.nome;
+        if (candidato.dimensione) {
+            descrizione += "  " + Math.round(candidato.dimensione / 1024) + " KB";
+        }
+        if (candidato.modificato) {
+            descrizione += "  " + new Date(candidato.modificato).toLocaleString();
+        }
+        riquadro.append($('<div style="font-size:11px; font-weight:bold; word-break:break-all;"></div>').text(descrizione));
+
+        return riquadro;
+    },
+
+    /// I20-980: da dove deve aprirsi il dialogo quando si carica una foto nuova.
+    ///
+    /// Si punta al file della foto attuale dentro la cartella Links della lavorazione, cosi'
+    /// chi sostituisce una foto non deve piu' cercarla a mano. Senza il nome si punta alla
+    /// sola cartella, e senza cartella non si punta a niente: il dialogo si apre come prima.
+    ///
+    /// Il separatore si deduce dal percorso ricevuto, perche' su Windows arriva con le barre
+    /// rovesciate e su Mac con quelle dritte, e quello di troppo in fondo va tolto.
+    percorsoDiPartenzaPerFoto(cartellaLinks, nomeFoto) {
+        var cartella = typeof cartellaLinks === "string" ? cartellaLinks.trim() : "";
+        if (cartella === "") {
+            return null;
+        }
+
+        var separatore = cartella.indexOf("\\") >= 0 ? "\\" : "/";
+        var base = cartella.replace(/[\\/]+$/, "");
+        if (base === "") {
+            base = separatore;
+        }
+
+        var nome = typeof nomeFoto === "string" ? nomeFoto.trim() : "";
+        if (nome === "") {
+            return base;
+        }
+
+        return base === separatore ? base + nome : base + separatore + nome;
+    },
+
+    /// Lo stesso percorso in forma di URL, che e' quello che il file system di UXP accetta.
+    /// Un percorso di Windows diventa file:///C:/..., uno di Mac file:///Utenti/...
+    urlDiPercorso(percorso) {
+        if (typeof percorso !== "string" || percorso.trim() === "") {
+            return null;
+        }
+
+        var pulito = percorso.trim().replace(/\\/g, "/");
+        if (pulito.indexOf("file:") === 0) {
+            return pulito;
+        }
+
+        return pulito.charAt(0) === "/" ? "file://" + pulito : "file:///" + pulito;
+    },
+
+    /// La cartella che contiene il percorso, per ripiegarci quando il file non c'e' piu'.
+    cartellaDiPercorso(percorso) {
+        if (typeof percorso !== "string") {
+            return null;
+        }
+
+        var taglio = Math.max(percorso.lastIndexOf("/"), percorso.lastIndexOf("\\"));
+        if (taglio <= 0) {
+            return null;
+        }
+
+        return percorso.substring(0, taglio);
+    },
+
     async openModalCambiaFoto(codice) {
         let me = this;
         var box = this.refSelected.item;
@@ -4687,6 +5134,15 @@ const schedaRef = {
                 if (elementoCercato != null && elementoCercato.recordInTracciato != null) {
                     fotoAttuale = elementoCercato.recordInTracciato["Foto.Id"] || null;
                 }
+
+                //I20-980: il nome del file impaginato, per aprire il dialogo di scelta gia'
+                //sulla foto che si sta sostituendo.
+                var nomeFotoImpaginata = elementoCercato != null && elementoCercato.recordInTracciato != null
+                    ? elementoCercato.recordInTracciato["Foto.Nome"]
+                    : null;
+                var hashFotoImpaginata = elementoCercato != null && elementoCercato.recordInTracciato != null
+                    ? elementoCercato.recordInTracciato["Foto.Hash"]
+                    : null;
 
                 const state = {
                     selectedUploadFile: null,
@@ -4908,6 +5364,7 @@ const schedaRef = {
                             background:#f8f8f8;
                         ">
                             <img id="imgPreviewUploadFoto" src="" style="max-width:120px; max-height:120px;">
+                            <div id="txtAnteprimaNonDisponibile" style="display:none; color:#777; font-size:11px; text-align:center;"></div>
                         </div>
                         <div id="txtNomeUploadFoto" style="margin-top:6px; font-size:11px; word-break:break-word;"></div>
                     </div>
@@ -5518,7 +5975,21 @@ const schedaRef = {
 
                     $('#btnCaricaFoto').off('click').on('click', async function () {
                         try {
-                            var fd = await selectFile();
+                            //I20-980: prima di mandare l'operatore a cercare, si guarda se nella
+                            //cartella Links c'e' gia' il file che sta cercando e glielo si propone.
+                            var fd = await me.fotoDaProporreDallaCartella(
+                                codice,
+                                { nome: nomeFotoImpaginata, hash: hashFotoImpaginata },
+                                fotoList.map(function (foto) {
+                                    return { nome: foto != null ? foto.Nome : null, hash: getFotoHash(foto) };
+                                }));
+
+                            if (fd == null) {
+                                //Niente da proporre, oppure l'operatore ha detto di no: si sfoglia,
+                                //partendo dalla foto attuale nella cartella della lavorazione.
+                                fd = await selectFile(
+                                    me.percorsoDiPartenzaPerFoto(percorsoLinks, nomeFotoImpaginata));
+                            }
                             if (fd == null) {
                                 return;
                             }
@@ -5553,7 +6024,7 @@ const schedaRef = {
                             setScopeSelection('globale');
                             updateConfirmButtonState();
 
-                            $('#imgPreviewUploadFoto').attr('src', previewUrl);
+                            me.mostraAnteprimaCaricamento(fd.nomeFile, previewUrl, fd.file);
                             $('#txtNomeUploadFoto').text(fd.nomeFile || '');
                             $('#previewUploadFoto').show();
                             $('#btnResetFotoScelta').show();
@@ -5614,7 +6085,8 @@ const schedaRef = {
                         state.selectedUploadPreviewUrl = null;
 
                         $('#previewUploadFoto').hide();
-                        $('#imgPreviewUploadFoto').attr('src', '');
+                        $('#imgPreviewUploadFoto').attr('src', '').show();
+                        $('#txtAnteprimaNonDisponibile').hide().text('');
                         $('#txtNomeUploadFoto').text('');
                         $('#btnResetFotoScelta').hide();
 
