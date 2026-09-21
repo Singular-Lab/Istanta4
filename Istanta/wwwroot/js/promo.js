@@ -170,6 +170,11 @@ class Promo {
                     item.promoTracciatis = me.agenzia.applicaSchemaDiOrdinamentoTracciati(item.promoTracciatis, "sigla");
                 }
 
+                //I20-973: i tracciati appena importati vanno in cima. Va dopo l'ordinamento
+                //per sigla, ed e' stabile, cosi' la data comanda e la sigla decide fra quelli
+                //arrivati con la stessa importazione.
+                item.promoTracciatis = ordinamentoTracciati.dalPiuRecente(item.promoTracciatis, item.promoImportazionis);
+
                 for (let t = 0; t < item.promoTracciatis.length; t++) {
                     let trItem = item.promoTracciatis[t];
                     let metaTr = JSON.parse(trItem.meta);
