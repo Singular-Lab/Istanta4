@@ -124,3 +124,166 @@ test("un punto di partenza che non si risolve non blocca la scelta del file", ()
     assert.ok((blocco.match(/return undefined;/g) || []).length >= 2,
         "in ogni caso perso si torna alle opzioni vuote, cioe' al dialogo di sempre");
 });
+
+/* ---- la foto proposta dalla cartella di lavorazione ---- */
+
+// Prima di mandare l'operatore a sfogliare si guarda se nella cartella Links c'e' gia' il
+// file che sta cercando. I casi sono tre, decisi dall'operatore: stesso nome ma contenuto
+// diverso, foto che il server non conosce, e psd presente solo in cartella.
+
+function file(nome, modificato, dimensione) {
+    return { nome: nome, modificato: modificato, dimensione: dimensione || 0 };
+}
+
+test("il nome si divide in radice ed estensione, in minuscolo", () => {
+    assert.deepStrictEqual(schedaRef.partiDelNomeFile("6119227_1_T5.PSD"), { base: "6119227_1_T5", estensione: "psd" });
+    assert.deepStrictEqual(schedaRef.partiDelNomeFile("senza_estensione"), { base: "senza_estensione", estensione: "" });
+    assert.deepStrictEqual(schedaRef.partiDelNomeFile(null), { base: "", estensione: "" });
+});
+
+test("sono candidati i file che portano il codice della referenza in testa", () => {
+    const cartella = [
+        file("6119227_1_T5.psd", 1),
+        file("6119227.jpg", 2),
+        file("altro_6119227.psd", 3),
+        file("7000000_1.psd", 4)
+    ];
+
+    assert.deepStrictEqual(
+        schedaRef.candidatiPerReferenza(cartella, "6119227").map(f => f.nome),
+        ["6119227_1_T5.psd", "6119227.jpg"]);
+});
+
+// Senza questo vincolo il codice 6119227 pescherebbe le foto di 61192271, che e' un altro
+// articolo, e la proposta sarebbe sbagliata proprio dove sembra giusta.
+test("una cifra dopo il codice vuol dire un altro articolo", () => {
+    const cartella = [file("61192271_1.psd", 1), file("6119227_1.psd", 2)];
+
+    assert.deepStrictEqual(
+        schedaRef.candidatiPerReferenza(cartella, "6119227").map(f => f.nome), ["6119227_1.psd"]);
+});
+
+test("senza codice o senza cartella non ci sono candidati", () => {
+    assert.deepStrictEqual(schedaRef.candidatiPerReferenza([file("a.psd", 1)], ""), []);
+    assert.deepStrictEqual(schedaRef.candidatiPerReferenza(null, "6119227"), []);
+    assert.strictEqual(schedaRef.scegliCandidatoFoto([], "6119227"), null);
+});
+
+test("fra i candidati vince il psd anche se e' il piu' vecchio", () => {
+    const cartella = [file("6119227_a.jpg", 100), file("6119227_b.psd", 1)];
+
+    assert.strictEqual(schedaRef.scegliCandidatoFoto(cartella, "6119227").nome, "6119227_b.psd");
+});
+
+test("fra due psd vince il piu' recente", () => {
+    const cartella = [file("6119227_vecchio.psd", 10), file("6119227_nuovo.psd", 99)];
+
+    assert.strictEqual(schedaRef.scegliCandidatoFoto(cartella, "6119227").nome, "6119227_nuovo.psd");
+});
+
+test("senza psd vince il piu' recente fra gli altri", () => {
+    const cartella = [file("6119227_a.jpg", 10), file("6119227_b.png", 99), file("6119227_c.gif", 50)];
+
+    assert.strictEqual(schedaRef.scegliCandidatoFoto(cartella, "6119227").nome, "6119227_b.png");
+});
+
+/* i tre motivi per proporre */
+
+test("stesso nome ma contenuto diverso da quello impaginato", () => {
+    assert.strictEqual(
+        schedaRef.motivoPropostaFoto(
+            file("6119227_1.psd", 1),
+            { nome: "6119227_1.psd", hash: "AAA" },
+            [{ nome: "6119227_1.psd", hash: "AAA" }],
+            "BBB"),
+        "hashDiverso");
+});
+
+test("il maiuscolo dell'hash non fa differenza", () => {
+    assert.strictEqual(
+        schedaRef.motivoPropostaFoto(
+            file("6119227_1.psd", 1),
+            { nome: "6119227_1.psd", hash: "abc123" },
+            [{ nome: "6119227_1.psd", hash: "abc123" }],
+            "ABC123"),
+        null);
+});
+
+test("la foto del box che il server non conosce", () => {
+    assert.strictEqual(
+        schedaRef.motivoPropostaFoto(
+            file("6119227_1.psd", 1),
+            { nome: "6119227_vecchia.jpg", hash: "AAA" },
+            [{ nome: "6119227_altra.jpg", hash: "BBB" }],
+            null),
+        "nonSulServer");
+});
+
+test("il box senza nessuna foto e la cartella che ne ha una", () => {
+    assert.strictEqual(
+        schedaRef.motivoPropostaFoto(file("6119227_1.psd", 1), null, [], null),
+        "nonSulServer");
+});
+
+test("il psd c'e' in cartella e non sul server", () => {
+    assert.strictEqual(
+        schedaRef.motivoPropostaFoto(
+            file("6119227_1.psd", 1),
+            { nome: "6119227_1.jpg", hash: "AAA" },
+            [{ nome: "6119227_1.jpg", hash: "AAA" }],
+            null),
+        "psdSoloInCartella");
+});
+
+test("se il server ha gia' il psd non si propone niente", () => {
+    assert.strictEqual(
+        schedaRef.motivoPropostaFoto(
+            file("6119227_1.psd", 1),
+            { nome: "6119227_1.jpg", hash: "AAA" },
+            [{ nome: "6119227_1.jpg", hash: "AAA" }, { nome: "6119227_2.psd", hash: "CCC" }],
+            null),
+        null);
+});
+
+// Il caso normale: la foto impaginata e' quella giusta e il server la conosce. Chiedere
+// qui vorrebbe dire disturbare l'operatore a ogni clic.
+test("quando e' tutto in ordine non si propone niente", () => {
+    assert.strictEqual(
+        schedaRef.motivoPropostaFoto(
+            file("6119227_1.jpg", 1),
+            { nome: "6119227_1.jpg", hash: "AAA" },
+            [{ nome: "6119227_1.jpg", hash: "AAA" }],
+            "AAA"),
+        null);
+});
+
+test("senza candidato non c'e' motivo", () => {
+    assert.strictEqual(schedaRef.motivoPropostaFoto(null, { nome: "a.jpg", hash: "A" }, [], null), null);
+});
+
+/* ---- come il Plugin la usa ---- */
+
+test("si propone prima di aprire lo sfoglia, e si sfoglia se la proposta non c'e'", () => {
+    const sorgente = sorgentePlugin("schedaRef.js");
+
+    const proposta = sorgente.indexOf("me.fotoDaProporreDallaCartella(");
+    const sfoglia = sorgente.indexOf("fd = await selectFile(", proposta);
+
+    assert.ok(proposta > 0, "la proposta deve esistere");
+    assert.ok(sfoglia > proposta, "lo sfoglia resta la strada quando non si propone o si dice di no");
+    assert.ok(sorgente.slice(proposta, sfoglia).includes("if (fd == null) {"),
+        "si sfoglia solo se dalla proposta non e' uscito niente");
+});
+
+test("l'hash si calcola solo quando il nome coincide", () => {
+    const sorgente = sorgentePlugin("schedaRef.js");
+
+    const inizio = sorgente.indexOf("async fotoDaProporreDallaCartella(");
+    const blocco = sorgente.slice(inizio, sorgente.indexOf("riquadroPropostaFoto(candidato", inizio));
+
+    const guardia = blocco.indexOf("if (candidato.nome === nomeBox) {");
+    const calcolo = blocco.indexOf("cmd.md5ArrayBuffer(");
+
+    assert.ok(guardia > 0 && calcolo > guardia && calcolo - guardia < 400,
+        "leggere un psd da centinaia di megabyte quando non serve l'hash sarebbe un costo inutile");
+});
