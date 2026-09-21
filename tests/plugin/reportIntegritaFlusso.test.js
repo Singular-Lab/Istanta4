@@ -307,13 +307,42 @@ test('il riquadro si misura sul pannello del plugin, non sulla finestra', () => 
     assert.ok(posWrapper > 0, 'il pannello non si misura piu\' da #wrapper');
     assert.ok(posWindow > posWrapper, 'window resta l\'ultimo ripiego, non il primo');
 
-    //Il riquadro e' limitato in larghezza e in altezza, e misurato davvero.
+    //Il riquadro e' limitato in larghezza e in altezza, e misurato davvero (la misura avviene
+    //nel fotogramma successivo, in _posizionaTooltip).
     const mostra = corpoFunzione(utility, '_mostraTooltip(elemento, testo) {');
     assert.match(mostra, /maxWidth = larghezzaConsentita/);
     assert.match(mostra, /maxHeight = tooltipPosizione\.altezzaMassima\(finestra\)/);
-    assert.match(mostra, /this\._misura\(riquadro, testo, larghezzaConsentita\)/);
+
+    const posa = corpoFunzione(utility, '_posizionaTooltip(elemento, testo, finestra, larghezzaConsentita) {');
+    assert.match(posa, /this\._misura\(riquadro, testo, larghezzaConsentita\)/);
 
     const misura = corpoFunzione(utility, '_misura(elemento, testo, larghezzaConsentita) {');
     assert.match(misura, /getBoundingClientRect\(\)/);
     assert.match(misura, /tooltipPosizione\.dimensioniStimate\(testo, larghezzaConsentita\)/);
+});
+
+test('il riquadro non si misura nello stesso giro in cui cambia il testo', () => {
+    //Passando da un elemento all'altro la larghezza letta era quella del testo precedente,
+    //perche' UXP non aveva ancora rifatto il layout: il riquadro usciva spostato di quella
+    //differenza. Ora si prepara nascosto e si posiziona nel fotogramma dopo.
+    const utility = sorgente('utility.js');
+    const mostra = corpoFunzione(utility, '_mostraTooltip(elemento, testo) {');
+
+    assert.match(mostra, /visibility = "hidden"/);
+    assert.match(mostra, /requestAnimationFrame\(posa\)/);
+    assert.match(mostra, /setTimeout\(posa, 0\)/);
+    assert.match(mostra, /this\._ancoraTooltip = elemento/);
+    //La misura non sta piu' qui.
+    assert.doesNotMatch(mostra, /posizioneTooltip/);
+
+    const posiziona = corpoFunzione(utility, '_posizionaTooltip(elemento, testo, finestra, larghezzaConsentita) {');
+    assert.match(posiziona, /if \(this\._ancoraTooltip !== elemento\)/);
+    assert.match(posiziona, /tooltipPosizione\.posizioneTooltip/);
+    assert.match(posiziona, /visibility = "visible"/);
+
+    //E chi nasconde il riquadro dimentica anche l'elemento, altrimenti un riquadro rimasto
+    //in attesa si mostrerebbe dopo che il mouse e' andato via.
+    const nascondi = corpoFunzione(utility, 'nascondiTooltip() {');
+    assert.match(nascondi, /this\._ancoraTooltip = null/);
+    assert.match(nascondi, /visibility = "hidden"/);
 });

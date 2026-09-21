@@ -2146,6 +2146,7 @@ const Utility=
     _tooltipGlobaliAttivi: false,
     _riquadroTooltip: null,
     _timerTooltip: null,
+    _ancoraTooltip: null,
     RITARDO_TOOLTIP: 350,
     ATTRIBUTO_TOOLTIP: "data-tooltip",
 
@@ -2237,11 +2238,18 @@ const Utility=
             this._timerTooltip = null;
         }
 
+        this._ancoraTooltip = null;
+
         if (this._riquadroTooltip != null) {
             this._riquadroTooltip.style.display = "none";
+            this._riquadroTooltip.style.visibility = "hidden";
         }
     },
 
+    //I20-981: il riquadro si prepara nascosto e si posiziona nel fotogramma dopo.
+    //Misurarlo nello stesso giro in cui gli si cambia il testo dava la larghezza del testo
+    //precedente, perche' UXP non aveva ancora rifatto il layout: passando da un elemento
+    //all'altro il secondo riquadro usciva spostato di quella differenza.
     _mostraTooltip(elemento, testo) {
         try {
             if (elemento == null || !document.body.contains(elemento)) {
@@ -2252,12 +2260,47 @@ const Utility=
             const finestra = this._dimensioniPannello();
             const larghezzaConsentita = tooltipPosizione.larghezzaMassima(finestra);
 
+            this._ancoraTooltip = elemento;
+
             riquadro.textContent = testo;
             riquadro.style.maxWidth = larghezzaConsentita + "px";
             riquadro.style.maxHeight = tooltipPosizione.altezzaMassima(finestra) + "px";
             riquadro.style.left = "0px";
             riquadro.style.top = "0px";
+            //Nascosto ma presente: occupa lo spazio, cosi' la misura del fotogramma dopo e'
+            //quella vera, e nel frattempo non si vede in un posto sbagliato.
+            riquadro.style.visibility = "hidden";
             riquadro.style.display = "block";
+
+            const me = this;
+            const posa = function () {
+                me._posizionaTooltip(elemento, testo, finestra, larghezzaConsentita);
+            };
+
+            if (typeof requestAnimationFrame === "function") {
+                requestAnimationFrame(posa);
+            }
+            else {
+                setTimeout(posa, 0);
+            }
+        }
+        catch (err) {
+            console.error("Errore durante la posa del tooltip:", err);
+            this.nascondiTooltip();
+        }
+    },
+
+    _posizionaTooltip(elemento, testo, finestra, larghezzaConsentita) {
+        try {
+            //Nel frattempo il mouse puo' essere andato altrove: quel riquadro non serve piu'.
+            if (this._ancoraTooltip !== elemento) {
+                return;
+            }
+
+            const riquadro = this._riquadroTooltip;
+            if (riquadro == null) {
+                return;
+            }
 
             const posizione = tooltipPosizione.posizioneTooltip(
                 this._misura(elemento, null, null),
@@ -2266,6 +2309,7 @@ const Utility=
 
             riquadro.style.left = posizione.left + "px";
             riquadro.style.top = posizione.top + "px";
+            riquadro.style.visibility = "visible";
         }
         catch (err) {
             console.error("Errore durante la posa del tooltip:", err);
