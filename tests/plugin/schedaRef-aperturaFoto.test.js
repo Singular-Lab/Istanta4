@@ -338,7 +338,7 @@ test("il riquadro sostitutivo esiste nel markup e viene governato in tutti i pun
 
     assert.ok(sorgente.includes('id="txtAnteprimaNonDisponibile"'),
         "il riquadro sostitutivo deve stare accanto all'immagine");
-    assert.ok(sorgente.includes("me.mostraAnteprimaCaricamento(fd.nomeFile, previewUrl);"),
+    assert.ok(sorgente.includes("me.mostraAnteprimaCaricamento(fd.nomeFile"),
         "l'anteprima del file scelto passa di li'");
     assert.ok(!sorgente.includes("$('#imgPreviewUploadFoto').attr('src', previewUrl);"),
         "l'immagine non va piu' impostata alla cieca");
@@ -346,4 +346,90 @@ test("il riquadro sostitutivo esiste nel markup e viene governato in tutti i pun
     const ripristino = sorgente.indexOf("$('#previewUploadFoto').hide();");
     assert.ok(sorgente.slice(ripristino, ripristino + 400).includes("$('#txtAnteprimaNonDisponibile').hide()"),
         "il ripristino deve pulire anche il riquadro sostitutivo");
+});
+
+/* ---- la miniatura che il psd si porta dentro ---- */
+
+// Il pannello non disegna i psd, ma Photoshop dentro al file salva gia' una piccola JPEG
+// della composizione: quella si puo' mostrare. Qui si costruiscono psd finti, con la stessa
+// struttura dei veri, per verificare che venga ritrovata.
+
+function psdFinto(risorse) {
+    const testa = [0x38, 0x42, 0x50, 0x53, 0, 1];            // 8BPS + versione
+    while (testa.length < 26) testa.push(0);                  // resto dell'intestazione
+    const colore = [0, 0, 0, 0];                              // blocco del colore vuoto
+    const lunghezza = risorse.length;
+    const dimensione = [
+        (lunghezza >> 24) & 255, (lunghezza >> 16) & 255, (lunghezza >> 8) & 255, lunghezza & 255];
+
+    return new Uint8Array([].concat(testa, colore, dimensione, risorse));
+}
+
+function risorsa(id, dati, nome) {
+    const testa = [0x38, 0x42, 0x49, 0x4D, (id >> 8) & 255, id & 255];
+    const nomeBytes = nome ? [nome.length].concat([...nome].map(c => c.charCodeAt(0))) : [0];
+    if (nomeBytes.length % 2 !== 0) nomeBytes.push(0);
+
+    const lunghezza = dati.length;
+    const dimensione = [
+        (lunghezza >> 24) & 255, (lunghezza >> 16) & 255, (lunghezza >> 8) & 255, lunghezza & 255];
+    const coda = lunghezza % 2 === 0 ? [] : [0];
+
+    return [].concat(testa, nomeBytes, dimensione, dati, coda);
+}
+
+// I primi 28 byte della risorsa descrivono la miniatura, il resto e' la JPEG.
+function miniatura(jpeg) {
+    return new Array(28).fill(0).concat(jpeg);
+}
+
+const JPEG = [0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3, 0xFF, 0xD9];
+
+test("la miniatura si ritrova dentro il psd", () => {
+    const file = psdFinto(risorsa(1036, miniatura(JPEG)));
+
+    assert.deepStrictEqual(Array.from(schedaRef.anteprimaDaPsd(file)), JPEG);
+});
+
+test("le risorse che vengono prima non fanno perdere la strada", () => {
+    const file = psdFinto([].concat(
+        risorsa(1005, [1, 2, 3, 4]),
+        risorsa(1039, [9], "profilo"),
+        risorsa(1036, miniatura(JPEG))));
+
+    assert.deepStrictEqual(Array.from(schedaRef.anteprimaDaPsd(file)), JPEG);
+});
+
+// La 1033 e' la miniatura delle versioni antiche, con rosso e blu invertiti: mostrarla
+// darebbe una foto dai colori sbagliati, meglio dire che non c'e'.
+test("la miniatura vecchia con i colori invertiti non si usa", () => {
+    const file = psdFinto(risorsa(1033, miniatura(JPEG)));
+
+    assert.strictEqual(schedaRef.anteprimaDaPsd(file), null);
+});
+
+test("un psd senza miniatura torna niente", () => {
+    const file = psdFinto(risorsa(1005, [1, 2, 3, 4]));
+
+    assert.strictEqual(schedaRef.anteprimaDaPsd(file), null);
+});
+
+test("quello che non e' un psd non si prova nemmeno a leggere", () => {
+    assert.strictEqual(schedaRef.anteprimaDaPsd(new Uint8Array([0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3])), null);
+    assert.strictEqual(schedaRef.anteprimaDaPsd(new Uint8Array(0)), null);
+});
+
+// Un file troncato a meta' non deve far esplodere il modal.
+test("un psd tagliato non fa danni", () => {
+    const intero = psdFinto(risorsa(1036, miniatura(JPEG)));
+
+    assert.strictEqual(schedaRef.anteprimaDaPsd(intero.slice(0, intero.length - 4)), null);
+    assert.strictEqual(schedaRef.anteprimaDaPsd(intero.slice(0, 20)), null);
+});
+
+test("il riquadro di proposta e l'anteprima di caricamento provano la miniatura", () => {
+    const sorgente = sorgentePlugin("schedaRef.js");
+
+    const usi = (sorgente.match(/this\.anteprimaDaPsd\(/g) || []).length;
+    assert.strictEqual(usi, 2, "la miniatura serve in tutti e due i punti dove si mostra una foto");
 });

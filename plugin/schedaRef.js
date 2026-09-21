@@ -13,6 +13,8 @@ const schedaRef = {
     //I20-978: com'erano le foto quando il modal si e' aperto, per sapere al salvataggio se
     //qualcosa e' cambiato e vale la pena proporre il fix foto.
     statoFotoAllApertura: null,
+    //I20-980: indirizzo della miniatura estratta da un psd, da liberare alla scelta successiva.
+    urlAnteprimaPsd: null,
     multiSchedeRef: [],
     editRefFieldController: null,
     idRecordLavorazione: 0,
@@ -4641,6 +4643,82 @@ const schedaRef = {
         return mostrabili[estensione] != null ? mostrabili[estensione] : null;
     },
 
+    /// I20-980: la miniatura che un psd si porta dentro, in byte JPEG, oppure null.
+    ///
+    /// Il pannello non sa disegnare un psd, ma Photoshop dentro al file ci salva gia' una
+    /// piccola JPEG della composizione finale, e quella si puo' mostrare.
+    ///
+    /// Struttura del file: firma 8BPS, intestazione di 26 byte, blocco del colore (lunghezza
+    /// piu' dati), blocco delle risorse (lunghezza piu' voci). Ogni voce comincia con 8BIM,
+    /// ha un identificativo, un nome in stile Pascal portato a lunghezza pari e i dati, anche
+    /// quelli portati a lunghezza pari. La risorsa 1036 e' la miniatura: 28 byte che la
+    /// descrivono e poi la JPEG vera.
+    ///
+    /// Si legge solo la 1036 e non la 1033, che e' la miniatura delle versioni antiche con
+    /// rosso e blu invertiti: mostrarla darebbe una foto dai colori sbagliati.
+    ///
+    /// La miniatura c'e' se il file e' stato salvato con l'anteprima. Quando manca si torna
+    /// null e resta il riquadro che lo dice.
+    anteprimaDaPsd(byte) {
+        try {
+            var dati = byte instanceof Uint8Array ? byte : new Uint8Array(byte);
+
+            //Firma 8BPS.
+            if (dati.length < 30 || dati[0] !== 0x38 || dati[1] !== 0x42 || dati[2] !== 0x50 || dati[3] !== 0x53) {
+                return null;
+            }
+
+            var leggi32 = function (posizione) {
+                return (dati[posizione] * 16777216) + (dati[posizione + 1] * 65536) +
+                    (dati[posizione + 2] * 256) + dati[posizione + 3];
+            };
+            var leggi16 = function (posizione) {
+                return (dati[posizione] * 256) + dati[posizione + 1];
+            };
+
+            var posizione = 26;
+            posizione += 4 + leggi32(posizione);
+
+            var fineRisorse = posizione + 4 + leggi32(posizione);
+            posizione += 4;
+
+            while (posizione + 12 <= fineRisorse && posizione + 12 <= dati.length) {
+                //8BIM: fuori sincrono non si prosegue a tentoni.
+                if (dati[posizione] !== 0x38 || dati[posizione + 1] !== 0x42 ||
+                    dati[posizione + 2] !== 0x49 || dati[posizione + 3] !== 0x4D) {
+                    return null;
+                }
+
+                var identificativo = leggi16(posizione + 4);
+
+                var posizioneNome = posizione + 6;
+                var saltoNome = 1 + dati[posizioneNome];
+                if (saltoNome % 2 !== 0) {
+                    saltoNome++;
+                }
+
+                var posizioneDimensione = posizioneNome + saltoNome;
+                var dimensione = leggi32(posizioneDimensione);
+                var posizioneDati = posizioneDimensione + 4;
+
+                if (identificativo === 1036) {
+                    if (dimensione <= 28 || posizioneDati + dimensione > dati.length) {
+                        return null;
+                    }
+                    return dati.slice(posizioneDati + 28, posizioneDati + dimensione);
+                }
+
+                posizione = posizioneDati + dimensione + (dimensione % 2);
+            }
+
+            return null;
+        }
+        catch (e) {
+            console.log("Miniatura del psd non leggibile: " + e);
+            return null;
+        }
+    },
+
     /// Cosa scrivere al posto dell'immagine quando non si puo' mostrare.
     testoAnteprimaNonDisponibile(nome) {
         var estensione = this.partiDelNomeFile(nome).estensione;
@@ -4651,11 +4729,32 @@ const schedaRef = {
 
     /// I20-980: mostra l'anteprima del file scelto, oppure dice perche' non c'e'. Un riquadro
     /// vuoto, o peggio un'immagine rotta, sembrerebbe un guasto del Plugin.
-    mostraAnteprimaCaricamento(nomeFile, url) {
-        var tipo = this.tipoAnteprimaDi(nomeFile);
+    mostraAnteprimaCaricamento(nomeFile, url, contenuto) {
+        //L'indirizzo della miniatura estratta dal psd si butta a ogni scelta nuova: e' roba
+        //che vive in memoria finche' qualcuno non la libera.
+        if (this.urlAnteprimaPsd) {
+            try { URL.revokeObjectURL(this.urlAnteprimaPsd); } catch (e) { }
+            this.urlAnteprimaPsd = null;
+        }
 
-        if (tipo != null && url) {
-            $('#imgPreviewUploadFoto').attr('src', url).show();
+        var daMostrare = this.tipoAnteprimaDi(nomeFile) != null ? url : null;
+
+        if (daMostrare == null && contenuto != null &&
+            this.partiDelNomeFile(nomeFile).estensione === "psd") {
+            var miniatura = this.anteprimaDaPsd(contenuto);
+            if (miniatura != null) {
+                try {
+                    this.urlAnteprimaPsd = URL.createObjectURL(new Blob([miniatura], { type: "image/jpeg" }));
+                    daMostrare = this.urlAnteprimaPsd;
+                }
+                catch (e) {
+                    console.log("Miniatura del psd non mostrabile: " + e);
+                }
+            }
+        }
+
+        if (daMostrare) {
+            $('#imgPreviewUploadFoto').attr('src', daMostrare).show();
             $('#txtAnteprimaNonDisponibile').hide().text('');
             return;
         }
@@ -4867,10 +4966,20 @@ const schedaRef = {
         riquadro.append($('<h3 style="margin:0;">E\' questa la foto che stai cercando?</h3>'));
         riquadro.append($('<div style="font-size:11px;"></div>').text(spiegazioni[motivo] || ""));
 
+        //Un psd non si disegna, ma la miniatura che si porta dentro si': e' una JPEG.
+        var daMostrare = contenuto;
+        if (tipo == null && this.partiDelNomeFile(candidato.nome).estensione === "psd") {
+            var miniatura = this.anteprimaDaPsd(contenuto);
+            if (miniatura != null) {
+                daMostrare = miniatura;
+                tipo = "image/jpeg";
+            }
+        }
+
         var immagine = null;
         if (tipo != null) {
             try {
-                var url = URL.createObjectURL(new Blob([contenuto], { type: tipo }));
+                var url = URL.createObjectURL(new Blob([daMostrare], { type: tipo }));
                 immagine = $('<img style="max-width:180px; max-height:180px; border:1px solid #ddd;">').attr("src", url);
             }
             catch (e) {
@@ -5915,7 +6024,7 @@ const schedaRef = {
                             setScopeSelection('globale');
                             updateConfirmButtonState();
 
-                            me.mostraAnteprimaCaricamento(fd.nomeFile, previewUrl);
+                            me.mostraAnteprimaCaricamento(fd.nomeFile, previewUrl, fd.file);
                             $('#txtNomeUploadFoto').text(fd.nomeFile || '');
                             $('#previewUploadFoto').show();
                             $('#btnResetFotoScelta').show();
