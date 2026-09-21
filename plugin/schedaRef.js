@@ -4744,12 +4744,21 @@ const schedaRef = {
         }
 
         //Tre: in cartella c'e' il psd, sul server no.
+        //
+        //A fermare la proposta e' solo il psd della stessa foto, non un psd qualsiasi: un altro
+        //scatto della stessa referenza salvato in psd non c'entra nulla con quello che
+        //l'operatore sta sostituendo, e bloccherebbe la proposta proprio quando serve.
         if (this.partiDelNomeFile(candidato.nome).estensione === "psd") {
-            var psdSulServer = elencoServer.some(function (foto) {
-                return foto != null && schedaRef.partiDelNomeFile(foto.nome).estensione === "psd";
+            var radiceBox = this.partiDelNomeFile(nomeBox).base.toUpperCase();
+            var psdGiaSulServer = elencoServer.some(function (foto) {
+                if (foto == null) {
+                    return false;
+                }
+                var parti = schedaRef.partiDelNomeFile(foto.nome);
+                return parti.estensione === "psd" && parti.base.toUpperCase() === radiceBox;
             });
 
-            if (!psdSulServer) {
+            if (!psdGiaSulServer) {
                 return "psdSoloInCartella";
             }
         }

@@ -235,12 +235,35 @@ test("il psd c'e' in cartella e non sul server", () => {
         "psdSoloInCartella");
 });
 
-test("se il server ha gia' il psd non si propone niente", () => {
+// A fermare la proposta e' solo il psd della stessa foto. Un altro scatto della stessa
+// referenza salvato in psd non c'entra con quello che si sta sostituendo, e bloccarla li'
+// vorrebbe dire perdere il caso proprio quando serve.
+test("se il server ha gia' quel psd non si propone niente", () => {
+    assert.strictEqual(
+        schedaRef.motivoPropostaFoto(
+            file("6119227_1.psd", 1),
+            { nome: "6119227_1.jpg", hash: "AAA" },
+            [{ nome: "6119227_1.jpg", hash: "AAA" }, { nome: "6119227_1.psd", hash: "CCC" }],
+            null),
+        null);
+});
+
+test("il psd di un altro scatto non ferma la proposta", () => {
     assert.strictEqual(
         schedaRef.motivoPropostaFoto(
             file("6119227_1.psd", 1),
             { nome: "6119227_1.jpg", hash: "AAA" },
             [{ nome: "6119227_1.jpg", hash: "AAA" }, { nome: "6119227_2.psd", hash: "CCC" }],
+            null),
+        "psdSoloInCartella");
+});
+
+test("il confronto dei nomi non si perde sulle maiuscole", () => {
+    assert.strictEqual(
+        schedaRef.motivoPropostaFoto(
+            file("6119227_1.PSD", 1),
+            { nome: "6119227_1.jpg", hash: "AAA" },
+            [{ nome: "6119227_1.jpg", hash: "AAA" }, { nome: "6119227_1.Psd", hash: "CCC" }],
             null),
         null);
 });
