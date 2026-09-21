@@ -117,7 +117,13 @@ Non inserire credenziali, token, configurazioni cliente o dati reali nei file, n
 
 L'agent non deve eseguire merge, pubblicazione di release o distribuzione. Squash/merge, stato `Merged`, release e stato `Distributed` restano azioni dell'operatore tramite Control Plane.
 
-## 10. Confini del cambiamento
+## 10. Revisione operatore
+
+1. Se l'operatore non è soddisfatto e chiede di rinegoziare il task con altre richieste di aggiustamento, devi ripetere il preflight sulla nuova richiesta e quindi impostando il task in questione tramite `company_update_task_status`
+
+2. Il processo itera di nuovo facendo un nuovo preflight per quel task
+
+## 11. Confini del cambiamento
 
 - Non includere modifiche locali preesistenti dell'utente nel commit.
 - Non modificare file generati, binari, output di build o dati persistenti salvo esplicita richiesta approvata.
