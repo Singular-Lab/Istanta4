@@ -2250,17 +2250,18 @@ const Utility=
 
             const riquadro = this._creaRiquadroTooltip();
             const finestra = this._dimensioniPannello();
+            const larghezzaConsentita = tooltipPosizione.larghezzaMassima(finestra);
 
             riquadro.textContent = testo;
-            riquadro.style.maxWidth = tooltipPosizione.larghezzaMassima(finestra) + "px";
+            riquadro.style.maxWidth = larghezzaConsentita + "px";
+            riquadro.style.maxHeight = tooltipPosizione.altezzaMassima(finestra) + "px";
             riquadro.style.left = "0px";
             riquadro.style.top = "0px";
             riquadro.style.display = "block";
 
-            //Si misura da mostrato, altrimenti larghezza e altezza sono zero.
             const posizione = tooltipPosizione.posizioneTooltip(
-                elemento.getBoundingClientRect(),
-                { width: riquadro.offsetWidth, height: riquadro.offsetHeight },
+                this._misura(elemento, null, null),
+                this._misura(riquadro, testo, larghezzaConsentita),
                 finestra);
 
             riquadro.style.left = posizione.left + "px";
@@ -2270,6 +2271,50 @@ const Utility=
             console.error("Errore durante la posa del tooltip:", err);
             this.nascondiTooltip();
         }
+    },
+
+    /// Quanto e' grande e dove sta un elemento. Si prova a chiederlo, e se UXP non risponde
+    /// (capita, e allora larghezza e altezza tornano zero) per il riquadro si stima dal testo:
+    /// calcolare la posizione su misure nulle vuol dire trattarlo come un punto, ed e' cosi'
+    /// che finiva oltre il bordo.
+    _misura(elemento, testo, larghezzaConsentita) {
+        let rettangolo = null;
+
+        try {
+            rettangolo = elemento.getBoundingClientRect();
+        }
+        catch (err) {
+            rettangolo = null;
+        }
+
+        if (rettangolo != null && rettangolo.width > 0 && rettangolo.height > 0) {
+            return rettangolo;
+        }
+
+        const larghezza = elemento.offsetWidth || 0;
+        const altezza = elemento.offsetHeight || 0;
+
+        if (larghezza > 0 && altezza > 0) {
+            const sinistra = rettangolo != null ? rettangolo.left : 0;
+            const sopra = rettangolo != null ? rettangolo.top : 0;
+
+            return {
+                left: sinistra,
+                top: sopra,
+                width: larghezza,
+                height: altezza,
+                right: sinistra + larghezza,
+                bottom: sopra + altezza
+            };
+        }
+
+        if (testo == null) {
+            //Non e' il riquadro: senza misure resta quel che sappiamo, cioe' la posizione.
+            return rettangolo || {};
+        }
+
+        const stima = tooltipPosizione.dimensioniStimate(testo, larghezzaConsentita);
+        return { left: 0, top: 0, width: stima.width, height: stima.height, right: stima.width, bottom: stima.height };
     },
 
     _creaRiquadroTooltip() {
@@ -2286,18 +2331,36 @@ const Utility=
         return riquadro;
     },
 
+    /// Le misure del pannello del plugin, che e' cio' che i tooltip non devono mai superare.
+    /// I20-981: prima si guardava window.innerWidth, che in UXP non e' la finestra del
+    /// pannello: su quelle misure il riquadro finiva fuori dai bordi e il testo lungo non
+    /// andava a capo dove doveva. #wrapper e' la stessa fonte che usa onresizeWindow.
     _dimensioniPannello() {
-        const wrapper = document.getElementById("wrapper");
+        const candidati = [
+            document.getElementById("wrapper"),
+            document.documentElement,
+            document.body
+        ];
 
-        const larghezza = (typeof window !== "undefined" && window.innerWidth)
-            || (wrapper != null ? wrapper.clientWidth : 0)
-            || 800;
+        for (let i = 0; i < candidati.length; i++) {
+            const elemento = candidati[i];
+            if (elemento == null) {
+                continue;
+            }
 
-        const altezza = (typeof window !== "undefined" && window.innerHeight)
-            || (wrapper != null ? wrapper.clientHeight : 0)
-            || 600;
+            const larghezza = elemento.clientWidth;
+            const altezza = elemento.clientHeight;
 
-        return { width: larghezza, height: altezza };
+            if (larghezza > 0 && altezza > 0) {
+                return { width: larghezza, height: altezza };
+            }
+        }
+
+        if (typeof window !== "undefined" && window.innerWidth > 0 && window.innerHeight > 0) {
+            return { width: window.innerWidth, height: window.innerHeight };
+        }
+
+        return { width: 800, height: 600 };
     },
 
     registerDateMenuPicker(rootNode = null) {

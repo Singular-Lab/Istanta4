@@ -77,3 +77,62 @@ test('la larghezza massima tiene il riquadro dentro il pannello', () => {
     assert.strictEqual(tooltip.larghezzaMassima({ width: 40 }), 80);
     assert.strictEqual(tooltip.larghezzaMassima(null), 800 - (tooltip.BORDO * 2));
 });
+
+test('il riquadro non supera mai i limiti del pannello', () => {
+    //La garanzia che mancava: qualunque elemento, qualunque testo, il riquadro resta dentro.
+    //Il pannello del plugin puo' essere stretto e basso, ed e' li' che il difetto si vedeva.
+    const pannelli = [{ width: 300, height: 200 }, { width: 420, height: 700 }, { width: 240, height: 120 }];
+    const testi = ['Fix', 'Scegli cartella. Attualmente impostata: /Volumi/Lavori/Volantini/Export/', 'x'.repeat(400)];
+
+    pannelli.forEach(pannello => {
+        const larghezzaConsentita = tooltip.larghezzaMassima(pannello);
+        const altezzaConsentita = tooltip.altezzaMassima(pannello);
+
+        testi.forEach(testo => {
+            const stima = tooltip.dimensioniStimate(testo, larghezzaConsentita);
+            const riquadro = {
+                width: Math.min(stima.width, larghezzaConsentita),
+                height: Math.min(stima.height, altezzaConsentita)
+            };
+
+            for (let x = 0; x <= pannello.width; x += 20) {
+                for (let y = 0; y <= pannello.height; y += 20) {
+                    const posizione = tooltip.posizioneTooltip(elemento(x, y, 26, 25), riquadro, pannello);
+
+                    assert.ok(posizione.left >= 0, `esce a sinistra a ${x},${y}`);
+                    assert.ok(posizione.top >= 0, `esce in alto a ${x},${y}`);
+                    assert.ok(posizione.left + riquadro.width <= pannello.width,
+                        `esce a destra a ${x},${y} (${posizione.left} + ${riquadro.width} > ${pannello.width})`);
+                    assert.ok(posizione.top + riquadro.height <= pannello.height,
+                        `esce in basso a ${x},${y} (${posizione.top} + ${riquadro.height} > ${pannello.height})`);
+                }
+            }
+        });
+    });
+});
+
+test('la stima delle dimensioni non lascia mai un riquadro a zero', () => {
+    //Serve quando UXP non sa dire quanto e' grande il riquadro: calcolare la posizione su
+    //misure nulle vuol dire trattarlo come un punto, ed e' cosi' che finiva oltre il bordo.
+    const corto = tooltip.dimensioniStimate('Fix', 300);
+    assert.ok(corto.width > 0 && corto.height > 0);
+    assert.ok(corto.width <= 300);
+
+    //Un testo lungo va a capo: piu' alto, mai piu' largo del consentito.
+    const lungo = tooltip.dimensioniStimate('x'.repeat(300), 300);
+    assert.ok(lungo.width <= 300);
+    assert.ok(lungo.height > corto.height);
+
+    //Gli a capo espliciti contano come righe.
+    const conACapo = tooltip.dimensioniStimate('prima\nseconda\nterza', 300);
+    assert.ok(conACapo.height > corto.height);
+
+    assert.ok(tooltip.dimensioniStimate('', 300).height > 0);
+    assert.ok(tooltip.dimensioniStimate(null, null).width > 0);
+});
+
+test('l\'altezza massima tiene il riquadro dentro un pannello basso', () => {
+    assert.strictEqual(tooltip.altezzaMassima({ height: 200 }), 200 - (tooltip.BORDO * 2));
+    assert.strictEqual(tooltip.altezzaMassima({ height: 20 }), 40);
+    assert.strictEqual(tooltip.altezzaMassima(null), 600 - (tooltip.BORDO * 2));
+});

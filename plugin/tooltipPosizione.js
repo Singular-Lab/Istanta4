@@ -68,6 +68,46 @@ function larghezzaMassima(finestra) {
     return larghezza > 80 ? Math.round(larghezza) : 80;
 }
 
+/// E l'altezza massima. Il pannello del plugin puo' essere basso, e un testo lungo che va a
+/// capo diventa alto in fretta: senza questo limite il riquadro usciva sotto.
+function altezzaMassima(finestra) {
+    const altezza = numero((finestra || {}).height, 600) - (BORDO * 2);
+    return altezza > 40 ? Math.round(altezza) : 40;
+}
+
+//Misure di ripiego, in pixel, quando UXP non sa dire quanto e' grande il riquadro.
+const LARGHEZZA_CARATTERE = 6.6;
+const ALTEZZA_RIGA = 17;
+const IMBOTTITURA = 18;
+
+/// Quanto occupera' il riquadro, stimato dal testo. Serve solo quando la misura vera non
+/// arriva: calcolare la posizione su una misura nulla vuol dire piazzare il riquadro come se
+/// fosse un punto, ed e' cosi' che finiva fuori dal pannello.
+function dimensioniStimate(testo, larghezzaConsentita) {
+    const stringa = String(testo == null ? "" : testo);
+    const massima = numero(larghezzaConsentita, 300);
+
+    const righeEsplicite = stringa.split("\n");
+    let righe = 0;
+    let larghezzaTesto = 0;
+
+    righeEsplicite.forEach(riga => {
+        const larghezzaRiga = riga.length * LARGHEZZA_CARATTERE;
+        if (larghezzaRiga > larghezzaTesto) {
+            larghezzaTesto = larghezzaRiga;
+        }
+
+        righe += Math.max(1, Math.ceil(larghezzaRiga / Math.max(1, massima - IMBOTTITURA)));
+    });
+
+    const larghezza = Math.min(massima, Math.ceil(larghezzaTesto) + IMBOTTITURA);
+
+    return {
+        width: Math.max(40, larghezza),
+        height: Math.max(ALTEZZA_RIGA, righe * ALTEZZA_RIGA) + IMBOTTITURA
+    };
+}
+
 function numero(valore, predefinito) {
     const n = Number(valore);
     return isNaN(n) ? predefinito : n;
@@ -78,5 +118,7 @@ module.exports = {
     BORDO,
     testoTooltip,
     posizioneTooltip,
-    larghezzaMassima
+    larghezzaMassima,
+    altezzaMassima,
+    dimensioniStimate
 };

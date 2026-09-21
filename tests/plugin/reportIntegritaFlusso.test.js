@@ -294,3 +294,26 @@ test('i title del plugin si vedono, tutti', () => {
     //aggiunto nasce muto senza che nessuno se ne accorga.
     assert.doesNotMatch(senzaCommenti(confronti), /\.title\s*=/);
 });
+
+test('il riquadro si misura sul pannello del plugin, non sulla finestra', () => {
+    //I20-981: window.innerWidth in UXP non e' il pannello, e su quelle misure il riquadro
+    //usciva dai bordi e il testo lungo non andava a capo dove doveva.
+    const utility = sorgente('utility.js');
+    const dimensioni = corpoFunzione(utility, '_dimensioniPannello() {');
+
+    const posWrapper = dimensioni.indexOf('getElementById("wrapper")');
+    const posWindow = dimensioni.indexOf('window.innerWidth');
+
+    assert.ok(posWrapper > 0, 'il pannello non si misura piu\' da #wrapper');
+    assert.ok(posWindow > posWrapper, 'window resta l\'ultimo ripiego, non il primo');
+
+    //Il riquadro e' limitato in larghezza e in altezza, e misurato davvero.
+    const mostra = corpoFunzione(utility, '_mostraTooltip(elemento, testo) {');
+    assert.match(mostra, /maxWidth = larghezzaConsentita/);
+    assert.match(mostra, /maxHeight = tooltipPosizione\.altezzaMassima\(finestra\)/);
+    assert.match(mostra, /this\._misura\(riquadro, testo, larghezzaConsentita\)/);
+
+    const misura = corpoFunzione(utility, '_misura(elemento, testo, larghezzaConsentita) {');
+    assert.match(misura, /getBoundingClientRect\(\)/);
+    assert.match(misura, /tooltipPosizione\.dimensioniStimate\(testo, larghezzaConsentita\)/);
+});
