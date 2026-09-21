@@ -9361,6 +9361,11 @@ double.TryParse(percorso.ToString(), out double valore16))
 
             LogAssistent logAss = new LogAssistent();
 
+            //Il Plugin chiama questa scheda a ogni apertura e, da I20-976, anche dopo ogni
+            //salvataggio primarie/secondarie: le tappe finiscono nel log perche' si possa
+            //vedere dove se ne va il tempo sui dati veri, invece di indovinarlo.
+            Stopwatch swScheda = Stopwatch.StartNew();
+
             Console.WriteLine($"getSchedaRef -> Codice:{codiceGruppo} - idLavorazione:{idLavorazione} - idRec:{idRec} - byPassLavorazioneRecord:{byPassLavorazioneRecord} - mode:{mode}");
 
             try
@@ -9671,14 +9676,13 @@ double.TryParse(percorso.ToString(), out double valore16))
 
                 //logAss.WriteLine("GET SCHEDA REF >> step4_ 1 " + gruppo.Count);
 
-                var versions = this.ctx2.PromoTracciatiRecords
-.Where(f => f.IdTracciato == idTracciato && f.Label == gruppo[0].label)
-.Select(f => f.Versione).ToList();
+                //Il massimo lo calcola il database: prima si scaricavano tutte le versioni
+                //della label per poi buttarle via tutte tranne una.
+                var lastVersion = this.ctx2.PromoTracciatiRecords
+                    .Where(f => f.IdTracciato == idTracciato && f.Label == gruppo[0].label)
+                    .Max(f => f.Versione);
 
-                //logAss.WriteLine("GET SCHEDA REF >> step4_2");
-
-                // Prevenire l'eccezione se la lista è vuota
-                var lastVersion = versions.Max();
+                Console.WriteLine($"getSchedaRef tappa 1 (record del gruppo): {swScheda.ElapsedMilliseconds} ms");
 
                 if (gruppo.Any(f => f.Versione != lastVersion))
                 {
@@ -9720,6 +9724,30 @@ double.TryParse(percorso.ToString(), out double valore16))
                     );
                 }
 
+                //Gli articoli di tutti i membri in una query sola: prima ogni giro del ciclo
+                //faceva la sua, con due Include e il loro prodotto cartesiano. AsSplitQuery
+                //tiene separate foto e descrizioni. Il risultato e' lo stesso: con il change
+                //tracker di EF, interrogare due volte lo stesso articolo restituiva comunque
+                //la stessa istanza che ora arriva dal dizionario.
+                var codiciDelGruppo = gruppo
+                    .Where(r => r.recordInTracciato != null && r.recordInTracciato.ContainsKey(k_cod))
+                    .Select(r => r.recordInTracciato![k_cod].ToString())
+                    .Where(c => !string.IsNullOrEmpty(c))
+                    .Distinct()
+                    .ToList();
+
+                var articoliDelGruppo = this.ctx.Articolis
+                    .Include(i => i.ArticoliFotos)
+                    .Include(f => f.ArticoliDescrizionis)
+                    .AsSplitQuery()
+                    .Where(a => codiciDelGruppo.Contains(a.Codice))
+                    .ToList()
+                    .GroupBy(a => a.Codice)
+                    .ToDictionary(g => g.Key, g => g.First());
+
+                //Il formato della lavorazione e' lo stesso per tutti i record del gruppo.
+                Formato? formatoLavorazione = SingletonConfiguration.DBFORMATI!.source.FirstOrDefault(f => f.guidID == lavorazione.GuidFormato);
+
                 foreach (var rec in gruppo)
                 {
                     rec.hasFoto = 0;
@@ -9732,11 +9760,11 @@ double.TryParse(percorso.ToString(), out double valore16))
                     //logAss.WriteLine($"GET SCHEDA REF >> step6 {_cod}");
 
                     //Preparazione del singolo
-                    Articoli? artItem = this.ctx.Articolis.Include(i => i.ArticoliFotos).Include(f => f.ArticoliDescrizionis).Where(a => a.Codice == rec.recordInTracciato[k_cod].ToString()).FirstOrDefault();
+                    Articoli? artItem = _cod != null && articoliDelGruppo.ContainsKey(_cod) ? articoliDelGruppo[_cod] : null;
                     art_list.Add(artItem!);
 
 
-                    Formato? formatoLav = SingletonConfiguration.DBFORMATI!.source.FirstOrDefault(f => f.guidID == lavorazione.GuidFormato);
+                    Formato? formatoLav = formatoLavorazione;
                     rec.formato = formatoLav!;
 
 
@@ -9789,6 +9817,8 @@ double.TryParse(percorso.ToString(), out double valore16))
 
                 //logAss.WriteLine("GET SCHEDA REF >> step7");
 
+                Console.WriteLine($"getSchedaRef tappa 2 (articoli e impacchettamento): {swScheda.ElapsedMilliseconds} ms");
+
                 var resultAutoPS = await Utility.Selezionatore.selezioneAutomaticaRefInMenabo(gruppo, this.ctx2, this._fico_conf.Value.nomeCliente, this.path_external_lib, true);
 
                 //if (recDeclinati.Count > 0)
@@ -9838,6 +9868,8 @@ double.TryParse(percorso.ToString(), out double valore16))
 
                 //logAss.WriteLine("GET SCHEDA REF >> step10");
 
+
+                Console.WriteLine($"getSchedaRef tappa 3 (selezione ed etichettatura): {swScheda.ElapsedMilliseconds} ms");
 
                 PreparazioneListaResult resultGlobale = new PreparazioneListaResult();
 
@@ -9988,6 +10020,8 @@ double.TryParse(percorso.ToString(), out double valore16))
                     error = "",
                     esito = true,
                 };
+
+                Console.WriteLine($"getSchedaRef tappa 4 (export di agenzia): {swScheda.ElapsedMilliseconds} ms");
 
                 //logAss.WriteLine("GET SCHEDA REF >> step12");
 

@@ -968,6 +968,10 @@ namespace IstantaLib
         public string[] schemasNotEditable { get; set; }//Specifica quali degli stili rappresentati su scheda revisione NON possono essere editati       
         public List<AgenziaCustomPlugin_EditSchedaRefRules> editSchedaRefRules { get; set; }
 
+        /// I20-976: avvisi da mostrare quando cambia il primario di un gruppo nella scheda ref.
+        /// Vuoto: nessun avviso, e resta il solo comportamento core.
+        public List<AgenziaCustomPlugin_AvvisoCambioPrimario> avvisiCambioPrimario { get; set; } = new List<AgenziaCustomPlugin_AvvisoCambioPrimario>();
+
         public List<AgenziaCustomPlugin_LibreriaIndd> regoleLibrerie { get; set; } //
 
         public List<TemplateFiltro> templateFiltro { get; set; } = new List<TemplateFiltro>();
@@ -1105,6 +1109,20 @@ namespace IstantaLib
     {
         public bool valido { get; set; }
         public List<BloccoRegole> setRegole { get; set; }
+    }
+
+    /// Avviso che il Plugin mostra quando l'operatore cambia il primario di un gruppo.
+    /// Vale la prima regola che corrisponde al record, come per editSchedaRefRules.
+    ///
+    /// Riscaricare la scheda dopo il cambio e allineare il box sono comportamenti core, di
+    /// tutti i clienti. Qui resta solo cio' che una singola agenzia ha da dire in piu': in
+    /// Edro, che con l'esempio governato dal gruppo il cambio di primario non lo modifica.
+    public class AgenziaCustomPlugin_AvvisoCambioPrimario
+    {
+        /// Testo mostrato all'operatore, in stile avviso. Vuoto: nessun avviso.
+        public string messaggio { get; set; } = "";
+
+        public List<BloccoRegole> setRegole { get; set; } = new List<BloccoRegole>();
     }
     public class AgenziaCustomPlugin_DecodificaNomeFilePerRicercaKit
     {

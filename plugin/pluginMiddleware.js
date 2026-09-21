@@ -432,6 +432,33 @@ const pluginMiddleware = {
         return true;
     },
 
+    /*
+     * L'avviso che l'agenzia vuole mostrare quando cambia il primario di un gruppo, null se
+     * non ne ha. E' l'unico contributo dell'agenzia a quel flusso: riscaricare la scheda e
+     * allineare il box sono comportamenti di tutti, e stanno in schedaRef.
+     */
+    getAvvisoCambioPrimario(itemRef) {
+        let me = this;
+
+        if (me.callCustom) {
+            if (typeof customAgenzia !== "undefined" && typeof customAgenzia.getAvvisoCambioPrimario === "function") {
+                return customAgenzia.getAvvisoCambioPrimario(itemRef);
+            } else {
+                return null;
+            }
+        }
+
+        const rules = me.customPluginDB?.avvisiCambioPrimario || [];
+
+        for (const rule of rules) {
+            if (me.valutaBlocchiRegole(itemRef, rule.setRegole)) {
+                return rule.messaggio;
+            }
+        }
+
+        return null;
+    },
+
     getSuffissoLavorazione(listaRefImpaginate) {
         let me = this;
 
