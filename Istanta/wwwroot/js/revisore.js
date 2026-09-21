@@ -2679,7 +2679,24 @@
     static riempiSchedaColonna(htmlItem, record, codice) {
         var campi = Revisore.campiPerLaColonna(record, Revisore.chiaviDellaColonna());
 
-        htmlItem.find(".codice").text("Cod: " + codice);
+        //I20-982: il codice del gruppo padre e' l'elenco delle referenze separate da virgola e
+        //trabocca dal riquadro. Si lascia troncare al browser, che sa quanto spazio c'e' e mette
+        //i puntini al punto giusto; contare i caratteri qui taglierebbe a caso, perche' la
+        //larghezza dipende dal carattere. Il valore intero resta nel title: ci si passa sopra e
+        //si legge tutto.
+        var testoCodice = "Cod: " + codice;
+        htmlItem.find(".codice")
+            .attr("title", testoCodice)
+            .empty()
+            .append($("<span></span>")
+                .css({
+                    "display": "block",
+                    "max-width": "100%",
+                    "overflow": "hidden",
+                    "text-overflow": "ellipsis",
+                    "white-space": "nowrap"
+                })
+                .text(testoCodice));
         htmlItem.find("#Descrizione1Tracciato").val(campi.descrizione1);
         htmlItem.find("#Descrizione2Tracciato").val(campi.descrizione2);
         htmlItem.find("#Descrizione3Tracciato").val(campi.descrizione3);

@@ -134,3 +134,22 @@ test('il gruppo senza tracciato compilato non perde le schede dei singoli', () =
     assert.ok(metodo.includes('elementsOfGroup.forEach('),
         'il ciclo sui singoli deve esistere ancora, per quel caso');
 });
+
+/* ---- il codice lungo nel riquadro ---- */
+
+// Il codice del gruppo padre e' l'elenco delle referenze separate da virgola: nel riquadro non
+// ci sta, e scritto per intero sfonda la colonna.
+test('il codice lungo si tronca con i puntini e resta leggibile per intero', () => {
+    const revisore = sorgente('Istanta/wwwroot/js/revisore.js');
+
+    const inizio = revisore.indexOf('static riempiSchedaColonna(');
+    const metodo = revisore.slice(inizio, revisore.indexOf('sostituisciColonnaSinistraGruppo() {', inizio));
+
+    assert.ok(metodo.includes('"text-overflow": "ellipsis"'), 'i puntini li mette il browser');
+    assert.ok(metodo.includes('"white-space": "nowrap"') && metodo.includes('"overflow": "hidden"'),
+        'senza queste due il testo va a capo invece di troncarsi');
+    assert.ok(metodo.includes('.attr("title", testoCodice)'),
+        'il valore intero deve restare leggibile passandoci sopra');
+    assert.ok(!/\.substring\(|\.slice\(0/.test(metodo),
+        'il taglio a caratteri fissi non sa quanto spazio c\'e\' e taglierebbe a caso');
+});
