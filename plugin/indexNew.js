@@ -43,6 +43,9 @@ const credenzialiSalvate = credenzialiSalvateModulo.crea((function () {
 })());
 
 Utility.registerDateMenuPicker();
+//I20-981: da qui in poi ogni elemento con un title mostra il suo suggerimento.
+//In UXP l'attributo da solo non fa nulla: il riquadro lo disegna il plugin.
+Utility.abilitaTooltipGlobali();
 showLoading("Inizializzazione...");
 
 

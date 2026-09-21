@@ -240,7 +240,7 @@ test('la cartella dei csv si cambia dalla schermata del report', () => {
 
     //Il title del pulsantino dice dove stanno andando i csv.
     const titolo = corpoFunzione(confronti, '_aggiornaTitoloCartellaCsv() {');
-    assert.match(titolo, /"Scegli cartella\. Attualmente impostata: " \+ cartella/);
+    assert.match(titolo, /"Scegli cartella\. Attualmente impostata: "/);
 
     //La memoria dura quanto il codice del plugin: e' un campo del modulo, non un file.
     assert.match(confronti, /_cartellaCsvSessione: null/);
@@ -254,4 +254,29 @@ test('il csv e l\'interfaccia usano la stessa descrizione composta', () => {
     const build = corpoFunzione(confronti, '_buildReportConfrontoCsv(report) {');
     assert.match(build, /reportConfrontoCsv\.componiCsv\(voci\)/);
     assert.match(build, /reportConfrontoCsv\.datiRecordPerCsv\(raw\)/);
+});
+
+test('i title del plugin si vedono, tutti', () => {
+    //In UXP l'attributo title non mostra nulla: il riquadro lo disegna il plugin, e lo fa per
+    //qualunque elemento con un title, anche per quelli creati dopo l'avvio.
+    const utility = sorgente('utility.js');
+    const abilita = corpoFunzione(utility, 'abilitaTooltipGlobali() {');
+
+    assert.match(abilita, /\$\(document\)\.on\("mouseenter", "\[title\]"/);
+    assert.match(abilita, /\$\(document\)\.on\("mouseleave", "\[title\]"/);
+    assert.match(abilita, /tooltipPosizione\.testoTooltip/);
+
+    //Acceso una volta sola, all'avvio del plugin.
+    assert.match(indexNew, /Utility\.abilitaTooltipGlobali\(\);/);
+    assert.match(abilita, /if \(this\._tooltipGlobaliAttivi\)/);
+
+    //Il riquadro usa la classe gia' prevista in index.html.
+    const crea = corpoFunzione(utility, '_creaRiquadroTooltip() {');
+    assert.match(crea, /className = "jq-tooltip"/);
+    assert.match(indexHtml, /\.jq-tooltip \{/);
+
+    //E il pulsante della cartella dice dove vanno i csv anche senza passarci sopra.
+    const aggiorna = corpoFunzione(confronti, '_aggiornaTitoloCartellaCsv() {');
+    assert.match(aggiorna, /reportConfrontoCsv\.etichettaCartella\(cartella\)/);
+    assert.match(aggiorna, /"Scegli cartella\. Attualmente impostata: "/);
 });

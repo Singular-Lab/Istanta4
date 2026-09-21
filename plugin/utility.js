@@ -1,6 +1,7 @@
 const { app, FitOptions, LocationOptions, Justification, VerticalJustification, NestedStyleDelimiters } = require('indesign');
 const XMLHttpRequestClient = require('./XMLHttpRequestClient');
 const cacheHashFoto = require('./cacheHashFoto');
+const tooltipPosizione = require('./tooltipPosizione');
 
 const Utility=
 {
@@ -2134,6 +2135,132 @@ const Utility=
     chiudiFloatingMenu() {
         $(document).off("mousedown.utilityFloatingMenu");
         $(".utility-floating-menu").remove();
+    },
+
+    //I20-981: i tooltip del plugin.
+    //In UXP l'attributo title non mostra niente, e i title scritti in giro per il plugin, un
+    //centinaio, erano muti. Invece di toccarli uno per uno, un solo gestore delegato ascolta
+    //l'hover su qualunque elemento che abbia un title e disegna il riquadro .jq-tooltip
+    //previsto in index.html: valgono anche i title creati dopo, che qui nascono in continuazione
+    //insieme alle righe dei pannelli.
+    _tooltipGlobaliAttivi: false,
+    _riquadroTooltip: null,
+    _timerTooltip: null,
+    RITARDO_TOOLTIP: 350,
+
+    abilitaTooltipGlobali() {
+        if (this._tooltipGlobaliAttivi) {
+            return;
+        }
+
+        this._tooltipGlobaliAttivi = true;
+        const me = this;
+
+        $(document).on("mouseenter", "[title]", function (evento) {
+            try {
+                //Con elementi annidati che hanno entrambi un title vince il piu' interno,
+                //quello che il mouse sta davvero toccando.
+                const piuInterno = $(evento.target).closest("[title]")[0];
+                if (piuInterno != null && piuInterno !== this) {
+                    return;
+                }
+
+                const testo = tooltipPosizione.testoTooltip(this.getAttribute("title"));
+                if (testo == null) {
+                    return;
+                }
+
+                me.nascondiTooltip();
+
+                const elemento = this;
+                me._timerTooltip = setTimeout(function () {
+                    me._mostraTooltip(elemento, testo);
+                }, me.RITARDO_TOOLTIP);
+            }
+            catch (err) {
+                console.error("Errore durante l'apertura del tooltip:", err);
+            }
+        });
+
+        $(document).on("mouseleave", "[title]", function () {
+            me.nascondiTooltip();
+        });
+
+        //Un clic sposta o cambia il pannello: il riquadro sparisce.
+        //Niente aggancio allo scorrimento: scroll non risale fino a document e jQuery non
+        //sa ascoltarlo in cattura, quindi sarebbe un gestore che non parte mai.
+        $(document).on("click", function () {
+            me.nascondiTooltip();
+        });
+    },
+
+    nascondiTooltip() {
+        if (this._timerTooltip != null) {
+            clearTimeout(this._timerTooltip);
+            this._timerTooltip = null;
+        }
+
+        if (this._riquadroTooltip != null) {
+            this._riquadroTooltip.style.display = "none";
+        }
+    },
+
+    _mostraTooltip(elemento, testo) {
+        try {
+            if (elemento == null || !document.body.contains(elemento)) {
+                return;
+            }
+
+            const riquadro = this._creaRiquadroTooltip();
+            const finestra = this._dimensioniPannello();
+
+            riquadro.textContent = testo;
+            riquadro.style.maxWidth = tooltipPosizione.larghezzaMassima(finestra) + "px";
+            riquadro.style.left = "0px";
+            riquadro.style.top = "0px";
+            riquadro.style.display = "block";
+
+            //Si misura da mostrato, altrimenti larghezza e altezza sono zero.
+            const posizione = tooltipPosizione.posizioneTooltip(
+                elemento.getBoundingClientRect(),
+                { width: riquadro.offsetWidth, height: riquadro.offsetHeight },
+                finestra);
+
+            riquadro.style.left = posizione.left + "px";
+            riquadro.style.top = posizione.top + "px";
+        }
+        catch (err) {
+            console.error("Errore durante la posa del tooltip:", err);
+            this.nascondiTooltip();
+        }
+    },
+
+    _creaRiquadroTooltip() {
+        if (this._riquadroTooltip != null && document.body.contains(this._riquadroTooltip)) {
+            return this._riquadroTooltip;
+        }
+
+        const riquadro = document.createElement("div");
+        riquadro.className = "jq-tooltip";
+        riquadro.id = "tooltipGlobale";
+        document.body.appendChild(riquadro);
+
+        this._riquadroTooltip = riquadro;
+        return riquadro;
+    },
+
+    _dimensioniPannello() {
+        const wrapper = document.getElementById("wrapper");
+
+        const larghezza = (typeof window !== "undefined" && window.innerWidth)
+            || (wrapper != null ? wrapper.clientWidth : 0)
+            || 800;
+
+        const altezza = (typeof window !== "undefined" && window.innerHeight)
+            || (wrapper != null ? wrapper.clientHeight : 0)
+            || 600;
+
+        return { width: larghezza, height: altezza };
     },
 
     registerDateMenuPicker(rootNode = null) {

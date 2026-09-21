@@ -1570,9 +1570,12 @@ const confronti = {
                 btnCartellaCsv = document.createElement("button");
                 btnCartellaCsv.id = "cartellaReportConfrontoCsv";
                 btnCartellaCsv.type = "button";
-                btnCartellaCsv.textContent = "...";
                 btnCartellaCsv.style.height = "25px";
                 btnCartellaCsv.style.minWidth = "26px";
+                btnCartellaCsv.style.maxWidth = "120px";
+                btnCartellaCsv.style.overflow = "hidden";
+                btnCartellaCsv.style.whiteSpace = "nowrap";
+                btnCartellaCsv.style.textOverflow = "ellipsis";
                 btnCartellaCsv.style.padding = "0 6px";
                 btnCartellaCsv.style.cursor = "pointer";
                 btnCartellaCsv.style.marginRight = "8px";
@@ -1842,6 +1845,9 @@ const confronti = {
         }
     },
 
+    //I20-981: il pulsante porta scritto il nome della cartella e, nel suggerimento, il
+    //percorso intero. Il suggerimento da solo non bastava: in UXP il title non si vedeva, e
+    //adesso che si vede resta comunque piu' comodo leggere a colpo d'occhio dove vanno i file.
     _aggiornaTitoloCartellaCsv() {
         const bottone = document.getElementById("cartellaReportConfrontoCsv");
         if (bottone == null) {
@@ -1853,10 +1859,15 @@ const confronti = {
             cartella = this.cartellaCsvReport();
         }
         catch (err) {
-            cartella = "nessuna (configura i percorsi di sistema)";
+            cartella = "";
         }
 
-        bottone.title = "Scegli cartella. Attualmente impostata: " + cartella;
+        bottone.textContent = cartella !== ""
+            ? reportConfrontoCsv.etichettaCartella(cartella)
+            : "cartella";
+
+        bottone.title = "Scegli cartella. Attualmente impostata: "
+            + (cartella !== "" ? cartella : "nessuna (configura i percorsi di sistema)");
     },
 
     _buildReportConfrontoCsv(report) {
