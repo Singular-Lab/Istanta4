@@ -4613,6 +4613,63 @@ const schedaRef = {
         }
     },
 
+    /// I20-980: da dove deve aprirsi il dialogo quando si carica una foto nuova.
+    ///
+    /// Si punta al file della foto attuale dentro la cartella Links della lavorazione, cosi'
+    /// chi sostituisce una foto non deve piu' cercarla a mano. Senza il nome si punta alla
+    /// sola cartella, e senza cartella non si punta a niente: il dialogo si apre come prima.
+    ///
+    /// Il separatore si deduce dal percorso ricevuto, perche' su Windows arriva con le barre
+    /// rovesciate e su Mac con quelle dritte, e quello di troppo in fondo va tolto.
+    percorsoDiPartenzaPerFoto(cartellaLinks, nomeFoto) {
+        var cartella = typeof cartellaLinks === "string" ? cartellaLinks.trim() : "";
+        if (cartella === "") {
+            return null;
+        }
+
+        var separatore = cartella.indexOf("\\") >= 0 ? "\\" : "/";
+        var base = cartella.replace(/[\\/]+$/, "");
+        if (base === "") {
+            base = separatore;
+        }
+
+        var nome = typeof nomeFoto === "string" ? nomeFoto.trim() : "";
+        if (nome === "") {
+            return base;
+        }
+
+        return base === separatore ? base + nome : base + separatore + nome;
+    },
+
+    /// Lo stesso percorso in forma di URL, che e' quello che il file system di UXP accetta.
+    /// Un percorso di Windows diventa file:///C:/..., uno di Mac file:///Utenti/...
+    urlDiPercorso(percorso) {
+        if (typeof percorso !== "string" || percorso.trim() === "") {
+            return null;
+        }
+
+        var pulito = percorso.trim().replace(/\\/g, "/");
+        if (pulito.indexOf("file:") === 0) {
+            return pulito;
+        }
+
+        return pulito.charAt(0) === "/" ? "file://" + pulito : "file:///" + pulito;
+    },
+
+    /// La cartella che contiene il percorso, per ripiegarci quando il file non c'e' piu'.
+    cartellaDiPercorso(percorso) {
+        if (typeof percorso !== "string") {
+            return null;
+        }
+
+        var taglio = Math.max(percorso.lastIndexOf("/"), percorso.lastIndexOf("\\"));
+        if (taglio <= 0) {
+            return null;
+        }
+
+        return percorso.substring(0, taglio);
+    },
+
     async openModalCambiaFoto(codice) {
         let me = this;
         var box = this.refSelected.item;
@@ -4687,6 +4744,12 @@ const schedaRef = {
                 if (elementoCercato != null && elementoCercato.recordInTracciato != null) {
                     fotoAttuale = elementoCercato.recordInTracciato["Foto.Id"] || null;
                 }
+
+                //I20-980: il nome del file impaginato, per aprire il dialogo di scelta gia'
+                //sulla foto che si sta sostituendo.
+                var nomeFotoImpaginata = elementoCercato != null && elementoCercato.recordInTracciato != null
+                    ? elementoCercato.recordInTracciato["Foto.Nome"]
+                    : null;
 
                 const state = {
                     selectedUploadFile: null,
@@ -5518,7 +5581,10 @@ const schedaRef = {
 
                     $('#btnCaricaFoto').off('click').on('click', async function () {
                         try {
-                            var fd = await selectFile();
+                            //I20-980: si parte dalla foto attuale nella cartella Links della
+                            //lavorazione, invece che da dove il sistema si era fermato l'ultima volta.
+                            var fd = await selectFile(
+                                me.percorsoDiPartenzaPerFoto(percorsoLinks, nomeFotoImpaginata));
                             if (fd == null) {
                                 return;
                             }
