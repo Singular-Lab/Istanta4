@@ -433,27 +433,26 @@ const pluginMiddleware = {
     },
 
     /*
-     * Cosa fare quando l'operatore cambia il primario di un gruppo nella scheda ref.
-     * Ritorna {azione, messaggio} della prima regola che corrisponde, null se nessuna:
-     * null vuol dire "niente di speciale", che e' il comportamento di ogni agenzia che
-     * non configura la regola. La decisione su quando applicarla sta in schedaRef.
+     * L'avviso che l'agenzia vuole mostrare quando cambia il primario di un gruppo, null se
+     * non ne ha. E' l'unico contributo dell'agenzia a quel flusso: riscaricare la scheda e
+     * allineare il box sono comportamenti di tutti, e stanno in schedaRef.
      */
-    getAzioneCambioPrimario(itemRef) {
+    getAvvisoCambioPrimario(itemRef) {
         let me = this;
 
         if (me.callCustom) {
-            if (typeof customAgenzia !== "undefined" && typeof customAgenzia.getAzioneCambioPrimario === "function") {
-                return customAgenzia.getAzioneCambioPrimario(itemRef);
+            if (typeof customAgenzia !== "undefined" && typeof customAgenzia.getAvvisoCambioPrimario === "function") {
+                return customAgenzia.getAvvisoCambioPrimario(itemRef);
             } else {
                 return null;
             }
         }
 
-        const rules = me.customPluginDB?.azioniCambioPrimario || [];
+        const rules = me.customPluginDB?.avvisiCambioPrimario || [];
 
         for (const rule of rules) {
             if (me.valutaBlocchiRegole(itemRef, rule.setRegole)) {
-                return { azione: rule.azione, messaggio: rule.messaggio };
+                return rule.messaggio;
             }
         }
 

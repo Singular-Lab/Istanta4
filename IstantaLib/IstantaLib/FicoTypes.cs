@@ -968,9 +968,9 @@ namespace IstantaLib
         public string[] schemasNotEditable { get; set; }//Specifica quali degli stili rappresentati su scheda revisione NON possono essere editati       
         public List<AgenziaCustomPlugin_EditSchedaRefRules> editSchedaRefRules { get; set; }
 
-        /// I20-976: cosa fare quando cambia il primario di un gruppo nella scheda ref.
-        /// Vuoto: non succede nulla oltre a quello che il Plugin fa gia'.
-        public List<AgenziaCustomPlugin_AzioneCambioPrimario> azioniCambioPrimario { get; set; } = new List<AgenziaCustomPlugin_AzioneCambioPrimario>();
+        /// I20-976: avvisi da mostrare quando cambia il primario di un gruppo nella scheda ref.
+        /// Vuoto: nessun avviso, e resta il solo comportamento core.
+        public List<AgenziaCustomPlugin_AvvisoCambioPrimario> avvisiCambioPrimario { get; set; } = new List<AgenziaCustomPlugin_AvvisoCambioPrimario>();
 
         public List<AgenziaCustomPlugin_LibreriaIndd> regoleLibrerie { get; set; } //
 
@@ -1111,20 +1111,15 @@ namespace IstantaLib
         public List<BloccoRegole> setRegole { get; set; }
     }
 
-    /// Azione che il Plugin compie quando l'operatore cambia il primario di un gruppo.
+    /// Avviso che il Plugin mostra quando l'operatore cambia il primario di un gruppo.
     /// Vale la prima regola che corrisponde al record, come per editSchedaRefRules.
     ///
-    /// Serve a tenere fuori dal Plugin comportamenti di una sola agenzia: in Edro il cambio
-    /// del primario cambia anche la descrizione quando l'esempio viene dal primario, e la
-    /// scheda va riscaricata; se invece l'esempio viene dal gruppo la scheda resta valida e
-    /// basta avvisare l'operatore.
-    public class AgenziaCustomPlugin_AzioneCambioPrimario
+    /// Riscaricare la scheda dopo il cambio e allineare il box sono comportamenti core, di
+    /// tutti i clienti. Qui resta solo cio' che una singola agenzia ha da dire in piu': in
+    /// Edro, che con l'esempio governato dal gruppo il cambio di primario non lo modifica.
+    public class AgenziaCustomPlugin_AvvisoCambioPrimario
     {
-        /// "ricarica" per riscaricare la scheda riportando l'interfaccia alla schermata di
-        /// edit, "avviso" per il solo messaggio. Qualunque altro valore non fa nulla.
-        public string azione { get; set; } = "";
-
-        /// Testo mostrato all'operatore. Vuoto: il Plugin usa il proprio predefinito.
+        /// Testo mostrato all'operatore, in stile avviso. Vuoto: nessun avviso.
         public string messaggio { get; set; } = "";
 
         public List<BloccoRegole> setRegole { get; set; } = new List<BloccoRegole>();

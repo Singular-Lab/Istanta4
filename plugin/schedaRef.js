@@ -3509,15 +3509,14 @@ const schedaRef = {
 
     },
 
-    //Azioni possibili quando cambia il primario di un gruppo. Quale si applica lo decide il
-    //dato di agenzia (azioniCambioPrimario nel SourceCustomPlugin): qui restano solo i nomi.
-    AZIONI_CAMBIO_PRIMARIO: {
-        nessuna: "nessuna",
-        ricarica: "ricarica",
-        avviso: "avviso"
+    //Esiti possibili per il box dopo un salvataggio primarie/secondarie, in ordine di
+    //precedenza: se cambia il tipo di box si reimpagina e basta, altrimenti si guarda se il
+    //contenuto e' ancora allineato alla scheda.
+    ESITI_ALLINEAMENTO_BOX: {
+        nessuno: "nessuno",
+        reimpagina: "reimpagina",
+        proponiAggiornamento: "proponiAggiornamento"
     },
-
-    MESSAGGIO_RICARICA_PREDEFINITO: "Il primario e' cambiato e la scheda contiene un esempio: va riscaricata. Procedere?",
 
     /*
      * Il primario del gruppo e' cambiato?
@@ -3546,77 +3545,195 @@ const schedaRef = {
     },
 
     /*
-     * Cosa fare dopo che l'operatore ha cambiato il primario di un gruppo.
+     * L'avviso che l'agenzia vuole mostrare quando cambia il primario, "" se non ne ha.
      *
-     * leggiAzione(recordInTracciato) -> {azione, messaggio} e' la regola di agenzia, cioe'
-     * pluginMiddleware.getAzioneCambioPrimario. Arriva iniettata perche' qui non si dipenda
-     * dal middleware: la decisione resta verificabile da sola, senza il dato del server.
+     * E' l'unico pezzo di questo flusso che appartiene all'agenzia: riscaricare la scheda e
+     * allineare il box sono comportamenti di tutti. Per Edro serve a dire che l'esempio e'
+     * governato dal gruppo e che quindi il cambio di primario non lo tocca.
      *
-     * La regola si valuta su tutti i record della scheda, non solo sul primario: la
-     * provenienza dell'esempio e' una proprieta' del gruppo. Se piu' record rispondono,
-     * la ricarica vince sull'avviso, perche' riscaricare risolve anche cio' che l'avviso
-     * si limiterebbe a segnalare.
+     * leggiAvviso(recordInTracciato) -> messaggio, e' pluginMiddleware.getAvvisoCambioPrimario;
+     * arriva iniettata perche' la decisione resti verificabile senza middleware ne' server.
+     * Si valuta su tutti i record della scheda: la provenienza dell'esempio e' del gruppo.
      */
-    azioneCambioPrimario(recordsScheda, listaSingoli, leggiAzione) {
-        var azioni = schedaRef.AZIONI_CAMBIO_PRIMARIO;
-        var nessuna = { azione: azioni.nessuna, messaggio: "", codicePrecedente: null, codiceNuovo: null };
-
-        var cambio = schedaRef.primarioCambiato(recordsScheda, listaSingoli);
-        if (!cambio.cambiato) {
-            return nessuna;
+    avvisoCambioPrimario(recordsScheda, listaSingoli, leggiAvviso) {
+        if (!schedaRef.primarioCambiato(recordsScheda, listaSingoli).cambiato) {
+            return "";
         }
 
-        var regola = leggiAzione;
+        var regola = leggiAvviso;
         if (regola == null && typeof pluginMiddleware !== "undefined" && pluginMiddleware != null) {
-            regola = function (recordInTracciato) { return pluginMiddleware.getAzioneCambioPrimario(recordInTracciato); };
+            regola = function (recordInTracciato) { return pluginMiddleware.getAvvisoCambioPrimario(recordInTracciato); };
         }
         if (regola == null) {
-            return nessuna;
+            return "";
         }
 
-        var scelta = null;
         for (var i = 0; i < (recordsScheda || []).length; i++) {
             var record = recordsScheda[i];
             if (record == null || record.recordInTracciato == null) {
                 continue;
             }
 
-            var esito = null;
+            var messaggio = null;
             try {
-                esito = regola(record.recordInTracciato);
+                messaggio = regola(record.recordInTracciato);
             }
             catch (e) {
-                console.error("Code SRF-46 Regola di agenzia sul cambio primario non valutata: " + e);
-                return nessuna;
+                console.error("Code SRF-46 Avviso di agenzia sul cambio primario non valutato: " + e);
+                return "";
             }
 
-            if (esito == null || esito.azione == null) {
-                continue;
-            }
-
-            if (esito.azione === azioni.ricarica) {
-                scelta = esito;
-                break;
-            }
-            if (esito.azione === azioni.avviso && scelta == null) {
-                scelta = esito;
+            if (messaggio != null && messaggio !== "") {
+                return messaggio;
             }
         }
 
-        if (scelta == null) {
-            return nessuna;
+        return "";
+    },
+
+    /*
+     * Cosa fare del box, confrontando la scheda riscaricata con quello che c'e' in pagina.
+     *
+     * Il codice del box vince su tutto: se cambia, il box va rifatto e confrontarne il
+     * contenuto non avrebbe senso. Senza uno dei due codici non si reimpagina a indovinare.
+     */
+    esitoAllineamentoBox(codiceBoxPrecedente, codiceBoxNuovo, differenze) {
+        var esiti = schedaRef.ESITI_ALLINEAMENTO_BOX;
+
+        var precedente = codiceBoxPrecedente != null ? String(codiceBoxPrecedente).trim() : "";
+        var nuovo = codiceBoxNuovo != null ? String(codiceBoxNuovo).trim() : "";
+
+        if (precedente !== "" && nuovo !== "" && precedente !== nuovo) {
+            return esiti.reimpagina;
         }
 
-        var messaggio = scelta.messaggio != null && scelta.messaggio !== ""
-            ? scelta.messaggio
-            : (scelta.azione === azioni.ricarica ? schedaRef.MESSAGGIO_RICARICA_PREDEFINITO : "");
+        return (differenze || []).length > 0 ? esiti.proponiAggiornamento : esiti.nessuno;
+    },
 
-        return {
-            azione: scelta.azione,
-            messaggio: messaggio,
-            codicePrecedente: cambio.codicePrecedente,
-            codiceNuovo: cambio.codiceNuovo
-        };
+    //Il codice del box della scheda, letto dal primario o, in mancanza, dal primo record.
+    codiceBoxDellaScheda(recordsScheda) {
+        var records = recordsScheda || [];
+        var record = records.find(f => f != null && f.recordInTracciato != null && f.recordInTracciato.StatoSelezione == 1);
+
+        if (record == null) {
+            record = records.find(f => f != null && f.recordInTracciato != null);
+        }
+        if (record == null) {
+            return "";
+        }
+
+        var codice = record.recordInTracciato.codiceBox;
+        return codice != null ? String(codice) : "";
+    },
+
+    /*
+     * getSchedaRef con la callback avvolta in una promessa: dentro un flusso async si legge
+     * meglio. Scarica soltanto: la navigazione fra le schermate non la tocca nessuno.
+     */
+    async ricaricaDatiScheda(codiceGruppo, idRec) {
+        let me = this;
+
+        return new Promise(function (resolve) {
+            try {
+                me.getSchedaRef(codiceGruppo, function (errore, scheda) {
+                    if (errore != null || scheda == null || scheda.records == null || scheda.records.length === 0) {
+                        console.error("Code SRF-47 Riscaricamento della scheda non riuscito: " + errore);
+                        resolve(false);
+                        return;
+                    }
+
+                    me.schedeRefDati = scheda.records;
+                    me.idRecordLavorazione = scheda.idRecInLavorazione;
+                    resolve(true);
+                }, idRec);
+            }
+            catch (e) {
+                console.error("Code SRF-47 Riscaricamento della scheda non riuscito: " + e);
+                resolve(false);
+            }
+        });
+    },
+
+    /*
+     * Le differenze fra i dati della scheda e quello che c'e' nel box, con la stessa pre
+     * analisi che gira all'apertura della schermata di edit.
+     */
+    async differenzeDatiNelBox(box, recordsScheda) {
+        try {
+            if (box == null || !box.isValid) {
+                return [];
+            }
+
+            var primario = (recordsScheda || []).find(f => f != null && f.recordInTracciato != null && f.recordInTracciato.StatoSelezione == 1);
+            if (primario == null) {
+                return [];
+            }
+
+            var rec = primario.recordInTracciato;
+            var listaFoto = [];
+
+            if (rec.membriGruppoFoto != null) {
+                listaFoto = rec.membriGruppoFoto.map(function (membro) {
+                    return { nomeFoto: membro.nomeFoto, hash: membro.hash };
+                });
+            }
+            if (rec["Foto.Nome"] != null && rec["Foto.Nome"] !== "") {
+                listaFoto.push({ nomeFoto: rec["Foto.Nome"], hash: rec["Foto.Hash"] });
+            }
+
+            var preAnalisi = await confronti.confrontoBoxCompiledFieldPreAnalisi(
+                box,
+                rec.compiledFields,
+                rec.deletedFields,
+                listaFoto,
+                rec["Foto.Extra"],
+                rec["Foto.ExtraAuto"],
+                true,
+                NoRenderElementi.elencoPerSegnalazioni(rec.noRenderElementi, rec.membriGruppoFoto)
+            );
+
+            return preAnalisi != null && preAnalisi.differenze != null ? preAnalisi.differenze : [];
+        }
+        catch (e) {
+            console.error("Code SRF-48 Confronto dei dati del box non riuscito: " + e);
+            return [];
+        }
+    },
+
+    /*
+     * Allinea il box alla scheda appena riscaricata. Ritorna l'esito applicato, cosi' il
+     * chiamante sa se il box e' stato rifatto e deve fermarsi.
+     */
+    async allineaBoxDopoSalvataggioPS(box, codiceBoxPrecedente) {
+        let me = this;
+        var esiti = me.ESITI_ALLINEAMENTO_BOX;
+
+        var codiceBoxNuovo = me.codiceBoxDellaScheda(me.schedeRefDati);
+        var differenze = [];
+
+        //Se cambia il tipo di box si reimpagina comunque: confrontare i campi di un box che
+        //sta per essere rifatto sarebbe tempo speso per niente.
+        if (codiceBoxPrecedente == codiceBoxNuovo) {
+            differenze = await me.differenzeDatiNelBox(box, me.schedeRefDati);
+        }
+
+        var esito = me.esitoAllineamentoBox(codiceBoxPrecedente, codiceBoxNuovo, differenze);
+
+        if (esito === esiti.reimpagina) {
+            messaggioUtente("Il tipo di box e' cambiato (" + codiceBoxPrecedente + " -> " + codiceBoxNuovo + "): il box viene reimpaginato.", "warning", false, 10);
+            me.applicaReimpaginazione();
+            return esito;
+        }
+
+        if (esito === esiti.proponiAggiornamento) {
+            var aggiorna = await Utility.confirm("I dati del box non sono piu' allineati alla scheda. Aggiorno il box?");
+            if (aggiorna) {
+                me.applicaReimpaginazione();
+                return esito;
+            }
+        }
+
+        return esiti.nessuno;
     },
 
     async EditFotoPrimarieSecondarie(box) {
@@ -3996,9 +4113,9 @@ const schedaRef = {
                     return;
                 }
 
-                //Il cambio del primario puo' richiedere altro, e lo decide il dato di agenzia.
-                //Va valutato adesso: fra poco il dato locale sara' gia' quello nuovo.
-                var azioneCambioPrimario = me.azioneCambioPrimario(schedaRef, listaSingoli);
+                //Vanno letti adesso, sul dato ancora vecchio: fra poco sara' quello nuovo.
+                var codiceBoxPrecedente = me.codiceBoxDellaScheda(schedaRef);
+                var avvisoCambioPrimario = me.avvisoCambioPrimario(schedaRef, listaSingoli);
 
                 //creiamo un oggetto da mandare al server, composto da una lista di elementi con codice e stato selezione
                 //scorriamo la listaRef e confrontiamo lo stato selezione con quello dell'elemento con lo stesso codice in listaSingoli, se non corrisponde creiamo un nuovo elemento da mettere in lista da mandare al server
@@ -4118,32 +4235,41 @@ const schedaRef = {
                             primaria.bringToFront(firstSecondaria);
                         }
 
-                        //mandiamo un confirm in cui chiediamo se vogliamo applicare il Fix Foto automatico
-                        let res = await Utility.confirm("Modifiche salvate. Applicare il Fix Foto automatico?");
-                        if (res) {
-                            //applichiamo il fix foto automatico, che consiste nel posizionare tutte le foto primarie e secondarie al posto giusto in base alla meccanica
-                            var obs = CssFramework.getSpazioImpaginazione(box);
-                            CssFramework.fixFoto(box, obs.candidate, obs.obstacles);
-                            messaggioUtente("Fix Foto automatico applicato", "success", false, 3);
-                        }
                     }
                     catch (ex) {
                         console.error(ex);
                     }
 
+                    //La scheda sul server puo' essere cambiata insieme alle primarie e secondarie:
+                    //la si riscarica sempre, ed e' dal dato fresco che si capisce se il box in
+                    //pagina e' ancora allineato. Prima si riscaricava solo su richiesta di agenzia.
+                    showLoading("Aggiornamento della scheda in corso...");
+                    var schedaRicaricata = await me.ricaricaDatiScheda(codice_gruppo, idRec);
+                    hideLoading();
 
-                    if (azioneCambioPrimario.azione === me.AZIONI_CAMBIO_PRIMARIO.ricarica) {
-                        const ricarica = await Utility.confirm(azioneCambioPrimario.messaggio);
-                        if (ricarica) {
-                            //initSchedaRef riscarica la scheda dal server e riporta
-                            //l'interfaccia alla prima schermata, quella di edit.
-                            me.initSchedaRef(me.refSelected);
+                    if (avvisoCambioPrimario !== "") {
+                        messaggioUtente(avvisoCambioPrimario, "warning", false, 15);
+                    }
+
+                    if (schedaRicaricata) {
+                        var esitoAllineamento = await me.allineaBoxDopoSalvataggioPS(box, codiceBoxPrecedente);
+                        if (esitoAllineamento !== me.ESITI_ALLINEAMENTO_BOX.nessuno) {
+                            //Il box e' stato rifatto: il fix foto e il refresh della lista
+                            //lavorerebbero su un box che non c'e' piu'.
                             return;
                         }
                     }
-                    else if (azioneCambioPrimario.azione === me.AZIONI_CAMBIO_PRIMARIO.avviso) {
-                        messaggioUtente(azioneCambioPrimario.messaggio, "warning", false, 15);
+
+                    //Il fix foto viene dopo: una reimpaginazione rifa' il box e butterebbe via
+                    //il fix appena applicato, oltre a chiedere due conferme per un lavoro solo.
+                    let res = await Utility.confirm("Modifiche salvate. Applicare il Fix Foto automatico?");
+                    if (res) {
+                        //applichiamo il fix foto automatico, che consiste nel posizionare tutte le foto primarie e secondarie al posto giusto in base alla meccanica
+                        var obs = CssFramework.getSpazioImpaginazione(box);
+                        CssFramework.fixFoto(box, obs.candidate, obs.obstacles);
+                        messaggioUtente("Fix Foto automatico applicato", "success", false, 3);
                     }
+
 
                     //Questa funzione fa un refresh della schermata lista PRIMARIE/SECONDARIE
                     await me.EditFotoPrimarieSecondarie(box);  //serve, non è un loop
