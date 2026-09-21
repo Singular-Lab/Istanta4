@@ -2633,6 +2633,67 @@
         });
     }
 
+    /// I20-982: i campi di un record come vanno mostrati nella colonna di sinistra: vale il
+    /// valore revisionato quando c'e', altrimenti quello del tracciato, altrimenti la stringa
+    /// vuota.
+    ///
+    /// La regola era ripetuta sei volte dentro il codice che costruisce l'HTML, una per campo:
+    /// qui sta scritta una volta e si puo' verificare senza browser. Le chiavi del tracciato
+    /// arrivano da fuori perche' sono variabili globali della pagina.
+    static campiPerLaColonna(record, chiavi) {
+        var nomi = chiavi || {};
+        var revisionato = record != null ? record.recordRevisionato : null;
+        var tracciato = record != null && record.recordInTracciato != null ? record.recordInTracciato : {};
+
+        var valore = function (daRevisione, chiaveTracciato) {
+            if (revisionato != null && revisionato[daRevisione] != null) {
+                return revisionato[daRevisione];
+            }
+            var dalTracciato = chiaveTracciato != null ? tracciato[chiaveTracciato] : null;
+            return dalTracciato != null ? dalTracciato : "";
+        };
+
+        return {
+            descrizione1: valore("descrizione1", nomi.descrizione1),
+            descrizione2: valore("descrizione2", nomi.descrizione2),
+            descrizione3: valore("descrizione3", nomi.descrizione3),
+            descrizione4: valore("descrizione4", nomi.descrizione4),
+            um: valore("um", nomi.um),
+            peso: valore("peso", nomi.peso)
+        };
+    }
+
+    /// Le chiavi del tracciato usate dalla colonna, prese dalle variabili globali della pagina.
+    static chiaviDellaColonna() {
+        return {
+            descrizione1: typeof keyDescr1 !== "undefined" ? keyDescr1 : null,
+            descrizione2: typeof keyDescr2 !== "undefined" ? keyDescr2 : null,
+            descrizione3: typeof keyDescr3 !== "undefined" ? keyDescr3 : null,
+            descrizione4: typeof keyDescr4 !== "undefined" ? keyDescr4 : null,
+            um: typeof keyDescrUm !== "undefined" ? keyDescrUm : null,
+            peso: typeof keyDescrPeso !== "undefined" ? keyDescrPeso : null
+        };
+    }
+
+    /// Riempie una scheda della colonna con i campi di un record.
+    static riempiSchedaColonna(htmlItem, record, codice) {
+        var campi = Revisore.campiPerLaColonna(record, Revisore.chiaviDellaColonna());
+
+        htmlItem.find(".codice").text("Cod: " + codice);
+        htmlItem.find("#Descrizione1Tracciato").val(campi.descrizione1);
+        htmlItem.find("#Descrizione2Tracciato").val(campi.descrizione2);
+        htmlItem.find("#Descrizione3Tracciato").val(campi.descrizione3);
+        htmlItem.find("#Descrizione4Tracciato").val(campi.descrizione4);
+        htmlItem.find("#UmTracciato").val(campi.um);
+        htmlItem.find("#PesoTracciato").val(rappresenteDecimaleInCulturaItaliana(campi.peso));
+
+        htmlItem.find("#btnDuplica").on("click", function () {
+            revInstance.copiaValoriNelGruppo($(this).closest('.container'));
+        });
+
+        return htmlItem;
+    }
+
     sostituisciColonnaSinistraGruppo() {
         let me = this;
         let gruppiElements = $("#_list").find(".record-revisione[is_gruppo='true']");
@@ -2653,44 +2714,40 @@
                 if (me.agenzia.addCustomDettagli != null) {
                     me.agenzia.addCustomDettagli(groupElement.find(".dettaglioGruppo"), elementsOfGroup);
                 }
-                if (revInstance.modalitaSottogruppi && elementsOfGroup.length > 0) {
-                    let gruppoPadre = me.ListSottogruppi.find(f => f.recordInTracciato[keyScattoCodiceGruppo] == elementsOfGroup[0].recordInTracciato[keyScattoCodiceGruppo] && f.isGruppo)
-                    let template = $("#recapElementGruppo").clone();
-                    let htmlItem = $(template.html());
-                    htmlItem.find(".codice").text("Cod: " + gruppoPadre.recordInTracciato[keyScattoCodiceGruppo]);
-                    htmlItem.find("#Descrizione1Tracciato").val((gruppoPadre.recordRevisionato != null ? gruppoPadre.recordRevisionato.descrizione1 : (gruppoPadre.recordInTracciato[keyDescr1] != null ? gruppoPadre.recordInTracciato[keyDescr1] : "")));
-                    htmlItem.find("#Descrizione2Tracciato").val((gruppoPadre.recordRevisionato != null ? gruppoPadre.recordRevisionato.descrizione2 : (gruppoPadre.recordInTracciato[keyDescr2] != null ? gruppoPadre.recordInTracciato[keyDescr2] : "")));
-                    htmlItem.find("#Descrizione3Tracciato").val((gruppoPadre.recordRevisionato != null ? gruppoPadre.recordRevisionato.descrizione3 : (gruppoPadre.recordInTracciato[keyDescr3] != null ? gruppoPadre.recordInTracciato[keyDescr3] : "")));
-                    htmlItem.find("#Descrizione4Tracciato").val((gruppoPadre.recordRevisionato != null ? gruppoPadre.recordRevisionato.descrizione4 : (gruppoPadre.recordInTracciato[keyDescr4] != null ? gruppoPadre.recordInTracciato[keyDescr4] : "")));
-                    htmlItem.find("#UmTracciato").val((gruppoPadre.recordRevisionato != null ? gruppoPadre.recordRevisionato.um : (gruppoPadre.recordInTracciato[keyDescrUm] != null ? gruppoPadre.recordInTracciato[keyDescrUm] : "")));
-                    htmlItem.find("#PesoTracciato").val(rappresenteDecimaleInCulturaItaliana((gruppoPadre.recordRevisionato != null ? gruppoPadre.recordRevisionato.peso : (gruppoPadre.recordInTracciato[keyDescrPeso] != null ? gruppoPadre.recordInTracciato[keyDescrPeso] : ""))));
+                if (revInstance.modalitaSottogruppi) {
+                    //I20-982: in modalita' sottogruppi la colonna porta i campi revisionati del
+                    //solo gruppo padre. Le schede dei singoli, che prima venivano accodate qui,
+                    //ripetevano un dato che l'operatore ha gia' sotto gli occhi nelle righe del
+                    //sottogruppo, e allungavano la colonna fino a nascondere quello che conta.
+                    if (elementsOfGroup.length > 0) {
+                        let gruppoPadre = me.ListSottogruppi.find(f => f.recordInTracciato[keyScattoCodiceGruppo] == elementsOfGroup[0].recordInTracciato[keyScattoCodiceGruppo] && f.isGruppo);
 
-                    htmlItem.find("#btnDuplica").on("click", function () {
-                        revInstance.copiaValoriNelGruppo($(this).closest('.container'));
-                    });
+                        if (gruppoPadre != null) {
+                            groupElement.find(".dettaglioGruppo").append(
+                                $('<div class="fw-bold text-primary border-bottom border-primary mb-2 pb-1" style="font-size:12px;">Campi revisionati gruppo padre</div>'));
 
-                    groupElement.find(".dettaglioGruppo").append(htmlItem);
+                            let template = $("#recapElementGruppo").clone();
+                            let htmlItem = $(template.html());
+                            //La scheda del padre si distingue da quelle gialle di riepilogo: qui e'
+                            //l'unica cosa in colonna, e il colore d'avviso non ha piu' senso.
+                            htmlItem.removeClass("bg-warning bg-opacity-50").addClass("bg-light border rounded p-2");
+
+                            Revisore.riempiSchedaColonna(htmlItem, gruppoPadre, gruppoPadre.recordInTracciato[keyScattoCodiceGruppo]);
+
+                            groupElement.find(".dettaglioGruppo").append(htmlItem);
+                        }
+                    }
                 }
-                elementsOfGroup.forEach(function (item) {
-                    let template = $("#recapElementGruppo").clone();
-                    let htmlItem = $(template.html());
-                    //if (me.agenzia.compilaBoxConInformazioniCustom != null) {
-                    //    me.agenzia.compilaBoxConInformazioniCustom(htmlItem, item);
-                    //}
-                    htmlItem.find(".codice").text("Cod: " + item.recordInTracciato[keyRefCodice]);
-                    htmlItem.find("#Descrizione1Tracciato").val((item.recordRevisionato != null ? item.recordRevisionato.descrizione1 : (item.recordInTracciato[keyDescr1] != null ? item.recordInTracciato[keyDescr1] : "")));
-                    htmlItem.find("#Descrizione2Tracciato").val((item.recordRevisionato != null ? item.recordRevisionato.descrizione2 : (item.recordInTracciato[keyDescr2] != null ? item.recordInTracciato[keyDescr2] : "")));
-                    htmlItem.find("#Descrizione3Tracciato").val((item.recordRevisionato != null ? item.recordRevisionato.descrizione3 : (item.recordInTracciato[keyDescr3] != null ? item.recordInTracciato[keyDescr3] : "")));
-                    htmlItem.find("#Descrizione4Tracciato").val((item.recordRevisionato != null ? item.recordRevisionato.descrizione4 : (item.recordInTracciato[keyDescr4] != null ? item.recordInTracciato[keyDescr4] : "")));
-                    htmlItem.find("#UmTracciato").val((item.recordRevisionato != null ? item.recordRevisionato.um : (item.recordInTracciato[keyDescrUm] != null ? item.recordInTracciato[keyDescrUm] : "")));
-                    htmlItem.find("#PesoTracciato").val(rappresenteDecimaleInCulturaItaliana((item.recordRevisionato != null ? item.recordRevisionato.peso : (item.recordInTracciato[keyDescrPeso] != null ? item.recordInTracciato[keyDescrPeso] : ""))));
+                else {
+                    elementsOfGroup.forEach(function (item) {
+                        let template = $("#recapElementGruppo").clone();
+                        let htmlItem = $(template.html());
 
-                    htmlItem.find("#btnDuplica").on("click", function () {
-                        revInstance.copiaValoriNelGruppo($(this).closest('.container'));
+                        Revisore.riempiSchedaColonna(htmlItem, item, item.recordInTracciato[keyRefCodice]);
+
+                        groupElement.find(".dettaglioGruppo").append(htmlItem);
                     });
-
-                    groupElement.find(".dettaglioGruppo").append(htmlItem);
-                });
+                }
             }
             //else {
             //    if (me.agenzia.compilaBoxConInformazioniCustom != null) {
@@ -3579,4 +3636,10 @@
         }
     }
 
+}
+
+//I20-982: in Node si esporta per i test (tests/istanta-web). Nella pagina module non esiste
+//e questa riga non fa nulla.
+if (typeof module !== "undefined" && module.exports) {
+    module.exports = Revisore;
 }
