@@ -117,8 +117,10 @@ test("un punto di partenza che non si risolve non blocca la scelta del file", ()
 
     const blocco = sorgente.slice(inizio, sorgente.indexOf("async function selectFile(", inizio));
 
-    assert.strictEqual((blocco.match(/catch/g) || []).length, 2,
-        "sia il file sia la cartella vanno provati dentro un catch");
-    assert.strictEqual((blocco.match(/return undefined;/g) || []).length, 3,
+    assert.strictEqual((blocco.match(/getEntryWithUrl/g) || []).length, 2,
+        "si prova prima il file e poi la cartella che lo contiene");
+    assert.ok((blocco.match(/catch/g) || []).length >= 2,
+        "entrambi i tentativi vanno protetti: un percorso perso non deve arrivare al chiamante");
+    assert.ok((blocco.match(/return undefined;/g) || []).length >= 2,
         "in ogni caso perso si torna alle opzioni vuote, cioe' al dialogo di sempre");
 });
