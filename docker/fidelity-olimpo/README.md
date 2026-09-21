@@ -12,18 +12,46 @@ riscrivendo le sole variabili immagine in `release.env`.
 | `release.env.example` | Variabili di sostituzione del compose. Il Runner ci scrive dentro `FIDELITY_IMAGE` e `OLIMPO_IMAGE`. |
 | `fidelity.env.example` | Ambiente iniettato nel container Fidelity: credenziali e segreti. |
 | `olimpo.env.example` | Ambiente iniettato nel container Olimpo: credenziali e segreti. |
+| `postgres-init/` | Script eseguito al primo avvio di PostgreSQL: estensioni e database di Olimpo. |
+| `proxy-templates/` | Configurazione di nginx, l'unica origine con cui parla il browser. |
 
 Cosa non c'è, di proposito:
 
-- **PostgreSQL**, che gira sull'host come nel compose di produzione di Fidelity. I
-  container lo raggiungono via `host.docker.internal`.
 - **Lo stack di osservabilità** (Prometheus, Grafana, Loki, Promtail): richiede i
   file di `fidelity/docker/observability` montati accanto al compose. Si aggiunge
   come passo successivo, quando questo deployment è verificato.
 - **Istanta e Correggo4**, che sono altri componenti della suite.
 
-Redis invece c'è: è una dipendenza interna di Fidelity, non un componente della
-release. Il ControlPlane non la conosce e il Runner non la aggiorna.
+PostgreSQL, MongoDB e Redis invece ci sono, e non sono componenti della release:
+il ControlPlane non li conosce e il Runner non li aggiorna. PostgreSQL usa
+l'immagine **PostGIS**, non `postgres` semplice, perché il database di Fidelity
+usa `DataTypes.GEOMETRY`; con l'immagine normale il primo `models:sync`
+fallisce. Ogni componente ha il suo database e il suo ruolo: `fidelity` lo crea
+l'immagine leggendo `POSTGRES_DB`/`POSTGRES_USER`, `olimpo` lo crea
+`postgres-init/01-init-databases.sh` al primo avvio.
+
+Nginx c'è per una ragione che non è la comodità: l'immagine di Fidelity contiene
+solo il server Node, e il bundle del frontend è costruito con URL **relative**
+(`VITE_API_URL=/api`, `VITE_WS_URL=/`). La SPA quindi presuppone che pagina, API
+e WebSocket stiano sulla stessa origine, mentre nell'applicazione il WebSocket
+ascolta su una porta diversa. Senza il proxy il socket non si connette.
+
+Il TLS non è un di più. La CSP dell'applicazione contiene
+`upgrade-insecure-requests` quando `NODE_ENV=production`
+(`server/core/middleware/securityMiddleware.ts`): servita in chiaro, la pagina
+arriva ma il browser richiede da solo ogni risorsa in `https` e fallisce con
+`ERR_SSL_PROTOCOL_ERROR`. Con il certificato davanti, gli header di sicurezza
+di Fidelity funzionano come previsto invece di doverli rimuovere.
+
+MongoDB serve a Fidelity per la configurazione di WebPliant. Lo schema Zod
+dichiara `MONGO_URL` opzionale, ma `server/core/models/mongoose.ts` apre la
+connessione al caricamento del modulo: senza, il processo termina prima di
+mettersi in ascolto. Il servizio non pubblica porte e non ha autenticazione,
+perché è raggiungibile solo dalla rete interna del progetto.
+
+Le credenziali stanno in `release.env`, non nei due file d'ambiente delle
+applicazioni: sono la stessa cosa per il container che inizializza il database e
+per chi ci si connette, e tenerle in un posto solo evita che divergano.
 
 ## 1. Catalogo ControlPlane
 
@@ -40,15 +68,19 @@ Se i nomi non coincidono, il Runner scrive variabili che il compose non legge e
 
 ## 2. Preparare il target
 
+`/percorso/bundle` è la directory in cui hai copiato questa cartella sul target,
+per esempio `/tmp/fidelity-olimpo`.
+
 ```bash
 sudo mkdir -p /opt/company-ai/projects/istanta4/fidelity-config
 cd /opt/company-ai/projects/istanta4
 
 sudo cp /percorso/bundle/compose.production.yaml .
+sudo cp -r /percorso/bundle/postgres-init .
 sudo cp /percorso/bundle/release.env.example   release.env
 sudo cp /percorso/bundle/fidelity.env.example  fidelity.env
 sudo cp /percorso/bundle/olimpo.env.example    olimpo.env
-sudo chmod 600 fidelity.env olimpo.env
+sudo chmod 600 release.env fidelity.env olimpo.env
 ```
 
 Compilare poi i tre file: porte in `release.env`, credenziali e segreti negli
@@ -63,16 +95,79 @@ compilarle tutte prima del primo deployment. Attenzione in particolare a `CLIENT
 senza TLS deve iniziare con `http://`, perché con `https://` il cookie di sessione
 diventa secure e il login non funziona.
 
-`fidelity-config` deve esistere **prima** del primo avvio: è montata in
-`/app/config` e, se manca, Docker la crea vuota e di proprietà di root, con un
-errore che si manifesta solo dentro l'applicazione.
+### I percorsi dei mount vanno assoluti
 
-Sull'host servono inoltre:
+`POSTGRES_INIT_DIR` e `FIDELITY_CONFIG_DIR` in `release.env` devono essere
+percorsi **assoluti dell'host**, e le directory devono esistere con il contenuto
+giusto prima del primo avvio.
 
-- i database `fidelity` e `olimpo` già creati, con gli utenti indicati nei due
-  file `.env`;
-- PostgreSQL in ascolto sull'interfaccia raggiungibile dai container (non solo su
-  `127.0.0.1`) e un `pg_hba.conf` che ammetta la subnet Docker.
+Il motivo è che il Runner esegue `docker compose` da dentro il proprio
+container, parlando con il daemon dell'host. Un percorso relativo come
+`./postgres-init` verrebbe risolto nella directory di lavoro del Runner,
+`/deployments/istanta4`, che sull'host non esiste: Docker non segnala niente,
+crea una directory vuota e il container si ritrova senza quei file. Nel caso di
+`postgres-init` il risultato è che il ruolo di Olimpo non viene mai creato, e
+l'errore compare molto più tardi come `password authentication failed`.
+
+Sull'host non serve più nessun PostgreSQL: niente database da creare a mano,
+niente `listen_addresses`, niente `pg_hba.conf`. Le password però vanno scelte
+**prima** del primo avvio e scritte in `release.env`, perché è in quel momento
+che il container crea database e ruoli.
+
+L'inizializzazione avviene **una volta sola**, quando il volume `postgres_data` è
+vuoto. Due conseguenze pratiche:
+
+- cambiare una password in `release.env` dopo il primo avvio non la cambia dentro
+  il database, e l'applicazione smette di connettersi: serve un `ALTER ROLE`
+  dentro il container e poi riallineare il file;
+- se lo script di init fallisce a metà, il volume resta inizializzato
+  parzialmente e non viene rieseguito, ma il container risulta comunque sano.
+  Si riparte con `docker compose down -v`, che **cancella i dati**.
+
+Per la manutenzione PostgreSQL è raggiungibile dall'host su `127.0.0.1:5433`
+(`POSTGRES_HOST_PORT`), non dall'esterno:
+
+```bash
+psql -h 127.0.0.1 -p 5433 -U fidelity -d fidelity
+```
+
+### Il certificato del proxy
+
+`PROXY_CERT_DIR` deve contenere `fullchain.pem` e `privkey.pem`. Su un indirizzo
+di LAN si genera un certificato autofirmato, con l'indirizzo IP nel SAN — senza,
+i browser lo rifiutano a prescindere:
+
+```bash
+sudo mkdir -p /opt/company-ai/projects/istanta4/proxy-certs
+cd /opt/company-ai/projects/istanta4/proxy-certs
+sudo openssl req -x509 -nodes -newkey rsa:2048 -days 825   -keyout privkey.pem -out fullchain.pem   -subj "/CN=192.168.1.66"   -addext "subjectAltName=IP:192.168.1.66"
+sudo chmod 600 privkey.pem
+```
+
+Il browser mostrerà un avviso perché la CA non è nota: si accetta una volta. Il
+giorno in cui il target avrà un nome DNS e un certificato vero, si sostituiscono
+questi due file e non cambia altro.
+
+`CLIENT_URL` in `fidelity.env` deve coincidere con l'indirizzo del proxy, schema
+compreso:
+
+```properties
+CLIENT_URL=https://192.168.1.66:8081
+```
+
+Le porte 3010 e 3400 restano pubblicate ma non vanno usate dal browser: servono
+solo al proxy e alla diagnosi.
+
+### Il proxy si avvia una volta
+
+`proxy` dipende da `fidelity`, non viceversa, quindi il deployment selettivo del
+Runner (`up -d --wait fidelity olimpo`) non lo avvia. Si avvia a mano la prima
+volta e poi resta su, anche attraverso le release, perché instrada per nome di
+servizio:
+
+```bash
+docker compose --env-file release.env -f compose.production.yaml up -d proxy
+```
 
 ## 3. Configurare il Runner
 

@@ -21,7 +21,11 @@ docs
 logs
 
 deprecati
-on_start
+# on_start NON va escluso: MongoDBConnector.ensureCollections() legge a runtime
+# on_start/stile_vergine.json e on_start/css_vergine.css per creare la
+# configurazione WebPliant di default al primo avvio con il database vuoto.
+# Escludendolo, la seed fallisce in silenzio (l'errore e' catturato) e la
+# collection `config` resta vuota.
 
 uploads
 

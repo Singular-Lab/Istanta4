@@ -7,8 +7,18 @@
 # FIDELITY_IMAGE e OLIMPO_IMAGE le scrive il Runner in release.env a ogni
 # release, pinnate a digest. Non vanno mai impostate a mano.
 #
-# PostgreSQL non sta qui: gira sull'host, come nel compose di produzione di
-# fidelity. I container lo raggiungono via host.docker.internal.
+# PostgreSQL gira qui dentro, con un database separato per componente. L'immagine
+# e' quella con PostGIS perche' il database di Fidelity usa DataTypes.GEOMETRY,
+# che l'immagine postgres semplice non sa gestire.
+#
+# `extra_hosts` resta comunque: gli altri servizi della suite (Istanta, il proxy)
+# vivono sull'host e i container li raggiungono via host.docker.internal.
+#
+# IMPORTANTE: ogni bind mount deve indicare un percorso ASSOLUTO dell'host. Il
+# Runner esegue docker compose da dentro il proprio container, parlando con il
+# daemon dell'host: un percorso relativo verrebbe risolto nel filesystem del
+# Runner (/deployments/...), che sull'host non esiste, e Docker lo creerebbe
+# vuoto invece di dare errore.
 #
 # Lo stack di osservabilita' (prometheus, grafana, loki, promtail) e' escluso
 # di proposito: richiede i file di configurazione di fidelity/docker/observability
@@ -35,20 +45,37 @@ services:
     env_file:
       - fidelity.env
     environment:
-      NODE_ENV: production
+      # Con `production` la CSP applica upgrade-insecure-requests: il browser
+      # richiede ogni risorsa in https e su un target senza TLS la pagina resta
+      # bianca. Su una macchina di prova raggiunta in chiaro si mette
+      # FIDELITY_NODE_ENV=development in release.env, che rende la CSP
+      # report-only e permissivo il CORS. In produzione va lasciato production,
+      # con il proxy TLS davanti.
+      NODE_ENV: ${FIDELITY_NODE_ENV:-production}
       # `environment` vince su `env_file`: queste due tengono allineate la porta
       # su cui ascolta il processo e quella pubblicata sopra. Non ridefinirle
       # in fidelity.env, verrebbero ignorate.
       NODE_PORT: ${FIDELITY_HTTP_PORT:-3010}
       WS_PORT: ${FIDELITY_WS_PORT:-3400}
-      DB_POSTGRESQL_HOST: host.docker.internal
-      DB_POSTGRESQL_PORT: ${DB_POSTGRESQL_PORT:-5432}
+      # Il database sta nel servizio postgres qui sotto. Definite qui e non in
+      # fidelity.env perche' devono restare identiche a quelle con cui il
+      # container PostgreSQL e' stato inizializzato.
+      DB_POSTGRESQL_HOST: postgres
+      DB_POSTGRESQL_PORT: 5432
+      DB_POSTGRESQL_NAME: ${FIDELITY_DB_NAME:-fidelity}
+      DB_POSTGRESQL_USER: ${FIDELITY_DB_USER:-fidelity}
+      DB_POSTGRESQL_PASSWORD: ${FIDELITY_DB_PASSWORD:?Impostare FIDELITY_DB_PASSWORD in release.env}
       REDIS_URL: redis://redis:6379
+      # Lo schema Zod le dichiara opzionali, ma server/core/models/mongoose.ts
+      # apre la connessione al caricamento del modulo: senza MONGO_URL il
+      # processo termina prima di ascoltare sulla porta.
+      MONGO_URL: mongodb://mongo:27017
+      MONGO_DB_NAME: ${FIDELITY_MONGO_DB:-fidelity}
       ICONE_INSEGNA_DIR: /home/node/insegne
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - ${FIDELITY_CONFIG_DIR:-./fidelity-config}:/app/config
+      - ${FIDELITY_CONFIG_DIR:?Impostare FIDELITY_CONFIG_DIR in release.env, percorso assoluto sull'host}:/app/config
       - fidelity_insegne:/home/node/insegne
       - fidelity_materiali:/app/public/uploads/materiali_POP
       - fidelity_uploads:/app/uploads
@@ -56,6 +83,10 @@ services:
     depends_on:
       redis:
         condition: service_started
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
     healthcheck:
       # node e' sempre presente nell'immagine; wget/curl no. status < 500
       # significa "il processo risponde", anche se la rotta richiede login.
@@ -88,8 +119,12 @@ services:
       - olimpo.env
     environment:
       NODE_ENV: production
-      DB_HOST: host.docker.internal
-      DB_PORT: ${DB_POSTGRESQL_PORT:-5432}
+      # Stesso servizio PostgreSQL di Fidelity, database e ruolo separati.
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${OLIMPO_DB_NAME:-olimpo}
+      DB_USER: ${OLIMPO_DB_USER:-olimpo}
+      DB_PASSWORD: ${OLIMPO_DB_PASSWORD:?Impostare OLIMPO_DB_PASSWORD in release.env}
       # Deve restare dentro il volume olimpo_uploads, altrimenti i file
       # depositati via FTP spariscono al primo aggiornamento.
       FTP_ROOT: /app/uploads/FTP
@@ -97,6 +132,9 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - olimpo_uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
     healthcheck:
       test:
         - CMD
@@ -112,6 +150,111 @@ services:
       options:
         max-size: "50m"
         max-file: "5"
+
+  postgres:
+    # PostGIS, non postgres semplice: il database di Fidelity usa
+    # DataTypes.GEOMETRY. Come redis, non e' un componente della release.
+    image: postgis/postgis:17-3.5
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      # L'immagine crea database e ruolo di Fidelity al primo avvio.
+      POSTGRES_DB: ${FIDELITY_DB_NAME:-fidelity}
+      POSTGRES_USER: ${FIDELITY_DB_USER:-fidelity}
+      POSTGRES_PASSWORD: ${FIDELITY_DB_PASSWORD:?Impostare FIDELITY_DB_PASSWORD in release.env}
+      # Lette da postgres-init/01-init-databases.sh, che crea quelli di Olimpo.
+      OLIMPO_DB_NAME: ${OLIMPO_DB_NAME:-olimpo}
+      OLIMPO_DB_USER: ${OLIMPO_DB_USER:-olimpo}
+      OLIMPO_DB_PASSWORD: ${OLIMPO_DB_PASSWORD:?Impostare OLIMPO_DB_PASSWORD in release.env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ${POSTGRES_INIT_DIR:?Impostare POSTGRES_INIT_DIR in release.env, percorso assoluto sull'host}:/docker-entrypoint-initdb.d:ro
+    ports:
+      # Solo su localhost, per manutenzione dall'host (psql, pg_dump). La porta
+      # predefinita e' 5433 per non collidere con un PostgreSQL gia' installato.
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5433}:5432"
+    healthcheck:
+      # Due controlli, non uno. `pg_isready` su TCP e non sul socket, perche'
+      # durante l'inizializzazione l'immagine avvia un server temporaneo solo su
+      # socket: con il socket il servizio risulterebbe sano mentre gli script di
+      # init stanno ancora girando. La query sul ruolo di Olimpo verifica che
+      # quegli script siano stati davvero eseguiti: se il volume era gia' stato
+      # inizializzato senza di essi, PostgreSQL li salta in silenzio e il guasto
+      # emergerebbe molto dopo, come errore di autenticazione.
+      test:
+        - CMD-SHELL
+        - >-
+          pg_isready -h 127.0.0.1 -U ${FIDELITY_DB_USER:-fidelity} -d ${FIDELITY_DB_NAME:-fidelity}
+          && psql -U ${FIDELITY_DB_USER:-fidelity} -d ${FIDELITY_DB_NAME:-fidelity} -tAc
+          "select 1 from pg_roles where rolname='${OLIMPO_DB_USER:-olimpo}'" | grep -q 1
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  proxy:
+    # Unica origine per il browser davanti a Fidelity: termina il TLS e instrada
+    # la SPA e le API sulla porta HTTP, /socket.io/ su quella WebSocket. Gli
+    # header di sicurezza dell'applicazione passano intatti. Vedi
+    # proxy-templates/default.conf.template.
+    #
+    # Non e' una dipendenza di Fidelity ma il contrario, quindi il deployment
+    # selettivo del Runner (`up -d --wait fidelity olimpo`) non lo avvia: si
+    # avvia una volta a mano con `docker compose up -d proxy` e resta su.
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      FIDELITY_HTTP_PORT: ${FIDELITY_HTTP_PORT:-3010}
+      FIDELITY_WS_PORT: ${FIDELITY_WS_PORT:-3400}
+      # Limita la sostituzione alle nostre variabili: senza filtro envsubst
+      # potrebbe intaccare le variabili di nginx presenti nel template.
+      NGINX_ENVSUBST_FILTER: "^FIDELITY_"
+    volumes:
+      - ${PROXY_TEMPLATE_DIR:?Impostare PROXY_TEMPLATE_DIR in release.env, percorso assoluto sull'host}:/etc/nginx/templates:ro
+      # fullchain.pem e privkey.pem. Su un indirizzo di LAN e' un certificato
+      # autofirmato: il browser avvisa una volta, il resto funziona.
+      - ${PROXY_CERT_DIR:?Impostare PROXY_CERT_DIR in release.env, percorso assoluto sull'host}:/etc/nginx/certs:ro
+    ports:
+      - "${PROXY_HTTPS_PORT:-8081}:443"
+    depends_on:
+      fidelity:
+        condition: service_started
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  mongo:
+    # Fidelity tiene su MongoDB la configurazione di WebPliant (collection
+    # `config`, stili, dashboard). Niente porta pubblicata e niente
+    # autenticazione: e' raggiungibile solo dalla rete interna del progetto.
+    image: mongo:7
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    command: ["--quiet"]
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   redis:
     # Dipendenza interna di fidelity, non un componente della release: il
@@ -130,6 +273,8 @@ services:
         max-file: "3"
 
 volumes:
+  postgres_data:
+  mongo_data:
   fidelity_insegne:
   fidelity_materiali:
   fidelity_uploads:

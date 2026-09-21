@@ -35,6 +35,9 @@ COPY --from=builder /app/server ./server
 COPY --from=builder /app/lib ./lib
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/src/assets/images ./src/assets/images
+# Letta a runtime da MongoDBConnector.ensureCollections() per la seed della
+# configurazione WebPliant quando il database Mongo e' vuoto.
+COPY --from=builder /app/on_start ./on_start
 COPY --from=builder /app/docker/server-entrypoint.prod.sh ./docker/server-entrypoint.prod.sh
 
 # Directory scrivibili dal runtime non-root:

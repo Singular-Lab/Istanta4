@@ -1,0 +1,61 @@
+# Unica origine per il browser davanti a Fidelity, con terminazione TLS.
+#
+# Serve perche' il bundle e' costruito con URL relative (VITE_API_URL=/api,
+# VITE_WS_URL=/): la SPA presuppone che pagina, API e WebSocket stiano tutti
+# sulla stessa origine, mentre nell'applicazione il WebSocket ascolta su una
+# porta diversa da quella HTTP. E' questo proxy a ricomporre le due cose.
+#
+# TLS non e' un di piu': la CSP dell'applicazione contiene
+# upgrade-insecure-requests, quindi su http il browser richiederebbe ogni
+# risorsa in https e fallirebbe. Con il certificato qui davanti, gli header di
+# sicurezza di Fidelity arrivano al browser intatti e coerenti.
+#
+# Reso da envsubst all'avvio: si sostituiscono solo le variabili che iniziano
+# per FIDELITY_ (NGINX_ENVSUBST_FILTER nel compose), cosi' le variabili di
+# nginx come $http_upgrade restano intatte.
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name _;
+
+    ssl_certificate     /etc/nginx/certs/fullchain.pem;
+    ssl_certificate_key /etc/nginx/certs/privkey.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_session_cache   shared:SSL:10m;
+    ssl_session_timeout 1h;
+
+    client_max_body_size 200m;
+
+    # Il resolver di Docker, usato insieme alle variabili qui sotto: senza,
+    # nginx risolverebbe il nome una volta sola all'avvio e continuerebbe a
+    # puntare al vecchio indirizzo ogni volta che il Runner ricrea il
+    # container di Fidelity.
+    resolver 127.0.0.11 valid=10s ipv6=off;
+
+    location /socket.io/ {
+        set $ws_upstream http://fidelity:${FIDELITY_WS_PORT};
+        proxy_pass $ws_upstream;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade           $http_upgrade;
+        proxy_set_header Connection        "upgrade";
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        # L'applicazione ha trust proxy attivo: e' da qui che capisce di essere
+        # servita in https, e di conseguenza marca i cookie di sessione secure.
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 3600s;
+    }
+
+    location / {
+        set $app_upstream http://fidelity:${FIDELITY_HTTP_PORT};
+        proxy_pass $app_upstream;
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300s;
+    }
+}
