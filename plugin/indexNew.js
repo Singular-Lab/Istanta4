@@ -4399,6 +4399,11 @@ async function applicaConfronto(mappa) {
                 var reportFilePath = confronti._getReportIntegritaFilePath ? confronti._getReportIntegritaFilePath(idKitLavorazione) : pathLavorazione + "/reportIntegrita_" + idKitLavorazione + ".json";
                 messaggioUtente("Report confronto creato con successo: " + reportFilePath, "success", false, 10);
                 confronti.compilaReportConfronto(reportObj);
+
+                //I20-981: il csv nasce da solo insieme al report. Solo qui, che e' l'unico
+                //posto dove un report viene creato: riaprire un report gia' fatto o rinfrescare
+                //l'interfaccia non deve produrre altri file.
+                await confronti.scaricaReportConfrontoCsv(reportObj, { automatico: true });
             }
         }
         catch (ex) {

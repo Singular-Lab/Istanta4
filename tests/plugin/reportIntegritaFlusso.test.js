@@ -39,12 +39,22 @@ function corpoFunzione(testo, intestazione) {
     const inizio = testo.indexOf(intestazione);
     assert.notStrictEqual(inizio, -1, `${intestazione} non trovata: il test va aggiornato`);
 
+    //Le graffe dentro le tonde non contano: un parametro con valore predefinito {}
+    //chiuderebbe il conteggio prima ancora di entrare nel corpo.
+    let tonde = 0;
     let livello = 0;
     let aperta = false;
 
     for (let i = inizio; i < testo.length; i++) {
-        if (testo[i] === '{') { livello++; aperta = true; }
-        else if (testo[i] === '}') { livello--; }
+        const c = testo[i];
+
+        if (c === '(') { tonde++; continue; }
+        if (c === ')') { tonde--; continue; }
+        if (tonde > 0) { continue; }
+
+        if (c === '{') { livello++; aperta = true; }
+        else if (c === '}') { livello--; }
+
         if (aperta && livello === 0) {
             return testo.substring(inizio, i + 1);
         }
@@ -187,4 +197,61 @@ test('l\'hash di una foto si ricalcola solo se la foto e\' cambiata', () => {
     assert.match(getLinkHash, /cacheHashFoto\.chiave\(filePath, await fileEntry\.getMetadata\(\)\)/);
     //Lo stato del link non si mette in cache: si rilegge sempre.
     assert.match(getLinkHash, /if \(link\.status\.toString\(\) == "LINK_OUT_OF_DATE"\)/);
+});
+
+/* I20-981 (Lotto 2): il csv nasce col report, va dove dice l'operatore e non si rompe. */
+
+test('il csv si scrive quando nasce un report, non quando se ne riapre uno', () => {
+    //Unico punto di creazione: applicaConfronto, subito dopo l'apertura del report.
+    assert.match(applicaConfronto, /await confronti\.scaricaReportConfrontoCsv\(reportObj, \{ automatico: true \}\)/);
+
+    //La riapertura e il rinfresco dell'interfaccia non devono produrre altri file.
+    const riapertura = avvio.substring(avvio.indexOf('azioneReport === "open"'), avvio.indexOf('//2.'));
+    assert.doesNotMatch(riapertura, /scaricaReportConfrontoCsv/);
+
+    //Nell'apertura del report il csv compare solo come gesto dell'operatore (il pulsante in
+    //testata), mai come scrittura automatica.
+    const compila = corpoFunzione(confronti, 'compilaReportConfronto(report, options = {}) {');
+    assert.doesNotMatch(compila, /^\s*await this\.scaricaReportConfrontoCsv/m);
+    assert.match(compila, /onclick = async \(\) => await this\.scaricaReportConfrontoCsv/);
+});
+
+test('il csv si scrive in byte utf8', () => {
+    //Scritto come stringa da fs, il file usciva con le accentate rotte.
+    const scrittura = corpoFunzione(confronti, 'async _scriviTestoUtf8(cartella, nomeFile, testo) {');
+
+    assert.match(scrittura, /createFile\(nomeFile, \{ overwrite: true \}\)/);
+    //I byte li calcoliamo noi: scritta come stringa, l'accentata dipendeva da chi la leggeva.
+    assert.match(scrittura, /reportConfrontoCsv\.bytesUtf8\(testo\)/);
+    assert.match(scrittura, /format: require\("uxp"\)\.storage\.formats\.binary/);
+
+    const scarica = corpoFunzione(confronti, 'async scaricaReportConfrontoCsv(report, opzioni = {}) {');
+    assert.match(scarica, /_scriviTestoUtf8/);
+    assert.doesNotMatch(scarica, /fs\.writeFileSync/);
+});
+
+test('la cartella dei csv si cambia dalla schermata del report', () => {
+    const scelta = corpoFunzione(confronti, 'async scegliCartellaCsvReport() {');
+
+    assert.match(scelta, /fs2\.getFolder\(\)/);
+    //Il csv di questo confronto viene riscritto nella nuova cartella e tolto dalla vecchia.
+    assert.match(scelta, /scaricaReportConfrontoCsv\(report, \{ automatico: true \}\)/);
+    assert.match(scelta, /this\._eliminaFile\(precedente\)/);
+
+    //Il title del pulsantino dice dove stanno andando i csv.
+    const titolo = corpoFunzione(confronti, '_aggiornaTitoloCartellaCsv() {');
+    assert.match(titolo, /"Scegli cartella\. Attualmente impostata: " \+ cartella/);
+
+    //La memoria dura quanto il codice del plugin: e' un campo del modulo, non un file.
+    assert.match(confronti, /_cartellaCsvSessione: null/);
+});
+
+test('il csv e l\'interfaccia usano la stessa descrizione composta', () => {
+    const descrizione = corpoFunzione(confronti, '_getDescrizioneNuovo(item) {');
+    assert.match(descrizione, /reportConfrontoCsv\.descrizioneComposta\(item\)/);
+
+    //Le regole del csv stanno nel modulo, non piu' sparse in confronti.js.
+    const build = corpoFunzione(confronti, '_buildReportConfrontoCsv(report) {');
+    assert.match(build, /reportConfrontoCsv\.componiCsv\(voci\)/);
+    assert.match(build, /reportConfrontoCsv\.datiRecordPerCsv\(raw\)/);
 });

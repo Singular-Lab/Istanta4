@@ -7,6 +7,7 @@ const GarbageCollector = require('./garbageCollector');
 const { ref } = require('process');
 const NoRenderElementi = require('./noRenderElementi');
 const reportIntegritaAvvio = require('./reportIntegritaAvvio');
+const reportConfrontoCsv = require('./reportConfrontoCsv');
 
 const confronti = {
     async confrontoBox(box1, box2, forzaReimpaginazione = false){ //mode 0 -> cambio strutturale, mode 1 -> confrontoMassivo
@@ -1560,7 +1561,27 @@ const confronti = {
             }
 
             btnScaricaCsv.title = "Scarica il report confronto in formato CSV";
-            btnScaricaCsv.onclick = () => this.scaricaReportConfrontoCsv(this._confrontoReportState?.report || reportData);
+            btnScaricaCsv.onclick = async () => await this.scaricaReportConfrontoCsv(this._confrontoReportState?.report || reportData);
+
+            //I20-981: il pulsantino accanto cambia la cartella dei csv. Il title dice dove
+            //stanno andando adesso, cosi' non serve aprire il selettore per saperlo.
+            let btnCartellaCsv = document.getElementById("cartellaReportConfrontoCsv");
+            if (!btnCartellaCsv) {
+                btnCartellaCsv = document.createElement("button");
+                btnCartellaCsv.id = "cartellaReportConfrontoCsv";
+                btnCartellaCsv.type = "button";
+                btnCartellaCsv.textContent = "...";
+                btnCartellaCsv.style.height = "25px";
+                btnCartellaCsv.style.minWidth = "26px";
+                btnCartellaCsv.style.padding = "0 6px";
+                btnCartellaCsv.style.cursor = "pointer";
+                btnCartellaCsv.style.marginRight = "8px";
+
+                btnScaricaCsv.parentNode.insertBefore(btnCartellaCsv, btnScaricaCsv.nextSibling);
+            }
+
+            btnCartellaCsv.onclick = async () => await this.scegliCartellaCsvReport();
+            this._aggiornaTitoloCartellaCsv();
         }
 
         const body = document.getElementById("bodyConfrontoReport");
@@ -1665,52 +1686,205 @@ const confronti = {
         this._restorePendingReportScroll();
     },
 
-    scaricaReportConfrontoCsv(report) {
-        try {
-            const cartellaExport = this._getCartellaExportReport();
-            const nomeFile = this._getNomeFileReportCsv();
-            const filePath = cartellaExport + nomeFile;
-            const csv = this._buildReportConfrontoCsv(report);
+    //I20-981: il csv del report.
+    //Il salvataggio ora avviene da solo quando nasce un report nuovo (automatico = true) e
+    //resta disponibile a mano dalla testata. La cartella di destinazione puo' essere cambiata
+    //dalla schermata del report: vale per la sessione del codice del plugin, un reload di UXP
+    //la riporta alla cartella di esportazione.
+    _cartellaCsvSessione: null,
+    _csvDelReportCorrente: null,
 
-            fs.writeFileSync(filePath, "\uFEFF" + csv);
-            messaggioUtente("Report confronto scaricato in CSV: " + filePath, "success", false, 10);
+    async scaricaReportConfrontoCsv(report, opzioni = {}) {
+        const automatico = opzioni.automatico === true;
+
+        try {
+            const cartella = this.cartellaCsvReport();
+            const testo = this._buildReportConfrontoCsv(report);
+            const nomeFile = await this._nomeFileReportCsv(cartella);
+
+            const filePath = await this._scriviTestoUtf8(cartella, nomeFile, testo);
+            this._csvDelReportCorrente = filePath;
+
+            messaggioUtente((automatico ? "Report confronto salvato in CSV: " : "Report confronto scaricato in CSV: ") + filePath, "success", false, 10);
+            return filePath;
         } catch (err) {
             console.error("Errore durante lo scaricamento del report CSV:", err);
             messaggioUtente("Code CNF-020: Errore durante lo scaricamento del report CSV: " + (err?.message || err), "error", false, 10);
+            return null;
         }
     },
 
-    _getCartellaExportReport() {
-        const cartellaExport = typeof percorsoEsportazione !== "undefined" ? String(percorsoEsportazione || "") : "";
-        if (!cartellaExport) {
+    /// La cartella dove finiscono i csv: quella scelta per questa sessione, altrimenti la
+    /// cartella di esportazione configurata nei percorsi di sistema.
+    cartellaCsvReport() {
+        const scelta = this._cartellaCsvSessione;
+        const cartella = scelta != null && scelta !== ""
+            ? String(scelta)
+            : (typeof percorsoEsportazione !== "undefined" ? String(percorsoEsportazione || "") : "");
+
+        if (!cartella) {
             throw new Error("cartella di export non configurata");
         }
 
-        const pathExport = cartellaExport.endsWith("/") ? cartellaExport : cartellaExport + "/";
-        return pathExport;
+        return cartella.endsWith("/") ? cartella : cartella + "/";
     },
 
-    _getNomeFileReportCsv() {
-        const pad = (value) => value < 10 ? "0" + value : String(value);
-        const now = new Date();
-        const timestamp = now.getFullYear()
-            + pad(now.getMonth() + 1)
-            + pad(now.getDate())
-            + "_"
-            + pad(now.getHours())
-            + pad(now.getMinutes())
-            + pad(now.getSeconds());
+    /// Il selettore di cartella dalla schermata del report. Cambiando cartella il csv di
+    /// questo confronto viene riscritto subito la' dentro e tolto da dove stava: cosi' il
+    /// report e il suo csv restano nello stesso posto.
+    async scegliCartellaCsvReport() {
+        try {
+            const cartella = await fs2.getFolder();
+            if (!cartella) {
+                return null;
+            }
 
-        const idKit = typeof idKitLavorazione !== "undefined" ? String(idKitLavorazione || "kit") : "kit";
-        const safeIdKit = idKit.replace(/[\\/:*?"<>|]/g, "_");
-        return "reportConfronto_" + safeIdKit + "_" + timestamp + ".csv";
+            let attuale = "";
+            try {
+                attuale = this.cartellaCsvReport();
+            }
+            catch (errCartella) {
+                attuale = "";
+            }
+
+            const scelta = String(cartella.nativePath || "");
+            if (attuale !== "" && (scelta === attuale || scelta + "/" === attuale)) {
+                //Stessa cartella: non c'e' niente da spostare e non serve un file in piu'.
+                this._aggiornaTitoloCartellaCsv();
+                return this._cartellaCsvSessione;
+            }
+
+            const precedente = this._csvDelReportCorrente;
+            this._cartellaCsvSessione = scelta;
+
+            const report = this._confrontoReportState?.report;
+            if (report != null) {
+                const nuovoPercorso = await this.scaricaReportConfrontoCsv(report, { automatico: true });
+
+                if (nuovoPercorso != null && precedente != null && precedente !== nuovoPercorso) {
+                    this._eliminaFile(precedente);
+                }
+            }
+
+            this._aggiornaTitoloCartellaCsv();
+            return this._cartellaCsvSessione;
+        }
+        catch (err) {
+            console.error("Errore durante la scelta della cartella dei csv:", err);
+            messaggioUtente("Code CNF-021: Errore durante la scelta della cartella dei csv: " + (err?.message || err), "error", false, 10);
+            return null;
+        }
+    },
+
+    /// Il nome del prossimo csv in quella cartella. Il progressivo guarda i file gia' presenti
+    /// la' dentro, quindi cambiando cartella riparte da quello che la nuova cartella contiene.
+    async _nomeFileReportCsv(cartella) {
+        const titolo = this._titoloKitPerCsv();
+        const dataReport = new Date(this._confrontoReportState?.createdAt || Date.now());
+        const progressivo = reportConfrontoCsv.prossimoProgressivo(await this._nomiFileNellaCartella(cartella));
+
+        return reportConfrontoCsv.nomeFileReport(progressivo, titolo, dataReport);
+    },
+
+    /// Il titolo del kit come lo mostra la testata del plugin: e' quello che dice all'operatore
+    /// a che volantino si riferisce il csv.
+    _titoloKitPerCsv() {
+        try {
+            const meta = ficoProcess?.metaLavorazioneCorrente?.meta;
+            if (meta != null && meta.titolo) {
+                return String(meta.titolo);
+            }
+        }
+        catch (err) {
+            console.warn("Titolo del kit non disponibile per il nome del csv:", err);
+        }
+
+        return typeof idKitLavorazione !== "undefined" ? String(idKitLavorazione || "kit") : "kit";
+    },
+
+    async _nomiFileNellaCartella(cartella) {
+        try {
+            const percorso = cartella.endsWith("/") ? cartella.slice(0, -1) : cartella;
+            const entry = await fs2.getEntryWithUrl("file://" + percorso);
+            const voci = await entry.getEntries();
+
+            return (voci || []).filter(v => v.isFile).map(v => v.name);
+        }
+        catch (err) {
+            //Cartella non leggibile: il csv si scrive lo stesso, il progressivo riparte da uno.
+            console.warn("Cartella dei csv non leggibile, progressivo da capo:", err);
+            return [];
+        }
+    },
+
+    /// I20-981: il csv si scrive in byte utf8, non come stringa.
+    /// Scritto come stringa, il file usciva con le accentate rotte: l'operatore apriva il csv
+    /// e al posto di "è" trovava segni che non c'entravano nulla, perche' l'interpretazione
+    /// della stringa non era piu' nelle nostre mani. I byte li calcola reportConfrontoCsv e
+    /// il BOM in testa dice a Excel come leggerli.
+    async _scriviTestoUtf8(cartella, nomeFile, testo) {
+        const percorso = cartella.endsWith("/") ? cartella.slice(0, -1) : cartella;
+        const entry = await fs2.getEntryWithUrl("file://" + percorso);
+        const file = await entry.createFile(nomeFile, { overwrite: true });
+
+        const bytes = reportConfrontoCsv.bytesUtf8(testo);
+        await file.write(bytes, { format: require("uxp").storage.formats.binary });
+
+        return cartella + nomeFile;
+    },
+
+    _eliminaFile(percorso) {
+        try {
+            fs.unlinkSync(percorso);
+        }
+        catch (err) {
+            console.warn("Il csv precedente non e' stato rimosso:", percorso, err);
+        }
+    },
+
+    _aggiornaTitoloCartellaCsv() {
+        const bottone = document.getElementById("cartellaReportConfrontoCsv");
+        if (bottone == null) {
+            return;
+        }
+
+        let cartella = "";
+        try {
+            cartella = this.cartellaCsvReport();
+        }
+        catch (err) {
+            cartella = "nessuna (configura i percorsi di sistema)";
+        }
+
+        bottone.title = "Scegli cartella. Attualmente impostata: " + cartella;
     },
 
     _buildReportConfrontoCsv(report) {
-        const intestazioni = ["Tipo", "Pagina", "Codice gruppo", "RefId", "Descrizione", "Campo", "Dettaglio"];
-        const rows = [intestazioni];
+        const voci = [];
 
-        this._appendReportRecordsCsvRows(rows, "Cambiato", report?.recordCambiati || [], (record) => {
+        const aggiungi = (stato, records, dettagliDelRecord) => {
+            (records || []).forEach(record => {
+                const raw = this._getReportRecordRaw(record);
+                const dati = reportConfrontoCsv.datiRecordPerCsv(raw);
+                const dettagli = dettagliDelRecord(record) || [{ campo: "", dettaglio: "" }];
+
+                dettagli.forEach(dettaglio => {
+                    voci.push({
+                        stato: stato,
+                        pagina: this._getReportRecordPage(record),
+                        codiceGruppo: record?.codiceGruppo || "",
+                        etichetta: dati.etichetta,
+                        versione: dati.versione,
+                        reparto: dati.reparto,
+                        descrizione: dati.descrizione,
+                        campo: dettaglio?.campo || "",
+                        dettaglio: dettaglio?.dettaglio || ""
+                    });
+                });
+            });
+        };
+
+        aggiungi("Cambiato", report?.recordCambiati, (record) => {
             const differenze = Array.isArray(record?.preAnalisi?.differenze) ? record.preAnalisi.differenze : [];
             if (differenze.length === 0) {
                 return [{ campo: "", dettaglio: "Differenza non specificata" }];
@@ -1722,55 +1896,37 @@ const confronti = {
             }));
         });
 
-        this._appendReportRecordsCsvRows(rows, "Eliminato", report?.recordUsciti || [], () => {
+        aggiungi("Eliminato", report?.recordUsciti, () => {
             return [{ campo: "", dettaglio: "Presente in impaginato ma non nel tracciato" }];
         });
 
-        this._appendReportRecordsCsvRows(rows, "Errore", report?.recordConErrori || [], (record) => {
+        aggiungi("Errore", report?.recordConErrori, (record) => {
             const errors = Array.isArray(record?.preAnalisi?.errors) ? record.preAnalisi.errors : [];
             if (errors.length === 0) {
                 return [{ campo: "", dettaglio: "Errore non specificato" }];
             }
 
-            return errors.map(error => ({
+            return errors.map(error => ({ campo: "", dettaglio: error }));
+        });
+
+        //I nuovi non hanno una pagina: nel documento non ci sono ancora, e in coda ci vanno.
+        this._getReportNuoviRows(report).forEach(row => {
+            const dati = reportConfrontoCsv.datiRecordPerCsv(row.raw);
+
+            voci.push({
+                stato: "Nuovo",
+                pagina: "",
+                codiceGruppo: row.codiceGruppo || "",
+                etichetta: dati.etichetta,
+                versione: dati.versione,
+                reparto: dati.reparto,
+                descrizione: row.descrizione || dati.descrizione,
                 campo: "",
-                dettaglio: error
-            }));
-        });
-
-        const nuovi = this._getReportNuoviRows(report);
-        nuovi.forEach(row => {
-            rows.push([
-                "Nuovo",
-                "",
-                row.codiceGruppo || "",
-                "",
-                row.descrizione || "",
-                "",
-                "Presente nel tracciato ma non in impaginato"
-            ]);
-        });
-
-        return rows
-            .map(row => row.map(value => this._csvEscape(value)).join(";"))
-            .join("\n");
-    },
-
-    _appendReportRecordsCsvRows(rows, tipo, records, detailFactory) {
-        (records || []).forEach(record => {
-            const details = detailFactory(record) || [{ campo: "", dettaglio: "" }];
-            details.forEach(detail => {
-                rows.push([
-                    tipo,
-                    this._getReportRecordPage(record),
-                    record?.codiceGruppo || "",
-                    this._getReportRecordRefId(record),
-                    this._getReportRecordDescrizione(record),
-                    detail?.campo || "",
-                    detail?.dettaglio || ""
-                ]);
+                dettaglio: "Presente nel tracciato ma non in impaginato"
             });
         });
+
+        return reportConfrontoCsv.componiCsv(voci);
     },
 
     _getReportNuoviRows(report) {
@@ -1793,15 +1949,6 @@ const confronti = {
         }
 
         return record?.recordInTracciato || record?.raw || null;
-    },
-
-    _getReportRecordDescrizione(record) {
-        const raw = this._getReportRecordRaw(record);
-        if (!raw) {
-            return "";
-        }
-
-        return this._getDescrizioneNuovo(raw);
     },
 
     _getReportRecordPage(record) {
@@ -2429,11 +2576,6 @@ const confronti = {
 
         Utility.mostraHidebleElements();
         return { result, dontAsk };
-    },
-
-    _csvEscape(value) {
-        const normalized = value == null ? "" : String(value).replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-        return "\"" + normalized.replace(/"/g, "\"\"") + "\"";
     },
 
     _buildPanelCambiati(records) {
@@ -4270,24 +4412,11 @@ const confronti = {
         return result;
     },
 
+    //I20-981: una sola descrizione composta per il csv, per la tabella dei nuovi e per le
+    //info, con la barra al posto del trattino: due separatori diversi fra schermo e file
+    //sarebbero una trappola per chi confronta l'uno con l'altro.
     _getDescrizioneNuovo(item) {
-        const src = item?.descrizione_gruppo || item || {};
-
-        const candidates = [
-            "Descrizioni.Descrizione1", "Descrizioni.Descrizione2", "Descrizioni.Descrizione3", "Descrizioni.Descrizione4",
-        ];
-
-        const parts = [];
-
-        for (let i = 0; i < candidates.length; i++) {
-            const key = candidates[i];
-            const val = src?.[key];
-            if (val != null && String(val).trim() !== "") {
-                parts.push(String(val).trim());
-            }
-        }
-
-        return parts.join(" - ");
+        return reportConfrontoCsv.descrizioneComposta(item);
     },
 
     _renderNuoviTable() {
