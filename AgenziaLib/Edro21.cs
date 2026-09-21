@@ -177,6 +177,29 @@ namespace AgenziaLib
 
     internal class Edro21 : IAgenzia
     {
+
+        // I source del cliente cambiano di rado ma venivano riletti e riparsati a ogni
+        // export: per Edro sono circa 9,9 MB, di cui 8,5 solo di SourceMappaStili.
+        // La cache si invalida sulla data di modifica e sulla dimensione del file, quindi
+        // una modifica fatta dall'editor di Istanta viene raccolta al primo export dopo.
+        //
+        // I valori in cache sono condivisi fra le chiamate: vanno letti, non modificati.
+        // Oggi vale per tutti e sette, verificato prima di introdurre la cache.
+        private static readonly IstantaLib.CacheFilePerPercorso<object> cacheSourceCliente = new();
+
+        private static T SourceInCache<T>(string percorso, Func<string, T> carica) where T : class
+        {
+            return (T)cacheSourceCliente.Ottieni(
+                percorso,
+                p => (object)carica(p),
+                percorso + "|" + typeof(T).FullName);
+        }
+
+        private static T SourceJson<T>(string percorso) where T : class
+        {
+            return SourceInCache(percorso, p => JObject.Parse(File.ReadAllText(p)).ToObject<T>()!);
+        }
+
         private List<Meccanica> dbMeccaniche;
         private List<Ordinamento> dbGrammature;
         private List<AreaItem> dbAree;
@@ -1734,24 +1757,23 @@ namespace AgenziaLib
                 string tipo_materiale = "vol";
                 Byte tipo_volantino = 1;
 
-                JObject o2 = JObject.Parse(File.ReadAllText(pathOrdinamentoLista));
-                DbOrdinamento ordDB = o2.ToObject<DbOrdinamento>();
+                //Le sette letture di questo blocco pesavano quanto tutto il resto dell'export
+                //messo insieme: ora passano dalla cache e si ripetono solo se il file cambia.
+                var swSource = System.Diagnostics.Stopwatch.StartNew();
+
+                DbOrdinamento ordDB = SourceJson<DbOrdinamento>(pathOrdinamentoLista);
                 dbGrammature = ordDB.source;
 
 
-                JObject o3 = JObject.Parse(File.ReadAllText(pathMeccaniche));
-                DbMeccaniche mcDB = o3.ToObject<DbMeccaniche>();
+                DbMeccaniche mcDB = SourceJson<DbMeccaniche>(pathMeccaniche);
                 dbMeccaniche = mcDB.source;
 
 
-                JObject o1 = JObject.Parse(File.ReadAllText(pathACPV));
-                DbACPV acpvDB = o1.ToObject<DbACPV>();
+                DbACPV acpvDB = SourceJson<DbACPV>(pathACPV);
 
-                JObject o5 = JObject.Parse(File.ReadAllText(pathLoghiBolli));
-                loghibolliDB = o5.ToObject<DbLoghiBolli>();
+                loghibolliDB = SourceJson<DbLoghiBolli>(pathLoghiBolli);
 
-                JObject o6 = JObject.Parse(File.ReadAllText(pathTipiDiExport));
-                DbTipoDiExport tipiExportDB = o6.ToObject<DbTipoDiExport>();
+                DbTipoDiExport tipiExportDB = SourceJson<DbTipoDiExport>(pathTipiDiExport);
 
                 bool isWeb = false;
                 if (kit.tipiDiExportInKit.Count == 1)
@@ -1763,11 +1785,14 @@ namespace AgenziaLib
                     }
                 }
 
-                JObject o7 = JObject.Parse(File.ReadAllText(pathMappaStili));
-                MappaStili mappaStili = o7.ToObject<MappaStili>();
+                MappaStili mappaStili = SourceJson<MappaStili>(pathMappaStili);
 
-                string ncContentFile = File.ReadAllText(pathNamingConvention);
-                FicoNamingConvention ncDB = JsonConvert.DeserializeObject<FicoNamingConvention>(ncContentFile);
+                FicoNamingConvention ncDB = SourceInCache(
+                    pathNamingConvention,
+                    p => JsonConvert.DeserializeObject<FicoNamingConvention>(File.ReadAllText(p))!);
+
+                swSource.Stop();
+                Console.WriteLine($"esportaVolantino: source del cliente pronti in {swSource.ElapsedMilliseconds} ms (caricamenti dall'avvio: {cacheSourceCliente.Caricamenti})");
 
                 //I nomi saranno per tutte le ref identici quindi lo estraggouna volta soltanto
                 List<IstantaLib.ArticoloInKitExportName> exportNames = new List<IstantaLib.ArticoloInKitExportName>();
