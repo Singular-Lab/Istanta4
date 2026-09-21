@@ -1008,6 +1008,11 @@ const CssFramework =
             // }
         }
 
+        //I20-978: prima di disporle, le foto tornano tutte alla stessa scala. Senza questo, un
+        //fix foto girato su un gruppo ridotto lascia ingrandite le foto rimaste e la foto
+        //riattivata dopo, mai toccata, risulta piu' piccola per sempre.
+        this.normalizzaScalaDelleFoto(fotos);
+
         var res = this.getRaggruppamentoFoto(fotos, distanzFoto)
         var boundsGruppo = res.boundsGruppo;
         fotos = res.fotos;
@@ -1163,6 +1168,61 @@ const CssFramework =
             this.controllaSegnalazioniConflittiPendenti(box);
         }
         return areaFinale;
+    },
+
+    /// La scala a cui e' inserita l'immagine di una foto, in percentuale, oppure null se la
+    /// foto e' vuota o la scala non si legge.
+    scalaDellaFoto(rect) {
+        try {
+            var grafica = null;
+            if (rect.images != null && rect.images.length > 0) {
+                grafica = rect.images.item(0);
+            }
+            else if (rect.graphics != null && rect.graphics.length > 0) {
+                grafica = rect.graphics.item(0);
+            }
+
+            if (grafica == null) {
+                return null;
+            }
+
+            return grafica.horizontalScale;
+        }
+        catch (e) {
+            //Una scala illeggibile non deve fermare il fix foto: quella foto resta com'e'.
+            console.log("Scala della foto non leggibile: " + e);
+            return null;
+        }
+    },
+
+    /// Riporta le foto alla scala della prima, che e' la primaria. La regola vive in
+    /// cssSpazioFoto, fuori da InDesign e quindi verificabile.
+    normalizzaScalaDelleFoto(fotos) {
+        var scale = [];
+        for (var i = 0; i < fotos.length; i++) {
+            scale.push(this.scalaDellaFoto(fotos[i].object));
+        }
+
+        var fattori = cssSpazioFoto.fattoriDiNormalizzazione(scale);
+
+        for (var f = 0; f < fotos.length; f++) {
+            var fattore = fattori[f];
+            if (fattore === 1) {
+                continue;
+            }
+
+            var foto = fotos[f];
+            foto.altezzaFoto *= fattore;
+            foto.larghezzaFoto *= fattore;
+            foto.bounds = [
+                foto.bounds[0] * fattore,
+                foto.bounds[1] * fattore,
+                foto.bounds[2] * fattore,
+                foto.bounds[3] * fattore
+            ];
+        }
+
+        return fattori;
     },
 
     getRaggruppamentoFoto(fotos, distanzFoto){
