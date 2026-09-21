@@ -432,6 +432,34 @@ const pluginMiddleware = {
         return true;
     },
 
+    /*
+     * Cosa fare quando l'operatore cambia il primario di un gruppo nella scheda ref.
+     * Ritorna {azione, messaggio} della prima regola che corrisponde, null se nessuna:
+     * null vuol dire "niente di speciale", che e' il comportamento di ogni agenzia che
+     * non configura la regola. La decisione su quando applicarla sta in schedaRef.
+     */
+    getAzioneCambioPrimario(itemRef) {
+        let me = this;
+
+        if (me.callCustom) {
+            if (typeof customAgenzia !== "undefined" && typeof customAgenzia.getAzioneCambioPrimario === "function") {
+                return customAgenzia.getAzioneCambioPrimario(itemRef);
+            } else {
+                return null;
+            }
+        }
+
+        const rules = me.customPluginDB?.azioniCambioPrimario || [];
+
+        for (const rule of rules) {
+            if (me.valutaBlocchiRegole(itemRef, rule.setRegole)) {
+                return { azione: rule.azione, messaggio: rule.messaggio };
+            }
+        }
+
+        return null;
+    },
+
     getSuffissoLavorazione(listaRefImpaginate) {
         let me = this;
 

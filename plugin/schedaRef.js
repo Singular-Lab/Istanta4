@@ -3509,6 +3509,116 @@ const schedaRef = {
 
     },
 
+    //Azioni possibili quando cambia il primario di un gruppo. Quale si applica lo decide il
+    //dato di agenzia (azioniCambioPrimario nel SourceCustomPlugin): qui restano solo i nomi.
+    AZIONI_CAMBIO_PRIMARIO: {
+        nessuna: "nessuna",
+        ricarica: "ricarica",
+        avviso: "avviso"
+    },
+
+    MESSAGGIO_RICARICA_PREDEFINITO: "Il primario e' cambiato e la scheda contiene un esempio: va riscaricata. Procedere?",
+
+    /*
+     * Il primario del gruppo e' cambiato?
+     *
+     * recordsScheda: i record della scheda come sono adesso, cioe' prima dell'applica.
+     * listaSingoli: [{Codice, StatoSelezione}] come li ha appena impostati l'operatore.
+     *
+     * Senza un primario prima o dopo non si segnala nulla: quei casi hanno gia' i loro
+     * controlli e messaggi nell'applica.
+     */
+    primarioCambiato(recordsScheda, listaSingoli) {
+        var esito = { cambiato: false, codicePrecedente: null, codiceNuovo: null };
+
+        var precedente = (recordsScheda || []).find(f => f != null && f.recordInTracciato != null && f.recordInTracciato.StatoSelezione == 1);
+        var nuovo = (listaSingoli || []).find(f => f != null && f.StatoSelezione == 1);
+
+        esito.codicePrecedente = precedente != null ? precedente.recordInTracciato["Referenza.Codice"] : null;
+        esito.codiceNuovo = nuovo != null ? nuovo.Codice : null;
+
+        if (esito.codicePrecedente == null || esito.codiceNuovo == null) {
+            return esito;
+        }
+
+        esito.cambiato = String(esito.codicePrecedente) !== String(esito.codiceNuovo);
+        return esito;
+    },
+
+    /*
+     * Cosa fare dopo che l'operatore ha cambiato il primario di un gruppo.
+     *
+     * leggiAzione(recordInTracciato) -> {azione, messaggio} e' la regola di agenzia, cioe'
+     * pluginMiddleware.getAzioneCambioPrimario. Arriva iniettata perche' qui non si dipenda
+     * dal middleware: la decisione resta verificabile da sola, senza il dato del server.
+     *
+     * La regola si valuta su tutti i record della scheda, non solo sul primario: la
+     * provenienza dell'esempio e' una proprieta' del gruppo. Se piu' record rispondono,
+     * la ricarica vince sull'avviso, perche' riscaricare risolve anche cio' che l'avviso
+     * si limiterebbe a segnalare.
+     */
+    azioneCambioPrimario(recordsScheda, listaSingoli, leggiAzione) {
+        var azioni = schedaRef.AZIONI_CAMBIO_PRIMARIO;
+        var nessuna = { azione: azioni.nessuna, messaggio: "", codicePrecedente: null, codiceNuovo: null };
+
+        var cambio = schedaRef.primarioCambiato(recordsScheda, listaSingoli);
+        if (!cambio.cambiato) {
+            return nessuna;
+        }
+
+        var regola = leggiAzione;
+        if (regola == null && typeof pluginMiddleware !== "undefined" && pluginMiddleware != null) {
+            regola = function (recordInTracciato) { return pluginMiddleware.getAzioneCambioPrimario(recordInTracciato); };
+        }
+        if (regola == null) {
+            return nessuna;
+        }
+
+        var scelta = null;
+        for (var i = 0; i < (recordsScheda || []).length; i++) {
+            var record = recordsScheda[i];
+            if (record == null || record.recordInTracciato == null) {
+                continue;
+            }
+
+            var esito = null;
+            try {
+                esito = regola(record.recordInTracciato);
+            }
+            catch (e) {
+                console.error("Code SRF-46 Regola di agenzia sul cambio primario non valutata: " + e);
+                return nessuna;
+            }
+
+            if (esito == null || esito.azione == null) {
+                continue;
+            }
+
+            if (esito.azione === azioni.ricarica) {
+                scelta = esito;
+                break;
+            }
+            if (esito.azione === azioni.avviso && scelta == null) {
+                scelta = esito;
+            }
+        }
+
+        if (scelta == null) {
+            return nessuna;
+        }
+
+        var messaggio = scelta.messaggio != null && scelta.messaggio !== ""
+            ? scelta.messaggio
+            : (scelta.azione === azioni.ricarica ? schedaRef.MESSAGGIO_RICARICA_PREDEFINITO : "");
+
+        return {
+            azione: scelta.azione,
+            messaggio: messaggio,
+            codicePrecedente: cambio.codicePrecedente,
+            codiceNuovo: cambio.codiceNuovo
+        };
+    },
+
     async EditFotoPrimarieSecondarie(box) {
         var messageDelivered = false;
         var schedaRef = this.schedeRefDati;
@@ -3886,6 +3996,10 @@ const schedaRef = {
                     return;
                 }
 
+                //Il cambio del primario puo' richiedere altro, e lo decide il dato di agenzia.
+                //Va valutato adesso: fra poco il dato locale sara' gia' quello nuovo.
+                var azioneCambioPrimario = me.azioneCambioPrimario(schedaRef, listaSingoli);
+
                 //creiamo un oggetto da mandare al server, composto da una lista di elementi con codice e stato selezione
                 //scorriamo la listaRef e confrontiamo lo stato selezione con quello dell'elemento con lo stesso codice in listaSingoli, se non corrisponde creiamo un nuovo elemento da mettere in lista da mandare al server
 
@@ -4017,6 +4131,19 @@ const schedaRef = {
                         console.error(ex);
                     }
 
+
+                    if (azioneCambioPrimario.azione === me.AZIONI_CAMBIO_PRIMARIO.ricarica) {
+                        const ricarica = await Utility.confirm(azioneCambioPrimario.messaggio);
+                        if (ricarica) {
+                            //initSchedaRef riscarica la scheda dal server e riporta
+                            //l'interfaccia alla prima schermata, quella di edit.
+                            me.initSchedaRef(me.refSelected);
+                            return;
+                        }
+                    }
+                    else if (azioneCambioPrimario.azione === me.AZIONI_CAMBIO_PRIMARIO.avviso) {
+                        messaggioUtente(azioneCambioPrimario.messaggio, "warning", false, 15);
+                    }
 
                     //Questa funzione fa un refresh della schermata lista PRIMARIE/SECONDARIE
                     await me.EditFotoPrimarieSecondarie(box);  //serve, non è un loop
