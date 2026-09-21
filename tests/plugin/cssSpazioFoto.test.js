@@ -271,3 +271,54 @@ test('la descrizione per il log riporta le estensioni quando ci sono', () => {
     const senza = cssSpazioFoto.descriviScelta([centrale], null, null, 100, 100, null);
     assert.doesNotMatch(senza, /estensioni/);
 });
+
+/* ---- I20-978: le foto tornano tutte alla stessa scala ---- */
+
+// Il fix foto conserva le proporzioni fra le foto e scala il gruppo. Basta che giri una
+// volta senza una foto, perche' l'operatore l'ha nascosta, e le rimaste vengono ingrandite:
+// riattivando quella nascosta, che nessuno ha toccato, la proporzione non vuol dire piu'
+// niente e la foto tornata visibile resta piccola.
+test("una foto rimasta indietro viene riportata alla scala della primaria", () => {
+    assert.deepStrictEqual(cssSpazioFoto.fattoriDiNormalizzazione([120, 60]), [1, 2]);
+});
+
+test("dove le scale sono gia' uguali non cambia nulla", () => {
+    assert.deepStrictEqual(cssSpazioFoto.fattoriDiNormalizzazione([80, 80, 80]), [1, 1, 1]);
+});
+
+test("la prima foto e' il riferimento e non si muove", () => {
+    const fattori = cssSpazioFoto.fattoriDiNormalizzazione([50, 100, 25]);
+
+    assert.strictEqual(fattori[0], 1);
+    assert.deepStrictEqual(fattori, [1, 0.5, 2]);
+});
+
+// Una foto vuota, o con la scala illeggibile, non si tocca: non sappiamo a che scala sia.
+test("le scale illeggibili lasciano la foto com'e'", () => {
+    assert.deepStrictEqual(
+        cssSpazioFoto.fattoriDiNormalizzazione([100, null, undefined, 0, -30, NaN, Infinity, "50"]),
+        [1, 1, 1, 1, 1, 1, 1, 1]);
+});
+
+test("se il riferimento non si legge, comanda la prima scala utilizzabile", () => {
+    assert.deepStrictEqual(cssSpazioFoto.fattoriDiNormalizzazione([null, 90, 45]), [1, 1, 2]);
+});
+
+test("senza foto non si rompe nulla", () => {
+    assert.deepStrictEqual(cssSpazioFoto.fattoriDiNormalizzazione([]), []);
+    assert.deepStrictEqual(cssSpazioFoto.fattoriDiNormalizzazione(null), []);
+});
+
+test("il fix foto normalizza prima di disporre le foto", () => {
+    const fs = require("node:fs");
+    const path = require("node:path");
+    const sorgente = fs.readFileSync(
+        path.join(__dirname, "..", "..", "plugin", "CssFramework.js"), "utf8");
+
+    const normalizza = sorgente.indexOf("this.normalizzaScalaDelleFoto(fotos);");
+    const raggruppa = sorgente.indexOf("this.getRaggruppamentoFoto(fotos, distanzFoto)");
+
+    assert.ok(normalizza > 0, "la normalizzazione deve esistere");
+    assert.ok(normalizza < raggruppa,
+        "normalizzare dopo aver raggruppato non servirebbe: le proporzioni sono gia' state usate");
+});

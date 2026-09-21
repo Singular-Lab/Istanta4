@@ -979,9 +979,16 @@ namespace Istanta.Models
         }
 
         /// <summary>
-        /// Porta nella struttura noRender le foto che i meta storici marcavano dentro ps.
-        /// Serve a non perdere le marcature gia' fatte dagli operatori quando le foto sono
-        /// passate alla struttura unica: la voce si crea solo se non c'e' gia'.
+        /// Porta nella struttura noRender le foto che i meta storici marcavano dentro ps, e
+        /// consuma il flag storico azzerandolo.
+        ///
+        /// Consumarlo e' la differenza fra una migrazione e una copia che si ripete. Finche'
+        /// il flag restava dentro ps, una foto liberata dal modal, che riscrive solo noRender,
+        /// veniva rimessa fra gli elementi disattivati alla lettura successiva: il box la
+        /// mostrava e la pre analisi la segnalava, a ogni riselezione (I20-977).
+        ///
+        /// Ogni scrittura sul meta passa da leggi e poi riserializza, quindi il flag storico
+        /// sparisce dal dato salvato al primo salvataggio, di qualunque tipo esso sia.
         /// </summary>
         public static void migraNoRenderDelleFoto(RevisioneMetaPromoLavorazioni? meta)
         {
@@ -1006,6 +1013,8 @@ namespace Istanta.Models
                         nome = selezione.codRef
                     });
                 }
+
+                selezione.noRender = false;
             }
         }
 
@@ -1033,8 +1042,10 @@ namespace Istanta.Models
                 }
                 else
                 {
+                    //I20-977: il noRender delle foto vive solo nella struttura noRender. Qui
+                    //non si copia piu', altrimenti un salvataggio P/S riscriverebbe il flag
+                    //storico e la migrazione tornerebbe a resuscitare la foto.
                     giaEsistente.stato = selezione.stato;
-                    giaEsistente.noRender = selezione.noRender;
                 }
             }
         }
