@@ -2000,7 +2000,7 @@ const schedaRef = {
             return;
         }
 
-        impaginazioneSingoloIndd(schedaRef, pagina, false, null, false, false, bounds);
+        impaginazioneSingoloIndd(schedaRef, pagina, false, null, false, bounds);
     },
 
     mostraSecondaSchermataClonazione(element, idKitLavorazione, selezioneClonazione, allElementGruppo, skipImpaginazione) {

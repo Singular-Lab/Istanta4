@@ -26,6 +26,8 @@ const CssFramework = require('./CssFramework');
 const pluginMiddleware = require('./pluginMiddleware');
 const fotoAutoSync = require('./fotoAutoSync');
 const credenzialiSalvateModulo = require('./credenzialiSalvate');
+const reportIntegritaAvvio = require('./reportIntegritaAvvio');
+const cacheHashFoto = require('./cacheHashFoto');
 
 //I20-956: le credenziali ricordate vivono nell'archivio cifrato del sistema operativo.
 //Se questa versione di UXP non lo espone, l'oggetto resta senza archivio e il Plugin
@@ -1381,7 +1383,7 @@ async function autoCompilazioneCampiKit(){
 
 //Funzione che scarica da Istanta2 il contenuto del kit
 
-function scaricaContenutoKit(idKit, noCacheValue = null, callback = null, skipMostraTracciato = false)
+function scaricaContenutoKit(idKit, noCacheValue = null, callback = null, skipMostraTracciato = false, onErrore = null)
 {
     if(idKit == null){
         idKit = idKitLavorazione;
@@ -1389,7 +1391,6 @@ function scaricaContenutoKit(idKit, noCacheValue = null, callback = null, skipMo
     if(noCacheValue == null){
         noCacheValue = noCache;
     }
-    let me = this;
     console.log("scaricaContenutoKit("+ idKit +")");
     showLoading("Scaricamento lista...");
 
@@ -1441,11 +1442,22 @@ function scaricaContenutoKit(idKit, noCacheValue = null, callback = null, skipMo
                 confronti.eliminaReportIntegritaLocale(idKit);
             }
 
-            leggiContenutoKit(idKit, skipMostraTracciato);
-            //mostraTracciato();
+            //I20-981: il rinfresco dell'interfaccia non deve poter impedire il lavoro di chi
+            //aspetta la lista. Prima stava dentro lo stesso try della callback: un errore qui
+            //(leggiContenutoKit rifa' il tracciato, e con lui la riga del bottone appena
+            //premuto) faceva saltare la callback e il Report Integrita' non partiva mai, con
+            //l'operatore costretto a richiederlo.
+            try {
+                leggiContenutoKit(idKit, skipMostraTracciato);
+            }
+            catch (exUi) {
+                console.error("Errore durante la lettura del contenuto del kit appena scaricato:", exUi);
+            }
 
             tracciatoOnlineScaricato = true;
             //scaricaTracciatoLocale(idTracciato);
+
+            xhrInProcess = null;
 
             if (callback != null && typeof callback === "function") {
                 callback(objResult);
@@ -1453,8 +1465,6 @@ function scaricaContenutoKit(idKit, noCacheValue = null, callback = null, skipMo
             else {
                 hideLoading();
             }
-
-            me.xhrInProcess = null;
 
         }
         catch (e) {
@@ -1476,8 +1486,13 @@ function scaricaContenutoKit(idKit, noCacheValue = null, callback = null, skipMo
         }
     };
 
-    xhrInProcess.onerror = function () {
-        //messaggioUtente("refreshCambiaPS:Errore di rete", "error");
+    xhrInProcess.onerror = function (errore) {
+        //I20-981: prima l'errore non arrivava a nessuno e chi attendeva la lista restava
+        //appeso. Il chiamante che passa onErrore lo viene a sapere.
+        hideLoading();
+        if (onErrore != null && typeof onErrore === "function") {
+            onErrore(errore);
+        }
     }
 
 
@@ -1485,6 +1500,31 @@ function scaricaContenutoKit(idKit, noCacheValue = null, callback = null, skipMo
     //var formData = new FormData();
     console.log(xhrInProcess);
     xhrInProcess.send("Menabo/getListaTracciatoNew2/" + idKit+"/"+noCacheValue, null, "GET");
+}
+
+//I20-981: la lista del kit attesa come si deve.
+//Il Report Integrita' partiva dentro la callback di scaricaContenutoKit e da la' in poi
+//nessuno sapeva piu' se il download fosse andato bene: onload chiudeva con un finally che
+//spegneva il loading mentre la callback era ancora in volo e onerror non avvisava nessuno.
+//Chi attende la lista ora ha una Promise che si risolve o fallisce.
+function scaricaContenutoKitAsync(idKit, noCacheValue = null, skipMostraTracciato = false) {
+    return new Promise((resolve, reject) => {
+        try {
+            scaricaContenutoKit(
+                idKit,
+                noCacheValue,
+                function (objResult) {
+                    resolve(objResult);
+                },
+                skipMostraTracciato,
+                function (errore) {
+                    reject(new Error("scaricamento della lista non riuscito: " + errore));
+                });
+        }
+        catch (e) {
+            reject(e);
+        }
+    });
 }
 
 //Funzione che legge in locale il contentuo del kit grazie al file json ultimo scaricato
@@ -3785,7 +3825,279 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
 
 }
 
-async function applicaConfronto(mappa, usaListaScaricata = false, report = false) {
+//I20-981: i dati del primario che servono a confrontare un box con la lista.
+//Erano scritti dentro impaginazioneSingoloIndd, e per averli la preanalisi del Report
+//Integrita' doveva passare da quella funzione anche quando non c'era nulla da impaginare.
+//Qui stanno una volta sola, cosi' le due strade non possono divergere.
+function datiPrimarioPerConfronto(records) {
+    var primario = (records || []).find(f => f.recordInTracciato["StatoSelezione"] == 1);
+    if (primario == null) {
+        return null;
+    }
+
+    var agenziaUsaSottogruppi = true;
+    //* ad ora è disattivato poichè nessuno lo usava
+    // if (customAgenzia.usaSottogruppi != null) {
+    //     agenziaUsaSottogruppi = customAgenzia.usaSottogruppi;
+    // }
+
+    var tracciatoPrimario = primario.sottogruppo && agenziaUsaSottogruppi ? primario.sottogruppo : primario.recordInTracciato;
+
+    //I20-968: gli elementi in noRender stanno sul record, non sul sottogruppo. Se si
+    //impagina a partire dal sottogruppo la chiave va portata avanti, altrimenti una
+    //reimpaginazione riporta visibili gli elementi che l'operatore aveva nascosto.
+    if (tracciatoPrimario != null && tracciatoPrimario.noRenderElementi == null) {
+        tracciatoPrimario.noRenderElementi = primario.recordInTracciato.noRenderElementi;
+    }
+
+    let listaFoto = [];
+    if (tracciatoPrimario.membriGruppoFoto != null) {
+        listaFoto = tracciatoPrimario.membriGruppoFoto
+            .filter(membro => membro.nomeFoto && membro.statoSelezione == 2)
+            .map(membro => {
+                return {
+                    nomeFoto: membro.nomeFoto,
+                    hash: membro.hash
+                };
+            });
+    }
+
+    if (tracciatoPrimario["Foto.Nome"] != "") {
+        listaFoto.push({
+            nomeFoto: tracciatoPrimario["Foto.Nome"],
+            hash: tracciatoPrimario["Foto.Hash"]
+        });
+    }
+
+    return {
+        primario: primario,
+        tracciatoPrimario: tracciatoPrimario,
+        compiledFields: tracciatoPrimario.compiledFields,
+        deletedFields: tracciatoPrimario.deletedFields,
+        fotoExtra: tracciatoPrimario["Foto.Extra"],
+        fotoExtraAuto: tracciatoPrimario["Foto.ExtraAuto"],
+        listaFoto: listaFoto
+    };
+}
+
+//I20-981: il box di cui la mappa dell'impaginato ha gia' il riferimento.
+//La mappa tiene il gruppo InDesign in `ref`: si usa quello. Si torna a cercarlo solo se il
+//riferimento non e' piu' valido, perche' il sync dei numeri di pagina puo' aver rifatto il
+//box; in quel caso si ripetono, nell'ordine, le ricerche che faceva prima
+//impaginazioneSingoloIndd: per id nella pagina attesa, per id in tutto il documento, per
+//codice gruppo fra i gruppi della pagina.
+function boxDellElementoMappa(elementoMappa) {
+    if (elementoMappa == null) {
+        return null;
+    }
+
+    try {
+        if (elementoMappa.ref != null && elementoMappa.ref.isValid) {
+            return elementoMappa.ref;
+        }
+    }
+    catch (e) {
+        //Riferimento morto: si cerca.
+    }
+
+    var box = Utility._findBoxInExpectedPage(elementoMappa.refId, elementoMappa.pagina);
+
+    if (box == null) {
+        box = Utility._findBoxInDocument(elementoMappa.refId);
+    }
+
+    if (box == null) {
+        box = confronti._findBoxByCodiceGruppoInPage(elementoMappa.codiceGruppo, elementoMappa.idRec, elementoMappa.pagina);
+    }
+
+    return box;
+}
+
+//I20-981: la preanalisi di un box che la mappa ha gia' trovato.
+//Il Report Integrita' passava da impaginazioneSingoloIndd solo per arrivare qui, e per ogni
+//box pagava la materializzazione di tutte le pagine del documento
+//(pages.everyItem().getElements()), una page.select() e una ricerca dentro page.allPageItems
+//o, peggio, dentro doc.allPageItems: tutte cose che la mappa aveva gia' risolto. La
+//preanalisi non impagina nulla, quindi della pagina non ha bisogno.
+async function preAnalisiBoxMappato(records, elementoMappa) {
+    var dati = datiPrimarioPerConfronto(records);
+    if (dati == null) {
+        //Nessun primario nel gruppo: senza di lui non c'e' nulla da confrontare. Nel report
+        //non e' un errore da mostrare all'operatore, il box finira' fra quelli senza analisi.
+        console.warn("Preanalisi confronto: nessun elemento primario nel gruppo");
+        return null;
+    }
+
+    var box = boxDellElementoMappa(elementoMappa);
+    if (box == null) {
+        return null;
+    }
+
+    return await confronti.confrontoBoxCompiledFieldPreAnalisi(
+        box,
+        dati.compiledFields,
+        dati.deletedFields,
+        dati.listaFoto,
+        dati.fotoExtra,
+        dati.fotoExtraAuto,
+        true,
+        NoRenderElementi.elencoPerSegnalazioni(dati.tracciatoPrimario.noRenderElementi, dati.tracciatoPrimario.membriGruppoFoto));
+}
+
+//I nomi delle pagine del documento in lavorazione, nell'ordine in cui stanno nel documento.
+function nomiPagineDelDocumento() {
+    var nomi = [];
+
+    if (docInLavorazione == null) {
+        return nomi;
+    }
+
+    for (var i = 0; i < docInLavorazione.pages.length; i++) {
+        nomi.push(docInLavorazione.pages.item(i).name);
+    }
+
+    return nomi;
+}
+
+//I20-981: la sequenza del Report Integrita', tutta in un posto e tutta attesa.
+//Prima viveva dentro il gestore del bottone "Avvia": la lista si scaricava con una callback
+//il cui esito nessuno controllava, la mappatura dell'impaginato partiva in parallelo e veniva
+//raccolta con due cicli di attesa identici da sessanta secondi, e in mezzo al report girava
+//il rifacimento del tracciato, che ricostruisce anche la riga del bottone appena premuto.
+//Quando la lista andava scaricata, il report spesso non si apriva e l'operatore doveva
+//richiederlo: qui ogni passo e' atteso e ogni errore ha un codice.
+async function avviaReportIntegrita(idKit = null) {
+    if (idKit == null) {
+        idKit = idKitLavorazione;
+    }
+
+    const inizio = Date.now();
+    let listaScaricata = false;
+
+    try {
+        //1. Un report gia' salvato si puo' riaprire, se non e' troppo vecchio.
+        const reportLocale = confronti.leggiReportIntegritaLocale(idKit);
+        if (reportLocale != null) {
+            const azioneReport = await confronti.richiediAzioneReportIntegritaEsistente(reportLocale);
+
+            if (azioneReport === "cancel") {
+                return;
+            }
+
+            if (azioneReport === "open") {
+                confronti.compilaReportConfronto(reportLocale.report, {
+                    wrapper: reportLocale,
+                    skipSave: true,
+                    activeList: "report",
+                    activeTab: 0
+                });
+                return;
+            }
+        }
+
+        //2. La lista: quella scaricata da meno di un'ora si puo' riusare, se l'operatore vuole.
+        const listaLocale = readFile(pathLavorazione + "/listaKit" + idKit + ".json");
+        let usaListaLocale = reportIntegritaAvvio.listaERecente(
+            listaLocale != null ? listaLocale["DataScaricamento"] : null);
+
+        if (usaListaLocale) {
+            const res = await Utility.confirmCustom(
+                "La lista degli elementi è stata scaricata meno di un'ora fa, vuoi utilizzare la lista recente?",
+                "Usa lista",
+                "1",
+                "Riscarica",
+                "2"
+            );
+
+            if (res.hiddenVal == "2") {
+                usaListaLocale = false;
+            }
+            else if (res.hiddenVal != "1") {
+                return;
+            }
+        }
+
+        indesignEvents.setBusy(true);
+        showLoading("Calcolo pagine in corso...");
+        await Utility.sleep(100);
+
+        //3. Mappatura dell'impaginato e, se serve, download della lista: in parallelo come
+        //prima, ma attesi entrambi. Se uno dei due fallisce il report si ferma dicendolo,
+        //invece di restare appeso al timeout.
+        const rangePagine = reportIntegritaAvvio.componiRangePagine(nomiPagineDelDocumento());
+        console.log("Range pagine: " + rangePagine);
+
+        const attesaMappa = confronti.mappaturaImpaginato(rangePagine, false, false);
+        const attesaLista = usaListaLocale
+            ? Promise.resolve(null)
+            : scaricaContenutoKitAsync(idKit, true, true);
+
+        const esiti = await Promise.all([attesaMappa, attesaLista]);
+        const mappa = esiti[0];
+        listaScaricata = !usaListaLocale;
+
+        if (mappa == null) {
+            messaggioUtente("Code IDX-84 Mappatura dell'impaginato non riuscita: report annullato.", "error", false, 10);
+            return;
+        }
+
+        //4. I numeri di pagina: preanalisi e sync col server.
+        showLoading("Inizio sync numeri di pagina...");
+        await Utility.sleep(10);
+
+        const preAnalisiMismatchNumeriPagina = await confronti.preAnalisiMismatchNumeriPagina(rangePagine, mappa);
+        if (preAnalisiMismatchNumeriPagina == null) {
+            messaggioUtente("Code IDX-85 PreAnalisi di confronto fallita", "error", false, 10);
+            return;
+        }
+
+        const statoRes = await confronti.syncImpaginatoConServer(mappa, preAnalisiMismatchNumeriPagina, true);
+        if (statoRes == null) {
+            messaggioUtente("Code IDX-86 Sync con server fallita", "error", false, 10);
+            return;
+        }
+
+        messaggioUtente("Code IDX-87 Sync pagine con server completata con successo", "success", false, 2);
+
+        //5. Il confronto box per box e l'apertura del report.
+        showLoading("Inizio confronto box...");
+        await Utility.sleep(100);
+        await applicaConfronto(mappa);
+
+        console.log("Report integrità: sequenza completa in " + ((Date.now() - inizio) / 1000).toFixed(1) + " s");
+    }
+    catch (e) {
+        console.error(e);
+        messaggioUtente("Code IDX-166 Errore durante il report integrità: " + e, "error", false, 10);
+    }
+    finally {
+        hideLoading();
+
+        //Il report aperto tiene il busy per se': lo libera la sua chiusura.
+        if (!confronti.reportIntegritaAperto()) {
+            indesignEvents.setBusy(false);
+        }
+
+        //Il tracciato si rinfresca alla fine, e solo se la lista e' cambiata: prima girava in
+        //mezzo al report e ne rifaceva l'interfaccia sotto i piedi.
+        if (listaScaricata) {
+            try {
+                await mostraTracciato();
+            }
+            catch (exUi) {
+                console.error("Errore durante il rinfresco del tracciato dopo il report:", exUi);
+            }
+        }
+    }
+}
+
+//I20-981: il confronto del Report Integrita', box per box.
+//Prima questa funzione serviva due flussi: il report e il "Fix integrità" senza report.
+//Il secondo e' stato rimosso dal picker su richiesta, e con lui sono spariti il ramo che
+//metteva i bollini in pagina e quello che scaricava le schede dal server
+//(getSchedeRefsMassivo), che nel report non si e' mai usato. Resta il confronto sulla lista
+//locale, che il chiamante ha appena verificato o riscaricato.
+async function applicaConfronto(mappa) {
     console.log(mappa);
     showLoading("Controllo dei box in pagina per ricerca differenze...");
     await Utility.sleep(10);
@@ -3806,76 +4118,103 @@ async function applicaConfronto(mappa, usaListaScaricata = false, report = false
     // refId: 3466160
     // stato: 1
 
-    //recuperiamo da tutte le pagine tutti i codici gruppo e mettiamoli in un'unica lista
-
     indesignEvents.setBusy(true);
 
+    const inizioConfronto = Date.now();
 
-    var listaCodiciGruppo = [];
-    var listaIdRec = [];
-    for(var key in mappa){
+    //I20-981: due indici costruiti una volta sola. Prima, per ogni box in pagina, si
+    //riscorreva tutta la mappa e si rifiltrava tutta la lista del kit: su un volantino sono
+    //centinaia di box per migliaia di record, e il lavoro cresceva col quadrato.
+    var boxPerCodiceGruppo = {};
+    for (var key in mappa) {
+        var listaRefPagina = mappa[key];
+        for (var i = 0; i < listaRefPagina.length; i++) {
+            var refPagina = listaRefPagina[i];
+            var cgPagina = refPagina.codiceGruppo != null ? refPagina.codiceGruppo.toString() : "";
+
+            if (boxPerCodiceGruppo[cgPagina] == null) {
+                boxPerCodiceGruppo[cgPagina] = [];
+            }
+
+            boxPerCodiceGruppo[cgPagina].push({
+                elMappa: refPagina,
+                elementoPaginaMappa: listaRefPagina,
+                numeroPagina: key.toString()
+            });
+        }
+    }
+
+    //Le presenze da confrontare: codice gruppo e idRec insieme, perche' lo stesso codice puo'
+    //comparire piu' volte con idRec diversi (flusso-impaginazione-indesign, identita' della
+    //presenza impaginata).
+    var presenze = [];
+    var presenzeViste = {};
+    for (var key in mappa) {
         var listaRef = mappa[key];
-        for(var i=0; i<listaRef.length; i++){
+        for (var i = 0; i < listaRef.length; i++) {
             var ref = listaRef[i];
             var idRecNorm = null;
             if (ref.idRec != null && ref.idRec !== "" && !isNaN(parseInt(ref.idRec))) {
                 idRecNorm = parseInt(ref.idRec);
             }
 
-            var esisteGia = false;
-            for (var x = 0; x < listaCodiciGruppo.length; x++) {
-                if (listaCodiciGruppo[x] === ref.codiceGruppo && listaIdRec[x] === idRecNorm) {
-                    esisteGia = true;
-                    break;
-                }
+            var chiavePresenza = (ref.codiceGruppo != null ? ref.codiceGruppo : "") + "|" + (idRecNorm != null ? idRecNorm : "");
+            if (presenzeViste[chiavePresenza]) {
+                continue;
             }
 
-            if(!esisteGia){
-                listaCodiciGruppo.push(ref.codiceGruppo);
-                listaIdRec.push(idRecNorm);
-            }
+            presenzeViste[chiavePresenza] = true;
+            presenze.push({ codiceGruppo: ref.codiceGruppo, idRec: idRecNorm });
         }
     }
 
-    if (listaCodiciGruppo.length == 0) {
+    if (presenze.length == 0) {
         messaggioUtente("Code IDX-40 Confronto: Nessun elemento trovato in pagina", "warning");
         hideLoading();
         indesignEvents.setBusy(false);
         return;
     }
 
-    if(usaListaScaricata){
-        //recuperiamo dalla lista scaricata le schedeRefs con i codici gruppo presenti nella listaCodiciGruppo
-        var lista = readFile(pathLavorazione + "/listaKit" + idKitLavorazione + ".json");
-        console.log(lista);
-        var schedeRefs = [];
-        for (var i=0; i<listaCodiciGruppo.length; i++){
-            var codiceGruppo = listaCodiciGruppo[i];
-            var idRec = listaIdRec[i];
-            var records = {
-                records: lista.records.filter(r => {
-                    var recordCodiceGruppo = r.recordInTracciato["Scatto.CodiceGruppo"] != null ? r.recordInTracciato["Scatto.CodiceGruppo"].toString() : "";
-                    if (recordCodiceGruppo !== codiceGruppo) {
-                        return false;
-                    }
+    //recuperiamo dalla lista scaricata le schedeRefs con i codici gruppo presenti in pagina
+    var lista = readFile(pathLavorazione + "/listaKit" + idKitLavorazione + ".json");
+    if (lista == null || lista.records == null) {
+        messaggioUtente("Code IDX-165 Confronto: lista del kit non disponibile in locale", "error", false, 10);
+        hideLoading();
+        indesignEvents.setBusy(false);
+        return;
+    }
 
-                    if (idRec == null) {
-                        return true;
-                    }
+    var recordsPerCodiceGruppo = {};
+    for (var i = 0; i < lista.records.length; i++) {
+        var recordLista = lista.records[i];
+        var cgRecord = recordLista.recordInTracciato["Scatto.CodiceGruppo"] != null
+            ? recordLista.recordInTracciato["Scatto.CodiceGruppo"].toString()
+            : "";
 
-                    return getIdRecFromItemRef(r.recordInTracciato) === idRec;
-                })
-            }
-            schedeRefs.push(records);
+        if (recordsPerCodiceGruppo[cgRecord] == null) {
+            recordsPerCodiceGruppo[cgRecord] = [];
         }
 
-        await impaginaSingoliConfrontati(schedeRefs);
+        recordsPerCodiceGruppo[cgRecord].push(recordLista);
     }
-    else{
-        getSchedeRefsMassivo(listaCodiciGruppo, listaIdRec, async function(error, schedeRefs){
-            await impaginaSingoliConfrontati(schedeRefs);
+
+    var schedeRefs = [];
+    for (var i = 0; i < presenze.length; i++) {
+        var presenza = presenze[i];
+        var candidati = recordsPerCodiceGruppo[presenza.codiceGruppo] || [];
+
+        schedeRefs.push({
+            records: candidati.filter(r => {
+                if (presenza.idRec == null) {
+                    return true;
+                }
+
+                return getIdRecFromItemRef(r.recordInTracciato) === presenza.idRec;
+            })
         });
     }
+
+    await impaginaSingoliConfrontati(schedeRefs);
 
     async function impaginaSingoliConfrontati(schedeRefs){
         try {
@@ -3883,10 +4222,6 @@ async function applicaConfronto(mappa, usaListaScaricata = false, report = false
             console.log(schedeRefs);
 
             if (schedeRefs != null && schedeRefs.length > 0) {
-                if (!report) {
-                    //cicliamo le schedeRefs
-                    CssFramework.richiediDiScaricareFramework();
-                }
                 var reportObj ={
                     recordCambiati: [],
                     recordUsciti: [],
@@ -3896,36 +4231,33 @@ async function applicaConfronto(mappa, usaListaScaricata = false, report = false
                 }
 
                 var duplicateGroups = {};
-                if (report) {
-                    for (var keyDup in mappa) {
-                        var listaDup = mappa[keyDup] || [];
-                        for (var d = 0; d < listaDup.length; d++) {
-                            var refDup = listaDup[d];
-                            var idRecDup = refDup.idRec != null && !isNaN(parseInt(refDup.idRec)) ? parseInt(refDup.idRec) : "";
-                            var refIdDup = refDup.refId != null ? refDup.refId : "";
-                            var dupKey = [refDup.codiceGruppo || "", idRecDup].join("|");
-                            if (duplicateGroups[dupKey] == null) {
-                                duplicateGroups[dupKey] = [];
-                            }
-                            duplicateGroups[dupKey].push(refDup);
+                for (var keyDup in mappa) {
+                    var listaDup = mappa[keyDup] || [];
+                    for (var d = 0; d < listaDup.length; d++) {
+                        var refDup = listaDup[d];
+                        var idRecDup = refDup.idRec != null && !isNaN(parseInt(refDup.idRec)) ? parseInt(refDup.idRec) : "";
+                        var dupKey = [refDup.codiceGruppo || "", idRecDup].join("|");
+                        if (duplicateGroups[dupKey] == null) {
+                            duplicateGroups[dupKey] = [];
                         }
+                        duplicateGroups[dupKey].push(refDup);
+                    }
+                }
+
+                for (var dupKey in duplicateGroups) {
+                    var gruppoDup = duplicateGroups[dupKey];
+                    if (gruppoDup.length <= 1) {
+                        continue;
                     }
 
-                    for (var dupKey in duplicateGroups) {
-                        var gruppoDup = duplicateGroups[dupKey];
-                        if (gruppoDup.length <= 1) {
-                            continue;
-                        }
-
-                        for (var gd = 0; gd < gruppoDup.length; gd++) {
-                            gruppoDup[gd].duplicateInfo = {
-                                key: dupKey,
-                                total: gruppoDup.length,
-                                index: gd + 1,
-                                refId: gruppoDup[gd].refId != null ? gruppoDup[gd].refId : "",
-                                instanceId: dupKey + "|" + (gruppoDup[gd].refId != null ? gruppoDup[gd].refId : "") + "|" + (gd + 1)
-                            };
-                        }
+                    for (var gd = 0; gd < gruppoDup.length; gd++) {
+                        gruppoDup[gd].duplicateInfo = {
+                            key: dupKey,
+                            total: gruppoDup.length,
+                            index: gd + 1,
+                            refId: gruppoDup[gd].refId != null ? gruppoDup[gd].refId : "",
+                            instanceId: dupKey + "|" + (gruppoDup[gd].refId != null ? gruppoDup[gd].refId : "") + "|" + (gd + 1)
+                        };
                     }
                 }
 
@@ -3941,35 +4273,21 @@ async function applicaConfronto(mappa, usaListaScaricata = false, report = false
 
                     var codiceGruppo = schedaRef.records[0].recordInTracciato["Scatto.CodiceGruppo"].toString();
                     var idRecScheda = getIdRecFromItemRef(schedaRef.records[0].recordInTracciato);
-                    var elementiDaAnalizzare = [];
 
-                    for (var key in mappa) {
-                        var listaRef = mappa[key];
-                        for (var j = 0; j < listaRef.length; j++) {
-                            var ref = listaRef[j];
-                            if (ref.codiceGruppo != codiceGruppo) {
-                                continue;
-                            }
+                    var elementiDaAnalizzare = (boxPerCodiceGruppo[codiceGruppo] || []).filter(candidato => {
+                        var idRecRef = candidato.elMappa.idRec != null && !isNaN(parseInt(candidato.elMappa.idRec))
+                            ? parseInt(candidato.elMappa.idRec)
+                            : null;
 
-                            var idRecRef = ref.idRec != null && !isNaN(parseInt(ref.idRec)) ? parseInt(ref.idRec) : null;
-                            if (idRecScheda != null && idRecRef != null && idRecRef !== idRecScheda) {
-                                continue;
-                            }
-
-                            elementiDaAnalizzare.push({
-                                elMappa: ref,
-                                elementoPaginaMappa: listaRef,
-                                numeroPagina: key.toString()
-                            });
+                        if (idRecScheda != null && idRecRef != null && idRecRef !== idRecScheda) {
+                            return false;
                         }
-                    }
+
+                        return true;
+                    });
 
                     if (elementiDaAnalizzare.length === 0) {
                         console.log("Mismatch tra schedeRef e mappa durante il confronto per il codice gruppo: " + codiceGruppo);
-                    }
-
-                    if (!report && elementiDaAnalizzare.length > 1) {
-                        elementiDaAnalizzare = [elementiDaAnalizzare[0]];
                     }
 
                     for (var em = 0; em < elementiDaAnalizzare.length; em++) {
@@ -3982,97 +4300,88 @@ async function applicaConfronto(mappa, usaListaScaricata = false, report = false
 
                         var resAnalisi = null;
                         if (elementoPaginaMappa != null && numeroPagina != null) {
-                            console.log("Impaginazione ref confronto per codice gruppo: " + codiceGruppo + " a pagina " + numeroPagina);
-                            resAnalisi = await impaginazioneSingoloIndd(schedaRef.records, numeroPagina, true, elementoPaginaMappa, true, report, null, false, elMappa);
+                            console.log("Preanalisi ref confronto per codice gruppo: " + codiceGruppo + " a pagina " + numeroPagina);
+                            resAnalisi = await preAnalisiBoxMappato(schedaRef.records, elMappa);
                         }
 
-                        if(report){
-                            var recordReport = {
-                                elementoMappa: elMappa,
-                                inddId: elMappa.refId != null ? elMappa.refId : null,
-                                codiceGruppo: codiceGruppo,
-                                schedaRef: schedaRef,
-                                preAnalisi: resAnalisi,
-                                numeroPagina: numeroPagina,
-                                elementoPaginaMappa: elementoPaginaMappa
+                        var recordReport = {
+                            elementoMappa: elMappa,
+                            inddId: elMappa.refId != null ? elMappa.refId : null,
+                            codiceGruppo: codiceGruppo,
+                            schedaRef: schedaRef,
+                            preAnalisi: resAnalisi,
+                            numeroPagina: numeroPagina,
+                            elementoPaginaMappa: elementoPaginaMappa
+                        }
+
+                        if (elMappa.duplicateInfo != null) {
+                            recordReport.duplicateInfo = {
+                                key: elMappa.duplicateInfo.key,
+                                total: elMappa.duplicateInfo.total,
+                                index: elMappa.duplicateInfo.index,
+                                refId: elMappa.duplicateInfo.refId,
+                                instanceId: elMappa.duplicateInfo.instanceId,
+                                resolvedCount: 0
+                            };
+                        }
+
+                        if (recordReport.duplicateInfo != null) {
+                            if (resAnalisi == null) {
+                                resAnalisi = { differenze: [], errors: [] };
+                                recordReport.preAnalisi = resAnalisi;
                             }
 
-                            if (elMappa.duplicateInfo != null) {
-                                recordReport.duplicateInfo = {
-                                    key: elMappa.duplicateInfo.key,
-                                    total: elMappa.duplicateInfo.total,
-                                    index: elMappa.duplicateInfo.index,
-                                    refId: elMappa.duplicateInfo.refId,
-                                    instanceId: elMappa.duplicateInfo.instanceId,
-                                    resolvedCount: 0
-                                };
-                            }
+                            resAnalisi.differenze = resAnalisi.differenze || [];
+                            resAnalisi.differenze.push({
+                                label: "Duplicato",
+                                difference: "box duplicato: istanza " + recordReport.duplicateInfo.index + " di " + recordReport.duplicateInfo.total
+                            });
+                        }
 
-                            if (recordReport.duplicateInfo != null) {
-                                if (resAnalisi == null) {
-                                    resAnalisi = { differenze: [], errors: [] };
-                                    recordReport.preAnalisi = resAnalisi;
-                                }
-
-                                resAnalisi.differenze = resAnalisi.differenze || [];
-                                resAnalisi.differenze.push({
-                                    label: "Duplicato",
-                                    difference: "box duplicato: istanza " + recordReport.duplicateInfo.index + " di " + recordReport.duplicateInfo.total
-                                });
-                            }
-
-                            if (recordReport.duplicateInfo != null) {
-                                reportObj.recordCambiati.push(recordReport);
-                            }
-                            else if (resAnalisi != null && resAnalisi.errors.length > 0) {
-                                reportObj.recordConErrori.push(recordReport);
-                            }
-                            else if (resAnalisi != null && resAnalisi.differenze.length > 0) {
-                                reportObj.recordCambiati.push(recordReport);
-                            }
-                            else if (resAnalisi != null && resAnalisi.differenze.length == 0) {
-                                reportObj.recordGiusti.push(recordReport);
-                            }
+                        if (recordReport.duplicateInfo != null) {
+                            reportObj.recordCambiati.push(recordReport);
+                        }
+                        else if (resAnalisi != null && resAnalisi.errors.length > 0) {
+                            reportObj.recordConErrori.push(recordReport);
+                        }
+                        else if (resAnalisi != null && resAnalisi.differenze.length > 0) {
+                            reportObj.recordCambiati.push(recordReport);
+                        }
+                        else if (resAnalisi != null && resAnalisi.differenze.length == 0) {
+                            reportObj.recordGiusti.push(recordReport);
                         }
                     }
                 }
 
-                //adesso scorriamo tutte le ref in mappa e vediamo quali non sono state processate (match = false) e gli applichiamo
-                // Utility.addBollinoCustom(ref, "Dif", "orange", null, 1, null);
+                //adesso scorriamo tutte le ref in mappa e vediamo quali non sono state processate (match = false)
                 for (var key in mappa) {
                     var listaRef = mappa[key];
                     for (var i = 0; i < listaRef.length; i++) {
                         var ref = listaRef[i];
                         if (!ref.match) {
-                            if(report){
-                                //lo aggiungiamo ai record usciti
-                                var recordUscito = {
-                                    elementoMappa: ref,
-                                    inddId: ref.refId != null ? ref.refId : null,
-                                    codiceGruppo: ref.codiceGruppo,
-                                    schedaRef: null,
-                                    preAnalisi: null,
-                                    numeroPagina: key,
-                                    elementoPaginaMappa: listaRef
+                            //lo aggiungiamo ai record usciti
+                            var recordUscito = {
+                                elementoMappa: ref,
+                                inddId: ref.refId != null ? ref.refId : null,
+                                codiceGruppo: ref.codiceGruppo,
+                                schedaRef: null,
+                                preAnalisi: null,
+                                numeroPagina: key,
+                                elementoPaginaMappa: listaRef
+                            };
+
+                            if (ref.duplicateInfo != null) {
+                                recordUscito.duplicateInfo = {
+                                    key: ref.duplicateInfo.key,
+                                    total: ref.duplicateInfo.total,
+                                    index: ref.duplicateInfo.index,
+                                    refId: ref.duplicateInfo.refId,
+                                    instanceId: ref.duplicateInfo.instanceId,
+                                    resolvedCount: 0
                                 };
-
-                                if (ref.duplicateInfo != null) {
-                                    recordUscito.duplicateInfo = {
-                                        key: ref.duplicateInfo.key,
-                                        total: ref.duplicateInfo.total,
-                                        index: ref.duplicateInfo.index,
-                                        refId: ref.duplicateInfo.refId,
-                                        instanceId: ref.duplicateInfo.instanceId,
-                                        resolvedCount: 0
-                                    };
-                                }
-
-                                reportObj.recordUsciti.push(recordUscito);
                             }
-                            else{
-                                //mettiamo il bollino con la X
-                                ref.ref = Utility.addBollinoCustom(ref.ref, "X", "red", null, 1, null);
-                            }
+
+                            reportObj.recordUsciti.push(recordUscito);
                         }
                     }
                 }
@@ -4080,15 +4389,16 @@ async function applicaConfronto(mappa, usaListaScaricata = false, report = false
 
                 hideLoading();
                 console.log(reportObj);
-                //creiamo un file con il reportObj in output
-                if(report){
-                    var reportFilePath = confronti._getReportIntegritaFilePath ? confronti._getReportIntegritaFilePath(idKitLavorazione) : pathLavorazione + "/reportIntegrita_" + idKitLavorazione + ".json";
-                    messaggioUtente("Report confronto creato con successo: " + reportFilePath, "success", false, 10);
-                    confronti.compilaReportConfronto(reportObj);
-                }
-                else{
-                    indesignEvents.setBusy(false);
-                }
+
+                var statisticheHash = cacheHashFoto.statistiche();
+                console.log("Report integrità: confronto di " + schedeRefs.length + " presenze in "
+                    + ((Date.now() - inizioConfronto) / 1000).toFixed(1) + " s"
+                    + " (hash foto: " + statisticheHash.richieste + " richiesti, "
+                    + statisticheHash.risposte + " riusati dalla cache)");
+
+                var reportFilePath = confronti._getReportIntegritaFilePath ? confronti._getReportIntegritaFilePath(idKitLavorazione) : pathLavorazione + "/reportIntegrita_" + idKitLavorazione + ".json";
+                messaggioUtente("Report confronto creato con successo: " + reportFilePath, "success", false, 10);
+                confronti.compilaReportConfronto(reportObj);
             }
         }
         catch (ex) {
@@ -6520,7 +6830,6 @@ function creaRigaSync(contenutoKitInLavorazione) {
 
     if (ruoloUtenteLoggato == RuoloUtente.superAdmin) {
         optionsBox.push({ value: "report_confronto", label: "Report integrità" });
-        optionsBox.push({ value: "confronto", label: "Fix integrità" });
     }
 
     const box = creaPickerCol(
@@ -6556,207 +6865,9 @@ function creaRigaSync(contenutoKitInLavorazione) {
             return;
         }
 
-        if (boxVal === "report_confronto" && confronti.leggiReportIntegritaLocale) {
-            const reportLocale = confronti.leggiReportIntegritaLocale(idKitLavorazione);
-            if (reportLocale != null) {
-                const azioneReport = await confronti.richiediAzioneReportIntegritaEsistente(reportLocale);
-                if (azioneReport === "open") {
-                    confronti.compilaReportConfronto(reportLocale.report, {
-                        wrapper: reportLocale,
-                        skipSave: true,
-                        activeList: "report",
-                        activeTab: 0
-                    });
-                    return;
-                }
-
-                if (azioneReport === "cancel") {
-                    return;
-                }
-            }
-        }
-
-        var file = readFile(pathLavorazione + "/listaKit" + idKitLavorazione + ".json");
-        var fileRecente = false;
-
-        if (file != null) {
-            const dataScaricamento = file["DataScaricamento"];
-
-            function parseITDateTime(s) {
-                const [datePart, timePart] = s.split(",").map(p => p.trim());
-                const [dd, mm, yyyy] = datePart.split("/").map(Number);
-                const [HH, MM, SS] = timePart.split(":").map(Number);
-                return new Date(yyyy, mm - 1, dd, HH, MM, SS);
-            }
-
-            if (dataScaricamento != null) {
-                const dataScaricamentoDate = parseITDateTime(dataScaricamento);
-                const diffMinutes = (new Date() - dataScaricamentoDate) / (1000 * 60);
-                if (diffMinutes < 60) {
-                    fileRecente = true;
-                }
-            }
-        }
-
-        if (fileRecente && boxVal != "none") {
-            var res = await Utility.confirmCustom(
-                "La lista degli elementi è stata scaricata meno di un'ora fa, vuoi utilizzare la lista recente?",
-                "Usa lista",
-                "1",
-                "Riscarica",
-                "2"
-            );
-
-            if (res.hiddenVal == "2") {
-                fileRecente = false;
-            } else if (res.hiddenVal != "1") {
-                return;
-            }
-
-            console.log(res);
-        }
-
-        let mappa = null;
-
-        showLoading("Calcolo pagine in corso...");
-        await Utility.sleep(100);
-
-        var rangePagine = "";
-
-        if (boxVal != "none") {
-            for (var i = 0; i < docInLavorazione.pages.length; i++) {
-                var page = docInLavorazione.pages.item(i);
-                console.log(page);
-                var pageNum = parseInt(page.name);
-
-                if (!isNaN(pageNum)) {
-                    if (rangePagine.length > 0) {
-                        rangePagine += ",";
-                    }
-                    rangePagine += pageNum;
-                }
-            }
-
-            console.log("Range pagine: " + rangePagine);
-
-            confronti.mappaturaImpaginato(rangePagine, false, false).then(result => {
-                mappa = result;
-            });
-        }
-
-        if (!fileRecente && boxVal != "none") {
-            scaricaContenutoKit(idKitLavorazione, true, async function () {
-                await operazioniControlloIntegrita();
-            });
-        } else {
-            await operazioniControlloIntegrita();
-        }
-
-        async function operazioniControlloIntegrita() {
-            if (boxVal === "none") {
-                return;
-            }
-
-            if (boxVal != "none") {
-                indesignEvents.setBusy(true);
-
-                let counter = 600;
-                if (fileRecente) {
-                    counter += 3000;
-                }
-
-                let attesa = 0;
-
-                if (mappa == null) {
-                    showLoading("In attesa della mappatura dell'impaginato...");
-                    await Utility.sleep(1);
-                }
-
-                while (mappa == null && counter > 0) {
-                    if (mappa != null) {
-                        break;
-                    }
-
-                    if (attesa >= 600) {
-                        showLoading("La mappatura dell'impaginato sta richiedendo più tempo del previsto, tempo rimanente prima del timeout: " + (counter) / 10 + " secondi...");
-                        await Utility.sleep(1);
-                    }
-
-                    await Utility.sleep(100);
-                    counter--;
-                    attesa++;
-                }
-
-                if (mappa == null) {
-                    messaggioUtente("Code IDX-84 Timeout scaduto durante la generazione della mappa per il sync delle pagine.", "error");
-                    await Utility.sleep(1);
-                    indesignEvents.setBusy(false);
-                    return;
-                }
-
-                showLoading("Inizio sync numeri di pagina...");
-                await Utility.sleep(10);
-
-                let preAnalisiMismatchNumeriPagina = await confronti.preAnalisiMismatchNumeriPagina(rangePagine, mappa);
-                if (preAnalisiMismatchNumeriPagina == null) {
-                    messaggioUtente("Code IDX-85 PreAnalisi di confronto fallita", "error", false, 10);
-                    hideLoading();
-                    return;
-                }
-
-                var statoRes = await confronti.syncImpaginatoConServer(mappa, preAnalisiMismatchNumeriPagina, true);
-                if (statoRes == null) {
-                    messaggioUtente("Code IDX-86 Sync con server fallita", "error", false, 10);
-                    hideLoading();
-                    indesignEvents.setBusy(false);
-                    return;
-                }
-
-                messaggioUtente("Code IDX-87 Sync pagine con server completata con successo", "success", false, 2);
-                showLoading("Code IDX-87 Sync pagine con server completata con successo");
-                await Utility.sleep(1000);
-            }
-
-            if (boxVal != "none") {
-                let counter = 600;
-                if (fileRecente) {
-                    counter += 3000;
-                }
-
-                var attesa = 0;
-
-                if (mappa == null) {
-                    showLoading("In attesa della mappatura dell'impaginato...");
-                    await Utility.sleep(1);
-                }
-
-                while (mappa == null && counter > 0) {
-                    if (mappa != null) {
-                        break;
-                    }
-
-                    if (attesa >= 600) {
-                        showLoading("La mappatura dell'impaginato sta richiedendo più tempo del previsto, tempo rimanente prima del timeout: " + (counter) / 10 + " secondi...");
-                        await Utility.sleep(1);
-                    }
-
-                    await Utility.sleep(100);
-                    counter--;
-                    attesa++;
-                }
-
-                if (mappa == null) {
-                    messaggioUtente("Code IDX-84 Timeout scaduto durante la generazione della mappa per il sync delle pagine.", "error");
-                    hideLoading();
-                    indesignEvents.setBusy(false);
-                    return;
-                }
-
-                showLoading("Inizio confronto box...");
-                await Utility.sleep(100);
-                await applicaConfronto(mappa, true, boxVal == "report_confronto");
-            }
-        }
+        //I20-981: la sequenza del report vive in avviaReportIntegrita, non piu' dentro il
+        //gestore di un bottone che il rinfresco del tracciato ricostruisce mentre gira.
+        await avviaReportIntegrita(idKitLavorazione);
     });
 
     box.$picker.on("change", function (e) {
@@ -7188,30 +7299,24 @@ async function impaginaSingolo(codice, pagina, byPassBloccoGiaImpaginato = false
 }
 
 
-async function impaginazioneSingoloIndd(records, pagina, cercaInPaginaPerConfronto, mappaPagina, massiveOperation = false, getPreAnalisi = false, bounds = null, richiederRicollegamento = false, elementoMappaTarget = null) {
+//I20-981: via i parametri getPreAnalisi ed elementoMappaTarget. Servivano solo al Report
+//Integrita', che per avere una preanalisi passava da qui pagando la ricerca del box e la
+//selezione della pagina: ora la preanalisi ha la sua strada in preAnalisiBoxMappato e questa
+//funzione fa una cosa sola, impaginare il singolo.
+async function impaginazioneSingoloIndd(records, pagina, cercaInPaginaPerConfronto, mappaPagina, massiveOperation = false, bounds = null, richiederRicollegamento = false) {
     try {
-        var primario = records.find(f => f.recordInTracciato["StatoSelezione"] == 1);
-        if (primario == null) {
+        //I20-981: primario, tracciato del primario e foto stanno in datiPrimarioPerConfronto,
+        //che usa anche la preanalisi del Report Integrita'.
+        var datiPrimario = datiPrimarioPerConfronto(records);
+        if (datiPrimario == null) {
             messaggioUtente("Code IDX-95 Impaginazione singolo: Nessun elemento primario trovato nel gruppo", "error");
             return;
         }
 
+        var primario = datiPrimario.primario;
+        var tracciatoPrimario = datiPrimario.tracciatoPrimario;
+
         var boundsSpecifici = bounds != null;
-
-        var agenziaUsaSottogruppi = true;
-        //* ad ora è disattivato poichè nessuno lo usava
-        // if (customAgenzia.usaSottogruppi != null) {
-        //     agenziaUsaSottogruppi = customAgenzia.usaSottogruppi;
-        // }
-
-        var tracciatoPrimario = primario.sottogruppo && agenziaUsaSottogruppi ? primario.sottogruppo : primario.recordInTracciato;
-
-        //I20-968: gli elementi in noRender stanno sul record, non sul sottogruppo. Se si
-        //impagina a partire dal sottogruppo la chiave va portata avanti, altrimenti una
-        //reimpaginazione riporta visibili gli elementi che l'operatore aveva nascosto.
-        if (tracciatoPrimario != null && tracciatoPrimario.noRenderElementi == null) {
-            tracciatoPrimario.noRenderElementi = primario.recordInTracciato.noRenderElementi;
-        }
         //i bounds avranno l'angolo sinistro superiore in 0,0 e l'angolo inferiore destro in larghezza,altezza pari ad 1/3 della pagina
         //[0, 0, (docInLavorazione.documentPreferences.pageHeight / 4), docInLavorazione.documentPreferences.pageWidth / 4];
         let tipo_lavorazione_corrente = ficoProcess.getTipoLavorazioneCorrente();
@@ -7219,7 +7324,7 @@ async function impaginazioneSingoloIndd(records, pagina, cercaInPaginaPerConfron
         var originalBox = null;
         //se c'è una mappa cerchiamo l'elemento target, oppure il primo con codice gruppo uguale al primario
         if (mappaPagina != null) {
-            let elementoMappa = elementoMappaTarget || mappaPagina.find(el => el.codiceGruppo == primario.recordInTracciato["Scatto.CodiceGruppo"]);
+            let elementoMappa = mappaPagina.find(el => el.codiceGruppo == primario.recordInTracciato["Scatto.CodiceGruppo"]);
             
             if (elementoMappa != null) {
                 pagina = elementoMappa.pagina;
@@ -7286,43 +7391,13 @@ async function impaginazioneSingoloIndd(records, pagina, cercaInPaginaPerConfron
         }
 
         if (originalBox != null) {
-            var compiledField = tracciatoPrimario.compiledFields;
-            var deletedFields = tracciatoPrimario.deletedFields;
-            var fotoExtra = tracciatoPrimario["Foto.Extra"];
-            var fotoExtraAuto = tracciatoPrimario["Foto.ExtraAuto"];
-            let listaFoto = [];
-            if (tracciatoPrimario.membriGruppoFoto != null)
-                listaFoto = tracciatoPrimario.membriGruppoFoto
-                    .filter(membro => membro.nomeFoto && membro.statoSelezione == 2)
-                    .map(membro => {
-                        return {
-                            nomeFoto: membro.nomeFoto,
-                            hash: membro.hash
-                        };
-                    });
-
-            if (tracciatoPrimario["Foto.Nome"] != ""){
-                listaFoto.push({
-                    nomeFoto: tracciatoPrimario["Foto.Nome"],
-                    hash: tracciatoPrimario["Foto.Hash"]
-                });
-            }
-
-            var preAnalisi = await confronti.confrontoBoxCompiledFieldPreAnalisi(originalBox, compiledField, deletedFields, listaFoto, fotoExtra, fotoExtraAuto, true,
+            var preAnalisi = await confronti.confrontoBoxCompiledFieldPreAnalisi(originalBox, datiPrimario.compiledFields, datiPrimario.deletedFields, datiPrimario.listaFoto, datiPrimario.fotoExtra, datiPrimario.fotoExtraAuto, true,
                 NoRenderElementi.elencoPerSegnalazioni(tracciatoPrimario.noRenderElementi, tracciatoPrimario.membriGruppoFoto));
-
-            if(getPreAnalisi){
-                return preAnalisi;
-            }
 
             if (preAnalisi != null && preAnalisi.differenze.length == 0) {
                 return originalBox;
             }
 
-        }
-        
-        if(getPreAnalisi){
-            return null;
         }
 
         if(!massiveOperation){

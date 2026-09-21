@@ -911,8 +911,7 @@
   <button id="closeModalConfrontoPerEsportazione" title="Esegui esportazione" style="height: 25px;cursor: pointer; display: none;">Esegui esportazione</button>
   <button id="closeModalConfronto" onclick="(async () => {
     if (await Utility.confirm('Sicuro di voler interrompere il processo di controllo integrità?')) {
-        indesignEvents.setBusy(false);
-        Utility.chiudiModal();
+        confronti.chiudiReportIntegrita();
     }
 })()" title="Chiudi report confronto" style="height: 25px;cursor: pointer;">&times;</button>
 </div>
