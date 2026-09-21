@@ -1,8 +1,10 @@
 /*
- * I20-981: dove finisce il riquadro di un tooltip.
+ * I20-981: dove viene ancorato il riquadro di un tooltip.
  *
- * Il pannello del plugin e' stretto e spesso alto poco: il rischio vero non e' sbagliare di
- * qualche pixel, e' che il suggerimento esca dal pannello e non si legga.
+ * Il pannello del plugin e' stretto e spesso basso: il rischio vero non e' sbagliare di
+ * qualche pixel, e' che il suggerimento esca dal pannello e non si legga. La regola non
+ * guarda mai quanto e' grande il riquadro, perche' in UXP quella misura non e' attendibile:
+ * usa il rettangolo dell'elemento e i limiti massimi che imponiamo noi.
  *
  * Esecuzione: node --test tests/plugin/*.test.js
  */
@@ -26,113 +28,88 @@ test('il testo vuoto non merita un riquadro', () => {
 });
 
 test('di norma il riquadro sta sotto l\'elemento, allineato a sinistra', () => {
-    const posizione = tooltip.posizioneTooltip(elemento(50, 100, 80, 25), { width: 200, height: 40 }, finestra);
+    const a = tooltip.ancoraggioTooltip(elemento(50, 100, 80, 25), finestra, 260);
 
-    assert.deepStrictEqual(posizione, { left: 50, top: 100 + 25 + tooltip.DISTANZA });
+    assert.strictEqual(a.left, 50);
+    assert.strictEqual(a.top, 100 + 25 + tooltip.DISTANZA);
+    assert.strictEqual(a.bottom, undefined, 'con top non si ancora anche il fondo');
+    assert.strictEqual(a.maxWidth, 260);
 });
 
-test('se sotto non ci sta, il riquadro va sopra', () => {
-    //Elemento in fondo al pannello: sotto restano pochi pixel.
-    const posizione = tooltip.posizioneTooltip(elemento(50, 560, 80, 25), { width: 200, height: 40 }, finestra);
+test('se sotto non c\'e\' spazio il riquadro si ancora col fondo', () => {
+    //Ancorando il bordo inferiore al bordo superiore dell'elemento, il riquadro cresce verso
+    //l'alto: quanto sia alto non serve saperlo, ed e' il punto di tutta la regola.
+    const a = tooltip.ancoraggioTooltip(elemento(50, 580, 80, 15), finestra, 260);
 
-    assert.strictEqual(posizione.top, 560 - tooltip.DISTANZA - 40);
+    assert.strictEqual(a.top, undefined);
+    assert.strictEqual(a.bottom, 600 - (580 - tooltip.DISTANZA));
+    //E lo spazio concesso e' quello che c'e' davvero sopra.
+    assert.strictEqual(a.maxHeight, 580 - tooltip.DISTANZA - tooltip.BORDO);
 });
 
-test('se non ci sta ne\' sotto ne\' sopra resta dentro il pannello', () => {
-    //Riquadro piu' alto del pannello: si attacca al bordo alto invece di sparire.
-    const posizione = tooltip.posizioneTooltip(elemento(50, 500, 80, 25), { width: 200, height: 590 }, finestra);
+test('vicino al bordo destro il riquadro arretra', () => {
+    const a = tooltip.ancoraggioTooltip(elemento(380, 100, 20, 25), finestra, 260);
 
-    assert.strictEqual(posizione.top, tooltip.BORDO);
+    assert.strictEqual(a.left, 400 - tooltip.BORDO - 260);
+    assert.ok(a.left + a.maxWidth <= 400 - tooltip.BORDO);
 });
 
-test('il riquadro non sborda a destra', () => {
-    const posizione = tooltip.posizioneTooltip(elemento(330, 100, 60, 25), { width: 200, height: 40 }, finestra);
+test('in un pannello stretto il riquadro si restringe, non esce', () => {
+    const stretto = { width: 200, height: 400 };
+    const a = tooltip.ancoraggioTooltip(elemento(150, 100, 30, 25), stretto, 260);
 
-    assert.strictEqual(posizione.left, 400 - tooltip.BORDO - 200);
-    assert.ok(posizione.left + 200 <= 400 - tooltip.BORDO);
-});
-
-test('e non sborda nemmeno a sinistra', () => {
-    //Riquadro piu' largo del pannello: parte dal bordo, il testo va a capo.
-    const posizione = tooltip.posizioneTooltip(elemento(10, 100, 60, 25), { width: 500, height: 40 }, finestra);
-
-    assert.strictEqual(posizione.left, tooltip.BORDO);
+    assert.ok(a.maxWidth <= 200 - (tooltip.BORDO * 2));
+    assert.ok(a.left >= tooltip.BORDO);
+    assert.ok(a.left + a.maxWidth <= 200 - tooltip.BORDO);
 });
 
 test('misure mancanti non mandano il riquadro fuori schermo', () => {
     //In UXP le misure possono non arrivare: meglio un riquadro in alto a sinistra che uno a NaN.
-    const posizione = tooltip.posizioneTooltip({}, {}, {});
+    const a = tooltip.ancoraggioTooltip({}, {}, null);
 
-    assert.strictEqual(Number.isNaN(posizione.left), false);
-    assert.strictEqual(Number.isNaN(posizione.top), false);
-    assert.ok(posizione.left >= tooltip.BORDO);
-    assert.ok(posizione.top >= 0);
+    assert.strictEqual(Number.isNaN(a.left), false);
+    assert.strictEqual(Number.isNaN(a.top != null ? a.top : a.bottom), false);
+    assert.ok(a.left >= tooltip.BORDO);
+    assert.ok(a.maxWidth > 0 && a.maxHeight > 0);
 
-    assert.strictEqual(Number.isNaN(tooltip.posizioneTooltip(null, null, null).top), false);
+    const b = tooltip.ancoraggioTooltip(null, null, null);
+    assert.ok(b.maxWidth > 0);
 });
 
-test('la larghezza massima tiene il riquadro dentro il pannello', () => {
+test('i limiti di larghezza e altezza restano dentro il pannello', () => {
     assert.strictEqual(tooltip.larghezzaMassima({ width: 400 }), 400 - (tooltip.BORDO * 2));
-    //Pannello ridotto al minimo: si smette di stringere, altrimenti non si legge piu' nulla.
     assert.strictEqual(tooltip.larghezzaMassima({ width: 40 }), 80);
-    assert.strictEqual(tooltip.larghezzaMassima(null), 800 - (tooltip.BORDO * 2));
+    assert.strictEqual(tooltip.altezzaMassima({ height: 200 }), 200 - (tooltip.BORDO * 2));
+    assert.strictEqual(tooltip.altezzaMassima({ height: 20 }), tooltip.ALTEZZA_MINIMA);
 });
 
 test('il riquadro non supera mai i limiti del pannello', () => {
-    //La garanzia che mancava: qualunque elemento, qualunque testo, il riquadro resta dentro.
-    //Il pannello del plugin puo' essere stretto e basso, ed e' li' che il difetto si vedeva.
+    //La garanzia che conta: qualunque elemento, in qualunque punto, di qualunque pannello, il
+    //riquadro resta dentro. Vale per lo spazio concesso, che e' il massimo che il riquadro
+    //puo' occupare: piu' piccolo puo' essere, piu' grande no.
     const pannelli = [{ width: 300, height: 200 }, { width: 420, height: 700 }, { width: 240, height: 120 }];
-    const testi = ['Fix', 'Scegli cartella. Attualmente impostata: /Volumi/Lavori/Volantini/Export/', 'x'.repeat(400)];
 
     pannelli.forEach(pannello => {
-        const larghezzaConsentita = tooltip.larghezzaMassima(pannello);
-        const altezzaConsentita = tooltip.altezzaMassima(pannello);
+        for (let x = 0; x <= pannello.width; x += 10) {
+            for (let y = 0; y <= pannello.height; y += 10) {
+                const a = tooltip.ancoraggioTooltip(elemento(x, y, 26, 25), pannello, 260);
 
-        testi.forEach(testo => {
-            const stima = tooltip.dimensioniStimate(testo, larghezzaConsentita);
-            const riquadro = {
-                width: Math.min(stima.width, larghezzaConsentita),
-                height: Math.min(stima.height, altezzaConsentita)
-            };
+                assert.ok(a.left >= 0, `esce a sinistra a ${x},${y}`);
+                assert.ok(a.left + a.maxWidth <= pannello.width,
+                    `esce a destra a ${x},${y} (${a.left} + ${a.maxWidth} > ${pannello.width})`);
 
-            for (let x = 0; x <= pannello.width; x += 20) {
-                for (let y = 0; y <= pannello.height; y += 20) {
-                    const posizione = tooltip.posizioneTooltip(elemento(x, y, 26, 25), riquadro, pannello);
-
-                    assert.ok(posizione.left >= 0, `esce a sinistra a ${x},${y}`);
-                    assert.ok(posizione.top >= 0, `esce in alto a ${x},${y}`);
-                    assert.ok(posizione.left + riquadro.width <= pannello.width,
-                        `esce a destra a ${x},${y} (${posizione.left} + ${riquadro.width} > ${pannello.width})`);
-                    assert.ok(posizione.top + riquadro.height <= pannello.height,
-                        `esce in basso a ${x},${y} (${posizione.top} + ${riquadro.height} > ${pannello.height})`);
+                if (a.top != null) {
+                    assert.ok(a.top >= 0, `esce in alto a ${x},${y}`);
+                    assert.ok(a.top + a.maxHeight <= pannello.height,
+                        `esce in basso a ${x},${y} (${a.top} + ${a.maxHeight} > ${pannello.height})`);
+                }
+                else {
+                    //Ancorato col fondo: il bordo alto del riquadro e' finestra - bottom - altezza.
+                    const altoRiquadro = pannello.height - a.bottom - a.maxHeight;
+                    assert.ok(altoRiquadro >= 0, `esce in alto a ${x},${y} (${altoRiquadro})`);
+                    assert.ok(a.bottom >= 0, `esce in basso a ${x},${y}`);
                 }
             }
-        });
+        }
     });
-});
-
-test('la stima delle dimensioni non lascia mai un riquadro a zero', () => {
-    //Serve quando UXP non sa dire quanto e' grande il riquadro: calcolare la posizione su
-    //misure nulle vuol dire trattarlo come un punto, ed e' cosi' che finiva oltre il bordo.
-    const corto = tooltip.dimensioniStimate('Fix', 300);
-    assert.ok(corto.width > 0 && corto.height > 0);
-    assert.ok(corto.width <= 300);
-
-    //Un testo lungo va a capo: piu' alto, mai piu' largo del consentito.
-    const lungo = tooltip.dimensioniStimate('x'.repeat(300), 300);
-    assert.ok(lungo.width <= 300);
-    assert.ok(lungo.height > corto.height);
-
-    //Gli a capo espliciti contano come righe.
-    const conACapo = tooltip.dimensioniStimate('prima\nseconda\nterza', 300);
-    assert.ok(conACapo.height > corto.height);
-
-    assert.ok(tooltip.dimensioniStimate('', 300).height > 0);
-    assert.ok(tooltip.dimensioniStimate(null, null).width > 0);
-});
-
-test('l\'altezza massima tiene il riquadro dentro un pannello basso', () => {
-    assert.strictEqual(tooltip.altezzaMassima({ height: 200 }), 200 - (tooltip.BORDO * 2));
-    assert.strictEqual(tooltip.altezzaMassima({ height: 20 }), 40);
-    assert.strictEqual(tooltip.altezzaMassima(null), 600 - (tooltip.BORDO * 2));
 });

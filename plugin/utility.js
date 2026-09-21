@@ -2149,6 +2149,8 @@ const Utility=
     _ancoraTooltip: null,
     RITARDO_TOOLTIP: 350,
     ATTRIBUTO_TOOLTIP: "data-tooltip",
+    //Larghezza che chiediamo per il riquadro: oltre questa il testo va a capo.
+    LARGHEZZA_TOOLTIP: 260,
 
     abilitaTooltipGlobali() {
         if (this._tooltipGlobaliAttivi) {
@@ -2246,10 +2248,11 @@ const Utility=
         }
     },
 
-    //I20-981: il riquadro si prepara nascosto e si posiziona nel fotogramma dopo.
-    //Misurarlo nello stesso giro in cui gli si cambia il testo dava la larghezza del testo
-    //precedente, perche' UXP non aveva ancora rifatto il layout: passando da un elemento
-    //all'altro il secondo riquadro usciva spostato di quella differenza.
+    //I20-981: il riquadro si mette dove dice tooltipPosizione, che non lo misura.
+    //Misurarlo era il difetto: passando da un elemento all'altro UXP restituiva le dimensioni
+    //del testo precedente e il riquadro usciva spostato di quella differenza. Ora si usano il
+    //rettangolo dell'elemento e i limiti massimi che imponiamo qui sotto in stile: il riquadro
+    //puo' essere piu' piccolo del limite, mai piu' grande, e tanto basta a tenerlo dentro.
     _mostraTooltip(elemento, testo) {
         try {
             if (elemento == null || !document.body.contains(elemento)) {
@@ -2258,107 +2261,41 @@ const Utility=
 
             const riquadro = this._creaRiquadroTooltip();
             const finestra = this._dimensioniPannello();
-            const larghezzaConsentita = tooltipPosizione.larghezzaMassima(finestra);
 
-            this._ancoraTooltip = elemento;
+            let rettangolo = null;
+            try {
+                rettangolo = elemento.getBoundingClientRect();
+            }
+            catch (err) {
+                rettangolo = null;
+            }
+
+            const ancoraggio = tooltipPosizione.ancoraggioTooltip(
+                rettangolo || {}, finestra, this.LARGHEZZA_TOOLTIP);
 
             riquadro.textContent = testo;
-            riquadro.style.maxWidth = larghezzaConsentita + "px";
-            riquadro.style.maxHeight = tooltipPosizione.altezzaMassima(finestra) + "px";
-            riquadro.style.left = "0px";
-            riquadro.style.top = "0px";
-            //Nascosto ma presente: occupa lo spazio, cosi' la misura del fotogramma dopo e'
-            //quella vera, e nel frattempo non si vede in un posto sbagliato.
-            riquadro.style.visibility = "hidden";
-            riquadro.style.display = "block";
+            riquadro.style.maxWidth = ancoraggio.maxWidth + "px";
+            riquadro.style.maxHeight = ancoraggio.maxHeight + "px";
+            riquadro.style.left = ancoraggio.left + "px";
 
-            const me = this;
-            const posa = function () {
-                me._posizionaTooltip(elemento, testo, finestra, larghezzaConsentita);
-            };
-
-            if (typeof requestAnimationFrame === "function") {
-                requestAnimationFrame(posa);
+            //Uno dei due, mai tutti e due: l'altro va rimesso ad auto, altrimenti resta quello
+            //del suggerimento precedente e il riquadro si stira.
+            if (ancoraggio.top != null) {
+                riquadro.style.top = ancoraggio.top + "px";
+                riquadro.style.bottom = "auto";
             }
             else {
-                setTimeout(posa, 0);
-            }
-        }
-        catch (err) {
-            console.error("Errore durante la posa del tooltip:", err);
-            this.nascondiTooltip();
-        }
-    },
-
-    _posizionaTooltip(elemento, testo, finestra, larghezzaConsentita) {
-        try {
-            //Nel frattempo il mouse puo' essere andato altrove: quel riquadro non serve piu'.
-            if (this._ancoraTooltip !== elemento) {
-                return;
+                riquadro.style.bottom = ancoraggio.bottom + "px";
+                riquadro.style.top = "auto";
             }
 
-            const riquadro = this._riquadroTooltip;
-            if (riquadro == null) {
-                return;
-            }
-
-            const posizione = tooltipPosizione.posizioneTooltip(
-                this._misura(elemento, null, null),
-                this._misura(riquadro, testo, larghezzaConsentita),
-                finestra);
-
-            riquadro.style.left = posizione.left + "px";
-            riquadro.style.top = posizione.top + "px";
             riquadro.style.visibility = "visible";
+            riquadro.style.display = "block";
         }
         catch (err) {
             console.error("Errore durante la posa del tooltip:", err);
             this.nascondiTooltip();
         }
-    },
-
-    /// Quanto e' grande e dove sta un elemento. Si prova a chiederlo, e se UXP non risponde
-    /// (capita, e allora larghezza e altezza tornano zero) per il riquadro si stima dal testo:
-    /// calcolare la posizione su misure nulle vuol dire trattarlo come un punto, ed e' cosi'
-    /// che finiva oltre il bordo.
-    _misura(elemento, testo, larghezzaConsentita) {
-        let rettangolo = null;
-
-        try {
-            rettangolo = elemento.getBoundingClientRect();
-        }
-        catch (err) {
-            rettangolo = null;
-        }
-
-        if (rettangolo != null && rettangolo.width > 0 && rettangolo.height > 0) {
-            return rettangolo;
-        }
-
-        const larghezza = elemento.offsetWidth || 0;
-        const altezza = elemento.offsetHeight || 0;
-
-        if (larghezza > 0 && altezza > 0) {
-            const sinistra = rettangolo != null ? rettangolo.left : 0;
-            const sopra = rettangolo != null ? rettangolo.top : 0;
-
-            return {
-                left: sinistra,
-                top: sopra,
-                width: larghezza,
-                height: altezza,
-                right: sinistra + larghezza,
-                bottom: sopra + altezza
-            };
-        }
-
-        if (testo == null) {
-            //Non e' il riquadro: senza misure resta quel che sappiamo, cioe' la posizione.
-            return rettangolo || {};
-        }
-
-        const stima = tooltipPosizione.dimensioniStimate(testo, larghezzaConsentita);
-        return { left: 0, top: 0, width: stima.width, height: stima.height, right: stima.width, bottom: stima.height };
     },
 
     _creaRiquadroTooltip() {

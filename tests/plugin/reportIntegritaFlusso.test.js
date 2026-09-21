@@ -307,41 +307,33 @@ test('il riquadro si misura sul pannello del plugin, non sulla finestra', () => 
     assert.ok(posWrapper > 0, 'il pannello non si misura piu\' da #wrapper');
     assert.ok(posWindow > posWrapper, 'window resta l\'ultimo ripiego, non il primo');
 
-    //Il riquadro e' limitato in larghezza e in altezza, e misurato davvero (la misura avviene
-    //nel fotogramma successivo, in _posizionaTooltip).
+    //I limiti del riquadro vengono dall'ancoraggio e finiscono in stile: sono loro a rendere
+    //vera la premessa del calcolo, cioe' che il riquadro non sia mai piu' grande del previsto.
     const mostra = corpoFunzione(utility, '_mostraTooltip(elemento, testo) {');
-    assert.match(mostra, /maxWidth = larghezzaConsentita/);
-    assert.match(mostra, /maxHeight = tooltipPosizione\.altezzaMassima\(finestra\)/);
-
-    const posa = corpoFunzione(utility, '_posizionaTooltip(elemento, testo, finestra, larghezzaConsentita) {');
-    assert.match(posa, /this\._misura\(riquadro, testo, larghezzaConsentita\)/);
-
-    const misura = corpoFunzione(utility, '_misura(elemento, testo, larghezzaConsentita) {');
-    assert.match(misura, /getBoundingClientRect\(\)/);
-    assert.match(misura, /tooltipPosizione\.dimensioniStimate\(testo, larghezzaConsentita\)/);
+    assert.match(mostra, /tooltipPosizione\.ancoraggioTooltip\(/);
+    assert.match(mostra, /maxWidth = ancoraggio\.maxWidth/);
+    assert.match(mostra, /maxHeight = ancoraggio\.maxHeight/);
 });
 
-test('il riquadro non si misura nello stesso giro in cui cambia il testo', () => {
-    //Passando da un elemento all'altro la larghezza letta era quella del testo precedente,
-    //perche' UXP non aveva ancora rifatto il layout: il riquadro usciva spostato di quella
-    //differenza. Ora si prepara nascosto e si posiziona nel fotogramma dopo.
+test('il riquadro non viene mai misurato', () => {
+    //E' il difetto che si e' ripresentato tre volte: in UXP la misura del riquadro, appena
+    //gli si cambia il testo, restituisce le dimensioni del testo precedente, e passando da un
+    //elemento all'altro il riquadro usciva spostato di quella differenza. Ora nessuno lo
+    //misura: si guardano il rettangolo dell'elemento e i limiti che imponiamo noi.
     const utility = sorgente('utility.js');
     const mostra = corpoFunzione(utility, '_mostraTooltip(elemento, testo) {');
 
-    assert.match(mostra, /visibility = "hidden"/);
-    assert.match(mostra, /requestAnimationFrame\(posa\)/);
-    assert.match(mostra, /setTimeout\(posa, 0\)/);
-    assert.match(mostra, /this\._ancoraTooltip = elemento/);
-    //La misura non sta piu' qui.
-    assert.doesNotMatch(mostra, /posizioneTooltip/);
+    assert.match(mostra, /elemento\.getBoundingClientRect\(\)/);
+    assert.doesNotMatch(mostra, /riquadro\.getBoundingClientRect/);
+    assert.doesNotMatch(mostra, /riquadro\.offsetWidth/);
+    assert.doesNotMatch(mostra, /riquadro\.offsetHeight/);
 
-    const posiziona = corpoFunzione(utility, '_posizionaTooltip(elemento, testo, finestra, larghezzaConsentita) {');
-    assert.match(posiziona, /if \(this\._ancoraTooltip !== elemento\)/);
-    assert.match(posiziona, /tooltipPosizione\.posizioneTooltip/);
-    assert.match(posiziona, /visibility = "visible"/);
+    //Uno solo dei due ancoraggi verticali, e l'altro rimesso ad auto: se restasse quello di
+    //prima il riquadro si stirerebbe fra i due bordi.
+    assert.match(mostra, /riquadro\.style\.bottom = "auto"/);
+    assert.match(mostra, /riquadro\.style\.top = "auto"/);
 
-    //E chi nasconde il riquadro dimentica anche l'elemento, altrimenti un riquadro rimasto
-    //in attesa si mostrerebbe dopo che il mouse e' andato via.
+    //Chi nasconde il riquadro dimentica anche l'elemento.
     const nascondi = corpoFunzione(utility, 'nascondiTooltip() {');
     assert.match(nascondi, /this\._ancoraTooltip = null/);
     assert.match(nascondi, /visibility = "hidden"/);
