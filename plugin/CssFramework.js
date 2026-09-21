@@ -1,4 +1,4 @@
-const { app, FitOptions, LocationOptions, Justification, VerticalJustification, NestedStyleDelimiters, Leading } = require('indesign');
+﻿const { app, FitOptions, LocationOptions, Justification, VerticalJustification, NestedStyleDelimiters, Leading } = require('indesign');
 const { ClippingPathType, ClippingPathSettings, Image } = require('indesign');
 const cssComposizioneBox = require('./cssComposizioneBox');
 const cssSequenzaOperazioni = require('./cssSequenzaOperazioni');
@@ -934,6 +934,14 @@ const CssFramework =
         //cerchiamo nel box le foto
         for (let k = 0; k < box.rectangles.length; k++) {
             let rect = box.rectangles.item(k);
+
+            //I20-978: una foto in noRender e' impaginata ma invisibile, e resta un rettangolo
+            //del box. Contandola, il fix foto sceglieva la disposizione per una foto in piu' e
+            //ne spostava una che nessuno vede: l'unica visibile finiva nel posto sbagliato e
+            //restava un buco. Le foto invisibili non partecipano.
+            if (rect.visible === false) {
+                continue;
+            }
             if (Utility.parseLabel(rect.label).startsWith(pluginMiddleware.getCampo("nomeFotoPrimaria") !== null ? pluginMiddleware.getCampo("nomeFotoPrimaria") : "immagine") ||
                 Utility.parseLabel(rect.label).startsWith(pluginMiddleware.getCampo("nomeFotoSecondaria") !== null ? pluginMiddleware.getCampo("nomeFotoSecondaria") : "foto_secondaria")) {
                 //la mettiamo da parte, se è la primaria la mettiamo in testa

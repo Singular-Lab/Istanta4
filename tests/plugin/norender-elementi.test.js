@@ -591,3 +591,105 @@ test("l'ordinamento sta dove la lista si costruisce, non dove si ridisegna", () 
         ordinamento > lettura && ordinamento < disegno,
         "l'ordinamento va fatto all'apertura: nel disegno farebbe saltare la riga a ogni click");
 });
+
+/* ---- I20-978: proporre il fix foto quando le foto del box cambiano ---- */
+
+const FOTO = NoRenderElementi.TIPO_FOTO;
+
+function elementoFoto(chiave, noRender) {
+    return { tipo: FOTO, chiave: chiave, nome: chiave + ".psd", noRender: noRender };
+}
+
+function elementoLogo(chiave, noRender) {
+    return { tipo: NoRenderElementi.TIPO.logo, chiave: chiave, nome: chiave, noRender: noRender };
+}
+
+test("lo stato di partenza guarda le foto e ignora tutto il resto", () => {
+    const stato = NoRenderElementi.statoDelleFoto([
+        elementoFoto("6119227", true),
+        elementoFoto("6119231", false),
+        elementoLogo("logo_bio", true)
+    ]);
+
+    assert.deepStrictEqual(stato, { "6119227": true, "6119231": false });
+});
+
+test("nascondere una foto lasciandone una visibile fa proporre il fix foto", () => {
+    const prima = NoRenderElementi.statoDelleFoto([elementoFoto("A", false), elementoFoto("B", false)]);
+    const dopo = [elementoFoto("A", true), elementoFoto("B", false)];
+
+    assert.ok(NoRenderElementi.proporreFixFoto(prima, dopo));
+});
+
+test("rimettere visibile una foto fa proporre il fix foto", () => {
+    const prima = NoRenderElementi.statoDelleFoto([elementoFoto("A", true), elementoFoto("B", false)]);
+    const dopo = [elementoFoto("A", false), elementoFoto("B", false)];
+
+    assert.ok(NoRenderElementi.proporreFixFoto(prima, dopo));
+});
+
+// Il fix foto dispone le foto: se non ne cambia nessuna non c'e' niente da ridisporre.
+test("cambiando solo loghi o campi non si propone nulla", () => {
+    const prima = NoRenderElementi.statoDelleFoto([elementoFoto("A", false), elementoLogo("logo_bio", false)]);
+    const dopo = [elementoFoto("A", false), elementoLogo("logo_bio", true)];
+
+    assert.ok(!NoRenderElementi.proporreFixFoto(prima, dopo));
+});
+
+// Un box senza piu' foto da mostrare non ha una disposizione da sistemare.
+test("se non resta nessuna foto visibile non si propone nulla", () => {
+    const prima = NoRenderElementi.statoDelleFoto([elementoFoto("A", false)]);
+    const dopo = [elementoFoto("A", true)];
+
+    assert.ok(!NoRenderElementi.proporreFixFoto(prima, dopo));
+});
+
+test("salvare senza aver toccato niente non propone nulla", () => {
+    const lista = [elementoFoto("A", true), elementoFoto("B", false)];
+    const prima = NoRenderElementi.statoDelleFoto(lista);
+
+    assert.ok(!NoRenderElementi.proporreFixFoto(prima, lista));
+});
+
+test("il conteggio delle foto ancora visibili", () => {
+    assert.strictEqual(NoRenderElementi.fotoAncoraVisibili([
+        elementoFoto("A", true), elementoFoto("B", false), elementoLogo("logo_bio", false)
+    ]), 1);
+    assert.strictEqual(NoRenderElementi.fotoAncoraVisibili([]), 0);
+    assert.strictEqual(NoRenderElementi.fotoAncoraVisibili(null), 0);
+});
+
+test("senza stato di partenza non si inventa un cambiamento", () => {
+    //Modal aperto e salvato senza che la lettura sia andata a buon fine: meglio non proporre
+    //nulla che proporre un fix foto per un cambiamento che non sappiamo se c'e' stato.
+    assert.ok(!NoRenderElementi.proporreFixFoto(null, null));
+    assert.ok(!NoRenderElementi.proporreFixFoto({}, []));
+});
+
+/* ---- come il Plugin usa la regola ---- */
+
+test("il fix foto si propone dopo aver salvato e applicato al documento", () => {
+    const sorgente = sorgentePlugin("schedaRef.js");
+
+    const applica = sorgente.indexOf("this.applicaNoRenderAlDocumento();");
+    const proposta = sorgente.indexOf("this.proponiFixFotoSeServe();");
+
+    assert.ok(applica > 0 && proposta > applica,
+        "il fix foto deve vedere il documento gia' aggiornato, altrimenti disporrebbe le foto vecchie");
+    assert.ok(sorgente.includes("this.statoFotoAllApertura = NoRenderElementi.statoDelleFoto("),
+        "lo stato di partenza si prende all'apertura del modal");
+});
+
+// La foto nascosta resta un rettangolo del box: contandola, il fix foto sceglieva la
+// disposizione per una foto in piu' e ne spostava una che nessuno vede.
+test("il fix foto salta le foto invisibili", () => {
+    const sorgente = sorgentePlugin("CssFramework.js");
+
+    const raccolta = sorgente.indexOf("//cerchiamo nel box le foto");
+    const salto = sorgente.indexOf("if (rect.visible === false) {", raccolta);
+    const etichetta = sorgente.indexOf("nomeFotoPrimaria", raccolta);
+
+    assert.ok(raccolta > 0, "la raccolta delle foto deve esistere");
+    assert.ok(salto > raccolta && salto < etichetta,
+        "la foto invisibile va saltata prima ancora di guardarne l'etichetta");
+});
