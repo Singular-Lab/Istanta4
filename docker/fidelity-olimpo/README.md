@@ -72,20 +72,48 @@ Se i nomi non coincidono, il Runner scrive variabili che il compose non legge e
 per esempio `/tmp/fidelity-olimpo`.
 
 ```bash
-sudo mkdir -p /opt/company-ai/projects/istanta4/fidelity-config
+sudo mkdir -p /opt/company-ai/projects/istanta4
 cd /opt/company-ai/projects/istanta4
 
 sudo cp /percorso/bundle/compose.production.yaml .
+sudo cp /percorso/bundle/prepare-target.sh .
 sudo cp -r /percorso/bundle/postgres-init .
+sudo cp -r /percorso/bundle/proxy-templates .
 sudo cp /percorso/bundle/release.env.example   release.env
 sudo cp /percorso/bundle/fidelity.env.example  fidelity.env
 sudo cp /percorso/bundle/olimpo.env.example    olimpo.env
 sudo chmod 600 release.env fidelity.env olimpo.env
+sudo chmod +x prepare-target.sh
 ```
 
 Compilare poi i tre file: porte in `release.env`, credenziali e segreti negli
 altri due. `FIDELITY_IMAGE` e `OLIMPO_IMAGE` non vanno aggiunte a mano, le scrive
 il Runner al primo deployment.
+
+E **poi**, prima di distribuire:
+
+```bash
+sudo ./prepare-target.sh
+```
+
+Lo script crea `fidelity-config` assegnandola a `node` (UID 1000, che è l'utente
+con cui gira Fidelity e che deve poter riscrivere `config/menu.json`), verifica
+che `postgres-init` e `proxy-templates` contengano davvero i file — non che le
+cartelle esistano — e controlla una per una le variabili obbligatorie di
+`fidelity.env`, comprese quelle che lo schema vuole come URL assoluti o come
+numeri. Si ferma elencando cosa manca.
+
+Controlla anche due incoerenze che passano ogni verifica presa da sola e poi non
+funzionano nel browser: `CLIENT_URL` in `https://` senza certificato del proxy, e
+`CLIENT_URL` in `http://` senza `FIDELITY_NODE_ENV=development` — nel secondo
+caso la CSP applica `upgrade-insecure-requests`, la pagina resta bianca e nei log
+del server non compare nulla.
+
+Un ultimo avviso riguarda i `$` nei valori di `release.env`: quel file lo usa
+docker compose per l'interpolazione, e un `$` seguito da lettere viene preso per
+il nome di un'altra variabile. Una password come `segreta$dollaro` arriva al
+container come `segreta`, senza che nessuno protesti. Con una cifra subito dopo
+il dollaro il problema non si pone; in ogni caso si può raddoppiare: `$$`.
 
 Fidelity valida il proprio ambiente con Zod all'avvio (`server/core/config/index.ts`):
 se manca una delle variabili obbligatorie elencate in `fidelity.env.example`, stampa

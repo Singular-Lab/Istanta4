@@ -29,8 +29,10 @@ services:
     security_opt:
       - no-new-privileges:true
     ports:
-      # Solo su localhost, per diagnosi dall'host: il traffico vero passa da nginx.
-      - "127.0.0.1:${ISTANTA_LOCAL_PORT:-18080}:8080"
+      # Per diagnosi e per le prove in chiaro. Il traffico vero passa da nginx,
+      # quindi l'indirizzo predefinito e' 127.0.0.1: l'applicazione non e'
+      # raggiungibile dalla rete finche' non si cambia APP_BIND_ADDRESS.
+      - "${APP_BIND_ADDRESS:-127.0.0.1}:${ISTANTA_LOCAL_PORT:-18080}:8080"
     env_file:
       # Configurazione completa dell'applicazione: nell'immagine non c'e' alcun
       # appsettings.json, perche' appsettings*.json e' gitignorato e la CI
@@ -60,12 +62,20 @@ services:
       # modificato non viene sovrascritto dall'immagine nuova.
       - istanta_external_source:/app/wwwroot/external_source
       - istanta_logs:/app/logs
-      - istanta_keys:/home/app/.aspnet/DataProtection-Keys
+      # Bind mount e non volume nominato, per una ragione precisa: nell'immagine
+      # /home/app/.aspnet non esiste, quindi Docker creerebbe il volume vuoto e
+      # di proprieta' di root, mentre l'applicazione gira come 1654. Senza poter
+      # scrivere la chiave, DataProtection non cifra il cookie di sessione e
+      # OGNI pagina risponde 500 — fallisce persino il gestore d'errore. Come
+      # bind mount invece la directory la prepara prepare-target.sh sull'host,
+      # con il proprietario giusto, e il problema non si ripresenta quando il
+      # volume viene ricreato.
+      - ${ISTANTA_DATA_DIR:?Impostare ISTANTA_DATA_DIR in release.env, percorso assoluto sull'host}/dataprotection-keys:/home/app/.aspnet/DataProtection-Keys
       # BackgroundCodeService scrive i campioni di addestramento in
       # AppContext.BaseDirectory/ai_models, cioe' dentro l'immagine: senza questo
       # volume andrebbero persi a ogni release. Il percorso e' nel codice, non
       # configurabile, quindi si persiste dove lui scrive.
-      - istanta_ai_models:/app/ai_models
+      - ${ISTANTA_DATA_DIR:?Impostare ISTANTA_DATA_DIR in release.env, percorso assoluto sull'host}/ai_models:/app/ai_models
     extra_hosts:
       # Olimpo e Fidelity vivono in un altro deployment set, quindi in un'altra
       # rete Compose: non sono raggiungibili per nome di servizio. Con questo
@@ -98,7 +108,7 @@ services:
     security_opt:
       - no-new-privileges:true
     ports:
-      - "127.0.0.1:${CORREGGO_LOCAL_PORT:-18081}:8080"
+      - "${APP_BIND_ADDRESS:-127.0.0.1}:${CORREGGO_LOCAL_PORT:-18081}:8080"
     env_file:
       - correggo4.env
     environment:
@@ -107,7 +117,10 @@ services:
       ConnectionStrings__Correggo4Db: Host=postgres;Port=5432;Database=${CORREGGO_DB_NAME:-correggo4};Username=${CORREGGO_DB_USER:-correggo4};Password=${CORREGGO_DB_PASSWORD:?Impostare CORREGGO_DB_PASSWORD in release.env}
       Storage__VolantiniPath: /data/volantini
     volumes:
-      - correggo_volantini:/data/volantini
+      # Bind mount per lo stesso motivo delle chiavi di Istanta: /data/volantini
+      # non esiste nell'immagine, quindi come volume nominato nascerebbe
+      # root:root e Correggo4, che gira come 1654, non potrebbe scriverci.
+      - ${CORREGGO_DATA_DIR:?Impostare CORREGGO_DATA_DIR in release.env, percorso assoluto sull'host}/volantini:/data/volantini
     depends_on:
       postgres:
         condition: service_healthy
@@ -139,6 +152,16 @@ services:
       CORREGGO_DB_NAME: ${CORREGGO_DB_NAME:-correggo4}
       CORREGGO_DB_USER: ${CORREGGO_DB_USER:-correggo4}
       CORREGGO_DB_PASSWORD: ${CORREGGO_DB_PASSWORD:?Impostare CORREGGO_DB_PASSWORD in release.env}
+      # Primo utente amministratore, creato da postgres-init/02-utente-admin.sh
+      # nei due database. Su Istanta la password finisce in chiaro, perche' e'
+      # cosi' che l'applicazione la confronta; su Correggo4 viene cifrata con
+      # PBKDF2-SHA256 nel formato che si aspetta Auth/Password.cs.
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?Impostare ADMIN_EMAIL in release.env}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:?Impostare ADMIN_USERNAME in release.env}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Impostare ADMIN_PASSWORD in release.env}
+      ADMIN_NOME: ${ADMIN_NOME:-Amministratore}
+      ADMIN_COGNOME: ${ADMIN_COGNOME:-Sistema}
+      CORREGGO_ADMIN_RUOLO: ${CORREGGO_ADMIN_RUOLO:-2}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ${POSTGRES_INIT_DIR:?Impostare POSTGRES_INIT_DIR in release.env, percorso assoluto sull'host}:/docker-entrypoint-initdb.d:ro
@@ -231,11 +254,13 @@ services:
         max-size: "10m"
         max-file: "3"
 
+# Restano volumi nominati solo quelli che l'immagine semina con un contenuto
+# gia' di proprieta' dell'utente applicativo, o che appartengono a un'immagine
+# che si arrangia da sola (postgres, redis). Tutto il resto e' bind mount sotto
+# le directory preparate da prepare-target.sh: un volume nominato su un percorso
+# che nell'immagine non esiste nasce vuoto e di proprieta' di root.
 volumes:
   postgres_data:
   redis_data:
   istanta_external_source:
   istanta_logs:
-  istanta_keys:
-  istanta_ai_models:
-  correggo_volantini:

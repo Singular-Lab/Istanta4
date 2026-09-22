@@ -12,7 +12,7 @@ Runner riscrivendo le sole variabili immagine in `release.env`.
 | `release.env.example` | Variabili di sostituzione del compose. Il Runner ci scrive `ISTANTA_IMAGE` e `CORREGGO4_IMAGE`. |
 | `istanta.env.example` | Configurazione completa di Istanta: nell'immagine non c'è un appsettings.json. |
 | `correggo4.env.example` | Ambiente aggiuntivo del container Correggo4. |
-| `postgres-init/` | Script eseguito al primo avvio di PostgreSQL: database di Correggo4 e applicazione degli schemi. |
+| `postgres-init/` | Script eseguiti al primo avvio di PostgreSQL: database di Correggo4, schemi e utente amministratore. |
 | `proxy-templates/` | Configurazione di nginx: due origini TLS, una per applicazione. |
 | `schemas/` | Gli schemi SQL applicati al primo avvio, una sottocartella per database. |
 
@@ -97,13 +97,20 @@ l'aggiornamento non richiede il riavvio del container.
 
 ## 3. Preparare il target
 
+La directory di lavoro è quella che il Runner usa per questo progetto, e prende
+il nome del **progetto** in ControlPlane — `istanta4` — non del deployment set.
+Sbagliarla è facile e si paga caro: i percorsi in `release.env` punterebbero
+altrove, Docker creerebbe directory vuote senza dire niente, e PostgreSQL
+partirebbe senza schemi.
+
 `/percorso/bundle` è la directory in cui hai copiato questa cartella sul target.
 
 ```bash
-sudo mkdir -p /opt/company-ai/projects/istanta-correggo
-cd /opt/company-ai/projects/istanta-correggo
+sudo mkdir -p /opt/company-ai/projects/istanta4
+cd /opt/company-ai/projects/istanta4
 
 sudo cp /percorso/bundle/compose.production.yaml .
+sudo cp /percorso/bundle/prepare-target.sh .
 sudo cp -r /percorso/bundle/postgres-init .
 sudo cp -r /percorso/bundle/proxy-templates .
 sudo cp -r /percorso/bundle/schemas .
@@ -111,12 +118,27 @@ sudo cp /percorso/bundle/release.env.example    release.env
 sudo cp /percorso/bundle/istanta.env.example    istanta.env
 sudo cp /percorso/bundle/correggo4.env.example  correggo4.env
 sudo chmod 600 release.env istanta.env correggo4.env
-
-# le directory che il compose monta: devono esistere PRIMA del primo avvio
-sudo mkdir -p external_lib istanta-data proxy-certs
+sudo chmod +x prepare-target.sh
 ```
 
 Gli schemi arrivano con il bundle e non vanno copiati a mano.
+
+Ora si compilano i tre `.env`, e **poi**:
+
+```bash
+sudo ./prepare-target.sh
+```
+
+Lo script legge `release.env`, crea le directory di dati assegnandole all'utente
+con cui girano le applicazioni (UID 1654, l'utente `app` delle immagini .NET),
+verifica che gli script di init e gli schemi ci siano davvero — non che le
+cartelle esistano: che contengano i file — e si ferma elencando cosa manca.
+
+Non è una comodità. Docker non fallisce mai su un bind mount il cui percorso non
+esiste: lo crea vuoto, di proprietà di root, e prosegue. Il guasto si manifesta
+molto dopo e lontano dalla causa, e nel caso di PostgreSQL non si corregge
+nemmeno dopo aver sistemato il percorso, perché gli script di
+`/docker-entrypoint-initdb.d` girano soltanto su un volume vuoto.
 
 ### La configurazione di Istanta vive tutta in `istanta.env`
 
@@ -190,11 +212,29 @@ frequente, e che a mano è facile dimenticare — con il risultato che l'
 applicazione non trova `vergine`, non crea nulla, e `CalcolaMancanti` restituisce
 una lista vuota dentro un `catch` silenzioso.
 
-Per `ai_models` il compose monta un volume per la stessa ragione:
-`BackgroundCodeService` vi scrive i campioni di addestramento usando
-`AppContext.BaseDirectory`, percorso nel codice e non configurabile. È materia da
-dismettere lato applicazione, ma finché scrive lì il volume evita di perdere
-quei file a ogni release.
+### Perché non tutto è un volume nominato
+
+Un volume nominato eredita il proprietario dal contenuto che l'immagine ha in
+quel punto — ma **solo se quella directory nell'immagine esiste**. Se non c'è,
+Docker crea il volume vuoto e `root:root`, mentre le applicazioni girano come
+UID 1654: non ci possono scrivere.
+
+Non è un difetto teorico. Su `/home/app/.aspnet/DataProtection-Keys` costa caro:
+senza poter scrivere la chiave, DataProtection non cifra il cookie di sessione e
+**ogni** pagina risponde 500 — fallisce persino il gestore d'errore, quindi il
+messaggio che arriva al browser non dice niente di utile. Lo stesso vale per
+`/data/volantini` di Correggo4 e per `/app/ai_models`.
+
+Quei tre percorsi sono quindi bind mount sotto `ISTANTA_DATA_DIR` e
+`CORREGGO_DATA_DIR`, che `prepare-target.sh` crea e assegna a 1654 prima del
+primo avvio. Restano volumi nominati soltanto `istanta_external_source` e
+`istanta_logs` — che l'immagine semina con contenuto già di proprietà di `app` —
+più `postgres_data` e `redis_data`, di immagini che si arrangiano da sole.
+
+`ai_models` in particolare esiste perché `BackgroundCodeService` vi scrive i
+campioni di addestramento usando `AppContext.BaseDirectory`, percorso nel codice
+e non configurabile. È materia da dismettere lato applicazione, ma finché scrive
+lì va persistito, altrimenti quei file si perdono a ogni release.
 
 Il certificato del proxy, con l'indirizzo IP nel SAN — senza, i browser lo
 rifiutano a prescindere:
@@ -234,6 +274,41 @@ Quando il volume `postgres_data` è vuoto. Due conseguenze:
 L'healthcheck di PostgreSQL controlla che entrambi i database abbiano tabelle,
 non solo che il ruolo esista: un init interrotto a metà fa fallire il
 deployment subito, invece di lasciare il guasto latente.
+
+### Il primo utente amministratore
+
+`postgres-init/02-utente-admin.sh` crea al primo avvio un utente in **entrambi**
+i database, con le credenziali dichiarate in `release.env`. Serve per entrare la
+prima volta: gli utenti successivi si creano dalle applicazioni.
+
+Le due applicazioni memorizzano le password in modo diverso, e lo script fa
+quindi due cose diverse:
+
+| | |
+| --- | --- |
+| Istanta | `utenti.password` è `varchar(50)` e `LoginController` confronta direttamente `utente.Password == password`: la password finisce nel database **in chiaro**. |
+| Correggo4 | `utenti.psw_hash` contiene PBKDF2-SHA256 nel formato `pbkdf2.sha256$iterazioni$sale$chiave`, generato con `openssl` dentro il container. |
+
+Che l'hash sia valido non è dedotto: è stato verificato compilando
+`correggo4/app/Correggo4/Auth/Password.cs` e passandogli l'hash prodotto dallo
+script. `Password.Verifica` accetta la password giusta e rifiuta quella
+sbagliata.
+
+Su Istanta l'utente nasce `stato = 1` (Attivo) e `ruolo = 1` (Superadmin),
+secondo gli enum in `Istanta/Models/IstantaCore.cs`. Su Correggo4 nasce
+`is_super_admin = true`, con ruolo configurabile — 1 è GDO, 2 è Agenzia.
+
+Due vincoli che lo script verifica prima di toccare il database, perché un
+errore a metà inizializzazione lascerebbe un volume irrecuperabile: la password
+non può superare i **50 caratteri**, che è il limite della colonna di Istanta, e
+le tre variabili `ADMIN_*` devono essere impostate.
+
+Sulla password in chiaro: non è una scelta di questo deployment set, è come
+funziona Istanta oggi. Le conseguenze pratiche però sono due, e vanno accettate
+con consapevolezza. `release.env` va trattato come un segreto — `chmod 600`, che
+il README impone già — e quella password non va riusata altrove, perché chi
+legge il database la vede. Il rimedio vero è introdurre un hash in Istanta, ed è
+lavoro applicativo.
 
 ## 4. Configurare il Runner
 
@@ -292,9 +367,33 @@ ls -l external_lib/
 docker ps --filter name=istanta-correggo --format '{{.Names}}\t{{.Status}}'
 ```
 
-Gli indirizzi sono `https://<host>:8443` per Istanta e `https://<host>:8444` per
-Correggo4, con l'avviso del browser sul certificato autofirmato. Le porte 18080
-e 18081 sono esposte solo su `127.0.0.1` dell'host, per diagnosi.
+### Due modi di raggiungerle
+
+| | Istanta | Correggo4 | cosa attraversa |
+| --- | --- | --- | --- |
+| Topologia vera | `https://<host>:8443` | `https://<host>:8444` | nginx, TLS, `X-Forwarded-Proto` |
+| Prova in chiaro | `http://<host>:18080` | `http://<host>:18081` | direttamente l'applicazione |
+
+Le seconde non sono una modalità ridotta: sono le applicazioni intere, servite
+in HTTP. Funzionano perché nessuna delle due emette HSTS o una CSP con
+`upgrade-insecure-requests`, e `UseHttpsRedirection` di Istanta resta inerte
+quando nel container non esiste una porta https — verificato, il middleware
+logga «Failed to determine the https port for redirect» e lascia passare la
+richiesta.
+
+Di default sono legate a `127.0.0.1`, quindi raggiungibili solo dalla macchina
+stessa. Per provarle da un altro computer si imposta in `release.env`:
+
+```properties
+APP_BIND_ADDRESS=0.0.0.0
+```
+
+PostgreSQL non segue quella variabile: resta su `127.0.0.1` in ogni caso.
+
+Quello che la prova in chiaro **non** esercita è il percorso del proxy: TLS,
+instradamento e header inoltrati. Per Istanta non cambia molto, perché il suo
+WebSocket viaggia sulla stessa porta dell'HTTP; è comunque il passaggio da
+rifare prima di considerare buona un'installazione.
 
 Nelle immagini .NET non ci sono `curl`, `wget` né `nc`: per interrogare
 un'applicazione dall'interno si usa bash, che c'è.
