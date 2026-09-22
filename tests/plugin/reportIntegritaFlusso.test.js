@@ -39,12 +39,22 @@ function corpoFunzione(testo, intestazione) {
     const inizio = testo.indexOf(intestazione);
     assert.notStrictEqual(inizio, -1, `${intestazione} non trovata: il test va aggiornato`);
 
+    //Le graffe dentro le tonde non contano: un parametro con valore predefinito {}
+    //chiuderebbe il conteggio prima ancora di entrare nel corpo.
+    let tonde = 0;
     let livello = 0;
     let aperta = false;
 
     for (let i = inizio; i < testo.length; i++) {
-        if (testo[i] === '{') { livello++; aperta = true; }
-        else if (testo[i] === '}') { livello--; }
+        const c = testo[i];
+
+        if (c === '(') { tonde++; continue; }
+        if (c === ')') { tonde--; continue; }
+        if (tonde > 0) { continue; }
+
+        if (c === '{') { livello++; aperta = true; }
+        else if (c === '}') { livello--; }
+
         if (aperta && livello === 0) {
             return testo.substring(inizio, i + 1);
         }
@@ -187,4 +197,144 @@ test('l\'hash di una foto si ricalcola solo se la foto e\' cambiata', () => {
     assert.match(getLinkHash, /cacheHashFoto\.chiave\(filePath, await fileEntry\.getMetadata\(\)\)/);
     //Lo stato del link non si mette in cache: si rilegge sempre.
     assert.match(getLinkHash, /if \(link\.status\.toString\(\) == "LINK_OUT_OF_DATE"\)/);
+});
+
+/* I20-981 (Lotto 2): il csv nasce col report, va dove dice l'operatore e non si rompe. */
+
+test('il csv si scrive quando nasce un report, non quando se ne riapre uno', () => {
+    //Unico punto di creazione: applicaConfronto, subito dopo l'apertura del report.
+    assert.match(applicaConfronto, /await confronti\.scaricaReportConfrontoCsv\(reportObj, \{ automatico: true \}\)/);
+
+    //La riapertura e il rinfresco dell'interfaccia non devono produrre altri file.
+    const riapertura = avvio.substring(avvio.indexOf('azioneReport === "open"'), avvio.indexOf('//2.'));
+    assert.doesNotMatch(riapertura, /scaricaReportConfrontoCsv/);
+
+    //Nell'apertura del report il csv compare solo come gesto dell'operatore (il pulsante in
+    //testata), mai come scrittura automatica.
+    const compila = corpoFunzione(confronti, 'compilaReportConfronto(report, options = {}) {');
+    assert.doesNotMatch(compila, /^\s*await this\.scaricaReportConfrontoCsv/m);
+    assert.match(compila, /onclick = async \(\) => await this\.scaricaReportConfrontoCsv/);
+});
+
+test('il csv si scrive in byte utf8', () => {
+    //Scritto come stringa da fs, il file usciva con le accentate rotte.
+    const scrittura = corpoFunzione(confronti, 'async _scriviTestoUtf8(cartella, nomeFile, testo) {');
+
+    assert.match(scrittura, /createFile\(nomeFile, \{ overwrite: true \}\)/);
+    //I byte li calcoliamo noi: scritta come stringa, l'accentata dipendeva da chi la leggeva.
+    assert.match(scrittura, /reportConfrontoCsv\.bytesUtf8\(testo\)/);
+    assert.match(scrittura, /format: require\("uxp"\)\.storage\.formats\.binary/);
+
+    const scarica = corpoFunzione(confronti, 'async scaricaReportConfrontoCsv(report, opzioni = {}) {');
+    assert.match(scarica, /_scriviTestoUtf8/);
+    assert.doesNotMatch(scarica, /fs\.writeFileSync/);
+});
+
+test('la cartella dei csv si cambia dalla schermata del report', () => {
+    const scelta = corpoFunzione(confronti, 'async scegliCartellaCsvReport() {');
+
+    assert.match(scelta, /fs2\.getFolder\(\)/);
+    //Il csv di questo confronto viene riscritto nella nuova cartella e tolto dalla vecchia.
+    assert.match(scelta, /scaricaReportConfrontoCsv\(report, \{ automatico: true \}\)/);
+    assert.match(scelta, /this\._eliminaFile\(precedente\)/);
+
+    //Il suggerimento del pulsantino dice dove stanno andando i csv, e il testo del pulsante
+    //non cambia: cambiarlo spostava la testata a ogni scelta.
+    const titolo = corpoFunzione(confronti, '_aggiornaTitoloCartellaCsv() {');
+    assert.match(titolo, /Utility\.impostaTooltip\(bottone, "Scegli cartella\. Attualmente impostata: "/);
+    assert.doesNotMatch(titolo, /textContent/);
+
+    //La memoria dura quanto il codice del plugin: e' un campo del modulo, non un file.
+    assert.match(confronti, /_cartellaCsvSessione: null/);
+});
+
+test('il csv e l\'interfaccia usano la stessa descrizione composta', () => {
+    const descrizione = corpoFunzione(confronti, '_getDescrizioneNuovo(item) {');
+    assert.match(descrizione, /reportConfrontoCsv\.descrizioneComposta\(item\)/);
+
+    //Le regole del csv stanno nel modulo, non piu' sparse in confronti.js.
+    const build = corpoFunzione(confronti, '_buildReportConfrontoCsv(report) {');
+    assert.match(build, /reportConfrontoCsv\.componiCsv\(voci\)/);
+    assert.match(build, /reportConfrontoCsv\.datiRecordPerCsv\(raw\)/);
+});
+
+test('i title del plugin si vedono, tutti', () => {
+    //In UXP l'attributo title non mostra nulla: il riquadro lo disegna il plugin, e lo fa per
+    //qualunque elemento con un title, anche per quelli creati dopo l'avvio.
+    const utility = sorgente('utility.js');
+    const abilita = corpoFunzione(utility, 'abilitaTooltipGlobali() {');
+
+    //Il gestore ascolta sia il nostro attributo sia i title rimasti in giro.
+    assert.match(abilita, /\$\(document\)\.on\("mouseenter", "\[" \+ this\.ATTRIBUTO_TOOLTIP \+ "\], \[title\]"/);
+    assert.match(abilita, /\$\(document\)\.on\("mouseleave", "\[" \+ this\.ATTRIBUTO_TOOLTIP \+ "\], \[title\]"/);
+    assert.match(abilita, /me\._testoDelTooltip\(this\)/);
+
+    //Acceso una volta sola, all'avvio del plugin.
+    assert.match(indexNew, /Utility\.abilitaTooltipGlobali\(\);/);
+    assert.match(abilita, /if \(this\._tooltipGlobaliAttivi\)/);
+
+    //Il riquadro usa la classe gia' prevista in index.html.
+    const crea = corpoFunzione(utility, '_creaRiquadroTooltip() {');
+    assert.match(crea, /className = "jq-tooltip"/);
+    assert.match(indexHtml, /\.jq-tooltip \{/);
+
+    //Il vecchio title viene portato via al primo passaggio del mouse, cosi' InDesign non
+    //mostra il suo suggerimento sopra al nostro.
+    const testo = corpoFunzione(utility, '_testoDelTooltip(elemento) {');
+    assert.match(testo, /getAttribute\("title"\)/);
+    assert.match(testo, /this\.impostaTooltip\(elemento, titolo\)/);
+
+    //Un suggerimento si da' scrivendo l'attributo: la proprieta' .title in UXP non lo crea,
+    //ed e' per questo che i pulsanti del report erano muti.
+    const imposta = corpoFunzione(utility, 'impostaTooltip(elemento, testo) {');
+    assert.match(imposta, /setAttribute\(this\.ATTRIBUTO_TOOLTIP, pulito\)/);
+    assert.match(imposta, /removeAttribute\("title"\)/);
+
+    //E in confronti.js non deve restare nessun .title =, altrimenti il prossimo pulsante
+    //aggiunto nasce muto senza che nessuno se ne accorga.
+    assert.doesNotMatch(senzaCommenti(confronti), /\.title\s*=/);
+});
+
+test('il riquadro si misura sul pannello del plugin, non sulla finestra', () => {
+    //I20-981: window.innerWidth in UXP non e' il pannello, e su quelle misure il riquadro
+    //usciva dai bordi e il testo lungo non andava a capo dove doveva.
+    const utility = sorgente('utility.js');
+    const dimensioni = corpoFunzione(utility, '_dimensioniPannello() {');
+
+    const posWrapper = dimensioni.indexOf('getElementById("wrapper")');
+    const posWindow = dimensioni.indexOf('window.innerWidth');
+
+    assert.ok(posWrapper > 0, 'il pannello non si misura piu\' da #wrapper');
+    assert.ok(posWindow > posWrapper, 'window resta l\'ultimo ripiego, non il primo');
+
+    //I limiti del riquadro vengono dall'ancoraggio e finiscono in stile: sono loro a rendere
+    //vera la premessa del calcolo, cioe' che il riquadro non sia mai piu' grande del previsto.
+    const mostra = corpoFunzione(utility, '_mostraTooltip(elemento, testo) {');
+    assert.match(mostra, /tooltipPosizione\.ancoraggioTooltip\(/);
+    assert.match(mostra, /maxWidth = ancoraggio\.maxWidth/);
+    assert.match(mostra, /maxHeight = ancoraggio\.maxHeight/);
+});
+
+test('il riquadro non viene mai misurato', () => {
+    //E' il difetto che si e' ripresentato tre volte: in UXP la misura del riquadro, appena
+    //gli si cambia il testo, restituisce le dimensioni del testo precedente, e passando da un
+    //elemento all'altro il riquadro usciva spostato di quella differenza. Ora nessuno lo
+    //misura: si guardano il rettangolo dell'elemento e i limiti che imponiamo noi.
+    const utility = sorgente('utility.js');
+    const mostra = corpoFunzione(utility, '_mostraTooltip(elemento, testo) {');
+
+    assert.match(mostra, /elemento\.getBoundingClientRect\(\)/);
+    assert.doesNotMatch(mostra, /riquadro\.getBoundingClientRect/);
+    assert.doesNotMatch(mostra, /riquadro\.offsetWidth/);
+    assert.doesNotMatch(mostra, /riquadro\.offsetHeight/);
+
+    //Uno solo dei due ancoraggi verticali, e l'altro rimesso ad auto: se restasse quello di
+    //prima il riquadro si stirerebbe fra i due bordi.
+    assert.match(mostra, /riquadro\.style\.bottom = "auto"/);
+    assert.match(mostra, /riquadro\.style\.top = "auto"/);
+
+    //Chi nasconde il riquadro dimentica anche l'elemento.
+    const nascondi = corpoFunzione(utility, 'nascondiTooltip() {');
+    assert.match(nascondi, /this\._ancoraTooltip = null/);
+    assert.match(nascondi, /visibility = "hidden"/);
 });
