@@ -2640,7 +2640,10 @@ out var mismatch);
                                 throw new Exception("Elemento con codice " + act.Codice + " non trovato durante l'estrazione del garante");
                             }
                         }
-                        else
+                        //I20-983: e senza record non si entra nemmeno qui, che partirebbe dal
+                        //primo di un elenco vuoto. Il meta della revisione resta vuoto, che e'
+                        //giusto: non c'e' nessun tracciato da cui ereditarlo.
+                        else if (promoRecordsArt.Count > 0)
                         {
                             var el = promoRecordsArt[0];
 
@@ -2871,7 +2874,8 @@ out var mismatch);
                                 throw new Exception("Gruppo con codice " + act.CodiceGruppo + " non trovato durante l'estrazione del garante");
                             }
                         }
-                        else
+                        //I20-983: come sopra, senza record non c'e' un primo elemento da cui partire.
+                        else if (recordsFirma != null && recordsFirma.Any())
                         {
                             var el = recordsFirma[0];
 
