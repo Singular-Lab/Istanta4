@@ -2550,13 +2550,18 @@ out var mismatch);
                             }
                         }
 
-                        string firma_complessiva_gruppo = Utility.Main.getFirmaTracciatoGruppoDaRecords(
+                        //I20-983: senza record non c'e' una firma da calcolare, e vale quella
+                        //dichiarata da chi salva. E' il salvataggio che arriva dalla scheda
+                        //articolo, dove non c'e' ne' promo ne' record: prima si finiva a cercare
+                        //un garante inesistente e il salvataggio moriva con un errore.
+                        string firma_complessiva_gruppo = Utility.Main.firmaDaRecordsOppureDichiarata(
                                 promoRecordsArt,
                                 act.Codice,
-                                act.IsSottogruppo
+                                act.IsSottogruppo,
+                                act.FirmaTracciato
                         );
 
-                        if (firma_complessiva_gruppo == GLOBAL_VARIABLES.keyMismatchFirma)
+                        if (promoRecordsArt.Count > 0 && firma_complessiva_gruppo == GLOBAL_VARIABLES.keyMismatchFirma)
                         {
                             var gruppiPerTracciato = new List<WrapperGruppoConTracciato>();
 
@@ -2779,14 +2784,16 @@ out var mismatch);
                             return Ok(result);
                         }
 
-                        firma_complessiva_gruppo = Utility.Main.getFirmaTracciatoGruppoDaRecords(
+                        //I20-983: come sopra, senza record vale la firma dichiarata dal chiamante.
+                        firma_complessiva_gruppo = Utility.Main.firmaDaRecordsOppureDichiarata(
                             recordsFirma,
                             act.CodiceGruppo,
-                            act.IsSottogruppo
+                            act.IsSottogruppo,
+                            act.FirmaTracciato
                         );
 
 
-                        if (firma_complessiva_gruppo == GLOBAL_VARIABLES.keyMismatchFirma)
+                        if (recordsFirma != null && recordsFirma.Any() && firma_complessiva_gruppo == GLOBAL_VARIABLES.keyMismatchFirma)
                         {
                             var gruppiPerTracciato = new List<WrapperGruppoConTracciato>();
 
