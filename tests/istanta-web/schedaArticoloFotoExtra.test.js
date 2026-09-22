@@ -187,3 +187,27 @@ test('gli agganci partono all\'apertura della pagina', () => {
     assert.ok(creazione > 0 && aggancio > creazione,
         'prima si crea l\'oggetto, poi gli si chiede di agganciare i gestori');
 });
+
+/* ---- quando il salvataggio non riesce ---- */
+
+// Call.do, sull'errore, richiama lo stesso callback passando un oggetto invece della lista.
+// Andando dritti su forEach l'eccezione fermava tutto prima di hideLoading: la pagina restava
+// a girare per sempre e il motivo del rifiuto, che il server manda nel corpo, non si vedeva.
+test('un salvataggio rifiutato chiude il caricamento e dice perche\'', () => {
+    const js = sorgente('Istanta/wwwroot/js/archivio.js');
+
+    const inizio = js.indexOf('salvaFunction(listAct, callback, senderButton) {');
+    const metodo = js.slice(inizio, js.indexOf('EliminaFotoExtra(button) {', inizio));
+
+    const guardia = metodo.indexOf('!Array.isArray(result)');
+    const scorrimento = metodo.indexOf('result.forEach(');
+
+    assert.ok(guardia > 0, 'senza guardia un errore diventa un TypeError');
+    assert.ok(guardia < scorrimento, 'la guardia deve venire prima di scorrere la lista');
+
+    const dentroGuardia = metodo.slice(guardia, scorrimento);
+    assert.ok(dentroGuardia.includes('hideLoading();'),
+        'il caricamento va chiuso, altrimenti la pagina resta appesa');
+    assert.ok(dentroGuardia.includes('result.message || result.error'),
+        'il motivo lo manda il server: va mostrato, non buttato');
+});

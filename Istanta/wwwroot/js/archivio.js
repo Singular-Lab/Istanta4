@@ -99,6 +99,19 @@ class Archivio {
         showLoading();
         console.log("Salva function")
         Call.do("Revisore", "salva/" + IdTracciato + "/0/0", "PUT", { coda: listAct }, ME, function (result, sender) {
+            //I20-983: quando il server rifiuta, Call.do richiama questo stesso callback passando
+            //un oggetto d'errore al posto della lista. Andando dritti su forEach l'eccezione
+            //fermava tutto prima di hideLoading: la pagina restava a girare per sempre e il
+            //motivo del rifiuto, che il server manda nel corpo della risposta, non lo vedeva
+            //nessuno. La stessa guardia c'e' gia' nel revisore.
+            if (result == null || !Array.isArray(result)) {
+                hideLoading();
+                var motivo = (result && (result.message || result.error)) || "Salvataggio non riuscito";
+                console.error("Salvataggio fallito:", result);
+                alert("Salvataggio non riuscito: " + motivo);
+                return;
+            }
+
             let areaEl = null;
             let canaleEL = null;
             if (result.length == 1) {
