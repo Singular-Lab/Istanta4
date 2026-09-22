@@ -107,7 +107,7 @@
                                 </div>
                                 <div class="col">
                                 <h6>@foto!.NomeReale</h6>
-                                <input type="button" class="btn btn-sm btn-primary" value="Seleziona" onclick="ArchivioItem.AggiornaPrimario('@foto.GuidId')">
+                                <input type="button" class="btn btn-sm btn-primary" value="Seleziona" data-azione="selezionaPrimaria" data-guidid="@foto.GuidId">
                                 </div>
                             </div>
                     </figure>
@@ -160,9 +160,9 @@
                                     </div>
                                     <div class="col">
                                         <input type="hidden" id="fotoExtra" data='@Html.Raw(System.Text.Json.JsonSerializer.Serialize(foto))'/>
-                                        <input type="button" class="btn btn-sm btn-danger" value="Elimina" onclick="ArchivioItem.EliminaFotoExtra($(this))">
+                                        <input type="button" class="btn btn-sm btn-danger" value="Elimina" data-azione="eliminaFotoExtra">
                                         <div class="form-check mt-2">
-                                            <input class="form-check-input" type="checkbox" id="fotoExtraAttiva-@foto.Id" guidid="@foto.GuidId" @(foto.Attiva == true ? "checked" : string.Empty) onchange="ArchivioItem.AttivaDisattivaFotoExtra($(this))">
+                                            <input class="form-check-input" type="checkbox" id="fotoExtraAttiva-@foto.Id" guidid="@foto.GuidId" @(foto.Attiva == true ? "checked" : string.Empty) data-azione="attivaFotoExtra">
                                             <label class="form-check-label" for="fotoExtraAttiva-@foto.Id">Attiva</label>
                                         </div>
                                     </div>
@@ -171,8 +171,8 @@
                         }
 
                         <div class="d-flex gap-2 flex-wrap">
-                            <button type="button" class="btn btn-sm btn-success" onclick="ArchivioItem.AggiungiFotoExtra(@tipoExtra.Val)">Aggiungi @tipoExtra.Nome</button>
-                            <button type="button" class="btn btn-sm btn-outline-success" onclick="ArchivioItem.CollegaFotoExtra(@tipoExtra.Val, '@tipoExtra.Nome')">Collega a immagine a sistema</button>
+                            <button type="button" class="btn btn-sm btn-success" data-azione="aggiungiFotoExtra" data-tipo="@tipoExtra.Val">Aggiungi @tipoExtra.Nome</button>
+                            <button type="button" class="btn btn-sm btn-outline-success" data-azione="collegaFotoExtra" data-tipo="@tipoExtra.Val" data-nometipo="@tipoExtra.Nome">Collega a immagine a sistema</button>
                         </div>
                     </div>
                 }
@@ -181,7 +181,7 @@
                 <input type="hidden" id="ipOlympus" value="@olimpoIp" />
 
                 @*Uno solo per tutta la pagina: il tipo scelto si tiene sull'elemento stesso.*@
-                <input type="file" id="fileNuovaFotoExtra" accept="image/*,.psd,.tif,.tiff" style="display:none" onchange="ArchivioItem.CaricaNuovaFotoExtra($(this))" />
+                <input type="file" id="fileNuovaFotoExtra" accept="image/*,.psd,.tif,.tiff" style="display:none" data-azione="fileFotoExtraScelto" />
                 </div>
 
 
@@ -290,10 +290,10 @@
 
                             <div class="row mt-4">
                                 <div class="col text-start px-3">
-                                    <input id="vediUltimeModifiche" type="button" class="btn btn-primary" value="Cronologia modifiche" onclick="ArchivioItem.checkLastModificaFromButton($(this), $(this).closest('.row').find('#bottoneSalva').attr('canale'),$(this).closest('.row').find('#bottoneSalva').attr('area'))" />
+                                    <input id="vediUltimeModifiche" type="button" class="btn btn-primary" value="Cronologia modifiche" data-azione="cronologiaModifiche" />
                                 </div>
                                 <div class="col text-end px-3">
-                                    <input id="bottoneSalva" type="button" class="btn btn-primary" value="Salva" onclick="ArchivioItem.salvaRevisione($(this), null, $(this).attr('canale'), $(this).attr('area'))" />
+                                    <input id="bottoneSalva" type="button" class="btn btn-primary" value="Salva" data-azione="salvaRevisione" />
                                 </div>
                             </div>
                         </div>
@@ -385,10 +385,10 @@
                           
                                 <div class="row mt-4">
                                     <div class="col text-start px-3">
-                                        <input id="vediUltimeModifiche" type="button" class="btn btn-primary" value="Cronologia modifiche" onclick="ArchivioItem.checkLastModificaFromButton($(this), $(this).closest('.row').find('#bottoneSalva').attr('canale'),$(this).closest('.row').find('#bottoneSalva').attr('area'))" />
+                                        <input id="vediUltimeModifiche" type="button" class="btn btn-primary" value="Cronologia modifiche" data-azione="cronologiaModifiche" />
                                     </div>
                                     <div class="col text-end px-3">
-                                        <input id="bottoneSalva" area="@item.Area" canale="@item.Canale" type="button" class="btn btn-primary" value="Salva" onclick="ArchivioItem.salvaRevisione($(this), null, $(this).attr('canale'), $(this).attr('area'))" />
+                                        <input id="bottoneSalva" area="@item.Area" canale="@item.Canale" type="button" class="btn btn-primary" value="Salva" data-azione="salvaRevisione" />
                                     </div>
                                 </div>
                             </div>
@@ -460,6 +460,10 @@
        
         ArchivioItem = new Archivio();
         agenzia = new Agenzia();
+
+        //I20-983: i gestori si agganciano da qui, che e' uno script col nonce. Scritti come
+        //attributo nel markup la policy di sicurezza della pagina li rifiuterebbe.
+        ArchivioItem.collegaGestoriSchedaArticolo();
 
         const el = $('#itemBind');
 

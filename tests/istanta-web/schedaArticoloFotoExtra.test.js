@@ -127,9 +127,9 @@ test('la pagina ha le quattro sezioni con i loro due pulsanti', () => {
         assert.ok(vista.includes('IstantaLib.TipoFoto.' + tipo), 'manca la sezione ' + tipo);
     }
 
-    assert.ok(vista.includes('ArchivioItem.AggiungiFotoExtra(@tipoExtra.Val)'),
+    assert.ok(vista.includes('data-azione="aggiungiFotoExtra" data-tipo="@tipoExtra.Val"'),
         'ogni sezione deve poter caricare un file nuovo');
-    assert.ok(vista.includes('ArchivioItem.CollegaFotoExtra(@tipoExtra.Val'),
+    assert.ok(vista.includes('data-azione="collegaFotoExtra" data-tipo="@tipoExtra.Val"'),
         'ogni sezione deve poter collegare un\'immagine a sistema');
 });
 
@@ -139,10 +139,51 @@ test('la casella Attiva ora chiama il server', () => {
     const vista = sorgente('Istanta/Views/SchedaArticolo/Index.cshtml');
     const js = sorgente('Istanta/wwwroot/js/archivio.js');
 
-    assert.ok(vista.includes('onchange="ArchivioItem.AttivaDisattivaFotoExtra($(this))"'),
+    assert.ok(vista.includes('data-azione="attivaFotoExtra"'),
         'senza gestore la casella resta un comando finto');
     assert.ok(js.includes('"attivaDisattivaFotoExtra/" + guidId + "/" + attiva'),
         'e\' l\'endpoint che usa anche il Plugin');
     assert.ok(js.includes('casella.prop("checked", !attiva);'),
         'se il server rifiuta, la casella deve tornare com\'era invece di mentire');
+});
+
+
+/* ---- i gestori e la policy di sicurezza della pagina ---- */
+
+// La pagina dichiara script-src con il nonce e senza unsafe-inline: in quel caso il browser
+// rifiuta i gestori scritti come attributo, e i pulsanti non fanno niente. Valeva gia' per
+// Seleziona, Elimina, Salva e Cronologia, che erano inerti da sempre.
+test('nel markup della scheda articolo non restano gestori inline', () => {
+    const vista = sorgente('Istanta/Views/SchedaArticolo/Index.cshtml');
+
+    //I blocchi commentati non arrivano al browser e non contano.
+    const attivo = vista.replace(/@\*[\s\S]*?\*@/g, '');
+
+    assert.strictEqual((attivo.match(/onclick=/g) || []).length, 0,
+        'un onclick nel markup e\' un pulsante che non fara\' niente');
+    assert.strictEqual((attivo.match(/onchange=/g) || []).length, 0,
+        'lo stesso vale per onchange');
+});
+
+test('ogni azione della pagina ha il suo aggancio da JavaScript', () => {
+    const vista = sorgente('Istanta/Views/SchedaArticolo/Index.cshtml');
+    const js = sorgente('Istanta/wwwroot/js/archivio.js');
+
+    const azioni = [...vista.matchAll(/data-azione="([a-zA-Z]+)"/g)].map(t => t[1]);
+    assert.ok(azioni.length >= 8, 'le azioni della pagina devono essere dichiarate sugli elementi');
+
+    for (const azione of new Set(azioni)) {
+        assert.ok(js.includes("[data-azione='" + azione + "']"),
+            'azione senza gestore agganciato: ' + azione);
+    }
+});
+
+test('gli agganci partono all\'apertura della pagina', () => {
+    const vista = sorgente('Istanta/Views/SchedaArticolo/Index.cshtml');
+
+    const creazione = vista.indexOf('ArchivioItem = new Archivio();');
+    const aggancio = vista.indexOf('ArchivioItem.collegaGestoriSchedaArticolo();');
+
+    assert.ok(creazione > 0 && aggancio > creazione,
+        'prima si crea l\'oggetto, poi gli si chiede di agganciare i gestori');
 });

@@ -123,6 +123,54 @@ class Archivio {
         });
     }
 
+    /// I20-983: aggancia i gestori della scheda articolo.
+    ///
+    /// Scritti come attributo onclick nel markup il browser li rifiuta: la policy di sicurezza
+    /// della pagina dichiara script-src con il nonce e senza unsafe-inline, e in quel caso i
+    /// gestori inline non vengono eseguiti. Non e' una novita' dei pulsanti nuovi: erano inerti
+    /// anche Seleziona, Elimina, Salva e Cronologia, cioe' tutta la pagina.
+    ///
+    /// Si aggancia sul documento e non sui singoli elementi perche' alcuni id sulla pagina sono
+    /// ripetuti su piu' schede, e la delega li prende tutti senza doverli rincorrere.
+    collegaGestoriSchedaArticolo() {
+        let ME = this;
+        var pagina = $(document);
+
+        pagina.on("click", "[data-azione='selezionaPrimaria']", function () {
+            ME.AggiornaPrimario($(this).attr("data-guidid"));
+        });
+
+        pagina.on("click", "[data-azione='eliminaFotoExtra']", function () {
+            ME.EliminaFotoExtra($(this));
+        });
+
+        pagina.on("change", "[data-azione='attivaFotoExtra']", function () {
+            ME.AttivaDisattivaFotoExtra($(this));
+        });
+
+        pagina.on("click", "[data-azione='aggiungiFotoExtra']", function () {
+            ME.AggiungiFotoExtra($(this).attr("data-tipo"));
+        });
+
+        pagina.on("click", "[data-azione='collegaFotoExtra']", function () {
+            ME.CollegaFotoExtra($(this).attr("data-tipo"), $(this).attr("data-nometipo"));
+        });
+
+        pagina.on("change", "[data-azione='fileFotoExtraScelto']", function () {
+            ME.CaricaNuovaFotoExtra($(this));
+        });
+
+        //Canale e area stanno sul pulsante Salva della stessa riga, dove le metteva la vista.
+        pagina.on("click", "[data-azione='cronologiaModifiche']", function () {
+            var salva = $(this).closest(".row").find("#bottoneSalva");
+            ME.checkLastModificaFromButton($(this), salva.attr("canale"), salva.attr("area"));
+        });
+
+        pagina.on("click", "[data-azione='salvaRevisione']", function () {
+            ME.salvaRevisione($(this), null, $(this).attr("canale"), $(this).attr("area"));
+        });
+    }
+
     /// I20-983: le foto extra che l'articolo ha di questo tipo. Il raggruppamento e' per nome
     /// reale, perche' dello stesso file possono esistere piu' versioni e in elenco ne va una.
     static fotoExtraDelTipo(fotoArticolo, tipo) {
