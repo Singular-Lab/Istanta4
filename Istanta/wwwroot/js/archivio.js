@@ -99,6 +99,19 @@ class Archivio {
         showLoading();
         console.log("Salva function")
         Call.do("Revisore", "salva/" + IdTracciato + "/0/0", "PUT", { coda: listAct }, ME, function (result, sender) {
+            //I20-983: quando il server rifiuta, Call.do richiama questo stesso callback passando
+            //un oggetto d'errore al posto della lista. Andando dritti su forEach l'eccezione
+            //fermava tutto prima di hideLoading: la pagina restava a girare per sempre e il
+            //motivo del rifiuto, che il server manda nel corpo della risposta, non lo vedeva
+            //nessuno. La stessa guardia c'e' gia' nel revisore.
+            if (result == null || !Array.isArray(result)) {
+                hideLoading();
+                var motivo = (result && (result.message || result.error)) || "Salvataggio non riuscito";
+                console.error("Salvataggio fallito:", result);
+                alert("Salvataggio non riuscito: " + motivo);
+                return;
+            }
+
             let areaEl = null;
             let canaleEL = null;
             if (result.length == 1) {
@@ -119,6 +132,238 @@ class Archivio {
             if (callback != null && result.error == null) {
                 console.warn("Callback");
                 callback(result, senderButton);
+            }
+        });
+    }
+
+    /// I20-983: aggancia i gestori della scheda articolo.
+    ///
+    /// Scritti come attributo onclick nel markup il browser li rifiuta: la policy di sicurezza
+    /// della pagina dichiara script-src con il nonce e senza unsafe-inline, e in quel caso i
+    /// gestori inline non vengono eseguiti. Non e' una novita' dei pulsanti nuovi: erano inerti
+    /// anche Seleziona, Elimina, Salva e Cronologia, cioe' tutta la pagina.
+    ///
+    /// Si aggancia sul documento e non sui singoli elementi perche' alcuni id sulla pagina sono
+    /// ripetuti su piu' schede, e la delega li prende tutti senza doverli rincorrere.
+    collegaGestoriSchedaArticolo() {
+        let ME = this;
+        var pagina = $(document);
+
+        pagina.on("click", "[data-azione='selezionaPrimaria']", function () {
+            ME.AggiornaPrimario($(this).attr("data-guidid"));
+        });
+
+        pagina.on("click", "[data-azione='eliminaFotoExtra']", function () {
+            ME.EliminaFotoExtra($(this));
+        });
+
+        pagina.on("change", "[data-azione='attivaFotoExtra']", function () {
+            ME.AttivaDisattivaFotoExtra($(this));
+        });
+
+        pagina.on("click", "[data-azione='aggiungiFotoExtra']", function () {
+            ME.AggiungiFotoExtra($(this).attr("data-tipo"));
+        });
+
+        pagina.on("click", "[data-azione='collegaFotoExtra']", function () {
+            ME.CollegaFotoExtra($(this).attr("data-tipo"), $(this).attr("data-nometipo"));
+        });
+
+        pagina.on("change", "[data-azione='fileFotoExtraScelto']", function () {
+            ME.CaricaNuovaFotoExtra($(this));
+        });
+
+        //Canale e area stanno sul pulsante Salva della stessa riga, dove le metteva la vista.
+        pagina.on("click", "[data-azione='cronologiaModifiche']", function () {
+            var salva = $(this).closest(".row").find("#bottoneSalva");
+            ME.checkLastModificaFromButton($(this), salva.attr("canale"), salva.attr("area"));
+        });
+
+        pagina.on("click", "[data-azione='salvaRevisione']", function () {
+            ME.salvaRevisione($(this), null, $(this).attr("canale"), $(this).attr("area"));
+        });
+    }
+
+    /// I20-983: le foto extra che l'articolo ha di questo tipo. Il raggruppamento e' per nome
+    /// reale, perche' dello stesso file possono esistere piu' versioni e in elenco ne va una.
+    static fotoExtraDelTipo(fotoArticolo, tipo) {
+        var elenco = Array.isArray(fotoArticolo) ? fotoArticolo : [];
+        var cercato = Number(tipo);
+        var visti = {};
+        var risultato = [];
+
+        for (var i = 0; i < elenco.length; i++) {
+            var foto = elenco[i];
+            if (foto == null || Number(foto.Tipo) !== cercato || foto.NomeReale == null) {
+                continue;
+            }
+            if (visti[foto.NomeReale]) {
+                continue;
+            }
+            visti[foto.NomeReale] = true;
+            risultato.push(foto);
+        }
+
+        return risultato;
+    }
+
+    /// Le immagini del catalogo che si possono collegare come questo tipo, senza quelle che
+    /// l'articolo ha gia': ricollegare la stessa immagine il server lo rifiuta, e mostrarla
+    /// vorrebbe dire far sbagliare l'operatore.
+    static catalogoCollegabile(catalogo, tipo, fotoArticolo) {
+        var elenco = Array.isArray(catalogo) ? catalogo : [];
+        var gia = Array.isArray(fotoArticolo) ? fotoArticolo : [];
+        var cercato = Number(tipo);
+
+        return elenco.filter(function (immagine) {
+            if (immagine == null || Number(immagine.tipo) !== cercato) {
+                return false;
+            }
+            return !gia.some(function (foto) {
+                return foto != null && foto.GuidId != null && foto.GuidId === immagine.guidId;
+            });
+        });
+    }
+
+    /// Quello che si manda per caricare una foto extra nuova.
+    ///
+    /// idLavorazione e idRec restano a zero: dalla scheda articolo non si sta lavorando a un
+    /// volantino, e il server tocca la lavorazione solo quando quel numero non e' zero. Area e
+    /// canale restano vuoti, come fa il Plugin per le extra, cosi' la foto vale per tutti.
+    static datiNuovaFotoExtra(codice, tipo, nomeFile) {
+        return {
+            codice: codice,
+            tipo: Number(tipo),
+            nomeFile: nomeFile,
+            idLavorazione: 0,
+            idRec: 0,
+            uploadMethod: 0
+        };
+    }
+
+    /// Apre la scelta del file per il tipo chiesto. Il tipo si tiene sull'elemento, cosi' il
+    /// gestore del cambiamento sa per quale sezione si sta caricando.
+    AggiungiFotoExtra(tipo) {
+        var campo = $("#fileNuovaFotoExtra");
+        campo.attr("tipo", tipo);
+        campo.val("");
+        campo.trigger("click");
+    }
+
+    CaricaNuovaFotoExtra(campo) {
+        var file = campo[0] != null && campo[0].files != null ? campo[0].files[0] : null;
+        if (file == null) {
+            return;
+        }
+
+        var dati = Archivio.datiNuovaFotoExtra($("#Codice").val(), campo.attr("tipo"), file.name);
+
+        var fd = new FormData();
+        fd.append("file", file);
+        for (var chiave in dati) {
+            if (Object.prototype.hasOwnProperty.call(dati, chiave)) {
+                fd.append(chiave, dati[chiave]);
+            }
+        }
+
+        showLoading();
+        Call.doWithUpload("SyncFoto", "updateFotoFromIndd/0", "PUT", fd, this, function (result, sender) {
+            hideLoading();
+
+            if (result != null && result.esito === false) {
+                alert("Caricamento non riuscito: " + (result.error || "errore sconosciuto"));
+                return;
+            }
+
+            location.reload();
+        });
+    }
+
+    /// Mostra il catalogo delle immagini a sistema per quel tipo e collega quella scelta.
+    CollegaFotoExtra(tipo, nomeTipo) {
+        let ME = this;
+        var corpo = $("#collegaFotoExtraBody");
+
+        $("#collegaFotoExtraModalLabel").text("Collega " + (nomeTipo || "") + " a immagine a sistema");
+        corpo.html("<div>Caricamento...</div>");
+        new bootstrap.Modal(document.getElementById("collegaFotoExtraModal")).show();
+
+        Call.do("FicoProcess", "getLoghiBolli", "GET", null, this, function (result, sender) {
+            var catalogo = result != null && result.content != null ? result.content : [];
+            var disponibili = Archivio.catalogoCollegabile(catalogo, tipo, ME.fotoExtraDellaPagina());
+
+            if (disponibili.length === 0) {
+                corpo.html("<div>Nessuna immagine disponibile per questo tipo.</div>");
+                return;
+            }
+
+            corpo.empty();
+            var griglia = $('<div class="d-flex flex-wrap gap-3"></div>');
+
+            disponibili.forEach(function (immagine) {
+                var miniatura = $("#ipOlympus").val() + "/foto/getThumbNailOnDemand?width=80&guidId=" + encodeURIComponent(immagine.guidId);
+                var riquadro = $('<div class="text-center border rounded p-2" style="width:140px; cursor:pointer;"></div>');
+                riquadro.append($('<img class="img-fluid rounded mb-1">').attr("src", miniatura).attr("alt", immagine.nome || ""));
+                riquadro.append($('<div style="font-size:11px; word-break:break-all;"></div>').text(immagine.nome || immagine.sigla || ""));
+                riquadro.on("click", function () {
+                    ME.collegaImmagineScelta(immagine, tipo);
+                });
+                griglia.append(riquadro);
+            });
+
+            corpo.append(griglia);
+        });
+    }
+
+    /// Le foto extra gia' sulla pagina, lette dai riquadri disegnati dalla vista.
+    fotoExtraDellaPagina() {
+        var elenco = [];
+        $("#fotoExtra").each(function () {
+            try {
+                elenco.push(JSON.parse($(this).attr("data")));
+            }
+            catch (e) {
+                console.log("Foto extra non leggibile dalla pagina: " + e);
+            }
+        });
+        return elenco;
+    }
+
+    collegaImmagineScelta(immagine, tipo) {
+        var dati = {
+            guidId: immagine.guidId,
+            nomeReale: immagine.nome,
+            fileHash: immagine.hash || immagine.fileHash || "",
+            codiceReferenza: $("#Codice").val(),
+            tipo: Number(tipo)
+        };
+
+        showLoading();
+        Call.do("SyncFoto", "linkLogoBollo", "PUT", dati, this, function (result, sender) {
+            hideLoading();
+
+            if (result != null && result.esito === false) {
+                alert("Collegamento non riuscito: " + (result.error || "errore sconosciuto"));
+                return;
+            }
+
+            location.reload();
+        });
+    }
+
+    /// La casella Attiva: fino a oggi cambiava solo il segno di spunta sullo schermo.
+    AttivaDisattivaFotoExtra(casella) {
+        var guidId = casella.attr("guidid");
+        var attiva = casella.is(":checked");
+
+        showLoading();
+        Call.do("SyncFoto", "attivaDisattivaFotoExtra/" + guidId + "/" + attiva, "GET", null, this, function (result, sender) {
+            hideLoading();
+
+            if (result != null && result.esito === false) {
+                alert("Modifica non riuscita: " + (result.error || "errore sconosciuto"));
+                //Si rimette la casella com'era: lasciarla girata direbbe una cosa falsa.
+                casella.prop("checked", !attiva);
             }
         });
     }
@@ -489,4 +734,10 @@ class Archivio {
 
         });
     }
+}
+
+//I20-983: in Node si esporta per i test (tests/istanta-web). Nella pagina module non esiste
+//e questa riga non fa nulla.
+if (typeof module !== "undefined" && module.exports) {
+    module.exports = Archivio;
 }

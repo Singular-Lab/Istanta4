@@ -43,6 +43,9 @@ const credenzialiSalvate = credenzialiSalvateModulo.crea((function () {
 })());
 
 Utility.registerDateMenuPicker();
+//I20-981: da qui in poi ogni elemento con un title mostra il suo suggerimento.
+//In UXP l'attributo da solo non fa nulla: il riquadro lo disegna il plugin.
+Utility.abilitaTooltipGlobali();
 showLoading("Inizializzazione...");
 
 
@@ -4399,6 +4402,11 @@ async function applicaConfronto(mappa) {
                 var reportFilePath = confronti._getReportIntegritaFilePath ? confronti._getReportIntegritaFilePath(idKitLavorazione) : pathLavorazione + "/reportIntegrita_" + idKitLavorazione + ".json";
                 messaggioUtente("Report confronto creato con successo: " + reportFilePath, "success", false, 10);
                 confronti.compilaReportConfronto(reportObj);
+
+                //I20-981: il csv nasce da solo insieme al report. Solo qui, che e' l'unico
+                //posto dove un report viene creato: riaprire un report gia' fatto o rinfrescare
+                //l'interfaccia non deve produrre altri file.
+                await confronti.scaricaReportConfrontoCsv(reportObj, { automatico: true });
             }
         }
         catch (ex) {
