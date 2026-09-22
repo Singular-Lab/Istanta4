@@ -197,6 +197,31 @@ namespace Istanta.Utility
             return Utility.Main.getFirmaTracciatoGruppo(membriGruppo);
         }
 
+        /// <summary>
+        /// La firma del gruppo presa dai record del tracciato, oppure quella dichiarata da chi
+        /// salva quando di record non ce ne sono.
+        ///
+        /// Senza record non c'e' niente da confrontare: il calcolo risponde "firme discordanti"
+        /// e chi lo chiama va a cercare un garante che non esiste, fallendo. E' il caso del
+        /// salvataggio che arriva dalla scheda articolo invece che da una lavorazione: li' la
+        /// descrizione non nasce da un tracciato e la firma la dichiara il chiamante (I20-983).
+        ///
+        /// Dove i record ci sono il calcolo resta quello di sempre.
+        /// </summary>
+        public static string firmaDaRecordsOppureDichiarata(
+            IEnumerable<PromoTracciatiRecord>? records,
+            string codiceGruppo,
+            bool isSottogruppo,
+            string? firmaDichiarata)
+        {
+            if (records == null || !records.Any())
+            {
+                return firmaDichiarata ?? "";
+            }
+
+            return getFirmaTracciatoGruppoDaRecords(records, codiceGruppo, isSottogruppo);
+        }
+
         public static string getFirmaTracciatoGruppoDaRecords(
     IEnumerable<PromoTracciatiRecord> records,
     string codiceGruppo,

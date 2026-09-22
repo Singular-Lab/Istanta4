@@ -2550,13 +2550,18 @@ out var mismatch);
                             }
                         }
 
-                        string firma_complessiva_gruppo = Utility.Main.getFirmaTracciatoGruppoDaRecords(
+                        //I20-983: senza record non c'e' una firma da calcolare, e vale quella
+                        //dichiarata da chi salva. E' il salvataggio che arriva dalla scheda
+                        //articolo, dove non c'e' ne' promo ne' record: prima si finiva a cercare
+                        //un garante inesistente e il salvataggio moriva con un errore.
+                        string firma_complessiva_gruppo = Utility.Main.firmaDaRecordsOppureDichiarata(
                                 promoRecordsArt,
                                 act.Codice,
-                                act.IsSottogruppo
+                                act.IsSottogruppo,
+                                act.FirmaTracciato
                         );
 
-                        if (firma_complessiva_gruppo == GLOBAL_VARIABLES.keyMismatchFirma)
+                        if (promoRecordsArt.Count > 0 && firma_complessiva_gruppo == GLOBAL_VARIABLES.keyMismatchFirma)
                         {
                             var gruppiPerTracciato = new List<WrapperGruppoConTracciato>();
 
@@ -2635,7 +2640,10 @@ out var mismatch);
                                 throw new Exception("Elemento con codice " + act.Codice + " non trovato durante l'estrazione del garante");
                             }
                         }
-                        else
+                        //I20-983: e senza record non si entra nemmeno qui, che partirebbe dal
+                        //primo di un elenco vuoto. Il meta della revisione resta vuoto, che e'
+                        //giusto: non c'e' nessun tracciato da cui ereditarlo.
+                        else if (promoRecordsArt.Count > 0)
                         {
                             var el = promoRecordsArt[0];
 
@@ -2779,14 +2787,16 @@ out var mismatch);
                             return Ok(result);
                         }
 
-                        firma_complessiva_gruppo = Utility.Main.getFirmaTracciatoGruppoDaRecords(
+                        //I20-983: come sopra, senza record vale la firma dichiarata dal chiamante.
+                        firma_complessiva_gruppo = Utility.Main.firmaDaRecordsOppureDichiarata(
                             recordsFirma,
                             act.CodiceGruppo,
-                            act.IsSottogruppo
+                            act.IsSottogruppo,
+                            act.FirmaTracciato
                         );
 
 
-                        if (firma_complessiva_gruppo == GLOBAL_VARIABLES.keyMismatchFirma)
+                        if (recordsFirma != null && recordsFirma.Any() && firma_complessiva_gruppo == GLOBAL_VARIABLES.keyMismatchFirma)
                         {
                             var gruppiPerTracciato = new List<WrapperGruppoConTracciato>();
 
@@ -2864,7 +2874,8 @@ out var mismatch);
                                 throw new Exception("Gruppo con codice " + act.CodiceGruppo + " non trovato durante l'estrazione del garante");
                             }
                         }
-                        else
+                        //I20-983: come sopra, senza record non c'e' un primo elemento da cui partire.
+                        else if (recordsFirma != null && recordsFirma.Any())
                         {
                             var el = recordsFirma[0];
 

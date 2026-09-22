@@ -107,37 +107,81 @@
                                 </div>
                                 <div class="col">
                                 <h6>@foto!.NomeReale</h6>
-                                <input type="button" class="btn btn-sm btn-primary" value="Seleziona" onclick="ArchivioItem.AggiornaPrimario('@foto.GuidId')">
+                                <input type="button" class="btn btn-sm btn-primary" value="Seleziona" data-azione="selezionaPrimaria" data-guidid="@foto.GuidId">
                                 </div>
                             </div>
                     </figure>
+                }
+
+                @*I20-983: le foto extra si raggruppano per tipo, come nel pannello del Plugin, e
+                  ogni gruppo porta i suoi due modi di aggiungerne: caricare un file nuovo oppure
+                  collegare un'immagine gia' a sistema.*@
+                @{
+                    var tipiFotoExtra = new[] {
+                        new { Val = (byte)IstantaLib.TipoFoto.Bollino, Nome = "Bollini" },
+                        new { Val = (byte)IstantaLib.TipoFoto.Logo, Nome = "Loghi" },
+                        new { Val = (byte)IstantaLib.TipoFoto.Ambientata, Nome = "Foto ambientate" },
+                        new { Val = (byte)IstantaLib.TipoFoto.Sfondo, Nome = "Sfondo" }
+                    };
+
+                    var fotoExtraArticolo = itemBind.ArticoliFotos!
+                        .Where(f => f.Tipo.HasValue && f.Tipo != (byte)IstantaLib.TipoFoto.Foto)
+                        .GroupBy(g => g.NomeReale)
+                        .Select(s => s.First())
+                        .ToList();
                 }
 
                 <div class="mt-3">
                     <h5>Foto extra</h5>
                 </div>
-                @foreach (Istanta.Models.ArticoliFoto foto in itemBind.ArticoliFotos!.Where(f => fotoPrimaria != null && f.Id != fotoPrimaria.Id && f.Tipo != (byte)IstantaLib.TipoFoto.Foto).GroupBy(g=>g.NomeReale).Select(s=>s.FirstOrDefault()))
-                {
-                    string thumbnail = olimpoIp + "/foto/getThumbNailOnDemand?width=40&guidId=" + foto.GuidId;
-                    string bigImage = olimpoIp + "/foto/getThumbNailOnDemand?width=800&guidId=" + foto.GuidId;
 
-                    <figure class="figure w-50 mb-4 p-2 border border-primary">
-                        <div class="row" style="align-items:center;">
-                            <div class="col">
-                                <h6>@foto!.NomeReale</h6>
-                                <img src="@thumbnail" data-bigimg="@bigImage" class="figure-img img-fluid rounded img-preview-hover" alt="@foto!.NomeReale">
-                            </div>
-                            <div class="col">
-                                <input type="hidden" id="fotoExtra" data='@Html.Raw(System.Text.Json.JsonSerializer.Serialize(foto))'/>
-                                <input type="button" class="btn btn-sm btn-danger" value="Elimina" onclick="ArchivioItem.EliminaFotoExtra($(this))">
-                                <div class="form-check mt-2">
-                                    <input class="form-check-input" type="checkbox" id="fotoExtraAttiva-@foto.Id" @(foto.Attiva == true ? "checked" : string.Empty)>
-                                    <label class="form-check-label" for="fotoExtraAttiva-@foto.Id">Attiva</label>
+                @foreach (var tipoExtra in tipiFotoExtra)
+                {
+                    var fotoDelTipo = fotoExtraArticolo.Where(f => f.Tipo == tipoExtra.Val).ToList();
+
+                    <div class="fotoExtraSezione mb-4" data-tipo="@tipoExtra.Val">
+                        <h6 class="border-bottom border-secondary pb-1">@tipoExtra.Nome</h6>
+
+                        @if (fotoDelTipo.Count == 0)
+                        {
+                            <div class="fst-italic text-muted mb-2" style="font-size:12px">Nessun elemento</div>
+                        }
+
+                        @foreach (Istanta.Models.ArticoliFoto foto in fotoDelTipo)
+                        {
+                            string thumbnail = olimpoIp + "/foto/getThumbNailOnDemand?width=40&guidId=" + foto.GuidId;
+                            string bigImage = olimpoIp + "/foto/getThumbNailOnDemand?width=800&guidId=" + foto.GuidId;
+
+                            <figure class="figure w-50 mb-3 p-2 border border-primary">
+                                <div class="row" style="align-items:center;">
+                                    <div class="col">
+                                        <h6>@foto!.NomeReale</h6>
+                                        <img src="@thumbnail" data-bigimg="@bigImage" class="figure-img img-fluid rounded img-preview-hover" alt="@foto!.NomeReale">
+                                    </div>
+                                    <div class="col">
+                                        <input type="hidden" id="fotoExtra" data='@Html.Raw(System.Text.Json.JsonSerializer.Serialize(foto))'/>
+                                        <input type="button" class="btn btn-sm btn-danger" value="Elimina" data-azione="eliminaFotoExtra">
+                                        <div class="form-check mt-2">
+                                            <input class="form-check-input" type="checkbox" id="fotoExtraAttiva-@foto.Id" guidid="@foto.GuidId" @(foto.Attiva == true ? "checked" : string.Empty) data-azione="attivaFotoExtra">
+                                            <label class="form-check-label" for="fotoExtraAttiva-@foto.Id">Attiva</label>
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
+                            </figure>
+                        }
+
+                        <div class="d-flex gap-2 flex-wrap">
+                            <button type="button" class="btn btn-sm btn-success" data-azione="aggiungiFotoExtra" data-tipo="@tipoExtra.Val">Aggiungi @tipoExtra.Nome</button>
+                            <button type="button" class="btn btn-sm btn-outline-success" data-azione="collegaFotoExtra" data-tipo="@tipoExtra.Val" data-nometipo="@tipoExtra.Nome">Collega a immagine a sistema</button>
                         </div>
-                    </figure>
+                    </div>
                 }
+
+                @*Indirizzo di Olimpo per le miniature del catalogo, come nelle altre pagine.*@
+                <input type="hidden" id="ipOlympus" value="@olimpoIp" />
+
+                @*Uno solo per tutta la pagina: il tipo scelto si tiene sull'elemento stesso.*@
+                <input type="file" id="fileNuovaFotoExtra" accept="image/*,.psd,.tif,.tiff" style="display:none" data-azione="fileFotoExtraScelto" />
                 </div>
 
 
@@ -246,10 +290,10 @@
 
                             <div class="row mt-4">
                                 <div class="col text-start px-3">
-                                    <input id="vediUltimeModifiche" type="button" class="btn btn-primary" value="Cronologia modifiche" onclick="ArchivioItem.checkLastModificaFromButton($(this), $(this).closest('.row').find('#bottoneSalva').attr('canale'),$(this).closest('.row').find('#bottoneSalva').attr('area'))" />
+                                    <input id="vediUltimeModifiche" type="button" class="btn btn-primary" value="Cronologia modifiche" data-azione="cronologiaModifiche" />
                                 </div>
                                 <div class="col text-end px-3">
-                                    <input id="bottoneSalva" type="button" class="btn btn-primary" value="Salva" onclick="ArchivioItem.salvaRevisione($(this), null, $(this).attr('canale'), $(this).attr('area'))" />
+                                    <input id="bottoneSalva" type="button" class="btn btn-primary" value="Salva" data-azione="salvaRevisione" />
                                 </div>
                             </div>
                         </div>
@@ -341,10 +385,10 @@
                           
                                 <div class="row mt-4">
                                     <div class="col text-start px-3">
-                                        <input id="vediUltimeModifiche" type="button" class="btn btn-primary" value="Cronologia modifiche" onclick="ArchivioItem.checkLastModificaFromButton($(this), $(this).closest('.row').find('#bottoneSalva').attr('canale'),$(this).closest('.row').find('#bottoneSalva').attr('area'))" />
+                                        <input id="vediUltimeModifiche" type="button" class="btn btn-primary" value="Cronologia modifiche" data-azione="cronologiaModifiche" />
                                     </div>
                                     <div class="col text-end px-3">
-                                        <input id="bottoneSalva" area="@item.Area" canale="@item.Canale" type="button" class="btn btn-primary" value="Salva" onclick="ArchivioItem.salvaRevisione($(this), null, $(this).attr('canale'), $(this).attr('area'))" />
+                                        <input id="bottoneSalva" area="@item.Area" canale="@item.Canale" type="button" class="btn btn-primary" value="Salva" data-azione="salvaRevisione" />
                                     </div>
                                 </div>
                             </div>
@@ -360,6 +404,19 @@
         </div>
 
     <!-- Modal Principale -->
+    @*I20-983: il catalogo delle immagini gia' a sistema, filtrato sul tipo da collegare.*@
+    <div class="modal fade" id="collegaFotoExtraModal" tabindex="-1" aria-labelledby="collegaFotoExtraModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="collegaFotoExtraModalLabel">Collega a immagine a sistema</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Chiudi"></button>
+                </div>
+                <div class="modal-body" id="collegaFotoExtraBody"></div>
+            </div>
+        </div>
+    </div>
+
     <div class="modal fade" id="operazioniModal" tabindex="-1" aria-labelledby="operazioniModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-scrollable">
             <div class="modal-content">
@@ -403,6 +460,10 @@
        
         ArchivioItem = new Archivio();
         agenzia = new Agenzia();
+
+        //I20-983: i gestori si agganciano da qui, che e' uno script col nonce. Scritti come
+        //attributo nel markup la policy di sicurezza della pagina li rifiuterebbe.
+        ArchivioItem.collegaGestoriSchedaArticolo();
 
         const el = $('#itemBind');
 
