@@ -149,14 +149,20 @@ test('il csv completo ha intestazioni, BOM e righe CRLF', () => {
     assert.ok(testo.startsWith('﻿'), 'senza BOM Excel sbaglia le accentate');
 
     const righe = testo.split('\r\n');
-    assert.strictEqual(righe[0], '﻿Stato;Pagina;Codice gruppo;Etichetta tracciato;Versione tracciato;Reparto;Descrizione;Campo;Dettaglio');
+    assert.strictEqual(righe[0], '﻿Stato;Pagina;Codice gruppo;Etichetta tracciato;Versione tracciato;Reparto;Descrizione;Campo;Dettaglio;Campi osservati');
     //La virgola dei codici gruppo non va virgolettata: il separatore e' il punto e virgola.
-    assert.strictEqual(righe[1], 'Cambiato;3;123,456;SS_TO;2;7 (PE);Mele | Val Venosta;prezzo_offerta;contenuto');
+    //L'ultima colonna raccoglie i cambiamenti sui campi osservati: qui non ce ne sono.
+    assert.strictEqual(righe[1], 'Cambiato;3;123,456;SS_TO;2;7 (PE);Mele | Val Venosta;prezzo_offerta;contenuto;');
     assert.strictEqual(righe[2], '', 'il file finisce con un a capo');
 
     //La colonna RefId non c'e' piu' e "Tipo" si chiama "Stato".
     assert.ok(!csv.INTESTAZIONI.includes('RefId'));
     assert.ok(!csv.INTESTAZIONI.includes('Tipo'));
+
+    //I cambiamenti sui campi osservati stanno in coda, in una colonna sola.
+    assert.strictEqual(csv.INTESTAZIONI[csv.INTESTAZIONI.length - 1], 'Campi osservati');
+    const conConfronto = csv.componiCsv([{ stato: 'Nuovo', pagina: '', codiceGruppo: 'A', confronto: 'Tema: Bio \u2192 Base' }]);
+    assert.ok(conConfronto.split('\r\n')[1].endsWith(';Tema: Bio \u2192 Base'));
 });
 
 test('i byte del csv sono utf8, accentate comprese', () => {

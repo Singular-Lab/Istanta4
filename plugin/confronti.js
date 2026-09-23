@@ -1628,18 +1628,19 @@ const confronti = {
         //I20-981: i pannelli si costruiscono per primi, perche' le linguette portano il
         //conteggio di cio' che i pannelli mostrano davvero. In vista whitelist le liste sono
         //altre, e un numero preso dal report intero direbbe il falso.
+        //I20-981: le differenze sui campi osservati servono ai nuovi e al csv, quindi si
+        //calcolano prima dei pannelli e restano indicizzate per presenza.
+        this._confrontoReportState.confronti = this._calcolaConfronti();
+        this._indiceConfronti = reportConfronti.indicizzaPerPresenza(this._confrontoReportState.confronti.voci);
+
         const recordsCambiati = this._getCurrentReportRecords("recordCambiati");
         const recordsUsciti = this._getCurrentReportRecords("recordUsciti");
 
         const changedPanel = this._buildPanelCambiati(recordsCambiati);
         const removedPanel = this._buildPanelEliminati(recordsUsciti);
-        const newPanel = this._buildPanelNuovi(this._confrontoReportState.report);
+        const confrontiPanel = this._buildPanelConfronti();
 
-        //I20-981: la sezione Confronti si apre sul confronto con se stessa. Il risultato resta
-        //nello stato perche' lo rilegge anche il csv.
-        const confronti = this._calcolaConfronti();
-        this._confrontoReportState.confronti = confronti;
-        const confrontiPanel = this._buildPanelConfronti(confronti);
+        const newPanel = this._buildPanelNuovi(this._confrontoReportState.report);
 
         const conteggi = reportConteggi.conteggiVisibili(
             recordsCambiati,
@@ -1649,7 +1650,7 @@ const confronti = {
         const changedTab = this._crTabButton(reportConteggi.etichettaLinguetta("Cambiati", conteggi.cambiati), true, "Cambiati");
         const removedTab = this._crTabButton(reportConteggi.etichettaLinguetta("Eliminati", conteggi.eliminati), false, "Eliminati");
         const newTab = this._crTabButton(reportConteggi.etichettaLinguetta("Nuovi", conteggi.nuovi), false, "Nuovi");
-        const confrontiTab = this._crTabButton(reportConteggi.etichettaLinguetta("Differenti", reportConteggi.conteggio(confronti.voci)), false, "Differenti");
+        const confrontiTab = this._crTabButton("Confronti", false, "Confronti");
 
         const panels = [
             { button: changedTab, panel: changedPanel },
@@ -1879,6 +1880,10 @@ const confronti = {
                 const dati = reportConfrontoCsv.datiRecordPerCsv(raw);
                 const dettagli = dettagliDelRecord(record) || [{ campo: "", dettaglio: "" }];
 
+                //I20-981: i cambiamenti sui campi osservati stanno tutti in una colonna sola,
+                //ripetuta su ogni riga della referenza: in Excel si filtra "non vuota".
+                const confronto = this._testoConfrontoDelRecord(record);
+
                 dettagli.forEach(dettaglio => {
                     voci.push({
                         stato: stato,
@@ -1889,16 +1894,21 @@ const confronti = {
                         reparto: dati.reparto,
                         descrizione: dati.descrizione,
                         campo: dettaglio?.campo || "",
-                        dettaglio: dettaglio?.dettaglio || ""
+                        dettaglio: dettaglio?.dettaglio || "",
+                        confronto: confronto
                     });
                 });
             });
         };
 
         aggiungi("Cambiato", report?.recordCambiati, (record) => {
-            const differenze = Array.isArray(record?.preAnalisi?.differenze) ? record.preAnalisi.differenze : [];
+            const tutte = Array.isArray(record?.preAnalisi?.differenze) ? record.preAnalisi.differenze : [];
+            //Le differenze sui campi osservati hanno la loro colonna: qui restano le
+            //segnalazioni dell'analisi di integrita', altrimenti si leggerebbero due volte.
+            const differenze = tutte.filter(d => d?.origine !== "confronto");
+
             if (differenze.length === 0) {
-                return [{ campo: "", dettaglio: "Differenza non specificata" }];
+                return [{ campo: "", dettaglio: tutte.length > 0 ? "" : "Differenza non specificata" }];
             }
 
             return differenze.map(diff => ({
@@ -1920,28 +1930,6 @@ const confronti = {
             return errors.map(error => ({ campo: "", dettaglio: error }));
         });
 
-        //I20-981: le differenze sui campi osservati, dalla sezione Confronti. Come i nuovi non
-        //hanno una pagina: non dicono dove sta la referenza, dicono che qualcosa che decide
-        //dove metterla e' cambiato.
-        const confronti = this._confrontoReportState?.confronti;
-        ((confronti && confronti.voci) || []).forEach(voce => {
-            const dati = reportConfrontoCsv.datiRecordPerCsv(voce.raw);
-
-            voce.differenze.forEach(differenza => {
-                voci.push({
-                    stato: "Differente",
-                    pagina: "",
-                    codiceGruppo: voce.codiceGruppo || "",
-                    etichetta: dati.etichetta,
-                    versione: dati.versione,
-                    reparto: dati.reparto,
-                    descrizione: dati.descrizione,
-                    campo: differenza.etichetta,
-                    dettaglio: "Prima: " + (differenza.prima || "(vuoto)") + " | Adesso: " + (differenza.adesso || "(vuoto)")
-                });
-            });
-        });
-
         //I nuovi non hanno una pagina: nel documento non ci sono ancora, e in coda ci vanno.
         this._getReportNuoviRows(report).forEach(row => {
             const dati = reportConfrontoCsv.datiRecordPerCsv(row.raw);
@@ -1955,7 +1943,8 @@ const confronti = {
                 reparto: dati.reparto,
                 descrizione: row.descrizione || dati.descrizione,
                 campo: "",
-                dettaglio: "Presente nel tracciato ma non in impaginato"
+                dettaglio: "Presente nel tracciato ma non in impaginato",
+                confronto: row.confronto || ""
             });
         });
 
@@ -2006,6 +1995,16 @@ const confronti = {
         const listaTracciato = this._leggiListaKitLocale();
 
         return this._estraiNuoviDaLista(report, listaTracciato);
+    },
+
+    /// I cambiamenti sui campi osservati di una referenza, in una riga sola per il csv.
+    _testoConfrontoDelRecord(record) {
+        const differenze = Array.isArray(record?.preAnalisi?.differenze) ? record.preAnalisi.differenze : [];
+
+        return differenze
+            .filter(d => d?.origine === "confronto")
+            .map(d => (d.label || "") + ": " + (d.difference || ""))
+            .join(" | ");
     },
 
     _getReportRecordRaw(record) {
@@ -2715,8 +2714,17 @@ const confronti = {
                     diffList.style.minWidth = "0";
                     diffList.style.width = "100%";
 
-                    const differenze = Array.isArray(item?.preAnalisi?.differenze) ? item.preAnalisi.differenze : [];
-                    if (differenze.length === 0) {
+                    //I20-981: nella stessa riga convivono due cose diverse. Le segnalazioni
+                    //dell'analisi di integrita' dicono che il box in pagina non corrisponde al
+                    //dato; le differenze sui campi osservati dicono che e' cambiato qualcosa
+                    //che non tocca il box ma puo' cambiare la pagina in cui va. Si vedono
+                    //separate perche' chiedono all'operatore due decisioni diverse.
+                    const tutteLeDifferenze = Array.isArray(item?.preAnalisi?.differenze) ? item.preAnalisi.differenze : [];
+                    const segnalazioniIntegrita = tutteLeDifferenze.filter(d => d?.origine !== "confronto");
+                    const differenzeConfronto = tutteLeDifferenze.filter(d => d?.origine === "confronto");
+
+                    const differenze = segnalazioniIntegrita;
+                    if (tutteLeDifferenze.length === 0) {
                         const emptyDiff = document.createElement("div");
                         emptyDiff.textContent = "Nessuna differenza rilevata";
                         emptyDiff.style.opacity = "0.7";
@@ -2747,6 +2755,10 @@ const confronti = {
                             diffRow.style.minWidth = "0";
                             diffList.appendChild(diffRow);
                         });
+                    }
+
+                    if (differenzeConfronto.length > 0) {
+                        diffList.appendChild(this._crRiquadroConfronto(differenzeConfronto));
                     }
 
                     if (item?._hasWhitelistOtherSegnalazioni) {
@@ -2800,7 +2812,12 @@ const confronti = {
                     btnInfo.addEventListener("click", (ev) => this._onConfrontoAction(ev, "info"));
 
                     if (this._confrontoReportState?.activeList !== "whitelist") {
-                        actions.appendChild(btnFix);
+                        //Il Fix rifa' il box a partire dal dato: con sole differenze sui campi
+                        //osservati in pagina non c'e' niente da rifare, e offrirlo sarebbe un
+                        //invito a rimettere mano a un box che va bene com'e'.
+                        if (segnalazioniIntegrita.length > 0) {
+                            actions.appendChild(btnFix);
+                        }
                         actions.appendChild(btnResolve);
                     }
                     actions.appendChild(btnWhitelist);
@@ -3855,6 +3872,49 @@ const confronti = {
         differente: "#1565c0"
     },
 
+    //I20-981: il riquadro che raccoglie le differenze sui campi osservati dentro una riga.
+    //Sta staccato dalle segnalazioni di integrita' e porta il colore dei confronti, cosi' si
+    //capisce a colpo d'occhio che parla di un'altra cosa.
+    _crRiquadroConfronto(differenze) {
+        const riquadro = document.createElement("div");
+        riquadro.style.marginTop = "6px";
+        riquadro.style.padding = "4px 6px";
+        riquadro.style.borderLeft = "3px solid " + this.COLORI_STATO.differente;
+        riquadro.style.backgroundColor = "#eef3fb";
+        riquadro.style.borderRadius = "3px";
+        riquadro.style.minWidth = "0";
+
+        const titolo = document.createElement("div");
+        titolo.textContent = "Campi osservati (confronto)";
+        titolo.style.fontSize = "10px";
+        titolo.style.fontWeight = "700";
+        titolo.style.letterSpacing = "0.3px";
+        titolo.style.textTransform = "uppercase";
+        titolo.style.color = this.COLORI_STATO.differente;
+        titolo.style.marginBottom = "2px";
+        Utility.impostaTooltip(titolo, "Campi che non cambiano il box ma che decidono a che pagina va la referenza");
+        riquadro.appendChild(titolo);
+
+        (differenze || []).forEach(differenza => {
+            const riga = document.createElement("div");
+            riga.style.fontSize = "11px";
+            riga.style.lineHeight = "1.3";
+            riga.style.whiteSpace = "normal";
+            riga.style.overflowWrap = "anywhere";
+            riga.style.minWidth = "0";
+
+            const campo = document.createElement("span");
+            campo.textContent = differenza?.label || "";
+            campo.style.fontWeight = "600";
+            riga.appendChild(campo);
+            riga.appendChild(document.createTextNode(": " + (differenza?.difference || "")));
+
+            riquadro.appendChild(riga);
+        });
+
+        return riquadro;
+    },
+
     _crRow(stato = null) {
         const row = document.createElement("div");
         row.style.display = "flex";
@@ -3972,81 +4032,31 @@ const confronti = {
         };
     },
 
-    _buildPanelConfronti(confronti) {
+    //I20-981: la scheda Confronti ospitera' il confronto con un'altra lista (prossimo lotto).
+    //Il confronto della lista con se stessa vive nelle righe dei Cambiati, dove ci sono gia' i
+    //pulsanti per trovare la referenza, risolverla o metterla in whitelist.
+    _buildPanelConfronti() {
         const panel = this._crPanel();
         this._stylePanelForReportListMode(panel);
         const topbar = this._crTabTopbar();
         const content = this._crScrollableContent();
 
         const modo = document.createElement("div");
-        modo.textContent = "Confronto della lista con se stessa";
+        modo.textContent = "Confronto con un'altra lista";
         modo.style.fontWeight = "600";
         modo.style.fontSize = "12px";
-        Utility.impostaTooltip(modo, "Si confrontano i campi osservati fra il valore di adesso e quello che avevano prima");
         topbar.appendChild(modo);
 
-        const campi = (confronti && confronti.campi) || [];
-        const voci = (confronti && confronti.voci) || [];
+        content.appendChild(this._crEmptyState("Nessuna lista di confronto selezionata"));
 
-        if (campi.length > 0) {
-            const elenco = document.createElement("div");
-            elenco.textContent = "Campi osservati: " + campi.map(c => c.label || c.keyInRecordInTracciato).join(", ");
-            elenco.style.fontSize = "11px";
-            elenco.style.opacity = "0.8";
-            elenco.style.marginLeft = "8px";
-            elenco.style.minWidth = "0";
-            elenco.style.overflow = "hidden";
-            elenco.style.textOverflow = "ellipsis";
-            elenco.style.whiteSpace = "nowrap";
-            Utility.impostaTooltip(elenco, campi.map(c => (c.label || "") + " (" + (c.keyInRecordInTracciato || "") + ")").join("\n"));
-            topbar.appendChild(elenco);
-        }
-
-        if (campi.length === 0) {
-            //Senza campi configurati la sezione non ha niente da confrontare, e lo dice invece
-            //di mostrare un elenco vuoto che sembrerebbe "tutto a posto".
-            content.appendChild(this._crEmptyState("Nessun campo osservato configurato per questa agenzia"));
-        }
-        else if (voci.length === 0) {
-            content.appendChild(this._crEmptyState("Nessuna differenza sui campi osservati"));
-        }
-        else {
-            voci.forEach(voce => {
-                const row = this._crRow("differente");
-
-                const left = document.createElement("div");
-                left.style.display = "flex";
-                left.style.flexDirection = "column";
-                left.style.flex = "1 1 auto";
-                left.style.minWidth = "0";
-                left.style.overflow = "hidden";
-                left.style.gap = "4px";
-
-                left.appendChild(this._crCodiceGruppo(voce.codiceGruppo));
-
-                voce.differenze.forEach(differenza => {
-                    const riga = document.createElement("div");
-                    riga.style.fontSize = "11px";
-                    riga.style.lineHeight = "1.3";
-                    riga.style.whiteSpace = "normal";
-                    riga.style.overflowWrap = "anywhere";
-                    riga.style.minWidth = "0";
-
-                    const campo = document.createElement("span");
-                    campo.textContent = differenza.etichetta;
-                    campo.style.fontWeight = "600";
-                    riga.appendChild(campo);
-
-                    //Prima e adesso, in quest'ordine: si legge come una frase.
-                    riga.appendChild(document.createTextNode(": " + (differenza.prima || "(vuoto)") + " → " + (differenza.adesso || "(vuoto)")));
-
-                    left.appendChild(riga);
-                });
-
-                row.appendChild(left);
-                content.appendChild(row);
-            });
-        }
+        const nota = document.createElement("div");
+        nota.textContent = "Le differenze della lista con se stessa si trovano nella scheda Cambiati, "
+            + "nel riquadro \"Campi osservati\" di ogni referenza.";
+        nota.style.padding = "0 8px 12px 8px";
+        nota.style.fontSize = "11px";
+        nota.style.opacity = "0.8";
+        nota.style.whiteSpace = "normal";
+        content.appendChild(nota);
 
         panel.appendChild(topbar);
         panel.appendChild(content);
@@ -4684,11 +4694,17 @@ const confronti = {
 
             if (codiciPresenti.has(codiceGruppo)) continue;
 
+            //I20-981: anche una referenza non ancora impaginata puo' avere campi osservati
+            //cambiati, ed e' un'informazione che serve prima di decidere dove metterla.
+            const confrontoRiga = reportConfronti.differenzePerPresenza(
+                this._indiceConfronti, codiceGruppo, reportConfronti.idRecDelRecord(item));
+
             result.push({
                 raw: item,
                 originalIndex: i,
                 codiceGruppo,
-                descrizione: this._getDescrizioneNuovo(item)
+                descrizione: this._getDescrizioneNuovo(item),
+                confronto: confrontoRiga != null ? reportConfronti.testoDifferenze(confrontoRiga.differenze) : ""
             });
         }
 
@@ -4731,6 +4747,14 @@ const confronti = {
                 minPx: 240,
                 sortable: true,
                 small: true
+            },
+            {
+                key: "confronto",
+                label: "Campi osservati",
+                perc: 130,
+                minPx: 260,
+                sortable: true,
+                small: true
             }
         ];
 
@@ -4745,7 +4769,7 @@ const confronti = {
         //rimuoviamo aventuali colonneExtra con chiave codice, descrizione o codiceGruppo se ci sono, per evitare duplicati
         const colonneExtraFiltrate = colonneExtra.filter(col => {
             const key = col.key.toLowerCase();
-            return key !== "codicegruppo" && key !== "descrizione" && key !== "codice";
+            return key !== "codicegruppo" && key !== "descrizione" && key !== "codice" && key !== "confronto";
         });
 
         const colonne = [...colonneBase, ...colonneExtraFiltrate];
@@ -4830,6 +4854,8 @@ const confronti = {
                 value = rowData.codiceGruppo || "";
             } else if (col.key === "descrizione") {
                 value = rowData.descrizione || "";
+            } else if (col.key === "confronto") {
+                value = rowData.confronto || "";
             } else {
                 const rawVal = this._getRawValueForNuoviColumn(rowData?.raw, col.key);
                 value = rawVal == null ? "" : String(rawVal);

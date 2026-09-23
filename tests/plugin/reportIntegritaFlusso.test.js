@@ -486,58 +486,73 @@ test('la copia negli appunti passa una stringa, in tutto il plugin', () => {
     assert.strictEqual((sorgente('schedaRef.js').match(/writeText\(String\(\$\(this\)\.attr\("codiceGruppo"\) \|\| ""\)\)/g) || []).length, 2);
 });
 
-/* I20-981 (Lotto 4a): la sezione Confronti. */
+/* I20-981 (Lotto 4a): le differenze sui campi osservati. */
 
-test('la quarta scheda confronta la lista con se stessa', () => {
-    const compila = corpoFunzione(confronti, 'compilaReportConfronto(report, options = {}) {');
+test('le differenze di confronto diventano segnalazioni della referenza', () => {
+    //Vivono nella scheda Cambiati insieme alle segnalazioni di integrita', cosi' l'operatore
+    //ha sotto mano i pulsanti che gia' conosce: trova, risolvi, whitelist, info.
+    const applica = corpoFunzione(indexNew, 'async function applicaConfronto(');
 
-    //Il risultato del confronto sta nello stato, perche' lo rilegge anche il csv.
-    assert.match(compila, /const confronti = this\._calcolaConfronti\(\)/);
-    assert.match(compila, /this\._confrontoReportState\.confronti = confronti/);
-
-    //La linguetta porta il conteggio dei differenti, come le altre.
-    assert.match(compila, /etichettaLinguetta\("Differenti", reportConteggi\.conteggio\(confronti\.voci\)\)/);
-    assert.match(compila, /\{ button: confrontiTab, panel: confrontiPanel \}/);
-    assert.match(compila, /confrontiTab\.addEventListener\("click", \(\) => activateTab\(3\)\)/);
-
-    //Quattro linguette col numero non stanno su una riga sola in un pannello stretto.
-    const tabRoot = corpoFunzione(confronti, '_crTabRoot() {');
-    assert.match(tabRoot, /header\.style\.flexWrap = "wrap"/);
+    assert.match(applica, /reportConfronti\.confrontoConSeStessa\(lista\.records, campiOsservati\)/);
+    assert.match(applica, /reportConfronti\.indicizzaPerPresenza/);
+    assert.match(applica, /reportConfronti\.differenzePerPresenza\(\s*differenzeConfronto, codiceGruppo, idRecScheda\)/);
+    //Marcate, cosi' si distinguono da quelle dell'analisi di integrita'.
+    assert.match(applica, /origine: "confronto"/);
 });
 
-test('si confrontano solo i campi che l\'agenzia dichiara', () => {
-    const campi = corpoFunzione(confronti, 'campiOsservatiConfronto() {');
-    assert.match(campi, /pluginMiddleware\.getCampo\("campiOsservatiConfronto"\)/);
+test('nella riga le due cose restano separate, e il Fix vale solo per l\'integrita\'', () => {
+    const pannello = corpoFunzione(confronti, '_buildPanelCambiati(records) {');
 
-    const calcolo = corpoFunzione(confronti, '_calcolaConfronti() {');
-    assert.match(calcolo, /reportConfronti\.confrontoConSeStessa\(this\._recordsListaKit\(\), campi\)/);
-    //Senza campi configurati non si confronta nulla, e il pannello lo dice.
-    assert.match(calcolo, /if \(campi\.length === 0\)/);
+    assert.match(pannello, /const segnalazioniIntegrita = tutteLeDifferenze\.filter\(d => d\?\.origine !== "confronto"\)/);
+    assert.match(pannello, /const differenzeConfronto = tutteLeDifferenze\.filter\(d => d\?\.origine === "confronto"\)/);
+    assert.match(pannello, /this\._crRiquadroConfronto\(differenzeConfronto\)/);
 
-    const pannello = corpoFunzione(confronti, '_buildPanelConfronti(confronti) {');
-    assert.match(pannello, /Nessun campo osservato configurato per questa agenzia/);
-    assert.match(pannello, /Nessuna differenza sui campi osservati/);
-    //Evidenzia e basta: nessun pulsante che proponga correzioni.
-    assert.doesNotMatch(pannello, /_crIconButton|_onConfrontoAction/);
+    //Il Fix rifa' il box: senza segnalazioni di integrita' non c'e' niente da rifare.
+    assert.match(pannello, /if \(segnalazioniIntegrita\.length > 0\) \{\s*\n\s*actions\.appendChild\(btnFix\);/);
+
+    //Gli altri pulsanti restano disponibili comunque.
+    assert.match(pannello, /actions\.appendChild\(btnResolve\)/);
+    assert.match(pannello, /actions\.appendChild\(btnWhitelist\)/);
+
+    const riquadro = corpoFunzione(confronti, '_crRiquadroConfronto(differenze) {');
+    assert.match(riquadro, /Campi osservati \(confronto\)/);
+    assert.match(riquadro, /COLORI_STATO\.differente/);
 });
 
-test('le differenze finiscono anche nel csv', () => {
+test('anche le referenze nuove dicono cosa e\' cambiato', () => {
+    //Una referenza non ancora impaginata puo' avere campi osservati cambiati, ed e' proprio
+    //quello che serve sapere prima di decidere dove metterla.
+    const estrai = corpoFunzione(confronti, '_estraiNuoviDaLista(report, listaTracciato) {');
+    assert.match(estrai, /reportConfronti\.differenzePerPresenza\(/);
+    assert.match(estrai, /confronto: confrontoRiga != null \? reportConfronti\.testoDifferenze/);
+
+    //E la tabella ha la sua colonna.
+    const tabella = corpoFunzione(confronti, '_renderNuoviTable() {');
+    assert.match(tabella, /key: "confronto",\s*\n\s*label: "Campi osservati"/);
+});
+
+test('nel csv i cambiamenti di confronto stanno in una colonna sola', () => {
     const build = corpoFunzione(confronti, '_buildReportConfrontoCsv(report) {');
 
-    assert.match(build, /stato: "Differente"/);
-    assert.match(build, /this\._confrontoReportState\?\.confronti/);
-    assert.match(build, /"Prima: " \+ \(differenza\.prima \|\| "\(vuoto\)"\)/);
+    //Una colonna per referenza, non righe in piu'.
+    assert.match(build, /confronto: confronto/);
+    assert.doesNotMatch(build, /stato: "Differente"/);
+    //Le segnalazioni di confronto non si ripetono anche fra le differenze.
+    assert.match(build, /const differenze = tutte\.filter\(d => d\?\.origine !== "confronto"\)/);
+
+    const testo = corpoFunzione(confronti, '_testoConfrontoDelRecord(record) {');
+    assert.match(testo, /filter\(d => d\?\.origine === "confronto"\)/);
 });
 
-test('la lista del kit si legge una volta sola per report', () => {
-    //La leggevano il pannello dei nuovi e il csv, e la sezione Confronti sarebbe stata la terza:
-    //su un volantino sono parecchi megabyte di json.
-    const lettura = corpoFunzione(confronti, '_leggiListaKitLocale() {');
-    assert.match(lettura, /stato\.listaKit !== undefined/);
-    assert.match(lettura, /stato\.listaKit = lista/);
+test('la scheda Confronti resta in attesa del confronto con altre liste', () => {
+    const pannello = corpoFunzione(confronti, '_buildPanelConfronti() {');
 
-    //Nessuno legge piu' il file per conto suo.
-    const codice = senzaCommenti(confronti);
-    const letture = (codice.match(/readFile\(pathLavorazione \+ "\/listaKit"/g) || []).length;
-    assert.strictEqual(letture, 1, 'la lista del kit si legge in un posto solo');
+    assert.match(pannello, /Nessuna lista di confronto selezionata/);
+    //E dice dove sono finite le differenze con se stessa, per non farle cercare.
+    assert.match(pannello, /scheda Cambiati/);
+
+    //La linguetta non conta piu' nulla: il conteggio dei differenti e' confluito nei Cambiati.
+    const compila = corpoFunzione(confronti, 'compilaReportConfronto(report, options = {}) {');
+    assert.doesNotMatch(compila, /etichettaLinguetta\("Differenti"/);
+    assert.match(compila, /this\._crTabButton\("Confronti", false, "Confronti"\)/);
 });

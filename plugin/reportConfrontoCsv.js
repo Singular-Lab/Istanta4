@@ -29,7 +29,11 @@ const INTESTAZIONI = [
     "Reparto",
     "Descrizione",
     "Campo",
-    "Dettaglio"
+    "Dettaglio",
+    //I20-981: una colonna sola per tutti i cambiamenti sui campi osservati della referenza.
+    //In Excel si filtra "non vuota" e si ha davanti l'elenco di cio' che puo' spostare di
+    //pagina una referenza, senza doverlo cercare fra le righe delle altre segnalazioni.
+    "Campi osservati"
 ];
 
 const CAMPI_DESCRIZIONE = [
@@ -197,7 +201,7 @@ function campoCsv(valore) {
 
 /// Il csv completo: intestazioni, righe ordinate per pagina, BOM davanti.
 /// Una voce ha: stato, pagina, codiceGruppo, etichetta, versione, reparto, descrizione,
-/// campo, dettaglio.
+/// campo, dettaglio, confronto.
 function componiCsv(voci) {
     const righe = [INTESTAZIONI.slice()];
 
@@ -211,7 +215,8 @@ function componiCsv(voci) {
             voce.reparto,
             voce.descrizione,
             voce.campo,
-            voce.dettaglio
+            voce.dettaglio,
+            voce.confronto
         ]);
     });
 

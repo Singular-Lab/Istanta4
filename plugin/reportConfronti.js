@@ -106,6 +106,7 @@ function confrontoConSeStessa(recordsLista, campiOsservati) {
 
         risultato.push({
             codiceGruppo: valoreLeggibile(dato["Scatto.CodiceGruppo"]),
+            idRec: idRecDelRecord(dato),
             etichettaTracciato: valoreLeggibile(dato["Tracciato.Label"]),
             versioneTracciato: valoreLeggibile(dato["Tracciato.Versione"]),
             raw: dato,
@@ -116,10 +117,78 @@ function confrontoConSeStessa(recordsLista, campiOsservati) {
     return risultato;
 }
 
+/// L'idRec di un record, come lo legge il resto del plugin: lo stesso codice gruppo puo'
+/// comparire piu' volte con idRec diversi, e sono presenze diverse.
+function idRecDelRecord(record) {
+    const dato = record || {};
+    const valore = dato.idRec != null ? dato.idRec : dato.IdRec;
+
+    if (valore == null || valore === "") {
+        return null;
+    }
+
+    const numero = parseInt(valore, 10);
+    return isNaN(numero) ? null : numero;
+}
+
+/// La chiave con cui si aggancia una referenza della lista al suo box in pagina.
+function chiavePresenza(codiceGruppo, idRec) {
+    const codice = valoreLeggibile(codiceGruppo);
+    const numero = idRec == null || idRec === "" || isNaN(Number(idRec)) ? "" : String(Number(idRec));
+
+    return codice + "|" + numero;
+}
+
+/// Le differenze indicizzate per presenza, cosi' che ogni riga del report possa cercare le
+/// proprie senza riscorrere tutta la lista.
+/// Una referenza senza idRec si trova anche cercandola col solo codice gruppo: e' il caso
+/// normale, un gruppo che in pagina compare una volta sola.
+function indicizzaPerPresenza(voci) {
+    const indice = {};
+
+    (voci || []).forEach(voce => {
+        indice[chiavePresenza(voce.codiceGruppo, voce.idRec)] = voce;
+
+        const soloCodice = chiavePresenza(voce.codiceGruppo, null);
+        if (indice[soloCodice] == null) {
+            indice[soloCodice] = voce;
+        }
+    });
+
+    return indice;
+}
+
+/// Le differenze di una presenza, cercate prima per codice gruppo e idRec e poi, se non si
+/// trova, col solo codice gruppo.
+function differenzePerPresenza(indice, codiceGruppo, idRec) {
+    if (indice == null) {
+        return null;
+    }
+
+    const esatta = indice[chiavePresenza(codiceGruppo, idRec)];
+    if (esatta != null) {
+        return esatta;
+    }
+
+    return indice[chiavePresenza(codiceGruppo, null)] || null;
+}
+
+/// Le differenze in una riga sola, per il csv e per le tabelle: "Tema: Bio -> Base | Ruolo: ...".
+function testoDifferenze(differenze, separatore = " | ") {
+    return (differenze || [])
+        .map(d => (d.etichetta || d.campo || "") + ": " + (d.prima || "(vuoto)") + " \u2192 " + (d.adesso || "(vuoto)"))
+        .join(separatore);
+}
+
 module.exports = {
     CHIAVE_ALTERAZIONI,
     valoreLeggibile,
     sonoUguali,
     differenzeDelRecord,
-    confrontoConSeStessa
+    confrontoConSeStessa,
+    idRecDelRecord,
+    chiavePresenza,
+    indicizzaPerPresenza,
+    differenzePerPresenza,
+    testoDifferenze
 };
