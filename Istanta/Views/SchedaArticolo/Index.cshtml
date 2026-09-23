@@ -90,31 +90,52 @@
 
                 }
 
-                @foreach (var foto_gruppo in itemBind.ArticoliFotos!.Where(f => fotoPrimaria != null && f.Id != fotoPrimaria.Id && f.Tipo == (byte)IstantaLib.TipoFoto.Foto).GroupBy(g => getNomeGenerico(g.NomeReale)).Select(s => new { Gruppo =  s.ToList() }))
+                @{
+                    //I20-985: le foto non in uso si contano prima, perche' il numero serve sia per
+                    //decidere se ha senso la tendina sia per dirlo senza costringere ad aprirla.
+                    //Di ogni nome si tiene la piu' recente, che e' quella che uscirebbe scegliendo
+                    //quel nome, ed e' la stessa regola di prima.
+                    var altreFotoArticolo = itemBind.ArticoliFotos!
+                        .Where(f => fotoPrimaria != null && f.Id != fotoPrimaria.Id && f.Tipo == (byte)IstantaLib.TipoFoto.Foto)
+                        .GroupBy(g => getNomeGenerico(g.NomeReale))
+                        .Select(s => s.OrderByDescending(o => o.DataModifica).FirstOrDefault())
+                        .Where(f => f != null && System.IO.Path.GetFileNameWithoutExtension(f.NomeReale) != nomeFotoPrimariaNoExt)
+                        .ToList();
+                }
+
+                @*I20-985: una decina di foto una sotto l'altra faceva una scheda lunghissima.
+                  Stanno raccolte e chiuse: chi deve solo guardare la primaria non se le trova
+                  tra i piedi, chi deve cambiarla le apre.*@
+                @if (altreFotoArticolo.Count > 0)
                 {
-                    //Prendiamo la prima in ordine desc di modifica che è quella attualmente attiva, che uscirebbe se dovessimo selezionare quel nome foto
-                    ArticoliFoto foto = foto_gruppo.Gruppo.OrderByDescending(o => o.DataModifica).FirstOrDefault();                    
-                    string nomeFotNoExt = System.IO.Path.GetFileNameWithoutExtension(foto.NomeReale);
-                    if (nomeFotNoExt == nomeFotoPrimariaNoExt)
-                        continue;
+                    <div class="mb-3">
+                        <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#altreFotoArticolo" aria-expanded="false" aria-controls="altreFotoArticolo">
+                            Altre foto non selezionate (@altreFotoArticolo.Count)
+                        </button>
 
-                    string thumbnail = olimpoIp + "/foto/getThumbNailOnDemand?width=150&guidId=" + foto.GuidId;
-                    string bigImage = olimpoIp + "/foto/getThumbNailOnDemand?width=800&guidId=" + foto.GuidId;
+                        <div class="collapse mt-2" id="altreFotoArticolo">
+                            @foreach (var foto in altreFotoArticolo)
+                            {
+                                string thumbnail = olimpoIp + "/foto/getThumbNailOnDemand?width=150&guidId=" + foto!.GuidId;
+                                string bigImage = olimpoIp + "/foto/getThumbNailOnDemand?width=800&guidId=" + foto.GuidId;
+                                bool isPostPorodotta = ((_extPostProduzione.Length <= 0) || _extPostProduzione.Contains(System.IO.Path.GetExtension(foto.NomeReale!)));
 
-                    bool isPostPorodotta = ((_extPostProduzione.Length <= 0) || _extPostProduzione.Contains(System.IO.Path.GetExtension(foto.NomeReale!))); 
-                    <figure class="figure mb-4 p-2" style="border:3px solid @(isPostPorodotta ? "green" : "red")">
-                            <div class="row" style="align-items:center;">
-                                <div class="col">
-                                    <div class="riquadroFotoArticolo">
-                                        <img src="@thumbnail" data-bigimg="@bigImage" class="figure-img rounded img-preview-hover" alt="@foto?.NomeReale">
+                                <figure class="figure mb-4 p-2" style="border:3px solid @(isPostPorodotta ? "green" : "red")">
+                                    <div class="row" style="align-items:center;">
+                                        <div class="col">
+                                            <div class="riquadroFotoArticolo">
+                                                <img src="@thumbnail" data-bigimg="@bigImage" class="figure-img rounded img-preview-hover" alt="@foto?.NomeReale">
+                                            </div>
+                                        </div>
+                                        <div class="col">
+                                            <h6>@foto!.NomeReale</h6>
+                                            <input type="button" class="btn btn-sm btn-primary" value="Seleziona" data-azione="selezionaPrimaria" data-guidid="@foto.GuidId">
+                                        </div>
                                     </div>
-                                </div>
-                                <div class="col">
-                                <h6>@foto!.NomeReale</h6>
-                                <input type="button" class="btn btn-sm btn-primary" value="Seleziona" data-azione="selezionaPrimaria" data-guidid="@foto.GuidId">
-                                </div>
-                            </div>
-                    </figure>
+                                </figure>
+                            }
+                        </div>
+                    </div>
                 }
 
                 @*I20-985: da qui si archivia una foto nuova del prodotto. Si sceglie il file, se

@@ -226,12 +226,12 @@ test('la foto nuova del prodotto si archivia senza selezionarla', () => {
     assert.strictEqual(dati.idLavorazione, 0, 'dalla scheda non si sta lavorando a un volantino');
 });
 
-test('il browser sa disegnare solo alcuni formati', () => {
-    assert.strictEqual(Archivio.tipoAnteprimaDi('scatto.jpg'), 'image/jpeg');
-    assert.strictEqual(Archivio.tipoAnteprimaDi('scatto.PNG'), 'image/png');
-    assert.strictEqual(Archivio.tipoAnteprimaDi('scatto.psd'), null);
-    assert.strictEqual(Archivio.tipoAnteprimaDi('scatto.tif'), null);
-    assert.strictEqual(Archivio.tipoAnteprimaDi(null), null);
+// L'elenco fisso di estensioni non c'e' piu': decideva in anticipo cosa il browser sa aprire e
+// sbagliava per difetto, per esempio sul tiff, che Safari disegna. Quello che resta a parte e' il
+// psd, perche' li' l'immagine va estratta prima. Le regole nuove stanno in anteprimaPsd.test.js.
+test('non si decide piu\' dall\'estensione cosa e\' mostrabile', () => {
+    assert.strictEqual(typeof Archivio.tipoAnteprimaDi, 'undefined');
+    assert.strictEqual(typeof Archivio.eUnPsd, 'function');
 });
 
 test('si vede cosa si sta per archiviare prima di scrivere', () => {

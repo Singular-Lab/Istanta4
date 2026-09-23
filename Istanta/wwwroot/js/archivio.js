@@ -202,23 +202,67 @@ class Archivio {
 
     /// I20-985: il tipo con cui il browser sa disegnare questo file, oppure null.
     /// Un psd non lo sa disegnare, e resta il caso che capita piu' spesso.
-    static tipoAnteprimaDi(nomeFile) {
-        var nome = typeof nomeFile === "string" ? nomeFile.toLowerCase() : "";
-        var mostrabili = {
-            ".jpg": "image/jpeg",
-            ".jpeg": "image/jpeg",
-            ".png": "image/png",
-            ".webp": "image/webp",
-            ".gif": "image/gif"
-        };
+    /// Quanto si legge della testa di un psd per cercarci la miniatura: le risorse immagine
+    /// stanno all'inizio, otto megabyte sono abbondanti anche per un file da centinaia.
+    static get TESTA_PSD() { return 8 * 1024 * 1024; }
 
-        for (var estensione in mostrabili) {
-            if (Object.prototype.hasOwnProperty.call(mostrabili, estensione) && nome.endsWith(estensione)) {
-                return mostrabili[estensione];
+    /// Oltre questa misura non si legge il file per intero: diventerebbe testo in memoria per
+    /// un terzo in piu' della sua dimensione.
+    static get LIMITE_ANTEPRIMA() { return 40 * 1024 * 1024; }
+
+    /// Il lato dell'anteprima disegnata: il riquadro e' da 150, il doppio basta perche' si veda
+    /// nitida anche sugli schermi fitti.
+    static get LATO_ANTEPRIMA() { return 300; }
+
+    /// L'immagine decodificata, ridisegnata piccola e resa come indirizzo data. Si rimpicciolisce
+    /// perche' l'originale come indirizzo data sarebbe enorme, e qui serve solo una miniatura.
+    static indirizzoRimpicciolito(immagine) {
+        try {
+            var misure = Archivio.misureRimpicciolite(immagine.width, immagine.height, Archivio.LATO_ANTEPRIMA);
+            if (misure.larghezza === 0) {
+                return null;
             }
+
+            var tela = document.createElement("canvas");
+            tela.width = misure.larghezza;
+            tela.height = misure.altezza;
+            tela.getContext("2d").drawImage(immagine, 0, 0, misure.larghezza, misure.altezza);
+
+            //png e non jpeg: quello che ha il fondo trasparente non deve diventare nero.
+            return tela.toDataURL("image/png");
+        }
+        catch (e) {
+            console.log("Anteprima non disegnabile: " + e);
+            return null;
+        }
+    }
+
+    /// Se il file e' un psd. E' l'unico formato che si tratta a parte, perche' il browser non
+    /// lo disegna ma dentro ci sta una miniatura da tirare fuori.
+    static eUnPsd(nomeFile) {
+        var nome = typeof nomeFile === "string" ? nomeFile.toLowerCase() : "";
+        return nome.endsWith(".psd") || nome.endsWith(".psb");
+    }
+
+    /// Quanto grande disegnare l'anteprima, tenendo le proporzioni e senza mai ingrandire:
+    /// una miniatura gonfiata verrebbe sgranata, e non serve a nessuno.
+    static misureRimpicciolite(larghezza, altezza, lato) {
+        if (!(larghezza > 0) || !(altezza > 0) || !(lato > 0)) {
+            return { larghezza: 0, altezza: 0 };
         }
 
-        return null;
+        var fattore = Math.min(1, lato / Math.max(larghezza, altezza));
+        return {
+            larghezza: Math.max(1, Math.round(larghezza * fattore)),
+            altezza: Math.max(1, Math.round(altezza * fattore))
+        };
+    }
+
+    /// Se conviene leggere tutto il file per farne un indirizzo data. Un tiff da trecento
+    /// megabyte diventerebbe quattrocento di testo in memoria, e il browser si pianta: meglio
+    /// dire che l'anteprima non c'e' che bloccare la pagina per mostrarla.
+    static siPuoLeggereTutto(dimensione) {
+        return typeof dimensione === "number" && dimensione > 0 && dimensione <= Archivio.LIMITE_ANTEPRIMA;
     }
 
     /// Quello che si manda per archiviare una foto nuova del prodotto.
@@ -303,6 +347,11 @@ class Archivio {
     }
 
     /// Mostra cosa si sta per archiviare. Fino alla conferma non si scrive niente.
+    ///
+    /// I20-985: non si decide piu' dall'estensione se il formato e' mostrabile, perche' vuol
+    /// dire indovinare in anticipo cosa il browser di turno sa fare: si prova a disegnare e si
+    /// scrive che l'anteprima manca solo quando il disegno fallisce davvero. Il psd e' l'unica
+    /// eccezione, perche' li' l'immagine va estratta prima.
     AnteprimaFotoArticolo(campo) {
         var file = campo[0] != null && campo[0].files != null ? campo[0].files[0] : null;
         if (file == null) {
@@ -311,37 +360,124 @@ class Archivio {
 
         this.fileNuovaFotoArticolo = file;
         $("#nomeNuovaFotoArticolo").text(file.name);
+        $("#anteprimaNuovaFotoArticolo").show();
+        this.TestoAnteprimaFotoArticolo("Anteprima in corso");
 
-        var tipo = Archivio.tipoAnteprimaDi(file.name);
-
-        if (tipo == null) {
-            //Un riquadro vuoto sembrerebbe un guasto: si dice perche' l'immagine non c'e'.
-            $("#imgNuovaFotoArticolo").attr("src", "").hide();
-            $("#txtAnteprimaNuovaFotoArticolo").text("Anteprima non disponibile per questo formato").show();
-            $("#anteprimaNuovaFotoArticolo").show();
+        if (Archivio.eUnPsd(file.name)) {
+            this.AnteprimaDalPsd(file);
             return;
         }
 
-        //I20-985: l'indirizzo dell'anteprima si costruisce come data e non con createObjectURL.
-        //Quello produce uno schema blob, e la policy di sicurezza della pagina dichiara img-src
-        //con self, Olimpo e data: il browser rifiutava l'immagine, qualunque fosse il formato.
+        this.AnteprimaDisegnataDalBrowser(file);
+    }
+
+    /// La miniatura che Photoshop lascia dentro al psd. Si legge solo la testa del file: le
+    /// risorse immagine stanno all'inizio, e un psd da centinaia di megabyte non va caricato
+    /// in memoria per mostrare un quadratino.
+    AnteprimaDalPsd(file) {
+        let ME = this;
         var lettore = new FileReader();
 
         lettore.onload = function () {
-            $("#imgNuovaFotoArticolo").attr("src", lettore.result).show();
-            $("#txtAnteprimaNuovaFotoArticolo").hide().text("");
-            $("#anteprimaNuovaFotoArticolo").show();
+            var indirizzo = typeof AnteprimaPsd !== "undefined"
+                ? AnteprimaPsd.indirizzoMiniatura(lettore.result)
+                : null;
+
+            if (indirizzo == null) {
+                //Capita: non tutti i psd portano la miniatura, dipende da come sono stati salvati.
+                ME.TestoAnteprimaFotoArticolo("Anteprima non disponibile per questo file");
+                return;
+            }
+
+            ME.MostraAnteprimaFotoArticolo(indirizzo, file);
         };
 
         lettore.onerror = function () {
-            //Il file resta scelto: si puo' confermare lo stesso, e' l'anteprima che manca.
-            console.log("Anteprima non letta: " + (lettore.error != null ? lettore.error.name : ""));
-            $("#imgNuovaFotoArticolo").attr("src", "").hide();
-            $("#txtAnteprimaNuovaFotoArticolo").text("Anteprima non disponibile").show();
-            $("#anteprimaNuovaFotoArticolo").show();
+            ME.TestoAnteprimaFotoArticolo("Anteprima non disponibile");
+        };
+
+        lettore.readAsArrayBuffer(file.slice(0, Archivio.TESTA_PSD));
+    }
+
+    /// Si chiede al browser di decodificare il file: quello che riesce ad aprire lo ridisegna
+    /// piccolo, e quello che non riesce ad aprire lo dice da se'. Cosi' un tiff si vede dove il
+    /// browser lo supporta, senza tenere un elenco di formati che invecchia.
+    AnteprimaDisegnataDalBrowser(file) {
+        let ME = this;
+
+        if (typeof createImageBitmap !== "function") {
+            ME.AnteprimaDalContenuto(file);
+            return;
+        }
+
+        createImageBitmap(file).then(function (immagine) {
+            var indirizzo = Archivio.indirizzoRimpicciolito(immagine);
+            try { immagine.close(); } catch (e) { }
+
+            if (indirizzo == null) {
+                ME.AnteprimaDalContenuto(file);
+                return;
+            }
+
+            ME.MostraAnteprimaFotoArticolo(indirizzo, file);
+        }).catch(function () {
+            //Il browser non sa decodificarlo per conto suo: resta la strada di darglielo intero.
+            ME.AnteprimaDalContenuto(file);
+        });
+    }
+
+    /// Ultima strada: il file per intero come indirizzo data, e sia l'immagine a dire se ce la
+    /// fa. L'indirizzo e' data e non blob perche' la policy della pagina ammette il primo e
+    /// rifiuta il secondo.
+    AnteprimaDalContenuto(file) {
+        let ME = this;
+
+        if (!Archivio.siPuoLeggereTutto(file.size)) {
+            ME.TestoAnteprimaFotoArticolo("Anteprima non disponibile per questo file");
+            return;
+        }
+
+        var lettore = new FileReader();
+
+        lettore.onload = function () {
+            ME.MostraAnteprimaFotoArticolo(lettore.result, file);
+        };
+
+        lettore.onerror = function () {
+            ME.TestoAnteprimaFotoArticolo("Anteprima non disponibile");
         };
 
         lettore.readAsDataURL(file);
+    }
+
+    /// Mette l'indirizzo nell'immagine e aspetta l'esito: se il disegno fallisce si scrive che
+    /// l'anteprima manca, invece di lasciare l'icona di immagine rotta, che sembrerebbe un guasto.
+    MostraAnteprimaFotoArticolo(indirizzo, file) {
+        let ME = this;
+        var immagine = $("#imgNuovaFotoArticolo");
+        var elemento = immagine[0];
+
+        if (elemento == null) {
+            return;
+        }
+
+        elemento.onload = function () {
+            immagine.show();
+            $("#txtAnteprimaNuovaFotoArticolo").hide().text("");
+        };
+
+        elemento.onerror = function () {
+            ME.TestoAnteprimaFotoArticolo("Anteprima non disponibile per questo file");
+        };
+
+        immagine.attr("alt", file != null ? file.name : "").attr("src", indirizzo);
+    }
+
+    /// Il riquadro non resta mai vuoto: o c'e' l'immagine o c'e' scritto perche' non c'e'.
+    TestoAnteprimaFotoArticolo(testo) {
+        $("#imgNuovaFotoArticolo").attr("src", "").hide();
+        $("#txtAnteprimaNuovaFotoArticolo").text(testo).show();
+        $("#anteprimaNuovaFotoArticolo").show();
     }
 
     AnnullaFotoArticolo() {
