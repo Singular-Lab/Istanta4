@@ -1988,6 +1988,7 @@ const confronti = {
         if (restanti.length === 0) {
             await this._dissolviElementi(riga);
             this._rimuoviDallaVista([riga]);
+            await this._lasciaRidisegnare();
             return;
         }
 
@@ -2007,6 +2008,7 @@ const confronti = {
 
         await this._dissolviElementi(elementi);
         this._rimuoviDallaVista(elementi);
+        await this._lasciaRidisegnare();
     },
 
     /// Gli elementi sfumati escono dalla vista senza aspettare il ridisegno, che arriva dopo
@@ -3386,6 +3388,17 @@ const confronti = {
         const state = this._confrontoReportState;
         if (!state) return;
 
+        //Il salvataggio e' sincrono e il file e' grosso: quanto costa lo dice il tracciato.
+        const inizioSalvataggio = Date.now();
+        try {
+            this._salvaReportEWhitelist(state);
+        }
+        finally {
+            this._tracciaScheda("report:salvato", { ms: Date.now() - inizioSalvataggio });
+        }
+    },
+
+    _salvaReportEWhitelist(state) {
         const saved = this.salvaReportIntegritaLocale(state.report, {
             createdAt: state.createdAt,
             uiPrefs: state.uiPrefs || {}
@@ -3401,6 +3414,17 @@ const confronti = {
         const state = this._confrontoReportState;
         if (!state) return;
 
+        //Il ridisegno rifa' tutto l'elenco: quanto costa lo dice il tracciato.
+        const inizioRidisegno = Date.now();
+        try {
+            this._ricostruisciReport(state);
+        }
+        finally {
+            this._tracciaScheda("report:ridisegnato", { ms: Date.now() - inizioRidisegno });
+        }
+    },
+
+    _ricostruisciReport(state) {
         this.compilaReportConfronto(state.report, {
             createdAt: state.createdAt,
             activeTab: state.activeTab,
@@ -4212,8 +4236,22 @@ const confronti = {
         //file grosso, e il ridisegno di tutto l'elenco: se la riga restasse li' sbiancata ad
         //aspettarli, fra la dissolvenza e la sparizione ci sarebbe un istante di vuoto.
         this._removeConfrontoRow(payloadId);
+        await this._lasciaRidisegnare();
 
         return esito;
+    },
+
+    //Quanto si aspetta perche' UXP porti a schermo una rimozione prima che parta del lavoro
+    //sincrono. Un solo giro del ciclo degli eventi non basta: il ridisegno arriva al confine
+    //del fotogramma, e con zero millisecondi il lavoro pesante lo scavalca.
+    ATTESA_RIDISEGNO_MS: 40,
+
+    /// Cede il passo al motore. UXP ridisegna solo quando il ciclo degli eventi e' libero:
+    /// togliere un elemento e subito dopo salvare un file da undici megabyte e ricostruire
+    /// l'elenco vuol dire che l'elemento tolto resta a schermo finche' tutto quello non e'
+    /// finito. E' il divario che si vedeva fra la dissolvenza e la sparizione.
+    _lasciaRidisegnare() {
+        return new Promise(resolve => setTimeout(resolve, this.ATTESA_RIDISEGNO_MS));
     },
 
     async _onConfrontoAction(ev, action) {

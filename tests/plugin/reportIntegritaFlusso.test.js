@@ -949,6 +949,19 @@ test('anche le scritte sfumano, e la riga sparisce appena sfumata', () => {
     const riga = corpoFunzione(confronti, '_dissolviRiga(payloadId) {');
     assert.match(riga, /await this\._dissolviElementi\(riga\)[\s\S]*this\._removeConfrontoRow\(payloadId\)/);
 
+    //UXP ridisegna solo quando il ciclo degli eventi e' libero: dopo la rimozione si cede il
+    //passo, altrimenti il salvataggio del report e il ridisegno la scavalcano e la riga
+    //sbiancata resta a schermo finche' non hanno finito.
+    assert.match(riga, /this\._removeConfrontoRow\(payloadId\);\s*\n\s*await this\._lasciaRidisegnare\(\)/);
+    const attesa = corpoFunzione(confronti, '_lasciaRidisegnare() {');
+    assert.match(attesa, /setTimeout\(resolve, this\.ATTESA_RIDISEGNO_MS\)/);
+
+    //Quanto costano salvataggio e ridisegno lo dice il tracciato.
+    const salva = corpoFunzione(confronti, '_saveCurrentReportAndWhitelist() {');
+    assert.match(salva, /this\._tracciaScheda\("report:salvato"/);
+    const ridisegna = corpoFunzione(confronti, '_refreshConfrontoReportUi() {');
+    assert.match(ridisegna, /this\._tracciaScheda\("report:ridisegnato"/);
+
     const risolte = corpoFunzione(confronti, '_mostraSegnalazioniRisolte(piano) {');
     assert.match(risolte, /this\._rimuoviDallaVista\(elementi\)/);
     assert.match(risolte, /this\._rimuoviDallaVista\(\[riga\]\)/);
