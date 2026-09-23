@@ -73,8 +73,34 @@ namespace Istanta.Controllers
             }
             ViewBag.ipOlympus = olympusServerUrl;
             ViewBag.extPostProduzione = ext_post_lavorazione;
+            ViewBag.combinazioniAreaCanale = combinazioniAreaCanale();
 
             return View();
+        }
+
+        /// I20-985: le coppie area/canale fra cui si puo' scegliere caricando una foto.
+        ///
+        /// Sono le righe della tabella di Settings, che e' gia' l'elenco degli abbinamenti
+        /// buoni: qui non se ne inventano altri, altrimenti la scheda offrirebbe destinazioni
+        /// che nel resto del sistema non esistono. Se la sorgente non si legge si va avanti
+        /// senza elenco, perche' una scheda articolo che non si apre sarebbe un danno peggiore
+        /// di un menu senza voci.
+        private List<Aree> combinazioniAreaCanale()
+        {
+            try
+            {
+                return new ExternalSourceClass(path_external_source).getAree().source
+                    .Where(r => !string.IsNullOrWhiteSpace(r.Area))
+                    .OrderBy(r => r.IndiceCombo ?? byte.MaxValue)
+                    .ThenBy(r => r.Area)
+                    .ThenBy(r => r.Canale)
+                    .ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Combinazioni area/canale non leggibili");
+                return new List<Aree>();
+            }
         }
 
         [HttpGet]

@@ -189,6 +189,10 @@ class Archivio {
             ME.AnnullaFotoArticolo();
         });
 
+        pagina.on("change", "[data-azione='destinazioneFotoArticolo']", function () {
+            ME.DestinazioneFotoArticoloCambiata($(this));
+        });
+
         //Canale e area stanno sul pulsante Salva della stessa riga, dove le metteva la vista.
         pagina.on("click", "[data-azione='cronologiaModifiche']", function () {
             var salva = $(this).closest(".row").find("#bottoneSalva");
@@ -265,16 +269,58 @@ class Archivio {
         return typeof dimensione === "number" && dimensione > 0 && dimensione <= Archivio.LIMITE_ANTEPRIMA;
     }
 
+    /// Il valore che nei due menu vuol dire "vale per tutte": al server si manda vuoto, che e'
+    /// come il sistema tratta gia' le foto buone ovunque. Non si manda la parola perche' finirebbe
+    /// scritta in archivio come se fosse il nome di un'area.
+    static get DESTINAZIONE_TUTTE() { return "*"; }
+
+    /// Dove va la foto, oppure niente se la scelta non e' completa. Niente non e' un caso da
+    /// aggirare con un valore di comodo: e' il motivo per cui Conferma resta spento.
+    static destinazioneFotoArticolo(area, canale) {
+        if (!area || !canale) {
+            return null;
+        }
+
+        return {
+            area: area === Archivio.DESTINAZIONE_TUTTE ? "" : area,
+            canale: canale === Archivio.DESTINAZIONE_TUTTE ? "" : canale
+        };
+    }
+
+    /// I canali che con quell'area esistono davvero, secondo la tabella di Settings. Scegliendo
+    /// tutte le aree restano tutti, perche' non c'e' un'area a restringere.
+    static canaliPerArea(opzioni, area) {
+        var elenco = Array.isArray(opzioni) ? opzioni : [];
+
+        if (!area || area === Archivio.DESTINAZIONE_TUTTE) {
+            return elenco.slice();
+        }
+
+        return elenco.filter(function (opzione) {
+            return Array.isArray(opzione.aree) && opzione.aree.indexOf(area) >= 0;
+        });
+    }
+
+    /// Si archivia solo con il file scelto e la destinazione decisa: una foto senza destinazione
+    /// finirebbe valida ovunque senza che nessuno l'abbia deciso.
+    static siPuoConfermareFotoArticolo(file, area, canale) {
+        return file != null && Archivio.destinazioneFotoArticolo(area, canale) != null;
+    }
+
     /// Quello che si manda per archiviare una foto nuova del prodotto.
     ///
     /// tipo 1 e' la foto del prodotto. archiviaSenzaSelezionare dice al server di non metterla
     /// in uso: caricarla non vuol dire volerla, e senza quell'indicazione il server la
     /// selezionerebbe spegnendo la primaria di adesso.
-    static datiNuovaFotoArticolo(codice, nomeFile) {
+    static datiNuovaFotoArticolo(codice, nomeFile, destinazione) {
+        var dove = destinazione != null ? destinazione : { area: "", canale: "" };
+
         return {
             codice: codice,
             tipo: 1,
             nomeFile: nomeFile,
+            area: dove.area,
+            canale: dove.canale,
             idLavorazione: 0,
             idRec: 0,
             uploadMethod: 0,
@@ -361,6 +407,7 @@ class Archivio {
         this.fileNuovaFotoArticolo = file;
         $("#nomeNuovaFotoArticolo").text(file.name);
         $("#anteprimaNuovaFotoArticolo").show();
+        this.AggiornaConfermaFotoArticolo();
         this.TestoAnteprimaFotoArticolo("Anteprima in corso");
 
         if (Archivio.eUnPsd(file.name)) {
@@ -505,17 +552,88 @@ class Archivio {
         $("#txtAnteprimaNuovaFotoArticolo").hide().text("");
         $("#nomeNuovaFotoArticolo").text("");
         $("#anteprimaNuovaFotoArticolo").hide();
+        this.AggiornaConfermaFotoArticolo();
+    }
+
+    /// Le voci del menu dei canali come sono arrivate dalla vista, lette una volta sola: da qui
+    /// in avanti il menu si ricostruisce da questo elenco, perche' filtrare togliendo le voci
+    /// dal menu significherebbe perderle alla scelta successiva.
+    OpzioniCanaleFotoArticolo() {
+        if (this.opzioniCanaleFotoArticolo != null) {
+            return this.opzioniCanaleFotoArticolo;
+        }
+
+        var opzioni = [];
+
+        $("#canaleNuovaFotoArticolo option").each(function () {
+            var valore = $(this).attr("value");
+            if (!valore || valore === Archivio.DESTINAZIONE_TUTTE) {
+                return;
+            }
+
+            var aree = $(this).attr("data-aree");
+            opzioni.push({
+                valore: valore,
+                etichetta: $(this).text(),
+                aree: aree ? aree.split(",") : []
+            });
+        });
+
+        this.opzioniCanaleFotoArticolo = opzioni;
+        return opzioni;
+    }
+
+    /// Cambiata l'area, il menu dei canali si rifa' con i soli canali che con quell'area
+    /// esistono in tabella. Se il canale scelto prima non c'e' piu', torna da scegliere: meglio
+    /// farlo notare che archiviare in una coppia che non esiste.
+    DestinazioneFotoArticoloCambiata(campo) {
+        if (campo != null && campo.attr("id") === "areaNuovaFotoArticolo") {
+            this.RicostruisciCanaliFotoArticolo();
+        }
+
+        this.AggiornaConfermaFotoArticolo();
+    }
+
+    RicostruisciCanaliFotoArticolo() {
+        var menu = $("#canaleNuovaFotoArticolo");
+        var sceltoPrima = menu.val();
+        var validi = Archivio.canaliPerArea(this.OpzioniCanaleFotoArticolo(), $("#areaNuovaFotoArticolo").val());
+
+        menu.empty();
+        menu.append($("<option>").attr("value", "").text("Scegli..."));
+        menu.append($("<option>").attr("value", Archivio.DESTINAZIONE_TUTTE).text("Tutti i canali"));
+
+        validi.forEach(function (opzione) {
+            menu.append($("<option>").attr("value", opzione.valore)
+                .attr("data-aree", opzione.aree.join(",")).text(opzione.etichetta));
+        });
+
+        var restaBuono = sceltoPrima === Archivio.DESTINAZIONE_TUTTE || validi.some(function (opzione) {
+            return opzione.valore === sceltoPrima;
+        });
+
+        menu.val(restaBuono ? sceltoPrima : "");
+    }
+
+    /// Conferma si accende solo col file scelto e la destinazione decisa.
+    AggiornaConfermaFotoArticolo() {
+        var pronto = Archivio.siPuoConfermareFotoArticolo(
+            this.fileNuovaFotoArticolo, $("#areaNuovaFotoArticolo").val(), $("#canaleNuovaFotoArticolo").val());
+
+        $("#confermaNuovaFotoArticolo").prop("disabled", !pronto);
     }
 
     ConfermaFotoArticolo() {
         let ME = this;
         var file = this.fileNuovaFotoArticolo;
+        var destinazione = Archivio.destinazioneFotoArticolo(
+            $("#areaNuovaFotoArticolo").val(), $("#canaleNuovaFotoArticolo").val());
 
-        if (file == null) {
+        if (file == null || destinazione == null) {
             return;
         }
 
-        var dati = Archivio.datiNuovaFotoArticolo($("#Codice").val(), file.name);
+        var dati = Archivio.datiNuovaFotoArticolo($("#Codice").val(), file.name, destinazione);
 
         var fd = new FormData();
         fd.append("file", file);

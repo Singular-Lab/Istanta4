@@ -143,6 +143,41 @@
                   finisce fra le altre e resta da selezionare, perche caricarla non vuol dire
                   volerla in uso.*@
                 <div class="card card-body mt-3 mb-3" id="sezioneNuovaFotoArticolo">
+                    @{
+                        //I20-985: le destinazioni possibili sono le righe della tabella di
+                        //Settings, dove area e canale sono gia' abbinati. I canali portano
+                        //addosso le aree con cui compaiono, cosi' scegliendo un'area restano
+                        //solo i canali che con quell'area esistono davvero.
+                        var combinazioniFoto = ViewBag.combinazioniAreaCanale as List<Aree> ?? new List<Aree>();
+                        var areeFoto = combinazioniFoto.Select(c => c.Area).Distinct().ToList();
+                        var canaliFoto = combinazioniFoto.Where(c => !string.IsNullOrWhiteSpace(c.Canale))
+                                                         .Select(c => c.Canale).Distinct().ToList();
+                    }
+
+                    <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+                        <label for="areaNuovaFotoArticolo" style="font-size:12px">Area</label>
+                        <select id="areaNuovaFotoArticolo" class="form-select form-select-sm" style="width:auto" data-azione="destinazioneFotoArticolo">
+                            <option value="">Scegli...</option>
+                            <option value="*">Tutte le aree</option>
+                            @foreach (var area in areeFoto)
+                            {
+                                <option value="@area">@area</option>
+                            }
+                        </select>
+
+                        <label for="canaleNuovaFotoArticolo" style="font-size:12px">Canale</label>
+                        <select id="canaleNuovaFotoArticolo" class="form-select form-select-sm" style="width:auto" data-azione="destinazioneFotoArticolo">
+                            <option value="">Scegli...</option>
+                            <option value="*">Tutti i canali</option>
+                            @foreach (var canale in canaliFoto)
+                            {
+                                var areeDelCanale = string.Join(",", combinazioniFoto.Where(c => c.Canale == canale)
+                                                                                     .Select(c => c.Area).Distinct());
+                                <option value="@canale" data-aree="@areeDelCanale">@canale</option>
+                            }
+                        </select>
+                    </div>
+
                     <div class="d-flex align-items-center gap-2">
                         <button type="button" class="btn btn-sm btn-success" data-azione="aggiungiFotoArticolo">Aggiungi foto</button>
                         <span class="text-muted" style="font-size:12px">La foto viene archiviata, non selezionata.</span>
@@ -157,7 +192,7 @@
                             <div>
                                 <div id="nomeNuovaFotoArticolo" style="font-size:12px; word-break:break-all;"></div>
                                 <div class="mt-2 d-flex gap-2">
-                                    <button type="button" class="btn btn-sm btn-primary" data-azione="confermaFotoArticolo">Conferma</button>
+                                    <button type="button" class="btn btn-sm btn-primary" data-azione="confermaFotoArticolo" id="confermaNuovaFotoArticolo" disabled>Conferma</button>
                                     <button type="button" class="btn btn-sm btn-secondary" data-azione="annullaFotoArticolo">Annulla</button>
                                 </div>
                             </div>
