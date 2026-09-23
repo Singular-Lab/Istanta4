@@ -26,7 +26,7 @@ CREATE TABLE articoli (
     nota_tecnica text NULL,
     reparto integer NULL,
     segmento character varying(20) NULL,
-    ean character varying(30) NULL,
+    ean character varying(300) NULL,
     data_inserimento timestamp without time zone NULL,
     data_modifica timestamp without time zone NULL,
     CONSTRAINT "PK_articoli" PRIMARY KEY (id)

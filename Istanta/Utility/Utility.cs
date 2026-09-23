@@ -103,6 +103,33 @@ namespace Istanta.Utility
             return codici.Where(c => !string.IsNullOrWhiteSpace(c) && !coperti.Contains(c.Trim())).ToList();
         }
 
+        /// <summary>
+        /// Quanto puo' essere lungo un ean in archivio.
+        ///
+        /// La misura sta qui e non ripetuta nei punti che la usano: era scritta a mano nella
+        /// mappatura del modello, nello schema e tre volte nell'importazione, e cambiarla
+        /// significava trovarli tutti. Chi la cambia deve ricordarsi che la colonna sui database
+        /// gia' esistenti non si allarga da sola: serve l'alterazione (I20-988).
+        /// </summary>
+        public const int lunghezzaMassimaEan = 300;
+
+        /// <summary>
+        /// L'ean come puo' entrare in archivio: piu' lungo del consentito viene tagliato.
+        ///
+        /// Tagliare non e' bello, ma l'alternativa e' che l'intera importazione si fermi per un
+        /// dato fuori misura. Il taglio resta legato alla misura della colonna: se le due si
+        /// scollassero, il primo ean lungo farebbe fallire la scrittura.
+        /// </summary>
+        public static string? eanTroncato(string? ean)
+        {
+            if (ean == null || ean.Length <= lunghezzaMassimaEan)
+            {
+                return ean;
+            }
+
+            return ean.Substring(0, lunghezzaMassimaEan);
+        }
+
         public static Dictionary<string, object>? getJsonObject(string json_string)
         {
 

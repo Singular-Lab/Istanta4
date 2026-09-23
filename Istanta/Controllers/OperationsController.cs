@@ -1,4 +1,4 @@
-using Istanta.Models;
+﻿using Istanta.Models;
 using Microsoft.AspNetCore.JsonPatch.Operations;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore.Query.Internal;
@@ -635,10 +635,8 @@ namespace Istanta.Controllers
                                                     {
                                                         if (scope_chiave == GLOBAL_VARIABLES.keyRefEan)
                                                         {
-                                                            if (_val!.Length>30)
-                                                            {
-                                                                _val = _val.Substring(0, 30);
-                                                            }    
+                                                            //I20-988: stessa misura della colonna, dichiarata una volta sola.
+                                                            _val = Utility.Main.eanTroncato(_val);
                                                             artRecord.Ean = _val;
                                                             //ctx_1.SaveChanges();
                                                             _ = await ctx_1.SaveChangesAsync();
@@ -1034,9 +1032,10 @@ namespace Istanta.Controllers
                                         //E aggiornare il record del tracciato
 
 
-                                        if (item.ContainsKey(kRefEan) && item[kRefEan].ToString()!.Length > 30)
+                                        //I20-988: la misura del taglio e' quella della colonna, e sta in un posto solo.
+                                        if (item.ContainsKey(kRefEan))
                                         {
-                                            item[kRefEan] = item[kRefEan].ToString()!.Substring(0, 30);
+                                            item[kRefEan] = Utility.Main.eanTroncato(item[kRefEan].ToString())!;
                                         }
 
                                         artRecord = new Articoli();
@@ -1113,21 +1112,15 @@ namespace Istanta.Controllers
                                         //L'ean per adesso è l'unico campo rimasto indietro e da controllare
                                         if (cRefEan != null && item.ContainsKey(kRefEan))
                                         {
-                                            //va aumentato a 150 il substring
-                                            if (item[kRefEan].ToString()!.Length > 30)
-                                            {
-                                                item[kRefEan] = item[kRefEan].ToString()!.Substring(0, 30);
-                                            }
+                                            //I20-988: il taglio segue la misura della colonna, dichiarata una volta sola.
+                                            item[kRefEan] = Utility.Main.eanTroncato(item[kRefEan].ToString())!;
 
                                             if (artRecord.Ean != item[kRefEan].ToString())
                                             {
-                                                if (item[kRefEan].ToString()!.Length <= 30)
-                                                {
-                                                    artRecord.Ean = item[kRefEan].ToString();
-                                                    artRecord.DataModifica = DateTime.Now;
-                                                    //ctx_1.SaveChanges();
-                                                    _ = await ctx_1.SaveChangesAsync();
-                                                }
+                                                artRecord.Ean = item[kRefEan].ToString();
+                                                artRecord.DataModifica = DateTime.Now;
+                                                //ctx_1.SaveChanges();
+                                                _ = await ctx_1.SaveChangesAsync();
                                             }
                                         }
 
