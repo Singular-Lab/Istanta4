@@ -4096,8 +4096,11 @@ const confronti = {
         tableScroll.style.flex = "1 1 auto";
         tableScroll.style.minHeight = "0";
         tableScroll.style.minWidth = "0";
-        tableScroll.style.overflowX = "auto";
-        tableScroll.style.overflowY = "auto";
+        //I20-981: "scroll" e non "auto". In questo pannello l'elenco delle segnalazioni, che
+        //scorre davvero, e' scritto cosi'; la tabella dei nuovi usava "auto" ed era l'unica a
+        //non scorrere. La rotella resta verticale: in orizzontale si trascina la barra.
+        tableScroll.style.overflowX = "scroll";
+        tableScroll.style.overflowY = "scroll";
         tableScroll.style.border = "1px solid #555";
         tableScroll.style.borderRadius = "4px";
 
@@ -4747,16 +4750,19 @@ const confronti = {
                 minPx: 240,
                 sortable: true,
                 small: true
-            },
-            {
-                key: "confronto",
-                label: "Campi osservati",
-                perc: 130,
-                minPx: 260,
-                sortable: true,
-                small: true
             }
         ];
+
+        //I20-981: i campi osservati stanno in fondo a destra: servono quando servono, e non
+        //devono rubare spazio a codice e descrizione, che si leggono sempre.
+        const colonnaConfronto = {
+            key: "confronto",
+            label: "Campi osservati",
+            perc: 130,
+            minPx: 260,
+            sortable: true,
+            small: true
+        };
 
         const colonneExtra = (state.colonneExtra || []).map(col => ({
             key: col.chiaveDato,
@@ -4772,7 +4778,7 @@ const confronti = {
             return key !== "codicegruppo" && key !== "descrizione" && key !== "codice" && key !== "confronto";
         });
 
-        const colonne = [...colonneBase, ...colonneExtraFiltrate];
+        const colonne = [...colonneBase, ...colonneExtraFiltrate, colonnaConfronto];
         state.colonneRender = colonne;
 
         for (let i = 0; i < colonne.length; i++) {
@@ -4811,6 +4817,14 @@ const confronti = {
         cell.style.textOverflow = "ellipsis";
         cell.style.width = this._calcNuoviColumnWidth(col);
         cell.style.minWidth = this._calcNuoviColumnWidth(col);
+
+        //L'intestazione della colonna dei pulsanti resta ancorata come le sue celle.
+        if (col.key === "__azione__") {
+            cell.style.position = "sticky";
+            cell.style.left = "0";
+            cell.style.zIndex = "3";
+            cell.style.backgroundColor = "#ffffff";
+        }
 
         let label = col.label;
         if (col.sortable && state.sortKey === col.key) {
@@ -4878,6 +4892,14 @@ const confronti = {
         cell.style.width = "130px";
         cell.style.minWidth = "130px";
         cell.style.borderRight = "1px solid #eee";
+        //I20-981: i pulsanti restano al loro posto mentre i campi scorrono di lato. Serve uno
+        //sfondo pieno, altrimenti il contenuto che passa sotto si vedrebbe attraverso. Se
+        //questa versione di UXP non applica lo sticky, la colonna scorre come prima: nessun
+        //peggioramento rispetto a oggi.
+        cell.style.position = "sticky";
+        cell.style.left = "0";
+        cell.style.zIndex = "2";
+        cell.style.backgroundColor = "#ffffff";
         cell.style.minHeight = "42px";
         cell.style.maxHeight = "42px";
 

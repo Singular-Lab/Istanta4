@@ -526,9 +526,29 @@ test('anche le referenze nuove dicono cosa e\' cambiato', () => {
     assert.match(estrai, /reportConfronti\.differenzePerPresenza\(/);
     assert.match(estrai, /confronto: confrontoRiga != null \? reportConfronti\.testoDifferenze/);
 
-    //E la tabella ha la sua colonna.
+    //E la tabella ha la sua colonna, in fondo a destra: serve quando serve, e non deve rubare
+    //spazio a codice e descrizione.
     const tabella = corpoFunzione(confronti, '_renderNuoviTable() {');
-    assert.match(tabella, /key: "confronto",\s*\n\s*label: "Campi osservati"/);
+    assert.match(tabella, /const colonnaConfronto = \{\s*\n\s*key: "confronto"/);
+    assert.match(tabella, /const colonne = \[\.\.\.colonneBase, \.\.\.colonneExtraFiltrate, colonnaConfronto\]/);
+});
+
+test('la tabella dei nuovi scorre, e i pulsanti restano al loro posto', () => {
+    const pannello = corpoFunzione(confronti, '_buildPanelNuovi(report) {');
+
+    //"scroll" e non "auto": in questo pannello e' cosi' che e' scritto cio' che scorre davvero.
+    assert.match(pannello, /tableScroll\.style\.overflowX = "scroll"/);
+    assert.match(pannello, /tableScroll\.style\.overflowY = "scroll"/);
+
+    //La colonna dei pulsanti resta ancorata a sinistra, con uno sfondo pieno sotto.
+    const cella = corpoFunzione(confronti, '_crNuoviActionCell(rowData) {');
+    assert.match(cella, /position = "sticky"/);
+    assert.match(cella, /left = "0"/);
+    assert.match(cella, /backgroundColor = "#ffffff"/);
+
+    //E anche la sua intestazione, altrimenti scorrerebbe via da sola.
+    const intestazione = corpoFunzione(confronti, '_crNuoviHeaderCell(col) {');
+    assert.match(intestazione, /if \(col\.key === "__azione__"\) \{[\s\S]*?position = "sticky"/);
 });
 
 test('nel csv i cambiamenti di confronto stanno in una colonna sola', () => {
