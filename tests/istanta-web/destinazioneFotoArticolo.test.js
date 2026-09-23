@@ -21,34 +21,36 @@ function sorgente(percorso) {
     return fs.readFileSync(path.join(__dirname, '..', '..', percorso), 'utf8');
 }
 
-/* Le voci del menu dei canali come le rende la vista: ogni canale porta le aree con cui in
-   tabella compare abbinato. */
-const CANALI = [
-    { valore: 'GDO', etichetta: 'GDO', aree: ['NORD', 'CENTRO'] },
-    { valore: 'DISCOUNT', etichetta: 'Discount', aree: ['NORD'] },
-    { valore: 'HORECA', etichetta: 'Horeca', aree: ['SUD'] }
+/* Le voci del menu delle aree come le rende la vista: ogni area porta i canali con cui in
+   tabella e' attiva. Si sceglie prima il canale, come nella matrice, dove i canali sono le
+   righe. Le aree qui sotto seguono un caso vero: SA ha tutto tranne petstore, EM ha tutto
+   tranne petstore, fidelity e sapori. */
+const AREE = [
+    { valore: 'SA', etichetta: 'SA', canali: ['GDO', 'FIDELITY', 'SAPORI'] },
+    { valore: 'EM', etichetta: 'EM', canali: ['GDO'] },
+    { valore: 'PET', etichetta: 'PET', canali: ['PETSTORE'] }
 ];
 
 /* ---- cosa si puo' scegliere ---- */
 
-test('scegliendo un\'area restano i canali che con quell\'area esistono', () => {
-    assert.deepStrictEqual(Archivio.canaliPerArea(CANALI, 'NORD').map(c => c.valore), ['GDO', 'DISCOUNT']);
-    assert.deepStrictEqual(Archivio.canaliPerArea(CANALI, 'SUD').map(c => c.valore), ['HORECA']);
+test('scelto il canale restano le aree che con quel canale sono attive', () => {
+    assert.deepStrictEqual(Archivio.areePerCanale(AREE, 'GDO').map(a => a.valore), ['SA', 'EM']);
+    assert.deepStrictEqual(Archivio.areePerCanale(AREE, 'FIDELITY').map(a => a.valore), ['SA']);
 });
 
-// Un'area che in tabella non ha canali non deve offrirne: meglio un menu vuoto che una coppia
-// che nel resto del sistema non esiste.
-test('un\'area senza canali abbinati non ne offre', () => {
-    assert.deepStrictEqual(Archivio.canaliPerArea(CANALI, 'ISOLE'), []);
+// Petstore non e' attivo ne' su SA ne' su EM: quelle aree non devono comparire, altrimenti si
+// archivierebbe in una coppia che in tabella e' spenta.
+test('un canale non attivo su un\'area non la offre', () => {
+    assert.deepStrictEqual(Archivio.areePerCanale(AREE, 'PETSTORE').map(a => a.valore), ['PET']);
 });
 
-test('senza un\'area a restringere restano tutti i canali', () => {
-    assert.deepStrictEqual(Archivio.canaliPerArea(CANALI, '*').map(c => c.valore), ['GDO', 'DISCOUNT', 'HORECA']);
-    assert.deepStrictEqual(Archivio.canaliPerArea(CANALI, '').map(c => c.valore), ['GDO', 'DISCOUNT', 'HORECA']);
+test('senza un canale a restringere restano tutte le aree', () => {
+    assert.deepStrictEqual(Archivio.areePerCanale(AREE, '*').map(a => a.valore), ['SA', 'EM', 'PET']);
+    assert.deepStrictEqual(Archivio.areePerCanale(AREE, '').map(a => a.valore), ['SA', 'EM', 'PET']);
 });
 
 test('un elenco che non arriva non fa cadere il menu', () => {
-    assert.deepStrictEqual(Archivio.canaliPerArea(null, 'NORD'), []);
+    assert.deepStrictEqual(Archivio.areePerCanale(null, 'GDO'), []);
 });
 
 /* ---- cosa si manda al server ---- */
@@ -122,16 +124,19 @@ test('la conferma non parte se la destinazione non e\' stata scelta', () => {
 
 /* ---- come la vista offre la scelta ---- */
 
-test('i due menu stanno accanto alla scelta del file', () => {
+test('i due menu stanno accanto alla scelta del file, prima il canale', () => {
     const vista = sorgente('Istanta/Views/SchedaArticolo/Index.cshtml');
 
-    assert.ok(vista.includes('id="areaNuovaFotoArticolo"') && vista.includes('id="canaleNuovaFotoArticolo"'));
     assert.ok(vista.includes('data-azione="destinazioneFotoArticolo"'),
         'i gestori inline la policy della pagina li blocca');
     assert.ok(vista.includes('id="confermaNuovaFotoArticolo" disabled'),
         'si parte col pulsante spento, perche\' la destinazione va scelta');
-    assert.ok(vista.includes('data-aree="@areeDelCanale"'),
-        'ogni canale porta le aree con cui e\' abbinato, altrimenti non si puo\' filtrare');
+    assert.ok(vista.includes('data-canali="@canaliDellArea"'),
+        'ogni area porta i canali con cui e\' attiva, altrimenti non si puo\' filtrare');
+
+    //Chi restringe deve venire prima di chi viene ristretto, o il filtro non serve a niente.
+    assert.ok(vista.indexOf('id="canaleNuovaFotoArticolo"') < vista.indexOf('id="areaNuovaFotoArticolo"'),
+        'prima il canale, poi l\'area');
 });
 
 // Aree, canali e coppie ammesse sono quelli di Settings, voce Aree e Canali, cioe' la sorgente
@@ -153,7 +158,7 @@ test('aree e canali arrivano dalla stessa sorgente della pagina Aree/Canali', ()
 test('nei menu si mostrano le sigle, che sono cio\' che il server scrive', () => {
     const vista = sorgente('Istanta/Views/SchedaArticolo/Index.cshtml');
 
-    assert.ok(vista.includes('<option value="@area.sigla">'), 'l\'area si manda come sigla');
+    assert.ok(vista.includes('<option value="@area.sigla"'), 'l\'area si manda come sigla');
     assert.ok(vista.includes('<option value="@canale.sigla"'), 'il canale si manda come sigla');
     assert.ok(!vista.includes('value="@area.guidID"') && !vista.includes('value="@canale.guidID"'),
         'l\'identificativo darebbe una foto di un\'area inesistente');

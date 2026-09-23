@@ -147,37 +147,38 @@
                         //I20-985: le destinazioni sono quelle di Settings, voce Aree e Canali:
                         //gli elenchi di aree e canali e la matrice che dice quali coppie sono
                         //attive. Nei menu si mostrano le sigle, che sono cio' che il server
-                        //scrive nella foto, e ogni canale porta addosso le aree con cui e'
-                        //attivo, cosi' scegliendo un'area restano solo i canali previsti.
+                        //scrive nella foto. Si sceglie prima il canale, come nella matrice, dove
+                        //i canali sono le righe: ogni area porta addosso i canali con cui e'
+                        //attiva, cosi' scelto il canale restano le sole aree previste.
                         var areeFoto = ViewBag.areeFoto as List<Area> ?? new List<Area>();
                         var canaliFoto = ViewBag.canaliFoto as List<Canale> ?? new List<Canale>();
                         var combinazioniFoto = ViewBag.combinazioniFoto as List<CombinazioneAreaCanale> ?? new List<CombinazioneAreaCanale>();
-                        var siglaPerArea = areeFoto.GroupBy(a => a.guidID).ToDictionary(g => g.Key, g => g.First().sigla);
+                        var siglaPerCanale = canaliFoto.GroupBy(c => c.guidID).ToDictionary(g => g.Key, g => g.First().sigla);
                     }
 
                     <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
-                        <label for="areaNuovaFotoArticolo" style="font-size:12px">Area</label>
-                        <select id="areaNuovaFotoArticolo" class="form-select form-select-sm" style="width:auto" data-azione="destinazioneFotoArticolo">
-                            <option value="">Scegli...</option>
-                            <option value="*">Tutte le aree</option>
-                            @foreach (var area in areeFoto.OrderBy(a => a.nome))
-                            {
-                                <option value="@area.sigla">@area.sigla - @area.nome</option>
-                            }
-                        </select>
-
                         <label for="canaleNuovaFotoArticolo" style="font-size:12px">Canale</label>
                         <select id="canaleNuovaFotoArticolo" class="form-select form-select-sm" style="width:auto" data-azione="destinazioneFotoArticolo">
                             <option value="">Scegli...</option>
                             <option value="*">Tutti i canali</option>
                             @foreach (var canale in canaliFoto.OrderBy(c => c.nome))
                             {
-                                var areeDelCanale = string.Join(",", combinazioniFoto
-                                    .Where(c => c.guidIDCanale == canale.guidID && siglaPerArea.ContainsKey(c.guidIDArea))
-                                    .Select(c => siglaPerArea[c.guidIDArea])
+                                <option value="@canale.sigla">@canale.sigla - @canale.nome</option>
+                            }
+                        </select>
+
+                        <label for="areaNuovaFotoArticolo" style="font-size:12px">Area</label>
+                        <select id="areaNuovaFotoArticolo" class="form-select form-select-sm" style="width:auto" data-azione="destinazioneFotoArticolo">
+                            <option value="">Scegli...</option>
+                            <option value="*">Tutte le aree</option>
+                            @foreach (var area in areeFoto.OrderBy(a => a.nome))
+                            {
+                                var canaliDellArea = string.Join(",", combinazioniFoto
+                                    .Where(c => c.guidIDArea == area.guidID && siglaPerCanale.ContainsKey(c.guidIDCanale))
+                                    .Select(c => siglaPerCanale[c.guidIDCanale])
                                     .Where(sigla => !string.IsNullOrWhiteSpace(sigla))
                                     .Distinct());
-                                <option value="@canale.sigla" data-aree="@areeDelCanale">@canale.sigla - @canale.nome</option>
+                                <option value="@area.sigla" data-canali="@canaliDellArea">@area.sigla - @area.nome</option>
                             }
                         </select>
                     </div>

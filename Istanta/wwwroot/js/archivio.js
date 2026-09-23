@@ -287,17 +287,18 @@ class Archivio {
         };
     }
 
-    /// I canali che con quell'area esistono davvero, secondo la tabella di Settings. Scegliendo
-    /// tutte le aree restano tutti, perche' non c'e' un'area a restringere.
-    static canaliPerArea(opzioni, area) {
+    /// Le aree che con quel canale sono attive nella tabella di Settings. Si sceglie prima il
+    /// canale, come nella matrice, dove i canali sono le righe: scegliendo tutti i canali restano
+    /// tutte le aree, perche' non c'e' un canale a restringere.
+    static areePerCanale(opzioni, canale) {
         var elenco = Array.isArray(opzioni) ? opzioni : [];
 
-        if (!area || area === Archivio.DESTINAZIONE_TUTTE) {
+        if (!canale || canale === Archivio.DESTINAZIONE_TUTTE) {
             return elenco.slice();
         }
 
         return elenco.filter(function (opzione) {
-            return Array.isArray(opzione.aree) && opzione.aree.indexOf(area) >= 0;
+            return Array.isArray(opzione.canali) && opzione.canali.indexOf(canale) >= 0;
         });
     }
 
@@ -555,57 +556,57 @@ class Archivio {
         this.AggiornaConfermaFotoArticolo();
     }
 
-    /// Le voci del menu dei canali come sono arrivate dalla vista, lette una volta sola: da qui
+    /// Le voci del menu delle aree come sono arrivate dalla vista, lette una volta sola: da qui
     /// in avanti il menu si ricostruisce da questo elenco, perche' filtrare togliendo le voci
     /// dal menu significherebbe perderle alla scelta successiva.
-    OpzioniCanaleFotoArticolo() {
-        if (this.opzioniCanaleFotoArticolo != null) {
-            return this.opzioniCanaleFotoArticolo;
+    OpzioniAreaFotoArticolo() {
+        if (this.opzioniAreaFotoArticolo != null) {
+            return this.opzioniAreaFotoArticolo;
         }
 
         var opzioni = [];
 
-        $("#canaleNuovaFotoArticolo option").each(function () {
+        $("#areaNuovaFotoArticolo option").each(function () {
             var valore = $(this).attr("value");
             if (!valore || valore === Archivio.DESTINAZIONE_TUTTE) {
                 return;
             }
 
-            var aree = $(this).attr("data-aree");
+            var canali = $(this).attr("data-canali");
             opzioni.push({
                 valore: valore,
                 etichetta: $(this).text(),
-                aree: aree ? aree.split(",") : []
+                canali: canali ? canali.split(",") : []
             });
         });
 
-        this.opzioniCanaleFotoArticolo = opzioni;
+        this.opzioniAreaFotoArticolo = opzioni;
         return opzioni;
     }
 
-    /// Cambiata l'area, il menu dei canali si rifa' con i soli canali che con quell'area
-    /// esistono in tabella. Se il canale scelto prima non c'e' piu', torna da scegliere: meglio
-    /// farlo notare che archiviare in una coppia che non esiste.
+    /// Cambiato il canale, il menu delle aree si rifa' con le sole aree che con quel canale sono
+    /// attive in tabella. Se l'area scelta prima non c'e' piu', torna da scegliere: meglio farlo
+    /// notare che archiviare in una coppia che non esiste.
     DestinazioneFotoArticoloCambiata(campo) {
-        if (campo != null && campo.attr("id") === "areaNuovaFotoArticolo") {
-            this.RicostruisciCanaliFotoArticolo();
+        if (campo != null && campo.attr("id") === "canaleNuovaFotoArticolo") {
+            this.RicostruisciAreeFotoArticolo();
         }
 
         this.AggiornaConfermaFotoArticolo();
     }
 
-    RicostruisciCanaliFotoArticolo() {
-        var menu = $("#canaleNuovaFotoArticolo");
+    RicostruisciAreeFotoArticolo() {
+        var menu = $("#areaNuovaFotoArticolo");
         var sceltoPrima = menu.val();
-        var validi = Archivio.canaliPerArea(this.OpzioniCanaleFotoArticolo(), $("#areaNuovaFotoArticolo").val());
+        var validi = Archivio.areePerCanale(this.OpzioniAreaFotoArticolo(), $("#canaleNuovaFotoArticolo").val());
 
         menu.empty();
         menu.append($("<option>").attr("value", "").text("Scegli..."));
-        menu.append($("<option>").attr("value", Archivio.DESTINAZIONE_TUTTE).text("Tutti i canali"));
+        menu.append($("<option>").attr("value", Archivio.DESTINAZIONE_TUTTE).text("Tutte le aree"));
 
         validi.forEach(function (opzione) {
             menu.append($("<option>").attr("value", opzione.valore)
-                .attr("data-aree", opzione.aree.join(",")).text(opzione.etichetta));
+                .attr("data-canali", opzione.canali.join(",")).text(opzione.etichetta));
         });
 
         var restaBuono = sceltoPrima === Archivio.DESTINAZIONE_TUTTE || validi.some(function (opzione) {
