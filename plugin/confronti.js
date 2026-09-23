@@ -3917,8 +3917,10 @@ const confronti = {
     //in UXP leggere una misura appena scritta non e' affidabile, e delle animazioni di jQuery
     //nel plugin non c'e' un solo uso vivo (fadeOut e animate compaiono commentati), quindi non
     //ci si appoggia. Scrivere style.opacity invece funziona, ed e' gia' usato in mezzo report.
-    DURATA_DISSOLVENZA: 420,
-    PASSO_DISSOLVENZA: 35,
+    //Passi piu' radi che in un browser: UXP ridisegna quando il ciclo degli eventi glielo
+    //concede, e con un timer troppo fitto potrebbe non ridisegnare mai fra un passo e l'altro.
+    DURATA_DISSOLVENZA: 600,
+    PASSO_DISSOLVENZA: 60,
 
     /// Mentre una riga sta sparendo non si accetta nessun'altra azione del report. I pulsanti
     /// delle righe sono immagini, non bottoni: disabled non esiste e pointer-events in UXP non
@@ -3941,6 +3943,9 @@ const confronti = {
 
             const passi = Math.max(1, Math.round(this.DURATA_DISSOLVENZA / this.PASSO_DISSOLVENZA));
             let passo = 0;
+            const inizio = Date.now();
+            const letture = [];
+            let errori = 0;
 
             const timer = setInterval(() => {
                 passo++;
@@ -3951,16 +3956,59 @@ const confronti = {
                         el.style.opacity = String(opacita);
                     }
                     catch (err) {
-                        //Un elemento tolto dall'interfaccia mentre sfuma non e' un errore.
+                        //Un elemento tolto dall'interfaccia mentre sfuma non e' un errore, ma
+                        //va contato: se succede sempre, la dissolvenza non esiste.
+                        errori++;
                     }
                 });
 
+                //Il valore riletto dice se il motore ha preso la scrittura; il tempo dice se il
+                //timer e' andato al passo che gli abbiamo chiesto.
+                letture.push(this._leggiOpacita(lista[0]));
+
                 if (passo >= passi) {
                     clearInterval(timer);
+
+                    this._tracciaScheda("dissolvenza", {
+                        elementi: lista.length,
+                        primo: lista[0] != null ? (lista[0].tagName || "") + (lista[0].dataset?.payloadId ? "#" + lista[0].dataset.payloadId : "") : null,
+                        passi,
+                        durataMs: Date.now() - inizio,
+                        errori,
+                        opacitaRilette: letture
+                    });
+
                     resolve(true);
                 }
             }, this.PASSO_DISSOLVENZA);
         });
+    },
+
+    /// Com'e' l'opacita' di un elemento secondo il motore: quella scritta nello stile e, se il
+    /// motore la espone, quella calcolata. Se le due divergono, o la calcolata manca, il valore
+    /// non e' arrivato a schermo.
+    _leggiOpacita(elemento) {
+        if (elemento == null) {
+            return null;
+        }
+
+        let calcolata = null;
+        try {
+            calcolata = typeof getComputedStyle === "function" ? getComputedStyle(elemento).opacity : "n/d";
+        }
+        catch (err) {
+            calcolata = "errore";
+        }
+
+        let scritta = null;
+        try {
+            scritta = elemento.style.opacity;
+        }
+        catch (err) {
+            scritta = "errore";
+        }
+
+        return scritta + "/" + calcolata;
     },
 
     _spegniInterazione(elemento) {
@@ -4002,6 +4050,7 @@ const confronti = {
     async _dissolviRiga(payloadId) {
         const riga = this._rigaDelPayload(payloadId);
         if (riga == null) {
+            this._tracciaScheda("dissolvenza:rigaNonTrovata", { payloadId });
             return false;
         }
 
