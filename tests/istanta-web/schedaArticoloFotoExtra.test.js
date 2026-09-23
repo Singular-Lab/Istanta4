@@ -265,3 +265,22 @@ test('le foto del prodotto stanno in un riquadro quadrato, senza tagli', () => {
     assert.ok(regola.includes('object-fit: contain'), 'l\'immagine ci sta dentro per intero');
     assert.ok(!regola.includes('object-fit: cover'), 'cover taglierebbe i lati dello scatto');
 });
+
+// L'anteprima non si vedeva in nessun formato: era costruita con URL.createObjectURL, che
+// produce un indirizzo blob, e la policy di sicurezza della pagina non ammette blob fra le
+// immagini. Un indirizzo data la policy lo accetta gia'.
+test('l\'anteprima usa un indirizzo che la policy della pagina ammette', () => {
+    const js = sorgente('Istanta/wwwroot/js/archivio.js');
+    const inizio = js.indexOf('AnteprimaFotoArticolo(campo) {');
+    const anteprima = js.slice(inizio, js.indexOf('AnnullaFotoArticolo() {', inizio));
+
+    assert.ok(anteprima.includes('readAsDataURL'), 'l\'anteprima si legge come indirizzo data');
+    assert.ok(!/URL\.createObjectURL/.test(anteprima),
+        'un indirizzo blob la policy lo rifiuta: l\'immagine non comparirebbe');
+
+    const policy = sorgente('Istanta/Program.cs');
+    const direttiva = policy.slice(policy.indexOf('img-src'), policy.indexOf('img-src') + 200);
+    assert.ok(direttiva.includes('data:'), 'la policy ammette gli indirizzi data');
+    assert.ok(!direttiva.includes('blob:'),
+        'finche\' blob non e\' ammesso, l\'anteprima non puo\' tornare a createObjectURL');
+});

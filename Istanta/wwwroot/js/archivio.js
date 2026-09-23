@@ -314,32 +314,38 @@ class Archivio {
 
         var tipo = Archivio.tipoAnteprimaDi(file.name);
 
-        if (this.urlAnteprimaFotoArticolo) {
-            try { URL.revokeObjectURL(this.urlAnteprimaFotoArticolo); } catch (e) { }
-            this.urlAnteprimaFotoArticolo = null;
-        }
-
-        if (tipo != null) {
-            this.urlAnteprimaFotoArticolo = URL.createObjectURL(file);
-            $("#imgNuovaFotoArticolo").attr("src", this.urlAnteprimaFotoArticolo).show();
-            $("#txtAnteprimaNuovaFotoArticolo").hide().text("");
-        }
-        else {
+        if (tipo == null) {
             //Un riquadro vuoto sembrerebbe un guasto: si dice perche' l'immagine non c'e'.
             $("#imgNuovaFotoArticolo").attr("src", "").hide();
             $("#txtAnteprimaNuovaFotoArticolo").text("Anteprima non disponibile per questo formato").show();
+            $("#anteprimaNuovaFotoArticolo").show();
+            return;
         }
 
-        $("#anteprimaNuovaFotoArticolo").show();
+        //I20-985: l'indirizzo dell'anteprima si costruisce come data e non con createObjectURL.
+        //Quello produce uno schema blob, e la policy di sicurezza della pagina dichiara img-src
+        //con self, Olimpo e data: il browser rifiutava l'immagine, qualunque fosse il formato.
+        var lettore = new FileReader();
+
+        lettore.onload = function () {
+            $("#imgNuovaFotoArticolo").attr("src", lettore.result).show();
+            $("#txtAnteprimaNuovaFotoArticolo").hide().text("");
+            $("#anteprimaNuovaFotoArticolo").show();
+        };
+
+        lettore.onerror = function () {
+            //Il file resta scelto: si puo' confermare lo stesso, e' l'anteprima che manca.
+            console.log("Anteprima non letta: " + (lettore.error != null ? lettore.error.name : ""));
+            $("#imgNuovaFotoArticolo").attr("src", "").hide();
+            $("#txtAnteprimaNuovaFotoArticolo").text("Anteprima non disponibile").show();
+            $("#anteprimaNuovaFotoArticolo").show();
+        };
+
+        lettore.readAsDataURL(file);
     }
 
     AnnullaFotoArticolo() {
         this.fileNuovaFotoArticolo = null;
-
-        if (this.urlAnteprimaFotoArticolo) {
-            try { URL.revokeObjectURL(this.urlAnteprimaFotoArticolo); } catch (e) { }
-            this.urlAnteprimaFotoArticolo = null;
-        }
 
         $("#fileNuovaFotoArticolo").val("");
         $("#imgNuovaFotoArticolo").attr("src", "").show();
