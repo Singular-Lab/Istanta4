@@ -1032,3 +1032,13 @@ test('anche le scritte sfumano, e la riga sparisce appena sfumata', () => {
     assert.match(risolte, /this\._rimuoviDallaVista\(elementi\)/);
     assert.match(risolte, /this\._rimuoviDallaVista\(\[riga\]\)/);
 });
+
+test('l\'intestazione del confronto non si schiaccia sulla prima riga', () => {
+    //In UXP un figlio di una colonna flex senza flexShrink 0 viene schiacciato e finisce sopra
+    //il vicino: l'intestazione con le due liste e i filtri si sovrapponeva al primo risultato.
+    //E' la stessa regola che le righe del report chiamano "il punto importante".
+    const intestazione = corpoFunzione(confronti, '_crIdentitaConfronto() {');
+    assert.match(intestazione, /riga\.style\.flexShrink = "0"/);
+    assert.match(intestazione, /riga\.style\.flexGrow = "0"/);
+    assert.match(intestazione, /riga\.style\.flexBasis = "auto"/);
+});

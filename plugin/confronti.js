@@ -5700,6 +5700,16 @@ const confronti = {
         riga.style.fontSize = "11px";
         riga.style.whiteSpace = "normal";
         riga.style.overflowWrap = "anywhere";
+        riga.style.borderBottom = "1px solid #ccc";
+        riga.style.marginBottom = "4px";
+        riga.style.width = "100%";
+        riga.style.boxSizing = "border-box";
+        //Come per le righe del report: dentro una colonna flex, in UXP, un figlio senza queste
+        //tre regole viene schiacciato e finisce sopra il vicino. Qui l'intestazione si
+        //sovrapponeva alla prima riga dei risultati, e non si leggeva nessuna delle due.
+        riga.style.flexShrink = "0";
+        riga.style.flexGrow = "0";
+        riga.style.flexBasis = "auto";
 
         const corrente = document.createElement("div");
         corrente.appendChild(this._crEtichettaForte("Lista corrente: "));
