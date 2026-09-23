@@ -271,12 +271,118 @@ function bytesUtf8(testo) {
     return new Uint8Array(bytes);
 }
 
+//I20-981 (Lotto 4b): il csv del confronto con un'altra lista. E' un file a se': il csv del
+//report parla del documento contro la sua lista, questo parla di due liste fra loro, e in
+//testa dice quali. Le righe sono quelle che l'operatore vede, filtri compresi: cio' che si
+//esporta e' cio' che si e' scelto di guardare, e i filtri attivi sono scritti in testa.
+const reportConfronti = require('./reportConfronti');
+
+const INTESTAZIONI_CONFRONTO = [
+    "Stato",
+    "Codice gruppo",
+    "Descrizione",
+    "Canale",
+    "Campo",
+    "Lista corrente",
+    "Altra lista"
+];
+
+function nomeFileConfronto(progressivo, titoloKit, data) {
+    return conSuffissoConfronto(nomeFileReport(progressivo, titoloKit, data));
+}
+
+/// Il nome del csv del confronto a partire da quello del report: stesso progressivo, stesso
+/// kit, stessa data, e il suffisso che dice di cosa parla.
+function conSuffissoConfronto(nomeFileReportCsv) {
+    return String(nomeFileReportCsv || "").replace(/\.csv$/i, "") + "_confronto" + ESTENSIONE;
+}
+
+function descriviLista(lista) {
+    const dati = lista || {};
+    const parti = [];
+
+    if (dati.titolo) {
+        parti.push(String(dati.titolo));
+    }
+    if (dati.idKit != null && dati.idKit !== "") {
+        parti.push("idKit " + dati.idKit);
+    }
+    if (dati.etichettaTracciato || dati.versioneTracciato) {
+        parti.push("tracciato " + (dati.etichettaTracciato || "?") + (dati.versioneTracciato ? " v." + dati.versioneTracciato : ""));
+    }
+    if (dati.origine) {
+        parti.push(String(dati.origine));
+    }
+
+    return parti.join(" - ");
+}
+
+/// Le righe in testa: cosa si confronta con cosa, e con quali filtri.
+function righeIdentitaListe(intestazione) {
+    const dati = intestazione || {};
+    return [
+        ["Confronto fra liste"],
+        ["Lista corrente", descriviLista(dati.corrente)],
+        ["Altra lista", descriviLista(dati.altra)],
+        ["Filtri", dati.filtri || "nessuno"],
+        []
+    ];
+}
+
+function righeDellaVoce(voce) {
+    const stato = reportConfronti.descriviPresenza(voce.presenza);
+    const descrizione = descrizioneComposta(voce.rawCorrente || voce.rawAltra || {});
+    const differenze = voce.differenze || [];
+
+    if (differenze.length === 0) {
+        //Una referenza da un lato solo: la notizia e' dove sta.
+        return [[
+            stato,
+            voce.codiceGruppo,
+            descrizione,
+            "",
+            "",
+            voce.presenza === reportConfronti.PRESENZA.soloCorrente ? "presente" : "",
+            voce.presenza === reportConfronti.PRESENZA.soloAltra ? "presente" : ""
+        ]];
+    }
+
+    return differenze.map(d => [
+        stato,
+        voce.codiceGruppo,
+        descrizione,
+        reportConfronti.descriviCanale(d.canale),
+        d.etichetta || d.campo || "",
+        d.corrente === "" || d.corrente == null ? "(vuoto)" : d.corrente,
+        d.altra === "" || d.altra == null ? "(vuoto)" : d.altra
+    ]);
+}
+
+function componiCsvConfronto(intestazione, voci) {
+    const righe = righeIdentitaListe(intestazione);
+    righe.push(INTESTAZIONI_CONFRONTO.slice());
+
+    (voci || []).forEach(voce => {
+        righeDellaVoce(voce).forEach(riga => righe.push(riga));
+    });
+
+    return BOM + righe
+        .map(riga => riga.map(campoCsv).join(SEPARATORE_CAMPI))
+        .join(FINE_RIGA) + FINE_RIGA;
+}
+
 module.exports = {
     SEPARATORE_CAMPI,
     SEPARATORE_DESCRIZIONE,
     FINE_RIGA,
     BOM,
     INTESTAZIONI,
+    INTESTAZIONI_CONFRONTO,
+    nomeFileConfronto,
+    conSuffissoConfronto,
+    descriviLista,
+    righeIdentitaListe,
+    componiCsvConfronto,
     PREFISSO_NOME,
     prossimoProgressivo,
     nomeFileSicuro,

@@ -6760,6 +6760,31 @@ double.TryParse(percorso.ToString(), out double valore16))
         }
 
 
+        //I20-981 (Lotto 4b): le lavorazioni della stessa promo di quella data. Il plugin le
+        //offre all'operatore per scegliere da quale scaricare la lista con cui confrontare la
+        //propria: fra promo diverse il confronto non ha senso. La forma dell'elenco sta in
+        //LavorazioniDellaPromo, che non tocca il database ed e' verificata a parte.
+        [Route("Menabo/getLavorazioniDellaPromo/{idLavorazione}")]
+        public IActionResult getLavorazioniDellaPromo(int idLavorazione)
+        {
+            try
+            {
+                PromoLavorazioni? corrente = this.ctx2.PromoLavorazionis.FirstOrDefault(p => p.Id == idLavorazione);
+
+                List<PromoLavorazioni> tutte = corrente == null
+                    ? new List<PromoLavorazioni>()
+                    : this.ctx2.PromoLavorazionis.Where(p => p.GuidPromo == corrente.GuidPromo).ToList();
+
+                return Ok(LavorazioniDellaPromo.Componi(corrente, tutte));
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Errore in getLavorazioniDellaPromo: " + ex.ToString());
+                return Ok(new LavorazioniDellaPromoResponse() { esito = false, error = ex.Message });
+            }
+        }
+
+
         [HttpPost]
         [Route("Menabo/restoreCacheConfronto")]
         public async Task<IActionResult> RestoreCacheConfronto(int idLavorazione)

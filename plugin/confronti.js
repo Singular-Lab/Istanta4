@@ -2604,6 +2604,9 @@ const confronti = {
         //calcolano prima dei pannelli e restano indicizzate per presenza.
         this._confrontoReportState.confronti = this._calcolaConfronti();
         this._indiceConfronti = reportConfronti.indicizzaPerPresenza(this._confrontoReportState.confronti.voci);
+        //I20-981 (Lotto 4b): se una lista di confronto e' stata scelta in questa sessione, il
+        //confronto si rifa' sulla lista corrente di adesso, che puo' essere cambiata.
+        this._vociConfrontoListe = this._calcolaConfrontoAltraLista();
 
         const recordsCambiati = this._getCurrentReportRecords("recordCambiati");
         const recordsUsciti = this._getCurrentReportRecords("recordUsciti");
@@ -2622,7 +2625,14 @@ const confronti = {
         const changedTab = this._crTabButton(reportConteggi.etichettaLinguetta("Cambiati", conteggi.cambiati), true, "Cambiati");
         const removedTab = this._crTabButton(reportConteggi.etichettaLinguetta("Eliminati", conteggi.eliminati), false, "Eliminati");
         const newTab = this._crTabButton(reportConteggi.etichettaLinguetta("Nuovi", conteggi.nuovi), false, "Nuovi");
-        const confrontiTab = this._crTabButton("Confronti", false, "Confronti");
+        const confrontiTab = this._crTabButton(
+            this._listaConfronto == null
+                ? "Confronti"
+                : reportConteggi.etichettaLinguetta("Confronti", this._vociConfrontoFiltrate().length),
+            false, "Confronti");
+        if (this._confrontoListeUi != null) {
+            this._confrontoListeUi.tab = confrontiTab;
+        }
 
         const panels = [
             { button: changedTab, panel: changedPanel },
@@ -5357,35 +5367,667 @@ const confronti = {
         };
     },
 
-    //I20-981: la scheda Confronti ospitera' il confronto con un'altra lista (prossimo lotto).
-    //Il confronto della lista con se stessa vive nelle righe dei Cambiati, dove ci sono gia' i
-    //pulsanti per trovare la referenza, risolverla o metterla in whitelist.
+    //I20-981 (Lotto 4b): il confronto con un'altra lista della stessa promo. La lista si
+    //sceglie fra le lavorazioni sorelle, chieste al server, o si apre da un json locale; resta
+    //in memoria per la sessione del plugin. Il confronto vero sta in reportConfronti.js, il
+    //csv in reportConfrontoCsv.js: qui c'e' solo la scheda, con i suoi filtri.
+    _listaConfronto: null,
+    _lavorazioniSorelle: null,
+    _filtroConfronto: null,
+    _vociConfrontoListe: null,
+    _confrontoListeUi: null,
+
+    filtroConfrontoCorrente() {
+        if (this._filtroConfronto == null) {
+            this._filtroConfronto = {
+                presenza: reportConfronti.FILTRO_PRESENZA.tutte,
+                canali: { osservato: true, compilato: true },
+                campi: null
+            };
+        }
+        return this._filtroConfronto;
+    },
+
+    /// Le voci del confronto, complete: e' il filtro a decidere cosa si vede.
+    _calcolaConfrontoAltraLista() {
+        if (this._listaConfronto == null) {
+            return [];
+        }
+
+        try {
+            return reportConfronti.confrontoConAltraLista(
+                this._recordsListaKit(),
+                this._listaConfronto.records,
+                this.campiOsservatiConfronto());
+        }
+        catch (err) {
+            console.error("Confronto con l'altra lista non calcolato:", err);
+            return [];
+        }
+    },
+
+    _vociConfrontoFiltrate() {
+        return reportConfronti.filtraVociConfronto(this._vociConfrontoListe || [], this.filtroConfrontoCorrente());
+    },
+
     _buildPanelConfronti() {
         const panel = this._crPanel();
         this._stylePanelForReportListMode(panel);
+
         const topbar = this._crTabTopbar();
+        topbar.style.flexWrap = "wrap";
+
+        const pickerLavorazioni = document.createElement("sp-picker");
+        pickerLavorazioni.style.minWidth = "220px";
+        const menuLavorazioni = document.createElement("sp-menu");
+        menuLavorazioni.setAttribute("slot", "options");
+        pickerLavorazioni.appendChild(menuLavorazioni);
+        Utility.impostaTooltip(pickerLavorazioni, "Le lavorazioni della stessa promo: da una di queste si scarica la lista da confrontare");
+
+        const btnScarica = this._crButton("Scarica lista");
+        Utility.impostaTooltip(btnScarica, "Scarica la lista della lavorazione scelta e confrontala con quella corrente");
+        const btnLocale = this._crButton("Apri json locale");
+        Utility.impostaTooltip(btnLocale, "Confronta con una lista salvata in un file listaKit json");
+        const btnCsv = this._crButton("Scarica CSV confronto");
+        Utility.impostaTooltip(btnCsv, "Scarica in csv le righe del confronto, con i filtri attivi");
+
+        topbar.appendChild(pickerLavorazioni);
+        topbar.appendChild(btnScarica);
+        topbar.appendChild(btnLocale);
+        topbar.appendChild(btnCsv);
+
+        //I filtri: presenze, canali, campi. Alla maniera di un foglio di calcolo: si spegne
+        //quello che non si vuole vedere, e si riaccende.
+        const filtro = this.filtroConfrontoCorrente();
+
+        const barraFiltri = document.createElement("div");
+        barraFiltri.style.display = "flex";
+        barraFiltri.style.flexWrap = "wrap";
+        barraFiltri.style.alignItems = "center";
+        barraFiltri.style.gap = "10px";
+        barraFiltri.style.padding = "6px 0";
+        barraFiltri.style.borderBottom = "1px solid #555";
+        barraFiltri.style.flexShrink = "0";
+        barraFiltri.style.fontSize = "11px";
+
+        const pickerPresenza = this._crPickerPresenza(filtro.presenza);
+        pickerPresenza.addEventListener("change", (ev) => {
+            this.filtroConfrontoCorrente().presenza = ev.target.value || reportConfronti.FILTRO_PRESENZA.tutte;
+            this._ridisegnaConfrontoListe();
+        });
+
+        const interruttoreOsservati = this._crInterruttore("Campi osservati", filtro.canali.osservato !== false, (acceso) => {
+            this.filtroConfrontoCorrente().canali.osservato = acceso;
+            this._ridisegnaConfrontoListe();
+        });
+        const interruttoreCompilati = this._crInterruttore("Campi compilati", filtro.canali.compilato !== false, (acceso) => {
+            this.filtroConfrontoCorrente().canali.compilato = acceso;
+            this._ridisegnaConfrontoListe();
+        });
+
+        const btnCampi = this._crButton("Campi...");
+        Utility.impostaTooltip(btnCampi, "Scegli quali campi vedere");
+
+        const pannelloCampi = document.createElement("div");
+        pannelloCampi.style.display = "none";
+        pannelloCampi.style.flexWrap = "wrap";
+        pannelloCampi.style.gap = "8px 14px";
+        pannelloCampi.style.padding = "6px 8px";
+        pannelloCampi.style.borderBottom = "1px solid #555";
+        pannelloCampi.style.flexShrink = "0";
+        pannelloCampi.style.fontSize = "11px";
+
+        btnCampi.addEventListener("click", () => {
+            pannelloCampi.style.display = pannelloCampi.style.display === "none" ? "flex" : "none";
+        });
+
+        barraFiltri.appendChild(pickerPresenza);
+        barraFiltri.appendChild(interruttoreOsservati);
+        barraFiltri.appendChild(interruttoreCompilati);
+        barraFiltri.appendChild(btnCampi);
+
         const content = this._crScrollableContent();
 
-        const modo = document.createElement("div");
-        modo.textContent = "Confronto con un'altra lista";
-        modo.style.fontWeight = "600";
-        modo.style.fontSize = "12px";
-        topbar.appendChild(modo);
-
-        content.appendChild(this._crEmptyState("Nessuna lista di confronto selezionata"));
-
-        const nota = document.createElement("div");
-        nota.textContent = "Le differenze della lista con se stessa si trovano nella scheda Cambiati, "
-            + "nel riquadro \"Campi osservati\" di ogni referenza.";
-        nota.style.padding = "0 8px 12px 8px";
-        nota.style.fontSize = "11px";
-        nota.style.opacity = "0.8";
-        nota.style.whiteSpace = "normal";
-        content.appendChild(nota);
-
         panel.appendChild(topbar);
+        panel.appendChild(barraFiltri);
+        panel.appendChild(pannelloCampi);
         panel.appendChild(content);
+
+        this._confrontoListeUi = {
+            pickerLavorazioni,
+            menuLavorazioni,
+            btnScarica,
+            btnLocale,
+            btnCsv,
+            pickerPresenza,
+            pannelloCampi,
+            content,
+            tab: null
+        };
+
+        btnScarica.addEventListener("click", () => this._scaricaListaConfrontoScelta());
+        btnLocale.addEventListener("click", () => this._apriListaConfrontoLocale());
+        btnCsv.addEventListener("click", () => this._scaricaCsvConfrontoListe());
+
+        this._riempiPickerLavorazioni();
+        this._ridisegnaConfrontoListe();
+
         return panel;
+    },
+
+    _crPickerPresenza(valore) {
+        const picker = document.createElement("sp-picker");
+        picker.style.minWidth = "170px";
+        const menu = document.createElement("sp-menu");
+        menu.setAttribute("slot", "options");
+
+        [
+            { valore: reportConfronti.FILTRO_PRESENZA.tutte, testo: "Tutte le referenze" },
+            { valore: reportConfronti.FILTRO_PRESENZA.comuni, testo: "Solo in comune" },
+            { valore: reportConfronti.FILTRO_PRESENZA.soloUna, testo: "Solo in una lista" }
+        ].forEach(voce => {
+            const item = document.createElement("sp-menu-item");
+            item.value = voce.valore;
+            item.textContent = voce.testo;
+            if (voce.valore === valore) {
+                item.setAttribute("selected", "selected");
+            }
+            menu.appendChild(item);
+        });
+
+        picker.appendChild(menu);
+        Utility.impostaTooltip(picker, "Quali referenze vedere: tutte, solo quelle in comune alle due liste, solo quelle presenti in una sola");
+        return picker;
+    },
+
+    _crInterruttore(testo, acceso, alCambio) {
+        const etichetta = document.createElement("label");
+        etichetta.style.display = "flex";
+        etichetta.style.alignItems = "center";
+        etichetta.style.gap = "4px";
+        etichetta.style.cursor = "pointer";
+        etichetta.style.whiteSpace = "nowrap";
+
+        const casella = document.createElement("input");
+        casella.type = "checkbox";
+        casella.checked = acceso === true;
+        casella.addEventListener("change", () => alCambio(casella.checked === true));
+
+        etichetta.appendChild(casella);
+        etichetta.appendChild(document.createTextNode(testo));
+        return etichetta;
+    },
+
+    /// Il pannello dei campi: una casella per ogni campo che ha qualcosa da mostrare, per
+    /// canale, con "tutti" e "nessuno". Un campo spento non si vede in nessuna riga.
+    _riempiPannelloCampi() {
+        const ui = this._confrontoListeUi;
+        if (ui == null || ui.pannelloCampi == null) {
+            return;
+        }
+
+        const pannello = ui.pannelloCampi;
+        pannello.innerHTML = "";
+
+        const disponibili = reportConfronti.campiDisponibili(this._vociConfrontoListe || []);
+        const filtro = this.filtroConfrontoCorrente();
+
+        if (disponibili.length === 0) {
+            const vuoto = document.createElement("div");
+            vuoto.textContent = "Nessun campo con differenze";
+            vuoto.style.opacity = "0.7";
+            pannello.appendChild(vuoto);
+            return;
+        }
+
+        const accesi = new Set(filtro.campi == null ? disponibili.map(c => String(c.campo)) : filtro.campi.map(String));
+
+        const applica = () => {
+            //Tutti accesi vale "nessun filtro": cosi' un campo nuovo, la prossima volta, entra.
+            filtro.campi = accesi.size === disponibili.length ? null : Array.from(accesi);
+            this._ridisegnaConfrontoListe(false);
+        };
+
+        const comandi = document.createElement("div");
+        comandi.style.display = "flex";
+        comandi.style.gap = "6px";
+        comandi.style.width = "100%";
+
+        const btnTutti = this._crButton("Tutti");
+        btnTutti.addEventListener("click", () => {
+            disponibili.forEach(c => accesi.add(String(c.campo)));
+            applica();
+            this._riempiPannelloCampi();
+        });
+        const btnNessuno = this._crButton("Nessuno");
+        btnNessuno.addEventListener("click", () => {
+            accesi.clear();
+            applica();
+            this._riempiPannelloCampi();
+        });
+        comandi.appendChild(btnTutti);
+        comandi.appendChild(btnNessuno);
+        pannello.appendChild(comandi);
+
+        [reportConfronti.CANALE.osservato, reportConfronti.CANALE.compilato].forEach(canale => {
+            const delCanale = disponibili.filter(c => c.canale === canale);
+            if (delCanale.length === 0) {
+                return;
+            }
+
+            const gruppo = document.createElement("div");
+            gruppo.style.display = "flex";
+            gruppo.style.flexWrap = "wrap";
+            gruppo.style.gap = "6px 14px";
+            gruppo.style.width = "100%";
+
+            const titolo = document.createElement("div");
+            titolo.textContent = reportConfronti.descriviCanale(canale) + ":";
+            titolo.style.fontWeight = "700";
+            titolo.style.width = "100%";
+            gruppo.appendChild(titolo);
+
+            delCanale.forEach(campo => {
+                gruppo.appendChild(this._crInterruttore(campo.etichetta || campo.campo, accesi.has(String(campo.campo)), (acceso) => {
+                    if (acceso) {
+                        accesi.add(String(campo.campo));
+                    }
+                    else {
+                        accesi.delete(String(campo.campo));
+                    }
+                    applica();
+                }));
+            });
+
+            pannello.appendChild(gruppo);
+        });
+    },
+
+    /// Ridisegna la sola scheda Confronti: cambiare un filtro non deve rifare tutto il report.
+    _ridisegnaConfrontoListe(anchePannelloCampi = true) {
+        const ui = this._confrontoListeUi;
+        if (ui == null || ui.content == null) {
+            return;
+        }
+
+        if (anchePannelloCampi) {
+            this._riempiPannelloCampi();
+        }
+
+        const content = ui.content;
+        content.innerHTML = "";
+
+        const voci = this._vociConfrontoFiltrate();
+
+        if (ui.tab != null) {
+            ui.tab.textContent = this._listaConfronto == null
+                ? "Confronti"
+                : reportConteggi.etichettaLinguetta("Confronti", voci.length);
+        }
+
+        if (this._listaConfronto == null) {
+            content.appendChild(this._crEmptyState("Nessuna lista di confronto selezionata"));
+
+            const nota = document.createElement("div");
+            nota.textContent = "Scegli una lavorazione della stessa promo e scarica la sua lista, oppure apri un listaKit json. "
+                + "Le differenze della lista con se stessa stanno nella scheda Cambiati, nel riquadro \"Campi osservati\".";
+            nota.style.padding = "0 8px 12px 8px";
+            nota.style.fontSize = "11px";
+            nota.style.opacity = "0.8";
+            nota.style.whiteSpace = "normal";
+            content.appendChild(nota);
+            return;
+        }
+
+        content.appendChild(this._crIdentitaConfronto());
+
+        if (voci.length === 0) {
+            content.appendChild(this._crEmptyState("Nessuna differenza con i filtri scelti"));
+            return;
+        }
+
+        voci.forEach(voce => content.appendChild(this._crRigaConfrontoListe(voce)));
+    },
+
+    _descriviListaConfronto(lista) {
+        return reportConfrontoCsv.descriviLista(lista);
+    },
+
+    /// Cosa si sta confrontando con cosa: sopra l'elenco, sempre visibile.
+    _crIdentitaConfronto() {
+        const riga = document.createElement("div");
+        riga.style.padding = "4px 8px 8px 8px";
+        riga.style.fontSize = "11px";
+        riga.style.whiteSpace = "normal";
+        riga.style.overflowWrap = "anywhere";
+
+        const corrente = document.createElement("div");
+        corrente.appendChild(this._crEtichettaForte("Lista corrente: "));
+        corrente.appendChild(document.createTextNode(this._descriviListaConfronto(this._identitaListaCorrente())));
+
+        const altra = document.createElement("div");
+        altra.appendChild(this._crEtichettaForte("Altra lista: "));
+        altra.appendChild(document.createTextNode(this._descriviListaConfronto(this._listaConfronto)));
+
+        const filtro = document.createElement("div");
+        filtro.style.opacity = "0.8";
+        filtro.textContent = "Filtri: " + reportConfronti.descriviFiltro(
+            this.filtroConfrontoCorrente(), reportConfronti.campiDisponibili(this._vociConfrontoListe || []));
+
+        riga.appendChild(corrente);
+        riga.appendChild(altra);
+        riga.appendChild(filtro);
+        return riga;
+    },
+
+    _crEtichettaForte(testo) {
+        const span = document.createElement("span");
+        span.textContent = testo;
+        span.style.fontWeight = "700";
+        return span;
+    },
+
+    _identitaListaCorrente() {
+        return Object.assign({
+            titolo: this._titoloKitPerCsv(),
+            idKit: typeof idKitLavorazione !== "undefined" ? idKitLavorazione : ""
+        }, reportConfronti.identitaTracciato(this._recordsListaKit()));
+    },
+
+    _crRigaConfrontoListe(voce) {
+        const row = this._crRow("differente");
+        row.dataset.codiceGruppo = voce.codiceGruppo;
+
+        const left = document.createElement("div");
+        left.style.display = "flex";
+        left.style.flexDirection = "column";
+        left.style.gap = "4px";
+        left.style.flex = "1 1 auto";
+        left.style.minWidth = "0";
+        left.style.overflow = "hidden";
+
+        const testata = document.createElement("div");
+        testata.style.display = "flex";
+        testata.style.alignItems = "center";
+        testata.style.gap = "8px";
+        testata.style.minWidth = "0";
+        testata.appendChild(this._crCodiceGruppo(voce.codiceGruppo));
+
+        const stato = document.createElement("span");
+        stato.textContent = reportConfronti.descriviPresenza(voce.presenza);
+        stato.style.fontSize = "10px";
+        stato.style.fontWeight = "700";
+        stato.style.padding = "1px 6px";
+        stato.style.borderRadius = "10px";
+        stato.style.backgroundColor = voce.presenza === reportConfronti.PRESENZA.entrambe ? "#eef3fb" : "#fbeeee";
+        stato.style.whiteSpace = "nowrap";
+        testata.appendChild(stato);
+        left.appendChild(testata);
+
+        const descrizione = document.createElement("div");
+        descrizione.textContent = this._getDescrizioneNuovo(voce.rawCorrente || voce.rawAltra || {}) || "";
+        descrizione.style.fontSize = "11px";
+        descrizione.style.whiteSpace = "normal";
+        descrizione.style.overflowWrap = "anywhere";
+        left.appendChild(descrizione);
+
+        (voce.differenze || []).forEach(d => {
+            const riga = document.createElement("div");
+            riga.style.fontSize = "11px";
+            riga.style.lineHeight = "1.3";
+            riga.style.whiteSpace = "normal";
+            riga.style.overflowWrap = "anywhere";
+            riga.dataset.canale = d.canale;
+            riga.dataset.campo = d.campo;
+
+            const canale = document.createElement("span");
+            canale.textContent = d.canale === reportConfronti.CANALE.compilato ? "compilato" : "osservato";
+            canale.style.fontSize = "9px";
+            canale.style.opacity = "0.7";
+            canale.style.marginRight = "6px";
+            riga.appendChild(canale);
+
+            const campo = document.createElement("span");
+            campo.textContent = d.etichetta || d.campo;
+            campo.style.fontWeight = "600";
+            riga.appendChild(campo);
+
+            riga.appendChild(document.createTextNode(": " + (d.corrente || "(vuoto)") + " ↔ " + (d.altra || "(vuoto)")));
+            Utility.impostaTooltip(riga, "Lista corrente: " + (d.corrente || "(vuoto)") + "\nAltra lista: " + (d.altra || "(vuoto)"));
+            left.appendChild(riga);
+        });
+
+        const actions = document.createElement("div");
+        actions.style.display = "flex";
+        actions.style.flexShrink = "0";
+        actions.style.alignItems = "flex-start";
+        actions.style.gap = "6px";
+
+        //La referenza che sta nella lista corrente puo' essere in pagina: la si cerca come fa il
+        //report. Quella che sta solo nell'altra lista in questo documento non c'e'.
+        if (voce.presenza !== reportConfronti.PRESENZA.soloAltra) {
+            const btnFind = this._crIconButton("Trova", "images/leggiLog.png");
+            btnFind.addEventListener("click", () => {
+                this._findElemento({ record: { codiceGruppo: voce.codiceGruppo } });
+            });
+            actions.appendChild(btnFind);
+        }
+
+        const btnInfo = this._crIconButton("Info", "images/info.png");
+        btnInfo.addEventListener("click", () => {
+            this._openInfoReportRecord({ raw: voce.rawCorrente || voce.rawAltra, codiceGruppo: voce.codiceGruppo });
+        });
+        actions.appendChild(btnInfo);
+
+        row.appendChild(left);
+        row.appendChild(actions);
+        return row;
+    },
+
+    /// Le lavorazioni della stessa promo, chieste al server una volta per sessione.
+    async _lavorazioniDellaPromo() {
+        if (this._lavorazioniSorelle != null) {
+            return this._lavorazioniSorelle;
+        }
+
+        try {
+            const risposta = await ficoProcess.requestFicoData("Menabo/getLavorazioniDellaPromo/" + idKitLavorazione);
+            if (risposta != null && risposta.esito === true && Array.isArray(risposta.lavorazioni)) {
+                this._lavorazioniSorelle = risposta;
+                return risposta;
+            }
+            console.warn("Elenco delle lavorazioni della promo non disponibile:", risposta?.error);
+            return null;
+        }
+        catch (err) {
+            console.error("Elenco delle lavorazioni della promo non letto:", err);
+            return null;
+        }
+    },
+
+    async _riempiPickerLavorazioni() {
+        const ui = this._confrontoListeUi;
+        if (ui == null || ui.menuLavorazioni == null) {
+            return;
+        }
+
+        const menu = ui.menuLavorazioni;
+        menu.innerHTML = "";
+
+        const primo = document.createElement("sp-menu-item");
+        primo.value = "";
+        primo.textContent = "Scegli una lavorazione della promo";
+        primo.setAttribute("selected", "selected");
+        menu.appendChild(primo);
+
+        const risposta = await this._lavorazioniDellaPromo();
+
+        if (risposta == null) {
+            const voce = document.createElement("sp-menu-item");
+            voce.value = "";
+            voce.textContent = "Elenco non disponibile";
+            voce.setAttribute("disabled", "disabled");
+            menu.appendChild(voce);
+            return;
+        }
+
+        risposta.lavorazioni.filter(l => l.corrente !== true).forEach(l => {
+            const voce = document.createElement("sp-menu-item");
+            voce.value = String(l.id);
+            voce.textContent = l.titolo + " (" + l.id + ", " + this._dataBreve(l.registerDate) + ")";
+            menu.appendChild(voce);
+        });
+    },
+
+    _dataBreve(valore) {
+        try {
+            const data = new Date(valore);
+            return isNaN(data.getTime()) ? "" : data.toLocaleDateString("it-IT");
+        }
+        catch (err) {
+            return "";
+        }
+    },
+
+    async _scaricaListaConfrontoScelta() {
+        const ui = this._confrontoListeUi;
+        const id = ui != null && ui.pickerLavorazioni != null ? String(ui.pickerLavorazioni.value || "") : "";
+
+        if (id === "") {
+            messaggioUtente("Scegli prima una lavorazione della promo", "warning", false, 4);
+            return;
+        }
+
+        const sorelle = this._lavorazioniSorelle;
+        const scelta = sorelle != null ? sorelle.lavorazioni.find(l => String(l.id) === id) : null;
+        const titolo = scelta != null ? scelta.titolo : "Lavorazione " + id;
+
+        //Il download puo' pesare: lo si dice, e si mostra il caricamento finche' dura.
+        messaggioUtente("Scarico la lista di \"" + titolo + "\": puo' richiedere qualche secondo", "warning", false, 6);
+        showLoading("Scaricamento lista di confronto...");
+
+        try {
+            const lista = await ficoProcess.requestFicoData(
+                "Menabo/getListaTracciatoNew2/" + id + "/" + (typeof noCache !== "undefined" ? noCache : true));
+            const records = reportConfronti.recordsDellaLista(lista);
+
+            if (records == null || (lista != null && lista.esito === false)) {
+                messaggioUtente("Code CNF-80 La lista della lavorazione " + id + " non e' arrivata: " + (lista?.error || "risposta non valida"), "error", false, 8);
+                return;
+            }
+
+            this._impostaListaConfronto({ origine: "scaricata", idKit: Number(id), titolo, records });
+        }
+        catch (err) {
+            console.error("Lista di confronto non scaricata:", err);
+            messaggioUtente("Code CNF-81 Lista di confronto non scaricata: " + (err?.message || err), "error", false, 8);
+        }
+        finally {
+            hideLoading();
+        }
+    },
+
+    async _apriListaConfrontoLocale() {
+        try {
+            const file = await fs2.getFileForOpening();
+            if (!file) {
+                return;
+            }
+
+            if (!String(file.name || "").toLowerCase().endsWith(".json")) {
+                messaggioUtente("Code CNF-82 Il file scelto non e' un json", "error", false, 5);
+                return;
+            }
+
+            showLoading("Lettura della lista...");
+            let lista = null;
+            try {
+                lista = JSON.parse(await file.read());
+            }
+            catch (err) {
+                messaggioUtente("Code CNF-83 Il file non si legge come json: " + (err?.message || err), "error", false, 6);
+                return;
+            }
+            finally {
+                hideLoading();
+            }
+
+            const records = reportConfronti.recordsDellaLista(lista);
+            if (records == null) {
+                messaggioUtente("Code CNF-84 Il file non e' una lista del kit: manca l'elenco dei record", "error", false, 6);
+                return;
+            }
+
+            //La promo non si legge dal contenuto: la si verifica dall'idKit, contro l'elenco
+            //delle lavorazioni della promo. Se non si puo' verificare, decide l'operatore.
+            const idKit = lista != null && lista.idKit != null ? Number(lista.idKit) : null;
+            const sorelle = await this._lavorazioniDellaPromo();
+            let titolo = String(file.name || "lista locale");
+
+            if (sorelle == null) {
+                const procedi = await Utility.confirm("Non riesco a verificare che la lista sia della stessa promo (elenco delle lavorazioni non disponibile). Vuoi confrontarla comunque?");
+                if (!procedi) {
+                    return;
+                }
+            }
+            else {
+                const sorella = idKit != null ? sorelle.lavorazioni.find(l => Number(l.id) === idKit) : null;
+                if (sorella == null) {
+                    const procedi = await Utility.confirm("La lista " + (idKit != null ? "della lavorazione " + idKit : "scelta") + " non risulta della stessa promo. Il confronto fra promo diverse non ha senso: vuoi procedere comunque?");
+                    if (!procedi) {
+                        return;
+                    }
+                }
+                else {
+                    titolo = sorella.titolo + " - " + file.name;
+                }
+            }
+
+            this._impostaListaConfronto({ origine: "locale", idKit: idKit, titolo, records });
+        }
+        catch (err) {
+            console.error("Lista di confronto locale non aperta:", err);
+            messaggioUtente("Code CNF-85 Lista di confronto non aperta: " + (err?.message || err), "error", false, 8);
+        }
+    },
+
+    /// La lista scelta diventa quella del confronto, per tutta la sessione del plugin: si
+    /// ricalcolano le voci, si azzera il filtro sui campi (i campi disponibili sono altri) e
+    /// si ridisegna la scheda.
+    _impostaListaConfronto(lista) {
+        this._listaConfronto = Object.assign({}, lista, reportConfronti.identitaTracciato(lista.records), { sceltaIl: new Date() });
+        this._vociConfrontoListe = this._calcolaConfrontoAltraLista();
+        this.filtroConfrontoCorrente().campi = null;
+        this._ridisegnaConfrontoListe();
+
+        const voci = this._vociConfrontoFiltrate();
+        messaggioUtente("Lista di confronto pronta: " + this._listaConfronto.primari + " referenze, " + voci.length + " voci con differenze", "success", false, 6);
+    },
+
+    async _scaricaCsvConfrontoListe() {
+        if (this._listaConfronto == null) {
+            messaggioUtente("Scegli prima una lista di confronto", "warning", false, 4);
+            return;
+        }
+
+        try {
+            const cartella = this.cartellaCsvReport();
+            const nomeFile = reportConfrontoCsv.conSuffissoConfronto(await this._nomeFileReportCsv(cartella));
+            const voci = this._vociConfrontoFiltrate();
+
+            const testo = reportConfrontoCsv.componiCsvConfronto({
+                corrente: this._identitaListaCorrente(),
+                altra: this._listaConfronto,
+                filtri: reportConfronti.descriviFiltro(this.filtroConfrontoCorrente(), reportConfronti.campiDisponibili(this._vociConfrontoListe || []))
+            }, voci);
+
+            const filePath = await this._scriviTestoUtf8(cartella, nomeFile, testo);
+            messaggioUtente("Confronto fra liste scaricato in CSV: " + filePath, "success", false, 10);
+        }
+        catch (err) {
+            console.error("Csv del confronto non scritto:", err);
+            messaggioUtente("Code CNF-86 Csv del confronto non scritto: " + (err?.message || err), "error", false, 8);
+        }
     },
 
     _buildPanelNuovi(report) {
