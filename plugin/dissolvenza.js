@@ -11,10 +11,13 @@
  * Esecuzione dei test: node --test tests/plugin/dissolvenza.test.js
  */
 
-//Passi radi: UXP ridisegna quando il ciclo degli eventi glielo concede, e un timer fitto
-//potrebbe non lasciargli mai spazio fra un passo e l'altro.
-const DURATA_MS = 600;
-const PASSO_MS = 60;
+//Breve, perche' l'operatore aspetta; ma a passi non troppo fitti, perche' UXP ridisegna quando
+//il ciclo degli eventi glielo concede e un timer serrato non gli lascerebbe spazio.
+const DURATA_MS = 300;
+const PASSO_MS = 50;
+//Il colore del testo quando il motore non lo dice: il report scrive in scuro su chiaro, e
+//un testo che sfuma dal grigio scuro e' quello che l'occhio si aspetta.
+const COLORE_TESTO_DI_BASE = { r: 17, g: 17, b: 17, a: 1 };
 //Sotto questa alfa le immagini si spengono: non hanno un colore da attenuare.
 const SOGLIA_IMMAGINI = 0.5;
 
@@ -91,6 +94,7 @@ module.exports = {
     DURATA_MS,
     PASSO_MS,
     SOGLIA_IMMAGINI,
+    COLORE_TESTO_DI_BASE,
     numeroDiPassi,
     alfaAlPasso,
     analizzaColore,

@@ -1987,6 +1987,7 @@ const confronti = {
 
         if (restanti.length === 0) {
             await this._dissolviElementi(riga);
+            this._rimuoviDallaVista([riga]);
             return;
         }
 
@@ -2005,6 +2006,22 @@ const confronti = {
         }
 
         await this._dissolviElementi(elementi);
+        this._rimuoviDallaVista(elementi);
+    },
+
+    /// Gli elementi sfumati escono dalla vista senza aspettare il ridisegno, che arriva dopo
+    /// il salvataggio e li avrebbe tolti comunque.
+    _rimuoviDallaVista(elementi) {
+        (elementi || []).forEach(el => {
+            try {
+                if (el != null && el.parentNode != null) {
+                    el.parentNode.removeChild(el);
+                }
+            }
+            catch (err) {
+                //Un elemento gia' tolto dal ridisegno non e' un errore.
+            }
+        });
     },
 
     /// La riga del record dopo che il report si e' ridisegnato: i payload sono altri, quindi
@@ -3948,6 +3965,13 @@ const confronti = {
             console.error("Discendenti della riga non letti:", err);
         }
 
+        //Il colore del testo il motore spesso non lo dice: per gli elementi che lo ereditano
+        //getComputedStyle torna una forma che non e' un colore. Si prende allora quello scritto
+        //sull'antenato piu' vicino che ne ha uno, e in mancanza il grigio scuro del report.
+        //Senza questo le scritte delle segnalazioni restavano ferme mentre il resto sfumava.
+        const coloreTestoDiBase = this._coloreTestoDegliAntenati(radice) || dissolvenza.COLORE_TESTO_DI_BASE;
+        let colorePrimoTestoLetto = null;
+
         elementi.forEach(el => {
             const bersaglio = { el, colori: {}, immagine: false };
 
@@ -3981,12 +4005,45 @@ const confronti = {
                 if (colore != null) {
                     bersaglio.colori[proprieta] = colore;
                 }
+                else if (proprieta === "color" && colorePrimoTestoLetto == null && testo != null && testo !== "") {
+                    colorePrimoTestoLetto = String(testo);
+                }
             });
+
+            if (bersaglio.colori.color == null && !bersaglio.immagine) {
+                bersaglio.colori.color = coloreTestoDiBase;
+            }
 
             bersagli.push(bersaglio);
         });
 
+        //Com'e' fatto il colore che il motore restituisce e che non riconosco: la prossima
+        //lettura del tracciato dira' se c'e' una forma da imparare.
+        this._ultimoColoreNonRiconosciuto = colorePrimoTestoLetto;
+
         return bersagli;
+    },
+
+    /// Il colore di testo scritto sull'antenato piu' vicino, dentro il report.
+    _coloreTestoDegliAntenati(elemento) {
+        let corrente = elemento;
+        let passi = 0;
+
+        while (corrente != null && passi < 12) {
+            try {
+                const colore = dissolvenza.analizzaColore(corrente.style ? corrente.style.color : null);
+                if (colore != null) {
+                    return colore;
+                }
+                corrente = corrente.parentElement;
+            }
+            catch (err) {
+                return null;
+            }
+            passi++;
+        }
+
+        return null;
     },
 
     _applicaPassoDissolvenza(bersagli, alfa) {
@@ -4069,6 +4126,7 @@ const confronti = {
                         durataMs: Date.now() - inizio,
                         scritture,
                         coloreDelPrimo: bersagli[0] != null ? bersagli[0].colori : null,
+                        coloreNonRiconosciuto: this._ultimoColoreNonRiconosciuto || null,
                         letturaFinale: this._leggiOpacita(lista[0])
                     });
 
@@ -4148,7 +4206,14 @@ const confronti = {
             return false;
         }
 
-        return await this._dissolviElementi(riga);
+        const esito = await this._dissolviElementi(riga);
+
+        //Sfumata, la riga se ne va subito. Dopo vengono il salvataggio del report, che e' un
+        //file grosso, e il ridisegno di tutto l'elenco: se la riga restasse li' sbiancata ad
+        //aspettarli, fra la dissolvenza e la sparizione ci sarebbe un istante di vuoto.
+        this._removeConfrontoRow(payloadId);
+
+        return esito;
     },
 
     async _onConfrontoAction(ev, action) {

@@ -14,12 +14,17 @@ const dissolvenza = require('../../plugin/dissolvenza.js');
 
 test('i passi vanno da pieno a zero, radi abbastanza per UXP', () => {
     const passi = dissolvenza.numeroDiPassi();
-    assert.strictEqual(passi, 10);
-    //Passi troppo fitti non lasciano al motore il tempo di ridisegnare.
-    assert.ok(dissolvenza.PASSO_MS >= 50, 'il passo deve dare respiro al motore');
+    assert.strictEqual(passi, 6);
+    //Passi troppo fitti non lasciano al motore il tempo di ridisegnare; una dissolvenza troppo
+    //lunga fa aspettare l'operatore.
+    assert.ok(dissolvenza.PASSO_MS >= 40, 'il passo deve dare respiro al motore');
+    assert.ok(dissolvenza.DURATA_MS <= 400, 'la dissolvenza non deve far aspettare');
+
+    //Quando il motore non dice il colore del testo, si sfuma dal grigio scuro del report.
+    assert.deepStrictEqual(dissolvenza.COLORE_TESTO_DI_BASE, { r: 17, g: 17, b: 17, a: 1 });
 
     assert.strictEqual(dissolvenza.alfaAlPasso(0, passi), 1);
-    assert.strictEqual(dissolvenza.alfaAlPasso(5, passi), 0.5);
+    assert.strictEqual(dissolvenza.alfaAlPasso(passi / 2, passi), 0.5);
     assert.strictEqual(dissolvenza.alfaAlPasso(passi, passi), 0);
     //Oltre l'ultimo passo non si va sotto zero, e senza passi si e' gia' a zero.
     assert.strictEqual(dissolvenza.alfaAlPasso(passi + 3, passi), 0);

@@ -935,3 +935,21 @@ test('il record ricontrollato resta dove stava', () => {
     //l'interfaccia non sono attendibili.
     assert.match(evidenzia, /setTimeout\(/);
 });
+
+test('anche le scritte sfumano, e la riga sparisce appena sfumata', () => {
+    //Il tracciato del collaudo: su 14 elementi solo 4 avevano un colore leggibile, i quattro
+    //bordi della riga. Il colore del testo ereditato il motore non lo dice, e le scritte delle
+    //segnalazioni restavano ferme mentre il resto sfumava. Serve un colore di base.
+    const bersagli = corpoFunzione(confronti, '_bersagliDissolvenza(radice) {');
+    assert.match(bersagli, /this\._coloreTestoDegliAntenati\(radice\) \|\| dissolvenza\.COLORE_TESTO_DI_BASE/);
+    assert.match(bersagli, /if \(bersaglio\.colori\.color == null && !bersaglio\.immagine\)/);
+
+    //Sfumata, la riga se ne va subito: il salvataggio del report e il ridisegno arrivano dopo,
+    //e una riga sbiancata che li aspetta e' un istante di vuoto.
+    const riga = corpoFunzione(confronti, '_dissolviRiga(payloadId) {');
+    assert.match(riga, /await this\._dissolviElementi\(riga\)[\s\S]*this\._removeConfrontoRow\(payloadId\)/);
+
+    const risolte = corpoFunzione(confronti, '_mostraSegnalazioniRisolte(piano) {');
+    assert.match(risolte, /this\._rimuoviDallaVista\(elementi\)/);
+    assert.match(risolte, /this\._rimuoviDallaVista\(\[riga\]\)/);
+});
