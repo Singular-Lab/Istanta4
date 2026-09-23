@@ -1531,6 +1531,114 @@ const confronti = {
         return this._schedaDalReport != null;
     },
 
+    //I20-981: il tracciato di quello che la scheda aperta dal report fa davvero. Il collaudo
+    //vede il risultato ma non il percorso, e senza il percorso si tira a indovinare: qui ogni
+    //passo lascia una riga in logs/schedaDalReport.log nella cartella di lavorazione, oltre
+    //che in console. Non puo' mai fermare il flusso: se non riesce a scrivere, tace.
+    FILE_TRACCIATO_SCHEDA: "/logs/schedaDalReport.log",
+
+    _tracciaScheda(evento, dati) {
+        try {
+            const riga = "[" + new Date().toISOString() + "] " + evento +
+                (dati != null ? " | " + JSON.stringify(dati) : "");
+
+            console.log("SchedaDalReport " + riga);
+
+            const percorso = pathLavorazione + this.FILE_TRACCIATO_SCHEDA;
+            let contenuto = "";
+
+            try {
+                contenuto = fs.readFileSync(percorso, "utf8") || "";
+            }
+            catch (err) {
+                contenuto = "";
+            }
+
+            fs.writeFileSync(percorso, contenuto + riga + "\n");
+        }
+        catch (err) {
+            console.error("Tracciato della scheda non scritto:", err);
+        }
+    },
+
+    _descriviBox(box) {
+        try {
+            if (box == null) {
+                return { presente: false };
+            }
+
+            return {
+                presente: true,
+                valido: box.isValid === true,
+                id: box.isValid ? box.id : null,
+                pagina: box.isValid && box.parentPage != null ? box.parentPage.name : null
+            };
+        }
+        catch (err) {
+            return { presente: true, valido: false, errore: String(err) };
+        }
+    },
+
+    _descriviRecord(record) {
+        try {
+            const differenze = Array.isArray(record?.preAnalisi?.differenze) ? record.preAnalisi.differenze : [];
+            return {
+                codiceGruppo: record?.codiceGruppo || null,
+                inddId: record?.inddId ?? null,
+                refIdMappa: record?.elementoMappa?.refId ?? null,
+                numeroPagina: record?.numeroPagina ?? null,
+                duplicato: record?.duplicateInfo != null,
+                recordsScheda: Array.isArray(record?.schedaRef?.records) ? record.schedaRef.records.length : null,
+                differenze: differenze.map(d => (d?.label || "") + ": " + (d?.difference || "") + (d?.origine ? " [" + d.origine + "]" : "")),
+                errori: Array.isArray(record?.preAnalisi?.errors) ? record.preAnalisi.errors : []
+            };
+        }
+        catch (err) {
+            return { errore: String(err) };
+        }
+    },
+
+    _descriviDatiConfronto(records) {
+        try {
+            const dati = typeof datiPrimarioPerConfronto === "function" ? datiPrimarioPerConfronto(records) : null;
+            if (dati == null) {
+                return { primario: false, records: (records || []).length };
+            }
+
+            return {
+                primario: true,
+                records: (records || []).length,
+                sottogruppo: dati.primario?.sottogruppo != null,
+                compiledFields: (dati.compiledFields || []).map(c => c?.labelName),
+                deletedFields: (dati.deletedFields || []).length,
+                listaFoto: (dati.listaFoto || []).map(f => f?.nomeFoto),
+                fotoExtra: (dati.fotoExtra || []).length,
+                fotoExtraAuto: (dati.fotoExtraAuto || []).length,
+                noRender: (dati.tracciatoPrimario?.noRenderElementi || []).length
+            };
+        }
+        catch (err) {
+            return { errore: String(err) };
+        }
+    },
+
+    _dimensioniReport() {
+        const report = this._confrontoReportState?.report;
+        if (report == null) {
+            return null;
+        }
+
+        const conta = (chiave) => Array.isArray(report[chiave]) ? report[chiave].length : 0;
+        return {
+            cambiati: conta("recordCambiati"),
+            usciti: conta("recordUsciti"),
+            conErrori: conta("recordConErrori"),
+            giusti: conta("recordGiusti"),
+            nuoviRisolti: conta("recordNuoviRisolti"),
+            lista: this._confrontoReportState?.activeList || null
+        };
+    },
+
     /// Il Trova: prima porta l'operatore sul box, poi gli apre la scheda di quella referenza
     /// al posto del report.
     async _apriSchedaDalReport(payloadId, payload) {
@@ -1564,6 +1672,16 @@ const confronti = {
             timer: null,
             riaggancioInCorso: false
         };
+
+        this._tracciaScheda("apertura", {
+            payloadId,
+            tipo: payload?.tipo || null,
+            recordVisibileEraFiltrato: payload?.record?._fullReportRecord != null,
+            record: this._descriviRecord(record),
+            box: this._descriviBox(box),
+            dna: { codice: dna.codice, codiceGruppo: dna.codice_gruppo, idRec: dna.idRec },
+            report: this._dimensioniReport()
+        });
 
         //Il report si chiude qui: il suo stato resta in _confrontoReportState e lo si riapre
         //alla X. chiudiModal rimette visibile la schermata principale, che e' dove sta la
@@ -1678,6 +1796,12 @@ const confronti = {
         const box = this._resolveBoxByCodiceGruppo(stato.record);
         const dna = box != null ? Utility.getDnaOfBox(box) : null;
 
+        this._tracciaScheda("riaggancio", {
+            boxPrecedente: this._descriviBox(stato.box),
+            boxNuovo: this._descriviBox(box),
+            dnaLetto: dna != null
+        });
+
         if (box == null || dna == null) {
             messaggioUtente("Code CNF-71 Il box non e' piu' in pagina: la scheda si chiude e il report si aggiorna", "warning", false, 6);
             stato.riaggancioInCorso = false;
@@ -1722,6 +1846,12 @@ const confronti = {
 
         showLoading("Aggiorno la referenza nel report...");
 
+        this._tracciaScheda("chiusura:inizio", {
+            box: this._descriviBox(stato.box),
+            record: this._descriviRecord(stato.record),
+            report: this._dimensioniReport()
+        });
+
         let piano = null;
 
         try {
@@ -1729,6 +1859,7 @@ const confronti = {
         }
         catch (err) {
             console.error("Ricontrollo della referenza non riuscito:", err);
+            this._tracciaScheda("chiusura:eccezione", { errore: String(err), stack: err?.stack || null });
             messaggioUtente("Code CNF-72 Ricontrollo della referenza non riuscito: il report resta com'era", "error", false, 6);
         }
 
@@ -1738,6 +1869,7 @@ const confronti = {
         //Il report torna con la referenza ancora al suo posto: quello che il ricontrollo ha
         //trovato risolto lo si vede andare via, non lo si trova gia' sparito.
         this._riapriReportDopoScheda();
+        this._tracciaScheda("chiusura:reportRiaperto", { report: this._dimensioniReport(), pianoPresente: piano != null });
 
         if (piano == null) {
             return;
@@ -1747,12 +1879,19 @@ const confronti = {
 
         try {
             await this._mostraSegnalazioniRisolte(piano);
+            const prima = this._dimensioniReport();
             piano.applica();
+            this._tracciaScheda("chiusura:applicato", {
+                prima,
+                dopo: this._dimensioniReport(),
+                record: this._descriviRecord(piano.record)
+            });
             this._saveCurrentReportAndWhitelist();
             this._refreshConfrontoReportUi();
         }
         catch (err) {
             console.error("Aggiornamento del report dopo la scheda non riuscito:", err);
+            this._tracciaScheda("chiusura:eccezioneApplicazione", { errore: String(err), stack: err?.stack || null });
         }
         finally {
             this._azioneReportInCorso = false;
@@ -1891,6 +2030,7 @@ const confronti = {
         //vorrebbe dire rimettere in circolo quello che l'operatore ha messo da parte, e per
         //giunta in un elenco, quello del report, dove quel record non sta.
         if (state.activeList === "whitelist") {
+            this._tracciaScheda("ricontrollo:saltato", { motivo: "vista whitelist" });
             return null;
         }
 
@@ -1898,12 +2038,16 @@ const confronti = {
         //riagganciata: non lo si chiede alla selezione, che nel frattempo l'operatore puo'
         //aver spostata, ne' alla scheda, che svuotandosi lo perde.
         let box = schedaRef.serveRiaggancioDalReport(stato.box) ? null : stato.box;
+        let viaDelBox = box != null ? "memoria" : null;
 
         if (box == null) {
             //Prima di dire che non c'e' piu' lo si cerca come lo cerca il Trova: per id e poi
             //per codice gruppo. Dichiararlo sparito costa al record l'uscita dal report.
             box = this._resolveBoxFromRecord(record);
+            viaDelBox = box != null ? "ricerca" : "nessuno";
         }
+
+        this._tracciaScheda("ricontrollo:box", { via: viaDelBox, box: this._descriviBox(box) });
 
         if (box == null) {
             //Il box non c'e' piu': la referenza esce dal report e ricompare fra le Nuove, che
@@ -1917,12 +2061,24 @@ const confronti = {
 
         const records = await this._leggiSchedaRefAggiornata(stato.codiceGruppo, stato.idRec);
 
+        this._tracciaScheda("ricontrollo:schedaRiletta", {
+            richiesta: { codiceGruppo: stato.codiceGruppo, idRec: stato.idRec },
+            dalServer: this._descriviDatiConfronto(records),
+            dellaLista: this._descriviDatiConfronto(record?.schedaRef?.records)
+        });
+
         if (records == null || records.length === 0) {
             messaggioUtente("Code CNF-73 Scheda della referenza non riletta: il report resta com'era", "warning", false, 6);
             return null;
         }
 
         const preAnalisi = await preAnalisiBoxMappato(records, record.elementoMappa, box);
+
+        this._tracciaScheda("ricontrollo:preanalisi", {
+            nulla: preAnalisi == null,
+            differenze: (preAnalisi?.differenze || []).map(d => (d?.label || "") + ": " + (d?.difference || "")),
+            errori: preAnalisi?.errors || []
+        });
 
         if (preAnalisi == null) {
             messaggioUtente("Code CNF-74 Referenza non ricontrollata: il report resta com'era", "warning", false, 6);
@@ -1960,6 +2116,13 @@ const confronti = {
         const chiaviRisolte = esito.azione === "invariato"
             ? []
             : chiaviPrima.filter(chiave => !chiaviDopo.has(chiave));
+
+        this._tracciaScheda("ricontrollo:esito", {
+            esito,
+            chiaviPrima,
+            chiaviDopo: Array.from(chiaviDopo),
+            chiaviRisolte
+        });
 
         return {
             record,
@@ -2108,8 +2271,14 @@ const confronti = {
             return;
         }
 
+        const tolti = {};
+
         ["recordCambiati", "recordUsciti", "recordConErrori", "recordGiusti", "recordNuoviRisolti"]
-            .forEach(chiave => this._removeRecordFromArray(state.report[chiave], record));
+            .forEach(chiave => {
+                tolti[chiave] = this._removeRecordFromArray(state.report[chiave], record) ? 1 : 0;
+            });
+
+        this._tracciaScheda("report:recordTolto", { tolti });
     },
 
     /// Il box puo' essere un altro rispetto a quello con cui il report e' nato: chi lo cerchera'
