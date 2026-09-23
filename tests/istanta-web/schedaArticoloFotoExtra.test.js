@@ -284,3 +284,67 @@ test('l\'anteprima usa un indirizzo che la policy della pagina ammette', () => {
     assert.ok(!direttiva.includes('blob:'),
         'finche\' blob non e\' ammesso, l\'anteprima non puo\' tornare a createObjectURL');
 });
+
+/* ---- I20-985: Annulla deve chiudere il riquadro, non solo togliere l'immagine ---- */
+
+/* Una pagina finta quel tanto che basta: tiene conto di cosa e' visibile e dei gestori
+   attaccati all'immagine, che e' il punto in cui il difetto si manifestava. */
+function paginaFinta() {
+    const nodi = {};
+
+    function nodo(id) {
+        if (!nodi[id]) {
+            nodi[id] = { visibile: true, testo: '', valore: '', attributi: {}, elemento: { onload: null, onerror: null } };
+        }
+        return nodi[id];
+    }
+
+    const selettore = function (chiave) {
+        const n = nodo(String(chiave).replace('#', ''));
+        const api = {
+            0: n.elemento,
+            attr(nome, valore) { if (valore === undefined) { return n.attributi[nome]; } n.attributi[nome] = valore; return api; },
+            removeAttr(nome) { delete n.attributi[nome]; return api; },
+            show() { n.visibile = true; return api; },
+            hide() { n.visibile = false; return api; },
+            text(t) { if (t === undefined) { return n.testo; } n.testo = t; return api; },
+            val(v) { if (v === undefined) { return n.valore; } n.valore = v; return api; }
+        };
+        return api;
+    };
+
+    selettore.nodi = nodi;
+    return selettore;
+}
+
+// Il riquadro spariva e ricompariva subito: Annulla azzerava l'indirizzo dell'immagine mentre il
+// gestore d'errore era ancora attaccato, il browser segnalava il caricamento fallito e si
+// rientrava nel ramo che il riquadro lo rimostra, con dentro messaggio, Conferma e Annulla.
+test('Annulla chiude il riquadro e non se lo fa riaprire dall\'errore', () => {
+    const finta = paginaFinta();
+    const precedente = global.$;
+    global.$ = finta;
+
+    try {
+        const scheda = Object.create(Archivio.prototype);
+        scheda.MostraAnteprimaFotoArticolo('data:image/png;base64,AAAA', { name: 'scatto.psd' });
+
+        const immagine = finta.nodi['imgNuovaFotoArticolo'].elemento;
+        assert.strictEqual(typeof immagine.onerror, 'function', 'durante l\'anteprima l\'esito si ascolta');
+
+        scheda.AnnullaFotoArticolo();
+
+        assert.strictEqual(immagine.onerror, null, 'staccato prima di togliere l\'indirizzo');
+
+        //Quello che farebbe il browser se il gestore fosse rimasto attaccato.
+        if (immagine.onerror) { immagine.onerror(); }
+
+        assert.strictEqual(finta.nodi['anteprimaNuovaFotoArticolo'].visibile, false,
+            'il riquadro col messaggio e i due pulsanti deve restare chiuso');
+        assert.strictEqual(finta.nodi['imgNuovaFotoArticolo'].attributi['src'], undefined,
+            'l\'immagine non deve restare con un indirizzo addosso');
+    }
+    finally {
+        global.$ = precedente;
+    }
+});

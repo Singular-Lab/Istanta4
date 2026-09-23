@@ -473,9 +473,26 @@ class Archivio {
         immagine.attr("alt", file != null ? file.name : "").attr("src", indirizzo);
     }
 
+    /// Toglie l'immagine dal riquadro staccando prima i gestori.
+    ///
+    /// L'ordine non e' un dettaglio: azzerare l'indirizzo mentre il gestore d'errore e' ancora
+    /// attaccato fa segnalare al browser un caricamento fallito, e si rientrerebbe da dove si
+    /// era appena usciti. E' cosi' che Annulla nascondeva il riquadro e se lo vedeva riaprire.
+    SvuotaImmagineFotoArticolo() {
+        var immagine = $("#imgNuovaFotoArticolo");
+        var elemento = immagine[0];
+
+        if (elemento != null) {
+            elemento.onload = null;
+            elemento.onerror = null;
+        }
+
+        immagine.removeAttr("src").hide();
+    }
+
     /// Il riquadro non resta mai vuoto: o c'e' l'immagine o c'e' scritto perche' non c'e'.
     TestoAnteprimaFotoArticolo(testo) {
-        $("#imgNuovaFotoArticolo").attr("src", "").hide();
+        this.SvuotaImmagineFotoArticolo();
         $("#txtAnteprimaNuovaFotoArticolo").text(testo).show();
         $("#anteprimaNuovaFotoArticolo").show();
     }
@@ -484,7 +501,7 @@ class Archivio {
         this.fileNuovaFotoArticolo = null;
 
         $("#fileNuovaFotoArticolo").val("");
-        $("#imgNuovaFotoArticolo").attr("src", "").show();
+        this.SvuotaImmagineFotoArticolo();
         $("#txtAnteprimaNuovaFotoArticolo").hide().text("");
         $("#nomeNuovaFotoArticolo").text("");
         $("#anteprimaNuovaFotoArticolo").hide();
