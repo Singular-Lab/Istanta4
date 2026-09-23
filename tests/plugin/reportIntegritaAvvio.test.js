@@ -167,3 +167,35 @@ test('le differenze di confronto sopravvivono al ricontrollo del box', () => {
     assert.strictEqual(conDuplicato[0].label, 'Duplicato');
     assert.match(conDuplicato[0].difference, /istanza 2 di 3/);
 });
+
+test('il dato riletto dal server prende il posto di quello in lista', () => {
+    const lista = [
+        { idRec: 11, label: 'riga di lista', recordInTracciato: { 'Referenza.Codice': 'A', descr: 'vecchia' } },
+        { idRec: 22, recordInTracciato: { 'Referenza.Codice': 'B', descr: 'altra' } }
+    ];
+
+    const esito = avvio.sostituisciRecordNellaLista(lista, [
+        { idRec: 11, recordInTracciato: { 'Referenza.Codice': 'A', descr: 'nuova' } }
+    ]);
+
+    assert.strictEqual(esito.sostituiti, 1);
+    assert.strictEqual(esito.records[0].recordInTracciato.descr, 'nuova');
+    //La scheda non restituisce tutte le chiavi che la lista ha: quelle non si perdono.
+    assert.strictEqual(esito.records[0].label, 'riga di lista');
+    //Gli altri record non si toccano.
+    assert.strictEqual(esito.records[1].recordInTracciato.descr, 'altra');
+
+    //Senza idRec ci si aggancia al codice della referenza.
+    const perCodice = avvio.sostituisciRecordNellaLista(
+        [{ recordInTracciato: { 'Referenza.Codice': 'C', descr: 'vecchia' } }],
+        [{ recordInTracciato: { 'Referenza.Codice': 'C', descr: 'nuova' } }]);
+    assert.strictEqual(perCodice.sostituiti, 1);
+
+    //Un record che nella lista non c'e' non si aggiunge: e' la lista a dire quali referenze
+    //sono nel kit, e non e' questo il posto per cambiarlo.
+    const estraneo = avvio.sostituisciRecordNellaLista(lista, [
+        { idRec: 99, recordInTracciato: { 'Referenza.Codice': 'Z' } }
+    ]);
+    assert.strictEqual(estraneo.sostituiti, 0);
+    assert.strictEqual(estraneo.records.length, 2);
+});

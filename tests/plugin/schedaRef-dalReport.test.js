@@ -74,3 +74,32 @@ test('il box rifatto si riconosce e la scheda ci si riaggancia', () => {
     const boxCheEsplode = { get isValid() { throw new Error('oggetto non piu valido'); } };
     assert.strictEqual(schedaRef.serveRiaggancioDalReport(boxCheEsplode), true);
 });
+
+test('la descrizione del server e\' quella con cui il report giudica il box', () => {
+    const compilato = { labelName: 'descrizione', paragraphName: '', content: '<DES_nome>Mele Giga</DES_nome>' };
+    const records = [
+        { recordInTracciato: { StatoSelezione: 2, compiledFields: [{ labelName: 'descrizione', content: 'secondaria' }] } },
+        { recordInTracciato: { StatoSelezione: 1, compiledFields: [compilato, { labelName: 'prezzo_offerta', content: '1,99' }] } }
+    ];
+
+    //Si prende la descrizione del primario, non quella di un componente qualsiasi del gruppo.
+    assert.strictEqual(schedaRef.descrizioneCompilataDelPrimario(records), compilato.content);
+
+    //La regola del sottogruppo e' la stessa della preanalisi: se c'e', comanda lui, altrimenti
+    //il box verrebbe allineato a un dato diverso da quello con cui viene giudicato.
+    const conSottogruppo = [{
+        recordInTracciato: { StatoSelezione: 1, compiledFields: [compilato] },
+        sottogruppo: { compiledFields: [{ labelName: 'descrizione', content: '<DES_nome>Dal sottogruppo</DES_nome>' }] }
+    }];
+    assert.strictEqual(
+        schedaRef.descrizioneCompilataDelPrimario(conSottogruppo), '<DES_nome>Dal sottogruppo</DES_nome>');
+
+    //Senza primario, senza campo o senza contenuto non c'e' niente da applicare, e il pulsante
+    //non deve nemmeno comparire.
+    assert.strictEqual(schedaRef.descrizioneCompilataDelPrimario([]), null);
+    assert.strictEqual(schedaRef.descrizioneCompilataDelPrimario(null), null);
+    assert.strictEqual(schedaRef.descrizioneCompilataDelPrimario(
+        [{ recordInTracciato: { StatoSelezione: 1, compiledFields: [{ labelName: 'prezzo_offerta', content: '1,99' }] } }]), null);
+    assert.strictEqual(schedaRef.descrizioneCompilataDelPrimario(
+        [{ recordInTracciato: { StatoSelezione: 1, compiledFields: [{ labelName: 'descrizione', content: '' }] } }]), null);
+});

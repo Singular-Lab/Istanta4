@@ -58,9 +58,40 @@ const schedaRef = {
     DAL_REPORT_VOCI_BARRA_NASCOSTE: ["homeImage", "menaboTab", "grigliaTab", "utilityImage", "artworkTab", "raggruppaImage"],
 
     //Sgruppa e Struttura restano fuori: cambiano la composizione del gruppo, e non e' quello
-    //che si viene a fare da qui. I cambi strutturali proposti dalla schermata di edit si
-    //raggiungono lo stesso, perche' ci arrivano per conto loro.
+    //che si viene a fare da qui.
     DAL_REPORT_VOCI_SOTTOMENU_NASCOSTE: ["Tab8", "Tab13"],
+
+    //Vero mentre la scheda e' stata aperta dal Report Integrita'. Lo accende e lo spegne il
+    //report; la scheda lo legge soltanto, per sapere cosa non deve offrire.
+    apertaDalReport: false,
+
+    /// Le azioni strutturali offerte dalla schermata di edit non si mostrano quando si arriva
+    /// dal report: da li' si viene a sistemare una segnalazione, e rifare la struttura del
+    /// gruppo e' un'altra cosa, che si fa dalla scheda normale.
+    mostraAzioniStrutturaliInEdit() {
+        return this.apertaDalReport !== true;
+    },
+
+    /// Il contenuto della descrizione come lo ha compilato il server, per il primario della
+    /// scheda caricata. E' esattamente cio' con cui il Report Integrita' confronta il box,
+    /// quindi riportarlo nel box allinea le due cose per costruzione.
+    /// La regola del sottogruppo e' la stessa che usa la preanalisi: se c'e', comanda lui.
+    descrizioneCompilataDelPrimario(records) {
+        const primario = (records || []).find(
+            r => r != null && r.recordInTracciato != null && r.recordInTracciato["StatoSelezione"] == 1);
+
+        if (primario == null) {
+            return null;
+        }
+
+        const tracciato = primario.sottogruppo ? primario.sottogruppo : primario.recordInTracciato;
+        const campi = (tracciato != null && tracciato.compiledFields) || [];
+
+        const campo = campi.find(
+            c => c != null && String(c.labelName || "").toLowerCase() === "descrizione");
+
+        return campo != null && campo.content ? campo.content : null;
+    },
 
     /// La ref che initSchedaRef si aspetta, composta dal box e dal suo dna: la stessa forma
     /// che prepara l'evento di selezione, perche' da li' in poi il flusso deve essere uno solo.
@@ -1049,6 +1080,16 @@ const schedaRef = {
         //Inserisco lo spazio per far immettere le info di MISMATCH se ci sono
         $("#editReferenza").append('<div id="mismatchWarningPanel" style="padding:5px;"></div>');
 
+        //I20-981: la descrizione del server si puo' riportare nel box senza passare dal
+        //salvataggio, per quando il dato e' gia' a posto a monte e il box e' rimasto indietro.
+        if (this.descrizioneCompilataDelPrimario(this.schedeRefDati) != null) {
+            const bottoneDescrizione = $('<sp-action-button id="applicaDescrizioneDaServer" style="font-size: 12px; margin: 4px 0px 8px 0px;">Applica descrizione da server</sp-action-button>');
+            bottoneDescrizione.on("click", function () {
+                me.applicaDescrizioneDaServer();
+            });
+            $("#editReferenza").append(bottoneDescrizione);
+        }
+
 
         if (codice != $("#elementiArtwork").val()) {
             $("#panelElementiArtwork").empty();
@@ -1633,7 +1674,7 @@ const schedaRef = {
             //writeDebugMessageForCrash("Inizio cambio strutturale");
 
 
-            if (cambiStrutturaliJs.getCambioStrutturalePath != null) {
+            if (cambiStrutturaliJs.getCambioStrutturalePath != null && me.mostraAzioniStrutturaliInEdit()) {
                 //Implementazioni path di cambio strutturale
 
                 let cambiStrutturali = await cambiStrutturaliJs.getCambioStrutturalePath(primario, box);
@@ -2025,6 +2066,42 @@ const schedaRef = {
         hideLoading();
         onresizeWindow();
 
+    },
+
+    /// Riporta nel box la descrizione come la dice il server, senza toccare il dato: allinea
+    /// il box a quello che il Report Integrita' si aspetta di leggerci.
+    applicaDescrizioneDaServer() {
+        try {
+            const contenuto = this.descrizioneCompilataDelPrimario(this.schedeRefDati);
+
+            if (contenuto == null) {
+                messaggioUtente("Code SRF-91 Nessuna descrizione compilata dal server per questa referenza", "warning", false, 4);
+                return;
+            }
+
+            const box = this.refSelected != null ? this.refSelected.item : null;
+
+            if (box == null || !box.isValid) {
+                messaggioUtente("Code SRF-92 Il box non e' piu' valido: descrizione non applicata", "error", false, 4);
+                return;
+            }
+
+            const campo = Utility.getFieldByLabel("descrizione", box);
+
+            if (campo == null) {
+                messaggioUtente("Code SRF-93 Il box non ha un campo descrizione", "warning", false, 4);
+                return;
+            }
+
+            //Lo stesso passaggio che usa il salvataggio delle modifiche: il contenuto e' gia'
+            //nella forma a tag di stile di carattere.
+            Utility.applicaTagStringToInndTextFrame(campo, contenuto, box.geometricBounds);
+            messaggioUtente("Descrizione allineata al dato del server", "success", false, 3);
+        }
+        catch (error) {
+            console.error(error);
+            messaggioUtente("Code SRF-94 Errore applicando la descrizione dal server: " + error.message, "error", false, 5);
+        }
     },
 
     applicaReimpaginazione(){

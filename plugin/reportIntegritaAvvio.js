@@ -198,6 +198,74 @@ function differenzeDopoRicontrollo(differenzeIntegrita, differenzeConfronto, dup
     return risultato;
 }
 
+//I20-981 (Lotto 4a): il dato riletto dal server alla chiusura della scheda prende il posto di
+//quello nella lista del kit. Serve perche' l'operatore, sistemando una segnalazione, allinea
+//il box al server: se la lista restasse indietro, il report continuerebbe a giudicare il box
+//con un dato che non e' piu' quello vero.
+
+/// L'identita' di un record di lista: l'idRec quando c'e' da tutte e due le parti, altrimenti
+/// il codice della referenza.
+function idRecDiLista(record) {
+    const diretto = record != null ? record.idRec : null;
+    const dentro = record != null && record.recordInTracciato != null ? record.recordInTracciato.idRec : null;
+    const valore = diretto != null && diretto !== "" ? diretto : dentro;
+
+    if (valore == null || valore === "") {
+        return null;
+    }
+
+    const numero = Number(valore);
+    return isNaN(numero) ? String(valore) : numero;
+}
+
+function codiceDiLista(record) {
+    const tracciato = record != null ? record.recordInTracciato : null;
+    const codice = tracciato != null ? tracciato["Referenza.Codice"] : null;
+    return codice == null ? "" : String(codice);
+}
+
+function stessoRecordDiLista(uno, altro) {
+    if (uno == null || altro == null) {
+        return false;
+    }
+
+    const idUno = idRecDiLista(uno);
+    const idAltro = idRecDiLista(altro);
+
+    if (idUno != null && idAltro != null) {
+        return idUno === idAltro;
+    }
+
+    const codiceUno = codiceDiLista(uno);
+    return codiceUno !== "" && codiceUno === codiceDiLista(altro);
+}
+
+/// Sostituisce nella lista i record riletti dal server. La scheda non restituisce tutte le
+/// chiavi che la lista ha (label, forzaSoloUscitaSottogruppo sono della lista), quindi si
+/// sovrascrive quello che arriva e si conserva il resto. Un record che nella lista non c'e'
+/// non si aggiunge: la lista dice quali referenze sono nel kit, e non e' questo il posto per
+/// cambiarlo.
+function sostituisciRecordNellaLista(recordsLista, recordsFreschi) {
+    const lista = Array.isArray(recordsLista) ? recordsLista.slice() : [];
+    let sostituiti = 0;
+
+    (recordsFreschi || []).forEach(fresco => {
+        if (fresco == null) {
+            return;
+        }
+
+        const indice = lista.findIndex(item => stessoRecordDiLista(item, fresco));
+        if (indice < 0) {
+            return;
+        }
+
+        lista[indice] = Object.assign({}, lista[indice], fresco);
+        sostituiti++;
+    });
+
+    return { records: lista, sostituiti };
+}
+
 module.exports = {
     MINUTI_LISTA_RECENTE,
     ORE_REPORT_DA_CHIEDERE,
@@ -210,5 +278,6 @@ module.exports = {
     categoriaRecordRicontrollato,
     esitoChiusuraScheda,
     differenzeDiConfronto,
-    differenzeDopoRicontrollo
+    differenzeDopoRicontrollo,
+    sostituisciRecordNellaLista
 };

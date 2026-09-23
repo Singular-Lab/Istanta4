@@ -34,6 +34,9 @@ const events = sorgente('events.js');
 const utility = sorgente('utility.js');
 const indexHtml = sorgente('index.html');
 
+//La scheda si carica sotto Node: le sue regole si provano chiamandole, non leggendole.
+const schedaRef = require('../../plugin/schedaRef.js');
+
 //Il corpo di una funzione di primo livello di indexNew.js, isolato contando le graffe.
 function corpoFunzione(testo, intestazione) {
     const inizio = testo.indexOf(intestazione);
@@ -646,7 +649,7 @@ test('la scheda Confronti resta in attesa del confronto con altre liste', () => 
 });
 
 test('il Trova apre la scheda referenza vera, non una sua copia', () => {
-    const azione = corpoFunzione(confronti, '_onConfrontoAction(ev, action) {');
+    const azione = corpoFunzione(confronti, '_eseguiAzioneConfronto(action, payloadId, payload) {');
     assert.match(azione, /case "find":\s*\n\s*await this\._apriSchedaDalReport\(payloadId, payload\)/);
 
     const apri = corpoFunzione(confronti, '_apriSchedaDalReport(payloadId, payload) {');
@@ -742,4 +745,86 @@ test('il report che si chiude sotto la scheda non lascia l\'interfaccia bloccata
     const termina = corpoFunzione(confronti, '_terminaSchedaDalReport() {');
     assert.match(termina, /\$\("#chiudiSchedaDalReport"\)\.remove\(\)/);
     assert.match(termina, /\$\("#homeImage"\)\.show\(\)/);
+});
+
+test('il ricontrollo giudica col dato del server e allinea la lista', () => {
+    const ricontrollo = corpoFunzione(confronti, '_ricontrollaReferenzaDopoScheda(stato) {');
+
+    //Il dato riletto e' la verita': sistemando una segnalazione l'operatore allinea il box al
+    //server, e una lista rimasta indietro farebbe giudicare il box con un dato che non c'e'
+    //piu'.
+    assert.match(ricontrollo, /await this\._leggiSchedaRefAggiornata\(stato\.codiceGruppo, stato\.idRec\)/);
+    assert.match(ricontrollo, /this\._aggiornaListaKitConRecordFreschi\(records\)/);
+
+    //La preanalisi si rifa' per intero: dice tutto quello che c'e', non solo quello che se ne va.
+    assert.match(ricontrollo, /await preAnalisiBoxMappato\(records, record\.elementoMappa, box\)/);
+    assert.match(ricontrollo, /reportIntegritaAvvio\.esitoChiusuraScheda\(/);
+
+    //Non applica niente da se': torna il piano, perche' prima si fa vedere cosa se ne va.
+    assert.match(ricontrollo, /applica: \(\) =>/);
+    assert.match(ricontrollo, /chiaviRisolte/);
+
+    //Una segnalazione che sparisce senza che nessuno abbia toccato niente va spiegata, non
+    //subita: la diagnostica confronta il dato del server con quello della lista.
+    const diagnostica = corpoFunzione(confronti, '_diagnosticaRicontrollo(record, recordsFreschi, chiaviPrima, differenzeDopo) {');
+    assert.match(diagnostica, /compiledFields/);
+    assert.match(diagnostica, /campi diversi fra server e lista/);
+
+    //La lista si riscrive sul disco e la copia in memoria la segue, altrimenti i Nuovi e il
+    //tracciato mostrerebbero il dato vecchio fino al prossimo download.
+    const lista = corpoFunzione(confronti, '_aggiornaListaKitConRecordFreschi(recordsFreschi) {');
+    assert.match(lista, /reportIntegritaAvvio\.sostituisciRecordNellaLista\(lista\.records, recordsFreschi\)/);
+    assert.match(lista, /fs\.writeFileSync\(percorso, JSON\.stringify\(lista\)\)/);
+    assert.match(lista, /contenutoKitInLavorazione = lista/);
+});
+
+test('una segnalazione che se ne va lo fa vedere', () => {
+    const dissolvi = corpoFunzione(confronti, '_dissolviElementi(elementi) {');
+
+    //L'opacita' si scrive a passi e non si legge mai: in UXP una misura appena scritta non e'
+    //affidabile, e delle animazioni di jQuery nel plugin non c'e' un uso vivo.
+    assert.match(dissolvi, /el\.style\.opacity = String\(opacita\)/);
+    assert.match(dissolvi, /setInterval/);
+    assert.doesNotMatch(dissolvi, /fadeOut|\.animate\(/);
+
+    //Tutte le azioni che tolgono una riga la fanno prima sfumare.
+    ['_resolveSegnalazione(payloadId, payload) {',
+     '_mandaInWhitelist(payloadId, payload) {',
+     '_ripristinaDaWhitelist(payloadId, payload) {',
+     '_deleteElemento(payloadId, payload) {',
+     '_fixElemento(payloadId, payload) {'].forEach(firma => {
+        const corpo = corpoFunzione(confronti, firma);
+        assert.match(corpo, /await this\._dissolviRiga\(payloadId\)/, firma + ' deve dissolvere la riga');
+    });
+
+    //I pulsanti delle righe sono immagini: disabled non esiste e pointer-events in UXP non e'
+    //verificabile, quindi il blocco vero e' un interruttore, che non dipende dallo stile.
+    const azione = corpoFunzione(confronti, '_onConfrontoAction(ev, action) {');
+    assert.match(azione, /if \(this\.azioneReportInCorso\(\)\)/);
+    assert.match(azione, /this\._azioneReportInCorso = true/);
+    assert.match(azione, /this\._azioneReportInCorso = false/);
+
+    //Alla chiusura della scheda si vede andare via quello che e' stato risolto, e solo dopo lo
+    //stato cambia.
+    const chiudi = corpoFunzione(confronti, '_chiudiSchedaDalReport() {');
+    assert.match(chiudi, /this\._riapriReportDopoScheda\(\)[\s\S]*await this\._mostraSegnalazioniRisolte\(piano\)[\s\S]*piano\.applica\(\)/);
+});
+
+test('dalla scheda aperta dal report non si rifa la struttura del gruppo', () => {
+    //Le azioni strutturali della schermata di edit non si offrono a chi e' venuto a sistemare
+    //una segnalazione. La scheda normale resta com'e'.
+    assert.strictEqual(schedaRef.mostraAzioniStrutturaliInEdit(), true);
+
+    schedaRef.apertaDalReport = true;
+    assert.strictEqual(schedaRef.mostraAzioniStrutturaliInEdit(), false);
+    schedaRef.apertaDalReport = false;
+
+    const sorgenteScheda = sorgente('schedaRef.js');
+    assert.match(sorgenteScheda, /getCambioStrutturalePath != null && me\.mostraAzioniStrutturaliInEdit\(\)/);
+
+    //L'interruttore lo accende il report, non la scheda.
+    const apri = corpoFunzione(confronti, '_apriSchedaDalReport(payloadId, payload) {');
+    assert.match(apri, /schedaRef\.apertaDalReport = true/);
+    const termina = corpoFunzione(confronti, '_terminaSchedaDalReport() {');
+    assert.match(termina, /schedaRef\.apertaDalReport = false/);
 });

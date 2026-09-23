@@ -1571,6 +1571,9 @@ const confronti = {
         this._applicaBloccoSchedaDalReport();
 
         showLoading("Caricamento scheda REF");
+        //La scheda deve sapere da dove arriva: le azioni strutturali della schermata di edit
+        //non si offrono a chi e' venuto qui a sistemare una segnalazione.
+        schedaRef.apertaDalReport = true;
         schedaRef.setInvalidated(false);
         schedaRef.initSchedaRef(this._refPerSchedaDalReport(box, dna));
 
@@ -1721,8 +1724,10 @@ const confronti = {
 
         showLoading("Aggiorno la referenza nel report...");
 
+        let piano = null;
+
         try {
-            await this._ricontrollaReferenzaDopoScheda(stato);
+            piano = await this._ricontrollaReferenzaDopoScheda(stato);
         }
         catch (err) {
             console.error("Ricontrollo della referenza non riuscito:", err);
@@ -1731,7 +1736,90 @@ const confronti = {
 
         this._terminaSchedaDalReport();
         hideLoading();
+
+        //Il report torna con la referenza ancora al suo posto: quello che il ricontrollo ha
+        //trovato risolto lo si vede andare via, non lo si trova gia' sparito.
         this._riapriReportDopoScheda();
+
+        if (piano == null) {
+            return;
+        }
+
+        this._azioneReportInCorso = true;
+
+        try {
+            await this._mostraSegnalazioniRisolte(piano);
+            piano.applica();
+            this._saveCurrentReportAndWhitelist();
+            this._refreshConfrontoReportUi();
+        }
+        catch (err) {
+            console.error("Aggiornamento del report dopo la scheda non riuscito:", err);
+        }
+        finally {
+            this._azioneReportInCorso = false;
+        }
+    },
+
+    /// Fa vedere le segnalazioni che il ricontrollo ha trovato risolte: se non ne resta
+    /// nessuna se ne va la riga intera, altrimenti se ne vanno solo quelle.
+    async _mostraSegnalazioniRisolte(piano) {
+        const risolte = piano?.chiaviRisolte || [];
+        if (piano?.record == null || risolte.length === 0) {
+            return;
+        }
+
+        const riga = this._rigaDelPayload(this._payloadIdDelRecord(piano.record));
+        if (riga == null) {
+            return;
+        }
+
+        const restanti = this._chiaviSegnalazioniDelRecord(piano.record)
+            .filter(chiave => risolte.indexOf(chiave) < 0);
+
+        if (restanti.length === 0) {
+            await this._dissolviElementi(riga);
+            return;
+        }
+
+        const elementi = [];
+
+        try {
+            const nodi = riga.querySelectorAll("[data-segnalazione-key]");
+            for (let i = 0; i < nodi.length; i++) {
+                if (risolte.indexOf(nodi[i].dataset.segnalazioneKey) >= 0) {
+                    elementi.push(nodi[i]);
+                }
+            }
+        }
+        catch (err) {
+            console.error("Segnalazioni risolte non trovate nella riga:", err);
+        }
+
+        await this._dissolviElementi(elementi);
+    },
+
+    /// La riga del record dopo che il report si e' ridisegnato: i payload sono altri, quindi
+    /// si cerca per record, non per identificativo.
+    _payloadIdDelRecord(record) {
+        if (record == null || this._confrontoReportStore == null) {
+            return null;
+        }
+
+        let trovato = null;
+
+        this._confrontoReportStore.forEach((payload, id) => {
+            if (trovato != null) {
+                return;
+            }
+
+            const candidato = payload?.record?._fullReportRecord || payload?.record;
+            if (candidato === record || this._sameReportRecord(candidato, record)) {
+                trovato = id;
+            }
+        });
+
+        return trovato;
     },
 
     _terminaSchedaDalReport() {
@@ -1740,6 +1828,7 @@ const confronti = {
             $("#referenza").css("display", "");
             $("#referenza").css("justify-content", "");
 
+            schedaRef.apertaDalReport = false;
             schedaRef.setInvalidated(true);
             schedaRef.svuotaRef();
             schedaRef.resetRefInterface();
@@ -1784,22 +1873,27 @@ const confronti = {
         });
     },
 
-    /// Il ricontrollo di una sola referenza: il box si rilegge, la scheda si riscarica dal
-    /// server (le descrizioni possono essere cambiate proprio adesso) e il record prende il
-    /// posto che gli spetta. Rifare tutto il report costerebbe quanto aprirlo.
+    /// Il ricontrollo di una sola referenza alla chiusura della scheda. La scheda si rilegge
+    /// dal server e quel dato diventa la verita': sistemando una segnalazione l'operatore
+    /// allinea il box al server, e se la lista restasse indietro il report continuerebbe a
+    /// giudicare il box con un dato che non e' piu' quello vero. Per questo il record riletto
+    /// prende il posto di quello in lista, e la preanalisi si rifa' per intero: dice tutto
+    /// quello che c'e', non solo quello che se ne va.
+    /// Non applica niente: torna il piano, cosi' chi chiama puo' far vedere le segnalazioni
+    /// che se ne stanno andando prima che se ne vadano davvero.
     async _ricontrollaReferenzaDopoScheda(stato) {
         const state = this._confrontoReportState;
         const record = stato?.record;
 
         if (state == null || record == null) {
-            return;
+            return null;
         }
 
         //Nella whitelist le segnalazioni stanno parcheggiate apposta: ricontrollarle da qui
         //vorrebbe dire rimettere in circolo quello che l'operatore ha messo da parte, e per
         //giunta in un elenco, quello del report, dove quel record non sta.
         if (state.activeList === "whitelist") {
-            return;
+            return null;
         }
 
         let box = null;
@@ -1816,49 +1910,160 @@ const confronti = {
             box = this._resolveBoxByCodiceGruppo(record);
         }
 
-        let preAnalisi = null;
-
-        if (box != null) {
-            const records = await this._leggiSchedaRefAggiornata(stato.codiceGruppo, stato.idRec);
-
-            if (records == null || records.length === 0) {
-                messaggioUtente("Code CNF-73 Scheda della referenza non riletta: il report resta com'era", "warning", false, 6);
-                return;
-            }
-
-            preAnalisi = await preAnalisiBoxMappato(records, record.elementoMappa, box);
-
-            if (preAnalisi != null) {
-                preAnalisi.differenze = reportIntegritaAvvio.differenzeDopoRicontrollo(
-                    preAnalisi.differenze,
-                    reportIntegritaAvvio.differenzeDiConfronto(record),
-                    record.duplicateInfo);
-
-                record.schedaRef = { records };
-                record.preAnalisi = preAnalisi;
-                this._aggiornaRiferimentiBox(record, box);
-            }
+        if (box == null) {
+            //Il box non c'e' piu': la referenza esce dal report e ricompare fra le Nuove, che
+            //si calcolano per differenza da chi nel report c'e' gia'.
+            return {
+                record,
+                chiaviRisolte: this._chiaviSegnalazioniDelRecord(record),
+                applica: () => this._rimuoviRecordDalReport(record)
+            };
         }
 
+        const records = await this._leggiSchedaRefAggiornata(stato.codiceGruppo, stato.idRec);
+
+        if (records == null || records.length === 0) {
+            messaggioUtente("Code CNF-73 Scheda della referenza non riletta: il report resta com'era", "warning", false, 6);
+            return null;
+        }
+
+        const preAnalisi = await preAnalisiBoxMappato(records, record.elementoMappa, box);
+
+        if (preAnalisi == null) {
+            messaggioUtente("Code CNF-74 Referenza non ricontrollata: il report resta com'era", "warning", false, 6);
+            return null;
+        }
+
+        preAnalisi.differenze = reportIntegritaAvvio.differenzeDopoRicontrollo(
+            preAnalisi.differenze,
+            reportIntegritaAvvio.differenzeDiConfronto(record),
+            record.duplicateInfo);
+
+        const chiaviPrima = this._chiaviSegnalazioniDelRecord(record);
+        const chiaviDopo = new Set(preAnalisi.differenze.map(d => this._getSegnalazioneKey(d)));
+        const chiaviRisolte = chiaviPrima.filter(chiave => !chiaviDopo.has(chiave));
+
+        this._diagnosticaRicontrollo(record, records, chiaviPrima, preAnalisi.differenze);
+
         const esito = reportIntegritaAvvio.esitoChiusuraScheda({
-            boxPresente: box != null,
+            boxPresente: true,
             preAnalisi,
             haDuplicato: record.duplicateInfo != null
         });
 
-        if (esito.azione === "invariato") {
-            messaggioUtente("Code CNF-74 Referenza non ricontrollata: il report resta com'era", "warning", false, 6);
-            return;
+        return {
+            record,
+            chiaviRisolte,
+            applica: () => {
+                record.schedaRef = { records };
+                record.preAnalisi = preAnalisi;
+                this._aggiornaRiferimentiBox(record, box);
+                this._aggiornaListaKitConRecordFreschi(records);
+
+                if (esito.azione === "invariato") {
+                    return;
+                }
+
+                this._rimuoviRecordDalReport(record);
+
+                if (esito.azione === "sposta" && esito.categoria != null) {
+                    const state2 = this._confrontoReportState;
+                    if (state2 != null && state2.report != null) {
+                        state2.report[esito.categoria] = state2.report[esito.categoria] || [];
+                        state2.report[esito.categoria].push(record);
+                    }
+                }
+
+                this._removeConfrontoPayload(stato.payloadId);
+            }
+        };
+    },
+
+    _chiaviSegnalazioniDelRecord(record) {
+        const differenze = Array.isArray(record?.preAnalisi?.differenze) ? record.preAnalisi.differenze : [];
+        return differenze.map(diff => this._getSegnalazioneKey(diff));
+    },
+
+    /// Una segnalazione che se ne va senza che l'operatore abbia fatto niente e' un fatto da
+    /// spiegare, non da subire: qui si scrive cosa ha risposto il server rispetto a cosa
+    /// diceva la lista, cosi' il collaudo dice come stanno le cose invece di farmele indovinare.
+    _diagnosticaRicontrollo(record, recordsFreschi, chiaviPrima, differenzeDopo) {
+        try {
+            const campiDaGuardare = ["compiledFields", "deletedFields", "Foto.Nome", "Foto.Hash", "Foto.Extra", "Foto.ExtraAuto", "membriGruppoFoto"];
+
+            const primarioFresco = (recordsFreschi || []).find(r => r?.recordInTracciato?.StatoSelezione == 1);
+            const primarioLista = (record?.schedaRef?.records || []).find(r => r?.recordInTracciato?.StatoSelezione == 1);
+
+            const tracciatoFresco = primarioFresco?.sottogruppo || primarioFresco?.recordInTracciato || {};
+            const tracciatoLista = primarioLista?.sottogruppo || primarioLista?.recordInTracciato || {};
+
+            const diversi = campiDaGuardare.filter(campo => {
+                try {
+                    return JSON.stringify(tracciatoFresco[campo]) !== JSON.stringify(tracciatoLista[campo]);
+                }
+                catch (err) {
+                    return true;
+                }
+            });
+
+            console.log("Ricontrollo referenza " + (record?.codiceGruppo || "") +
+                ": segnalazioni prima " + chiaviPrima.length + ", dopo " + (differenzeDopo || []).length +
+                "; record dal server " + (recordsFreschi || []).length +
+                "; campi diversi fra server e lista: " + (diversi.length > 0 ? diversi.join(", ") : "nessuno"));
+
+            if (diversi.length === 0 && (differenzeDopo || []).length < chiaviPrima.length) {
+                console.warn("Ricontrollo referenza " + (record?.codiceGruppo || "") +
+                    ": segnalazioni risolte con dato identico a quello della lista. Il box e' cambiato, oppure il confronto non e' lo stesso del report.");
+            }
         }
-
-        this._rimuoviRecordDalReport(record);
-
-        if (esito.azione === "sposta" && esito.categoria != null) {
-            state.report[esito.categoria] = state.report[esito.categoria] || [];
-            state.report[esito.categoria].push(record);
+        catch (err) {
+            console.error("Diagnostica del ricontrollo non riuscita:", err);
         }
+    },
 
-        this._removeConfrontoPayload(stato.payloadId);
+    /// Il dato riletto sostituisce quello della lista del kit: da qui in poi il resto del
+    /// report, l'elenco dei Nuovi e il prossimo Fix guardano lo stesso dato che ha deciso il
+    /// ricontrollo.
+    _aggiornaListaKitConRecordFreschi(recordsFreschi) {
+        try {
+            const percorso = pathLavorazione + "/listaKit" + idKitLavorazione + ".json";
+            const lista = readFile(percorso);
+
+            if (lista == null || !Array.isArray(lista.records)) {
+                console.warn("Lista del kit non aggiornata: file non leggibile o senza record");
+                return false;
+            }
+
+            const esito = reportIntegritaAvvio.sostituisciRecordNellaLista(lista.records, recordsFreschi);
+
+            if (esito.sostituiti === 0) {
+                console.warn("Lista del kit non aggiornata: nessun record corrispondente");
+                return false;
+            }
+
+            lista.records = esito.records;
+            fs.writeFileSync(percorso, JSON.stringify(lista));
+
+            //La copia in memoria deve seguire il file, altrimenti l'elenco dei Nuovi e il
+            //tracciato continuerebbero a mostrare il dato vecchio fino al prossimo download.
+            if (this._confrontoReportState != null) {
+                this._confrontoReportState.listaKit = lista;
+            }
+
+            try {
+                contenutoKitInLavorazione = lista;
+            }
+            catch (err) {
+                console.error("Copia in memoria della lista non aggiornata:", err);
+            }
+
+            console.log("Lista del kit aggiornata dal server: " + esito.sostituiti + " record");
+            return true;
+        }
+        catch (err) {
+            console.error("Lista del kit non aggiornata:", err);
+            return false;
+        }
     },
 
     _rimuoviRecordDalReport(record) {
@@ -3182,6 +3387,9 @@ const confronti = {
                             else {
                                 diffRow.textContent = diff?.difference || "-";
                             }
+                            //La chiave della segnalazione resta attaccata alla riga: serve per
+                            //far vedere quale se ne sta andando dopo un ricontrollo.
+                            diffRow.dataset.segnalazioneKey = this._getSegnalazioneKey(diff);
                             diffRow.style.fontSize = "11px";
                             diffRow.style.lineHeight = "1.3";
                             diffRow.style.whiteSpace = "normal";
@@ -3400,7 +3608,108 @@ const confronti = {
         return panel;
     },
 
+    //I20-981: una segnalazione che se ne va lo deve far vedere. L'opacita' si scrive a passi:
+    //in UXP leggere una misura appena scritta non e' affidabile, e delle animazioni di jQuery
+    //nel plugin non c'e' un solo uso vivo (fadeOut e animate compaiono commentati), quindi non
+    //ci si appoggia. Scrivere style.opacity invece funziona, ed e' gia' usato in mezzo report.
+    DURATA_DISSOLVENZA: 420,
+    PASSO_DISSOLVENZA: 35,
+
+    /// Mentre una riga sta sparendo non si accetta nessun'altra azione del report. I pulsanti
+    /// delle righe sono immagini, non bottoni: disabled non esiste e pointer-events in UXP non
+    /// e' verificabile, quindi il blocco vero e' questo interruttore, che non dipende da come
+    /// il motore tratta lo stile.
+    azioneReportInCorso() {
+        return this._azioneReportInCorso === true;
+    },
+
+    _dissolviElementi(elementi) {
+        const lista = (Array.isArray(elementi) ? elementi : [elementi]).filter(el => el != null);
+
+        return new Promise(resolve => {
+            if (lista.length === 0) {
+                resolve(false);
+                return;
+            }
+
+            lista.forEach(el => this._spegniInterazione(el));
+
+            const passi = Math.max(1, Math.round(this.DURATA_DISSOLVENZA / this.PASSO_DISSOLVENZA));
+            let passo = 0;
+
+            const timer = setInterval(() => {
+                passo++;
+                const opacita = Math.max(0, 1 - (passo / passi));
+
+                lista.forEach(el => {
+                    try {
+                        el.style.opacity = String(opacita);
+                    }
+                    catch (err) {
+                        //Un elemento tolto dall'interfaccia mentre sfuma non e' un errore.
+                    }
+                });
+
+                if (passo >= passi) {
+                    clearInterval(timer);
+                    resolve(true);
+                }
+            }, this.PASSO_DISSOLVENZA);
+        });
+    },
+
+    _spegniInterazione(elemento) {
+        try {
+            elemento.style.pointerEvents = "none";
+            elemento.style.cursor = "default";
+
+            const figli = elemento.querySelectorAll("img, button, sp-action-button, sp-button, input");
+            for (let i = 0; i < figli.length; i++) {
+                figli[i].style.pointerEvents = "none";
+                figli[i].style.cursor = "default";
+
+                if (figli[i].tagName !== "IMG") {
+                    figli[i].disabled = true;
+                }
+            }
+        }
+        catch (err) {
+            console.error("Interazione non disattivata durante la dissolvenza:", err);
+        }
+    },
+
+    _rigaDelPayload(payloadId) {
+        if (!payloadId) {
+            return null;
+        }
+
+        try {
+            return document.querySelector('[data-payload-id="' + payloadId + '"]');
+        }
+        catch (err) {
+            console.error("Riga della segnalazione non trovata:", err);
+            return null;
+        }
+    },
+
+    /// La riga se ne va sotto gli occhi dell'operatore, e solo dopo cambia lo stato. Se la riga
+    /// non si trova, il lavoro si fa lo stesso: l'effetto e' un di piu', non una condizione.
+    async _dissolviRiga(payloadId) {
+        const riga = this._rigaDelPayload(payloadId);
+        if (riga == null) {
+            return false;
+        }
+
+        return await this._dissolviElementi(riga);
+    },
+
     async _onConfrontoAction(ev, action) {
+        //Mentre una riga sta sparendo non si accetta altro: un secondo clic lavorerebbe su un
+        //record che sta gia' uscendo dal report.
+        if (this.azioneReportInCorso()) {
+            return;
+        }
+
         const payloadId = ev.currentTarget?.dataset?.payloadId;
         const payload = this._getConfrontoPayload(payloadId);
 
@@ -3409,6 +3718,17 @@ const confronti = {
             return;
         }
 
+        this._azioneReportInCorso = true;
+
+        try {
+            await this._eseguiAzioneConfronto(action, payloadId, payload);
+        }
+        finally {
+            this._azioneReportInCorso = false;
+        }
+    },
+
+    async _eseguiAzioneConfronto(action, payloadId, payload) {
         switch (action) {
             case "find":
                 await this._apriSchedaDalReport(payloadId, payload);
@@ -3428,15 +3748,15 @@ const confronti = {
                 break;
 
             case "whitelist":
-                this._mandaInWhitelist(payloadId, payload);
+                await this._mandaInWhitelist(payloadId, payload);
                 break;
 
             case "restoreWhitelist":
-                this._ripristinaDaWhitelist(payloadId, payload);
+                await this._ripristinaDaWhitelist(payloadId, payload);
                 break;
 
             case "delete":
-                this._deleteElemento(payloadId, payload);
+                await this._deleteElemento(payloadId, payload);
                 break;
         }
     },
@@ -3451,6 +3771,8 @@ const confronti = {
         const key = this._getReportCategoryFromTipo(payload?.tipo);
         const recordRisolto = payload.record;
         const duplicateInfo = this._getDuplicateInfo(recordRisolto);
+
+        await this._dissolviRiga(payloadId);
 
         this._removeRecordFromArray(state.report?.[key], recordRisolto);
         this._removeConfrontoPayload(payloadId);
@@ -3468,9 +3790,11 @@ const confronti = {
         }
     },
 
-    _mandaInWhitelist(payloadId, payload) {
+    async _mandaInWhitelist(payloadId, payload) {
         const state = this._confrontoReportState;
         if (!state) return;
+
+        await this._dissolviRiga(payloadId);
 
         const key = this._getReportCategoryFromTipo(payload?.tipo);
         const recordDaSpostare = payload?.record?._fullReportRecord || payload.record;
@@ -3485,9 +3809,11 @@ const confronti = {
         this._refreshConfrontoReportUi();
     },
 
-    _ripristinaDaWhitelist(payloadId, payload) {
+    async _ripristinaDaWhitelist(payloadId, payload) {
         const state = this._confrontoReportState;
         if (!state) return;
+
+        await this._dissolviRiga(payloadId);
 
         const key = this._getReportCategoryFromTipo(payload?.tipo);
         const recordDaRipristinare = payload?.record?._fullReportRecord || payload.record;
@@ -3921,7 +4247,7 @@ const confronti = {
         return null;
     },
 
-    _deleteElemento(payloadId, payload) {
+    async _deleteElemento(payloadId, payload) {
         const record = payload?.record;
         const box = this._resolveBoxFromRecord(record);
 
@@ -3937,6 +4263,8 @@ const confronti = {
             }
 
             box.remove();
+
+            await this._dissolviRiga(payloadId);
 
             const key = this._getReportCategoryFromTipo(payload?.tipo);
             this._removeRecordFromArray(this._confrontoReportState?.report?.[key], record);
@@ -4046,6 +4374,8 @@ const confronti = {
 
 
             if (box != null){
+                await this._dissolviRiga(payloadId);
+
                 const key = this._getReportCategoryFromTipo(payload?.tipo);
                 this._removeRecordFromArray(this._confrontoReportState?.report?.[key], record);
                 this._removeConfrontoPayload(payloadId);
