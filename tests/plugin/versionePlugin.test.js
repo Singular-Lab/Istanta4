@@ -120,15 +120,16 @@ test('il riquadro di blocco copre il pannello e tiene il testo al centro', () =>
     const inizio = html.indexOf('<div id="istantaDownAlert"');
     const riquadro = html.slice(inizio, html.indexOf('</div>', html.indexOf('<h3', inizio)));
 
-    //In UXP un elemento fisso parte dal riquadro del corpo e non dalla finestra: senza
-    //compensare il margine del corpo, l'ombreggiatura resta spostata rispetto al bordo del
-    //pannello. E' la stessa compensazione usata dalla barra in fondo a questo file.
-    assert.ok(riquadro.includes('margin-top: -8px') && riquadro.includes('margin-left: -8px'),
-        'senza compensazione il riquadro non parte dall\'angolo del pannello');
-    assert.ok(!riquadro.includes('margin: 10px'), 'un margine positivo lo farebbe sbordare');
+    //In UXP un elemento fisso parte dal riquadro del corpo e non dalla finestra, e il corpo ha
+    //il suo margine. La misura la danno i quattro lati, tirati oltre il bordo per ogni verso:
+    //dichiarando larghezza e altezza si copriva il corpo e restava scoperta una striscia sui
+    //lati opposti.
+    for (const lato of ['top: -8px', 'left: -8px', 'right: -8px', 'bottom: -8px']) {
+        assert.ok(riquadro.includes(lato), 'manca il lato ' + lato + ': resterebbe una striscia scoperta');
+    }
+    assert.ok(!/width: *100%/.test(riquadro) && !/height: *100%/.test(riquadro),
+        'dichiarare la misura riporterebbe il riquadro dentro al corpo invece che sulla finestra');
     assert.ok(!riquadro.includes('padding-top: 200px'), 'spingeva il testo in basso invece di centrarlo');
     assert.ok(riquadro.includes('justify-content: center') && riquadro.includes('align-items: center'));
     assert.ok(riquadro.includes('flex-direction: column'), 'titolo e dettaglio stanno uno sotto l\'altro');
-    assert.ok(riquadro.includes('top: 0') && riquadro.includes('left: 0'),
-        'senza un punto di partenza il riquadro non copre quello che deve coprire');
 });
