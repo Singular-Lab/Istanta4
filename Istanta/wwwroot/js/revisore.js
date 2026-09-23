@@ -26,6 +26,14 @@
         showLoading();
         this.agenzia = new Agenzia();
 
+        //I20-984: i campi del blocco di dettaglio arrivano nella pagina quando la libreria di
+        //agenzia disegna la scheda, e sono diversi da cliente a cliente. Si ascolta sul
+        //documento, una volta sola: cosi' il campo aggiunto domani da chiunque si comporta da
+        //solo, senza che nessuno debba ricordarsi di agganciarlo.
+        $(document).on("input", "[campoTracciato]", function () {
+            revInstance.controlChangeText($(this));
+        });
+
         // Da creare una sola volta, magari all'avvio della pagina
         if ($("#image-hover-preview").length === 0) {
             $("body").append(`
@@ -943,7 +951,8 @@
             }
         }
 
-        this.scrollToTop = true;
+        //I20-984: niente salto in cima alla pagina dopo il salvataggio: chi lavora su una
+        //scheda a meta' elenco si ritrovava all'inizio e doveva ricercarla.
         this.salvaFunction(listAct, callback, null);
         if (list.length > 0) {
             hideLoading();
@@ -1462,13 +1471,81 @@
 
         var resCustom = this.agenzia.controlChangeTextCustom(container, ref);
 
-        if (!resCustom && !changes) {
+        //I20-984: i campi del blocco di dettaglio si controllano qui e non nella libreria di
+        //agenzia, cosi' valgono per tutti i clienti: alcuni non implementano nemmeno il
+        //controllo dei campi custom, e li' non sarebbe successo niente.
+        var resDettaglio = this.controlChangeCampiTracciato(box);
+
+        if (!resCustom && !resDettaglio && !changes) {
             this.disattivaPulsanteSalvaInGruppo(container);
         }
     }
 
+    /// I20-984: i campi del blocco di dettaglio cambiati rispetto al dato del tracciato.
+    ///
+    /// Il valore di partenza non si conserva da nessuna parte: e' quello che sta nel record,
+    /// da cui la scheda e' stata riempita, e che il salvataggio aggiorna. Il nome dell'attributo
+    /// e' anche la chiave nel record, quindi vale per qualunque campo venga aggiunto domani.
+    controlChangeCampiTracciato(box) {
+        var scheda = box.closest(".record-revisione");
+        var campi = scheda.find('[campoTracciato]');
+
+        if (campi.length === 0) {
+            return false;
+        }
+
+        var record = this.recordDellaScheda(scheda);
+        var me = this;
+        var cambiati = false;
+
+        campi.each(function () {
+            var campo = $(this);
+            var chiave = campo.attr("campoTracciato");
+            var originale = record != null && record.recordInTracciato != null
+                ? record.recordInTracciato[chiave]
+                : null;
+
+            if (Revisore.valoreCampoCambiato(campo.val(), originale)) {
+                me.changeBorderAndSave(campo);
+                cambiati = true;
+            }
+            else {
+                me.undoBorder(campo);
+            }
+        });
+
+        return cambiati;
+    }
+
+    /// Un record da cui leggere i dati del tracciato per questa scheda. Per un gruppo vale un
+    /// suo elemento qualunque: il valore di questi campi e' del gruppo, non del singolo, e il
+    /// salvataggio lo scrive su tutti.
+    recordDellaScheda(scheda) {
+        var chiaveGruppo = revInstance.modalitaSottogruppi ? keyScattoCodiceSottogruppo : keyScattoCodiceGruppo;
+
+        if (scheda.attr("is_gruppo") == "true") {
+            var codGruppo = scheda.attr("codice_gruppo");
+            return this.List.find(f => !f.isGruppo && f.recordInTracciato[chiaveGruppo] == codGruppo);
+        }
+
+        var codice = scheda.attr("referenzaCodice");
+        return this.List.find(f => !f.isGruppo && f.recordInTracciato[keyRefCodice] == codice);
+    }
+
     changeBorderAndSave(box) {
         let container = box.closest(".container");
+
+        //I20-984: i campi del blocco di dettaglio vivono dentro un container loro, dove la
+        //casella del salva in gruppo non c'e'. Cercandola li' non si spuntava niente: il
+        //pulsante compariva ma il salvataggio non trovava nessuna scheda selezionata. Quando
+        //il contenitore vicino non ce l'ha, si sale alla scheda e si prende quella della
+        //linguetta aperta, che e' quella che l'operatore sta guardando.
+        if (container.find(".checkbox-salva-gruppo").length === 0) {
+            var scheda = box.closest(".record-revisione");
+            var linguettaAperta = scheda.find(".content.active").first();
+            container = linguettaAperta.length > 0 ? linguettaAperta : scheda;
+        }
+
         container.find(".checkbox-salva-gruppo").prop('checked', true);
         this.TogglePulsanteSalvaInGruppo(true);
         console.log("Attivo bordo");
@@ -3512,6 +3589,7 @@
     /// I campi del blocco di dettaglio modificati nelle schede selezionate.
     raccogliCampiTracciatoModificati(schede) {
         var campi = [];
+        var me = this;
 
         (schede || []).forEach(function (scheda) {
             var record = scheda.closest(".record-revisione");
@@ -3519,12 +3597,15 @@
                 ? record.attr("codice_gruppo")
                 : record.attr("referenzaCodice");
 
+            var dati = me.recordDellaScheda(record);
+
             record.find('[campoTracciato]').each(function () {
+                var chiave = $(this).attr("campoTracciato");
                 campi.push({
                     codice: codice,
-                    chiave: $(this).attr("campoTracciato"),
+                    chiave: chiave,
                     valore: $(this).val(),
-                    originale: $(this).attr("valoreOriginale")
+                    originale: dati != null && dati.recordInTracciato != null ? dati.recordInTracciato[chiave] : null
                 });
             });
         });

@@ -102,27 +102,72 @@ test('il valore parte come testo, anche quando arriva vuoto', () => {
 
 /* ---- come la pagina li tratta ---- */
 
-test('il campo dichiara la sua chiave e si ricorda il valore di partenza', () => {
-    const agenzia = sorgente('Istanta/wwwroot/js/edro21/agenzia.js');
+// La nota esiste nelle librerie di piu' clienti: la modifica non e' di uno solo.
+test('ogni cliente che ha il campo ne dichiara la chiave sul tracciato', () => {
+    const clienti = ['edro21', 'famila', 'pac', 'trea'];
 
-    assert.ok(agenzia.includes('campoTracciato="noteImpaginato"'),
-        'senza chiave dichiarata nessuno sa dove va salvato');
-    assert.ok(agenzia.includes("$(this).attr('valoreOriginale'"),
-        'senza valore di partenza non si sa se e\' cambiato');
-    assert.ok(agenzia.includes("$elem.find('[campoTracciato]').on('input'"),
-        'senza ascolto il bordo rosso non compare mai');
+    for (const cliente of clienti) {
+        const agenzia = sorgente('Istanta/wwwroot/js/' + cliente + '/agenzia.js');
+
+        assert.ok(agenzia.includes('id="NoteImpaginato"'),
+            'il caso va aggiornato se ' + cliente + ' non ha piu\' quel campo');
+        assert.ok(agenzia.includes('campoTracciato="noteImpaginato"'),
+            'senza chiave dichiarata, in ' + cliente + ' nessuno sa dove va salvato');
+    }
 });
 
-test('il rilevamento delle modifiche custom guarda anche questi campi', () => {
-    const agenzia = sorgente('Istanta/wwwroot/js/edro21/agenzia.js');
+// Alcuni clienti non implementano nemmeno il controllo dei campi custom: se la regola stesse
+// li', da loro non succederebbe niente.
+test('il rilevamento sta nel revisore, non nelle librerie di agenzia', () => {
+    const revisore = sorgente('Istanta/wwwroot/js/revisore.js');
 
-    const inizio = agenzia.indexOf('controlChangeTextCustom(container, ref) {');
-    const metodo = agenzia.slice(inizio, agenzia.indexOf('getParametriReport()', inizio));
+    assert.ok(revisore.includes('controlChangeCampiTracciato(box) {'),
+        'la regola deve valere per tutti i clienti');
+    assert.ok(revisore.includes('$(document).on("input", "[campoTracciato]"'),
+        'senza ascolto il bordo rosso non compare mai, e l\'ascolto vale per i campi di tutti');
 
-    assert.ok(metodo.includes("container.find('[campoTracciato]')"),
-        'e\' qui che si decide se accendere il salva in gruppo');
-    assert.ok(metodo.includes('Revisore.valoreCampoCambiato('),
-        'la regola sta in un posto solo');
+    for (const cliente of ['edro21', 'famila', 'pac', 'trea']) {
+        const agenzia = sorgente('Istanta/wwwroot/js/' + cliente + '/agenzia.js');
+        assert.ok(!agenzia.includes('controlChangeCampiTracciato'),
+            'la regola non va duplicata in ' + cliente);
+    }
+});
+
+// Il valore di partenza e' quello del record, da cui la scheda e' stata riempita: non si
+// conserva da nessun'altra parte, e il salvataggio lo aggiorna.
+test('il valore di partenza si legge dal record', () => {
+    const revisore = sorgente('Istanta/wwwroot/js/revisore.js');
+
+    const inizio = revisore.indexOf('controlChangeCampiTracciato(box) {');
+    const metodo = revisore.slice(inizio, revisore.indexOf('recordDellaScheda(scheda) {', inizio));
+
+    assert.ok(metodo.includes('record.recordInTracciato[chiave]'),
+        'la chiave dichiarata sul campo e\' anche la chiave nel record');
+});
+
+// La casella del salva in gruppo sta sulla scheda: cercandola nel container piu' vicino non si
+// spuntava niente, il pulsante compariva e il salvataggio non trovava schede selezionate.
+test('la casella si cerca sulla scheda quando il contenitore vicino non ce l\'ha', () => {
+    const revisore = sorgente('Istanta/wwwroot/js/revisore.js');
+
+    const inizio = revisore.indexOf('changeBorderAndSave(box) {');
+    const metodo = revisore.slice(inizio, revisore.indexOf('undoBorder(box) {', inizio));
+
+    assert.ok(metodo.includes('.checkbox-salva-gruppo").length === 0'),
+        'serve accorgersi che li\' la casella non c\'e\'');
+    assert.ok(metodo.includes('.content.active'),
+        'si prende quella della linguetta aperta, che e\' quella che l\'operatore guarda');
+});
+
+// Chi lavora su una scheda a meta' elenco si ritrovava all'inizio della pagina.
+test('il salvataggio non riporta piu\' in cima alla pagina', () => {
+    const revisore = sorgente('Istanta/wwwroot/js/revisore.js');
+
+    const inizio = revisore.indexOf('salvaTuttoRevisioni(callback) {');
+    const metodo = revisore.slice(inizio, revisore.indexOf('salvaFunction(listAct, callback, senderButton) {', inizio));
+
+    assert.ok(!metodo.includes('scrollToTop = true'),
+        'nessun salvataggio deve piu\' chiedere il salto in cima');
 });
 
 // La domanda "vale per tutti i tracciati" compariva una volta per campo: con piu' schede
