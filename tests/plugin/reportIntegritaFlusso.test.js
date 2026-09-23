@@ -766,7 +766,7 @@ test('il ricontrollo giudica col dato del server e allinea la lista', () => {
 
     //Una segnalazione che sparisce senza che nessuno abbia toccato niente va spiegata, non
     //subita: la diagnostica confronta il dato del server con quello della lista.
-    const diagnostica = corpoFunzione(confronti, '_diagnosticaRicontrollo(record, recordsFreschi, chiaviPrima, differenzeDopo) {');
+    const diagnostica = corpoFunzione(confronti, '_diagnosticaRicontrollo(record, recordsFreschi, chiaviPrima, preAnalisi) {');
     assert.match(diagnostica, /compiledFields/);
     assert.match(diagnostica, /campi diversi fra server e lista/);
 
@@ -842,4 +842,31 @@ test('la descrizione applicata si vede anche in edit', () => {
     const applica = corpoFunzione(sorgenteScheda, 'applicaDescrizioneDaServer() {');
     assert.match(applica, /Utility\.applicaTagStringToInndTextFrame\(campo, contenuto, box\.geometricBounds\)/);
     assert.match(applica, /await this\.selectSchedaRef\(1\)/);
+});
+
+test('un ricontrollo che non decide non scrive niente', () => {
+    const ricontrollo = corpoFunzione(confronti, '_ricontrollaReferenzaDopoScheda(stato) {');
+
+    //L'esito tiene conto degli errori dell'analisi e dell'assenza di dati da confrontare.
+    assert.match(ricontrollo, /nienteDaConfrontare: !reportIntegritaAvvio\.ciSonoDatiDaConfrontare\(dati\)/);
+    assert.match(ricontrollo, /this\._avvisaRicontrolloNonRiuscito\(esito\.motivo\)/);
+
+    //Niente si dissolve se niente e' stato risolto davvero.
+    assert.match(ricontrollo, /esito\.azione === "invariato"\s*\n\s*\? \[\]/);
+
+    //Nel caso invariato non si sovrascrivono l'analisi del record, i suoi dati e la lista.
+    const applica = ricontrollo.slice(ricontrollo.indexOf('applica: () =>'));
+    const uscita = applica.indexOf('if (esito.azione === "invariato")');
+    assert.ok(uscita >= 0, 'il caso invariato deve uscire prima di scrivere');
+    assert.ok(applica.indexOf('record.preAnalisi = preAnalisi') > uscita,
+        "l'analisi del record non si scrive prima di sapere se vale");
+    assert.ok(applica.indexOf('this._aggiornaListaKitConRecordFreschi(records)') > uscita,
+        'la lista del kit non si riscrive con un dato non verificato');
+
+    //Prima di dire che il box non c'e' piu' lo si cerca come lo cerca il Trova.
+    assert.match(ricontrollo, /box = this\._resolveBoxFromRecord\(record\)/);
+
+    //La diagnostica riporta anche gli errori dell'analisi: sono la spiegazione del caso.
+    const diagnostica = corpoFunzione(confronti, '_diagnosticaRicontrollo(record, recordsFreschi, chiaviPrima, preAnalisi) {');
+    assert.match(diagnostica, /errori dell'analisi/);
 });

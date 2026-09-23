@@ -199,3 +199,48 @@ test('il dato riletto dal server prende il posto di quello in lista', () => {
     assert.strictEqual(estraneo.sostituiti, 0);
     assert.strictEqual(estraneo.records.length, 2);
 });
+
+test('il ricontrollo non tocca il report se non ha potuto confrontare', () => {
+    //La preanalisi non rilancia: in caso di eccezione mette il messaggio negli errori e torna
+    //le differenze raccolte fino a li', che possono essere zero. Quello zero non e' la prova
+    //che le segnalazioni siano risolte, ed e' il caso che si presenta proprio quando il box e'
+    //stato manomesso a mano, cioe' quando i problemi sono aumentati, non diminuiti.
+    const inErrore = avvio.esitoChiusuraScheda({
+        boxPresente: true,
+        preAnalisi: { differenze: [], errors: ['Errore durante la pre analisi: qualcosa'] }
+    });
+    assert.strictEqual(inErrore.azione, 'invariato');
+    assert.strictEqual(inErrore.motivo, 'errori');
+
+    //Un record classificato per errore finirebbe fra quelli con errori, che il report non
+    //mostra in nessuna scheda: sparirebbe dalla vista senza essere stato risolto.
+    assert.strictEqual(
+        avvio.categoriaRecordRicontrollato({ differenze: [], errors: ['rotto'] }, false), 'recordConErrori');
+
+    //Niente da confrontare non vuol dire tutto a posto.
+    const senzaDati = avvio.esitoChiusuraScheda({
+        boxPresente: true,
+        preAnalisi: { differenze: [], errors: [] },
+        nienteDaConfrontare: true
+    });
+    assert.strictEqual(senzaDati.azione, 'invariato');
+    assert.strictEqual(senzaDati.motivo, 'nienteDaConfrontare');
+
+    //Con dati veri e analisi pulita si decide, come prima.
+    assert.strictEqual(avvio.esitoChiusuraScheda({
+        boxPresente: true,
+        preAnalisi: { differenze: [], errors: [] }
+    }).azione, 'sposta');
+});
+
+test('si riconosce quando non c\'e\' niente da confrontare', () => {
+    assert.strictEqual(avvio.ciSonoDatiDaConfrontare(null), false);
+    assert.strictEqual(avvio.ciSonoDatiDaConfrontare({}), false);
+    assert.strictEqual(avvio.ciSonoDatiDaConfrontare(
+        { compiledFields: [], listaFoto: [], fotoExtra: [], fotoExtraAuto: [] }), false);
+
+    //Basta una cosa sola da guardare perche' il confronto abbia un senso.
+    assert.strictEqual(avvio.ciSonoDatiDaConfrontare({ compiledFields: [{ labelName: 'descrizione' }] }), true);
+    assert.strictEqual(avvio.ciSonoDatiDaConfrontare({ listaFoto: [{ nomeFoto: 'a.psd' }] }), true);
+    assert.strictEqual(avvio.ciSonoDatiDaConfrontare({ fotoExtraAuto: [{ nome: 'bollo' }] }), true);
+});

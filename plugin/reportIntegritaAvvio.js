@@ -152,7 +152,26 @@ function categoriaRecordRicontrollato(preAnalisi, haDuplicato) {
     return "recordGiusti";
 }
 
+/// Il dato riletto ha qualcosa da confrontare? Se non porta ne' campi compilati ne' foto, il
+/// confronto non guarda niente e torna zero differenze: uno zero che non vuol dire "a posto",
+/// vuol dire "non ho guardato".
+function ciSonoDatiDaConfrontare(dati) {
+    if (dati == null) {
+        return false;
+    }
+
+    const quanti = (elenco) => (Array.isArray(elenco) ? elenco.length : 0);
+
+    return (quanti(dati.compiledFields) +
+        quanti(dati.listaFoto) +
+        quanti(dati.fotoExtra) +
+        quanti(dati.fotoExtraAuto)) > 0;
+}
+
 /// Che fare del record alla chiusura della scheda.
+/// La regola che tiene tutto insieme: il report si cambia solo quando il ricontrollo ha
+/// davvero potuto confrontare. In tutti gli altri casi si resta com'era, perche' una
+/// segnalazione tolta per sbaglio e' lavoro che l'operatore non sa piu' di dover fare.
 function esitoChiusuraScheda(situazione) {
     const dati = situazione || {};
 
@@ -166,6 +185,19 @@ function esitoChiusuraScheda(situazione) {
     //dichiarare risolto quello che non abbiamo controllato.
     if (dati.preAnalisi == null) {
         return { azione: "invariato", categoria: null };
+    }
+
+    //L'analisi e' finita in errore. Non rilancia: mette il messaggio negli errori e torna le
+    //differenze raccolte fino a li', che possono essere zero. Quello zero non e' una prova che
+    //le segnalazioni siano risolte, e un record classificato per errore finirebbe fra quelli
+    //con errori, che il report non mostra in nessuna scheda: sparirebbe dalla vista.
+    if ((dati.preAnalisi.errors || []).length > 0) {
+        return { azione: "invariato", categoria: null, motivo: "errori" };
+    }
+
+    //Niente da confrontare non vuol dire tutto a posto.
+    if (dati.nienteDaConfrontare === true) {
+        return { azione: "invariato", categoria: null, motivo: "nienteDaConfrontare" };
     }
 
     return {
@@ -277,6 +309,7 @@ module.exports = {
     deveChiudereReport,
     categoriaRecordRicontrollato,
     esitoChiusuraScheda,
+    ciSonoDatiDaConfrontare,
     differenzeDiConfronto,
     differenzeDopoRicontrollo,
     sostituisciRecordNellaLista

@@ -1907,7 +1907,9 @@ const confronti = {
         }
 
         if (box == null) {
-            box = this._resolveBoxByCodiceGruppo(record);
+            //Prima di dire che non c'e' piu' lo si cerca come lo cerca il Trova: per id e poi
+            //per codice gruppo. Dichiararlo sparito costa al record l'uscita dal report.
+            box = this._resolveBoxFromRecord(record);
         }
 
         if (box == null) {
@@ -1941,28 +1943,47 @@ const confronti = {
 
         const chiaviPrima = this._chiaviSegnalazioniDelRecord(record);
         const chiaviDopo = new Set(preAnalisi.differenze.map(d => this._getSegnalazioneKey(d)));
-        const chiaviRisolte = chiaviPrima.filter(chiave => !chiaviDopo.has(chiave));
 
-        this._diagnosticaRicontrollo(record, records, chiaviPrima, preAnalisi.differenze);
+        this._diagnosticaRicontrollo(record, records, chiaviPrima, preAnalisi);
+
+        //Il dato riletto puo' non avere niente da confrontare: allora lo zero differenze non
+        //dice "a posto", dice "non ho guardato".
+        const dati = typeof datiPrimarioPerConfronto === "function"
+            ? datiPrimarioPerConfronto(records)
+            : null;
 
         const esito = reportIntegritaAvvio.esitoChiusuraScheda({
             boxPresente: true,
             preAnalisi,
-            haDuplicato: record.duplicateInfo != null
+            haDuplicato: record.duplicateInfo != null,
+            nienteDaConfrontare: !reportIntegritaAvvio.ciSonoDatiDaConfrontare(dati)
         });
+
+        if (esito.azione === "invariato") {
+            this._avvisaRicontrolloNonRiuscito(esito.motivo);
+        }
+
+        //Si fa vedere andare via solo cio' che si e' visto risolvere davvero.
+        const chiaviRisolte = esito.azione === "invariato"
+            ? []
+            : chiaviPrima.filter(chiave => !chiaviDopo.has(chiave));
 
         return {
             record,
             chiaviRisolte,
             applica: () => {
-                record.schedaRef = { records };
-                record.preAnalisi = preAnalisi;
+                //Il riferimento al box si aggiorna comunque: quello lo abbiamo in mano.
                 this._aggiornaRiferimentiBox(record, box);
-                this._aggiornaListaKitConRecordFreschi(records);
 
+                //Di quello che non abbiamo potuto verificare non si scrive niente: ne' l'analisi
+                //del record, ne' i suoi dati, ne' la lista del kit.
                 if (esito.azione === "invariato") {
                     return;
                 }
+
+                record.schedaRef = { records };
+                record.preAnalisi = preAnalisi;
+                this._aggiornaListaKitConRecordFreschi(records);
 
                 this._rimuoviRecordDalReport(record);
 
@@ -1979,6 +2000,19 @@ const confronti = {
         };
     },
 
+    /// Quando il ricontrollo non decide, l'operatore deve sapere perche': altrimenti crede di
+    /// aver sistemato qualcosa e il report, restando fermo, sembra rotto.
+    _avvisaRicontrolloNonRiuscito(motivo) {
+        if (motivo === "errori") {
+            messaggioUtente("Code CNF-75 Il ricontrollo della referenza e' andato in errore: il report resta com'era", "warning", false, 6);
+            return;
+        }
+
+        if (motivo === "nienteDaConfrontare") {
+            messaggioUtente("Code CNF-76 Il dato riletto non ha campi da confrontare: il report resta com'era", "warning", false, 6);
+        }
+    },
+
     _chiaviSegnalazioniDelRecord(record) {
         const differenze = Array.isArray(record?.preAnalisi?.differenze) ? record.preAnalisi.differenze : [];
         return differenze.map(diff => this._getSegnalazioneKey(diff));
@@ -1987,7 +2021,7 @@ const confronti = {
     /// Una segnalazione che se ne va senza che l'operatore abbia fatto niente e' un fatto da
     /// spiegare, non da subire: qui si scrive cosa ha risposto il server rispetto a cosa
     /// diceva la lista, cosi' il collaudo dice come stanno le cose invece di farmele indovinare.
-    _diagnosticaRicontrollo(record, recordsFreschi, chiaviPrima, differenzeDopo) {
+    _diagnosticaRicontrollo(record, recordsFreschi, chiaviPrima, preAnalisi) {
         try {
             const campiDaGuardare = ["compiledFields", "deletedFields", "Foto.Nome", "Foto.Hash", "Foto.Extra", "Foto.ExtraAuto", "membriGruppoFoto"];
 
@@ -2006,12 +2040,21 @@ const confronti = {
                 }
             });
 
+            const differenzeDopo = preAnalisi != null ? preAnalisi.differenze || [] : [];
+            const erroriAnalisi = preAnalisi != null ? preAnalisi.errors || [] : [];
+
             console.log("Ricontrollo referenza " + (record?.codiceGruppo || "") +
-                ": segnalazioni prima " + chiaviPrima.length + ", dopo " + (differenzeDopo || []).length +
+                ": segnalazioni prima " + chiaviPrima.length + ", dopo " + differenzeDopo.length +
+                "; errori dell'analisi " + erroriAnalisi.length +
                 "; record dal server " + (recordsFreschi || []).length +
                 "; campi diversi fra server e lista: " + (diversi.length > 0 ? diversi.join(", ") : "nessuno"));
 
-            if (diversi.length === 0 && (differenzeDopo || []).length < chiaviPrima.length) {
+            if (erroriAnalisi.length > 0) {
+                console.warn("Ricontrollo referenza " + (record?.codiceGruppo || "") +
+                    ": l'analisi e' finita in errore, il report non si tocca. " + erroriAnalisi.join(" | "));
+            }
+
+            if (diversi.length === 0 && differenzeDopo.length < chiaviPrima.length) {
                 console.warn("Ricontrollo referenza " + (record?.codiceGruppo || "") +
                     ": segnalazioni risolte con dato identico a quello della lista. Il box e' cambiato, oppure il confronto non e' lo stesso del report.");
             }
