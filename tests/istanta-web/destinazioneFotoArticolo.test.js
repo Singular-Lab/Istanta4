@@ -238,8 +238,13 @@ test('menu e pulsante di una foto si ritrovano per identificativo', () => {
     const vista = sorgente('Istanta/Views/SchedaArticolo/Index.cshtml');
     const js = sorgente('Istanta/wwwroot/js/archivio.js');
 
-    assert.ok(vista.includes('@salvaDestinazioneDiUnaFoto(fotoPrimaria.Id)'), 'accanto alla foto in uso');
-    assert.ok(vista.includes('@salvaDestinazioneDiUnaFoto(foto.Id)'), 'accanto a ognuna in elenco');
+    //Accanto al nome della foto, non accanto all'immagine.
+    assert.ok(vista.indexOf('@salvaDestinazioneDiUnaFoto(fotoPrimaria.Id)') > vista.indexOf('@fotoPrimaria!.NomeReale'),
+        'il pulsante della foto in uso segue il suo nome');
+    assert.ok(vista.indexOf('@salvaDestinazioneDiUnaFoto(foto.Id)') > vista.indexOf('@foto!.NomeReale'),
+        'e lo stesso per ognuna in elenco');
+    assert.ok(vista.indexOf('@salvaDestinazioneDiUnaFoto(fotoPrimaria.Id)') > vista.indexOf('riquadroFotoArticolo'),
+        'non sta nel riquadro dell\'immagine');
     assert.ok(js.includes('.destinazioneFotoEsistente[data-idfoto=\'" + idFoto + "\']'));
     assert.ok(js.includes('.salvaDestinazioneFoto[data-idfoto=\'" + idFoto + "\']'));
 });
