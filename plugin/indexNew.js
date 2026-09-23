@@ -20,6 +20,7 @@ const ipconfig = require("./ipconfig.json");
 const confronti = require('./confronti');
 const NoRenderElementi = require('./noRenderElementi');
 const RicollegaEsiti = require('./ricollegaEsiti');
+const VersionePlugin = require('./versionePlugin');
 const ficoProcess = require('./ficoProcess');
 const grigliaJs = require('./griglia');
 const filtriJs = require('./filtri');
@@ -143,6 +144,60 @@ function setVersionePlugin() {
     //leggiamo la versione da manifest.json version
     var versione = manifesto.version;
     $("#versionePlugin").text("Istanta v. " + versione + (testMode ? " - (testmode)" : ""));
+}
+
+/// I20-987: il Plugin installato deve essere quello pubblicato per il cliente.
+///
+/// Lavorare con una versione diversa da quella del server vuol dire lavorare con regole diverse,
+/// e i guai che ne nascono si scoprono a impaginato fatto. Se la versione pubblicata non si
+/// riesce a leggere non si blocca niente: questo controllo gira a ogni avvio, e fermare il
+/// lavoro per un server che non risponde sarebbe un danno peggiore di quello che si previene.
+function controllaVersionePubblicata() {
+    try {
+        var xhr = new XMLHttpRequestClient();
+
+        xhr.onload = function (objResult, parsed) {
+            try {
+                if (!parsed) {
+                    objResult = JSON.parse(objResult);
+                }
+
+                var pubblicata = objResult != null && objResult.boolEsito ? objResult.esito : "";
+                var esito = VersionePlugin.confronta(manifesto.version, pubblicata);
+
+                if (VersionePlugin.siPuoLavorare(esito)) {
+                    if (esito === VersionePlugin.ESITO.nonVerificabile) {
+                        console.log("Code IDX-165 Versione pubblicata non verificabile: " +
+                            (objResult != null && objResult.error != null ? objResult.error : ""));
+                    }
+                    return;
+                }
+
+                bloccaPerVersioneDisallineata(VersionePlugin.messaggioDisallineamento(manifesto.version, pubblicata));
+            }
+            catch (e) {
+                //Un controllo che non riesce non deve fermare chi lavora: si annota e si va avanti.
+                console.error("Code IDX-165 Controllo della versione non riuscito: " + e);
+            }
+        };
+
+        xhr.onerror = function () {
+            console.log("Code IDX-165 Versione pubblicata non verificabile: errore di rete");
+        };
+
+        xhr.send("LoginController/getVersionePluginPubblicata", null, "GET", "application/x-www-form-urlencoded");
+    }
+    catch (e) {
+        console.error("Code IDX-165 Controllo della versione non avviato: " + e);
+    }
+}
+
+function bloccaPerVersioneDisallineata(avviso) {
+    console.error("Code IDX-166 " + avviso.titolo + " - " + avviso.dettaglio);
+
+    $("#istantaDownAlert").find("h1").text(avviso.titolo);
+    $("#istantaDownAlert").find("h3").text(avviso.dettaglio);
+    $("#istantaDownAlert").css("display", "flex");
 }
 
 function checkForLoghiCore(){
@@ -349,6 +404,11 @@ indesignEvents.addEventListener(indesignEvents.EVENT_USER_LOGGED, function(args)
     setFinestrePerRuolo();
 
     cambioDiStatoDelSistema();
+
+    //I20-987: appena si e' loggati si guarda se il Plugin installato e' quello pubblicato per
+    //il cliente. Prima del login non si puo': serve il server, ed e' il login a dirci che
+    //risponde.
+    controllaVersionePubblicata();
 
 
     $("#nomeUtente").text(nomeUtente);
