@@ -43,6 +43,7 @@
             await loadScript(`${webRootFolder}/js/statoRevisione.js?id=${dynamicId}`); // regola di revisione condivisa da revisore.js e components.js
             await loadScript(`${webRootFolder}/js/revisore.js?id=${dynamicId}`); // dipende da lib2
             await loadScript(`${webRootFolder}/js/components.js?id=${dynamicId}`); // dipende da lib2
+            await loadScript(`${webRootFolder}/js/anteprimaPsd.js?id=${dynamicId}`); // miniatura dentro ai psd, usata da archivio.js
             await loadScript(`${webRootFolder}/js/archivio.js?id=${dynamicId}`); // dipende da lib2
             await loadScript(`${webRootFolder}/js/ordinamento.js?id=${dynamicId}`); // dipende da lib2
             await loadScript(`${webRootFolder}/js/taskManager.js?id=${dynamicId}`);
