@@ -11,6 +11,7 @@ const reportConfrontoCsv = require('./reportConfrontoCsv');
 const reportConteggi = require('./reportConteggi');
 const reportConfronti = require('./reportConfronti');
 const barraScorrimento = require('./barraScorrimento');
+const dissolvenza = require('./dissolvenza');
 
 const confronti = {
     async confrontoBox(box1, box2, forzaReimpaginazione = false){ //mode 0 -> cambio strutturale, mode 1 -> confrontoMassivo
@@ -3913,14 +3914,12 @@ const confronti = {
         return panel;
     },
 
-    //I20-981: una segnalazione che se ne va lo deve far vedere. L'opacita' si scrive a passi:
-    //in UXP leggere una misura appena scritta non e' affidabile, e delle animazioni di jQuery
-    //nel plugin non c'e' un solo uso vivo (fadeOut e animate compaiono commentati), quindi non
-    //ci si appoggia. Scrivere style.opacity invece funziona, ed e' gia' usato in mezzo report.
-    //Passi piu' radi che in un browser: UXP ridisegna quando il ciclo degli eventi glielo
-    //concede, e con un timer troppo fitto potrebbe non ridisegnare mai fra un passo e l'altro.
-    DURATA_DISSOLVENZA: 600,
-    PASSO_DISSOLVENZA: 60,
+    //I20-981: una segnalazione che se ne va lo deve far vedere. In UXP la proprieta' opacity
+    //si scrive e si rilegge ma non si ridisegna: il tracciato del collaudo ha mostrato dieci
+    //passi accettati dal motore senza che a schermo cambiasse niente. I colori invece si
+    //ridisegnano, e il plugin lo sa gia' dal lampo verde della copia e dal bordo arancione dei
+    //duplicati. La dissolvenza quindi porta a zero l'alfa dei colori di testo, sfondo e bordi,
+    //e spegne le immagini a meta' strada. I conti stanno in dissolvenza.js.
 
     /// Mentre una riga sta sparendo non si accetta nessun'altra azione del report. I pulsanti
     /// delle righe sono immagini, non bottoni: disabled non esiste e pointer-events in UXP non
@@ -3928,6 +3927,104 @@ const confronti = {
     /// il motore tratta lo stile.
     azioneReportInCorso() {
         return this._azioneReportInCorso === true;
+    },
+
+    PROPRIETA_COLORE_DA_ATTENUARE: ["color", "backgroundColor", "borderTopColor", "borderRightColor", "borderBottomColor", "borderLeftColor"],
+
+    /// I bersagli della dissolvenza: l'elemento e tutti i suoi discendenti, ciascuno con i
+    /// colori che il motore gli attribuisce adesso. Si leggono una volta sola, all'inizio: da
+    /// li' in poi si scrive soltanto.
+    _bersagliDissolvenza(radice) {
+        const bersagli = [];
+        const elementi = [radice];
+
+        try {
+            const figli = radice.querySelectorAll("*");
+            for (let i = 0; i < figli.length; i++) {
+                elementi.push(figli[i]);
+            }
+        }
+        catch (err) {
+            console.error("Discendenti della riga non letti:", err);
+        }
+
+        elementi.forEach(el => {
+            const bersaglio = { el, colori: {}, immagine: false };
+
+            try {
+                bersaglio.immagine = String(el.tagName || "").toUpperCase() === "IMG";
+            }
+            catch (err) {
+                bersaglio.immagine = false;
+            }
+
+            let calcolato = null;
+            try {
+                calcolato = typeof getComputedStyle === "function" ? getComputedStyle(el) : null;
+            }
+            catch (err) {
+                calcolato = null;
+            }
+
+            this.PROPRIETA_COLORE_DA_ATTENUARE.forEach(proprieta => {
+                let testo = null;
+                try {
+                    //Prima lo stile scritto, che e' quello che il plugin controlla; poi quello
+                    //calcolato, per i colori che arrivano dai fogli di stile.
+                    testo = (el.style && el.style[proprieta]) || (calcolato != null ? calcolato[proprieta] : null);
+                }
+                catch (err) {
+                    testo = null;
+                }
+
+                const colore = dissolvenza.analizzaColore(testo);
+                if (colore != null) {
+                    bersaglio.colori[proprieta] = colore;
+                }
+            });
+
+            bersagli.push(bersaglio);
+        });
+
+        return bersagli;
+    },
+
+    _applicaPassoDissolvenza(bersagli, alfa) {
+        let scritture = 0;
+
+        bersagli.forEach(bersaglio => {
+            const el = bersaglio.el;
+
+            Object.keys(bersaglio.colori).forEach(proprieta => {
+                try {
+                    el.style[proprieta] = dissolvenza.coloreConAlfa(bersaglio.colori[proprieta], alfa);
+                    scritture++;
+                }
+                catch (err) {
+                    //Un elemento tolto dall'interfaccia mentre sfuma non e' un errore.
+                }
+            });
+
+            if (bersaglio.immagine && dissolvenza.immaginiSpente(alfa)) {
+                try {
+                    el.style.visibility = "hidden";
+                }
+                catch (err) {
+                    //Come sopra.
+                }
+            }
+
+            //Si scrive anche l'opacita': non costa niente, e il giorno che UXP la ridisegnera'
+            //la dissolvenza sara' completa anche sulle immagini.
+            try {
+                el.style.opacity = String(alfa);
+            }
+            catch (err) {
+                //Come sopra.
+            }
+        });
+
+        return scritture;
     },
 
     _dissolviElementi(elementi) {
@@ -3941,30 +4038,23 @@ const confronti = {
 
             lista.forEach(el => this._spegniInterazione(el));
 
-            const passi = Math.max(1, Math.round(this.DURATA_DISSOLVENZA / this.PASSO_DISSOLVENZA));
+            let bersagli = [];
+            lista.forEach(el => {
+                bersagli = bersagli.concat(this._bersagliDissolvenza(el));
+            });
+
+            const conColore = bersagli.filter(b => Object.keys(b.colori).length > 0).length;
+            const immagini = bersagli.filter(b => b.immagine).length;
+
+            const passi = dissolvenza.numeroDiPassi();
             let passo = 0;
             const inizio = Date.now();
-            const letture = [];
-            let errori = 0;
+            let scritture = 0;
 
             const timer = setInterval(() => {
                 passo++;
-                const opacita = Math.max(0, 1 - (passo / passi));
-
-                lista.forEach(el => {
-                    try {
-                        el.style.opacity = String(opacita);
-                    }
-                    catch (err) {
-                        //Un elemento tolto dall'interfaccia mentre sfuma non e' un errore, ma
-                        //va contato: se succede sempre, la dissolvenza non esiste.
-                        errori++;
-                    }
-                });
-
-                //Il valore riletto dice se il motore ha preso la scrittura; il tempo dice se il
-                //timer e' andato al passo che gli abbiamo chiesto.
-                letture.push(this._leggiOpacita(lista[0]));
+                const alfa = dissolvenza.alfaAlPasso(passo, passi);
+                scritture += this._applicaPassoDissolvenza(bersagli, alfa);
 
                 if (passo >= passi) {
                     clearInterval(timer);
@@ -3972,15 +4062,19 @@ const confronti = {
                     this._tracciaScheda("dissolvenza", {
                         elementi: lista.length,
                         primo: lista[0] != null ? (lista[0].tagName || "") + (lista[0].dataset?.payloadId ? "#" + lista[0].dataset.payloadId : "") : null,
+                        bersagli: bersagli.length,
+                        conColore,
+                        immagini,
                         passi,
                         durataMs: Date.now() - inizio,
-                        errori,
-                        opacitaRilette: letture
+                        scritture,
+                        coloreDelPrimo: bersagli[0] != null ? bersagli[0].colori : null,
+                        letturaFinale: this._leggiOpacita(lista[0])
                     });
 
                     resolve(true);
                 }
-            }, this.PASSO_DISSOLVENZA);
+            }, dissolvenza.PASSO_MS);
         });
     },
 

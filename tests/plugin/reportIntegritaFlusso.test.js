@@ -781,11 +781,21 @@ test('il ricontrollo giudica col dato del server e allinea la lista', () => {
 test('una segnalazione che se ne va lo fa vedere', () => {
     const dissolvi = corpoFunzione(confronti, '_dissolviElementi(elementi) {');
 
-    //L'opacita' si scrive a passi e non si legge mai: in UXP una misura appena scritta non e'
-    //affidabile, e delle animazioni di jQuery nel plugin non c'e' un uso vivo.
-    assert.match(dissolvi, /el\.style\.opacity = String\(opacita\)/);
+    //In UXP opacity si scrive e si rilegge ma non si ridisegna: il tracciato del collaudo lo
+    //ha mostrato. Si attenua l'alfa dei colori, che UXP ridisegna, a passi radi, e i conti
+    //stanno nel modulo verificato. Delle animazioni di jQuery nel plugin non c'e' un uso vivo.
+    assert.match(dissolvi, /this\._bersagliDissolvenza\(el\)/);
+    assert.match(dissolvi, /dissolvenza\.numeroDiPassi\(\)/);
+    assert.match(dissolvi, /dissolvenza\.alfaAlPasso\(passo, passi\)/);
     assert.match(dissolvi, /setInterval/);
     assert.doesNotMatch(dissolvi, /fadeOut|\.animate\(/);
+
+    const bersagli = corpoFunzione(confronti, '_bersagliDissolvenza(radice) {');
+    assert.match(bersagli, /dissolvenza\.analizzaColore\(testo\)/);
+    const passoDiss = corpoFunzione(confronti, '_applicaPassoDissolvenza(bersagli, alfa) {');
+    assert.match(passoDiss, /dissolvenza\.coloreConAlfa\(bersaglio\.colori\[proprieta\], alfa\)/);
+    //Le immagini non hanno un colore da attenuare: si spengono a meta' strada.
+    assert.match(passoDiss, /dissolvenza\.immaginiSpente\(alfa\)/);
 
     //Tutte le azioni che tolgono una riga la fanno prima sfumare.
     ['_resolveSegnalazione(payloadId, payload) {',
