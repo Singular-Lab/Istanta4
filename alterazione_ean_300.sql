@@ -5,7 +5,10 @@
 -- resta com'e' finche' non la si allarga a mano. Le installazioni nuove non hanno bisogno di
 -- questo file, perche' nascono gia' con la misura giusta.
 --
--- Va eseguito sul database di Istanta, come utente proprietario delle tabelle. Per esempio:
+-- Va eseguito su OGNI database di Istanta dell'installazione, non su uno solo: un'installazione
+-- puo' averne piu' d'uno, e allargarne uno solo lascia gli altri a trenta, dove gli ean
+-- continuerebbero ad arrivare tagliati senza che nessuno se ne accorga finche' non li si guarda.
+-- Si esegue come utente proprietario delle tabelle. Per esempio:
 --
 --   psql -h <host> -U <utente> -d <database> -f alterazione_ean_300.sql
 --
