@@ -684,7 +684,7 @@ test('dalla scheda aperta dal report non si scappa', () => {
 
     const vigila = corpoFunzione(confronti, '_vigilaSchedaDalReport() {');
     assert.match(vigila, /this\._applicaBloccoSchedaDalReport\(\)/);
-    assert.match(vigila, /schedaRef\.serveRiaggancioDalReport\(box\)/);
+    assert.match(vigila, /schedaRef\.serveRiaggancioDalReport\(stato\.box\)/);
 
     //Si esce solo dalla X: sgruppamenti e raggruppamenti deselezionano e riselezionano il box,
     //e una deselezione non vuol dire che l'operatore ha finito.
@@ -869,4 +869,27 @@ test('un ricontrollo che non decide non scrive niente', () => {
     //La diagnostica riporta anche gli errori dell'analisi: sono la spiegazione del caso.
     const diagnostica = corpoFunzione(confronti, '_diagnosticaRicontrollo(record, recordsFreschi, chiaviPrima, preAnalisi) {');
     assert.match(diagnostica, /errori dell'analisi/);
+});
+
+test('il box della scheda dal report se lo tiene il report', () => {
+    //La selezione dell'operatore va e viene, e la scheda svuotandosi perde il suo riferimento:
+    //se il ricontrollo dipendesse da loro, una deselezione basterebbe a impedirlo.
+    const apri = corpoFunzione(confronti, '_apriSchedaDalReport(payloadId, payload) {');
+    assert.match(apri, /\n\s+box,\s/);
+
+    const vigila = corpoFunzione(confronti, '_vigilaSchedaDalReport() {');
+    assert.match(vigila, /schedaRef\.serveRiaggancioDalReport\(stato\.box\)/);
+
+    const riaggancio = corpoFunzione(confronti, '_riagganciaSchedaDalReport() {');
+    assert.match(riaggancio, /stato\.box = box/);
+
+    const ricontrollo = corpoFunzione(confronti, '_ricontrollaReferenzaDopoScheda(stato) {');
+    assert.match(ricontrollo, /let box = schedaRef\.serveRiaggancioDalReport\(stato\.box\) \? null : stato\.box/);
+
+    //Quello che conta e' se il riferimento e' ancora valido, e lo si chiede al box.
+    const codice = senzaCommenti(confronti);
+    assert.ok(!codice.includes('schedaRef.refSelected'),
+        'il report non deve leggere il box dalla scheda');
+    assert.ok(!/=\s*app\.selection/.test(codice),
+        'il report non deve leggere il box dalla selezione');
 });

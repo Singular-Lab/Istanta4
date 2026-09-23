@@ -1555,6 +1555,10 @@ const confronti = {
             payloadId,
             payload,
             record,
+            //Il box lo teniamo noi: la selezione dell'operatore va e viene, e anche la scheda
+            //la puo' perdere svuotandosi. Quello che conta e' se questo riferimento e' ancora
+            //valido, e quello si chiede al box, non a chi lo ha selezionato.
+            box,
             codiceGruppo: dna.codice_gruppo,
             idRec: dna.idRec,
             timer: null,
@@ -1655,15 +1659,7 @@ const confronti = {
             return;
         }
 
-        let box = null;
-        try {
-            box = schedaRef.refSelected != null ? schedaRef.refSelected.item : null;
-        }
-        catch (err) {
-            box = null;
-        }
-
-        if (!schedaRef.serveRiaggancioDalReport(box)) {
+        if (!schedaRef.serveRiaggancioDalReport(stato.box)) {
             return;
         }
 
@@ -1699,6 +1695,8 @@ const confronti = {
         //Una scheda morta a meta' resta occupata, e occupata rifiuterebbe di ripartire.
         schedaRef.setBusy(false);
         schedaRef.setInvalidated(false);
+
+        stato.box = box;
 
         showLoading("Ricarico la scheda sul box rifatto");
         schedaRef.initSchedaRef(this._refPerSchedaDalReport(box, dna));
@@ -1896,15 +1894,10 @@ const confronti = {
             return null;
         }
 
-        let box = null;
-        try {
-            box = schedaRef.refSelected != null && !schedaRef.serveRiaggancioDalReport(schedaRef.refSelected.item)
-                ? schedaRef.refSelected.item
-                : null;
-        }
-        catch (err) {
-            box = null;
-        }
+        //Il box e' quello che ci siamo tenuti aprendo la scheda, o quello su cui l'abbiamo
+        //riagganciata: non lo si chiede alla selezione, che nel frattempo l'operatore puo'
+        //aver spostata, ne' alla scheda, che svuotandosi lo perde.
+        let box = schedaRef.serveRiaggancioDalReport(stato.box) ? null : stato.box;
 
         if (box == null) {
             //Prima di dire che non c'e' piu' lo si cerca come lo cerca il Trova: per id e poi
