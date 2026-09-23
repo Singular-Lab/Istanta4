@@ -134,14 +134,27 @@ test('i due menu stanno accanto alla scelta del file', () => {
         'ogni canale porta le aree con cui e\' abbinato, altrimenti non si puo\' filtrare');
 });
 
-// Le coppie valide sono quelle della tabella di Settings: se la scheda se le costruisse da sola
-// offrirebbe destinazioni che nel resto del sistema non esistono.
-test('le coppie arrivano dalla tabella di Settings, non da un elenco a parte', () => {
+// Aree, canali e coppie ammesse sono quelli di Settings, voce Aree e Canali, cioe' la sorgente
+// ACPV che disegna quella pagina. Un elenco costruito altrove offrirebbe destinazioni che nel
+// resto del sistema non esistono, ed e' l'errore in cui ero gia' caduto leggendo SourceAree.
+test('aree e canali arrivano dalla stessa sorgente della pagina Aree/Canali', () => {
     const controller = sorgente('Istanta/Controllers/SchedaArticoloController.cs');
+    const vista = sorgente('Istanta/Views/Aree/Index.cshtml');
 
-    assert.ok(controller.includes('new ExternalSourceClass(path_external_source).getAree().source'),
-        'la sorgente e\' la stessa della pagina Aree/Canali');
-    assert.ok(controller.includes('ViewBag.combinazioniAreaCanale'), 'la vista le riceve dal controller');
+    assert.ok(vista.includes("mostra(\"ACPV\")"), 'la pagina di Settings disegna la sorgente ACPV');
+    assert.ok(controller.includes('SingletonConfiguration.DBACPV'), 'la scheda legge la stessa');
+    assert.ok(!controller.includes('getAree().source'), 'SourceAree e\' un\'altra tabella');
+    assert.ok(controller.includes('acpv.combinazioni.Where(c => c.enabled)'),
+        'valgono solo le coppie attive: quelle spente sono state tolte apposta');
     assert.ok(controller.includes('catch (Exception ex)'),
         'se la sorgente non si legge la scheda deve aprirsi lo stesso');
+});
+
+test('nei menu si mostrano le sigle, che sono cio\' che il server scrive', () => {
+    const vista = sorgente('Istanta/Views/SchedaArticolo/Index.cshtml');
+
+    assert.ok(vista.includes('<option value="@area.sigla">'), 'l\'area si manda come sigla');
+    assert.ok(vista.includes('<option value="@canale.sigla"'), 'il canale si manda come sigla');
+    assert.ok(!vista.includes('value="@area.guidID"') && !vista.includes('value="@canale.guidID"'),
+        'l\'identificativo darebbe una foto di un\'area inesistente');
 });

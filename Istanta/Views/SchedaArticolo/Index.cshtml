@@ -144,14 +144,15 @@
                   volerla in uso.*@
                 <div class="card card-body mt-3 mb-3" id="sezioneNuovaFotoArticolo">
                     @{
-                        //I20-985: le destinazioni possibili sono le righe della tabella di
-                        //Settings, dove area e canale sono gia' abbinati. I canali portano
-                        //addosso le aree con cui compaiono, cosi' scegliendo un'area restano
-                        //solo i canali che con quell'area esistono davvero.
-                        var combinazioniFoto = ViewBag.combinazioniAreaCanale as List<Aree> ?? new List<Aree>();
-                        var areeFoto = combinazioniFoto.Select(c => c.Area).Distinct().ToList();
-                        var canaliFoto = combinazioniFoto.Where(c => !string.IsNullOrWhiteSpace(c.Canale))
-                                                         .Select(c => c.Canale).Distinct().ToList();
+                        //I20-985: le destinazioni sono quelle di Settings, voce Aree e Canali:
+                        //gli elenchi di aree e canali e la matrice che dice quali coppie sono
+                        //attive. Nei menu si mostrano le sigle, che sono cio' che il server
+                        //scrive nella foto, e ogni canale porta addosso le aree con cui e'
+                        //attivo, cosi' scegliendo un'area restano solo i canali previsti.
+                        var areeFoto = ViewBag.areeFoto as List<Area> ?? new List<Area>();
+                        var canaliFoto = ViewBag.canaliFoto as List<Canale> ?? new List<Canale>();
+                        var combinazioniFoto = ViewBag.combinazioniFoto as List<CombinazioneAreaCanale> ?? new List<CombinazioneAreaCanale>();
+                        var siglaPerArea = areeFoto.GroupBy(a => a.guidID).ToDictionary(g => g.Key, g => g.First().sigla);
                     }
 
                     <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
@@ -159,9 +160,9 @@
                         <select id="areaNuovaFotoArticolo" class="form-select form-select-sm" style="width:auto" data-azione="destinazioneFotoArticolo">
                             <option value="">Scegli...</option>
                             <option value="*">Tutte le aree</option>
-                            @foreach (var area in areeFoto)
+                            @foreach (var area in areeFoto.OrderBy(a => a.nome))
                             {
-                                <option value="@area">@area</option>
+                                <option value="@area.sigla">@area.sigla - @area.nome</option>
                             }
                         </select>
 
@@ -169,11 +170,14 @@
                         <select id="canaleNuovaFotoArticolo" class="form-select form-select-sm" style="width:auto" data-azione="destinazioneFotoArticolo">
                             <option value="">Scegli...</option>
                             <option value="*">Tutti i canali</option>
-                            @foreach (var canale in canaliFoto)
+                            @foreach (var canale in canaliFoto.OrderBy(c => c.nome))
                             {
-                                var areeDelCanale = string.Join(",", combinazioniFoto.Where(c => c.Canale == canale)
-                                                                                     .Select(c => c.Area).Distinct());
-                                <option value="@canale" data-aree="@areeDelCanale">@canale</option>
+                                var areeDelCanale = string.Join(",", combinazioniFoto
+                                    .Where(c => c.guidIDCanale == canale.guidID && siglaPerArea.ContainsKey(c.guidIDArea))
+                                    .Select(c => siglaPerArea[c.guidIDArea])
+                                    .Where(sigla => !string.IsNullOrWhiteSpace(sigla))
+                                    .Distinct());
+                                <option value="@canale.sigla" data-aree="@areeDelCanale">@canale.sigla - @canale.nome</option>
                             }
                         </select>
                     </div>

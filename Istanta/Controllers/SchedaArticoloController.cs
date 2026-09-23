@@ -1,6 +1,7 @@
 ﻿using DocumentFormat.OpenXml.Spreadsheet;
 using DocumentFormat.OpenXml.Vml.Spreadsheet;
 using Istanta.Models;
+using Istanta.Utility;
 using IstantaLib;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -73,34 +74,45 @@ namespace Istanta.Controllers
             }
             ViewBag.ipOlympus = olympusServerUrl;
             ViewBag.extPostProduzione = ext_post_lavorazione;
-            ViewBag.combinazioniAreaCanale = combinazioniAreaCanale();
+            destinazioniFoto();
 
             return View();
         }
 
-        /// I20-985: le coppie area/canale fra cui si puo' scegliere caricando una foto.
+        /// I20-985: dove si puo' mandare una foto caricata dalla scheda.
         ///
-        /// Sono le righe della tabella di Settings, che e' gia' l'elenco degli abbinamenti
-        /// buoni: qui non se ne inventano altri, altrimenti la scheda offrirebbe destinazioni
-        /// che nel resto del sistema non esistono. Se la sorgente non si legge si va avanti
-        /// senza elenco, perche' una scheda articolo che non si apre sarebbe un danno peggiore
-        /// di un menu senza voci.
-        private List<Aree> combinazioniAreaCanale()
+        /// Aree, canali e coppie ammesse sono quelli di Settings, voce Aree e Canali: la stessa
+        /// sorgente ACPV che disegna quella pagina, dove la matrice dice quali coppie sono
+        /// attive. Qui non se ne inventano altre, altrimenti la scheda offrirebbe destinazioni
+        /// che nel resto del sistema non esistono. Si mandano le sigle perche' e' la sigla che
+        /// il server scrive nella foto, come fa il Plugin.
+        private void destinazioniFoto()
         {
+            var aree = new List<Area>();
+            var canali = new List<Canale>();
+            var combinazioni = new List<CombinazioneAreaCanale>();
+
             try
             {
-                return new ExternalSourceClass(path_external_source).getAree().source
-                    .Where(r => !string.IsNullOrWhiteSpace(r.Area))
-                    .OrderBy(r => r.IndiceCombo ?? byte.MaxValue)
-                    .ThenBy(r => r.Area)
-                    .ThenBy(r => r.Canale)
-                    .ToList();
+                var acpv = SingletonConfiguration.DBACPV;
+
+                if (acpv != null)
+                {
+                    aree = acpv.aree.Where(a => !string.IsNullOrWhiteSpace(a.sigla)).ToList();
+                    canali = acpv.canali.Where(c => !string.IsNullOrWhiteSpace(c.sigla)).ToList();
+                    //Solo le coppie attive: quelle spente in tabella sono state tolte apposta.
+                    combinazioni = acpv.combinazioni.Where(c => c.enabled).ToList();
+                }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Combinazioni area/canale non leggibili");
-                return new List<Aree>();
+                //Una scheda articolo che non si apre sarebbe peggio di un menu senza voci.
+                _logger.LogError(ex, "Aree e canali non leggibili per la scheda articolo");
             }
+
+            ViewBag.areeFoto = aree;
+            ViewBag.canaliFoto = canali;
+            ViewBag.combinazioniFoto = combinazioni;
         }
 
         [HttpGet]
