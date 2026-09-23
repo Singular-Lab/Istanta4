@@ -1326,10 +1326,8 @@ namespace Istanta.Controllers
                                             {
                                                 if (scope_chiave == GLOBAL_VARIABLES.keyRefEan)
                                                 {
-                                                    if (_val.Length > 30)
-                                                    {
-                                                        _val = _val.Substring(0, 30);
-                                                    }
+                                                    //I20-988: stessa misura della colonna, dichiarata una volta sola.
+                                                    _val = Utility.Main.eanTroncato(_val)!;
                                                     artRecord.Ean = _val;
                                                 }
                                             }
