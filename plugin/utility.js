@@ -1050,9 +1050,12 @@ const Utility=
             this.nascondiHidebleElements();
             var result = null;
             var modal = $('<div id="confirmModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); z-index: 5000; display: flex; justify-content: center; align-items: center; padding: 10px;"></div>');
-            var dialog = $('<div style="width: 60%; height: 40%; background-color: white; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 10px;"></div>');
+            //I20-981: il riquadro si adatta al messaggio invece di avere un'altezza fissa, e
+            //il testo scorre se e' lungo. Prima, con height 40% e il messaggio in un blocco
+            //all'80% senza scorrimento, un testo lungo usciva dal riquadro bianco.
+            var dialog = $('<div style="width: 92%; max-width: 460px; min-width: 200px; max-height: 88%; background-color: white; display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch; padding: 14px; box-sizing: border-box; border-radius: 6px;"></div>');
             
-            let messaggio = $('<div style="display: flex; height: 80%;"></div>');
+            let messaggio = $('<div style="display: block; flex: 1 1 auto; min-height: 0; overflow: auto;"></div>');
     
             if (typeof message === "string") {
                 messaggio.html(`<h3>${message}</h3>`);
@@ -1063,9 +1066,11 @@ const Utility=
             }
             
             //var messaggio = $('<div style="display: flex; height: 80%;"><h3>'+message+'</h3></div>');
-            var pulsanti = $('<div style="display: flex; justify-content: space-between; align-items: flex-end; width: 100%; height: 20%;"></div>');
-            var conferma = $('<button style="width: 100px; height: 20px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">Conferma</button>');
-            var annulla = $('<button style="width: 100px; height: 20px; background-color: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer;">Annulla</button>');
+            //I pulsanti vanno a capo invece di uscire: su un pannello stretto due pulsanti da
+            //cento pixel non stavano in un riquadro largo il 60%.
+            var pulsanti = $('<div style="display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; width: 100%; flex: 0 0 auto; padding-top: 12px;"></div>');
+            var conferma = $('<button style="min-width: 88px; height: 26px; padding: 0 10px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">Conferma</button>');
+            var annulla = $('<button style="min-width: 88px; height: 26px; padding: 0 10px; background-color: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer;">Annulla</button>');
         
             modal.click(function(e) {
                 e.stopPropagation();
@@ -1081,8 +1086,8 @@ const Utility=
                 $("#confirmModal").remove();
             });
         
-            pulsanti.append(conferma);
             pulsanti.append(annulla);
+            pulsanti.append(conferma);
             dialog.append(messaggio);
             dialog.append(pulsanti);
             modal.append(dialog);
@@ -1209,14 +1214,14 @@ const Utility=
         var result = null;
         this.nascondiHidebleElements();
         var modal = $('<div id="confirmModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); z-index: 5000; display: flex; justify-content: center; align-items: center; padding: 10px;"></div>');
-        var dialog = $('<div style="width: 60%; height: 40%; background-color: white; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 10px;"></div>');
-        var messaggio = $('<div style="display: flex; height: 80%;"><h3>'+message+'</h3></div>');
-        var pulsanti = $('<div style="display: flex; justify-content: space-between; align-items: flex-end; width: 100%; height: 20%;"></div>');
-        var conferma1 = $('<button style="width:'+ (bottoneConfirm2Text != null ? '80px;' :'100px;')+' height: 20px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">'+bottoneConfirm1Text +'</button>');
+        var dialog = $('<div style="width: 92%; max-width: 460px; min-width: 200px; max-height: 88%; background-color: white; display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch; padding: 14px; box-sizing: border-box; border-radius: 6px;"></div>');
+        var messaggio = $('<div style="display: block; flex: 1 1 auto; min-height: 0; overflow: auto;"><h3 style="margin-top:0;">'+message+'</h3></div>');
+        var pulsanti = $('<div style="display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; width: 100%; flex: 0 0 auto; padding-top: 12px;"></div>');
+        var conferma1 = $('<button style="min-width: 88px; height: 26px; padding: 0 10px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">'+bottoneConfirm1Text +'</button>');
         if(bottoneConfirm2Text != null){
-            var conferma2 = $('<button style="width:'+ (bottoneConfirm2Text != null ? '80px;' :'100px;')+' height: 20px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">'+bottoneConfirm2Text +'</button>');
+            var conferma2 = $('<button style="min-width: 88px; height: 26px; padding: 0 10px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">'+bottoneConfirm2Text +'</button>');
         }
-        var annulla = $('<button style="width:'+ (bottoneConfirm2Text != null ? '80px;' :'100px;')+' height: 20px; background-color: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer;">Annulla</button>');
+        var annulla = $('<button style="min-width: 88px; height: 26px; padding: 0 10px; background-color: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer;">Annulla</button>');
     
         var objRes = {
             result: false,
