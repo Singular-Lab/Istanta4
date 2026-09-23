@@ -232,5 +232,40 @@ namespace Istanta.Controllers
 
             return Ok();
         }
+
+        /// I20-985: cambia solo dove vale una foto, senza toccare altro.
+        ///
+        /// Non si riusa SyncFoto/updateImmagineEsistente perche' quello, oltre alla
+        /// destinazione, mette la foto in uso come primaria: su una foto dell'elenco vorrebbe
+        /// dire promuoverla, mentre qui si sta solo dicendo dove vale. La foto si cerca per
+        /// identificativo di riga e non per GuidId, perche' dello stesso file possono esistere
+        /// piu' righe, una per destinazione, e per GuidId si finirebbe a cambiarne una a caso.
+        [HttpPut]
+        [Route("SchedaArticolo/AggiornaDestinazioneFoto")]
+        public async Task<IActionResult> AggiornaDestinazioneFoto(long idFoto, string codice, string? area, string? canale)
+        {
+            Articoli? artItem = await this.ctx.Articolis.Include(f => f.ArticoliFotos).Where(f => f.Codice == codice).FirstOrDefaultAsync();
+
+            if (artItem == null)
+            {
+                return NotFound("Articolo " + codice + " non trovato");
+            }
+
+            var foto = artItem.ArticoliFotos!.FirstOrDefault(f => f.Id == idFoto);
+
+            if (foto == null)
+            {
+                return NotFound("Foto " + idFoto + " non trovata sull'articolo " + codice);
+            }
+
+            var destinazione = Utility.Main.destinazioneDellaFoto(area, canale);
+
+            foto.Area = destinazione.area;
+            foto.Canale = destinazione.canale;
+            foto.DataModifica = DateTime.Now;
+            ctx.SaveChanges();
+
+            return Ok();
+        }
     }
 }

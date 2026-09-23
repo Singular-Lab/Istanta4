@@ -1,6 +1,7 @@
 ﻿@page
 @model Istanta.Views.SchedaArticolo.IndexModel
 @using IstantaLib;
+@using Microsoft.AspNetCore.Html;
 @{
     string[] _extPostProduzione = (string[])ViewBag.extPostProduzione;
 }
@@ -55,6 +56,64 @@
             <div class="container">
                 @{
                     string nomeFotoPrimaria = "";
+
+                    //I20-985: le destinazioni sono quelle di Settings, voce Aree e Canali: gli
+                    //elenchi di aree e canali e la matrice che dice quali coppie sono attive. Si
+                    //preparano qui una volta sola perche' servono in piu' punti della scheda:
+                    //sulla foto in uso, su ognuna di quelle in elenco e sul caricamento.
+                    var areeFoto = ViewBag.areeFoto as List<Area> ?? new List<Area>();
+                    var canaliFoto = ViewBag.canaliFoto as List<Canale> ?? new List<Canale>();
+                    var combinazioniFoto = ViewBag.combinazioniFoto as List<CombinazioneAreaCanale> ?? new List<CombinazioneAreaCanale>();
+                    var siglaPerCanale = canaliFoto.GroupBy(c => c.guidID).ToDictionary(g => g.Key, g => g.First().sigla);
+
+                    Func<string, string> testo = valore => System.Net.WebUtility.HtmlEncode(valore ?? "");
+
+                    //Nei menu si mostrano le sigle, che sono cio' che il server scrive nella foto.
+                    var opzioniCanale = new HtmlString(string.Join("", canaliFoto.OrderBy(c => c.nome)
+                        .Select(c => $"<option value=\"{testo(c.sigla)}\">{testo(c.sigla + " - " + c.nome)}</option>")));
+
+                    //Ogni area porta addosso i canali con cui e' attiva: scelto il canale,
+                    //restano le sole aree previste.
+                    var opzioniArea = new HtmlString(string.Join("", areeFoto.OrderBy(a => a.nome).Select(a =>
+                    {
+                        var canaliDellArea = string.Join(",", combinazioniFoto
+                            .Where(c => c.guidIDArea == a.guidID && siglaPerCanale.ContainsKey(c.guidIDCanale))
+                            .Select(c => siglaPerCanale[c.guidIDCanale])
+                            .Where(sigla => !string.IsNullOrWhiteSpace(sigla))
+                            .Distinct());
+
+                        return $"<option value=\"{testo(a.sigla)}\" data-canali=\"{testo(canaliDellArea)}\">{testo(a.sigla + " - " + a.nome)}</option>";
+                    })));
+
+                    //I20-985: dove vale una foto gia' in archivio. Si scrive solo premendo Salva,
+                    //perche' cambiare destinazione a una foto in uso non deve poter succedere per
+                    //un tocco di troppo sul menu. Vuoto in archivio vuol dire che vale ovunque, e
+                    //nei menu si mostra come tale.
+                    Func<long, string, string, IHtmlContent> destinazioneDiUnaFoto = (idFoto, areaFoto, canaleFoto) =>
+                    {
+                        var canaleScelto = string.IsNullOrWhiteSpace(canaleFoto) ? "*" : canaleFoto;
+                        var areaScelta = string.IsNullOrWhiteSpace(areaFoto) ? "*" : areaFoto;
+
+                        return new HtmlString($@"
+                        <div class=""destinazioneFotoEsistente d-flex align-items-center gap-3 flex-wrap mt-2""
+                             data-idfoto=""{idFoto}"" data-canale=""{testo(canaleScelto)}"" data-area=""{testo(areaScelta)}"">
+                            <div class=""d-flex align-items-center gap-2"">
+                                <label class=""mb-0"" for=""canaleFoto-{idFoto}"" style=""font-size:12px"">Canale</label>
+                                <select id=""canaleFoto-{idFoto}"" class=""form-select form-select-sm canaleFotoEsistente"" style=""width:auto"" data-azione=""destinazioneFotoEsistente"">
+                                    <option value=""*"">Tutti i canali</option>
+                                    {opzioniCanale}
+                                </select>
+                            </div>
+                            <div class=""d-flex align-items-center gap-2"">
+                                <label class=""mb-0"" for=""areaFoto-{idFoto}"" style=""font-size:12px"">Area</label>
+                                <select id=""areaFoto-{idFoto}"" class=""form-select form-select-sm areaFotoEsistente"" style=""width:auto"" data-azione=""destinazioneFotoEsistente"">
+                                    <option value=""*"">Tutte le aree</option>
+                                    {opzioniArea}
+                                </select>
+                            </div>
+                            <button type=""button"" class=""btn btn-sm btn-outline-primary salvaDestinazioneFoto"" data-azione=""salvaDestinazioneFoto"" disabled>Salva destinazione</button>
+                        </div>");
+                    };
                 }
                 @if (fotoPrimaria != null)
                 {
@@ -73,6 +132,7 @@
                             <div class="col">
                                 <h6>@fotoPrimaria!.NomeReale</h6>
                                 <h6>Primaria selezionata</h6>
+                                @destinazioneDiUnaFoto(fotoPrimaria.Id, fotoPrimaria.Area, fotoPrimaria.Canale)
                             </div>
                         </div>                        
                     </figure>
@@ -130,6 +190,7 @@
                                         <div class="col">
                                             <h6>@foto!.NomeReale</h6>
                                             <input type="button" class="btn btn-sm btn-primary" value="Seleziona" data-azione="selezionaPrimaria" data-guidid="@foto.GuidId">
+                                            @destinazioneDiUnaFoto(foto.Id, foto.Area, foto.Canale)
                                         </div>
                                     </div>
                                 </figure>
@@ -143,19 +204,6 @@
                   finisce fra le altre e resta da selezionare, perche caricarla non vuol dire
                   volerla in uso.*@
                 <div class="card card-body mt-3 mb-3" id="sezioneNuovaFotoArticolo">
-                    @{
-                        //I20-985: le destinazioni sono quelle di Settings, voce Aree e Canali:
-                        //gli elenchi di aree e canali e la matrice che dice quali coppie sono
-                        //attive. Nei menu si mostrano le sigle, che sono cio' che il server
-                        //scrive nella foto. Si sceglie prima il canale, come nella matrice, dove
-                        //i canali sono le righe: ogni area porta addosso i canali con cui e'
-                        //attiva, cosi' scelto il canale restano le sole aree previste.
-                        var areeFoto = ViewBag.areeFoto as List<Area> ?? new List<Area>();
-                        var canaliFoto = ViewBag.canaliFoto as List<Canale> ?? new List<Canale>();
-                        var combinazioniFoto = ViewBag.combinazioniFoto as List<CombinazioneAreaCanale> ?? new List<CombinazioneAreaCanale>();
-                        var siglaPerCanale = canaliFoto.GroupBy(c => c.guidID).ToDictionary(g => g.Key, g => g.First().sigla);
-                    }
-
                     @*Ogni etichetta sta in gruppo col suo menu: andando a capo, il gruppo si
                       sposta intero e l'etichetta non finisce sotto al menu sbagliato.*@
                     <div class="d-flex align-items-center gap-3 flex-wrap mb-2">
@@ -163,10 +211,7 @@
                             <label for="canaleNuovaFotoArticolo" class="mb-0" style="font-size:12px">Canale</label>
                             <select id="canaleNuovaFotoArticolo" class="form-select form-select-sm" style="width:auto" data-azione="destinazioneFotoArticolo">
                                 <option value="*" selected>Tutti i canali</option>
-                                @foreach (var canale in canaliFoto.OrderBy(c => c.nome))
-                                {
-                                    <option value="@canale.sigla">@canale.sigla - @canale.nome</option>
-                                }
+                                @opzioniCanale
                             </select>
                         </div>
 
@@ -174,15 +219,7 @@
                             <label for="areaNuovaFotoArticolo" class="mb-0" style="font-size:12px">Area</label>
                             <select id="areaNuovaFotoArticolo" class="form-select form-select-sm" style="width:auto" data-azione="destinazioneFotoArticolo">
                                 <option value="*" selected>Tutte le aree</option>
-                                @foreach (var area in areeFoto.OrderBy(a => a.nome))
-                                {
-                                    var canaliDellArea = string.Join(",", combinazioniFoto
-                                        .Where(c => c.guidIDArea == area.guidID && siglaPerCanale.ContainsKey(c.guidIDCanale))
-                                        .Select(c => siglaPerCanale[c.guidIDCanale])
-                                        .Where(sigla => !string.IsNullOrWhiteSpace(sigla))
-                                        .Distinct());
-                                    <option value="@area.sigla" data-canali="@canaliDellArea">@area.sigla - @area.nome</option>
-                                }
+                                @opzioniArea
                             </select>
                         </div>
                     </div>

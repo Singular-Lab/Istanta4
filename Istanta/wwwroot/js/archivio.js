@@ -193,6 +193,16 @@ class Archivio {
             ME.DestinazioneFotoArticoloCambiata($(this));
         });
 
+        pagina.on("change", "[data-azione='destinazioneFotoEsistente']", function () {
+            ME.DestinazioneFotoEsistenteCambiata($(this));
+        });
+
+        pagina.on("click", "[data-azione='salvaDestinazioneFoto']", function () {
+            ME.SalvaDestinazioneFoto($(this).closest(".destinazioneFotoEsistente"));
+        });
+
+        this.InizializzaDestinazioniFotoEsistenti();
+
         //Canale e area stanno sul pulsante Salva della stessa riga, dove le metteva la vista.
         pagina.on("click", "[data-azione='cronologiaModifiche']", function () {
             var salva = $(this).closest(".row").find("#bottoneSalva");
@@ -300,6 +310,17 @@ class Archivio {
         return elenco.filter(function (opzione) {
             return Array.isArray(opzione.canali) && opzione.canali.indexOf(canale) >= 0;
         });
+    }
+
+    /// Se la destinazione scelta e' diversa da quella registrata, cioe' se c'e' qualcosa da
+    /// salvare. Serve a tenere spento il pulsante finche' non si cambia davvero niente: cosi'
+    /// un menu toccato e rimesso com'era non lascia l'idea che ci sia una modifica in sospeso.
+    static destinazioneCambiata(registrata, scelta) {
+        if (registrata == null || scelta == null) {
+            return false;
+        }
+
+        return registrata.area !== scelta.area || registrata.canale !== scelta.canale;
     }
 
     /// Si archivia solo con il file scelto e la destinazione decisa: una foto senza destinazione
@@ -621,6 +642,127 @@ class Archivio {
             this.fileNuovaFotoArticolo, $("#areaNuovaFotoArticolo").val(), $("#canaleNuovaFotoArticolo").val());
 
         $("#confermaNuovaFotoArticolo").prop("disabled", !pronto);
+    }
+
+    /// I20-985: i menu delle foto gia' in archivio partono da dove la foto vale adesso.
+    ///
+    /// Qui le aree non si filtrano: se una foto e' registrata su una coppia che in tabella non
+    /// e' piu' attiva, mostrarla com'e' dice la verita', mentre nasconderla farebbe credere che
+    /// la foto valga altrove. Il filtro entra in gioco quando si cambia il canale, cioe' quando
+    /// si sta scegliendo davvero.
+    InizializzaDestinazioniFotoEsistenti() {
+        let ME = this;
+
+        $(".destinazioneFotoEsistente").each(function () {
+            var gruppo = $(this);
+
+            gruppo.find(".canaleFotoEsistente").val(gruppo.attr("data-canale") || Archivio.DESTINAZIONE_TUTTE);
+            gruppo.find(".areaFotoEsistente").val(gruppo.attr("data-area") || Archivio.DESTINAZIONE_TUTTE);
+
+            ME.AggiornaSalvaDestinazione(gruppo);
+        });
+    }
+
+    DestinazioneFotoEsistenteCambiata(campo) {
+        var gruppo = campo.closest(".destinazioneFotoEsistente");
+
+        if (campo.hasClass("canaleFotoEsistente")) {
+            this.RicostruisciAreeDelGruppo(gruppo);
+        }
+
+        this.AggiornaSalvaDestinazione(gruppo);
+    }
+
+    /// Le voci del menu delle aree di quel gruppo, lette una volta sola e tenute da parte:
+    /// ricostruendo il menu si perderebbero quelle escluse dal filtro.
+    OpzioniAreaDelGruppo(gruppo) {
+        var tenute = gruppo.data("opzioniArea");
+        if (tenute != null) {
+            return tenute;
+        }
+
+        var opzioni = [];
+
+        gruppo.find(".areaFotoEsistente option").each(function () {
+            var valore = $(this).attr("value");
+            if (!valore || valore === Archivio.DESTINAZIONE_TUTTE) {
+                return;
+            }
+
+            var canali = $(this).attr("data-canali");
+            opzioni.push({
+                valore: valore,
+                etichetta: $(this).text(),
+                canali: canali ? canali.split(",") : []
+            });
+        });
+
+        gruppo.data("opzioniArea", opzioni);
+        return opzioni;
+    }
+
+    RicostruisciAreeDelGruppo(gruppo) {
+        var menu = gruppo.find(".areaFotoEsistente");
+        var sceltoPrima = menu.val();
+        var validi = Archivio.areePerCanale(this.OpzioniAreaDelGruppo(gruppo), gruppo.find(".canaleFotoEsistente").val());
+
+        menu.empty();
+        menu.append($("<option>").attr("value", Archivio.DESTINAZIONE_TUTTE).text("Tutte le aree"));
+
+        validi.forEach(function (opzione) {
+            menu.append($("<option>").attr("value", opzione.valore)
+                .attr("data-canali", opzione.canali.join(",")).text(opzione.etichetta));
+        });
+
+        var restaBuono = sceltoPrima === Archivio.DESTINAZIONE_TUTTE || validi.some(function (opzione) {
+            return opzione.valore === sceltoPrima;
+        });
+
+        menu.val(restaBuono ? sceltoPrima : Archivio.DESTINAZIONE_TUTTE);
+    }
+
+    AggiornaSalvaDestinazione(gruppo) {
+        var daSalvare = Archivio.destinazioneCambiata(
+            { area: gruppo.attr("data-area"), canale: gruppo.attr("data-canale") },
+            { area: gruppo.find(".areaFotoEsistente").val(), canale: gruppo.find(".canaleFotoEsistente").val() });
+
+        gruppo.find(".salvaDestinazioneFoto").prop("disabled", !daSalvare);
+    }
+
+    /// Scrive dove vale una foto gia' in archivio, e nient'altro: non la mette in uso e non tocca
+    /// le altre, perche' qui si sta solo dicendo dove vale.
+    SalvaDestinazioneFoto(gruppo) {
+        let ME = this;
+        var scelta = {
+            area: gruppo.find(".areaFotoEsistente").val(),
+            canale: gruppo.find(".canaleFotoEsistente").val()
+        };
+        var destinazione = Archivio.destinazioneFotoArticolo(scelta.area, scelta.canale);
+
+        if (destinazione == null) {
+            return;
+        }
+
+        var dati = {
+            idFoto: gruppo.attr("data-idfoto"),
+            codice: $("#Codice").val(),
+            area: destinazione.area,
+            canale: destinazione.canale
+        };
+
+        showLoading();
+        Call.do("SchedaArticolo", "AggiornaDestinazioneFoto", "PUT", dati, this, function (result, sender) {
+            hideLoading();
+
+            if (result != null && result.esito === false) {
+                alert("Destinazione non salvata: " + (result.message || result.error || "errore sconosciuto"));
+                return;
+            }
+
+            //Da qui in avanti il registrato e' quello appena scelto: il pulsante si rispegne.
+            gruppo.attr("data-area", scelta.area).attr("data-canale", scelta.canale);
+            ME.AggiornaSalvaDestinazione(gruppo);
+        });
     }
 
     ConfermaFotoArticolo() {

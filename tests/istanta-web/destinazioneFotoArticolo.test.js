@@ -129,7 +129,7 @@ test('i due menu stanno accanto alla scelta del file, prima il canale', () => {
 
     assert.ok(vista.includes('data-azione="destinazioneFotoArticolo"'),
         'i gestori inline la policy della pagina li blocca');
-    assert.ok(vista.includes('data-canali="@canaliDellArea"'),
+    assert.ok(vista.includes('data-canali=\\"{testo(canaliDellArea)}\\"'),
         'ogni area porta i canali con cui e\' attiva, altrimenti non si puo\' filtrare');
 
     //Chi restringe deve venire prima di chi viene ristretto, o il filtro non serve a niente.
@@ -184,8 +184,66 @@ test('aree e canali arrivano dalla stessa sorgente della pagina Aree/Canali', ()
 test('nei menu si mostrano le sigle, che sono cio\' che il server scrive', () => {
     const vista = sorgente('Istanta/Views/SchedaArticolo/Index.cshtml');
 
-    assert.ok(vista.includes('<option value="@area.sigla"'), 'l\'area si manda come sigla');
-    assert.ok(vista.includes('<option value="@canale.sigla"'), 'il canale si manda come sigla');
-    assert.ok(!vista.includes('value="@area.guidID"') && !vista.includes('value="@canale.guidID"'),
+    assert.ok(vista.includes('<option value=\\"{testo(a.sigla)}\\"'), 'l\'area si manda come sigla');
+    assert.ok(vista.includes('<option value=\\"{testo(c.sigla)}\\"'), 'il canale si manda come sigla');
+    assert.ok(!vista.includes('{testo(a.guidID)}') && !vista.includes('{testo(c.guidID)}'),
         'l\'identificativo darebbe una foto di un\'area inesistente');
+    assert.ok(vista.includes('System.Net.WebUtility.HtmlEncode'),
+        'sigle e nomi arrivano da una sorgente esterna: vanno codificati prima di finire nella pagina');
+});
+
+
+/* ---- I20-985: cambiare dove vale una foto gia' in archivio ---- */
+
+test('c\'e\' qualcosa da salvare solo se la destinazione e\' cambiata davvero', () => {
+    const registrata = { area: 'SA', canale: 'GDO' };
+
+    assert.strictEqual(Archivio.destinazioneCambiata(registrata, { area: 'EM', canale: 'GDO' }), true);
+    assert.strictEqual(Archivio.destinazioneCambiata(registrata, { area: 'SA', canale: 'FIDELITY' }), true);
+    assert.strictEqual(Archivio.destinazioneCambiata(registrata, { area: 'SA', canale: 'GDO' }), false,
+        'un menu toccato e rimesso com\'era non e\' una modifica in sospeso');
+    assert.strictEqual(Archivio.destinazioneCambiata(null, { area: 'SA', canale: 'GDO' }), false);
+});
+
+test('la foto in uso e quelle in elenco hanno i due menu e il salva', () => {
+    const vista = sorgente('Istanta/Views/SchedaArticolo/Index.cshtml');
+
+    //Una volta per la primaria e una per ogni foto dell'elenco.
+    assert.ok(vista.includes('@destinazioneDiUnaFoto(fotoPrimaria.Id, fotoPrimaria.Area, fotoPrimaria.Canale)'));
+    assert.ok(vista.includes('@destinazioneDiUnaFoto(foto.Id, foto.Area, foto.Canale)'));
+    assert.ok(vista.includes('data-azione=""salvaDestinazioneFoto""'),
+        'si scrive premendo Salva, non al tocco del menu');
+    assert.ok(vista.includes('salvaDestinazioneFoto"" data-azione=""salvaDestinazioneFoto"" disabled'),
+        'il pulsante nasce spento: senza modifiche non c\'e\' niente da salvare');
+});
+
+// Il pericolo e' scrivere sulla riga sbagliata: dello stesso file possono esistere piu' righe, una
+// per destinazione, e allora il GuidId non basta a dire quale si sta cambiando.
+test('la foto da cambiare si indica per identificativo di riga', () => {
+    const js = sorgente('Istanta/wwwroot/js/archivio.js');
+    const controller = sorgente('Istanta/Controllers/SchedaArticoloController.cs');
+
+    const inizio = js.indexOf('SalvaDestinazioneFoto(gruppo) {');
+    const metodo = js.slice(inizio, js.indexOf('ConfermaFotoArticolo() {', inizio));
+
+    assert.ok(metodo.includes('idFoto: gruppo.attr("data-idfoto")'));
+    assert.ok(!metodo.includes('guidId'), 'per GuidId si cambierebbe una riga a caso');
+    assert.ok(controller.includes('f.Id == idFoto'), 'anche il server cerca per identificativo di riga');
+});
+
+// Cambiare destinazione non e' selezionare: l'endpoint del Plugin, oltre alla destinazione, mette
+// la foto in uso come primaria, e su una foto dell'elenco vorrebbe dire promuoverla.
+test('cambiare destinazione non mette la foto in uso', () => {
+    const js = sorgente('Istanta/wwwroot/js/archivio.js');
+    const controller = sorgente('Istanta/Controllers/SchedaArticoloController.cs');
+
+    assert.ok(js.includes('Call.do("SchedaArticolo", "AggiornaDestinazioneFoto"'),
+        'si usa l\'endpoint dedicato');
+    assert.ok(!js.includes('updateImmagineEsistente'), 'quello del Plugin promuoverebbe la foto');
+
+    const inizio = controller.indexOf('AggiornaDestinazioneFoto(');
+    const azione = controller.slice(inizio);
+
+    assert.ok(!azione.includes('StatoSelezione') && !azione.includes('Attiva'),
+        'si scrivono solo area e canale, niente stato di selezione');
 });
