@@ -83,3 +83,25 @@ myhr {
     margin-bottom: 0;
     box-shadow: 0 .5rem 1rem rgba(0, 0, 0, .25);
 }
+
+/* I20-985: le foto della scheda articolo stanno tutte nello stesso riquadro.
+   Le miniature arrivano da Olimpo con la sola larghezza fissata, quindi l'altezza segue le
+   proporzioni dello scatto e ogni scheda veniva diversa. Il riquadro e' un quadrato, l'immagine
+   ci sta dentro per intero e il suo lato piu' lungo lo riempie: nessun taglio, e tutte le schede
+   si somigliano. */
+.riquadroFotoArticolo {
+    width: 150px;
+    height: 150px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.riquadroFotoArticolo img {
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+}

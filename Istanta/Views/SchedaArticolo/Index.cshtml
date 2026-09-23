@@ -66,7 +66,9 @@
                     <figure class="figure mb-4 p-2" style="border:3px solid @(isPostPorodotta ? "green" : "red")">
                         <div class="row" style="align-items:center;">
                             <div class="col">
-                                <img src="@thumbnail" data-bigimg="@bigImage" class="figure-img img-fluid rounded img-preview-hover" alt="@fotoPrimaria!.NomeReale">
+                                <div class="riquadroFotoArticolo">
+                                    <img src="@thumbnail" data-bigimg="@bigImage" class="figure-img rounded img-preview-hover" alt="@fotoPrimaria!.NomeReale">
+                                </div>
                             </div>
                             <div class="col">
                                 <h6>@fotoPrimaria!.NomeReale</h6>
@@ -103,7 +105,9 @@
                     <figure class="figure mb-4 p-2" style="border:3px solid @(isPostPorodotta ? "green" : "red")">
                             <div class="row" style="align-items:center;">
                                 <div class="col">
-                                <img src="@thumbnail" data-bigimg="@bigImage" class="figure-img img-fluid rounded img-preview-hover" alt="@foto?.NomeReale">
+                                    <div class="riquadroFotoArticolo">
+                                        <img src="@thumbnail" data-bigimg="@bigImage" class="figure-img rounded img-preview-hover" alt="@foto?.NomeReale">
+                                    </div>
                                 </div>
                                 <div class="col">
                                 <h6>@foto!.NomeReale</h6>
@@ -112,6 +116,35 @@
                             </div>
                     </figure>
                 }
+
+                @*I20-985: da qui si archivia una foto nuova del prodotto. Si sceglie il file, se
+                  ne vede l'anteprima e si conferma: fino ad allora non si scrive niente. La foto
+                  finisce fra le altre e resta da selezionare, perche caricarla non vuol dire
+                  volerla in uso.*@
+                <div class="card card-body mt-3 mb-3" id="sezioneNuovaFotoArticolo">
+                    <div class="d-flex align-items-center gap-2">
+                        <button type="button" class="btn btn-sm btn-success" data-azione="aggiungiFotoArticolo">Aggiungi foto</button>
+                        <span class="text-muted" style="font-size:12px">La foto viene archiviata, non selezionata.</span>
+                    </div>
+
+                    <div id="anteprimaNuovaFotoArticolo" class="mt-3" style="display:none">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="riquadroFotoArticolo border rounded">
+                                <img id="imgNuovaFotoArticolo" src="" alt="" />
+                                <div id="txtAnteprimaNuovaFotoArticolo" class="text-muted text-center" style="display:none; font-size:11px;"></div>
+                            </div>
+                            <div>
+                                <div id="nomeNuovaFotoArticolo" style="font-size:12px; word-break:break-all;"></div>
+                                <div class="mt-2 d-flex gap-2">
+                                    <button type="button" class="btn btn-sm btn-primary" data-azione="confermaFotoArticolo">Conferma</button>
+                                    <button type="button" class="btn btn-sm btn-secondary" data-azione="annullaFotoArticolo">Annulla</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <input type="file" id="fileNuovaFotoArticolo" accept="image/*,.psd,.tif,.tiff" style="display:none" data-azione="fileFotoArticoloScelto" />
+                </div>
 
                 @*I20-983: le foto extra si raggruppano per tipo, come nel pannello del Plugin, e
                   ogni gruppo porta i suoi due modi di aggiungerne: caricare un file nuovo oppure

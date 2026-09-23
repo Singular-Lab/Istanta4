@@ -1,4 +1,4 @@
-using DocumentFormat.OpenXml.Office.CustomUI;
+﻿using DocumentFormat.OpenXml.Office.CustomUI;
 using DocumentFormat.OpenXml.Spreadsheet;
 using DocumentFormat.OpenXml.Wordprocessing;
 using Istanta.Antlr;
@@ -1634,7 +1634,13 @@ namespace Istanta.Controllers
     .ThenByDescending(f => f.DataModifica)
     .FirstOrDefault();
 
-                                if (_file.tracciatoArea != null && _file.tracciatoCanale != null)
+                                //I20-985: come nasce la foto caricata. Archiviarla e basta vuol
+                                //dire anche non spegnere quella in uso: il caricamento disattiva
+                                //le altre prima ancora di creare la nuova, e l'articolo
+                                //resterebbe senza nessuna foto attiva.
+                                var nascita = Utility.Main.selezioneNuovaFoto(_file.archiviaSenzaSelezionare);
+
+                                if (nascita.spegniLeAltre && _file.tracciatoArea != null && _file.tracciatoCanale != null)
                                 {
                                     var targetRank = GetSpecificity(_file.area, _file.canale);
 
@@ -1715,8 +1721,8 @@ namespace Istanta.Controllers
                                     nuovaFoto.PathFoto = nomeFile;
                                     nuovaFoto.Area = _file.area!;
                                     nuovaFoto.Canale = _file.canale!;
-                                    nuovaFoto.StatoSelezione = (byte)StatoSelezioneFoto.Primaria;
-                                    nuovaFoto.Attiva = true;
+                                    nuovaFoto.StatoSelezione = nascita.statoSelezione;
+                                    nuovaFoto.Attiva = nascita.attiva;
                                     nuovaFoto.Hash = md5;//resSync["hash"].ToString();
                                     nuovaFoto.DataInserimento = DateTime.Now;
                                     nuovaFoto.DataModifica = DateTime.Now;

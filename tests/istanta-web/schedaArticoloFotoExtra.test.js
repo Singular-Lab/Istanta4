@@ -211,3 +211,57 @@ test('un salvataggio rifiutato chiude il caricamento e dice perche\'', () => {
     assert.ok(dentroGuardia.includes('result.message || result.error'),
         'il motivo lo manda il server: va mostrato, non buttato');
 });
+
+/* ---- I20-985: archiviare altre foto del prodotto ---- */
+
+// Caricare una foto dalla scheda articolo non vuol dire volerla in uso: senza dirlo al server,
+// il caricamento la sceglie come primaria e spegne quella di adesso.
+test('la foto nuova del prodotto si archivia senza selezionarla', () => {
+    const dati = Archivio.datiNuovaFotoArticolo('6119227', 'scatto_nuovo.psd');
+
+    assert.strictEqual(dati.codice, '6119227');
+    assert.strictEqual(dati.tipo, 1, 'tipo 1 e\' la foto del prodotto');
+    assert.strictEqual(dati.nomeFile, 'scatto_nuovo.psd');
+    assert.strictEqual(dati.archiviaSenzaSelezionare, true);
+    assert.strictEqual(dati.idLavorazione, 0, 'dalla scheda non si sta lavorando a un volantino');
+});
+
+test('il browser sa disegnare solo alcuni formati', () => {
+    assert.strictEqual(Archivio.tipoAnteprimaDi('scatto.jpg'), 'image/jpeg');
+    assert.strictEqual(Archivio.tipoAnteprimaDi('scatto.PNG'), 'image/png');
+    assert.strictEqual(Archivio.tipoAnteprimaDi('scatto.psd'), null);
+    assert.strictEqual(Archivio.tipoAnteprimaDi('scatto.tif'), null);
+    assert.strictEqual(Archivio.tipoAnteprimaDi(null), null);
+});
+
+test('si vede cosa si sta per archiviare prima di scrivere', () => {
+    const vista = sorgente('Istanta/Views/SchedaArticolo/Index.cshtml');
+    const js = sorgente('Istanta/wwwroot/js/archivio.js');
+
+    assert.ok(vista.includes('data-azione="aggiungiFotoArticolo"'), 'serve il comando per iniziare');
+    assert.ok(vista.includes('data-azione="confermaFotoArticolo"') && vista.includes('data-azione="annullaFotoArticolo"'),
+        'l\'anteprima si conferma o si annulla');
+
+    const inizio = js.indexOf('AnteprimaFotoArticolo(campo) {');
+    const anteprima = js.slice(inizio, js.indexOf('AnnullaFotoArticolo() {', inizio));
+
+    assert.ok(!anteprima.includes('Call.doWithUpload'),
+        'guardare non deve scrivere: il caricamento parte solo dalla conferma');
+    assert.ok(js.indexOf('Call.doWithUpload("SyncFoto", "updateFotoFromIndd/0"', js.indexOf('ConfermaFotoArticolo() {')) > 0,
+        'il caricamento sta nella conferma');
+});
+
+// Le miniature arrivano da Olimpo con la sola larghezza fissata: senza un riquadro di misura
+// fissa ogni scheda veniva alta in modo diverso.
+test('le foto del prodotto stanno in un riquadro quadrato, senza tagli', () => {
+    const vista = sorgente('Istanta/Views/SchedaArticolo/Index.cshtml');
+    const css = sorgente('Istanta/wwwroot/css/site.css');
+
+    assert.strictEqual((vista.match(/riquadroFotoArticolo/g) || []).length >= 2, true,
+        'la primaria e le altre foto devono stare nello stesso riquadro');
+
+    const regola = css.slice(css.indexOf('.riquadroFotoArticolo {'));
+    assert.ok(/width:\s*150px/.test(regola) && /height:\s*150px/.test(regola), 'il riquadro e\' quadrato');
+    assert.ok(regola.includes('object-fit: contain'), 'l\'immagine ci sta dentro per intero');
+    assert.ok(!regola.includes('object-fit: cover'), 'cover taglierebbe i lati dello scatto');
+});

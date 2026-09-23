@@ -198,6 +198,24 @@ namespace Istanta.Utility
         }
 
         /// <summary>
+        /// Come nasce una foto appena caricata: in uso, oppure soltanto archiviata.
+        ///
+        /// Archiviarla e basta vuol dire tre cose insieme: non selezionarla, non attivarla e
+        /// non spegnere quella in uso. Le prime due da sole non bastano, perche' il caricamento
+        /// disattiva le altre foto attive prima ancora di creare la nuova, e l'articolo
+        /// resterebbe senza nessuna foto in uso (I20-985).
+        /// </summary>
+        public static (byte statoSelezione, bool attiva, bool spegniLeAltre) selezioneNuovaFoto(bool archiviaSenzaSelezionare)
+        {
+            if (archiviaSenzaSelezionare)
+            {
+                return ((byte)StatoSelezioneFoto.NonSelezionata, false, false);
+            }
+
+            return ((byte)StatoSelezioneFoto.Primaria, true, true);
+        }
+
+        /// <summary>
         /// La firma del gruppo presa dai record del tracciato, oppure quella dichiarata da chi
         /// salva quando di record non ce ne sono.
         ///

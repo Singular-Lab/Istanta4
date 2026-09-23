@@ -173,6 +173,22 @@ class Archivio {
             ME.CaricaNuovaFotoExtra($(this));
         });
 
+        pagina.on("click", "[data-azione='aggiungiFotoArticolo']", function () {
+            ME.AggiungiFotoArticolo();
+        });
+
+        pagina.on("change", "[data-azione='fileFotoArticoloScelto']", function () {
+            ME.AnteprimaFotoArticolo($(this));
+        });
+
+        pagina.on("click", "[data-azione='confermaFotoArticolo']", function () {
+            ME.ConfermaFotoArticolo();
+        });
+
+        pagina.on("click", "[data-azione='annullaFotoArticolo']", function () {
+            ME.AnnullaFotoArticolo();
+        });
+
         //Canale e area stanno sul pulsante Salva della stessa riga, dove le metteva la vista.
         pagina.on("click", "[data-azione='cronologiaModifiche']", function () {
             var salva = $(this).closest(".row").find("#bottoneSalva");
@@ -182,6 +198,44 @@ class Archivio {
         pagina.on("click", "[data-azione='salvaRevisione']", function () {
             ME.salvaRevisione($(this), null, $(this).attr("canale"), $(this).attr("area"));
         });
+    }
+
+    /// I20-985: il tipo con cui il browser sa disegnare questo file, oppure null.
+    /// Un psd non lo sa disegnare, e resta il caso che capita piu' spesso.
+    static tipoAnteprimaDi(nomeFile) {
+        var nome = typeof nomeFile === "string" ? nomeFile.toLowerCase() : "";
+        var mostrabili = {
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".png": "image/png",
+            ".webp": "image/webp",
+            ".gif": "image/gif"
+        };
+
+        for (var estensione in mostrabili) {
+            if (Object.prototype.hasOwnProperty.call(mostrabili, estensione) && nome.endsWith(estensione)) {
+                return mostrabili[estensione];
+            }
+        }
+
+        return null;
+    }
+
+    /// Quello che si manda per archiviare una foto nuova del prodotto.
+    ///
+    /// tipo 1 e' la foto del prodotto. archiviaSenzaSelezionare dice al server di non metterla
+    /// in uso: caricarla non vuol dire volerla, e senza quell'indicazione il server la
+    /// selezionerebbe spegnendo la primaria di adesso.
+    static datiNuovaFotoArticolo(codice, nomeFile) {
+        return {
+            codice: codice,
+            tipo: 1,
+            nomeFile: nomeFile,
+            idLavorazione: 0,
+            idRec: 0,
+            uploadMethod: 0,
+            archiviaSenzaSelezionare: true
+        };
     }
 
     /// I20-983: le foto extra che l'articolo ha di questo tipo. Il raggruppamento e' per nome
@@ -239,6 +293,91 @@ class Archivio {
             idRec: 0,
             uploadMethod: 0
         };
+    }
+
+    /// I20-985: apre la scelta del file per una foto nuova del prodotto.
+    AggiungiFotoArticolo() {
+        var campo = $("#fileNuovaFotoArticolo");
+        campo.val("");
+        campo.trigger("click");
+    }
+
+    /// Mostra cosa si sta per archiviare. Fino alla conferma non si scrive niente.
+    AnteprimaFotoArticolo(campo) {
+        var file = campo[0] != null && campo[0].files != null ? campo[0].files[0] : null;
+        if (file == null) {
+            return;
+        }
+
+        this.fileNuovaFotoArticolo = file;
+        $("#nomeNuovaFotoArticolo").text(file.name);
+
+        var tipo = Archivio.tipoAnteprimaDi(file.name);
+
+        if (this.urlAnteprimaFotoArticolo) {
+            try { URL.revokeObjectURL(this.urlAnteprimaFotoArticolo); } catch (e) { }
+            this.urlAnteprimaFotoArticolo = null;
+        }
+
+        if (tipo != null) {
+            this.urlAnteprimaFotoArticolo = URL.createObjectURL(file);
+            $("#imgNuovaFotoArticolo").attr("src", this.urlAnteprimaFotoArticolo).show();
+            $("#txtAnteprimaNuovaFotoArticolo").hide().text("");
+        }
+        else {
+            //Un riquadro vuoto sembrerebbe un guasto: si dice perche' l'immagine non c'e'.
+            $("#imgNuovaFotoArticolo").attr("src", "").hide();
+            $("#txtAnteprimaNuovaFotoArticolo").text("Anteprima non disponibile per questo formato").show();
+        }
+
+        $("#anteprimaNuovaFotoArticolo").show();
+    }
+
+    AnnullaFotoArticolo() {
+        this.fileNuovaFotoArticolo = null;
+
+        if (this.urlAnteprimaFotoArticolo) {
+            try { URL.revokeObjectURL(this.urlAnteprimaFotoArticolo); } catch (e) { }
+            this.urlAnteprimaFotoArticolo = null;
+        }
+
+        $("#fileNuovaFotoArticolo").val("");
+        $("#imgNuovaFotoArticolo").attr("src", "").show();
+        $("#txtAnteprimaNuovaFotoArticolo").hide().text("");
+        $("#nomeNuovaFotoArticolo").text("");
+        $("#anteprimaNuovaFotoArticolo").hide();
+    }
+
+    ConfermaFotoArticolo() {
+        let ME = this;
+        var file = this.fileNuovaFotoArticolo;
+
+        if (file == null) {
+            return;
+        }
+
+        var dati = Archivio.datiNuovaFotoArticolo($("#Codice").val(), file.name);
+
+        var fd = new FormData();
+        fd.append("file", file);
+        for (var chiave in dati) {
+            if (Object.prototype.hasOwnProperty.call(dati, chiave)) {
+                fd.append(chiave, dati[chiave]);
+            }
+        }
+
+        showLoading();
+        Call.doWithUpload("SyncFoto", "updateFotoFromIndd/0", "PUT", fd, this, function (result, sender) {
+            hideLoading();
+
+            if (result != null && result.esito === false) {
+                alert("Caricamento non riuscito: " + (result.error || "errore sconosciuto"));
+                return;
+            }
+
+            ME.AnnullaFotoArticolo();
+            location.reload();
+        });
     }
 
     /// Apre la scelta del file per il tipo chiesto. Il tipo si tiene sull'elemento, cosi' il
