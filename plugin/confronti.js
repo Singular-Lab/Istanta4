@@ -10,6 +10,9 @@ const NoRenderElementi = require('./noRenderElementi');
 const reportIntegritaAvvio = require('./reportIntegritaAvvio');
 const reportConfrontoCsv = require('./reportConfrontoCsv');
 const reportConteggi = require('./reportConteggi');
+const reportConfronti = require('./reportConfronti');
+const barraScorrimento = require('./barraScorrimento');
+const dissolvenza = require('./dissolvenza');
 
 const confronti = {
     async confrontoBox(box1, box2, forzaReimpaginazione = false){ //mode 0 -> cambio strutturale, mode 1 -> confrontoMassivo
@@ -1480,6 +1483,20 @@ const confronti = {
             return false;
         }
 
+        //Il report puo' chiudersi mentre l'operatore sta nella scheda di una sua referenza
+        //(succede al cambio di documento): la scheda va smontata, ma senza ricontrollare
+        //niente, perche' il report a cui il ricontrollo servirebbe non c'e' piu'.
+        if (this._schedaDalReport != null) {
+            const schedaAperta = this._schedaDalReport;
+            this._schedaDalReport = null;
+
+            if (schedaAperta.timer != null) {
+                clearInterval(schedaAperta.timer);
+            }
+
+            this._terminaSchedaDalReport();
+        }
+
         this._reportIntegritaAperto = false;
         this._documentoDelReport = "";
 
@@ -1502,6 +1519,955 @@ const confronti = {
         return true;
     },
 
+
+    //I20-981 (Lotto 4a): la scheda referenza aperta dal report. Non e' una copia della scheda:
+    //e' la scheda vera, mostrata al posto del report. Una copia avrebbe voluto dire duplicare
+    //il markup di index.html e i suoi id, cioe' due schede destinate ad allontanarsi; e in
+    //ogni caso i modal della scheda (info, noRender, cambia foto) svuotano #bodyModal, che e'
+    //dove vive il report: sotto la scheda il report non sopravvivrebbe comunque. Percio' il
+    //report si chiude e si riapre dal suo stato, che e' in memoria e su disco.
+
+    //Ogni quanto si controlla che la scheda sia ancora agganciata al suo box e che la
+    //navigazione resti bloccata. La scheda si ridisegna da sola e diversi suoi flussi
+    //liberano gli eventi uscendo: il blocco va riaffermato, non solo impostato.
+    INTERVALLO_VIGILANZA_SCHEDA: 600,
+    //Oltre questo tempo la rilettura della scheda dal server si considera persa: meglio
+    //lasciare il report com'era che restare appesi con il caricamento davanti.
+    ATTESA_MASSIMA_RILETTURA_SCHEDA: 20000,
+
+    schedaDalReportAperta() {
+        return this._schedaDalReport != null;
+    },
+
+    //I20-981: il tracciato di quello che la scheda aperta dal report fa davvero. Il collaudo
+    //vede il risultato ma non il percorso, e senza il percorso si tira a indovinare: qui ogni
+    //passo lascia una riga in logs/schedaDalReport.log nella cartella di lavorazione, oltre
+    //che in console. Non puo' mai fermare il flusso: se non riesce a scrivere, tace.
+    FILE_TRACCIATO_SCHEDA: "/logs/schedaDalReport.log",
+
+    _tracciaScheda(evento, dati) {
+        try {
+            const riga = "[" + new Date().toISOString() + "] " + evento +
+                (dati != null ? " | " + JSON.stringify(dati) : "");
+
+            console.log("SchedaDalReport " + riga);
+
+            const percorso = pathLavorazione + this.FILE_TRACCIATO_SCHEDA;
+            let contenuto = "";
+
+            try {
+                contenuto = fs.readFileSync(percorso, "utf8") || "";
+            }
+            catch (err) {
+                contenuto = "";
+            }
+
+            fs.writeFileSync(percorso, contenuto + riga + "\n");
+        }
+        catch (err) {
+            console.error("Tracciato della scheda non scritto:", err);
+        }
+    },
+
+    _descriviBox(box) {
+        try {
+            if (box == null) {
+                return { presente: false };
+            }
+
+            return {
+                presente: true,
+                valido: box.isValid === true,
+                id: box.isValid ? box.id : null,
+                pagina: box.isValid && box.parentPage != null ? box.parentPage.name : null
+            };
+        }
+        catch (err) {
+            return { presente: true, valido: false, errore: String(err) };
+        }
+    },
+
+    _descriviRecord(record) {
+        try {
+            const differenze = Array.isArray(record?.preAnalisi?.differenze) ? record.preAnalisi.differenze : [];
+            return {
+                codiceGruppo: record?.codiceGruppo || null,
+                inddId: record?.inddId ?? null,
+                refIdMappa: record?.elementoMappa?.refId ?? null,
+                numeroPagina: record?.numeroPagina ?? null,
+                duplicato: record?.duplicateInfo != null,
+                recordsScheda: Array.isArray(record?.schedaRef?.records) ? record.schedaRef.records.length : null,
+                differenze: differenze.map(d => (d?.label || "") + ": " + (d?.difference || "") + (d?.origine ? " [" + d.origine + "]" : "")),
+                errori: Array.isArray(record?.preAnalisi?.errors) ? record.preAnalisi.errors : []
+            };
+        }
+        catch (err) {
+            return { errore: String(err) };
+        }
+    },
+
+    _descriviDatiConfronto(records) {
+        try {
+            const dati = typeof datiPrimarioPerConfronto === "function" ? datiPrimarioPerConfronto(records) : null;
+            if (dati == null) {
+                return { primario: false, records: (records || []).length };
+            }
+
+            return {
+                primario: true,
+                records: (records || []).length,
+                sottogruppo: dati.primario?.sottogruppo != null,
+                compiledFields: (dati.compiledFields || []).map(c => c?.labelName),
+                deletedFields: (dati.deletedFields || []).length,
+                listaFoto: (dati.listaFoto || []).map(f => f?.nomeFoto),
+                fotoExtra: (dati.fotoExtra || []).length,
+                fotoExtraAuto: (dati.fotoExtraAuto || []).length,
+                noRender: (dati.tracciatoPrimario?.noRenderElementi || []).length
+            };
+        }
+        catch (err) {
+            return { errore: String(err) };
+        }
+    },
+
+    /// Porta la riga del record nella parte visibile dell'elenco e la evidenzia per un attimo,
+    /// con lo stesso gesto che il report usa per i duplicati. Il primo tentativo aspetta: in
+    /// UXP le misure lette subito dopo aver costruito l'interfaccia non sono attendibili.
+    _evidenziaRigaDelRecord(record, tentativi = 5) {
+        setTimeout(() => {
+            try {
+                const riga = this._rigaDelPayload(this._payloadIdDelRecord(record));
+
+                if (riga == null) {
+                    if (tentativi > 0) {
+                        this._evidenziaRigaDelRecord(record, tentativi - 1);
+                    }
+                    return;
+                }
+
+                this._scrollReportRowIntoView(riga);
+            }
+            catch (err) {
+                console.error("Riga del record non evidenziata:", err);
+            }
+        }, 80);
+    },
+
+    /// Dove sta la riga del record nella vista, dopo il ridisegno: c'e', in che pagina, a che
+    /// posizione, ed e' visibile? E' l'ultimo anello: il dato puo' essere giusto e la vista no.
+    _descriviRigaDelRecord(record) {
+        try {
+            const payloadId = this._payloadIdDelRecord(record);
+            const riga = this._rigaDelPayload(payloadId);
+
+            if (riga == null) {
+                return { rigaTrovata: false, payloadId };
+            }
+
+            const pagina = riga.dataset?.pageNumber || null;
+            const righeDellaPagina = document.querySelectorAll(
+                '[data-page-number="' + pagina + '"][data-record-type="' + (riga.dataset?.recordType || "") + '"][data-payload-id]');
+
+            let posizione = -1;
+            for (let i = 0; i < righeDellaPagina.length; i++) {
+                if (righeDellaPagina[i] === riga) {
+                    posizione = i + 1;
+                    break;
+                }
+            }
+
+            return {
+                rigaTrovata: true,
+                payloadId,
+                pagina,
+                posizioneNellaPagina: posizione + " di " + righeDellaPagina.length,
+                display: riga.style.display || "",
+                opacita: riga.style.opacity || "",
+                categoriaNelReport: this._categoriaDelRecord(record)
+            };
+        }
+        catch (err) {
+            return { errore: String(err) };
+        }
+    },
+
+    _dimensioniReport() {
+        const report = this._confrontoReportState?.report;
+        if (report == null) {
+            return null;
+        }
+
+        const conta = (chiave) => Array.isArray(report[chiave]) ? report[chiave].length : 0;
+        return {
+            cambiati: conta("recordCambiati"),
+            usciti: conta("recordUsciti"),
+            conErrori: conta("recordConErrori"),
+            giusti: conta("recordGiusti"),
+            nuoviRisolti: conta("recordNuoviRisolti"),
+            lista: this._confrontoReportState?.activeList || null
+        };
+    },
+
+    /// Il Trova: prima porta l'operatore sul box, poi gli apre la scheda di quella referenza
+    /// al posto del report.
+    async _apriSchedaDalReport(payloadId, payload) {
+        if (this._schedaDalReport != null) {
+            return;
+        }
+
+        const box = this._findElemento(payload);
+        if (box == null) {
+            return;
+        }
+
+        const dna = Utility.getDnaOfBox(box);
+        if (dna == null) {
+            messaggioUtente("Code CNF-70 Il box non ha un dna leggibile: la scheda non si puo' aprire", "error", false, 5);
+            return;
+        }
+
+        const record = payload?.record?._fullReportRecord || payload?.record;
+
+        this._schedaDalReport = {
+            payloadId,
+            payload,
+            record,
+            //Il box lo teniamo noi: la selezione dell'operatore va e viene, e anche la scheda
+            //la puo' perdere svuotandosi. Quello che conta e' se questo riferimento e' ancora
+            //valido, e quello si chiede al box, non a chi lo ha selezionato.
+            box,
+            codiceGruppo: dna.codice_gruppo,
+            idRec: dna.idRec,
+            timer: null,
+            riaggancioInCorso: false
+        };
+
+        this._tracciaScheda("apertura", {
+            payloadId,
+            tipo: payload?.tipo || null,
+            recordVisibileEraFiltrato: payload?.record?._fullReportRecord != null,
+            record: this._descriviRecord(record),
+            box: this._descriviBox(box),
+            dna: { codice: dna.codice, codiceGruppo: dna.codice_gruppo, idRec: dna.idRec },
+            report: this._dimensioniReport()
+        });
+
+        //Il report si chiude qui: il suo stato resta in _confrontoReportState e lo si riapre
+        //alla X. chiudiModal rimette visibile la schermata principale, che e' dove sta la
+        //scheda.
+        Utility.chiudiModal();
+
+        $("#refImage").show();
+        this._crChiusuraSchedaDalReport();
+        this._applicaBloccoSchedaDalReport();
+
+        showLoading("Caricamento scheda REF");
+        //La scheda deve sapere da dove arriva: le azioni strutturali della schermata di edit
+        //non si offrono a chi e' venuto qui a sistemare una segnalazione.
+        schedaRef.apertaDalReport = true;
+        schedaRef.setInvalidated(false);
+        schedaRef.initSchedaRef(this._refPerSchedaDalReport(box, dna));
+
+        //initSchedaRef libera gli eventi uscendo: da qui in avanti devono restare fermi, e il
+        //vigilante li riafferma ad ogni giro.
+        this._applicaBloccoSchedaDalReport();
+        this._schedaDalReport.timer = setInterval(
+            () => this._vigilaSchedaDalReport(), this.INTERVALLO_VIGILANZA_SCHEDA);
+    },
+
+    _refPerSchedaDalReport(box, dna) {
+        let pagina = -1;
+        let paginaRef = null;
+        let bounds = null;
+
+        try {
+            paginaRef = box.parentPage;
+            pagina = paginaRef == null ? -1 : parseInt(paginaRef.name);
+            bounds = box.geometricBounds;
+        }
+        catch (err) {
+            console.error("Pagina o dimensioni del box non leggibili:", err);
+        }
+
+        return schedaRef.refDalBoxPerReport(box, dna, { pagina, paginaRef, bounds });
+    },
+
+    /// La X: l'unica via d'uscita. Deselezionare non chiude niente, perche' sgruppamenti e
+    /// raggruppamenti deselezionano e riselezionano il box senza che l'operatore abbia finito.
+    _crChiusuraSchedaDalReport() {
+        $("#chiudiSchedaDalReport").remove();
+
+        const testata = $("#referenza");
+        testata.css("display", "flex");
+        testata.css("align-items", "center");
+        testata.css("justify-content", "space-between");
+
+        const bottone = $('<div id="chiudiSchedaDalReport">✕</div>');
+        bottone.css("color", "white");
+        bottone.css("cursor", "pointer");
+        bottone.css("padding", "0px 10px");
+        bottone.css("font-size", "14px");
+        bottone.on("click", () => this._chiudiSchedaDalReport());
+
+        testata.append(bottone);
+
+        const elemento = document.getElementById("chiudiSchedaDalReport");
+        if (elemento != null) {
+            Utility.impostaTooltip(elemento, "Chiudi la scheda e torna al report");
+        }
+    },
+
+    /// La barra resta sulla sola referenza e gli eventi restano fermi. Si riapplica ad ogni
+    /// giro perche' la scheda, ridisegnandosi, rimette in piedi quello che le appartiene.
+    _applicaBloccoSchedaDalReport() {
+        try {
+            schedaRef.DAL_REPORT_VOCI_BARRA_NASCOSTE.forEach(id => $("#" + id).hide());
+            schedaRef.DAL_REPORT_VOCI_SOTTOMENU_NASCOSTE.forEach(
+                tab => $(".subTab5").find('img[tab="' + tab + '"]').hide());
+
+            if (typeof indesignEvents !== "undefined" && indesignEvents?.setBusy) {
+                indesignEvents.setBusy(true);
+            }
+        }
+        catch (err) {
+            console.error("Blocco della navigazione non applicato:", err);
+        }
+    },
+
+    _vigilaSchedaDalReport() {
+        const stato = this._schedaDalReport;
+        if (stato == null) {
+            return;
+        }
+
+        this._applicaBloccoSchedaDalReport();
+
+        if (stato.riaggancioInCorso) {
+            return;
+        }
+
+        if (!schedaRef.serveRiaggancioDalReport(stato.box)) {
+            return;
+        }
+
+        stato.riaggancioInCorso = true;
+        this._riagganciaSchedaDalReport();
+    },
+
+    /// Reimpagina e cambi strutturali rifanno il box: con gli eventi fermi nessuno ripunta la
+    /// scheda, e allora la ripuntiamo noi, cercando il box nuovo per codice gruppo.
+    _riagganciaSchedaDalReport() {
+        const stato = this._schedaDalReport;
+        if (stato == null) {
+            return;
+        }
+
+        const box = this._resolveBoxByCodiceGruppo(stato.record);
+        const dna = box != null ? Utility.getDnaOfBox(box) : null;
+
+        this._tracciaScheda("riaggancio", {
+            boxPrecedente: this._descriviBox(stato.box),
+            boxNuovo: this._descriviBox(box),
+            dnaLetto: dna != null
+        });
+
+        if (box == null || dna == null) {
+            messaggioUtente("Code CNF-71 Il box non e' piu' in pagina: la scheda si chiude e il report si aggiorna", "warning", false, 6);
+            stato.riaggancioInCorso = false;
+            this._chiudiSchedaDalReport();
+            return;
+        }
+
+        try {
+            app.selection = [box];
+        }
+        catch (err) {
+            console.error("Errore selezione del box rifatto:", err);
+        }
+
+        //Una scheda morta a meta' resta occupata, e occupata rifiuterebbe di ripartire.
+        schedaRef.setBusy(false);
+        schedaRef.setInvalidated(false);
+
+        stato.box = box;
+
+        showLoading("Ricarico la scheda sul box rifatto");
+        schedaRef.initSchedaRef(this._refPerSchedaDalReport(box, dna));
+
+        stato.riaggancioInCorso = false;
+        this._applicaBloccoSchedaDalReport();
+    },
+
+    /// La chiusura: si ricontrolla la referenza, perche' l'operatore puo' averne risolto le
+    /// segnalazioni standoci dentro, e si torna al report aggiornato.
+    async _chiudiSchedaDalReport() {
+        const stato = this._schedaDalReport;
+        if (stato == null) {
+            return;
+        }
+
+        //Una volta sola: la X si puo' premere due volte, e il riaggancio puo' arrivarci nello
+        //stesso momento.
+        this._schedaDalReport = null;
+        if (stato.timer != null) {
+            clearInterval(stato.timer);
+        }
+
+        showLoading("Aggiorno la referenza nel report...");
+
+        this._tracciaScheda("chiusura:inizio", {
+            box: this._descriviBox(stato.box),
+            record: this._descriviRecord(stato.record),
+            report: this._dimensioniReport()
+        });
+
+        let piano = null;
+
+        try {
+            piano = await this._ricontrollaReferenzaDopoScheda(stato);
+        }
+        catch (err) {
+            console.error("Ricontrollo della referenza non riuscito:", err);
+            this._tracciaScheda("chiusura:eccezione", { errore: String(err), stack: err?.stack || null });
+            messaggioUtente("Code CNF-72 Ricontrollo della referenza non riuscito: il report resta com'era", "error", false, 6);
+        }
+
+        this._terminaSchedaDalReport();
+        hideLoading();
+
+        //Il report torna con la referenza ancora al suo posto: quello che il ricontrollo ha
+        //trovato risolto lo si vede andare via, non lo si trova gia' sparito.
+        this._riapriReportDopoScheda();
+        this._tracciaScheda("chiusura:reportRiaperto", { report: this._dimensioniReport(), pianoPresente: piano != null });
+
+        if (piano == null) {
+            return;
+        }
+
+        this._azioneReportInCorso = true;
+
+        try {
+            await this._mostraSegnalazioniRisolte(piano);
+            const prima = this._dimensioniReport();
+            piano.applica();
+            this._tracciaScheda("chiusura:applicato", {
+                prima,
+                dopo: this._dimensioniReport(),
+                record: this._descriviRecord(piano.record)
+            });
+            this._saveCurrentReportAndWhitelist();
+            this._refreshConfrontoReportUi();
+            this._tracciaScheda("chiusura:vista", this._descriviRigaDelRecord(piano.record));
+
+            //Il ridisegno riparte dall'alto: la riga, anche restando al suo posto, puo' essere
+            //finita fuori dallo schermo, e una riga che non si vede sembra sparita. Se il record
+            //e' ancora in un elenco visibile, lo si riporta sotto gli occhi e lo si evidenzia.
+            const categoriaFinale = this._categoriaDelRecord(piano.record);
+            if (categoriaFinale === "recordCambiati" || categoriaFinale === "recordUsciti") {
+                this._evidenziaRigaDelRecord(piano.record);
+            }
+        }
+        catch (err) {
+            console.error("Aggiornamento del report dopo la scheda non riuscito:", err);
+            this._tracciaScheda("chiusura:eccezioneApplicazione", { errore: String(err), stack: err?.stack || null });
+        }
+        finally {
+            this._azioneReportInCorso = false;
+        }
+    },
+
+    /// Fa vedere le segnalazioni che il ricontrollo ha trovato risolte: se non ne resta
+    /// nessuna se ne va la riga intera, altrimenti se ne vanno solo quelle.
+    async _mostraSegnalazioniRisolte(piano) {
+        const risolte = piano?.chiaviRisolte || [];
+        if (piano?.record == null || risolte.length === 0) {
+            return;
+        }
+
+        const riga = this._rigaDelPayload(this._payloadIdDelRecord(piano.record));
+        if (riga == null) {
+            return;
+        }
+
+        const restanti = this._chiaviSegnalazioniDelRecord(piano.record)
+            .filter(chiave => risolte.indexOf(chiave) < 0);
+
+        if (restanti.length === 0) {
+            await this._dissolviElementi(riga);
+            this._rimuoviDallaVista([riga]);
+            await this._lasciaRidisegnare();
+            return;
+        }
+
+        const elementi = [];
+
+        try {
+            const nodi = riga.querySelectorAll("[data-segnalazione-key]");
+            for (let i = 0; i < nodi.length; i++) {
+                if (risolte.indexOf(nodi[i].dataset.segnalazioneKey) >= 0) {
+                    elementi.push(nodi[i]);
+                }
+            }
+        }
+        catch (err) {
+            console.error("Segnalazioni risolte non trovate nella riga:", err);
+        }
+
+        await this._dissolviElementi(elementi);
+        this._rimuoviDallaVista(elementi);
+        await this._lasciaRidisegnare();
+    },
+
+    /// Gli elementi sfumati escono dalla vista senza aspettare il ridisegno, che arriva dopo
+    /// il salvataggio e li avrebbe tolti comunque.
+    _rimuoviDallaVista(elementi) {
+        (elementi || []).forEach(el => {
+            try {
+                if (el != null && el.parentNode != null) {
+                    el.parentNode.removeChild(el);
+                }
+            }
+            catch (err) {
+                //Un elemento gia' tolto dal ridisegno non e' un errore.
+            }
+        });
+    },
+
+    /// La riga del record dopo che il report si e' ridisegnato: i payload sono altri, quindi
+    /// si cerca per record, non per identificativo.
+    _payloadIdDelRecord(record) {
+        if (record == null || this._confrontoReportStore == null) {
+            return null;
+        }
+
+        let trovato = null;
+
+        this._confrontoReportStore.forEach((payload, id) => {
+            if (trovato != null) {
+                return;
+            }
+
+            const candidato = payload?.record?._fullReportRecord || payload?.record;
+            if (candidato === record || this._sameReportRecord(candidato, record)) {
+                trovato = id;
+            }
+        });
+
+        return trovato;
+    },
+
+    _terminaSchedaDalReport() {
+        try {
+            $("#chiudiSchedaDalReport").remove();
+            $("#referenza").css("display", "");
+            $("#referenza").css("justify-content", "");
+
+            schedaRef.apertaDalReport = false;
+            schedaRef.setInvalidated(true);
+            schedaRef.svuotaRef();
+            schedaRef.resetRefInterface();
+
+            //L'interfaccia torna come quando non c'e' niente di selezionato: e' lo stato che il
+            //plugin conosce gia', non uno nuovo inventato qui.
+            $("#homeImage").show();
+            $("#menaboTab").show();
+            $("#utilityImage").show();
+            $("#refImage").hide();
+            $("#raggruppaImage").hide();
+            $("#grigliaTab").hide();
+            schedaRef.DAL_REPORT_VOCI_SOTTOMENU_NASCOSTE.forEach(
+                tab => $(".subTab5").find('img[tab="' + tab + '"]').show());
+
+            jsIndexControls.changeSubMenu($("#homeImage").attr("subTab"));
+            jsIndexControls.changeImage($("#homeImage"));
+        }
+        catch (err) {
+            console.error("Chiusura della scheda dal report non completata:", err);
+        }
+    },
+
+    _riapriReportDopoScheda() {
+        const state = this._confrontoReportState;
+        if (state == null) {
+            return;
+        }
+
+        this._saveCurrentReportAndWhitelist();
+
+        this.compilaReportConfronto(state.report, {
+            wrapper: {
+                createdAt: state.createdAt,
+                createdAtLabel: state.createdAtLabel,
+                report: state.report,
+                uiPrefs: state.uiPrefs
+            },
+            skipSave: true,
+            activeList: state.activeList,
+            activeTab: state.activeTab
+        });
+    },
+
+    /// Il ricontrollo di una sola referenza alla chiusura della scheda. La scheda si rilegge
+    /// dal server e quel dato diventa la verita': sistemando una segnalazione l'operatore
+    /// allinea il box al server, e se la lista restasse indietro il report continuerebbe a
+    /// giudicare il box con un dato che non e' piu' quello vero. Per questo il record riletto
+    /// prende il posto di quello in lista, e la preanalisi si rifa' per intero: dice tutto
+    /// quello che c'e', non solo quello che se ne va.
+    /// Non applica niente: torna il piano, cosi' chi chiama puo' far vedere le segnalazioni
+    /// che se ne stanno andando prima che se ne vadano davvero.
+    async _ricontrollaReferenzaDopoScheda(stato) {
+        const state = this._confrontoReportState;
+        const record = stato?.record;
+
+        if (state == null || record == null) {
+            return null;
+        }
+
+        //Nella whitelist le segnalazioni stanno parcheggiate apposta: ricontrollarle da qui
+        //vorrebbe dire rimettere in circolo quello che l'operatore ha messo da parte, e per
+        //giunta in un elenco, quello del report, dove quel record non sta.
+        if (state.activeList === "whitelist") {
+            this._tracciaScheda("ricontrollo:saltato", { motivo: "vista whitelist" });
+            return null;
+        }
+
+        //Il box e' quello che ci siamo tenuti aprendo la scheda, o quello su cui l'abbiamo
+        //riagganciata: non lo si chiede alla selezione, che nel frattempo l'operatore puo'
+        //aver spostata, ne' alla scheda, che svuotandosi lo perde.
+        let box = schedaRef.serveRiaggancioDalReport(stato.box) ? null : stato.box;
+        let viaDelBox = box != null ? "memoria" : null;
+
+        if (box == null) {
+            //Prima di dire che non c'e' piu' lo si cerca come lo cerca il Trova: per id e poi
+            //per codice gruppo. Dichiararlo sparito costa al record l'uscita dal report.
+            box = this._resolveBoxFromRecord(record);
+            viaDelBox = box != null ? "ricerca" : "nessuno";
+        }
+
+        this._tracciaScheda("ricontrollo:box", { via: viaDelBox, box: this._descriviBox(box) });
+
+        if (box == null) {
+            //Il box non c'e' piu': la referenza esce dal report e ricompare fra le Nuove, che
+            //si calcolano per differenza da chi nel report c'e' gia'.
+            return {
+                record,
+                chiaviRisolte: this._chiaviSegnalazioniDelRecord(record),
+                applica: () => this._rimuoviRecordDalReport(record)
+            };
+        }
+
+        const records = await this._leggiSchedaRefAggiornata(stato.codiceGruppo, stato.idRec);
+
+        this._tracciaScheda("ricontrollo:schedaRiletta", {
+            richiesta: { codiceGruppo: stato.codiceGruppo, idRec: stato.idRec },
+            dalServer: this._descriviDatiConfronto(records),
+            dellaLista: this._descriviDatiConfronto(record?.schedaRef?.records)
+        });
+
+        if (records == null || records.length === 0) {
+            messaggioUtente("Code CNF-73 Scheda della referenza non riletta: il report resta com'era", "warning", false, 6);
+            return null;
+        }
+
+        const preAnalisi = await preAnalisiBoxMappato(records, record.elementoMappa, box);
+
+        this._tracciaScheda("ricontrollo:preanalisi", {
+            nulla: preAnalisi == null,
+            differenze: (preAnalisi?.differenze || []).map(d => (d?.label || "") + ": " + (d?.difference || "")),
+            errori: preAnalisi?.errors || []
+        });
+
+        if (preAnalisi == null) {
+            messaggioUtente("Code CNF-74 Referenza non ricontrollata: il report resta com'era", "warning", false, 6);
+            return null;
+        }
+
+        preAnalisi.differenze = reportIntegritaAvvio.differenzeDopoRicontrollo(
+            preAnalisi.differenze,
+            reportIntegritaAvvio.differenzeDiConfronto(record),
+            record.duplicateInfo);
+
+        const chiaviPrima = this._chiaviSegnalazioniDelRecord(record);
+        const chiaviDopo = new Set(preAnalisi.differenze.map(d => this._getSegnalazioneKey(d)));
+
+        this._diagnosticaRicontrollo(record, records, chiaviPrima, preAnalisi);
+
+        //Il dato riletto puo' non avere niente da confrontare: allora lo zero differenze non
+        //dice "a posto", dice "non ho guardato".
+        const dati = typeof datiPrimarioPerConfronto === "function"
+            ? datiPrimarioPerConfronto(records)
+            : null;
+
+        const esito = reportIntegritaAvvio.esitoChiusuraScheda({
+            boxPresente: true,
+            preAnalisi,
+            haDuplicato: record.duplicateInfo != null,
+            nienteDaConfrontare: !reportIntegritaAvvio.ciSonoDatiDaConfrontare(dati)
+        });
+
+        if (esito.azione === "invariato") {
+            this._avvisaRicontrolloNonRiuscito(esito.motivo);
+        }
+
+        //Si fa vedere andare via solo cio' che si e' visto risolvere davvero.
+        const chiaviRisolte = esito.azione === "invariato"
+            ? []
+            : chiaviPrima.filter(chiave => !chiaviDopo.has(chiave));
+
+        this._tracciaScheda("ricontrollo:esito", {
+            esito,
+            chiaviPrima,
+            chiaviDopo: Array.from(chiaviDopo),
+            chiaviRisolte
+        });
+
+        return {
+            record,
+            chiaviRisolte,
+            applica: () => {
+                //Il riferimento al box si aggiorna comunque: quello lo abbiamo in mano.
+                this._aggiornaRiferimentiBox(record, box);
+
+                //Di quello che non abbiamo potuto verificare non si scrive niente: ne' l'analisi
+                //del record, ne' i suoi dati, ne' la lista del kit.
+                if (esito.azione === "invariato") {
+                    return;
+                }
+
+                record.schedaRef = { records };
+                record.preAnalisi = preAnalisi;
+                this._aggiornaListaKitConRecordFreschi(records);
+
+                //Se il record resta nella stessa categoria non lo si tocca: togliere e
+                //rimettere lo manderebbe in fondo al suo gruppo di pagina, e l'operatore, che lo
+                //cercherebbe dov'era, lo darebbe per sparito. E' successo.
+                const categoriaAttuale = this._categoriaDelRecord(record);
+
+                if (esito.azione === "sposta" && esito.categoria === categoriaAttuale) {
+                    this._tracciaScheda("report:recordAggiornatoInPosto", { categoria: categoriaAttuale });
+                }
+                else {
+                    this._rimuoviRecordDalReport(record);
+
+                    if (esito.azione === "sposta" && esito.categoria != null) {
+                        const state2 = this._confrontoReportState;
+                        if (state2 != null && state2.report != null) {
+                            state2.report[esito.categoria] = state2.report[esito.categoria] || [];
+                            state2.report[esito.categoria].push(record);
+                        }
+                    }
+                }
+
+                this._removeConfrontoPayload(stato.payloadId);
+            }
+        };
+    },
+
+    /// Quando il ricontrollo non decide, l'operatore deve sapere perche': altrimenti crede di
+    /// aver sistemato qualcosa e il report, restando fermo, sembra rotto.
+    _avvisaRicontrolloNonRiuscito(motivo) {
+        if (motivo === "errori") {
+            messaggioUtente("Code CNF-75 Il ricontrollo della referenza e' andato in errore: il report resta com'era", "warning", false, 6);
+            return;
+        }
+
+        if (motivo === "nienteDaConfrontare") {
+            messaggioUtente("Code CNF-76 Il dato riletto non ha campi da confrontare: il report resta com'era", "warning", false, 6);
+        }
+    },
+
+    _chiaviSegnalazioniDelRecord(record) {
+        const differenze = Array.isArray(record?.preAnalisi?.differenze) ? record.preAnalisi.differenze : [];
+        return differenze.map(diff => this._getSegnalazioneKey(diff));
+    },
+
+    /// Una segnalazione che se ne va senza che l'operatore abbia fatto niente e' un fatto da
+    /// spiegare, non da subire: qui si scrive cosa ha risposto il server rispetto a cosa
+    /// diceva la lista, cosi' il collaudo dice come stanno le cose invece di farmele indovinare.
+    _diagnosticaRicontrollo(record, recordsFreschi, chiaviPrima, preAnalisi) {
+        try {
+            const campiDaGuardare = ["compiledFields", "deletedFields", "Foto.Nome", "Foto.Hash", "Foto.Extra", "Foto.ExtraAuto", "membriGruppoFoto"];
+
+            const primarioFresco = (recordsFreschi || []).find(r => r?.recordInTracciato?.StatoSelezione == 1);
+            const primarioLista = (record?.schedaRef?.records || []).find(r => r?.recordInTracciato?.StatoSelezione == 1);
+
+            const tracciatoFresco = primarioFresco?.sottogruppo || primarioFresco?.recordInTracciato || {};
+            const tracciatoLista = primarioLista?.sottogruppo || primarioLista?.recordInTracciato || {};
+
+            const diversi = campiDaGuardare.filter(campo => {
+                try {
+                    return JSON.stringify(tracciatoFresco[campo]) !== JSON.stringify(tracciatoLista[campo]);
+                }
+                catch (err) {
+                    return true;
+                }
+            });
+
+            const differenzeDopo = preAnalisi != null ? preAnalisi.differenze || [] : [];
+            const erroriAnalisi = preAnalisi != null ? preAnalisi.errors || [] : [];
+
+            console.log("Ricontrollo referenza " + (record?.codiceGruppo || "") +
+                ": segnalazioni prima " + chiaviPrima.length + ", dopo " + differenzeDopo.length +
+                "; errori dell'analisi " + erroriAnalisi.length +
+                "; record dal server " + (recordsFreschi || []).length +
+                "; campi diversi fra server e lista: " + (diversi.length > 0 ? diversi.join(", ") : "nessuno"));
+
+            if (erroriAnalisi.length > 0) {
+                console.warn("Ricontrollo referenza " + (record?.codiceGruppo || "") +
+                    ": l'analisi e' finita in errore, il report non si tocca. " + erroriAnalisi.join(" | "));
+            }
+
+            if (diversi.length === 0 && differenzeDopo.length < chiaviPrima.length) {
+                console.warn("Ricontrollo referenza " + (record?.codiceGruppo || "") +
+                    ": segnalazioni risolte con dato identico a quello della lista. Il box e' cambiato, oppure il confronto non e' lo stesso del report.");
+            }
+        }
+        catch (err) {
+            console.error("Diagnostica del ricontrollo non riuscita:", err);
+        }
+    },
+
+    /// Il dato riletto sostituisce quello della lista del kit: da qui in poi il resto del
+    /// report, l'elenco dei Nuovi e il prossimo Fix guardano lo stesso dato che ha deciso il
+    /// ricontrollo.
+    _aggiornaListaKitConRecordFreschi(recordsFreschi) {
+        try {
+            const percorso = pathLavorazione + "/listaKit" + idKitLavorazione + ".json";
+            const lista = readFile(percorso);
+
+            if (lista == null || !Array.isArray(lista.records)) {
+                console.warn("Lista del kit non aggiornata: file non leggibile o senza record");
+                return false;
+            }
+
+            const esito = reportIntegritaAvvio.sostituisciRecordNellaLista(lista.records, recordsFreschi);
+
+            if (esito.sostituiti === 0) {
+                console.warn("Lista del kit non aggiornata: nessun record corrispondente");
+                return false;
+            }
+
+            lista.records = esito.records;
+            fs.writeFileSync(percorso, JSON.stringify(lista));
+
+            //La copia in memoria deve seguire il file, altrimenti l'elenco dei Nuovi e il
+            //tracciato continuerebbero a mostrare il dato vecchio fino al prossimo download.
+            if (this._confrontoReportState != null) {
+                this._confrontoReportState.listaKit = lista;
+            }
+
+            try {
+                contenutoKitInLavorazione = lista;
+            }
+            catch (err) {
+                console.error("Copia in memoria della lista non aggiornata:", err);
+            }
+
+            console.log("Lista del kit aggiornata dal server: " + esito.sostituiti + " record");
+            return true;
+        }
+        catch (err) {
+            console.error("Lista del kit non aggiornata:", err);
+            return false;
+        }
+    },
+
+    /// L'elenco del report in cui il record sta adesso, o null se non sta in nessuno.
+    _categoriaDelRecord(record) {
+        const report = this._confrontoReportState?.report;
+        if (report == null || record == null) {
+            return null;
+        }
+
+        const target = record._fullReportRecord || record;
+        const categorie = ["recordCambiati", "recordUsciti", "recordConErrori", "recordGiusti", "recordNuoviRisolti"];
+
+        for (let i = 0; i < categorie.length; i++) {
+            const elenco = report[categorie[i]];
+            if (Array.isArray(elenco) && elenco.some(item => this._sameReportRecord(item, target))) {
+                return categorie[i];
+            }
+        }
+
+        return null;
+    },
+
+    _rimuoviRecordDalReport(record) {
+        const state = this._confrontoReportState;
+        if (state == null || state.report == null) {
+            return;
+        }
+
+        const tolti = {};
+
+        ["recordCambiati", "recordUsciti", "recordConErrori", "recordGiusti", "recordNuoviRisolti"]
+            .forEach(chiave => {
+                tolti[chiave] = this._removeRecordFromArray(state.report[chiave], record) ? 1 : 0;
+            });
+
+        this._tracciaScheda("report:recordTolto", { tolti });
+    },
+
+    /// Il box puo' essere un altro rispetto a quello con cui il report e' nato: chi lo cerchera'
+    /// domani deve trovare questo.
+    _aggiornaRiferimentiBox(record, box) {
+        try {
+            record.inddId = box.id;
+
+            if (record.elementoMappa != null) {
+                record.elementoMappa.refId = box.id;
+            }
+
+            const pagina = box.parentPage != null ? box.parentPage.name : null;
+            if (pagina != null) {
+                record.numeroPagina = pagina;
+
+                if (record.elementoMappa != null) {
+                    record.elementoMappa.pagina = pagina;
+                    record.elementoMappa.paginaAttuale = pagina;
+                }
+            }
+        }
+        catch (err) {
+            console.error("Riferimenti del box non aggiornati:", err);
+        }
+    },
+
+    /// La scheda si rilegge dal server per quella sola referenza: i record con cui il report e'
+    /// nato sono di prima che l'operatore ci mettesse mano.
+    _leggiSchedaRefAggiornata(codiceGruppo, idRec) {
+        return new Promise(resolve => {
+            let risposto = false;
+
+            const rispondi = (valore) => {
+                if (risposto) {
+                    return;
+                }
+                risposto = true;
+                resolve(valore);
+            };
+
+            //XMLHttpRequestClient.abort() non interrompe davvero: la richiesta tardiva la si
+            //lascia cadere, ma l'attesa non deve tenere fermo l'operatore.
+            setTimeout(() => rispondi(null), this.ATTESA_MASSIMA_RILETTURA_SCHEDA);
+
+            try {
+                schedaRef.getSchedaRef(codiceGruppo, (errore, risultato) => {
+                    if (errore != null || risultato == null || (risultato.error != null && risultato.error !== "")) {
+                        console.error("Rilettura della scheda non riuscita:", errore || risultato?.error);
+                        rispondi(null);
+                        return;
+                    }
+
+                    rispondi(risultato.records || null);
+                }, idRec);
+            }
+            catch (err) {
+                console.error("Rilettura della scheda non partita:", err);
+                rispondi(null);
+            }
+        });
+    },
 
     compilaReportConfronto(report, options = {}) {
         const wrapper = this._normalizeReportIntegritaWrapper(options.wrapper || null);
@@ -1634,11 +2600,18 @@ const confronti = {
         //I20-981: i pannelli si costruiscono per primi, perche' le linguette portano il
         //conteggio di cio' che i pannelli mostrano davvero. In vista whitelist le liste sono
         //altre, e un numero preso dal report intero direbbe il falso.
+        //I20-981: le differenze sui campi osservati servono ai nuovi e al csv, quindi si
+        //calcolano prima dei pannelli e restano indicizzate per presenza.
+        this._confrontoReportState.confronti = this._calcolaConfronti();
+        this._indiceConfronti = reportConfronti.indicizzaPerPresenza(this._confrontoReportState.confronti.voci);
+
         const recordsCambiati = this._getCurrentReportRecords("recordCambiati");
         const recordsUsciti = this._getCurrentReportRecords("recordUsciti");
 
         const changedPanel = this._buildPanelCambiati(recordsCambiati);
         const removedPanel = this._buildPanelEliminati(recordsUsciti);
+        const confrontiPanel = this._buildPanelConfronti();
+
         const newPanel = this._buildPanelNuovi(this._confrontoReportState.report);
 
         const conteggi = reportConteggi.conteggiVisibili(
@@ -1649,11 +2622,13 @@ const confronti = {
         const changedTab = this._crTabButton(reportConteggi.etichettaLinguetta("Cambiati", conteggi.cambiati), true, "Cambiati");
         const removedTab = this._crTabButton(reportConteggi.etichettaLinguetta("Eliminati", conteggi.eliminati), false, "Eliminati");
         const newTab = this._crTabButton(reportConteggi.etichettaLinguetta("Nuovi", conteggi.nuovi), false, "Nuovi");
+        const confrontiTab = this._crTabButton("Confronti", false, "Confronti");
 
         const panels = [
             { button: changedTab, panel: changedPanel },
             { button: removedTab, panel: removedPanel },
-            { button: newTab, panel: newPanel }
+            { button: newTab, panel: newPanel },
+            { button: confrontiTab, panel: confrontiPanel }
         ];
 
         const activateTab = (activeIndex) => {
@@ -1672,14 +2647,17 @@ const confronti = {
         changedTab.addEventListener("click", () => activateTab(0));
         removedTab.addEventListener("click", () => activateTab(1));
         newTab.addEventListener("click", () => activateTab(2));
+        confrontiTab.addEventListener("click", () => activateTab(3));
 
         tabsRoot.header.appendChild(changedTab);
         tabsRoot.header.appendChild(removedTab);
         tabsRoot.header.appendChild(newTab);
+        tabsRoot.header.appendChild(confrontiTab);
 
         tabsRoot.content.appendChild(changedPanel);
         tabsRoot.content.appendChild(removedPanel);
         tabsRoot.content.appendChild(newPanel);
+        tabsRoot.content.appendChild(confrontiPanel);
 
         body.appendChild(metaBar);
         body.appendChild(tabsRoot.root);
@@ -1874,6 +2852,10 @@ const confronti = {
                 const dati = reportConfrontoCsv.datiRecordPerCsv(raw);
                 const dettagli = dettagliDelRecord(record) || [{ campo: "", dettaglio: "" }];
 
+                //I20-981: i cambiamenti sui campi osservati stanno tutti in una colonna sola,
+                //ripetuta su ogni riga della referenza: in Excel si filtra "non vuota".
+                const confronto = this._testoConfrontoDelRecord(record);
+
                 dettagli.forEach(dettaglio => {
                     voci.push({
                         stato: stato,
@@ -1884,16 +2866,21 @@ const confronti = {
                         reparto: dati.reparto,
                         descrizione: dati.descrizione,
                         campo: dettaglio?.campo || "",
-                        dettaglio: dettaglio?.dettaglio || ""
+                        dettaglio: dettaglio?.dettaglio || "",
+                        confronto: confronto
                     });
                 });
             });
         };
 
         aggiungi("Cambiato", report?.recordCambiati, (record) => {
-            const differenze = Array.isArray(record?.preAnalisi?.differenze) ? record.preAnalisi.differenze : [];
+            const tutte = Array.isArray(record?.preAnalisi?.differenze) ? record.preAnalisi.differenze : [];
+            //Le differenze sui campi osservati hanno la loro colonna: qui restano le
+            //segnalazioni dell'analisi di integrita', altrimenti si leggerebbero due volte.
+            const differenze = tutte.filter(d => d?.origine !== "confronto");
+
             if (differenze.length === 0) {
-                return [{ campo: "", dettaglio: "Differenza non specificata" }];
+                return [{ campo: "", dettaglio: tutte.length > 0 ? "" : "Differenza non specificata" }];
             }
 
             return differenze.map(diff => ({
@@ -1928,25 +2915,68 @@ const confronti = {
                 reparto: dati.reparto,
                 descrizione: row.descrizione || dati.descrizione,
                 campo: "",
-                dettaglio: "Presente nel tracciato ma non in impaginato"
+                dettaglio: "Presente nel tracciato ma non in impaginato",
+                confronto: row.confronto || ""
             });
         });
 
         return reportConfrontoCsv.componiCsv(voci);
     },
 
-    _getReportNuoviRows(report) {
-        let listaTracciato = readFile(pathLavorazione + "/listaKit" + idKitLavorazione + ".json");
-        if (typeof listaTracciato === "string") {
+    //I20-981: la lista del kit si legge una volta sola per ogni apertura del report.
+    //La leggevano il pannello dei nuovi e il csv, ognuno per conto suo, e su un volantino sono
+    //parecchi megabyte di json; adesso la sezione Confronti sarebbe stata la terza.
+    _leggiListaKitLocale() {
+        const stato = this._confrontoReportState;
+
+        if (stato != null && stato.listaKit !== undefined) {
+            return stato.listaKit;
+        }
+
+        let lista = readFile(pathLavorazione + "/listaKit" + idKitLavorazione + ".json");
+
+        if (typeof lista === "string") {
             try {
-                listaTracciato = JSON.parse(listaTracciato);
-            } catch (err) {
-                console.error("Errore parse listaKit per export CSV:", err);
-                listaTracciato = [];
+                lista = JSON.parse(lista);
+            }
+            catch (err) {
+                console.error("Errore parse listaKit:", err);
+                lista = null;
             }
         }
 
+        if (stato != null) {
+            stato.listaKit = lista;
+        }
+
+        return lista;
+    },
+
+    /// I record della lista del kit, o un elenco vuoto se la lista non c'e'.
+    _recordsListaKit() {
+        const lista = this._leggiListaKitLocale();
+
+        if (Array.isArray(lista)) {
+            return lista;
+        }
+
+        return Array.isArray(lista?.records) ? lista.records : [];
+    },
+
+    _getReportNuoviRows(report) {
+        const listaTracciato = this._leggiListaKitLocale();
+
         return this._estraiNuoviDaLista(report, listaTracciato);
+    },
+
+    /// I cambiamenti sui campi osservati di una referenza, in una riga sola per il csv.
+    _testoConfrontoDelRecord(record) {
+        const differenze = Array.isArray(record?.preAnalisi?.differenze) ? record.preAnalisi.differenze : [];
+
+        return differenze
+            .filter(d => d?.origine === "confronto")
+            .map(d => (d.label || "") + ": " + (d.difference || ""))
+            .join(" | ");
     },
 
     _getReportRecordRaw(record) {
@@ -2365,6 +3395,17 @@ const confronti = {
         const state = this._confrontoReportState;
         if (!state) return;
 
+        //Il salvataggio e' sincrono e il file e' grosso: quanto costa lo dice il tracciato.
+        const inizioSalvataggio = Date.now();
+        try {
+            this._salvaReportEWhitelist(state);
+        }
+        finally {
+            this._tracciaScheda("report:salvato", { ms: Date.now() - inizioSalvataggio });
+        }
+    },
+
+    _salvaReportEWhitelist(state) {
         const saved = this.salvaReportIntegritaLocale(state.report, {
             createdAt: state.createdAt,
             uiPrefs: state.uiPrefs || {}
@@ -2380,6 +3421,17 @@ const confronti = {
         const state = this._confrontoReportState;
         if (!state) return;
 
+        //Il ridisegno rifa' tutto l'elenco: quanto costa lo dice il tracciato.
+        const inizioRidisegno = Date.now();
+        try {
+            this._ricostruisciReport(state);
+        }
+        finally {
+            this._tracciaScheda("report:ridisegnato", { ms: Date.now() - inizioRidisegno });
+        }
+    },
+
+    _ricostruisciReport(state) {
         this.compilaReportConfronto(state.report, {
             createdAt: state.createdAt,
             activeTab: state.activeTab,
@@ -2656,8 +3708,17 @@ const confronti = {
                     diffList.style.minWidth = "0";
                     diffList.style.width = "100%";
 
-                    const differenze = Array.isArray(item?.preAnalisi?.differenze) ? item.preAnalisi.differenze : [];
-                    if (differenze.length === 0) {
+                    //I20-981: nella stessa riga convivono due cose diverse. Le segnalazioni
+                    //dell'analisi di integrita' dicono che il box in pagina non corrisponde al
+                    //dato; le differenze sui campi osservati dicono che e' cambiato qualcosa
+                    //che non tocca il box ma puo' cambiare la pagina in cui va. Si vedono
+                    //separate perche' chiedono all'operatore due decisioni diverse.
+                    const tutteLeDifferenze = Array.isArray(item?.preAnalisi?.differenze) ? item.preAnalisi.differenze : [];
+                    const segnalazioniIntegrita = tutteLeDifferenze.filter(d => d?.origine !== "confronto");
+                    const differenzeConfronto = tutteLeDifferenze.filter(d => d?.origine === "confronto");
+
+                    const differenze = segnalazioniIntegrita;
+                    if (tutteLeDifferenze.length === 0) {
                         const emptyDiff = document.createElement("div");
                         emptyDiff.textContent = "Nessuna differenza rilevata";
                         emptyDiff.style.opacity = "0.7";
@@ -2680,6 +3741,9 @@ const confronti = {
                             else {
                                 diffRow.textContent = diff?.difference || "-";
                             }
+                            //La chiave della segnalazione resta attaccata alla riga: serve per
+                            //far vedere quale se ne sta andando dopo un ricontrollo.
+                            diffRow.dataset.segnalazioneKey = this._getSegnalazioneKey(diff);
                             diffRow.style.fontSize = "11px";
                             diffRow.style.lineHeight = "1.3";
                             diffRow.style.whiteSpace = "normal";
@@ -2688,6 +3752,10 @@ const confronti = {
                             diffRow.style.minWidth = "0";
                             diffList.appendChild(diffRow);
                         });
+                    }
+
+                    if (differenzeConfronto.length > 0) {
+                        diffList.appendChild(this._crRiquadroConfronto(differenzeConfronto));
                     }
 
                     if (item?._hasWhitelistOtherSegnalazioni) {
@@ -2741,7 +3809,12 @@ const confronti = {
                     btnInfo.addEventListener("click", (ev) => this._onConfrontoAction(ev, "info"));
 
                     if (this._confrontoReportState?.activeList !== "whitelist") {
-                        actions.appendChild(btnFix);
+                        //Il Fix rifa' il box a partire dal dato: con sole differenze sui campi
+                        //osservati in pagina non c'e' niente da rifare, e offrirlo sarebbe un
+                        //invito a rimettere mano a un box che va bene com'e'.
+                        if (segnalazioniIntegrita.length > 0) {
+                            actions.appendChild(btnFix);
+                        }
                         actions.appendChild(btnResolve);
                     }
                     actions.appendChild(btnWhitelist);
@@ -2889,7 +3962,312 @@ const confronti = {
         return panel;
     },
 
+    //I20-981: una segnalazione che se ne va lo deve far vedere. In UXP la proprieta' opacity
+    //si scrive e si rilegge ma non si ridisegna: il tracciato del collaudo ha mostrato dieci
+    //passi accettati dal motore senza che a schermo cambiasse niente. I colori invece si
+    //ridisegnano, e il plugin lo sa gia' dal lampo verde della copia e dal bordo arancione dei
+    //duplicati. La dissolvenza quindi porta a zero l'alfa dei colori di testo, sfondo e bordi,
+    //e spegne le immagini a meta' strada. I conti stanno in dissolvenza.js.
+
+    /// Mentre una riga sta sparendo non si accetta nessun'altra azione del report. I pulsanti
+    /// delle righe sono immagini, non bottoni: disabled non esiste e pointer-events in UXP non
+    /// e' verificabile, quindi il blocco vero e' questo interruttore, che non dipende da come
+    /// il motore tratta lo stile.
+    azioneReportInCorso() {
+        return this._azioneReportInCorso === true;
+    },
+
+    PROPRIETA_COLORE_DA_ATTENUARE: ["color", "backgroundColor", "borderTopColor", "borderRightColor", "borderBottomColor", "borderLeftColor"],
+
+    /// I bersagli della dissolvenza: l'elemento e tutti i suoi discendenti, ciascuno con i
+    /// colori che il motore gli attribuisce adesso. Si leggono una volta sola, all'inizio: da
+    /// li' in poi si scrive soltanto.
+    _bersagliDissolvenza(radice) {
+        const bersagli = [];
+        const elementi = [radice];
+
+        try {
+            const figli = radice.querySelectorAll("*");
+            for (let i = 0; i < figli.length; i++) {
+                elementi.push(figli[i]);
+            }
+        }
+        catch (err) {
+            console.error("Discendenti della riga non letti:", err);
+        }
+
+        //Il colore del testo il motore spesso non lo dice: per gli elementi che lo ereditano
+        //getComputedStyle torna una forma che non e' un colore. Si prende allora quello scritto
+        //sull'antenato piu' vicino che ne ha uno, e in mancanza il grigio scuro del report.
+        //Senza questo le scritte delle segnalazioni restavano ferme mentre il resto sfumava.
+        const coloreTestoDiBase = this._coloreTestoDegliAntenati(radice) || dissolvenza.COLORE_TESTO_DI_BASE;
+        let colorePrimoTestoLetto = null;
+
+        elementi.forEach(el => {
+            const bersaglio = { el, colori: {}, immagine: false };
+
+            try {
+                bersaglio.immagine = String(el.tagName || "").toUpperCase() === "IMG";
+            }
+            catch (err) {
+                bersaglio.immagine = false;
+            }
+
+            let calcolato = null;
+            try {
+                calcolato = typeof getComputedStyle === "function" ? getComputedStyle(el) : null;
+            }
+            catch (err) {
+                calcolato = null;
+            }
+
+            this.PROPRIETA_COLORE_DA_ATTENUARE.forEach(proprieta => {
+                let testo = null;
+                try {
+                    //Prima lo stile scritto, che e' quello che il plugin controlla; poi quello
+                    //calcolato, per i colori che arrivano dai fogli di stile.
+                    testo = (el.style && el.style[proprieta]) || (calcolato != null ? calcolato[proprieta] : null);
+                }
+                catch (err) {
+                    testo = null;
+                }
+
+                const colore = dissolvenza.analizzaColore(testo);
+                if (colore != null) {
+                    bersaglio.colori[proprieta] = colore;
+                }
+                else if (proprieta === "color" && colorePrimoTestoLetto == null && testo != null && testo !== "") {
+                    colorePrimoTestoLetto = String(testo);
+                }
+            });
+
+            if (bersaglio.colori.color == null && !bersaglio.immagine) {
+                bersaglio.colori.color = coloreTestoDiBase;
+            }
+
+            bersagli.push(bersaglio);
+        });
+
+        //Com'e' fatto il colore che il motore restituisce e che non riconosco: la prossima
+        //lettura del tracciato dira' se c'e' una forma da imparare.
+        this._ultimoColoreNonRiconosciuto = colorePrimoTestoLetto;
+
+        return bersagli;
+    },
+
+    /// Il colore di testo scritto sull'antenato piu' vicino, dentro il report.
+    _coloreTestoDegliAntenati(elemento) {
+        let corrente = elemento;
+        let passi = 0;
+
+        while (corrente != null && passi < 12) {
+            try {
+                const colore = dissolvenza.analizzaColore(corrente.style ? corrente.style.color : null);
+                if (colore != null) {
+                    return colore;
+                }
+                corrente = corrente.parentElement;
+            }
+            catch (err) {
+                return null;
+            }
+            passi++;
+        }
+
+        return null;
+    },
+
+    _applicaPassoDissolvenza(bersagli, alfa) {
+        let scritture = 0;
+
+        bersagli.forEach(bersaglio => {
+            const el = bersaglio.el;
+
+            Object.keys(bersaglio.colori).forEach(proprieta => {
+                try {
+                    el.style[proprieta] = dissolvenza.coloreConAlfa(bersaglio.colori[proprieta], alfa);
+                    scritture++;
+                }
+                catch (err) {
+                    //Un elemento tolto dall'interfaccia mentre sfuma non e' un errore.
+                }
+            });
+
+            if (bersaglio.immagine && dissolvenza.immaginiSpente(alfa)) {
+                try {
+                    el.style.visibility = "hidden";
+                }
+                catch (err) {
+                    //Come sopra.
+                }
+            }
+
+            //Si scrive anche l'opacita': non costa niente, e il giorno che UXP la ridisegnera'
+            //la dissolvenza sara' completa anche sulle immagini.
+            try {
+                el.style.opacity = String(alfa);
+            }
+            catch (err) {
+                //Come sopra.
+            }
+        });
+
+        return scritture;
+    },
+
+    _dissolviElementi(elementi) {
+        const lista = (Array.isArray(elementi) ? elementi : [elementi]).filter(el => el != null);
+
+        return new Promise(resolve => {
+            if (lista.length === 0) {
+                resolve(false);
+                return;
+            }
+
+            lista.forEach(el => this._spegniInterazione(el));
+
+            let bersagli = [];
+            lista.forEach(el => {
+                bersagli = bersagli.concat(this._bersagliDissolvenza(el));
+            });
+
+            const conColore = bersagli.filter(b => Object.keys(b.colori).length > 0).length;
+            const immagini = bersagli.filter(b => b.immagine).length;
+
+            const passi = dissolvenza.numeroDiPassi();
+            let passo = 0;
+            const inizio = Date.now();
+            let scritture = 0;
+
+            const timer = setInterval(() => {
+                passo++;
+                const alfa = dissolvenza.alfaAlPasso(passo, passi);
+                scritture += this._applicaPassoDissolvenza(bersagli, alfa);
+
+                if (passo >= passi) {
+                    clearInterval(timer);
+
+                    this._tracciaScheda("dissolvenza", {
+                        elementi: lista.length,
+                        primo: lista[0] != null ? (lista[0].tagName || "") + (lista[0].dataset?.payloadId ? "#" + lista[0].dataset.payloadId : "") : null,
+                        bersagli: bersagli.length,
+                        conColore,
+                        immagini,
+                        passi,
+                        durataMs: Date.now() - inizio,
+                        scritture,
+                        coloreDelPrimo: bersagli[0] != null ? bersagli[0].colori : null,
+                        coloreNonRiconosciuto: this._ultimoColoreNonRiconosciuto || null,
+                        letturaFinale: this._leggiOpacita(lista[0])
+                    });
+
+                    resolve(true);
+                }
+            }, dissolvenza.PASSO_MS);
+        });
+    },
+
+    /// Com'e' l'opacita' di un elemento secondo il motore: quella scritta nello stile e, se il
+    /// motore la espone, quella calcolata. Se le due divergono, o la calcolata manca, il valore
+    /// non e' arrivato a schermo.
+    _leggiOpacita(elemento) {
+        if (elemento == null) {
+            return null;
+        }
+
+        let calcolata = null;
+        try {
+            calcolata = typeof getComputedStyle === "function" ? getComputedStyle(elemento).opacity : "n/d";
+        }
+        catch (err) {
+            calcolata = "errore";
+        }
+
+        let scritta = null;
+        try {
+            scritta = elemento.style.opacity;
+        }
+        catch (err) {
+            scritta = "errore";
+        }
+
+        return scritta + "/" + calcolata;
+    },
+
+    _spegniInterazione(elemento) {
+        try {
+            elemento.style.pointerEvents = "none";
+            elemento.style.cursor = "default";
+
+            const figli = elemento.querySelectorAll("img, button, sp-action-button, sp-button, input");
+            for (let i = 0; i < figli.length; i++) {
+                figli[i].style.pointerEvents = "none";
+                figli[i].style.cursor = "default";
+
+                if (figli[i].tagName !== "IMG") {
+                    figli[i].disabled = true;
+                }
+            }
+        }
+        catch (err) {
+            console.error("Interazione non disattivata durante la dissolvenza:", err);
+        }
+    },
+
+    _rigaDelPayload(payloadId) {
+        if (!payloadId) {
+            return null;
+        }
+
+        try {
+            return document.querySelector('[data-payload-id="' + payloadId + '"]');
+        }
+        catch (err) {
+            console.error("Riga della segnalazione non trovata:", err);
+            return null;
+        }
+    },
+
+    /// La riga se ne va sotto gli occhi dell'operatore, e solo dopo cambia lo stato. Se la riga
+    /// non si trova, il lavoro si fa lo stesso: l'effetto e' un di piu', non una condizione.
+    async _dissolviRiga(payloadId) {
+        const riga = this._rigaDelPayload(payloadId);
+        if (riga == null) {
+            this._tracciaScheda("dissolvenza:rigaNonTrovata", { payloadId });
+            return false;
+        }
+
+        const esito = await this._dissolviElementi(riga);
+
+        //Sfumata, la riga se ne va subito. Dopo vengono il salvataggio del report, che e' un
+        //file grosso, e il ridisegno di tutto l'elenco: se la riga restasse li' sbiancata ad
+        //aspettarli, fra la dissolvenza e la sparizione ci sarebbe un istante di vuoto.
+        this._removeConfrontoRow(payloadId);
+        await this._lasciaRidisegnare();
+
+        return esito;
+    },
+
+    //Quanto si aspetta perche' UXP porti a schermo una rimozione prima che parta del lavoro
+    //sincrono. Un solo giro del ciclo degli eventi non basta: il ridisegno arriva al confine
+    //del fotogramma, e con zero millisecondi il lavoro pesante lo scavalca.
+    ATTESA_RIDISEGNO_MS: 40,
+
+    /// Cede il passo al motore. UXP ridisegna solo quando il ciclo degli eventi e' libero:
+    /// togliere un elemento e subito dopo salvare un file da undici megabyte e ricostruire
+    /// l'elenco vuol dire che l'elemento tolto resta a schermo finche' tutto quello non e'
+    /// finito. E' il divario che si vedeva fra la dissolvenza e la sparizione.
+    _lasciaRidisegnare() {
+        return new Promise(resolve => setTimeout(resolve, this.ATTESA_RIDISEGNO_MS));
+    },
+
     async _onConfrontoAction(ev, action) {
+        //Mentre una riga sta sparendo non si accetta altro: un secondo clic lavorerebbe su un
+        //record che sta gia' uscendo dal report.
+        if (this.azioneReportInCorso()) {
+            return;
+        }
+
         const payloadId = ev.currentTarget?.dataset?.payloadId;
         const payload = this._getConfrontoPayload(payloadId);
 
@@ -2898,9 +4276,20 @@ const confronti = {
             return;
         }
 
+        this._azioneReportInCorso = true;
+
+        try {
+            await this._eseguiAzioneConfronto(action, payloadId, payload);
+        }
+        finally {
+            this._azioneReportInCorso = false;
+        }
+    },
+
+    async _eseguiAzioneConfronto(action, payloadId, payload) {
         switch (action) {
             case "find":
-                this._findElemento(payload);
+                await this._apriSchedaDalReport(payloadId, payload);
                 break;
 
             case "info":
@@ -2917,15 +4306,15 @@ const confronti = {
                 break;
 
             case "whitelist":
-                this._mandaInWhitelist(payloadId, payload);
+                await this._mandaInWhitelist(payloadId, payload);
                 break;
 
             case "restoreWhitelist":
-                this._ripristinaDaWhitelist(payloadId, payload);
+                await this._ripristinaDaWhitelist(payloadId, payload);
                 break;
 
             case "delete":
-                this._deleteElemento(payloadId, payload);
+                await this._deleteElemento(payloadId, payload);
                 break;
         }
     },
@@ -2940,6 +4329,8 @@ const confronti = {
         const key = this._getReportCategoryFromTipo(payload?.tipo);
         const recordRisolto = payload.record;
         const duplicateInfo = this._getDuplicateInfo(recordRisolto);
+
+        await this._dissolviRiga(payloadId);
 
         this._removeRecordFromArray(state.report?.[key], recordRisolto);
         this._removeConfrontoPayload(payloadId);
@@ -2957,9 +4348,11 @@ const confronti = {
         }
     },
 
-    _mandaInWhitelist(payloadId, payload) {
+    async _mandaInWhitelist(payloadId, payload) {
         const state = this._confrontoReportState;
         if (!state) return;
+
+        await this._dissolviRiga(payloadId);
 
         const key = this._getReportCategoryFromTipo(payload?.tipo);
         const recordDaSpostare = payload?.record?._fullReportRecord || payload.record;
@@ -2974,9 +4367,11 @@ const confronti = {
         this._refreshConfrontoReportUi();
     },
 
-    _ripristinaDaWhitelist(payloadId, payload) {
+    async _ripristinaDaWhitelist(payloadId, payload) {
         const state = this._confrontoReportState;
         if (!state) return;
+
+        await this._dissolviRiga(payloadId);
 
         const key = this._getReportCategoryFromTipo(payload?.tipo);
         const recordDaRipristinare = payload?.record?._fullReportRecord || payload.record;
@@ -3210,7 +4605,7 @@ const confronti = {
         if (!box) {
             messaggioUtente("Impossibile trovare l'elemento nel documento il riferimento potrebbe essere stato perso", "warning", false, 5);
             console.warn("Elemento non trovato");
-            return;
+            return null;
         }
 
         try {
@@ -3221,6 +4616,8 @@ const confronti = {
         } catch (err) {
             console.error("Errore selezione:", err);
         }
+
+        return box;
     },
 
     _resolveBoxFromRecord(record) {
@@ -3408,7 +4805,7 @@ const confronti = {
         return null;
     },
 
-    _deleteElemento(payloadId, payload) {
+    async _deleteElemento(payloadId, payload) {
         const record = payload?.record;
         const box = this._resolveBoxFromRecord(record);
 
@@ -3424,6 +4821,8 @@ const confronti = {
             }
 
             box.remove();
+
+            await this._dissolviRiga(payloadId);
 
             const key = this._getReportCategoryFromTipo(payload?.tipo);
             this._removeRecordFromArray(this._confrontoReportState?.report?.[key], record);
@@ -3533,6 +4932,8 @@ const confronti = {
 
 
             if (box != null){
+                await this._dissolviRiga(payloadId);
+
                 const key = this._getReportCategoryFromTipo(payload?.tipo);
                 this._removeRecordFromArray(this._confrontoReportState?.report?.[key], record);
                 this._removeConfrontoPayload(payloadId);
@@ -3630,6 +5031,10 @@ const confronti = {
 
         const header = document.createElement("div");
         header.style.display = "flex";
+        //I20-981: quattro linguette con il conteggio non stanno su una riga sola in un pannello
+        //stretto: vanno a capo invece di uscire.
+        header.style.flexWrap = "wrap";
+        header.style.rowGap = "4px";
         header.style.gap = "6px";
         header.style.padding = "0 0 8px 0";
         header.style.flexShrink = "0";
@@ -3788,7 +5193,51 @@ const confronti = {
     COLORI_STATO: {
         cambiato: "#e0a800",
         uscito: "#c0392b",
-        nuovo: "#2e7d32"
+        nuovo: "#2e7d32",
+        differente: "#1565c0"
+    },
+
+    //I20-981: il riquadro che raccoglie le differenze sui campi osservati dentro una riga.
+    //Sta staccato dalle segnalazioni di integrita' e porta il colore dei confronti, cosi' si
+    //capisce a colpo d'occhio che parla di un'altra cosa.
+    _crRiquadroConfronto(differenze) {
+        const riquadro = document.createElement("div");
+        riquadro.style.marginTop = "6px";
+        riquadro.style.padding = "4px 6px";
+        riquadro.style.borderLeft = "3px solid " + this.COLORI_STATO.differente;
+        riquadro.style.backgroundColor = "#eef3fb";
+        riquadro.style.borderRadius = "3px";
+        riquadro.style.minWidth = "0";
+
+        const titolo = document.createElement("div");
+        titolo.textContent = "Campi osservati (confronto)";
+        titolo.style.fontSize = "10px";
+        titolo.style.fontWeight = "700";
+        titolo.style.letterSpacing = "0.3px";
+        titolo.style.textTransform = "uppercase";
+        titolo.style.color = this.COLORI_STATO.differente;
+        titolo.style.marginBottom = "2px";
+        Utility.impostaTooltip(titolo, "Campi che non cambiano il box ma che decidono a che pagina va la referenza");
+        riquadro.appendChild(titolo);
+
+        (differenze || []).forEach(differenza => {
+            const riga = document.createElement("div");
+            riga.style.fontSize = "11px";
+            riga.style.lineHeight = "1.3";
+            riga.style.whiteSpace = "normal";
+            riga.style.overflowWrap = "anywhere";
+            riga.style.minWidth = "0";
+
+            const campo = document.createElement("span");
+            campo.textContent = differenza?.label || "";
+            campo.style.fontWeight = "600";
+            riga.appendChild(campo);
+            riga.appendChild(document.createTextNode(": " + (differenza?.difference || "")));
+
+            riquadro.appendChild(riga);
+        });
+
+        return riquadro;
     },
 
     _crRow(stato = null) {
@@ -3880,6 +5329,65 @@ const confronti = {
     },
 
 
+    //I20-981 (Lotto 4a): la sezione Confronti, nella modalita' che si apre per prima.
+    //Confronta la lista con se stessa: per i campi che l'agenzia tiene d'occhio, mostra cosa
+    //aveva la referenza prima e cosa ha adesso. Evidenzia e basta, non propone correzioni: a
+    //decidere se la referenza va spostata di pagina e' l'operatore.
+    campiOsservatiConfronto() {
+        try {
+            const campi = pluginMiddleware.getCampo("campiOsservatiConfronto");
+            return Array.isArray(campi) ? campi : [];
+        }
+        catch (err) {
+            console.error("Campi osservati per il confronto non disponibili:", err);
+            return [];
+        }
+    },
+
+    _calcolaConfronti() {
+        const campi = this.campiOsservatiConfronto();
+
+        if (campi.length === 0) {
+            return { campi: campi, voci: [] };
+        }
+
+        return {
+            campi: campi,
+            voci: reportConfronti.confrontoConSeStessa(this._recordsListaKit(), campi)
+        };
+    },
+
+    //I20-981: la scheda Confronti ospitera' il confronto con un'altra lista (prossimo lotto).
+    //Il confronto della lista con se stessa vive nelle righe dei Cambiati, dove ci sono gia' i
+    //pulsanti per trovare la referenza, risolverla o metterla in whitelist.
+    _buildPanelConfronti() {
+        const panel = this._crPanel();
+        this._stylePanelForReportListMode(panel);
+        const topbar = this._crTabTopbar();
+        const content = this._crScrollableContent();
+
+        const modo = document.createElement("div");
+        modo.textContent = "Confronto con un'altra lista";
+        modo.style.fontWeight = "600";
+        modo.style.fontSize = "12px";
+        topbar.appendChild(modo);
+
+        content.appendChild(this._crEmptyState("Nessuna lista di confronto selezionata"));
+
+        const nota = document.createElement("div");
+        nota.textContent = "Le differenze della lista con se stessa si trovano nella scheda Cambiati, "
+            + "nel riquadro \"Campi osservati\" di ogni referenza.";
+        nota.style.padding = "0 8px 12px 8px";
+        nota.style.fontSize = "11px";
+        nota.style.opacity = "0.8";
+        nota.style.whiteSpace = "normal";
+        content.appendChild(nota);
+
+        panel.appendChild(topbar);
+        panel.appendChild(content);
+        return panel;
+    },
+
     _buildPanelNuovi(report) {
         const panel = this._crPanel();
         this._stylePanelForReportListMode(panel);
@@ -3913,46 +5421,84 @@ const confronti = {
         tableScroll.style.flex = "1 1 auto";
         tableScroll.style.minHeight = "0";
         tableScroll.style.minWidth = "0";
-        tableScroll.style.overflowX = "auto";
-        tableScroll.style.overflowY = "auto";
+        //I20-981: in orizzontale questo contenitore non scorre, in nessun modo nativo: ne' con
+        //"auto", ne' con "scroll", nemmeno dando alla tabella una larghezza vera in pixel. Lo
+        //scorrimento laterale lo fa la barra qui sotto, spostando la tabella; qui resta il solo
+        //scorrimento verticale, che invece funziona ed e' quello della rotella.
+        tableScroll.style.overflowX = "hidden";
+        tableScroll.style.overflowY = "scroll";
         tableScroll.style.border = "1px solid #555";
         tableScroll.style.borderRadius = "4px";
 
+        //I20-981: la tabella e' divisa in due colonne dentro l'unico contenitore che scorre in
+        //verticale: a sinistra i pulsanti di impaginazione, a larghezza fissa, che restano
+        //fermi; a destra i dati, che sono i soli a spostarsi di lato. Stando nello stesso
+        //contenitore le due colonne scorrono insieme in verticale per costruzione, e le righe
+        //restano appaiate grazie alle altezze fisse gia' in uso: 42px la riga, 34px
+        //l'intestazione.
+        const divisione = document.createElement("div");
+        divisione.style.display = "flex";
+        divisione.style.flexDirection = "row";
+        divisione.style.alignItems = "flex-start";
+        divisione.style.minWidth = "100%";
+
+        const colonnaAzioni = document.createElement("div");
+        colonnaAzioni.style.display = "flex";
+        colonnaAzioni.style.flexDirection = "column";
+        colonnaAzioni.style.flexShrink = "0";
+        colonnaAzioni.style.borderRight = "2px solid #bbb";
+
+        const headerAzioni = document.createElement("div");
+        headerAzioni.style.display = "flex";
+        headerAzioni.style.flexShrink = "0";
+
+        const bodyAzioni = document.createElement("div");
+        bodyAzioni.style.display = "flex";
+        bodyAzioni.style.flexDirection = "column";
+
+        colonnaAzioni.appendChild(headerAzioni);
+        colonnaAzioni.appendChild(bodyAzioni);
+
+        //L'area dei dati e' la finestra dello scorrimento laterale: quello che esce di qui
+        //resta nascosto, e la sua larghezza e' la misura che dice alla barra quanto si vede.
+        const areaDati = document.createElement("div");
+        areaDati.style.flex = "1 1 auto";
+        areaDati.style.minWidth = "0";
+        areaDati.style.overflow = "hidden";
+
+        //I20-981: la larghezza della tabella dei dati si dichiara in pixel, sommando le
+        //colonne. Era scritta "fit-content", e senza una larghezza vera non c'e' nulla da
+        //scorrere: la tabella si schiaccia nello spazio disponibile. Il minWidth al 100%
+        //serve per il caso opposto, poche colonne in un pannello largo, dove la tabella deve
+        //comunque riempire il riquadro.
         const table = document.createElement("div");
-        table.style.display = "inline-flex";
+        table.style.display = "flex";
         table.style.flexDirection = "column";
         table.style.alignItems = "flex-start";
-        table.style.minWidth = "fit-content";
+        table.style.minWidth = "100%";
 
         const headerRow = document.createElement("div");
         headerRow.style.display = "flex";
         headerRow.style.flexShrink = "0";
-        headerRow.style.width = "fit-content";
         headerRow.style.minWidth = "100%";
 
         const body = document.createElement("div");
         body.style.display = "flex";
         body.style.flexDirection = "column";
-        body.style.width = "fit-content";
         body.style.minWidth = "100%";
 
         table.appendChild(headerRow);
         table.appendChild(body);
-        tableScroll.appendChild(table);
+        areaDati.appendChild(table);
+        divisione.appendChild(colonnaAzioni);
+        divisione.appendChild(areaDati);
+        tableScroll.appendChild(divisione);
         wrapper.appendChild(tableScroll);
 
         panel.appendChild(topbar);
         panel.appendChild(wrapper);
 
-        let listaTracciato = readFile(pathLavorazione + "/listaKit" + idKitLavorazione + ".json");
-        if (typeof listaTracciato === "string") {
-            try {
-                listaTracciato = JSON.parse(listaTracciato);
-            } catch (err) {
-                console.error("Errore parse listaKit:", err);
-                listaTracciato = [];
-            }
-        }
+        const listaTracciato = this._leggiListaKitLocale();
 
         const colonneExtra = (pluginMiddleware?.getColonneTracciatoIntestazione?.() || []).map(col => ({
             nome: col?.nome || col?.name || col?.label || col?.chiaveDato || "",
@@ -3970,6 +5516,12 @@ const confronti = {
             rowsCurrent: [...rowsOriginal],
             body,
             headerRow,
+            table,
+            tableScroll,
+            areaDati,
+            colonnaAzioni,
+            headerAzioni,
+            bodyAzioni,
             colonneExtra,
             sortKey: null,
             sortDirection: null,
@@ -3980,6 +5532,8 @@ const confronti = {
             libreriaCorrente: null,
             elementiLibreria: []
         };
+
+        wrapper.appendChild(this._crBarraScorrimentoNuovi(this._confrontoNuoviState));
 
         this._renderNuoviTable();
         this._refreshPickerLibreriaNuovi();
@@ -4519,11 +6073,17 @@ const confronti = {
 
             if (codiciPresenti.has(codiceGruppo)) continue;
 
+            //I20-981: anche una referenza non ancora impaginata puo' avere campi osservati
+            //cambiati, ed e' un'informazione che serve prima di decidere dove metterla.
+            const confrontoRiga = reportConfronti.differenzePerPresenza(
+                this._indiceConfronti, codiceGruppo, reportConfronti.idRecDelRecord(item));
+
             result.push({
                 raw: item,
                 originalIndex: i,
                 codiceGruppo,
-                descrizione: this._getDescrizioneNuovo(item)
+                descrizione: this._getDescrizioneNuovo(item),
+                confronto: confrontoRiga != null ? reportConfronti.testoDifferenze(confrontoRiga.differenze) : ""
             });
         }
 
@@ -4543,6 +6103,9 @@ const confronti = {
 
         state.headerRow.innerHTML = "";
         state.body.innerHTML = "";
+
+        if (state.headerAzioni != null) state.headerAzioni.innerHTML = "";
+        if (state.bodyAzioni != null) state.bodyAzioni.innerHTML = "";
 
         const colonneBase = [
             {
@@ -4569,6 +6132,17 @@ const confronti = {
             }
         ];
 
+        //I20-981: i campi osservati stanno in fondo a destra: servono quando servono, e non
+        //devono rubare spazio a codice e descrizione, che si leggono sempre.
+        const colonnaConfronto = {
+            key: "confronto",
+            label: "Campi osservati",
+            perc: 130,
+            minPx: 260,
+            sortable: true,
+            small: true
+        };
+
         const colonneExtra = (state.colonneExtra || []).map(col => ({
             key: col.chiaveDato,
             label: col.nome,
@@ -4580,14 +6154,32 @@ const confronti = {
         //rimuoviamo aventuali colonneExtra con chiave codice, descrizione o codiceGruppo se ci sono, per evitare duplicati
         const colonneExtraFiltrate = colonneExtra.filter(col => {
             const key = col.key.toLowerCase();
-            return key !== "codicegruppo" && key !== "descrizione" && key !== "codice";
+            return key !== "codicegruppo" && key !== "descrizione" && key !== "codice" && key !== "confronto";
         });
 
-        const colonne = [...colonneBase, ...colonneExtraFiltrate];
+        const colonne = [...colonneBase, ...colonneExtraFiltrate, colonnaConfronto];
         state.colonneRender = colonne;
 
-        for (let i = 0; i < colonne.length; i++) {
-            state.headerRow.appendChild(this._crNuoviHeaderCell(colonne[i]));
+        //La colonna dei pulsanti sta fuori dallo scorrimento: la larghezza da scorrere e'
+        //quella dei soli dati, ed e' la sola che la barra deve conoscere.
+        const colonnaAzione = colonne.find(col => col.key === "__azione__");
+        const colonneDati = colonne.filter(col => col.key !== "__azione__");
+
+        const larghezzaTotale = this._larghezzaTotaleColonne(colonneDati);
+        state.larghezzaTotale = larghezzaTotale;
+
+        if (state.table != null) {
+            state.table.style.width = larghezzaTotale + "px";
+        }
+        state.headerRow.style.width = larghezzaTotale + "px";
+        state.body.style.width = larghezzaTotale + "px";
+
+        if (state.headerAzioni != null && colonnaAzione != null) {
+            state.headerAzioni.appendChild(this._crNuoviHeaderCell(colonnaAzione));
+        }
+
+        for (let i = 0; i < colonneDati.length; i++) {
+            state.headerRow.appendChild(this._crNuoviHeaderCell(colonneDati[i]));
         }
 
         if (!state.rowsCurrent.length) {
@@ -4600,8 +6192,216 @@ const confronti = {
         }
 
         for (let i = 0; i < state.rowsCurrent.length; i++) {
-            state.body.appendChild(this._crNuoviDataRow(state.rowsCurrent[i], colonne));
+            if (state.bodyAzioni != null) {
+                state.bodyAzioni.appendChild(this._crNuoviActionCell(state.rowsCurrent[i]));
+            }
+
+            state.body.appendChild(this._crNuoviDataRow(state.rowsCurrent[i], colonneDati));
         }
+
+        //Le colonne possono essere cambiate: si riporta la tabella dove dice lo spostamento e
+        //si rimette il cursore in accordo.
+        this._scorriNuovi(state, state.spostamento || 0);
+    },
+
+    //I20-981: la barra di scorrimento orizzontale della tabella dei nuovi, disegnata da noi.
+    //In UXP quel contenitore non scorre in orizzontale in nessun modo nativo, cosi' la tabella
+    //viene spostata con un margine negativo e la barra la mettiamo qui sotto, sempre visibile.
+    //Le frecce e il clic sulla traccia bastano da soli: se il trascinamento del cursore non
+    //funzionasse, la tabella si scorre comunque.
+    PASSO_SCORRIMENTO: 160,
+
+    _crBarraScorrimentoNuovi(state) {
+        const barra = document.createElement("div");
+        barra.style.display = "flex";
+        barra.style.alignItems = "center";
+        barra.style.gap = "4px";
+        barra.style.flexShrink = "0";
+        barra.style.padding = "4px 0 0 0";
+
+        const indietro = this._crFrecciaScorrimento("‹", "Sposta la tabella verso sinistra");
+        const avanti = this._crFrecciaScorrimento("›", "Sposta la tabella verso destra");
+
+        const traccia = document.createElement("div");
+        traccia.style.position = "relative";
+        traccia.style.flex = "1 1 auto";
+        traccia.style.height = "12px";
+        traccia.style.minWidth = "0";
+        traccia.style.backgroundColor = "#e6e6e6";
+        traccia.style.borderRadius = "6px";
+        traccia.style.cursor = "pointer";
+        Utility.impostaTooltip(traccia, "Clicca o trascina per scorrere le colonne");
+
+        const cursore = document.createElement("div");
+        cursore.style.position = "absolute";
+        cursore.style.top = "0";
+        cursore.style.left = "0";
+        cursore.style.height = "12px";
+        cursore.style.width = "40px";
+        cursore.style.backgroundColor = "#8a8a8a";
+        cursore.style.borderRadius = "6px";
+        cursore.style.cursor = "grab";
+
+        traccia.appendChild(cursore);
+
+        barra.appendChild(indietro);
+        barra.appendChild(traccia);
+        barra.appendChild(avanti);
+
+        state.barra = barra;
+        state.traccia = traccia;
+        state.cursore = cursore;
+        state.spostamento = 0;
+
+        indietro.addEventListener("click", () => this._scorriNuovi(state, state.spostamento - this.PASSO_SCORRIMENTO));
+        avanti.addEventListener("click", () => this._scorriNuovi(state, state.spostamento + this.PASSO_SCORRIMENTO));
+
+        traccia.addEventListener("click", (evento) => {
+            //Il clic sul cursore lo prende il cursore: qui arriva solo il clic sulla traccia.
+            if (evento?.target === cursore) {
+                return;
+            }
+
+            const misure = this._misureScorrimentoNuovi(state);
+            const posizione = this._posizioneNellaTraccia(evento, traccia);
+
+            this._scorriNuovi(state, barraScorrimento.spostamentoDaClic(
+                posizione, misure.contenuto, misure.visibile, misure.traccia));
+        });
+
+        //Terzo strato: il trascinamento. Se questi eventi non arrivano, restano frecce e traccia.
+        cursore.addEventListener("mousedown", (evento) => {
+            const misure = this._misureScorrimentoNuovi(state);
+
+            state.trascinamento = {
+                partenzaX: evento?.clientX || 0,
+                spostamentoIniziale: state.spostamento,
+                misure: misure
+            };
+
+            cursore.style.cursor = "grabbing";
+        });
+
+        this._abilitaTrascinamentoBarra();
+
+        return barra;
+    },
+
+    _crFrecciaScorrimento(simbolo, descrizione) {
+        const freccia = document.createElement("button");
+        freccia.type = "button";
+        freccia.textContent = simbolo;
+        freccia.style.height = "16px";
+        freccia.style.minWidth = "18px";
+        freccia.style.padding = "0";
+        freccia.style.lineHeight = "1";
+        freccia.style.cursor = "pointer";
+        freccia.style.flexShrink = "0";
+        Utility.impostaTooltip(freccia, descrizione);
+        return freccia;
+    },
+
+    /// Il trascinamento si ascolta una volta sola sul documento: il mouse esce dal cursore
+    /// quasi subito, e se ascoltassimo solo lui il movimento si perderebbe.
+    _abilitaTrascinamentoBarra() {
+        if (this._trascinamentoBarraAttivo) {
+            return;
+        }
+
+        this._trascinamentoBarraAttivo = true;
+        const me = this;
+
+        $(document).on("mousemove", function (evento) {
+            const state = me._confrontoNuoviState;
+            if (state == null || state.trascinamento == null) {
+                return;
+            }
+
+            const misure = state.trascinamento.misure;
+            const pixel = (evento?.clientX || 0) - state.trascinamento.partenzaX;
+
+            me._scorriNuovi(state, barraScorrimento.spostamentoDaTrascinamento(
+                state.trascinamento.spostamentoIniziale, pixel,
+                misure.contenuto, misure.visibile, misure.traccia));
+        });
+
+        $(document).on("mouseup", function () {
+            const state = me._confrontoNuoviState;
+            if (state == null || state.trascinamento == null) {
+                return;
+            }
+
+            state.trascinamento = null;
+            if (state.cursore != null) {
+                state.cursore.style.cursor = "grab";
+            }
+        });
+    },
+
+    /// Le misure si leggono adesso, non alla costruzione: quando il pannello nasce non e'
+    /// ancora impaginato e tornerebbero zero.
+    _misureScorrimentoNuovi(state) {
+        let visibile = 0;
+        let traccia = 0;
+
+        try {
+            visibile = (state?.areaDati || state?.tableScroll)?.clientWidth || 0;
+            traccia = state?.traccia?.clientWidth || 0;
+        }
+        catch (err) {
+            console.error("Misure della barra non disponibili:", err);
+        }
+
+        return {
+            contenuto: state?.larghezzaTotale || 0,
+            visibile: visibile,
+            traccia: traccia
+        };
+    },
+
+    _posizioneNellaTraccia(evento, traccia) {
+        try {
+            const rettangolo = traccia.getBoundingClientRect();
+            return (evento?.clientX || 0) - (rettangolo?.left || 0);
+        }
+        catch (err) {
+            return 0;
+        }
+    },
+
+    /// Sposta la tabella e aggiorna il cursore.
+    _scorriNuovi(state, spostamento) {
+        if (state == null || state.table == null) {
+            return;
+        }
+
+        const misure = this._misureScorrimentoNuovi(state);
+
+        state.spostamento = barraScorrimento.limitaSpostamento(spostamento, misure.contenuto, misure.visibile);
+        state.table.style.marginLeft = "-" + state.spostamento + "px";
+
+        this._aggiornaCursoreNuovi(state, misure);
+    },
+
+    _aggiornaCursoreNuovi(state, misure) {
+        if (state == null || state.cursore == null) {
+            return;
+        }
+
+        const m = misure || this._misureScorrimentoNuovi(state);
+        const serve = barraScorrimento.serveLaBarra(m.contenuto, m.visibile);
+
+        if (state.barra != null) {
+            //Se le colonne ci stanno tutte, la barra non ha niente da fare e sparisce.
+            //Finche' le misure non sono disponibili la si lascia, altrimenti lampeggerebbe.
+            state.barra.style.display = (m.visibile > 0 && !serve) ? "none" : "flex";
+        }
+
+        const geometria = barraScorrimento.geometriaCursore(
+            state.spostamento, m.contenuto, m.visibile, m.traccia);
+
+        state.cursore.style.width = geometria.larghezza + "px";
+        state.cursore.style.left = geometria.sinistra + "px";
     },
 
     _crNuoviHeaderCell(col) {
@@ -4622,6 +6422,7 @@ const confronti = {
         cell.style.textOverflow = "ellipsis";
         cell.style.width = this._calcNuoviColumnWidth(col);
         cell.style.minWidth = this._calcNuoviColumnWidth(col);
+
 
         let label = col.label;
         if (col.sortable && state.sortKey === col.key) {
@@ -4649,14 +6450,15 @@ const confronti = {
         row.style.minHeight = "42px";
         row.style.maxHeight = "42px";
         row.style.borderBottom = "1px solid #eee";
-        row.style.width = "fit-content";
+        row.style.width = (this._confrontoNuoviState?.larghezzaTotale || 0) + "px";
         row.style.minWidth = "100%";
 
         for (let i = 0; i < colonne.length; i++) {
             const col = colonne[i];
 
+            //I pulsanti non stanno qui: sono nella colonna fissa di sinistra, che non si
+            //sposta di lato.
             if (col.key === "__azione__") {
-                row.appendChild(this._crNuoviActionCell(rowData));
                 continue;
             }
 
@@ -4665,6 +6467,8 @@ const confronti = {
                 value = rowData.codiceGruppo || "";
             } else if (col.key === "descrizione") {
                 value = rowData.descrizione || "";
+            } else if (col.key === "confronto") {
+                value = rowData.confronto || "";
             } else {
                 const rawVal = this._getRawValueForNuoviColumn(rowData?.raw, col.key);
                 value = rawVal == null ? "" : String(rawVal);
@@ -4686,7 +6490,12 @@ const confronti = {
         cell.style.flexShrink = "0";
         cell.style.width = "130px";
         cell.style.minWidth = "130px";
-        cell.style.borderRight = "1px solid #eee";
+        cell.style.borderBottom = "1px solid #eee";
+        //I20-981: i pulsanti restano fermi mentre i campi scorrono perche' questa cella sta
+        //nella colonna di sinistra, fuori dalla tabella che si sposta. Con position sticky non
+        //funzionava: in UXP non viene ignorato, toglie la cella dal flusso e manda la colonna
+        //fuori dal riquadro.
+        cell.style.backgroundColor = "#ffffff";
         cell.style.minHeight = "42px";
         cell.style.maxHeight = "42px";
 
@@ -4787,6 +6596,15 @@ const confronti = {
 
         const match = Object.keys(raw).find(k => k.toLowerCase() === lowerKey);
         return match ? raw[match] : "";
+    },
+
+    /// La larghezza della tabella, in pixel: la somma delle colonne.
+    /// Serve perche' il contenitore abbia qualcosa da scorrere in orizzontale.
+    _larghezzaTotaleColonne(colonne) {
+        return (colonne || []).reduce((somma, col) => {
+            const larghezza = parseInt(this._calcNuoviColumnWidth(col), 10);
+            return somma + (isNaN(larghezza) ? 0 : larghezza);
+        }, 0);
     },
 
     _calcNuoviColumnWidth(col) {

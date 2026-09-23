@@ -29,6 +29,7 @@ const pluginMiddleware = require('./pluginMiddleware');
 const fotoAutoSync = require('./fotoAutoSync');
 const credenzialiSalvateModulo = require('./credenzialiSalvate');
 const reportIntegritaAvvio = require('./reportIntegritaAvvio');
+const reportConfronti = require('./reportConfronti');
 const cacheHashFoto = require('./cacheHashFoto');
 
 //I20-956: le credenziali ricordate vivono nell'archivio cifrato del sistema operativo.
@@ -3983,7 +3984,9 @@ function boxDellElementoMappa(elementoMappa) {
 //(pages.everyItem().getElements()), una page.select() e una ricerca dentro page.allPageItems
 //o, peggio, dentro doc.allPageItems: tutte cose che la mappa aveva gia' risolto. La
 //preanalisi non impagina nulla, quindi della pagina non ha bisogno.
-async function preAnalisiBoxMappato(records, elementoMappa) {
+//Il box si puo' passare gia' trovato: chi richiude la scheda referenza aperta dal report ce
+//l'ha in mano, e puo' essere un box rifatto, che nell'elemento di mappa non c'e' ancora.
+async function preAnalisiBoxMappato(records, elementoMappa, boxGiaTrovato = null) {
     var dati = datiPrimarioPerConfronto(records);
     if (dati == null) {
         //Nessun primario nel gruppo: senza di lui non c'e' nulla da confrontare. Nel report
@@ -3992,7 +3995,7 @@ async function preAnalisiBoxMappato(records, elementoMappa) {
         return null;
     }
 
-    var box = boxDellElementoMappa(elementoMappa);
+    var box = boxGiaTrovato != null ? boxGiaTrovato : boxDellElementoMappa(elementoMappa);
     if (box == null) {
         return null;
     }
@@ -4262,6 +4265,21 @@ async function applicaConfronto(mappa) {
         recordsPerCodiceGruppo[cgRecord].push(recordLista);
     }
 
+    //I20-981: le differenze sui campi osservati dall'agenzia si calcolano una volta sola, su
+    //tutta la lista, e si agganciano poi alla presenza giusta. Non cambiano l'aspetto del box,
+    //quindi l'analisi di integrita' non le vede: e' l'unico posto dove l'operatore le incontra.
+    var differenzeConfronto = {};
+    try {
+        const campiOsservati = confronti.campiOsservatiConfronto();
+        if (campiOsservati.length > 0) {
+            differenzeConfronto = reportConfronti.indicizzaPerPresenza(
+                reportConfronti.confrontoConSeStessa(lista.records, campiOsservati));
+        }
+    }
+    catch (exConfronto) {
+        console.error("Differenze sui campi osservati non calcolate:", exConfronto);
+    }
+
     var schedeRefs = [];
     for (var i = 0; i < presenze.length; i++) {
         var presenza = presenze[i];
@@ -4366,6 +4384,29 @@ async function applicaConfronto(mappa) {
                         if (elementoPaginaMappa != null && numeroPagina != null) {
                             console.log("Preanalisi ref confronto per codice gruppo: " + codiceGruppo + " a pagina " + numeroPagina);
                             resAnalisi = await preAnalisiBoxMappato(schedaRef.records, elMappa);
+                        }
+
+                        //Le differenze sui campi osservati diventano segnalazioni della
+                        //referenza, marcate con l'origine: nella riga stanno in un riquadro
+                        //loro, e il Fix non si offre per quelle, perche' in pagina non c'e'
+                        //niente da rifare.
+                        var confrontoPresenza = reportConfronti.differenzePerPresenza(
+                            differenzeConfronto, codiceGruppo, idRecScheda);
+
+                        if (confrontoPresenza != null && confrontoPresenza.differenze.length > 0) {
+                            if (resAnalisi == null) {
+                                resAnalisi = { differenze: [], errors: [] };
+                            }
+
+                            resAnalisi.differenze = resAnalisi.differenze || [];
+
+                            confrontoPresenza.differenze.forEach(function (d) {
+                                resAnalisi.differenze.push({
+                                    label: d.etichetta,
+                                    difference: (d.prima || "(vuoto)") + " \u2192 " + (d.adesso || "(vuoto)"),
+                                    origine: "confronto"
+                                });
+                            });
                         }
 
                         var recordReport = {

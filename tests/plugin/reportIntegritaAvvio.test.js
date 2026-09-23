@@ -100,3 +100,147 @@ test('il report si chiude quando cambia il documento sotto', () => {
     assert.strictEqual(avvio.deveChiudereReport(null, doc), false);
     assert.strictEqual(avvio.deveChiudereReport('', doc), false);
 });
+
+test('dopo la scheda il record torna dove gli spetta', () => {
+    //La stessa classificazione con cui il report nasce: un record ricontrollato e uno appena
+    //analizzato devono finire nello stesso posto a parita' di esito.
+    assert.strictEqual(
+        avvio.categoriaRecordRicontrollato({ differenze: [], errors: [] }, false), 'recordGiusti');
+    assert.strictEqual(
+        avvio.categoriaRecordRicontrollato({ differenze: [{ label: 'Descrizione' }], errors: [] }, false), 'recordCambiati');
+    assert.strictEqual(
+        avvio.categoriaRecordRicontrollato({ differenze: [], errors: ['rotto'] }, false), 'recordConErrori');
+    //Un box duplicato resta una segnalazione anche quando il resto e' a posto.
+    assert.strictEqual(
+        avvio.categoriaRecordRicontrollato({ differenze: [], errors: [] }, true), 'recordCambiati');
+});
+
+test('il box che non c\'e\' piu\' fa tornare la referenza fra le nuove', () => {
+    //I nuovi si calcolano per differenza da chi nel report c'e' gia': basta che il record esca
+    //dal report perche' la referenza ricompaia fra le nuove.
+    const eliminato = avvio.esitoChiusuraScheda({ boxPresente: false, preAnalisi: null });
+    assert.strictEqual(eliminato.azione, 'rimuovi');
+
+    //Senza preanalisi non sappiamo niente di nuovo: dichiarare risolto quello che non abbiamo
+    //controllato sarebbe peggio che lasciare il report com'era.
+    const nonRicontrollato = avvio.esitoChiusuraScheda({ boxPresente: true, preAnalisi: null });
+    assert.strictEqual(nonRicontrollato.azione, 'invariato');
+
+    const risolto = avvio.esitoChiusuraScheda({
+        boxPresente: true,
+        preAnalisi: { differenze: [], errors: [] }
+    });
+    assert.strictEqual(risolto.azione, 'sposta');
+    assert.strictEqual(risolto.categoria, 'recordGiusti');
+});
+
+test('le differenze di confronto sopravvivono al ricontrollo del box', () => {
+    const record = {
+        preAnalisi: {
+            differenze: [
+                { label: 'Descrizione', difference: 'vecchia -> nuova' },
+                { label: 'tema', difference: 'Pasqua → Natale', origine: 'confronto' }
+            ]
+        }
+    };
+
+    //Il confronto guarda il dato della lista, non il box: il ricontrollo del box non lo puo'
+    //vedere, e quindi va riportato com'era.
+    const confronto = avvio.differenzeDiConfronto(record);
+    assert.strictEqual(confronto.length, 1);
+    assert.strictEqual(confronto[0].label, 'tema');
+
+    const unite = avvio.differenzeDopoRicontrollo(
+        [{ label: 'Foto', difference: 'mancante' }], confronto, null);
+
+    assert.deepStrictEqual(unite.map(d => d.label), ['Foto', 'tema']);
+
+    //Le vecchie segnalazioni di confronto non devono entrare due volte se arrivano gia' fra
+    //quelle di integrita'.
+    const senzaDoppioni = avvio.differenzeDopoRicontrollo(
+        record.preAnalisi.differenze, confronto, null);
+    assert.deepStrictEqual(senzaDoppioni.map(d => d.label), ['Descrizione', 'tema']);
+
+    //Il duplicato si riscrive in fondo, come alla costruzione del report.
+    const conDuplicato = avvio.differenzeDopoRicontrollo([], [], { index: 2, total: 3 });
+    assert.strictEqual(conDuplicato.length, 1);
+    assert.strictEqual(conDuplicato[0].label, 'Duplicato');
+    assert.match(conDuplicato[0].difference, /istanza 2 di 3/);
+});
+
+test('il dato riletto dal server prende il posto di quello in lista', () => {
+    const lista = [
+        { idRec: 11, label: 'riga di lista', recordInTracciato: { 'Referenza.Codice': 'A', descr: 'vecchia' } },
+        { idRec: 22, recordInTracciato: { 'Referenza.Codice': 'B', descr: 'altra' } }
+    ];
+
+    const esito = avvio.sostituisciRecordNellaLista(lista, [
+        { idRec: 11, recordInTracciato: { 'Referenza.Codice': 'A', descr: 'nuova' } }
+    ]);
+
+    assert.strictEqual(esito.sostituiti, 1);
+    assert.strictEqual(esito.records[0].recordInTracciato.descr, 'nuova');
+    //La scheda non restituisce tutte le chiavi che la lista ha: quelle non si perdono.
+    assert.strictEqual(esito.records[0].label, 'riga di lista');
+    //Gli altri record non si toccano.
+    assert.strictEqual(esito.records[1].recordInTracciato.descr, 'altra');
+
+    //Senza idRec ci si aggancia al codice della referenza.
+    const perCodice = avvio.sostituisciRecordNellaLista(
+        [{ recordInTracciato: { 'Referenza.Codice': 'C', descr: 'vecchia' } }],
+        [{ recordInTracciato: { 'Referenza.Codice': 'C', descr: 'nuova' } }]);
+    assert.strictEqual(perCodice.sostituiti, 1);
+
+    //Un record che nella lista non c'e' non si aggiunge: e' la lista a dire quali referenze
+    //sono nel kit, e non e' questo il posto per cambiarlo.
+    const estraneo = avvio.sostituisciRecordNellaLista(lista, [
+        { idRec: 99, recordInTracciato: { 'Referenza.Codice': 'Z' } }
+    ]);
+    assert.strictEqual(estraneo.sostituiti, 0);
+    assert.strictEqual(estraneo.records.length, 2);
+});
+
+test('il ricontrollo non tocca il report se non ha potuto confrontare', () => {
+    //La preanalisi non rilancia: in caso di eccezione mette il messaggio negli errori e torna
+    //le differenze raccolte fino a li', che possono essere zero. Quello zero non e' la prova
+    //che le segnalazioni siano risolte, ed e' il caso che si presenta proprio quando il box e'
+    //stato manomesso a mano, cioe' quando i problemi sono aumentati, non diminuiti.
+    const inErrore = avvio.esitoChiusuraScheda({
+        boxPresente: true,
+        preAnalisi: { differenze: [], errors: ['Errore durante la pre analisi: qualcosa'] }
+    });
+    assert.strictEqual(inErrore.azione, 'invariato');
+    assert.strictEqual(inErrore.motivo, 'errori');
+
+    //Un record classificato per errore finirebbe fra quelli con errori, che il report non
+    //mostra in nessuna scheda: sparirebbe dalla vista senza essere stato risolto.
+    assert.strictEqual(
+        avvio.categoriaRecordRicontrollato({ differenze: [], errors: ['rotto'] }, false), 'recordConErrori');
+
+    //Niente da confrontare non vuol dire tutto a posto.
+    const senzaDati = avvio.esitoChiusuraScheda({
+        boxPresente: true,
+        preAnalisi: { differenze: [], errors: [] },
+        nienteDaConfrontare: true
+    });
+    assert.strictEqual(senzaDati.azione, 'invariato');
+    assert.strictEqual(senzaDati.motivo, 'nienteDaConfrontare');
+
+    //Con dati veri e analisi pulita si decide, come prima.
+    assert.strictEqual(avvio.esitoChiusuraScheda({
+        boxPresente: true,
+        preAnalisi: { differenze: [], errors: [] }
+    }).azione, 'sposta');
+});
+
+test('si riconosce quando non c\'e\' niente da confrontare', () => {
+    assert.strictEqual(avvio.ciSonoDatiDaConfrontare(null), false);
+    assert.strictEqual(avvio.ciSonoDatiDaConfrontare({}), false);
+    assert.strictEqual(avvio.ciSonoDatiDaConfrontare(
+        { compiledFields: [], listaFoto: [], fotoExtra: [], fotoExtraAuto: [] }), false);
+
+    //Basta una cosa sola da guardare perche' il confronto abbia un senso.
+    assert.strictEqual(avvio.ciSonoDatiDaConfrontare({ compiledFields: [{ labelName: 'descrizione' }] }), true);
+    assert.strictEqual(avvio.ciSonoDatiDaConfrontare({ listaFoto: [{ nomeFoto: 'a.psd' }] }), true);
+    assert.strictEqual(avvio.ciSonoDatiDaConfrontare({ fotoExtraAuto: [{ nome: 'bollo' }] }), true);
+});
