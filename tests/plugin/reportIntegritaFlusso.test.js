@@ -533,22 +533,25 @@ test('anche le referenze nuove dicono cosa e\' cambiato', () => {
     assert.match(tabella, /const colonne = \[\.\.\.colonneBase, \.\.\.colonneExtraFiltrate, colonnaConfronto\]/);
 });
 
-test('la tabella dei nuovi scorre, e i pulsanti restano al loro posto', () => {
+test('la tabella dei nuovi ha una larghezza vera, e quindi scorre', () => {
     const pannello = corpoFunzione(confronti, '_buildPanelNuovi(report) {');
 
     //"scroll" e non "auto": in questo pannello e' cosi' che e' scritto cio' che scorre davvero.
     assert.match(pannello, /tableScroll\.style\.overflowX = "scroll"/);
     assert.match(pannello, /tableScroll\.style\.overflowY = "scroll"/);
 
-    //La colonna dei pulsanti resta ancorata a sinistra, con uno sfondo pieno sotto.
-    const cella = corpoFunzione(confronti, '_crNuoviActionCell(rowData) {');
-    assert.match(cella, /position = "sticky"/);
-    assert.match(cella, /left = "0"/);
-    assert.match(cella, /backgroundColor = "#ffffff"/);
+    //La tabella ha una larghezza vera, in pixel: senza, il contenitore non ha nulla da
+    //scorrere e la barra orizzontale non compare. "fit-content" qui non produceva nulla.
+    const render = corpoFunzione(confronti, '_renderNuoviTable() {');
+    assert.match(render, /const larghezzaTotale = this\._larghezzaTotaleColonne\(colonne\)/);
+    assert.match(render, /state\.table\.style\.width = larghezzaTotale \+ "px"/);
+    assert.match(render, /state\.headerRow\.style\.width = larghezzaTotale \+ "px"/);
+    assert.doesNotMatch(senzaCommenti(pannello), /fit-content/);
 
-    //E anche la sua intestazione, altrimenti scorrerebbe via da sola.
-    const intestazione = corpoFunzione(confronti, '_crNuoviHeaderCell(col) {');
-    assert.match(intestazione, /if \(col\.key === "__azione__"\) \{[\s\S]*?position = "sticky"/);
+    //Position sticky non si usa: in UXP non viene ignorato, toglie la cella dal flusso e manda
+    //la colonna fuori dal riquadro. Il ritorno sarebbe una schermata rotta, non un pareggio.
+    const codice = senzaCommenti(confronti);
+    assert.ok(!codice.includes('sticky'), 'sticky e\' tornato: in UXP rompe la tabella');
 });
 
 test('nel csv i cambiamenti di confronto stanno in una colonna sola', () => {

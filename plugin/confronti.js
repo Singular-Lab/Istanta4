@@ -4104,22 +4104,25 @@ const confronti = {
         tableScroll.style.border = "1px solid #555";
         tableScroll.style.borderRadius = "4px";
 
+        //I20-981: la larghezza della tabella si dichiara in pixel, sommando le colonne.
+        //Era scritta "fit-content", e senza una larghezza vera il contenitore non ha nulla da
+        //scorrere: la tabella si schiacciava nello spazio disponibile e la barra orizzontale
+        //non compariva. Il minWidth al 100% serve per il caso opposto, poche colonne in un
+        //pannello largo, dove la tabella deve comunque riempire il riquadro.
         const table = document.createElement("div");
-        table.style.display = "inline-flex";
+        table.style.display = "flex";
         table.style.flexDirection = "column";
         table.style.alignItems = "flex-start";
-        table.style.minWidth = "fit-content";
+        table.style.minWidth = "100%";
 
         const headerRow = document.createElement("div");
         headerRow.style.display = "flex";
         headerRow.style.flexShrink = "0";
-        headerRow.style.width = "fit-content";
         headerRow.style.minWidth = "100%";
 
         const body = document.createElement("div");
         body.style.display = "flex";
         body.style.flexDirection = "column";
-        body.style.width = "fit-content";
         body.style.minWidth = "100%";
 
         table.appendChild(headerRow);
@@ -4148,6 +4151,7 @@ const confronti = {
             rowsCurrent: [...rowsOriginal],
             body,
             headerRow,
+            table,
             colonneExtra,
             sortKey: null,
             sortDirection: null,
@@ -4781,6 +4785,15 @@ const confronti = {
         const colonne = [...colonneBase, ...colonneExtraFiltrate, colonnaConfronto];
         state.colonneRender = colonne;
 
+        const larghezzaTotale = this._larghezzaTotaleColonne(colonne);
+        state.larghezzaTotale = larghezzaTotale;
+
+        if (state.table != null) {
+            state.table.style.width = larghezzaTotale + "px";
+        }
+        state.headerRow.style.width = larghezzaTotale + "px";
+        state.body.style.width = larghezzaTotale + "px";
+
         for (let i = 0; i < colonne.length; i++) {
             state.headerRow.appendChild(this._crNuoviHeaderCell(colonne[i]));
         }
@@ -4818,13 +4831,6 @@ const confronti = {
         cell.style.width = this._calcNuoviColumnWidth(col);
         cell.style.minWidth = this._calcNuoviColumnWidth(col);
 
-        //L'intestazione della colonna dei pulsanti resta ancorata come le sue celle.
-        if (col.key === "__azione__") {
-            cell.style.position = "sticky";
-            cell.style.left = "0";
-            cell.style.zIndex = "3";
-            cell.style.backgroundColor = "#ffffff";
-        }
 
         let label = col.label;
         if (col.sortable && state.sortKey === col.key) {
@@ -4852,7 +4858,7 @@ const confronti = {
         row.style.minHeight = "42px";
         row.style.maxHeight = "42px";
         row.style.borderBottom = "1px solid #eee";
-        row.style.width = "fit-content";
+        row.style.width = (this._confrontoNuoviState?.larghezzaTotale || 0) + "px";
         row.style.minWidth = "100%";
 
         for (let i = 0; i < colonne.length; i++) {
@@ -4892,13 +4898,9 @@ const confronti = {
         cell.style.width = "130px";
         cell.style.minWidth = "130px";
         cell.style.borderRight = "1px solid #eee";
-        //I20-981: i pulsanti restano al loro posto mentre i campi scorrono di lato. Serve uno
-        //sfondo pieno, altrimenti il contenuto che passa sotto si vedrebbe attraverso. Se
-        //questa versione di UXP non applica lo sticky, la colonna scorre come prima: nessun
-        //peggioramento rispetto a oggi.
-        cell.style.position = "sticky";
-        cell.style.left = "0";
-        cell.style.zIndex = "2";
+        //I20-981: qui avevo provato position sticky per tenere i pulsanti fermi mentre i campi
+        //scorrono. In UXP non viene ignorato: toglie la cella dal flusso e manda la colonna
+        //fuori dal riquadro. Resta una colonna come le altre.
         cell.style.backgroundColor = "#ffffff";
         cell.style.minHeight = "42px";
         cell.style.maxHeight = "42px";
@@ -5000,6 +5002,15 @@ const confronti = {
 
         const match = Object.keys(raw).find(k => k.toLowerCase() === lowerKey);
         return match ? raw[match] : "";
+    },
+
+    /// La larghezza della tabella, in pixel: la somma delle colonne.
+    /// Serve perche' il contenitore abbia qualcosa da scorrere in orizzontale.
+    _larghezzaTotaleColonne(colonne) {
+        return (colonne || []).reduce((somma, col) => {
+            const larghezza = parseInt(this._calcNuoviColumnWidth(col), 10);
+            return somma + (isNaN(larghezza) ? 0 : larghezza);
+        }, 0);
     },
 
     _calcNuoviColumnWidth(col) {
