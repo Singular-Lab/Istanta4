@@ -35,6 +35,48 @@ namespace Istanta.Utility
     {
         const int limit_char_length_indd = 18;
 
+        /// <summary>
+        /// Se un codice gruppo contiene quel codice come proprio elemento.
+        ///
+        /// Il codice gruppo e' una lista separata da virgole, quindi non basta vedere se la
+        /// stringa compare: il codice 100 comparirebbe dentro 1001. E il confronto ignora
+        /// maiuscole e minuscole, perche' il resto del ricollegamento gia' lo fa: facendolo solo
+        /// in alcuni punti, lo stesso codice risultava presente in un controllo e inesistente in
+        /// quello dopo (I20-986).
+        /// </summary>
+        public static bool gruppoContieneCodice(string? codiceGruppo, string? codice)
+        {
+            if (string.IsNullOrWhiteSpace(codiceGruppo) || string.IsNullOrWhiteSpace(codice))
+            {
+                return false;
+            }
+
+            return codiceGruppo
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Any(c => string.Equals(c, codice.Trim(), StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <summary>
+        /// I codici che nessuno dei gruppi indicati copre.
+        ///
+        /// Serve a dire quali codici restano fuori dopo aver trovato quelli presenti in un'altra
+        /// forma. Anche qui il confronto ignora maiuscole e minuscole (I20-986).
+        /// </summary>
+        public static List<string> codiciNonCoperti(IEnumerable<string>? codici, IEnumerable<string>? gruppiPresenti)
+        {
+            if (codici == null)
+            {
+                return new List<string>();
+            }
+
+            var coperti = (gruppiPresenti ?? Enumerable.Empty<string>())
+                .Where(g => !string.IsNullOrWhiteSpace(g))
+                .SelectMany(g => g.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            return codici.Where(c => !string.IsNullOrWhiteSpace(c) && !coperti.Contains(c.Trim())).ToList();
+        }
+
         public static Dictionary<string, object>? getJsonObject(string json_string)
         {
 

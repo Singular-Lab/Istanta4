@@ -10786,13 +10786,17 @@ double.TryParse(percorso.ToString(), out double valore16))
             {
                 RichiestaRicollegamentoBox request = JsonConvert.DeserializeObject<RichiestaRicollegamentoBox>(stringRequest);
                 PromoLavorazioni pl = await this.ctx2.PromoLavorazionis.Include(i2 => i2.PromoLavorazioniRecords).AsSplitQuery().FirstOrDefaultAsync(f => f.Id == request.idLavorazione);
-                FicoRuntimeKit? kit = JsonConvert.DeserializeObject<FicoRuntimeKit>(pl.Meta!);
 
+                //I20-986: il controllo viene prima della lettura. Stava dopo, quindi con una
+                //lavorazione inesistente si sollevava un errore di riferimento nullo e questo
+                //messaggio, che dice all'operatore cos'e' successo, non usciva mai.
                 if (pl == null)
                 {
                     result.error = "lavorazione_inesistente";
                     return Ok(result);
                 }
+
+                FicoRuntimeKit? kit = JsonConvert.DeserializeObject<FicoRuntimeKit>(pl.Meta!);
 
 
                 result.idLavorazione = request.idLavorazione;
@@ -10820,6 +10824,15 @@ double.TryParse(percorso.ToString(), out double valore16))
 
 
                 Promo promo = await this.ctx2.Promos.FirstOrDefaultAsync(p => p.guidID == pl.GuidPromo);
+
+                //I20-986: senza promo non si puo' proseguire, e piu' avanti se ne legge
+                //l'identificativo per riconoscere i riscontri della stessa promo.
+                if (promo == null)
+                {
+                    result.error = "promo_inesistente";
+                    return Ok(result);
+                }
+
                 if (ficoController == null)
                 {
                     ficoController = new FicoProcessController(_config, _external_lib, this._fico_conf, _option_import, this.httpClient, _cache, this._dbContextFactory, null, dbContextFactory2: this._dbContextFactory2);
@@ -10832,10 +10845,14 @@ double.TryParse(percorso.ToString(), out double valore16))
 
                 Func<string, PromoTracciatiRecord> getFormaDiversa = (_cod) =>
                 {
-                    //Estriamo intanto grossolanamente dove quel codice è presente in una stringa più grande
-                    var _listaCodSingoloInGruppi = ptrDellaLavorazione.Where(p => p.CodiceGruppo.Contains(_cod)).ToList();
+                    //I20-986: il confronto ignora maiuscole e minuscole come le ricerche qui sopra.
+                    //Facendolo solo in alcuni punti, lo stesso codice risultava presente in un
+                    //controllo e inesistente in quello dopo.
+                    var _listaCodSingoloInGruppi = ptrDellaLavorazione
+                        .Where(p => p.CodiceGruppo != null && p.CodiceGruppo.Contains(_cod, StringComparison.OrdinalIgnoreCase))
+                        .ToList();
                     //Assicuriamoci che sia proprio quel codice ad essere un intero item e non magari solo per una parte
-                    var prestazioneFormaDiversa = _listaCodSingoloInGruppi.FirstOrDefault(pp => pp.CodiceGruppo.Split(',').Contains(_cod));
+                    var prestazioneFormaDiversa = _listaCodSingoloInGruppi.FirstOrDefault(pp => Utility.Main.gruppoContieneCodice(pp.CodiceGruppo, _cod));
                     return prestazioneFormaDiversa;
                 };
 
@@ -10957,6 +10974,11 @@ double.TryParse(percorso.ToString(), out double valore16))
                         if (!fuoriRange)
                         {
                             plr.Pagina = request.elementoDaRicollegare.pag;
+
+                            //I20-986: qui mancava il salvataggio. La pagina veniva cambiata solo in
+                            //memoria e persa a fine richiesta, mentre la risposta riportava comunque
+                            //quella nuova: il Plugin dava la forzatura per fatta e non lo era.
+                            await this.ctx2.SaveChangesAsync();
                         }
                     }
 
@@ -11033,8 +11055,7 @@ double.TryParse(percorso.ToString(), out double valore16))
                             RicollegamentoBoxItem item = new RicollegamentoBoxItem();
                             //C'è cambio forma
                             //Sottrazione dei codici
-                            var _listaCodiciPresenti = String.Join(',', codiciCambioFormaPresenti.Select(s => s));
-                            listCodici = listCodici.Where(s => !_listaCodiciPresenti.Split(',').Contains(s)).ToList();
+                            listCodici = Utility.Main.codiciNonCoperti(listCodici, codiciCambioFormaPresenti);
 
                             item.stato = StatoRicollegamentoBox.CambioDiForma;
                             item.codiciPresenti = codiciCambioFormaPresenti;
@@ -11135,7 +11156,10 @@ double.TryParse(percorso.ToString(), out double valore16))
             }
             catch (Exception ex)
             {
-                result.error = ex.ToString();
+                //I20-986: all'operatore arriva il motivo, non lo stack trace intero dentro una
+                //finestra di messaggio. Il dettaglio non si perde: finisce nel registro.
+                _logger?.LogError(ex, "Ricollegamento del box non riuscito");
+                result.error = ex.Message;
                 result.idRecSelezionato = 0;
             }
 
