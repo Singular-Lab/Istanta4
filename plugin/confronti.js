@@ -1475,6 +1475,20 @@ const confronti = {
             return false;
         }
 
+        //Il report puo' chiudersi mentre l'operatore sta nella scheda di una sua referenza
+        //(succede al cambio di documento): la scheda va smontata, ma senza ricontrollare
+        //niente, perche' il report a cui il ricontrollo servirebbe non c'e' piu'.
+        if (this._schedaDalReport != null) {
+            const schedaAperta = this._schedaDalReport;
+            this._schedaDalReport = null;
+
+            if (schedaAperta.timer != null) {
+                clearInterval(schedaAperta.timer);
+            }
+
+            this._terminaSchedaDalReport();
+        }
+
         this._reportIntegritaAperto = false;
         this._documentoDelReport = "";
 
@@ -1497,6 +1511,426 @@ const confronti = {
         return true;
     },
 
+
+    //I20-981 (Lotto 4a): la scheda referenza aperta dal report. Non e' una copia della scheda:
+    //e' la scheda vera, mostrata al posto del report. Una copia avrebbe voluto dire duplicare
+    //il markup di index.html e i suoi id, cioe' due schede destinate ad allontanarsi; e in
+    //ogni caso i modal della scheda (info, noRender, cambia foto) svuotano #bodyModal, che e'
+    //dove vive il report: sotto la scheda il report non sopravvivrebbe comunque. Percio' il
+    //report si chiude e si riapre dal suo stato, che e' in memoria e su disco.
+
+    //Ogni quanto si controlla che la scheda sia ancora agganciata al suo box e che la
+    //navigazione resti bloccata. La scheda si ridisegna da sola e diversi suoi flussi
+    //liberano gli eventi uscendo: il blocco va riaffermato, non solo impostato.
+    INTERVALLO_VIGILANZA_SCHEDA: 600,
+    //Oltre questo tempo la rilettura della scheda dal server si considera persa: meglio
+    //lasciare il report com'era che restare appesi con il caricamento davanti.
+    ATTESA_MASSIMA_RILETTURA_SCHEDA: 20000,
+
+    schedaDalReportAperta() {
+        return this._schedaDalReport != null;
+    },
+
+    /// Il Trova: prima porta l'operatore sul box, poi gli apre la scheda di quella referenza
+    /// al posto del report.
+    async _apriSchedaDalReport(payloadId, payload) {
+        if (this._schedaDalReport != null) {
+            return;
+        }
+
+        const box = this._findElemento(payload);
+        if (box == null) {
+            return;
+        }
+
+        const dna = Utility.getDnaOfBox(box);
+        if (dna == null) {
+            messaggioUtente("Code CNF-70 Il box non ha un dna leggibile: la scheda non si puo' aprire", "error", false, 5);
+            return;
+        }
+
+        const record = payload?.record?._fullReportRecord || payload?.record;
+
+        this._schedaDalReport = {
+            payloadId,
+            payload,
+            record,
+            codiceGruppo: dna.codice_gruppo,
+            idRec: dna.idRec,
+            timer: null,
+            riaggancioInCorso: false
+        };
+
+        //Il report si chiude qui: il suo stato resta in _confrontoReportState e lo si riapre
+        //alla X. chiudiModal rimette visibile la schermata principale, che e' dove sta la
+        //scheda.
+        Utility.chiudiModal();
+
+        $("#refImage").show();
+        this._crChiusuraSchedaDalReport();
+        this._applicaBloccoSchedaDalReport();
+
+        showLoading("Caricamento scheda REF");
+        schedaRef.setInvalidated(false);
+        schedaRef.initSchedaRef(this._refPerSchedaDalReport(box, dna));
+
+        //initSchedaRef libera gli eventi uscendo: da qui in avanti devono restare fermi, e il
+        //vigilante li riafferma ad ogni giro.
+        this._applicaBloccoSchedaDalReport();
+        this._schedaDalReport.timer = setInterval(
+            () => this._vigilaSchedaDalReport(), this.INTERVALLO_VIGILANZA_SCHEDA);
+    },
+
+    _refPerSchedaDalReport(box, dna) {
+        let pagina = -1;
+        let paginaRef = null;
+        let bounds = null;
+
+        try {
+            paginaRef = box.parentPage;
+            pagina = paginaRef == null ? -1 : parseInt(paginaRef.name);
+            bounds = box.geometricBounds;
+        }
+        catch (err) {
+            console.error("Pagina o dimensioni del box non leggibili:", err);
+        }
+
+        return schedaRef.refDalBoxPerReport(box, dna, { pagina, paginaRef, bounds });
+    },
+
+    /// La X: l'unica via d'uscita. Deselezionare non chiude niente, perche' sgruppamenti e
+    /// raggruppamenti deselezionano e riselezionano il box senza che l'operatore abbia finito.
+    _crChiusuraSchedaDalReport() {
+        $("#chiudiSchedaDalReport").remove();
+
+        const testata = $("#referenza");
+        testata.css("display", "flex");
+        testata.css("align-items", "center");
+        testata.css("justify-content", "space-between");
+
+        const bottone = $('<div id="chiudiSchedaDalReport">✕</div>');
+        bottone.css("color", "white");
+        bottone.css("cursor", "pointer");
+        bottone.css("padding", "0px 10px");
+        bottone.css("font-size", "14px");
+        bottone.on("click", () => this._chiudiSchedaDalReport());
+
+        testata.append(bottone);
+
+        const elemento = document.getElementById("chiudiSchedaDalReport");
+        if (elemento != null) {
+            Utility.impostaTooltip(elemento, "Chiudi la scheda e torna al report");
+        }
+    },
+
+    /// La barra resta sulla sola referenza e gli eventi restano fermi. Si riapplica ad ogni
+    /// giro perche' la scheda, ridisegnandosi, rimette in piedi quello che le appartiene.
+    _applicaBloccoSchedaDalReport() {
+        try {
+            schedaRef.DAL_REPORT_VOCI_BARRA_NASCOSTE.forEach(id => $("#" + id).hide());
+            schedaRef.DAL_REPORT_VOCI_SOTTOMENU_NASCOSTE.forEach(
+                tab => $(".subTab5").find('img[tab="' + tab + '"]').hide());
+
+            if (typeof indesignEvents !== "undefined" && indesignEvents?.setBusy) {
+                indesignEvents.setBusy(true);
+            }
+        }
+        catch (err) {
+            console.error("Blocco della navigazione non applicato:", err);
+        }
+    },
+
+    _vigilaSchedaDalReport() {
+        const stato = this._schedaDalReport;
+        if (stato == null) {
+            return;
+        }
+
+        this._applicaBloccoSchedaDalReport();
+
+        if (stato.riaggancioInCorso) {
+            return;
+        }
+
+        let box = null;
+        try {
+            box = schedaRef.refSelected != null ? schedaRef.refSelected.item : null;
+        }
+        catch (err) {
+            box = null;
+        }
+
+        if (!schedaRef.serveRiaggancioDalReport(box)) {
+            return;
+        }
+
+        stato.riaggancioInCorso = true;
+        this._riagganciaSchedaDalReport();
+    },
+
+    /// Reimpagina e cambi strutturali rifanno il box: con gli eventi fermi nessuno ripunta la
+    /// scheda, e allora la ripuntiamo noi, cercando il box nuovo per codice gruppo.
+    _riagganciaSchedaDalReport() {
+        const stato = this._schedaDalReport;
+        if (stato == null) {
+            return;
+        }
+
+        const box = this._resolveBoxByCodiceGruppo(stato.record);
+        const dna = box != null ? Utility.getDnaOfBox(box) : null;
+
+        if (box == null || dna == null) {
+            messaggioUtente("Code CNF-71 Il box non e' piu' in pagina: la scheda si chiude e il report si aggiorna", "warning", false, 6);
+            stato.riaggancioInCorso = false;
+            this._chiudiSchedaDalReport();
+            return;
+        }
+
+        try {
+            app.selection = [box];
+        }
+        catch (err) {
+            console.error("Errore selezione del box rifatto:", err);
+        }
+
+        //Una scheda morta a meta' resta occupata, e occupata rifiuterebbe di ripartire.
+        schedaRef.setBusy(false);
+        schedaRef.setInvalidated(false);
+
+        showLoading("Ricarico la scheda sul box rifatto");
+        schedaRef.initSchedaRef(this._refPerSchedaDalReport(box, dna));
+
+        stato.riaggancioInCorso = false;
+        this._applicaBloccoSchedaDalReport();
+    },
+
+    /// La chiusura: si ricontrolla la referenza, perche' l'operatore puo' averne risolto le
+    /// segnalazioni standoci dentro, e si torna al report aggiornato.
+    async _chiudiSchedaDalReport() {
+        const stato = this._schedaDalReport;
+        if (stato == null) {
+            return;
+        }
+
+        //Una volta sola: la X si puo' premere due volte, e il riaggancio puo' arrivarci nello
+        //stesso momento.
+        this._schedaDalReport = null;
+        if (stato.timer != null) {
+            clearInterval(stato.timer);
+        }
+
+        showLoading("Aggiorno la referenza nel report...");
+
+        try {
+            await this._ricontrollaReferenzaDopoScheda(stato);
+        }
+        catch (err) {
+            console.error("Ricontrollo della referenza non riuscito:", err);
+            messaggioUtente("Code CNF-72 Ricontrollo della referenza non riuscito: il report resta com'era", "error", false, 6);
+        }
+
+        this._terminaSchedaDalReport();
+        hideLoading();
+        this._riapriReportDopoScheda();
+    },
+
+    _terminaSchedaDalReport() {
+        try {
+            $("#chiudiSchedaDalReport").remove();
+            $("#referenza").css("display", "");
+            $("#referenza").css("justify-content", "");
+
+            schedaRef.setInvalidated(true);
+            schedaRef.svuotaRef();
+            schedaRef.resetRefInterface();
+
+            //L'interfaccia torna come quando non c'e' niente di selezionato: e' lo stato che il
+            //plugin conosce gia', non uno nuovo inventato qui.
+            $("#homeImage").show();
+            $("#menaboTab").show();
+            $("#utilityImage").show();
+            $("#refImage").hide();
+            $("#raggruppaImage").hide();
+            $("#grigliaTab").hide();
+            schedaRef.DAL_REPORT_VOCI_SOTTOMENU_NASCOSTE.forEach(
+                tab => $(".subTab5").find('img[tab="' + tab + '"]').show());
+
+            jsIndexControls.changeSubMenu($("#homeImage").attr("subTab"));
+            jsIndexControls.changeImage($("#homeImage"));
+        }
+        catch (err) {
+            console.error("Chiusura della scheda dal report non completata:", err);
+        }
+    },
+
+    _riapriReportDopoScheda() {
+        const state = this._confrontoReportState;
+        if (state == null) {
+            return;
+        }
+
+        this._saveCurrentReportAndWhitelist();
+
+        this.compilaReportConfronto(state.report, {
+            wrapper: {
+                createdAt: state.createdAt,
+                createdAtLabel: state.createdAtLabel,
+                report: state.report,
+                uiPrefs: state.uiPrefs
+            },
+            skipSave: true,
+            activeList: state.activeList,
+            activeTab: state.activeTab
+        });
+    },
+
+    /// Il ricontrollo di una sola referenza: il box si rilegge, la scheda si riscarica dal
+    /// server (le descrizioni possono essere cambiate proprio adesso) e il record prende il
+    /// posto che gli spetta. Rifare tutto il report costerebbe quanto aprirlo.
+    async _ricontrollaReferenzaDopoScheda(stato) {
+        const state = this._confrontoReportState;
+        const record = stato?.record;
+
+        if (state == null || record == null) {
+            return;
+        }
+
+        //Nella whitelist le segnalazioni stanno parcheggiate apposta: ricontrollarle da qui
+        //vorrebbe dire rimettere in circolo quello che l'operatore ha messo da parte, e per
+        //giunta in un elenco, quello del report, dove quel record non sta.
+        if (state.activeList === "whitelist") {
+            return;
+        }
+
+        let box = null;
+        try {
+            box = schedaRef.refSelected != null && !schedaRef.serveRiaggancioDalReport(schedaRef.refSelected.item)
+                ? schedaRef.refSelected.item
+                : null;
+        }
+        catch (err) {
+            box = null;
+        }
+
+        if (box == null) {
+            box = this._resolveBoxByCodiceGruppo(record);
+        }
+
+        let preAnalisi = null;
+
+        if (box != null) {
+            const records = await this._leggiSchedaRefAggiornata(stato.codiceGruppo, stato.idRec);
+
+            if (records == null || records.length === 0) {
+                messaggioUtente("Code CNF-73 Scheda della referenza non riletta: il report resta com'era", "warning", false, 6);
+                return;
+            }
+
+            preAnalisi = await preAnalisiBoxMappato(records, record.elementoMappa, box);
+
+            if (preAnalisi != null) {
+                preAnalisi.differenze = reportIntegritaAvvio.differenzeDopoRicontrollo(
+                    preAnalisi.differenze,
+                    reportIntegritaAvvio.differenzeDiConfronto(record),
+                    record.duplicateInfo);
+
+                record.schedaRef = { records };
+                record.preAnalisi = preAnalisi;
+                this._aggiornaRiferimentiBox(record, box);
+            }
+        }
+
+        const esito = reportIntegritaAvvio.esitoChiusuraScheda({
+            boxPresente: box != null,
+            preAnalisi,
+            haDuplicato: record.duplicateInfo != null
+        });
+
+        if (esito.azione === "invariato") {
+            messaggioUtente("Code CNF-74 Referenza non ricontrollata: il report resta com'era", "warning", false, 6);
+            return;
+        }
+
+        this._rimuoviRecordDalReport(record);
+
+        if (esito.azione === "sposta" && esito.categoria != null) {
+            state.report[esito.categoria] = state.report[esito.categoria] || [];
+            state.report[esito.categoria].push(record);
+        }
+
+        this._removeConfrontoPayload(stato.payloadId);
+    },
+
+    _rimuoviRecordDalReport(record) {
+        const state = this._confrontoReportState;
+        if (state == null || state.report == null) {
+            return;
+        }
+
+        ["recordCambiati", "recordUsciti", "recordConErrori", "recordGiusti", "recordNuoviRisolti"]
+            .forEach(chiave => this._removeRecordFromArray(state.report[chiave], record));
+    },
+
+    /// Il box puo' essere un altro rispetto a quello con cui il report e' nato: chi lo cerchera'
+    /// domani deve trovare questo.
+    _aggiornaRiferimentiBox(record, box) {
+        try {
+            record.inddId = box.id;
+
+            if (record.elementoMappa != null) {
+                record.elementoMappa.refId = box.id;
+            }
+
+            const pagina = box.parentPage != null ? box.parentPage.name : null;
+            if (pagina != null) {
+                record.numeroPagina = pagina;
+
+                if (record.elementoMappa != null) {
+                    record.elementoMappa.pagina = pagina;
+                    record.elementoMappa.paginaAttuale = pagina;
+                }
+            }
+        }
+        catch (err) {
+            console.error("Riferimenti del box non aggiornati:", err);
+        }
+    },
+
+    /// La scheda si rilegge dal server per quella sola referenza: i record con cui il report e'
+    /// nato sono di prima che l'operatore ci mettesse mano.
+    _leggiSchedaRefAggiornata(codiceGruppo, idRec) {
+        return new Promise(resolve => {
+            let risposto = false;
+
+            const rispondi = (valore) => {
+                if (risposto) {
+                    return;
+                }
+                risposto = true;
+                resolve(valore);
+            };
+
+            //XMLHttpRequestClient.abort() non interrompe davvero: la richiesta tardiva la si
+            //lascia cadere, ma l'attesa non deve tenere fermo l'operatore.
+            setTimeout(() => rispondi(null), this.ATTESA_MASSIMA_RILETTURA_SCHEDA);
+
+            try {
+                schedaRef.getSchedaRef(codiceGruppo, (errore, risultato) => {
+                    if (errore != null || risultato == null || (risultato.error != null && risultato.error !== "")) {
+                        console.error("Rilettura della scheda non riuscita:", errore || risultato?.error);
+                        rispondi(null);
+                        return;
+                    }
+
+                    rispondi(risultato.records || null);
+                }, idRec);
+            }
+            catch (err) {
+                console.error("Rilettura della scheda non partita:", err);
+                rispondi(null);
+            }
+        });
+    },
 
     compilaReportConfronto(report, options = {}) {
         const wrapper = this._normalizeReportIntegritaWrapper(options.wrapper || null);
@@ -2977,7 +3411,7 @@ const confronti = {
 
         switch (action) {
             case "find":
-                this._findElemento(payload);
+                await this._apriSchedaDalReport(payloadId, payload);
                 break;
 
             case "info":
@@ -3287,7 +3721,7 @@ const confronti = {
         if (!box) {
             messaggioUtente("Impossibile trovare l'elemento nel documento il riferimento potrebbe essere stato perso", "warning", false, 5);
             console.warn("Elemento non trovato");
-            return;
+            return null;
         }
 
         try {
@@ -3298,6 +3732,8 @@ const confronti = {
         } catch (err) {
             console.error("Errore selezione:", err);
         }
+
+        return box;
     },
 
     _resolveBoxFromRecord(record) {

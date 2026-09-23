@@ -644,3 +644,102 @@ test('la scheda Confronti resta in attesa del confronto con altre liste', () => 
     assert.doesNotMatch(compila, /etichettaLinguetta\("Differenti"/);
     assert.match(compila, /this\._crTabButton\("Confronti", false, "Confronti"\)/);
 });
+
+test('il Trova apre la scheda referenza vera, non una sua copia', () => {
+    const azione = corpoFunzione(confronti, '_onConfrontoAction(ev, action) {');
+    assert.match(azione, /case "find":\s*\n\s*await this\._apriSchedaDalReport\(payloadId, payload\)/);
+
+    const apri = corpoFunzione(confronti, '_apriSchedaDalReport(payloadId, payload) {');
+
+    //Prima porta l'operatore sul box, come faceva il Trova di prima.
+    assert.match(apri, /const box = this\._findElemento\(payload\)/);
+
+    //Poi chiude il report e apre la scheda dallo stesso punto da cui la apre l'evento di
+    //selezione: e' quello che garantisce un flusso solo.
+    assert.match(apri, /Utility\.chiudiModal\(\)/);
+    assert.match(apri, /schedaRef\.initSchedaRef\(this\._refPerSchedaDalReport\(box, dna\)\)/);
+
+    //La ref la compone il modulo verificato, non questo file.
+    const ref = corpoFunzione(confronti, '_refPerSchedaDalReport(box, dna) {');
+    assert.match(ref, /schedaRef\.refDalBoxPerReport\(box, dna/);
+
+    //Nessuna copia della scheda: il report non ricostruisce i suoi pannelli.
+    const codice = senzaCommenti(confronti);
+    assert.ok(!codice.includes('editReferenza'), 'la scheda non si ridisegna dentro il report');
+});
+
+test('dalla scheda aperta dal report non si scappa', () => {
+    const blocco = corpoFunzione(confronti, '_applicaBloccoSchedaDalReport() {');
+
+    //Le voci nascoste sono quelle dichiarate nella scheda, non una lista scritta qui.
+    assert.match(blocco, /schedaRef\.DAL_REPORT_VOCI_BARRA_NASCOSTE/);
+    assert.match(blocco, /schedaRef\.DAL_REPORT_VOCI_SOTTOMENU_NASCOSTE/);
+
+    //Gli eventi restano fermi: la scheda li libera uscendo da diversi suoi flussi, quindi il
+    //blocco va riaffermato, non solo impostato all'apertura.
+    assert.match(blocco, /indesignEvents\.setBusy\(true\)/);
+
+    const vigila = corpoFunzione(confronti, '_vigilaSchedaDalReport() {');
+    assert.match(vigila, /this\._applicaBloccoSchedaDalReport\(\)/);
+    assert.match(vigila, /schedaRef\.serveRiaggancioDalReport\(box\)/);
+
+    //Si esce solo dalla X: sgruppamenti e raggruppamenti deselezionano e riselezionano il box,
+    //e una deselezione non vuol dire che l'operatore ha finito.
+    const chiusura = corpoFunzione(confronti, '_crChiusuraSchedaDalReport() {');
+    assert.match(chiusura, /bottone\.on\("click", \(\) => this\._chiudiSchedaDalReport\(\)\)/);
+});
+
+test('il box rifatto non lascia la scheda appesa al box morto', () => {
+    //Reimpagina e cambi strutturali creano un box nuovo: con gli eventi fermi nessuno ripunta
+    //la scheda, e allora la ripunta il report.
+    const riaggancio = corpoFunzione(confronti, '_riagganciaSchedaDalReport() {');
+    assert.match(riaggancio, /this\._resolveBoxByCodiceGruppo\(stato\.record\)/);
+    assert.match(riaggancio, /schedaRef\.initSchedaRef\(this\._refPerSchedaDalReport\(box, dna\)\)/);
+
+    //Se il box non si ritrova, la scheda si chiude e il report si aggiorna.
+    assert.match(riaggancio, /this\._chiudiSchedaDalReport\(\)/);
+});
+
+test('chiudendo la scheda la referenza si ricontrolla da sola', () => {
+    const chiudi = corpoFunzione(confronti, '_chiudiSchedaDalReport() {');
+
+    //Una volta sola: la X si puo' premere due volte e il riaggancio puo' arrivarci insieme.
+    assert.match(chiudi, /this\._schedaDalReport = null/);
+    assert.match(chiudi, /clearInterval\(stato\.timer\)/);
+    assert.match(chiudi, /await this\._ricontrollaReferenzaDopoScheda\(stato\)/);
+    assert.match(chiudi, /this\._riapriReportDopoScheda\(\)/);
+
+    const ricontrollo = corpoFunzione(confronti, '_ricontrollaReferenzaDopoScheda(stato) {');
+
+    //La scheda si rilegge dal server: i record con cui il report e' nato sono di prima che
+    //l'operatore ci mettesse mano.
+    assert.match(ricontrollo, /await this\._leggiSchedaRefAggiornata\(stato\.codiceGruppo, stato\.idRec\)/);
+    //La preanalisi e' quella del report, sul box che abbiamo in mano, che puo' essere nuovo.
+    assert.match(ricontrollo, /await preAnalisiBoxMappato\(records, record\.elementoMappa, box\)/);
+    //Le decisioni stanno nel modulo verificato.
+    assert.match(ricontrollo, /reportIntegritaAvvio\.differenzeDopoRicontrollo\(/);
+    assert.match(ricontrollo, /reportIntegritaAvvio\.esitoChiusuraScheda\(/);
+    //Rifare tutto il report costerebbe quanto aprirlo: qui si tocca una referenza sola.
+    assert.doesNotMatch(ricontrollo, /mappaturaImpaginato|syncImpaginatoConServer/);
+
+    //Dalla whitelist non si ricontrolla: quelle segnalazioni sono parcheggiate apposta, e il
+    //record non sta nemmeno negli elenchi del report.
+    assert.match(ricontrollo, /state\.activeList === "whitelist"/);
+
+    //Il box puo' essere un altro: chi lo cerchera' domani deve trovare questo.
+    const riferimenti = corpoFunzione(confronti, '_aggiornaRiferimentiBox(record, box) {');
+    assert.match(riferimenti, /record\.inddId = box\.id/);
+    assert.match(riferimenti, /record\.elementoMappa\.refId = box\.id/);
+});
+
+test('il report che si chiude sotto la scheda non lascia l\'interfaccia bloccata', () => {
+    //Al cambio di documento il report si chiude da solo: se l'operatore era dentro la scheda,
+    //la barra deve tornare navigabile.
+    const chiudiReport = corpoFunzione(confronti, 'chiudiReportIntegrita(motivo = null) {');
+    assert.match(chiudiReport, /this\._schedaDalReport != null/);
+    assert.match(chiudiReport, /this\._terminaSchedaDalReport\(\)/);
+
+    const termina = corpoFunzione(confronti, '_terminaSchedaDalReport() {');
+    assert.match(termina, /\$\("#chiudiSchedaDalReport"\)\.remove\(\)/);
+    assert.match(termina, /\$\("#homeImage"\)\.show\(\)/);
+});

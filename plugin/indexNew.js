@@ -3923,7 +3923,9 @@ function boxDellElementoMappa(elementoMappa) {
 //(pages.everyItem().getElements()), una page.select() e una ricerca dentro page.allPageItems
 //o, peggio, dentro doc.allPageItems: tutte cose che la mappa aveva gia' risolto. La
 //preanalisi non impagina nulla, quindi della pagina non ha bisogno.
-async function preAnalisiBoxMappato(records, elementoMappa) {
+//Il box si puo' passare gia' trovato: chi richiude la scheda referenza aperta dal report ce
+//l'ha in mano, e puo' essere un box rifatto, che nell'elemento di mappa non c'e' ancora.
+async function preAnalisiBoxMappato(records, elementoMappa, boxGiaTrovato = null) {
     var dati = datiPrimarioPerConfronto(records);
     if (dati == null) {
         //Nessun primario nel gruppo: senza di lui non c'e' nulla da confrontare. Nel report
@@ -3932,7 +3934,7 @@ async function preAnalisiBoxMappato(records, elementoMappa) {
         return null;
     }
 
-    var box = boxDellElementoMappa(elementoMappa);
+    var box = boxGiaTrovato != null ? boxGiaTrovato : boxDellElementoMappa(elementoMappa);
     if (box == null) {
         return null;
     }

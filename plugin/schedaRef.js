@@ -48,6 +48,57 @@ const schedaRef = {
         this.isBusy = value;
     },
 
+    //I20-981 (Lotto 4a): dal Report Integrita' si arriva a questa scheda, ed e' questa scheda,
+    //mostrata al posto del report: non una copia, che vorrebbe dire duplicare il markup di
+    //index.html e i suoi id, cioe' due schede che col tempo si allontanano. Quello che cambia
+    //e' solo cosa resta raggiungibile, e sono le regole qui sotto.
+
+    //Dalla scheda aperta dal report non si naviga altrove: gli eventi del plugin restano
+    //fermi, e il resto dell'interfaccia non sarebbe governato da nessuno.
+    DAL_REPORT_VOCI_BARRA_NASCOSTE: ["homeImage", "menaboTab", "grigliaTab", "utilityImage", "artworkTab", "raggruppaImage"],
+
+    //Sgruppa e Struttura restano fuori: cambiano la composizione del gruppo, e non e' quello
+    //che si viene a fare da qui. I cambi strutturali proposti dalla schermata di edit si
+    //raggiungono lo stesso, perche' ci arrivano per conto loro.
+    DAL_REPORT_VOCI_SOTTOMENU_NASCOSTE: ["Tab8", "Tab13"],
+
+    /// La ref che initSchedaRef si aspetta, composta dal box e dal suo dna: la stessa forma
+    /// che prepara l'evento di selezione, perche' da li' in poi il flusso deve essere uno solo.
+    refDalBoxPerReport(box, dna, contesto) {
+        if (box == null || dna == null) {
+            return null;
+        }
+
+        const dati = contesto || {};
+
+        return {
+            pag: dati.pagina != null ? dati.pagina : -1,
+            pagRef: dati.paginaRef != null ? dati.paginaRef : null,
+            item: box,
+            boxOriginalBounds: dati.bounds != null ? dati.bounds : null,
+            codice: dna.codice,
+            codiceGruppo: dna.codice_gruppo,
+            idRec: dna.idRec,
+            meccanica: dna.box
+        };
+    },
+
+    /// Il box su cui la scheda sta lavorando va ripreso: reimpagina e cambi strutturali ne
+    /// creano uno nuovo e il vecchio decade, e con gli eventi fermi nessuno ripunta la scheda.
+    serveRiaggancioDalReport(box) {
+        if (box == null) {
+            return true;
+        }
+
+        try {
+            return box.isValid !== true;
+        }
+        catch (err) {
+            //Un box che non risponde nemmeno su isValid e' un box perso.
+            return true;
+        }
+    },
+
     initSchedaRef(ref) {
         try {
 

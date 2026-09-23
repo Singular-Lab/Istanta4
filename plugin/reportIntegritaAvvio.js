@@ -125,6 +125,79 @@ function deveChiudereReport(documentoDelReport, documentoAttuale) {
     return attuale !== String(documentoDelReport);
 }
 
+//I20-981 (Lotto 4a): la scheda referenza si puo' aprire dal report, e quando si chiude quella
+//referenza va ricontrollata da sola, perche' l'operatore puo' aver risolto le sue segnalazioni
+//standoci dentro. Queste sono le regole di dove va a finire il record.
+
+/// La categoria del record dopo il ricontrollo: la stessa classificazione con cui il report
+/// nasce, cosi' un record ricontrollato e uno appena analizzato finiscono nello stesso posto a
+/// parita' di esito.
+function categoriaRecordRicontrollato(preAnalisi, haDuplicato) {
+    if (haDuplicato) {
+        return "recordCambiati";
+    }
+
+    if (preAnalisi == null) {
+        return null;
+    }
+
+    if ((preAnalisi.errors || []).length > 0) {
+        return "recordConErrori";
+    }
+
+    if ((preAnalisi.differenze || []).length > 0) {
+        return "recordCambiati";
+    }
+
+    return "recordGiusti";
+}
+
+/// Che fare del record alla chiusura della scheda.
+function esitoChiusuraScheda(situazione) {
+    const dati = situazione || {};
+
+    //Il box non c'e' piu': la referenza esce dal report e ricompare fra le Nuove, che si
+    //calcolano per differenza da chi nel report c'e' gia'.
+    if (!dati.boxPresente) {
+        return { azione: "rimuovi", categoria: null };
+    }
+
+    //Senza preanalisi non sappiamo niente di nuovo: meglio lasciare il report com'era che
+    //dichiarare risolto quello che non abbiamo controllato.
+    if (dati.preAnalisi == null) {
+        return { azione: "invariato", categoria: null };
+    }
+
+    return {
+        azione: "sposta",
+        categoria: categoriaRecordRicontrollato(dati.preAnalisi, dati.haDuplicato === true)
+    };
+}
+
+/// Le differenze di confronto non vengono dal box: il ricontrollo del box non le puo' vedere,
+/// e quindi si riportano come stavano.
+function differenzeDiConfronto(record) {
+    const differenze = (record && record.preAnalisi && record.preAnalisi.differenze) || [];
+    return differenze.filter(d => d != null && d.origine === "confronto");
+}
+
+/// Le differenze del record dopo il ricontrollo, nell'ordine in cui le mette la costruzione
+/// del report: prima l'integrita', poi il confronto, il duplicato in fondo.
+function differenzeDopoRicontrollo(differenzeIntegrita, differenzeConfronto, duplicateInfo) {
+    const risultato = (differenzeIntegrita || []).filter(d => d != null && d.origine !== "confronto");
+
+    (differenzeConfronto || []).forEach(d => risultato.push(d));
+
+    if (duplicateInfo != null) {
+        risultato.push({
+            label: "Duplicato",
+            difference: "box duplicato: istanza " + duplicateInfo.index + " di " + duplicateInfo.total
+        });
+    }
+
+    return risultato;
+}
+
 module.exports = {
     MINUTI_LISTA_RECENTE,
     ORE_REPORT_DA_CHIEDERE,
@@ -133,5 +206,9 @@ module.exports = {
     listaERecente,
     decidiReportEsistente,
     componiRangePagine,
-    deveChiudereReport
+    deveChiudereReport,
+    categoriaRecordRicontrollato,
+    esitoChiusuraScheda,
+    differenzeDiConfronto,
+    differenzeDopoRicontrollo
 };
