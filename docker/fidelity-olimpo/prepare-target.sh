@@ -222,6 +222,40 @@ if verifica_dati FIDELITY_CONFIG_DIR "$UID_APP"; then
     fi
 fi
 
+# Le directory di lavoro di Olimpo stanno dentro il volume olimpo_uploads, non
+# sull'host, quindi non si creano con mkdir. Si pre-crea il volume e ci si entra
+# con un container usa e getta: fatto PRIMA del primo `up`, il volume risulta poi
+# non vuoto e Docker non lo semina dall'immagine — che in quel punto contiene
+# solo FTP/, ricreata qui insieme alle altre.
+#
+# Perché serve: absolute_paths indica a Olimpo dove scrivere (WEB, ARCHIVIO,
+# MATERIALI, VIDEO), ma il codice non crea quelle directory: garantisce solo
+# FTP_ROOT. Senza, il primo salvataggio fallisce.
+prepara_volume_olimpo() {
+    local progetto volume
+    progetto=$(leggi release.env COMPOSE_PROJECT_NAME)
+    volume="${progetto:-istanta4}_olimpo_uploads"
+
+    if ! docker info >/dev/null 2>&1; then
+        giallo "  saltato   Docker non interrogabile: il volume $volume va preparato a parte"
+        avvisi=$((avvisi + 1))
+        return
+    fi
+    docker volume create "$volume" >/dev/null 2>&1
+    if docker run --rm -v "$volume:/v" busybox:1.36 sh -c         'mkdir -p /v/web /v/archivio /v/materiali /v/video /v/FTP && chown -R 1000:1000 /v'         >/dev/null 2>&1
+    then
+        verde "  ok        volume $volume (web, archivio, materiali, video, FTP)"
+    else
+        rosso "  errore    non riesco a preparare il volume $volume"
+        rosso "            Serve l'immagine busybox: docker pull busybox:1.36"
+        errori=$((errori + 1))
+    fi
+}
+
+echo
+echo "Volume di lavoro di Olimpo"
+prepara_volume_olimpo
+
 echo
 echo "Facoltativo"
 cert_dir=$(leggi release.env PROXY_CERT_DIR)

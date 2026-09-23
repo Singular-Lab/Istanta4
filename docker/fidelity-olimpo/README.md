@@ -197,6 +197,29 @@ servizio:
 docker compose --env-file release.env -f compose.production.yaml up -d proxy
 ```
 
+### Dopo il primo avvio: `seed-fidelity.sh`
+
+Su un database nuovo Fidelity parte ma non ci si entra: non esiste alcun metodo
+di accesso, nessun utente e nessuna voce di menu. Dopo il primo deployment:
+
+```bash
+sudo ./seed-fidelity.sh
+```
+
+Inserisce il provider `email_password`, l'utente amministratore preso da
+`FIDELITY_ADMIN_*` di `release.env` (password cifrata con bcrypt) e le 33 voci di
+menu del Superadmin.
+
+Non sta in `postgres-init` per una ragione precisa: `auth_providers`, `utenti` e
+`menu_items` le crea Sequelize quando Fidelity parte, quindi durante
+l'inizializzazione di PostgreSQL non esistono ancora. Definirle a mano nello
+script di init significherebbe duplicare i modelli, e la copia divergerebbe al
+primo campo aggiunto.
+
+Lo script è idempotente: rilanciarlo non duplica nulla e non tocca quello che c'è
+già, quindi si può rieseguire anche solo per aggiungere le voci di menu
+introdotte da una versione nuova.
+
 ## 3. Configurare il Runner
 
 In `/opt/company-ai/runner/compose.yaml`, sotto `environment` del servizio
