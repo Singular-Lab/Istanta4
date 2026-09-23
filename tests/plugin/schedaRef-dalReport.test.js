@@ -103,3 +103,24 @@ test('la descrizione del server e\' quella con cui il report giudica il box', ()
     assert.strictEqual(schedaRef.descrizioneCompilataDelPrimario(
         [{ recordInTracciato: { StatoSelezione: 1, compiledFields: [{ labelName: 'descrizione', content: '' }] } }]), null);
 });
+
+test('il pulsante della descrizione si offre solo quando serve, e chiede al report', async () => {
+    const compilato = { labelName: 'descrizione', paragraphName: '', content: '<DES_nome>Mele Giga</DES_nome>' };
+    const records = [{ recordInTracciato: { StatoSelezione: 1, compiledFields: [compilato] } }];
+
+    //Senza campo compilato non c'e' niente da allineare, e senza box non c'e' dove.
+    assert.strictEqual(await schedaRef.descrizioneDisallineata([], { isValid: true }), false);
+    assert.strictEqual(await schedaRef.descrizioneDisallineata(records, null), false);
+    //Un box non piu' valido non si giudica: ci pensa il riaggancio, non questo pulsante.
+    assert.strictEqual(await schedaRef.descrizioneDisallineata(records, { isValid: false }), false);
+
+    //Il giudizio non si scrive qui: se non riusciamo a chiederlo alla preanalisi del report,
+    //il pulsante si offre lo stesso. Proporre un allineamento inutile costa un clic,
+    //nasconderlo quando serviva costa una segnalazione che l'operatore non sa come togliersi.
+    assert.strictEqual(await schedaRef.descrizioneDisallineata(records, { isValid: true }), true);
+
+    //Il campo e' quello del primario, e il sottogruppo comanda anche qui.
+    assert.strictEqual(schedaRef.campoDescrizioneCompilatoDelPrimario(records), compilato);
+    assert.strictEqual(schedaRef.tracciatoDelPrimario(records), records[0].recordInTracciato);
+    assert.strictEqual(schedaRef.tracciatoDelPrimario([]), null);
+});

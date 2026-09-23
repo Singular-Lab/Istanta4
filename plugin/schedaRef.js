@@ -72,11 +72,10 @@ const schedaRef = {
         return this.apertaDalReport !== true;
     },
 
-    /// Il contenuto della descrizione come lo ha compilato il server, per il primario della
-    /// scheda caricata. E' esattamente cio' con cui il Report Integrita' confronta il box,
-    /// quindi riportarlo nel box allinea le due cose per costruzione.
-    /// La regola del sottogruppo e' la stessa che usa la preanalisi: se c'e', comanda lui.
-    descrizioneCompilataDelPrimario(records) {
+    /// Il primario del gruppo e il suo tracciato: la regola del sottogruppo e' la stessa che
+    /// usa la preanalisi, se c'e' comanda lui. Altrimenti si allineerebbe il box a un dato
+    /// diverso da quello con cui viene giudicato.
+    tracciatoDelPrimario(records) {
         const primario = (records || []).find(
             r => r != null && r.recordInTracciato != null && r.recordInTracciato["StatoSelezione"] == 1);
 
@@ -84,13 +83,65 @@ const schedaRef = {
             return null;
         }
 
-        const tracciato = primario.sottogruppo ? primario.sottogruppo : primario.recordInTracciato;
+        return primario.sottogruppo ? primario.sottogruppo : primario.recordInTracciato;
+    },
+
+    /// Il campo compilato della descrizione per il primario della scheda caricata. E'
+    /// esattamente cio' con cui il Report Integrita' confronta il box, quindi riportarlo nel
+    /// box allinea le due cose per costruzione.
+    campoDescrizioneCompilatoDelPrimario(records) {
+        const tracciato = this.tracciatoDelPrimario(records);
         const campi = (tracciato != null && tracciato.compiledFields) || [];
 
         const campo = campi.find(
             c => c != null && String(c.labelName || "").toLowerCase() === "descrizione");
 
-        return campo != null && campo.content ? campo.content : null;
+        return campo != null && campo.content ? campo : null;
+    },
+
+    descrizioneCompilataDelPrimario(records) {
+        const campo = this.campoDescrizioneCompilatoDelPrimario(records);
+        return campo != null ? campo.content : null;
+    },
+
+    /// Il box dice una descrizione diversa da quella del server? Non lo decidiamo qui: lo
+    /// chiediamo alla stessa preanalisi che usa il Report Integrita', sul solo campo della
+    /// descrizione. Cosi' il pulsante si offre esattamente quando il report si lamenterebbe,
+    /// e non compare quando non c'e' niente da allineare.
+    async descrizioneDisallineata(records, box) {
+        const campo = this.campoDescrizioneCompilatoDelPrimario(records);
+
+        if (campo == null || box == null) {
+            return false;
+        }
+
+        try {
+            if (!box.isValid) {
+                return false;
+            }
+
+            const tracciato = this.tracciatoDelPrimario(records);
+
+            const preAnalisi = await confronti.confrontoBoxCompiledFieldPreAnalisi(
+                box,
+                [campo],
+                [],
+                [],
+                null,
+                null,
+                false,
+                NoRenderElementi.elencoPerSegnalazioni(tracciato.noRenderElementi, tracciato.membriGruppoFoto)
+            );
+
+            return preAnalisi != null && (preAnalisi.differenze || []).length > 0;
+        }
+        catch (error) {
+            //Se non riusciamo a giudicare, il pulsante si offre lo stesso: proporre un
+            //allineamento che non serviva costa un clic, nasconderlo quando serviva costa una
+            //segnalazione che l'operatore non sa come togliersi.
+            console.error("Allineamento della descrizione non verificabile:", error);
+            return true;
+        }
     },
 
     /// La ref che initSchedaRef si aspetta, composta dal box e dal suo dna: la stessa forma
@@ -1082,7 +1133,8 @@ const schedaRef = {
 
         //I20-981: la descrizione del server si puo' riportare nel box senza passare dal
         //salvataggio, per quando il dato e' gia' a posto a monte e il box e' rimasto indietro.
-        if (this.descrizioneCompilataDelPrimario(this.schedeRefDati) != null) {
+        //Si offre solo quando le due cose non dicono la stessa cosa.
+        if (await this.descrizioneDisallineata(this.schedeRefDati, box)) {
             const bottoneDescrizione = $('<sp-action-button id="applicaDescrizioneDaServer" style="font-size: 12px; margin: 4px 0px 8px 0px;">Applica descrizione da server</sp-action-button>');
             bottoneDescrizione.on("click", function () {
                 me.applicaDescrizioneDaServer();
@@ -2070,7 +2122,7 @@ const schedaRef = {
 
     /// Riporta nel box la descrizione come la dice il server, senza toccare il dato: allinea
     /// il box a quello che il Report Integrita' si aspetta di leggerci.
-    applicaDescrizioneDaServer() {
+    async applicaDescrizioneDaServer() {
         try {
             const contenuto = this.descrizioneCompilataDelPrimario(this.schedeRefDati);
 
@@ -2097,6 +2149,11 @@ const schedaRef = {
             //nella forma a tag di stile di carattere.
             Utility.applicaTagStringToInndTextFrame(campo, contenuto, box.geometricBounds);
             messaggioUtente("Descrizione allineata al dato del server", "success", false, 3);
+
+            //La schermata di edit legge il box: dopo averlo cambiato va rifatta, altrimenti
+            //continuerebbe a mostrare la descrizione di prima. E rifacendosi si accorge da
+            //sola che non c'e' piu' niente da allineare, e il pulsante sparisce.
+            await this.selectSchedaRef(1);
         }
         catch (error) {
             console.error(error);

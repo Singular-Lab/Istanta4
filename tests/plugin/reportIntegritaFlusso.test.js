@@ -828,3 +828,18 @@ test('dalla scheda aperta dal report non si rifa la struttura del gruppo', () =>
     const termina = corpoFunzione(confronti, '_terminaSchedaDalReport() {');
     assert.match(termina, /schedaRef\.apertaDalReport = false/);
 });
+
+test('la descrizione applicata si vede anche in edit', () => {
+    const sorgenteScheda = sorgente('schedaRef.js');
+
+    //Il pulsante compare solo se box e server non dicono la stessa cosa, e il giudizio lo da'
+    //la stessa preanalisi del report, sul solo campo della descrizione.
+    assert.match(sorgenteScheda, /if \(await this\.descrizioneDisallineata\(this\.schedeRefDati, box\)\)/);
+    assert.match(sorgenteScheda, /confronti\.confrontoBoxCompiledFieldPreAnalisi\(\s*\n\s*box,\s*\n\s*\[campo\]/);
+
+    //La schermata di edit legge il box: dopo averlo cambiato va rifatta, altrimenti mostra
+    //ancora la descrizione di prima.
+    const applica = corpoFunzione(sorgenteScheda, 'applicaDescrizioneDaServer() {');
+    assert.match(applica, /Utility\.applicaTagStringToInndTextFrame\(campo, contenuto, box\.geometricBounds\)/);
+    assert.match(applica, /await this\.selectSchedaRef\(1\)/);
+});
