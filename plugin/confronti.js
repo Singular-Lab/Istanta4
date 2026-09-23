@@ -1622,6 +1622,29 @@ const confronti = {
         }
     },
 
+    /// Porta la riga del record nella parte visibile dell'elenco e la evidenzia per un attimo,
+    /// con lo stesso gesto che il report usa per i duplicati. Il primo tentativo aspetta: in
+    /// UXP le misure lette subito dopo aver costruito l'interfaccia non sono attendibili.
+    _evidenziaRigaDelRecord(record, tentativi = 5) {
+        setTimeout(() => {
+            try {
+                const riga = this._rigaDelPayload(this._payloadIdDelRecord(record));
+
+                if (riga == null) {
+                    if (tentativi > 0) {
+                        this._evidenziaRigaDelRecord(record, tentativi - 1);
+                    }
+                    return;
+                }
+
+                this._scrollReportRowIntoView(riga);
+            }
+            catch (err) {
+                console.error("Riga del record non evidenziata:", err);
+            }
+        }, 80);
+    },
+
     /// Dove sta la riga del record nella vista, dopo il ridisegno: c'e', in che pagina, a che
     /// posizione, ed e' visibile? E' l'ultimo anello: il dato puo' essere giusto e la vista no.
     _descriviRigaDelRecord(record) {
@@ -1927,6 +1950,14 @@ const confronti = {
             this._saveCurrentReportAndWhitelist();
             this._refreshConfrontoReportUi();
             this._tracciaScheda("chiusura:vista", this._descriviRigaDelRecord(piano.record));
+
+            //Il ridisegno riparte dall'alto: la riga, anche restando al suo posto, puo' essere
+            //finita fuori dallo schermo, e una riga che non si vede sembra sparita. Se il record
+            //e' ancora in un elenco visibile, lo si riporta sotto gli occhi e lo si evidenzia.
+            const categoriaFinale = this._categoriaDelRecord(piano.record);
+            if (categoriaFinale === "recordCambiati" || categoriaFinale === "recordUsciti") {
+                this._evidenziaRigaDelRecord(piano.record);
+            }
         }
         catch (err) {
             console.error("Aggiornamento del report dopo la scheda non riuscito:", err);

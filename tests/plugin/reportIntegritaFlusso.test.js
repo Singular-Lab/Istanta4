@@ -914,4 +914,14 @@ test('il record ricontrollato resta dove stava', () => {
     //E la vista si traccia: il dato puo' essere giusto e la vista no.
     const chiudi = corpoFunzione(confronti, '_chiudiSchedaDalReport() {');
     assert.match(chiudi, /this\._tracciaScheda\("chiusura:vista", this\._descriviRigaDelRecord\(piano\.record\)\)/);
+
+    //Il ridisegno riparte dall'alto: una riga al suo posto ma fuori dallo schermo sembra
+    //sparita lo stesso. Se il record e' ancora in un elenco visibile lo si riporta sotto gli
+    //occhi, con lo stesso gesto che il report usa per i duplicati.
+    assert.match(chiudi, /this\._evidenziaRigaDelRecord\(piano\.record\)/);
+    const evidenzia = corpoFunzione(confronti, '_evidenziaRigaDelRecord(record, tentativi = 5) {');
+    assert.match(evidenzia, /this\._scrollReportRowIntoView\(riga\)/);
+    //Il primo tentativo aspetta: in UXP le misure lette subito dopo aver costruito
+    //l'interfaccia non sono attendibili.
+    assert.match(evidenzia, /setTimeout\(/);
 });
