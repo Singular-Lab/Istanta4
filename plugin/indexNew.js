@@ -6131,7 +6131,7 @@ function compilaTabElementiEsclusi() {
         }
         //aggiungiamo la funziona di copia del codice nella clipboard
         $(".copiaElemento").on('click', function () {
-            navigator.clipboard.writeText({ 'text/plain': $(this).attr("codice") });
+            navigator.clipboard.writeText(String($(this).attr("codice") || ""));
         });
 
         //aggiungiamo la funzione di ripristina dell'elemento
@@ -8670,7 +8670,7 @@ function writeFileInConsole(logMessage) {
     copyButton.msg = msg;
 
     copyButton.on('click', function () {
-        navigator.clipboard.writeText({ 'text/plain': $(this).attr("msg") }); //item["Scatto.CodiceGruppo"]
+        navigator.clipboard.writeText(String($(this).attr("msg") || ""));
         //cambiamo il colore del pulsante per 1 secondo
         $(this).attr("src", "images/check.png");
         setTimeout(function () {

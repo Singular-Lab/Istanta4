@@ -474,10 +474,12 @@ test('i messaggi compaiono davanti al modal', () => {
     assert.match(indexNew, /contenitoreMessaggi\(modal\)\.append\(html\)/);
 });
 
-test('la copia negli appunti passa una stringa, ovunque tocchi i codici gruppo', () => {
-    ['griglia.js', 'schedaRef.js', 'confronti.js'].forEach(nome => {
+test('la copia negli appunti passa una stringa, in tutto il plugin', () => {
+    //writeText vuole una stringa: con un oggetto si copia "[object Object]", e nessuno se ne
+    //accorge finche' non prova a incollare.
+    ['griglia.js', 'schedaRef.js', 'confronti.js', 'indexNew.js', 'filtri.js'].forEach(nome => {
         const codice = sorgente(nome);
-        assert.ok(!codice.includes("writeText({ 'text/plain'"), `${nome} copia ancora un oggetto`);
+        assert.ok(!codice.includes("writeText({"), `${nome} copia ancora un oggetto`);
     });
 
     assert.match(sorgente('griglia.js'), /writeText\(String\(\$\(this\)\.attr\("codiceGruppo"\) \|\| ""\)\)/);
