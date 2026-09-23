@@ -129,14 +129,40 @@ test('i due menu stanno accanto alla scelta del file, prima il canale', () => {
 
     assert.ok(vista.includes('data-azione="destinazioneFotoArticolo"'),
         'i gestori inline la policy della pagina li blocca');
-    assert.ok(vista.includes('id="confermaNuovaFotoArticolo" disabled'),
-        'si parte col pulsante spento, perche\' la destinazione va scelta');
     assert.ok(vista.includes('data-canali="@canaliDellArea"'),
         'ogni area porta i canali con cui e\' attiva, altrimenti non si puo\' filtrare');
 
     //Chi restringe deve venire prima di chi viene ristretto, o il filtro non serve a niente.
     assert.ok(vista.indexOf('id="canaleNuovaFotoArticolo"') < vista.indexOf('id="areaNuovaFotoArticolo"'),
         'prima il canale, poi l\'area');
+});
+
+// Si parte gia' su una destinazione buona: chi carica senza pensarci archivia una foto valida
+// ovunque, che e' cio' che la scheda faceva da sempre.
+test('i menu partono su tutti i canali e tutte le aree', () => {
+    const vista = sorgente('Istanta/Views/SchedaArticolo/Index.cshtml');
+
+    assert.ok(vista.includes('<option value="*" selected>Tutti i canali</option>'));
+    assert.ok(vista.includes('<option value="*" selected>Tutte le aree</option>'));
+    assert.ok(!vista.includes('>Scegli...</option>'), 'non c\'e\' piu\' una voce da scegliere');
+    assert.ok(!vista.includes('id="confermaNuovaFotoArticolo" disabled'),
+        'con una destinazione gia\' valida il pulsante non deve nascere spento');
+});
+
+// L'etichetta deve restare col suo menu: andando a capo, un\'etichetta separata finirebbe sopra
+// al menu sbagliato e si sceglierebbe l'area credendo di scegliere il canale.
+test('ogni etichetta sta in gruppo col suo menu', () => {
+    const vista = sorgente('Istanta/Views/SchedaArticolo/Index.cshtml');
+
+    for (const nome of ['canaleNuovaFotoArticolo', 'areaNuovaFotoArticolo']) {
+        const etichetta = vista.indexOf('for="' + nome + '"');
+        const menu = vista.indexOf('id="' + nome + '"');
+        const inMezzo = vista.slice(etichetta, menu);
+
+        assert.ok(etichetta > 0 && menu > etichetta, 'l\'etichetta viene prima del suo menu');
+        assert.ok(!inMezzo.includes('</div>'),
+            'fra etichetta e menu non ci sta una chiusura: starebbero in gruppi diversi');
+    }
 });
 
 // Aree, canali e coppie ammesse sono quelli di Settings, voce Aree e Canali, cioe' la sorgente

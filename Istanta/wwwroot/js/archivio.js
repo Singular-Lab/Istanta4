@@ -601,7 +601,6 @@ class Archivio {
         var validi = Archivio.areePerCanale(this.OpzioniAreaFotoArticolo(), $("#canaleNuovaFotoArticolo").val());
 
         menu.empty();
-        menu.append($("<option>").attr("value", "").text("Scegli..."));
         menu.append($("<option>").attr("value", Archivio.DESTINAZIONE_TUTTE).text("Tutte le aree"));
 
         validi.forEach(function (opzione) {
@@ -613,7 +612,7 @@ class Archivio {
             return opzione.valore === sceltoPrima;
         });
 
-        menu.val(restaBuono ? sceltoPrima : "");
+        menu.val(restaBuono ? sceltoPrima : Archivio.DESTINAZIONE_TUTTE);
     }
 
     /// Conferma si accende solo col file scelto e la destinazione decisa.
