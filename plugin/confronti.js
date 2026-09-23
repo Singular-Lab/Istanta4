@@ -4106,11 +4106,47 @@ const confronti = {
         tableScroll.style.border = "1px solid #555";
         tableScroll.style.borderRadius = "4px";
 
-        //I20-981: la larghezza della tabella si dichiara in pixel, sommando le colonne.
-        //Era scritta "fit-content", e senza una larghezza vera il contenitore non ha nulla da
-        //scorrere: la tabella si schiacciava nello spazio disponibile e la barra orizzontale
-        //non compariva. Il minWidth al 100% serve per il caso opposto, poche colonne in un
-        //pannello largo, dove la tabella deve comunque riempire il riquadro.
+        //I20-981: la tabella e' divisa in due colonne dentro l'unico contenitore che scorre in
+        //verticale: a sinistra i pulsanti di impaginazione, a larghezza fissa, che restano
+        //fermi; a destra i dati, che sono i soli a spostarsi di lato. Stando nello stesso
+        //contenitore le due colonne scorrono insieme in verticale per costruzione, e le righe
+        //restano appaiate grazie alle altezze fisse gia' in uso: 42px la riga, 34px
+        //l'intestazione.
+        const divisione = document.createElement("div");
+        divisione.style.display = "flex";
+        divisione.style.flexDirection = "row";
+        divisione.style.alignItems = "flex-start";
+        divisione.style.minWidth = "100%";
+
+        const colonnaAzioni = document.createElement("div");
+        colonnaAzioni.style.display = "flex";
+        colonnaAzioni.style.flexDirection = "column";
+        colonnaAzioni.style.flexShrink = "0";
+        colonnaAzioni.style.borderRight = "2px solid #bbb";
+
+        const headerAzioni = document.createElement("div");
+        headerAzioni.style.display = "flex";
+        headerAzioni.style.flexShrink = "0";
+
+        const bodyAzioni = document.createElement("div");
+        bodyAzioni.style.display = "flex";
+        bodyAzioni.style.flexDirection = "column";
+
+        colonnaAzioni.appendChild(headerAzioni);
+        colonnaAzioni.appendChild(bodyAzioni);
+
+        //L'area dei dati e' la finestra dello scorrimento laterale: quello che esce di qui
+        //resta nascosto, e la sua larghezza e' la misura che dice alla barra quanto si vede.
+        const areaDati = document.createElement("div");
+        areaDati.style.flex = "1 1 auto";
+        areaDati.style.minWidth = "0";
+        areaDati.style.overflow = "hidden";
+
+        //I20-981: la larghezza della tabella dei dati si dichiara in pixel, sommando le
+        //colonne. Era scritta "fit-content", e senza una larghezza vera non c'e' nulla da
+        //scorrere: la tabella si schiaccia nello spazio disponibile. Il minWidth al 100%
+        //serve per il caso opposto, poche colonne in un pannello largo, dove la tabella deve
+        //comunque riempire il riquadro.
         const table = document.createElement("div");
         table.style.display = "flex";
         table.style.flexDirection = "column";
@@ -4129,7 +4165,10 @@ const confronti = {
 
         table.appendChild(headerRow);
         table.appendChild(body);
-        tableScroll.appendChild(table);
+        areaDati.appendChild(table);
+        divisione.appendChild(colonnaAzioni);
+        divisione.appendChild(areaDati);
+        tableScroll.appendChild(divisione);
         wrapper.appendChild(tableScroll);
 
         panel.appendChild(topbar);
@@ -4155,6 +4194,10 @@ const confronti = {
             headerRow,
             table,
             tableScroll,
+            areaDati,
+            colonnaAzioni,
+            headerAzioni,
+            bodyAzioni,
             colonneExtra,
             sortKey: null,
             sortDirection: null,
@@ -4737,6 +4780,9 @@ const confronti = {
         state.headerRow.innerHTML = "";
         state.body.innerHTML = "";
 
+        if (state.headerAzioni != null) state.headerAzioni.innerHTML = "";
+        if (state.bodyAzioni != null) state.bodyAzioni.innerHTML = "";
+
         const colonneBase = [
             {
                 key: "__azione__",
@@ -4790,7 +4836,12 @@ const confronti = {
         const colonne = [...colonneBase, ...colonneExtraFiltrate, colonnaConfronto];
         state.colonneRender = colonne;
 
-        const larghezzaTotale = this._larghezzaTotaleColonne(colonne);
+        //La colonna dei pulsanti sta fuori dallo scorrimento: la larghezza da scorrere e'
+        //quella dei soli dati, ed e' la sola che la barra deve conoscere.
+        const colonnaAzione = colonne.find(col => col.key === "__azione__");
+        const colonneDati = colonne.filter(col => col.key !== "__azione__");
+
+        const larghezzaTotale = this._larghezzaTotaleColonne(colonneDati);
         state.larghezzaTotale = larghezzaTotale;
 
         if (state.table != null) {
@@ -4799,8 +4850,12 @@ const confronti = {
         state.headerRow.style.width = larghezzaTotale + "px";
         state.body.style.width = larghezzaTotale + "px";
 
-        for (let i = 0; i < colonne.length; i++) {
-            state.headerRow.appendChild(this._crNuoviHeaderCell(colonne[i]));
+        if (state.headerAzioni != null && colonnaAzione != null) {
+            state.headerAzioni.appendChild(this._crNuoviHeaderCell(colonnaAzione));
+        }
+
+        for (let i = 0; i < colonneDati.length; i++) {
+            state.headerRow.appendChild(this._crNuoviHeaderCell(colonneDati[i]));
         }
 
         if (!state.rowsCurrent.length) {
@@ -4813,7 +4868,11 @@ const confronti = {
         }
 
         for (let i = 0; i < state.rowsCurrent.length; i++) {
-            state.body.appendChild(this._crNuoviDataRow(state.rowsCurrent[i], colonne));
+            if (state.bodyAzioni != null) {
+                state.bodyAzioni.appendChild(this._crNuoviActionCell(state.rowsCurrent[i]));
+            }
+
+            state.body.appendChild(this._crNuoviDataRow(state.rowsCurrent[i], colonneDati));
         }
 
         //Le colonne possono essere cambiate: si riporta la tabella dove dice lo spostamento e
@@ -4962,7 +5021,7 @@ const confronti = {
         let traccia = 0;
 
         try {
-            visibile = state?.tableScroll?.clientWidth || 0;
+            visibile = (state?.areaDati || state?.tableScroll)?.clientWidth || 0;
             traccia = state?.traccia?.clientWidth || 0;
         }
         catch (err) {
@@ -5073,8 +5132,9 @@ const confronti = {
         for (let i = 0; i < colonne.length; i++) {
             const col = colonne[i];
 
+            //I pulsanti non stanno qui: sono nella colonna fissa di sinistra, che non si
+            //sposta di lato.
             if (col.key === "__azione__") {
-                row.appendChild(this._crNuoviActionCell(rowData));
                 continue;
             }
 
@@ -5106,10 +5166,11 @@ const confronti = {
         cell.style.flexShrink = "0";
         cell.style.width = "130px";
         cell.style.minWidth = "130px";
-        cell.style.borderRight = "1px solid #eee";
-        //I20-981: qui avevo provato position sticky per tenere i pulsanti fermi mentre i campi
-        //scorrono. In UXP non viene ignorato: toglie la cella dal flusso e manda la colonna
-        //fuori dal riquadro. Resta una colonna come le altre.
+        cell.style.borderBottom = "1px solid #eee";
+        //I20-981: i pulsanti restano fermi mentre i campi scorrono perche' questa cella sta
+        //nella colonna di sinistra, fuori dalla tabella che si sposta. Con position sticky non
+        //funzionava: in UXP non viene ignorato, toglie la cella dal flusso e manda la colonna
+        //fuori dal riquadro.
         cell.style.backgroundColor = "#ffffff";
         cell.style.minHeight = "42px";
         cell.style.maxHeight = "42px";

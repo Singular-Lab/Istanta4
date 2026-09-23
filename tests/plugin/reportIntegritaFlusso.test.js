@@ -543,8 +543,9 @@ test('la tabella dei nuovi ha una larghezza vera, e quindi scorre', () => {
     assert.match(pannello, /this\._crBarraScorrimentoNuovi\(this\._confrontoNuoviState\)/);
 
     //La larghezza in pixel resta: e' quella che dice alla barra quanto c'e' da scorrere.
+    //Conta le sole colonne dei dati, perche' quella dei pulsanti non si sposta.
     const render = corpoFunzione(confronti, '_renderNuoviTable() {');
-    assert.match(render, /const larghezzaTotale = this\._larghezzaTotaleColonne\(colonne\)/);
+    assert.match(render, /const larghezzaTotale = this\._larghezzaTotaleColonne\(colonneDati\)/);
     assert.match(render, /state\.table\.style\.width = larghezzaTotale \+ "px"/);
     assert.match(render, /state\.headerRow\.style\.width = larghezzaTotale \+ "px"/);
     assert.doesNotMatch(senzaCommenti(pannello), /fit-content/);
@@ -555,6 +556,40 @@ test('la tabella dei nuovi ha una larghezza vera, e quindi scorre', () => {
     //la colonna fuori dal riquadro. Il ritorno sarebbe una schermata rotta, non un pareggio.
     const codice = senzaCommenti(confronti);
     assert.ok(!codice.includes('sticky'), 'sticky e\' tornato: in UXP rompe la tabella');
+});
+
+test('i pulsanti dei nuovi stanno in una colonna che non si sposta', () => {
+    //Due colonne dentro l'unico contenitore che scorre in verticale: cosi' scorrono insieme
+    //per costruzione, senza dover sincronizzare niente.
+    const pannello = corpoFunzione(confronti, '_buildPanelNuovi(report) {');
+    assert.match(pannello, /divisione\.style\.flexDirection = "row"/);
+    assert.match(pannello, /divisione\.appendChild\(colonnaAzioni\)/);
+    assert.match(pannello, /divisione\.appendChild\(areaDati\)/);
+    assert.match(pannello, /tableScroll\.appendChild\(divisione\)/);
+
+    //Lo spostamento laterale e' confinato all'area dei dati: quello che esce resta nascosto.
+    assert.match(pannello, /areaDati\.style\.overflow = "hidden"/);
+    assert.match(pannello, /areaDati\.appendChild\(table\)/);
+
+    //La tabella che si sposta contiene le sole colonne dei dati; i pulsanti hanno la loro.
+    const render = corpoFunzione(confronti, '_renderNuoviTable() {');
+    assert.match(render, /const colonneDati = colonne\.filter\(col => col\.key !== "__azione__"\)/);
+    assert.match(render, /state\.headerAzioni\.appendChild\(this\._crNuoviHeaderCell\(colonnaAzione\)\)/);
+    assert.match(render, /state\.bodyAzioni\.appendChild\(this\._crNuoviActionCell\(state\.rowsCurrent\[i\]\)\)/);
+    assert.match(render, /this\._crNuoviDataRow\(state\.rowsCurrent\[i\], colonneDati\)/);
+
+    //La riga dei dati non costruisce piu' i pulsanti, altrimenti comparirebbero due volte.
+    const riga = corpoFunzione(confronti, '_crNuoviDataRow(rowData, colonne) {');
+    assert.doesNotMatch(riga, /this\._crNuoviActionCell/);
+
+    //La parte visibile che interessa alla barra e' quella dei dati, non tutto il contenitore.
+    const misure = corpoFunzione(confronti, '_misureScorrimentoNuovi(state) {');
+    assert.match(misure, /areaDati/);
+
+    //Le due colonne restano appaiate solo se le altezze restano imposte.
+    const cella = corpoFunzione(confronti, '_crNuoviActionCell(rowData) {');
+    assert.match(cella, /cell\.style\.minHeight = "42px"/);
+    assert.match(cella, /cell\.style\.maxHeight = "42px"/);
 });
 
 test('la barra di scorrimento funziona anche senza trascinamento', () => {
