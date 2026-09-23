@@ -893,3 +893,25 @@ test('il box della scheda dal report se lo tiene il report', () => {
     assert.ok(!/=\s*app\.selection/.test(codice),
         'il report non deve leggere il box dalla selezione');
 });
+
+test('il record ricontrollato resta dove stava', () => {
+    //Togliere e rimettere il record lo mandava in fondo al suo gruppo di pagina: il tracciato
+    //del collaudo lo ha mostrato alla posizione 12 di 13, e l'operatore, che lo cercava
+    //dov'era, lo dava per sparito. Se la categoria non cambia, il record si aggiorna in posto.
+    const ricontrollo = corpoFunzione(confronti, '_ricontrollaReferenzaDopoScheda(stato) {');
+    assert.match(ricontrollo, /const categoriaAttuale = this\._categoriaDelRecord\(record\)/);
+    assert.match(ricontrollo, /esito\.categoria === categoriaAttuale/);
+
+    //L'ultima applica e' quella del caso con il box: la prima e' quella del box sparito.
+    const applica = ricontrollo.slice(ricontrollo.lastIndexOf('applica: () =>'));
+    const inPosto = applica.indexOf('esito.categoria === categoriaAttuale');
+    const rimozione = applica.indexOf('this._rimuoviRecordDalReport(record)');
+    assert.ok(inPosto >= 0 && rimozione > inPosto, 'la rimozione avviene solo se la categoria cambia');
+
+    const categoria = corpoFunzione(confronti, '_categoriaDelRecord(record) {');
+    assert.match(categoria, /this\._sameReportRecord\(item, target\)/);
+
+    //E la vista si traccia: il dato puo' essere giusto e la vista no.
+    const chiudi = corpoFunzione(confronti, '_chiudiSchedaDalReport() {');
+    assert.match(chiudi, /this\._tracciaScheda\("chiusura:vista", this\._descriviRigaDelRecord\(piano\.record\)\)/);
+});

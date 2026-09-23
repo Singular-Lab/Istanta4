@@ -1622,6 +1622,44 @@ const confronti = {
         }
     },
 
+    /// Dove sta la riga del record nella vista, dopo il ridisegno: c'e', in che pagina, a che
+    /// posizione, ed e' visibile? E' l'ultimo anello: il dato puo' essere giusto e la vista no.
+    _descriviRigaDelRecord(record) {
+        try {
+            const payloadId = this._payloadIdDelRecord(record);
+            const riga = this._rigaDelPayload(payloadId);
+
+            if (riga == null) {
+                return { rigaTrovata: false, payloadId };
+            }
+
+            const pagina = riga.dataset?.pageNumber || null;
+            const righeDellaPagina = document.querySelectorAll(
+                '[data-page-number="' + pagina + '"][data-record-type="' + (riga.dataset?.recordType || "") + '"][data-payload-id]');
+
+            let posizione = -1;
+            for (let i = 0; i < righeDellaPagina.length; i++) {
+                if (righeDellaPagina[i] === riga) {
+                    posizione = i + 1;
+                    break;
+                }
+            }
+
+            return {
+                rigaTrovata: true,
+                payloadId,
+                pagina,
+                posizioneNellaPagina: posizione + " di " + righeDellaPagina.length,
+                display: riga.style.display || "",
+                opacita: riga.style.opacity || "",
+                categoriaNelReport: this._categoriaDelRecord(record)
+            };
+        }
+        catch (err) {
+            return { errore: String(err) };
+        }
+    },
+
     _dimensioniReport() {
         const report = this._confrontoReportState?.report;
         if (report == null) {
@@ -1888,6 +1926,7 @@ const confronti = {
             });
             this._saveCurrentReportAndWhitelist();
             this._refreshConfrontoReportUi();
+            this._tracciaScheda("chiusura:vista", this._descriviRigaDelRecord(piano.record));
         }
         catch (err) {
             console.error("Aggiornamento del report dopo la scheda non riuscito:", err);
@@ -2141,13 +2180,23 @@ const confronti = {
                 record.preAnalisi = preAnalisi;
                 this._aggiornaListaKitConRecordFreschi(records);
 
-                this._rimuoviRecordDalReport(record);
+                //Se il record resta nella stessa categoria non lo si tocca: togliere e
+                //rimettere lo manderebbe in fondo al suo gruppo di pagina, e l'operatore, che lo
+                //cercherebbe dov'era, lo darebbe per sparito. E' successo.
+                const categoriaAttuale = this._categoriaDelRecord(record);
 
-                if (esito.azione === "sposta" && esito.categoria != null) {
-                    const state2 = this._confrontoReportState;
-                    if (state2 != null && state2.report != null) {
-                        state2.report[esito.categoria] = state2.report[esito.categoria] || [];
-                        state2.report[esito.categoria].push(record);
+                if (esito.azione === "sposta" && esito.categoria === categoriaAttuale) {
+                    this._tracciaScheda("report:recordAggiornatoInPosto", { categoria: categoriaAttuale });
+                }
+                else {
+                    this._rimuoviRecordDalReport(record);
+
+                    if (esito.azione === "sposta" && esito.categoria != null) {
+                        const state2 = this._confrontoReportState;
+                        if (state2 != null && state2.report != null) {
+                            state2.report[esito.categoria] = state2.report[esito.categoria] || [];
+                            state2.report[esito.categoria].push(record);
+                        }
                     }
                 }
 
@@ -2263,6 +2312,26 @@ const confronti = {
             console.error("Lista del kit non aggiornata:", err);
             return false;
         }
+    },
+
+    /// L'elenco del report in cui il record sta adesso, o null se non sta in nessuno.
+    _categoriaDelRecord(record) {
+        const report = this._confrontoReportState?.report;
+        if (report == null || record == null) {
+            return null;
+        }
+
+        const target = record._fullReportRecord || record;
+        const categorie = ["recordCambiati", "recordUsciti", "recordConErrori", "recordGiusti", "recordNuoviRisolti"];
+
+        for (let i = 0; i < categorie.length; i++) {
+            const elenco = report[categorie[i]];
+            if (Array.isArray(elenco) && elenco.some(item => this._sameReportRecord(item, target))) {
+                return categorie[i];
+            }
+        }
+
+        return null;
     },
 
     _rimuoviRecordDalReport(record) {
