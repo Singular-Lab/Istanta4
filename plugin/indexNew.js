@@ -19,6 +19,7 @@ const manifesto = require("./manifest.json");
 const ipconfig = require("./ipconfig.json");
 const confronti = require('./confronti');
 const NoRenderElementi = require('./noRenderElementi');
+const RicollegaEsiti = require('./ricollegaEsiti');
 const ficoProcess = require('./ficoProcess');
 const grigliaJs = require('./griglia');
 const filtriJs = require('./filtri');
@@ -10694,12 +10695,16 @@ async function ricollegaFotoMassivo(ricollegaFotoPresentiModificate = false, adv
     showLoading("Mappatura impaginato in corso...");
     await Utility.sleep(100);
 
+    //I20-986: il rapporto si dichiara qui e non dentro al try. Dichiarato dentro, il blocco che
+    //gestisce gli errori non lo vedeva: falliva a sua volta, e cosi' non usciva nessun messaggio,
+    //non si scriveva nessun rapporto e la rotella di attesa restava accesa per sempre.
+    let fileEsito = {
+        esito: true,
+        error: [],
+        fileModificati: [],
+    };
+
     try{
-        let fileEsito = {
-            esito: true,
-            error: [],
-            fileModificati: [],
-        };
          
         if(advancedMode){
             ricollegaFotoPresentiModificate = true;
@@ -10752,8 +10757,8 @@ async function ricollegaFotoMassivo(ricollegaFotoPresentiModificate = false, adv
                                 }
 
                                 if (ricollegaFotoPresentiModificate && !fotoAssente && primario.recordInTracciato["Foto.Nome"] == "") {
-                                    messaggioUtente("Code IDX-156 Dato manomesso per il codice gruppo " + item.codiceGruppo + " - Foto.Nome del codice:" + foto.codice + " non è stato trovato, ma la foto è presente. Ricollegamento foto non possibile.", "error");
-                                    fileEsito.error.push("Code IDX-156 Dato manomesso per il codice gruppo " + item.codiceGruppo + " - Foto.Nome del codice:" + foto.codice + " non è stato trovato, ma la foto è presente. Ricollegamento foto non possibile.");
+                                    messaggioUtente(RicollegaEsiti.messaggioDatoManomesso(item.codiceGruppo, foto), "error");
+                                    fileEsito.error.push(RicollegaEsiti.messaggioDatoManomesso(item.codiceGruppo, foto));
                                     continue;
                                 }
 
@@ -10799,8 +10804,8 @@ async function ricollegaFotoMassivo(ricollegaFotoPresentiModificate = false, adv
                                         }
 
                                         if (!fotoAssente && corrispondente.recordInTracciato["Foto.Nome"] == "") {
-                                            messaggioUtente("Code IDX-156 Dato manomesso per il codice gruppo " + item.codiceGruppo + " - Foto.Nome del codice:" + foto.codice + " non è stato trovato, ma la foto è presente. Ricollegamento foto non possibile.", "error");
-                                            fileEsito.error.push("Code IDX-156 Dato manomesso per il codice gruppo " + item.codiceGruppo + " - Foto.Nome del codice:" + foto.codice + " non è stato trovato, ma la foto è presente. Ricollegamento foto non possibile.");
+                                            messaggioUtente(RicollegaEsiti.messaggioDatoManomesso(item.codiceGruppo, foto), "error");
+                                            fileEsito.error.push(RicollegaEsiti.messaggioDatoManomesso(item.codiceGruppo, foto));
                                             continue;
                                         }
 
@@ -10815,6 +10820,14 @@ async function ricollegaFotoMassivo(ricollegaFotoPresentiModificate = false, adv
                                             });
                                         }
 
+                                    }
+                                    else {
+                                        //I20-986: senza questo ramo la foto restava li' in silenzio,
+                                        //agganciata a una referenza che non c'e' piu', e del fatto
+                                        //non restava traccia nemmeno nel rapporto.
+                                        let avviso = RicollegaEsiti.messaggioSecondariaSparita(item.codiceGruppo, foto);
+                                        messaggioUtente(avviso, "warning");
+                                        fileEsito.error.push(avviso);
                                     }
                                 }
                                 else {
@@ -10831,8 +10844,8 @@ async function ricollegaFotoMassivo(ricollegaFotoPresentiModificate = false, adv
                                     }
 
                                     if (ricollegaFotoPresentiModificate && !fotoAssente && corrispondente.recordInTracciato["Foto.Nome"] == "") {
-                                        messaggioUtente("Code IDX-156 Dato manomesso per il codice gruppo " + item.codiceGruppo + " - Foto.Nome del codice:" + foto.codice + " non è stato trovato, ma la foto è presente. Ricollegamento foto non possibile.", "error");
-                                        fileEsito.error.push("Code IDX-156 Dato manomesso per il codice gruppo " + item.codiceGruppo + " - Foto.Nome del codice:" + foto.codice + " non è stato trovato, ma la foto è presente. Ricollegamento foto non possibile.");
+                                        messaggioUtente(RicollegaEsiti.messaggioDatoManomesso(item.codiceGruppo, foto), "error");
+                                        fileEsito.error.push(RicollegaEsiti.messaggioDatoManomesso(item.codiceGruppo, foto));
                                         continue;
                                     }
 
@@ -10959,25 +10972,31 @@ async function ricollegaFotoMassivo(ricollegaFotoPresentiModificate = false, adv
                     let listElementCreati = [];
                     //adesso creiamo gli elementi nuovi e li mettiamo da parte, quando sono tutti prendiamo il gruppo, lo rompiamo e ricreiamo aggiungendo i nuovi elementi
                     for (let i = 0; i < elementiDaCreare.length; i++) {
+                        //I20-986: l'elemento si legge per primo. Stava dopo, ma il ramo senza foto
+                        //esistente lo usava gia': chi non aveva ancora una foto nel box, cioe'
+                        //proprio chi ne sta creando una, si prendeva un errore invece della foto.
+                        let item = elementiDaCreare[i];
+
                         //cerchiamo nel box se c'è già un'immagine startsWith(immagine) o startsWith(foto_secondaria), se c'è prendiamo le sue misure
                         let existingPhoto = null;
                         for (let j = 0; j < boxImpaginato.allPageItems.length; j++) {
-                            let item = boxImpaginato.allPageItems[j];
-                            if (item.label.startsWith((pluginMiddleware.getCampo("nomeFotoPrimaria") !== null ? pluginMiddleware.getCampo("nomeFotoPrimaria")+"$" :"immagine$")) || item.label.startsWith((pluginMiddleware.getCampo("nomeFotoSecondaria") != null ? pluginMiddleware.getCampo("nomeFotoSecondaria")+"$" :"foto_secondaria$"))) {
-                                existingPhoto = item;
+                            let elementoDelBox = boxImpaginato.allPageItems[j];
+                            if (elementoDelBox.label.startsWith((pluginMiddleware.getCampo("nomeFotoPrimaria") !== null ? pluginMiddleware.getCampo("nomeFotoPrimaria")+"$" :"immagine$")) || elementoDelBox.label.startsWith((pluginMiddleware.getCampo("nomeFotoSecondaria") != null ? pluginMiddleware.getCampo("nomeFotoSecondaria")+"$" :"foto_secondaria$"))) {
+                                existingPhoto = elementoDelBox;
                                 break;
                             }
                         }
-                        let g_new = null;
-                        if (existingPhoto != null) {
-                            //prendiamo le misure dell'elemento esistente
-                            g_new = [existingPhoto.geometricBounds[0] + 5, existingPhoto.geometricBounds[1] + 5, existingPhoto.geometricBounds[2] + 5, existingPhoto.geometricBounds[3] + 5];
-                        }
-                        else{
-                            g_new = [item.group.geometricBounds[0] + 5, item.group.geometricBounds[1] + 5, item.group.geometricBounds[2] + 5, item.group.geometricBounds[3] + 5];
+
+                        let g_new = RicollegaEsiti.boundsNuovaFoto(
+                            existingPhoto != null ? existingPhoto.geometricBounds : null,
+                            item.group != null ? item.group.geometricBounds : null);
+
+                        if (g_new == null) {
+                            messaggioUtente("Code IDX-164 Impossibile calcolare dove mettere la foto " + item.nomeFoto + " nel gruppo " + item.codiceGruppo, "error");
+                            fileEsito.error.push("Code IDX-164 Impossibile calcolare dove mettere la foto " + item.nomeFoto + " nel gruppo " + item.codiceGruppo);
+                            continue;
                         }
 
-                        let item = elementiDaCreare[i];
                         if (item.nomeFoto != "") {
                             //creo un nuovo elemento e lo posiziono
                             let photo = item.group.parentPage.rectangles.add(item.group.itemLayer, LocationOptions.UNKNOWN, { geometricBounds: g_new });
@@ -11079,7 +11098,7 @@ async function ricollegaFotoMassivo(ricollegaFotoPresentiModificate = false, adv
 
                 //creiamo il file di esito
                 fileEsito.esito = true;
-                let fileName = "EsitoRicollegamentoFoto_" + docInLavorazione.name.replace(".indd", "") + new Date().toISOString().replace('T', '_').replace(/:/g, '-').split('.')[0]  + ".json";
+                let fileName = RicollegaEsiti.nomeFileEsito(docInLavorazione.name, new Date());
                 let filePath = pathLavorazione + "/" + fileName;
                 fs.writeFileSync(filePath, JSON.stringify(fileEsito));
                 messaggioUtente("File di esito creato: " + fileName, "success");
@@ -11092,7 +11111,7 @@ async function ricollegaFotoMassivo(ricollegaFotoPresentiModificate = false, adv
                 fileEsito.esito = false;
                 fileEsito.error.push(e.toString());
                 //creiamo il file
-                let fileName = "EsitoRicollegamentoFoto_" + docInLavorazione.name.replace(".indd", "") + ".json";
+                let fileName = RicollegaEsiti.nomeFileEsito(docInLavorazione.name, new Date());
                 let filePath = pathLavorazione + "/" + fileName;
                 fs.writeFileSync(filePath, JSON.stringify(fileEsito));
                 messaggioUtente("File di esito creato: " + fileName, "info");
@@ -11107,7 +11126,7 @@ async function ricollegaFotoMassivo(ricollegaFotoPresentiModificate = false, adv
         fileEsito.error.push(e.toString());
         
         //creiamo il file
-        let fileName = "EsitoRicollegamentoFoto_" + docInLavorazione.name.replace(".indd", "") + ".json";
+        let fileName = RicollegaEsiti.nomeFileEsito(docInLavorazione.name, new Date());
         let filePath = pathLavorazione + "/" + fileName;
         fs.writeFileSync(filePath, JSON.stringify(fileEsito));
         messaggioUtente("File di esito creato: " + fileName, "info");

@@ -1,5 +1,6 @@
 ﻿const InputEditController = require('./InputEditController');
 const XMLHttpRequestClient = require('./XMLHttpRequestClient');
+const RicollegaEsiti = require('./ricollegaEsiti');
 const { app, PDFExportOptions, CompressionQuality } = require('indesign');
 const fs = require('fs');
 const { parse } = require('path');
@@ -785,24 +786,25 @@ const confronti = {
                                 //cerchiamo le foto nel gruppo, se sono presenti le aggiungiamo ad un array foto
                                 for (let k = 0; k < gruppo.rectangles.length; k++) {
                                     let rect = gruppo.rectangles.item(k);
-                                    if (Utility.parseLabel(rect.label).startsWith(pluginMiddleware.getCampo("nomeFotoPrimaria") !== null ? pluginMiddleware.getCampo("nomeFotoPrimaria") : "immagine") ||
-                                        Utility.parseLabel(rect.label).startsWith(pluginMiddleware.getCampo("nomeFotoSecondaria") !== null ? pluginMiddleware.getCampo("nomeFotoSecondaria") : "foto_secondaria")) {
-                                        if (rect.graphics.length > 0) {
-                                            let fullPath = rect.graphics.item(0).itemLink.filePath;
-                                            let nomeFile = fullPath.split("/").pop();
-                                            let statoSelezione = 0;
-                                            if (Utility.parseLabel(rect.label).startsWith(pluginMiddleware.getCampo("nomeFotoPrimaria") !== null ? pluginMiddleware.getCampo("nomeFotoPrimaria") : "immagine")) {
-                                                statoSelezione = 1; //foto primaria
-                                            }
-                                            else if (Utility.parseLabel(rect.label).startsWith(pluginMiddleware.getCampo("nomeFotoSecondaria") !== null ? pluginMiddleware.getCampo("nomeFotoSecondaria") : "foto_secondaria")) {
-                                                statoSelezione = 2; //foto secondaria
-                                            }
-                                            let codiceAssociato = "";
-                                            if (Utility.parseLabel(rect.label).split("$").length > 1) {
-                                                codiceAssociato = Utility.parseLabel(rect.label).split("$")[1];
-                                            }
-                                            foto.push({ nomeFoto: nomeFile, element: rect, statoSelezione: statoSelezione, codiceFoto: codiceAssociato });
-                                        }
+
+                                    //I20-986: cosa sia quel rettangolo lo decide un posto solo. Qui
+                                    //la stessa lettura era scritta due volte, una per quando si mappa
+                                    //tutto il documento e una per le pagine scelte, e le due copie
+                                    //erano divergenti: la seconda non registrava il codice della foto.
+                                    let riconosciuta = RicollegaEsiti.fotoDallaLabel(
+                                        Utility.parseLabel(rect.label),
+                                        pluginMiddleware.getCampo("nomeFotoPrimaria"),
+                                        pluginMiddleware.getCampo("nomeFotoSecondaria"));
+
+                                    if (riconosciuta != null && rect.graphics.length > 0) {
+                                        let fullPath = rect.graphics.item(0).itemLink.filePath;
+                                        let nomeFile = fullPath.split("/").pop();
+                                        foto.push({
+                                            nomeFoto: nomeFile,
+                                            element: rect,
+                                            statoSelezione: riconosciuta.statoSelezione,
+                                            codiceFoto: riconosciuta.codiceFoto
+                                        });
                                     }
                                 }
                             }
@@ -864,20 +866,25 @@ const confronti = {
                                 //cerchiamo le foto nel gruppo, se sono presenti le aggiungiamo ad un array foto
                                 for (let k = 0; k < gruppo.rectangles.length; k++) {
                                     let rect = gruppo.rectangles.item(k);
-                                    if (Utility.parseLabel(rect.label).startsWith(pluginMiddleware.getCampo("nomeFotoPrimaria") !== null ? pluginMiddleware.getCampo("nomeFotoPrimaria") : "immagine") ||
-                                        Utility.parseLabel(rect.label).startsWith(pluginMiddleware.getCampo("nomeFotoSecondaria") !== null ? pluginMiddleware.getCampo("nomeFotoSecondaria") : "foto_secondaria")) {
-                                        if (rect.graphics.length > 0) {
-                                            let fullPath = rect.graphics.item(0).itemLink.filePath;
-                                            let nomeFile = fullPath.split("/").pop();
-                                            let statoSelezione = 0;
-                                            if (Utility.parseLabel(rect.label).startsWith(pluginMiddleware.getCampo("nomeFotoPrimaria") !== null ? pluginMiddleware.getCampo("nomeFotoPrimaria") : "immagine")) {
-                                                statoSelezione = 1; //foto primaria
-                                            }
-                                            else if (Utility.parseLabel(rect.label).startsWith(pluginMiddleware.getCampo("nomeFotoSecondaria") !== null ? pluginMiddleware.getCampo("nomeFotoSecondaria") : "foto_secondaria")) {
-                                                statoSelezione = 2; //foto secondaria
-                                            }
-                                            foto.push({ nomeFoto: nomeFile, element: rect, statoSelezione: statoSelezione });
-                                        }
+
+                                    //I20-986: cosa sia quel rettangolo lo decide un posto solo. Qui
+                                    //la stessa lettura era scritta due volte, una per quando si mappa
+                                    //tutto il documento e una per le pagine scelte, e le due copie
+                                    //erano divergenti: la seconda non registrava il codice della foto.
+                                    let riconosciuta = RicollegaEsiti.fotoDallaLabel(
+                                        Utility.parseLabel(rect.label),
+                                        pluginMiddleware.getCampo("nomeFotoPrimaria"),
+                                        pluginMiddleware.getCampo("nomeFotoSecondaria"));
+
+                                    if (riconosciuta != null && rect.graphics.length > 0) {
+                                        let fullPath = rect.graphics.item(0).itemLink.filePath;
+                                        let nomeFile = fullPath.split("/").pop();
+                                        foto.push({
+                                            nomeFoto: nomeFile,
+                                            element: rect,
+                                            statoSelezione: riconosciuta.statoSelezione,
+                                            codiceFoto: riconosciuta.codiceFoto
+                                        });
                                     }
                                 }
                             }
