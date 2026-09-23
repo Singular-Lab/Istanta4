@@ -923,6 +923,26 @@
             }
         });
         console.log(listAct);
+
+        //I20-984: i campi del blocco di dettaglio non stanno nella revisione ma nel dato del
+        //tracciato, e quindi viaggiano per conto loro. Si mandano solo quelli cambiati, e la
+        //domanda sul fatto che valgano per tutti i tracciati si fa una volta per tutto il
+        //salvataggio invece che a ogni campo.
+        var campiTracciato = this.raccogliCampiTracciatoModificati(list);
+        if (campiTracciato.length > 0) {
+            var idTracciatoScelto = parseInt($("#CmbTracciato").val());
+            var procedi = idTracciatoScelto == 0 || confirm(
+                campiTracciato.length + (campiTracciato.length == 1 ? " campo di dettaglio sara' applicato" : " campi di dettaglio saranno applicati") +
+                " a tutti i tracciati. Procedere?\n\nRispondendo No, le descrizioni vengono salvate lo stesso.");
+
+            if (procedi) {
+                var me = this;
+                campiTracciato.forEach(function (campo) {
+                    me.inviaCampoInDatoTracciato(campo.chiave, campo.valore, campo.codice);
+                });
+            }
+        }
+
         this.scrollToTop = true;
         this.salvaFunction(listAct, callback, null);
         if (list.length > 0) {
@@ -3449,8 +3469,70 @@
         }
     }
 
+    /// I20-984: il valore di un campo del blocco di dettaglio e' cambiato rispetto a com'era
+    /// quando la scheda si e' aperta?
+    ///
+    /// Il confronto e' fra testi, con il nulla e la stringa vuota trattati allo stesso modo:
+    /// un campo mai riempito e uno svuotato dall'operatore sono la stessa cosa per chi legge.
+    static valoreCampoCambiato(valore, originale) {
+        var adesso = valore == null ? "" : String(valore);
+        var prima = originale == null ? "" : String(originale);
+        return adesso !== prima;
+    }
+
+    /// Fra i campi raccolti dalle schede selezionate, quelli da mandare davvero: solo i
+    /// cambiati, e senza ripetere lo stesso campo dello stesso codice, che il salvataggio di
+    /// gruppo puo' incontrare piu' volte.
+    static campiTracciatoDaSalvare(campi) {
+        var elenco = Array.isArray(campi) ? campi : [];
+        var visti = {};
+        var risultato = [];
+
+        for (var i = 0; i < elenco.length; i++) {
+            var campo = elenco[i];
+            if (campo == null || !campo.chiave || !campo.codice) {
+                continue;
+            }
+            if (!Revisore.valoreCampoCambiato(campo.valore, campo.originale)) {
+                continue;
+            }
+
+            var impronta = campo.codice + "|" + campo.chiave;
+            if (visti[impronta]) {
+                continue;
+            }
+            visti[impronta] = true;
+
+            risultato.push({ codice: campo.codice, chiave: campo.chiave, valore: campo.valore == null ? "" : String(campo.valore) });
+        }
+
+        return risultato;
+    }
+
+    /// I campi del blocco di dettaglio modificati nelle schede selezionate.
+    raccogliCampiTracciatoModificati(schede) {
+        var campi = [];
+
+        (schede || []).forEach(function (scheda) {
+            var record = scheda.closest(".record-revisione");
+            var codice = record.attr("is_gruppo") == "true"
+                ? record.attr("codice_gruppo")
+                : record.attr("referenzaCodice");
+
+            record.find('[campoTracciato]').each(function () {
+                campi.push({
+                    codice: codice,
+                    chiave: $(this).attr("campoTracciato"),
+                    valore: $(this).val(),
+                    originale: $(this).attr("valoreOriginale")
+                });
+            });
+        });
+
+        return Revisore.campiTracciatoDaSalvare(campi);
+    }
+
     salvaCampoInDatoTracciato(key, value, codice) {
-        var valori = [codice, key, value]
         let IdTracciato = parseInt($("#CmbTracciato").val());
 
         if (IdTracciato != 0) {
@@ -3458,6 +3540,16 @@
                 return;
             }
         }
+
+        this.inviaCampoInDatoTracciato(key, value, codice);
+    }
+
+    /// I20-984: l'invio vero e proprio, senza la domanda. Il salvataggio di gruppo puo' toccare
+    /// piu' campi e piu' schede: la domanda la fa una volta sola chi lo avvia, invece di
+    /// ripeterla a ogni campo.
+    inviaCampoInDatoTracciato(key, value, codice) {
+        var valori = [codice, key, value]
+        let IdTracciato = parseInt($("#CmbTracciato").val());
         showLoading();
 
         let idPromo = parseInt($("#Promo").val());
