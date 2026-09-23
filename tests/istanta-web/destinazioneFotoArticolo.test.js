@@ -213,8 +213,50 @@ test('la foto in uso e quelle in elenco hanno i due menu e il salva', () => {
     assert.ok(vista.includes('@destinazioneDiUnaFoto(foto.Id, foto.Area, foto.Canale)'));
     assert.ok(vista.includes('data-azione=""salvaDestinazioneFoto""'),
         'si scrive premendo Salva, non al tocco del menu');
-    assert.ok(vista.includes('salvaDestinazioneFoto"" data-azione=""salvaDestinazioneFoto"" disabled'),
-        'il pulsante nasce spento: senza modifiche non c\'e\' niente da salvare');
+});
+
+// Un pulsante sempre presente e spento e' un invito a premere che non porta da nessuna parte:
+// finche' non c'e' niente da salvare non deve esserci.
+test('il pulsante compare solo quando c\'e\' qualcosa da salvare', () => {
+    const vista = sorgente('Istanta/Views/SchedaArticolo/Index.cshtml');
+    const js = sorgente('Istanta/wwwroot/js/archivio.js');
+
+    assert.ok(vista.includes('data-idfoto=""{idFoto}"" style=""display:none""'),
+        'nasce invisibile, non spento');
+
+    const inizio = js.indexOf('AggiornaSalvaDestinazione(gruppo) {');
+    const metodo = js.slice(inizio, js.indexOf('SalvaDestinazioneFoto(gruppo) {', inizio));
+
+    assert.ok(metodo.includes('pulsante.show();') && metodo.includes('pulsante.hide();'),
+        'si mostra e si nasconde');
+    assert.ok(!metodo.includes('prop("disabled"'), 'spegnerlo lo lascerebbe li\' a vista');
+});
+
+// Il pulsante sta accanto all'immagine e i menu accanto al nome: sono in due punti diversi della
+// riga, quindi devono potersi ritrovare, e sbagliare foto vorrebbe dire scrivere su un'altra riga.
+test('menu e pulsante di una foto si ritrovano per identificativo', () => {
+    const vista = sorgente('Istanta/Views/SchedaArticolo/Index.cshtml');
+    const js = sorgente('Istanta/wwwroot/js/archivio.js');
+
+    assert.ok(vista.includes('@salvaDestinazioneDiUnaFoto(fotoPrimaria.Id)'), 'accanto alla foto in uso');
+    assert.ok(vista.includes('@salvaDestinazioneDiUnaFoto(foto.Id)'), 'accanto a ognuna in elenco');
+    assert.ok(js.includes('.destinazioneFotoEsistente[data-idfoto=\'" + idFoto + "\']'));
+    assert.ok(js.includes('.salvaDestinazioneFoto[data-idfoto=\'" + idFoto + "\']'));
+});
+
+test('le tendine hanno tutte la stessa misura, cosi\' restano incolonnate', () => {
+    const vista = sorgente('Istanta/Views/SchedaArticolo/Index.cshtml');
+    const css = sorgente('Istanta/wwwroot/css/site.css');
+
+    //Tre punti della scheda: la foto in uso, quelle in elenco e il caricamento.
+    assert.ok((vista.match(/menuDestinazioneFoto/g) || []).length >= 4);
+    assert.ok((vista.match(/etichettaDestinazioneFoto/g) || []).length >= 4);
+    assert.ok(!vista.includes('data-azione="destinazioneFotoArticolo"') ||
+        !vista.includes('style="width:auto" data-azione="destinazioneFotoArticolo"'),
+        'la misura non deve piu\' dipendere dal contenuto');
+
+    const regola = css.slice(css.indexOf('.menuDestinazioneFoto {'));
+    assert.ok(/width:\s*12rem/.test(regola), 'misura fissa, altrimenti ogni riga si allarga a modo suo');
 });
 
 // Il pericolo e' scrivere sulla riga sbagliata: dello stesso file possono esistere piu' righe, una

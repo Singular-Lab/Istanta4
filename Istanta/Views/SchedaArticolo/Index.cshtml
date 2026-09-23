@@ -95,25 +95,31 @@
                         var areaScelta = string.IsNullOrWhiteSpace(areaFoto) ? "*" : areaFoto;
 
                         return new HtmlString($@"
-                        <div class=""destinazioneFotoEsistente d-flex align-items-center gap-3 flex-wrap mt-2""
+                        <div class=""destinazioneFotoEsistente mt-2""
                              data-idfoto=""{idFoto}"" data-canale=""{testo(canaleScelto)}"" data-area=""{testo(areaScelta)}"">
-                            <div class=""d-flex align-items-center gap-2"">
-                                <label class=""mb-0"" for=""canaleFoto-{idFoto}"" style=""font-size:12px"">Canale</label>
-                                <select id=""canaleFoto-{idFoto}"" class=""form-select form-select-sm canaleFotoEsistente"" style=""width:auto"" data-azione=""destinazioneFotoEsistente"">
+                            <div class=""d-flex align-items-center gap-2 mb-1"">
+                                <label class=""mb-0 etichettaDestinazioneFoto"" for=""canaleFoto-{idFoto}"" style=""font-size:12px"">Canale</label>
+                                <select id=""canaleFoto-{idFoto}"" class=""form-select form-select-sm menuDestinazioneFoto canaleFotoEsistente"" data-azione=""destinazioneFotoEsistente"">
                                     <option value=""*"">Tutti i canali</option>
                                     {opzioniCanale}
                                 </select>
                             </div>
                             <div class=""d-flex align-items-center gap-2"">
-                                <label class=""mb-0"" for=""areaFoto-{idFoto}"" style=""font-size:12px"">Area</label>
-                                <select id=""areaFoto-{idFoto}"" class=""form-select form-select-sm areaFotoEsistente"" style=""width:auto"" data-azione=""destinazioneFotoEsistente"">
+                                <label class=""mb-0 etichettaDestinazioneFoto"" for=""areaFoto-{idFoto}"" style=""font-size:12px"">Area</label>
+                                <select id=""areaFoto-{idFoto}"" class=""form-select form-select-sm menuDestinazioneFoto areaFotoEsistente"" data-azione=""destinazioneFotoEsistente"">
                                     <option value=""*"">Tutte le aree</option>
                                     {opzioniArea}
                                 </select>
                             </div>
-                            <button type=""button"" class=""btn btn-sm btn-outline-primary salvaDestinazioneFoto"" data-azione=""salvaDestinazioneFoto"" disabled>Salva destinazione</button>
                         </div>");
                     };
+
+                    //Il pulsante sta accanto all'immagine e compare solo quando c'e' davvero
+                    //qualcosa da salvare: un pulsante sempre li', spento, e' un invito a premere
+                    //che non porta da nessuna parte.
+                    Func<long, IHtmlContent> salvaDestinazioneDiUnaFoto = idFoto =>
+                        new HtmlString($@"<button type=""button"" class=""btn btn-sm btn-outline-primary salvaDestinazioneFoto""
+                            data-azione=""salvaDestinazioneFoto"" data-idfoto=""{idFoto}"" style=""display:none"">Salva destinazione</button>");
                 }
                 @if (fotoPrimaria != null)
                 {
@@ -125,8 +131,11 @@
                     <figure class="figure mb-4 p-2" style="border:3px solid @(isPostPorodotta ? "green" : "red")">
                         <div class="row" style="align-items:center;">
                             <div class="col">
-                                <div class="riquadroFotoArticolo">
-                                    <img src="@thumbnail" data-bigimg="@bigImage" class="figure-img rounded img-preview-hover" alt="@fotoPrimaria!.NomeReale">
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="riquadroFotoArticolo">
+                                        <img src="@thumbnail" data-bigimg="@bigImage" class="figure-img rounded img-preview-hover" alt="@fotoPrimaria!.NomeReale">
+                                    </div>
+                                    @salvaDestinazioneDiUnaFoto(fotoPrimaria.Id)
                                 </div>
                             </div>
                             <div class="col">
@@ -183,8 +192,11 @@
                                 <figure class="figure mb-4 p-2" style="border:3px solid @(isPostPorodotta ? "green" : "red")">
                                     <div class="row" style="align-items:center;">
                                         <div class="col">
-                                            <div class="riquadroFotoArticolo">
-                                                <img src="@thumbnail" data-bigimg="@bigImage" class="figure-img rounded img-preview-hover" alt="@foto?.NomeReale">
+                                            <div class="d-flex align-items-center gap-2">
+                                                <div class="riquadroFotoArticolo">
+                                                    <img src="@thumbnail" data-bigimg="@bigImage" class="figure-img rounded img-preview-hover" alt="@foto?.NomeReale">
+                                                </div>
+                                                @salvaDestinazioneDiUnaFoto(foto.Id)
                                             </div>
                                         </div>
                                         <div class="col">
@@ -206,18 +218,18 @@
                 <div class="card card-body mt-3 mb-3" id="sezioneNuovaFotoArticolo">
                     @*Ogni etichetta sta in gruppo col suo menu: andando a capo, il gruppo si
                       sposta intero e l'etichetta non finisce sotto al menu sbagliato.*@
-                    <div class="d-flex align-items-center gap-3 flex-wrap mb-2">
+                    <div class="mb-2">
                         <div class="d-flex align-items-center gap-2">
-                            <label for="canaleNuovaFotoArticolo" class="mb-0" style="font-size:12px">Canale</label>
-                            <select id="canaleNuovaFotoArticolo" class="form-select form-select-sm" style="width:auto" data-azione="destinazioneFotoArticolo">
+                            <label for="canaleNuovaFotoArticolo" class="mb-0 etichettaDestinazioneFoto" style="font-size:12px">Canale</label>
+                            <select id="canaleNuovaFotoArticolo" class="form-select form-select-sm menuDestinazioneFoto" data-azione="destinazioneFotoArticolo">
                                 <option value="*" selected>Tutti i canali</option>
                                 @opzioniCanale
                             </select>
                         </div>
 
                         <div class="d-flex align-items-center gap-2">
-                            <label for="areaNuovaFotoArticolo" class="mb-0" style="font-size:12px">Area</label>
-                            <select id="areaNuovaFotoArticolo" class="form-select form-select-sm" style="width:auto" data-azione="destinazioneFotoArticolo">
+                            <label for="areaNuovaFotoArticolo" class="mb-0 etichettaDestinazioneFoto" style="font-size:12px">Area</label>
+                            <select id="areaNuovaFotoArticolo" class="form-select form-select-sm menuDestinazioneFoto" data-azione="destinazioneFotoArticolo">
                                 <option value="*" selected>Tutte le aree</option>
                                 @opzioniArea
                             </select>

@@ -105,3 +105,17 @@ myhr {
     height: auto;
     object-fit: contain;
 }
+
+/* I20-985: i menu della destinazione stanno incolonnati.
+   Le misure sono fisse e non dipendono dal contenuto: lasciandoli liberi, ogni riga si
+   allargherebbe quanto il nome piu' lungo che le capita e le tendine non si allineerebbero
+   piu' fra una foto e l'altra. */
+.etichettaDestinazioneFoto {
+    width: 3.5rem;
+    flex: 0 0 auto;
+}
+
+.menuDestinazioneFoto {
+    width: 12rem;
+    flex: 0 0 auto;
+}

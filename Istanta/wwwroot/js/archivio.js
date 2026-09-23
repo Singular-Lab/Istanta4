@@ -198,7 +198,7 @@ class Archivio {
         });
 
         pagina.on("click", "[data-azione='salvaDestinazioneFoto']", function () {
-            ME.SalvaDestinazioneFoto($(this).closest(".destinazioneFotoEsistente"));
+            ME.SalvaDestinazioneFoto(Archivio.gruppoDestinazioneDi($(this).attr("data-idfoto")));
         });
 
         this.InizializzaDestinazioniFotoEsistenti();
@@ -721,12 +721,31 @@ class Archivio {
         menu.val(restaBuono ? sceltoPrima : Archivio.DESTINAZIONE_TUTTE);
     }
 
+    /// I menu di una foto e il suo pulsante stanno in due punti diversi della riga, uno accanto
+    /// al nome e l'altro accanto all'immagine: si ritrovano per identificativo della foto.
+    static gruppoDestinazioneDi(idFoto) {
+        return $(".destinazioneFotoEsistente[data-idfoto='" + idFoto + "']");
+    }
+
+    static salvaDestinazioneDi(idFoto) {
+        return $(".salvaDestinazioneFoto[data-idfoto='" + idFoto + "']");
+    }
+
+    /// Il pulsante non c'e' finche' non c'e' niente da salvare: uno spento e sempre presente
+    /// sarebbe un invito a premere che non porta da nessuna parte.
     AggiornaSalvaDestinazione(gruppo) {
         var daSalvare = Archivio.destinazioneCambiata(
             { area: gruppo.attr("data-area"), canale: gruppo.attr("data-canale") },
             { area: gruppo.find(".areaFotoEsistente").val(), canale: gruppo.find(".canaleFotoEsistente").val() });
 
-        gruppo.find(".salvaDestinazioneFoto").prop("disabled", !daSalvare);
+        var pulsante = Archivio.salvaDestinazioneDi(gruppo.attr("data-idfoto"));
+
+        if (daSalvare) {
+            pulsante.show();
+        }
+        else {
+            pulsante.hide();
+        }
     }
 
     /// Scrive dove vale una foto gia' in archivio, e nient'altro: non la mette in uso e non tocca
@@ -738,8 +757,9 @@ class Archivio {
             canale: gruppo.find(".canaleFotoEsistente").val()
         };
         var destinazione = Archivio.destinazioneFotoArticolo(scelta.area, scelta.canale);
+        var registrata = { area: gruppo.attr("data-area"), canale: gruppo.attr("data-canale") };
 
-        if (destinazione == null) {
+        if (destinazione == null || !Archivio.destinazioneCambiata(registrata, scelta)) {
             return;
         }
 
