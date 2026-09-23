@@ -784,6 +784,7 @@ class Agenzia extends IAgenzia {
       <div class="row">
         <div class="col-10">NOTE PER IMPAGINATO
           <textarea class="form-control" style="height:33.5px; " id="NoteImpaginato"
+                    campoTracciato="noteImpaginato"
                     name="NOTE PER IMPAGINATO"></textarea>
         </div>
         <div class="col d-flex align-items-end">
@@ -893,6 +894,19 @@ class Agenzia extends IAgenzia {
             $elem.find('#NoteImpaginato').val(dataItem.recordInTracciato.noteImpaginato);
             $elem.find('#Territorialita').val(dataItem.recordInTracciato.territorialita);
         }
+
+        //I20-984: i campi editabili di questo blocco partecipano al rilevamento delle modifiche
+        //come gli altri. Si ricordano il valore con cui sono stati riempiti, che e' l'unico
+        //confronto che regge sia per il gruppo sia per il singolo, e avvisano quando cambia:
+        //bordo rosso e salva in gruppo acceso.
+        $elem.find('[campoTracciato]').each(function () {
+            var valore = $(this).val();
+            $(this).attr('valoreOriginale', valore == null ? '' : valore);
+        });
+
+        $elem.find('[campoTracciato]').on('input', function () {
+            revInstance.controlChangeText($(this));
+        });
 
         // imposta altezza fissa (come prima)
         htmlItem.find(".dettaglioGruppo").css("height", "600px");
@@ -1568,6 +1582,22 @@ class Agenzia extends IAgenzia {
                 } else {
                     revInstance.undoBorder(el);
                 }
+            }
+        });
+
+        //I20-984: i campi editabili del blocco di dettaglio non hanno una chiave fra gli extra
+        //della revisione, perche' non vivono li': vanno nel dato del tracciato. Il confronto si
+        //fa con il valore di partenza che si portano dietro.
+        container.find('[campoTracciato]').each(function (index, el) {
+            el = $(el);
+            var originale = el.attr('valoreOriginale');
+
+            if (Revisore.valoreCampoCambiato(el.val(), originale)) {
+                revInstance.changeBorderAndSave(el);
+                changes = true;
+            }
+            else {
+                revInstance.undoBorder(el);
             }
         });
 

@@ -1,6 +1,9 @@
 /*
  * I20-984: i campi editabili del blocco di dettaglio nella scheda del revisore.
  *
+ * La libreria sotto esame e' Istanta/wwwroot/js/edro21/agenzia.js: la copia in radice non sta
+ * in git, perche' ogni postazione monta un cliente diverso e la copia la fa monta-cliente.sh.
+ *
  * "Note per impaginato" e i campi editabili della sua zona non partecipavano al rilevamento
  * delle modifiche: niente bordo rosso e niente "salva in gruppo". Il motivo e' che il controllo
  * dei campi custom guarda solo gli elementi con l'attributo chiave, che quelli non hanno,
@@ -100,7 +103,7 @@ test('il valore parte come testo, anche quando arriva vuoto', () => {
 /* ---- come la pagina li tratta ---- */
 
 test('il campo dichiara la sua chiave e si ricorda il valore di partenza', () => {
-    const agenzia = sorgente('Istanta/wwwroot/js/agenzia.js');
+    const agenzia = sorgente('Istanta/wwwroot/js/edro21/agenzia.js');
 
     assert.ok(agenzia.includes('campoTracciato="noteImpaginato"'),
         'senza chiave dichiarata nessuno sa dove va salvato');
@@ -111,7 +114,7 @@ test('il campo dichiara la sua chiave e si ricorda il valore di partenza', () =>
 });
 
 test('il rilevamento delle modifiche custom guarda anche questi campi', () => {
-    const agenzia = sorgente('Istanta/wwwroot/js/agenzia.js');
+    const agenzia = sorgente('Istanta/wwwroot/js/edro21/agenzia.js');
 
     const inizio = agenzia.indexOf('controlChangeTextCustom(container, ref) {');
     const metodo = agenzia.slice(inizio, agenzia.indexOf('getParametriReport()', inizio));
