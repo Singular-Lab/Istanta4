@@ -226,9 +226,14 @@
   style="position: fixed; width: 100%; height: 100%; background-color: rgba(0,0,0,0.7); z-index: 9999; display: none; justify-content: center; align-items: center; color:white; margin: 0px; padding-top: 200px; text-align:center;">
   <h1>Messaggio</h1>
 </div>
-<div id="istantaDownAlert" style="display:none;position: fixed; width: 100%; height: 100%; background-color: rgba(0,0,0,0.7); z-index: 9999; justify-content: center; align-items: center; color:white; margin: 10px; padding-top: 200px; text-align:center;">
-  <div style="width:100%"><h1>Documento non legato a KIT</h1></div>
-  <div style="width:100%"><h3>Istanta2 è al momento non disponibile e per poter procedere con l'elaborazione è necessario attendere che Istanta2 sia di nuovo funzionante</h3></div>
+<!--I20-987: il riquadro di blocco copre esattamente il pannello e tiene il testo al centro.
+     Aveva larghezza e altezza al cento per cento insieme a un margine, quindi sbordava, e un
+     riempimento superiore di duecento pixel che spingeva il testo in basso rendendo inutile il
+     centramento gia' dichiarato. Le misure del testo sono quelle di un pannello stretto: un
+     titolo grande finirebbe fuori.-->
+<div id="istantaDownAlert" style="display:none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; margin: 0; padding: 0; background-color: rgba(0,0,0,0.85); z-index: 9999; flex-direction: column; justify-content: center; align-items: center; text-align: center; color:white;">
+  <div style="width: 80%; margin: 0 auto;"><h1 style="font-size: 18px; margin: 0 0 12px 0; word-wrap: break-word;">Documento non legato a KIT</h1></div>
+  <div style="width: 80%; margin: 0 auto;"><h3 style="font-size: 13px; font-weight: normal; margin: 0; line-height: 1.4; word-wrap: break-word;">Istanta2 è al momento non disponibile e per poter procedere con l'elaborazione è necessario attendere che Istanta2 sia di nuovo funzionante</h3></div>
 </div>
 
 <div id="wrapper" class="wrapper" style="display: flex; margin: 0px; padding: 0px; width: 100%; height: 100%;">

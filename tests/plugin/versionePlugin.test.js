@@ -108,3 +108,22 @@ test("la lettura del manifest pubblicato e' una sola", () => {
     assert.strictEqual((cs.match(/manifestPluginPubblicato\(\)/g) || []).length, 3,
         "definita una volta e usata dai due endpoint");
 });
+
+
+/* ---- I20-987: come si vede il blocco ---- */
+
+// Il riquadro aveva larghezza e altezza al cento per cento insieme a un margine, quindi sbordava
+// fuori dal pannello, e un riempimento superiore che spingeva il testo in basso: il centramento
+// era dichiarato ma non si vedeva.
+test('il riquadro di blocco copre il pannello e tiene il testo al centro', () => {
+    const html = sorgente('plugin/index.html');
+    const inizio = html.indexOf('<div id="istantaDownAlert"');
+    const riquadro = html.slice(inizio, html.indexOf('</div>', html.indexOf('<h3', inizio)));
+
+    assert.ok(riquadro.includes('margin: 0'), 'un margine su un elemento al cento per cento lo fa sbordare');
+    assert.ok(!riquadro.includes('padding-top: 200px'), 'spingeva il testo in basso invece di centrarlo');
+    assert.ok(riquadro.includes('justify-content: center') && riquadro.includes('align-items: center'));
+    assert.ok(riquadro.includes('flex-direction: column'), 'titolo e dettaglio stanno uno sotto l\'altro');
+    assert.ok(riquadro.includes('top: 0') && riquadro.includes('left: 0'),
+        'senza un punto di partenza il riquadro non copre quello che deve coprire');
+});
