@@ -230,8 +230,11 @@
      Aveva larghezza e altezza al cento per cento insieme a un margine, quindi sbordava, e un
      riempimento superiore di duecento pixel che spingeva il testo in basso rendendo inutile il
      centramento gia' dichiarato. Le misure del testo sono quelle di un pannello stretto: un
-     titolo grande finirebbe fuori.-->
-<div id="istantaDownAlert" style="display:none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; margin: 0; padding: 0; background-color: rgba(0,0,0,0.85); z-index: 9999; flex-direction: column; justify-content: center; align-items: center; text-align: center; color:white;">
+     titolo grande finirebbe fuori. I margini negativi di otto pixel recuperano il margine del
+     corpo della pagina: qui un elemento fisso parte dal riquadro del corpo e non dalla finestra,
+     e senza compensazione l'ombreggiatura resterebbe spostata a destra e in basso rispetto al
+     bordo del pannello. E' la stessa compensazione usata dalla barra in fondo a questo file.-->
+<div id="istantaDownAlert" style="display:none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; margin-top: -8px; margin-left: -8px; padding: 0 16px 16px 0; background-color: rgba(0,0,0,0.85); z-index: 9999; flex-direction: column; justify-content: center; align-items: center; text-align: center; color:white;">
   <div style="width: 80%; margin: 0 auto;"><h1 style="font-size: 18px; margin: 0 0 12px 0; word-wrap: break-word;">Documento non legato a KIT</h1></div>
   <div style="width: 80%; margin: 0 auto;"><h3 style="font-size: 13px; font-weight: normal; margin: 0; line-height: 1.4; word-wrap: break-word;">Istanta2 è al momento non disponibile e per poter procedere con l'elaborazione è necessario attendere che Istanta2 sia di nuovo funzionante</h3></div>
 </div>
