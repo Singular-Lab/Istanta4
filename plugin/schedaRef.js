@@ -349,7 +349,7 @@ const schedaRef = {
         copyButton.codice = codice;
 
         copyButton.on('click', function () {
-            navigator.clipboard.writeText({ 'text/plain': $(this).attr("codiceGruppo") });
+            navigator.clipboard.writeText(String($(this).attr("codiceGruppo") || ""));
             messaggioUtente("Codice copiato negli appunti", "success", false, 1, true);
             $(this).attr("src", "images/check.png");
             setTimeout(function () {
@@ -975,7 +975,7 @@ const schedaRef = {
         copyButton.codice = codice;
 
         copyButton.on('click', function () {
-            navigator.clipboard.writeText({ 'text/plain': $(this).attr("codiceGruppo") }); //item["Scatto.CodiceGruppo"]
+            navigator.clipboard.writeText(String($(this).attr("codiceGruppo") || "")); //item["Scatto.CodiceGruppo"]
             messaggioUtente("Codice copiato negli appunti", "success", false, 1, true);
             $(this).attr("src", "images/check.png");
             setTimeout(function () {
@@ -3248,16 +3248,19 @@ const schedaRef = {
             const valueC = clampText(valueFull, cfg.maxValueChars);
 
             const rowBg = i % 2 === 0 ? "background-color: rgba(255,255,255,0.03);" : "";
-            const rowStyle = "padding:4px 6px; margin-bottom:2px; line-height:1.5; font-size:13px; display:flex; align-items:flex-start;" + rowBg;
+            //I20-981: su un pannello stretto etichetta e valore non ci stanno affiancati e il
+            //valore veniva schiacciato: ora vanno a capo, e il valore puo' spezzarsi.
+            const rowStyle = "padding:4px 6px; margin-bottom:2px; line-height:1.5; font-size:13px; display:flex; flex-wrap:wrap; align-items:flex-start;" + rowBg;
 
             const labelStyle =
                 (color ? "color:" + color + ";" : "") +
-                "font-weight:600; margin-right:6px; display:inline-block; min-width:" + cfg.keyMinWidthPx + "px;" +
+                "font-weight:600; margin-right:6px; display:inline-block; min-width:" + cfg.keyMinWidthPx + "px; max-width:100%;" +
                 "cursor:pointer; user-select:text; border-radius:4px; padding:1px 3px;";
 
             const valueStyle =
                 (color ? "color:" + color + ";" : "") +
-                "opacity:0.95; cursor:pointer; user-select:text; border-radius:4px; padding:1px 3px;";
+                "opacity:0.95; cursor:pointer; user-select:text; border-radius:4px; padding:1px 3px;" +
+                "min-width:0; overflow-wrap:anywhere; word-break:break-word;";
 
             // data-copy = testo completo (quello che copio)
             // title = testo completo (per leggere tutto)

@@ -784,6 +784,7 @@ class Agenzia extends IAgenzia {
       <div class="row">
         <div class="col-10">NOTE PER IMPAGINATO
           <textarea class="form-control" style="height:33.5px; " id="NoteImpaginato"
+                    campoTracciato="noteImpaginato"
                     name="NOTE PER IMPAGINATO"></textarea>
         </div>
         <div class="col d-flex align-items-end">

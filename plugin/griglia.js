@@ -656,7 +656,7 @@ const griglia = {
                 copyButton.codice = item["Scatto.CodiceGruppo"];
 
                 copyButton.on('click', function () {
-                    navigator.clipboard.writeText({ 'text/plain': $(this).attr("codiceGruppo") }); //item["Scatto.CodiceGruppo"]
+                    navigator.clipboard.writeText(String($(this).attr("codiceGruppo") || "")); //item["Scatto.CodiceGruppo"]
                     $(this).attr("src", "images/check.png");
                     setTimeout(function () {
                         copyButton.attr("src", "images/copyToClipBoard.png");

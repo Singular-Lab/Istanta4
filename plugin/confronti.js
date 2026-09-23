@@ -8,6 +8,7 @@ const { ref } = require('process');
 const NoRenderElementi = require('./noRenderElementi');
 const reportIntegritaAvvio = require('./reportIntegritaAvvio');
 const reportConfrontoCsv = require('./reportConfrontoCsv');
+const reportConteggi = require('./reportConteggi');
 
 const confronti = {
     async confrontoBox(box1, box2, forzaReimpaginazione = false){ //mode 0 -> cambio strutturale, mode 1 -> confrontoMassivo
@@ -1417,12 +1418,15 @@ const confronti = {
         Utility.nascondiHidebleElements();
 
         const modal = $('<div id="confirmModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); z-index: 5000; display: flex; justify-content: center; align-items: center; padding: 10px;"></div>');
-        const dialog = $('<div style="width: 60%; min-height: 35%; background-color: white; display: flex; flex-direction: column; justify-content: space-between; align-items: stretch; padding: 14px; box-sizing: border-box;"></div>');
-        const body = $('<div style="flex:1; overflow:auto;"><h3 style="margin-top:0;">' + message + '</h3></div>');
-        const buttons = $('<div style="display:flex; justify-content:flex-end; align-items:center; gap:8px; padding-top:12px;"></div>');
+        //I20-981: tre pulsanti da novanta pixel non stavano in un riquadro largo il 60% del
+        //pannello e uscivano di lato. Ora il riquadro e' largo quasi quanto il pannello e i
+        //pulsanti vanno a capo.
+        const dialog = $('<div style="width: 92%; max-width: 460px; min-width: 200px; max-height: 88%; background-color: white; display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch; padding: 14px; box-sizing: border-box; border-radius: 6px;"></div>');
+        const body = $('<div style="flex:1 1 auto; min-height:0; overflow:auto;"><h3 style="margin-top:0;">' + message + '</h3></div>');
+        const buttons = $('<div style="display:flex; flex-wrap:wrap; justify-content:flex-end; align-items:center; gap:8px; flex:0 0 auto; padding-top:12px;"></div>');
 
         actions.forEach(action => {
-            const btn = $('<button style="min-width:90px; height:26px; background-color:' + action.color + '; color:white; border:none; border-radius:5px; cursor:pointer;">' + action.label + '</button>');
+            const btn = $('<button style="min-width:88px; height:26px; padding:0 10px; background-color:' + action.color + '; color:white; border:none; border-radius:5px; cursor:pointer;">' + action.label + '</button>');
             btn.attr("title", action.tooltip || action.label);
             btn.on("click", function () {
                 result = action.value;
@@ -1590,34 +1594,14 @@ const confronti = {
             return;
         }
 
+        //I20-981: via il piede del report. Conteneva solo "Fix massivo", che dietro aveva un
+        //TODO e non faceva nulla: un pulsante che promette un'azione inesistente e' peggio di
+        //un pulsante che manca. Lo spazio recuperato va all'elenco, che su questo pannello
+        //conta piu' di tutto.
         const footer = document.getElementById("footerConfrontoReport");
         if (footer) {
             footer.innerHTML = "";
-            footer.style.display = "flex";
-            footer.style.justifyContent = "center";
-            footer.style.alignItems = "center";
-            footer.style.padding = "8px 0";
-
-            const btnFixMassivo = document.createElement("button");
-            btnFixMassivo.type = "button";
-            btnFixMassivo.textContent = "Fix massivo";
-            Utility.impostaTooltip(btnFixMassivo, "Applica il fix massivo al report");
-            btnFixMassivo.style.padding = "8px 18px";
-            btnFixMassivo.style.cursor = "pointer";
-            btnFixMassivo.style.border = "1px solid #a22";
-            btnFixMassivo.style.borderRadius = "4px";
-            btnFixMassivo.style.backgroundColor = "#c33";
-            btnFixMassivo.style.color = "#fff";
-            btnFixMassivo.style.fontWeight = "700";
-            btnFixMassivo.style.display = activeList === "whitelist" ? "none" : "block";
-
-            btnFixMassivo.addEventListener("click", async () => {
-                const ok = await this._confirmReportAction("massive", "Procedere con il fix massivo del report?");
-                if (!ok) return;
-                // TODO
-            });
-
-            footer.appendChild(btnFixMassivo);
+            footer.style.display = "none";
         }
 
         // Store runtime per recuperare i dati reali al click dei pulsanti
@@ -1640,13 +1624,24 @@ const confronti = {
 
         const tabsRoot = this._crTabRoot();
 
-        const changedTab = this._crTabButton("Cambiati", true);
-        const removedTab = this._crTabButton("Eliminati", false);
-        const newTab = this._crTabButton("Nuovi", false);
+        //I20-981: i pannelli si costruiscono per primi, perche' le linguette portano il
+        //conteggio di cio' che i pannelli mostrano davvero. In vista whitelist le liste sono
+        //altre, e un numero preso dal report intero direbbe il falso.
+        const recordsCambiati = this._getCurrentReportRecords("recordCambiati");
+        const recordsUsciti = this._getCurrentReportRecords("recordUsciti");
 
-        const changedPanel = this._buildPanelCambiati(this._getCurrentReportRecords("recordCambiati"));
-        const removedPanel = this._buildPanelEliminati(this._getCurrentReportRecords("recordUsciti"));
+        const changedPanel = this._buildPanelCambiati(recordsCambiati);
+        const removedPanel = this._buildPanelEliminati(recordsUsciti);
         const newPanel = this._buildPanelNuovi(this._confrontoReportState.report);
+
+        const conteggi = reportConteggi.conteggiVisibili(
+            recordsCambiati,
+            recordsUsciti,
+            this._confrontoNuoviState?.rowsOriginal);
+
+        const changedTab = this._crTabButton(reportConteggi.etichettaLinguetta("Cambiati", conteggi.cambiati), true, "Cambiati");
+        const removedTab = this._crTabButton(reportConteggi.etichettaLinguetta("Eliminati", conteggi.eliminati), false, "Eliminati");
+        const newTab = this._crTabButton(reportConteggi.etichettaLinguetta("Nuovi", conteggi.nuovi), false, "Nuovi");
 
         const panels = [
             { button: changedTab, panel: changedPanel },
@@ -2467,13 +2462,18 @@ const confronti = {
     _apriOverlayInfoReport(titolo) {
         $("#confrontoInfoOverlay").remove();
 
-        const overlay = $('<div id="confrontoInfoOverlay" style="position: fixed; inset: 0; z-index: 9999999; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; padding: 12px; box-sizing: border-box;"></div>');
-        const dialog = $('<div style="width: 80%; height: 80%; background: #fff; color: #111; display: flex; flex-direction: column; border-radius: 4px; box-shadow: 0 8px 28px rgba(0,0,0,0.35); overflow: hidden;"></div>');
+        //I20-981: questo era l'unico overlay del plugin che usava "inset: 0" per occupare lo
+        //schermo; gli altri dieci scrivono top, left, width e height per esteso. Senza quelle
+        //misure il riquadro si stringeva sul contenuto: da li' la finestra ridotta a una
+        //colonna e lo scorrimento che non arrivava in fondo, perche' il corpo calcolava la
+        //propria altezza dentro un riquadro che non ne aveva una.
+        const overlay = $('<div id="confrontoInfoOverlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 9999999; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; padding: 12px; box-sizing: border-box;"></div>');
+        const dialog = $('<div style="width: 92%; max-width: 720px; height: 86%; max-height: 86%; background: #fff; color: #111; display: flex; flex-direction: column; border-radius: 4px; box-shadow: 0 8px 28px rgba(0,0,0,0.35); overflow: hidden; box-sizing: border-box;"></div>');
         const header = $('<div style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 10px; border-bottom:1px solid #ccc; flex:0 0 auto;"></div>');
         const title = $('<div style="font-weight:700;"></div>').text(titolo || "Info dati referenza");
         const close = $('<button type="button" style="height:26px; min-width:32px; cursor:pointer;">&times;</button>');
         const body = $('<div id="confrontoInfoBody" style="flex:1 1 auto; min-height:0; overflow:auto; padding:10px;"></div>');
-        const footer = $('<div style="display:flex; gap:8px; padding:8px 10px; border-top:1px solid #ccc; flex:0 0 auto;"></div>');
+        const footer = $('<div style="display:flex; flex-wrap:wrap; gap:8px; padding:8px 10px; border-top:1px solid #ccc; flex:0 0 auto;"></div>');
         const btnVediTutto = $('<button type="button" style="height:26px;">Vedi tutto</button>');
         const btnVediMeno = $('<button type="button" style="height:26px; display:none;">Vedi meno</button>');
         const btnScarica = $('<button type="button" style="height:26px;">Scarica dato</button>');
@@ -2544,12 +2544,12 @@ const confronti = {
         Utility.nascondiHidebleElements();
 
         const modal = $('<div id="confirmModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); z-index: 5000; display: flex; justify-content: center; align-items: center; padding: 10px;"></div>');
-        const dialog = $('<div style="width: 60%; min-height: 36%; background-color: white; display: flex; flex-direction: column; justify-content: space-between; align-items: stretch; padding: 14px; box-sizing: border-box;"></div>');
-        const body = $('<div style="flex:1; overflow:auto;"><h3 style="margin-top:0;">' + message + '</h3></div>');
+        const dialog = $('<div style="width: 92%; max-width: 460px; min-width: 200px; max-height: 88%; background-color: white; display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch; padding: 14px; box-sizing: border-box; border-radius: 6px;"></div>');
+        const body = $('<div style="flex:1 1 auto; min-height:0; overflow:auto;"><h3 style="margin-top:0;">' + message + '</h3></div>');
         const chkWrap = $('<label style="display:flex; align-items:center; gap:6px; cursor:pointer; margin-top:8px;"><input type="checkbox"><span>Non chiedere di nuovo per questo report</span></label>');
-        const buttons = $('<div style="display:flex; justify-content:flex-end; align-items:center; gap:8px; padding-top:12px;"></div>');
-        const ok = $('<button style="min-width:90px; height:26px; background-color:#007bff; color:white; border:none; border-radius:5px; cursor:pointer;">Conferma</button>');
-        const cancel = $('<button style="min-width:90px; height:26px; background-color:#dc3545; color:white; border:none; border-radius:5px; cursor:pointer;">Annulla</button>');
+        const buttons = $('<div style="display:flex; flex-wrap:wrap; justify-content:flex-end; align-items:center; gap:8px; flex:0 0 auto; padding-top:12px;"></div>');
+        const ok = $('<button style="min-width:88px; height:26px; padding:0 10px; background-color:#007bff; color:white; border:none; border-radius:5px; cursor:pointer;">Conferma</button>');
+        const cancel = $('<button style="min-width:88px; height:26px; padding:0 10px; background-color:#dc3545; color:white; border:none; border-radius:5px; cursor:pointer;">Annulla</button>');
         ok.attr("title", "Conferma operazione");
         cancel.attr("title", "Annulla operazione");
 
@@ -2588,12 +2588,9 @@ const confronti = {
         const topbar = this._crTabTopbar();
         const content = this._crScrollableContent();
 
-        const btnFixAll = this._crButton("Fix all");
+        //I20-981: via "Fix all", come "Fix massivo" dietro non aveva nulla. Il fix per singola
+        //segnalazione resta, ed e' l'unico che abbia mai davvero sistemato qualcosa.
         const picker = this._crReportListPicker();
-
-        if (this._confrontoReportState?.activeList !== "whitelist") {
-            topbar.appendChild(btnFixAll);
-        }
         topbar.appendChild(picker);
 
         const grouped = this._groupByPage(records);
@@ -2620,7 +2617,7 @@ const confronti = {
                     });
 
 
-                    const row = this._crRow();
+                    const row = this._crRow("cambiato");
                     row.dataset.payloadId = payloadId;
                     row.dataset.pageNumber = String(group.page);
                     row.dataset.recordType = "cambiato";
@@ -2643,14 +2640,7 @@ const confronti = {
                     left.style.overflow = "hidden";
                     left.style.gap = "4px";
 
-                    const codice = document.createElement("div");
-                    codice.textContent = this._truncate(item.codiceGruppo || "-", 20);
-                    Utility.impostaTooltip(codice, item.codiceGruppo || "");
-                    codice.style.fontWeight = "600";
-                    codice.style.whiteSpace = "nowrap";
-                    codice.style.overflow = "hidden";
-                    codice.style.textOverflow = "ellipsis";
-                    codice.style.minWidth = "0";
+                    const codice = this._crCodiceGruppo(item.codiceGruppo);
 
                     const diffList = document.createElement("div");
                     diffList.style.display = "flex";
@@ -2671,7 +2661,18 @@ const confronti = {
                     } else {
                         differenze.forEach(diff => {
                             const diffRow = document.createElement("div");
-                            diffRow.textContent = (diff?.label ? diff.label + " - " : "-") + (diff?.difference || "");
+                            //I20-981: il nome del campo in grassetto e il resto normale: in un
+                            //elenco di differenze e' il campo che si cerca con l'occhio.
+                            if (diff?.label) {
+                                const campo = document.createElement("span");
+                                campo.textContent = diff.label;
+                                campo.style.fontWeight = "600";
+                                diffRow.appendChild(campo);
+                                diffRow.appendChild(document.createTextNode(": " + (diff?.difference || "")));
+                            }
+                            else {
+                                diffRow.textContent = diff?.difference || "-";
+                            }
                             diffRow.style.fontSize = "11px";
                             diffRow.style.lineHeight = "1.3";
                             diffRow.style.whiteSpace = "normal";
@@ -2703,6 +2704,11 @@ const confronti = {
                     const actions = document.createElement("div");
                     actions.style.display = "flex";
                     actions.style.flexShrink = "0";
+                    //Su un pannello stretto i pulsanti vanno a capo invece di ridurre il testo
+                    //della riga a due lettere.
+                    actions.style.flexWrap = "wrap";
+                    actions.style.justifyContent = "flex-end";
+                    actions.style.maxWidth = "50%";
                     actions.style.alignItems = "flex-start";
                     actions.style.alignSelf = "flex-start";
                     actions.style.gap = "6px";
@@ -2741,14 +2747,6 @@ const confronti = {
                 });
             });
         }
-
-        btnFixAll.addEventListener("click", () => {
-            this._confirmReportAction("massive", "Procedere con il fix massivo degli elementi modificati?").then(ok => {
-                if (ok) {
-                    console.log("TODO: Fix all cambiati", records);
-                }
-            });
-        });
 
         this._confrontoCambiatiContent = content;
 
@@ -2801,7 +2799,7 @@ const confronti = {
                         hidden: false
                     });
 
-                    const row = this._crRow();
+                    const row = this._crRow("uscito");
                     row.dataset.payloadId = payloadId;
                     row.dataset.pageNumber = String(group.page);
                     row.dataset.recordType = "uscito";
@@ -2816,15 +2814,8 @@ const confronti = {
                         this._styleDuplicateRow(row);
                     }
 
-                    const codice = document.createElement("div");
-                    codice.textContent = this._truncate(item.codiceGruppo || "-", 20);
-                    Utility.impostaTooltip(codice, item.codiceGruppo || "");
+                    const codice = this._crCodiceGruppo(item.codiceGruppo);
                     codice.style.flex = "1 1 auto";
-                    codice.style.minWidth = "0";
-                    codice.style.fontWeight = "600";
-                    codice.style.whiteSpace = "nowrap";
-                    codice.style.overflow = "hidden";
-                    codice.style.textOverflow = "ellipsis";
 
                     const left = document.createElement("div");
                     left.style.display = "flex";
@@ -2843,6 +2834,9 @@ const confronti = {
                     const actions = document.createElement("div");
                     actions.style.display = "flex";
                     actions.style.flexShrink = "0";
+                    actions.style.flexWrap = "wrap";
+                    actions.style.justifyContent = "flex-end";
+                    actions.style.maxWidth = "50%";
                     actions.style.alignItems = "center";
                     actions.style.gap = "6px";
 
@@ -2881,13 +2875,7 @@ const confronti = {
             });
         }
 
-        btnDeleteAll.addEventListener("click", () => {
-            this._confirmReportAction("massive", "Procedere con l'eliminazione massiva degli elementi eliminati?").then(ok => {
-                if (ok) {
-                    console.log("TODO: Elimina tutti usciti", records);
-                }
-            });
-        });
+        btnDeleteAll.addEventListener("click", () => this._eliminaTuttiUsciti(records));
 
         panel.appendChild(topbar);
         panel.appendChild(content);
@@ -3441,6 +3429,66 @@ const confronti = {
         }
     },
 
+    //I20-981: l'eliminazione di tutti i box usciti, che prima era un pulsante con dietro un
+    //TODO. Toglie dal documento gli stessi box che il singolo "Elimina" toglie uno per uno:
+    //una conferma sola all'inizio, con scritto quanti sono, e un solo rinfresco alla fine.
+    //Un box gia' sparito dal documento non e' un errore: e' il caso di chi ha fatto pulizia a
+    //mano prima di aprire il report, e nel riepilogo si conta a parte.
+    async _eliminaTuttiUsciti(records) {
+        const elenco = Array.isArray(records) ? records.slice() : [];
+
+        if (elenco.length === 0) {
+            messaggioUtente("Nessun elemento da eliminare", "warning", false, 3);
+            return;
+        }
+
+        const ok = await this._confirmReportAction(
+            "massive",
+            "Eliminare dal documento " + elenco.length + " box segnalati come usciti dal tracciato? L'operazione non si annulla.");
+
+        if (!ok) {
+            return;
+        }
+
+        let eliminati = 0;
+        let nonTrovati = 0;
+        let errori = 0;
+
+        for (let i = 0; i < elenco.length; i++) {
+            const record = elenco[i];
+
+            try {
+                const box = this._resolveBoxFromRecord(record);
+
+                if (!box || !box.isValid) {
+                    nonTrovati++;
+                    continue;
+                }
+
+                box.remove();
+                this._removeRecordFromArray(this._confrontoReportState?.report?.recordUsciti, record);
+                eliminati++;
+            }
+            catch (err) {
+                console.error("Errore durante l'eliminazione massiva del box:", err);
+                errori++;
+            }
+        }
+
+        this._saveCurrentReportAndWhitelist();
+        this._refreshConfrontoReportUi();
+
+        let riepilogo = "Eliminati " + eliminati + " box su " + elenco.length;
+        if (nonTrovati > 0) {
+            riepilogo += ", " + nonTrovati + " non piu' in pagina";
+        }
+        if (errori > 0) {
+            riepilogo += ", " + errori + " con errori (vedi console)";
+        }
+
+        messaggioUtente("Code CNF-023: " + riepilogo, errori > 0 ? "warning" : "success", false, 8);
+    },
+
     async _fixElemento(payloadId, payload) {
         const ok = await this._confirmReportAction("fixSingle", "Procedere con il fix di questa segnalazione?");
         if (!ok) return;
@@ -3597,11 +3645,13 @@ const confronti = {
         return { root, header, content };
     },
 
-    _crTabButton(label, active = false) {
+    //Il nome semplice serve al suggerimento: sull'etichetta c'e' anche il conteggio, e
+    //"Mostra cambiati (12)" si leggerebbe male.
+    _crTabButton(label, active = false, nomeSemplice = null) {
         const btn = document.createElement("button");
         btn.textContent = label;
         btn.type = "button";
-        Utility.impostaTooltip(btn, "Mostra " + String(label || "").toLowerCase());
+        Utility.impostaTooltip(btn, "Mostra " + String(nomeSemplice || label || "").toLowerCase());
         btn.style.padding = "6px 10px";
         btn.style.border = "1px solid #666";
         btn.style.borderRadius = "4px";
@@ -3668,17 +3718,73 @@ const confronti = {
         el.dataset.pageNumber = String(pageNumber);
         el.dataset.recordType = recordType;
         el.style.fontWeight = "700";
-        el.style.padding = "10px 8px";
-        el.style.marginTop = "6px";
-        el.style.marginBottom = "6px";
-        el.style.border = "1px solid #666";
-        el.style.borderRadius = "4px";
+        el.style.fontSize = "12px";
+        el.style.letterSpacing = "0.4px";
+        el.style.textTransform = "uppercase";
+        el.style.padding = "6px 8px";
+        el.style.marginTop = "10px";
+        el.style.marginBottom = "2px";
+        el.style.borderBottom = "2px solid #8ab661";
         el.style.flexShrink = "0";
-        el.style.backgroundColor = "#d6f5b3";
+        el.style.backgroundColor = "#eef7e3";
         return el;
     },
 
-    _crRow() {
+    //I20-981: il codice gruppo si copia con un clic.
+    //Un codice gruppo e' l'elenco dei membri separati da virgola: copiato cosi' com'e' si
+    //incolla nella ricerca del revisore, che e' il motivo per cui serve.
+    _crCodiceGruppo(codiceGruppo) {
+        const testo = String(codiceGruppo == null ? "" : codiceGruppo);
+
+        const elemento = document.createElement("div");
+        elemento.textContent = this._truncate(testo || "-", 20);
+        elemento.style.fontWeight = "600";
+        elemento.style.whiteSpace = "nowrap";
+        elemento.style.overflow = "hidden";
+        elemento.style.textOverflow = "ellipsis";
+        elemento.style.minWidth = "0";
+
+        if (testo === "") {
+            return elemento;
+        }
+
+        Utility.impostaTooltip(elemento, "Clicca per copiare i codici del gruppo: " + testo);
+        elemento.style.cursor = "pointer";
+        elemento.style.textDecoration = "underline dotted";
+
+        elemento.addEventListener("click", () => this.copiaCodiceGruppo(testo));
+
+        return elemento;
+    },
+
+    copiaCodiceGruppo(codiceGruppo) {
+        const testo = String(codiceGruppo == null ? "" : codiceGruppo);
+        if (testo === "") {
+            return;
+        }
+
+        try {
+            //writeText vuole una stringa: passargli un oggetto, come si fa in qualche altro
+            //punto del plugin, finisce per copiare "[object Object]".
+            navigator.clipboard.writeText(testo);
+            messaggioUtente("Codici del gruppo copiati negli appunti", "success", false, 2);
+        }
+        catch (err) {
+            console.error("Errore durante la copia del codice gruppo:", err);
+            messaggioUtente("Code CNF-022: Non e' stato possibile copiare i codici del gruppo", "error", false, 6);
+        }
+    },
+
+    //I20-981: una riga porta sul fianco il colore del suo stato.
+    //Scorrendo un elenco lungo il colore dice a che categoria appartiene la riga senza doverla
+    //leggere: e' la differenza fra cercare e vedere.
+    COLORI_STATO: {
+        cambiato: "#e0a800",
+        uscito: "#c0392b",
+        nuovo: "#2e7d32"
+    },
+
+    _crRow(stato = null) {
         const row = document.createElement("div");
         row.style.display = "flex";
         row.style.flexDirection = "row";
@@ -3686,6 +3792,7 @@ const confronti = {
         row.style.gap = "10px";
         row.style.padding = "8px";
         row.style.border = "1px solid #444";
+        row.style.borderLeft = "4px solid " + (this.COLORI_STATO[stato] || "#444");
         row.style.borderRadius = "4px";
         row.style.boxSizing = "border-box";
         row.style.width = "100%";
