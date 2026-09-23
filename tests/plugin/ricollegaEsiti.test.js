@@ -209,3 +209,59 @@ test("all'operatore arriva il motivo, non lo stack trace", () => {
     assert.ok(!azione.includes("result.error = ex.ToString();"));
     assert.ok(azione.includes("_logger?.LogError(ex"), "il dettaglio non si perde, va nel registro");
 });
+
+
+/* ---- I20-986: cosa rappresenta un rettangolo del box ---- */
+
+// La stessa lettura era scritta due volte nella mappatura dell'impaginato, e le due copie erano
+// divergenti: chi mappava una pagina sola otteneva foto senza codice. La foto passava allora per
+// una secondaria non piu' esistente, e in modalita' avanzata quel caso non la salta: la mette in
+// coda per la rimozione. Cioe' avrebbe cancellato foto buone.
+test('la foto primaria si riconosce e porta il suo codice', () => {
+    assert.deepStrictEqual(RicollegaEsiti.fotoDallaLabel('immagine$6119227', null, null),
+        { statoSelezione: 1, codiceFoto: '6119227' });
+});
+
+test('la foto secondaria si riconosce e porta il suo codice', () => {
+    assert.deepStrictEqual(RicollegaEsiti.fotoDallaLabel('foto_secondaria$6119231', null, null),
+        { statoSelezione: 2, codiceFoto: '6119231' });
+});
+
+test('quello che non e\' una foto non entra nella mappa', () => {
+    assert.strictEqual(RicollegaEsiti.fotoDallaLabel('base$6119227', null, null), null);
+    assert.strictEqual(RicollegaEsiti.fotoDallaLabel('descrizione$1', null, null), null);
+    assert.strictEqual(RicollegaEsiti.fotoDallaLabel('', null, null), null);
+    assert.strictEqual(RicollegaEsiti.fotoDallaLabel(null, null, null), null);
+});
+
+test('una foto senza codice nell\'etichetta non inventa un codice', () => {
+    assert.deepStrictEqual(RicollegaEsiti.fotoDallaLabel('immagine', null, null),
+        { statoSelezione: 1, codiceFoto: '' });
+});
+
+test('i nomi dei campi configurati dal cliente valgono al posto di quelli di sempre', () => {
+    assert.deepStrictEqual(RicollegaEsiti.fotoDallaLabel('scatto$999', 'scatto', 'extra'),
+        { statoSelezione: 1, codiceFoto: '999' });
+    assert.deepStrictEqual(RicollegaEsiti.fotoDallaLabel('extra$998', 'scatto', 'extra'),
+        { statoSelezione: 2, codiceFoto: '998' });
+});
+
+// Il controllo era fatto solo contro il valore nullo: un campo non definito passava per
+// configurato, e si finiva a cercare etichette che cominciano per indefinito.
+test('un campo non definito non diventa il nome da cercare', () => {
+    assert.deepStrictEqual(RicollegaEsiti.fotoDallaLabel('immagine$1', undefined, undefined),
+        { statoSelezione: 1, codiceFoto: '1' });
+    assert.deepStrictEqual(RicollegaEsiti.fotoDallaLabel('immagine$1', '', ''),
+        { statoSelezione: 1, codiceFoto: '1' });
+});
+
+test('i due rami della mappatura usano la stessa regola', () => {
+    const js = sorgente('plugin/confronti.js');
+    const quanti = (js.match(/RicollegaEsiti\.fotoDallaLabel\(/g) || []).length;
+
+    assert.strictEqual(quanti, 2, 'uno per il documento intero e uno per le pagine scelte');
+    assert.ok(!js.includes('statoSelezione: statoSelezione }'),
+        'la vecchia lettura senza codice non deve restare in giro');
+    assert.ok((js.match(/codiceFoto: riconosciuta\.codiceFoto/g) || []).length === 2,
+        'tutte e due registrano il codice della foto');
+});

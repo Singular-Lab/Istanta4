@@ -11097,9 +11097,13 @@ double.TryParse(percorso.ToString(), out double valore16))
                                     //ogni ciclo di foreach rappresenta un codice del gruppo
                                     RicollegamentoBoxItem item = new RicollegamentoBoxItem();
 
+                                    //I20-986: la data si legge solo se c'e'. Le altre chiavi erano
+                                    //gia' protette, questa no: un riscontro senza data avrebbe fatto
+                                    //fallire l'ordinamento e l'operatore avrebbe visto un errore al
+                                    //posto della proposta di clonazione.
                                     var ordinatiPerData = riscontro
-                         .OrderByDescending(x => x["dataPromo"])
-                         .ToList();
+                                        .OrderByDescending(x => Utility.Main.dataDelRiscontro(x))
+                                        .ToList();
 
                                     var piuRecente = ordinatiPerData[0];
 

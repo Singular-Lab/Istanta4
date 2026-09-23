@@ -72,6 +72,46 @@ const RicollegaEsiti = {
         return Array.isArray(codici) ? codici.filter(c => c != null && c !== "").join(", ") : "";
     },
 
+    /// Cosa rappresenta un rettangolo del box, leggendone l'etichetta: la foto primaria, una
+    /// secondaria, oppure niente. Restituisce anche il codice della referenza a cui la foto e'
+    /// associata, che serve a ritrovarla in tracciato.
+    ///
+    /// Stava scritta due volte dentro alla mappatura dell'impaginato, una per quando si mappa
+    /// tutto il documento e una per quando si mappano pagine scelte, e le due copie erano
+    /// divergenti: la seconda il codice non lo registrava. Chi mappa una pagina sola avrebbe
+    /// quindi ottenuto foto senza codice, la referenza non si sarebbe trovata e la foto sarebbe
+    /// passata per una secondaria non piu' esistente, che in modalita' avanzata vuol dire
+    /// metterla in coda per la rimozione (I20-986).
+    fotoDallaLabel(etichetta, nomePrimaria, nomeSecondaria) {
+        if (typeof etichetta !== "string" || etichetta === "") {
+            return null;
+        }
+
+        const primaria = RicollegaEsiti.nomeCampo(nomePrimaria, "immagine");
+        const secondaria = RicollegaEsiti.nomeCampo(nomeSecondaria, "foto_secondaria");
+
+        let statoSelezione = 0;
+        if (etichetta.startsWith(primaria)) {
+            statoSelezione = 1;
+        }
+        else if (etichetta.startsWith(secondaria)) {
+            statoSelezione = 2;
+        }
+        else {
+            return null;
+        }
+
+        const parti = etichetta.split("$");
+        return { statoSelezione: statoSelezione, codiceFoto: parti.length > 1 ? parti[1] : "" };
+    },
+
+    /// Il nome del campo configurato, o quello di sempre se non e' configurato. Il controllo era
+    /// fatto solo contro il valore nullo: un campo non definito passava per configurato e si
+    /// finiva a cercare etichette che cominciano per indefinito.
+    nomeCampo(nome, predefinito) {
+        return typeof nome === "string" && nome !== "" ? nome : predefinito;
+    },
+
     /// Dove mettere una foto che va creata: sopra a quella che c'e' gia', se c'e', altrimenti
     /// sopra al gruppo, spostata di poco per non finire esattamente sotto l'altra.
     ///

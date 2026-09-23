@@ -57,6 +57,32 @@ namespace Istanta.Utility
         }
 
         /// <summary>
+        /// La data della promo di un riscontro, oppure niente se il riscontro non la porta.
+        ///
+        /// I riscontri arrivano come dizionari costruiti altrove, e la chiave della data veniva
+        /// letta senza controllare che ci fosse, mentre tutte le altre erano protette: un
+        /// riscontro senza quella chiave avrebbe fatto fallire l'ordinamento, e all'operatore
+        /// sarebbe arrivato un errore invece della proposta di clonazione. Ordinando, i riscontri
+        /// senza data finiscono in fondo, che e' dove servono meno (I20-986).
+        /// </summary>
+        public static DateTime? dataDelRiscontro(Dictionary<string, object>? riscontro)
+        {
+            if (riscontro == null || !riscontro.ContainsKey("dataPromo"))
+            {
+                return null;
+            }
+
+            var valore = riscontro["dataPromo"];
+
+            if (valore is DateTime data)
+            {
+                return data;
+            }
+
+            return DateTime.TryParse(valore?.ToString(), out var letta) ? letta : (DateTime?)null;
+        }
+
+        /// <summary>
         /// I codici che nessuno dei gruppi indicati copre.
         ///
         /// Serve a dire quali codici restano fuori dopo aver trovato quelli presenti in un'altra
