@@ -485,3 +485,59 @@ test('la copia negli appunti passa una stringa, in tutto il plugin', () => {
     assert.match(sorgente('griglia.js'), /writeText\(String\(\$\(this\)\.attr\("codiceGruppo"\) \|\| ""\)\)/);
     assert.strictEqual((sorgente('schedaRef.js').match(/writeText\(String\(\$\(this\)\.attr\("codiceGruppo"\) \|\| ""\)\)/g) || []).length, 2);
 });
+
+/* I20-981 (Lotto 4a): la sezione Confronti. */
+
+test('la quarta scheda confronta la lista con se stessa', () => {
+    const compila = corpoFunzione(confronti, 'compilaReportConfronto(report, options = {}) {');
+
+    //Il risultato del confronto sta nello stato, perche' lo rilegge anche il csv.
+    assert.match(compila, /const confronti = this\._calcolaConfronti\(\)/);
+    assert.match(compila, /this\._confrontoReportState\.confronti = confronti/);
+
+    //La linguetta porta il conteggio dei differenti, come le altre.
+    assert.match(compila, /etichettaLinguetta\("Differenti", reportConteggi\.conteggio\(confronti\.voci\)\)/);
+    assert.match(compila, /\{ button: confrontiTab, panel: confrontiPanel \}/);
+    assert.match(compila, /confrontiTab\.addEventListener\("click", \(\) => activateTab\(3\)\)/);
+
+    //Quattro linguette col numero non stanno su una riga sola in un pannello stretto.
+    const tabRoot = corpoFunzione(confronti, '_crTabRoot() {');
+    assert.match(tabRoot, /header\.style\.flexWrap = "wrap"/);
+});
+
+test('si confrontano solo i campi che l\'agenzia dichiara', () => {
+    const campi = corpoFunzione(confronti, 'campiOsservatiConfronto() {');
+    assert.match(campi, /pluginMiddleware\.getCampo\("campiOsservatiConfronto"\)/);
+
+    const calcolo = corpoFunzione(confronti, '_calcolaConfronti() {');
+    assert.match(calcolo, /reportConfronti\.confrontoConSeStessa\(this\._recordsListaKit\(\), campi\)/);
+    //Senza campi configurati non si confronta nulla, e il pannello lo dice.
+    assert.match(calcolo, /if \(campi\.length === 0\)/);
+
+    const pannello = corpoFunzione(confronti, '_buildPanelConfronti(confronti) {');
+    assert.match(pannello, /Nessun campo osservato configurato per questa agenzia/);
+    assert.match(pannello, /Nessuna differenza sui campi osservati/);
+    //Evidenzia e basta: nessun pulsante che proponga correzioni.
+    assert.doesNotMatch(pannello, /_crIconButton|_onConfrontoAction/);
+});
+
+test('le differenze finiscono anche nel csv', () => {
+    const build = corpoFunzione(confronti, '_buildReportConfrontoCsv(report) {');
+
+    assert.match(build, /stato: "Differente"/);
+    assert.match(build, /this\._confrontoReportState\?\.confronti/);
+    assert.match(build, /"Prima: " \+ \(differenza\.prima \|\| "\(vuoto\)"\)/);
+});
+
+test('la lista del kit si legge una volta sola per report', () => {
+    //La leggevano il pannello dei nuovi e il csv, e la sezione Confronti sarebbe stata la terza:
+    //su un volantino sono parecchi megabyte di json.
+    const lettura = corpoFunzione(confronti, '_leggiListaKitLocale() {');
+    assert.match(lettura, /stato\.listaKit !== undefined/);
+    assert.match(lettura, /stato\.listaKit = lista/);
+
+    //Nessuno legge piu' il file per conto suo.
+    const codice = senzaCommenti(confronti);
+    const letture = (codice.match(/readFile\(pathLavorazione \+ "\/listaKit"/g) || []).length;
+    assert.strictEqual(letture, 1, 'la lista del kit si legge in un posto solo');
+});

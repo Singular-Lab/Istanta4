@@ -972,6 +972,14 @@ namespace IstantaLib
         /// Vuoto: nessun avviso, e resta il solo comportamento core.
         public List<AgenziaCustomPlugin_AvvisoCambioPrimario> avvisiCambioPrimario { get; set; } = new List<AgenziaCustomPlugin_AvvisoCambioPrimario>();
 
+        /// I20-981: i campi che l'agenzia tiene d'occhio nella sezione Confronti del Report
+        /// Integrita'. Non cambiano l'aspetto del box, quindi l'analisi di integrita' non li
+        /// guarda, ma l'operatore li usa per decidere a che pagina va la referenza: se
+        /// cambiano, la pagina puo' dover cambiare, e vuole vederlo.
+        /// La chiave e' quella del record, l'etichetta e' cio' che legge l'operatore.
+        /// Vuoto: la sezione non ha nulla da confrontare e lo dice.
+        public List<AgenziaCustomPlugin_KeyLabel> campiOsservatiConfronto { get; set; } = new List<AgenziaCustomPlugin_KeyLabel>();
+
         public List<AgenziaCustomPlugin_LibreriaIndd> regoleLibrerie { get; set; } //
 
         public List<TemplateFiltro> templateFiltro { get; set; } = new List<TemplateFiltro>();

@@ -9,6 +9,7 @@ const NoRenderElementi = require('./noRenderElementi');
 const reportIntegritaAvvio = require('./reportIntegritaAvvio');
 const reportConfrontoCsv = require('./reportConfrontoCsv');
 const reportConteggi = require('./reportConteggi');
+const reportConfronti = require('./reportConfronti');
 
 const confronti = {
     async confrontoBox(box1, box2, forzaReimpaginazione = false){ //mode 0 -> cambio strutturale, mode 1 -> confrontoMassivo
@@ -1634,6 +1635,12 @@ const confronti = {
         const removedPanel = this._buildPanelEliminati(recordsUsciti);
         const newPanel = this._buildPanelNuovi(this._confrontoReportState.report);
 
+        //I20-981: la sezione Confronti si apre sul confronto con se stessa. Il risultato resta
+        //nello stato perche' lo rilegge anche il csv.
+        const confronti = this._calcolaConfronti();
+        this._confrontoReportState.confronti = confronti;
+        const confrontiPanel = this._buildPanelConfronti(confronti);
+
         const conteggi = reportConteggi.conteggiVisibili(
             recordsCambiati,
             recordsUsciti,
@@ -1642,11 +1649,13 @@ const confronti = {
         const changedTab = this._crTabButton(reportConteggi.etichettaLinguetta("Cambiati", conteggi.cambiati), true, "Cambiati");
         const removedTab = this._crTabButton(reportConteggi.etichettaLinguetta("Eliminati", conteggi.eliminati), false, "Eliminati");
         const newTab = this._crTabButton(reportConteggi.etichettaLinguetta("Nuovi", conteggi.nuovi), false, "Nuovi");
+        const confrontiTab = this._crTabButton(reportConteggi.etichettaLinguetta("Differenti", reportConteggi.conteggio(confronti.voci)), false, "Differenti");
 
         const panels = [
             { button: changedTab, panel: changedPanel },
             { button: removedTab, panel: removedPanel },
-            { button: newTab, panel: newPanel }
+            { button: newTab, panel: newPanel },
+            { button: confrontiTab, panel: confrontiPanel }
         ];
 
         const activateTab = (activeIndex) => {
@@ -1665,14 +1674,17 @@ const confronti = {
         changedTab.addEventListener("click", () => activateTab(0));
         removedTab.addEventListener("click", () => activateTab(1));
         newTab.addEventListener("click", () => activateTab(2));
+        confrontiTab.addEventListener("click", () => activateTab(3));
 
         tabsRoot.header.appendChild(changedTab);
         tabsRoot.header.appendChild(removedTab);
         tabsRoot.header.appendChild(newTab);
+        tabsRoot.header.appendChild(confrontiTab);
 
         tabsRoot.content.appendChild(changedPanel);
         tabsRoot.content.appendChild(removedPanel);
         tabsRoot.content.appendChild(newPanel);
+        tabsRoot.content.appendChild(confrontiPanel);
 
         body.appendChild(metaBar);
         body.appendChild(tabsRoot.root);
@@ -1908,6 +1920,28 @@ const confronti = {
             return errors.map(error => ({ campo: "", dettaglio: error }));
         });
 
+        //I20-981: le differenze sui campi osservati, dalla sezione Confronti. Come i nuovi non
+        //hanno una pagina: non dicono dove sta la referenza, dicono che qualcosa che decide
+        //dove metterla e' cambiato.
+        const confronti = this._confrontoReportState?.confronti;
+        ((confronti && confronti.voci) || []).forEach(voce => {
+            const dati = reportConfrontoCsv.datiRecordPerCsv(voce.raw);
+
+            voce.differenze.forEach(differenza => {
+                voci.push({
+                    stato: "Differente",
+                    pagina: "",
+                    codiceGruppo: voce.codiceGruppo || "",
+                    etichetta: dati.etichetta,
+                    versione: dati.versione,
+                    reparto: dati.reparto,
+                    descrizione: dati.descrizione,
+                    campo: differenza.etichetta,
+                    dettaglio: "Prima: " + (differenza.prima || "(vuoto)") + " | Adesso: " + (differenza.adesso || "(vuoto)")
+                });
+            });
+        });
+
         //I nuovi non hanno una pagina: nel documento non ci sono ancora, e in coda ci vanno.
         this._getReportNuoviRows(report).forEach(row => {
             const dati = reportConfrontoCsv.datiRecordPerCsv(row.raw);
@@ -1928,16 +1962,48 @@ const confronti = {
         return reportConfrontoCsv.componiCsv(voci);
     },
 
-    _getReportNuoviRows(report) {
-        let listaTracciato = readFile(pathLavorazione + "/listaKit" + idKitLavorazione + ".json");
-        if (typeof listaTracciato === "string") {
+    //I20-981: la lista del kit si legge una volta sola per ogni apertura del report.
+    //La leggevano il pannello dei nuovi e il csv, ognuno per conto suo, e su un volantino sono
+    //parecchi megabyte di json; adesso la sezione Confronti sarebbe stata la terza.
+    _leggiListaKitLocale() {
+        const stato = this._confrontoReportState;
+
+        if (stato != null && stato.listaKit !== undefined) {
+            return stato.listaKit;
+        }
+
+        let lista = readFile(pathLavorazione + "/listaKit" + idKitLavorazione + ".json");
+
+        if (typeof lista === "string") {
             try {
-                listaTracciato = JSON.parse(listaTracciato);
-            } catch (err) {
-                console.error("Errore parse listaKit per export CSV:", err);
-                listaTracciato = [];
+                lista = JSON.parse(lista);
+            }
+            catch (err) {
+                console.error("Errore parse listaKit:", err);
+                lista = null;
             }
         }
+
+        if (stato != null) {
+            stato.listaKit = lista;
+        }
+
+        return lista;
+    },
+
+    /// I record della lista del kit, o un elenco vuoto se la lista non c'e'.
+    _recordsListaKit() {
+        const lista = this._leggiListaKitLocale();
+
+        if (Array.isArray(lista)) {
+            return lista;
+        }
+
+        return Array.isArray(lista?.records) ? lista.records : [];
+    },
+
+    _getReportNuoviRows(report) {
+        const listaTracciato = this._leggiListaKitLocale();
 
         return this._estraiNuoviDaLista(report, listaTracciato);
     },
@@ -3623,6 +3689,10 @@ const confronti = {
 
         const header = document.createElement("div");
         header.style.display = "flex";
+        //I20-981: quattro linguette con il conteggio non stanno su una riga sola in un pannello
+        //stretto: vanno a capo invece di uscire.
+        header.style.flexWrap = "wrap";
+        header.style.rowGap = "4px";
         header.style.gap = "6px";
         header.style.padding = "0 0 8px 0";
         header.style.flexShrink = "0";
@@ -3781,7 +3851,8 @@ const confronti = {
     COLORI_STATO: {
         cambiato: "#e0a800",
         uscito: "#c0392b",
-        nuovo: "#2e7d32"
+        nuovo: "#2e7d32",
+        differente: "#1565c0"
     },
 
     _crRow(stato = null) {
@@ -3873,6 +3944,115 @@ const confronti = {
     },
 
 
+    //I20-981 (Lotto 4a): la sezione Confronti, nella modalita' che si apre per prima.
+    //Confronta la lista con se stessa: per i campi che l'agenzia tiene d'occhio, mostra cosa
+    //aveva la referenza prima e cosa ha adesso. Evidenzia e basta, non propone correzioni: a
+    //decidere se la referenza va spostata di pagina e' l'operatore.
+    campiOsservatiConfronto() {
+        try {
+            const campi = pluginMiddleware.getCampo("campiOsservatiConfronto");
+            return Array.isArray(campi) ? campi : [];
+        }
+        catch (err) {
+            console.error("Campi osservati per il confronto non disponibili:", err);
+            return [];
+        }
+    },
+
+    _calcolaConfronti() {
+        const campi = this.campiOsservatiConfronto();
+
+        if (campi.length === 0) {
+            return { campi: campi, voci: [] };
+        }
+
+        return {
+            campi: campi,
+            voci: reportConfronti.confrontoConSeStessa(this._recordsListaKit(), campi)
+        };
+    },
+
+    _buildPanelConfronti(confronti) {
+        const panel = this._crPanel();
+        this._stylePanelForReportListMode(panel);
+        const topbar = this._crTabTopbar();
+        const content = this._crScrollableContent();
+
+        const modo = document.createElement("div");
+        modo.textContent = "Confronto della lista con se stessa";
+        modo.style.fontWeight = "600";
+        modo.style.fontSize = "12px";
+        Utility.impostaTooltip(modo, "Si confrontano i campi osservati fra il valore di adesso e quello che avevano prima");
+        topbar.appendChild(modo);
+
+        const campi = (confronti && confronti.campi) || [];
+        const voci = (confronti && confronti.voci) || [];
+
+        if (campi.length > 0) {
+            const elenco = document.createElement("div");
+            elenco.textContent = "Campi osservati: " + campi.map(c => c.label || c.keyInRecordInTracciato).join(", ");
+            elenco.style.fontSize = "11px";
+            elenco.style.opacity = "0.8";
+            elenco.style.marginLeft = "8px";
+            elenco.style.minWidth = "0";
+            elenco.style.overflow = "hidden";
+            elenco.style.textOverflow = "ellipsis";
+            elenco.style.whiteSpace = "nowrap";
+            Utility.impostaTooltip(elenco, campi.map(c => (c.label || "") + " (" + (c.keyInRecordInTracciato || "") + ")").join("\n"));
+            topbar.appendChild(elenco);
+        }
+
+        if (campi.length === 0) {
+            //Senza campi configurati la sezione non ha niente da confrontare, e lo dice invece
+            //di mostrare un elenco vuoto che sembrerebbe "tutto a posto".
+            content.appendChild(this._crEmptyState("Nessun campo osservato configurato per questa agenzia"));
+        }
+        else if (voci.length === 0) {
+            content.appendChild(this._crEmptyState("Nessuna differenza sui campi osservati"));
+        }
+        else {
+            voci.forEach(voce => {
+                const row = this._crRow("differente");
+
+                const left = document.createElement("div");
+                left.style.display = "flex";
+                left.style.flexDirection = "column";
+                left.style.flex = "1 1 auto";
+                left.style.minWidth = "0";
+                left.style.overflow = "hidden";
+                left.style.gap = "4px";
+
+                left.appendChild(this._crCodiceGruppo(voce.codiceGruppo));
+
+                voce.differenze.forEach(differenza => {
+                    const riga = document.createElement("div");
+                    riga.style.fontSize = "11px";
+                    riga.style.lineHeight = "1.3";
+                    riga.style.whiteSpace = "normal";
+                    riga.style.overflowWrap = "anywhere";
+                    riga.style.minWidth = "0";
+
+                    const campo = document.createElement("span");
+                    campo.textContent = differenza.etichetta;
+                    campo.style.fontWeight = "600";
+                    riga.appendChild(campo);
+
+                    //Prima e adesso, in quest'ordine: si legge come una frase.
+                    riga.appendChild(document.createTextNode(": " + (differenza.prima || "(vuoto)") + " → " + (differenza.adesso || "(vuoto)")));
+
+                    left.appendChild(riga);
+                });
+
+                row.appendChild(left);
+                content.appendChild(row);
+            });
+        }
+
+        panel.appendChild(topbar);
+        panel.appendChild(content);
+        return panel;
+    },
+
     _buildPanelNuovi(report) {
         const panel = this._crPanel();
         this._stylePanelForReportListMode(panel);
@@ -3937,15 +4117,7 @@ const confronti = {
         panel.appendChild(topbar);
         panel.appendChild(wrapper);
 
-        let listaTracciato = readFile(pathLavorazione + "/listaKit" + idKitLavorazione + ".json");
-        if (typeof listaTracciato === "string") {
-            try {
-                listaTracciato = JSON.parse(listaTracciato);
-            } catch (err) {
-                console.error("Errore parse listaKit:", err);
-                listaTracciato = [];
-            }
-        }
+        const listaTracciato = this._leggiListaKitLocale();
 
         const colonneExtra = (pluginMiddleware?.getColonneTracciatoIntestazione?.() || []).map(col => ({
             nome: col?.nome || col?.name || col?.label || col?.chiaveDato || "",
