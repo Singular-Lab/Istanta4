@@ -265,8 +265,51 @@ export class ModelliManager {
       log.warn(Colorize.yellow('⚠️ Errore applicazione mixins:', errore));
     }
 
-    // Sincronizza ogni modello
-    for (const [chiave, config] of Object.entries(MODELLI_SEQUELIZE)) {
+    // Sincronizza ogni modello, rispettando l'ordine delle dipendenze.
+    //
+    // L'ordine di dichiarazione di MODELLI_SEQUELIZE non ha relazione con quello
+    // delle chiavi esterne: su un database vuoto questo faceva fallire i modelli
+    // che dipendono da tabelle non ancora create (es. aree, dichiarata seconda,
+    // ha una FK verso gdo, dichiarata decima), con "relation ... does not exist".
+    //
+    // getModelsTopoSortedByForeignKey e' la stessa API usata da sequelize.sync().
+    // Attenzione alla direzione: sequelize.sync() INVERTE l'array prima di creare,
+    // quindi l'ordine di creazione corretto e' quello invertito, non quello
+    // restituito. Le associazioni sono gia' state configurate qui sopra, quindi
+    // il grafo delle dipendenze e' completo.
+    type VoceRegistro = {
+      chiave: string;
+      config: typeof MODELLI_SEQUELIZE[keyof typeof MODELLI_SEQUELIZE];
+    };
+
+    // La chiave e' il modello stesso: i tipi concreti del registro e il ModelType
+    // restituito dall'ordinamento non coincidono, quindi la mappa resta generica.
+    const vociPerModello = new Map<unknown, VoceRegistro>(
+      Object.entries(MODELLI_SEQUELIZE).map(([chiave, config]) => [config.model, { chiave, config }])
+    );
+
+    const ordinatiPerDipendenza = sequelize.modelManager.getModelsTopoSortedByForeignKey();
+    let daSincronizzare: VoceRegistro[];
+
+    if (ordinatiPerDipendenza == null) {
+      // Ciclo fra chiavi esterne: oggi non accade, ma se venisse introdotto
+      // l'ordinamento non e' calcolabile. Si ripiega sull'ordine di dichiarazione,
+      // cioe' sul comportamento precedente, segnalandolo.
+      log.warn(Colorize.yellow(
+        '⚠️ Dipendenze cicliche fra modelli: impossibile ordinare per chiave esterna, ' +
+        'si procede con ordine di dichiarazione e alcune tabelle potrebbero non essere create'
+      ));
+      daSincronizzare = Object.entries(MODELLI_SEQUELIZE).map(([chiave, config]) => ({ chiave, config }));
+    } else {
+      // Solo i modelli del registro: le tabelle ponte generate da belongsToMany
+      // non sono dichiarate qui e non vengono sincronizzate, come in precedenza.
+      daSincronizzare = [...ordinatiPerDipendenza]
+        .reverse()
+        .map(model => vociPerModello.get(model))
+        .filter((voce): voce is VoceRegistro => voce != null);
+    }
+
+    for (const { chiave, config } of daSincronizzare) {
       const modelStartTime = Date.now();
 
       try {

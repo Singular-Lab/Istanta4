@@ -74,6 +74,42 @@ describe('sincronizzaTuttiIModelli', () => {
     expect(ordineChiamate).not.toContain('seed:bulkCreate');
   });
 
+  it('sincronizza gdo prima di aree, che ha una chiave esterna verso gdo', async () => {
+    const risultati = await modelliManager.sincronizzaTuttiIModelli();
+
+    const indiceGdo = ordineChiamate.indexOf('sync:GDO');
+    const indiceAree = ordineChiamate.indexOf('sync:Area');
+
+    expect(indiceGdo).toBeGreaterThan(-1);
+    expect(indiceAree).toBeGreaterThan(-1);
+    //Nell'ordine di dichiarazione Area e' seconda e GDO decima: senza
+    //ordinamento per dipendenze, su database vuoto Area fallisce con
+    //"relation gdo does not exist".
+    expect(indiceGdo).toBeLessThan(indiceAree);
+    expect(risultati.every(r => r.successo)).toBe(true);
+  });
+
+  it('copre tutti i modelli del registro, una volta ciascuno', async () => {
+    const risultati = await modelliManager.sincronizzaTuttiIModelli();
+
+    const attesi = Object.values(MODELLI_SEQUELIZE).map(c => c.nome).sort();
+    const ottenuti = risultati.map(r => r.modello).sort();
+
+    expect(ottenuti).toEqual(attesi);
+    //Le tabelle ponte generate da belongsToMany restano fuori dal registro e
+    //non vengono sincronizzate: lo schema di produzione non cambia.
+    expect(risultati).toHaveLength(attesi.length);
+  });
+
+  it('con dipendenze cicliche ripiega sull ordine di dichiarazione senza perdere modelli', async () => {
+    vi.spyOn(sequelize.modelManager, 'getModelsTopoSortedByForeignKey').mockReturnValue(null);
+
+    const risultati = await modelliManager.sincronizzaTuttiIModelli();
+
+    const attesi = Object.values(MODELLI_SEQUELIZE).map(c => c.nome).sort();
+    expect(risultati.map(r => r.modello).sort()).toEqual(attesi);
+  });
+
   it('non propaga un errore del seed: il rigetto resta catturato', async () => {
     vi.spyOn(RuoloUtenteGDO, 'findAll').mockImplementation(async () => {
       ordineChiamate.push('seed:findAll');
