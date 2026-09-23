@@ -635,17 +635,83 @@ test('nel csv i cambiamenti di confronto stanno in una colonna sola', () => {
     assert.match(testo, /filter\(d => d\?\.origine === "confronto"\)/);
 });
 
-test('la scheda Confronti resta in attesa del confronto con altre liste', () => {
+test('la scheda Confronti ospita il confronto con un\'altra lista', () => {
+    //I20-981 (Lotto 4b): finche' una lista non e' scelta la scheda dice cosa fare, e dice dove
+    //sono finite le differenze con se stessa, per non farle cercare.
+    const ridisegna = corpoFunzione(confronti, '_ridisegnaConfrontoListe(anchePannelloCampi = true) {');
+    assert.match(ridisegna, /Nessuna lista di confronto selezionata/);
+    assert.match(ridisegna, /scheda Cambiati/);
+    //Cambiare un filtro ridisegna la sola scheda, non tutto il report.
+    assert.doesNotMatch(ridisegna, /compilaReportConfronto|_refreshConfrontoReportUi/);
+
+    //Le due sorgenti: una lavorazione della promo, o un json locale. I pulsanti ci sono, i
+    //filtri anche: presenze, i due canali, i campi.
     const pannello = corpoFunzione(confronti, '_buildPanelConfronti() {');
+    assert.match(pannello, /this\._scaricaListaConfrontoScelta\(\)/);
+    assert.match(pannello, /this\._apriListaConfrontoLocale\(\)/);
+    assert.match(pannello, /this\._scaricaCsvConfrontoListe\(\)/);
+    assert.match(pannello, /this\._crPickerPresenza\(filtro\.presenza\)/);
+    assert.match(pannello, /_crInterruttore\("Campi osservati"/);
+    assert.match(pannello, /_crInterruttore\("Campi compilati"/);
 
-    assert.match(pannello, /Nessuna lista di confronto selezionata/);
-    //E dice dove sono finite le differenze con se stessa, per non farle cercare.
-    assert.match(pannello, /scheda Cambiati/);
+    //Il confronto e il filtro stanno nel modulo verificato, non qui.
+    const calcola = corpoFunzione(confronti, '_calcolaConfrontoAltraLista() {');
+    assert.match(calcola, /reportConfronti\.confrontoConAltraLista\(/);
+    const filtrate = corpoFunzione(confronti, '_vociConfrontoFiltrate() {');
+    assert.match(filtrate, /reportConfronti\.filtraVociConfronto\(/);
 
-    //La linguetta non conta piu' nulla: il conteggio dei differenti e' confluito nei Cambiati.
+    //La linguetta conta le voci che si vedono, e resta senza numero finche' non c'e' una lista.
     const compila = corpoFunzione(confronti, 'compilaReportConfronto(report, options = {}) {');
     assert.doesNotMatch(compila, /etichettaLinguetta\("Differenti"/);
-    assert.match(compila, /this\._crTabButton\("Confronti", false, "Confronti"\)/);
+    assert.match(compila, /reportConteggi\.etichettaLinguetta\("Confronti", this\._vociConfrontoFiltrate\(\)\.length\)/);
+    assert.match(compila, /this\._vociConfrontoListe = this\._calcolaConfrontoAltraLista\(\)/);
+});
+
+test('la lista di confronto si scarica in memoria, senza toccare quella corrente', () => {
+    //scaricaContenutoKit scrive la lista su disco, cancella il report locale e rifa' il
+    //tracciato: tre cose che una lista di confronto non deve fare. Si usa una richiesta
+    //propria, e la lista resta in memoria per la sessione.
+    const scarica = corpoFunzione(confronti, '_scaricaListaConfrontoScelta() {');
+    assert.match(scarica, /ficoProcess\.requestFicoData\(\s*\n?\s*"Menabo\/getListaTracciatoNew2\/" \+ id/);
+    assert.doesNotMatch(scarica, /scaricaContenutoKit|writeFileSync|eliminaReportIntegritaLocale/);
+    //Il download pesa: lo si dice e si mostra il caricamento finche' dura.
+    assert.match(scarica, /showLoading\("Scaricamento lista di confronto\.\.\."\)/);
+    assert.match(scarica, /hideLoading\(\)/);
+    assert.match(scarica, /reportConfronti\.recordsDellaLista\(lista\)/);
+
+    //Le lavorazioni fra cui scegliere sono quelle della stessa promo, chieste al server una
+    //volta per sessione.
+    const sorelle = corpoFunzione(confronti, '_lavorazioniDellaPromo() {');
+    assert.match(sorelle, /"Menabo\/getLavorazioniDellaPromo\/" \+ idKitLavorazione/);
+    assert.match(sorelle, /this\._lavorazioniSorelle = risposta/);
+
+    //Il json locale: la promo si verifica dall'idKit contro quell'elenco, e se non si puo'
+    //verificare decide l'operatore.
+    const locale = corpoFunzione(confronti, '_apriListaConfrontoLocale() {');
+    assert.match(locale, /fs2\.getFileForOpening\(\)/);
+    assert.match(locale, /reportConfronti\.recordsDellaLista\(lista\)/);
+    assert.match(locale, /sorelle\.lavorazioni\.find\(l => Number\(l\.id\) === idKit\)/);
+    assert.match(locale, /Utility\.confirm\(/);
+
+    //La lista scelta vale per la sessione: la si imposta una volta e il confronto si rifa'.
+    const imposta = corpoFunzione(confronti, '_impostaListaConfronto(lista) {');
+    assert.match(imposta, /this\._listaConfronto = Object\.assign\(/);
+    assert.match(imposta, /reportConfronti\.identitaTracciato\(lista\.records\)/);
+
+    //Il csv del confronto e' un file a se', con i filtri attivi in testa, e passa dal modulo
+    //verificato e dallo stesso scrittore del csv del report.
+    const csv = corpoFunzione(confronti, '_scaricaCsvConfrontoListe() {');
+    assert.match(csv, /reportConfrontoCsv\.conSuffissoConfronto\(await this\._nomeFileReportCsv\(cartella\)\)/);
+    assert.match(csv, /reportConfrontoCsv\.componiCsvConfronto\(/);
+    assert.match(csv, /reportConfronti\.descriviFiltro\(/);
+    assert.match(csv, /this\._scriviTestoUtf8\(cartella, nomeFile, testo\)/);
+});
+
+test('l\'endpoint delle lavorazioni della promo esiste e passa dalla forma verificata', () => {
+    const controller = fs.readFileSync(path.join(cartellaPlugin, '..', 'Istanta', 'Controllers', 'MenaboController.cs'), 'utf8');
+    assert.match(controller, /\[Route\("Menabo\/getLavorazioniDellaPromo\/\{idLavorazione\}"\)\]/);
+    //Il controller legge; la forma dell'elenco la decide la classe senza database.
+    assert.match(controller, /LavorazioniDellaPromo\.Componi\(corrente, tutte\)/);
 });
 
 test('il Trova apre la scheda referenza vera, non una sua copia', () => {
@@ -965,4 +1031,14 @@ test('anche le scritte sfumano, e la riga sparisce appena sfumata', () => {
     const risolte = corpoFunzione(confronti, '_mostraSegnalazioniRisolte(piano) {');
     assert.match(risolte, /this\._rimuoviDallaVista\(elementi\)/);
     assert.match(risolte, /this\._rimuoviDallaVista\(\[riga\]\)/);
+});
+
+test('l\'intestazione del confronto non si schiaccia sulla prima riga', () => {
+    //In UXP un figlio di una colonna flex senza flexShrink 0 viene schiacciato e finisce sopra
+    //il vicino: l'intestazione con le due liste e i filtri si sovrapponeva al primo risultato.
+    //E' la stessa regola che le righe del report chiamano "il punto importante".
+    const intestazione = corpoFunzione(confronti, '_crIdentitaConfronto() {');
+    assert.match(intestazione, /riga\.style\.flexShrink = "0"/);
+    assert.match(intestazione, /riga\.style\.flexGrow = "0"/);
+    assert.match(intestazione, /riga\.style\.flexBasis = "auto"/);
 });

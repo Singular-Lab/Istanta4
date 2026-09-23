@@ -180,6 +180,288 @@ function testoDifferenze(differenze, separatore = " | ") {
         .join(separatore);
 }
 
+//I20-981 (Lotto 4b): il confronto fra la lista corrente e un'altra lista della stessa promo.
+//Le due liste vengono da lavorazioni diverse, e fra lavorazioni l'idRec cambia: ci si accoppia
+//per codice gruppo, sui soli primari. Le differenze viaggiano su due canali, i campi osservati
+//dall'agenzia e i campi compilati, cosi' l'operatore puo' spegnere un canale intero o tenere
+//un campo solo, alla maniera di un foglio di calcolo.
+const CANALE = Object.freeze({ osservato: "osservato", compilato: "compilato" });
+const PRESENZA = Object.freeze({ entrambe: "entrambe", soloCorrente: "soloCorrente", soloAltra: "soloAltra" });
+const FILTRO_PRESENZA = Object.freeze({ tutte: "tutte", comuni: "comuni", soloUna: "soloUna" });
+
+/// I primari di una lista, per codice gruppo. Se un codice compare due volte come primario
+/// vince il primo: la lista dice l'ordine, e non e' questo il posto per discuterlo.
+function primariPerCodiceGruppo(records) {
+    const indice = new Map();
+
+    (records || []).forEach(voce => {
+        const dato = voce && voce.recordInTracciato ? voce.recordInTracciato : voce;
+        if (dato == null || Number(dato.StatoSelezione) !== 1) {
+            return;
+        }
+
+        const codice = valoreLeggibile(dato["Scatto.CodiceGruppo"]);
+        if (codice === "" || indice.has(codice)) {
+            return;
+        }
+
+        indice.set(codice, dato);
+    });
+
+    return indice;
+}
+
+/// Le differenze sui campi osservati fra il dato della lista corrente e quello dell'altra.
+function differenzeOsservate(datoCorrente, datoAltra, campiOsservati) {
+    const differenze = [];
+
+    (campiOsservati || []).forEach(campo => {
+        const chiave = campo && (campo.keyInRecordInTracciato || campo.campo || campo.chiave);
+        if (chiave == null || chiave === "") {
+            return;
+        }
+
+        const corrente = (datoCorrente || {})[chiave];
+        const altra = (datoAltra || {})[chiave];
+
+        if (sonoUguali(corrente, altra)) {
+            return;
+        }
+
+        differenze.push({
+            canale: CANALE.osservato,
+            campo: chiave,
+            etichetta: (campo && campo.label) || chiave,
+            corrente: valoreLeggibile(corrente),
+            altra: valoreLeggibile(altra)
+        });
+    });
+
+    return differenze;
+}
+
+/// I campi compilati per nome, come li porta il record: labelName e content.
+function compilatiPerNome(dato) {
+    const indice = new Map();
+    const campi = dato && Array.isArray(dato.compiledFields) ? dato.compiledFields : [];
+
+    campi.forEach(campo => {
+        const nome = campo && campo.labelName != null ? String(campo.labelName) : "";
+        if (nome === "" || indice.has(nome)) {
+            return;
+        }
+        indice.set(nome, campo.content == null ? "" : String(campo.content));
+    });
+
+    return indice;
+}
+
+/// Le differenze sui campi compilati: si guarda l'unione dei nomi delle due parti, e un campo
+/// che una lista ha e l'altra no e' una differenza come le altre, con il lato mancante vuoto.
+/// Il contenuto si confronta com'e', tag di stile compresi: due descrizioni uguali nel testo ma
+/// diverse nello stile finiscono in pagina diverse, e all'operatore serve saperlo.
+function differenzeCompilate(datoCorrente, datoAltra) {
+    const corrente = compilatiPerNome(datoCorrente);
+    const altra = compilatiPerNome(datoAltra);
+    const nomi = [];
+
+    corrente.forEach((valore, nome) => nomi.push(nome));
+    altra.forEach((valore, nome) => {
+        if (!corrente.has(nome)) {
+            nomi.push(nome);
+        }
+    });
+
+    const differenze = [];
+
+    nomi.forEach(nome => {
+        const valoreCorrente = corrente.has(nome) ? corrente.get(nome) : "";
+        const valoreAltra = altra.has(nome) ? altra.get(nome) : "";
+
+        if (sonoUguali(valoreCorrente, valoreAltra)) {
+            return;
+        }
+
+        differenze.push({
+            canale: CANALE.compilato,
+            campo: nome,
+            etichetta: nome,
+            corrente: valoreCorrente,
+            altra: valoreAltra
+        });
+    });
+
+    return differenze;
+}
+
+/// Il confronto fra le due liste. Torna una voce per ogni codice gruppo presente in almeno una
+/// delle due, nell'ordine della lista corrente e poi di quella altra: prima le referenze in
+/// comune con le loro differenze (anche nessuna: e' il filtro a decidere se mostrarle), poi
+/// quelle che stanno da un lato solo.
+function confrontoConAltraLista(recordsCorrente, recordsAltra, campiOsservati) {
+    const corrente = primariPerCodiceGruppo(recordsCorrente);
+    const altra = primariPerCodiceGruppo(recordsAltra);
+    const voci = [];
+
+    corrente.forEach((datoCorrente, codice) => {
+        if (!altra.has(codice)) {
+            voci.push({ codiceGruppo: codice, presenza: PRESENZA.soloCorrente, rawCorrente: datoCorrente, rawAltra: null, differenze: [] });
+            return;
+        }
+
+        const datoAltra = altra.get(codice);
+        voci.push({
+            codiceGruppo: codice,
+            presenza: PRESENZA.entrambe,
+            rawCorrente: datoCorrente,
+            rawAltra: datoAltra,
+            differenze: differenzeOsservate(datoCorrente, datoAltra, campiOsservati)
+                .concat(differenzeCompilate(datoCorrente, datoAltra))
+        });
+    });
+
+    altra.forEach((datoAltra, codice) => {
+        if (!corrente.has(codice)) {
+            voci.push({ codiceGruppo: codice, presenza: PRESENZA.soloAltra, rawCorrente: null, rawAltra: datoAltra, differenze: [] });
+        }
+    });
+
+    return voci;
+}
+
+/// I campi che compaiono almeno una volta fra le differenze, per canale: e' l'elenco con cui
+/// si costruisce il filtro, e non si offre un campo che non ha niente da mostrare.
+function campiDisponibili(voci) {
+    const visti = new Set();
+    const campi = [];
+
+    [CANALE.osservato, CANALE.compilato].forEach(canale => {
+        (voci || []).forEach(voce => {
+            (voce.differenze || []).forEach(d => {
+                if (d.canale !== canale) {
+                    return;
+                }
+                const chiave = canale + "|" + d.campo;
+                if (visti.has(chiave)) {
+                    return;
+                }
+                visti.add(chiave);
+                campi.push({ canale: canale, campo: d.campo, etichetta: d.etichetta || d.campo });
+            });
+        });
+    });
+
+    return campi;
+}
+
+/// Il filtro come lo vuole l'operatore: quali presenze, quali canali, quali campi. Un campo
+/// spento non si vede, e una referenza in comune a cui non resta nessuna differenza da mostrare
+/// esce dall'elenco. Le referenze da un lato solo restano: la loro notizia e' la presenza.
+function filtraVociConfronto(voci, filtro) {
+    const scelte = filtro || {};
+    const presenza = scelte.presenza || FILTRO_PRESENZA.tutte;
+    const canali = Object.assign({ osservato: true, compilato: true }, scelte.canali || {});
+    const campi = Array.isArray(scelte.campi) ? new Set(scelte.campi.map(c => String(c))) : null;
+
+    const risultato = [];
+
+    (voci || []).forEach(voce => {
+        const inComune = voce.presenza === PRESENZA.entrambe;
+
+        if (presenza === FILTRO_PRESENZA.comuni && !inComune) {
+            return;
+        }
+        if (presenza === FILTRO_PRESENZA.soloUna && inComune) {
+            return;
+        }
+
+        const differenze = (voce.differenze || []).filter(d =>
+            canali[d.canale] !== false && (campi == null || campi.has(String(d.campo))));
+
+        if (inComune && differenze.length === 0) {
+            return;
+        }
+
+        risultato.push(Object.assign({}, voce, { differenze: differenze }));
+    });
+
+    return risultato;
+}
+
+/// L'identita' di una lista come si legge dai suoi record: etichetta e versione del tracciato
+/// del primo primario. Serve in testa al csv e sopra l'elenco, per dire cosa si sta confrontando.
+function identitaTracciato(records) {
+    const primari = primariPerCodiceGruppo(records);
+    let dato = null;
+    primari.forEach(valore => {
+        if (dato == null) {
+            dato = valore;
+        }
+    });
+
+    return {
+        etichettaTracciato: dato != null ? valoreLeggibile(dato["Tracciato.Label"]) : "",
+        versioneTracciato: dato != null ? valoreLeggibile(dato["Tracciato.Versione"]) : "",
+        primari: primari.size
+    };
+}
+
+/// Il nome dello stato per l'operatore e per il csv.
+function descriviPresenza(presenza) {
+    if (presenza === PRESENZA.soloCorrente) {
+        return "Solo lista corrente";
+    }
+    if (presenza === PRESENZA.soloAltra) {
+        return "Solo altra lista";
+    }
+    return "Diversa";
+}
+
+function descriviCanale(canale) {
+    return canale === CANALE.compilato ? "Campo compilato" : "Campo osservato";
+}
+
+/// I record di una lista come la restituisce il server o come sta nel json locale: o l'array
+/// nudo, o l'oggetto con la chiave records. Qualunque altra cosa non e' una lista.
+function recordsDellaLista(lista) {
+    if (Array.isArray(lista)) {
+        return lista;
+    }
+    if (lista != null && Array.isArray(lista.records)) {
+        return lista.records;
+    }
+    return null;
+}
+
+/// Il filtro raccontato in una riga, per la testa del csv e per l'operatore.
+function descriviFiltro(filtro, campiDisponibili) {
+    const scelte = filtro || {};
+    const parti = [];
+
+    const presenza = scelte.presenza || FILTRO_PRESENZA.tutte;
+    parti.push("presenze: " + (presenza === FILTRO_PRESENZA.comuni ? "solo in comune"
+        : presenza === FILTRO_PRESENZA.soloUna ? "solo in una lista" : "tutte"));
+
+    const canali = Object.assign({ osservato: true, compilato: true }, scelte.canali || {});
+    const canaliAttivi = [];
+    if (canali.osservato !== false) canaliAttivi.push("osservati");
+    if (canali.compilato !== false) canaliAttivi.push("compilati");
+    parti.push("canali: " + (canaliAttivi.length > 0 ? canaliAttivi.join(", ") : "nessuno"));
+
+    if (Array.isArray(scelte.campi)) {
+        const etichette = scelte.campi.map(campo => {
+            const trovato = (campiDisponibili || []).find(c => String(c.campo) === String(campo));
+            return trovato != null ? (trovato.etichetta || trovato.campo) : String(campo);
+        });
+        parti.push("campi: " + (etichette.length > 0 ? etichette.join(", ") : "nessuno"));
+    }
+    else {
+        parti.push("campi: tutti");
+    }
+
+    return parti.join("; ");
+}
+
 module.exports = {
     CHIAVE_ALTERAZIONI,
     valoreLeggibile,
@@ -190,5 +472,19 @@ module.exports = {
     chiavePresenza,
     indicizzaPerPresenza,
     differenzePerPresenza,
+    CANALE,
+    PRESENZA,
+    FILTRO_PRESENZA,
+    primariPerCodiceGruppo,
+    differenzeOsservate,
+    differenzeCompilate,
+    confrontoConAltraLista,
+    campiDisponibili,
+    filtraVociConfronto,
+    identitaTracciato,
+    descriviPresenza,
+    descriviCanale,
+    recordsDellaLista,
+    descriviFiltro,
     testoDifferenze
 };
