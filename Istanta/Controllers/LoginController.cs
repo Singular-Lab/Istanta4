@@ -1288,6 +1288,66 @@ namespace Istanta.Controllers
 
         }
 
+        /// <summary>
+        /// I20-987: il manifest del Plugin pubblicato per questo cliente, oppure niente se non
+        /// si riesce a leggerlo.
+        ///
+        /// La lettura sta in un posto solo perche' la usano sia il link di scaricamento sia il
+        /// controllo della versione: due copie prenderebbero strade diverse alla prima modifica.
+        /// </summary>
+        private async Task<PluginManifest?> manifestPluginPubblicato()
+        {
+            Random rnd = new Random(999999);
+            int rndNum = rnd.Next();
+            string k = Crypto.EncryptString(ficoConfig.nomeCliente, ficoConfig.secretKey);
+            string linkManifest = $"https://www.istanta.it/plugin/{k}/manifest.json?c={rndNum}";
+
+            HttpClient httpClient = httpClientFactory.CreateClient();
+            var responseManifest = await httpClient.GetAsync(linkManifest);
+
+            if (!responseManifest.IsSuccessStatusCode)
+            {
+                return null;
+            }
+
+            string manifestContent = await responseManifest.Content.ReadAsStringAsync();
+            return JsonConvert.DeserializeObject<PluginManifest>(manifestContent);
+        }
+
+        /// <summary>
+        /// I20-987: la versione del Plugin pubblicata per questo cliente.
+        ///
+        /// La chiede il Plugin all'avvio per confrontarla con la propria. Se il manifest non si
+        /// legge si risponde senza versione invece di inventarne una: il Plugin, in quel caso,
+        /// non blocca niente, perche' un disservizio di rete non deve fermare il lavoro.
+        /// </summary>
+        [HttpGet]
+        [Route("LoginController/getVersionePluginPubblicata")]
+        public async Task<IActionResult> getVersionePluginPubblicata()
+        {
+            StringResult str = new StringResult();
+
+            try
+            {
+                PluginManifest? manifest = await manifestPluginPubblicato();
+
+                if (manifest == null || string.IsNullOrWhiteSpace(manifest.version))
+                {
+                    str.error = "Versione del Plugin non disponibile";
+                    return Ok(str);
+                }
+
+                str.Esito = manifest.version;
+                str.boolEsito = true;
+            }
+            catch (Exception ex)
+            {
+                str.error = ex.Message;
+            }
+
+            return Ok(str);
+        }
+
         [HttpGet]
         [Route("LoginController/getDownloadLinkOfPlugin")]
         public async Task<IActionResult> getDownloadLinkOfPlugin()
@@ -1300,23 +1360,18 @@ namespace Istanta.Controllers
                 Random rnd = new Random(999999);
                 int rndNum = rnd.Next();
                 string k = Crypto.EncryptString(ficoConfig.nomeCliente, ficoConfig.secretKey);
-                string linkManifest = $"https://www.istanta.it/plugin/{k}/manifest.json?c={rndNum}";
-                //Leggo il file manifest
-                HttpClient httpClient = httpClientFactory.CreateClient();
-                var responseManifest = await httpClient.GetAsync(linkManifest);
+
+                PluginManifest? manifest = await manifestPluginPubblicato();
 
                 string _version = "";
                 string sourcename = "";
-                if (!responseManifest.IsSuccessStatusCode)
+                if (manifest == null)
                 {
                     str.error = "Plugin non disponibile";
                     return Ok(str);
                 }
                 else
                 {
-                    //Converto json string in oggetto
-                    string manifestContent = await responseManifest.Content.ReadAsStringAsync();
-                    PluginManifest manifest = JsonConvert.DeserializeObject<PluginManifest>(manifestContent)!;
                     _version = manifest.version!;
                     sourcename = $"{manifest.id}_{manifest.host.FirstOrDefault().app}_{_version}";
                 }
@@ -1332,6 +1387,7 @@ namespace Istanta.Controllers
                 string link = $"https://www.istanta.it/plugin/{k}/{sourcename}.zip?c={rndNum}";
                 //Controllo se la risrsa esiste
 
+                HttpClient httpClient = httpClientFactory.CreateClient();
                 var response = await httpClient.GetAsync(link);
                 if (!response.IsSuccessStatusCode)
                 {
