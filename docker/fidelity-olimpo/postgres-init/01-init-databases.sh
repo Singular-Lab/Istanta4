@@ -21,6 +21,22 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS postgis;
 SQL
 
+# Nove script in server/core/db/scripts/ terminano con `OWNER TO postgres`, e li
+# esegue Fidelity all'avvio. Qui il superutente si chiama come il database
+# (POSTGRES_USER=fidelity), quindi un ruolo `postgres` non esiste e quegli script
+# falliscono tutti con 42704. Il ruolo non serve per accedere — non ha LOGIN e
+# nessuno ci si connette — serve solo a poter essere indicato come proprietario.
+echo "[init] Ruolo postgres, atteso dagli script SQL di Fidelity"
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname postgres <<'SQL'
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'postgres') THEN
+        CREATE ROLE postgres NOLOGIN;
+    END IF;
+END
+$$;
+SQL
+
 echo "[init] Ruolo e database di Olimpo ($OLIMPO_DB_NAME)"
 # Le variabili psql vanno passate da stdin: con -c non vengono interpolate e
 # ":nome" arriverebbe letterale al server. :"x" cita un identificatore, :'x' un
