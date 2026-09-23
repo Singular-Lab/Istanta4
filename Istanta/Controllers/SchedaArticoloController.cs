@@ -1,6 +1,7 @@
 ﻿using DocumentFormat.OpenXml.Spreadsheet;
 using DocumentFormat.OpenXml.Vml.Spreadsheet;
 using Istanta.Models;
+using Istanta.Utility;
 using IstantaLib;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -73,8 +74,45 @@ namespace Istanta.Controllers
             }
             ViewBag.ipOlympus = olympusServerUrl;
             ViewBag.extPostProduzione = ext_post_lavorazione;
+            destinazioniFoto();
 
             return View();
+        }
+
+        /// I20-985: dove si puo' mandare una foto caricata dalla scheda.
+        ///
+        /// Aree, canali e coppie ammesse sono quelli di Settings, voce Aree e Canali: la stessa
+        /// sorgente ACPV che disegna quella pagina, dove la matrice dice quali coppie sono
+        /// attive. Qui non se ne inventano altre, altrimenti la scheda offrirebbe destinazioni
+        /// che nel resto del sistema non esistono. Si mandano le sigle perche' e' la sigla che
+        /// il server scrive nella foto, come fa il Plugin.
+        private void destinazioniFoto()
+        {
+            var aree = new List<Area>();
+            var canali = new List<Canale>();
+            var combinazioni = new List<CombinazioneAreaCanale>();
+
+            try
+            {
+                var acpv = SingletonConfiguration.DBACPV;
+
+                if (acpv != null)
+                {
+                    aree = acpv.aree.Where(a => !string.IsNullOrWhiteSpace(a.sigla)).ToList();
+                    canali = acpv.canali.Where(c => !string.IsNullOrWhiteSpace(c.sigla)).ToList();
+                    //Solo le coppie attive: quelle spente in tabella sono state tolte apposta.
+                    combinazioni = acpv.combinazioni.Where(c => c.enabled).ToList();
+                }
+            }
+            catch (Exception ex)
+            {
+                //Una scheda articolo che non si apre sarebbe peggio di un menu senza voci.
+                _logger.LogError(ex, "Aree e canali non leggibili per la scheda articolo");
+            }
+
+            ViewBag.areeFoto = aree;
+            ViewBag.canaliFoto = canali;
+            ViewBag.combinazioniFoto = combinazioni;
         }
 
         [HttpGet]
@@ -191,6 +229,41 @@ namespace Istanta.Controllers
                 el.DataModifica = DateTime.Now;
                 ctx.SaveChanges();
             }
+
+            return Ok();
+        }
+
+        /// I20-985: cambia solo dove vale una foto, senza toccare altro.
+        ///
+        /// Non si riusa SyncFoto/updateImmagineEsistente perche' quello, oltre alla
+        /// destinazione, mette la foto in uso come primaria: su una foto dell'elenco vorrebbe
+        /// dire promuoverla, mentre qui si sta solo dicendo dove vale. La foto si cerca per
+        /// identificativo di riga e non per GuidId, perche' dello stesso file possono esistere
+        /// piu' righe, una per destinazione, e per GuidId si finirebbe a cambiarne una a caso.
+        [HttpPut]
+        [Route("SchedaArticolo/AggiornaDestinazioneFoto")]
+        public async Task<IActionResult> AggiornaDestinazioneFoto(long idFoto, string codice, string? area, string? canale)
+        {
+            Articoli? artItem = await this.ctx.Articolis.Include(f => f.ArticoliFotos).Where(f => f.Codice == codice).FirstOrDefaultAsync();
+
+            if (artItem == null)
+            {
+                return NotFound("Articolo " + codice + " non trovato");
+            }
+
+            var foto = artItem.ArticoliFotos!.FirstOrDefault(f => f.Id == idFoto);
+
+            if (foto == null)
+            {
+                return NotFound("Foto " + idFoto + " non trovata sull'articolo " + codice);
+            }
+
+            var destinazione = Utility.Main.destinazioneDellaFoto(area, canale);
+
+            foto.Area = destinazione.area;
+            foto.Canale = destinazione.canale;
+            foto.DataModifica = DateTime.Now;
+            ctx.SaveChanges();
 
             return Ok();
         }

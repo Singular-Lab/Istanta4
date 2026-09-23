@@ -15,6 +15,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const Archivio = require('../../Istanta/wwwroot/js/archivio.js');
+const paginaFinta = require('./paginaFinta.js');
 
 const BOLLINO = 2, LOGO = 3, AMBIENTATA = 4, SFONDO = 5;
 
@@ -210,4 +211,111 @@ test('un salvataggio rifiutato chiude il caricamento e dice perche\'', () => {
         'il caricamento va chiuso, altrimenti la pagina resta appesa');
     assert.ok(dentroGuardia.includes('result.message || result.error'),
         'il motivo lo manda il server: va mostrato, non buttato');
+});
+
+/* ---- I20-985: archiviare altre foto del prodotto ---- */
+
+// Caricare una foto dalla scheda articolo non vuol dire volerla in uso: senza dirlo al server,
+// il caricamento la sceglie come primaria e spegne quella di adesso.
+test('la foto nuova del prodotto si archivia senza selezionarla', () => {
+    const dati = Archivio.datiNuovaFotoArticolo('6119227', 'scatto_nuovo.psd');
+
+    assert.strictEqual(dati.codice, '6119227');
+    assert.strictEqual(dati.tipo, 1, 'tipo 1 e\' la foto del prodotto');
+    assert.strictEqual(dati.nomeFile, 'scatto_nuovo.psd');
+    assert.strictEqual(dati.archiviaSenzaSelezionare, true);
+    assert.strictEqual(dati.idLavorazione, 0, 'dalla scheda non si sta lavorando a un volantino');
+});
+
+// L'elenco fisso di estensioni non c'e' piu': decideva in anticipo cosa il browser sa aprire e
+// sbagliava per difetto, per esempio sul tiff, che Safari disegna. Quello che resta a parte e' il
+// psd, perche' li' l'immagine va estratta prima. Le regole nuove stanno in anteprimaPsd.test.js.
+test('non si decide piu\' dall\'estensione cosa e\' mostrabile', () => {
+    assert.strictEqual(typeof Archivio.tipoAnteprimaDi, 'undefined');
+    assert.strictEqual(typeof Archivio.eUnPsd, 'function');
+});
+
+test('si vede cosa si sta per archiviare prima di scrivere', () => {
+    const vista = sorgente('Istanta/Views/SchedaArticolo/Index.cshtml');
+    const js = sorgente('Istanta/wwwroot/js/archivio.js');
+
+    assert.ok(vista.includes('data-azione="aggiungiFotoArticolo"'), 'serve il comando per iniziare');
+    assert.ok(vista.includes('data-azione="confermaFotoArticolo"') && vista.includes('data-azione="annullaFotoArticolo"'),
+        'l\'anteprima si conferma o si annulla');
+
+    const inizio = js.indexOf('AnteprimaFotoArticolo(campo) {');
+    const anteprima = js.slice(inizio, js.indexOf('AnnullaFotoArticolo() {', inizio));
+
+    assert.ok(!anteprima.includes('Call.doWithUpload'),
+        'guardare non deve scrivere: il caricamento parte solo dalla conferma');
+    assert.ok(js.indexOf('Call.doWithUpload("SyncFoto", "updateFotoFromIndd/0"', js.indexOf('ConfermaFotoArticolo() {')) > 0,
+        'il caricamento sta nella conferma');
+});
+
+// Le miniature arrivano da Olimpo con la sola larghezza fissata: senza un riquadro di misura
+// fissa ogni scheda veniva alta in modo diverso.
+test('le foto del prodotto stanno in un riquadro quadrato, senza tagli', () => {
+    const vista = sorgente('Istanta/Views/SchedaArticolo/Index.cshtml');
+    const css = sorgente('Istanta/wwwroot/css/site.css');
+
+    assert.strictEqual((vista.match(/riquadroFotoArticolo/g) || []).length >= 2, true,
+        'la primaria e le altre foto devono stare nello stesso riquadro');
+
+    const regola = css.slice(css.indexOf('.riquadroFotoArticolo {'));
+    assert.ok(/width:\s*150px/.test(regola) && /height:\s*150px/.test(regola), 'il riquadro e\' quadrato');
+    assert.ok(regola.includes('object-fit: contain'), 'l\'immagine ci sta dentro per intero');
+    assert.ok(!regola.includes('object-fit: cover'), 'cover taglierebbe i lati dello scatto');
+});
+
+// L'anteprima non si vedeva in nessun formato: era costruita con URL.createObjectURL, che
+// produce un indirizzo blob, e la policy di sicurezza della pagina non ammette blob fra le
+// immagini. Un indirizzo data la policy lo accetta gia'.
+test('l\'anteprima usa un indirizzo che la policy della pagina ammette', () => {
+    const js = sorgente('Istanta/wwwroot/js/archivio.js');
+    const inizio = js.indexOf('AnteprimaFotoArticolo(campo) {');
+    const anteprima = js.slice(inizio, js.indexOf('AnnullaFotoArticolo() {', inizio));
+
+    assert.ok(anteprima.includes('readAsDataURL'), 'l\'anteprima si legge come indirizzo data');
+    assert.ok(!/URL\.createObjectURL/.test(anteprima),
+        'un indirizzo blob la policy lo rifiuta: l\'immagine non comparirebbe');
+
+    const policy = sorgente('Istanta/Program.cs');
+    const direttiva = policy.slice(policy.indexOf('img-src'), policy.indexOf('img-src') + 200);
+    assert.ok(direttiva.includes('data:'), 'la policy ammette gli indirizzi data');
+    assert.ok(!direttiva.includes('blob:'),
+        'finche\' blob non e\' ammesso, l\'anteprima non puo\' tornare a createObjectURL');
+});
+
+/* ---- I20-985: Annulla deve chiudere il riquadro, non solo togliere l'immagine ---- */
+
+// Il riquadro spariva e ricompariva subito: Annulla azzerava l'indirizzo dell'immagine mentre il
+// gestore d'errore era ancora attaccato, il browser segnalava il caricamento fallito e si
+// rientrava nel ramo che il riquadro lo rimostra, con dentro messaggio, Conferma e Annulla.
+test('Annulla chiude il riquadro e non se lo fa riaprire dall\'errore', () => {
+    const finta = paginaFinta();
+    const precedente = global.$;
+    global.$ = finta;
+
+    try {
+        const scheda = Object.create(Archivio.prototype);
+        scheda.MostraAnteprimaFotoArticolo('data:image/png;base64,AAAA', { name: 'scatto.psd' });
+
+        const immagine = finta.nodi['imgNuovaFotoArticolo'].elemento;
+        assert.strictEqual(typeof immagine.onerror, 'function', 'durante l\'anteprima l\'esito si ascolta');
+
+        scheda.AnnullaFotoArticolo();
+
+        assert.strictEqual(immagine.onerror, null, 'staccato prima di togliere l\'indirizzo');
+
+        //Quello che farebbe il browser se il gestore fosse rimasto attaccato.
+        if (immagine.onerror) { immagine.onerror(); }
+
+        assert.strictEqual(finta.nodi['anteprimaNuovaFotoArticolo'].visibile, false,
+            'il riquadro col messaggio e i due pulsanti deve restare chiuso');
+        assert.strictEqual(finta.nodi['imgNuovaFotoArticolo'].attributi['src'], undefined,
+            'l\'immagine non deve restare con un indirizzo addosso');
+    }
+    finally {
+        global.$ = precedente;
+    }
 });

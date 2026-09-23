@@ -35,6 +35,74 @@ namespace Istanta.Utility
     {
         const int limit_char_length_indd = 18;
 
+        /// <summary>
+        /// Se un codice gruppo contiene quel codice come proprio elemento.
+        ///
+        /// Il codice gruppo e' una lista separata da virgole, quindi non basta vedere se la
+        /// stringa compare: il codice 100 comparirebbe dentro 1001. E il confronto ignora
+        /// maiuscole e minuscole, perche' il resto del ricollegamento gia' lo fa: facendolo solo
+        /// in alcuni punti, lo stesso codice risultava presente in un controllo e inesistente in
+        /// quello dopo (I20-986).
+        /// </summary>
+        public static bool gruppoContieneCodice(string? codiceGruppo, string? codice)
+        {
+            if (string.IsNullOrWhiteSpace(codiceGruppo) || string.IsNullOrWhiteSpace(codice))
+            {
+                return false;
+            }
+
+            return codiceGruppo
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Any(c => string.Equals(c, codice.Trim(), StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <summary>
+        /// La data della promo di un riscontro, oppure niente se il riscontro non la porta.
+        ///
+        /// I riscontri arrivano come dizionari costruiti altrove, e la chiave della data veniva
+        /// letta senza controllare che ci fosse, mentre tutte le altre erano protette: un
+        /// riscontro senza quella chiave avrebbe fatto fallire l'ordinamento, e all'operatore
+        /// sarebbe arrivato un errore invece della proposta di clonazione. Ordinando, i riscontri
+        /// senza data finiscono in fondo, che e' dove servono meno (I20-986).
+        /// </summary>
+        public static DateTime? dataDelRiscontro(Dictionary<string, object>? riscontro)
+        {
+            if (riscontro == null || !riscontro.ContainsKey("dataPromo"))
+            {
+                return null;
+            }
+
+            var valore = riscontro["dataPromo"];
+
+            if (valore is DateTime data)
+            {
+                return data;
+            }
+
+            return DateTime.TryParse(valore?.ToString(), out var letta) ? letta : (DateTime?)null;
+        }
+
+        /// <summary>
+        /// I codici che nessuno dei gruppi indicati copre.
+        ///
+        /// Serve a dire quali codici restano fuori dopo aver trovato quelli presenti in un'altra
+        /// forma. Anche qui il confronto ignora maiuscole e minuscole (I20-986).
+        /// </summary>
+        public static List<string> codiciNonCoperti(IEnumerable<string>? codici, IEnumerable<string>? gruppiPresenti)
+        {
+            if (codici == null)
+            {
+                return new List<string>();
+            }
+
+            var coperti = (gruppiPresenti ?? Enumerable.Empty<string>())
+                .Where(g => !string.IsNullOrWhiteSpace(g))
+                .SelectMany(g => g.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            return codici.Where(c => !string.IsNullOrWhiteSpace(c) && !coperti.Contains(c.Trim())).ToList();
+        }
+
         public static Dictionary<string, object>? getJsonObject(string json_string)
         {
 
@@ -195,6 +263,43 @@ namespace Istanta.Utility
                 .ToList();
 
             return Utility.Main.getFirmaTracciatoGruppo(membriGruppo);
+        }
+
+        /// <summary>
+        /// Dove vale una foto: area e canale, come li scrive l'archivio.
+        ///
+        /// I menu della scheda mandano un asterisco per dire che vale per tutte. In archivio
+        /// quel concetto si scrive come stringa vuota, ed e' su quello che il server calcola la
+        /// precedenza fra foto: area piu' canale batte la sola area, che batte il solo canale,
+        /// che batte quella valida ovunque. Scrivere l'asterisco la renderebbe una foto di
+        /// un'area che non esiste (I20-985).
+        /// </summary>
+        public static (string area, string canale) destinazioneDellaFoto(string? area, string? canale)
+        {
+            return (valeOvunque(area) ? "" : area!.Trim(), valeOvunque(canale) ? "" : canale!.Trim());
+        }
+
+        private static bool valeOvunque(string? valore)
+        {
+            return string.IsNullOrWhiteSpace(valore) || valore.Trim() == "*";
+        }
+
+        /// <summary>
+        /// Come nasce una foto appena caricata: in uso, oppure soltanto archiviata.
+        ///
+        /// Archiviarla e basta vuol dire tre cose insieme: non selezionarla, non attivarla e
+        /// non spegnere quella in uso. Le prime due da sole non bastano, perche' il caricamento
+        /// disattiva le altre foto attive prima ancora di creare la nuova, e l'articolo
+        /// resterebbe senza nessuna foto in uso (I20-985).
+        /// </summary>
+        public static (byte statoSelezione, bool attiva, bool spegniLeAltre) selezioneNuovaFoto(bool archiviaSenzaSelezionare)
+        {
+            if (archiviaSenzaSelezionare)
+            {
+                return ((byte)StatoSelezioneFoto.NonSelezionata, false, false);
+            }
+
+            return ((byte)StatoSelezioneFoto.Primaria, true, true);
         }
 
         /// <summary>

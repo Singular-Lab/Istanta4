@@ -3,6 +3,7 @@ const InputEditController = require('./InputEditController');
 const XMLHttpRequestClient = require('./XMLHttpRequestClient');
 const DataCaricamentoFoto = require('./dataCaricamentoFoto');
 const NoRenderElementi = require('./noRenderElementi');
+const RicollegaEsiti = require('./ricollegaEsiti');
 
 const schedaRef = {
     refSelected: null,
@@ -447,10 +448,22 @@ const schedaRef = {
                         if (objResult.codici.length > 0){
                             var element = objResult.codici[0];
                             var allElementGruppo = objResult.codici;
-                            if(element.stato == 1 || element.stato == 2 || element.stato == 3){
-                                if(element.stato == 1){
-                                    messaggioUtente("Code SRF-12 Referenza già impaginata", "warning",false, 3);
+
+                            //I20-986: si riferisce l'esito di ogni elemento, non solo del primo, e
+                            //soprattutto si mostra l'errore che il server scrive dentro al singolo:
+                            //prima veniva letto solo l'errore generale, e un ricollegamento fallito
+                            //passava per riuscito con la scheda che si aggiornava come se nulla fosse.
+                            for (var iEsito = 0; iEsito < allElementGruppo.length; iEsito++) {
+                                var avviso = RicollegaEsiti.messaggioPerElemento(allElementGruppo[iEsito]);
+                                if (avviso != null) {
+                                    messaggioUtente(avviso.testo, avviso.tipo, false, 5);
+                                    if (avviso.tipo === "error") {
+                                        console.error(avviso.testo);
+                                    }
                                 }
+                            }
+
+                            if(element.stato == 1 || element.stato == 2 || element.stato == 3){
                                 if (!externalCall && box != null && box.isValid) {
                                     var idRec = dna.idRec;
                                     if (objResult.idRecSelezionato != null && objResult.idRecSelezionato != 0 && objResult.idRecSelezionato != idRec) {
@@ -477,7 +490,7 @@ const schedaRef = {
                                 }
                             }
                             else if (element.stato == 5){
-                                messaggioUtente("Code SRF-11 Referenza inesistente nello storico, ricollegamento non possibile", "error",false, 3);
+                                //il messaggio l'ha gia' dato il giro sugli esiti
                             }
                             else if (element.stato == 7){
                                 var skipImpaginazione = codiceGruppo != null;
@@ -527,16 +540,35 @@ const schedaRef = {
                 // }
                 
 
+                //I20-986: un box appoggiato fuori dalla pagina non ha una pagina, e chiederne il
+                //nome faceva fallire tutto con l'errore generico, che non dice cosa fare. Si
+                //riconosce il caso e lo si dice.
+                var nomePagina = "1";
+                if (box != null) {
+                    var paginaDelBox = null;
+                    try { paginaDelBox = box.parentPage; } catch (e) { paginaDelBox = null; }
+
+                    if (paginaDelBox == null) {
+                        indesignEvents.setBusy(false);
+                        hideLoading();
+                        messaggioUtente("Code SRF-18 Il box non si trova su una pagina del documento: spostalo nella pagina in cui deve stare e riprova il ricollegamento.", "error");
+                        console.error("Code SRF-18 Box fuori pagina durante il ricollegamento del codice " + codiceGruppo);
+                        return;
+                    }
+
+                    nomePagina = paginaDelBox.name;
+                }
+
                 var formData = new FormData();
                 var request = {
                     idLavorazione: idKitLavorazione,
                     canaleDiPartenza: canale,
                     areaDiPartenza: area,
-                    rangePagine: box != null ? box.parentPage.name : "1",
+                    rangePagine: nomePagina,
                     elementoDaRicollegare: {
                         codiceGruppo: codiceGruppo,
                         idRec: idRec,
-                        pag: box != null ? box.parentPage.name : "1",
+                        pag: nomePagina,
                         forzaloAllaPaginaIndicata: true,
                     }
                 }
