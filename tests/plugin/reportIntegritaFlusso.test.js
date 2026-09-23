@@ -338,3 +338,85 @@ test('il riquadro non viene mai misurato', () => {
     assert.match(nascondi, /this\._ancoraTooltip = null/);
     assert.match(nascondi, /visibility = "hidden"/);
 });
+
+/* I20-981 (Lotto 3): l'interfaccia del report. */
+
+test('i pulsanti che non facevano nulla non ci sono piu\'', () => {
+    //"Fix all" e "Fix massivo" aprivano una conferma e dietro avevano un TODO: un pulsante
+    //che promette un'azione inesistente e' peggio di un pulsante che manca.
+    const codice = senzaCommenti(confronti);
+
+    assert.ok(!codice.includes('"Fix all"'), 'Fix all e\' tornato');
+    assert.ok(!codice.includes('"Fix massivo"'), 'Fix massivo e\' tornato');
+    assert.ok(!codice.includes('btnFixAll'));
+    assert.ok(!codice.includes('btnFixMassivo'));
+
+    //Il piede resta vuoto e nascosto: lo spazio va all'elenco.
+    assert.match(confronti, /footer\.style\.display = "none"/);
+
+    //Il fix della singola segnalazione invece resta.
+    assert.match(confronti, /_crIconButton\("Fix", "images\/fix\.png"\)/);
+});
+
+test('le linguette contano quello che i pannelli mostrano', () => {
+    const compila = corpoFunzione(confronti, 'compilaReportConfronto(report, options = {}) {');
+
+    //I pannelli si costruiscono prima, perche' il conteggio dei nuovi viene dal loro stato.
+    const posPannelli = compila.indexOf('this._buildPanelCambiati(recordsCambiati)');
+    const posConteggi = compila.indexOf('reportConteggi.conteggiVisibili');
+    const posLinguette = compila.indexOf('reportConteggi.etichettaLinguetta("Cambiati"');
+
+    assert.ok(posPannelli > 0 && posConteggi > posPannelli, 'i conteggi vengono dopo i pannelli');
+    assert.ok(posLinguette > posConteggi);
+
+    //Si contano le liste mostrate, non il report intero: in vista whitelist sono diverse.
+    assert.match(compila, /conteggiVisibili\(\s*recordsCambiati,\s*recordsUsciti,\s*this\._confrontoNuoviState\?\.rowsOriginal\)/);
+    assert.match(compila, /const recordsCambiati = this\._getCurrentReportRecords\("recordCambiati"\)/);
+});
+
+test('il codice del gruppo si copia con un clic', () => {
+    const crea = corpoFunzione(confronti, '_crCodiceGruppo(codiceGruppo) {');
+    assert.match(crea, /addEventListener\("click", \(\) => this\.copiaCodiceGruppo\(testo\)\)/);
+    assert.match(crea, /Clicca per copiare i codici del gruppo/);
+
+    //writeText vuole una stringa: l'oggetto usato altrove nel plugin copia "[object Object]".
+    const copia = corpoFunzione(confronti, 'copiaCodiceGruppo(codiceGruppo) {');
+    assert.match(copia, /navigator\.clipboard\.writeText\(testo\)/);
+    assert.doesNotMatch(copia, /writeText\(\{/);
+
+    //Entrambi gli elenchi con i codici passano di li'.
+    const occorrenze = (confronti.match(/this\._crCodiceGruppo\(item\.codiceGruppo\)/g) || []).length;
+    assert.strictEqual(occorrenze, 2, 'cambiati ed eliminati devono usare lo stesso elemento');
+});
+
+test('i dialoghi si adattano invece di sbordare', () => {
+    const utility = sorgente('utility.js');
+
+    //Niente piu' altezze fisse nei due dialoghi che il report usa: il riquadro cresce col
+    //messaggio e il testo scorre. (Utility.popup ha misure fisse ma scorre al suo interno,
+    //quindi non fa uscire nulla e resta com'e'.)
+    const confirm = corpoFunzione(utility, 'async confirm (message){');
+    const confirmCustom = corpoFunzione(utility, 'async confirmCustom (message, bottoneConfirm1Text, hiddenVal1=null, bottoneConfirm2Text = null, hiddenVal2 = null){');
+
+    [confirm, confirmCustom].forEach(dialogo => {
+        assert.doesNotMatch(dialogo, /width: 60%; height: 40%/);
+        assert.doesNotMatch(dialogo, /display: flex; height: 80%"/);
+        //I pulsanti vanno a capo invece di uscire di lato.
+        assert.match(dialogo, /flex-wrap: wrap/);
+        assert.match(dialogo, /min-width: 88px/);
+        assert.match(dialogo, /overflow: auto/);
+    });
+
+    const treAzioni = corpoFunzione(confronti, 'async _confirmTreAzioniReport(message, actions) {');
+    assert.match(treAzioni, /flex-wrap:wrap/);
+    assert.doesNotMatch(treAzioni, /min-width:90px/);
+});
+
+test('le righe portano il colore del loro stato', () => {
+    assert.match(confronti, /COLORI_STATO: \{/);
+    assert.match(confronti, /this\._crRow\("cambiato"\)/);
+    assert.match(confronti, /this\._crRow\("uscito"\)/);
+
+    const riga = corpoFunzione(confronti, '_crRow(stato = null) {');
+    assert.match(riga, /borderLeft = "4px solid " \+ \(this\.COLORI_STATO\[stato\] \|\| "#444"\)/);
+});
