@@ -420,3 +420,66 @@ test('le righe portano il colore del loro stato', () => {
     const riga = corpoFunzione(confronti, '_crRow(stato = null) {');
     assert.match(riga, /borderLeft = "4px solid " \+ \(this\.COLORI_STATO\[stato\] \|\| "#444"\)/);
 });
+
+/* I20-981 (Lotto 3, collaudo): le correzioni nate dal collaudo. */
+
+test('la finestra delle info ha misure sue, non "inset"', () => {
+    //Era l'unico overlay del plugin a usare inset: senza misure esplicite si stringeva sul
+    //contenuto, da cui la finestra ridotta a una colonna e lo scorrimento incompleto.
+    const overlay = senzaCommenti(corpoFunzione(confronti, '_apriOverlayInfoReport(titolo) {'));
+
+    assert.doesNotMatch(overlay, /inset: 0/);
+    assert.match(overlay, /position: fixed; top: 0; left: 0; width: 100%; height: 100%/);
+    assert.match(overlay, /max-height: 86%/);
+    //Il corpo resta quello che scorre.
+    assert.match(overlay, /id="confrontoInfoBody" style="flex:1 1 auto; min-height:0; overflow:auto/);
+
+    //E le righe dell'informazione vanno a capo invece di schiacciare il valore.
+    const schedaRef = sorgente('schedaRef.js');
+    assert.match(schedaRef, /display:flex; flex-wrap:wrap; align-items:flex-start/);
+});
+
+test('"Elimina tutti" elimina davvero, e chiede prima', () => {
+    const elimina = corpoFunzione(confronti, 'async _eliminaTuttiUsciti(records) {');
+
+    //Una conferma sola, con scritto quanti box e che non si torna indietro.
+    assert.match(elimina, /_confirmReportAction\(\s*"massive"/);
+    assert.match(elimina, /L'operazione non si annulla/);
+    assert.match(elimina, /if \(!ok\) \{[\s\S]*?return;/);
+
+    //Il ciclo usa lo stesso riferimento del singolo, e un box gia' sparito non e' un errore.
+    assert.match(elimina, /this\._resolveBoxFromRecord\(record\)/);
+    assert.match(elimina, /box\.remove\(\)/);
+    assert.match(elimina, /nonTrovati\+\+/);
+
+    //Un solo salvataggio e un solo rinfresco alla fine, non uno per record.
+    assert.strictEqual((elimina.match(/_refreshConfrontoReportUi\(\)/g) || []).length, 1);
+    assert.strictEqual((elimina.match(/_saveCurrentReportAndWhitelist\(\)/g) || []).length, 1);
+
+    //E il pulsante ci e' collegato, senza piu' il TODO.
+    assert.match(confronti, /btnDeleteAll\.addEventListener\("click", \(\) => this\._eliminaTuttiUsciti\(records\)\)/);
+    assert.ok(!senzaCommenti(confronti).includes('TODO: Elimina tutti'));
+});
+
+test('i messaggi compaiono davanti al modal', () => {
+    //Il parametro modal esisteva da sempre ma nessuna chiamata del report lo passava: i
+    //messaggi finivano nel contenitore della schermata principale, sotto all'overlay.
+    const scelta = corpoFunzione(indexNew, 'function contenitoreMessaggi(modal) {');
+
+    assert.match(scelta, /\$\("\.overlayModal"\)\.filter/);
+    assert.match(scelta, /messaggiUtenteModal/);
+    //Niente :visible: in UXP le misure su cui si basa non sono affidabili.
+    assert.doesNotMatch(scelta, /:visible/);
+
+    assert.match(indexNew, /contenitoreMessaggi\(modal\)\.append\(html\)/);
+});
+
+test('la copia negli appunti passa una stringa, ovunque tocchi i codici gruppo', () => {
+    ['griglia.js', 'schedaRef.js', 'confronti.js'].forEach(nome => {
+        const codice = sorgente(nome);
+        assert.ok(!codice.includes("writeText({ 'text/plain'"), `${nome} copia ancora un oggetto`);
+    });
+
+    assert.match(sorgente('griglia.js'), /writeText\(String\(\$\(this\)\.attr\("codiceGruppo"\) \|\| ""\)\)/);
+    assert.strictEqual((sorgente('schedaRef.js').match(/writeText\(String\(\$\(this\)\.attr\("codiceGruppo"\) \|\| ""\)\)/g) || []).length, 2);
+});

@@ -7448,6 +7448,31 @@ async function impaginazioneSingoloIndd(records, pagina, cercaInPaginaPerConfron
 }
 
 var cartellaAssenteCheck = false;
+//I20-981: dove scrivere un messaggio all'operatore.
+//Con un overlay aperto il posto giusto e' il contenitore dentro l'overlay: quello della
+//schermata principale gli finisce sotto. Si guarda lo stile in linea invece di :visible,
+//perche' in UXP le misure su cui :visible si basa non sono affidabili.
+function contenitoreMessaggi(modal) {
+    try {
+        const aperti = $(".overlayModal").filter(function () {
+            const display = this.style ? this.style.display : "";
+            return display != null && display !== "" && display !== "none";
+        });
+
+        if (aperti.length > 0) {
+            const dentroOverlay = aperti.first().find('[id="messaggiUtenteModal"]').first();
+            if (dentroOverlay.length > 0) {
+                return dentroOverlay;
+            }
+        }
+    }
+    catch (e) {
+        console.error("Errore nella scelta del contenitore dei messaggi:", e);
+    }
+
+    return $("#messaggiUtente" + (modal ? "Modal" : ""));
+}
+
 async function messaggioUtente(msg, style, loading = false, tempo = 0, dontWriteInLogs = false, modal = false) {
     try {
         if (msg == null || msg == "") {
@@ -7519,7 +7544,11 @@ async function messaggioUtente(msg, style, loading = false, tempo = 0, dontWrite
         }
 
         var html = '<div class="row" id="messaggioUtente" style="background-color: ' + color + '; width:90%; display: flex; padding:2px;"> <div class="col" style="color: white; padding-left: 10px; font-size:10px; width:90%;"><h4 style="margin: 0; display: flex; align-items: center;width: 100%;">' + msg + '</h4></div>';
-        $("#messaggiUtente"+(modal?"Modal":"")).append(html);
+        //I20-981: col modal aperto i messaggi finivano dietro, nel contenitore della schermata
+        //principale, e non si leggevano. Il parametro modal esiste da sempre ma quasi nessuno
+        //lo passa: invece di rincorrere le chiamate, il contenitore lo sceglie la funzione,
+        //guardando se c'e' un overlay aperto.
+        contenitoreMessaggi(modal).append(html);
         //usiamo uno spinner per il caricamento, poichè non supporta le gif dobbiamo creare noi un effetto che possa sembrare un caricamento
         if (loading) {
 

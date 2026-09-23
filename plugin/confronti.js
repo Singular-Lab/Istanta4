@@ -2462,8 +2462,13 @@ const confronti = {
     _apriOverlayInfoReport(titolo) {
         $("#confrontoInfoOverlay").remove();
 
-        const overlay = $('<div id="confrontoInfoOverlay" style="position: fixed; inset: 0; z-index: 9999999; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; padding: 12px; box-sizing: border-box;"></div>');
-        const dialog = $('<div style="width: 80%; height: 80%; background: #fff; color: #111; display: flex; flex-direction: column; border-radius: 4px; box-shadow: 0 8px 28px rgba(0,0,0,0.35); overflow: hidden;"></div>');
+        //I20-981: questo era l'unico overlay del plugin che usava "inset: 0" per occupare lo
+        //schermo; gli altri dieci scrivono top, left, width e height per esteso. Senza quelle
+        //misure il riquadro si stringeva sul contenuto: da li' la finestra ridotta a una
+        //colonna e lo scorrimento che non arrivava in fondo, perche' il corpo calcolava la
+        //propria altezza dentro un riquadro che non ne aveva una.
+        const overlay = $('<div id="confrontoInfoOverlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 9999999; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; padding: 12px; box-sizing: border-box;"></div>');
+        const dialog = $('<div style="width: 92%; max-width: 720px; height: 86%; max-height: 86%; background: #fff; color: #111; display: flex; flex-direction: column; border-radius: 4px; box-shadow: 0 8px 28px rgba(0,0,0,0.35); overflow: hidden; box-sizing: border-box;"></div>');
         const header = $('<div style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 10px; border-bottom:1px solid #ccc; flex:0 0 auto;"></div>');
         const title = $('<div style="font-weight:700;"></div>').text(titolo || "Info dati referenza");
         const close = $('<button type="button" style="height:26px; min-width:32px; cursor:pointer;">&times;</button>');
@@ -2870,13 +2875,7 @@ const confronti = {
             });
         }
 
-        btnDeleteAll.addEventListener("click", () => {
-            this._confirmReportAction("massive", "Procedere con l'eliminazione massiva degli elementi eliminati?").then(ok => {
-                if (ok) {
-                    console.log("TODO: Elimina tutti usciti", records);
-                }
-            });
-        });
+        btnDeleteAll.addEventListener("click", () => this._eliminaTuttiUsciti(records));
 
         panel.appendChild(topbar);
         panel.appendChild(content);
@@ -3428,6 +3427,66 @@ const confronti = {
         } catch (err) {
             console.error("Errore durante eliminazione box:", err);
         }
+    },
+
+    //I20-981: l'eliminazione di tutti i box usciti, che prima era un pulsante con dietro un
+    //TODO. Toglie dal documento gli stessi box che il singolo "Elimina" toglie uno per uno:
+    //una conferma sola all'inizio, con scritto quanti sono, e un solo rinfresco alla fine.
+    //Un box gia' sparito dal documento non e' un errore: e' il caso di chi ha fatto pulizia a
+    //mano prima di aprire il report, e nel riepilogo si conta a parte.
+    async _eliminaTuttiUsciti(records) {
+        const elenco = Array.isArray(records) ? records.slice() : [];
+
+        if (elenco.length === 0) {
+            messaggioUtente("Nessun elemento da eliminare", "warning", false, 3);
+            return;
+        }
+
+        const ok = await this._confirmReportAction(
+            "massive",
+            "Eliminare dal documento " + elenco.length + " box segnalati come usciti dal tracciato? L'operazione non si annulla.");
+
+        if (!ok) {
+            return;
+        }
+
+        let eliminati = 0;
+        let nonTrovati = 0;
+        let errori = 0;
+
+        for (let i = 0; i < elenco.length; i++) {
+            const record = elenco[i];
+
+            try {
+                const box = this._resolveBoxFromRecord(record);
+
+                if (!box || !box.isValid) {
+                    nonTrovati++;
+                    continue;
+                }
+
+                box.remove();
+                this._removeRecordFromArray(this._confrontoReportState?.report?.recordUsciti, record);
+                eliminati++;
+            }
+            catch (err) {
+                console.error("Errore durante l'eliminazione massiva del box:", err);
+                errori++;
+            }
+        }
+
+        this._saveCurrentReportAndWhitelist();
+        this._refreshConfrontoReportUi();
+
+        let riepilogo = "Eliminati " + eliminati + " box su " + elenco.length;
+        if (nonTrovati > 0) {
+            riepilogo += ", " + nonTrovati + " non piu' in pagina";
+        }
+        if (errori > 0) {
+            riepilogo += ", " + errori + " con errori (vedi console)";
+        }
+
+        messaggioUtente("Code CNF-023: " + riepilogo, errori > 0 ? "warning" : "success", false, 8);
     },
 
     async _fixElemento(payloadId, payload) {
