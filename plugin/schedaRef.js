@@ -104,6 +104,35 @@ const schedaRef = {
         return campo != null ? campo.content : null;
     },
 
+    /// Del verdetto della preanalisi si guarda solo il campo che stiamo per riscrivere. La
+    /// preanalisi giudica tutto il box e non i soli campi che le passi: le foto extra che
+    /// stanno nel box e non nell'elenco che le hai dato risultano tutte in piu', e gli
+    /// elementi nascosti rimessi visibili diventano segnalazioni loro. Sono cose vere, ma che
+    /// riscrivere la descrizione non aggiusta: offrire il pulsante per quelle sarebbe una
+    /// promessa che non manteniamo.
+    differenzaDaAllineare(differenze, labelName) {
+        const etichetta = String(labelName || "").toLowerCase();
+
+        if (etichetta === "") {
+            return false;
+        }
+
+        return (differenze || []).some(differenza => {
+            if (differenza == null) {
+                return false;
+            }
+
+            if (String(differenza.label || "").toLowerCase() !== etichetta) {
+                return false;
+            }
+
+            //Il testo o il suo stile: tutti e due si allineano riscrivendo il campo, perche' il
+            //contenuto del server si porta dietro gli stili di carattere. Un campo che nel box
+            //non c'e' proprio non si aggiusta scrivendoci dentro.
+            return differenza.difference === "contenuto" || differenza.difference === "paragrafo";
+        });
+    },
+
     /// Il box dice una descrizione diversa da quella del server? Non lo decidiamo qui: lo
     /// chiediamo alla stessa preanalisi che usa il Report Integrita', sul solo campo della
     /// descrizione. Cosi' il pulsante si offre esattamente quando il report si lamenterebbe,
@@ -133,7 +162,8 @@ const schedaRef = {
                 NoRenderElementi.elencoPerSegnalazioni(tracciato.noRenderElementi, tracciato.membriGruppoFoto)
             );
 
-            return preAnalisi != null && (preAnalisi.differenze || []).length > 0;
+            return this.differenzaDaAllineare(
+                preAnalisi != null ? preAnalisi.differenze : null, campo.labelName);
         }
         catch (error) {
             //Se non riusciamo a giudicare, il pulsante si offre lo stesso: proporre un

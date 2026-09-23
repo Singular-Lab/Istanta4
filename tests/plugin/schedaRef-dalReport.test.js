@@ -124,3 +124,32 @@ test('il pulsante della descrizione si offre solo quando serve, e chiede al repo
     assert.strictEqual(schedaRef.tracciatoDelPrimario(records), records[0].recordInTracciato);
     assert.strictEqual(schedaRef.tracciatoDelPrimario([]), null);
 });
+
+test('del verdetto conta solo la descrizione, non tutto il box', () => {
+    //La preanalisi giudica tutto il box: le foto extra che non stanno nell'elenco passato
+    //risultano in piu', e gli elementi nascosti rimessi visibili diventano segnalazioni loro.
+    //Chiedendole il solo campo della descrizione, quelle arrivano comunque, e prenderle per
+    //buone faceva comparire il pulsante sempre.
+    const rumore = [
+        { label: 'boll_CORRETTO_EDRO21.psd', difference: 'foto extra in piu\' nel box originale: boll_CORRETTO_EDRO21.psd' },
+        { label: 'foto_1', difference: 'elemento disattivato ma presente nel box: foto_1' }
+    ];
+
+    assert.strictEqual(schedaRef.differenzaDaAllineare(rumore, 'descrizione'), false);
+    assert.strictEqual(schedaRef.differenzaDaAllineare([], 'descrizione'), false);
+    assert.strictEqual(schedaRef.differenzaDaAllineare(null, 'descrizione'), false);
+
+    //Il testo diverso e lo stile diverso si allineano tutti e due riscrivendo il campo.
+    assert.strictEqual(schedaRef.differenzaDaAllineare(
+        rumore.concat([{ label: 'descrizione', difference: 'contenuto' }]), 'descrizione'), true);
+    assert.strictEqual(schedaRef.differenzaDaAllineare(
+        [{ label: 'descrizione', difference: 'paragrafo' }], 'descrizione'), true);
+
+    //Un campo che nel box non c'e' proprio non si aggiusta scrivendoci dentro.
+    assert.strictEqual(schedaRef.differenzaDaAllineare(
+        [{ label: 'descrizione', difference: 'non presente' }], 'descrizione'), false);
+
+    //Una differenza su un altro campo non riguarda questo pulsante.
+    assert.strictEqual(schedaRef.differenzaDaAllineare(
+        [{ label: 'prezzo_offerta', difference: 'contenuto' }], 'descrizione'), false);
+});
