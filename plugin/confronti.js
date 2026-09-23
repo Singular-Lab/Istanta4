@@ -10,6 +10,7 @@ const reportIntegritaAvvio = require('./reportIntegritaAvvio');
 const reportConfrontoCsv = require('./reportConfrontoCsv');
 const reportConteggi = require('./reportConteggi');
 const reportConfronti = require('./reportConfronti');
+const barraScorrimento = require('./barraScorrimento');
 
 const confronti = {
     async confrontoBox(box1, box2, forzaReimpaginazione = false){ //mode 0 -> cambio strutturale, mode 1 -> confrontoMassivo
@@ -4096,10 +4097,11 @@ const confronti = {
         tableScroll.style.flex = "1 1 auto";
         tableScroll.style.minHeight = "0";
         tableScroll.style.minWidth = "0";
-        //I20-981: "scroll" e non "auto". In questo pannello l'elenco delle segnalazioni, che
-        //scorre davvero, e' scritto cosi'; la tabella dei nuovi usava "auto" ed era l'unica a
-        //non scorrere. La rotella resta verticale: in orizzontale si trascina la barra.
-        tableScroll.style.overflowX = "scroll";
+        //I20-981: in orizzontale questo contenitore non scorre, in nessun modo nativo: ne' con
+        //"auto", ne' con "scroll", nemmeno dando alla tabella una larghezza vera in pixel. Lo
+        //scorrimento laterale lo fa la barra qui sotto, spostando la tabella; qui resta il solo
+        //scorrimento verticale, che invece funziona ed e' quello della rotella.
+        tableScroll.style.overflowX = "hidden";
         tableScroll.style.overflowY = "scroll";
         tableScroll.style.border = "1px solid #555";
         tableScroll.style.borderRadius = "4px";
@@ -4152,6 +4154,7 @@ const confronti = {
             body,
             headerRow,
             table,
+            tableScroll,
             colonneExtra,
             sortKey: null,
             sortDirection: null,
@@ -4162,6 +4165,8 @@ const confronti = {
             libreriaCorrente: null,
             elementiLibreria: []
         };
+
+        wrapper.appendChild(this._crBarraScorrimentoNuovi(this._confrontoNuoviState));
 
         this._renderNuoviTable();
         this._refreshPickerLibreriaNuovi();
@@ -4810,6 +4815,210 @@ const confronti = {
         for (let i = 0; i < state.rowsCurrent.length; i++) {
             state.body.appendChild(this._crNuoviDataRow(state.rowsCurrent[i], colonne));
         }
+
+        //Le colonne possono essere cambiate: si riporta la tabella dove dice lo spostamento e
+        //si rimette il cursore in accordo.
+        this._scorriNuovi(state, state.spostamento || 0);
+    },
+
+    //I20-981: la barra di scorrimento orizzontale della tabella dei nuovi, disegnata da noi.
+    //In UXP quel contenitore non scorre in orizzontale in nessun modo nativo, cosi' la tabella
+    //viene spostata con un margine negativo e la barra la mettiamo qui sotto, sempre visibile.
+    //Le frecce e il clic sulla traccia bastano da soli: se il trascinamento del cursore non
+    //funzionasse, la tabella si scorre comunque.
+    PASSO_SCORRIMENTO: 160,
+
+    _crBarraScorrimentoNuovi(state) {
+        const barra = document.createElement("div");
+        barra.style.display = "flex";
+        barra.style.alignItems = "center";
+        barra.style.gap = "4px";
+        barra.style.flexShrink = "0";
+        barra.style.padding = "4px 0 0 0";
+
+        const indietro = this._crFrecciaScorrimento("‹", "Sposta la tabella verso sinistra");
+        const avanti = this._crFrecciaScorrimento("›", "Sposta la tabella verso destra");
+
+        const traccia = document.createElement("div");
+        traccia.style.position = "relative";
+        traccia.style.flex = "1 1 auto";
+        traccia.style.height = "12px";
+        traccia.style.minWidth = "0";
+        traccia.style.backgroundColor = "#e6e6e6";
+        traccia.style.borderRadius = "6px";
+        traccia.style.cursor = "pointer";
+        Utility.impostaTooltip(traccia, "Clicca o trascina per scorrere le colonne");
+
+        const cursore = document.createElement("div");
+        cursore.style.position = "absolute";
+        cursore.style.top = "0";
+        cursore.style.left = "0";
+        cursore.style.height = "12px";
+        cursore.style.width = "40px";
+        cursore.style.backgroundColor = "#8a8a8a";
+        cursore.style.borderRadius = "6px";
+        cursore.style.cursor = "grab";
+
+        traccia.appendChild(cursore);
+
+        barra.appendChild(indietro);
+        barra.appendChild(traccia);
+        barra.appendChild(avanti);
+
+        state.barra = barra;
+        state.traccia = traccia;
+        state.cursore = cursore;
+        state.spostamento = 0;
+
+        indietro.addEventListener("click", () => this._scorriNuovi(state, state.spostamento - this.PASSO_SCORRIMENTO));
+        avanti.addEventListener("click", () => this._scorriNuovi(state, state.spostamento + this.PASSO_SCORRIMENTO));
+
+        traccia.addEventListener("click", (evento) => {
+            //Il clic sul cursore lo prende il cursore: qui arriva solo il clic sulla traccia.
+            if (evento?.target === cursore) {
+                return;
+            }
+
+            const misure = this._misureScorrimentoNuovi(state);
+            const posizione = this._posizioneNellaTraccia(evento, traccia);
+
+            this._scorriNuovi(state, barraScorrimento.spostamentoDaClic(
+                posizione, misure.contenuto, misure.visibile, misure.traccia));
+        });
+
+        //Terzo strato: il trascinamento. Se questi eventi non arrivano, restano frecce e traccia.
+        cursore.addEventListener("mousedown", (evento) => {
+            const misure = this._misureScorrimentoNuovi(state);
+
+            state.trascinamento = {
+                partenzaX: evento?.clientX || 0,
+                spostamentoIniziale: state.spostamento,
+                misure: misure
+            };
+
+            cursore.style.cursor = "grabbing";
+        });
+
+        this._abilitaTrascinamentoBarra();
+
+        return barra;
+    },
+
+    _crFrecciaScorrimento(simbolo, descrizione) {
+        const freccia = document.createElement("button");
+        freccia.type = "button";
+        freccia.textContent = simbolo;
+        freccia.style.height = "16px";
+        freccia.style.minWidth = "18px";
+        freccia.style.padding = "0";
+        freccia.style.lineHeight = "1";
+        freccia.style.cursor = "pointer";
+        freccia.style.flexShrink = "0";
+        Utility.impostaTooltip(freccia, descrizione);
+        return freccia;
+    },
+
+    /// Il trascinamento si ascolta una volta sola sul documento: il mouse esce dal cursore
+    /// quasi subito, e se ascoltassimo solo lui il movimento si perderebbe.
+    _abilitaTrascinamentoBarra() {
+        if (this._trascinamentoBarraAttivo) {
+            return;
+        }
+
+        this._trascinamentoBarraAttivo = true;
+        const me = this;
+
+        $(document).on("mousemove", function (evento) {
+            const state = me._confrontoNuoviState;
+            if (state == null || state.trascinamento == null) {
+                return;
+            }
+
+            const misure = state.trascinamento.misure;
+            const pixel = (evento?.clientX || 0) - state.trascinamento.partenzaX;
+
+            me._scorriNuovi(state, barraScorrimento.spostamentoDaTrascinamento(
+                state.trascinamento.spostamentoIniziale, pixel,
+                misure.contenuto, misure.visibile, misure.traccia));
+        });
+
+        $(document).on("mouseup", function () {
+            const state = me._confrontoNuoviState;
+            if (state == null || state.trascinamento == null) {
+                return;
+            }
+
+            state.trascinamento = null;
+            if (state.cursore != null) {
+                state.cursore.style.cursor = "grab";
+            }
+        });
+    },
+
+    /// Le misure si leggono adesso, non alla costruzione: quando il pannello nasce non e'
+    /// ancora impaginato e tornerebbero zero.
+    _misureScorrimentoNuovi(state) {
+        let visibile = 0;
+        let traccia = 0;
+
+        try {
+            visibile = state?.tableScroll?.clientWidth || 0;
+            traccia = state?.traccia?.clientWidth || 0;
+        }
+        catch (err) {
+            console.error("Misure della barra non disponibili:", err);
+        }
+
+        return {
+            contenuto: state?.larghezzaTotale || 0,
+            visibile: visibile,
+            traccia: traccia
+        };
+    },
+
+    _posizioneNellaTraccia(evento, traccia) {
+        try {
+            const rettangolo = traccia.getBoundingClientRect();
+            return (evento?.clientX || 0) - (rettangolo?.left || 0);
+        }
+        catch (err) {
+            return 0;
+        }
+    },
+
+    /// Sposta la tabella e aggiorna il cursore.
+    _scorriNuovi(state, spostamento) {
+        if (state == null || state.table == null) {
+            return;
+        }
+
+        const misure = this._misureScorrimentoNuovi(state);
+
+        state.spostamento = barraScorrimento.limitaSpostamento(spostamento, misure.contenuto, misure.visibile);
+        state.table.style.marginLeft = "-" + state.spostamento + "px";
+
+        this._aggiornaCursoreNuovi(state, misure);
+    },
+
+    _aggiornaCursoreNuovi(state, misure) {
+        if (state == null || state.cursore == null) {
+            return;
+        }
+
+        const m = misure || this._misureScorrimentoNuovi(state);
+        const serve = barraScorrimento.serveLaBarra(m.contenuto, m.visibile);
+
+        if (state.barra != null) {
+            //Se le colonne ci stanno tutte, la barra non ha niente da fare e sparisce.
+            //Finche' le misure non sono disponibili la si lascia, altrimenti lampeggerebbe.
+            state.barra.style.display = (m.visibile > 0 && !serve) ? "none" : "flex";
+        }
+
+        const geometria = barraScorrimento.geometriaCursore(
+            state.spostamento, m.contenuto, m.visibile, m.traccia);
+
+        state.cursore.style.width = geometria.larghezza + "px";
+        state.cursore.style.left = geometria.sinistra + "px";
     },
 
     _crNuoviHeaderCell(col) {

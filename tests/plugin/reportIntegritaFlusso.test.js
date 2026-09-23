@@ -536,22 +536,52 @@ test('anche le referenze nuove dicono cosa e\' cambiato', () => {
 test('la tabella dei nuovi ha una larghezza vera, e quindi scorre', () => {
     const pannello = corpoFunzione(confronti, '_buildPanelNuovi(report) {');
 
-    //"scroll" e non "auto": in questo pannello e' cosi' che e' scritto cio' che scorre davvero.
-    assert.match(pannello, /tableScroll\.style\.overflowX = "scroll"/);
+    //Lo scorrimento laterale non e' piu' del contenitore: in UXP non funziona in nessun modo
+    //nativo. Lo fa la barra disegnata dal plugin, spostando la tabella.
+    assert.match(pannello, /tableScroll\.style\.overflowX = "hidden"/);
     assert.match(pannello, /tableScroll\.style\.overflowY = "scroll"/);
+    assert.match(pannello, /this\._crBarraScorrimentoNuovi\(this\._confrontoNuoviState\)/);
 
-    //La tabella ha una larghezza vera, in pixel: senza, il contenitore non ha nulla da
-    //scorrere e la barra orizzontale non compare. "fit-content" qui non produceva nulla.
+    //La larghezza in pixel resta: e' quella che dice alla barra quanto c'e' da scorrere.
     const render = corpoFunzione(confronti, '_renderNuoviTable() {');
     assert.match(render, /const larghezzaTotale = this\._larghezzaTotaleColonne\(colonne\)/);
     assert.match(render, /state\.table\.style\.width = larghezzaTotale \+ "px"/);
     assert.match(render, /state\.headerRow\.style\.width = larghezzaTotale \+ "px"/);
     assert.doesNotMatch(senzaCommenti(pannello), /fit-content/);
+    //Dopo ogni ridisegno tabella e cursore tornano in accordo.
+    assert.match(render, /this\._scorriNuovi\(state, state\.spostamento \|\| 0\)/);
 
     //Position sticky non si usa: in UXP non viene ignorato, toglie la cella dal flusso e manda
     //la colonna fuori dal riquadro. Il ritorno sarebbe una schermata rotta, non un pareggio.
     const codice = senzaCommenti(confronti);
     assert.ok(!codice.includes('sticky'), 'sticky e\' tornato: in UXP rompe la tabella');
+});
+
+test('la barra di scorrimento funziona anche senza trascinamento', () => {
+    //Frecce e clic sulla traccia usano solo "click", che nel plugin funziona di sicuro: se il
+    //trascinamento non arrivasse, la tabella si scorre lo stesso.
+    const barra = corpoFunzione(confronti, '_crBarraScorrimentoNuovi(state) {');
+
+    assert.match(barra, /indietro\.addEventListener\("click"/);
+    assert.match(barra, /avanti\.addEventListener\("click"/);
+    assert.match(barra, /traccia\.addEventListener\("click"/);
+    assert.match(barra, /cursore\.addEventListener\("mousedown"/);
+
+    //I conti stanno nel modulo verificato, non qui.
+    assert.match(barra, /barraScorrimento\.spostamentoDaClic/);
+
+    const scorri = corpoFunzione(confronti, '_scorriNuovi(state, spostamento) {');
+    assert.match(scorri, /barraScorrimento\.limitaSpostamento/);
+    assert.match(scorri, /state\.table\.style\.marginLeft = "-" \+ state\.spostamento \+ "px"/);
+
+    //Le misure si leggono al momento dell'uso: alla costruzione il pannello non e' impaginato.
+    const misure = corpoFunzione(confronti, '_misureScorrimentoNuovi(state) {');
+    assert.match(misure, /clientWidth/);
+
+    //Il trascinamento si ascolta sul documento, non sul cursore: il mouse ne esce subito.
+    const trascinamento = corpoFunzione(confronti, '_abilitaTrascinamentoBarra() {');
+    assert.match(trascinamento, /\$\(document\)\.on\("mousemove"/);
+    assert.match(trascinamento, /\$\(document\)\.on\("mouseup"/);
 });
 
 test('nel csv i cambiamenti di confronto stanno in una colonna sola', () => {
