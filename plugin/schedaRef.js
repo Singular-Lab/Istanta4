@@ -1287,19 +1287,16 @@ const schedaRef = {
                     }
 
                     pannelloVariante.empty();
+                    //Sulla variante modificabile il pannello resta vuoto: i campi sono i suoi,
+                    //poco sotto, e non serve dirlo a parole.
                     if (modificabile) {
-                        //I campi qui sotto sono i suoi e mostrano l'impaginato: e' il confronto
-                        //fra quello e l'archivio a far emergere il disallineamento, e la scheda
-                        //lo segnala da se'. Nel pannello non serve altro.
-                        pannelloVariante.append($('<div style="opacity:0.85;"></div>')
-                            .text(etichettaScelta + " - e' la piu' specifica per questa lavorazione: i campi qui sotto si modificano."));
+                        pannelloVariante.hide();
                         return;
                     }
 
                     //Questa variante nell'impaginato non c'e': si mostra il suo dato d'archivio,
                     //un campo per riga come sta nel revisore, senza toccare i campi della scheda.
-                    pannelloVariante.append($('<div style="font-weight:bold; margin-bottom:4px;"></div>')
-                        .text(etichettaScelta + " - sola lettura: si modifica solo la piu' specifica."));
+                    pannelloVariante.show();
 
                     var campi = [
                         ["Descrizione 1", variante.descrizione1],
