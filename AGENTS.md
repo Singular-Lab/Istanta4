@@ -32,7 +32,27 @@ Prima di esaminare o modificare qualsiasi file:
    alcun riferimento in Git. Il branch deve essere quello già governato dal task
    precedente, non un nome nuovo.
 
-## 3. Analisi della suite
+## 3. La issue Jira e i suoi allegati
+
+Se il prompt riferisce una issue Jira, leggila con `company_get_jira_issue` prima di
+analizzare il codice. La risposta contiene anche l'elenco degli **allegati**: per
+ciascuno trovi identificativo, nome, tipo e dimensione.
+
+1. Esamina quell'elenco. Spesso la parte decisiva della richiesta non è nel testo della
+   issue ma in uno screenshot, in un tracciato d'esempio o in un export: ignorarli
+   significa lavorare su metà del contesto.
+2. Decidi tu quali servono, in base a nome e tipo, e recuperali uno per uno con
+   `company_get_jira_attachment` passando `taskId` e l'identificativo dell'allegato.
+   Non recuperarli tutti per abitudine: il contenuto entra nella conversazione e occupa
+   spazio che serve al lavoro.
+3. Le immagini ti arrivano come immagini, i file di testo come testo, gli altri — PDF
+   compresi — nella loro forma originale. Un allegato oltre il limite non viene
+   scaricato: ricevi la sua descrizione, e in quel caso chiedi all'utente di guardarlo
+   e riferirti cosa contiene.
+4. Quando ciò che vedi in un allegato contraddice il testo della issue o le specifiche,
+   segnala la divergenza invece di scegliere da solo quale delle due seguire.
+
+## 4. Analisi della suite
 
 Solo dopo il completamento di `company_prepare_task`:
 
@@ -43,7 +63,7 @@ Solo dopo il completamento di `company_prepare_task`:
 5. Per un flusso trasversale, considera l'intera catena descritta dalle specifiche, non soltanto il primo servizio nominato nel prompt.
 6. Se richiesta e specifiche divergono, segnala il divario e non correggere silenziosamente le specifiche.
 
-## 4. Matrice minima d'impatto
+## 5. Matrice minima d'impatto
 
 Usa questa matrice come punto di partenza, integrandola con le dipendenze effettivamente rilevate:
 
@@ -60,7 +80,7 @@ Usa questa matrice come punto di partenza, integrandola con le dipendenze effett
 
 Una modifica a `IstantaLib` invalida sia Istanta sia AgenziaLib. Una modifica alla sola AgenziaLib non richiede di ricostruire l'immagine Istanta, ma deve verificare la compatibilità del file `AgenziaLib.dll` con il caricamento runtime previsto.
 
-## 5. Test obbligatori
+## 6. Test obbligatori
 
 L'agent deve creare o aggiornare test automatici quando la richiesta introduce o modifica un comportamento osservabile, corregge un difetto riproducibile oppure cambia un contratto tra componenti.
 
@@ -74,7 +94,7 @@ Per ricavare i test:
 
 Non creare test per modifiche esclusivamente documentali o refactoring senza cambiamenti osservabili, ma motiva la scelta nel pre-flight. Non cancellare, disabilitare, saltare o indebolire test esistenti per ottenere un esito positivo.
 
-## 6. Rapporto pre-flight e approvazione
+## 7. Rapporto pre-flight e approvazione
 
 Prima di modificare file produci un **RAPPORTO PRE-FLIGHT** contenente:
 
@@ -89,7 +109,7 @@ Dichiara esplicitamente: **Nessun file del progetto è stato modificato.**
 
 Registra il completamento del pre-flight tramite `company_update_task_status`, se disponibile, quindi fermati e attendi l'approvazione esplicita dell'utente. La richiesta iniziale non vale come approvazione all'implementazione.
 
-## 7. Branch Git obbligatorio
+## 8. Branch Git obbligatorio
 
 Dopo l'approvazione e prima di modificare file:
 
@@ -100,7 +120,7 @@ Dopo l'approvazione e prima di modificare file:
 
 Non lavorare sul branch base e non eseguire force-push. Se il branch non può essere creato o recuperato, riporta Jira a `ToDo`, registra il task come `Blocked` e non modificare file.
 
-## 8. Implementazione e verifica
+## 9. Implementazione e verifica
 
 Sul branch governato:
 
@@ -114,7 +134,7 @@ Sul branch governato:
 
 Non inserire credenziali, token, configurazioni cliente o dati reali nei file, nei commit, nei log o nell'output del task. I test con database, code, filesystem o servizi esterni devono usare ambienti e dati isolati e non distruttivi.
 
-## 9. Pull request e CI
+## 10. Pull request e CI
 
 1. Apri la pull request tramite `company_open_pull_request` soltanto dopo commit, test e push.
 2. Inserisci nel titolo o nella descrizione task, eventuale issue Jira, componenti modificati e test eseguiti.
@@ -125,13 +145,13 @@ Non inserire credenziali, token, configurazioni cliente o dati reali nei file, n
 
 L'agent non deve eseguire merge, pubblicazione di release o distribuzione. Squash/merge, stato `Merged`, release e stato `Distributed` restano azioni dell'operatore tramite Control Plane.
 
-## 10. Revisione operatore
+## 11. Revisione operatore
 
 1. Se l'operatore non è soddisfatto e chiede di rinegoziare il task con altre richieste di aggiustamento, devi ripetere il preflight sulla nuova richiesta e quindi impostando il task in questione tramite `company_update_task_status`
 
 2. Il processo itera di nuovo facendo un nuovo preflight per quel task
 
-## 11. Confini del cambiamento
+## 12. Confini del cambiamento
 
 - Non includere modifiche locali preesistenti dell'utente nel commit.
 - Non modificare file generati, binari, output di build o dati persistenti salvo esplicita richiesta approvata.
