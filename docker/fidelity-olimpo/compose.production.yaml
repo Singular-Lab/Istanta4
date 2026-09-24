@@ -42,9 +42,36 @@ services:
     ports:
       - "${FIDELITY_HTTP_PORT:-3010}:${FIDELITY_HTTP_PORT:-3010}"
       - "${FIDELITY_WS_PORT:-3400}:${FIDELITY_WS_PORT:-3400}"
+    # Sostituisce il CMD dell'immagine, che è `sh docker/server-entrypoint.prod.sh`
+    # ed esegue SEMPRE `models:sync` con alter:true prima di avviare il server,
+    # ignorandone l'esito. Va bene per una installazione nuova, dove la sincronia
+    # è l'unico modo per creare le tabelle; va molto meno bene su un database che
+    # contiene dati veri, perché Sequelize modifica le tabelle per farle
+    # combaciare con i modelli e lo fa a ogni riavvio, senza che nessuno guardi.
+    #
+    # FIDELITY_SYNC_MODELS=no in release.env salta la sincronia e avvia soltanto
+    # il server. Da usare dopo aver riversato dati da un'altra installazione, e
+    # dopo aver lasciato passare UNA sincronia che riallinei lo schema importato
+    # ai modelli della versione distribuita.
+    #
+    # Attenzione: l'applicazione non ha migrazioni, quindi questa sincronia è di
+    # fatto l'unico meccanismo che crea le tabelle nuove. Spegnendola, lo schema
+    # di ogni release successiva va applicato a mano.
+    command:
+      - sh
+      - -c
+      - |
+        if [ "$${FIDELITY_SYNC_MODELS:-si}" = "no" ]; then
+          echo "[compose] models:sync saltato (FIDELITY_SYNC_MODELS=no)"
+        else
+          echo "[compose] models:sync in corso..."
+          npm run models:sync || echo "[compose] models:sync terminato con errori: guarda sopra"
+        fi
+        exec npm start
     env_file:
       - fidelity.env
     environment:
+      FIDELITY_SYNC_MODELS: ${FIDELITY_SYNC_MODELS:-si}
       # Con `production` la CSP applica upgrade-insecure-requests: il browser
       # richiede ogni risorsa in https e su un target senza TLS la pagina resta
       # bianca. Su una macchina di prova raggiunta in chiaro si mette

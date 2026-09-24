@@ -287,3 +287,146 @@ Durante il deployment i log utili sono due: `sudo docker compose logs -f runner`
 in `/opt/company-ai/runner` per il Runner, e i log dei singoli servizi in questa
 directory. Il Runner, se `up --wait` fallisce, ripristina automaticamente le
 immagini precedenti.
+
+
+# DUMP DEL DATO
+
+Sulla macchina che possiede il dato effettuare l'export
+
+❯ mkdir -p /tmp/dump && cd /tmp/dump
+❯ sudo -u postgres pg_dump -d fidelity_promotion -Fc --no-owner --no-acl > 
+❯ sudo -u postgres pg_dump -d olimpo_db -Fc --no-owner --no-acl > olimpo.dump
+
+mettendo i nomi delle tabelle relative al cliente che vogliamo esportare
+
+## 5. Trasportare i dati da un'altra macchina
+
+Serve quando si porta su questo target il contenuto di un'installazione
+esistente — tipicamente una macchina di staging — invece di partire da zero.
+
+### Salvare
+
+```bash
+cd /opt/company-ai/projects/istanta4
+sudo ./dump-databases.sh                    # in ./backup/<data>-<ora>/
+sudo ./dump-databases.sh /mnt/nas/istanta4  # altrove
+```
+
+Esporta i due database PostgreSQL in formato custom (`-Fc`), verifica che gli
+archivi siano rileggibili, e scrive `SHA256SUMS` e un `MANIFEST` con versioni e
+provenienza. Le applicazioni possono restare in funzione.
+
+Non esporta redis — sono sessioni e cache — **né i file**: immagini, materiali e
+volantini stanno nei volumi Docker e vanno salvati a parte. Lo script lo ripete
+in coda, perché è la cosa che si dà per fatta quando non lo è.
+
+Non esporta nemmeno MongoDB, e vale la pena dire perché. I dati che ci stavano
+sono già stati portati in PostgreSQL; nel codice di Fidelity restano tre agganci,
+nessuno dei quali è dato vivo: l'endpoint legacy
+`PUT /api/update_data_fields_translation_map`, il codice della migrazione in
+`PromoController` — che non è registrato su alcuna rotta — e un `await` a livello
+di modulo in `models/mongoose.ts` che apre la connessione al solo caricamento del
+file. È quest'ultimo a rendere il servizio ancora necessario nel compose, non la
+logica applicativa. Finché non viene sciolto, `mongo` resta acceso ma il suo
+contenuto non è la fonte di nulla.
+
+### Ripristinare
+
+I passi che seguono **cancellano** i database sul target. Prima conviene un
+`dump-databases.sh`, che è la via di ritorno.
+
+Il formato custom si legge da stdin ma si ripristina meglio da file, quindi si
+copia l'archivio dentro il container:
+
+```bash
+cd /opt/company-ai/projects/istanta4
+sudo docker compose --env-file release.env -f compose.production.yaml stop fidelity olimpo
+```
+
+**Fidelity** — si ripristina come superutente, che è anche il ruolo con cui
+l'applicazione si connette:
+
+```bash
+sudo docker exec -i istanta4-postgres-1 psql -U fidelity -d postgres <<'SQL'
+DROP DATABASE IF EXISTS fidelity;
+CREATE DATABASE fidelity OWNER fidelity;
+SQL
+
+sudo docker cp fidelity.dump istanta4-postgres-1:/tmp/fidelity.dump
+sudo docker exec istanta4-postgres-1   pg_restore -U fidelity -d fidelity --no-owner --no-acl /tmp/fidelity.dump
+```
+
+`--no-owner` va ripetuto qui e non basta averlo passato al dump: nel formato
+custom i proprietari restano scritti nell'archivio e si scartano al ripristino.
+
+**Olimpo** — si ripristina connettendosi come `olimpo`, non come superutente,
+altrimenti le tabelle risultano di proprietà di `fidelity` e l'applicazione non
+può scriverci. L'estensione va creata prima da superutente, perché `olimpo` non
+ha quel privilegio:
+
+```bash
+sudo docker exec -i istanta4-postgres-1 psql -U fidelity -d postgres <<'SQL'
+DROP DATABASE IF EXISTS olimpo;
+CREATE DATABASE olimpo OWNER olimpo;
+SQL
+
+sudo docker exec istanta4-postgres-1 psql -U fidelity -d olimpo   -c 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp"'
+
+sudo docker cp olimpo.dump istanta4-postgres-1:/tmp/olimpo.dump
+sudo docker exec istanta4-postgres-1   pg_restore -U olimpo -d olimpo --no-owner --no-acl /tmp/olimpo.dump
+```
+
+Quella `CREATE EXTENSION` serve solo qui: in un'installazione nuova la fa già
+`postgres-init/01-init-databases.sh`. È `DROP DATABASE` che butta via anche il
+lavoro dell'inizializzazione.
+
+### Dopo il ripristino
+
+**I percorsi di Olimpo puntano ancora alla macchina di origine.** Vanno riportati
+a quelli del container, altrimenti `OlimpoService.initialize()` non trova le
+directory e il processo termina in ciclo:
+
+```bash
+sudo docker exec -i istanta4-postgres-1 psql -U olimpo -d olimpo <<'SQL'
+UPDATE absolute_paths
+SET path = CASE tipo
+    WHEN 'WEB'       THEN '/app/uploads/web'
+    WHEN 'ARCHIVIO'  THEN '/app/uploads/archivio'
+    WHEN 'MATERIALI' THEN '/app/uploads/materiali'
+    WHEN 'VIDEO'     THEN '/app/uploads/video'
+    ELSE path
+END
+WHERE tipo IN ('WEB', 'ARCHIVIO', 'MATERIALI', 'VIDEO');
+
+SELECT tipo, path, active FROM absolute_paths ORDER BY tipo;
+SQL
+```
+
+Annota i valori **prima** di sovrascriverli: sono le directory da cui copiare i
+file fisici.
+
+Poi si riavvia:
+
+```bash
+sudo docker compose --env-file release.env -f compose.production.yaml start fidelity olimpo
+sudo docker logs -f --tail 30 istanta4-fidelity-1
+```
+
+Il primo avvio dopo un ripristino è quello che conta: `models:sync` riallinea lo
+schema importato ai modelli della versione distribuita. Vale la pena guardare che
+non compaiano `❌ Errore sincronizzazione`, perché l'entrypoint ignora l'esito e
+una tabella non riconciliata si manifesta molto dopo, come errore a runtime.
+
+`seed-fidelity.sh` qui **non** va eseguito: utenti, menu e provider arrivano con
+il dump, e un secondo amministratore creerebbe solo confusione.
+
+### Cose che il ripristino non porta
+
+- **I job di `pgagent`.** Se la macchina di origine ne aveva, compaiono come
+  errori `extension "pgagent" is not available` e vanno ignorati: l'estensione
+  non è nell'immagine e richiederebbe un demone a parte. Se però quei job
+  facevano lavoro vero — una pulizia notturna, una vista da rinfrescare — vanno
+  ricreati altrimenti, con `cron` sull'host o un servizio nel compose.
+- **I file.** Vedi sopra: i database sanno dove stanno le immagini, ma le
+  immagini vanno spostate a parte.
+
