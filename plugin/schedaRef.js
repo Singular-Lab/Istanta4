@@ -2149,7 +2149,7 @@ const schedaRef = {
                         word-break: break-word;
                     ">
                         <div style="font-weight: bold; color: #333; margin-bottom: 2px;">
-                            ${diff.label}
+                            ${confronti.etichettaSegnalazione(diff.label)}
                         </div>
                         <div style="color: #666;">
                             ${diff.difference}

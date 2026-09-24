@@ -2894,7 +2894,7 @@ const confronti = {
             }
 
             return differenze.map(diff => ({
-                campo: this._etichettaSegnalazione(diff?.label),
+                campo: this.etichettaSegnalazione(diff?.label),
                 dettaglio: diff?.difference || ""
             }));
         });
@@ -3743,7 +3743,7 @@ const confronti = {
                             //elenco di differenze e' il campo che si cerca con l'occhio.
                             if (diff?.label) {
                                 const campo = document.createElement("span");
-                                campo.textContent = this._etichettaSegnalazione(diff.label);
+                                campo.textContent = this.etichettaSegnalazione(diff.label);
                                 campo.style.fontWeight = "600";
                                 diffRow.appendChild(campo);
                                 diffRow.appendChild(document.createTextNode(": " + (diff?.difference || "")));
@@ -5357,8 +5357,9 @@ const confronti = {
     },
 
     //Il nome della label come va letto: la regola sta in reportIntegritaAvvio, qui si porta
-    //solo il dato dell'agenzia.
-    _etichettaSegnalazione(label) {
+    //solo il dato dell'agenzia. Pubblico perche' lo usa anche il popup della pre analisi
+    //all'apertura della scheda ref, che di suo non legge il SourceCustomPlugin.
+    etichettaSegnalazione(label) {
         return reportIntegritaAvvio.etichettaSegnalazione(label, this.traduzioniLabelSegnalazioni());
     },
 
