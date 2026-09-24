@@ -3246,7 +3246,11 @@ out var mismatch);
                         ArticoliDescrizioni? descrItem = artItem.ArticoliDescrizionis!.Where(d => (d.Area == actArea || (d.Area == null && actArea == null)) && (d.Canale == actCanale || (d.Canale == null && actCanale == null)) /*inserire custom */).FirstOrDefault();
                         if (descrItem == null)
                         {
-                            throw new Exception("Revisione non trovata");
+                            //I20-993: dire cosa si e' cercato. Senza, "non trovata" non
+                            //distingue il codice sbagliato dalla variante inesistente.
+                            throw new Exception("Revisione non trovata per l'articolo " + act.Codice +
+                                " con area " + (actArea ?? "(nessuna)") + " e canale " + (actCanale ?? "(nessuno)") +
+                                ". Descrizioni presenti: " + string.Join(", ", artItem.ArticoliDescrizionis!.Select(d => "[" + (d.Area ?? "-") + "/" + (d.Canale ?? "-") + "/" + (d.Custom ?? "-") + "]")));
 
                         }
                         else
@@ -3262,7 +3266,9 @@ out var mismatch);
                         //ArticoliDescrizioni descrItem = await this.ctx.ArticoliDescrizionis.Where(d => d.CodiceGruppo == act.CodiceGruppo && (act.areaRichiesta && act.Area != null && act.Area != "" ? d.Area == act.Area : d.Area == null) && (act.areaRichiesta && act.canaleRichiesto && act.Canale != null && act.Canale != "" ? d.Canale == act.Canale : d.Canale == null)).FirstOrDefaultAsync();
                         if (descrItem == null)
                         {
-                            throw new Exception("Revisione non trovata");
+                            //I20-993: come sopra, per le descrizioni di gruppo.
+                            throw new Exception("Revisione non trovata per il gruppo " + act.CodiceGruppo +
+                                " con area " + (actArea ?? "(nessuna)") + " e canale " + (actCanale ?? "(nessuno)"));
                         }
                         else
                         {
