@@ -1117,7 +1117,9 @@ const Utility=
     /// per esempio il pulsante delle segnalazioni della scheda ref, che dopo un refresh
     /// andato a buon fine non ha piu' ragione di stare li'. Chi non lo passa non cambia
     /// comportamento.
-    async popup(title, message, taglia = "md", alChiudi = null) {
+    /// contenutoIntestazione, facoltativo, si mette nella barra del titolo accanto alla X:
+    /// e' il posto delle scelte che si leggono quando il popup si chiude, non delle azioni.
+    async popup(title, message, taglia = "md", alChiudi = null, contenutoIntestazione = null) {
         try {
             let me = this;
             me.nascondiHidebleElements();
@@ -1156,7 +1158,7 @@ const Utility=
             let titleBar = $(`
                 <div style="
                     display: flex; justify-content: space-between; align-items: center;
-                    width: 100%; height: 10%; background-color: #f1f1f1;
+                    width: 100%; min-height: 10%; flex: 0 0 auto; background-color: #f1f1f1;
                     padding: 5px; box-sizing: border-box;
                 "></div>
             `);
@@ -1183,7 +1185,15 @@ const Utility=
                 }
             });
     
-            titleBar.append(titleText).append(closeButton);
+            //A destra convivono cio' che il chiamante vuole far leggere alla chiusura e la X.
+            let gruppoDestro = $('<div style="display: flex; align-items: center; gap: 10px;"></div>');
+
+            if (contenutoIntestazione != null) {
+                gruppoDestro.append(contenutoIntestazione);
+            }
+
+            gruppoDestro.append(closeButton);
+            titleBar.append(titleText).append(gruppoDestro);
     
             // Finestra centrale
             let dialog = $(`

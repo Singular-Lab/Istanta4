@@ -3864,8 +3864,11 @@ const schedaRef = {
             }, 1000);
         });
 
-        //codiceRef e' un h3: dentro ci vanno il pulsante delle segnalazioni, il copy e il testo.
+        //codiceRef e' un h3: dentro ci vanno il segnalino, il copy e il testo. La riga e' flex
+        //con gli elementi centrati, perche' vertical-align allinea alla meta' della x-height del
+        //testo e non al centro della barra: il numerino restava un po' alto.
         $("#codiceRef").empty();
+        $("#codiceRef").css({ "display": "flex", "align-items": "center" });
         $("#codiceRef").append(copyButton);
         $("#codiceRef").append(testo.substring(0, 45) + (testo.length > 45 ? "..." : ""));
 
@@ -3905,7 +3908,6 @@ const schedaRef = {
                 "border-radius": "3px",
                 "background-color": "#b21d1d",
                 "color": "#fff",
-                "vertical-align": "middle",
                 "margin-right": "8px",
                 "cursor": "pointer"
             });
@@ -3990,29 +3992,53 @@ const schedaRef = {
         });
     },
 
-    /// Un comando testuale: sta in fondo al modal accanto all'azione principale, e pesa meno.
-    /// Silenziare e' una rinuncia, non la cosa che si viene a fare qui: gridarla allo stesso
-    /// volume dell'Aggiorna era il motivo per cui quella riga sembrava un semaforo.
-    comandoTestualeSegnalazioni(etichetta, suggerimento, alClick) {
-        const comando = $('<span></span>');
-        comando.text(etichetta);
-        comando.css({
-            "font-size": "11px",
-            "color": "#767676",
-            "cursor": "pointer",
-            "text-decoration": "underline",
-            "white-space": "nowrap"
-        });
+    /// Una casella dell'intestazione: una scelta, non un'azione. Si legge quando il popup si
+    /// chiude, e fino ad allora non succede niente - e' la differenza fra dichiarare una
+    /// preferenza e premere un comando.
+    caselleSilenziamento() {
+        const riquadro = $('<div style="display: flex; flex-direction: column; gap: 2px;"></div>');
 
-        Utility.impostaTooltip(comando[0], suggerimento);
-        comando.on("click", alClick);
+        const crea = (id, etichetta) => {
+            const riga = $('<div style="display: flex; align-items: center; gap: 5px;"></div>');
+            const casella = $('<input type="checkbox" id="' + id + '">');
+            const testo = $('<label for="' + id + '" style="font-size: 11px; color: #2c2c2c; cursor: pointer;"></label>');
 
-        return comando;
+            testo.text(etichetta);
+            riga.append(casella).append(testo);
+            riquadro.append(riga);
+        };
+
+        crea("segnalazioniSilenziaQuesta", "Non mostrare piu' questo avviso");
+        crea("segnalazioniSilenziaTutte", "Non mostrare piu' tutti gli avvisi");
+
+        return riquadro;
+    },
+
+    /// Il lampo: il contenuto sparisce e torna. Il modal e' gia' su fondo bianco, quindi basta
+    /// portare a zero l'opacita' e non serve sovrapporre nulla.
+    ///
+    /// Dura sempre la stessa frazione, non quanto il lavoro: legato alla durata vera, su un box
+    /// svelto non si vedrebbe e su uno lento sembrerebbe bloccato. Serve a dire "ho fatto
+    /// qualcosa" quando le segnalazioni restano le stesse e nulla cambia a schermo.
+    lampeggiaContenuto(contenuto) {
+        const DURATA = 250;
+
+        try {
+            contenuto.css("opacity", "0");
+            setTimeout(function () {
+                contenuto.css("opacity", "1");
+            }, DURATA);
+        }
+        catch (e) {
+            console.error("Code SRF-98 Lampeggio del contenuto non riuscito: " + e);
+            contenuto.css("opacity", "1");
+        }
     },
 
     /// La finestra delle segnalazioni. Si apre da sola all'apertura della scheda quando c'e'
     /// qualcosa da dire e la referenza non e' stata silenziata, e si riapre a mano dal
-    /// segnalino nel titolo. Alla chiusura il segnalino si riallinea a quello che resta.
+    /// segnalino nel titolo. Alla chiusura si leggono le caselle e il segnalino si riallinea a
+    /// quello che resta.
     async mostraModalSegnalazioni() {
         try {
             const me = this;
@@ -4020,48 +4046,44 @@ const schedaRef = {
 
             const contenuto = $(`
                 <div style="width: 100%; display: flex; flex-direction: column; gap: 10px; font-family: Arial, sans-serif; color: #2c2c2c;">
-                    <div id="segnalazioniIntestazione" style="display: flex; align-items: center;"></div>
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+                        <div id="segnalazioniIntestazione" style="display: flex; align-items: center; min-width: 0;"></div>
+                        <div id="segnalazioniAzioni" style="flex: 0 0 auto;"></div>
+                    </div>
 
                     <div style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: #767676;">
                         <span>Per correggere i dati nel box usa il pulsante</span>
                         <img src="images/reimpaginaFix.png" alt="Correggi" style="width: 16px; height: 16px; object-fit: contain; vertical-align: middle;" />
                     </div>
 
-                    <div id="segnalazioniElenco" style="width: 100%; max-height: 200px; overflow-y: auto; padding-right: 4px; box-sizing: border-box;"></div>
-
-                    <div id="segnalazioniComandi" style="display: flex; align-items: center; justify-content: flex-end; gap: 14px; border-top: 1px solid #e4e4e4; padding-top: 10px;"></div>
+                    <div id="segnalazioniElenco" style="width: 100%; max-height: 220px; overflow-y: auto; padding-right: 4px; box-sizing: border-box;"></div>
                 </div>
             `);
 
             const intestazione = contenuto.find("#segnalazioniIntestazione");
             const elenco = contenuto.find("#segnalazioniElenco");
-            const comandi = contenuto.find("#segnalazioniComandi");
+            const azioni = contenuto.find("#segnalazioniAzioni");
 
             this.riempiElencoSegnalazioni(elenco, intestazione, this.segnalazioniInMemoria() || []);
 
-            comandi.append(this.comandoTestualeSegnalazioni(
-                "Silenzia questa ref",
-                "Non mostrare piu' da sola questa finestra per questa referenza, fino al riavvio del plugin",
-                function () {
-                    me.silenziaSegnalazioniDellaRef(codice);
-                    messaggioUtente("Segnalazioni silenziate per questa referenza", "success", false, 3);
-                    $("#popupCloseButton").click();
-                }));
+            //Rifa' la pre analisi adesso: e' il modo per vedere l'effetto delle correzioni senza
+            //chiudere e riaprire la scheda. Icona, non scritta: sta sulla riga dello stato.
+            const aggiorna = $('<img src="images/refresh.png" alt="Aggiorna">');
+            aggiorna.css({
+                "height": "16px",
+                "padding": "4px",
+                "box-sizing": "content-box",
+                "border": "1px solid #d0d0d0",
+                "border-radius": "4px",
+                "cursor": "pointer",
+                "display": "inline-block"
+            });
+            Utility.impostaTooltip(aggiorna[0], "Rifai il controllo e aggiorna l'elenco");
 
-            comandi.append(this.comandoTestualeSegnalazioni(
-                "Silenzia tutte",
-                "Non mostrare piu' da sola questa finestra per nessuna referenza, fino al riavvio del plugin",
-                function () {
-                    me.silenziaSegnalazioniOvunque();
-                    messaggioUtente("Segnalazioni silenziate per tutte le referenze", "success", false, 3);
-                    $("#popupCloseButton").click();
-                }));
-
-            //Rifa' la pre analisi adesso: e' il modo per vedere l'effetto delle correzioni
-            //senza chiudere e riaprire la scheda. E' l'azione principale, e resta un pulsante.
-            const aggiorna = $('<sp-action-button style="font-size: 11px; cursor: pointer;">Aggiorna</sp-action-button>');
             aggiorna.on("click", async function () {
                 try {
+                    me.lampeggiaContenuto(contenuto);
+
                     const box = me.refSelected != null ? me.refSelected.item : null;
                     me.memorizzaSegnalazioni(await me.differenzeDatiNelBox(box, me.schedeRefDati));
                     me.riempiElencoSegnalazioni(elenco, intestazione, me.segnalazioniInMemoria());
@@ -4069,15 +4091,30 @@ const schedaRef = {
                 catch (err) {
                     console.error("Code SRF-96 Aggiornamento delle segnalazioni non riuscito: " + err);
                     messaggioUtente("Code SRF-96 Non e' stato possibile aggiornare le segnalazioni", "error", false, 4);
+                    contenuto.css("opacity", "1");
                 }
             });
-            comandi.append(aggiorna);
+            azioni.append(aggiorna);
 
-            //Alla chiusura il segnalino nel titolo si rifa' i conti: se l'Aggiorna ha trovato
-            //tutto risolto, sparisce.
+            const caselle = this.caselleSilenziamento();
+
+            //Alla chiusura si leggono le scelte dichiarate e il segnalino nel titolo si rifa' i
+            //conti: se l'Aggiorna ha trovato tutto risolto, sparisce.
             Utility.popup("Differenze rilevate", contenuto, "lg", function () {
+                //Le caselle si leggono dal riquadro che si e' tenuto, non dal documento: quando
+                //questo callback parte il popup e' gia' stato rimosso, e un selettore globale
+                //non troverebbe piu' niente. Il sottoalbero staccato conserva lo stato.
+                if (caselle.find("#segnalazioniSilenziaTutte").prop("checked")) {
+                    me.silenziaSegnalazioniOvunque();
+                    messaggioUtente("Avvisi silenziati per tutte le referenze", "success", false, 3);
+                }
+                else if (caselle.find("#segnalazioniSilenziaQuesta").prop("checked")) {
+                    me.silenziaSegnalazioniDellaRef(codice);
+                    messaggioUtente("Avviso silenziato per questa referenza", "success", false, 3);
+                }
+
                 me.aggiornaPulsanteSegnalazioni();
-            });
+            }, caselle);
         }
         catch (e) {
             console.error("Code SRF-97 Finestra delle segnalazioni non aperta: " + e);
