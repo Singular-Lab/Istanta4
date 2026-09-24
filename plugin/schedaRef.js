@@ -1428,6 +1428,7 @@ const schedaRef = {
                     linguette.find(".creaVariante").remove();
 
                     var creabili = variantiDescrizione.variantiCreabili(elencoVarianti, areaLav, canaleLav);
+                    var nazionale = elencoVarianti.filter(function (v) { return variantiDescrizione.specificita(v) === 0; })[0];
 
                     if (creabili.length === 0) {
                         return;
@@ -1479,13 +1480,15 @@ const schedaRef = {
                                     area: scelta.area,
                                     canale: scelta.canale,
                                     specificita: variantiDescrizione.specificita(scelta),
-                                    descrizione1: "",
-                                    descrizione2: "",
-                                    descrizione3: "",
-                                    descrizione4: "",
-                                    //Appena creata non esiste ancora in archivio: nasce vuota,
-                                    //come fa il revisore, e non con i campi dell'impaginato -
-                                    //che sono quelli della variante che comandava prima.
+                                    //Nasce con i campi della nazionale, che e' il punto di
+                                    //partenza naturale per una variante: si prende da lei e si
+                                    //cambia quello che cambia. Si legge dall'elenco e non
+                                    //dall'impaginato, cosi' e' davvero la nazionale anche quando
+                                    //il box dice altro.
+                                    descrizione1: nazionale != null ? nazionale.descrizione1 : "",
+                                    descrizione2: nazionale != null ? nazionale.descrizione2 : "",
+                                    descrizione3: nazionale != null ? nazionale.descrizione3 : "",
+                                    descrizione4: nazionale != null ? nazionale.descrizione4 : "",
                                     nuova: true
                                 });
 
@@ -2005,13 +2008,23 @@ const schedaRef = {
 
                     $("#pulsantiExtra").empty();
                     $("#pulsantiExtra").append(button);
-                    if ($("#Tab5").css("display") == "none") {
-                        button.css("display", "none");
-                    }
 
                     break;
                 }
             }
+
+            //I20-993: il Salva deve esserci sempre. Nasceva soltanto dentro il ramo che disegna
+            //il campo descrizione del box, quindi su un box senza quel campo non compariva, e
+            //si nascondeva anche quando la Tab5 non era visibile. Qui si garantisce che ci sia.
+            if ($("#salvaButton").length === 0) {
+                var salvaSempre = $('<sp-action-button id="salvaButton" style="color:lightgreen; margin-right:10px;">Salva modifiche</sp-action-button>');
+                salvaSempre.on('click', function () {
+                    me.salvaModifiche(schedaRef, codice, box, meccanica, page);
+                });
+                $("#pulsantiExtra").append(salvaSempre);
+            }
+
+            $("#salvaButton").css("display", "");
 
             //writeDebugMessageForCrash("Inizio cambio strutturale");
 
