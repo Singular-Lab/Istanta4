@@ -185,6 +185,38 @@ public class VariantiDescrizioneTests
         Assert.Equal("recente", scelta!.Descrizione1);
     }
 
+    [Fact]
+    public void Le_varianti_chiuse_restano_nell_elenco_ma_marcate()
+    {
+        // Toglierle vorrebbe dire non poterle piu' riaprire dal Plugin.
+        var descrizioni = new List<ArticoliDescrizioni> { Variante(null, null), Variante("TO", "SS") };
+        var chiuse = new List<VarianteDescrizioneChiusa> { new() { area = "TO", canale = "SS" } };
+
+        var elenco = SpecificitaDescrizione.Elenco(descrizioni, chiuse);
+
+        Assert.Equal(2, elenco.Count);
+        Assert.Equal(false, elenco[0]["chiusa"]);
+        Assert.Equal(true, elenco[1]["chiusa"]);
+    }
+
+    [Fact]
+    public void La_nazionale_non_si_chiude_mai()
+    {
+        // Sotto di lei non c'e' niente su cui ricadere.
+        var chiuse = new List<VarianteDescrizioneChiusa> { new() { area = null, canale = null } };
+
+        Assert.False(SpecificitaDescrizione.EChiusa(chiuse, null, null));
+        Assert.True(SpecificitaDescrizione.EChiusa(chiuse.Concat(new[] { new VarianteDescrizioneChiusa { area = "TO", canale = "SS" } }), "TO", "SS"));
+    }
+
+    [Fact]
+    public void Senza_chiusure_niente_e_chiuso()
+    {
+        var elenco = SpecificitaDescrizione.Elenco(new List<ArticoliDescrizioni> { Variante("TO", "SS") });
+
+        Assert.Equal(false, elenco[0]["chiusa"]);
+    }
+
     private static ArticoliDescrizioni Variante(string? area, string? canale, string? custom = null, string? descrizione1 = null)
     {
         return new ArticoliDescrizioni

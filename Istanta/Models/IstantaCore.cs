@@ -1073,6 +1073,26 @@ namespace Istanta.Models
         /// Le foto primarie/secondarie non stanno qui, hanno la loro opzione dentro ps.
         /// </summary>
         public List<RevisioneNoRenderFromIndd>? noRender { get; set; }
+
+        /// <summary>
+        /// I20-993: le varianti di descrizione che l'operatore ha chiuso su questa lavorazione.
+        /// Chiudere la piu' specifica fa diventare modificabile quella sotto, fino alla
+        /// nazionale che non si chiude mai. Come per noRender qui stanno solo quelle chiuse,
+        /// cosi' la struttura resta piccola e riaprirne una e' togliere la sua voce: l'archivio
+        /// non viene toccato, quindi non si perde niente e si torna indietro sempre.
+        /// La chiusura vale per questa lavorazione, non per tutte.
+        /// </summary>
+        public List<VarianteDescrizioneChiusa>? variantiChiuse { get; set; }
+    }
+
+    /// <summary>
+    /// I20-993: una variante di descrizione chiusa su una lavorazione, per area e canale.
+    /// La nazionale non compare mai qui: non si chiude.
+    /// </summary>
+    public class VarianteDescrizioneChiusa
+    {
+        public string? area { get; set; }
+        public string? canale { get; set; }
     }
 
     /// <summary>
