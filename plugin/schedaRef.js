@@ -1354,10 +1354,12 @@ const schedaRef = {
 
                     //La modificabile mostra l'impaginato, le altre il loro dato d'archivio, e in
                     //entrambi i casi nei box delle descrizioni: e' li' che si leggono.
-                    if (modificabile) {
+                    if (modificabile && variante.nuova !== true) {
                         rimettiTestiDellImpaginato();
                     }
                     else {
+                        //Una variante appena creata nasce vuota: riempirla con l'impaginato
+                        //vorrebbe dire copiarci dentro la descrizione di un'altra variante.
                         scriviVarianteNeiBox(variante);
                     }
                 };
@@ -1480,7 +1482,11 @@ const schedaRef = {
                                     descrizione1: "",
                                     descrizione2: "",
                                     descrizione3: "",
-                                    descrizione4: ""
+                                    descrizione4: "",
+                                    //Appena creata non esiste ancora in archivio: nasce vuota,
+                                    //come fa il revisore, e non con i campi dell'impaginato -
+                                    //che sono quelli della variante che comandava prima.
+                                    nuova: true
                                 });
 
                                 var nuova = elencoVarianti[elencoVarianti.length - 1];
