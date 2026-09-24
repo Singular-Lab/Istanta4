@@ -1175,16 +1175,11 @@ const schedaRef = {
         //Inserisco lo spazio per far immettere le info di MISMATCH se ci sono
         $("#editReferenza").append('<div id="mismatchWarningPanel" style="padding:5px;"></div>');
 
-        //I20-981: la descrizione del server si puo' riportare nel box senza passare dal
-        //salvataggio, per quando il dato e' gia' a posto a monte e il box e' rimasto indietro.
-        //Si offre solo quando le due cose non dicono la stessa cosa.
-        if (await this.descrizioneDisallineata(this.schedeRefDati, box)) {
-            const bottoneDescrizione = $('<sp-action-button id="applicaDescrizioneDaServer" style="font-size: 12px; margin: 4px 0px 8px 0px;">Applica descrizione da server</sp-action-button>');
-            bottoneDescrizione.on("click", function () {
-                me.applicaDescrizioneDaServer();
-            });
-            $("#editReferenza").append(bottoneDescrizione);
-        }
+        //I20-993: il pulsante "Applica descrizione da server" e' stato tolto. Riportava la
+        //descrizione gia' compilata dal server, cioe' la piu' specifica appiattita in un blocco
+        //solo: cosi' ss_sa, ss e nazionale finivano tutte uguali, che e' il contrario di quello
+        //che serve. Ora i testi si importano da soli, variante per variante, scegliendo la
+        //linguetta. Il metodo applicaDescrizioneDaServer resta, non e' piu' richiamato da qui.
 
 
         if (codice != $("#elementiArtwork").val()) {
@@ -1241,6 +1236,48 @@ const schedaRef = {
                 var linguette = $('<div id="tabVariantiDescrizione" style="display:flex; flex-wrap:wrap; align-items:flex-end; border-bottom:1px solid #777; margin:6px 0 0 0; width:100%;"></div>');
                 var pannelloVariante = $('<div id="pannelloVarianteDescrizione" style="border:1px solid #777; border-top:none; padding:6px; color:white; font-size:11px; white-space:pre-wrap; width:100%; box-sizing:border-box;"></div>');
 
+                //Porta nei campi della scheda i testi della variante scelta, cosi' come stanno
+                //su Istanta: descrizione1 nel campo di descrizione1 e via cosi'. Quando piu'
+                //campi rispondono allo stesso fondamentale si riempie il primo, che e' quello
+                //che InputEditController rilegge. Niente pulsante: cambiando linguetta i testi
+                //sono quelli di quella variante, non un blocco appiattito.
+                var importaTestiDellaVariante = function (variante) {
+                    if (variante == null) {
+                        return;
+                    }
+
+                    var testi = {
+                        descrizione1: variante.descrizione1,
+                        descrizione2: variante.descrizione2,
+                        descrizione3: variante.descrizione3,
+                        descrizione4: variante.descrizione4
+                    };
+                    var giaRiempiti = {};
+
+                    $("#editReferenza").find("textarea").each(function () {
+                        var campo = $(this);
+
+                        if (campo.attr("labelcorrispondente") !== "descrizione") {
+                            return;
+                        }
+
+                        var universale = pluginMiddleware.getNameStileUniversale(campo.attr("currentcharacterstyle"));
+
+                        if (universale == null || universale.fondamentale == null) {
+                            return;
+                        }
+
+                        var fondamentale = universale.fondamentale;
+
+                        if (!(fondamentale in testi) || giaRiempiti[fondamentale] === true) {
+                            return;
+                        }
+
+                        giaRiempiti[fondamentale] = true;
+                        campo.val(testi[fondamentale] != null ? testi[fondamentale] : "");
+                    });
+                };
+
                 var mostraVariante = function (variante) {
                     varianteMostrata = variante;
 
@@ -1259,21 +1296,12 @@ const schedaRef = {
 
                     bloccaCampiScheda(!modificabile);
 
-                    var testi = [variante.descrizione1, variante.descrizione2, variante.descrizione3, variante.descrizione4]
-                        .filter(function (t) { return t != null && String(t).trim() !== ""; })
-                        .join("\n");
+                    importaTestiDellaVariante(variante);
 
                     pannelloVariante.empty();
-
-                    if (modificabile) {
-                        pannelloVariante.append($('<div style="opacity:0.8;"></div>')
-                            .text(etichettaScelta + " - e' la piu' specifica per questa lavorazione, si modifica nei campi qui sotto."));
-                        return;
-                    }
-
-                    pannelloVariante.append($('<div style="font-weight:bold; margin-bottom:4px;"></div>')
-                        .text(etichettaScelta + " - sola lettura"));
-                    pannelloVariante.append($('<div></div>').text(testi !== "" ? testi : "(nessun testo)"));
+                    pannelloVariante.append($('<div style="opacity:0.85;"></div>').text(modificabile
+                        ? etichettaScelta + " - e' la piu' specifica per questa lavorazione: i campi qui sotto si modificano."
+                        : etichettaScelta + " - sola lettura: si modifica solo la piu' specifica."));
                 };
 
                 variantiDescrizione.variantiApplicabili(elencoVarianti, areaLav, canaleLav).forEach(function (variante) {
