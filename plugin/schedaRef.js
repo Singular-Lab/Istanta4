@@ -3872,103 +3872,164 @@ const schedaRef = {
         this.aggiornaPulsanteSegnalazioni();
     },
 
-    /// Il pulsante che riapre le segnalazioni. Sta in testa al titolo, prima del codice, e si
-    /// vede solo quando c'e' davvero qualcosa da risolvere: e' il promemoria che il box non
-    /// corrisponde al dato, e sparisce da solo quando non e' piu' vero.
+    /// Il segnalino nel titolo della scheda: quante differenze ci sono fra il box e il dato,
+    /// e un modo per riaprirle. Sta prima del codice e si vede solo quando c'e' davvero
+    /// qualcosa da risolvere.
+    ///
+    /// La barra #referenza e' alta 25px fisse e l'h3 dentro ha 5px di padding sopra e sotto:
+    /// restano 15px. Un componente Spectrum non ci sta, cresce e spinge il codice fuori dal
+    /// fondo scuro, che di 25px resta. Quindi uno span alto quanto l'icona della copia, che
+    /// in quella riga convive da sempre: e' la misura che la barra tollera.
     aggiornaPulsanteSegnalazioni() {
         try {
             $("#segnalazioniBoxButton").remove();
 
-            if (!this.ciSonoSegnalazioniIrrisolte(this.segnalazioniInMemoria())) {
+            const segnalazioni = this.segnalazioniInMemoria();
+            if (!this.ciSonoSegnalazioniIrrisolte(segnalazioni)) {
                 return;
             }
 
-            const quante = this.segnalazioniInMemoria().length;
+            const quante = segnalazioni.length;
             const me = this;
-            const pulsante = $('<sp-action-button id="segnalazioniBoxButton"></sp-action-button>');
+            const segnalino = $('<span id="segnalazioniBoxButton"></span>');
 
-            pulsante.text("! " + quante + (quante === 1 ? " differenza" : " differenze"));
-            pulsante.attr("title", "Rivedi le differenze fra il box e il dato");
-            pulsante.css({
-                "background-color": "#b00020",
-                "color": "white",
-                "font-weight": "bold",
-                "border-radius": "4px",
-                "margin-right": "10px",
+            //Il solo numero: il senso lo da' il suggerimento, e la riga resta pulita.
+            segnalino.text(String(quante));
+            segnalino.css({
+                "display": "inline-block",
+                "height": "16px",
+                "line-height": "16px",
+                "padding": "0 5px",
+                "font-size": "10px",
+                "font-weight": "700",
+                "border-radius": "3px",
+                "background-color": "#b21d1d",
+                "color": "#fff",
+                "vertical-align": "middle",
+                "margin-right": "8px",
                 "cursor": "pointer"
             });
 
-            pulsante.on("click", function () {
+            //In UXP elemento.title come proprieta' non crea l'attributo e il suggerimento
+            //resta muto: si passa sempre da qui.
+            Utility.impostaTooltip(segnalino[0], quante === 1
+                ? "1 differenza fra il box e il dato - clicca per rivederla"
+                : quante + " differenze fra il box e il dato - clicca per rivederle");
+
+            segnalino.on("click", function () {
                 me.mostraModalSegnalazioni();
             });
 
-            $("#codiceRef").prepend(pulsante);
+            $("#codiceRef").prepend(segnalino);
         }
         catch (e) {
-            console.error("Code SRF-95 Pulsante delle segnalazioni non aggiornato: " + e);
+            console.error("Code SRF-95 Segnalino delle differenze non aggiornato: " + e);
         }
     },
 
-    /// Riscrive l'elenco dentro il modal a partire dalle segnalazioni in memoria. Tenuto
-    /// separato dall'apertura perche' lo rifa' anche il refresh, senza riaprire nulla.
+    /// Riscrive lo stato e l'elenco dentro il modal. Tenuto separato dall'apertura perche' lo
+    /// rifa' anche l'Aggiorna, senza riaprire nulla.
+    ///
+    /// Le righe non sono riquadri: un filetto colorato a sinistra basta a separarle e toglie
+    /// dalla finestra una dozzina di bordi che non dicevano niente.
     riempiElencoSegnalazioni(contenitore, intestazione, differenze) {
         contenitore.empty();
+        intestazione.empty();
 
-        if (!this.ciSonoSegnalazioniIrrisolte(differenze)) {
-            intestazione.text("Tutte le segnalazioni risolte.");
-            intestazione.css("color", "#1b7f3b");
-            contenitore.append($('<div style="color: #666; padding: 6px 8px;">Il box corrisponde al dato.</div>'));
+        const risolte = !this.ciSonoSegnalazioniIrrisolte(differenze);
+        const colore = risolte ? "#1b7f3b" : "#b21d1d";
+
+        const pallino = $('<span></span>');
+        pallino.css({
+            "display": "inline-block",
+            "width": "8px",
+            "height": "8px",
+            "border-radius": "50%",
+            "background-color": colore,
+            "margin-right": "8px",
+            "flex": "0 0 auto"
+        });
+
+        const testo = $('<span></span>');
+        testo.css({ "font-size": "13px", "font-weight": "600", "color": colore });
+
+        if (risolte) {
+            testo.text("Tutte le segnalazioni risolte");
+            intestazione.append(pallino).append(testo);
+
+            const nota = $('<div>Il box corrisponde al dato.</div>');
+            nota.css({ "font-size": "12px", "color": "#767676", "padding": "2px 0" });
+            contenitore.append(nota);
             return;
         }
 
-        intestazione.text("Riscontrate delle differenze nel box selezionato.");
-        intestazione.css("color", "#b00020");
+        const quante = differenze.length;
+        testo.text(quante === 1
+            ? "Riscontrata 1 differenza nel box"
+            : "Riscontrate " + quante + " differenze nel box");
+        intestazione.append(pallino).append(testo);
 
         differenze.forEach(diff => {
-            contenitore.append(`
-                <div style="
-                    padding: 6px 8px;
-                    margin-bottom: 6px;
-                    background: white;
-                    border: 1px solid #e0e0e0;
-                    border-radius: 4px;
-                    word-break: break-word;
-                ">
-                    <div style="font-weight: bold; color: #333; margin-bottom: 2px;">
-                        ${confronti.etichettaSegnalazione(diff.label)}
-                    </div>
-                    <div style="color: #666;">
-                        ${diff.difference}
-                    </div>
-                </div>
-            `);
+            const riga = $('<div></div>');
+            riga.css({
+                "border-left": "2px solid " + colore,
+                "padding": "3px 0 3px 8px",
+                "margin-bottom": "6px"
+            });
+
+            const campo = $('<div></div>');
+            campo.text(confronti.etichettaSegnalazione(diff.label));
+            campo.css({ "font-size": "12px", "font-weight": "600", "color": "#2c2c2c" });
+
+            const dettaglio = $('<div></div>');
+            dettaglio.text(diff.difference == null ? "" : String(diff.difference));
+            dettaglio.css({ "font-size": "12px", "color": "#767676" });
+
+            riga.append(campo).append(dettaglio);
+            contenitore.append(riga);
         });
+    },
+
+    /// Un comando testuale: sta in fondo al modal accanto all'azione principale, e pesa meno.
+    /// Silenziare e' una rinuncia, non la cosa che si viene a fare qui: gridarla allo stesso
+    /// volume dell'Aggiorna era il motivo per cui quella riga sembrava un semaforo.
+    comandoTestualeSegnalazioni(etichetta, suggerimento, alClick) {
+        const comando = $('<span></span>');
+        comando.text(etichetta);
+        comando.css({
+            "font-size": "11px",
+            "color": "#767676",
+            "cursor": "pointer",
+            "text-decoration": "underline",
+            "white-space": "nowrap"
+        });
+
+        Utility.impostaTooltip(comando[0], suggerimento);
+        comando.on("click", alClick);
+
+        return comando;
     },
 
     /// La finestra delle segnalazioni. Si apre da sola all'apertura della scheda quando c'e'
     /// qualcosa da dire e la referenza non e' stata silenziata, e si riapre a mano dal
-    /// pulsante nel titolo. Alla chiusura il pulsante si riallinea a quello che resta.
+    /// segnalino nel titolo. Alla chiusura il segnalino si riallinea a quello che resta.
     async mostraModalSegnalazioni() {
         try {
             const me = this;
             const codice = this.codiceDellaRefAperta();
 
             const contenuto = $(`
-                <div style="width: 100%; display: flex; flex-direction: column; gap: 12px; font-family: Arial, sans-serif;">
-                    <div id="segnalazioniIntestazione" style="font-size: 16px; font-weight: bold; color: #b00020;"></div>
+                <div style="width: 100%; display: flex; flex-direction: column; gap: 10px; font-family: Arial, sans-serif; color: #2c2c2c;">
+                    <div id="segnalazioniIntestazione" style="display: flex; align-items: center;"></div>
 
-                    <div style="display: flex; align-items: center; gap: 8px; font-size: 14px; color: #222; margin-top: 4px; margin-bottom: 4px;">
-                        <span>
-                            Per correggere automaticamente i dati all'interno del box usa il pulsante
-                            <img src="images/reimpaginaFix.png" alt="Correggi" style="width: 20px; height: 20px; object-fit: contain; vertical-align: middle;" />
-                        </span>
+                    <div style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: #767676;">
+                        <span>Per correggere i dati nel box usa il pulsante</span>
+                        <img src="images/reimpaginaFix.png" alt="Correggi" style="width: 16px; height: 16px; object-fit: contain; vertical-align: middle;" />
                     </div>
 
-                    <div style="font-size: 13px; color: #444;">Differenze trovate:</div>
+                    <div id="segnalazioniElenco" style="width: 100%; max-height: 200px; overflow-y: auto; padding-right: 4px; box-sizing: border-box;"></div>
 
-                    <div id="segnalazioniElenco" style="width: 100%; max-height: 180px; overflow-y: auto; border: 1px solid #ccc; border-radius: 6px; background: #fafafa; padding: 8px; box-sizing: border-box; font-size: 12px;"></div>
-
-                    <div id="segnalazioniComandi" style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center;"></div>
+                    <div id="segnalazioniComandi" style="display: flex; align-items: center; justify-content: flex-end; gap: 14px; border-top: 1px solid #e4e4e4; padding-top: 10px;"></div>
                 </div>
             `);
 
@@ -3978,9 +4039,27 @@ const schedaRef = {
 
             this.riempiElencoSegnalazioni(elenco, intestazione, this.segnalazioniInMemoria() || []);
 
+            comandi.append(this.comandoTestualeSegnalazioni(
+                "Silenzia questa ref",
+                "Non mostrare piu' da sola questa finestra per questa referenza, fino al riavvio del plugin",
+                function () {
+                    me.silenziaSegnalazioniDellaRef(codice);
+                    messaggioUtente("Segnalazioni silenziate per questa referenza", "success", false, 3);
+                    $("#popupCloseButton").click();
+                }));
+
+            comandi.append(this.comandoTestualeSegnalazioni(
+                "Silenzia tutte",
+                "Non mostrare piu' da sola questa finestra per nessuna referenza, fino al riavvio del plugin",
+                function () {
+                    me.silenziaSegnalazioniOvunque();
+                    messaggioUtente("Segnalazioni silenziate per tutte le referenze", "success", false, 3);
+                    $("#popupCloseButton").click();
+                }));
+
             //Rifa' la pre analisi adesso: e' il modo per vedere l'effetto delle correzioni
-            //senza chiudere e riaprire la scheda.
-            const aggiorna = $('<sp-action-button style="cursor: pointer;">Aggiorna</sp-action-button>');
+            //senza chiudere e riaprire la scheda. E' l'azione principale, e resta un pulsante.
+            const aggiorna = $('<sp-action-button style="font-size: 11px; cursor: pointer;">Aggiorna</sp-action-button>');
             aggiorna.on("click", async function () {
                 try {
                     const box = me.refSelected != null ? me.refSelected.item : null;
@@ -3994,23 +4073,7 @@ const schedaRef = {
             });
             comandi.append(aggiorna);
 
-            const silenziaQuesta = $('<sp-action-button style="cursor: pointer;">Non mostrare per questa referenza</sp-action-button>');
-            silenziaQuesta.on("click", function () {
-                me.silenziaSegnalazioniDellaRef(codice);
-                messaggioUtente("Segnalazioni silenziate per questa referenza fino al riavvio del plugin", "success", false, 3);
-                $("#popupCloseButton").click();
-            });
-            comandi.append(silenziaQuesta);
-
-            const silenziaTutte = $('<sp-action-button style="cursor: pointer;">Non mostrare per nessuna referenza</sp-action-button>');
-            silenziaTutte.on("click", function () {
-                me.silenziaSegnalazioniOvunque();
-                messaggioUtente("Segnalazioni silenziate per tutte le referenze fino al riavvio del plugin", "success", false, 3);
-                $("#popupCloseButton").click();
-            });
-            comandi.append(silenziaTutte);
-
-            //Alla chiusura il pulsante nel titolo si rifa' i conti: se l'Aggiorna ha trovato
+            //Alla chiusura il segnalino nel titolo si rifa' i conti: se l'Aggiorna ha trovato
             //tutto risolto, sparisce.
             Utility.popup("Differenze rilevate", contenuto, "lg", function () {
                 me.aggiornaPulsanteSegnalazioni();
