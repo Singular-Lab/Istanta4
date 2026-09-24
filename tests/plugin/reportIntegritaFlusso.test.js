@@ -910,19 +910,19 @@ test('dalla scheda aperta dal report non si rifa la struttura del gruppo', () =>
 test('la descrizione applicata si vede anche in edit', () => {
     const sorgenteScheda = sorgente('schedaRef.js');
 
-    //I20-993: il pulsante "Applica descrizione da server" non viene piu' offerto nella scheda.
-    //Riportava la descrizione gia' compilata dal server, cioe' la piu' specifica appiattita in
-    //un blocco solo, e cosi' ss_sa, ss e nazionale finivano identiche. Ora i testi si importano
-    //da soli, variante per variante, cambiando linguetta.
-    assert.doesNotMatch(sorgenteScheda, /applicaDescrizioneDaServer"/);
+    //Il pulsante compare solo se box e server non dicono la stessa cosa, e il giudizio lo da'
+    //la stessa preanalisi del report, sul solo campo della descrizione.
+    assert.match(sorgenteScheda, /if \(await this\.descrizioneDisallineata\(this\.schedeRefDati, box\)\)/);
+
+    //I20-993: il contenuto che riporta e' quello composto per la variante che comanda, quindi
+    //il pulsante si offre solo mentre si sta su quella. Stando sulla nazionale applicava la
+    //descrizione della ss_sa, che e' il difetto che questa guardia chiude.
+    assert.match(sorgenteScheda, /\$\("#applicaDescrizioneDaServer"\)\.hide\(\)/);
     assert.match(sorgenteScheda, /importaTestiDellaVariante/);
 
-    //Il giudizio sul disallineamento resta disponibile: lo da' la stessa preanalisi del report,
-    //sul solo campo della descrizione.
     assert.match(sorgenteScheda, /confronti\.confrontoBoxCompiledFieldPreAnalisi\(\s*\n\s*box,\s*\n\s*\[campo\]/);
 
-    //Il metodo resta nel file, non piu' richiamato dalla scheda: se lo si riaggancia deve
-    //continuare a rifare la schermata di edit, che legge il box e altrimenti mostrerebbe
+    //La schermata di edit legge il box: dopo averlo cambiato va rifatta, altrimenti mostra
     //ancora la descrizione di prima.
     const applica = corpoFunzione(sorgenteScheda, 'applicaDescrizioneDaServer() {');
     assert.match(applica, /Utility\.applicaTagStringToInndTextFrame\(campo, contenuto, box\.geometricBounds\)/);

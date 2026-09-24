@@ -1175,11 +1175,22 @@ const schedaRef = {
         //Inserisco lo spazio per far immettere le info di MISMATCH se ci sono
         $("#editReferenza").append('<div id="mismatchWarningPanel" style="padding:5px;"></div>');
 
-        //I20-993: il pulsante "Applica descrizione da server" e' stato tolto. Riportava la
-        //descrizione gia' compilata dal server, cioe' la piu' specifica appiattita in un blocco
-        //solo: cosi' ss_sa, ss e nazionale finivano tutte uguali, che e' il contrario di quello
-        //che serve. Ora i testi si importano da soli, variante per variante, scegliendo la
-        //linguetta. Il metodo applicaDescrizioneDaServer resta, non e' piu' richiamato da qui.
+        //I20-981: la descrizione del server si puo' riportare nel box senza passare dal
+        //salvataggio, per quando il dato e' gia' a posto a monte e il box e' rimasto indietro.
+        //Si offre solo quando le due cose non dicono la stessa cosa.
+        //
+        //I20-993: il contenuto che riporta viene da compiledFields, cioe' e' la descrizione che
+        //il server ha gia' composto per la variante che comanda. Prima il pulsante restava
+        //attivo su qualunque linguetta, e stando sulla nazionale applicava la descrizione della
+        //ss_sa. Ora lo si offre solo quando si sta sulla variante a cui quel contenuto
+        //appartiene: sulle altre si guarda soltanto, e il pulsante non c'e'.
+        if (await this.descrizioneDisallineata(this.schedeRefDati, box)) {
+            const bottoneDescrizione = $('<sp-action-button id="applicaDescrizioneDaServer" style="font-size: 12px; margin: 4px 0px 8px 0px;">Applica descrizione da server</sp-action-button>');
+            bottoneDescrizione.on("click", function () {
+                me.applicaDescrizioneDaServer();
+            });
+            $("#editReferenza").append(bottoneDescrizione);
+        }
 
 
         if (codice != $("#elementiArtwork").val()) {
@@ -1295,6 +1306,16 @@ const schedaRef = {
                     });
 
                     bloccaCampiScheda(!modificabile);
+
+                    //Il contenuto del pulsante e' quello composto per la variante che comanda:
+                    //offrirlo mentre se ne guarda un'altra vorrebbe dire scriverle addosso il
+                    //testo sbagliato.
+                    if (modificabile) {
+                        $("#applicaDescrizioneDaServer").show();
+                    }
+                    else {
+                        $("#applicaDescrizioneDaServer").hide();
+                    }
 
                     importaTestiDellaVariante(variante);
 
