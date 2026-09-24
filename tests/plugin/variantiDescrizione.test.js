@@ -129,3 +129,36 @@ test('la nazionale non si chiude, le altre si\'', () => {
     assert.strictEqual(varianti.siPuoChiudere(AREA_TO), true);
     assert.strictEqual(varianti.siPuoChiudere(AREA_CANALE), true);
 });
+
+test('si creano solo le varianti che servono a questa lavorazione', () => {
+    // Sul revisore si crea qualunque combinazione; da qui solo il canale, l'area e le due
+    // insieme della lavorazione aperta.
+    const creabili = varianti.variantiCreabili([NAZ], 'TO', 'SS');
+
+    assert.deepStrictEqual(creabili, [
+        { area: null, canale: 'SS' },
+        { area: 'TO', canale: null },
+        { area: 'TO', canale: 'SS' }
+    ]);
+});
+
+test('quelle che esistono gia\' non si ripropongono', () => {
+    const creabili = varianti.variantiCreabili([NAZ, CANALE_SS, AREA_CANALE], 'TO', 'SS');
+
+    assert.deepStrictEqual(creabili, [{ area: 'TO', canale: null }]);
+});
+
+test('senza area o canale della lavorazione non c\'e\' niente da creare', () => {
+    assert.deepStrictEqual(varianti.variantiCreabili([NAZ], null, null), []);
+    assert.deepStrictEqual(varianti.variantiCreabili([NAZ], '  ', ''), []);
+});
+
+test('con il solo canale si crea solo quella di canale', () => {
+    assert.deepStrictEqual(varianti.variantiCreabili([NAZ], null, 'SS'), [{ area: null, canale: 'SS' }]);
+});
+
+test('la nazionale non si crea: esiste sempre', () => {
+    const creabili = varianti.variantiCreabili([], 'TO', 'SS');
+
+    assert.strictEqual(creabili.some(c => varianti.specificita(c) === 0), false);
+});

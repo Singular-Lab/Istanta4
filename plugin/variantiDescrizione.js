@@ -105,6 +105,32 @@ function siPuoChiudere(variante) {
     return specificita(variante) > 0;
 }
 
+/// Le varianti che si possono creare da qui, cioe' quelle che varrebbero per questa
+/// lavorazione e che ancora non esistono.
+///
+/// Sul revisore si puo' creare qualunque combinazione di area e canale. Dal Plugin no, e non e'
+/// una limitazione tecnica: stando dentro una lavorazione si creano le varianti che servono a
+/// lei - il suo canale, la sua area, le due insieme - e non quelle di zone su cui non si sta
+/// lavorando. La nazionale non compare: esiste sempre.
+function variantiCreabili(esistenti, area, canale) {
+    const gia = Array.isArray(esistenti) ? esistenti : [];
+    const candidate = [];
+
+    if (!vuoto(canale)) {
+        candidate.push({ area: null, canale: canale });
+    }
+
+    if (!vuoto(area)) {
+        candidate.push({ area: area, canale: null });
+    }
+
+    if (!vuoto(area) && !vuoto(canale)) {
+        candidate.push({ area: area, canale: canale });
+    }
+
+    return candidate.filter(c => !gia.some(e => uguali(e.area, c.area) && uguali(e.canale, c.canale)));
+}
+
 /// L'etichetta con cui si nomina una variante nell'interfaccia.
 function etichetta(variante) {
     if (variante == null) {
@@ -126,5 +152,6 @@ module.exports = {
     eModificabile,
     varianteDopoChiusura,
     siPuoChiudere,
+    variantiCreabili,
     etichetta
 };

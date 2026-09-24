@@ -1247,8 +1247,12 @@ const schedaRef = {
                 }
             };
 
-            //Con la sola nazionale non c'e' niente da scegliere: la scheda resta com'era.
-            if (variantiDescrizione.variantiApplicabili(elencoVarianti, areaLav, canaleLav).length > 1) {
+            //Le linguette servono se c'e' da scegliere fra piu' varianti, oppure se ce n'e' da
+            //creare: con la sola nazionale e niente da creare la scheda resta com'era.
+            var quanteValgono = variantiDescrizione.variantiApplicabili(elencoVarianti, areaLav, canaleLav).length;
+            var quanteSeNePossonoCreare = variantiDescrizione.variantiCreabili(elencoVarianti, areaLav, canaleLav).length;
+
+            if (quanteValgono > 1 || quanteSeNePossonoCreare > 0) {
                 var linguette = $('<div id="tabVariantiDescrizione" style="display:flex; flex-wrap:wrap; align-items:flex-end; border-bottom:1px solid #777; margin:6px 0 0 0; width:100%;"></div>');
 
                 //I testi che il box ha all'apertura, cioe' l'impaginato. Si ricordano una volta
@@ -1358,7 +1362,7 @@ const schedaRef = {
                     }
                 };
 
-                variantiDescrizione.variantiApplicabili(elencoVarianti, areaLav, canaleLav).forEach(function (variante) {
+                var creaLinguetta = function (variante) {
                     var etichetta = variantiDescrizione.etichetta(variante);
                     var linguetta = $('<div class="linguettaVariante"></div>');
                     linguetta.attr("data-variante", etichetta);
@@ -1411,9 +1415,92 @@ const schedaRef = {
                     }
 
                     linguette.append(linguetta);
-                });
+                };
+
+                variantiDescrizione.variantiApplicabili(elencoVarianti, areaLav, canaleLav).forEach(creaLinguetta);
+
+                //I20-993: il piu' crea una descrizione regionale per questa lavorazione. Sul
+                //revisore si crea qualunque combinazione; qui solo quelle che servono al lavoro
+                //aperto, e la riga d'archivio nasce al primo salvataggio.
+                var disegnaPiu = function () {
+                    linguette.find(".creaVariante").remove();
+
+                    var creabili = variantiDescrizione.variantiCreabili(elencoVarianti, areaLav, canaleLav);
+
+                    if (creabili.length === 0) {
+                        return;
+                    }
+
+                    var piu = $('<div class="creaVariante" title="Crea una descrizione regionale per questa lavorazione">+</div>');
+                    piu.css({
+                        "padding": "3px 10px",
+                        "margin-left": "4px",
+                        "cursor": "pointer",
+                        "border": "1px dashed #777",
+                        "border-bottom": "none",
+                        "border-radius": "4px 4px 0 0",
+                        "font-size": "11px",
+                        "color": "#cccccc"
+                    });
+
+                    piu.on("click", function () {
+                        var scelta = creabili[0];
+
+                        //Con piu' di una possibilita' si chiede quale.
+                        if (creabili.length > 1) {
+                            var elenco = creabili.map(function (c, i) { return (i + 1) + ") " + variantiDescrizione.etichetta(c); }).join("\n");
+                            var risposta = prompt("Quale descrizione vuoi creare?\n" + elenco, "1");
+
+                            if (risposta == null) {
+                                return;
+                            }
+
+                            var indice = parseInt(risposta, 10) - 1;
+
+                            if (isNaN(indice) || indice < 0 || indice >= creabili.length) {
+                                messaggioUtente("Code SRF-99 Scelta non valida", "warning", false, 3);
+                                return;
+                            }
+
+                            scelta = creabili[indice];
+                        }
+
+                        //Nasce vuota e sta nell'elenco come le altre: se e' la piu' specifica
+                        //diventa lei quella modificabile, e salvando la riga viene creata.
+                        elencoVarianti.push({
+                            area: scelta.area,
+                            canale: scelta.canale,
+                            specificita: variantiDescrizione.specificita(scelta),
+                            descrizione1: "",
+                            descrizione2: "",
+                            descrizione3: "",
+                            descrizione4: ""
+                        });
+
+                        var nuova = elencoVarianti[elencoVarianti.length - 1];
+
+                        //Non si ricarica dal server: la riga li' non esiste ancora, e ricaricando
+                        //la variante appena creata sparirebbe. Si disegna la sua linguetta e la si
+                        //apre: e' la piu' specifica, quindi e' lei la modificabile.
+                        creaLinguetta(nuova);
+                        disegnaPiu();
+                        varianteChePuoiModificare = variantiDescrizione.varianteApplicabile(elencoVarianti, areaLav, canaleLav);
+                        linguette.show();
+                        mostraVariante(nuova);
+
+                        messaggioUtente("Descrizione " + variantiDescrizione.etichetta(scelta) + " creata: si scrive in archivio salvando la scheda", "success", false, 5);
+                    });
+
+                    linguette.append(piu);
+                };
 
                 rowOpzioniRegionaliEArtwork.append(linguette);
+
+                //Il pulsante viene creato prima delle linguette e finiva sopra di loro. Qui lo si
+                //sposta sotto: append di un elemento che esiste gia' lo muove, non lo duplica.
+                rowOpzioniRegionaliEArtwork.append($("#applicaDescrizioneDaServer"));
+
+                disegnaPiu();
 
                 //Si parte da quella che comanda, cioe' dallo stato di prima di I20-993.
                 setTimeout(function () { mostraVariante(varianteChePuoiModificare); }, 10);

@@ -3917,8 +3917,12 @@ out var mismatch);
                         {
                             //l'operazione è stata autorizzata per cui procediamo a creare l'operazione sul DB
                             var nuovaOperazione = new RegistroOperazioni();
-                            nuovaOperazione.Area = "";//actArea != null ? actArea : ""; //per ora è disattivata l'opzione di fare revisioni di area o di canale dal plugin
-                            nuovaOperazione.Canale = ""; // actCanale != null ? actCanale : ""; 
+                            //I20-993: la revisione di area o canale dal Plugin adesso si fa,
+                            //quindi l'operazione registra su quale variante e' avvenuta
+                            //invece di dire sempre nazionale. Senza area ne' canale resta
+                            //il vuoto di prima.
+                            nuovaOperazione.Area = string.IsNullOrWhiteSpace(req.area) ? "" : req.area;
+                            nuovaOperazione.Canale = string.IsNullOrWhiteSpace(req.canale) ? "" : req.canale;
                             nuovaOperazione.Stato = (byte)statoOperazioni.risolta;
                             nuovaOperazione.Autore = int.Parse(session);
                             var data = DateTime.Now;
@@ -3959,6 +3963,14 @@ out var mismatch);
                         {
                             newAdItem.CodiceGruppo = req.codice_gruppo;
                         }
+
+                        //I20-993: la riga nasce sulla variante richiesta. Senza questo la creazione
+                        //faceva sempre una nazionale, e chiedendo una variante non ancora esistente
+                        //si sarebbe aggiunta una seconda nazionale accanto a quella che c'e' gia'.
+                        //E' anche il modo in cui dal Plugin si crea una descrizione regionale: si
+                        //salva su una variante che non esiste ancora.
+                        newAdItem.Area = string.IsNullOrWhiteSpace(req.area) ? null : req.area;
+                        newAdItem.Canale = string.IsNullOrWhiteSpace(req.canale) ? null : req.canale;
 
                         newAdItem.Descrizione1 = "";
                         newAdItem.Descrizione2 = "";
