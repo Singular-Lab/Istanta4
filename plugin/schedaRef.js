@@ -5,6 +5,7 @@ const DataCaricamentoFoto = require('./dataCaricamentoFoto');
 const NoRenderElementi = require('./noRenderElementi');
 const RicollegaEsiti = require('./ricollegaEsiti');
 const variantiDescrizione = require('./variantiDescrizione');
+const trattiDescrizione = require('./trattiDescrizione');
 
 const schedaRef = {
     refSelected: null,
@@ -1191,7 +1192,22 @@ const schedaRef = {
         //attivo su qualunque linguetta, e stando sulla nazionale applicava la descrizione della
         //ss_sa. Ora lo si offre solo quando si sta sulla variante a cui quel contenuto
         //appartiene: sulle altre si guarda soltanto, e il pulsante non c'e'.
-        if (await this.descrizioneDisallineata(this.schedeRefDati, box)) {
+        //I20-995: quando la preanalisi della scheda e' gia' stata fatta, il pulsante si decide
+        //da quella invece di rifarne una tutta per se'. Era il costo che tornava a ogni
+        //rientro nella schermata di edit: la preanalisi delle segnalazioni si fa una volta per
+        //scheda da I20-992, questa no, e ripartiva anche solo tornando dalle foto.
+        //
+        //Alla prima apertura si continua a chiederlo a descrizioneDisallineata, e non per
+        //pigrizia: poco piu' sotto un campo descrizione vuoto viene riempito col contenuto del
+        //server, quindi la preanalisi fatta prima e quella fatta dopo non rispondono la stessa
+        //cosa. Quella delle segnalazioni gira a schermata costruita, e va lasciata li'.
+        const segnalazioniGiaInMemoria = this.segnalazioniInMemoria();
+        const campoDescrizioneDelPrimario = this.campoDescrizioneCompilatoDelPrimario(this.schedeRefDati);
+        const descrizioneDaAllineare = segnalazioniGiaInMemoria != null && campoDescrizioneDelPrimario != null
+            ? this.differenzaDaAllineare(segnalazioniGiaInMemoria, campoDescrizioneDelPrimario.labelName)
+            : await this.descrizioneDisallineata(this.schedeRefDati, box);
+
+        if (descrizioneDaAllineare) {
             const bottoneDescrizione = $('<sp-action-button id="applicaDescrizioneDaServer" style="font-size: 12px; margin: 4px 0px 8px 0px;">Applica descrizione da server</sp-action-button>');
             bottoneDescrizione.on("click", function () {
                 me.applicaDescrizioneDaServer();
@@ -1623,24 +1639,29 @@ const schedaRef = {
                         Utility.applicaTagStringToInndTextFrame(item, content, box.geometricBounds);
                     }
 
+                    //I20-995: il campo si legge qui, una volta, a tratti di stile. Prima ogni
+                    //carattere veniva chiesto a InDesign due volte - una per la lista degli
+                    //stili, una per riempire le textarea - e ogni volta si chiedevano anche lo
+                    //stile, il suo nome e il suo gruppo. Si legge dopo il riempimento qui
+                    //sopra, altrimenti di un campo vuoto si leggerebbe il vuoto.
+                    var trattiDelCampo = Utility.trattiDiStileDelCampo(item);
+
+                    //La stessa normalizzazione di prima, applicata a un carattere per volta:
+                    //sul tratto intero riconoscerebbe sequenze lunghe come "<br>" o "\r\n" e
+                    //cambierebbe di nascosto il testo che l'operatore vede nel campo.
+                    var normalizzaCarattere = function (carattere) {
+                        return Utility.replaceAllSpecialCharacters(carattere.toString());
+                    };
+
                     var schemaTrovato = null;
                     var lastStileSchemaInserito = 0;
                     if (schemi != null) {
-                        lastCharacterStyle = "";
                         //scorriamo tutta la descrizione e ci salviamo tutti gli stili che troviamo nell'ordine che li troviamo, uno stile può essere presente se intermezzato da uno stile differente
-                        for (var $j = 0; $j < item.characters.length; $j++) {
-                            var character = item.characters.item($j);
-                            var characterStyle = character.appliedCharacterStyle;
-                            var currentCharacterStyle = characterStyle.name;
-                            var nomeCompleto = currentCharacterStyle;
-                            if (characterStyle != null && characterStyle.parent != null && characterStyle.parent.constructorName == "CharacterStyleGroup") {
-                                nomeCompleto = characterStyle.parent.name + "." + characterStyle.name;
-                            }
-                            if (nomeCompleto != lastCharacterStyle) {
-                                listaStili.push(nomeCompleto);
-                                lastCharacterStyle = nomeCompleto;
-                            }
-                        }
+                        //I20-995: i tratti arrivano gia' accorpati per stile, quindi la loro
+                        //sequenza di nomi e' esattamente la lista che si costruiva a mano.
+                        trattiDescrizione.stiliInOrdine(trattiDelCampo).forEach(function (nomeStile) {
+                            listaStili.push(nomeStile);
+                        });
 
                         //adesso scrorriamo ogni lista di schemi presente e la confrontiamo con la lista di stili, se tutti gli stili presenti in lista stili sono presenti in uno schema e con lo stesso ordine, allora abbiamo trovato lo schema corrispondente
                         for (var $j = 0; $j < schemi.length; $j++) {
@@ -1796,15 +1817,17 @@ const schedaRef = {
                     var currentCharacterStyle = "";
                     var row = $('<div class="row"></div>');
                     let stringaPerStile = "";
-                    for (var $j = 0; $j < item.characters.length; $j++) {
-                        let character = item.characters.item($j);
-                        let characterStyle = character.appliedCharacterStyle;
-                        var characterName = characterStyle.name;
-                        var nomeCompleto = characterName;
-                        if (characterStyle != null && characterStyle.parent != null && characterStyle.parent.constructorName == "CharacterStyleGroup") {
-                            nomeCompleto = characterStyle.parent.name + "." + characterStyle.name;
-                        }
-                        if (nomeCompleto != currentCharacterStyle) {
+                    //I20-995: un giro per tratto di stile invece che per carattere. Il ramo che
+                    //allungava la textarea un carattere alla volta non serve piu': il testo del
+                    //tratto si scrive tutto insieme, in fondo al blocco.
+                    for (var $j = 0; $j < trattiDelCampo.length; $j++) {
+                        let tratto = trattiDelCampo[$j];
+                        var characterName = tratto.nome;
+                        var nomeCompleto = tratto.nomeCompleto;
+
+                        //Quello che era il ramo "lo stile e' cambiato" vale adesso per ogni
+                        //tratto, perche' due tratti di fila con lo stesso stile non esistono.
+                        {
                             //cerchiamo in contentObjParsedStiles l'oggetto con stile pari a characterName
 
                             var stileObj = contentObjParsedStiles.find(f => f.stile == nomeCompleto);
@@ -1836,7 +1859,7 @@ const schedaRef = {
                                     if (elSchema.length == 1) {
                                         elSchema.insert(0, "");
                                     }
-                                    var characterName = item.characters.item($j).appliedCharacterStyle.name;
+                                    var characterName = tratto.nome;
                                     var schemaSplitted = elSchema[1].split(".");
                                     if (schemaSplitted.length > 1) {
                                         schemaSplitted = schemaSplitted[1];
@@ -1887,12 +1910,8 @@ const schedaRef = {
                                     }
                                 }
                             }
-                            let characterStyle = item.characters.item($j).appliedCharacterStyle;
-                            currentCharacterStyle = characterStyle.name;
-                            //guardiamo se il suo parent è un CharacterStyleGroup, se lo è segnamoci il nome completo
-                            if (characterStyle != null && characterStyle.parent != null && characterStyle.parent.constructorName == "CharacterStyleGroup") {
-                                currentCharacterStyle = characterStyle.parent.name + "." + characterStyle.name;
-                            }
+                            //Il nome completo, gruppo compreso, lo porta gia' il tratto.
+                            currentCharacterStyle = tratto.nomeCompleto;
                             var label = '<label style="margin-top: 10px;color:' + (stileInMismatch ? 'gold' : 'white') + ';">' + currentCharacterStyle + '</label><br>';
                             let isEditable = true;
                             if (pluginMiddleware.isSchemaEditable != null) {
@@ -1903,36 +1922,15 @@ const schedaRef = {
                             var column = $('<div class="column" style="margin-right:' + (grandezzeBox != null && grandezzeBox.marginBetweenBigBox != null && grandezzeBox.marginBetweenBigBox != "auto" ? grandezzeBox.marginBetweenBigBox : "10px") + 'px;"></div>').append(label).append(textarea);
                             row.append(column);
 
+                            //Il testo del tratto: quello che si vede e quello che serve al
+                            //confronto con il contenuto del server. La normalizzazione passa
+                            //carattere per carattere come faceva il ciclo vecchio, e l'a capo
+                            //diventa "\n" nella textarea e resta "\r" nel confronto.
+                            var testiDelTratto = trattiDescrizione.testiDelTratto(tratto.contenuto, normalizzaCarattere);
                             var currentTextarea = row.find('textarea').last();
-                            let _char = item.characters.item($j).contents;
-                            _char = Utility.replaceAllSpecialCharacters(_char.toString());
-                            currentTextarea.val(_char); // Aggiungi il contenuto alla textarea qui
+                            currentTextarea.val(testiDelTratto.perLaTextarea); // Aggiungi il contenuto alla textarea qui
 
-                            stringaPerStile += _char;
-                        } else {
-                            // Se il carattere è dello stesso tipo, aggiungilo al contenuto del textbox
-                            var currentTextarea = row.find('textarea').last();
-                            var currentContent = currentTextarea.val();
-                            let cVal = item.characters.item($j);
-
-                            if (cVal.contents == "\r") {
-                                currentTextarea.val(currentContent + "\n");
-                                stringaPerStile += "\r";
-                            }
-                            else {
-                                let _char = cVal.contents;
-                                _char = Utility.replaceAllSpecialCharacters(_char.toString());
-                                //console.log("Aggiungo carattere: '" + _char + "' allo stile: " + currentCharacterStyle);
-                                currentTextarea.val(currentContent + _char);
-                                stringaPerStile += _char;
-                                //console.log(currentContent + _char);
-                            }
-
-                            // if (currentTextarea.length != 0) {
-                            //     currentTextarea.val(Utility.replaceAllSpecialCharacters(currentTextarea.val()));
-                            // }
-
-                            //console.log(currentCharacterStyle+ "\n" + currentTextarea.val());
+                            stringaPerStile += testiDelTratto.perIlConfronto;
                         }
                     }
 

@@ -1,6 +1,7 @@
 const { app, FitOptions, LocationOptions, Justification, VerticalJustification, NestedStyleDelimiters } = require('indesign');
 const XMLHttpRequestClient = require('./XMLHttpRequestClient');
 const cacheHashFoto = require('./cacheHashFoto');
+const trattiDescrizione = require('./trattiDescrizione');
 const tooltipPosizione = require('./tooltipPosizione');
 
 const Utility=
@@ -550,9 +551,13 @@ const Utility=
             return result;
         }
 
-        for (let i=0; i<box.allPageItems.length; i++)
+        //I20-995: gli elementi si chiedono una volta. Scritto nella condizione del for, il
+        //conto tornava a InDesign a ogni giro.
+        let elementi=box.allPageItems;
+
+        for (let i=0; i<elementi.length; i++)
         {
-            let campo=box.allPageItems[i];
+            let campo=elementi[i];
             if (!campo.isValid)
             {
                 return null;
@@ -564,6 +569,44 @@ const Utility=
 
         return result;
     },
+    /// I20-995: i tratti di stile di un campo, letti in un colpo solo.
+    ///
+    /// textStyleRanges da' i pezzi di testo con stile omogeneo: sono pochi, mentre i caratteri
+    /// sono tanti, e ogni carattere chiesto a InDesign e' un passaggio che si paga. I tratti
+    /// consecutivi con lo stesso stile si accorpano, perche' InDesign spezza anche dove cambia
+    /// soltanto un attributo locale e la scheda invece ragiona per nome di stile.
+    trattiDiStileDelCampo:function(item)
+    {
+        if (item == null || !item.isValid)
+        {
+            return [];
+        }
+
+        let tratti=[];
+        let pezzi=item.textStyleRanges.everyItem().getElements();
+
+        for (let i=0; i<pezzi.length; i++)
+        {
+            let pezzo=pezzi[i];
+            let stile=pezzo.appliedCharacterStyle;
+            let nome=stile!=null ? stile.name : "";
+            let gruppo=null;
+
+            if (stile!=null && stile.parent!=null && stile.parent.constructorName=="CharacterStyleGroup")
+            {
+                gruppo=stile.parent.name;
+            }
+
+            tratti.push({
+                nome: nome,
+                nomeCompleto: trattiDescrizione.nomeCompletoStile(nome, gruppo),
+                contenuto: pezzo.contents,
+                origine: pezzo
+            });
+        }
+
+        return trattiDescrizione.accorpa(tratti);
+    },
     getAllFieldsInGroup:function(box)
     {
         let result=[];
@@ -573,22 +616,34 @@ const Utility=
             return result;
         }
 
-        for (let i=0; i<box.allPageItems.length; i++)
+        //I20-995: come sopra, la collection si chiede una volta sola.
+        let elementi=box.allPageItems;
+
+        for (let i=0; i<elementi.length; i++)
         {
-            let campo=box.allPageItems[i];
+            let campo=elementi[i];
             if (campo.label!="")
             {
                 result.push({ label: Utility.parseLabel(campo.label), item: campo });
                 if (Utility.parseLabel(campo.label)=="descrizione")
                 {
                     //Estrapolo tutti gli stili coinvolti
+                    //
+                    //I20-995: a tratti e non a caratteri. Prima ogni carattere costava la sua
+                    //lettura da InDesign, un filtro sulla lista degli stili universali e un
+                    //console.log: su una descrizione lunga era il passaggio piu' caro
+                    //dell'apertura della scheda, e serviva solo a dire quali stili ci sono.
                     let stileAnomalo = {label:""};
-                    for (var ich = 0; ich < campo.characters.length; ich++) {
-    
-                        let styName = campo.characters.item(ich).appliedCharacterStyle.name;
-                        //console.log("diodidio ");
-                        console.log(styName);
-                        if (pluginMiddleware.getCampo("listaStiliUniversali").filter(s=>styName.startsWith(s.nome)).length<=0)
+                    let tratti = Utility.trattiDiStileDelCampo(campo);
+                    //La lista si chiede solo se c'e' qualcosa da confrontarci, come quando la
+                    //si chiedeva dentro il ciclo: un campo vuoto non la chiedeva mai.
+                    let stiliUniversali = tratti.length > 0 ? pluginMiddleware.getCampo("listaStiliUniversali") : null;
+
+                    for (var ich = 0; ich < tratti.length; ich++) {
+
+                        let styName = tratti[ich].nome;
+
+                        if (stiliUniversali.filter(s=>styName.startsWith(s.nome)).length<=0)
                         {
                             let lab="descrizione#" +  styName;
                             if (stileAnomalo.label!=lab)
@@ -601,7 +656,9 @@ const Utility=
                                 //Trovato uno stile anomalo
                                 stileAnomalo.label= lab;
                             }
-                            stileAnomalo.item = campo.characters.item(ich).lines.item(0);//La linea
+                            //La linea dell'ultimo carattere del tratto, che e' quella a cui
+                            //arrivava il ciclo per carattere quando lo stile finiva.
+                            stileAnomalo.item = tratti[ich].ultimaOrigine.characters.item(-1).lines.item(0);//La linea
                             
                         }
                         
