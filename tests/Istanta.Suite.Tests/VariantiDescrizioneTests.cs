@@ -103,8 +103,45 @@ public class VariantiDescrizioneTests
         Assert.Empty(SpecificitaDescrizione.Elenco(new List<ArticoliDescrizioni>()));
     }
 
-    private static ArticoliDescrizioni Variante(string? area, string? canale, string? custom = null)
+    [Fact]
+    public void Ogni_variante_porta_i_suoi_testi()
     {
-        return new ArticoliDescrizioni { Area = area, Canale = canale, Custom = custom };
+        // Senza i testi le schermate del Plugin sarebbero vuote e servirebbe una chiamata
+        // per ognuna.
+        var descrizioni = new List<ArticoliDescrizioni>
+        {
+            Variante("TO", "SS", descrizione1: "Porchetta di Ariccia")
+        };
+
+        var sola = Assert.Single(SpecificitaDescrizione.Elenco(descrizioni));
+
+        Assert.Equal("Porchetta di Ariccia", sola["descrizione1"]);
+    }
+
+    [Fact]
+    public void Fra_i_doppioni_vale_il_piu_recente()
+    {
+        // L'archivio tiene piu' righe per la stessa coppia: si mostra quella arrivata dopo,
+        // come fa il resto del server ordinando per DataUltimaRicezione.
+        var vecchia = Variante("TO", "SS", descrizione1: "vecchia");
+        vecchia.DataUltimaRicezione = new DateTime(2026, 1, 1);
+
+        var recente = Variante("TO", "SS", descrizione1: "recente");
+        recente.DataUltimaRicezione = new DateTime(2026, 9, 24);
+
+        var sola = Assert.Single(SpecificitaDescrizione.Elenco(new List<ArticoliDescrizioni> { vecchia, recente }));
+
+        Assert.Equal("recente", sola["descrizione1"]);
+    }
+
+    private static ArticoliDescrizioni Variante(string? area, string? canale, string? custom = null, string? descrizione1 = null)
+    {
+        return new ArticoliDescrizioni
+        {
+            Area = area,
+            Canale = canale,
+            Custom = custom,
+            Descrizione1 = descrizione1
+        };
     }
 }

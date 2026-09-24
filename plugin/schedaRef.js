@@ -4,6 +4,7 @@ const XMLHttpRequestClient = require('./XMLHttpRequestClient');
 const DataCaricamentoFoto = require('./dataCaricamentoFoto');
 const NoRenderElementi = require('./noRenderElementi');
 const RicollegaEsiti = require('./ricollegaEsiti');
+const variantiDescrizione = require('./variantiDescrizione');
 
 const schedaRef = {
     refSelected: null,
@@ -1198,80 +1199,82 @@ const schedaRef = {
 
         try {
             //writeDebugMessageForCrash("Inizio try descrizioni regionali e canale");
-            var descrizioneRegionale = false;
-            try {
-                descrizioneRegionale = pluginMiddleware.getCampo("abilitaDescrizioniRegionali") || false;
-            }
-            catch (ex) {
-                console.log("Code SRF-18 Errore durante il caricamento delle impostazioni personalizzate dell'agenzia:", ex);
-                messaggioUtente("Code SRF-18 Errore durante il caricamento delle impostazioni personalizzate dell'agenzia, specificare lo stato della descrizione regionale", "error", false, 5);
-            }
+            //I20-993: al posto delle due caselle, una schermata per variante di descrizione.
+            //Creare e cancellare varianti resta sul revisore: qui si guardano soltanto, e si
+            //modifica solo quella che comanda, cioe' la piu' specifica valida per questa
+            //lavorazione. Le altre si mostrano in sola lettura, e chiudendone una si scende a
+            //quella meno specifica fino alla nazionale.
+            var rowOpzioniRegionaliEArtwork = $('<div class="row" style="justify-content: flex-start; display: flex; flex-wrap: wrap;"></div>');
 
-            var descrizioneCanale = false;
-            try {
-                descrizioneCanale = pluginMiddleware.getCampo("abilitaDescrizioniCanale") || false;
+            var elencoVarianti = primario.recordInTracciato["varianti_descrizione"] || [];
+            var areaObjLav = ficoProcess.getAreaLavorazioneCorrente();
+            var canaleObjLav = ficoProcess.getCanaleLavorazioneCorrente();
+            var areaLav = areaObjLav != null ? areaObjLav.sigla : null;
+            var canaleLav = canaleObjLav != null ? canaleObjLav.sigla : null;
 
-                if (descrizioneCanale && !descrizioneRegionale) {
-                    messaggioUtente("Code SRF-18 Attenzione: Le descrizioni canale sono abilitate ma le descrizioni regionali sono disabilitate, verranno ignorate le descrizioni canale", "warning", false, 5);
-                }
-            }
-            catch (ex) {
-                console.log("Code SRF-18 Errore durante il caricamento delle impostazioni personalizzate dell'agenzia:", ex);
-                messaggioUtente("Code SRF-18 Errore durante il caricamento delle impostazioni personalizzate dell'agenzia, specificare lo stato della descrizione canale", "error", false, 5);
-            }
+            var varianteChePuoiModificare = variantiDescrizione.varianteApplicabile(elencoVarianti, areaLav, canaleLav);
+            var varianteMostrata = varianteChePuoiModificare;
 
-            //creiamo una row
-            var rowOpzioniRegionaliEArtwork = $('<div class="row" style="justify-content: flex-start; display: flex;"></div>');
+            //Con la sola nazionale non c'e' niente da scegliere: si lascia la scheda com'era.
+            if (variantiDescrizione.variantiApplicabili(elencoVarianti, areaLav, canaleLav).length > 1) {
+                var rigaVarianti = $('<div id="rigaVariantiDescrizione" style="display:flex; align-items:center; flex-wrap:wrap; margin:4px 0;"></div>');
+                var pannelloVariante = $('<div id="pannelloVarianteDescrizione" style="display:none; margin:4px 0; padding:6px; background:#3a3a3a; color:white; font-size:11px; white-space:pre-wrap;"></div>');
 
-            //se descrizione regionale è abilitata o se objResult[0].descrizione_regionale è true, allora dobbiamo creare un checkbox già spuntato da attaccare al div
-            var descrizioneRegionaleCheckbox = null;
-            if (primario.recordInTracciato.descrizione_regionale) {
-                descrizioneRegionaleCheckbox = $('<div style="vertical-align: top;display: flex;"><input type="checkbox" checked id="descrizioneRegionale"><label style="color:white;">Descrizione Regionale</label></div>');
-                if (!descrizioneRegionale) {
-                    messaggioUtente("Code SRF-18 Attenzione: La descrizione regionale è disabilita ma è stata trovata una descrizione regionale per il prodotto, per rimuovere la descrizione regionale disattivare il checkbox corrispondente prima di salvare", "warning", false, 5)
-                }
-            } else if (descrizioneRegionale) {
-                descrizioneRegionaleCheckbox = $('<div style="vertical-align: top;display: flex;"><input type="checkbox" id="descrizioneRegionale"><label style="color:white;">Descrizione Regionale</label></div>');
-            }
+                var mostraVariante = function (variante) {
+                    varianteMostrata = variante;
 
-            //ripetiamo per la descrizione canale
-            var descrizioneCanaleCheckbox = null;
-            if (primario.recordInTracciato.descrizione_regionale && primario.recordInTracciato.descrizione_canale) {
-                descrizioneCanaleCheckbox = $('<div id="rowDescrizioneCanale" style="vertical-align: top; display: flex;"><input type="checkbox" checked id="descrizioneCanale"><label style="color:white;">Descrizione Canale</label></div>');
+                    var modificabile = variantiDescrizione.eModificabile(variante, elencoVarianti, areaLav, canaleLav);
 
-                if (!descrizioneRegionale) {
-                    messaggioUtente("Code SRF-18 Attenzione: La descrizione canale è stata trovata ma la descrizione regionale è disabilitata", "warning", false, 5);
-                }
-                if (!descrizioneCanale) {
-                    messaggioUtente("Code SRF-18 Attenzione: La descrizione canale è disabilita ma è stata trovata una descrizione canale per il prodotto, per rimuovere la descrizione canale disattivare il checkbox corrispondente prima di salvare", "warning", false, 5)
-                }
-            } else if (descrizioneCanale && descrizioneRegionale) {
-                descrizioneCanaleCheckbox = $('<div id="rowDescrizioneCanale" style="vertical-align: top;' + (primario.recordInTracciato.descrizione_regionale ? 'display: flex;' : 'display: none;') + '"><input type="checkbox" id="descrizioneCanale"><label style="color:white;">Descrizione Canale</label></div>');
-            }
+                    rigaVarianti.find("sp-action-button").each(function () {
+                        var suo = $(this).attr("data-variante");
+                        $(this).css("opacity", suo === variantiDescrizione.etichetta(variante) ? "1" : "0.55");
+                    });
 
-
-            //appendiamo il checkbox alla row
-            if (descrizioneRegionaleCheckbox != null) {
-                rowOpzioniRegionaliEArtwork.append(descrizioneRegionaleCheckbox);
-                //se attualmente il checkbox è spuntato allora mostriamo id="rowDescrizioneCanale", inoltre mettiamo un evento onChange che fa si che quando il checkbox viene spuntato o deselezionato, venga mostrato o nascosto il checkbox della descrizione canale
-                descrizioneRegionaleCheckbox.find("input").on("change", function () {
-                    if ($(this).is(":checked")) {
-                        $("#rowDescrizioneCanale").css("display", "flex");
+                    //I campi della scheda restano quelli della variante che comanda: le altre
+                    //si leggono qui sotto, senza che si possa scriverci sopra per sbaglio.
+                    if (me.editRefFieldController != null) {
+                        me.editRefFieldController.impostaSolaLettura(!modificabile);
                     }
-                    else {
-                        $("#rowDescrizioneCanale").hide();
-                        //impostiamo il checkbox di descrizione canale a false
-                        $("#descrizioneCanale").prop("checked", false);
+
+                    if (modificabile) {
+                        pannelloVariante.hide().empty();
+                        return;
                     }
-                }
-                );
-                //se il checkbox è spuntato allora mostriamo il checkbox della descrizione canale
-                if (descrizioneRegionaleCheckbox.find("input").is(":checked")) {
-                    $("#rowDescrizioneCanale").css("display", "flex");
-                }
-            }
-            if (descrizioneCanaleCheckbox != null) {
-                rowOpzioniRegionaliEArtwork.append(descrizioneCanaleCheckbox);
+
+                    var testi = [variante.descrizione1, variante.descrizione2, variante.descrizione3, variante.descrizione4]
+                        .filter(function (t) { return t != null && String(t).trim() !== ""; })
+                        .join("\n");
+
+                    pannelloVariante.empty();
+                    pannelloVariante.append($('<div style="font-weight:bold; margin-bottom:4px;"></div>')
+                        .text(variantiDescrizione.etichetta(variante) + " - sola lettura"));
+                    pannelloVariante.append($('<div></div>').text(testi !== "" ? testi : "(nessun testo)"));
+
+                    var chiudi = $('<sp-action-button style="font-size:10px; margin-top:4px;">Chiudi</sp-action-button>');
+                    chiudi.on("click", function () {
+                        var sotto = variantiDescrizione.varianteDopoChiusura(elencoVarianti, variante, areaLav, canaleLav);
+                        //Sotto la nazionale non si scende: si torna a quella che comanda.
+                        mostraVariante(sotto != null ? sotto : varianteChePuoiModificare);
+                    });
+                    pannelloVariante.append(chiudi);
+
+                    pannelloVariante.show();
+                };
+
+                variantiDescrizione.variantiApplicabili(elencoVarianti, areaLav, canaleLav).forEach(function (variante) {
+                    var etichetta = variantiDescrizione.etichetta(variante);
+                    var bottone = $('<sp-action-button style="font-size:10px; margin-right:4px;"></sp-action-button>');
+                    bottone.attr("data-variante", etichetta);
+                    bottone.text(etichetta);
+                    bottone.on("click", function () { mostraVariante(variante); });
+                    rigaVarianti.append(bottone);
+                });
+
+                rowOpzioniRegionaliEArtwork.append(rigaVarianti);
+                rowOpzioniRegionaliEArtwork.append(pannelloVariante);
+
+                //Si parte da quella che comanda, cioe' dallo stato di prima di I20-993.
+                setTimeout(function () { mostraVariante(varianteChePuoiModificare); }, 10);
             }
 
             //se artworkId è definito allora dentro elementiArtwork mettiamo due pulsanti, uno per eliminare l'artwork e uno per selezionarlo

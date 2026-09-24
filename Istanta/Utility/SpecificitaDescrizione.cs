@@ -26,12 +26,16 @@ namespace Istanta.Utility
             return 0;
         }
 
-        /// Le varianti che esistono per una referenza, dalla meno alla piu' specifica.
+        /// Le varianti che esistono per una referenza, dalla meno alla piu' specifica, ognuna
+        /// con i suoi testi.
         ///
-        /// Si scartano quelle con Custom valorizzato, e i doppioni: la stessa coppia area e
-        /// canale puo' comparire piu' volte nell'archivio, con date di ricezione diverse, ma
-        /// per il Plugin e' una schermata sola. L'ordine non e' un vezzo: e' la scala su cui
-        /// si scende quando si chiude una schermata.
+        /// I testi servono perche' il Plugin mostra una schermata per variante: senza, le
+        /// schermate sarebbero vuote e servirebbe una chiamata per ognuna. Si scartano le
+        /// varianti con Custom valorizzato, e per ogni coppia area e canale si tiene la piu'
+        /// recente: l'archivio ne conserva piu' d'una, con date di ricezione diverse, ma per il
+        /// Plugin e' una schermata sola. Stesso criterio del resto del server, che ordina per
+        /// DataUltimaRicezione. L'ordine finale non e' un vezzo: e' la scala su cui si scende
+        /// quando si chiude una schermata.
         public static List<Dictionary<string, object?>> Elenco(IEnumerable<ArticoliDescrizioni>? descrizioni)
         {
             var elenco = new List<Dictionary<string, object?>>();
@@ -41,7 +45,7 @@ namespace Istanta.Utility
                 return elenco;
             }
 
-            var viste = new HashSet<string>();
+            var piuRecentePerCoppia = new Dictionary<string, ArticoliDescrizioni>();
 
             foreach (var d in descrizioni)
             {
@@ -55,16 +59,29 @@ namespace Istanta.Utility
 
                 //La chiave tiene distinti "area vuota" e "area che si chiama come il canale".
                 string chiave = (area ?? "") + "\u0000" + (canale ?? "");
-                if (!viste.Add(chiave))
+
+                if (!piuRecentePerCoppia.TryGetValue(chiave, out var gia) ||
+                    d.DataUltimaRicezione > gia.DataUltimaRicezione)
                 {
-                    continue;
+                    piuRecentePerCoppia[chiave] = d;
                 }
+            }
+
+            foreach (var d in piuRecentePerCoppia.Values)
+            {
+                string? area = string.IsNullOrWhiteSpace(d.Area) ? null : d.Area;
+                string? canale = string.IsNullOrWhiteSpace(d.Canale) ? null : d.Canale;
 
                 elenco.Add(new Dictionary<string, object?>
                 {
                     ["area"] = area,
                     ["canale"] = canale,
-                    ["specificita"] = Rango(area, canale)
+                    ["specificita"] = Rango(area, canale),
+                    ["descrizione1"] = d.Descrizione1,
+                    ["descrizione2"] = d.Descrizione2,
+                    ["descrizione3"] = d.Descrizione3,
+                    ["descrizione4"] = d.Descrizione4,
+                    ["descrizioneIndd"] = d.DescrizioneIndd
                 });
             }
 

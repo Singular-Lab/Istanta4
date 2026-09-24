@@ -6,6 +6,8 @@ class InputEditController {
     convalidaFirma = false;//Boolean che mi specifica se tale REF in lettura è stata REVISIONATA con la FIRMA del tracciato o se invece è DA CONTROLLARE.
     descrInArchivio;
     inMismatch=false;
+    //I20-993: le varianti che non comandano si guardano e non si toccano.
+    solaLettura = false;
 
     constructor(container, convalidaFirma, descrInArchivio, compiledFields = null) {
         this.myContainer = container;//.find('input');
@@ -483,6 +485,19 @@ class InputEditController {
         return operazioni;
     }
 
+
+    /// I20-993: mette o toglie la sola lettura sui campi della scheda.
+    ///
+    /// Solo la variante piu' specifica applicabile si modifica; le altre si mostrano e basta.
+    /// Chi non chiama questo metodo non cambia comportamento: si parte modificabili, come prima.
+    impostaSolaLettura(solaLettura) {
+        this.solaLettura = solaLettura === true;
+
+        let campi = this.myContainer.find("textarea");
+        campi.prop("readonly", this.solaLettura);
+        //Si vede che non si tocca, senza nascondere il testo: serve leggerlo.
+        campi.css("opacity", this.solaLettura ? "0.6" : "");
+    }
 }
 
 module.exports = InputEditController;
