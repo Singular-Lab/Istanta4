@@ -57,19 +57,6 @@ namespace Istanta.Utility
                 .FirstOrDefault();
         }
 
-        /// Se una variante e' fra quelle che l'operatore ha chiuso su questa lavorazione.
-        /// La nazionale non si chiude: anche se comparisse nell'elenco delle chiuse non le si
-        /// darebbe retta, perche' sotto di lei non c'e' niente su cui ricadere.
-        public static bool EChiusa(IEnumerable<VarianteDescrizioneChiusa>? chiuse, string? area, string? canale)
-        {
-            if (chiuse == null || Rango(area, canale) == 0)
-            {
-                return false;
-            }
-
-            return chiuse.Any(c => c != null && Corrisponde(c.area, area) && Corrisponde(c.canale, canale));
-        }
-
         /// Due valori dicono la stessa cosa, trattando il vuoto e il nullo come sinonimi:
         /// nell'archivio la nazionale arriva ora con null ora con la stringa vuota.
         private static bool Corrisponde(string? uno, string? altro)
@@ -92,9 +79,7 @@ namespace Istanta.Utility
         /// Plugin e' una schermata sola. Stesso criterio del resto del server, che ordina per
         /// DataUltimaRicezione. L'ordine finale non e' un vezzo: e' la scala su cui si scende
         /// quando si chiude una schermata.
-        public static List<Dictionary<string, object?>> Elenco(
-            IEnumerable<ArticoliDescrizioni>? descrizioni,
-            IEnumerable<VarianteDescrizioneChiusa>? chiuse = null)
+        public static List<Dictionary<string, object?>> Elenco(IEnumerable<ArticoliDescrizioni>? descrizioni)
         {
             var elenco = new List<Dictionary<string, object?>>();
 
@@ -135,9 +120,6 @@ namespace Istanta.Utility
                     ["area"] = area,
                     ["canale"] = canale,
                     ["specificita"] = Rango(area, canale),
-                    //Le chiuse restano nell'elenco, marcate: servono al Plugin per poterle
-                    //riaprire. Toglierle vorrebbe dire non poterci piu' tornare.
-                    ["chiusa"] = EChiusa(chiuse, area, canale),
                     ["descrizione1"] = d.Descrizione1,
                     ["descrizione2"] = d.Descrizione2,
                     ["descrizione3"] = d.Descrizione3,

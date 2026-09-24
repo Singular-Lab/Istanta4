@@ -53,20 +53,8 @@ function siApplica(variante, area, canale) {
     return areaOk && canaleOk;
 }
 
-/// Una variante chiusa dall'operatore su questa lavorazione. La nazionale non si chiude mai:
-/// sotto di lei non c'e' niente su cui ricadere, quindi anche se arrivasse marcata non le si
-/// da' retta.
-function eChiusa(variante) {
-    if (variante == null || specificita(variante) === 0) {
-        return false;
-    }
-
-    return variante.chiusa === true;
-}
-
-/// Tutte le varianti da mostrare come linguette: quelle che valgono per questa lavorazione,
-/// comprese le chiuse, che restano visibili per poterle riaprire.
-function variantiDaMostrare(varianti, area, canale) {
+/// Le varianti che valgono per questa lavorazione, dalla meno alla piu' specifica.
+function variantiApplicabili(varianti, area, canale) {
     if (!Array.isArray(varianti)) {
         return [];
     }
@@ -75,12 +63,6 @@ function variantiDaMostrare(varianti, area, canale) {
         .filter(v => siApplica(v, area, canale))
         .slice()
         .sort((a, b) => specificita(a) - specificita(b));
-}
-
-/// Le varianti che entrano nella scala, cioe' quelle che valgono e non sono state chiuse.
-/// E' su queste che si decide chi comanda: chiudere la piu' specifica fa salire quella sotto.
-function variantiApplicabili(varianti, area, canale) {
-    return variantiDaMostrare(varianti, area, canale).filter(v => !eChiusa(v));
 }
 
 /// La variante che comanda: la piu' specifica fra quelle che valgono. E' l'unica modificabile,
@@ -130,8 +112,6 @@ function etichetta(variante) {
 
 module.exports = {
     specificita,
-    eChiusa,
-    variantiDaMostrare,
     siApplica,
     variantiApplicabili,
     varianteApplicabile,
