@@ -296,3 +296,30 @@ test('la proposta gia\' fatta non si porta dietro un silenziamento', () => {
     assert.strictEqual(schedaRef.refESilenziata('5329719'), false);
     assert.deepStrictEqual(schedaRef.statoCaselleSilenziamento('5329719'), { questa: false, tutte: false });
 });
+
+/*
+ * I20-995: il pulsante "Applica descrizione da server" si decide dalle segnalazioni gia'
+ * calcolate, invece di far ripartire una preanalisi tutta per se' a ogni rientro nella
+ * schermata di edit.
+ */
+
+test('il pulsante della descrizione si legge dalle segnalazioni della scheda', () => {
+    pulisci();
+
+    //L'elenco completo della preanalisi: c'e' dentro anche quello che non riguarda la
+    //descrizione, ed e' il motivo per cui il filtro sul campo deve restare.
+    schedaRef.memorizzaSegnalazioni([
+        { label: 'foto_1', difference: 'elemento disattivato ma presente nel box: foto_1' },
+        { label: 'descrizione', difference: 'contenuto' }
+    ]);
+
+    assert.strictEqual(schedaRef.differenzaDaAllineare(schedaRef.segnalazioniInMemoria(), 'descrizione'), true);
+
+    //Risolta la descrizione, il pulsante non si offre piu' nemmeno se il box ha altri guai.
+    schedaRef.memorizzaSegnalazioni([{ label: 'foto_1', difference: 'elemento disattivato ma presente nel box: foto_1' }]);
+    assert.strictEqual(schedaRef.differenzaDaAllineare(schedaRef.segnalazioniInMemoria(), 'descrizione'), false);
+
+    //Senza preanalisi in memoria non si decide da qui: la schermata ricade sulla strada vecchia.
+    schedaRef.dimenticaSegnalazioni();
+    assert.strictEqual(schedaRef.segnalazioniInMemoria(), null);
+});

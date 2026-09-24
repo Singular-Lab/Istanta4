@@ -911,8 +911,14 @@ test('la descrizione applicata si vede anche in edit', () => {
     const sorgenteScheda = sorgente('schedaRef.js');
 
     //Il pulsante compare solo se box e server non dicono la stessa cosa, e il giudizio lo da'
-    //la stessa preanalisi del report, sul solo campo della descrizione.
-    assert.match(sorgenteScheda, /if \(await this\.descrizioneDisallineata\(this\.schedeRefDati, box\)\)/);
+    //sempre la preanalisi del report.
+    //
+    //I20-995: quando la preanalisi della scheda e' gia' stata fatta il giudizio si legge da
+    //quella - stesso elenco di differenze, stesso filtro sul campo - invece di rifarne una a
+    //ogni rientro nella schermata. Alla prima apertura si continua a chiederlo a
+    //descrizioneDisallineata, che gira prima che un campo vuoto venga riempito.
+    assert.match(sorgenteScheda, /segnalazioniGiaInMemoria != null && campoDescrizioneDelPrimario != null\s*\n\s*\? this\.differenzaDaAllineare\(segnalazioniGiaInMemoria, campoDescrizioneDelPrimario\.labelName\)\s*\n\s*: await this\.descrizioneDisallineata\(this\.schedeRefDati, box\)/);
+    assert.match(sorgenteScheda, /if \(descrizioneDaAllineare\) \{/);
 
     //I20-993: il contenuto che riporta e' quello composto per la variante che comanda, quindi
     //il pulsante si offre solo mentre si sta su quella. Stando sulla nazionale applicava la

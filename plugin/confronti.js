@@ -392,29 +392,42 @@ const confronti = {
                         let stringaRicomposta = "";
                         let currentCharacterStyle = null;
 
-                        for (let i = 0; i < campoBox1.characters.length; i++) {
-                            let character = campoBox1.characters.item(i);
-                            let chParsed = me.decodeSpecialCharacters(character.contents);
-                            //se il character content non è una stringa continua
-                            if ((typeof chParsed !== 'string' && typeof character.contents !== 'string') || chParsed.trim() === '') {
-                                continue;
-                            }
-                            else if (typeof chParsed !== 'string') {
-                                chParsed = chParsed.contents;
-                            }
+                        //I20-995: il campo si legge a tratti di stile invece che carattere per
+                        //carattere. Prima ogni carattere costava due passaggi verso InDesign -
+                        //l'oggetto e il nome del suo stile - e questa preanalisi gira a ogni
+                        //apertura di scheda e per ogni referenza del Report Integrita'.
+                        //
+                        //Il testo si scorre ancora carattere per carattere, ma in memoria: il
+                        //tag si apre sul primo carattere che conta davvero, e un tratto fatto di
+                        //soli spazi non ne apre nessuno, esattamente come prima.
+                        let trattiDelCampo = Utility.trattiDiStileDelCampo(campoBox1);
 
-                            let styleName = character.appliedCharacterStyle.name;
+                        for (let t = 0; t < trattiDelCampo.length; t++) {
+                            let styleName = trattiDelCampo[t].nome;
+                            let testoDelTratto = trattiDelCampo[t].contenuto;
 
-                            if (styleName !== currentCharacterStyle) {
-                                if (currentCharacterStyle != null) {
-                                    stringaRicomposta += `</${currentCharacterStyle}>`;
+                            for (let i = 0; i < testoDelTratto.length; i++) {
+                                let carattere = testoDelTratto[i];
+                                let chParsed = me.decodeSpecialCharacters(carattere);
+                                //se il character content non è una stringa continua
+                                if ((typeof chParsed !== 'string' && typeof carattere !== 'string') || chParsed.trim() === '') {
+                                    continue;
                                 }
-                                currentCharacterStyle = styleName;
-                                stringaRicomposta += `<${currentCharacterStyle}>`;
-                            }
+                                else if (typeof chParsed !== 'string') {
+                                    chParsed = chParsed.contents;
+                                }
 
-                            // Aggiungi il testo normale
-                            stringaRicomposta += chParsed;
+                                if (styleName !== currentCharacterStyle) {
+                                    if (currentCharacterStyle != null) {
+                                        stringaRicomposta += `</${currentCharacterStyle}>`;
+                                    }
+                                    currentCharacterStyle = styleName;
+                                    stringaRicomposta += `<${currentCharacterStyle}>`;
+                                }
+
+                                // Aggiungi il testo normale
+                                stringaRicomposta += chParsed;
+                            }
                         }
 
                         // Chiudi l’ultimo tag aperto
