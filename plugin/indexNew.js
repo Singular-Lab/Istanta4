@@ -19,6 +19,8 @@ const manifesto = require("./manifest.json");
 const ipconfig = require("./ipconfig.json");
 const confronti = require('./confronti');
 const NoRenderElementi = require('./noRenderElementi');
+const RicollegaEsiti = require('./ricollegaEsiti');
+const VersionePlugin = require('./versionePlugin');
 const ficoProcess = require('./ficoProcess');
 const grigliaJs = require('./griglia');
 const filtriJs = require('./filtri');
@@ -27,6 +29,7 @@ const pluginMiddleware = require('./pluginMiddleware');
 const fotoAutoSync = require('./fotoAutoSync');
 const credenzialiSalvateModulo = require('./credenzialiSalvate');
 const reportIntegritaAvvio = require('./reportIntegritaAvvio');
+const reportConfronti = require('./reportConfronti');
 const cacheHashFoto = require('./cacheHashFoto');
 
 //I20-956: le credenziali ricordate vivono nell'archivio cifrato del sistema operativo.
@@ -142,6 +145,60 @@ function setVersionePlugin() {
     //leggiamo la versione da manifest.json version
     var versione = manifesto.version;
     $("#versionePlugin").text("Istanta v. " + versione + (testMode ? " - (testmode)" : ""));
+}
+
+/// I20-987: il Plugin installato deve essere quello pubblicato per il cliente.
+///
+/// Lavorare con una versione diversa da quella del server vuol dire lavorare con regole diverse,
+/// e i guai che ne nascono si scoprono a impaginato fatto. Se la versione pubblicata non si
+/// riesce a leggere non si blocca niente: questo controllo gira a ogni avvio, e fermare il
+/// lavoro per un server che non risponde sarebbe un danno peggiore di quello che si previene.
+function controllaVersionePubblicata() {
+    try {
+        var xhr = new XMLHttpRequestClient();
+
+        xhr.onload = function (objResult, parsed) {
+            try {
+                if (!parsed) {
+                    objResult = JSON.parse(objResult);
+                }
+
+                var pubblicata = objResult != null && objResult.boolEsito ? objResult.esito : "";
+                var esito = VersionePlugin.confronta(manifesto.version, pubblicata);
+
+                if (VersionePlugin.siPuoLavorare(esito)) {
+                    if (esito === VersionePlugin.ESITO.nonVerificabile) {
+                        console.log("Code IDX-165 Versione pubblicata non verificabile: " +
+                            (objResult != null && objResult.error != null ? objResult.error : ""));
+                    }
+                    return;
+                }
+
+                bloccaPerVersioneDisallineata(VersionePlugin.messaggioDisallineamento(manifesto.version, pubblicata));
+            }
+            catch (e) {
+                //Un controllo che non riesce non deve fermare chi lavora: si annota e si va avanti.
+                console.error("Code IDX-165 Controllo della versione non riuscito: " + e);
+            }
+        };
+
+        xhr.onerror = function () {
+            console.log("Code IDX-165 Versione pubblicata non verificabile: errore di rete");
+        };
+
+        xhr.send("LoginController/getVersionePluginPubblicata", null, "GET", "application/x-www-form-urlencoded");
+    }
+    catch (e) {
+        console.error("Code IDX-165 Controllo della versione non avviato: " + e);
+    }
+}
+
+function bloccaPerVersioneDisallineata(avviso) {
+    console.error("Code IDX-166 " + avviso.titolo + " - " + avviso.dettaglio);
+
+    $("#istantaDownAlert").find("h1").text(avviso.titolo);
+    $("#istantaDownAlert").find("h3").text(avviso.dettaglio);
+    $("#istantaDownAlert").css("display", "flex");
 }
 
 function checkForLoghiCore(){
@@ -348,6 +405,11 @@ indesignEvents.addEventListener(indesignEvents.EVENT_USER_LOGGED, function(args)
     setFinestrePerRuolo();
 
     cambioDiStatoDelSistema();
+
+    //I20-987: appena si e' loggati si guarda se il Plugin installato e' quello pubblicato per
+    //il cliente. Prima del login non si puo': serve il server, ed e' il login a dirci che
+    //risponde.
+    controllaVersionePubblicata();
 
 
     $("#nomeUtente").text(nomeUtente);
@@ -3922,7 +3984,9 @@ function boxDellElementoMappa(elementoMappa) {
 //(pages.everyItem().getElements()), una page.select() e una ricerca dentro page.allPageItems
 //o, peggio, dentro doc.allPageItems: tutte cose che la mappa aveva gia' risolto. La
 //preanalisi non impagina nulla, quindi della pagina non ha bisogno.
-async function preAnalisiBoxMappato(records, elementoMappa) {
+//Il box si puo' passare gia' trovato: chi richiude la scheda referenza aperta dal report ce
+//l'ha in mano, e puo' essere un box rifatto, che nell'elemento di mappa non c'e' ancora.
+async function preAnalisiBoxMappato(records, elementoMappa, boxGiaTrovato = null) {
     var dati = datiPrimarioPerConfronto(records);
     if (dati == null) {
         //Nessun primario nel gruppo: senza di lui non c'e' nulla da confrontare. Nel report
@@ -3931,7 +3995,7 @@ async function preAnalisiBoxMappato(records, elementoMappa) {
         return null;
     }
 
-    var box = boxDellElementoMappa(elementoMappa);
+    var box = boxGiaTrovato != null ? boxGiaTrovato : boxDellElementoMappa(elementoMappa);
     if (box == null) {
         return null;
     }
@@ -4201,6 +4265,21 @@ async function applicaConfronto(mappa) {
         recordsPerCodiceGruppo[cgRecord].push(recordLista);
     }
 
+    //I20-981: le differenze sui campi osservati dall'agenzia si calcolano una volta sola, su
+    //tutta la lista, e si agganciano poi alla presenza giusta. Non cambiano l'aspetto del box,
+    //quindi l'analisi di integrita' non le vede: e' l'unico posto dove l'operatore le incontra.
+    var differenzeConfronto = {};
+    try {
+        const campiOsservati = confronti.campiOsservatiConfronto();
+        if (campiOsservati.length > 0) {
+            differenzeConfronto = reportConfronti.indicizzaPerPresenza(
+                reportConfronti.confrontoConSeStessa(lista.records, campiOsservati));
+        }
+    }
+    catch (exConfronto) {
+        console.error("Differenze sui campi osservati non calcolate:", exConfronto);
+    }
+
     var schedeRefs = [];
     for (var i = 0; i < presenze.length; i++) {
         var presenza = presenze[i];
@@ -4305,6 +4384,29 @@ async function applicaConfronto(mappa) {
                         if (elementoPaginaMappa != null && numeroPagina != null) {
                             console.log("Preanalisi ref confronto per codice gruppo: " + codiceGruppo + " a pagina " + numeroPagina);
                             resAnalisi = await preAnalisiBoxMappato(schedaRef.records, elMappa);
+                        }
+
+                        //Le differenze sui campi osservati diventano segnalazioni della
+                        //referenza, marcate con l'origine: nella riga stanno in un riquadro
+                        //loro, e il Fix non si offre per quelle, perche' in pagina non c'e'
+                        //niente da rifare.
+                        var confrontoPresenza = reportConfronti.differenzePerPresenza(
+                            differenzeConfronto, codiceGruppo, idRecScheda);
+
+                        if (confrontoPresenza != null && confrontoPresenza.differenze.length > 0) {
+                            if (resAnalisi == null) {
+                                resAnalisi = { differenze: [], errors: [] };
+                            }
+
+                            resAnalisi.differenze = resAnalisi.differenze || [];
+
+                            confrontoPresenza.differenze.forEach(function (d) {
+                                resAnalisi.differenze.push({
+                                    label: d.etichetta,
+                                    difference: (d.prima || "(vuoto)") + " \u2192 " + (d.adesso || "(vuoto)"),
+                                    origine: "confronto"
+                                });
+                            });
                         }
 
                         var recordReport = {
@@ -10694,12 +10796,16 @@ async function ricollegaFotoMassivo(ricollegaFotoPresentiModificate = false, adv
     showLoading("Mappatura impaginato in corso...");
     await Utility.sleep(100);
 
+    //I20-986: il rapporto si dichiara qui e non dentro al try. Dichiarato dentro, il blocco che
+    //gestisce gli errori non lo vedeva: falliva a sua volta, e cosi' non usciva nessun messaggio,
+    //non si scriveva nessun rapporto e la rotella di attesa restava accesa per sempre.
+    let fileEsito = {
+        esito: true,
+        error: [],
+        fileModificati: [],
+    };
+
     try{
-        let fileEsito = {
-            esito: true,
-            error: [],
-            fileModificati: [],
-        };
          
         if(advancedMode){
             ricollegaFotoPresentiModificate = true;
@@ -10752,8 +10858,8 @@ async function ricollegaFotoMassivo(ricollegaFotoPresentiModificate = false, adv
                                 }
 
                                 if (ricollegaFotoPresentiModificate && !fotoAssente && primario.recordInTracciato["Foto.Nome"] == "") {
-                                    messaggioUtente("Code IDX-156 Dato manomesso per il codice gruppo " + item.codiceGruppo + " - Foto.Nome del codice:" + foto.codice + " non è stato trovato, ma la foto è presente. Ricollegamento foto non possibile.", "error");
-                                    fileEsito.error.push("Code IDX-156 Dato manomesso per il codice gruppo " + item.codiceGruppo + " - Foto.Nome del codice:" + foto.codice + " non è stato trovato, ma la foto è presente. Ricollegamento foto non possibile.");
+                                    messaggioUtente(RicollegaEsiti.messaggioDatoManomesso(item.codiceGruppo, foto), "error");
+                                    fileEsito.error.push(RicollegaEsiti.messaggioDatoManomesso(item.codiceGruppo, foto));
                                     continue;
                                 }
 
@@ -10799,8 +10905,8 @@ async function ricollegaFotoMassivo(ricollegaFotoPresentiModificate = false, adv
                                         }
 
                                         if (!fotoAssente && corrispondente.recordInTracciato["Foto.Nome"] == "") {
-                                            messaggioUtente("Code IDX-156 Dato manomesso per il codice gruppo " + item.codiceGruppo + " - Foto.Nome del codice:" + foto.codice + " non è stato trovato, ma la foto è presente. Ricollegamento foto non possibile.", "error");
-                                            fileEsito.error.push("Code IDX-156 Dato manomesso per il codice gruppo " + item.codiceGruppo + " - Foto.Nome del codice:" + foto.codice + " non è stato trovato, ma la foto è presente. Ricollegamento foto non possibile.");
+                                            messaggioUtente(RicollegaEsiti.messaggioDatoManomesso(item.codiceGruppo, foto), "error");
+                                            fileEsito.error.push(RicollegaEsiti.messaggioDatoManomesso(item.codiceGruppo, foto));
                                             continue;
                                         }
 
@@ -10815,6 +10921,14 @@ async function ricollegaFotoMassivo(ricollegaFotoPresentiModificate = false, adv
                                             });
                                         }
 
+                                    }
+                                    else {
+                                        //I20-986: senza questo ramo la foto restava li' in silenzio,
+                                        //agganciata a una referenza che non c'e' piu', e del fatto
+                                        //non restava traccia nemmeno nel rapporto.
+                                        let avviso = RicollegaEsiti.messaggioSecondariaSparita(item.codiceGruppo, foto);
+                                        messaggioUtente(avviso, "warning");
+                                        fileEsito.error.push(avviso);
                                     }
                                 }
                                 else {
@@ -10831,8 +10945,8 @@ async function ricollegaFotoMassivo(ricollegaFotoPresentiModificate = false, adv
                                     }
 
                                     if (ricollegaFotoPresentiModificate && !fotoAssente && corrispondente.recordInTracciato["Foto.Nome"] == "") {
-                                        messaggioUtente("Code IDX-156 Dato manomesso per il codice gruppo " + item.codiceGruppo + " - Foto.Nome del codice:" + foto.codice + " non è stato trovato, ma la foto è presente. Ricollegamento foto non possibile.", "error");
-                                        fileEsito.error.push("Code IDX-156 Dato manomesso per il codice gruppo " + item.codiceGruppo + " - Foto.Nome del codice:" + foto.codice + " non è stato trovato, ma la foto è presente. Ricollegamento foto non possibile.");
+                                        messaggioUtente(RicollegaEsiti.messaggioDatoManomesso(item.codiceGruppo, foto), "error");
+                                        fileEsito.error.push(RicollegaEsiti.messaggioDatoManomesso(item.codiceGruppo, foto));
                                         continue;
                                     }
 
@@ -10959,25 +11073,31 @@ async function ricollegaFotoMassivo(ricollegaFotoPresentiModificate = false, adv
                     let listElementCreati = [];
                     //adesso creiamo gli elementi nuovi e li mettiamo da parte, quando sono tutti prendiamo il gruppo, lo rompiamo e ricreiamo aggiungendo i nuovi elementi
                     for (let i = 0; i < elementiDaCreare.length; i++) {
+                        //I20-986: l'elemento si legge per primo. Stava dopo, ma il ramo senza foto
+                        //esistente lo usava gia': chi non aveva ancora una foto nel box, cioe'
+                        //proprio chi ne sta creando una, si prendeva un errore invece della foto.
+                        let item = elementiDaCreare[i];
+
                         //cerchiamo nel box se c'è già un'immagine startsWith(immagine) o startsWith(foto_secondaria), se c'è prendiamo le sue misure
                         let existingPhoto = null;
                         for (let j = 0; j < boxImpaginato.allPageItems.length; j++) {
-                            let item = boxImpaginato.allPageItems[j];
-                            if (item.label.startsWith((pluginMiddleware.getCampo("nomeFotoPrimaria") !== null ? pluginMiddleware.getCampo("nomeFotoPrimaria")+"$" :"immagine$")) || item.label.startsWith((pluginMiddleware.getCampo("nomeFotoSecondaria") != null ? pluginMiddleware.getCampo("nomeFotoSecondaria")+"$" :"foto_secondaria$"))) {
-                                existingPhoto = item;
+                            let elementoDelBox = boxImpaginato.allPageItems[j];
+                            if (elementoDelBox.label.startsWith((pluginMiddleware.getCampo("nomeFotoPrimaria") !== null ? pluginMiddleware.getCampo("nomeFotoPrimaria")+"$" :"immagine$")) || elementoDelBox.label.startsWith((pluginMiddleware.getCampo("nomeFotoSecondaria") != null ? pluginMiddleware.getCampo("nomeFotoSecondaria")+"$" :"foto_secondaria$"))) {
+                                existingPhoto = elementoDelBox;
                                 break;
                             }
                         }
-                        let g_new = null;
-                        if (existingPhoto != null) {
-                            //prendiamo le misure dell'elemento esistente
-                            g_new = [existingPhoto.geometricBounds[0] + 5, existingPhoto.geometricBounds[1] + 5, existingPhoto.geometricBounds[2] + 5, existingPhoto.geometricBounds[3] + 5];
-                        }
-                        else{
-                            g_new = [item.group.geometricBounds[0] + 5, item.group.geometricBounds[1] + 5, item.group.geometricBounds[2] + 5, item.group.geometricBounds[3] + 5];
+
+                        let g_new = RicollegaEsiti.boundsNuovaFoto(
+                            existingPhoto != null ? existingPhoto.geometricBounds : null,
+                            item.group != null ? item.group.geometricBounds : null);
+
+                        if (g_new == null) {
+                            messaggioUtente("Code IDX-164 Impossibile calcolare dove mettere la foto " + item.nomeFoto + " nel gruppo " + item.codiceGruppo, "error");
+                            fileEsito.error.push("Code IDX-164 Impossibile calcolare dove mettere la foto " + item.nomeFoto + " nel gruppo " + item.codiceGruppo);
+                            continue;
                         }
 
-                        let item = elementiDaCreare[i];
                         if (item.nomeFoto != "") {
                             //creo un nuovo elemento e lo posiziono
                             let photo = item.group.parentPage.rectangles.add(item.group.itemLayer, LocationOptions.UNKNOWN, { geometricBounds: g_new });
@@ -11079,7 +11199,7 @@ async function ricollegaFotoMassivo(ricollegaFotoPresentiModificate = false, adv
 
                 //creiamo il file di esito
                 fileEsito.esito = true;
-                let fileName = "EsitoRicollegamentoFoto_" + docInLavorazione.name.replace(".indd", "") + new Date().toISOString().replace('T', '_').replace(/:/g, '-').split('.')[0]  + ".json";
+                let fileName = RicollegaEsiti.nomeFileEsito(docInLavorazione.name, new Date());
                 let filePath = pathLavorazione + "/" + fileName;
                 fs.writeFileSync(filePath, JSON.stringify(fileEsito));
                 messaggioUtente("File di esito creato: " + fileName, "success");
@@ -11092,7 +11212,7 @@ async function ricollegaFotoMassivo(ricollegaFotoPresentiModificate = false, adv
                 fileEsito.esito = false;
                 fileEsito.error.push(e.toString());
                 //creiamo il file
-                let fileName = "EsitoRicollegamentoFoto_" + docInLavorazione.name.replace(".indd", "") + ".json";
+                let fileName = RicollegaEsiti.nomeFileEsito(docInLavorazione.name, new Date());
                 let filePath = pathLavorazione + "/" + fileName;
                 fs.writeFileSync(filePath, JSON.stringify(fileEsito));
                 messaggioUtente("File di esito creato: " + fileName, "info");
@@ -11107,7 +11227,7 @@ async function ricollegaFotoMassivo(ricollegaFotoPresentiModificate = false, adv
         fileEsito.error.push(e.toString());
         
         //creiamo il file
-        let fileName = "EsitoRicollegamentoFoto_" + docInLavorazione.name.replace(".indd", "") + ".json";
+        let fileName = RicollegaEsiti.nomeFileEsito(docInLavorazione.name, new Date());
         let filePath = pathLavorazione + "/" + fileName;
         fs.writeFileSync(filePath, JSON.stringify(fileEsito));
         messaggioUtente("File di esito creato: " + fileName, "info");

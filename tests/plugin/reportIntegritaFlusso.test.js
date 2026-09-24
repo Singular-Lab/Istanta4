@@ -34,6 +34,9 @@ const events = sorgente('events.js');
 const utility = sorgente('utility.js');
 const indexHtml = sorgente('index.html');
 
+//La scheda si carica sotto Node: le sue regole si provano chiamandole, non leggendole.
+const schedaRef = require('../../plugin/schedaRef.js');
+
 //Il corpo di una funzione di primo livello di indexNew.js, isolato contando le graffe.
 function corpoFunzione(testo, intestazione) {
     const inizio = testo.indexOf(intestazione);
@@ -484,4 +487,558 @@ test('la copia negli appunti passa una stringa, in tutto il plugin', () => {
 
     assert.match(sorgente('griglia.js'), /writeText\(String\(\$\(this\)\.attr\("codiceGruppo"\) \|\| ""\)\)/);
     assert.strictEqual((sorgente('schedaRef.js').match(/writeText\(String\(\$\(this\)\.attr\("codiceGruppo"\) \|\| ""\)\)/g) || []).length, 2);
+});
+
+/* I20-981 (Lotto 4a): le differenze sui campi osservati. */
+
+test('le differenze di confronto diventano segnalazioni della referenza', () => {
+    //Vivono nella scheda Cambiati insieme alle segnalazioni di integrita', cosi' l'operatore
+    //ha sotto mano i pulsanti che gia' conosce: trova, risolvi, whitelist, info.
+    const applica = corpoFunzione(indexNew, 'async function applicaConfronto(');
+
+    assert.match(applica, /reportConfronti\.confrontoConSeStessa\(lista\.records, campiOsservati\)/);
+    assert.match(applica, /reportConfronti\.indicizzaPerPresenza/);
+    assert.match(applica, /reportConfronti\.differenzePerPresenza\(\s*differenzeConfronto, codiceGruppo, idRecScheda\)/);
+    //Marcate, cosi' si distinguono da quelle dell'analisi di integrita'.
+    assert.match(applica, /origine: "confronto"/);
+});
+
+test('nella riga le due cose restano separate, e il Fix vale solo per l\'integrita\'', () => {
+    const pannello = corpoFunzione(confronti, '_buildPanelCambiati(records) {');
+
+    assert.match(pannello, /const segnalazioniIntegrita = tutteLeDifferenze\.filter\(d => d\?\.origine !== "confronto"\)/);
+    assert.match(pannello, /const differenzeConfronto = tutteLeDifferenze\.filter\(d => d\?\.origine === "confronto"\)/);
+    assert.match(pannello, /this\._crRiquadroConfronto\(differenzeConfronto\)/);
+
+    //Il Fix rifa' il box: senza segnalazioni di integrita' non c'e' niente da rifare.
+    assert.match(pannello, /if \(segnalazioniIntegrita\.length > 0\) \{\s*\n\s*actions\.appendChild\(btnFix\);/);
+
+    //Gli altri pulsanti restano disponibili comunque.
+    assert.match(pannello, /actions\.appendChild\(btnResolve\)/);
+    assert.match(pannello, /actions\.appendChild\(btnWhitelist\)/);
+
+    const riquadro = corpoFunzione(confronti, '_crRiquadroConfronto(differenze) {');
+    assert.match(riquadro, /Campi osservati \(confronto\)/);
+    assert.match(riquadro, /COLORI_STATO\.differente/);
+});
+
+test('anche le referenze nuove dicono cosa e\' cambiato', () => {
+    //Una referenza non ancora impaginata puo' avere campi osservati cambiati, ed e' proprio
+    //quello che serve sapere prima di decidere dove metterla.
+    const estrai = corpoFunzione(confronti, '_estraiNuoviDaLista(report, listaTracciato) {');
+    assert.match(estrai, /reportConfronti\.differenzePerPresenza\(/);
+    assert.match(estrai, /confronto: confrontoRiga != null \? reportConfronti\.testoDifferenze/);
+
+    //E la tabella ha la sua colonna, in fondo a destra: serve quando serve, e non deve rubare
+    //spazio a codice e descrizione.
+    const tabella = corpoFunzione(confronti, '_renderNuoviTable() {');
+    assert.match(tabella, /const colonnaConfronto = \{\s*\n\s*key: "confronto"/);
+    assert.match(tabella, /const colonne = \[\.\.\.colonneBase, \.\.\.colonneExtraFiltrate, colonnaConfronto\]/);
+});
+
+test('la tabella dei nuovi ha una larghezza vera, e quindi scorre', () => {
+    const pannello = corpoFunzione(confronti, '_buildPanelNuovi(report) {');
+
+    //Lo scorrimento laterale non e' piu' del contenitore: in UXP non funziona in nessun modo
+    //nativo. Lo fa la barra disegnata dal plugin, spostando la tabella.
+    assert.match(pannello, /tableScroll\.style\.overflowX = "hidden"/);
+    assert.match(pannello, /tableScroll\.style\.overflowY = "scroll"/);
+    assert.match(pannello, /this\._crBarraScorrimentoNuovi\(this\._confrontoNuoviState\)/);
+
+    //La larghezza in pixel resta: e' quella che dice alla barra quanto c'e' da scorrere.
+    //Conta le sole colonne dei dati, perche' quella dei pulsanti non si sposta.
+    const render = corpoFunzione(confronti, '_renderNuoviTable() {');
+    assert.match(render, /const larghezzaTotale = this\._larghezzaTotaleColonne\(colonneDati\)/);
+    assert.match(render, /state\.table\.style\.width = larghezzaTotale \+ "px"/);
+    assert.match(render, /state\.headerRow\.style\.width = larghezzaTotale \+ "px"/);
+    assert.doesNotMatch(senzaCommenti(pannello), /fit-content/);
+    //Dopo ogni ridisegno tabella e cursore tornano in accordo.
+    assert.match(render, /this\._scorriNuovi\(state, state\.spostamento \|\| 0\)/);
+
+    //Position sticky non si usa: in UXP non viene ignorato, toglie la cella dal flusso e manda
+    //la colonna fuori dal riquadro. Il ritorno sarebbe una schermata rotta, non un pareggio.
+    const codice = senzaCommenti(confronti);
+    assert.ok(!codice.includes('sticky'), 'sticky e\' tornato: in UXP rompe la tabella');
+});
+
+test('i pulsanti dei nuovi stanno in una colonna che non si sposta', () => {
+    //Due colonne dentro l'unico contenitore che scorre in verticale: cosi' scorrono insieme
+    //per costruzione, senza dover sincronizzare niente.
+    const pannello = corpoFunzione(confronti, '_buildPanelNuovi(report) {');
+    assert.match(pannello, /divisione\.style\.flexDirection = "row"/);
+    assert.match(pannello, /divisione\.appendChild\(colonnaAzioni\)/);
+    assert.match(pannello, /divisione\.appendChild\(areaDati\)/);
+    assert.match(pannello, /tableScroll\.appendChild\(divisione\)/);
+
+    //Lo spostamento laterale e' confinato all'area dei dati: quello che esce resta nascosto.
+    assert.match(pannello, /areaDati\.style\.overflow = "hidden"/);
+    assert.match(pannello, /areaDati\.appendChild\(table\)/);
+
+    //La tabella che si sposta contiene le sole colonne dei dati; i pulsanti hanno la loro.
+    const render = corpoFunzione(confronti, '_renderNuoviTable() {');
+    assert.match(render, /const colonneDati = colonne\.filter\(col => col\.key !== "__azione__"\)/);
+    assert.match(render, /state\.headerAzioni\.appendChild\(this\._crNuoviHeaderCell\(colonnaAzione\)\)/);
+    assert.match(render, /state\.bodyAzioni\.appendChild\(this\._crNuoviActionCell\(state\.rowsCurrent\[i\]\)\)/);
+    assert.match(render, /this\._crNuoviDataRow\(state\.rowsCurrent\[i\], colonneDati\)/);
+
+    //La riga dei dati non costruisce piu' i pulsanti, altrimenti comparirebbero due volte.
+    const riga = corpoFunzione(confronti, '_crNuoviDataRow(rowData, colonne) {');
+    assert.doesNotMatch(riga, /this\._crNuoviActionCell/);
+
+    //La parte visibile che interessa alla barra e' quella dei dati, non tutto il contenitore.
+    const misure = corpoFunzione(confronti, '_misureScorrimentoNuovi(state) {');
+    assert.match(misure, /areaDati/);
+
+    //Le due colonne restano appaiate solo se le altezze restano imposte.
+    const cella = corpoFunzione(confronti, '_crNuoviActionCell(rowData) {');
+    assert.match(cella, /cell\.style\.minHeight = "42px"/);
+    assert.match(cella, /cell\.style\.maxHeight = "42px"/);
+});
+
+test('la barra di scorrimento funziona anche senza trascinamento', () => {
+    //Frecce e clic sulla traccia usano solo "click", che nel plugin funziona di sicuro: se il
+    //trascinamento non arrivasse, la tabella si scorre lo stesso.
+    const barra = corpoFunzione(confronti, '_crBarraScorrimentoNuovi(state) {');
+
+    assert.match(barra, /indietro\.addEventListener\("click"/);
+    assert.match(barra, /avanti\.addEventListener\("click"/);
+    assert.match(barra, /traccia\.addEventListener\("click"/);
+    assert.match(barra, /cursore\.addEventListener\("mousedown"/);
+
+    //I conti stanno nel modulo verificato, non qui.
+    assert.match(barra, /barraScorrimento\.spostamentoDaClic/);
+
+    const scorri = corpoFunzione(confronti, '_scorriNuovi(state, spostamento) {');
+    assert.match(scorri, /barraScorrimento\.limitaSpostamento/);
+    assert.match(scorri, /state\.table\.style\.marginLeft = "-" \+ state\.spostamento \+ "px"/);
+
+    //Le misure si leggono al momento dell'uso: alla costruzione il pannello non e' impaginato.
+    const misure = corpoFunzione(confronti, '_misureScorrimentoNuovi(state) {');
+    assert.match(misure, /clientWidth/);
+
+    //Il trascinamento si ascolta sul documento, non sul cursore: il mouse ne esce subito.
+    const trascinamento = corpoFunzione(confronti, '_abilitaTrascinamentoBarra() {');
+    assert.match(trascinamento, /\$\(document\)\.on\("mousemove"/);
+    assert.match(trascinamento, /\$\(document\)\.on\("mouseup"/);
+});
+
+test('nel csv i cambiamenti di confronto stanno in una colonna sola', () => {
+    const build = corpoFunzione(confronti, '_buildReportConfrontoCsv(report) {');
+
+    //Una colonna per referenza, non righe in piu'.
+    assert.match(build, /confronto: confronto/);
+    assert.doesNotMatch(build, /stato: "Differente"/);
+    //Le segnalazioni di confronto non si ripetono anche fra le differenze.
+    assert.match(build, /const differenze = tutte\.filter\(d => d\?\.origine !== "confronto"\)/);
+
+    const testo = corpoFunzione(confronti, '_testoConfrontoDelRecord(record) {');
+    assert.match(testo, /filter\(d => d\?\.origine === "confronto"\)/);
+});
+
+test('la scheda Confronti ospita il confronto con un\'altra lista', () => {
+    //I20-981 (Lotto 4b): finche' una lista non e' scelta la scheda dice cosa fare, e dice dove
+    //sono finite le differenze con se stessa, per non farle cercare.
+    const ridisegna = corpoFunzione(confronti, '_ridisegnaConfrontoListe(anchePannelloCampi = true) {');
+    assert.match(ridisegna, /Nessuna lista di confronto selezionata/);
+    assert.match(ridisegna, /scheda Cambiati/);
+    //Cambiare un filtro ridisegna la sola scheda, non tutto il report.
+    assert.doesNotMatch(ridisegna, /compilaReportConfronto|_refreshConfrontoReportUi/);
+
+    //Le due sorgenti: una lavorazione della promo, o un json locale. I pulsanti ci sono, i
+    //filtri anche: presenze, i due canali, i campi.
+    const pannello = corpoFunzione(confronti, '_buildPanelConfronti() {');
+    assert.match(pannello, /this\._scaricaListaConfrontoScelta\(\)/);
+    assert.match(pannello, /this\._apriListaConfrontoLocale\(\)/);
+    assert.match(pannello, /this\._scaricaCsvConfrontoListe\(\)/);
+    assert.match(pannello, /this\._crPickerPresenza\(filtro\.presenza\)/);
+    assert.match(pannello, /_crInterruttore\("Campi osservati"/);
+    assert.match(pannello, /_crInterruttore\("Campi compilati"/);
+
+    //Il confronto e il filtro stanno nel modulo verificato, non qui.
+    const calcola = corpoFunzione(confronti, '_calcolaConfrontoAltraLista() {');
+    assert.match(calcola, /reportConfronti\.confrontoConAltraLista\(/);
+    const filtrate = corpoFunzione(confronti, '_vociConfrontoFiltrate() {');
+    assert.match(filtrate, /reportConfronti\.filtraVociConfronto\(/);
+
+    //La linguetta conta le voci che si vedono, e resta senza numero finche' non c'e' una lista.
+    const compila = corpoFunzione(confronti, 'compilaReportConfronto(report, options = {}) {');
+    assert.doesNotMatch(compila, /etichettaLinguetta\("Differenti"/);
+    assert.match(compila, /reportConteggi\.etichettaLinguetta\("Confronti", this\._vociConfrontoFiltrate\(\)\.length\)/);
+    assert.match(compila, /this\._vociConfrontoListe = this\._calcolaConfrontoAltraLista\(\)/);
+});
+
+test('la lista di confronto si scarica in memoria, senza toccare quella corrente', () => {
+    //scaricaContenutoKit scrive la lista su disco, cancella il report locale e rifa' il
+    //tracciato: tre cose che una lista di confronto non deve fare. Si usa una richiesta
+    //propria, e la lista resta in memoria per la sessione.
+    const scarica = corpoFunzione(confronti, '_scaricaListaConfrontoScelta() {');
+    assert.match(scarica, /ficoProcess\.requestFicoData\(\s*\n?\s*"Menabo\/getListaTracciatoNew2\/" \+ id/);
+    assert.doesNotMatch(scarica, /scaricaContenutoKit|writeFileSync|eliminaReportIntegritaLocale/);
+    //Il download pesa: lo si dice e si mostra il caricamento finche' dura.
+    assert.match(scarica, /showLoading\("Scaricamento lista di confronto\.\.\."\)/);
+    assert.match(scarica, /hideLoading\(\)/);
+    assert.match(scarica, /reportConfronti\.recordsDellaLista\(lista\)/);
+
+    //Le lavorazioni fra cui scegliere sono quelle della stessa promo, chieste al server una
+    //volta per sessione.
+    const sorelle = corpoFunzione(confronti, '_lavorazioniDellaPromo() {');
+    assert.match(sorelle, /"Menabo\/getLavorazioniDellaPromo\/" \+ idKitLavorazione/);
+    assert.match(sorelle, /this\._lavorazioniSorelle = risposta/);
+
+    //Il json locale: la promo si verifica dall'idKit contro quell'elenco, e se non si puo'
+    //verificare decide l'operatore.
+    const locale = corpoFunzione(confronti, '_apriListaConfrontoLocale() {');
+    assert.match(locale, /fs2\.getFileForOpening\(\)/);
+    assert.match(locale, /reportConfronti\.recordsDellaLista\(lista\)/);
+    assert.match(locale, /sorelle\.lavorazioni\.find\(l => Number\(l\.id\) === idKit\)/);
+    assert.match(locale, /Utility\.confirm\(/);
+
+    //La lista scelta vale per la sessione: la si imposta una volta e il confronto si rifa'.
+    const imposta = corpoFunzione(confronti, '_impostaListaConfronto(lista) {');
+    assert.match(imposta, /this\._listaConfronto = Object\.assign\(/);
+    assert.match(imposta, /reportConfronti\.identitaTracciato\(lista\.records\)/);
+
+    //Il csv del confronto e' un file a se', con i filtri attivi in testa, e passa dal modulo
+    //verificato e dallo stesso scrittore del csv del report.
+    const csv = corpoFunzione(confronti, '_scaricaCsvConfrontoListe() {');
+    assert.match(csv, /reportConfrontoCsv\.conSuffissoConfronto\(await this\._nomeFileReportCsv\(cartella\)\)/);
+    assert.match(csv, /reportConfrontoCsv\.componiCsvConfronto\(/);
+    assert.match(csv, /reportConfronti\.descriviFiltro\(/);
+    assert.match(csv, /this\._scriviTestoUtf8\(cartella, nomeFile, testo\)/);
+});
+
+test('l\'endpoint delle lavorazioni della promo esiste e passa dalla forma verificata', () => {
+    const controller = fs.readFileSync(path.join(cartellaPlugin, '..', 'Istanta', 'Controllers', 'MenaboController.cs'), 'utf8');
+    assert.match(controller, /\[Route\("Menabo\/getLavorazioniDellaPromo\/\{idLavorazione\}"\)\]/);
+    //Il controller legge; la forma dell'elenco la decide la classe senza database.
+    assert.match(controller, /LavorazioniDellaPromo\.Componi\(corrente, tutte\)/);
+});
+
+test('il Trova apre la scheda referenza vera, non una sua copia', () => {
+    const azione = corpoFunzione(confronti, '_eseguiAzioneConfronto(action, payloadId, payload) {');
+    assert.match(azione, /case "find":\s*\n\s*await this\._apriSchedaDalReport\(payloadId, payload\)/);
+
+    const apri = corpoFunzione(confronti, '_apriSchedaDalReport(payloadId, payload) {');
+
+    //Prima porta l'operatore sul box, come faceva il Trova di prima.
+    assert.match(apri, /const box = this\._findElemento\(payload\)/);
+
+    //Poi chiude il report e apre la scheda dallo stesso punto da cui la apre l'evento di
+    //selezione: e' quello che garantisce un flusso solo.
+    assert.match(apri, /Utility\.chiudiModal\(\)/);
+    assert.match(apri, /schedaRef\.initSchedaRef\(this\._refPerSchedaDalReport\(box, dna\)\)/);
+
+    //La ref la compone il modulo verificato, non questo file.
+    const ref = corpoFunzione(confronti, '_refPerSchedaDalReport(box, dna) {');
+    assert.match(ref, /schedaRef\.refDalBoxPerReport\(box, dna/);
+
+    //Nessuna copia della scheda: il report non ricostruisce i suoi pannelli.
+    const codice = senzaCommenti(confronti);
+    assert.ok(!codice.includes('editReferenza'), 'la scheda non si ridisegna dentro il report');
+});
+
+test('dalla scheda aperta dal report non si scappa', () => {
+    const blocco = corpoFunzione(confronti, '_applicaBloccoSchedaDalReport() {');
+
+    //Le voci nascoste sono quelle dichiarate nella scheda, non una lista scritta qui.
+    assert.match(blocco, /schedaRef\.DAL_REPORT_VOCI_BARRA_NASCOSTE/);
+    assert.match(blocco, /schedaRef\.DAL_REPORT_VOCI_SOTTOMENU_NASCOSTE/);
+
+    //Gli eventi restano fermi: la scheda li libera uscendo da diversi suoi flussi, quindi il
+    //blocco va riaffermato, non solo impostato all'apertura.
+    assert.match(blocco, /indesignEvents\.setBusy\(true\)/);
+
+    const vigila = corpoFunzione(confronti, '_vigilaSchedaDalReport() {');
+    assert.match(vigila, /this\._applicaBloccoSchedaDalReport\(\)/);
+    assert.match(vigila, /schedaRef\.serveRiaggancioDalReport\(stato\.box\)/);
+
+    //Si esce solo dalla X: sgruppamenti e raggruppamenti deselezionano e riselezionano il box,
+    //e una deselezione non vuol dire che l'operatore ha finito.
+    const chiusura = corpoFunzione(confronti, '_crChiusuraSchedaDalReport() {');
+    assert.match(chiusura, /bottone\.on\("click", \(\) => this\._chiudiSchedaDalReport\(\)\)/);
+});
+
+test('il box rifatto non lascia la scheda appesa al box morto', () => {
+    //Reimpagina e cambi strutturali creano un box nuovo: con gli eventi fermi nessuno ripunta
+    //la scheda, e allora la ripunta il report.
+    const riaggancio = corpoFunzione(confronti, '_riagganciaSchedaDalReport() {');
+    assert.match(riaggancio, /this\._resolveBoxByCodiceGruppo\(stato\.record\)/);
+    assert.match(riaggancio, /schedaRef\.initSchedaRef\(this\._refPerSchedaDalReport\(box, dna\)\)/);
+
+    //Se il box non si ritrova, la scheda si chiude e il report si aggiorna.
+    assert.match(riaggancio, /this\._chiudiSchedaDalReport\(\)/);
+});
+
+test('chiudendo la scheda la referenza si ricontrolla da sola', () => {
+    const chiudi = corpoFunzione(confronti, '_chiudiSchedaDalReport() {');
+
+    //Una volta sola: la X si puo' premere due volte e il riaggancio puo' arrivarci insieme.
+    assert.match(chiudi, /this\._schedaDalReport = null/);
+    assert.match(chiudi, /clearInterval\(stato\.timer\)/);
+    assert.match(chiudi, /await this\._ricontrollaReferenzaDopoScheda\(stato\)/);
+    assert.match(chiudi, /this\._riapriReportDopoScheda\(\)/);
+
+    const ricontrollo = corpoFunzione(confronti, '_ricontrollaReferenzaDopoScheda(stato) {');
+
+    //La scheda si rilegge dal server: i record con cui il report e' nato sono di prima che
+    //l'operatore ci mettesse mano.
+    assert.match(ricontrollo, /await this\._leggiSchedaRefAggiornata\(stato\.codiceGruppo, stato\.idRec\)/);
+    //La preanalisi e' quella del report, sul box che abbiamo in mano, che puo' essere nuovo.
+    assert.match(ricontrollo, /await preAnalisiBoxMappato\(records, record\.elementoMappa, box\)/);
+    //Le decisioni stanno nel modulo verificato.
+    assert.match(ricontrollo, /reportIntegritaAvvio\.differenzeDopoRicontrollo\(/);
+    assert.match(ricontrollo, /reportIntegritaAvvio\.esitoChiusuraScheda\(/);
+    //Rifare tutto il report costerebbe quanto aprirlo: qui si tocca una referenza sola.
+    assert.doesNotMatch(ricontrollo, /mappaturaImpaginato|syncImpaginatoConServer/);
+
+    //Dalla whitelist non si ricontrolla: quelle segnalazioni sono parcheggiate apposta, e il
+    //record non sta nemmeno negli elenchi del report.
+    assert.match(ricontrollo, /state\.activeList === "whitelist"/);
+
+    //Il box puo' essere un altro: chi lo cerchera' domani deve trovare questo.
+    const riferimenti = corpoFunzione(confronti, '_aggiornaRiferimentiBox(record, box) {');
+    assert.match(riferimenti, /record\.inddId = box\.id/);
+    assert.match(riferimenti, /record\.elementoMappa\.refId = box\.id/);
+});
+
+test('il report che si chiude sotto la scheda non lascia l\'interfaccia bloccata', () => {
+    //Al cambio di documento il report si chiude da solo: se l'operatore era dentro la scheda,
+    //la barra deve tornare navigabile.
+    const chiudiReport = corpoFunzione(confronti, 'chiudiReportIntegrita(motivo = null) {');
+    assert.match(chiudiReport, /this\._schedaDalReport != null/);
+    assert.match(chiudiReport, /this\._terminaSchedaDalReport\(\)/);
+
+    const termina = corpoFunzione(confronti, '_terminaSchedaDalReport() {');
+    assert.match(termina, /\$\("#chiudiSchedaDalReport"\)\.remove\(\)/);
+    assert.match(termina, /\$\("#homeImage"\)\.show\(\)/);
+});
+
+test('il ricontrollo giudica col dato del server e allinea la lista', () => {
+    const ricontrollo = corpoFunzione(confronti, '_ricontrollaReferenzaDopoScheda(stato) {');
+
+    //Il dato riletto e' la verita': sistemando una segnalazione l'operatore allinea il box al
+    //server, e una lista rimasta indietro farebbe giudicare il box con un dato che non c'e'
+    //piu'.
+    assert.match(ricontrollo, /await this\._leggiSchedaRefAggiornata\(stato\.codiceGruppo, stato\.idRec\)/);
+    assert.match(ricontrollo, /this\._aggiornaListaKitConRecordFreschi\(records\)/);
+
+    //La preanalisi si rifa' per intero: dice tutto quello che c'e', non solo quello che se ne va.
+    assert.match(ricontrollo, /await preAnalisiBoxMappato\(records, record\.elementoMappa, box\)/);
+    assert.match(ricontrollo, /reportIntegritaAvvio\.esitoChiusuraScheda\(/);
+
+    //Non applica niente da se': torna il piano, perche' prima si fa vedere cosa se ne va.
+    assert.match(ricontrollo, /applica: \(\) =>/);
+    assert.match(ricontrollo, /chiaviRisolte/);
+
+    //Una segnalazione che sparisce senza che nessuno abbia toccato niente va spiegata, non
+    //subita: la diagnostica confronta il dato del server con quello della lista.
+    const diagnostica = corpoFunzione(confronti, '_diagnosticaRicontrollo(record, recordsFreschi, chiaviPrima, preAnalisi) {');
+    assert.match(diagnostica, /compiledFields/);
+    assert.match(diagnostica, /campi diversi fra server e lista/);
+
+    //La lista si riscrive sul disco e la copia in memoria la segue, altrimenti i Nuovi e il
+    //tracciato mostrerebbero il dato vecchio fino al prossimo download.
+    const lista = corpoFunzione(confronti, '_aggiornaListaKitConRecordFreschi(recordsFreschi) {');
+    assert.match(lista, /reportIntegritaAvvio\.sostituisciRecordNellaLista\(lista\.records, recordsFreschi\)/);
+    assert.match(lista, /fs\.writeFileSync\(percorso, JSON\.stringify\(lista\)\)/);
+    assert.match(lista, /contenutoKitInLavorazione = lista/);
+});
+
+test('una segnalazione che se ne va lo fa vedere', () => {
+    const dissolvi = corpoFunzione(confronti, '_dissolviElementi(elementi) {');
+
+    //In UXP opacity si scrive e si rilegge ma non si ridisegna: il tracciato del collaudo lo
+    //ha mostrato. Si attenua l'alfa dei colori, che UXP ridisegna, a passi radi, e i conti
+    //stanno nel modulo verificato. Delle animazioni di jQuery nel plugin non c'e' un uso vivo.
+    assert.match(dissolvi, /this\._bersagliDissolvenza\(el\)/);
+    assert.match(dissolvi, /dissolvenza\.numeroDiPassi\(\)/);
+    assert.match(dissolvi, /dissolvenza\.alfaAlPasso\(passo, passi\)/);
+    assert.match(dissolvi, /setInterval/);
+    assert.doesNotMatch(dissolvi, /fadeOut|\.animate\(/);
+
+    const bersagli = corpoFunzione(confronti, '_bersagliDissolvenza(radice) {');
+    assert.match(bersagli, /dissolvenza\.analizzaColore\(testo\)/);
+    const passoDiss = corpoFunzione(confronti, '_applicaPassoDissolvenza(bersagli, alfa) {');
+    assert.match(passoDiss, /dissolvenza\.coloreConAlfa\(bersaglio\.colori\[proprieta\], alfa\)/);
+    //Le immagini non hanno un colore da attenuare: si spengono a meta' strada.
+    assert.match(passoDiss, /dissolvenza\.immaginiSpente\(alfa\)/);
+
+    //Tutte le azioni che tolgono una riga la fanno prima sfumare.
+    ['_resolveSegnalazione(payloadId, payload) {',
+     '_mandaInWhitelist(payloadId, payload) {',
+     '_ripristinaDaWhitelist(payloadId, payload) {',
+     '_deleteElemento(payloadId, payload) {',
+     '_fixElemento(payloadId, payload) {'].forEach(firma => {
+        const corpo = corpoFunzione(confronti, firma);
+        assert.match(corpo, /await this\._dissolviRiga\(payloadId\)/, firma + ' deve dissolvere la riga');
+    });
+
+    //I pulsanti delle righe sono immagini: disabled non esiste e pointer-events in UXP non e'
+    //verificabile, quindi il blocco vero e' un interruttore, che non dipende dallo stile.
+    const azione = corpoFunzione(confronti, '_onConfrontoAction(ev, action) {');
+    assert.match(azione, /if \(this\.azioneReportInCorso\(\)\)/);
+    assert.match(azione, /this\._azioneReportInCorso = true/);
+    assert.match(azione, /this\._azioneReportInCorso = false/);
+
+    //Alla chiusura della scheda si vede andare via quello che e' stato risolto, e solo dopo lo
+    //stato cambia.
+    const chiudi = corpoFunzione(confronti, '_chiudiSchedaDalReport() {');
+    assert.match(chiudi, /this\._riapriReportDopoScheda\(\)[\s\S]*await this\._mostraSegnalazioniRisolte\(piano\)[\s\S]*piano\.applica\(\)/);
+});
+
+test('dalla scheda aperta dal report non si rifa la struttura del gruppo', () => {
+    //Le azioni strutturali della schermata di edit non si offrono a chi e' venuto a sistemare
+    //una segnalazione. La scheda normale resta com'e'.
+    assert.strictEqual(schedaRef.mostraAzioniStrutturaliInEdit(), true);
+
+    schedaRef.apertaDalReport = true;
+    assert.strictEqual(schedaRef.mostraAzioniStrutturaliInEdit(), false);
+    schedaRef.apertaDalReport = false;
+
+    const sorgenteScheda = sorgente('schedaRef.js');
+    assert.match(sorgenteScheda, /getCambioStrutturalePath != null && me\.mostraAzioniStrutturaliInEdit\(\)/);
+
+    //L'interruttore lo accende il report, non la scheda.
+    const apri = corpoFunzione(confronti, '_apriSchedaDalReport(payloadId, payload) {');
+    assert.match(apri, /schedaRef\.apertaDalReport = true/);
+    const termina = corpoFunzione(confronti, '_terminaSchedaDalReport() {');
+    assert.match(termina, /schedaRef\.apertaDalReport = false/);
+});
+
+test('la descrizione applicata si vede anche in edit', () => {
+    const sorgenteScheda = sorgente('schedaRef.js');
+
+    //Il pulsante compare solo se box e server non dicono la stessa cosa, e il giudizio lo da'
+    //la stessa preanalisi del report, sul solo campo della descrizione.
+    assert.match(sorgenteScheda, /if \(await this\.descrizioneDisallineata\(this\.schedeRefDati, box\)\)/);
+    assert.match(sorgenteScheda, /confronti\.confrontoBoxCompiledFieldPreAnalisi\(\s*\n\s*box,\s*\n\s*\[campo\]/);
+
+    //La schermata di edit legge il box: dopo averlo cambiato va rifatta, altrimenti mostra
+    //ancora la descrizione di prima.
+    const applica = corpoFunzione(sorgenteScheda, 'applicaDescrizioneDaServer() {');
+    assert.match(applica, /Utility\.applicaTagStringToInndTextFrame\(campo, contenuto, box\.geometricBounds\)/);
+    assert.match(applica, /await this\.selectSchedaRef\(1\)/);
+});
+
+test('un ricontrollo che non decide non scrive niente', () => {
+    const ricontrollo = corpoFunzione(confronti, '_ricontrollaReferenzaDopoScheda(stato) {');
+
+    //L'esito tiene conto degli errori dell'analisi e dell'assenza di dati da confrontare.
+    assert.match(ricontrollo, /nienteDaConfrontare: !reportIntegritaAvvio\.ciSonoDatiDaConfrontare\(dati\)/);
+    assert.match(ricontrollo, /this\._avvisaRicontrolloNonRiuscito\(esito\.motivo\)/);
+
+    //Niente si dissolve se niente e' stato risolto davvero.
+    assert.match(ricontrollo, /esito\.azione === "invariato"\s*\n\s*\? \[\]/);
+
+    //Nel caso invariato non si sovrascrivono l'analisi del record, i suoi dati e la lista.
+    const applica = ricontrollo.slice(ricontrollo.indexOf('applica: () =>'));
+    const uscita = applica.indexOf('if (esito.azione === "invariato")');
+    assert.ok(uscita >= 0, 'il caso invariato deve uscire prima di scrivere');
+    assert.ok(applica.indexOf('record.preAnalisi = preAnalisi') > uscita,
+        "l'analisi del record non si scrive prima di sapere se vale");
+    assert.ok(applica.indexOf('this._aggiornaListaKitConRecordFreschi(records)') > uscita,
+        'la lista del kit non si riscrive con un dato non verificato');
+
+    //Prima di dire che il box non c'e' piu' lo si cerca come lo cerca il Trova.
+    assert.match(ricontrollo, /box = this\._resolveBoxFromRecord\(record\)/);
+
+    //La diagnostica riporta anche gli errori dell'analisi: sono la spiegazione del caso.
+    const diagnostica = corpoFunzione(confronti, '_diagnosticaRicontrollo(record, recordsFreschi, chiaviPrima, preAnalisi) {');
+    assert.match(diagnostica, /errori dell'analisi/);
+});
+
+test('il box della scheda dal report se lo tiene il report', () => {
+    //La selezione dell'operatore va e viene, e la scheda svuotandosi perde il suo riferimento:
+    //se il ricontrollo dipendesse da loro, una deselezione basterebbe a impedirlo.
+    const apri = corpoFunzione(confronti, '_apriSchedaDalReport(payloadId, payload) {');
+    assert.match(apri, /\n\s+box,\s/);
+
+    const vigila = corpoFunzione(confronti, '_vigilaSchedaDalReport() {');
+    assert.match(vigila, /schedaRef\.serveRiaggancioDalReport\(stato\.box\)/);
+
+    const riaggancio = corpoFunzione(confronti, '_riagganciaSchedaDalReport() {');
+    assert.match(riaggancio, /stato\.box = box/);
+
+    const ricontrollo = corpoFunzione(confronti, '_ricontrollaReferenzaDopoScheda(stato) {');
+    assert.match(ricontrollo, /let box = schedaRef\.serveRiaggancioDalReport\(stato\.box\) \? null : stato\.box/);
+
+    //Quello che conta e' se il riferimento e' ancora valido, e lo si chiede al box.
+    const codice = senzaCommenti(confronti);
+    assert.ok(!codice.includes('schedaRef.refSelected'),
+        'il report non deve leggere il box dalla scheda');
+    assert.ok(!/=\s*app\.selection/.test(codice),
+        'il report non deve leggere il box dalla selezione');
+});
+
+test('il record ricontrollato resta dove stava', () => {
+    //Togliere e rimettere il record lo mandava in fondo al suo gruppo di pagina: il tracciato
+    //del collaudo lo ha mostrato alla posizione 12 di 13, e l'operatore, che lo cercava
+    //dov'era, lo dava per sparito. Se la categoria non cambia, il record si aggiorna in posto.
+    const ricontrollo = corpoFunzione(confronti, '_ricontrollaReferenzaDopoScheda(stato) {');
+    assert.match(ricontrollo, /const categoriaAttuale = this\._categoriaDelRecord\(record\)/);
+    assert.match(ricontrollo, /esito\.categoria === categoriaAttuale/);
+
+    //L'ultima applica e' quella del caso con il box: la prima e' quella del box sparito.
+    const applica = ricontrollo.slice(ricontrollo.lastIndexOf('applica: () =>'));
+    const inPosto = applica.indexOf('esito.categoria === categoriaAttuale');
+    const rimozione = applica.indexOf('this._rimuoviRecordDalReport(record)');
+    assert.ok(inPosto >= 0 && rimozione > inPosto, 'la rimozione avviene solo se la categoria cambia');
+
+    const categoria = corpoFunzione(confronti, '_categoriaDelRecord(record) {');
+    assert.match(categoria, /this\._sameReportRecord\(item, target\)/);
+
+    //E la vista si traccia: il dato puo' essere giusto e la vista no.
+    const chiudi = corpoFunzione(confronti, '_chiudiSchedaDalReport() {');
+    assert.match(chiudi, /this\._tracciaScheda\("chiusura:vista", this\._descriviRigaDelRecord\(piano\.record\)\)/);
+
+    //Il ridisegno riparte dall'alto: una riga al suo posto ma fuori dallo schermo sembra
+    //sparita lo stesso. Se il record e' ancora in un elenco visibile lo si riporta sotto gli
+    //occhi, con lo stesso gesto che il report usa per i duplicati.
+    assert.match(chiudi, /this\._evidenziaRigaDelRecord\(piano\.record\)/);
+    const evidenzia = corpoFunzione(confronti, '_evidenziaRigaDelRecord(record, tentativi = 5) {');
+    assert.match(evidenzia, /this\._scrollReportRowIntoView\(riga\)/);
+    //Il primo tentativo aspetta: in UXP le misure lette subito dopo aver costruito
+    //l'interfaccia non sono attendibili.
+    assert.match(evidenzia, /setTimeout\(/);
+});
+
+test('anche le scritte sfumano, e la riga sparisce appena sfumata', () => {
+    //Il tracciato del collaudo: su 14 elementi solo 4 avevano un colore leggibile, i quattro
+    //bordi della riga. Il colore del testo ereditato il motore non lo dice, e le scritte delle
+    //segnalazioni restavano ferme mentre il resto sfumava. Serve un colore di base.
+    const bersagli = corpoFunzione(confronti, '_bersagliDissolvenza(radice) {');
+    assert.match(bersagli, /this\._coloreTestoDegliAntenati\(radice\) \|\| dissolvenza\.COLORE_TESTO_DI_BASE/);
+    assert.match(bersagli, /if \(bersaglio\.colori\.color == null && !bersaglio\.immagine\)/);
+
+    //Sfumata, la riga se ne va subito: il salvataggio del report e il ridisegno arrivano dopo,
+    //e una riga sbiancata che li aspetta e' un istante di vuoto.
+    const riga = corpoFunzione(confronti, '_dissolviRiga(payloadId) {');
+    assert.match(riga, /await this\._dissolviElementi\(riga\)[\s\S]*this\._removeConfrontoRow\(payloadId\)/);
+
+    //UXP ridisegna solo quando il ciclo degli eventi e' libero: dopo la rimozione si cede il
+    //passo, altrimenti il salvataggio del report e il ridisegno la scavalcano e la riga
+    //sbiancata resta a schermo finche' non hanno finito.
+    assert.match(riga, /this\._removeConfrontoRow\(payloadId\);\s*\n\s*await this\._lasciaRidisegnare\(\)/);
+    const attesa = corpoFunzione(confronti, '_lasciaRidisegnare() {');
+    assert.match(attesa, /setTimeout\(resolve, this\.ATTESA_RIDISEGNO_MS\)/);
+
+    //Quanto costano salvataggio e ridisegno lo dice il tracciato.
+    const salva = corpoFunzione(confronti, '_saveCurrentReportAndWhitelist() {');
+    assert.match(salva, /this\._tracciaScheda\("report:salvato"/);
+    const ridisegna = corpoFunzione(confronti, '_refreshConfrontoReportUi() {');
+    assert.match(ridisegna, /this\._tracciaScheda\("report:ridisegnato"/);
+
+    const risolte = corpoFunzione(confronti, '_mostraSegnalazioniRisolte(piano) {');
+    assert.match(risolte, /this\._rimuoviDallaVista\(elementi\)/);
+    assert.match(risolte, /this\._rimuoviDallaVista\(\[riga\]\)/);
+});
+
+test('l\'intestazione del confronto non si schiaccia sulla prima riga', () => {
+    //In UXP un figlio di una colonna flex senza flexShrink 0 viene schiacciato e finisce sopra
+    //il vicino: l'intestazione con le due liste e i filtri si sovrapponeva al primo risultato.
+    //E' la stessa regola che le righe del report chiamano "il punto importante".
+    const intestazione = corpoFunzione(confronti, '_crIdentitaConfronto() {');
+    assert.match(intestazione, /riga\.style\.flexShrink = "0"/);
+    assert.match(intestazione, /riga\.style\.flexGrow = "0"/);
+    assert.match(intestazione, /riga\.style\.flexBasis = "auto"/);
 });

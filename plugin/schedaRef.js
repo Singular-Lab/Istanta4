@@ -3,6 +3,7 @@ const InputEditController = require('./InputEditController');
 const XMLHttpRequestClient = require('./XMLHttpRequestClient');
 const DataCaricamentoFoto = require('./dataCaricamentoFoto');
 const NoRenderElementi = require('./noRenderElementi');
+const RicollegaEsiti = require('./ricollegaEsiti');
 
 const schedaRef = {
     refSelected: null,
@@ -46,6 +47,169 @@ const schedaRef = {
             value = false;
         }
         this.isBusy = value;
+    },
+
+    //I20-981 (Lotto 4a): dal Report Integrita' si arriva a questa scheda, ed e' questa scheda,
+    //mostrata al posto del report: non una copia, che vorrebbe dire duplicare il markup di
+    //index.html e i suoi id, cioe' due schede che col tempo si allontanano. Quello che cambia
+    //e' solo cosa resta raggiungibile, e sono le regole qui sotto.
+
+    //Dalla scheda aperta dal report non si naviga altrove: gli eventi del plugin restano
+    //fermi, e il resto dell'interfaccia non sarebbe governato da nessuno.
+    DAL_REPORT_VOCI_BARRA_NASCOSTE: ["homeImage", "menaboTab", "grigliaTab", "utilityImage", "artworkTab", "raggruppaImage"],
+
+    //Sgruppa e Struttura restano fuori: cambiano la composizione del gruppo, e non e' quello
+    //che si viene a fare da qui.
+    DAL_REPORT_VOCI_SOTTOMENU_NASCOSTE: ["Tab8", "Tab13"],
+
+    //Vero mentre la scheda e' stata aperta dal Report Integrita'. Lo accende e lo spegne il
+    //report; la scheda lo legge soltanto, per sapere cosa non deve offrire.
+    apertaDalReport: false,
+
+    /// Le azioni strutturali offerte dalla schermata di edit non si mostrano quando si arriva
+    /// dal report: da li' si viene a sistemare una segnalazione, e rifare la struttura del
+    /// gruppo e' un'altra cosa, che si fa dalla scheda normale.
+    mostraAzioniStrutturaliInEdit() {
+        return this.apertaDalReport !== true;
+    },
+
+    /// Il primario del gruppo e il suo tracciato: la regola del sottogruppo e' la stessa che
+    /// usa la preanalisi, se c'e' comanda lui. Altrimenti si allineerebbe il box a un dato
+    /// diverso da quello con cui viene giudicato.
+    tracciatoDelPrimario(records) {
+        const primario = (records || []).find(
+            r => r != null && r.recordInTracciato != null && r.recordInTracciato["StatoSelezione"] == 1);
+
+        if (primario == null) {
+            return null;
+        }
+
+        return primario.sottogruppo ? primario.sottogruppo : primario.recordInTracciato;
+    },
+
+    /// Il campo compilato della descrizione per il primario della scheda caricata. E'
+    /// esattamente cio' con cui il Report Integrita' confronta il box, quindi riportarlo nel
+    /// box allinea le due cose per costruzione.
+    campoDescrizioneCompilatoDelPrimario(records) {
+        const tracciato = this.tracciatoDelPrimario(records);
+        const campi = (tracciato != null && tracciato.compiledFields) || [];
+
+        const campo = campi.find(
+            c => c != null && String(c.labelName || "").toLowerCase() === "descrizione");
+
+        return campo != null && campo.content ? campo : null;
+    },
+
+    descrizioneCompilataDelPrimario(records) {
+        const campo = this.campoDescrizioneCompilatoDelPrimario(records);
+        return campo != null ? campo.content : null;
+    },
+
+    /// Del verdetto della preanalisi si guarda solo il campo che stiamo per riscrivere. La
+    /// preanalisi giudica tutto il box e non i soli campi che le passi: le foto extra che
+    /// stanno nel box e non nell'elenco che le hai dato risultano tutte in piu', e gli
+    /// elementi nascosti rimessi visibili diventano segnalazioni loro. Sono cose vere, ma che
+    /// riscrivere la descrizione non aggiusta: offrire il pulsante per quelle sarebbe una
+    /// promessa che non manteniamo.
+    differenzaDaAllineare(differenze, labelName) {
+        const etichetta = String(labelName || "").toLowerCase();
+
+        if (etichetta === "") {
+            return false;
+        }
+
+        return (differenze || []).some(differenza => {
+            if (differenza == null) {
+                return false;
+            }
+
+            if (String(differenza.label || "").toLowerCase() !== etichetta) {
+                return false;
+            }
+
+            //Il testo o il suo stile: tutti e due si allineano riscrivendo il campo, perche' il
+            //contenuto del server si porta dietro gli stili di carattere. Un campo che nel box
+            //non c'e' proprio non si aggiusta scrivendoci dentro.
+            return differenza.difference === "contenuto" || differenza.difference === "paragrafo";
+        });
+    },
+
+    /// Il box dice una descrizione diversa da quella del server? Non lo decidiamo qui: lo
+    /// chiediamo alla stessa preanalisi che usa il Report Integrita', sul solo campo della
+    /// descrizione. Cosi' il pulsante si offre esattamente quando il report si lamenterebbe,
+    /// e non compare quando non c'e' niente da allineare.
+    async descrizioneDisallineata(records, box) {
+        const campo = this.campoDescrizioneCompilatoDelPrimario(records);
+
+        if (campo == null || box == null) {
+            return false;
+        }
+
+        try {
+            if (!box.isValid) {
+                return false;
+            }
+
+            const tracciato = this.tracciatoDelPrimario(records);
+
+            const preAnalisi = await confronti.confrontoBoxCompiledFieldPreAnalisi(
+                box,
+                [campo],
+                [],
+                [],
+                null,
+                null,
+                false,
+                NoRenderElementi.elencoPerSegnalazioni(tracciato.noRenderElementi, tracciato.membriGruppoFoto)
+            );
+
+            return this.differenzaDaAllineare(
+                preAnalisi != null ? preAnalisi.differenze : null, campo.labelName);
+        }
+        catch (error) {
+            //Se non riusciamo a giudicare, il pulsante si offre lo stesso: proporre un
+            //allineamento che non serviva costa un clic, nasconderlo quando serviva costa una
+            //segnalazione che l'operatore non sa come togliersi.
+            console.error("Allineamento della descrizione non verificabile:", error);
+            return true;
+        }
+    },
+
+    /// La ref che initSchedaRef si aspetta, composta dal box e dal suo dna: la stessa forma
+    /// che prepara l'evento di selezione, perche' da li' in poi il flusso deve essere uno solo.
+    refDalBoxPerReport(box, dna, contesto) {
+        if (box == null || dna == null) {
+            return null;
+        }
+
+        const dati = contesto || {};
+
+        return {
+            pag: dati.pagina != null ? dati.pagina : -1,
+            pagRef: dati.paginaRef != null ? dati.paginaRef : null,
+            item: box,
+            boxOriginalBounds: dati.bounds != null ? dati.bounds : null,
+            codice: dna.codice,
+            codiceGruppo: dna.codice_gruppo,
+            idRec: dna.idRec,
+            meccanica: dna.box
+        };
+    },
+
+    /// Il box su cui la scheda sta lavorando va ripreso: reimpagina e cambi strutturali ne
+    /// creano uno nuovo e il vecchio decade, e con gli eventi fermi nessuno ripunta la scheda.
+    serveRiaggancioDalReport(box) {
+        if (box == null) {
+            return true;
+        }
+
+        try {
+            return box.isValid !== true;
+        }
+        catch (err) {
+            //Un box che non risponde nemmeno su isValid e' un box perso.
+            return true;
+        }
     },
 
     initSchedaRef(ref) {
@@ -447,10 +611,22 @@ const schedaRef = {
                         if (objResult.codici.length > 0){
                             var element = objResult.codici[0];
                             var allElementGruppo = objResult.codici;
-                            if(element.stato == 1 || element.stato == 2 || element.stato == 3){
-                                if(element.stato == 1){
-                                    messaggioUtente("Code SRF-12 Referenza già impaginata", "warning",false, 3);
+
+                            //I20-986: si riferisce l'esito di ogni elemento, non solo del primo, e
+                            //soprattutto si mostra l'errore che il server scrive dentro al singolo:
+                            //prima veniva letto solo l'errore generale, e un ricollegamento fallito
+                            //passava per riuscito con la scheda che si aggiornava come se nulla fosse.
+                            for (var iEsito = 0; iEsito < allElementGruppo.length; iEsito++) {
+                                var avviso = RicollegaEsiti.messaggioPerElemento(allElementGruppo[iEsito]);
+                                if (avviso != null) {
+                                    messaggioUtente(avviso.testo, avviso.tipo, false, 5);
+                                    if (avviso.tipo === "error") {
+                                        console.error(avviso.testo);
+                                    }
                                 }
+                            }
+
+                            if(element.stato == 1 || element.stato == 2 || element.stato == 3){
                                 if (!externalCall && box != null && box.isValid) {
                                     var idRec = dna.idRec;
                                     if (objResult.idRecSelezionato != null && objResult.idRecSelezionato != 0 && objResult.idRecSelezionato != idRec) {
@@ -477,7 +653,7 @@ const schedaRef = {
                                 }
                             }
                             else if (element.stato == 5){
-                                messaggioUtente("Code SRF-11 Referenza inesistente nello storico, ricollegamento non possibile", "error",false, 3);
+                                //il messaggio l'ha gia' dato il giro sugli esiti
                             }
                             else if (element.stato == 7){
                                 var skipImpaginazione = codiceGruppo != null;
@@ -527,16 +703,35 @@ const schedaRef = {
                 // }
                 
 
+                //I20-986: un box appoggiato fuori dalla pagina non ha una pagina, e chiederne il
+                //nome faceva fallire tutto con l'errore generico, che non dice cosa fare. Si
+                //riconosce il caso e lo si dice.
+                var nomePagina = "1";
+                if (box != null) {
+                    var paginaDelBox = null;
+                    try { paginaDelBox = box.parentPage; } catch (e) { paginaDelBox = null; }
+
+                    if (paginaDelBox == null) {
+                        indesignEvents.setBusy(false);
+                        hideLoading();
+                        messaggioUtente("Code SRF-18 Il box non si trova su una pagina del documento: spostalo nella pagina in cui deve stare e riprova il ricollegamento.", "error");
+                        console.error("Code SRF-18 Box fuori pagina durante il ricollegamento del codice " + codiceGruppo);
+                        return;
+                    }
+
+                    nomePagina = paginaDelBox.name;
+                }
+
                 var formData = new FormData();
                 var request = {
                     idLavorazione: idKitLavorazione,
                     canaleDiPartenza: canale,
                     areaDiPartenza: area,
-                    rangePagine: box != null ? box.parentPage.name : "1",
+                    rangePagine: nomePagina,
                     elementoDaRicollegare: {
                         codiceGruppo: codiceGruppo,
                         idRec: idRec,
-                        pag: box != null ? box.parentPage.name : "1",
+                        pag: nomePagina,
                         forzaloAllaPaginaIndicata: true,
                     }
                 }
@@ -997,6 +1192,17 @@ const schedaRef = {
 
         //Inserisco lo spazio per far immettere le info di MISMATCH se ci sono
         $("#editReferenza").append('<div id="mismatchWarningPanel" style="padding:5px;"></div>');
+
+        //I20-981: la descrizione del server si puo' riportare nel box senza passare dal
+        //salvataggio, per quando il dato e' gia' a posto a monte e il box e' rimasto indietro.
+        //Si offre solo quando le due cose non dicono la stessa cosa.
+        if (await this.descrizioneDisallineata(this.schedeRefDati, box)) {
+            const bottoneDescrizione = $('<sp-action-button id="applicaDescrizioneDaServer" style="font-size: 12px; margin: 4px 0px 8px 0px;">Applica descrizione da server</sp-action-button>');
+            bottoneDescrizione.on("click", function () {
+                me.applicaDescrizioneDaServer();
+            });
+            $("#editReferenza").append(bottoneDescrizione);
+        }
 
 
         if (codice != $("#elementiArtwork").val()) {
@@ -1582,7 +1788,7 @@ const schedaRef = {
             //writeDebugMessageForCrash("Inizio cambio strutturale");
 
 
-            if (cambiStrutturaliJs.getCambioStrutturalePath != null) {
+            if (cambiStrutturaliJs.getCambioStrutturalePath != null && me.mostraAzioniStrutturaliInEdit()) {
                 //Implementazioni path di cambio strutturale
 
                 let cambiStrutturali = await cambiStrutturaliJs.getCambioStrutturalePath(primario, box);
@@ -1974,6 +2180,47 @@ const schedaRef = {
         hideLoading();
         onresizeWindow();
 
+    },
+
+    /// Riporta nel box la descrizione come la dice il server, senza toccare il dato: allinea
+    /// il box a quello che il Report Integrita' si aspetta di leggerci.
+    async applicaDescrizioneDaServer() {
+        try {
+            const contenuto = this.descrizioneCompilataDelPrimario(this.schedeRefDati);
+
+            if (contenuto == null) {
+                messaggioUtente("Code SRF-91 Nessuna descrizione compilata dal server per questa referenza", "warning", false, 4);
+                return;
+            }
+
+            const box = this.refSelected != null ? this.refSelected.item : null;
+
+            if (box == null || !box.isValid) {
+                messaggioUtente("Code SRF-92 Il box non e' piu' valido: descrizione non applicata", "error", false, 4);
+                return;
+            }
+
+            const campo = Utility.getFieldByLabel("descrizione", box);
+
+            if (campo == null) {
+                messaggioUtente("Code SRF-93 Il box non ha un campo descrizione", "warning", false, 4);
+                return;
+            }
+
+            //Lo stesso passaggio che usa il salvataggio delle modifiche: il contenuto e' gia'
+            //nella forma a tag di stile di carattere.
+            Utility.applicaTagStringToInndTextFrame(campo, contenuto, box.geometricBounds);
+            messaggioUtente("Descrizione allineata al dato del server", "success", false, 3);
+
+            //La schermata di edit legge il box: dopo averlo cambiato va rifatta, altrimenti
+            //continuerebbe a mostrare la descrizione di prima. E rifacendosi si accorge da
+            //sola che non c'e' piu' niente da allineare, e il pulsante sparisce.
+            await this.selectSchedaRef(1);
+        }
+        catch (error) {
+            console.error(error);
+            messaggioUtente("Code SRF-94 Errore applicando la descrizione dal server: " + error.message, "error", false, 5);
+        }
     },
 
     applicaReimpaginazione(){

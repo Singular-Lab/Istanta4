@@ -1759,6 +1759,15 @@ namespace Istanta.Models
         public TipoFoto tipo { get; set; }
         public FileInddUploadMethod uploadMethod { get; set; }
         public string? guidId { get; set; }
+        /// <summary>
+        /// I20-985: la foto si archivia e basta, senza diventare quella in uso.
+        ///
+        /// Dalla scheda articolo si caricano scatti che non devono sostituire la primaria:
+        /// selezionarli vorrebbe dire cambiare la foto del prodotto sotto gli occhi
+        /// dell'operatore, che non l'ha chiesto. Il Plugin non la valorizza e continua a
+        /// caricare come prima.
+        /// </summary>
+        public bool archiviaSenzaSelezionare { get; set; } = false;
 
 
         public void Normalize()

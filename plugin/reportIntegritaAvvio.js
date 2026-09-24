@@ -125,6 +125,179 @@ function deveChiudereReport(documentoDelReport, documentoAttuale) {
     return attuale !== String(documentoDelReport);
 }
 
+//I20-981 (Lotto 4a): la scheda referenza si puo' aprire dal report, e quando si chiude quella
+//referenza va ricontrollata da sola, perche' l'operatore puo' aver risolto le sue segnalazioni
+//standoci dentro. Queste sono le regole di dove va a finire il record.
+
+/// La categoria del record dopo il ricontrollo: la stessa classificazione con cui il report
+/// nasce, cosi' un record ricontrollato e uno appena analizzato finiscono nello stesso posto a
+/// parita' di esito.
+function categoriaRecordRicontrollato(preAnalisi, haDuplicato) {
+    if (haDuplicato) {
+        return "recordCambiati";
+    }
+
+    if (preAnalisi == null) {
+        return null;
+    }
+
+    if ((preAnalisi.errors || []).length > 0) {
+        return "recordConErrori";
+    }
+
+    if ((preAnalisi.differenze || []).length > 0) {
+        return "recordCambiati";
+    }
+
+    return "recordGiusti";
+}
+
+/// Il dato riletto ha qualcosa da confrontare? Se non porta ne' campi compilati ne' foto, il
+/// confronto non guarda niente e torna zero differenze: uno zero che non vuol dire "a posto",
+/// vuol dire "non ho guardato".
+function ciSonoDatiDaConfrontare(dati) {
+    if (dati == null) {
+        return false;
+    }
+
+    const quanti = (elenco) => (Array.isArray(elenco) ? elenco.length : 0);
+
+    return (quanti(dati.compiledFields) +
+        quanti(dati.listaFoto) +
+        quanti(dati.fotoExtra) +
+        quanti(dati.fotoExtraAuto)) > 0;
+}
+
+/// Che fare del record alla chiusura della scheda.
+/// La regola che tiene tutto insieme: il report si cambia solo quando il ricontrollo ha
+/// davvero potuto confrontare. In tutti gli altri casi si resta com'era, perche' una
+/// segnalazione tolta per sbaglio e' lavoro che l'operatore non sa piu' di dover fare.
+function esitoChiusuraScheda(situazione) {
+    const dati = situazione || {};
+
+    //Il box non c'e' piu': la referenza esce dal report e ricompare fra le Nuove, che si
+    //calcolano per differenza da chi nel report c'e' gia'.
+    if (!dati.boxPresente) {
+        return { azione: "rimuovi", categoria: null };
+    }
+
+    //Senza preanalisi non sappiamo niente di nuovo: meglio lasciare il report com'era che
+    //dichiarare risolto quello che non abbiamo controllato.
+    if (dati.preAnalisi == null) {
+        return { azione: "invariato", categoria: null };
+    }
+
+    //L'analisi e' finita in errore. Non rilancia: mette il messaggio negli errori e torna le
+    //differenze raccolte fino a li', che possono essere zero. Quello zero non e' una prova che
+    //le segnalazioni siano risolte, e un record classificato per errore finirebbe fra quelli
+    //con errori, che il report non mostra in nessuna scheda: sparirebbe dalla vista.
+    if ((dati.preAnalisi.errors || []).length > 0) {
+        return { azione: "invariato", categoria: null, motivo: "errori" };
+    }
+
+    //Niente da confrontare non vuol dire tutto a posto.
+    if (dati.nienteDaConfrontare === true) {
+        return { azione: "invariato", categoria: null, motivo: "nienteDaConfrontare" };
+    }
+
+    return {
+        azione: "sposta",
+        categoria: categoriaRecordRicontrollato(dati.preAnalisi, dati.haDuplicato === true)
+    };
+}
+
+/// Le differenze di confronto non vengono dal box: il ricontrollo del box non le puo' vedere,
+/// e quindi si riportano come stavano.
+function differenzeDiConfronto(record) {
+    const differenze = (record && record.preAnalisi && record.preAnalisi.differenze) || [];
+    return differenze.filter(d => d != null && d.origine === "confronto");
+}
+
+/// Le differenze del record dopo il ricontrollo, nell'ordine in cui le mette la costruzione
+/// del report: prima l'integrita', poi il confronto, il duplicato in fondo.
+function differenzeDopoRicontrollo(differenzeIntegrita, differenzeConfronto, duplicateInfo) {
+    const risultato = (differenzeIntegrita || []).filter(d => d != null && d.origine !== "confronto");
+
+    (differenzeConfronto || []).forEach(d => risultato.push(d));
+
+    if (duplicateInfo != null) {
+        risultato.push({
+            label: "Duplicato",
+            difference: "box duplicato: istanza " + duplicateInfo.index + " di " + duplicateInfo.total
+        });
+    }
+
+    return risultato;
+}
+
+//I20-981 (Lotto 4a): il dato riletto dal server alla chiusura della scheda prende il posto di
+//quello nella lista del kit. Serve perche' l'operatore, sistemando una segnalazione, allinea
+//il box al server: se la lista restasse indietro, il report continuerebbe a giudicare il box
+//con un dato che non e' piu' quello vero.
+
+/// L'identita' di un record di lista: l'idRec quando c'e' da tutte e due le parti, altrimenti
+/// il codice della referenza.
+function idRecDiLista(record) {
+    const diretto = record != null ? record.idRec : null;
+    const dentro = record != null && record.recordInTracciato != null ? record.recordInTracciato.idRec : null;
+    const valore = diretto != null && diretto !== "" ? diretto : dentro;
+
+    if (valore == null || valore === "") {
+        return null;
+    }
+
+    const numero = Number(valore);
+    return isNaN(numero) ? String(valore) : numero;
+}
+
+function codiceDiLista(record) {
+    const tracciato = record != null ? record.recordInTracciato : null;
+    const codice = tracciato != null ? tracciato["Referenza.Codice"] : null;
+    return codice == null ? "" : String(codice);
+}
+
+function stessoRecordDiLista(uno, altro) {
+    if (uno == null || altro == null) {
+        return false;
+    }
+
+    const idUno = idRecDiLista(uno);
+    const idAltro = idRecDiLista(altro);
+
+    if (idUno != null && idAltro != null) {
+        return idUno === idAltro;
+    }
+
+    const codiceUno = codiceDiLista(uno);
+    return codiceUno !== "" && codiceUno === codiceDiLista(altro);
+}
+
+/// Sostituisce nella lista i record riletti dal server. La scheda non restituisce tutte le
+/// chiavi che la lista ha (label, forzaSoloUscitaSottogruppo sono della lista), quindi si
+/// sovrascrive quello che arriva e si conserva il resto. Un record che nella lista non c'e'
+/// non si aggiunge: la lista dice quali referenze sono nel kit, e non e' questo il posto per
+/// cambiarlo.
+function sostituisciRecordNellaLista(recordsLista, recordsFreschi) {
+    const lista = Array.isArray(recordsLista) ? recordsLista.slice() : [];
+    let sostituiti = 0;
+
+    (recordsFreschi || []).forEach(fresco => {
+        if (fresco == null) {
+            return;
+        }
+
+        const indice = lista.findIndex(item => stessoRecordDiLista(item, fresco));
+        if (indice < 0) {
+            return;
+        }
+
+        lista[indice] = Object.assign({}, lista[indice], fresco);
+        sostituiti++;
+    });
+
+    return { records: lista, sostituiti };
+}
+
 module.exports = {
     MINUTI_LISTA_RECENTE,
     ORE_REPORT_DA_CHIEDERE,
@@ -133,5 +306,11 @@ module.exports = {
     listaERecente,
     decidiReportEsistente,
     componiRangePagine,
-    deveChiudereReport
+    deveChiudereReport,
+    categoriaRecordRicontrollato,
+    esitoChiusuraScheda,
+    ciSonoDatiDaConfrontare,
+    differenzeDiConfronto,
+    differenzeDopoRicontrollo,
+    sostituisciRecordNellaLista
 };

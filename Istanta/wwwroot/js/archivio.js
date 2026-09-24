@@ -173,6 +173,36 @@ class Archivio {
             ME.CaricaNuovaFotoExtra($(this));
         });
 
+        pagina.on("click", "[data-azione='aggiungiFotoArticolo']", function () {
+            ME.AggiungiFotoArticolo();
+        });
+
+        pagina.on("change", "[data-azione='fileFotoArticoloScelto']", function () {
+            ME.AnteprimaFotoArticolo($(this));
+        });
+
+        pagina.on("click", "[data-azione='confermaFotoArticolo']", function () {
+            ME.ConfermaFotoArticolo();
+        });
+
+        pagina.on("click", "[data-azione='annullaFotoArticolo']", function () {
+            ME.AnnullaFotoArticolo();
+        });
+
+        pagina.on("change", "[data-azione='destinazioneFotoArticolo']", function () {
+            ME.DestinazioneFotoArticoloCambiata($(this));
+        });
+
+        pagina.on("change", "[data-azione='destinazioneFotoEsistente']", function () {
+            ME.DestinazioneFotoEsistenteCambiata($(this));
+        });
+
+        pagina.on("click", "[data-azione='salvaDestinazioneFoto']", function () {
+            ME.SalvaDestinazioneFoto(Archivio.gruppoDestinazioneDi($(this).attr("data-idfoto")));
+        });
+
+        this.InizializzaDestinazioniFotoEsistenti();
+
         //Canale e area stanno sul pulsante Salva della stessa riga, dove le metteva la vista.
         pagina.on("click", "[data-azione='cronologiaModifiche']", function () {
             var salva = $(this).closest(".row").find("#bottoneSalva");
@@ -182,6 +212,142 @@ class Archivio {
         pagina.on("click", "[data-azione='salvaRevisione']", function () {
             ME.salvaRevisione($(this), null, $(this).attr("canale"), $(this).attr("area"));
         });
+    }
+
+    /// I20-985: il tipo con cui il browser sa disegnare questo file, oppure null.
+    /// Un psd non lo sa disegnare, e resta il caso che capita piu' spesso.
+    /// Quanto si legge della testa di un psd per cercarci la miniatura: le risorse immagine
+    /// stanno all'inizio, otto megabyte sono abbondanti anche per un file da centinaia.
+    static get TESTA_PSD() { return 8 * 1024 * 1024; }
+
+    /// Oltre questa misura non si legge il file per intero: diventerebbe testo in memoria per
+    /// un terzo in piu' della sua dimensione.
+    static get LIMITE_ANTEPRIMA() { return 40 * 1024 * 1024; }
+
+    /// Il lato dell'anteprima disegnata: il riquadro e' da 150, il doppio basta perche' si veda
+    /// nitida anche sugli schermi fitti.
+    static get LATO_ANTEPRIMA() { return 300; }
+
+    /// L'immagine decodificata, ridisegnata piccola e resa come indirizzo data. Si rimpicciolisce
+    /// perche' l'originale come indirizzo data sarebbe enorme, e qui serve solo una miniatura.
+    static indirizzoRimpicciolito(immagine) {
+        try {
+            var misure = Archivio.misureRimpicciolite(immagine.width, immagine.height, Archivio.LATO_ANTEPRIMA);
+            if (misure.larghezza === 0) {
+                return null;
+            }
+
+            var tela = document.createElement("canvas");
+            tela.width = misure.larghezza;
+            tela.height = misure.altezza;
+            tela.getContext("2d").drawImage(immagine, 0, 0, misure.larghezza, misure.altezza);
+
+            //png e non jpeg: quello che ha il fondo trasparente non deve diventare nero.
+            return tela.toDataURL("image/png");
+        }
+        catch (e) {
+            console.log("Anteprima non disegnabile: " + e);
+            return null;
+        }
+    }
+
+    /// Se il file e' un psd. E' l'unico formato che si tratta a parte, perche' il browser non
+    /// lo disegna ma dentro ci sta una miniatura da tirare fuori.
+    static eUnPsd(nomeFile) {
+        var nome = typeof nomeFile === "string" ? nomeFile.toLowerCase() : "";
+        return nome.endsWith(".psd") || nome.endsWith(".psb");
+    }
+
+    /// Quanto grande disegnare l'anteprima, tenendo le proporzioni e senza mai ingrandire:
+    /// una miniatura gonfiata verrebbe sgranata, e non serve a nessuno.
+    static misureRimpicciolite(larghezza, altezza, lato) {
+        if (!(larghezza > 0) || !(altezza > 0) || !(lato > 0)) {
+            return { larghezza: 0, altezza: 0 };
+        }
+
+        var fattore = Math.min(1, lato / Math.max(larghezza, altezza));
+        return {
+            larghezza: Math.max(1, Math.round(larghezza * fattore)),
+            altezza: Math.max(1, Math.round(altezza * fattore))
+        };
+    }
+
+    /// Se conviene leggere tutto il file per farne un indirizzo data. Un tiff da trecento
+    /// megabyte diventerebbe quattrocento di testo in memoria, e il browser si pianta: meglio
+    /// dire che l'anteprima non c'e' che bloccare la pagina per mostrarla.
+    static siPuoLeggereTutto(dimensione) {
+        return typeof dimensione === "number" && dimensione > 0 && dimensione <= Archivio.LIMITE_ANTEPRIMA;
+    }
+
+    /// Il valore che nei due menu vuol dire "vale per tutte": al server si manda vuoto, che e'
+    /// come il sistema tratta gia' le foto buone ovunque. Non si manda la parola perche' finirebbe
+    /// scritta in archivio come se fosse il nome di un'area.
+    static get DESTINAZIONE_TUTTE() { return "*"; }
+
+    /// Dove va la foto, oppure niente se la scelta non e' completa. Niente non e' un caso da
+    /// aggirare con un valore di comodo: e' il motivo per cui Conferma resta spento.
+    static destinazioneFotoArticolo(area, canale) {
+        if (!area || !canale) {
+            return null;
+        }
+
+        return {
+            area: area === Archivio.DESTINAZIONE_TUTTE ? "" : area,
+            canale: canale === Archivio.DESTINAZIONE_TUTTE ? "" : canale
+        };
+    }
+
+    /// Le aree che con quel canale sono attive nella tabella di Settings. Si sceglie prima il
+    /// canale, come nella matrice, dove i canali sono le righe: scegliendo tutti i canali restano
+    /// tutte le aree, perche' non c'e' un canale a restringere.
+    static areePerCanale(opzioni, canale) {
+        var elenco = Array.isArray(opzioni) ? opzioni : [];
+
+        if (!canale || canale === Archivio.DESTINAZIONE_TUTTE) {
+            return elenco.slice();
+        }
+
+        return elenco.filter(function (opzione) {
+            return Array.isArray(opzione.canali) && opzione.canali.indexOf(canale) >= 0;
+        });
+    }
+
+    /// Se la destinazione scelta e' diversa da quella registrata, cioe' se c'e' qualcosa da
+    /// salvare. Serve a tenere spento il pulsante finche' non si cambia davvero niente: cosi'
+    /// un menu toccato e rimesso com'era non lascia l'idea che ci sia una modifica in sospeso.
+    static destinazioneCambiata(registrata, scelta) {
+        if (registrata == null || scelta == null) {
+            return false;
+        }
+
+        return registrata.area !== scelta.area || registrata.canale !== scelta.canale;
+    }
+
+    /// Si archivia solo con il file scelto e la destinazione decisa: una foto senza destinazione
+    /// finirebbe valida ovunque senza che nessuno l'abbia deciso.
+    static siPuoConfermareFotoArticolo(file, area, canale) {
+        return file != null && Archivio.destinazioneFotoArticolo(area, canale) != null;
+    }
+
+    /// Quello che si manda per archiviare una foto nuova del prodotto.
+    ///
+    /// tipo 1 e' la foto del prodotto. archiviaSenzaSelezionare dice al server di non metterla
+    /// in uso: caricarla non vuol dire volerla, e senza quell'indicazione il server la
+    /// selezionerebbe spegnendo la primaria di adesso.
+    static datiNuovaFotoArticolo(codice, nomeFile, destinazione) {
+        var dove = destinazione != null ? destinazione : { area: "", canale: "" };
+
+        return {
+            codice: codice,
+            tipo: 1,
+            nomeFile: nomeFile,
+            area: dove.area,
+            canale: dove.canale,
+            idLavorazione: 0,
+            idRec: 0,
+            uploadMethod: 0,
+            archiviaSenzaSelezionare: true
+        };
     }
 
     /// I20-983: le foto extra che l'articolo ha di questo tipo. Il raggruppamento e' per nome
@@ -239,6 +405,418 @@ class Archivio {
             idRec: 0,
             uploadMethod: 0
         };
+    }
+
+    /// I20-985: apre la scelta del file per una foto nuova del prodotto.
+    AggiungiFotoArticolo() {
+        var campo = $("#fileNuovaFotoArticolo");
+        campo.val("");
+        campo.trigger("click");
+    }
+
+    /// Mostra cosa si sta per archiviare. Fino alla conferma non si scrive niente.
+    ///
+    /// I20-985: non si decide piu' dall'estensione se il formato e' mostrabile, perche' vuol
+    /// dire indovinare in anticipo cosa il browser di turno sa fare: si prova a disegnare e si
+    /// scrive che l'anteprima manca solo quando il disegno fallisce davvero. Il psd e' l'unica
+    /// eccezione, perche' li' l'immagine va estratta prima.
+    AnteprimaFotoArticolo(campo) {
+        var file = campo[0] != null && campo[0].files != null ? campo[0].files[0] : null;
+        if (file == null) {
+            return;
+        }
+
+        this.fileNuovaFotoArticolo = file;
+        $("#nomeNuovaFotoArticolo").text(file.name);
+        $("#anteprimaNuovaFotoArticolo").show();
+        this.AggiornaConfermaFotoArticolo();
+        this.TestoAnteprimaFotoArticolo("Anteprima in corso");
+
+        if (Archivio.eUnPsd(file.name)) {
+            this.AnteprimaDalPsd(file);
+            return;
+        }
+
+        this.AnteprimaDisegnataDalBrowser(file);
+    }
+
+    /// La miniatura che Photoshop lascia dentro al psd. Si legge solo la testa del file: le
+    /// risorse immagine stanno all'inizio, e un psd da centinaia di megabyte non va caricato
+    /// in memoria per mostrare un quadratino.
+    AnteprimaDalPsd(file) {
+        let ME = this;
+        var lettore = new FileReader();
+
+        lettore.onload = function () {
+            var indirizzo = typeof AnteprimaPsd !== "undefined"
+                ? AnteprimaPsd.indirizzoMiniatura(lettore.result)
+                : null;
+
+            if (indirizzo == null) {
+                //Capita: non tutti i psd portano la miniatura, dipende da come sono stati salvati.
+                ME.TestoAnteprimaFotoArticolo("Anteprima non disponibile per questo file");
+                return;
+            }
+
+            ME.MostraAnteprimaFotoArticolo(indirizzo, file);
+        };
+
+        lettore.onerror = function () {
+            ME.TestoAnteprimaFotoArticolo("Anteprima non disponibile");
+        };
+
+        lettore.readAsArrayBuffer(file.slice(0, Archivio.TESTA_PSD));
+    }
+
+    /// Si chiede al browser di decodificare il file: quello che riesce ad aprire lo ridisegna
+    /// piccolo, e quello che non riesce ad aprire lo dice da se'. Cosi' un tiff si vede dove il
+    /// browser lo supporta, senza tenere un elenco di formati che invecchia.
+    AnteprimaDisegnataDalBrowser(file) {
+        let ME = this;
+
+        if (typeof createImageBitmap !== "function") {
+            ME.AnteprimaDalContenuto(file);
+            return;
+        }
+
+        createImageBitmap(file).then(function (immagine) {
+            var indirizzo = Archivio.indirizzoRimpicciolito(immagine);
+            try { immagine.close(); } catch (e) { }
+
+            if (indirizzo == null) {
+                ME.AnteprimaDalContenuto(file);
+                return;
+            }
+
+            ME.MostraAnteprimaFotoArticolo(indirizzo, file);
+        }).catch(function () {
+            //Il browser non sa decodificarlo per conto suo: resta la strada di darglielo intero.
+            ME.AnteprimaDalContenuto(file);
+        });
+    }
+
+    /// Ultima strada: il file per intero come indirizzo data, e sia l'immagine a dire se ce la
+    /// fa. L'indirizzo e' data e non blob perche' la policy della pagina ammette il primo e
+    /// rifiuta il secondo.
+    AnteprimaDalContenuto(file) {
+        let ME = this;
+
+        if (!Archivio.siPuoLeggereTutto(file.size)) {
+            ME.TestoAnteprimaFotoArticolo("Anteprima non disponibile per questo file");
+            return;
+        }
+
+        var lettore = new FileReader();
+
+        lettore.onload = function () {
+            ME.MostraAnteprimaFotoArticolo(lettore.result, file);
+        };
+
+        lettore.onerror = function () {
+            ME.TestoAnteprimaFotoArticolo("Anteprima non disponibile");
+        };
+
+        lettore.readAsDataURL(file);
+    }
+
+    /// Mette l'indirizzo nell'immagine e aspetta l'esito: se il disegno fallisce si scrive che
+    /// l'anteprima manca, invece di lasciare l'icona di immagine rotta, che sembrerebbe un guasto.
+    MostraAnteprimaFotoArticolo(indirizzo, file) {
+        let ME = this;
+        var immagine = $("#imgNuovaFotoArticolo");
+        var elemento = immagine[0];
+
+        if (elemento == null) {
+            return;
+        }
+
+        elemento.onload = function () {
+            immagine.show();
+            $("#txtAnteprimaNuovaFotoArticolo").hide().text("");
+        };
+
+        elemento.onerror = function () {
+            ME.TestoAnteprimaFotoArticolo("Anteprima non disponibile per questo file");
+        };
+
+        immagine.attr("alt", file != null ? file.name : "").attr("src", indirizzo);
+    }
+
+    /// Toglie l'immagine dal riquadro staccando prima i gestori.
+    ///
+    /// L'ordine non e' un dettaglio: azzerare l'indirizzo mentre il gestore d'errore e' ancora
+    /// attaccato fa segnalare al browser un caricamento fallito, e si rientrerebbe da dove si
+    /// era appena usciti. E' cosi' che Annulla nascondeva il riquadro e se lo vedeva riaprire.
+    SvuotaImmagineFotoArticolo() {
+        var immagine = $("#imgNuovaFotoArticolo");
+        var elemento = immagine[0];
+
+        if (elemento != null) {
+            elemento.onload = null;
+            elemento.onerror = null;
+        }
+
+        immagine.removeAttr("src").hide();
+    }
+
+    /// Il riquadro non resta mai vuoto: o c'e' l'immagine o c'e' scritto perche' non c'e'.
+    TestoAnteprimaFotoArticolo(testo) {
+        this.SvuotaImmagineFotoArticolo();
+        $("#txtAnteprimaNuovaFotoArticolo").text(testo).show();
+        $("#anteprimaNuovaFotoArticolo").show();
+    }
+
+    AnnullaFotoArticolo() {
+        this.fileNuovaFotoArticolo = null;
+
+        $("#fileNuovaFotoArticolo").val("");
+        this.SvuotaImmagineFotoArticolo();
+        $("#txtAnteprimaNuovaFotoArticolo").hide().text("");
+        $("#nomeNuovaFotoArticolo").text("");
+        $("#anteprimaNuovaFotoArticolo").hide();
+        this.AggiornaConfermaFotoArticolo();
+    }
+
+    /// Le voci del menu delle aree come sono arrivate dalla vista, lette una volta sola: da qui
+    /// in avanti il menu si ricostruisce da questo elenco, perche' filtrare togliendo le voci
+    /// dal menu significherebbe perderle alla scelta successiva.
+    OpzioniAreaFotoArticolo() {
+        if (this.opzioniAreaFotoArticolo != null) {
+            return this.opzioniAreaFotoArticolo;
+        }
+
+        var opzioni = [];
+
+        $("#areaNuovaFotoArticolo option").each(function () {
+            var valore = $(this).attr("value");
+            if (!valore || valore === Archivio.DESTINAZIONE_TUTTE) {
+                return;
+            }
+
+            var canali = $(this).attr("data-canali");
+            opzioni.push({
+                valore: valore,
+                etichetta: $(this).text(),
+                canali: canali ? canali.split(",") : []
+            });
+        });
+
+        this.opzioniAreaFotoArticolo = opzioni;
+        return opzioni;
+    }
+
+    /// Cambiato il canale, il menu delle aree si rifa' con le sole aree che con quel canale sono
+    /// attive in tabella. Se l'area scelta prima non c'e' piu', torna da scegliere: meglio farlo
+    /// notare che archiviare in una coppia che non esiste.
+    DestinazioneFotoArticoloCambiata(campo) {
+        if (campo != null && campo.attr("id") === "canaleNuovaFotoArticolo") {
+            this.RicostruisciAreeFotoArticolo();
+        }
+
+        this.AggiornaConfermaFotoArticolo();
+    }
+
+    RicostruisciAreeFotoArticolo() {
+        var menu = $("#areaNuovaFotoArticolo");
+        var sceltoPrima = menu.val();
+        var validi = Archivio.areePerCanale(this.OpzioniAreaFotoArticolo(), $("#canaleNuovaFotoArticolo").val());
+
+        menu.empty();
+        menu.append($("<option>").attr("value", Archivio.DESTINAZIONE_TUTTE).text("Tutte le aree"));
+
+        validi.forEach(function (opzione) {
+            menu.append($("<option>").attr("value", opzione.valore)
+                .attr("data-canali", opzione.canali.join(",")).text(opzione.etichetta));
+        });
+
+        var restaBuono = sceltoPrima === Archivio.DESTINAZIONE_TUTTE || validi.some(function (opzione) {
+            return opzione.valore === sceltoPrima;
+        });
+
+        menu.val(restaBuono ? sceltoPrima : Archivio.DESTINAZIONE_TUTTE);
+    }
+
+    /// Conferma si accende solo col file scelto e la destinazione decisa.
+    AggiornaConfermaFotoArticolo() {
+        var pronto = Archivio.siPuoConfermareFotoArticolo(
+            this.fileNuovaFotoArticolo, $("#areaNuovaFotoArticolo").val(), $("#canaleNuovaFotoArticolo").val());
+
+        $("#confermaNuovaFotoArticolo").prop("disabled", !pronto);
+    }
+
+    /// I20-985: i menu delle foto gia' in archivio partono da dove la foto vale adesso.
+    ///
+    /// Qui le aree non si filtrano: se una foto e' registrata su una coppia che in tabella non
+    /// e' piu' attiva, mostrarla com'e' dice la verita', mentre nasconderla farebbe credere che
+    /// la foto valga altrove. Il filtro entra in gioco quando si cambia il canale, cioe' quando
+    /// si sta scegliendo davvero.
+    InizializzaDestinazioniFotoEsistenti() {
+        let ME = this;
+
+        $(".destinazioneFotoEsistente").each(function () {
+            var gruppo = $(this);
+
+            gruppo.find(".canaleFotoEsistente").val(gruppo.attr("data-canale") || Archivio.DESTINAZIONE_TUTTE);
+            gruppo.find(".areaFotoEsistente").val(gruppo.attr("data-area") || Archivio.DESTINAZIONE_TUTTE);
+
+            ME.AggiornaSalvaDestinazione(gruppo);
+        });
+    }
+
+    DestinazioneFotoEsistenteCambiata(campo) {
+        var gruppo = campo.closest(".destinazioneFotoEsistente");
+
+        if (campo.hasClass("canaleFotoEsistente")) {
+            this.RicostruisciAreeDelGruppo(gruppo);
+        }
+
+        this.AggiornaSalvaDestinazione(gruppo);
+    }
+
+    /// Le voci del menu delle aree di quel gruppo, lette una volta sola e tenute da parte:
+    /// ricostruendo il menu si perderebbero quelle escluse dal filtro.
+    OpzioniAreaDelGruppo(gruppo) {
+        var tenute = gruppo.data("opzioniArea");
+        if (tenute != null) {
+            return tenute;
+        }
+
+        var opzioni = [];
+
+        gruppo.find(".areaFotoEsistente option").each(function () {
+            var valore = $(this).attr("value");
+            if (!valore || valore === Archivio.DESTINAZIONE_TUTTE) {
+                return;
+            }
+
+            var canali = $(this).attr("data-canali");
+            opzioni.push({
+                valore: valore,
+                etichetta: $(this).text(),
+                canali: canali ? canali.split(",") : []
+            });
+        });
+
+        gruppo.data("opzioniArea", opzioni);
+        return opzioni;
+    }
+
+    RicostruisciAreeDelGruppo(gruppo) {
+        var menu = gruppo.find(".areaFotoEsistente");
+        var sceltoPrima = menu.val();
+        var validi = Archivio.areePerCanale(this.OpzioniAreaDelGruppo(gruppo), gruppo.find(".canaleFotoEsistente").val());
+
+        menu.empty();
+        menu.append($("<option>").attr("value", Archivio.DESTINAZIONE_TUTTE).text("Tutte le aree"));
+
+        validi.forEach(function (opzione) {
+            menu.append($("<option>").attr("value", opzione.valore)
+                .attr("data-canali", opzione.canali.join(",")).text(opzione.etichetta));
+        });
+
+        var restaBuono = sceltoPrima === Archivio.DESTINAZIONE_TUTTE || validi.some(function (opzione) {
+            return opzione.valore === sceltoPrima;
+        });
+
+        menu.val(restaBuono ? sceltoPrima : Archivio.DESTINAZIONE_TUTTE);
+    }
+
+    /// I menu di una foto e il suo pulsante stanno in due punti diversi della riga, uno accanto
+    /// al nome e l'altro accanto all'immagine: si ritrovano per identificativo della foto.
+    static gruppoDestinazioneDi(idFoto) {
+        return $(".destinazioneFotoEsistente[data-idfoto='" + idFoto + "']");
+    }
+
+    static salvaDestinazioneDi(idFoto) {
+        return $(".salvaDestinazioneFoto[data-idfoto='" + idFoto + "']");
+    }
+
+    /// Il pulsante non c'e' finche' non c'e' niente da salvare: uno spento e sempre presente
+    /// sarebbe un invito a premere che non porta da nessuna parte.
+    AggiornaSalvaDestinazione(gruppo) {
+        var daSalvare = Archivio.destinazioneCambiata(
+            { area: gruppo.attr("data-area"), canale: gruppo.attr("data-canale") },
+            { area: gruppo.find(".areaFotoEsistente").val(), canale: gruppo.find(".canaleFotoEsistente").val() });
+
+        var pulsante = Archivio.salvaDestinazioneDi(gruppo.attr("data-idfoto"));
+
+        if (daSalvare) {
+            pulsante.show();
+        }
+        else {
+            pulsante.hide();
+        }
+    }
+
+    /// Scrive dove vale una foto gia' in archivio, e nient'altro: non la mette in uso e non tocca
+    /// le altre, perche' qui si sta solo dicendo dove vale.
+    SalvaDestinazioneFoto(gruppo) {
+        let ME = this;
+        var scelta = {
+            area: gruppo.find(".areaFotoEsistente").val(),
+            canale: gruppo.find(".canaleFotoEsistente").val()
+        };
+        var destinazione = Archivio.destinazioneFotoArticolo(scelta.area, scelta.canale);
+        var registrata = { area: gruppo.attr("data-area"), canale: gruppo.attr("data-canale") };
+
+        if (destinazione == null || !Archivio.destinazioneCambiata(registrata, scelta)) {
+            return;
+        }
+
+        var dati = {
+            idFoto: gruppo.attr("data-idfoto"),
+            codice: $("#Codice").val(),
+            area: destinazione.area,
+            canale: destinazione.canale
+        };
+
+        showLoading();
+        Call.do("SchedaArticolo", "AggiornaDestinazioneFoto", "PUT", dati, this, function (result, sender) {
+            hideLoading();
+
+            if (result != null && result.esito === false) {
+                alert("Destinazione non salvata: " + (result.message || result.error || "errore sconosciuto"));
+                return;
+            }
+
+            //Da qui in avanti il registrato e' quello appena scelto: il pulsante si rispegne.
+            gruppo.attr("data-area", scelta.area).attr("data-canale", scelta.canale);
+            ME.AggiornaSalvaDestinazione(gruppo);
+        });
+    }
+
+    ConfermaFotoArticolo() {
+        let ME = this;
+        var file = this.fileNuovaFotoArticolo;
+        var destinazione = Archivio.destinazioneFotoArticolo(
+            $("#areaNuovaFotoArticolo").val(), $("#canaleNuovaFotoArticolo").val());
+
+        if (file == null || destinazione == null) {
+            return;
+        }
+
+        var dati = Archivio.datiNuovaFotoArticolo($("#Codice").val(), file.name, destinazione);
+
+        var fd = new FormData();
+        fd.append("file", file);
+        for (var chiave in dati) {
+            if (Object.prototype.hasOwnProperty.call(dati, chiave)) {
+                fd.append(chiave, dati[chiave]);
+            }
+        }
+
+        showLoading();
+        Call.doWithUpload("SyncFoto", "updateFotoFromIndd/0", "PUT", fd, this, function (result, sender) {
+            hideLoading();
+
+            if (result != null && result.esito === false) {
+                alert("Caricamento non riuscito: " + (result.error || "errore sconosciuto"));
+                return;
+            }
+
+            ME.AnnullaFotoArticolo();
+            location.reload();
+        });
     }
 
     /// Apre la scelta del file per il tipo chiesto. Il tipo si tiene sull'elemento, cosi' il

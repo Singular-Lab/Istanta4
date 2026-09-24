@@ -149,14 +149,20 @@ test('il csv completo ha intestazioni, BOM e righe CRLF', () => {
     assert.ok(testo.startsWith('﻿'), 'senza BOM Excel sbaglia le accentate');
 
     const righe = testo.split('\r\n');
-    assert.strictEqual(righe[0], '﻿Stato;Pagina;Codice gruppo;Etichetta tracciato;Versione tracciato;Reparto;Descrizione;Campo;Dettaglio');
+    assert.strictEqual(righe[0], '﻿Stato;Pagina;Codice gruppo;Etichetta tracciato;Versione tracciato;Reparto;Descrizione;Campo;Dettaglio;Campi osservati');
     //La virgola dei codici gruppo non va virgolettata: il separatore e' il punto e virgola.
-    assert.strictEqual(righe[1], 'Cambiato;3;123,456;SS_TO;2;7 (PE);Mele | Val Venosta;prezzo_offerta;contenuto');
+    //L'ultima colonna raccoglie i cambiamenti sui campi osservati: qui non ce ne sono.
+    assert.strictEqual(righe[1], 'Cambiato;3;123,456;SS_TO;2;7 (PE);Mele | Val Venosta;prezzo_offerta;contenuto;');
     assert.strictEqual(righe[2], '', 'il file finisce con un a capo');
 
     //La colonna RefId non c'e' piu' e "Tipo" si chiama "Stato".
     assert.ok(!csv.INTESTAZIONI.includes('RefId'));
     assert.ok(!csv.INTESTAZIONI.includes('Tipo'));
+
+    //I cambiamenti sui campi osservati stanno in coda, in una colonna sola.
+    assert.strictEqual(csv.INTESTAZIONI[csv.INTESTAZIONI.length - 1], 'Campi osservati');
+    const conConfronto = csv.componiCsv([{ stato: 'Nuovo', pagina: '', codiceGruppo: 'A', confronto: 'Tema: Bio \u2192 Base' }]);
+    assert.ok(conConfronto.split('\r\n')[1].endsWith(';Tema: Bio \u2192 Base'));
 });
 
 test('i byte del csv sono utf8, accentate comprese', () => {
@@ -198,3 +204,43 @@ test('la codifica utf8 regge anche senza TextEncoder', () => {
     }
 });
 
+
+//I20-981 (Lotto 4b): il csv del confronto con un'altra lista.
+
+test('il csv del confronto e\' un file a se\' che dice cosa confronta', () => {
+    const nome = csv.nomeFileConfronto(3, 'Volantino SS', new Date(2026, 8, 23, 15, 4, 9));
+    assert.match(nome, /^ConfR_3_.*_confronto\.csv$/);
+
+    const testo = csv.componiCsvConfronto({
+        corrente: { titolo: 'P2611 SS/SA', idKit: 3227, etichettaTracciato: 'main', versioneTracciato: '2' },
+        altra: { titolo: 'P2611 TO', idKit: 3231, etichettaTracciato: 'main', versioneTracciato: '3', origine: 'scaricata' },
+        filtri: 'solo campi osservati'
+    }, [
+        { codiceGruppo: '1', presenza: 'entrambe', rawCorrente: { 'Descrizioni.Descrizione1': 'Mele' }, rawAltra: {},
+          differenze: [{ canale: 'osservato', campo: 'tema', etichetta: 'Tema', corrente: 'Bio', altra: '' }] },
+        { codiceGruppo: '2', presenza: 'soloCorrente', rawCorrente: { 'Descrizioni.Descrizione1': 'Pere; rosse' }, rawAltra: null, differenze: [] },
+        { codiceGruppo: '3', presenza: 'soloAltra', rawCorrente: null, rawAltra: { 'Descrizioni.Descrizione1': 'Kiwi' }, differenze: [] }
+    ]);
+
+    const righe = testo.replace(/^﻿/, '').split('\r\n');
+
+    //In testa le due liste, identificate, e i filtri con cui si e' guardato.
+    assert.strictEqual(righe[0], 'Confronto fra liste');
+    assert.strictEqual(righe[1], 'Lista corrente;P2611 SS/SA - idKit 3227 - tracciato main v.2');
+    assert.strictEqual(righe[2], 'Altra lista;P2611 TO - idKit 3231 - tracciato main v.3 - scaricata');
+    assert.strictEqual(righe[3], 'Filtri;solo campi osservati');
+    assert.strictEqual(righe[4], '');
+    assert.strictEqual(righe[5], csv.INTESTAZIONI_CONFRONTO.join(';'));
+
+    //Una riga per differenza, con il lato vuoto detto per esteso.
+    assert.strictEqual(righe[6], 'Diversa;1;Mele;Campo osservato;Tema;Bio;(vuoto)');
+    //Le referenze da un lato solo: la notizia e' dove stanno, e il punto e virgola nella
+    //descrizione non rompe la riga.
+    assert.strictEqual(righe[7], 'Solo lista corrente;2;"Pere; rosse";;;presente;');
+    assert.strictEqual(righe[8], 'Solo altra lista;3;Kiwi;;;;presente');
+});
+
+test('il nome del csv del confronto segue quello del report', () => {
+    assert.strictEqual(csv.conSuffissoConfronto('ConfR_3_Volantino_2026-09-23.csv'), 'ConfR_3_Volantino_2026-09-23_confronto.csv');
+    assert.strictEqual(csv.conSuffissoConfronto('ConfR_3_Volantino_2026-09-23.CSV'), 'ConfR_3_Volantino_2026-09-23_confronto.csv');
+});
