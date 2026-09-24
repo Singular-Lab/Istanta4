@@ -1199,11 +1199,10 @@ const schedaRef = {
 
         try {
             //writeDebugMessageForCrash("Inizio try descrizioni regionali e canale");
-            //I20-993: al posto delle due caselle, una schermata per variante di descrizione.
-            //Creare e cancellare varianti resta sul revisore: qui si guardano soltanto, e si
-            //modifica solo quella che comanda, cioe' la piu' specifica valida per questa
-            //lavorazione. Le altre si mostrano in sola lettura, e chiudendone una si scende a
-            //quella meno specifica fino alla nazionale.
+            //I20-993: al posto delle due caselle, una scheda a linguette per variante, come
+            //quella del revisore. Creare e cancellare varianti resta sul revisore: qui si
+            //sceglie quale guardare, e si modifica solo quella che comanda, cioe' la piu'
+            //specifica valida per questa lavorazione. Sulle altre i campi si bloccano.
             var rowOpzioniRegionaliEArtwork = $('<div class="row" style="justify-content: flex-start; display: flex; flex-wrap: wrap;"></div>');
 
             var elencoVarianti = primario.recordInTracciato["varianti_descrizione"] || [];
@@ -1215,62 +1214,89 @@ const schedaRef = {
             var varianteChePuoiModificare = variantiDescrizione.varianteApplicabile(elencoVarianti, areaLav, canaleLav);
             var varianteMostrata = varianteChePuoiModificare;
 
-            //Con la sola nazionale non c'e' niente da scegliere: si lascia la scheda com'era.
+            //Blocca o sblocca i campi della scheda. Si agisce anche direttamente sulle textarea
+            //e non solo tramite il controller, perche' quello nasce piu' tardi e la prima
+            //selezione non deve dipendere da quel tempo. Chi era gia' in sola lettura ci resta:
+            //l'agenzia o la revisione possono averlo deciso per conto loro.
+            var bloccaCampiScheda = function (bloccare) {
+                $("#editReferenza").find("textarea").each(function () {
+                    var campo = $(this);
+
+                    if (campo.attr("data-solaletturaoriginale") == null) {
+                        campo.attr("data-solaletturaoriginale", campo.prop("readonly") ? "1" : "0");
+                    }
+
+                    var originale = campo.attr("data-solaletturaoriginale") === "1";
+                    campo.prop("readonly", bloccare || originale);
+                    campo.css("opacity", bloccare ? "0.6" : "");
+                });
+
+                if (me.editRefFieldController != null) {
+                    me.editRefFieldController.solaLettura = bloccare === true;
+                }
+            };
+
+            //Con la sola nazionale non c'e' niente da scegliere: la scheda resta com'era.
             if (variantiDescrizione.variantiApplicabili(elencoVarianti, areaLav, canaleLav).length > 1) {
-                var rigaVarianti = $('<div id="rigaVariantiDescrizione" style="display:flex; align-items:center; flex-wrap:wrap; margin:4px 0;"></div>');
-                var pannelloVariante = $('<div id="pannelloVarianteDescrizione" style="display:none; margin:4px 0; padding:6px; background:#3a3a3a; color:white; font-size:11px; white-space:pre-wrap;"></div>');
+                var linguette = $('<div id="tabVariantiDescrizione" style="display:flex; flex-wrap:wrap; align-items:flex-end; border-bottom:1px solid #777; margin:6px 0 0 0; width:100%;"></div>');
+                var pannelloVariante = $('<div id="pannelloVarianteDescrizione" style="border:1px solid #777; border-top:none; padding:6px; color:white; font-size:11px; white-space:pre-wrap; width:100%; box-sizing:border-box;"></div>');
 
                 var mostraVariante = function (variante) {
                     varianteMostrata = variante;
 
+                    var etichettaScelta = variantiDescrizione.etichetta(variante);
                     var modificabile = variantiDescrizione.eModificabile(variante, elencoVarianti, areaLav, canaleLav);
 
-                    rigaVarianti.find("sp-action-button").each(function () {
-                        var suo = $(this).attr("data-variante");
-                        $(this).css("opacity", suo === variantiDescrizione.etichetta(variante) ? "1" : "0.55");
+                    linguette.find(".linguettaVariante").each(function () {
+                        var sua = $(this).attr("data-variante");
+                        var attiva = sua === etichettaScelta;
+                        $(this).css({
+                            "background": attiva ? "#ffffff" : "#4d4c4c",
+                            "color": attiva ? "#000000" : "#cccccc",
+                            "font-weight": attiva ? "bold" : "normal"
+                        });
                     });
 
-                    //I campi della scheda restano quelli della variante che comanda: le altre
-                    //si leggono qui sotto, senza che si possa scriverci sopra per sbaglio.
-                    if (me.editRefFieldController != null) {
-                        me.editRefFieldController.impostaSolaLettura(!modificabile);
-                    }
-
-                    if (modificabile) {
-                        pannelloVariante.hide().empty();
-                        return;
-                    }
+                    bloccaCampiScheda(!modificabile);
 
                     var testi = [variante.descrizione1, variante.descrizione2, variante.descrizione3, variante.descrizione4]
                         .filter(function (t) { return t != null && String(t).trim() !== ""; })
                         .join("\n");
 
                     pannelloVariante.empty();
+
+                    if (modificabile) {
+                        pannelloVariante.append($('<div style="opacity:0.8;"></div>')
+                            .text(etichettaScelta + " - e' la piu' specifica per questa lavorazione, si modifica nei campi qui sotto."));
+                        return;
+                    }
+
                     pannelloVariante.append($('<div style="font-weight:bold; margin-bottom:4px;"></div>')
-                        .text(variantiDescrizione.etichetta(variante) + " - sola lettura"));
+                        .text(etichettaScelta + " - sola lettura"));
                     pannelloVariante.append($('<div></div>').text(testi !== "" ? testi : "(nessun testo)"));
-
-                    var chiudi = $('<sp-action-button style="font-size:10px; margin-top:4px;">Chiudi</sp-action-button>');
-                    chiudi.on("click", function () {
-                        var sotto = variantiDescrizione.varianteDopoChiusura(elencoVarianti, variante, areaLav, canaleLav);
-                        //Sotto la nazionale non si scende: si torna a quella che comanda.
-                        mostraVariante(sotto != null ? sotto : varianteChePuoiModificare);
-                    });
-                    pannelloVariante.append(chiudi);
-
-                    pannelloVariante.show();
                 };
 
                 variantiDescrizione.variantiApplicabili(elencoVarianti, areaLav, canaleLav).forEach(function (variante) {
                     var etichetta = variantiDescrizione.etichetta(variante);
-                    var bottone = $('<sp-action-button style="font-size:10px; margin-right:4px;"></sp-action-button>');
-                    bottone.attr("data-variante", etichetta);
-                    bottone.text(etichetta);
-                    bottone.on("click", function () { mostraVariante(variante); });
-                    rigaVarianti.append(bottone);
+                    var linguetta = $('<div class="linguettaVariante"></div>');
+                    linguetta.attr("data-variante", etichetta);
+                    linguetta.text(etichetta);
+                    linguetta.css({
+                        "padding": "3px 12px",
+                        "margin-right": "2px",
+                        "cursor": "pointer",
+                        "border": "1px solid #777",
+                        "border-bottom": "none",
+                        "border-radius": "4px 4px 0 0",
+                        "font-size": "11px",
+                        "background": "#4d4c4c",
+                        "color": "#cccccc"
+                    });
+                    linguetta.on("click", function () { mostraVariante(variante); });
+                    linguette.append(linguetta);
                 });
 
-                rowOpzioniRegionaliEArtwork.append(rigaVarianti);
+                rowOpzioniRegionaliEArtwork.append(linguette);
                 rowOpzioniRegionaliEArtwork.append(pannelloVariante);
 
                 //Si parte da quella che comanda, cioe' dallo stato di prima di I20-993.
