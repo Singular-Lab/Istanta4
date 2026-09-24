@@ -26,6 +26,19 @@ const schedaRef = {
 
     selezioneClonazioneCorrente: null,
 
+    //I20-992: la pre analisi del box si fa una volta sola, all'apertura della scheda, e da
+    //li' in poi si legge questa copia. Tornare alla schermata di edit da foto o struttura
+    //non la rifa': prima ripartiva a ogni ritorno, e su box pesanti si aspettava ogni volta.
+    //null vuol dire "non ancora fatta per questa scheda"; la svuota svuotaRef.
+    segnalazioniDelBox: null,
+
+    //I20-992: le referenze per cui l'operatore ha chiesto di non rivedere le segnalazioni, e
+    //l'interruttore che le silenzia tutte. Vivono in memoria e basta: riavviare il plugin o
+    //InDesign le riporta a zero, come chiede la issue. Non passano da svuotaRef, altrimenti
+    //riaprire la stessa scheda le farebbe tornare e il silenzio non sarebbe silenzio.
+    refConSegnalazioniSilenziate: [],
+    segnalazioniSilenziateOvunque: false,
+
 
 
     tipiFotoExtra: [{ val: 2, nome: "Bollini" }, { val: 3, nome: "Loghi" }, { val: 4, nome: "Foto ambientate" }, { val: 5, nome: "Sfondo" }],
@@ -508,23 +521,7 @@ const schedaRef = {
         //leggiamo il codice gruppo dalla base
         var codice = dna.codice_gruppo;
 
-        $("#copiaCodiceTitolo").remove();
-        var copyButton = $('<img src="images/icon_small_copia.png" style="height: 16px; margin-left:10px; margin-right:10px;" id="copiaCodiceTitolo" codiceGruppo="' + codice + '">');
-        copyButton.codice = codice;
-
-        copyButton.on('click', function () {
-            navigator.clipboard.writeText(String($(this).attr("codiceGruppo") || ""));
-            messaggioUtente("Codice copiato negli appunti", "success", false, 1, true);
-            $(this).attr("src", "images/check.png");
-            setTimeout(function () {
-                copyButton.attr("src", "images/icon_small_copia.png");
-            }, 1000);
-        });
-
-        //codiceRef è un h3, dentro dobbiamo mettere il copy button e il testo
-        $("#codiceRef").empty();
-        $("#codiceRef").append(copyButton);
-        $("#codiceRef").append(codice.substring(0, 45) + (codice.length > 45 ? "..." : ""));
+        this.componiTitoloCodice(codice);
 
         //creiamo un piccolo pulsante da appendere a $("#editReferenza") con scritto ricollega, sopra una didascalia con scritto "Il box non risulta al momento impaginato, tentare il ricollegamento?"
         var ricollegaButton = $('<sp-action-button id="ricollegaButton" style="color:lightgreen; margin-top:10px;">Ricollega</sp-action-button>');
@@ -1164,24 +1161,8 @@ const schedaRef = {
         this.resetInitSchedaRef();
         //writeDebugMessageForCrash("Reset init scheda ref");
         console.log("COMPILO REF");
-        $("#copiaCodiceTitolo").remove();
         var codice = primario.recordInTracciato["Scatto.CodiceGruppo"];
-        var copyButton = $('<img src="images/icon_small_copia.png" style="height: 16px; margin-left:10px; margin-right:10px;" id="copiaCodiceTitolo" codiceGruppo="' + codice + '">');
-        copyButton.codice = codice;
-
-        copyButton.on('click', function () {
-            navigator.clipboard.writeText(String($(this).attr("codiceGruppo") || "")); //item["Scatto.CodiceGruppo"]
-            messaggioUtente("Codice copiato negli appunti", "success", false, 1, true);
-            $(this).attr("src", "images/check.png");
-            setTimeout(function () {
-                copyButton.attr("src", "images/icon_small_copia.png");
-            }, 1000);
-        });
-
-        //codiceRef è un h3, dentro dobbiamo mettere il copy button e il testo
-        $("#codiceRef").empty();
-        $("#codiceRef").append(copyButton);
-        $("#codiceRef").append(codice.substring(0, 45) + (codice.length > 45 ? "..." : ""));
+        this.componiTitoloCodice(codice);
         if (codice.includes(",")) {
             $("#sgruppa").show();
         }
@@ -2031,137 +2012,23 @@ const schedaRef = {
                 //writeDebugMessageForCrash("Fine try descrizioni regionali e canale");
             }, 5);
 
-            var compiledField = primario.recordInTracciato.compiledFields;
-            var deletedFields = primario.recordInTracciato.deletedFields;
-            var fotoExtra = primario.recordInTracciato["Foto.Extra"];
-            var fotoExtraAuto = primario.recordInTracciato["Foto.ExtraAuto"];
-            let listaFoto = [];
-            // if (primario.recordInTracciato.membriGruppoFoto != null)
-            //     listaNomiFoto = primario.recordInTracciato.membriGruppoFoto.map(membro => membro.nomeFoto);
-            var membriGruppoFoto =primario.recordInTracciato.membriGruppoFoto.map((membro) => {
-                const nomeFoto = membro.nomeFoto;
-                return {
-                    nomeFoto: nomeFoto,
-                    hash: membro.hash
-                };
-            })
+            //I20-992: la pre analisi del box si fa una volta sola, all'apertura della scheda.
+            //Prima ripartiva a ogni ritorno alla schermata di edit - anche solo tornando dalle
+            //foto - e su box pesanti l'attesa si ripeteva senza che nulla fosse cambiato.
+            //Si aggiorna solo con l'Aggiorna del modal o riaprendo la scheda, che passa da
+            //svuotaRef e quindi dimentica.
+            if (me.segnalazioniInMemoria() == null) {
+                me.memorizzaSegnalazioni(await me.differenzeDatiNelBox(box, schedaRef));
+            }
 
-            listaFoto = listaFoto.concat(membriGruppoFoto);
+            const segnalazioniDellaScheda = me.segnalazioniInMemoria() || [];
+            me.aggiornaPulsanteSegnalazioni();
 
-
-            if (primario.recordInTracciato["Foto.Nome"] != "")
-                listaFoto.push({
-                    nomeFoto: primario.recordInTracciato["Foto.Nome"],
-                    hash: primario.recordInTracciato["Foto.Hash"]
-                });
-
-            //if (false) {
-                //disattivato per demo in COOP, da riattivare
-                var preAnalisi = await confronti.confrontoBoxCompiledFieldPreAnalisi(
-                    box,
-                    compiledField,
-                    deletedFields,
-                    listaFoto,
-                    fotoExtra,
-                    fotoExtraAuto,
-                    true,
-                    NoRenderElementi.elencoPerSegnalazioni(primario.recordInTracciato.noRenderElementi, primario.recordInTracciato.membriGruppoFoto)
-                );
-
-                console.log(preAnalisi);
-
-                if (preAnalisi?.differenze?.length > 0) {
-                    let contenutoPopup = $(`
-                <div style="
-                    width: 100%;
-                    display: flex;
-                    flex-direction: column;
-                    gap: 12px;
-                    font-family: Arial, sans-serif;
-                ">
-                    <div style="
-                        font-size: 16px;
-                        font-weight: bold;
-                        color: #b00020;
-                    ">
-                        Riscontrate delle differenze nel box selezionato.
-                    </div>
-        
-                    <div style="
-                        display: flex;
-                        align-items: center;
-                        gap: 8px;
-                        font-size: 14px;
-                        color: #222;
-                        margin-top: 4px;
-                        margin-bottom: 4px;
-                    ">
-                        <span>
-                            Per correggere automaticamente i dati all'interno del box usa il pulsante
-                            <img 
-                                src="images/reimpaginaFix.png"
-                                alt="Correggi"
-                                style="
-                                    width: 20px;
-                                    height: 20px;
-                                    object-fit: contain;
-                                    vertical-align: middle;
-                                "
-                            />
-                        </span>
-                    </div>
-        
-                                <div style="
-                        font-size: 13px;
-                        color: #444;
-                    ">
-                        Differenze trovate:
-                    </div>
-        
-                                <div style="
-                        width: 100%;
-                        max-height: 180px;
-                        overflow-y: auto;
-                        border: 1px solid #ccc;
-                        border-radius: 6px;
-                        background: #fafafa;
-                        padding: 8px;
-                        box-sizing: border-box;
-                        font-size: 12px;
-                    "></div>
-        
-        
-        
-                    
-                </div>
-            `);
-
-                    let boxDifferenze = contenutoPopup.find("div").eq(3);
-
-                    preAnalisi.differenze.forEach(diff => {
-                        boxDifferenze.append(`
-                    <div style="
-                        padding: 6px 8px;
-                        margin-bottom: 6px;
-                        background: white;
-                        border: 1px solid #e0e0e0;
-                        border-radius: 4px;
-                        word-break: break-word;
-                    ">
-                        <div style="font-weight: bold; color: #333; margin-bottom: 2px;">
-                            ${confronti.etichettaSegnalazione(diff.label)}
-                        </div>
-                        <div style="color: #666;">
-                            ${diff.difference}
-                        </div>
-                    </div>
-                `);
-                    });
-                    setTimeout(function () {
-                        Utility.popup("Differenze rilevate", contenutoPopup, "lg");
-                    }, 5);
-                }
-            //}
+            if (me.deveAprirsiDaSola(segnalazioniDellaScheda, codice)) {
+                setTimeout(function () {
+                    me.mostraModalSegnalazioni();
+                }, 5);
+            }
 
 
             indesignEvents.setBusy(false);
@@ -3907,6 +3774,418 @@ const schedaRef = {
                 resolve(false);
             }
         });
+    },
+
+    /* ---------- I20-992: le segnalazioni del box nella scheda ref ---------- */
+
+    /// La chiave con cui si riconosce una referenza fra quelle silenziate: il codice gruppo,
+    /// cioe' quello che l'operatore si vede scritto nel titolo della scheda.
+    chiaveRefPerSilenzio(codice) {
+        return codice == null ? "" : String(codice).trim();
+    },
+
+    /// Le segnalazioni gia' calcolate per la scheda aperta, oppure null se l'analisi per
+    /// questa scheda non e' ancora stata fatta.
+    segnalazioniInMemoria() {
+        return this.segnalazioniDelBox;
+    },
+
+    memorizzaSegnalazioni(differenze) {
+        this.segnalazioniDelBox = Array.isArray(differenze) ? differenze : [];
+    },
+
+    dimenticaSegnalazioni() {
+        this.segnalazioniDelBox = null;
+    },
+
+    /// C'e' qualcosa da risolvere? E' questo che decide se il pulsante si vede.
+    ciSonoSegnalazioniIrrisolte(differenze) {
+        return Array.isArray(differenze) && differenze.length > 0;
+    },
+
+    refESilenziata(codice) {
+        const chiave = this.chiaveRefPerSilenzio(codice);
+        return chiave !== "" && this.refConSegnalazioniSilenziate.indexOf(chiave) >= 0;
+    },
+
+    /// Se la finestra deve aprirsi da sola all'apertura della scheda. Silenziata quella
+    /// referenza, o silenziate tutte, non si apre - ma il pulsante resta, e da li' si riapre
+    /// a mano: silenziare vuol dire non essere interrotti, non perdere l'informazione.
+    deveAprirsiDaSola(differenze, codice) {
+        if (!this.ciSonoSegnalazioniIrrisolte(differenze)) {
+            return false;
+        }
+        if (this.segnalazioniSilenziateOvunque) {
+            return false;
+        }
+        return !this.refESilenziata(codice);
+    },
+
+    silenziaSegnalazioniDellaRef(codice) {
+        const chiave = this.chiaveRefPerSilenzio(codice);
+        if (chiave !== "" && !this.refESilenziata(chiave)) {
+            this.refConSegnalazioniSilenziate.push(chiave);
+        }
+    },
+
+    togliSilenzioDellaRef(codice) {
+        const chiave = this.chiaveRefPerSilenzio(codice);
+        const posizione = this.refConSegnalazioniSilenziate.indexOf(chiave);
+
+        if (posizione >= 0) {
+            this.refConSegnalazioniSilenziate.splice(posizione, 1);
+        }
+    },
+
+    riattivaSegnalazioniOvunque() {
+        this.segnalazioniSilenziateOvunque = false;
+    },
+
+    /// Come si aprono le caselle del modal per una referenza. Con il silenzio generale acceso
+    /// ogni referenza si presenta con entrambe spuntate, perche' e' quello che sta succedendo;
+    /// altrimenti conta solo se questa referenza e' stata dichiarata una per una.
+    statoCaselleSilenziamento(codice) {
+        const tutte = this.segnalazioniSilenziateOvunque === true;
+
+        return {
+            questa: tutte || this.refESilenziata(codice),
+            tutte: tutte
+        };
+    },
+
+    /// Registra quello che l'operatore ha dichiarato, alla chiusura del modal.
+    ///
+    /// Togliere la spunta al generale lo spegne, e restano zitte solo le referenze dichiarate
+    /// una per una: e' il motivo per cui una referenza aperta mentre il generale era acceso non
+    /// entra nell'elenco, la sua spunta non era una scelta ma il riflesso del generale.
+    applicaScelteSilenziamento(codice, questa, tutte) {
+        if (tutte === true) {
+            this.silenziaSegnalazioniOvunque();
+            return;
+        }
+
+        this.riattivaSegnalazioniOvunque();
+
+        if (questa === true) {
+            this.silenziaSegnalazioniDellaRef(codice);
+        }
+        else {
+            this.togliSilenzioDellaRef(codice);
+        }
+    },
+    silenziaSegnalazioniOvunque() {
+        this.segnalazioniSilenziateOvunque = true;
+    },
+
+    /// Rimette il silenzio com'era all'avvio del plugin.
+    azzeraSilenziamenti() {
+        this.refConSegnalazioniSilenziate = [];
+        this.segnalazioniSilenziateOvunque = false;
+    },
+
+    /// Il codice gruppo della referenza aperta, che e' anche la chiave del silenziamento.
+    codiceDellaRefAperta() {
+        const primario = (this.schedeRefDati || []).find(f => f != null && f.recordInTracciato != null && f.recordInTracciato.StatoSelezione == 1);
+        return primario != null ? primario.recordInTracciato["Scatto.CodiceGruppo"] : null;
+    },
+
+    /// Compone il titolo della scheda: il pulsante delle segnalazioni, poi quello per copiare
+    /// il codice, poi il codice. Stava scritto uguale in due punti, e il pulsante nuovo
+    /// sarebbe comparso in uno e non nell'altro.
+    componiTitoloCodice(codice) {
+        const testo = codice == null ? "" : String(codice);
+
+        $("#copiaCodiceTitolo").remove();
+
+        const copyButton = $('<img src="images/icon_small_copia.png" style="height: 16px; margin-left:10px; margin-right:10px;" id="copiaCodiceTitolo" codiceGruppo="' + testo + '">');
+        copyButton.codice = testo;
+
+        copyButton.on('click', function () {
+            navigator.clipboard.writeText(String($(this).attr("codiceGruppo") || ""));
+            messaggioUtente("Codice copiato negli appunti", "success", false, 1, true);
+            $(this).attr("src", "images/check.png");
+            setTimeout(function () {
+                copyButton.attr("src", "images/icon_small_copia.png");
+            }, 1000);
+        });
+
+        //codiceRef e' un h3: dentro ci vanno il segnalino, il copy e il testo. La riga e' flex
+        //con gli elementi centrati, perche' vertical-align allinea alla meta' della x-height del
+        //testo e non al centro della barra: il numerino restava un po' alto.
+        $("#codiceRef").empty();
+        $("#codiceRef").css({ "display": "flex", "align-items": "center" });
+        $("#codiceRef").append(copyButton);
+        $("#codiceRef").append(testo.substring(0, 45) + (testo.length > 45 ? "..." : ""));
+
+        this.aggiornaPulsanteSegnalazioni();
+    },
+
+    /// Il segnalino nel titolo della scheda: quante differenze ci sono fra il box e il dato,
+    /// e un modo per riaprirle. Sta prima del codice e si vede solo quando c'e' davvero
+    /// qualcosa da risolvere.
+    ///
+    /// La barra #referenza e' alta 25px fisse e l'h3 dentro ha 5px di padding sopra e sotto:
+    /// restano 15px. Un componente Spectrum non ci sta, cresce e spinge il codice fuori dal
+    /// fondo scuro, che di 25px resta. Quindi uno span alto quanto l'icona della copia, che
+    /// in quella riga convive da sempre: e' la misura che la barra tollera.
+    aggiornaPulsanteSegnalazioni() {
+        try {
+            $("#segnalazioniBoxButton").remove();
+
+            const segnalazioni = this.segnalazioniInMemoria();
+            if (!this.ciSonoSegnalazioniIrrisolte(segnalazioni)) {
+                return;
+            }
+
+            const quante = segnalazioni.length;
+            const me = this;
+            const segnalino = $('<span id="segnalazioniBoxButton"></span>');
+
+            //Il solo numero: il senso lo da' il suggerimento, e la riga resta pulita.
+            segnalino.text(String(quante));
+            segnalino.css({
+                "display": "inline-block",
+                "height": "16px",
+                "line-height": "16px",
+                "padding": "0 5px",
+                "font-size": "10px",
+                "font-weight": "700",
+                "border-radius": "3px",
+                "background-color": "#b21d1d",
+                "color": "#fff",
+                "margin-right": "8px",
+                "cursor": "pointer"
+            });
+
+            //In UXP elemento.title come proprieta' non crea l'attributo e il suggerimento
+            //resta muto: si passa sempre da qui.
+            Utility.impostaTooltip(segnalino[0], quante === 1
+                ? "1 differenza fra il box e il dato - clicca per rivederla"
+                : quante + " differenze fra il box e il dato - clicca per rivederle");
+
+            segnalino.on("click", function () {
+                me.mostraModalSegnalazioni();
+            });
+
+            $("#codiceRef").prepend(segnalino);
+        }
+        catch (e) {
+            console.error("Code SRF-95 Segnalino delle differenze non aggiornato: " + e);
+        }
+    },
+
+    /// Riscrive lo stato e l'elenco dentro il modal. Tenuto separato dall'apertura perche' lo
+    /// rifa' anche l'Aggiorna, senza riaprire nulla.
+    ///
+    /// Le righe non sono riquadri: un filetto colorato a sinistra basta a separarle e toglie
+    /// dalla finestra una dozzina di bordi che non dicevano niente.
+    riempiElencoSegnalazioni(contenitore, intestazione, differenze) {
+        contenitore.empty();
+        intestazione.empty();
+
+        const risolte = !this.ciSonoSegnalazioniIrrisolte(differenze);
+        const colore = risolte ? "#1b7f3b" : "#b21d1d";
+
+        const pallino = $('<span></span>');
+        pallino.css({
+            "display": "inline-block",
+            "width": "8px",
+            "height": "8px",
+            "border-radius": "50%",
+            "background-color": colore,
+            "margin-right": "8px",
+            "flex": "0 0 auto"
+        });
+
+        const testo = $('<span></span>');
+        testo.css({ "font-size": "13px", "font-weight": "600", "color": colore });
+
+        if (risolte) {
+            testo.text("Tutte le segnalazioni risolte");
+            intestazione.append(pallino).append(testo);
+
+            const nota = $('<div>Il box corrisponde al dato.</div>');
+            nota.css({ "font-size": "12px", "color": "#767676", "padding": "2px 0" });
+            contenitore.append(nota);
+            return;
+        }
+
+        const quante = differenze.length;
+        testo.text(quante === 1
+            ? "Riscontrata 1 differenza nel box"
+            : "Riscontrate " + quante + " differenze nel box");
+        intestazione.append(pallino).append(testo);
+
+        differenze.forEach(diff => {
+            const riga = $('<div></div>');
+            riga.css({
+                "border-left": "2px solid " + colore,
+                "padding": "3px 0 3px 8px",
+                "margin-bottom": "6px"
+            });
+
+            const campo = $('<div></div>');
+            campo.text(confronti.etichettaSegnalazione(diff.label));
+            campo.css({ "font-size": "12px", "font-weight": "600", "color": "#2c2c2c" });
+
+            const dettaglio = $('<div></div>');
+            dettaglio.text(diff.difference == null ? "" : String(diff.difference));
+            dettaglio.css({ "font-size": "12px", "color": "#767676" });
+
+            riga.append(campo).append(dettaglio);
+            contenitore.append(riga);
+        });
+    },
+
+    /// Le caselle dell'intestazione: scelte, non azioni. Si leggono quando il popup si chiude,
+    /// e fino ad allora non succede niente.
+    ///
+    /// La seconda compare solo quando la prima e' spuntata: estendere a tutte una cosa che non
+    /// si sta facendo nemmeno qui non vuol dire niente, e tenerla sempre in vista costringeva a
+    /// leggere due righe per capirne una.
+    caselleSilenziamento(codice) {
+        const stato = this.statoCaselleSilenziamento(codice);
+        const riquadro = $('<div style="display: flex; flex-direction: column; gap: 3px;"></div>');
+
+        const crea = (id, etichetta, spuntata) => {
+            const riga = $('<div style="display: flex; align-items: center; gap: 5px;"></div>');
+            const casella = $('<input type="checkbox" id="' + id + '">');
+            const testo = $('<label for="' + id + '" style="font-size: 11px; color: #2c2c2c; cursor: pointer;"></label>');
+
+            casella.prop("checked", spuntata === true);
+            testo.text(etichetta);
+            riga.append(casella).append(testo);
+            riquadro.append(riga);
+
+            return { riga: riga, casella: casella };
+        };
+
+        const questa = crea("segnalazioniSilenziaQuesta", "Non mostrare piu' questo avviso", stato.questa);
+        const tutte = crea("segnalazioniSilenziaTutte", "Applica a tutte le segnalazioni", stato.tutte);
+
+        const mostraSeconda = () => {
+            const accesa = questa.casella.prop("checked") === true;
+            tutte.riga.css("display", accesa ? "flex" : "none");
+
+            //Sparendo non deve lasciarsi dietro una scelta che non si vede piu'.
+            if (!accesa) {
+                tutte.casella.prop("checked", false);
+            }
+        };
+
+        questa.casella.on("change", mostraSeconda);
+        mostraSeconda();
+
+        return riquadro;
+    },
+
+    /// Il lampo: il contenuto sparisce e torna. Il modal e' gia' su fondo bianco, quindi basta
+    /// portare a zero l'opacita' e non serve sovrapporre nulla.
+    ///
+    /// Dura sempre la stessa frazione, non quanto il lavoro: legato alla durata vera, su un box
+    /// svelto non si vedrebbe e su uno lento sembrerebbe bloccato. Serve a dire "ho fatto
+    /// qualcosa" quando le segnalazioni restano le stesse e nulla cambia a schermo.
+    lampeggiaContenuto(contenuto) {
+        const DURATA = 250;
+
+        try {
+            contenuto.css("opacity", "0");
+            setTimeout(function () {
+                contenuto.css("opacity", "1");
+            }, DURATA);
+        }
+        catch (e) {
+            console.error("Code SRF-98 Lampeggio del contenuto non riuscito: " + e);
+            contenuto.css("opacity", "1");
+        }
+    },
+
+    /// La finestra delle segnalazioni. Si apre da sola all'apertura della scheda quando c'e'
+    /// qualcosa da dire e la referenza non e' stata silenziata, e si riapre a mano dal
+    /// segnalino nel titolo. Alla chiusura si leggono le caselle e il segnalino si riallinea a
+    /// quello che resta.
+    async mostraModalSegnalazioni() {
+        try {
+            const me = this;
+            const codice = this.codiceDellaRefAperta();
+
+            const contenuto = $(`
+                <div style="width: 100%; display: flex; flex-direction: column; gap: 10px; font-family: Arial, sans-serif; color: #2c2c2c;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 10px;">
+                            <div id="segnalazioniIntestazione" style="display: flex; align-items: center; min-width: 0;"></div>
+
+                            <div style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: #767676;">
+                                <span>Per correggere i dati nel box usa il pulsante</span>
+                                <img src="images/reimpaginaFix.png" alt="Correggi" style="width: 16px; height: 16px; object-fit: contain; vertical-align: middle;" />
+                            </div>
+                        </div>
+
+                        <div id="segnalazioniAzioni" style="flex: 0 0 auto;"></div>
+                    </div>
+
+                    <div id="segnalazioniElenco" style="width: 100%; max-height: 220px; overflow-y: auto; padding-right: 4px; box-sizing: border-box;"></div>
+                </div>
+            `);
+
+            const intestazione = contenuto.find("#segnalazioniIntestazione");
+            const elenco = contenuto.find("#segnalazioniElenco");
+            const azioni = contenuto.find("#segnalazioniAzioni");
+
+            this.riempiElencoSegnalazioni(elenco, intestazione, this.segnalazioniInMemoria() || []);
+
+            //Rifa' la pre analisi adesso: e' il modo per vedere l'effetto delle correzioni senza
+            //chiudere e riaprire la scheda. Icona, non scritta: sta sulla riga dello stato.
+            const aggiorna = $('<img src="images/refresh.png" alt="Aggiorna">');
+            aggiorna.css({
+                //Alta quanto le due righe della colonna a sinistra messe insieme: lo stato, i
+                //10px che le separano e la riga del suggerimento. Le due righe restano dove
+                //sono, l'icona le affianca invece di stare sopra una sola.
+                "height": "30px",
+                "padding": "4px",
+                "box-sizing": "content-box",
+                "border": "1px solid #d0d0d0",
+                "border-radius": "4px",
+                "cursor": "pointer",
+                "display": "inline-block"
+            });
+            Utility.impostaTooltip(aggiorna[0], "Rifai il controllo e aggiorna l'elenco");
+
+            aggiorna.on("click", async function () {
+                try {
+                    me.lampeggiaContenuto(contenuto);
+
+                    const box = me.refSelected != null ? me.refSelected.item : null;
+                    me.memorizzaSegnalazioni(await me.differenzeDatiNelBox(box, me.schedeRefDati));
+                    me.riempiElencoSegnalazioni(elenco, intestazione, me.segnalazioniInMemoria());
+                }
+                catch (err) {
+                    console.error("Code SRF-96 Aggiornamento delle segnalazioni non riuscito: " + err);
+                    messaggioUtente("Code SRF-96 Non e' stato possibile aggiornare le segnalazioni", "error", false, 4);
+                    contenuto.css("opacity", "1");
+                }
+            });
+            azioni.append(aggiorna);
+
+            const caselle = this.caselleSilenziamento(codice);
+
+            //Alla chiusura si leggono le scelte dichiarate e il segnalino nel titolo si rifa' i
+            //conti: se l'Aggiorna ha trovato tutto risolto, sparisce.
+            Utility.popup("Differenze rilevate", contenuto, "lg", function () {
+                //Le caselle si leggono dal riquadro che si e' tenuto, non dal documento: quando
+                //questo callback parte il popup e' gia' stato rimosso, e un selettore globale
+                //non troverebbe piu' niente. Il sottoalbero staccato conserva lo stato.
+                me.applicaScelteSilenziamento(
+                    codice,
+                    caselle.find("#segnalazioniSilenziaQuesta").prop("checked") === true,
+                    caselle.find("#segnalazioniSilenziaTutte").prop("checked") === true);
+
+                me.aggiornaPulsanteSegnalazioni();
+            }, caselle);
+        }
+        catch (e) {
+            console.error("Code SRF-97 Finestra delle segnalazioni non aperta: " + e);
+        }
     },
 
     /*
@@ -7169,6 +7448,11 @@ const schedaRef = {
         this.multiSelection = [];
         this.multiSchedeRef = [];
         this.isBusy = false;
+
+        //I20-992: la scheda che si apre e' un'altra, quindi la pre analisi va rifatta. Il
+        //silenziamento invece resta: dura per la sessione, e riaprire la stessa referenza non
+        //deve farlo decadere.
+        this.dimenticaSegnalazioni();
     },
 
     annullaCambiaMeccanica() {

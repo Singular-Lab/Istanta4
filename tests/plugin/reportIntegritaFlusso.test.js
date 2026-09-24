@@ -486,7 +486,9 @@ test('la copia negli appunti passa una stringa, in tutto il plugin', () => {
     });
 
     assert.match(sorgente('griglia.js'), /writeText\(String\(\$\(this\)\.attr\("codiceGruppo"\) \|\| ""\)\)/);
-    assert.strictEqual((sorgente('schedaRef.js').match(/writeText\(String\(\$\(this\)\.attr\("codiceGruppo"\) \|\| ""\)\)/g) || []).length, 2);
+    //I20-992: i due punti che componevano il titolo della scheda ref erano scritti uguali;
+    //ora passano entrambi da componiTitoloCodice, quindi il copia-appunti sta in un posto solo.
+    assert.strictEqual((sorgente('schedaRef.js').match(/writeText\(String\(\$\(this\)\.attr\("codiceGruppo"\) \|\| ""\)\)/g) || []).length, 1);
 });
 
 /* I20-981 (Lotto 4a): le differenze sui campi osservati. */
