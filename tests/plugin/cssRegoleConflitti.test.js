@@ -131,9 +131,11 @@ test('Edro21 chiede che la descrizione non tocchi le foto extra, misurando il te
         }
     })(config);
 
+    // Produzione ha allargato il primo pattern a '*descrizione*' (I20-989): la regola e' la stessa,
+    // cambia solo quanto pesca. Cio' che non deve cambiare e' la misura sul testo.
     const descrizione = regole.filter(r =>
         Array.isArray(r.segnalazioni) &&
-        r.segnalazioni[0] === 'descrizione' &&
+        (r.segnalazioni[0] === 'descrizione' || r.segnalazioni[0] === '*descrizione*') &&
         r.segnalazioni[1] === '*foto_extra*');
 
     assert.ok(descrizione.length > 0, 'la regola deve esistere nella configurazione di Edro21');
