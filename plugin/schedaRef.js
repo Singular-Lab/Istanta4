@@ -4,6 +4,7 @@ const XMLHttpRequestClient = require('./XMLHttpRequestClient');
 const DataCaricamentoFoto = require('./dataCaricamentoFoto');
 const NoRenderElementi = require('./noRenderElementi');
 const RicollegaEsiti = require('./ricollegaEsiti');
+const variantiDescrizione = require('./variantiDescrizione');
 
 const schedaRef = {
     refSelected: null,
@@ -1177,6 +1178,12 @@ const schedaRef = {
         //I20-981: la descrizione del server si puo' riportare nel box senza passare dal
         //salvataggio, per quando il dato e' gia' a posto a monte e il box e' rimasto indietro.
         //Si offre solo quando le due cose non dicono la stessa cosa.
+        //
+        //I20-993: il contenuto che riporta viene da compiledFields, cioe' e' la descrizione che
+        //il server ha gia' composto per la variante che comanda. Prima il pulsante restava
+        //attivo su qualunque linguetta, e stando sulla nazionale applicava la descrizione della
+        //ss_sa. Ora lo si offre solo quando si sta sulla variante a cui quel contenuto
+        //appartiene: sulle altre si guarda soltanto, e il pulsante non c'e'.
         if (await this.descrizioneDisallineata(this.schedeRefDati, box)) {
             const bottoneDescrizione = $('<sp-action-button id="applicaDescrizioneDaServer" style="font-size: 12px; margin: 4px 0px 8px 0px;">Applica descrizione da server</sp-action-button>');
             bottoneDescrizione.on("click", function () {
@@ -1198,80 +1205,323 @@ const schedaRef = {
 
         try {
             //writeDebugMessageForCrash("Inizio try descrizioni regionali e canale");
-            var descrizioneRegionale = false;
-            try {
-                descrizioneRegionale = pluginMiddleware.getCampo("abilitaDescrizioniRegionali") || false;
-            }
-            catch (ex) {
-                console.log("Code SRF-18 Errore durante il caricamento delle impostazioni personalizzate dell'agenzia:", ex);
-                messaggioUtente("Code SRF-18 Errore durante il caricamento delle impostazioni personalizzate dell'agenzia, specificare lo stato della descrizione regionale", "error", false, 5);
-            }
+            //I20-993: al posto delle due caselle, una scheda a linguette per variante, come
+            //quella del revisore. Creare e cancellare varianti resta sul revisore: qui si
+            //sceglie quale guardare, e si modifica solo quella che comanda, cioe' la piu'
+            //specifica valida per questa lavorazione. Sulle altre i campi si bloccano.
+            var rowOpzioniRegionaliEArtwork = $('<div class="row" style="justify-content: flex-start; display: flex; flex-wrap: wrap;"></div>');
 
-            var descrizioneCanale = false;
-            try {
-                descrizioneCanale = pluginMiddleware.getCampo("abilitaDescrizioniCanale") || false;
+            var elencoVarianti = primario.recordInTracciato["varianti_descrizione"] || [];
+            var areaObjLav = ficoProcess.getAreaLavorazioneCorrente();
+            var canaleObjLav = ficoProcess.getCanaleLavorazioneCorrente();
+            var areaLav = areaObjLav != null ? areaObjLav.sigla : null;
+            var canaleLav = canaleObjLav != null ? canaleObjLav.sigla : null;
 
-                if (descrizioneCanale && !descrizioneRegionale) {
-                    messaggioUtente("Code SRF-18 Attenzione: Le descrizioni canale sono abilitate ma le descrizioni regionali sono disabilitate, verranno ignorate le descrizioni canale", "warning", false, 5);
+            var varianteChePuoiModificare = variantiDescrizione.varianteApplicabile(elencoVarianti, areaLav, canaleLav);
+            var varianteMostrata = varianteChePuoiModificare;
+
+            //I20-993: il salvataggio sta in un altro metodo e deve sapere su quale variante si
+            //sta scrivendo, altrimenti il server sceglie la prima riga che capita e la modifica
+            //finisce sulla nazionale. Vale anche quando la variante e' una sola.
+            me.varianteDescrizioneScelta = varianteChePuoiModificare;
+
+            //Blocca o sblocca i campi della scheda. Si agisce anche direttamente sulle textarea
+            //e non solo tramite il controller, perche' quello nasce piu' tardi e la prima
+            //selezione non deve dipendere da quel tempo. Chi era gia' in sola lettura ci resta:
+            //l'agenzia o la revisione possono averlo deciso per conto loro.
+            var bloccaCampiScheda = function (bloccare) {
+                $("#editReferenza").find("textarea").each(function () {
+                    var campo = $(this);
+
+                    if (campo.attr("data-solaletturaoriginale") == null) {
+                        campo.attr("data-solaletturaoriginale", campo.prop("readonly") ? "1" : "0");
+                    }
+
+                    var originale = campo.attr("data-solaletturaoriginale") === "1";
+                    campo.prop("readonly", bloccare || originale);
+                    campo.css("opacity", bloccare ? "0.6" : "");
+                });
+
+                if (me.editRefFieldController != null) {
+                    me.editRefFieldController.solaLettura = bloccare === true;
                 }
-            }
-            catch (ex) {
-                console.log("Code SRF-18 Errore durante il caricamento delle impostazioni personalizzate dell'agenzia:", ex);
-                messaggioUtente("Code SRF-18 Errore durante il caricamento delle impostazioni personalizzate dell'agenzia, specificare lo stato della descrizione canale", "error", false, 5);
-            }
+            };
 
-            //creiamo una row
-            var rowOpzioniRegionaliEArtwork = $('<div class="row" style="justify-content: flex-start; display: flex;"></div>');
+            //Le linguette servono se c'e' da scegliere fra piu' varianti, oppure se ce n'e' da
+            //creare: con la sola nazionale e niente da creare la scheda resta com'era.
+            var quanteValgono = variantiDescrizione.variantiApplicabili(elencoVarianti, areaLav, canaleLav).length;
+            var quanteSeNePossonoCreare = variantiDescrizione.variantiCreabili(elencoVarianti, areaLav, canaleLav).length;
 
-            //se descrizione regionale è abilitata o se objResult[0].descrizione_regionale è true, allora dobbiamo creare un checkbox già spuntato da attaccare al div
-            var descrizioneRegionaleCheckbox = null;
-            if (primario.recordInTracciato.descrizione_regionale) {
-                descrizioneRegionaleCheckbox = $('<div style="vertical-align: top;display: flex;"><input type="checkbox" checked id="descrizioneRegionale"><label style="color:white;">Descrizione Regionale</label></div>');
-                if (!descrizioneRegionale) {
-                    messaggioUtente("Code SRF-18 Attenzione: La descrizione regionale è disabilita ma è stata trovata una descrizione regionale per il prodotto, per rimuovere la descrizione regionale disattivare il checkbox corrispondente prima di salvare", "warning", false, 5)
-                }
-            } else if (descrizioneRegionale) {
-                descrizioneRegionaleCheckbox = $('<div style="vertical-align: top;display: flex;"><input type="checkbox" id="descrizioneRegionale"><label style="color:white;">Descrizione Regionale</label></div>');
-            }
+            if (quanteValgono > 1 || quanteSeNePossonoCreare > 0) {
+                var linguette = $('<div id="tabVariantiDescrizione" style="display:flex; flex-wrap:wrap; align-items:flex-end; border-bottom:1px solid #777; margin:6px 0 0 0; width:100%;"></div>');
 
-            //ripetiamo per la descrizione canale
-            var descrizioneCanaleCheckbox = null;
-            if (primario.recordInTracciato.descrizione_regionale && primario.recordInTracciato.descrizione_canale) {
-                descrizioneCanaleCheckbox = $('<div id="rowDescrizioneCanale" style="vertical-align: top; display: flex;"><input type="checkbox" checked id="descrizioneCanale"><label style="color:white;">Descrizione Canale</label></div>');
+                //I testi che il box ha all'apertura, cioe' l'impaginato. Si ricordano una volta
+                //sola, prima che qualcuno li tocchi: sono quelli che la variante modificabile
+                //deve mostrare, ed e' il confronto fra loro e l'archivio a far emergere il
+                //disallineamento. Guardando un'altra variante i campi si riempiono col suo dato,
+                //e tornando su quella modificabile questi vengono rimessi.
+                var testiDellImpaginato = null;
 
-                if (!descrizioneRegionale) {
-                    messaggioUtente("Code SRF-18 Attenzione: La descrizione canale è stata trovata ma la descrizione regionale è disabilitata", "warning", false, 5);
-                }
-                if (!descrizioneCanale) {
-                    messaggioUtente("Code SRF-18 Attenzione: La descrizione canale è disabilita ma è stata trovata una descrizione canale per il prodotto, per rimuovere la descrizione canale disattivare il checkbox corrispondente prima di salvare", "warning", false, 5)
-                }
-            } else if (descrizioneCanale && descrizioneRegionale) {
-                descrizioneCanaleCheckbox = $('<div id="rowDescrizioneCanale" style="vertical-align: top;' + (primario.recordInTracciato.descrizione_regionale ? 'display: flex;' : 'display: none;') + '"><input type="checkbox" id="descrizioneCanale"><label style="color:white;">Descrizione Canale</label></div>');
-            }
+                var ricordaTestiDellImpaginato = function () {
+                    if (testiDellImpaginato != null) {
+                        return;
+                    }
 
+                    testiDellImpaginato = [];
+                    $("#editReferenza").find('textarea[labelCorrispondente="descrizione"]').each(function () {
+                        testiDellImpaginato.push({ campo: this, valore: $(this).val() });
+                    });
+                };
 
-            //appendiamo il checkbox alla row
-            if (descrizioneRegionaleCheckbox != null) {
-                rowOpzioniRegionaliEArtwork.append(descrizioneRegionaleCheckbox);
-                //se attualmente il checkbox è spuntato allora mostriamo id="rowDescrizioneCanale", inoltre mettiamo un evento onChange che fa si che quando il checkbox viene spuntato o deselezionato, venga mostrato o nascosto il checkbox della descrizione canale
-                descrizioneRegionaleCheckbox.find("input").on("change", function () {
-                    if ($(this).is(":checked")) {
-                        $("#rowDescrizioneCanale").css("display", "flex");
+                var rimettiTestiDellImpaginato = function () {
+                    if (testiDellImpaginato == null) {
+                        return;
+                    }
+
+                    testiDellImpaginato.forEach(function (voce) { $(voce.campo).val(voce.valore); });
+                };
+
+                //Scrive i testi di una variante nei box delle descrizioni, ciascuno nel suo.
+                //Il campo dichiara a quale descrizione appartiene con il suo stile di carattere;
+                //quando lo stile non si risolve - e succede - si procede in ordine sui campi
+                //rimasti, invece di ammucchiare tutto nel primo.
+                var scriviVarianteNeiBox = function (variante) {
+                    var testi = [variante.descrizione1, variante.descrizione2, variante.descrizione3, variante.descrizione4];
+                    var campi = $("#editReferenza").find('textarea[labelCorrispondente="descrizione"]');
+                    var assegnati = {};
+                    var senzaStile = [];
+
+                    campi.each(function () {
+                        var campo = $(this);
+                        var universale = pluginMiddleware.getNameStileUniversale(campo.attr("currentcharacterstyle"));
+                        var fondamentale = universale != null ? universale.fondamentale : null;
+                        var indice = fondamentale != null ? ["descrizione1", "descrizione2", "descrizione3", "descrizione4"].indexOf(fondamentale) : -1;
+
+                        if (indice >= 0 && assegnati[indice] !== true) {
+                            assegnati[indice] = true;
+                            campo.val(testi[indice] != null ? testi[indice] : "");
+                        }
+                        else if (indice < 0) {
+                            senzaStile.push(campo);
+                        }
+                    });
+
+                    //I campi che non dicono chi sono prendono le descrizioni non ancora assegnate,
+                    //nell'ordine in cui compaiono.
+                    var daAssegnare = [];
+                    for (var i = 0; i < testi.length; i++) {
+                        if (assegnati[i] !== true) {
+                            daAssegnare.push(testi[i]);
+                        }
+                    }
+
+                    senzaStile.forEach(function (campo, posizione) {
+                        campo.val(posizione < daAssegnare.length && daAssegnare[posizione] != null ? daAssegnare[posizione] : "");
+                    });
+                };
+                var mostraVariante = function (variante) {
+                    varianteMostrata = variante;
+                    me.varianteDescrizioneScelta = variante;
+
+                    var etichettaScelta = variantiDescrizione.etichetta(variante);
+                    var modificabile = variantiDescrizione.eModificabile(variante, elencoVarianti, areaLav, canaleLav);
+
+                    linguette.find(".linguettaVariante").each(function () {
+                        var sua = $(this).attr("data-variante");
+                        var attiva = sua === etichettaScelta;
+                        $(this).css({
+                            "background": attiva ? "#ffffff" : "#4d4c4c",
+                            "color": attiva ? "#000000" : "#cccccc",
+                            "font-weight": attiva ? "bold" : "normal"
+                        });
+                    });
+
+                    bloccaCampiScheda(!modificabile);
+
+                    //Il contenuto del pulsante e' quello composto per la variante che comanda:
+                    //offrirlo mentre se ne guarda un'altra vorrebbe dire scriverle addosso il
+                    //testo sbagliato.
+                    //Si mostra solo sulla variante a cui quel contenuto appartiene: il suo
+                    //contenuto e' quello composto per lei.
+                    if (modificabile) {
+                        $("#applicaDescrizioneDaServer").show();
                     }
                     else {
-                        $("#rowDescrizioneCanale").hide();
-                        //impostiamo il checkbox di descrizione canale a false
-                        $("#descrizioneCanale").prop("checked", false);
+                        $("#applicaDescrizioneDaServer").hide();
                     }
-                }
-                );
-                //se il checkbox è spuntato allora mostriamo il checkbox della descrizione canale
-                if (descrizioneRegionaleCheckbox.find("input").is(":checked")) {
-                    $("#rowDescrizioneCanale").css("display", "flex");
-                }
-            }
-            if (descrizioneCanaleCheckbox != null) {
-                rowOpzioniRegionaliEArtwork.append(descrizioneCanaleCheckbox);
+
+                    ricordaTestiDellImpaginato();
+
+                    //La modificabile mostra l'impaginato, le altre il loro dato d'archivio, e in
+                    //entrambi i casi nei box delle descrizioni: e' li' che si leggono.
+                    if (modificabile && variante.nuova !== true) {
+                        rimettiTestiDellImpaginato();
+                    }
+                    else {
+                        //Una variante appena creata nasce vuota: riempirla con l'impaginato
+                        //vorrebbe dire copiarci dentro la descrizione di un'altra variante.
+                        scriviVarianteNeiBox(variante);
+                    }
+                };
+
+                var creaLinguetta = function (variante) {
+                    var etichetta = variantiDescrizione.etichetta(variante);
+                    var linguetta = $('<div class="linguettaVariante"></div>');
+                    linguetta.attr("data-variante", etichetta);
+                    linguetta.text(etichetta);
+                    linguetta.css({
+                        "padding": "3px 12px",
+                        "margin-right": "2px",
+                        "cursor": "pointer",
+                        "border": "1px solid #777",
+                        "border-bottom": "none",
+                        "border-radius": "4px 4px 0 0",
+                        "font-size": "11px",
+                        "background": "#4d4c4c",
+                        "color": "#cccccc"
+                    });
+                    linguetta.on("click", function () { mostraVariante(variante); });
+
+                    //I20-993: chiudere una variante la cancella davvero, come l'elimina del
+                    //revisore: sparisce di qui e di la'. Per questo si chiede conferma e si
+                    //dice per esteso cosa si sta per perdere. La nazionale non ha la crocetta,
+                    //e il server rifiuta comunque di eliminarla su richiesta del Plugin.
+                    if (variantiDescrizione.siPuoChiudere(variante)) {
+                        var crocetta = $('<span title="Elimina questa variante">&#10005;</span>');
+                        crocetta.css({ "margin-left": "8px", "cursor": "pointer", "opacity": "0.7" });
+                        crocetta.on("click", async function (evento) {
+                            evento.stopPropagation();
+
+                            var avviso = $('<div style="display:block;"></div>');
+                            avviso.append($('<div style="color:black; font-size:16px;"></div>')
+                                .text("Eliminare la descrizione " + etichetta + " di questa referenza?"));
+                            avviso.append($('<div style="color:black; font-size:13px; margin-top:6px;"></div>')
+                                .text("Viene cancellata anche dal revisore e non si recupera. Resteranno le varianti meno specifiche, e quella che comanda diventera' la prima ancora valida."));
+
+                            if (!(await Utility.confirm(avviso))) {
+                                return;
+                            }
+
+                            me.eliminaVarianteDescrizione(dna, variante, function () {
+                                //Si ricarica la scheda dal server, non la si ridisegna. Ridisegnarla
+                                //la rifarebbe con l'elenco di varianti e con compiledFields gia'
+                                //scaricati, dove la variante eliminata c'e' ancora e la descrizione
+                                //composta e' quella di allora. Ricaricandola arrivano l'elenco
+                                //aggiornato, la composizione della variante che comanda adesso, e il
+                                //controllo del disallineamento rifatto su quella: e' quel controllo
+                                //a decidere se offrire "Applica descrizione da server".
+                                me.initSchedaRef(me.refSelected);
+                            });
+                        });
+                        linguetta.append(crocetta);
+                    }
+
+                    linguette.append(linguetta);
+                };
+
+                variantiDescrizione.variantiApplicabili(elencoVarianti, areaLav, canaleLav).forEach(creaLinguetta);
+
+                //I20-993: il piu' crea una descrizione regionale per questa lavorazione. Sul
+                //revisore si crea qualunque combinazione; qui solo quelle che servono al lavoro
+                //aperto, e la riga d'archivio nasce al primo salvataggio.
+                var disegnaPiu = function () {
+                    linguette.find(".creaVariante").remove();
+
+                    var creabili = variantiDescrizione.variantiCreabili(elencoVarianti, areaLav, canaleLav);
+                    var nazionale = elencoVarianti.filter(function (v) { return variantiDescrizione.specificita(v) === 0; })[0];
+
+                    if (creabili.length === 0) {
+                        return;
+                    }
+
+                    var piu = $('<div class="creaVariante" title="Crea una descrizione regionale per questa lavorazione">+</div>');
+                    piu.css({
+                        "padding": "3px 10px",
+                        "margin-left": "4px",
+                        "cursor": "pointer",
+                        "border": "1px dashed #777",
+                        "border-bottom": "none",
+                        "border-radius": "4px 4px 0 0",
+                        "font-size": "11px",
+                        "color": "#cccccc"
+                    });
+
+                    //Le possibilita' si mostrano come voci cliccabili accanto al piu'. In UXP
+                    //prompt e alert non esistono - nel Plugin non li usa nessuno - e chiamarli
+                    //interrompe il gestore senza dire niente: era il motivo per cui il piu' non
+                    //faceva nulla.
+                    piu.on("click", function () {
+                        if (linguette.find(".sceltaVariante").length > 0) {
+                            linguette.find(".sceltaVariante").remove();
+                            return;
+                        }
+
+                        creabili.forEach(function (scelta) {
+                            var voce = $('<div class="sceltaVariante"></div>');
+                            voce.text(variantiDescrizione.etichetta(scelta));
+                            voce.css({
+                                "padding": "3px 10px",
+                                "margin-left": "4px",
+                                "cursor": "pointer",
+                                "border": "1px dashed #9ecbff",
+                                "border-bottom": "none",
+                                "border-radius": "4px 4px 0 0",
+                                "font-size": "11px",
+                                "color": "#9ecbff"
+                            });
+
+                            voce.on("click", function () {
+                                linguette.find(".sceltaVariante").remove();
+
+                                //Nasce vuota e sta nell'elenco come le altre: se e' la piu'
+                                //specifica diventa lei la modificabile, e salvando la scheda la
+                                //riga viene creata in archivio.
+                                elencoVarianti.push({
+                                    area: scelta.area,
+                                    canale: scelta.canale,
+                                    specificita: variantiDescrizione.specificita(scelta),
+                                    //Nasce con i campi della nazionale, che e' il punto di
+                                    //partenza naturale per una variante: si prende da lei e si
+                                    //cambia quello che cambia. Si legge dall'elenco e non
+                                    //dall'impaginato, cosi' e' davvero la nazionale anche quando
+                                    //il box dice altro.
+                                    descrizione1: nazionale != null ? nazionale.descrizione1 : "",
+                                    descrizione2: nazionale != null ? nazionale.descrizione2 : "",
+                                    descrizione3: nazionale != null ? nazionale.descrizione3 : "",
+                                    descrizione4: nazionale != null ? nazionale.descrizione4 : "",
+                                    nuova: true
+                                });
+
+                                var nuova = elencoVarianti[elencoVarianti.length - 1];
+
+                                //Non si ricarica dal server: la riga li' non esiste ancora, e
+                                //ricaricando la variante appena creata sparirebbe.
+                                creaLinguetta(nuova);
+                                disegnaPiu();
+                                varianteChePuoiModificare = variantiDescrizione.varianteApplicabile(elencoVarianti, areaLav, canaleLav);
+                                linguette.show();
+                                mostraVariante(nuova);
+
+                                messaggioUtente("Descrizione " + variantiDescrizione.etichetta(scelta) + " creata: si scrive in archivio salvando la scheda", "success", false, 5);
+                            });
+
+                            linguette.append(voce);
+                        });
+                    });
+
+                    linguette.append(piu);
+                };
+
+                rowOpzioniRegionaliEArtwork.append(linguette);
+
+                //Il pulsante viene creato prima delle linguette e finiva sopra di loro. Qui lo si
+                //sposta sotto: append di un elemento che esiste gia' lo muove, non lo duplica.
+                rowOpzioniRegionaliEArtwork.append($("#applicaDescrizioneDaServer"));
+
+                disegnaPiu();
+
+                //Si parte da quella che comanda, cioe' dallo stato di prima di I20-993.
+                setTimeout(function () { mostraVariante(varianteChePuoiModificare); }, 10);
             }
 
             //se artworkId è definito allora dentro elementiArtwork mettiamo due pulsanti, uno per eliminare l'artwork e uno per selezionarlo
@@ -1758,13 +2008,23 @@ const schedaRef = {
 
                     $("#pulsantiExtra").empty();
                     $("#pulsantiExtra").append(button);
-                    if ($("#Tab5").css("display") == "none") {
-                        button.css("display", "none");
-                    }
 
                     break;
                 }
             }
+
+            //I20-993: il Salva deve esserci sempre. Nasceva soltanto dentro il ramo che disegna
+            //il campo descrizione del box, quindi su un box senza quel campo non compariva, e
+            //si nascondeva anche quando la Tab5 non era visibile. Qui si garantisce che ci sia.
+            if ($("#salvaButton").length === 0) {
+                var salvaSempre = $('<sp-action-button id="salvaButton" style="color:lightgreen; margin-right:10px;">Salva modifiche</sp-action-button>');
+                salvaSempre.on('click', function () {
+                    me.salvaModifiche(schedaRef, codice, box, meccanica, page);
+                });
+                $("#pulsantiExtra").append(salvaSempre);
+            }
+
+            $("#salvaButton").css("display", "");
 
             //writeDebugMessageForCrash("Inizio cambio strutturale");
 
@@ -2051,6 +2311,78 @@ const schedaRef = {
 
     /// Riporta nel box la descrizione come la dice il server, senza toccare il dato: allinea
     /// il box a quello che il Report Integrita' si aspetta di leggerci.
+    /// I20-993: elimina una variante di descrizione, cioe' la "chiude". Passa dallo stesso
+    /// endpoint del revisore, con sender indd: stessa logica, stesso registro, nessuna seconda
+    /// strada per cancellare le stesse righe. La nazionale non arriva mai qui, e comunque il
+    /// server la rifiuta.
+    eliminaVarianteDescrizione(dna, variante, aEliminazioneAvvenuta) {
+        var me = this;
+
+        if (!variantiDescrizione.siPuoChiudere(variante)) {
+            messaggioUtente("Code SRF-95 La descrizione nazionale non si puo' eliminare", "warning", false, 4);
+            return;
+        }
+
+        var eSingola = dna.codice === dna.codice_gruppo;
+
+        //RevisoreController e' un Controller senza ApiController: i parametri complessi non si
+        //legano dal corpo JSON ma dal form, ed e' cosi' che li manda il revisore. Mandando JSON
+        //il binding non legava niente, la coda restava vuota e il server rispondeva Esito falso
+        //senza errore, che e' il default di BoolResult.
+        //
+        //I campi nulli vanno omessi, non mandati vuoti: una stringa vuota si lega come "" e non
+        //come null, e il confronto con la colonna nulla non troverebbe la riga.
+        var corpo = "idPromo=0";
+        corpo += "&coda[0].Codice=" + encodeURIComponent(eSingola ? dna.codice : "");
+        corpo += "&coda[0].CodiceGruppo=" + encodeURIComponent(dna.codice_gruppo != null ? dna.codice_gruppo : "");
+
+        if (variante.area != null && String(variante.area).trim() !== "") {
+            corpo += "&coda[0].revRegionale.area=" + encodeURIComponent(variante.area);
+        }
+
+        if (variante.canale != null && String(variante.canale).trim() !== "") {
+            corpo += "&coda[0].revRegionale.canale=" + encodeURIComponent(variante.canale);
+        }
+
+        var xhr = new XMLHttpRequestClient();
+
+        xhr.onload = async function (objResult, parsed) {
+            if (!parsed) {
+                try { objResult = JSON.parse(objResult); }
+                catch (e) {
+                    messaggioUtente("Code SRF-96 Eliminazione variante: risposta non leggibile: " + e, "error", false, 5);
+                    return;
+                }
+            }
+
+            if (objResult == null) {
+                messaggioUtente("Code SRF-97 Eliminazione variante: il server non ha risposto nulla di leggibile", "error", false, 5);
+                return;
+            }
+
+            if (objResult.esito === false) {
+                var motivo = objResult.error != null && objResult.error !== "" ? objResult.error : "nessun motivo indicato dal server";
+                messaggioUtente("Code SRF-97 Il server ha rifiutato l'eliminazione: " + motivo, "error", false, 5);
+                return;
+            }
+
+            messaggioUtente("Descrizione " + variantiDescrizione.etichetta(variante) + " eliminata", "success", false, 4);
+
+            //Non si ricarica la scheda: la rifarebbe con l'elenco di varianti gia' scaricato, in
+            //cui quella appena eliminata c'e' ancora, e la linguetta tornerebbe. L'allineamento
+            //lo fa chi ha chiesto l'eliminazione, che quell'elenco ce l'ha in mano.
+            if (typeof aEliminazioneAvvenuta === "function") {
+                aEliminazioneAvvenuta();
+            }
+        };
+
+        xhr.onerror = function () {
+            messaggioUtente("Code SRF-98 Errore di rete durante l'eliminazione della variante", "error", false, 5);
+        };
+
+        xhr.send("Revisore/elimina/0/0/1", corpo, "PUT", "application/x-www-form-urlencoded");
+    },
+
     async applicaDescrizioneDaServer() {
         try {
             const contenuto = this.descrizioneCompilataDelPrimario(this.schedeRefDati);
@@ -3482,12 +3814,18 @@ const schedaRef = {
             let descrizioneCampo = opResult.campi_offerta.find(c => Utility.parseLabel(c.label) == "descrizione");
 
             //Adesso procedo con Istanta
+            //I20-993: si scrive sulla variante su cui si sta, non sulla prima riga che il server
+            //trova. Senza questi due campi le modifiche finivano sulla nazionale.
+            let varianteScelta = this.varianteDescrizioneScelta;
+
             let req = {
                 codice: dna.codice,
                 codice_gruppo: dna.codice_gruppo,
                 idLavorazione: idKitLavorazione,
                 revisione: opResult.revisione,
-                campi_offerta: opResult.campi_offerta
+                campi_offerta: opResult.campi_offerta,
+                area: varianteScelta != null ? varianteScelta.area : null,
+                canale: varianteScelta != null ? varianteScelta.canale : null
             };
 
             //creiamo una funzione richiamabile

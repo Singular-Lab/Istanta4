@@ -107,6 +107,10 @@ namespace Istanta.Models
         public static readonly string keyDescrizioneRegionale = "descrizione_regionale";
         public static readonly string keyDescrizioneCanale = "descrizione_canale";
         public static readonly string keyDescrizioneCustom = "descrizione_custom";
+        //I20-993: l'elenco delle varianti di descrizione che esistono per una referenza, con
+        //cui il Plugin costruisce una schermata per ciascuna. Le tre chiavi qui sopra dicono
+        //soltanto com'e' fatta la variante richiesta, e da quelle l'elenco non si ricava.
+        public static readonly string keyVariantiDescrizione = "varianti_descrizione";
         public static readonly string keyFotoRegionale = "foto_regionale";
         public static readonly string keyFotoCanale = "foto_canale";
         public static readonly string allEtichette = "allEtichette";
@@ -931,6 +935,11 @@ namespace Istanta.Models
         public string? codice_gruppo { get; set; }
         public RevisioneDescrizione? revisione { get; set; }
         public List<RevisioneCampiOffertaFromIndd>? campi_offerta { get; set; }
+        //I20-993: la variante su cui si sta salvando. Senza, il server sceglieva la prima riga
+        //che capitava e le modifiche finivano sulla nazionale. I client che non li mandano
+        //continuano a comportarsi come prima.
+        public string? area { get; set; }
+        public string? canale { get; set; }
 
     }
 

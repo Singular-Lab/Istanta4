@@ -3649,6 +3649,12 @@ namespace Istanta.Controllers
                 rec.recordRevisionato = naz;
             }
 
+            //I20-993: l'elenco delle varianti esistenti viaggia sempre, anche vuoto, cosi' il
+            //Plugin non deve distinguere "nessuna variante" da "chiave assente". Quale si
+            //applichi lo decide lui: conosce area e canale della lavorazione, il server no.
+            rec.recordInTracciato![GLOBAL_VARIABLES.keyVariantiDescrizione] =
+                Utility.SpecificitaDescrizione.Elenco(artDescrList);
+
             ////Console.WriteLine("### -> getDesccrizioen step3");
 
             ArticoliDescrizioni? artDescr;

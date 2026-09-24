@@ -3218,6 +3218,15 @@ out var mismatch);
                     var actArea = act.revRegionale != null ? act.revRegionale.area : null;
                     var actCanale = act.revRegionale != null ? act.revRegionale.canale : null;
                     var actCustom = act.revRegionale != null ? act.revRegionale.custom : null;
+
+                    //I20-993: dal Plugin la nazionale non si chiude. La guardia sta qui e non
+                    //solo nell'interfaccia, perche' cancellarla lascerebbe il gruppo senza
+                    //nessuna descrizione su cui ricadere. Vale solo per le chiamate con sender
+                    //indd: da Istanta non cambia niente.
+                    if (sender == senderOperazione.indd && !Utility.SpecificitaDescrizione.SiPuoChiudere(actArea, actCanale))
+                    {
+                        throw new Exception("La descrizione nazionale non si puo' eliminare dal Plugin");
+                    }
                     /*List<RevisioneAction> coda = pkg.coda;
 
                     foreach (RevisioneAction act in coda)
@@ -3237,7 +3246,11 @@ out var mismatch);
                         ArticoliDescrizioni? descrItem = artItem.ArticoliDescrizionis!.Where(d => (d.Area == actArea || (d.Area == null && actArea == null)) && (d.Canale == actCanale || (d.Canale == null && actCanale == null)) /*inserire custom */).FirstOrDefault();
                         if (descrItem == null)
                         {
-                            throw new Exception("Revisione non trovata");
+                            //I20-993: dire cosa si e' cercato. Senza, "non trovata" non
+                            //distingue il codice sbagliato dalla variante inesistente.
+                            throw new Exception("Revisione non trovata per l'articolo " + act.Codice +
+                                " con area " + (actArea ?? "(nessuna)") + " e canale " + (actCanale ?? "(nessuno)") +
+                                ". Descrizioni presenti: " + string.Join(", ", artItem.ArticoliDescrizionis!.Select(d => "[" + (d.Area ?? "-") + "/" + (d.Canale ?? "-") + "/" + (d.Custom ?? "-") + "]")));
 
                         }
                         else
@@ -3253,7 +3266,9 @@ out var mismatch);
                         //ArticoliDescrizioni descrItem = await this.ctx.ArticoliDescrizionis.Where(d => d.CodiceGruppo == act.CodiceGruppo && (act.areaRichiesta && act.Area != null && act.Area != "" ? d.Area == act.Area : d.Area == null) && (act.areaRichiesta && act.canaleRichiesto && act.Canale != null && act.Canale != "" ? d.Canale == act.Canale : d.Canale == null)).FirstOrDefaultAsync();
                         if (descrItem == null)
                         {
-                            throw new Exception("Revisione non trovata");
+                            //I20-993: come sopra, per le descrizioni di gruppo.
+                            throw new Exception("Revisione non trovata per il gruppo " + act.CodiceGruppo +
+                                " con area " + (actArea ?? "(nessuna)") + " e canale " + (actCanale ?? "(nessuno)"));
                         }
                         else
                         {
@@ -3846,8 +3861,10 @@ out var mismatch);
                         if (artItem!=null)
                         {
                             idArt = artItem.Id;
-                            //Per ora prendo la prima, ATTENZIONE per quando verranno sbloccate le descrizioni regionali
-                            adItem = artItem.ArticoliDescrizionis!.FirstOrDefault();
+                            //I20-993: si scrive sulla variante indicata dal Plugin. Senza area
+                            //ne' canale vale il comportamento di prima, la prima che capita.
+                            adItem = Utility.SpecificitaDescrizione.ScegliPerVariante(
+                                artItem.ArticoliDescrizionis, req.area, req.canale);
 
                             codice = artItem.Codice;
                         }
@@ -3856,7 +3873,10 @@ out var mismatch);
                     {
                         codice = req.codice_gruppo!;
 
-                        adItem = this.ctx.ArticoliDescrizionis.FirstOrDefault(a => a.CodiceGruppo == req.codice_gruppo);
+                        adItem = Utility.SpecificitaDescrizione.ScegliPerVariante(
+                            this.ctx.ArticoliDescrizionis.Where(a => a.CodiceGruppo == req.codice_gruppo).ToList(),
+                            req.area,
+                            req.canale);
                     }
 
                     if(adItem!=null)
@@ -3897,8 +3917,12 @@ out var mismatch);
                         {
                             //l'operazione è stata autorizzata per cui procediamo a creare l'operazione sul DB
                             var nuovaOperazione = new RegistroOperazioni();
-                            nuovaOperazione.Area = "";//actArea != null ? actArea : ""; //per ora è disattivata l'opzione di fare revisioni di area o di canale dal plugin
-                            nuovaOperazione.Canale = ""; // actCanale != null ? actCanale : ""; 
+                            //I20-993: la revisione di area o canale dal Plugin adesso si fa,
+                            //quindi l'operazione registra su quale variante e' avvenuta
+                            //invece di dire sempre nazionale. Senza area ne' canale resta
+                            //il vuoto di prima.
+                            nuovaOperazione.Area = string.IsNullOrWhiteSpace(req.area) ? "" : req.area;
+                            nuovaOperazione.Canale = string.IsNullOrWhiteSpace(req.canale) ? "" : req.canale;
                             nuovaOperazione.Stato = (byte)statoOperazioni.risolta;
                             nuovaOperazione.Autore = int.Parse(session);
                             var data = DateTime.Now;
@@ -3939,6 +3963,14 @@ out var mismatch);
                         {
                             newAdItem.CodiceGruppo = req.codice_gruppo;
                         }
+
+                        //I20-993: la riga nasce sulla variante richiesta. Senza questo la creazione
+                        //faceva sempre una nazionale, e chiedendo una variante non ancora esistente
+                        //si sarebbe aggiunta una seconda nazionale accanto a quella che c'e' gia'.
+                        //E' anche il modo in cui dal Plugin si crea una descrizione regionale: si
+                        //salva su una variante che non esiste ancora.
+                        newAdItem.Area = string.IsNullOrWhiteSpace(req.area) ? null : req.area;
+                        newAdItem.Canale = string.IsNullOrWhiteSpace(req.canale) ? null : req.canale;
 
                         newAdItem.Descrizione1 = "";
                         newAdItem.Descrizione2 = "";

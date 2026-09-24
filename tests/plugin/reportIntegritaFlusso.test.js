@@ -913,6 +913,17 @@ test('la descrizione applicata si vede anche in edit', () => {
     //Il pulsante compare solo se box e server non dicono la stessa cosa, e il giudizio lo da'
     //la stessa preanalisi del report, sul solo campo della descrizione.
     assert.match(sorgenteScheda, /if \(await this\.descrizioneDisallineata\(this\.schedeRefDati, box\)\)/);
+
+    //I20-993: il contenuto che riporta e' quello composto per la variante che comanda, quindi
+    //il pulsante si offre solo mentre si sta su quella. Stando sulla nazionale applicava la
+    //descrizione della ss_sa, che e' il difetto che questa guardia chiude.
+    assert.match(sorgenteScheda, /\$\("#applicaDescrizioneDaServer"\)\.hide\(\)/);
+
+    //E la variante modificabile mostra l'impaginato, non l'archivio: e' il confronto fra quello
+    //e il dato del server a far emergere il disallineamento, quindi i testi del box vanno
+    //ricordati e rimessi quando si torna su di lei.
+    assert.match(sorgenteScheda, /rimettiTestiDellImpaginato/);
+
     assert.match(sorgenteScheda, /confronti\.confrontoBoxCompiledFieldPreAnalisi\(\s*\n\s*box,\s*\n\s*\[campo\]/);
 
     //La schermata di edit legge il box: dopo averlo cambiato va rifatta, altrimenti mostra
