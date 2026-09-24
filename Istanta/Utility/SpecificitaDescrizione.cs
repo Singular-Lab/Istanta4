@@ -26,6 +26,16 @@ namespace Istanta.Utility
             return 0;
         }
 
+        /// Se una variante si puo' chiudere, cioe' cancellare, dal Plugin.
+        ///
+        /// La nazionale no, mai: e' il fondo della scala, e senza di lei il gruppo resterebbe
+        /// senza nessuna descrizione su cui ricadere. Le altre si', ed e' una cancellazione
+        /// vera - la stessa dell'elimina del revisore - quindi a monte ci vuole una conferma.
+        public static bool SiPuoChiudere(string? area, string? canale)
+        {
+            return Rango(area, canale) > 0;
+        }
+
         /// La riga su cui scrivere quando si salva una variante dal Plugin.
         ///
         /// Senza area ne' canale si torna al comportamento di prima - la prima riga che capita -

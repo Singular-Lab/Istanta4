@@ -1348,6 +1348,32 @@ const schedaRef = {
                         "color": "#cccccc"
                     });
                     linguetta.on("click", function () { mostraVariante(variante); });
+
+                    //I20-993: chiudere una variante la cancella davvero, come l'elimina del
+                    //revisore: sparisce di qui e di la'. Per questo si chiede conferma e si
+                    //dice per esteso cosa si sta per perdere. La nazionale non ha la crocetta,
+                    //e il server rifiuta comunque di eliminarla su richiesta del Plugin.
+                    if (variantiDescrizione.siPuoChiudere(variante)) {
+                        var crocetta = $('<span title="Elimina questa variante">&#10005;</span>');
+                        crocetta.css({ "margin-left": "8px", "cursor": "pointer", "opacity": "0.7" });
+                        crocetta.on("click", async function (evento) {
+                            evento.stopPropagation();
+
+                            var avviso = $('<div style="display:block;"></div>');
+                            avviso.append($('<div style="color:black; font-size:16px;"></div>')
+                                .text("Eliminare la descrizione " + etichetta + " di questa referenza?"));
+                            avviso.append($('<div style="color:black; font-size:13px; margin-top:6px;"></div>')
+                                .text("Viene cancellata anche dal revisore e non si recupera. Resteranno le varianti meno specifiche, e quella che comanda diventera' la prima ancora valida."));
+
+                            if (!(await Utility.confirm(avviso))) {
+                                return;
+                            }
+
+                            me.eliminaVarianteDescrizione(dna, variante);
+                        });
+                        linguetta.append(crocetta);
+                    }
+
                     linguette.append(linguetta);
                 });
 
@@ -2135,6 +2161,63 @@ const schedaRef = {
 
     /// Riporta nel box la descrizione come la dice il server, senza toccare il dato: allinea
     /// il box a quello che il Report Integrita' si aspetta di leggerci.
+    /// I20-993: elimina una variante di descrizione, cioe' la "chiude". Passa dallo stesso
+    /// endpoint del revisore, con sender indd: stessa logica, stesso registro, nessuna seconda
+    /// strada per cancellare le stesse righe. La nazionale non arriva mai qui, e comunque il
+    /// server la rifiuta.
+    eliminaVarianteDescrizione(dna, variante) {
+        var me = this;
+
+        if (!variantiDescrizione.siPuoChiudere(variante)) {
+            messaggioUtente("Code SRF-95 La descrizione nazionale non si puo' eliminare", "warning", false, 4);
+            return;
+        }
+
+        var eSingola = dna.codice === dna.codice_gruppo;
+
+        var corpo = {
+            idPromo: 0,
+            coda: [{
+                Codice: eSingola ? dna.codice : "",
+                CodiceGruppo: dna.codice_gruppo,
+                revRegionale: {
+                    area: variante.area,
+                    canale: variante.canale,
+                    custom: null
+                }
+            }]
+        };
+
+        var xhr = new XMLHttpRequestClient();
+
+        xhr.onload = async function (objResult, parsed) {
+            if (!parsed) {
+                try { objResult = JSON.parse(objResult); }
+                catch (e) {
+                    messaggioUtente("Code SRF-96 Eliminazione variante: risposta non leggibile: " + e, "error", false, 5);
+                    return;
+                }
+            }
+
+            if (objResult == null || objResult.esito === false) {
+                messaggioUtente("Code SRF-97 Il server ha rifiutato l'eliminazione: " + (objResult != null ? objResult.error : ""), "error", false, 5);
+                return;
+            }
+
+            messaggioUtente("Descrizione " + variantiDescrizione.etichetta(variante) + " eliminata", "success", false, 4);
+
+            //La scheda legge le varianti dal server: dopo averne tolta una va rifatta, altrimenti
+            //resterebbe la linguetta di una descrizione che non esiste piu'.
+            await me.selectSchedaRef(1);
+        };
+
+        xhr.onerror = function () {
+            messaggioUtente("Code SRF-98 Errore di rete durante l'eliminazione della variante", "error", false, 5);
+        };
+
+        xhr.send("Revisore/elimina/0/0/1", JSON.stringify(corpo), "PUT", "application/json");
+    },
+
     async applicaDescrizioneDaServer() {
         try {
             const contenuto = this.descrizioneCompilataDelPrimario(this.schedeRefDati);

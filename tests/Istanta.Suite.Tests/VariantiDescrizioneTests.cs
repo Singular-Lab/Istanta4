@@ -185,6 +185,19 @@ public class VariantiDescrizioneTests
         Assert.Equal("recente", scelta!.Descrizione1);
     }
 
+    [Theory]
+    [InlineData(null, null, false)]
+    [InlineData("", "   ", false)]
+    [InlineData(null, "SS", true)]
+    [InlineData("TO", null, true)]
+    [InlineData("TO", "SS", true)]
+    public void La_nazionale_non_si_chiude_le_altre_si(string? area, string? canale, bool atteso)
+    {
+        // Chiudere una variante la cancella davvero. Sulla nazionale non si puo': e' il fondo
+        // della scala, e senza di lei il gruppo resterebbe senza niente su cui ricadere.
+        Assert.Equal(atteso, SpecificitaDescrizione.SiPuoChiudere(area, canale));
+    }
+
     private static ArticoliDescrizioni Variante(string? area, string? canale, string? custom = null, string? descrizione1 = null)
     {
         return new ArticoliDescrizioni

@@ -97,6 +97,14 @@ function varianteDopoChiusura(varianti, chiusa, area, canale) {
     return sotto.length > 0 ? sotto[sotto.length - 1] : null;
 }
 
+/// Se una variante si puo' chiudere, cioe' cancellare, dal Plugin. La nazionale no, mai:
+/// e' il fondo della scala, e senza di lei il gruppo resterebbe senza niente su cui ricadere.
+/// Stessa regola del server (SpecificitaDescrizione.SiPuoChiudere), che la fa comunque
+/// rispettare anche se da qui ci si distraesse.
+function siPuoChiudere(variante) {
+    return specificita(variante) > 0;
+}
+
 /// L'etichetta con cui si nomina una variante nell'interfaccia.
 function etichetta(variante) {
     if (variante == null) {
@@ -117,5 +125,6 @@ module.exports = {
     varianteApplicabile,
     eModificabile,
     varianteDopoChiusura,
+    siPuoChiudere,
     etichetta
 };

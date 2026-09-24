@@ -119,3 +119,13 @@ test('l\'etichetta nomina la variante come la legge chi impagina', () => {
     assert.strictEqual(varianti.etichetta(AREA_TO), 'TO');
     assert.strictEqual(varianti.etichetta(AREA_CANALE), 'SS TO');
 });
+
+test('la nazionale non si chiude, le altre si\'', () => {
+    // Chiudere la nazionale lascerebbe il gruppo senza niente su cui ricadere. Il server fa
+    // rispettare la stessa regola anche se da qui ci si distraesse.
+    assert.strictEqual(varianti.siPuoChiudere(NAZ), false);
+    assert.strictEqual(varianti.siPuoChiudere({ area: '', canale: '  ' }), false);
+    assert.strictEqual(varianti.siPuoChiudere(CANALE_SS), true);
+    assert.strictEqual(varianti.siPuoChiudere(AREA_TO), true);
+    assert.strictEqual(varianti.siPuoChiudere(AREA_CANALE), true);
+});

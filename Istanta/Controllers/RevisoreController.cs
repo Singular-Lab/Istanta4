@@ -3218,6 +3218,15 @@ out var mismatch);
                     var actArea = act.revRegionale != null ? act.revRegionale.area : null;
                     var actCanale = act.revRegionale != null ? act.revRegionale.canale : null;
                     var actCustom = act.revRegionale != null ? act.revRegionale.custom : null;
+
+                    //I20-993: dal Plugin la nazionale non si chiude. La guardia sta qui e non
+                    //solo nell'interfaccia, perche' cancellarla lascerebbe il gruppo senza
+                    //nessuna descrizione su cui ricadere. Vale solo per le chiamate con sender
+                    //indd: da Istanta non cambia niente.
+                    if (sender == senderOperazione.indd && !Utility.SpecificitaDescrizione.SiPuoChiudere(actArea, actCanale))
+                    {
+                        throw new Exception("La descrizione nazionale non si puo' eliminare dal Plugin");
+                    }
                     /*List<RevisioneAction> coda = pkg.coda;
 
                     foreach (RevisioneAction act in coda)
