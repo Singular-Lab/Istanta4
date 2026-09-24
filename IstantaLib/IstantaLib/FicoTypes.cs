@@ -980,6 +980,15 @@ namespace IstantaLib
         /// Vuoto: la sezione non ha nulla da confrontare e lo dice.
         public List<AgenziaCustomPlugin_KeyLabel> campiOsservatiConfronto { get; set; } = new List<AgenziaCustomPlugin_KeyLabel>();
 
+        /// I20-991: come si legge il nome di una label quando la sua segnalazione arriva
+        /// davanti all'operatore, nel Report Integrita' e nel csv. La label di InDesign e'
+        /// un nome tecnico che dice poco a chi lavora: qui l'agenzia dichiara come si chiama
+        /// quella cosa nel suo linguaggio. Chi mostra la segnalazione scrive la traduzione e
+        /// accanto, fra parentesi, la label originale, che serve a ritrovare il campo in pagina.
+        /// Vuoto: le label si mostrano come sono, ed e' il caso di tutte le agenzie che non
+        /// dichiarano nulla.
+        public List<AgenziaCustomPlugin_TraduzioneLabel> traduzioniLabelSegnalazioni { get; set; } = new List<AgenziaCustomPlugin_TraduzioneLabel>();
+
         public List<AgenziaCustomPlugin_LibreriaIndd> regoleLibrerie { get; set; } //
 
         public List<TemplateFiltro> templateFiltro { get; set; } = new List<TemplateFiltro>();
@@ -1104,6 +1113,15 @@ namespace IstantaLib
     {
         public string label { get; set; }
         public string keyInRecordInTracciato { get; set; }
+    }
+
+    /// I20-991: la traduzione di una label di InDesign, per quando la sua segnalazione va
+    /// mostrata a chi lavora. Maiuscole, minuscole e accenti sono quelli dichiarati
+    /// dall'agenzia e vanno riportati tali e quali.
+    public class AgenziaCustomPlugin_TraduzioneLabel
+    {
+        public string label { get; set; }
+        public string traduzione { get; set; }
     }
 
     public class AgenziaCustomPlugin_SchemaOrdinamentoConPesi

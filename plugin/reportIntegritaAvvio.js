@@ -298,6 +298,38 @@ function sostituisciRecordNellaLista(recordsLista, recordsFreschi) {
     return { records: lista, sostituiti };
 }
 
+/// I20-991: come si legge il nome di una label quando la sua segnalazione arriva davanti a
+/// chi lavora. La label di InDesign e' un nome tecnico - "campo_offerta" non dice che quello
+/// e' il prezzo di prima - e l'operatore che deve decidere si trova davanti una sigla. Se
+/// l'agenzia ha dichiarato come si chiama quella cosa nel suo linguaggio, si scrive la
+/// traduzione e accanto, fra parentesi, la label originale: la traduzione dice di che si
+/// tratta, la label serve a ritrovare il campo in pagina.
+///
+/// Le traduzioni arrivano da fuori, cosi' la regola resta verificabile senza middleware.
+/// Senza traduzione la label si mostra com'e': e' il caso di tutte le agenzie che non
+/// dichiarano nulla, e delle label che l'agenzia non ha ritenuto oscure.
+///
+/// Non tocca l'identita' della segnalazione: la chiave con cui il report riconosce quali
+/// segnalazioni spariscono dopo un ricontrollo continua a usare la label vera.
+function etichettaSegnalazione(label, traduzioni) {
+    const nome = label == null ? "" : String(label);
+    if (nome === "") {
+        return "";
+    }
+
+    const elenco = Array.isArray(traduzioni) ? traduzioni : [];
+    const voce = elenco.find(t => t != null && String(t.label == null ? "" : t.label) === nome);
+    const traduzione = voce != null && voce.traduzione != null ? String(voce.traduzione).trim() : "";
+
+    //Una traduzione vuota o assente non e' una traduzione: meglio la label che una parentesi
+    //con dentro il nulla.
+    if (traduzione === "") {
+        return nome;
+    }
+
+    return traduzione + " (" + nome + ")";
+}
+
 module.exports = {
     MINUTI_LISTA_RECENTE,
     ORE_REPORT_DA_CHIEDERE,
@@ -312,5 +344,6 @@ module.exports = {
     ciSonoDatiDaConfrontare,
     differenzeDiConfronto,
     differenzeDopoRicontrollo,
-    sostituisciRecordNellaLista
+    sostituisciRecordNellaLista,
+    etichettaSegnalazione
 };

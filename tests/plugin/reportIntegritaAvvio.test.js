@@ -244,3 +244,67 @@ test('si riconosce quando non c\'e\' niente da confrontare', () => {
     assert.strictEqual(avvio.ciSonoDatiDaConfrontare({ listaFoto: [{ nomeFoto: 'a.psd' }] }), true);
     assert.strictEqual(avvio.ciSonoDatiDaConfrontare({ fotoExtraAuto: [{ nome: 'bollo' }] }), true);
 });
+
+
+/* ---- I20-991: come si legge il nome di una label segnalata ---- */
+
+const TRADUZIONI_EDRO = [
+    { label: 'campo_offerta', traduzione: 'ANZICH\u00e8' },
+    { label: 'campo_offerta_KgL_sconto', traduzione: 'PREZZI AL KG/L' },
+    { label: 'sconto_effettivo_grande', traduzione: 'SCONTO EFFETTIVO' }
+];
+
+test('la label tradotta si legge come traduzione piu\' label fra parentesi', () => {
+    // E' il caso della issue: davanti all'operatore "campo_offerta" non dice che quello e' il
+    // prezzo di prima, ma la label serve ancora per ritrovare il campo in pagina.
+    assert.strictEqual(
+        avvio.etichettaSegnalazione('campo_offerta', TRADUZIONI_EDRO),
+        'ANZICH\u00e8 (campo_offerta)');
+    assert.strictEqual(
+        avvio.etichettaSegnalazione('campo_offerta_KgL_sconto', TRADUZIONI_EDRO),
+        'PREZZI AL KG/L (campo_offerta_KgL_sconto)');
+    assert.strictEqual(
+        avvio.etichettaSegnalazione('sconto_effettivo_grande', TRADUZIONI_EDRO),
+        'SCONTO EFFETTIVO (sconto_effettivo_grande)');
+});
+
+test('maiuscole, minuscole e accenti della traduzione si riportano tali e quali', () => {
+    // I20-991: la e accentata di ANZICHe' e' minuscola in coda a sei maiuscole. E' voluta, e
+    // nessuno deve normalizzarla per fare ordine.
+    const letto = avvio.etichettaSegnalazione('campo_offerta', TRADUZIONI_EDRO);
+
+    assert.ok(letto.startsWith('ANZICH\u00e8'), 'la traduzione va riportata carattere per carattere');
+    assert.strictEqual(letto.indexOf('ANZICH\u00c8'), -1, 'la e accentata non va resa maiuscola');
+});
+
+test('una label senza traduzione resta quella che e\'', () => {
+    // Le agenzie che non dichiarano nulla, e le label che l'agenzia non ha ritenuto oscure,
+    // devono continuare a leggersi come prima.
+    assert.strictEqual(avvio.etichettaSegnalazione('descrizione', TRADUZIONI_EDRO), 'descrizione');
+    assert.strictEqual(avvio.etichettaSegnalazione('descrizione', []), 'descrizione');
+    assert.strictEqual(avvio.etichettaSegnalazione('descrizione', null), 'descrizione');
+    assert.strictEqual(avvio.etichettaSegnalazione('descrizione', undefined), 'descrizione');
+});
+
+test('il confronto sulla label e\' esatto, come quello di InDesign', () => {
+    // Le label di InDesign si confrontano lettera per lettera in tutto il resto del plugin:
+    // tradurre una label che somiglia a quella dichiarata metterebbe in pagina il nome sbagliato.
+    assert.strictEqual(avvio.etichettaSegnalazione('CAMPO_OFFERTA', TRADUZIONI_EDRO), 'CAMPO_OFFERTA');
+    assert.strictEqual(avvio.etichettaSegnalazione('campo_offerta_KgL', TRADUZIONI_EDRO), 'campo_offerta_KgL');
+});
+
+test('una segnalazione senza label non si inventa una parentesi vuota', () => {
+    // Le segnalazioni che parlano del record e non di un campo - "Presente in impaginato ma
+    // non nel tracciato" - arrivano con label vuota, e la riga non deve cambiare aspetto.
+    assert.strictEqual(avvio.etichettaSegnalazione('', TRADUZIONI_EDRO), '');
+    assert.strictEqual(avvio.etichettaSegnalazione(null, TRADUZIONI_EDRO), '');
+    assert.strictEqual(avvio.etichettaSegnalazione(undefined, TRADUZIONI_EDRO), '');
+});
+
+test('una traduzione dichiarata vuota non nasconde la label', () => {
+    // Caso limite del dato d'agenzia: meglio la label che una parentesi con dentro il nulla.
+    const traduzioni = [{ label: 'campo_offerta', traduzione: '   ' }, { label: 'altro' }];
+
+    assert.strictEqual(avvio.etichettaSegnalazione('campo_offerta', traduzioni), 'campo_offerta');
+    assert.strictEqual(avvio.etichettaSegnalazione('altro', traduzioni), 'altro');
+});
