@@ -23,6 +23,7 @@ const DUE_DIFFERENZE = [
 function pulisci() {
     schedaRef.dimenticaSegnalazioni();
     schedaRef.azzeraSilenziamenti();
+    schedaRef.consentiAperturaAutomatica();
 }
 
 test('la pre analisi si fa una volta sola e poi si rilegge', () => {
@@ -220,4 +221,78 @@ test('togliere il silenzio a una referenza che non ce l\'aveva non fa danni', ()
 
     assert.strictEqual(schedaRef.refESilenziata('5329719'), true);
     assert.strictEqual(schedaRef.refConSegnalazioniSilenziate.length, 1);
+});
+
+/*
+ * I20-992, secondo giro: la finestra si proponeva da sola a ogni ritorno alla schermata di
+ * edit. La pre analisi, quella, si faceva gia' una volta sola - ma l'avviso tornava davanti
+ * ogni volta che si cliccava EDIT o si applicava la descrizione dal server.
+ */
+
+test('la finestra si propone una volta sola per scheda, anche senza silenziamenti', () => {
+    pulisci();
+    schedaRef.memorizzaSegnalazioni(UNA_DIFFERENZA);
+
+    assert.strictEqual(schedaRef.deveAprirsiDaSola(UNA_DIFFERENZA, '5329719'), true);
+
+    schedaRef.segnaSegnalazioniGiaProposte();
+
+    //Tornare alla schermata di edit - dalle foto, dalla struttura - non la ripropone.
+    assert.strictEqual(schedaRef.deveAprirsiDaSola(UNA_DIFFERENZA, '5329719'), false);
+
+    //Ma l'informazione non si perde: il segnalino resta, e da li' si riapre a mano.
+    assert.strictEqual(schedaRef.ciSonoSegnalazioniIrrisolte(schedaRef.segnalazioniInMemoria()), true);
+});
+
+test('riaprire la scheda ripropone la finestra', () => {
+    pulisci();
+    schedaRef.memorizzaSegnalazioni(UNA_DIFFERENZA);
+    schedaRef.segnaSegnalazioniGiaProposte();
+
+    //svuotaRef gira all'inizio di ogni apertura di scheda: quella che si apre e' un'altra.
+    schedaRef.svuotaRef();
+
+    assert.strictEqual(schedaRef.deveAprirsiDaSola(UNA_DIFFERENZA, '5329719'), true);
+});
+
+test('rifare la pre analisi non ripropone la finestra da sola', () => {
+    pulisci();
+    schedaRef.memorizzaSegnalazioni(DUE_DIFFERENZE);
+    schedaRef.segnaSegnalazioniGiaProposte();
+
+    //E' quello che fa applicaDescrizioneDaServer: il box e' cambiato per volonta' dell'operatore,
+    //l'analisi va rifatta, ma non e' una scheda nuova. Se qui la finestra tornasse davanti,
+    //risolvere una segnalazione verrebbe punito con un altro avviso.
+    schedaRef.dimenticaSegnalazioni();
+    assert.strictEqual(schedaRef.segnalazioniInMemoria(), null);
+
+    schedaRef.memorizzaSegnalazioni(UNA_DIFFERENZA);
+
+    assert.strictEqual(schedaRef.deveAprirsiDaSola(schedaRef.segnalazioniInMemoria(), '5329719'), false);
+    assert.strictEqual(schedaRef.segnalazioniInMemoria().length, 1);
+});
+
+test('risolto tutto, non si propone niente e il segnalino sparisce', () => {
+    pulisci();
+    schedaRef.memorizzaSegnalazioni(UNA_DIFFERENZA);
+    schedaRef.segnaSegnalazioniGiaProposte();
+
+    //Il caso in cui applicare la descrizione dal server risolve l'ultima differenza rimasta.
+    schedaRef.dimenticaSegnalazioni();
+    schedaRef.memorizzaSegnalazioni([]);
+
+    assert.strictEqual(schedaRef.deveAprirsiDaSola(schedaRef.segnalazioniInMemoria(), '5329719'), false);
+    assert.strictEqual(schedaRef.ciSonoSegnalazioniIrrisolte(schedaRef.segnalazioniInMemoria()), false);
+});
+
+test('la proposta gia\' fatta non si porta dietro un silenziamento', () => {
+    pulisci();
+    schedaRef.memorizzaSegnalazioni(UNA_DIFFERENZA);
+    schedaRef.segnaSegnalazioniGiaProposte();
+
+    //Non essere interrotti due volte per la stessa scheda non e' aver chiesto il silenzio:
+    //le caselle del modal devono restare vuote, altrimenti riaprendolo a mano l'operatore si
+    //troverebbe spuntato qualcosa che non ha mai scelto.
+    assert.strictEqual(schedaRef.refESilenziata('5329719'), false);
+    assert.deepStrictEqual(schedaRef.statoCaselleSilenziamento('5329719'), { questa: false, tutte: false });
 });
