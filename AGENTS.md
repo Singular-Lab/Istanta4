@@ -18,11 +18,19 @@ Prima di esaminare o modificare qualsiasi file:
 
 1. Chiama `company_prepare_task` con:
    - `projectId`: `istanta4`;
-   - `prompt`: la richiesta completa originale dell'utente.
+   - `prompt`: la richiesta completa originale dell'utente;
+   - `sourceBranch`: **solo** nel caso descritto al punto 6, altrimenti lascialo vuoto.
 2. Conserva il `taskId` restituito e consulta tutte le specifiche fornite.
 3. Non inventare o generare autonomamente un `taskId`.
 4. Riutilizza lo stesso `taskId` per tutte le operazioni relative alla medesima richiesta.
 5. Se un task `Blocked` può riprendere, usa `company_update_task_status` con stato `Resume` prima di continuare.
+6. Se apri un task di tua iniziativa per proseguire un lavoro già in corso — per esempio
+   perché l'utente, dopo il debug, chiede altre modifiche e queste finiranno sul branch
+   di un task precedente — **devi** passare quel branch in `sourceBranch`. Non è
+   facoltativo: senza, il task resta senza branch e senza pull request, nessuna
+   propagazione del merge lo raggiungerà mai, e resterà completato per sempre senza
+   alcun riferimento in Git. Il branch deve essere quello già governato dal task
+   precedente, non un nome nuovo.
 
 ## 3. Analisi della suite
 
