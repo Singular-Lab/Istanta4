@@ -1443,52 +1443,61 @@ const schedaRef = {
                         "color": "#cccccc"
                     });
 
+                    //Le possibilita' si mostrano come voci cliccabili accanto al piu'. In UXP
+                    //prompt e alert non esistono - nel Plugin non li usa nessuno - e chiamarli
+                    //interrompe il gestore senza dire niente: era il motivo per cui il piu' non
+                    //faceva nulla.
                     piu.on("click", function () {
-                        var scelta = creabili[0];
-
-                        //Con piu' di una possibilita' si chiede quale.
-                        if (creabili.length > 1) {
-                            var elenco = creabili.map(function (c, i) { return (i + 1) + ") " + variantiDescrizione.etichetta(c); }).join("\n");
-                            var risposta = prompt("Quale descrizione vuoi creare?\n" + elenco, "1");
-
-                            if (risposta == null) {
-                                return;
-                            }
-
-                            var indice = parseInt(risposta, 10) - 1;
-
-                            if (isNaN(indice) || indice < 0 || indice >= creabili.length) {
-                                messaggioUtente("Code SRF-99 Scelta non valida", "warning", false, 3);
-                                return;
-                            }
-
-                            scelta = creabili[indice];
+                        if (linguette.find(".sceltaVariante").length > 0) {
+                            linguette.find(".sceltaVariante").remove();
+                            return;
                         }
 
-                        //Nasce vuota e sta nell'elenco come le altre: se e' la piu' specifica
-                        //diventa lei quella modificabile, e salvando la riga viene creata.
-                        elencoVarianti.push({
-                            area: scelta.area,
-                            canale: scelta.canale,
-                            specificita: variantiDescrizione.specificita(scelta),
-                            descrizione1: "",
-                            descrizione2: "",
-                            descrizione3: "",
-                            descrizione4: ""
+                        creabili.forEach(function (scelta) {
+                            var voce = $('<div class="sceltaVariante"></div>');
+                            voce.text(variantiDescrizione.etichetta(scelta));
+                            voce.css({
+                                "padding": "3px 10px",
+                                "margin-left": "4px",
+                                "cursor": "pointer",
+                                "border": "1px dashed #9ecbff",
+                                "border-bottom": "none",
+                                "border-radius": "4px 4px 0 0",
+                                "font-size": "11px",
+                                "color": "#9ecbff"
+                            });
+
+                            voce.on("click", function () {
+                                linguette.find(".sceltaVariante").remove();
+
+                                //Nasce vuota e sta nell'elenco come le altre: se e' la piu'
+                                //specifica diventa lei la modificabile, e salvando la scheda la
+                                //riga viene creata in archivio.
+                                elencoVarianti.push({
+                                    area: scelta.area,
+                                    canale: scelta.canale,
+                                    specificita: variantiDescrizione.specificita(scelta),
+                                    descrizione1: "",
+                                    descrizione2: "",
+                                    descrizione3: "",
+                                    descrizione4: ""
+                                });
+
+                                var nuova = elencoVarianti[elencoVarianti.length - 1];
+
+                                //Non si ricarica dal server: la riga li' non esiste ancora, e
+                                //ricaricando la variante appena creata sparirebbe.
+                                creaLinguetta(nuova);
+                                disegnaPiu();
+                                varianteChePuoiModificare = variantiDescrizione.varianteApplicabile(elencoVarianti, areaLav, canaleLav);
+                                linguette.show();
+                                mostraVariante(nuova);
+
+                                messaggioUtente("Descrizione " + variantiDescrizione.etichetta(scelta) + " creata: si scrive in archivio salvando la scheda", "success", false, 5);
+                            });
+
+                            linguette.append(voce);
                         });
-
-                        var nuova = elencoVarianti[elencoVarianti.length - 1];
-
-                        //Non si ricarica dal server: la riga li' non esiste ancora, e ricaricando
-                        //la variante appena creata sparirebbe. Si disegna la sua linguetta e la si
-                        //apre: e' la piu' specifica, quindi e' lei la modificabile.
-                        creaLinguetta(nuova);
-                        disegnaPiu();
-                        varianteChePuoiModificare = variantiDescrizione.varianteApplicabile(elencoVarianti, areaLav, canaleLav);
-                        linguette.show();
-                        mostraVariante(nuova);
-
-                        messaggioUtente("Descrizione " + variantiDescrizione.etichetta(scelta) + " creata: si scrive in archivio salvando la scheda", "success", false, 5);
                     });
 
                     linguette.append(piu);
