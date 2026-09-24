@@ -1316,9 +1316,8 @@ const schedaRef = {
                     //Il contenuto del pulsante e' quello composto per la variante che comanda:
                     //offrirlo mentre se ne guarda un'altra vorrebbe dire scriverle addosso il
                     //testo sbagliato.
-                    //Si mostra solo sulla variante a cui quel contenuto appartiene. Se e' stato
-                    //rimosso dopo un'eliminazione non torna: show() su un elemento che non c'e'
-                    //piu' non fa niente, ed e' quello che si vuole.
+                    //Si mostra solo sulla variante a cui quel contenuto appartiene: il suo
+                    //contenuto e' quello composto per lei.
                     if (modificabile) {
                         $("#applicaDescrizioneDaServer").show();
                     }
@@ -1373,39 +1372,14 @@ const schedaRef = {
                             }
 
                             me.eliminaVarianteDescrizione(dna, variante, function () {
-                                //La riga non c'e' piu' sul server: va tolta anche dall'elenco che
-                                //la scheda ha in mano, altrimenti al primo ridisegno la linguetta
-                                //torna e al secondo tentativo il server dice "non trovata".
-                                //elencoVarianti e' lo stesso array del record, quindi basta questo.
-                                var posizione = elencoVarianti.indexOf(variante);
-                                if (posizione >= 0) {
-                                    elencoVarianti.splice(posizione, 1);
-                                }
-
-                                linguetta.remove();
-
-                                //Il pulsante "Applica descrizione da server" porta compiledFields,
-                                //cioe' la descrizione composta dal server quando la scheda e' stata
-                                //caricata: era quella della variante che comandava allora. Tolta
-                                //quella variante, quel contenuto e' vecchio, e applicarlo scrive i
-                                //testi di una descrizione che non esiste piu' sopra quella che
-                                //comanda adesso. Si toglie: per riaverlo si richiude e riapre la
-                                //scheda, che lo ricompone sul dato aggiornato.
-                                $("#applicaDescrizioneDaServer").remove();
-
-                                //Comanda la prima ancora valida, che ora e' modificabile.
-                                varianteChePuoiModificare = variantiDescrizione.varianteApplicabile(elencoVarianti, areaLav, canaleLav);
-                                me.varianteDescrizioneScelta = varianteChePuoiModificare;
-
-                                if (varianteChePuoiModificare != null) {
-                                    mostraVariante(varianteChePuoiModificare);
-                                }
-
-                                //Con una sola variante rimasta non c'e' piu' niente da scegliere.
-                                if (variantiDescrizione.variantiApplicabili(elencoVarianti, areaLav, canaleLav).length <= 1) {
-                                    linguette.hide();
-                                    pannelloVariante.hide();
-                                }
+                                //Si ricarica la scheda dal server, non la si ridisegna. Ridisegnarla
+                                //la rifarebbe con l'elenco di varianti e con compiledFields gia'
+                                //scaricati, dove la variante eliminata c'e' ancora e la descrizione
+                                //composta e' quella di allora. Ricaricandola arrivano l'elenco
+                                //aggiornato, la composizione della variante che comanda adesso, e il
+                                //controllo del disallineamento rifatto su quella: e' quel controllo
+                                //a decidere se offrire "Applica descrizione da server".
+                                me.initSchedaRef(me.refSelected);
                             });
                         });
                         linguetta.append(crocetta);
