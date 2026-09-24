@@ -1,5 +1,4 @@
 const XMLHttpRequestClient = require('./XMLHttpRequestClient');
-const lavorazioneDelDocumento = require('./lavorazioneDelDocumento');
 const { app, ExportFormat } = require('indesign');
 const path = require('path');
 const FicoProcess=
@@ -35,15 +34,14 @@ const FicoProcess=
         
         if(file != null){
             //console.log(file);
-            //I20-936: la ricerca sta in lavorazioneDelDocumento, cosi' si puo' verificare sotto Node.
-            let refLavorazione = lavorazioneDelDocumento.trovaLavorazione(file, app.activeDocument.name);
+            let refFileLavorazione = file.filter(f=>f.file == app.activeDocument.name);
             //console.log(resFileValorazione);
-            if (refLavorazione != null)
+            if (refFileLavorazione.length >= 1)
             {
                 //La lavorazione è stata trovata
-                idKitLavorazione = refLavorazione.id;
+                idKitLavorazione = refFileLavorazione[0].id;
                             
-                let metaObj=JSON.parse(refLavorazione.details.meta);
+                let metaObj=JSON.parse(refFileLavorazione[0].details.meta);
                 let titoloKit = metaObj.titolo || "";
                 let titoloKitTroncato = titoloKit.length > 50 ? titoloKit.substring(0, 50) + "..." : titoloKit;
                 $("#nomeKitInLavorazione").text(titoloKitTroncato).attr("title", titoloKit);
