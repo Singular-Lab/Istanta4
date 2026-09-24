@@ -40,6 +40,13 @@ const schedaRef = {
     refConSegnalazioniSilenziate: [],
     segnalazioniSilenziateOvunque: false,
 
+    //I20-992: se la finestra si e' gia' proposta da sola per la scheda aperta. Proporla una
+    //volta e' un avviso, riproporla a ogni ritorno alla schermata di edit e' un ostacolo:
+    //l'operatore torna dalle foto, o riapplica la descrizione, e se la ritrova davanti. Il
+    //segnalino intanto resta, e da li' si riapre a mano quando serve. Vale per la scheda
+    //aperta: svuotaRef la rimette disponibile, perche' la scheda dopo e' un'altra cosa.
+    modalSegnalazioniGiaProposto: false,
+
 
 
     tipiFotoExtra: [{ val: 2, nome: "Bollini" }, { val: 3, nome: "Loghi" }, { val: 4, nome: "Foto ambientate" }, { val: 5, nome: "Sfondo" }],
@@ -2284,7 +2291,11 @@ const schedaRef = {
             const segnalazioniDellaScheda = me.segnalazioniInMemoria() || [];
             me.aggiornaPulsanteSegnalazioni();
 
+            //I20-992: proposta una volta per scheda. Si segna prima del setTimeout, perche'
+            //quello che conta e' la decisione presa qui: se si segnasse dentro la finestra,
+            //due passaggi ravvicinati dalla schermata di edit ne aprirebbero due.
             if (me.deveAprirsiDaSola(segnalazioniDellaScheda, codice)) {
+                me.segnaSegnalazioniGiaProposte();
                 setTimeout(function () {
                     me.mostraModalSegnalazioni();
                 }, 5);
@@ -2412,8 +2423,15 @@ const schedaRef = {
             messaggioUtente("Descrizione allineata al dato del server", "success", false, 3);
 
             //La schermata di edit legge il box: dopo averlo cambiato va rifatta, altrimenti
-            //continuerebbe a mostrare la descrizione di prima. E rifacendosi si accorge da
-            //sola che non c'e' piu' niente da allineare, e il pulsante sparisce.
+            //continuerebbe a mostrare la descrizione di prima.
+            //
+            //I20-992: e va rifatta anche la pre analisi, che altrimenti resterebbe quella di
+            //prima e continuerebbe a contare una segnalazione appena risolta. E' l'eccezione al
+            //"una volta sola": non e' un ritorno alla schermata, e' il box che e' cambiato per
+            //volonta' dell'operatore, quindi vale come l'Aggiorna della finestra. Quello che
+            //non si rimette e' l'apertura automatica: il conto si aggiorna, il segnalino
+            //sparisce se non resta altro, ma nessuna finestra torna davanti da sola.
+            this.dimenticaSegnalazioni();
             await this.selectSchedaRef(1);
         }
         catch (error) {
@@ -4136,6 +4154,19 @@ const schedaRef = {
         this.segnalazioniDelBox = null;
     },
 
+    /// I20-992: la finestra si e' proposta da sola per questa scheda, e non lo rifara'.
+    segnaSegnalazioniGiaProposte() {
+        this.modalSegnalazioniGiaProposto = true;
+    },
+
+    /// I20-992: la scheda che si apre e' un'altra, quindi la finestra puo' proporsi di nuovo.
+    /// Sta separato da dimenticaSegnalazioni perche' le due cose non vanno sempre insieme:
+    /// applicare la descrizione dal server rifa' l'analisi sul box appena cambiato, ma non e'
+    /// una scheda nuova e non deve riaprire niente.
+    consentiAperturaAutomatica() {
+        this.modalSegnalazioniGiaProposto = false;
+    },
+
     /// C'e' qualcosa da risolvere? E' questo che decide se il pulsante si vede.
     ciSonoSegnalazioniIrrisolte(differenze) {
         return Array.isArray(differenze) && differenze.length > 0;
@@ -4149,8 +4180,16 @@ const schedaRef = {
     /// Se la finestra deve aprirsi da sola all'apertura della scheda. Silenziata quella
     /// referenza, o silenziate tutte, non si apre - ma il pulsante resta, e da li' si riapre
     /// a mano: silenziare vuol dire non essere interrotti, non perdere l'informazione.
+    ///
+    /// I20-992: non si apre nemmeno se per questa scheda si e' gia' proposta. La schermata di
+    /// edit si rifa' a ogni ritorno - dalle foto, dalla struttura, dopo aver applicato la
+    /// descrizione dal server - e senza questo controllo l'avviso tornava davanti ogni volta,
+    /// anche a chi non aveva chiesto nessun silenzio.
     deveAprirsiDaSola(differenze, codice) {
         if (!this.ciSonoSegnalazioniIrrisolte(differenze)) {
+            return false;
+        }
+        if (this.modalSegnalazioniGiaProposto) {
             return false;
         }
         if (this.segnalazioniSilenziateOvunque) {
@@ -7787,10 +7826,11 @@ const schedaRef = {
         this.multiSchedeRef = [];
         this.isBusy = false;
 
-        //I20-992: la scheda che si apre e' un'altra, quindi la pre analisi va rifatta. Il
-        //silenziamento invece resta: dura per la sessione, e riaprire la stessa referenza non
-        //deve farlo decadere.
+        //I20-992: la scheda che si apre e' un'altra, quindi la pre analisi va rifatta e la
+        //finestra puo' proporsi di nuovo. Il silenziamento invece resta: dura per la sessione,
+        //e riaprire la stessa referenza non deve farlo decadere.
         this.dimenticaSegnalazioni();
+        this.consentiAperturaAutomatica();
     },
 
     annullaCambiaMeccanica() {
