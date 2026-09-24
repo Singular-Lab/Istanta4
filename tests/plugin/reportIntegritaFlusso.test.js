@@ -919,10 +919,10 @@ test('la descrizione applicata si vede anche in edit', () => {
     //descrizione della ss_sa, che e' il difetto che questa guardia chiude.
     assert.match(sorgenteScheda, /\$\("#applicaDescrizioneDaServer"\)\.hide\(\)/);
 
-    //E i campi della scheda restano quelli della variante modificabile, che mostra l'impaginato:
-    //e' il confronto fra quello e l'archivio a far emergere il disallineamento. Le altre varianti
-    //si leggono nel loro pannello e non scrivono mai nei campi.
-    assert.match(sorgenteScheda, /pannelloVarianteDescrizione/);
+    //E la variante modificabile mostra l'impaginato, non l'archivio: e' il confronto fra quello
+    //e il dato del server a far emergere il disallineamento, quindi i testi del box vanno
+    //ricordati e rimessi quando si torna su di lei.
+    assert.match(sorgenteScheda, /rimettiTestiDellImpaginato/);
 
     assert.match(sorgenteScheda, /confronti\.confrontoBoxCompiledFieldPreAnalisi\(\s*\n\s*box,\s*\n\s*\[campo\]/);
 

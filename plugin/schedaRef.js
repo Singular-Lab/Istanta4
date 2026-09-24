@@ -1250,7 +1250,6 @@ const schedaRef = {
             //Con la sola nazionale non c'e' niente da scegliere: la scheda resta com'era.
             if (variantiDescrizione.variantiApplicabili(elencoVarianti, areaLav, canaleLav).length > 1) {
                 var linguette = $('<div id="tabVariantiDescrizione" style="display:flex; flex-wrap:wrap; align-items:flex-end; border-bottom:1px solid #777; margin:6px 0 0 0; width:100%;"></div>');
-                var pannelloVariante = $('<div id="pannelloVarianteDescrizione" style="border:1px solid #777; border-top:none; padding:6px; color:white; font-size:11px; white-space:pre-wrap; width:100%; box-sizing:border-box;"></div>');
 
                 //I testi che il box ha all'apertura, cioe' l'impaginato. Si ricordano una volta
                 //sola, prima che qualcuno li tocchi: sono quelli che la variante modificabile
@@ -1347,7 +1346,6 @@ const schedaRef = {
                         $("#applicaDescrizioneDaServer").hide();
                     }
 
-                    pannelloVariante.empty();
                     ricordaTestiDellImpaginato();
 
                     //La modificabile mostra l'impaginato, le altre il loro dato d'archivio, e in
@@ -1416,7 +1414,6 @@ const schedaRef = {
                 });
 
                 rowOpzioniRegionaliEArtwork.append(linguette);
-                rowOpzioniRegionaliEArtwork.append(pannelloVariante);
 
                 //Si parte da quella che comanda, cioe' dallo stato di prima di I20-993.
                 setTimeout(function () { mostraVariante(varianteChePuoiModificare); }, 10);
