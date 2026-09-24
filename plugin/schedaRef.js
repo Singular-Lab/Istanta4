@@ -1252,72 +1252,9 @@ const schedaRef = {
                 var linguette = $('<div id="tabVariantiDescrizione" style="display:flex; flex-wrap:wrap; align-items:flex-end; border-bottom:1px solid #777; margin:6px 0 0 0; width:100%;"></div>');
                 var pannelloVariante = $('<div id="pannelloVarianteDescrizione" style="border:1px solid #777; border-top:none; padding:6px; color:white; font-size:11px; white-space:pre-wrap; width:100%; box-sizing:border-box;"></div>');
 
-                //I testi che il box ha all'apertura, cioe' quello che c'e' nell'impaginato.
-                //Si ricordano una volta sola, prima che qualcuno li tocchi: sono il dato su cui
-                //si misura il disallineamento, e la variante modificabile deve mostrare quelli.
-                var testiDellImpaginato = null;
-
-                var ricordaTestiDellImpaginato = function () {
-                    if (testiDellImpaginato != null) {
-                        return;
-                    }
-
-                    testiDellImpaginato = [];
-                    $("#editReferenza").find("textarea").each(function () {
-                        testiDellImpaginato.push({ campo: this, valore: $(this).val() });
-                    });
-                };
-
-                var rimettiTestiDellImpaginato = function () {
-                    if (testiDellImpaginato == null) {
-                        return;
-                    }
-
-                    testiDellImpaginato.forEach(function (voce) { $(voce.campo).val(voce.valore); });
-                };
-
-                //Porta nei campi della scheda i testi della variante scelta, cosi' come stanno
-                //su Istanta: descrizione1 nel campo di descrizione1 e via cosi'. Quando piu'
-                //campi rispondono allo stesso fondamentale si riempie il primo, che e' quello
-                //che InputEditController rilegge. Niente pulsante: cambiando linguetta i testi
-                //sono quelli di quella variante, non un blocco appiattito.
-                var importaTestiDellaVariante = function (variante) {
-                    if (variante == null) {
-                        return;
-                    }
-
-                    var testi = {
-                        descrizione1: variante.descrizione1,
-                        descrizione2: variante.descrizione2,
-                        descrizione3: variante.descrizione3,
-                        descrizione4: variante.descrizione4
-                    };
-                    var giaRiempiti = {};
-
-                    $("#editReferenza").find("textarea").each(function () {
-                        var campo = $(this);
-
-                        if (campo.attr("labelcorrispondente") !== "descrizione") {
-                            return;
-                        }
-
-                        var universale = pluginMiddleware.getNameStileUniversale(campo.attr("currentcharacterstyle"));
-
-                        if (universale == null || universale.fondamentale == null) {
-                            return;
-                        }
-
-                        var fondamentale = universale.fondamentale;
-
-                        if (!(fondamentale in testi) || giaRiempiti[fondamentale] === true) {
-                            return;
-                        }
-
-                        giaRiempiti[fondamentale] = true;
-                        campo.val(testi[fondamentale] != null ? testi[fondamentale] : "");
-                    });
-                };
-
+                //I campi della scheda appartengono alla variante modificabile e mostrano
+                //l'impaginato: non li tocca nessuno cambiando linguetta. Le altre varianti si
+                //leggono nel pannello qui sotto, che e' un posto separato apposta.
                 var mostraVariante = function (variante) {
                     varianteMostrata = variante;
                     me.varianteDescrizioneScelta = variante;
@@ -1349,24 +1286,34 @@ const schedaRef = {
                         $("#applicaDescrizioneDaServer").hide();
                     }
 
-                    ricordaTestiDellImpaginato();
-
-                    //La variante modificabile mostra l'impaginato, non l'archivio: e' il confronto
-                    //fra le due cose che fa emergere il disallineamento, e riempirla col dato del
-                    //server lo cancellerebbe prima che l'operatore possa vederlo. Per riportare
-                    //l'archivio nel box c'e' il pulsante, che e' una scelta sua.
-                    //Le altre varianti nel box non ci sono: li' si mostra il loro dato d'archivio.
-                    if (modificabile) {
-                        rimettiTestiDellImpaginato();
-                    }
-                    else {
-                        importaTestiDellaVariante(variante);
-                    }
-
                     pannelloVariante.empty();
-                    pannelloVariante.append($('<div style="opacity:0.85;"></div>').text(modificabile
-                        ? etichettaScelta + " - e' la piu' specifica per questa lavorazione: i campi qui sotto si modificano."
-                        : etichettaScelta + " - sola lettura: si modifica solo la piu' specifica."));
+                    if (modificabile) {
+                        //I campi qui sotto sono i suoi e mostrano l'impaginato: e' il confronto
+                        //fra quello e l'archivio a far emergere il disallineamento, e la scheda
+                        //lo segnala da se'. Nel pannello non serve altro.
+                        pannelloVariante.append($('<div style="opacity:0.85;"></div>')
+                            .text(etichettaScelta + " - e' la piu' specifica per questa lavorazione: i campi qui sotto si modificano."));
+                        return;
+                    }
+
+                    //Questa variante nell'impaginato non c'e': si mostra il suo dato d'archivio,
+                    //un campo per riga come sta nel revisore, senza toccare i campi della scheda.
+                    pannelloVariante.append($('<div style="font-weight:bold; margin-bottom:4px;"></div>')
+                        .text(etichettaScelta + " - sola lettura: si modifica solo la piu' specifica."));
+
+                    var campi = [
+                        ["Descrizione 1", variante.descrizione1],
+                        ["Descrizione 2", variante.descrizione2],
+                        ["Descrizione 3", variante.descrizione3],
+                        ["Descrizione 4", variante.descrizione4]
+                    ];
+
+                    campi.forEach(function (voce) {
+                        var riga = $('<div style="margin-top:3px;"></div>');
+                        riga.append($('<span style="opacity:0.7;"></span>').text(voce[0] + ": "));
+                        riga.append($('<span></span>').text(voce[1] != null && String(voce[1]).trim() !== "" ? voce[1] : "-"));
+                        pannelloVariante.append(riga);
+                    });
                 };
 
                 variantiDescrizione.variantiApplicabili(elencoVarianti, areaLav, canaleLav).forEach(function (variante) {
