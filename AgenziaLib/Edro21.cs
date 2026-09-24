@@ -4442,7 +4442,9 @@ descrizioneEsempio.EndsWith("\r\n");
                                 }
                             }
 
-                            if (isTakeway)
+                            //I20-522: se la dicitura e' gia' nelle descrizioni scritte dall'operatore,
+                            //aggiungerla qui la stamperebbe due volte sul box.
+                            if (isTakeway && !contieneDicituraTakeAway(descrizione))
                             {
                                 var nome_stile = getStileTakeAway(recItem, canale);
 
@@ -12402,6 +12404,76 @@ Descrizione3.EndsWith("\r\n");
             throw new NotImplementedException();
         }
 
+        //I20-522: la dicitura che l'operatore scrive in una delle quattro descrizioni quando la
+        //referenza si vende anche d'asporto. Si confronta senza maiuscole e con gli spazi
+        //normalizzati: e' scritta a mano, e una distrazione non deve farla mancare.
+        private const string dicituraTakeAway = "disponibile anche take away";
+
+        private static string normalizzaPerConfronto(string testo)
+        {
+            return string.Join(" ", testo.ToLower().Split((char[])null, StringSplitOptions.RemoveEmptyEntries));
+        }
+
+        internal static bool contieneDicituraTakeAway(string testo)
+        {
+            return !string.IsNullOrWhiteSpace(testo) && normalizzaPerConfronto(testo).Contains(dicituraTakeAway);
+        }
+
+        //Le descrizioni arrivano in due forme: dritte nel record quando sono della singola ref, dentro
+        //un dizionario annidato quando sono del gruppo. Guardarne una sola ne perderebbe meta'.
+        private static IEnumerable<string> descrizioniDellaRef(Dictionary<string, object> item)
+        {
+            string[] chiavi = { GLOBAL_VARIABLES.keyDescr1, GLOBAL_VARIABLES.keyDescr2, GLOBAL_VARIABLES.keyDescr3, GLOBAL_VARIABLES.keyDescr4 };
+
+            foreach (var chiave in chiavi)
+            {
+                if (item.ContainsKey(chiave) && item[chiave] != null)
+                    yield return item[chiave].ToString();
+            }
+
+            if (item.ContainsKey(GLOBAL_VARIABLES.keyXMLDescrizioneGruppo) &&
+                item[GLOBAL_VARIABLES.keyXMLDescrizioneGruppo] is Dictionary<string, object> descrizioniDiGruppo)
+            {
+                foreach (var chiave in chiavi)
+                {
+                    if (descrizioniDiGruppo.ContainsKey(chiave) && descrizioniDiGruppo[chiave] != null)
+                        yield return descrizioniDiGruppo[chiave].ToString();
+                }
+            }
+        }
+
+        private static bool gruppoDichiaraTakeAway(List<Dictionary<string, object>> gruppo)
+        {
+            return gruppo.Any(item => descrizioniDellaRef(item).Any(contieneDicituraTakeAway));
+        }
+
+        //I20-522: fra le ref di un gruppo take away il primario e' quello di peso 1. Quel peso pero'
+        //arriva nel record solo quando non e' nullo, quindi puo' mancare: si ripiega allora sul criterio
+        //di prima, l'unita' di fatturazione a peso, e in ultimo sul primo elemento. Un gruppo senza
+        //primaria verrebbe saltato nell'export e farebbe fallire l'impaginazione.
+        private static Dictionary<string, object> scegliPrimariaTakeAway(List<Dictionary<string, object>> gruppo)
+        {
+            var perPeso = gruppo.FirstOrDefault(pesoUnitario);
+            if (perPeso != null)
+                return perPeso;
+
+            var perUnitaDiFatturazione = gruppo.FirstOrDefault(item => item.ContainsKey("unita_fatt") && item["unita_fatt"] != null
+                && item["unita_fatt"].ToString().Trim().ToLower() == "peso");
+            if (perUnitaDiFatturazione != null)
+                return perUnitaDiFatturazione;
+
+            return gruppo[0];
+        }
+
+        private static bool pesoUnitario(Dictionary<string, object> item)
+        {
+            if (!item.ContainsKey(GLOBAL_VARIABLES.keyDescrPeso) || item[GLOBAL_VARIABLES.keyDescrPeso] == null)
+                return false;
+
+            return decimal.TryParse(Convert.ToString(item[GLOBAL_VARIABLES.keyDescrPeso], CultureInfo.InvariantCulture),
+                NumberStyles.Any, CultureInfo.InvariantCulture, out decimal peso) && peso == 1m;
+        }
+
         public string eseguiAutoSelezioneGruppo(List<Dictionary<string, object>> gruppo, List<Dictionary<string, object>> ghost)
         {
             string referenza_pilota = Edro21Context.Meta.referenza_pilota;
@@ -12414,34 +12486,41 @@ Descrizione3.EndsWith("\r\n");
 
 
             //controlliamo se è un take away
+            bool takeAwayPerSettore = false;
             if (gruppo[0].ContainsKey("settore") && gruppo[0]["settore"].ToString() == "2507")
             {
                 //se siamo qui è GASTRONOMIA VENDITA ASSISTITA (2507), ora controlliamo se è take away
                 bool peso = gruppo.Any(g => g.ContainsKey("unita_fatt") && g["unita_fatt"].ToString().ToLower() == "peso");
                 bool pezzo = gruppo.Any(g => g.ContainsKey("unita_fatt") && g["unita_fatt"].ToString().ToLower() == "pezzo");
-                if (peso && pezzo)
-                {
-                    //è take away
-                    foreach (var item in gruppo)
-                    {
-                        if (!primaria_gia_assegnata && item["unita_fatt"].ToString() == "Peso")
-                        {
-                            item[keyXMLSelezione] = (Byte)TipoSelezioneMenabo.Primaria;
-                            primaria_gia_assegnata = true;
-                        }
-                        else if (item[potenziale_esempio].ToString() != "" || item[referenza_pilota].ToString() == "S")
-                        {
-                            item[keyXMLSelezione] = (Byte)TipoSelezioneMenabo.Secondaria;
-                        }
-                        else
-                        {
-                            item[keyXMLSelezione] = (Byte)TipoSelezioneMenabo.None;
-                        }
-                        item["isTakeAway"] = true;
-                    }
+                takeAwayPerSettore = peso && pezzo;
+            }
 
-                    return JsonConvert.SerializeObject(gruppo);
+            //I20-522: vale come take away anche il gruppo che se lo dice da solo in una delle quattro
+            //descrizioni. Il riconoscimento per settore resta, questo gli si aggiunge.
+            if (takeAwayPerSettore || gruppoDichiaraTakeAway(gruppo))
+            {
+                //è take away
+                var refPrimaria = scegliPrimariaTakeAway(gruppo);
+
+                foreach (var item in gruppo)
+                {
+                    if (!primaria_gia_assegnata && ReferenceEquals(item, refPrimaria))
+                    {
+                        item[keyXMLSelezione] = (Byte)TipoSelezioneMenabo.Primaria;
+                        primaria_gia_assegnata = true;
+                    }
+                    else if (item[potenziale_esempio].ToString() != "" || item[referenza_pilota].ToString() == "S")
+                    {
+                        item[keyXMLSelezione] = (Byte)TipoSelezioneMenabo.Secondaria;
+                    }
+                    else
+                    {
+                        item[keyXMLSelezione] = (Byte)TipoSelezioneMenabo.None;
+                    }
+                    item["isTakeAway"] = true;
                 }
+
+                return JsonConvert.SerializeObject(gruppo);
             }
 
             if (gruppo.Count > 1)
