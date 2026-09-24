@@ -1252,9 +1252,70 @@ const schedaRef = {
                 var linguette = $('<div id="tabVariantiDescrizione" style="display:flex; flex-wrap:wrap; align-items:flex-end; border-bottom:1px solid #777; margin:6px 0 0 0; width:100%;"></div>');
                 var pannelloVariante = $('<div id="pannelloVarianteDescrizione" style="border:1px solid #777; border-top:none; padding:6px; color:white; font-size:11px; white-space:pre-wrap; width:100%; box-sizing:border-box;"></div>');
 
-                //I campi della scheda appartengono alla variante modificabile e mostrano
-                //l'impaginato: non li tocca nessuno cambiando linguetta. Le altre varianti si
-                //leggono nel pannello qui sotto, che e' un posto separato apposta.
+                //I testi che il box ha all'apertura, cioe' l'impaginato. Si ricordano una volta
+                //sola, prima che qualcuno li tocchi: sono quelli che la variante modificabile
+                //deve mostrare, ed e' il confronto fra loro e l'archivio a far emergere il
+                //disallineamento. Guardando un'altra variante i campi si riempiono col suo dato,
+                //e tornando su quella modificabile questi vengono rimessi.
+                var testiDellImpaginato = null;
+
+                var ricordaTestiDellImpaginato = function () {
+                    if (testiDellImpaginato != null) {
+                        return;
+                    }
+
+                    testiDellImpaginato = [];
+                    $("#editReferenza").find('textarea[labelCorrispondente="descrizione"]').each(function () {
+                        testiDellImpaginato.push({ campo: this, valore: $(this).val() });
+                    });
+                };
+
+                var rimettiTestiDellImpaginato = function () {
+                    if (testiDellImpaginato == null) {
+                        return;
+                    }
+
+                    testiDellImpaginato.forEach(function (voce) { $(voce.campo).val(voce.valore); });
+                };
+
+                //Scrive i testi di una variante nei box delle descrizioni, ciascuno nel suo.
+                //Il campo dichiara a quale descrizione appartiene con il suo stile di carattere;
+                //quando lo stile non si risolve - e succede - si procede in ordine sui campi
+                //rimasti, invece di ammucchiare tutto nel primo.
+                var scriviVarianteNeiBox = function (variante) {
+                    var testi = [variante.descrizione1, variante.descrizione2, variante.descrizione3, variante.descrizione4];
+                    var campi = $("#editReferenza").find('textarea[labelCorrispondente="descrizione"]');
+                    var assegnati = {};
+                    var senzaStile = [];
+
+                    campi.each(function () {
+                        var campo = $(this);
+                        var universale = pluginMiddleware.getNameStileUniversale(campo.attr("currentcharacterstyle"));
+                        var fondamentale = universale != null ? universale.fondamentale : null;
+                        var indice = fondamentale != null ? ["descrizione1", "descrizione2", "descrizione3", "descrizione4"].indexOf(fondamentale) : -1;
+
+                        if (indice >= 0 && assegnati[indice] !== true) {
+                            assegnati[indice] = true;
+                            campo.val(testi[indice] != null ? testi[indice] : "");
+                        }
+                        else if (indice < 0) {
+                            senzaStile.push(campo);
+                        }
+                    });
+
+                    //I campi che non dicono chi sono prendono le descrizioni non ancora assegnate,
+                    //nell'ordine in cui compaiono.
+                    var daAssegnare = [];
+                    for (var i = 0; i < testi.length; i++) {
+                        if (assegnati[i] !== true) {
+                            daAssegnare.push(testi[i]);
+                        }
+                    }
+
+                    senzaStile.forEach(function (campo, posizione) {
+                        campo.val(posizione < daAssegnare.length && daAssegnare[posizione] != null ? daAssegnare[posizione] : "");
+                    });
+                };
                 var mostraVariante = function (variante) {
                     varianteMostrata = variante;
                     me.varianteDescrizioneScelta = variante;
@@ -1287,30 +1348,16 @@ const schedaRef = {
                     }
 
                     pannelloVariante.empty();
-                    //Sulla variante modificabile il pannello resta vuoto: i campi sono i suoi,
-                    //poco sotto, e non serve dirlo a parole.
+                    ricordaTestiDellImpaginato();
+
+                    //La modificabile mostra l'impaginato, le altre il loro dato d'archivio, e in
+                    //entrambi i casi nei box delle descrizioni: e' li' che si leggono.
                     if (modificabile) {
-                        pannelloVariante.hide();
-                        return;
+                        rimettiTestiDellImpaginato();
                     }
-
-                    //Questa variante nell'impaginato non c'e': si mostra il suo dato d'archivio,
-                    //un campo per riga come sta nel revisore, senza toccare i campi della scheda.
-                    pannelloVariante.show();
-
-                    var campi = [
-                        ["Descrizione 1", variante.descrizione1],
-                        ["Descrizione 2", variante.descrizione2],
-                        ["Descrizione 3", variante.descrizione3],
-                        ["Descrizione 4", variante.descrizione4]
-                    ];
-
-                    campi.forEach(function (voce) {
-                        var riga = $('<div style="margin-top:3px;"></div>');
-                        riga.append($('<span style="opacity:0.7;"></span>').text(voce[0] + ": "));
-                        riga.append($('<span></span>').text(voce[1] != null && String(voce[1]).trim() !== "" ? voce[1] : "-"));
-                        pannelloVariante.append(riga);
-                    });
+                    else {
+                        scriviVarianteNeiBox(variante);
+                    }
                 };
 
                 variantiDescrizione.variantiApplicabili(elencoVarianti, areaLav, canaleLav).forEach(function (variante) {
