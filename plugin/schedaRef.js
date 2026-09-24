@@ -1369,7 +1369,32 @@ const schedaRef = {
                                 return;
                             }
 
-                            me.eliminaVarianteDescrizione(dna, variante);
+                            me.eliminaVarianteDescrizione(dna, variante, function () {
+                                //La riga non c'e' piu' sul server: va tolta anche dall'elenco che
+                                //la scheda ha in mano, altrimenti al primo ridisegno la linguetta
+                                //torna e al secondo tentativo il server dice "non trovata".
+                                //elencoVarianti e' lo stesso array del record, quindi basta questo.
+                                var posizione = elencoVarianti.indexOf(variante);
+                                if (posizione >= 0) {
+                                    elencoVarianti.splice(posizione, 1);
+                                }
+
+                                linguetta.remove();
+
+                                //Comanda la prima ancora valida, che ora e' modificabile.
+                                varianteChePuoiModificare = variantiDescrizione.varianteApplicabile(elencoVarianti, areaLav, canaleLav);
+                                me.varianteDescrizioneScelta = varianteChePuoiModificare;
+
+                                if (varianteChePuoiModificare != null) {
+                                    mostraVariante(varianteChePuoiModificare);
+                                }
+
+                                //Con una sola variante rimasta non c'e' piu' niente da scegliere.
+                                if (variantiDescrizione.variantiApplicabili(elencoVarianti, areaLav, canaleLav).length <= 1) {
+                                    linguette.hide();
+                                    pannelloVariante.hide();
+                                }
+                            });
                         });
                         linguetta.append(crocetta);
                     }
@@ -2165,7 +2190,7 @@ const schedaRef = {
     /// endpoint del revisore, con sender indd: stessa logica, stesso registro, nessuna seconda
     /// strada per cancellare le stesse righe. La nazionale non arriva mai qui, e comunque il
     /// server la rifiuta.
-    eliminaVarianteDescrizione(dna, variante) {
+    eliminaVarianteDescrizione(dna, variante, aEliminazioneAvvenuta) {
         var me = this;
 
         if (!variantiDescrizione.siPuoChiudere(variante)) {
@@ -2218,9 +2243,12 @@ const schedaRef = {
 
             messaggioUtente("Descrizione " + variantiDescrizione.etichetta(variante) + " eliminata", "success", false, 4);
 
-            //La scheda legge le varianti dal server: dopo averne tolta una va rifatta, altrimenti
-            //resterebbe la linguetta di una descrizione che non esiste piu'.
-            await me.selectSchedaRef(1);
+            //Non si ricarica la scheda: la rifarebbe con l'elenco di varianti gia' scaricato, in
+            //cui quella appena eliminata c'e' ancora, e la linguetta tornerebbe. L'allineamento
+            //lo fa chi ha chiesto l'eliminazione, che quell'elenco ce l'ha in mano.
+            if (typeof aEliminazioneAvvenuta === "function") {
+                aEliminazioneAvvenuta();
+            }
         };
 
         xhr.onerror = function () {
