@@ -832,6 +832,32 @@ async function cambioDiStatoDelSistema()
 
 
 // #region INIT FUNCTION
+
+//I20-936: rilegge la cartella del documento senza chiudere il pannello.
+//Il lucchetto va tolto per primo: l'ha alzato il blocco che ha mostrato il messaggio e nessun
+//altro lo abbasserebbe, quindi restando su terrebbe il plugin fermo anche a lavorazione trovata.
+//Se la lavorazione manca ancora, initDocumentInLavorazione rimette il messaggio col suo pulsante.
+var riletturaDocumentoInCorso = false;
+async function rileggiDocumentoInLavorazione()
+{
+    if (riletturaDocumentoInCorso)
+    {
+        return;
+    }
+    riletturaDocumentoInCorso = true;
+
+    try
+    {
+        indesignEvents.policyIsLocked = false;
+        clearNarrow();
+        await initDocumentInLavorazione();
+    }
+    finally
+    {
+        riletturaDocumentoInCorso = false;
+    }
+}
+
 async function initDocumentInLavorazione()
 {
     if (docInLavorazione == null)
@@ -956,7 +982,12 @@ async function initDocumentInLavorazione()
             {
                 if (ruoloUtenteLoggato != RuoloUtente.superAdmin) {
                     indesignEvents.policyIsLocked = true;
-                    setNarrow("Impossibile inizializzare questo documento con l’account " + nomeUtente + ". Contattare l’amministratore per risolvere la lavorazione.");
+                    //I20-936: chi non puo' creare la lavorazione se la fa mandare e la mette nella
+                    //cartella a pannello aperto. Il file si rilegge solo a una nuova
+                    //inizializzazione, quindi senza questo pulsante l'unico modo di vederla era
+                    //chiudere e riaprire il plugin.
+                    setNarrow("Impossibile inizializzare questo documento con l’account " + nomeUtente + ". Contattare l’amministratore per risolvere la lavorazione.",
+                        [{ buttonText: "Rileggi il documento", buttonCallback: rileggiDocumentoInLavorazione }]);
                     $("#nomeKitInLavorazione").text("");
                     $("#wrapper").css("display", "block");
                     return;
