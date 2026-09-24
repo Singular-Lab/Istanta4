@@ -2175,18 +2175,24 @@ const schedaRef = {
 
         var eSingola = dna.codice === dna.codice_gruppo;
 
-        var corpo = {
-            idPromo: 0,
-            coda: [{
-                Codice: eSingola ? dna.codice : "",
-                CodiceGruppo: dna.codice_gruppo,
-                revRegionale: {
-                    area: variante.area,
-                    canale: variante.canale,
-                    custom: null
-                }
-            }]
-        };
+        //RevisoreController e' un Controller senza ApiController: i parametri complessi non si
+        //legano dal corpo JSON ma dal form, ed e' cosi' che li manda il revisore. Mandando JSON
+        //il binding non legava niente, la coda restava vuota e il server rispondeva Esito falso
+        //senza errore, che e' il default di BoolResult.
+        //
+        //I campi nulli vanno omessi, non mandati vuoti: una stringa vuota si lega come "" e non
+        //come null, e il confronto con la colonna nulla non troverebbe la riga.
+        var corpo = "idPromo=0";
+        corpo += "&coda[0].Codice=" + encodeURIComponent(eSingola ? dna.codice : "");
+        corpo += "&coda[0].CodiceGruppo=" + encodeURIComponent(dna.codice_gruppo != null ? dna.codice_gruppo : "");
+
+        if (variante.area != null && String(variante.area).trim() !== "") {
+            corpo += "&coda[0].revRegionale.area=" + encodeURIComponent(variante.area);
+        }
+
+        if (variante.canale != null && String(variante.canale).trim() !== "") {
+            corpo += "&coda[0].revRegionale.canale=" + encodeURIComponent(variante.canale);
+        }
 
         var xhr = new XMLHttpRequestClient();
 
@@ -2199,8 +2205,14 @@ const schedaRef = {
                 }
             }
 
-            if (objResult == null || objResult.esito === false) {
-                messaggioUtente("Code SRF-97 Il server ha rifiutato l'eliminazione: " + (objResult != null ? objResult.error : ""), "error", false, 5);
+            if (objResult == null) {
+                messaggioUtente("Code SRF-97 Eliminazione variante: il server non ha risposto nulla di leggibile", "error", false, 5);
+                return;
+            }
+
+            if (objResult.esito === false) {
+                var motivo = objResult.error != null && objResult.error !== "" ? objResult.error : "nessun motivo indicato dal server";
+                messaggioUtente("Code SRF-97 Il server ha rifiutato l'eliminazione: " + motivo, "error", false, 5);
                 return;
             }
 
@@ -2215,7 +2227,7 @@ const schedaRef = {
             messaggioUtente("Code SRF-98 Errore di rete durante l'eliminazione della variante", "error", false, 5);
         };
 
-        xhr.send("Revisore/elimina/0/0/1", JSON.stringify(corpo), "PUT", "application/json");
+        xhr.send("Revisore/elimina/0/0/1", corpo, "PUT", "application/x-www-form-urlencoded");
     },
 
     async applicaDescrizioneDaServer() {
