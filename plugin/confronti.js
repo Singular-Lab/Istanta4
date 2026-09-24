@@ -2894,7 +2894,7 @@ const confronti = {
             }
 
             return differenze.map(diff => ({
-                campo: diff?.label || "",
+                campo: this.etichettaSegnalazione(diff?.label),
                 dettaglio: diff?.difference || ""
             }));
         });
@@ -3743,7 +3743,7 @@ const confronti = {
                             //elenco di differenze e' il campo che si cerca con l'occhio.
                             if (diff?.label) {
                                 const campo = document.createElement("span");
-                                campo.textContent = diff.label;
+                                campo.textContent = this.etichettaSegnalazione(diff.label);
                                 campo.style.fontWeight = "600";
                                 diffRow.appendChild(campo);
                                 diffRow.appendChild(document.createTextNode(": " + (diff?.difference || "")));
@@ -5343,6 +5343,26 @@ const confronti = {
     //Confronta la lista con se stessa: per i campi che l'agenzia tiene d'occhio, mostra cosa
     //aveva la referenza prima e cosa ha adesso. Evidenzia e basta, non propone correzioni: a
     //decidere se la referenza va spostata di pagina e' l'operatore.
+    //I20-991: le label che l'agenzia ha dichiarato illeggibili per chi lavora, con il nome
+    //da mostrare al loro posto. Chi non dichiara nulla vede le label come sempre.
+    traduzioniLabelSegnalazioni() {
+        try {
+            const traduzioni = pluginMiddleware.getCampo("traduzioniLabelSegnalazioni");
+            return Array.isArray(traduzioni) ? traduzioni : [];
+        }
+        catch (err) {
+            console.error("Traduzioni delle label non disponibili:", err);
+            return [];
+        }
+    },
+
+    //Il nome della label come va letto: la regola sta in reportIntegritaAvvio, qui si porta
+    //solo il dato dell'agenzia. Pubblico perche' lo usa anche il popup della pre analisi
+    //all'apertura della scheda ref, che di suo non legge il SourceCustomPlugin.
+    etichettaSegnalazione(label) {
+        return reportIntegritaAvvio.etichettaSegnalazione(label, this.traduzioniLabelSegnalazioni());
+    },
+
     campiOsservatiConfronto() {
         try {
             const campi = pluginMiddleware.getCampo("campiOsservatiConfronto");
