@@ -82,6 +82,10 @@ namespace AgenziaLib
             return returnField;
         }
 
+        public void finalizeFields()
+        {
+            currentFields.compiledFields.RemoveAll(f => currentFields.deletedFields.Contains(f.labelName));
+        }
         public CompiledField getFieldsValue(string labelName)
         {
             var validField = getFields();
@@ -102,6 +106,15 @@ namespace AgenziaLib
             }
 
             return clone;
+        }
+    
+        public bool compiledContainsKey(string labelName)
+        {
+            return currentFields.compiledFields.Any(f => f.labelName == labelName);
+        }
+        public bool deletedContainsKey(string labelName)
+        {
+            return currentFields.deletedFields.Any(f => f == labelName);
         }
     }
 }

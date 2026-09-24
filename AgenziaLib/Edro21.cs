@@ -4097,6 +4097,11 @@ namespace AgenziaLib
                             interprete.removeCompiledField("linee");
                         }
 
+                        if(interprete.compiledContainsKey("prezzo_offerta_EURprima") && !interprete.deletedContainsKey("prezzo_offerta_EURprima"))
+                        {
+                            interprete.removeCompiledField("prezzo_offerta");
+                        }
+
                         #endregion parseMeccanica
 
                         #region descrizione
@@ -4465,6 +4470,7 @@ descrizioneEsempio.EndsWith("\r\n");
                         //    interprete.removeCompiledField("sfondo");
                         //}
 
+                        interprete.finalizeFields();
                         var fields = interprete.getFields();
                         recItem["compiledFields"] = fields.compiledFields;
                         recItem["deletedFields"] = fields.deletedFields;
@@ -7096,6 +7102,7 @@ Descrizione3.EndsWith("\r\n");
                         interprete.removeCompiledField("sfondo");
                     }
 
+                    interprete.finalizeFields();
                     var fields = interprete.getFields();
                     recItem["compiledFields"] = fields.compiledFields;
                     recItem["deletedFields"] = fields.deletedFields;
@@ -7246,6 +7253,7 @@ Descrizione3.EndsWith("\r\n");
 
                                 interpreteSottogruppo = interprete.Clone();
                                 interpreteSottogruppo.assignCompiledField("descrizione", descrizioneParagraphStyle, descrizione);
+                                interpreteSottogruppo.finalizeFields();
                                 var fieldsSottogruppo = interpreteSottogruppo.getFields();
                                 sottogruppo["compiledFields"] = fieldsSottogruppo.compiledFields;
                                 #endregion
@@ -11155,10 +11163,10 @@ Descrizione3.EndsWith("\r\n");
                         prodotto_conad = "conad_bio";
                     else if ((gusto.Contains("sapori&dintorni") || desc1.Contains("sapori&dintorni") || brand.Contains("sapori&dintorni")) &&
                         (gusto.Contains("percorso qualità") || desc1.Contains("percorso qualità") || brand.Contains("percorso qualità")))
-                        prodotto_conad = "conad_saporidintornipq";
+                        prodotto_conad = "conad_saporidintorniPQ";
                     else if ((gusto.Contains("sapori&idee") || desc1.Contains("sapori&idee") || brand.Contains("sapori&idee")) &&
                         (gusto.Contains("percorso qualità") || desc1.Contains("percorso qualità") || brand.Contains("percorso qualità")))
-                        prodotto_conad = "conad_saporiideepq";
+                        prodotto_conad = "conad_saporiideePQ";
                     else if (gusto.ToNoSpacing().Contains("percorsoqualità") || desc1.ToNoSpacing().Contains("percorsoqualità") || brand.ToNoSpacing().Contains("percorsoqualità"))
                         prodotto_conad = "conad_cpq";
                     else if (gusto.Contains("sapori&dintorni") || desc1.Contains("sapori&dintorni") || brand.Contains("sapori&dintorni"))
