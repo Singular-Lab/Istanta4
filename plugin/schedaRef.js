@@ -3828,6 +3828,51 @@ const schedaRef = {
         }
     },
 
+    togliSilenzioDellaRef(codice) {
+        const chiave = this.chiaveRefPerSilenzio(codice);
+        const posizione = this.refConSegnalazioniSilenziate.indexOf(chiave);
+
+        if (posizione >= 0) {
+            this.refConSegnalazioniSilenziate.splice(posizione, 1);
+        }
+    },
+
+    riattivaSegnalazioniOvunque() {
+        this.segnalazioniSilenziateOvunque = false;
+    },
+
+    /// Come si aprono le caselle del modal per una referenza. Con il silenzio generale acceso
+    /// ogni referenza si presenta con entrambe spuntate, perche' e' quello che sta succedendo;
+    /// altrimenti conta solo se questa referenza e' stata dichiarata una per una.
+    statoCaselleSilenziamento(codice) {
+        const tutte = this.segnalazioniSilenziateOvunque === true;
+
+        return {
+            questa: tutte || this.refESilenziata(codice),
+            tutte: tutte
+        };
+    },
+
+    /// Registra quello che l'operatore ha dichiarato, alla chiusura del modal.
+    ///
+    /// Togliere la spunta al generale lo spegne, e restano zitte solo le referenze dichiarate
+    /// una per una: e' il motivo per cui una referenza aperta mentre il generale era acceso non
+    /// entra nell'elenco, la sua spunta non era una scelta ma il riflesso del generale.
+    applicaScelteSilenziamento(codice, questa, tutte) {
+        if (tutte === true) {
+            this.silenziaSegnalazioniOvunque();
+            return;
+        }
+
+        this.riattivaSegnalazioniOvunque();
+
+        if (questa === true) {
+            this.silenziaSegnalazioniDellaRef(codice);
+        }
+        else {
+            this.togliSilenzioDellaRef(codice);
+        }
+    },
     silenziaSegnalazioniOvunque() {
         this.segnalazioniSilenziateOvunque = true;
     },
@@ -3992,24 +4037,44 @@ const schedaRef = {
         });
     },
 
-    /// Una casella dell'intestazione: una scelta, non un'azione. Si legge quando il popup si
-    /// chiude, e fino ad allora non succede niente - e' la differenza fra dichiarare una
-    /// preferenza e premere un comando.
-    caselleSilenziamento() {
-        const riquadro = $('<div style="display: flex; flex-direction: column; gap: 2px;"></div>');
+    /// Le caselle dell'intestazione: scelte, non azioni. Si leggono quando il popup si chiude,
+    /// e fino ad allora non succede niente.
+    ///
+    /// La seconda compare solo quando la prima e' spuntata: estendere a tutte una cosa che non
+    /// si sta facendo nemmeno qui non vuol dire niente, e tenerla sempre in vista costringeva a
+    /// leggere due righe per capirne una.
+    caselleSilenziamento(codice) {
+        const stato = this.statoCaselleSilenziamento(codice);
+        const riquadro = $('<div style="display: flex; flex-direction: column; gap: 3px;"></div>');
 
-        const crea = (id, etichetta) => {
+        const crea = (id, etichetta, spuntata) => {
             const riga = $('<div style="display: flex; align-items: center; gap: 5px;"></div>');
             const casella = $('<input type="checkbox" id="' + id + '">');
             const testo = $('<label for="' + id + '" style="font-size: 11px; color: #2c2c2c; cursor: pointer;"></label>');
 
+            casella.prop("checked", spuntata === true);
             testo.text(etichetta);
             riga.append(casella).append(testo);
             riquadro.append(riga);
+
+            return { riga: riga, casella: casella };
         };
 
-        crea("segnalazioniSilenziaQuesta", "Non mostrare piu' questo avviso");
-        crea("segnalazioniSilenziaTutte", "Non mostrare piu' tutti gli avvisi");
+        const questa = crea("segnalazioniSilenziaQuesta", "Non mostrare piu' questo avviso", stato.questa);
+        const tutte = crea("segnalazioniSilenziaTutte", "Applica a tutte le segnalazioni", stato.tutte);
+
+        const mostraSeconda = () => {
+            const accesa = questa.casella.prop("checked") === true;
+            tutte.riga.css("display", accesa ? "flex" : "none");
+
+            //Sparendo non deve lasciarsi dietro una scelta che non si vede piu'.
+            if (!accesa) {
+                tutte.casella.prop("checked", false);
+            }
+        };
+
+        questa.casella.on("change", mostraSeconda);
+        mostraSeconda();
 
         return riquadro;
     },
@@ -4046,14 +4111,17 @@ const schedaRef = {
 
             const contenuto = $(`
                 <div style="width: 100%; display: flex; flex-direction: column; gap: 10px; font-family: Arial, sans-serif; color: #2c2c2c;">
-                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
-                        <div id="segnalazioniIntestazione" style="display: flex; align-items: center; min-width: 0;"></div>
-                        <div id="segnalazioniAzioni" style="flex: 0 0 auto;"></div>
-                    </div>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 10px;">
+                            <div id="segnalazioniIntestazione" style="display: flex; align-items: center; min-width: 0;"></div>
 
-                    <div style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: #767676;">
-                        <span>Per correggere i dati nel box usa il pulsante</span>
-                        <img src="images/reimpaginaFix.png" alt="Correggi" style="width: 16px; height: 16px; object-fit: contain; vertical-align: middle;" />
+                            <div style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: #767676;">
+                                <span>Per correggere i dati nel box usa il pulsante</span>
+                                <img src="images/reimpaginaFix.png" alt="Correggi" style="width: 16px; height: 16px; object-fit: contain; vertical-align: middle;" />
+                            </div>
+                        </div>
+
+                        <div id="segnalazioniAzioni" style="flex: 0 0 auto;"></div>
                     </div>
 
                     <div id="segnalazioniElenco" style="width: 100%; max-height: 220px; overflow-y: auto; padding-right: 4px; box-sizing: border-box;"></div>
@@ -4070,7 +4138,10 @@ const schedaRef = {
             //chiudere e riaprire la scheda. Icona, non scritta: sta sulla riga dello stato.
             const aggiorna = $('<img src="images/refresh.png" alt="Aggiorna">');
             aggiorna.css({
-                "height": "16px",
+                //Alta quanto le due righe della colonna a sinistra messe insieme: lo stato, i
+                //10px che le separano e la riga del suggerimento. Le due righe restano dove
+                //sono, l'icona le affianca invece di stare sopra una sola.
+                "height": "30px",
                 "padding": "4px",
                 "box-sizing": "content-box",
                 "border": "1px solid #d0d0d0",
@@ -4096,7 +4167,7 @@ const schedaRef = {
             });
             azioni.append(aggiorna);
 
-            const caselle = this.caselleSilenziamento();
+            const caselle = this.caselleSilenziamento(codice);
 
             //Alla chiusura si leggono le scelte dichiarate e il segnalino nel titolo si rifa' i
             //conti: se l'Aggiorna ha trovato tutto risolto, sparisce.
@@ -4104,14 +4175,10 @@ const schedaRef = {
                 //Le caselle si leggono dal riquadro che si e' tenuto, non dal documento: quando
                 //questo callback parte il popup e' gia' stato rimosso, e un selettore globale
                 //non troverebbe piu' niente. Il sottoalbero staccato conserva lo stato.
-                if (caselle.find("#segnalazioniSilenziaTutte").prop("checked")) {
-                    me.silenziaSegnalazioniOvunque();
-                    messaggioUtente("Avvisi silenziati per tutte le referenze", "success", false, 3);
-                }
-                else if (caselle.find("#segnalazioniSilenziaQuesta").prop("checked")) {
-                    me.silenziaSegnalazioniDellaRef(codice);
-                    messaggioUtente("Avviso silenziato per questa referenza", "success", false, 3);
-                }
+                me.applicaScelteSilenziamento(
+                    codice,
+                    caselle.find("#segnalazioniSilenziaQuesta").prop("checked") === true,
+                    caselle.find("#segnalazioniSilenziaTutte").prop("checked") === true);
 
                 me.aggiornaPulsanteSegnalazioni();
             }, caselle);

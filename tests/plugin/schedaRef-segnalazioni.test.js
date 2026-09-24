@@ -141,3 +141,83 @@ test('azzerare i silenziamenti rimette tutto come all\'avvio del plugin', () => 
     assert.strictEqual(schedaRef.deveAprirsiDaSola(UNA_DIFFERENZA, '5329719'), true);
     assert.strictEqual(schedaRef.segnalazioniSilenziateOvunque, false);
 });
+
+
+/* ---- I20-992: come si presentano e si registrano le caselle del modal ---- */
+
+test('senza silenziamenti le caselle si aprono vuote', () => {
+    pulisci();
+
+    assert.deepStrictEqual(schedaRef.statoCaselleSilenziamento('5329719'), { questa: false, tutte: false });
+});
+
+test('una referenza dichiarata si riapre con la sua casella spuntata', () => {
+    pulisci();
+    schedaRef.applicaScelteSilenziamento('5329719', true, false);
+
+    assert.deepStrictEqual(schedaRef.statoCaselleSilenziamento('5329719'), { questa: true, tutte: false });
+
+    //Le altre no: la dichiarazione vale per quella referenza e basta.
+    assert.deepStrictEqual(schedaRef.statoCaselleSilenziamento('5365965'), { questa: false, tutte: false });
+});
+
+test('con il generale acceso qualunque referenza si apre con entrambe spuntate', () => {
+    pulisci();
+    schedaRef.applicaScelteSilenziamento('5329719', true, true);
+
+    assert.deepStrictEqual(schedaRef.statoCaselleSilenziamento('5329719'), { questa: true, tutte: true });
+    assert.deepStrictEqual(schedaRef.statoCaselleSilenziamento('mai vista'), { questa: true, tutte: true });
+});
+
+test('togliendo il generale restano zitte solo le referenze dichiarate una per una', () => {
+    // E' lo scenario descritto dall'operatore, ed e' il motivo per cui una referenza aperta
+    // mentre il generale era acceso non entra nell'elenco: la sua spunta non era una scelta,
+    // era il riflesso del generale.
+    pulisci();
+
+    schedaRef.applicaScelteSilenziamento('dichiarata', true, false);   // dichiarata a mano
+    schedaRef.applicaScelteSilenziamento('altra', true, true);         // da qui si accende il generale
+
+    // Una terza referenza si apre con entrambe spuntate, e l'operatore le toglie.
+    assert.deepStrictEqual(schedaRef.statoCaselleSilenziamento('terza'), { questa: true, tutte: true });
+    schedaRef.applicaScelteSilenziamento('terza', false, false);
+
+    assert.strictEqual(schedaRef.refESilenziata('dichiarata'), true, 'la dichiarata sopravvive');
+    assert.strictEqual(schedaRef.refESilenziata('altra'), false, 'chi ha solo acceso il generale no');
+    assert.strictEqual(schedaRef.refESilenziata('terza'), false);
+    assert.strictEqual(schedaRef.segnalazioniSilenziateOvunque, false);
+});
+
+test('chiudere lasciando spuntata la prima dichiara la referenza e spegne il generale', () => {
+    pulisci();
+    schedaRef.applicaScelteSilenziamento('prima', true, true);
+
+    //Dalla seconda si toglie il generale ma si lascia la propria: quella diventa una scelta.
+    schedaRef.applicaScelteSilenziamento('seconda', true, false);
+
+    assert.strictEqual(schedaRef.segnalazioniSilenziateOvunque, false);
+    assert.strictEqual(schedaRef.refESilenziata('seconda'), true);
+    assert.strictEqual(schedaRef.refESilenziata('prima'), false);
+});
+
+test('togliere la spunta a una referenza dichiarata la fa tornare a parlare', () => {
+    pulisci();
+    schedaRef.applicaScelteSilenziamento('5329719', true, false);
+    assert.strictEqual(schedaRef.deveAprirsiDaSola(UNA_DIFFERENZA, '5329719'), false);
+
+    schedaRef.applicaScelteSilenziamento('5329719', false, false);
+
+    assert.strictEqual(schedaRef.deveAprirsiDaSola(UNA_DIFFERENZA, '5329719'), true);
+    assert.strictEqual(schedaRef.refConSegnalazioniSilenziate.length, 0);
+});
+
+test('togliere il silenzio a una referenza che non ce l\'aveva non fa danni', () => {
+    pulisci();
+    schedaRef.applicaScelteSilenziamento('5329719', true, false);
+
+    schedaRef.togliSilenzioDellaRef('mai dichiarata');
+    schedaRef.togliSilenzioDellaRef(null);
+
+    assert.strictEqual(schedaRef.refESilenziata('5329719'), true);
+    assert.strictEqual(schedaRef.refConSegnalazioniSilenziate.length, 1);
+});
