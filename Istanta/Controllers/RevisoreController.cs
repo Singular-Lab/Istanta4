@@ -3846,8 +3846,10 @@ out var mismatch);
                         if (artItem!=null)
                         {
                             idArt = artItem.Id;
-                            //Per ora prendo la prima, ATTENZIONE per quando verranno sbloccate le descrizioni regionali
-                            adItem = artItem.ArticoliDescrizionis!.FirstOrDefault();
+                            //I20-993: si scrive sulla variante indicata dal Plugin. Senza area
+                            //ne' canale vale il comportamento di prima, la prima che capita.
+                            adItem = Utility.SpecificitaDescrizione.ScegliPerVariante(
+                                artItem.ArticoliDescrizionis, req.area, req.canale);
 
                             codice = artItem.Codice;
                         }
@@ -3856,7 +3858,10 @@ out var mismatch);
                     {
                         codice = req.codice_gruppo!;
 
-                        adItem = this.ctx.ArticoliDescrizionis.FirstOrDefault(a => a.CodiceGruppo == req.codice_gruppo);
+                        adItem = Utility.SpecificitaDescrizione.ScegliPerVariante(
+                            this.ctx.ArticoliDescrizionis.Where(a => a.CodiceGruppo == req.codice_gruppo).ToList(),
+                            req.area,
+                            req.canale);
                     }
 
                     if(adItem!=null)

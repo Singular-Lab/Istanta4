@@ -935,6 +935,11 @@ namespace Istanta.Models
         public string? codice_gruppo { get; set; }
         public RevisioneDescrizione? revisione { get; set; }
         public List<RevisioneCampiOffertaFromIndd>? campi_offerta { get; set; }
+        //I20-993: la variante su cui si sta salvando. Senza, il server sceglieva la prima riga
+        //che capitava e le modifiche finivano sulla nazionale. I client che non li mandano
+        //continuano a comportarsi come prima.
+        public string? area { get; set; }
+        public string? canale { get; set; }
 
     }
 

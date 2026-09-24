@@ -26,6 +26,49 @@ namespace Istanta.Utility
             return 0;
         }
 
+        /// La riga su cui scrivere quando si salva una variante dal Plugin.
+        ///
+        /// Senza area ne' canale si torna al comportamento di prima - la prima riga che capita -
+        /// perche' i client che non li mandano non devono cambiare comportamento. Quando invece
+        /// la variante e' indicata si scrive solo sulla riga che le corrisponde, e fra i doppioni
+        /// vale il piu' recente, come per l'elenco. Se quella variante non esiste si restituisce
+        /// null e non si scrive niente: meglio non salvare che salvare sulla riga sbagliata, che
+        /// e' il difetto per cui le modifiche finivano sulla nazionale.
+        public static ArticoliDescrizioni? ScegliPerVariante(
+            IEnumerable<ArticoliDescrizioni>? descrizioni,
+            string? area,
+            string? canale)
+        {
+            if (descrizioni == null)
+            {
+                return null;
+            }
+
+            bool varianteIndicata = !string.IsNullOrWhiteSpace(area) || !string.IsNullOrWhiteSpace(canale);
+
+            if (!varianteIndicata)
+            {
+                return descrizioni.FirstOrDefault();
+            }
+
+            return descrizioni
+                .Where(d => d != null && d.Custom == null && Corrisponde(d.Area, area) && Corrisponde(d.Canale, canale))
+                .OrderByDescending(d => d.DataUltimaRicezione)
+                .FirstOrDefault();
+        }
+
+        /// Due valori dicono la stessa cosa, trattando il vuoto e il nullo come sinonimi:
+        /// nell'archivio la nazionale arriva ora con null ora con la stringa vuota.
+        private static bool Corrisponde(string? uno, string? altro)
+        {
+            if (string.IsNullOrWhiteSpace(uno) && string.IsNullOrWhiteSpace(altro))
+            {
+                return true;
+            }
+
+            return string.Equals(uno, altro, StringComparison.Ordinal);
+        }
+
         /// Le varianti che esistono per una referenza, dalla meno alla piu' specifica, ognuna
         /// con i suoi testi.
         ///

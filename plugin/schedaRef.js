@@ -1220,6 +1220,11 @@ const schedaRef = {
             var varianteChePuoiModificare = variantiDescrizione.varianteApplicabile(elencoVarianti, areaLav, canaleLav);
             var varianteMostrata = varianteChePuoiModificare;
 
+            //I20-993: il salvataggio sta in un altro metodo e deve sapere su quale variante si
+            //sta scrivendo, altrimenti il server sceglie la prima riga che capita e la modifica
+            //finisce sulla nazionale. Vale anche quando la variante e' una sola.
+            me.varianteDescrizioneScelta = varianteChePuoiModificare;
+
             //Blocca o sblocca i campi della scheda. Si agisce anche direttamente sulle textarea
             //e non solo tramite il controller, perche' quello nasce piu' tardi e la prima
             //selezione non deve dipendere da quel tempo. Chi era gia' in sola lettura ci resta:
@@ -1291,6 +1296,7 @@ const schedaRef = {
 
                 var mostraVariante = function (variante) {
                     varianteMostrata = variante;
+                    me.varianteDescrizioneScelta = variante;
 
                     var etichettaScelta = variantiDescrizione.etichetta(variante);
                     var modificabile = variantiDescrizione.eModificabile(variante, elencoVarianti, areaLav, canaleLav);
@@ -3560,12 +3566,18 @@ const schedaRef = {
             let descrizioneCampo = opResult.campi_offerta.find(c => Utility.parseLabel(c.label) == "descrizione");
 
             //Adesso procedo con Istanta
+            //I20-993: si scrive sulla variante su cui si sta, non sulla prima riga che il server
+            //trova. Senza questi due campi le modifiche finivano sulla nazionale.
+            let varianteScelta = this.varianteDescrizioneScelta;
+
             let req = {
                 codice: dna.codice,
                 codice_gruppo: dna.codice_gruppo,
                 idLavorazione: idKitLavorazione,
                 revisione: opResult.revisione,
-                campi_offerta: opResult.campi_offerta
+                campi_offerta: opResult.campi_offerta,
+                area: varianteScelta != null ? varianteScelta.area : null,
+                canale: varianteScelta != null ? varianteScelta.canale : null
             };
 
             //creiamo una funzione richiamabile

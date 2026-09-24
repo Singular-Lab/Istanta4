@@ -134,6 +134,57 @@ public class VariantiDescrizioneTests
         Assert.Equal("recente", sola["descrizione1"]);
     }
 
+    [Fact]
+    public void Salvando_si_scrive_sulla_variante_indicata()
+    {
+        // E' il difetto per cui le modifiche fatte sulla ss_sa finivano sulla nazionale.
+        var descrizioni = new List<ArticoliDescrizioni>
+        {
+            Variante(null, null, descrizione1: "nazionale"),
+            Variante("TO", "SS", descrizione1: "specifica")
+        };
+
+        var scelta = SpecificitaDescrizione.ScegliPerVariante(descrizioni, "TO", "SS");
+
+        Assert.Equal("specifica", scelta!.Descrizione1);
+    }
+
+    [Fact]
+    public void Senza_variante_indicata_si_scrive_dove_si_scriveva_prima()
+    {
+        // I client che non mandano area e canale non devono cambiare comportamento.
+        var descrizioni = new List<ArticoliDescrizioni>
+        {
+            Variante(null, null, descrizione1: "la prima"),
+            Variante("TO", "SS", descrizione1: "specifica")
+        };
+
+        Assert.Equal("la prima", SpecificitaDescrizione.ScegliPerVariante(descrizioni, null, null)!.Descrizione1);
+        Assert.Equal("la prima", SpecificitaDescrizione.ScegliPerVariante(descrizioni, "", "  ")!.Descrizione1);
+    }
+
+    [Fact]
+    public void Una_variante_che_non_esiste_non_fa_scrivere_da_nessuna_parte()
+    {
+        // Meglio non salvare che salvare sulla riga sbagliata.
+        var descrizioni = new List<ArticoliDescrizioni> { Variante(null, null, descrizione1: "nazionale") };
+
+        Assert.Null(SpecificitaDescrizione.ScegliPerVariante(descrizioni, "MI", "SA"));
+    }
+
+    [Fact]
+    public void Fra_i_doppioni_della_variante_indicata_vale_il_piu_recente()
+    {
+        var vecchia = Variante("TO", "SS", descrizione1: "vecchia");
+        vecchia.DataUltimaRicezione = new DateTime(2026, 1, 1);
+        var recente = Variante("TO", "SS", descrizione1: "recente");
+        recente.DataUltimaRicezione = new DateTime(2026, 9, 24);
+
+        var scelta = SpecificitaDescrizione.ScegliPerVariante(new List<ArticoliDescrizioni> { vecchia, recente }, "TO", "SS");
+
+        Assert.Equal("recente", scelta!.Descrizione1);
+    }
+
     private static ArticoliDescrizioni Variante(string? area, string? canale, string? custom = null, string? descrizione1 = null)
     {
         return new ArticoliDescrizioni
