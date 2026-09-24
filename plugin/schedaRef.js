@@ -1252,6 +1252,30 @@ const schedaRef = {
                 var linguette = $('<div id="tabVariantiDescrizione" style="display:flex; flex-wrap:wrap; align-items:flex-end; border-bottom:1px solid #777; margin:6px 0 0 0; width:100%;"></div>');
                 var pannelloVariante = $('<div id="pannelloVarianteDescrizione" style="border:1px solid #777; border-top:none; padding:6px; color:white; font-size:11px; white-space:pre-wrap; width:100%; box-sizing:border-box;"></div>');
 
+                //I testi che il box ha all'apertura, cioe' quello che c'e' nell'impaginato.
+                //Si ricordano una volta sola, prima che qualcuno li tocchi: sono il dato su cui
+                //si misura il disallineamento, e la variante modificabile deve mostrare quelli.
+                var testiDellImpaginato = null;
+
+                var ricordaTestiDellImpaginato = function () {
+                    if (testiDellImpaginato != null) {
+                        return;
+                    }
+
+                    testiDellImpaginato = [];
+                    $("#editReferenza").find("textarea").each(function () {
+                        testiDellImpaginato.push({ campo: this, valore: $(this).val() });
+                    });
+                };
+
+                var rimettiTestiDellImpaginato = function () {
+                    if (testiDellImpaginato == null) {
+                        return;
+                    }
+
+                    testiDellImpaginato.forEach(function (voce) { $(voce.campo).val(voce.valore); });
+                };
+
                 //Porta nei campi della scheda i testi della variante scelta, cosi' come stanno
                 //su Istanta: descrizione1 nel campo di descrizione1 e via cosi'. Quando piu'
                 //campi rispondono allo stesso fondamentale si riempie il primo, che e' quello
@@ -1325,7 +1349,19 @@ const schedaRef = {
                         $("#applicaDescrizioneDaServer").hide();
                     }
 
-                    importaTestiDellaVariante(variante);
+                    ricordaTestiDellImpaginato();
+
+                    //La variante modificabile mostra l'impaginato, non l'archivio: e' il confronto
+                    //fra le due cose che fa emergere il disallineamento, e riempirla col dato del
+                    //server lo cancellerebbe prima che l'operatore possa vederlo. Per riportare
+                    //l'archivio nel box c'e' il pulsante, che e' una scelta sua.
+                    //Le altre varianti nel box non ci sono: li' si mostra il loro dato d'archivio.
+                    if (modificabile) {
+                        rimettiTestiDellImpaginato();
+                    }
+                    else {
+                        importaTestiDellaVariante(variante);
+                    }
 
                     pannelloVariante.empty();
                     pannelloVariante.append($('<div style="opacity:0.85;"></div>').text(modificabile
