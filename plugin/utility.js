@@ -1112,7 +1112,12 @@ const Utility=
         this.chiudiModal();
     },
 
-    async popup(title, message, taglia = "md") {
+    /// I20-992: alChiudi, facoltativo, viene chiamato quando l'operatore chiude il popup.
+    /// Serve a chi deve rimettere a posto qualcosa fuori dal popup una volta che sparisce -
+    /// per esempio il pulsante delle segnalazioni della scheda ref, che dopo un refresh
+    /// andato a buon fine non ha piu' ragione di stare li'. Chi non lo passa non cambia
+    /// comportamento.
+    async popup(title, message, taglia = "md", alChiudi = null) {
         try {
             let me = this;
             me.nascondiHidebleElements();
@@ -1157,11 +1162,25 @@ const Utility=
             `);
     
             let titleText = $(`<span style="font-size: 16px; font-weight: bold;">${title}</span>`);
-            let closeButton = $('<button style="background-color: transparent; border: none; font-size: 18px; cursor: pointer;">&times;</button>');
+            //I20-992: l'id serve a chi deve chiudere il popup da dentro il contenuto, senza
+            //rifare a mano la pulizia che fa questo handler.
+            let closeButton = $('<button id="popupCloseButton" style="background-color: transparent; border: none; font-size: 18px; cursor: pointer;">&times;</button>');
     
             closeButton.click(function () {
                 me.mostraHidebleElements();
                 $("#popup").remove();
+
+                //Il popup e' gia' sparito quando si avvisa: chi ascolta puo' riaprirne un
+                //altro senza trovarsi il vecchio ancora attaccato. Un errore qui non deve
+                //lasciare il popup a meta'.
+                if (typeof alChiudi === "function") {
+                    try {
+                        alChiudi();
+                    }
+                    catch (err) {
+                        console.error("Errore nel callback di chiusura del popup: ", err);
+                    }
+                }
             });
     
             titleBar.append(titleText).append(closeButton);
