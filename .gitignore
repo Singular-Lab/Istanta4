@@ -28,8 +28,14 @@ Thumbs.db
 # chi clonava si ritrovava le pagine senza stile. Le due righe seguenti li
 # riammettono (serve riammettere prima la cartella, poi il contenuto: git non
 # puo' recuperare un file dentro una cartella esclusa).
-!Istanta/wwwroot/lib/**/dist/
-!Istanta/wwwroot/lib/**/dist/**
+#
+# L'eccezione era ancorata a Istanta/, e per questo Correggo4 e' rimasto
+# scoperto: le stesse cinque librerie referenziate dalle sue view non sono mai
+# entrate in git, quindi serviva le pagine senza stile ne' validazione client.
+# Ora vale per qualunque progetto della suite abbia un wwwroot/lib, cosi' il
+# prossimo non ripete la storia.
+!**/wwwroot/lib/**/dist/
+!**/wwwroot/lib/**/dist/**
 **/[Oo]ut/
 **/[Cc]overage/
 **/.cache/
