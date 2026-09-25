@@ -1,8 +1,9 @@
 /*
  * I20-984: i campi editabili del blocco di dettaglio nella scheda del revisore.
  *
- * La libreria sotto esame e' Istanta/wwwroot/js/edro21/agenzia.js: la copia in radice non sta
- * in git, perche' ogni postazione monta un cliente diverso e la copia la fa monta-cliente.sh.
+ * La libreria sotto esame e' Istanta/ScriptAgenzia/edro21/agenzia.js. Dopo I20-997 gli archivi
+ * per cliente stanno fuori da wwwroot - non sono piu' serviti staticamente, li legge il server -
+ * e non esiste piu' nessuna copia in radice da montare.
  *
  * "Note per impaginato" e i campi editabili della sua zona non partecipavano al rilevamento
  * delle modifiche: niente bordo rosso e niente "salva in gruppo". Il motivo e' che il controllo
@@ -107,7 +108,7 @@ test('ogni cliente che ha il campo ne dichiara la chiave sul tracciato', () => {
     const clienti = ['edro21', 'famila', 'pac', 'trea'];
 
     for (const cliente of clienti) {
-        const agenzia = sorgente('Istanta/wwwroot/js/' + cliente + '/agenzia.js');
+        const agenzia = sorgente('Istanta/ScriptAgenzia/' + cliente + '/agenzia.js');
 
         assert.ok(agenzia.includes('id="NoteImpaginato"'),
             'il caso va aggiornato se ' + cliente + ' non ha piu\' quel campo');
@@ -127,7 +128,7 @@ test('il rilevamento sta nel revisore, non nelle librerie di agenzia', () => {
         'senza ascolto il bordo rosso non compare mai, e l\'ascolto vale per i campi di tutti');
 
     for (const cliente of ['edro21', 'famila', 'pac', 'trea']) {
-        const agenzia = sorgente('Istanta/wwwroot/js/' + cliente + '/agenzia.js');
+        const agenzia = sorgente('Istanta/ScriptAgenzia/' + cliente + '/agenzia.js');
         assert.ok(!agenzia.includes('controlChangeCampiTracciato'),
             'la regola non va duplicata in ' + cliente);
     }

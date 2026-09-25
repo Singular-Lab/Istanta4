@@ -92,11 +92,12 @@ credentials.local.*
 *.cer
 
 # Il cliente montato su QUESTA macchina: non passa da git.
-# Ogni postazione monta un cliente diverso, quindi questi due file cambierebbero
-# a ogni cambio cliente sporcando i diff di tutti. La fonte restano gli archivi,
-# che sono in git: Istanta/wwwroot/js/<cliente>/agenzia.js e
-# plugin/Agenzie/<Cliente>/custom.js. Li copia in radice ./monta-cliente.sh.
-Istanta/wwwroot/js/agenzia.js
+# Ogni postazione monta un cliente diverso, quindi questo file cambierebbe a ogni
+# cambio cliente sporcando i diff di tutti. La fonte restano gli archivi, che sono
+# in git: plugin/Agenzie/<Cliente>/custom.js. Lo copia in radice ./monta-cliente.sh.
+# I20-997: Istanta/wwwroot/js/agenzia.js non esiste piu'. Lo script del front-end
+# lo serve il server leggendo Istanta/ScriptAgenzia/<cliente>/agenzia.js, quindi
+# non c'e' piu' nessuna copia in radice da ignorare.
 plugin/custom.js
 # Lo stesso vale per il profilo di avvio: contiene ISTANTA_CLIENTE, che dice a
 # Program.cs quale cliente montare. Il modello tracciato e' launchSettings.template.json.
