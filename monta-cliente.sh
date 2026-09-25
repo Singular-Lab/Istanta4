@@ -7,12 +7,15 @@
 # in git (vedi .gitignore), altrimenti il cliente montato da uno comparirebbe
 # nei diff di tutti. Le fonti sono gli archivi, quelli si che stanno in git:
 #
-#   Istanta/wwwroot/js/<cartellaJs>/agenzia.js  ->  Istanta/wwwroot/js/agenzia.js
 #   plugin/Agenzie/<Cliente>/custom.js          ->  plugin/custom.js
 #
-# A runtime viene caricato SOLO il file in radice: il front-end web legge
-# js/agenzia.js e il plugin fa require('./custom'). Le cartelle per cliente
-# non le legge nessuno, sono l'archivio.
+# A runtime il plugin fa require('./custom'), quindi per lui la copia in radice
+# serve ancora.
+#
+# I20-997: il front-end web NON passa piu' di qui. Lo script di agenzia lo serve
+# il server, che legge Istanta/ScriptAgenzia/<cliente>/agenzia.js in base a
+# ISTANTA_CLIENTE: niente copia in radice da tenere allineata, e si modifica
+# direttamente l'archivio del proprio cliente.
 #
 # Uso:
 #   ./monta-cliente.sh Edro21
@@ -31,17 +34,18 @@ for a in "$@"; do
     esac
 done
 
-# La mappa dei nomi. Serve perche i tre mondi non usano la stessa grafia:
-# il cliente si chiama Coopfi in AgenziaLib e nel plugin, ma la sua cartella
-# javascript si chiama "coop". Ogni riga: cliente, cartella js, cartella plugin
-# (vuota se quel cliente non ha un archivio nel plugin).
+# La mappa dei nomi, che ora riguarda il solo plugin: vuota se quel cliente non
+# ha un archivio li'. La cartella javascript non compare piu', perche' il server
+# la trova da se' da ISTANTA_CLIENTE, che e' il nome del cliente in minuscolo.
+# Per questo la cartella "coop" e' stata rinominata "coopfi" (I20-997): era
+# l'unica che non corrispondeva, e teneva in piedi una tabella da allineare.
 case "$CLIENTE" in
-    Edro21) JS=edro21; PLG=Edro21 ;;
-    Coopfi) JS=coop;   PLG=Coopfi ;;
-    Pac)    JS=pac;    PLG=Pac    ;;
-    Trea)   JS=trea;   PLG=Trea   ;;
-    Famila) JS=famila; PLG=Famila ;;
-    Gross)  JS=gross;  PLG=""     ;;
+    Edro21) PLG=Edro21 ;;
+    Coopfi) PLG=Coopfi ;;
+    Pac)    PLG=Pac    ;;
+    Trea)   PLG=Trea   ;;
+    Famila) PLG=Famila ;;
+    Gross)  PLG=""     ;;
     *)
         echo "Uso: $0 <Cliente> [--forza]"
         echo "Clienti: Edro21 Coopfi Pac Trea Famila Gross"
@@ -78,8 +82,6 @@ monta() {
 
 echo "Monto $CLIENTE"
 esito=0
-
-monta "Istanta/wwwroot/js/$JS/agenzia.js" "Istanta/wwwroot/js/agenzia.js" || esito=1
 
 if [ -n "$PLG" ]; then
     monta "plugin/Agenzie/$PLG/custom.js" "plugin/custom.js" || esito=1
