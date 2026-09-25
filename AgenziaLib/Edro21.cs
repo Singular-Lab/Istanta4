@@ -332,6 +332,33 @@ namespace AgenziaLib
                 string keyTipo_riga = Edro21Context.Meta.tipo_riga;
                 string keyReparto = Edro21Context.Meta.reparto;
                 string keyNome_foto = Edro21Context.Meta.nome_foto;
+
+                //I20-1000: il nome foto arriva dalla chiave custom nome_foto sulle liste vecchie e
+                //dalla chiave core Foto.SelezioneDaTracciato su quelle nuove, e per un po' le due
+                //generazioni convivono. Si legge quella che c'e'.
+                //Prima si faceva item[keyNome_foto] diretto: su un dizionario una chiave assente non
+                //restituisce vuoto, solleva un'eccezione, quindi su una lista nuova non si degradava,
+                //ci si fermava. Mancando entrambe si prosegue con la stringa vuota, che i controlli
+                //piu' avanti gia' sanno gestire.
+                string leggiNomeFoto(Dictionary<string, object> riga)
+                {
+                    if (riga == null)
+                    {
+                        return "";
+                    }
+
+                    if (riga.ContainsKey(keyNome_foto) && riga[keyNome_foto] != null)
+                    {
+                        return riga[keyNome_foto].ToString()!;
+                    }
+
+                    if (riga.ContainsKey(GLOBAL_VARIABLES.keyFotoSelezioneDaTracciato) && riga[GLOBAL_VARIABLES.keyFotoSelezioneDaTracciato] != null)
+                    {
+                        return riga[GLOBAL_VARIABLES.keyFotoSelezioneDaTracciato].ToString()!;
+                    }
+
+                    return "";
+                }
                 string keyCodice_scatto = Edro21Context.Meta.codice_scatto;
                 string keyId_pop = Edro21Context.Meta.id_pop;
                 string keyData_da = Edro21Context.Meta.data_da;
@@ -798,7 +825,7 @@ namespace AgenziaLib
                         string tipo = item[GLOBAL_VARIABLES.keyDescr3].ToString();
                         string grammatura = item[GLOBAL_VARIABLES.keyDescr4].ToString();
                         string peso = item[GLOBAL_VARIABLES.keyDescrPeso].ToString();
-                        string lista_foto = item[keyNome_foto].ToString();
+                        string lista_foto = leggiNomeFoto(item);
 
                         string codice_scatto = item[keyCodice_scatto].ToString();
                         string sezione = item[keySezione].ToString().ToLower();
@@ -1011,7 +1038,7 @@ namespace AgenziaLib
                                         //Controllo se la sua foto è dentro il lista foto del gruppo
                                         var arrFotoGruppo = gruppoAvv.ListaFoto.Split(',');
                                         //itemInGruppo["referenza_pilota"] = arrFotoGruppo.Contains(itemInGruppo[keyNome_foto].ToString()) ? "S" : "";
-                                        itemInGruppo[prenotazione_pilota] = arrFotoGruppo.Contains(itemInGruppo[keyNome_foto].ToString()) ? true : false;
+                                        itemInGruppo[prenotazione_pilota] = arrFotoGruppo.Contains(leggiNomeFoto(itemInGruppo)) ? true : false;
                                     //}
 
                                     if (nota_esempio != "")
@@ -1232,7 +1259,7 @@ namespace AgenziaLib
                                 #region lettura dettagli signolo record
 
 
-                                string nome_foto = item[keyNome_foto].ToString();// (item["Foto"] as Dictionary<string, object>)["PathFoto"].ToString();
+                                string nome_foto = leggiNomeFoto(item);
 
                                 //Dictionary<string, object> ref_archivio = item["Referenza"] as Dictionary<string, object>;
                                 string codice_radice = item[GLOBAL_VARIABLES.keyRefCodice].ToString();
