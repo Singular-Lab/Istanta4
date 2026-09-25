@@ -32,6 +32,45 @@ Runner riscrivendo le sole variabili immagine in `release.env`.
 Né PostgreSQL, né Redis, né nginx sono componenti della release: il ControlPlane
 non li conosce e il Runner non li aggiorna.
 
+## 0. Portare il bundle sul target
+
+Vale sia per una macchina nuova sia per una già installata: è la stessa
+operazione, e conviene che resti una sola.
+
+```bash
+# dal PC di sviluppo
+scp -r docker/istanta-correggo UTENTE@TARGET:/tmp/
+
+# sul target
+sudo mkdir -p /opt/company-ai/projects/<progetto>
+cd /opt/company-ai/projects/<progetto>
+sudo /tmp/istanta-correggo/install-bundle.sh
+```
+
+Su una directory vuota copia tutto e crea i tre file d'ambiente dai rispettivi
+esempi, che vanno poi compilati. Su una macchina già installata aggiorna i file
+del bundle e lascia stare quelli compilati.
+
+Compilati i `.env`:
+
+```bash
+sudo ./prepare-target.sh
+```
+
+Il motivo per cui questo passaggio esiste come script e non come elenco di
+comandi da ripetere: su una macchina nuova si copia tutto insieme e il bundle è
+coerente per costruzione, mentre su una già installata si tende ad aggiornare un
+file alla volta, e la deriva non si vede — i file hanno lo stesso nome e lo
+stesso aspetto di quelli giusti.
+
+Sovrascrive tutto ciò che appartiene al bundle e riporta cosa è cambiato.
+**Non tocca mai** i file d'ambiente compilati, i certificati e le directory di
+dati: appartengono alla macchina. Se un `.env` manca lo crea dall'esempio e lo
+dice, perché a quel punto va compilato prima di distribuire.
+
+Se il compose risulta fra i file aggiornati, i container vanno **ricreati** e non
+riavviati: i mount e le variabili si fissano alla creazione.
+
 ## 1. Gli schemi
 
 Nessuna delle due applicazioni crea il proprio schema all'avvio — non ci sono
