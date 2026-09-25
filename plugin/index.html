@@ -222,8 +222,16 @@
 <body style="width: 100%; height: 100%;">
 
   <!-- <script src="sp-popover.mjs"></script> -->
+<!--I20-998: l'ombreggiatura non arrivava in cima. E' lo stesso difetto che I20-987 aveva
+     corretto sul riquadro qui sotto: un elemento fisso, in questa pagina, parte dal riquadro del
+     corpo e non dalla finestra, e il corpo ha il suo margine. Dichiarando larghezza e altezza al
+     cento per cento si copre il corpo e resta scoperta una striscia, e senza dichiarare i lati
+     il riquadro parte da dove sarebbe finito nel flusso, cioe' sotto l'intestazione.
+     La misura non si dichiara: la danno i quattro lati, tirati otto pixel oltre il bordo per
+     ogni verso. Il riempimento superiore resta perche' e' lui a tenere il testo dov'era, e
+     border-box lo fa stare dentro invece di allungare il riquadro.-->
 <div id="loadingPanel"
-  style="position: fixed; width: 100%; height: 100%; background-color: rgba(0,0,0,0.7); z-index: 9999; display: none; justify-content: center; align-items: center; color:white; margin: 0px; padding-top: 200px; text-align:center;">
+  style="position: fixed; top: -8px; left: -8px; right: -8px; bottom: -8px; box-sizing: border-box; background-color: rgba(0,0,0,0.7); z-index: 9999; display: none; justify-content: center; align-items: center; color:white; margin: 0px; padding-top: 200px; text-align:center;">
   <h1>Messaggio</h1>
 </div>
 <!--I20-987: il riquadro di blocco copre esattamente il pannello e tiene il testo al centro.
