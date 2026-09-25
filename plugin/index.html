@@ -460,28 +460,27 @@
                  mostra e li nasconde, e cambiarli sposterebbe il comportamento.
                  Erano incolonnati a tutta larghezza perche' hanno display flex addosso e
                  stavano dentro div di blocco, quindi ognuno diventava un contenitore per se'.
-                 Adesso i due gruppi - gli svuotamenti, che sono distruttivi, e i bolli -
-                 hanno un titolo che dice cosa sono, e i pulsanti stanno su una griglia a due
-                 colonne: a larghezza libera i bordi restavano frastagliati, perche' le
-                 etichette sono lunghe diverse, e in un pannello stretto si nota. -->
+                 Adesso i contenitori sono righe che vanno a capo, e i due gruppi - gli
+                 svuotamenti, che sono distruttivi, e i bolli - hanno un titolo che dice cosa
+                 sono, invece di stare uno sotto l'altro senza spiegazione. -->
             <div class="panel" id="comandiExtraMenabo" style="margin-top: 12px; margin-right: 8px; padding-right: 8px;">
               <div id="comandiInterfacciaExtra" style="width: 100%; margin-bottom: 8px;">
 
                 <sp-label size="s" style="color: #bbbbbb;">Svuotamento</sp-label>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 4px 0 14px 0;">
-                  <sp-action-button style="display: flex; justify-content: center; color: lightcoral; font-size: 12px;" pag=""
+                <div style="display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 14px 0;">
+                  <sp-action-button style="display: flex; color: lightcoral; font-size: 12px;" pag=""
                     id="svuotaPagina" name="svuotaPagina" onclick="apriModalSvuotamento('0')">Svuota pagina</sp-action-button>
-                  <sp-action-button style="display: flex; justify-content: center; color: lightcoral; font-size: 12px;" pag=""
+                  <sp-action-button style="display: flex; color: lightcoral; font-size: 12px;" pag=""
                     id="svuotaMenabo" name="svuotaMenabo" onclick="apriModalSvuotamento('1')">Svuota menabo</sp-action-button>
-                  <sp-action-button style="display: none; justify-content: center; color: lightcoral; font-size: 12px;" pag="" id="resetIdRec"
+                  <sp-action-button style="display: none; color: lightcoral; font-size: 12px;" pag="" id="resetIdRec"
                     name="svuotaMenabo" onclick="resetIdRec()">Reset idRec</sp-action-button>
                 </div>
 
                 <sp-label size="s" style="color: #bbbbbb;">Bolli</sp-label>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 4px 0 0 0;">
-                  <sp-action-button style="display: flex; justify-content: center; color: white; font-size: 12px;" id="Disattiva bolli"
+                <div style="display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 0 0;">
+                  <sp-action-button style="display: flex; color: white; font-size: 12px;" id="Disattiva bolli"
                     name="svuotaMenabo" onclick="apriModalBolli('0')">Disattiva bolli</sp-action-button>
-                  <sp-action-button style="display: flex; justify-content: center; color: white; font-size: 12px;" id="Attiva bolli"
+                  <sp-action-button style="display: flex; color: white; font-size: 12px;" id="Attiva bolli"
                     name="svuotaMenabo" onclick="apriModalBolli('1')">Attiva bolli</sp-action-button>
                 </div>
 
