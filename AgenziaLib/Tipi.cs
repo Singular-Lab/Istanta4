@@ -48,6 +48,10 @@ namespace AgenziaLib.Tipi
         public static readonly string keyDescrGruppo = "Descrizioni.Gruppo";
         public static readonly string keyDescrUm = "Descrizioni.Um";
         public static readonly string keyDescrPeso = "Descrizioni.Peso";
+
+        //I20-1000: la chiave core che per edro21 ha sostituito la custom nome_foto. Le liste
+        //vecchie portano ancora quella, le nuove questa, e per un po' girano insieme.
+        public static readonly string keyFotoSelezioneDaTracciato = "Foto.SelezioneDaTracciato";
         public static readonly string keyDescrUmGruppo = "Descrizioni.UmGruppo";
         public static readonly string keyDescrPesoGruppo = "Descrizioni.PesoGruppo";
 
