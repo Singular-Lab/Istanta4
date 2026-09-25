@@ -3972,20 +3972,38 @@ out var mismatch);
                         newAdItem.Area = string.IsNullOrWhiteSpace(req.area) ? null : req.area;
                         newAdItem.Canale = string.IsNullOrWhiteSpace(req.canale) ? null : req.canale;
 
+                        //I20-996: un campo non toccato eredita dalla nazionale invece di nascere
+                        //vuoto. Il marcatore vuol dire "lascia com'era", ma qui la riga non c'e'
+                        //ancora: prima diventava una stringa vuota, e chi creava una regionale
+                        //toccando un campo solo si ritrovava gli altri tre svuotati.
+                        //L'articolo non e' in scope qui, quindi la nazionale si ripesca.
+                        List<ArticoliDescrizioni> descrizioniEsistenti = isGruppo
+                            ? this.ctx.ArticoliDescrizionis.Where(d => d.CodiceGruppo == req.codice_gruppo).ToList()
+                            : this.ctx.ArticoliDescrizionis.Where(d => d.IdArticolo == idArt).ToList();
+
+                        ArticoliDescrizioni? nazionale = Utility.SpecificitaDescrizione.Nazionale(descrizioniEsistenti);
+
                         newAdItem.Descrizione1 = "";
                         newAdItem.Descrizione2 = "";
                         newAdItem.Descrizione3 = "";
                         newAdItem.Descrizione4 = "";
                         newAdItem.DescrizioneIndd = req.revisione.valoreInddSoloFondamentali;
 
-                        if (req.revisione.descrizione1 != null && req.revisione.descrizione1 != "<untouched>")
-                            newAdItem.Descrizione1 = req.revisione.descrizione1;
-                        if (req.revisione.descrizione2 != null && req.revisione.descrizione2 != "<untouched>")
-                            newAdItem.Descrizione2 = req.revisione.descrizione2;
-                        if (req.revisione.descrizione3 != null && req.revisione.descrizione3 != "<untouched>")
-                            newAdItem.Descrizione3 = req.revisione.descrizione3;
-                        if (req.revisione.descrizione4 != null && req.revisione.descrizione4 != "<untouched>")
-                            newAdItem.Descrizione4 = req.revisione.descrizione4;
+                        var d1 = Utility.SpecificitaDescrizione.ValoreInCreazione(req.revisione.descrizione1, nazionale?.Descrizione1);
+                        if (d1 != null)
+                            newAdItem.Descrizione1 = d1;
+
+                        var d2 = Utility.SpecificitaDescrizione.ValoreInCreazione(req.revisione.descrizione2, nazionale?.Descrizione2);
+                        if (d2 != null)
+                            newAdItem.Descrizione2 = d2;
+
+                        var d3 = Utility.SpecificitaDescrizione.ValoreInCreazione(req.revisione.descrizione3, nazionale?.Descrizione3);
+                        if (d3 != null)
+                            newAdItem.Descrizione3 = d3;
+
+                        var d4 = Utility.SpecificitaDescrizione.ValoreInCreazione(req.revisione.descrizione4, nazionale?.Descrizione4);
+                        if (d4 != null)
+                            newAdItem.Descrizione4 = d4;
 
                         newAdItem.DataUltimaRicezione = DateTime.Now;
                         if (!plrItem.CodiceGruppo!.Contains(","))

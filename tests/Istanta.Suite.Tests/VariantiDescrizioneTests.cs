@@ -198,6 +198,73 @@ public class VariantiDescrizioneTests
         Assert.Equal(atteso, SpecificitaDescrizione.SiPuoChiudere(area, canale));
     }
 
+    [Fact]
+    public void Creando_un_campo_non_toccato_eredita_dalla_nazionale()
+    {
+        // E' il bug I20-996: creando una regionale e toccando un campo solo, gli altri tre
+        // nascevano vuoti perche' "non toccato" in creazione non ha niente da lasciare com'era.
+        Assert.Equal("dalla nazionale", SpecificitaDescrizione.ValoreInCreazione(SpecificitaDescrizione.NonToccato, "dalla nazionale"));
+    }
+
+    [Fact]
+    public void Creando_un_campo_toccato_vince_su_quello_della_nazionale()
+    {
+        Assert.Equal("scritto ora", SpecificitaDescrizione.ValoreInCreazione("scritto ora", "dalla nazionale"));
+    }
+
+    [Fact]
+    public void Un_campo_svuotato_apposta_resta_vuoto()
+    {
+        // La stringa vuota e' una scelta dell'operatore, non un "non toccato": non si eredita.
+        Assert.Equal("", SpecificitaDescrizione.ValoreInCreazione("", "dalla nazionale"));
+    }
+
+    [Fact]
+    public void Senza_nazionale_non_c_e_da_dove_ereditare()
+    {
+        Assert.Equal("", SpecificitaDescrizione.ValoreInCreazione(SpecificitaDescrizione.NonToccato, null));
+    }
+
+    [Fact]
+    public void Un_campo_assente_del_tutto_resta_come_prima()
+    {
+        // null vuol dire che il client non manda quel campo, non che l'operatore non l'ha
+        // toccato: si restituisce null e chi chiama lascia il valore di partenza.
+        Assert.Null(SpecificitaDescrizione.ValoreInCreazione(null, "dalla nazionale"));
+    }
+
+    [Fact]
+    public void La_nazionale_e_quella_senza_area_canale_e_custom()
+    {
+        var descrizioni = new List<ArticoliDescrizioni>
+        {
+            Variante("TO", "SS", descrizione1: "specifica"),
+            Variante(null, null, custom: "promo", descrizione1: "custom"),
+            Variante(null, null, descrizione1: "nazionale")
+        };
+
+        Assert.Equal("nazionale", SpecificitaDescrizione.Nazionale(descrizioni)!.Descrizione1);
+    }
+
+    [Fact]
+    public void Fra_piu_nazionali_vale_la_piu_recente()
+    {
+        var vecchia = Variante(null, null, descrizione1: "vecchia");
+        vecchia.DataUltimaRicezione = new DateTime(2026, 1, 1);
+        var recente = Variante(null, null, descrizione1: "recente");
+        recente.DataUltimaRicezione = new DateTime(2026, 9, 25);
+
+        Assert.Equal("recente", SpecificitaDescrizione.Nazionale(new List<ArticoliDescrizioni> { vecchia, recente })!.Descrizione1);
+    }
+
+    [Fact]
+    public void Senza_descrizioni_non_c_e_nazionale()
+    {
+        Assert.Null(SpecificitaDescrizione.Nazionale(null));
+        Assert.Null(SpecificitaDescrizione.Nazionale(new List<ArticoliDescrizioni>()));
+        Assert.Null(SpecificitaDescrizione.Nazionale(new List<ArticoliDescrizioni> { Variante("TO", "SS") }));
+    }
+
     private static ArticoliDescrizioni Variante(string? area, string? canale, string? custom = null, string? descrizione1 = null)
     {
         return new ArticoliDescrizioni
