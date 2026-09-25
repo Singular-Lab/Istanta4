@@ -13,6 +13,13 @@ const assert = require('node:assert');
 
 const varianti = require('../../plugin/variantiDescrizione');
 
+const fs = require('node:fs');
+const path = require('node:path');
+
+//schedaRef.js richiede InDesign e non si carica sotto Node: di lui si verifica il sorgente,
+//come si fa altrove in questa suite.
+const sorgenteSchedaRef = fs.readFileSync(path.join(__dirname, '..', '..', 'plugin', 'schedaRef.js'), 'utf8');
+
 const NAZ = { area: null, canale: null };
 const CANALE_SS = { area: null, canale: 'SS' };
 const AREA_TO = { area: 'TO', canale: null };
@@ -161,4 +168,11 @@ test('la nazionale non si crea: esiste sempre', () => {
     const creabili = varianti.variantiCreabili([], 'TO', 'SS');
 
     assert.strictEqual(creabili.some(c => varianti.specificita(c) === 0), false);
+});
+
+test('salvando una variante nuova si mandano tutti i campi, non solo quello toccato', () => {
+    // I20-996: in creazione "non toccato" non ha niente da lasciare com'era, quindi i campi
+    // non toccati nascerebbero vuoti. Il flag che esiste gia' per le descrizioni ereditate
+    // vale anche qui.
+    assert.match(sorgenteSchedaRef, /varianteDescrizioneScelta\.nuova === true\)\s*\{\s*\n\s*descrizioneEreditata = true;/);
 });

@@ -26,6 +26,49 @@ namespace Istanta.Utility
             return 0;
         }
 
+        /// I20-996: il marcatore con cui il Plugin dice "questo campo non l'ho toccato".
+        public const string NonToccato = "<untouched>";
+
+        /// La descrizione nazionale di un insieme: niente area, niente canale, niente custom.
+        /// Fra i doppioni vale la piu' recente, come ovunque qui.
+        public static ArticoliDescrizioni? Nazionale(IEnumerable<ArticoliDescrizioni>? descrizioni)
+        {
+            if (descrizioni == null)
+            {
+                return null;
+            }
+
+            return descrizioni
+                .Where(d => d != null && d.Custom == null && Rango(d.Area, d.Canale) == 0)
+                .OrderByDescending(d => d.DataUltimaRicezione)
+                .FirstOrDefault();
+        }
+
+        /// I20-996: cosa scrivere in un campo quando si **crea** una descrizione.
+        ///
+        /// Il marcatore significa "lascia com'era", e in aggiornamento funziona perche' la riga
+        /// c'e'. In creazione non c'e' niente da lasciare, e prima diventava vuoto: chi creava una
+        /// regionale toccando un campo solo si ritrovava gli altri tre svuotati. Ora un campo non
+        /// toccato prende quello della nazionale, che e' il punto da cui la variante nasce.
+        ///
+        /// Se la nazionale non c'e' resta vuoto: non c'e' da dove ereditare. Un campo assente del
+        /// tutto - null - resta come prima, perche' vuol dire che il client non lo gestisce, non
+        /// che l'operatore non l'ha toccato.
+        public static string? ValoreInCreazione(string? richiesto, string? dallaNazionale)
+        {
+            if (richiesto == null)
+            {
+                return null;
+            }
+
+            if (richiesto == NonToccato)
+            {
+                return dallaNazionale ?? "";
+            }
+
+            return richiesto;
+        }
+
         /// Se una variante si puo' chiudere, cioe' cancellare, dal Plugin.
         ///
         /// La nazionale no, mai: e' il fondo della scala, e senza di lei il gruppo resterebbe

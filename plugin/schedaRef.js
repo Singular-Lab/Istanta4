@@ -3812,6 +3812,14 @@ const schedaRef = {
 
             //descrizioneEreditata è un bool che è vero se la ref è un gruppo (codice != codice_gruppo) e descrizione_gruppo non esiste come chiave
             let descrizioneEreditata = (primario.recordInTracciato["Referenza.Codice"] != primario.recordInTracciato["Scatto.CodiceGruppo"]) && !(primario.recordInTracciato.hasOwnProperty("descrizione_gruppo"));
+
+            //I20-996: una variante appena creata e' lo stesso caso, e va scritta per intero. Senza
+            //questo i campi non toccati partono come "non toccato", e in creazione non c'e' niente
+            //da lasciare com'era: nascerebbero vuoti. Il server se ne difende ereditando dalla
+            //nazionale, ma il posto giusto per dirlo e' qui, dove si sa che la variante e' nuova.
+            if (this.varianteDescrizioneScelta != null && this.varianteDescrizioneScelta.nuova === true) {
+                descrizioneEreditata = true;
+            }
             //Chiedo al controller le operazioni che devo fare
             let opResult = this.editRefFieldController.getOperazioniDiSalvataggioDaFare(descrizioneEreditata);
             console.log(opResult);
