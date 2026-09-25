@@ -352,7 +352,12 @@ namespace IstantaLib
         public static readonly string keyFotoNome = "Foto.Nome";
         public static readonly string keyFotoHash = "Foto.Hash";
         public static readonly string keyFotoUri = "Foto.OriginUri";//Se le GDO implementano una loro api o servizio di fruizione immagini allo stato grezzo, imposta la uri qui che viene poi usata dal SYNC per poter fare una raccolta automatica di foto da processare internamente
-        public static readonly string keyFotoSelezioeDaTracciato = "Foto.SelezioneDaTracciato";
+        public static readonly string keyFotoSelezioneDaTracciato = "Foto.SelezioneDaTracciato";
+        //I20-999: dice che la selezione da tracciato e' stata messa da parte per questo record,
+        //perche' il tracciato la chiedeva ma la foto con quel nome non si e' trovata in archivio.
+        //Viaggia sempre, anche a false, cosi' chi la legge non deve distinguere "non disattivata"
+        //da "chiave assente".
+        public static readonly string keyFotoSelezioneDaTracciatoDisabled = "Foto.SelezioneDaTracciatoDisabled";
         public static readonly string keyMembriGruppoFoto = "membriGruppoFoto";
 
 

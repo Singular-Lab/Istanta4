@@ -3452,32 +3452,46 @@ namespace Istanta.Controllers
                 //Metto la chiave della FOTO del prodotto
 
                 //Controlliamo prima se il dato d addestramento espone il campo foto selezionata da lista
-                if (rec.recordInTracciato!.ContainsKey(GLOBAL_VARIABLES_FICO.keyFotoSelezioeDaTracciato))
+                //I20-999: la selezione da tracciato, quando c'e', comanda. Ma se la foto che nomina
+                //non si trova in archivio non si spegne la scelta: prima si azzeravano nome, guid e
+                //id, e la ref usciva senza immagine anche avendone una buona. Ora si segna che la
+                //selezione da tracciato e' stata messa da parte e si torna alla scelta normale, la
+                //stessa che gira quando la chiave non c'e' affatto.
+                bool selezioneDaTracciatoDichiarata = rec.recordInTracciato!.ContainsKey(GLOBAL_VARIABLES_FICO.keyFotoSelezioneDaTracciato);
+                bool fotoDaTracciatoTrovata = false;
+
+                if (selezioneDaTracciatoDichiarata)
                 {
                     //A prescindere da come andrà la foto è quella indicata da tracciato e per chiave dichiarata MI FIDO del tracciato
-                    string? nomeFotoSelezionata = rec.recordInTracciato[GLOBAL_VARIABLES_FICO.keyFotoSelezioeDaTracciato].ToString();
-                    FileInfo finfo_foto = new FileInfo(nomeFotoSelezionata!);
-                    string nomeSenzaEstensione = finfo_foto.Name.Replace(finfo_foto.Extension, "") + ".";
-                    //string[] ext_post_produzione = this.syncOptions.Value.extPostLavorazione;
-                    //string[] ext_grezzi = this.syncOptions.Value.extPreLavorazione;
-                    ArticoliFoto? artFotoSelezionatoDaLista = this.ctx.ArticoliFotos.Where(f => f.IdArticolo == artItem.Id && f.NomeReale.Contains(nomeSenzaEstensione))/* NULL-ORDER 7/9/2026: su PostgreSQL i NULL vengono PRIMA in ORDER BY DESC, su SQL Server dopo. Senza HasValue una foto con data_modifica vuota risulterebbe "la piu recente" e finirebbe nel volantino al posto di quella giusta. Vedi migrazione-mssql-postgres.md §12. */ .OrderByDescending(o => o.DataModifica.HasValue).ThenByDescending(o => o.DataModifica).FirstOrDefault();
+                    string? nomeFotoSelezionata = rec.recordInTracciato[GLOBAL_VARIABLES_FICO.keyFotoSelezioneDaTracciato].ToString();
+                    //Il nome si normalizza in un punto solo, che regge anche i valori inutilizzabili:
+                    //prima un nome vuoto faceva sollevare un'eccezione a FileInfo invece di
+                    //comportarsi come una foto che non si trova.
+                    string? nomeSenzaEstensione = Utility.FotoDaTracciato.NomeDaCercare(nomeFotoSelezionata);
+
+                    ArticoliFoto? artFotoSelezionatoDaLista = nomeSenzaEstensione == null
+                        ? null
+                        : this.ctx.ArticoliFotos.Where(f => f.IdArticolo == artItem.Id && f.NomeReale.Contains(nomeSenzaEstensione))/* NULL-ORDER 7/9/2026: su PostgreSQL i NULL vengono PRIMA in ORDER BY DESC, su SQL Server dopo. Senza HasValue una foto con data_modifica vuota risulterebbe "la piu recente" e finirebbe nel volantino al posto di quella giusta. Vedi migrazione-mssql-postgres.md §12. */ .OrderByDescending(o => o.DataModifica.HasValue).ThenByDescending(o => o.DataModifica).FirstOrDefault();
+
                     if (artFotoSelezionatoDaLista != null)
                     {
+                        fotoDaTracciatoTrovata = true;
                         rec.recordInTracciato[_key_foto] = artFotoSelezionatoDaLista.NomeReale;
                         rec.recordInTracciato[keyGuidFoto] = artFotoSelezionatoDaLista.GuidId;
                         rec.recordInTracciato[keyIdFoto] = artFotoSelezionatoDaLista.Id;
                         rec.hasFoto = 1;
                     }
-                    else
-                    {
-                        rec.recordInTracciato[_key_foto] = "";
-                        rec.recordInTracciato[keyGuidFoto] = "";
-                        rec.recordInTracciato[keyIdFoto] = 0;
-                    }
                 }
-                else
+
+                if (!selezioneDaTracciatoDichiarata || !fotoDaTracciatoTrovata)
                 {
                     rec = getFoto(artItem.ArticoliFotos!.Where(f => !f.Tipo.HasValue || f.Tipo == (Byte)TipoFoto.Foto).OrderByDescending(o => o.DataModifica).ToList(), rec, richiestaDatiReg, tItem);
+                }
+
+                //Viaggia sempre, anche a false: chi la legge non deve distinguere "non disattivata"
+                //da "chiave assente".
+                rec.recordInTracciato[GLOBAL_VARIABLES_FICO.keyFotoSelezioneDaTracciatoDisabled] =
+                    Utility.FotoDaTracciato.SelezioneDisattivata(selezioneDaTracciatoDichiarata, fotoDaTracciatoTrovata);
 
                     //ArticoliFoto? af = artItem.ArticoliFotos!.Where(f => !f.Tipo.HasValue || f.Tipo == (Byte)TipoFoto.Foto).OrderByDescending(o => o.DataModifica).FirstOrDefault();
                     //if (af != null)
@@ -3494,7 +3508,6 @@ namespace Istanta.Controllers
                     //    rec.recordInTracciato[_key_foto] = "";//artItem.Codice + ".psd";
                     //    rec.recordInTracciato[keyGuidFoto] = "";
                     //}
-                }
 
                 //Metto tutte le altre foto NON del prodotto
                 var fotoExtra = artItem.ArticoliFotos!.Where(f => f.Tipo.HasValue && f.Tipo != (Byte)TipoFoto.Foto).OrderByDescending(o => o.DataModifica).Select(s => new LogoBollo_ExtraNoAuto
