@@ -79,11 +79,8 @@ namespace Istanta.Models
                     .HasMaxLength(4000)
                     .HasColumnName("descrizione1");
 
-                //I20-988: la misura sta in un posto solo, condivisa col troncamento in
-                //importazione. Sui database gia' esistenti la colonna non si allarga da sola:
-                //va eseguita l'alterazione, perche' gli schemi si applicano solo alla creazione.
                 entity.Property(e => e.Ean)
-                    .HasMaxLength(Utility.Main.lunghezzaMassimaEan)
+                    .HasMaxLength(30)
                     .HasColumnName("ean");
 
                 entity.Property(e => e.Descrizione4)
