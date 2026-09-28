@@ -95,7 +95,7 @@ col suo nome.
 
 | membro | nota |
 |---|---|
-| `cercaChiaveValore` | esiste anche in `Trea/custom.js` e `Pac/custom.js`, ma quelle sono **loro copie**, non chiamate a questa |
+| `cercaChiaveValore` | esisteva anche in `Trea/custom.js` e `Pac/custom.js`, ma erano **loro copie**, non chiamate a questa; quelle due agenzie sono state poi rimosse del tutto |
 | `chiudiModalSync` | nessun chiamante |
 | `itemsInfami` | variabile mai letta |
 | `pagInfame` | variabile mai letta; l'unica assegnazione era commentata |

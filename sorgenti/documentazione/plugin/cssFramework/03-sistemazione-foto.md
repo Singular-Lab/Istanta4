@@ -17,7 +17,7 @@ Panoramica del file: [README.md](README.md).
 Con **`projection = true` calcola soltanto l'area occupata senza toccare il documento**: serve a
 sapere quanto spazio servirebbe, prima di decidere.
 
-Lo chiamano `indexNew.js`, `schedaRef.js`, `custom.js` in radice e le agenzie Edro21 e Pac, sempre
+Lo chiamano `indexNew.js`, `schedaRef.js`, `custom.js` in radice e l'agenzia Edro21, sempre
 dopo `getSpazioImpaginazione` e passandogli entrambi i risultati.
 
 ## Come lavora, in ordine

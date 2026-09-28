@@ -133,6 +133,11 @@ var cacheLoghi = {};
 let idKitLavorazione=0;
 let segnalazioniBoxImpaginato = [];
 
+/// Il pezzo di HTML di un bottone dei filtri: icona a sinistra, etichetta a destra.
+/// Non tocca la pagina, restituisce soltanto la stringa.
+///
+/// DA SPOSTARE (task di divisione): sta in filtri.js. E' l'unica riga di indexNew che
+/// parla dell'aspetto dei filtri, e qui non la trova nessuno.
 function getFiltroButtonMarkup(iconName, label) {
     return '<span style="display:flex;align-items:center;gap:6px;">'
         + '<img src="images/' + iconName + '" style="width:16px;height:16px;object-fit:contain;">'
@@ -157,6 +162,17 @@ ficoProcess.successScaricamentoFicoDataCallback=function (){
 //setMenaboInterface(0);
 
 setVersionePlugin();
+/// Scrive la versione in fondo al pannello, leggendola da manifest.json.
+///
+/// Il suffisso "(testmode)" non e' un dettaglio estetico: e' l'unico segno visibile che
+/// quella copia del Plugin sta parlando con la macchina di sviluppo invece che col server
+/// del cliente. Chi non lo nota lavora per ore contro i dati sbagliati.
+///
+/// Si chiama da sola, alla riga sopra la propria definizione.
+///
+/// DA SPOSTARE (task di divisione): con controllaVersionePubblicata e
+/// bloccaPerVersioneDisallineata in versionePlugin.js, che gia' esiste e tiene il
+/// confronto fra versioni. Qui restano tre funzioni di un concetto che ha gia' casa.
 function setVersionePlugin() {
     //leggiamo la versione da manifest.json version
     var versione = manifesto.version;
@@ -209,6 +225,13 @@ function controllaVersionePubblicata() {
     }
 }
 
+/// Copre il pannello con l'avviso a tutta pagina e non lo toglie piu': quando la versione
+/// installata non e' quella pubblicata, l'unica via d'uscita e' aggiornare il Plugin.
+///
+/// Riusa #istantaDownAlert, lo stesso riquadro del server irraggiungibile: sono due guasti
+/// diversi ma la risposta dell'operatore e' la stessa, fermarsi.
+///
+/// DA SPOSTARE (task di divisione): in versionePlugin.js, vedi setVersionePlugin.
 function bloccaPerVersioneDisallineata(avviso) {
     console.error("Code IDX-166 " + avviso.titolo + " - " + avviso.dettaglio);
 
@@ -217,6 +240,17 @@ function bloccaPerVersioneDisallineata(avviso) {
     $("#istantaDownAlert").css("display", "flex");
 }
 
+/// Mette in Links/Loghi le due immagini che il Plugin usa quando una foto manca -
+/// nofoto.png e fotoNoFound.png - copiandole da images/ se non ci sono gia'.
+///
+/// Sono segnaposto, non loghi: finiscono li' perche' quella e' la cartella che InDesign
+/// ha gia' collegata, cosi' il riquadro mostra qualcosa invece di restare vuoto.
+///
+/// I due blocchi sono identici, uno per file: il try esterno e' il modo storto di chiedere
+/// "il file c'e'?", perche' la lettura fallisce se manca.
+///
+/// DA SPOSTARE (task di divisione): nel js delle foto, insieme a chi quelle immagini le
+/// usa. Qui non c'entra con niente di quello che la circonda.
 function checkForLoghiCore(){
     //cerchiamo nella cartella pathLavorazioni + "Links/Loghi" se esitono le foto nofoto e fotonofound
     //se non esistono li copiamo dalla cartella images e li inseriamo nella cartella Links/Loghi
@@ -260,6 +294,15 @@ let indesignEvents = new InddEvents();
 const gC = new garbageCollector();
 //I20-968: rende invisibili gli elementi del box che l'operatore ha messo in noRender.
 //L'elenco arriva dal record consegnato da Istanta, letto dai meta della lavorazione.
+/// I20-968: rende invisibili gli elementi del box che l'operatore ha messo in noRender.
+/// L'elenco arriva dal record consegnato da Istanta, letto dai meta della lavorazione.
+///
+/// Gira in coda alla composizione del box, quando tutto e' gia' al suo posto: e' una
+/// sottrazione finale, non una regola di impaginazione.
+///
+/// Il conteggio finale distingue due guasti che altrimenti si confonderebbero: se i marcati
+/// sono piu' di quelli spenti, l'elenco arriva ma le label del box non corrispondono alle
+/// chiavi salvate.
 function applicaNoRenderAgliElementiDelBox(box, elementiNoRender) {
     if (box == null || elementiNoRender == null || elementiNoRender.length == 0) {
         return;
@@ -293,14 +336,23 @@ function applicaNoRenderAgliElementiDelBox(box, elementiNoRender) {
         console.error("Impossibile applicare il noRender agli elementi del box", e);
     }
 }
+/// Consegna un elemento al garbage collector perche' lo rimuova piu' tardi.
+/// Con una chiave, la rimozione avviene solo quando quella chiave viene attivata.
+///
+/// Una riga sola che inoltra a gC. Le tre funzioni qui sotto sono uguali: esistono perche'
+/// nel resto del file gC non e' mai nominato direttamente.
 function addToGarbageCollector(element, keyToDelete = null) {
     gC.Add(element, keyToDelete);
 }
 
+/// Chiede al garbage collector una chiave nuova, da dare poi agli elementi da rimuovere
+/// insieme. Inoltra a gC e basta.
 function requireKeyForGarbage(){
     return gC.generateKey();
 }
 
+/// Attiva una chiave: da questo momento il garbage collector puo' rimuovere tutti gli
+/// elementi che erano stati messi in attesa con quella chiave. Inoltra a gC e basta.
 function activateKeyForGarbage(key){
     return gC.activateKey(key);
 }
@@ -667,6 +719,10 @@ indesignEvents.addEventListener(indesignEvents.EVENT_NEW_MULTISELECTION, async f
 
 
 
+/// Toglie il messaggio a tutta larghezza e rimette in vista il pannello.
+///
+/// Se non c'e' un documento in lavorazione non fa niente: senza documento il messaggio
+/// e' l'unica cosa che ha senso mostrare, e toglierlo lascerebbe una schermata vuota.
 function clearNarrow()
 {
     if (docInLavorazione == null){
@@ -677,6 +733,14 @@ function clearNarrow()
     $("#mainContent").show();
 }
 
+/// Mostra al posto del pannello una riga di testo a tutta larghezza - "Nessun documento
+/// aperto", "Selezionato il campo X" - con eventuali pulsanti sotto.
+///
+/// E' il modo in cui il Plugin dice perche' non si puo' lavorare. I pulsanti servono a dare
+/// una via d'uscita dentro al messaggio stesso: senza, l'operatore puo' solo chiudere e
+/// riaprire il pannello.
+///
+/// Con hideMainContent a false il messaggio convive col pannello invece di sostituirlo.
 function setNarrow(msg, buttons = [], hideMainContent = true)
 {
     $("#narrow").css("display","block");
@@ -706,18 +770,26 @@ function setNarrow(msg, buttons = [], hideMainContent = true)
     }
 }
 
+/// Inoltra a schedaRef.selectSchedaRef. Esiste perche' la chiama index.html da un onclick,
+/// e li' dentro si vedono solo le funzioni globali.
 function selectSchedaRef(enumSchedaRef){
     schedaRef.selectSchedaRef(enumSchedaRef);
 }
 
+/// Inoltra a schedaRef.SchermataRaggruppamento. Chiamata da un onclick di index.html.
+///
+/// Il parametro enumSchedaRef lo riceve e non lo passa: la funzione chiamata non ne vuole.
+/// E' un residuo, non un dimenticato - togliendolo non cambia niente.
 function raggruppa(enumSchedaRef){
     schedaRef.SchermataRaggruppamento();
 }
 
+/// Inoltra a schedaArtwork.raggruppaSottoArtwork. Chiamata da un onclick di index.html.
 function raggruppaSottoArtwork(){
     schedaArtwork.raggruppaSottoArtwork();
 }
 
+/// Inoltra a schedaArtwork.eliminaArtwork. Chiamata da un onclick di index.html.
 function eliminaArtwork(){
     schedaArtwork.eliminaArtwork();
 }
@@ -750,6 +822,22 @@ function eliminaArtwork(){
 //     // }
 // }
 
+/// Il Plugin ha due interruttori indipendenti - c'e' internet (isOnline) e Istanta risponde
+/// (istantaState) - e questa funzione traduce la loro combinazione in cosa si vede.
+///
+/// Il colore della barra in basso e' il riassunto: verde si lavora, arancione Istanta e'
+/// giu', rosso non c'e' rete.
+///
+/// Il caso interessante e' Istanta giu' CON una lavorazione gia' aperta: li' non si mostra
+/// il login, si tira dritto. Il tracciato e' gia' in locale, e fermare chi sta impaginando
+/// perche' il server ha un problema sarebbe un danno inutile.
+///
+/// Quando invece si e' collegati e tutto risponde, prima di aprire il documento carica i
+/// due bolli di ripiego (nofoto, fotoNoFound) nel pluginMiddleware: servono dopo, quando
+/// una foto non si trova, e allora sarebbe tardi per andarli a chiedere.
+///
+/// La chiamano gli eventi di rete e di sessione: non e' una funzione che si invoca, e' la
+/// risposta a un cambiamento.
 async function cambioDiStatoDelSistema()
 {
     $("#modalita").text(isOnline?"ONLINE":"OFFLINE");
@@ -854,6 +942,15 @@ async function cambioDiStatoDelSistema()
 //altro lo abbasserebbe, quindi restando su terrebbe il plugin fermo anche a lavorazione trovata.
 //Se la lavorazione manca ancora, initDocumentInLavorazione rimette il messaggio col suo pulsante.
 var riletturaDocumentoInCorso = false;
+/// I20-936: rilegge la cartella del documento senza chiudere il pannello.
+///
+/// Il lucchetto (policyIsLocked) va tolto per primo: l'ha alzato il blocco che ha mostrato
+/// il messaggio e nessun altro lo abbasserebbe, quindi restando su terrebbe il Plugin fermo
+/// anche a lavorazione trovata. Se la lavorazione manca ancora,
+/// initDocumentInLavorazione rimette il messaggio col suo pulsante.
+///
+/// riletturaDocumentoInCorso impedisce che due clic di seguito avviino due riletture: il
+/// finally la riabbassa sempre, anche se l'inizializzazione ha lanciato.
 async function rileggiDocumentoInLavorazione()
 {
     if (riletturaDocumentoInCorso)
@@ -874,6 +971,26 @@ async function rileggiDocumentoInLavorazione()
     }
 }
 
+/// Da un documento InDesign aperto ricava tutto il resto: la cartella di lavoro, il kit
+/// associato, il tracciato, i percorsi di sistema, l'interfaccia giusta.
+///
+/// E' il passaggio da "c'e' un file aperto" a "si puo' lavorare", e finisce in uno di tre
+/// posti: il pannello operativo, la scelta del kit, o un messaggio che spiega cosa manca.
+///
+/// Due cose non ovvie:
+///
+/// - il tipo di lavorazione 2 cambia il bottone principale da Conteggio a Impagina e
+///   nasconde mezzo menu. Non e' una preferenza: quella lavorazione non ha referenze da
+///   aggiungere, quindi quei comandi non avrebbero su cosa agire.
+/// - chi non e' superAdmin e trova un documento senza lavorazione non viene mandato alla
+///   scelta del kit: viene bloccato con un messaggio e un pulsante per rileggere. La
+///   lavorazione gliela deve creare un amministratore.
+///
+/// DIFETTO (I20-1002, da correggere in un task a parte): la riga
+/// "while (await !checkPercorsi())" e' await applicato alla NEGAZIONE della promise, non
+/// al suo risultato. !promise e' sempre false, quindi il ciclo non gira mai: checkPercorsi
+/// viene chiamata una volta sola e il suo esito ignorato. Andava scritta
+/// "while (!(await checkPercorsi()))". Lo stesso errore e' in initLibroInLavorazione.
 async function initDocumentInLavorazione()
 {
     if (docInLavorazione == null)
@@ -1024,6 +1141,21 @@ async function initDocumentInLavorazione()
     $("#homeImage").click();
 }
 
+/// L'equivalente di initDocumentInLavorazione quando invece di un documento e' aperto un
+/// libro InDesign: si entra qui solo se docInLavorazione e' null.
+///
+/// Un libro e' un elenco di .indd, e il Plugin lo lavora tutto insieme. Per sapere quali
+/// file sono lavorabili legge lavorazioni.json nella cartella del libro e tiene solo quelli
+/// che ci compaiono: gli altri sono file che stanno nel libro ma non appartengono a questa
+/// lavorazione.
+///
+/// Lo stato di jobImpaginazioneLibro decide cosa si vede, ed e' persistente fra una
+/// sessione e l'altra: 0 mai partito, 1 interrotto a meta' (il bottone diventa CONTINUA
+/// IMPAGINAZIONE), 2 e 4 finito (si passa all'esportazione), 3 esportazione interrotta.
+/// E' quello che permette di riprendere un libro lasciato a meta' il giorno prima.
+///
+/// DIFETTO (I20-1002): "await !checkPercorsi()" come in initDocumentInLavorazione - vedi
+/// li' la spiegazione. Qui il risultato finisce in _resTest, che viene solo stampato.
 async function initLibroInLavorazione()
 {
     if (isOnline && istantaState != IstantaState.NotLogged) {
@@ -1153,6 +1285,15 @@ async function initLibroInLavorazione()
 
 }
 
+/// Apre la finestra di esportazione del libro mettendoci dentro una casella per ogni tipo
+/// di export che serve davvero.
+///
+/// I tipi non sono un elenco fisso: si ricavano da quello che e' stato impaginato. Per ogni
+/// voce della coda si guarda l'ultimo elemento, si leggono i Kit.Names delle sue referenze,
+/// e da ogni guidIdTipoExport si risale al tipo in ficoProcess.sourceTipiExport. Senza
+/// ripetizioni, perche' lo stesso tipo compare in ogni referenza.
+///
+/// Cosi' all'operatore vengono proposte solo le esportazioni che quel libro puo' produrre.
 async function apriModalEsportaLibro(){
     Utility.apriModal("dialogEsportaLibro", "Esporta Libro");
     //In jobImpaginazioneLibro.queue ci sono i tipi di esportazione che ci interessano
@@ -1241,6 +1382,27 @@ async function apriModalEsportaLibro(){
 
 }
 
+/// Esporta tutti i file del libro, uno dopo l'altro, in tutti i formati scelti nella
+/// finestra aperta da apriModalEsportaLibro.
+///
+/// E' l'operazione piu' lunga del Plugin: apre ogni .indd, lo inizializza, produce ogni
+/// esportazione, lo richiude salvando. Gli eventi restano spenti per tutta la durata
+/// (setBusy), altrimenti ogni apertura di documento farebbe ripartire l'analisi.
+///
+/// E' ripartibile, ed e' la ragione di meta' del codice. Dopo ogni file esportato lo stato
+/// finisce su disco (registraStatoLavorazioneLibro): se il processo si interrompe, allo
+/// stato 3 si rientra da dove si era - stesso file, stesso tipo di export, pagina
+/// successiva all'ultima riuscita. I due controlli su lastItemExport.pag == tot servono a
+/// saltare cio' che era gia' finito.
+///
+/// Due conferme sbarrano la strada quando lo stato non e' quello previsto: se e' gia' stato
+/// esportato (4) si chiede se ripetere, se l'impaginazione non e' finita (0 o 1) si avverte
+/// che forzando non si potra' piu' impaginare - e si spiega come tornare indietro,
+/// cancellando listaImpaginata<idKit>.json.
+///
+/// _processJob aspetta con un ciclo di sleep che esitoFinale smetta di essere null:
+/// ficoProcess.esportaMateriale lavora a callback e non restituisce una promise, quindi
+/// non c'e' niente da attendere.
 async function esportaLibro(){
     try{
 
@@ -1440,6 +1602,19 @@ async function esportaLibro(){
     }
 }
 
+/// Dovrebbe leggere il nome del documento aperto, ricavarne promo, canale, area e formato,
+/// riempire le quattro tendine della scelta kit e, se le trova tutte e quattro, far partire
+/// da sola la ricerca del kit. Cosi' l'operatore che apre un file gia' battezzato con le
+/// regole del cliente non deve ridigitare quello che il nome contiene gia'.
+///
+/// DIFETTO (I20-1002, da correggere in un task a parte): NON FA NIENTE DI TUTTO QUESTO.
+/// campiDecodificati e' messa a null e non viene mai riassegnata - il risultato di
+/// customAgenzia.decodificaNomeFile viene chiamato e buttato via. Manca l'assegnazione.
+/// Di conseguenza il blocco da "if(campiDecodificati != null)" in giu' e' irraggiungibile,
+/// e l'unica cosa che questa funzione fa davvero e' nascondere #actMassivaSuKit.
+///
+/// Non si nota perche' non c'e' un errore: le tendine restano vuote, e si compilano a mano
+/// come se l'automatismo non fosse mai stato previsto.
 async function autoCompilazioneCampiKit(){
 
     var campiDecodificati = null;
@@ -1495,6 +1670,27 @@ async function autoCompilazioneCampiKit(){
 
 //Funzione che scarica da Istanta2 il contenuto del kit
 
+/// Scarica da Istanta il tracciato del kit, lo salva in listaKit<idKit>.json nella cartella
+/// della lavorazione, e rilegge subito il file appena scritto per ridisegnare il tracciato.
+///
+/// Il file su disco e' quello che rende possibile lavorare con Istanta irraggiungibile:
+/// finche' c'e', leggiContenutoKit basta a se' stessa.
+///
+/// Una richiesta gia' in volo viene annullata (xhrInProcess.abort): l'operatore che preme
+/// due volte non si ritrova due tracciati che si sovrascrivono a vicenda.
+///
+/// I20-981, due correzioni che vanno lette insieme:
+///
+/// - il rinfresco dell'interfaccia sta in un try suo. Prima era nello stesso try della
+///   callback, e un errore li' dentro - leggiContenutoKit rifa' il tracciato, e con lui la
+///   riga del bottone appena premuto - faceva saltare la callback: il Report Integrita' non
+///   partiva mai e l'operatore doveva richiederlo.
+/// - onerror ora avvisa, tramite onErrore. Prima l'errore non arrivava a nessuno e chi
+///   attendeva la lista restava appeso per sempre.
+///
+/// DA SPOSTARE (task di divisione): questa, scaricaContenutoKitAsync e leggiContenutoKit
+/// sono il kit in lavorazione, non la schermata. Starebbero in ficoProcess.js, che gia'
+/// tiene la ricerca e la selezione del kit.
 function scaricaContenutoKit(idKit, noCacheValue = null, callback = null, skipMostraTracciato = false, onErrore = null)
 {
     if(idKit == null){
@@ -1619,6 +1815,14 @@ function scaricaContenutoKit(idKit, noCacheValue = null, callback = null, skipMo
 //nessuno sapeva piu' se il download fosse andato bene: onload chiudeva con un finally che
 //spegneva il loading mentre la callback era ancora in volo e onerror non avvisava nessuno.
 //Chi attende la lista ora ha una Promise che si risolve o fallisce.
+/// I20-981: la lista del kit attesa come si deve.
+///
+/// Avvolge scaricaContenutoKit in una Promise che si risolve col risultato o fallisce con
+/// l'errore. Prima chi aveva bisogno della lista doveva passare una callback e sperare:
+/// onload chiudeva con un finally che spegneva il loading mentre la callback era ancora in
+/// volo, e onerror non avvisava nessuno.
+///
+/// DA SPOSTARE (task di divisione): in ficoProcess.js con scaricaContenutoKit.
 function scaricaContenutoKitAsync(idKit, noCacheValue = null, skipMostraTracciato = false) {
     return new Promise((resolve, reject) => {
         try {
@@ -1640,6 +1844,16 @@ function scaricaContenutoKitAsync(idKit, noCacheValue = null, skipMostraTracciat
 }
 
 //Funzione che legge in locale il contentuo del kit grazie al file json ultimo scaricato
+/// Rilegge da disco listaKit<idKit>.json e lo mette in contenutoKitInLavorazione, poi
+/// ridisegna il tracciato.
+///
+/// Non chiede niente al server: e' la meta' offline di scaricaContenutoKit, ed e' quella
+/// che si usa all'avvio. L'operatore aggiorna quando decide lui.
+///
+/// skipMostraTracciato serve a chi il tracciato lo ridisegna per conto suo dopo, e non
+/// vuole pagarlo due volte.
+///
+/// DA SPOSTARE (task di divisione): in ficoProcess.js con scaricaContenutoKit.
 function leggiContenutoKit(idKit, skipMostraTracciato = false)
 {
     console.log("leggiContenutoKit("+ idKit +")");
@@ -1656,6 +1870,14 @@ function leggiContenutoKit(idKit, skipMostraTracciato = false)
 // #endregion
 
 
+/// Mostra il modulo di accesso e nasconde il resto.
+///
+/// I20-956: se l'operatore ha chiesto di ricordare le credenziali, le ritrova gia' scritte
+/// nei campi, col segno di spunta alzato. Il Plugin non entra da solo: l'accesso resta un
+/// gesto suo. Dopo un logout non c'e' nulla da rimettere, perche' il logout le dimentica.
+///
+/// DA SPOSTARE (task di divisione): con login, logout e setFinestrePerRuolo in un js
+/// dell'accesso. Sono quattro funzioni di un concetto solo.
 async function showLogin()
 {
     console.log("Devo mostrare il form di login");
@@ -1679,14 +1901,18 @@ async function showLogin()
 
 }
 
+/// Restituisce l'elenco delle aree caricato da ficoProcess. Una riga di inoltro, perche'
+/// index.html vede solo le globali.
 function getSourceAree(){
     return ficoProcess.sourceAree;
 }
 
+/// Restituisce l'elenco dei canali caricato da ficoProcess. Vedi getSourceAree.
 function getSourceCanali(){
     return ficoProcess.sourceCanali;
 }
 
+/// Restituisce l'elenco dei formati caricato da ficoProcess. Vedi getSourceAree.
 function getSourceFormati(){
     return ficoProcess.sourceFormati;
 }
@@ -1696,6 +1922,13 @@ const bOpt1 = document.getElementById("bOpt1Advanced");
 const bOpt2 = document.getElementById("bOpt2Advanced");
 var lastSelections = [];
 
+/// Rimette i due bottoni grossi al loro aspetto normale: Conteggio a sinistra, Impagina a
+/// destra.
+///
+/// Serve dopo che initDocumentInLavorazione li ha cambiati per una lavorazione di tipo 2,
+/// che di bottoni ne mostra uno solo.
+///
+/// DA SPOSTARE (task di divisione): in filtri.js con getFiltroButtonMarkup.
 function setFiltroButtonsDefaultMarkup() {
     if (bOpt1 != null) {
         bOpt1.innerHTML = getFiltroButtonMarkup('conteggio.png', 'Conteggio');
@@ -1746,6 +1979,11 @@ async function puntoDiAperturaFile(percorso) {
     }
 }
 
+/// Apre il dialogo di sistema per scegliere un file e ne restituisce nome, percorso e
+/// contenuto binario. Se l'operatore annulla, restituisce undefined.
+///
+/// Il punto in cui si apre lo decide puntoDiAperturaFile qui sopra: di norma la cartella
+/// della foto che si sta sostituendo, cosi' non si parte ogni volta dalla home.
 async function selectFile(percorsoDiPartenza = null) {
     // Ottieni il file tramite un dialogo
     const fileEntry = await storage.localFileSystem.getFileForOpening(
@@ -1771,6 +2009,8 @@ async function selectFile(percorsoDiPartenza = null) {
 }
 
 
+/// Conta senza impaginare: chiama conteggiaImpagina(false). Attaccata al bottone di
+/// sinistra di index.html.
 function conteggia() {
     conteggiaImpagina(false);
 }
@@ -1784,11 +2024,18 @@ if (bOpt2 != null){
     };
 }
 
+/// Impagina davvero: chiama conteggiaImpagina(true). Attaccata al bottone di destra, che
+/// prima chiede conferma - e' l'operazione che modifica il documento.
 function impagina() {
     console.log("Impagino (modalita standard)");
     conteggiaImpagina(true);
 }
 
+/// Avvia l'impaginazione di tutti i file del libro, mettendoli in coda uno dietro l'altro.
+///
+/// E' il gemello di esportaLibro sul lato impaginazione: stessa coda, stesso stato su
+/// disco, stessa possibilita' di riprendere. Prepara jobImpaginazioneLibro e poi lascia
+/// fare a impaginaLibroTask, che si richiama per ogni file.
 async function impaginaLibro() {
     //Controllo se il libro è effettivamente attivo
     if (libroInLavorazione == null) {
@@ -1866,6 +2113,20 @@ async function impaginaLibro() {
 
 }
 
+/// Impagina un file del libro e poi richiama se stessa sul successivo: la ricorsione E' la
+/// coda. Finito l'ultimo, lo stato passa a 2 e la coda si svuota.
+///
+/// Apre il file, lo inizializza come se l'operatore l'avesse aperto a mano, impagina,
+/// chiude salvando. L'indice viene scritto su disco PRIMA di cominciare, non dopo: se
+/// InDesign muore a meta', al riavvio si sa a che punto si era. Un file gia' completo
+/// (lastItem.pag == tot) viene saltato senza nemmeno aprirlo.
+///
+/// La scelta sulle foto si fa una volta sola, al primo file. Col pacchetto completo
+/// spuntato si scarica tutto prima di partire; senza, si scaricano solo i loghi - e solo
+/// all'indice 0, perche' i loghi sono gli stessi per tutti i file del libro.
+///
+/// conteggiaImpagina lavora a callback, quindi viene avvolta in una Promise per poterla
+/// aspettare. Il terzo argomento e' la pagina da cui riprendere.
 async function impaginaLibroTask(indice)
 {
     //Blocco gli events
@@ -1999,6 +2260,11 @@ async function impaginaLibroTask(indice)
 
 }
 
+/// Rilegge da disco lo stato del libro: <nomeLibro>_register.json, nella cartella del
+/// libro. Restituisce null se il file non c'e' ancora.
+///
+/// E' questo file che rende ripartibili impaginazione ed esportazione: tiene lo stato, la
+/// coda dei documenti e, per ognuno, l'ultima pagina andata a buon fine.
 async function leggiStatoLavorazioneLibro()
 {
     let _libroFilePath = await libroInLavorazione.filePath; 
@@ -2009,6 +2275,15 @@ async function leggiStatoLavorazioneLibro()
     return file;
 }
 
+/// Scrive su disco jobImpaginazioneLibro, nello stesso file che legge
+/// leggiStatoLavorazioneLibro.
+///
+/// Viene chiamata dopo ogni passo - non a fine operazione - ed e' proprio quello a renderle
+/// riprendibili: quello che c'e' nel file e' sempre quello che e' gia' stato fatto.
+///
+/// La riga "file== readFile(filePath)" e' un doppio uguale al posto di un uguale: e' un
+/// confronto che non assegna niente. Non fa danno perche' quella variabile non viene poi
+/// letta, ma e' un refuso.
 async function registraStatoLavorazioneLibro()
 {
     let _libroFilePath = await libroInLavorazione.filePath; 
@@ -2029,6 +2304,14 @@ async function registraStatoLavorazioneLibro()
 
 }
 
+/// Toglie dal documento tutti i loghi e i bolli messi in cache e svuota la cache.
+///
+/// I loghi vengono piazzati durante l'impaginazione e tenuti da parte per riusarli: quando
+/// l'operazione finisce, o ricomincia, quelli rimasti in giro vanno rimossi, altrimenti si
+/// sommano a quelli del giro successivo.
+///
+/// DA SPOSTARE (task di divisione): nel js delle foto. E' gestione di immagini piazzate,
+/// non interfaccia.
 function rimuoviSimboli() {
     for (var key in cacheLoghi) {
         if (cacheLoghi[key] != null && cacheLoghi[key].isValid) {
@@ -2038,6 +2321,16 @@ function rimuoviSimboli() {
     cacheLoghi = {};
 }
 
+/// L'idRec di un record, da qualunque delle forme in cui arriva: idRec, IdRec, o la chiave
+/// letterale "idRec".
+///
+/// I record passano da Istanta, dal file su disco e dalle etichette del documento, e lungo
+/// la strada le maiuscole non si conservano. Questa funzione esiste per non dover ricordare
+/// ogni volta quale delle tre forme ha in mano chi chiama.
+///
+/// DA SPOSTARE (task di divisione): questa e le cinque qui sotto sono l'identita' di una
+/// referenza - come si legge, come si scrive in un'etichetta, come si confronta. Le usa
+/// anche griglia.js. Starebbero in un js loro, o in utility.js.
 function getIdRecFromItemRef(itemRef) {
     if (itemRef == null) {
         return null;
@@ -2058,6 +2351,11 @@ function getIdRecFromItemRef(itemRef) {
     return null;
 }
 
+/// Il codice gruppo di un record: "Scatto.CodiceGruppo" se c'e', altrimenti "codice".
+/// Stringa vuota se non c'e' nessuno dei due.
+///
+/// Due nomi per la stessa cosa, come per getIdRecFromItemRef: il primo e' come arriva dal
+/// tracciato, il secondo come lo scrive il Plugin.
 function getCodiceGruppoFromItemRef(itemRef) {
     if (itemRef == null) {
         return "";
@@ -2074,6 +2372,14 @@ function getCodiceGruppoFromItemRef(itemRef) {
     return "";
 }
 
+/// Costruisce l'etichetta con cui un elemento del documento dichiara a quale referenza
+/// appartiene: "codice_associato$<codice>$<idRec>".
+///
+/// Ci vogliono entrambi. Il codice gruppo da solo non basta, perche' la stessa referenza
+/// puo' comparire piu' volte nella stessa lavorazione: e' l'idRec a dire quale.
+///
+/// Lancia invece di restituire vuoto: un'etichetta sbagliata non si nota, e lega
+/// l'elemento alla referenza sbagliata per sempre.
 function makeCodiceAssociatoLabel(codice, idRec) {
     if (codice == null || codice === "") {
         throw new Error("Codice gruppo mancante per codice_associato");
@@ -2086,6 +2392,11 @@ function makeCodiceAssociatoLabel(codice, idRec) {
     return "codice_associato$" + codice.toString() + "$" + parseInt(idRec);
 }
 
+/// Da un record ricava la coppia {codice, idRec} che lo identifica, usando le due funzioni
+/// qui sopra. Lancia se manca uno dei due.
+///
+/// E' la chiave con cui il Plugin riconosce una referenza in ogni elenco: esclusi, filtri,
+/// griglia.
 function makeCodiceFiltroFromItemRef(itemRef) {
     var codice = getCodiceGruppoFromItemRef(itemRef);
     var idRec = getIdRecFromItemRef(itemRef);
@@ -2104,6 +2415,11 @@ function makeCodiceFiltroFromItemRef(itemRef) {
     };
 }
 
+/// Dice se due coppie {codice, idRec} indicano la stessa referenza.
+///
+/// Il confronto e' esplicito - codice come stringa, idRec come intero - perche' le due
+/// coppie possono venire da fonti diverse: una letta da JSON, l'altra costruita in memoria,
+/// e li' un 12 e un "12" sono la stessa referenza.
 function sameCodiceFiltro(a, b) {
     if (a == null || b == null) {
         return false;
@@ -2115,6 +2431,11 @@ function sameCodiceFiltro(a, b) {
         parseInt(a.idRec) === parseInt(b.idRec);
 }
 
+/// Aggiunge a una querystring in costruzione i due campi di una coppia
+/// {codice, idRec}, nella forma "<rootPath>.<propName>[<i>].codice=...&...idRec=...".
+///
+/// E' il formato che si aspetta il model binder di ASP.NET dall'altra parte: e' cosi' che
+/// un elenco di referenze arriva al server come lista di oggetti invece che di stringhe.
 function addCodiceFiltroToReq(req, rootPath, propName, index, codiceFiltro) {
     req += rootPath + "." + propName + "[" + index + "].codice=" + encodeURIComponent(codiceFiltro.codice) + "&";
     req += rootPath + "." + propName + "[" + index + "].idRec=" + encodeURIComponent(codiceFiltro.idRec) + "&";
@@ -3956,6 +4277,22 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
 //Erano scritti dentro impaginazioneSingoloIndd, e per averli la preanalisi del Report
 //Integrita' doveva passare da quella funzione anche quando non c'era nulla da impaginare.
 //Qui stanno una volta sola, cosi' le due strade non possono divergere.
+/// Da un gruppo di record estrae quello primario (StatoSelezione == 1) e ne ricava tutto
+/// cio' che serve a confrontare il box col tracciato: campi compilati, campi cancellati,
+/// foto, foto extra.
+///
+/// Se il primario ha un sottogruppo, e' il sottogruppo a comandare: e' li' che stanno i
+/// dati con cui il box e' stato davvero impaginato.
+///
+/// I20-968: gli elementi in noRender stanno sul record, non sul sottogruppo. Se si impagina
+/// a partire dal sottogruppo la chiave va portata avanti, altrimenti una reimpaginazione
+/// riporta visibili gli elementi che l'operatore aveva nascosto.
+///
+/// La lista foto si compone di due sorgenti: i membri del gruppo foto scelti
+/// (statoSelezione == 2) piu' la foto principale, se ha un nome.
+///
+/// DA SPOSTARE (task di divisione): con l'accorpamento del Report Integrita', questa,
+/// boxDellElementoMappa e preAnalisiBoxMappato vanno nel js del report.
 function datiPrimarioPerConfronto(records) {
     var primario = (records || []).find(f => f.recordInTracciato["StatoSelezione"] == 1);
     if (primario == null) {
@@ -4013,6 +4350,16 @@ function datiPrimarioPerConfronto(records) {
 //box; in quel caso si ripetono, nell'ordine, le ricerche che faceva prima
 //impaginazioneSingoloIndd: per id nella pagina attesa, per id in tutto il documento, per
 //codice gruppo fra i gruppi della pagina.
+/// I20-981: il box di cui la mappa dell'impaginato ha gia' il riferimento.
+///
+/// La mappa tiene il gruppo InDesign in `ref`: si usa quello. Si torna a cercarlo solo se
+/// il riferimento non e' piu' valido, perche' il sync dei numeri di pagina puo' aver rifatto
+/// il box; in quel caso si ripetono, nell'ordine, le ricerche che faceva prima
+/// impaginazioneSingoloIndd: per id nella pagina attesa, per id in tutto il documento, per
+/// codice gruppo fra i gruppi della pagina.
+///
+/// L'ordine non e' casuale: va dalla ricerca piu' stretta alla piu' larga, perche' ognuna
+/// costa piu' della precedente.
 function boxDellElementoMappa(elementoMappa) {
     if (elementoMappa == null) {
         return null;
@@ -4048,6 +4395,20 @@ function boxDellElementoMappa(elementoMappa) {
 //preanalisi non impagina nulla, quindi della pagina non ha bisogno.
 //Il box si puo' passare gia' trovato: chi richiude la scheda referenza aperta dal report ce
 //l'ha in mano, e puo' essere un box rifatto, che nell'elemento di mappa non c'e' ancora.
+/// I20-981: la preanalisi di un box che la mappa ha gia' trovato.
+///
+/// Il Report Integrita' passava da impaginazioneSingoloIndd solo per arrivare qui, e per
+/// ogni box pagava la materializzazione di tutte le pagine del documento
+/// (pages.everyItem().getElements()), una page.select() e una ricerca dentro
+/// page.allPageItems o, peggio, dentro doc.allPageItems: tutte cose che la mappa aveva gia'
+/// risolto. La preanalisi non impagina nulla, quindi della pagina non ha bisogno.
+///
+/// Il box si puo' passare gia' trovato: chi richiude la scheda referenza aperta dal report
+/// ce l'ha in mano, e puo' essere un box rifatto, che nell'elemento di mappa non c'e'
+/// ancora.
+///
+/// Senza primario non si confronta niente, e nel report non e' un errore da mostrare
+/// all'operatore: il box finisce fra quelli senza analisi.
 async function preAnalisiBoxMappato(records, elementoMappa, boxGiaTrovato = null) {
     var dati = datiPrimarioPerConfronto(records);
     if (dati == null) {
@@ -4074,6 +4435,11 @@ async function preAnalisiBoxMappato(records, elementoMappa, boxGiaTrovato = null
 }
 
 //I nomi delle pagine del documento in lavorazione, nell'ordine in cui stanno nel documento.
+/// I nomi delle pagine del documento in lavorazione, nell'ordine in cui stanno nel
+/// documento. Elenco vuoto se non c'e' un documento aperto.
+///
+/// Si usano i nomi e non i numeri perche' in InDesign le due cose non coincidono: una
+/// sezione puo' far ripartire la numerazione, e il nome e' quello che l'operatore legge.
 function nomiPagineDelDocumento() {
     var nomi = [];
 
@@ -4846,6 +5212,13 @@ async function fixRefImpaginata() {
 
 }
 
+/// Avvolge schedaRef.getSchedaRef, che lavora a callback, in una Promise.
+///
+/// Il primo parametro si chiama come il modulo globale schedaRef e lo nasconde dentro il
+/// corpo della funzione. Funziona perche' chi la chiama passa proprio quel modulo, ma e' un
+/// nome che inganna: qui dentro `schedaRef` non e' la globale.
+///
+/// DA SPOSTARE (task di divisione): in schedaRef.js, accanto alla funzione che avvolge.
 function getSchedaRefAsync(schedaRef, codiceGruppo, idRec = 0) {
     return new Promise(function (resolve, reject) {
         schedaRef.getSchedaRef(codiceGruppo, function (errore, data) {
@@ -4859,6 +5232,20 @@ function getSchedaRefAsync(schedaRef, codiceGruppo, idRec = 0) {
     });
 }
 
+/// Mette da parte un avviso nato durante l'impaginazione di un box, in attesa che
+/// finalizzaSegnalazioni lo tiri fuori.
+///
+/// Le segnalazioni non si mostrano subito: un box ne puo' produrre diverse, e vanno
+/// raccolte per essere presentate insieme e in ordine di gravita'. Le priorita' sono 1
+/// alta, 2 media, 3 bassa.
+///
+/// impostazioniBollino ha sei posizioni - testo, colore, e altre quattro - e il chiamante
+/// puo' passarne meno: le mancanti vengono completate coi valori di riferimento. E' la
+/// ragione della scaletta di if, che altrimenti non avrebbe senso.
+///
+/// DA SPOSTARE (task di divisione): questa, finalizzaSegnalazioni e stampaSegnalazioni
+/// sono un meccanismo solo, e usano la globale segnalazioniBoxImpaginato. Starebbero in un
+/// js loro, o nel js del report.
 function addSegnalazione(msg, typeMessage = "Error", priority = 2, applicaBollino = true, impostazioniBollino = ["", "red", null, 0, null, false], key = null) {
     //le priority sono 1 (alta), 2 (media), 3 (bassa)
     //aggiungiamo la segnalazione in segnalazioniBoxImpaginato
@@ -4889,6 +5276,19 @@ function addSegnalazione(msg, typeMessage = "Error", priority = 2, applicaBollin
     segnalazioniBoxImpaginato.push({ msg: msg, typeMessage: typeMessage, priority: priority, applicaBollino: applicaBollino, impostazioniBollino: impostazioniBollino, key: key });
 }
 
+/// Chiude le segnalazioni raccolte per un box: le ordina per gravita', ne fa un unico
+/// messaggio nel report, appiccica al box il bollino della piu' grave, e svuota la lista
+/// per il box successivo.
+///
+/// Il bollino e' uno solo, il primo dopo l'ordinamento: piu' bollini su uno stesso box si
+/// sovrapporrebbero senza dire niente di piu'.
+///
+/// Al testo del bollino viene aggiunto " (Testo per mandare in overflow)": serve a far
+/// traboccare il riquadro di proposito, perche' l'overflow in InDesign si vede a colpo
+/// d'occhio. E' un avviso che l'operatore non puo' non notare.
+///
+/// Attenzione: quella aggiunta modifica l'array impostazioniBollino di chi ha chiamato
+/// addSegnalazione, non una copia.
 function finalizzaSegnalazioni(reportImpaginazioneObj = { segnalazioni: [] }, codiceGruppo, boxImpaginato = null) {
     var segnalazioni = segnalazioniBoxImpaginato.sort((a, b) => a.priority - b.priority);
     //aggiungiamo le segnalazioni al reportObj, nel report mettiamo solo un messaggio formato da
@@ -4925,6 +5325,15 @@ function finalizzaSegnalazioni(reportImpaginazioneObj = { segnalazioni: [] }, co
     return boxImpaginato;
 }
 
+/// A fine impaginazione scrive tutte le segnalazioni raccolte in un file di testo nella
+/// cartella dei log, e avvisa l'operatore con un solo messaggio del colore della
+/// segnalazione piu' grave.
+///
+/// Un messaggio per ogni segnalazione sarebbe illeggibile dopo un'impaginazione da
+/// centinaia di box: qui si dice quante sono e dove leggerle.
+///
+/// Il nome del file contiene data e ora fino ai secondi, cosi' i report non si
+/// sovrascrivono fra loro.
 function stampaSegnalazioni(reportImpaginazioneObj = { segnalazioni: [] }) {
     //se ci sono segnalazioni in segnalazioniBoxImpaginato stampiamo un unico messaggio che avvisa l'utente di controllare le segnalazioni.
     //il colore del messaggio dipende dal typeMessage più grave presente nelle segnalazioni.
@@ -4950,6 +5359,11 @@ function stampaSegnalazioni(reportImpaginazioneObj = { segnalazioni: [] }) {
     }
 }
 
+/// Mette in fila tutte le sistemazioni che un box subisce dopo essere stato compilato:
+/// overflow, ridimensionamento CSS, e quello che il CssFramework applica di seguito.
+///
+/// E' il punto in cui l'impaginazione smette di collocare contenuti e comincia a farli
+/// stare dentro lo spazio che hanno.
 async function callAllOperationFixBox(boxImpaginato, bounds, itemRef, garbageKey = null, modalitaOperazioniRidimensionamento = 0) {
     CssFramework.fixOverflowFromBox(boxImpaginato.geometricBounds, boxImpaginato);
     var mappaBoxOriginale = null;
@@ -5012,6 +5426,24 @@ async function callAllOperationFixBox(boxImpaginato, bounds, itemRef, garbageKey
     return boxImpaginato;
 }
 
+/// Allarga un campo che trabocca, un passo alla volta, fino a che ci sta o fino a cento
+/// tentativi.
+///
+/// Di quanto e in che direzione crescere non lo decide questa funzione: lo dice
+/// pluginMiddleware.getOverflowsInstruction leggendo la configurazione del cliente
+/// (campiSoggettiAOverflow). Se quel campo non e' fra quelli previsti, non si tocca niente.
+///
+/// Il campo non puo' uscire dal box: prima di applicare lo spostamento i nuovi bounds
+/// vengono tagliati su quelli del box, e lo step ridotto di conseguenza. Quando tutti e
+/// quattro gli step diventano zero si esce - il campo tocca i bordi e non c'e' altro spazio
+/// da dargli. Il limite dei cento tentativi e' la rete di sicurezza.
+///
+/// NOTA (I20-1002): overflowInstruction e' assegnata senza var, let o const, quindi e' una
+/// globale implicita. Il file non ha "use strict", percio' passa inosservata. Funziona
+/// solo perche' viene riscritta a ogni chiamata prima di essere letta.
+///
+/// DA SPOSTARE (task di divisione): e' una regola di impaginazione sul contenuto di un
+/// campo, come quelle del CssFramework. Starebbe li'.
 function applyOverflowFix(boxbounds, field) {
     try{
         if(field == null || !field.overflows)
@@ -5106,7 +5538,16 @@ function applyOverflowFix(boxbounds, field) {
         
 }
 
-function makeRegexFromGroupName(groupName) {
+/// Trasforma il nome di un campo in una regex, con l'asterisco come jolly:
+/// "prezzo*" diventa /^prezzo.*$/. Serve a ritrovare un campo del box partendo
+/// dal nome scritto nella referenza (compiledFields, deletedFields).
+///
+/// NON e' CssFramework.makeRegexFromGroupName, da cui si chiamava uguale fino a
+/// I20-1002: quella toglie prima i suffissi [itemLink] e [exist], questa no.
+/// Il nome uguale era una trappola, perche' questa e' una globale: una chiamata
+/// dentro CssFramework scritta senza this. non dava ReferenceError, cadeva qui e
+/// si comportava in modo diverso senza dirlo a nessuno.
+function makeRegexFromFieldName(groupName) {
     // Escapa i caratteri speciali, tranne *
     let escaped = groupName.replace(/[-\/\\^$+?.()|[\]{}]/g, '\\$&');
     // Converte * in .*
@@ -5250,7 +5691,7 @@ async function impaginaBox(meccanica, pagCoinvolta, bounds, itemRef, pathLavoraz
                                             var imgDeleted = false;
     
                                             if (itemRef.deletedFields != null && itemRef.deletedFields.length > 0) {
-                                                let deleteField = itemRef.deletedFields.find(f => makeRegexFromGroupName(f).test(lab_field));
+                                                let deleteField = itemRef.deletedFields.find(f => makeRegexFromFieldName(f).test(lab_field));
     
                                                 if (deleteField != null) {
                                                     //è stato cancellato, eliminiamo il campo
@@ -5331,7 +5772,7 @@ async function impaginaBox(meccanica, pagCoinvolta, bounds, itemRef, pathLavoraz
                                         else if (lab_field == "sfondo") {
     
                                             if (itemRef.deletedFields != null && itemRef.deletedFields.length > 0) {
-                                                let deleteField = itemRef.deletedFields.find(f => makeRegexFromGroupName(f).test(lab_field));
+                                                let deleteField = itemRef.deletedFields.find(f => makeRegexFromFieldName(f).test(lab_field));
     
                                                 if (deleteField != null) {
                                                     //è stato cancellato, eliminiamo il campo
@@ -5364,8 +5805,8 @@ async function impaginaBox(meccanica, pagCoinvolta, bounds, itemRef, pathLavoraz
                                         }else {
                                             console.log(">>> " + lab_field);
                                             
-                                            let matchFieldData = itemRef.compiledFields.find(f => makeRegexFromGroupName(f.labelName).test(lab_field));
-                                            let deleteField = itemRef.deletedFields.find(f => makeRegexFromGroupName(f).test(lab_field));
+                                            let matchFieldData = itemRef.compiledFields.find(f => makeRegexFromFieldName(f.labelName).test(lab_field));
+                                            let deleteField = itemRef.deletedFields.find(f => makeRegexFromFieldName(f).test(lab_field));
                                             if (matchFieldData != null && deleteField == null) {
                                                 if (matchFieldData.content != "" && field.constructor.name == "TextFrame") {
                                                     //Posso compilare il campo con i dati che leggo
@@ -5868,10 +6309,22 @@ async function impaginaBox(meccanica, pagCoinvolta, bounds, itemRef, pathLavoraz
     }
 }
 
+/// Svuota un file scrivendoci dentro la stringa vuota. Non lo cancella: il file resta, a
+/// zero byte.
 function clearFile(filePath) {
     fs.writeFileSync(filePath, "");
 }
 
+/// Legge un file e ne restituisce il JSON deserializzato. null se il file non c'e', non si
+/// legge, o non e' JSON valido.
+///
+/// I tre casi si confondono di proposito: per chi chiama - il tracciato del kit, lo stato
+/// del libro, la lista degli esclusi - non fanno differenza, in tutti e tre il dato non c'e'
+/// e va riscaricato. Il catch senza parametro e' quello che rende esplicito che l'errore
+/// non serve.
+///
+/// DA SPOSTARE (task di divisione): questa, clearFile e appendToFile sono accesso al disco,
+/// non interfaccia. Starebbero in utility.js.
 function readFile(filePath) {
     try {
         // Leggi il contenuto del file
@@ -5887,6 +6340,13 @@ function readFile(filePath) {
     }
 }
 
+/// Aggiunge un elemento a un file che contiene un array JSON, creandolo se non c'e'.
+///
+/// Non e' un append di testo: rilegge tutto, fa il push, riscrive tutto. Su file piccoli -
+/// gli esclusi, lo stato del libro - va bene; e' il motivo per cui non esiste altrove.
+///
+/// Chiamata con data nullo o vuoto, scrive comunque il file: e' cosi' che la si usa per
+/// crearlo vuoto.
 function appendToFile(filePath, data) {
     try {
         // Leggi il contenuto esistente del file
@@ -5925,6 +6385,14 @@ function appendToFile(filePath, data) {
     }
 }
 
+/// Traduce il simbolo di un operatore di confronto nel numero che usa il server:
+/// = 0, < 1, <= 2, > 3, >= 4, != 5, in 6, !in 7. -1 se il simbolo non e' riconosciuto.
+///
+/// Sono gli stessi valori di cambiStrutturali.js, dove pero' sono scritti come costanti.
+/// Qui la tabella e' una scaletta di if.
+///
+/// Attenzione al primo if: e' separato dalla catena else che segue. Non cambia il
+/// risultato, ma non e' come sembra a prima vista.
 function getOperatoreEnumValue(symbolParam) {
     var symbol = symbolParam.toLowerCase();
 
@@ -5963,161 +6431,7 @@ var ignoreChangeEvent = false;
 
 var currentTimeoutId = null;
 
-function sincronizzaBoxGriglia(val, boxNumber, boxHtml, griglia) {
-    boxNumber = parseInt(boxNumber);
-    if (griglia != null) {
-        var box = grigliaJs.getBoxByNumber(griglia, boxNumber);
-        if (box != null && box.isValid) {
-            if (boxHtml.find("sp-picker").attr("lastValue") == "Bloccato" && val != "Bloccato") {
-                if (boxHtml.attr("linkedBox") != null) {
-                    var linkedBox = $("#" + boxHtml.attr("linkedBox"));
-                    linkedBox.find("sp-picker").attr("lastValue", "Vuoto");
-                    Utility.setPickerValue(linkedBox.find("sp-picker"), "Vuoto");
-                    boxHtml.attr("linkedBox") == null;
-                }
-            }
-            else if (boxHtml.find("sp-picker").attr("lastValue") == "2v" && val != "2v") {
-                $("#grigliaController").find(".box").each(function () {
-                    var id = boxHtml.attr("id");
-                    if ($(this).attr("linkedBox") == id) {
-                        $(this).attr("linkedBox", null);
-                        $(this).find("sp-picker").attr("lastValue", "Vuoto");
-                        Utiliy.setPickerValue($(this).find("sp-picker"), "Vuoto");
-                    }
-                });
 
-                var RigaBox = grigliaJs.getBoxListByRiga(boxHtml.attr("riga"));
-                var currentBox = RigaBox.find(box => $(box).attr("id") === "box_" + boxNumber);
-
-                var RigaSuccessiva = grigliaJs.getBoxListByRiga((parseInt(boxHtml.attr("riga")) + 1).toString());
-                if (RigaBox.length > 1 && RigaBox.length == RigaSuccessiva.length) {
-
-
-                    var nextBoxNumber = RigaSuccessiva[RigaBox.indexOf(currentBox)];
-                    var nextBox = grigliaJs.getBoxByNumber(checkCurrentSelection(), $(nextBoxNumber).attr("id").split("_")[1]);
-                    var previousBoxLock = grigliaJs.getChildBoxByLabel(nextBox, "no");
-
-
-                    if (previousBoxLock.visible) {
-                        previousBoxLock.visible = false;
-                        Utiliy.setPickerValue(nextBoxNumber.find("sp-picker"), "Vuoto");
-                    }
-                }
-            }
-            else if (boxHtml.find("sp-picker").attr("lastValue") == "2o" && val != "2o") {
-                $("#grigliaController").find(".box").each(function () {
-                    var id = boxHtml.attr("id");
-                    if ($(this).attr("linkedBox") == id) {
-                        $(this).attr("linkedBox", null);
-                        $(this).find("sp-picker").attr("lastValue", "Vuoto");
-                        Utiliy.setPickerValue($(this).find("sp-picker"), "Vuoto");
-                    }
-                });
-                var RigaBox = grigliaJs.getBoxListByRiga(boxHtml.attr("riga"));
-                var currentBox = RigaBox.find(box => $(box).attr("id") === "box_" + boxNumber);
-                var rightBoxIndex = RigaBox.indexOf(currentBox) + 1;
-                var rightBox = rightBoxIndex < RigaBox.length ? RigaBox[rightBoxIndex] : null;
-                console.log("rightbox " + rightBox);
-                if (rightBox != null) {
-                    console.log((RigaBox.length * parseInt(boxHtml.attr("riga")) + rightBoxIndex + 1));
-                    var nextBox = grigliaJs.getBoxByNumber(checkCurrentSelection(), (RigaBox.length * parseInt(boxHtml.attr("riga"))) + rightBoxIndex + 1);
-                    var previousBoxLock = grigliaJs.getChildBoxByLabel(nextBox, "no");
-
-                    if (previousBoxLock.visible) {
-                        previousBoxLock.visible = false;
-                        Utiliy.setPickerValue(rightBox.find("sp-picker"), "Vuoto");
-                    }
-                }
-            }
-
-
-
-
-            if (val == "Vuoto") {
-                grigliaJs.getChildBoxByLabel(box, "no").visible = false;
-                grigliaJs.getChildBoxByLabel(box, "h").visible = false;
-                grigliaJs.getChildBoxByLabel(box, "v").visible = false;
-                Utiliy.setPickerValue(boxHtml.find("sp-picker"), val);
-            }
-            else if (val == "Bloccato") {
-                grigliaJs.getChildBoxByLabel(box, "no").visible = true;
-                grigliaJs.getChildBoxByLabel(box, "h").visible = false;
-                grigliaJs.getChildBoxByLabel(box, "v").visible = false;
-                Utiliy.setPickerValue(boxHtml.find("sp-picker"), val);
-            }
-            else if (val == "2v") {
-                var lunghezzaRiga1 = grigliaJs.getBoxListByRiga(boxHtml.attr("riga")).length;
-                var lunghezzaRiga2 = grigliaJs.getBoxListByRiga((parseInt(boxHtml.attr("riga")) + 1).toString()).length;
-                if (lunghezzaRiga1 == lunghezzaRiga2 && lunghezzaRiga1 > 0) {
-                    var otherBox = grigliaJs.getBoxByNumber(checkCurrentSelection(), parseInt(boxNumber) + lunghezzaRiga1);
-                    var otherBoxHeight = grigliaJs.getChildBoxByLabel(otherBox, "h");
-                    var otherBoxLocked = grigliaJs.getChildBoxByLabel(otherBox, "no");
-                    var otherBoxWidth = grigliaJs.getChildBoxByLabel(otherBox, "v");
-                    if (otherBoxHeight.visible == false && otherBoxLocked.visible == false && otherBoxWidth.visible == false) {
-                        otherBoxLocked.visible = true;
-                        grigliaJs.getChildBoxByLabel(box, "h").visible = true;
-                        grigliaJs.getChildBoxByLabel(box, "no").visible = false;
-                        grigliaJs.getChildBoxByLabel(box, "v").visible = false;
-                        console.log($("#box_" + (parseInt(boxNumber) + lunghezzaRiga1)).find("sp-picker"));
-                        Utiliy.setPickerValue($("#box_" + (parseInt(boxNumber) + lunghezzaRiga1)).find("sp-picker"), "Bloccato");
-                        $("#box_" + (parseInt(boxNumber) + lunghezzaRiga1)).attr("linkedBox", boxHtml.attr("id"));
-                        Utiliy.setPickerValue(boxHtml.find("sp-picker"), val);
-                    }
-                    else {
-                        //debugMessage("Non posso mettere 2v, box sottostante occupato", 5000);
-                        Utiliy.setPickerValue(boxHtml.find("sp-picker"), boxHtml.find("sp-picker").attr("lastValue"));
-                    }
-
-                }
-                else {
-                    //debugMessage("Non posso mettere 2v, lunghezza righe diverse", 5000);
-                    Utiliy.setPickerValue(boxHtml.find("sp-picker"), boxHtml.find("sp-picker").attr("lastValue"));
-                }
-            }
-            else if (val == "2o") {
-                var lunghezzaRiga = grigliaJs.getBoxListByRiga(boxHtml.attr("riga")).length;
-                if (lunghezzaRiga > parseInt(boxNumber) - (parseInt(boxHtml.attr("riga")) * lunghezzaRiga)) {
-                    var otherBox = grigliaJs.getBoxByNumber(checkCurrentSelection(), parseInt(boxNumber) + 1);
-                    var otherBoxHeight = grigliaJs.getChildBoxByLabel(otherBox, "h");
-                    var otherBoxLocked = grigliaJs.getChildBoxByLabel(otherBox, "no");
-                    var otherBoxWidth = grigliaJs.getChildBoxByLabel(otherBox, "v");
-                    if (otherBoxHeight.visible == false && otherBoxLocked.visible == false && otherBoxWidth.visible == false) {
-                        otherBoxLocked.visible = true;
-                        grigliaJs.getChildBoxByLabel(box, "v").visible = true;
-                        grigliaJs.getChildBoxByLabel(box, "no").visible = false;
-                        grigliaJs.getChildBoxByLabel(box, "h").visible = false;
-                        console.log($("#box_" + (parseInt(boxNumber) + 1)).find("sp-picker"));
-                        Utiliy.setPickerValue($("#box_" + (parseInt(boxNumber) + 1)).find("sp-picker"), "Bloccato");
-                        $("#box_" + (parseInt(boxNumber) + 1)).attr("linkedBox", boxHtml.attr("id"));
-                        Utiliy.setPickerValue(boxHtml.find("sp-picker"), val);
-                    }
-                    else {
-                        //debugMessage("Non posso mettere 2o, box a destra occupato", 5000);
-                        Utiliy.setPickerValue(boxHtml.find("sp-picker"), boxHtml.find("sp-picker").attr("lastValue"));
-                    }
-
-                }
-                else {
-                    //debugMessage("Non posso mettere 2o, riga terminata", 5000);
-                    Utiliy.setPickerValue(boxHtml.find("sp-picker"), boxHtml.find("sp-picker").attr("lastValue"));
-                }
-            }
-        }
-    }
-}
-
-function replaceAll(str, stringToReplace, replacement) {
-    try {
-        while (str.indexOf(stringToReplace) != -1) {
-            str = str.replace(stringToReplace, replacement);
-        }
-        return str;
-    }
-    catch (e) {
-        console.log(e);
-        return str;
-    }
-}
 
 
 tracciatoVisualizzato = false;
@@ -6125,6 +6439,18 @@ lastWidthDimension = 0;
 lastHeightDimension = 0;
 
 //da ripristinare
+/// PARCHEGGIATA - l'autore l'ha marcata "da ripristinare" e oggi NON LA CHIAMA NESSUNO.
+///
+/// Dovrebbe escludere dall'impaginazione la referenza che sta nel box indicato della
+/// griglia: legge il codice dall'etichetta info$<codice>, lo scrive in listaRefEscluse.json,
+/// colora di rosso il testo nel box e ridisegna l'elenco degli esclusi.
+///
+/// Insieme a ripristinaElemento e compilaTabElementiEsclusi forma un ciclo chiuso: si
+/// chiamano fra loro e nessuno chiama il gruppo dall'esterno. Il meccanismo e' intero, gli
+/// manca solo il pulsante.
+///
+/// I20-1002: NON cancellata proprio per quella nota. Da decidere nel task di divisione se
+/// ripristinarla o toglierla.
 function escludiRef(boxNumber, button) {
     console.log(boxNumber);
     //controlliamo che la current selection sia una griglia
@@ -6227,6 +6553,13 @@ function escludiRef(boxNumber, button) {
 
 }
 //da ripristinare
+/// PARCHEGGIATA - vedi escludiRef.
+///
+/// Toglie una referenza da listaRefEscluse.json e, se si e' sulla griglia, rimette il testo
+/// del box al colore normale e ridisegna la griglia.
+///
+/// NOTA (I20-1002): boxNumber e' assegnata senza var, let o const - globale implicita, come
+/// in applyOverflowFix. Il file non ha "use strict".
 function ripristinaElemento(codice, info) {
     //scarichiamo il json delle ref escluse
     var filePath = pathLavorazione + "/listaRefEscluse.json";
@@ -6271,6 +6604,14 @@ function ripristinaElemento(codice, info) {
 }
 
 //da ripristinare
+/// PARCHEGGIATA - vedi escludiRef.
+///
+/// Ridisegna l'elenco degli esclusi leggendo listaRefEscluse.json: una riga per referenza,
+/// col codice accorciato a venti caratteri, un pulsante per copiarlo e uno per
+/// ripristinarla. Se il file non c'e', scrive "Nessun elemento escluso".
+///
+/// E' questa a creare l'unico punto da cui si arriva a ripristinaElemento, ed e' per questo
+/// che il gruppo e' chiuso in se stesso.
 function compilaTabElementiEsclusi() {
 
     //cerchiamo un file json chiamato listaRefEscluse.json e lo leggiamo, se non c'è lo creiamo vuoto
@@ -6563,6 +6904,22 @@ async function rimuoviRefImpaginata(listaCodiciConId = [], mantieniBusyEsterno =
     }
 }
 
+/// Svuota una pagina: avvisa prima il server, e solo se il server conferma rimuove i gruppi
+/// dal documento.
+///
+/// L'ordine e' la cosa importante. I box si tolgono dentro la callback di onload, dopo che
+/// Menabo/SvuotaPagina ha risposto con esito positivo: se la richiesta fallisce, il
+/// documento resta com'era e server e impaginato non si disallineano.
+///
+/// Si rimuove solo cio' che ha un DNA (Utility.getDnaOfBox): quello che l'operatore ha
+/// messo a mano nella pagina non e' roba del Plugin e non si tocca.
+///
+/// La rimozione scorre l'array all'indietro, perche' togliere un elemento sposta gli indici
+/// di quelli dopo.
+///
+/// NOTA (I20-1002): il controllo "pagSelected == -1 && page == null" legge `page` prima
+/// della sua dichiarazione. Con var la variabile c'e' gia' ma vale undefined, quindi quella
+/// meta' del controllo e' sempre vera e la condizione si riduce a pagSelected == -1.
 async function svuotaPaginaByPageName(pageName) {
     try{
 
@@ -6701,6 +7058,16 @@ async function svuotaPaginaByPageName(pageName) {
 
 }
 
+/// ABBOZZO - non la chiama nessuno e restituisce valori fissi, sempre gli stessi
+/// ("A2515_SC_27-06-25", "SC", "TO", null). Legge docInLavorazione.name e non lo usa.
+///
+/// Quella vera e' customAgenzia.decodificaNomeFile, in Agenzie/<Cliente>/custom.js, perche'
+/// le regole con cui si battezza un file sono del cliente. Questa e' rimasta qui come
+/// segnaposto - lo dice il commento "qui ci sara' roba che per ora non c'e'".
+///
+/// I20-1002: e' un abbozzo pericoloso. Se un domani qualcuno la chiamasse per sbaglio al
+/// posto di quella dell'agenzia, non avrebbe un errore: avrebbe una promo inventata. Da
+/// togliere, salvo che si voglia scriverla davvero.
 function decodificaNomeFile(){
     //leggiamo il nome del fil indd aperto
     var nomeFile = docInLavorazione.name;
@@ -6715,6 +7082,17 @@ function decodificaNomeFile(){
     }
 }
 
+/// Quando l'operatore sceglie la promo, riempie le due tendine sotto - canali e aree - con
+/// le sole voci che quella promo contiene davvero.
+///
+/// Non sono elenchi fissi: si ricavano dai promoTracciatis della promo scelta, senza
+/// ripetizioni, e si risolvono in ficoProcess.sourceCanali e sourceAree per averne la
+/// sigla. Scegliendo "nessuna promo" (valore 0) le due tendine spariscono, perche' senza
+/// promo non hanno contenuto.
+///
+/// L'ordine lo decide pluginMiddleware.applicaSchemaDiOrdinamentoConPesi, cioe' la
+/// configurazione del cliente: a ogni sigla corrisponde un peso, e i canali dell'operatore
+/// escono nell'ordine in cui e' abituato a vederli invece che in ordine alfabetico.
 function kitPromoCmb_changed()
 {
     //console.log("kitPromoCmb_changed");
@@ -6795,6 +7173,11 @@ function kitPromoCmb_changed()
     }
 }
 
+/// Copre il pannello con la schermata di attesa, col testo passato o con "Caricamento in
+/// corso...".
+///
+/// Nasconde anche gli elementi marcati hideable: sono quelli che in UXP si disegnano sopra
+/// qualunque cosa - le tendine di sistema - e resterebbero visibili sopra l'attesa.
 function showLoading(msg)//Facoltativo
 {
 
@@ -6806,18 +7189,27 @@ function showLoading(msg)//Facoltativo
     }
     else
     {
-        Default
+        //I20-1002: qui c'era una riga col solo identificatore "Default", che non esiste
+        //da nessuna parte: questo ramo lanciava ReferenceError, e showLoading non ha un
+        //try/catch. Non si notava perche' nessuno chiamava showLoading() senza testo,
+        //ma tre chiamanti passano una variabile che puo' essere nulla.
         $("#loadingPanel").find("h1").text("Caricamento in corso...");
     }
     Utility.nascondiHidebleElements();
 
 }
 
+/// Toglie la schermata di attesa e rimette gli elementi hideable. L'opposto esatto di
+/// showLoading.
 function hideLoading() {
     $("#loadingPanel").hide();
     Utility.mostraHidebleElements();
 }
 
+/// Svuota le quattro liste del tracciato e toglie la riga con la data di scaricamento.
+///
+/// Si chiama prima di rifare il tracciato: senza, le referenze si accumulerebbero a quelle
+/// gia' scritte.
 function clearInfo()
 {
     $("#FiltroRicercaTracciato").empty();    
@@ -6827,6 +7219,18 @@ function clearInfo()
     $("#dataScaricamentoTracciato").remove();
 }
 
+/// Ridisegna da zero la scheda del tracciato: la riga di sincronizzazione in alto, l'area
+/// dei filtri, l'elenco delle referenze.
+///
+/// Si rifa' tutto a ogni chiamata - si rimuove e si ricrea - invece di aggiornare cio' che
+/// c'e'. E' la ragione del guasto corretto in I20-981: chi premeva un bottone del tracciato
+/// si vedeva ricostruire sotto il bottone stesso mentre il gestore era ancora in corso.
+///
+/// Senza kit non fa niente. Senza contenuto scaricato mostra la sola riga di
+/// sincronizzazione, che e' proprio da dove si scarica.
+///
+/// L'intero corpo e' in un try che registra e tace: un errore qui lascia il tracciato a
+/// meta' senza dirlo all'operatore.
 async function mostraTracciato() {
 
     try {
@@ -6916,6 +7320,25 @@ async function mostraTracciato() {
 
 }
 
+/// Costruisce la riga in cima al tracciato: quando e' stato scaricato l'ultimo, una tendina
+/// con cosa avviare, e il pulsante Avvia.
+///
+/// La tendina ha due voci, ma la seconda - Report integrita' - la vede solo un superAdmin.
+/// E' un controllo di ruolo fatto costruendo l'interfaccia, non nascondendola dopo.
+///
+/// I20-981: la sequenza del report vive in avviaReportIntegrita, non piu' dentro il gestore
+/// di questo bottone, che il rinfresco del tracciato ricostruisce mentre gira.
+///
+/// DA VERIFICARE (I20-1002): il gestore legge la tendina con box.$picker[1].value. E' un
+/// oggetto jQuery che avvolge un solo elemento, quindi l'indice 1 dovrebbe essere
+/// undefined e la lettura lanciare. E' l'unico accesso indicizzato di questa forma in tutto
+/// il Plugin. Non e' stato toccato perche' non lo si puo' provare senza InDesign: se in
+/// esercizio il pulsante Avvia funziona, allora qui c'e' qualcosa che non si vede dal
+/// sorgente; se non funziona, l'indice giusto e' 0.
+///
+/// Restano due gestori vuoti - il clic sull'icona info e il change della tendina - e un
+/// campo per l'intervallo di pagine (pagineRange_<uid>) che nasce nascosto e che nessuno
+/// mostra ne' legge.
 function creaRigaSync(contenutoKitInLavorazione) {
     const dataScaricamento = contenutoKitInLavorazione != null
         ? contenutoKitInLavorazione["DataScaricamento"]
@@ -7081,6 +7504,17 @@ function creaRigaSync(contenutoKitInLavorazione) {
     };
 }
 
+/// Ridisegna il corpo del tracciato con i record da mostrare: tutti, i soli impaginati, o i
+/// soli da impaginare, secondo il filtro di visualizzazione.
+///
+/// Due sorgenti diverse a seconda di come ci si arriva. Senza ricerca si parte dal
+/// contenuto del kit e si divide confrontando con la lista dei codici gia' impaginati nel
+/// documento. Con una ricerca si usano le liste che la ricerca ha gia' preparato, e li'
+/// conta criteriValidati: se i criteri non sono stati validati valgono le liste complete,
+/// altrimenti quelle filtrate.
+///
+/// Le righe si aggiungono a un DocumentFragment e si attaccano in una volta sola: mille
+/// append diretti al DOM sarebbero mille ridisegni.
 async function aggiornaTracciatoPostRicerca(resRicerca) {
     try {
         $("#Tab1Table").empty();
@@ -7147,6 +7581,11 @@ async function aggiornaTracciatoPostRicerca(resRicerca) {
     }
 }
 
+/// Le colonne del tracciato: Pag sempre per prima, poi quelle che il cliente ha configurato
+/// (pluginMiddleware.getColonneTracciatoIntestazione).
+///
+/// Pag non e' configurabile perche' non viene dal record: e' la pagina in cui la referenza
+/// si trova nell'impaginato, e la calcola il Plugin.
 function getTracciatoColumns() {
     let colonne = [];
 
@@ -7169,6 +7608,12 @@ function getTracciatoColumns() {
     return result;
 }
 
+/// Fissa la larghezza di una cella in tutti e quattro i modi che servono perche' resti
+/// ferma: width, minWidth, maxWidth e la base flex.
+///
+/// La sola width non basta dentro un contenitore flex, che allargherebbe o stringerebbe le
+/// celle per far quadrare la riga. Qui le colonne devono restare allineate con
+/// l'intestazione, riga dopo riga.
 function applicaLarghezzaCella($cell, width) {
     $cell.css({
         width: width + "px",
@@ -7179,6 +7624,8 @@ function applicaLarghezzaCella($cell, width) {
 }
 
 
+/// Costruisce la riga di intestazione del tracciato, una cella per colonna, usando le stesse
+/// larghezze delle righe di dati.
 function renderIntestazioneTracciato() {
     const columns = getTracciatoColumns();
 
@@ -7203,6 +7650,14 @@ function renderIntestazioneTracciato() {
     return $header;
 }
 
+/// La pagina su cui si trova l'operatore adesso: si chiede alla finestra attiva di InDesign,
+/// e se non risponde si ripiega su pagSelected, l'ultima pagina che il Plugin ha visto
+/// selezionare.
+///
+/// Restituisce null se non si arriva a un valore sensato, cosi' chi chiama sa che non puo'
+/// impaginare da qui.
+///
+/// Si usa il nome della pagina, non il numero: con le sezioni i due non coincidono.
 async function getPaginaImpaginazioneCorrente() {
     var pagina = pagSelected;
 
@@ -7222,6 +7677,11 @@ async function getPaginaImpaginazioneCorrente() {
     return pagina;
 }
 
+/// Le quattro descrizioni del record unite da " | ", saltando quelle vuote.
+///
+/// Se il record appartiene a un gruppo, le descrizioni si prendono dal gruppo
+/// (descrizione_gruppo): e' quella che l'operatore riconosce, perche' e' il gruppo che
+/// finisce nel box, non il singolo record.
 function getDescrizioneRecordTracciato(record) {
     var sorgenteDescrizione = record.descrizione_gruppo != null ? record.descrizione_gruppo : record;
 
@@ -7233,6 +7693,11 @@ function getDescrizioneRecordTracciato(record) {
     ].filter(Boolean).join(" | ");
 }
 
+/// Aggiunge al riquadro di conferma una riga "etichetta: valore", saltandola se il valore
+/// non c'e'.
+///
+/// Il testo si mette con .text e non con l'HTML: una descrizione che contenga < o & non
+/// deve poter rompere il riquadro.
 function appendRigaRiepilogoImpaginazione($container, label, value) {
     if (value == null || value === "") {
         return;
@@ -7258,6 +7723,15 @@ function appendRigaRiepilogoImpaginazione($container, label, value) {
     $container.append($row);
 }
 
+/// Chiede conferma prima di impaginare una referenza presa dal tracciato, mostrando su
+/// quale pagina finira' e quale referenza e'.
+///
+/// La pagina e' in grassetto perche' e' l'unica cosa che l'operatore puo' avere sbagliato:
+/// la referenza l'ha scelta lui, la pagina gliela propone il Plugin in base a dove si trova
+/// in quel momento.
+///
+/// Codice gruppo, idRec e descrizione servono a riconoscere la referenza: il solo codice
+/// non basta, perche' la stessa referenza puo' comparire piu' volte.
 async function confermaImpaginazioneDaTracciato(record, pagina) {
     var codiceGruppo = record["Scatto.CodiceGruppo"] || "";
     var idRec = getIdRecFromItemRef(record);
@@ -7295,6 +7769,13 @@ async function confermaImpaginazioneDaTracciato(record, pagina) {
     return await Utility.confirm($container);
 }
 
+/// Costruisce la riga di una referenza nel tracciato: una cella per colonna, coi valori
+/// presi dal record.
+///
+/// NOTA (I20-1002): chiama getTracciatoColumns a ogni riga, e quella a sua volta interroga
+/// il pluginMiddleware. Le colonne sono le stesse per tutto l'elenco: su un tracciato da
+/// migliaia di referenze e' lo stesso lavoro rifatto migliaia di volte. Andrebbe calcolato
+/// una volta in aggiornaTracciatoPostRicerca e passato qui.
 function creaElementoTracciato(obj, isFirst) {
     const record = obj.recordInTracciato || {};
     const columns = getTracciatoColumns();
@@ -7415,6 +7896,20 @@ function creaElementoTracciato(obj, isFirst) {
     return $row;
 }
 
+/// Impagina una sola referenza: chiede il dato al server e lo passa a
+/// impaginazioneSingoloIndd.
+///
+/// byPassBloccoGiaImpaginato serve quando la referenza risulta gia' impaginata da qualche
+/// parte e si vuole rifarla lo stesso: e' il server a tenere quel blocco, e il flag glielo
+/// fa saltare.
+///
+/// In coda c'e' un ciclo di attesa, fino a venti secondi, perche' la risposta arriva in una
+/// callback e la funzione e' async: senza, tornerebbe prima che l'impaginazione sia
+/// avvenuta. Se l'attesa scade si avvisa l'operatore.
+///
+/// Attenzione: res diventa vero solo sul cammino che va a buon fine. Se il server risponde
+/// con un errore l'operatore vede il messaggio dell'errore, ma questa funzione aspetta
+/// comunque i venti secondi e poi aggiunge un timeout che timeout non e'.
 async function impaginaSingolo(codice, pagina, byPassBloccoGiaImpaginato = false, idRec = null) {
     showLoading("Scaricamento del dato");
     indesignEvents.setBusy(true);
@@ -7502,6 +7997,29 @@ async function impaginaSingolo(codice, pagina, byPassBloccoGiaImpaginato = false
 //Integrita', che per avere una preanalisi passava da qui pagando la ricerca del box e la
 //selezione della pagina: ora la preanalisi ha la sua strada in preAnalisiBoxMappato e questa
 //funzione fa una cosa sola, impaginare il singolo.
+/// Impagina una referenza in una pagina precisa. E' il gesto singolo, quello del pulsante
+/// sulla referenza, non l'impaginazione di massa.
+///
+/// I20-981: via i parametri getPreAnalisi ed elementoMappaTarget. Servivano solo al Report
+/// Integrita', che per avere una preanalisi passava da qui pagando la ricerca del box e la
+/// selezione della pagina: ora la preanalisi ha la sua strada in preAnalisiBoxMappato e
+/// questa funzione fa una cosa sola, impaginare il singolo.
+///
+/// Il punto delicato e' da dove prende i bounds, cioe' dove va a finire il box:
+///   - se la mappa conosce gia' il box, si riusano i suoi bounds - si rifa' dov'era;
+///   - se in pagina c'e' un altro box del Plugin, se ne copiano le misure e si parte
+///     dall'angolo alto a sinistra: i box di una pagina hanno tutti la stessa forma;
+///   - su pagina dispari si aggiunge la larghezza di pagina, perche' in uno spread le
+///     coordinate proseguono sulla facciata destra invece di ripartire da zero.
+///
+/// Se il box c'e' gia' e la preanalisi non trova differenze, si esce restituendolo:
+/// rifarlo identico costerebbe e basta.
+///
+/// Il noRender si riapplica in fondo perche' ricollegamento, confronto e rimozione dei
+/// simboli possono rifare elementi del box, e un elemento rifatto nasce visibile.
+/// L'operazione e' idempotente.
+///
+/// La variabile `found` viene assegnata e mai letta: e' un residuo.
 async function impaginazioneSingoloIndd(records, pagina, cercaInPaginaPerConfronto, mappaPagina, massiveOperation = false, bounds = null, richiederRicollegamento = false) {
     try {
         //I20-981: primario, tracciato del primario e foto stanno in datiPrimarioPerConfronto,
@@ -7643,6 +8161,15 @@ var cartellaAssenteCheck = false;
 //Con un overlay aperto il posto giusto e' il contenitore dentro l'overlay: quello della
 //schermata principale gli finisce sotto. Si guarda lo stile in linea invece di :visible,
 //perche' in UXP le misure su cui :visible si basa non sono affidabili.
+/// I20-981: dove scrivere un messaggio all'operatore.
+///
+/// Con un overlay aperto il posto giusto e' il contenitore dentro l'overlay: quello della
+/// schermata principale gli finisce sotto e non si legge. Si guarda lo stile in linea
+/// invece di :visible, perche' in UXP le misure su cui :visible si basa non sono
+/// affidabili.
+///
+/// Se qualcosa va storto si ripiega sul contenitore indicato dal parametro: un messaggio
+/// nel posto sbagliato e' meglio di nessun messaggio.
 function contenitoreMessaggi(modal) {
     try {
         const aperti = $(".overlayModal").filter(function () {
@@ -7664,6 +8191,27 @@ function contenitoreMessaggi(modal) {
     return $("#messaggiUtente" + (modal ? "Modal" : ""));
 }
 
+/// L'unico modo in cui il Plugin parla all'operatore. Scrive il messaggio a video e lo
+/// registra nel file di log del giorno.
+///
+/// Il colore dice la gravita': verde riuscito, arancione avviso, rosso tutto il resto -
+/// compreso uno stile non riconosciuto, perche' un messaggio di cui non si sa la natura e'
+/// piu' prudente mostrarlo come errore.
+///
+/// A video ce n'e' uno alla volta: il precedente viene rimosso. Sopra i 200 caratteri si
+/// tronca, perche' il pannello e' stretto e il testo lungo lo sfonda; nel log, invece, il
+/// messaggio finisce intero.
+///
+/// tempo > 0 lo fa sparire da solo dopo quei secondi. Il timeout precedente viene sempre
+/// annullato, altrimenti un messaggio vecchio porterebbe via quello nuovo.
+///
+/// I20-981: col modal aperto i messaggi finivano dietro, nel contenitore della schermata
+/// principale, e non si leggevano. Il parametro modal esiste da sempre ma quasi nessuno lo
+/// passa: invece di rincorrere le chiamate, il contenitore lo sceglie contenitoreMessaggi
+/// guardando se c'e' un overlay aperto.
+///
+/// dontWriteInLogs evita la ricorsione: se e' la scrittura del log a fallire, il messaggio
+/// che lo dice non puo' provare a scriversi nel log.
 async function messaggioUtente(msg, style, loading = false, tempo = 0, dontWriteInLogs = false, modal = false) {
     try {
         if (msg == null || msg == "") {
@@ -7775,6 +8323,22 @@ async function messaggioUtente(msg, style, loading = false, tempo = 0, dontWrite
     }
 }
 
+/// Scrive una riga in un file Debuglog_<data>.txt, per ricostruire cosa stava succedendo
+/// quando InDesign e' morto. Non mostra niente a video.
+///
+/// Serve dove un console.log non basta: se il processo crolla, la console se ne va con lui,
+/// il file no.
+///
+/// DIFETTO (I20-1002, da correggere in un task a parte): il percorso e'
+/// "pathLavorazione + percorsoLogs", ma percorsoLogs e' GIA' un percorso assoluto - glielo
+/// assegna impostaPercorsiDiSistema leggendo file.pathLogs. Concatenarli produce un percorso
+/// che non esiste. Due funzioni piu' su, in messaggioUtente, quella stessa concatenazione
+/// c'e' ma e' commentata: "/*pathLavorazione +*/ percorsoLogs". Li' e' stata corretta, qui
+/// no.
+///
+/// La conseguenza e' doppia: il log di crash non viene mai scritto, e la scrittura fallita
+/// fa comparire all'operatore "Code IDX-98 Errore cartella logs assente", che manda a
+/// cercare un guasto che non c'e'.
 function writeDebugMessageForCrash(msg) {
     try {
         if (msg == null || msg == "") {
@@ -7822,6 +8386,24 @@ function writeDebugMessageForCrash(msg) {
 }
 
 //da finire di ripristinare
+/// Cerca nel documento il box di una referenza e lo seleziona.
+///
+/// Il riconoscimento avviene sul DNA del box (Utility.getDnaOfBox), non sull'etichetta:
+/// serve la coppia codice gruppo + idRec, perche' la stessa referenza puo' comparire piu'
+/// volte. Si guardano solo i gruppi del livello "InPagina": quello che sta su altri livelli
+/// non e' impaginato.
+///
+/// Tre esiti, in ordine di bonta':
+///   - trovato con l'idRec giusto: si seleziona e si dice trovato;
+///   - trovato lo stesso codice ma con un altro idRec (alternativeMatch): si seleziona
+///     comunque, avvisando che l'idRec non corrisponde. Meglio portare l'operatore vicino
+///     a quello che cerca che dirgli di no;
+///   - non trovato nella pagina attesa: si ricerca in tutto il documento, e se salta fuori
+///     altrove si avvisa che l'impaginato andrebbe sincronizzato.
+///
+/// Con RemoveOnFail, se non si trova proprio, si propone di toglierla dall'impaginato sul
+/// server: e' il caso di una referenza che il server crede impaginata e nel documento non
+/// c'e' piu'. La conferma e' obbligatoria.
 async function trovaRecord(codice, idRec, searchPage = null, select = true, RemoveOnFail = false, paginaAttesa = searchPage) {
     try{
         //cerchiamo in ogni pagina il box con label uguale a base$codice e lo selezioniamo   
@@ -7921,6 +8503,10 @@ async function trovaRecord(codice, idRec, searchPage = null, select = true, Remo
     return result;
 }
 
+/// Mostra o nasconde l'elenco del tracciato, cambiando anche il testo del pulsante.
+///
+/// Lo stato sta in un attributo del pulsante stesso (tracciatoVisibile), non in una
+/// variabile: e' il pulsante a ricordarsi come e' messo.
 function mostraNascondiTracciato() {
     //cerchiamo mostraNascondiTracciato e leggiamo il sua attr tracciatoVisibile
     var bottoneTracciato = $("#mostraNascondiTracciato");
@@ -7942,6 +8528,16 @@ function mostraNascondiTracciato() {
 
 var listaRecordDaAltriTracciati = [];
 //#region clonazione del record da rivedere
+/// Cerca una referenza per codice, prima nel tracciato aperto e poi in tutti gli altri.
+///
+/// Le due ricerche sono annidate di proposito: la prima, su getSchedaRef col kit corrente,
+/// serve a dire "ce l'hai gia'" - e in quel caso ci si ferma con un avviso. Solo se
+/// fallisce parte la seconda (LeggiTracciatoRecord con idTracciato 0), che guarda
+/// ovunque. Trovandola altrove si apre la clonazione, che e' il modo di portarla qui.
+///
+/// Un codice di gruppo arriva come elenco separato da virgole: viene riordinato
+/// alfabeticamente prima di spedirlo, perche' il server riconosce il gruppo dalla stringa e
+/// "A,B" e "B,A" sono lo stesso gruppo.
 function cercaRecordInTracciato(Codice) {
     //mandiamo la richiesta xhr per ottenere il record
     if (Codice == null || Codice == "" || Codice == 0 || Codice == "0") {
@@ -8050,6 +8646,20 @@ function cercaRecordInTracciato(Codice) {
     xhr.send("Menabo/getSchedaRef/" + idKitLavorazione + "/" + false, formData, "PUT");
 }
 
+/// Chiede al server le schede di piu' referenze in una volta sola, invece di una richiesta
+/// per referenza.
+///
+/// I codici viaggiano uniti da un trattino; gli idRec, se ci sono, allo stesso modo e nello
+/// stesso ordine.
+///
+/// Il secondo parametro puo' essere la callback: e' la forma vecchia della chiamata, senza
+/// idRec, e le prime righe la riconoscono per non rompere chi la usa ancora.
+///
+/// NOTA (I20-1002): "let me = this" e il controllo me.isInvalidated sono un trapianto da
+/// schedaRef.js, dove this e' l'oggetto modulo. Qui la funzione e' globale e this e'
+/// l'oggetto globale, quindi me.isInvalidated e' sempre undefined e quel controllo non
+/// scatta mai. Lo stesso vale per "this.isBusy = false" nel catch, che scrive su una
+/// proprieta' del globale che nessuno legge.
 async function getSchedeRefsMassivo(codiciGruppi, idRecs, callback) {
     if (typeof idRecs === "function") {
         callback = idRecs;
@@ -8111,6 +8721,15 @@ async function getSchedeRefsMassivo(codiciGruppi, idRecs, callback) {
     xhr.send("Menabo/getSchedeRefs/" + idKitLavorazione + "/" + true, formData, "PUT");
 }
 
+/// Quando si sceglie un tracciato dalla tendina della clonazione, mostra i campi di quel
+/// record perche' l'operatore possa correggerli prima di clonarlo.
+///
+/// I campi non sono tutti modificabili allo stesso modo: il cliente decide quali non si
+/// toccano e quali vanno messi per primi (listCampiNonEditabili,
+/// listCampiEditabiliPrioritari).
+///
+/// Senza record scelto scrive l'avviso che spiega cosa sta succedendo: la referenza non e'
+/// in questo tracciato ma esiste in altri, e va scelto da quale portarla.
 function selezionatoTracciatoEdit(idTracciato) {
     $("#campiRecord").empty();
     //convertiamo idTracciato in un numero
@@ -8322,11 +8941,22 @@ function selezionatoTracciatoEdit(idTracciato) {
 
 }
 
+/// Chiude la tendina di scelta tracciato e svuota i campi: riporta la clonazione al punto di
+/// partenza.
 function resetEditTracciato() {
     $("#tendinaEditTracciato").hide();
     $("#campiRecord").empty();
 }
 
+/// Porta una referenza da un altro tracciato in quello in lavorazione, coi valori che
+/// l'operatore ha eventualmente corretto.
+///
+/// I valori si rileggono dal DOM al momento dell'invio, non da una copia in memoria: per
+/// ogni blocco .recordClonazione si raccolgono textarea, input di testo e caselle di
+/// spunta, e la chiave di ogni campo e' l'attributo key del controllo.
+///
+/// A clonazione riuscita il tracciato si riscarica da capo: dopo una clonazione quello che
+/// si ha in locale e' vecchio.
 function clonaRecord(recordGruppo) {
     //leggiamo tutte le textarea e input e checkbox all'interno di ogni div con classe recordClonazione e salviamo i valori in una lista di oggetti, dove ogni oggetto ha come chiavi il valore dell'attributo key e come valore il valore del campo oltre al codice ricavato dal div stesso
     var records = [];
@@ -8420,6 +9050,11 @@ function clonaRecord(recordGruppo) {
     xhr.send("Menabo/ClonaRecord/" + idTracciato, formData, "PUT");
 }
 //#endregion
+/// Apre la finestra di svuotamento, gia' impostata su una delle due modalita': per
+/// intervallo di pagine (0) o su tutto (1).
+///
+/// L'intervallo si propone gia' compilato con la pagina su cui sta l'operatore: e' quasi
+/// sempre quella che vuole svuotare.
 function apriModalSvuotamento(mode) {
     //in entrambe le modalità apriamo il modal dialogSvuotaPagina
     Utility.apriModal("dialogSvuotaPagina", "Svuota impaginato");
@@ -8437,6 +9072,11 @@ function apriModalSvuotamento(mode) {
 
 }
 
+/// Apre la finestra dei bolli, che serve sia ad attivarli che a disattivarli: cambia solo il
+/// testo del pulsante e il suo attributo attiva.
+///
+/// Un'unica finestra per due operazioni opposte, ed e' l'attributo a portare avanti quale
+/// delle due si e' scelta.
 function apriModalBolli(mode) {
     if( mode != "0" && mode != "1") {
         messaggioUtente("Code IDX-126 Modalità di attivazione/disattivazione non valida", "error");
@@ -8459,6 +9099,7 @@ function apriModalBolli(mode) {
     }
 }
 
+/// Accende o spegne i bolli sulle pagine scelte: su un intervallo, o su tutto il documento.
 function selectionAttivaDisattivaBolli(mode, attiva){
     attiva = (attiva == "true" || attiva == true);
     console.log((attiva ? "Attivazione" : "Disattivazione") + " bolli in corso, modalità: " + mode);
@@ -8541,6 +9182,8 @@ function selectionAttivaDisattivaBolli(mode, attiva){
     Utility.chiudiModal();
 }
 
+/// Accende o spegne un singolo bollo. E' il gesto elementare che
+/// selectionAttivaDisattivaBolli ripete su tutti quelli che trova.
 function attivaDisattivaBollo(bollo, attiva) {
     //rendiamo visibile o invisibile il bollo
     if(bollo != null && bollo.isValid){
@@ -8553,6 +9196,12 @@ function attivaDisattivaBollo(bollo, attiva) {
 
 }
 
+/// Esegue lo svuotamento scelto nella finestra: le pagine di un intervallo, una per una, o
+/// tutto il documento.
+///
+/// Ogni pagina passa da svuotaPaginaByPageName, quindi ognuna avvisa il server prima di
+/// toccare il documento: se il server rifiuta a meta' elenco, le pagine gia' fatte restano
+/// fatte e le altre no, ma server e impaginato restano d'accordo su entrambe.
 async function selectionModalSvuota(mode){
     showLoading("Svuotamento in corso, l'operazione potrebbe richiedere un po' di tempo...");
     if(mode == "1"){
@@ -8834,6 +9483,19 @@ async function svuotaMenabo() {
     xhr.send("Menabo/svuotaMenabo/" + idKitLavorazione, null, "GET");
 }
 
+/// Scrive un messaggio nella console interna del Plugin (#debugLogs), col colore dello
+/// stile, l'ora, un pulsante per copiarlo e uno per toglierlo.
+///
+/// I messaggi identici consecutivi non si ripetono: al primo si aggiunge un contatore fra
+/// parentesi e si aggiorna l'ora. Senza, un errore dentro un ciclo riempirebbe la console
+/// di mille righe uguali.
+///
+/// Aggiorna anche il contatore dei non letti e il colore dell'icona della console, che
+/// peggiora e non migliora: un warning non cancella un errore gia' segnato in rosso.
+///
+/// NOTA (I20-1002): il messaggio viene inserito come HTML, e finisce anche dentro
+/// l'attributo msg del pulsante di copia. I messaggi contengono testi di eccezione: uno con
+/// dentro un apice o un < rompe il markup. Andrebbe messo con .text e .attr.
 function writeFileInConsole(logMessage) {
     //logMessage è un oggetto di forma
     // var logMessage = {
@@ -8919,12 +9581,23 @@ function writeFileInConsole(logMessage) {
     //$("#debugLogs").prepend(div); 
 }
 
+/// Svuota la console interna, azzera il contatore dei non letti e rimette l'icona verde.
 function svuotaConsole() {
     $("#debugLogs").empty();
     $("#counterNonLetti").text(0);
     $("#consoleIcon").css("background-color", "green");
 }
 
+/// Mostra o nasconde i messaggi della console secondo le tre caselle - errori, warning,
+/// info.
+///
+/// DA VERIFICARE (I20-1002): il filtro riconosce lo stile confrontando
+/// .css("background-color") con le parole "red", "darkorange" e "green". Il colore e'
+/// scritto con quelle parole nello stile in linea, ma .css legge lo stile CALCOLATO, che di
+/// norma restituisce "rgb(255, 0, 0)". Se qui si comporta come altrove, nessun confronto e'
+/// mai vero e spuntando un filtro spariscono tutti i messaggi. Non e' stato toccato perche'
+/// non lo si puo' provare senza InDesign; lo stile andrebbe comunque letto da un attributo
+/// nostro, non dedotto dal colore.
 function cambioVisualizzazioneConsole() {
     //leggiamo i tre checkBox logErrori, logWarning e logInfo, nascondiamo tutti i messaggi e poi li mostriamo in base ai checkBox
     var logErrori = $("#logErrori").is(":checked");
@@ -8947,6 +9620,10 @@ function cambioVisualizzazioneConsole() {
     }
 }
 
+/// Apre un file di log salvato e lo rimette nella console, riga per riga.
+///
+/// Serve a guardare cosa e' successo in una sessione precedente, o sulla macchina di
+/// qualcun altro: il file dei log e' l'unica cosa che sopravvive alla chiusura del Plugin.
 async function leggiLog() {
     var file = await fs2.getFileForOpening();
     if (file != null) {
@@ -8974,6 +9651,21 @@ async function leggiLog() {
 }
 
 var currentTimeoutIdLogin = null;
+/// Manda credenziali al server e, se vanno bene, fa ripartire il controllo di stato che
+/// porta il Plugin in lavorazione.
+///
+/// I messaggi di errore non passano da messaggioUtente ma vengono scritti direttamente
+/// sopra il pannello di accesso: quando si e' fermi al login, il contenitore dei messaggi
+/// della schermata principale non e' in vista.
+///
+/// I20-956: si ricorda solo se l'operatore lo ha chiesto, e si dimentica appena toglie la
+/// spunta, altrimenti la scelta precedente resterebbe viva.
+///
+/// onNoConnection e' un caso a parte: senza rete non si fallisce, si entra in modalita'
+/// agenzia e si avvisa che al ritorno della rete andra' fatto l'accesso per sincronizzare.
+///
+/// DA SPOSTARE (task di divisione): con showLogin, logout e setFinestrePerRuolo in un js
+/// dell'accesso.
 async function login(username, password, ricordami = false){
 
     //cambiamo il testo del pulsante in un ciclo di "Connessione", "Connessione.","Connessione..","Connessione...","Connessione"
@@ -9086,6 +9778,26 @@ async function login(username, password, ricordami = false){
     xhr.send("LoginController/login", formData , "POST");
 }
 
+/// Trova i quattro percorsi di sistema - Links, Loghi, Logs, Esportazione - e, se ne manca
+/// uno, apre la finestra che chiede all'operatore di indicarli. Restituisce true solo
+/// quando ci sono tutti.
+///
+/// Tre tentativi in ordine, per ognuno:
+///   1. quello scritto in lavorazioni.json, ma solo se la cartella esiste davvero: un
+///      percorso registrato e poi spostato varrebbe come assente;
+///   2. la cartella prevista sotto la lavorazione (defaultPercorso...), che se c'e' viene
+///      anche registrata;
+///   3. niente, e allora si chiede.
+///
+/// scope serve a chiedere solo una parte: linksLoghi sono i percorsi delle immagini,
+/// sistema quelli di log ed esportazione. La finestra pero' e' sempre la stessa e li mostra
+/// tutti e quattro.
+///
+/// Col libro aperto e nessun documento, i percorsi si cercano a partire dal primo file del
+/// libro: sono gli stessi per tutti.
+///
+/// DA SPOSTARE (task di divisione): questa e impostaPercorsiDiSistema sono i percorsi di
+/// lavoro, un concetto a se'. Starebbero in un js loro.
 async function checkPercorsi(forceOpenModal = false, scope = 'entrambi') {
     
     let _pathLavorazione = pathLavorazione;
@@ -9279,11 +9991,14 @@ async function checkPercorsi(forceOpenModal = false, scope = 'entrambi') {
             $("#pathEsportazione").val(percorsoEsportazione);
             $("#pathEsportazione").text(percorsoEsportazione);
 
-            //se tutti e 4 i percorsi sono presenti $("#confermaPercorsi").show();
-            if (
-                (percorsoLinks && percorsoLoghi && percorsoLogs && percorsoEsportazione) ||
-                forceOptions!=null
-            ) {
+            //Il pulsante di conferma compare solo quando tutti e quattro i percorsi ci sono.
+            //I20-1002: qui la condizione aveva in coda "|| forceOptions != null", ma
+            //forceOptions era un parametro rimosso - restano le tre righe commentate in
+            //cima alla funzione. Era un identificatore inesistente, quindi ReferenceError
+            //ogni volta che mancava un percorso, cioe' proprio nel caso per cui questo
+            //ramo esiste. Nessun chiamante ha mai passato forceOptions, percio' quel
+            //confronto valeva false anche prima: toglierlo non cambia il comportamento.
+            if (percorsoLinks && percorsoLoghi && percorsoLogs && percorsoEsportazione) {
                 $("#confermaPercorsi").show();
             }
         }
@@ -9297,6 +10012,8 @@ async function checkPercorsi(forceOpenModal = false, scope = 'entrambi') {
     return true;
 }
 
+/// Chiude la sessione sul server, dimentica le credenziali salvate e riporta al modulo di
+/// accesso.
 async function logout(){
     showLoading("Logout in corso...");
     //facciamo la chiamata xhr per settare la sessione
@@ -9369,6 +10086,12 @@ async function logout(){
                         
 }
 
+/// Ricalcola a mano le altezze dei pannelli quando la finestra cambia dimensione.
+///
+/// Si fa in JavaScript e non in CSS perche' le altezze dipendono da quelle di intestazione
+/// e barra in basso, che cambiano col contenuto. Il setTimeout da' al pannello il tempo di
+/// assestarsi: misurare subito dopo un cambio restituisce i valori di prima - vale in UXP
+/// come altrove.
 function onresizeWindow(){
     try{
         setTimeout(function () {
@@ -9413,6 +10136,14 @@ function onresizeWindow(){
     }
 }
 
+/// Ricalcola l'altezza e la larghezza dell'elenco del tracciato, sottraendo quanto occupano
+/// la riga di sincronizzazione e l'area dei filtri.
+///
+/// Se quei due elementi non ci sono ancora esce senza fare niente: viene chiamata anche
+/// mentre il tracciato si sta costruendo.
+///
+/// La larghezza si prende dallo scrollWidth dell'intestazione, cosi' le righe non vanno mai
+/// piu' strette delle colonne.
 function onResizeTab1Tracciato(){
     setTimeout(function () {
         lastHeightDimension = document.getElementById("wrapper").clientHeight;
@@ -9451,6 +10182,12 @@ function onResizeTab1Tracciato(){
 }
 
 
+/// Registra in lavorazioni.json uno dei quattro percorsi di sistema: 0 Links, 1 Loghi,
+/// 2 Logs, 3 Esportazione.
+///
+/// Col valore passato lo scrive e basta; senza, apre il dialogo di scelta cartella.
+/// checkPercorsi la usa nel primo modo quando trova la cartella prevista, l'operatore nel
+/// secondo quando gliela si chiede.
 async function impostaPercorsiDiSistema(tipo, value = null){
 
     try{
@@ -9578,6 +10315,15 @@ async function impostaPercorsiDiSistema(tipo, value = null){
 }
 
 
+/// Copia un pezzo di interfaccia portandosi dietro i gestori onclick e onchange scritti
+/// negli attributi.
+///
+/// Un clone jQuery perde gli eventi legati via JavaScript ma conserva gli attributi: qui si
+/// rileggono e si riattaccano. Il valore dell'attributo si esegue con eval, perche' e'
+/// testo, ed e' l'unico eval del file.
+///
+/// L'abbinamento fra originale e copia e' per posizione (eq(index)): regge finche' le due
+/// strutture sono identiche, il che e' vero subito dopo il clone.
 function cloneElementWithEvents($element) {
     // Clona l'elemento
     var $clone = $element.clone();
@@ -9601,10 +10347,25 @@ function cloneElementWithEvents($element) {
     return $clone;
 }
 
+/// Aspetta il numero di millisecondi indicato. Un wrapper su setTimeout, per poter scrivere
+/// await delay(500).
+///
+/// DA SPOSTARE (task di divisione): esiste gia' Utility.sleep, che fa la stessa identica
+/// cosa. Una delle due va tolta.
 function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+/// Mostra o nasconde le parti del pannello riservate: menabo, referenze avanzate e le due
+/// schede Sync e Tab13 le vede il solo superAdmin.
+///
+/// Agenzia, GDO e Punto Vendita le nascondono. Un ruolo che non rientra in nessuno dei due
+/// gruppi lascia tutto com'e' - e' il ramo else vuoto, e vale come "non decido".
+///
+/// resetIdRec compare solo in testMode: e' un comando che riscrive le etichette di tutti i
+/// box, e su una macchina di produzione non deve nemmeno vedersi.
+///
+/// DA SPOSTARE (task di divisione): con login, logout e showLogin in un js dell'accesso.
 function setFinestrePerRuolo() {
     if (ruoloUtenteLoggato == RuoloUtente.superAdmin) {
         $("#menaboTab").show();
@@ -10248,6 +11009,11 @@ var pingInProcess = false;
 //FINE - Modalità OFFLINE
 
 
+/// PROCURARSI LA FOTO. Apre la finestra dello scaricamento del pacchetto foto.
+///
+/// Se uno scaricamento e' gia' in corso non ne avvia un altro: rimostra la finestra di quello,
+/// che l'operatore aveva ridotto a icona. E' l'unico motivo per cui syncFotoInCorso e' una
+/// lista e non un booleano.
 async function apriSchermataSyncPacchettoFoto(){
     
     //se negli id delle operazioni di sync in corso c'è già un id non avviamo nuove operazioni ma ricostruiamo solo la schermata con i dati correnti
@@ -10291,8 +11057,11 @@ function fotoPresenteNeiLinks(nomeFoto) {
     }
 }
 
-//I20-967: scrive nella cartella indicata i byte di un file scelto dall'operatore.
-//Attende davvero la scrittura, con la stessa API usata dallo scaricamento foto.
+/// PROCURARSI LA FOTO. I20-967: scrive nella cartella indicata i byte di un file scelto
+/// dall'operatore.
+///
+/// Attende davvero la scrittura, con la stessa API usata dallo scaricamento foto: senza
+/// l'attesa, chi impagina subito dopo trova il file a meta'.
 async function scriviFileInCartella(bytes, cartella, nomeFile) {
     const folder = await fs2.getEntryWithUrl("file://" + cartella);
     const file = await folder.createFile(nomeFile, { overwrite: true });
@@ -10300,8 +11069,12 @@ async function scriviFileInCartella(bytes, cartella, nomeFile) {
     await file.write(dati);
 }
 
-//I20-967: impagina una foto appena arrivata in cartella, concedendo a InDesign un
-//secondo tentativo se il primo place e' caduto sul segnaposto di foto non trovata.
+/// PROCURARSI LA FOTO. I20-967: impagina una foto appena arrivata in cartella, concedendo a
+/// InDesign un secondo tentativo se il primo place e' caduto sul segnaposto di foto non trovata.
+///
+/// Fra il momento in cui il file compare e quello in cui InDesign lo sa collocare passa un
+/// istante: la decisione di ritentare sta in fotoAutoSync, che e' un modulo puro e si puo'
+/// provare; qui restano le due operazioni concrete, impaginare e aspettare.
 async function impaginaFotoAppenaDisponibile(nomeFoto, box, fotoRectangle, codice, statoSelezione = null, noRender = false) {
     var esito = await fotoAutoSync.impaginaConRitentativo({
         impagina: async function () {
@@ -10322,8 +11095,12 @@ async function impaginaFotoAppenaDisponibile(nomeFoto, box, fotoRectangle, codic
     return esito;
 }
 
-//I20-967: dati di download della singola foto, chiesti per guid cosi' da avere esattamente
-//quella appena assegnata alla ref e non quella che la risoluzione area/canale ritiene corrente.
+/// PROCURARSI LA FOTO. I20-967: dati di download della singola foto, chiesti per guid cosi' da
+/// avere esattamente quella appena assegnata alla ref e non quella che la risoluzione
+/// area/canale ritiene corrente.
+///
+/// Non fallisce mai: ogni strada - risposta illeggibile, errore del server, rete assente -
+/// risolve con null. Chi chiama deve solo sapere se la foto si puo' scaricare o no.
 function getInfoFotoDalServer(guidId) {
     return new Promise((resolve) => {
         var xhr = new XMLHttpRequestClient();
@@ -10360,8 +11137,15 @@ function getInfoFotoDalServer(guidId) {
     });
 }
 
-//I20-967: scaricamento silenzioso della singola foto. Non apre la modale del pacchetto foto:
-//l'operatore ha gia' confermato il cambio foto e non deve chiudere altre finestre.
+/// PROCURARSI LA FOTO. I20-967: scaricamento silenzioso della singola foto. Non apre la modale
+/// del pacchetto foto: l'operatore ha gia' confermato il cambio foto e non deve chiudere altre
+/// finestre.
+///
+/// Riusa cmd.downloadImages, cioe' la stessa strada del pacchetto completo, ma con le callback
+/// di avanzamento quasi tutte vuote: si vede solo la riga di caricamento.
+///
+/// Il finally toglie l'id da entrambe le liste: senza, un'operazione finita male lascerebbe
+/// syncFotoInCorso non vuoto e apriSchermataSyncPacchettoFoto non farebbe piu' partire niente.
 async function scaricaFotoSingolaNeiLinks(recordFoto) {
     const folder = await fs2.getEntryWithUrl("file://" + /*pathLavorazione +*/ percorsoLinks);
     var idOperazione = Utility.generateId();
@@ -10759,6 +11543,11 @@ async function avviaSyncPacchettoFoto(mode, callback, codici = []){
     }
 }
 
+/// Annulla lo scaricamento del pacchetto foto in corso, dopo conferma.
+///
+/// Non interrompe niente di brutale: sposta gli id delle operazioni in corso in
+/// abortedSyncFoto, ed e' chi scarica a controllare quella lista e fermarsi da solo. Le
+/// foto gia' arrivate restano, e la conferma lo dice.
 async function abortSyncPacchettoFotoFunction(){
     //usiamo un confirm
     var res = await Utility.confirm("Sicuro di voler annullare l'operazione in corso? Le immagini già scaricate verranno mantenute.");
@@ -10778,6 +11567,11 @@ async function abortSyncPacchettoFotoFunction(){
 
 }
 
+/// Chiede al server l'elenco di loghi e bolli da scaricare, nel formato che si aspetta
+/// cmd.downloadImages.
+///
+/// Sono le immagini comuni a tutta la lavorazione, non quelle delle singole referenze: si
+/// scaricano una volta per libro.
 function getLoghiBolliData(callback) {
     var xhr = new XMLHttpRequestClient();
     xhr.onload = async (data, parsed) => {
@@ -10814,6 +11608,8 @@ function getLoghiBolliData(callback) {
     xhr.send("SyncFoto/getPacchettoLoghiBolliAsContract", null, "GET", null);
 }
 
+/// Chiede al server i dati di scaricamento delle foto di una referenza, per codice.
+/// L'equivalente di getLoghiBolliData per le foto di prodotto.
 function getFotoData(codice, callback) {
     var xhr = new XMLHttpRequestClient();
     xhr.onload = async (data, parsed) => {
@@ -11336,6 +12132,12 @@ async function ricollegaFotoMassivo(ricollegaFotoPresentiModificate = false, adv
     }
 }
 
+/// Il pulsante che mette il Plugin in pausa: smette di reagire ai cambi di selezione e di
+/// pagina, e copre il pannello con un avviso.
+///
+/// Serve quando l'operatore deve lavorare in InDesign senza che ogni clic faccia partire
+/// un'analisi. Lo stato sta nell'attributo dell'icona, che e' anche cio' che decide quale
+/// delle due immagini mostrare.
 function clickOnSleepAwake(sender)
 {
     if (sender.attr('stato')=='wake')
@@ -11356,6 +12158,15 @@ function clickOnSleepAwake(sender)
     }
 }
 
+/// Toglie l'idRec dall'etichetta di tutti i box del documento, in tutte le pagine.
+///
+/// E' un attrezzo da banco di prova, e si vede solo in testMode (setFinestrePerRuolo).
+/// Senza idRec i box tornano a essere riconoscibili per solo codice gruppo, che e' come si
+/// faceva prima: serve a riprodurre quella situazione.
+///
+/// La posizione dell'idRec nell'etichetta dipende da quanto e' vecchio il box: campo 4 nel
+/// formato vecchio, campo 5 in quello nuovo. E' getDnaOfBox a dire quale dei due si ha per
+/// le mani (dna.oldBoxFormat).
 async function resetIdRec(){
     //confirm all'utente
     var res = await Utility.confirm("Verranno rimossi tutti gli idRec da tutti i box, sicuro di voler procedere?");
