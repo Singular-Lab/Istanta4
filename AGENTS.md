@@ -109,6 +109,8 @@ Dichiara esplicitamente: **Nessun file del progetto è stato modificato.**
 
 Registra il completamento del pre-flight tramite `company_update_task_status`, se disponibile, quindi fermati e attendi l'approvazione esplicita dell'utente. La richiesta iniziale non vale come approvazione all'implementazione.
 
+L'approvazione del pre-flight autorizza soltanto la creazione del branch e la modifica dei file. Non autorizza test, commit, push né pull request: questi passi richiedono la conferma separata della revisione descritta al §10.
+
 ## 8. Branch Git obbligatorio
 
 Dopo l'approvazione e prima di modificare file:
@@ -120,38 +122,57 @@ Dopo l'approvazione e prima di modificare file:
 
 Non lavorare sul branch base e non eseguire force-push. Se il branch non può essere creato o recuperato, riporta Jira a `ToDo`, registra il task come `Blocked` e non modificare file.
 
-## 9. Implementazione e verifica
+## 9. Implementazione
 
 Sul branch governato:
 
 1. Applica soltanto le modifiche approvate.
 2. Crea o aggiorna i test individuati nel pre-flight.
-3. Esegui prima i test mirati, poi le verifiche richieste dagli `AGENTS.md` dei componenti coinvolti.
-4. Per modifiche trasversali, esegui i test di tutti i componenti impattati dalla matrice.
-5. Registra i comandi realmente eseguiti e i relativi risultati; non dichiarare verifiche mai lanciate.
-6. Se i controlli falliscono, non effettuare il push, riporta Jira a `ToDo` e registra il task come `Blocked` con il dettaglio dell'errore.
-7. Se i controlli pertinenti passano, crea un commit limitato ai file approvati e pubblica il branch remoto.
+3. Non eseguire test, commit né push: le modifiche restano nel workspace locale, sul branch del task.
+
+## 10. Revisione delle modifiche
+
+Terminate le modifiche:
+
+1. Registra il task come `WaitingReview` tramite `company_update_task_status`.
+2. Presenta all'utente l'elenco dei file modificati e una sintesi di ogni modifica, in modo che possa rivederle sul branch.
+3. Fermati e attendi la conferma esplicita dell'utente. L'approvazione del pre-flight non vale come conferma della revisione.
+
+Se l'utente accetta le modifiche, registra il task come `ReviewApproved` tramite `company_update_task_status` e prosegui con il §11.
+
+Se l'utente non è soddisfatto, registra il task come `PreflightReady` tramite `company_update_task_status` e prepara un nuovo rapporto pre-flight sullo stesso `taskId`, a partire dalle modifiche già presenti sul branch e dalle indicazioni dell'utente. Il ciclo riprende dal §7: nuova approvazione, nuove modifiche sullo stesso branch, nuova revisione. `company_create_task_branch` restituisce il branch già collegato al task, e il lavoro prosegue lì senza scartare le modifiche precedenti, salvo indicazione esplicita dell'utente.
+
+Il Control Plane rifiuta verifica, pull request e completamento di un task dell'agent che non sia `ReviewApproved`.
+
+## 11. Verifica e pubblicazione
+
+Solo dopo la conferma della revisione:
+
+1. Esegui prima i test mirati, poi le verifiche richieste dagli `AGENTS.md` dei componenti coinvolti.
+2. Per modifiche trasversali, esegui i test di tutti i componenti impattati dalla matrice.
+3. Registra i comandi realmente eseguiti e i relativi risultati; non dichiarare verifiche mai lanciate.
+4. Se i controlli falliscono, non effettuare il push, riporta Jira a `ToDo` e registra il task come `Blocked` con il dettaglio dell'errore.
+5. Se i controlli pertinenti passano, crea un commit limitato ai file approvati e pubblica il branch remoto. Nei cicli successivi al primo aggiungi un nuovo commit sullo stesso branch, senza riscrivere quelli già pubblicati.
 
 Non inserire credenziali, token, configurazioni cliente o dati reali nei file, nei commit, nei log o nell'output del task. I test con database, code, filesystem o servizi esterni devono usare ambienti e dati isolati e non distruttivi.
 
-## 10. Pull request e CI
+## 12. Pull request e CI
 
-1. Apri la pull request tramite `company_open_pull_request` soltanto dopo commit, test e push.
+1. Apri la pull request tramite `company_open_pull_request` soltanto dopo commit, test e push. Se il task ha già una pull request aperta, lo strumento restituisce quella: il push l'ha già aggiornata e la CI riparte sui nuovi commit.
 2. Inserisci nel titolo o nella descrizione task, eventuale issue Jira, componenti modificati e test eseguiti.
 3. Chiama `company_get_pull_request_status` e rispetta i check richiesti dal progetto.
-4. Se i check sono in corso, mantieni il task in attesa e riutilizza lo stesso `taskId` al controllo successivo.
+4. Se i check sono in corso, mantieni il task nello stato `ReviewApproved` e riutilizza lo stesso `taskId` al controllo successivo.
 5. Se un check fallisce, riporta Jira a `ToDo` e il task a `Blocked` indicando il check fallito.
 6. Quando i controlli richiesti passano, porta Jira a `Completed` e poi il task Control Plane a `Completed`.
 
 L'agent non deve eseguire merge, pubblicazione di release o distribuzione. Squash/merge, stato `Merged`, release e stato `Distributed` restano azioni dell'operatore tramite Control Plane.
 
-## 11. Revisione operatore
+## 13. Revisione operatore dopo il completamento
 
-1. Se l'operatore non è soddisfatto e chiede di rinegoziare il task con altre richieste di aggiustamento, devi ripetere il preflight sulla nuova richiesta e quindi impostando il task in questione tramite `company_update_task_status`
+1. Se, a task già `Completed`, l'operatore non è soddisfatto e chiede altri aggiustamenti, registra il task come `PreflightReady` tramite `company_update_task_status` e ripeti il pre-flight sulla nuova richiesta, con lo stesso `taskId`.
+2. Il processo itera di nuovo dal §7, compresa la revisione delle modifiche del §10.
 
-2. Il processo itera di nuovo facendo un nuovo preflight per quel task
-
-## 12. Confini del cambiamento
+## 14. Confini del cambiamento
 
 - Non includere modifiche locali preesistenti dell'utente nel commit.
 - Non modificare file generati, binari, output di build o dati persistenti salvo esplicita richiesta approvata.
