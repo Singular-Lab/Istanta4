@@ -1,4 +1,12 @@
 
+/// I20-1002: i campi di testo della scheda referenza - cosa e' stato modificato, cosa si puo'
+/// modificare, cosa va salvato.
+///
+/// Tiene da parte il valore che ogni campo aveva all'apertura, e su quello si regge tutto:
+/// getOperazioniDiSalvataggioDaFare confronta e restituisce SOLO le operazioni che servono
+/// davvero, invece di risalvare ogni campo a ogni conferma.
+///
+/// E' una classe: ne nasce una per ogni scheda aperta.
 class InputEditController {
     inputCollection = [];
     datasource = {};
@@ -58,6 +66,7 @@ class InputEditController {
 
     }
 
+    /// Si mette in ascolto delle modifiche dell'operatore sui campi.
     listen() {
         let me = this;
 
@@ -260,6 +269,8 @@ class InputEditController {
 
     }
 
+    /// Aggiorna lo stato della scheda dopo una modifica: cosa risulta cambiato, e se la
+    /// descrizione mostrata si discosta da quella in archivio.
     checkStato() {
         let modificato = false;
         for (let key in this.datasource) {
@@ -299,6 +310,9 @@ class InputEditController {
 
     }
 
+    /// Il cuore della classe: confronta i valori attuali con quelli di partenza e restituisce
+    /// le sole operazioni necessarie. Senza questo confronto ogni conferma riscriverebbe tutti
+    /// i campi, anche quelli che l'operatore non ha toccato.
     getOperazioniDiSalvataggioDaFare(descrizioneEreditata = false)
     {
         //Funzione che torna al gestore le cose che devono essere cambiate
@@ -483,34 +497,6 @@ class InputEditController {
         }
 
         return operazioni;
-    }
-
-
-    /// I20-993: mette o toglie la sola lettura sui campi della scheda.
-    ///
-    /// Solo la variante piu' specifica applicabile si modifica; le altre si mostrano e basta.
-    /// Chi non chiama questo metodo non cambia comportamento: si parte modificabili, come prima.
-    impostaSolaLettura(solaLettura) {
-        this.solaLettura = solaLettura === true;
-
-        let me = this;
-
-        this.myContainer.find("textarea").each(function () {
-            let campo = $(this);
-
-            //Alcuni campi nascono gia' in sola lettura, perche' l'agenzia o la revisione non
-            //li lascia toccare. Quello stato va ricordato la prima volta e mai perso: togliere
-            //la sola lettura a tutti renderebbe scrivibile chi non doveva esserlo.
-            if (campo.attr("data-solaletturaoriginale") == null) {
-                campo.attr("data-solaletturaoriginale", campo.prop("readonly") ? "1" : "0");
-            }
-
-            let originale = campo.attr("data-solaletturaoriginale") === "1";
-
-            campo.prop("readonly", me.solaLettura || originale);
-            //Si vede che non si tocca, senza nascondere il testo: serve leggerlo.
-            campo.css("opacity", me.solaLettura ? "0.6" : "");
-        });
     }
 }
 

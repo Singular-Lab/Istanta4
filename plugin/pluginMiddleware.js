@@ -1,5 +1,14 @@
 const FicoProcess = require("./ficoProcess");
 
+/// I20-1002: il mediatore fra il Plugin e la configurazione del cliente. Quando il codice ha
+/// bisogno di sapere come si comporta QUESTO cliente, lo chiede qui.
+///
+/// Le fonti sono due e un interruttore sceglie: se callCustom e' vero comanda il custom.js
+/// montato in radice da monta-cliente.sh, altrimenti la configurazione scaricata dal server.
+/// Quasi ogni metodo qui dentro ha percio' la stessa forma a due rami.
+///
+/// E' la traduzione in codice della direzione in cui il progetto si muove: dal comportamento
+/// scritto in un .js per cliente alla configurazione dichiarata sul server.
 const pluginMiddleware = {
 
     callCustom: true,
@@ -59,6 +68,8 @@ const pluginMiddleware = {
         });
     },
 
+    /// Il valore di un campo di configurazione per il cliente corrente. E' la funzione da cui
+    /// passa quasi tutto il resto del file.
     getCampo(nomeCampo){
         let me = this;
         if (me.callCustom) {
@@ -218,6 +229,8 @@ const pluginMiddleware = {
         return null;
     },
 
+    /// RICOLLOCAZIONE (I20-1002): traduce un numero in un FitOptions di InDesign. Non e'
+    /// mediazione: destinazione utility.js, o accanto agli enum di CssFramework.
     toFitOptions(tipoFit) {
         let me = this;
 
@@ -599,6 +612,10 @@ const pluginMiddleware = {
         return null;
     },
 
+    /// NOTA DI DISEGNO (I20-1002): questa e setBolloFOTONOFOUND hanno la forma a due rami come
+    /// le altre, quindi sono mediazione - ma cio' che mediano e' un'OPERAZIONE su InDesign, non
+    /// un valore di configurazione. Se il middleware debba delegare operazioni oltre che
+    /// rispondere a domande e' una decisione di disegno, non una ricollocazione.
     setBolloNOFOTO(name) {
         let me = this;
 
@@ -990,6 +1007,16 @@ const pluginMiddleware = {
         }
     },
 
+    /// Il valore di un campo, anche annidato: prima prova la chiave letterale, perche' un campo
+    /// puo' contenere il punto nel nome, e solo se non c'e' spezza il percorso.
+    ///
+    /// RICOLLOCAZIONE (I20-1002): questa non media niente, e' un'utilita' generica finita qui
+    /// perche' serviva qui. Insieme a normalize, isIn e toFitOptions andrebbe in utility.js.
+    ///
+    /// DA UNIFICARE: cambiStrutturali._getNestedValue fa esattamente questo. Sono due copie
+    /// della stessa funzione. Non si uniscono oggi perche' questo file richiede InDesign e sotto
+    /// Node non si carica, mentre cambiStrutturali si', e importarlo da li' gli farebbe perdere
+    /// il test. Serve un modulo puro che entrambi possano importare.
     getValueByPath(source, path) {
         let me = this;
 
@@ -1015,6 +1042,7 @@ const pluginMiddleware = {
         return current;
     },
 
+    /// RICOLLOCAZIONE (I20-1002): utilita' generica, non mediazione. Destinazione: utility.js.
     normalize(value) {
         let me = this;
 
@@ -1025,6 +1053,7 @@ const pluginMiddleware = {
         return String(value).toLowerCase().trim();
     },
 
+    /// RICOLLOCAZIONE (I20-1002): utilita' generica, non mediazione. Destinazione: utility.js.
     isIn(actualValue, expectedValue) {
         let me = this;
 

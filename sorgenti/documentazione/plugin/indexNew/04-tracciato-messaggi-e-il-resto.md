@@ -1,0 +1,215 @@
+# indexNew.js — tracciato, messaggi e il resto
+
+**Cosa contiene questa pagina:** le **114 funzioni** rimaste dopo le tre pagine precedenti. Non
+sono un concetto, sono dodici concetti diversi finiti nello stesso file — ed è questa pagina, più
+delle altre, a dare la misura del perché `indexNew.js` vada diviso.
+
+Con questo sotto-lotto **tutte e 129 le funzioni globali di `indexNew.js` hanno il commento**.
+
+---
+
+## Le famiglie che ci sono dentro
+
+| famiglia | funzioni | dove dovrebbero stare |
+|---|---|---|
+| tracciato (elenco, righe, colonne, ricerca) | 14 | qui, è il concetto principale del file |
+| messaggi, console e log | 8 | un js dei messaggi |
+| accesso e ruoli | 4 | un js dell'accesso |
+| percorsi di sistema | 2 | un js dei percorsi |
+| kit in lavorazione | 3 | `ficoProcess.js`, che già fa la ricerca del kit |
+| libro (impaginazione ed esportazione) | 6 | qui |
+| identità di una referenza | 6 | un js loro, o `utility.js` — le usa anche `griglia.js` |
+| accesso al disco | 3 | `utility.js` |
+| versione del Plugin | 3 | `versionePlugin.js`, che già esiste |
+| foto | 7 | il js delle foto già previsto |
+| segnalazioni di impaginazione | 3 | il js del Report Integrità già previsto |
+
+---
+
+## Quello che non andava
+
+Leggendole una per una sono venuti fuori **sei difetti veri**. Tre erano correggibili senza
+cambiare comportamento e sono stati corretti qui; gli altri tre no, e hanno un task ciascuno.
+
+Altre due cose sembravano difetti e non lo erano: le ha verificate l'operatore, e sono descritte
+più sotto perché nessuno provi a «correggerle».
+
+### Corretti in I20-1002
+
+**`showLoading` conteneva una riga col solo identificatore `Default`.** Nel ramo che scrive il
+testo di ripiego, e `Default` non esiste da nessuna parte: quel ramo lanciava `ReferenceError`, e
+`showLoading` non ha un `try/catch`. Non si notava perché nessuno chiama `showLoading()` senza
+testo — ma tre chiamanti passano una variabile che può essere nulla. Riga rimossa.
+
+**`checkPercorsi` leggeva `forceOptions`, che non esiste più.** Era un parametro, rimosso; ne
+restano le tre righe commentate in cima alla funzione. La condizione era
+
+```js
+if ((percorsoLinks && percorsoLoghi && percorsoLogs && percorsoEsportazione) || forceOptions != null)
+```
+
+Per corto circuito, `forceOptions` si valuta **solo quando uno dei quattro percorsi manca** — cioè
+esattamente nel caso per cui quel ramo esiste. `ReferenceError`. Ed è passato inosservato perché
+la funzione è `async` e i suoi due chiamanti scrivono `await !checkPercorsi()` (vedi sotto), quindi
+la promise rifiutata non la raccoglie nessuno.
+
+Nessun chiamante ha mai passato `forceOptions`, perciò quel confronto valeva `false` anche quando
+il parametro esisteva: il termine è stato tolto, e il comportamento voluto è lo stesso.
+
+**`sincronizzaBoxGriglia` è stata rimossa**: 142 righe, **zero chiamanti in tutto il repository**, e
+dentro **14 occorrenze di `Utiliy.`** invece di `Utility.` — che avrebbero lanciato `ReferenceError`
+su quasi ogni ramo. Il refuso è sopravvissuto per anni proprio perché la funzione non gira mai.
+
+### Da correggere in un task a parte
+
+**`await` applicato alla negazione di una promise, in due punti.**
+
+```js
+while (await !checkPercorsi()) { await Utility.sleep(1000); }   // initDocumentInLavorazione
+let _resTest = await !checkPercorsi();                          // initLibroInLavorazione
+```
+
+`!promise` è sempre `false`, quindi `await false` è `false` e **il ciclo non gira mai**:
+`checkPercorsi` viene chiamata una volta sola e il suo esito ignorato. Andava scritto
+`while (!(await checkPercorsi()))`. L'effetto è che l'attesa dei percorsi di sistema non avviene —
+si tira dritto comunque.
+
+**`autoCompilazioneCampiKit` non fa niente.**
+
+```js
+var campiDecodificati = null;
+...
+if (customAgenzia.decodificaNomeFile != null)
+    customAgenzia.decodificaNomeFile(docInLavorazione.name);   // <- il risultato si butta
+...
+if (campiDecodificati != null) { ... }                        // <- irraggiungibile
+```
+
+Manca l'assegnazione. `campiDecodificati` resta `null`, tutto il corpo da lì in giù è morto, e
+l'unica cosa che la funzione fa davvero è nascondere `#actMassivaSuKit`. Dovrebbe leggere il nome
+del documento, ricavarne promo, canale, area e formato, riempire le quattro tendine e far partire
+la ricerca del kit. **Non si nota perché non c'è un errore**: le tendine restano vuote e si
+compilano a mano, come se l'automatismo non fosse mai stato previsto.
+
+**`writeDebugMessageForCrash` scrive su un percorso che non esiste.**
+
+```js
+var logPath = pathLavorazione + percorsoLogs;      // writeDebugMessageForCrash
+var logPath = /*pathLavorazione +*/ percorsoLogs;  // messaggioUtente, due funzioni sopra
+```
+
+`percorsoLogs` è **già assoluto** — glielo assegna `impostaPercorsiDiSistema` leggendo
+`file.pathLogs`. In `messaggioUtente` la concatenazione è stata commentata, qui no. Doppio effetto:
+il log di crash non viene mai scritto, e la scrittura fallita fa comparire all'operatore
+*«Code IDX-98 Errore cartella logs assente»*, che manda a cercare un guasto che non c'è.
+
+### Due cose che sembrano difetti e non lo sono
+
+**Verificate in esercizio in I20-1002: funzionano entrambe.** Sono scritte in un modo che a chi
+legge il codice come se fosse un browser sembra sbagliato — e chi provasse a «correggerle» le
+romperebbe. Stanno qui perché non succeda.
+
+**`creaRigaSync` legge la tendina con `box.$picker[1].value`.** In una pagina normale quell'oggetto
+jQuery avvolgerebbe un solo elemento e l'indice `1` sarebbe `undefined`. In UXP no: il pulsante
+*Avvia* del tracciato funziona regolarmente. È **l'unico accesso indicizzato di questa forma in
+tutto il Plugin**; non cambiarlo in `[0]` senza averlo provato.
+
+**`cambioVisualizzazioneConsole` riconosce lo stile dal colore.** Confronta
+`.css("background-color")` con le parole `"red"`, `"darkorange"` e `"green"`. In un browser `.css`
+restituirebbe lo stile calcolato — `rgb(255, 0, 0)` — e nessun confronto sarebbe mai vero. In UXP
+il confronto regge: spuntando le caselle spariscono esattamente i messaggi corrispondenti.
+
+Resta valida una sola osservazione di disegno: lo stile sarebbe più solido letto da un attributo
+nostro invece che dedotto dal colore. Ma è un miglioramento, non una correzione.
+
+---
+
+## Annotazioni minori
+
+Cose che non rompono niente oggi ma che vale la pena sapere, tutte segnate anche nel codice.
+
+| dove | cosa |
+|---|---|
+| `applyOverflowFix` | `overflowInstruction` assegnata senza `var`/`let`: globale implicita. Il file non ha `"use strict"` |
+| `registraStatoLavorazioneLibro` | `file== readFile(filePath)` — doppio uguale al posto di uno. Non fa danno, quella variabile non si rilegge |
+| `getSchedeRefsMassivo` | `let me = this` e `me.isInvalidated` sono un trapianto da `schedaRef.js`, dove `this` è il modulo. Qui la funzione è globale, quindi il controllo non scatta mai |
+| `creaElementoTracciato` | chiama `getTracciatoColumns` **a ogni riga**, e quella interroga il `pluginMiddleware`. Su migliaia di referenze è lo stesso lavoro rifatto migliaia di volte |
+| `writeFileInConsole` | il messaggio viene inserito come HTML e finisce anche dentro un attributo. I messaggi contengono testi di eccezione: uno con dentro un apice o un `<` rompe il markup |
+| `impaginazioneSingoloIndd` | la variabile `found` è assegnata e mai letta |
+| `impaginaSingolo` | `res` diventa vero solo sul cammino riuscito: se il server risponde con un errore, l'operatore vede il messaggio giusto ma la funzione aspetta comunque venti secondi e poi aggiunge un timeout che timeout non è |
+| `creaRigaSync` | due gestori vuoti (clic sull'icona info, `change` della tendina) e un campo `pagineRange_<uid>` che nasce nascosto e che nessuno mostra né legge |
+| `raggruppa` | riceve `enumSchedaRef` e non lo passa: la funzione chiamata non ne vuole |
+| `delay` | fa esattamente quello che fa già `Utility.sleep`. Una delle due va tolta |
+
+---
+
+## Gli esclusi: una versione vecchia rimasta indietro
+
+`escludiRef`, `ripristinaElemento` e `compilaTabElementiEsclusi` formavano **un ciclo chiuso senza
+porta d'ingresso**: si chiamavano fra loro e nessuno chiamava il gruppo dall'esterno. Portavano in
+testa la nota `//da ripristinare` dell'autore, e a prima lettura sembravano un meccanismo intero a
+cui mancava solo il pulsante.
+
+Non era così. **La funzione è già stata reintegrata in `griglia.js`**, dove è viva e si usa. Le tre
+di `indexNew` erano la versione precedente, e le due scrivono `listaRefEscluse.json` in **formati
+incompatibili**:
+
+| | formato |
+|---|---|
+| `griglia.js` (vivo) | `[{ Pag, listaEscluse: [record, …] }, …]` — raggruppato per pagina |
+| le tre di `indexNew` (rimosse) | `["{\"Codice\":…,\"Info\":…,\"BoxNumber\":…}", …]` — array di stringhe JSON, piatto, senza pagina |
+
+Che quello giusto sia il primo lo dicono tutti gli altri lettori del file:
+`indexNew.js` stesso (`listaRefEscluse.find(f => f.Pag == pItem.name)`) e `filtri.js`. Se le tre
+funzioni fossero mai ripartite non avrebbero solo duplicato una funzione esistente: avrebbero
+**riscritto quel file in un formato che nessun altro sa leggere**. **Rimosse** (219 righe).
+
+Rimossa anche **`decodificaNomeFile`**: non la chiamava nessuno e restituiva valori fissi inventati
+(`"A2515_SC_27-06-25"`, `"SC"`, `"TO"`, `null`), col commento *«qui ci sarà roba che per ora non
+c'è»*. Quella vera è `customAgenzia.decodificaNomeFile`, perché le regole con cui si battezza un
+file sono del cliente. Era un abbozzo pericoloso: chi l'avesse chiamata per sbaglio al posto di
+quella dell'agenzia non avrebbe avuto un errore — avrebbe avuto una promo inventata.
+
+---
+
+## Le due unificazioni
+
+**`replaceAll`** esisteva in due copie, e non erano equivalenti.
+
+```js
+// Utility.replaceAll — split/join
+// indexNew.replaceAll — while (str.indexOf(cerca) != -1) str = str.replace(cerca, sost)
+```
+
+La seconda **non termina** se la sostituzione contiene la stringa cercata:
+`replaceAll("pippo", "p", "pp")` è un ciclo infinito, e il `try/catch` che l'avvolge non salva da
+un ciclo. Non la chiamava nessuno — l'unica chiamata nuda era in `Trea/custom.js`, per giunta con
+un solo argomento. **Rimossa**: resta `Utility.replaceAll`, e con essa se ne va il ciclo infinito.
+
+**`makeRegexFromGroupName`** esisteva in due copie che facevano cose diverse: quella di
+`CssFramework` toglie i suffissi `[itemLink]` e `[exist]` prima di costruire la regex, quella di
+`indexNew` no. E quella di `indexNew` era una **globale**: se in `CssFramework` qualcuno dimentica
+il `this.`, la chiamata non lancia `ReferenceError` — cade sulla globale e si comporta in modo
+diverso **in silenzio**. È il caso peggiore della classe di difetti corretta nel Lotto 5, perché lì
+almeno l'errore c'era.
+
+Quella di `indexNew` è stata rinominata **`makeRegexFromFieldName`**, che è anche il nome giusto:
+i suoi quattro punti d'uso confrontano nomi di **campi** (`compiledFields`, `deletedFields`), non di
+gruppi.
+
+---
+
+## Le agenzie deprecate
+
+`Agenzie/Pac/` e `Agenzie/Trea/` sono state rimosse: **11.733 righe**. Erano le ultime due agenzie
+non più in uso — restano Edro21, Coopfi e Famila.
+
+Con loro se ne sono andate le uniche due copie di `rimuoviSimboli` fuori da `indexNew`, che peraltro
+**non le chiamava nessuno** (Edro21, Coopfi e Famila non ne hanno una): la sola viva è la globale.
+
+`monta-cliente.sh` è stato allineato — senza, avrebbe continuato a offrire due clienti montando un
+file che non c'è più.
+
+**Fuori dal Plugin, Pac e Trea esistono ancora**: `AgenziaLib/Pac.cs`, `AgenziaLib/Trea.cs`,
+`Istanta/appsettings.pac.json`, `Istanta/wwwroot/external_source/Trea/`. È lato server, fuori dal
+perimetro di I20-1002.

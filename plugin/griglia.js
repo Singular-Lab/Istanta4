@@ -1,6 +1,15 @@
 const InddEvents = require('./events');
 
+/// I20-1002: la griglia e' la mappa dell'impaginato.
+///
+/// Un documento InDesign in cui ogni box del volantino e' un riquadro con dentro il codice della
+/// referenza che ci andra': serve all'operatore per vedere cosa va dove PRIMA di impaginare, e
+/// per intervenire - escludere una referenza, includerne un'altra, scambiare due box di posto.
+///
+/// Questo file non ricorda quasi niente fra una chiamata e l'altra: la memoria sta nel documento,
+/// nelle label dei riquadri, nel formato codice_associato$CODICE$IDREC.
 const griglia = {
+    /// Riempie i riquadri della griglia con le referenze. GRD-01 se la griglia non e' valida.
     async compilaGriglia(griglia, mappaGriglia = null) {
         let me = this;
         let pageName = griglia.parentPage.name;
@@ -295,6 +304,7 @@ const griglia = {
         }
     },
 
+    /// Legge cosa c'e' nei riquadri e ne fa una mappa.
     mappaturaGriglia(griglia) {
         let start = Date.now();
         if (!griglia.isValid) {
@@ -470,6 +480,8 @@ const griglia = {
         return null;
     },
 
+    /// Legge la lista del conteggio, tollerando che arrivi gia' come array. GRD-39 se il JSON
+    /// non si legge: in quel caso la lista e' vuota, non si solleva.
     parseListaConteggio(listaSerializzata) {
         if (listaSerializzata == null || listaSerializzata === "") {
             return [];
@@ -705,6 +717,9 @@ const griglia = {
         griglia.transparencySettings.blendingSettings.opacity = val;
     },
 
+    /// Ridistribuisce le referenze sui box disponibili. Due modalita', scelte dalla spunta
+    /// #toggleMode: sequenziale riempie in ordine, magnetica mette ogni referenza nel box piu'
+    /// vicino a dove stava. GRD-11 se la griglia non e' valida.
     async ricalcaConteggio(griglia) { //mode 0 = sequenziale, mode 1 magnetico
         try {
             let me = this;
@@ -989,6 +1004,9 @@ const griglia = {
         }
     },
 
+    /// La distanza fra due punti, per la modalita' magnetica del conteggio.
+    /// RICOLLOCAZIONE (I20-1002): geometria pura di sei righe, non ha niente di specifico della
+    /// griglia. Destinazione: utility.js.
     calcolaDistanza(punto1, punto2) {
         var dx = punto2[0] - punto1[0]; // Differenza sulle X
         var dy = punto2[1] - punto1[1]; // Differenza sulle Y
@@ -1181,6 +1199,7 @@ const griglia = {
         return validBoxes;
     },
 
+    /// Toglie una referenza dalla griglia: il suo box resta, ma vuoto.
     escludiElemento(pagCercate = [], gruppo = null, codiceFiltro = null) {
         let me = this;
         // leggiamo il codice, cerchiamo in listaRefConteggio se è presente alla pagina a cui ci troviamo, se lo troviamo lo spostiamo in listaRefEscluse all'elemento con la stessa pagina
@@ -1332,6 +1351,7 @@ const griglia = {
         return true;
     },
 
+    /// Mette una referenza in un box della griglia.
     includiElemento(codiceFiltro, box) {
         try{
             let me = this;
@@ -1592,6 +1612,13 @@ const griglia = {
 
     },
 
+    /// Il dialogo con cui l'operatore sceglie cosa includere o escludere.
+    ///
+    /// E' un DIALOGO, non una griglia: 382 righe che costruiscono e governano una finestra
+    /// modale. La griglia sa quali elementi si possono includere o escludere; come lo si chiede
+    /// all'operatore e' un altro mestiere. Era stato proposto di dare una casa comune alle
+    /// modali del Plugin: l'operatore ha valutato e SCARTATO la proposta. Resta qui, e il file
+    /// resta con 382 righe di dialogo dentro.
     modalSelezioneElementoIncludiEscludi(includi, escludi, griglia, pagCercate = [], mappaGriglia = null, gruppo = null, codiceSuggeritoPerEsclusione = null, callback = null) {
         try {
             if (mappaGriglia == null && griglia != null) {
@@ -2048,6 +2075,7 @@ const griglia = {
         }
     },
 
+    /// Muove la selezione fra i box della griglia, avanti o indietro.
     scorri(avanti, griglia, i, mappaGriglia = null){
         //se mappaGriglia è null la creiamo
         let me = this;
@@ -2298,6 +2326,9 @@ const griglia = {
         this.annullatoSwap = annullato;
     },
 
+    /// Scambia di posto due box: mostra da quale si parte e su quale si va, e chiede conferma.
+    /// L'esito si legge in terminatoSwap e annullatoSwap, perche' chi ha avviato lo scambio deve
+    /// sapere com'e' finito.
     swap(gruppo, mappaGriglia, griglia, pageName){
         let me = this;
         //riempiamo #elementoDiPartenzaSwap con le seguenti info
@@ -2640,6 +2671,15 @@ const griglia = {
     },
 
 
+    /// Legge il codice e l'idRec dalla label di un riquadro. Regge due formati: quello attuale
+    /// a tre parti, codice_associato$CODICE$IDREC, e quello storico a due.
+    ///
+    /// E' la funzione che DECIDE IL SIGNIFICATO DI UNA LABEL, ed e' logica pura dentro un file
+    /// che tocca InDesign, quindi non verificabile sotto Node.
+    /// Era stato proposto di portarla, con parseListaConteggio e getCodiceFiltroKey, in un
+    /// modulo suo che si sarebbe potuto collaudare: l'operatore ha valutato e SCARTATO la
+    /// proposta, non volendo un file nuovo. Resta cosi', e resta non verificabile: annotato
+    /// perche' la questione non torni senza sapere cosa si e' gia' deciso.
     parseCodiceAssociato(raw) {
         if (raw == null || raw === "") {
             return null;

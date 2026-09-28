@@ -7,7 +7,28 @@ const RicollegaEsiti = require('./ricollegaEsiti');
 const variantiDescrizione = require('./variantiDescrizione');
 const trattiDescrizione = require('./trattiDescrizione');
 
+/// I20-1002: la scheda della referenza - quello che l'operatore vede e modifica quando
+/// seleziona un box nel documento.
+///
+/// 182 membri, 9.640 righe, tutti sullo stesso piano: qui non c'e' distinzione fra pubblico e
+/// privato come in confronti.js.
+///
+/// Dentro ci sono TRE CONCETTI che il file non distingue, e che l'operatore ha deciso di
+/// separare. Ogni membro che appartiene a uno di essi e' marcato qui sotto:
+///
+///   PROCURARSI LA FOTO - 28 membri, circa 2.500 righe: quale foto va su questa referenza,
+///   chiederla al server, scaricarla, sostituirla, gestire extra ed extra auto. Va in un js
+///   suo, da non confondere col fixFoto di CssFramework, che invece decide DOVE la foto sta
+///   dentro il box: quelli sono due task distinti e non devono sovrapporsi.
+///
+///   CLONAZIONE - 26 membri: duplicare una referenza su piu' box e' un'altra cosa rispetto al
+///   modificarne i campi.
+///
+///   REPORT INTEGRITA' - 5 membri: come la scheda si comporta quando viene aperta DAL report
+///   invece che dal documento. Vanno col resto del report, sparso su otto file.
 const schedaRef = {
+    /// La referenza aperta nella scheda. E' la variabile piu' letta del Plugin: quasi ogni file
+    /// che vuole sapere "su cosa sta lavorando l'operatore" guarda qui.
     refSelected: null,
     multiSelection: null,
     schedeRefDati: [],
@@ -78,6 +99,8 @@ const schedaRef = {
 
     //Dalla scheda aperta dal report non si naviga altrove: gli eventi del plugin restano
     //fermi, e il resto dell'interfaccia non sarebbe governato da nessuno.
+    /// REPORT INTEGRITA'. Quando la scheda si apre dal report, la barra e i sottomenu' si
+    /// riducono: l'operatore sta guardando una referenza segnalata, non navigando il documento.
     DAL_REPORT_VOCI_BARRA_NASCOSTE: ["homeImage", "menaboTab", "grigliaTab", "utilityImage", "artworkTab", "raggruppaImage"],
 
     //Sgruppa e Struttura restano fuori: cambiano la composizione del gruppo, e non e' quello
@@ -547,6 +570,8 @@ const schedaRef = {
 
     },
 
+    /// Riaggancia un box impaginato alla sua referenza. Gli esiti che il server manda indietro
+    /// si leggono con ricollegaEsiti.js, che e' verificabile.
     async ricollegaBoxImpaginato(box, externalCall = false, codiceGruppo = null) {
         try {
             var dna = null;
@@ -1130,6 +1155,8 @@ const schedaRef = {
         this.aggiornaVisibilitaConfermaClonaRecord();
     },
 
+    /// L'apertura della scheda: legge il DNA del box, costruisce tutte le schermate, aggancia i
+    /// controlli. E' la funzione piu' lunga del file, 1.194 righe.
     async attivaSchermateReferenza(meccanica, box, page) {
 
         let me = this;
@@ -3797,6 +3824,8 @@ const schedaRef = {
         });
     },
 
+    /// Manda al server quello che l'operatore ha cambiato. Cosa sia cambiato davvero lo dice
+    /// InputEditController, che tiene da parte i valori di partenza.
     salvaModifiche(schedaRef, codice, box, meccanica, page) {
         try {
             console.log("Salva modifiche " + codice);
@@ -4653,6 +4682,7 @@ const schedaRef = {
         return esiti.nessuno;
     },
 
+    /// PROCURARSI LA FOTO. La schermata di primarie e secondarie.
     async EditFotoPrimarieSecondarie(box) {
         var messageDelivered = false;
         var schedaRef = this.schedeRefDati;
@@ -5972,6 +6002,8 @@ const schedaRef = {
         return percorso.substring(0, taglio);
     },
 
+    /// PROCURARSI LA FOTO. Il cambio foto: l'elenco delle foto disponibili, l'anteprima, la
+    /// scelta, lo scaricamento. 1.066 righe, ed e' il capofila delle 28 che vanno nel js nuovo.
     async openModalCambiaFoto(codice) {
         let me = this;
         var box = this.refSelected.item;
@@ -8717,90 +8749,6 @@ const schedaRef = {
         $("#confermaButtonGruppo").show();
     },
 
-    ImpostaPSSottogruppi(codiciGruppi) {
-        let me = this;
-        let schedaRef = this.schedeRefDati;
-        console.log(codiciGruppi);
-        //se codici.lenght è uguale a 1 mandiamo un alert e ritorniamo
-        if (codiciGruppi.length == 1) {
-            messaggioUtente("Code SRF-89: Selezionare almeno due gruppi per poter procedere", "error");
-            return;
-        }
-        // var objResult = JSON.parse(xhr.responseText);
-        // console.log(objResult);
-        try {
-            //svuotiamo #alterazioneGruppo e #gruppiFormati
-            $("#alterazioneGruppo").empty();
-            $("#gruppiFormati").empty();
-            //cambiamo il testo del pulsante sgruppa in torna indietro
-            $("#sgruppa").text("Torna indietro");
-
-            //per ogni codiceGruppo inseriamo una riga in #gruppiformati con il codiceGruppo
-            //poi in #alterazioneGruppo inseriamo una riga per ogni codice del gruppo con due checkbox uno per primario e uno per secondario
-            for (var i = 0; i < codiciGruppi.length; i++) {
-                //creiamo un elemento container con il codice del gruppo e classe containerGruppoPerSgruppamento
-                var container = $('<div class="containerGruppoPerSgruppamento" codice="' + codiciGruppi[i] + '"></div>');
-                var row = $('<div class="row align-items-center" style="margin-bottom:10px" codice="' + codiciGruppi[i] + '"></div>'); // Crea una nuova riga
-                var text = $('<span>(' + codiciGruppi[i] + ')</span>'); // Crea il testo
-                text.css({ "font-size": "12px", "color": "white" });
-                row.append(text); // Aggiunge il testo alla riga
-                $("#alterazioneGruppo").append(row); // Aggiunge la riga a #gruppiFormati
-
-                var codici = codiciGruppi[i].split(",");
-                for (var j = 0; j < codici.length; j++) {
-                    //troviamo nell'objResult l'elemento con codice uguale a codici[j] e prendiamo il valore di StatoSelezione
-                    var statoSelezione = schedaRef.find(function (item) {
-                        return item.recordInTracciato["Referenza.Codice"] == codici[j];
-                    }).StatoSelezione;
-                    var row = $('<div class="row align-items-center" style="margin-bottom:10px" codice="' + codici[j] + '"></div>'); // Crea una nuova riga
-                    var text = $('<span>(' + codici[j] + ')</span>'); // Crea il testo
-                    text.css({ "font-size": "12px", "color": "white" });
-                    var checkbox1 = $('<input class="checkboxSgruppa primario" type="checkbox" codice="' + codici[j] + '" style="vertical-align: middle;">');
-                    //se lo stato selezione è 1 mettiamo il checkbox1 a checked
-                    if (statoSelezione == 1) {
-                        checkbox1.prop("checked", true);
-                    }
-                    var label1 = $('<label for="checkbox1">P:</label>'); // Crea l'etichetta per il primo checkbox
-
-                    var checkbox2 = $('<input class="checkboxSgruppa secondario" type="checkbox" codice="' + codici[j] + '" style="vertical-align: middle;">');
-                    //se lo stato selezione è 2 mettiamo il checkbox2 a checked
-                    if (statoSelezione == 2) {
-                        checkbox2.prop("checked", true);
-                    }
-                    var label2 = $('<label for="checkbox2">S:</label>'); // Crea l'etichetta per il secondo checkbox
-
-                    label1.css({ "font-size": "12px", "color": "lightblue" });
-                    checkbox1.css("background-color", "blue");
-                    label2.css({ "font-size": "12px", "color": "yellow" });
-                    checkbox2.css("background-color", "yellow");
-                    //infine se l'elemento ha una foto mettiamo l'icona con l'immagine prima dei checkbox
-                    var single = schedaRef.find(function (item) {
-                        return item.recordInTracciato["Referenza.Codice"] == codici[j];
-                    });
-                    var imgSrc = single.recordInTracciato["Foto.Nome"] != "" ? olimpoIp + "getThumbNailOnDemand?width=50&guidId=" + single.recordInTracciato["Foto.guidid"] : 'images/immagineNonPresente.png';
-                    var img = $('<img>', { src: imgSrc, style: "width:50px; cursor:pointer;", 'data-codice': codici[j] });
-
-                    //appediamo i checkbox e i label alla riga
-                    row.append(img, checkbox1, label1, checkbox2, label2, text); // Aggiunge il testo alla riga
-                    container.append(row);
-                    $("#alterazioneGruppo").append(container); // Aggiunge la riga a #alterazioneGruppo
-                }
-
-            }
-
-            //appendiamo infine un bottone con scritto conferma modifiche rosso, se premuto chiama la funzione Sgruppa
-            var confermaButton = $('<sp-action-button style="color:lightcoral">Conferma modifiche</sp-action-button>');
-            confermaButton.on('click', function () {
-                me.Sgruppa();
-            });
-            $("#alterazioneGruppo").append(confermaButton);
-        }
-        catch (e) {
-            messaggioUtente("Code SRF-90 errore generico: " + e, "error");
-        }
-
-
-    },
 
     Sgruppa(codiciGruppi = []) {
 

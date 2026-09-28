@@ -4,10 +4,25 @@ const cacheHashFoto = require('./cacheHashFoto');
 const trattiDescrizione = require('./trattiDescrizione');
 const tooltipPosizione = require('./tooltipPosizione');
 
+/// I20-1002: il file in cui e' finito tutto quello che non aveva un posto.
+///
+/// Settantasei membri in Utility, piu' un secondo oggetto FotoPlacer esportato dallo stesso
+/// file. Non ha un concetto: ne ha almeno otto - modali (11 membri), tooltip (13), menu e
+/// picker (5), testo e tag InDesign (9), trovare cose nel documento (10), foto (5 piu'
+/// FotoPlacer), utilita' vere (8) e un resto.
+///
+/// SOLO OTTO MEMBRI SU SETTANTASEI meritano il nome "utility": sleep, generateId, replaceAll,
+/// replaceAllSpecialCharacters, getDirSeparator, cercaChiaveContesto, duplicaFile,
+/// applyObjectStyle. Sono anche quelli che dovrebbero accogliere le ricollocazioni annotate
+/// altrove: normalize, isIn, getValueByPath e toFitOptions da pluginMiddleware, calcolaDistanza
+/// da griglia.
+///
+/// LA DIVISIONE DI QUESTO FILE E' UN TASK A SE', gia' aperto. Le famiglie che non toccano
+/// InDesign - tooltip, modali, menu - diventerebbero verificabili una volta separate, ed e' il
+/// guadagno vero. Attenzione: utility.js e' importato da quasi tutto il Plugin come
+/// {Utility, FotoPlacer}, quindi ogni spostamento tocca decine di file.
 const Utility=
 {
-    itemsInfami:[],
-    pagInfame:null,
     parseContent: function(content)
     {
         let result=[];
@@ -542,6 +557,8 @@ const Utility=
         }
     
     },
+    /// Il campo di un box, cercato per etichetta. E' una delle funzioni piu' chiamate del
+    /// Plugin.
     getFieldByLabel:function(label, box, parseLabel = true)
     {
         let result=null;
@@ -607,6 +624,7 @@ const Utility=
 
         return trattiDescrizione.accorpa(tratti);
     },
+    /// Tutti i campi dentro un box, scendendo nei gruppi annidati.
     getAllFieldsInGroup:function(box)
     {
         let result=[];
@@ -747,31 +765,7 @@ const Utility=
 
         xhr.send("LoghiBolli/getBySigla/" + sigla, null, "GET");
     },
-    testPerformance:async function(pagIndex)
-    {
-        //let myPag = docInLavorazione.pages.item(pagIndex);
-        
-        let start = Date.now();
-
-        await confronti.mappaturaImpaginato(null, false, true);
-        // console.log("N elements " + myPag.groups.length);
-        // let filter=0;
-
-        // for (let i=0; i<myPag.groups.length; i++)
-        // {
-        //     let pItem = myPag.groups.item(i);
-        //     if (pItem.itemLayer.name=="InPagina")
-        //     {
-        //         filter++;
-        //     }
-        // }
-
-        // console.log(filter+"/"+myPag.groups.length);
-
-        let fine=Date.now();
-
-        console.log("PERFORMANCE RESULT: " +  (fine-start));
-    },
+    /// Pausa. E' una delle otto funzioni che meritano davvero il nome di questo file.
     sleep:function(ms)
     {        
         return new Promise(resolve=>setTimeout(resolve, ms));        
@@ -907,7 +901,6 @@ const Utility=
             }
         }
 
-        //this.pagInfame =box;
         var oldLabel = box.label;
 
         try {
@@ -1176,6 +1169,8 @@ const Utility=
     /// comportamento.
     /// contenutoIntestazione, facoltativo, si mette nella barra del titolo accanto alla X:
     /// e' il posto delle scelte che si leggono quando il popup si chiude, non delle azioni.
+    /// Mostra un popup e attende. ATTENZIONE al contratto: rimuove il popup PRIMA di chiamare
+    /// alChiudi, e il suo ciclo di attesa non finisce da solo.
     async popup(title, message, taglia = "md", alChiudi = null, contenutoIntestazione = null) {
         try {
             let me = this;
@@ -1827,11 +1822,6 @@ const Utility=
         }
     },
 
-    chiudiModalSync(){
-        this.chiudiModal();
-        $("#headerModal").find("#pulsantiTestataSync").remove();
-        $("#headerModal").find("#pulsantiTestataSyncOnline").remove();
-    },
 
     replaceAllSpecialCharacters(str){
         // {chiave: "\r\n", valore: "\n"} abbiamo visto che /r/n da problemi creando una doppia interlinea, quindi lo sostituiamo con /n. Warning
@@ -2066,6 +2056,9 @@ const Utility=
         return id;
     },
 
+    /// L'md5 dell'immagine collegata a un riquadro, per sapere se e' ancora quella del server.
+    /// Passa da cacheHashFoto, perche' il calcolo su centinaia di file e' il costo dominante del
+    /// Report Integrita'.
     async getLinkHash(rectangle) {
         var result = {
             success: false,
@@ -2154,14 +2147,6 @@ const Utility=
         return null;
     },
 
-    cercaChiaveValore(key, value, array) {
-        for (var i = 0; i < array.length; i++) {
-            if (array[i][key] != undefined && array[i][key] == value) {
-                return true;
-            }
-        }
-        return false;
-    },
 
     applyObjectStyle(doc, ctrl, style) {
         try {
@@ -2243,6 +2228,9 @@ const Utility=
     //Larghezza che chiediamo per il riquadro: oltre questa il testo va a capo.
     LARGHEZZA_TOOLTIP: 260,
 
+    /// Accende i tooltip su tutto il pannello. In UXP l'attributo title non basta su un
+    /// elemento creato da codice, quindi il riquadro lo disegna il Plugin: qui c'e' il ciclo e
+    /// il disegno, mentre dove metterlo lo decide tooltipPosizione.js, che e' verificabile.
     abilitaTooltipGlobali() {
         if (this._tooltipGlobaliAttivi) {
             return;
@@ -2834,6 +2822,7 @@ const Utility=
         return null;
     },
 
+    /// Il DNA di un box: i dati della referenza che contiene, letti dalle sue label.
     getDnaOfBox: function (box) {
         if (!box.isValid)
             return null;
@@ -2943,6 +2932,9 @@ const Utility=
 
 
 
+    /// L'etichetta normalizzata: taglia quello che segue il primo $, che nelle label del
+    /// Plugin porta il codice della referenza. Chi lavora sulle copie da duplicazione NON deve
+    /// usarla, perche' taglierebbe il suffisso che le distingue - vedi cssComposizioneBox.
     parseLabel(label){
         //cerchiamo $ e torniamo la label prima del $
         if (label == null || label == "" || label.startsWith("foto_extra") ||
@@ -2958,6 +2950,10 @@ const Utility=
 
 }
 
+/// Il piazzamento di una foto dentro il suo riquadro in InDesign.
+///
+/// E' gia' un oggetto separato dentro utility.js, ed e' percio' il candidato piu' semplice
+/// della divisione: basta portarlo fuori, perche' chi lo usa lo importa gia' col suo nome.
 const FotoPlacer=
 {
     placeFoto:function(nomeFoto, fotoRectangle, callback)
