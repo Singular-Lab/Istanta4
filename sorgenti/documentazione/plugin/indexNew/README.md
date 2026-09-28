@@ -52,5 +52,5 @@ quello che l'operatore intende quando dice che qui «c'è stato messo di tutto»
 |---|---|
 | [01-globali-e-ossatura.md](01-globali-e-ossatura.md) | le variabili globali, l'avvio, il documento in lavorazione, accesso e ruoli |
 | [02-impaginazione.md](02-impaginazione.md) | il flusso, il libro, e l eliminazione dal tracciato |
-| foto, report ed esportazione | da scrivere |
+| [03-foto-report-esportazione.md](03-foto-report-esportazione.md) | i pezzi di due concetti che vivono altrove |
 | tracciato, messaggi e il resto | da scrivere |

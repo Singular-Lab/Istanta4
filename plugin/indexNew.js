@@ -4095,6 +4095,9 @@ function nomiPagineDelDocumento() {
 //il rifacimento del tracciato, che ricostruisce anche la riga del bottone appena premuto.
 //Quando la lista andava scaricata, il report spesso non si apriva e l'operatore doveva
 //richiederlo: qui ogni passo e' atteso e ogni errore ha un codice.
+/// REPORT INTEGRITA'. La sequenza di avvio: guarda se ce n'e' uno aperto, decide con le soglie
+/// di reportIntegritaAvvio.js se riusarlo o rifarlo, compone l'intervallo di pagine.
+/// Le decisioni stanno nel modulo puro, qui resta la sequenza.
 async function avviaReportIntegrita(idKit = null) {
     if (idKit == null) {
         idKit = idKitLavorazione;
@@ -4226,6 +4229,8 @@ async function avviaReportIntegrita(idKit = null) {
 //metteva i bollini in pagina e quello che scaricava le schede dal server
 //(getSchedeRefsMassivo), che nel report non si e' mai usato. Resta il confronto sulla lista
 //locale, che il chiamante ha appena verificato o riscaricato.
+/// REPORT INTEGRITA'. Applica il confronto alla mappa dell'impaginato, appoggiandosi a
+/// reportConfronti.js per le differenze sui campi osservati dall'agenzia. 359 righe.
 async function applicaConfronto(mappa) {
     console.log(mappa);
     showLoading("Controllo dei box in pagina per ricerca differenze...");
@@ -10264,6 +10269,9 @@ var syncFotoInCorso = [];
 
 //I20-967: presenza del file nella cartella Links. Usa la stessa lettura con cui la
 //scheda ref decide se una foto e' in cartella, cosi' i due controlli non possono discordare.
+/// PROCURARSI LA FOTO. Se la foto c'e' gia' nella cartella Links.
+/// Non si limita a guardare se il file esiste: un file troncato o vuoto vale come ASSENTE,
+/// perche' non e' impaginabile.
 function fotoPresenteNeiLinks(nomeFoto) {
     if (nomeFoto == null || nomeFoto == "") {
         return false;
@@ -10381,6 +10389,10 @@ async function scaricaFotoSingolaNeiLinks(recordFoto) {
 
 //I20-967: usata dalla scheda ref subito prima di impaginare una foto appena cambiata.
 //Ritorna true se il file e' nei Links; false lascia proseguire col comportamento precedente.
+/// PROCURARSI LA FOTO. Il ponte verso il modulo puro: inietta in fotoAutoSync le tre operazioni
+/// concrete - c'e' gia'? chiedila al server; scaricala - e gli lascia la decisione.
+/// Sedici righe, ed e' il pattern del progetto fatto bene: la decisione sta dove si puo' provare,
+/// le operazioni concrete dove devono stare.
 async function assicuraFotoNeiLinks(nomeFoto, guidId) {
     var esito = await fotoAutoSync.assicuraFotoNeiLinks(nomeFoto, guidId, {
         fotoPresente: async function (nome) { return fotoPresenteNeiLinks(nome); },
@@ -10397,6 +10409,8 @@ async function assicuraFotoNeiLinks(nomeFoto, guidId) {
     return esito.presente;
 }
 
+/// PROCURARSI LA FOTO. Lo scaricamento massivo del pacchetto foto, con barra di avanzamento e
+/// possibilita' di interruzione. 348 righe.
 async function avviaSyncPacchettoFoto(mode, callback, codici = []){
     // var idTracciato = parseInt($("#idTracciato").val());
     // if(idTracciato == null || idTracciato == "" || idTracciato == 0){
@@ -10836,6 +10850,8 @@ function getFotoData(codice, callback) {
     xhr.send("SchedaArticolo/getAllFotoByCodice/"+codice, null, "GET", null);
 }
 
+/// Involucro: controlla il kit, legge il tipo di export scelto e chiama
+/// ficoProcess.esportaMateriale, dove sta il lavoro vero.
 async function esportaMateriale(sender)
 {
     
@@ -10873,6 +10889,8 @@ async function esportaMateriale(sender)
     }
 }
 
+/// PROCURARSI LA FOTO. Riaggancia in blocco le foto dei box impaginati. 445 righe.
+/// Gli esiti che il server manda indietro si leggono con ricollegaEsiti.js, che e' verificabile.
 async function ricollegaFotoMassivo(ricollegaFotoPresentiModificate = false, advancedMode = false){
     Utility.chiudiModal();
 
