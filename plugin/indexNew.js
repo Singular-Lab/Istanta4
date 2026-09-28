@@ -2122,6 +2122,13 @@ function addCodiceFiltroToReq(req, rootPath, propName, index, codiceFiltro) {
 }
 
 var paramsCache = {};
+/// IMPAGINAZIONE. L'ingresso: con impagina a false conta soltanto quante referenze ci
+/// starebbero, senza toccare il documento.
+///
+/// Qui non si impagina: si CATTURA IL CONTESTO - documento, percorso, kit - e lo si passa a
+/// _conteggiaImpaginaConContesto. L'impaginazione dura minuti, e se nel frattempo l'operatore
+/// cambia documento o kit le globali cambiano sotto i piedi dell'operazione in corso.
+/// IDX-163 se il documento non e' valido.
 async function conteggiaImpagina(impagina = false, cbkEnd = null, restartFromIndexPoP = 0) {
     const documentoImpaginazione = docInLavorazione;
     const pathImpaginazione = pathLavorazione;
@@ -2143,6 +2150,14 @@ async function conteggiaImpagina(impagina = false, cbkEnd = null, restartFromInd
     );
 }
 
+/// IMPAGINAZIONE. Il motore: chiede a Istanta quali gruppi vanno in quali box e, per ognuno,
+/// chiama impaginaBox. E' la funzione piu' lunga del Plugin, 1.798 righe.
+///
+/// ATTENZIONE ai nomi dei parametri: docInLavorazione, pathLavorazione e idKitLavorazione
+/// OMBREGGIANO DELIBERATAMENTE le globali omonime. Dentro questa funzione quei nomi sono il
+/// contesto fissato all'avvio da conteggiaImpagina, non le variabili di modulo. E' cosi' che il
+/// codice interno, scritto quando le globali si usavano direttamente, lavora su un contesto
+/// stabile senza essere stato riscritto.
 async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, idKitLavorazione, impagina = false, cbkEnd = null, restartFromIndexPoP = 0) {
     var noCacheCheck = !($("#cacheCheckAdvanced").is(":checked"));
 
@@ -4569,6 +4584,7 @@ async function applicaConfronto(mappa) {
 
 
 
+/// IMPAGINAZIONE. Sistema una referenza impaginata male, senza rifare tutto il box.
 async function fixRefImpaginata() {
     try{
         //controlliamo la ref
@@ -5094,6 +5110,8 @@ function makeRegexFromGroupName(groupName) {
 }
 
 
+/// IMPAGINAZIONE. Costruisce il singolo box: prende la meccanica dalla libreria, compila i
+/// campi, colloca le foto, applica il CSS. 751 righe.
 async function impaginaBox(meccanica, pagCoinvolta, bounds, itemRef, pathLavorazione, listElementiNonImpaginati, tipoLavorazione, reportImpaginazioneObj, preAnalisi = null, refConfronto = null, docOperazione = docInLavorazione) {
     try{
         if (preAnalisi != null && preAnalisi.differenze.length == 0) {
@@ -6295,6 +6313,25 @@ function compilaTabElementiEsclusi() {
     }
 }
 
+/// IMPAGINAZIONE. Toglie una o piu' referenze dall'impaginato, e in un caso preciso le elimina
+/// anche dal tracciato sul server.
+///
+/// DUE MODI DI CHIAMARLA, e la differenza e' tutta li':
+///   - SENZA lista, dal pulsante di index.html: chiede conferma, e per un superAdmin puo'
+///     arrivare a eliminare dal tracciato;
+///   - CON lista, dai due punti di indexNew che ripuliscono gli elementi che hanno fallito
+///     l'impaginazione: nessuna conferma, e NON elimina mai dal tracciato. Serve a rimettere
+///     d'accordo server e impaginato.
+///
+/// eliminaDaTracciato diventa vero solo se si verificano TRE cose insieme: la chiamata viene dal
+/// pulsante, l'utente e' superAdmin, e ha alzato la spunta in Utility.confirmRimozioneRef.
+/// Il flag va al server: Menabo/rimuoviRefImpaginata/{idKit}/{eliminaDaTracciato}.
+///
+/// L'ELIMINAZIONE DAL TRACCIATO CANCELLA IL RECORD SUL SERVER, ed e' voluta. La specifica
+/// flusso-impaginazione-indesign la elenca ancora fra i rischi con la domanda se debba alterare
+/// anche il dato server: la risposta e' si', confermata dall'operatore in I20-1002, e la
+/// specifica andrebbe aggiornata.
+/// E' aperto un task per chiedere una seconda conferma, in cui scrivere la parola ELIMINA.
 async function rimuoviRefImpaginata(listaCodiciConId = [], mantieniBusyEsterno = false) {
     //scorriamo tutte le selezioni, cerchiamo le loro basi e ci salviamo in una lista i loro codici gruppo
 
@@ -8662,6 +8699,7 @@ async function selectionModalSvuota(mode){
 }
 
 
+/// IMPAGINAZIONE. Svuota l'intero menabo': tutte le referenze escono dall'impaginato.
 async function svuotaMenabo() {
     //mandiamo la richiesta xhr per svuotare il tracciato
     var xhr = new XMLHttpRequestClient();
