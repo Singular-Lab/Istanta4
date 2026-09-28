@@ -35,7 +35,7 @@ Panoramica del file: [README.md](README.md).
    restituisce `{candidate, obstacles}`.
 
 Chi chiama passa poi **entrambi** a `fixFoto`. È sempre questa la coppia: `indexNew.js`,
-`schedaRef.js`, `custom.js` in radice e le agenzie Edro21 e Pac fanno tutti così.
+`schedaRef.js`, `custom.js` in radice e l'agenzia Edro21 fanno tutti così.
 
 ---
 

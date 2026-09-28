@@ -42,13 +42,11 @@ done
 case "$CLIENTE" in
     Edro21) PLG=Edro21 ;;
     Coopfi) PLG=Coopfi ;;
-    Pac)    PLG=Pac    ;;
-    Trea)   PLG=Trea   ;;
     Famila) PLG=Famila ;;
     Gross)  PLG=""     ;;
     *)
         echo "Uso: $0 <Cliente> [--forza]"
-        echo "Clienti: Edro21 Coopfi Pac Trea Famila Gross"
+        echo "Clienti: Edro21 Coopfi Famila Gross"
         exit 1
         ;;
 esac

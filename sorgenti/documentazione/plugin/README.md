@@ -37,8 +37,19 @@ peggio di una documentazione assente, perché fa perdere tempo invece di farne r
 | 2 — Utilità piccole | `barraScorrimento`, `dissolvenza`, `tooltipPosizione`, `jsIndexControls`, `cacheHashFoto`, `dataCaricamentoFoto`, `credenzialiSalvate`, `fotoAutoSync`, `garbageCollector`, `cambiStrutturali`, `ricollegaEsiti`, `reportConteggi`, `trattiDescrizione`, `variantiDescrizione` | **fatto** |
 | 3 — Motore CSS | `CssFramework`, `cssComposizioneBox`, `cssRegoleConflitti`, `cssSequenzaOperazioni`, `cssSpazioFoto`, `noRenderElementi` | **fatto** |
 | 4 — Report | `reportConfronti`, `reportConfrontoCsv`, `reportIntegritaAvvio` | **fatto** |
-| 5 — Nucleo | `utility`, `events`, `cmd`, `pluginMiddleware`, `custom`, `filtri`, `griglia`, `ficoProcess`, `schedaArtwork`, `InputEditController`, `schedaRef`, `confronti`, `indexNew` | da fare |
-| 6 — Agenzie e Receiver | i sette `custom.js` di cliente, la cartella `Receiver` | da fare |
+| 5 — Nucleo | `utility`, `events`, `cmd`, `pluginMiddleware`, `custom`, `filtri`, `griglia`, `ficoProcess`, `schedaArtwork`, `InputEditController`, `schedaRef`, `confronti`, `indexNew` | **fatto** |
+
+**Con il Lotto 5 questo lavoro è concluso.**
+
+Restano fuori i tre `custom.js` di cliente — Edro21, Coopfi, Famila — e la cartella `Receiver`.
+**Non sono in arretrato: sono fuori perimetro per decisione dell'operatore.** Le agenzie sono un
+caso a sé e vorranno una documentazione loro, con criteri diversi da questi; oggi non è in
+programma, e non c'è un task aperto. Chi arriva qui cercando quelle pagine non le trova perché non
+devono esserci, non perché qualcuno le ha dimenticate.
+
+Quello che serve sapere sul confine col cliente sta comunque in [custom.md](custom.md) e
+[pluginMiddleware.md](pluginMiddleware.md): il file dell'agenzia montato in radice è documentato,
+ed è documentato il meccanismo con cui il server prevale su di lui.
 
 ## Le pagine scritte finora
 
@@ -90,6 +101,26 @@ peggio di una documentazione assente, perché fa perdere tempo invece di farne r
 | [reportIntegritaAvvio.md](reportIntegritaAvvio.md) | quando il Report Integrità parte, e quando smette di valere |
 | [reportConfronti.md](reportConfronti.md) | la sezione Confronti: cosa è cambiato nei campi che l'agenzia tiene d'occhio |
 | [reportConfrontoCsv.md](reportConfrontoCsv.md) | come è fatto il csv, e perché è fatto per Excel |
+
+### Lotto 5 — il nucleo
+
+| pagina | il file che spiega |
+|---|---|
+| [events.md](events.md) | il registro degli eventi di background, a cui gli altri si registrano |
+| [InputEditController.md](InputEditController.md) | i campi della scheda referenza, e cosa va davvero salvato |
+| [schedaArtwork.md](schedaArtwork.md) | l'artwork: più referenze trattate come un'unica immagine |
+| [pluginMiddleware.md](pluginMiddleware.md) | il mediatore fra il Plugin e la configurazione del cliente |
+| [custom.md](custom.md) | il file dell'agenzia montata, e cosa resta quando il server comanda |
+| [cmd.md](cmd.md) | lo scaricamento delle immagini, e perché il nome non dice cosa fa |
+| [ficoProcess.md](ficoProcess.md) | promo, kit, lavorazione corrente ed esportazione |
+| [griglia.md](griglia.md) | la mappa dell'impaginato: cosa va dove, prima di impaginare |
+| [filtri.md](filtri.md) | i filtri di pagina del volantino, e i dieci nomi di «è una data» |
+| [utility.md](utility.md) | settantasei membri e otto concetti: il file che va diviso |
+| [confronti.md](confronti.md) | il Report Integrità, e i suoi duecento pannelli |
+| [schedaRef.md](schedaRef.md) | la scheda della referenza, e i tre concetti che contiene |
+| [indexNew/](indexNew/README.md) | il file che tiene insieme il Plugin: 129 funzioni, tutte documentate |
+
+---
 
 Insieme a [reportConteggi.md](reportConteggi.md), documentata nel Lotto 2, sono i quattro pezzi del
 Report Integrità, tutti nati da I20-981.
@@ -164,6 +195,99 @@ In tutto **oltre 10.000 righe rimosse** dal Plugin.
 A impedire il ritorno di quella classe di difetti c'è
 `tests/plugin/cssFrameworkChiamateMembri.test.js`, che legge il sorgente come testo — il file non si
 carica sotto Node — e fallisce se un membro viene chiamato senza `this.`.
+
+## Cosa è stato rimosso e corretto durante il Lotto 5
+
+Il nucleo è la parte grossa, e leggerla ha fatto emergere i difetti descritti nelle singole pagine.
+Quelli di `indexNew.js` stanno in
+[indexNew/04-tracciato-messaggi-e-il-resto.md](indexNew/04-tracciato-messaggi-e-il-resto.md).
+
+| cosa | esito |
+|---|---|
+| agenzie `Pac` e `Trea` (11.733 righe) | **cancellate**: deprecate. Restano Edro21, Coopfi e Famila |
+| `sincronizzaBoxGriglia` (142 righe) | **cancellata**: zero chiamanti, e dentro 14 `Utiliy.` al posto di `Utility.` |
+| `escludiRef`, `ripristinaElemento`, `compilaTabElementiEsclusi` (219 righe) | **cancellate**: la funzione è già viva in `griglia.js`, e queste scrivevano `listaRefEscluse.json` in un formato che nessun altro sa leggere |
+| `decodificaNomeFile` | **cancellata**: abbozzo senza chiamanti che restituiva una promo inventata. Quella vera è `customAgenzia.decodificaNomeFile` |
+| `indexNew.replaceAll` | **cancellata**: copia locale senza chiamanti, e il suo `while` non termina se la sostituzione contiene la stringa cercata |
+| `indexNew.makeRegexFromGroupName` | **rinominata** `makeRegexFromFieldName`: era una globale omonima di un membro di `CssFramework` che fa una cosa diversa, quindi un `this.` dimenticato là cadeva qui **senza errore** |
+| `showLoading` | **corretta**: una riga col solo identificatore `Default`, che lanciava `ReferenceError` nel ramo di ripiego |
+| `checkPercorsi` | **corretta**: leggeva `forceOptions`, un parametro rimosso — `ReferenceError` ogni volta che mancava un percorso |
+| `monta-cliente.sh` | allineato: non offre più i due clienti cancellati |
+
+### Difetti del Lotto 5 non corretti
+
+Tre, tutti in `indexNew.js`, tutti da task separato perché correggerli cambia il comportamento:
+
+4. **`await` applicato alla negazione di una promise**, in `initDocumentInLavorazione` e
+   `initLibroInLavorazione`: `while (await !checkPercorsi())` non gira mai, quindi l'attesa dei
+   percorsi di sistema non avviene.
+5. **`autoCompilazioneCampiKit` non fa niente**: manca l'assegnazione del risultato di
+   `customAgenzia.decodificaNomeFile`, quindi la compilazione automatica dei campi del kit è morta
+   da sempre — e senza errore, perché le tendine restano semplicemente vuote.
+6. **`writeDebugMessageForCrash` scrive su un percorso inesistente**: concatena `pathLavorazione`
+   a `percorsoLogs`, che è già assoluto. Il log di crash non viene mai scritto, e all'operatore
+   compare un avviso fuorviante di «cartella logs assente».
+
+## Dove le funzioni dovrebbero stare
+
+Dal Lotto 5 in poi, leggendo le funzioni una per una, si annota anche **quando una sembra stare nel
+file sbagliato** — senza spostare niente. Gli appunti servono al task di divisione dei file, che
+altrimenti dovrebbe rifare la stessa lettura da capo.
+
+| funzione | dov'è | dove dovrebbe stare |
+|---|---|---|
+| `controllaChiusuraReportIntegrita` | `events.js` | `reportIntegritaAvvio.js`: decide quando un report smette di valere, ed è una regola del report, non un evento |
+| `normalize`, `isIn`, `getValueByPath` | `pluginMiddleware.js` | `utility.js`: sono utilità generiche, non mediano niente |
+| `toFitOptions` | `pluginMiddleware.js` | `utility.js`, o accanto agli `enum*` di `CssFramework` |
+| `calcolaDistanza` | `griglia.js` | `utility.js`: sei righe di geometria pura |
+| `setVersionePlugin`, `controllaVersionePubblicata`, `bloccaPerVersioneDisallineata` | `indexNew.js` | `versionePlugin.js`, che **esiste già** e tiene il confronto fra versioni |
+| `getFiltroButtonMarkup`, `setFiltroButtonsDefaultMarkup` | `indexNew.js` | `filtri.js`: sono le uniche due righe di `indexNew` che parlano dell'aspetto dei filtri |
+| `clearFile`, `readFile`, `appendToFile` | `indexNew.js` | `utility.js`: è accesso al disco, non interfaccia |
+| `scaricaContenutoKit`, `scaricaContenutoKitAsync`, `leggiContenutoKit` | `indexNew.js` | `ficoProcess.js`, che già fa ricerca e selezione del kit |
+| `showLogin`, `login`, `logout`, `setFinestrePerRuolo` | `indexNew.js` | un js dell'accesso: sono quattro funzioni di un concetto solo |
+| `checkPercorsi`, `impostaPercorsiDiSistema` | `indexNew.js` | un js dei percorsi di lavoro |
+| `getIdRecFromItemRef`, `getCodiceGruppoFromItemRef`, `makeCodiceAssociatoLabel`, `makeCodiceFiltroFromItemRef`, `sameCodiceFiltro`, `addCodiceFiltroToReq` | `indexNew.js` | un js loro, o `utility.js`: sono l'identità di una referenza, e le usa anche `griglia.js` |
+| `addSegnalazione`, `finalizzaSegnalazioni`, `stampaSegnalazioni` | `indexNew.js` | il js del Report Integrità già previsto |
+| `datiPrimarioPerConfronto`, `boxDellElementoMappa`, `preAnalisiBoxMappato` | `indexNew.js` | idem |
+| `checkForLoghiCore`, `rimuoviSimboli` | `indexNew.js` | il js delle foto già previsto |
+| `applyOverflowFix` | `indexNew.js` | `CssFramework.js`: è una regola di impaginazione sul contenuto di un campo |
+| `getSchedaRefAsync` | `indexNew.js` | `schedaRef.js`, accanto alla funzione che avvolge |
+
+**Un caso a parte: due copie della stessa funzione.** `pluginMiddleware.getValueByPath` e
+`cambiStrutturali._getNestedValue` fanno la stessa identica cosa. In I20-1002 sono state allineate
+nel comportamento — quella di `cambiStrutturali` aveva il corpo commentato e non scendeva più nei
+percorsi — ma **non unite fisicamente**: `pluginMiddleware.js` e `utility.js` richiedono InDesign e
+sotto Node non si caricano, mentre `cambiStrutturali.js` sì e ha il suo test. Importare l'uno
+dall'altro farebbe perdere quel test. Per unirle serve **un modulo puro che entrambi possano
+importare**.
+
+**Un doppione da togliere:** `delay` in `indexNew.js` fa esattamente quello che fa già
+`Utility.sleep`. Una delle due va tolta, e nel Plugin `Utility.sleep` è quella usata ovunque.
+
+**Un file il cui nome nasconde il contenuto:** `cmd.js` contiene lo scaricamento delle immagini,
+non «comandi». **Rinomina proposta: `scaricaImmagini.js`.** Costa quanto un file mal diviso, perché
+chi cerca quel codice non guarda lì.
+
+**Proposte valutate e scartate**, annotate con quello che si perde, perché non tornino senza sapere
+cosa si è già deciso:
+
+| proposta | cosa resta così |
+|---|---|
+| un modulo per le funzioni di parsing di `griglia.js` | `parseCodiceAssociato` resta non verificabile |
+| una casa comune per le finestre modali | `griglia.js` resta con 382 righe di dialogo dentro |
+| un `lavorazioneCorrente.js` per i quattro `get*LavorazioneCorrente` | chi vuole sapere il tipo di lavorazione deve importare tutto `ficoProcess` |
+
+Il criterio con cui sono state scartate è sempre lo stesso, ed è il rovescio di quello che porta ad
+accorpare: **un file nuovo si paga**, e va aperto solo quando il guadagno è evidente. Dove il
+guadagno era solo la verificabilità di poche funzioni, o l'ordine formale, non è bastato.
+
+**E una nota di disegno, non una ricollocazione:** `setBolloNOFOTO` e `setBolloFOTONOFOUND` in
+`pluginMiddleware` mediano un'operazione su InDesign invece di un valore di configurazione. Se il
+middleware debba delegare operazioni oltre che rispondere a domande è una decisione da prendere,
+non un errore da correggere.
+
+Il criterio è quello di sempre: **un file rappresenta un concetto**. Vale nei due sensi — ci sono
+moduli piccoli da accorpare, e file grandi che contengono di tutto.
 
 ## Un'osservazione che vale per tutto il Plugin
 

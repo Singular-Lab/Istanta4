@@ -5,6 +5,17 @@ const { refSelected } = require('./schedaRef');
 const {Logger} = require('./logger');
 const reportIntegritaAvvio = require('./reportIntegritaAvvio');
 
+/// I20-1002: il registro degli eventi di background del Plugin.
+///
+/// InDesign non avvisa quando qualcosa cambia, e nemmeno il server: questa classe interroga
+/// tutto a intervalli regolari, confronta con quello che aveva visto l'ultima volta, e quando
+/// qualcosa e' cambiato emette un evento. Chi vuole saperlo si registra con addEventListener.
+///
+/// Gli eventi non sono solo quelli del documento: connessione, sessione e raggiungibilita' di
+/// Istanta sono eventi di background come gli altri, ed e' il motivo per cui stanno qui.
+///
+/// indexNew ne crea UNA SOLA istanza, indesignEvents. Gli altri file la usano quasi solo per
+/// setBusy, che sospende il ciclo durante le operazioni lunghe.
 class InddEvents {
     mainInterval = null;
     lastActiveDocument = null;
@@ -98,6 +109,8 @@ class InddEvents {
 
     }
 
+    /// Avvia il ciclo. E' lungo perche' E' il ciclo: a ogni giro interroga InDesign e il
+    /// server, confronta con l'ultima osservazione ed emette quello che e' cambiato.
     init(firstCheck = false) {
         let me = this;
 
@@ -528,6 +541,13 @@ class InddEvents {
     /// altro file, o li chiude tutti, quelle segnalazioni non si possono piu' verificare e il
     /// report va chiuso senza chiedere niente: la domanda "sicuro di voler interrompere?"
     /// resta per la chiusura fatta a mano.
+    /// RICOLLOCAZIONE (I20-1002): questa funzione sta nel file sbagliato.
+    /// Decide quando un Report Integrita' aperto smette di valere, ed e' una regola del report,
+    /// non un evento. E' finita qui perche' il controllo deve girare a intervalli e il ciclo sta
+    /// in questo file, ma il "quando" appartiene a reportIntegritaAvvio.js, dove vivono gia' le
+    /// regole della stessa famiglia, deveChiudereReport su tutte.
+    /// Proposta: portare la decisione in reportIntegritaAvvio.js e lasciare qui la sola chiamata
+    /// periodica. Vedi il task di divisione dei file.
     async controllaChiusuraReportIntegrita() {
         if (this.controlloReportInCorso) {
             return;
@@ -565,6 +585,8 @@ class InddEvents {
         }
     }
 
+    /// Dimentica l'ultima osservazione, cosi' il prossimo giro riemette anche se nulla e'
+    /// cambiato davvero. Serve dopo le operazioni che rifanno il documento sotto al ciclo.
     resetLastSelection(){
         this.lastSelectionID = [];
         this.lastSelectionIDValidated = [];
@@ -633,6 +655,8 @@ class InddEvents {
         console.log(res.activePage.name);
     }
 
+    /// Da una selezione grezza di InDesign capisce cosa ha selezionato l'operatore DAVVERO:
+    /// una ref, piu' ref, un artwork, una griglia, un campo, o niente di valido.
     interpretaSelezione(newSelection) {
         //Funzione di analisi comportamentale della selezione
         if (newSelection.join()==this.lastInvalidSelectionID.join() && this.lastInvalidSelectionID.length>0)
@@ -663,10 +687,13 @@ class InddEvents {
         return false;
     }
 
+    /// Chi vuole sapere di un evento si registra qui. L'evento si nomina con le costanti
+    /// EVENT_* dichiarate in testa, non con la stringa.
     addEventListener(event, callback) {
         this.listeners.push({ eventName: event, callback: callback });
     }
 
+    /// Avvisa tutti quelli che si sono registrati per questo evento.
     fireEvent(eventName, params) {
         console.log("Fire event: " + eventName);
         //console.log(params);
@@ -683,6 +710,9 @@ class InddEvents {
     //callback deve essere una fuinzione di ascolto risultato che espone due parametri in ingresso
     //0- Connectivity state (true-online, false-offline)
     //1 - Istanta state IstantaState enum
+    /// Chiede al server se la connessione c'e' e se la sessione e' ancora valida. L'esito
+    /// diventa EVENT_ONLINE / EVENT_OFFLINE, EVENT_USER_LOGGED / EVENT_USER_NOT_LOGGED o
+    /// EVENT_ISTANTA_DOWN.
     checkStatus(callback) {
 
         //console.log("Check status");    
@@ -845,9 +875,6 @@ class InddEvents {
 
     }
 
-    quit() {
-        clearInterval(this.mainInterval);
-    }
 
     timestamp()
     {        

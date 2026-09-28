@@ -1,6 +1,16 @@
 const XMLHttpRequestClient = require('./XMLHttpRequestClient');
 const { app, ExportFormat } = require('indesign');
 const path = require('path');
+/// I20-1002: il dialogo con Istanta su promo, kit e lavorazioni, e l'esportazione dei
+/// materiali. "Fico" e' il nome del servizio lato Istanta.
+///
+/// Quattro mestieri: scaricare i dati di contesto (aree, canali, formati, tipi di export, promo
+/// aperte), sapere su cosa si sta lavorando, cercare e aprire un kit, esportare.
+///
+/// I quattro get*LavorazioneCorrente sono la risposta alla domanda "su cosa sto lavorando" e li
+/// chiede mezzo Plugin. Era stato proposto di portarli in un file loro, caricabile sotto Node
+/// perche' leggono solo metaLavorazioneCorrente: l'operatore ha valutato e scartato la proposta
+/// come non abbastanza utile. Annotato qui perche' non venga riproposta.
 const FicoProcess=
 {    
     errorScaricamentoFicoDataCallback:null,
@@ -16,6 +26,8 @@ const FicoProcess=
     abortExport:false,
     listaElementiMateriali:[],
     metaLavorazioneCorrente:{},
+    /// Scarica da Istanta tutto il set di dati fico. Da richiamare ogni volta che lo si vuole
+    /// aggiornare.
     init:function(succesCbk, errorCbk)
     {
         //Inizializza FICO PRocess scaricando tutti i dati da Istanta
@@ -77,6 +89,8 @@ const FicoProcess=
         return true;
 
     },
+    /// Il tipo della lavorazione aperta: 1 Volantino, 2 PoP. Zero se non c'e' lavorazione.
+    /// E' da qui che tutto il Plugin sa che cosa sta facendo.
     getTipoLavorazioneCorrente:function()
     {
         if (this.metaLavorazioneCorrente!=null)
@@ -695,6 +709,7 @@ const FicoProcess=
         }
     },
     
+    /// Cerca i kit disponibili per i filtri impostati dall'operatore.
     cercaKit:function(cbk)
     {
         console.log("Cerco KIT: " + $("#kitPromoCmb").val() + " - " + $("#kitFormatiCmb").val() + " - " + $("#kitCanaliCmb").val() + " - " + $("#kitAreeCmb").val());
@@ -802,33 +817,7 @@ const FicoProcess=
         xhr.send("FicoProcess/getCombinazioniByPromo/"+guidPromo+"/"+guidFormato+"/"+guidCanale+"/"+guidArea, null, "GET");
     
     },
-    filtraKit:function(resultFiltrato)
-    {
-        //Questa funzione filtra localmente il risultato di ricerca.
-        //Si usa per lavorare un insieme di kit in un colpo. 
-        //Processo PoP
-        $("#listaKitTrovati").find("div").each(function(){
-            let _id=$(this).attr("id");
-            if(_id!=null)
-            {
-                let idItem = _id.replace("item_","");
-                let foundInFilter = resultFiltrato.find(f=>f.guidId==idItem);
-                if (foundInFilter==null)
-                {
-                    $(this).hide();
-                }
-                else
-                {
-                    foundInFilter.ok=true;//Approvo questo file kit per la lavorazione massiva
-                    $(this).find(".btnActKit").hide();
-                    $(this).show();
-                }
-            }
-            
-        });
-
-        this.cacheKitFilterResult = resultFiltrato;
-    },
+    /// Apre un kit in lavorazione: da qui in poi il Plugin ha una lavorazione corrente.
     lavoraKit:function(idKit, idLavorazioneLocale)
     {
         if (idLavorazioneLocale>0)
@@ -1269,6 +1258,9 @@ const FicoProcess=
     },
     
     //esportaMateriale:async function(actionFormat, guidExport, exportTemplate)
+    /// Esporta il materiale della lavorazione secondo il tipo di export scelto, pagina per
+    /// pagina, e lo invia a Istanta. paginaRestart riprende da dove un export interrotto si era
+    /// fermato.
     esportaMateriale:async function(guidExport, callBack, paginaRestart = null)
     {
         try 
