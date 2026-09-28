@@ -94,17 +94,13 @@ una svista, ma un prezzo pagato consapevolmente.
 
 ### Applicare il CSS a un campo
 
-- `adaptField(field, compiledInfo, offsetX, offsetY)` → interpreta la stringa `css` di un campo:
-  `move`, `resize`, `max-sizeX/Y`, `min-sizeX/Y`, `alignX`, `alignY`, con le varianti per singolo
-  asse (`moveX`, `resizeY`…).
+`adaptField` **non c'è più.** Interpretava una stringa `css` con `move`, `resize`, `max-sizeX/Y`,
+`min-sizeX/Y`, `alignX` e `alignY`, ma in tutto il repository compariva **una volta sola**, la sua
+definizione: 140 righe senza un chiamante. Cancellata in I20-1002.
 
-  **L'ordine di scrittura conta, ed è una trappola vera.** Le istruzioni si applicano nell'ordine in
-  cui sono scritte, quindi un vincolo dichiarato dopo un allineamento arriva troppo tardi:
-
-  ```
-  "resize max-sizeX:300 alignXright"    funziona
-  "resize alignXright max-sizeX:300"    no
-  ```
+L'interprete vivo delle espressioni di dimensione è `calcolaValoreDimensione`, con una sintassi
+diversa e documentata in
+[04-ridimensionamento-e-overflow](04-ridimensionamento-e-overflow.md).
 
 ### Tradurre i numeri del server
 

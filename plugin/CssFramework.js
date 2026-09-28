@@ -65,151 +65,6 @@ const CssFramework =
         this.semaforoDownloadFramework = true;
     },
 
-    /// Interpreta la stringa css di un campo: move, resize, max-sizeX/Y, min-sizeX/Y, alignX,
-    /// alignY, con le varianti per singolo asse.
-    /// L'ORDINE DI SCRITTURA CONTA, ed e' la trappola di questa funzione: le istruzioni si
-    /// applicano nell'ordine in cui sono scritte, quindi un vincolo dichiarato dopo un
-    /// allineamento arriva troppo tardi. Il dettaglio sta nei commenti qui sotto.
-    adaptField: function (field, compiledInfo, offsetX, offsetY) {
-        //Azioni CSS standard
-        //move: aggiungere X o Y se si intende muovere solo una delle due assi. Move, sposta dell'offset il campo, mantenendo le stesse dimensioni
-        //resize: aggiungere X o Y se si intede ridimensionare solo una delle due assi: Resize, ridimensiona dell'offset il box ancorandosi al punto di ridimensionamento (in basso a destra)
-        //max-sizeX: aggiungere il valore di massima larghezza in cui puo presentarsi il box (es: max-sizeX:400)
-        //max-sizeY: aggiungere il valore di massima altezza in cui puo presentarsi il box (es: max-sizeY:400)
-        //min-sizeX: aggiungere il valore di mminima larghezza in cui puo presentarsi il box (es: min-sizeX:200)
-        //min-sizeY: aggiungere il valore di minima altezza in cui puo presentarsi il box (es: min-sizeY:200)
-        //alignX: aggiungere left/rigth (Nei casi di max o min size si puo suggerire al sistema se seguire l'allineamento verso sinitra o verso destra) 
-        //alignY: aggiungere top/bottom (Nei casi di max o min size si puo suggerire al sistema se seguire l'allineamento verso sl'alto o verso il basso) 
-
-        //ATTENZIONE: è imnportante seguire questa priorità di scrittura quando si imposta il valore css
-        //Es. corretto
-        //"resize max-sizeX:300 alignXright" //Questo chiede ridimensionamento con limite massimo di allargamento. Nel caso di allargamento ridotto allineare il contenuto verso l'avanzo a destra
-        //Es. sbagliato
-        //"resize alignXright -sizeX:300";
-
-        if (compiledInfo.css != null) {
-            let cssInstructions = compiledInfo.css.split(' ');
-            let avanzo_margine = 0;
-
-            cssInstructions.forEach(element => {
-
-                if (element.startsWith("move")) {
-                    let option = element.replace("move", "");
-                    let xOff = 0;
-                    let yOff = 0;
-                    if (option == "X") {
-                        xOff = offsetX;
-                    }
-                    else if (option == "Y") {
-                        yOff = offsetY;
-                    }
-                    else {
-                        xOff = offsetX;
-                        yOff = offsetY;
-                    }
-
-                    field.geometricBounds = [field.geometricBounds[0] + yOff, field.geometricBounds[1] + xOff, field.geometricBounds[2] + yOff, field.geometricBounds[3] + xOff];
-
-                }
-                else if (element.startsWith("resize")) {
-                    let option = element.replace("resize", "");
-                    let xOff = 0;
-                    let yOff = 0;
-                    let xOffEnd = offsetX;
-                    let yOffEnd = offsetY;
-
-                    if (option == "X") {
-                        xOff = 0;
-                        yOff = offsetY;
-                    }
-                    else if (option == "Y") {
-                        xOff = offsetX;
-                        yOff = 0;
-                    }
-                    else {
-                        xOff = 0;
-                        yOff = 0;
-                    }
-
-                    field.geometricBounds = [field.geometricBounds[0] + yOff, field.geometricBounds[1] + xOff, field.geometricBounds[2] + yOffEnd, field.geometricBounds[3] + xOffEnd];
-
-                }
-                else if (element.startsWith("max-size")) {
-                    let p = element.replace("max-size", "").split(':');
-                    let unita = p[0];
-                    let val = Number(p[1]);
-
-                    if (unita == "X") {
-                        console.log("Massima larghezza: " + val);
-                        let w = field.geometricBounds[3] - field.geometricBounds[1];
-                        if (w > val) {
-                            let diff = val - w;
-                            avanzo_margine = diff;
-                            field.geometricBounds = [field.geometricBounds[0], field.geometricBounds[1], field.geometricBounds[2], field.geometricBounds[3] + diff];
-                        }
-                    }
-                    else if (unita == "Y") {
-                        console.log("Massima altezza: " + val);
-                        let h = field.geometricBounds[2] - field.geometricBounds[0];
-                        if (h > val) {
-                            let diff = val - h;
-                            avanzo_margine = diff;
-                            field.geometricBounds = [field.geometricBounds[0], field.geometricBounds[1], field.geometricBounds[2] + diff, field.geometricBounds[3]];
-                        }
-                    }
-
-
-                }
-                else if (element.startsWith("min-size")) {
-                    let p = element.replace("min-size", "").split(':');;
-                    let unita = p[0];
-
-                    if (unita == "X") {
-                        console.log("Minima larghezza: " + val);
-                        let w = field.geometricBounds[3] - field.geometricBounds[1];
-                        if (w < val) {
-                            let diff = val - w;
-                            avanzo_margine = diff;
-                            field.geometricBounds = [field.geometricBounds[0], field.geometricBounds[1], field.geometricBounds[2], field.geometricBounds[3] + diff];
-                        }
-                    }
-                    else if (unita == "Y") {
-                        console.log("Minima altezza: " + val);
-                        let h = field.geometricBounds[2] - field.geometricBounds[0];
-                        if (h < val) {
-                            let diff = val - h;
-                            avanzo_margine = diff;
-                            field.geometricBounds = [field.geometricBounds[0], field.geometricBounds[1], field.geometricBounds[2] + diff, field.geometricBounds[3]];
-                        }
-                    }
-                }
-                else if (element.startsWith("alignX")) {
-                    //Si basa su avanzo margine
-                    let dir = element.replace("alignX", "");
-                    if (dir == "left") {
-
-                    }
-                    else if (dir == "right") {
-
-                    }
-                }
-                else if (element.startsWith("alignY")) {
-                    //Si basa su avanzo margine
-                    let dir = element.replace("alignY", "");
-                    if (dir == "top") {
-
-                    }
-                    else if (dir == "bottom") {
-
-                    }
-                }
-
-
-            });
-        }
-
-    },
-
     /// La porta d'ingresso del gruppo: quali porzioni del box sono libere per le foto.
     /// Mette in fila i tre passi - ostacoli, candidati grossolani, raffinamento - e torna
     /// { candidate, obstacles }. Chi chiama passa poi tutti e due a fixFoto.
@@ -1570,7 +1425,10 @@ const CssFramework =
                         fs.writeFileSync(pathLavorazione + "/allineamenti.json", JSON.stringify(allineamentiDB));
                         callback(null, allineamentiDB); // Passiamo `null` come primo argomento per indicare che non c'è errore
                     }catch(e){
-                        //console.error(e);  
+                        //I20-1002: qui il console.error era commentato. Se la copia di riserva in
+                        //allineamenti.json non si scrive, il prossimo scaricamento fallito non ha
+                        //su cosa ripiegare e l'operazione si annulla: va detto adesso, non allora.
+                        console.error("Code CSF-009: impossibile scrivere la copia di riserva delle regole in allineamenti.json: " + e);
                     }
                 }
 
@@ -1837,7 +1695,7 @@ const CssFramework =
     applicaRidimensionamento(box, boxInGrigliaBounds, mappaBoxOriginale, itemRef, DBallineamenti, DBDef) {
         try{
 
-            etichetteSegnalate = [];
+            this.etichetteSegnalate = [];
 
             let wBOX_ridimensionato = boxInGrigliaBounds[3] - boxInGrigliaBounds[1];
             let hBOX_ridimensionato = boxInGrigliaBounds[2] - boxInGrigliaBounds[0];
@@ -3348,7 +3206,9 @@ const CssFramework =
         }
     },
 
-    etichetteSegnalate : [],
+    /// Le etichette gia' segnalate per questo box, per non ripetere la stessa segnalazione.
+    /// Azzerata a ogni applicaRidimensionamento, cioe' una volta per box.
+    etichetteSegnalate: [],
 
     /// Chi e' uscito dai bordi del box rientra. Su una casella di testo prova PRIMA a
     /// stringerla, e solo se andrebbe in overflow la sposta.
@@ -3593,10 +3453,10 @@ const CssFramework =
                 pageItem.geometricBounds[1] < boxInGrigliaBounds[1] - 0.05 ||
                 pageItem.geometricBounds[2] > boxInGrigliaBounds[2] + 0.05 ||
                 pageItem.geometricBounds[3] > boxInGrigliaBounds[3] + 0.05) {
-                if (!etichetteSegnalate.includes(Utility.parseLabel(pageItem.label))) {
+                if (!this.etichetteSegnalate.includes(Utility.parseLabel(pageItem.label))) {
                     messaggioUtente("Code CSF-009: L'elemento con etichetta " + (pageItem.label != "" ? Utility.parseLabel(pageItem.label) : "senza etichetta") + " nel box " + (box.label != "" ? box.label : "senza etichetta") + ", post ridimensionamento eccede i limiti della griglia assegnata. L'elemento è stato rimpicciolito per permettere la corretta impaginazione.", "error");
                     addSegnalazione("Code CSF-009: L'elemento con etichetta " + (pageItem.label != "" ? Utility.parseLabel(pageItem.label) : "senza etichetta") + " nel box " + (box.label != "" ? box.label : "senza etichetta") + ", post ridimensionamento eccede i limiti della griglia assegnata. L'elemento è stato rimpicciolito per permettere la corretta impaginazione.", "error", 1, true, ["CSF-009", "red"]);
-                    etichetteSegnalate.push(Utility.parseLabel(pageItem.label));
+                    this.etichetteSegnalate.push(Utility.parseLabel(pageItem.label));
 
                     //Rimpiccioliamo l'elemento in modo proporzionale per farlo rientrare nei limiti della griglia
                     //calcoliamo quanto esce in ogni direzione
@@ -3820,6 +3680,10 @@ const CssFramework =
         }
     },
 
+    /// Dispone gli elementi di un gruppo: ordinamento per livello, direzione di lettura
+    /// (colonne o righe, in un verso o nell'altro) e spaziatura fra uno e l'altro.
+    /// I bounds in arrivo sono relativi al box e qui diventano assoluti.
+    /// E' la funzione piu' grande del file.
     AllineamentoInternoGruppo(box, nomeGruppo, gruppoElementiOriginal, ordinamento, lettura, Spacing, mappaBoxOriginale, itemRef) {
         let me = this;
         //ordiniamo gli elementi in ordinamento per valore di Livello
@@ -4617,6 +4481,8 @@ const CssFramework =
 
     },
 
+    /// Se una regola si applica a questo box: elementi che devono esserci, elementi che non
+    /// devono esserci, contatti fra etichette e le altre condizioni descritte qui sotto.
     checkCondition(mappaBoxOriginale, itemRef, condizione, box) {
         try{
             //la condizione ha questa struttura
@@ -4953,18 +4819,9 @@ const CssFramework =
             if (box && box.id != null) {
                 return box.id.toString();
             }
-        } catch (e) {}
+        } catch (e) { /* id illeggibile: si ripiega sulla label, qui sotto */ }
 
         return box && box.label ? box.label : "";
-    },
-
-    //La lettura delle regole vive in cssRegoleConflitti: li' e' verificabile dalla suite.
-    splitSegnalazioniConflittiSpec(spec) {
-        return cssRegoleConflitti.splitSpec(spec);
-    },
-
-    normalizzaRegolaSegnalazioniConflitti(regola) {
-        return cssRegoleConflitti.normalizzaRegola(regola);
     },
 
     getListaRegoleSegnalazioniConflitti(segnalazioniConflitti) {
@@ -4989,6 +4846,9 @@ const CssFramework =
         }
     },
 
+    /// Raccoglie le regole di conflitto del box e le mette in sospeso: il controllo vero
+    /// avviene alla fine, quando gli elementi hanno preso la posizione definitiva.
+    /// La lettura delle regole non e' qui, vive in cssRegoleConflitti.
     preparaSegnalazioniConflitti(box, DBallineamenti, DBDefault) {
         try {
             var meccanica = box.label;
@@ -5028,7 +4888,7 @@ const CssFramework =
                 }
                 current = current.parent;
             }
-        } catch (e) {}
+        } catch (e) { /* catena dei genitori illeggibile: si assume visibile, qui sotto */ }
 
         return true;
     },
@@ -5038,7 +4898,7 @@ const CssFramework =
             if (item && item.id != null) {
                 return item.id.toString();
             }
-        } catch (e) {}
+        } catch (e) { /* id illeggibile: si ripiega sull'indice, qui sotto */ }
 
         return "idx_" + index;
     },
@@ -5094,6 +4954,8 @@ const CssFramework =
         addSegnalazione(msg, "warning", 2, true, ["CSF-013", "yellow"]);
     },
 
+    /// Il controllo finale: guarda se gli elementi che non dovevano toccarsi si toccano, e
+    /// segnala. Non fa niente se il controllo e' sospeso o se e' gia' stato fatto per il box.
     controllaSegnalazioniConflittiPendenti(box) {
         try {
             var pendente = this.segnalazioniConflittiPendenti;
@@ -5144,6 +5006,8 @@ const CssFramework =
     },
     
 
+    /// L'ingresso degli allineamenti, chiamato da indexNew. Scarica le regole se il semaforo
+    /// e' alzato e passa ad allineamenti().
     applicaAllineamentoCss(box, boundsBoxImpaginato, mappaBoxOriginale, itemRef, bypassDownload = true, momento = cssSequenzaOperazioni.standard) {
         try {
             let me = this;
@@ -5379,6 +5243,8 @@ const CssFramework =
         return box;
     },
 
+    /// Cerca le regole di allineamento del box per meccanica, con la gerarchia a due livelli
+    /// - cliente prima, default poi - e le applica gruppo per gruppo.
     allineamenti(box, boundsBoxImpaginato, mappaBoxOriginale, itemRef, DBallineamenti, DBDefault) {
         //leggiamo la label del box per capire che meccanica è
         //cerchiamo nel DB l'elemento la cui variabile nomiBox contiene la meccanica
@@ -5638,6 +5504,9 @@ const CssFramework =
         return box;
     },
 
+    /// Fa seguire un gruppo a un altro. La struttura dell'ancora e' descritta qui sotto: per
+    /// ogni asse la distanza da tenere, il lato del bersaglio a cui avvicinarsi, il proprio
+    /// lato di riferimento e se fermarsi in caso di collisione.
     FollowAnchorGruppo(mappaBoxOriginale, gruppoAllineamento, anchor, elementAllineamento, elementAllineamentoDefault, elementDefaultAllineamento, elementDefaultAllineamentoDefault, itemRef, box, isItemLinkGruppo) {
         //struttura di un anchor
         // followAnchor: [{
@@ -5894,6 +5763,8 @@ const CssFramework =
         return attive;
     },
 
+    /// Esegue sul documento il piano calcolato da cssComposizioneBox: duplicazioni degli
+    /// elementi e ordine di sovrapposizione.
     applicaComposizioneBox(box, mappaBoxOriginale, itemRef, DBallineamenti, DBDefault) {
         try {
             var me = this;
@@ -6127,6 +5998,8 @@ const CssFramework =
      * allineato a loro prima stava seguendo una posizione provvisoria. Lavora sul contesto
      * dell'ultima applicazione del CSS, quindi non rilegge il file delle regole.
      */
+    /// Il momento "dopoFixFoto" di cssSequenzaOperazioni: le regole che hanno senso solo
+    /// quando le foto hanno preso la posizione definitiva.
     applicaOperazioniDopoFixFoto(box, boundsBoxImpaginato) {
         if (box == null || !box.isValid) {
             return box;
@@ -6164,6 +6037,8 @@ const CssFramework =
         return this.riapplicaComposizioneBox(box);
     },
 
+    /// Trasforma il nome di un gruppo in una regex: "sy_ombra*" diventa /^sy_ombra.*$/.
+    /// Toglie i suffissi [itemLink] e [exist] e protegge i caratteri speciali tranne l'asterisco.
     makeRegexFromGroupName(groupName) {
         // rimuovo un eventuale [itemLink] finale (case-insensitive)
         var baseName = groupName.replace(/\[itemLink\]$/i, '')
@@ -6176,6 +6051,7 @@ const CssFramework =
         return new RegExp(regexStr);
     },
 
+    /// Separa dal nome del gruppo il suffisso [exist], che dice "vale solo se c'e'".
     parseGroupSpec(groupName) {
         const hasExist = /\[exist\]$/i.test(groupName);
         const cleanName = groupName.replace(/\[exist\]$/i, '');
@@ -6188,6 +6064,8 @@ const CssFramework =
     },
 
 
+    /// I bounds veri di un elemento: su una casella di testo sono quelli del TESTO, non del
+    /// riquadro che lo contiene.
     getRealBounds(item) {
         if (item.isInvalid){
             return [-1,-1,-1,-1];
@@ -6297,54 +6175,6 @@ const CssFramework =
         }
     },
 
-    getBoundsLineByIndex(item, indexLine) {
-        if (item.constructorName == "TextFrame") {
-
-            var lines = item.lines.everyItem().getElements();
-            if (indexLine >= 0 && indexLine < lines.length) {
-                var line = lines[indexLine];
-                var base = line.baseline;
-                var top = base - line.ascent;
-                var bottom = base + line.descent;
-                // prendo un carattere “rappresentativo” della riga
-                var ch = null;
-                try {
-                    if (line.characters && line.characters.length > 0) {
-                        var chars = line.characters.everyItem().getElements();
-                        var maxPS = -1;
-                        for (var i = 0; i < chars.length; i++) {
-                            var ps = chars[i].pointSize;
-                            if (ps != null && !isNaN(ps) && ps > maxPS) {
-                                maxPS = ps;
-                                ch = chars[i];
-                            }
-                        }
-                    }
-                } catch (e) {
-                    ch = null;
-                }
-                if (ch) {
-                    var top = base - line.ascent - ch.pointSize;
-                    var bottom = base + line.descent;
-                }
-
-                var left = line.horizontalOffset;
-                var right = line.endHorizontalOffset;
-
-
-                return [top, left, bottom, right];
-            }
-            else {
-                console.error("Linea non valida");
-                return null;
-            }
-        }
-        else {
-            console.error("Linea non valida");
-            return null;
-        }
-    },
-
     getBoundsLine(line) {
         if (line.constructorName == "Line") {
 
@@ -6435,6 +6265,13 @@ const CssFramework =
     /// NON HA MAI FUNZIONATO fino a I20-1002: chiamava makeRegexFromGroupName senza this.,
     /// nel preambolo, e il ReferenceError finiva nel catch in fondo che torna false. Il
     /// chiamante, indexNew per le sole lavorazioni PoP, quel false non lo guarda.
+    ///
+    /// I catch vuoti qui dentro - una dozzina - sono deliberati e vanno letti cosi': l'algoritmo
+    /// interroga InDesign su proprieta' che su un certo oggetto possono non esistere, e subito
+    /// dopo prova la strada alternativa. Scriverci un log vorrebbe dire una riga in console per
+    /// ogni carattere esaminato. E' lo stesso silenzio che ha nascosto il difetto qui sopra per
+    /// anni, e per questo il difetto lo previene ora un test sul sorgente
+    /// (tests/plugin/cssFrameworkChiamateMembri.test.js) invece della lettura dei log.
     reflowTextFrameAvoidConflicts(
         textFrame,
         box,
@@ -7670,6 +7507,7 @@ const CssFramework =
     },
 
 
+    /// Scende dentro i gruppi fino agli elementi foglia. Una casella di testo e' gia' foglia.
     getItemContained(item) {
         var listItem = [];
         if (item.constructorName == "TextFrame") {
@@ -7710,6 +7548,8 @@ const CssFramework =
         }
     },
 
+    /// Sposta un gruppo perche' segua un altro su un asse, rispettando distanza e lati
+    /// dell'ancora, e fermandosi in caso di collisione se l'ancora lo chiede.
     followGroup(gruppoSeguito, gruppoAllineamento, anchor, direction = "x", useTextBounds = false, isItemLinkGruppo = false) {
         try {
             let me = this;
@@ -8255,6 +8095,7 @@ const CssFramework =
         }
     },
 
+    /// Come followGroup, ma il bersaglio e' un punto fisso del box invece di un altro gruppo.
     followStaticAnchor(box, gruppoAllineamento, anchor, mappaBoxOriginale, itemRef, allineamentiRiusciti, isItemLinkGruppo = false) {
 
         if (gruppoAllineamento.length == 0) {

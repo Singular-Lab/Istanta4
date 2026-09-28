@@ -42,10 +42,14 @@ function leggiSorgente() {
 
 /// I membri di primo livello dell'oggetto: stanno a quattro spazi di rientro, come
 /// "    nomeMembro(" oppure "    nomeMembro:".
+///
+/// L'async va riconosciuto: "    async nomeMembro(" e' un membro come gli altri, e senza
+/// questo ramo il controllo lo ignorerebbe - cioe' non segnalerebbe una sua chiamata
+/// sbagliata. La prima versione di questo test aveva proprio questo buco.
 function membriDellOggetto(sorgente) {
     const membri = new Set();
     for (const riga of sorgente.split('\n')) {
-        const m = riga.match(/^ {4}([a-zA-Z_][\w]*)\s*[:(]/);
+        const m = riga.match(/^ {4}(?:async\s+)?([a-zA-Z_][\w]*)\s*[:(]/);
         if (m) membri.add(m[1]);
     }
     return membri;
@@ -74,7 +78,7 @@ function chiamateSenzaThis(sorgente) {
         //I commenti non eseguono niente.
         if (spoglia.startsWith('//') || spoglia.startsWith('*') || spoglia.startsWith('/*')) continue;
         //La definizione del membro non e' una chiamata a se stesso.
-        if (/^ {4}[a-zA-Z_][\w]*\s*[:(]/.test(riga)) continue;
+        if (/^ {4}(?:async\s+)?[a-zA-Z_][\w]*\s*[:(]/.test(riga)) continue;
 
         for (const m of riga.matchAll(/(?<![\w.])([a-zA-Z_][\w]*)\s*\(/g)) {
             const nome = m[1];
@@ -137,6 +141,28 @@ test('con this. davanti, la stessa chiamata non viene segnalata', () => {
     ].join('\n');
 
     assert.deepStrictEqual(chiamateSenzaThis(finto), []);
+});
+
+test('un membro async e\' un membro come gli altri', () => {
+    //Il buco della prima versione: "async nome(" non veniva riconosciuto come membro, quindi
+    //una sua chiamata senza this. sarebbe passata inosservata.
+    const finto = [
+        'const CssFramework =',
+        '{',
+        '    async faQualcosa(x) {',
+        '        return x;',
+        '    },',
+        '',
+        '    chiamante() {',
+        '        return faQualcosa(1);',
+        '    },',
+        '}'
+    ].join('\n');
+
+    const trovate = chiamateSenzaThis(finto);
+
+    assert.strictEqual(trovate.length, 1);
+    assert.strictEqual(trovate[0].nome, 'faQualcosa');
 });
 
 test('le funzioni locali dichiarate nel file non sono segnalate', () => {

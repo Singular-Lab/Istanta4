@@ -35,7 +35,7 @@ peggio di una documentazione assente, perché fa perdere tempo invece di farne r
 |---|---|---|
 | 1 — Fondamenta | `manifest.json`, `ipconfig.json`, `index.html`, `logger.js`, `versionePlugin.js`, `XMLHttpRequestClient.js` | **fatto** |
 | 2 — Utilità piccole | `barraScorrimento`, `dissolvenza`, `tooltipPosizione`, `jsIndexControls`, `cacheHashFoto`, `dataCaricamentoFoto`, `credenzialiSalvate`, `fotoAutoSync`, `garbageCollector`, `cambiStrutturali`, `ricollegaEsiti`, `reportConteggi`, `trattiDescrizione`, `variantiDescrizione` | **fatto** |
-| 3 — Motore CSS | `CssFramework`, `cssComposizioneBox`, `cssRegoleConflitti`, `cssSequenzaOperazioni`, `cssSpazioFoto`, `noRenderElementi` | da fare |
+| 3 — Motore CSS | `CssFramework`, `cssComposizioneBox`, `cssRegoleConflitti`, `cssSequenzaOperazioni`, `cssSpazioFoto`, `noRenderElementi` | **fatto** |
 | 4 — Report | `reportConfronti`, `reportConfrontoCsv`, `reportIntegritaAvvio` | da fare |
 | 5 — Nucleo | `utility`, `events`, `cmd`, `pluginMiddleware`, `custom`, `filtri`, `griglia`, `ficoProcess`, `schedaArtwork`, `InputEditController`, `schedaRef`, `confronti`, `indexNew` | da fare |
 | 6 — Agenzie e Receiver | i sette `custom.js` di cliente, la cartella `Receiver` | da fare |
@@ -71,6 +71,17 @@ peggio di una documentazione assente, perché fa perdere tempo invece di farne r
 | [jsIndexControls.md](jsIndexControls.md) | le schede del pannello, la copia che chiama il codice |
 | [garbageCollector.md](garbageCollector.md) | la rimozione differita degli elementi InDesign |
 | [cambiStrutturali.md](cambiStrutturali.md) | quali cambi strutturali si applicano a una referenza |
+
+### Lotto 3 — il motore CSS
+
+| pagina | il file che spiega |
+|---|---|
+| [cssSequenzaOperazioni.md](cssSequenzaOperazioni.md) | quando una regola del framework viene eseguita |
+| [cssRegoleConflitti.md](cssRegoleConflitti.md) | quali elementi non devono toccarsi, e su cosa si misura |
+| [cssComposizioneBox.md](cssComposizioneBox.md) | duplicare elementi e decidere chi sta davanti |
+| [cssSpazioFoto.md](cssSpazioFoto.md) | in quale spazio libero finiscono le foto |
+| [noRenderElementi.md](noRenderElementi.md) | rendere invisibili singoli elementi di un box |
+| [cssFramework/](cssFramework/README.md) | il motore vero: 8.636 righe, spiegate in cinque pagine per gruppo |
 
 ---
 
@@ -115,6 +126,28 @@ oggi ci convivono.
 3. **`garbageCollector.js` ha quattro difetti** nella rimozione differita, di cui il più grave è
    `ContentType` usato senza `require` con l'errore inghiottito da un `catch` vuoto —
    [garbageCollector.md](garbageCollector.md).
+
+## Cosa è stato rimosso e corretto durante il Lotto 3
+
+Il motore CSS era il pezzo mai documentato, e documentarlo ha fatto emergere due difetti che
+duravano da anni, entrambi della stessa natura: **un membro dell'oggetto chiamato senza `this.`**.
+In un metodo quel nome non esiste come funzione globale, quindi la riga lancia `ReferenceError`; e
+siccome in questo file quasi tutto è avvolto in un `try/catch`, l'errore spariva.
+
+| cosa | esito |
+|---|---|
+| catena `MAIN_fixFoto` (28 membri, 627 righe) | **cancellata**: non poteva funzionare, e la chiamavano solo agenzie deprecate |
+| `reflowTextFrameAvoidConflicts` | **corretta**: 1.230 righe che non erano mai partite, il reflow della descrizione nei PoP |
+| agenzie `Doc` ed `Etruria` (9.120 righe) | **cancellate**: deprecate, e già orfane nel resto della suite |
+| cinque membri senza chiamanti (211 righe) | **cancellati**: `adaptField`, `getBoundsLineByIndex`, due involucri e un membro inerte |
+| `coloraResults` | **cancellata**: strumento di debug con l'unica chiamata commentata |
+| `cambiStrutturali.js` | `textFrame` → `TextFrame`, vedi [cambiStrutturali.md](cambiStrutturali.md) |
+
+In tutto **oltre 10.000 righe rimosse** dal Plugin.
+
+A impedire il ritorno di quella classe di difetti c'è
+`tests/plugin/cssFrameworkChiamateMembri.test.js`, che legge il sorgente come testo — il file non si
+carica sotto Node — e fallisce se un membro viene chiamato senza `this.`.
 
 ## Un'osservazione che vale per tutto il Plugin
 

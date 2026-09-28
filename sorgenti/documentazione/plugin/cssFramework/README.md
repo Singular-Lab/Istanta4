@@ -2,7 +2,7 @@
 
 **Cosa è:** ridimensiona, sposta, allinea, ancora un elemento a un altro, mette a posto le foto,
 risolve le sovrapposizioni e segnala quello che non si è potuto risolvere. È il file più grande del
-Plugin — **8.751 righe, 87 membri** — ed è l'unico del motore CSS che **tocca davvero
+Plugin — **8.636 righe, 84 membri** — ed è l'unico del motore CSS che **tocca davvero
 InDesign**.
 
 Attorno a lui girano cinque moduli che non lo toccano affatto:
@@ -28,13 +28,13 @@ gruppi:
 | spazio di impaginazione e rettangoli candidati | 204–682 | [02-spazio-di-impaginazione.md](02-spazio-di-impaginazione.md) |
 | sistemazione delle foto | 938–1550 | [03-sistemazione-foto.md](03-sistemazione-foto.md) |
 | ridimensionamento, overflow, collisioni, reflow | 1833–8650 | [04-ridimensionamento-e-overflow.md](04-ridimensionamento-e-overflow.md) |
-| allineamenti, ancoraggi, condizioni, conflitti, composizione | 5523–8973 | da scrivere (3f) |
+| allineamenti, ancoraggi, condizioni, conflitti, composizione | 3683–8420 | [05-allineamenti-e-conflitti.md](05-allineamenti-e-conflitti.md) |
 
 ---
 
 ## Lo stato del modulo
 
-Su 87 membri **solo 8 sono dati**: il resto sono funzioni. `CssFramework` è un oggetto solo
+Su 84 membri **solo 7 sono dati**: il resto sono funzioni. `CssFramework` è un oggetto solo
 — un singleton — e quei 22 membri sono **stato mutabile condiviso da tutte le sue funzioni**.
 
 | gruppo | membri | dove si spiegano |
