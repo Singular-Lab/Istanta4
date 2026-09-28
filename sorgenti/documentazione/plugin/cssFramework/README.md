@@ -25,7 +25,7 @@ gruppi:
 | gruppo | righe | pagina |
 |---|---|---|
 | infrastruttura, contesto, mappa del box, enum | 57–204, 1967–2236, 9051–9148 | [01-infrastruttura-e-mappa.md](01-infrastruttura-e-mappa.md) |
-| spazio di impaginazione e rettangoli candidati | 204–682 | da scrivere (3c) |
+| spazio di impaginazione e rettangoli candidati | 204–682 | [02-spazio-di-impaginazione.md](02-spazio-di-impaginazione.md) |
 | sistemazione delle foto | 917–1967, più i modelli in coda | da scrivere (3d) |
 | ridimensionamento, overflow, collisioni, reflow | 2236–5320 | da scrivere (3e) |
 | allineamenti, ancoraggi, condizioni, conflitti, composizione | 5523–8973 | da scrivere (3f) |

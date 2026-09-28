@@ -208,6 +208,11 @@ const CssFramework =
 
     },
 
+    /// La porta d'ingresso del gruppo: quali porzioni del box sono libere per le foto.
+    /// Mette in fila i tre passi - ostacoli, candidati grossolani, raffinamento - e torna
+    /// { candidate, obstacles }. Chi chiama passa poi tutti e due a fixFoto.
+    /// PRESUPPONE che nel box esista un elemento la cui label comincia per "base": e' lo spazio
+    /// dentro cui si cerca lo spazio. Se non c'e', qui si rompe con un TypeError.
     getSpazioImpaginazione(box) {
         let obs = this.getObstacles(box);
         //calcoliamo la larghezza e l'altezza del box
@@ -236,6 +241,13 @@ const CssFramework =
 
     },
 
+    /// Quali elementi del box sono ostacoli per le foto, in coordinate relative alla base.
+    /// Non lo sono le foto stesse, le loro etichette e gli sfondi: le foto vengono collocate
+    /// tutte insieme dal fixFoto, e lo sfondo sta dietro a tutto.
+    /// Il cliente puo' intervenire da custom.js con ignoreElementsFixFoto per aggiungerne,
+    /// exceptionElementsToIgnoreFixFoto per fare eccezioni, customPadding per dare a un elemento
+    /// un margine suo.
+    /// Come getSpazioImpaginazione, presuppone che la base ci sia.
     getObstacles(box) {
         //scorriamo tutti gli elementi tranne quelli elencati nella variabile ignoreElements
         let ignoreElements = ["base*", "immagine*", "foto_secondaria*", "etichetta*", "foto_extra*", "sfondo*"];
@@ -330,6 +342,13 @@ const CssFramework =
         return obstacles;
     },
 
+    /// Fit di un TextFrame al contenuto, conservando la posizione del testo.
+    /// InDesign, con FRAME_TO_CONTENT, sposta anche il testo: qui si misura la baseline prima e
+    /// dopo e si rimette il frame dov'era, altrimenti ogni fit farebbe salire il testo.
+    /// Sui frame di piu' righe stringe anche in orizzontale sulla larghezza vera del testo, riga
+    /// per riga, tenendo conto di inset, indent e scala orizzontale, con un 3% di margine.
+    /// Se il frame e' in overflow non tocca niente e lo segnala (CSF-001): un fit su un testo che
+    /// non ci sta gia' peggiorerebbe le cose. CSF-000 se non si risale al box.
     safeFitToContent(textFrame) {
         if (!textFrame || !textFrame.lines || textFrame.lines.length === 0 || textFrame.rotationAngle != 0) return;
     
@@ -469,6 +488,12 @@ const CssFramework =
     //     return freeRects;
     // },
 
+    /// I candidati grossolani: per ogni ostacolo, tutto lo spazio sopra, sotto, a sinistra e a
+    /// destra di esso. Sono sovrapposti fra loro e ignorano l'esistenza degli altri ostacoli:
+    /// e' refineRects a sistemarli.
+    /// Ogni candidato viene poi ristretto di paddingBox, che di default e' negativo,
+    /// [-2,-2,-2,-2], cosi' le foto non finiscono a filo degli ostacoli. Il cliente puo'
+    /// cambiarlo da custom.js.
     generateCandidateRects(boxWidth, boxHeight, obstacles, tolerance = 0) {
         const results = [];
         var paddingBox = [-2, -2, -2, -2]; // [top, left, bottom, right]
@@ -545,6 +570,8 @@ const CssFramework =
         return results;
     },
 
+    /// Toglie i candidati interamente contenuti in un altro: non sono sbagliati, sono sottoaree
+    /// di uno piu' grande. Disattivandola si ottengono piu' aree fra cui scegliere.
     reduceResult(res) {
         const reduced = [];
         for (const r of res) {
@@ -563,6 +590,11 @@ const CssFramework =
     },
 
 
+    /// Il cuore del gruppo: spezza ogni candidato sugli ostacoli che lo attraversano, e ripete
+    /// finche' nessuno collide piu'. Alla fine toglie i duplicati, scarta i candidati piu'
+    /// piccoli di un quarto della base per lato e quelli contenuti in altri.
+    /// GUARDIA DI EMERGENZA: il ciclo si ferma comunque dopo mille iterazioni. Se scatta, i
+    /// candidati restituiti sono quelli parziali dell'ultimo giro e nessuno lo viene a sapere.
     refineRects(obstacles, contours, boxWidth, boxHeight, tolerance = 0) {
         let currentRects = [...contours];
         let changed = true;
@@ -619,33 +651,10 @@ const CssFramework =
 
         //Se vogliamo più aree possiamo disattivare questa funzione, le aree che toglie non sono sbagliate ma sono sottoaree di quelle rimaste
         cleanedRects = this.reduceResult(cleanedRects);
-        //this.coloraResults(docInLavorazione.pages.item(0), cleanedRects);
         return cleanedRects;
     },
 
-    coloraResults(page, res) {
-        for (var i = 0; i < res.length; i++) {
-            var r = res[i];
-
-            try {
-                // Calcolo geometricBounds: [y1, x1, y2, x2]
-                var gb = [
-                    r.y,                   // top
-                    r.x,                   // left
-                    r.y + r.height,        // bottom
-                    r.x + r.width          // right
-                ];
-
-                var newRect = page.rectangles.add();
-                newRect.geometricBounds = gb;
-                newRect.fillColor = "Rosso prezzi";
-                newRect.strokeWeight = 0;
-            } catch (e) {
-                console.log("Errore su rettangolo " + i + ": " + e);
-            }
-        }
-    },
-
+    /// Via i rettangoli uguali a meno della tolleranza.
     removeDuplicateRects(rects, tolerance = 0.0001) {
         const unique = [];
 
@@ -665,6 +674,8 @@ const CssFramework =
         return unique;
     },
 
+    /// Via i rettangoli troppo piccoli. La soglia arriva da refineRects ed e' un quarto della
+    /// base per lato: sotto quella misura non ci sta una foto utile.
     removeRectsToSmall(rects, widthMin, heightMin) {
         const tolerance = 0.0001;
         return rects.filter(r =>
@@ -686,6 +697,9 @@ const CssFramework =
     //     return null;
     // },
 
+    /// Cosa resta di un rettangolo tolto di mezzo un ostacolo: fino a quattro pezzi, sopra,
+    /// sotto, a sinistra e a destra. I pezzi laterali sono alti quanto la sola fascia
+    /// dell'ostacolo, cosi' non si sovrappongono a quelli sopra e sotto.
     intersectRect(rect, obs, tolerance = 0.0001) {
         const results = [];
 
