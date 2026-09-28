@@ -2,7 +2,7 @@
 
 **Cosa è:** ridimensiona, sposta, allinea, ancora un elemento a un altro, mette a posto le foto,
 risolve le sovrapposizioni e segnala quello che non si è potuto risolvere. È il file più grande del
-Plugin — **9.306 righe, circa 110 membri** — ed è l'unico del motore CSS che **tocca davvero
+Plugin — **8.751 righe, 87 membri** — ed è l'unico del motore CSS che **tocca davvero
 InDesign**.
 
 Attorno a lui girano cinque moduli che non lo toccano affatto:
@@ -26,7 +26,7 @@ gruppi:
 |---|---|---|
 | infrastruttura, contesto, mappa del box, enum | 57–204, 1967–2236, 9051–9148 | [01-infrastruttura-e-mappa.md](01-infrastruttura-e-mappa.md) |
 | spazio di impaginazione e rettangoli candidati | 204–682 | [02-spazio-di-impaginazione.md](02-spazio-di-impaginazione.md) |
-| sistemazione delle foto | 917–1967, più i modelli in coda | da scrivere (3d) |
+| sistemazione delle foto | 938–1550 | [03-sistemazione-foto.md](03-sistemazione-foto.md) |
 | ridimensionamento, overflow, collisioni, reflow | 2236–5320 | da scrivere (3e) |
 | allineamenti, ancoraggi, condizioni, conflitti, composizione | 5523–8973 | da scrivere (3f) |
 
@@ -34,14 +34,14 @@ gruppi:
 
 ## Lo stato del modulo
 
-Su circa 110 membri **solo 22 sono dati**: il resto sono funzioni. `CssFramework` è un oggetto solo
+Su 87 membri **solo 8 sono dati**: il resto sono funzioni. `CssFramework` è un oggetto solo
 — un singleton — e quei 22 membri sono **stato mutabile condiviso da tutte le sue funzioni**.
 
 | gruppo | membri | dove si spiegano |
 |---|---|---|
 | infrastruttura e contesto | `semaforoDownloadFramework`, `contestoCss` | [01-infrastruttura-e-mappa.md](01-infrastruttura-e-mappa.md) |
 | segnalazioni | `etichetteSegnalate`, `segnalazioniConflittiPendenti`, `sospendiControlloSegnalazioniConflitti` | 3f |
-| sistemazione foto | `calcoloDistanziamentoFoto`, `confini`, `offsetScale`, i sei `modello*`, `img1-3`, `inddItemImg1-3`, `cacheBoundaries`, `modelloDiFix` | 3d |
+| sistemazione foto | `calcoloDistanziamentoFoto` | [03-sistemazione-foto.md](03-sistemazione-foto.md) |
 
 **La conseguenza che conta:** `CssFramework` lavora su **un box alla volta e non è rientrante**. Due
 box in parallelo si sovrascriverebbero il contesto a vicenda. Chi un domani volesse parallelizzare

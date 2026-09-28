@@ -8,6 +8,8 @@ const cssRegoleConflitti = require('./cssRegoleConflitti');
 const CssFramework =
 {
     //sono i valori sulla x e sulla y in percentuale (0-1) di cui deve essere distanziato dall'immagine prima
+    /// Per ogni numero di foto, le percentuali di distanziamento fra una e l'altra, scelte in
+    /// base al rapporto altezza/larghezza. Il cliente la sovrascrive da custom.js.
     calcoloDistanziamentoFoto: [ //il ratio è calcolato Y/X
         {
             foto: 0,
@@ -935,6 +937,15 @@ const CssFramework =
     //     return unique.slice(0, maxResults);
     // }
 
+    /// Fa stare le foto nello spazio trovato, senza che si sovrappongano.
+    /// Riceve i candidati di getSpazioImpaginazione, dispone le foto in gruppo, sceglie il
+    /// candidato con cssSpazioFoto, ridimensiona il gruppo perche' ci stia e lo applica.
+    /// Con projection = true calcola soltanto l'area occupata SENZA toccare il documento:
+    /// serve a sapere quanto spazio servirebbe, prima di decidere.
+    /// Si ferma senza fare nulla se non c'e' una configurazione di distanziamento per quel
+    /// numero di foto (CSF-12) o se nessun candidato puo' ospitare il gruppo.
+    /// In coda ripristina la dimensione originale degli ostacoli, che getObstacles aveva
+    /// alterato col fit, e fa scattare il controllo delle segnalazioni conflitti.
     fixFoto(box, candidateRects, obstacles, projection = false) {
 
         var base = null;
@@ -1246,6 +1257,10 @@ const CssFramework =
         return fattori;
     },
 
+    /// Dispone le foto a cascata: ognuna centrata rispetto alla precedente e scostata delle
+    /// percentuali configurate. Il set di percentuali si sceglie sul rapporto altezza/larghezza
+    /// della PRIMA foto. Torna l'ingombro complessivo del gruppo e le foto con i nuovi bounds,
+    /// normalizzati con l'angolo in 0,0.
     getRaggruppamentoFoto(fotos, distanzFoto){
         //adattiamo i bounds della foto di modo che le misure diventino normalizzate con l'angolo in 0,0
 
@@ -1310,12 +1325,18 @@ const CssFramework =
         return {boundsGruppo:boundsGruppo, fotos:fotos};
     },
 
+    /// Avvicina un valore a 1 con un decadimento esponenziale. Smorza l'effetto del rapporto
+    /// d'aspetto sul distanziamento: una foto molto allungata non deve allontanarsi dalle altre
+    /// in proporzione alla sua stranezza.
     approachOne(x, k = 1.2) {
         let resOperation = 1 + ((x - 1) * Math.exp(-k));
         console.log("Res: "+resOperation);
         return resOperation;
     },
 
+    /// I vertici dell'immagine dentro il riquadro, per getRealBoundsOfFoto.
+    /// E' l'unica sopravvissuta della vecchia geometria del fix iterativo: tutte le altre
+    /// servivano solo alla catena MAIN_fixFoto, cancellata in I20-1002.
     getVertex(img, offset) {
         //img.graphics[0].clippingPath.clippingType = ClippingPathType.ALPHA_CHANNEL;    
 
@@ -1485,6 +1506,8 @@ const CssFramework =
         return result;//nvert:nvert, vertx:vertx, verty:verty};
     },
 
+    /// L'ingombro reale dell'immagine dentro il riquadro, che non coincide col riquadro:
+    /// e' quello che conta per disporre le foto senza spazi vuoti fra l'una e l'altra.
     getRealBoundsOfFoto(img, offset)//Funione da spostare in Utility (ora è occupata)
     {
         //img.graphics[0].clippingPath.clippingType = ClippingPathType.ALPHA_CHANNEL;
@@ -1519,477 +1542,6 @@ const CssFramework =
     },
 
 
-    checkHittedArea(bounds_area, img, offset) {
-        var listObjVertex = getVertex(img, offset);
-        for (var $vtx = 0; $vtx < listObjVertex.length; $vtx++) {
-            var objVertex = listObjVertex[$vtx]; //getVertex(img, offset);
-            var nvert = objVertex.nvert;
-            var vertx = objVertex.vertx;
-            var verty = objVertex.verty;
-
-            var minmax = [-1000, -1000, -1000, -1000];
-
-            for (var $v = 0; $v < nvert; $v++) {
-                var vPos = [vertx[$v], verty[$v]];
-                if (minmax[1] == -1000 || vPos[0] < minmax[1])
-                    minmax[1] = vPos[0];
-
-                if (minmax[3] == -1000 || vPos[0] > minmax[3])
-                    minmax[3] = vPos[0];
-
-                if (minmax[0] == -1000 || vPos[1] < minmax[0])
-                    minmax[0] = vPos[1];
-
-                if (minmax[2] == -1000 || vPos[1] > minmax[2])
-                    minmax[2] = vPos[1];
-
-                if (vPos[0] >= bounds_area[1] && vPos[0] <= bounds_area[3] &&
-                    vPos[1] >= bounds_area[0] && vPos[1] <= bounds_area[2]) {
-                    return true;
-                }
-            }
-
-        }
-        //alert(minmax + " ------ " + bounds_area);
-        var y_compresa = (minmax[0] < bounds_area[0] && minmax[2] > bounds_area[0]) || (minmax[0] > bounds_area[0] && minmax[0] < bounds_area[2]);
-        var x_compresa = (minmax[1] < bounds_area[1] && minmax[1] > bounds_area[1]) || (minmax[1] > bounds_area[1] && minmax[1] < bounds_area[3]);
-        if (y_compresa && x_compresa) {
-            //alert("QUI!")
-            return true;
-        }
-
-        return false;
-    },
-
-
-
-    intersec(nvert, vertx, verty, testx, testy) {
-
-        var i, j, c = 0;
-        var inter = 0;
-
-        for (i = 0, j = nvert - 1; i < nvert; j = i++) {
-
-            if ((verty[i] > testy) != (verty[j] > testy)) {
-                if (verty[i] == testy && vertx[i] == testx) {
-                    //alert("STESSO PUNTO " + [testx,testy]);
-                    c = !c;
-                }
-                else {
-                    var calcolo = (vertx[j] - vertx[i]) * (testy - verty[i]) / (verty[j] - verty[i]) + vertx[i];
-                    if (testx < calcolo) {
-                        //alert("PUNTO CONTENUTO " + [testx,testy]);
-
-                        c = !c;
-                        //if (c)
-                        //alert([testx,texty]);
-                    }
-                }
-            }
-        }
-
-        //alert("Interazioni " + inter);
-
-        return c;
-    },
-
-    //Basata su poligono complesso
-    getAreaSovrapposizione(imgPolygon1, imgPolygon2) {
-        var intersectPoints = [];
-
-        for (var p = 0; p < imgPolygon2.points.length; p++) {
-            var pTest = imgPolygon2.points[p];
-            // alert([pTest[0], pTest[1]]);
-            var isInside = intersec(imgPolygon1.nvert, imgPolygon1.vertx, imgPolygon1.verty, pTest[0], pTest[1]);
-            //alert(isInside);
-            if (isInside) {
-                intersectPoints.push(pTest);
-            }
-        }
-
-        return intersectPoints;
-    },
-
-    //Basata su rect semplice
-    getAreaSovrapposizione2(rect1, rect2) {
-
-        // Extracting coordinates of Rectangle A
-        //const { x1: x1A, y1: y1A, x2: x2A, y2: y2A } = rectA;
-        var x1 = rect1[0];
-        var y1 = rect1[1];
-        var x1max = rect1[2];
-        var y1max = rect1[3];
-
-        // Extracting coordinates of Rectangle B
-        //const { x1: x1B, y1: y1B, x2: x2B, y2: y2B } = rectB;
-        var x2 = rect2[0];
-        var y2 = rect2[1];
-        var x2max = rect2[2];
-        var y2max = rect2[3];
-
-        // Calculate overlap in X-axis
-        const overlapX = Math.max(0, Math.min(x1max, x2max) - Math.max(x1, x2));
-
-        // Calculate overlap in Y-axis
-        const overlapY = Math.max(0, Math.min(y1max, y2max) - Math.max(y1, y2));
-
-        // Calculate total overlap area
-        const overlapArea = overlapX * overlapY;
-
-        return overlapArea;
-
-
-        // var poly1 = {points:[[rect1[0],rect1[1]],[rect1[2],rect1[1]],[rect1[2],rect1[3]],[rect1[0],rect1[3]],[rect1[0],rect1[1]]], nvert:0, vertx:[], verty:[]};
-        // var poly2 = {points:[[rect2[0],rect2[1]],[rect2[2],rect2[1]],[rect2[2],rect2[3]],[rect2[0],rect2[3]], [rect2[0],rect2[1]]], nvert:0, vertx:[], verty:[]};
-
-        // for (var p=0; p<poly1.points.length; p++)
-        // {
-        //     poly1.nvert += 1;
-        //     poly2.nvert += 1;
-
-        //     poly1.vertx.push(poly1.points[p][0]);
-        //     poly2.vertx.push(poly2.points[p][0]);
-
-        //     poly1.verty.push(poly1.points[p][1]);
-        //     poly2.verty.push(poly2.points[p][1]);
-        // }
-
-        // // alert(poly1.vertx);
-        // // alert(poly1.verty);
-        // // alert(poly2.vertx);
-        // // alert(poly2.verty);
-        // alert("Confronto\n"+poly1.points+"\n\n"+poly2.points);
-
-        // var result=getAreaSovrapposizione(poly1, poly2);
-        // alert("RESULT " + result);
-        // return result;
-    },
-
-    // alert(img1[0]);
-    // alert(img2[0]);
-
-    calcolaAreaPoligono(poligono) {
-        const n = poligono.length;
-
-        if (n < 3) {
-            // Il poligono deve avere almeno 3 vertici
-            return 0;
-        }
-
-        var area = 0;
-
-        for (var i = 0; i < n; i++) {
-            var x1 = poligono[i][0];
-            var y1 = poligono[i][1];
-
-            var x2 = poligono[(i + 1) % n][0];
-            var y2 = poligono[(i + 1) % n][1];
-
-            area += (x1 * y2 - x2 * y1);
-        }
-
-        // L'area calcolata è positiva, prendiamo il valore assoluto
-        area = Math.abs(area) / 2.0;
-
-        return area;
-    },
-
-    getRect(poligono) {
-        var boundary = [9000, 9000, 0, 0];
-        for (var p = 0; p < poligono.length; p++) {
-            var _p = poligono[p];
-            if (_p[0] < boundary[0])
-                boundary[0] = _p[0];
-            if (_p[1] < boundary[1])
-                boundary[1] = _p[1];
-            if (_p[0] > boundary[2])
-                boundary[2] = _p[0];
-            if (_p[1] > boundary[3])
-                boundary[3] = _p[1];
-        }
-
-        if (poligono.length < 3) {
-            boundary = [0, 0, 0, 0];
-        }
-
-        return boundary;
-    },
-
-
-    checkOverflow(rect) {
-        //alert(rect + " ++++ " + confini );
-        var result = "";
-
-        if (rect[0] < confini[0]) {
-            result += "-2"; //OVERFLOW -X
-        }
-        if (rect[1] < confini[1]) {
-            result += "-3"; //OVERFLOW -Y
-        }
-        if (rect[2] > confini[2]) {
-            result += "-4"; //OVERFLOW +X
-        }
-        if (rect[3] > confini[3]) {
-            result += "-5"; //OVERFLOW +Y
-        }
-
-        return result; //OK
-    },
-
-    startFix(imgList, nTentativo) {
-        //Posiziono tute le immagini al centro rispetto al confine
-        for (var f = 0; f < imgList.length; f++) {
-            var item = imgList[f];
-            if (item == null)
-                continue;
-
-            var bound = item.graphics.item(0).geometricBounds;//item.geometricBounds;
-            var h = bound[2] - bound[0];
-            var w = bound[3] - bound[1];
-
-            if (modelloDiFix.scaleReduce > 0 && nTentativo > 1) {
-                var hDaSottrarre = modelloDiFix.scaleReduce * h;
-                var wDaSottrarre = modelloDiFix.scaleReduce * w;
-                h -= hDaSottrarre;
-                w -= wDaSottrarre;
-            }
-
-            var startCenterX = confini[0] + ((confini[2] - confini[0] - w) / 2);
-            var startCenterY = confini[1] + ((confini[3] - confini[1] - h) / 2);
-            //alert([startCenterY, startCenterX, startCenterY+h, startCenterX+w]);
-
-
-
-            item.graphics.item(0).geometricBounds = [startCenterY, startCenterX, startCenterY + h, startCenterX + w];
-
-            item.geometricBounds = item.graphics.item(0).geometricBounds;
-        }
-    },
-
-
-    fixIterazione(imgList) {
-        for (var f = 0; f < imgList.length; f++) {
-            var item = imgList[f];
-            if (item == null)
-                continue;
-
-            var offsetModello = modelloDiFix.offsetSteps[f][0];//Il momento non cambia mai. Semper e solo 1 per adesso
-            var offset = [offsetModello[0], offsetModello[1]];
-            offset[0] *= offsetScale;
-            offset[1] *= offsetScale;
-
-
-            item.graphics.item(0).geometricBounds = [item.graphics.item(0).geometricBounds[0] + offset[1], item.graphics.item(0).geometricBounds[1] + offset[0], item.graphics.item(0).geometricBounds[2] + offset[1], item.graphics.item(0).geometricBounds[3] + offset[0]];
-            item.geometricBounds = item.graphics.item(0).geometricBounds;//[item.geometricBounds[0]+offset[1], item.geometricBounds[1]+offset[0], item.geometricBounds[2]+offset[1], item.geometricBounds[3]+offset[0]];
-        }
-    },
-
-
-    analisiModello(imgList) {
-        var rapporti = [];
-
-        for (var f = 0; f < imgList.length; f++) {
-            var item = imgList[f];
-            if (item == null)
-                continue;
-
-            var poly = getVertex(item, [0, 0, 0, 0]);
-            var rect = getRect(poly[0].points);
-            var w = rect[2] - rect[0];
-            var h = rect[3] - rect[1];
-
-            //alert([w,h]);
-
-            rapporti.push(w / h);
-        }
-
-        //alert(rapporti.length);
-
-        if (rapporti.length == 2) {
-            if ((rapporti[0] >= 1 && rapporti[1] < 0) ||
-                rapporti[1] >= 1 && rapporti[0] < 0) {
-                //Due foto con orientamento diverso
-                // aprescindere dal differenziale si applica il modello classico orizzontale
-                return modelloStandardFotoOrizzontali;//"due foto con orientamento differente -> modelloStandardFotoOrizzontali";
-            }
-            else {
-                if (rapporti[0] < 1) {
-                    //h>w
-                    var minRapp = Math.min(rapporti[0], rapporti[1]);
-                    //alert(minRapp);
-                    if (minRapp >= 0.45) {
-                        return modelloStandardFotoVerticali;//"due foto con orientamento verticale (rapp "+ minRapp +")  -> modelloSlimFotoVerticali";
-                    }
-                    else {
-                        return modelloSlimFotoVerticali;//"due foto con orientamento verticale (rapp "+ minRapp +") -> modelloStandardFotoVerticali";
-                    }
-                }
-                else {
-                    //w>h                
-                    var maxRapp = Math.max(rapporti[0], rapporti[1]);
-                    if (maxRapp <= 3) {
-                        return modelloStandardFotoOrizzontali;//"due foto con orientamento orizzontale (rapp "+ maxRapp +") -> modelloSlimFotoOrizzontali";
-                    }
-                    else {
-                        return modelloSlimFotoOrizzontali;//"due foto con orientamento orizzontale (rapp "+ maxRapp +") -> modelloStandardFotoOrizzontali";
-                    }
-                }
-            }
-        }
-        else if (rapporti.length == 3) {
-            //Nel caso di 3 foto, basta prendere il rapporto della prima. Sono per forza dello stesso orientamento (da specifica)
-            if (rapporti[0] >= 1) {
-                //Tre foto orizzontali
-                return modelloTreFoto;
-            }
-            else {
-                return modelloTreFotoVerticale;
-            }
-        }
-
-    },
-
-    test() {
-        //alert("step1");
-
-        img1 = getVertex(inddItemImg1, [0, 0, 0, 0]);
-        img2 = getVertex(inddItemImg2, [0, 0, 0, 0]);
-        img3 = getVertex(inddItemImg3, [0, 0, 0, 0]);
-
-        //alert("step2");
-
-        var img1_rect = getRect(img1[0].points);
-        var img2_rect = getRect(img2[0].points);
-        var img3_rect = getRect(img3[0].points);
-
-        //alert(img1_rect);
-
-        var overflow1 = checkOverflow(img1_rect);
-        if (overflow1 != "") {
-            //alert("IMG 1 fuori dai margini " + overflow1);
-            if (overflow1.indexOf("-2") >= 0 || overflow1.indexOf("-4") >= 0) {
-                modelloDiFix.offsetSteps[0][0][0] = 0;
-            }
-
-            if (overflow1.indexOf("-3") >= 0 || overflow1.indexOf("-5") >= 0) {
-                modelloDiFix.offsetSteps[0][0][1] = 0;
-            }
-        }
-
-        var overflow2 = checkOverflow(img2_rect);
-        if (overflow2 != "") {
-            //alert("IMG 2 fuori dai margini " + overflow2);
-            if (overflow2.indexOf("-2") >= 0 || overflow2.indexOf("-4") >= 0) {
-                modelloDiFix.offsetSteps[1][0][0] = 0;
-            }
-
-            if (overflow2.indexOf("-3") >= 0 || overflow2.indexOf("-5") >= 0) {
-                modelloDiFix.offsetSteps[1][0][1] = 0;
-            }
-        }
-
-        var overflow3 = checkOverflow(img3_rect);
-        if (overflow3 != "") {
-            //alert("IMG 3 fuori dai margini " + overflow2);
-            if (overflow3.indexOf("-2") >= 0 || overflow3.indexOf("-4") >= 0) {
-                modelloDiFix.offsetSteps[2][0][0] = 0;
-            }
-
-            if (overflow3.indexOf("-3") >= 0 || overflow3.indexOf("-5") >= 0) {
-                modelloDiFix.offsetSteps[2][0][1] = 0;
-            }
-        }
-
-        //alert("step3");
-
-
-        /*
-        var areaImg1 = calcolaAreaPoligono(img1[0].points);
-        var areaImg2 = calcolaAreaPoligono(img2[0].points);
-        var areaImg3 = calcolaAreaPoligono(img3[0].points);
-       
-        //Sovrapposizione tra foto 1 e 2
-        var sovrapposizione1=getAreaSovrapposizione(img1[0], img2[0]);
-        var sovrapposizione2=getAreaSovrapposizione(img2[0], img1[0]);
-        var sovrapposizione_complessiva = sovrapposizione1.concat(sovrapposizione2);
-        var sovrapposizione_rect = getRect(sovrapposizione_complessiva);
-        var areaSovrapposizione = (sovrapposizione_rect[2]-sovrapposizione_rect[0]) * (sovrapposizione_rect[3]-sovrapposizione_rect[1]);
-        */
-
-        var areaImg1 = (img1_rect[2] - img1_rect[0]) * (img1_rect[3] - img1_rect[1]);
-        var areaImg2 = (img2_rect[2] - img2_rect[0]) * (img2_rect[3] - img2_rect[1]);
-        var areaImg3 = (img3_rect[2] - img3_rect[0]) * (img3_rect[3] - img3_rect[1]);
-
-
-        var areaSovrapposizione = getAreaSovrapposizione2(img1_rect, img2_rect);
-        //var areaSovrapposizione = (sovrapposizione_rect[2]-sovrapposizione_rect[0]) * (sovrapposizione_rect[3]-sovrapposizione_rect[1]);
-
-        //alert(areaSovrapposizione);
-
-        // if (parseInt(areaSovrapposizione)<=0)
-        // {
-        //     //Probabilmente siamo in una casistica d esatta sovrapposizione 
-        //     //Tipica per le linee di prodotti con stessa identica confezione e solo cambio gusto
-        //     //Allora proviamo a risolvere estraendo i rect
-        //     var rect1 = getRect(img1[0].points);
-        //     var rect2 = getRect(img2[0].points);
-
-        //     var areaCoincidente = (parseInt(rect1[0])==parseInt(rect2[0]) && parseInt(rect1[1])==parseInt(rect2[1]) && parseInt(rect1[2])==parseInt(rect2[2]) && parseInt(rect1[3])==parseInt(rect2[3]));
-
-        //     if (areaCoincidente)
-        //     {
-        //         //alert("L'area coincide");
-        //         areaSovrapposizione = areaImg1;
-        //     }
-
-
-        // }
-
-        //alert("step4");
-        //alert("1. " + areaSovrapposizione);
-
-        var perc1 = (areaSovrapposizione / areaImg1) * 100;
-        var perc2 = (areaSovrapposizione / areaImg2) * 100;
-        var percErr = Math.max(perc1, perc2);
-
-        //alert("1. " + percErr);
-        //Sovrapposizione tra foto 1 e 3
-        if (areaImg3 > 0) {
-            //Controllo sovrapposizione tra 2 e 3
-            areaSovrapposizione = getAreaSovrapposizione2(img2_rect, img3_rect);
-            //areaSovrapposizione = (sovrapposizione_rect[2]-sovrapposizione_rect[0]) * (sovrapposizione_rect[3]-sovrapposizione_rect[1]);
-
-            //alert("2. " + areaSovrapposizione + " su " + areaImg2);
-
-            var perc1 = (areaSovrapposizione / areaImg2) * 100;
-            var perc2 = (areaSovrapposizione / areaImg3) * 100;
-
-            percErr = Math.max(Math.max(perc1, perc2), percErr);
-
-
-            //Controllo sovrapposizione tra 1 e 3
-            areaSovrapposizione = getAreaSovrapposizione2(img1_rect, img3_rect);
-            //areaSovrapposizione = (sovrapposizione_rect[2]-sovrapposizione_rect[0]) * (sovrapposizione_rect[3]-sovrapposizione_rect[1]);
-
-            //alert("2. " + areaSovrapposizione + " su " + areaImg2);
-
-            perc1 = (areaSovrapposizione / areaImg2) * 100;
-            perc2 = (areaSovrapposizione / areaImg3) * 100;
-
-            percErr = Math.max(Math.max(perc1, perc2), percErr);
-        }
-
-        //alert(percErr);
-
-        return percErr;
-
-    },
-
-    /// Scarica le regole da FrameworkCssController/scaricaAllineamenti e ne salva una copia in
-    /// allineamenti.json nella cartella di lavorazione. Quella copia non e' un residuo: se lo
-    /// scaricamento fallisce il motore la rilegge e va avanti con l'ultima versione scaricata,
-    /// dicendolo in console. Se manca anche quella, l'operazione si annulla.
-    /// Codici: CSF-002 parsing della risposta.
     getAllineamentiDB(callback){
 
         let me=this;
@@ -9191,163 +8743,6 @@ const CssFramework =
                 return "FILL_PROPORTIONALLY";
             default:
                 return null;
-        }
-    },
-
-    confini: [7.225, 27.625, 7.225 + 61.5, 27.625 + 38.375],
-    offsetScale: 1,
-
-    //DEFINIZIONE MODELLI
-    //offsetSteps: E' un array a 3 dimensioni
-    //il primo array è l'indice della foto per cui
-    //L'array di secondo livello specifica i momenti. Quando una immagine arriva ad azzerare entrami gli offset per cui è in fase di stallo, procede (se esiste) con il momento successivo, altrimenti rimane ferma
-    //L'array di terzo livello invece rappresenta la coppia X,Y
-    //scaleReduce: Coefficiente di scalatura della dimenione delle immagini a partire dal secondo tentativo tra i maxTentativi disponibili
-    //maxTentativi: Quante volte il FIX deve essere operato in caso di mancata risoluzione.Un ciclo di fix si termina quando tutti gli offsetSteps di tutte le immagini coinvolte sono tutte in stallo
-    //percentualeSovrapposizioneAccettabile: Percentuale accettabile di area ovrapposta tra le immagini 
-
-    // 2 foto dove w>h
-    modelloStandardFotoOrizzontali: {
-        scaleReduce: 0.15,
-        maxTentativi: 5,
-        percentualeSovrapposizioneAccettabile: 25,
-        momenti: [0, 0, 0]
-    },
-
-    // 2 foto dove h>w
-    modelloStandardFotoVerticali: {
-        scaleReduce: 0.15,
-        maxTentativi: 5,
-        percentualeSovrapposizioneAccettabile: 25,
-        momenti: [0, 0, 0]
-    },
-
-    // 2 foto dove w>h Rapporto >= del 50%
-    modelloSlimFotoOrizzontali: {
-        scaleReduce: 0.15,
-        maxTentativi: 5,
-        percentualeSovrapposizioneAccettabile: 0,
-        momenti: [0, 0, 0]
-    },
-
-    // 2 foto dove h>w Rapporto >= del 50%
-    modelloSlimFotoVerticali: {
-        scaleReduce: 0.07,
-        maxTentativi: 5,
-        percentualeSovrapposizioneAccettabile: 0,
-        momenti: [0, 0, 0]
-    },
-
-    // 3 foto 
-    modelloTreFoto: {
-        scaleReduce: 0.15,
-        maxTentativi: 5,
-        percentualeSovrapposizioneAccettabile: 35,
-        momenti: [0, 0, 0]
-    },
-
-    modelloTreFotoVerticale: {
-        scaleReduce: 0.1,
-        maxTentativi: 5,
-        percentualeSovrapposizioneAccettabile: 25,
-        momenti: [0, 0, 0]
-    },
-
-    img1: {},
-    img2: {},
-    img3: {},
-    inddItemImg1: null,
-    inddItemImg2: null,
-    inddItemImg3: null,
-
-    cacheBoundaries: {},
-    modelloDiFix: null,
-
-    MAIN_fixFoto(listaFoto, confiniParam) {
-
-        img1 = {};
-        img2 = {};
-        img3 = {};
-
-        inddItemImg1 = null;
-        inddItemImg2 = null;
-        inddItemImg3 = null;
-
-        for (var p = 0; p < listaFoto.length; p++) {
-            if (p == 0) {
-                inddItemImg1 = listaFoto[p];
-            }
-            else if (p == 1) {
-                inddItemImg2 = listaFoto[p];
-            }
-            else if (p == 2) {
-                inddItemImg3 = listaFoto[p];
-            }
-        }
-        console.log(confiniParam);
-        confini = [confiniParam[1], confiniParam[0], confiniParam[3], confiniParam[2]];// [objDna.confineFixFoto[1],objDna.confineFixFoto[0],objDna.confineFixFoto[3],objDna.confineFixFoto[2]];
-
-        if (inddItemImg2 != null) {
-            //alert("Inizio fix");
-
-            //Ci devono essere almeno 2 foto per questo genere di FIX
-            //Altrimenti analizzo modello e procedo al fix
-            modelloDiFix = analisiModello([inddItemImg1, inddItemImg2, inddItemImg3]);
-            modelloDiFix.momenti = [0, 0, 0];
-
-            //alert("START");
-            //alert(modelloDiFix);
-
-            var risolto = true;
-
-            for (var m = 0; m < modelloDiFix.maxTentativi; m++) {
-
-
-                //alert("Tentativo " + (m+1));
-                modelloStandardFotoOrizzontali.offsetSteps = [[[-2, -1]], [[2, 1]], [[1, -0.7]]];
-                modelloStandardFotoVerticali.offsetSteps = [[[-1, -1]], [[1, 1]], [[1, -0.7]]];
-                modelloSlimFotoOrizzontali.offsetSteps = [[[0, -1]], [[0, 1]], [[0, 2]]];
-                modelloSlimFotoVerticali.offsetSteps = [[[-1, 0]], [[1, 0]], [[2, 0]]];
-                modelloTreFoto.offsetSteps = [[[-2, -1]], [[0, 1]], [[1, -0.7]]];
-                modelloTreFotoVerticale.offsetSteps = [[[-2, -1]], [[0, 1]], [[2, -0.7]]];
-
-                startFix([inddItemImg1, inddItemImg2, inddItemImg3], m + 1);
-
-                //Da fare FIX
-                var tester = test();
-                var paracadute = 0;
-
-
-                risolto = true;
-
-                //alert("Tolleranza " + modelloDiFix.percentualeSovrapposizioneAccettabile);
-
-                while (tester > modelloDiFix.percentualeSovrapposizioneAccettabile) {
-                    //alert("ERR: " + tester);
-                    // logFile = File (myDoc.filePath +"/loadingFixFoto.txt");
-                    // logFile.encoding="ASCII";
-                    // logFile.open("w");
-                    // logFile.writeln(pagItem.name + " - Tentativo n." + (m+1) + " SOVRAPPOSIZIONE " + tester + "%");
-                    // logFile.close();
-
-                    fixIterazione([inddItemImg1, inddItemImg2, inddItemImg3]);
-                    tester = test();
-                    //alert("tester finito");
-
-                    paracadute++;
-                    if (paracadute > 10) {
-                        risolto = false;
-                        break;
-                    }
-                }
-
-                //alert(tester);
-
-
-                if (risolto)
-                    break;
-
-            }
         }
     },
 }
