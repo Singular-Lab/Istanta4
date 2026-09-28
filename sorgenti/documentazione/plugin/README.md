@@ -37,7 +37,7 @@ peggio di una documentazione assente, perché fa perdere tempo invece di farne r
 | 2 — Utilità piccole | `barraScorrimento`, `dissolvenza`, `tooltipPosizione`, `jsIndexControls`, `cacheHashFoto`, `dataCaricamentoFoto`, `credenzialiSalvate`, `fotoAutoSync`, `garbageCollector`, `cambiStrutturali`, `ricollegaEsiti`, `reportConteggi`, `trattiDescrizione`, `variantiDescrizione` | **fatto** |
 | 3 — Motore CSS | `CssFramework`, `cssComposizioneBox`, `cssRegoleConflitti`, `cssSequenzaOperazioni`, `cssSpazioFoto`, `noRenderElementi` | **fatto** |
 | 4 — Report | `reportConfronti`, `reportConfrontoCsv`, `reportIntegritaAvvio` | **fatto** |
-| 5 — Nucleo | `utility`, `events`, `cmd`, `pluginMiddleware`, `custom`, `filtri`, `griglia`, `ficoProcess`, `schedaArtwork`, `InputEditController`, `schedaRef`, `confronti`, `indexNew` | in corso: fatti `events`, `InputEditController`, `schedaArtwork`, `pluginMiddleware`, `custom` |
+| 5 — Nucleo | `utility`, `events`, `cmd`, `pluginMiddleware`, `custom`, `filtri`, `griglia`, `ficoProcess`, `schedaArtwork`, `InputEditController`, `schedaRef`, `confronti`, `indexNew` | in corso: fatti `events`, `InputEditController`, `schedaArtwork`, `pluginMiddleware`, `custom`, `cmd`, `ficoProcess` |
 | 6 — Agenzie e Receiver | i sette `custom.js` di cliente, la cartella `Receiver` | da fare |
 
 ## Le pagine scritte finora
@@ -100,6 +100,8 @@ peggio di una documentazione assente, perché fa perdere tempo invece di farne r
 | [schedaArtwork.md](schedaArtwork.md) | l'artwork: più referenze trattate come un'unica immagine |
 | [pluginMiddleware.md](pluginMiddleware.md) | il mediatore fra il Plugin e la configurazione del cliente |
 | [custom.md](custom.md) | il file dell'agenzia montata, e cosa resta quando il server comanda |
+| [cmd.md](cmd.md) | lo scaricamento delle immagini, e perché il nome non dice cosa fa |
+| [ficoProcess.md](ficoProcess.md) | promo, kit, lavorazione corrente ed esportazione |
 
 ---
 
@@ -196,6 +198,14 @@ percorsi — ma **non unite fisicamente**: `pluginMiddleware.js` e `utility.js` 
 sotto Node non si caricano, mentre `cambiStrutturali.js` sì e ha il suo test. Importare l'uno
 dall'altro farebbe perdere quel test. Per unirle serve **un modulo puro che entrambi possano
 importare**.
+
+**Un file il cui nome nasconde il contenuto:** `cmd.js` contiene lo scaricamento delle immagini,
+non «comandi». **Rinomina proposta: `scaricaImmagini.js`.** Costa quanto un file mal diviso, perché
+chi cerca quel codice non guarda lì.
+
+**Una proposta valutata e scartata**, annotata perché non venga riproposta: portare i quattro
+`get*LavorazioneCorrente` di `ficoProcess.js` in un `lavorazioneCorrente.js`. Sarebbe caricabile
+sotto Node, ma l'operatore l'ha giudicata non abbastanza utile.
 
 **E una nota di disegno, non una ricollocazione:** `setBolloNOFOTO` e `setBolloFOTONOFOUND` in
 `pluginMiddleware` mediano un'operazione su InDesign invece di un valore di configurazione. Se il
