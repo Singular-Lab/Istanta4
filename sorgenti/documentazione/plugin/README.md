@@ -107,7 +107,7 @@ peggio di una documentazione assente, perché fa perdere tempo invece di farne r
 | [utility.md](utility.md) | settantasei membri e otto concetti: il file che va diviso |
 | [confronti.md](confronti.md) | il Report Integrità, e i suoi duecento pannelli |
 | [schedaRef.md](schedaRef.md) | la scheda della referenza, e i tre concetti che contiene |
-| [indexNew/](indexNew/README.md) | il file che tiene insieme il Plugin: 133 funzioni, tutte documentate |
+| [indexNew/](indexNew/README.md) | il file che tiene insieme il Plugin: 129 funzioni, tutte documentate |
 
 ---
 
@@ -195,6 +195,8 @@ Quelli di `indexNew.js` stanno in
 |---|---|
 | agenzie `Pac` e `Trea` (11.733 righe) | **cancellate**: deprecate. Restano Edro21, Coopfi e Famila |
 | `sincronizzaBoxGriglia` (142 righe) | **cancellata**: zero chiamanti, e dentro 14 `Utiliy.` al posto di `Utility.` |
+| `escludiRef`, `ripristinaElemento`, `compilaTabElementiEsclusi` (219 righe) | **cancellate**: la funzione è già viva in `griglia.js`, e queste scrivevano `listaRefEscluse.json` in un formato che nessun altro sa leggere |
+| `decodificaNomeFile` | **cancellata**: abbozzo senza chiamanti che restituiva una promo inventata. Quella vera è `customAgenzia.decodificaNomeFile` |
 | `indexNew.replaceAll` | **cancellata**: copia locale senza chiamanti, e il suo `while` non termina se la sostituzione contiene la stringa cercata |
 | `indexNew.makeRegexFromGroupName` | **rinominata** `makeRegexFromFieldName`: era una globale omonima di un membro di `CssFramework` che fa una cosa diversa, quindi un `this.` dimenticato là cadeva qui **senza errore** |
 | `showLoading` | **corretta**: una riga col solo identificatore `Default`, che lanciava `ReferenceError` nel ramo di ripiego |

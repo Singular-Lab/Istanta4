@@ -1,10 +1,10 @@
 # indexNew.js — tracciato, messaggi e il resto
 
-**Cosa contiene questa pagina:** le **118 funzioni** rimaste dopo le tre pagine precedenti. Non
+**Cosa contiene questa pagina:** le **114 funzioni** rimaste dopo le tre pagine precedenti. Non
 sono un concetto, sono dodici concetti diversi finiti nello stesso file — ed è questa pagina, più
 delle altre, a dare la misura del perché `indexNew.js` vada diviso.
 
-Con questo sotto-lotto **tutte e 133 le funzioni globali di `indexNew.js` hanno il commento**.
+Con questo sotto-lotto **tutte e 129 le funzioni globali di `indexNew.js` hanno il commento**.
 
 ---
 
@@ -23,15 +23,16 @@ Con questo sotto-lotto **tutte e 133 le funzioni globali di `indexNew.js` hanno 
 | versione del Plugin | 3 | `versionePlugin.js`, che già esiste |
 | foto | 7 | il js delle foto già previsto |
 | segnalazioni di impaginazione | 3 | il js del Report Integrità già previsto |
-| esclusi dall'impaginato | 3 | parcheggiate, vedi sotto |
 
 ---
 
 ## Quello che non andava
 
-Leggendole una per una sono venuti fuori **sette difetti veri e due cose da verificare**. Tre erano
-correggibili senza cambiare comportamento e sono stati corretti qui; gli altri no, e vanno in un
-task a parte.
+Leggendole una per una sono venuti fuori **sei difetti veri**. Tre erano correggibili senza
+cambiare comportamento e sono stati corretti qui; gli altri tre no, e hanno un task ciascuno.
+
+Altre due cose sembravano difetti e non lo erano: le ha verificate l'operatore, e sono descritte
+più sotto perché nessuno provi a «correggerle».
 
 ### Corretti in I20-1002
 
@@ -102,23 +103,24 @@ var logPath = /*pathLavorazione +*/ percorsoLogs;  // messaggioUtente, due funzi
 il log di crash non viene mai scritto, e la scrittura fallita fa comparire all'operatore
 *«Code IDX-98 Errore cartella logs assente»*, che manda a cercare un guasto che non c'è.
 
-### Da verificare in esercizio
+### Due cose che sembrano difetti e non lo sono
 
-Due cose che dal solo sorgente sembrano rotte, ma che non si possono provare senza InDesign. Non
-sono state toccate.
+**Verificate in esercizio in I20-1002: funzionano entrambe.** Sono scritte in un modo che a chi
+legge il codice come se fosse un browser sembra sbagliato — e chi provasse a «correggerle» le
+romperebbe. Stanno qui perché non succeda.
 
-**`creaRigaSync` legge la tendina con `box.$picker[1].value`.** È un oggetto jQuery che avvolge un
-solo elemento, quindi l'indice `1` dovrebbe essere `undefined` e la lettura lanciare. È **l'unico
-accesso indicizzato di questa forma in tutto il Plugin**. Se in esercizio il pulsante *Avvia* del
-tracciato funziona, allora qui c'è qualcosa che dal sorgente non si vede; se non funziona, l'indice
-giusto è `0`.
+**`creaRigaSync` legge la tendina con `box.$picker[1].value`.** In una pagina normale quell'oggetto
+jQuery avvolgerebbe un solo elemento e l'indice `1` sarebbe `undefined`. In UXP no: il pulsante
+*Avvia* del tracciato funziona regolarmente. È **l'unico accesso indicizzato di questa forma in
+tutto il Plugin**; non cambiarlo in `[0]` senza averlo provato.
 
 **`cambioVisualizzazioneConsole` riconosce lo stile dal colore.** Confronta
-`.css("background-color")` con le parole `"red"`, `"darkorange"` e `"green"`. Il colore è scritto
-con quelle parole nello stile in linea, ma `.css` legge lo stile **calcolato**, che di norma
-restituisce `rgb(255, 0, 0)`. Se qui si comporta come altrove, nessun confronto è mai vero e
-spuntando un filtro spariscono tutti i messaggi. In ogni caso lo stile andrebbe letto da un
-attributo nostro, non dedotto dal colore.
+`.css("background-color")` con le parole `"red"`, `"darkorange"` e `"green"`. In un browser `.css`
+restituirebbe lo stile calcolato — `rgb(255, 0, 0)` — e nessun confronto sarebbe mai vero. In UXP
+il confronto regge: spuntando le caselle spariscono esattamente i messaggi corrispondenti.
+
+Resta valida una sola osservazione di disegno: lo stile sarebbe più solido letto da un attributo
+nostro invece che dedotto dal colore. Ma è un miglioramento, non una correzione.
 
 ---
 
@@ -129,7 +131,6 @@ Cose che non rompono niente oggi ma che vale la pena sapere, tutte segnate anche
 | dove | cosa |
 |---|---|
 | `applyOverflowFix` | `overflowInstruction` assegnata senza `var`/`let`: globale implicita. Il file non ha `"use strict"` |
-| `ripristinaElemento` | stessa cosa con `boxNumber` |
 | `registraStatoLavorazioneLibro` | `file== readFile(filePath)` — doppio uguale al posto di uno. Non fa danno, quella variabile non si rilegge |
 | `getSchedeRefsMassivo` | `let me = this` e `me.isInvalidated` sono un trapianto da `schedaRef.js`, dove `this` è il modulo. Qui la funzione è globale, quindi il controllo non scatta mai |
 | `creaElementoTracciato` | chiama `getTracciatoColumns` **a ogni riga**, e quella interroga il `pluginMiddleware`. Su migliaia di referenze è lo stesso lavoro rifatto migliaia di volte |
@@ -142,24 +143,32 @@ Cose che non rompono niente oggi ma che vale la pena sapere, tutte segnate anche
 
 ---
 
-## Le tre funzioni parcheggiate
+## Gli esclusi: una versione vecchia rimasta indietro
 
-`escludiRef`, `ripristinaElemento` e `compilaTabElementiEsclusi` formano **un ciclo chiuso senza
-porta d'ingresso**: si chiamano fra loro e nessuno chiama il gruppo dall'esterno. Il meccanismo è
-intero — legge il codice dall'etichetta `info$<codice>`, lo scrive in `listaRefEscluse.json`, colora
-di rosso il box, ridisegna l'elenco con un pulsante per copiare e uno per ripristinare. **Gli manca
-solo il pulsante che lo avvia.**
+`escludiRef`, `ripristinaElemento` e `compilaTabElementiEsclusi` formavano **un ciclo chiuso senza
+porta d'ingresso**: si chiamavano fra loro e nessuno chiamava il gruppo dall'esterno. Portavano in
+testa la nota `//da ripristinare` dell'autore, e a prima lettura sembravano un meccanismo intero a
+cui mancava solo il pulsante.
 
-Tutte e tre portano in testa la nota `//da ripristinare` dell'autore. **Non sono state cancellate
-proprio per quella nota**: è codice morto, ma parcheggiato di proposito. Da decidere nel task di
-divisione se ripristinarlo o toglierlo.
+Non era così. **La funzione è già stata reintegrata in `griglia.js`**, dove è viva e si usa. Le tre
+di `indexNew` erano la versione precedente, e le due scrivono `listaRefEscluse.json` in **formati
+incompatibili**:
 
-Stesso discorso, in piccolo, per **`decodificaNomeFile`**: non la chiama nessuno e restituisce
-valori fissi inventati (`"A2515_SC_27-06-25"`, `"SC"`, `"TO"`, `null`), col commento *«qui ci sarà
-roba che per ora non c'è»*. Quella vera è `customAgenzia.decodificaNomeFile`, perché le regole con
-cui si battezza un file sono del cliente. È un abbozzo pericoloso: se un domani qualcuno la
-chiamasse per sbaglio al posto di quella dell'agenzia, non avrebbe un errore — avrebbe una promo
-inventata.
+| | formato |
+|---|---|
+| `griglia.js` (vivo) | `[{ Pag, listaEscluse: [record, …] }, …]` — raggruppato per pagina |
+| le tre di `indexNew` (rimosse) | `["{\"Codice\":…,\"Info\":…,\"BoxNumber\":…}", …]` — array di stringhe JSON, piatto, senza pagina |
+
+Che quello giusto sia il primo lo dicono tutti gli altri lettori del file:
+`indexNew.js` stesso (`listaRefEscluse.find(f => f.Pag == pItem.name)`) e `filtri.js`. Se le tre
+funzioni fossero mai ripartite non avrebbero solo duplicato una funzione esistente: avrebbero
+**riscritto quel file in un formato che nessun altro sa leggere**. **Rimosse** (219 righe).
+
+Rimossa anche **`decodificaNomeFile`**: non la chiamava nessuno e restituiva valori fissi inventati
+(`"A2515_SC_27-06-25"`, `"SC"`, `"TO"`, `null`), col commento *«qui ci sarà roba che per ora non
+c'è»*. Quella vera è `customAgenzia.decodificaNomeFile`, perché le regole con cui si battezza un
+file sono del cliente. Era un abbozzo pericoloso: chi l'avesse chiamata per sbaglio al posto di
+quella dell'agenzia non avrebbe avuto un errore — avrebbe avuto una promo inventata.
 
 ---
 

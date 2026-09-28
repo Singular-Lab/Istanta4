@@ -9,11 +9,12 @@ Fa quattro cose che nessun altro file fa:
 3. **Ascolta gli eventi** emessi da [events.js](../events.md) e decide cosa succede.
 4. **Contiene le operazioni grosse**: impaginazione, esportazione, sincronizzazione foto.
 
-**133 funzioni globali, 228 membri di oggetti, 85 variabili globali, 11.148 righe di codice** — e
+**129 funzioni globali, 228 membri di oggetti, 85 variabili globali, 10.943 righe di codice** — e
 prima di I20-1002 aveva quindici commenti in tutto. Oggi sono documentate tutte.
 
-Le funzioni erano 135: in I20-1002 sono state rimosse `sincronizzaBoxGriglia` (142 righe morte) e
-la copia locale di `replaceAll`. Col commento su ognuna il file arriva a 12.208 righe.
+Le funzioni erano 135. In I20-1002 ne sono state rimosse sei: `sincronizzaBoxGriglia` (142 righe
+morte), la copia locale di `replaceAll`, le tre degli esclusi superate da `griglia.js` e l'abbozzo
+`decodificaNomeFile`. Col commento su ognuna il file arriva a 11.966 righe.
 
 ---
 
@@ -31,7 +32,7 @@ la copia locale di `replaceAll`. Col commento su ognuna il file arriva a 12.208 
 | rimozioni differite | 3 |
 | griglia | 1 |
 
-**Settantatré funzioni su centotrentatré non appartengono a nessuna famiglia.** È la misura di
+**Settantatré funzioni su centoventinove non appartengono a nessuna famiglia.** È la misura di
 quello che l'operatore intende quando dice che qui «c'è stato messo di tutto».
 
 ### Le funzioni più grandi
@@ -56,4 +57,4 @@ quello che l'operatore intende quando dice che qui «c'è stato messo di tutto»
 | [01-globali-e-ossatura.md](01-globali-e-ossatura.md) | le variabili globali, l'avvio, il documento in lavorazione, accesso e ruoli |
 | [02-impaginazione.md](02-impaginazione.md) | il flusso, il libro, e l eliminazione dal tracciato |
 | [03-foto-report-esportazione.md](03-foto-report-esportazione.md) | i pezzi di due concetti che vivono altrove |
-| [04-tracciato-messaggi-e-il-resto.md](04-tracciato-messaggi-e-il-resto.md) | le altre 118 funzioni, e i sette difetti che nascondevano |
+| [04-tracciato-messaggi-e-il-resto.md](04-tracciato-messaggi-e-il-resto.md) | le altre 114 funzioni, e i sei difetti che nascondevano |
