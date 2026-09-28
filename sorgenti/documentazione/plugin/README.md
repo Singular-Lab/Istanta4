@@ -36,7 +36,7 @@ peggio di una documentazione assente, perché fa perdere tempo invece di farne r
 | 1 — Fondamenta | `manifest.json`, `ipconfig.json`, `index.html`, `logger.js`, `versionePlugin.js`, `XMLHttpRequestClient.js` | **fatto** |
 | 2 — Utilità piccole | `barraScorrimento`, `dissolvenza`, `tooltipPosizione`, `jsIndexControls`, `cacheHashFoto`, `dataCaricamentoFoto`, `credenzialiSalvate`, `fotoAutoSync`, `garbageCollector`, `cambiStrutturali`, `ricollegaEsiti`, `reportConteggi`, `trattiDescrizione`, `variantiDescrizione` | **fatto** |
 | 3 — Motore CSS | `CssFramework`, `cssComposizioneBox`, `cssRegoleConflitti`, `cssSequenzaOperazioni`, `cssSpazioFoto`, `noRenderElementi` | **fatto** |
-| 4 — Report | `reportConfronti`, `reportConfrontoCsv`, `reportIntegritaAvvio` | da fare |
+| 4 — Report | `reportConfronti`, `reportConfrontoCsv`, `reportIntegritaAvvio` | **fatto** |
 | 5 — Nucleo | `utility`, `events`, `cmd`, `pluginMiddleware`, `custom`, `filtri`, `griglia`, `ficoProcess`, `schedaArtwork`, `InputEditController`, `schedaRef`, `confronti`, `indexNew` | da fare |
 | 6 — Agenzie e Receiver | i sette `custom.js` di cliente, la cartella `Receiver` | da fare |
 
@@ -82,6 +82,22 @@ peggio di una documentazione assente, perché fa perdere tempo invece di farne r
 | [cssSpazioFoto.md](cssSpazioFoto.md) | in quale spazio libero finiscono le foto |
 | [noRenderElementi.md](noRenderElementi.md) | rendere invisibili singoli elementi di un box |
 | [cssFramework/](cssFramework/README.md) | il motore vero: 8.636 righe, spiegate in cinque pagine per gruppo |
+
+### Lotto 4 — i report
+
+| pagina | il file che spiega |
+|---|---|
+| [reportIntegritaAvvio.md](reportIntegritaAvvio.md) | quando il Report Integrità parte, e quando smette di valere |
+| [reportConfronti.md](reportConfronti.md) | la sezione Confronti: cosa è cambiato nei campi che l'agenzia tiene d'occhio |
+| [reportConfrontoCsv.md](reportConfrontoCsv.md) | come è fatto il csv, e perché è fatto per Excel |
+
+Insieme a [reportConteggi.md](reportConteggi.md), documentata nel Lotto 2, sono i quattro pezzi del
+Report Integrità, tutti nati da I20-981.
+
+**Sono anche gli unici file del Plugin su cui la ricognizione dei difetti non ha trovato niente da
+segnalare**, e il motivo vale la pena dirlo: sono nati insieme ai loro test. Il movimento è sempre
+lo stesso — togliere le regole da `indexNew.js` e `confronti.js`, che non si caricano sotto Node,
+per poterle provare — e il risultato si vede.
 
 ---
 
