@@ -37,7 +37,7 @@ peggio di una documentazione assente, perché fa perdere tempo invece di farne r
 | 2 — Utilità piccole | `barraScorrimento`, `dissolvenza`, `tooltipPosizione`, `jsIndexControls`, `cacheHashFoto`, `dataCaricamentoFoto`, `credenzialiSalvate`, `fotoAutoSync`, `garbageCollector`, `cambiStrutturali`, `ricollegaEsiti`, `reportConteggi`, `trattiDescrizione`, `variantiDescrizione` | **fatto** |
 | 3 — Motore CSS | `CssFramework`, `cssComposizioneBox`, `cssRegoleConflitti`, `cssSequenzaOperazioni`, `cssSpazioFoto`, `noRenderElementi` | **fatto** |
 | 4 — Report | `reportConfronti`, `reportConfrontoCsv`, `reportIntegritaAvvio` | **fatto** |
-| 5 — Nucleo | `utility`, `events`, `cmd`, `pluginMiddleware`, `custom`, `filtri`, `griglia`, `ficoProcess`, `schedaArtwork`, `InputEditController`, `schedaRef`, `confronti`, `indexNew` | in corso: fatti `events`, `InputEditController`, `schedaArtwork`, `pluginMiddleware`, `custom`, `cmd`, `ficoProcess`, `griglia`, `filtri`, `utility`, `confronti`, `schedaRef` |
+| 5 — Nucleo | `utility`, `events`, `cmd`, `pluginMiddleware`, `custom`, `filtri`, `griglia`, `ficoProcess`, `schedaArtwork`, `InputEditController`, `schedaRef`, `confronti`, `indexNew` | in corso: fatti `events`, `InputEditController`, `schedaArtwork`, `pluginMiddleware`, `custom`, `cmd`, `ficoProcess`, `griglia`, `filtri`, `utility`, `confronti`, `schedaRef`, e l ossatura di `indexNew` |
 | 6 — Agenzie e Receiver | i sette `custom.js` di cliente, la cartella `Receiver` | da fare |
 
 ## Le pagine scritte finora
@@ -107,6 +107,7 @@ peggio di una documentazione assente, perché fa perdere tempo invece di farne r
 | [utility.md](utility.md) | settantasei membri e otto concetti: il file che va diviso |
 | [confronti.md](confronti.md) | il Report Integrità, e i suoi duecento pannelli |
 | [schedaRef.md](schedaRef.md) | la scheda della referenza, e i tre concetti che contiene |
+| [indexNew/](indexNew/README.md) | il file che tiene insieme il Plugin: 11.316 righe, in corso |
 
 ---
 

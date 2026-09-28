@@ -1,4 +1,21 @@
-﻿const uxp = require('uxp');
+﻿/// I20-1002: il file che tiene insieme il Plugin.
+///
+/// Non e' "la schermata principale": e' il punto in cui tutto si incontra. Carica ogni altro
+/// modulo, definisce le globali che tutti usano senza dichiararle, ascolta gli eventi di
+/// events.js e contiene le operazioni grosse - impaginazione, esportazione, sincronizzazione
+/// foto.
+///
+/// 135 funzioni globali, 228 membri di oggetti, 85 variabili globali. Settantatre' delle
+/// funzioni globali non appartengono a nessuna famiglia riconoscibile: e' il file in cui "c'e'
+/// stato messo di tutto", ed e' un task a se' dividerlo.
+///
+/// Le globali che arrivano piu' lontano sono pathLavorazione e messaggioUtente, usate in
+/// diciassette file su quaranta: sono l'interfaccia implicita del Plugin e non esistono da
+/// nessun'altra parte.
+///
+/// La documentazione sta in sorgenti/documentazione/plugin/indexNew/.
+
+const uxp = require('uxp');
 const { storage } = require('uxp');
 const fs = require('fs');
 const fs2 = require('uxp').storage.localFileSystem;
@@ -52,16 +69,17 @@ Utility.abilitaTooltipGlobali();
 showLoading("Inizializzazione...");
 
 
+/// Una sola richiesta al server in volo alla volta: chi ne avvia una nuova ferma la precedente.
+/// E' la variabile che spiega i sei abort() sparsi per il Plugin - peccato che
+/// XMLHttpRequestClient.abort() non fermi davvero niente, vedi la sua pagina.
 let xhrInProcess=null;//Processo XHR uncio per tutte le operazioni che devono per forza di cosa essere sequenziali
 let docInLavorazione=null;
 let libroInLavorazione=null;
 let jobImpaginazioneLibro={queue:[], index:-1, stato:0}
 let contenutoKitInLavorazione=null;
-let cacheKitSearchResult=null;
 var pagSelected = -1;
 //let refSelected=null;
 var offlineMode = true;
-let listaPromoAperte=[];
 //let editRefFieldController=null;
 
 let userLoggedDetails=null;
@@ -71,12 +89,12 @@ var tracciatoOnlineScaricato = false;
 var pathLavorazione = "";
 var pluginPath = "";
 var intervalSpeed=100;
-var sourceFormati = null;
-var sourceAree = null;
-var sourceCanali = null;
-var sourceTipiExport = null;
+/// ATTENZIONE: qui pathLavorazione e' ancora la stringa vuota, quindi si legge /dbMastro.json
+/// alla radice, che non esiste. Vale null finche' qualcuno non la riassegna.
 var dbMastro = readFile(pathLavorazione + "/dbMastro.json");
 let useCompiledField = true;
+/// I quattro percorsi di lavoro, ognuno col suo gemello defaultPercorso*: i primi si possono
+/// cambiare, i secondi dicono da cosa si riparte.
 let percorsoLinks = "/Links/";
 let percorsoLoghi = "/Links/Loghi/";
 let percorsoLogs = "/Logs/";
@@ -86,9 +104,7 @@ let defaultPercorsoLoghi = "/Links/Loghi/";
 let defaultPercorsoLogs = "/Logs/";
 let defaultPercorsoEsportazione = "/Export/";
 
-let datiFicoScaricati=false;
 
-let abortExport=false;
 
 // ======= Enum ruolo utente =======
 const RuoloUtente = {
@@ -10782,13 +10798,11 @@ function getFotoData(codice, callback) {
     xhr.send("SchedaArticolo/getAllFotoByCodice/"+codice, null, "GET", null);
 }
 
-var listaElementiMateriali = [];
 async function esportaMateriale(sender)
 {
     
     try 
     {        
-        abortExport = false;
         //controllo che l'id lavorazione sia stato selezionato e che il file listaKit + idlavorazione.json esista
         if (idKitLavorazione == null || idKitLavorazione == "" || idKitLavorazione == 0) {
             messaggioUtente("Code IDX-153 Errore: Nessun kit selezionato", "error");
