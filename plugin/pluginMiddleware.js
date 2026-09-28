@@ -698,6 +698,115 @@ const pluginMiddleware = {
         return sorted;
     },
 
+    /// I20-1003: due valori di contesto sono lo stesso valore a meno di spazi e di maiuscole.
+    stessoValoreContesto(primo, secondo) {
+        const ripulisci = (v) => v == null ? "" : String(v).trim().toLowerCase();
+
+        return ripulisci(primo) === ripulisci(secondo);
+    },
+
+    /// I20-1003: Context.Promo di un record, nelle due forme in cui arriva.
+    ///
+    /// Quasi ovunque e' gia' una lista di {nome_field, user_value}, ma i record clonati da
+    /// Menabo/ClonaRecordRicollegato si portano dietro la stringa json della colonna Context
+    /// della promo, cosi' com'e'. Chi legge deve reggerle entrambe, altrimenti proprio su
+    /// quelle liste il difetto resterebbe.
+    contestoPromoDelRecord(record) {
+        const grezzo = record != null && record.recordInTracciato != null
+            ? record.recordInTracciato["Context.Promo"]
+            : null;
+
+        if (grezzo == null) {
+            return [];
+        }
+
+        let contesto = grezzo;
+
+        if (typeof grezzo === "string") {
+            try {
+                contesto = JSON.parse(grezzo);
+            }
+            catch (err) {
+                console.warn("Context.Promo non interpretabile come json:", grezzo, err);
+                return [];
+            }
+        }
+
+        if (!Array.isArray(contesto)) {
+            return [];
+        }
+
+        return contesto.filter(c => c != null && c.nome_field != null);
+    },
+
+    /// I20-1003: i record della lavorazione, da dove si trovano in questo momento.
+    ///
+    /// In memoria c'e' la lista dell'ultimo scaricamento; se il Plugin e' appena partito e
+    /// nessuno l'ha ancora letta, resta il file di quello scaricamento. Qui non si scarica
+    /// niente: la scelta della libreria non deve dipendere da una chiamata al server.
+    recordsDellaLavorazione() {
+        try {
+            if (typeof contenutoKitInLavorazione !== "undefined"
+                && contenutoKitInLavorazione != null
+                && Array.isArray(contenutoKitInLavorazione.records)) {
+                return contenutoKitInLavorazione.records;
+            }
+
+            const lista = readFile(pathLavorazione + "/listaKit" + idKitLavorazione + ".json");
+            if (lista != null && Array.isArray(lista.records)) {
+                return lista.records;
+            }
+        }
+        catch (err) {
+            console.warn("Lista della lavorazione non disponibile per il contesto promo:", err);
+        }
+
+        return [];
+    },
+
+    /// I20-1003: il contesto promo della lavorazione in corso.
+    ///
+    /// Prima si leggeva da ficoProcess.metaLavorazioneCorrente.meta.context, ma quel meta e' il
+    /// FicoRuntimeKit che arriva da Fidelity e il suo campo context non lo riempie nessuno:
+    /// restava sempre vuoto. Con la lista vuota la condizione rule.context.every(...) e' falsa
+    /// per definizione, quindi le regole delle librerie che hanno un contesto non matchavano
+    /// mai e si scivolava sulla regola generica. Su Edro21 saltavano cosi' le regole di BB e di
+    /// MC, e con la libreria sbagliata arrivavano le griglie sbagliate.
+    ///
+    /// Il contesto vero sta su ogni record, in Context.Promo: lo scrive l'import e Istanta lo
+    /// risincronizza su tutti i record a ogni cambio del contesto della promo. I tracciati di
+    /// una lavorazione appartengono tutti alla stessa promo, quindi il contesto e' identico su
+    /// ogni record e il primo che ce l'ha vale per tutti.
+    ///
+    /// Il meta resta come ripiego, per quando la lista non e' ancora stata scaricata.
+    contestoPromoDellaLavorazione() {
+        let me = this;
+
+        const records = me.recordsDellaLavorazione();
+
+        for (const record of records) {
+            const contesto = me.contestoPromoDelRecord(record);
+            if (contesto.length > 0) {
+                return contesto;
+            }
+        }
+
+        try {
+            const meta = ficoProcess != null && ficoProcess.metaLavorazioneCorrente != null
+                ? ficoProcess.metaLavorazioneCorrente.meta
+                : null;
+
+            if (meta != null && Array.isArray(meta.context)) {
+                return meta.context;
+            }
+        }
+        catch (err) {
+            console.warn("Contesto promo non leggibile dal meta della lavorazione:", err);
+        }
+
+        return [];
+    },
+
     getLibreria() {
         let me = this;
 
@@ -726,7 +835,6 @@ const pluginMiddleware = {
         //il primo passo è ordinarla
         const sortedRules = rulesSet.sort((a, b) => a.ordine - b.ordine);
 
-        var promoContext = [];
         var titolo = "";
         var canale = ficoProcess.getCanaleLavorazioneCorrente();
         var siglaCanale = canale ? canale.sigla : "";
@@ -736,10 +844,12 @@ const pluginMiddleware = {
         if (metaLavorazione) {
             var meta = metaLavorazione.meta;
             if (meta) {
-                promoContext = meta.context || [];
                 titolo = meta.titolo || "";
             }
         }
+
+        //I20-1003: il contesto promo si legge dai record, non piu' dal meta della lavorazione.
+        var promoContext = me.contestoPromoDellaLavorazione();
         //il risultato sarà 1 o 2
         var tipoLavorazione = ficoProcess.getTipoLavorazioneCorrente();
 
@@ -756,8 +866,11 @@ const pluginMiddleware = {
         for (const rule of sortedRules) {
             const canaleMatch = !rule.canale || rule.canale.length === 0 || rule.canale.some(c => c === siglaCanale);
             const areaMatch = !rule.area || rule.area.length === 0 || rule.area.some(a => a === siglaArea);
-            const contextMatch = !rule.context || rule.context.length === 0 
-            || rule.context.every(ctx => promoContext.some(pc => pc.nome_field === ctx.nome_field && pc.user_value === ctx.user_value));
+            //I20-1003: il confronto non guarda spazi e maiuscole. Il contesto della regola lo
+            //scrive chi configura il cliente, il valore lo scrive chi compila la promo in
+            //Fidelity: una regola su "BB" non deve mancare la promo salvata come "bb".
+            const contextMatch = !rule.context || rule.context.length === 0
+            || rule.context.every(ctx => promoContext.some(pc => me.stessoValoreContesto(pc.nome_field, ctx.nome_field) && me.stessoValoreContesto(pc.user_value, ctx.user_value)));
             const formatoMatch = !rule.formati || rule.formati.length === 0 || rule.formati.some(f => {
                 const parts = f.split("x");
                 if (parts.length != 2) {
