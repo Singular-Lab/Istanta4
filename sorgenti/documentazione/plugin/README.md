@@ -37,7 +37,7 @@ peggio di una documentazione assente, perché fa perdere tempo invece di farne r
 | 2 — Utilità piccole | `barraScorrimento`, `dissolvenza`, `tooltipPosizione`, `jsIndexControls`, `cacheHashFoto`, `dataCaricamentoFoto`, `credenzialiSalvate`, `fotoAutoSync`, `garbageCollector`, `cambiStrutturali`, `ricollegaEsiti`, `reportConteggi`, `trattiDescrizione`, `variantiDescrizione` | **fatto** |
 | 3 — Motore CSS | `CssFramework`, `cssComposizioneBox`, `cssRegoleConflitti`, `cssSequenzaOperazioni`, `cssSpazioFoto`, `noRenderElementi` | **fatto** |
 | 4 — Report | `reportConfronti`, `reportConfrontoCsv`, `reportIntegritaAvvio` | **fatto** |
-| 5 — Nucleo | `utility`, `events`, `cmd`, `pluginMiddleware`, `custom`, `filtri`, `griglia`, `ficoProcess`, `schedaArtwork`, `InputEditController`, `schedaRef`, `confronti`, `indexNew` | in corso: fatti `events`, `InputEditController`, `schedaArtwork`, `pluginMiddleware`, `custom`, `cmd`, `ficoProcess` |
+| 5 — Nucleo | `utility`, `events`, `cmd`, `pluginMiddleware`, `custom`, `filtri`, `griglia`, `ficoProcess`, `schedaArtwork`, `InputEditController`, `schedaRef`, `confronti`, `indexNew` | in corso: fatti `events`, `InputEditController`, `schedaArtwork`, `pluginMiddleware`, `custom`, `cmd`, `ficoProcess`, `griglia` |
 | 6 — Agenzie e Receiver | i sette `custom.js` di cliente, la cartella `Receiver` | da fare |
 
 ## Le pagine scritte finora
@@ -102,6 +102,7 @@ peggio di una documentazione assente, perché fa perdere tempo invece di farne r
 | [custom.md](custom.md) | il file dell'agenzia montata, e cosa resta quando il server comanda |
 | [cmd.md](cmd.md) | lo scaricamento delle immagini, e perché il nome non dice cosa fa |
 | [ficoProcess.md](ficoProcess.md) | promo, kit, lavorazione corrente ed esportazione |
+| [griglia.md](griglia.md) | la mappa dell'impaginato: cosa va dove, prima di impaginare |
 
 ---
 
@@ -190,6 +191,7 @@ altrimenti dovrebbe rifare la stessa lettura da capo.
 | `controllaChiusuraReportIntegrita` | `events.js` | `reportIntegritaAvvio.js`: decide quando un report smette di valere, ed è una regola del report, non un evento |
 | `normalize`, `isIn`, `getValueByPath` | `pluginMiddleware.js` | `utility.js`: sono utilità generiche, non mediano niente |
 | `toFitOptions` | `pluginMiddleware.js` | `utility.js`, o accanto agli `enum*` di `CssFramework` |
+| `calcolaDistanza` | `griglia.js` | `utility.js`: sei righe di geometria pura |
 
 **Un caso a parte: due copie della stessa funzione.** `pluginMiddleware.getValueByPath` e
 `cambiStrutturali._getNestedValue` fanno la stessa identica cosa. In I20-1002 sono state allineate
@@ -203,9 +205,18 @@ importare**.
 non «comandi». **Rinomina proposta: `scaricaImmagini.js`.** Costa quanto un file mal diviso, perché
 chi cerca quel codice non guarda lì.
 
-**Una proposta valutata e scartata**, annotata perché non venga riproposta: portare i quattro
-`get*LavorazioneCorrente` di `ficoProcess.js` in un `lavorazioneCorrente.js`. Sarebbe caricabile
-sotto Node, ma l'operatore l'ha giudicata non abbastanza utile.
+**Proposte valutate e scartate**, annotate con quello che si perde, perché non tornino senza sapere
+cosa si è già deciso:
+
+| proposta | cosa resta così |
+|---|---|
+| un modulo per le funzioni di parsing di `griglia.js` | `parseCodiceAssociato` resta non verificabile |
+| una casa comune per le finestre modali | `griglia.js` resta con 382 righe di dialogo dentro |
+| un `lavorazioneCorrente.js` per i quattro `get*LavorazioneCorrente` | chi vuole sapere il tipo di lavorazione deve importare tutto `ficoProcess` |
+
+Il criterio con cui sono state scartate è sempre lo stesso, ed è il rovescio di quello che porta ad
+accorpare: **un file nuovo si paga**, e va aperto solo quando il guadagno è evidente. Dove il
+guadagno era solo la verificabilità di poche funzioni, o l'ordine formale, non è bastato.
 
 **E una nota di disegno, non una ricollocazione:** `setBolloNOFOTO` e `setBolloFOTONOFOUND` in
 `pluginMiddleware` mediano un'operazione su InDesign invece di un valore di configurazione. Se il
