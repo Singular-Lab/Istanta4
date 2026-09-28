@@ -26,6 +26,7 @@ var NoRenderElementi = (function () {
     //tipo_N nelle label rimanda a TipoFoto di IstantaLib: 3 e' il logo.
     var TIPO_FOTO_LOGO = 3;
 
+    /// Testo ripulito, per confrontare label che arrivano con spazi di troppo.
     function pulisci(valore) {
         return valore == null ? "" : String(valore);
     }
@@ -83,6 +84,8 @@ var NoRenderElementi = (function () {
         return nome !== "" ? nome : chiave;
     }
 
+    /// Due descrizioni indicano lo stesso elemento del box: si confronta tipo piu' chiave logica,
+    /// mai la label, che incorpora il codice della ref e cambia a ogni impaginazione.
     function stessoElemento(a, b) {
         return a != null && b != null && a.tipo === b.tipo && pulisci(a.chiave) === pulisci(b.chiave);
     }
@@ -295,6 +298,8 @@ var NoRenderElementi = (function () {
         return marcati + " element" + (marcati === 1 ? "o" : "i") + " su " + elementi.length + " non renderizzat" + (marcati === 1 ? "o" : "i") + ".";
     }
 
+    /// Se un elemento e' fra quelli marcati in noRender. E' la domanda che fa l'impaginazione,
+    /// una volta per ogni elemento del box.
     function inNoRender(elementiMarcati, tipo, chiave) {
         var marcati = elementiMarcati || [];
         for (var i = 0; i < marcati.length; i++) {
