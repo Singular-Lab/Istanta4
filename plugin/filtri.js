@@ -1,8 +1,19 @@
 const InddEvents = require('./events');
 
+/// I20-1002: i filtri di pagina del volantino.
+///
+/// Ogni pagina ha un insieme di criteri che dicono QUALI REFERENZE ci vanno: questo file li
+/// costruisce, li salva, li applica e li sposta da una pagina all'altra.
+///
+/// Funziona solo per il Volantino: visualizzaHomePageFiltri esce subito se il tipo di
+/// lavorazione non e' 1, perche' nei PoP i filtri di pagina non esistono.
+///
+/// Lo stato non sta qui ma in Filtri.json, nella cartella di lavorazione, con una voce per
+/// pagina: i criteri, se e' attiva, se e' bloccata.
 const filtri = {
     paginaFiltro:0,
 
+    /// La schermata dei filtri. Se Filtri.json non c'e' lo crea con la struttura vuota.
     async visualizzaHomePageFiltri(){
         if(ficoProcess.getTipoLavorazioneCorrente() != 1){
             return;
@@ -654,6 +665,7 @@ const filtri = {
         }
     },
 
+    /// Costruisce il riquadro di un filtro, vuoto o riempito con uno gia' salvato.
     async addNewFiltro(filtro = null, alternativeBody = null, hideButtonsForTracciato = false, hideNarrow = false) {
         let me = this;
         //creiamo ed appendiamo un nuovo filtro al bodyFiltri
@@ -940,6 +952,8 @@ const filtri = {
         }
     },
 
+    /// Aggiunge una condizione a un filtro. E' lunga perche' ogni tipo di campo ha il suo modo
+    /// di chiedere il valore: tendina, testo libero, data, intervallo.
     addCriterio(body, criterio = null, isTracciato = false) {
         let me = this;
 
@@ -1711,6 +1725,7 @@ const filtri = {
         }
     },
 
+    /// Il restringimento progressivo: quali valori restano possibili dati i criteri gia' scelti.
     refreshNarrow(filtroDiv)
     {
         const isCampoData = (campoAssociato) => {
@@ -1791,6 +1806,8 @@ const filtri = {
         filtroDiv.find(".filtro-narrow").html(narrazione);
     },
 
+    /// Guarda nel tracciato quali valori esistono davvero per quel campo, cosi' la tendina
+    /// propone solo cose che si possono trovare.
     trovaValoriPerTendinaValueDelFiltro(chiave, scope = null){
         let listaTracciato = readFile(pathLavorazione + "/listaKit" + idKitLavorazione + ".json");
         if(listaTracciato == null){
@@ -1883,6 +1900,7 @@ const filtri = {
         return valoriTrovatiArray;
     },
 
+    /// Scrive i filtri in Filtri.json, nella cartella di lavorazione.
     salvaFiltri(){
         let pagina = $('#dialogFiltri').data('pagina');
 
@@ -1998,6 +2016,7 @@ const filtri = {
         return pathLavorazione + "/Filtri" + nomeFileSenzaEstensione + ".json";
     },
 
+    /// Congela una pagina perche' non venga toccata dagli spostamenti di filtri.
     bloccaSblocca(){
         let pagina = $('#dialogFiltri').data('pagina');
         //leggiamo il file Filtri.json
@@ -2059,6 +2078,16 @@ const filtri = {
         this.visualizzaHomePageFiltri();
     },
 
+    /// Applica i criteri di un filtro e restituisce le referenze che li soddisfano.
+    /// E' il cuore del file.
+    ///
+    /// Dentro, isCampoData decide se un campo e' una data provando DIECI nomi diversi: quattro
+    /// flag booleani (isData, isDate, date, data) e sei campi di tipo (tipo, tipoCampo,
+    /// tipoValori, fieldType, inputType, formato, format), confrontati con data, date, datetime
+    /// e dataora. Non e' codice difensivo: e' la fotografia di un formato che nel tempo e' stato
+    /// scritto in modi diversi, e che nessuno ha potuto normalizzare perche' non si sa quale
+    /// variante usi ancora qualche cliente. Chi tocca quel punto senza saperlo rompe i filtri
+    /// data di qualcuno.
     async ricercaFiltro(filtro){
         try{
 
@@ -2616,6 +2645,8 @@ const filtri = {
 
     },
 
+    /// Sposta i filtri avanti o indietro fra le pagine, potendosi fermare alla prima bloccata
+    /// o alla prima senza filtri.
     async scorriFiltri(scorriAvanti = true, pagina = null, scorriFinoAPaginaBloccata = null, scorriFinoAPaginaConFiltroVuoto = null, paginaFineScorrimento = null) {
 
         if(pagina == null){
