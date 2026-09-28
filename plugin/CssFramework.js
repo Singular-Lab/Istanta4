@@ -8,6 +8,8 @@ const cssRegoleConflitti = require('./cssRegoleConflitti');
 const CssFramework =
 {
     //sono i valori sulla x e sulla y in percentuale (0-1) di cui deve essere distanziato dall'immagine prima
+    /// Per ogni numero di foto, le percentuali di distanziamento fra una e l'altra, scelte in
+    /// base al rapporto altezza/larghezza. Il cliente la sovrascrive da custom.js.
     calcoloDistanziamentoFoto: [ //il ratio è calcolato Y/X
         {
             foto: 0,
@@ -56,151 +58,18 @@ const CssFramework =
 
     semaforoDownloadFramework:true,
 
+    /// Alza il semaforo: le regole andranno riscaricate alla prima operazione che le usa.
+    /// Lo chiama indexNew a ogni impaginazione, una volta sola per tutto il volantino.
     richiediDiScaricareFramework()
     {
         this.semaforoDownloadFramework = true;
     },
 
-    adaptField: function (field, compiledInfo, offsetX, offsetY) {
-        //Azioni CSS standard
-        //move: aggiungere X o Y se si intende muovere solo una delle due assi. Move, sposta dell'offset il campo, mantenendo le stesse dimensioni
-        //resize: aggiungere X o Y se si intede ridimensionare solo una delle due assi: Resize, ridimensiona dell'offset il box ancorandosi al punto di ridimensionamento (in basso a destra)
-        //max-sizeX: aggiungere il valore di massima larghezza in cui puo presentarsi il box (es: max-sizeX:400)
-        //max-sizeY: aggiungere il valore di massima altezza in cui puo presentarsi il box (es: max-sizeY:400)
-        //min-sizeX: aggiungere il valore di mminima larghezza in cui puo presentarsi il box (es: min-sizeX:200)
-        //min-sizeY: aggiungere il valore di minima altezza in cui puo presentarsi il box (es: min-sizeY:200)
-        //alignX: aggiungere left/rigth (Nei casi di max o min size si puo suggerire al sistema se seguire l'allineamento verso sinitra o verso destra) 
-        //alignY: aggiungere top/bottom (Nei casi di max o min size si puo suggerire al sistema se seguire l'allineamento verso sl'alto o verso il basso) 
-
-        //ATTENZIONE: è imnportante seguire questa priorità di scrittura quando si imposta il valore css
-        //Es. corretto
-        //"resize max-sizeX:300 alignXright" //Questo chiede ridimensionamento con limite massimo di allargamento. Nel caso di allargamento ridotto allineare il contenuto verso l'avanzo a destra
-        //Es. sbagliato
-        //"resize alignXright -sizeX:300";
-
-        if (compiledInfo.css != null) {
-            let cssInstructions = compiledInfo.css.split(' ');
-            let avanzo_margine = 0;
-
-            cssInstructions.forEach(element => {
-
-                if (element.startsWith("move")) {
-                    let option = element.replace("move", "");
-                    let xOff = 0;
-                    let yOff = 0;
-                    if (option == "X") {
-                        xOff = offsetX;
-                    }
-                    else if (option == "Y") {
-                        yOff = offsetY;
-                    }
-                    else {
-                        xOff = offsetX;
-                        yOff = offsetY;
-                    }
-
-                    field.geometricBounds = [field.geometricBounds[0] + yOff, field.geometricBounds[1] + xOff, field.geometricBounds[2] + yOff, field.geometricBounds[3] + xOff];
-
-                }
-                else if (element.startsWith("resize")) {
-                    let option = element.replace("resize", "");
-                    let xOff = 0;
-                    let yOff = 0;
-                    let xOffEnd = offsetX;
-                    let yOffEnd = offsetY;
-
-                    if (option == "X") {
-                        xOff = 0;
-                        yOff = offsetY;
-                    }
-                    else if (option == "Y") {
-                        xOff = offsetX;
-                        yOff = 0;
-                    }
-                    else {
-                        xOff = 0;
-                        yOff = 0;
-                    }
-
-                    field.geometricBounds = [field.geometricBounds[0] + yOff, field.geometricBounds[1] + xOff, field.geometricBounds[2] + yOffEnd, field.geometricBounds[3] + xOffEnd];
-
-                }
-                else if (element.startsWith("max-size")) {
-                    let p = element.replace("max-size", "").split(':');
-                    let unita = p[0];
-                    let val = Number(p[1]);
-
-                    if (unita == "X") {
-                        console.log("Massima larghezza: " + val);
-                        let w = field.geometricBounds[3] - field.geometricBounds[1];
-                        if (w > val) {
-                            let diff = val - w;
-                            avanzo_margine = diff;
-                            field.geometricBounds = [field.geometricBounds[0], field.geometricBounds[1], field.geometricBounds[2], field.geometricBounds[3] + diff];
-                        }
-                    }
-                    else if (unita == "Y") {
-                        console.log("Massima altezza: " + val);
-                        let h = field.geometricBounds[2] - field.geometricBounds[0];
-                        if (h > val) {
-                            let diff = val - h;
-                            avanzo_margine = diff;
-                            field.geometricBounds = [field.geometricBounds[0], field.geometricBounds[1], field.geometricBounds[2] + diff, field.geometricBounds[3]];
-                        }
-                    }
-
-
-                }
-                else if (element.startsWith("min-size")) {
-                    let p = element.replace("min-size", "").split(':');;
-                    let unita = p[0];
-
-                    if (unita == "X") {
-                        console.log("Minima larghezza: " + val);
-                        let w = field.geometricBounds[3] - field.geometricBounds[1];
-                        if (w < val) {
-                            let diff = val - w;
-                            avanzo_margine = diff;
-                            field.geometricBounds = [field.geometricBounds[0], field.geometricBounds[1], field.geometricBounds[2], field.geometricBounds[3] + diff];
-                        }
-                    }
-                    else if (unita == "Y") {
-                        console.log("Minima altezza: " + val);
-                        let h = field.geometricBounds[2] - field.geometricBounds[0];
-                        if (h < val) {
-                            let diff = val - h;
-                            avanzo_margine = diff;
-                            field.geometricBounds = [field.geometricBounds[0], field.geometricBounds[1], field.geometricBounds[2] + diff, field.geometricBounds[3]];
-                        }
-                    }
-                }
-                else if (element.startsWith("alignX")) {
-                    //Si basa su avanzo margine
-                    let dir = element.replace("alignX", "");
-                    if (dir == "left") {
-
-                    }
-                    else if (dir == "right") {
-
-                    }
-                }
-                else if (element.startsWith("alignY")) {
-                    //Si basa su avanzo margine
-                    let dir = element.replace("alignY", "");
-                    if (dir == "top") {
-
-                    }
-                    else if (dir == "bottom") {
-
-                    }
-                }
-
-
-            });
-        }
-
-    },
-
+    /// La porta d'ingresso del gruppo: quali porzioni del box sono libere per le foto.
+    /// Mette in fila i tre passi - ostacoli, candidati grossolani, raffinamento - e torna
+    /// { candidate, obstacles }. Chi chiama passa poi tutti e due a fixFoto.
+    /// PRESUPPONE che nel box esista un elemento la cui label comincia per "base": e' lo spazio
+    /// dentro cui si cerca lo spazio. Se non c'e', qui si rompe con un TypeError.
     getSpazioImpaginazione(box) {
         let obs = this.getObstacles(box);
         //calcoliamo la larghezza e l'altezza del box
@@ -229,6 +98,13 @@ const CssFramework =
 
     },
 
+    /// Quali elementi del box sono ostacoli per le foto, in coordinate relative alla base.
+    /// Non lo sono le foto stesse, le loro etichette e gli sfondi: le foto vengono collocate
+    /// tutte insieme dal fixFoto, e lo sfondo sta dietro a tutto.
+    /// Il cliente puo' intervenire da custom.js con ignoreElementsFixFoto per aggiungerne,
+    /// exceptionElementsToIgnoreFixFoto per fare eccezioni, customPadding per dare a un elemento
+    /// un margine suo.
+    /// Come getSpazioImpaginazione, presuppone che la base ci sia.
     getObstacles(box) {
         //scorriamo tutti gli elementi tranne quelli elencati nella variabile ignoreElements
         let ignoreElements = ["base*", "immagine*", "foto_secondaria*", "etichetta*", "foto_extra*", "sfondo*"];
@@ -323,6 +199,13 @@ const CssFramework =
         return obstacles;
     },
 
+    /// Fit di un TextFrame al contenuto, conservando la posizione del testo.
+    /// InDesign, con FRAME_TO_CONTENT, sposta anche il testo: qui si misura la baseline prima e
+    /// dopo e si rimette il frame dov'era, altrimenti ogni fit farebbe salire il testo.
+    /// Sui frame di piu' righe stringe anche in orizzontale sulla larghezza vera del testo, riga
+    /// per riga, tenendo conto di inset, indent e scala orizzontale, con un 3% di margine.
+    /// Se il frame e' in overflow non tocca niente e lo segnala (CSF-001): un fit su un testo che
+    /// non ci sta gia' peggiorerebbe le cose. CSF-000 se non si risale al box.
     safeFitToContent(textFrame) {
         if (!textFrame || !textFrame.lines || textFrame.lines.length === 0 || textFrame.rotationAngle != 0) return;
     
@@ -462,6 +345,12 @@ const CssFramework =
     //     return freeRects;
     // },
 
+    /// I candidati grossolani: per ogni ostacolo, tutto lo spazio sopra, sotto, a sinistra e a
+    /// destra di esso. Sono sovrapposti fra loro e ignorano l'esistenza degli altri ostacoli:
+    /// e' refineRects a sistemarli.
+    /// Ogni candidato viene poi ristretto di paddingBox, che di default e' negativo,
+    /// [-2,-2,-2,-2], cosi' le foto non finiscono a filo degli ostacoli. Il cliente puo'
+    /// cambiarlo da custom.js.
     generateCandidateRects(boxWidth, boxHeight, obstacles, tolerance = 0) {
         const results = [];
         var paddingBox = [-2, -2, -2, -2]; // [top, left, bottom, right]
@@ -538,6 +427,8 @@ const CssFramework =
         return results;
     },
 
+    /// Toglie i candidati interamente contenuti in un altro: non sono sbagliati, sono sottoaree
+    /// di uno piu' grande. Disattivandola si ottengono piu' aree fra cui scegliere.
     reduceResult(res) {
         const reduced = [];
         for (const r of res) {
@@ -556,6 +447,11 @@ const CssFramework =
     },
 
 
+    /// Il cuore del gruppo: spezza ogni candidato sugli ostacoli che lo attraversano, e ripete
+    /// finche' nessuno collide piu'. Alla fine toglie i duplicati, scarta i candidati piu'
+    /// piccoli di un quarto della base per lato e quelli contenuti in altri.
+    /// GUARDIA DI EMERGENZA: il ciclo si ferma comunque dopo mille iterazioni. Se scatta, i
+    /// candidati restituiti sono quelli parziali dell'ultimo giro e nessuno lo viene a sapere.
     refineRects(obstacles, contours, boxWidth, boxHeight, tolerance = 0) {
         let currentRects = [...contours];
         let changed = true;
@@ -612,33 +508,10 @@ const CssFramework =
 
         //Se vogliamo più aree possiamo disattivare questa funzione, le aree che toglie non sono sbagliate ma sono sottoaree di quelle rimaste
         cleanedRects = this.reduceResult(cleanedRects);
-        //this.coloraResults(docInLavorazione.pages.item(0), cleanedRects);
         return cleanedRects;
     },
 
-    coloraResults(page, res) {
-        for (var i = 0; i < res.length; i++) {
-            var r = res[i];
-
-            try {
-                // Calcolo geometricBounds: [y1, x1, y2, x2]
-                var gb = [
-                    r.y,                   // top
-                    r.x,                   // left
-                    r.y + r.height,        // bottom
-                    r.x + r.width          // right
-                ];
-
-                var newRect = page.rectangles.add();
-                newRect.geometricBounds = gb;
-                newRect.fillColor = "Rosso prezzi";
-                newRect.strokeWeight = 0;
-            } catch (e) {
-                console.log("Errore su rettangolo " + i + ": " + e);
-            }
-        }
-    },
-
+    /// Via i rettangoli uguali a meno della tolleranza.
     removeDuplicateRects(rects, tolerance = 0.0001) {
         const unique = [];
 
@@ -658,6 +531,8 @@ const CssFramework =
         return unique;
     },
 
+    /// Via i rettangoli troppo piccoli. La soglia arriva da refineRects ed e' un quarto della
+    /// base per lato: sotto quella misura non ci sta una foto utile.
     removeRectsToSmall(rects, widthMin, heightMin) {
         const tolerance = 0.0001;
         return rects.filter(r =>
@@ -679,6 +554,9 @@ const CssFramework =
     //     return null;
     // },
 
+    /// Cosa resta di un rettangolo tolto di mezzo un ostacolo: fino a quattro pezzi, sopra,
+    /// sotto, a sinistra e a destra. I pezzi laterali sono alti quanto la sola fascia
+    /// dell'ostacolo, cosi' non si sovrappongono a quelli sopra e sotto.
     intersectRect(rect, obs, tolerance = 0.0001) {
         const results = [];
 
@@ -914,6 +792,15 @@ const CssFramework =
     //     return unique.slice(0, maxResults);
     // }
 
+    /// Fa stare le foto nello spazio trovato, senza che si sovrappongano.
+    /// Riceve i candidati di getSpazioImpaginazione, dispone le foto in gruppo, sceglie il
+    /// candidato con cssSpazioFoto, ridimensiona il gruppo perche' ci stia e lo applica.
+    /// Con projection = true calcola soltanto l'area occupata SENZA toccare il documento:
+    /// serve a sapere quanto spazio servirebbe, prima di decidere.
+    /// Si ferma senza fare nulla se non c'e' una configurazione di distanziamento per quel
+    /// numero di foto (CSF-12) o se nessun candidato puo' ospitare il gruppo.
+    /// In coda ripristina la dimensione originale degli ostacoli, che getObstacles aveva
+    /// alterato col fit, e fa scattare il controllo delle segnalazioni conflitti.
     fixFoto(box, candidateRects, obstacles, projection = false) {
 
         var base = null;
@@ -1225,6 +1112,10 @@ const CssFramework =
         return fattori;
     },
 
+    /// Dispone le foto a cascata: ognuna centrata rispetto alla precedente e scostata delle
+    /// percentuali configurate. Il set di percentuali si sceglie sul rapporto altezza/larghezza
+    /// della PRIMA foto. Torna l'ingombro complessivo del gruppo e le foto con i nuovi bounds,
+    /// normalizzati con l'angolo in 0,0.
     getRaggruppamentoFoto(fotos, distanzFoto){
         //adattiamo i bounds della foto di modo che le misure diventino normalizzate con l'angolo in 0,0
 
@@ -1289,12 +1180,18 @@ const CssFramework =
         return {boundsGruppo:boundsGruppo, fotos:fotos};
     },
 
+    /// Avvicina un valore a 1 con un decadimento esponenziale. Smorza l'effetto del rapporto
+    /// d'aspetto sul distanziamento: una foto molto allungata non deve allontanarsi dalle altre
+    /// in proporzione alla sua stranezza.
     approachOne(x, k = 1.2) {
         let resOperation = 1 + ((x - 1) * Math.exp(-k));
         console.log("Res: "+resOperation);
         return resOperation;
     },
 
+    /// I vertici dell'immagine dentro il riquadro, per getRealBoundsOfFoto.
+    /// E' l'unica sopravvissuta della vecchia geometria del fix iterativo: tutte le altre
+    /// servivano solo alla catena MAIN_fixFoto, cancellata in I20-1002.
     getVertex(img, offset) {
         //img.graphics[0].clippingPath.clippingType = ClippingPathType.ALPHA_CHANNEL;    
 
@@ -1464,6 +1361,8 @@ const CssFramework =
         return result;//nvert:nvert, vertx:vertx, verty:verty};
     },
 
+    /// L'ingombro reale dell'immagine dentro il riquadro, che non coincide col riquadro:
+    /// e' quello che conta per disporre le foto senza spazi vuoti fra l'una e l'altra.
     getRealBoundsOfFoto(img, offset)//Funione da spostare in Utility (ora è occupata)
     {
         //img.graphics[0].clippingPath.clippingType = ClippingPathType.ALPHA_CHANNEL;
@@ -1498,472 +1397,6 @@ const CssFramework =
     },
 
 
-    checkHittedArea(bounds_area, img, offset) {
-        var listObjVertex = getVertex(img, offset);
-        for (var $vtx = 0; $vtx < listObjVertex.length; $vtx++) {
-            var objVertex = listObjVertex[$vtx]; //getVertex(img, offset);
-            var nvert = objVertex.nvert;
-            var vertx = objVertex.vertx;
-            var verty = objVertex.verty;
-
-            var minmax = [-1000, -1000, -1000, -1000];
-
-            for (var $v = 0; $v < nvert; $v++) {
-                var vPos = [vertx[$v], verty[$v]];
-                if (minmax[1] == -1000 || vPos[0] < minmax[1])
-                    minmax[1] = vPos[0];
-
-                if (minmax[3] == -1000 || vPos[0] > minmax[3])
-                    minmax[3] = vPos[0];
-
-                if (minmax[0] == -1000 || vPos[1] < minmax[0])
-                    minmax[0] = vPos[1];
-
-                if (minmax[2] == -1000 || vPos[1] > minmax[2])
-                    minmax[2] = vPos[1];
-
-                if (vPos[0] >= bounds_area[1] && vPos[0] <= bounds_area[3] &&
-                    vPos[1] >= bounds_area[0] && vPos[1] <= bounds_area[2]) {
-                    return true;
-                }
-            }
-
-        }
-        //alert(minmax + " ------ " + bounds_area);
-        var y_compresa = (minmax[0] < bounds_area[0] && minmax[2] > bounds_area[0]) || (minmax[0] > bounds_area[0] && minmax[0] < bounds_area[2]);
-        var x_compresa = (minmax[1] < bounds_area[1] && minmax[1] > bounds_area[1]) || (minmax[1] > bounds_area[1] && minmax[1] < bounds_area[3]);
-        if (y_compresa && x_compresa) {
-            //alert("QUI!")
-            return true;
-        }
-
-        return false;
-    },
-
-
-
-    intersec(nvert, vertx, verty, testx, testy) {
-
-        var i, j, c = 0;
-        var inter = 0;
-
-        for (i = 0, j = nvert - 1; i < nvert; j = i++) {
-
-            if ((verty[i] > testy) != (verty[j] > testy)) {
-                if (verty[i] == testy && vertx[i] == testx) {
-                    //alert("STESSO PUNTO " + [testx,testy]);
-                    c = !c;
-                }
-                else {
-                    var calcolo = (vertx[j] - vertx[i]) * (testy - verty[i]) / (verty[j] - verty[i]) + vertx[i];
-                    if (testx < calcolo) {
-                        //alert("PUNTO CONTENUTO " + [testx,testy]);
-
-                        c = !c;
-                        //if (c)
-                        //alert([testx,texty]);
-                    }
-                }
-            }
-        }
-
-        //alert("Interazioni " + inter);
-
-        return c;
-    },
-
-    //Basata su poligono complesso
-    getAreaSovrapposizione(imgPolygon1, imgPolygon2) {
-        var intersectPoints = [];
-
-        for (var p = 0; p < imgPolygon2.points.length; p++) {
-            var pTest = imgPolygon2.points[p];
-            // alert([pTest[0], pTest[1]]);
-            var isInside = intersec(imgPolygon1.nvert, imgPolygon1.vertx, imgPolygon1.verty, pTest[0], pTest[1]);
-            //alert(isInside);
-            if (isInside) {
-                intersectPoints.push(pTest);
-            }
-        }
-
-        return intersectPoints;
-    },
-
-    //Basata su rect semplice
-    getAreaSovrapposizione2(rect1, rect2) {
-
-        // Extracting coordinates of Rectangle A
-        //const { x1: x1A, y1: y1A, x2: x2A, y2: y2A } = rectA;
-        var x1 = rect1[0];
-        var y1 = rect1[1];
-        var x1max = rect1[2];
-        var y1max = rect1[3];
-
-        // Extracting coordinates of Rectangle B
-        //const { x1: x1B, y1: y1B, x2: x2B, y2: y2B } = rectB;
-        var x2 = rect2[0];
-        var y2 = rect2[1];
-        var x2max = rect2[2];
-        var y2max = rect2[3];
-
-        // Calculate overlap in X-axis
-        const overlapX = Math.max(0, Math.min(x1max, x2max) - Math.max(x1, x2));
-
-        // Calculate overlap in Y-axis
-        const overlapY = Math.max(0, Math.min(y1max, y2max) - Math.max(y1, y2));
-
-        // Calculate total overlap area
-        const overlapArea = overlapX * overlapY;
-
-        return overlapArea;
-
-
-        // var poly1 = {points:[[rect1[0],rect1[1]],[rect1[2],rect1[1]],[rect1[2],rect1[3]],[rect1[0],rect1[3]],[rect1[0],rect1[1]]], nvert:0, vertx:[], verty:[]};
-        // var poly2 = {points:[[rect2[0],rect2[1]],[rect2[2],rect2[1]],[rect2[2],rect2[3]],[rect2[0],rect2[3]], [rect2[0],rect2[1]]], nvert:0, vertx:[], verty:[]};
-
-        // for (var p=0; p<poly1.points.length; p++)
-        // {
-        //     poly1.nvert += 1;
-        //     poly2.nvert += 1;
-
-        //     poly1.vertx.push(poly1.points[p][0]);
-        //     poly2.vertx.push(poly2.points[p][0]);
-
-        //     poly1.verty.push(poly1.points[p][1]);
-        //     poly2.verty.push(poly2.points[p][1]);
-        // }
-
-        // // alert(poly1.vertx);
-        // // alert(poly1.verty);
-        // // alert(poly2.vertx);
-        // // alert(poly2.verty);
-        // alert("Confronto\n"+poly1.points+"\n\n"+poly2.points);
-
-        // var result=getAreaSovrapposizione(poly1, poly2);
-        // alert("RESULT " + result);
-        // return result;
-    },
-
-    // alert(img1[0]);
-    // alert(img2[0]);
-
-    calcolaAreaPoligono(poligono) {
-        const n = poligono.length;
-
-        if (n < 3) {
-            // Il poligono deve avere almeno 3 vertici
-            return 0;
-        }
-
-        var area = 0;
-
-        for (var i = 0; i < n; i++) {
-            var x1 = poligono[i][0];
-            var y1 = poligono[i][1];
-
-            var x2 = poligono[(i + 1) % n][0];
-            var y2 = poligono[(i + 1) % n][1];
-
-            area += (x1 * y2 - x2 * y1);
-        }
-
-        // L'area calcolata è positiva, prendiamo il valore assoluto
-        area = Math.abs(area) / 2.0;
-
-        return area;
-    },
-
-    getRect(poligono) {
-        var boundary = [9000, 9000, 0, 0];
-        for (var p = 0; p < poligono.length; p++) {
-            var _p = poligono[p];
-            if (_p[0] < boundary[0])
-                boundary[0] = _p[0];
-            if (_p[1] < boundary[1])
-                boundary[1] = _p[1];
-            if (_p[0] > boundary[2])
-                boundary[2] = _p[0];
-            if (_p[1] > boundary[3])
-                boundary[3] = _p[1];
-        }
-
-        if (poligono.length < 3) {
-            boundary = [0, 0, 0, 0];
-        }
-
-        return boundary;
-    },
-
-
-    checkOverflow(rect) {
-        //alert(rect + " ++++ " + confini );
-        var result = "";
-
-        if (rect[0] < confini[0]) {
-            result += "-2"; //OVERFLOW -X
-        }
-        if (rect[1] < confini[1]) {
-            result += "-3"; //OVERFLOW -Y
-        }
-        if (rect[2] > confini[2]) {
-            result += "-4"; //OVERFLOW +X
-        }
-        if (rect[3] > confini[3]) {
-            result += "-5"; //OVERFLOW +Y
-        }
-
-        return result; //OK
-    },
-
-    startFix(imgList, nTentativo) {
-        //Posiziono tute le immagini al centro rispetto al confine
-        for (var f = 0; f < imgList.length; f++) {
-            var item = imgList[f];
-            if (item == null)
-                continue;
-
-            var bound = item.graphics.item(0).geometricBounds;//item.geometricBounds;
-            var h = bound[2] - bound[0];
-            var w = bound[3] - bound[1];
-
-            if (modelloDiFix.scaleReduce > 0 && nTentativo > 1) {
-                var hDaSottrarre = modelloDiFix.scaleReduce * h;
-                var wDaSottrarre = modelloDiFix.scaleReduce * w;
-                h -= hDaSottrarre;
-                w -= wDaSottrarre;
-            }
-
-            var startCenterX = confini[0] + ((confini[2] - confini[0] - w) / 2);
-            var startCenterY = confini[1] + ((confini[3] - confini[1] - h) / 2);
-            //alert([startCenterY, startCenterX, startCenterY+h, startCenterX+w]);
-
-
-
-            item.graphics.item(0).geometricBounds = [startCenterY, startCenterX, startCenterY + h, startCenterX + w];
-
-            item.geometricBounds = item.graphics.item(0).geometricBounds;
-        }
-    },
-
-
-    fixIterazione(imgList) {
-        for (var f = 0; f < imgList.length; f++) {
-            var item = imgList[f];
-            if (item == null)
-                continue;
-
-            var offsetModello = modelloDiFix.offsetSteps[f][0];//Il momento non cambia mai. Semper e solo 1 per adesso
-            var offset = [offsetModello[0], offsetModello[1]];
-            offset[0] *= offsetScale;
-            offset[1] *= offsetScale;
-
-
-            item.graphics.item(0).geometricBounds = [item.graphics.item(0).geometricBounds[0] + offset[1], item.graphics.item(0).geometricBounds[1] + offset[0], item.graphics.item(0).geometricBounds[2] + offset[1], item.graphics.item(0).geometricBounds[3] + offset[0]];
-            item.geometricBounds = item.graphics.item(0).geometricBounds;//[item.geometricBounds[0]+offset[1], item.geometricBounds[1]+offset[0], item.geometricBounds[2]+offset[1], item.geometricBounds[3]+offset[0]];
-        }
-    },
-
-
-    analisiModello(imgList) {
-        var rapporti = [];
-
-        for (var f = 0; f < imgList.length; f++) {
-            var item = imgList[f];
-            if (item == null)
-                continue;
-
-            var poly = getVertex(item, [0, 0, 0, 0]);
-            var rect = getRect(poly[0].points);
-            var w = rect[2] - rect[0];
-            var h = rect[3] - rect[1];
-
-            //alert([w,h]);
-
-            rapporti.push(w / h);
-        }
-
-        //alert(rapporti.length);
-
-        if (rapporti.length == 2) {
-            if ((rapporti[0] >= 1 && rapporti[1] < 0) ||
-                rapporti[1] >= 1 && rapporti[0] < 0) {
-                //Due foto con orientamento diverso
-                // aprescindere dal differenziale si applica il modello classico orizzontale
-                return modelloStandardFotoOrizzontali;//"due foto con orientamento differente -> modelloStandardFotoOrizzontali";
-            }
-            else {
-                if (rapporti[0] < 1) {
-                    //h>w
-                    var minRapp = Math.min(rapporti[0], rapporti[1]);
-                    //alert(minRapp);
-                    if (minRapp >= 0.45) {
-                        return modelloStandardFotoVerticali;//"due foto con orientamento verticale (rapp "+ minRapp +")  -> modelloSlimFotoVerticali";
-                    }
-                    else {
-                        return modelloSlimFotoVerticali;//"due foto con orientamento verticale (rapp "+ minRapp +") -> modelloStandardFotoVerticali";
-                    }
-                }
-                else {
-                    //w>h                
-                    var maxRapp = Math.max(rapporti[0], rapporti[1]);
-                    if (maxRapp <= 3) {
-                        return modelloStandardFotoOrizzontali;//"due foto con orientamento orizzontale (rapp "+ maxRapp +") -> modelloSlimFotoOrizzontali";
-                    }
-                    else {
-                        return modelloSlimFotoOrizzontali;//"due foto con orientamento orizzontale (rapp "+ maxRapp +") -> modelloStandardFotoOrizzontali";
-                    }
-                }
-            }
-        }
-        else if (rapporti.length == 3) {
-            //Nel caso di 3 foto, basta prendere il rapporto della prima. Sono per forza dello stesso orientamento (da specifica)
-            if (rapporti[0] >= 1) {
-                //Tre foto orizzontali
-                return modelloTreFoto;
-            }
-            else {
-                return modelloTreFotoVerticale;
-            }
-        }
-
-    },
-
-    test() {
-        //alert("step1");
-
-        img1 = getVertex(inddItemImg1, [0, 0, 0, 0]);
-        img2 = getVertex(inddItemImg2, [0, 0, 0, 0]);
-        img3 = getVertex(inddItemImg3, [0, 0, 0, 0]);
-
-        //alert("step2");
-
-        var img1_rect = getRect(img1[0].points);
-        var img2_rect = getRect(img2[0].points);
-        var img3_rect = getRect(img3[0].points);
-
-        //alert(img1_rect);
-
-        var overflow1 = checkOverflow(img1_rect);
-        if (overflow1 != "") {
-            //alert("IMG 1 fuori dai margini " + overflow1);
-            if (overflow1.indexOf("-2") >= 0 || overflow1.indexOf("-4") >= 0) {
-                modelloDiFix.offsetSteps[0][0][0] = 0;
-            }
-
-            if (overflow1.indexOf("-3") >= 0 || overflow1.indexOf("-5") >= 0) {
-                modelloDiFix.offsetSteps[0][0][1] = 0;
-            }
-        }
-
-        var overflow2 = checkOverflow(img2_rect);
-        if (overflow2 != "") {
-            //alert("IMG 2 fuori dai margini " + overflow2);
-            if (overflow2.indexOf("-2") >= 0 || overflow2.indexOf("-4") >= 0) {
-                modelloDiFix.offsetSteps[1][0][0] = 0;
-            }
-
-            if (overflow2.indexOf("-3") >= 0 || overflow2.indexOf("-5") >= 0) {
-                modelloDiFix.offsetSteps[1][0][1] = 0;
-            }
-        }
-
-        var overflow3 = checkOverflow(img3_rect);
-        if (overflow3 != "") {
-            //alert("IMG 3 fuori dai margini " + overflow2);
-            if (overflow3.indexOf("-2") >= 0 || overflow3.indexOf("-4") >= 0) {
-                modelloDiFix.offsetSteps[2][0][0] = 0;
-            }
-
-            if (overflow3.indexOf("-3") >= 0 || overflow3.indexOf("-5") >= 0) {
-                modelloDiFix.offsetSteps[2][0][1] = 0;
-            }
-        }
-
-        //alert("step3");
-
-
-        /*
-        var areaImg1 = calcolaAreaPoligono(img1[0].points);
-        var areaImg2 = calcolaAreaPoligono(img2[0].points);
-        var areaImg3 = calcolaAreaPoligono(img3[0].points);
-       
-        //Sovrapposizione tra foto 1 e 2
-        var sovrapposizione1=getAreaSovrapposizione(img1[0], img2[0]);
-        var sovrapposizione2=getAreaSovrapposizione(img2[0], img1[0]);
-        var sovrapposizione_complessiva = sovrapposizione1.concat(sovrapposizione2);
-        var sovrapposizione_rect = getRect(sovrapposizione_complessiva);
-        var areaSovrapposizione = (sovrapposizione_rect[2]-sovrapposizione_rect[0]) * (sovrapposizione_rect[3]-sovrapposizione_rect[1]);
-        */
-
-        var areaImg1 = (img1_rect[2] - img1_rect[0]) * (img1_rect[3] - img1_rect[1]);
-        var areaImg2 = (img2_rect[2] - img2_rect[0]) * (img2_rect[3] - img2_rect[1]);
-        var areaImg3 = (img3_rect[2] - img3_rect[0]) * (img3_rect[3] - img3_rect[1]);
-
-
-        var areaSovrapposizione = getAreaSovrapposizione2(img1_rect, img2_rect);
-        //var areaSovrapposizione = (sovrapposizione_rect[2]-sovrapposizione_rect[0]) * (sovrapposizione_rect[3]-sovrapposizione_rect[1]);
-
-        //alert(areaSovrapposizione);
-
-        // if (parseInt(areaSovrapposizione)<=0)
-        // {
-        //     //Probabilmente siamo in una casistica d esatta sovrapposizione 
-        //     //Tipica per le linee di prodotti con stessa identica confezione e solo cambio gusto
-        //     //Allora proviamo a risolvere estraendo i rect
-        //     var rect1 = getRect(img1[0].points);
-        //     var rect2 = getRect(img2[0].points);
-
-        //     var areaCoincidente = (parseInt(rect1[0])==parseInt(rect2[0]) && parseInt(rect1[1])==parseInt(rect2[1]) && parseInt(rect1[2])==parseInt(rect2[2]) && parseInt(rect1[3])==parseInt(rect2[3]));
-
-        //     if (areaCoincidente)
-        //     {
-        //         //alert("L'area coincide");
-        //         areaSovrapposizione = areaImg1;
-        //     }
-
-
-        // }
-
-        //alert("step4");
-        //alert("1. " + areaSovrapposizione);
-
-        var perc1 = (areaSovrapposizione / areaImg1) * 100;
-        var perc2 = (areaSovrapposizione / areaImg2) * 100;
-        var percErr = Math.max(perc1, perc2);
-
-        //alert("1. " + percErr);
-        //Sovrapposizione tra foto 1 e 3
-        if (areaImg3 > 0) {
-            //Controllo sovrapposizione tra 2 e 3
-            areaSovrapposizione = getAreaSovrapposizione2(img2_rect, img3_rect);
-            //areaSovrapposizione = (sovrapposizione_rect[2]-sovrapposizione_rect[0]) * (sovrapposizione_rect[3]-sovrapposizione_rect[1]);
-
-            //alert("2. " + areaSovrapposizione + " su " + areaImg2);
-
-            var perc1 = (areaSovrapposizione / areaImg2) * 100;
-            var perc2 = (areaSovrapposizione / areaImg3) * 100;
-
-            percErr = Math.max(Math.max(perc1, perc2), percErr);
-
-
-            //Controllo sovrapposizione tra 1 e 3
-            areaSovrapposizione = getAreaSovrapposizione2(img1_rect, img3_rect);
-            //areaSovrapposizione = (sovrapposizione_rect[2]-sovrapposizione_rect[0]) * (sovrapposizione_rect[3]-sovrapposizione_rect[1]);
-
-            //alert("2. " + areaSovrapposizione + " su " + areaImg2);
-
-            perc1 = (areaSovrapposizione / areaImg2) * 100;
-            perc2 = (areaSovrapposizione / areaImg3) * 100;
-
-            percErr = Math.max(Math.max(perc1, perc2), percErr);
-        }
-
-        //alert(percErr);
-
-        return percErr;
-
-    },
-
     getAllineamentiDB(callback){
 
         let me=this;
@@ -1992,7 +1425,10 @@ const CssFramework =
                         fs.writeFileSync(pathLavorazione + "/allineamenti.json", JSON.stringify(allineamentiDB));
                         callback(null, allineamentiDB); // Passiamo `null` come primo argomento per indicare che non c'è errore
                     }catch(e){
-                        //console.error(e);  
+                        //I20-1002: qui il console.error era commentato. Se la copia di riserva in
+                        //allineamenti.json non si scrive, il prossimo scaricamento fallito non ha
+                        //su cosa ripiegare e l'operazione si annulla: va detto adesso, non allora.
+                        console.error("Code CSF-009: impossibile scrivere la copia di riserva delle regole in allineamenti.json: " + e);
                     }
                 }
 
@@ -2026,6 +1462,14 @@ const CssFramework =
      * rovinoso: due ombre finirebbero sulla stessa chiave e la seconda cancellerebbe la prima.
      * Le foto sono gia' un'eccezione dentro Utility.parseLabel per lo stesso motivo.
      */
+    /// Fotografa il box prima che lo si tocchi: per ogni elemento con una label, l'oggetto
+    /// InDesign e i suoi bounds RELATIVI al box.
+    /// Relativi perche' il box verra' spostato e ridimensionato, e una misura assoluta scadrebbe
+    /// al primo movimento; tagliati ai bordi del box, cosi' un elemento che sporge non falsa i
+    /// conti successivi.
+    /// La chiave dipende da cosa e' l'elemento: per una copia nata da duplicazione e' la label
+    /// intera, per gli altri quella normalizzata. Normalizzare la label di una copia taglierebbe
+    /// il suffisso e farebbe di due ombre un elemento solo.
     creaMappaturaBoxOriginale(box, prefissiDerivati) {
         var mappaElementi = {};
         try {
@@ -2065,6 +1509,9 @@ const CssFramework =
         return mappaElementi;
     },
 
+    /// Non ricostruisce niente: marca eliminato quello che InDesign non considera piu' valido.
+    /// Un elemento rimosso resta nella mappa come lapide, perche' le regole che lo nominavano
+    /// devono sapere che non c'e' piu', non trovarsi un buco.
     updateMap(mappaBoxOriginale) {
         //scorriamp la mappaBoxOriginale per vedere quali elementi sono ancora validi, se non lo sono impostiamo eliminato=true
         for (var key in mappaBoxOriginale) {
@@ -2131,6 +1578,8 @@ const CssFramework =
      * Le regole del box, cercate prima fra quelle del kit e poi fra quelle di default.
      * La stessa ricerca serviva in piu' punti: tenerla in un posto solo evita che divergano.
      */
+    /// Cerca le regole del box per meccanica, cioe' per la sua label: prima nel DB del cliente,
+    /// poi in quello di default. E' la gerarchia a due livelli di tutto il framework.
     getElementoBoxDB(box, DBallineamenti, DBDefault) {
         if (box == null) {
             return null;
@@ -2145,6 +1594,7 @@ const CssFramework =
         return elementoBox;
     },
 
+    /// I prefissi delle etichette che nascono dalle duplicazioni di questo box.
     getPrefissiDerivati(box, DBallineamenti, DBDefault) {
         var elementoBox = this.getElementoBoxDB(box, DBallineamenti, DBDefault);
         return elementoBox != null ? cssComposizioneBox.prefissiDerivati(elementoBox.duplicazioni) : [];
@@ -2219,6 +1669,11 @@ const CssFramework =
      */
     contestoCss: null,
 
+    /// Ricorda su cosa si sta lavorando: box, bounds da impaginato, mappa originale, referenza,
+    /// i due DB e i prefissi delle copie. Serve perche' passare questi dati come parametri lungo
+    /// tutte le catene di chiamate era impraticabile.
+    /// Il prezzo e' che il motore lavora su un box alla volta e NON e' rientrante: due box in
+    /// parallelo si sovrascriverebbero il contesto a vicenda.
     memorizzaContestoCss(box, boundsBoxImpaginato, mappaBoxOriginale, itemRef, DBallineamenti, DBDefault) {
         this.contestoCss = {
             etichettaBox: box != null ? box.label : null,
@@ -2233,10 +1688,14 @@ const CssFramework =
         return this.contestoCss;
     },
 
+    /// Ridimensiona il contenuto del box per le misure che la griglia gli ha assegnato.
+    /// Non misura il box sui suoi bounds dichiarati ma sull'ingombro degli elementi VISIBILI,
+    /// prendendo il piu' stretto fra i due: un box il cui riquadro e' piu' grande del contenuto
+    /// non deve ingrandire tutto in proporzione al vuoto.
     applicaRidimensionamento(box, boxInGrigliaBounds, mappaBoxOriginale, itemRef, DBallineamenti, DBDef) {
         try{
 
-            etichetteSegnalate = [];
+            this.etichetteSegnalate = [];
 
             let wBOX_ridimensionato = boxInGrigliaBounds[3] - boxInGrigliaBounds[1];
             let hBOX_ridimensionato = boxInGrigliaBounds[2] - boxInGrigliaBounds[0];
@@ -2687,6 +2146,7 @@ const CssFramework =
         }
     },
 
+    /// Le regole che devono girare DOPO che le dimensioni si sono assestate.
     applicaPostRidimensionamento(box, mappaBoxOriginale, itemRef, DBallineamenti, DBDef) {
         try {
 
@@ -2909,6 +2369,8 @@ const CssFramework =
         }
     },
 
+    /// I post ridimensionamenti di un singolo elemento. Con isItemLink agisce sulla grafica
+    /// dentro il riquadro invece che sul riquadro.
     applicaPostRidimensionamenti(elemento, mappaBoxOriginale, itemRef, listaPostRidimensionamenti, box, isItemLink) {
         try {
             if (!elemento || elemento.eliminato) {
@@ -3272,6 +2734,16 @@ const CssFramework =
         }
     },
 
+    /// L'interprete delle espressioni di dimensione, cioe' la sintassi che il cliente scrive
+    /// nella configurazione. I termini si sommano e si sottraggono: "+prezzo[W]-10" e' valido.
+    ///   40               quaranta millimetri
+    ///   20%              il 20% della dimensione del box sull'asse richiesto
+    ///   sy_ombra         la dimensione di quell'elemento
+    ///   sy_ombra[W] [H]  forzando l'asse invece di usare quello richiesto
+    ///   sy_ombra[text]   i bounds del TESTO, non del riquadro
+    ///   sy_ombra[presente]  il termine vale solo se l'elemento c'e' e non e' stato eliminato
+    ///   sy_ombra[H][50%] meta' dell'altezza dell'ombra
+    /// Virgole trasformate in punti, spazi ignorati, sequenze +- e -- normalizzate.
     calcolaValoreDimensione: function (espressione, asse, mappaBoxOriginale, box) {
         // asse: "width" oppure "height"
         if (espressione == null) {
@@ -3734,8 +3206,12 @@ const CssFramework =
         }
     },
 
-    etichetteSegnalate : [],
+    /// Le etichette gia' segnalate per questo box, per non ripetere la stessa segnalazione.
+    /// Azzerata a ogni applicaRidimensionamento, cioe' una volta per box.
+    etichetteSegnalate: [],
 
+    /// Chi e' uscito dai bordi del box rientra. Su una casella di testo prova PRIMA a
+    /// stringerla, e solo se andrebbe in overflow la sposta.
     fixOverflowFromBox(boxInGrigliaBounds, box, mappaBoxOriginale = null){
         //controlliamo per ogni pageItem di box se esce dai bounds di boxInGrigliaBounds
         //se esce lo riportiamo dentro
@@ -3977,10 +3453,10 @@ const CssFramework =
                 pageItem.geometricBounds[1] < boxInGrigliaBounds[1] - 0.05 ||
                 pageItem.geometricBounds[2] > boxInGrigliaBounds[2] + 0.05 ||
                 pageItem.geometricBounds[3] > boxInGrigliaBounds[3] + 0.05) {
-                if (!etichetteSegnalate.includes(Utility.parseLabel(pageItem.label))) {
+                if (!this.etichetteSegnalate.includes(Utility.parseLabel(pageItem.label))) {
                     messaggioUtente("Code CSF-009: L'elemento con etichetta " + (pageItem.label != "" ? Utility.parseLabel(pageItem.label) : "senza etichetta") + " nel box " + (box.label != "" ? box.label : "senza etichetta") + ", post ridimensionamento eccede i limiti della griglia assegnata. L'elemento è stato rimpicciolito per permettere la corretta impaginazione.", "error");
                     addSegnalazione("Code CSF-009: L'elemento con etichetta " + (pageItem.label != "" ? Utility.parseLabel(pageItem.label) : "senza etichetta") + " nel box " + (box.label != "" ? box.label : "senza etichetta") + ", post ridimensionamento eccede i limiti della griglia assegnata. L'elemento è stato rimpicciolito per permettere la corretta impaginazione.", "error", 1, true, ["CSF-009", "red"]);
-                    etichetteSegnalate.push(Utility.parseLabel(pageItem.label));
+                    this.etichetteSegnalate.push(Utility.parseLabel(pageItem.label));
 
                     //Rimpiccioliamo l'elemento in modo proporzionale per farlo rientrare nei limiti della griglia
                     //calcoliamo quanto esce in ogni direzione
@@ -4022,6 +3498,8 @@ const CssFramework =
         }
     },
 
+    /// Allontana gli elementi dalla traccia del bordo della base, di uno spessore piu' la
+    /// distanza configurata. Se la base non c'e' o non e' valida non fa niente.
     fixCollisioneTracciaBase(box, gruppoElementi, evitaTracciaImpostazioni) {
         var useTextBounds = false;
         var distance = 0;
@@ -4202,6 +3680,10 @@ const CssFramework =
         }
     },
 
+    /// Dispone gli elementi di un gruppo: ordinamento per livello, direzione di lettura
+    /// (colonne o righe, in un verso o nell'altro) e spaziatura fra uno e l'altro.
+    /// I bounds in arrivo sono relativi al box e qui diventano assoluti.
+    /// E' la funzione piu' grande del file.
     AllineamentoInternoGruppo(box, nomeGruppo, gruppoElementiOriginal, ordinamento, lettura, Spacing, mappaBoxOriginale, itemRef) {
         let me = this;
         //ordiniamo gli elementi in ordinamento per valore di Livello
@@ -4999,6 +4481,8 @@ const CssFramework =
 
     },
 
+    /// Se una regola si applica a questo box: elementi che devono esserci, elementi che non
+    /// devono esserci, contatti fra etichette e le altre condizioni descritte qui sotto.
     checkCondition(mappaBoxOriginale, itemRef, condizione, box) {
         try{
             //la condizione ha questa struttura
@@ -5264,6 +4748,8 @@ const CssFramework =
     /// del testo: baseline, ascent e descent per l'altezza, gli offset orizzontali per la
     /// larghezza, senza i margini interni del riquadro. Per quel che non e' testo, o quando
     /// le righe non si possono leggere, l'elenco resta vuoto e si torna al rettangolo unico.
+    /// I rettangoli delle singole righe di una casella di testo, costruiti con
+    /// cssRegoleConflitti.rettangoloDiRiga. Lista vuota per tutto cio' che non e' un TextFrame.
     righeDiTesto(item) {
         try {
             if (item == null || item.constructorName != "TextFrame" || !item.lines) {
@@ -5287,6 +4773,10 @@ const CssFramework =
         }
     },
 
+    /// Se due elementi si toccano. Con useTextBounds il confronto e' RIGA PER RIGA: il
+    /// rettangolo unico ingloba tutte le righe, quindi una riga lunga presterebbe la sua
+    /// larghezza alla fascia dove c'e' solo una riga corta, e lo spazio fra le righe
+    /// conterebbe come testo.
     elementsTouching(item1, item2, useTextBounds = false) {
         //controlliamo se i due item si toccano
         var b1 = useTextBounds ? this.getRealBounds(item1) : item1.geometricBounds;
@@ -5329,18 +4819,9 @@ const CssFramework =
             if (box && box.id != null) {
                 return box.id.toString();
             }
-        } catch (e) {}
+        } catch (e) { /* id illeggibile: si ripiega sulla label, qui sotto */ }
 
         return box && box.label ? box.label : "";
-    },
-
-    //La lettura delle regole vive in cssRegoleConflitti: li' e' verificabile dalla suite.
-    splitSegnalazioniConflittiSpec(spec) {
-        return cssRegoleConflitti.splitSpec(spec);
-    },
-
-    normalizzaRegolaSegnalazioniConflitti(regola) {
-        return cssRegoleConflitti.normalizzaRegola(regola);
     },
 
     getListaRegoleSegnalazioniConflitti(segnalazioniConflitti) {
@@ -5365,6 +4846,9 @@ const CssFramework =
         }
     },
 
+    /// Raccoglie le regole di conflitto del box e le mette in sospeso: il controllo vero
+    /// avviene alla fine, quando gli elementi hanno preso la posizione definitiva.
+    /// La lettura delle regole non e' qui, vive in cssRegoleConflitti.
     preparaSegnalazioniConflitti(box, DBallineamenti, DBDefault) {
         try {
             var meccanica = box.label;
@@ -5404,7 +4888,7 @@ const CssFramework =
                 }
                 current = current.parent;
             }
-        } catch (e) {}
+        } catch (e) { /* catena dei genitori illeggibile: si assume visibile, qui sotto */ }
 
         return true;
     },
@@ -5414,7 +4898,7 @@ const CssFramework =
             if (item && item.id != null) {
                 return item.id.toString();
             }
-        } catch (e) {}
+        } catch (e) { /* id illeggibile: si ripiega sull'indice, qui sotto */ }
 
         return "idx_" + index;
     },
@@ -5470,6 +4954,8 @@ const CssFramework =
         addSegnalazione(msg, "warning", 2, true, ["CSF-013", "yellow"]);
     },
 
+    /// Il controllo finale: guarda se gli elementi che non dovevano toccarsi si toccano, e
+    /// segnala. Non fa niente se il controllo e' sospeso o se e' gia' stato fatto per il box.
     controllaSegnalazioniConflittiPendenti(box) {
         try {
             var pendente = this.segnalazioniConflittiPendenti;
@@ -5520,6 +5006,8 @@ const CssFramework =
     },
     
 
+    /// L'ingresso degli allineamenti, chiamato da indexNew. Scarica le regole se il semaforo
+    /// e' alzato e passa ad allineamenti().
     applicaAllineamentoCss(box, boundsBoxImpaginato, mappaBoxOriginale, itemRef, bypassDownload = true, momento = cssSequenzaOperazioni.standard) {
         try {
             let me = this;
@@ -5755,6 +5243,8 @@ const CssFramework =
         return box;
     },
 
+    /// Cerca le regole di allineamento del box per meccanica, con la gerarchia a due livelli
+    /// - cliente prima, default poi - e le applica gruppo per gruppo.
     allineamenti(box, boundsBoxImpaginato, mappaBoxOriginale, itemRef, DBallineamenti, DBDefault) {
         //leggiamo la label del box per capire che meccanica è
         //cerchiamo nel DB l'elemento la cui variabile nomiBox contiene la meccanica
@@ -6014,6 +5504,9 @@ const CssFramework =
         return box;
     },
 
+    /// Fa seguire un gruppo a un altro. La struttura dell'ancora e' descritta qui sotto: per
+    /// ogni asse la distanza da tenere, il lato del bersaglio a cui avvicinarsi, il proprio
+    /// lato di riferimento e se fermarsi in caso di collisione.
     FollowAnchorGruppo(mappaBoxOriginale, gruppoAllineamento, anchor, elementAllineamento, elementAllineamentoDefault, elementDefaultAllineamento, elementDefaultAllineamentoDefault, itemRef, box, isItemLinkGruppo) {
         //struttura di un anchor
         // followAnchor: [{
@@ -6270,6 +5763,8 @@ const CssFramework =
         return attive;
     },
 
+    /// Esegue sul documento il piano calcolato da cssComposizioneBox: duplicazioni degli
+    /// elementi e ordine di sovrapposizione.
     applicaComposizioneBox(box, mappaBoxOriginale, itemRef, DBallineamenti, DBDefault) {
         try {
             var me = this;
@@ -6503,6 +5998,8 @@ const CssFramework =
      * allineato a loro prima stava seguendo una posizione provvisoria. Lavora sul contesto
      * dell'ultima applicazione del CSS, quindi non rilegge il file delle regole.
      */
+    /// Il momento "dopoFixFoto" di cssSequenzaOperazioni: le regole che hanno senso solo
+    /// quando le foto hanno preso la posizione definitiva.
     applicaOperazioniDopoFixFoto(box, boundsBoxImpaginato) {
         if (box == null || !box.isValid) {
             return box;
@@ -6540,6 +6037,8 @@ const CssFramework =
         return this.riapplicaComposizioneBox(box);
     },
 
+    /// Trasforma il nome di un gruppo in una regex: "sy_ombra*" diventa /^sy_ombra.*$/.
+    /// Toglie i suffissi [itemLink] e [exist] e protegge i caratteri speciali tranne l'asterisco.
     makeRegexFromGroupName(groupName) {
         // rimuovo un eventuale [itemLink] finale (case-insensitive)
         var baseName = groupName.replace(/\[itemLink\]$/i, '')
@@ -6552,6 +6051,7 @@ const CssFramework =
         return new RegExp(regexStr);
     },
 
+    /// Separa dal nome del gruppo il suffisso [exist], che dice "vale solo se c'e'".
     parseGroupSpec(groupName) {
         const hasExist = /\[exist\]$/i.test(groupName);
         const cleanName = groupName.replace(/\[exist\]$/i, '');
@@ -6564,6 +6064,8 @@ const CssFramework =
     },
 
 
+    /// I bounds veri di un elemento: su una casella di testo sono quelli del TESTO, non del
+    /// riquadro che lo contiene.
     getRealBounds(item) {
         if (item.isInvalid){
             return [-1,-1,-1,-1];
@@ -6673,54 +6175,6 @@ const CssFramework =
         }
     },
 
-    getBoundsLineByIndex(item, indexLine) {
-        if (item.constructorName == "TextFrame") {
-
-            var lines = item.lines.everyItem().getElements();
-            if (indexLine >= 0 && indexLine < lines.length) {
-                var line = lines[indexLine];
-                var base = line.baseline;
-                var top = base - line.ascent;
-                var bottom = base + line.descent;
-                // prendo un carattere “rappresentativo” della riga
-                var ch = null;
-                try {
-                    if (line.characters && line.characters.length > 0) {
-                        var chars = line.characters.everyItem().getElements();
-                        var maxPS = -1;
-                        for (var i = 0; i < chars.length; i++) {
-                            var ps = chars[i].pointSize;
-                            if (ps != null && !isNaN(ps) && ps > maxPS) {
-                                maxPS = ps;
-                                ch = chars[i];
-                            }
-                        }
-                    }
-                } catch (e) {
-                    ch = null;
-                }
-                if (ch) {
-                    var top = base - line.ascent - ch.pointSize;
-                    var bottom = base + line.descent;
-                }
-
-                var left = line.horizontalOffset;
-                var right = line.endHorizontalOffset;
-
-
-                return [top, left, bottom, right];
-            }
-            else {
-                console.error("Linea non valida");
-                return null;
-            }
-        }
-        else {
-            console.error("Linea non valida");
-            return null;
-        }
-    },
-
     getBoundsLine(line) {
         if (line.constructorName == "Line") {
 
@@ -6800,6 +6254,24 @@ const CssFramework =
  * @param {Boolean} reducePointSizeFallback
  * @param {String} expandVericalToFindSpace - "bottom" | "top" | "none"
  */
+    /// Manda a capo la descrizione perche' non si sovrapponga agli altri elementi del box.
+    /// Tre leve, in quest'ordine: inserire a capo nei punti consentiti, espandere il frame
+    /// verso il basso o l'alto, e come ultima risorsa ridurre il corpo del carattere un punto
+    /// alla volta fino a un minimo di 3.
+    /// Tiene traccia degli a capo che inserisce lei, per poterli togliere se cambia strada.
+    /// Una trentina di funzioni locali e tre guardie anti-ciclo: 200 giri principali, 50 per
+    /// conflitto singolo, 50 nel fallback sul corpo.
+    ///
+    /// NON HA MAI FUNZIONATO fino a I20-1002: chiamava makeRegexFromGroupName senza this.,
+    /// nel preambolo, e il ReferenceError finiva nel catch in fondo che torna false. Il
+    /// chiamante, indexNew per le sole lavorazioni PoP, quel false non lo guarda.
+    ///
+    /// I catch vuoti qui dentro - una dozzina - sono deliberati e vanno letti cosi': l'algoritmo
+    /// interroga InDesign su proprieta' che su un certo oggetto possono non esistere, e subito
+    /// dopo prova la strada alternativa. Scriverci un log vorrebbe dire una riga in console per
+    /// ogni carattere esaminato. E' lo stesso silenzio che ha nascosto il difetto qui sopra per
+    /// anni, e per questo il difetto lo previene ora un test sul sorgente
+    /// (tests/plugin/cssFrameworkChiamateMembri.test.js) invece della lettura dei log.
     reflowTextFrameAvoidConflicts(
         textFrame,
         box,
@@ -6838,7 +6310,12 @@ const CssFramework =
             // Prepariamo i matcher delle label escluse
             var excludeRegexes = [];
             for (var i = 0; i < labelEscluse.length; i++) {
-                excludeRegexes.push(makeRegexFromGroupName(labelEscluse[i]));
+                //I20-1002: il this. qui mancava, e senza di lui makeRegexFromGroupName non e'
+                //un nome noto: e' un membro dell'oggetto, non una funzione globale. La riga
+                //lanciava ReferenceError, il catch in fondo alla funzione lo inghiottiva e
+                //tornava false, cosi' il reflow della descrizione non e' MAI avvenuto. Il
+                //chiamante, in indexNew, il false non lo guarda nemmeno.
+                excludeRegexes.push(this.makeRegexFromGroupName(labelEscluse[i]));
             }
 
             // Cache bounds oggetti esterni (immutabili durante l'esecuzione)
@@ -8030,6 +7507,7 @@ const CssFramework =
     },
 
 
+    /// Scende dentro i gruppi fino agli elementi foglia. Una casella di testo e' gia' foglia.
     getItemContained(item) {
         var listItem = [];
         if (item.constructorName == "TextFrame") {
@@ -8070,6 +7548,8 @@ const CssFramework =
         }
     },
 
+    /// Sposta un gruppo perche' segua un altro su un asse, rispettando distanza e lati
+    /// dell'ancora, e fermandosi in caso di collisione se l'ancora lo chiede.
     followGroup(gruppoSeguito, gruppoAllineamento, anchor, direction = "x", useTextBounds = false, isItemLinkGruppo = false) {
         try {
             let me = this;
@@ -8615,6 +8095,7 @@ const CssFramework =
         }
     },
 
+    /// Come followGroup, ma il bersaglio e' un punto fisso del box invece di un altro gruppo.
     followStaticAnchor(box, gruppoAllineamento, anchor, mappaBoxOriginale, itemRef, allineamentiRiusciti, isItemLinkGruppo = false) {
 
         if (gruppoAllineamento.length == 0) {
@@ -8978,6 +8459,7 @@ const CssFramework =
             boundsA[1] >= boundsB[3]);   // A è sotto B
     },
 
+    /// Applica in ordine i fit dichiarati per ogni etichetta.
     finalFit(mappaBoxOriginale, fitRichiesti) {
         //fitRichiesti è un array di
         // {
@@ -9048,6 +8530,10 @@ const CssFramework =
             
     },
 
+    /// I sette enum qui di seguito traducono in nomi i numeri che arrivano dalla configurazione
+    /// del cliente. Tutti tornano null su un valore sconosciuto, tranne enumPriorityAxis che
+    /// torna "x": per l'asse prioritario esiste un default sensato, per gli altri no, e un null
+    /// fa saltare la regola invece di applicarla a caso.
     enumAxisResizeMode(numericValue){
         switch(numericValue){
             case 0:
@@ -9142,163 +8628,6 @@ const CssFramework =
                 return "FILL_PROPORTIONALLY";
             default:
                 return null;
-        }
-    },
-
-    confini: [7.225, 27.625, 7.225 + 61.5, 27.625 + 38.375],
-    offsetScale: 1,
-
-    //DEFINIZIONE MODELLI
-    //offsetSteps: E' un array a 3 dimensioni
-    //il primo array è l'indice della foto per cui
-    //L'array di secondo livello specifica i momenti. Quando una immagine arriva ad azzerare entrami gli offset per cui è in fase di stallo, procede (se esiste) con il momento successivo, altrimenti rimane ferma
-    //L'array di terzo livello invece rappresenta la coppia X,Y
-    //scaleReduce: Coefficiente di scalatura della dimenione delle immagini a partire dal secondo tentativo tra i maxTentativi disponibili
-    //maxTentativi: Quante volte il FIX deve essere operato in caso di mancata risoluzione.Un ciclo di fix si termina quando tutti gli offsetSteps di tutte le immagini coinvolte sono tutte in stallo
-    //percentualeSovrapposizioneAccettabile: Percentuale accettabile di area ovrapposta tra le immagini 
-
-    // 2 foto dove w>h
-    modelloStandardFotoOrizzontali: {
-        scaleReduce: 0.15,
-        maxTentativi: 5,
-        percentualeSovrapposizioneAccettabile: 25,
-        momenti: [0, 0, 0]
-    },
-
-    // 2 foto dove h>w
-    modelloStandardFotoVerticali: {
-        scaleReduce: 0.15,
-        maxTentativi: 5,
-        percentualeSovrapposizioneAccettabile: 25,
-        momenti: [0, 0, 0]
-    },
-
-    // 2 foto dove w>h Rapporto >= del 50%
-    modelloSlimFotoOrizzontali: {
-        scaleReduce: 0.15,
-        maxTentativi: 5,
-        percentualeSovrapposizioneAccettabile: 0,
-        momenti: [0, 0, 0]
-    },
-
-    // 2 foto dove h>w Rapporto >= del 50%
-    modelloSlimFotoVerticali: {
-        scaleReduce: 0.07,
-        maxTentativi: 5,
-        percentualeSovrapposizioneAccettabile: 0,
-        momenti: [0, 0, 0]
-    },
-
-    // 3 foto 
-    modelloTreFoto: {
-        scaleReduce: 0.15,
-        maxTentativi: 5,
-        percentualeSovrapposizioneAccettabile: 35,
-        momenti: [0, 0, 0]
-    },
-
-    modelloTreFotoVerticale: {
-        scaleReduce: 0.1,
-        maxTentativi: 5,
-        percentualeSovrapposizioneAccettabile: 25,
-        momenti: [0, 0, 0]
-    },
-
-    img1: {},
-    img2: {},
-    img3: {},
-    inddItemImg1: null,
-    inddItemImg2: null,
-    inddItemImg3: null,
-
-    cacheBoundaries: {},
-    modelloDiFix: null,
-
-    MAIN_fixFoto(listaFoto, confiniParam) {
-
-        img1 = {};
-        img2 = {};
-        img3 = {};
-
-        inddItemImg1 = null;
-        inddItemImg2 = null;
-        inddItemImg3 = null;
-
-        for (var p = 0; p < listaFoto.length; p++) {
-            if (p == 0) {
-                inddItemImg1 = listaFoto[p];
-            }
-            else if (p == 1) {
-                inddItemImg2 = listaFoto[p];
-            }
-            else if (p == 2) {
-                inddItemImg3 = listaFoto[p];
-            }
-        }
-        console.log(confiniParam);
-        confini = [confiniParam[1], confiniParam[0], confiniParam[3], confiniParam[2]];// [objDna.confineFixFoto[1],objDna.confineFixFoto[0],objDna.confineFixFoto[3],objDna.confineFixFoto[2]];
-
-        if (inddItemImg2 != null) {
-            //alert("Inizio fix");
-
-            //Ci devono essere almeno 2 foto per questo genere di FIX
-            //Altrimenti analizzo modello e procedo al fix
-            modelloDiFix = analisiModello([inddItemImg1, inddItemImg2, inddItemImg3]);
-            modelloDiFix.momenti = [0, 0, 0];
-
-            //alert("START");
-            //alert(modelloDiFix);
-
-            var risolto = true;
-
-            for (var m = 0; m < modelloDiFix.maxTentativi; m++) {
-
-
-                //alert("Tentativo " + (m+1));
-                modelloStandardFotoOrizzontali.offsetSteps = [[[-2, -1]], [[2, 1]], [[1, -0.7]]];
-                modelloStandardFotoVerticali.offsetSteps = [[[-1, -1]], [[1, 1]], [[1, -0.7]]];
-                modelloSlimFotoOrizzontali.offsetSteps = [[[0, -1]], [[0, 1]], [[0, 2]]];
-                modelloSlimFotoVerticali.offsetSteps = [[[-1, 0]], [[1, 0]], [[2, 0]]];
-                modelloTreFoto.offsetSteps = [[[-2, -1]], [[0, 1]], [[1, -0.7]]];
-                modelloTreFotoVerticale.offsetSteps = [[[-2, -1]], [[0, 1]], [[2, -0.7]]];
-
-                startFix([inddItemImg1, inddItemImg2, inddItemImg3], m + 1);
-
-                //Da fare FIX
-                var tester = test();
-                var paracadute = 0;
-
-
-                risolto = true;
-
-                //alert("Tolleranza " + modelloDiFix.percentualeSovrapposizioneAccettabile);
-
-                while (tester > modelloDiFix.percentualeSovrapposizioneAccettabile) {
-                    //alert("ERR: " + tester);
-                    // logFile = File (myDoc.filePath +"/loadingFixFoto.txt");
-                    // logFile.encoding="ASCII";
-                    // logFile.open("w");
-                    // logFile.writeln(pagItem.name + " - Tentativo n." + (m+1) + " SOVRAPPOSIZIONE " + tester + "%");
-                    // logFile.close();
-
-                    fixIterazione([inddItemImg1, inddItemImg2, inddItemImg3]);
-                    tester = test();
-                    //alert("tester finito");
-
-                    paracadute++;
-                    if (paracadute > 10) {
-                        risolto = false;
-                        break;
-                    }
-                }
-
-                //alert(tester);
-
-
-                if (risolto)
-                    break;
-
-            }
         }
     },
 }

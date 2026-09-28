@@ -24,6 +24,9 @@ const cssSpazioFoto = {
     //Usata quando la regola non dice altro: lo scarto d'area accettato per centrarsi.
     tolleranzaPredefinita: 0.7,
 
+    /// La preferenza del cliente messa in sicurezza: modo sconosciuto vale areaMassima, e una
+    /// tolleranza fuori scala torna nei limiti. Sopra 1 nessun candidato sarebbe ammesso e le
+    /// foto non si muoverebbero piu': un refuso in configurazione fermerebbe il fixFoto in silenzio.
     normalizzaPreferenza(preferenza) {
         const opzioni = preferenza || {};
         const modo = String(opzioni.modo || cssSpazioFoto.areaMassima).toLowerCase() === cssSpazioFoto.centrato.toLowerCase()
@@ -79,6 +82,9 @@ const cssSpazioFoto = {
         return null;
     },
 
+    /// Quanto e' scentrato un candidato rispetto alla base del box, sull'asse richiesto.
+    /// Si misura dal centro del candidato, non dal suo angolo: due spazi di larghezza diversa
+    /// attorno allo stesso centro devono risultare ugualmente centrati.
     distanzaDalCentro(candidato, larghezzaBase, altezzaBase, asse) {
         //Il gruppo viene centrato nel candidato, quindi il centro del candidato e' quello delle foto.
         const dx = (candidato.x + candidato.width / 2) - larghezzaBase / 2;

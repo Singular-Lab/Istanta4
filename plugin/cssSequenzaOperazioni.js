@@ -48,6 +48,8 @@ const cssSequenzaOperazioni = {
         return cssSequenzaOperazioni.standard;
     },
 
+    /// Se una regola appartiene al momento dato. Il confronto passa da normalizzaMomento su
+    /// entrambi i lati, cosi' una regola senza fase e una richiesta di "standard" si incontrano.
     regolaNelMomento(regola, momento) {
         if (regola == null) {
             return false;
@@ -55,6 +57,8 @@ const cssSequenzaOperazioni = {
         return cssSequenzaOperazioni.normalizzaMomento(regola.fase) === cssSequenzaOperazioni.normalizzaMomento(momento);
     },
 
+    /// Le sole regole del momento. Un elenco assente resta assente, un elenco vuoto resta vuoto:
+    /// chi chiama distingue "non ci sono regole" da "non ce ne sono per adesso".
     filtraRegole(regole, momento) {
         if (regole == null || regole.length === 0) {
             return regole == null ? regole : [];

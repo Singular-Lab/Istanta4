@@ -229,6 +229,8 @@ const cssComposizioneBox = {
         return prefissi;
     },
 
+    /// Se un'etichetta e' quella di una copia. Il suffisso deve esserci davvero: "sy_ombra$" da
+    /// solo non e' una copia, e' una sorgente col separatore appiccicato.
     etichettaDerivata(etichetta, prefissi) {
         if (etichetta == null || prefissi == null) {
             return false;
