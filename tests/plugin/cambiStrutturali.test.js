@@ -85,6 +85,32 @@ test('un campo assente non soddisfa la regola sul contenuto', () => {
     assert.strictEqual(cambiStrutturali._matchRegola({}, regolaSulBox('sconto', EXIST, null), campi), false);
 });
 
+test('un campo annidato si legge scendendo nel percorso', () => {
+    //I20-1002: _getNestedValue tornava sempre obj[path], quindi una regola su "Scatto.Codice"
+    //non trovava niente. Nessun cliente usa oggi campi col punto, ma la trappola c'era.
+    const record = { Scatto: { CodiceGruppo: 'ABC' }, semplice: 'x' };
+
+    assert.strictEqual(cambiStrutturali._getNestedValue(record, 'Scatto.CodiceGruppo'), 'ABC');
+    assert.strictEqual(cambiStrutturali._getNestedValue(record, 'semplice'), 'x');
+    assert.strictEqual(cambiStrutturali._getNestedValue(record, 'Scatto.NonCe'), undefined);
+    assert.strictEqual(cambiStrutturali._getNestedValue(record, 'non.esiste.affatto'), undefined);
+});
+
+test('la chiave letterale vince sul percorso, se esiste', () => {
+    //Un campo puo' avere il punto nel nome: in quel caso comanda la chiave cosi' com'e'.
+    const record = { 'a.b': 'letterale', a: { b: 'annidato' } };
+
+    assert.strictEqual(cambiStrutturali._getNestedValue(record, 'a.b'), 'letterale');
+});
+
+test('Exist vede un campo annidato come lo vede il confronto sul valore', () => {
+    //Prima la presenza si leggeva direttamente: il valore si trovava ed Exist diceva di no.
+    const record = { Scatto: { CodiceGruppo: 'ABC' } };
+
+    assert.strictEqual(cambiStrutturali._matchRegola(record, { campo: 'Scatto.CodiceGruppo', operatore: EXIST }, []), true);
+    assert.strictEqual(cambiStrutturali._matchRegola(record, { campo: 'Scatto.NonCe', operatore: EXIST }, []), false);
+});
+
 test('le regole sul record continuano a funzionare come prima', () => {
     const record = { codice: 'ABC123', promozionale: true };
 

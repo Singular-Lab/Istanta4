@@ -151,7 +151,10 @@ const cambiStrutturali = {
         }
         else {
             valoreCampo = this._getNestedValue(record, regola.campo);
-            campo = record[regola.campo] != null;
+            //I20-1002: la presenza si legge con la stessa funzione del valore. Prima era una
+            //lettura diretta, quindi su un campo annidato il valore si trovava ed Exist diceva
+            //che non c'era.
+            campo = this._getNestedValue(record, regola.campo) != null;
 
             //se il valoreCampo è di tipo boolean e expetedValue è un stringa "true" o "false"
             if ((operatore == 0 || operatore == 1) && typeof valoreCampo === "boolean" && typeof expectedValue === "string") {
@@ -192,23 +195,41 @@ const cambiStrutturali = {
         }
     },
 
-    /// Il valore di un campo del record. NON scende nei campi annidati: il corpo che lo faceva
-    /// e' commentato qui sotto, e oggi questa e' una lettura diretta. Il nome resta quello di
-    /// prima ed e' fuorviante.
+    /// Il valore di un campo del record, anche annidato: "Scatto.CodiceGruppo" scende di un
+    /// livello. Prima prova la chiave letterale, perche' un campo puo' contenere il punto nel
+    /// nome, e solo se non c'e' spezza il percorso.
+    ///
+    /// I20-1002: il corpo che scendeva era commentato e restava la sola lettura diretta, quindi
+    /// il nome mentiva e una regola su un campo annidato non trovava niente. Nessun cliente ne
+    /// usa oggi - verificato su Coopfi, Edro21 e Famila - percio' rimetterlo in funzione non
+    /// cambia il comportamento di nessuno, e toglie una trappola per chi scrivera' la prossima
+    /// regola.
+    ///
+    /// DA UNIFICARE (vedi il task di divisione dei file): pluginMiddleware.getValueByPath fa
+    /// esattamente questo, con lo stesso ordine dei due tentativi. Sono due copie della stessa
+    /// funzione. Non si uniscono oggi perche' pluginMiddleware.js e utility.js richiedono
+    /// InDesign e sotto Node non si caricano: importarli da qui farebbe perdere il test di
+    /// questo modulo. Serve un modulo puro che entrambi possano importare.
     _getNestedValue(obj, path) {
+        if (!obj || !path) {
+            return undefined;
+        }
 
-        return obj[path];
-        // if (!obj || !path) return undefined;
+        if (obj[path] !== undefined) {
+            return obj[path];
+        }
 
-        // const parts = path.split(".");
-        // let current = obj;
+        const parts = String(path).split(".");
+        let current = obj;
 
-        // for (const part of parts) {
-        //     if (current == null) return undefined;
-        //     current = current[part];
-        // }
+        for (const part of parts) {
+            if (current == null) {
+                return undefined;
+            }
+            current = current[part];
+        }
 
-        // return current;
+        return current;
     },
 
     /// I tre confronti - _equals, _contains, _in - non distinguono maiuscole da minuscole e
