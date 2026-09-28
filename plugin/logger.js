@@ -1,7 +1,12 @@
+/// I20-1002: log su file nella cartella di lavorazione, uno al giorno per tipo.
+/// Il percorso e' la globale percorsoLogs (indexNew.js): questo modulo da solo non gira.
+/// Riscrive tutto il file a ogni riga: va bene finche' i log restano corti.
+
 const fs = require('fs');
 
 const Logger=
 {
+    /// Antepone l'orario ISO e passa ad append. Non dice se ha scritto.
     log: (message, type) => {
         const timestamp = new Date().toISOString();
         const logMessage = `[${timestamp}] ${message}\n`;
@@ -11,6 +16,8 @@ const Logger=
         //fs.appendFileSync(filePath, logMessage);
         //console.log(logMessage.trim());
     },
+    /// Scrive la riga nel log del giorno, rileggendo e riscrivendo tutto il file.
+    /// Torna false su qualunque errore, compreso il percorso inesistente: nessuno oggi lo guarda.
     append: (message, type) => {
         try {
             let date = new Date();

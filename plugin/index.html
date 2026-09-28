@@ -1,4 +1,7 @@
 ﻿<!DOCTYPE html>
+<!-- I20-1002: il pannello del Plugin dentro InDesign, tutta l'interfaccia in un file solo.
+     Carica jQuery e indexNew.js; ogni altro modulo arriva da li' con require.
+     Gli id degli elementi sono il legame con il codice: rinominarli rompe in silenzio. -->
 <html>
 
 <head>
@@ -221,7 +224,6 @@
 
 <body style="width: 100%; height: 100%;">
 
-  <!-- <script src="sp-popover.mjs"></script> -->
 <!--I20-998: l'ombreggiatura non arrivava in cima. E' lo stesso difetto che I20-987 aveva
      corretto sul riquadro qui sotto: un elemento fisso, in questa pagina, parte dal riquadro del
      corpo e non dalla finestra, e il corpo ha il suo margine. Dichiarando larghezza e altezza al
@@ -784,10 +786,15 @@
       <!-- Qui inserisco lo script per il tab -->
       <script>
         //ondocument ready
+        /// Lega il nome scritto in data-method sull'elemento alla funzione vera da chiamare.
+        /// Un data-method non registrato qui non fa niente e non da' errore.
         const functionMap = {
           "filtriJs.visualizzaHomePageFiltri": filtriJs.visualizzaHomePageFiltri
         };
 
+        /// Nasconde tutte le schede e mostra quella chiesta, con le eccezioni dello switch.
+        /// ATTENZIONE: ne esiste una copia divergente in jsIndexControls.js, che il codice JS
+        /// chiama al posto di questa. Qui c'e' il case Tab1 e il parametro functionToCall, li' no.
         function openTab(evt, tabName, functionToCall = null) {
           var i, tabcontent, tablinks;
           tabcontent = document.getElementsByClassName("tabcontent");
@@ -837,6 +844,7 @@
           onresizeWindow();
         }
 
+        /// MORTA: nessun chiamante, ne' dal markup ne' dal codice.
         function openTabTracciato(evt, tabName) {
           var i, tabcontent, tablinks;
           tabcontent = document.getElementsByClassName("tabcontentTracciato");
@@ -851,6 +859,8 @@
           //evt.currentTarget.className += " active";
         }
 
+        /// Il pulsante e' un'immagine e "acceso" vuol dire un file diverso: spegne il fratello
+        /// attivo togliendo _active dal nome e accende il cliccato aggiungendolo.
         function changeImage(sender) {
           //il sender è un oggetto di tipo img, noi dobbiamo eseguire due passaggi, il primo tornare dal sender al padre e cercare l'oggetto con l'immagine il cui nome contiene _active e sostituire l'immagine con l'immagine che non contiene _active, poi sostituire l'immagine del sender con l'immagine che contiene _active, usiamo il jquery per fare questo
           var parent = $(sender).parent();
@@ -884,6 +894,8 @@
           });
         }
 
+        /// Mostra il sottomenu' della scheda e simula il click sul primo elemento visibile:
+        /// e' cosi' che entrando in una scheda si apre gia' la prima sottoscheda.
         function changeSubMenu(tabName) {
           console.warn('changeSubMenu ' + tabName);
           var subMenu = $(".sub" + tabName);
@@ -919,10 +931,13 @@
           });
         }
 
+        /// MORTA: approccio scartato in favore di functionMap.
         function resolveFunctionFromString(path) {
           return path.split('.').reduce((obj, key) => obj && obj[key], window);
         }
 
+        /// Mostra o nasconde la riga della modalita' avanzata. Nascondendola azzera anche la
+        /// spunta, cosi' non resta attiva invisibile.
         function toggleAdvancedMode(isChecked) {
           const advancedModeCheckbox = $('#advancedMode');
           if (isChecked) {
@@ -1233,6 +1248,7 @@
       </div>
 
       <script>
+        /// Le tre schede della finestra di sincronizzazione foto: rimasti, terminati, falliti.
         function openTabSync(evt, tabName) {
           var i, tabcontent, tablinks;
           tabcontent = document.getElementsByClassName("tabcontentSync");

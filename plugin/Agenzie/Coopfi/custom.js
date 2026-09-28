@@ -1,7 +1,6 @@
 //Coop.fi
 const fs = require('fs');
 const { app, FitOptions, LocationOptions, Justification, VerticalJustification, NestedStyleDelimiters, CornerOptions } = require('indesign');
-const MAIN_fixFoto = require('./fotoFix');
 const { FotoPlacer, Utility } = require('./utility');
 const GarbageCollector = require('./garbageCollector');
 const ficoProcess = require('./ficoProcess');

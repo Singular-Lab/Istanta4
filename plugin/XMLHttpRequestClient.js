@@ -1,4 +1,9 @@
 
+/// I20-1002: il canale verso Istanta, ogni chiamata al server passa di qui.
+/// Aggiunge all'XMLHttpRequest nudo il parsing JSON con ricaduta sul testo, il
+/// riconoscimento della sessione scaduta (no_login -> noLoginCallback) e il messaggio
+/// all'operatore col codice HRC-01.
+/// Dipende dalle globali istantaIp, noLoginCallback e messaggioUtente.
 class XMLHttpRequestClient 
 {
     readyState;
@@ -31,12 +36,17 @@ class XMLHttpRequestClient
     {
     }
 
+    /// NON ferma la richiesta in volo: aborta this.xhr, che send non usa. Vedi il commento
+    /// in confronti.js:2463. Chi deve smettere di aspettare mette una scadenza propria.
     abort()
     {
         if (this.xhr!=null)
             this.xhr.abort();
     }
 
+    /// La chiamata vera. URL su istantaIp salvo externalIp. Risposta: JSON se ci riesce,
+    /// testo altrimenti; no_login e utente_non_trovato dirottano su noLoginCallback.
+    /// Su stato diverso da 200 mostra da se' il messaggio HRC-01 all'operatore.
     send(url, parameter, method, type, externalIp = null) 
     {
         let me = this;
@@ -125,6 +135,8 @@ class XMLHttpRequestClient
         }
     }
 
+    /// Invio di file, via $.ajax e non via XMLHttpRequest.
+    /// A differenza di send non mostra nessun messaggio: in errore chiama solo onNoConnection.
     sendFiles(url, formData) 
     {
         let me = this;

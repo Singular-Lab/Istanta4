@@ -1,6 +1,5 @@
 const fs = require('fs');
 const { app, FitOptions, LocationOptions, Justification, VerticalJustification } = require('indesign');
-//const MAIN_fixFoto = require('./fotoFix');
 const CssFramework = require('../../CssFramework');
 var countRef = 0;
 const customAgenzia={
