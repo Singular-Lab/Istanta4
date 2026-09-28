@@ -34,6 +34,7 @@ Poi, quando ti serve:
 | [08-dati.md](08-dati.md) | devi capire il database o i json di configurazione |
 | [08b-schema-database.md](08b-schema-database.md) | ti serve lo schema esatto: tabelle, colonne, chiavi, indici. **Generato dal database** |
 | [09-servizi-satellite.md](09-servizi-satellite.md) | devi capire olimpo, fidelity, correggo4 o il plugin di InDesign |
+| [plugin/](plugin/README.md) | devi lavorare **dentro** il plugin: una pagina per file, con variabili globali e funzioni. In corso di scrittura, vedi lo stato lì |
 | [11-rimozioni.md](11-rimozioni.md) | cerchi qualcosa che c'era e non c'è più |
 | [12-trappole.md](12-trappole.md) | **leggilo prima di scrivere uno strumento di analisi del codice.** Costa dieci minuti e ne fa risparmiare molte ore |
 | [13-da-fare.md](13-da-fare.md) | cerchi il prossimo lavoro |
