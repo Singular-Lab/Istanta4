@@ -29,6 +29,7 @@ const fotoAutoSync = {
      * Ritorna { presente, scaricata, motivo }. Il chiamante impagina comunque: se presente e'
      * false si ricade sul comportamento precedente, con la riga di errore e i pulsanti manuali.
      */
+    /// Assicura che la foto sia nella cartella Links, scaricandola se manca.
     async assicuraFotoNeiLinks(nomeFoto, guidId, operazioni) {
         const esito = { presente: false, scaricata: false, motivo: null };
 
@@ -96,6 +97,7 @@ const fotoAutoSync = {
      *  - impagina() -> risultato di FotoPlacer.updateFoto, con warning valorizzato se non ce l'ha fatta
      *  - attendi()  -> pausa fra il primo tentativo e il secondo
      */
+    /// Impagina ritentando una volta sola.
     async impaginaConRitentativo(operazioni) {
         let esito = await operazioni.impagina();
 

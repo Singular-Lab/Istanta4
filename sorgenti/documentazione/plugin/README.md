@@ -34,13 +34,15 @@ peggio di una documentazione assente, perché fa perdere tempo invece di farne r
 | lotto | file | stato |
 |---|---|---|
 | 1 — Fondamenta | `manifest.json`, `ipconfig.json`, `index.html`, `logger.js`, `versionePlugin.js`, `XMLHttpRequestClient.js` | **fatto** |
-| 2 — Utilità piccole | `barraScorrimento`, `dissolvenza`, `tooltipPosizione`, `jsIndexControls`, `cacheHashFoto`, `dataCaricamentoFoto`, `credenzialiSalvate`, `fotoAutoSync`, `garbageCollector`, `cambiStrutturali`, `ricollegaEsiti`, `reportConteggi`, `trattiDescrizione`, `variantiDescrizione` | da fare |
+| 2 — Utilità piccole | `barraScorrimento`, `dissolvenza`, `tooltipPosizione`, `jsIndexControls`, `cacheHashFoto`, `dataCaricamentoFoto`, `credenzialiSalvate`, `fotoAutoSync`, `garbageCollector`, `cambiStrutturali`, `ricollegaEsiti`, `reportConteggi`, `trattiDescrizione`, `variantiDescrizione` | **fatto** |
 | 3 — Motore CSS | `CssFramework`, `cssComposizioneBox`, `cssRegoleConflitti`, `cssSequenzaOperazioni`, `cssSpazioFoto`, `noRenderElementi` | da fare |
 | 4 — Report | `reportConfronti`, `reportConfrontoCsv`, `reportIntegritaAvvio` | da fare |
 | 5 — Nucleo | `utility`, `events`, `cmd`, `pluginMiddleware`, `custom`, `filtri`, `griglia`, `ficoProcess`, `schedaArtwork`, `InputEditController`, `schedaRef`, `confronti`, `indexNew` | da fare |
 | 6 — Agenzie e Receiver | i sette `custom.js` di cliente, la cartella `Receiver` | da fare |
 
 ## Le pagine scritte finora
+
+### Lotto 1 — le fondamenta
 
 | pagina | il file che spiega |
 |---|---|
@@ -50,6 +52,25 @@ peggio di una documentazione assente, perché fa perdere tempo invece di farne r
 | [logger.md](logger.md) | `plugin/logger.js` — il log su file |
 | [versionePlugin.md](versionePlugin.md) | `plugin/versionePlugin.js` — installata contro pubblicata |
 | [XMLHttpRequestClient.md](XMLHttpRequestClient.md) | `plugin/XMLHttpRequestClient.js` — il canale verso il server |
+
+### Lotto 2 — le utilità piccole
+
+| pagina | il file che spiega |
+|---|---|
+| [barraScorrimento.md](barraScorrimento.md) | una barra di scorrimento disegnata da noi, perché in UXP non scorre |
+| [dissolvenza.md](dissolvenza.md) | i conti della dissolvenza, perché in UXP `opacity` non si ridisegna |
+| [tooltipPosizione.md](tooltipPosizione.md) | dove ancorare un tooltip senza misurarlo |
+| [cacheHashFoto.md](cacheHashFoto.md) | la memoria degli hash md5 delle foto |
+| [reportConteggi.md](reportConteggi.md) | i numeri sulle linguette del Report Integrità |
+| [dataCaricamentoFoto.md](dataCaricamentoFoto.md) | il badge con la data sulle foto |
+| [ricollegaEsiti.md](ricollegaEsiti.md) | cosa dire all'operatore dopo un ricollegamento |
+| [trattiDescrizione.md](trattiDescrizione.md) | i tratti di stile di un campo descrizione |
+| [variantiDescrizione.md](variantiDescrizione.md) | quale variante di descrizione comanda |
+| [credenzialiSalvate.md](credenzialiSalvate.md) | le credenziali nell'archivio cifrato del sistema |
+| [fotoAutoSync.md](fotoAutoSync.md) | scaricare e impaginare la foto in un colpo solo |
+| [jsIndexControls.md](jsIndexControls.md) | le schede del pannello, la copia che chiama il codice |
+| [garbageCollector.md](garbageCollector.md) | la rimozione differita degli elementi InDesign |
+| [cambiStrutturali.md](cambiStrutturali.md) | quali cambi strutturali si applicano a una referenza |
 
 ---
 
@@ -69,14 +90,41 @@ Insieme ai file sono stati tolti la riga commentata che caricava `sp-popover.mjs
 `./fotoFix` nelle sette agenzie: attivi in Pac, Coopfi e Famila — dove restituivano un oggetto vuoto
 — e già commentati in Doc, Trea ed Etruria.
 
-## Due difetti trovati e non corretti
+## Cosa è stato corretto durante il Lotto 2
 
-Documentare ne ha fatti emergere due che meritano un intervento a sé, aperti come task separati:
+Una cosa sola, perché era una riga e perché lasciarla sarebbe stato peggio che cambiarla.
 
-1. **`XMLHttpRequestClient.abort()` non interrompe la richiesta in volo.** Dettaglio in
+In `cambiStrutturali.js` il confronto sul tipo dell'oggetto InDesign era scritto `"textFrame"`,
+mentre `constructorName` vale `"TextFrame"`. Il confronto non era mai vero, e **ogni regola di
+cambio strutturale che guardava il contenuto di un campo del box falliva sempre**. La correzione
+accende regole che prima erano sempre false: per i clienti con quel tipo di condizioni l'edit si
+comporta diversamente da prima. Il dettaglio, e il perché `NotEquals` era il caso peggiore, sono in
+[cambiStrutturali.md](cambiStrutturali.md). Coperta da `tests/plugin/cambiStrutturali.test.js`, che
+senza la correzione fallisce in quattro casi su sette.
+
+## Difetti trovati e non corretti
+
+Documentare ne ha fatti emergere altri, tutti aperti come task separati. Nessuno è stato toccato:
+I20-1002 è un task di documentazione, e correggerli cambierebbe il comportamento di chiamate che
+oggi ci convivono.
+
+1. **`XMLHttpRequestClient.abort()` non interrompe la richiesta in volo** —
    [XMLHttpRequestClient.md](XMLHttpRequestClient.md).
-2. **`index.html` e `jsIndexControls.js` contengono due copie divergenti delle funzioni dei tab.**
-   Dettaglio in [index-html.md](index-html.md).
+2. **`index.html` e `jsIndexControls.js` contengono due copie divergenti delle funzioni dei tab** —
+   [index-html.md](index-html.md) e [jsIndexControls.md](jsIndexControls.md).
+3. **`garbageCollector.js` ha quattro difetti** nella rimozione differita, di cui il più grave è
+   `ContentType` usato senza `require` con l'errore inghiottito da un `catch` vuoto —
+   [garbageCollector.md](garbageCollector.md).
 
-Nessuno dei due è stato toccato: I20-1002 è un task di documentazione, e correggerli cambierebbe il
-comportamento di chiamate che oggi convivono col difetto.
+## Un'osservazione che vale per tutto il Plugin
+
+Guardando insieme i venti file documentati finora, la differenza salta agli occhi: **i moduli nati
+di recente non hanno globali esterne — ricevono tutto come parametro — mentre quelli più vecchi
+dipendono da globali che non dichiarano.**
+
+Non è una differenza di stile. È esattamente la linea che separa i file verificabili sotto Node da
+quelli che non si caricano affatto, ed è la ragione per cui esistono tanti moduli piccoli: il loro
+ospite naturale — `utility.js`, `CssFramework.js`, `indexNew.js` — ha `require('indesign')` in
+testa. Chi un giorno accorperà questi file per ridurne il numero deve raggrupparli **fra loro**, non
+riversarli dentro gli ospiti: in quel caso si perderebbero i test che oggi coprono proprio quella
+logica.

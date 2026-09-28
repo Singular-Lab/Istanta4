@@ -1,13 +1,27 @@
+/// I20-1002: le funzioni delle schede del pannello, quelle che chiama il CODICE.
+///
+/// ATTENZIONE: index.html contiene una copia quasi identica di openTab, openTabTracciato,
+/// changeImage, clearSubmenu e changeSubMenu, e la chiamano gli onclick scritti nel markup.
+/// Le due copie sono gia' divergenti: li' ci sono il case Tab1 e il parametro functionToCall,
+/// qui no; qui c'e' findOpenedTab, li' no. Correggere un comportamento dei tab in un punto
+/// solo lo corregge a meta'.
+///
+/// Il require qui sotto importa app, PDFExportOptions e CompressionQuality, che questo file
+/// non usa: e' un residuo, e basta lui a impedire che il modulo si carichi sotto Node.
+
 const { app, PDFExportOptions, CompressionQuality } = require('indesign');
 
 const jsIndexControls = {
 
+    /// Nasconde tutti i sottomenu'.
     clearSubmenu() {
         $(".subMenuTabs").find('div[class*="subTab"]').each(function () {
             $(this).css('display', 'none');
         });
     },
 
+    /// Mostra il sottomenu' della scheda e simula il click sul primo elemento visibile:
+    /// e' cosi' che entrando in una scheda si apre gia' la prima sottoscheda.
     changeSubMenu(tabName) {
         let me = this;
         console.warn('changeSubMenu ' + tabName);
@@ -39,6 +53,10 @@ const jsIndexControls = {
         //changeImage($(subMenu).find('img').first());
     },
 
+    /// Nasconde tutte le schede e mostra quella chiesta, con le eccezioni dello switch:
+    /// Tab5 mostra "Salva", Tab6 "Conferma", Tab7, Tab8 e Tab13 nascondono entrambi.
+    /// A differenza della copia in index.html non gestisce Tab1 e non accetta una funzione
+    /// da eseguire dopo.
     openTab(evt, tabName) {
         var i, tabcontent, tablinks;
         tabcontent = document.getElementsByClassName("tabcontent");
@@ -82,6 +100,8 @@ const jsIndexControls = {
         onresizeWindow();
     },
 
+    /// Come openTab ma sulle schede interne del tracciato. Nessun chiamante, ne' qui ne' nel
+    /// markup: vale anche per la copia in index.html.
     openTabTracciato(evt, tabName) {
         var i, tabcontent, tablinks;
         tabcontent = document.getElementsByClassName("tabcontentTracciato");
@@ -96,6 +116,8 @@ const jsIndexControls = {
         //evt.currentTarget.className += " active";
     },
 
+    /// Il pulsante e' un'immagine e "acceso" vuol dire un file diverso: spegne il fratello
+    /// attivo togliendo _active dal nome e accende il cliccato aggiungendolo.
     changeImage(sender) {
         //il sender è un oggetto di tipo img, noi dobbiamo eseguire due passaggi, il primo tornare dal sender al padre e cercare l'oggetto con l'immagine il cui nome contiene _active e sostituire l'immagine con l'immagine che non contiene _active, poi sostituire l'immagine del sender con l'immagine che contiene _active, usiamo il jquery per fare questo
         var parent = $(sender).parent();
@@ -122,6 +144,8 @@ const jsIndexControls = {
 
     },
 
+    /// Quale scheda e' accesa, letta dall'attributo active delle immagini della barra.
+    /// Null se non ce n'e' nessuna.
     findOpenedTab() {
         //cerchiamo in #barraTab il primo elemento il cui attr active è true
         var tab = $("#barraTab").find('img[active="true"]');
