@@ -37,7 +37,7 @@ peggio di una documentazione assente, perché fa perdere tempo invece di farne r
 | 2 — Utilità piccole | `barraScorrimento`, `dissolvenza`, `tooltipPosizione`, `jsIndexControls`, `cacheHashFoto`, `dataCaricamentoFoto`, `credenzialiSalvate`, `fotoAutoSync`, `garbageCollector`, `cambiStrutturali`, `ricollegaEsiti`, `reportConteggi`, `trattiDescrizione`, `variantiDescrizione` | **fatto** |
 | 3 — Motore CSS | `CssFramework`, `cssComposizioneBox`, `cssRegoleConflitti`, `cssSequenzaOperazioni`, `cssSpazioFoto`, `noRenderElementi` | **fatto** |
 | 4 — Report | `reportConfronti`, `reportConfrontoCsv`, `reportIntegritaAvvio` | **fatto** |
-| 5 — Nucleo | `utility`, `events`, `cmd`, `pluginMiddleware`, `custom`, `filtri`, `griglia`, `ficoProcess`, `schedaArtwork`, `InputEditController`, `schedaRef`, `confronti`, `indexNew` | da fare |
+| 5 — Nucleo | `utility`, `events`, `cmd`, `pluginMiddleware`, `custom`, `filtri`, `griglia`, `ficoProcess`, `schedaArtwork`, `InputEditController`, `schedaRef`, `confronti`, `indexNew` | in corso: fatti `events`, `InputEditController`, `schedaArtwork` |
 | 6 — Agenzie e Receiver | i sette `custom.js` di cliente, la cartella `Receiver` | da fare |
 
 ## Le pagine scritte finora
@@ -90,6 +90,16 @@ peggio di una documentazione assente, perché fa perdere tempo invece di farne r
 | [reportIntegritaAvvio.md](reportIntegritaAvvio.md) | quando il Report Integrità parte, e quando smette di valere |
 | [reportConfronti.md](reportConfronti.md) | la sezione Confronti: cosa è cambiato nei campi che l'agenzia tiene d'occhio |
 | [reportConfrontoCsv.md](reportConfrontoCsv.md) | come è fatto il csv, e perché è fatto per Excel |
+
+### Lotto 5 — il nucleo (in corso)
+
+| pagina | il file che spiega |
+|---|---|
+| [events.md](events.md) | il registro degli eventi di background, a cui gli altri si registrano |
+| [InputEditController.md](InputEditController.md) | i campi della scheda referenza, e cosa va davvero salvato |
+| [schedaArtwork.md](schedaArtwork.md) | l'artwork: più referenze trattate come un'unica immagine |
+
+---
 
 Insieme a [reportConteggi.md](reportConteggi.md), documentata nel Lotto 2, sono i quattro pezzi del
 Report Integrità, tutti nati da I20-981.
@@ -164,6 +174,19 @@ In tutto **oltre 10.000 righe rimosse** dal Plugin.
 A impedire il ritorno di quella classe di difetti c'è
 `tests/plugin/cssFrameworkChiamateMembri.test.js`, che legge il sorgente come testo — il file non si
 carica sotto Node — e fallisce se un membro viene chiamato senza `this.`.
+
+## Dove le funzioni dovrebbero stare
+
+Dal Lotto 5 in poi, leggendo le funzioni una per una, si annota anche **quando una sembra stare nel
+file sbagliato** — senza spostare niente. Gli appunti servono al task di divisione dei file, che
+altrimenti dovrebbe rifare la stessa lettura da capo.
+
+| funzione | dov'è | dove dovrebbe stare |
+|---|---|---|
+| `controllaChiusuraReportIntegrita` | `events.js` | `reportIntegritaAvvio.js`: decide quando un report smette di valere, ed è una regola del report, non un evento |
+
+Il criterio è quello di sempre: **un file rappresenta un concetto**. Vale nei due sensi — ci sono
+moduli piccoli da accorpare, e file grandi che contengono di tutto.
 
 ## Un'osservazione che vale per tutto il Plugin
 

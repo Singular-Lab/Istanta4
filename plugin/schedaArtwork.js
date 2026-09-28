@@ -3,6 +3,13 @@ const XMLHttpRequestClient = require('./XMLHttpRequestClient');
 const { app, PDFExportOptions, CompressionQuality } = require('indesign');
 const fs = require('fs');
 
+/// I20-1002: la scheda dell'artwork, cioe' di un gruppo di referenze trattate come un'unica
+/// immagine.
+///
+/// Fa tre cose: mostrare un artwork esistente o uno potenziale nato dalle referenze
+/// selezionate, raggruppare le referenze sotto un artwork, ed esportarne la foto.
+///
+/// Lo stato qui dentro e' stato di SCHERMATA, non di dominio: vive quanto la scheda aperta.
 const schedaArtwork = {
     existingArtwork:null,
     potentialArtwork: null,
@@ -11,6 +18,8 @@ const schedaArtwork = {
     schedeRefDati:[],
     refs: null,
     job:[],
+    /// L'ingresso quando l'operatore ha selezionato piu' referenze che potrebbero diventare
+    /// un artwork.
     showSchermataArtworkMultiRef(refs, artwork){
         this.refs = refs;
         this.potentialArtwork = artwork;
@@ -37,6 +46,7 @@ const schedaArtwork = {
         }
 
     },
+    /// L'ingresso quando l'artwork esiste gia' ed e' stato selezionato nel documento.
     showSchermataArtworkEsistente(artworkEl){
         this.existingArtwork=artworkEl;
 
@@ -67,6 +77,7 @@ const schedaArtwork = {
         //     $("#listaGruppiArtwork").append("<h4 class=\"artworkGroupListed\">"+(i+1)+". " + gruppo + "</h4>");
         // }
     },
+    /// Riempie la schermata coi dati della referenza all'indice dato.
     bindDati(indice){
         let me=this;
 
@@ -136,6 +147,7 @@ const schedaArtwork = {
         }
     },
 
+    /// Chiede al server i dati di una referenza del gruppo.
     getSchedaRef(codiceGruppo, callback, idRec = 0) {
         var xhr = new XMLHttpRequestClient();
     
@@ -174,6 +186,7 @@ const schedaArtwork = {
         formData.append("idRec", idRec);
         xhr.send("Menabo/getSchedaRef/" + idKitLavorazione + "/" + false, formData, "PUT");
     },
+    /// Esporta la foto dell'artwork.
     esportaFotoArtwork(idArtwork, cbk){
         let fileArtwork=pathLavorazione + "/" + idArtwork + ".png";
         let preset=app.pdfExportPresets.add();
@@ -215,6 +228,7 @@ const schedaArtwork = {
         xhr.onerror = function () {}
         xhr.sendFiles("LoghiBolli/salva", formData);
     },
+    /// L'operazione vera: mette le referenze selezionate sotto un artwork.
     raggruppaSottoArtwork() {
 
         if (this.potentialArtwork.label.startsWith("artwork")) {
