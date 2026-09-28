@@ -38,7 +38,18 @@ peggio di una documentazione assente, perché fa perdere tempo invece di farne r
 | 3 — Motore CSS | `CssFramework`, `cssComposizioneBox`, `cssRegoleConflitti`, `cssSequenzaOperazioni`, `cssSpazioFoto`, `noRenderElementi` | **fatto** |
 | 4 — Report | `reportConfronti`, `reportConfrontoCsv`, `reportIntegritaAvvio` | **fatto** |
 | 5 — Nucleo | `utility`, `events`, `cmd`, `pluginMiddleware`, `custom`, `filtri`, `griglia`, `ficoProcess`, `schedaArtwork`, `InputEditController`, `schedaRef`, `confronti`, `indexNew` | **fatto** |
-| 6 — Agenzie e Receiver | i tre `custom.js` di cliente rimasti — Edro21, Coopfi, Famila — e la cartella `Receiver` | da fare |
+
+**Con il Lotto 5 questo lavoro è concluso.**
+
+Restano fuori i tre `custom.js` di cliente — Edro21, Coopfi, Famila — e la cartella `Receiver`.
+**Non sono in arretrato: sono fuori perimetro per decisione dell'operatore.** Le agenzie sono un
+caso a sé e vorranno una documentazione loro, con criteri diversi da questi; oggi non è in
+programma, e non c'è un task aperto. Chi arriva qui cercando quelle pagine non le trova perché non
+devono esserci, non perché qualcuno le ha dimenticate.
+
+Quello che serve sapere sul confine col cliente sta comunque in [custom.md](custom.md) e
+[pluginMiddleware.md](pluginMiddleware.md): il file dell'agenzia montato in radice è documentato,
+ed è documentato il meccanismo con cui il server prevale su di lui.
 
 ## Le pagine scritte finora
 
