@@ -56,11 +56,18 @@ const CssFramework =
 
     semaforoDownloadFramework:true,
 
+    /// Alza il semaforo: le regole andranno riscaricate alla prima operazione che le usa.
+    /// Lo chiama indexNew a ogni impaginazione, una volta sola per tutto il volantino.
     richiediDiScaricareFramework()
     {
         this.semaforoDownloadFramework = true;
     },
 
+    /// Interpreta la stringa css di un campo: move, resize, max-sizeX/Y, min-sizeX/Y, alignX,
+    /// alignY, con le varianti per singolo asse.
+    /// L'ORDINE DI SCRITTURA CONTA, ed e' la trappola di questa funzione: le istruzioni si
+    /// applicano nell'ordine in cui sono scritte, quindi un vincolo dichiarato dopo un
+    /// allineamento arriva troppo tardi. Il dettaglio sta nei commenti qui sotto.
     adaptField: function (field, compiledInfo, offsetX, offsetY) {
         //Azioni CSS standard
         //move: aggiungere X o Y se si intende muovere solo una delle due assi. Move, sposta dell'offset il campo, mantenendo le stesse dimensioni
@@ -1964,6 +1971,11 @@ const CssFramework =
 
     },
 
+    /// Scarica le regole da FrameworkCssController/scaricaAllineamenti e ne salva una copia in
+    /// allineamenti.json nella cartella di lavorazione. Quella copia non e' un residuo: se lo
+    /// scaricamento fallisce il motore la rilegge e va avanti con l'ultima versione scaricata,
+    /// dicendolo in console. Se manca anche quella, l'operazione si annulla.
+    /// Codici: CSF-002 parsing della risposta.
     getAllineamentiDB(callback){
 
         let me=this;
@@ -2026,6 +2038,14 @@ const CssFramework =
      * rovinoso: due ombre finirebbero sulla stessa chiave e la seconda cancellerebbe la prima.
      * Le foto sono gia' un'eccezione dentro Utility.parseLabel per lo stesso motivo.
      */
+    /// Fotografa il box prima che lo si tocchi: per ogni elemento con una label, l'oggetto
+    /// InDesign e i suoi bounds RELATIVI al box.
+    /// Relativi perche' il box verra' spostato e ridimensionato, e una misura assoluta scadrebbe
+    /// al primo movimento; tagliati ai bordi del box, cosi' un elemento che sporge non falsa i
+    /// conti successivi.
+    /// La chiave dipende da cosa e' l'elemento: per una copia nata da duplicazione e' la label
+    /// intera, per gli altri quella normalizzata. Normalizzare la label di una copia taglierebbe
+    /// il suffisso e farebbe di due ombre un elemento solo.
     creaMappaturaBoxOriginale(box, prefissiDerivati) {
         var mappaElementi = {};
         try {
@@ -2065,6 +2085,9 @@ const CssFramework =
         return mappaElementi;
     },
 
+    /// Non ricostruisce niente: marca eliminato quello che InDesign non considera piu' valido.
+    /// Un elemento rimosso resta nella mappa come lapide, perche' le regole che lo nominavano
+    /// devono sapere che non c'e' piu', non trovarsi un buco.
     updateMap(mappaBoxOriginale) {
         //scorriamp la mappaBoxOriginale per vedere quali elementi sono ancora validi, se non lo sono impostiamo eliminato=true
         for (var key in mappaBoxOriginale) {
@@ -2131,6 +2154,8 @@ const CssFramework =
      * Le regole del box, cercate prima fra quelle del kit e poi fra quelle di default.
      * La stessa ricerca serviva in piu' punti: tenerla in un posto solo evita che divergano.
      */
+    /// Cerca le regole del box per meccanica, cioe' per la sua label: prima nel DB del cliente,
+    /// poi in quello di default. E' la gerarchia a due livelli di tutto il framework.
     getElementoBoxDB(box, DBallineamenti, DBDefault) {
         if (box == null) {
             return null;
@@ -2145,6 +2170,7 @@ const CssFramework =
         return elementoBox;
     },
 
+    /// I prefissi delle etichette che nascono dalle duplicazioni di questo box.
     getPrefissiDerivati(box, DBallineamenti, DBDefault) {
         var elementoBox = this.getElementoBoxDB(box, DBallineamenti, DBDefault);
         return elementoBox != null ? cssComposizioneBox.prefissiDerivati(elementoBox.duplicazioni) : [];
@@ -2219,6 +2245,11 @@ const CssFramework =
      */
     contestoCss: null,
 
+    /// Ricorda su cosa si sta lavorando: box, bounds da impaginato, mappa originale, referenza,
+    /// i due DB e i prefissi delle copie. Serve perche' passare questi dati come parametri lungo
+    /// tutte le catene di chiamate era impraticabile.
+    /// Il prezzo e' che il motore lavora su un box alla volta e NON e' rientrante: due box in
+    /// parallelo si sovrascriverebbero il contesto a vicenda.
     memorizzaContestoCss(box, boundsBoxImpaginato, mappaBoxOriginale, itemRef, DBallineamenti, DBDefault) {
         this.contestoCss = {
             etichettaBox: box != null ? box.label : null,
@@ -9048,6 +9079,10 @@ const CssFramework =
             
     },
 
+    /// I sette enum qui di seguito traducono in nomi i numeri che arrivano dalla configurazione
+    /// del cliente. Tutti tornano null su un valore sconosciuto, tranne enumPriorityAxis che
+    /// torna "x": per l'asse prioritario esiste un default sensato, per gli altri no, e un null
+    /// fa saltare la regola invece di applicarla a caso.
     enumAxisResizeMode(numericValue){
         switch(numericValue){
             case 0:
