@@ -1830,6 +1830,10 @@ const CssFramework =
         return this.contestoCss;
     },
 
+    /// Ridimensiona il contenuto del box per le misure che la griglia gli ha assegnato.
+    /// Non misura il box sui suoi bounds dichiarati ma sull'ingombro degli elementi VISIBILI,
+    /// prendendo il piu' stretto fra i due: un box il cui riquadro e' piu' grande del contenuto
+    /// non deve ingrandire tutto in proporzione al vuoto.
     applicaRidimensionamento(box, boxInGrigliaBounds, mappaBoxOriginale, itemRef, DBallineamenti, DBDef) {
         try{
 
@@ -2284,6 +2288,7 @@ const CssFramework =
         }
     },
 
+    /// Le regole che devono girare DOPO che le dimensioni si sono assestate.
     applicaPostRidimensionamento(box, mappaBoxOriginale, itemRef, DBallineamenti, DBDef) {
         try {
 
@@ -2506,6 +2511,8 @@ const CssFramework =
         }
     },
 
+    /// I post ridimensionamenti di un singolo elemento. Con isItemLink agisce sulla grafica
+    /// dentro il riquadro invece che sul riquadro.
     applicaPostRidimensionamenti(elemento, mappaBoxOriginale, itemRef, listaPostRidimensionamenti, box, isItemLink) {
         try {
             if (!elemento || elemento.eliminato) {
@@ -2869,6 +2876,16 @@ const CssFramework =
         }
     },
 
+    /// L'interprete delle espressioni di dimensione, cioe' la sintassi che il cliente scrive
+    /// nella configurazione. I termini si sommano e si sottraggono: "+prezzo[W]-10" e' valido.
+    ///   40               quaranta millimetri
+    ///   20%              il 20% della dimensione del box sull'asse richiesto
+    ///   sy_ombra         la dimensione di quell'elemento
+    ///   sy_ombra[W] [H]  forzando l'asse invece di usare quello richiesto
+    ///   sy_ombra[text]   i bounds del TESTO, non del riquadro
+    ///   sy_ombra[presente]  il termine vale solo se l'elemento c'e' e non e' stato eliminato
+    ///   sy_ombra[H][50%] meta' dell'altezza dell'ombra
+    /// Virgole trasformate in punti, spazi ignorati, sequenze +- e -- normalizzate.
     calcolaValoreDimensione: function (espressione, asse, mappaBoxOriginale, box) {
         // asse: "width" oppure "height"
         if (espressione == null) {
@@ -3333,6 +3350,8 @@ const CssFramework =
 
     etichetteSegnalate : [],
 
+    /// Chi e' uscito dai bordi del box rientra. Su una casella di testo prova PRIMA a
+    /// stringerla, e solo se andrebbe in overflow la sposta.
     fixOverflowFromBox(boxInGrigliaBounds, box, mappaBoxOriginale = null){
         //controlliamo per ogni pageItem di box se esce dai bounds di boxInGrigliaBounds
         //se esce lo riportiamo dentro
@@ -3619,6 +3638,8 @@ const CssFramework =
         }
     },
 
+    /// Allontana gli elementi dalla traccia del bordo della base, di uno spessore piu' la
+    /// distanza configurata. Se la base non c'e' o non e' valida non fa niente.
     fixCollisioneTracciaBase(box, gruppoElementi, evitaTracciaImpostazioni) {
         var useTextBounds = false;
         var distance = 0;
@@ -4861,6 +4882,8 @@ const CssFramework =
     /// del testo: baseline, ascent e descent per l'altezza, gli offset orizzontali per la
     /// larghezza, senza i margini interni del riquadro. Per quel che non e' testo, o quando
     /// le righe non si possono leggere, l'elenco resta vuoto e si torna al rettangolo unico.
+    /// I rettangoli delle singole righe di una casella di testo, costruiti con
+    /// cssRegoleConflitti.rettangoloDiRiga. Lista vuota per tutto cio' che non e' un TextFrame.
     righeDiTesto(item) {
         try {
             if (item == null || item.constructorName != "TextFrame" || !item.lines) {
@@ -4884,6 +4907,10 @@ const CssFramework =
         }
     },
 
+    /// Se due elementi si toccano. Con useTextBounds il confronto e' RIGA PER RIGA: il
+    /// rettangolo unico ingloba tutte le righe, quindi una riga lunga presterebbe la sua
+    /// larghezza alla fascia dove c'e' solo una riga corta, e lo spazio fra le righe
+    /// conterebbe come testo.
     elementsTouching(item1, item2, useTextBounds = false) {
         //controlliamo se i due item si toccano
         var b1 = useTextBounds ? this.getRealBounds(item1) : item1.geometricBounds;
@@ -6397,6 +6424,17 @@ const CssFramework =
  * @param {Boolean} reducePointSizeFallback
  * @param {String} expandVericalToFindSpace - "bottom" | "top" | "none"
  */
+    /// Manda a capo la descrizione perche' non si sovrapponga agli altri elementi del box.
+    /// Tre leve, in quest'ordine: inserire a capo nei punti consentiti, espandere il frame
+    /// verso il basso o l'alto, e come ultima risorsa ridurre il corpo del carattere un punto
+    /// alla volta fino a un minimo di 3.
+    /// Tiene traccia degli a capo che inserisce lei, per poterli togliere se cambia strada.
+    /// Una trentina di funzioni locali e tre guardie anti-ciclo: 200 giri principali, 50 per
+    /// conflitto singolo, 50 nel fallback sul corpo.
+    ///
+    /// NON HA MAI FUNZIONATO fino a I20-1002: chiamava makeRegexFromGroupName senza this.,
+    /// nel preambolo, e il ReferenceError finiva nel catch in fondo che torna false. Il
+    /// chiamante, indexNew per le sole lavorazioni PoP, quel false non lo guarda.
     reflowTextFrameAvoidConflicts(
         textFrame,
         box,
@@ -6435,7 +6473,12 @@ const CssFramework =
             // Prepariamo i matcher delle label escluse
             var excludeRegexes = [];
             for (var i = 0; i < labelEscluse.length; i++) {
-                excludeRegexes.push(makeRegexFromGroupName(labelEscluse[i]));
+                //I20-1002: il this. qui mancava, e senza di lui makeRegexFromGroupName non e'
+                //un nome noto: e' un membro dell'oggetto, non una funzione globale. La riga
+                //lanciava ReferenceError, il catch in fondo alla funzione lo inghiottiva e
+                //tornava false, cosi' il reflow della descrizione non e' MAI avvenuto. Il
+                //chiamante, in indexNew, il false non lo guarda nemmeno.
+                excludeRegexes.push(this.makeRegexFromGroupName(labelEscluse[i]));
             }
 
             // Cache bounds oggetti esterni (immutabili durante l'esecuzione)
@@ -8575,6 +8618,7 @@ const CssFramework =
             boundsA[1] >= boundsB[3]);   // A è sotto B
     },
 
+    /// Applica in ordine i fit dichiarati per ogni etichetta.
     finalFit(mappaBoxOriginale, fitRichiesti) {
         //fitRichiesti è un array di
         // {
