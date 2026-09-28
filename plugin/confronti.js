@@ -14,7 +14,19 @@ const reportConfronti = require('./reportConfronti');
 const barraScorrimento = require('./barraScorrimento');
 const dissolvenza = require('./dissolvenza');
 
+/// I20-1002: il Report Integrita' - il confronto fra quello che c'e' nel documento InDesign e
+/// quello che dice il server - e tutta l'interfaccia con cui l'operatore lo guarda.
+///
+/// Il file e' sbilanciato: 36 membri pubblici fanno la logica in 1.802 righe, e 200 membri
+/// privati col prefisso _ costruiscono i pannelli in 5.621. Tre quarti del file sono interfaccia.
+///
+/// APPARTIENE AL REPORT INTEGRITA', che e' un concetto sparso su otto file: i quattro moduli
+/// report*.js gia' estratti, questo, indexNew.js con avviaReportIntegrita e applicaConfronto,
+/// schedaRef.js ed events.js. L'operatore ha chiesto di raccoglierlo in un posto solo: e' un
+/// task a se', e i pezzi che gli appartengono sono marcati qui sotto con REPORT INTEGRITA'.
 const confronti = {
+    /// REPORT INTEGRITA'. Guarda un box impaginato e dice cosa non corrisponde piu' al dato del
+    /// server: e' il confronto vero, quello da cui nascono le segnalazioni.
     async confrontoBox(box1, box2, forzaReimpaginazione = false){ //mode 0 -> cambio strutturale, mode 1 -> confrontoMassivo
         try {
 
@@ -323,6 +335,9 @@ const confronti = {
 
     //elementiNoRender: elenco degli elementi che l'operatore ha messo in noRender (I20-968).
     //Un elemento marcato e poi cancellato dai livelli non e' un file perso: va detto, non gridato.
+    /// REPORT INTEGRITA'. Il confronto fatto sui campi gia' compilati, senza rileggere il box:
+    /// e' la via veloce, usata quando la pre-analisi ha gia' raccolto tutto.
+    /// checkMD5 a false salta il confronto degli hash delle foto, che e' la parte cara.
     async confrontoBoxCompiledFieldPreAnalisi(box1, compiledFields, deletedFields, listFoto, fotoExtra, fotoExtraAuto, checkMD5 = true, elementiNoRender = null) { //mode 0 -> cambio strutturale, mode 1 -> confrontoMassivo
         let differenze = [];
         let errors = [];
@@ -726,6 +741,8 @@ const confronti = {
         }
     },
 
+    /// REPORT INTEGRITA'. Legge il documento e ne fa una mappa: quali referenze stanno in quali
+    /// box, a quale pagina. Con simplified torna la versione ridotta al necessario.
     async mappaturaImpaginato(pag = null, infoDescrizione = false, simplified = false){
         try{
             let mappa = {};
@@ -994,6 +1011,7 @@ const confronti = {
         return lista;
     },
 
+    /// REPORT INTEGRITA'. Cerca le referenze finite su una pagina diversa da quella prevista.
     async preAnalisiMismatchNumeriPagina(rangePagine, mappa) {
 
         //se rangePagine è null allora rangePagine diventa tutte le pagine del documento
@@ -1088,6 +1106,8 @@ const confronti = {
         return res;
     },
 
+    /// REPORT INTEGRITA'. Confronta la mappa dell'impaginato coi dati del server e puo'
+    /// restituire i record da reimpaginare, pagina per pagina.
     async syncImpaginatoConServer(mappa = null, preAnalisi, applicaImpaginazioni = false){
 
         var lista = null;
@@ -1335,6 +1355,10 @@ const confronti = {
         };
     },
 
+    /// REPORT INTEGRITA'. Il report vive in un file JSON nella cartella di lavorazione.
+    /// ATTENZIONE: indexNew ricostruisce a mano lo stesso percorso quando
+    /// _getReportIntegritaFilePath non risponde. Il nome del file e' scritto in due posti, ed e'
+    /// uno dei motivi per cui il report andrebbe raccolto in un modulo suo.
     leggiReportIntegritaLocale(idKit = null) {
         try {
             const filePath = this._getReportIntegritaFilePath(idKit);
@@ -1415,6 +1439,9 @@ const confronti = {
         return data;
     },
 
+    /// REPORT INTEGRITA'. Cosa fare quando un report e' gia' aperto: riusarlo, chiedere
+    /// all'operatore o rifarlo. Le soglie orarie stanno in reportIntegritaAvvio.js, che e'
+    /// verificabile; qui resta il dialogo con l'operatore.
     async richiediAzioneReportIntegritaEsistente(wrapper) {
         //I20-981: le soglie (oltre quattro ore si rifa' senza chiedere, oltre due la data va
         //in evidenza) stanno in reportIntegritaAvvio, dove si possono verificare.
@@ -1543,9 +1570,14 @@ const confronti = {
     //Ogni quanto si controlla che la scheda sia ancora agganciata al suo box e che la
     //navigazione resti bloccata. La scheda si ridisegna da sola e diversi suoi flussi
     //liberano gli eventi uscendo: il blocco va riaffermato, non solo impostato.
+    /// REPORT INTEGRITA'. Ogni quanto si controlla se la scheda aperta dal report e' stata
+    /// chiusa, per rifare il confronto su quella referenza.
     INTERVALLO_VIGILANZA_SCHEDA: 600,
     //Oltre questo tempo la rilettura della scheda dal server si considera persa: meglio
     //lasciare il report com'era che restare appesi con il caricamento davanti.
+    /// REPORT INTEGRITA'. Oltre questa attesa si smette di aspettare la rilettura della scheda.
+    /// Serve perche' XMLHttpRequestClient.abort() non interrompe davvero la richiesta: la
+    /// risposta tardiva si lascia cadere, ma l'operatore non deve restare fermo.
     ATTESA_MASSIMA_RILETTURA_SCHEDA: 20000,
 
     schedaDalReportAperta() {
@@ -2128,6 +2160,9 @@ const confronti = {
     /// quello che c'e', non solo quello che se ne va.
     /// Non applica niente: torna il piano, cosi' chi chiama puo' far vedere le segnalazioni
     /// che se ne stanno andando prima che se ne vadano davvero.
+    /// REPORT INTEGRITA'. Quando l'operatore chiude la scheda di una referenza aperta dal
+    /// report, si rifa' il confronto solo su quella e si aggiorna la riga, invece di rifare
+    /// tutto il report. Le regole di cosa resta da segnalare stanno in reportIntegritaAvvio.js.
     async _ricontrollaReferenzaDopoScheda(stato) {
         const state = this._confrontoReportState;
         const record = stato?.record;
@@ -2482,6 +2517,8 @@ const confronti = {
         });
     },
 
+    /// REPORT INTEGRITA'. Compone il report di confronto fra due liste. Le regole del csv - nome
+    /// del file, ordine delle righe, virgolettatura - stanno in reportConfrontoCsv.js.
     compilaReportConfronto(report, options = {}) {
         const wrapper = this._normalizeReportIntegritaWrapper(options.wrapper || null);
         const createdAt = options.createdAt || wrapper?.createdAt || new Date().toISOString();
@@ -3664,6 +3701,11 @@ const confronti = {
         return { result, dontAsk };
     },
 
+    /// REPORT INTEGRITA', interfaccia. E' il capofila dei pannelli: _buildPanelCambiati,
+    /// _buildPanelEliminati e _buildPanelNuovi seguono lo stesso schema - intestazione con il
+    /// conteggio, righe raggruppate per pagina, azioni per riga - e i _refresh*, _toggle*,
+    /// _apri* che seguono nel file li governano.
+    /// Sono duecento membri privati per 5.621 righe: lo schema conta piu' del dettaglio.
     _buildPanelCambiati(records) {
         const panel = this._crPanel();
         this._stylePanelForReportListMode(panel);
@@ -3862,9 +3904,6 @@ const confronti = {
         return this._confrontoVisibilityFilter || "visible";
     },
 
-    _setConfrontoVisibilityFilter(value) {
-        this._confrontoVisibilityFilter = value;
-    },
 
     _buildPanelEliminati(records) {
         const panel = this._crPanel();
@@ -4437,66 +4476,7 @@ const confronti = {
         return true;
     },
 
-    _toggleHiddenElemento(payloadId, iconEl) {
-        const payload = this._getConfrontoPayload(payloadId);
-        if (!payload) return;
 
-        payload.hidden = !payload.hidden;
-
-        if (iconEl) {
-            iconEl.src = payload.hidden ? "images/sleep.png" : "images/wake.png";
-            Utility.impostaTooltip(iconEl, payload.hidden ? "Nascosto" : "Visibile");
-        }
-
-        this._refreshCambiatiVisibility();
-    },
-
-    _crPageSection(pageNumber, recordType) {
-        const root = document.createElement("div");
-        root.dataset.pageSection = "true";
-        root.dataset.pageNumber = String(pageNumber);
-        root.dataset.recordType = recordType;
-        root.style.display = "flex";
-        root.style.flexDirection = "column";
-        root.style.gap = "6px";
-        root.style.marginBottom = "6px";
-
-        const header = document.createElement("div");
-        header.textContent = `Pagina ${pageNumber}`;
-        header.dataset.pageHeader = "true";
-        header.dataset.pageNumber = String(pageNumber);
-        header.dataset.recordType = recordType;
-        header.style.fontWeight = "700";
-        header.style.padding = "10px 8px";
-        header.style.marginTop = "6px";
-        header.style.border = "1px solid #666";
-        header.style.borderRadius = "4px";
-        header.style.backgroundColor = "#E6F4EA";
-
-        const notice = document.createElement("div");
-        notice.dataset.pageHiddenNotice = "true";
-        notice.dataset.pageNumber = String(pageNumber);
-        notice.dataset.recordType = recordType;
-        notice.textContent = "Ci sono elementi nascosti dalle attuali impostazioni di visualizzazione";
-        notice.style.display = "none";
-        notice.style.padding = "8px";
-        notice.style.border = "1px dashed #666";
-        notice.style.borderRadius = "4px";
-        notice.style.opacity = "0.8";
-        notice.style.fontSize = "11px";
-
-        const rows = document.createElement("div");
-        rows.dataset.pageRows = "true";
-        rows.style.display = "flex";
-        rows.style.flexDirection = "column";
-        rows.style.gap = "6px";
-
-        root.appendChild(header);
-        root.appendChild(notice);
-        root.appendChild(rows);
-
-        return { root, header, notice, rows };
-    },
 
     _refreshCambiatiVisibility() {
         const filter = this._getConfrontoVisibilityFilter();
