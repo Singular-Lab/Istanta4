@@ -50,6 +50,9 @@ var CredenzialiSalvate = (function () {
     /// prima, chiedendo le credenziali a mano.
     function crea(archivio) {
 
+        /// Se l'archivio c'e' ed espone i tre metodi che servono. Tutto il resto si appoggia a
+        /// questo controllo: un archivio assente non e' un errore, e' un Plugin che chiede le
+        /// credenziali a mano come faceva prima.
         function disponibile() {
             return archivio != null &&
                 typeof archivio.setItem === "function" &&
@@ -57,6 +60,8 @@ var CredenzialiSalvate = (function () {
                 typeof archivio.removeItem === "function";
         }
 
+        /// Salva la coppia. Torna false invece di sollevare: il login non deve fallire perche'
+        /// il Portachiavi non ha voluto saperne.
         async function salva(username, password) {
             if (!disponibile() || !coppiaUtilizzabile(username, password)) {
                 return false;
@@ -74,6 +79,8 @@ var CredenzialiSalvate = (function () {
             }
         }
 
+        /// La coppia salvata, o null. Mezza credenziale vale come niente: farebbe partire un
+        /// tentativo di accesso destinato a fallire.
         async function leggi() {
             if (!disponibile()) {
                 return null;
@@ -94,6 +101,7 @@ var CredenzialiSalvate = (function () {
             }
         }
 
+        /// Dimentica la coppia. Come salva: non solleva mai.
         async function dimentica() {
             if (!disponibile()) {
                 return false;

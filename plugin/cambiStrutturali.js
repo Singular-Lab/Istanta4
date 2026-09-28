@@ -1,6 +1,17 @@
+/// I20-1002: quali cambi strutturali si applicano a una referenza.
+///
+/// Il server manda un elenco di strutture, ognuna con una condizione e delle istruzioni. Questo
+/// modulo scorre l'elenco, verifica le condizioni contro il record della referenza e contro i
+/// campi presenti nel box, e restituisce le azioni applicabili. Lo usano schedaRef.js nella
+/// schermata di edit e ficoProcess.js.
+///
+/// cambiStrutturaliDB e' cache e stato insieme, e lo riempiono in due: questo modulo quando lo
+/// trova vuoto, e pluginMiddleware.js dalla risposta di inizializzazione.
+
 const cambiStrutturali = {
     cambiStrutturaliDB: [],
 
+    /// Scarica l'elenco delle strutture da Menabo/getCambioStrutturale e lo memorizza.
     async getCambioStrutturale() {
         return new Promise((resolve, reject) => {
             var xhr = new XMLHttpRequestClient();
@@ -48,6 +59,8 @@ const cambiStrutturali = {
         });
     },
 
+    /// Le azioni applicabili a questa referenza in questo box, numerate da 1.
+    /// Se l'elenco non e' ancora stato caricato lo chiede al server.
     async getCambioStrutturalePath(itemRef, box) {
         let strutture = this.cambiStrutturaliDB || [];
      
@@ -77,6 +90,8 @@ const cambiStrutturali = {
         return result;
     },
 
+    /// Se almeno una delle condizioni e' soddisfatta. Le condizioni sono in OR fra loro, le
+    /// regole dentro una condizione sono in AND. Una condizione senza regole vale sempre.
     _matchCambioStrutturale(record, condizioneRoot, dbItems) {
         if (!condizioneRoot || !Array.isArray(condizioneRoot) || condizioneRoot.length === 0) {
             return true;
@@ -96,6 +111,7 @@ const cambiStrutturali = {
         return false;
     },
 
+    /// Tutte le regole della condizione, piu' le eventuali regole annidate.
     checkCondizione(record, condizione, dbItems) {
         for (const regola of condizione.regole) {
             if (!this._matchRegola(record, regola, dbItems)) {
@@ -110,6 +126,10 @@ const cambiStrutturali = {
         return true;
     },
 
+    /// Una singola regola. Con isBox il valore si legge dal campo presente nel box - e solo da
+    /// una casella di testo, le altre non hanno un contenuto da confrontare - altrimenti dal
+    /// record. Gli operatori sono numeri che arrivano dal server: 0 Equals, 1 NotEquals,
+    /// 2 Contains, 3 NotContains, 4 In, 5 NotIn, 6 Exist, 7 NotExist.
     _matchRegola(record, regola, dbItems) {
         const isBox = regola.isBox ?? regola.IsBox ?? false;
         //se isBox è true, cerchiamo il campo tra dbItems (che rappresentano i campi presenti nella box) invece che direttamente nel record
@@ -119,9 +139,12 @@ const cambiStrutturali = {
         var expectedValue = regola.value ?? regola.Value;    
         if (isBox) {
             var obj = dbItems.find(item => Utility.parseLabel(item.label) === regola.campo);
-            //se item è un textFrame allora prendiamo il suo contenuto testuale per la valutazione della regola
-            var valoreCampo = null;
-            if(obj && obj.item.constructorName === "textFrame") {
+            //se item è un TextFrame allora prendiamo il suo contenuto testuale per la valutazione della regola
+            //I20-1002: la maiuscola conta. constructorName vale "TextFrame", come ovunque nel Plugin,
+            //e qui c'era scritto "textFrame": il confronto non era mai vero, valoreCampo restava null
+            //e _equals, _contains e _in tornano tutti false su null. Le regole isBox sul contenuto di
+            //un campo fallivano sempre; reggevano solo Exist e NotExist, che guardano la presenza.
+            if(obj && obj.item.constructorName === "TextFrame") {
                 valoreCampo = obj.item.contents;
             }
             campo = obj != null;
@@ -169,6 +192,9 @@ const cambiStrutturali = {
         }
     },
 
+    /// Il valore di un campo del record. NON scende nei campi annidati: il corpo che lo faceva
+    /// e' commentato qui sotto, e oggi questa e' una lettura diretta. Il nome resta quello di
+    /// prima ed e' fuorviante.
     _getNestedValue(obj, path) {
 
         return obj[path];
@@ -185,6 +211,9 @@ const cambiStrutturali = {
         // return current;
     },
 
+    /// I tre confronti - _equals, _contains, _in - non distinguono maiuscole da minuscole e
+    /// sono tutti falsi su un valore assente. E' il motivo per cui una regola sbagliata non da'
+    /// errore: risponde "no" come se la condizione non fosse soddisfatta.
     _equals(currentValue, expectedValue) {
         if (currentValue == null) return false;
         return String(currentValue).toLowerCase() === String(expectedValue).toLowerCase();
@@ -205,6 +234,7 @@ const cambiStrutturali = {
         return String(currentValue).toLowerCase().indexOf(String(expectedValue).toLowerCase()) >= 0;
     },
 
+    /// Traduce una struttura del server nella forma che si aspetta la schermata di edit.
     _mapCambioStrutturaleToLegacy(struttura, record, id) {
         return {
             id: id,
@@ -222,6 +252,8 @@ const cambiStrutturali = {
         };
     },
 
+    /// Il valore di un'istruzione secondo la sua operazione: 0 Set scrive il valore,
+    /// 1 AppendText lo accoda a quello che c'e', 2 RemoveText lo toglie e ripulisce i bordi.
     _resolveIstruzioneValue(istruzione, record) {
         const operazione = Number(istruzione.operazione);
 
