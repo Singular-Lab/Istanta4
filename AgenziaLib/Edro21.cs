@@ -2085,6 +2085,8 @@ namespace AgenziaLib
 
                     //Imposto le foto secondarie del gruppo
                     List<FotoElementoGruppo> membriGruppoFoto = RefsHelper.getFotoSecondarieDelGruppo(myGroupFiltered);
+                    //I20-1019: nelle meccaniche BIS il box esce sempre con due foto.
+                    aggiungiSecondariaPerMeccanicaBis(recItem[key_combinazioneAssegnata].ToString(), membriGruppoFoto);
                     recItem[GLOBAL_VARIABLES_FICO.keyMembriGruppoFoto] = membriGruppoFoto;
 
                     #region nuova implementazione
@@ -12429,6 +12431,47 @@ Descrizione3.EndsWith("\r\n");
         public string getAlterazioniTracciatoFromIndd(List<Dictionary<string, object>> gruppo, Dictionary<string, object> articoloIndd)
         {
             throw new NotImplementedException();
+        }
+
+        //I20-1019: le meccaniche BIS, che nel box vogliono due foto. Si riconoscono come fa il
+        //resto di esportaVolantino: la sigla sta dentro combinazioneAssegnata, seguita dalle
+        //varianti di stile (NM_FID_KgL_evento_SC), e maiuscole e minuscole contano.
+        private static readonly string[] sigleMeccanicaBis = { "NM_MM", "NM_MIX_MM", "NM_FID", "NM_MIX_FID" };
+
+        internal static bool isMeccanicaBis(string combinazioneAssegnata)
+        {
+            return !string.IsNullOrEmpty(combinazioneAssegnata) &&
+                sigleMeccanicaBis.Any(s => combinazioneAssegnata.IndexOf(s, StringComparison.Ordinal) >= 0);
+        }
+
+        /// <summary>
+        /// I20-1019: in una meccanica BIS il box deve uscire con due foto. Se il gruppo ha solo la
+        /// primaria, se ne aggiunge una copia come secondaria: il Plugin impagina ogni voce con
+        /// statoSelezione 2 come foto_secondaria, quindi basta la voce in piu'.
+        /// La copia vive solo qui, fra le foto del box: non e' un record e non entra nei meta
+        /// P/S, cosi' non puo' cambiare quale ref e' primaria. Porta lo stesso codRef della
+        /// primaria perche' il Plugin e Istanta cercano le foto per codice ref.
+        /// </summary>
+        internal static void aggiungiSecondariaPerMeccanicaBis(string combinazioneAssegnata, List<FotoElementoGruppo> membriGruppoFoto)
+        {
+            if (membriGruppoFoto == null || !isMeccanicaBis(combinazioneAssegnata))
+                return;
+
+            //C'e' gia' una seconda foto, vera o copia: il box ne ha gia' due.
+            if (membriGruppoFoto.Any(m => m.statoSelezione == (Byte)2))
+                return;
+
+            FotoElementoGruppo primaria = membriGruppoFoto.FirstOrDefault(m => m.statoSelezione == (Byte)1);
+            if (primaria == null || string.IsNullOrWhiteSpace(primaria.nomeFoto))
+                return;
+
+            membriGruppoFoto.Add(new FotoElementoGruppo()
+            {
+                codRef = primaria.codRef,
+                nomeFoto = primaria.nomeFoto,
+                hash = primaria.hash,
+                statoSelezione = (Byte)2,
+            });
         }
 
         //I20-522: la dicitura che l'operatore scrive in una delle quattro descrizioni quando la
