@@ -1,4 +1,7 @@
-# dataCaricamentoFoto.js
+# reperimentoFoto/dataCaricamento.js
+
+*Fino a I20-1015 si chiamava `dataCaricamentoFoto.js` e stava in `plugin/`; chi lo importa lo
+chiama ancora `DataCaricamentoFoto`. Lo usa la [parte foto della scheda](schedaFoto.md).*
 
 **Cosa è:** la data di caricamento mostrata sul badge delle foto nella schermata di cambio foto.
 Nasce con I20-971.

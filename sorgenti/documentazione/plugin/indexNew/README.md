@@ -41,9 +41,9 @@ quello che l'operatore intende quando dice che qui «c'è stato messo di tutto»
 |---|---|
 | `_conteggiaImpaginaConContesto` | **1.793** |
 | `impaginaBox` | 750 |
-| `ricollegaFotoMassivo` | 444 |
-| `applicaConfronto` | 355 |
-| `avviaSyncPacchettoFoto` | 347 |
+| `ricollegaFotoMassivo` | 444 — dal I20-1015 in [reperimentoFoto](../reperimentoFoto/operazioni.md) |
+| `applicaConfronto` | 355 — dal I20-1014 in [reportIntegrita](../reportIntegrita/flusso.md) |
+| `avviaSyncPacchettoFoto` | 347 — dal I20-1015 in [reperimentoFoto](../reperimentoFoto/operazioni.md) |
 | `fixRefImpaginata` | 255 |
 
 `_conteggiaImpaginaConContesto` da sola è più grande di nove dei tredici file del Lotto 5.

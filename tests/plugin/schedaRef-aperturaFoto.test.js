@@ -18,8 +18,17 @@ const path = require("node:path");
 
 const schedaRef = require("../../plugin/schedaRef");
 
+//I20-1015: la parte foto della scheda e le operazioni foto sono uscite in reperimentoFoto/. Per
+//questi controlli la scheda e' schedaRef.js piu' schedaFoto.js (a runtime un oggetto solo), e
+//indexNew.js e utility.js si leggono insieme a quello che hanno dato a reperimentoFoto.js.
+const INSIEME_A = {
+    "schedaRef.js": ["reperimentoFoto/schedaFoto.js"],
+    "indexNew.js": ["reperimentoFoto/reperimentoFoto.js"],
+    "utility.js": ["reperimentoFoto/reperimentoFoto.js", "reperimentoFoto/fotoPlacer.js"]
+};
 function sorgentePlugin(nomeFile) {
-    return fs.readFileSync(path.join(__dirname, "..", "..", "plugin", nomeFile), "utf8");
+    return [nomeFile, ...(INSIEME_A[nomeFile] || [])]
+        .map(nome => fs.readFileSync(path.join(__dirname, "..", "..", "plugin", nome), "utf8")).join("\n");
 }
 
 /* ---- il percorso da cui partire ---- */
@@ -305,7 +314,8 @@ test("l'hash si calcola solo quando il nome coincide", () => {
     const blocco = sorgente.slice(inizio, sorgente.indexOf("riquadroPropostaFoto(candidato", inizio));
 
     const guardia = blocco.indexOf("if (candidato.nome === nomeBox) {");
-    const calcolo = blocco.indexOf("cmd.md5ArrayBuffer(");
+    //I20-1015: cmd.js e' diventato reperimentoFoto/scaricamento.js, e si chiama scaricamentoFoto.
+    const calcolo = blocco.indexOf("scaricamentoFoto.md5ArrayBuffer(");
 
     assert.ok(guardia > 0 && calcolo > guardia && calcolo - guardia < 400,
         "leggere un psd da centinaia di megabyte quando non serve l'hash sarebbe un costo inutile");

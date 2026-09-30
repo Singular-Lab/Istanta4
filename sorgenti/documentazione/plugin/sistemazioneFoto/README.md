@@ -6,7 +6,7 @@ altri elementi né fra loro. È il primo concetto del Plugin ad avere **una cart
 segnalazioni conflitti.
 
 Da non confondere con **procurarsi la foto giusta** — quale foto va su una referenza, chiederla al
-server, scaricarla — che è un altro concetto e sta in `schedaRef.js`, `indexNew.js` e `cmd.js`.
+server, scaricarla — che è un altro concetto e ha la sua cartella, [reperimentoFoto/](../reperimentoFoto/README.md).
 
 ---
 

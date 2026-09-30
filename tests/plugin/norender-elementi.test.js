@@ -11,8 +11,17 @@ const NoRenderElementi = require("../../plugin/noRenderElementi.js");
 
 const cartellaPlugin = path.join(__dirname, "..", "..", "plugin");
 
+//I20-1015: la parte foto della scheda e le operazioni foto sono uscite in reperimentoFoto/. Per
+//questi controlli la scheda e' schedaRef.js piu' schedaFoto.js (a runtime un oggetto solo), e
+//indexNew.js e utility.js si leggono insieme a quello che hanno dato a reperimentoFoto.js.
+const INSIEME_A = {
+    "schedaRef.js": ["reperimentoFoto/schedaFoto.js"],
+    "indexNew.js": ["reperimentoFoto/reperimentoFoto.js"],
+    "utility.js": ["reperimentoFoto/reperimentoFoto.js", "reperimentoFoto/fotoPlacer.js"]
+};
 function sorgentePlugin(nomeFile) {
-    return fs.readFileSync(path.join(cartellaPlugin, nomeFile), "utf8");
+    return [nomeFile, ...(INSIEME_A[nomeFile] || [])]
+        .map(nome => fs.readFileSync(path.join(cartellaPlugin, nome), "utf8")).join("\n");
 }
 
 test("la label della foto primaria diventa tipo foto piu' codice referenza", () => {

@@ -518,7 +518,7 @@ const confronti = {
                             let nomeFile = fullPath.split("/").pop();
 
                             if (checkMD5){
-                                const res = await Utility.getLinkHash(campo);
+                                const res = await ReperimentoFoto.getLinkHash(campo);
     
                                 return {
                                     tipo: "principale",

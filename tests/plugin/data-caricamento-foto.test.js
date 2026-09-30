@@ -12,12 +12,21 @@ const assert = require("node:assert");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const DataCaricamentoFoto = require("../../plugin/dataCaricamentoFoto");
+const DataCaricamentoFoto = require("../../plugin/reperimentoFoto/dataCaricamento");
 
 const cartellaPlugin = path.join(__dirname, "..", "..", "plugin");
 
+//I20-1015: la parte foto della scheda e le operazioni foto sono uscite in reperimentoFoto/. Per
+//questi controlli la scheda e' schedaRef.js piu' schedaFoto.js (a runtime un oggetto solo), e
+//indexNew.js e utility.js si leggono insieme a quello che hanno dato a reperimentoFoto.js.
+const INSIEME_A = {
+    "schedaRef.js": ["reperimentoFoto/schedaFoto.js"],
+    "indexNew.js": ["reperimentoFoto/reperimentoFoto.js"],
+    "utility.js": ["reperimentoFoto/reperimentoFoto.js", "reperimentoFoto/fotoPlacer.js"]
+};
 function sorgente(nomeFile) {
-    return fs.readFileSync(path.join(cartellaPlugin, nomeFile), "utf8");
+    return [nomeFile, ...(INSIEME_A[nomeFile] || [])]
+        .map(nome => fs.readFileSync(path.join(cartellaPlugin, nome), "utf8")).join("\n");
 }
 
 test("una data valida si legge come giorno, mese e anno", () => {
@@ -86,7 +95,8 @@ test("il server espone la data nell'elenco delle foto", () => {
 test("la schermata di cambio foto disegna il badge", () => {
     const schedaRef = sorgente("schedaRef.js");
 
-    assert.ok(schedaRef.includes("require('./dataCaricamentoFoto')"),
+    //I20-1015: la schermata di cambio foto sta in reperimentoFoto/schedaFoto.js, accanto al modulo.
+    assert.ok(schedaRef.includes("require('./dataCaricamento')"),
         "il modulo va caricato come gli altri del Plugin");
     assert.ok(schedaRef.includes("DataCaricamentoFoto.dataDaMostrare(item)"),
         "ogni foto della griglia deve calcolare la propria data");

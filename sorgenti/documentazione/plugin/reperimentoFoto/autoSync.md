@@ -1,4 +1,8 @@
-# fotoAutoSync.js
+# reperimentoFoto/autoSync.js
+
+*Fino a I20-1015 si chiamava `fotoAutoSync.js` e stava in `plugin/`; chi lo importa lo chiama ancora
+`fotoAutoSync`. Il ponte che gli passa le operazioni è `assicuraFotoNeiLinks` di
+[ReperimentoFoto](operazioni.md).*
 
 **Cosa è:** al cambio foto, se la foto non è nei Links, va scaricata e impaginata da sola, senza
 che l'operatore prema prima «scarica» e poi «impagina». Nasce con I20-967.

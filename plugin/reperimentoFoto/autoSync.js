@@ -2,6 +2,9 @@
  * I20-967: al cambio foto, se la foto non e' nei Links, deve essere scaricata e impaginata
  * da sola, senza che l'operatore prema prima "scarica" e poi "impagina".
  *
+ * I20-1015: si chiamava fotoAutoSync.js e stava in plugin/; ora e' reperimentoFoto/autoSync.js.
+ * Chi lo importa lo chiama ancora fotoAutoSync.
+ *
  * Qui vive solo la decisione: c'e' gia'? serve chiederla al server? il file e' arrivato davvero?
  * Le operazioni concrete (filesystem UXP, chiamata a Istanta, download da Olimpo) arrivano
  * dall'esterno, cosi' questo modulo resta privo di dipendenze da InDesign e verificabile.

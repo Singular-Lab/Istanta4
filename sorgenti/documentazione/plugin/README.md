@@ -37,7 +37,8 @@ di I20-1007).
 
 - **Un file rappresenta un concetto.** Quando un concetto ha bisogno di più di un file, ha **una
   cartella sua**: `plugin/<concetto>/`. Le prime sono [sistemazioneFoto/](sistemazioneFoto/README.md)
-  (I20-1009) e [reportIntegrita/](reportIntegrita/README.md) (I20-1014).
+  (I20-1009), [reportIntegrita/](reportIntegrita/README.md) (I20-1014) e
+  [reperimentoFoto/](reperimentoFoto/README.md) (I20-1015).
 - **Quando due parti non pure di un concetto condividono lo stato**, come il flusso e i pannelli
   del report, stanno in due file ma in **un oggetto solo**: il secondo si mescola nel primo con
   `Object.assign`, e a runtime il `this` è uno. Si divide il file, non lo stato.
@@ -101,14 +102,14 @@ ed è documentato il meccanismo con cui il server prevale su di lui.
 | [barraScorrimento.md](barraScorrimento.md) | una barra di scorrimento disegnata da noi, perché in UXP non scorre |
 | [dissolvenza.md](dissolvenza.md) | i conti della dissolvenza, perché in UXP `opacity` non si ridisegna |
 | [tooltipPosizione.md](tooltipPosizione.md) | dove ancorare un tooltip senza misurarlo |
-| [cacheHashFoto.md](cacheHashFoto.md) | la memoria degli hash md5 delle foto |
+| [reperimentoFoto/cacheHash.md](reperimentoFoto/cacheHash.md) | la memoria degli hash md5 delle foto (era `cacheHashFoto.js`) |
 | [reportIntegrita/conteggi.md](reportIntegrita/conteggi.md) | i numeri sulle linguette del Report Integrità (era `reportConteggi.js`) |
-| [dataCaricamentoFoto.md](dataCaricamentoFoto.md) | il badge con la data sulle foto |
+| [reperimentoFoto/dataCaricamento.md](reperimentoFoto/dataCaricamento.md) | il badge con la data sulle foto (era `dataCaricamentoFoto.js`) |
 | [ricollegaEsiti.md](ricollegaEsiti.md) | cosa dire all'operatore dopo un ricollegamento |
 | [trattiDescrizione.md](trattiDescrizione.md) | i tratti di stile di un campo descrizione |
 | [variantiDescrizione.md](variantiDescrizione.md) | quale variante di descrizione comanda |
 | [credenzialiSalvate.md](credenzialiSalvate.md) | le credenziali nell'archivio cifrato del sistema |
-| [fotoAutoSync.md](fotoAutoSync.md) | scaricare e impaginare la foto in un colpo solo |
+| [reperimentoFoto/autoSync.md](reperimentoFoto/autoSync.md) | scaricare e impaginare la foto in un colpo solo (era `fotoAutoSync.js`) |
 | [jsIndexControls.md](jsIndexControls.md) | le schede del pannello, per il codice e per i click |
 | [garbageCollector.md](garbageCollector.md) | la rimozione differita degli elementi InDesign |
 | [cambiStrutturali.md](cambiStrutturali.md) | quali cambi strutturali si applicano a una referenza |
@@ -144,7 +145,7 @@ del report.
 | [schedaArtwork.md](schedaArtwork.md) | l'artwork: più referenze trattate come un'unica immagine |
 | [pluginMiddleware.md](pluginMiddleware.md) | il mediatore fra il Plugin e la configurazione del cliente |
 | [custom.md](custom.md) | il file dell'agenzia montata, e cosa resta quando il server comanda |
-| [cmd.md](cmd.md) | lo scaricamento delle immagini, e perché il nome non dice cosa fa |
+| [reperimentoFoto/](reperimentoFoto/README.md) | procurarsi la foto giusta: la parte foto della scheda, le operazioni, lo scaricamento (era `cmd.js`), `FotoPlacer`. Raccolto in I20-1015 |
 | [ficoProcess.md](ficoProcess.md) | promo, kit, lavorazione corrente ed esportazione |
 | [griglia.md](griglia.md) | la mappa dell'impaginato: cosa va dove, prima di impaginare |
 | [filtri.md](filtri.md) | i filtri di pagina del volantino, e i dieci nomi di «è una data» |
@@ -299,9 +300,10 @@ importare**.
 **Un doppione da togliere:** `delay` in `indexNew.js` fa esattamente quello che fa già
 `Utility.sleep`. Una delle due va tolta, e nel Plugin `Utility.sleep` è quella usata ovunque.
 
-**Un file il cui nome nasconde il contenuto:** `cmd.js` contiene lo scaricamento delle immagini,
-non «comandi». **Rinomina proposta: `scaricaImmagini.js`.** Costa quanto un file mal diviso, perché
-chi cerca quel codice non guarda lì.
+**Un file il cui nome nasconde il contenuto:** `cmd.js` conteneva lo scaricamento delle immagini,
+non «comandi». **Fatto in I20-1015:** è diventato
+[reperimentoFoto/scaricamento.js](reperimentoFoto/scaricamento.md), e chi lo usa lo chiama
+`scaricamentoFoto`.
 
 **Proposte valutate e scartate**, annotate con quello che si perde, perché non tornino senza sapere
 cosa si è già deciso:

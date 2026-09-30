@@ -11,7 +11,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const cache = require('../../plugin/cacheHashFoto');
+const cache = require('../../plugin/reperimentoFoto/cacheHash');
 
 function metadata(size, modifica) {
     return { size: size, dateModified: modifica };
