@@ -101,8 +101,9 @@ if (!string.IsNullOrWhiteSpace(chosenConfig))
 
 builder.Services.AddHttpClient();
 //builder.Services.AddDbContext<edro21_dbContext>(options => options.UseNpgsql(builder.Configuration.GetConnectionString("IstandaConnectionDb")!), ServiceLifetime.Transient);
-builder.Services.AddDbContextFactory<edro21_dbContext>(options => options.UseNpgsql(builder.Configuration.GetConnectionString("IstandaConnectionDb")!));
-builder.Services.AddDbContextFactory<Edro21_DbContext2>(options => options.UseNpgsql(builder.Configuration.GetConnectionString("IstandaConnectionDb")!));
+// I20-994: ogni contesto ha la sua tabella di storico delle migration, perche' condividono la connessione.
+builder.Services.AddDbContextFactory<edro21_dbContext>(options => Migrazioni.UsaPostgres(options, builder.Configuration.GetConnectionString("IstandaConnectionDb")!, Migrazioni.StoricoContesto1));
+builder.Services.AddDbContextFactory<Edro21_DbContext2>(options => Migrazioni.UsaPostgres(options, builder.Configuration.GetConnectionString("IstandaConnectionDb")!, Migrazioni.StoricoContesto2));
 builder.Services.AddControllersWithViews(
     //options => {
     //    options.Filters.Add(new AutoValidateAntiforgeryTokenAttribute());

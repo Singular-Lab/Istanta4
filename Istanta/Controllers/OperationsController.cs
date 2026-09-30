@@ -635,10 +635,8 @@ namespace Istanta.Controllers
                                                     {
                                                         if (scope_chiave == GLOBAL_VARIABLES.keyRefEan)
                                                         {
-                                                            if (_val!.Length>30)
-                                                            {
-                                                                _val = _val.Substring(0, 30);
-                                                            }    
+                                                            //I20-994: il limite e' quello della colonna, non piu' 30.
+                                                            _val = LimitiColonne.TroncaEan(_val!);
                                                             artRecord.Ean = _val;
                                                             //ctx_1.SaveChanges();
                                                             _ = await ctx_1.SaveChangesAsync();
@@ -1034,9 +1032,10 @@ namespace Istanta.Controllers
                                         //E aggiornare il record del tracciato
 
 
-                                        if (item.ContainsKey(kRefEan) && item[kRefEan].ToString()!.Length > 30)
+                                        //I20-994: il limite e' quello della colonna, non piu' 30.
+                                        if (item.ContainsKey(kRefEan) && item[kRefEan].ToString()!.Length > LimitiColonne.Ean)
                                         {
-                                            item[kRefEan] = item[kRefEan].ToString()!.Substring(0, 30);
+                                            item[kRefEan] = LimitiColonne.TroncaEan(item[kRefEan].ToString()!);
                                         }
 
                                         artRecord = new Articoli();
@@ -1113,10 +1112,10 @@ namespace Istanta.Controllers
                                         //L'ean per adesso è l'unico campo rimasto indietro e da controllare
                                         if (cRefEan != null && item.ContainsKey(kRefEan))
                                         {
-                                            //va aumentato a 150 il substring
-                                            if (item[kRefEan].ToString()!.Length > 30)
+                                            //I20-994: il limite e' quello della colonna, non piu' 30.
+                                            if (item[kRefEan].ToString()!.Length > LimitiColonne.Ean)
                                             {
-                                                item[kRefEan] = item[kRefEan].ToString()!.Substring(0, 30);
+                                                item[kRefEan] = LimitiColonne.TroncaEan(item[kRefEan].ToString()!);
                                             }
 
                                             if (artRecord.Ean != item[kRefEan].ToString())

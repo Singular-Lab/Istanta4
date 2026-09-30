@@ -79,8 +79,9 @@ namespace Istanta.Models
                     .HasMaxLength(4000)
                     .HasColumnName("descrizione1");
 
+                //I20-994: era 30. La migration EanA300ContractA5000 porta la colonna a 300.
                 entity.Property(e => e.Ean)
-                    .HasMaxLength(30)
+                    .HasMaxLength(LimitiColonne.Ean)
                     .HasColumnName("ean");
 
                 entity.Property(e => e.Descrizione4)
@@ -337,8 +338,9 @@ namespace Istanta.Models
 
                 entity.Property(e => e.Id).HasColumnName("id");
 
+                //I20-994: era 500. La migration EanA300ContractA5000 porta la colonna a 5000.
                 entity.Property(e => e.Contract)
-                    .HasMaxLength(500)
+                    .HasMaxLength(LimitiColonne.Contract)
                     .HasColumnName("contract");
 
                 entity.Property(e => e.StatoMsg)
