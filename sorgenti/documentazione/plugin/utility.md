@@ -2,7 +2,9 @@
 
 **Cosa è:** il file in cui è finito tutto quello che non aveva un posto.
 
-Esporta **due** oggetti: `Utility`, con 76 membri, e `FotoPlacer`. Non ha un concetto: ne ha almeno
+Esporta **due** oggetti: `Utility` e `FotoPlacer`. **Dal I20-1015 `FotoPlacer` sta in
+[reperimentoFoto/fotoPlacer.js](reperimentoFoto/fotoPlacer.md)** e `utility.js` lo riesporta con lo
+stesso nome, per il core e per le agenzie che lo prendono da qui. Non ha un concetto: ne ha almeno
 otto.
 
 **Solo otto membri su settantasei meritano il nome «utility».**
@@ -16,7 +18,7 @@ otto.
 | **menu e picker** | 5 | no |
 | **testo e tag InDesign** | 9 | sì |
 | **trovare cose nel documento** | 10 | sì |
-| **foto** | 5 + `FotoPlacer` | sì |
+| **foto** | uscite in I20-1015 | — |
 | **utilità vere** | 8 | no |
 | varie | il resto | in parte |
 
@@ -57,14 +59,12 @@ ciclo e il disegno.
 - `setCampoDNA`, `getBoxFromElementOfBox`, `_findBoxInExpectedPage`, `_findBoxInDocument`,
   `getGrigliaFromPage`, `getMasterSpreadByName`.
 
-### Foto — 5 più `FotoPlacer`
+### Foto — uscite in I20-1015
 
-- `getLinkHash(rectangle)` → l'md5 dell'immagine collegata, per sapere se è ancora quella del
-  server. Passa da [cacheHashFoto](cacheHashFoto.md), perché il calcolo su centinaia di file è il
-  costo dominante del Report Integrità.
-- `getBolloNOFOTO`, `getBolloFOTONOFOUND`, `getNomeFotoLogoBolloBySigla`.
-- **`FotoPlacer`** — `placeFoto`, `applicaNoRender`, `updateFoto` — è già un oggetto separato dentro
-  lo stesso file.
+`getLinkHash`, `getBolloNOFOTO`, `getBolloFOTONOFOUND` e `getNomeFotoLogoBolloBySigla` sono
+diventati membri di [ReperimentoFoto](reperimentoFoto/operazioni.md), e `FotoPlacer` è
+[reperimentoFoto/fotoPlacer.js](reperimentoFoto/fotoPlacer.md). Il concetto è
+[procurarsi la foto giusta](reperimentoFoto/README.md).
 
 ### Utilità vere — 8
 
@@ -88,8 +88,7 @@ separate, diventerebbero verificabili. Per le altre il guadagno è solo di ordin
 **Il costo da mettere in conto:** `utility.js` è importato da quasi tutto il Plugin come
 `{Utility, FotoPlacer}`, quindi ogni spostamento tocca decine di file.
 
-Il candidato più semplice è `FotoPlacer`: basta portarlo fuori, perché chi lo usa lo importa già
-col suo nome.
+Il candidato più semplice era `FotoPlacer`: è uscito in I20-1015, e `utility.js` lo riesporta.
 
 ## Cosa è stato rimosso in I20-1002
 

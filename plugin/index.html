@@ -410,11 +410,11 @@
             <div class="panel" id="SyncTracciato">
               <div class="row">
                 <sp-action-button id="ScaricaPacchettoFoto" name="downloadFoto" style="margin-top: 24px;"
-                  onclick="apriSchermataSyncPacchettoFoto(0)">Scarica Pacchetto Foto</sp-action-button><hr>
+                  onclick="ReperimentoFoto.apriSchermataSyncPacchettoFoto(0)">Scarica Pacchetto Foto</sp-action-button><hr>
                   <sp-action-button id="SyncFotoMassivo" name="SyncFotoMassivo" style="margin-top: 24px;"
                   onclick="Utility.apriModal('dialogSyncFotoMassivo','Impagina');">Sync massivo foto</sp-action-button><hr>
                   <!-- <sp-action-button id="ScaricaLoghiBolli" name="ScaricaLoghiBolli" style="margin-top: 24px; color: green;"
-                  onclick="apriSchermataSyncPacchettoFoto(1)">Scarica Loghi/Bolli</sp-action-button><hr> -->
+                  onclick="ReperimentoFoto.apriSchermataSyncPacchettoFoto(1)">Scarica Loghi/Bolli</sp-action-button><hr> -->
                 <sp-action-button id="syncRimaste" name="syncRimaste" style="margin-top: 24px; color: lightcoral; display: none;"
                   onclick="apriSchermataSyncModifiche()">Sync rimaste</sp-action-button><hr>
                 <sp-action-button id="svuotaCodaSync" name="svuotaCodaSync" style="margin-top: 24px; color: lightcoral; display: none;"
@@ -948,7 +948,7 @@
   <div>
     <button onclick="Utility.chiudiModal();">Annulla</button>
     <button
-      onclick="ricollegaFotoMassivo($('#ricollegaFotoPresentiModificate').is(':checked'), $('#advancedMode').is(':checked'))">Avvia Sync</button>
+      onclick="ReperimentoFoto.ricollegaFotoMassivo($('#ricollegaFotoPresentiModificate').is(':checked'), $('#advancedMode').is(':checked'))">Avvia Sync</button>
   </div>
 </div>
 
@@ -1062,7 +1062,7 @@
     &#x25BC; <!-- Unicode character for a downward triangle -->
   </button>
   <!-- creiamo un bottone che chiama abortSyncPacchettoFotoFunction quando viene cliccato -->
-  <button id="abortSyncPacchettoFoto" onclick="abortSyncPacchettoFotoFunction()" style="font-size: 16px; border: none; background: none; cursor: pointer;">
+  <button id="abortSyncPacchettoFoto" onclick="ReperimentoFoto.abortSyncPacchettoFotoFunction()" style="font-size: 16px; border: none; background: none; cursor: pointer;">
     &#x2716; <!-- Unicode character for a cross -->
   </button>
 </div>
@@ -1136,9 +1136,9 @@
 <div id="dialogSyncPacchettoFoto" myname="dialogSyncPacchettoFoto" style="width:100%; display: none; overflow: none;">
   <div style="height: 90%;" id="avvioOperazioneSyncFoto" style="overflow: none; display: block;">
     <button id="ScaricaPacchettoFoto" name="downloadFoto" style="margin-top: 24px;"
-    onclick="avviaSyncPacchettoFoto(0)">Avvia sync completo</button><hr>
+    onclick="ReperimentoFoto.avviaSyncPacchettoFoto(0)">Avvia sync completo</button><hr>
     <button id="ScaricaPacchettoFoto" name="downloadFoto" style="margin-top: 24px;"
-    onclick="avviaSyncPacchettoFoto(1)">Avvia sync loghi</button><hr>
+    onclick="ReperimentoFoto.avviaSyncPacchettoFoto(1)">Avvia sync loghi</button><hr>
   </div>
   <div style="height: 90%;" id="bodySyncPacchettoFoto" style="overflow: none; display: none;">
     <div id="loadingBox" style="display: flex; justify-content: center; align-items: center; height: 10%; width: 100%; margin-top: 10%;">

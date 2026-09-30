@@ -6,13 +6,14 @@ const fs = uxp.storage.localFileSystem;
 
 /// I20-1002: lo scaricamento delle immagini dal server nella cartella Links di InDesign.
 ///
-/// Il nome non dice cosa fa: "cmd" non significa niente, e chi cerca lo scaricamento delle foto
-/// qui dentro non ci guarda. RINOMINA PROPOSTA: scaricaImmagini.js. Vedi il task di divisione
-/// dei file.
+/// I20-1015: si chiamava scaricamentoFoto.js, un nome che non diceva cosa fa. Ora e' reperimentoFoto/
+/// scaricamento.js, parte del concetto "procurarsi la foto giusta", e chi lo usa lo chiama
+/// scaricamentoFoto: indexNew.js lo dichiara come globale, e lo usano schedaFoto e
+/// ReperimentoFoto. La rinomina in scaricaImmagini.js proposta in I20-1002 e' assorbita qui.
 ///
 /// Il lavoro vero e' non riscaricare quello che c'e' gia': si calcola l'md5 dei file presenti e
 /// lo si confronta con quelli richiesti.
-const cmd = {
+const scaricamentoFoto = {
 
     //I20-967: sotto questa soglia i file gia' presenti si cercano per nome invece di elencare
     //l'intera cartella di destinazione.
@@ -49,7 +50,7 @@ const cmd = {
         //I20-967: per poche foto (tipicamente una sola, dal cambio foto della scheda ref) chiediamo
         //i file per nome: elencare una cartella Links con migliaia di immagini costerebbe molto di piu'.
         let entriesDaControllare = null;
-        if (nomiRichiesti.size > 0 && nomiRichiesti.size <= cmd.SOGLIA_LETTURA_MIRATA && typeof folder.getEntry === "function") {
+        if (nomiRichiesti.size > 0 && nomiRichiesti.size <= scaricamentoFoto.SOGLIA_LETTURA_MIRATA && typeof folder.getEntry === "function") {
             entriesDaControllare = [];
             for (const nomeRichiesto of nomiRichiesti.keys()) {
                 try {
@@ -88,7 +89,7 @@ const cmd = {
 
             const data = await entry.read({ format: uxp.storage.formats.binary });
             const byteArray = new Uint8Array(data);
-            md5GIaScaricati.push(cmd.md5ArrayBuffer(byteArray));
+            md5GIaScaricati.push(scaricamentoFoto.md5ArrayBuffer(byteArray));
 
             count++;
 
@@ -241,7 +242,7 @@ const cmd = {
                 console.error('Errore durante il salvataggio del file:', err);
                 if (objProcess != null && objProcess.onProgress != null) {
                     objProcess.onProgress($va, "Errore durante il salvataggio del file");
-                    await cmd.delay(3000);
+                    await scaricamentoFoto.delay(3000);
                 }
             }
     
@@ -453,4 +454,4 @@ const cmd = {
     }
 }
 
-module.exports = cmd;
+module.exports = scaricamentoFoto;

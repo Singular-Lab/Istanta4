@@ -1,8 +1,11 @@
-# cacheHashFoto.js
+# reperimentoFoto/cacheHash.js
+
+*Fino a I20-1015 si chiamava `cacheHashFoto.js` e stava in `plugin/`; chi lo importa lo chiama
+ancora `cacheHashFoto`.*
 
 **Cosa è:** la memoria degli hash md5 delle foto collegate. Nasce con I20-981 (Lotto 1).
 
-`Utility.getLinkHash` legge da disco l'intero file dell'immagine e ne calcola l'md5 in JavaScript.
+`ReperimentoFoto.getLinkHash` (fino a I20-1015 `Utility.getLinkHash`) legge da disco l'intero file dell'immagine e ne calcola l'md5 in JavaScript.
 Il Report Integrità lo fa per ogni foto di ogni box in pagina, e su un volantino sono centinaia di
 file da qualche MB: **è il costo dominante del report**, e si ripaga solo la prima volta, perché al
 secondo report della stessa sessione i file sono gli stessi.

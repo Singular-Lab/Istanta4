@@ -16,8 +16,18 @@ const path = require("node:path");
 
 const RicollegaEsiti = require("../../plugin/ricollegaEsiti.js");
 
+//I20-1015: la parte foto della scheda e le operazioni foto sono uscite in reperimentoFoto/. Per
+//questi controlli la scheda e' schedaRef.js piu' schedaFoto.js (a runtime un oggetto solo), e
+//indexNew.js e utility.js si leggono insieme a quello che hanno dato a reperimentoFoto.js.
+const INSIEME_A = {
+    "schedaRef.js": ["reperimentoFoto/schedaFoto.js"],
+    "indexNew.js": ["reperimentoFoto/reperimentoFoto.js"],
+    "utility.js": ["reperimentoFoto/reperimentoFoto.js", "reperimentoFoto/fotoPlacer.js"]
+};
 function sorgente(percorso) {
-    return fs.readFileSync(path.join(__dirname, "..", "..", percorso), "utf8");
+    const altri = (INSIEME_A[percorso.replace(/^plugin\//, "")] || []).map(nome => "plugin/" + nome);
+    return [percorso, ...altri]
+        .map(nome => fs.readFileSync(path.join(__dirname, "..", "..", nome), "utf8")).join("\n");
 }
 
 /* ---- dove mettere una foto che va creata ---- */
@@ -145,8 +155,9 @@ test("l'elemento da creare si legge prima di usarlo", () => {
 
 test("il rapporto e' visibile anche a chi gestisce gli errori", () => {
     const js = sorgente("plugin/indexNew.js");
-    const inizio = js.indexOf("async function ricollegaFotoMassivo");
-    const funzione = js.slice(inizio, js.indexOf("function clickOnSleepAwake", inizio));
+    //I20-1015: ricollegaFotoMassivo e' un membro di ReperimentoFoto, non piu' una funzione di indexNew.
+    const inizio = js.indexOf("    async ricollegaFotoMassivo(");
+    const funzione = js.slice(inizio, js.indexOf("\n    },", inizio));
 
     const dichiarazione = funzione.indexOf("let fileEsito = {");
     const primoTry = funzione.indexOf("try{");

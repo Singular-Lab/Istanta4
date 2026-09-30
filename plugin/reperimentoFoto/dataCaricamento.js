@@ -1,5 +1,6 @@
 //I20-971: data di caricamento mostrata sulle foto della schermata di cambio foto.
-//Modulo CommonJS come gli altri del Plugin: si carica con require('./dataCaricamentoFoto').
+//Modulo CommonJS come gli altri del Plugin: si carica con require('./dataCaricamento') da
+//reperimentoFoto/. I20-1015: si chiamava dataCaricamentoFoto.js e stava in plugin/.
 //Qui non si tocca InDesign, cosi' la formattazione e' verificabile dal test runner di Node.
 var DataCaricamentoFoto = (function () {
 

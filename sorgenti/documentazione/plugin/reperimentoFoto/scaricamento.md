@@ -1,10 +1,13 @@
-# cmd.js
+# reperimentoFoto/scaricamento.js
 
-**Cosa è:** lo scaricamento delle immagini dal server nella cartella Links di InDesign.
+**Cosa è:** lo scaricamento delle immagini dal server nella cartella Links di InDesign. Fa parte del
+concetto [procurarsi la foto giusta](README.md).
 
-**Il nome non dice cosa fa.** «cmd» non significa niente, e chi cerca lo scaricamento delle foto qui
-dentro non ci guarda. **Rinomina proposta: `scaricaImmagini.js`** — è il genere di cosa che costa
-quanto un file mal diviso, perché nasconde il contenuto a chi lo cerca.
+**Fino a I20-1015 si chiamava `cmd.js`**, un nome che non diceva cosa fa: chi cercava lo
+scaricamento delle foto lì dentro non ci guardava. I20-1002 aveva proposto `scaricaImmagini.js`; la
+rinomina è stata assorbita in I20-1015, e ora chi lo usa lo chiama `scaricamentoFoto`, la globale che
+`indexNew.js` dichiara. Non lo importa nessuno col `require`: al caricamento legge `uxp`, e sotto
+Node non si carica — vedi [README.md](README.md).
 
 ## Come lavora
 
@@ -26,10 +29,11 @@ costava moltissimo.
 ## Funzioni
 
 - `downloadImages(listImagesRequired, objProcess, cartella, idOperazione)` → il cuore del file.
-  Lo chiama `indexNew` per il cambio foto della scheda e per la sincronizzazione massiva.
+  Lo chiamano [ReperimentoFoto](operazioni.md) per la foto singola e per la sincronizzazione massiva.
   `objProcess.onProgress` riceve l'avanzamento.
-- `md5ArrayBuffer(arrayBuffer)` → l'md5 di un file letto in memoria. Lo usano anche `utility.js` e
-  `schedaRef.js` per sapere se una foto locale è ancora quella del server.
+- `md5ArrayBuffer(arrayBuffer)` → l'md5 di un file letto in memoria. Lo usano anche `getLinkHash`
+  e la [parte foto della scheda](schedaFoto.md) per sapere se una foto locale è ancora quella del
+  server.
 - `delay(ms)` → pausa fra un tentativo di scaricamento e il successivo.
 
 ## Cosa è stato rimosso in I20-1002

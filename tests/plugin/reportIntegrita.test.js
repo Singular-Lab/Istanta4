@@ -59,6 +59,34 @@ function membriDelFile(testo) {
     return membri;
 }
 
+//Il sorgente senza commenti e senza stringhe: un nome dentro un messaggio non e' codice.
+function soloCodice(testo) {
+    return senzaCommenti(testo.replace(/<!--[\s\S]*?-->/g, ""))
+        .replace(/`(?:\\.|[^`\\])*`/g, "``")
+        .replace(/"(?:\\.|[^"\\\n])*"/g, '""')
+        .replace(/'(?:\\.|[^'\\\n])*'/g, "''");
+}
+
+//I20-1015: le funzioni diventate membri si chiamano col nome dell'oggetto anche quando si
+//passano come valore. Nel ponte, "infoFoto: getInfoFotoDalServer" era rimasto cosi': in UXP la
+//globale non c'e' piu', e al primo cambio foto con la foto mancante partiva un ReferenceError.
+function nomiNudi(nomi) {
+    const trovati = [];
+    for (const relativo of fileDelPlugin().concat(["index.html"])) {
+        soloCodice(leggiFileDelPlugin(relativo)).split("\n").forEach(riga => {
+            for (const nome of nomi) {
+                if (new RegExp("^\\s*(async\\s+)?" + nome + "\\s*[:(]").test(riga)) {
+                    continue;
+                }
+                if (new RegExp("(?<![\\w.$])" + nome + "\\b").test(riga)) {
+                    trovati.push(relativo + ": " + riga.trim());
+                }
+            }
+        });
+    }
+    return trovati;
+}
+
 /* ---- le due meta' ---- */
 
 test("confronti.js e' rimasto il motore: cinque membri, nessuno del report", () => {
@@ -172,4 +200,8 @@ test("le quattro regole pure si caricano sotto Node senza aiuti", () => {
         assert.ok(Object.keys(modulo).length > 0, nome);
         assert.doesNotMatch(senzaCommenti(leggiFileDelPlugin("reportIntegrita/" + nome + ".js")), /require\(['"]indesign['"]\)/, nome);
     }
+});
+
+test("le funzioni arrivate da indexNew non compaiono mai nude, nemmeno passate come valore", () => {
+    assert.deepStrictEqual(nomiNudi(DA_INDEXNEW), []);
 });

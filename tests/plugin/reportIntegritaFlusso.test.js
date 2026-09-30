@@ -17,8 +17,17 @@ const path = require('node:path');
 
 const cartellaPlugin = path.join(__dirname, '..', '..', 'plugin');
 
+//I20-1015: la parte foto della scheda e le operazioni foto sono uscite in reperimentoFoto/. Per
+//questi controlli la scheda e' schedaRef.js piu' schedaFoto.js (a runtime un oggetto solo), e
+//indexNew.js e utility.js si leggono insieme a quello che hanno dato a reperimentoFoto.js.
+const INSIEME_A = {
+    "schedaRef.js": ["reperimentoFoto/schedaFoto.js"],
+    "indexNew.js": ["reperimentoFoto/reperimentoFoto.js"],
+    "utility.js": ["reperimentoFoto/reperimentoFoto.js", "reperimentoFoto/fotoPlacer.js"]
+};
 function sorgente(nome) {
-    return fs.readFileSync(path.join(cartellaPlugin, nome), 'utf8');
+    return [nome, ...(INSIEME_A[nome] || [])]
+        .map(n => fs.readFileSync(path.join(cartellaPlugin, n), 'utf8')).join('\n');
 }
 
 //Il sorgente senza commenti: i nomi citati in un commento non sono codice.

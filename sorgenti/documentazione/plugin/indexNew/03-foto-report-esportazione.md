@@ -7,44 +7,16 @@ Panoramica del file: [README.md](README.md).
 
 ---
 
-## Le foto — 10 funzioni, ~1.000 righe
+## Le foto — uscite in I20-1015
 
-Ci sono **tre livelli**, e la distinzione è quella che il progetto usa già altrove.
+Le dieci funzioni foto — più `impaginaFotoAppenaDisponibile`, undici in tutto — sono diventate
+membri di `ReperimentoFoto`, in [reperimentoFoto/](../reperimentoFoto/README.md). Si chiamano con gli
+stessi nomi: `ReperimentoFoto.avviaSyncPacchettoFoto(...)`. I tre livelli — operazioni concrete, il
+ponte `assicuraFotoNeiLinks`, operazioni grosse — sono descritti in
+[reperimentoFoto/operazioni.md](../reperimentoFoto/operazioni.md).
 
-### 1. Le operazioni concrete
-
-Toccano il disco o il server:
-
-- `fotoPresenteNeiLinks(nomeFoto)` → **non si limita a guardare se il file c'è**: un file troncato
-  o vuoto vale come **assente**, perché non è impaginabile.
-- `getInfoFotoDalServer(guidId)` → il record della foto dal server.
-- `scaricaFotoSingolaNeiLinks(...)`, `scriviFileInCartella(bytes, cartella, nomeFile)`.
-
-### 2. Il ponte verso il modulo puro
-
-`assicuraFotoNeiLinks(nomeFoto, guidId)` — **sedici righe**:
-
-```javascript
-var esito = await fotoAutoSync.assicuraFotoNeiLinks(nomeFoto, guidId, {
-    fotoPresente: async function (nome) { return fotoPresenteNeiLinks(nome); },
-    infoFoto: getInfoFotoDalServer,
-    scarica: scaricaFotoSingolaNeiLinks
-});
-```
-
-Inietta le tre operazioni concrete dentro [fotoAutoSync](../fotoAutoSync.md) e **gli lascia la
-decisione**. È il pattern del progetto fatto bene: la decisione sta dove si può provare, le
-operazioni concrete dove devono stare. È anche il motivo per cui `fotoAutoSync` ha i test e queste
-no.
-
-### 3. Le operazioni grosse
-
-- `avviaSyncPacchettoFoto(mode, callback, codici)` → **348 righe**: lo scaricamento massivo, con
-  barra di avanzamento e interruzione.
-- `ricollegaFotoMassivo(...)` → **445 righe**: riaggancia in blocco le foto dei box impaginati. Gli
-  esiti si leggono con [ricollegaEsiti](../ricollegaEsiti.md), che è verificabile.
-- `getFotoData`, `apriSchermataSyncPacchettoFoto`, `abortSyncPacchettoFotoFunction`,
-  `impaginaFotoAppenaDisponibile`.
+Qui restano le due globali che quelle funzioni e la scheda usano: `ReperimentoFoto` e
+`scaricamentoFoto`, lo scaricamento che si chiamava `cmd`.
 
 ---
 
@@ -79,18 +51,14 @@ task sono stati scritti.
 Gli otto file sono diventati una cartella: [reportIntegrita/](../reportIntegrita/README.md). Il
 README del report dice cosa è entrato e cosa è rimasto fuori, e perché.
 
-### Procurarsi la foto — sette file
+### Procurarsi la foto — fatto in I20-1015
 
-| file | pezzi |
-|---|---|
-| `schedaRef.js` | 28 membri, ~2.500 righe |
-| **`indexNew.js`** | queste 10 funzioni, ~1.000 righe, su tre livelli |
-| `cmd.js` | `downloadImages`, `md5ArrayBuffer` |
-| `utility.js` | `FotoPlacer`, `getLinkHash`, i bolli |
-| `fotoAutoSync`, `cacheHashFoto`, `dataCaricamentoFoto` | i moduli puri, già pronti |
+I sette file sono diventati una cartella: [reperimentoFoto/](../reperimentoFoto/README.md).
 
 **Non va confuso con il `fixFoto` di [sistemazioneFoto](../sistemazioneFoto/02-sistemazione-foto.md)**, che
 decide *dove* la foto sta dentro il box: sono due concetti e due task distinti.
 
-Nel codice i pezzi sono marcati con **`REPORT INTEGRITA'`** e **`PROCURARSI LA FOTO`**: un grep su
-quelle parole li elenca tutti.
+I marcatori **`REPORT INTEGRITA'`** e **`PROCURARSI LA FOTO`** che I20-1002 aveva messo nel codice
+sono serviti a ritrovare i pezzi, e con i due concetti raccolti nelle loro cartelle sono stati tolti.
+Resta `REPORT INTEGRITA'` in `schedaRef.js`, sui membri dell'aggancio al report, che stanno lì di
+proposito.

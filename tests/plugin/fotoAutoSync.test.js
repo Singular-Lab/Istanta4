@@ -10,7 +10,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const fotoAutoSync = require('../../plugin/fotoAutoSync');
+const fotoAutoSync = require('../../plugin/reperimentoFoto/autoSync');
 
 function operazioni({ presenze = [], info = null, erroreInfo = null, erroreDownload = null } = {}) {
     const chiamate = { fotoPresente: [], infoFoto: [], scarica: [] };

@@ -3,7 +3,8 @@
 **Cosa è:** la scheda della referenza — quello che l'operatore vede e modifica quando seleziona un
 box nel documento.
 
-**182 membri, 9.640 righe**, tutti sullo stesso piano: qui non c'è la distinzione fra pubblico e
+**145 membri propri in 6.207 righe**, più i 36 della [parte foto](reperimentoFoto/schedaFoto.md)
+mescolati dal I20-1015, tutti sullo stesso piano: qui non c'è la distinzione fra pubblico e
 privato che c'è nel [Report Integrità](reportIntegrita/README.md).
 
 ## Le famiglie
@@ -59,17 +60,19 @@ sta lavorando l'operatore» guarda lì. Con lei: `multiSelection`, `schedeRefDat
 Il file non li distingue, ma ci sono, e l'operatore ha deciso di separarli. Nel codice ogni membro
 che appartiene a uno di essi è **marcato**, così i task li ritrovano con un grep.
 
-### 1. Procurarsi la foto — 28 membri, circa 2.500 righe
+### 1. Procurarsi la foto — uscita in I20-1015
 
 Quale foto va su questa referenza, chiederla al server, scaricarla, sostituirla, gestire extra ed
-extra auto.
+extra auto. **Dal I20-1015 sta in [reperimentoFoto/schedaFoto.js](reperimentoFoto/schedaFoto.md)**:
+36 membri, 3.489 righe, mescolati in fondo a `schedaRef.js` con `Object.assign`, quindi ancora
+membri della scheda. Il resto del concetto è in [reperimentoFoto/](reperimentoFoto/README.md).
 
 **Non va confuso con il `fixFoto` di [sistemazioneFoto](sistemazioneFoto/02-sistemazione-foto.md)**, che
 decide *dove* la foto sta dentro il box. Sono due concetti diversi e **due task distinti**:
 
 | concetto | dove vive oggi | task |
 |---|---|---|
-| **procurarsi** la foto giusta | `schedaRef` (28), `indexNew` (10 funzioni globali), `cmd.downloadImages`, `FotoPlacer` in `utility`, più i moduli puri `cacheHashFoto`, `fotoAutoSync`, `dataCaricamentoFoto` | I20-1015, da fare |
+| **procurarsi** la foto giusta | [`plugin/reperimentoFoto/`](reperimentoFoto/README.md), raccolta da `schedaRef`, `indexNew`, `cmd.js` e `utility` | I20-1015, fatto |
 | **collocarla** nel box | [`plugin/sistemazioneFoto/`](sistemazioneFoto/README.md), uscita da `CssFramework` | I20-1009, fatto |
 
 ### 2. La clonazione — 26 membri
