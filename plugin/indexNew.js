@@ -6487,15 +6487,17 @@ lastHeightDimension = 0;
 ///     l'impaginazione: nessuna conferma, e NON elimina mai dal tracciato. Serve a rimettere
 ///     d'accordo server e impaginato.
 ///
-/// eliminaDaTracciato diventa vero solo se si verificano TRE cose insieme: la chiamata viene dal
-/// pulsante, l'utente e' superAdmin, e ha alzato la spunta in Utility.confirmRimozioneRef.
+/// eliminaDaTracciato diventa vero solo se si verificano QUATTRO cose insieme: la chiamata viene
+/// dal pulsante, l'utente e' superAdmin, ha alzato la spunta in Utility.confirmRimozioneRef, e poi
+/// ha scritto la parola ELIMINA in Utility.confirmParolaEliminazione (I20-1013).
 /// Il flag va al server: Menabo/rimuoviRefImpaginata/{idKit}/{eliminaDaTracciato}.
 ///
 /// L'ELIMINAZIONE DAL TRACCIATO CANCELLA IL RECORD SUL SERVER, ed e' voluta. La specifica
 /// flusso-impaginazione-indesign la elenca ancora fra i rischi con la domanda se debba alterare
 /// anche il dato server: la risposta e' si', confermata dall'operatore in I20-1002, e la
 /// specifica andrebbe aggiornata.
-/// E' aperto un task per chiedere una seconda conferma, in cui scrivere la parola ELIMINA.
+/// I20-1013: annullare la seconda conferma, o sbagliare la parola, annulla TUTTO: non si rimuove
+/// nemmeno dall'impaginato.
 async function rimuoviRefImpaginata(listaCodiciConId = [], mantieniBusyEsterno = false) {
     //scorriamo tutte le selezioni, cerchiamo le loro basi e ci salviamo in una lista i loro codici gruppo
 
