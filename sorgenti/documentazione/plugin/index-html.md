@@ -8,7 +8,8 @@ documento solo.
 - **Schede** (`#contenitoreTab`) → menabò, griglia, artwork, filtri, referenza, libro, utility.
 - **Pannelli a copertura totale** → `#loadingPanel` blocca il lavoro durante le operazioni lunghe,
   `#loginPanel` prima dell'accesso.
-- **Due blocchi `<script>` in fondo** (righe 785 e 1235 circa): comportamento dei tab e dialoghi.
+- **Due blocchi `<script>` in fondo**: `toggleAdvancedMode` e `openTabSync`. Le funzioni dei tab
+  non stanno qui ma in [jsIndexControls.js](jsIndexControls.md).
 
 ## Da sapere
 
@@ -16,60 +17,39 @@ Markup e comportamento non sono separati: molti elementi portano l'azione scritt
 `onclick`. Chi cerca un pulsante lo cerca qui per `id`, e quell'`id` è il filo che lega
 l'interfaccia al codice: rinominarlo rompe in silenzio.
 
-## Variabili globali
+## Le schede: si chiama jsIndexControls
 
-| nome | cos'è |
-|---|---|
-| `functionMap` | mappa un nome scritto come stringa nell'attributo `data-method` di un elemento alla funzione vera da chiamare |
+Gli `onclick` della barra e dei sottomenù chiamano `jsIndexControls.openTab`,
+`jsIndexControls.changeSubMenu`, `jsIndexControls.changeImage` e `jsIndexControls.clearSubmenu`:
+`jsIndexControls` è una `const` di `indexNew.js`, e il markup la vede come vede `confronti` e
+`Utility`.
 
-Oggi `functionMap` contiene **una voce sola**, `filtriJs.visualizzaHomePageFiltri`. Serve perché
-l'interfaccia dichiara l'azione come testo nel markup; se aggiungi un `data-method` senza
-registrarlo qui, il click non fa niente e non dà errore.
+- I click della **barra** passano `true` come secondo argomento di `changeSubMenu`: dicono che il
+  click è dell'operatore, e solo allora parte il `data-method` della prima sottoscheda.
+- L'attributo **`data-method`** dichiara cosa fare entrando in una sottoscheda col click: oggi
+  «Consulta tracciato» ha `mostraTracciato` e «Filtri» ha `filtriJs.visualizzaHomePageFiltri`. Il
+  nome va registrato in `jsIndexControls.metodiDaMarkup`, altrimenti non fa niente.
+- Il click **diretto** su una sottoscheda passa la stessa funzione a `openTab`, che la esegue dopo
+  aver mostrato la scheda: `jsIndexControls.openTab(event, 'Tab1', mostraTracciato)`.
+
+Perché le azioni del click non stanno in `openTab`: vedi [jsIndexControls.md](jsIndexControls.md).
 
 ## Funzioni
 
-- `openTab(evt, tabName, functionToCall)` → nasconde tutte le schede, mostra quella chiesta, poi
-  applica le eccezioni: `Tab1` chiama `mostraTracciato()`, `Tab5` mostra «Salva», `Tab6` mostra
-  «Conferma», `Tab7`, `Tab8` e `Tab13` nascondono entrambi. Se le passi una funzione la esegue
-  dopo, e chiude sempre con `onresizeWindow()`.
-- `openTabTracciato(evt, tabName)` → come sopra ma sulle schede interne del tracciato. **Nessun
-  chiamante**, né dal markup né dal codice.
-- `changeImage(sender)` → il pulsante è un'immagine, e «acceso» vuol dire un file diverso: spegne
-  quello attivo fra i fratelli togliendo `_active` dal nome e accende il cliccato aggiungendolo,
-  tenendo allineato l'attributo `active`.
-- `clearSubmenu()` → nasconde tutti i sottomenù.
-- `changeSubMenu(tabName)` → mostra il sottomenù della scheda e **simula il click sul suo primo
-  elemento visibile**: ne legge l'attributo `tab`, cerca in `functionMap` l'eventuale `data-method`
-  e chiama `openTab`, poi `changeImage`. È il motivo per cui entrare in una scheda apre già la prima
-  sottoscheda giusta.
 - `toggleAdvancedMode(isChecked)` → mostra o nasconde la riga della modalità avanzata; quando la
   nasconde **azzera anche la spunta**, così non resta attiva invisibile.
 - `openTabSync(evt, tabName)` → le tre schede della finestra di sincronizzazione foto (rimasti,
   terminati, falliti).
-- `resolveFunctionFromString(path)` → risolverebbe `"a.b.c"` in una funzione partendo da `window`.
-  **Nessun chiamante**: è l'approccio scartato in favore di `functionMap`.
 
-## La stessa interfaccia è governata da due copie del codice
+## Fino a I20-1005: due copie
 
-`jsIndexControls.js` contiene `openTab`, `openTabTracciato`, `changeImage`, `clearSubmenu` e
-`changeSubMenu` quasi identiche a queste. Non è un residuo: **sono vive tutte e due**.
+Il primo blocco `<script>` conteneva una copia di `openTab`, `openTabTracciato`, `changeImage`,
+`clearSubmenu` e `changeSubMenu`, con `functionMap` al posto di `metodiDaMarkup`, e la chiamavano i
+click; il codice chiamava quella di `jsIndexControls.js`. Le due erano già divergenti: aprire una
+scheda da codice e aprirla con un click non facevano la stessa cosa. La copia di qui è stata tolta,
+con `resolveFunctionFromString`, che non aveva chiamanti.
 
-- gli `onclick` scritti nel markup chiamano quelle di `index.html`;
-- il codice JS chiama quelle di `jsIndexControls` — `indexNew.js:550`, `confronti.js:2094`,
-  `schedaArtwork.js:20` e `47`.
-
-Le due copie **sono già divergenti**:
-
-| | `index.html` | `jsIndexControls.js` |
-|---|---|---|
-| `case 'Tab1'` → `mostraTracciato()` | sì | **no** |
-| parametro `functionToCall` | sì | **no** |
-| `findOpenedTab()` | no | sì |
-
-Aprire una scheda da codice e aprirla con un click **non fanno la stessa cosa**. Chi corregge un
-comportamento dei tab deve correggerlo in due punti, o accorgersi di quale dei due sta guardando.
-È stato aperto un task a sé.
-
-**Un dettaglio minore, in entrambe le copie:** nello `switch` di `openTab` il `case 'Tab8'` è senza
-`break` e prosegue dentro `Tab13`. Oggi è innocuo perché le due istruzioni sono identiche; smette di
-esserlo il giorno che `Tab13` cambia.
+Nel passaggio è cambiata una cosa sola del click: su «Filtri» l'`onclick` chiamava
+`filtriJs.visualizzaHomePageFiltri()` con le parentesi, cioè **prima** di aprire la scheda,
+passando a `openTab` il risultato. Ora le passa la funzione, che parte dopo l'apertura come già
+succedeva entrando dal menabò.
