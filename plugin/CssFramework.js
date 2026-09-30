@@ -92,10 +92,39 @@ const CssFramework =
         let candidate = this.generateCandidateRects(baseWidth, baseHeight, obs, 0);
 
         //refiniamo i rettangoli liberi
-        let refinedRects = this.refineRects(obs, candidate, baseWidth, baseHeight, 0);
+        //I20-1011: l'esito dice come e' andato il raffinamento. La riga in console serve a
+        //misurare sui volantini veri quanto costa: il numero di rettangoli, e con lui il
+        //tempo, cresce in fretta con gli ostacoli.
+        let esito = {};
+        let inizioRaffinamento = Date.now();
+        let refinedRects = this.refineRects(obs, candidate, baseWidth, baseHeight, 0, esito);
+        let codiceGruppo = this.codiceGruppoDelBox(box);
+        console.log("refineRects " + codiceGruppo + ": " + esito.ostacoli + " ostacoli, " + esito.iterazioni + " iterazioni, " +
+            esito.rettangoli + " rettangoli, " + (Date.now() - inizioRaffinamento) + " ms");
+
+        if (esito.interrotto) {
+            //Non dovrebbe succedere mai: vedi refineRects. Se succede, lo spazio per le foto e'
+            //calcolato a meta' e l'operatore deve saperlo prima di guardare l'impaginato.
+            console.warn("refineRects " + codiceGruppo + ": interrotto dalla guardia dopo " + esito.iterazioni +
+                " iterazioni, con " + esito.rettangoli + " rettangoli e " + esito.ostacoli + " ostacoli");
+            messaggioUtente("Code CSF-18: Nel box con codice gruppo " + codiceGruppo + " lo spazio per le foto non e' stato calcolato fino in fondo: " +
+                "controllare la posizione delle foto.", "warning");
+        }
 
         return {candidate: refinedRects, obstacles: obs};
 
+    },
+
+    /// Il codice gruppo del box, per i messaggi. "sconosciuto" se il DNA non lo dice o non si
+    /// legge: e' solo un'etichetta, non deve poter fermare il calcolo.
+    codiceGruppoDelBox(box) {
+        try {
+            let dna = Utility.getDnaOfBox(box);
+            return dna != null && dna.codice_gruppo != null ? dna.codice_gruppo : "sconosciuto";
+        }
+        catch (e) {
+            return "sconosciuto";
+        }
     },
 
     /// Quali elementi del box sono ostacoli per le foto, in coordinate relative alla base.
@@ -450,14 +479,28 @@ const CssFramework =
     /// Il cuore del gruppo: spezza ogni candidato sugli ostacoli che lo attraversano, e ripete
     /// finche' nessuno collide piu'. Alla fine toglie i duplicati, scarta i candidati piu'
     /// piccoli di un quarto della base per lato e quelli contenuti in altri.
-    /// GUARDIA DI EMERGENZA: il ciclo si ferma comunque dopo mille iterazioni. Se scatta, i
-    /// candidati restituiti sono quelli parziali dell'ultimo giro e nessuno lo viene a sapere.
-    refineRects(obstacles, contours, boxWidth, boxHeight, tolerance = 0) {
+    ///
+    /// Il ciclo finisce sempre, in al piu' tanti giri quanti sono gli ostacoli piu' uno: ogni
+    /// pezzo nato da una spezzatura porta in obstacleRefs l'ostacolo che l'ha spezzato, e su
+    /// quello non viene piu' spezzato; un rettangolo che a un giro non collide con niente non
+    /// collide piu', perche' gli ostacoli non cambiano. Quindi a ogni giro chi resta da
+    /// spezzare ha un ostacolo in piu' nei suoi obstacleRefs, e gli ostacoli sono finiti.
+    ///
+    /// La guardia e' quel numero, obstacles.length + 1. Se scatta la regola qui sopra e' stata
+    /// rotta, e i candidati restituiti sono quelli parziali dell'ultimo giro: esito.interrotto
+    /// lo dice, e getSpazioImpaginazione lo fa sapere.
+    /// I20-1011: prima la guardia era a mille giri, e un secondo limite a dieci milioni di
+    /// rettangoli si controllava solo all'inizio di ogni giro. Non potevano scattare, e se
+    /// l'avessero fatto nessuno l'avrebbe saputo.
+    ///
+    /// esito, se passato, si riempie con { iterazioni, rettangoli, ostacoli, interrotto }.
+    refineRects(obstacles, contours, boxWidth, boxHeight, tolerance = 0, esito = null) {
         let currentRects = [...contours];
         let changed = true;
         let emergencycounter = 0;
-        let emergencyLimit = 10000000;
-        while (changed && emergencycounter < 1000 && currentRects.length < emergencyLimit) {
+        let rettangoliAlPicco = currentRects.length;
+        const limiteIterazioni = obstacles.length + 1;
+        while (changed && emergencycounter < limiteIterazioni) {
             changed = false;
             const newRects = [];
 
@@ -500,7 +543,16 @@ const CssFramework =
 
             currentRects = newRects;
             currentRects = this.removeDuplicateRects(currentRects);
+            rettangoliAlPicco = Math.max(rettangoliAlPicco, currentRects.length);
             emergencycounter++;
+        }
+
+        if (esito != null) {
+            esito.iterazioni = emergencycounter;
+            esito.rettangoli = rettangoliAlPicco;
+            esito.ostacoli = obstacles.length;
+            //Uscito con changed ancora vero: l'ha fermato la guardia, non la convergenza.
+            esito.interrotto = changed;
         }
 
         let cleanedRects = this.removeDuplicateRects(currentRects);
