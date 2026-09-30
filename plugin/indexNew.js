@@ -1210,7 +1210,7 @@ async function initLibroInLavorazione()
 
                 libroInLavorazione = book;
 
-                openTab(null, "Tab14");
+                jsIndexControls.openTab(null, "Tab14");
                 setNarrow("Libro in lavorazione: " + book.name);
                 jobImpaginazioneLibro = await leggiStatoLavorazioneLibro();
                 if (jobImpaginazioneLibro == null) {

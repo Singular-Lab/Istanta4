@@ -1,17 +1,35 @@
-/// I20-1002: le funzioni delle schede del pannello, quelle che chiama il CODICE.
+/// Le funzioni delle schede del pannello. Le chiamano sia il codice sia gli onclick del
+/// markup di index.html.
 ///
-/// ATTENZIONE: index.html contiene una copia quasi identica di openTab, openTabTracciato,
-/// changeImage, clearSubmenu e changeSubMenu, e la chiamano gli onclick scritti nel markup.
-/// Le due copie sono gia' divergenti: li' ci sono il case Tab1 e il parametro functionToCall,
-/// qui no; qui c'e' findOpenedTab, li' no. Correggere un comportamento dei tab in un punto
-/// solo lo corregge a meta'.
+/// I20-1005: fino ad allora index.html ne teneva una copia sua, gia' divergente, che
+/// chiamavano i click. Le differenze servivano solo al click - ridisegnare il tracciato
+/// entrando in home, caricare la home dei filtri entrando nel menabo' - e il codice non
+/// deve farle: EVENT_NO_REF_SELECTED torna alla home a ogni deselezione, e ridisegnerebbe
+/// il tracciato a ogni click nel vuoto. Ora quelle azioni le dichiara il markup, col
+/// data-method dell'immagine, e changeSubMenu le esegue solo se gli si dice che il click
+/// e' dell'operatore.
 ///
-/// Il require qui sotto importa app, PDFExportOptions e CompressionQuality, che questo file
-/// non usa: e' un residuo, e basta lui a impedire che il modulo si carichi sotto Node.
-
-const { app, PDFExportOptions, CompressionQuality } = require('indesign');
+/// Usa come globali $, document, onresizeWindow e, dentro metodiDaMarkup, filtriJs e
+/// mostraTracciato: le mette indexNew, e sotto Node le mette il test.
 
 const jsIndexControls = {
+
+    /// I nomi che il markup puo' scrivere in data-method, e la funzione che corrisponde a
+    /// ciascuno. Un data-method non registrato qui non fa niente e non da' errore.
+    /// Le globali si leggono al momento della chiamata: quando questo modulo si carica,
+    /// indexNew non le ha ancora dichiarate.
+    metodiDaMarkup: {
+        "filtriJs.visualizzaHomePageFiltri": () => filtriJs.visualizzaHomePageFiltri(),
+        "mostraTracciato": () => mostraTracciato()
+    },
+
+    /// La funzione registrata per quel data-method, o null.
+    metodoDaMarkup(nome) {
+        if (nome == null || !Object.prototype.hasOwnProperty.call(this.metodiDaMarkup, nome)) {
+            return null;
+        }
+        return this.metodiDaMarkup[nome];
+    },
 
     /// Nasconde tutti i sottomenu'.
     clearSubmenu() {
@@ -20,44 +38,38 @@ const jsIndexControls = {
         });
     },
 
-    /// Mostra il sottomenu' della scheda e simula il click sul primo elemento visibile:
-    /// e' cosi' che entrando in una scheda si apre gia' la prima sottoscheda.
-    changeSubMenu(tabName) {
+    /// Mostra il sottomenu' della scheda e apre il primo elemento visibile: e' cosi' che
+    /// entrando in una scheda si apre gia' la prima sottoscheda.
+    ///
+    /// daOperatore lo passano solo gli onclick della barra: allora, dopo aver aperto la
+    /// sottoscheda, si esegue anche il suo data-method. Il codice non lo passa.
+    changeSubMenu(tabName, daOperatore = false) {
         let me = this;
         console.warn('changeSubMenu ' + tabName);
         var subMenu = $(".sub" + tabName);
 
-        //cerchiamo tutti gli elementi la cui classe contiene subTab e li nascondiamo
-        // $(".subMenuTabs").find('div[class*="subTab"]').each(function () {
-        //   $(this).css('display', 'none');
-        // });
         me.clearSubmenu();
 
         //mostraimo il subMenu selezionato
         $(subMenu).css('display', 'flex');
-        //simuliamo un click sul primo elemento del submenu
-        // $(subMenu).find('img').first().click();
-        //troviamo tra i figli del subMenu il primo elemento che non sia a display none e simuliamo un click su di esso
+        //troviamo tra i figli del subMenu il primo elemento che non sia a display none e lo apriamo
         $(subMenu).find('img').each(function () {
             if ($(this).css('display') != 'none') {
                 //leggiamo il suo attributo tab
                 var tab = $(this).attr('tab');
-                me.openTab(null, tab);
+                var fn = daOperatore ? me.metodoDaMarkup($(this).data("method")) : null;
+                me.openTab(null, tab, fn);
                 console.warn('tab ' + tab);
                 me.changeImage($(this));
                 return false;
             }
         });
-
-        //openTab(null, subMenu.attr("defaultTab"));
-        //changeImage($(subMenu).find('img').first());
     },
 
     /// Nasconde tutte le schede e mostra quella chiesta, con le eccezioni dello switch:
     /// Tab5 mostra "Salva", Tab6 "Conferma", Tab7, Tab8 e Tab13 nascondono entrambi.
-    /// A differenza della copia in index.html non gestisce Tab1 e non accetta una funzione
-    /// da eseguire dopo.
-    openTab(evt, tabName) {
+    /// functionToCall, se c'e', si esegue dopo che la scheda e' visibile.
+    openTab(evt, tabName, functionToCall = null) {
         var i, tabcontent, tablinks;
         tabcontent = document.getElementsByClassName("tabcontent");
         for (i = 0; i < tabcontent.length; i++) {
@@ -70,7 +82,6 @@ const jsIndexControls = {
         }
         document.getElementById(tabName).style.display = "block";
         document.getElementById(tabName).parentNode.style.display = "block";
-        //evt.currentTarget.className += " active";
         //creiamo un eccezione per le tab della ref
         switch (tabName) {
             case 'Tab5':
@@ -88,32 +99,21 @@ const jsIndexControls = {
             case 'Tab8':
                 $("#salvaButton").css('display', 'none');
                 $("#confermaButton").css('display', 'none');
+                break;
             case 'Tab13':
                 $("#salvaButton").css('display', 'none');
                 $("#confermaButton").css('display', 'none');
                 break;
             default:
                 break;
-        }        
-    
-        console.warn("opentab " + tabName);
-        onresizeWindow();
-    },
+        }
 
-    /// Come openTab ma sulle schede interne del tracciato. Nessun chiamante, ne' qui ne' nel
-    /// markup: vale anche per la copia in index.html.
-    openTabTracciato(evt, tabName) {
-        var i, tabcontent, tablinks;
-        tabcontent = document.getElementsByClassName("tabcontentTracciato");
-        for (i = 0; i < tabcontent.length; i++) {
-            tabcontent[i].style.display = "none";
+        console.warn("opentab " + tabName);
+
+        if (functionToCall && typeof functionToCall === 'function') {
+            functionToCall();
         }
-        tablinks = document.getElementsByClassName("tablinksTracciato");
-        for (i = 0; i < tablinks.length; i++) {
-            tablinks[i].className = tablinks[i].className.replace(" active", "");
-        }
-        document.getElementById(tabName).style.display = "block";
-        //evt.currentTarget.className += " active";
+        onresizeWindow();
     },
 
     /// Il pulsante e' un'immagine e "acceso" vuol dire un file diverso: spegne il fratello

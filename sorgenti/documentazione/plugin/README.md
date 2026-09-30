@@ -79,7 +79,7 @@ ed è documentato il meccanismo con cui il server prevale su di lui.
 | [variantiDescrizione.md](variantiDescrizione.md) | quale variante di descrizione comanda |
 | [credenzialiSalvate.md](credenzialiSalvate.md) | le credenziali nell'archivio cifrato del sistema |
 | [fotoAutoSync.md](fotoAutoSync.md) | scaricare e impaginare la foto in un colpo solo |
-| [jsIndexControls.md](jsIndexControls.md) | le schede del pannello, la copia che chiama il codice |
+| [jsIndexControls.md](jsIndexControls.md) | le schede del pannello, per il codice e per i click |
 | [garbageCollector.md](garbageCollector.md) | la rimozione differita degli elementi InDesign |
 | [cambiStrutturali.md](cambiStrutturali.md) | quali cambi strutturali si applicano a una referenza |
 
@@ -170,7 +170,8 @@ oggi ci convivono.
    ora la ferma e dice all'operatore cosa è stato annullato e perché
    ([XMLHttpRequestClient.md](XMLHttpRequestClient.md)).
 2. **`index.html` e `jsIndexControls.js` contengono due copie divergenti delle funzioni dei tab** —
-   [index-html.md](index-html.md) e [jsIndexControls.md](jsIndexControls.md).
+   corretto da I20-1005: resta la copia di `jsIndexControls.js`, e le azioni del solo click le
+   dichiara il markup ([index-html.md](index-html.md) e [jsIndexControls.md](jsIndexControls.md)).
 3. **`garbageCollector.js` ha quattro difetti** nella rimozione differita, di cui il più grave è
    `ContentType` usato senza `require` con l'errore inghiottito da un `catch` vuoto —
    [garbageCollector.md](garbageCollector.md).

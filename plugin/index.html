@@ -288,19 +288,19 @@
         <div class="col" style="display: flex; margin-left: 7px; margin-bottom: 0px; padding-bottom: 0px;">
           <div id="barraTab" class="tab" style="display: flex; margin-left: 0px; margin-bottom: 0px; padding-bottom: 0px;">
             <img id="homeImage" src="images/header_home_button_active.png" active="true" subTab="Tab7" style="cursor:pointer;"
-              onclick="changeImage($(this)), changeSubMenu('Tab7')">
+              onclick="jsIndexControls.changeImage($(this)), jsIndexControls.changeSubMenu('Tab7', true)">
             <img id="refImage" src="images/header_ref_button.png" active="false" subTab="Tab5" style="cursor:pointer; padding-left: 2px; display: none;"
-              onclick="changeImage($(this)), changeSubMenu('Tab5')">
+              onclick="jsIndexControls.changeImage($(this)), jsIndexControls.changeSubMenu('Tab5', true)">
               <img id="raggruppaImage" src="images/header_raggruppa_button.png" active="false" subTab="Tab10" style="cursor:pointer; padding-left: 2px; display: none;" 
-              onclick="changeImage($(this)), changeSubMenu('Tab10')">
+              onclick="jsIndexControls.changeImage($(this)), jsIndexControls.changeSubMenu('Tab10', true)">
             <img id="menaboTab" src="images/header_menabo_button.png" active="false" subTab="Tab1"
-                style="cursor:pointer; padding-left: 2px;" onclick="changeImage($(this)), changeSubMenu('Tab1')">
+                style="cursor:pointer; padding-left: 2px;" onclick="jsIndexControls.changeImage($(this)), jsIndexControls.changeSubMenu('Tab1', true)">
             <img id="grigliaTab" src="images/header_griglia_button.png" active="false" subTab="TabGriglia"
-              style="cursor:pointer; padding-left: 2px; display: none;" onclick="changeImage($(this)), changeSubMenu('TabGriglia')">
+              style="cursor:pointer; padding-left: 2px; display: none;" onclick="jsIndexControls.changeImage($(this)), jsIndexControls.changeSubMenu('TabGriglia', true)">
             <img id="utilityImage" src="images/header_utility_button.png" active="false" subTab="Tab12" style="cursor:pointer; padding-left: 2px;"
-              onclick="changeImage($(this)), changeSubMenu('Tab12')">
+              onclick="jsIndexControls.changeImage($(this)), jsIndexControls.changeSubMenu('Tab12', true)">
             <img id="artworkTab" src="images/header_artwork_button.png" active="false" subTab="Tab9" style="cursor:pointer; padding-left: 2px;  display: none;"
-              onclick="changeImage($(this)), changeSubMenu('Tab9')">
+              onclick="jsIndexControls.changeImage($(this)), jsIndexControls.changeSubMenu('Tab9', true)">
           </div>
         </div>
       </div>
@@ -310,54 +310,55 @@
           style="display: flex; margin-left: 0px; margin-top: 0px; padding-top: 0px; margin-bottom: 0px;">
           <div class="subTab7" defaultTab="Tab1" style="display: flex; margin-left: 0px; margin-top: 0px; padding-top: 0px;">
             <img src="images/SubMenu_ConsultaTracciato_active.png" tab="Tab1" style="cursor:pointer;"
-              onclick="openTab(event, 'Tab1'), changeImage($(this))">
+              data-method="mostraTracciato"
+              onclick="jsIndexControls.openTab(event, 'Tab1', mostraTracciato), jsIndexControls.changeImage($(this))">
             <img id="aggiungiReferenzaMenuImg" src="images/SubMenu_AggiungiReferenza.png" tab="Tab2" style="cursor:pointer; display: block;"
-              onclick="openTab(event, 'Tab2'), changeImage($(this))">
+              onclick="jsIndexControls.openTab(event, 'Tab2'), jsIndexControls.changeImage($(this))">
             <img src="images/SubMenu_SyncFoto.png" tab="TabSync" style="cursor:pointer;"
-              onclick="openTab(event, 'TabSync'), changeImage($(this))">
+              onclick="jsIndexControls.openTab(event, 'TabSync'), jsIndexControls.changeImage($(this))">
             <img src="images/SubMenu_Esporta.png" tab="TabEsporta" style="cursor:pointer;"
-              onclick="openTab(event, 'TabEsporta'), changeImage($(this))">
+              onclick="jsIndexControls.openTab(event, 'TabEsporta'), jsIndexControls.changeImage($(this))">
           </div>
           <div class="subTab1" defaultTab="Tab3" style="display: none; margin-left: 0px; margin-top: 0px; padding-top: 0px;">
             <img id="menuFiltri" class="tablinksSync" src="images/SubMenu_Filtri.png" tab="filtriTab" style="cursor:pointer;" 
               data-method="filtriJs.visualizzaHomePageFiltri" 
-              onclick="openTab(event, 'filtriTab', filtriJs.visualizzaHomePageFiltri()), changeImage($(this))">
+              onclick="jsIndexControls.openTab(event, 'filtriTab', () => filtriJs.visualizzaHomePageFiltri()), jsIndexControls.changeImage($(this))">
               <img id="menuMenaboExtra" src="images/SubMenu_Extra.png" tab="Tab4" style="cursor:pointer;"
-              onclick="openTab(event, 'Tab4'), changeImage($(this))">
+              onclick="jsIndexControls.openTab(event, 'Tab4'), jsIndexControls.changeImage($(this))">
               <!-- <img id="menuGriglia" src="images/SubMenu_Griglia.png" tab="TabGriglia" style="cursor:pointer; display: none;"
-                onclick="openTab(event, 'TabGriglia'), changeImage($(this))"> 
+                onclick="jsIndexControls.openTab(event, 'TabGriglia'), jsIndexControls.changeImage($(this))"> 
               <img id="menuRefAvanzate" src="images/SubMenu_RefAvanzate.png" tab="Tab11" style="cursor:pointer; display: none;"
-                onclick="openTab(event, 'Tab11'), changeImage($(this))"> -->
+                onclick="jsIndexControls.openTab(event, 'Tab11'), jsIndexControls.changeImage($(this))"> -->
           </div>
           <div class="subTab5" defaultTab="Tab5" style="display: none; margin-left: 0px; margin-top: 0px; padding-top: 0px; margin-bottom: 0px; padding-bottom: 0px;">
             <img src="images/SubMenu_Edit_active.png" tab="Tab5" style="cursor:pointer;"
-              onclick="openTab(event, 'Tab5'), changeImage($(this)), selectSchedaRef(1)">
+              onclick="jsIndexControls.openTab(event, 'Tab5'), jsIndexControls.changeImage($(this)), selectSchedaRef(1)">
             <img src="images/SubMenu_Primariasecondaria.png" tab="Tab6" style="cursor:pointer;"
-              onclick="openTab(event, 'Tab6'), changeImage($(this)), selectSchedaRef(2)">
+              onclick="jsIndexControls.openTab(event, 'Tab6'), jsIndexControls.changeImage($(this)), selectSchedaRef(2)">
             <img src="images/SubMenu_Fotoextra.png" tab="Tab7" style="cursor:pointer;"
-              onclick="openTab(event, 'Tab7'), changeImage($(this)), selectSchedaRef(3)">
+              onclick="jsIndexControls.openTab(event, 'Tab7'), jsIndexControls.changeImage($(this)), selectSchedaRef(3)">
             <img id="sgruppa" src="images/SubMenu_Sgruppa.png" tab="Tab8" style="cursor:pointer;"
-              onclick="openTab(event, 'Tab8'), changeImage($(this)), selectSchedaRef(4)">
+              onclick="jsIndexControls.openTab(event, 'Tab8'), jsIndexControls.changeImage($(this)), selectSchedaRef(4)">
             <img src="images/SubMenu_CambioStrutturale.png" tab="Tab13" style="cursor:pointer;"
-              onclick="openTab(event, 'Tab13'), changeImage($(this)), selectSchedaRef(5)">
+              onclick="jsIndexControls.openTab(event, 'Tab13'), jsIndexControls.changeImage($(this)), selectSchedaRef(5)">
           </div>
           <div class="subTab9" defaultTab="Tab9" style="display: none; margin-left: 0px; margin-top: 0px; padding-top: 0px;">
             <img src="images/SubMenu_Impostazioni_active.png" tab="Tab9" style="cursor:pointer;"
-              onclick="openTab(event, 'Tab9'), changeImage($(this)), clearSubmenu()">
+              onclick="jsIndexControls.openTab(event, 'Tab9'), jsIndexControls.changeImage($(this)), jsIndexControls.clearSubmenu()">
           </div>
           <div class="subTab10" defaultTab="Tab10" style="display: none; margin-left: 0px; margin-top: 0px; padding-top: 0px;">
             <img src="images/SubMenu_Impostazioni_active.png" tab="Tab10" style="cursor:pointer;"
-              onclick="openTab(event, 'Tab10'), changeImage($(this)), raggruppa()">
+              onclick="jsIndexControls.openTab(event, 'Tab10'), jsIndexControls.changeImage($(this)), raggruppa()">
           </div>
           <div class="subTab12" defaultTab="Tab12" style="display: none; margin-left: 0px; margin-top: 0px; padding-top: 0px;">
             <img src="images/SubMenu_Console_active.png" tab="Tab12" style="cursor:pointer;"
-              onclick="openTab(event, 'Tab12'), changeImage($(this))">
+              onclick="jsIndexControls.openTab(event, 'Tab12'), jsIndexControls.changeImage($(this))">
           </div>          
           <div class="subTabGriglia" defaultTab="TabGriglia" style="display: none; margin-left: 0px; margin-top: 0px; padding-top: 0px;">
               <img id="menuGriglia" src="images/SubMenu_Griglia_active.png" tab="TabGriglia" style="cursor:pointer;"
-                onclick="openTab(event, 'TabGriglia'), changeImage($(this))"> 
+                onclick="jsIndexControls.openTab(event, 'TabGriglia'), jsIndexControls.changeImage($(this))"> 
               <img id="menuRefAvanzate" src="images/SubMenu_RefAvanzate.png" tab="Tab11" style="cursor:pointer;"
-                onclick="openTab(event, 'Tab11'), changeImage($(this))">
+                onclick="jsIndexControls.openTab(event, 'Tab11'), jsIndexControls.changeImage($(this))">
           </div>
         </div>
       </div>
@@ -783,159 +784,8 @@
     </div>
   </div>
 
-      <!-- Qui inserisco lo script per il tab -->
+      <!-- I20-1005: le funzioni dei tab stanno in jsIndexControls.js, e il markup le chiama da li'. -->
       <script>
-        //ondocument ready
-        /// Lega il nome scritto in data-method sull'elemento alla funzione vera da chiamare.
-        /// Un data-method non registrato qui non fa niente e non da' errore.
-        const functionMap = {
-          "filtriJs.visualizzaHomePageFiltri": filtriJs.visualizzaHomePageFiltri
-        };
-
-        /// Nasconde tutte le schede e mostra quella chiesta, con le eccezioni dello switch.
-        /// ATTENZIONE: ne esiste una copia divergente in jsIndexControls.js, che il codice JS
-        /// chiama al posto di questa. Qui c'e' il case Tab1 e il parametro functionToCall, li' no.
-        function openTab(evt, tabName, functionToCall = null) {
-          var i, tabcontent, tablinks;
-          tabcontent = document.getElementsByClassName("tabcontent");
-          for (i = 0; i < tabcontent.length; i++) {
-            tabcontent[i].style.display = "none";
-            tabcontent[i].parentNode.style.display = "none";
-          }
-          tablinks = document.getElementsByClassName("tablinks");
-          for (i = 0; i < tablinks.length; i++) {
-            tablinks[i].className = tablinks[i].className.replace(" active", "");
-          }
-          document.getElementById(tabName).style.display = "block";
-          document.getElementById(tabName).parentNode.style.display = "block";
-          //evt.currentTarget.className += " active";
-          //creiamo un eccezione per le tab della ref
-          switch(tabName) {
-              case 'Tab1':
-              mostraTracciato();
-              break;
-            case 'Tab5':
-              $("#salvaButton").css('display', 'block');
-              $("#confermaButton").css('display', 'none');
-              break;
-            case 'Tab6':
-              $("#salvaButton").css('display', 'none');
-              $("#confermaButton").css('display', 'block');
-              break;
-            case 'Tab7':
-              $("#salvaButton").css('display', 'none');
-              $("#confermaButton").css('display', 'none');
-              break;
-            case 'Tab8':
-              $("#salvaButton").css('display', 'none');
-              $("#confermaButton").css('display', 'none');
-            case 'Tab13':
-              $("#salvaButton").css('display', 'none');
-              $("#confermaButton").css('display', 'none');
-              break;
-            default:
-              break;
-          }
-          console.warn("opentab " + tabName);
-
-          if (functionToCall && typeof functionToCall === 'function') {
-            functionToCall();
-          }
-          onresizeWindow();
-        }
-
-        /// MORTA: nessun chiamante, ne' dal markup ne' dal codice.
-        function openTabTracciato(evt, tabName) {
-          var i, tabcontent, tablinks;
-          tabcontent = document.getElementsByClassName("tabcontentTracciato");
-          for (i = 0; i < tabcontent.length; i++) {
-            tabcontent[i].style.display = "none";
-          }
-          tablinks = document.getElementsByClassName("tablinksTracciato");
-          for (i = 0; i < tablinks.length; i++) {
-            tablinks[i].className = tablinks[i].className.replace(" active", "");
-          }
-          document.getElementById(tabName).style.display = "block";
-          //evt.currentTarget.className += " active";
-        }
-
-        /// Il pulsante e' un'immagine e "acceso" vuol dire un file diverso: spegne il fratello
-        /// attivo togliendo _active dal nome e accende il cliccato aggiungendolo.
-        function changeImage(sender) {
-          //il sender è un oggetto di tipo img, noi dobbiamo eseguire due passaggi, il primo tornare dal sender al padre e cercare l'oggetto con l'immagine il cui nome contiene _active e sostituire l'immagine con l'immagine che non contiene _active, poi sostituire l'immagine del sender con l'immagine che contiene _active, usiamo il jquery per fare questo
-          var parent = $(sender).parent();
-          var img = $(parent).find('img[src*="active"]');
-          var src = $(img).attr('src');
-
-          if (img.length > 0 && img.attr('src') != sender.attr('src')) {
-            console.log('cambio immagine');
-            console.log(img);
-            console.log(sender);
-            console.log(src);
-            var newSrc = src.replace('_active', '');
-            $(img).attr('src', newSrc);
-            $(img).attr('active', "false");
-          }
-
-          if (img == null || img.attr('src') != sender.attr('src')) {
-            src = $(sender).attr('src');
-            console.log(src);
-            var newSrc = src.replace('.png', '_active.png');
-            $(sender).attr('src', newSrc);
-            $(sender).attr('active', "true");
-          }
-
-        }
-
-        function clearSubmenu()
-        {
-          $(".subMenuTabs").find('div[class*="subTab"]').each(function () {
-            $(this).css('display', 'none');
-          });
-        }
-
-        /// Mostra il sottomenu' della scheda e simula il click sul primo elemento visibile:
-        /// e' cosi' che entrando in una scheda si apre gia' la prima sottoscheda.
-        function changeSubMenu(tabName) {
-          console.warn('changeSubMenu ' + tabName);
-          var subMenu = $(".sub" + tabName);
-
-          //cerchiamo tutti gli elementi la cui classe contiene subTab e li nascondiamo
-          // $(".subMenuTabs").find('div[class*="subTab"]').each(function () {
-          //   $(this).css('display', 'none');
-          // });
-          clearSubmenu();
-
-          //mostraimo il subMenu selezionato
-          $(subMenu).css('display', 'flex');
-          //simuliamo un click sul primo elemento del submenu
-          // $(subMenu).find('img').first().click();
-          //troviamo tra i figli del subMenu il primo elemento che non sia a display none e simuliamo un click su di esso
-          $(subMenu).find('img').each(function () {
-            if ($(this).css('display') != 'none') {
-              //leggiamo il suo attributo tab
-  
-              var tab = $(this).attr('tab');
-              //leggiamo nei suoi data se ha un metodo da chiamare
-              const method = $(this).data("method");
-              const fn = functionMap[method];
-
-              if (typeof fn === "function") {
-                openTab(null, tab, fn);
-              } else {
-                openTab(null, tab);
-              }
-              changeImage($(this));
-              return false;
-            }
-          });
-        }
-
-        /// MORTA: approccio scartato in favore di functionMap.
-        function resolveFunctionFromString(path) {
-          return path.split('.').reduce((obj, key) => obj && obj[key], window);
-        }
-
         /// Mostra o nasconde la riga della modalita' avanzata. Nascondendola azzera anche la
         /// spunta, cosi' non resta attiva invisibile.
         function toggleAdvancedMode(isChecked) {
@@ -1225,11 +1075,11 @@
       <div id="tabContainer" style="display: block; width: 100%; height: 100%;">
         <div id="tabButtons" style="display: flex; background-color: #333; width: 100%;">
           <img class="tablinksSync" src="images/SubMenu_Impaginazione_active.png" style="cursor:pointer; width:33%;"
-            onclick="openTabSync(null, 'processiRimastiTab'), changeImage($(this))">
+            onclick="openTabSync(null, 'processiRimastiTab'), jsIndexControls.changeImage($(this))">
           <img class="tablinksSync" src="images/SubMenu_RefAvanzate.png" style="cursor:pointer; width:33%;"
-            onclick="openTabSync(null, 'processiTerminatiTab'), changeImage($(this))">
+            onclick="openTabSync(null, 'processiTerminatiTab'), jsIndexControls.changeImage($(this))">
           <img class="tablinksSync" src="images/SubMenu_Extra.png" style="cursor:pointer; width:34%;"
-            onclick="openTabSync(null, 'processiFallitiTab'), changeImage($(this))">
+            onclick="openTabSync(null, 'processiFallitiTab'), jsIndexControls.changeImage($(this))">
         </div>
         <div style="height: 100%; overflow: auto;">
           <div id="processiRimastiTab" class="tabcontentSync"
