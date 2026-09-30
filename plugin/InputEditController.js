@@ -29,7 +29,7 @@ class InputEditController {
                 let content = matchFieldData.content;
                 //Parsing del content
                 if(content!=null){
-                    let contentObj = Utility.parseContent(content);
+                    let contentObj = TestoTag.parseContent(content);
                     //mettiamoci da parte una lista di tutti gli stili di tutte le row in contentObj post parse
                     for (let r = 0; r < contentObj.length; r++) {
                         let itemRow = contentObj[r];
@@ -205,7 +205,7 @@ class InputEditController {
 
         if (false){//this.descrInArchivio[4] != null && this.descrInArchivio[4] != "") {
             //Esiste in archivio la desczrizione INDD
-            let inddNettoINArchivioObj = Utility.parseContent(this.descrInArchivio[4]);
+            let inddNettoINArchivioObj = TestoTag.parseContent(this.descrInArchivio[4]);
 
             let inddNettoINArchivio ="";
             for (let i2=0; i2<inddNettoINArchivioObj.length; i2++ )
@@ -220,12 +220,12 @@ class InputEditController {
                 // {
                 //     val = val.substring(0,val.length-1);
                 // }
-                inddNettoINArchivio+=Utility.trimDescrizione(val);
+                inddNettoINArchivio+=TestoTag.trimDescrizione(val);
             }
 
 
 
-            if (inddNettoINArchivio != Utility.trimDescrizione(inddNettoInpage)) {
+            if (inddNettoINArchivio != TestoTag.trimDescrizione(inddNettoInpage)) {
                 //MISMATCH WARNING
                 $("#mismatchWarningPanel").text("ATTENZIONE - Mismatch tra impaginato e Istanta: La desrizione HTML non coincide");
                 $("#mismatchWarningPanel").css("background-color", "orange");
@@ -238,19 +238,19 @@ class InputEditController {
         else {
             let report = "";
 
-            if (Utility.trimDescrizione(this.descrInArchivio[0]) != Utility.trimDescrizione(descr1InPage)) {
+            if (TestoTag.trimDescrizione(this.descrInArchivio[0]) != TestoTag.trimDescrizione(descr1InPage)) {
                 //MISMATCH WARNING
                 report +=" Descrizione1 no match";
             }
-            if (Utility.trimDescrizione(this.descrInArchivio[1]) != Utility.trimDescrizione(descr2InPage)) {
+            if (TestoTag.trimDescrizione(this.descrInArchivio[1]) != TestoTag.trimDescrizione(descr2InPage)) {
                 //MISMATCH WARNING
                 report +=" Descrizione2 no match";
             }
-            if (Utility.trimDescrizione(this.descrInArchivio[2]) != Utility.trimDescrizione(descr3InPage)) {
+            if (TestoTag.trimDescrizione(this.descrInArchivio[2]) != TestoTag.trimDescrizione(descr3InPage)) {
                 //MISMATCH WARNING
                 report +=" Descrizione3 no match";
             }
-            if (Utility.trimDescrizione(this.descrInArchivio[3]) != Utility.trimDescrizione(descr4InPage)) {
+            if (TestoTag.trimDescrizione(this.descrInArchivio[3]) != TestoTag.trimDescrizione(descr4InPage)) {
                 //MISMATCH WARNING
                 report +=" Descrizione4 no match";
             }

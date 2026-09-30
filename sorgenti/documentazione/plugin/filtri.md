@@ -31,6 +31,10 @@ cartella di lavorazione, con una voce per pagina — i criteri, se è attiva, se
   campo ha il suo modo di chiedere il valore: tendina, testo libero, data, intervallo.
 - `refreshNarrow(filtroDiv)` → il restringimento progressivo: quali valori restano possibili dati i
   criteri già scelti.
+- `getLetturaFacilitataDellaParola(operatore)` → l'operatore di un criterio detto in parole, per la
+  frase che riassume il filtro: `IN` diventa «contiente», `>=` «è maggiore o uguale di». Un
+  operatore sconosciuto torna com'è. Stava in `utility.js` fino a I20-1012; la usa solo
+  `refreshNarrow`, che la chiama `filtri.X` perché sta dentro una callback.
 
 ### Template
 - `creaPickerTemplateFiltro(templates, onTemplateSelected)`, `applicaTemplateFiltro(...)`,

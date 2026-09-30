@@ -43,7 +43,7 @@ const ReperimentoFoto = {
         //rimuoviamo il progressBarContainerMini se esiste
         $("#progressBarContainerMini").remove();
 
-        Utility.apriModalCustom("dialogSyncPacchettoFoto", "Scaricamento pacchetto foto", "DownloadFoto", true, ["riduciIconaRow"]);
+        Modali.apriModalCustom("dialogSyncPacchettoFoto", "Scaricamento pacchetto foto", "DownloadFoto", true, ["riduciIconaRow"]);
         $("#bodySyncPacchettoFoto").hide();
     },
 
@@ -218,7 +218,7 @@ const ReperimentoFoto = {
         // }
 
         if(mode == 2){
-            Utility.apriModalCustom("dialogSyncPacchettoFoto", "Scaricamento pacchetto foto", "DownloadFoto", true, ["riduciIconaRow"]);
+            Modali.apriModalCustom("dialogSyncPacchettoFoto", "Scaricamento pacchetto foto", "DownloadFoto", true, ["riduciIconaRow"]);
         }
 
         //rimuoviamo vecchie progress bar se esistono
@@ -409,7 +409,7 @@ const ReperimentoFoto = {
                                 //se il modal non è visibile
                                 if ($("#overlayModalDownloadFoto").css("display") == "none") {
                                     messaggioUtente("Scaricamento delle immagini completato", "success");
-                                    Utility.chiudiModalCustom("DownloadFoto");
+                                    Modali.chiudiModalCustom("DownloadFoto");
                                 }
                                 abortedSyncFoto = abortedSyncFoto.filter(id => id !== codiceSyncFotoMode1);
                                 syncFotoInCorso = syncFotoInCorso.filter(id => id !== codiceSyncFotoMode1);
@@ -565,7 +565,7 @@ const ReperimentoFoto = {
     /// foto gia' arrivate restano, e la conferma lo dice.
     async abortSyncPacchettoFotoFunction(){
         //usiamo un confirm
-        var res = await Utility.confirm("Sicuro di voler annullare l'operazione in corso? Le immagini già scaricate verranno mantenute.");
+        var res = await Modali.confirm("Sicuro di voler annullare l'operazione in corso? Le immagini già scaricate verranno mantenute.");
         if (!res) {
             return;
         }
@@ -578,7 +578,7 @@ const ReperimentoFoto = {
         }
         syncFotoInCorso = [];
         $("#progressBarContainerMini").remove();
-        Utility.chiudiModalCustom('DownloadFoto');
+        Modali.chiudiModalCustom('DownloadFoto');
 
     },
 
@@ -623,7 +623,7 @@ const ReperimentoFoto = {
     /// Riaggancia in blocco le foto dei box impaginati. 445 righe.
     /// Gli esiti che il server manda indietro si leggono con ricollegaEsiti.js, che e' verificabile.
     async ricollegaFotoMassivo(ricollegaFotoPresentiModificate = false, advancedMode = false){
-        Utility.chiudiModal();
+        Modali.chiudiModal();
 
         showLoading("Mappatura impaginato in corso...");
         await Utility.sleep(100);

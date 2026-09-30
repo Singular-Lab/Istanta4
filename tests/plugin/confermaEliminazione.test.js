@@ -6,9 +6,10 @@
  * scrive a mano la parola ELIMINA. E' l'unica strada del Plugin che cancella un dato sul server,
  * quindi qui si verifica soprattutto che nel dubbio NON si elimini.
  *
- * utility.js fa require('indesign') e sotto Node non si carica. Le parti pure (la parola, il
- * controllo, il riepilogo) si estraggono dal sorgente e si eseguono; per i dialoghi, che girano
- * solo dentro InDesign, si controlla il sorgente nei punti in cui si decide se eliminare.
+ * I20-1012: le conferme stanno in modali/eliminazione.js, mescolate in Modali, che si carica
+ * sotto Node. Le parti pure (la parola, il controllo, il riepilogo) si chiamano direttamente; per
+ * i dialoghi, che girano solo dentro InDesign, si controlla il sorgente nei punti in cui si
+ * decide se eliminare.
  *
  * Esecuzione: node --test tests/plugin/*.test.js
  */
@@ -19,7 +20,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const cartellaPlugin = path.join(__dirname, '..', '..', 'plugin');
-const utility = fs.readFileSync(path.join(cartellaPlugin, 'utility.js'), 'utf8');
+const utility = fs.readFileSync(path.join(cartellaPlugin, 'modali', 'eliminazione.js'), 'utf8');
+const Modali = require('../../plugin/modali/modali');
 const indexNew = fs.readFileSync(path.join(cartellaPlugin, 'indexNew.js'), 'utf8');
 
 //Il corpo di un membro, isolato contando le graffe a partire dalla sua intestazione.
@@ -39,45 +41,39 @@ function corpoMembro(testo, intestazione) {
     assert.fail(`corpo di ${intestazione} non delimitato`);
 }
 
-//La parola come e' scritta davvero in utility.js.
+//La parola come e' scritta davvero nel sorgente, e come la vede il modulo caricato.
 const parola = (utility.match(/PAROLA_ELIMINAZIONE: "([^"]*)"/) || [])[1];
-
-//Un Utility ridotto alle parti pure, prese dal sorgente vero.
-const UtilityPura = { PAROLA_ELIMINAZIONE: parola };
-for (const [nome, firma] of [['parolaEliminazioneCorretta', 'parolaEliminazioneCorretta(testo) {'], ['riepilogoEliminazione', 'riepilogoEliminazione(codici) {']]) {
-    const corpo = corpoMembro(utility, firma);
-    UtilityPura[nome] = new Function('Utility', 'return function ' + corpo)(UtilityPura);
-}
 
 /* ---- la parola ---- */
 
 test('la parola da scrivere e\' ELIMINA', () => {
     assert.strictEqual(parola, 'ELIMINA');
+    assert.strictEqual(Modali.PAROLA_ELIMINAZIONE, 'ELIMINA');
 });
 
 test('vale solo la parola esatta, anche con spazi ai bordi', () => {
-    assert.strictEqual(UtilityPura.parolaEliminazioneCorretta('ELIMINA'), true);
-    assert.strictEqual(UtilityPura.parolaEliminazioneCorretta('  ELIMINA  '), true);
-    assert.strictEqual(UtilityPura.parolaEliminazioneCorretta('ELIMINA\n'), true);
+    assert.strictEqual(Modali.parolaEliminazioneCorretta('ELIMINA'), true);
+    assert.strictEqual(Modali.parolaEliminazioneCorretta('  ELIMINA  '), true);
+    assert.strictEqual(Modali.parolaEliminazioneCorretta('ELIMINA\n'), true);
 });
 
 //La fatica di scriverla in maiuscolo e' parte della difesa: il minuscolo non vale.
 test('minuscole, parole a meta\' o in piu\' non valgono', () => {
     for (const testo of ['elimina', 'Elimina', 'ELIMIN', 'ELIMINAA', 'ELIMINA ORA', 'E LIMINA', 'ELIMINO']) {
-        assert.strictEqual(UtilityPura.parolaEliminazioneCorretta(testo), false, testo);
+        assert.strictEqual(Modali.parolaEliminazioneCorretta(testo), false, testo);
     }
 });
 
 test('un campo vuoto o un valore che non e\' testo non valgono', () => {
     for (const testo of ['', '   ', null, undefined, 0, true, ['ELIMINA'], { valore: 'ELIMINA' }]) {
-        assert.strictEqual(UtilityPura.parolaEliminazioneCorretta(testo), false, String(testo));
+        assert.strictEqual(Modali.parolaEliminazioneCorretta(testo), false, String(testo));
     }
 });
 
 /* ---- cosa dice il dialogo ---- */
 
 test('il riepilogo dice quanti codici, quali, e che si cancella il dato sul server', () => {
-    const r = UtilityPura.riepilogoEliminazione(['3150596', '3150599']);
+    const r = Modali.riepilogoEliminazione(['3150596', '3150599']);
 
     assert.match(r.avviso, /2 codici gruppo/);
     assert.match(r.avviso, /tracciato sul server/);
@@ -87,13 +83,13 @@ test('il riepilogo dice quanti codici, quali, e che si cancella il dato sul serv
 });
 
 test('con un codice solo il riepilogo usa il singolare', () => {
-    assert.match(UtilityPura.riepilogoEliminazione(['3150596']).avviso, /1 codice gruppo /);
+    assert.match(Modali.riepilogoEliminazione(['3150596']).avviso, /1 codice gruppo /);
 });
 
 test('codici vuoti o mancanti non compaiono nel riepilogo', () => {
-    assert.deepStrictEqual(UtilityPura.riepilogoEliminazione([' 3150596 ', '', null, '  ']).codici, ['3150596']);
-    assert.deepStrictEqual(UtilityPura.riepilogoEliminazione(null).codici, []);
-    assert.deepStrictEqual(UtilityPura.riepilogoEliminazione('3150596').codici, []);
+    assert.deepStrictEqual(Modali.riepilogoEliminazione([' 3150596 ', '', null, '  ']).codici, ['3150596']);
+    assert.deepStrictEqual(Modali.riepilogoEliminazione(null).codici, []);
+    assert.deepStrictEqual(Modali.riepilogoEliminazione('3150596').codici, []);
 });
 
 /* ---- nel dubbio non si elimina: i punti in cui si decide ---- */
@@ -107,7 +103,7 @@ test('la seconda conferma si chiede solo se la spunta e\' alzata', () => {
     assert.match(clic, /var eliminare = \$\("#chkEliminaDaTracciato"\)\.prop\("checked"\) === true;/);
     //Senza spunta: solo rimozione dall'impaginato, senza seconda conferma.
     assert.match(clic, /if \(!eliminare\) \{[\s\S]*?eliminaDaTracciato: false,[\s\S]*?return;\s*\}/);
-    assert.match(clic, /\(await Utility\.confirmParolaEliminazione\(codici\)\) === true/);
+    assert.match(clic, /\(await modali\(\)\.confirmParolaEliminazione\(codici\)\) === true/);
 });
 
 test('eliminaDaTracciato diventa vero solo dopo la parola confermata', () => {
@@ -128,7 +124,7 @@ test('la seconda conferma ricontrolla la parola al momento di confermare', () =>
     const conferma = corpoMembro(secondaConferma, 'var confermaSeValida = function');
 
     //Il controllo viene prima di tutto il resto, e solo dopo si da' l'assenso.
-    assert.match(conferma, /^var confermaSeValida = function \(\) \{\s*if \(!Utility\.parolaEliminazioneCorretta\(messaggio\.find\("#txtParolaElimina"\)\.val\(\)\)\) \{\s*return;\s*\}\s*esito = true;/);
+    assert.match(conferma, /^var confermaSeValida = function \(\) \{\s*if \(!modali\(\)\.parolaEliminazioneCorretta\(messaggio\.find\("#txtParolaElimina"\)\.val\(\)\)\) \{\s*return;\s*\}\s*esito = true;/);
     //Pulsante e Invio passano entrambi dal controllo.
     assert.match(secondaConferma, /elimina\.on\("click", confermaSeValida\);/);
     assert.match(secondaConferma, /if \(e\.key === "Enter" \|\| e\.keyCode === 13\) \{\s*confermaSeValida\(\);/);

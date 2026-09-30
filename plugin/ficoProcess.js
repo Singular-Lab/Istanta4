@@ -2024,7 +2024,7 @@ const FicoProcess=
                                             try
                                             {
                                                 let startY=descrItem.item.lines.item(0).baseline-5;
-                                                let objAz = { titolo: "Cambia descrizione", compiledValue: Utility.componiStringTagFromInndTextFrame(descrItem.item), labelIndd: "descrizione", istruzioni: [], bounds:[startY,descrItem.item.geometricBounds[1]-pageOffset,descrItem.item.geometricBounds[2],descrItem.item.geometricBounds[3]-pageOffset] };
+                                                let objAz = { titolo: "Cambia descrizione", compiledValue: TestoTag.componiStringTagFromInndTextFrame(descrItem.item), labelIndd: "descrizione", istruzioni: [], bounds:[startY,descrItem.item.geometricBounds[1]-pageOffset,descrItem.item.geometricBounds[2],descrItem.item.geometricBounds[3]-pageOffset] };
                                                 data.azioni.push(objAz);
                                             }
                                             catch(err)

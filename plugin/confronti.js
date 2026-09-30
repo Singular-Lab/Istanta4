@@ -389,7 +389,7 @@ const confronti = {
                     if (compiledField.paragraphName && compiledField.paragraphName != "") {
                         //se il campo compilato ha un paragrafo allora controlliamo che sia lo stesso del campo nel box1
 
-                        var stile = Utility.parseStile(compiledField.paragraphName, true);
+                        var stile = TestoTag.parseStile(compiledField.paragraphName, true);
 
                         if (campoBox1.paragraphs.length > 0 && (stile != null && stile.isValid ? stile.name : compiledField.paragraphName) != campoBox1.paragraphs.item(0).appliedParagraphStyle.name) {
                             differenze.push({ label: Utility.parseLabel(compiledField.labelName), difference: "paragrafo" });
@@ -410,7 +410,7 @@ const confronti = {
                         //Il testo si scorre ancora carattere per carattere, ma in memoria: il
                         //tag si apre sul primo carattere che conta davvero, e un tratto fatto di
                         //soli spazi non ne apre nessuno, esattamente come prima.
-                        let trattiDelCampo = Utility.trattiDiStileDelCampo(campoBox1);
+                        let trattiDelCampo = TestoTag.trattiDiStileDelCampo(campoBox1);
 
                         for (let t = 0; t < trattiDelCampo.length; t++) {
                             let styleName = trattiDelCampo[t].nome;
@@ -481,7 +481,7 @@ const confronti = {
 
                         while (match = tagRegex.exec(stringaConfronto)) {
                             let tagName = match[1];
-                            let stile = Utility.parseStile(tagName);
+                            let stile = TestoTag.parseStile(tagName);
                             if (stile != null && stile.isValid) {
                                 stringaConfronto = stringaConfronto.replace(new RegExp(`<${tagName}>`, 'g'), `<${stile.name}>`);
                                 stringaConfronto = stringaConfronto.replace(new RegExp(`</${tagName}>`, 'g'), `</${stile.name}>`);

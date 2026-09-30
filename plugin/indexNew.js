@@ -31,6 +31,12 @@ const garbageCollector = require('./garbageCollector');
 const InputEditController = require('./InputEditController');
 const cambiStrutturaliJs = require('./cambiStrutturali');
 const {Utility, FotoPlacer} = require('./utility');
+//I20-1012: usciti da utility.js. Li usano come globali quasi tutti i file del Plugin, e
+//index.html dai suoi pulsanti.
+const Modali = require('./modali/modali');
+const Tooltip = require('./tooltip/tooltip');
+const Menu = require('./menu');
+const TestoTag = require('./testoTag');
 const jsIndexControls = require('./jsIndexControls');
 const schedaRef = require('./schedaRef');
 //I20-1015: procurarsi la foto giusta. schedaRef, index.html, confronti e il report lo usano da qui.
@@ -66,10 +72,10 @@ const credenzialiSalvate = credenzialiSalvateModulo.crea((function () {
     }
 })());
 
-Utility.registerDateMenuPicker();
+Menu.registerDateMenuPicker();
 //I20-981: da qui in poi ogni elemento con un title mostra il suo suggerimento.
 //In UXP l'attributo da solo non fa nulla: il riquadro lo disegna il plugin.
-Utility.abilitaTooltipGlobali();
+Tooltip.abilitaTooltipGlobali();
 showLoading("Inizializzazione...");
 
 
@@ -547,7 +553,7 @@ indesignEvents.addEventListener(indesignEvents.EVENT_NEW_REF_SELECTED, async fun
     console.log("EVENT_NEW_REF_SELECTED");
     console.log(args);
     
-    Utility.closeAllModal();
+    Modali.closeAllModal();
     clearNarrow();
     $("#grigliaTab").hide();
 
@@ -565,7 +571,7 @@ indesignEvents.addEventListener(indesignEvents.EVENT_NEW_REF_SELECTED, async fun
 });
 
 indesignEvents.addEventListener(indesignEvents.EVENT_NEW_MULTIREF_SELECTED, async function(args){    
-    Utility.closeAllModal();
+    Modali.closeAllModal();
 
     console.log(args);
     schedaRef.svuotaRef();
@@ -602,7 +608,7 @@ indesignEvents.addEventListener(indesignEvents.EVENT_NEW_ARTWORK_SELECTED, async
 });
 
 indesignEvents.addEventListener(indesignEvents.EVENT_NEW_GRIGLIA_SELECTED, async function(args){    
-    Utility.closeAllModal();
+    Modali.closeAllModal();
 
     console.log(args);
     schedaRef.svuotaRef();
@@ -628,7 +634,7 @@ indesignEvents.addEventListener(indesignEvents.EVENT_NEW_GRIGLIA_SELECTED, async
 });
 
 indesignEvents.addEventListener(indesignEvents.EVENT_NO_REF_SELECTED, async function(args){    
-    Utility.closeAllModal();
+    Modali.closeAllModal();
 
     schedaRef.setInvalidated(true);
     schedaRef.svuotaRef();
@@ -1160,7 +1166,7 @@ async function initDocumentInLavorazione()
             }
         }
     }
-    Utility.closeAllModal();
+    Modali.closeAllModal();
     $("#homeImage").click();
 }
 
@@ -1318,7 +1324,7 @@ async function initLibroInLavorazione()
 ///
 /// Cosi' all'operatore vengono proposte solo le esportazioni che quel libro puo' produrre.
 async function apriModalEsportaLibro(){
-    Utility.apriModal("dialogEsportaLibro", "Esporta Libro");
+    Modali.apriModal("dialogEsportaLibro", "Esporta Libro");
     //In jobImpaginazioneLibro.queue ci sono i tipi di esportazione che ci interessano
     //Scorriamo tutti gli elementi e per ognuno accediamo a lastItem.listaRef[0][Kit.Names]
     //kit.names è così formata
@@ -1438,14 +1444,14 @@ async function esportaLibro(){
             let id = $(this).attr("id").replace("exportTipo_", "");
             tipiExportSelezionati.push(id);
         });
-        Utility.chiudiModal();
+        Modali.chiudiModal();
     
     
         let job = jobImpaginazioneLibro;
         let esportazioneDaRiprendere = false;
     
         if(job.stato == 4){
-            var res = await Utility.confirm("Il processo di esportazione del libro è già stato effettuato, vuoi ripeterlo?.");
+            var res = await Modali.confirm("Il processo di esportazione del libro è già stato effettuato, vuoi ripeterlo?.");
             if(!res){
                 return;
             }
@@ -1457,7 +1463,7 @@ async function esportaLibro(){
         }
     
         if(job.stato == 1 || job.stato == 0){
-            var res = await Utility.confirm("Impaginazione non ancora completata. Vuoi forzare il processo di esportazione? Non sarà possibile più possibile impaginare il libro. Per ripristinare l'impaginazione in un secondo momento cancellare il file listaImpaginata"+idKitLavorazione+".json nella cartella del libro. CONTINUARE?");
+            var res = await Modali.confirm("Impaginazione non ancora completata. Vuoi forzare il processo di esportazione? Non sarà possibile più possibile impaginare il libro. Per ripristinare l'impaginazione in un secondo momento cancellare il file listaImpaginata"+idKitLavorazione+".json nella cartella del libro. CONTINUARE?");
             if(!res){
                 return;
             }
@@ -1666,19 +1672,19 @@ async function autoCompilazioneCampiKit(){
 
         if(campiDecodificati != null){
             if(campiDecodificati.promo != null){
-                promoTrovata = Utility.setPickerValue($("#kitPromoCmb"), campiDecodificati.promo, false);
+                promoTrovata = Menu.setPickerValue($("#kitPromoCmb"), campiDecodificati.promo, false);
                 await Utility.sleep(50);
                 if(promoTrovata){
                     if(campiDecodificati.canale != null){
-                        canaleTrovato = Utility.setPickerValue($("#kitCanaliCmb"), campiDecodificati.canale, false);
+                        canaleTrovato = Menu.setPickerValue($("#kitCanaliCmb"), campiDecodificati.canale, false);
                     }
                     if(campiDecodificati.area != null){
-                        areaTrovata = Utility.setPickerValue($("#kitAreeCmb"), campiDecodificati.area, false);
+                        areaTrovata = Menu.setPickerValue($("#kitAreeCmb"), campiDecodificati.area, false);
                     }
                 }
             }
 
-            formatoTrovato = Utility.setPickerValue($("#kitFormatiCmb"), campiDecodificati.formato, false);
+            formatoTrovato = Menu.setPickerValue($("#kitFormatiCmb"), campiDecodificati.formato, false);
         }
 
         if(promoTrovata && canaleTrovato && areaTrovata && formatoTrovato){
@@ -2056,7 +2062,7 @@ function conteggia() {
 
 if (bOpt2 != null){
     bOpt2.onclick = async () => {
-        const conferma = await Utility.confirm("Confermi l'impaginazione?");
+        const conferma = await Modali.confirm("Confermi l'impaginazione?");
         if (conferma) {
             impagina();
         }
@@ -2521,7 +2527,7 @@ async function conteggiaImpagina(impagina = false, cbkEnd = null, restartFromInd
 async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, idKitLavorazione, impagina = false, cbkEnd = null, restartFromIndexPoP = 0) {
     var noCacheCheck = !($("#cacheCheckAdvanced").is(":checked"));
 
-    Utility.chiudiModal();
+    Modali.chiudiModal();
 
     CssFramework.richiediDiScaricareFramework();
 
@@ -3379,7 +3385,7 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                                             if (elInBox.label == "segnalazione_ingombro" && ingombro != "") {
                                                 elInBox.visible = true;
                                                 if (stile != null && stile != "") {
-                                                    var style = Utility.parseObjStile(stile);
+                                                    var style = TestoTag.parseObjStile(stile);
                                                     if (style != null && style.isValid) {
                                                         elInBox.appliedObjectStyle = style;
                                                     }
@@ -4526,7 +4532,7 @@ async function fixRefImpaginata() {
     
         indesignEvents.setBusy(true);
     
-        var confirmRes = await Utility.confirm("Ridimensionare il box alle dimensioni desiderate");
+        var confirmRes = await Modali.confirm("Ridimensionare il box alle dimensioni desiderate");
 
 
         for (var a = 0; a < listItemDaFixare.length; a++) {
@@ -5267,7 +5273,7 @@ async function impaginaBox(meccanica, pagCoinvolta, bounds, itemRef, pathLavoraz
     
                                                     if (parag != null && parag != "") {
                                                         //Parsing del content
-                                                        let contentObj = Utility.parseContent(content);
+                                                        let contentObj = TestoTag.parseContent(content);
                                                         // let haStileDiCarattere = false;
                                                         // if (contentObj.length > 0) {
                                                         //     if (contentObj[0].stile != "") {
@@ -5281,7 +5287,7 @@ async function impaginaBox(meccanica, pagCoinvolta, bounds, itemRef, pathLavoraz
                                                             field.characters.itemByRange(0, field.characters.length - 1).appliedCharacterStyle = nessCharStyle;
                                                         }
     
-                                                        let stile = (Utility.parseStile != null ? Utility.parseStile(parag, true) : null);
+                                                        let stile = (TestoTag.parseStile != null ? TestoTag.parseStile(parag, true) : null);
                                                         var par = stile != null ? stile : doc.paragraphStyles.itemByName(parag);
     
                                                         if (par != null && par.isValid && field.paragraphs && field.paragraphs.length > 0) {
@@ -5309,7 +5315,7 @@ async function impaginaBox(meccanica, pagCoinvolta, bounds, itemRef, pathLavoraz
                                                     }
     
                                                     if (content != "" && content != null) {
-                                                        Utility.applicaTagStringToInndTextFrame(field, content, bounds);
+                                                        TestoTag.applicaTagStringToInndTextFrame(field, content, bounds);
                                                     }
                                                 }
                                                 else {
@@ -5883,8 +5889,8 @@ lastHeightDimension = 0;
 ///     d'accordo server e impaginato.
 ///
 /// eliminaDaTracciato diventa vero solo se si verificano QUATTRO cose insieme: la chiamata viene
-/// dal pulsante, l'utente e' superAdmin, ha alzato la spunta in Utility.confirmRimozioneRef, e poi
-/// ha scritto la parola ELIMINA in Utility.confirmParolaEliminazione (I20-1013).
+/// dal pulsante, l'utente e' superAdmin, ha alzato la spunta in Modali.confirmRimozioneRef, e poi
+/// ha scritto la parola ELIMINA in Modali.confirmParolaEliminazione (I20-1013).
 /// Il flag va al server: Menabo/rimuoviRefImpaginata/{idKit}/{eliminaDaTracciato}.
 ///
 /// L'ELIMINAZIONE DAL TRACCIATO CANCELLA IL RECORD SUL SERVER, ed e' voluta. La specifica
@@ -5990,7 +5996,7 @@ async function rimuoviRefImpaginata(listaCodiciConId = [], mantieniBusyEsterno =
         if (askConfirm) {
 
             if (ruoloUtenteLoggato == RuoloUtente.superAdmin){
-                var resConfirm = await Utility.confirmRimozioneRef(codiciGruppo);
+                var resConfirm = await Modali.confirmRimozioneRef(codiciGruppo);
     
                 if (!resConfirm.confermato) {
                     return;
@@ -6002,7 +6008,7 @@ async function rimuoviRefImpaginata(listaCodiciConId = [], mantieniBusyEsterno =
                 }
             }
             else {
-                var resConfirn = await Utility.confirm("Procedere alla rimozione dall'impaginato?");
+                var resConfirn = await Modali.confirm("Procedere alla rimozione dall'impaginato?");
                 if (!resConfirn) {
                     return;
                 }
@@ -6387,7 +6393,7 @@ function showLoading(msg)//Facoltativo
         //ma tre chiamanti passano una variabile che puo' essere nulla.
         $("#loadingPanel").find("h1").text("Caricamento in corso...");
     }
-    Utility.nascondiHidebleElements();
+    Modali.nascondiHidebleElements();
 
 }
 
@@ -6395,7 +6401,7 @@ function showLoading(msg)//Facoltativo
 /// showLoading.
 function hideLoading() {
     $("#loadingPanel").hide();
-    Utility.mostraHidebleElements();
+    Modali.mostraHidebleElements();
 }
 
 /// Svuota le quattro liste del tracciato e toglie la riga con la data di scaricamento.
@@ -6958,7 +6964,7 @@ async function confermaImpaginazioneDaTracciato(record, pagina) {
     appendRigaRiepilogoImpaginazione($container, "idRec", idRec);
     appendRigaRiepilogoImpaginazione($container, "Descrizione", descrizione);
 
-    return await Utility.confirm($container);
+    return await Modali.confirm($container);
 }
 
 /// Costruisce la riga di una referenza nel tracciato: una cella per colonna, coi valori
@@ -7670,7 +7676,7 @@ async function trovaRecord(codice, idRec, searchPage = null, select = true, Remo
         if (RemoveOnFail) {
             hideLoading();
             var idRecNorm = idRec != null && !isNaN(parseInt(idRec)) ? parseInt(idRec) : 0;
-            var confermaRimozione = await Utility.confirmRimozioneRefNonTrovata({
+            var confermaRimozione = await Modali.confirmRimozioneRefNonTrovata({
                 codice: codice,
                 idRec: idRecNorm,
                 paginaAttesa: paginaAttesa
@@ -8255,14 +8261,14 @@ function clonaRecord(recordGruppo) {
 /// sempre quella che vuole svuotare.
 function apriModalSvuotamento(mode) {
     //in entrambe le modalità apriamo il modal dialogSvuotaPagina
-    Utility.apriModal("dialogSvuotaPagina", "Svuota impaginato");
+    Modali.apriModal("dialogSvuotaPagina", "Svuota impaginato");
 
     if(mode == "0"){
-        Utility.setPickerValue($("#svuotaImpaginazioneMode"), "0");
+        Menu.setPickerValue($("#svuotaImpaginazioneMode"), "0");
         $("#pagineRangeSvuotatura").show();
     }
     else if (mode == "1") {
-        Utility.setPickerValue($("#svuotaImpaginazioneMode"), "1");
+        Menu.setPickerValue($("#svuotaImpaginazioneMode"), "1");
         $("#pagineRangeSvuotatura").hide();
     }
     //uguale alla pagina attualmente selezionata
@@ -8282,7 +8288,7 @@ function apriModalBolli(mode) {
     }
 
     //in entrambe le modalità apriamo il modal dialogSvuotaPagina
-    Utility.apriModal("dialogAttivaDisattivaBolli", (mode=="0" ? "Disattiva" : "Attiva") + " bolli");
+    Modali.apriModal("dialogAttivaDisattivaBolli", (mode=="0" ? "Disattiva" : "Attiva") + " bolli");
 
     //uguale alla pagina attualmente selezionata
     $("#pagineRangeAttivaDisattivaBolli").val(pagSelected);
@@ -8349,7 +8355,7 @@ function selectionAttivaDisattivaBolli(mode, attiva){
                 pages.push(page);
             } else {
                 messaggioUtente("Code IDX-129 Pagina " + pageName + " non trovata", "error", false, 5);
-                Utility.chiudiModal();
+                Modali.chiudiModal();
                 return;
             }
         }
@@ -8377,7 +8383,7 @@ function selectionAttivaDisattivaBolli(mode, attiva){
     }
 
     messaggioUtente((attiva ? "Attivazione" : "Disattivazione") + " bolli completata", "success", false, 3);
-    Utility.chiudiModal();
+    Modali.chiudiModal();
 }
 
 /// Accende o spegne un singolo bollo. E' il gesto elementare che
@@ -8434,7 +8440,7 @@ async function selectionModalSvuota(mode){
             }
         }
 
-        Utility.chiudiModal();
+        Modali.chiudiModal();
 
 
         var preAnalisi = await ReportIntegrita.preAnalisiMismatchNumeriPagina(pagineRange);
@@ -8448,7 +8454,7 @@ async function selectionModalSvuota(mode){
 
             hideLoading()
 
-            if (Utility.confirm("Errore durante l'analisi delle pagine, le pagine non sono state sincronizzate, vuoi comunque procedere con lo svuotamento?")) {
+            if (Modali.confirm("Errore durante l'analisi delle pagine, le pagine non sono state sincronizzate, vuoi comunque procedere con lo svuotamento?")) {
                 showLoading("Svuotamento in corso, l'operazione potrebbe richiedere un po' di tempo...");
                 for (const page of pagine) {
                     await svuotaPaginaByPageName(page);
@@ -9171,7 +9177,7 @@ async function checkPercorsi(forceOpenModal = false, scope = 'entrambi') {
         // Apri SEMPRE lo stesso dialog anche per links/loghi
         if ($("#overlayModal").css("display") == "none" &&
             $("#overlayModal").find("#dialogPathDiSistema").length == 0) {
-            Utility.apriModal(
+            Modali.apriModal(
                 "dialogPathDiSistema",
                 "Seleziona i percorsi di sistema (links, loghi, logs, esportazione)",
                 false,
@@ -9231,7 +9237,7 @@ async function logout(){
                 console.log(objResult);
 
                 if(objResult.esito){
-                    Utility.closeAllModal();
+                    Modali.closeAllModal();
                     $("#mainContent").hide();
                     indesignEvents.logout();
                     nomeUtente = "";
@@ -9705,10 +9711,10 @@ var pingInProcess = false;
 //         }
 //         if (tasks.length > 0) {
 //             if(offlineMode){
-//                 Utility.apriModal("dialogSyncModifiche", "Sync modifiche", false, ["pulsantiTestataSync"]);                
+//                 Modali.apriModal("dialogSyncModifiche", "Sync modifiche", false, ["pulsantiTestataSync"]);                
 //             }
 //             else{
-//                 Utility.apriModal("dialogSyncModifiche", "Sync modifiche", false, ["pulsantiTestataSyncOnline"]);
+//                 Modali.apriModal("dialogSyncModifiche", "Sync modifiche", false, ["pulsantiTestataSyncOnline"]);
 //             }
 //             //simuliamo il click sul primo elemento di #tabButtons
 //             $("#tabButtons").children().eq(0).click();
@@ -9725,7 +9731,7 @@ var pingInProcess = false;
 // }
 
 // async function svuotaCodaSync(){
-//     var result = await Utility.confirm("La coda di operazioni nei task irrisolti verrà svuotata, l'operazione sarà irreversibile, continuare?");
+//     var result = await Modali.confirm("La coda di operazioni nei task irrisolti verrà svuotata, l'operazione sarà irreversibile, continuare?");
 //     if(result){
 //         fs.writeFileSync(pathLavorazione + "/tasksIrrisolti.json", JSON.stringify([]));
 //     }
@@ -10201,7 +10207,7 @@ var pingInProcess = false;
 //     $("#modalita").hide();
 //     $("#footer").css("background-color", "red");
 //     $("#tornaOnlineButton").show();
-//     Utility.chiudiModal();
+//     Modali.chiudiModal();
 // }
 
 //FINE - Modalità OFFLINE
@@ -10303,7 +10309,7 @@ function clickOnSleepAwake(sender)
         sender.attr('src','images/sleep.png');
         sender.attr('stato','sleep');
         indesignEvents.sleep(true);
-        Utility.apriModal("dialogSleepLock", "Modalità sleep attiva", false);
+        Modali.apriModal("dialogSleepLock", "Modalità sleep attiva", false);
         
     }
     else
@@ -10311,7 +10317,7 @@ function clickOnSleepAwake(sender)
         sender.attr('src','images/wake.png');
         sender.attr('stato','wake');
         indesignEvents.sleep(false);
-        Utility.chiudiModal();
+        Modali.chiudiModal();
         
     }
 }
@@ -10327,7 +10333,7 @@ function clickOnSleepAwake(sender)
 /// le mani (dna.oldBoxFormat).
 async function resetIdRec(){
     //confirm all'utente
-    var res = await Utility.confirm("Verranno rimossi tutti gli idRec da tutti i box, sicuro di voler procedere?");
+    var res = await Modali.confirm("Verranno rimossi tutti gli idRec da tutti i box, sicuro di voler procedere?");
     if (!res) {
         return;
     }

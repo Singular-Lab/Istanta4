@@ -618,7 +618,7 @@ const schedaRef = {
             codiceGruppo = codiceGruppo != null ? codiceGruppo : dna.codice_gruppo;
 
             //chiediamo conferma all'utente se vuole ricollegare il box al codice letto
-            if (externalCall || await Utility.confirm("Ricollegare il box al codice gruppo " + codiceGruppo + "?")) {
+            if (externalCall || await Modali.confirm("Ricollegare il box al codice gruppo " + codiceGruppo + "?")) {
                 if(!externalCall){
                     indesignEvents.setBusy(true);
                     showLoading("Ricollegamento in corso...");
@@ -845,7 +845,7 @@ const schedaRef = {
 
         this.salvaSelezioneClonazione(null);
 
-        Utility.apriModal("dialogClonaRecord", "Clona");
+        Modali.apriModal("dialogClonaRecord", "Clona");
 
         this.montaBodyDialogClonaRecord(suggeriti, tuttiRiscontri, element, idKitLavorazione);
         this.montaFooterDialogClonaRecord(element, idKitLavorazione, allElementGruppo, skipImpaginazione);
@@ -1445,7 +1445,7 @@ const schedaRef = {
                             avviso.append($('<div style="color:black; font-size:13px; margin-top:6px;"></div>')
                                 .text("Viene cancellata anche dal revisore e non si recupera. Resteranno le varianti meno specifiche, e quella che comanda diventera' la prima ancora valida."));
 
-                            if (!(await Utility.confirm(avviso))) {
+                            if (!(await Modali.confirm(avviso))) {
                                 return;
                             }
 
@@ -1607,7 +1607,7 @@ const schedaRef = {
                         container.append(confirmMessage);
                         container.append('<div><span style="color:black; font-size:16px">L\'artwork non è stato trovato nell\'impaginato, vuoi scollegarlo dai suoi elementi?</span></div>');
                         //mostriamo il confirm
-                        if (!(await Utility.confirm(container))) {
+                        if (!(await Modali.confirm(container))) {
                             return;
                         }
                         schedaArtwork.eliminaArtwork(primario.recordInTracciato["artworkId"]);
@@ -1644,7 +1644,7 @@ const schedaRef = {
                     //Posso compilare il campo con i dati che leggo
                     let content = matchFieldData.content;
                     //Parsing del content
-                    let contentObj = Utility.parseContent(content);
+                    let contentObj = TestoTag.parseContent(content);
                     //mettiamoci da parte una lista di tutti gli stili di tutte le row in contentObj post parse
                     let contentObjParsedStiles = [];
                     for (let r = 0; r < contentObj.length; r++) {
@@ -1660,7 +1660,7 @@ const schedaRef = {
 
                     //se il content è "" allora lo scriviamo con il valore della descrizione trovata nella schedaRef
                     if (item.contents == "" && !item.overflows) {
-                        Utility.applicaTagStringToInndTextFrame(item, content, box.geometricBounds);
+                        TestoTag.applicaTagStringToInndTextFrame(item, content, box.geometricBounds);
                     }
 
                     //I20-995: il campo si legge qui, una volta, a tratti di stile. Prima ogni
@@ -1668,7 +1668,7 @@ const schedaRef = {
                     //stili, una per riempire le textarea - e ogni volta si chiedevano anche lo
                     //stile, il suo nome e il suo gruppo. Si legge dopo il riempimento qui
                     //sopra, altrimenti di un campo vuoto si leggerebbe il vuoto.
-                    var trattiDelCampo = Utility.trattiDiStileDelCampo(item);
+                    var trattiDelCampo = TestoTag.trattiDiStileDelCampo(item);
 
                     //La stessa normalizzazione di prima, applicata a un carattere per volta:
                     //sul tratto intero riconoscerebbe sequenze lunghe come "<br>" o "\r\n" e
@@ -2120,7 +2120,7 @@ const schedaRef = {
                         //$("#azioni_strutturali").append(val);
                         //$("#cmbActCambioStrutturale").val(val);
                         //$("#cmbActCambioStrutturale").val("0");
-                        Utility.setPickerValue($("#cmbActCambioStrutturale"), "0", false);
+                        Menu.setPickerValue($("#cmbActCambioStrutturale"), "0", false);
 
                         let template_panelAzione = '<div id="az_$id" class="panel" style="width: 90%;margin: 0px auto;border: 2px solid #d6d0d0;border-radius: 10px;padding: 10px;margin-bottom: 10px;">'+
                                                 '<div class="row" style="margin-bottom: 10px;">'+
@@ -2441,7 +2441,7 @@ const schedaRef = {
 
             //Lo stesso passaggio che usa il salvataggio delle modifiche: il contenuto e' gia'
             //nella forma a tag di stile di carattere.
-            Utility.applicaTagStringToInndTextFrame(campo, contenuto, box.geometricBounds);
+            TestoTag.applicaTagStringToInndTextFrame(campo, contenuto, box.geometricBounds);
             messaggioUtente("Descrizione allineata al dato del server", "success", false, 3);
 
             //La schermata di edit legge il box: dopo averlo cambiato va rifatta, altrimenti
@@ -2651,12 +2651,12 @@ const schedaRef = {
                     console.error("Code SRF-28 Ricollegamento fallito: " + objResult.error);
                 }
 
-                Utility.closeAllModal();
+                Modali.closeAllModal();
                 if (pagina != "0"){
                     this.initSchedaRef(this.refSelected);
                 }else{
                     hideLoading();
-                    if (await Utility.confirm("Clonazione completata con successo. Vuoi impaginare subito l'elemento a pagina corrente?")) {
+                    if (await Modali.confirm("Clonazione completata con successo. Vuoi impaginare subito l'elemento a pagina corrente?")) {
                         showLoading("Impaginazione in corso...");
                         await impaginaSingolo(codiceGruppo, null);
                     }
@@ -3525,7 +3525,7 @@ const schedaRef = {
         $container.append($lista);
         $container.append("<div style='font-weight:bold;'>Vuoi procedere comunque con la clonazione?</div>");
 
-        return await Utility.confirm($container);
+        return await Modali.confirm($container);
     },
 
     // costruisciPayloadClonazione(datoOriginale, listCampiEreditaDalTracciato) {
@@ -3922,7 +3922,7 @@ const schedaRef = {
                         }
 
                         //il testo è in formato <stile>testo</stile><stile>testo2</stile>
-                        Utility.applicaTagStringToInndTextFrame(field, descr, box.geometricBounds);
+                        TestoTag.applicaTagStringToInndTextFrame(field, descr, box.geometricBounds);
                     }
                     //Ricarico la scheda ref
                     //Probabilmente è necessario verificare lo stato della selezione (Questo se nella sciagurata ipotesi, tra il click di Salva modifiche e la fine dell'operazione l'utente cambia follemente la selezione)
@@ -4372,7 +4372,7 @@ const schedaRef = {
 
             //In UXP elemento.title come proprieta' non crea l'attributo e il suggerimento
             //resta muto: si passa sempre da qui.
-            Utility.impostaTooltip(segnalino[0], quante === 1
+            Tooltip.impostaTooltip(segnalino[0], quante === 1
                 ? "1 differenza fra il box e il dato - clicca per rivederla"
                 : quante + " differenze fra il box e il dato - clicca per rivederle");
 
@@ -4562,7 +4562,7 @@ const schedaRef = {
                 "cursor": "pointer",
                 "display": "inline-block"
             });
-            Utility.impostaTooltip(aggiorna[0], "Rifai il controllo e aggiorna l'elenco");
+            Tooltip.impostaTooltip(aggiorna[0], "Rifai il controllo e aggiorna l'elenco");
 
             aggiorna.on("click", async function () {
                 try {
@@ -4584,7 +4584,7 @@ const schedaRef = {
 
             //Alla chiusura si leggono le scelte dichiarate e il segnalino nel titolo si rifa' i
             //conti: se l'Aggiorna ha trovato tutto risolto, sparisce.
-            Utility.popup("Differenze rilevate", contenuto, "lg", function () {
+            Modali.popup("Differenze rilevate", contenuto, "lg", function () {
                 //Le caselle si leggono dal riquadro che si e' tenuto, non dal documento: quando
                 //questo callback parte il popup e' gia' stato rimosso, e un selettore globale
                 //non troverebbe piu' niente. Il sottoalbero staccato conserva lo stato.
@@ -4673,7 +4673,7 @@ const schedaRef = {
         }
 
         if (esito === esiti.proponiAggiornamento) {
-            var aggiorna = await Utility.confirm("I dati del box non sono piu' allineati alla scheda. Aggiorno il box?");
+            var aggiorna = await Modali.confirm("I dati del box non sono piu' allineati alla scheda. Aggiorno il box?");
             if (aggiorna) {
                 me.applicaReimpaginazione();
                 return esito;
@@ -5181,7 +5181,7 @@ const schedaRef = {
 
     async scegliSostituisciOMantieni(messageHtml) {
         var result = null;
-        Utility.nascondiHidebleElements();
+        Modali.nascondiHidebleElements();
 
         var modal = $('<div id="confirmModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); z-index: 5000; display: flex; justify-content: center; align-items: center; padding: 10px;"></div>');
         var dialog = $('<div style="width: 60%; height: 40%; background-color: white; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 10px; box-sizing:border-box;"></div>');
@@ -5228,7 +5228,7 @@ const schedaRef = {
             await Utility.sleep(100);
         }
 
-        Utility.mostraHidebleElements();
+        Modali.mostraHidebleElements();
 
         return {
             result: result !== 0,
@@ -5761,7 +5761,7 @@ const schedaRef = {
             this.statoFotoAllApertura = NoRenderElementi.statoDelleFoto(this.elementiNoRenderDelBox);
             //apriModal clona il dialog dentro bodyModal: la lista va disegnata dopo l'apertura,
             //cosi' si scrive nel clone e i gestori dei bottoni restano vivi.
-            Utility.apriModal('dialogNoRender', 'Elementi non renderizzati', true, [], true);
+            Modali.apriModal('dialogNoRender', 'Elementi non renderizzati', true, [], true);
             this.disegnaListaNoRender();
         }
         catch (e) {
@@ -6059,13 +6059,13 @@ const schedaRef = {
             }
         }
 
-        Utility.apriModal('dialogLeggiInfoRef', 'Info dati referenza', true, [], true);
+        Modali.apriModal('dialogLeggiInfoRef', 'Info dati referenza', true, [], true);
         this.visibilitaCampiIspezioneDelDato(true);
     },
 
     apriModalIspezioneDelDato(recordInTracciato, titolo = "Info dati referenza", datoDaScaricare = null) {
         this.preparaInfoIspezioneDelDato(recordInTracciato, datoDaScaricare);
-        Utility.apriModal('dialogLeggiInfoRef', titolo, true, [], true);
+        Modali.apriModal('dialogLeggiInfoRef', titolo, true, [], true);
         this.visibilitaCampiIspezioneDelDato(true);
     },
 

@@ -12,7 +12,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const tooltip = require('../../plugin/tooltipPosizione');
+const tooltip = require('../../plugin/tooltip/posizione');
 
 const finestra = { width: 400, height: 600 };
 
