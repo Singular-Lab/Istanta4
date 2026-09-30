@@ -5,7 +5,8 @@
  * report e' in vista whitelist le liste mostrate sono altre, e un conteggio che ignorasse la
  * vista mentirebbe. Per questo i conteggi si fanno sulle stesse liste che vengono disegnate.
  *
- * confronti.js non si carica sotto Node, quindi la regola sta qui.
+ * I pannelli del report (pannelli.js, fino a I20-1014 confronti.js) non si caricano sotto Node,
+ * quindi la regola sta qui. Prima si chiamava reportConteggi.js e stava in plugin/.
  *
  * Esecuzione dei test: node --test tests/plugin/reportConteggi.test.js
  */

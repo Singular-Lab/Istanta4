@@ -1,4 +1,7 @@
-# reportConteggi.js
+# reportIntegrita/conteggi.js
+
+*Fino a I20-1014 si chiamava `reportConteggi.js` e stava in `plugin/`: dentro la cartella del report il
+prefisso non serve.*
 
 **Cosa è:** i conteggi che finiscono sulle linguette del Report Integrità. Nasce con I20-981
 (Lotto 3).
@@ -7,7 +10,8 @@ Il numero deve dire **quanti record stai guardando adesso**, non quanti ne esist
 report è in vista whitelist le liste mostrate sono altre, e un conteggio che ignorasse la vista
 mentirebbe. Per questo i conteggi si fanno sulle stesse liste che vengono disegnate.
 
-Sta separato perché `confronti.js` non si carica sotto Node, e questa è la regola.
+Sta separato perché i pannelli del report — oggi [pannelli.js](pannelli.md), fino a I20-1014
+`confronti.js` — non si caricano sotto Node, e questa è la regola.
 
 ## Variabili globali
 

@@ -10,7 +10,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const conteggi = require('../../plugin/reportConteggi');
+const conteggi = require('../../plugin/reportIntegrita/conteggi');
 
 test('si contano gli elementi delle liste mostrate', () => {
     const c = conteggi.conteggiVisibili([1, 2, 3], [4], [5, 6]);

@@ -1,10 +1,14 @@
-# reportIntegritaAvvio.js
+# reportIntegrita/avvio.js
+
+*Fino a I20-1014 si chiamava `reportIntegritaAvvio.js` e stava in `plugin/`: dentro la cartella del report il
+prefisso non serve.*
 
 **Cosa è:** le regole con cui il Report Integrità decide **come partire e quando smettere di
 valere**. Nasce con I20-981 (Lotto 1).
 
 Stavano dentro il gestore del bottone «Avvia» in `indexNew.js` e dentro
-`richiediAzioneReportIntegritaEsistente` in `confronti.js`, mescolate all'interfaccia. Nessuno dei
+`richiediAzioneReportIntegritaEsistente` in `confronti.js`, mescolate all'interfaccia (dal I20-1014 quel
+codice sta in [reportIntegrita.js](flusso.md)). Nessuno dei
 due file si carica sotto Node, quindi **le soglie non erano verificabili**: qui restano solo le
 decisioni, senza InDesign e senza DOM.
 

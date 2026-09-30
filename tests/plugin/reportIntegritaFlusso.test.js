@@ -29,7 +29,11 @@ function senzaCommenti(testo) {
 }
 
 const indexNew = sorgente('indexNew.js');
-const confronti = sorgente('confronti.js');
+//I20-1014: il report sta in reportIntegrita/, diviso fra il flusso e i pannelli. A runtime sono
+//un oggetto solo, e per questi controlli sono un testo solo. Le funzioni del report che stavano
+//in indexNew.js ora sono membri di quell'oggetto.
+const FILE_DEL_REPORT = ['reportIntegrita/reportIntegrita.js', 'reportIntegrita/pannelli.js'];
+const confronti = FILE_DEL_REPORT.map(sorgente).join('\n');
 const events = sorgente('events.js');
 const utility = sorgente('utility.js');
 const indexHtml = sorgente('index.html');
@@ -66,10 +70,10 @@ function corpoFunzione(testo, intestazione) {
     assert.fail(`corpo di ${intestazione} non delimitato`);
 }
 
-const avvio = corpoFunzione(indexNew, 'async function avviaReportIntegrita(');
-const applicaConfronto = corpoFunzione(indexNew, 'async function applicaConfronto(');
-const preAnalisiBoxMappato = corpoFunzione(indexNew, 'async function preAnalisiBoxMappato(');
-const boxDellElementoMappa = corpoFunzione(indexNew, 'function boxDellElementoMappa(');
+const avvio = corpoFunzione(confronti, 'async avviaReportIntegrita(');
+const applicaConfronto = corpoFunzione(confronti, 'async applicaConfronto(');
+const preAnalisiBoxMappato = corpoFunzione(confronti, 'async preAnalisiBoxMappato(');
+const boxDellElementoMappa = corpoFunzione(confronti, '    boxDellElementoMappa(');
 
 test('la lista e la mappatura sono attese, non piu\' sondate a cicli', () => {
     //Il difetto: il report partiva dentro la callback del download e la mappatura veniva
@@ -109,7 +113,7 @@ test('ogni passo del report ha un esito dichiarato', () => {
 
     //Qualunque cosa accada, loading e busy non restano accesi per sbaglio.
     assert.match(avvio, /finally \{[\s\S]*hideLoading\(\)/);
-    assert.match(avvio, /if \(!confronti\.reportIntegritaAperto\(\)\) \{[\s\S]*?setBusy\(false\)/);
+    assert.match(avvio, /if \(!ReportIntegrita\.reportIntegritaAperto\(\)\) \{[\s\S]*?setBusy\(false\)/);
 });
 
 test('il fix senza report non e\' piu\' offerto', () => {
@@ -118,7 +122,9 @@ test('il fix senza report non e\' piu\' offerto', () => {
 
     //Con lui sono spariti i due rami che il report non usava: i bollini in pagina e il
     //recupero delle schede dal server.
-    assert.match(indexNew, /async function applicaConfronto\(mappa\) \{/);
+    //I20-1014: applicaConfronto e' un membro del report, non piu' una funzione di indexNew.
+    assert.match(confronti, /async applicaConfronto\(mappa\) \{/);
+    assert.doesNotMatch(indexNew, /function applicaConfronto\(/);
     assert.doesNotMatch(applicaConfronto, /getSchedeRefsMassivo/);
     assert.doesNotMatch(applicaConfronto, /addBollinoCustom/);
     assert.doesNotMatch(applicaConfronto, /richiediDiScaricareFramework/);
@@ -127,7 +133,7 @@ test('il fix senza report non e\' piu\' offerto', () => {
 test('la preanalisi usa il box che la mappa ha gia\' in mano', () => {
     //Prima passava da impaginazioneSingoloIndd: per ogni box, tutte le pagine del documento
     //materializzate, una page.select() e una scansione di allPageItems.
-    assert.match(applicaConfronto, /await preAnalisiBoxMappato\(schedaRef\.records, elMappa\)/);
+    assert.match(applicaConfronto, /await ReportIntegrita\.preAnalisiBoxMappato\(schedaRef\.records, elMappa\)/);
     assert.doesNotMatch(applicaConfronto, /impaginazioneSingoloIndd/);
 
     assert.match(preAnalisiBoxMappato, /confrontoBoxCompiledFieldPreAnalisi/);
@@ -149,7 +155,7 @@ test('impaginazioneSingoloIndd impagina e non fa altro', () => {
 
     //I parametri morti non devono tornare da nessuna parte: chi li passasse per posizione
     //finirebbe per impaginare con i bounds sbagliati.
-    ['indexNew.js', 'confronti.js', 'schedaRef.js', 'griglia.js', 'filtri.js'].forEach(nome => {
+    ['indexNew.js', 'confronti.js', ...FILE_DEL_REPORT, 'schedaRef.js', 'griglia.js', 'filtri.js'].forEach(nome => {
         const codice = senzaCommenti(sorgente(nome));
         assert.ok(!codice.includes('getPreAnalisi'), `getPreAnalisi e\' ricomparso in ${nome}`);
         assert.ok(!codice.includes('elementoMappaTarget'), `elementoMappaTarget e\' ricomparso in ${nome}`);
@@ -169,9 +175,13 @@ test('il report si chiude quando cambia il documento, senza chiedere', () => {
     assert.ok(posControllo > 0, 'manca il controllo di chiusura nel ciclo degli eventi');
     assert.ok(posControllo < posBusy, 'il controllo deve precedere il cancello isBusy');
 
+    //I20-1014: events guarda a intervalli, il report decide. La regola e' la stessa di prima.
     const controllo = corpoFunzione(events, 'async controllaChiusuraReportIntegrita()');
-    assert.match(controllo, /reportIntegritaAvvio\.deveChiudereReport/);
-    assert.match(controllo, /confronti\.chiudiReportIntegrita/);
+    assert.match(controllo, /ReportIntegrita\.chiudiSeNonValePiu\(documentoAttuale\)/);
+    const decisione = corpoFunzione(confronti, 'chiudiSeNonValePiu(documentoAttuale) {');
+    assert.match(decisione, /reportIntegritaAvvio\.deveChiudereReport/);
+    assert.match(decisione, /this\.chiudiReportIntegrita\(/);
+    assert.doesNotMatch(decisione, /Utility\.confirm/);
     //Non deve chiedere conferma: la domanda resta sulla chiusura fatta a mano.
     assert.doesNotMatch(controllo, /Utility\.confirm/);
 
@@ -181,7 +191,7 @@ test('il report si chiude quando cambia il documento, senza chiedere', () => {
     assert.match(chiusura, /setBusy\(false\)/);
     assert.match(chiusura, /Utility\.chiudiModal\(\)/);
 
-    assert.match(indexHtml, /confronti\.chiudiReportIntegrita\(\)/);
+    assert.match(indexHtml, /ReportIntegrita\.chiudiReportIntegrita\(\)/);
     assert.match(confronti, /this\._documentoDelReport = typeof indesignEvents/);
 });
 
@@ -206,7 +216,7 @@ test('l\'hash di una foto si ricalcola solo se la foto e\' cambiata', () => {
 
 test('il csv si scrive quando nasce un report, non quando se ne riapre uno', () => {
     //Unico punto di creazione: applicaConfronto, subito dopo l'apertura del report.
-    assert.match(applicaConfronto, /await confronti\.scaricaReportConfrontoCsv\(reportObj, \{ automatico: true \}\)/);
+    assert.match(applicaConfronto, /await ReportIntegrita\.scaricaReportConfrontoCsv\(reportObj, \{ automatico: true \}\)/);
 
     //La riapertura e il rinfresco dell'interfaccia non devono produrre altri file.
     const riapertura = avvio.substring(avvio.indexOf('azioneReport === "open"'), avvio.indexOf('//2.'));
@@ -480,7 +490,7 @@ test('i messaggi compaiono davanti al modal', () => {
 test('la copia negli appunti passa una stringa, in tutto il plugin', () => {
     //writeText vuole una stringa: con un oggetto si copia "[object Object]", e nessuno se ne
     //accorge finche' non prova a incollare.
-    ['griglia.js', 'schedaRef.js', 'confronti.js', 'indexNew.js', 'filtri.js'].forEach(nome => {
+    ['griglia.js', 'schedaRef.js', 'confronti.js', ...FILE_DEL_REPORT, 'indexNew.js', 'filtri.js'].forEach(nome => {
         const codice = sorgente(nome);
         assert.ok(!codice.includes("writeText({"), `${nome} copia ancora un oggetto`);
     });
@@ -496,7 +506,7 @@ test('la copia negli appunti passa una stringa, in tutto il plugin', () => {
 test('le differenze di confronto diventano segnalazioni della referenza', () => {
     //Vivono nella scheda Cambiati insieme alle segnalazioni di integrita', cosi' l'operatore
     //ha sotto mano i pulsanti che gia' conosce: trova, risolvi, whitelist, info.
-    const applica = corpoFunzione(indexNew, 'async function applicaConfronto(');
+    const applica = corpoFunzione(confronti, 'async applicaConfronto(');
 
     assert.match(applica, /reportConfronti\.confrontoConSeStessa\(lista\.records, campiOsservati\)/);
     assert.match(applica, /reportConfronti\.indicizzaPerPresenza/);
@@ -786,7 +796,7 @@ test('chiudendo la scheda la referenza si ricontrolla da sola', () => {
     //l'operatore ci mettesse mano.
     assert.match(ricontrollo, /await this\._leggiSchedaRefAggiornata\(stato\.codiceGruppo, stato\.idRec\)/);
     //La preanalisi e' quella del report, sul box che abbiamo in mano, che puo' essere nuovo.
-    assert.match(ricontrollo, /await preAnalisiBoxMappato\(records, record\.elementoMappa, box\)/);
+    assert.match(ricontrollo, /await ReportIntegrita\.preAnalisiBoxMappato\(records, record\.elementoMappa, box\)/);
     //Le decisioni stanno nel modulo verificato.
     assert.match(ricontrollo, /reportIntegritaAvvio\.differenzeDopoRicontrollo\(/);
     assert.match(ricontrollo, /reportIntegritaAvvio\.esitoChiusuraScheda\(/);
@@ -825,7 +835,7 @@ test('il ricontrollo giudica col dato del server e allinea la lista', () => {
     assert.match(ricontrollo, /this\._aggiornaListaKitConRecordFreschi\(records\)/);
 
     //La preanalisi si rifa' per intero: dice tutto quello che c'e', non solo quello che se ne va.
-    assert.match(ricontrollo, /await preAnalisiBoxMappato\(records, record\.elementoMappa, box\)/);
+    assert.match(ricontrollo, /await ReportIntegrita\.preAnalisiBoxMappato\(records, record\.elementoMappa, box\)/);
     assert.match(ricontrollo, /reportIntegritaAvvio\.esitoChiusuraScheda\(/);
 
     //Non applica niente da se': torna il piano, perche' prima si fa vedere cosa se ne va.

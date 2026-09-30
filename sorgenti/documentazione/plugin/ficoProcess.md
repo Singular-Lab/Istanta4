@@ -13,7 +13,7 @@ singole parti.
 **2. Sapere su cosa si sta lavorando.** `checklavorazioneSelezionata()` e i quattro
 `get*LavorazioneCorrente`: tipo, formato, canale, area. **È da qui che tutto il Plugin sa se sta
 facendo un Volantino (tipo 1) o un PoP (tipo 2)**, e lo chiedono `filtri.js`, `custom.js`,
-`confronti.js`, `CssFramework.js` e `pluginMiddleware.js`.
+il Report Integrità, `CssFramework.js` e `pluginMiddleware.js`.
 
 **3. Cercare e aprire un kit.** `cercaKit(cbk)` cerca, `lavoraKit(idKit, idLavorazioneLocale)` apre:
 da lì in poi il Plugin ha una lavorazione corrente. `lavoraKitMassivo` e `lavoraKitMassivo_Queue`

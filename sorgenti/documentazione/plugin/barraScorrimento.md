@@ -5,7 +5,7 @@
 In UXP la tabella dei nuovi non scorre in orizzontale: né con `overflow: auto`, né con `scroll`,
 né dando alla tabella una larghezza vera in pixel. Invece di insistere, la tabella viene spostata a
 mano e la barra la disegna il Plugin. Qui stanno solo i conti — la parte che si può sbagliare in
-silenzio; il disegno e gli eventi stanno in `confronti.js`.
+silenzio; il disegno e gli eventi stanno in `reportIntegrita/pannelli.js`, fino a I20-1014 in `confronti.js`.
 
 ## Variabili globali
 
@@ -14,7 +14,7 @@ silenzio; il disegno e gli eventi stanno in `confronti.js`.
 | `CURSORE_MINIMO` = `24` | sotto questa larghezza il cursore non si afferra più |
 
 Nessuno stato: tutte le funzioni ricevono le misure e restituiscono un risultato. Lo spostamento
-corrente lo tiene `confronti.js`. La costante è esportata perché chi disegna e chi calcola devono
+corrente lo tiene il report ([pannelli.js](reportIntegrita/pannelli.md)). La costante è esportata perché chi disegna e chi calcola devono
 usare lo stesso numero.
 
 ## Funzioni

@@ -163,12 +163,11 @@ test("sistemazioneFoto chiede CssFramework solo al momento della chiamata", () =
 //ReferenceError al primo uso. Qui si cerca in tutto il Plugin una variabile locale con il nome di
 //un modulo che lo stesso file importa con require.
 //
-//L'unico caso che c'era gia', in applicaConfronto di indexNew.js, oggi non fa danni - li' dentro
-//schedaRef si usa solo come variabile - ed e' fuori da I20-1009: e' elencato, cosi' che nessun
-//altro caso ci si aggiunga senza che qualcuno lo decida.
-const NASCONDIMENTI_AMMESSI = [
-    { file: "indexNew.js", riga: "var schedaRef = schedeRefs[i];" }
-];
+//Nessun caso ammesso. C'era "var schedaRef = schedeRefs[i];" in applicaConfronto di indexNew.js,
+//che nascondeva il modulo schedaRef importato li'; con I20-1014 applicaConfronto e' passata in
+//reportIntegrita/reportIntegrita.js, che schedaRef non lo importa: la variabile non nasconde piu'
+//niente. Un caso nuovo va aggiunto qui solo se qualcuno lo decide.
+const NASCONDIMENTI_AMMESSI = [];
 
 function moduliImportati(testo) {
     const moduli = new Set();
@@ -226,9 +225,9 @@ test("il controllo riconosce davvero una variabile che nasconde un modulo", () =
     assert.deepStrictEqual(nascondimenti("finto.js", finto), ["finto.js: let sceltaSpazio = sceltaSpazio.scegli([]);"]);
 });
 
-test("il caso ammesso di indexNew c'e' ancora: se sparisce, va tolto anche dall'elenco", () => {
-    const righe = leggiFileDelPlugin("indexNew.js").replace(/\r/g, "").split("\n").map(r => r.trim());
+test("ogni caso ammesso c'e' ancora: se sparisce, va tolto anche dall'elenco", () => {
     for (const ammesso of NASCONDIMENTI_AMMESSI) {
-        assert.ok(righe.includes(ammesso.riga), ammesso.riga);
+        const righe = leggiFileDelPlugin(ammesso.file).replace(/\r/g, "").split("\n").map(r => r.trim());
+        assert.ok(righe.includes(ammesso.riga), ammesso.file + ": " + ammesso.riga);
     }
 });

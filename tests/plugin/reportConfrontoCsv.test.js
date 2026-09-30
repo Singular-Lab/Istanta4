@@ -11,7 +11,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const csv = require('../../plugin/reportConfrontoCsv');
+const csv = require('../../plugin/reportIntegrita/csv');
 
 test('il progressivo riprende dal numero piu\' alto della cartella', () => {
     assert.strictEqual(csv.prossimoProgressivo([]), 1);
@@ -188,10 +188,10 @@ test('la codifica utf8 regge anche senza TextEncoder', () => {
     //UXP non garantisce TextEncoder: il ripiego scritto a mano deve dare gli stessi byte.
     const salvato = globalThis.TextEncoder;
     delete globalThis.TextEncoder;
-    delete require.cache[require.resolve('../../plugin/reportConfrontoCsv')];
+    delete require.cache[require.resolve('../../plugin/reportIntegrita/csv')];
 
     try {
-        const senzaEncoder = require('../../plugin/reportConfrontoCsv');
+        const senzaEncoder = require('../../plugin/reportIntegrita/csv');
         const testo = '﻿Caffè è più buono; costa 1€\r\nemoji \u{1F600}\r\n';
 
         assert.deepStrictEqual(
@@ -200,7 +200,7 @@ test('la codifica utf8 regge anche senza TextEncoder', () => {
     }
     finally {
         globalThis.TextEncoder = salvato;
-        delete require.cache[require.resolve('../../plugin/reportConfrontoCsv')];
+        delete require.cache[require.resolve('../../plugin/reportIntegrita/csv')];
     }
 });
 

@@ -1,10 +1,13 @@
-# reportConfrontoCsv.js
+# reportIntegrita/csv.js
+
+*Fino a I20-1014 si chiamava `reportConfrontoCsv.js` e stava in `plugin/`: dentro la cartella del report il
+prefisso non serve.*
 
 **Cosa è:** come è fatto il csv del Report Integrità. Nasce con I20-981 (Lotto 2).
 
 Stava tutto dentro `confronti.js`, che fa `require('indesign')` e sotto Node non si carica: **il nome
 del file, l'ordine delle righe, la virgolettatura e la descrizione composta non erano
-verificabili**. Qui restano le regole; in `confronti.js` resta ciò che tocca il disco.
+verificabili**. Qui restano le regole; in [reportIntegrita.js](flusso.md) — fino a I20-1014 `confronti.js` — resta ciò che tocca il disco.
 
 ## Variabili globali
 
@@ -49,7 +52,7 @@ Ventidue membri esportati, in tre mestieri.
 
 ## Una nota tecnica
 
-`require('./reportConfronti')` sta **alla riga 278**, a metà file, invece che in testa. Non è un
+`require('./sezioneConfronti')` (fino a I20-1014 `./reportConfronti`) sta **alla riga 278**, a metà file, invece che in testa. Non è un
 difetto e non cambia niente a runtime, ma è insolito rispetto a tutto il resto del Plugin e chi
 cerca le dipendenze del modulo guardando le prime righe non lo trova.
 

@@ -4,7 +4,7 @@
 box nel documento.
 
 **182 membri, 9.640 righe**, tutti sullo stesso piano: qui non c'è la distinzione fra pubblico e
-privato che c'è in [confronti.js](confronti.md).
+privato che c'è nel [Report Integrità](reportIntegrita/README.md).
 
 ## Le famiglie
 
@@ -83,7 +83,9 @@ Duplicare una referenza su più box è un'altra cosa rispetto al modificarne i c
 aperta **dal report** invece che dal documento — la barra e i sottomenù si riducono, perché
 l'operatore sta guardando una referenza segnalata, non navigando.
 
-Vanno col resto del report, che è sparso su otto file: vedi [confronti.md](confronti.md).
+Dal I20-1014 il report ha una cartella sua, [reportIntegrita/](reportIntegrita/README.md), ma questi
+membri **restano qui, di proposito**: sono stato della scheda, e il report li imposta da fuori. Il
+perché è nel README del report.
 
 ## Cosa è stato rimosso in I20-1002
 
