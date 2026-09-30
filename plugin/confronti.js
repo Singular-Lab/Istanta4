@@ -510,6 +510,10 @@ const confronti = {
                 box1campi.map(async campo => {
                     if (campo.constructorName !== "Rectangle") return null;
 
+                    //I20-1022: il clone della primaria non e' una foto del dato, e' nato nel documento:
+                    //contarlo farebbe sembrare il box diverso da quello che dice il server.
+                    if (Utility.eUnClone(campo.label)) return null;
+
                     if (
                         Utility.parseLabel(campo.label).startsWith(pluginMiddleware.getCampo("nomeFotoPrimaria") ?? "immagine") ||
                         Utility.parseLabel(campo.label).startsWith(pluginMiddleware.getCampo("nomeFotoSecondaria") ?? "foto_secondaria")

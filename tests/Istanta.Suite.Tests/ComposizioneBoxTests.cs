@@ -130,6 +130,87 @@ public class ComposizioneBoxTests
         }
     }
 
+    /// <summary>
+    /// I20-1022: i campi per duplicare una foto non esistevano. Un file che non li ha deve dare
+    /// i valori che riproducono il comportamento di prima, come per l'ombra del BOX41.
+    /// </summary>
+    [Fact]
+    public void Una_duplicazione_senza_i_campi_del_clone_si_comporta_come_prima()
+    {
+        const string json = "{\"nomeGruppo\":\"ombra_per_foto\",\"etichettaSorgente\":\"sy_ombra\",\"bersagli\":[\"immagine*\"]}";
+
+        var duplicazione = JsonConvert.DeserializeObject<DuplicazioneObj>(json);
+
+        Assert.Equal("", duplicazione!.etichettaCopia);
+        Assert.False(duplicazione.marcaClone);
+        Assert.True(duplicazione.aggiornaCopie);
+    }
+
+    [Fact]
+    public void I_campi_del_clone_arrivano_al_Plugin_senza_perdersi()
+    {
+        var originale = new DuplicazioneObj
+        {
+            etichettaSorgente = "immagine*",
+            bersagli = new List<string> { "immagine*" },
+            etichettaCopia = "foto_secondaria",
+            marcaClone = true,
+            aggiornaCopie = false,
+            mantieniSorgente = true
+        };
+
+        var riletto = JsonConvert.DeserializeObject<DuplicazioneObj>(JsonConvert.SerializeObject(originale));
+
+        Assert.Equal("foto_secondaria", riletto!.etichettaCopia);
+        Assert.True(riletto.marcaClone);
+        Assert.False(riletto.aggiornaCopie);
+        Assert.True(riletto.mantieniSorgente);
+    }
+
+    /// <summary>
+    /// I20-1022: nei box BIS di Edro21 (solo BOX7) la primaria si duplica in una secondaria
+    /// marcata come clone, e il clone va dietro alla primaria. Se il file e il modello
+    /// divergessero il box uscirebbe con una foto sola, senza alcun errore visibile.
+    /// </summary>
+    [Fact]
+    public void Il_box7_di_Edro21_duplica_la_primaria_in_un_clone_dietro_di_lei()
+    {
+        var root = JsonConvert.DeserializeObject<DbFrameworkCss>(File.ReadAllText(TrovaSorgenteEdro21()));
+
+        var box7 = root!.dbRidimensionamentiAllineamenti.modificheCssPerKit
+            .SelectMany(m => m.operazioniPerBox)
+            .Where(op => op.nomiBox.Contains("BOX7"))
+            .ToList();
+
+        Assert.NotEmpty(box7);
+
+        foreach (var box in box7)
+        {
+            var duplicazione = Assert.Single(box.duplicazioni);
+            Assert.Equal("immagine*", duplicazione.etichettaSorgente);
+            Assert.Equal(new[] { "immagine*" }, duplicazione.bersagli);
+            Assert.Equal("foto_secondaria", duplicazione.etichettaCopia);
+            Assert.True(duplicazione.marcaClone);
+            Assert.True(duplicazione.mantieniSorgente);
+            Assert.False(duplicazione.aggiornaCopie);
+            Assert.Null(duplicazione.adattaAlBersaglio);
+            // Solo se il box non ha gia' una secondaria vera.
+            var condizione = Assert.Single(Assert.Single(duplicazione.listSetCondizioni).setCondizioni);
+            Assert.Equal(new[] { "foto_secondaria*" }, condizione.elementiDaNonTrovare);
+
+            var ordine = Assert.Single(box.ordiniZ);
+            Assert.Equal("dietro", ordine.posizione);
+            Assert.Equal(new[] { "foto_secondaria*" }, ordine.etichette);
+            Assert.Equal(new[] { "immagine*" }, ordine.rispettoA);
+        }
+
+        // Il BOX1 non e' un box BIS e resta senza.
+        Assert.All(root.dbRidimensionamentiAllineamenti.modificheCssPerKit
+            .SelectMany(m => m.operazioniPerBox)
+            .Where(op => op.nomiBox.Contains("BOX1")),
+            box => Assert.DoesNotContain(box.duplicazioni, d => d.marcaClone));
+    }
+
     private static string TrovaSorgenteEdro21()
     {
         const string relativo = "Istanta/wwwroot/external_source/Edro21/SourceFrameworkCss.json";
