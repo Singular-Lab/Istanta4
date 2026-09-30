@@ -31,15 +31,20 @@ peggio di una documentazione assente, perché fa perdere tempo invece di farne r
 
 ## Come è organizzato il Plugin: un concetto, una cartella
 
-Regola decisa con l'operatore il 2026-09-30, applicata per la prima volta in **I20-1009**. Vale per
-i lavori di divisione e accorpamento che seguono (I20-1014, I20-1015, I20-1012, e quello che resta
-di I20-1007).
+Regola decisa con l'operatore il 2026-09-30, applicata per la prima volta in **I20-1009** e poi in
+I20-1014, I20-1015, I20-1012 e I20-1007, che ha chiuso il giro degli accorpamenti. In radice
+restano i file grandi che parlano con InDesign e i moduli che sono un concetto da soli
+(`variantiDescrizione`, `noRenderElementi`, `credenzialiSalvate`, `ricollegaEsiti`,
+`cambiStrutturali`, `garbageCollector`, `versionePlugin`, `XMLHttpRequestClient`, `logger`,
+`jsIndexControls`): un file nuovo, o una cartella, si apre solo quando il concetto lo chiede.
 
 - **Un file rappresenta un concetto.** Quando un concetto ha bisogno di più di un file, ha **una
   cartella sua**: `plugin/<concetto>/`. Le prime sono [sistemazioneFoto/](sistemazioneFoto/README.md)
   (I20-1009), [reportIntegrita/](reportIntegrita/README.md) (I20-1014),
   [reperimentoFoto/](reperimentoFoto/README.md) (I20-1015), [modali/](modali/README.md) e
-  [tooltip/](tooltip/README.md) (I20-1012). **Un concetto di un file solo resta un file**, senza
+  [tooltip/](tooltip/README.md) (I20-1012) e [cssFramework/](cssFramework/README.md) (I20-1007, le
+  parti pure del motore CSS; `CssFramework.js` resta in radice perché le agenzie lo richiedono da
+  lì). **Un concetto di un file solo resta un file**, senza
   cartella: [menu.js](menu.md) e [testoTag.js](testoTag.md), usciti da `utility.js` insieme agli
   altri due.
 - **Quando due parti non pure di un concetto condividono lo stato**, come il flusso e i pannelli
@@ -102,14 +107,14 @@ ed è documentato il meccanismo con cui il server prevale su di lui.
 
 | pagina | il file che spiega |
 |---|---|
-| [barraScorrimento.md](barraScorrimento.md) | una barra di scorrimento disegnata da noi, perché in UXP non scorre |
-| [dissolvenza.md](dissolvenza.md) | i conti della dissolvenza, perché in UXP `opacity` non si ridisegna |
+| [reportIntegrita/barraScorrimento.md](reportIntegrita/barraScorrimento.md) | una barra di scorrimento disegnata da noi, perché in UXP non scorre (in radice fino a I20-1007) |
+| [reportIntegrita/dissolvenza.md](reportIntegrita/dissolvenza.md) | i conti della dissolvenza, perché in UXP `opacity` non si ridisegna (in radice fino a I20-1007) |
 | [tooltip/posizione.md](tooltip/posizione.md) | dove ancorare un tooltip senza misurarlo (era `tooltipPosizione.js`) |
 | [reperimentoFoto/cacheHash.md](reperimentoFoto/cacheHash.md) | la memoria degli hash md5 delle foto (era `cacheHashFoto.js`) |
 | [reportIntegrita/conteggi.md](reportIntegrita/conteggi.md) | i numeri sulle linguette del Report Integrità (era `reportConteggi.js`) |
 | [reperimentoFoto/dataCaricamento.md](reperimentoFoto/dataCaricamento.md) | il badge con la data sulle foto (era `dataCaricamentoFoto.js`) |
 | [ricollegaEsiti.md](ricollegaEsiti.md) | cosa dire all'operatore dopo un ricollegamento |
-| [trattiDescrizione.md](trattiDescrizione.md) | i tratti di stile di un campo descrizione |
+| [testoTag.md](testoTag.md) | i tratti di stile di un campo descrizione: da I20-1007 sono una parte di `testoTag.js` (era `trattiDescrizione.js`) |
 | [variantiDescrizione.md](variantiDescrizione.md) | quale variante di descrizione comanda |
 | [credenzialiSalvate.md](credenzialiSalvate.md) | le credenziali nell'archivio cifrato del sistema |
 | [reperimentoFoto/autoSync.md](reperimentoFoto/autoSync.md) | scaricare e impaginare la foto in un colpo solo (era `fotoAutoSync.js`) |
@@ -121,9 +126,9 @@ ed è documentato il meccanismo con cui il server prevale su di lui.
 
 | pagina | il file che spiega |
 |---|---|
-| [cssSequenzaOperazioni.md](cssSequenzaOperazioni.md) | quando una regola del framework viene eseguita |
-| [cssRegoleConflitti.md](cssRegoleConflitti.md) | quali elementi non devono toccarsi, e su cosa si misura |
-| [cssComposizioneBox.md](cssComposizioneBox.md) | duplicare elementi e decidere chi sta davanti |
+| [cssFramework/sequenzaOperazioni.md](cssFramework/sequenzaOperazioni.md) | quando una regola del framework viene eseguita (era `cssSequenzaOperazioni.js`) |
+| [cssFramework/regoleConflitti.md](cssFramework/regoleConflitti.md) | quali elementi non devono toccarsi, e su cosa si misura (era `cssRegoleConflitti.js`) |
+| [cssFramework/composizioneBox.md](cssFramework/composizioneBox.md) | duplicare elementi e decidere chi sta davanti (era `cssComposizioneBox.js`) |
 | [sistemazioneFoto/](sistemazioneFoto/README.md) | trovare dove c'è posto nel box e farci stare le foto: tre file, uno puro per il calcolo dei rettangoli e uno per la scelta. Uscito da `CssFramework` in I20-1009 |
 | [noRenderElementi.md](noRenderElementi.md) | rendere invisibili singoli elementi di un box |
 | [cssFramework/](cssFramework/README.md) | il motore vero: 7.283 righe, spiegate in tre pagine per gruppo |

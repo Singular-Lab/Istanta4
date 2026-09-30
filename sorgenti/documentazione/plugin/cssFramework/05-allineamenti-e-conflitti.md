@@ -64,17 +64,17 @@ Due tempi perché **durante la lavorazione i conflitti sono transitori**: un ele
 altro finché non viene spostato. Per la stessa ragione `indexNew` alza
 `sospendiControlloSegnalazioniConflitti` attorno al fix foto.
 
-**La lettura delle regole non è qui:** vive in [cssRegoleConflitti](../cssRegoleConflitti.md), fuori
+**La lettura delle regole non è qui:** vive in [cssRegoleConflitti](regoleConflitti.md), fuori
 da InDesign e con i suoi test.
 
 ## Comporre
 
 - `applicaComposizioneBox(...)` → esegue sul documento il piano calcolato da
-  [cssComposizioneBox](../cssComposizioneBox.md): duplicazioni e ordine di sovrapposizione.
+  [cssComposizioneBox](composizioneBox.md): duplicazioni e ordine di sovrapposizione.
 - `riapplicaComposizioneBox(...)` → lo rifà dopo che le cose si sono mosse.
 - `riportaDentroAlBox(...)` ed `elementoDentroAlBox(...)` → il rientro degli elementi derivati.
 - `applicaOperazioniDopoFixFoto(box, bounds)` → il momento `dopoFixFoto` di
-  [cssSequenzaOperazioni](../cssSequenzaOperazioni.md).
+  [cssSequenzaOperazioni](sequenzaOperazioni.md).
 
 ## Variabili
 

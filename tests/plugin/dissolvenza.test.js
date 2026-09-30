@@ -10,7 +10,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const dissolvenza = require('../../plugin/dissolvenza.js');
+const dissolvenza = require('../../plugin/reportIntegrita/dissolvenza.js');
 
 test('i passi vanno da pieno a zero, radi abbastanza per UXP', () => {
     const passi = dissolvenza.numeroDiPassi();

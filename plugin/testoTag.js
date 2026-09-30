@@ -14,7 +14,6 @@
 /// FitOptions e NestedStyleDelimiters, e si chiedono con indesign() dentro le due funzioni che le
 /// usano: cosi' parseContent, trimDescrizione, parseStile e parseObjStile si provano chiamandole,
 /// le ultime due con un documento finto. Il resto si prova in collaudo.
-const trattiDescrizione = require('./trattiDescrizione');
 //Si chiede al momento della chiamata: in testa al file, sotto Node il modulo non si caricherebbe.
 function indesign() { return require('indesign'); }
 
@@ -594,13 +593,111 @@ const TestoTag = {
 
             tratti.push({
                 nome: nome,
-                nomeCompleto: trattiDescrizione.nomeCompletoStile(nome, gruppo),
+                nomeCompleto: TestoTag.nomeCompletoStile(nome, gruppo),
                 contenuto: pezzo.contents,
                 origine: pezzo
             });
         }
 
-        return trattiDescrizione.accorpa(tratti);
+        return TestoTag.accorpa(tratti);
+    },
+
+    /// I20-995, I20-1007: il lavoro sui tratti, fatto su stringhe. Stava in trattiDescrizione.js,
+    /// nato fuori da schedaRef.js e utility.js perche' quelli non si caricano sotto Node; ora che
+    /// testoTag.js si carica, il file a parte non serve piu'. Quello che queste funzioni NON fanno
+    /// e' cambiare il risultato: il testo delle textarea si compone carattere per carattere
+    /// esattamente come prima, comprese le asimmetrie del codice vecchio.
+
+    /// Il nome con cui la scheda riconosce uno stile: "gruppo.nome" se lo stile sta dentro un
+    /// gruppo, altrimenti il nome e basta.
+    nomeCompletoStile(nomeStile, nomeGruppo) {
+        const nome = nomeStile == null ? '' : String(nomeStile);
+
+        if (nomeGruppo == null || String(nomeGruppo) === '') {
+            return nome;
+        }
+
+        return String(nomeGruppo) + '.' + nome;
+    },
+
+    /// Unisce i tratti consecutivi che portano lo stesso stile. InDesign spezza i tratti anche
+    /// dove cambia solo un attributo locale - un corpo, un colore - mentre la scheda ragiona per
+    /// nome di stile: senza questo passaggio lo stesso stile aprirebbe due textarea.
+    accorpa(tratti) {
+        const risultato = [];
+
+        (tratti || []).forEach(function (tratto) {
+            if (tratto == null) {
+                return;
+            }
+
+            const contenuto = tratto.contenuto == null ? '' : String(tratto.contenuto);
+
+            //Un tratto senza testo non apre niente e non chiude niente: per la scheda non esiste.
+            if (contenuto === '') {
+                return;
+            }
+
+            const ultimo = risultato.length > 0 ? risultato[risultato.length - 1] : null;
+
+            if (ultimo != null && ultimo.nomeCompleto === tratto.nomeCompleto) {
+                ultimo.contenuto += contenuto;
+                ultimo.ultimaOrigine = tratto.origine;
+                return;
+            }
+
+            //origine e ultimaOrigine sono il pezzo di InDesign da cui il tratto viene, il primo e
+            //l'ultimo di quelli accorpati. Qui dentro non si guardano mai: servono a chi, dopo,
+            //deve risalire alla riga in cui il tratto finisce.
+            risultato.push({
+                nome: tratto.nome,
+                nomeCompleto: tratto.nomeCompleto,
+                contenuto: contenuto,
+                origine: tratto.origine,
+                ultimaOrigine: tratto.origine
+            });
+        });
+
+        return risultato;
+    },
+
+    /// Gli stili nell'ordine in cui compaiono, uno stile ripetuto piu' avanti compare di nuovo.
+    /// E' la lista con cui si riconosce lo schema della descrizione.
+    stiliInOrdine(tratti) {
+        return (tratti || []).map(function (tratto) { return tratto.nomeCompleto; });
+    },
+
+    /// I due testi di un tratto: quello che si vede nella textarea e quello che serve a confrontare
+    /// il tratto con il contenuto del server.
+    ///
+    /// Si differenziano sull'a capo, che nella textarea e' "\n" e nel confronto resta "\r". La
+    /// differenza vale dal secondo carattere in poi: sul primo carattere del tratto il codice
+    /// vecchio non guardava l'a capo, e cambiarlo adesso vorrebbe dire cambiare di nascosto il
+    /// contenuto di un campo. Ogni carattere passa dalla normalizzazione, uno per uno, perche'
+    /// applicarla al tratto intero riconoscerebbe sequenze lunghe - "<br>", "\r\n" - che carattere
+    /// per carattere non si vedono mai.
+    testiDelTratto(contenuto, normalizzaCarattere) {
+        const testo = contenuto == null ? '' : String(contenuto);
+        const normalizza = typeof normalizzaCarattere === 'function' ? normalizzaCarattere : function (c) { return c; };
+
+        let perLaTextarea = '';
+        let perIlConfronto = '';
+
+        for (let i = 0; i < testo.length; i++) {
+            const carattere = testo[i];
+
+            if (i > 0 && carattere === '\r') {
+                perLaTextarea += '\n';
+                perIlConfronto += '\r';
+                continue;
+            }
+
+            const normalizzato = normalizza(carattere);
+            perLaTextarea += normalizzato;
+            perIlConfronto += normalizzato;
+        }
+
+        return { perLaTextarea: perLaTextarea, perIlConfronto: perIlConfronto };
     },
 
     /// Una descrizione ridotta per il confronto: senza a capo e senza spazi, nemmeno in mezzo.

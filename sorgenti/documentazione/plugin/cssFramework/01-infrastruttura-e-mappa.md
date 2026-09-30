@@ -64,7 +64,7 @@ una svista, ma un prezzo pagato consapevolmente.
 
   **La chiave dipende da cosa è l'elemento:** per una copia nata da duplicazione è la label intera,
   per tutti gli altri è la label normalizzata da `Utility.parseLabel`. È qui che si vede all'opera la
-  ragione di `etichettaDerivata` in [cssComposizioneBox](../cssComposizioneBox.md): normalizzare la
+  ragione di `etichettaDerivata` in [cssComposizioneBox](composizioneBox.md): normalizzare la
   label di una copia taglierebbe il suffisso e farebbe **di due ombre un elemento solo**.
 
 - `updateMap(mappa)` → non ricostruisce niente: marca `eliminato: true` quello che InDesign non
@@ -74,7 +74,7 @@ una svista, ma un prezzo pagato consapevolmente.
 - `aggiungiNuoviElementiAllaMappa(box, mappa, prefissiDerivati)` → il caso opposto. **Le copie delle
   duplicazioni nascono a valle degli allineamenti**, e senza questo passaggio le regole eseguite in
   un momento successivo non le vedrebbero affatto. Vedi
-  [cssSequenzaOperazioni](../cssSequenzaOperazioni.md) per i momenti.
+  [cssSequenzaOperazioni](sequenzaOperazioni.md) per i momenti.
 
 ### Leggere le regole di un box
 

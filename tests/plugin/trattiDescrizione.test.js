@@ -11,7 +11,8 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const tratti = require('../../plugin/trattiDescrizione.js');
+//I20-1007: i tratti stanno in testoTag.js, che si carica sotto Node.
+const tratti = require('../../plugin/testoTag.js');
 
 //La normalizzazione vera sostituisce anche sequenze lunghe: qui ne basta una che si comporti
 //allo stesso modo, per vedere che venga applicata a un carattere per volta e non al tratto.

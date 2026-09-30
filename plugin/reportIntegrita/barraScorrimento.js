@@ -7,9 +7,12 @@
  *
  * Qui stanno solo i conti, che sono la parte che si puo' sbagliare in silenzio: quanto e'
  * largo il cursore, dove va messo, dove porta un clic sulla traccia, e come si resta dentro i
- * limiti. Il disegno e gli eventi stanno in reportIntegrita/pannelli.js.
+ * limiti. Il disegno e gli eventi stanno in pannelli.js, qui accanto.
  *
  * Esecuzione dei test: node --test tests/plugin/barraScorrimento.test.js
+ *
+ * I20-1007: sta in reportIntegrita/, accanto a pannelli.js che e' l'unico a usarla. Fino ad
+ * allora era in radice.
  */
 
 //Sotto questa larghezza il cursore non si afferra piu'.

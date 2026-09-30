@@ -32,10 +32,10 @@ un'intestazione del report si fanno sempre con loro**, così hanno tutti lo stes
 - **Lo scorrimento orizzontale della lista dei nuovi** — `_crBarraScorrimentoNuovi`,
   `_abilitaTrascinamentoBarra`, `_scorriNuovi`, `_misureScorrimentoNuovi`, `PASSO_SCORRIMENTO`. In
   UXP la tabella non scorre: la barra la disegna il Plugin, e i conti stanno in
-  [barraScorrimento](../barraScorrimento.md).
+  [barraScorrimento](barraScorrimento.md).
 - **La dissolvenza delle righe risolte** — `_dissolviRiga`, `_dissolviElementi` e i loro aiutanti,
   `PROPRIETA_COLORE_DA_ATTENUARE`, `ATTESA_RIDISEGNO_MS`. In UXP `opacity` non si ridisegna: si
-  sfumano i colori, e i conti stanno in [dissolvenza](../dissolvenza.md).
+  sfumano i colori, e i conti stanno in [dissolvenza](dissolvenza.md).
 - **Le conferme a tre scelte** — `_confirmTreAzioniReport`, `_confirmConNonChiedere`.
 
 ## I colori

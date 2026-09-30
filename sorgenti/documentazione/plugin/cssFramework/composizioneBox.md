@@ -1,4 +1,7 @@
-# cssComposizioneBox.js
+# cssFramework/composizioneBox.js
+
+**Dal I20-1007** sta in `plugin/cssFramework/` con le altre parti pure del [motore CSS](README.md);
+fino ad allora era `cssComposizioneBox.js` in radice. Chi lo importa lo chiama ancora col nome di prima.
 
 **Cosa è:** duplicazione di elementi e ordine di sovrapposizione dentro un box. Nasce con I20-970.
 
@@ -6,7 +9,7 @@ Il CssFramework sa spostare, ridimensionare e allineare quello che **già esiste
 crearne di nuovi né decidere chi sta davanti a chi. Questo modulo aggiunge le due decisioni
 tenendole fuori da `custom.js` e fuori da InDesign: qui si calcola soltanto **il piano** — cosa
 duplicare, con che etichetta, con che bounds, cosa mandare dietro a cosa — mentre
-[CssFramework](cssFramework/README.md) lo esegue sul documento.
+[CssFramework](README.md) lo esegue sul documento.
 
 I bounds seguono la convenzione InDesign: `[y1, x1, y2, x2]`, con `y1` in alto e `y2` in basso.
 

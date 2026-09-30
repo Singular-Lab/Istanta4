@@ -1,4 +1,7 @@
-# cssSequenzaOperazioni.js
+# cssFramework/sequenzaOperazioni.js
+
+**Dal I20-1007** sta in `plugin/cssFramework/` con le altre parti pure del [motore CSS](README.md);
+fino ad allora era `cssSequenzaOperazioni.js` in radice. Chi lo importa lo chiama ancora col nome di prima.
 
 **Cosa è:** il momento in cui una regola del framework CSS viene eseguita.
 

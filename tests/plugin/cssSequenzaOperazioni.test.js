@@ -1,7 +1,7 @@
 /*
  * Momento di esecuzione delle regole del framework CSS.
  *
- * Il modulo sotto test e' plugin/cssSequenzaOperazioni.js: decide quali regole appartengono
+ * Il modulo sotto test e' plugin/cssFramework/sequenzaOperazioni.js (fino a I20-1007 cssSequenzaOperazioni.js): decide quali regole appartengono
  * a quale momento, e consegna al motore un DB gia' filtrato. Il vincolo piu' importante e'
  * che a dati invariati non cambi nulla, perche' ogni regola gia' scritta e' senza fase.
  *
@@ -11,7 +11,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const cssSequenzaOperazioni = require('../../plugin/cssSequenzaOperazioni');
+const cssSequenzaOperazioni = require('../../plugin/cssFramework/sequenzaOperazioni');
 
 function dbDiProva() {
     return [

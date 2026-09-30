@@ -1,7 +1,7 @@
 /*
  * I20-974: regole di segnalazione conflitti del CSS framework.
  *
- * Il modulo sotto test e' plugin/cssRegoleConflitti.js, che legge le regole senza toccare
+ * Il modulo sotto test e' plugin/cssFramework/regoleConflitti.js (fino a I20-1007 cssRegoleConflitti.js), che legge le regole senza toccare
  * InDesign. Due cose vanno protette: che le forme di regola gia' in uso continuino a valere
  * esattamente come prima, e che la scelta fra riquadro dell'oggetto e testo reale arrivi
  * fino al controllo, perche' e' li' che nascevano le segnalazioni inutili.
@@ -14,7 +14,7 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const cssRegoleConflitti = require('../../plugin/cssRegoleConflitti');
+const cssRegoleConflitti = require('../../plugin/cssFramework/regoleConflitti');
 
 const radice = path.join(__dirname, '..', '..');
 

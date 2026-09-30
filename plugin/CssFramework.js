@@ -1,10 +1,11 @@
 ﻿const { app, FitOptions, LocationOptions, Justification, VerticalJustification, NestedStyleDelimiters, Leading } = require('indesign');
 const { ClippingPathType, ClippingPathSettings, Image } = require('indesign');
-const cssComposizioneBox = require('./cssComposizioneBox');
-const cssSequenzaOperazioni = require('./cssSequenzaOperazioni');
+//I20-1007: le parti pure del motore stanno in cssFramework/.
+const cssComposizioneBox = require('./cssFramework/composizioneBox');
+const cssSequenzaOperazioni = require('./cssFramework/sequenzaOperazioni');
 //I20-1009: la sistemazione delle foto sta in un modulo suo; qui ne restano tre rimandi.
 const SistemazioneFoto = require('./sistemazioneFoto/sistemazioneFoto');
-const cssRegoleConflitti = require('./cssRegoleConflitti');
+const cssRegoleConflitti = require('./cssFramework/regoleConflitti');
 
 const CssFramework =
 {
