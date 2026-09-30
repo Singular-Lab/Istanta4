@@ -32,9 +32,8 @@
 
 <div class="container" id="container">
     <div id="contentVisual" class="pt-3">
-        <div class="alert alert-warning" role="alert">
-            <strong>Attenzione</strong>: Nessuna interfaccia implementata
-        </div>
+        @* I20-1024: l'elenco dei campi di controllo, modificabile. Scrive lo stesso file della scheda Source. *@
+        <div id="parametriConfrontoBody"></div>
     </div>
     <div id="contentSource" class="pt-3" style="display:none;">
         <div class="container">
@@ -52,13 +51,34 @@
 
 @inject Microsoft.AspNetCore.Http.IHttpContextAccessor HttpContextAccessor
 <script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]" src="~/js/sourceEditor.js?v=3"></script>
+<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]" src="~/js/parametriConfronto.js?v=1"></script>
 <script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]" src="https://unpkg.com/monaco-editor@latest/min/vs/loader.js"></script>
 
 <script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]">
 
     let exSourceEditor = new ExternalSourceEditor();
 
+    //I20-1024: dopo un salvataggio dalla Visual, la scheda Source, se e' gia' stata aperta, mostra
+    //il file nuovo invece di quello letto all'apertura.
+    let parametriConfronto = new ParametriConfronto("parametriConfrontoBody", {
+        dopoSalvataggio: function (json) {
+            if (exSourceEditor.editorInstance) {
+                exSourceEditor.editorInstance.setValue(json);
+            }
+        }
+    });
+
     function documentReady() {
+
+        parametriConfronto.carica();
+
+        //Uscendo dalla pagina con modifiche non salvate nella Visual, il browser chiede conferma.
+        window.addEventListener("beforeunload", function (e) {
+            if (parametriConfronto.sporco) {
+                e.preventDefault();
+                e.returnValue = "";
+            }
+        });
 
         $("#btnSourceSave").on("click", function() {
             exSourceEditor.save('Confronti');
@@ -80,6 +100,12 @@
 
         $(".toggleVisual").addClass("active");
         $(".toggleSource").removeClass("active");
+
+        //Tornando dalla Source si rilegge il file, che potrebbe essere stato salvato di la'. Non
+        //se ci sono modifiche in corso nella Visual: si perderebbero.
+        if (!parametriConfronto.sporco) {
+            parametriConfronto.carica();
+        }
 
     }
     function menuSource() {
