@@ -31,8 +31,9 @@ Panoramica del file: [README.md](README.md).
    nessun candidato collide più. Poi toglie i duplicati, scarta i rettangoli più piccoli di **un
    quarto della base** per lato, ed elimina quelli interamente contenuti in un altro.
 
-4. **`getSpazioImpaginazione(box)`** — l'unica porta d'ingresso: mette in fila i tre passi e
-   restituisce `{candidate, obstacles}`. Per ogni box scrive in console una riga
+4. **`getSpazioImpaginazione(box)`** — l'unica porta d'ingresso: cerca la base, mette in fila i
+   tre passi e restituisce `{candidate, obstacles}`. Senza base avvisa con `CSF-19` e restituisce
+   uno spazio vuoto — vedi sotto. Per ogni box scrive in console una riga
    `refineRects <codice gruppo>: N ostacoli, N iterazioni, N rettangoli, N ms`, e avvisa
    l'operatore con `CSF-18` se il raffinamento è stato fermato dalla guardia.
 
@@ -83,7 +84,14 @@ scartati senza che nessuno lo dica.
 ## Funzioni
 
 - `getSpazioImpaginazione(box)` → l'ingresso del gruppo.
+- `calcolaSpazioLibero(box, base, obs)` → il resto di `getSpazioImpaginazione`, una volta che base
+  e ostacoli ci sono: candidati grossolani e raffinamento.
+- `trovaBase(box)` → il primo elemento la cui label comincia per `base`, o `null`. È l'unico punto
+  che cerca la base: lo usano `getSpazioImpaginazione`, `getObstacles` e `fixFoto`.
+- `segnalaBaseMancante(box)` → il messaggio `CSF-19`, all'operatore e nelle segnalazioni.
 - `getObstacles(box)` → gli ostacoli, in coordinate relative alla base.
+- `ripristinaFit(fitApplicati)`, `ripristinaOstacoli(obstacles)` → rimettono i frame alle misure
+  di prima del fit. Un frame che non si lascia rimettere non ferma gli altri.
 - `safeFitToContent(textFrame)` → chiamata da `getObstacles` su ogni casella di testo. Serve perché
   un campo di testo occupa il suo riquadro, non il testo che contiene: **senza il fit l'ostacolo
   sarebbe più grande del vero** e le foto verrebbero più piccole del necessario. Vedi sotto.
@@ -122,15 +130,43 @@ probabilmente appartiene alle utilità sul testo.
 
 ---
 
-## Una cosa segnalata e non corretta
+## La base mancante — I20-1010
 
-È aperta come task a sé.
+Lo spazio per le foto si cerca **dentro la base** del box, l'elemento la cui label comincia per
+`base`. Se manca — un box malformato, una base rinominata, un livello cancellato — non c'è niente da
+calcolare. `getSpazioImpaginazione` e `getObstacles` la cercano **per prima cosa**, e se non la
+trovano:
 
-**Il presupposto della base.** Sia `getObstacles` sia `getSpazioImpaginazione` danno per scontato che
-nel box esista un elemento la cui label comincia per `base`, e ne usano i `geometricBounds` senza
-verificare di averlo trovato. In pratica ogni box ha la sua base, quindi non capita; se capitasse —
-un box malformato, una base rinominata, un livello cancellato — l'errore sarebbe un `TypeError`
-grezzo in due punti diversi, e chi lo legge nei log non capirebbe che manca la base.
+- avvisano con `Code CSF-19: Nel box <label> con codice gruppo <codice> manca la base…`, sia come
+  messaggio all'operatore sia fra le segnalazioni;
+- **non toccano niente**: nessun testo prende il fit;
+- restituiscono uno spazio vuoto. `fixFoto`, con zero candidati, non sposta nessuna foto.
+
+**Si ferma quel box, non l'operazione**: in un'impaginazione gli altri box vanno avanti. È una
+scelta dell'operatore. Prima si rompeva con un `TypeError` su `null`, dentro `getObstacles`, dopo
+aver già fatto il fit ai testi del box, e l'errore interrompeva tutto ciò che stava sopra.
+
+## I fit si ripristinano sempre — I20-1010
+
+`getObstacles` fa il fit dei testi sul loro contenuto (`safeFitToContent`), così l'ostacolo è il
+testo e non il suo riquadro. Quel fit **va sempre disfatto**: i testi devono tornare alle misure che
+avevano. Prima succedeva solo se tutto andava liscio fino in fondo a `fixFoto`. Ora:
+
+- **`safeFitToContent`** salva le misure all'ingresso: se il fit, lo spostamento o il
+  restringimento vanno storti, il frame torna com'era e l'errore prosegue;
+- **`getObstacles`** ricorda ogni fit con le misure di prima, legato all'**id** dell'elemento. Se si
+  interrompe per un errore rimette tutto e l'errore prosegue. Chi ha preso il fit ma non diventa
+  ostacolo — un testo senza label, un ostacolo di misura nulla — torna subito com'era: prima restava
+  ristretto per sempre;
+- **`getSpazioImpaginazione`** rimette gli ostacoli se qualcosa va storto dopo `getObstacles`;
+- **`fixFoto`** li rimette in un `finally`, qualunque cosa succeda, e **prima** di ogni controllo
+  dei conflitti, anche nelle uscite anticipate («nessuna foto» e `CSF-12`), che prima non lo
+  facevano: il controllo deve vedere i testi alle loro misure vere.
+
+Il ripristino per **id** e non per label conta quando due elementi del box hanno la stessa label:
+prima il secondo prendeva le misure originali del primo, e al ripristino gli finiva sopra.
+
+Coperto da `tests/plugin/spazioFotoRobusto.test.js`.
 
 ## Il ciclo di `refineRects` finisce sempre — I20-1011
 

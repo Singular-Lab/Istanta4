@@ -68,23 +68,35 @@ const CssFramework =
     /// La porta d'ingresso del gruppo: quali porzioni del box sono libere per le foto.
     /// Mette in fila i tre passi - ostacoli, candidati grossolani, raffinamento - e torna
     /// { candidate, obstacles }. Chi chiama passa poi tutti e due a fixFoto.
-    /// PRESUPPONE che nel box esista un elemento la cui label comincia per "base": e' lo spazio
-    /// dentro cui si cerca lo spazio. Se non c'e', qui si rompe con un TypeError.
+    ///
+    /// Lo spazio si cerca dentro la base del box: senza base non c'e' niente da calcolare.
+    /// I20-1010: allora si avvisa (CSF-19) e si torna uno spazio vuoto, con cui fixFoto non
+    /// sposta nessuna foto: si ferma quel box, non l'operazione. La base si cerca per prima,
+    /// cosi' senza base nessun testo prende il fit. Prima si rompeva con un TypeError, dopo
+    /// aver gia' fatto il fit ai testi del box.
+    ///
+    /// Se qualcosa va storto dopo getObstacles, gli ostacoli tornano alle misure di prima
+    /// del fit e l'errore prosegue: fixFoto, che li ripristina, non ci arriverebbe.
     getSpazioImpaginazione(box) {
-        let obs = this.getObstacles(box);
-        //calcoliamo la larghezza e l'altezza del box
-        // let boxWidth = box.geometricBounds[3] - box.geometricBounds[1];
-        // let boxHeight = box.geometricBounds[2] - box.geometricBounds[0];
-
-        var base = null;
-        for (var i = 0; i < box.allPageItems.length; i++){
-            var el = box.allPageItems[i];
-            if(Utility.parseLabel(el.label).startsWith("base")){
-                base = el;
-                break;
-            }
+        var base = this.trovaBase(box);
+        if (base == null) {
+            this.segnalaBaseMancante(box);
+            return {candidate: [], obstacles: []};
         }
 
+        let obs = this.getObstacles(box);
+        try {
+            return this.calcolaSpazioLibero(box, base, obs);
+        }
+        catch (e) {
+            this.ripristinaOstacoli(obs);
+            throw e;
+        }
+    },
+
+    /// Il resto di getSpazioImpaginazione, una volta che base e ostacoli ci sono: candidati
+    /// grossolani e raffinamento.
+    calcolaSpazioLibero(box, base, obs) {
         let baseWidth = base.geometricBounds[3] - base.geometricBounds[1];
         let baseHeight = base.geometricBounds[2] - base.geometricBounds[0];
 
@@ -127,14 +139,80 @@ const CssFramework =
         }
     },
 
+    /// La base del box: il primo elemento la cui label comincia per "base". E' lo spazio
+    /// dentro cui si cerca lo spazio per le foto. Null se non c'e'.
+    trovaBase(box) {
+        for (var i = 0; i < box.allPageItems.length; i++) {
+            var el = box.allPageItems[i];
+            if (Utility.parseLabel(el.label).startsWith("base")) {
+                return el;
+            }
+        }
+        return null;
+    },
+
+    /// I20-1010: la base manca. Lo si dice all'operatore e nelle segnalazioni, con il box e
+    /// il suo codice gruppo, perche' la causa si possa trovare: un box malformato, una base
+    /// rinominata, un livello cancellato.
+    segnalaBaseMancante(box) {
+        var nomeBox = "";
+        try {
+            nomeBox = Utility.parseLabel(box.label);
+        }
+        catch (e) {
+            nomeBox = "senza etichetta";
+        }
+        var testo = "Code CSF-19: Nel box " + nomeBox + " con codice gruppo " + this.codiceGruppoDelBox(box) +
+            " manca la base: lo spazio per le foto non si può calcolare e le foto non vengono sistemate.";
+        console.warn(testo);
+        messaggioUtente(testo, "warning");
+        addSegnalazione(testo, "warning", 2, false);
+    },
+
+    /// Rimette i frame alle misure che avevano prima del fit: [{ object, originalBounds }].
+    /// Un frame che non si lascia rimettere non ferma gli altri.
+    ripristinaFit(fitApplicati) {
+        for (let i = 0; i < fitApplicati.length; i++) {
+            let f = fitApplicati[i];
+            try {
+                f.object.geometricBounds = [f.originalBounds[0], f.originalBounds[1], f.originalBounds[2], f.originalBounds[3]];
+            }
+            catch (e) {
+                console.error("Ripristino delle misure non riuscito:", e);
+            }
+        }
+    },
+
+    /// Gli ostacoli tornano alle misure che avevano prima di getObstacles. I gruppi si saltano:
+    /// non prendono il fit. Rimettere due volte le stesse misure non fa danni, per questo
+    /// fixFoto puo' chiamarla sia prima dei controlli sia in chiusura.
+    ripristinaOstacoli(obstacles) {
+        if (obstacles == null) {
+            return;
+        }
+        this.ripristinaFit(obstacles.filter(obs => obs.constructor == null || obs.constructor.toLowerCase() != "group"));
+    },
+
     /// Quali elementi del box sono ostacoli per le foto, in coordinate relative alla base.
     /// Non lo sono le foto stesse, le loro etichette e gli sfondi: le foto vengono collocate
     /// tutte insieme dal fixFoto, e lo sfondo sta dietro a tutto.
     /// Il cliente puo' intervenire da custom.js con ignoreElementsFixFoto per aggiungerne,
     /// exceptionElementsToIgnoreFixFoto per fare eccezioni, customPadding per dare a un elemento
     /// un margine suo.
-    /// Come getSpazioImpaginazione, presuppone che la base ci sia.
+    ///
+    /// I testi prendono il fit (safeFitToContent), cosi' l'ostacolo e' il testo e non il suo
+    /// riquadro. I20-1010: ogni fit viene ricordato con le misure di prima, legato all'id
+    /// dell'elemento. Chi ha preso il fit ma non diventa ostacolo - senza label, o di misura
+    /// nulla - torna subito com'era; gli ostacoli li rimette fixFoto. Se qui dentro qualcosa
+    /// va storto, torna tutto com'era e l'errore prosegue.
+    /// Senza base: CSF-19 e nessun ostacolo, senza toccare niente.
     getObstacles(box) {
+        var base = this.trovaBase(box);
+        if (base == null) {
+            this.segnalaBaseMancante(box);
+            return [];
+        }
+
         //scorriamo tutti gli elementi tranne quelli elencati nella variabile ignoreElements
         let ignoreElements = ["base*", "immagine*", "foto_secondaria*", "etichetta*", "foto_extra*", "sfondo*"];
         let exception = [];
@@ -153,77 +231,88 @@ const CssFramework =
 
         //scorriamo tutti gli elementi del box
         let listObjFitted = [];
-        var base = null;
-        for (let i = 0; i < box.allPageItems.length; i++) {
-            const item = box.allPageItems[i];
-            if(base == null && Utility.parseLabel(item.label).startsWith("base")){
-                base = item;
-            }
-            //controlliamo se l'elemento è valido e non è uno degli elementi da ignorare (se la label inizia con uno degli ignoreElements)
-            //se però è presente in exception non lo ignoriamo
-            if (
-                !ignoreElements.some(ignore => item.label && this.makeRegexFromGroupName(ignore).test(Utility.parseLabel(item.label))) ||
-                exception.some(exc => item.label && this.makeRegexFromGroupName(exc).test(Utility.parseLabel(item.label)))
-            ){
-                var obj = {
-                    originalBounds: item.geometricBounds,
-                    originalWidth: item.geometricBounds[3] - item.geometricBounds[1],
-                    originalHeight: item.geometricBounds[2] - item.geometricBounds[0],
-                    label: Utility.parseLabel(item.label),
+        let fitApplicati = [];
+        try {
+            for (let i = 0; i < box.allPageItems.length; i++) {
+                const item = box.allPageItems[i];
+                //controlliamo se l'elemento è valido e non è uno degli elementi da ignorare (se la label inizia con uno degli ignoreElements)
+                //se però è presente in exception non lo ignoriamo
+                if (
+                    !ignoreElements.some(ignore => item.label && this.makeRegexFromGroupName(ignore).test(Utility.parseLabel(item.label))) ||
+                    exception.some(exc => item.label && this.makeRegexFromGroupName(exc).test(Utility.parseLabel(item.label)))
+                ){
+                    var obj = {
+                        id: item.id,
+                        originalBounds: item.geometricBounds,
+                        originalWidth: item.geometricBounds[3] - item.geometricBounds[1],
+                        originalHeight: item.geometricBounds[2] - item.geometricBounds[0],
+                        label: Utility.parseLabel(item.label),
+                    }
+
+                    //controlliamo se è un textFrame
+                    if (item.constructorName === "TextFrame") {
+                        //applichiamo il fit al contenuto, ricordando com'era prima
+                        fitApplicati.push({ object: item, originalBounds: obj.originalBounds });
+                        this.safeFitToContent(item);
+                    }
+
+                    listObjFitted.push(obj);
                 }
 
-                //controlliamo se è un textFrame
-                if (item.constructorName === "TextFrame") {
-                    //applichiamo il fit al contenuto
-                    this.safeFitToContent(item);
-                }
-
-                listObjFitted.push(obj);
             }
-
-        }
         
-        for (let i = 0; i < box.allPageItems.length; i++) {
-            const item = box.allPageItems[i];
-            //controlliamo se l'elemento è valido e non è uno degli elementi da ignorare (se la label inizia con uno degli ignoreElements)
-            if (item.isValid && item.label != "" && (!ignoreElements.some(ignore => item.label && this.makeRegexFromGroupName(ignore).test(Utility.parseLabel(item.label))) || exception.some(exc => item.label && this.makeRegexFromGroupName(exc).test(Utility.parseLabel(item.label))))) {
-                //aggiungiamo l'elemento come ostacolo
-                //controlliamo se l'elemento ha un padding personalizzato
-                let padding = [0, 0, 0, 0]; // [top, left, bottom, right]
-                if (customPadding.length > 0) {
-                    let customPad = customPadding.find(p => item.label && this.makeRegexFromGroupName(p.label).test(Utility.parseLabel(item.label)));
-                    if (customPad) {
-                        padding = customPad.padding;
+            for (let i = 0; i < box.allPageItems.length; i++) {
+                const item = box.allPageItems[i];
+                //controlliamo se l'elemento è valido e non è uno degli elementi da ignorare (se la label inizia con uno degli ignoreElements)
+                if (item.isValid && item.label != "" && (!ignoreElements.some(ignore => item.label && this.makeRegexFromGroupName(ignore).test(Utility.parseLabel(item.label))) || exception.some(exc => item.label && this.makeRegexFromGroupName(exc).test(Utility.parseLabel(item.label))))) {
+                    //aggiungiamo l'elemento come ostacolo
+                    //controlliamo se l'elemento ha un padding personalizzato
+                    let padding = [0, 0, 0, 0]; // [top, left, bottom, right]
+                    if (customPadding.length > 0) {
+                        let customPad = customPadding.find(p => item.label && this.makeRegexFromGroupName(p.label).test(Utility.parseLabel(item.label)));
+                        if (customPad) {
+                            padding = customPad.padding;
+                        }
+                    }
+
+                    //I20-1010: per id, non per label. Con due elementi della stessa label il secondo
+                    //prendeva le misure del primo, e al ripristino gli finiva sopra.
+                    var obj = listObjFitted.find(o => o.id == item.id);
+
+                    //controlliamo se è un textFrame
+                    if (item.constructorName === "TextFrame") {
+                        //applichiamo il fit al contenuto
+                        this.safeFitToContent(item);
+                    }
+
+                    obj = {
+                        x: (item.geometricBounds[1] > base.geometricBounds[1] ? item.geometricBounds[1] : base.geometricBounds[1]) - base.geometricBounds[1] - padding[1],
+                        y: (item.geometricBounds[0] > base.geometricBounds[0] ? item.geometricBounds[0] : base.geometricBounds[0]) - base.geometricBounds[0] - padding[0],
+                        width: (item.geometricBounds[3] - item.geometricBounds[1] <= base.geometricBounds[3] - base.geometricBounds[1] ? item.geometricBounds[3] - item.geometricBounds[1] : box.geometricBounds[3] - box.geometricBounds[1]) + padding[1] + padding[3],
+                        height: (item.geometricBounds[2] - item.geometricBounds[0] <= base.geometricBounds[2] - base.geometricBounds[0] ? item.geometricBounds[2] - item.geometricBounds[0] : box.geometricBounds[2] - box.geometricBounds[0]) + padding[0] + padding[2],
+                        label: Utility.parseLabel(item.label),
+                        constructor: item.constructorName,
+                        object: item,
+                        originalBounds: obj.originalBounds,
+                        originalWidth: obj.originalWidth,
+                        originalHeight: obj.originalHeight,
+                    }
+
+                    //Se width e height sono positivi, aggiungiamo l'ostacolo
+                    if (obj.width > 0 && obj.height > 0) {
+                        obstacles.push(obj);
                     }
                 }
-
-                var obj = listObjFitted.find(o => o.label == Utility.parseLabel(item.label));
-
-                //controlliamo se è un textFrame
-                if (item.constructorName === "TextFrame") {
-                    //applichiamo il fit al contenuto
-                    this.safeFitToContent(item);
-                }
-
-                obj = {
-                    x: (item.geometricBounds[1] > base.geometricBounds[1] ? item.geometricBounds[1] : base.geometricBounds[1]) - base.geometricBounds[1] - padding[1],
-                    y: (item.geometricBounds[0] > base.geometricBounds[0] ? item.geometricBounds[0] : base.geometricBounds[0]) - base.geometricBounds[0] - padding[0],
-                    width: (item.geometricBounds[3] - item.geometricBounds[1] <= base.geometricBounds[3] - base.geometricBounds[1] ? item.geometricBounds[3] - item.geometricBounds[1] : box.geometricBounds[3] - box.geometricBounds[1]) + padding[1] + padding[3],
-                    height: (item.geometricBounds[2] - item.geometricBounds[0] <= base.geometricBounds[2] - base.geometricBounds[0] ? item.geometricBounds[2] - item.geometricBounds[0] : box.geometricBounds[2] - box.geometricBounds[0]) + padding[0] + padding[2],
-                    label: Utility.parseLabel(item.label),
-                    constructor: item.constructorName,
-                    object: item,
-                    originalBounds: obj.originalBounds,
-                    originalWidth: obj.originalWidth,
-                    originalHeight: obj.originalHeight,
-                }
-
-                //Se width e height sono positivi, aggiungiamo l'ostacolo
-                if (obj.width > 0 && obj.height > 0) {
-                    obstacles.push(obj);
-                }
             }
         }
+        catch (e) {
+            this.ripristinaFit(fitApplicati);
+            throw e;
+        }
+
+        //Chi ha preso il fit ma non e' un ostacolo non lo rimettera' nessuno: lo si fa adesso.
+        let idOstacoli = obstacles.map(o => o.object.id);
+        this.ripristinaFit(fitApplicati.filter(f => !idOstacoli.includes(f.object.id)));
 
         return obstacles;
     },
@@ -258,72 +347,81 @@ const CssFramework =
             messaggioUtente("Code CSF-001: Nel box con codice gruppo " + codiceGruppo + ", il TextFrame " + Utility.parseLabel(textFrame.label) + " è in overflow, impossibile fare il fit", "error");
             return;
         }
-        var originalBaseline = textFrame.lines.item(0).baseline;
+        //I20-1010: fit, spostamento e restringimento sono tre passi. Se uno va storto il frame
+        //non deve restare a meta': torna com'era e l'errore prosegue.
+        var boundsIniziali = textFrame.geometricBounds;
+        try {
+            var originalBaseline = textFrame.lines.item(0).baseline;
             
-        // 3. Fit
-        textFrame.fit(FitOptions.FRAME_TO_CONTENT);
+            // 3. Fit
+            textFrame.fit(FitOptions.FRAME_TO_CONTENT);
     
-        // 4. Nuova baseline
-        var newBaseline = textFrame.lines.item(0).baseline;
+            // 4. Nuova baseline
+            var newBaseline = textFrame.lines.item(0).baseline;
     
-        // 5. Calcola la differenza e sposta verticalmente
-        var deltaY = originalBaseline - newBaseline;
+            // 5. Calcola la differenza e sposta verticalmente
+            var deltaY = originalBaseline - newBaseline;
     
-        // 6. Applica lo spostamento
-        textFrame.move(undefined, [0, deltaY]);
+            // 6. Applica lo spostamento
+            textFrame.move(undefined, [0, deltaY]);
 
-        if (textFrame.lines.length > 1) {
+            if (textFrame.lines.length > 1) {
 
-            var left = Infinity;
-            var right = -Infinity;
+                var left = Infinity;
+                var right = -Infinity;
 
-            for (var i = 0; i < textFrame.lines.length; i++) {
-                var line = textFrame.lines.item(i);
-                var start = line.horizontalOffset;
-                //var start = line.insertionPoints.item(0).horizontalOffset;
-                var end = line.endHorizontalOffset;
-                //var end = line.insertionPoints.item(-1).endHorizontalOffset;
+                for (var i = 0; i < textFrame.lines.length; i++) {
+                    var line = textFrame.lines.item(i);
+                    var start = line.horizontalOffset;
+                    //var start = line.insertionPoints.item(0).horizontalOffset;
+                    var end = line.endHorizontalOffset;
+                    //var end = line.insertionPoints.item(-1).endHorizontalOffset;
 
-                if (start < left) left = start;
-                if (end > right) right = end;
-            }
+                    if (start < left) left = start;
+                    if (end > right) right = end;
+                }
 
-            var prefs = textFrame.textFramePreferences;
+                var prefs = textFrame.textFramePreferences;
 
-            var insetLeft = prefs.insetSpacing[1];
-            var insetRight = prefs.insetSpacing[3];
-            var absoluteHorizontalScale = textFrame.absoluteHorizontalScale / 100;
+                var insetLeft = prefs.insetSpacing[1];
+                var insetRight = prefs.insetSpacing[3];
+                var absoluteHorizontalScale = textFrame.absoluteHorizontalScale / 100;
             
 
-            //controlliamo anche i left e rightindent del paragrafo 0
+                //controlliamo anche i left e rightindent del paragrafo 0
 
-            var leftIndent = 0;
-            var rightIndent = 0;
-            if (textFrame.paragraphs.length > 0) {
-                var firstPara = textFrame.paragraphs.item(0);
-                if (firstPara.leftIndent != null) {
-                    leftIndent = firstPara.leftIndent;
+                var leftIndent = 0;
+                var rightIndent = 0;
+                if (textFrame.paragraphs.length > 0) {
+                    var firstPara = textFrame.paragraphs.item(0);
+                    if (firstPara.leftIndent != null) {
+                        leftIndent = firstPara.leftIndent;
+                    }
+                    if (firstPara.rightIndent != null) {
+                        rightIndent = firstPara.rightIndent;
+                    }
                 }
-                if (firstPara.rightIndent != null) {
-                    rightIndent = firstPara.rightIndent;
+
+                if (insetLeft == null || insetRight == null) {
+                    //per qualche motivo l'insetSpacing può essere o un array di 4 unità o un singolo valore int, questo è un fallback nel caso non fosse un array
+                    insetLeft = prefs.insetSpacing;
+                    insetRight = prefs.insetSpacing;
                 }
+
+                //Aumentiamolo del 3% per starci largo
+                absoluteHorizontalScale += (absoluteHorizontalScale*0.03);
+
+                insetLeft = insetLeft * absoluteHorizontalScale;
+                insetRight = insetRight * absoluteHorizontalScale;
+                leftIndent = leftIndent * absoluteHorizontalScale;
+                rightIndent = rightIndent * absoluteHorizontalScale;
+
+                textFrame.geometricBounds = [textFrame.geometricBounds[0], left - insetLeft - leftIndent, textFrame.geometricBounds[2], right + insetRight + rightIndent];
             }
-
-            if (insetLeft == null || insetRight == null) {
-                //per qualche motivo l'insetSpacing può essere o un array di 4 unità o un singolo valore int, questo è un fallback nel caso non fosse un array
-                insetLeft = prefs.insetSpacing;
-                insetRight = prefs.insetSpacing;
-            }
-
-            //Aumentiamolo del 3% per starci largo
-            absoluteHorizontalScale += (absoluteHorizontalScale*0.03);
-
-            insetLeft = insetLeft * absoluteHorizontalScale;
-            insetRight = insetRight * absoluteHorizontalScale;
-            leftIndent = leftIndent * absoluteHorizontalScale;
-            rightIndent = rightIndent * absoluteHorizontalScale;
-
-            textFrame.geometricBounds = [textFrame.geometricBounds[0], left - insetLeft - leftIndent, textFrame.geometricBounds[2], right + insetRight + rightIndent];
+        }
+        catch (e) {
+            this.ripristinaFit([{ object: textFrame, originalBounds: boundsIniziali }]);
+            throw e;
         }
     },
 
@@ -853,16 +951,23 @@ const CssFramework =
     /// numero di foto (CSF-12) o se nessun candidato puo' ospitare il gruppo.
     /// In coda ripristina la dimensione originale degli ostacoli, che getObstacles aveva
     /// alterato col fit, e fa scattare il controllo delle segnalazioni conflitti.
+    /// I20-1010: il ripristino avviene sempre, prima del controllo dei conflitti - che deve
+    /// vedere i testi alle loro misure vere - anche nelle uscite anticipate, e comunque in
+    /// chiusura, anche se qualcosa va storto. Prima le uscite senza foto e CSF-12 lasciavano i
+    /// testi ristretti dal fit.
     fixFoto(box, candidateRects, obstacles, projection = false) {
-
-        var base = null;
-        for (var i = 0; i < box.allPageItems.length; i++){
-            var el = box.allPageItems[i];
-            if(Utility.parseLabel(el.label).startsWith("base")){
-                base = el;
-                break;
-            }
+        try {
+            return this.eseguiFixFoto(box, candidateRects, obstacles, projection);
         }
+        finally {
+            this.ripristinaOstacoli(obstacles);
+        }
+    },
+
+    /// Il corpo di fixFoto. Si chiama solo da li': e' fixFoto a garantire il ripristino.
+    eseguiFixFoto(box, candidateRects, obstacles, projection) {
+
+        var base = this.trovaBase(box);
 
         if (customAgenzia.calcoloDistanziamentoFoto != null) {
             this.calcoloDistanziamentoFoto = customAgenzia.calcoloDistanziamentoFoto;
@@ -916,6 +1021,7 @@ const CssFramework =
         }
 
         if(fotos.length == 0){
+            this.ripristinaOstacoli(obstacles);
             if (!projection && !this.sospendiControlloSegnalazioniConflitti) {
                 this.controllaSegnalazioniConflittiPendenti(box);
             }
@@ -931,6 +1037,7 @@ const CssFramework =
             //non esiste una configurazione per questo numero di foto, mandiamo l'avviso e torniamo senza fare nulla
             messaggioUtente("Code CSF-12: Non esiste una configurazione di fix foto automatico per " + fotos.length + " foto.", "warning");
             addSegnalazione("Code CSF-12: Non esiste una configurazione di fix foto automatico per " + fotos.length + " foto.", "warning", 2, false);
+            this.ripristinaOstacoli(obstacles);
             if (!projection && !this.sospendiControlloSegnalazioniConflitti) {
                 this.controllaSegnalazioniConflittiPendenti(box);
             }
@@ -987,16 +1094,7 @@ const CssFramework =
 
         if (bestCandidate == null) {
             //ripristiniamo la grandezza originale degli ostacoli
-            for (let i = 0; i < obstacles.length; i++) {
-                let obs = obstacles[i];
-                if (obs.constructor.toLowerCase() == "group") continue;
-                obs.object.geometricBounds = [
-                    obs.originalBounds[0],
-                    obs.originalBounds[1],
-                    obs.originalBounds[2],
-                    obs.originalBounds[3]
-                ];
-            }
+            this.ripristinaOstacoli(obstacles);
             console.error("Nessun candidato trovato per le foto");
             if (!projection && !this.sospendiControlloSegnalazioniConflitti) {
                 this.controllaSegnalazioniConflittiPendenti(box);
@@ -1090,16 +1188,7 @@ const CssFramework =
         }
         
         //ripristiniamo la grandezza originale degli ostacoli
-        for (let i = 0; i < obstacles.length; i++) {
-            let obs = obstacles[i];
-            if (obs.constructor.toLowerCase() == "group") continue;
-            obs.object.geometricBounds = [
-                obs.originalBounds[0],
-                obs.originalBounds[1],
-                obs.originalBounds[2],
-                obs.originalBounds[3]
-            ];
-        }
+        this.ripristinaOstacoli(obstacles);
 
         //calcoliamo l'area finale occupato dal gruppo
         let areaFinale = (absoluteBounds[2] - absoluteBounds[0]) * (absoluteBounds[3] - absoluteBounds[1]);
