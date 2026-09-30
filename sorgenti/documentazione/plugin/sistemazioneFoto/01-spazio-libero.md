@@ -1,16 +1,20 @@
-# CssFramework — lo spazio di impaginazione e i rettangoli candidati
+# Sistemazione foto — lo spazio libero e i rettangoli candidati
 
-**A cosa serve questo gruppo: trovare dove c'è posto nel box.**
+**A cosa serve questa parte: trovare dove c'è posto nel box.**
 
 Prima che le foto vengano collocate, qualcuno deve dire quali porzioni del box sono libere. Questo
 gruppo prende gli elementi già presenti — prezzo, descrizione, loghi, bolli — li tratta come
 **ostacoli**, e produce un elenco di **rettangoli candidati** in cui le foto potrebbero stare.
 
-È la prima metà di una coppia: qui si producono i candidati, [cssSpazioFoto](../cssSpazioFoto.md) li
-valuta e sceglie quale vince. La divisione è la solita del motore CSS: **qui si guarda InDesign, lì
-si decide senza guardarlo.**
+È la prima metà di una coppia: qui si producono i candidati, [sceltaSpazio](sceltaSpazio.md) li
+valuta e sceglie quale vince, e [02-sistemazione-foto](02-sistemazione-foto.md) ci mette le foto.
 
-Panoramica del file: [README.md](README.md).
+**Sta in due file.** Quello che legge il documento — gli ostacoli, il fit dei testi, la base — è in
+`plugin/sistemazioneFoto/sistemazioneFoto.js`. Il calcolo dei rettangoli, che lavora solo su numeri,
+è in `plugin/sistemazioneFoto/spazioLibero.js`, si carica sotto Node ed è verificato dai test. Fino a
+I20-1009 stava tutto in `CssFramework.js`.
+
+Panoramica del concetto: [README.md](README.md).
 
 ---
 
@@ -22,7 +26,7 @@ Panoramica del file: [README.md](README.md).
    un'altra foto**, perché vengono collocate tutte insieme dal fixFoto. Le coordinate sono relative
    alla base, non al box.
 
-2. **`generateCandidateRects(larghezza, altezza, ostacoli, tolleranza)`** — per ogni ostacolo
+2. **`generateCandidateRects(larghezza, altezza, ostacoli, tolleranza, paddingBox)`** — per ogni ostacolo
    genera fino a quattro rettangoli: tutto lo spazio sopra, sotto, a sinistra e a destra. Sono
    candidati **grossolani e sovrapposti**, che ignorano l'esistenza di tutti gli altri ostacoli.
 
@@ -37,17 +41,17 @@ Panoramica del file: [README.md](README.md).
    `refineRects <codice gruppo>: N ostacoli, N iterazioni, N rettangoli, N ms`, e avvisa
    l'operatore con `CSF-18` se il raffinamento è stato fermato dalla guardia.
 
-Chi chiama passa poi **entrambi** a `fixFoto`. È sempre questa la coppia: `indexNew.js`,
-`schedaRef.js`, `custom.js` in radice e l'agenzia Edro21 fanno tutti così.
+Chi chiama passa poi **entrambi** a `fixFoto`. È sempre questa la coppia: `indexNew.js` e
+`schedaRef.js` la chiamano su `SistemazioneFoto`, `custom.js` in radice e l'agenzia Edro21 su
+`CssFramework`, che per loro tiene un rimando — vedi [README.md](README.md).
 
 ---
 
 ## Variabili
 
-**Il gruppo non ha nessuna variabile di modulo.** Nessuno dei nove membri è un dato: sono tutte
-funzioni, e tutto lo stato è locale. È una differenza netta rispetto al resto di `CssFramework`, e
-vale la pena dirla: **questo gruppo è già quasi puro** — prende un box, restituisce rettangoli, non
-ricorda niente fra una chiamata e l'altra.
+**Questa parte non ha nessuna variabile di modulo.** Sono tutte funzioni, e tutto lo stato è
+locale: prende un box, restituisce rettangoli, non ricorda niente fra una chiamata e l'altra. È per
+questo che il calcolo dei rettangoli si è potuto separare in un modulo puro senza riscriverlo.
 
 ### Le quattro manopole del cliente
 
@@ -58,7 +62,7 @@ Stanno in `custom.js`, non nella configurazione del server:
 | `ignoreElementsFixFoto` | `getObstacles` | **aggiunge** elementi alla lista di quelli che non sono ostacoli |
 | `exceptionElementsToIgnoreFixFoto` | `getObstacles` | eccezioni alla lista: un elemento che sarebbe ignorato torna a contare |
 | `customPadding` | `getObstacles` | margine per etichetta, come `{label, padding:[top,left,bottom,right]}` |
-| `paddingBox` | `generateCandidateRects` | margine applicato a **ogni candidato** |
+| `paddingBox` | `calcolaSpazioLibero`, che lo passa a `generateCandidateRects` | margine applicato a **ogni candidato** |
 
 **`paddingBox` di default è negativo — `[-2,-2,-2,-2]` — e non è un errore di segno.** Applicato come
 `r.x -= paddingBox[1]` e `r.width += (paddingBox[1] + paddingBox[3])`, un valore negativo
@@ -83,7 +87,9 @@ scartati senza che nessuno lo dica.
 
 ## Funzioni
 
-- `getSpazioImpaginazione(box)` → l'ingresso del gruppo.
+### In `sistemazioneFoto.js`, la parte che legge il documento
+
+- `getSpazioImpaginazione(box)` → l'ingresso.
 - `calcolaSpazioLibero(box, base, obs)` → il resto di `getSpazioImpaginazione`, una volta che base
   e ostacoli ci sono: candidati grossolani e raffinamento.
 - `trovaBase(box)` → il primo elemento la cui label comincia per `base`, o `null`. È l'unico punto
@@ -94,13 +100,19 @@ scartati senza che nessuno lo dica.
   di prima del fit. Un frame che non si lascia rimettere non ferma gli altri.
 - `safeFitToContent(textFrame)` → chiamata da `getObstacles` su ogni casella di testo. Serve perché
   un campo di testo occupa il suo riquadro, non il testo che contiene: **senza il fit l'ostacolo
-  sarebbe più grande del vero** e le foto verrebbero più piccole del necessario. Vedi sotto.
-- `generateCandidateRects(...)` → i candidati grossolani.
+  sarebbe più grande del vero** e le foto verrebbero più piccole del necessario. Vedi sotto. La usa
+  anche `CssFramework.getRealBounds`, attraverso il rimando.
+- `codiceGruppoDelBox(box)` → il codice gruppo dal DNA del box, per i messaggi; `sconosciuto` se
+  non si legge.
+
+### In `spazioLibero.js`, il calcolo puro
+
+- `generateCandidateRects(larghezza, altezza, ostacoli, tolleranza, paddingBox)` → i candidati
+  grossolani. `paddingBox` arriva da `calcolaSpazioLibero`, che lo legge da `custom.js`; se non c'è
+  vale il default `[-2,-2,-2,-2]`. Prima lo si leggeva qui dalla globale `customAgenzia`.
 - `refineRects(..., esito)` → il raffinamento iterativo. Se gli si passa `esito`, lo riempie con
   `{ iterazioni, rettangoli, ostacoli, interrotto }`: `rettangoli` è il massimo raggiunto in un
   giro, `interrotto` è vero solo se il ciclo l'ha fermato la guardia e non la convergenza.
-- `codiceGruppoDelBox(box)` → il codice gruppo dal DNA del box, per i messaggi; `sconosciuto` se
-  non si legge.
 - `intersectRect(rect, obs, tolerance)` → cosa resta di un rettangolo tolto un ostacolo: fino a
   quattro pezzi. I pezzi laterali sono alti quanto la sola fascia dell'ostacolo, così non si
   sovrappongono a quelli sopra e sotto.
@@ -125,7 +137,7 @@ Fa tre cose diverse:
 3. **Rifiuta di lavorare su un frame in overflow** e lo segnala (`CSF-001`): un fit su un testo che
    già non ci sta peggiorerebbe le cose. `CSF-000` se non si riesce a risalire al box.
 
-È l'unica del gruppo che non riguarda i rettangoli: se un domani il file si spezza ancora,
+È l'unica di questa parte che non riguarda i rettangoli: se un domani il concetto si spezza ancora,
 probabilmente appartiene alle utilità sul testo.
 
 ---
@@ -206,8 +218,8 @@ UXP più che in Node. Quanti ostacoli abbia un box reale dipende da quanti suoi 
 foto, etichette o sfondi. La riga in console di `getSpazioImpaginazione` serve a misurarlo sui
 volantini veri; **è un punto aperto**, non corretto.
 
-Coperto da `tests/plugin/raffinamentoSpazio.test.js`, che carica il vero `CssFramework.js`
-sostituendo il modulo `indesign` con un oggetto vuoto.
+Coperto da `tests/plugin/raffinamentoSpazio.test.js`, che carica `spazioLibero.js` così com'è: dal
+I20-1009 non serve più sostituire il modulo `indesign`.
 
 ## Cosa è stato rimosso
 

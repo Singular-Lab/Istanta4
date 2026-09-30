@@ -13,10 +13,14 @@
  * I candidati arrivano in coordinate relative alla base del box: x e y sono l'angolo in alto
  * a sinistra, il centro della base e' quindi (larghezzaBase / 2, altezzaBase / 2).
  *
+ * I20-1009: parte del concetto sistemazioneFoto, insieme a sistemazioneFoto.js e
+ * spazioLibero.js. Prima si chiamava sceltaSpazio.js e stava in plugin/: il prefisso "css"
+ * diceva solo che la usava CssFramework, e dentro la cartella non serve piu'.
+ *
  * Esecuzione dei test: node --test tests/plugin/*.test.js
  */
 
-const cssSpazioFoto = {
+const sceltaSpazio = {
 
     areaMassima: "areaMassima",
     centrato: "centrato",
@@ -29,13 +33,13 @@ const cssSpazioFoto = {
     /// foto non si muoverebbero piu': un refuso in configurazione fermerebbe il fixFoto in silenzio.
     normalizzaPreferenza(preferenza) {
         const opzioni = preferenza || {};
-        const modo = String(opzioni.modo || cssSpazioFoto.areaMassima).toLowerCase() === cssSpazioFoto.centrato.toLowerCase()
-            ? cssSpazioFoto.centrato
-            : cssSpazioFoto.areaMassima;
+        const modo = String(opzioni.modo || sceltaSpazio.areaMassima).toLowerCase() === sceltaSpazio.centrato.toLowerCase()
+            ? sceltaSpazio.centrato
+            : sceltaSpazio.areaMassima;
 
-        let tolleranza = opzioni.tolleranzaArea != null ? Number(opzioni.tolleranzaArea) : cssSpazioFoto.tolleranzaPredefinita;
+        let tolleranza = opzioni.tolleranzaArea != null ? Number(opzioni.tolleranzaArea) : sceltaSpazio.tolleranzaPredefinita;
         if (!isFinite(tolleranza) || tolleranza <= 0) {
-            tolleranza = cssSpazioFoto.tolleranzaPredefinita;
+            tolleranza = sceltaSpazio.tolleranzaPredefinita;
         }
         if (tolleranza > 1) {
             //Oltre 1 nessun candidato sarebbe ammesso e le foto non si muoverebbero piu'.
@@ -121,7 +125,7 @@ const cssSpazioFoto = {
      * Uno spazio che non regge le estensioni sparisce dalla scelta.
      */
     restringiCandidati(candidati, estensioni) {
-        const e = cssSpazioFoto.normalizzaEstensioni(estensioni);
+        const e = sceltaSpazio.normalizzaEstensioni(estensioni);
         if (candidati == null) {
             return [];
         }
@@ -200,13 +204,13 @@ const cssSpazioFoto = {
             return null;
         }
 
-        const opzioni = cssSpazioFoto.normalizzaPreferenza(preferenza);
+        const opzioni = sceltaSpazio.normalizzaPreferenza(preferenza);
 
         const ammessi = [];
         let migliore = null;
 
         const valuta = function (candidato) {
-            const valutazione = cssSpazioFoto.valutaCandidato(candidato, boundsGruppo);
+            const valutazione = sceltaSpazio.valutaCandidato(candidato, boundsGruppo);
             if (valutazione == null || !(valutazione.area > 0)) {
                 return null;
             }
@@ -230,14 +234,14 @@ const cssSpazioFoto = {
             }
         }
 
-        if (migliore == null || opzioni.modo !== cssSpazioFoto.centrato) {
+        if (migliore == null || opzioni.modo !== sceltaSpazio.centrato) {
             return migliore;
         }
 
         //Le parti centrate degli spazi che attraversano il centro concorrono come gli altri:
         //valgono meno area, ma stanno esattamente al centro.
         for (const candidato of candidati) {
-            const centrata = cssSpazioFoto.parteCentrata(candidato, larghezzaBase, altezzaBase, opzioni.asseCentratura);
+            const centrata = sceltaSpazio.parteCentrata(candidato, larghezzaBase, altezzaBase, opzioni.asseCentratura);
             if (centrata == null) {
                 continue;
             }
@@ -249,14 +253,14 @@ const cssSpazioFoto = {
 
         const sogliaArea = migliore.area * opzioni.tolleranzaArea;
         let scelto = migliore;
-        let distanzaScelto = cssSpazioFoto.distanzaDalCentro(migliore.candidato, larghezzaBase, altezzaBase, opzioni.asseCentratura);
+        let distanzaScelto = sceltaSpazio.distanzaDalCentro(migliore.candidato, larghezzaBase, altezzaBase, opzioni.asseCentratura);
 
         for (const voce of ammessi) {
             if (voce === migliore || voce.area < sogliaArea) {
                 continue;
             }
 
-            const distanza = cssSpazioFoto.distanzaDalCentro(voce.candidato, larghezzaBase, altezzaBase, opzioni.asseCentratura);
+            const distanza = sceltaSpazio.distanzaDalCentro(voce.candidato, larghezzaBase, altezzaBase, opzioni.asseCentratura);
             //Piu' centrato vince; a pari centratura resta l'area piu' grande.
             if (distanza < distanzaScelto || (distanza === distanzaScelto && voce.area > scelto.area)) {
                 scelto = voce;
@@ -272,15 +276,15 @@ const cssSpazioFoto = {
      * Serve al collaudo, dove l'unica cosa che si vede e' dove e' finita la foto.
      */
     descriviScelta(candidati, scelta, preferenza, larghezzaBase, altezzaBase, estensioni) {
-        const opzioni = cssSpazioFoto.normalizzaPreferenza(preferenza);
-        const e = cssSpazioFoto.normalizzaEstensioni(estensioni);
+        const opzioni = sceltaSpazio.normalizzaPreferenza(preferenza);
+        const e = sceltaSpazio.normalizzaEstensioni(estensioni);
         const arrotonda = function (n) { return Math.round(n * 10) / 10; };
         const rettangolo = function (c) {
             return (c.direction ? c.direction + " " : "") + "x" + arrotonda(c.x) + " y" + arrotonda(c.y) + " " + arrotonda(c.width) + "x" + arrotonda(c.height);
         };
 
         let testo = "modo " + opzioni.modo;
-        if (opzioni.modo === cssSpazioFoto.centrato) {
+        if (opzioni.modo === sceltaSpazio.centrato) {
             testo += " (tolleranza " + opzioni.tolleranzaArea + ", asse " + opzioni.asseCentratura + ")";
         }
         testo += ", base " + arrotonda(larghezzaBase) + "x" + arrotonda(altezzaBase);
@@ -332,4 +336,4 @@ const cssSpazioFoto = {
 
 }
 
-module.exports = cssSpazioFoto;
+module.exports = sceltaSpazio;

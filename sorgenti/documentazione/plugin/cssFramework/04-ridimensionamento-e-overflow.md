@@ -84,9 +84,9 @@ Le costanti del reflow stanno dentro la funzione: `MIN_POINT_SIZE` 3, `MAX_MAIN_
 - `isTextFrame(item)` → il controllo di tipo usato lì.
 - `fixCollisioneTracciaBase(box, gruppoElementi, impostazioni)` e
   `fixCollisioneTracciaBaseSingolo(...)` → allontanano dalla traccia del bordo della base, di uno
-  spessore più la distanza configurata. **Entrambe controllano che la base ci sia e sia valida** — a
-  differenza di `getObstacles` e `getSpazioImpaginazione`, dove quella guardia manca ed è il difetto
-  segnalato in [02-spazio-di-impaginazione](02-spazio-di-impaginazione.md).
+  spessore più la distanza configurata. **Entrambe controllano che la base ci sia e sia valida**, come
+  dal I20-1010 fanno anche `getObstacles` e `getSpazioImpaginazione` — vedi
+  [sistemazioneFoto/01-spazio-libero](../sistemazioneFoto/01-spazio-libero.md).
 - `righeDiTesto(item)` → i rettangoli delle singole righe, costruiti con
   `cssRegoleConflitti.rettangoloDiRiga`.
 - `elementsTouching(item1, item2, useTextBounds)` → se due elementi si toccano. Con `useTextBounds`

@@ -92,7 +92,7 @@ task sono stati scritti.
 | `utility.js` | `FotoPlacer`, `getLinkHash`, i bolli |
 | `fotoAutoSync`, `cacheHashFoto`, `dataCaricamentoFoto` | i moduli puri, già pronti |
 
-**Non va confuso con il `fixFoto` di [CssFramework](../cssFramework/03-sistemazione-foto.md)**, che
+**Non va confuso con il `fixFoto` di [sistemazioneFoto](../sistemazioneFoto/02-sistemazione-foto.md)**, che
 decide *dove* la foto sta dentro il box: sono due concetti e due task distinti.
 
 Nel codice i pezzi sono marcati con **`REPORT INTEGRITA'`** e **`PROCURARSI LA FOTO`**: un grep su

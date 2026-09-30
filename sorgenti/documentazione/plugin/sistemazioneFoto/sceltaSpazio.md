@@ -1,6 +1,8 @@
-# cssSpazioFoto.js
+# sistemazioneFoto/sceltaSpazio.js
 
-**Cosa è:** la scelta dello spazio in cui finiscono le foto del box.
+**Cosa è:** la scelta dello spazio in cui finiscono le foto del box. Fa parte del concetto
+[sistemazione foto](README.md): lo usa `fixFoto`. Fino a I20-1009 si chiamava `cssSpazioFoto.js` e
+stava in `plugin/`.
 
 Il criterio storico è uno solo: fra gli spazi liberi vince quello che permette al gruppo di foto di
 venire **più grande**. In box come il BOX41, però, le foto stanno dentro un disegno fisso — le
@@ -77,4 +79,4 @@ di chi risponde.
 - `scegli(candidati, boundsGruppo, preferenza, larghezzaBase, altezzaBase)` → la decisione finale.
 - `descriviScelta(...)` e `fattoriDiNormalizzazione(...)`.
 
-**Test:** `node --test tests/plugin/cssSpazioFoto.test.js`
+**Test:** `node --test tests/plugin/sceltaSpazio.test.js`

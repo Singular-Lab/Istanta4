@@ -19,6 +19,10 @@
  * non queste chiamate. Questo test guarda il sorgente come testo, perche' CssFramework.js
  * richiede InDesign e sotto Node non si carica: e' l'unico modo di tenere la regola.
  *
+ * I20-1009: la stessa regola vale per i moduli usciti da CssFramework, che sono oggetti fatti
+ * allo stesso modo: sistemazioneFoto.js e spazioLibero.js. Il codice e' stato spostato, non
+ * riscritto, e un membro chiamato senza this. si romperebbe li' come qui.
+ *
  * Esecuzione: node --test tests/plugin/cssFrameworkChiamateMembri.test.js
  */
 
@@ -27,7 +31,14 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const PERCORSO = path.join(__dirname, '..', '..', 'plugin', 'CssFramework.js');
+const CARTELLA_PLUGIN = path.join(__dirname, '..', '..', 'plugin');
+
+//I file fatti come CssFramework: un oggetto solo, con le funzioni come membri.
+const FILE_DA_CONTROLLARE = [
+    'CssFramework.js',
+    'sistemazioneFoto/sistemazioneFoto.js',
+    'sistemazioneFoto/spazioLibero.js'
+];
 
 //Nomi che somigliano a una chiamata ma sono parole del linguaggio o oggetti del runtime.
 const NON_SONO_MEMBRI = new Set([
@@ -36,8 +47,8 @@ const NON_SONO_MEMBRI = new Set([
     'Error', 'parseInt', 'parseFloat', 'isNaN', 'isFinite', 'decodeURI', 'encodeURI'
 ]);
 
-function leggiSorgente() {
-    return fs.readFileSync(PERCORSO, 'utf8');
+function leggiSorgente(relativo = 'CssFramework.js') {
+    return fs.readFileSync(path.join(CARTELLA_PLUGIN, relativo), 'utf8');
 }
 
 /// I membri di primo livello dell'oggetto: stanno a quattro spazi di rientro, come
@@ -91,17 +102,19 @@ function chiamateSenzaThis(sorgente) {
     return trovate;
 }
 
-test('nessun membro di CssFramework viene chiamato senza this.', () => {
-    const trovate = chiamateSenzaThis(leggiSorgente());
+for (const relativo of FILE_DA_CONTROLLARE) {
+    test('nessun membro di ' + relativo + ' viene chiamato senza this.', () => {
+        const trovate = chiamateSenzaThis(leggiSorgente(relativo));
 
-    const elenco = trovate
-        .map(t => `  CssFramework.js:${t.riga}  ${t.nome}()  ->  ${t.testo}`)
-        .join('\n');
+        const elenco = trovate
+            .map(t => `  ${relativo}:${t.riga}  ${t.nome}()  ->  ${t.testo}`)
+            .join('\n');
 
-    assert.strictEqual(trovate.length, 0,
-        'Questi nomi sono membri dell\'oggetto e senza this. lanciano ReferenceError a ' +
-        'runtime, dove quasi sempre un try/catch li nasconde:\n' + elenco);
-});
+        assert.strictEqual(trovate.length, 0,
+            'Questi nomi sono membri dell\'oggetto e senza this. lanciano ReferenceError a ' +
+            'runtime, dove quasi sempre un try/catch li nasconde:\n' + elenco);
+    });
+}
 
 test('il controllo riconosce davvero una chiamata senza this.', () => {
     //Senza questa prova, un test che passa non direbbe niente: potrebbe passare perche' non

@@ -1,12 +1,13 @@
-# CssFramework — la sistemazione delle foto nel box
+# Sistemazione foto — far stare le foto nel box
 
-**A cosa serve questo gruppo: far stare le foto nello spazio trovato, senza che si sovrappongano.**
+**A cosa serve questa parte: far stare le foto nello spazio trovato, senza che si sovrappongano.**
 
-Riceve i candidati prodotti da [02-spazio-di-impaginazione](02-spazio-di-impaginazione.md), dispone
-le foto in gruppo, sceglie il candidato migliore tramite [cssSpazioFoto](../cssSpazioFoto.md),
-ridimensiona il gruppo perché ci stia e lo applica al documento.
+Riceve i candidati prodotti da [01-spazio-libero](01-spazio-libero.md), dispone le foto in gruppo,
+sceglie il candidato migliore tramite [sceltaSpazio](sceltaSpazio.md), ridimensiona il gruppo
+perché ci stia e lo applica al documento. Sta in `plugin/sistemazioneFoto/sistemazioneFoto.js`;
+fino a I20-1009 era in `CssFramework.js`.
 
-Panoramica del file: [README.md](README.md).
+Panoramica del concetto: [README.md](README.md).
 
 ---
 
@@ -17,8 +18,12 @@ Panoramica del file: [README.md](README.md).
 Con **`projection = true` calcola soltanto l'area occupata senza toccare il documento**: serve a
 sapere quanto spazio servirebbe, prima di decidere.
 
-Lo chiamano `indexNew.js`, `schedaRef.js`, `custom.js` in radice e l'agenzia Edro21, sempre
-dopo `getSpazioImpaginazione` e passandogli entrambi i risultati.
+Lo chiamano `indexNew.js` e `schedaRef.js` su `SistemazioneFoto`, `custom.js` in radice e
+l'agenzia Edro21 su `CssFramework`, attraverso il rimando: sempre dopo `getSpazioImpaginazione` e
+passandogli entrambi i risultati.
+
+`fixFoto` è una busta: il lavoro lo fa `eseguiFixFoto`, e `fixFoto` garantisce in un `finally` che
+gli ostacoli tornino alle misure di prima del fit, qualunque cosa succeda (I20-1010).
 
 ## Come lavora, in ordine
 
@@ -31,8 +36,8 @@ dopo `getSpazioImpaginazione` e passandogli entrambi i risultati.
    lasciava ingrandite le foto rimaste, e quella riattivata dopo restava più piccola per sempre.
 4. **Dispone le foto in gruppo** con `getRaggruppamentoFoto` e ne calcola l'ingombro complessivo.
 5. **Restringe i candidati** di quanto sporge dalle foto (`getEstensioniFoto`, vedi
-   [01-infrastruttura-e-mappa](01-infrastruttura-e-mappa.md)) e **sceglie** con
-   `cssSpazioFoto.scegli`. Se nessun candidato va bene, ripristina gli ostacoli e si ferma.
+   [01-infrastruttura-e-mappa](../cssFramework/01-infrastruttura-e-mappa.md)) e **sceglie** con
+   `sceltaSpazio.scegli`. Se nessun candidato va bene, ripristina gli ostacoli e si ferma.
 6. **Ridimensiona il gruppo** perché entri nel candidato, lo centra, e applica i bounds alle foto
    vere con `CONTENT_TO_FRAME`.
 7. **Ripristina la dimensione originale degli ostacoli** — che `getObstacles` aveva alterato col fit
@@ -46,12 +51,13 @@ dopo `getSpazioImpaginazione` e passandogli entrambi i risultati.
 |---|---|
 | `calcoloDistanziamentoFoto` | per ogni numero di foto, le percentuali di distanziamento fra una e l'altra, con soglie sul rapporto altezza/larghezza |
 
-È **l'unico dato rimasto del gruppo**. Il cliente lo sovrascrive da `custom.js` con la chiave
+È **l'unico dato di questa parte**. Il cliente lo sovrascrive da `custom.js` con la chiave
 omonima, e con `paddingFoto` aggiunge un margine attorno a ogni foto.
 
 ## Funzioni
 
 - `fixFoto(...)` → l'ingresso, descritto sopra.
+- `eseguiFixFoto(...)` → il corpo di `fixFoto`. Si chiama solo da lì.
 - `getRaggruppamentoFoto(fotos, distanzFoto)` → dispone le foto **a cascata**: ognuna centrata
   rispetto alla precedente e scostata delle percentuali configurate. Il set di percentuali si
   sceglie sul rapporto altezza/larghezza della **prima** foto. Torna l'ingombro del gruppo e le foto
@@ -62,11 +68,17 @@ omonima, e con `paddingFoto` aggiunge un margine attorno a ogni foto.
 - `scalaDellaFoto(rect)` → la scala a cui è inserita l'immagine, o `null` se la foto è vuota. Una
   scala illeggibile non ferma il fix: quella foto resta com'è.
 - `normalizzaScalaDelleFoto(fotos)` → riporta tutte alla scala della prima, che è la primaria. La
-  regola vive in `cssSpazioFoto.fattoriDiNormalizzazione`, fuori da InDesign e quindi verificabile.
+  regola vive in `sceltaSpazio.fattoriDiNormalizzazione`, fuori da InDesign e quindi verificabile.
 - `getRealBoundsOfFoto(img, offset)` → l'ingombro **reale** dell'immagine dentro il riquadro, che
   non coincide col riquadro: è quello che conta per disporre le foto senza spazi vuoti fra l'una e
   l'altra.
 - `getVertex(img, offset)` → i vertici dell'immagine, usata da `getRealBoundsOfFoto`.
+
+**Dove non si è spostato tutto.** `getSceltaSpazioFoto` e `getEstensioniFoto`, che leggono dalla
+configurazione CSS del box come scegliere lo spazio e quanto sporge dalle foto, sono rimasti in
+`CssFramework`: lavorano sul contesto e sulla mappa del box, che sono suoi. `eseguiFixFoto` li
+chiede a `CssFramework` al momento della chiamata. Lo stesso vale per `applicaOperazioniDopoFixFoto`,
+che è composizione del box.
 
 ---
 
@@ -102,6 +114,6 @@ residuo, in `Agenzie/Trea/custom.js:1516`, era commentato — ed è stata rimoss
 `inddItemImg1-3`, `cacheBoundaries`, `modelloDiFix` e i sei `modello*`.
 
 **Sono restati** `getVertex`, perché lo usa `getRealBoundsOfFoto`, e `approachOne`, perché lo usa
-`getRaggruppamentoFoto`. La verifica è stata fatta a punto fisso, controllando i tre modi in cui un
+`getRaggruppamentoFoto`; dal I20-1009 stanno in `sistemazioneFoto.js`. La verifica è stata fatta a punto fisso, controllando i tre modi in cui un
 membro può essere chiamato — `nome(`, `this.nome`, `CssFramework.nome` — perché il terzo era
 proprio il caso di `getVertex` e la prima passata lo aveva mancato.

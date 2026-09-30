@@ -11,17 +11,18 @@
  * questi casi un testo restava ristretto, o finiva alle misure di un altro. Ora torna sempre
  * com'era.
  *
- * CssFramework.js fa require('indesign') e sotto Node non si carica: qui il modulo e' sostituito
- * da uno stub che da' solo FitOptions, e il box e i suoi elementi sono finti.
+ * I20-1009: questo codice sta in plugin/sistemazioneFoto/sistemazioneFoto.js, che fa
+ * require('indesign') e sotto Node non si carica: qui il modulo e' sostituito da uno stub che da'
+ * solo FitOptions, e il box e i suoi elementi sono finti. CssFramework si carica insieme, mentre lo
+ * stub e' attivo, perche' sistemazioneFoto lo chiede solo al momento della chiamata.
  *
  * Esecuzione: node --test tests/plugin/*.test.js
  */
 
 const test = require("node:test");
 const assert = require("node:assert");
-const fs = require("node:fs");
-const path = require("node:path");
 const Module = require("node:module");
+const { fileDelPlugin, leggiFileDelPlugin } = require("./fileDelPlugin");
 
 const caricaOriginale = Module._load;
 Module._load = function (richiesta) {
@@ -31,8 +32,12 @@ Module._load = function (richiesta) {
     return caricaOriginale.apply(this, arguments);
 };
 let CssFramework;
+let SistemazioneFoto;
+let spazioLibero;
 try {
     CssFramework = require("../../plugin/CssFramework.js");
+    SistemazioneFoto = require("../../plugin/sistemazioneFoto/sistemazioneFoto.js");
+    spazioLibero = require("../../plugin/sistemazioneFoto/spazioLibero.js");
 }
 finally {
     Module._load = caricaOriginale;
@@ -120,18 +125,18 @@ test("trovaBase trova la base anche se non e' il primo elemento", () => {
     const b = base();
     const scatola = box([testo("prezzo", [10, 10, 30, 40]), b]);
 
-    assert.strictEqual(CssFramework.trovaBase(scatola), b);
+    assert.strictEqual(SistemazioneFoto.trovaBase(scatola), b);
 });
 
 test("trovaBase torna null se la base non c'e'", () => {
-    assert.strictEqual(CssFramework.trovaBase(box([testo("prezzo", [10, 10, 30, 40])])), null);
+    assert.strictEqual(SistemazioneFoto.trovaBase(box([testo("prezzo", [10, 10, 30, 40])])), null);
 });
 
 test("senza base getSpazioImpaginazione avvisa una volta, torna spazio vuoto e non tocca i testi", () => {
     const prezzo = testo("prezzo", [10, 10, 30, 40]);
     const scatola = box([prezzo, elemento("basetta_rinominata", [0, 0, 80, 100], { label: "sfondo" })], "BOX41");
 
-    const risultato = CssFramework.getSpazioImpaginazione(scatola);
+    const risultato = SistemazioneFoto.getSpazioImpaginazione(scatola);
 
     assert.deepStrictEqual(risultato, { candidate: [], obstacles: [] });
     assert.strictEqual(prezzo.fitFatti, 0);
@@ -145,7 +150,7 @@ test("senza base getSpazioImpaginazione avvisa una volta, torna spazio vuoto e n
 test("senza base getObstacles, chiamata da sola, avvisa e non trova ostacoli", () => {
     const prezzo = testo("prezzo", [10, 10, 30, 40]);
 
-    assert.deepStrictEqual(CssFramework.getObstacles(box([prezzo])), []);
+    assert.deepStrictEqual(SistemazioneFoto.getObstacles(box([prezzo])), []);
     assert.strictEqual(prezzo.fitFatti, 0);
     assert.match(messaggi[0].testo, /^Code CSF-19: /);
 });
@@ -154,9 +159,9 @@ test("senza base getObstacles, chiamata da sola, avvisa e non trova ostacoli", (
 //non sposta niente e non si rompe.
 test("lo spazio vuoto passato a fixFoto non rompe niente", () => {
     const scatola = box([testo("prezzo", [10, 10, 30, 40])]);
-    const risultato = CssFramework.getSpazioImpaginazione(scatola);
+    const risultato = SistemazioneFoto.getSpazioImpaginazione(scatola);
 
-    assert.doesNotThrow(() => CssFramework.fixFoto(scatola, risultato.candidate, risultato.obstacles));
+    assert.doesNotThrow(() => SistemazioneFoto.fixFoto(scatola, risultato.candidate, risultato.obstacles));
 });
 
 /* ---- il fit torna sempre indietro ---- */
@@ -165,13 +170,13 @@ test("con la base, il percorso normale: il testo prende il fit e fixFoto lo rime
     const prezzo = testo("prezzo", [10, 10, 30, 40]);
     const scatola = box([base(), prezzo]);
 
-    const risultato = CssFramework.getSpazioImpaginazione(scatola);
+    const risultato = SistemazioneFoto.getSpazioImpaginazione(scatola);
 
     assert.strictEqual(risultato.obstacles.length, 1);
     assert.ok(risultato.candidate.length > 0);
     assert.deepStrictEqual(prezzo.geometricBounds, [10, 10, 25, 40], "durante il calcolo il testo e' stretto");
 
-    CssFramework.fixFoto(scatola, risultato.candidate, risultato.obstacles);
+    SistemazioneFoto.fixFoto(scatola, risultato.candidate, risultato.obstacles);
     assert.deepStrictEqual(prezzo.geometricBounds, [10, 10, 30, 40]);
     assert.deepStrictEqual(messaggi, []);
 });
@@ -179,7 +184,7 @@ test("con la base, il percorso normale: il testo prende il fit e fixFoto lo rime
 test("un errore dentro safeFitToContent dopo il fit lascia il testo com'era", () => {
     const prezzo = testo("prezzo", [10, 10, 30, 40], { move() { throw new Error("move non riuscito"); } });
 
-    assert.throws(() => CssFramework.safeFitToContent(prezzo), /move non riuscito/);
+    assert.throws(() => SistemazioneFoto.safeFitToContent(prezzo), /move non riuscito/);
     assert.strictEqual(prezzo.fitFatti, 1);
     assert.deepStrictEqual(prezzo.geometricBounds, [10, 10, 30, 40]);
 });
@@ -191,7 +196,7 @@ test("un errore a meta' di getObstacles rimette tutti i testi che avevano preso 
     Object.defineProperty(guasto, "isValid", { get() { throw new Error("elemento non piu' valido"); } });
     const scatola = box([base(), prezzo, descrizione, guasto]);
 
-    assert.throws(() => CssFramework.getObstacles(scatola), /elemento non piu' valido/);
+    assert.throws(() => SistemazioneFoto.getObstacles(scatola), /elemento non piu' valido/);
     assert.deepStrictEqual(prezzo.geometricBounds, [10, 10, 30, 40]);
     assert.deepStrictEqual(descrizione.geometricBounds, [40, 10, 60, 90]);
 });
@@ -199,13 +204,13 @@ test("un errore a meta' di getObstacles rimette tutti i testi che avevano preso 
 test("un errore dopo getObstacles, nel raffinamento, rimette gli ostacoli", () => {
     const prezzo = testo("prezzo", [10, 10, 30, 40]);
     const scatola = box([base(), prezzo]);
-    const vera = CssFramework.refineRects;
-    CssFramework.refineRects = () => { throw new Error("raffinamento rotto"); };
+    const vera = spazioLibero.refineRects;
+    spazioLibero.refineRects = () => { throw new Error("raffinamento rotto"); };
     try {
-        assert.throws(() => CssFramework.getSpazioImpaginazione(scatola), /raffinamento rotto/);
+        assert.throws(() => SistemazioneFoto.getSpazioImpaginazione(scatola), /raffinamento rotto/);
     }
     finally {
-        CssFramework.refineRects = vera;
+        spazioLibero.refineRects = vera;
     }
     assert.deepStrictEqual(prezzo.geometricBounds, [10, 10, 30, 40]);
 });
@@ -214,7 +219,7 @@ test("un testo senza label prende il fit ma non e' un ostacolo: torna subito com
     const anonimo = testo("", [10, 10, 30, 40]);
     const scatola = box([base(), anonimo]);
 
-    const ostacoli = CssFramework.getObstacles(scatola);
+    const ostacoli = SistemazioneFoto.getObstacles(scatola);
 
     assert.strictEqual(anonimo.fitFatti, 1, "il primo ciclo lo stringe, il secondo lo scarta");
     assert.deepStrictEqual(ostacoli, []);
@@ -226,9 +231,9 @@ test("due elementi con la stessa label tornano ciascuno alle proprie misure", ()
     const secondo = testo("prezzo", [45, 50, 70, 95]);
     const scatola = box([base(), primo, secondo]);
 
-    const ostacoli = CssFramework.getObstacles(scatola);
+    const ostacoli = SistemazioneFoto.getObstacles(scatola);
     assert.strictEqual(ostacoli.length, 2);
-    CssFramework.ripristinaOstacoli(ostacoli);
+    SistemazioneFoto.ripristinaOstacoli(ostacoli);
 
     assert.deepStrictEqual(primo.geometricBounds, [10, 10, 30, 40]);
     assert.deepStrictEqual(secondo.geometricBounds, [45, 50, 70, 95]);
@@ -237,9 +242,9 @@ test("due elementi con la stessa label tornano ciascuno alle proprie misure", ()
 test("fixFoto senza foto rimette i testi prima del controllo dei conflitti", () => {
     const prezzo = testo("prezzo", [10, 10, 30, 40]);
     const scatola = box([base(), prezzo]);
-    const risultato = CssFramework.getSpazioImpaginazione(scatola);
+    const risultato = SistemazioneFoto.getSpazioImpaginazione(scatola);
 
-    const area = CssFramework.fixFoto(scatola, risultato.candidate, risultato.obstacles);
+    const area = SistemazioneFoto.fixFoto(scatola, risultato.candidate, risultato.obstacles);
 
     assert.strictEqual(area, 0);
     assert.deepStrictEqual(controlliConflitti, [[[10, 10, 30, 40]]], "il controllo vede il testo alle misure vere");
@@ -249,34 +254,77 @@ test("fixFoto senza foto rimette i testi prima del controllo dei conflitti", () 
 test("se fixFoto va in errore i testi tornano comunque com'erano", () => {
     const prezzo = testo("prezzo", [10, 10, 30, 40]);
     const scatola = box([base(), prezzo]);
-    const risultato = CssFramework.getSpazioImpaginazione(scatola);
-    const vera = CssFramework.eseguiFixFoto;
-    CssFramework.eseguiFixFoto = () => { throw new Error("fix foto rotto"); };
+    const risultato = SistemazioneFoto.getSpazioImpaginazione(scatola);
+    const vera = SistemazioneFoto.eseguiFixFoto;
+    SistemazioneFoto.eseguiFixFoto = () => { throw new Error("fix foto rotto"); };
     try {
-        assert.throws(() => CssFramework.fixFoto(scatola, risultato.candidate, risultato.obstacles), /fix foto rotto/);
+        assert.throws(() => SistemazioneFoto.fixFoto(scatola, risultato.candidate, risultato.obstacles), /fix foto rotto/);
     }
     finally {
-        CssFramework.eseguiFixFoto = vera;
+        SistemazioneFoto.eseguiFixFoto = vera;
     }
     assert.deepStrictEqual(prezzo.geometricBounds, [10, 10, 30, 40]);
+});
+
+/* ---- fino in fondo, con una foto ---- */
+
+//I20-1009: rinominando cssSpazioFoto in sceltaSpazio, la variabile locale con lo spazio scelto
+//- che si chiamava gia' sceltaSpazio - nascondeva il modulo, e fixFoto si rompeva con un
+//ReferenceError appena arrivava a scegliere. Nessun test arrivava fin li': tutti si fermavano
+//alla foto mancante. Questo porta fixFoto fino in fondo, e prende qualunque rottura sulla strada.
+test("fixFoto con una foto arriva fino in fondo: sceglie lo spazio e ci mette la foto", () => {
+    global.pluginMiddleware = { getCampo: () => null };
+    //Il prezzo occupa la fascia alta del box, a tutta larghezza: lo spazio libero e' sotto.
+    const prezzo = testo("prezzo", [0, 0, 20, 100]);
+    const foto = elemento("immagine_primaria", [30, 10, 60, 40], {
+        visible: true,
+        fitFatti: 0,
+        fit() { this.fitFatti++; }
+    });
+    const scatola = box([base(), prezzo, foto]);
+    scatola.rectangles = { length: 1, item: () => foto };
+
+    //L'ingombro reale dell'immagine si legge dai vertici della grafica InDesign: qui e' il riquadro.
+    const vera = SistemazioneFoto.getRealBoundsOfFoto;
+    SistemazioneFoto.getRealBoundsOfFoto = (img) => img.geometricBounds;
+    let area;
+    try {
+        const risultato = SistemazioneFoto.getSpazioImpaginazione(scatola);
+        assert.ok(risultato.candidate.length > 0);
+        area = SistemazioneFoto.fixFoto(scatola, risultato.candidate, risultato.obstacles);
+    }
+    finally {
+        SistemazioneFoto.getRealBoundsOfFoto = vera;
+        delete global.pluginMiddleware;
+    }
+
+    assert.ok(area > 0, "l'area occupata dalla foto");
+    assert.strictEqual(foto.fitFatti, 1, "la foto viene adattata al suo nuovo riquadro");
+    const [alto, sinistra, basso, destra] = foto.geometricBounds;
+    assert.ok(alto >= 15, "la foto sta sotto il prezzo: comincia a " + alto);
+    assert.ok(sinistra >= 0 && destra <= 100 && basso <= 80, "la foto sta nella base: " + foto.geometricBounds);
+    assert.deepStrictEqual(prezzo.geometricBounds, [0, 0, 20, 100], "il prezzo torna alle sue misure");
+    assert.deepStrictEqual(messaggi, []);
 });
 
 /* ---- nel sorgente ---- */
 
 function sorgente() {
-    return fs.readFileSync(path.join(__dirname, "..", "..", "plugin", "CssFramework.js"), "utf8").replace(/\r/g, "");
+    return leggiFileDelPlugin("sistemazioneFoto/sistemazioneFoto.js").replace(/\r/g, "");
 }
 
 test("la base si cerca in un punto solo", () => {
     const ricerche = sorgente().match(/startsWith\("base"\)/g) || [];
     assert.strictEqual(ricerche.length, 1);
+    //I20-1009: e non in CssFramework, che dopo lo spostamento non la cerca piu'.
+    assert.doesNotMatch(leggiFileDelPlugin("CssFramework.js"), /startsWith\("base"\)/);
 });
 
 test("nelle uscite anticipate di fixFoto il ripristino viene prima del controllo dei conflitti", () => {
     const testoFile = sorgente();
     const inizio = testoFile.indexOf("    eseguiFixFoto(box, candidateRects, obstacles, projection) {");
     const corpo = testoFile.slice(inizio, testoFile.indexOf("\n    },", inizio));
-    const controlli = [...corpo.matchAll(/this\.controllaSegnalazioniConflittiPendenti\(box\)/g)].map(m => m.index);
+    const controlli = [...corpo.matchAll(/\.controllaSegnalazioniConflittiPendenti\(box\)/g)].map(m => m.index);
 
     assert.ok(controlli.length >= 4);
     for (const posizione of controlli) {
@@ -287,10 +335,9 @@ test("nelle uscite anticipate di fixFoto il ripristino viene prima del controllo
 });
 
 test("il messaggio CSF-19 e' scritto una volta sola in tutto il Plugin", () => {
-    const cartella = path.join(__dirname, "..", "..", "plugin");
     let occorrenze = 0;
-    for (const nome of fs.readdirSync(cartella).filter(n => n.endsWith(".js"))) {
-        occorrenze += (fs.readFileSync(path.join(cartella, nome), "utf8").match(/"Code CSF-0?19\b/g) || []).length;
+    for (const relativo of fileDelPlugin()) {
+        occorrenze += (leggiFileDelPlugin(relativo).match(/"Code CSF-0?19\b/g) || []).length;
     }
     assert.strictEqual(occorrenze, 1);
 });
