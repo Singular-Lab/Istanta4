@@ -12,7 +12,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const barra = require('../../plugin/barraScorrimento');
+const barra = require('../../plugin/reportIntegrita/barraScorrimento');
 
 //Un caso realistico: tabella larga 1200, riquadro 400, traccia 380.
 const CONTENUTO = 1200;

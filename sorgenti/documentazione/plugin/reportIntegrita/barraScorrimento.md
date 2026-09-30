@@ -1,11 +1,12 @@
 # barraScorrimento.js
 
-**Cosa è:** i conti di una barra di scorrimento disegnata dal Plugin. Nasce con I20-981.
+**Cosa è:** i conti di una barra di scorrimento disegnata dal Plugin. Nasce con I20-981; da I20-1007
+sta in `reportIntegrita/`, accanto a [pannelli.js](pannelli.md), l'unico che la usa.
 
 In UXP la tabella dei nuovi non scorre in orizzontale: né con `overflow: auto`, né con `scroll`,
 né dando alla tabella una larghezza vera in pixel. Invece di insistere, la tabella viene spostata a
 mano e la barra la disegna il Plugin. Qui stanno solo i conti — la parte che si può sbagliare in
-silenzio; il disegno e gli eventi stanno in `reportIntegrita/pannelli.js`, fino a I20-1014 in `confronti.js`.
+silenzio; il disegno e gli eventi stanno in `pannelli.js`, qui accanto (fino a I20-1014 in `confronti.js`).
 
 ## Variabili globali
 
@@ -14,7 +15,7 @@ silenzio; il disegno e gli eventi stanno in `reportIntegrita/pannelli.js`, fino 
 | `CURSORE_MINIMO` = `24` | sotto questa larghezza il cursore non si afferra più |
 
 Nessuno stato: tutte le funzioni ricevono le misure e restituiscono un risultato. Lo spostamento
-corrente lo tiene il report ([pannelli.js](reportIntegrita/pannelli.md)). La costante è esportata perché chi disegna e chi calcola devono
+corrente lo tiene il report ([pannelli.js](pannelli.md)). La costante è esportata perché chi disegna e chi calcola devono
 usare lo stesso numero.
 
 ## Funzioni

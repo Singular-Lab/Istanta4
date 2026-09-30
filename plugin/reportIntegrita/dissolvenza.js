@@ -9,6 +9,9 @@
  * strada. Qui stanno solo i conti: niente DOM, niente InDesign.
  *
  * Esecuzione dei test: node --test tests/plugin/dissolvenza.test.js
+ *
+ * I20-1007: sta in reportIntegrita/, accanto a pannelli.js che e' l'unico a usarla. Fino ad
+ * allora era in radice.
  */
 
 //Breve, perche' l'operatore aspetta; ma a passi non troppo fitti, perche' UXP ridisegna quando

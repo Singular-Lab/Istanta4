@@ -11,6 +11,9 @@
  * useTextBounds sceglie su cosa si misura il contatto: il riquadro dell'oggetto oppure il
  * testo che contiene davvero. Per un campo di testo i due valori sono molto diversi, ed e'
  * la ragione per cui nascevano segnalazioni che l'occhio non vedeva.
+ *
+ * I20-1007: una delle parti pure del motore CSS, in cssFramework/. Fino ad allora era
+ * cssRegoleConflitti.js in radice, e chi lo importa lo chiama ancora cssRegoleConflitti.
  */
 var CssRegoleConflitti = (function () {
 

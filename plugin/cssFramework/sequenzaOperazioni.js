@@ -14,6 +14,9 @@
  * e' esattamente quello di prima.
  *
  * Esecuzione dei test: node --test tests/plugin/*.test.js
+ *
+ * I20-1007: una delle parti pure del motore CSS, in cssFramework/. Fino ad allora era
+ * cssSequenzaOperazioni.js in radice, e chi lo importa lo chiama ancora cssSequenzaOperazioni.
  */
 
 const cssSequenzaOperazioni = {

@@ -4,7 +4,9 @@ const XMLHttpRequestClient = require('./XMLHttpRequestClient');
 const NoRenderElementi = require('./noRenderElementi');
 const RicollegaEsiti = require('./ricollegaEsiti');
 const variantiDescrizione = require('./variantiDescrizione');
-const trattiDescrizione = require('./trattiDescrizione');
+//I20-1007: i tratti di stile stanno in testoTag.js. La scheda lo importa, perche' sotto Node
+//la globale di indexNew non c'e'.
+const TestoTag = require('./testoTag');
 
 /// I20-1002: la scheda della referenza - quello che l'operatore vede e modifica quando
 /// seleziona un box nel documento.
@@ -1683,7 +1685,7 @@ const schedaRef = {
                         //scorriamo tutta la descrizione e ci salviamo tutti gli stili che troviamo nell'ordine che li troviamo, uno stile può essere presente se intermezzato da uno stile differente
                         //I20-995: i tratti arrivano gia' accorpati per stile, quindi la loro
                         //sequenza di nomi e' esattamente la lista che si costruiva a mano.
-                        trattiDescrizione.stiliInOrdine(trattiDelCampo).forEach(function (nomeStile) {
+                        TestoTag.stiliInOrdine(trattiDelCampo).forEach(function (nomeStile) {
                             listaStili.push(nomeStile);
                         });
 
@@ -1950,7 +1952,7 @@ const schedaRef = {
                             //confronto con il contenuto del server. La normalizzazione passa
                             //carattere per carattere come faceva il ciclo vecchio, e l'a capo
                             //diventa "\n" nella textarea e resta "\r" nel confronto.
-                            var testiDelTratto = trattiDescrizione.testiDelTratto(tratto.contenuto, normalizzaCarattere);
+                            var testiDelTratto = TestoTag.testiDelTratto(tratto.contenuto, normalizzaCarattere);
                             var currentTextarea = row.find('textarea').last();
                             currentTextarea.val(testiDelTratto.perLaTextarea); // Aggiungi il contenuto alla textarea qui
 

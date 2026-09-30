@@ -10,6 +10,9 @@
  * I bounds seguono la convenzione InDesign: [y1, x1, y2, x2], con y1 in alto e y2 in basso.
  *
  * Esecuzione dei test: node --test tests/plugin/*.test.js
+ *
+ * I20-1007: una delle parti pure del motore CSS, in cssFramework/. Fino ad allora era
+ * cssComposizioneBox.js in radice, e chi lo importa lo chiama ancora cssComposizioneBox.
  */
 
 const cssComposizioneBox = {

@@ -1,7 +1,7 @@
 /*
  * I20-970: duplicazione di elementi e ordine di sovrapposizione dentro un box.
  *
- * Il modulo sotto test e' plugin/cssComposizioneBox.js, che calcola il piano senza toccare
+ * Il modulo sotto test e' plugin/cssFramework/composizioneBox.js (fino a I20-1007 cssComposizioneBox.js), che calcola il piano senza toccare
  * InDesign. La corrispondenza per etichetta viene iniettata: qui si usa la stessa semantica
  * con l'asterisco di CssFramework.makeRegexFromGroupName.
  *
@@ -11,7 +11,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const cssComposizioneBox = require('../../plugin/cssComposizioneBox');
+const cssComposizioneBox = require('../../plugin/cssFramework/composizioneBox');
 
 function corrisponde(etichetta, spec) {
     const escaped = String(spec).replace(/[-\/\\^$+?.()|[\]{}]/g, '\\$&');

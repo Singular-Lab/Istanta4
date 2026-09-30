@@ -4,7 +4,7 @@ const XMLHttpRequestClient = require('./XMLHttpRequestClient');
 const FotoPlacer = require('./reperimentoFoto/fotoPlacer');
 //I20-1012: i tratti di stile di un campo ora stanno in testoTag.js.
 const TestoTag = require('./testoTag');
-const cssComposizioneBox = require('./cssComposizioneBox');
+const cssComposizioneBox = require('./cssFramework/composizioneBox');
 
 /// I20-1002: il file in cui era finito tutto quello che non aveva un posto.
 ///

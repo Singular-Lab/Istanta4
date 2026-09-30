@@ -1,6 +1,7 @@
 # dissolvenza.js
 
-**Cosa è:** i conti della dissolvenza delle righe del report. Nasce con I20-981 (Lotto 4a).
+**Cosa è:** i conti della dissolvenza delle righe del report. Nasce con I20-981 (Lotto 4a); da
+I20-1007 sta in `reportIntegrita/`, accanto a [pannelli.js](pannelli.md), l'unico che la usa.
 
 In UXP la proprietà `opacity` viene accettata nello stile ma **non ridisegnata**: il collaudo ha
 mostrato dieci passi scritti e riletti dal motore senza che a schermo cambiasse niente. I colori

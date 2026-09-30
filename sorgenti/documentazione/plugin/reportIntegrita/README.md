@@ -20,6 +20,8 @@ risolvere, mandare in whitelist, aprire la scheda di una referenza, scaricare il
 | `sezioneConfronti.js` | la sezione Confronti: cosa è cambiato nei campi che l'agenzia tiene d'occhio | no | `reportConfronti.test.js` |
 | `csv.js` | il csv: nome del file, ordine delle righe, virgolettatura | no | `reportConfrontoCsv.test.js` |
 | `conteggi.js` | i numeri sulle linguette | no | `reportConteggi.test.js` |
+| `barraScorrimento.js` | i conti della barra di scorrimento dei Nuovi, che in UXP non scorrono (dal I20-1007) | no | `barraScorrimento.test.js` |
+| `dissolvenza.js` | i conti della dissolvenza delle righe risolte, perché `opacity` non si ridisegna (dal I20-1007) | no | `dissolvenza.test.js` |
 
 Le pagine:
 

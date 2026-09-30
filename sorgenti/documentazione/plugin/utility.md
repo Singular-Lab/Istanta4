@@ -37,7 +37,7 @@ nome cinque membri — `parseLabel`, `getFieldByLabel`, `setCampoDNA`, `cercaChi
 - `getAllFieldsInGroup(box)` → tutti i campi, scendendo nei gruppi annidati.
 - `parseLabel(label)` → **taglia quello che segue il primo `$`**, che nelle label porta il codice
   della referenza. Chi lavora sulle copie da duplicazione **non deve usarla**, perché taglierebbe il
-  suffisso che le distingue — vedi [cssComposizioneBox.md](cssComposizioneBox.md).
+  suffisso che le distingue — vedi [cssComposizioneBox.md](cssFramework/composizioneBox.md).
 - `getDnaOfBox(box)` → i dati della referenza contenuta, letti dalle label.
 - `eUnClone(label)` → se un elemento è una copia da duplicazione.
 - `setCampoDNA`, `getBoxFromElementOfBox`, `_findBoxInExpectedPage`, `_findBoxInDocument`,

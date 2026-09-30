@@ -14,8 +14,9 @@
 const { app, PDFExportOptions, CompressionQuality } = require('indesign');
 const reportConteggi = require('./conteggi');
 const reportConfronti = require('./sezioneConfronti');
-const barraScorrimento = require('../barraScorrimento');
-const dissolvenza = require('../dissolvenza');
+//I20-1007: le due parti pure dell'interfaccia del report, qui accanto.
+const barraScorrimento = require('./barraScorrimento');
+const dissolvenza = require('./dissolvenza');
 
 const pannelli = {
     async _confirmTreAzioniReport(message, actions) {

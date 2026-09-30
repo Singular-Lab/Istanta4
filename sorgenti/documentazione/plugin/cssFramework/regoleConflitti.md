@@ -1,4 +1,7 @@
-# cssRegoleConflitti.js
+# cssFramework/regoleConflitti.js
+
+**Dal I20-1007** sta in `plugin/cssFramework/` con le altre parti pure del [motore CSS](README.md);
+fino ad allora era `cssRegoleConflitti.js` in radice. Chi lo importa lo chiama ancora col nome di prima.
 
 **Cosa è:** la lettura delle regole di segnalazione conflitti, senza toccare InDesign. Nasce con
 I20-974.
