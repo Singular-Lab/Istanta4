@@ -7,7 +7,7 @@
  *
  * Qui stanno solo i conti, che sono la parte che si puo' sbagliare in silenzio: quanto e'
  * largo il cursore, dove va messo, dove porta un clic sulla traccia, e come si resta dentro i
- * limiti. Il disegno e gli eventi stanno in confronti.js.
+ * limiti. Il disegno e gli eventi stanno in reportIntegrita/pannelli.js.
  *
  * Esecuzione dei test: node --test tests/plugin/barraScorrimento.test.js
  */

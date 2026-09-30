@@ -11,7 +11,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const avvio = require('../../plugin/reportIntegritaAvvio');
+const avvio = require('../../plugin/reportIntegrita/avvio');
 
 const adesso = new Date(2026, 8, 21, 12, 0, 0); //21/09/2026 12:00:00
 

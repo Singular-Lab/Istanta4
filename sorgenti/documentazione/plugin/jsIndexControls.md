@@ -12,7 +12,7 @@ ridisegna il tracciato, nel menabò si carica la home dei filtri. Il codice, qua
 
 - `EVENT_NO_REF_SELECTED` (`indexNew.js`) torna alla home, o al menabò, **a ogni deselezione**:
   ridisegnare lì il tracciato vorrebbe dire ridisegnarlo a ogni click nel vuoto;
-- la chiusura della scheda aperta dal Report Integrità (`confronti.js`) torna alla home e subito
+- la chiusura della scheda aperta dal Report Integrità (`reportIntegrita/reportIntegrita.js`) torna alla home e subito
   dopo riapre il report: il ridisegno del tracciato in mezzo al report è quello che I20-981 aveva
   tolto.
 

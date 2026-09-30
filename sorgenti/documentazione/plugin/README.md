@@ -20,7 +20,7 @@ peggio di una documentazione assente, perché fa perdere tempo invece di farne r
 1. **`indexNew.js` è il centro di gravità.** È lui che carica con `require` tutti gli altri moduli
    ed è lui che definisce le globali — `percorsoLogs`, `istantaIp`, `messaggioUtente` — da cui gli
    altri dipendono. Molti file del Plugin non si caricano sotto Node proprio per questo; i moduli
-   nati di recente (`versionePlugin`, `reportIntegritaAvvio`) sono l'eccezione voluta, scritti
+   nati di recente (`versionePlugin`, `reportIntegrita/avvio`) sono l'eccezione voluta, scritti
    apposta per essere verificabili da soli.
 2. **`ipconfig.json` e `custom.js` cambiano per cliente**, montati da `monta-cliente.sh`. Quello che
    trovi nel repository è l'ultimo montaggio fatto su quella macchina, non il prodotto.
@@ -36,7 +36,11 @@ i lavori di divisione e accorpamento che seguono (I20-1014, I20-1015, I20-1012, 
 di I20-1007).
 
 - **Un file rappresenta un concetto.** Quando un concetto ha bisogno di più di un file, ha **una
-  cartella sua**: `plugin/<concetto>/`. La prima è [sistemazioneFoto/](sistemazioneFoto/README.md).
+  cartella sua**: `plugin/<concetto>/`. Le prime sono [sistemazioneFoto/](sistemazioneFoto/README.md)
+  (I20-1009) e [reportIntegrita/](reportIntegrita/README.md) (I20-1014).
+- **Quando due parti non pure di un concetto condividono lo stato**, come il flusso e i pannelli
+  del report, stanno in due file ma in **un oggetto solo**: il secondo si mescola nel primo con
+  `Object.assign`, e a runtime il `this` è uno. Si divide il file, non lo stato.
 - **Dentro la cartella, la parte pura sta separata da quella che parla con InDesign.** La parte
   pura non fa `require('indesign')`, si carica sotto Node ed è verificata dai test; l'altra si prova
   solo in collaudo. È la divisione che ha prodotto i moduli buoni del Plugin, e non si mescola.
@@ -98,7 +102,7 @@ ed è documentato il meccanismo con cui il server prevale su di lui.
 | [dissolvenza.md](dissolvenza.md) | i conti della dissolvenza, perché in UXP `opacity` non si ridisegna |
 | [tooltipPosizione.md](tooltipPosizione.md) | dove ancorare un tooltip senza misurarlo |
 | [cacheHashFoto.md](cacheHashFoto.md) | la memoria degli hash md5 delle foto |
-| [reportConteggi.md](reportConteggi.md) | i numeri sulle linguette del Report Integrità |
+| [reportIntegrita/conteggi.md](reportIntegrita/conteggi.md) | i numeri sulle linguette del Report Integrità (era `reportConteggi.js`) |
 | [dataCaricamentoFoto.md](dataCaricamentoFoto.md) | il badge con la data sulle foto |
 | [ricollegaEsiti.md](ricollegaEsiti.md) | cosa dire all'operatore dopo un ricollegamento |
 | [trattiDescrizione.md](trattiDescrizione.md) | i tratti di stile di un campo descrizione |
@@ -124,9 +128,12 @@ ed è documentato il meccanismo con cui il server prevale su di lui.
 
 | pagina | il file che spiega |
 |---|---|
-| [reportIntegritaAvvio.md](reportIntegritaAvvio.md) | quando il Report Integrità parte, e quando smette di valere |
-| [reportConfronti.md](reportConfronti.md) | la sezione Confronti: cosa è cambiato nei campi che l'agenzia tiene d'occhio |
-| [reportConfrontoCsv.md](reportConfrontoCsv.md) | come è fatto il csv, e perché è fatto per Excel |
+| [reportIntegrita/avvio.md](reportIntegrita/avvio.md) | quando il Report Integrità parte, e quando smette di valere (era `reportIntegritaAvvio.js`) |
+| [reportIntegrita/sezioneConfronti.md](reportIntegrita/sezioneConfronti.md) | la sezione Confronti: cosa è cambiato nei campi che l'agenzia tiene d'occhio (era `reportConfronti.js`) |
+| [reportIntegrita/csv.md](reportIntegrita/csv.md) | come è fatto il csv, e perché è fatto per Excel (era `reportConfrontoCsv.js`) |
+
+Dal I20-1014 stanno in [reportIntegrita/](reportIntegrita/README.md), insieme al flusso e ai pannelli
+del report.
 
 ### Lotto 5 — il nucleo
 
@@ -142,13 +149,13 @@ ed è documentato il meccanismo con cui il server prevale su di lui.
 | [griglia.md](griglia.md) | la mappa dell'impaginato: cosa va dove, prima di impaginare |
 | [filtri.md](filtri.md) | i filtri di pagina del volantino, e i dieci nomi di «è una data» |
 | [utility.md](utility.md) | settantasei membri e otto concetti: il file che va diviso |
-| [confronti.md](confronti.md) | il Report Integrità, e i suoi duecento pannelli |
+| [confronti.md](confronti.md) | il motore di confronto fra documento e dato; fino a I20-1014 anche il Report Integrità, ora in [reportIntegrita/](reportIntegrita/README.md) |
 | [schedaRef.md](schedaRef.md) | la scheda della referenza, e i tre concetti che contiene |
 | [indexNew/](indexNew/README.md) | il file che tiene insieme il Plugin: 129 funzioni, tutte documentate |
 
 ---
 
-Insieme a [reportConteggi.md](reportConteggi.md), documentata nel Lotto 2, sono i quattro pezzi del
+Insieme a [reportIntegrita/conteggi.md](reportIntegrita/conteggi.md), documentata nel Lotto 2, sono i quattro pezzi del
 Report Integrità, tutti nati da I20-981.
 
 **Sono anche gli unici file del Plugin su cui la ricognizione dei difetti non ha trovato niente da
@@ -264,7 +271,7 @@ altrimenti dovrebbe rifare la stessa lettura da capo.
 
 | funzione | dov'è | dove dovrebbe stare |
 |---|---|---|
-| `controllaChiusuraReportIntegrita` | `events.js` | `reportIntegritaAvvio.js`: decide quando un report smette di valere, ed è una regola del report, non un evento |
+| `controllaChiusuraReportIntegrita` | `events.js` | **fatto in I20-1014**: la decisione è `ReportIntegrita.chiudiSeNonValePiu`, e in `events.js` resta la chiamata a intervalli |
 | `normalize`, `isIn`, `getValueByPath` | `pluginMiddleware.js` | `utility.js`: sono utilità generiche, non mediano niente |
 | `toFitOptions` | `pluginMiddleware.js` | `utility.js`, o accanto agli `enum*` di `CssFramework` |
 | `calcolaDistanza` | `griglia.js` | `utility.js`: sei righe di geometria pura |

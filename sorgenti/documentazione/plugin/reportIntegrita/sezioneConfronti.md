@@ -1,4 +1,7 @@
-# reportConfronti.js
+# reportIntegrita/sezioneConfronti.js
+
+*Fino a I20-1014 si chiamava `reportConfronti.js` e stava in `plugin/`: dentro la cartella del
+report il prefisso non serve, e il nome nuovo evita di confonderlo con `confronti.js`, il motore.*
 
 **Cosa è:** la sezione Confronti del Report Integrità, nella modalità che si apre per prima — il
 confronto della lista con sé stessa. Nasce con I20-981 (Lotto 4a).

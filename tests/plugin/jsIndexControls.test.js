@@ -277,7 +277,8 @@ test("i click della barra chiamano changeSubMenu come operatore", () => {
 
 //Il codice invece non lo dice mai: e' la differenza che deve restare.
 test("il codice non chiama mai changeSubMenu come operatore", () => {
-    for (const file of ["plugin/indexNew.js", "plugin/confronti.js", "plugin/schedaArtwork.js", "plugin/schedaRef.js"]) {
+    //I20-1014: le chiamate del Report Integrita' stanno in reportIntegrita/, non piu' in confronti.js.
+    for (const file of ["plugin/indexNew.js", "plugin/reportIntegrita/reportIntegrita.js", "plugin/schedaArtwork.js", "plugin/schedaRef.js"]) {
         const chiamate = sorgente(file).match(/jsIndexControls\.changeSubMenu\([^;]*;/g) || [];
         assert.ok(chiamate.length > 0, file);
         for (const chiamata of chiamate) {

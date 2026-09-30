@@ -11,7 +11,7 @@ const trattiDescrizione = require('./trattiDescrizione');
 /// seleziona un box nel documento.
 ///
 /// 182 membri, 9.640 righe, tutti sullo stesso piano: qui non c'e' distinzione fra pubblico e
-/// privato come in confronti.js.
+/// privato come nel Report Integrita' (plugin/reportIntegrita/).
 ///
 /// Dentro ci sono TRE CONCETTI che il file non distingue, e che l'operatore ha deciso di
 /// separare. Ogni membro che appartiene a uno di essi e' marcato qui sotto:
@@ -25,7 +25,9 @@ const trattiDescrizione = require('./trattiDescrizione');
 ///   modificarne i campi.
 ///
 ///   REPORT INTEGRITA' - 5 membri: come la scheda si comporta quando viene aperta DAL report
-///   invece che dal documento. Vanno col resto del report, sparso su otto file.
+///   invece che dal documento. I20-1014: il report ha una cartella sua, ma questi restano qui
+///   di proposito - sono stato della scheda, e il report li imposta da fuori. E' l'aggancio,
+///   descritto in sorgenti/documentazione/plugin/reportIntegrita/README.md.
 const schedaRef = {
     /// La referenza aperta nella scheda. E' la variabile piu' letta del Plugin: quasi ogni file
     /// che vuole sapere "su cosa sta lavorando l'operatore" guarda qui.
@@ -4441,7 +4443,7 @@ const schedaRef = {
             });
 
             const campo = $('<div></div>');
-            campo.text(confronti.etichettaSegnalazione(diff.label));
+            campo.text(ReportIntegrita.etichettaSegnalazione(diff.label));
             campo.css({ "font-size": "12px", "font-weight": "600", "color": "#2c2c2c" });
 
             const dettaglio = $('<div></div>');

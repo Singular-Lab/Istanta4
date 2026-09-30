@@ -3,7 +3,9 @@
  * smettere di valere.
  *
  * Stavano dentro il gestore del bottone "Avvia" in indexNew.js e dentro
- * richiediAzioneReportIntegritaEsistente in confronti.js, mescolate all'interfaccia.
+ * richiediAzioneReportIntegritaEsistente in confronti.js, mescolate all'interfaccia (dal I20-1014
+ * quel codice sta in reportIntegrita.js, e questo file, che si chiamava reportIntegritaAvvio.js,
+ * gli sta accanto).
  * Nessuno dei due file si carica sotto Node (require('indesign')), quindi le soglie non
  * erano verificabili: qui restano solo le decisioni, senza InDesign e senza DOM.
  *

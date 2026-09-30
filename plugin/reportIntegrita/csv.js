@@ -3,7 +3,9 @@
  *
  * Stava tutto dentro confronti.js, che fa require('indesign') e sotto Node non si carica:
  * il nome del file, l'ordine delle righe, la virgolettatura e la descrizione composta non
- * erano verificabili. Qui restano le regole; in confronti.js resta cio' che tocca il disco.
+ * erano verificabili. Qui restano le regole; cio' che tocca il disco sta in reportIntegrita.js.
+ *
+ * I20-1014: prima si chiamava reportConfrontoCsv.js e stava in plugin/.
  *
  * Esecuzione dei test: node --test tests/plugin/reportConfrontoCsv.test.js
  */
@@ -275,7 +277,7 @@ function bytesUtf8(testo) {
 //report parla del documento contro la sua lista, questo parla di due liste fra loro, e in
 //testa dice quali. Le righe sono quelle che l'operatore vede, filtri compresi: cio' che si
 //esporta e' cio' che si e' scelto di guardare, e i filtri attivi sono scritti in testa.
-const reportConfronti = require('./reportConfronti');
+const reportConfronti = require('./sezioneConfronti');
 
 const INTESTAZIONI_CONFRONTO = [
     "Stato",

@@ -3,7 +3,6 @@ const XMLHttpRequestClient = require('./XMLHttpRequestClient');
 const {Utility} = require('./utility');
 const { refSelected } = require('./schedaRef');
 const {Logger} = require('./logger');
-const reportIntegritaAvvio = require('./reportIntegritaAvvio');
 
 /// I20-1002: il registro degli eventi di background del Plugin.
 ///
@@ -541,13 +540,9 @@ class InddEvents {
     /// altro file, o li chiude tutti, quelle segnalazioni non si possono piu' verificare e il
     /// report va chiuso senza chiedere niente: la domanda "sicuro di voler interrompere?"
     /// resta per la chiusura fatta a mano.
-    /// RICOLLOCAZIONE (I20-1002): questa funzione sta nel file sbagliato.
-    /// Decide quando un Report Integrita' aperto smette di valere, ed e' una regola del report,
-    /// non un evento. E' finita qui perche' il controllo deve girare a intervalli e il ciclo sta
-    /// in questo file, ma il "quando" appartiene a reportIntegritaAvvio.js, dove vivono gia' le
-    /// regole della stessa famiglia, deveChiudereReport su tutte.
-    /// Proposta: portare la decisione in reportIntegritaAvvio.js e lasciare qui la sola chiamata
-    /// periodica. Vedi il task di divisione dei file.
+    /// I20-1014: qui resta solo il "quando guardare" - a intervalli, un controllo alla volta, col
+    /// documento attivo letto da InDesign. Il "quando chiudere" e' del report:
+    /// ReportIntegrita.chiudiSeNonValePiu, che usa deveChiudereReport di reportIntegrita/avvio.js.
     async controllaChiusuraReportIntegrita() {
         if (this.controlloReportInCorso) {
             return;
@@ -559,7 +554,7 @@ class InddEvents {
 
         this.timeStampControlloReport = Date.now();
 
-        if (typeof confronti === "undefined" || confronti == null || !confronti.reportIntegritaAperto()) {
+        if (typeof ReportIntegrita === "undefined" || ReportIntegrita == null || !ReportIntegrita.reportIntegritaAperto()) {
             return;
         }
 
@@ -573,9 +568,7 @@ class InddEvents {
                 documentoAttuale = nomeCompleto != null ? nomeCompleto.nativePath : null;
             }
 
-            if (reportIntegritaAvvio.deveChiudereReport(confronti.documentoDelReport(), documentoAttuale)) {
-                confronti.chiudiReportIntegrita("il documento non e' piu' quello del report");
-            }
+            ReportIntegrita.chiudiSeNonValePiu(documentoAttuale);
         }
         catch (err) {
             console.error("Errore durante il controllo di chiusura del report integrita':", err);

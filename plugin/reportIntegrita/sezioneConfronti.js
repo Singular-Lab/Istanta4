@@ -10,6 +10,9 @@
  *
  * Il confronto evidenzia e basta: non propone correzioni.
  *
+ * I20-1014: prima si chiamava reportConfronti.js e stava in plugin/. Il nome nuovo evita di
+ * confonderlo con confronti.js, che e' il motore di confronto fra documento e dato.
+ *
  * Esecuzione dei test: node --test tests/plugin/reportConfronti.test.js
  */
 

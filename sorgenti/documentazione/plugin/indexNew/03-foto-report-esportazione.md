@@ -48,14 +48,16 @@ no.
 
 ---
 
-## Il report — 3 funzioni, 547 righe
+## Il report — uscito in I20-1014
 
-- `avviaReportIntegrita(idKit)` → **131 righe**: guarda se ce n'è uno aperto, decide con le soglie
-  di [reportIntegritaAvvio](../reportIntegritaAvvio.md) se riusarlo o rifarlo, compone l'intervallo
-  di pagine. **Le decisioni stanno nel modulo puro, qui resta la sequenza.**
-- `applicaConfronto(mappa)` → **359 righe**: applica il confronto alla mappa dell'impaginato,
-  appoggiandosi a [reportConfronti](../reportConfronti.md).
-- `datiPrimarioPerConfronto(...)` → 57 righe.
+`avviaReportIntegrita` e `applicaConfronto`, con le tre funzioni che usavano solo loro —
+`preAnalisiBoxMappato`, `boxDellElementoMappa`, `nomiPagineDelDocumento` — sono diventati membri di
+`ReportIntegrita`, in [reportIntegrita/](../reportIntegrita/README.md). Si chiamano con gli stessi
+nomi: `ReportIntegrita.avviaReportIntegrita(idKit)`. Sono descritti in
+[reportIntegrita/flusso.md](../reportIntegrita/flusso.md).
+
+Qui resta `datiPrimarioPerConfronto(...)` (57 righe), perché la usa anche la reimpaginazione di una
+referenza, che non è report.
 
 ---
 
@@ -72,15 +74,10 @@ no.
 Queste funzioni sono l'ultimo pezzo mancante di **due inventari** che ora sono completi, e i due
 task sono stati scritti.
 
-### Report Integrità — otto file
+### Report Integrità — fatto in I20-1014
 
-| file | pezzi |
-|---|---|
-| i quattro `report*.js` | 1.279 righe, con i test: sono il modello |
-| `confronti.js` | 57 membri, più i 200 pannelli |
-| **`indexNew.js`** | queste 3 funzioni, 547 righe |
-| `schedaRef.js` | 5 membri |
-| `events.js` | `controllaChiusuraReportIntegrita` |
+Gli otto file sono diventati una cartella: [reportIntegrita/](../reportIntegrita/README.md). Il
+README del report dice cosa è entrato e cosa è rimasto fuori, e perché.
 
 ### Procurarsi la foto — sette file
 

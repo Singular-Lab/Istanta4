@@ -13,7 +13,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const confronti = require('../../plugin/reportConfronti');
+const confronti = require('../../plugin/reportIntegrita/sezioneConfronti');
 
 const campi = [
     { label: 'Data validita\' da', keyInRecordInTracciato: 'data_da' },

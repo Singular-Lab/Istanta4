@@ -105,7 +105,7 @@ Tutti annullano `xhrInProcess`, la richiesta unica in volo di
 
 Chi aspetta e imposta `onabort`: `scaricaContenutoKit`, che fa fallire `scaricaContenutoKitAsync`
 col motivo (il Report Integrità lo riporta nel suo errore); `getListaCodiciImpaginati` in
-`utility.js`; la preanalisi e la sincronizzazione del Report Integrità in `confronti.js`, che
+`utility.js`; la preanalisi e la sincronizzazione del Report Integrità in `reportIntegrita/reportIntegrita.js`, che
 smettono di aspettare invece di arrivare al loro timeout.
 
 Il cambio di documento non scatta mentre `setBusy(true)` è attivo: conteggio, impaginazione e

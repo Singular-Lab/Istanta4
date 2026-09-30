@@ -59,16 +59,14 @@ che gli altri file chiedono a `events`, oltre ad ascoltare.
   nulla è cambiato davvero. Serve dopo le operazioni che rifanno il documento sotto al ciclo.
 - `timestamp()` → l'ora leggibile per i log.
 
-## Ricollocazione proposta
+## La chiusura del Report Integrità — ricollocata in I20-1014
 
-`controllaChiusuraReportIntegrita()` **sta nel file sbagliato.** Decide quando un Report Integrità
-aperto smette di valere: è una regola del report, non un evento. È finita qui perché il controllo
-deve girare a intervalli e il ciclo sta in questo file, ma il «quando» appartiene a
-[reportIntegritaAvvio.md](reportIntegritaAvvio.md), dove vivono già le regole della stessa famiglia
-— `deveChiudereReport` su tutte.
-
-**Proposta:** portare la decisione in `reportIntegritaAvvio.js` e lasciare qui la sola chiamata
-periodica.
+`controllaChiusuraReportIntegrita()` decideva qui quando un Report Integrità aperto smette di
+valere, ma è una regola del report, non un evento. **Ora qui resta solo il «quando guardare»**: a
+intervalli, un controllo alla volta, col documento attivo letto da InDesign, e prima del cancello
+`isBusy` — il report tiene `isBusy` per sé. **Il «quando chiudere» è del report**:
+`ReportIntegrita.chiudiSeNonValePiu(documentoAttuale)`, che usa `deveChiudereReport` di
+[reportIntegrita/avvio](reportIntegrita/avvio.md). Vedi [reportIntegrita/flusso.md](reportIntegrita/flusso.md).
 
 ## Cosa è stato rimosso
 
