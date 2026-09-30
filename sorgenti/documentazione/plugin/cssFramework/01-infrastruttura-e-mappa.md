@@ -83,7 +83,7 @@ una svista, ma un prezzo pagato consapevolmente.
   tutto il framework: il cliente sovrascrive il default, e se non dice niente vale il default.
 - `getPrefissiDerivati(box, DBallineamenti, DBDefault)` → i prefissi delle copie.
 - `getSceltaSpazioFoto(box)` → la preferenza sullo spazio foto. `null` vuol dire area massima, come
-  sempre. Dettaglio in [cssSpazioFoto](../cssSpazioFoto.md).
+  sempre. Dettaglio in [sceltaSpazio](../sistemazioneFoto/sceltaSpazio.md).
 - `getEstensioniFoto(box)` → lo spazio da riservare attorno alle foto, per lato, in millimetri.
 
   Usa **le stesse espressioni dei post ridimensionamenti**: un numero, oppure un'etichetta con le

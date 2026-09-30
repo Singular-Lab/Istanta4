@@ -29,13 +29,39 @@ peggio di una documentazione assente, perché fa perdere tempo invece di farne r
 
 ---
 
+## Come è organizzato il Plugin: un concetto, una cartella
+
+Regola decisa con l'operatore il 2026-09-30, applicata per la prima volta in **I20-1009**. Vale per
+i lavori di divisione e accorpamento che seguono (I20-1014, I20-1015, I20-1012, e quello che resta
+di I20-1007).
+
+- **Un file rappresenta un concetto.** Quando un concetto ha bisogno di più di un file, ha **una
+  cartella sua**: `plugin/<concetto>/`. La prima è [sistemazioneFoto/](sistemazioneFoto/README.md).
+- **Dentro la cartella, la parte pura sta separata da quella che parla con InDesign.** La parte
+  pura non fa `require('indesign')`, si carica sotto Node ed è verificata dai test; l'altra si prova
+  solo in collaudo. È la divisione che ha prodotto i moduli buoni del Plugin, e non si mescola.
+- **I nomi dentro la cartella non ripetono il prefisso del vecchio ospite.** `cssSpazioFoto.js`,
+  entrato in `sistemazioneFoto/`, è diventato `sceltaSpazio.js`.
+- **Il file da cui il concetto esce tiene dei rimandi** di una riga per i membri che chiamano le
+  agenzie. `Agenzie/*/custom.js` fa `require('./utility')` e `require('./CssFramework')` e usa quei
+  membri per nome: senza rimandi, ogni spostamento romperebbe un cliente. **Il core chiama il
+  modulo nuovo direttamente**, e un test lo controlla.
+- **I test restano in `tests/plugin/`**, senza sottocartelle: la CI lancia
+  `node --test tests/plugin/*.test.js`. Chi scandisce i file del Plugin usa
+  `tests/plugin/fileDelPlugin.js`, che guarda anche nelle cartelle dei concetti.
+- **La documentazione segue il codice**: `sorgenti/documentazione/plugin/<concetto>/`, con un
+  README del concetto e una pagina per parte.
+- **Il codice commentato non si trasloca.** Resta nella storia git.
+
+---
+
 ## Stato del lavoro
 
 | lotto | file | stato |
 |---|---|---|
 | 1 — Fondamenta | `manifest.json`, `ipconfig.json`, `index.html`, `logger.js`, `versionePlugin.js`, `XMLHttpRequestClient.js` | **fatto** |
 | 2 — Utilità piccole | `barraScorrimento`, `dissolvenza`, `tooltipPosizione`, `jsIndexControls`, `cacheHashFoto`, `dataCaricamentoFoto`, `credenzialiSalvate`, `fotoAutoSync`, `garbageCollector`, `cambiStrutturali`, `ricollegaEsiti`, `reportConteggi`, `trattiDescrizione`, `variantiDescrizione` | **fatto** |
-| 3 — Motore CSS | `CssFramework`, `cssComposizioneBox`, `cssRegoleConflitti`, `cssSequenzaOperazioni`, `cssSpazioFoto`, `noRenderElementi` | **fatto** |
+| 3 — Motore CSS | `CssFramework`, `cssComposizioneBox`, `cssRegoleConflitti`, `cssSequenzaOperazioni`, `cssSpazioFoto` (dal I20-1009 `sistemazioneFoto/sceltaSpazio`), `noRenderElementi` | **fatto** |
 | 4 — Report | `reportConfronti`, `reportConfrontoCsv`, `reportIntegritaAvvio` | **fatto** |
 | 5 — Nucleo | `utility`, `events`, `cmd`, `pluginMiddleware`, `custom`, `filtri`, `griglia`, `ficoProcess`, `schedaArtwork`, `InputEditController`, `schedaRef`, `confronti`, `indexNew` | **fatto** |
 
@@ -90,9 +116,9 @@ ed è documentato il meccanismo con cui il server prevale su di lui.
 | [cssSequenzaOperazioni.md](cssSequenzaOperazioni.md) | quando una regola del framework viene eseguita |
 | [cssRegoleConflitti.md](cssRegoleConflitti.md) | quali elementi non devono toccarsi, e su cosa si misura |
 | [cssComposizioneBox.md](cssComposizioneBox.md) | duplicare elementi e decidere chi sta davanti |
-| [cssSpazioFoto.md](cssSpazioFoto.md) | in quale spazio libero finiscono le foto |
+| [sistemazioneFoto/](sistemazioneFoto/README.md) | trovare dove c'è posto nel box e farci stare le foto: tre file, uno puro per il calcolo dei rettangoli e uno per la scelta. Uscito da `CssFramework` in I20-1009 |
 | [noRenderElementi.md](noRenderElementi.md) | rendere invisibili singoli elementi di un box |
-| [cssFramework/](cssFramework/README.md) | il motore vero: 8.636 righe, spiegate in cinque pagine per gruppo |
+| [cssFramework/](cssFramework/README.md) | il motore vero: 7.283 righe, spiegate in tre pagine per gruppo |
 
 ### Lotto 4 — i report
 

@@ -42,6 +42,8 @@ const ficoProcess = require('./ficoProcess');
 const grigliaJs = require('./griglia');
 const filtriJs = require('./filtri');
 const CssFramework = require('./CssFramework');
+//I20-1009: la sistemazione delle foto nel box ha un modulo suo. Anche schedaRef la usa da qui.
+const SistemazioneFoto = require('./sistemazioneFoto/sistemazioneFoto');
 const pluginMiddleware = require('./pluginMiddleware');
 const fotoAutoSync = require('./fotoAutoSync');
 const credenzialiSalvateModulo = require('./credenzialiSalvate');
@@ -695,8 +697,8 @@ indesignEvents.addEventListener(indesignEvents.EVENT_NEW_REF_FIELD_SELECTED, asy
                     currentElement = currentElement.parent;
                 }
 
-                var obs =CssFramework.getSpazioImpaginazione(currentElement);
-                CssFramework.fixFoto(currentElement, obs.candidate, obs.obstacles);
+                var obs =SistemazioneFoto.getSpazioImpaginazione(currentElement);
+                SistemazioneFoto.fixFoto(currentElement, obs.candidate, obs.obstacles);
             }
         }];
 
@@ -5445,8 +5447,8 @@ async function callAllOperationFixBox(boxImpaginato, bounds, itemRef, garbageKey
             boxImpaginato = customAgenzia.setCustomFixFoto(boxImpaginato);
         }
         else if (fixFotoLavorazioni.includes(tipoLavorazione)) {
-            var res = CssFramework.getSpazioImpaginazione(boxImpaginato);
-            CssFramework.fixFoto(boxImpaginato, res.candidate, res.obstacles);
+            var res = SistemazioneFoto.getSpazioImpaginazione(boxImpaginato);
+            SistemazioneFoto.fixFoto(boxImpaginato, res.candidate, res.obstacles);
         }
     }
     finally {
@@ -11892,8 +11894,8 @@ async function ricollegaFotoMassivo(ricollegaFotoPresentiModificate = false, adv
                         boxImpaginato = customAgenzia.setCustomFixFoto(boxImpaginato);
                     }
                     else if(fixFotoLavorazioni.includes(ficoProcess.getTipoLavorazioneCorrente())){
-                        var res = CssFramework.getSpazioImpaginazione(boxImpaginato);
-                        CssFramework.fixFoto(boxImpaginato, res.candidate, res.obstacles);
+                        var res = SistemazioneFoto.getSpazioImpaginazione(boxImpaginato);
+                        SistemazioneFoto.fixFoto(boxImpaginato, res.candidate, res.obstacles);
                     }
                 }
 

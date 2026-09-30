@@ -64,13 +64,13 @@ che appartiene a uno di essi è **marcato**, così i task li ritrovano con un gr
 Quale foto va su questa referenza, chiederla al server, scaricarla, sostituirla, gestire extra ed
 extra auto.
 
-**Non va confuso con il `fixFoto` di [CssFramework](cssFramework/03-sistemazione-foto.md)**, che
+**Non va confuso con il `fixFoto` di [sistemazioneFoto](sistemazioneFoto/02-sistemazione-foto.md)**, che
 decide *dove* la foto sta dentro il box. Sono due concetti diversi e **due task distinti**:
 
 | concetto | dove vive oggi | task |
 |---|---|---|
-| **procurarsi** la foto giusta | `schedaRef` (28), `indexNew` (10 funzioni globali), `cmd.downloadImages`, `FotoPlacer` in `utility`, più i moduli puri `cacheHashFoto`, `fotoAutoSync`, `dataCaricamentoFoto` | js nuovo, da aprire |
-| **collocarla** nel box | `CssFramework` (9 membri più il gruppo fixFoto) | già aperto |
+| **procurarsi** la foto giusta | `schedaRef` (28), `indexNew` (10 funzioni globali), `cmd.downloadImages`, `FotoPlacer` in `utility`, più i moduli puri `cacheHashFoto`, `fotoAutoSync`, `dataCaricamentoFoto` | I20-1015, da fare |
+| **collocarla** nel box | [`plugin/sistemazioneFoto/`](sistemazioneFoto/README.md), uscita da `CssFramework` | I20-1009, fatto |
 
 ### 2. La clonazione — 26 membri
 

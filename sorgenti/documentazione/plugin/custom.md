@@ -31,7 +31,7 @@ direttamente:
   referenza nella **meccanica** del box. È la funzione più lunga del file, quasi seicento righe, ed
   è il cuore di ciò che distingue un cliente dall'altro.
 - `setCustomFixFoto(box)` → la sistemazione delle foto a modo del cliente, al posto di quella
-  standard. `indexNew` la cerca **prima** di chiamare `CssFramework.fixFoto`: se c'è, comanda questa.
+  standard. `indexNew` la cerca **prima** di chiamare `SistemazioneFoto.fixFoto`: se c'è, comanda questa. Lei, dall'agenzia, chiama `CssFramework.fixFoto`, che rimanda allo stesso modulo — vedi [sistemazioneFoto](sistemazioneFoto/README.md).
 - `impaginazioneFotoExtraCustom(...)` → come vanno impaginate foto extra e loghi.
 - `getEtichetteEsclusePerFixDescrizione()`, `decodificaNomeFile(fullPath)`.
 

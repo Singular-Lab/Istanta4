@@ -12,13 +12,11 @@
 
 const test = require("node:test");
 const assert = require("node:assert");
-const fs = require("node:fs");
-const path = require("node:path");
 
-const CARTELLA_PLUGIN = path.join(__dirname, "..", "..", "plugin");
+const { fileDelPlugin, leggiFileDelPlugin } = require("./fileDelPlugin");
 
 function sorgente(nome) {
-    return fs.readFileSync(path.join(CARTELLA_PLUGIN, nome), "utf8").replace(/\r/g, "");
+    return leggiFileDelPlugin(nome).replace(/\r/g, "");
 }
 
 //Il corpo di una funzione di primo livello: dalla sua dichiarazione alla successiva.
@@ -43,8 +41,10 @@ const ECCEZIONI_AMMESSE = [
 ];
 
 test("nel Plugin nessun await e' applicato a una negazione", () => {
-    const file = fs.readdirSync(CARTELLA_PLUGIN).filter(nome => nome.endsWith(".js"));
+    //I20-1009: anche nelle sottocartelle dei concetti, non solo in radice.
+    const file = fileDelPlugin();
     assert.ok(file.length > 20);
+    assert.ok(file.some(nome => nome.includes("/")), "le sottocartelle vanno guardate");
 
     const trovati = [];
     for (const nome of file) {

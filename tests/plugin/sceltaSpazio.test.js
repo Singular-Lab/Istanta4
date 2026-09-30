@@ -1,7 +1,8 @@
 /*
  * Scelta dello spazio in cui finiscono le foto del box.
  *
- * Il modulo sotto test e' plugin/cssSpazioFoto.js. Due cose vanno protette: che il criterio
+ * Il modulo sotto test e' plugin/sistemazioneFoto/sceltaSpazio.js, che fino a I20-1009 si
+ * chiamava sceltaSpazio.js e stava in plugin/. Due cose vanno protette: che il criterio
  * storico (vince lo spazio piu' ampio) resti identico dove nessuno chiede altro, e che il
  * criterio centrato non diventi una scusa per rimpicciolire le foto oltre misura.
  *
@@ -13,7 +14,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const cssSpazioFoto = require('../../plugin/cssSpazioFoto');
+const sceltaSpazio = require('../../plugin/sistemazioneFoto/sceltaSpazio');
 
 //Base larga 100 e alta 100: il centro e' in 50,50.
 const larghezzaBase = 100;
@@ -31,14 +32,14 @@ const laterale = { x: 60, y: 27, width: 40, height: 46 };
 const lateraleGrande = { x: 40, y: 0, width: 60, height: 100 };
 
 test('senza preferenze vince lo spazio piu\' ampio, come e\' sempre stato', () => {
-    const scelta = cssSpazioFoto.scegli([centrale, laterale], gruppoFoto, null, larghezzaBase, altezzaBase);
+    const scelta = sceltaSpazio.scegli([centrale, laterale], gruppoFoto, null, larghezzaBase, altezzaBase);
 
     assert.strictEqual(scelta.candidato, laterale);
 });
 
 test('col criterio centrato qualche millimetro in meno vale la centratura', () => {
     //E' il caso del cartone di latte: 6 di altezza in piu' non giustificano finire di lato.
-    const scelta = cssSpazioFoto.scegli([centrale, laterale], gruppoFoto, {
+    const scelta = sceltaSpazio.scegli([centrale, laterale], gruppoFoto, {
         modo: 'centrato',
         tolleranzaArea: 0.7,
         asseCentratura: 'x'
@@ -48,7 +49,7 @@ test('col criterio centrato qualche millimetro in meno vale la centratura', () =
 });
 
 test('uno spazio laterale davvero piu\' grande vince anche col criterio centrato', () => {
-    const scelta = cssSpazioFoto.scegli([centrale, lateraleGrande], gruppoFoto, {
+    const scelta = sceltaSpazio.scegli([centrale, lateraleGrande], gruppoFoto, {
         modo: 'centrato',
         tolleranzaArea: 0.7,
         asseCentratura: 'x'
@@ -61,7 +62,7 @@ test('la tolleranza decide dove sta il confine, ed e\' un dato del cliente', () 
     const candidati = [centrale, laterale];
 
     //Con una tolleranza stretta l'area del laterale non basta a essere scartata.
-    const stretta = cssSpazioFoto.scegli(candidati, gruppoFoto, {
+    const stretta = sceltaSpazio.scegli(candidati, gruppoFoto, {
         modo: 'centrato',
         tolleranzaArea: 0.99,
         asseCentratura: 'x'
@@ -69,7 +70,7 @@ test('la tolleranza decide dove sta il confine, ed e\' un dato del cliente', () 
     assert.strictEqual(stretta.candidato, laterale);
 
     //Con una tolleranza larga si accetta la perdita e si resta al centro.
-    const larga = cssSpazioFoto.scegli(candidati, gruppoFoto, {
+    const larga = sceltaSpazio.scegli(candidati, gruppoFoto, {
         modo: 'centrato',
         tolleranzaArea: 0.5,
         asseCentratura: 'x'
@@ -82,13 +83,13 @@ test('l\'asse di centratura distingue lo scentramento che conta da quello che no
     const scentratoX = { x: 0, y: 30, width: 40, height: 40 };
     const scentratoY = { x: 30, y: 0, width: 40, height: 40 };
 
-    const suX = cssSpazioFoto.scegli([scentratoX, scentratoY], gruppoFoto, {
+    const suX = sceltaSpazio.scegli([scentratoX, scentratoY], gruppoFoto, {
         modo: 'centrato',
         asseCentratura: 'x'
     }, larghezzaBase, altezzaBase);
     assert.strictEqual(suX.candidato, scentratoY);
 
-    const suY = cssSpazioFoto.scegli([scentratoX, scentratoY], gruppoFoto, {
+    const suY = sceltaSpazio.scegli([scentratoX, scentratoY], gruppoFoto, {
         modo: 'centrato',
         asseCentratura: 'y'
     }, larghezzaBase, altezzaBase);
@@ -98,14 +99,14 @@ test('l\'asse di centratura distingue lo scentramento che conta da quello che no
 test('il lato che si esaurisce per primo e\' quello che comanda il ridimensionamento', () => {
     //Gruppo largo 20 e alto 10 dentro uno spazio 30 x 30: comanda la larghezza.
     const gruppoLargo = [0, 0, 10, 20];
-    const scelta = cssSpazioFoto.scegli([{ x: 0, y: 0, width: 30, height: 30 }], gruppoLargo, null, larghezzaBase, altezzaBase);
+    const scelta = sceltaSpazio.scegli([{ x: 0, y: 0, width: 30, height: 30 }], gruppoLargo, null, larghezzaBase, altezzaBase);
 
     assert.ok(scelta.useXaxisForReference);
     assert.strictEqual(scelta.area, 15 * 30);
 
     //Gruppo alto: comanda l'altezza.
     const gruppoAlto = [0, 0, 20, 10];
-    const sceltaAlta = cssSpazioFoto.scegli([{ x: 0, y: 0, width: 30, height: 30 }], gruppoAlto, null, larghezzaBase, altezzaBase);
+    const sceltaAlta = sceltaSpazio.scegli([{ x: 0, y: 0, width: 30, height: 30 }], gruppoAlto, null, larghezzaBase, altezzaBase);
 
     assert.ok(!sceltaAlta.useXaxisForReference);
     assert.strictEqual(sceltaAlta.area, 15 * 30);
@@ -115,30 +116,30 @@ test('uno spazio che non puo\' contenere il gruppo non viene scelto', () => {
     //Il gruppo si riduce in proporzione, quindi uno spazio schiacciato ospita comunque
     //una versione piccola: cio' che non passa e' lo spazio senza misure.
     const degenere = { x: 0, y: 0, width: 0, height: 40 };
-    const scelta = cssSpazioFoto.scegli([degenere], gruppoFoto, null, larghezzaBase, altezzaBase);
+    const scelta = sceltaSpazio.scegli([degenere], gruppoFoto, null, larghezzaBase, altezzaBase);
 
     assert.strictEqual(scelta, null);
 });
 
 test('senza candidati non si sceglie nulla e il chiamante lo vede', () => {
-    assert.strictEqual(cssSpazioFoto.scegli([], gruppoFoto, null, larghezzaBase, altezzaBase), null);
-    assert.strictEqual(cssSpazioFoto.scegli(null, gruppoFoto, null, larghezzaBase, altezzaBase), null);
+    assert.strictEqual(sceltaSpazio.scegli([], gruppoFoto, null, larghezzaBase, altezzaBase), null);
+    assert.strictEqual(sceltaSpazio.scegli(null, gruppoFoto, null, larghezzaBase, altezzaBase), null);
 });
 
 test('una tolleranza assurda non blocca le foto', () => {
     //Sopra 1 nessuno spazio sarebbe ammesso: viene riportata a 1, che vale "solo a pari area".
-    const preferenza = cssSpazioFoto.normalizzaPreferenza({ modo: 'centrato', tolleranzaArea: 5 });
+    const preferenza = sceltaSpazio.normalizzaPreferenza({ modo: 'centrato', tolleranzaArea: 5 });
     assert.strictEqual(preferenza.tolleranzaArea, 1);
 
-    const zero = cssSpazioFoto.normalizzaPreferenza({ modo: 'centrato', tolleranzaArea: 0 });
-    assert.strictEqual(zero.tolleranzaArea, cssSpazioFoto.tolleranzaPredefinita);
+    const zero = sceltaSpazio.normalizzaPreferenza({ modo: 'centrato', tolleranzaArea: 0 });
+    assert.strictEqual(zero.tolleranzaArea, sceltaSpazio.tolleranzaPredefinita);
 
-    const scelta = cssSpazioFoto.scegli([centrale, laterale], gruppoFoto, { modo: 'centrato', tolleranzaArea: 5 }, larghezzaBase, altezzaBase);
+    const scelta = sceltaSpazio.scegli([centrale, laterale], gruppoFoto, { modo: 'centrato', tolleranzaArea: 5 }, larghezzaBase, altezzaBase);
     assert.strictEqual(scelta.candidato, laterale);
 });
 
 test('un modo sconosciuto ricade sul criterio di sempre', () => {
-    const preferenza = cssSpazioFoto.normalizzaPreferenza({ modo: 'quelloBello' });
+    const preferenza = sceltaSpazio.normalizzaPreferenza({ modo: 'quelloBello' });
 
     assert.strictEqual(preferenza.modo, 'areaMassima');
     assert.strictEqual(preferenza.asseCentratura, 'xy');
@@ -147,7 +148,7 @@ test('un modo sconosciuto ricade sul criterio di sempre', () => {
 test('a pari area vince il primo spazio, come faceva il confronto originale', () => {
     const primo = { x: 0, y: 0, width: 40, height: 40 };
     const secondo = { x: 60, y: 0, width: 40, height: 40 };
-    const scelta = cssSpazioFoto.scegli([primo, secondo], gruppoFoto, null, larghezzaBase, altezzaBase);
+    const scelta = sceltaSpazio.scegli([primo, secondo], gruppoFoto, null, larghezzaBase, altezzaBase);
 
     assert.strictEqual(scelta.candidato, primo);
 });
@@ -156,7 +157,7 @@ test('col criterio centrato uno spazio che attraversa il centro viene usato solo
     //Spazio libero da x 20 a x 90: le foto centrate li' starebbero in 55, non in 50.
     const sbilanciato = { x: 20, y: 0, width: 70, height: 40 };
 
-    const scelta = cssSpazioFoto.scegli([sbilanciato], gruppoFoto, {
+    const scelta = sceltaSpazio.scegli([sbilanciato], gruppoFoto, {
         modo: 'centrato',
         asseCentratura: 'x'
     }, larghezzaBase, altezzaBase);
@@ -175,7 +176,7 @@ test('la parte simmetrica di uno spazio non attraversa mai la tolleranza al cont
     const fasciaAlta = { x: 0, y: 0, width: 100, height: 30 };
 
     //Con tolleranza 0.7 la fascia (30 di altezza contro 100) non basta: resta la colonna.
-    const stretta = cssSpazioFoto.scegli([colonnaDestra, fasciaAlta], gruppoFoto, {
+    const stretta = sceltaSpazio.scegli([colonnaDestra, fasciaAlta], gruppoFoto, {
         modo: 'centrato',
         tolleranzaArea: 0.7,
         asseCentratura: 'x'
@@ -183,7 +184,7 @@ test('la parte simmetrica di uno spazio non attraversa mai la tolleranza al cont
     assert.strictEqual(stretta.candidato, colonnaDestra);
 
     //Abbassando la soglia si accetta la foto piccola pur di averla al centro.
-    const larga = cssSpazioFoto.scegli([colonnaDestra, fasciaAlta], gruppoFoto, {
+    const larga = sceltaSpazio.scegli([colonnaDestra, fasciaAlta], gruppoFoto, {
         modo: 'centrato',
         tolleranzaArea: 0.05,
         asseCentratura: 'x'
@@ -192,36 +193,36 @@ test('la parte simmetrica di uno spazio non attraversa mai la tolleranza al cont
 });
 
 test('la parte centrata esiste solo per gli spazi che attraversano il centro', () => {
-    assert.strictEqual(cssSpazioFoto.parteCentrata({ x: 50, y: 0, width: 50, height: 100 }, 100, 100, 'x'), null);
-    assert.strictEqual(cssSpazioFoto.parteCentrata({ x: 0, y: 0, width: 50, height: 100 }, 100, 100, 'x'), null);
+    assert.strictEqual(sceltaSpazio.parteCentrata({ x: 50, y: 0, width: 50, height: 100 }, 100, 100, 'x'), null);
+    assert.strictEqual(sceltaSpazio.parteCentrata({ x: 0, y: 0, width: 50, height: 100 }, 100, 100, 'x'), null);
     //Gia' simmetrico: nessuna variante da aggiungere.
-    assert.strictEqual(cssSpazioFoto.parteCentrata({ x: 30, y: 0, width: 40, height: 100 }, 100, 100, 'x'), null);
+    assert.strictEqual(sceltaSpazio.parteCentrata({ x: 30, y: 0, width: 40, height: 100 }, 100, 100, 'x'), null);
 
-    const suDueAssi = cssSpazioFoto.parteCentrata({ x: 10, y: 20, width: 80, height: 70 }, 100, 100, 'xy');
+    const suDueAssi = sceltaSpazio.parteCentrata({ x: 10, y: 20, width: 80, height: 70 }, 100, 100, 'xy');
     assert.deepStrictEqual([suDueAssi.x, suDueAssi.y, suDueAssi.width, suDueAssi.height], [10, 20, 80, 60]);
 });
 
 test('senza criterio centrato nessuna parte simmetrica entra in gioco', () => {
     const sbilanciato = { x: 20, y: 0, width: 70, height: 40 };
-    const scelta = cssSpazioFoto.scegli([sbilanciato], gruppoFoto, null, larghezzaBase, altezzaBase);
+    const scelta = sceltaSpazio.scegli([sbilanciato], gruppoFoto, null, larghezzaBase, altezzaBase);
 
     assert.strictEqual(scelta.candidato, sbilanciato);
 });
 
 test('la descrizione per il log dice cosa c\'era e cosa si e\' scelto', () => {
-    const scelta = cssSpazioFoto.scegli([centrale, laterale], gruppoFoto, { modo: 'centrato', asseCentratura: 'x' }, larghezzaBase, altezzaBase);
-    const testo = cssSpazioFoto.descriviScelta([centrale, laterale], scelta, { modo: 'centrato', asseCentratura: 'x' }, larghezzaBase, altezzaBase);
+    const scelta = sceltaSpazio.scegli([centrale, laterale], gruppoFoto, { modo: 'centrato', asseCentratura: 'x' }, larghezzaBase, altezzaBase);
+    const testo = sceltaSpazio.descriviScelta([centrale, laterale], scelta, { modo: 'centrato', asseCentratura: 'x' }, larghezzaBase, altezzaBase);
 
     assert.match(testo, /modo centrato/);
     assert.match(testo, /candidati \[x30 y30 40x40; x60 y27 40x46\]/);
     assert.match(testo, /scelto x30 y30 40x40/);
-    assert.match(cssSpazioFoto.descriviScelta([], null, null, 100, 100), /scelto nessuno/);
+    assert.match(sceltaSpazio.descriviScelta([], null, null, 100, 100), /scelto nessuno/);
 });
 
 test('le estensioni tolgono spazio ai candidati lato per lato, senza scalare con la foto', () => {
     const candidato = { x: 10, y: 20, width: 50, height: 60, direction: 'sopra' };
 
-    const ristretti = cssSpazioFoto.restringiCandidati([candidato], { alto: 1, sinistra: 2, basso: 3, destra: 4 });
+    const ristretti = sceltaSpazio.restringiCandidati([candidato], { alto: 1, sinistra: 2, basso: 3, destra: 4 });
 
     assert.strictEqual(ristretti.length, 1);
     assert.deepStrictEqual(
@@ -233,8 +234,8 @@ test('le estensioni tolgono spazio ai candidati lato per lato, senza scalare con
 
 test('con l\'ombra sotto la foto viene piu\' bassa di quanto sporge l\'ombra e il suo lato basso resta libero', () => {
     //Spazio 40 x 40, foto alta: comanda l'altezza. Con 3 di estensione sotto la foto puo' essere alta 37.
-    const ristretti = cssSpazioFoto.restringiCandidati([centrale], { basso: 3 });
-    const scelta = cssSpazioFoto.scegli(ristretti, gruppoFoto, null, larghezzaBase, altezzaBase);
+    const ristretti = sceltaSpazio.restringiCandidati([centrale], { basso: 3 });
+    const scelta = sceltaSpazio.scegli(ristretti, gruppoFoto, null, larghezzaBase, altezzaBase);
 
     assert.strictEqual(scelta.candidato.height, 37);
     //Il bordo basso dello spazio ristretto lascia esattamente i 3 mm all'ombra.
@@ -244,14 +245,14 @@ test('con l\'ombra sotto la foto viene piu\' bassa di quanto sporge l\'ombra e i
 test('senza estensioni i candidati sono gli stessi oggetti di prima', () => {
     const candidati = [centrale, laterale];
 
-    assert.strictEqual(cssSpazioFoto.restringiCandidati(candidati, null), candidati);
-    assert.strictEqual(cssSpazioFoto.restringiCandidati(candidati, { alto: 0, basso: 0 }), candidati);
-    assert.strictEqual(cssSpazioFoto.restringiCandidati(candidati, { basso: 'niente' }), candidati);
+    assert.strictEqual(sceltaSpazio.restringiCandidati(candidati, null), candidati);
+    assert.strictEqual(sceltaSpazio.restringiCandidati(candidati, { alto: 0, basso: 0 }), candidati);
+    assert.strictEqual(sceltaSpazio.restringiCandidati(candidati, { basso: 'niente' }), candidati);
 });
 
 test('uno spazio che non regge le estensioni sparisce dalla scelta', () => {
     const basso = { x: 0, y: 0, width: 40, height: 5 };
-    const ristretti = cssSpazioFoto.restringiCandidati([basso, centrale], { basso: 6 });
+    const ristretti = sceltaSpazio.restringiCandidati([basso, centrale], { basso: 6 });
 
     assert.strictEqual(ristretti.length, 1);
     assert.strictEqual(ristretti[0].derivatoDa, centrale);
@@ -259,16 +260,16 @@ test('uno spazio che non regge le estensioni sparisce dalla scelta', () => {
 
 test('le estensioni negative o non numeriche valgono zero', () => {
     assert.deepStrictEqual(
-        cssSpazioFoto.normalizzaEstensioni({ alto: -2, sinistra: 'x', basso: '2.5', destra: null }),
+        sceltaSpazio.normalizzaEstensioni({ alto: -2, sinistra: 'x', basso: '2.5', destra: null }),
         { alto: 0, sinistra: 0, basso: 2.5, destra: 0 });
-    assert.deepStrictEqual(cssSpazioFoto.normalizzaEstensioni(null), { alto: 0, sinistra: 0, basso: 0, destra: 0 });
+    assert.deepStrictEqual(sceltaSpazio.normalizzaEstensioni(null), { alto: 0, sinistra: 0, basso: 0, destra: 0 });
 });
 
 test('la descrizione per il log riporta le estensioni quando ci sono', () => {
-    const conEstensioni = cssSpazioFoto.descriviScelta([centrale], null, null, 100, 100, { basso: 3 });
+    const conEstensioni = sceltaSpazio.descriviScelta([centrale], null, null, 100, 100, { basso: 3 });
     assert.match(conEstensioni, /estensioni alto 0 sinistra 0 basso 3 destra 0/);
 
-    const senza = cssSpazioFoto.descriviScelta([centrale], null, null, 100, 100, null);
+    const senza = sceltaSpazio.descriviScelta([centrale], null, null, 100, 100, null);
     assert.doesNotMatch(senza, /estensioni/);
 });
 
@@ -279,15 +280,15 @@ test('la descrizione per il log riporta le estensioni quando ci sono', () => {
 // riattivando quella nascosta, che nessuno ha toccato, la proporzione non vuol dire piu'
 // niente e la foto tornata visibile resta piccola.
 test("una foto rimasta indietro viene riportata alla scala della primaria", () => {
-    assert.deepStrictEqual(cssSpazioFoto.fattoriDiNormalizzazione([120, 60]), [1, 2]);
+    assert.deepStrictEqual(sceltaSpazio.fattoriDiNormalizzazione([120, 60]), [1, 2]);
 });
 
 test("dove le scale sono gia' uguali non cambia nulla", () => {
-    assert.deepStrictEqual(cssSpazioFoto.fattoriDiNormalizzazione([80, 80, 80]), [1, 1, 1]);
+    assert.deepStrictEqual(sceltaSpazio.fattoriDiNormalizzazione([80, 80, 80]), [1, 1, 1]);
 });
 
 test("la prima foto e' il riferimento e non si muove", () => {
-    const fattori = cssSpazioFoto.fattoriDiNormalizzazione([50, 100, 25]);
+    const fattori = sceltaSpazio.fattoriDiNormalizzazione([50, 100, 25]);
 
     assert.strictEqual(fattori[0], 1);
     assert.deepStrictEqual(fattori, [1, 0.5, 2]);
@@ -296,24 +297,25 @@ test("la prima foto e' il riferimento e non si muove", () => {
 // Una foto vuota, o con la scala illeggibile, non si tocca: non sappiamo a che scala sia.
 test("le scale illeggibili lasciano la foto com'e'", () => {
     assert.deepStrictEqual(
-        cssSpazioFoto.fattoriDiNormalizzazione([100, null, undefined, 0, -30, NaN, Infinity, "50"]),
+        sceltaSpazio.fattoriDiNormalizzazione([100, null, undefined, 0, -30, NaN, Infinity, "50"]),
         [1, 1, 1, 1, 1, 1, 1, 1]);
 });
 
 test("se il riferimento non si legge, comanda la prima scala utilizzabile", () => {
-    assert.deepStrictEqual(cssSpazioFoto.fattoriDiNormalizzazione([null, 90, 45]), [1, 1, 2]);
+    assert.deepStrictEqual(sceltaSpazio.fattoriDiNormalizzazione([null, 90, 45]), [1, 1, 2]);
 });
 
 test("senza foto non si rompe nulla", () => {
-    assert.deepStrictEqual(cssSpazioFoto.fattoriDiNormalizzazione([]), []);
-    assert.deepStrictEqual(cssSpazioFoto.fattoriDiNormalizzazione(null), []);
+    assert.deepStrictEqual(sceltaSpazio.fattoriDiNormalizzazione([]), []);
+    assert.deepStrictEqual(sceltaSpazio.fattoriDiNormalizzazione(null), []);
 });
 
 test("il fix foto normalizza prima di disporre le foto", () => {
     const fs = require("node:fs");
     const path = require("node:path");
+    //I20-1009: il fix foto sta in sistemazioneFoto.js, non piu' in CssFramework.js.
     const sorgente = fs.readFileSync(
-        path.join(__dirname, "..", "..", "plugin", "CssFramework.js"), "utf8");
+        path.join(__dirname, "..", "..", "plugin", "sistemazioneFoto", "sistemazioneFoto.js"), "utf8");
 
     const normalizza = sorgente.indexOf("this.normalizzaScalaDelleFoto(fotos);");
     const raggruppa = sorgente.indexOf("this.getRaggruppamentoFoto(fotos, distanzFoto)");

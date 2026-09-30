@@ -5217,8 +5217,8 @@ const schedaRef = {
                     let res = await Utility.confirm("Modifiche salvate. Applicare il Fix Foto automatico?");
                     if (res) {
                         //applichiamo il fix foto automatico, che consiste nel posizionare tutte le foto primarie e secondarie al posto giusto in base alla meccanica
-                        var obs = CssFramework.getSpazioImpaginazione(box);
-                        CssFramework.fixFoto(box, obs.candidate, obs.obstacles);
+                        var obs = SistemazioneFoto.getSpazioImpaginazione(box);
+                        SistemazioneFoto.fixFoto(box, obs.candidate, obs.obstacles);
                         messaggioUtente("Fix Foto automatico applicato", "success", false, 3);
                     }
 
@@ -9374,8 +9374,8 @@ const schedaRef = {
                 return;
             }
 
-            var obs = CssFramework.getSpazioImpaginazione(box);
-            CssFramework.fixFoto(box, obs.candidate, obs.obstacles);
+            var obs = SistemazioneFoto.getSpazioImpaginazione(box);
+            SistemazioneFoto.fixFoto(box, obs.candidate, obs.obstacles);
             messaggioUtente("Fix Foto automatico applicato", "success", false, 3);
         }
         catch (ex) {

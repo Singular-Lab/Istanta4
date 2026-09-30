@@ -7,35 +7,18 @@
  * ciclo finisce in al piu' ostacoli + 1 giri: la guardia e' quel numero. Prima era a mille
  * giri, non poteva scattare, e se l'avesse fatto nessuno l'avrebbe saputo.
  *
- * CssFramework.js fa require('indesign') e sotto Node non si carica: qui il modulo viene
- * sostituito da un oggetto vuoto, solo durante il require. refineRects e le funzioni che usa
- * sono calcolo puro e non ne toccano niente.
+ * I20-1009: refineRects e le funzioni che usa stanno in plugin/sistemazioneFoto/spazioLibero.js,
+ * che non tocca InDesign e si carica sotto Node cosi' com'e'. Prima stavano in CssFramework.js,
+ * e questo test doveva sostituire il modulo indesign per poterlo caricare.
  *
  * Esecuzione: node --test tests/plugin/*.test.js
  */
 
 const test = require("node:test");
 const assert = require("node:assert");
-const fs = require("node:fs");
-const path = require("node:path");
-const Module = require("node:module");
+const { fileDelPlugin, leggiFileDelPlugin } = require("./fileDelPlugin");
 
-global.customAgenzia = null;
-
-const caricaOriginale = Module._load;
-Module._load = function (richiesta) {
-    if (richiesta === "indesign") {
-        return {};
-    }
-    return caricaOriginale.apply(this, arguments);
-};
-let CssFramework;
-try {
-    CssFramework = require("../../plugin/CssFramework.js");
-}
-finally {
-    Module._load = caricaOriginale;
-}
+const spazioLibero = require("../../plugin/sistemazioneFoto/spazioLibero.js");
 
 /* ---- strumenti ---- */
 
@@ -59,9 +42,9 @@ function ostacoliCasuali(quanti, casuale) {
 }
 
 function raffina(ostacoli) {
-    const candidati = CssFramework.generateCandidateRects(LARGHEZZA, ALTEZZA, ostacoli, 0);
+    const candidati = spazioLibero.generateCandidateRects(LARGHEZZA, ALTEZZA, ostacoli, 0);
     const esito = {};
-    const risultato = CssFramework.refineRects(ostacoli, candidati, LARGHEZZA, ALTEZZA, 0, esito);
+    const risultato = spazioLibero.refineRects(ostacoli, candidati, LARGHEZZA, ALTEZZA, 0, esito);
     return { risultato, esito };
 }
 
@@ -126,19 +109,19 @@ test("configurazioni casuali da 1 a 8 ostacoli: mai piu' di ostacoli + 1 giri", 
 //se': un intersectRect che restituisce il rettangolo intatto, e un obstacleRefs che non
 //riconosce mai l'ostacolo gia' visto.
 test("se la convergenza viene rotta, la guardia ferma il ciclo e lo segnala", () => {
-    const intersectRectVera = CssFramework.intersectRect;
+    const intersectRectVera = spazioLibero.intersectRect;
     const includesVera = Array.prototype.includes;
     const ostacoli = [{ x: 40, y: 30, width: 20, height: 20 }, { x: 10, y: 10, width: 10, height: 10 }];
     const esito = {};
     try {
-        CssFramework.intersectRect = (rect) => [{ ...rect }];
+        spazioLibero.intersectRect = (rect) => [{ ...rect }];
         Array.prototype.includes = () => false;
-        CssFramework.refineRects(ostacoli, [{ x: 0, y: 0, width: 100, height: 80, direction: "sopra", obstacleRefs: [] }],
+        spazioLibero.refineRects(ostacoli, [{ x: 0, y: 0, width: 100, height: 80, direction: "sopra", obstacleRefs: [] }],
             LARGHEZZA, ALTEZZA, 0, esito);
     }
     finally {
         Array.prototype.includes = includesVera;
-        CssFramework.intersectRect = intersectRectVera;
+        spazioLibero.intersectRect = intersectRectVera;
     }
 
     assert.strictEqual(esito.interrotto, true);
@@ -147,8 +130,8 @@ test("se la convergenza viene rotta, la guardia ferma il ciclo e lo segnala", ()
 
 test("esito e' facoltativo: senza, refineRects risponde come prima", () => {
     const ostacoli = [{ x: 40, y: 30, width: 20, height: 20 }];
-    const candidati = CssFramework.generateCandidateRects(LARGHEZZA, ALTEZZA, ostacoli, 0);
-    const risultato = CssFramework.refineRects(ostacoli, candidati, LARGHEZZA, ALTEZZA, 0);
+    const candidati = spazioLibero.generateCandidateRects(LARGHEZZA, ALTEZZA, ostacoli, 0);
+    const risultato = spazioLibero.refineRects(ostacoli, candidati, LARGHEZZA, ALTEZZA, 0);
 
     assert.ok(Array.isArray(risultato) && risultato.length > 0);
 });
@@ -176,7 +159,7 @@ function refineRectsPrima(obstacles, contours, boxWidth, boxHeight, tolerance = 
                     rect.y + rect.height > obs.y;
                 if (collides) {
                     collided = true;
-                    const inter = CssFramework.intersectRect(rect, obs, tolerance);
+                    const inter = spazioLibero.intersectRect(rect, obs, tolerance);
                     if (inter.length > 0) {
                         for (const r of inter) {
                             newRects.push({ ...r, direction: rect.direction, obstacleRefs: [...rect.obstacleRefs, obs] });
@@ -189,12 +172,12 @@ function refineRectsPrima(obstacles, contours, boxWidth, boxHeight, tolerance = 
                 newRects.push(rect);
             }
         }
-        currentRects = CssFramework.removeDuplicateRects(newRects);
+        currentRects = spazioLibero.removeDuplicateRects(newRects);
         emergencycounter++;
     }
-    let cleanedRects = CssFramework.removeDuplicateRects(currentRects);
-    cleanedRects = CssFramework.removeRectsToSmall(cleanedRects, boxWidth / 4, boxHeight / 4);
-    return CssFramework.reduceResult(cleanedRects);
+    let cleanedRects = spazioLibero.removeDuplicateRects(currentRects);
+    cleanedRects = spazioLibero.removeRectsToSmall(cleanedRects, boxWidth / 4, boxHeight / 4);
+    return spazioLibero.reduceResult(cleanedRects);
 }
 
 function forma(rettangoli) {
@@ -207,7 +190,7 @@ test("sugli stessi dati i rettangoli sono quelli di prima", () => {
         for (let prova = 0; prova < 15; prova++) {
             const ostacoli = ostacoliCasuali(quanti, casuale);
             const adesso = raffina(ostacoli).risultato;
-            const prima = refineRectsPrima(ostacoli, CssFramework.generateCandidateRects(LARGHEZZA, ALTEZZA, ostacoli, 0), LARGHEZZA, ALTEZZA, 0);
+            const prima = refineRectsPrima(ostacoli, spazioLibero.generateCandidateRects(LARGHEZZA, ALTEZZA, ostacoli, 0), LARGHEZZA, ALTEZZA, 0);
 
             assert.deepStrictEqual(forma(adesso), forma(prima), quanti + " ostacoli, prova " + prova);
         }
@@ -217,23 +200,22 @@ test("sugli stessi dati i rettangoli sono quelli di prima", () => {
 /* ---- chi chiama ---- */
 
 //I20-1010: il calcolo dopo la ricerca della base sta in calcolaSpazioLibero, che
-//getSpazioImpaginazione chiama.
+//getSpazioImpaginazione chiama. I20-1009: tutti e due stanno in sistemazioneFoto.js.
 test("getSpazioImpaginazione passa l'esito e avvisa con CSF-18 se il calcolo e' interrotto", () => {
-    const testo = fs.readFileSync(path.join(__dirname, "..", "..", "plugin", "CssFramework.js"), "utf8").replace(/\r/g, "");
+    const testo = leggiFileDelPlugin("sistemazioneFoto/sistemazioneFoto.js").replace(/\r/g, "");
     const ingresso = testo.slice(testo.indexOf("    getSpazioImpaginazione(box) {"), testo.indexOf("    calcolaSpazioLibero(box, base, obs) {"));
     assert.match(ingresso, /return this\.calcolaSpazioLibero\(box, base, obs\);/);
     const inizio = testo.indexOf("    calcolaSpazioLibero(box, base, obs) {");
     const corpo = testo.slice(inizio, testo.indexOf("\n    },", inizio));
 
-    assert.match(corpo, /this\.refineRects\(obs, candidate, baseWidth, baseHeight, 0, esito\)/);
+    assert.match(corpo, /spazioLibero\.refineRects\(obs, candidate, baseWidth, baseHeight, 0, esito\)/);
     assert.match(corpo, /if \(esito\.interrotto\) \{[\s\S]*console\.warn\([\s\S]*messaggioUtente\("Code CSF-18: /);
 });
 
 test("il codice CSF-18 e' usato una volta sola in tutto il Plugin", () => {
-    const cartella = path.join(__dirname, "..", "..", "plugin");
     let occorrenze = 0;
-    for (const nome of fs.readdirSync(cartella).filter(n => n.endsWith(".js"))) {
-        occorrenze += (fs.readFileSync(path.join(cartella, nome), "utf8").match(/\bCSF-0?18\b/g) || []).length;
+    for (const relativo of fileDelPlugin()) {
+        occorrenze += (leggiFileDelPlugin(relativo).match(/\bCSF-0?18\b/g) || []).length;
     }
     assert.strictEqual(occorrenze, 1);
 });

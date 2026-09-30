@@ -710,7 +710,8 @@ test("il fix foto si propone dopo aver salvato e applicato al documento", () => 
 // La foto nascosta resta un rettangolo del box: contandola, il fix foto sceglieva la
 // disposizione per una foto in piu' e ne spostava una che nessuno vede.
 test("il fix foto salta le foto invisibili", () => {
-    const sorgente = sorgentePlugin("CssFramework.js");
+    //I20-1009: il fix foto sta in sistemazioneFoto.js, non piu' in CssFramework.js.
+    const sorgente = sorgentePlugin("sistemazioneFoto/sistemazioneFoto.js");
 
     const raccolta = sorgente.indexOf("//cerchiamo nel box le foto");
     const salto = sorgente.indexOf("if (rect.visible === false) {", raccolta);
