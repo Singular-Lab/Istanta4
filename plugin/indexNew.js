@@ -986,11 +986,16 @@ async function rileggiDocumentoInLavorazione()
 ///   scelta del kit: viene bloccato con un messaggio e un pulsante per rileggere. La
 ///   lavorazione gliela deve creare un amministratore.
 ///
-/// DIFETTO (I20-1002, da correggere in un task a parte): la riga
-/// "while (await !checkPercorsi())" e' await applicato alla NEGAZIONE della promise, non
-/// al suo risultato. !promise e' sempre false, quindi il ciclo non gira mai: checkPercorsi
-/// viene chiamata una volta sola e il suo esito ignorato. Andava scritta
-/// "while (!(await checkPercorsi()))". Lo stesso errore e' in initLibroInLavorazione.
+/// - con la lavorazione trovata si aspetta che ci siano i quattro percorsi di sistema:
+///   checkPercorsi apre la finestra che li chiede, e la si ricontrolla ogni secondo finche'
+///   l'operatore non li ha indicati tutti. L'attesa si interrompe se nel frattempo cambia
+///   il documento: checkPercorsi legge le globali, quindi continuerebbe a controllare il
+///   documento nuovo, per il quale e' gia' partita un'altra inizializzazione.
+///
+/// I20-1016: la riga era "while (await !checkPercorsi())", cioe' await applicato alla
+/// NEGAZIONE della promise, che vale sempre false: il ciclo non girava mai e si tirava
+/// dritto senza percorsi. Lo stesso errore resta in initLibroInLavorazione, lasciato cosi'
+/// di proposito.
 async function initDocumentInLavorazione()
 {
     if (docInLavorazione == null)
@@ -1102,8 +1107,22 @@ async function initDocumentInLavorazione()
                 // while (!checkPercorsiDiSistema()) {
                 //     await Utility.sleep(1000);
                 // }
-                while (await !checkPercorsi()) {
-                    await Utility.sleep(1000);
+                const docAtteso = docInLavorazione;
+                try {
+                    while (docInLavorazione === docAtteso && !(await checkPercorsi())) {
+                        await Utility.sleep(1000);
+                    }
+                }
+                catch (e) {
+                    //Finche' l'await non c'era un errore qui dentro non arrivava a nessuno: e' cosi'
+                    //che il ReferenceError su forceOptions (I20-1002) e' rimasto nascosto per mesi.
+                    //Ora lo si dice, e poi si prosegue come si e' sempre fatto.
+                    console.error(e);
+                    messaggioUtente("Code IDX-167 Errore durante la verifica dei percorsi di sistema: " + e, "error");
+                }
+                if (docInLavorazione !== docAtteso) {
+                    //Il documento e' cambiato durante l'attesa: ci pensa la sua inizializzazione.
+                    return;
                 }
                 checkForLoghiCore();
             }
