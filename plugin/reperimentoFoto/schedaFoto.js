@@ -26,7 +26,7 @@ const schedaFoto = {
         var box = this.refSelected.item;
 
         if (box == null || box.isValid == null || !box.isValid) {
-            await Utility.popup(
+            await Modali.popup(
                 "Nessun elemento selezionato",
                 "Per cambiare foto è necessario selezionare un elemento in pagina."
             );
@@ -65,7 +65,7 @@ const schedaFoto = {
                 }
                 var canale = canaleObj.sigla;
 
-                await Utility.apriModal('dialogCambiaFoto', 'Cambia foto', true, [], true);
+                await Modali.apriModal('dialogCambiaFoto', 'Cambia foto', true, [], true);
 
                 const $footer = $('#footerCambiaFoto');
                 $footer.empty();
@@ -875,7 +875,7 @@ const schedaFoto = {
                         const fotosToDisable = getPhotosThatWillBeDisabled(scope);
                         if (fotosToDisable.length > 0) {
                             const confirmContent = buildDisableWarningConfirmContent(fotosToDisable);
-                            const res = await Utility.confirm(confirmContent);
+                            const res = await Modali.confirm(confirmContent);
 
                             if (!res) {
                                 return;
@@ -900,7 +900,7 @@ const schedaFoto = {
                                 hideLoading();
 
                                 if (esito) {
-                                    Utility.closeAllModal();
+                                    Modali.closeAllModal();
                                 }
 
                                 return;
@@ -918,7 +918,7 @@ const schedaFoto = {
                                 );
 
                                 hideLoading();
-                                Utility.closeAllModal();
+                                Modali.closeAllModal();
                                 return;
                             }
 
@@ -927,7 +927,7 @@ const schedaFoto = {
                         catch (e) {
                             console.log(e);
                             hideLoading();
-                            await Utility.popup(
+                            await Modali.popup(
                                 "Errore",
                                 "Si è verificato un errore durante l'aggiornamento della foto."
                             );
@@ -960,7 +960,7 @@ const schedaFoto = {
                             const isValidImage = validExtensions.some(ext => lowerName.endsWith(ext));
 
                             if (!isValidImage || fd.file == null) {
-                                await Utility.popup(
+                                await Modali.popup(
                                     "File non valido",
                                     "Seleziona un file immagine valido."
                                 );
@@ -1001,7 +1001,7 @@ const schedaFoto = {
                         }
                         catch (e) {
                             console.log(e);
-                            await Utility.popup(
+                            await Modali.popup(
                                 "Errore",
                                 "Errore durante il caricamento della foto."
                             );
@@ -1202,7 +1202,7 @@ const schedaFoto = {
                 //aggiungiamo un evento onclick
                 metaIcon.on('click', async function () {
                     //mandiamo un confirm (usando il componente usato nel progetto) in cui chiediamo se vogliamo rimuovere il metatag
-                    let res = await Utility.confirm("Rimuovere la foto associata a questa lavorazione? Sarà ripristinata la foto da archivio.");
+                    let res = await Modali.confirm("Rimuovere la foto associata a questa lavorazione? Sarà ripristinata la foto da archivio.");
                     if (res) {
                         me.eliminaMetaFoto(objItem["Referenza.Codice"], 1);
                     }
@@ -1615,7 +1615,7 @@ const schedaFoto = {
 
                     //Il fix foto viene dopo: una reimpaginazione rifa' il box e butterebbe via
                     //il fix appena applicato, oltre a chiedere due conferme per un lavoro solo.
-                    let res = await Utility.confirm("Modifiche salvate. Applicare il Fix Foto automatico?");
+                    let res = await Modali.confirm("Modifiche salvate. Applicare il Fix Foto automatico?");
                     if (res) {
                         //applichiamo il fix foto automatico, che consiste nel posizionare tutte le foto primarie e secondarie al posto giusto in base alla meccanica
                         var obs = SistemazioneFoto.getSpazioImpaginazione(box);
@@ -2177,7 +2177,7 @@ const schedaFoto = {
         var box = this.refSelected.item;
 
         if (box == null || box.isValid == null || !box.isValid) {
-            await Utility.popup(
+            await Modali.popup(
                 "Nessun elemento selezionato",
                 "Per collegare un logo bollo è necessario selezionare un elemento in pagina."
             );
@@ -2189,7 +2189,7 @@ const schedaFoto = {
         getLoghiBolliData((objResult) => {
             hideLoading();
 
-            Utility.apriModal('dialogLinkLogoBollo', 'Seleziona immagine', true, [], true);
+            Modali.apriModal('dialogLinkLogoBollo', 'Seleziona immagine', true, [], true);
 
             const $body = $('#bodyLinkLogoBollo');
             $body.empty();
@@ -2264,7 +2264,7 @@ const schedaFoto = {
                     return;
                 }
 
-                const res = await Utility.confirm(`Confermi il collegamento del logo "${logoData.fileName}"?`);
+                const res = await Modali.confirm(`Confermi il collegamento del logo "${logoData.fileName}"?`);
                 if (!res) {
                     return;
                 }
@@ -2273,11 +2273,11 @@ const schedaFoto = {
 
                 var primario = schedaRef.find(f => f.recordInTracciato.StatoSelezione == 1);
                 if (primario == null) {
-                    await Utility.popup(
+                    await Modali.popup(
                         "Nessun elemento primario trovato",
                         "Non è stato possibile trovare un elemento primario selezionato."
                     );
-                    Utility.closeAllModal();
+                    Modali.closeAllModal();
                     return;
                 }
 
@@ -2299,11 +2299,11 @@ const schedaFoto = {
                     }
 
                     if (fileEntry == null) {
-                        await Utility.popup(
+                        await Modali.popup(
                             "Logo non disponibile",
                             `Il logo "${logoData.fileName}" non è stato scaricato. Effettua una syncFoto e riprova.`
                         );
-                        Utility.closeAllModal();
+                        Modali.closeAllModal();
                         return;
                     }
 
@@ -2312,11 +2312,11 @@ const schedaFoto = {
                     const localMd5 = scaricamentoFoto.md5ArrayBuffer(byteArray);
 
                     if (localMd5 !== logoData.fileHash) {
-                        await Utility.popup(
+                        await Modali.popup(
                             "Logo non aggiornato",
                             `Il logo "${logoData.fileName}" non è aggiornato. Effettua una syncFoto e riprova.`
                         );
-                        Utility.closeAllModal();
+                        Modali.closeAllModal();
                         return;
                     }
 
@@ -2382,11 +2382,11 @@ const schedaFoto = {
 
                 } catch (ex) {
                     console.error(ex);
-                    await Utility.popup(
+                    await Modali.popup(
                         "Errore",
                         "Si è verificato un errore durante il controllo del logo."
                     );
-                    Utility.closeAllModal();
+                    Modali.closeAllModal();
                 }
             });
         });
@@ -2984,7 +2984,7 @@ const schedaFoto = {
                 contenuto = await candidato.voce.read({ format: uxp.storage.formats.binary });
             }
 
-            var conferma = await Utility.confirm(
+            var conferma = await Modali.confirm(
                 this.riquadroPropostaFoto(candidato, contenuto, motivo));
 
             if (!conferma) {
@@ -3217,7 +3217,7 @@ const schedaFoto = {
         this.statoFotoAllApertura = NoRenderElementi.statoDelleFoto(this.elementiNoRenderDelBox);
 
         try {
-            var procedi = await Utility.confirm("Le foto mostrate nel box sono cambiate. Applicare il Fix Foto automatico?");
+            var procedi = await Modali.confirm("Le foto mostrate nel box sono cambiate. Applicare il Fix Foto automatico?");
             if (!procedi) {
                 return;
             }

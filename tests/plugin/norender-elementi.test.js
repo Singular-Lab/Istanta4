@@ -17,7 +17,9 @@ const cartellaPlugin = path.join(__dirname, "..", "..", "plugin");
 const INSIEME_A = {
     "schedaRef.js": ["reperimentoFoto/schedaFoto.js"],
     "indexNew.js": ["reperimentoFoto/reperimentoFoto.js"],
-    "utility.js": ["reperimentoFoto/reperimentoFoto.js", "reperimentoFoto/fotoPlacer.js"]
+    //I20-1012: e utility.js anche con i quattro oggetti che ne sono usciti.
+    "utility.js": ["reperimentoFoto/reperimentoFoto.js", "reperimentoFoto/fotoPlacer.js",
+        "modali/modali.js", "modali/eliminazione.js", "tooltip/tooltip.js", "menu.js", "testoTag.js"]
 };
 function sorgentePlugin(nomeFile) {
     return [nomeFile, ...(INSIEME_A[nomeFile] || [])]
@@ -179,7 +181,7 @@ test("il modulo si esporta come gli altri moduli del Plugin", () => {
 // quindi riempirlo prima significa scrivere nel template nascosto.
 test("il modal si apre prima di essere riempito", () => {
     const sorgente = sorgentePlugin("schedaRef.js");
-    const apertura = sorgente.indexOf("Utility.apriModal('dialogNoRender'");
+    const apertura = sorgente.indexOf("Modali.apriModal('dialogNoRender'");
     const disegno = sorgente.indexOf("this.disegnaListaNoRender();");
 
     assert.ok(apertura > 0 && disegno > 0);

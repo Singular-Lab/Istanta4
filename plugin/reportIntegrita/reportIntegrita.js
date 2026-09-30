@@ -471,7 +471,7 @@ const ReportIntegrita = {
 
         try {
             $("#confrontoInfoOverlay").remove();
-            Utility.chiudiModal();
+            Modali.chiudiModal();
         }
         catch (err) {
             console.error("Errore durante la chiusura del report integrità:", err);
@@ -652,7 +652,7 @@ const ReportIntegrita = {
         //Il report si chiude qui: il suo stato resta in _confrontoReportState e lo si riapre
         //alla X. chiudiModal rimette visibile la schermata principale, che e' dove sta la
         //scheda.
-        Utility.chiudiModal();
+        Modali.chiudiModal();
 
         $("#refImage").show();
         this._crChiusuraSchedaDalReport();
@@ -1327,7 +1327,7 @@ const ReportIntegrita = {
             indesignEvents.setBusy(true);
         }
 
-        Utility.apriModal("dialogConfrontoReport", "Report Confronto", false, ["pulsantiTestataConfronto"]);
+        Modali.apriModal("dialogConfrontoReport", "Report Confronto", false, ["pulsantiTestataConfronto"]);
 
         //Il documento su cui questo report vale: se l'operatore ne apre un altro, il report
         //si chiude da solo (il controllo sta in events.js).
@@ -1344,7 +1344,7 @@ const ReportIntegrita = {
                 btnScaricaCsv.id = "scaricaReportConfrontoCsv";
                 btnScaricaCsv.type = "button";
                 btnScaricaCsv.textContent = "Scarica CSV";
-                Utility.impostaTooltip(btnScaricaCsv, "Scarica il report confronto in formato CSV");
+                Tooltip.impostaTooltip(btnScaricaCsv, "Scarica il report confronto in formato CSV");
                 btnScaricaCsv.style.height = "25px";
                 btnScaricaCsv.style.cursor = "pointer";
                 btnScaricaCsv.style.marginRight = "8px";
@@ -1357,7 +1357,7 @@ const ReportIntegrita = {
                 }
             }
 
-            Utility.impostaTooltip(btnScaricaCsv, "Scarica il report confronto in formato CSV");
+            Tooltip.impostaTooltip(btnScaricaCsv, "Scarica il report confronto in formato CSV");
             btnScaricaCsv.onclick = async () => await this.scaricaReportConfrontoCsv(this._confrontoReportState?.report || reportData);
 
             //I20-981: il pulsantino accanto cambia la cartella dei csv. Il title dice dove
@@ -2162,7 +2162,7 @@ const ReportIntegrita = {
         if (duplicateInfo) {
             const altreIstanze = this._getDuplicateActiveRecords(duplicateInfo.key, { includeWhitelist: false });
             if (altreIstanze.length > 0) {
-                const vaiAllaProssima = await Utility.confirm("Ci sono altre istanze non risolte di questo box duplicato. Vuoi andare alla prossima?");
+                const vaiAllaProssima = await Modali.confirm("Ci sono altre istanze non risolte di questo box duplicato. Vuoi andare alla prossima?");
                 if (vaiAllaProssima) {
                     this._goToNextDuplicate(recordRisolto, key, false);
                 }
@@ -2825,7 +2825,7 @@ const ReportIntegrita = {
             let titolo = String(file.name || "lista locale");
 
             if (sorelle == null) {
-                const procedi = await Utility.confirm("Non riesco a verificare che la lista sia della stessa promo (elenco delle lavorazioni non disponibile). Vuoi confrontarla comunque?");
+                const procedi = await Modali.confirm("Non riesco a verificare che la lista sia della stessa promo (elenco delle lavorazioni non disponibile). Vuoi confrontarla comunque?");
                 if (!procedi) {
                     return;
                 }
@@ -2833,7 +2833,7 @@ const ReportIntegrita = {
             else {
                 const sorella = idKit != null ? sorelle.lavorazioni.find(l => Number(l.id) === idKit) : null;
                 if (sorella == null) {
-                    const procedi = await Utility.confirm("La lista " + (idKit != null ? "della lavorazione " + idKit : "scelta") + " non risulta della stessa promo. Il confronto fra promo diverse non ha senso: vuoi procedere comunque?");
+                    const procedi = await Modali.confirm("La lista " + (idKit != null ? "della lavorazione " + idKit : "scelta") + " non risulta della stessa promo. Il confronto fra promo diverse non ha senso: vuoi procedere comunque?");
                     if (!procedi) {
                         return;
                     }
@@ -3272,7 +3272,7 @@ const ReportIntegrita = {
                 return;
             }
 
-            const conferma = await Utility.confirm(
+            const conferma = await Modali.confirm(
                 "Non hai specificato una pagina. La referenza verrà impaginata nella pagina corrente: " + paginaCorrente + ". Continuare?"
             );
 
@@ -3488,7 +3488,7 @@ const ReportIntegrita = {
                 listaLocale != null ? listaLocale["DataScaricamento"] : null);
 
             if (usaListaLocale) {
-                const res = await Utility.confirmCustom(
+                const res = await Modali.confirmCustom(
                     "La lista degli elementi è stata scaricata meno di un'ora fa, vuoi utilizzare la lista recente?",
                     "Usa lista",
                     "1",

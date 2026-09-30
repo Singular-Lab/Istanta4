@@ -23,7 +23,9 @@ const cartellaPlugin = path.join(__dirname, '..', '..', 'plugin');
 const INSIEME_A = {
     "schedaRef.js": ["reperimentoFoto/schedaFoto.js"],
     "indexNew.js": ["reperimentoFoto/reperimentoFoto.js"],
-    "utility.js": ["reperimentoFoto/reperimentoFoto.js", "reperimentoFoto/fotoPlacer.js"]
+    //I20-1012: e utility.js anche con i quattro oggetti che ne sono usciti.
+    "utility.js": ["reperimentoFoto/reperimentoFoto.js", "reperimentoFoto/fotoPlacer.js",
+        "modali/modali.js", "modali/eliminazione.js", "tooltip/tooltip.js", "menu.js", "testoTag.js"]
 };
 function sorgente(nome) {
     return [nome, ...(INSIEME_A[nome] || [])]
@@ -190,15 +192,15 @@ test('il report si chiude quando cambia il documento, senza chiedere', () => {
     const decisione = corpoFunzione(confronti, 'chiudiSeNonValePiu(documentoAttuale) {');
     assert.match(decisione, /reportIntegritaAvvio\.deveChiudereReport/);
     assert.match(decisione, /this\.chiudiReportIntegrita\(/);
-    assert.doesNotMatch(decisione, /Utility\.confirm/);
+    assert.doesNotMatch(decisione, /Modali\.confirm/);
     //Non deve chiedere conferma: la domanda resta sulla chiusura fatta a mano.
-    assert.doesNotMatch(controllo, /Utility\.confirm/);
+    assert.doesNotMatch(controllo, /Modali\.confirm/);
 
     //Chi chiude, chiude passando da un punto solo, cosi' busy e stato restano coerenti.
     const chiusura = corpoFunzione(confronti, 'chiudiReportIntegrita(motivo = null) {');
     assert.match(chiusura, /_reportIntegritaAperto = false/);
     assert.match(chiusura, /setBusy\(false\)/);
-    assert.match(chiusura, /Utility\.chiudiModal\(\)/);
+    assert.match(chiusura, /Modali\.chiudiModal\(\)/);
 
     assert.match(indexHtml, /ReportIntegrita\.chiudiReportIntegrita\(\)/);
     assert.match(confronti, /this\._documentoDelReport = typeof indesignEvents/);
@@ -263,7 +265,7 @@ test('la cartella dei csv si cambia dalla schermata del report', () => {
     //Il suggerimento del pulsantino dice dove stanno andando i csv, e il testo del pulsante
     //non cambia: cambiarlo spostava la testata a ogni scelta.
     const titolo = corpoFunzione(confronti, '_aggiornaTitoloCartellaCsv() {');
-    assert.match(titolo, /Utility\.impostaTooltip\(bottone, "Scegli cartella\. Attualmente impostata: "/);
+    assert.match(titolo, /Tooltip\.impostaTooltip\(bottone, "Scegli cartella\. Attualmente impostata: "/);
     assert.doesNotMatch(titolo, /textContent/);
 
     //La memoria dura quanto il codice del plugin: e' un campo del modulo, non un file.
@@ -292,7 +294,7 @@ test('i title del plugin si vedono, tutti', () => {
     assert.match(abilita, /me\._testoDelTooltip\(this\)/);
 
     //Acceso una volta sola, all'avvio del plugin.
-    assert.match(indexNew, /Utility\.abilitaTooltipGlobali\(\);/);
+    assert.match(indexNew, /Tooltip\.abilitaTooltipGlobali\(\);/);
     assert.match(abilita, /if \(this\._tooltipGlobaliAttivi\)/);
 
     //Il riquadro usa la classe gia' prevista in index.html.
@@ -415,7 +417,7 @@ test('i dialoghi si adattano invece di sbordare', () => {
     const utility = sorgente('utility.js');
 
     //Niente piu' altezze fisse nei due dialoghi che il report usa: il riquadro cresce col
-    //messaggio e il testo scorre. (Utility.popup ha misure fisse ma scorre al suo interno,
+    //messaggio e il testo scorre. (Modali.popup ha misure fisse ma scorre al suo interno,
     //quindi non fa uscire nulla e resta com'e'.)
     const confirm = corpoFunzione(utility, 'async confirm (message){');
     const confirmCustom = corpoFunzione(utility, 'async confirmCustom (message, bottoneConfirm1Text, hiddenVal1=null, bottoneConfirm2Text = null, hiddenVal2 = null){');
@@ -712,7 +714,7 @@ test('la lista di confronto si scarica in memoria, senza toccare quella corrente
     assert.match(locale, /fs2\.getFileForOpening\(\)/);
     assert.match(locale, /reportConfronti\.recordsDellaLista\(lista\)/);
     assert.match(locale, /sorelle\.lavorazioni\.find\(l => Number\(l\.id\) === idKit\)/);
-    assert.match(locale, /Utility\.confirm\(/);
+    assert.match(locale, /Modali\.confirm\(/);
 
     //La lista scelta vale per la sessione: la si imposta una volta e il confronto si rifa'.
     const imposta = corpoFunzione(confronti, '_impostaListaConfronto(lista) {');
@@ -746,7 +748,7 @@ test('il Trova apre la scheda referenza vera, non una sua copia', () => {
 
     //Poi chiude il report e apre la scheda dallo stesso punto da cui la apre l'evento di
     //selezione: e' quello che garantisce un flusso solo.
-    assert.match(apri, /Utility\.chiudiModal\(\)/);
+    assert.match(apri, /Modali\.chiudiModal\(\)/);
     assert.match(apri, /schedaRef\.initSchedaRef\(this\._refPerSchedaDalReport\(box, dna\)\)/);
 
     //La ref la compone il modulo verificato, non questo file.
@@ -954,7 +956,7 @@ test('la descrizione applicata si vede anche in edit', () => {
     //La schermata di edit legge il box: dopo averlo cambiato va rifatta, altrimenti mostra
     //ancora la descrizione di prima.
     const applica = corpoFunzione(sorgenteScheda, 'applicaDescrizioneDaServer() {');
-    assert.match(applica, /Utility\.applicaTagStringToInndTextFrame\(campo, contenuto, box\.geometricBounds\)/);
+    assert.match(applica, /TestoTag\.applicaTagStringToInndTextFrame\(campo, contenuto, box\.geometricBounds\)/);
     assert.match(applica, /await this\.selectSchedaRef\(1\)/);
 });
 

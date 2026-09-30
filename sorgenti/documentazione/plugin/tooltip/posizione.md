@@ -1,10 +1,11 @@
-# tooltipPosizione.js
+# posizione.js — dove mettere il riquadro
 
-**Cosa è:** dove ancorare il riquadro di un tooltip. Nasce con I20-981.
+**Cosa è:** dove ancorare il riquadro di un tooltip. Nasce con I20-981 come `tooltipPosizione.js`;
+in I20-1012 è entrato in `tooltip/`, accanto al ciclo che lo usa. Panoramica: [README.md](README.md).
 
 In UXP l'attributo `title` non basta a mostrare un suggerimento su un elemento creato da codice,
-quindi il riquadro lo disegna il Plugin (`Utility.abilitaTooltipGlobali`, con la classe
-`.jq-tooltip` di `index.html`). Qui sta il calcolo di dove metterlo.
+quindi il riquadro lo disegna il Plugin ([tooltip.js](tooltip.md), con la classe `.jq-tooltip` di
+`index.html`). Qui sta il calcolo di dove metterlo.
 
 ## Da sapere
 

@@ -20,7 +20,7 @@ const dissolvenza = require('../dissolvenza');
 const pannelli = {
     async _confirmTreAzioniReport(message, actions) {
         let result = null;
-        Utility.nascondiHidebleElements();
+        Modali.nascondiHidebleElements();
 
         const modal = $('<div id="confirmModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); z-index: 5000; display: flex; justify-content: center; align-items: center; padding: 10px;"></div>');
         //I20-981: tre pulsanti da novanta pixel non stavano in un riquadro largo il 60% del
@@ -53,7 +53,7 @@ const pannelli = {
             await Utility.sleep(100);
         }
 
-        Utility.mostraHidebleElements();
+        Modali.mostraHidebleElements();
         return result;
     },
 
@@ -156,7 +156,7 @@ const pannelli = {
 
         const elemento = document.getElementById("chiudiSchedaDalReport");
         if (elemento != null) {
-            Utility.impostaTooltip(elemento, "Chiudi la scheda e torna al report");
+            Tooltip.impostaTooltip(elemento, "Chiudi la scheda e torna al report");
         }
     },
 
@@ -234,7 +234,7 @@ const pannelli = {
 
         //Il testo del pulsante non cambia: cambiarlo spostava tutta la testata a ogni scelta,
         //e una cartella dal nome lungo non ci stava comunque. Il percorso sta nel suggerimento.
-        Utility.impostaTooltip(bottone, "Scegli cartella. Attualmente impostata: "
+        Tooltip.impostaTooltip(bottone, "Scegli cartella. Attualmente impostata: "
             + (cartella !== "" ? cartella : "nessuna (configura i percorsi di sistema)"));
     },
 
@@ -267,7 +267,7 @@ const pannelli = {
         label.style.overflowWrap = "anywhere";
 
         const next = this._crButton(">");
-        Utility.impostaTooltip(next, "Vai alla prossima istanza duplicata");
+        Tooltip.impostaTooltip(next, "Vai alla prossima istanza duplicata");
         next.style.minWidth = "24px";
         next.style.minHeight = "22px";
         next.style.padding = "2px 6px";
@@ -557,7 +557,7 @@ const pannelli = {
 
         const withSkip = kind === "fixSingle" || kind === "resolve";
         if (!withSkip) {
-            return await Utility.confirm(message);
+            return await Modali.confirm(message);
         }
 
         const res = await this._confirmConNonChiedere(message);
@@ -577,7 +577,7 @@ const pannelli = {
     async _confirmConNonChiedere(message) {
         let result = null;
         let dontAsk = false;
-        Utility.nascondiHidebleElements();
+        Modali.nascondiHidebleElements();
 
         const modal = $('<div id="confirmModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); z-index: 5000; display: flex; justify-content: center; align-items: center; padding: 10px;"></div>');
         const dialog = $('<div style="width: 92%; max-width: 460px; min-width: 200px; max-height: 88%; background-color: white; display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch; padding: 14px; box-sizing: border-box; border-radius: 6px;"></div>');
@@ -614,7 +614,7 @@ const pannelli = {
             await Utility.sleep(100);
         }
 
-        Utility.mostraHidebleElements();
+        Modali.mostraHidebleElements();
         return { result, dontAsk };
     },
 
@@ -1427,7 +1427,7 @@ const pannelli = {
         const btn = document.createElement("button");
         btn.textContent = label;
         btn.type = "button";
-        Utility.impostaTooltip(btn, "Mostra " + String(nomeSemplice || label || "").toLowerCase());
+        Tooltip.impostaTooltip(btn, "Mostra " + String(nomeSemplice || label || "").toLowerCase());
         btn.style.padding = "6px 10px";
         btn.style.border = "1px solid #666";
         btn.style.borderRadius = "4px";
@@ -1524,7 +1524,7 @@ const pannelli = {
             return elemento;
         }
 
-        Utility.impostaTooltip(elemento, "Clicca per copiare i codici del gruppo: " + testo);
+        Tooltip.impostaTooltip(elemento, "Clicca per copiare i codici del gruppo: " + testo);
         elemento.style.cursor = "pointer";
         elemento.style.textDecoration = "underline dotted";
 
@@ -1581,7 +1581,7 @@ const pannelli = {
         titolo.style.textTransform = "uppercase";
         titolo.style.color = this.COLORI_STATO.differente;
         titolo.style.marginBottom = "2px";
-        Utility.impostaTooltip(titolo, "Campi che non cambiano il box ma che decidono a che pagina va la referenza");
+        Tooltip.impostaTooltip(titolo, "Campi che non cambiano il box ma che decidono a che pagina va la referenza");
         riquadro.appendChild(titolo);
 
         (differenze || []).forEach(differenza => {
@@ -1628,7 +1628,7 @@ const pannelli = {
     _crButton(label, iconPath = null) {
         const btn = document.createElement("button");
         btn.type = "button";
-        Utility.impostaTooltip(btn, label);
+        Tooltip.impostaTooltip(btn, label);
         btn.style.cursor = "pointer";
         btn.style.padding = "4px";
         btn.style.display = "flex";
@@ -1642,11 +1642,11 @@ const pannelli = {
             const img = document.createElement("img");
             img.src = iconPath;
             img.alt = label;
-            Utility.impostaTooltip(img, label);
+            Tooltip.impostaTooltip(img, label);
             img.style.height = "16px";
             img.style.width = "auto";
             img.style.display = "block";
-            Utility.impostaTooltip(btn, label);
+            Tooltip.impostaTooltip(btn, label);
             btn.appendChild(img);
         } else {
             btn.textContent = label;
@@ -1669,7 +1669,7 @@ const pannelli = {
 
         img.src = iconPath;
         img.alt = label;
-        Utility.impostaTooltip(img, label);
+        Tooltip.impostaTooltip(img, label);
         img.onerror = () => {
             if (iconPath.indexOf("risolviSegnalazioni.png") >= 0) img.src = "images/check.png";
             else if (iconPath.indexOf("whitelist.png") >= 0) img.src = "images/wake.png";
@@ -1706,14 +1706,14 @@ const pannelli = {
         const menuLavorazioni = document.createElement("sp-menu");
         menuLavorazioni.setAttribute("slot", "options");
         pickerLavorazioni.appendChild(menuLavorazioni);
-        Utility.impostaTooltip(pickerLavorazioni, "Le lavorazioni della stessa promo: da una di queste si scarica la lista da confrontare");
+        Tooltip.impostaTooltip(pickerLavorazioni, "Le lavorazioni della stessa promo: da una di queste si scarica la lista da confrontare");
 
         const btnScarica = this._crButton("Scarica lista");
-        Utility.impostaTooltip(btnScarica, "Scarica la lista della lavorazione scelta e confrontala con quella corrente");
+        Tooltip.impostaTooltip(btnScarica, "Scarica la lista della lavorazione scelta e confrontala con quella corrente");
         const btnLocale = this._crButton("Apri json locale");
-        Utility.impostaTooltip(btnLocale, "Confronta con una lista salvata in un file listaKit json");
+        Tooltip.impostaTooltip(btnLocale, "Confronta con una lista salvata in un file listaKit json");
         const btnCsv = this._crButton("Scarica CSV confronto");
-        Utility.impostaTooltip(btnCsv, "Scarica in csv le righe del confronto, con i filtri attivi");
+        Tooltip.impostaTooltip(btnCsv, "Scarica in csv le righe del confronto, con i filtri attivi");
 
         topbar.appendChild(pickerLavorazioni);
         topbar.appendChild(btnScarica);
@@ -1750,7 +1750,7 @@ const pannelli = {
         });
 
         const btnCampi = this._crButton("Campi...");
-        Utility.impostaTooltip(btnCampi, "Scegli quali campi vedere");
+        Tooltip.impostaTooltip(btnCampi, "Scegli quali campi vedere");
 
         const pannelloCampi = document.createElement("div");
         pannelloCampi.style.display = "none";
@@ -1820,7 +1820,7 @@ const pannelli = {
         });
 
         picker.appendChild(menu);
-        Utility.impostaTooltip(picker, "Quali referenze vedere: tutte, solo quelle in comune alle due liste, solo quelle presenti in una sola");
+        Tooltip.impostaTooltip(picker, "Quali referenze vedere: tutte, solo quelle in comune alle due liste, solo quelle presenti in una sola");
         return picker;
     },
 
@@ -2076,7 +2076,7 @@ const pannelli = {
             riga.appendChild(campo);
 
             riga.appendChild(document.createTextNode(": " + (d.corrente || "(vuoto)") + " ↔ " + (d.altra || "(vuoto)")));
-            Utility.impostaTooltip(riga, "Lista corrente: " + (d.corrente || "(vuoto)") + "\nAltra lista: " + (d.altra || "(vuoto)"));
+            Tooltip.impostaTooltip(riga, "Lista corrente: " + (d.corrente || "(vuoto)") + "\nAltra lista: " + (d.altra || "(vuoto)"));
             left.appendChild(riga);
         });
 
@@ -2157,7 +2157,7 @@ const pannelli = {
         const topbar = this._crTabTopbar();
 
         const btnImpaginaTutti = this._crButton("Impagina in coda");
-        Utility.impostaTooltip(btnImpaginaTutti, "Impagina tutto in coda al documento");
+        Tooltip.impostaTooltip(btnImpaginaTutti, "Impagina tutto in coda al documento");
 
         const pickerLibreria = document.createElement("sp-picker");
         pickerLibreria.style.minWidth = "220px";
@@ -2637,7 +2637,7 @@ const pannelli = {
         traccia.style.backgroundColor = "#e6e6e6";
         traccia.style.borderRadius = "6px";
         traccia.style.cursor = "pointer";
-        Utility.impostaTooltip(traccia, "Clicca o trascina per scorrere le colonne");
+        Tooltip.impostaTooltip(traccia, "Clicca o trascina per scorrere le colonne");
 
         const cursore = document.createElement("div");
         cursore.style.position = "absolute";
@@ -2704,7 +2704,7 @@ const pannelli = {
         freccia.style.lineHeight = "1";
         freccia.style.cursor = "pointer";
         freccia.style.flexShrink = "0";
-        Utility.impostaTooltip(freccia, descrizione);
+        Tooltip.impostaTooltip(freccia, descrizione);
         return freccia;
     },
 
@@ -2838,7 +2838,7 @@ const pannelli = {
         }
 
         cell.textContent = label;
-        Utility.impostaTooltip(cell, col.label);
+        Tooltip.impostaTooltip(cell, col.label);
 
         if (col.sortable) {
             cell.style.cursor = "pointer";
@@ -2907,7 +2907,7 @@ const pannelli = {
         cell.style.maxHeight = "42px";
 
         const btn = this._crButton("Imp.");
-        Utility.impostaTooltip(btn, "Impagina questo nuovo record");
+        Tooltip.impostaTooltip(btn, "Impagina questo nuovo record");
         btn.style.padding = "4px 6px";
         btn.style.minWidth = "0";
         btn.style.fontSize = "10px";
@@ -2959,7 +2959,7 @@ const pannelli = {
 
         const text = document.createElement("div");
         text.textContent = value || "";
-        Utility.impostaTooltip(text, value || "");
+        Tooltip.impostaTooltip(text, value || "");
         text.style.width = "100%";
         text.style.overflow = "hidden";
         text.style.whiteSpace = "nowrap";
@@ -2967,7 +2967,7 @@ const pannelli = {
         text.style.lineHeight = "1.2";
         text.style.fontSize = small ? "11px" : "12px";
 
-        Utility.impostaTooltip(cell, value || "");
+        Tooltip.impostaTooltip(cell, value || "");
 
         cell.addEventListener("click", () => {
             navigator.clipboard.writeText(String(value || "")).then(() => {

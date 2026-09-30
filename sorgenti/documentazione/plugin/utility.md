@@ -1,54 +1,37 @@
 # utility.js
 
-**Cosa è:** il file in cui è finito tutto quello che non aveva un posto.
+**Cosa è:** quello che resta del file in cui era finito tutto quello che non aveva un posto.
+**I20-1012 l'ha diviso**, da 3.048 righe a 726, e ci ha lasciato quello che le agenzie chiamano per
+nome: le etichette e il DNA del box, le utilità vere, e un resto che non ha ancora una casa.
 
-Esporta **due** oggetti: `Utility` e `FotoPlacer`. **Dal I20-1015 `FotoPlacer` sta in
-[reperimentoFoto/fotoPlacer.js](reperimentoFoto/fotoPlacer.md)** e `utility.js` lo riesporta con lo
-stesso nome, per il core e per le agenzie che lo prendono da qui. Non ha un concetto: ne ha almeno
-otto.
+Esporta **due** oggetti: `Utility` e `FotoPlacer`. `FotoPlacer` sta in
+[reperimentoFoto/fotoPlacer.js](reperimentoFoto/fotoPlacer.md) dal I20-1015, e `utility.js` lo
+riesporta con lo stesso nome.
 
-**Solo otto membri su settantasei meritano il nome «utility».**
+## Dove sono andate le famiglie
 
-## Le otto famiglie
-
-| famiglia | membri | tocca InDesign? |
+| famiglia | dove sta ora | chi la chiama |
 |---|---|---|
-| **modali e dialoghi** | 11 | no |
-| **tooltip** | 13 | no |
-| **menu e picker** | 5 | no |
-| **testo e tag InDesign** | 9 | sì |
-| **trovare cose nel documento** | 10 | sì |
-| **foto** | uscite in I20-1015 | — |
-| **utilità vere** | 8 | no |
-| varie | il resto | in parte |
+| **modali e dialoghi**, con le conferme di eliminazione | [modali/](modali/README.md), oggetto `Modali` | quasi tutto il Plugin e `index.html` |
+| **tooltip** | [tooltip/](tooltip/README.md), oggetto `Tooltip` | `indexNew.js`, la scheda, il Report Integrità |
+| **menu e picker** | [menu.js](menu.md), oggetto `Menu` | `filtri.js`, `indexNew.js`, la scheda |
+| **testo e tag InDesign** | [testoTag.js](testoTag.md), oggetto `TestoTag` | la scheda, `InputEditController`, `confronti`... |
+| **foto** | [reperimentoFoto/](reperimentoFoto/README.md), dal I20-1015 | — |
+| **trovare cose nel documento** | **qui** | tutto il Plugin e le agenzie |
+| **utilità vere** | **qui** | tutto il Plugin e le agenzie |
+| varie | **qui** | pochi |
 
-### Modali e dialoghi — 11
+I quattro oggetti nuovi li dichiara `indexNew.js` come globali, subito dopo `Utility`. **Il core li
+chiama per nome, `Modali.confirm`, e non più `Utility.confirm`**: un test controlla che non resti
+nessun `Utility.X` per un membro uscito, e che ogni `Oggetto.X` del Plugin esista davvero.
 
-`confirm`, `confirmCustom`, `confirmRimozioneRef`, `confirmRimozioneRefNonTrovata`, `popup`,
-`apriModal`, `apriModalCustom`, `chiudiModal`, `chiudiModalCustom`, `closeAllModal`.
+**Le agenzie non hanno dovuto cambiare niente.** `Agenzie/*/custom.js` e `custom.js` chiamano per
+nome cinque membri — `parseLabel`, `getFieldByLabel`, `setCampoDNA`, `cercaChiaveContesto`,
+`applyObjectStyle` — e sono tutti rimasti qui.
 
-**`popup` ha un contratto da conoscere:** rimuove il popup **prima** di chiamare `alChiudi`, e il
-suo ciclo di attesa non finisce da solo.
+## Cosa resta
 
-### Tooltip — 13
-
-Tutto il meccanismo dei suggerimenti, che il Plugin si disegna da sé perché in UXP l'attributo
-`title` non basta su un elemento creato da codice. **Metà della logica sta già fuori**, in
-[tooltipPosizione.md](tooltipPosizione.md), che è un modulo puro con i suoi test: qui restano il
-ciclo e il disegno.
-
-### Menu e picker — 5
-
-`creaFloatingMenu`, `chiudiFloatingMenu`, `registerDateMenuPicker` — **378 righe da sola** —
-`setPickerValue`, `setPickerWidthHack`.
-
-### Testo e tag InDesign — 9
-
-`parseContent`, `componiStringTagFromInndTextFrame`, `applicaTagStringToInndTextFrame`,
-`applyNeastedStyles`, `parseStile`, `parseObjStile`, `trimDescrizione`, `trattiDiStileDelCampo`,
-`getLetturaFacilitataDellaParola`.
-
-### Trovare cose nel documento — 10
+### Trovare cose nel documento
 
 - `getFieldByLabel(label, box, parseLabel)` → una delle funzioni più chiamate del Plugin.
 - `getAllFieldsInGroup(box)` → tutti i campi, scendendo nei gruppi annidati.
@@ -56,39 +39,31 @@ ciclo e il disegno.
   della referenza. Chi lavora sulle copie da duplicazione **non deve usarla**, perché taglierebbe il
   suffisso che le distingue — vedi [cssComposizioneBox.md](cssComposizioneBox.md).
 - `getDnaOfBox(box)` → i dati della referenza contenuta, letti dalle label.
+- `eUnClone(label)` → se un elemento è una copia da duplicazione.
 - `setCampoDNA`, `getBoxFromElementOfBox`, `_findBoxInExpectedPage`, `_findBoxInDocument`,
   `getGrigliaFromPage`, `getMasterSpreadByName`.
 
-### Foto — uscite in I20-1015
-
-`getLinkHash`, `getBolloNOFOTO`, `getBolloFOTONOFOUND` e `getNomeFotoLogoBolloBySigla` sono
-diventati membri di [ReperimentoFoto](reperimentoFoto/operazioni.md), e `FotoPlacer` è
-[reperimentoFoto/fotoPlacer.js](reperimentoFoto/fotoPlacer.md). Il concetto è
-[procurarsi la foto giusta](reperimentoFoto/README.md).
-
-### Utilità vere — 8
+### Utilità vere
 
 `sleep`, `generateId`, `replaceAll`, `replaceAllSpecialCharacters`, `getDirSeparator`,
 `cercaChiaveContesto`, `duplicaFile`, `applyObjectStyle`.
 
-Sono le uniche che meritano il nome del file, e sono anche quelle che dovrebbero **accogliere le
-ricollocazioni annotate altrove**: `normalize`, `isIn`, `getValueByPath` e `toFitOptions` da
-[pluginMiddleware](pluginMiddleware.md), `calcolaDistanza` da [griglia](griglia.md).
+### Varie
 
----
+- `addBollinoCustom` → il bollino disegnato su un box; lo usano `confronti` e `CssFramework`.
+- `getListaCodiciImpaginati` → chiede al server i codici impaginati.
+- `moveToPasteBoard`, `impostaValHiddenVal`.
 
-## La divisione è un task a sé
+`getLetturaFacilitataDellaParola`, che la issue metteva nel testo, **è andata in
+[filtri.js](filtri.md)**: traduce gli operatori dei filtri in parole, e la usa solo lui.
 
-Qui non ha senso spostare una funzione: **il file va diviso**, ed è l'altro capo dello stesso
-problema di `indexNew.js`. Il task è stato aperto, con l'elenco completo membro per membro.
+## Le ricollocazioni annotate, e perché non si sono fatte
 
-**Il guadagno vero sta nelle tre famiglie che non toccano InDesign** — tooltip, modali, menu:
-separate, diventerebbero verificabili. Per le altre il guadagno è solo di ordine.
-
-**Il costo da mettere in conto:** `utility.js` è importato da quasi tutto il Plugin come
-`{Utility, FotoPlacer}`, quindi ogni spostamento tocca decine di file.
-
-Il candidato più semplice era `FotoPlacer`: è uscito in I20-1015, e `utility.js` lo riesporta.
+I20-1002 aveva proposto di portare qui `normalize`, `isIn`, `getValueByPath` e `toFitOptions` da
+[pluginMiddleware](pluginMiddleware.md), e `calcolaDistanza` da [griglia](griglia.md). **In I20-1012
+si è deciso di no:** hanno chiamanti solo nel proprio file — `getValueByPath` anche in
+`cambiStrutturali` — e portarle qui aggiungerebbe una dipendenza da un file che sotto Node non si
+carica, senza togliere niente a nessuno.
 
 ## Cosa è stato rimosso in I20-1002
 

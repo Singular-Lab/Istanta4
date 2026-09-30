@@ -2,7 +2,7 @@
  * I20-981: dove ancorare il riquadro di un tooltip.
  *
  * In UXP l'attributo title non basta a mostrare un suggerimento su un elemento creato da
- * codice, quindi il riquadro lo disegna il plugin (Utility.abilitaTooltipGlobali, che usa la
+ * codice, quindi il riquadro lo disegna il plugin (Tooltip.abilitaTooltipGlobali, che usa la
  * classe .jq-tooltip di index.html). Qui sta il calcolo di dove metterlo.
  *
  * La regola non guarda mai quanto e' grande il riquadro: in UXP quella misura non e'

@@ -37,8 +37,11 @@ di I20-1007).
 
 - **Un file rappresenta un concetto.** Quando un concetto ha bisogno di più di un file, ha **una
   cartella sua**: `plugin/<concetto>/`. Le prime sono [sistemazioneFoto/](sistemazioneFoto/README.md)
-  (I20-1009), [reportIntegrita/](reportIntegrita/README.md) (I20-1014) e
-  [reperimentoFoto/](reperimentoFoto/README.md) (I20-1015).
+  (I20-1009), [reportIntegrita/](reportIntegrita/README.md) (I20-1014),
+  [reperimentoFoto/](reperimentoFoto/README.md) (I20-1015), [modali/](modali/README.md) e
+  [tooltip/](tooltip/README.md) (I20-1012). **Un concetto di un file solo resta un file**, senza
+  cartella: [menu.js](menu.md) e [testoTag.js](testoTag.md), usciti da `utility.js` insieme agli
+  altri due.
 - **Quando due parti non pure di un concetto condividono lo stato**, come il flusso e i pannelli
   del report, stanno in due file ma in **un oggetto solo**: il secondo si mescola nel primo con
   `Object.assign`, e a runtime il `this` è uno. Si divide il file, non lo stato.
@@ -101,7 +104,7 @@ ed è documentato il meccanismo con cui il server prevale su di lui.
 |---|---|
 | [barraScorrimento.md](barraScorrimento.md) | una barra di scorrimento disegnata da noi, perché in UXP non scorre |
 | [dissolvenza.md](dissolvenza.md) | i conti della dissolvenza, perché in UXP `opacity` non si ridisegna |
-| [tooltipPosizione.md](tooltipPosizione.md) | dove ancorare un tooltip senza misurarlo |
+| [tooltip/posizione.md](tooltip/posizione.md) | dove ancorare un tooltip senza misurarlo (era `tooltipPosizione.js`) |
 | [reperimentoFoto/cacheHash.md](reperimentoFoto/cacheHash.md) | la memoria degli hash md5 delle foto (era `cacheHashFoto.js`) |
 | [reportIntegrita/conteggi.md](reportIntegrita/conteggi.md) | i numeri sulle linguette del Report Integrità (era `reportConteggi.js`) |
 | [reperimentoFoto/dataCaricamento.md](reperimentoFoto/dataCaricamento.md) | il badge con la data sulle foto (era `dataCaricamentoFoto.js`) |
@@ -149,7 +152,11 @@ del report.
 | [ficoProcess.md](ficoProcess.md) | promo, kit, lavorazione corrente ed esportazione |
 | [griglia.md](griglia.md) | la mappa dell'impaginato: cosa va dove, prima di impaginare |
 | [filtri.md](filtri.md) | i filtri di pagina del volantino, e i dieci nomi di «è una data» |
-| [utility.md](utility.md) | settantasei membri e otto concetti: il file che va diviso |
+| [utility.md](utility.md) | quello che resta dopo la divisione di I20-1012: le etichette e il DNA del box, le utilità, i membri che chiamano le agenzie |
+| [modali/](modali/README.md) | le finestre di dialogo e le conferme prima di eliminare. Uscito da `utility.js` in I20-1012 |
+| [tooltip/](tooltip/README.md) | i suggerimenti al passaggio del mouse. Uscito da `utility.js` in I20-1012 |
+| [menu.md](menu.md) | il menu flottante, i picker e il calendario. Uscito da `utility.js` in I20-1012 |
+| [testoTag.md](testoTag.md) | il testo dei campi con i tag e gli stili. Uscito da `utility.js` in I20-1012 |
 | [confronti.md](confronti.md) | il motore di confronto fra documento e dato; fino a I20-1014 anche il Report Integrità, ora in [reportIntegrita/](reportIntegrita/README.md) |
 | [schedaRef.md](schedaRef.md) | la scheda della referenza, e i tre concetti che contiene |
 | [indexNew/](indexNew/README.md) | il file che tiene insieme il Plugin: 129 funzioni, tutte documentate |
@@ -273,9 +280,9 @@ altrimenti dovrebbe rifare la stessa lettura da capo.
 | funzione | dov'è | dove dovrebbe stare |
 |---|---|---|
 | `controllaChiusuraReportIntegrita` | `events.js` | **fatto in I20-1014**: la decisione è `ReportIntegrita.chiudiSeNonValePiu`, e in `events.js` resta la chiamata a intervalli |
-| `normalize`, `isIn`, `getValueByPath` | `pluginMiddleware.js` | `utility.js`: sono utilità generiche, non mediano niente |
-| `toFitOptions` | `pluginMiddleware.js` | `utility.js`, o accanto agli `enum*` di `CssFramework` |
-| `calcolaDistanza` | `griglia.js` | `utility.js`: sei righe di geometria pura |
+| `normalize`, `isIn`, `getValueByPath` | `pluginMiddleware.js` | **valutato in I20-1012 e non fatto**: hanno chiamanti solo in `pluginMiddleware` (e `getValueByPath` in `cambiStrutturali`), e in `utility.js` non guadagnerebbero niente |
+| `toFitOptions` | `pluginMiddleware.js` | **valutato in I20-1012 e non fatto**: traduce la configurazione del cliente in un valore di InDesign, ed è lavoro del mediatore |
+| `calcolaDistanza` | `griglia.js` | **valutato in I20-1012 e non fatto**: la chiama solo `griglia.js` |
 | `setVersionePlugin`, `controllaVersionePubblicata`, `bloccaPerVersioneDisallineata` | `indexNew.js` | `versionePlugin.js`, che **esiste già** e tiene il confronto fra versioni |
 | `getFiltroButtonMarkup`, `setFiltroButtonsDefaultMarkup` | `indexNew.js` | `filtri.js`: sono le uniche due righe di `indexNew` che parlano dell'aspetto dei filtri |
 | `clearFile`, `readFile`, `appendToFile` | `indexNew.js` | `utility.js`: è accesso al disco, non interfaccia |

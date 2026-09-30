@@ -412,7 +412,7 @@
                 <sp-action-button id="ScaricaPacchettoFoto" name="downloadFoto" style="margin-top: 24px;"
                   onclick="ReperimentoFoto.apriSchermataSyncPacchettoFoto(0)">Scarica Pacchetto Foto</sp-action-button><hr>
                   <sp-action-button id="SyncFotoMassivo" name="SyncFotoMassivo" style="margin-top: 24px;"
-                  onclick="Utility.apriModal('dialogSyncFotoMassivo','Impagina');">Sync massivo foto</sp-action-button><hr>
+                  onclick="Modali.apriModal('dialogSyncFotoMassivo','Impagina');">Sync massivo foto</sp-action-button><hr>
                   <!-- <sp-action-button id="ScaricaLoghiBolli" name="ScaricaLoghiBolli" style="margin-top: 24px; color: green;"
                   onclick="ReperimentoFoto.apriSchermataSyncPacchettoFoto(1)">Scarica Loghi/Bolli</sp-action-button><hr> -->
                 <sp-action-button id="syncRimaste" name="syncRimaste" style="margin-top: 24px; color: lightcoral; display: none;"
@@ -754,7 +754,7 @@
           <div class="row" id="messaggiUtenteModal" style="position: fixed; width:76%; align-self: self-start; z-index: 9999;">
           </div>
           <h2 id="modalTitle" style="margin: 0; display: block;">Titolo</h2>
-          <button id="closeModal" onclick="Utility.chiudiModal()" style="height: 25px;cursor: pointer;">&times;</button>
+          <button id="closeModal" onclick="Modali.chiudiModal()" style="height: 25px;cursor: pointer;">&times;</button>
         </div>
     
         <!-- Body -->
@@ -774,7 +774,7 @@
         <div class="row" id="messaggiUtenteModal" style="position: fixed; width:76%; align-self: self-start; z-index: 9999;">
         </div>
         <h2 id="modalTitle" style="margin: 0; display: block;">Titolo</h2>
-        <button id="closeModal" onclick="Utility.chiudiModalCustom('DownloadFoto')" style="height: 25px;cursor: pointer;">&times;</button>
+        <button id="closeModal" onclick="Modali.chiudiModalCustom('DownloadFoto')" style="height: 25px;cursor: pointer;">&times;</button>
       </div>
   
       <!-- Body -->
@@ -806,7 +806,7 @@
 <div id="pulsantiTestataConfronto" style="width:60%; display: none; justify-content: end;">
   <button id="closeModalConfrontoPerEsportazione" title="Esegui esportazione" style="height: 25px;cursor: pointer; display: none;">Esegui esportazione</button>
   <button id="closeModalConfronto" onclick="(async () => {
-    if (await Utility.confirm('Sicuro di voler interrompere il processo di controllo integrità?')) {
+    if (await Modali.confirm('Sicuro di voler interrompere il processo di controllo integrità?')) {
         ReportIntegrita.chiudiReportIntegrita();
     }
 })()" title="Chiudi report confronto" style="height: 25px;cursor: pointer;">&times;</button>
@@ -891,7 +891,7 @@
     </div>
   </div>
   <div>
-    <button onclick="Utility.chiudiModal();">Annulla</button>
+    <button onclick="Modali.chiudiModal();">Annulla</button>
     <button
       onclick="impagina($('#reimpostaPS').is(':checked'), $('#confrontaVolantino').is(':checked'))">Impagina</button>
   </div>
@@ -910,7 +910,7 @@
     style="color: white; display: none;"></sp-textfield>
   </div>
   <div>
-    <button onclick="Utility.chiudiModal();">Annulla</button>
+    <button onclick="Modali.chiudiModal();">Annulla</button>
     <button
       onclick="selectionModalSvuota($('#svuotaImpaginazioneMode').val())">Procedi</button>
   </div>
@@ -929,7 +929,7 @@
     style="color: white;"></sp-textfield>
   </div>
   <div>
-    <button onclick="Utility.chiudiModal();">Annulla</button>
+    <button onclick="Modali.chiudiModal();">Annulla</button>
     <button id="bottoneAttivaDisattivaBolli" modalita="false"
       onclick="selectionAttivaDisattivaBolli($('#attivaDisattivaBolliMode').val(), $('#bottoneAttivaDisattivaBolli').attr('attiva'))">Procedi</button>
   </div>
@@ -946,7 +946,7 @@
     </div>
   </div>
   <div>
-    <button onclick="Utility.chiudiModal();">Annulla</button>
+    <button onclick="Modali.chiudiModal();">Annulla</button>
     <button
       onclick="ReperimentoFoto.ricollegaFotoMassivo($('#ricollegaFotoPresentiModificate').is(':checked'), $('#advancedMode').is(':checked'))">Avvia Sync</button>
   </div>
@@ -960,7 +960,7 @@
     </div>
   </div>
     <div>
-      <button onclick="Utility.chiudiModal();">Annulla</button>
+      <button onclick="Modali.chiudiModal();">Annulla</button>
     </div>
 </div>
 
@@ -977,8 +977,8 @@
     </div>
   </div>
     <div>
-      <button onclick="Utility.chiudiModal();">Annulla</button>
-      <button codice="" id="confermaCambioMeccanica" onclick="confermatoCambioMeccanica($('#meccanicheModal').attr('codice'), $('#meccanicheModal').val(), true) ; Utility.chiudiModal()">Conferma</button>
+      <button onclick="Modali.chiudiModal();">Annulla</button>
+      <button codice="" id="confermaCambioMeccanica" onclick="confermatoCambioMeccanica($('#meccanicheModal').attr('codice'), $('#meccanicheModal').val(), true) ; Modali.chiudiModal()">Conferma</button>
     </div>
 </div>
 
@@ -989,8 +989,8 @@
   <div id="bodyIncludiEscludi" codiceEscluso="" codiceIncluso="" style="overflow-y: auto; overflow-x: hidden; height: 80%;">
   </div>
   <div style="height: 10%;">
-    <button onclick="Utility.chiudiModal();">Annulla</button>
-    <button style="visibility: hidden;" id="confermaIncludiEscludi" onclick=" grigliaJs.confermatoIncludiEscludi($('#bodyIncludiEscludi').attr('codiceEscluso'), $('#bodyIncludiEscludi').attr('codiceIncluso')) ; Utility.chiudiModal()">Conferma</button>
+    <button onclick="Modali.chiudiModal();">Annulla</button>
+    <button style="visibility: hidden;" id="confermaIncludiEscludi" onclick=" grigliaJs.confermatoIncludiEscludi($('#bodyIncludiEscludi').attr('codiceEscluso'), $('#bodyIncludiEscludi').attr('codiceIncluso')) ; Modali.chiudiModal()">Conferma</button>
   </div>
 </div>
 
@@ -1128,8 +1128,8 @@
     </div>
   </div>
   <div>
-    <button onclick="Utility.chiudiModal()" style="height: 25px;">Annulla</button>
-    <button onclick="cambiaMastro($('#mastroMenuPicker').val(), $('#impostaMastroPagina').prop('checked'), $('#impostaMastroAllBox').prop('checked')); Utility.chiudiModal();" style="height: 25px;">Procedi</button>
+    <button onclick="Modali.chiudiModal()" style="height: 25px;">Annulla</button>
+    <button onclick="cambiaMastro($('#mastroMenuPicker').val(), $('#impostaMastroPagina').prop('checked'), $('#impostaMastroAllBox').prop('checked')); Modali.chiudiModal();" style="height: 25px;">Procedi</button>
   </div>
 </div>
 
@@ -1190,7 +1190,7 @@
   </div>
   <div>
     <button codice="" id="confermaPercorsi" style="display: none;"
-      onclick="indesignEvents.checkStatus(indesignEvents.checkStatusResonse); Utility.chiudiModal()">Conferma</button>
+      onclick="indesignEvents.checkStatus(indesignEvents.checkStatusResonse); Modali.chiudiModal()">Conferma</button>
   </div>
 </div> -->
 
@@ -1237,7 +1237,7 @@
   </div>
   <div>
     <button codice="" id="confermaPercorsi" style="display: none;"
-      onclick="indesignEvents.checkStatus(indesignEvents.checkStatusResonse); Utility.chiudiModal()">Conferma</button>
+      onclick="indesignEvents.checkStatus(indesignEvents.checkStatusResonse); Modali.chiudiModal()">Conferma</button>
   </div>
 </div>
 

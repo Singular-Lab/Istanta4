@@ -187,7 +187,7 @@ const filtri = {
                                 //se invece l'ordine è minore di 1 o non valido mandiamo un alert con errore e resettiamo il valore al precedente
                                 //se invece il numero è maggiore del numero di ordine massimo + 1 lo portiamo a tale valore e poi controlliamo tutti i filtri da 1 e se troviamo buchi decrementiamo di 1 tutti i filtri successivi
                                 if (isNaN(newOrdine) || newOrdine < 1) {
-                                    Utility.popup("Errore", "Valore di ordine non valido. Deve essere un numero intero maggiore di 0.");
+                                    Modali.popup("Errore", "Valore di ordine non valido. Deve essere un numero intero maggiore di 0.");
                                     //resetto al precedente, lo possiamo leggere dal suo attr value
                                     $(this).val(
                                         paginaFiltri.ordine != null && paginaFiltri.ordine != 999 ? paginaFiltri.ordine : $(this).attr('value')
@@ -197,7 +197,7 @@ const filtri = {
                                 
                                 //cerchiamo e aggiorniamo la pagina filtri corrispondente a questa pagina
                                 if (!paginaFiltri) {
-                                    Utility.popup("Errore", "Pagina non trovata nei filtri.");
+                                    Modali.popup("Errore", "Pagina non trovata nei filtri.");
                                     return;
                                 }
                                 //controlliamo il valore di partenza e di arrivo, e spostiamo di 1 tutti gli elementi che si trovano in quel range tranne l'elemento corrente
@@ -604,7 +604,7 @@ const filtri = {
             scrollIdContainer: 'filtriBodyGriglia'
         }
 
-        Utility.apriModal('dialogFiltri', 'Filtri Pagina ' + pagina, true, ["pulsanteAdvancedOptionFiltro"], true, scrollObj);
+        Modali.apriModal('dialogFiltri', 'Filtri Pagina ' + pagina, true, ["pulsanteAdvancedOptionFiltro"], true, scrollObj);
         //impostiamo i data della pagina
         $('#dialogFiltri').data('pagina', pagina);
 
@@ -628,12 +628,12 @@ const filtri = {
 
         const ObjFiltri = readFile(filtri.getNomeFileFiltriJson());
         if (!ObjFiltri || !ObjFiltri.source) {
-            Utility.popup ('Errore','Nessun filtro trovato per la pagina ' + pagina);
+            Modali.popup ('Errore','Nessun filtro trovato per la pagina ' + pagina);
             return;
         }
         const paginaFiltri = ObjFiltri.source.find(item => item.pagina === pagina);
         if (!paginaFiltri) {
-            Utility.popup ('Errore','Nessun filtro trovato per la pagina ' + pagina);
+            Modali.popup ('Errore','Nessun filtro trovato per la pagina ' + pagina);
             return;
         }
 
@@ -947,7 +947,7 @@ const filtri = {
 
         if (!hideNarrow){
             newFiltroDiv.find("sp-picker").each(function(){
-                Utility.setPickerWidthHack($(this));
+                Menu.setPickerWidthHack($(this));
             })
         }
     },
@@ -1017,7 +1017,7 @@ const filtri = {
             let dateContainer = criterioContainer.find('.filtro-valore-data');
             if (dateContainer.length) {
                 if (dateContainer.find('date-menu-picker').length > 0) {
-                    Utility.registerDateMenuPicker(dateContainer.get(0));
+                    Menu.registerDateMenuPicker(dateContainer.get(0));
                 }
                 return dateContainer;
             }
@@ -1034,9 +1034,9 @@ const filtri = {
             dateContainer.append(placeholder);
             criterioContainer.find('.filtro-valore-hidden').before(dateContainer);
 
-            Utility.registerDateMenuPicker(dateContainer.get(0));
+            Menu.registerDateMenuPicker(dateContainer.get(0));
             if (dateContainer.find('date-menu-picker').length > 0) {
-                Utility.registerDateMenuPicker(criterioContainer.get(0));
+                Menu.registerDateMenuPicker(criterioContainer.get(0));
             }
 
             const wrapper = dateContainer.find('#' + datePickerId);
@@ -1123,7 +1123,7 @@ const filtri = {
                                 const criterioCopia = JSON.parse(localStorage.getItem('criterioCopia'));
                                 if (criterioCopia) {
                                     // Imposta chiave picker e hidden
-                                    Utility.setPickerValue(criterioHtml.find('.filtro-chiave'), criterioCopia.chiave, false);
+                                    Menu.setPickerValue(criterioHtml.find('.filtro-chiave'), criterioCopia.chiave, false);
                                     criterioHtml.find('.filtro-chiave-hidden').val(criterioCopia.chiaveHidden || criterioCopia.chiave);
 
                                     
@@ -1138,7 +1138,7 @@ const filtri = {
                                     }
                                     // Trigger per mostrare/nascondere controlli in base alla chiave
                                     // Imposta operatore
-                                    Utility.setPickerValue(criterioHtml.find('.filtro-operatore'), criterioCopia.operatore, false);
+                                    Menu.setPickerValue(criterioHtml.find('.filtro-operatore'), criterioCopia.operatore, false);
 
                                     // Imposta valore hidden
                                     criterioHtml.find('.filtro-valore-hidden').val(criterioCopia.valore);
@@ -1158,7 +1158,7 @@ const filtri = {
                                             criterioHtml.find('.filtro-valore-hidden').css({ display: 'block' });
                                             hideDatePicker(criterioHtml);
                                         } else {
-                                            Utility.setPickerValue(criterioHtml.find('.filtro-valore-tendina'), valoreTendina, false);
+                                            Menu.setPickerValue(criterioHtml.find('.filtro-valore-tendina'), valoreTendina, false);
                                             // se impostiamo la tendina, assicuriamoci che l'hidden sia nascosto
                                             criterioHtml.find('.filtro-valore-hidden').css({ display: 'none' });
                                             criterioHtml.find('.filtro-valore-tendina').css({ display: 'block' });
@@ -1174,7 +1174,7 @@ const filtri = {
                                     $(this).attr('src', 'images/copy.png');
                                     $(this).attr('title', 'Copia criterio filtro');
                                 } else {
-                                    Utility.popup('Errore', 'Nessun criterio copiato trovato.');
+                                    Modali.popup('Errore', 'Nessun criterio copiato trovato.');
                                 }
                             } else {
                                 // Copia il criterio includendo chiave hidden e valore tendina
@@ -1251,7 +1251,7 @@ const filtri = {
                                 chiaveHidden.val('Referenza.Codice');
 
                                 //impostiamo il filtro-operatore                                
-                                Utility.setPickerValue(criterioCorrente.find('.filtro-operatore'), "!=", false);
+                                Menu.setPickerValue(criterioCorrente.find('.filtro-operatore'), "!=", false);
 
                             } else {
                                 // Popola il campo 
@@ -1503,7 +1503,7 @@ const filtri = {
             //criterioHtml.find('.filtro-valore-hidden').text(criterio.chiave);
 
             let filtroOperatore = criterioHtml.find('.filtro-operatore');
-            Utility.setPickerValue(filtroOperatore, criterio.operatore, false);
+            Menu.setPickerValue(filtroOperatore, criterio.operatore, false);
             let filtroChiave = criterioHtml.find('.filtro-chiave');
             let filtroValore = criterioHtml.find('.filtro-valore-tendina');
 
@@ -1515,7 +1515,7 @@ const filtri = {
             }
             if (campoAssociato != null || impaginaTutto) {
                 //criterioHtml.find('.filtro-chiave').val(impaginaTutto ? "Impagina tutto" : criterio.chiave);
-                Utility.setPickerValue(filtroChiave, impaginaTutto ? "Impagina tutto" : criterio.chiave, false);
+                Menu.setPickerValue(filtroChiave, impaginaTutto ? "Impagina tutto" : criterio.chiave, false);
                 if(impaginaTutto) {
                     //nascondiamo la tendina e mostriamo il campo di testo
                     criterioHtml.find('.filtro-valore-tendina').css({ display: 'none' });
@@ -1550,7 +1550,7 @@ const filtri = {
                         //if (filtroValoreSelect.find(`option[value="${criterio.valore}"]`).length) {
                         if (filtroValoreSelect.find(`sp-menu-item[value="${criterio.valore}"]`).length) {
                             //criterioHtml.closest('.criterio').find('.filtro-valore-tendina').val(criterio.valore);
-                            Utility.setPickerValue(filtroValore, criterio.valore, false);
+                            Menu.setPickerValue(filtroValore, criterio.valore, false);
                         }
                         else{
                             criterioHtml.closest('.criterio').find('.filtro-valore-tendina').css({ display: 'none' });
@@ -1605,7 +1605,7 @@ const filtri = {
 
         if (!isTracciato){
             criterioHtml.find("sp-picker").each(function(){
-                Utility.setPickerWidthHack($(this));
+                Menu.setPickerWidthHack($(this));
             });
         }
 
@@ -1664,7 +1664,7 @@ const filtri = {
             if (template == null)
                 return;
 
-            Utility.chiudiFloatingMenu();
+            Menu.chiudiFloatingMenu();
 
             if (onTemplateSelected != null)
                 onTemplateSelected(template);
@@ -1710,19 +1710,60 @@ const filtri = {
                 }
             );
 
-            Utility.creaFloatingMenu({
+            Menu.creaFloatingMenu({
                 x: e.clientX,
                 y: e.clientY,
                 content: picker,
                 className: "floating-menu-template-filtri"
             });
 
-            Utility.setPickerWidthHack(picker);
+            Menu.setPickerWidthHack(picker);
         }
         catch (err) {
             console.error(err);
             messaggioUtente("Errore durante il caricamento dei template filtro", "error");
         }
+    },
+
+    /// I20-1012: l'operatore di un criterio detto in parole, per la frase che riassume il filtro:
+    /// "IN" diventa "contiente", ">=" "e' maggiore o uguale di". Un operatore sconosciuto
+    /// torna com'e'. Stava in utility.js, ma la usa solo refreshNarrow.
+    getLetturaFacilitataDellaParola(parola)
+    {
+        if (parola=="IN")
+        {
+            return "contiente";
+        }
+        else if (parola=="!IN")
+        {
+            return "non contiente";
+        }
+        else if (parola=="=")
+        {
+            return "è uguale a";
+        }
+        else if (parola=="!=")
+        {
+            return "è diverso da";
+        }
+        else if (parola=="<")
+        {
+            return "è minore di";
+        }
+        else if (parola=="<=")
+        {
+            return "è minore o uguale di";
+        }
+        else if (parola==">")
+        {
+            return "è maggiore di";
+        }
+        else if (parola==">=")
+        {
+            return "è maggiore o uguale di";
+        }
+
+        return parola;
     },
 
     /// Il restringimento progressivo: quali valori restano possibili dati i criteri gia' scelti.
@@ -1791,11 +1832,11 @@ const filtri = {
             {
                 if (operatore == "IN" || operatore == "!IN")
                 {
-                    narrazione += "<b>"+ (valoreVisualizzato==""?"<VUOTO>":valoreVisualizzato)  + " " + Utility.getLetturaFacilitataDellaParola(operatore) + " " + chiave + "</b>";
+                    narrazione += "<b>"+ (valoreVisualizzato==""?"<VUOTO>":valoreVisualizzato)  + " " + filtri.getLetturaFacilitataDellaParola(operatore) + " " + chiave + "</b>";
                 }
                 else
                 {
-                    narrazione +=  "<b>"+ chiave + " " + Utility.getLetturaFacilitataDellaParola(operatore) + " " + (valoreVisualizzato==""?"<VUOTO>":valoreVisualizzato) + "</b>";
+                    narrazione +=  "<b>"+ chiave + " " + filtri.getLetturaFacilitataDellaParola(operatore) + " " + (valoreVisualizzato==""?"<VUOTO>":valoreVisualizzato) + "</b>";
                 }
 
                 count++;
@@ -1999,7 +2040,7 @@ const filtri = {
 
         this.visualizzaHomePageFiltri();
 
-        Utility.chiudiModal();
+        Modali.chiudiModal();
     },
 
     getNomeFileFiltriJson(){
@@ -2023,13 +2064,13 @@ const filtri = {
 
         const ObjFiltri = readFile(filtri.getNomeFileFiltriJson());
         if (!ObjFiltri || !ObjFiltri.source) {
-            Utility.popup ('Errore','Nessun filtro trovato per la pagina ' + pagina);
+            Modali.popup ('Errore','Nessun filtro trovato per la pagina ' + pagina);
             return;
         }
         //cerchiamo la pagina corrispondente
         const paginaFiltri = ObjFiltri.source.find(item => item.pagina === pagina);
         if (!paginaFiltri) {
-            Utility.popup ('Errore','Nessun filtro trovato per la pagina ' + pagina);
+            Modali.popup ('Errore','Nessun filtro trovato per la pagina ' + pagina);
             return;
         }
         //se la pagina è bloccata, la sblocchiamo, altrimenti la blocchiamo
@@ -2462,7 +2503,7 @@ const filtri = {
             });
     
             //filtro-info-label-trovati modifichiamo il testo con il numero dei risultati trovati, inoltre creiamo un pulsante con la i di info, se cliccato
-            // si apre Utility.popup('Risultati', x) dove x è il contenuto del popup ovvero il codice HTML con i risultati trovati con la seguente struttura:
+            // si apre Modali.popup('Risultati', x) dove x è il contenuto del popup ovvero il codice HTML con i risultati trovati con la seguente struttura:
             // una riga per risultato divisa in due colonne, la prima con il codice del record e la seconda con la descrizione 1
             filtro.find('.filtro-info-label-trovati').text('Elementi non impaginati: ' + risultati.length);
             filtro.find('.filtro-info-label-trovati').prepend(
@@ -2525,7 +2566,7 @@ const filtri = {
                     // Aggiungi al contenuto
                     popupContent.append(riga);
                     });
-                    Utility.popup('Risultati', popupContent, "lg");
+                    Modali.popup('Risultati', popupContent, "lg");
                 })
             );
     
@@ -2581,7 +2622,7 @@ const filtri = {
                     // Aggiungi al contenuto
                     popupContent.append(riga);
                     });
-                    Utility.popup('Già impaginati:', popupContent, "lg");
+                    Modali.popup('Già impaginati:', popupContent, "lg");
                 })
             );
     
@@ -2664,7 +2705,7 @@ const filtri = {
         //leggiamo il file Filtri.json
         const ObjFiltri = readFile(filtri.getNomeFileFiltriJson());
         if (!ObjFiltri || !ObjFiltri.source) {
-            Utility.popup ('Errore','Nessun filtro trovato per la pagina ' + pagina);
+            Modali.popup ('Errore','Nessun filtro trovato per la pagina ' + pagina);
             return;
         }
 
@@ -2672,7 +2713,7 @@ const filtri = {
         const paginaFiltri = ObjFiltri.source.find(item => item.pagina === pagina);
         let nomePagina = paginaFiltri.pagina;
         if (!paginaFiltri) {
-            Utility.popup ('Errore','Nessun filtro trovato per la pagina corrente' + pagina);
+            Modali.popup ('Errore','Nessun filtro trovato per la pagina corrente' + pagina);
             return;
         }
 
@@ -2743,7 +2784,7 @@ const filtri = {
 
             //controlliamo se pagina 1 è tra pagineFiltri, se c'è apriamo un confirm  che avvisa che se si procede il filtro a pagina 1 verrà eliminato e sostituito
             if (pagineFiltri.includes("1")) {
-                let conferma = await Utility.confirm("Sei sicuro di voler procedere? Il filtro a pagina 1 verrà eliminato e sostituito.");
+                let conferma = await Modali.confirm("Sei sicuro di voler procedere? Il filtro a pagina 1 verrà eliminato e sostituito.");
                 if (!conferma) {
                     return false; // Se l'utente non conferma, non facciamo nulla
                 }
@@ -2791,26 +2832,26 @@ const filtri = {
             //recuperiamo i filtri della pagina corrente
             let ObjFiltri = readFile(filtri.getNomeFileFiltriJson());
             if (!ObjFiltri || !ObjFiltri.source) {
-                Utility.popup ('Errore','Nessun filtro trovato per la pagina ' + pagina);
+                Modali.popup ('Errore','Nessun filtro trovato per la pagina ' + pagina);
                 return;
             }
             //cerchiamo la pagina corrispondente
             let paginaFiltri = ObjFiltri.source.find(item => item.pagina === pagina);
             if (!paginaFiltri) {
-                Utility.popup ('Errore','Nessun filtro trovato per la pagina corrente' + pagina);
+                Modali.popup ('Errore','Nessun filtro trovato per la pagina corrente' + pagina);
                 return;
             }
     
             //controlliamo se la pagina di invio è valida
             if (paginaInvio == null || paginaInvio === '' || isNaN(paginaInvio) || parseInt(paginaInvio) < 1) {
-                Utility.popup ('Errore','Inserire un numero di pagina valido per l\'invio del filtro');
+                Modali.popup ('Errore','Inserire un numero di pagina valido per l\'invio del filtro');
                 return;
             } 
     
             //cerchiamo la pagina di invio
             let paginaInvioFiltri = ObjFiltri.source.find(item => item.pagina === paginaInvio.toString());
             if (!paginaInvioFiltri) {
-                Utility.popup ('Errore','Pagina di invio non trovata' + paginaInvio);
+                Modali.popup ('Errore','Pagina di invio non trovata' + paginaInvio);
                 return;
             }
     
@@ -2874,7 +2915,7 @@ const filtri = {
         }
         catch (error) {
             console.error("Errore durante lo scambio dei filtri:", error);
-            Utility.popup ('Errore','Si è verificato un errore durante lo scambio dei filtri: ' + error.message);
+            Modali.popup ('Errore','Si è verificato un errore durante lo scambio dei filtri: ' + error.message);
         }
     },
 
@@ -2884,27 +2925,27 @@ const filtri = {
         let paginaInvio = $('#paginaInvioFiltro').val();
 
         if (pagina==paginaInvio){
-            Utility.popup ('Errore','Non si puo duplicare il filtro di una pagina su se stessa');
+            Modali.popup ('Errore','Non si puo duplicare il filtro di una pagina su se stessa');
             return;
         }
         
         //recuperiamo i filtri della pagina corrente
         let ObjFiltri = readFile(filtri.getNomeFileFiltriJson());
         if (!ObjFiltri || !ObjFiltri.source) {
-            Utility.popup ('Errore','Nessun filtro trovato per la pagina ' + pagina);
+            Modali.popup ('Errore','Nessun filtro trovato per la pagina ' + pagina);
             return;
         }
         //cerchiamo la pagina corrispondente
         let paginaFiltri = ObjFiltri.source.find(item => item.pagina === pagina);
         if (!paginaFiltri) {
-            Utility.popup ('Errore','Nessun filtro trovato per la pagina corrente' + pagina);
+            Modali.popup ('Errore','Nessun filtro trovato per la pagina corrente' + pagina);
             return;
         }
 
         //cerchiamo la pagina di invio
         let paginaInvioFiltri = ObjFiltri.source.find(item => item.pagina === paginaInvio.toString());
         if (!paginaInvioFiltri) {
-            Utility.popup ('Errore','Pagina di invio non trovata' + paginaInvio);
+            Modali.popup ('Errore','Pagina di invio non trovata' + paginaInvio);
             return;
         }
 
@@ -2923,7 +2964,7 @@ const filtri = {
 
         this.visualizzaHomePageFiltri();
 
-        Utility.chiudiModal();
+        Modali.chiudiModal();
 
 
     }

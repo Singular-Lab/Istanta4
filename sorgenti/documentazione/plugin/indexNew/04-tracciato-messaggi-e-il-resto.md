@@ -76,7 +76,7 @@ while (docInLavorazione === docAtteso && !(await checkPercorsi())) { await Utili
 - **Si aspetta davvero.** `checkPercorsi` apre la finestra dei percorsi, se non è già aperta, e la
   si ricontrolla ogni secondo. `impostaPercorsiDiSistema` scrive subito in `lavorazioni.json`
   ogni cartella scelta, quindi l'attesa finisce da sola quando ci sono tutti e quattro. La
-  chiusura della finestra la fa `Utility.closeAllModal()`, in coda all'inizializzazione.
+  chiusura della finestra la fa `Modali.closeAllModal()`, in coda all'inizializzazione.
 - **L'attesa si interrompe se cambia il documento.** `checkPercorsi` legge le globali: senza
   questo controllo il ciclo vecchio continuerebbe sul documento nuovo — che ha già la sua
   inizializzazione — e se quello non ha una voce in `lavorazioni.json` ripeterebbe «IDX-143» ogni

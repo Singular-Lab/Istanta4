@@ -22,7 +22,9 @@ const cartellaPlugin = path.join(__dirname, "..", "..", "plugin");
 const INSIEME_A = {
     "schedaRef.js": ["reperimentoFoto/schedaFoto.js"],
     "indexNew.js": ["reperimentoFoto/reperimentoFoto.js"],
-    "utility.js": ["reperimentoFoto/reperimentoFoto.js", "reperimentoFoto/fotoPlacer.js"]
+    //I20-1012: e utility.js anche con i quattro oggetti che ne sono usciti.
+    "utility.js": ["reperimentoFoto/reperimentoFoto.js", "reperimentoFoto/fotoPlacer.js",
+        "modali/modali.js", "modali/eliminazione.js", "tooltip/tooltip.js", "menu.js", "testoTag.js"]
 };
 function sorgente(nomeFile) {
     return [nomeFile, ...(INSIEME_A[nomeFile] || [])]

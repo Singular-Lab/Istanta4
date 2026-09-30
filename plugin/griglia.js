@@ -186,7 +186,7 @@ const griglia = {
                     // Icona escludi
                     var escludiIcon = $('<img title="Escludi elemento" src="images/escludi.png" alt="escludi" style="cursor: pointer; height: 15px; margin-right:5px;">');
                     escludiIcon.on('click', async function () {
-                        var res = await Utility.confirmCustom("Escludere l'elemento da tutte le pagine associate al filtro o solo dalla pagina corrente?", "Pagina "+pageName, 1, "Pagine filtro", 2);
+                        var res = await Modali.confirmCustom("Escludere l'elemento da tutte le pagine associate al filtro o solo dalla pagina corrente?", "Pagina "+pageName, 1, "Pagine filtro", 2);
                         if (res.result) {
                             var pagine = [];
                             if (res.hiddenVal == 2) {
@@ -230,7 +230,7 @@ const griglia = {
                     // Icona includiEscludi
                     var includiEscludiIcon = $('<img title="Scambia elemento con elemento escluso" src="images/includiEscludi.png" alt="includiEscludi" style="cursor: pointer; height: 15px; margin-right:5px;">');
                     includiEscludiIcon.on('click', async function () {
-                        var res = await Utility.confirmCustom("Escludere l'elemento da tutte le pagine associate al filtro o solo dalla pagina corrente?", "Pagina "+pageName, 1, "Pagine filtro", 2);
+                        var res = await Modali.confirmCustom("Escludere l'elemento da tutte le pagine associate al filtro o solo dalla pagina corrente?", "Pagina "+pageName, 1, "Pagine filtro", 2);
                         if (res.result) {
                             var pagine = [];
                             if (res.hiddenVal == 2) {
@@ -976,7 +976,7 @@ const griglia = {
                 return;
             }
 
-            result = await Utility.confirm("Gli elementi impaginati a pagina " + griglia.parentPage.name + " saranno ricalcati seguendo la griglia selezionata, l'operazione non è annullabile, continuare?");
+            result = await Modali.confirm("Gli elementi impaginati a pagina " + griglia.parentPage.name + " saranno ricalcati seguendo la griglia selezionata, l'operazione non è annullabile, continuare?");
 
             if (result) {
                 var mappe = await this.ricalcaConteggio(griglia);
@@ -1138,7 +1138,7 @@ const griglia = {
             obj.visible = visibility;
             //se objStyle è valorizzato cerchiamo lo stile di oggetto con quel nome e se esiste lo applichiamo all'oggetto
             if (objStyle != null) {
-                var style = Utility.parseObjStile(objStyle);
+                var style = TestoTag.parseObjStile(objStyle);
                 if (style != null && style.isValid) {
                     obj.appliedObjectStyle = style;
                 }
@@ -1631,7 +1631,7 @@ const griglia = {
             }
 
             var titolo = "Seleziona l'elemento da " + (includi ? "includere" : "escludere");
-            Utility.apriModal("dialogIncludiEscludi", titolo);
+            Modali.apriModal("dialogIncludiEscludi", titolo);
             //salviamo nel modal i data della griglia, e se presente del gruppo
             $("#bodyIncludiEscludi").data("griglia", griglia);
             $("#bodyIncludiEscludi").data("mappaGriglia", mappaGriglia);
@@ -1732,7 +1732,7 @@ const griglia = {
                                     var colInfo = $('<div class="col" style="width: 10%;"></div>');
                                     var info = $('<img title="Info extra" src="images/info.png" alt="Info" style="cursor: pointer; width: 25px; height: 20px; margin-right:5px;">');
                                     info.click(function () {
-                                        Utility.popup('info', pluginMiddleware.getInfoExtra(elemento))
+                                        Modali.popup('info', pluginMiddleware.getInfoExtra(elemento))
                                     });
                                     colInfo.append(info);
                                     row.append(colInfo);
@@ -1843,7 +1843,7 @@ const griglia = {
                                         var colInfo = $('<div class="col" style="width: 10%;"></div>');
                                         var info = $('<img title="Info extra" src="images/info.png" alt="Info" style="cursor: pointer; width: 25px; height: 20px; margin-right:5px;">');
                                         info.click(function () {
-                                            Utility.popup('info', pluginMiddleware.getInfoExtra(elemento))
+                                            Modali.popup('info', pluginMiddleware.getInfoExtra(elemento))
                                         });
                                         colInfo.append(info);
                                         row.append(colInfo);
@@ -1985,12 +1985,12 @@ const griglia = {
             }
             //fine parte esclusione
 
-            //se c'è una callback la impostiamo come evento on click del pulsante #confermaIncludiEscludi sostituendo i precedenti, oltre alla callback ci mettiamo anche Utility.chiudiModal()
+            //se c'è una callback la impostiamo come evento on click del pulsante #confermaIncludiEscludi sostituendo i precedenti, oltre alla callback ci mettiamo anche Modali.chiudiModal()
             if (callback != null) {
                 $("#confermaIncludiEscludi").off("click");
                 $("#confermaIncludiEscludi").on("click", async function () {
                     await callback($("#bodyIncludiEscludi").data("codiceEscluso"));
-                    Utility.chiudiModal();
+                    Modali.chiudiModal();
                 });
 }
         }
@@ -2014,7 +2014,7 @@ const griglia = {
 
             var pagineEsclusione = [];
             if (codiceEscluso != null) {
-                var res = await Utility.confirmCustom("Escludere l'elemento da tutte le pagine associate al filtro o solo dalla pagina corrente?", "Pagina "+pageName, 1, "Pagine filtro", 2);
+                var res = await Modali.confirmCustom("Escludere l'elemento da tutte le pagine associate al filtro o solo dalla pagina corrente?", "Pagina "+pageName, 1, "Pagine filtro", 2);
                 if (res.result) {
                     if (res.hiddenVal == 2) {
                         var obj = readFile(pathLavorazione + "/listaRefConteggio.json");
@@ -2345,7 +2345,7 @@ const griglia = {
         if (codiceScritto1.length > 30) {
             codiceScritto1 = codiceScritto1.substring(0, 30) + "...";
         }
-        Utility.apriModal("dialogSwap", "Clicca e seleziona il box con cui vuoi scambiare l'elemento "+codiceScritto1, false);
+        Modali.apriModal("dialogSwap", "Clicca e seleziona il box con cui vuoi scambiare l'elemento "+codiceScritto1, false);
 
         let box = gruppo.nomeBox != null ? gruppo.nomeBox : "Box vuoto";
 
@@ -2459,7 +2459,7 @@ const griglia = {
                 clearInterval(interval);
                 me.setVariabiliSwap(false, false);
                 //chiudiamo il modal
-                Utility.chiudiModal();
+                Modali.chiudiModal();
                 app.selection = [griglia];
                 indesignEvents.setBusy(false);
                 intervalloInCorso = false;
@@ -2484,7 +2484,7 @@ const griglia = {
                         clearInterval(interval);
                         me.setVariabiliSwap(false, false);
                         //chiudiamo il modal
-                        Utility.chiudiModal();
+                        Modali.chiudiModal();
                         app.selection = [griglia];
                         indesignEvents.setBusy(false);
                         intervalloInCorso = false;
@@ -2660,7 +2660,7 @@ const griglia = {
                 clearInterval(interval);
                 me.setVariabiliSwap(false, false);
                 //chiudiamo il modal
-                Utility.chiudiModal();
+                Modali.chiudiModal();
                 app.selection = [griglia];
                 indesignEvents.setBusy(false);
                 intervalloInCorso = false;

@@ -105,7 +105,7 @@ questo non chiede niente e non tocca il tracciato.
 
 1. la chiamata viene dal pulsante;
 2. l'utente è `superAdmin`;
-3. ha alzato la spunta dentro `Utility.confirmRimozioneRef`.
+3. ha alzato la spunta dentro `Modali.confirmRimozioneRef`.
 
 Poi il flag va al server:
 
