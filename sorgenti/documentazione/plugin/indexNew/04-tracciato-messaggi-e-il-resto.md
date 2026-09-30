@@ -60,19 +60,38 @@ il parametro esisteva: il termine è stato tolto, e il comportamento voluto è l
 dentro **14 occorrenze di `Utiliy.`** invece di `Utility.` — che avrebbero lanciato `ReferenceError`
 su quasi ogni ramo. Il refuso è sopravvissuto per anni proprio perché la funzione non gira mai.
 
-### Da correggere in un task a parte
+### Corretto in I20-1016: l'attesa dei percorsi di sistema
 
-**`await` applicato alla negazione di una promise, in due punti.**
+In `initDocumentInLavorazione` la riga era `while (await !checkPercorsi())`: `await` applicato alla
+**negazione** della promise, che vale sempre `false`. Il ciclo non girava mai, `checkPercorsi`
+veniva chiamata una volta sola e si tirava dritto anche senza i percorsi.
+
+Ora è:
 
 ```js
-while (await !checkPercorsi()) { await Utility.sleep(1000); }   // initDocumentInLavorazione
-let _resTest = await !checkPercorsi();                          // initLibroInLavorazione
+const docAtteso = docInLavorazione;
+while (docInLavorazione === docAtteso && !(await checkPercorsi())) { await Utility.sleep(1000); }
 ```
 
-`!promise` è sempre `false`, quindi `await false` è `false` e **il ciclo non gira mai**:
-`checkPercorsi` viene chiamata una volta sola e il suo esito ignorato. Andava scritto
-`while (!(await checkPercorsi()))`. L'effetto è che l'attesa dei percorsi di sistema non avviene —
-si tira dritto comunque.
+- **Si aspetta davvero.** `checkPercorsi` apre la finestra dei percorsi, se non è già aperta, e la
+  si ricontrolla ogni secondo. `impostaPercorsiDiSistema` scrive subito in `lavorazioni.json`
+  ogni cartella scelta, quindi l'attesa finisce da sola quando ci sono tutti e quattro. La
+  chiusura della finestra la fa `Utility.closeAllModal()`, in coda all'inizializzazione.
+- **L'attesa si interrompe se cambia il documento.** `checkPercorsi` legge le globali: senza
+  questo controllo il ciclo vecchio continuerebbe sul documento nuovo — che ha già la sua
+  inizializzazione — e se quello non ha una voce in `lavorazioni.json` ripeterebbe «IDX-143» ogni
+  secondo. Col documento cambiato l'inizializzazione vecchia esce senza fare altro.
+- **Gli errori si vedono.** Finché la promise non veniva attesa, un'eccezione dentro
+  `checkPercorsi` non arrivava a nessuno: è così che il `ReferenceError` su `forceOptions` è rimasto
+  nascosto. Ora diventa il messaggio `IDX-167`, e poi l'inizializzazione prosegue come faceva
+  sempre.
+
+**Il libro è rimasto com'era, di proposito.** In `initLibroInLavorazione` c'è ancora
+`let _resTest = await !checkPercorsi();`: `checkPercorsi` parte, il suo esito non viene atteso e
+`_resTest` vale sempre `false`. Il ciclo d'attesa, lì, era stato scritto e poi commentato.
+`tests/plugin/attesaPercorsi.test.js` lo esclude per nome dal controllo contro `await !`.
+
+### Da correggere in un task a parte
 
 **`autoCompilazioneCampiKit` non fa niente.**
 
