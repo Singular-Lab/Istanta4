@@ -166,8 +166,9 @@ Documentare ne ha fatti emergere altri, tutti aperti come task separati. Nessuno
 I20-1002 è un task di documentazione, e correggerli cambierebbe il comportamento di chiamate che
 oggi ci convivono.
 
-1. **`XMLHttpRequestClient.abort()` non interrompe la richiesta in volo** —
-   [XMLHttpRequestClient.md](XMLHttpRequestClient.md).
+1. **`XMLHttpRequestClient.abort()` non interrompe la richiesta in volo** — corretto da I20-1004:
+   ora la ferma e dice all'operatore cosa è stato annullato e perché
+   ([XMLHttpRequestClient.md](XMLHttpRequestClient.md)).
 2. **`index.html` e `jsIndexControls.js` contengono due copie divergenti delle funzioni dei tab** —
    [index-html.md](index-html.md) e [jsIndexControls.md](jsIndexControls.md).
 3. **`garbageCollector.js` ha quattro difetti** nella rimozione differita, di cui il più grave è

@@ -59,8 +59,9 @@ in cui un file di configurazione diventa stato del programma.
 ### `xhrInProcess` — una sola richiesta alla volta
 
 È la variabile che spiega i sei `abort()` sparsi per il Plugin: c'è una sola richiesta al server in
-volo, e chi ne avvia una nuova ferma la precedente. **Peccato che `abort()` non fermi davvero
-niente** — vedi [XMLHttpRequestClient.md](../XMLHttpRequestClient.md).
+volo, e chi ne avvia una nuova ferma la precedente. Ogni `abort()` passa il suo motivo, e
+l'operatore lo legge nell'avviso `HRC-02` — vedi [XMLHttpRequestClient.md](../XMLHttpRequestClient.md).
+Il salvataggio della scheda referenza è l'eccezione: usa un client suo, e non si può annullare.
 
 ### Lo stato del lavoro
 

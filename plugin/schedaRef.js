@@ -3936,10 +3936,14 @@ const schedaRef = {
             var isEditabile = pluginMiddleware.getEditabilitaSchedaRef ? pluginMiddleware.getEditabilitaSchedaRef(primario.recordInTracciato) : true;
             if(isEditabile){
                 if (xhrInProcess != null)
-                    xhrInProcess.abort();
+                    xhrInProcess.abort("Salvataggio della scheda referenza");
     
-                xhrInProcess = new XMLHttpRequestClient();
-                xhrInProcess.onload = (objResult, parsed) => {
+                //I20-1004: il salvataggio ha un client suo e non diventa xhrInProcess, cosi'
+                //nessun altro puo' annullarlo. Il server salverebbe lo stesso, e senza la risposta
+                //i cambi strutturali non arriverebbero al documento: documento e server
+                //andrebbero ognuno per conto suo.
+                let xhrSalva = new XMLHttpRequestClient();
+                xhrSalva.onload = (objResult, parsed) => {
                     try {
                         if (!parsed) {
                             objResult = JSON.parse(objResult);
@@ -3964,9 +3968,9 @@ const schedaRef = {
     
                 }
     
-                xhrInProcess.onreadystatechange = function () {
-                    if (xhrInProcess.readyState == 4) {
-                        if (xhrInProcess.status == 200) {
+                xhrSalva.onreadystatechange = function () {
+                    if (xhrSalva.readyState == 4) {
+                        if (xhrSalva.status == 200) {
                             //currentSelection = null;
                         } else {
                             //currentSelection = null;
@@ -3975,7 +3979,7 @@ const schedaRef = {
                     }
                 };
     
-                xhrInProcess.onerror = function () {
+                xhrSalva.onerror = function () {
                     //currentSelection = null;
                     //messaggioUtente("SalvaModifiche: Errore di rete", "error");
                 };
@@ -3984,7 +3988,7 @@ const schedaRef = {
     
                 let reqPass = JSON.stringify(req);
                 reqPass = encodeURIComponent(reqPass);
-                xhrInProcess.send("Revisore/salvaRefFromIndd", "reqStr=" + reqPass, "PUT", "application/x-www-form-urlencoded");
+                xhrSalva.send("Revisore/salvaRefFromIndd", "reqStr=" + reqPass, "PUT", "application/x-www-form-urlencoded");
                 messaggioUtente("SalvaModifiche: Richiesta inviata", "success", true, 3, true);
             }
             else {
