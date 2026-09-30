@@ -7958,6 +7958,18 @@ var cartellaAssenteCheck = false;
 //Con un overlay aperto il posto giusto e' il contenitore dentro l'overlay: quello della
 //schermata principale gli finisce sotto. Si guarda lo stile in linea invece di :visible,
 //perche' in UXP le misure su cui :visible si basa non sono affidabili.
+/// I20-1018: la cartella in cui scrivere i log, per messaggioUtente e writeDebugMessageForCrash.
+///
+/// percorsoLogs parte da "/Logs/", relativo alla lavorazione, e impostaPercorsiDiSistema lo
+/// rende assoluto: da file.pathLogs di lavorazioni.json, o da pathLavorazione + "/Logs/" se
+/// manca. Da li' in poi si usa com'e'; concatenarci davanti pathLavorazione dava un percorso
+/// inesistente. Prima che succeda, pero', si scrive gia': aprendo una lavorazione nuova,
+/// impostaPercorsiDiSistema per foto e loghi scrive nel log prima che tocchi ai log, e in quel
+/// momento il valore relativo va ancora completato. Vuoto vuol dire che la cartella non c'e'.
+function cartellaDeiLog() {
+    return percorsoLogs === defaultPercorsoLogs ? pathLavorazione + percorsoLogs : percorsoLogs;
+}
+
 /// I20-981: dove scrivere un messaggio all'operatore.
 ///
 /// Con un overlay aperto il posto giusto e' il contenitore dentro l'overlay: quello della
@@ -8021,7 +8033,7 @@ async function messaggioUtente(msg, style, loading = false, tempo = 0, dontWrite
             return n < 10 ? '0' + n : '' + n;
         }
 
-        var logPath = /*pathLavorazione +*/ percorsoLogs;
+        var logPath = cartellaDeiLog();
 
         var date = new Date();
         var logMessage = {
@@ -8126,16 +8138,10 @@ async function messaggioUtente(msg, style, loading = false, tempo = 0, dontWrite
 /// Serve dove un console.log non basta: se il processo crolla, la console se ne va con lui,
 /// il file no.
 ///
-/// DIFETTO (I20-1002, da correggere in un task a parte): il percorso e'
-/// "pathLavorazione + percorsoLogs", ma percorsoLogs e' GIA' un percorso assoluto - glielo
-/// assegna impostaPercorsiDiSistema leggendo file.pathLogs. Concatenarli produce un percorso
-/// che non esiste. Due funzioni piu' su, in messaggioUtente, quella stessa concatenazione
-/// c'e' ma e' commentata: "/*pathLavorazione +*/ percorsoLogs". Li' e' stata corretta, qui
-/// no.
-///
-/// La conseguenza e' doppia: il log di crash non viene mai scritto, e la scrittura fallita
-/// fa comparire all'operatore "Code IDX-98 Errore cartella logs assente", che manda a
-/// cercare un guasto che non c'e'.
+/// I20-1018: il percorso era "pathLavorazione + percorsoLogs", ma percorsoLogs e' gia'
+/// assoluto: il Debuglog non veniva mai scritto, e la scrittura fallita mostrava "Code IDX-98
+/// Errore cartella logs assente" anche con la cartella al suo posto. Ora la cartella la dice
+/// cartellaDeiLog, la stessa di messaggioUtente.
 function writeDebugMessageForCrash(msg) {
     try {
         if (msg == null || msg == "") {
@@ -8147,7 +8153,7 @@ function writeDebugMessageForCrash(msg) {
             return n < 10 ? '0' + n : '' + n;
         }
 
-        var logPath = pathLavorazione + percorsoLogs;
+        var logPath = cartellaDeiLog();
 
         var date = new Date();
         var logMessage = {

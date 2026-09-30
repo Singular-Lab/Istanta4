@@ -110,17 +110,15 @@ del documento, ricavarne promo, canale, area e formato, riempire le quattro tend
 la ricerca del kit. **Non si nota perché non c'è un errore**: le tendine restano vuote e si
 compilano a mano, come se l'automatismo non fosse mai stato previsto.
 
-**`writeDebugMessageForCrash` scrive su un percorso che non esiste.**
+**`writeDebugMessageForCrash` scriveva su un percorso che non esiste.** *Corretto in I20-1018.*
 
-```js
-var logPath = pathLavorazione + percorsoLogs;      // writeDebugMessageForCrash
-var logPath = /*pathLavorazione +*/ percorsoLogs;  // messaggioUtente, due funzioni sopra
-```
-
-`percorsoLogs` è **già assoluto** — glielo assegna `impostaPercorsiDiSistema` leggendo
-`file.pathLogs`. In `messaggioUtente` la concatenazione è stata commentata, qui no. Doppio effetto:
-il log di crash non viene mai scritto, e la scrittura fallita fa comparire all'operatore
-*«Code IDX-98 Errore cartella logs assente»*, che manda a cercare un guasto che non c'è.
+Usava `pathLavorazione + percorsoLogs`, ma `percorsoLogs` è già assoluto dopo
+`impostaPercorsiDiSistema`: il `Debuglog_<data>.txt` non veniva mai scritto, e la scrittura fallita
+mostrava *«Code IDX-98 Errore cartella logs assente»* con la cartella al suo posto. Ora
+`writeDebugMessageForCrash` e `messaggioUtente` chiedono la cartella a `cartellaDeiLog()`, che
+completa solo il valore di partenza `"/Logs/"`: aprendo una lavorazione nuova si scrive nel log
+prima che `percorsoLogs` sia diventato assoluto, e togliere e basta la concatenazione avrebbe
+mandato quei log alla radice del disco.
 
 ### Due cose che sembrano difetti e non lo sono
 
