@@ -216,9 +216,13 @@ test("sugli stessi dati i rettangoli sono quelli di prima", () => {
 
 /* ---- chi chiama ---- */
 
+//I20-1010: il calcolo dopo la ricerca della base sta in calcolaSpazioLibero, che
+//getSpazioImpaginazione chiama.
 test("getSpazioImpaginazione passa l'esito e avvisa con CSF-18 se il calcolo e' interrotto", () => {
     const testo = fs.readFileSync(path.join(__dirname, "..", "..", "plugin", "CssFramework.js"), "utf8").replace(/\r/g, "");
-    const inizio = testo.indexOf("    getSpazioImpaginazione(box) {");
+    const ingresso = testo.slice(testo.indexOf("    getSpazioImpaginazione(box) {"), testo.indexOf("    calcolaSpazioLibero(box, base, obs) {"));
+    assert.match(ingresso, /return this\.calcolaSpazioLibero\(box, base, obs\);/);
+    const inizio = testo.indexOf("    calcolaSpazioLibero(box, base, obs) {");
     const corpo = testo.slice(inizio, testo.indexOf("\n    },", inizio));
 
     assert.match(corpo, /this\.refineRects\(obs, candidate, baseWidth, baseHeight, 0, esito\)/);
