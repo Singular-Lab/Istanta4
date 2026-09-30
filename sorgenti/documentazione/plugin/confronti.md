@@ -68,10 +68,9 @@ stessi tre per la whitelist.
 | `ATTESA_RIDISEGNO_MS` | 40 | quanto si lascia a UXP per ridisegnare |
 | `COLORI_STATO`, `PASSO_SCORRIMENTO` | | |
 
-**`ATTESA_MASSIMA_RILETTURA_SCHEDA` esiste per una ragione precisa:**
-`XMLHttpRequestClient.abort()` non interrompe davvero la richiesta — vedi
-[XMLHttpRequestClient.md](XMLHttpRequestClient.md) — quindi la risposta tardiva si lascia cadere, ma
-l'operatore non deve restare fermo ad aspettarla.
+**`ATTESA_MASSIMA_RILETTURA_SCHEDA` esiste per una ragione precisa:** la rilettura passa da
+`schedaRef.getSchedaRef`, che non offre modo di essere fermata, quindi la risposta tardiva si lascia
+cadere, ma l'operatore non deve restare fermo ad aspettarla.
 
 ---
 

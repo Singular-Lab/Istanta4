@@ -70,8 +70,8 @@ showLoading("Inizializzazione...");
 
 
 /// Una sola richiesta al server in volo alla volta: chi ne avvia una nuova ferma la precedente.
-/// E' la variabile che spiega i sei abort() sparsi per il Plugin - peccato che
-/// XMLHttpRequestClient.abort() non fermi davvero niente, vedi la sua pagina.
+/// E' la variabile che spiega i sei abort() sparsi per il Plugin. Ognuno dice il suo motivo,
+/// e l'operatore lo legge nel messaggio HRC-02 (I20-1004).
 let xhrInProcess=null;//Processo XHR uncio per tutte le operazioni che devono per forza di cosa essere sequenziali
 let docInLavorazione=null;
 let libroInLavorazione=null;
@@ -368,7 +368,7 @@ indesignEvents.addEventListener(indesignEvents.EVENT_NEW_DOCUMENT_SELECTED, asyn
     
     //Annullo qualsiasi operazione in corso per potermi focalizzarfe sulla nuova selezione di documento
     if (xhrInProcess!=null)
-        xhrInProcess.abort();
+        xhrInProcess.abort("Cambio documento attivo");
     
     docInLavorazione = args[0];
     
@@ -409,7 +409,7 @@ indesignEvents.addEventListener(indesignEvents.EVENT_NO_DOCUMENT_OPENED, async f
 
         //Annullo qualsiasi operazione in corso per potermi focalizzarfe sulla nuova selezione di documento
         if (xhrInProcess!=null)
-            xhrInProcess.abort();
+            xhrInProcess.abort("Nessun documento aperto");
 
         docInLavorazione = null;
 
@@ -1679,6 +1679,9 @@ async function autoCompilazioneCampiKit(){
 /// Una richiesta gia' in volo viene annullata (xhrInProcess.abort): l'operatore che preme
 /// due volte non si ritrova due tracciati che si sovrascrivono a vicenda.
 ///
+/// I20-1004: se e' questo scaricamento a essere annullato, spegne il suo caricamento e
+/// onErrore lo viene a sapere col motivo.
+///
 /// I20-981, due correzioni che vanno lette insieme:
 ///
 /// - il rinfresco dell'interfaccia sta in un try suo. Prima era nello stesso try della
@@ -1700,17 +1703,20 @@ function scaricaContenutoKit(idKit, noCacheValue = null, callback = null, skipMo
         noCacheValue = noCache;
     }
     console.log("scaricaContenutoKit("+ idKit +")");
-    showLoading("Scaricamento lista...");
 
     console.log("step1");
 
+    //I20-1004: prima si annulla, poi si accende il caricamento. Lo scaricamento annullato
+    //spegne il suo nell'onabort, e spegnerebbe questo se fosse gia' acceso.
     if (xhrInProcess!=null)
-        xhrInProcess.abort();
+        xhrInProcess.abort("Nuovo scaricamento della lista");
 
+    showLoading("Scaricamento lista...");
 
     console.log("step2");
 
     xhrInProcess = new XMLHttpRequestClient();
+    xhrInProcess.descrizione = "Scaricamento lista";
     xhrInProcess.onload = (objResult, parsed) => {
 
         console.log(objResult);
@@ -1800,6 +1806,16 @@ function scaricaContenutoKit(idKit, noCacheValue = null, callback = null, skipMo
         hideLoading();
         if (onErrore != null && typeof onErrore === "function") {
             onErrore(errore);
+        }
+    }
+
+    xhrInProcess.onabort = function (motivo) {
+        //Il caricamento acceso qui va spento qui: la risposta, che lo spegneva nel suo
+        //finally, non arrivera' piu', e chi ha annullato - un cambio di documento, per
+        //esempio - non ne sa niente. Il pannello resterebbe sopra tutto il Plugin.
+        hideLoading();
+        if (onErrore != null && typeof onErrore === "function") {
+            onErrore("annullato a causa di: " + motivo);
         }
     }
 
@@ -3056,9 +3072,10 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
             }
 
             if (xhrInProcess != null)
-                xhrInProcess.abort();
+                xhrInProcess.abort(impagina ? "Nuova impaginazione avviata" : "Nuovo conteggio avviato");
 
             xhrInProcess = new XMLHttpRequestClient();
+            xhrInProcess.descrizione = impagina ? "Calcolo dell'impaginazione" : "Calcolo del conteggio";
             xhrInProcess.onload = async (objResult, parsed) => {
 
                 console.log(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>RISULTATO FILTRO CONTEGGIO");
@@ -4214,9 +4231,10 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
 
             if(restartFromIndexPoP == 0){
                 if (xhrInProcess != null)
-                    xhrInProcess.abort();
+                    xhrInProcess.abort("Nuova impaginazione del libro avviata");
     
                 xhrInProcess = new XMLHttpRequestClient();
+                xhrInProcess.descrizione = "Calcolo dell'impaginazione del libro";
                 xhrInProcess.onload = async (objResult, parsed) => {
                     await impaginaLista(objResult, parsed);
                 }

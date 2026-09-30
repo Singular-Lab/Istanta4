@@ -1875,6 +1875,7 @@ const Utility=
         var result = null;
         var error = null;
         xhrInProcess = new XMLHttpRequestClient();
+        xhrInProcess.descrizione = "Scaricamento degli impaginati";
         xhrInProcess.onload = (objResult, parsed) => {
             result = objResult;
         }
@@ -1893,6 +1894,11 @@ const Utility=
         xhrInProcess.onerror = function () {
             //messaggioUtente("Errore di rete durante la richiesta", "error");
             error = "Errore di rete durante la richiesta";
+        }
+
+        //I20-1004: annullata, non arrivera' piu' niente. Inutile aspettare la scadenza.
+        xhrInProcess.onabort = function (motivo) {
+            error = "annullato a causa di: " + motivo;
         }
     
         console.log("Menabo/getListaImpaginati/" + idKitLavorazione);

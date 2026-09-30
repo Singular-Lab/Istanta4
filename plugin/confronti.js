@@ -1042,8 +1042,10 @@ const confronti = {
         formData.append("lista", JSON.stringify(lista));
 
         var res = null;
+        var annullata = false;
 
         xhrInProcess = new XMLHttpRequestClient();
+        xhrInProcess.descrizione = "Confronto preliminare del Report Integrita'";
         xhrInProcess.onload = (objResult, parsed) => {
             try {
                 if (!parsed) {
@@ -1089,10 +1091,15 @@ const confronti = {
             messaggioUtente("Code CNF-008: Errore di connessione al server durante la preanalisi", "error");
         }
 
+        //I20-1004: annullata, non arrivera' piu' niente. Il messaggio l'ha gia' dato abort.
+        xhrInProcess.onabort = function () {
+            annullata = true;
+        }
+
         xhrInProcess.send("Menabo/PreAnalisiMismatch/"+idKitLavorazione, formData, "PUT");
 
         var securityCounter = 0;
-        while (res == null) {
+        while (res == null && !annullata) {
             if (securityCounter > 600) {
                 messaggioUtente("Code CNF-009: Timeout durante la preanalisi", "error");
                 hideLoading();
@@ -1123,8 +1130,10 @@ const confronti = {
         }
 
         var stato = null;
+        var annullata = false;
 
         xhrInProcess = new XMLHttpRequestClient();
+        xhrInProcess.descrizione = "Allineamento del Report Integrita' con il server";
         xhrInProcess.onload = async (objResult, parsed) => {
             try {
                 if (!parsed) {
@@ -1186,16 +1195,27 @@ const confronti = {
             messaggioUtente("Code CNF-014: Errore di connessione al server durante la sincronizzazione dell'impaginato", "error");
         }
 
+        //I20-1004: annullata, non arrivera' piu' niente. Il messaggio l'ha gia' dato abort.
+        xhrInProcess.onabort = function () {
+            annullata = true;
+        }
+
         xhrInProcess.send("Menabo/syncImpaginatoConServer/"+idKitLavorazione+"/"+applicaImpaginazioni, formData, "PUT");
 
         var securityCounter = 0;
-        while (stato == null) {
+        while (stato == null && !annullata) {
             if (securityCounter > 100) {
                 messaggioUtente("Code CNF-015: Timeout durante la sincronizzazione dell'impaginato", "error");
                 break;
             }
             securityCounter++;
             await Utility.sleep(100);
+        }
+
+        //I20-1004: sotto, qualunque cosa succeda, lo stato diventa "Completed". Una sync
+        //annullata non e' completata: il chiamante deve fermarsi.
+        if (annullata) {
+            return null;
         }
 
         while (stato == "InProgress") {
@@ -1576,8 +1596,8 @@ const confronti = {
     //Oltre questo tempo la rilettura della scheda dal server si considera persa: meglio
     //lasciare il report com'era che restare appesi con il caricamento davanti.
     /// REPORT INTEGRITA'. Oltre questa attesa si smette di aspettare la rilettura della scheda.
-    /// Serve perche' XMLHttpRequestClient.abort() non interrompe davvero la richiesta: la
-    /// risposta tardiva si lascia cadere, ma l'operatore non deve restare fermo.
+    /// getSchedaRef non ha un modo di essere fermata: la risposta tardiva si lascia cadere, ma
+    /// l'operatore non deve restare fermo.
     ATTESA_MASSIMA_RILETTURA_SCHEDA: 20000,
 
     schedaDalReportAperta() {
@@ -2495,8 +2515,8 @@ const confronti = {
                 resolve(valore);
             };
 
-            //XMLHttpRequestClient.abort() non interrompe davvero: la richiesta tardiva la si
-            //lascia cadere, ma l'attesa non deve tenere fermo l'operatore.
+            //getSchedaRef non si puo' fermare: la richiesta tardiva la si lascia cadere, ma
+            //l'attesa non deve tenere fermo l'operatore.
             setTimeout(() => rispondi(null), this.ATTESA_MASSIMA_RILETTURA_SCHEDA);
 
             try {
