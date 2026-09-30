@@ -49,6 +49,25 @@ test("i vecchi file non ci sono piu', e i nuovi si'", () => {
     }
 });
 
+//I file che il Plugin richiede ma che il repository non contiene, per disegno: in CI non ci sono.
+//custom.js e' l'agenzia, montata in radice da monta-cliente.sh; ipconfig.json e' la
+//configurazione della macchina. Accanto a ciascuno, la riga del .gitignore che lo tiene fuori.
+const NON_VERSIONATI = {
+    "custom.js": "plugin/custom.js",
+    "ipconfig.json": "**/ipconfig*.json"
+};
+
+//L'eccezione vale solo finche' il .gitignore la conferma: un file che tornasse versionato, o una
+//riga tolta, farebbero di nuovo controllare quel require.
+test("i file richiesti ma non versionati sono davvero fuori dal repository", () => {
+    const gitignore = fs.readFileSync(path.join(CARTELLA_PLUGIN, "..", ".gitignore"), "utf8")
+        .replace(/\r/g, "").split("\n").map(riga => riga.trim());
+
+    for (const [file, riga] of Object.entries(NON_VERSIONATI)) {
+        assert.ok(gitignore.includes(riga), file + ": manca la riga " + riga + " nel .gitignore");
+    }
+});
+
 //Un require che non trova il file in UXP ferma il caricamento del pannello, e sotto Node si
 //vedrebbe solo se un test caricasse proprio quel file. Qui si guardano tutti.
 test("ogni require relativo del Plugin trova il suo file", () => {
@@ -57,6 +76,10 @@ test("ogni require relativo del Plugin trova il suo file", () => {
     for (const { relativo, cartella } of fileConRequire()) {
         const codice = senzaCommenti(leggiFileDelPlugin(relativo));
         for (const m of codice.matchAll(/require\(\s*['"](\.{1,2}\/[^'"]+)['"]\s*\)/g)) {
+            const richiesto = path.normalize(path.join(cartella, m[1]));
+            if ([richiesto, richiesto + ".js"].some(nome => nome in NON_VERSIONATI)) {
+                continue;
+            }
             const base = path.join(CARTELLA_PLUGIN, cartella, m[1]);
             const trovato = [base, base + ".js", base + ".json", path.join(base, "index.js")]
                 .some(candidato => fs.existsSync(candidato) && fs.statSync(candidato).isFile());
