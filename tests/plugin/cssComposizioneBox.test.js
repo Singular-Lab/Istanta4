@@ -334,3 +334,118 @@ test('senza regole di duplicazione non esiste nessuna etichetta derivata', () =>
     assert.ok(!cssComposizioneBox.etichettaDerivata('sy_ombra$1', null));
     assert.ok(!cssComposizioneBox.etichettaDerivata(null, ['sy_ombra$']));
 });
+
+/* ---- I20-1022: la copia della primaria nei box BIS ---- */
+
+//La regola di BOX7 in SourceFrameworkCss di Edro21: si duplica la primaria, e la copia si chiama
+//foto_secondaria$...$clone, cosi' il fix foto la conta e le segnalazioni la riconoscono.
+const regolaCopiaBis = {
+    nomeGruppo: 'copia_foto_BIS',
+    etichettaSorgente: 'immagine*',
+    bersagli: ['immagine*'],
+    etichettaCopia: 'foto_secondaria',
+    marcaClone: true,
+    adattaAlBersaglio: null,
+    mantieniSorgente: true,
+    aggiornaCopie: false
+};
+
+test('la primaria si duplica in una foto_secondaria marcata come clone', () => {
+    const piano = cssComposizioneBox.pianificaDuplicazioni([regolaCopiaBis], [foto, parentesi], corrisponde);
+
+    assert.strictEqual(piano.copie.length, 1);
+    const copia = piano.copie[0];
+    assert.strictEqual(copia.etichetta, 'foto_secondaria$3150596$clone');
+    assert.strictEqual(copia.etichettaModello, 'immagine$3150596');
+    assert.strictEqual(copia.etichettaBersaglio, 'immagine$3150596');
+    //Stesse misure e stessa posizione della primaria: a disporle ci pensa il fix foto.
+    assert.deepStrictEqual(copia.bounds, foto.bounds);
+    //La primaria resta.
+    assert.deepStrictEqual(piano.rimozioni, []);
+});
+
+test('al passaggio dopo il fix foto il clone resta dove il fix foto l\'ha messo', () => {
+    const primariaSpostata = { etichetta: 'immagine$3150596', bounds: [30, 0, 70, 40] };
+    const cloneSistemato = { etichetta: 'foto_secondaria$3150596$clone', bounds: [20, 20, 60, 60] };
+
+    const piano = cssComposizioneBox.pianificaDuplicazioni([regolaCopiaBis], [primariaSpostata, cloneSistemato], corrisponde);
+
+    assert.deepStrictEqual(piano.copie, []);
+    assert.deepStrictEqual(piano.aggiornamenti, []);
+    assert.deepStrictEqual(piano.rimozioni, []);
+});
+
+test('senza aggiornaCopie false il clone verrebbe riportato sulla primaria', () => {
+    const regola = Object.assign({}, regolaCopiaBis, { aggiornaCopie: undefined });
+    const primariaSpostata = { etichetta: 'immagine$3150596', bounds: [30, 0, 70, 40] };
+    const cloneSistemato = { etichetta: 'foto_secondaria$3150596$clone', bounds: [20, 20, 60, 60] };
+
+    const piano = cssComposizioneBox.pianificaDuplicazioni([regola], [primariaSpostata, cloneSistemato], corrisponde);
+
+    assert.deepStrictEqual(piano.aggiornamenti.map(a => a.bounds), [[30, 0, 70, 40]]);
+});
+
+test('una foto_secondaria vera non viene scambiata per un clone da togliere', () => {
+    const piano = cssComposizioneBox.pianificaDuplicazioni([regolaCopiaBis], [foto, fotoSecondaria], corrisponde);
+
+    assert.ok(!piano.rimozioni.includes('foto_secondaria$3150599'));
+    assert.ok(!piano.aggiornamenti.some(a => a.etichetta === 'foto_secondaria$3150599'));
+});
+
+test('se la primaria sparisce se ne va anche il suo clone', () => {
+    const cloneOrfano = { etichetta: 'foto_secondaria$3150596$clone', bounds: [10, 20, 50, 60] };
+
+    const piano = cssComposizioneBox.pianificaDuplicazioni([regolaCopiaBis], [cloneOrfano, parentesi], corrisponde);
+
+    assert.deepStrictEqual(piano.copie, []);
+    assert.deepStrictEqual(piano.rimozioni, ['foto_secondaria$3150596$clone']);
+});
+
+//BOX41: l'ombra del clone prendeva lo stesso nome di quella della primaria, e al passaggio
+//dopo il fix foto tutte e due le correzioni finivano sulla prima delle due.
+test('l\'ombra del clone ha un nome suo, diverso da quello dell\'ombra della primaria', () => {
+    const regolaOmbra = { etichettaSorgente: 'sy_ombra', bersagli: ['immagine*', 'foto_secondaria*'] };
+    const clone = { etichetta: 'foto_secondaria$3150596$clone', bounds: [10, 40, 50, 80] };
+
+    const piano = cssComposizioneBox.pianificaDuplicazioni([regolaOmbra], [foto, clone, ombra], corrisponde);
+
+    assert.deepStrictEqual(piano.copie.map(c => c.etichetta), ['sy_ombra$3150596', 'sy_ombra$3150596$clone']);
+});
+
+test('le regole di sempre, senza i campi nuovi, si comportano come prima', () => {
+    const regolaOmbra = { etichettaSorgente: 'sy_ombra', bersagli: ['immagine*', 'foto_secondaria*'] };
+
+    const piano = cssComposizioneBox.pianificaDuplicazioni([regolaOmbra], [foto, fotoSecondaria, ombra], corrisponde);
+
+    assert.deepStrictEqual(piano.copie.map(c => c.etichetta), ['sy_ombra$3150596', 'sy_ombra$3150599']);
+    assert.deepStrictEqual(piano.rimozioni, ['sy_ombra']);
+    assert.deepStrictEqual(cssComposizioneBox.prefissiDerivati([regolaOmbra]), ['sy_ombra$']);
+});
+
+test('il prefisso delle copie di una regola con etichettaCopia e\' quello della copia', () => {
+    assert.deepStrictEqual(cssComposizioneBox.prefissiDerivati([regolaCopiaBis]), ['foto_secondaria$']);
+    assert.strictEqual(cssComposizioneBox.etichettaBaseCopia({ etichettaSorgente: 'immagine*' }), 'immagine');
+});
+
+test('il clone si riconosce dal segno in fondo all\'etichetta', () => {
+    assert.ok(cssComposizioneBox.eUnClone('foto_secondaria$3150596$clone'));
+    assert.ok(!cssComposizioneBox.eUnClone('foto_secondaria$3150596'));
+    assert.ok(!cssComposizioneBox.eUnClone('immagine$3150596'));
+    assert.ok(!cssComposizioneBox.eUnClone('$clone'));
+    assert.ok(!cssComposizioneBox.eUnClone(''));
+    assert.ok(!cssComposizioneBox.eUnClone(null));
+});
+
+//Le tre segnalazioni che il clone farebbe scattare senza motivo. Le funzioni girano dentro
+//InDesign e qui non si possono eseguire: si controlla che il clone venga scartato.
+test('conflitti, fuori griglia e confronto col server ignorano il clone', () => {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const leggi = nome => fs.readFileSync(path.join(__dirname, '..', '..', 'plugin', nome), 'utf8');
+
+    const framework = leggi('CssFramework.js');
+    assert.match(framework, /var pageItem = box\.pageItems\.item\(i\);\s*\/\/I20-1022[^\n]*\s*if \(Utility\.eUnClone\(pageItem\.label\)\) \{\s*continue;/);
+    assert.match(framework, /if \(Utility\.eUnClone\(item\.label\)\) \{\s*continue;\s*\}\s*var label = Utility\.parseLabel\(item\.label\);/);
+    assert.match(leggi('confronti.js'), /if \(Utility\.eUnClone\(campo\.label\)\) return null;/);
+    assert.match(leggi('utility.js'), /eUnClone\(label\) \{\s*return cssComposizioneBox\.eUnClone\(label\);/);
+});

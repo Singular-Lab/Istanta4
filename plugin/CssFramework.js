@@ -3449,6 +3449,10 @@ const CssFramework =
         //controlliamo che post spostamento non abbia causato overflow, se è uscito vuol dire che l'elemento è troppo grande e dobbiamo mandare un messaggioUtente
         for (var i = 0; i < box.pageItems.length; i++) {
             var pageItem = box.pageItems.item(i);
+            //I20-1022: il clone non si segnala: lo sistema il fix foto, come la foto da cui nasce.
+            if (Utility.eUnClone(pageItem.label)) {
+                continue;
+            }
             if (pageItem.geometricBounds[0] < boxInGrigliaBounds[0] - 0.05 ||
                 pageItem.geometricBounds[1] < boxInGrigliaBounds[1] - 0.05 ||
                 pageItem.geometricBounds[2] > boxInGrigliaBounds[2] + 0.05 ||
@@ -4913,6 +4917,11 @@ const CssFramework =
         for (var i = 0; i < box.allPageItems.length; i++) {
             var item = box.allPageItems[i];
             if (!item || item.isValid === false || item.label == null || item.label == "" || !item.geometricBounds || !this.elementoVisibilePerSegnalazioniConflitti(item)) {
+                continue;
+            }
+
+            //I20-1022: il clone sta sopra la foto da cui nasce per costruzione: non e' un conflitto.
+            if (Utility.eUnClone(item.label)) {
                 continue;
             }
 

@@ -3,6 +3,7 @@ const XMLHttpRequestClient = require('./XMLHttpRequestClient');
 const cacheHashFoto = require('./cacheHashFoto');
 const trattiDescrizione = require('./trattiDescrizione');
 const tooltipPosizione = require('./tooltipPosizione');
+const cssComposizioneBox = require('./cssComposizioneBox');
 
 /// I20-1002: il file in cui e' finito tutto quello che non aveva un posto.
 ///
@@ -2931,6 +2932,13 @@ const Utility=
     // },
 
 
+
+    /// I20-1022: se l'elemento e' un clone nato da una duplicazione del CssFramework, come la copia
+    /// della primaria nei box BIS (foto_secondaria$617632$clone). Le segnalazioni lo ignorano:
+    /// e' voluto, e sovrapposto alla foto da cui nasce.
+    eUnClone(label) {
+        return cssComposizioneBox.eUnClone(label);
+    },
 
     /// L'etichetta normalizzata: taglia quello che segue il primo $, che nelle label del
     /// Plugin porta il codice della referenza. Chi lavora sulle copie da duplicazione NON deve

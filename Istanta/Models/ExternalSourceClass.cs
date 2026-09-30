@@ -3319,8 +3319,22 @@ namespace Istanta.Models
     {
         public string nomeGruppo { get; set; } = "";
 
-        /// Etichetta dell'elemento da duplicare.
+        /// Etichetta dell'elemento da duplicare. I20-1022: ammette l'asterisco ("immagine*"),
+        /// per le sorgenti che portano un codice nell'etichetta, come le foto.
         public string etichettaSorgente { get; set; } = "";
+
+        /// I20-1022: il nome base delle copie, se diverso da quello della sorgente. La copia della
+        /// primaria nei box BIS si chiama foto_secondaria$..., cosi' il fix foto la conta.
+        /// Vuoto: le copie prendono il nome della sorgente, come le ombre.
+        public string etichettaCopia { get; set; } = "";
+
+        /// I20-1022: aggiunge $clone in fondo all'etichetta della copia. Le segnalazioni riconoscono
+        /// il clone da quel segno e lo ignorano.
+        public bool marcaClone { get; set; } = false;
+
+        /// I20-1022: false lascia la copia dov'e' nei passaggi successivi alla creazione, invece di
+        /// riportarla sul bersaglio. Serve alla copia di una foto, che la sistema il fix foto.
+        public bool aggiornaCopie { get; set; } = true;
 
         /// Etichette dei bersagli, un elemento per copia. Ammette l'asterisco.
         public List<string> bersagli { get; set; } = new();

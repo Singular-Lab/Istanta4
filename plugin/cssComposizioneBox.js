@@ -17,6 +17,44 @@ const cssComposizioneBox = {
     //Suffisso che rende univoca l'etichetta di una copia: sy_ombra$3150596 per la foto immagine$3150596.
     separatoreSuffisso: "$",
 
+    //I20-1022: il segno in fondo all'etichetta delle copie fatte con marcaClone. Serve a chi
+    //deve riconoscerle senza conoscere la regola che le ha fatte, come le segnalazioni.
+    marcatoreClone: "$clone",
+
+    /// Se un'etichetta e' quella di un clone, cioe' di una copia fatta con marcaClone.
+    eUnClone(etichetta) {
+        return typeof etichetta === "string" &&
+            etichetta.length > cssComposizioneBox.marcatoreClone.length &&
+            etichetta.endsWith(cssComposizioneBox.marcatoreClone);
+    },
+
+    /// Il nome base delle copie di una regola: etichettaCopia se c'e', altrimenti la sorgente.
+    /// Una sorgente con l'asterisco senza etichettaCopia perde l'asterisco, che in un'etichetta
+    /// vera non ci puo' stare.
+    etichettaBaseCopia(regola) {
+        if (regola == null) {
+            return "";
+        }
+        if (typeof regola.etichettaCopia === "string" && regola.etichettaCopia !== "") {
+            return regola.etichettaCopia;
+        }
+        return String(regola.etichettaSorgente || "").replace(/\*/g, "");
+    },
+
+    /// Se l'etichetta e' di una copia fatta da questa regola. Con marcaClone conta anche il segno
+    /// in fondo, ed e' cio' che impedisce di scambiare una foto_secondaria vera per una copia da
+    /// togliere quando le copie si chiamano foto_secondaria$... anche loro.
+    eCopiaDellaRegola(etichetta, regola) {
+        if (etichetta == null) {
+            return false;
+        }
+        const prefisso = cssComposizioneBox.etichettaBaseCopia(regola) + cssComposizioneBox.separatoreSuffisso;
+        if (etichetta.indexOf(prefisso) !== 0 || etichetta.length <= prefisso.length) {
+            return false;
+        }
+        return regola.marcaClone === true ? cssComposizioneBox.eUnClone(etichetta) : true;
+    },
+
     /*
      * L'etichetta di una copia e' quella della sorgente piu' il suffisso del bersaglio.
      * Il suffisso e' cio' che nel bersaglio segue il primo $; senza suffisso si usa l'indice,
@@ -110,6 +148,14 @@ const cssComposizioneBox = {
      * e' l'unico modello possibile (se e' stata rimossa si duplica da una copia) e spariscono
      * solo le copie il cui bersaglio non esiste piu'.
      *
+     * I20-1022, per duplicare una foto e non solo un'ombra:
+     *  - etichettaSorgente ammette l'asterisco ("immagine*"): la foto ha il codice nell'etichetta;
+     *  - etichettaCopia da' alle copie un nome base diverso da quello della sorgente
+     *    (la copia della primaria si chiama foto_secondaria$..., e il fix foto la conta);
+     *  - marcaClone aggiunge $clone in fondo, cosi' il clone si riconosce anche fuori di qui;
+     *  - aggiornaCopie false lascia la copia dov'e' ai passaggi successivi: la sistema il fix
+     *    foto, e riallinearla al bersaglio disferebbe quello che ha fatto.
+     *
      * Ritorna { copie, aggiornamenti, rimozioni }.
      */
     pianificaDuplicazioni(regole, elementi, corrisponde) {
@@ -124,9 +170,13 @@ const cssComposizioneBox = {
                 continue;
             }
 
-            const prefissoCopia = regola.etichettaSorgente + cssComposizioneBox.separatoreSuffisso;
-            const sorgente = elementi.find(el => el.etichetta === regola.etichettaSorgente);
-            const copieEsistenti = elementi.filter(el => el.etichetta != null && el.etichetta.indexOf(prefissoCopia) === 0);
+            const eCopia = el => cssComposizioneBox.eCopiaDellaRegola(el.etichetta, regola);
+            const sorgenteConAsterisco = regola.etichettaSorgente.indexOf("*") >= 0;
+            const sorgente = sorgenteConAsterisco
+                ? elementi.find(el => el.etichetta != null && !eCopia(el) && corrisponde(el.etichetta, regola.etichettaSorgente))
+                : elementi.find(el => el.etichetta === regola.etichettaSorgente);
+            const copieEsistenti = elementi.filter(el => el.etichetta != null && eCopia(el));
+            const aggiornaCopie = regola.aggiornaCopie !== false;
 
             //Da cosa si duplica: la sorgente se c'e' ancora, altrimenti una copia gia' fatta.
             const modello = sorgente != null ? sorgente : (copieEsistenti.length > 0 ? copieEsistenti[0] : null);
@@ -137,7 +187,7 @@ const cssComposizioneBox = {
                     if (elemento.etichetta == null || elemento.etichetta === regola.etichettaSorgente) {
                         continue;
                     }
-                    if (elemento.etichetta.indexOf(prefissoCopia) === 0) {
+                    if (eCopia(elemento)) {
                         continue;
                     }
                     if (corrisponde(elemento.etichetta, spec) && bersagli.indexOf(elemento) < 0) {
@@ -151,7 +201,8 @@ const cssComposizioneBox = {
 
             for (let i = 0; i < bersagli.length; i++) {
                 const bersaglio = bersagli[i];
-                const etichetta = cssComposizioneBox.etichettaCopia(regola.etichettaSorgente, bersaglio.etichetta, i);
+                const etichetta = cssComposizioneBox.etichettaCopia(cssComposizioneBox.etichettaBaseCopia(regola), bersaglio.etichetta, i) +
+                    (regola.marcaClone === true ? cssComposizioneBox.marcatoreClone : "");
                 etichetteAttese.push(etichetta);
 
                 const esistente = copieEsistenti.find(el => el.etichetta === etichetta);
@@ -166,6 +217,9 @@ const cssComposizioneBox = {
                 const bounds = cssComposizioneBox.boundsCopia(riferimentoMisure.bounds, bersaglio.bounds, regola.adattaAlBersaglio);
 
                 if (esistente != null) {
+                    if (!aggiornaCopie) {
+                        continue;
+                    }
                     piano.aggiornamenti.push({
                         etichetta: etichetta,
                         etichettaBersaglio: bersaglio.etichetta,
@@ -195,7 +249,7 @@ const cssComposizioneBox = {
             //La sorgente se ne va quando le copie ci sono: resterebbe un elemento spaiato.
             const copieFinali = piano.copie.length + piano.aggiornamenti.length;
             if (sorgente != null && copieFinali > 0 && regola.mantieniSorgente !== true) {
-                piano.rimozioni.push(regola.etichettaSorgente);
+                piano.rimozioni.push(sorgente.etichetta);
             }
         }
 
@@ -220,7 +274,7 @@ const cssComposizioneBox = {
             if (regola == null || regola.etichettaSorgente == null || regola.etichettaSorgente === "") {
                 continue;
             }
-            const prefisso = regola.etichettaSorgente + cssComposizioneBox.separatoreSuffisso;
+            const prefisso = cssComposizioneBox.etichettaBaseCopia(regola) + cssComposizioneBox.separatoreSuffisso;
             if (prefissi.indexOf(prefisso) < 0) {
                 prefissi.push(prefisso);
             }
