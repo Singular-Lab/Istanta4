@@ -8,35 +8,42 @@
 /// indexNew.js ne crea una sola istanza, gC, e la espone con addToGarbageCollector,
 /// requireKeyForGarbage e activateKeyForGarbage.
 ///
-/// Difetti noti, descritti nel task dedicato e non corretti qui: inProcess non viene mai messo
-/// a true, ContentType e' usato senza require e l'errore finisce in un catch vuoto, $.writeln
-/// e' un residuo di ExtendScript, e il callback di startInterval si perde quando Add riavvia
-/// il timer.
+/// I20-1006: i quattro difetti annotati in I20-1002, verificati a runtime il 30/09/2026.
+///  - ContentType senza require NON era un difetto: indexNew.js e' uno script classico e le sue
+///    costanti di primo livello, ContentType compresa, sono visibili a tutti i moduli (come
+///    customAgenzia per CssFramework). Il riquadro rimasto vuoto torna davvero UNASSIGNED.
+///  - $.writeln era un difetto vero: $ e' jQuery, writeln non esiste, e Add avrebbe lanciato un
+///    errore nel chiamante invece di avvisare. Ora e' console.warn.
+///  - La guardia inProcess non serviva: il corpo del timer e' sincrono, e un tick di setInterval
+///    non parte mentre il precedente e' in corso. E' stata tolta.
+///  - Il callback di startInterval ora si ricorda anche quando Add riavvia il timer.
 class GarbageCollector {
     constructor() {
         this.elements = [];
         this.processingElements = [];
         this.interval = null;
         this.waitingKeys = [];
+        //Chiamato ogni volta che la coda si svuota e il timer si ferma. Resta impostato anche
+        //quando Add riavvia il timer, che il callback non lo passa.
+        this.callbackCodaVuota = null;
         this.startInterval();
     }
 
     /// Avvia il timer che svuota la coda, se non e' gia' in moto. Il callback, se passato,
-    /// viene chiamato quando la coda si svuota - ma solo per questo avvio: vedi i difetti noti.
+    /// viene chiamato ogni volta che la coda si svuota, anche dopo i riavvii fatti da Add.
     startInterval(callback){
         let me = this;
+        if(callback && typeof callback === "function") {
+            this.callbackCodaVuota = callback;
+        }
         if(this.interval != null) {
             return;
         }
-        var inProcess = false;
         this.interval = setInterval(() => {
             if (me.elements.length > 0) {
-                if(inProcess){
-                    return;
-                }
                 me.processingElements = me.elements.slice();
                 me.elements = [];
-                
+
                 for (let i = me.processingElements.length - 1; i >= 0; i--) {
                     try {
                         if(me.processingElements[i].element.isValid && (me.processingElements[i].key == null || !me.waitingKeys.includes(me.processingElements[i].key))){
@@ -52,14 +59,17 @@ class GarbageCollector {
 
                             me.processingElements[i].element.remove();
 
+                            //Il riquadro che conteneva l'elemento torna senza contenuto.
+                            //ContentType arriva da indexNew.js (vedi l'intestazione): se un giorno
+                            //non ci fosse piu', qui lo si vedrebbe invece di passare in silenzio.
                             try{
                                 if(parentNode && parentNode.constructorName == "Rectangle" && parentNode.isValid){
                                     parentNode.contentType = ContentType.UNASSIGNED;
                                 }
                             }
                             catch(e2){
+                                console.warn("Garbage collector: riquadro non azzerato dopo la rimozione: " + (e2 && e2.message ? e2.message : e2));
                             }
-                            //se parent è definito e valido impostiamo il suo content Type a ContentType.UNASSIGNED;
 
                         }
                         else if(!me.processingElements[i].element.isValid){
@@ -72,19 +82,18 @@ class GarbageCollector {
                         console.error("Errore nel rimuovere l'elemento: " + e.message);
                     }
                 }
-                
+
                 me.processingElements = [];
-                inProcess = false;
             }
             else{
                 me.stop();
-                if(callback && typeof callback === "function") {
-                    callback();
+                if(me.callbackCodaVuota && typeof me.callbackCodaVuota === "function") {
+                    me.callbackCodaVuota();
                 }
             }
         }, 100);
     }
-    
+
     /// Accoda un elemento da rimuovere, con la chiave che ne trattiene la rimozione.
     /// Se il timer era fermo lo riavvia.
     Add(element, key = null) {
@@ -95,7 +104,8 @@ class GarbageCollector {
             }
             this.elements.push(obj);
         } else {
-            $.writeln("L'elemento aggiunto non ha un metodo remove");
+            //I20-1006: era $.writeln, che in UXP non esiste e faceva saltare il chiamante.
+            console.warn("Garbage collector: l'elemento aggiunto non ha un metodo remove");
         }
 
         if(this.interval == null){
@@ -109,9 +119,11 @@ class GarbageCollector {
         let key = "";
         let possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
         do {
+            //I20-1006: si riparte da capo a ogni tentativo, altrimenti una collisione allungava la chiave.
+            key = "";
             for (let i = 0; i < 10; i++)
                 key += possible.charAt(Math.floor(Math.random() * possible.length));
-        }         
+        }
         while(this.waitingKeys.includes(key));
 
         this.waitingKeys.push(key);
@@ -125,7 +137,7 @@ class GarbageCollector {
             this.waitingKeys.splice(index, 1);
         }
     }
-    
+
     /// Ferma il timer. Non svuota la coda: quello che resta accodato verra' rimosso al
     /// prossimo Add, che fa ripartire il timer.
     stop() {
