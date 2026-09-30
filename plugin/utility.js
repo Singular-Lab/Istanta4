@@ -1480,14 +1480,36 @@ const Utility=
                 }
             });
 
-            conferma.on("click", function () {
-                result = {
-                    confermato: true,
-                    eliminaDaTracciato: $("#chkEliminaDaTracciato").prop("checked") === true,
-                    codici: codici
-                };
-
+            conferma.on("click", async function () {
+                var eliminare = $("#chkEliminaDaTracciato").prop("checked") === true;
                 $("#confirmModal").remove();
+
+                if (!eliminare) {
+                    //Solo la rimozione dall'impaginato: resta com'era.
+                    result = {
+                        confermato: true,
+                        eliminaDaTracciato: false,
+                        codici: codici
+                    };
+                    return;
+                }
+
+                //I20-1013: eliminare dal tracciato cancella il dato sul server, e una spunta sola
+                //non basta. Serve la parola ELIMINA scritta a mano. Nel dubbio non si elimina:
+                //vale solo un true esplicito, e annullare, sbagliare o un errore annullano TUTTO,
+                //anche la rimozione dall'impaginato.
+                var parolaConfermata = false;
+                try {
+                    parolaConfermata = (await Utility.confirmParolaEliminazione(codici)) === true;
+                }
+                catch (e) {
+                    console.error("Errore nella conferma con la parola ELIMINA:", e);
+                    parolaConfermata = false;
+                }
+
+                result = parolaConfermata
+                    ? { confermato: true, eliminaDaTracciato: true, codici: codici }
+                    : { confermato: false, eliminaDaTracciato: false, codici: [] };
             });
 
             annulla.on("click", function () {
@@ -1530,6 +1552,192 @@ const Utility=
                 eliminaDaTracciato: false,
                 codici: []
             };
+        }
+    },
+
+    //I20-1013: la parola da scrivere per eliminare dal tracciato. Esatta e in maiuscolo: la fatica
+    //di scriverla e' parte della difesa.
+    PAROLA_ELIMINAZIONE: "ELIMINA",
+
+    /// I20-1013: se il testo e' la parola di conferma. Si tolgono solo gli spazi ai bordi; le
+    /// minuscole non valgono.
+    parolaEliminazioneCorretta(testo) {
+        return typeof testo === "string" && testo.trim() === Utility.PAROLA_ELIMINAZIONE;
+    },
+
+    /// I20-1013: i testi della seconda conferma. Dice cosa sparisce e da dove: quanti codici, quali,
+    /// e che si cancella il dato sul tracciato del server, non solo l'impaginato.
+    riepilogoEliminazione(codici) {
+        var elenco = Array.isArray(codici)
+            ? codici.filter(c => c != null && String(c).trim() !== "").map(c => String(c).trim())
+            : [];
+        var quanti = elenco.length === 1 ? "1 codice gruppo" : elenco.length + " codici gruppo";
+
+        return {
+            titolo: "Eliminazione dal tracciato sul server",
+            avviso: "Stai per eliminare " + quanti + " dal tracciato sul server. Il dato viene cancellato, " +
+                "non solo tolto dall'impaginato, e l'operazione non si puo' annullare.",
+            codici: elenco,
+            istruzione: "Per confermare scrivi " + Utility.PAROLA_ELIMINAZIONE + " e premi Invio o il pulsante."
+        };
+    },
+
+    /// I20-1013: la seconda conferma dell'eliminazione dal tracciato, come quella di Jira quando si
+    /// cancella un task. Restituisce true solo se la parola e' stata scritta esatta e confermata;
+    /// false in ogni altro caso, errori compresi. Non chiama il server: si puo' provare da sola
+    /// dalla console, con await Utility.confirmParolaEliminazione(["CODICE"]).
+    async confirmParolaEliminazione(codici) {
+        var esito = null;
+        try {
+            var testi = Utility.riepilogoEliminazione(codici);
+
+            //Senza codici non si sa cosa si sta per cancellare: non si chiede nemmeno.
+            if (testi.codici.length === 0) {
+                console.error("Conferma ELIMINA: nessun codice gruppo, eliminazione annullata");
+                return false;
+            }
+
+            Utility.nascondiHidebleElements();
+
+            var modal = $(`
+            <div id="confirmEliminaModal" style="
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background-color: rgba(0,0,0,0.5);
+                z-index: 5001;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                padding: 10px;
+            "></div>
+        `);
+
+            var dialog = $(`
+            <div style="
+                width: 60%;
+                min-height: 45%;
+                background-color: white;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                align-items: stretch;
+                padding: 12px;
+                box-sizing: border-box;
+                gap: 10px;
+            "></div>
+        `);
+
+            var messaggio = $(`
+            <div style="
+                overflow: auto;
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+            ">
+                <h3 id="titoloElimina"></h3>
+                <div id="avvisoElimina" style="font-weight:bold; color:red;"></div>
+                <div id="codiciElimina" style="font-size:12px; line-height:18px;"></div>
+                <div id="istruzioneElimina"></div>
+                <input type="text" id="txtParolaElimina" autocomplete="off" style="width: 90%; color: black;">
+            </div>
+        `);
+
+            messaggio.find("#titoloElimina").text(testi.titolo);
+            messaggio.find("#avvisoElimina").text(testi.avviso);
+            messaggio.find("#istruzioneElimina").text(testi.istruzione);
+            var listaCodici = messaggio.find("#codiciElimina");
+            testi.codici.forEach(c => listaCodici.append($("<div>").text(c)));
+
+            var pulsanti = $(`
+            <div style="
+                display:flex;
+                justify-content:space-between;
+                align-items:center;
+                width:100%;
+            "></div>
+        `);
+
+            var elimina = $(`
+            <button id="btnConfermaElimina" style="
+                width:160px;
+                height:24px;
+                color:white;
+                border:none;
+                border-radius:5px;
+            ">Elimina dal tracciato</button>
+        `);
+
+            var annulla = $(`
+            <button style="
+                width:100px;
+                height:24px;
+                background-color:#6c757d;
+                color:white;
+                border:none;
+                border-radius:5px;
+                cursor:pointer;
+            ">Annulla</button>
+        `);
+
+            //Il pulsante sembra spento finche' la parola non corrisponde. Non ci si affida a
+            //disabled, che in UXP non e' certo: il clic ricontrolla la parola comunque.
+            var aggiornaPulsante = function () {
+                var valida = Utility.parolaEliminazioneCorretta(messaggio.find("#txtParolaElimina").val());
+                elimina.css("background-color", valida ? "#dc3545" : "#c8c8c8");
+                elimina.css("cursor", valida ? "pointer" : "default");
+            };
+            aggiornaPulsante();
+
+            var confermaSeValida = function () {
+                if (!Utility.parolaEliminazioneCorretta(messaggio.find("#txtParolaElimina").val())) {
+                    return;
+                }
+                esito = true;
+                $("#confirmEliminaModal").remove();
+            };
+
+            messaggio.find("#txtParolaElimina").on("input", aggiornaPulsante);
+            messaggio.find("#txtParolaElimina").on("keydown", function (e) {
+                if (e.key === "Enter" || e.keyCode === 13) {
+                    confermaSeValida();
+                }
+            });
+            elimina.on("click", confermaSeValida);
+
+            annulla.on("click", function () {
+                esito = false;
+                $("#confirmEliminaModal").remove();
+            });
+
+            modal.on("click", function (e) {
+                e.stopPropagation();
+            });
+
+            pulsanti.append(elimina);
+            pulsanti.append(annulla);
+
+            dialog.append(messaggio);
+            dialog.append(pulsanti);
+            modal.append(dialog);
+
+            $("body").append(modal);
+
+            while (esito == null) {
+                await delay(100);
+            }
+
+            Utility.mostraHidebleElements();
+
+            return esito === true;
+        }
+        catch (e) {
+            console.error("Errore durante la conferma con la parola ELIMINA:", e);
+            $("#confirmEliminaModal").remove();
+            Utility.mostraHidebleElements();
+            return false;
         }
     },
 
