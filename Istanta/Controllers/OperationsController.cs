@@ -1766,6 +1766,9 @@ namespace Istanta.Controllers
                 }
                 catch (Exception ex)
                 {
+                    //Se l'errore viene da un salvataggio, le entita' non scritte restano nel contesto
+                    //e farebbero fallire anche il salvataggio del log: si scartano, tranne l'attivita'
+                    ModifichePendenti.Scarta(ctx_1, res.Attivita);
 
                     ctx_1.AttivitaLogs.Add(icItem.addLog(id_attivita, TipoDiLog.Error, "EX1: " + ex.ToString()));
                     res.Attivita.Stato = (Byte)OperationStauts.TerminataConErrori;
@@ -1786,12 +1789,22 @@ namespace Istanta.Controllers
 
                 Console.WriteLine("importaovlantino EX2 -> " + ex2.ToString());
 
+                ModifichePendenti.Scarta(ctx_1, res.Attivita);
+
                 res.Attivita!.Progress = 0;
                 res.Attivita.Stato = (Byte)OperationStauts.TerminataConErrori;
                 res.Attivita.DataFine = DateTime.Now;
                 ctx_1.AttivitaLogs.Add(icItem.addLog(id_attivita, TipoDiLog.Error, "EX2: " + ex2.ToString()));
-                //ctx_1.SaveChanges();
-                _ = await ctx_1.SaveChangesAsync();
+                try
+                {
+                    //ctx_1.SaveChanges();
+                    _ = await ctx_1.SaveChangesAsync();
+                }
+                catch (Exception ex3)
+                {
+                    //Ultima istanza (es. database irraggiungibile): almeno resta traccia nel log applicativo
+                    Console.WriteLine("importaovlantino EX3 -> impossibile registrare l'errore sull'attivita' " + id_attivita + ": " + ex3.ToString());
+                }
             }
 
             return Ok(res);
