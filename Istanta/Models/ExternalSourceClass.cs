@@ -3249,6 +3249,31 @@ namespace Istanta.Models
         public List<modificheCssBox> operazioniPerBox = new List<modificheCssBox>();
 
         public KitCondition kit = new KitCondition();
+
+        /// I20-1026: regole che non appartengono a un box ma a una ref. Una sovrastruttura le cui
+        /// condizioni sono vere si fonde nelle regole del box come il livello piu' alto: una
+        /// regola con un nomeGruppo nuovo si aggiunge, una con lo stesso nomeGruppo sostituisce
+        /// quella del box. Il Plugin le fonde in plugin/cssFramework/sovrastrutture.js.
+        public List<SovrastrutturaObj> sovrastrutture = new List<SovrastrutturaObj>();
+    }
+
+    /// I20-1026: una sovrastruttura. Le operazioni hanno la stessa forma delle regole di un box
+    /// (nomiBox non conta). Senza condizioni vale per tutti i box del kit.
+    public class SovrastrutturaObj
+    {
+        public string nome { get; set; } = "";
+        public List<SetCondizioni> listSetCondizioni { get; set; } = new List<SetCondizioni>();
+        public modificheCssBox operazioni { get; set; } = new modificheCssBox();
+    }
+
+    /// I20-1026: nasconde gli elementi che nomina quando le condizioni sono vere, e li rimostra
+    /// quando non lo sono piu'. Nascondere e' visible = false, come il noRender: niente si
+    /// cancella. Un elemento che l'operatore ha messo in noRender non si rimostra mai.
+    public class NascondiObj
+    {
+        public string nomeGruppo { get; set; } = "";
+        public List<string> elementi { get; set; } = new List<string>();
+        public List<SetCondizioni> listSetCondizioni { get; set; } = new List<SetCondizioni>();
     }
 
     public class modificheCssBox
@@ -3273,6 +3298,9 @@ namespace Istanta.Models
 
         /// Spazio da riservare attorno alle foto, per lato. Null: nessuno.
         public EstensioniFotoObj? estensioniFoto { get; set; }
+
+        /// I20-1026: elementi da nascondere quando le condizioni sono vere.
+        public List<NascondiObj> nascondi { get; set; } = new();
     }
 
     /// Spazio riservato attorno al gruppo foto quando il fixFoto lo colloca, in millimetri
@@ -3610,6 +3638,10 @@ namespace Istanta.Models
     /// 
     public class FollowOnX
     {
+        /// I20-1026: si somma a distance una percentuale della dimensione del gruppo seguito
+        /// sull'asse dell'ancora (larghezza per x, altezza per y). Null: niente.
+        public double? distancePercentuale { get; set; }
+
         /// Distanza verticale in mm tra la X del gruppo corrente e quella del gruppo seguito.
         public double distance { get; set; } = 0;
         public bool stopOnCollision { get; set; } = false;
@@ -3625,6 +3657,10 @@ namespace Istanta.Models
     /// 
     public class FollowOnY
     {
+        /// I20-1026: si somma a distance una percentuale della dimensione del gruppo seguito
+        /// sull'asse dell'ancora (larghezza per x, altezza per y). Null: niente.
+        public double? distancePercentuale { get; set; }
+
         /// Distanza orizzontale in mm tra la Y del gruppo corrente e quella del gruppo seguito.
         public double distance { get; set; } = 0;
 
@@ -3656,6 +3692,28 @@ namespace Istanta.Models
         public List<TouchCondition> touchCondition { get; set; } = new List<TouchCondition>();
         public List<BoxCondition> boxCondition { get; set; } = new List<BoxCondition>();
         public List<KitCondition> kitCondition { get; set; } = new List<KitCondition>();
+
+        /// I20-1026: condizioni sui dati della ref. Basta che una sia vera.
+        public List<RefCondition> refCondition { get; set; } = new List<RefCondition>();
+
+        /// I20-1026: condizioni sulla forma del box. Basta che una sia vera.
+        public List<FormaBoxCondition> formaBoxCondition { get; set; } = new List<FormaBoxCondition>();
+    }
+
+    /// I20-1026: vera se il campo della ref contiene il testo, senza distinguere maiuscole e
+    /// minuscole; per i campi Descrizioni.* di un gruppo vale la descrizione del gruppo.
+    public class RefCondition
+    {
+        public string campo { get; set; } = "";
+        public string contiene { get; set; } = "";
+    }
+
+    /// I20-1026: vera se il box ha una delle forme. Largo: larghezza almeno rapporto volte
+    /// l'altezza. Alto: il contrario. Standard: tutti gli altri casi. Rapporto null: 1.6.
+    public class FormaBoxCondition
+    {
+        public List<string> forme { get; set; } = new List<string>();
+        public double? rapporto { get; set; }
     }
 
     public class KitCondition

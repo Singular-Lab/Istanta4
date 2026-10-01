@@ -6051,6 +6051,14 @@ const schedaRef = {
         catch (e) {
             console.error("Impossibile applicare l'opzione di rendering agli elementi del box", e);
         }
+
+        //I20-1026: qui sopra si rimostra ogni elemento che l'operatore non ha marcato, anche quelli
+        //che la regola nascondi del framework CSS tiene nascosti per la forma del box: la regola si
+        //ripete subito, con la scelta appena salvata.
+        if (typeof CssFramework !== "undefined" && CssFramework.riapplicaNascondi != null) {
+            var primario = (this.schedeRefDati || []).find(f => f.recordInTracciato != null && f.recordInTracciato.StatoSelezione == 1);
+            CssFramework.riapplicaNascondi(box, primario != null ? primario.recordInTracciato : null);
+        }
     },
     apriModalInfoReferenza() {
         var schedaRef = this.schedeRefDati;

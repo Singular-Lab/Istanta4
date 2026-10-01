@@ -6,6 +6,9 @@ const cssSequenzaOperazioni = require('./cssFramework/sequenzaOperazioni');
 //I20-1009: la sistemazione delle foto sta in un modulo suo; qui ne restano tre rimandi.
 const SistemazioneFoto = require('./sistemazioneFoto/sistemazioneFoto');
 const cssRegoleConflitti = require('./cssFramework/regoleConflitti');
+//I20-1026: le sovrastrutture, le condizioni sulla ref e sulla forma del box, la regola nascondi.
+const sovrastrutture = require('./cssFramework/sovrastrutture');
+const NoRenderElementi = require('./noRenderElementi');
 
 const CssFramework =
 {
@@ -115,7 +118,8 @@ const CssFramework =
             //facciamo una mappatura degli elementi del box di cui la chiave di ricerca sarà la label
             for (var i = 0; i < box.allPageItems.length; i++) {
                 var item = box.allPageItems[i];
-                if (item.label) {
+                //I20-1026: un elemento nascosto dalla regola nascondi, per le regole, non c'e'.
+                if (item.label && !this.elementoNascostoDalCss(item)) {
                     let relativeBounds = [
                         item.geometricBounds[0] - box.geometricBounds[0],
                         item.geometricBounds[1] - box.geometricBounds[1],
@@ -178,7 +182,7 @@ const CssFramework =
         try {
             for (var i = 0; i < box.allPageItems.length; i++) {
                 var item = box.allPageItems[i];
-                if (item == null || !item.isValid || !item.label) {
+                if (item == null || !item.isValid || !item.label || this.elementoNascostoDalCss(item)) {
                     continue;
                 }
 
@@ -303,6 +307,208 @@ const CssFramework =
             console.error("Code CSF-17: estensioni foto del box " + box.label + " non calcolate: " + e);
             return vuote;
         }
+    },
+
+    /// I20-1026: i bounds su cui si misura la forma del box (largo, alto, standard). Sono quelli
+    /// che il passaggio in corso ha ricevuto: la cella della griglia all'impaginazione, le misure
+    /// attuali del box al fix. In mancanza valgono quelli del box.
+    boundsFormaCorrente: null,
+
+    /// I20-1026: gli id degli elementi che la regola nascondi ha nascosto nel box in lavorazione.
+    /// Restano fuori dalla mappa del box: per le regole non ci sono, e nessun allineamento si
+    /// appoggia a un elemento che non si vede.
+    nascostiCss: null,
+
+    /// I20-1026: i bounds per le condizioni di forma.
+    boundsDellaForma(box) {
+        if (Array.isArray(this.boundsFormaCorrente) && this.boundsFormaCorrente.length >= 4) {
+            return this.boundsFormaCorrente;
+        }
+        try {
+            return box != null ? box.geometricBounds : null;
+        }
+        catch (e) {
+            return null;
+        }
+    },
+
+    /// I20-1026: fonde nel DB le sovrastrutture del kit le cui condizioni sono vere per questo
+    /// box, con cssFramework/sovrastrutture.js. Le condizioni si valutano sul box com'e' adesso,
+    /// prima che il motore sposti qualcosa. Una sovrastruttura senza condizioni vale per tutti i
+    /// box del kit. Se qualcosa va storto restano le regole di sempre.
+    applicaSovrastrutture(DB, fileModifiche, box, itemRef) {
+        try {
+            if (fileModifiche == null || !Array.isArray(fileModifiche.sovrastrutture) || fileModifiche.sovrastrutture.length === 0) {
+                return DB;
+            }
+
+            var me = this;
+            var mappa = this.creaMappaturaBoxOriginale(box, []);
+            var attive = fileModifiche.sovrastrutture.filter(function (sovrastruttura) {
+                return sovrastruttura != null && sovrastruttura.operazioni != null
+                    && me.checkAllConditions(mappa, itemRef, sovrastruttura.listSetCondizioni, box);
+            });
+
+            return sovrastrutture.fondiNelDB(DB, box.label, attive.map(s => s.operazioni));
+        }
+        catch (error) {
+            console.error("Code CSF-21: sovrastrutture del box " + (box != null ? box.label : "") + " non applicate: " + error);
+            return DB;
+        }
+    },
+
+    /// I20-1026: la regola nascondi. Ogni regola nomina degli elementi e ha le sue condizioni:
+    /// con le condizioni vere gli elementi si nascondono, con le condizioni false si mostrano.
+    /// Un elemento che nessuna regola nomina resta com'e', e un elemento che l'operatore ha messo
+    /// in noRender non si mostra mai: la sua scelta vince. Nascondere vuol dire visible = false,
+    /// come il noRender: niente si cancella, e quando il box cambia forma e si rifa' il fix
+    /// l'elemento torna.
+    applicaNascondi(box, DB, DBDef, itemRef) {
+        this.nascostiCss = new Set();
+        try {
+            if (box == null || !box.isValid) {
+                return;
+            }
+
+            var meccanica = box.label;
+            var voce = function (lista, delBox) {
+                if (!Array.isArray(lista)) {
+                    return null;
+                }
+                return lista.find(el => el != null && Array.isArray(el.nomiBox)
+                    && (delBox ? el.nomiBox.includes(meccanica) : el.nomiBox.length == 0)) || null;
+            };
+            var regole = sovrastrutture.regoleNascondi([voce(DBDef, false), voce(DBDef, true), voce(DB, false), voce(DB, true)]);
+            if (regole.length === 0) {
+                return;
+            }
+
+            var me = this;
+            var mappa = this.creaMappaturaBoxOriginale(box, []);
+            var valutate = regole.map(function (regola) {
+                return {
+                    espressioni: (regola.elementi || []).map(e => me.makeRegexFromGroupName(e)),
+                    vera: me.checkAllConditions(mappa, itemRef, regola.listSetCondizioni, box)
+                };
+            });
+
+            var marcati = itemRef != null ? itemRef.noRenderElementi : null;
+            var middleware = typeof pluginMiddleware !== "undefined" ? pluginMiddleware : null;
+            var nomePrimaria = middleware != null ? middleware.getCampo("nomeFotoPrimaria") : null;
+            var nomeSecondaria = middleware != null ? middleware.getCampo("nomeFotoSecondaria") : null;
+
+            for (var i = 0; i < box.allPageItems.length; i++) {
+                var item = box.allPageItems[i];
+                if (!item.label) {
+                    continue;
+                }
+
+                var chiave = Utility.parseLabel(item.label);
+                var condizioni = valutate
+                    .filter(v => v.espressioni.some(r => r.test(chiave)))
+                    .map(v => v.vera);
+
+                var classificato = NoRenderElementi.classificaLabel(item.label, nomePrimaria, nomeSecondaria);
+                var dellOperatore = classificato != null && NoRenderElementi.inNoRender(marcati, classificato.tipo, classificato.chiave);
+
+                var esito = sovrastrutture.esitoNascondi(condizioni, dellOperatore);
+                if (esito === "nascondi") {
+                    item.visible = false;
+                    this.nascostiCss.add(item.id);
+                }
+                else if (esito === "mostra") {
+                    item.visible = true;
+                }
+            }
+        }
+        catch (error) {
+            console.error("Code CSF-22: regola nascondi del box " + (box != null ? box.label : "") + " non applicata: " + error);
+        }
+    },
+
+    /// I20-1026: se un elemento e' fra quelli che la regola nascondi ha appena nascosto.
+    elementoNascostoDalCss(item) {
+        try {
+            return this.nascostiCss != null && item != null && this.nascostiCss.has(item.id);
+        }
+        catch (e) {
+            return false;
+        }
+    },
+
+    /// I20-1026: il kit di regole della lavorazione corrente, come lo scelgono le applicazioni
+    /// del CSS: area e canale, poi la sola area, poi il solo canale; il default e' il kit senza
+    /// area e senza canale.
+    kitDelleRegole(file) {
+        var area = ficoProcess.getAreaLavorazioneCorrente();
+        var canale = ficoProcess.getCanaleLavorazioneCorrente();
+        var tipoLavorazione = ficoProcess.getTipoLavorazioneCorrente();
+        var formatoObj = ficoProcess.getFormatoLavorazioneCorrente();
+        if (area == null || canale == null || tipoLavorazione == null || tipoLavorazione == 0 || formatoObj == null) {
+            return null;
+        }
+
+        var vale = function (el) {
+            return (el.kit.kitTipoLavorazioniValide == null || el.kit.kitTipoLavorazioniValide.length === 0 || el.kit.kitTipoLavorazioniValide.includes(tipoLavorazione))
+                && (el.kit.kitFormatiValidi == null || el.kit.kitFormatiValidi.length === 0 || el.kit.kitFormatiValidi.includes(formatoObj.codice));
+        };
+        var conAree = el => el.kit.areeValide != null && el.kit.areeValide.length > 0;
+        var conCanali = el => el.kit.canaliValidi != null && el.kit.canaliValidi.length > 0;
+        var kit = file.modificheCssPerKit;
+
+        var fileModifiche = kit.find(el => vale(el) && conAree(el) && el.kit.areeValide.includes(area.sigla) && conCanali(el) && el.kit.canaliValidi.includes(canale.sigla))
+            || kit.find(el => vale(el) && conAree(el) && el.kit.areeValide.includes(area.sigla) && !conCanali(el))
+            || kit.find(el => vale(el) && !conAree(el) && conCanali(el) && el.kit.canaliValidi.includes(canale.sigla));
+        var fileModificheDef = kit.find(el => vale(el) && !conAree(el) && !conCanali(el));
+
+        return {
+            fileModifiche: fileModifiche || fileModificheDef,
+            fileModificheDef: fileModificheDef
+        };
+    },
+
+    /// I20-1026: ripete la sola regola nascondi su un box, con le regole della copia locale. Serve
+    /// a chi cambia la visibilita' fuori dal fix: il modal noRender della scheda rimostra ogni
+    /// elemento che l'operatore non ha marcato, anche quelli che la forma del box vuole nascosti.
+    riapplicaNascondi(box, itemRef) {
+        try {
+            if (box == null || !box.isValid) {
+                return;
+            }
+
+            var file = readFile(pathLavorazione + "/allineamenti.json");
+            if (!file || !Array.isArray(file.modificheCssPerKit)) {
+                return;
+            }
+
+            var kit = this.kitDelleRegole(file);
+            if (kit == null || kit.fileModifiche == null) {
+                return;
+            }
+
+            this.boundsFormaCorrente = box.geometricBounds;
+            var DB = kit.fileModifiche.operazioniPerBox;
+            var DBDef = kit.fileModificheDef ? kit.fileModificheDef.operazioniPerBox : null;
+            DB = this.applicaSovrastrutture(DB, kit.fileModifiche, box, itemRef);
+            DBDef = kit.fileModificheDef === kit.fileModifiche ? DB : this.applicaSovrastrutture(DBDef, kit.fileModificheDef, box, itemRef);
+            this.applicaNascondi(box, DB, DBDef, itemRef);
+        }
+        catch (error) {
+            console.error("Code CSF-23: regola nascondi non riapplicata al box " + (box != null ? box.label : "") + ": " + error);
+        }
+    },
+
+    /// I20-1026: la distanza di un followAnchor: i mm di distance, piu' distancePercentuale per
+    /// cento della dimensione del gruppo seguito sull'asse dell'ancora - la larghezza per x,
+    /// l'altezza per y. Il bollo "a un quarto dell'altezza della foto" e' distancePercentuale 25.
+    distanzaDellAncora(anchor, gruppoBounds, direction) {
+        var mm = Number(anchor.distance) || 0;
+        var percentuale = Number(anchor.distancePercentuale);
+        if (!isFinite(percentuale) || percentuale === 0 || !Array.isArray(gruppoBounds)) {
+            return mm;
+        }
+        var dimensione = direction == "y" ? gruppoBounds[2] - gruppoBounds[0] : gruppoBounds[3] - gruppoBounds[1];
+        return mm + dimensione * percentuale / 100;
     },
 
     /*
@@ -1658,6 +1864,12 @@ const CssFramework =
 
                     var DB = fileModifiche ? fileModifiche.operazioniPerBox : null;
                     var DBDef = fileModificheDef ? fileModificheDef.operazioniPerBox : null;
+                    //I20-1026: le sovrastrutture attive per questa ref e per questa forma si fondono nelle
+                    //regole del box; poi la regola nascondi decide cosa si vede, prima che si faccia la mappa.
+                    me.boundsFormaCorrente = boxInGrigliaBounds;
+                    DB = me.applicaSovrastrutture(DB, fileModifiche, box, itemRef);
+                    DBDef = fileModificheDef === fileModifiche ? DB : me.applicaSovrastrutture(DBDef, fileModificheDef, box, itemRef);
+                    me.applicaNascondi(box, DB, DBDef, itemRef);
 
                     //Le copie generate dalle duplicazioni vanno riconosciute per etichetta prima
                     //di costruire la mappa, altrimenti due omonime collassano in una sola voce.
@@ -1804,6 +2016,12 @@ const CssFramework =
 
                 var DB = fileModifiche ? fileModifiche.operazioniPerBox : null;
                 var DBDef = fileModificheDef ? fileModificheDef.operazioniPerBox : null;
+                //I20-1026: le sovrastrutture attive per questa ref e per questa forma si fondono nelle
+                //regole del box; poi la regola nascondi decide cosa si vede, prima che si faccia la mappa.
+                me.boundsFormaCorrente = boxInGrigliaBounds;
+                DB = me.applicaSovrastrutture(DB, fileModifiche, box, itemRef);
+                DBDef = fileModificheDef === fileModifiche ? DB : me.applicaSovrastrutture(DBDef, fileModificheDef, box, itemRef);
+                me.applicaNascondi(box, DB, DBDef, itemRef);
 
                 //Le copie generate dalle duplicazioni vanno riconosciute per etichetta prima
                 //di costruire la mappa, altrimenti due omonime collassano in una sola voce.
@@ -3152,6 +3370,14 @@ const CssFramework =
                 "boxCondition":[{
                     "boxValidi": List<string>, //se la lista contiene almeno un elemento dobbiamo controllare che il box corrente sia uno di questi
                     "boxInvalidi": List<string>, //se la lista contiene almeno un elemento dobbiamo controllare che il box corrente non sia uno di questi
+                }],
+                "refCondition":[{ //I20-1026
+                    "campo": string, //un campo della ref, per esempio "Descrizioni.Descrizione1"
+                    "contiene": string //il testo che deve contenere, senza distinguere maiuscole e minuscole
+                }],
+                "formaBoxCondition":[{ //I20-1026
+                    "forme": List<string>, //"largo", "alto", "standard"
+                    "rapporto": double //opzionale, 1.6 se manca
                 }]
 
             }
@@ -3290,7 +3516,7 @@ const CssFramework =
                     }
                     if (kitCond.areeValide && kitCond.areeValide.length > 0) {
                         if (kitCond.areeValide.includes(area)) {
-                            valida = false;
+                            valida = true;
                         }
                     }
                     if (kitCond.kitTipoLavorazioniValide && kitCond.kitTipoLavorazioniValide.length > 0) {
@@ -3332,6 +3558,20 @@ const CssFramework =
                     }
                 }
                 if (!valida) {
+                    return false;
+                }
+            }
+
+            //I20-1026: le condizioni sui dati della ref e sulla forma del box. Come le altre a
+            //elenco, basta che una delle voci sia vera.
+            if (condizione.refCondition && condizione.refCondition.length > 0) {
+                if (!sovrastrutture.refConditionVera(itemRef, condizione.refCondition)) {
+                    return false;
+                }
+            }
+
+            if (condizione.formaBoxCondition && condizione.formaBoxCondition.length > 0) {
+                if (!sovrastrutture.formaBoxConditionVera(this.boundsDellaForma(box), condizione.formaBoxCondition)) {
                     return false;
                 }
             }
@@ -3767,6 +4007,11 @@ const CssFramework =
 
                     var DB = fileModifiche ? fileModifiche.operazioniPerBox : null;
                     var DBDefault = fileModificheDef ? fileModificheDef.operazioniPerBox : null;
+                    //I20-1026: le stesse sovrastrutture del ridimensionamento. La regola nascondi non si ripete:
+                    //la mappa ricevuta e' gia' senza gli elementi nascosti.
+                    me.boundsFormaCorrente = boundsBoxImpaginato;
+                    DB = me.applicaSovrastrutture(DB, fileModifiche, box, itemRef);
+                    DBDefault = fileModificheDef === fileModifiche ? DB : me.applicaSovrastrutture(DBDefault, fileModificheDef, box, itemRef);
 
                     me.memorizzaContestoCss(box, boundsBoxImpaginato, mappaBoxOriginale, itemRef, DB, DBDefault);
 
@@ -3872,6 +4117,11 @@ const CssFramework =
 
                 var DB = fileModifiche ? fileModifiche.operazioniPerBox : null;
                 var DBDefault = fileModificheDef ? fileModificheDef.operazioniPerBox : null;
+                //I20-1026: le stesse sovrastrutture del ridimensionamento. La regola nascondi non si ripete:
+                //la mappa ricevuta e' gia' senza gli elementi nascosti.
+                me.boundsFormaCorrente = boundsBoxImpaginato;
+                DB = me.applicaSovrastrutture(DB, fileModifiche, box, itemRef);
+                DBDefault = fileModificheDef === fileModifiche ? DB : me.applicaSovrastrutture(DBDefault, fileModificheDef, box, itemRef);
 
                 //Il contesto resta a disposizione dei passaggi successivi: la scelta dello spazio
                 //foto e le operazioni del momento dopoFixFoto non rileggono il file per ogni box.
@@ -4667,6 +4917,7 @@ const CssFramework =
                     cssSequenzaOperazioni.esistonoRegole(contesto.DBDefault, momento)) {
 
                     var bounds = boundsBoxImpaginato != null ? boundsBoxImpaginato : contesto.boundsBoxImpaginato;
+                    this.boundsFormaCorrente = bounds;
 
                     //Le copie sono nate dopo la mappa: senza questo passaggio non esisterebbero
                     //per le regole che stanno per essere eseguite.
@@ -6255,6 +6506,9 @@ const CssFramework =
             }
 
 
+            //I20-1026: i mm dell'ancora, piu' l'eventuale percentuale del gruppo seguito.
+            var distanza = this.distanzaDellAncora(anchor, gruppoBounds, direction);
+
             var spostamentoDaApplicare = [0, 0];
             var allineaAlLato = "left";
             var allineaLato = "left";
@@ -6454,110 +6708,110 @@ const CssFramework =
             if (direction == "x") {
                 if (allineaAlLato == "left") {
                     if (allineaLato == "left") {
-                        spostamento[0] = (gruppoBounds[1] + anchor.distance) - targetElemento.geometricBounds[1];
+                        spostamento[0] = (gruppoBounds[1] + distanza) - targetElemento.geometricBounds[1];
                     }
                     else if (allineaLato == "right") {
-                        spostamento[0] = (gruppoBounds[1] + anchor.distance) - targetElemento.geometricBounds[3];
+                        spostamento[0] = (gruppoBounds[1] + distanza) - targetElemento.geometricBounds[3];
                     }
                     else if (allineaLato == "middle") {
                         var centroElemento = (targetElemento.geometricBounds[1] + targetElemento.geometricBounds[3]) / 2;
-                        spostamento[0] = (gruppoBounds[1] + anchor.distance) - centroElemento;
+                        spostamento[0] = (gruppoBounds[1] + distanza) - centroElemento;
                     }
                     else {
-                        spostamento[0] = (gruppoBounds[1] + anchor.distance) - targetElemento.geometricBounds[1];
+                        spostamento[0] = (gruppoBounds[1] + distanza) - targetElemento.geometricBounds[1];
                         messaggioUtente("Code CSF-10 Attenzione: allineamento " + allineaLato + " non supportato, eseguito come left");
                     }
                 }
                 else if (allineaAlLato == "right") {
                     if (allineaLato == "left") {
-                        spostamento[0] = (gruppoBounds[3] - anchor.distance) - targetElemento.geometricBounds[1];
+                        spostamento[0] = (gruppoBounds[3] - distanza) - targetElemento.geometricBounds[1];
                     }
                     else if (allineaLato == "right") {
-                        spostamento[0] = (gruppoBounds[3] - anchor.distance) - targetElemento.geometricBounds[3];
+                        spostamento[0] = (gruppoBounds[3] - distanza) - targetElemento.geometricBounds[3];
                     }
                     else if (allineaLato == "middle") {
                         var centroElemento = (targetElemento.geometricBounds[1] + targetElemento.geometricBounds[3]) / 2;
-                        spostamento[0] = (gruppoBounds[3] - anchor.distance) - centroElemento;
+                        spostamento[0] = (gruppoBounds[3] - distanza) - centroElemento;
                     }
                     else {
-                        spostamento[0] = (gruppoBounds[3] - anchor.distance) - targetElemento.geometricBounds[3];
+                        spostamento[0] = (gruppoBounds[3] - distanza) - targetElemento.geometricBounds[3];
                         messaggioUtente("Code CSF-10 Attenzione: allineamento " + anchor.allineaLato + " non supportato, eseguito come right");
                     }
                 }
                 else if (allineaAlLato == "middle") {
                     var centroGruppo = (gruppoBounds[1] + gruppoBounds[3]) / 2;
                     if (allineaLato == "left") {
-                        spostamento[0] = (centroGruppo + anchor.distance) - targetElemento.geometricBounds[1];
+                        spostamento[0] = (centroGruppo + distanza) - targetElemento.geometricBounds[1];
                     }
                     else if (allineaLato == "right") {
-                        spostamento[0] = (centroGruppo + anchor.distance) - targetElemento.geometricBounds[3];
+                        spostamento[0] = (centroGruppo + distanza) - targetElemento.geometricBounds[3];
                     }
                     else if (allineaLato == "middle") {
                         var centroElemento = (targetElemento.geometricBounds[1] + targetElemento.geometricBounds[3]) / 2;
-                        spostamento[0] = (centroGruppo + anchor.distance) - centroElemento;
+                        spostamento[0] = (centroGruppo + distanza) - centroElemento;
                     }
                     else {
-                        spostamento[0] = (centroGruppo + anchor.distance) - targetElemento.geometricBounds[1];
+                        spostamento[0] = (centroGruppo + distanza) - targetElemento.geometricBounds[1];
                         messaggioUtente("Code CSF-10 Attenzione: allineamento " + allineaLato + " non supportato, eseguito come middle");
                     }
                 }
                 else {
-                    spostamento[0] = (gruppoBounds[1] + anchor.distance) - targetElemento.geometricBounds[1];
+                    spostamento[0] = (gruppoBounds[1] + distanza) - targetElemento.geometricBounds[1];
                     messaggioUtente("Code CSF-10 Attenzione: allineamento " + allineaAlLato + " non supportato, eseguito come left");
                 }
             }
             else {
                 if (allineaAlLato == "top") {
                     if (allineaLato == "top") {
-                        spostamento[1] = (gruppoBounds[0] + anchor.distance) - targetElemento.geometricBounds[0];
+                        spostamento[1] = (gruppoBounds[0] + distanza) - targetElemento.geometricBounds[0];
                     }
                     else if (allineaLato == "bottom") {
-                        spostamento[1] = (gruppoBounds[0] + anchor.distance) - targetElemento.geometricBounds[2];
+                        spostamento[1] = (gruppoBounds[0] + distanza) - targetElemento.geometricBounds[2];
                     }
                     else if (allineaLato == "middle") {
                         var centroElemento = (targetElemento.geometricBounds[0] + targetElemento.geometricBounds[2]) / 2;
-                        spostamento[1] = (gruppoBounds[0] + anchor.distance) - centroElemento;
+                        spostamento[1] = (gruppoBounds[0] + distanza) - centroElemento;
                     }
                     else {
-                        spostamento[1] = (gruppoBounds[0] + anchor.distance) - targetElemento.geometricBounds[0];
+                        spostamento[1] = (gruppoBounds[0] + distanza) - targetElemento.geometricBounds[0];
                         messaggioUtente("Code CSF-10 Attenzione: allineamento " + allineaLato + " non supportato, eseguito come top");
                     }
                 }
                 else if (allineaAlLato == "bottom") {
                     if (allineaLato == "top") {
-                        spostamento[1] = (gruppoBounds[2] - anchor.distance) - targetElemento.geometricBounds[0];
+                        spostamento[1] = (gruppoBounds[2] - distanza) - targetElemento.geometricBounds[0];
                     }
                     else if (allineaLato == "bottom") {
-                        spostamento[1] = (gruppoBounds[2] - anchor.distance) - targetElemento.geometricBounds[2];
+                        spostamento[1] = (gruppoBounds[2] - distanza) - targetElemento.geometricBounds[2];
                     }
                     else if (allineaLato == "middle") {
                         var centroElemento = (targetElemento.geometricBounds[0] + targetElemento.geometricBounds[2]) / 2;
-                        spostamento[1] = (gruppoBounds[2] - anchor.distance) - centroElemento;
+                        spostamento[1] = (gruppoBounds[2] - distanza) - centroElemento;
                     }
                     else {
-                        spostamento[1] = (gruppoBounds[2] - anchor.distance) - targetElemento.geometricBounds[2];
+                        spostamento[1] = (gruppoBounds[2] - distanza) - targetElemento.geometricBounds[2];
                         messaggioUtente("Code CSF-10 Attenzione: allineamento " + allineaLato + " non supportato, eseguito come bottom");
                     }
                 }
                 else if (allineaAlLato == "middle") {
                     var centroGruppo = (gruppoBounds[0] + gruppoBounds[2]) / 2;
                     if (allineaLato == "top") {
-                        spostamento[1] = (centroGruppo + anchor.distance) - targetElemento.geometricBounds[0];
+                        spostamento[1] = (centroGruppo + distanza) - targetElemento.geometricBounds[0];
                     }
                     else if (allineaLato == "bottom") {
-                        spostamento[1] = (centroGruppo + anchor.distance) - targetElemento.geometricBounds[2];
+                        spostamento[1] = (centroGruppo + distanza) - targetElemento.geometricBounds[2];
                     }
                     else if (allineaLato == "middle") {
                         var centroElemento = (targetElemento.geometricBounds[0] + targetElemento.geometricBounds[2]) / 2;
-                        spostamento[1] = (centroGruppo + anchor.distance) - centroElemento;
+                        spostamento[1] = (centroGruppo + distanza) - centroElemento;
                     }
                     else {
-                        spostamento[1] = (centroGruppo + anchor.distance) - targetElemento.geometricBounds[0];
+                        spostamento[1] = (centroGruppo + distanza) - targetElemento.geometricBounds[0];
                         messaggioUtente("Code CSF-10 Attenzione: allineamento " + allineaLato + " non supportato, eseguito come middle");
                     }
                 }
                 else {
-                    spostamento[1] = (gruppoBounds[0] + anchor.distance) - targetElemento.geometricBounds[0];
+                    spostamento[1] = (gruppoBounds[0] + distanza) - targetElemento.geometricBounds[0];
                     messaggioUtente("Code CSF-10 Attenzione: allineamento " + allineaAlLato + " non supportato, eseguito come top");
                 }
             }

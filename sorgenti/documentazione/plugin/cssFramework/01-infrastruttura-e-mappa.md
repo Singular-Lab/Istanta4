@@ -67,6 +67,9 @@ una svista, ma un prezzo pagato consapevolmente.
   ragione di `etichettaDerivata` in [cssComposizioneBox](composizioneBox.md): normalizzare la
   label di una copia taglierebbe il suffisso e farebbe **di due ombre un elemento solo**.
 
+  **Gli elementi nascosti dalla regola nascondi restano fuori** (I20-1026): per le regole non ci
+  sono. Lo stesso vale in `aggiungiNuoviElementiAllaMappa`. Vedi [sovrastrutture](sovrastrutture.md).
+
 - `updateMap(mappa)` → non ricostruisce niente: marca `eliminato: true` quello che InDesign non
   considera più valido. **Un elemento rimosso resta nella mappa come lapide**, perché le regole che
   lo nominavano devono sapere che non c'è più, non trovarsi un buco.
@@ -82,6 +85,11 @@ una svista, ma un prezzo pagato consapevolmente.
   sua label, prima nel DB del cliente e poi in quello di default. È la gerarchia a due livelli di
   tutto il framework: il cliente sovrascrive il default, e se non dice niente vale il default.
 - `getPrefissiDerivati(box, DBallineamenti, DBDefault)` → i prefissi delle copie.
+- `applicaSovrastrutture(DB, fileModifiche, box, itemRef)` → (I20-1026) fonde nel DB le
+  sovrastrutture del kit le cui condizioni sono vere per questo box. `applicaNascondi(box, DB,
+  DBDef, itemRef)` applica la regola nascondi, `riapplicaNascondi(box, itemRef)` la ripete fuori
+  dal fix leggendo la copia locale delle regole, con il kit scelto da `kitDelleRegole(file)`. Vedi
+  [sovrastrutture](sovrastrutture.md).
 - `getSceltaSpazioFoto(box)` → la preferenza sullo spazio foto. `null` vuol dire area massima, come
   sempre. Dettaglio in [sceltaSpazio](../sistemazioneFoto/sceltaSpazio.md).
 - `getEstensioniFoto(box)` → lo spazio da riservare attorno alle foto, per lato, in millimetri.
