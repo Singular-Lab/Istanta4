@@ -1294,6 +1294,63 @@ const customAgenzia={
         return box;
     },
 
+    /// I20-1017: il metodo principale per compilare la scelta del kit dal nome del documento.
+    /// Il file si chiama <NOME PROMO>_<CANALE><AREA>, per esempio P2621_VOL_08-10-26_SSTO.indd:
+    /// tutto quello che serve sta nel nome, e la cartella non conta.
+    ///
+    /// La promo e' l'inizio del nome, cercata fra le promo aperte (nomiPromo): i nomi delle promo
+    /// hanno anch'essi dei _, quindi non si puo' dividere e basta. Se piu' promo vanno bene vince
+    /// la piu' lunga. Canale e area sono la parte che segue, due caratteri ciascuno. Il formato e'
+    /// il codice (fra codiciFormato) che compare come parte del nome della promo, senza badare alle
+    /// maiuscole: fra le promo c'e' P2611_vol_21-05-26. Restituisce gli stessi campi di
+    /// decodificaNomeFile; quello che non trova resta null, e allora si usa decodificaNomeFile.
+    decodificaNomeFileConPromo(nomeFile, nomiPromo, codiciFormato)
+    {
+        let vuoto = { nomePromo: null, siglaFormato: null, siglaCanale: null, siglaArea: null };
+        if (typeof nomeFile !== "string" || nomeFile === "") {
+            return vuoto;
+        }
+
+        let base = nomeFile.replace(/\.indd$/i, "");
+
+        let promo = null;
+        (nomiPromo || []).forEach(function (nome) {
+            if (typeof nome !== "string" || nome === "") {
+                return;
+            }
+            if (base.indexOf(nome + "_") === 0 && (promo == null || nome.length > promo.length)) {
+                promo = nome;
+            }
+        });
+        if (promo == null) {
+            return vuoto;
+        }
+
+        //Quello che segue la promo: canale e area attaccati, poi eventualmente altro dopo un _.
+        //Le sigle sono maiuscole: ssto scritto a mano vale come SSTO.
+        let resto = base.substring(promo.length + 1).split("_")[0].toUpperCase();
+
+        let parti = "_" + promo.toUpperCase() + "_";
+        let formato = null;
+        (codiciFormato || []).forEach(function (codice) {
+            if (typeof codice !== "string" || codice === "") {
+                return;
+            }
+            if (parti.indexOf("_" + codice.toUpperCase() + "_") >= 0 && (formato == null || codice.length > formato.length)) {
+                formato = codice;
+            }
+        });
+
+        return {
+            nomePromo: promo,
+            siglaFormato: formato,
+            siglaCanale: resto.length >= 2 ? resto.substring(0, 2) : null,
+            siglaArea: resto.length >= 4 ? resto.substring(2, 4) : null
+        };
+    },
+
+    /// Il metodo di riserva (I20-1017): la promo e' il nome della cartella, e il file si chiama
+    /// <FORMATO>_<CANALE><AREA>_..., per esempio .../A2515_SC_27-06-25/VOL_SCTO_prova.indd.
     decodificaNomeFile(fullPath)
     {
         let sep="/";

@@ -1631,69 +1631,156 @@ async function esportaLibro(){
     }
 }
 
-/// Dovrebbe leggere il nome del documento aperto, ricavarne promo, canale, area e formato,
-/// riempire le quattro tendine della scelta kit e, se le trova tutte e quattro, far partire
-/// da sola la ricerca del kit. Cosi' l'operatore che apre un file gia' battezzato con le
-/// regole del cliente non deve ridigitare quello che il nome contiene gia'.
+/// I20-1017: il percorso completo del documento, che decodificaNomeFile vuole intero perche' la
+/// promo e' il nome della cartella che lo contiene. Il separatore si prende dalla cartella, che e'
+/// gia' nella forma del sistema operativo.
+function percorsoCompletoDocumento(cartella, nomeFile) {
+    if (typeof cartella !== "string" || cartella === "" || typeof nomeFile !== "string" || nomeFile === "") {
+        return null;
+    }
+    var sep = cartella.indexOf("\\") >= 0 && cartella.indexOf("/") < 0 ? "\\" : "/";
+    return cartella.endsWith(sep) ? cartella + nomeFile : cartella + sep + nomeFile;
+}
+
+/// I20-1017: dal nome del file alle quattro opzioni da selezionare nella scelta del kit.
 ///
-/// DIFETTO (I20-1002, da correggere in un task a parte): NON FA NIENTE DI TUTTO QUESTO.
-/// campiDecodificati e' messa a null e non viene mai riassegnata - il risultato di
-/// customAgenzia.decodificaNomeFile viene chiamato e buttato via. Manca l'assegnazione.
-/// Di conseguenza il blocco da "if(campiDecodificati != null)" in giu' e' irraggiungibile,
-/// e l'unica cosa che questa funzione fa davvero e' nascondere #actMassivaSuKit.
+/// decodificaNomeFile restituisce nomi e sigle - nomePromo, siglaCanale, siglaArea, siglaFormato -
+/// mentre le tendine hanno come valore il guidID: qui si cercano gli elementi corrispondenti. La
+/// promo si confronta con nomePromo, canale e area con la sigla, il formato con il codice (VOL,
+/// A4_FLUSSO2...). Canale e area valgono solo se la promo li ha davvero fra i suoi tracciati,
+/// perche' la tendina mostra solo quelli. Quello che non si trova resta null.
+function opzioniKitDaNomeFile(decodificato, promoAperte, canali, aree, formati) {
+    var scelte = { guidPromo: null, guidCanale: null, guidArea: null, guidFormato: null };
+    if (decodificato == null) {
+        return scelte;
+    }
+
+    var stessoTesto = function (a, b) {
+        return a != null && b != null && String(a).trim() !== "" && String(a).trim() === String(b).trim();
+    };
+
+    var promo = (promoAperte || []).find(function (p) { return p != null && stessoTesto(p.nomePromo, decodificato.nomePromo); });
+    if (promo != null) {
+        scelte.guidPromo = promo.guidID;
+
+        var tracciati = promo.promoTracciatis || [];
+        var canale = (canali || []).find(function (c) {
+            return c != null && stessoTesto(c.sigla, decodificato.siglaCanale) &&
+                tracciati.some(function (tr) { return tr.guidCanale == c.guidID; });
+        });
+        var area = (aree || []).find(function (a) {
+            return a != null && stessoTesto(a.sigla, decodificato.siglaArea) &&
+                tracciati.some(function (tr) { return tr.guidArea == a.guidID; });
+        });
+        scelte.guidCanale = canale != null ? canale.guidID : null;
+        scelte.guidArea = area != null ? area.guidID : null;
+    }
+
+    var formato = (formati || []).find(function (f) { return f != null && stessoTesto(f.codice, decodificato.siglaFormato); });
+    scelte.guidFormato = formato != null ? formato.guidID : null;
+
+    return scelte;
+}
+
+/// I20-1017: se le quattro opzioni ci sono tutte. Solo allora la ricerca del kit parte da sola, e
+/// solo allora il metodo principale basta senza ricorrere alla riserva.
+function sceltaKitCompleta(scelte) {
+    return scelte != null && scelte.guidPromo != null && scelte.guidCanale != null &&
+        scelte.guidArea != null && scelte.guidFormato != null;
+}
+
+/// Legge il nome del documento aperto, ne ricava promo, canale, area e formato, riempie le quattro
+/// tendine della scelta kit e, se le trova tutte e quattro, fa partire da sola la ricerca del kit.
+/// Cosi' l'operatore che apre un file gia' battezzato con le regole del cliente non deve
+/// ridigitare quello che il nome contiene gia'.
 ///
-/// Non si nota perche' non c'e' un errore: le tendine restano vuote, e si compilano a mano
-/// come se l'automatismo non fosse mai stato previsto.
+/// I20-1017: non aveva mai funzionato, e per quattro motivi, non uno: il risultato di
+/// decodificaNomeFile si buttava via; si leggevano promo/canale/area/formato mentre il decoder
+/// restituisce nomePromo/siglaCanale/siglaArea/siglaFormato; gli si passava il solo nome del file
+/// mentre la promo la ricava dalla cartella; e le tendine confrontano il guidID, non il nome. In
+/// piu' canale e area si riempiono solo scegliendo la promo, cosa che setPickerValue non fa
+/// scattare: dopo la promo si chiama kitPromoCmb_changed.
+///
+/// I due metodi, nell'ordine (I20-1017, secondo giro):
+/// 1. principale, customAgenzia.decodificaNomeFileConPromo: tutto dal nome del file, che si chiama
+///    <NOME PROMO>_<CANALE><AREA>; se trova tutte e quattro le opzioni basta lui, e la cartella non
+///    si guarda;
+/// 2. riserva, customAgenzia.decodificaNomeFile: la promo e' il nome della cartella, e il file si
+///    chiama <FORMATO>_<CANALE><AREA>_... Un risultato parziale del principale non si mescola con la
+///    riserva: o tutto dal nome del file, o la riserva.
+///
+/// Se manca anche uno dei quattro si compila quello che si e' trovato e la ricerca non parte:
+/// l'operatore completa a mano. I clienti senza nessuno dei due metodi non passano di qui.
 async function autoCompilazioneCampiKit(){
 
-    var campiDecodificati = null;
-    
-    $("#actMassivaSuKit").css("display", "none");    
+    $("#actMassivaSuKit").css("display", "none");
 
+    if (docInLavorazione == null ||
+        (customAgenzia.decodificaNomeFileConPromo == null && customAgenzia.decodificaNomeFile == null)) {
+        return;
+    }
 
-    //Se non ci sono file aperti ma c'è un libro analizzo quello
-    if (docInLavorazione != null)
-    {
-        if (customAgenzia.decodificaNomeFile != null)
-            customAgenzia.decodificaNomeFile(docInLavorazione.name);
+    var elenchi = [ficoProcess.listaPromoAperte, ficoProcess.sourceCanali, ficoProcess.sourceAree, ficoProcess.sourceFormati];
+    var scelte = null;
 
-        //l'ogggetto di ritorno ha le seguenti chiavi
-        // {
-        //     promo: "A2515_SC_27-06-25",
-        //     canale: "SC",
-        //     area: "TO",
-        //     formato: "VOL"
-        // }
-
-        var promoTrovata = false;
-        var canaleTrovato = false;
-        var areaTrovata = false;
-        var formatoTrovato = false;
-
-        if(campiDecodificati != null){
-            if(campiDecodificati.promo != null){
-                promoTrovata = Menu.setPickerValue($("#kitPromoCmb"), campiDecodificati.promo, false);
-                await Utility.sleep(50);
-                if(promoTrovata){
-                    if(campiDecodificati.canale != null){
-                        canaleTrovato = Menu.setPickerValue($("#kitCanaliCmb"), campiDecodificati.canale, false);
-                    }
-                    if(campiDecodificati.area != null){
-                        areaTrovata = Menu.setPickerValue($("#kitAreeCmb"), campiDecodificati.area, false);
-                    }
-                }
+    //Un nome scritto in un altro modo non deve fermare l'apertura: ogni metodo che fallisce si
+    //salta, e al peggio le tendine restano da compilare a mano.
+    if (customAgenzia.decodificaNomeFileConPromo != null) {
+        try {
+            var nomiPromo = (ficoProcess.listaPromoAperte || []).map(function (p) { return p != null ? p.nomePromo : null; });
+            var codiciFormato = (ficoProcess.sourceFormati || []).map(function (f) { return f != null ? f.codice : null; });
+            var dalNome = customAgenzia.decodificaNomeFileConPromo(docInLavorazione.name, nomiPromo, codiciFormato);
+            var scelteDalNome = opzioniKitDaNomeFile(dalNome, elenchi[0], elenchi[1], elenchi[2], elenchi[3]);
+            if (sceltaKitCompleta(scelteDalNome)) {
+                scelte = scelteDalNome;
             }
-
-            formatoTrovato = Menu.setPickerValue($("#kitFormatiCmb"), campiDecodificati.formato, false);
         }
-
-        if(promoTrovata && canaleTrovato && areaTrovata && formatoTrovato){
-            ficoProcess.cercaKit(function(result)
-            {
-                console.log("Ricerca kit terminata");
-
-            });
+        catch (e) {
+            console.warn("Compilazione automatica del kit dal nome del file non riuscita:", e);
         }
+    }
+
+    if (scelte == null && customAgenzia.decodificaNomeFile != null) {
+        try {
+            var percorso = percorsoCompletoDocumento(pathLavorazione, docInLavorazione.name);
+            if (percorso != null) {
+                var decodificato = customAgenzia.decodificaNomeFile(percorso);
+                scelte = opzioniKitDaNomeFile(decodificato, elenchi[0], elenchi[1], elenchi[2], elenchi[3]);
+            }
+        }
+        catch (e) {
+            console.warn("Compilazione automatica del kit da cartella e nome del file non riuscita:", e);
+        }
+    }
+
+    if (scelte == null) {
+        return;
+    }
+
+    if (scelte.guidPromo != null) {
+        Menu.setPickerValue($("#kitPromoCmb"), scelte.guidPromo, false);
+        //Canale e area si riempiono solo con la promo scelta.
+        kitPromoCmb_changed();
+        await Utility.sleep(50);
+
+        if (scelte.guidCanale != null) {
+            Menu.setPickerValue($("#kitCanaliCmb"), scelte.guidCanale, false);
+        }
+        if (scelte.guidArea != null) {
+            Menu.setPickerValue($("#kitAreeCmb"), scelte.guidArea, false);
+        }
+    }
+
+    if (scelte.guidFormato != null) {
+        Menu.setPickerValue($("#kitFormatiCmb"), scelte.guidFormato, false);
+    }
+
+    if (sceltaKitCompleta(scelte)) {
+        ficoProcess.cercaKit(function(result)
+        {
+            console.log("Ricerca kit terminata");
+
+        });
     }
 }
 

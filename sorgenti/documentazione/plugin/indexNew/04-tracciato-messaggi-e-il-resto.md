@@ -93,22 +93,35 @@ while (docInLavorazione === docAtteso && !(await checkPercorsi())) { await Utili
 
 ### Da correggere in un task a parte
 
-**`autoCompilazioneCampiKit` non fa niente.**
+**`autoCompilazioneCampiKit` non faceva niente.** *Corretto in I20-1017.*
 
-```js
-var campiDecodificati = null;
-...
-if (customAgenzia.decodificaNomeFile != null)
-    customAgenzia.decodificaNomeFile(docInLavorazione.name);   // <- il risultato si butta
-...
-if (campiDecodificati != null) { ... }                        // <- irraggiungibile
-```
+Il difetto annotato qui, il risultato di `customAgenzia.decodificaNomeFile` buttato via, era solo il
+primo di quattro, e correggere quello da solo non sarebbe bastato:
 
-Manca l'assegnazione. `campiDecodificati` resta `null`, tutto il corpo da lì in giù è morto, e
-l'unica cosa che la funzione fa davvero è nascondere `#actMassivaSuKit`. Dovrebbe leggere il nome
-del documento, ricavarne promo, canale, area e formato, riempire le quattro tendine e far partire
-la ricerca del kit. **Non si nota perché non c'è un errore**: le tendine restano vuote e si
-compilano a mano, come se l'automatismo non fosse mai stato previsto.
+1. l'assegnazione mancava, e tutto il corpo utile era irraggiungibile;
+2. la funzione leggeva `promo`, `canale`, `area`, `formato`, mentre il decoder di Edro21 restituisce
+   `nomePromo`, `siglaCanale`, `siglaArea`, `siglaFormato`;
+3. al decoder arrivava solo il nome del file, ma la promo la ricava dal nome della **cartella**:
+   ora riceve il percorso completo (`percorsoCompletoDocumento`);
+4. le tendine hanno come valore il `guidID` e `Menu.setPickerValue` confronta il valore: nomi e sigle
+   non corrispondevano mai. Ora `opzioniKitDaNomeFile` li traduce nei guid (promo per `nomePromo`,
+   canale e area per sigla fra quelli della promo, formato per `codice`). In piu' canale e area si
+   riempiono solo scegliendo la promo, e dopo averla impostata si chiama `kitPromoCmb_changed`.
+
+Dopo la prova dell'operatore i metodi sono diventati due, nell'ordine:
+
+1. **principale**, `decodificaNomeFileConPromo` in `custom.js` di Edro21: tutto dal nome del file,
+   `<NOME PROMO>_<CANALE><AREA>.indd`, per esempio `P2621_VOL_08-10-26_SSTO.indd`. La promo e'
+   l'inizio del nome cercato fra le promo aperte (vince la piu' lunga, perche' i nomi delle promo
+   hanno anch'essi dei `_`); il formato e' il codice che compare fra le parti del nome della promo,
+   senza badare alle maiuscole. Se trova tutte e quattro le opzioni basta lui, e la cartella non si
+   guarda;
+2. **riserva**, `decodificaNomeFile`: la promo e' il nome della cartella, e il file si chiama
+   `<FORMATO>_<CANALE><AREA>_....indd`. Un risultato parziale del principale non si mescola con la
+   riserva.
+
+Se manca anche uno dei quattro si compila quello che si e' trovato e la ricerca del kit non parte.
+I clienti senza nessuno dei due metodi (Coopfi, Famila) non passano di li'.
 
 **`writeDebugMessageForCrash` scriveva su un percorso che non esiste.** *Corretto in I20-1018.*
 
