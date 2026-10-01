@@ -152,6 +152,28 @@ Ricorda il meccanismo: una `NotImplementedException` attraverso la riflessione d
 
 ---
 
+## Edro21: il formato Parmigiano Reggiano (I20-1026)
+
+Una ref di volantino è Parmigiano Reggiano quando **la descrizione1** contiene «parmigiano
+reggiano», senza distinguere maiuscole e minuscole; a capo, `<br>` e spazi doppi valgono come uno
+spazio. Allora `getLoghiEBolliNew` le assegna **tutti** i loghi del formato — `Parmigiano_payoff`,
+`Parmigiano_caratteristiche`, `parmigiano_testo_2mod_verticale`, `parmigiano_testo_2mod_orizzontale`
+— perché quali si vedono dipende dalla forma del box, che il server non conosce: li sceglie il
+Plugin con le regole del framework CSS, e gli altri li nasconde senza cancellarli.
+
+Il bollo dei mesi è `Parmigiano_<N>M`, con N il numero che precede «mesi» nella descrizione3, se ci
+sono sia «stagionatura» sia «mesi». **La sigla si scrive per qualunque N**: se il logo non è nella
+source (oggi mancano 47, 48 e 49) l'export la scarta come ogni sigla che non trova, e appena il logo
+viene caricato esce da solo.
+
+La logica sta nella classe pubblica `FormatoParmigianoEdro21`, in `Edro21.cs`, e si prova in
+`tests/Istanta.Suite.Tests/FormatoParmigianoEdro21Tests.cs`.
+
+**Com'era prima.** La regola c'era ma non funzionava: guardava anche brand e descrizione3, non
+leggeva mai il numero dei mesi e scriveva sigle `PARMIGIANO_mesiNN` che nella source non esistono.
+Ne usciva solo `sfondo_parmigiano`, che ora è **disattivato** — commentato, non tolto — perché lo
+stile di oggetto della base (`base_P_Parmigiano`, `base_A_Parmigiano` per SC) dovrebbe sostituirlo.
+
 ## Modificare AgenziaLib: la procedura
 
 1. Modifica il `.cs` del cliente.

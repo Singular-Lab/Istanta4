@@ -175,6 +175,85 @@ namespace AgenziaLib
 
     }
 
+    /// I20-1026: il formato Parmigiano Reggiano di Edro21, nella parte che decide il server.
+    ///
+    /// Una ref e' Parmigiano Reggiano quando lo dice la descrizione1, senza distinguere maiuscole e
+    /// minuscole, come chiede il cliente. Allora riceve sempre tutti i loghi del formato: il payoff,
+    /// le caratteristiche e i due testi, verticale e orizzontale. Quali si vedono dipende dalla forma
+    /// del box, che il server non conosce: li sceglie il Plugin, con le regole del framework CSS, e
+    /// gli altri li nasconde senza cancellarli.
+    ///
+    /// Il bollo dei mesi e' Parmigiano_<N>M, dove N e' il numero che precede la parola "mesi" nella
+    /// descrizione3, quando ci sono sia "stagionatura" sia "mesi". La sigla si scrive per qualunque
+    /// N: se quel logo non e' nella source, l'export lo scarta come ogni sigla che non trova, e
+    /// appena viene caricato esce da solo.
+    public static class FormatoParmigianoEdro21
+    {
+        public const string SiglaPayoff = "Parmigiano_payoff";
+        public const string SiglaCaratteristiche = "Parmigiano_caratteristiche";
+        public const string SiglaTestoVerticale = "parmigiano_testo_2mod_verticale";
+        public const string SiglaTestoOrizzontale = "parmigiano_testo_2mod_orizzontale";
+
+        /// La chiave con cui il bollo dei mesi entra fra i loghi della ref.
+        public const string ChiaveBolloMesi = "parmigiano_mesi";
+
+        /// I loghi del formato, ciascuno con la chiave con cui entra fra i loghi della ref. Le
+        /// chiavi sono tutte diverse, e diverse da quelle degli altri loghi: Dictionary.Add non ne
+        /// accetta due uguali.
+        public static readonly IReadOnlyList<KeyValuePair<string, string>> LoghiDelFormato = new List<KeyValuePair<string, string>>
+        {
+            new KeyValuePair<string, string>("parmigiano_payoff", SiglaPayoff),
+            new KeyValuePair<string, string>("parmigiano_caratteristiche", SiglaCaratteristiche),
+            new KeyValuePair<string, string>("parmigiano_testo_verticale", SiglaTestoVerticale),
+            new KeyValuePair<string, string>("parmigiano_testo_orizzontale", SiglaTestoOrizzontale)
+        };
+
+        /// Se la descrizione1 dice Parmigiano Reggiano. Gli a capo, i <br> e gli spazi doppi valgono
+        /// come uno spazio: in una descrizione impaginata le due parole possono stare su due righe.
+        public static bool EParmigianoReggiano(string descrizione1)
+        {
+            return NormalizzaSpazi(descrizione1).Contains("parmigiano reggiano");
+        }
+
+        /// I mesi di stagionatura scritti nella descrizione3, oppure null se non ci sono. Servono
+        /// tutte e due le parole, "stagionatura" e "mesi", e un numero subito prima di "mesi"
+        /// ("stagionatura minima 24 mesi", "24<br>mesi").
+        public static int? MesiDiStagionatura(string descrizione3)
+        {
+            var testo = NormalizzaSpazi(descrizione3);
+            if (!testo.Contains("stagionatura") || !testo.Contains("mesi"))
+            {
+                return null;
+            }
+
+            var trovato = System.Text.RegularExpressions.Regex.Match(testo, @"(\d+) ?mesi");
+            if (!trovato.Success)
+            {
+                return null;
+            }
+
+            return int.TryParse(trovato.Groups[1].Value, out var mesi) && mesi > 0 ? mesi : (int?)null;
+        }
+
+        /// La sigla del bollo dei mesi, come la scrive la source: Parmigiano_24M.
+        public static string SiglaBolloMesi(int mesi)
+        {
+            return "Parmigiano_" + mesi + "M";
+        }
+
+        /// Il testo in minuscolo, con <br>, a capo e spazi ripetuti ridotti a uno spazio.
+        private static string NormalizzaSpazi(string testo)
+        {
+            if (string.IsNullOrEmpty(testo))
+            {
+                return "";
+            }
+
+            var senzaBr = System.Text.RegularExpressions.Regex.Replace(testo, @"<br\s*/?>", " ", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            return System.Text.RegularExpressions.Regex.Replace(senzaBr, @"\s+", " ").ToLowerInvariant();
+        }
+    }
+
     internal class Edro21 : IAgenzia
     {
 
@@ -11079,7 +11158,6 @@ Descrizione3.EndsWith("\r\n");
             string logo_bandiera_it = "";
 
             string logo_attributo_it = "";
-            string logo_parmigiano = "";
 
             var temaContesto = cercaChiaveContesto("tema", promoContext);
 
@@ -11508,48 +11586,30 @@ Descrizione3.EndsWith("\r\n");
                     }
                 }
 
-                if ((brand.ToNoSpacing().Contains("parmigianoreggiano") || gusto.ToNoSpacing().Contains("parmigianoreggiano") || desc1.ToNoSpacing().Contains("parmigianoreggiano")) && tipo_lavorazione == 1)
+                //I20-1026: il formato Parmigiano Reggiano, solo nel volantino. Si riconosce dalla sola
+                //descrizione1, come chiede il cliente; prima si guardavano anche brand e descrizione3. E
+                //prima il bollo dei mesi non usciva mai: il numero non veniva letto, e le sigle
+                //PARMIGIANO_mesiNN che si scrivevano non esistono nella source.
+                if (tipo_lavorazione == 1 && FormatoParmigianoEdro21.EParmigianoReggiano(desc1))
                 {
-
-                    if (gusto.Contains("stagionatura") && gusto.Contains("mesi"))
+                    foreach (var logo in FormatoParmigianoEdro21.LoghiDelFormato)
                     {
-                        //Intercettiamo il numero dei mesi
-                        string stagionatura = gusto.Substring(gusto.ToLower().IndexOf("stagionatura"));
-                        if (stagionatura.IndexOf(" ") > 0 || stagionatura.IndexOf(Environment.NewLine) > 0)
-                        {
-                            if (stagionatura.IndexOf(" ") > 0 && (stagionatura.IndexOf(" ") < stagionatura.IndexOf(Environment.NewLine) || stagionatura.IndexOf(Environment.NewLine) < 0))
-                            {
-                                stagionatura = stagionatura.Substring(0, stagionatura.IndexOf(" "));
-                            }
-                            else if (stagionatura.IndexOf(Environment.NewLine) > 0)
-                            {
-                                stagionatura = stagionatura.Substring(0, stagionatura.IndexOf(Environment.NewLine));
-                            }
-                        }
-                        int mesi = 0;
-                        if (Int32.TryParse(stagionatura, out mesi))
-                        {
-                            logo_parmigiano = "PARMIGIANO_mesi" + mesi;
-                        }
-                        else
-                        {
-                            //Nessun mese trovato
-                            logo_parmigiano = "PARMIGIANO_mesiNO";
-                        }
-
-                    }
-                    else
-                    {
-                        //Logo stagionatura generica
-                        logo_parmigiano = "PARMIGIANO_mesiNO";
+                        loghi_e_bolli.Add(logo.Key, logo.Value);
                     }
 
-                    loghi_e_bolli.Add("logo_parmigiano", logo_parmigiano);
-
-                    if (codiceTipoExport.ToUpper() != "WEB")
+                    var mesi = FormatoParmigianoEdro21.MesiDiStagionatura(gusto);
+                    if (mesi != null)
                     {
-                        sfondo = "sfondo_parmigiano";
+                        loghi_e_bolli.Add(FormatoParmigianoEdro21.ChiaveBolloMesi, FormatoParmigianoEdro21.SiglaBolloMesi(mesi.Value));
                     }
+
+                    //I20-1026: sfondo_parmigiano e' disattivato. Il formato ora passa dallo stile di oggetto
+                    //della base (base_P_Parmigiano, base_A_Parmigiano per SC, nel custom del Plugin), che in
+                    //teoria lo sostituisce. Resta commentato per poterlo riattivare.
+                    //if (codiceTipoExport.ToUpper() != "WEB")
+                    //{
+                    //    sfondo = "sfondo_parmigiano";
+                    //}
                 }
 
                 if (brand.Contains("conad") && gusto.Contains("antibiotic")/* && oItem.reparto == 29*/)
