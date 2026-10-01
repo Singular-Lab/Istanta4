@@ -536,8 +536,9 @@
                 onclick="conteggia();"><span style="display:flex;align-items:center;gap:6px;"><img src="images/conteggio.png" style="width:16px;height:16px;object-fit:contain;"><span>Conteggio</span></span></sp-action-button>
               <sp-action-button id="bOpt2Advanced" name="bOpt2" style="font-size: 12px; margin:1px;"><span style="display:flex;align-items:center;gap:6px;"><img src="images/impagina.png" style="width:16px;height:16px;object-fit:contain;"><span>Impagina</span></span></sp-action-button>
               
+              <!-- I20-1028: spuntata di default. E' l'unica delle due caselle che il codice legge (noCacheCheck in indexNew.js). -->
               <div style="width: 100%; align-items: center; display: flex;">
-                <input type="checkbox" id="cacheCheckAdvanced"> <label style="color: white;">Utilizza cache se disponibile</label>
+                <input type="checkbox" id="cacheCheckAdvanced" checked> <label style="color: white;">Utilizza cache se disponibile</label>
               </div>
             </div>
             <div id="filtriBody" style="height: 90%; overflow: hidden;">
