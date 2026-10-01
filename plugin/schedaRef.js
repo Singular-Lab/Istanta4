@@ -4638,7 +4638,8 @@ const schedaRef = {
                 rec["Foto.Extra"],
                 rec["Foto.ExtraAuto"],
                 true,
-                NoRenderElementi.elencoPerSegnalazioni(rec.noRenderElementi, rec.membriGruppoFoto)
+                NoRenderElementi.elencoPerSegnalazioni(rec.noRenderElementi, rec.membriGruppoFoto),
+                rec
             );
 
             return preAnalisi != null && preAnalisi.differenze != null ? preAnalisi.differenze : [];

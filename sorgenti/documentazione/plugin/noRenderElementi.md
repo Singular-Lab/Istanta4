@@ -14,6 +14,19 @@ nome del campo per campi ed etichette, il codice referenza per le foto.
 **La label InDesign non serve da identificativo:** incorpora il codice della ref e viene ricostruita
 a ogni impaginazione.
 
+## Il noRender dell'operatore e la regola disattiva del framework
+
+Dal I20-1026 un logo automatico può mancare dal box per due ragioni diverse, e non vanno confuse:
+
+- **l'operatore lo ha nascosto**, con questo modulo: resta nel box con `visible = false`, e la scelta
+  si salva sul server, nel meta della lavorazione;
+- **il framework CSS lo ha disattivato**, con la regola `disattiva` (vedi
+  [sovrastrutture](cssFramework/sovrastrutture.md)): non sta nel box, non si salva, e torna quando il
+  box cambia forma.
+
+Il Report Integrità segnala solo gli elementi marcati dall'operatore, e non conta come mancante un
+logo disattivato per la forma.
+
 ## Variabili globali
 
 | nome | valore | cos'è |

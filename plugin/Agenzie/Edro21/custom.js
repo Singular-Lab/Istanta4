@@ -1,5 +1,7 @@
 //EDRO21
 const { app, FitOptions, LocationOptions, Justification, VerticalJustification, NestedStyleDelimiters, CornerOptions, StrokeAlignment } = require('indesign');
+//I20-1026: il riconoscimento del formato Parmigiano e' lo stesso delle regole del framework CSS.
+const sovrastrutture = require('./cssFramework/sovrastrutture');
 
 const customAgenzia={
 
@@ -20,7 +22,10 @@ const customAgenzia={
     
     exceptionElementsToIgnoreFixFoto: ["*cpq*","*conad_logo*","*piacersi*","*lattosio*","*glutine*",
         "*parafarmacia*","*conad_vn*","*conad_11P*","*essentiae*","*PetFr*","*petfrplus*","*conad_baby*","*Friend-of-the-Sea*",
-        "*Marinou*","*Carne_Chianina*","*Logo_filiera*","*Logo_BDP*","*Logo_SDB*",], //se un elemento è sia in ignoreElementsFixFoto che in exceptionElementsToIgnoreFixFoto non viene ignorato. Serve perchè si può fare cose come ignora loghi e specificare solo il logo che fa eccezione
+        "*Marinou*","*Carne_Chianina*","*Logo_filiera*","*Logo_BDP*","*Logo_SDB*",
+        //I20-1026: payoff e testi del Parmigiano stanno in basso a sinistra, dove la foto non deve
+        //finire. Le caratteristiche no: stanno con il DOP, che non fa da ostacolo.
+        "*Parmigiano_payoff*","*parmigiano_testo_2mod_*",], //se un elemento è sia in ignoreElementsFixFoto che in exceptionElementsToIgnoreFixFoto non viene ignorato. Serve perchè si può fare cose come ignora loghi e specificare solo il logo che fa eccezione
     
     calcoloDistanziamentoFoto: [ //il ratio è calcolato Y/X
         {
@@ -181,6 +186,12 @@ const customAgenzia={
         var obj_da_cestinare = new Array();
         var fondoDaPosizionare = objItem["Foto.ExtraAuto"].find(f => f.tipo == 5);
         var meccanica = objItem.combinazioneAssegnata;
+        //I20-1026: il formato Parmigiano Reggiano. La ref lo e' quando la descrizione1 dice
+        //Parmigiano Reggiano, senza distinguere maiuscole e minuscole: lo stesso criterio del
+        //server (FormatoParmigianoEdro21) e della sovrastruttura Parmigiano del framework CSS.
+        //Come gli stili vicini della base, non vale per i box focus, che hanno uno stile loro.
+        //Si calcola una volta qui, perche' serve a piu' elementi del ciclo: la base e lo sfondo.
+        var formatoParmigiano = meccanica.indexOf("focus") < 0 && sovrastrutture.refConditionVera(objItem, [{ campo: "Descrizioni.Descrizione1", contiene: "parmigiano reggiano" }]);
 
         for (var $xa = 0; $xa < box.allPageItems.length; $xa++) {
             try {
@@ -253,6 +264,14 @@ const customAgenzia={
                         meta_meccanica.azioni.push(a_eff);
                     }
 
+                    //I20-1026: per SC lo stile e' base_A_Parmigiano, per gli altri canali
+                    //base_P_Parmigiano. Viene dopo gli altri stili della base, quindi su una ref
+                    //Parmigiano vince lui.
+                    if (formatoParmigiano) {
+                        var a_eff = { tipo: "effect", campo_indd: "base", name: canale == "SC" ? "base_A_Parmigiano" : "base_P_Parmigiano" };
+                        meta_meccanica.azioni.push(a_eff);
+                    }
+
                     
 
                     for (var a = 0; a < meta_meccanica.azioni.length; a++) {
@@ -318,6 +337,14 @@ const customAgenzia={
                     if (objItem.codiceBox == "solo_descr") {
                         obj_da_cestinare.push(pItem);
                     }
+                }
+                else if (formatoParmigiano && nome_proprieta.indexOf("sfondo") == 0) {
+                    //I20-1026: il campo sfondo del master non serve nel formato Parmigiano: la base fa
+                    //da fondo e il server non assegna piu' sfondo_parmigiano. Si nasconde, non si
+                    //elimina: resta nel box della sua misura, e il Plugin salta gli elementi invisibili
+                    //dove conta. Qui, quando il ciclo lo visita, e non fra le azioni: quelle nascono
+                    //visitando la base, che puo' venire dopo lo sfondo.
+                    pItem.visible = false;
                 }
                 else if (nome_proprieta == "immagine") {
 
@@ -1109,6 +1136,41 @@ const customAgenzia={
     // },
 
 
+    /// I20-1026: se il testo della descrizione tocca un logo che fa da ostacolo alla foto - le foto
+    /// extra elencate in exceptionElementsToIgnoreFixFoto, come il payoff e i testi del Parmigiano,
+    /// SDB, BDP, Conad. Conta il testo (getRealBounds), non il riquadro, e solo i loghi visibili: uno
+    /// nascosto dal noRender non c'e', e uno disattivato dalla forma del box non sta nel box.
+    descrizioneTraLoghi(box, descrizione) {
+        try {
+            var testo = CssFramework.getRealBounds(descrizione);
+            if (testo == null) {
+                return false;
+            }
+
+            var loghi = (this.exceptionElementsToIgnoreFixFoto || []).map(e => CssFramework.makeRegexFromGroupName(e));
+            for (var i = 0; i < box.allPageItems.length; i++) {
+                var item = box.allPageItems[i];
+                if (item === descrizione || !item.label || item.visible === false) {
+                    continue;
+                }
+
+                var etichetta = Utility.parseLabel(item.label);
+                if (etichetta.indexOf("foto_extra") !== 0 || !loghi.some(r => r.test(etichetta))) {
+                    continue;
+                }
+
+                var logo = item.geometricBounds;
+                if (testo[0] < logo[2] && testo[2] > logo[0] && testo[1] < logo[3] && testo[3] > logo[1]) {
+                    return true;
+                }
+            }
+        }
+        catch (e) {
+            console.error("Controllo della descrizione sui loghi non riuscito: " + e);
+        }
+        return false;
+    },
+
     setCustomFixFoto(box){
 
         if(ficoProcess.getTipoLavorazioneCorrente() != 1){
@@ -1270,6 +1332,18 @@ const customAgenzia={
                     CssFramework.fixFoto(box, res1.candidate, res1.obstacles);
                     return box;
                 }
+            }
+
+            //I20-1026: la descrizione spostata non deve finire addosso a un logo, per esempio al payoff
+            //del Parmigiano in basso a sinistra. Se il suo testo ne tocca uno torna dov'era, e la foto
+            //si sistema come se lo spostamento non ci fosse stato.
+            if (this.descrizioneTraLoghi(box, descrizione)) {
+                if (descrizioneFuoriBox && descrizioneDaRidurre != null) {
+                    descrizioneDaRidurre.geometricBounds = oldBoundsOverflow;
+                }
+                descrizione.geometricBounds = oldBounds;
+                CssFramework.fixFoto(box, res1.candidate, res1.obstacles);
+                return box;
             }
         }
         else{

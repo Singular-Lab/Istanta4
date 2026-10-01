@@ -333,7 +333,7 @@ const confronti = {
     /// Il confronto fatto sui campi gia' compilati, senza rileggere il box:
     /// e' la via veloce, usata quando la pre-analisi ha gia' raccolto tutto.
     /// checkMD5 a false salta il confronto degli hash delle foto, che e' la parte cara.
-    async confrontoBoxCompiledFieldPreAnalisi(box1, compiledFields, deletedFields, listFoto, fotoExtra, fotoExtraAuto, checkMD5 = true, elementiNoRender = null) { //mode 0 -> cambio strutturale, mode 1 -> confrontoMassivo
+    async confrontoBoxCompiledFieldPreAnalisi(box1, compiledFields, deletedFields, listFoto, fotoExtra, fotoExtraAuto, checkMD5 = true, elementiNoRender = null, itemRef = null) { //mode 0 -> cambio strutturale, mode 1 -> confrontoMassivo
         let differenze = [];
         let errors = [];
         let me = this;
@@ -652,7 +652,16 @@ const confronti = {
             }
 
             if (fotoExtraAuto && fotoExtraAuto.length > 0) {
+                //I20-1026: un logo che la regola disattiva del framework CSS vuole fuori da questo box
+                //non e' mancante, e se c'e' ancora lo togliera' il prossimo fix: non si segnala.
+                var disattivatiDallaForma = itemRef != null && typeof CssFramework !== "undefined"
+                    ? CssFramework.disattivatiDallaForma(box1, itemRef, box1.geometricBounds).disattivati
+                    : new Set();
                 fotoExtraAuto.forEach(foto => {
+                    if (disattivatiDallaForma.has(foto.sigla)) {
+                        listFotoExtraBox1 = listFotoExtraBox1.filter(f => f != foto.nome && f != foto.sigla);
+                        return;
+                    }
                     if(foto.nome.includes(".idms")){
                         //cerchiamo nel box un elemento con questa etichetta
                         let campoBox1 = box1campi.find(campo => campo.isValid && Utility.parseLabel(campo.label).includes(foto.sigla));

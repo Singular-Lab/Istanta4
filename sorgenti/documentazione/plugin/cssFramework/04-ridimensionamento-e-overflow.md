@@ -20,12 +20,26 @@ Panoramica del file: [README.md](README.md).
    regole. **Non misura il box sui suoi bounds dichiarati**, ma sull'ingombro dei suoi elementi
    visibili, prendendo il più stretto fra i due: un box il cui riquadro è più grande del contenuto
    non deve ingrandire tutto in proporzione al vuoto.
+   **Subito dopo, al fix, la regola `disattiva`** (I20-1026) toglie e rimette i loghi automatici
+   per la forma nuova: dopo, perché un logo tolto o aggiunto prima cambierebbe la geometria da cui
+   parte la scala. Vedi [sovrastrutture](sovrastrutture.md).
 2. **Post-ridimensionare.** `applicaPostRidimensionamento` e `applicaPostRidimensionamenti` applicano
    le regole che devono girare **dopo** che le dimensioni si sono assestate. È qui che vive
    `calcolaValoreDimensione`, l'interprete delle espressioni.
 3. **Rimediare.** `fixOverflowFromBox` riporta dentro chi è uscito, `fixCollisioneTracciaBase`
    allontana gli elementi dalla traccia del bordo, `finalFit` applica i fit richiesti.
 4. **Il reflow della descrizione.** `reflowTextFrameAvoidConflicts`, 1.230 righe.
+
+**Le posizioni si misurano dall'angolo della cella** (I20-1026). `applicaRidimensionamento` piazza
+ogni elemento a `angolo di boxInGrigliaBounds + bounds relativi della mappa`, non dall'angolo del
+gruppo. All'impaginazione i due coincidono. Al fix no, se l'operatore ha mosso il bordo alto o
+quello sinistro: `fixRefImpaginata` rimette gli elementi dove erano, quindi il gruppo parte dal
+vecchio angolo mentre la cella parte dal nuovo. Misurando dal gruppo la base finiva sopra la cella,
+gli spostamenti lineari si fermavano sul bordo mentre la mappa registrava lo spostamento intero,
+`fixOverflowFromBox` spostava la base in giù e l'angolo del gruppo con lei, e gli allineamenti
+leggevano dalla mappa posizioni sotto il fondo: i campi si ammassavano. Lo spostamento lineare va
+dove dice la mappa, che lo ha già sommato; se l'elemento uscisse dalla cella rientra, **e la mappa
+con lui**, così le due non divergono. Un elemento senza regola su un asse non viene toccato.
 
 ---
 
@@ -80,7 +94,9 @@ Le costanti del reflow stanno dentro la funzione: `MIN_POINT_SIZE` 3, `MAX_MAIN_
   `isItemLink` agisce sulla grafica dentro il riquadro invece che sul riquadro.
 - `calcolaValoreDimensione(...)` → l'interprete descritto sopra.
 - `fixOverflowFromBox(boxInGrigliaBounds, box, mappa)` → chi esce rientra. **Su una casella di testo
-  prova prima a stringerla**, e solo se andrebbe in overflow la sposta.
+  prova prima a stringerla**, e solo se andrebbe in overflow la sposta. Dal I20-1026 **salta gli
+  elementi invisibili**, per esempio quelli in noRender: non si segnalano (CSF-009) e
+  non si rimpiccioliscono. Vedi [sovrastrutture](sovrastrutture.md).
 - `isTextFrame(item)` → il controllo di tipo usato lì.
 - `fixCollisioneTracciaBase(box, gruppoElementi, impostazioni)` e
   `fixCollisioneTracciaBaseSingolo(...)` → allontanano dalla traccia del bordo della base, di uno

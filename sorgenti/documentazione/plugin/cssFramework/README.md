@@ -9,9 +9,11 @@ Plugin — **7.283 righe, 69 membri** — ed è il cuore del motore CSS che **to
 `getSpazioImpaginazione`, `fixFoto`, `safeFitToContent` — perché le agenzie li chiamano da qui e
 `getRealBounds` usa l'ultimo. Il codice nuovo del core chiama `SistemazioneFoto`.
 
-Attorno a lui girano quattro moduli che non toccano InDesign:
+Attorno a lui girano cinque moduli che non toccano InDesign:
 [cssComposizioneBox](composizioneBox.md), [cssSequenzaOperazioni](sequenzaOperazioni.md),
-[cssRegoleConflitti](regoleConflitti.md) e [noRenderElementi](../noRenderElementi.md). Sono
+[cssRegoleConflitti](regoleConflitti.md), [sovrastrutture](sovrastrutture.md) (I20-1026: regole
+che seguono la ref e la forma del box, e la regola disattiva) e
+[noRenderElementi](../noRenderElementi.md). Sono
 stati estratti uno alla volta, e dal I20-1007 i primi tre stanno in questa cartella anche nel
 codice, `plugin/cssFramework/`, mentre `CssFramework.js` resta in radice perché le agenzie lo
 richiedono da lì. La divisione è sempre la stessa: **loro calcolano il piano,

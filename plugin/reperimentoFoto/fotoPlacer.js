@@ -93,6 +93,67 @@ const FotoPlacer =
         return warningMessage;
     },
 
+    /// I20-1026: mette nel box un logo automatico, cioe' una voce di Foto.ExtraAuto, e restituisce
+    /// l'elemento creato, ancora fuori dal gruppo: raggrupparlo tocca a chi chiama. E' la strada
+    /// dell'impaginazione (impaginaBox) e del fix (CssFramework.applicaDisattivazioni, che riattiva
+    /// i loghi che la forma del box vuole), per avere un modo solo di farlo.
+    ///  - Un .idms si piazza una volta sola, in alto a sinistra della prima pagina, con label
+    ///    simbolo$<sigla>$tipo_<tipo>, e lo si ricorda in cacheLoghi (globale di indexNew); nel box
+    ///    ne va una copia, nell'angolo in alto a sinistra.
+    ///  - Un'immagine va in un riquadro grande quanto il box, con il fit del cliente
+    ///    (pluginMiddleware.getFitTypeLogo) e poi proporzionale.
+    /// La label nel box e' foto_extra$<sigla>$tipo_<tipo>, e la voce riceve referenceTo.
+    piazzaFotoExtraAuto(extra, box, paginaDelBox, doc = docInLavorazione) {
+        var imgName = extra.nome;
+        var sigla = extra.sigla;
+        var tipo = extra.tipo;
+        var path = /*pathLavorazione +*/ percorsoLoghi + imgName;
+        //idms rappresenta un eccezione: deve essere caricato SOLO 1 VOLTA e piazzato nella prima pagina in alto a sx
+        if (imgName.split(".")[1] == "idms") {
+            if (cacheLoghi[sigla] == null || !cacheLoghi[sigla].isValid) {
+                //Cerco in pagina 1 se ho gia' impaginato il simbolo
+                var pag0 = doc.pages.item(0);
+                for (var i2 = 0; i2 < pag0.allPageItems.length; i2++) {
+                    var item = pag0.allPageItems[i2];
+                    if (item.label == "simbolo$" + sigla + "$tipo_" + tipo) {
+                        cacheLoghi[sigla] = item;
+                        break;
+                    }
+                }
+
+                if (cacheLoghi[sigla] == null || !cacheLoghi[sigla].isValid) {
+                    let objDms = doc.pages.item(0).place(path, [0, 0], doc.layers.itemByName("InPagina"));
+                    objDms.label = "simbolo$" + sigla + "$tipo_" + tipo;
+                    cacheLoghi[sigla] = objDms[0];
+                }
+            }
+            var sy = cacheLoghi[sigla].duplicate(paginaDelBox);
+            sy.move(doc.layers.itemByName("InPagina"));
+            //muoviamo sy nell'angolo in alto a sinistra del box
+            sy.move([box.visibleBounds[1], box.visibleBounds[0]]);
+            extra.referenceTo = sy;
+            sy.label = "foto_extra$" + sigla + "$tipo_" + tipo;
+            sy.bringToFront();
+            return sy;
+        }
+
+        var rect = box.parentPage.rectangles.add(doc.layers.itemByName("InPagina"), LocationOptions.UNKNOWN, box, { geometricBounds: box.geometricBounds });
+        rect.label = "foto_extra$" + sigla + "$tipo_" + tipo;
+        rect.place(path);
+        //Alessio: CONTENT_TO_FRAME al posto di FRAME_TO_CONTENT perche' in Despar faceva un macello con i
+        //loghi che costringevano il frame ad adattarsi. Il cliente lo cambia con getFitTypeLogo.
+        let fitType = FitOptions.CONTENT_TO_FRAME;
+        if (pluginMiddleware.getFitTypeLogo != null) {
+            fitType = pluginMiddleware.getFitTypeLogo(sigla, tipo);
+        }
+        if (fitType != null) {
+            rect.fit(fitType);
+            rect.fit(FitOptions.PROPORTIONALLY);
+        }
+        extra.referenceTo = rect;
+        return rect;
+    },
+
     applicaNoRender:function(fotoRectangle, noRender)
     {
         if (fotoRectangle == null) {

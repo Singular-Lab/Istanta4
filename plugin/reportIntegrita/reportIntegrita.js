@@ -3425,7 +3425,8 @@ const ReportIntegrita = {
             dati.fotoExtra,
             dati.fotoExtraAuto,
             true,
-            NoRenderElementi.elencoPerSegnalazioni(dati.tracciatoPrimario.noRenderElementi, dati.tracciatoPrimario.membriGruppoFoto));
+            NoRenderElementi.elencoPerSegnalazioni(dati.tracciatoPrimario.noRenderElementi, dati.tracciatoPrimario.membriGruppoFoto),
+            dati.tracciatoPrimario);
     },
 
     //I nomi delle pagine del documento in lavorazione, nell'ordine in cui stanno nel documento.

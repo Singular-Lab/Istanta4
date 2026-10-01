@@ -82,6 +82,11 @@ una svista, ma un prezzo pagato consapevolmente.
   sua label, prima nel DB del cliente e poi in quello di default. È la gerarchia a due livelli di
   tutto il framework: il cliente sovrascrive il default, e se non dice niente vale il default.
 - `getPrefissiDerivati(box, DBallineamenti, DBDefault)` → i prefissi delle copie.
+- `applicaSovrastrutture(DB, fileModifiche, box, itemRef)` → (I20-1026) fonde nel DB le
+  sovrastrutture del kit le cui condizioni sono vere per questo box. `disattivatiDallaForma(box,
+  itemRef, bounds)` dice quali loghi automatici la regola disattiva tiene fuori dal box, e
+  `applicaDisattivazioni(box, itemRef, bounds)` li toglie e rimette, con il kit scelto da
+  `kitDelleRegole(file)` sulla copia locale delle regole. Vedi [sovrastrutture](sovrastrutture.md).
 - `getSceltaSpazioFoto(box)` → la preferenza sullo spazio foto. `null` vuol dire area massima, come
   sempre. Dettaglio in [sceltaSpazio](../sistemazioneFoto/sceltaSpazio.md).
 - `getEstensioniFoto(box)` → lo spazio da riservare attorno alle foto, per lato, in millimetri.

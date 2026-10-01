@@ -39,6 +39,7 @@ Panoramica del file: [README.md](README.md).
 |---|---|
 | `nomiGruppiSeguiti` | chi si segue; può essere il nome di un gruppo o di una singola etichetta |
 | `distance` | la distanza da mantenere, in millimetri |
+| `distancePercentuale` | I20-1026: si somma a `distance` una percentuale della dimensione del gruppo seguito sull'asse (larghezza per x, altezza per y). Vedi [sovrastrutture](sovrastrutture.md) |
 | `allineaAlLato` | il lato del bersaglio a cui ci si avvicina: `left`, `right`, `middle` |
 | `allineaLato` | il proprio lato di riferimento, stessi valori |
 | `stopOnCollision` | ci si ferma in anticipo se si va addosso a qualcosa |
@@ -49,6 +50,8 @@ Panoramica del file: [README.md](README.md).
   Le condizioni previste comprendono `elementiDaTrovare` — basta che ne manchi uno e la condizione è
   falsa — `elementiDaNonTrovare`, e `touchCondition`, che usa `elementsTouching` per chiedere se
   un'etichetta ne tocca un'altra.
+  Dal I20-1026 ci sono anche `refCondition`, sui dati della ref, e `formaBoxCondition`, sulla forma
+  del box (largo, alto, standard): vedi [sovrastrutture](sovrastrutture.md).
 - `checkSetCondition(...)` e `checkAllConditions(...)` → la applicano a insiemi di condizioni.
 
 ## Segnalare i conflitti
@@ -75,6 +78,16 @@ da InDesign e con i suoi test.
 - `riportaDentroAlBox(...)` ed `elementoDentroAlBox(...)` → il rientro degli elementi derivati.
 - `applicaOperazioniDopoFixFoto(box, bounds)` → il momento `dopoFixFoto` di
   [cssSequenzaOperazioni](sequenzaOperazioni.md).
+
+## Evitare la traccia della base
+
+Una regola di allineamento con `evitaTracciaAllineamento.evitaTracciaBase` vero passa, dopo le
+ancore, da `fixCollisioneTracciaBase`: il gruppo allineato viene spostato dentro il bordo della base
+di `spessore della traccia` (secondo l'allineamento del tratto) più `distance` in mm, misurando il
+testo se `useTextBounds` è vero. **Se la base non ha traccia (`strokeWeight` 0) non fa niente**:
+accenderla su una regola è innocuo finché lo stile della base non ha un bordo, come `base_P_Parmigiano`
+(I20-1026). Nei kit volantino di Edro21 ce l'hanno i `Loghi_*` (distanza 1) e i gruppi principali
+`Campi_DX` / `Campi_SX` (distanza 0, testo adiacente al bordo).
 
 ## Variabili
 
