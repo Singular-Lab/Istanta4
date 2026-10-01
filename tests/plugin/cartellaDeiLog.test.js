@@ -84,3 +84,107 @@ test('fuori da cartellaDeiLog nessuno concatena piu\' lavorazione e cartella dei
     assert.strictEqual(occorrenze.length, 1);
     assert.match(corpo, /pathLavorazione \+ percorsoLogs/);
 });
+
+/* ---- I20-1038: la riga di log dice da quale macchina viene, e IDX-27 dice dove e' scattato ---- */
+
+//Estrae una funzione di indexNew.js per nome, con le parentesi bilanciate.
+function estrai(nome) {
+    const inizio = indexNew.indexOf('\nfunction ' + nome + '(');
+    assert.notStrictEqual(inizio, -1, nome + ' non trovata');
+    const apertura = indexNew.indexOf('{', inizio);
+    let livello = 0;
+    for (let i = apertura; i < indexNew.length; i++) {
+        if (indexNew[i] === '{') livello++;
+        else if (indexNew[i] === '}' && --livello === 0) return indexNew.substring(inizio + 1, i + 1);
+    }
+    throw new Error('parentesi non bilanciate in ' + nome);
+}
+
+const nomeMacchina = new Function('require', 'var nomeMacchinaCache = null;\n' + estrai('nomeMacchina') + '\nreturn nomeMacchina;')(() => { throw new Error('niente os'); });
+
+test('il nome della macchina viene da hostname, poi dall\'utente, poi dalla home', () => {
+    assert.strictEqual(nomeMacchina({ hostname: () => 'macstudio06.local' }), 'macstudio06.local');
+    assert.strictEqual(nomeMacchina({ hostname: () => { throw new Error('no'); }, userInfo: () => ({ username: 'elisa' }) }), 'elisa');
+    assert.strictEqual(nomeMacchina({ hostname: () => '', userInfo: () => { throw new Error('no'); }, homedir: () => '/Users/macstudio11/' }), 'macstudio11');
+});
+
+test('senza nessuna informazione il nome e\' "sconosciuta", senza mai un errore', () => {
+    assert.strictEqual(nomeMacchina({}), 'sconosciuta');
+    //Senza il modulo os (il require finto lancia) vale lo stesso.
+    assert.strictEqual(nomeMacchina(), 'sconosciuta');
+});
+
+test('tutte e due le righe di log portano il campo macchina', () => {
+    const scrittori = ['async function messaggioUtente(', 'function writeDebugMessageForCrash('];
+    for (const intestazione of scrittori) {
+        const corpo = corpoFunzione(indexNew, intestazione);
+        assert.match(corpo, /orario: [^\n]*\n\s*macchina: nomeMacchina\(\),/, intestazione);
+    }
+});
+
+const contestoErroreFiltro = new Function(estrai('contestoErroreFiltro') + '\nreturn contestoErroreFiltro;')();
+
+test('il contesto di IDX-27: pagina e ref quando ci sono, altrimenti lo dice', () => {
+    assert.strictEqual(contestoErroreFiltro(null, null), 'prima del primo risultato');
+    assert.strictEqual(contestoErroreFiltro({ pag: 12 }, null), 'pagina 12');
+    assert.strictEqual(contestoErroreFiltro({ pag: 12 }, { 'Scatto.CodiceGruppo': 6147585, 'Descrizioni.Descrizione1': 'PARMIGIANO REGGIANO DOP' }),
+        'pagina 12, ref 6147585 (PARMIGIANO REGGIANO DOP)');
+    //Una ref strana non fa saltare il catch che lo chiama.
+    assert.strictEqual(contestoErroreFiltro({ pag: 3 }, Object.create(null, { 'Scatto.CodiceGruppo': { get() { throw new Error('boom'); } } })), 'pagina 3');
+});
+
+test('il catch IDX-27 usa il contesto senza stack, tace gli errori gia\' segnalati, e la ref si azzera a ogni pagina nei due rami', () => {
+    assert.match(indexNew, /if \(!\(ex != null && ex\.giaSegnalato === true\)\) \{\s*messaggioUtente\("Code IDX-27 Filtro: Errore durante l'elaborazione del filtro \(Deb1\) \[" \+ contestoErrore \+ "\]: " \+ ex, "error"\);/);
+    assert.match(indexNew, /logContent \+= "Errore durante l'elaborazione del filtro \[" \+ contestoErrore \+ "\]: " \+ ex\.toString\(\) \+ "\\n" \+ \(ex != null && ex\.stack != null \? ex\.stack \+ "\\n" : ""\);/);
+    assert.strictEqual((indexNew.match(/itemRef = null; \/\/I20-1038/g) || []).length, 2);
+});
+
+/* ---- I20-1038: la griglia dalla libreria, con l'errore rivolto a chi fa le librerie ---- */
+
+//Una libreria InDesign finta: itemByName restituisce un riferimento non valido se il nome manca,
+//come fa InDesign; everyItem().getElements() elenca gli asset, doppioni compresi.
+function libreriaFinta(nomiAsset) {
+    return {
+        name: 'Griglie_IS2_EDRO_PL_',
+        assets: {
+            itemByName: nome => ({ name: nome, isValid: nomiAsset.includes(nome) }),
+            everyItem: () => ({ getElements: () => nomiAsset.map(n => ({ name: n, isValid: true })) })
+        }
+    };
+}
+
+function caricaGrigliaDallaLibreria() {
+    const messaggi = [];
+    const fn = new Function('messaggioUtente', estrai('grigliaDallaLibreria') + '\nreturn grigliaDallaLibreria;')((msg, stile) => messaggi.push({ msg, stile }));
+    return { fn, messaggi };
+}
+
+test('la griglia si prende con il lato, altrimenti senza, in silenzio se la libreria e\' a posto', () => {
+    const { fn, messaggi } = caricaGrigliaDallaLibreria();
+    assert.strictEqual(fn(libreriaFinta(['4x4_CN_SX', '4x4_CN_DX']), '4x4_CN', '_DX', 1).name, '4x4_CN_DX');
+    assert.strictEqual(fn(libreriaFinta(['4x4_CN']), '4x4_CN', '_DX', 1).name, '4x4_CN');
+    assert.deepStrictEqual(messaggi, []);
+});
+
+test('il caso di produzione: due 4x4_CN_SX e nessun _DX', () => {
+    const { fn, messaggi } = caricaGrigliaDallaLibreria();
+    //Pagina 1, lato DX: manca, e lo si dice a chi fa le librerie, poi ci si ferma.
+    assert.throws(() => fn(libreriaFinta(['4x4_CN_SX', '4x4_CN_SX']), '4x4_CN', '_DX', 1), err => {
+        assert.strictEqual(err.giaSegnalato, true);
+        assert.match(err.message, /^Code IDX-169 Filtro: nella libreria 'Griglie_IS2_EDRO_PL_' manca la griglia '4x4_CN_DX' \(cercata anche come '4x4_CN'\), richiesta dal server per la pagina 1\./);
+        return true;
+    });
+    assert.strictEqual(messaggi.length, 1);
+    assert.strictEqual(messaggi[0].stile, 'error');
+    assert.match(messaggi[0].msg, /la libreria va completata con l'asset mancante/);
+    //Pagina 2, lato SX: c'e', ma e' doppia: avviso e si va avanti con la prima.
+    assert.strictEqual(fn(libreriaFinta(['4x4_CN_SX', '4x4_CN_SX']), '4x4_CN', '_SX', 2).name, '4x4_CN_SX');
+    assert.strictEqual(messaggi.length, 2);
+    assert.strictEqual(messaggi[1].stile, 'warning');
+    assert.match(messaggi[1].msg, /^Code IDX-170 Filtro: nella libreria 'Griglie_IS2_EDRO_PL_' ci sono 2 asset chiamati '4x4_CN_SX'/);
+});
+
+test('i rami di impaginazione e conteggio passano dalla stessa ricerca', () => {
+    assert.strictEqual((indexNew.match(/var grigliaTemplate = grigliaDallaLibreria\(libreria, nome_griglia, suffix, filtroResult\.pag\);\r?\n\s*grigliaTemplate = grigliaTemplate\.placeAsset\(docInLavorazione\)\[0\];/g) || []).length, 2);
+    assert.doesNotMatch(indexNew, /IDX-168/);
+});
