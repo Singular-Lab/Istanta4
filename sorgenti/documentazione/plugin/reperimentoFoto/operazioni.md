@@ -44,7 +44,12 @@ motivo per cui `autoSync` ha i test e queste no.
 - `avviaSyncPacchettoFoto(mode, callback, codici)` → **347 righe**: lo scaricamento massivo, con
   barra di avanzamento e interruzione. Lo lanciano i pulsanti di `index.html` («Avvia sync
   completo», «Avvia sync loghi») e la scheda; `apriSchermataSyncPacchettoFoto` apre la finestra,
-  `abortSyncPacchettoFotoFunction` la ferma.
+  `abortSyncPacchettoFotoFunction` la ferma. Il sync completo è in due fasi: finite le foto (modo
+  0) parte da solo il modo 1, loghi e bolli.
+- `mostraFineScaricamento(modo, esito)` → la fine di una fase scritta nella finestra (I20-1027): il
+  messaggio e, alla fine vera o su un errore, il pulsante **Fine**. La decisione sta in
+  [fineScaricamento](fineScaricamento.md); qui si applica, sempre dentro
+  `#overlayModalDownloadFoto` e mai sul modello della finestra in `index.html`.
 - `ricollegaFotoMassivo(...)` → **444 righe**: riaggancia in blocco le foto dei box impaginati. Gli
   esiti si leggono con [ricollegaEsiti](../ricollegaEsiti.md), che è verificabile.
 - `getFotoData(codice, callback)` → le foto di una referenza, per la scheda.
