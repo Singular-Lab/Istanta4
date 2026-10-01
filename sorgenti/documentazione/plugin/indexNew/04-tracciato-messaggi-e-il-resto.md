@@ -26,6 +26,39 @@ Con questo sotto-lotto **tutte e 129 le funzioni globali di `indexNew.js` hanno 
 
 ---
 
+## La barra orizzontale della lista (I20-1035)
+
+In UXP la lista dei tracciati non scorre in orizzontale in nessun modo nativo: `#Tab1Table` è larga
+quanto le colonne, `#Tab1Viewport` la taglia, e assegnare `scrollLeft` da codice interrompe il
+comando (provato in console). La barra sotto la lista è quindi **disegnata dal Plugin**, ed è la
+**replica della barra dei Nuovi del Report Integrità** (`reportIntegrita/pannelli.js`,
+`_crBarraScorrimentoNuovi` e seguenti, I20-981): stessi pezzi, stessi stili, stessi conti di
+[barraScorrimento](../reportIntegrita/barraScorrimento.md). Il codice è duplicato per scelta
+dell'operatore, per non toccare il Report: **se cambia quella dei Nuovi, questa va riallineata.**
+
+| funzione | cosa fa |
+|---|---|
+| `assicuraBarraScorrimentoTracciato()` | crea la barra la prima volta, subito dopo `#Tab1Viewport`; poi è la stessa, perché `#TracciatoRecords` non si svuota mai |
+| `crBarraScorrimentoTracciato(state)` | freccia ‹, traccia con il cursore, freccia ›: `click` su frecce e traccia, `mousedown` sul cursore. Il passo delle frecce è `PASSO_SCORRIMENTO_TRACCIATO` = 160 |
+| `crFrecciaScorrimentoTracciato` | il pulsante della freccia, con il tooltip |
+| `abilitaTrascinamentoBarraTracciato()` | `mousemove`/`mouseup` sul documento, una volta sola: il mouse esce dal cursore quasi subito |
+| `misureScorrimentoTracciato(state)` | contenuto (`scrollWidth` di `#Tab1Table`), visibile (`clientWidth` di `#Tab1Viewport`), traccia: lette al momento |
+| `scorriTracciato(state, spostamento)` | `limitaSpostamento`, poi `margin-left` negativo su `#Tab1Table`, poi il cursore. L'intestazione sta dentro la tabella: scorre con le righe |
+| `aggiornaCursoreTracciato(state, misure)` | la barra sparisce se le colonne ci stanno; il cursore ha la geometria di `geometriaCursore` |
+| `altezzaBarraScorrimentoTracciato()` | l'altezza della barra, zero se nascosta |
+
+Le differenze dal Report sono solo quelle della Home:
+- che cosa si sposta e da dove si misura;
+- la barra si crea una volta;
+- **il ridimensionamento**: `onResizeTab1Tracciato` fa altezza della lista ([altezzaScorrimento](../altezzaScorrimento.md)),
+  barra, di nuovo altezza, e passa l'altezza della barra come margine. Lista e barra insieme
+  restano così dentro `#contenitoreTab`.
+
+Dopo ogni ricostruzione, `aggiornaTracciatoPostRicerca` riporta la tabella dove dice lo spostamento,
+come fa il Report dopo il ridisegno.
+
+---
+
 ## Quello che non andava
 
 Leggendole una per una sono venuti fuori **sei difetti veri**. Tre erano correggibili senza

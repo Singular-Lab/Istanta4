@@ -51,6 +51,8 @@ const NoRenderElementi = require('./noRenderElementi');
 const RicollegaEsiti = require('./ricollegaEsiti');
 const VersionePlugin = require('./versionePlugin');
 const AltezzaScorrimento = require('./altezzaScorrimento');
+//I20-1035: i conti della barra orizzontale della lista dei tracciati, gli stessi del Report Integrita'.
+const barraScorrimento = require('./reportIntegrita/barraScorrimento');
 const ficoProcess = require('./ficoProcess');
 const grigliaJs = require('./griglia');
 const filtriJs = require('./filtri');
@@ -6860,10 +6862,264 @@ async function aggiornaTracciatoPostRicerca(resRicerca) {
 
         $body.append(frag);
 
+        //I20-1035: le colonne possono essere cambiate. Come nel Report Integrita', si riporta la
+        //tabella dove dice lo spostamento e si rimette il cursore in accordo.
+        const statoBarra = assicuraBarraScorrimentoTracciato();
+        scorriTracciato(statoBarra, statoBarra != null ? (statoBarra.spostamento || 0) : 0);
+
         await Utility.sleep(50);
         onResizeTab1Tracciato();
     } catch (e) {
         console.error(e);
+    }
+}
+
+//I20-1035: la barra di scorrimento orizzontale della lista dei tracciati, disegnata da noi.
+//E' la replica di quella dei Nuovi del Report Integrita' (reportIntegrita/pannelli.js,
+//_crBarraScorrimentoNuovi e seguenti, I20-981): stessi pezzi, stessi stili, stessi conti di
+//barraScorrimento. In UXP la lista non scorre in orizzontale in nessun modo nativo - assegnare
+//scrollLeft interrompe il comando, provato in console -, cosi' la tabella viene spostata con un
+//margine negativo e la barra la mettiamo sotto la lista, sempre visibile quando serve.
+//Le differenze sono solo quelle della Home: si sposta #Tab1Table, le misure si prendono da
+//#Tab1Table e #Tab1Viewport, e la barra si crea una volta sola, perche' #TracciatoRecords non si
+//svuota mai. Le frecce e il clic sulla traccia bastano da soli: se il trascinamento del cursore
+//non funzionasse, la tabella si scorre comunque.
+const PASSO_SCORRIMENTO_TRACCIATO = 160;
+var statoBarraTracciato = { barra: null, traccia: null, cursore: null, spostamento: 0, trascinamento: null };
+var trascinamentoBarraTracciatoAttivo = false;
+
+/// La barra sotto la lista: creata la prima volta, poi la stessa. Restituisce lo stato, o null se
+/// la lista non c'e'.
+function assicuraBarraScorrimentoTracciato() {
+    const state = statoBarraTracciato;
+    const lista = document.getElementById("Tab1Viewport");
+    if (lista == null) {
+        return null;
+    }
+
+    if (state.barra == null || document.getElementById("barraScorrimentoTracciato") == null) {
+        $(lista).after(crBarraScorrimentoTracciato(state));
+    }
+
+    return state;
+}
+
+/// Costruisce la barra, come _crBarraScorrimentoNuovi: freccia, traccia con il cursore, freccia.
+/// Frecce e traccia con il click, il cursore con il trascinamento.
+function crBarraScorrimentoTracciato(state) {
+    const barra = document.createElement("div");
+    barra.id = "barraScorrimentoTracciato";
+    barra.style.display = "flex";
+    barra.style.alignItems = "center";
+    barra.style.gap = "4px";
+    barra.style.flexShrink = "0";
+    barra.style.padding = "4px 0 0 0";
+
+    const indietro = crFrecciaScorrimentoTracciato("‹", "Sposta la tabella verso sinistra");
+    const avanti = crFrecciaScorrimentoTracciato("›", "Sposta la tabella verso destra");
+
+    const traccia = document.createElement("div");
+    traccia.style.position = "relative";
+    traccia.style.flex = "1 1 auto";
+    traccia.style.height = "12px";
+    traccia.style.minWidth = "0";
+    traccia.style.backgroundColor = "#e6e6e6";
+    traccia.style.borderRadius = "6px";
+    traccia.style.cursor = "pointer";
+    Tooltip.impostaTooltip(traccia, "Clicca o trascina per scorrere le colonne");
+
+    const cursore = document.createElement("div");
+    cursore.style.position = "absolute";
+    cursore.style.top = "0";
+    cursore.style.left = "0";
+    cursore.style.height = "12px";
+    cursore.style.width = "40px";
+    cursore.style.backgroundColor = "#8a8a8a";
+    cursore.style.borderRadius = "6px";
+    cursore.style.cursor = "grab";
+
+    traccia.appendChild(cursore);
+
+    barra.appendChild(indietro);
+    barra.appendChild(traccia);
+    barra.appendChild(avanti);
+
+    state.barra = barra;
+    state.traccia = traccia;
+    state.cursore = cursore;
+    state.spostamento = 0;
+
+    indietro.addEventListener("click", () => scorriTracciato(state, state.spostamento - PASSO_SCORRIMENTO_TRACCIATO));
+    avanti.addEventListener("click", () => scorriTracciato(state, state.spostamento + PASSO_SCORRIMENTO_TRACCIATO));
+
+    traccia.addEventListener("click", (evento) => {
+        //Il clic sul cursore lo prende il cursore: qui arriva solo il clic sulla traccia.
+        if (evento?.target === cursore) {
+            return;
+        }
+
+        const misure = misureScorrimentoTracciato(state);
+        const posizione = posizioneNellaTracciaTracciato(evento, traccia);
+
+        scorriTracciato(state, barraScorrimento.spostamentoDaClic(
+            posizione, misure.contenuto, misure.visibile, misure.traccia));
+    });
+
+    //Terzo strato: il trascinamento. Se questi eventi non arrivano, restano frecce e traccia.
+    cursore.addEventListener("mousedown", (evento) => {
+        const misure = misureScorrimentoTracciato(state);
+
+        state.trascinamento = {
+            partenzaX: evento?.clientX || 0,
+            spostamentoIniziale: state.spostamento,
+            misure: misure
+        };
+
+        cursore.style.cursor = "grabbing";
+    });
+
+    abilitaTrascinamentoBarraTracciato();
+
+    return barra;
+}
+
+/// Il pulsante di una freccia, con il suo tooltip.
+function crFrecciaScorrimentoTracciato(simbolo, descrizione) {
+    const freccia = document.createElement("button");
+    freccia.type = "button";
+    freccia.textContent = simbolo;
+    freccia.style.height = "16px";
+    freccia.style.minWidth = "18px";
+    freccia.style.padding = "0";
+    freccia.style.lineHeight = "1";
+    freccia.style.cursor = "pointer";
+    freccia.style.flexShrink = "0";
+    Tooltip.impostaTooltip(freccia, descrizione);
+    return freccia;
+}
+
+/// Il trascinamento si ascolta una volta sola sul documento: il mouse esce dal cursore
+/// quasi subito, e se ascoltassimo solo lui il movimento si perderebbe.
+function abilitaTrascinamentoBarraTracciato() {
+    if (trascinamentoBarraTracciatoAttivo) {
+        return;
+    }
+
+    trascinamentoBarraTracciatoAttivo = true;
+
+    $(document).on("mousemove", function (evento) {
+        const state = statoBarraTracciato;
+        if (state == null || state.trascinamento == null) {
+            return;
+        }
+
+        const misure = state.trascinamento.misure;
+        const pixel = (evento?.clientX || 0) - state.trascinamento.partenzaX;
+
+        scorriTracciato(state, barraScorrimento.spostamentoDaTrascinamento(
+            state.trascinamento.spostamentoIniziale, pixel,
+            misure.contenuto, misure.visibile, misure.traccia));
+    });
+
+    $(document).on("mouseup", function () {
+        const state = statoBarraTracciato;
+        if (state == null || state.trascinamento == null) {
+            return;
+        }
+
+        state.trascinamento = null;
+        if (state.cursore != null) {
+            state.cursore.style.cursor = "grab";
+        }
+    });
+}
+
+/// Le misure si leggono adesso, non alla costruzione: quando la barra nasce la lista non e'
+/// ancora impaginata e tornerebbero zero. Il contenuto e' la larghezza vera della tabella, il
+/// visibile quella della lista che la taglia.
+function misureScorrimentoTracciato(state) {
+    let contenuto = 0;
+    let visibile = 0;
+    let traccia = 0;
+
+    try {
+        contenuto = document.getElementById("Tab1Table")?.scrollWidth || 0;
+        visibile = document.getElementById("Tab1Viewport")?.clientWidth || 0;
+        traccia = state?.traccia?.clientWidth || 0;
+    }
+    catch (err) {
+        console.error("Misure della barra non disponibili:", err);
+    }
+
+    return {
+        contenuto: contenuto,
+        visibile: visibile,
+        traccia: traccia
+    };
+}
+
+/// Dove e' caduto il clic, in pixel dall'inizio della traccia.
+function posizioneNellaTracciaTracciato(evento, traccia) {
+    try {
+        const rettangolo = traccia.getBoundingClientRect();
+        return (evento?.clientX || 0) - (rettangolo?.left || 0);
+    }
+    catch (err) {
+        return 0;
+    }
+}
+
+/// Sposta la tabella e aggiorna il cursore.
+function scorriTracciato(state, spostamento) {
+    const table = document.getElementById("Tab1Table");
+    if (state == null || table == null) {
+        return;
+    }
+
+    const misure = misureScorrimentoTracciato(state);
+
+    state.spostamento = barraScorrimento.limitaSpostamento(spostamento, misure.contenuto, misure.visibile);
+    table.style.marginLeft = "-" + state.spostamento + "px";
+
+    aggiornaCursoreTracciato(state, misure);
+}
+
+/// Mostra o nasconde la barra e mette il cursore dove dice lo spostamento.
+function aggiornaCursoreTracciato(state, misure) {
+    if (state == null || state.cursore == null) {
+        return;
+    }
+
+    const m = misure || misureScorrimentoTracciato(state);
+    const serve = barraScorrimento.serveLaBarra(m.contenuto, m.visibile);
+
+    if (state.barra != null) {
+        //Se le colonne ci stanno tutte, la barra non ha niente da fare e sparisce.
+        //Finche' le misure non sono disponibili la si lascia, altrimenti lampeggerebbe.
+        state.barra.style.display = (m.visibile > 0 && !serve) ? "none" : "flex";
+    }
+
+    const geometria = barraScorrimento.geometriaCursore(
+        state.spostamento, m.contenuto, m.visibile, m.traccia);
+
+    state.cursore.style.width = geometria.larghezza + "px";
+    state.cursore.style.left = geometria.sinistra + "px";
+}
+
+/// L'altezza che la barra occupa sotto la lista, zero se non c'e' o e' nascosta. Serve a
+/// onResizeTab1Tracciato per lasciarle posto: lista e barra insieme devono stare dentro
+/// #contenitoreTab, altrimenti tornerebbe a scorrere quello.
+function altezzaBarraScorrimentoTracciato() {
+    const barra = statoBarraTracciato.barra;
+    if (barra == null || barra.style.display === "none") {
+        return 0;
+    }
+
+    try {
+        return Math.ceil(barra.getBoundingClientRect().height || 0);
+    }
+    catch (err) {
+        return 0;
     }
 }
 
@@ -9445,7 +9701,14 @@ function onresizeWindow(){
 /// index.html.
 function onResizeTab1Tracciato(){
     setTimeout(function () {
-        AltezzaScorrimento.fissaAltezza(document.getElementById("contenitoreTab"), document.getElementById("Tab1Viewport"));
+        //I20-1035: sotto la lista c'e' la barra orizzontale, e l'altezza le lascia posto. Prima
+        //l'altezza, poi la barra - fissare l'altezza puo' far comparire la barra verticale, che
+        //stringe la lista - e di nuovo l'altezza, nel caso la barra sia comparsa o sparita.
+        var contenitoreTab = document.getElementById("contenitoreTab");
+        var listaTracciato = document.getElementById("Tab1Viewport");
+        AltezzaScorrimento.fissaAltezza(contenitoreTab, listaTracciato, { margine: AltezzaScorrimento.MARGINE + altezzaBarraScorrimentoTracciato() });
+        scorriTracciato(statoBarraTracciato, statoBarraTracciato.spostamento || 0);
+        AltezzaScorrimento.fissaAltezza(contenitoreTab, listaTracciato, { margine: AltezzaScorrimento.MARGINE + altezzaBarraScorrimentoTracciato() });
 
         lastHeightDimension = document.getElementById("wrapper").clientHeight;
         footerHeight = document.getElementById("footer").clientHeight;

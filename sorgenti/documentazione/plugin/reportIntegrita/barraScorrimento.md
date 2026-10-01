@@ -8,6 +8,10 @@ né dando alla tabella una larghezza vera in pixel. Invece di insistere, la tabe
 mano e la barra la disegna il Plugin. Qui stanno solo i conti — la parte che si può sbagliare in
 silenzio; il disegno e gli eventi stanno in `pannelli.js`, qui accanto (fino a I20-1014 in `confronti.js`).
 
+**Da I20-1035 la usa anche la Home**, per la barra orizzontale della lista dei tracciati: il disegno
+e gli eventi sono una replica di quelli dei Nuovi, in `indexNew.js` (vedi
+[indexNew/04](../indexNew/04-tracciato-messaggi-e-il-resto.md)). I conti restano solo qui.
+
 ## Variabili globali
 
 | nome | cos'è |
