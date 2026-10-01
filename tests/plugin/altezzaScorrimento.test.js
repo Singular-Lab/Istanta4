@@ -114,7 +114,10 @@ test("onResizeTab1Tracciato fissa l'altezza della lista prima di tutto il resto"
     assert.ok(inizio >= 0, "manca onResizeTab1Tracciato");
     const corpo = sorgente.substring(inizio, sorgente.indexOf("\n}\n", inizio));
 
-    const chiamata = 'AltezzaScorrimento.fissaAltezza(document.getElementById("contenitoreTab"), document.getElementById("Tab1Viewport"));';
+    //I20-1035: la chiamata lascia posto alla barra orizzontale sotto la lista.
+    assert.ok(corpo.includes('var contenitoreTab = document.getElementById("contenitoreTab");'), "manca #contenitoreTab");
+    assert.ok(corpo.includes('var listaTracciato = document.getElementById("Tab1Viewport");'), "manca #Tab1Viewport");
+    const chiamata = "AltezzaScorrimento.fissaAltezza(contenitoreTab, listaTracciato,";
     assert.ok(corpo.includes(chiamata), "manca la chiamata a fissaAltezza");
     //Prima delle uscite anticipate: deve valere anche quando la funzione esce presto.
     assert.ok(corpo.indexOf(chiamata) < corpo.indexOf("return;"), "fissaAltezza va prima delle uscite anticipate");

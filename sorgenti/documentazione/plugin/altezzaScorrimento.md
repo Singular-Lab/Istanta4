@@ -49,6 +49,8 @@ cambio dei criteri dei filtri e a ogni ridimensionamento del pannello (attravers
 `onresizeWindow`): l'altezza segue lo spazio libero, **non il numero di righe**. Con poche righe
 sotto resta spazio vuoto; con tante la lista scorre, e l'intestazione resta ferma.
 
-Lo scorrimento orizzontale della lista non è toccato da I20-1030.
+Lo scorrimento orizzontale lo aggiunge I20-1035, con la barra sotto la lista
+([indexNew/04](indexNew/04-tracciato-messaggi-e-il-resto.md)): `onResizeTab1Tracciato` passa come
+margine anche l'altezza della barra, così lista e barra insieme restano dentro il contenitore.
 
 **Test:** `node --test tests/plugin/altezzaScorrimento.test.js`
