@@ -17,6 +17,10 @@ secondo report della stessa sessione i file sono gli stessi.
 - Lo stato del link — mancante, non aggiornato — **non viene mai messo in cache**: si rilegge
   sempre da InDesign.
 - La memoria dura quanto il codice del Plugin: un reload di UXP la azzera.
+- **La usano in due**: `ReperimentoFoto.getLinkHash`, che la riempie, e il
+  [Report Integrità](../reportIntegrita/README.md), che a fine confronto ne scrive le `statistiche()`
+  nel log. Tutti e due la importano con `require` (il report da I20-1036): è lo stesso file, quindi lo
+  stesso oggetto e gli stessi contatori. Non è più una globale di `indexNew`.
 
 ## Variabili globali
 

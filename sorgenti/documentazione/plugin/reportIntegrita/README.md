@@ -95,6 +95,14 @@ Il report usa, come faceva `confronti.js`, le globali di `indexNew.js`: `idKitLa
 moduli che `indexNew` dichiara. Le funzioni arrivate da `indexNew.js` le usavano già, e sono
 rimaste le stesse.
 
+**`cacheHashFoto` invece la importa** (`require('../reperimentoFoto/cacheHash')`, da I20-1036): a
+fine confronto ne scrive le statistiche nel log. Fino a I20-1015 era una globale di `indexNew`; da lì
+è uscita insieme a [reperimentoFoto](../reperimentoFoto/README.md), il report la chiamava ancora per
+nome, e il confronto finiva in un `ReferenceError` (IDX-41) proprio prima di mostrare il report.
+Quando una globale esce da `indexNew`, chi la usa ancora va cercato in tutto il Plugin: il test
+`chi usa le globali tolte da indexNew le dichiara nel proprio file`, in `reperimentoFoto.test.js`,
+lo fa per le tre di I20-1015.
+
 ## Cosa è stato tolto in I20-1014
 
 - Dal motore, due membri senza chiamanti: `testMappaturaImpaginato` e `ripristinaCacheConfronto`
