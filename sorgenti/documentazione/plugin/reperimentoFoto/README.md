@@ -13,7 +13,7 @@ file**: `schedaRef.js`, `indexNew.js`, `cmd.js`, `utility.js` e i tre moduli pur
 
 ---
 
-## I sette file
+## Gli otto file
 
 | file | cosa fa | InDesign | test |
 |---|---|---|---|
@@ -24,10 +24,12 @@ file**: `schedaRef.js`, `indexNew.js`, `cmd.js`, `utility.js` e i tre moduli pur
 | `autoSync.js` | la decisione del cambio foto: c'è già? chiederla? è arrivata davvero? | no | `fotoAutoSync.test.js` |
 | `cacheHash.js` | la memoria degli hash md5 delle foto collegate | no | `cacheHashFoto.test.js` |
 | `dataCaricamento.js` | la data sul badge e l'ordinamento delle foto | no | `data-caricamento-foto.test.js` |
+| `fineScaricamento.js` | quando lo scaricamento del pacchetto foto è finito davvero, e il pulsante Fine (I20-1027) | no | `fineScaricamentoFoto.test.js` |
 
 Le pagine: [schedaFoto.md](schedaFoto.md), [operazioni.md](operazioni.md),
 [scaricamento.md](scaricamento.md), [fotoPlacer.md](fotoPlacer.md), [autoSync.md](autoSync.md),
-[cacheHash.md](cacheHash.md), [dataCaricamento.md](dataCaricamento.md).
+[cacheHash.md](cacheHash.md), [dataCaricamento.md](dataCaricamento.md),
+[fineScaricamento.md](fineScaricamento.md).
 
 **Nomi di prima.** `scaricamento.js` era `cmd.js`; `autoSync.js`, `cacheHash.js` e
 `dataCaricamento.js` erano `fotoAutoSync.js`, `cacheHashFoto.js` e `dataCaricamentoFoto.js`;

@@ -12,8 +12,8 @@
 ///
 /// Il concetto sta in questa cartella: schedaFoto.js (la parte foto della scheda, mescolata in
 /// schedaRef), questo, scaricamento.js (lo scaricamento vero, ex cmd.js), fotoPlacer.js
-/// (collocare il file nel riquadro, ex FotoPlacer di utility.js) e tre regole pure: autoSync.js,
-/// cacheHash.js, dataCaricamento.js.
+/// (collocare il file nel riquadro, ex FotoPlacer di utility.js) e quattro regole pure: autoSync.js,
+/// cacheHash.js, dataCaricamento.js e fineScaricamento.js (I20-1027).
 ///
 /// Prima era sparso: le prime undici funzioni erano globali di indexNew.js, getLinkHash e i bolli
 /// membri di Utility. indexNew.js dichiara ReperimentoFoto; index.html, schedaRef, confronti e il
@@ -24,6 +24,7 @@ const XMLHttpRequestClient = require('../XMLHttpRequestClient');
 const fotoAutoSync = require('./autoSync');
 const cacheHashFoto = require('./cacheHash');
 const FotoPlacer = require('./fotoPlacer');
+const fineScaricamento = require('./fineScaricamento');
 
 const ReperimentoFoto = {
     /// Apre la finestra dello scaricamento del pacchetto foto.
@@ -208,6 +209,37 @@ const ReperimentoFoto = {
         return esito.presente;
     },
 
+    /// I20-1027: la fine di una fase dello scaricamento, scritta nella finestra. La decisione -
+    /// e' la fine vera? che messaggio? serve il pulsante Fine? - sta in fineScaricamento.js; qui
+    /// resta l'applicarla.
+    ///
+    /// Tutto passa da #overlayModalDownloadFoto. La finestra e' un clone del modello
+    /// dialogSyncPacchettoFoto di index.html: a finestra chiusa, come nell'impaginazione del libro
+    /// che scarica senza aprirla, un $("#...") globale troverebbe il modello e lo cambierebbe, e
+    /// Fine comparirebbe gia' all'apertura successiva. A finestra chiusa, invece, qui non si tocca
+    /// niente.
+    ///
+    /// Alla fine vera l'operazione esce da syncFotoInCorso. Sulle strade d'errore nessuno la
+    /// toglieva, e apriSchermataSyncPacchettoFoto, trovandola, rimostrava la finestra gia' chiusa
+    /// e vuota invece di avviarne una nuova.
+    mostraFineScaricamento(modo, esito, idOperazione = null) {
+        var stato = fineScaricamento.statoAlTermine(modo, esito);
+        var finestra = $("#overlayModalDownloadFoto");
+
+        if (stato.concluso && idOperazione != null) {
+            syncFotoInCorso = syncFotoInCorso.filter(id => id !== idOperazione);
+        }
+
+        finestra.find("#messageOperazione").text(stato.messaggio);
+        if (stato.mostraFine) {
+            finestra.find("#fineSyncPacchettoFoto").show();
+            finestra.find("#closeModal").show();
+            finestra.find("#riduciIconaRow").hide();
+        }
+
+        return stato;
+    },
+
     /// Lo scaricamento massivo del pacchetto foto, con barra di avanzamento e
     /// possibilita' di interruzione. 348 righe.
     async avviaSyncPacchettoFoto(mode, callback, codici = []){
@@ -239,6 +271,8 @@ const ReperimentoFoto = {
         $("#avvioOperazioneSyncFoto").hide();
         $("#bodySyncPacchettoFoto").show();
         $("#overlayModalDownloadFoto").find("#closeModal").hide();
+        //I20-1027: Fine compare solo alla fine vera, mai durante.
+        $("#overlayModalDownloadFoto").find("#fineSyncPacchettoFoto").hide();
     
     
     
@@ -272,6 +306,7 @@ const ReperimentoFoto = {
                             messaggioUtente("Code IDX-149 errore sul server: " + data.error, "error");
                         }
                         if (data.esito == false) {
+                            ReperimentoFoto.mostraFineScaricamento(0, fineScaricamento.esiti.nonRiuscito, codiceSyncFoto);
                             return;
                         }
                         console.log(data);
@@ -307,11 +342,11 @@ const ReperimentoFoto = {
                             },
 
                             onComplete: async function (message = null) {
-                                if (message != null) {
-                                    $("#messageOperazione").text(message);
-                                }
+                                //I20-1027: finite le foto il processo non e' finito, partono loghi e
+                                //bolli: niente "Operazione completata" qui, lo dira' il modo 1.
                                 syncFotoInCorso = syncFotoInCorso.filter(id => id !== codiceSyncFoto);
                                 if (!abortedSyncFoto.includes(codiceSyncFoto)) {
+                                    ReperimentoFoto.mostraFineScaricamento(0, fineScaricamento.esiti.completato, codiceSyncFoto);
                                     ReperimentoFoto.avviaSyncPacchettoFoto(1, callback);
                                 }
                                 else{
@@ -323,6 +358,7 @@ const ReperimentoFoto = {
                     }
                     catch (e) {
                         console.log(e);
+                        ReperimentoFoto.mostraFineScaricamento(0, fineScaricamento.esiti.nonRiuscito, codiceSyncFoto);
                         if (callback != null) {
                             callback();
                         }
@@ -333,9 +369,8 @@ const ReperimentoFoto = {
 
                 xhr.onerror = function () {
                     console.error("errore");
-                    $("#overlayModalDownloadFoto").find("#closeModal").show();
-                    //nascondiamo la riduciIconaRow
-                    $("#overlayModalDownloadFoto").find("#riduciIconaRow").hide();
+                    //I20-1027: oltre alla croce, il messaggio e Fine.
+                    ReperimentoFoto.mostraFineScaricamento(0, fineScaricamento.esiti.nonRiuscito, codiceSyncFoto);
                 }
 
                 xhr.onNoConnection = async function () { }
@@ -346,6 +381,7 @@ const ReperimentoFoto = {
             catch (e) {
                 console.log(e);
                 messaggioUtente("Code IDX-150 Errore generico: " + e, "error");
+                ReperimentoFoto.mostraFineScaricamento(0, fineScaricamento.esiti.nonRiuscito, codiceSyncFoto);
             }
         }
         else if (mode == 1) { //loghi/bolli
@@ -369,14 +405,19 @@ const ReperimentoFoto = {
                             messaggioUtente("Code IDX-149 errore sul server: " + data.error, "error");
                         }
                         if (data.esito == false) {
+                            ReperimentoFoto.mostraFineScaricamento(1, fineScaricamento.esiti.nonRiuscito, codiceSyncFotoMode1);
                             return;
                         }
                         console.log(data);
                         //modifichiamo il ? con la lunghezza dell'array
                         //creiamo un oggetto contenente due funzioni, onProgress e onComplete
                         var total = 0;
+                        //I20-1027: un'operazione annullata non arriva a onComplete, ma il codice dopo
+                        //downloadImages gira lo stesso: questo dice se mostrare la fine.
+                        var annullata = false;
                         var objProcess = {
                             onAbort: async function(message = null){
+                                annullata = true;
                                 if(message != null){
                                     $("#messageOperazione").text(message);
                                 }
@@ -422,8 +463,11 @@ const ReperimentoFoto = {
                             dataToDownload.push({fileName: obj.nome, id: obj.guidId});
                         }
                         await scaricamentoFoto.downloadImages(data, objProcess, folder, codiceSyncFotoMode1);
-                        $("#overlayModalDownloadFoto").find("#closeModal").show();
-                        $("#overlayModalDownloadFoto").find("#riduciIconaRow").hide();
+                        //I20-1027: la fine vera, anche del sync completo. Se la finestra era ridotta a
+                        //icona onComplete l'ha gia' chiusa col messaggio verde, e qui non si tocca niente.
+                        if (!annullata) {
+                            ReperimentoFoto.mostraFineScaricamento(1, fineScaricamento.esiti.completato, codiceSyncFotoMode1);
+                        }
 
 
                         if (callback != null) {
@@ -433,6 +477,7 @@ const ReperimentoFoto = {
                     }
                     catch (e) {
                         console.log(e);
+                        ReperimentoFoto.mostraFineScaricamento(1, fineScaricamento.esiti.nonRiuscito, codiceSyncFotoMode1);
                         if (callback != null) {
                             callback();
                         }
@@ -443,9 +488,7 @@ const ReperimentoFoto = {
 
                 xhr.onerror = function () {
                     console.error("errore");
-                    $("#overlayModalDownloadFoto").find("#closeModal").show();
-                    $("#overlayModalDownloadFoto").find("#riduciIconaRow").hide();
-
+                    ReperimentoFoto.mostraFineScaricamento(1, fineScaricamento.esiti.nonRiuscito, codiceSyncFotoMode1);
                 }
 
                 xhr.onNoConnection = async function () { }
@@ -456,6 +499,7 @@ const ReperimentoFoto = {
             catch (e) {
                 console.log(e);
                 messaggioUtente("Code IDX-150 Errore generico: " + e, "error");
+                ReperimentoFoto.mostraFineScaricamento(1, fineScaricamento.esiti.nonRiuscito, codiceSyncFotoMode1);
             }
         }
         else if (mode == 2) { //scaricamento di una lista di codici
@@ -485,9 +529,12 @@ const ReperimentoFoto = {
                         //modifichiamo il ? con la lunghezza dell'array
                         //creiamo un oggetto contenente due funzioni, onProgress e onComplete
                         var total = 0;
+                        //I20-1027: come nel modo 1, l'annullamento non deve mostrare la fine.
+                        var annullata = false;
                         var objProcess = {
 
                             onAbort: async function(message = null){
+                                annullata = true;
                                 if(message != null){
                                     $("#messageOperazione").text(message);
                                 }
@@ -523,15 +570,19 @@ const ReperimentoFoto = {
                         };
                         await scaricamentoFoto.downloadImages(data.lista, objProcess, folder, codiceSyncFotoMode2);
 
-                        if (callback != null) {
-                            $("#overlayModalDownloadFoto").find("#closeModal").show();
-                            $("#overlayModalDownloadFoto").find("#riduciIconaRow").hide();
+                        //I20-1027: la fine si mostra sempre, non solo quando c'e' una callback: senza,
+                        //la finestra restava senza croce.
+                        if (!annullata) {
+                            ReperimentoFoto.mostraFineScaricamento(2, fineScaricamento.esiti.completato, codiceSyncFotoMode2);
+                        }
 
+                        if (callback != null) {
                             callback();
                         }
                     }
                     catch (e) {
                         console.log(e);
+                        ReperimentoFoto.mostraFineScaricamento(2, fineScaricamento.esiti.nonRiuscito, codiceSyncFotoMode2);
                     }
                 }
 
@@ -539,8 +590,7 @@ const ReperimentoFoto = {
 
                 xhr.onerror = function () { 
                     console.error("errore");
-                    $("#overlayModalDownloadFoto").find("#closeModal").show();
-                    $("#overlayModalDownloadFoto").find("#riduciIconaRow").hide();
+                    ReperimentoFoto.mostraFineScaricamento(2, fineScaricamento.esiti.nonRiuscito, codiceSyncFotoMode2);
                 }
 
                 xhr.onNoConnection = async function () { }
@@ -554,6 +604,7 @@ const ReperimentoFoto = {
             catch (e) {
                 console.log(e);
                 messaggioUtente("Code IDX-150 Errore generico: " + e, "error");
+                ReperimentoFoto.mostraFineScaricamento(2, fineScaricamento.esiti.nonRiuscito, codiceSyncFotoMode2);
             }
         }
     },

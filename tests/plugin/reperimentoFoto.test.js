@@ -208,8 +208,9 @@ test("utility.js riesporta FotoPlacer da reperimentoFoto/", () => {
 
 /* ---- le regole pure ---- */
 
-test("le tre regole pure si caricano sotto Node senza aiuti", () => {
-    for (const nome of ["autoSync", "cacheHash", "dataCaricamento"]) {
+//I20-1027: la quarta e' fineScaricamento, la fine vera dello scaricamento del pacchetto foto.
+test("le quattro regole pure si caricano sotto Node senza aiuti", () => {
+    for (const nome of ["autoSync", "cacheHash", "dataCaricamento", "fineScaricamento"]) {
         const modulo = require("../../plugin/reperimentoFoto/" + nome + ".js");
         assert.ok(modulo != null && Object.keys(modulo).length > 0, nome);
         assert.doesNotMatch(senzaCommenti(leggiFileDelPlugin("reperimentoFoto/" + nome + ".js")), /require\(['"]indesign['"]\)/, nome);
