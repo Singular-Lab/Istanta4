@@ -36,6 +36,11 @@ const reportIntegritaAvvio = require('./avvio');
 const reportConfrontoCsv = require('./csv');
 const reportConteggi = require('./conteggi');
 const reportConfronti = require('./sezioneConfronti');
+//I20-1036: le statistiche della cache degli hash, scritte nel log a fine confronto. Fino a I20-1015
+//cacheHashFoto era una globale di indexNew; da li' e' uscita insieme a reperimentoFoto, e senza
+//questo require il confronto finiva in un ReferenceError (IDX-41) proprio prima di mostrare il
+//report. E' lo stesso file di reperimentoFoto.js, quindi lo stesso oggetto e gli stessi contatori.
+const cacheHashFoto = require('../reperimentoFoto/cacheHash');
 
 const ReportIntegrita = {
     /// Cerca le referenze finite su una pagina diversa da quella prevista.

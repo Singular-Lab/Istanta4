@@ -226,3 +226,38 @@ test("il controllo riconosce davvero un nome passato come valore", () => {
     assert.match(soloCodice(finto), /infoFoto: getInfoFotoDalServer/);
     assert.doesNotMatch(soloCodice(finto), /"getInfoFotoDalServer"/);
 });
+
+/* ---- le globali che indexNew non dichiara piu' ---- */
+
+//I20-1036: I20-1015 ha tolto da indexNew tre globali - cmd, fotoAutoSync, cacheHashFoto - e il
+//Report Integrita' chiamava ancora cacheHashFoto.statistiche() per nome: ReferenceError a fine
+//confronto, e il report non compariva. Chi le usa deve dichiararle nel proprio file.
+const GLOBALI_TOLTE = ["cmd", "fotoAutoSync", "cacheHashFoto"];
+
+test("chi usa le globali tolte da indexNew le dichiara nel proprio file", () => {
+    const senzaDichiarazione = [];
+    for (const relativo of fileDelPlugin()) {
+        const codice = soloCodice(leggiFileDelPlugin(relativo));
+        for (const nome of GLOBALI_TOLTE) {
+            const usa = new RegExp("(?<![\\w.$])" + nome + "\\.[A-Za-z_]").test(codice);
+            const dichiara = new RegExp("\\b(?:const|let|var)\\s+" + nome + "\\s*=").test(codice);
+            if (usa && !dichiara) {
+                senzaDichiarazione.push(relativo + ": " + nome);
+            }
+        }
+    }
+    assert.deepStrictEqual(senzaDichiarazione, []);
+});
+
+test("il Report Integrita' legge le statistiche dalla stessa cache di reperimentoFoto", () => {
+    //senzaCommenti e non soloCodice: qui serve proprio il testo dentro le stringhe dei require.
+    const report = senzaCommenti(leggiFileDelPlugin("reportIntegrita/reportIntegrita.js"));
+    const operazioni = senzaCommenti(leggiFileDelPlugin("reperimentoFoto/reperimentoFoto.js"));
+
+    assert.match(report, /const cacheHashFoto = require\('\.\.\/reperimentoFoto\/cacheHash'\);/);
+    assert.match(operazioni, /const cacheHashFoto = require\('\.\/cacheHash'\);/);
+    //Due percorsi verso lo stesso file: require restituisce lo stesso oggetto, e i contatori sono quelli veri.
+    const dalReport = require("../../plugin/reportIntegrita/../reperimentoFoto/cacheHash.js");
+    const daReperimento = require("../../plugin/reperimentoFoto/cacheHash.js");
+    assert.strictEqual(dalReport, daReperimento);
+});
