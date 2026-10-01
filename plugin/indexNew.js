@@ -50,6 +50,7 @@ const ReportIntegrita = require('./reportIntegrita/reportIntegrita');
 const NoRenderElementi = require('./noRenderElementi');
 const RicollegaEsiti = require('./ricollegaEsiti');
 const VersionePlugin = require('./versionePlugin');
+const AltezzaScorrimento = require('./altezzaScorrimento');
 const ficoProcess = require('./ficoProcess');
 const grigliaJs = require('./griglia');
 const filtriJs = require('./filtri');
@@ -9435,8 +9436,17 @@ function onresizeWindow(){
 ///
 /// La larghezza si prende dallo scrollWidth dell'intestazione, cosi' le righe non vanno mai
 /// piu' strette delle colonne.
+///
+/// I20-1030: per prima cosa da' alla lista (#Tab1Viewport) un'altezza vera, lo spazio che resta
+/// libero in #contenitoreTab. Senza, la lista cresceva quanto tutte le righe e la rotella del
+/// mouse non la faceva scorrere: in UXP la rotella scorre solo un contenitore che ha un'altezza.
+/// Sta prima delle uscite anticipate, perche' vale anche quando quelle escono. Le altezze qui
+/// sotto sono per #Tab1Tracciato e #Tab1Container, la lista di prima, oggi commentata in
+/// index.html.
 function onResizeTab1Tracciato(){
     setTimeout(function () {
+        AltezzaScorrimento.fissaAltezza(document.getElementById("contenitoreTab"), document.getElementById("Tab1Viewport"));
+
         lastHeightDimension = document.getElementById("wrapper").clientHeight;
         footerHeight = document.getElementById("footer").clientHeight;
 

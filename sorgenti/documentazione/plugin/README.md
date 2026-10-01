@@ -36,7 +36,7 @@ I20-1014, I20-1015, I20-1012 e I20-1007, che ha chiuso il giro degli accorpament
 restano i file grandi che parlano con InDesign e i moduli che sono un concetto da soli
 (`variantiDescrizione`, `noRenderElementi`, `credenzialiSalvate`, `ricollegaEsiti`,
 `cambiStrutturali`, `garbageCollector`, `versionePlugin`, `XMLHttpRequestClient`, `logger`,
-`jsIndexControls`): un file nuovo, o una cartella, si apre solo quando il concetto lo chiede.
+`jsIndexControls`, `altezzaScorrimento`): un file nuovo, o una cartella, si apre solo quando il concetto lo chiede.
 
 - **Un file rappresenta un concetto.** Quando un concetto ha bisogno di più di un file, ha **una
   cartella sua**: `plugin/<concetto>/`. Le prime sono [sistemazioneFoto/](sistemazioneFoto/README.md)
@@ -121,6 +121,7 @@ ed è documentato il meccanismo con cui il server prevale su di lui.
 | [jsIndexControls.md](jsIndexControls.md) | le schede del pannello, per il codice e per i click |
 | [garbageCollector.md](garbageCollector.md) | la rimozione differita degli elementi InDesign |
 | [cambiStrutturali.md](cambiStrutturali.md) | quali cambi strutturali si applicano a una referenza |
+| [altezzaScorrimento.md](altezzaScorrimento.md) | l'altezza vera della lista della Home, perché in UXP la rotella non scorre un contenitore senza altezza (I20-1030) |
 
 ### Lotto 3 — il motore CSS
 
