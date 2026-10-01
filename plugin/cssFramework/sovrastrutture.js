@@ -14,7 +14,7 @@
  * in cui sono gia' fuse, e la precedenza fra i livelli resta quella di sempre.
  *
  * Qui stanno anche le due condizioni nuove, sulla ref e sulla forma del box, e la decisione
- * della regola nascondi: quali elementi il motore nasconde, quali rimostra.
+ * della regola disattiva: quali loghi automatici della ref stanno fuori dal box, quali dentro.
  *
  * Niente InDesign: si caricano sotto Node e i test lo chiamano.
  *
@@ -33,7 +33,7 @@ const sovrastrutture = {
 
     /// Le regole di un box che possono avere un nomeGruppo, cioe' quelle in cui una regola di
     /// un livello piu' alto sostituisce quella omonima di un livello piu' basso.
-    CHIAVI_PER_NOME: ["postRidimensionamenti", "allineamenti", "duplicazioni", "ordiniZ", "nascondi"],
+    CHIAVI_PER_NOME: ["postRidimensionamenti", "allineamenti", "duplicazioni", "ordiniZ", "disattiva"],
 
     /// La forma di un box dai suoi bounds InDesign [y1, x1, y2, x2]. Bounds mancanti o senza
     /// misure valgono standard: una regola di forma non deve scattare su un dato che non c'e'.
@@ -140,7 +140,7 @@ const sovrastrutture = {
             segnalazioniConflitti: [],
             duplicazioni: [],
             ordiniZ: [],
-            nascondi: [],
+            disattiva: [],
             sceltaSpazioFoto: null,
             estensioniFoto: null
         };
@@ -148,8 +148,10 @@ const sovrastrutture = {
 
     /// Fonde le operazioni di una sovrastruttura nelle regole di un box, senza toccarle: torna
     /// una voce nuova.
-    ///   - Nelle regole con nomeGruppo, una regola con lo stesso nome sostituisce quella del box,
-    ///     una con un nome nuovo si aggiunge.
+    ///   - Nelle regole con nomeGruppo, le regole della sovrastruttura sostituiscono quelle del
+    ///     box con lo stesso nome, e quelle con un nome nuovo si aggiungono. Piu' regole con lo
+    ///     stesso nome si tengono tutte: e' cosi' che il dato esprime varianti alternative dello
+    ///     stesso gruppo, con condizioni opposte (Loghi_DX di Edro21 con e senza Conad).
     ///   - I ridimensionamenti vanno in testa: il motore prende il primo che corrisponde
     ///     all'etichetta, e la sovrastruttura e' il livello piu' alto.
     ///   - Le segnalazioni dei conflitti si aggiungono.
@@ -160,7 +162,7 @@ const sovrastrutture = {
         var me = this;
 
         ["ridimensionamenti", "postRidimensionamenti", "allineamenti", "segnalazioniConflitti",
-            "duplicazioni", "ordiniZ", "nascondi"].forEach(function (chiave) {
+            "duplicazioni", "ordiniZ", "disattiva"].forEach(function (chiave) {
             fusa[chiave] = Array.isArray(voce[chiave]) ? voce[chiave].slice() : [];
         });
 
@@ -177,21 +179,9 @@ const sovrastrutture = {
         }
 
         this.CHIAVI_PER_NOME.forEach(function (chiave) {
-            if (!Array.isArray(operazioni[chiave])) {
-                return;
+            if (Array.isArray(operazioni[chiave])) {
+                fusa[chiave] = me.sostituisciPerNome(fusa[chiave], operazioni[chiave]);
             }
-            operazioni[chiave].forEach(function (regola) {
-                var nome = regola != null ? regola.nomeGruppo : null;
-                var indice = nome != null && nome !== ""
-                    ? fusa[chiave].findIndex(r => r != null && r.nomeGruppo === nome)
-                    : -1;
-                if (indice >= 0) {
-                    fusa[chiave][indice] = regola;
-                }
-                else {
-                    fusa[chiave].push(regola);
-                }
-            });
         });
 
         if (operazioni.sceltaSpazioFoto != null) {
@@ -204,10 +194,21 @@ const sovrastrutture = {
         return me.completaVoce(fusa);
     },
 
+    /// Le regole di sopra al posto di quelle di sotto con lo stesso nomeGruppo: le omonime di sotto
+    /// se ne vanno tutte, quelle di sopra si aggiungono tutte, nel loro ordine. Una regola senza
+    /// nome non sostituisce niente.
+    sostituisciPerNome(sotto, sopra) {
+        var regoleSopra = (sopra || []).filter(r => r != null);
+        var nomi = new Set(regoleSopra.map(r => r.nomeGruppo).filter(n => n != null && n !== ""));
+        return (sotto || [])
+            .filter(r => r == null || !nomi.has(r.nomeGruppo))
+            .concat(regoleSopra);
+    },
+
     /// Una voce con tutti gli elenchi, anche se il dato ne aveva meno.
     completaVoce(voce) {
         ["ridimensionamenti", "postRidimensionamenti", "allineamenti", "segnalazioniConflitti",
-            "duplicazioni", "ordiniZ", "nascondi"].forEach(function (chiave) {
+            "duplicazioni", "ordiniZ", "disattiva"].forEach(function (chiave) {
             if (!Array.isArray(voce[chiave])) {
                 voce[chiave] = [];
             }
@@ -242,49 +243,55 @@ const sovrastrutture = {
         return risultato;
     },
 
-    /// Le regole nascondi che valgono per un box, dalle quattro voci in cui il motore cerca le
+    /// Le regole disattiva che valgono per un box, dalle quattro voci in cui il motore cerca le
     /// regole, dalla meno alla piu' specifica: default del kit di default, box del kit di
     /// default, default del kit, box del kit. Una regola con lo stesso nomeGruppo di una regola
-    /// piu' specifica e' sostituita da quella.
-    regoleNascondi(vociDallaMenoSpecifica) {
+    /// piu' specifica e' sostituita da quella (da tutte quelle, se sono piu' d'una).
+    regoleDisattiva(vociDallaMenoSpecifica) {
+        var me = this;
         var regole = [];
         (vociDallaMenoSpecifica || []).forEach(function (voce) {
-            if (voce == null || !Array.isArray(voce.nascondi)) {
-                return;
+            if (voce != null && Array.isArray(voce.disattiva)) {
+                regole = me.sostituisciPerNome(regole, voce.disattiva);
             }
-            voce.nascondi.forEach(function (regola) {
-                if (regola == null) {
-                    return;
-                }
-                var nome = regola.nomeGruppo;
-                var indice = nome != null && nome !== "" ? regole.findIndex(r => r.nomeGruppo === nome) : -1;
-                if (indice >= 0) {
-                    regole[indice] = regola;
-                }
-                else {
-                    regole.push(regola);
-                }
-            });
         });
         return regole;
     },
 
-    /// Cosa fare di un elemento che una o piu' regole nascondi nominano.
-    ///   - Se almeno una delle sue regole ha le condizioni vere, si nasconde.
-    ///   - Altrimenti si mostra, a meno che l'operatore non l'abbia messo in noRender: la sua
-    ///     scelta vince sempre, e il motore non la annulla.
-    /// Un elemento che nessuna regola nomina resta com'e': torna null.
-    esitoNascondi(condizioniDelleRegole, nascostoDallOperatore) {
-        if (!Array.isArray(condizioniDelleRegole) || condizioniDelleRegole.length === 0) {
-            return null;
-        }
-        if (condizioniDelleRegole.some(vera => vera === true)) {
-            return "nascondi";
-        }
-        if (nascostoDallOperatore === true) {
-            return null;
-        }
-        return "mostra";
+    /// La label con cui il Plugin mette nel box una voce di Foto.ExtraAuto.
+    labelFotoExtraAuto(voce) {
+        return "foto_extra$" + voce.sigla + "$tipo_" + voce.tipo;
+    },
+
+    /// Per ogni logo automatico della ref (le voci di Foto.ExtraAuto), se deve stare fuori dal box
+    /// o dentro. valutate e' l'elenco delle regole disattiva gia' valutate: { espressioni, vera },
+    /// con le espressioni delle etichette che la regola nomina e la verita' delle sue condizioni.
+    ///   - Basta una regola vera che lo nomini: il logo e' disattivato, e non sta nel box.
+    ///   - Lo nominano solo regole false: e' attivato, e nel box ci deve stare.
+    ///   - Non lo nomina nessuna: non e' in nessuno dei due elenchi, e resta com'e'.
+    /// L'esclusione dell'operatore (escluso) la guarda chi mette i loghi nel box: vince sempre.
+    esitoDisattiva(vociFotoExtraAuto, valutate) {
+        var me = this;
+        var esito = { disattivati: new Set(), attivati: new Set() };
+        (vociFotoExtraAuto || []).forEach(function (voce) {
+            if (voce == null || voce.sigla == null) {
+                return;
+            }
+            var label = me.labelFotoExtraAuto(voce);
+            var condizioni = (valutate || [])
+                .filter(v => v != null && (v.espressioni || []).some(r => r.test(label)))
+                .map(v => v.vera === true);
+            if (condizioni.length === 0) {
+                return;
+            }
+            if (condizioni.some(vera => vera)) {
+                esito.disattivati.add(voce.sigla);
+            }
+            else {
+                esito.attivati.add(voce.sigla);
+            }
+        });
+        return esito;
     }
 };
 

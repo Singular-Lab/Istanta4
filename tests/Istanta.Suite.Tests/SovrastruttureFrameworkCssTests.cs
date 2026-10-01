@@ -5,7 +5,7 @@ using Xunit;
 namespace Istanta.Suite.Tests;
 
 /// <summary>
-/// I20-1026: sovrastrutture, condizioni sulla ref e sulla forma del box, regola nascondi e
+/// I20-1026: sovrastrutture, condizioni sulla ref e sulla forma del box, regola disattiva e
 /// distanza in percentuale dei followAnchor.
 ///
 /// Il SourceFrameworkCss del cliente passa dalle classi C# sia quando il Plugin lo scarica
@@ -21,7 +21,7 @@ public class SovrastruttureFrameworkCssTests
         + "\"sovrastrutture\":[{\"nome\":\"Parmigiano\","
         + "\"listSetCondizioni\":[{\"setCondizioni\":[{\"refCondition\":[{\"campo\":\"Descrizioni.Descrizione1\",\"contiene\":\"parmigiano reggiano\"}]}]}],"
         + "\"operazioni\":{\"nomiBox\":[],"
-        + "\"nascondi\":[{\"nomeGruppo\":\"testoVerticale\",\"elementi\":[\"*parmigiano_testo_2mod_verticale*\"],"
+        + "\"disattiva\":[{\"nomeGruppo\":\"testoVerticale\",\"elementi\":[\"*parmigiano_testo_2mod_verticale*\"],"
         + "\"listSetCondizioni\":[{\"setCondizioni\":[{\"formaBoxCondition\":[{\"forme\":[\"largo\",\"standard\"],\"rapporto\":1.6}]}]}]}],"
         + "\"allineamenti\":[{\"nomeGruppo\":\"BolloMesi\",\"fase\":\"dopoFixFoto\","
         + "\"followAnchor\":[{\"nomiGruppiSeguiti\":[\"immagine*\"],"
@@ -35,7 +35,7 @@ public class SovrastruttureFrameworkCssTests
 
         Assert.NotNull(kit);
         Assert.Empty(kit!.sovrastrutture);
-        Assert.Empty(kit.operazioniPerBox.Single().nascondi);
+        Assert.Empty(kit.operazioniPerBox.Single().disattiva);
     }
 
     [Fact]
@@ -51,10 +51,10 @@ public class SovrastruttureFrameworkCssTests
         Assert.Equal("Descrizioni.Descrizione1", ref1.campo);
         Assert.Equal("parmigiano reggiano", ref1.contiene);
 
-        var nascondi = Assert.Single(sovrastruttura.operazioni.nascondi);
-        Assert.Equal("testoVerticale", nascondi.nomeGruppo);
-        Assert.Equal(new[] { "*parmigiano_testo_2mod_verticale*" }, nascondi.elementi);
-        var forma = Assert.Single(Assert.Single(Assert.Single(nascondi.listSetCondizioni).setCondizioni).formaBoxCondition);
+        var disattiva = Assert.Single(sovrastruttura.operazioni.disattiva);
+        Assert.Equal("testoVerticale", disattiva.nomeGruppo);
+        Assert.Equal(new[] { "*parmigiano_testo_2mod_verticale*" }, disattiva.elementi);
+        var forma = Assert.Single(Assert.Single(Assert.Single(disattiva.listSetCondizioni).setCondizioni).formaBoxCondition);
         Assert.Equal(new[] { "largo", "standard" }, forma.forme);
         Assert.Equal(1.6, forma.rapporto);
 
@@ -72,9 +72,9 @@ public class SovrastruttureFrameworkCssTests
 
         var sovrastruttura = Assert.Single(riletto!.sovrastrutture);
         Assert.Equal("parmigiano reggiano", sovrastruttura.listSetCondizioni.Single().setCondizioni.Single().refCondition.Single().contiene);
-        Assert.Equal("testoVerticale", sovrastruttura.operazioni.nascondi.Single().nomeGruppo);
+        Assert.Equal("testoVerticale", sovrastruttura.operazioni.disattiva.Single().nomeGruppo);
         Assert.Equal(new[] { "largo", "standard" },
-            sovrastruttura.operazioni.nascondi.Single().listSetCondizioni.Single().setCondizioni.Single().formaBoxCondition.Single().forme);
+            sovrastruttura.operazioni.disattiva.Single().listSetCondizioni.Single().setCondizioni.Single().formaBoxCondition.Single().forme);
         Assert.Equal(25, sovrastruttura.operazioni.allineamenti.Single().followAnchor.Single().yAnchor!.distancePercentuale);
     }
 
@@ -85,6 +85,48 @@ public class SovrastruttureFrameworkCssTests
 
         Assert.Equal(2.5, ancora!.distance);
         Assert.Null(ancora.distancePercentuale);
+    }
+
+    [Fact]
+    public void Le_regole_di_Edro21_portano_la_sovrastruttura_Parmigiano_e_la_conservano()
+    {
+        // Il file vero del cliente: due kit volantino, ciascuno con la sovrastruttura, che deve
+        // restare intera anche dopo un salvataggio dall'editor di Istanta.
+        var root = JsonConvert.DeserializeObject<DbFrameworkCss>(File.ReadAllText(TrovaFile("Istanta/wwwroot/external_source/Edro21/SourceFrameworkCss.json")));
+        var riletto = JsonConvert.DeserializeObject<DbFrameworkCss>(JsonConvert.SerializeObject(root));
+
+        foreach (var db in new[] { root!, riletto! })
+        {
+            var kitVolantino = db.dbRidimensionamentiAllineamenti.modificheCssPerKit
+                .Where(k => k.kit.kitTipoLavorazioniValide.Contains(1)).ToList();
+            Assert.Equal(2, kitVolantino.Count);
+
+            foreach (var kit in kitVolantino)
+            {
+                var parmigiano = Assert.Single(kit.sovrastrutture, s => s.nome == "Parmigiano Reggiano");
+                Assert.Equal("Descrizioni.Descrizione1", parmigiano.listSetCondizioni.Single().setCondizioni.Single().refCondition.Single().campo);
+                Assert.Equal(3, parmigiano.operazioni.disattiva.Count);
+                var bollo = Assert.Single(parmigiano.operazioni.allineamenti, a => a.nomeGruppo == "Parmigiano_BolloMesi");
+                Assert.Equal("dopoFixFoto", bollo.fase);
+                Assert.Equal(25, bollo.followAnchor.Single().yAnchor!.distancePercentuale);
+            }
+        }
+    }
+
+    private static string TrovaFile(string relativo)
+    {
+        var cartella = new DirectoryInfo(AppContext.BaseDirectory);
+        while (cartella != null)
+        {
+            var candidato = Path.Combine(cartella.FullName, relativo.Replace('/', Path.DirectorySeparatorChar));
+            if (File.Exists(candidato))
+            {
+                return candidato;
+            }
+            cartella = cartella.Parent;
+        }
+
+        throw new FileNotFoundException($"File non trovato risalendo da {AppContext.BaseDirectory}: {relativo}");
     }
 
     [Fact]

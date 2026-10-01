@@ -5427,6 +5427,11 @@ async function impaginaBox(meccanica, pagCoinvolta, bounds, itemRef, pathLavoraz
                                 
     
                                 if (itemRef["Foto.ExtraAuto"] != null) {
+                                    //I20-1026: i loghi che la regola disattiva del framework CSS vuole fuori da questo
+                                    //box non si piazzano. La forma si misura sulla cella della griglia: un box che nasce
+                                    //alto o largo ha subito il suo formato. Al fix, callAllOperationFixBox li toglie e
+                                    //li rimette se il box cambia forma.
+                                    var disattivatiDallaForma = CssFramework.disattivatiDallaForma(boxImpaginato, itemRef, bounds).disattivati;
                                     for (var ij = 0; ij < itemRef["Foto.ExtraAuto"].length; ij++) {
     
                                         if (itemRef["Foto.ExtraAuto"][ij].escluso == true) {
@@ -5434,62 +5439,11 @@ async function impaginaBox(meccanica, pagCoinvolta, bounds, itemRef, pathLavoraz
                                         }
     
                                         if((itemRef["Foto.ExtraAuto"][ij].tipo != 5)){
-                                            var imgName = itemRef["Foto.ExtraAuto"][ij].nome;
-                                            var sigla = itemRef["Foto.ExtraAuto"][ij].sigla;
-                                            var tipo = itemRef["Foto.ExtraAuto"][ij].tipo;
-                                            var path = /*pathLavorazione +*/ percorsoLoghi + imgName;
-                                            //Controllo esstensine
-                                            //idms rappresenta un eccezione
-                                            //Deve essere caricato SOLO 1 VOLTA ew piazzato nella prima pagina in alto a sx
-                                            if (imgName.split(".")[1] == "idms") {
-        
-                                                let syObj = null;
-                                                if (cacheLoghi[sigla] == null || !cacheLoghi[sigla].isValid) {
-                                                    //Cerco in pagina 1 se ho già impaginato il simbolo
-                                                    var pag0 = doc.pages.item(0);
-                                                    for (var i2 = 0; i2 < pag0.allPageItems.length; i2++) {
-                                                        var item = pag0.allPageItems[i2];
-                                                        if (item.label == "simbolo$" + sigla + "$tipo_" + tipo) {
-                                                            cacheLoghi[sigla] = item;
-                                                            break;
-                                                        }
-                                                    }
-        
-                                                    if (cacheLoghi[sigla] == null || !cacheLoghi[sigla].isValid) {
-                                                        let objDms = doc.pages.item(0).place(path, [0, 0], doc.layers.itemByName("InPagina"));
-                                                        objDms.label = "simbolo$" + sigla + "$tipo_" + tipo;
-                                                        cacheLoghi[sigla] = objDms[0];
-                                                    }
-                                                }
-                                                syObj = cacheLoghi[sigla];
-                                                var sy = syObj.duplicate(pagCoinvolta);
-                                                sy.move(doc.layers.itemByName("InPagina"));
-                                                //muoviamo sy nell'angolo in alto a sinistra del box
-                                                sy.move([boxImpaginato.visibleBounds[1], boxImpaginato.visibleBounds[0]]);
-                                                itemRef["Foto.ExtraAuto"][ij].referenceTo = sy;
-                                                elementiDaGruppare.push(sy);
-                                                sy.label = "foto_extra$" + sigla + "$tipo_" + tipo
-                                                sy.bringToFront();
+                                            if (disattivatiDallaForma.has(itemRef["Foto.ExtraAuto"][ij].sigla)) {
+                                                continue;
                                             }
-                                            else {
-                                                var rect = myPage.rectangles.add(doc.layers.itemByName("InPagina"), LocationOptions.UNKNOWN, boxImpaginato, { geometricBounds: boxImpaginato.geometricBounds })
-                                                elementiDaGruppare.push(rect);
-                                                rect.label = "foto_extra$" + sigla + "$tipo_" + tipo;
-                                                rect.place(path);
-                                                //rect.fit(FitOptions.FRAME_TO_CONTENT);
-                                                //Alessio: Ho ripristinato questo al posto di FRAME_TO_CONTENT perchè in Despar faceva un macelllo con i loghi che costringevano il frame ad adattarsi.
-                                                //non possiamo permettergli di farlo, se questa cosa era stata fatta per Edro21 va ritestata e capita una misura comune
-                                                let fitType = FitOptions.CONTENT_TO_FRAME;
-                                                if(pluginMiddleware.getFitTypeLogo != null){
-                                                    fitType = pluginMiddleware.getFitTypeLogo(sigla, tipo);
-                                                }
-                                                if (fitType != null) {
-                                                    rect.fit(fitType);
-                                                    rect.fit(FitOptions.PROPORTIONALLY);
-                                                }
-                                                //rect.fillColor = "None";
-                                                itemRef["Foto.ExtraAuto"][ij].referenceTo = rect;
-                                            }
+                                            //I20-1026: il piazzamento sta in FotoPlacer, comune all'impaginazione e al fix.
+                                            elementiDaGruppare.push(FotoPlacer.piazzaFotoExtraAuto(itemRef["Foto.ExtraAuto"][ij], boxImpaginato, pagCoinvolta, doc));
                                         }
                                     }
                                 }
@@ -7394,7 +7348,7 @@ async function impaginazioneSingoloIndd(records, pagina, cercaInPaginaPerConfron
 
         if (originalBox != null) {
             var preAnalisi = await confronti.confrontoBoxCompiledFieldPreAnalisi(originalBox, datiPrimario.compiledFields, datiPrimario.deletedFields, datiPrimario.listaFoto, datiPrimario.fotoExtra, datiPrimario.fotoExtraAuto, true,
-                NoRenderElementi.elencoPerSegnalazioni(tracciatoPrimario.noRenderElementi, tracciatoPrimario.membriGruppoFoto));
+                NoRenderElementi.elencoPerSegnalazioni(tracciatoPrimario.noRenderElementi, tracciatoPrimario.membriGruppoFoto), tracciatoPrimario);
 
             if (preAnalisi != null && preAnalisi.differenze.length == 0) {
                 return originalBox;

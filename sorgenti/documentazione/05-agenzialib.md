@@ -167,7 +167,9 @@ source (oggi mancano 47, 48 e 49) l'export la scarta come ogni sigla che non tro
 viene caricato esce da solo.
 
 La logica sta nella classe pubblica `FormatoParmigianoEdro21`, in `Edro21.cs`, e si prova in
-`tests/Istanta.Suite.Tests/FormatoParmigianoEdro21Tests.cs`.
+`tests/Istanta.Suite.Tests/FormatoParmigianoEdro21Tests.cs`. Quali loghi si vedono e dove li decide
+il Plugin, con la sovrastruttura Parmigiano del framework CSS: vedi
+[plugin/cssFramework/sovrastrutture.md](plugin/cssFramework/sovrastrutture.md).
 
 **Com'era prima.** La regola c'era ma non funzionava: guardava anche brand e descrizione3, non
 leggeva mai il numero dei mesi e scriveva sigle `PARMIGIANO_mesiNN` che nella source non esistono.

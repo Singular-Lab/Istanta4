@@ -2,9 +2,9 @@
  * I20-1026: sovrastrutture, condizioni sulla ref e sulla forma del box, regola nascondi.
  *
  * La logica sta in plugin/cssFramework/sovrastrutture.js, che si carica sotto Node e si prova
- * chiamandola. CssFramework.js richiede InDesign e non si carica: i suoi membri nuovi -
- * applicaNascondi, la mappa senza gli elementi nascosti, le condizioni, la distanza dell'ancora -
- * si estraggono dal sorgente e si eseguono su un box finto. Il resto si controlla sul sorgente.
+ * chiamandola. CssFramework.js richiede InDesign e non si carica: i suoi membri nuovi - la regola
+ * disattiva, le condizioni, la distanza dell'ancora - si estraggono dal sorgente e si eseguono su
+ * un box finto. Il resto si controlla sul sorgente.
  *
  * Esecuzione: node --test tests/plugin/*.test.js
  */
@@ -101,7 +101,7 @@ test("fusione: una regola con un nomeGruppo nuovo si aggiunge, una omonima sosti
     }]);
     const box = fuso.find(v => v.nomiBox.includes("BOX1"));
 
-    assert.deepStrictEqual(box.allineamenti.map(a => a.nomeGruppo), ["Campi_DX", "Loghi_SX", "Payoff"]);
+    assert.deepStrictEqual(box.allineamenti.map(a => a.nomeGruppo).sort(), ["Campi_DX", "Loghi_SX", "Payoff"]);
     assert.strictEqual(box.allineamenti.find(a => a.nomeGruppo === "Loghi_SX").segno, "sovrastruttura");
     //Le regole generali restano quelle di prima.
     assert.deepStrictEqual(fuso[0], dbDiProva()[0]);
@@ -120,7 +120,7 @@ test("fusione: un box senza regole sue riceve una voce completa", () => {
 
     assert.strictEqual(fuso.length, 3);
     assert.deepStrictEqual(voce.allineamenti.map(a => a.nomeGruppo), ["Payoff"]);
-    for (const chiave of ["ridimensionamenti", "postRidimensionamenti", "segnalazioniConflitti", "duplicazioni", "ordiniZ", "nascondi"]) {
+    for (const chiave of ["ridimensionamenti", "postRidimensionamenti", "segnalazioniConflitti", "duplicazioni", "ordiniZ", "disattiva"]) {
         assert.ok(Array.isArray(voce[chiave]), chiave);
     }
 });
@@ -128,7 +128,7 @@ test("fusione: un box senza regole sue riceve una voce completa", () => {
 test("fusione: il DB del kit non viene toccato", () => {
     const db = dbDiProva();
     const prima = JSON.stringify(db);
-    sovrastrutture.fondiNelDB(db, "BOX1", [{ allineamenti: [{ nomeGruppo: "Loghi_SX" }], nascondi: [{ nomeGruppo: "x", elementi: ["a"] }] }]);
+    sovrastrutture.fondiNelDB(db, "BOX1", [{ allineamenti: [{ nomeGruppo: "Loghi_SX" }], disattiva: [{ nomeGruppo: "x", elementi: ["a"] }] }]);
     assert.strictEqual(JSON.stringify(db), prima);
 });
 
@@ -148,23 +148,68 @@ test("fusione: fra due sovrastrutture attive l'ultima vince sul nome", () => {
     assert.strictEqual(box.allineamenti.find(a => a.nomeGruppo === "Payoff").da, "seconda");
 });
 
-/* ---- la regola nascondi: la decisione ---- */
+/* ---- la regola disattiva: la decisione ---- */
 
-test("regoleNascondi: la regola piu' specifica sostituisce l'omonima", () => {
-    const regole = sovrastrutture.regoleNascondi([
-        { nascondi: [{ nomeGruppo: "a", da: "default" }, { nomeGruppo: "b" }] },
+test("regoleDisattiva: la regola piu' specifica sostituisce l'omonima", () => {
+    const regole = sovrastrutture.regoleDisattiva([
+        { disattiva: [{ nomeGruppo: "a", da: "default" }, { nomeGruppo: "b" }] },
         null,
-        { nascondi: [{ nomeGruppo: "a", da: "box" }] }
+        { disattiva: [{ nomeGruppo: "a", da: "box" }] }
     ]);
-    assert.deepStrictEqual(regole.map(r => r.nomeGruppo + (r.da || "")), ["abox", "b"]);
+    assert.deepStrictEqual(regole.map(r => r.nomeGruppo + (r.da || "")).sort(), ["abox", "b"]);
 });
 
-test("esitoNascondi: condizione vera nasconde, falsa mostra, l'operatore vince", () => {
-    assert.strictEqual(sovrastrutture.esitoNascondi([false, true], false), "nascondi");
-    assert.strictEqual(sovrastrutture.esitoNascondi([false], false), "mostra");
-    assert.strictEqual(sovrastrutture.esitoNascondi([false], true), null);
-    assert.strictEqual(sovrastrutture.esitoNascondi([true], true), "nascondi");
-    assert.strictEqual(sovrastrutture.esitoNascondi([], false), null);
+//Il dato esprime varianti alternative dello stesso gruppo con piu' regole omonime e condizioni
+//opposte: Loghi_DX di Edro21, con e senza Conad. Una sovrastruttura che le ridefinisce deve
+//tenerle tutte e due, e togliere quelle del box.
+test("fusione: piu' regole con lo stesso nomeGruppo si tengono tutte", () => {
+    const fuso = sovrastrutture.fondiNelDB(dbDiProva(), "BOX1", [{
+        allineamenti: [{ nomeGruppo: "Loghi_SX", variante: 1 }, { nomeGruppo: "Loghi_SX", variante: 2 }]
+    }]);
+    const box = fuso.find(v => v.nomiBox.includes("BOX1"));
+    const loghi = box.allineamenti.filter(a => a.nomeGruppo === "Loghi_SX");
+
+    assert.deepStrictEqual(loghi.map(a => a.variante), [1, 2]);
+    assert.ok(box.allineamenti.some(a => a.nomeGruppo === "Campi_DX"));
+
+    const regole = sovrastrutture.regoleDisattiva([
+        { disattiva: [{ nomeGruppo: "a", da: "default" }] },
+        { disattiva: [{ nomeGruppo: "a", da: "uno" }, { nomeGruppo: "a", da: "due" }] }
+    ]);
+    assert.deepStrictEqual(regole.map(r => r.da), ["uno", "due"]);
+});
+
+const VERTICALE = "foto_extra$parmigiano_testo_2mod_verticale$tipo_3";
+const ORIZZONTALE = "foto_extra$parmigiano_testo_2mod_orizzontale$tipo_3";
+const CARATTERISTICHE = "foto_extra$Parmigiano_caratteristiche$tipo_3";
+const PAYOFF = "foto_extra$Parmigiano_payoff$tipo_3";
+
+//Le voci di Foto.ExtraAuto di una ref Parmigiano, come le scrive il server.
+function vociParmigiano(escluse = []) {
+    return ["Parmigiano_payoff", "Parmigiano_caratteristiche", "parmigiano_testo_2mod_verticale", "parmigiano_testo_2mod_orizzontale"]
+        .map(sigla => ({ sigla, tipo: 3, nome: sigla + (sigla.indexOf("testo") > 0 ? ".idms" : ".psd"), escluso: escluse.includes(sigla) }));
+}
+
+//makeRegexFromGroupName quanto basta: l'asterisco vale qualunque cosa.
+const regexDi = gruppo => new RegExp("^" + gruppo.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*") + "$");
+
+test("esitoDisattiva: basta una regola vera, solo regole false attivano, nessuna regola lascia com'e'", () => {
+    const valutate = [
+        { espressioni: [regexDi("*parmigiano_testo_2mod_verticale*")], vera: true },
+        { espressioni: [regexDi("*parmigiano_testo_2mod_orizzontale*")], vera: false },
+        { espressioni: [regexDi("*Parmigiano_caratteristiche*")], vera: false },
+        { espressioni: [regexDi("*Parmigiano_caratteristiche*")], vera: true }
+    ];
+    const esito = sovrastrutture.esitoDisattiva(vociParmigiano(), valutate);
+
+    assert.deepStrictEqual([...esito.disattivati].sort(), ["Parmigiano_caratteristiche", "parmigiano_testo_2mod_verticale"]);
+    assert.deepStrictEqual([...esito.attivati], ["parmigiano_testo_2mod_orizzontale"]);
+    //Il payoff non lo nomina nessuno.
+    assert.ok(!esito.disattivati.has("Parmigiano_payoff") && !esito.attivati.has("Parmigiano_payoff"));
+});
+
+test("labelFotoExtraAuto: la label con cui il Plugin mette il logo nel box", () => {
+    assert.strictEqual(sovrastrutture.labelFotoExtraAuto({ sigla: "Parmigiano_payoff", tipo: 3 }), PAYOFF);
 });
 
 /* ---- CssFramework: i membri nuovi, eseguiti su un box finto ---- */
@@ -194,123 +239,161 @@ const UtilityFinta = {
     }
 };
 
-function framework() {
+//Le regole Parmigiano come stanno nella copia locale: un kit, una voce generale, una sovrastruttura.
+function fileRegole() {
+    const forma = forme => [{ setCondizioni: [{ formaBoxCondition: [{ forme }] }] }];
+    return {
+        modificheCssPerKit: [{
+            kit: { areeValide: [], canaliValidi: ["SC"], kitTipoLavorazioniValide: [1], kitFormatiValidi: null },
+            operazioniPerBox: [{ nomiBox: [], allineamenti: [] }],
+            sovrastrutture: [{
+                nome: "Parmigiano Reggiano",
+                listSetCondizioni: [{ setCondizioni: [{ refCondition: PARMIGIANO }] }],
+                operazioni: {
+                    disattiva: [
+                        { nomeGruppo: "verticale", elementi: ["*parmigiano_testo_2mod_verticale*"], listSetCondizioni: forma(["largo", "standard"]) },
+                        { nomeGruppo: "orizzontale", elementi: ["*parmigiano_testo_2mod_orizzontale*"], listSetCondizioni: forma(["alto", "standard"]) },
+                        { nomeGruppo: "caratteristiche", elementi: ["*Parmigiano_caratteristiche*"], listSetCondizioni: forma(["standard"]) }
+                    ]
+                }
+            }]
+        }]
+    };
+}
+
+function framework(regole = fileRegole()) {
     const sorgente = leggi("CssFramework.js");
-    const membri = ["boundsDellaForma", "applicaNascondi", "elementoNascostoDalCss", "creaMappaturaBoxOriginale",
-        "checkCondition", "checkSetCondition", "checkAllConditions", "makeRegexFromGroupName", "parseGroupSpec", "distanzaDellAncora"]
+    const membri = ["boundsDellaForma", "applicaSovrastrutture", "kitDelleRegole", "disattivatiDallaForma", "applicaDisattivazioni",
+        "creaMappaturaBoxOriginale", "checkCondition", "checkSetCondition", "checkAllConditions", "makeRegexFromGroupName",
+        "parseGroupSpec", "distanzaDellAncora"]
         .map(nome => membro(sorgente, nome));
-    const fabbrica = new Function("sovrastrutture", "NoRenderElementi", "cssComposizioneBox", "Utility",
-        "return { boundsFormaCorrente: null, nascostiCss: null,\n" + membri.join(",\n") + "\n};");
-    return fabbrica(sovrastrutture, NoRenderElementi, cssComposizioneBox, UtilityFinta);
+    const ficoProcess = {
+        getAreaLavorazioneCorrente: () => ({ sigla: "TO" }),
+        getCanaleLavorazioneCorrente: () => ({ sigla: "SC" }),
+        getTipoLavorazioneCorrente: () => 1,
+        getFormatoLavorazioneCorrente: () => ({ codice: "VOL" })
+    };
+    const piazzati = [];
+    const FotoPlacerFinto = {
+        piazzaFotoExtraAuto(extra, box) {
+            const nuovo = elemento(sovrastrutture.labelFotoExtraAuto(extra));
+            piazzati.push(nuovo.label);
+            return nuovo;
+        }
+    };
+    const fabbrica = new Function("sovrastrutture", "cssComposizioneBox", "Utility", "ficoProcess", "readFile", "pathLavorazione", "FotoPlacer",
+        "return { boundsFormaCorrente: null,\n" + membri.join(",\n") + "\n};");
+    const css = fabbrica(sovrastrutture, cssComposizioneBox, UtilityFinta, ficoProcess, () => regole, "/lavorazione", FotoPlacerFinto);
+    css.piazzati = piazzati;
+    return css;
 }
 
 let prossimoId = 1;
 function elemento(label, visibile = true) {
-    return { id: prossimoId++, label, visible: visibile, isValid: true, geometricBounds: [0, 0, 10, 10] };
+    const el = { id: prossimoId++, label, visible: visibile, isValid: true, geometricBounds: [0, 0, 10, 10] };
+    el.remove = () => { el.isValid = false; el.rimosso = true; };
+    return el;
 }
 
-const VERTICALE = "foto_extra$parmigiano_testo_2mod_verticale$tipo_3";
-const ORIZZONTALE = "foto_extra$parmigiano_testo_2mod_orizzontale$tipo_3";
-const CARATTERISTICHE = "foto_extra$Parmigiano_caratteristiche$tipo_3";
-
+//Un gruppo InDesign finto: allPageItems, pageItems, ungroup, e la pagina che ne crea uno nuovo.
 function boxFinto(larghezza, altezza, etichette) {
-    return {
+    const box = {
         label: "BOX1",
         isValid: true,
         geometricBounds: bounds(larghezza, altezza),
-        allPageItems: etichette.map(e => typeof e === "string" ? elemento(e) : e)
+        elementi: etichette.map(e => typeof e === "string" ? elemento(e) : e)
     };
+    Object.defineProperty(box, "allPageItems", { get: () => box.elementi.filter(e => e.isValid) });
+    box.pageItems = { everyItem: () => ({ getElements: () => box.elementi.filter(e => e.isValid) }) };
+    box.ungroup = () => { box.isValid = false; };
+    box.parentPage = {
+        groups: {
+            add(elementi) {
+                const nuovo = boxFinto(larghezza, altezza, elementi);
+                nuovo.rifatto = true;
+                return nuovo;
+            }
+        }
+    };
+    return box;
 }
 
-function regoleParmigiano() {
-    const forma = forme => [{ setCondizioni: [{ formaBoxCondition: [{ forme }] }] }];
-    return [{
-        nomiBox: ["BOX1"],
-        nascondi: [
-            { nomeGruppo: "verticale", elementi: ["*parmigiano_testo_2mod_verticale*"], listSetCondizioni: forma(["largo", "standard"]) },
-            { nomeGruppo: "orizzontale", elementi: ["*parmigiano_testo_2mod_orizzontale*"], listSetCondizioni: forma(["alto", "standard"]) },
-            { nomeGruppo: "caratteristiche", elementi: ["*Parmigiano_caratteristiche*"], listSetCondizioni: forma(["standard"]) }
-        ]
-    }];
+const REF = { "Descrizioni.Descrizione1": "PARMIGIANO REGGIANO DOP" };
+function ref(escluse = []) {
+    return Object.assign({ "Foto.ExtraAuto": vociParmigiano(escluse) }, REF);
 }
 
-function visibili(box) {
-    return Object.fromEntries(box.allPageItems.map(i => [i.label, i.visible]));
+function etichette(box) {
+    return box.allPageItems.map(i => i.label).sort();
 }
 
-test("nascondi: in un box largo si vede il testo orizzontale, non il verticale", () => {
+test("disattivatiDallaForma: standard, alto e largo", () => {
     const css = framework();
-    const box = boxFinto(200, 100, [VERTICALE, ORIZZONTALE, CARATTERISTICHE, "descrizione"]);
-    css.boundsFormaCorrente = box.geometricBounds;
-
-    css.applicaNascondi(box, regoleParmigiano(), null, {});
-
-    assert.deepStrictEqual(visibili(box), { [VERTICALE]: false, [ORIZZONTALE]: true, [CARATTERISTICHE]: true, descrizione: true });
+    const caso = (larghezza, altezza) => {
+        const esito = css.disattivatiDallaForma(boxFinto(larghezza, altezza, []), ref(), bounds(larghezza, altezza));
+        return [...esito.disattivati].sort();
+    };
+    assert.deepStrictEqual(caso(100, 100), ["Parmigiano_caratteristiche", "parmigiano_testo_2mod_orizzontale", "parmigiano_testo_2mod_verticale"]);
+    assert.deepStrictEqual(caso(100, 160), ["parmigiano_testo_2mod_orizzontale"]);
+    assert.deepStrictEqual(caso(160, 100), ["parmigiano_testo_2mod_verticale"]);
 });
 
-test("nascondi: in un box alto il contrario, in uno standard nessuno dei tre", () => {
+test("disattivatiDallaForma: la forma si misura sui bounds dati, non sul box", () => {
+    //All'impaginazione e' la cella della griglia, al fix sono le misure nuove.
     const css = framework();
-    const alto = boxFinto(100, 200, [VERTICALE, ORIZZONTALE, CARATTERISTICHE]);
-    css.boundsFormaCorrente = alto.geometricBounds;
-    css.applicaNascondi(alto, regoleParmigiano(), null, {});
-    assert.deepStrictEqual(visibili(alto), { [VERTICALE]: true, [ORIZZONTALE]: false, [CARATTERISTICHE]: true });
-
-    const standard = boxFinto(100, 100, [VERTICALE, ORIZZONTALE, CARATTERISTICHE]);
-    css.boundsFormaCorrente = standard.geometricBounds;
-    css.applicaNascondi(standard, regoleParmigiano(), null, {});
-    assert.deepStrictEqual(visibili(standard), { [VERTICALE]: false, [ORIZZONTALE]: false, [CARATTERISTICHE]: false });
+    const esito = css.disattivatiDallaForma(boxFinto(100, 100, []), ref(), bounds(200, 100));
+    assert.deepStrictEqual([...esito.disattivati], ["parmigiano_testo_2mod_verticale"]);
 });
 
-test("nascondi: quando il box cambia forma, l'elemento nascosto torna", () => {
-    //E' il motivo per cui si nasconde invece di cancellare: l'operatore ridimensiona e rifa' il fix.
+test("disattivatiDallaForma: senza ref Parmigiano, senza regole o senza loghi non disattiva niente", () => {
     const css = framework();
-    const box = boxFinto(200, 100, [VERTICALE, ORIZZONTALE]);
-    css.boundsFormaCorrente = box.geometricBounds;
-    css.applicaNascondi(box, regoleParmigiano(), null, {});
-    assert.strictEqual(box.allPageItems[0].visible, false);
-
-    css.boundsFormaCorrente = bounds(100, 200);
-    css.applicaNascondi(box, regoleParmigiano(), null, {});
-    assert.deepStrictEqual(visibili(box), { [VERTICALE]: true, [ORIZZONTALE]: false });
+    const vuoto = esito => esito.disattivati.size + esito.attivati.size;
+    assert.strictEqual(vuoto(css.disattivatiDallaForma(boxFinto(100, 100, []), { "Descrizioni.Descrizione1": "Grana Padano", "Foto.ExtraAuto": vociParmigiano() })), 0);
+    assert.strictEqual(vuoto(css.disattivatiDallaForma(boxFinto(100, 100, []), null)), 0);
+    assert.strictEqual(vuoto(framework(null).disattivatiDallaForma(boxFinto(100, 100, []), ref())), 0);
+    assert.strictEqual(vuoto(css.disattivatiDallaForma(boxFinto(100, 100, []), Object.assign({ "Foto.ExtraAuto": [] }, REF))), 0);
 });
 
-test("nascondi: un elemento che l'operatore ha messo in noRender non si rimostra", () => {
+test("applicaDisattivazioni: un box che diventa largo perde il verticale e riceve orizzontale e caratteristiche", () => {
     const css = framework();
-    const box = boxFinto(200, 100, [VERTICALE, elemento(ORIZZONTALE, false)]);
-    css.boundsFormaCorrente = box.geometricBounds;
-    const itemRef = { noRenderElementi: [{ tipo: NoRenderElementi.TIPO.logo, chiave: "parmigiano_testo_2mod_orizzontale" }] };
+    //Il box era alto: dentro payoff, caratteristiche e testo verticale.
+    const box = boxFinto(160, 100, [PAYOFF, CARATTERISTICHE, VERTICALE, "descrizione"]);
 
-    css.applicaNascondi(box, regoleParmigiano(), null, itemRef);
+    const nuovo = css.applicaDisattivazioni(box, ref(), bounds(160, 100));
 
-    assert.deepStrictEqual(visibili(box), { [VERTICALE]: false, [ORIZZONTALE]: false });
+    assert.strictEqual(nuovo.rifatto, true);
+    assert.strictEqual(nuovo.label, "BOX1");
+    assert.deepStrictEqual(etichette(nuovo), [CARATTERISTICHE, PAYOFF, ORIZZONTALE, "descrizione"].sort());
+    assert.deepStrictEqual(css.piazzati, [ORIZZONTALE]);
 });
 
-test("nascondi: un elemento che nessuna regola nomina resta com'e'", () => {
+test("applicaDisattivazioni: un box che torna standard tiene solo il payoff, e non rifa' il gruppo", () => {
     const css = framework();
-    const box = boxFinto(200, 100, [elemento("foto_extra$Logo_SDB$tipo_3", false), VERTICALE]);
-    css.boundsFormaCorrente = box.geometricBounds;
-    css.applicaNascondi(box, regoleParmigiano(), null, {});
-    assert.strictEqual(box.allPageItems[0].visible, false);
+    const box = boxFinto(100, 100, [PAYOFF, CARATTERISTICHE, ORIZZONTALE, "descrizione"]);
+
+    const nuovo = css.applicaDisattivazioni(box, ref(), bounds(100, 100));
+
+    //Togliere non chiede di rifare il gruppo: e' lo stesso box.
+    assert.strictEqual(nuovo, box);
+    assert.deepStrictEqual(etichette(nuovo), [PAYOFF, "descrizione"].sort());
+    assert.deepStrictEqual(css.piazzati, []);
 });
 
-test("nascondi: gli elementi nascosti restano fuori dalla mappa delle regole", () => {
+test("applicaDisattivazioni: un logo escluso dall'operatore non torna", () => {
     const css = framework();
-    const box = boxFinto(200, 100, [VERTICALE, ORIZZONTALE, "descrizione"]);
-    css.boundsFormaCorrente = box.geometricBounds;
-    css.applicaNascondi(box, regoleParmigiano(), null, {});
+    const box = boxFinto(100, 160, [PAYOFF]);
 
-    const mappa = css.creaMappaturaBoxOriginale(box, []);
-    assert.deepStrictEqual(Object.keys(mappa).sort(), [ORIZZONTALE, "descrizione"].sort());
+    const nuovo = css.applicaDisattivazioni(box, ref(["Parmigiano_caratteristiche"]), bounds(100, 160));
+
+    assert.deepStrictEqual(css.piazzati, [VERTICALE]);
+    assert.ok(!etichette(nuovo).includes(CARATTERISTICHE));
 });
 
-test("nascondi: le regole del kit di default valgono anche loro", () => {
+test("applicaDisattivazioni: con il box gia' nella sua forma non cambia niente", () => {
     const css = framework();
-    const box = boxFinto(200, 100, [VERTICALE]);
-    css.boundsFormaCorrente = box.geometricBounds;
-    const regole = regoleParmigiano();
-    regole[0].nomiBox = [];
-    css.applicaNascondi(box, null, regole, {});
-    assert.strictEqual(box.allPageItems[0].visible, false);
+    const box = boxFinto(100, 160, [PAYOFF, CARATTERISTICHE, VERTICALE]);
+    assert.strictEqual(css.applicaDisattivazioni(box, ref(), bounds(100, 160)), box);
+    assert.deepStrictEqual(css.piazzati, []);
 });
 
 test("le condizioni di forma e di ref passano da checkCondition", () => {
@@ -335,14 +418,24 @@ test("la distanza dell'ancora: i mm, piu' la percentuale del gruppo seguito", ()
 
 /* ---- dove il motore le usa: sul sorgente ---- */
 
-test("le quattro letture delle regole fondono le sovrastrutture, il ridimensionamento nasconde", () => {
+test("le quattro letture delle regole fondono le sovrastrutture", () => {
     const sorgente = leggi("CssFramework.js");
     assert.strictEqual((sorgente.match(/DB = me\.applicaSovrastrutture\(DB, fileModifiche, box, itemRef\);/g) || []).length, 4);
-    assert.strictEqual((sorgente.match(/me\.applicaNascondi\(box, DB, DBDef, itemRef\);/g) || []).length, 2);
     //La fusione viene prima del contesto: le operazioni dopo il fix foto la ereditano.
     const allineamento = sorgente.substring(sorgente.indexOf("    applicaAllineamentoCss("), sorgente.indexOf("    allineamenti(box, boundsBoxImpaginato"));
     for (const ramo of allineamento.split("me.memorizzaContestoCss(").slice(0, -1)) {
         assert.match(ramo.slice(-1200), /me\.applicaSovrastrutture\(DB, fileModifiche, box, itemRef\);/);
+    }
+});
+
+//La regola nascondi del primo collaudo e' stata sostituita: un elemento invisibile restava nel
+//gruppo e ne allargava l'ingombro, e tenerlo fuori dalla mappa interrompeva il ridimensionamento.
+test("della regola nascondi non resta niente: nessun elemento si tiene fuori dalla mappa", () => {
+    for (const relativo of ["CssFramework.js", "schedaRef.js", "sistemazioneFoto/sistemazioneFoto.js", "indexNew.js", "cssFramework/sovrastrutture.js"]) {
+        const testo = leggi(relativo);
+        for (const nome of ["applicaNascondi", "riapplicaNascondi", "elementoNascostoDalCss", "nascostiCss", "regoleNascondi", "esitoNascondi"]) {
+            assert.ok(!testo.includes(nome), nome + " in " + relativo);
+        }
     }
 });
 
@@ -353,8 +446,159 @@ test("followGroup usa la distanza dell'ancora, non piu' i soli mm", () => {
     assert.doesNotMatch(follow, /anchor\.distance/);
 });
 
-test("il modal noRender della scheda ripete la regola nascondi", () => {
-    const scheda = leggi("schedaRef.js");
-    const corpo = scheda.substring(scheda.indexOf("    applicaNoRenderAlDocumento() {"), scheda.indexOf("    apriModalInfoReferenza() {"));
-    assert.match(corpo, /CssFramework\.riapplicaNascondi\(box, primario != null \? primario\.recordInTracciato : null\);/);
+test("fixOverflowFromBox non costringe nel box un elemento invisibile", () => {
+    const sorgente = leggi("CssFramework.js");
+    const fabbrica = new Function("Utility", "messaggioUtente",
+        "return {\n" + membro(sorgente, "fixOverflowFromBox") + ",\nisTextFrame() { return false; }\n};");
+    const messaggi = [];
+    const css = fabbrica(Object.assign({ eUnClone: () => false }, UtilityFinta), testo => messaggi.push(testo));
+    const spostamenti = [];
+    const fuori = { label: VERTICALE, visible: false, geometricBounds: [0, -50, 10, 300], move: () => spostamenti.push("mosso") };
+    const box = { label: "BOX1", pageItems: { length: 1, item: () => fuori } };
+
+    css.fixOverflowFromBox([0, 0, 100, 100], box);
+
+    assert.deepStrictEqual(spostamenti, []);
+    assert.deepStrictEqual(fuori.geometricBounds, [0, -50, 10, 300]);
+    assert.deepStrictEqual(messaggi, []);
+    //I due giri della funzione: il primo riporta dentro, il secondo segnala CSF-009 e rimpicciolisce.
+    const corpo = membro(sorgente, "fixOverflowFromBox");
+    assert.strictEqual((corpo.match(/if \(pageItem\.visible === false\) \{\s*continue;\s*\}/g) || []).length, 2);
+});
+
+test("al fix la regola disattiva viene dopo il ridimensionamento e prima di post ridimensionamenti e allineamenti, nei due rami", () => {
+    //Un logo tolto o rimesso prima di applicaRidimensionamento ne cambierebbe la geometria di
+    //partenza: in collaudo la base finiva fuori posto e i campi sovrapposti.
+    const sorgente = leggi("CssFramework.js");
+    const inizio = sorgente.indexOf("async applicaRidimensionamentoCss(");
+    const corpo = sorgente.substring(inizio, sorgente.indexOf("\n    applicaAllineamentoCss(", inizio));
+    const passi = [/me\.applicaRidimensionamento\(box, boxInGrigliaBounds, mappaBoxOriginale, itemRef, DB, DBDef\);/g,
+        /box = me\.applicaDisattivazioni\(box, itemRef, boxInGrigliaBounds\);/g,
+        /mappaBoxOriginale = me\.creaMappaturaBoxOriginale\(box, prefissiDerivati\);\n\s*if ?\(garbageKey ?!= ?null\)/g,
+        /me\.applicaPostRidimensionamento\(box, mappaBoxOriginale, itemRef, DB, DBDef\);/g]
+        .map(re => [...corpo.matchAll(re)].map(m => m.index));
+    //Due rami, con e senza download: in ciascuno i quattro passi in quest'ordine.
+    passi.forEach(posizioni => assert.strictEqual(posizioni.length, 2));
+    for (let ramo = 0; ramo < 2; ramo++) {
+        for (let passo = 1; passo < passi.length; passo++) {
+            assert.ok(passi[passo - 1][ramo] < passi[passo][ramo], "ramo " + ramo + ", passo " + passo);
+        }
+    }
+    //Fuori dal blocco della modalita' 1, che esce subito dopo il ridimensionamento.
+    const modalita1 = [...corpo.matchAll(/if \(modalitaOperazioni == 1\) \{/g)].map(m => m.index);
+    for (let ramo = 0; ramo < 2; ramo++) {
+        assert.ok(modalita1[ramo] < passi[1][ramo]);
+    }
+    //Il box che torna, magari un gruppo nuovo, arriva nel risultato.
+    assert.strictEqual((corpo.match(/mappaBoxOriginale: mappaBoxOriginale,\s*box ?: box\s*\}/g) || []).length, 2);
+});
+
+test("callAllOperationFixBox non applica piu' la regola disattiva in apertura, e lavora sul box del ridimensionamento", () => {
+    const indexNew = leggi("indexNew.js");
+    const inizio = indexNew.indexOf("async function callAllOperationFixBox(");
+    const corpo = indexNew.substring(inizio, indexNew.indexOf("\n}\n", inizio));
+    assert.doesNotMatch(corpo, /applicaDisattivazioni/);
+    assert.match(corpo, /^    CssFramework\.fixOverflowFromBox\(boxImpaginato\.geometricBounds, boxImpaginato\);/m);
+    assert.match(corpo, /boxImpaginato = res\.box;/);
+});
+
+/* ---- il ridimensionamento misura dall'angolo della cella ---- */
+
+//applicaRidimensionamento estratta dal sorgente, con i soli collaboratori che servono a un box
+//senza condizioni ne' fit finali. applyOverflowFix e' una globale del Plugin: qui non fa niente.
+function motoreRidimensionamento() {
+    const sorgente = leggi("CssFramework.js");
+    const membri = ["applicaRidimensionamento", "enumAxisResizeMode", "makeRegexFromGroupName", "creaMappaturaBoxOriginale"]
+        .map(nome => membro(sorgente, nome));
+    const fabbrica = new Function("Utility", "cssComposizioneBox", "applyOverflowFix",
+        "return { etichetteSegnalate: [], getItemContained: () => [], finalFit: () => {}, checkAllConditions: () => true,\n" + membri.join(",\n") + "\n};");
+    return fabbrica(UtilityFinta, cssComposizioneBox, () => {});
+}
+
+function elementoPosizionato(label, geometricBounds) {
+    return { label, geometricBounds: geometricBounds.slice(), visible: true, isValid: true, parent: { constructorName: "Spread" } };
+}
+
+function boxPosizionato(geometricBounds, elementi) {
+    return { label: "BOX1", geometricBounds: geometricBounds.slice(), allPageItems: elementi };
+}
+
+//Le regole di Edro21 che contano qui: base e foto proporzionali, descrizione e payoff con lo
+//spostamento lineare (Parmigiano_fondo), piu' un'etichetta in alto che con lo spostamento uscirebbe.
+const REGOLE_RIDIMENSIONAMENTO = [{
+    nomiBox: ["BOX1"],
+    ridimensionamenti: [
+        { gruppoEtichette: ["base*", "immagine*"], ridimensionamento: { x: 0, y: 0 }, listSetCondizioni: null, finalFit: null },
+        { gruppoEtichette: ["descrizione", "*Parmigiano_payoff*", "etichetta_alta"], ridimensionamento: { x: 2, y: 2 }, listSetCondizioni: null, finalFit: null }
+    ]
+}];
+
+const arrotonda = bounds => bounds.map(v => Number(v.toFixed(2)));
+
+test("al fix con il bordo alto spostato, gli elementi si misurano dall'angolo della cella e la mappa resta coerente", () => {
+    //I numeri del collaudo: box alto [141.20..302.00], cella standard [223.60..302.00], stesso fondo.
+    const base = elementoPosizionato("base", [141.2, 75.75, 302, 141]);
+    const foto = elementoPosizionato("immagine$6147585", [181.77, 75.75, 229.42, 141]);
+    const descrizione = elementoPosizionato("descrizione", [254.46, 109, 279.46, 141]);
+    const payoff = elementoPosizionato("foto_extra$Parmigiano_payoff$tipo_3", [288.13, 76.75, 301, 102.91]);
+    const etichetta = elementoPosizionato("etichetta_alta", [141.2, 75.75, 151.2, 90]);
+    const box = boxPosizionato([141.2, 75.75, 302, 141], [base, foto, descrizione, payoff, etichetta]);
+    const cella = [223.6, 75.75, 302, 141];
+    const motore = motoreRidimensionamento();
+    const mappa = motore.creaMappaturaBoxOriginale(box, []);
+
+    motore.applicaRidimensionamento(box, cella, mappa, {}, REGOLE_RIDIMENSIONAMENTO, null);
+
+    //La base riempie la cella; la foto scala in proporzione dentro la cella.
+    assert.deepStrictEqual(arrotonda(base.geometricBounds), [223.6, 75.75, 302, 141]);
+    assert.deepStrictEqual(arrotonda(foto.geometricBounds), [243.38, 75.75, 266.61, 141]);
+    //Descrizione e payoff seguono il fondo, che non si e' mosso: restano dove erano.
+    assert.deepStrictEqual(arrotonda(descrizione.geometricBounds), [254.46, 109, 279.46, 141]);
+    assert.deepStrictEqual(arrotonda(payoff.geometricBounds), [288.13, 76.75, 301, 102.91]);
+    //L'etichetta in alto con lo spostamento uscirebbe dalla cella: rientra sul bordo alto.
+    assert.deepStrictEqual(arrotonda(etichetta.geometricBounds), [223.6, 75.75, 233.6, 90]);
+    //Niente sopra la cella: fixOverflowFromBox non avra' nulla da spostare.
+    for (const el of box.allPageItems) {
+        assert.ok(el.geometricBounds[0] >= cella[0] - 0.001 && el.geometricBounds[2] <= cella[2] + 0.001, el.label);
+    }
+    //La mappa dice le stesse posizioni, misurate dall'angolo della cella: anche per chi e' rientrato.
+    for (const [el, chiave] of [[base, "base"], [foto, "immagine"], [descrizione, "descrizione"], [payoff, payoff.label], [etichetta, "etichetta_alta"]]) {
+        const rel = mappa[chiave].bounds;
+        assert.deepStrictEqual(arrotonda([cella[0] + rel[0], cella[1] + rel[1], cella[0] + rel[2], cella[1] + rel[3]]), arrotonda(el.geometricBounds), chiave);
+    }
+});
+
+test("con l'angolo invariato il ridimensionamento da' le posizioni di sempre", () => {
+    //Bordo basso tirato su: la cella parte dall'angolo del box, come all'impaginazione.
+    const base = elementoPosizionato("base", [141.2, 75.75, 302, 141]);
+    const descrizione = elementoPosizionato("descrizione", [254.46, 109, 279.46, 141]);
+    const box = boxPosizionato([141.2, 75.75, 302, 141], [base, descrizione]);
+    const motore = motoreRidimensionamento();
+    const mappa = motore.creaMappaturaBoxOriginale(box, []);
+
+    motore.applicaRidimensionamento(box, [141.2, 75.75, 219.6, 141], mappa, {}, REGOLE_RIDIMENSIONAMENTO, null);
+
+    assert.deepStrictEqual(arrotonda(base.geometricBounds), [141.2, 75.75, 219.6, 141]);
+    //Spostamento lineare di -82.40, come faceva il move di prima.
+    assert.deepStrictEqual(arrotonda(descrizione.geometricBounds), [172.06, 109, 197.06, 141]);
+});
+
+test("all'impaginazione i loghi disattivati non si piazzano, e il piazzamento e' quello di FotoPlacer", () => {
+    const indexNew = leggi("indexNew.js");
+    assert.match(indexNew, /var disattivatiDallaForma = CssFramework\.disattivatiDallaForma\(boxImpaginato, itemRef, bounds\)\.disattivati;/);
+    assert.match(indexNew, /if \(disattivatiDallaForma\.has\(itemRef\["Foto\.ExtraAuto"\]\[ij\]\.sigla\)\) \{\s*continue;\s*\}/);
+    assert.match(indexNew, /elementiDaGruppare\.push\(FotoPlacer\.piazzaFotoExtraAuto\(itemRef\["Foto\.ExtraAuto"\]\[ij\], boxImpaginato, pagCoinvolta, doc\)\);/);
+    //Il vecchio piazzamento in linea non c'e' piu'.
+    assert.doesNotMatch(indexNew, /itemRef\["Foto\.ExtraAuto"\]\[ij\]\.referenceTo = rect;/);
+});
+
+test("il Report Integrita' non segnala come mancante un logo disattivato per la forma", () => {
+    const confronti = leggi("confronti.js");
+    assert.match(confronti, /async confrontoBoxCompiledFieldPreAnalisi\(box1, compiledFields, deletedFields, listFoto, fotoExtra, fotoExtraAuto, checkMD5 = true, elementiNoRender = null, itemRef = null\)/);
+    assert.match(confronti, /CssFramework\.disattivatiDallaForma\(box1, itemRef, box1\.geometricBounds\)\.disattivati/);
+    assert.match(confronti, /if \(disattivatiDallaForma\.has\(foto\.sigla\)\) \{/);
+    //I chiamanti che passano i loghi passano anche la ref.
+    assert.match(leggi("indexNew.js"), /elencoPerSegnalazioni\(tracciatoPrimario\.noRenderElementi, tracciatoPrimario\.membriGruppoFoto\), tracciatoPrimario\);/);
+    assert.match(leggi("schedaRef.js"), /elencoPerSegnalazioni\(rec\.noRenderElementi, rec\.membriGruppoFoto\),\s*rec\s*\);/);
+    assert.match(leggi("reportIntegrita/reportIntegrita.js"), /membriGruppoFoto\),\s*dati\.tracciatoPrimario\);/);
 });

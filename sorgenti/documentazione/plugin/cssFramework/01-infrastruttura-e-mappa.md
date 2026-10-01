@@ -67,9 +67,6 @@ una svista, ma un prezzo pagato consapevolmente.
   ragione di `etichettaDerivata` in [cssComposizioneBox](composizioneBox.md): normalizzare la
   label di una copia taglierebbe il suffisso e farebbe **di due ombre un elemento solo**.
 
-  **Gli elementi nascosti dalla regola nascondi restano fuori** (I20-1026): per le regole non ci
-  sono. Lo stesso vale in `aggiungiNuoviElementiAllaMappa`. Vedi [sovrastrutture](sovrastrutture.md).
-
 - `updateMap(mappa)` → non ricostruisce niente: marca `eliminato: true` quello che InDesign non
   considera più valido. **Un elemento rimosso resta nella mappa come lapide**, perché le regole che
   lo nominavano devono sapere che non c'è più, non trovarsi un buco.
@@ -86,10 +83,10 @@ una svista, ma un prezzo pagato consapevolmente.
   tutto il framework: il cliente sovrascrive il default, e se non dice niente vale il default.
 - `getPrefissiDerivati(box, DBallineamenti, DBDefault)` → i prefissi delle copie.
 - `applicaSovrastrutture(DB, fileModifiche, box, itemRef)` → (I20-1026) fonde nel DB le
-  sovrastrutture del kit le cui condizioni sono vere per questo box. `applicaNascondi(box, DB,
-  DBDef, itemRef)` applica la regola nascondi, `riapplicaNascondi(box, itemRef)` la ripete fuori
-  dal fix leggendo la copia locale delle regole, con il kit scelto da `kitDelleRegole(file)`. Vedi
-  [sovrastrutture](sovrastrutture.md).
+  sovrastrutture del kit le cui condizioni sono vere per questo box. `disattivatiDallaForma(box,
+  itemRef, bounds)` dice quali loghi automatici la regola disattiva tiene fuori dal box, e
+  `applicaDisattivazioni(box, itemRef, bounds)` li toglie e rimette, con il kit scelto da
+  `kitDelleRegole(file)` sulla copia locale delle regole. Vedi [sovrastrutture](sovrastrutture.md).
 - `getSceltaSpazioFoto(box)` → la preferenza sullo spazio foto. `null` vuol dire area massima, come
   sempre. Dettaglio in [sceltaSpazio](../sistemazioneFoto/sceltaSpazio.md).
 - `getEstensioniFoto(box)` → lo spazio da riservare attorno alle foto, per lato, in millimetri.

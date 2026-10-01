@@ -129,7 +129,7 @@ ed è documentato il meccanismo con cui il server prevale su di lui.
 | [cssFramework/sequenzaOperazioni.md](cssFramework/sequenzaOperazioni.md) | quando una regola del framework viene eseguita (era `cssSequenzaOperazioni.js`) |
 | [cssFramework/regoleConflitti.md](cssFramework/regoleConflitti.md) | quali elementi non devono toccarsi, e su cosa si misura (era `cssRegoleConflitti.js`) |
 | [cssFramework/composizioneBox.md](cssFramework/composizioneBox.md) | duplicare elementi e decidere chi sta davanti (era `cssComposizioneBox.js`) |
-| [cssFramework/sovrastrutture.md](cssFramework/sovrastrutture.md) | regole che seguono la ref e la forma del box, e la regola nascondi (I20-1026) |
+| [cssFramework/sovrastrutture.md](cssFramework/sovrastrutture.md) | regole che seguono la ref e la forma del box, e la regola disattiva (I20-1026) |
 | [sistemazioneFoto/](sistemazioneFoto/README.md) | trovare dove c'è posto nel box e farci stare le foto: tre file, uno puro per il calcolo dei rettangoli e uno per la scelta. Uscito da `CssFramework` in I20-1009 |
 | [noRenderElementi.md](noRenderElementi.md) | rendere invisibili singoli elementi di un box |
 | [cssFramework/](cssFramework/README.md) | il motore vero: 7.283 righe, spiegate in tre pagine per gruppo |

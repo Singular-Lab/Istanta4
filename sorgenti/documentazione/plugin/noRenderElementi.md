@@ -14,18 +14,18 @@ nome del campo per campi ed etichette, il codice referenza per le foto.
 **La label InDesign non serve da identificativo:** incorpora il codice della ref e viene ricostruita
 a ogni impaginazione.
 
-## Il noRender dell'operatore e la regola nascondi del framework
+## Il noRender dell'operatore e la regola disattiva del framework
 
-Dal I20-1026 un elemento può essere nascosto da due parti diverse:
+Dal I20-1026 un logo automatico può mancare dal box per due ragioni diverse, e non vanno confuse:
 
-- **dall'operatore**, con questo modulo: la scelta si salva sul server, nel meta della lavorazione;
-- **dal framework CSS**, con la regola `nascondi` (vedi [sovrastrutture](cssFramework/sovrastrutture.md)):
-  non si salva, si ricalcola a ogni fix dalla forma del box.
+- **l'operatore lo ha nascosto**, con questo modulo: resta nel box con `visible = false`, e la scelta
+  si salva sul server, nel meta della lavorazione;
+- **il framework CSS lo ha disattivato**, con la regola `disattiva` (vedi
+  [sovrastrutture](cssFramework/sovrastrutture.md)): non sta nel box, non si salva, e torna quando il
+  box cambia forma.
 
-Tutte e due nascondono con `visible = false`, e nessuna cancella. **La scelta dell'operatore
-vince**: il framework non rimostra mai un elemento che l'operatore ha messo in noRender, e lo
-riconosce con `classificaLabel` e `inNoRender` di questo modulo. Il Report Integrità segnala solo
-gli elementi marcati dall'operatore, quindi un logo nascosto dal framework non è una segnalazione.
+Il Report Integrità segnala solo gli elementi marcati dall'operatore, e non conta come mancante un
+logo disattivato per la forma.
 
 ## Variabili globali
 

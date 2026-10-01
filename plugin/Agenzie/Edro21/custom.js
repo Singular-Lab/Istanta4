@@ -1,5 +1,7 @@
 //EDRO21
 const { app, FitOptions, LocationOptions, Justification, VerticalJustification, NestedStyleDelimiters, CornerOptions, StrokeAlignment } = require('indesign');
+//I20-1026: il riconoscimento del formato Parmigiano e' lo stesso delle regole del framework CSS.
+const sovrastrutture = require('./cssFramework/sovrastrutture');
 
 const customAgenzia={
 
@@ -20,7 +22,10 @@ const customAgenzia={
     
     exceptionElementsToIgnoreFixFoto: ["*cpq*","*conad_logo*","*piacersi*","*lattosio*","*glutine*",
         "*parafarmacia*","*conad_vn*","*conad_11P*","*essentiae*","*PetFr*","*petfrplus*","*conad_baby*","*Friend-of-the-Sea*",
-        "*Marinou*","*Carne_Chianina*","*Logo_filiera*","*Logo_BDP*","*Logo_SDB*",], //se un elemento è sia in ignoreElementsFixFoto che in exceptionElementsToIgnoreFixFoto non viene ignorato. Serve perchè si può fare cose come ignora loghi e specificare solo il logo che fa eccezione
+        "*Marinou*","*Carne_Chianina*","*Logo_filiera*","*Logo_BDP*","*Logo_SDB*",
+        //I20-1026: payoff e testi del Parmigiano stanno in basso a sinistra, dove la foto non deve
+        //finire. Le caratteristiche no: stanno con il DOP, che non fa da ostacolo.
+        "*Parmigiano_payoff*","*parmigiano_testo_2mod_*",], //se un elemento è sia in ignoreElementsFixFoto che in exceptionElementsToIgnoreFixFoto non viene ignorato. Serve perchè si può fare cose come ignora loghi e specificare solo il logo che fa eccezione
     
     calcoloDistanziamentoFoto: [ //il ratio è calcolato Y/X
         {
@@ -250,6 +255,17 @@ const customAgenzia={
 
                     if (canale != "SC" && meccanica.indexOf("focus") < 0 && fondoDaPosizionare != null && fondoDaPosizionare.sigla == "sfondo_vn") {
                         var a_eff = { tipo: "effect", campo_indd: "base", name: "base_P_VersoNatura" };
+                        meta_meccanica.azioni.push(a_eff);
+                    }
+
+                    //I20-1026: il formato Parmigiano Reggiano. La ref lo e' quando la descrizione1 dice
+                    //Parmigiano Reggiano, senza distinguere maiuscole e minuscole: lo stesso criterio del
+                    //server (FormatoParmigianoEdro21) e della sovrastruttura Parmigiano del framework CSS.
+                    //Per SC lo stile e' base_A_Parmigiano, per gli altri canali base_P_Parmigiano. Viene
+                    //dopo gli altri stili della base, quindi su una ref Parmigiano vince lui. Come gli
+                    //stili vicini, non si applica ai box focus, che hanno uno stile di base loro.
+                    if (meccanica.indexOf("focus") < 0 && sovrastrutture.refConditionVera(objItem, [{ campo: "Descrizioni.Descrizione1", contiene: "parmigiano reggiano" }])) {
+                        var a_eff = { tipo: "effect", campo_indd: "base", name: canale == "SC" ? "base_A_Parmigiano" : "base_P_Parmigiano" };
                         meta_meccanica.azioni.push(a_eff);
                     }
 
@@ -1109,6 +1125,41 @@ const customAgenzia={
     // },
 
 
+    /// I20-1026: se il testo della descrizione tocca un logo che fa da ostacolo alla foto - le foto
+    /// extra elencate in exceptionElementsToIgnoreFixFoto, come il payoff e i testi del Parmigiano,
+    /// SDB, BDP, Conad. Conta il testo (getRealBounds), non il riquadro, e solo i loghi visibili: uno
+    /// nascosto dal noRender non c'e', e uno disattivato dalla forma del box non sta nel box.
+    descrizioneTraLoghi(box, descrizione) {
+        try {
+            var testo = CssFramework.getRealBounds(descrizione);
+            if (testo == null) {
+                return false;
+            }
+
+            var loghi = (this.exceptionElementsToIgnoreFixFoto || []).map(e => CssFramework.makeRegexFromGroupName(e));
+            for (var i = 0; i < box.allPageItems.length; i++) {
+                var item = box.allPageItems[i];
+                if (item === descrizione || !item.label || item.visible === false) {
+                    continue;
+                }
+
+                var etichetta = Utility.parseLabel(item.label);
+                if (etichetta.indexOf("foto_extra") !== 0 || !loghi.some(r => r.test(etichetta))) {
+                    continue;
+                }
+
+                var logo = item.geometricBounds;
+                if (testo[0] < logo[2] && testo[2] > logo[0] && testo[1] < logo[3] && testo[3] > logo[1]) {
+                    return true;
+                }
+            }
+        }
+        catch (e) {
+            console.error("Controllo della descrizione sui loghi non riuscito: " + e);
+        }
+        return false;
+    },
+
     setCustomFixFoto(box){
 
         if(ficoProcess.getTipoLavorazioneCorrente() != 1){
@@ -1270,6 +1321,18 @@ const customAgenzia={
                     CssFramework.fixFoto(box, res1.candidate, res1.obstacles);
                     return box;
                 }
+            }
+
+            //I20-1026: la descrizione spostata non deve finire addosso a un logo, per esempio al payoff
+            //del Parmigiano in basso a sinistra. Se il suo testo ne tocca uno torna dov'era, e la foto
+            //si sistema come se lo spostamento non ci fosse stato.
+            if (this.descrizioneTraLoghi(box, descrizione)) {
+                if (descrizioneFuoriBox && descrizioneDaRidurre != null) {
+                    descrizioneDaRidurre.geometricBounds = oldBoundsOverflow;
+                }
+                descrizione.geometricBounds = oldBounds;
+                CssFramework.fixFoto(box, res1.candidate, res1.obstacles);
+                return box;
             }
         }
         else{

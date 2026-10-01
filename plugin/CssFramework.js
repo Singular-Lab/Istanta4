@@ -6,9 +6,9 @@ const cssSequenzaOperazioni = require('./cssFramework/sequenzaOperazioni');
 //I20-1009: la sistemazione delle foto sta in un modulo suo; qui ne restano tre rimandi.
 const SistemazioneFoto = require('./sistemazioneFoto/sistemazioneFoto');
 const cssRegoleConflitti = require('./cssFramework/regoleConflitti');
-//I20-1026: le sovrastrutture, le condizioni sulla ref e sulla forma del box, la regola nascondi.
+//I20-1026: le sovrastrutture, le condizioni sulla ref e sulla forma del box, la regola disattiva.
 const sovrastrutture = require('./cssFramework/sovrastrutture');
-const NoRenderElementi = require('./noRenderElementi');
+const FotoPlacer = require('./reperimentoFoto/fotoPlacer');
 
 const CssFramework =
 {
@@ -118,8 +118,7 @@ const CssFramework =
             //facciamo una mappatura degli elementi del box di cui la chiave di ricerca sarà la label
             for (var i = 0; i < box.allPageItems.length; i++) {
                 var item = box.allPageItems[i];
-                //I20-1026: un elemento nascosto dalla regola nascondi, per le regole, non c'e'.
-                if (item.label && !this.elementoNascostoDalCss(item)) {
+                if (item.label) {
                     let relativeBounds = [
                         item.geometricBounds[0] - box.geometricBounds[0],
                         item.geometricBounds[1] - box.geometricBounds[1],
@@ -182,7 +181,7 @@ const CssFramework =
         try {
             for (var i = 0; i < box.allPageItems.length; i++) {
                 var item = box.allPageItems[i];
-                if (item == null || !item.isValid || !item.label || this.elementoNascostoDalCss(item)) {
+                if (item == null || !item.isValid || !item.label) {
                     continue;
                 }
 
@@ -314,11 +313,6 @@ const CssFramework =
     /// attuali del box al fix. In mancanza valgono quelli del box.
     boundsFormaCorrente: null,
 
-    /// I20-1026: gli id degli elementi che la regola nascondi ha nascosto nel box in lavorazione.
-    /// Restano fuori dalla mappa del box: per le regole non ci sono, e nessun allineamento si
-    /// appoggia a un elemento che non si vede.
-    nascostiCss: null,
-
     /// I20-1026: i bounds per le condizioni di forma.
     boundsDellaForma(box) {
         if (Array.isArray(this.boundsFormaCorrente) && this.boundsFormaCorrente.length >= 4) {
@@ -357,18 +351,35 @@ const CssFramework =
         }
     },
 
-    /// I20-1026: la regola nascondi. Ogni regola nomina degli elementi e ha le sue condizioni:
-    /// con le condizioni vere gli elementi si nascondono, con le condizioni false si mostrano.
-    /// Un elemento che nessuna regola nomina resta com'e', e un elemento che l'operatore ha messo
-    /// in noRender non si mostra mai: la sua scelta vince. Nascondere vuol dire visible = false,
-    /// come il noRender: niente si cancella, e quando il box cambia forma e si rifa' il fix
-    /// l'elemento torna.
-    applicaNascondi(box, DB, DBDef, itemRef) {
-        this.nascostiCss = new Set();
+    /// I20-1026: quali loghi automatici della ref la regola disattiva vuole fuori da questo box, e
+    /// quali dentro. Le regole si leggono dalla copia locale (allineamenti.json), con le
+    /// sovrastrutture del kit; la forma si misura sui bounds dati - la cella della griglia
+    /// all'impaginazione, le misure nuove al fix - o, in mancanza, su quelli del box.
+    /// Restituisce { disattivati, attivati }, due insiemi di sigle (sovrastrutture.esitoDisattiva).
+    /// Un logo che nessuna regola nomina non e' in nessuno dei due, e resta com'e'.
+    disattivatiDallaForma(box, itemRef, bounds = null) {
+        var esito = { disattivati: new Set(), attivati: new Set() };
         try {
-            if (box == null || !box.isValid) {
-                return;
+            if (box == null || !box.isValid || itemRef == null
+                || !Array.isArray(itemRef["Foto.ExtraAuto"]) || itemRef["Foto.ExtraAuto"].length === 0) {
+                return esito;
             }
+
+            var file = readFile(pathLavorazione + "/allineamenti.json");
+            if (!file || !Array.isArray(file.modificheCssPerKit)) {
+                return esito;
+            }
+
+            var kit = this.kitDelleRegole(file);
+            if (kit == null || kit.fileModifiche == null) {
+                return esito;
+            }
+
+            this.boundsFormaCorrente = Array.isArray(bounds) && bounds.length >= 4 ? bounds : box.geometricBounds;
+            var DB = this.applicaSovrastrutture(kit.fileModifiche.operazioniPerBox, kit.fileModifiche, box, itemRef);
+            var DBDef = kit.fileModificheDef == null ? null
+                : kit.fileModificheDef === kit.fileModifiche ? DB
+                : this.applicaSovrastrutture(kit.fileModificheDef.operazioniPerBox, kit.fileModificheDef, box, itemRef);
 
             var meccanica = box.label;
             var voce = function (lista, delBox) {
@@ -378,9 +389,9 @@ const CssFramework =
                 return lista.find(el => el != null && Array.isArray(el.nomiBox)
                     && (delBox ? el.nomiBox.includes(meccanica) : el.nomiBox.length == 0)) || null;
             };
-            var regole = sovrastrutture.regoleNascondi([voce(DBDef, false), voce(DBDef, true), voce(DB, false), voce(DB, true)]);
+            var regole = sovrastrutture.regoleDisattiva([voce(DBDef, false), voce(DBDef, true), voce(DB, false), voce(DB, true)]);
             if (regole.length === 0) {
-                return;
+                return esito;
             }
 
             var me = this;
@@ -392,47 +403,66 @@ const CssFramework =
                 };
             });
 
-            var marcati = itemRef != null ? itemRef.noRenderElementi : null;
-            var middleware = typeof pluginMiddleware !== "undefined" ? pluginMiddleware : null;
-            var nomePrimaria = middleware != null ? middleware.getCampo("nomeFotoPrimaria") : null;
-            var nomeSecondaria = middleware != null ? middleware.getCampo("nomeFotoSecondaria") : null;
-
-            for (var i = 0; i < box.allPageItems.length; i++) {
-                var item = box.allPageItems[i];
-                if (!item.label) {
-                    continue;
-                }
-
-                var chiave = Utility.parseLabel(item.label);
-                var condizioni = valutate
-                    .filter(v => v.espressioni.some(r => r.test(chiave)))
-                    .map(v => v.vera);
-
-                var classificato = NoRenderElementi.classificaLabel(item.label, nomePrimaria, nomeSecondaria);
-                var dellOperatore = classificato != null && NoRenderElementi.inNoRender(marcati, classificato.tipo, classificato.chiave);
-
-                var esito = sovrastrutture.esitoNascondi(condizioni, dellOperatore);
-                if (esito === "nascondi") {
-                    item.visible = false;
-                    this.nascostiCss.add(item.id);
-                }
-                else if (esito === "mostra") {
-                    item.visible = true;
-                }
-            }
+            return sovrastrutture.esitoDisattiva(itemRef["Foto.ExtraAuto"], valutate);
         }
         catch (error) {
-            console.error("Code CSF-22: regola nascondi del box " + (box != null ? box.label : "") + " non applicata: " + error);
+            console.error("Code CSF-22: regola disattiva del box " + (box != null ? box.label : "") + " non valutata: " + error);
+            return esito;
         }
     },
 
-    /// I20-1026: se un elemento e' fra quelli che la regola nascondi ha appena nascosto.
-    elementoNascostoDalCss(item) {
+    /// I20-1026: porta il box alla sua forma. Toglie dal box i loghi automatici che la regola
+    /// disattiva vuole fuori, e rimette quelli che vuole dentro e mancano, con
+    /// FotoPlacer.piazzaFotoExtraAuto: la stessa strada dell'impaginazione. Un logo escluso
+    /// dall'operatore (escluso) non si rimette mai: la sua scelta vince. Un logo disattivato
+    /// non sta nel box, quindi non ne allarga l'ingombro, e torna quando il box cambia forma.
+    /// Restituisce il box: un gruppo nuovo se si e' aggiunto qualcosa, perche' per mettere un
+    /// elemento in un gruppo lo si scioglie e lo si rifa', come quando l'operatore include una
+    /// foto extra dalla scheda.
+    applicaDisattivazioni(box, itemRef, bounds = null) {
         try {
-            return this.nascostiCss != null && item != null && this.nascostiCss.has(item.id);
+            var esito = this.disattivatiDallaForma(box, itemRef, bounds);
+            if (esito.disattivati.size === 0 && esito.attivati.size === 0) {
+                return box;
+            }
+
+            var voci = itemRef["Foto.ExtraAuto"].filter(e => e != null && e.tipo != 5);
+            var daTogliere = new Set(voci.filter(e => esito.disattivati.has(e.sigla)).map(e => sovrastrutture.labelFotoExtraAuto(e)));
+            var presenti = new Set();
+            Array.from(box.allPageItems).forEach(function (item) {
+                if (item == null || !item.isValid || !item.label) {
+                    return;
+                }
+                if (daTogliere.has(item.label)) {
+                    item.remove();
+                }
+                else {
+                    presenti.add(item.label);
+                }
+            });
+
+            var daAggiungere = voci.filter(e => e.escluso !== true && esito.attivati.has(e.sigla)
+                && !presenti.has(sovrastrutture.labelFotoExtraAuto(e)));
+            if (daAggiungere.length === 0) {
+                return box;
+            }
+
+            var pagina = box.parentPage;
+            var nuovi = daAggiungere.map(e => FotoPlacer.piazzaFotoExtraAuto(e, box, pagina)).filter(el => el != null);
+            if (nuovi.length === 0) {
+                return box;
+            }
+
+            var etichetta = box.label;
+            var vecchi = box.pageItems.everyItem().getElements();
+            box.ungroup();
+            var gruppo = pagina.groups.add(vecchi.concat(nuovi));
+            gruppo.label = etichetta;
+            return gruppo;
         }
-        catch (e) {
-            return false;
+        catch (error) {
+            console.error("Code CSF-23: regola disattiva non applicata al box " + (box != null ? box.label : "") + ": " + error);
+            return box;
         }
     },
 
@@ -465,37 +495,6 @@ const CssFramework =
             fileModifiche: fileModifiche || fileModificheDef,
             fileModificheDef: fileModificheDef
         };
-    },
-
-    /// I20-1026: ripete la sola regola nascondi su un box, con le regole della copia locale. Serve
-    /// a chi cambia la visibilita' fuori dal fix: il modal noRender della scheda rimostra ogni
-    /// elemento che l'operatore non ha marcato, anche quelli che la forma del box vuole nascosti.
-    riapplicaNascondi(box, itemRef) {
-        try {
-            if (box == null || !box.isValid) {
-                return;
-            }
-
-            var file = readFile(pathLavorazione + "/allineamenti.json");
-            if (!file || !Array.isArray(file.modificheCssPerKit)) {
-                return;
-            }
-
-            var kit = this.kitDelleRegole(file);
-            if (kit == null || kit.fileModifiche == null) {
-                return;
-            }
-
-            this.boundsFormaCorrente = box.geometricBounds;
-            var DB = kit.fileModifiche.operazioniPerBox;
-            var DBDef = kit.fileModificheDef ? kit.fileModificheDef.operazioniPerBox : null;
-            DB = this.applicaSovrastrutture(DB, kit.fileModifiche, box, itemRef);
-            DBDef = kit.fileModificheDef === kit.fileModifiche ? DB : this.applicaSovrastrutture(DBDef, kit.fileModificheDef, box, itemRef);
-            this.applicaNascondi(box, DB, DBDef, itemRef);
-        }
-        catch (error) {
-            console.error("Code CSF-23: regola nascondi non riapplicata al box " + (box != null ? box.label : "") + ": " + error);
-        }
     },
 
     /// I20-1026: la distanza di un followAnchor: i mm di distance, piu' distancePercentuale per
@@ -865,58 +864,57 @@ const CssFramework =
                 }
 
                 if (mappaBoxOriginale[Utility.parseLabel(item.label)]) {
-                    //applichiamo i nuovi bounds all'elemento
+                    //applichiamo i nuovi bounds all'elemento.
+                    //I20-1026: le posizioni si misurano dall'angolo in alto a sinistra della CELLA
+                    //(boxInGrigliaBounds), non da quello del gruppo. All'impaginazione coincidono; al
+                    //fix no, se l'operatore ha mosso il bordo alto o quello sinistro: misurando dal
+                    //gruppo la base finiva sopra la cella, gli spostamenti lineari si fermavano sul
+                    //bordo mentre la mappa registrava lo spostamento intero, e gli allineamenti
+                    //lavoravano su posizioni false. La mappa ha gia' sommato lo spostamento, quindi
+                    //l'elemento va dove dice la mappa; se uscisse dalla cella rientra, e la mappa con lui,
+                    //cosi' le due non divergono.
+                    var relativi = mappaBoxOriginale[Utility.parseLabel(item.label)].bounds;
 
                     if(ridY != null){
                         if (ridY == "spostamento_lineare" || ridY == "spostamento_lineare_centrato") {
-                            var spostamento = ridY == "spostamento_lineare_centrato" ? diff_y/2 : diff_y;
-
-                            //controlliamo che lo spostamento non porti l'elemento fuori dal boxInGrigliaBounds, nel caso lo limitiamo
-                            // if(item.geometricBounds[0] + spostamento < boxOriginalBounds[0]){
-                            //     spostamento = boxOriginalBounds[0] - item.geometricBounds[0];
-                            // }
-                            // if(item.geometricBounds[2] + spostamento > boxOriginalBounds[2]){
-                            //     spostamento = boxOriginalBounds[2] - item.geometricBounds[2];
-                            // }
-                            if(item.geometricBounds[0] + spostamento < boxInGrigliaBounds[0]){
-                                spostamento = boxInGrigliaBounds[0] - item.geometricBounds[0];
+                            var hCella = boxInGrigliaBounds[2] - boxInGrigliaBounds[0];
+                            var rientroY = 0;
+                            if (relativi[0] < 0) {
+                                rientroY = -relativi[0];
                             }
-                            if(item.geometricBounds[2] + spostamento > boxInGrigliaBounds[2]){
-                                spostamento = boxInGrigliaBounds[2] - item.geometricBounds[2];
+                            if (relativi[2] + rientroY > hCella) {
+                                rientroY = hCella - relativi[2];
                             }
-                            item.move(undefined, [0,spostamento]);
+                            relativi[0] += rientroY;
+                            relativi[2] += rientroY;
                         }
-                        else {
-                            item.geometricBounds = [
-                                boxOriginalBounds[0] + mappaBoxOriginale[Utility.parseLabel(item.label)].bounds[0],
-                                item.geometricBounds[1],
-                                boxOriginalBounds[0] + mappaBoxOriginale[Utility.parseLabel(item.label)].bounds[2],
-                                item.geometricBounds[3]
-                            ];
-                        }
+                        item.geometricBounds = [
+                            boxInGrigliaBounds[0] + relativi[0],
+                            item.geometricBounds[1],
+                            boxInGrigliaBounds[0] + relativi[2],
+                            item.geometricBounds[3]
+                        ];
                     }
 
                     if (ridX != null) {
                         if (ridX == "spostamento_lineare" || ridX == "spostamento_lineare_centrato") {
-                            var spostamento = ridX == "spostamento_lineare_centrato" ? diff_x / 2 : diff_x;
-
-                            //controlliamo che lo spostamento non porti l'elemento fuori dal box, nel caso lo limitiamo
-                            if(item.geometricBounds[1] + spostamento < boxInGrigliaBounds[1]){
-                                spostamento = boxInGrigliaBounds[1] - item.geometricBounds[1];
+                            var wCella = boxInGrigliaBounds[3] - boxInGrigliaBounds[1];
+                            var rientroX = 0;
+                            if (relativi[1] < 0) {
+                                rientroX = -relativi[1];
                             }
-                            if(item.geometricBounds[3] + spostamento > boxInGrigliaBounds[3]){
-                                spostamento = boxInGrigliaBounds[3] - item.geometricBounds[3];
+                            if (relativi[3] + rientroX > wCella) {
+                                rientroX = wCella - relativi[3];
                             }
-                            item.move(undefined, [spostamento, 0]);
+                            relativi[1] += rientroX;
+                            relativi[3] += rientroX;
                         }
-                        else {
-                            item.geometricBounds = [
-                                item.geometricBounds[0],
-                                boxOriginalBounds[1] + mappaBoxOriginale[Utility.parseLabel(item.label)].bounds[1],
-                                item.geometricBounds[2],
-                                boxOriginalBounds[1] + mappaBoxOriginale[Utility.parseLabel(item.label)].bounds[3]
-                            ];
-                        }
+                        item.geometricBounds = [
+                            item.geometricBounds[0],
+                            boxInGrigliaBounds[1] + relativi[1],
+                            item.geometricBounds[2],
+                            boxInGrigliaBounds[1] + relativi[3]
+                        ];
                     }
                 }
 
@@ -1865,11 +1863,10 @@ const CssFramework =
                     var DB = fileModifiche ? fileModifiche.operazioniPerBox : null;
                     var DBDef = fileModificheDef ? fileModificheDef.operazioniPerBox : null;
                     //I20-1026: le sovrastrutture attive per questa ref e per questa forma si fondono nelle
-                    //regole del box; poi la regola nascondi decide cosa si vede, prima che si faccia la mappa.
+                    //regole del box; la regola disattiva si applica dopo il ridimensionamento, qui sotto.
                     me.boundsFormaCorrente = boxInGrigliaBounds;
                     DB = me.applicaSovrastrutture(DB, fileModifiche, box, itemRef);
                     DBDef = fileModificheDef === fileModifiche ? DB : me.applicaSovrastrutture(DBDef, fileModificheDef, box, itemRef);
-                    me.applicaNascondi(box, DB, DBDef, itemRef);
 
                     //Le copie generate dalle duplicazioni vanno riconosciute per etichetta prima
                     //di costruire la mappa, altrimenti due omonime collassano in una sola voce.
@@ -1893,6 +1890,11 @@ const CssFramework =
                         }
                     }
 
+                    //I20-1026: la regola disattiva va dopo il ridimensionamento, che deve scalare gli
+                    //elementi com'erano: un logo tolto o rimesso prima ne cambierebbe la geometria di
+                    //partenza. Poi i loghi entrano alla misura di impaginazione e si allineano con gli altri,
+                    //come all'impaginazione. Se si aggiunge qualcosa il box e' un gruppo nuovo.
+                    box = me.applicaDisattivazioni(box, itemRef, boxInGrigliaBounds);
                     mappaBoxOriginale = me.creaMappaturaBoxOriginale(box, prefissiDerivati);
                     if(garbageKey!=null){
                         activateKeyForGarbage(garbageKey);
@@ -2017,11 +2019,10 @@ const CssFramework =
                 var DB = fileModifiche ? fileModifiche.operazioniPerBox : null;
                 var DBDef = fileModificheDef ? fileModificheDef.operazioniPerBox : null;
                 //I20-1026: le sovrastrutture attive per questa ref e per questa forma si fondono nelle
-                //regole del box; poi la regola nascondi decide cosa si vede, prima che si faccia la mappa.
+                //regole del box; la regola disattiva si applica dopo il ridimensionamento, qui sotto.
                 me.boundsFormaCorrente = boxInGrigliaBounds;
                 DB = me.applicaSovrastrutture(DB, fileModifiche, box, itemRef);
                 DBDef = fileModificheDef === fileModifiche ? DB : me.applicaSovrastrutture(DBDef, fileModificheDef, box, itemRef);
-                me.applicaNascondi(box, DB, DBDef, itemRef);
 
                 //Le copie generate dalle duplicazioni vanno riconosciute per etichetta prima
                 //di costruire la mappa, altrimenti due omonime collassano in una sola voce.
@@ -2043,6 +2044,11 @@ const CssFramework =
                         return;
                     }
                 }
+                //I20-1026: la regola disattiva va dopo il ridimensionamento, che deve scalare gli
+                //elementi com'erano: un logo tolto o rimesso prima ne cambierebbe la geometria di
+                //partenza. Poi i loghi entrano alla misura di impaginazione e si allineano con gli altri,
+                //come all'impaginazione. Se si aggiunge qualcosa il box e' un gruppo nuovo.
+                box = me.applicaDisattivazioni(box, itemRef, boxInGrigliaBounds);
                 mappaBoxOriginale = me.creaMappaturaBoxOriginale(box, prefissiDerivati);
                 if (garbageKey != null) {
                     activateKeyForGarbage(garbageKey);
@@ -2079,6 +2085,12 @@ const CssFramework =
         var segnalazioneDescrizione = false;
         for (var i = 0; i < box.pageItems.length; i++) {
             var pageItem = box.pageItems.item(i);
+            //I20-1026: un elemento nascosto, per esempio dal noRender dell'operatore,
+            //non va costretto dentro il box: non si vede, e rimpicciolirlo lo rovinerebbe per quando
+            //tornera' visibile.
+            if (pageItem.visible === false) {
+                continue;
+            }
             var moved = false;
             if (pageItem.geometricBounds[0] < boxInGrigliaBounds[0] - 0.05) {
                 //prima di muoverlo, se è un textframe, proviamo a ridurlo per vedere se lo possiamo far rientrare nel limite senza mandarlo in overflow
@@ -2312,6 +2324,11 @@ const CssFramework =
             var pageItem = box.pageItems.item(i);
             //I20-1022: il clone non si segnala: lo sistema il fix foto, come la foto da cui nasce.
             if (Utility.eUnClone(pageItem.label)) {
+                continue;
+            }
+            //I20-1026: un elemento invisibile non si segnala e non si rimpicciolisce: e' questo il
+            //passaggio che segnala CSF-009.
+            if (pageItem.visible === false) {
                 continue;
             }
             if (pageItem.geometricBounds[0] < boxInGrigliaBounds[0] - 0.05 ||
@@ -4007,8 +4024,7 @@ const CssFramework =
 
                     var DB = fileModifiche ? fileModifiche.operazioniPerBox : null;
                     var DBDefault = fileModificheDef ? fileModificheDef.operazioniPerBox : null;
-                    //I20-1026: le stesse sovrastrutture del ridimensionamento. La regola nascondi non si ripete:
-                    //la mappa ricevuta e' gia' senza gli elementi nascosti.
+                    //I20-1026: le stesse sovrastrutture del ridimensionamento.
                     me.boundsFormaCorrente = boundsBoxImpaginato;
                     DB = me.applicaSovrastrutture(DB, fileModifiche, box, itemRef);
                     DBDefault = fileModificheDef === fileModifiche ? DB : me.applicaSovrastrutture(DBDefault, fileModificheDef, box, itemRef);
@@ -4117,8 +4133,7 @@ const CssFramework =
 
                 var DB = fileModifiche ? fileModifiche.operazioniPerBox : null;
                 var DBDefault = fileModificheDef ? fileModificheDef.operazioniPerBox : null;
-                //I20-1026: le stesse sovrastrutture del ridimensionamento. La regola nascondi non si ripete:
-                //la mappa ricevuta e' gia' senza gli elementi nascosti.
+                //I20-1026: le stesse sovrastrutture del ridimensionamento.
                 me.boundsFormaCorrente = boundsBoxImpaginato;
                 DB = me.applicaSovrastrutture(DB, fileModifiche, box, itemRef);
                 DBDefault = fileModificheDef === fileModifiche ? DB : me.applicaSovrastrutture(DBDefault, fileModificheDef, box, itemRef);

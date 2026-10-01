@@ -3266,10 +3266,11 @@ namespace Istanta.Models
         public modificheCssBox operazioni { get; set; } = new modificheCssBox();
     }
 
-    /// I20-1026: nasconde gli elementi che nomina quando le condizioni sono vere, e li rimostra
-    /// quando non lo sono piu'. Nascondere e' visible = false, come il noRender: niente si
-    /// cancella. Un elemento che l'operatore ha messo in noRender non si rimostra mai.
-    public class NascondiObj
+    /// I20-1026: disattiva i loghi automatici della ref (Foto.ExtraAuto) che nomina quando le
+    /// condizioni sono vere, e li riattiva quando non lo sono piu'. Un logo disattivato non sta
+    /// nel box: il Plugin non lo piazza, o lo toglie, e lo rimette quando serve. Un logo escluso
+    /// dall'operatore non si riattiva mai.
+    public class DisattivaObj
     {
         public string nomeGruppo { get; set; } = "";
         public List<string> elementi { get; set; } = new List<string>();
@@ -3299,8 +3300,8 @@ namespace Istanta.Models
         /// Spazio da riservare attorno alle foto, per lato. Null: nessuno.
         public EstensioniFotoObj? estensioniFoto { get; set; }
 
-        /// I20-1026: elementi da nascondere quando le condizioni sono vere.
-        public List<NascondiObj> nascondi { get; set; } = new();
+        /// I20-1026: loghi automatici da tenere fuori dal box quando le condizioni sono vere.
+        public List<DisattivaObj> disattiva { get; set; } = new();
     }
 
     /// Spazio riservato attorno al gruppo foto quando il fixFoto lo colloca, in millimetri
