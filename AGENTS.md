@@ -6,6 +6,8 @@ Questo repository è governato dal **Company Control Plane**.
 
 Le regole seguenti sono obbligatorie per ogni richiesta che possa comportare modifiche al repository. Gli `AGENTS.md` presenti nelle cartelle dei componenti aggiungono regole tecniche locali e non sostituiscono questo protocollo.
 
+Le richieste di analisi di una riunione registrata (una trascrizione `TRJ-…` o una riunione `MTG-…`) non modificano il repository e seguono il §15, non il protocollo dei task.
+
 ## 1. Verifica del Company Control Plane
 
 Prima di esaminare o modificare qualsiasi file:
@@ -178,3 +180,28 @@ L'agent non deve eseguire merge, pubblicazione di release o distribuzione. Squas
 - Non modificare file generati, binari, output di build o dati persistenti salvo esplicita richiesta approvata.
 - Non modificare workflow, Dockerfile o configurazioni di distribuzione se non fanno parte del pre-flight approvato.
 - Se emerge la necessità di cambiare altri componenti, aggiorna il pre-flight e ottieni una nuova approvazione prima di estendere il perimetro.
+
+## 15. Analisi delle riunioni
+
+Si applica quando l'utente chiede di analizzare, sintetizzare o classificare una riunione registrata, per esempio "Analizza e sintetizza la trascrizione TRJ-33987FE1CC38", o di trovare le riunioni di un progetto.
+
+Non apre un task: niente `company_prepare_task`, niente branch, nessun file del repository modificato. Resta valida la verifica del server MCP del §1, con gli strumenti di questa sezione al posto di `company_prepare_task`.
+
+1. Trova la riunione con `company_find_meetings`, passando ciò che l'utente ha indicato: una parte del titolo, la sessione del registratore (per esempio `T2026-09-29_001`) o un id `MTG-…` / `TRJ-…`. Per restringere al progetto indica `projectId` (`istanta4`); per "l'ultima riunione" usa `company_list_meetings`.
+   - Se corrisponde una sola riunione, prosegui con il suo id.
+   - Se ne corrispondono più d'una, elencale all'utente (titolo, progetto, sessione, data) e chiedigli quale intende. Non sceglierne una da solo, neanche la più recente.
+   - Se non ne corrisponde nessuna, chiedi all'utente un altro titolo, la sessione o il progetto.
+2. Leggi la trascrizione con `company_get_meeting_transcript`. Se il testo termina con l'indicazione di un `offset`, richiama lo strumento fino all'ultimo segmento: l'analisi si fa sulla riunione intera, mai su una parte.
+3. Individua gli argomenti trattati e classifica ciascuno con un solo tipo:
+   - `idea`: una proposta o una possibilità, non decisa;
+   - `discussion`: un tema dibattuto senza conclusione;
+   - `decision`: una scelta presa o concordata;
+   - `requirement`: un vincolo o una funzionalità che il prodotto deve soddisfare;
+   - `conflict`: posizioni divergenti, o una divergenza da ciò che è già deciso o scritto nelle specifiche.
+4. Per ogni argomento indica titolo, obiettivo, confidenza (da 0 a 1) e le fonti: una per ogni parlante che vi ha contribuito, con gli id dei suoi segmenti e il punto saliente detto con parole tue. Non attribuire a una persona ciò che la trascrizione non le attribuisce; le "Voce N" del microfono d'ambiente restano tali.
+5. Consegna sintesi e argomenti con `company_submit_meeting_analysis`, nella lingua della riunione. Se il Control Plane rifiuta la consegna, correggi tutti i problemi elencati e reinvia.
+6. Riporta all'utente la sintesi, il numero di argomenti per tipo e il link alla revisione restituito dallo strumento. Se la trascrizione era una bozza non revisionata, dillo.
+
+L'analisi resta in attesa della revisione umana nel Control Plane. Quando una riunione serve come fonte per specifiche o requisiti, leggila con `company_get_meeting_analysis` e `onlyApproved` impostato a `true`: solo gli argomenti approvati valgono come decisioni o requisiti; gli altri sono indizi da verificare con l'utente.
+
+Se la stessa richiesta chiede anche di modificare il codice, l'analisi segue questa sezione e la modifica il protocollo dei task, dal §1.
