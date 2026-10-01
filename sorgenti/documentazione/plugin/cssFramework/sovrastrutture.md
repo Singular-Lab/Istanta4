@@ -172,6 +172,16 @@ dato tutti i loghi del formato.
   largo usciva dal tavolo di montaggio e `followStaticAnchor` si fermava con un errore di InDesign.
 - Nessun post ridimensionamento: i loghi restano alla misura di impaginazione, come gli altri di
   Edro21.
+- **Il campo `sfondo` del master è nascosto**: il custom di Edro21 decide il formato una volta
+  prima del ciclo sugli elementi del box (`formatoParmigiano`) e, quando il ciclo visita `sfondo`, lo
+  nasconde con `visible = false`. Non passa dalle azioni del custom: quelle nascono visitando la
+  base, che può venire dopo lo sfondo. La base Parmigiano fa da fondo e il server non assegna più
+  `sfondo_parmigiano`. Nascosto e non eliminato: resta nel box della sua misura, e il Plugin salta
+  gli elementi invisibili dove conta.
+- **I gruppi principali evitano la traccia della base**: nei due kit volantino `Campi_DX` e
+  `Campi_SX` di tutti i box hanno `evitaTracciaBase` a distanza 0, così il testo (`useTextBounds`)
+  sta subito dentro il bordo. Vale per ogni base con una traccia, non solo per il Parmigiano; dove
+  la base non ha bordo non cambia niente. Le altre regole restano come erano.
 - Lo stile della base (`base_P_Parmigiano`, `base_A_Parmigiano` per SC) lo applica il custom di
   Edro21, con lo stesso criterio (`refConditionVera` di questo modulo). Payoff e testi sono fra le
   eccezioni del fix foto (`exceptionElementsToIgnoreFixFoto`): la foto non ci finisce sopra.

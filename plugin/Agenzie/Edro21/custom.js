@@ -186,6 +186,12 @@ const customAgenzia={
         var obj_da_cestinare = new Array();
         var fondoDaPosizionare = objItem["Foto.ExtraAuto"].find(f => f.tipo == 5);
         var meccanica = objItem.combinazioneAssegnata;
+        //I20-1026: il formato Parmigiano Reggiano. La ref lo e' quando la descrizione1 dice
+        //Parmigiano Reggiano, senza distinguere maiuscole e minuscole: lo stesso criterio del
+        //server (FormatoParmigianoEdro21) e della sovrastruttura Parmigiano del framework CSS.
+        //Come gli stili vicini della base, non vale per i box focus, che hanno uno stile loro.
+        //Si calcola una volta qui, perche' serve a piu' elementi del ciclo: la base e lo sfondo.
+        var formatoParmigiano = meccanica.indexOf("focus") < 0 && sovrastrutture.refConditionVera(objItem, [{ campo: "Descrizioni.Descrizione1", contiene: "parmigiano reggiano" }]);
 
         for (var $xa = 0; $xa < box.allPageItems.length; $xa++) {
             try {
@@ -258,13 +264,10 @@ const customAgenzia={
                         meta_meccanica.azioni.push(a_eff);
                     }
 
-                    //I20-1026: il formato Parmigiano Reggiano. La ref lo e' quando la descrizione1 dice
-                    //Parmigiano Reggiano, senza distinguere maiuscole e minuscole: lo stesso criterio del
-                    //server (FormatoParmigianoEdro21) e della sovrastruttura Parmigiano del framework CSS.
-                    //Per SC lo stile e' base_A_Parmigiano, per gli altri canali base_P_Parmigiano. Viene
-                    //dopo gli altri stili della base, quindi su una ref Parmigiano vince lui. Come gli
-                    //stili vicini, non si applica ai box focus, che hanno uno stile di base loro.
-                    if (meccanica.indexOf("focus") < 0 && sovrastrutture.refConditionVera(objItem, [{ campo: "Descrizioni.Descrizione1", contiene: "parmigiano reggiano" }])) {
+                    //I20-1026: per SC lo stile e' base_A_Parmigiano, per gli altri canali
+                    //base_P_Parmigiano. Viene dopo gli altri stili della base, quindi su una ref
+                    //Parmigiano vince lui.
+                    if (formatoParmigiano) {
                         var a_eff = { tipo: "effect", campo_indd: "base", name: canale == "SC" ? "base_A_Parmigiano" : "base_P_Parmigiano" };
                         meta_meccanica.azioni.push(a_eff);
                     }
@@ -334,6 +337,14 @@ const customAgenzia={
                     if (objItem.codiceBox == "solo_descr") {
                         obj_da_cestinare.push(pItem);
                     }
+                }
+                else if (formatoParmigiano && nome_proprieta.indexOf("sfondo") == 0) {
+                    //I20-1026: il campo sfondo del master non serve nel formato Parmigiano: la base fa
+                    //da fondo e il server non assegna piu' sfondo_parmigiano. Si nasconde, non si
+                    //elimina: resta nel box della sua misura, e il Plugin salta gli elementi invisibili
+                    //dove conta. Qui, quando il ciclo lo visita, e non fra le azioni: quelle nascono
+                    //visitando la base, che puo' venire dopo lo sfondo.
+                    pItem.visible = false;
                 }
                 else if (nome_proprieta == "immagine") {
 

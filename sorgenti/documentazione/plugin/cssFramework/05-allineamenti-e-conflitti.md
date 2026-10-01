@@ -79,6 +79,16 @@ da InDesign e con i suoi test.
 - `applicaOperazioniDopoFixFoto(box, bounds)` → il momento `dopoFixFoto` di
   [cssSequenzaOperazioni](sequenzaOperazioni.md).
 
+## Evitare la traccia della base
+
+Una regola di allineamento con `evitaTracciaAllineamento.evitaTracciaBase` vero passa, dopo le
+ancore, da `fixCollisioneTracciaBase`: il gruppo allineato viene spostato dentro il bordo della base
+di `spessore della traccia` (secondo l'allineamento del tratto) più `distance` in mm, misurando il
+testo se `useTextBounds` è vero. **Se la base non ha traccia (`strokeWeight` 0) non fa niente**:
+accenderla su una regola è innocuo finché lo stile della base non ha un bordo, come `base_P_Parmigiano`
+(I20-1026). Nei kit volantino di Edro21 ce l'hanno i `Loghi_*` (distanza 1) e i gruppi principali
+`Campi_DX` / `Campi_SX` (distanza 0, testo adiacente al bordo).
+
 ## Variabili
 
 | nome | cos'è |

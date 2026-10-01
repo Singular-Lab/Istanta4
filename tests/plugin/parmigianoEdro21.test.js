@@ -298,3 +298,33 @@ test("il fix foto di Edro21 rimette la descrizione dov'era se tocca un logo", ()
     const custom = leggi("plugin/Agenzie/Edro21/custom.js");
     assert.match(custom, /if \(this\.descrizioneTraLoghi\(box, descrizione\)\) \{\s*if \(descrizioneFuoriBox && descrizioneDaRidurre != null\) \{\s*descrizioneDaRidurre\.geometricBounds = oldBoundsOverflow;\s*\}\s*descrizione\.geometricBounds = oldBounds;\s*CssFramework\.fixFoto\(box, res1\.candidate, res1\.obstacles\);\s*return box;/);
 });
+
+/* ---- riapertura: sfondo nascosto e campi principali sulla traccia ---- */
+
+test("nel formato Parmigiano il custom nasconde il campo sfondo quando lo visita, non con un'azione", () => {
+    const custom = leggi("plugin/Agenzie/Edro21/custom.js");
+    //Il formato si decide una volta, prima del ciclo sugli elementi del box.
+    const calcolo = custom.indexOf('var formatoParmigiano = meccanica.indexOf("focus") < 0 && sovrastrutture.refConditionVera(objItem, [{ campo: "Descrizioni.Descrizione1", contiene: "parmigiano reggiano" }]);');
+    const ciclo = custom.indexOf("for (var $xa = 0; $xa < box.allPageItems.length; $xa++) {");
+    assert.ok(calcolo > 0 && calcolo < ciclo);
+    //La base prende lo stile, lo sfondo si nasconde nel suo giro del ciclo.
+    assert.match(custom, /if \(formatoParmigiano\) \{\s*var a_eff = \{ tipo: "effect", campo_indd: "base", name: canale == "SC" \? "base_A_Parmigiano" : "base_P_Parmigiano" \};/);
+    assert.match(custom, /else if \(formatoParmigiano && nome_proprieta\.indexOf\("sfondo"\) == 0\) \{[^}]*pItem\.visible = false;\s*\}/);
+    //Non passa dalle azioni: nascono visitando la base, che puo' venire dopo lo sfondo.
+    assert.doesNotMatch(custom, /"nascondi"/);
+});
+
+test("i gruppi principali evitano la traccia della base in tutti i box dei kit volantino, a distanza zero", () => {
+    let trovati = 0;
+    for (const k of kitVolantino) {
+        for (const voce of k.operazioniPerBox) {
+            for (const gruppo of (voce.allineamenti || []).filter(a => a.nomeGruppo === "Campi_DX" || a.nomeGruppo === "Campi_SX")) {
+                const evita = gruppo.evitaTracciaAllineamento;
+                assert.ok(evita && evita.evitaTracciaBase === true, gruppo.nomeGruppo + " " + JSON.stringify(voce.nomiBox));
+                assert.strictEqual(evita.distance, 0, gruppo.nomeGruppo + " " + JSON.stringify(voce.nomiBox));
+                trovati++;
+            }
+        }
+    }
+    assert.ok(trovati >= 20, "regole trovate: " + trovati);
+});
