@@ -278,6 +278,31 @@ Tre, tutti in `indexNew.js`, tutti da task separato perché correggerli cambia i
    a `percorsoLogs`, che è già assoluto. Il log di crash non viene mai scritto, e all'operatore
    compare un avviso fuorviante di «cartella logs assente».
 
+## I log del Plugin
+
+`messaggioUtente` scrive ogni messaggio in `log_<g>-<m>-<anno>.txt` nella cartella dei log
+(`cartellaDeiLog`), un array JSON di righe `{ data, orario, stile, msg, macchina }`;
+`writeDebugMessageForCrash` fa lo stesso in `Debuglog_...`. Tre cose da sapere quando si legge un
+log di produzione (I20-1038):
+
+- **La cartella dei log è di solito su Dropbox, condivisa fra le postazioni**: tutte scrivono lo
+  stesso file, e Dropbox salva le scritture concorrenti come «Copia in conflitto di <macchina>».
+  Il file principale è l'ultima versione sincronizzata, le copie sono fotografie parziali. Per
+  questo ogni riga porta `macchina` (`nomeMacchina`: hostname, poi utente, poi nome della home).
+- **Le righe sono su un'unica riga di testo**: `grep -n` restituisce il file intero. Vanno lette
+  come JSON e filtrate per `orario`.
+- **IDX-27** (errore durante l'elaborazione del filtro) riporta fra parentesi quadre dove era
+  arrivato — la pagina del risultato e, se era nel ciclo dei box, la ref (`contestoErroreFiltro`);
+  lo stack va in console e nel log testuale dell'operazione, non all'operatore. Un errore già
+  detto all'operatore (`giaSegnalato`) non viene ripetuto. Prima diceva solo
+  `ReferenceError: Object is invalid`, che non permette di capire né la macchina né il punto.
+- **IDX-169 e IDX-170** (`grigliaDallaLibreria`): la griglia che il server chiede per una pagina
+  si cerca nella libreria InDesign prima con il lato (`_SX`/`_DX`), poi senza. Se manca,
+  l'impaginazione si ferma con un messaggio rivolto a chi prepara le librerie: nome cercato,
+  libreria, pagina, cosa fare. Se il nome è doppio in libreria, un avviso dice che il Plugin usa il
+  primo. È il caso di I20-1038 (due `4x4_CN_SX`, nessun `4x4_CN_DX`), che prima finiva in
+  «Object is invalid».
+
 ## Dove le funzioni dovrebbero stare
 
 Dal Lotto 5 in poi, leggendo le funzioni una per una, si annota anche **quando una sembra stare nel

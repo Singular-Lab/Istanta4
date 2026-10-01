@@ -2614,6 +2614,59 @@ async function conteggiaImpagina(impagina = false, cbkEnd = null, restartFromInd
 /// contesto fissato all'avvio da conteggiaImpagina, non le variabili di modulo. E' cosi' che il
 /// codice interno, scritto quando le globali si usavano direttamente, lavora su un contesto
 /// stabile senza essere stato riscritto.
+/// I20-1038: dove si era quando l'elaborazione del filtro e' fallita: la pagina del risultato
+/// in lavorazione e, se si era gia' nel ciclo dei box, la ref (codice gruppo e inizio della
+/// descrizione). "Object is invalid" da solo non dice niente, e il log non ha lo stack.
+/// Non lancia mai: la chiama un catch.
+function contestoErroreFiltro(filtroResult, itemRef) {
+    var parti = [];
+    try {
+        if (filtroResult != null && filtroResult.pag != null) {
+            parti.push("pagina " + filtroResult.pag);
+        }
+        if (itemRef != null) {
+            var codice = itemRef["Scatto.CodiceGruppo"] != null ? itemRef["Scatto.CodiceGruppo"] : itemRef["Referenza.Codice"];
+            var descr = itemRef["Descrizioni.Descrizione1"] != null ? String(itemRef["Descrizioni.Descrizione1"]).substring(0, 40) : "";
+            parti.push("ref " + codice + (descr !== "" ? " (" + descr + ")" : ""));
+        }
+    }
+    catch (e) {
+        //il contesto e' un aiuto: se non si legge, si va avanti senza
+    }
+    return parti.length > 0 ? parti.join(", ") : "prima del primo risultato";
+}
+
+/// I20-1038: la griglia da piazzare dalla libreria InDesign: prima con il lato (_SX/_DX), poi
+/// senza. Se la libreria ha piu' asset con quel nome lo dice (IDX-170): InDesign prende il primo.
+/// Se non ne ha nessuno lo dice a chi fa le librerie e ferma l'impaginazione (IDX-169): prima
+/// placeAsset su un asset inesistente dava "Object is invalid", senza nome ne' libreria.
+/// L'eccezione e' marcata giaSegnalato, cosi' il catch IDX-27 non la ripete all'operatore.
+function grigliaDallaLibreria(libreria, nomeGriglia, suffix, pagina) {
+    var nomi = [nomeGriglia + suffix, nomeGriglia];
+    for (var i = 0; i < nomi.length; i++) {
+        var nome = nomi[i];
+        var asset = libreria.assets.itemByName(nome);
+        if (asset != null && asset.isValid) {
+            var omonimi = 0;
+            try {
+                omonimi = libreria.assets.everyItem().getElements().filter(function (a) { return a.name === nome; }).length;
+            }
+            catch (e) {
+                omonimi = 0;
+            }
+            if (omonimi > 1) {
+                messaggioUtente("Code IDX-170 Filtro: nella libreria '" + libreria.name + "' ci sono " + omonimi + " asset chiamati '" + nome + "': il Plugin usa il primo, i doppioni vanno tolti dalla libreria", "warning");
+            }
+            return asset;
+        }
+    }
+    var messaggio = "Code IDX-169 Filtro: nella libreria '" + libreria.name + "' manca la griglia '" + nomi[0] + "' (cercata anche come '" + nomi[1] + "'), richiesta dal server per la pagina " + pagina + ". L'impaginazione si ferma: la libreria va completata con l'asset mancante e l'impaginazione rifatta";
+    messaggioUtente(messaggio, "error");
+    var errore = new Error(messaggio);
+    errore.giaSegnalato = true;
+    throw errore;
+}
+
 async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, idKitLavorazione, impagina = false, cbkEnd = null, restartFromIndexPoP = 0) {
     var noCacheCheck = !($("#cacheCheckAdvanced").is(":checked"));
 
@@ -3243,6 +3296,7 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                         let date = new Date().toLocaleString('it-IT')
                         for (var $r = 0; $r < objResult.result.length; $r++) {
                             var filtroResult = objResult.result[$r];
+                            itemRef = null; //I20-1038: il contesto di IDX-27 non deve mostrare la ref della pagina prima
 
                             var pagCoinvolta = docInLavorazione.pages.itemByName(filtroResult.pag.toString());
                             // var pagCoinvolta = docInLavorazione.pages.item(filtroResult.pag - 1);
@@ -3316,10 +3370,7 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                                 else {
                                     suffix = "_SX";
                                 }
-                                var grigliaTemplate = libreria.assets.itemByName(nome_griglia /*+ suffisso_lavorazione*/ + suffix);
-                                if (grigliaTemplate == null || !grigliaTemplate.isValid) {
-                                    grigliaTemplate = libreria.assets.itemByName(nome_griglia/*+suffisso_lavorazione*/);
-                                }
+                                var grigliaTemplate = grigliaDallaLibreria(libreria, nome_griglia, suffix, filtroResult.pag);
                                 grigliaTemplate = grigliaTemplate.placeAsset(docInLavorazione)[0];
                                 var grigliaObj = grigliaTemplate.duplicate(pagCoinvolta);
                                 grigliaObj.move([offsetPag, 0]);
@@ -3512,6 +3563,7 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                         for (var $r = 0; $r < objResult.result.length; $r++) {
                             docInLavorazione.activeLayer = docInLavorazione.layers.itemByName("InPagina");
                             var filtroResult = objResult.result[$r];
+                            itemRef = null; //I20-1038: il contesto di IDX-27 non deve mostrare la ref della pagina prima
                             showLoading("Impaginazione di pagina: " + filtroResult.pag);
                             await Utility.sleep(10);
                             var XoffsetElementiConfronto = 0; //offset usato solo in caso di confronto per sfalzare i record impaginati in alto a sinistra
@@ -3563,10 +3615,7 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                                 else {
                                     suffix = "_SX";
                                 }
-                                var grigliaTemplate = libreria.assets.itemByName(nome_griglia /*+ suffisso_lavorazione*/ + suffix);
-                                if (grigliaTemplate == null || !grigliaTemplate.isValid) {
-                                    grigliaTemplate = libreria.assets.itemByName(nome_griglia /*+ suffisso_lavorazione*/);
-                                }
+                                var grigliaTemplate = grigliaDallaLibreria(libreria, nome_griglia, suffix, filtroResult.pag);
                                 grigliaTemplate = grigliaTemplate.placeAsset(docInLavorazione)[0];
                                 //var grigliaTemplate = libreria.assets.itemByName(nome_griglia).placeAsset(docInLavorazione)[0];
                                 var grigliaObj = grigliaTemplate.duplicate(pagCoinvolta);
@@ -3721,9 +3770,16 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
 
                 }
                 catch (ex) {
-                    messaggioUtente("Code IDX-27 Filtro: Errore durante l'elaborazione del filtro (Deb1): " + ex, "error");
+                    //I20-1038: il messaggio dice dove si era (pagina e ref); lo stack va solo in console e nel
+                    //log testuale. filtroResult e itemRef sono var della stessa funzione: qui valgono anche se il
+                    //try si e' fermato prima del ciclo dei box; typeof protegge se finissero in una funzione interna.
+                    //Un errore gia' detto all'operatore (giaSegnalato, come IDX-169) non si ripete: resta la pulizia.
+                    var contestoErrore = contestoErroreFiltro(typeof filtroResult !== "undefined" ? filtroResult : null, typeof itemRef !== "undefined" ? itemRef : null);
+                    if (!(ex != null && ex.giaSegnalato === true)) {
+                        messaggioUtente("Code IDX-27 Filtro: Errore durante l'elaborazione del filtro (Deb1) [" + contestoErrore + "]: " + ex, "error");
+                    }
                     console.error(ex);
-                    logContent += "Errore durante l'elaborazione del filtro: " + ex.toString() + "\n";
+                    logContent += "Errore durante l'elaborazione del filtro [" + contestoErrore + "]: " + ex.toString() + "\n" + (ex != null && ex.stack != null ? ex.stack + "\n" : "");
                     //riattiviamo i bottoni bOpt1 e bOpt2 e rimettiamo il testo originale
                     bOpt1.disabled = false;
                     bOpt2.disabled = false;
@@ -7720,6 +7776,50 @@ function contenitoreMessaggi(modal) {
 ///
 /// dontWriteInLogs evita la ricorsione: se e' la scrittura del log a fallire, il messaggio
 /// che lo dice non puo' provare a scriversi nel log.
+/// I20-1038: il nome della macchina che scrive il log. I log stanno in una cartella Dropbox
+/// condivisa fra piu' postazioni, e senza questo campo non si capisce da quale PC viene una riga.
+/// UXP non garantisce os.hostname(): si prova, poi l'utente, poi il nome della home; mai un
+/// errore, e il risultato si calcola una volta sola. Il parametro os serve ai test.
+var nomeMacchinaCache = null;
+function nomeMacchina(os = null) {
+    if (nomeMacchinaCache != null && os == null) {
+        return nomeMacchinaCache;
+    }
+    var modulo = os;
+    try {
+        if (modulo == null) {
+            modulo = require('os');
+        }
+    }
+    catch (e) {
+        modulo = null;
+    }
+    var tentativi = [
+        function () { return modulo.hostname(); },
+        function () { return modulo.userInfo().username; },
+        function () { return modulo.homedir().split(/[\\/]/).filter(function (p) { return p !== ""; }).pop(); }
+    ];
+    var nome = null;
+    for (var i = 0; i < tentativi.length && nome == null; i++) {
+        try {
+            var valore = tentativi[i]();
+            if (valore != null && String(valore).trim() !== "") {
+                nome = String(valore).trim();
+            }
+        }
+        catch (e) {
+            //si passa al tentativo dopo
+        }
+    }
+    if (nome == null) {
+        nome = "sconosciuta";
+    }
+    if (os == null) {
+        nomeMacchinaCache = nome;
+    }
+    return nome;
+}
+
 async function messaggioUtente(msg, style, loading = false, tempo = 0, dontWriteInLogs = false, modal = false) {
     try {
         if (msg == null || msg == "") {
@@ -7738,6 +7838,7 @@ async function messaggioUtente(msg, style, loading = false, tempo = 0, dontWrite
         var logMessage = {
             data: formatTwoDigits(date.getDate()) + "/" + formatTwoDigits((date.getMonth() + 1)) + "/" + date.getFullYear(),
             orario: formatTwoDigits(date.getHours()) + ":" + formatTwoDigits(date.getMinutes()) + ":" + formatTwoDigits(date.getSeconds()),
+            macchina: nomeMacchina(),
             stile: style,
             msg: msg
         };
@@ -7857,7 +7958,8 @@ function writeDebugMessageForCrash(msg) {
         var date = new Date();
         var logMessage = {
             data: formatTwoDigits(date.getDate()) + "/" + formatTwoDigits((date.getMonth() + 1)) + "/" + date.getFullYear(),
-            orario: formatTwoDigits(date.getHours()) + ":" + formatTwoDigits(date.getMinutes()) + ":" + formatTwoDigits(date.getSeconds()),            
+            orario: formatTwoDigits(date.getHours()) + ":" + formatTwoDigits(date.getMinutes()) + ":" + formatTwoDigits(date.getSeconds()),
+            macchina: nomeMacchina(),
             msg: msg
         };
 
