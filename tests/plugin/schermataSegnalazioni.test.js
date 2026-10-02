@@ -161,7 +161,7 @@ test("la schermata legge il documento e offre vai al box, risolvi e risolvi tutt
     assert.match(schermata, /Segnalazioni\.leggiDocumento\(SchermataSegnalazioni\._documento\(\)\)/);
     assert.match(schermata, /\.text\("Vai al box"\)/);
     assert.match(schermata, /\.text\("Risolvi"\)\.on\('click', \(\) => \{\s*Segnalazioni\.risolviVoce\(lettura\.box, indice\);\s*SchermataSegnalazioni\.riempi\(elenco\);/);
-    assert.match(schermata, /Modali\.popup\("Segnalazioni di impaginazione", elenco, "xl"\)/);
+    assert.match(schermata, /Modali\.popup\("Segnalazioni di impaginazione", elenco, "xl", SchermataSegnalazioni\.allaChiusura\)/);
     assert.match(schermata, /\.text\("Nessuna segnalazione nel documento\."\)/);
     //I testi entrano come testo, non come HTML.
     assert.match(schermata, /\$\('<span><\/span>'\)\.text\(voce\.t \|\| ""\)/);
@@ -228,4 +228,87 @@ test("togliere la schermata di attesa non riaccende i controlli nascosti da un p
     //lo chiama chi l'ha lanciata: senza la guardia le caselle Ordine tornavano sopra il popup.
     assert.match(corpo, /if \(\$\("#popup"\)\.length === 0\) \{\s*Modali\.mostraHidebleElements\(\);\s*\}/);
     assert.strictEqual((corpo.match(/mostraHidebleElements/g) || []).length, 1);
+});
+
+/* ---- lotto 3: il badge di pagina del tracciato ---- */
+
+//Due box con bollino e DNA, uno di un'altra referenza, uno senza DNA leggibile.
+const LETTE = [
+    { pagina: "3", box: { dna: { idRec: "101" } }, voci: [{ g: "warning", c: "CSF-013", t: "a" }, { g: "error", c: "CSF-009", t: "b" }] },
+    { pagina: "3", box: { dna: { idRec: "202" } }, voci: [{ g: "warning", c: "CSF-013", t: "c" }] },
+    { pagina: "4", box: { dna: null }, voci: [{ g: "error", c: "CSF-009", t: "d" }] }
+];
+const dnaFinto = (box) => box.dna;
+
+test("le segnalazioni si riassumono per idRec: gravita' peggiore, quante sono e quanti errori", () => {
+    const riepilogo = Segnalazioni.riepilogoPerRecord(LETTE, dnaFinto);
+
+    assert.deepStrictEqual(riepilogo, {
+        "101": { gravita: "error", segnalazioni: 2, errori: 1 },
+        "202": { gravita: "warning", segnalazioni: 1, errori: 0 }
+    });
+    assert.deepStrictEqual(Segnalazioni.riepilogoPerRecord(null, dnaFinto), {});
+});
+
+test("una referenza in due box prende il box peggiore e la somma delle segnalazioni", () => {
+    const lette = [
+        { box: { dna: { idRec: "7" } }, voci: [{ g: "warning", t: "a" }] },
+        { box: { dna: { idRec: "7" } }, voci: [{ g: "error", t: "b" }] }
+    ];
+
+    assert.deepStrictEqual(Segnalazioni.riepilogoPerRecord(lette, dnaFinto)["7"], { gravita: "error", segnalazioni: 2, errori: 1 });
+});
+
+test("l'idRec del DNA (testo) e quello del tracciato (numero) danno la stessa chiave", () => {
+    assert.strictEqual(Segnalazioni.chiaveRecord("101"), "101");
+    assert.strictEqual(Segnalazioni.chiaveRecord(101), "101");
+    assert.strictEqual(Segnalazioni.chiaveRecord("abc"), null);
+    assert.strictEqual(Segnalazioni.chiaveRecord(null), null);
+});
+
+test("un DNA che non si legge non ferma il riepilogo", () => {
+    const lette = [{ box: {}, voci: [{ g: "error", t: "a" }] }, LETTE[1]];
+    const dnaCheSiRompe = (box) => { if (box.dna == null) { throw new Error("box non valido"); } return box.dna; };
+
+    assert.deepStrictEqual(Object.keys(Segnalazioni.riepilogoPerRecord(lette, dnaCheSiRompe)), ["202"]);
+});
+
+test("il suggerimento del badge dice quante segnalazioni e quanti errori", () => {
+    assert.strictEqual(SchermataSegnalazioni.testoRiepilogo({ gravita: "error", segnalazioni: 2, errori: 1 }), "2 segnalazioni di impaginazione (1 errore)");
+    assert.strictEqual(SchermataSegnalazioni.testoRiepilogo({ gravita: "error", segnalazioni: 3, errori: 3 }), "3 segnalazioni di impaginazione (3 errori)");
+    assert.strictEqual(SchermataSegnalazioni.testoRiepilogo({ gravita: "warning", segnalazioni: 1, errori: 0 }), "1 segnalazione di impaginazione");
+    assert.strictEqual(SchermataSegnalazioni.testoRiepilogo(null), "");
+});
+
+test("chiudendo la schermata i badge del tracciato si ricolorano, e sotto Node non succede niente", () => {
+    let chiamate = 0;
+    SchermataSegnalazioni.allaChiusura();
+    global.aggiornaBadgeSegnalazioniTracciato = () => { chiamate++; };
+    try {
+        SchermataSegnalazioni.allaChiusura();
+        assert.strictEqual(chiamate, 1);
+    }
+    finally {
+        delete global.aggiornaBadgeSegnalazioniTracciato;
+    }
+});
+
+test("il tracciato legge le segnalazioni una volta per ridisegno e colora il badge con esse", () => {
+    const indexNew = leggiFileDelPlugin("indexNew.js").replace(/\r/g, "");
+
+    //Una lettura per ridisegno, passata a ogni riga.
+    assert.match(indexNew, /const riepilogoSegnalazioni = riepilogoSegnalazioniTracciato\(\);[\s\S]{0,200}?creaElementoTracciato\(record, first, riepilogoSegnalazioni\)/);
+    assert.match(indexNew, /return Segnalazioni\.riepilogoPerRecord\(Segnalazioni\.leggiDocumento\(documento\)\);/);
+
+    //Il badge: classe e idRec per ricolorarlo, colore e suggerimento dal riepilogo, blu senza.
+    const crea = indexNew.substring(indexNew.indexOf("function creaElementoTracciato("));
+    assert.match(crea, /backgroundColor: COLORE_BADGE_TRACCIATO,/);
+    assert.match(crea, /\$badge\.addClass\("badge-pagina-tracciato"\);/);
+    assert.match(crea, /\$badge\.attr\("idRec", chiaveRecord\);/);
+    assert.match(crea, /coloraBadgeTracciato\(\$badge, /);
+    assert.match(indexNew, /const COLORE_BADGE_TRACCIATO = "rgb\(45,140,235\)";/);
+    assert.match(indexNew, /SchermataSegnalazioni\.coloreCss\(riepilogo\.gravita\) : COLORE_BADGE_TRACCIATO/);
+
+    //Ricolorare senza ridisegnare: i badge gia' disegnati, per idRec.
+    assert.match(indexNew, /function aggiornaBadgeSegnalazioniTracciato\(\) \{[\s\S]{0,200}?\$\("#ElementiTracciato \.badge-pagina-tracciato"\)\.each/);
 });

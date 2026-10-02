@@ -6896,10 +6896,13 @@ async function aggiornaTracciatoPostRicerca(resRicerca) {
             recordsDaMostrare = tutti;
         }
 
+        //I20-1029, lotto 3: le segnalazioni del documento si leggono una volta per ridisegno, non
+        //una per riga: le righe possono essere migliaia.
+        const riepilogoSegnalazioni = riepilogoSegnalazioniTracciato();
         const frag = $(document.createDocumentFragment());
         var first = true;
         recordsDaMostrare.forEach(record => {
-            frag.append(creaElementoTracciato(record, first));
+            frag.append(creaElementoTracciato(record, first, riepilogoSegnalazioni));
             first = false;
         });
 
@@ -7354,14 +7357,55 @@ async function confermaImpaginazioneDaTracciato(record, pagina) {
     return await Modali.confirm($container);
 }
 
+//I20-1029, lotto 3: il badge di pagina del tracciato prende il colore della segnalazione di
+//impaginazione piu' grave del box della referenza, letta dai bollini del documento: rosso gli
+//errori, arancione i warning, gli stessi colori della schermata delle segnalazioni. Senza
+//segnalazioni resta il blu di sempre.
+const COLORE_BADGE_TRACCIATO = "rgb(45,140,235)";
+
+/// Le segnalazioni del documento per referenza (Segnalazioni.riepilogoPerRecord), o una mappa
+/// vuota se il documento non si legge: il tracciato si disegna comunque, col blu di sempre.
+function riepilogoSegnalazioniTracciato() {
+    try {
+        const documento = docInLavorazione != null ? docInLavorazione : (app.documents.length > 0 ? app.activeDocument : null);
+        return Segnalazioni.riepilogoPerRecord(Segnalazioni.leggiDocumento(documento));
+    }
+    catch (e) {
+        console.warn("Segnalazioni non lette per il tracciato:", e);
+        return {};
+    }
+}
+
+/// Colora il badge di pagina di una referenza con le sue segnalazioni, e ci mette il
+/// suggerimento; senza segnalazioni lo riporta al blu, senza suggerimento.
+function coloraBadgeTracciato($badge, riepilogo) {
+    const testo = SchermataSegnalazioni.testoRiepilogo(riepilogo);
+    $badge.css("background-color", testo !== "" ? SchermataSegnalazioni.coloreCss(riepilogo.gravita) : COLORE_BADGE_TRACCIATO);
+    if (testo !== "") {
+        $badge.attr("title", testo);
+    } else {
+        $badge.removeAttr("title");
+    }
+}
+
+/// Ricolora i badge gia' disegnati, senza rifare il tracciato. La chiama la schermata delle
+/// segnalazioni quando si chiude: dopo un "Risolvi" il colore di prima non e' piu' vero.
+function aggiornaBadgeSegnalazioniTracciato() {
+    const riepilogo = riepilogoSegnalazioniTracciato();
+    $("#ElementiTracciato .badge-pagina-tracciato").each(function () {
+        coloraBadgeTracciato($(this), riepilogo[$(this).attr("idRec")]);
+    });
+}
+
 /// Costruisce la riga di una referenza nel tracciato: una cella per colonna, coi valori
-/// presi dal record.
+/// presi dal record. riepilogoSegnalazioni (lotto 3 di I20-1029) e' la mappa di
+/// riepilogoSegnalazioniTracciato, letta una volta per tutto il tracciato.
 ///
 /// NOTA (I20-1002): chiama getTracciatoColumns a ogni riga, e quella a sua volta interroga
 /// il pluginMiddleware. Le colonne sono le stesse per tutto l'elenco: su un tracciato da
 /// migliaia di referenze e' lo stesso lavoro rifatto migliaia di volte. Andrebbe calcolato
 /// una volta in aggiornaTracciatoPostRicerca e passato qui.
-function creaElementoTracciato(obj, isFirst) {
+function creaElementoTracciato(obj, isFirst, riepilogoSegnalazioni = {}) {
     const record = obj.recordInTracciato || {};
     const columns = getTracciatoColumns();
 
@@ -7388,7 +7432,7 @@ function creaElementoTracciato(obj, isFirst) {
                     width: "20px",
                     height: "20px",
                     borderRadius: "50%",
-                    backgroundColor: "rgb(45,140,235)",
+                    backgroundColor: COLORE_BADGE_TRACCIATO,
                     color: "white",
                     display: "flex",
                     alignItems: "center",
@@ -7397,6 +7441,13 @@ function creaElementoTracciato(obj, isFirst) {
                     fontWeight: "bold",
                     fontSize: "11px"
                 }).text(obj.paginaImpaginazione);
+
+                const chiaveRecord = Segnalazioni.chiaveRecord(getIdRecFromItemRef(record));
+                $badge.addClass("badge-pagina-tracciato");
+                if (chiaveRecord != null) {
+                    $badge.attr("idRec", chiaveRecord);
+                }
+                coloraBadgeTracciato($badge, chiaveRecord != null && riepilogoSegnalazioni != null ? riepilogoSegnalazioni[chiaveRecord] : null);
 
                 $badge.on("click", function () {
                     trovaRecord(record["Scatto.CodiceGruppo"], getIdRecFromItemRef(record), obj.paginaImpaginazione, true, true);

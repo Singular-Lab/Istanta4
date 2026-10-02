@@ -135,6 +135,52 @@ const Segnalazioni = {
         return risultato;
     },
 
+    /// Lotto 3: le segnalazioni per referenza, per colorare il badge di pagina del tracciato.
+    /// Dalle letture di leggiDocumento: { idRec: { gravita, segnalazioni, errori } }, con la
+    /// gravita' peggiore e i conteggi di tutti i box della referenza (di norma uno). Il box si
+    /// riconosce dal DNA (dnaDelBox, di norma Utility.getDnaOfBox); un box senza DNA leggibile,
+    /// per esempio finito dentro un altro gruppo, non entra nella mappa.
+    riepilogoPerRecord(lette, dnaDelBox) {
+        const leggiDna = typeof dnaDelBox === "function" ? dnaDelBox : (box) => Utility.getDnaOfBox(box);
+        const vociPerRecord = {};
+        (Array.isArray(lette) ? lette : []).forEach(lettura => {
+            let dna = null;
+            try {
+                dna = leggiDna(lettura.box);
+            }
+            catch (e) {
+                dna = null;
+            }
+            const idRec = Segnalazioni.chiaveRecord(dna != null ? dna.idRec : null);
+            if (idRec == null) {
+                return;
+            }
+            vociPerRecord[idRec] = (vociPerRecord[idRec] || []).concat(Array.isArray(lettura.voci) ? lettura.voci : []);
+        });
+
+        const riepilogo = {};
+        Object.keys(vociPerRecord).forEach(idRec => {
+            const voci = vociPerRecord[idRec];
+            if (voci.length === 0) {
+                return;
+            }
+            riepilogo[idRec] = {
+                gravita: etichettaSegnalazioni.gravitaPeggiore(voci),
+                segnalazioni: voci.length,
+                errori: voci.filter(voce => etichettaSegnalazioni.gravita(voce.g) === "error").length
+            };
+        });
+        return riepilogo;
+    },
+
+    /// La chiave di una referenza nella mappa di riepilogoPerRecord: l'idRec come numero
+    /// scritto in testo, perche' il DNA lo ha in testo e il tracciato in numero. null se non
+    /// e' un idRec.
+    chiaveRecord(idRec) {
+        const numero = parseInt(idRec);
+        return isNaN(numero) ? null : String(numero);
+    },
+
     /// I bollini fra gli ovali di un gruppo e, per livelliSotto livelli, dei suoi gruppi.
     _bolliniNelGruppo(gruppo, nomePagina, livelliSotto, risultato) {
         if (gruppo == null) {

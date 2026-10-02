@@ -103,9 +103,25 @@ aperto. La barra verticale che si intravede a destra è quella della griglia del
 dal lotto 2 passa da `stampaSegnalazioni` come il Volantino (file `.txt` e messaggio), fuori dal
 giro di un libro.
 
-## Il lotto successivo
+## Il badge di pagina del tracciato (lotto 3)
 
-- **Lotto 3:** il badge Pag del tracciato colorato con la segnalazione più grave del box.
+Nella Home il pallino col numero di pagina di una referenza impaginata prende il colore della
+segnalazione più grave del suo box: **rosso** gli errori, **arancione** i warning; senza
+segnalazioni resta **blu**. Passandoci sopra: «2 segnalazioni di impaginazione (1 errore)».
+
+- `Segnalazioni.riepilogoPerRecord(lette, dnaDelBox)` riassume le letture di `leggiDocumento` per
+  `idRec`, dal DNA del box: `{ idRec: { gravita, segnalazioni, errori } }`. Una referenza in più box
+  prende il peggiore e la somma. `Segnalazioni.chiaveRecord` rende uguali l'`idRec` del DNA (testo)
+  e quello del tracciato (numero).
+- `SchermataSegnalazioni.testoRiepilogo(riepilogo)` è il suggerimento.
+- Il tracciato legge **una volta per ridisegno**, non una per riga. Quando la schermata si
+  **chiude** (`SchermataSegnalazioni.allaChiusura`, il callback di chiusura di `Modali.popup`) i
+  pallini si ricolorano senza rifare il tracciato: dopo un «Risolvi» il colore di prima non è più
+  vero.
+- Un box senza DNA leggibile, per esempio finito dentro un altro gruppo, resta blu nel tracciato.
+
+Il dettaglio dal lato del tracciato sta in
+[indexNew, 04](../indexNew/04-tracciato-messaggi-e-il-resto.md).
 
 **I bollini vecchi**, quelli con il testo, non hanno etichetta e non vengono riconosciuti: spariscono
 rifacendo il box.

@@ -10,7 +10,8 @@
  * risolte dei giri prima restano nei bollini, e devono restare visibili.
  *
  * Usa le globali di indexNew come gli altri moduli: $, Modali, Utility, app, docInLavorazione,
- * messaggioUtente. Le funzioni che non toccano il documento (perPagina, conta, coloreCss) sono pure.
+ * messaggioUtente, aggiornaBadgeSegnalazioniTracciato (lotto 3). Le funzioni che non toccano il
+ * documento (perPagina, conta, coloreCss, testoRiepilogo) sono pure.
  */
 
 const Segnalazioni = require('./segnalazioni');
@@ -43,6 +44,20 @@ const SchermataSegnalazioni = {
         return pagine;
     },
 
+    /// Lotto 3: il suggerimento del badge di pagina del tracciato, da una voce di
+    /// Segnalazioni.riepilogoPerRecord: "2 segnalazioni di impaginazione (1 errore)". Vuoto se
+    /// la referenza non ha segnalazioni.
+    testoRiepilogo(riepilogo) {
+        if (riepilogo == null || !(riepilogo.segnalazioni > 0)) {
+            return "";
+        }
+        let testo = riepilogo.segnalazioni + (riepilogo.segnalazioni === 1 ? " segnalazione" : " segnalazioni") + " di impaginazione";
+        if (riepilogo.errori > 0) {
+            testo += " (" + riepilogo.errori + (riepilogo.errori === 1 ? " errore" : " errori") + ")";
+        }
+        return testo;
+    },
+
     /// Quanti box e quante segnalazioni.
     conta(lette) {
         const elenco = Array.isArray(lette) ? lette : [];
@@ -71,7 +86,16 @@ const SchermataSegnalazioni = {
             .css({ width: '100%', color: 'black', fontSize: '12px' });
         SchermataSegnalazioni.riempi(elenco);
         //Il popup aspetta finche' non lo si chiude: non si aspetta qui.
-        Modali.popup("Segnalazioni di impaginazione", elenco, "xl");
+        Modali.popup("Segnalazioni di impaginazione", elenco, "xl", SchermataSegnalazioni.allaChiusura);
+    },
+
+    /// Lotto 3: chiusa la schermata, i badge di pagina del tracciato si ricolorano: dopo un
+    /// "Risolvi" il colore di prima non e' piu' vero. aggiornaBadgeSegnalazioniTracciato e' di
+    /// indexNew; sotto Node non c'e', e non succede niente.
+    allaChiusura() {
+        if (typeof aggiornaBadgeSegnalazioniTracciato === "function") {
+            aggiornaBadgeSegnalazioniTracciato();
+        }
     },
 
     /// A fine impaginazione: apre la schermata solo se il giro ha prodotto segnalazioni.

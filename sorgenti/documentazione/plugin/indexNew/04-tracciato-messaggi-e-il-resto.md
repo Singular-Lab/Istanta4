@@ -59,6 +59,27 @@ come fa il Report dopo il ridisegno.
 
 ---
 
+## Il badge di pagina e le segnalazioni (I20-1029, lotto 3)
+
+Il pallino col numero di pagina di una referenza impaginata prende il colore della
+[segnalazione di impaginazione](../segnalazioni/README.md) più grave del suo box: **rosso** gli
+errori, **arancione** i warning, gli stessi colori della schermata delle segnalazioni. Senza
+segnalazioni resta il **blu** di sempre (`COLORE_BADGE_TRACCIATO`). Passandoci sopra si legge
+«2 segnalazioni di impaginazione (1 errore)».
+
+| funzione | cosa fa |
+|---|---|
+| `riepilogoSegnalazioniTracciato()` | legge i bollini del documento (`Segnalazioni.leggiDocumento`) e li riassume per `idRec` (`Segnalazioni.riepilogoPerRecord`); una mappa vuota se il documento non si legge |
+| `coloraBadgeTracciato($badge, riepilogo)` | colore e suggerimento del pallino; senza segnalazioni il blu e nessun suggerimento |
+| `aggiornaBadgeSegnalazioniTracciato()` | ricolora i pallini già disegnati (classe `badge-pagina-tracciato`, attributo `idRec`), senza rifare il tracciato. La chiama la schermata delle segnalazioni quando si chiude |
+
+La lettura si fa **una volta per ridisegno** in `aggiornaTracciatoPostRicerca` e arriva a
+`creaElementoTracciato` come terzo argomento: le righe possono essere migliaia. Il box si riconosce
+dal DNA (`Utility.getDnaOfBox`), che vale solo per i box figli diretti dello spread: un box finito
+dentro un altro gruppo resta blu nel tracciato, anche se la schermata lo mostra.
+
+---
+
 ## Canale e area nei messaggi (I20-1033)
 
 Ogni messaggio che `messaggioUtente` registra porta con sé **canale e area della lavorazione
