@@ -155,7 +155,9 @@ const Utility=
         platform.indexOf("win") == 0 ? sep="\\" : sep="/";
         return sep;        
     },
-    addBollinoCustom(box, text, colorString, colorGradient, positionEnum = 1, customBoundsRelativeToBox = null, overflowControls = true){
+    /// I20-1029: etichettaBollino, facoltativa, va sull'ovale: e' dove le segnalazioni di
+    /// impaginazione scrivono tutte le loro voci (segnalazioni/etichetta.js). Senza, come prima.
+    addBollinoCustom(box, text, colorString, colorGradient, positionEnum = 1, customBoundsRelativeToBox = null, overflowControls = true, etichettaBollino = null){
     
         //position enum{0:topLeft, 1:topRight, 2:bottomLeft, 3:bottomRight, 4 center}
         //creiamo un nuovo oval (circolare) e lo posizioniamo in base al positionEnum nella posizione corrispondente del box, la grandezza è di 10px
@@ -205,6 +207,9 @@ const Utility=
         var parentPage = box.parentPage;
 
         let bollino = parentPage.ovals.add(box.itemLayer, LocationOptions.UNKNOWN, box, { geometricBounds: bounds_rect });
+        if (etichettaBollino != null) {
+            bollino.label = etichettaBollino;
+        }
 
 
         //adesso se color string non è null o vuoto applichiamo il colore

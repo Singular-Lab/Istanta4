@@ -42,9 +42,10 @@ restano i file grandi che parlano con InDesign e i moduli che sono un concetto d
   cartella sua**: `plugin/<concetto>/`. Le prime sono [sistemazioneFoto/](sistemazioneFoto/README.md)
   (I20-1009), [reportIntegrita/](reportIntegrita/README.md) (I20-1014),
   [reperimentoFoto/](reperimentoFoto/README.md) (I20-1015), [modali/](modali/README.md) e
-  [tooltip/](tooltip/README.md) (I20-1012) e [cssFramework/](cssFramework/README.md) (I20-1007, le
+  [tooltip/](tooltip/README.md) (I20-1012), [cssFramework/](cssFramework/README.md) (I20-1007, le
   parti pure del motore CSS; `CssFramework.js` resta in radice perché le agenzie lo richiedono da
-  lì). **Un concetto di un file solo resta un file**, senza
+  lì) e [segnalazioni/](segnalazioni/README.md) (I20-1029, le segnalazioni di impaginazione nel
+  bollino del box). **Un concetto di un file solo resta un file**, senza
   cartella: [menu.js](menu.md) e [testoTag.js](testoTag.md), usciti da `utility.js` insieme agli
   altri due.
 - **Quando due parti non pure di un concetto condividono lo stato**, come il flusso e i pannelli

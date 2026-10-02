@@ -51,6 +51,10 @@ const NoRenderElementi = require('./noRenderElementi');
 const RicollegaEsiti = require('./ricollegaEsiti');
 const VersionePlugin = require('./versionePlugin');
 const AltezzaScorrimento = require('./altezzaScorrimento');
+//I20-1029: le segnalazioni di impaginazione nel bollino del box, tutte, non solo la piu' grave.
+const Segnalazioni = require('./segnalazioni/segnalazioni');
+const etichettaSegnalazioni = require('./segnalazioni/etichetta');
+const SchermataSegnalazioni = require('./segnalazioni/schermata');
 //I20-1035: i conti della barra orizzontale della lista dei tracciati, gli stessi del Report Integrita'.
 const barraScorrimento = require('./reportIntegrita/barraScorrimento');
 const ficoProcess = require('./ficoProcess');
@@ -3760,7 +3764,11 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                         }
                     };
 
-                    filtriJs.visualizzaHomePageFiltri();
+                    //I20-1029, lotto 2: si aspetta il ridisegno del Menabo' prima di aprire la schermata
+                    //delle segnalazioni nel finally: il popup nasconde i controlli nativi (.hideble) che
+                    //trova, e le caselle Ordine create dopo gli resterebbero sopra. Un errore del ridisegno
+                    //resta in console, come quando non si aspettava, e non diventa un errore del filtro.
+                    await filtriJs.visualizzaHomePageFiltri().catch(e => console.error("Ridisegno del Menabo' non riuscito:", e));
 
                     //riattiviamo i bottoni bOpt1 e bOpt2 e rimettiamo il testo originale
                     bOpt1.disabled = false;
@@ -3791,6 +3799,11 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                 finally {
                     rimuoviSimboli();
                     stampaSegnalazioni(reportImpaginazioneObj);
+                    //I20-1029, lotto 2: se l'impaginazione ha prodotto segnalazioni, la schermata si
+                    //apre da sola.
+                    if (impagina) {
+                        SchermataSegnalazioni.apriSeCiSono(reportImpaginazioneObj);
+                    }
 
                     //scriviamo il log
                     var currentDate = new Date();
@@ -4370,6 +4383,14 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                     logContent += currentDate.toLocaleDateString() + " alle " + currentDate.toLocaleTimeString() + " Operazione di impaginazione terminata\n";
                     fs.writeFileSync(logFilePath, logContent);
 
+                    //I20-1029, lotto 2: anche il PoP ha il suo report e la sua schermata, che prima
+                    //non aveva. Non dentro il giro di un libro: li' i documenti si impaginano uno
+                    //alla volta e si chiudono, e la schermata non avrebbe niente da mostrare.
+                    if (!(jobImpaginazioneLibro.stato == 1 && jobImpaginazioneLibro.queue.length > 0)) {
+                        stampaSegnalazioni(reportImpaginazioneObj);
+                        SchermataSegnalazioni.apriSeCiSono(reportImpaginazioneObj);
+                    }
+
                     if (jobImpaginazioneLibro.stato == 2 || jobImpaginazioneLibro.stato == 4) {
                         setNarrow("Libro impaginato");
                         //Nascondiamo impaginaLibroContainer
@@ -4761,6 +4782,11 @@ async function fixRefImpaginata() {
                     datiRef = schedaRefData.recordInTracciato;
                 }
 
+                //I20-1029: il box si rifa' da capo, e le sue segnalazioni con lui: il bollino di
+                //prima non vale piu'. Le nuove, se ce ne sono, le scrive finalizzaSegnalazioni.
+                segnalazioniBoxImpaginato = [];
+                boxImpaginato = Segnalazioni.togliDalBox(boxImpaginato);
+
                 boxImpaginato = await callAllOperationFixBox(boxImpaginato, bounds, datiRef);
 
                 // aggiorniamo boxOriginalBounds
@@ -4827,9 +4853,8 @@ function getSchedaRefAsync(schedaRef, codiceGruppo, idRec = 0) {
 /// puo' passarne meno: le mancanti vengono completate coi valori di riferimento. E' la
 /// ragione della scaletta di if, che altrimenti non avrebbe senso.
 ///
-/// DA SPOSTARE (task di divisione): questa, finalizzaSegnalazioni e stampaSegnalazioni
-/// sono un meccanismo solo, e usano la globale segnalazioniBoxImpaginato. Starebbero in un
-/// js loro, o nel js del report.
+/// I20-1029: il bollino e la sua etichetta stanno in segnalazioni/ (segnalazioni.js,
+/// etichetta.js). Qui restano la raccolta durante l'impaginazione e il report di fine.
 function addSegnalazione(msg, typeMessage = "Error", priority = 2, applicaBollino = true, impostazioniBollino = ["", "red", null, 0, null, false], key = null) {
     //le priority sono 1 (alta), 2 (media), 3 (bassa)
     //aggiungiamo la segnalazione in segnalazioniBoxImpaginato
@@ -4857,22 +4882,23 @@ function addSegnalazione(msg, typeMessage = "Error", priority = 2, applicaBollin
             impostazioniBollino.push(false);
         }
     }
-    segnalazioniBoxImpaginato.push({ msg: msg, typeMessage: typeMessage, priority: priority, applicaBollino: applicaBollino, impostazioniBollino: impostazioniBollino, key: key });
+    var segnalazione = { msg: msg, typeMessage: typeMessage, priority: priority, applicaBollino: applicaBollino, impostazioniBollino: impostazioniBollino, key: key };
+    //I20-1029: il motore CSS ripassa piu' volte sugli stessi controlli; la stessa segnalazione
+    //(stessa chiave o stesso testo) entra una volta sola.
+    if (etichettaSegnalazioni.giaPresente(segnalazioniBoxImpaginato, segnalazione)) {
+        return;
+    }
+    segnalazioniBoxImpaginato.push(segnalazione);
 }
 
 /// Chiude le segnalazioni raccolte per un box: le ordina per gravita', ne fa un unico
-/// messaggio nel report, appiccica al box il bollino della piu' grave, e svuota la lista
+/// messaggio nel report, scrive nel bollino del box tutte le segnalazioni, e svuota la lista
 /// per il box successivo.
 ///
-/// Il bollino e' uno solo, il primo dopo l'ordinamento: piu' bollini su uno stesso box si
-/// sovrapporrebbero senza dire niente di piu'.
-///
-/// Al testo del bollino viene aggiunto " (Testo per mandare in overflow)": serve a far
-/// traboccare il riquadro di proposito, perche' l'overflow in InDesign si vede a colpo
-/// d'occhio. E' un avviso che l'operatore non puo' non notare.
-///
-/// Attenzione: quella aggiunta modifica l'array impostazioniBollino di chi ha chiamato
-/// addSegnalazione, non una copia.
+/// I20-1029: il bollino e' uno solo per box, vuoto, del colore della gravita' peggiore, e la sua
+/// etichetta le contiene tutte (segnalazioni/etichetta.js). Prima portava come testo la sola
+/// prima segnalazione con applicaBollino, mandata apposta in overflow, e le altre si perdevano;
+/// i colori delle impostazioniBollino dei chiamanti non contano piu': decide la gravita'.
 function finalizzaSegnalazioni(reportImpaginazioneObj = { segnalazioni: [] }, codiceGruppo, boxImpaginato = null) {
     var segnalazioni = segnalazioniBoxImpaginato.sort((a, b) => a.priority - b.priority);
     //aggiungiamo le segnalazioni al reportObj, nel report mettiamo solo un messaggio formato da
@@ -4893,15 +4919,12 @@ function finalizzaSegnalazioni(reportImpaginazioneObj = { segnalazioni: [] }, co
         });
         reportImpaginazioneObj.segnalazioni.push({ codiceGruppo: codiceGruppo, msg: msg, typeMessage: typeMessage });
     }
-    //ora applichiamo i bollini ai box che li richiedono, prendiamo solo il primo bollino che troviamo nelle segnalazioni (ovvero quello con priorità maggiore (ovvero valore più basso))
-    for (var i = 0; i < segnalazioni.length; i++) {
-        if (segnalazioni[i].applicaBollino && boxImpaginato != null) {
-            var impostazioni = segnalazioni[i].impostazioniBollino;
-            //prima di aggiungere il bollino dobbiamo "Allungare il testo" in coda per farlo andare in overflow, in questo modo l'operatore potrà vedere la segnalazione di indesign
-            impostazioni[0] = impostazioni[0] + " (Testo per mandare in overflow)";
-            boxImpaginato = Utility.addBollinoCustom(boxImpaginato, impostazioni[0], impostazioni[1], impostazioni[2], impostazioni[3], impostazioni[4], impostazioni[5]);
-            break;
-        }
+    //I20-1029: un solo bollino per box, vuoto, del colore della gravita' peggiore, con TUTTE le
+    //segnalazioni nell'etichetta. Prima ne disegnava una sola, la prima con applicaBollino, con il
+    //testo mandato apposta in overflow, e le altre si perdevano. Senza segnalazioni il bollino
+    //non si tocca: questa funzione arriva due volte per box, e la seconda con la lista vuota.
+    if (boxImpaginato != null && segnalazioni.length > 0) {
+        boxImpaginato = Segnalazioni.applicaAlBox(boxImpaginato, segnalazioni.map(s => etichettaSegnalazioni.daSegnalazione(s)));
     }
 
     //svuotiamo le segnalazioni
@@ -5153,6 +5176,9 @@ async function impaginaBox(meccanica, pagCoinvolta, bounds, itemRef, pathLavoraz
         }
         var doc = docOperazione;
         var boxImpaginato = null;
+        //I20-1029: le segnalazioni partono vuote per ogni box. Se il box di prima e' andato in
+        //errore prima di chiuderle, non devono passare a questo.
+        segnalazioniBoxImpaginato = [];
 
         var trovato = false;
         var error = "Meccanica non trovata";
@@ -6498,10 +6524,17 @@ function showLoading(msg)//Facoltativo
 }
 
 /// Toglie la schermata di attesa e rimette gli elementi hideable. L'opposto esatto di
-/// showLoading.
+/// showLoading, tranne quando un popup e' aperto.
+///
+/// I20-1029, lotto 2: con un popup aperto gli elementi restano nascosti, li riaccende lui
+/// quando si chiude. La schermata delle segnalazioni si apre a fine impaginazione, prima
+/// di questa chiamata: riaccenderli qui rimetteva le caselle Ordine del Menabo' sopra il
+/// popup (in UXP i controlli nativi restano sopra a tutto).
 function hideLoading() {
     $("#loadingPanel").hide();
-    Modali.mostraHidebleElements();
+    if ($("#popup").length === 0) {
+        Modali.mostraHidebleElements();
+    }
 }
 
 /// Svuota le quattro liste del tracciato e toglie la riga con la data di scaricamento.
@@ -6863,10 +6896,13 @@ async function aggiornaTracciatoPostRicerca(resRicerca) {
             recordsDaMostrare = tutti;
         }
 
+        //I20-1029, lotto 3: le segnalazioni del documento si leggono una volta per ridisegno, non
+        //una per riga: le righe possono essere migliaia.
+        const riepilogoSegnalazioni = riepilogoSegnalazioniTracciato();
         const frag = $(document.createDocumentFragment());
         var first = true;
         recordsDaMostrare.forEach(record => {
-            frag.append(creaElementoTracciato(record, first));
+            frag.append(creaElementoTracciato(record, first, riepilogoSegnalazioni));
             first = false;
         });
 
@@ -7321,14 +7357,55 @@ async function confermaImpaginazioneDaTracciato(record, pagina) {
     return await Modali.confirm($container);
 }
 
+//I20-1029, lotto 3: il badge di pagina del tracciato prende il colore della segnalazione di
+//impaginazione piu' grave del box della referenza, letta dai bollini del documento: rosso gli
+//errori, arancione i warning, gli stessi colori della schermata delle segnalazioni. Senza
+//segnalazioni resta il blu di sempre.
+const COLORE_BADGE_TRACCIATO = "rgb(45,140,235)";
+
+/// Le segnalazioni del documento per referenza (Segnalazioni.riepilogoPerRecord), o una mappa
+/// vuota se il documento non si legge: il tracciato si disegna comunque, col blu di sempre.
+function riepilogoSegnalazioniTracciato() {
+    try {
+        const documento = docInLavorazione != null ? docInLavorazione : (app.documents.length > 0 ? app.activeDocument : null);
+        return Segnalazioni.riepilogoPerRecord(Segnalazioni.leggiDocumento(documento));
+    }
+    catch (e) {
+        console.warn("Segnalazioni non lette per il tracciato:", e);
+        return {};
+    }
+}
+
+/// Colora il badge di pagina di una referenza con le sue segnalazioni, e ci mette il
+/// suggerimento; senza segnalazioni lo riporta al blu, senza suggerimento.
+function coloraBadgeTracciato($badge, riepilogo) {
+    const testo = SchermataSegnalazioni.testoRiepilogo(riepilogo);
+    $badge.css("background-color", testo !== "" ? SchermataSegnalazioni.coloreCss(riepilogo.gravita) : COLORE_BADGE_TRACCIATO);
+    if (testo !== "") {
+        $badge.attr("title", testo);
+    } else {
+        $badge.removeAttr("title");
+    }
+}
+
+/// Ricolora i badge gia' disegnati, senza rifare il tracciato. La chiama la schermata delle
+/// segnalazioni quando si chiude: dopo un "Risolvi" il colore di prima non e' piu' vero.
+function aggiornaBadgeSegnalazioniTracciato() {
+    const riepilogo = riepilogoSegnalazioniTracciato();
+    $("#ElementiTracciato .badge-pagina-tracciato").each(function () {
+        coloraBadgeTracciato($(this), riepilogo[$(this).attr("idRec")]);
+    });
+}
+
 /// Costruisce la riga di una referenza nel tracciato: una cella per colonna, coi valori
-/// presi dal record.
+/// presi dal record. riepilogoSegnalazioni (lotto 3 di I20-1029) e' la mappa di
+/// riepilogoSegnalazioniTracciato, letta una volta per tutto il tracciato.
 ///
 /// NOTA (I20-1002): chiama getTracciatoColumns a ogni riga, e quella a sua volta interroga
 /// il pluginMiddleware. Le colonne sono le stesse per tutto l'elenco: su un tracciato da
 /// migliaia di referenze e' lo stesso lavoro rifatto migliaia di volte. Andrebbe calcolato
 /// una volta in aggiornaTracciatoPostRicerca e passato qui.
-function creaElementoTracciato(obj, isFirst) {
+function creaElementoTracciato(obj, isFirst, riepilogoSegnalazioni = {}) {
     const record = obj.recordInTracciato || {};
     const columns = getTracciatoColumns();
 
@@ -7355,7 +7432,7 @@ function creaElementoTracciato(obj, isFirst) {
                     width: "20px",
                     height: "20px",
                     borderRadius: "50%",
-                    backgroundColor: "rgb(45,140,235)",
+                    backgroundColor: COLORE_BADGE_TRACCIATO,
                     color: "white",
                     display: "flex",
                     alignItems: "center",
@@ -7364,6 +7441,13 @@ function creaElementoTracciato(obj, isFirst) {
                     fontWeight: "bold",
                     fontSize: "11px"
                 }).text(obj.paginaImpaginazione);
+
+                const chiaveRecord = Segnalazioni.chiaveRecord(getIdRecFromItemRef(record));
+                $badge.addClass("badge-pagina-tracciato");
+                if (chiaveRecord != null) {
+                    $badge.attr("idRec", chiaveRecord);
+                }
+                coloraBadgeTracciato($badge, chiaveRecord != null && riepilogoSegnalazioni != null ? riepilogoSegnalazioni[chiaveRecord] : null);
 
                 $badge.on("click", function () {
                     trovaRecord(record["Scatto.CodiceGruppo"], getIdRecFromItemRef(record), obj.paginaImpaginazione, true, true);
@@ -7692,6 +7776,9 @@ async function impaginazioneSingoloIndd(records, pagina, cercaInPaginaPerConfron
         if(!massiveOperation){
             stampaSegnalazioni(reportImpaginazioneObj);
             rimuoviSimboli();
+            //I20-1029, lotto 2: la schermata, se il box ha segnalazioni. Le operazioni massive del
+            //Report Integrita' non passano di qui: la aprirebbero a ogni box.
+            SchermataSegnalazioni.apriSeCiSono(reportImpaginazioneObj);
         }
 
         //Ricollegamento, confronto e rimozione dei simboli possono rifare elementi del box,

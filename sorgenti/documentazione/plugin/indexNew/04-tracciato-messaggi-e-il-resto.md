@@ -22,7 +22,7 @@ Con questo sotto-lotto **tutte e 129 le funzioni globali di `indexNew.js` hanno 
 | accesso al disco | 3 | `utility.js` |
 | versione del Plugin | 3 | `versionePlugin.js`, che già esiste |
 | foto | 7 | il js delle foto già previsto |
-| segnalazioni di impaginazione | 3 | il js del Report Integrità già previsto |
+| segnalazioni di impaginazione | 3 | dal I20-1029 il bollino e la sua etichetta stanno in [segnalazioni/](../segnalazioni/README.md); qui restano la raccolta e il report di fine |
 
 ---
 
@@ -56,6 +56,27 @@ Le differenze dal Report sono solo quelle della Home:
 
 Dopo ogni ricostruzione, `aggiornaTracciatoPostRicerca` riporta la tabella dove dice lo spostamento,
 come fa il Report dopo il ridisegno.
+
+---
+
+## Il badge di pagina e le segnalazioni (I20-1029, lotto 3)
+
+Il pallino col numero di pagina di una referenza impaginata prende il colore della
+[segnalazione di impaginazione](../segnalazioni/README.md) più grave del suo box: **rosso** gli
+errori, **arancione** i warning, gli stessi colori della schermata delle segnalazioni. Senza
+segnalazioni resta il **blu** di sempre (`COLORE_BADGE_TRACCIATO`). Passandoci sopra si legge
+«2 segnalazioni di impaginazione (1 errore)».
+
+| funzione | cosa fa |
+|---|---|
+| `riepilogoSegnalazioniTracciato()` | legge i bollini del documento (`Segnalazioni.leggiDocumento`) e li riassume per `idRec` (`Segnalazioni.riepilogoPerRecord`); una mappa vuota se il documento non si legge |
+| `coloraBadgeTracciato($badge, riepilogo)` | colore e suggerimento del pallino; senza segnalazioni il blu e nessun suggerimento |
+| `aggiornaBadgeSegnalazioniTracciato()` | ricolora i pallini già disegnati (classe `badge-pagina-tracciato`, attributo `idRec`), senza rifare il tracciato. La chiama la schermata delle segnalazioni quando si chiude |
+
+La lettura si fa **una volta per ridisegno** in `aggiornaTracciatoPostRicerca` e arriva a
+`creaElementoTracciato` come terzo argomento: le righe possono essere migliaia. Il box si riconosce
+dal DNA (`Utility.getDnaOfBox`), che vale solo per i box figli diretti dello spread: un box finito
+dentro un altro gruppo resta blu nel tracciato, anche se la schermata lo mostra.
 
 ---
 
