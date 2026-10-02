@@ -51,19 +51,54 @@ const Segnalazioni = {
         return trovati;
     },
 
-    /// Le segnalazioni scritte nel bollino di un box; una lista vuota se non ne ha.
+    /// Lotto 4: la voce di un bollino di prima del I20-1029, o null se l'ovale non lo e'. Il
+    /// bollino vecchio e' un ovale senza etichetta con dentro un riquadro di testo; il colore
+    /// dice la gravita'. Un ovale che non si legge non e' un bollino.
+    _voceBollinoVecchio(ovale) {
+        try {
+            if (ovale == null || ovale.label || ovale.textFrames == null || !(ovale.textFrames.length > 0)) {
+                return null;
+            }
+            const riquadro = ovale.textFrames.item(0);
+            //La storia intera: il riquadro ne mostra solo la parte che ci sta.
+            const testo = riquadro.parentStory != null ? riquadro.parentStory.contents : riquadro.contents;
+            const colore = ovale.fillColor != null ? ovale.fillColor.name : null;
+            return etichettaSegnalazioni.daBollinoVecchio(testo, colore);
+        }
+        catch (e) {
+            return null;
+        }
+    },
+
+    /// Lotto 4: i bollini vecchi di un box, con la loro voce. Solo gli ovali figli diretti del
+    /// gruppo, dove addBollinoCustom li metteva: gli ovali della grafica stanno dentro il box.
+    bolliniVecchiDelBox(box) {
+        const trovati = [];
+        elenco(box != null ? box.ovals : null).forEach(ovale => {
+            const voce = Segnalazioni._voceBollinoVecchio(ovale);
+            if (voce != null) {
+                trovati.push({ ovale: ovale, voce: voce });
+            }
+        });
+        return trovati;
+    },
+
+    /// Le segnalazioni di un box: quelle del bollino e, dal lotto 4, quelle dei bollini vecchi,
+    /// senza doppioni. Una lista vuota se non ne ha.
     leggiDalBox(box) {
         const voci = [];
         Segnalazioni.bolliniDelBox(box).forEach(bollino => {
             (etichettaSegnalazioni.leggi(bollino.label) || []).forEach(voce => voci.push(voce));
         });
-        return voci;
+        Segnalazioni.bolliniVecchiDelBox(box).forEach(vecchio => voci.push(vecchio.voce));
+        return etichettaSegnalazioni.senzaDoppioni(voci);
     },
 
-    /// Toglie dal box il suo bollino di segnalazioni, se c'e'. Serve prima di rifare un box: le
-    /// segnalazioni vecchie non valgono piu', e il bollino nuovo non deve sommarsi al vecchio.
+    /// Toglie dal box il suo bollino di segnalazioni, se c'e', e dal lotto 4 anche i bollini
+    /// vecchi. Serve prima di rifare un box: le segnalazioni vecchie non valgono piu', e il
+    /// bollino nuovo non deve sommarsi al vecchio.
     togliDalBox(box) {
-        Segnalazioni.bolliniDelBox(box).forEach(bollino => {
+        Segnalazioni.bolliniDelBox(box).concat(Segnalazioni.bolliniVecchiDelBox(box).map(vecchio => vecchio.ovale)).forEach(bollino => {
             try {
                 bollino.remove();
             }
@@ -93,6 +128,8 @@ const Segnalazioni = {
     /// Lotto 2, "Risolvi": toglie dal box la segnalazione in posizione indice, nell'ordine in cui
     /// leggiDalBox le restituisce. Se ne restano, il bollino si ridisegna con quelle e con il
     /// colore della gravita' che resta; se non ne resta nessuna, il bollino sparisce.
+    /// Un box con bollini vecchi passa cosi' al formato nuovo (lotto 4): applicaAlBox li toglie
+    /// tutti e le voci rimaste, anche quelle vecchie, finiscono nell'unico bollino nuovo.
     /// Restituisce il box: ridisegnare il bollino lo regruppa.
     risolviVoce(box, indice) {
         const voci = Segnalazioni.leggiDalBox(box);
@@ -114,6 +151,9 @@ const Segnalazioni = {
 
     /// Tutte le segnalazioni del documento, una voce per bollino: la pagina, il box che lo
     /// contiene e le segnalazioni. La usa la schermata delle segnalazioni (schermata.js).
+    ///
+    /// Una voce per box: dal lotto 4 le segnalazioni del bollino e quelle dei bollini vecchi
+    /// stanno insieme, senza doppioni.
     ///
     /// Lettura mirata: il bollino e' sempre un ovale figlio diretto del gruppo del box
     /// (addBollinoCustom lo raggruppa cosi'), quindi si guardano solo gli ovali dei gruppi delle
@@ -186,12 +226,27 @@ const Segnalazioni = {
         if (gruppo == null) {
             return;
         }
+        //Prima le voci del bollino, poi quelle dei bollini vecchi: lo stesso ordine di
+        //leggiDalBox, perche' "Risolvi" toglie la voce per posizione.
+        let haBollino = false;
+        let nuove = [];
+        const vecchie = [];
         elenco(gruppo.ovals).forEach(ovale => {
-            const voci = ovale != null ? etichettaSegnalazioni.leggi(ovale.label) : null;
-            if (voci != null) {
-                risultato.push({ pagina: nomePagina, box: gruppo, voci: voci });
+            const dalBollino = ovale != null ? etichettaSegnalazioni.leggi(ovale.label) : null;
+            if (dalBollino != null) {
+                haBollino = true;
+                nuove = nuove.concat(dalBollino);
+                return;
+            }
+            const vecchia = Segnalazioni._voceBollinoVecchio(ovale);
+            if (vecchia != null) {
+                haBollino = true;
+                vecchie.push(vecchia);
             }
         });
+        if (haBollino) {
+            risultato.push({ pagina: nomePagina, box: gruppo, voci: etichettaSegnalazioni.senzaDoppioni(nuove.concat(vecchie)) });
+        }
         if (livelliSotto > 0) {
             elenco(gruppo.groups).forEach(interno => Segnalazioni._bolliniNelGruppo(interno, nomePagina, livelliSotto - 1, risultato));
         }

@@ -209,6 +209,133 @@ test("la lettura del documento non scorre tutti gli elementi delle pagine", () =
     assert.match(lettura, /elenco\(pagina\.groups\)/);
 });
 
+/* ---- lotto 4: i bollini di prima del I20-1029 ---- */
+
+const collezioneDi = (elementi) => ({ length: elementi.length, item: (i) => elementi[i] });
+
+//Un bollino vecchio come lo lasciava addBollinoCustom: ovale senza etichetta, colore, e un
+//riquadro che mostra solo l'inizio della storia (misurato in console: "CSF-013 (Testo ").
+function ovaleVecchio(testo, colore) {
+    return {
+        label: "",
+        fillColor: { name: colore },
+        textFrames: collezioneDi([{ contents: testo.substring(0, 15), parentStory: { contents: testo } }])
+    };
+}
+
+//Un gruppo finto con ovali figli diretti (bollini e grafica) e tutti gli elementi; remove li toglie
+//da entrambi, come in InDesign.
+function gruppoFinto(ovali, altri = []) {
+    const box = { label: "BOX1", _ovali: ovali.slice(), allPageItems: ovali.concat(altri) };
+    Object.defineProperty(box, "ovals", { get: () => collezioneDi(box._ovali) });
+    box.allPageItems.forEach(elemento => {
+        elemento.remove = function () {
+            elemento.rimosso = true;
+            box._ovali = box._ovali.filter(e => e !== elemento);
+            box.allPageItems = box.allPageItems.filter(e => e !== elemento);
+        };
+    });
+    return box;
+}
+
+const SUFFISSO = " (Testo per mandare in overflow)";
+
+test("la gravita' di un bollino vecchio viene dal colore: rosso errore, arancione e giallo warning", () => {
+    assert.strictEqual(etichetta.gravitaDaColore("Red"), "error");
+    assert.strictEqual(etichetta.gravitaDaColore("Orange"), "warning");
+    assert.strictEqual(etichetta.gravitaDaColore("Yellow"), "warning");
+    assert.strictEqual(etichetta.gravitaDaColore("Blue"), "notifica");
+    assert.strictEqual(etichetta.gravitaDaColore(null), "notifica");
+});
+
+test("il testo di un bollino vecchio perde il pezzo per l'overflow, e Dif non e' una segnalazione", () => {
+    assert.deepStrictEqual(etichetta.daBollinoVecchio("CSF-013" + SUFFISSO, "Yellow"), { g: "warning", c: "CSF-013", t: "CSF-013", vecchio: true });
+    assert.deepStrictEqual(etichetta.daBollinoVecchio("Descrizione spostata poichè uscita dai limiti del box" + SUFFISSO, "Orange"),
+        { g: "warning", c: null, t: "Descrizione spostata poichè uscita dai limiti del box", vecchio: true });
+    assert.strictEqual(etichetta.daBollinoVecchio("Dif", "Orange"), null);
+    assert.strictEqual(etichetta.daBollinoVecchio("  ", "Red"), null);
+});
+
+test("i doppioni si contano una volta sola", () => {
+    const voce = { g: "warning", c: "CSF-013", t: "CSF-013", vecchio: true };
+    assert.deepStrictEqual(etichetta.senzaDoppioni([voce, { ...voce }, { g: "error", c: "CSF-013", t: "CSF-013" }]).length, 2);
+    assert.deepStrictEqual(etichetta.senzaDoppioni(null), []);
+});
+
+test("un box legge insieme il bollino nuovo e quelli vecchi: prima il nuovo, i vecchi uguali una volta", () => {
+    const nuovo = { label: etichetta.scrivi([{ g: "error", c: "CSF-009", t: "oltre" }]) };
+    const box = gruppoFinto([ovaleVecchio("CSF-013" + SUFFISSO, "Yellow"), nuovo, ovaleVecchio("CSF-013" + SUFFISSO, "Yellow")]);
+
+    assert.deepStrictEqual(Segnalazioni.leggiDalBox(box).map(v => [v.c, !!v.vecchio]), [["CSF-009", false], ["CSF-013", true]]);
+    assert.strictEqual(Segnalazioni.bolliniVecchiDelBox(box).length, 2);
+});
+
+test("gli ovali della grafica non sono bollini vecchi: con etichetta, senza testo, o dentro il box", () => {
+    const logo = { label: "logo", textFrames: collezioneDi([{ parentStory: { contents: "1+1" } }]), fillColor: { name: "Red" } };
+    const tondo = { label: "", textFrames: collezioneDi([]), fillColor: { name: "Red" } };
+    const rotto = { label: "", get textFrames() { throw new Error("oggetto non valido"); } };
+    const interno = ovaleVecchio("CSF-009" + SUFFISSO, "Red");
+    //interno sta fra tutti gli elementi ma non fra gli ovali figli diretti del gruppo.
+    const box = gruppoFinto([logo, tondo, rotto], [interno]);
+
+    assert.deepStrictEqual(Segnalazioni.leggiDalBox(box), []);
+    Segnalazioni.togliDalBox(box);
+    assert.ok(!logo.rimosso && !tondo.rimosso && !interno.rimosso);
+});
+
+test("rifare o fixare il box toglie anche i bollini vecchi, e lascia il resto", () => {
+    const dna = { label: "descrizione$DNA$BOX1$1$2$3" };
+    const vecchi = [ovaleVecchio("CSF-013" + SUFFISSO, "Yellow"), ovaleVecchio("Descrizione spostata" + SUFFISSO, "Orange")];
+    const box = gruppoFinto(vecchi.concat([{ label: etichetta.scrivi([{ g: "error", t: "x" }]) }]), [dna]);
+
+    Segnalazioni.togliDalBox(box);
+
+    assert.deepStrictEqual(box.allPageItems, [dna]);
+    assert.deepStrictEqual(Segnalazioni.leggiDalBox(box), []);
+});
+
+test("risolvere su un box con bollini vecchi lo porta a un solo bollino nuovo", () => {
+    conBollinoFinto(chiamate => {
+        const box = gruppoFinto([ovaleVecchio("CSF-013" + SUFFISSO, "Yellow"), ovaleVecchio("Descrizione spostata" + SUFFISSO, "Orange")]);
+
+        Segnalazioni.risolviVoce(box, 0);
+
+        assert.strictEqual(Segnalazioni.bolliniVecchiDelBox(box).length, 0);
+        assert.strictEqual(chiamate.length, 1);
+        assert.strictEqual(chiamate[0].colore, "orange");
+        assert.deepStrictEqual(etichetta.leggi(chiamate[0].etichettaBollino).map(v => [v.t, v.vecchio]), [["Descrizione spostata", true]]);
+    });
+});
+
+test("risolvere l'ultima segnalazione vecchia lascia il box senza bollini", () => {
+    conBollinoFinto(chiamate => {
+        const box = gruppoFinto([ovaleVecchio("CSF-013" + SUFFISSO, "Yellow"), ovaleVecchio("CSF-013" + SUFFISSO, "Yellow")]);
+
+        Segnalazioni.risolviVoce(box, 0);
+
+        assert.strictEqual(chiamate.length, 0);
+        assert.strictEqual(Segnalazioni.bolliniVecchiDelBox(box).length, 0, "i doppioni se ne vanno insieme");
+    });
+});
+
+test("dal documento i bollini vecchi si leggono con i nuovi, una voce per box, nello stesso ordine del box", () => {
+    const nuovo = { label: etichetta.scrivi([{ g: "error", c: "CSF-009", t: "oltre" }]) };
+    const misto = { label: "BOX12", ovals: collezioneDi([ovaleVecchio("CSF-013" + SUFFISSO, "Yellow"), nuovo]), groups: collezioneDi([]) };
+    const soloVecchi = { label: "BOX1", ovals: collezioneDi([ovaleVecchio("CSF-013" + SUFFISSO, "Yellow"), ovaleVecchio("CSF-013" + SUFFISSO, "Yellow")]), groups: collezioneDi([]) };
+    const confronto = { label: "BOX3", ovals: collezioneDi([ovaleVecchio("Dif", "Orange")]), groups: collezioneDi([]) };
+    const documento = { pages: collezioneDi([{ name: "1", groups: collezioneDi([misto, soloVecchi, confronto]) }]) };
+
+    const lette = Segnalazioni.leggiDocumento(documento);
+
+    assert.deepStrictEqual(lette.map(l => [l.box.label, l.voci.map(v => v.c)]), [["BOX12", ["CSF-009", "CSF-013"]], ["BOX1", ["CSF-013"]]]);
+});
+
+test("nella schermata le segnalazioni vecchie si riconoscono", () => {
+    const schermata = leggiFileDelPlugin("segnalazioni/schermata.js").replace(/\r/g, "");
+
+    assert.match(schermata, /if \(voce\.vecchio\) \{\s*testo\.append\(\$\('<span><\/span>'\)\.text\(" \(bollino vecchio\)"\)/);
+});
+
 /* ---- dove si applica ---- */
 
 test("i moduli nuovi non dipendono da InDesign", () => {

@@ -198,6 +198,11 @@ const SchermataSegnalazioni = {
                 testo.append($('<b></b>').text(voce.c + " "));
             }
             testo.append($('<span></span>').text(voce.t || ""));
+            //Lotto 4: un bollino di prima del I20-1029 mostrava solo il codice o una frase breve, e
+            //il messaggio intero non c'e'. Lo si dice, perche' il testo corto non sembri un errore.
+            if (voce.vecchio) {
+                testo.append($('<span></span>').text(" (bollino vecchio)").css({ color: '#777', fontStyle: 'italic' }));
+            }
             riga.append(testo);
             riga.append($('<button type="button"></button>').text("Risolvi").on('click', () => {
                 Segnalazioni.risolviVoce(lettura.box, indice);

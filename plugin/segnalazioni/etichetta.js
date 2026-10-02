@@ -26,6 +26,14 @@ const ORDINE_GRAVITA = { error: 1, warning: 2, notifica: 3 };
 //segnalazione portava il suo, e CSF-013 era giallo.
 const COLORE_GRAVITA = { error: "red", warning: "orange", notifica: "blue" };
 
+//Lotto 4, i bollini di prima del I20-1029: un ovale senza etichetta con il testo di una sola
+//segnalazione, a cui finalizzaSegnalazioni aggiungeva questo pezzo per mandarlo in overflow.
+const SUFFISSO_OVERFLOW_VECCHIO = " (Testo per mandare in overflow)";
+
+//Testi di bollini vecchi che non sono segnalazioni: "Dif" lo disegnava il vecchio confronto
+//dei box (confronti.js, oggi commentato).
+const TESTI_VECCHI_NON_SEGNALAZIONI = ["Dif"];
+
 const etichettaSegnalazioni = {
 
     PREFISSO: PREFISSO,
@@ -119,6 +127,58 @@ const etichettaSegnalazioni = {
     gravitaPeggiore(voci) {
         const ordinate = etichettaSegnalazioni.ordina(voci);
         return ordinate.length > 0 ? ordinate[0].g : null;
+    },
+
+    /// Lotto 4: la gravita' di un bollino vecchio dal nome del suo colore. Rosso gli errori,
+    /// arancione e giallo i warning (CSF-013 era giallo), il resto notifica.
+    gravitaDaColore(nomeColore) {
+        const colore = String(nomeColore == null ? "" : nomeColore).trim().toLowerCase();
+        if (colore === "red") {
+            return "error";
+        }
+        if (colore === "orange" || colore === "yellow") {
+            return "warning";
+        }
+        return "notifica";
+    },
+
+    /// Lotto 4: la voce di un bollino vecchio, dal suo testo e dal nome del suo colore, segnata
+    /// come vecchia. Il testo e' quello che il bollino mostrava (spesso il solo codice), senza il
+    /// pezzo per l'overflow: il messaggio intero non e' mai stato scritto nel documento. Null se
+    /// il testo e' vuoto o non e' una segnalazione ("Dif").
+    daBollinoVecchio(testo, nomeColore) {
+        let t = String(testo == null ? "" : testo);
+        const fine = t.indexOf(SUFFISSO_OVERFLOW_VECCHIO);
+        if (fine >= 0) {
+            t = t.substring(0, fine);
+        }
+        t = t.trim();
+        if (t === "" || TESTI_VECCHI_NON_SEGNALAZIONI.indexOf(t) >= 0) {
+            return null;
+        }
+        return {
+            g: etichettaSegnalazioni.gravitaDaColore(nomeColore),
+            c: etichettaSegnalazioni.codice(t),
+            t: t,
+            vecchio: true
+        };
+    },
+
+    /// Le voci senza doppioni: la stessa gravita', lo stesso codice e lo stesso testo una volta
+    /// sola. I bollini vecchi si sommavano a ogni rifacimento del box.
+    senzaDoppioni(voci) {
+        const viste = {};
+        return (Array.isArray(voci) ? voci : []).filter(voce => {
+            if (voce == null) {
+                return false;
+            }
+            const chiave = JSON.stringify([voce.g, voce.c || null, voce.t || ""]);
+            if (viste[chiave]) {
+                return false;
+            }
+            viste[chiave] = true;
+            return true;
+        });
     },
 
     /// Il colore del bollino per una gravita'.

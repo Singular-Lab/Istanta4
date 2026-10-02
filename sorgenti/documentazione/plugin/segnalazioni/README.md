@@ -123,5 +123,27 @@ segnalazioni resta **blu**. Passandoci sopra: «2 segnalazioni di impaginazione 
 Il dettaglio dal lato del tracciato sta in
 [indexNew, 04](../indexNew/04-tracciato-messaggi-e-il-resto.md).
 
-**I bollini vecchi**, quelli con il testo, non hanno etichetta e non vengono riconosciuti: spariscono
-rifacendo il box.
+## I bollini vecchi (lotto 4)
+
+Prima del I20-1029 il bollino era un **ovale senza etichetta** con dentro un riquadro di testo: una
+sola segnalazione, spesso il solo codice («CSF-013»), più « (Testo per mandare in overflow)» per
+farlo uscire dal riquadro. Si sommavano a ogni rifacimento del box. Misurato in console su un file
+vecchio: 5 ovali così, tutti segnalazioni (CSF-013 gialli, «Descrizione spostata» arancioni), due
+uguali sullo stesso box, nessun ovale della grafica.
+
+- **Si riconoscono**: ovale **figlio diretto** del gruppo del box (dove `addBollinoCustom` lo metteva;
+  gli ovali della grafica stanno dentro il box), **senza etichetta**, con un riquadro di testo.
+  `Segnalazioni.bolliniVecchiDelBox`, `_voceBollinoVecchio`.
+- **La voce**: `etichetta.daBollinoVecchio(testo, colore)`. Il testo è la storia del riquadro senza il
+  pezzo per l'overflow; la gravità viene dal colore (`gravitaDaColore`: rosso errore, arancione e
+  giallo warning, il resto notifica); la voce è segnata `vecchio: true`. Il messaggio intero non è mai
+  stato scritto nel documento: la schermata mette accanto al testo «(bollino vecchio)».
+- **Non sono segnalazioni** i bollini «Dif» del vecchio confronto dei box: esclusi.
+- **Doppioni** una volta sola (`etichetta.senzaDoppioni`).
+- **Si leggono con i nuovi**: `leggiDalBox` e `leggiDocumento` danno prima le voci del bollino e poi
+  quelle vecchie, nello stesso ordine, perché «Risolvi» toglie per posizione. Così compaiono nella
+  schermata e colorano il badge del tracciato.
+- **Si tolgono con i nuovi**: `togliDalBox` toglie anche i vecchi, quindi Fix referenza e rifacimento
+  del box non lasciano più due bollini.
+- **«Risolvi» converte il box**: le voci rimaste, anche quelle vecchie, finiscono nell'unico bollino
+  nuovo, e gli ovali vecchi spariscono.
