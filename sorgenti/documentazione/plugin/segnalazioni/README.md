@@ -89,6 +89,16 @@ su quel volantino: 6339 ms contro 90 ms, con gli stessi bollini.
   lì i documenti si impaginano uno alla volta e si chiudono, e la schermata non avrebbe niente da
   mostrare. Per decisione dell'operatore il libro resta col solo messaggio di prima.
 
+**I controlli del pannello restano sotto la schermata.** Il popup nasconde i controlli nativi
+`.hideble` che trova, perché in UXP restano sopra a tutto. In collaudo, a fine Volantino, le caselle
+Ordine del Menabò comparivano sopra la schermata (in console: 30 caselle, 0 nascoste; dal pulsante
+3 nascoste, le sole visibili). Una traccia dei ridisegni del Menabò ha mostrato che arrivavano tutti
+prima del popup: a riaccendere le caselle era `hideLoading()`, chiamato dopo l'apertura (nel `finally`
+di Volantino e PoP, da chi lancia l'impaginazione singola). Ora `hideLoading()` non riaccende niente
+se un popup è aperto: lo fa il popup quando si chiude. In più, a fine Volantino il ridisegno del
+Menabò si aspetta (`await filtriJs.visualizzaHomePageFiltri()`), così non crea caselle a popup già
+aperto. La barra verticale che si intravede a destra è quella della griglia del Menabò, e resta.
+
 **Il PoP ora ha il suo report**: prima le segnalazioni del PoP venivano raccolte e buttate via;
 dal lotto 2 passa da `stampaSegnalazioni` come il Volantino (file `.txt` e messaggio), fuori dal
 giro di un libro.

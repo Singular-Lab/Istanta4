@@ -3764,7 +3764,11 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                         }
                     };
 
-                    filtriJs.visualizzaHomePageFiltri();
+                    //I20-1029, lotto 2: si aspetta il ridisegno del Menabo' prima di aprire la schermata
+                    //delle segnalazioni nel finally: il popup nasconde i controlli nativi (.hideble) che
+                    //trova, e le caselle Ordine create dopo gli resterebbero sopra. Un errore del ridisegno
+                    //resta in console, come quando non si aspettava, e non diventa un errore del filtro.
+                    await filtriJs.visualizzaHomePageFiltri().catch(e => console.error("Ridisegno del Menabo' non riuscito:", e));
 
                     //riattiviamo i bottoni bOpt1 e bOpt2 e rimettiamo il testo originale
                     bOpt1.disabled = false;
@@ -6520,10 +6524,17 @@ function showLoading(msg)//Facoltativo
 }
 
 /// Toglie la schermata di attesa e rimette gli elementi hideable. L'opposto esatto di
-/// showLoading.
+/// showLoading, tranne quando un popup e' aperto.
+///
+/// I20-1029, lotto 2: con un popup aperto gli elementi restano nascosti, li riaccende lui
+/// quando si chiude. La schermata delle segnalazioni si apre a fine impaginazione, prima
+/// di questa chiamata: riaccenderli qui rimetteva le caselle Ordine del Menabo' sopra il
+/// popup (in UXP i controlli nativi restano sopra a tutto).
 function hideLoading() {
     $("#loadingPanel").hide();
-    Modali.mostraHidebleElements();
+    if ($("#popup").length === 0) {
+        Modali.mostraHidebleElements();
+    }
 }
 
 /// Svuota le quattro liste del tracciato e toglie la riga con la data di scaricamento.

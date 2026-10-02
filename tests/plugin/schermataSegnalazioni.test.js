@@ -208,3 +208,24 @@ test("si apre da sola a fine impaginazione di Volantino, PoP e singola, ma non d
     //Tre aperture automatiche, non di piu'.
     assert.strictEqual((indexNew.match(/SchermataSegnalazioni\.apriSeCiSono\(/g) || []).length, 3);
 });
+
+test("a fine Volantino la schermata si apre a Menabo' ridisegnato, o le caselle Ordine nuove le restano sopra", () => {
+    const indexNew = leggiFileDelPlugin("indexNew.js").replace(/\r/g, "");
+    const ridisegno = indexNew.indexOf("await filtriJs.visualizzaHomePageFiltri()");
+    const apertura = indexNew.indexOf("if (impagina) {\n                        SchermataSegnalazioni.apriSeCiSono(");
+
+    assert.ok(ridisegno >= 0, "il ridisegno del Menabo' si aspetta");
+    assert.ok(apertura > ridisegno, "e viene prima dell'apertura della schermata");
+    assert.doesNotMatch(indexNew, /^\s*filtriJs\.visualizzaHomePageFiltri\(\);/m);
+});
+
+test("togliere la schermata di attesa non riaccende i controlli nascosti da un popup aperto", () => {
+    const indexNew = leggiFileDelPlugin("indexNew.js").replace(/\r/g, "");
+    const hideLoading = indexNew.substring(indexNew.indexOf("function hideLoading() {"));
+    const corpo = hideLoading.substring(0, hideLoading.indexOf("\n}\n"));
+
+    //Volantino e PoP chiamano hideLoading nel finally dopo aver aperto la schermata, la singola
+    //lo chiama chi l'ha lanciata: senza la guardia le caselle Ordine tornavano sopra il popup.
+    assert.match(corpo, /if \(\$\("#popup"\)\.length === 0\) \{\s*Modali\.mostraHidebleElements\(\);\s*\}/);
+    assert.strictEqual((corpo.match(/mostraHidebleElements/g) || []).length, 1);
+});
