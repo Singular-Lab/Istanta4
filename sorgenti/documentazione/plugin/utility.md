@@ -51,7 +51,9 @@ nome cinque membri — `parseLabel`, `getFieldByLabel`, `setCampoDNA`, `cercaChi
 ### Varie
 
 - `addBollinoCustom` → il bollino disegnato su un box; lo usano `confronti` e `CssFramework`.
-- `getListaCodiciImpaginati` → chiede al server i codici impaginati.
+- `getListaCodiciImpaginati(opzioni)` → chiede al server i codici impaginati. Se la chiamata non
+  riesce restituisce una lista vuota, oppure `null` con `{ nullSeFallisce: true }` (I20-1031): così
+  chi mostra un conteggio distingue «nessuno» da «non lo so».
 - `moveToPasteBoard`, `impostaValHiddenVal`.
 
 `getLetturaFacilitataDellaParola`, che la issue metteva nel testo, **è andata in

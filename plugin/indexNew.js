@@ -9727,7 +9727,11 @@ function onresizeWindow(){
             let altezzaHeaderFiltri = $("#comandiInterfacciaAdvanced").outerHeight();
 
             let scrollTop = $('#filtriBodyGriglia').length ? $('#filtriBodyGriglia').scrollTop() : 0;
-            $("#filtriBodyGriglia").css("height", "" + altezzaResRef - 10 - altezzaHeaderFiltri + "px");
+            //I20-1031: sotto la griglia dei filtri c'e' la barra orizzontale. Prima le colonne si
+            //ricalcolano sulla larghezza nuova e la barra compare o sparisce, come nella Home; poi
+            //l'altezza le lascia posto.
+            filtriJs.aggiornaBarraGriglia();
+            $("#filtriBodyGriglia").css("height", "" + (altezzaResRef - 10 - altezzaHeaderFiltri - filtriJs.altezzaBarraGriglia()) + "px");
             $('#filtriBodyGriglia').scrollTop(scrollTop);
 
             onResizeTab1Tracciato();
