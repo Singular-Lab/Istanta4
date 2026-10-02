@@ -63,7 +63,7 @@ Solo dopo il completamento di `company_prepare_task`:
 3. Cerca i test esistenti collegati al comportamento richiesto.
 4. Consulta l'`AGENTS.md` di ogni componente interessato.
 5. Per un flusso trasversale, considera l'intera catena descritta dalle specifiche, non soltanto il primo servizio nominato nel prompt.
-6. Se richiesta e specifiche divergono, segnala il divario e non correggere silenziosamente le specifiche.
+6. Se richiesta e specifiche divergono, segnala il divario e non correggere silenziosamente le specifiche: proponi la rettifica con `company_propose_spec_change`, come descritto al §16.
 
 ## 5. Matrice minima d'impatto
 
@@ -105,6 +105,7 @@ Prima di modificare file produci un **RAPPORTO PRE-FLIGHT** contenente:
 - criteri di accettazione e matrice d'impatto del task;
 - test da creare, aggiornare ed eseguire;
 - vincoli, rischi e divergenze;
+- divari di specifica proposti con `company_propose_spec_change` (§16), con la change restituita;
 - file che verrebbero modificati e implementazione proposta.
 
 Dichiara esplicitamente: **Nessun file del progetto è stato modificato.**
@@ -137,7 +138,7 @@ Sul branch governato:
 Terminate le modifiche:
 
 1. Registra il task come `WaitingReview` tramite `company_update_task_status`.
-2. Presenta all'utente l'elenco dei file modificati e una sintesi di ogni modifica, in modo che possa rivederle sul branch.
+2. Presenta all'utente l'elenco dei file modificati e una sintesi di ogni modifica, in modo che possa rivederle sul branch. Elenca anche i divari di specifica proposti durante l'implementazione (§16).
 3. Fermati e attendi la conferma esplicita dell'utente. L'approvazione del pre-flight non vale come conferma della revisione.
 
 Se l'utente accetta le modifiche, registra il task come `ReviewApproved` tramite `company_update_task_status` e prosegui con il §11.
@@ -167,7 +168,9 @@ Non inserire credenziali, token, configurazioni cliente o dati reali nei file, n
 5. Se un check fallisce, riporta Jira a `ToDo` e il task a `Blocked` indicando il check fallito.
 6. Quando i controlli richiesti passano, porta Jira a `Completed` e poi il task Control Plane a `Completed`.
 
-L'agent non deve eseguire merge, pubblicazione di release o distribuzione. Squash/merge, stato `Merged`, release e stato `Distributed` restano azioni dell'operatore tramite Control Plane.
+L'agent non deve eseguire merge, pubblicazione di release o distribuzione. Squash/merge, release e stato `Distributed` restano azioni dell'operatore tramite Control Plane.
+
+Unica eccezione sullo stato `Merged`: se un task è `Completed` ma `company_get_pull_request_status` o GitHub mostrano la sua pull request già unita, segnalalo con `company_update_task_status` e stato `Merged`, spiegando nella nota da dove lo hai visto. Il Control Plane lo verifica su GitHub e registra il merge con il suo commit, oppure rifiuta la richiesta se la pull request non risulta unita. Non usarlo mai per chiedere un merge: una pull request aperta resta da unire all'operatore, e una chiusa senza merge si riporta all'utente.
 
 ## 13. Revisione operatore dopo il completamento
 
@@ -205,3 +208,26 @@ Non apre un task: niente `company_prepare_task`, niente branch, nessun file del 
 L'analisi resta in attesa della revisione umana nel Control Plane. Quando una riunione serve come fonte per specifiche o requisiti, leggila con `company_get_meeting_analysis` e `onlyApproved` impostato a `true`: solo gli argomenti approvati valgono come decisioni o requisiti; gli altri sono indizi da verificare con l'utente.
 
 Se la stessa richiesta chiede anche di modificare il codice, l'analisi segue questa sezione e la modifica il protocollo dei task, dal §1.
+
+## 16. Formato delle specifiche
+
+Le specifiche seguono lo standard OpenSpec, sempre: vale quando proponi un testo di specifica nel pre-flight, quando l'utente ti chiede di scriverne una e quando segnali una divergenza del §4.
+
+1. Il contenuto è in italiano, ma i titoli strutturali e le parole chiave restano in inglese: `## Purpose`, `## Requirements`, `### Requirement: <nome>`, `#### Scenario: <nome>`.
+2. Ogni requisito è una frase verificabile che contiene `SHALL` (o `MUST`; `SHALL NOT` per i divieti), per esempio "Fidelity SHALL escludere dall'invio i kit già inviati."
+3. Ogni requisito ha almeno uno scenario, scritto a elenco con `- **GIVEN**` (se serve), `- **WHEN**`, `- **THEN**` e `- **AND**`.
+4. Quando modifichi un requisito esistente, riscrivilo per intero con il suo nome attuale e tutti i suoi scenari: uno scenario omesso andrebbe perso.
+5. I documenti di panoramica che non contengono requisiti stanno in `context/`, non in `specs/`.
+
+### Divari di specifica durante un task
+
+Un task, che corregga un bug, aggiunga una funzionalità o ne migliori una, può far emergere un comportamento che le specifiche ricevute da `company_prepare_task` non descrivono, o descrivono in modo diverso. In quel caso:
+
+1. Verifica il divario sulle specifiche ufficiali: rileggi quella pertinente e, se serve, cercala con `company_search_specifications`.
+2. Proponi il requisito con `company_propose_spec_change`, indicando il `taskId`, la specifica (`specPath`, come la restituisce il Control Plane), se il requisito è nuovo (`added`) o cambia uno esistente (`modified`), il requisito nel formato dei punti precedenti, il motivo (`bug`, `feature` o `improvement`) e una spiegazione con le prove: issue, codice, test. Per una capacità che non ha ancora una specifica indica anche `capabilityPurpose`.
+3. Se il Control Plane rifiuta la proposta, correggi tutti i problemi elencati e richiamalo. Richiamarlo sullo stesso requisito sostituisce la proposta precedente.
+4. Riporta all'utente la proposta e la change restituita, nel rapporto pre-flight (§7) o nella revisione (§10).
+
+Proponi solo comportamenti osservabili da un utente o da un sistema esterno, mai dettagli d'implementazione. La proposta non modifica le specifiche ufficiali e non condiziona il task, che prosegue e si conclude come sempre: il Control Plane la raccoglie nella change del task, la segnala come divario da revisionare, e solo la revisione umana nel Control Plane la integra nelle specifiche. Non modificare tu i file delle specifiche.
+
+Gli strumenti del Control Plane ti forniscono solo le specifiche ufficiali. Le change proposal ancora aperte (`changes/`) non sono decise: non trattarle come specifiche e non applicarle tu. Si applicano e si archiviano nel Control Plane, dopo la revisione umana.
