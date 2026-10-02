@@ -22,7 +22,7 @@ Con questo sotto-lotto **tutte e 129 le funzioni globali di `indexNew.js` hanno 
 | accesso al disco | 3 | `utility.js` |
 | versione del Plugin | 3 | `versionePlugin.js`, che già esiste |
 | foto | 7 | il js delle foto già previsto |
-| segnalazioni di impaginazione | 3 | il js del Report Integrità già previsto |
+| segnalazioni di impaginazione | 3 | dal I20-1029 il bollino e la sua etichetta stanno in [segnalazioni/](../segnalazioni/README.md); qui restano la raccolta e il report di fine |
 
 ---
 

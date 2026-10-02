@@ -51,6 +51,9 @@ const NoRenderElementi = require('./noRenderElementi');
 const RicollegaEsiti = require('./ricollegaEsiti');
 const VersionePlugin = require('./versionePlugin');
 const AltezzaScorrimento = require('./altezzaScorrimento');
+//I20-1029: le segnalazioni di impaginazione nel bollino del box, tutte, non solo la piu' grave.
+const Segnalazioni = require('./segnalazioni/segnalazioni');
+const etichettaSegnalazioni = require('./segnalazioni/etichetta');
 //I20-1035: i conti della barra orizzontale della lista dei tracciati, gli stessi del Report Integrita'.
 const barraScorrimento = require('./reportIntegrita/barraScorrimento');
 const ficoProcess = require('./ficoProcess');
@@ -4761,6 +4764,11 @@ async function fixRefImpaginata() {
                     datiRef = schedaRefData.recordInTracciato;
                 }
 
+                //I20-1029: il box si rifa' da capo, e le sue segnalazioni con lui: il bollino di
+                //prima non vale piu'. Le nuove, se ce ne sono, le scrive finalizzaSegnalazioni.
+                segnalazioniBoxImpaginato = [];
+                boxImpaginato = Segnalazioni.togliDalBox(boxImpaginato);
+
                 boxImpaginato = await callAllOperationFixBox(boxImpaginato, bounds, datiRef);
 
                 // aggiorniamo boxOriginalBounds
@@ -4827,9 +4835,8 @@ function getSchedaRefAsync(schedaRef, codiceGruppo, idRec = 0) {
 /// puo' passarne meno: le mancanti vengono completate coi valori di riferimento. E' la
 /// ragione della scaletta di if, che altrimenti non avrebbe senso.
 ///
-/// DA SPOSTARE (task di divisione): questa, finalizzaSegnalazioni e stampaSegnalazioni
-/// sono un meccanismo solo, e usano la globale segnalazioniBoxImpaginato. Starebbero in un
-/// js loro, o nel js del report.
+/// I20-1029: il bollino e la sua etichetta stanno in segnalazioni/ (segnalazioni.js,
+/// etichetta.js). Qui restano la raccolta durante l'impaginazione e il report di fine.
 function addSegnalazione(msg, typeMessage = "Error", priority = 2, applicaBollino = true, impostazioniBollino = ["", "red", null, 0, null, false], key = null) {
     //le priority sono 1 (alta), 2 (media), 3 (bassa)
     //aggiungiamo la segnalazione in segnalazioniBoxImpaginato
@@ -4857,22 +4864,23 @@ function addSegnalazione(msg, typeMessage = "Error", priority = 2, applicaBollin
             impostazioniBollino.push(false);
         }
     }
-    segnalazioniBoxImpaginato.push({ msg: msg, typeMessage: typeMessage, priority: priority, applicaBollino: applicaBollino, impostazioniBollino: impostazioniBollino, key: key });
+    var segnalazione = { msg: msg, typeMessage: typeMessage, priority: priority, applicaBollino: applicaBollino, impostazioniBollino: impostazioniBollino, key: key };
+    //I20-1029: il motore CSS ripassa piu' volte sugli stessi controlli; la stessa segnalazione
+    //(stessa chiave o stesso testo) entra una volta sola.
+    if (etichettaSegnalazioni.giaPresente(segnalazioniBoxImpaginato, segnalazione)) {
+        return;
+    }
+    segnalazioniBoxImpaginato.push(segnalazione);
 }
 
 /// Chiude le segnalazioni raccolte per un box: le ordina per gravita', ne fa un unico
-/// messaggio nel report, appiccica al box il bollino della piu' grave, e svuota la lista
+/// messaggio nel report, scrive nel bollino del box tutte le segnalazioni, e svuota la lista
 /// per il box successivo.
 ///
-/// Il bollino e' uno solo, il primo dopo l'ordinamento: piu' bollini su uno stesso box si
-/// sovrapporrebbero senza dire niente di piu'.
-///
-/// Al testo del bollino viene aggiunto " (Testo per mandare in overflow)": serve a far
-/// traboccare il riquadro di proposito, perche' l'overflow in InDesign si vede a colpo
-/// d'occhio. E' un avviso che l'operatore non puo' non notare.
-///
-/// Attenzione: quella aggiunta modifica l'array impostazioniBollino di chi ha chiamato
-/// addSegnalazione, non una copia.
+/// I20-1029: il bollino e' uno solo per box, vuoto, del colore della gravita' peggiore, e la sua
+/// etichetta le contiene tutte (segnalazioni/etichetta.js). Prima portava come testo la sola
+/// prima segnalazione con applicaBollino, mandata apposta in overflow, e le altre si perdevano;
+/// i colori delle impostazioniBollino dei chiamanti non contano piu': decide la gravita'.
 function finalizzaSegnalazioni(reportImpaginazioneObj = { segnalazioni: [] }, codiceGruppo, boxImpaginato = null) {
     var segnalazioni = segnalazioniBoxImpaginato.sort((a, b) => a.priority - b.priority);
     //aggiungiamo le segnalazioni al reportObj, nel report mettiamo solo un messaggio formato da
@@ -4893,15 +4901,12 @@ function finalizzaSegnalazioni(reportImpaginazioneObj = { segnalazioni: [] }, co
         });
         reportImpaginazioneObj.segnalazioni.push({ codiceGruppo: codiceGruppo, msg: msg, typeMessage: typeMessage });
     }
-    //ora applichiamo i bollini ai box che li richiedono, prendiamo solo il primo bollino che troviamo nelle segnalazioni (ovvero quello con priorità maggiore (ovvero valore più basso))
-    for (var i = 0; i < segnalazioni.length; i++) {
-        if (segnalazioni[i].applicaBollino && boxImpaginato != null) {
-            var impostazioni = segnalazioni[i].impostazioniBollino;
-            //prima di aggiungere il bollino dobbiamo "Allungare il testo" in coda per farlo andare in overflow, in questo modo l'operatore potrà vedere la segnalazione di indesign
-            impostazioni[0] = impostazioni[0] + " (Testo per mandare in overflow)";
-            boxImpaginato = Utility.addBollinoCustom(boxImpaginato, impostazioni[0], impostazioni[1], impostazioni[2], impostazioni[3], impostazioni[4], impostazioni[5]);
-            break;
-        }
+    //I20-1029: un solo bollino per box, vuoto, del colore della gravita' peggiore, con TUTTE le
+    //segnalazioni nell'etichetta. Prima ne disegnava una sola, la prima con applicaBollino, con il
+    //testo mandato apposta in overflow, e le altre si perdevano. Senza segnalazioni il bollino
+    //non si tocca: questa funzione arriva due volte per box, e la seconda con la lista vuota.
+    if (boxImpaginato != null && segnalazioni.length > 0) {
+        boxImpaginato = Segnalazioni.applicaAlBox(boxImpaginato, segnalazioni.map(s => etichettaSegnalazioni.daSegnalazione(s)));
     }
 
     //svuotiamo le segnalazioni
@@ -5153,6 +5158,9 @@ async function impaginaBox(meccanica, pagCoinvolta, bounds, itemRef, pathLavoraz
         }
         var doc = docOperazione;
         var boxImpaginato = null;
+        //I20-1029: le segnalazioni partono vuote per ogni box. Se il box di prima e' andato in
+        //errore prima di chiuderle, non devono passare a questo.
+        segnalazioniBoxImpaginato = [];
 
         var trovato = false;
         var error = "Meccanica non trovata";

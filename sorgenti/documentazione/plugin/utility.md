@@ -50,7 +50,10 @@ nome cinque membri — `parseLabel`, `getFieldByLabel`, `setCampoDNA`, `cercaChi
 
 ### Varie
 
-- `addBollinoCustom` → il bollino disegnato su un box; lo usano `confronti` e `CssFramework`.
+- `addBollinoCustom` → il bollino disegnato su un box. Dal I20-1029 lo usa
+  [segnalazioni/](segnalazioni/README.md), con l'ultimo parametro facoltativo `etichettaBollino` che va
+  sull'ovale; le chiamate in `confronti` sono commentate e quella di `CssFramework` per «descrizione
+  spostata» non c'è più.
 - `getListaCodiciImpaginati` → chiede al server i codici impaginati.
 - `moveToPasteBoard`, `impostaValHiddenVal`.
 

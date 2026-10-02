@@ -2315,8 +2315,9 @@ const CssFramework =
         }
 
         if (segnalazioneDescrizione) {
+            //I20-1029: il bollino lo disegna finalizzaSegnalazioni, uno per box con tutte le
+            //segnalazioni. Qui ne nasceva un secondo, solo per questa.
             addSegnalazione("Descrizione spostata poichè uscita dai limiti del box", "warning", 2, true, ["Descrizione spostata poichè uscita dai limiti del box", "orange"], "descrizione_spostata");
-            box = Utility.addBollinoCustom(box, "Descrizione spostata poichè uscita dai limiti del box", "orange", null, 0, null, false)
         }
 
         //controlliamo che post spostamento non abbia causato overflow, se è uscito vuol dire che l'elemento è troppo grande e dobbiamo mandare un messaggioUtente
