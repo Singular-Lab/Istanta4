@@ -1,4 +1,6 @@
 const InddEvents = require('./events');
+//I20-1031: i conti della barra orizzontale della griglia, gli stessi del Report Integrita' e della Home.
+const barraScorrimento = require('./reportIntegrita/barraScorrimento');
 
 /// I20-1002: i filtri di pagina del volantino.
 ///
@@ -11,6 +13,378 @@ const InddEvents = require('./events');
 /// Lo stato non sta qui ma in Filtri.json, nella cartella di lavorazione, con una voce per
 /// pagina: i criteri, se e' attiva, se e' bloccata.
 const filtri = {
+
+    /// I20-1031: le presenze impaginate di Menabo/getListaImpaginati raggruppate per pagina, una
+    /// per box: { "5": [ { codiceGruppo, idRec, nomePagina }, ... ] }. Le voci senza pagina non
+    /// appartengono a nessuna riga della griglia e si scartano.
+    impaginatiPerPagina(lista) {
+        const perPagina = {};
+        (Array.isArray(lista) ? lista : []).forEach(elemento => {
+            if (elemento == null || elemento.nomePagina == null || String(elemento.nomePagina) === "") {
+                return;
+            }
+            const pagina = String(elemento.nomePagina);
+            if (perPagina[pagina] == null) {
+                perPagina[pagina] = [];
+            }
+            perPagina[pagina].push(elemento);
+        });
+        return perPagina;
+    },
+
+    /// I20-1031: la cella "Impaginate" di una pagina nella griglia del Menabo'. Il numero su fondo
+    /// bianco, e cliccandolo l'elenco dei box; "Nessuna" su fondo grigio se non ce ne sono; "?"
+    /// se Istanta non ha risposto (impaginatiPerPagina null), per non far passare per vuota una
+    /// pagina che non si e' potuta controllare.
+    cellaImpaginati(impaginatiPerPagina, nomePagina) {
+        const stile = { height: '30px', width: '10%', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center' };
+
+        if (impaginatiPerPagina == null) {
+            return $('<div></div>')
+                .css(Object.assign({}, stile, { backgroundColor: 'lightgrey' }))
+                .attr('title', 'Impaginati non disponibili: Istanta non ha risposto')
+                .append($('<span></span>').text('?').css({ color: 'black' }));
+        }
+
+        const impaginati = impaginatiPerPagina[String(nomePagina)] || [];
+        if (impaginati.length === 0) {
+            return $('<div></div>')
+                .css(Object.assign({}, stile, { backgroundColor: 'lightgrey' }))
+                .append($('<span></span>').text('Nessuna').css({ color: 'black' }));
+        }
+
+        return $('<div></div>')
+            .css(Object.assign({}, stile, { cursor: 'pointer', backgroundColor: 'white' }))
+            .append($('<span></span>').text('' + impaginati.length).css({ color: 'black' }))
+            .on('click', () => filtri.mostraImpaginatiPagina(nomePagina, impaginati));
+    },
+
+    //I20-1031: la barra di scorrimento orizzontale della griglia del Menabo'. E' la replica di quella
+    //dei Nuovi del Report Integrita' (reportIntegrita/pannelli.js, I20-981) e di quella della lista
+    //dei tracciati (indexNew.js, I20-1035): stessi pezzi, stessi stili, stessi conti di
+    //barraScorrimento. In UXP la griglia non scorre in orizzontale in nessun modo nativo, cosi'
+    //intestazione e righe si spostano con un margine negativo. Le differenze sono solo quelle della
+    //griglia: si spostano #filtriIntestazioneGriglia e #filtriRigheGriglia insieme, e la barra
+    //rinasce a ogni ridisegno, ma lo spostamento resta.
+    PASSO_SCORRIMENTO_GRIGLIA: 160,
+
+    //Le larghezze minime delle colonne in pixel, nell'ordine: Ordine, Pagina, Filtri, Griglia,
+    //Limite, N. ref, Impaginate, Ref. Avanzate, Ref. Escluse, Data Conteggio. In collaudo, con le
+    //sole proporzioni, le colonne erano di circa 50 px, i testi andavano a capo e le intestazioni
+    //si sovrapponevano; ai primi minimi l'operatore ha chiesto 10 px in meno per colonna.
+    MINIMI_COLONNE_GRIGLIA: [50, 50, 60, 80, 50, 110, 90, 110, 110, 120],
+
+    /// Le larghezze delle colonne in pixel per la larghezza visibile data, con la regola della
+    /// lista della Home: se ai loro minimi le colonne non ci stanno restano ai minimi, e la barra le
+    /// fa scorrere; se ci stanno si allargano in proporzione fino a riempire lo spazio, e la barra
+    /// non serve. L'ultima colonna prende i pixel che gli arrotondamenti lasciano, cosi' la somma e'
+    /// esattamente lo spazio. Null se non c'e' una larghezza da cui partire (scheda nascosta).
+    larghezzeColonneGriglia(visibile, minimi) {
+        if (!(visibile > 0) || !Array.isArray(minimi) || minimi.length === 0) {
+            return null;
+        }
+
+        const somma = minimi.reduce((totale, minimo) => totale + minimo, 0);
+        if (somma >= visibile) {
+            return minimi.slice();
+        }
+
+        const larghezze = minimi.map(minimo => Math.floor(minimo * visibile / somma));
+        larghezze[larghezze.length - 1] += Math.floor(visibile) - larghezze.reduce((totale, larghezza) => totale + larghezza, 0);
+        return larghezze;
+    },
+
+    /// I20-1031: al ridimensionamento del pannello, come onResizeTab1Tracciato per la lista della
+    /// Home. Le larghezze si ricalcolano sullo spazio nuovo e la barra si rimette in accordo:
+    /// senza, restava con i numeri vecchi e al primo clic spariva per sempre. La chiama
+    /// onresizeWindow, prima di dare l'altezza alla griglia.
+    aggiornaBarraGriglia() {
+        const righe = document.getElementById("filtriRigheGriglia");
+        if (righe == null) {
+            return;
+        }
+
+        filtri._applicaLarghezzeGriglia(document.getElementById("filtriIntestazioneGriglia"), righe);
+        filtri._scorriGriglia(filtri.statoBarraGriglia, filtri.statoBarraGriglia.spostamento || 0);
+    },
+
+    /// In UXP una larghezza in percentuale oltre il 100% non allarga la griglia, e le celle di una
+    /// riga flex si restringono per starci: con la sola percentuale le colonne venivano strette
+    /// come se fossero nove, e la barra non serviva mai. Come il Report Integrita', qui le
+    /// larghezze si scrivono in pixel, su ogni cella, e le celle non si possono restringere.
+    /// Intestazione e righe ricevono gli stessi pixel, cosi' le colonne restano allineate.
+    _applicaLarghezzeGriglia(intestazione, righe) {
+        if (righe == null || righe.parentNode == null) {
+            return;
+        }
+
+        const larghezze = filtri.larghezzeColonneGriglia(righe.parentNode.clientWidth, filtri.MINIMI_COLONNE_GRIGLIA);
+        if (larghezze == null) {
+            return;
+        }
+
+        //La larghezza totale resta nello stato della barra: e' il contenuto da scorrere. Misurarla
+        //subito dopo averla scritta non funziona, UXP restituisce ancora quella di prima (provato
+        //in console: la barra restava nascosta con 930 px di colonne su 499 visibili). Il Report
+        //Integrita' fa lo stesso con state.larghezzaTotale.
+        filtri.statoBarraGriglia.larghezzaTotale = larghezze.reduce((somma, larghezza) => somma + larghezza, 0);
+        const totale = filtri.statoBarraGriglia.larghezzaTotale + "px";
+        //Con jQuery, come il resto della griglia: in UXP e' la strada gia' provata.
+        const applicaAllaRiga = (riga) => {
+            $(riga).css({ width: totale });
+            $(riga).children().each((c, cella) => {
+                if (c < larghezze.length) {
+                    $(cella).css({ width: larghezze[c] + "px", minWidth: larghezze[c] + "px", maxWidth: larghezze[c] + "px", flexShrink: "0" });
+                }
+            });
+        };
+
+        $(righe).css({ width: totale });
+        $(righe).children().each((r, riga) => applicaAllaRiga(riga));
+
+        if (intestazione != null) {
+            applicaAllaRiga(intestazione);
+        }
+    },
+    statoBarraGriglia: { barra: null, traccia: null, cursore: null, spostamento: 0, trascinamento: null, larghezzaTotale: 0 },
+    _trascinamentoBarraGrigliaAttivo: false,
+
+    /// Costruisce la barra, come _crBarraScorrimentoNuovi: freccia, traccia con il cursore, freccia.
+    /// Frecce e traccia con il click, il cursore con il trascinamento. Lo spostamento non si azzera:
+    /// la griglia si ridisegna a ogni cambio di filtro, e l'operatore non deve ritrovarsi all'inizio.
+    _crBarraScorrimentoGriglia(state) {
+        const barra = document.createElement("div");
+        barra.style.display = "flex";
+        barra.style.alignItems = "center";
+        barra.style.gap = "4px";
+        barra.style.flexShrink = "0";
+        barra.style.padding = "4px 0 0 0";
+        barra.style.width = "97%";
+
+        const indietro = filtri._crFrecciaScorrimentoGriglia("‹", "Sposta la tabella verso sinistra");
+        const avanti = filtri._crFrecciaScorrimentoGriglia("›", "Sposta la tabella verso destra");
+
+        const traccia = document.createElement("div");
+        traccia.style.position = "relative";
+        traccia.style.flex = "1 1 auto";
+        traccia.style.height = "12px";
+        traccia.style.minWidth = "0";
+        traccia.style.backgroundColor = "#e6e6e6";
+        traccia.style.borderRadius = "6px";
+        traccia.style.cursor = "pointer";
+        Tooltip.impostaTooltip(traccia, "Clicca o trascina per scorrere le colonne");
+
+        const cursore = document.createElement("div");
+        cursore.style.position = "absolute";
+        cursore.style.top = "0";
+        cursore.style.left = "0";
+        cursore.style.height = "12px";
+        cursore.style.width = "40px";
+        cursore.style.backgroundColor = "#8a8a8a";
+        cursore.style.borderRadius = "6px";
+        cursore.style.cursor = "grab";
+
+        traccia.appendChild(cursore);
+
+        barra.appendChild(indietro);
+        barra.appendChild(traccia);
+        barra.appendChild(avanti);
+
+        state.barra = barra;
+        state.traccia = traccia;
+        state.cursore = cursore;
+        state.trascinamento = null;
+
+        indietro.addEventListener("click", () => filtri._scorriGriglia(state, state.spostamento - filtri.PASSO_SCORRIMENTO_GRIGLIA));
+        avanti.addEventListener("click", () => filtri._scorriGriglia(state, state.spostamento + filtri.PASSO_SCORRIMENTO_GRIGLIA));
+
+        traccia.addEventListener("click", (evento) => {
+            //Il clic sul cursore lo prende il cursore: qui arriva solo il clic sulla traccia.
+            if (evento?.target === cursore) {
+                return;
+            }
+
+            const misure = filtri._misureScorrimentoGriglia(state);
+            const posizione = filtri._posizioneNellaTracciaGriglia(evento, traccia);
+
+            filtri._scorriGriglia(state, barraScorrimento.spostamentoDaClic(
+                posizione, misure.contenuto, misure.visibile, misure.traccia));
+        });
+
+        //Terzo strato: il trascinamento. Se questi eventi non arrivano, restano frecce e traccia.
+        cursore.addEventListener("mousedown", (evento) => {
+            const misure = filtri._misureScorrimentoGriglia(state);
+
+            state.trascinamento = {
+                partenzaX: evento?.clientX || 0,
+                spostamentoIniziale: state.spostamento,
+                misure: misure
+            };
+
+            cursore.style.cursor = "grabbing";
+        });
+
+        filtri._abilitaTrascinamentoBarraGriglia();
+
+        return barra;
+    },
+
+    /// Il pulsante di una freccia, con il suo tooltip.
+    _crFrecciaScorrimentoGriglia(simbolo, descrizione) {
+        const freccia = document.createElement("button");
+        freccia.type = "button";
+        freccia.textContent = simbolo;
+        freccia.style.height = "16px";
+        freccia.style.minWidth = "18px";
+        freccia.style.padding = "0";
+        freccia.style.lineHeight = "1";
+        freccia.style.cursor = "pointer";
+        freccia.style.flexShrink = "0";
+        Tooltip.impostaTooltip(freccia, descrizione);
+        return freccia;
+    },
+
+    /// Il trascinamento si ascolta una volta sola sul documento: il mouse esce dal cursore
+    /// quasi subito, e se ascoltassimo solo lui il movimento si perderebbe.
+    _abilitaTrascinamentoBarraGriglia() {
+        if (filtri._trascinamentoBarraGrigliaAttivo) {
+            return;
+        }
+
+        filtri._trascinamentoBarraGrigliaAttivo = true;
+
+        $(document).on("mousemove", function (evento) {
+            const state = filtri.statoBarraGriglia;
+            if (state == null || state.trascinamento == null) {
+                return;
+            }
+
+            const misure = state.trascinamento.misure;
+            const pixel = (evento?.clientX || 0) - state.trascinamento.partenzaX;
+
+            filtri._scorriGriglia(state, barraScorrimento.spostamentoDaTrascinamento(
+                state.trascinamento.spostamentoIniziale, pixel,
+                misure.contenuto, misure.visibile, misure.traccia));
+        });
+
+        $(document).on("mouseup", function () {
+            const state = filtri.statoBarraGriglia;
+            if (state == null || state.trascinamento == null) {
+                return;
+            }
+
+            state.trascinamento = null;
+            if (state.cursore != null) {
+                state.cursore.style.cursor = "grab";
+            }
+        });
+    },
+
+    /// Le misure si leggono adesso: il contenuto e' la larghezza delle righe (110%), il visibile
+    /// quella dell'involucro che le taglia.
+    _misureScorrimentoGriglia(state) {
+        let contenuto = 0;
+        let visibile = 0;
+        let traccia = 0;
+
+        try {
+            const righe = document.getElementById("filtriRigheGriglia");
+            //I20-1031: la larghezza calcolata delle colonne, come nel Report; la misura solo se manca.
+            contenuto = state?.larghezzaTotale || righe?.scrollWidth || 0;
+            visibile = righe?.parentNode?.clientWidth || 0;
+            traccia = state?.traccia?.clientWidth || 0;
+        }
+        catch (err) {
+            console.error("Misure della barra non disponibili:", err);
+        }
+
+        return {
+            contenuto: contenuto,
+            visibile: visibile,
+            traccia: traccia
+        };
+    },
+
+    /// Dove e' caduto il clic, in pixel dall'inizio della traccia.
+    _posizioneNellaTracciaGriglia(evento, traccia) {
+        try {
+            const rettangolo = traccia.getBoundingClientRect();
+            return (evento?.clientX || 0) - (rettangolo?.left || 0);
+        }
+        catch (err) {
+            return 0;
+        }
+    },
+
+    /// Sposta intestazione e righe insieme, dello stesso margine, e aggiorna il cursore.
+    _scorriGriglia(state, spostamento) {
+        const righe = document.getElementById("filtriRigheGriglia");
+        const intestazione = document.getElementById("filtriIntestazioneGriglia");
+        if (state == null || righe == null) {
+            return;
+        }
+
+        const misure = filtri._misureScorrimentoGriglia(state);
+
+        state.spostamento = barraScorrimento.limitaSpostamento(spostamento, misure.contenuto, misure.visibile);
+        righe.style.marginLeft = "-" + state.spostamento + "px";
+        if (intestazione != null) {
+            intestazione.style.marginLeft = "-" + state.spostamento + "px";
+        }
+
+        filtri._aggiornaCursoreGriglia(state, misure);
+    },
+
+    /// L'altezza che la barra occupa sotto la griglia, zero se non c'e' o e' nascosta. La toglie
+    /// onresizeWindow dall'altezza di #filtriBodyGriglia: #filtriBody taglia quello che sborda, e
+    /// senza questo la barra finirebbe fuori, invisibile.
+    altezzaBarraGriglia() {
+        const barra = filtri.statoBarraGriglia.barra;
+        if (barra == null || barra.style.display === "none") {
+            return 0;
+        }
+
+        try {
+            return Math.ceil(barra.getBoundingClientRect().height || 0);
+        }
+        catch (err) {
+            return 0;
+        }
+    },
+
+    /// Mostra o nasconde la barra e mette il cursore dove dice lo spostamento.
+    _aggiornaCursoreGriglia(state, misure) {
+        if (state == null || state.cursore == null) {
+            return;
+        }
+
+        const m = misure || filtri._misureScorrimentoGriglia(state);
+        const serve = barraScorrimento.serveLaBarra(m.contenuto, m.visibile);
+
+        if (state.barra != null) {
+            //Se le colonne ci stanno tutte, la barra non ha niente da fare e sparisce.
+            //Finche' le misure non sono disponibili la si lascia, altrimenti lampeggerebbe.
+            state.barra.style.display = (m.visibile > 0 && !serve) ? "none" : "flex";
+        }
+
+        const geometria = barraScorrimento.geometriaCursore(
+            state.spostamento, m.contenuto, m.visibile, m.traccia);
+
+        state.cursore.style.width = geometria.larghezza + "px";
+        state.cursore.style.left = geometria.sinistra + "px";
+    },
+
+    /// I20-1031: l'elenco dei box impaginati di una pagina, in un popup: il codice gruppo e
+    /// l'idRec, perche' lo stesso codice puo' stare in pagina con due presenze diverse.
+    mostraImpaginatiPagina(nomePagina, impaginati) {
+        const elenco = $('<div></div>').css({ width: '100%', color: 'black', fontSize: '13px' });
+        impaginati.forEach(elemento => {
+            const testo = elemento.codiceGruppo + (elemento.idRec != null ? " (idRec " + elemento.idRec + ")" : "");
+            elenco.append($('<div></div>').text(testo).css({ padding: '2px 0', borderBottom: '1px solid #ddd' }));
+        });
+
+        Modali.popup("Box impaginati a pagina " + nomePagina + ": " + impaginati.length, elenco);
+    },
     paginaFiltro:0,
 
     /// La schermata dei filtri. Se Filtri.json non c'e' lo crea con la struttura vuota.
@@ -89,9 +463,14 @@ const filtri = {
         let scrollTop = $('#filtriBodyGriglia').length ? $('#filtriBodyGriglia').scrollTop() : 0;
         $('#filtriBody').empty();
         // adesso in pagina creeremo un header con i seguenti campi
-        // Pagina (width: 10%), filtri (width: 10%), N. ref (10%), Griglia (10%), Limite (10%), Ref. Avanzate (15%), Ref. Escluse (15%), Data Conteggio (20%)
+        // Ordine, Pagina, Filtri, Griglia, Limite, N. ref (10%), Impaginate (10%), Ref. Avanzate (13%), Ref. Escluse (13%), Data Conteggio (14%).
+        // I20-1031: con la colonna Impaginate le larghezze sommano a 110: le colonne restano larghe come
+        // prima, e la griglia scorre in orizzontale con la barra disegnata qui sotto.
         //Ogni header corrisponderà ad una colonna della tabella
-        const headerRow = $('<div></div>').css({backgroundColor: 'blue', display: 'flex', marginRight: '5px', width: '97%'});
+        //I20-1031: l'intestazione e' larga quanto le colonne (110%) e sta in un involucro che la taglia
+        //alla larghezza di prima; scorre insieme alle righe, spostata dello stesso margine.
+        const intestazioneVisibile = $('<div></div>').css({ marginRight: '5px', width: '97%', overflow: 'hidden' });
+        const headerRow = $('<div></div>').attr('id', 'filtriIntestazioneGriglia').css({backgroundColor: 'blue', display: 'flex', width: '110%'});
         const headers = [
             { text: 'Ordine', width: '10%' },
             { text: 'Pagina', width: '10%' },
@@ -99,6 +478,7 @@ const filtri = {
             { text: 'Griglia', width: '10%' },
             { text: 'Limite', width: '10%' },
             { text: 'N. ref', width: '10%' },
+            { text: 'Impaginate', width: '10%' },
             { text: 'Ref. Avanzate', width: '13%' },
             { text: 'Ref. Escluse', width: '13%' },
             { text: 'Data Conteggio', width: '14%' }
@@ -114,7 +494,8 @@ const filtri = {
             );
         });
 
-        $('#filtriBody').append(headerRow);
+        intestazioneVisibile.append(headerRow);
+        $('#filtriBody').append(intestazioneVisibile);
 
         //facciamo ora un div che ci farà da body, tale body deve prevedere lo scroll verticale
         const bodyDiv = $('<div></div>').attr('id', 'filtriBodyGriglia').css({
@@ -126,11 +507,25 @@ const filtri = {
         });
         $('#filtriBody').append(bodyDiv);
 
+        //I20-1031: le righe stanno in un involucro largo quanto le colonne, dentro uno che lo taglia. Si
+        //sposta solo quello interno: #filtriBodyGriglia resta fermo, e con lui la sua barra verticale.
+        const righeVisibili = $('<div></div>').css({ marginRight: '5px', width: '99%', overflow: 'hidden' });
+        const righeGriglia = $('<div></div>').attr('id', 'filtriRigheGriglia').css({ width: '110%' });
+        righeVisibili.append(righeGriglia);
+        bodyDiv.append(righeVisibili);
+
+        //La barra orizzontale, sotto la griglia: #filtriBody si svuota a ogni ridisegno, e la barra con lui.
+        $('#filtriBody').append(filtri._crBarraScorrimentoGriglia(filtri.statoBarraGriglia));
+
 
         //Al body adesso creiamo le varie righe, avremo una riga per ogni pagina del documento
         let lastElement = null;
         const listaRefConteggio = readFile(pathLavorazione + "/listaRefConteggio.json");
         const listaEscluse = readFile(pathLavorazione + "/listaRefEscluse.json");
+        //I20-1031: i box impaginati di ogni pagina secondo Istanta, chiesti una volta per ridisegno.
+        //null se la chiamata non riesce: la colonna dira' "?" invece di un "Nessuna" che non e' vero.
+        const listaImpaginati = await Utility.getListaCodiciImpaginati({ nullSeFallisce: true });
+        const impaginatiPerPagina = listaImpaginati != null ? filtri.impaginatiPerPagina(listaImpaginati) : null;
         let ultimaDataConteggio = null;
         //compiliamo l'ultima data di conteggio prendendo la data più recente tra quelle presenti in listaRefConteggio
         if (listaRefConteggio && Array.isArray(listaRefConteggio)) {
@@ -152,7 +547,7 @@ const filtri = {
         var daSalvare = false;
         let lastFiltroAcive = false;
         for (let i = 0; i < pagine.length; i++) {
-            const row = $('<div></div>').css({ display: 'flex', marginRight: '5px', backgroundColor: 'blue', height: '32px', width: '99%' });
+            const row = $('<div></div>').css({ display: 'flex', backgroundColor: 'blue', height: '32px', width: '100%' });
             // adesso creiamo le colonne della riga con i loro contenuti
             var paginaFiltri = ObjFiltri.source.find(item => item.pagina === pagine[i].name);
             //inseriamo una colonna con una piccola textarea (deve bastare per numeri fino a 2 cifre) per modificare l'ordine in cui verranno eseguiti i filtri
@@ -459,7 +854,10 @@ const filtri = {
                 );
             }
 
-
+            //I20-1031: i box impaginati della pagina secondo Istanta, accanto alle conteggiate. Servono
+            //a confrontare il dato con quello che si vede in pagina: un box cancellato a mano resta
+            //contato qui, uno da ricollegare pure.
+            row.append(filtri.cellaImpaginati(impaginatiPerPagina, pagine[i].name));
 
 
             //nella sesta colonna mettiamo il numero di riferimenti avanzati, se non ci sono riferimenti scriviamo 0. Per leggere i riferimenti avanzati, dobbiamo leggere il file listaRefConteggio.json
@@ -567,7 +965,7 @@ const filtri = {
             }
 
 
-            bodyDiv.append(row);
+            righeGriglia.append(row);
         }
 
         if(daSalvare){
@@ -576,6 +974,11 @@ const filtri = {
 
         onresizeWindow();
         $('#filtriBodyGriglia').scrollTop(scrollTop); // Ripristina lo scroll verticale
+        //I20-1031: le colonne in pixel, larghe quanto prima, e la griglia che supera lo spazio. Poi,
+        //come nel Report Integrita' dopo il ridisegno, la griglia torna dove dice lo spostamento e
+        //il cursore si rimette in accordo.
+        filtri._applicaLarghezzeGriglia(document.getElementById("filtriIntestazioneGriglia"), document.getElementById("filtriRigheGriglia"));
+        filtri._scorriGriglia(filtri.statoBarraGriglia, filtri.statoBarraGriglia.spostamento || 0);
         
         hideLoading();
         fineFlag=true;
