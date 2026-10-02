@@ -370,7 +370,10 @@ const Utility=
         element.attr(nomeVal, valore);
     },
 
-    async getListaCodiciImpaginati(){
+    /// I20-1031: con { nullSeFallisce: true } restituisce null invece di [] se la chiamata non
+    /// riesce, cosi' chi mostra un conteggio sa distinguere "nessuno" da "non lo so". Senza
+    /// opzioni si comporta come prima.
+    async getListaCodiciImpaginati(opzioni = {}){
         var result = null;
         var error = null;
         xhrInProcess = new XMLHttpRequestClient();
@@ -413,13 +416,13 @@ const Utility=
         if (error != null) {
             messaggioUtente("Code TLY-07: Errore durante lo scaricamento dei codici impaginati: " + error, "error");
             console.error("Code TLY-07: Errore durante lo scaricamento dei codici impaginati: " + error);
-            return [];
+            return opzioni.nullSeFallisce ? null : [];
         }
 
         if (i == 100) {
             messaggioUtente("Code TLY-08: Tempo massimo per lo scaricamento del dato superato", "error");
             console.warn("Code TLY-08: Tempo massimo per lo scaricamento del dato superato");
-            return [];
+            return opzioni.nullSeFallisce ? null : [];
         }
 
         if (result != null ) {

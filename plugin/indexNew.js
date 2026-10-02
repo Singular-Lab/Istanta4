@@ -7845,6 +7845,36 @@ function nomeMacchina(os = null) {
     return nome;
 }
 
+/// I20-1033: il canale e l'area di una lavorazione, scritti come li legge l'operatore:
+/// "Canale CN · Area TO". Riceve i dettagli di ficoProcess (oggetti con la sigla, oppure 0
+/// quando mancano) e restituisce null se non ce n'e' nessuno.
+function contestoLavorazioneMessaggio(canale, area) {
+    var parti = [];
+    if (canale != null && canale.sigla) {
+        parti.push("Canale " + canale.sigla);
+    }
+    if (area != null && area.sigla) {
+        parti.push("Area " + area.sigla);
+    }
+    return parti.length > 0 ? parti.join(" · ") : null;
+}
+
+/// I20-1033: canale e area della lavorazione aperta adesso, per i messaggi della console e del
+/// log. Null senza una lavorazione: idKitLavorazione torna a 0 quando il documento non ne ha una,
+/// mentre i dettagli di ficoProcess restano quelli della lavorazione di prima. Non fallisce mai:
+/// un messaggio non deve perdersi per colpa del suo contesto.
+function contestoLavorazioneCorrente() {
+    try {
+        if (!idKitLavorazione) {
+            return null;
+        }
+        return contestoLavorazioneMessaggio(ficoProcess.getCanaleLavorazioneCorrente(), ficoProcess.getAreaLavorazioneCorrente());
+    }
+    catch (e) {
+        return null;
+    }
+}
+
 async function messaggioUtente(msg, style, loading = false, tempo = 0, dontWriteInLogs = false, modal = false) {
     try {
         if (msg == null || msg == "") {
@@ -7867,6 +7897,12 @@ async function messaggioUtente(msg, style, loading = false, tempo = 0, dontWrite
             stile: style,
             msg: msg
         };
+        //I20-1033: canale e area della lavorazione, per la console e per il file di log. Il
+        //riquadro in cima al pannello resta com'era: lo compone msg, non logMessage.
+        var lavorazioneMessaggio = contestoLavorazioneCorrente();
+        if (lavorazioneMessaggio != null) {
+            logMessage.lavorazione = lavorazioneMessaggio;
+        }
 
         writeFileInConsole(logMessage);
 
@@ -9148,9 +9184,18 @@ function writeFileInConsole(logMessage) {
     var div = $('<div class="logMessage" style="width:100%; background-color: ' + color + '; color: white; margin-left:0px; padding: 5px; margin-top: 5px; display: flex; justify-content: space-between; text-align: left;"></div>');
     var orario = $('<span style="font-size: 10px; margin-right: 10px;">' + logMessage.orario + '</span>');
     var messaggio = $('<span style="flex-grow: 1;">' + msg + '</span>');
+    //I20-1033: canale e area della lavorazione, sotto il testo e piu' piccoli. Come testo, non come
+    //HTML. Ci sono anche nei log riletti con leggiLog, se il messaggio li aveva.
+    if (logMessage.lavorazione) {
+        messaggio.append($('<div class="lavorazioneMessaggio" style="font-size: 10px; margin-top: 2px;"></div>').text(logMessage.lavorazione));
+    }
     var x = $('<span style="font-size: 10px; cursor: pointer; margin-left:5px;">X</span>');
     var copyButton = $('<img src="images/copyToClipBoard.png" style="height: 10px; margin-left:5px;" msg="' + msg + '">');
     copyButton.msg = msg;
+    //I20-1033: chi copia il messaggio si porta dietro anche canale e area.
+    if (logMessage.lavorazione) {
+        copyButton.attr("msg", msg + " [" + logMessage.lavorazione + "]");
+    }
 
     copyButton.on('click', function () {
         navigator.clipboard.writeText(String($(this).attr("msg") || ""));
@@ -9176,7 +9221,9 @@ function writeFileInConsole(logMessage) {
     } else {
         lastMessage = $("#debugLogs .logMessage:first-child span:nth-child(2)").text();
     }
-    if (lastMessage === msg) {
+    //I20-1033: si confronta tutto il testo, canale e area compresi: lo stesso messaggio da due
+    //lavorazioni diverse resta su due righe.
+    if (lastMessage === messaggio.text()) {
         // Get the count element of the last message
         var countElement = $("#debugLogs .logMessage:first-child .count");
         if (countElement.length === 0) {
@@ -9752,7 +9799,11 @@ function onresizeWindow(){
             let altezzaHeaderFiltri = $("#comandiInterfacciaAdvanced").outerHeight();
 
             let scrollTop = $('#filtriBodyGriglia').length ? $('#filtriBodyGriglia').scrollTop() : 0;
-            $("#filtriBodyGriglia").css("height", "" + altezzaResRef - 10 - altezzaHeaderFiltri + "px");
+            //I20-1031: sotto la griglia dei filtri c'e' la barra orizzontale. Prima le colonne si
+            //ricalcolano sulla larghezza nuova e la barra compare o sparisce, come nella Home; poi
+            //l'altezza le lascia posto.
+            filtriJs.aggiornaBarraGriglia();
+            $("#filtriBodyGriglia").css("height", "" + (altezzaResRef - 10 - altezzaHeaderFiltri - filtriJs.altezzaBarraGriglia()) + "px");
             $('#filtriBodyGriglia').scrollTop(scrollTop);
 
             onResizeTab1Tracciato();

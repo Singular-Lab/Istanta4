@@ -54,7 +54,9 @@ nome cinque membri — `parseLabel`, `getFieldByLabel`, `setCampoDNA`, `cercaChi
   [segnalazioni/](segnalazioni/README.md), con l'ultimo parametro facoltativo `etichettaBollino` che va
   sull'ovale; le chiamate in `confronti` sono commentate e quella di `CssFramework` per «descrizione
   spostata» non c'è più.
-- `getListaCodiciImpaginati` → chiede al server i codici impaginati.
+- `getListaCodiciImpaginati(opzioni)` → chiede al server i codici impaginati. Se la chiamata non
+  riesce restituisce una lista vuota, oppure `null` con `{ nullSeFallisce: true }` (I20-1031): così
+  chi mostra un conteggio distingue «nessuno» da «non lo so».
 - `moveToPasteBoard`, `impostaValHiddenVal`.
 
 `getLetturaFacilitataDellaParola`, che la issue metteva nel testo, **è andata in

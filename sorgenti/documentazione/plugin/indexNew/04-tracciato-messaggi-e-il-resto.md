@@ -59,6 +59,29 @@ come fa il Report dopo il ridisegno.
 
 ---
 
+## Canale e area nei messaggi (I20-1033)
+
+Ogni messaggio che `messaggioUtente` registra porta con sé **canale e area della lavorazione
+aperta**, nel campo `lavorazione` del `logMessage`: «Canale CN · Area TO». Prima un errore come
+IDX-25 (OutOfMemory in `Edro21.ordinaLista`) arrivava in console senza dire su quale lavorazione.
+
+- `contestoLavorazioneMessaggio(canale, area)` → la riga, dai dettagli di `ficoProcess` (oggetti con
+  la `sigla`, o 0 quando mancano); `null` se non c'è né l'uno né l'altra.
+- `contestoLavorazioneCorrente()` → la riga per la lavorazione aperta adesso; `null` se
+  `idKitLavorazione` è 0, perché i dettagli di `ficoProcess` restano quelli della lavorazione di
+  prima quando si apre un documento che non ne ha. Non fallisce mai.
+- **Vale per tutti i messaggi** (errori, warning, info) e finisce anche nel **file di log**, quindi
+  la si ritrova rileggendo i log con «Leggi log». **Il riquadro in cima al pannello resta com'era**:
+  lo compone `msg`, non il `logMessage`.
+- In `writeFileInConsole` la riga sta sotto il testo, più piccola, inserita come testo e non come
+  HTML; il pulsante di copia la include fra parentesi quadre. Il raggruppamento dei messaggi uguali
+  confronta tutto il testo, canale e area compresi: lo stesso messaggio da due lavorazioni diverse
+  resta su due righe.
+
+**Test:** `node --test tests/plugin/contestoLavorazioneMessaggi.test.js`
+
+---
+
 ## Quello che non andava
 
 Leggendole una per una sono venuti fuori **sei difetti veri**. Tre erano correggibili senza
