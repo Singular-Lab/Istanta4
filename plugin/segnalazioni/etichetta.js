@@ -106,6 +106,15 @@ const etichettaSegnalazioni = {
         }
     },
 
+    /// Le voci senza quella in posizione indice: "Risolvi" di una segnalazione (lotto 2). Un
+    /// indice fuori dall'elenco non toglie niente.
+    senzaVoce(voci, indice) {
+        if (!Array.isArray(voci)) {
+            return [];
+        }
+        return voci.filter((voce, i) => i !== indice);
+    },
+
     /// La gravita' peggiore fra le voci, o null se non ce ne sono.
     gravitaPeggiore(voci) {
         const ordinate = etichettaSegnalazioni.ordina(voci);

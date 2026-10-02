@@ -16,6 +16,22 @@ const etichettaSegnalazioni = require('./etichetta');
 //In alto a sinistra, dove il bollino stava gia' prima del I20-1029.
 const POSIZIONE_BOLLINO = 0;
 
+//Gli elementi di una collezione di InDesign (length e item(i)) o di un array, come array.
+function elenco(collezione) {
+    if (collezione == null) {
+        return [];
+    }
+    if (Array.isArray(collezione)) {
+        return collezione;
+    }
+    const elementi = [];
+    const quanti = collezione.length || 0;
+    for (let i = 0; i < quanti; i++) {
+        elementi.push(typeof collezione.item === "function" ? collezione.item(i) : collezione[i]);
+    }
+    return elementi;
+}
+
 const Segnalazioni = {
 
     POSIZIONE_BOLLINO: POSIZIONE_BOLLINO,
@@ -74,28 +90,65 @@ const Segnalazioni = {
         return risultato != null ? risultato : box;
     },
 
+    /// Lotto 2, "Risolvi": toglie dal box la segnalazione in posizione indice, nell'ordine in cui
+    /// leggiDalBox le restituisce. Se ne restano, il bollino si ridisegna con quelle e con il
+    /// colore della gravita' che resta; se non ne resta nessuna, il bollino sparisce.
+    /// Restituisce il box: ridisegnare il bollino lo regruppa.
+    risolviVoce(box, indice) {
+        const voci = Segnalazioni.leggiDalBox(box);
+        if (!(indice >= 0 && indice < voci.length)) {
+            return box;
+        }
+
+        const restanti = etichettaSegnalazioni.senzaVoce(voci, indice);
+        if (restanti.length === 0) {
+            return Segnalazioni.togliDalBox(box);
+        }
+        return Segnalazioni.applicaAlBox(box, restanti);
+    },
+
+    /// Lotto 2, "Risolvi tutte": il box resta senza segnalazioni e senza bollino.
+    risolviTutte(box) {
+        return Segnalazioni.togliDalBox(box);
+    },
+
     /// Tutte le segnalazioni del documento, una voce per bollino: la pagina, il box che lo
-    /// contiene e le segnalazioni. Le usera' la schermata delle segnalazioni (lotto 2).
+    /// contiene e le segnalazioni. La usa la schermata delle segnalazioni (schermata.js).
+    ///
+    /// Lettura mirata: il bollino e' sempre un ovale figlio diretto del gruppo del box
+    /// (addBollinoCustom lo raggruppa cosi'), quindi si guardano solo gli ovali dei gruppi delle
+    /// pagine, e un livello sotto per i box finiti dentro un altro gruppo. Scorrere tutti gli
+    /// elementi del documento e leggere l'etichetta di ognuno costava 6339 ms su un volantino,
+    /// contro 90 ms cosi', con gli stessi bollini (misurato in console durante il lotto 2).
     leggiDocumento(documento) {
         const risultato = [];
         if (documento == null || documento.pages == null) {
             return risultato;
         }
 
-        for (let p = 0; p < documento.pages.length; p++) {
-            const pagina = typeof documento.pages.item === "function" ? documento.pages.item(p) : documento.pages[p];
-            if (pagina == null || pagina.allPageItems == null) {
-                continue;
+        elenco(documento.pages).forEach(pagina => {
+            if (pagina == null) {
+                return;
             }
-            for (let i = 0; i < pagina.allPageItems.length; i++) {
-                const elemento = pagina.allPageItems[i];
-                const voci = elemento != null ? etichettaSegnalazioni.leggi(elemento.label) : null;
-                if (voci != null) {
-                    risultato.push({ pagina: pagina.name, box: elemento.parent, voci: voci });
-                }
-            }
-        }
+            elenco(pagina.groups).forEach(gruppo => Segnalazioni._bolliniNelGruppo(gruppo, pagina.name, 1, risultato));
+        });
         return risultato;
+    },
+
+    /// I bollini fra gli ovali di un gruppo e, per livelliSotto livelli, dei suoi gruppi.
+    _bolliniNelGruppo(gruppo, nomePagina, livelliSotto, risultato) {
+        if (gruppo == null) {
+            return;
+        }
+        elenco(gruppo.ovals).forEach(ovale => {
+            const voci = ovale != null ? etichettaSegnalazioni.leggi(ovale.label) : null;
+            if (voci != null) {
+                risultato.push({ pagina: nomePagina, box: gruppo, voci: voci });
+            }
+        });
+        if (livelliSotto > 0) {
+            elenco(gruppo.groups).forEach(interno => Segnalazioni._bolliniNelGruppo(interno, nomePagina, livelliSotto - 1, risultato));
+        }
     }
 };
 

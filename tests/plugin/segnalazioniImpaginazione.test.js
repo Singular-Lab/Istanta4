@@ -177,20 +177,36 @@ test("togliere il bollino lascia gli altri elementi del box", () => {
 });
 
 test("dal documento si leggono le segnalazioni pagina per pagina, con il box che le contiene", () => {
-    const box5 = { label: "BOX7" };
-    const box6 = { label: "BOX1" };
+    //Lotto 2: la lettura guarda gli ovali dei gruppi della pagina, non tutti gli elementi.
+    //Le collezioni di InDesign hanno length e item(i): il documento finto le imita.
+    const collezione = (elementi) => ({ length: elementi.length, item: (i) => elementi[i] });
+    const box5 = { label: "BOX7", ovals: collezione([{ label: "logo" }, { label: etichetta.scrivi([{ g: "error", c: "CSF-009", t: "a" }]) }]), groups: collezione([]) };
+    const box6 = { label: "BOX1", ovals: collezione([]), groups: collezione([]) };
+    //Un box finito dentro un altro gruppo: il bollino e' un livello sotto.
+    const interno = { label: "BOX2", ovals: collezione([{ label: etichetta.scrivi([{ g: "warning", c: null, t: "b" }]) }]), groups: collezione([]) };
+    const raggruppato = { label: "", ovals: collezione([]), groups: collezione([interno]) };
     const documento = {
-        pages: [
-            { name: "5", allPageItems: [{ label: "descrizione$x", parent: box5 }, { label: etichetta.scrivi([{ g: "error", c: "CSF-009", t: "a" }]), parent: box5 }] },
-            { name: "6", allPageItems: [{ label: "prezzo$x", parent: box6 }] },
-            { name: "7", allPageItems: [{ label: etichetta.scrivi([{ g: "warning", c: null, t: "b" }]), parent: box6 }] }
-        ]
+        pages: collezione([
+            { name: "5", groups: collezione([box5]) },
+            { name: "6", groups: collezione([box6]) },
+            { name: "7", groups: collezione([raggruppato]) }
+        ])
     };
 
     const lette = Segnalazioni.leggiDocumento(documento);
 
-    assert.deepStrictEqual(lette.map(l => [l.pagina, l.box.label, l.voci.map(v => v.t)]), [["5", "BOX7", ["a"]], ["7", "BOX1", ["b"]]]);
+    assert.deepStrictEqual(lette.map(l => [l.pagina, l.box.label, l.voci.map(v => v.t)]), [["5", "BOX7", ["a"]], ["7", "BOX2", ["b"]]]);
     assert.deepStrictEqual(Segnalazioni.leggiDocumento(null), []);
+});
+
+test("la lettura del documento non scorre tutti gli elementi delle pagine", () => {
+    //Misurato in console: 6339 ms scorrendo tutti gli elementi, 90 ms con i soli ovali dei gruppi.
+    const corpo = leggiFileDelPlugin("segnalazioni/segnalazioni.js").replace(/\r/g, "");
+    const inizio = corpo.indexOf("    leggiDocumento(documento) {");
+    const lettura = corpo.substring(inizio, corpo.indexOf("\n    },\n", inizio));
+
+    assert.doesNotMatch(lettura, /allPageItems/);
+    assert.match(lettura, /elenco\(pagina\.groups\)/);
 });
 
 /* ---- dove si applica ---- */

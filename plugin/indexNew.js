@@ -54,6 +54,7 @@ const AltezzaScorrimento = require('./altezzaScorrimento');
 //I20-1029: le segnalazioni di impaginazione nel bollino del box, tutte, non solo la piu' grave.
 const Segnalazioni = require('./segnalazioni/segnalazioni');
 const etichettaSegnalazioni = require('./segnalazioni/etichetta');
+const SchermataSegnalazioni = require('./segnalazioni/schermata');
 //I20-1035: i conti della barra orizzontale della lista dei tracciati, gli stessi del Report Integrita'.
 const barraScorrimento = require('./reportIntegrita/barraScorrimento');
 const ficoProcess = require('./ficoProcess');
@@ -3794,6 +3795,11 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                 finally {
                     rimuoviSimboli();
                     stampaSegnalazioni(reportImpaginazioneObj);
+                    //I20-1029, lotto 2: se l'impaginazione ha prodotto segnalazioni, la schermata si
+                    //apre da sola.
+                    if (impagina) {
+                        SchermataSegnalazioni.apriSeCiSono(reportImpaginazioneObj);
+                    }
 
                     //scriviamo il log
                     var currentDate = new Date();
@@ -4372,6 +4378,14 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                     var currentDate = new Date();
                     logContent += currentDate.toLocaleDateString() + " alle " + currentDate.toLocaleTimeString() + " Operazione di impaginazione terminata\n";
                     fs.writeFileSync(logFilePath, logContent);
+
+                    //I20-1029, lotto 2: anche il PoP ha il suo report e la sua schermata, che prima
+                    //non aveva. Non dentro il giro di un libro: li' i documenti si impaginano uno
+                    //alla volta e si chiudono, e la schermata non avrebbe niente da mostrare.
+                    if (!(jobImpaginazioneLibro.stato == 1 && jobImpaginazioneLibro.queue.length > 0)) {
+                        stampaSegnalazioni(reportImpaginazioneObj);
+                        SchermataSegnalazioni.apriSeCiSono(reportImpaginazioneObj);
+                    }
 
                     if (jobImpaginazioneLibro.stato == 2 || jobImpaginazioneLibro.stato == 4) {
                         setNarrow("Libro impaginato");
@@ -7700,6 +7714,9 @@ async function impaginazioneSingoloIndd(records, pagina, cercaInPaginaPerConfron
         if(!massiveOperation){
             stampaSegnalazioni(reportImpaginazioneObj);
             rimuoviSimboli();
+            //I20-1029, lotto 2: la schermata, se il box ha segnalazioni. Le operazioni massive del
+            //Report Integrita' non passano di qui: la aprirebbero a ogni box.
+            SchermataSegnalazioni.apriSeCiSono(reportImpaginazioneObj);
         }
 
         //Ricollegamento, confronto e rimozione dei simboli possono rifare elementi del box,
