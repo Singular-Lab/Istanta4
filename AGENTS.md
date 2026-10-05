@@ -122,6 +122,8 @@ Dopo l'approvazione e prima di modificare file:
 2. Chiama `company_create_task_branch` con il `taskId` corrente.
 3. Usa esclusivamente il branch restituito dal Control Plane.
 4. Recupera il branch remoto, esegui il checkout e verifica il tracking.
+5. Se il task prosegue su un branch esistente, dichiarato con `sourceBranch` (§2, punto 6), parti dallo stato remoto di quel branch: `git fetch`, checkout del branch con tracking, `git pull` del branch stesso. Verifica nel `git log` che l'ultimo commit sia quello del task precedente; se non lo è, fermati e chiedi all'utente prima di modificare file.
+6. Non ricreare il branch da `main`, non riallinearlo a `main` con reset o rebase e non riprendere file da `main`: il lavoro dei task precedenti sullo stesso branch andrebbe perso. Integra `main` nel branch solo su richiesta esplicita dell'utente.
 
 Non lavorare sul branch base e non eseguire force-push. Se il branch non può essere creato o recuperato, riporta Jira a `ToDo`, registra il task come `Blocked` e non modificare file.
 
