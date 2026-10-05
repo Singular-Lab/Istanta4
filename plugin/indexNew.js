@@ -1914,7 +1914,8 @@ function scaricaContenutoKit(idKit, noCacheValue = null, callback = null, skipMo
             console.log(objResult);
 
             //salviamo il risultato in un file json
-            var filePath = pathLavorazione + "/listaKit" + idKit + ".json";
+            //I20-1034: il nome porta davanti canale e area della lavorazione (CN_TO_listaKit302.json).
+            var filePath = Utility.percorsoNuovaListaKit(idKit);
             //aggiungiamo a objResult una chiave con la data di scaricamento fino al secondo        
             objResult["DataScaricamento"] = new Date().toLocaleString('it-IT');
             objResult["idKit"] = idKit;
@@ -2042,7 +2043,7 @@ function leggiContenutoKit(idKit, skipMostraTracciato = false)
 {
     console.log("leggiContenutoKit("+ idKit +")");
 
-    let filePath = pathLavorazione + "/listaKit"+idKit+".json";   
+    let filePath = Utility.percorsoListaKit(idKit);
     contenutoKitInLavorazione=readFile(filePath);
 
     clearInfo();

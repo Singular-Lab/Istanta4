@@ -56,7 +56,7 @@ function caricaLettore(ambiente) {
 
     const fabbrica = new Function(
         'contenutoKitInLavorazione', 'readFile', 'pathLavorazione', 'idKitLavorazione',
-        'ficoProcess', 'console',
+        'ficoProcess', 'console', 'Utility',
         'return ({\n' + membri.join(',\n') + '\n});');
 
     return fabbrica(
@@ -65,7 +65,9 @@ function caricaLettore(ambiente) {
         ambiente.pathLavorazione || '/lavorazione',
         ambiente.idKitLavorazione || 0,
         ambiente.ficoProcess || null,
-        { warn() { }, error() { }, log() { } });
+        { warn() { }, error() { }, log() { } },
+        //I20-1034: il nome della lista lo sa Utility.percorsoListaKit, con canale e area davanti.
+        ambiente.Utility || { percorsoListaKit: (idKit) => (ambiente.pathLavorazione || '/lavorazione') + '/CN_TO_listaKit' + idKit + '.json' });
 }
 
 //La condizione che decide se una regola di libreria si applica, presa dal sorgente di
@@ -159,7 +161,7 @@ test('senza lista in memoria il contesto si legge dal file dell\'ultimo scaricam
     });
 
     assert.deepStrictEqual(lettore.contestoPromoDellaLavorazione(), contesto);
-    assert.deepStrictEqual(letti, ['/lavorazione/listaKit42.json']);
+    assert.deepStrictEqual(letti, ['/lavorazione/CN_TO_listaKit42.json']);
 });
 
 test('senza record il contesto torna a leggersi dal meta della lavorazione', () => {

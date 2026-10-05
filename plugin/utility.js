@@ -373,6 +373,73 @@ const Utility=
     /// I20-1031: con { nullSeFallisce: true } restituisce null invece di [] se la chiamata non
     /// riesce, cosi' chi mostra un conteggio sa distinguere "nessuno" da "non lo so". Senza
     /// opzioni si comporta come prima.
+    /// I20-1034: il nome del file della lista del kit, con le sigle di canale e area della
+    /// lavorazione davanti al nome di sempre - "CN_TO_listaKit302.json" -, cosi' nella cartella
+    /// si riconosce a colpo d'occhio. Solo le sigle che ci sono; senza nessuna, "listaKit302.json".
+    nomeFileListaKit(idKit, siglaCanale, siglaArea) {
+        const sigle = [siglaCanale, siglaArea]
+            .filter(s => s != null && s !== 0 && String(s).trim() !== "")
+            .map(s => String(s).trim());
+        return (sigle.length > 0 ? sigle.join("_") + "_" : "") + "listaKit" + idKit + ".json";
+    },
+
+    /// I20-1034: se un nome di file e' la lista del kit idKit, con o senza sigle davanti: finisce
+    /// con "listaKit<idKit>.json", e prima c'e' l'inizio del nome o un "_". Cosi' "listaKit1302"
+    /// non passa per "listaKit302".
+    eFileListaKit(nome, idKit) {
+        const fine = "listaKit" + idKit + ".json";
+        const n = String(nome == null ? "" : nome);
+        if (!n.endsWith(fine)) {
+            return false;
+        }
+        const prima = n.length - fine.length;
+        return prima === 0 || n.charAt(prima - 1) === "_";
+    },
+
+    /// Le sigle di canale e area per la lista del kit idKit: quelle della lavorazione aperta, se
+    /// il kit e' il suo; altrimenti nessuna.
+    _sigleListaKit(idKit) {
+        try {
+            if (typeof idKitLavorazione === "undefined" || typeof ficoProcess === "undefined" || ficoProcess == null
+                || String(idKit) !== String(idKitLavorazione)) {
+                return [null, null];
+            }
+            const canale = ficoProcess.getCanaleLavorazioneCorrente();
+            const area = ficoProcess.getAreaLavorazioneCorrente();
+            return [canale != null ? canale.sigla : null, area != null ? area.sigla : null];
+        }
+        catch (e) {
+            return [null, null];
+        }
+    },
+
+    /// I20-1034: dove scrivere la lista del kit appena scaricata: il nome con le sigle. I file con
+    /// un altro nome per lo stesso kit (per esempio il vecchio senza sigle) restano dove sono.
+    percorsoNuovaListaKit(idKit) {
+        const sigle = Utility._sigleListaKit(idKit);
+        return pathLavorazione + "/" + Utility.nomeFileListaKit(idKit, sigle[0], sigle[1]);
+    },
+
+    /// I20-1034: da dove leggere la lista del kit. Il file col nome atteso, se c'e'; altrimenti
+    /// un altro file della cartella che finisce con listaKit<idKit>.json, con sigle diverse o
+    /// senza (le liste scaricate prima); altrimenti il nome atteso, che dira' "non trovato".
+    percorsoListaKit(idKit) {
+        const sigle = Utility._sigleListaKit(idKit);
+        const atteso = Utility.nomeFileListaKit(idKit, sigle[0], sigle[1]);
+        let nomi = [];
+        try {
+            nomi = require('fs').readdirSync(pathLavorazione) || [];
+        }
+        catch (e) {
+            nomi = [];
+        }
+        if (nomi.indexOf(atteso) >= 0) {
+            return pathLavorazione + "/" + atteso;
+        }
+        const altro = nomi.find(n => Utility.eFileListaKit(n, idKit));
+        return pathLavorazione + "/" + (altro != null ? altro : atteso);
+    },
+
     async getListaCodiciImpaginati(opzioni = {}){
         var result = null;
         var error = null;
