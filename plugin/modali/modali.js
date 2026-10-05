@@ -258,7 +258,14 @@ const Modali = {
         this.nascondiHidebleElements();
         var modal = $('<div id="confirmModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); z-index: 5000; display: flex; justify-content: center; align-items: center; padding: 10px;"></div>');
         var dialog = $('<div style="width: 92%; max-width: 460px; min-width: 200px; max-height: 88%; background-color: white; display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch; padding: 14px; box-sizing: border-box; border-radius: 6px;"></div>');
-        var messaggio = $('<div style="display: block; flex: 1 1 auto; min-height: 0; overflow: auto;"><h3 style="margin-top:0;">'+message+'</h3></div>');
+        var messaggio = $('<div style="display: block; flex: 1 1 auto; min-height: 0; overflow: auto;"></div>');
+        //I20-1040: come confirm, il messaggio puo' essere un elemento, inserito com'e'; un testo
+        //resta in un titolo come prima.
+        if (message instanceof jQuery || message instanceof Element) {
+            messaggio.append(message);
+        } else {
+            messaggio.html('<h3 style="margin-top:0;">' + message + '</h3>');
+        }
         var pulsanti = $('<div style="display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; width: 100%; flex: 0 0 auto; padding-top: 12px;"></div>');
         var conferma1 = $('<button style="min-width: 88px; height: 26px; padding: 0 10px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">'+bottoneConfirm1Text +'</button>');
         if(bottoneConfirm2Text != null){
@@ -270,6 +277,9 @@ const Modali = {
             result: false,
             hiddenVal: null,
         }
+        //I20-1040: si aspetta la risposta, non hiddenVal: Annulla non lo imposta, e prima
+        //l'attesa con Annulla non finiva mai.
+        var risposto = false;
     
         modal.click(function(e) {
             e.stopPropagation();
@@ -278,6 +288,7 @@ const Modali = {
         conferma1.click(function(){
             objRes.result = true;
             objRes.hiddenVal = hiddenVal1;
+            risposto = true;
             $("#confirmModal").remove();
         });
     
@@ -285,12 +296,14 @@ const Modali = {
             conferma2.click(function(){
                 objRes.result = true;
                 objRes.hiddenVal = hiddenVal2;
+                risposto = true;
                 $("#confirmModal").remove();
             });
         }
     
         annulla.click(function(){
             objRes.result = false;
+            risposto = true;
             $("#confirmModal").remove();
         });
     
@@ -304,8 +317,23 @@ const Modali = {
         dialog.append(pulsanti);
         modal.append(dialog);
         $("body").append(modal);
+
+        //I20-1040: in UXP un contenitore scorre solo se ha un'altezza in pixel. Col solo
+        //max-height del riquadro un messaggio lungo veniva tagliato, senza modo di leggerlo.
+        //Se non ci sta, il messaggio prende lo spazio che resta sopra i pulsanti e scorre.
+        //Le misure si leggono dopo un attimo: subito dopo l'inserimento possono essere vecchie.
+        await delay(50);
+        try {
+            var spazio = Math.floor((modal[0].clientHeight - 20) * 0.88) - pulsanti[0].offsetHeight - 28;
+            if (spazio > 60 && messaggio[0].scrollHeight > spazio) {
+                messaggio.css({ height: spazio + "px", flex: "0 0 auto", overflowY: "auto" });
+            }
+        }
+        catch (e) {
+            console.warn("confirmCustom: altezza del messaggio non calcolata", e);
+        }
     
-        while(objRes.hiddenVal == null){
+        while(!risposto){
             await delay(100);
         }
     

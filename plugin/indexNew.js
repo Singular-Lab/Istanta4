@@ -6269,7 +6269,10 @@ async function rimuoviRefImpaginata(listaCodiciConId = [], mantieniBusyEsterno =
 /// NOTA (I20-1002): il controllo "pagSelected == -1 && page == null" legge `page` prima
 /// della sua dichiarazione. Con var la variabile c'e' gia' ma vale undefined, quindi quella
 /// meta' del controllo e' sempre vera e la condizione si riduce a pagSelected == -1.
-async function svuotaPaginaByPageName(pageName) {
+async function svuotaPaginaByPageName(pageName, daMantenere = []) {
+    //I20-1040: la funzione aspetta la risposta del server, cosi' chi svuota piu' pagine le fa
+    //una dopo l'altra e dice "completato" solo alla fine. finito si alza in ogni uscita.
+    var finito = false;
     try{
 
         if (pageName == null || pageName == "") {
@@ -6307,6 +6310,12 @@ async function svuotaPaginaByPageName(pageName) {
             var group = page.groups.item(i);
             var dna = Utility.getDnaOfBox(group);
             if (dna == null) {
+                continue;
+            }
+            //I20-1040: le referenze non registrate sul server che l'operatore ha scelto di
+            //mantenere nel documento restano dove sono.
+            var codiceBox = { codice: dna.codice_gruppo, idRec: parseInt(dna.idRec) || 0 };
+            if (Array.isArray(daMantenere) && daMantenere.some(m => ReportIntegrita._stessaReferenza(m, codiceBox))) {
                 continue;
             }
 
@@ -6375,6 +6384,7 @@ async function svuotaPaginaByPageName(pageName) {
             finally {
                 indesignEvents.setBusy(false);
                 hideLoading();
+                finito = true;
             }
         };
     
@@ -6385,6 +6395,7 @@ async function svuotaPaginaByPageName(pageName) {
                 } else {
                     hideLoading();
                     indesignEvents.setBusy(false);
+                    finito = true;
                 }
             }
         };
@@ -6393,10 +6404,23 @@ async function svuotaPaginaByPageName(pageName) {
             messaggioUtente("Code IDX-82 Svuota pagina: Errore di rete", "error");
             hideLoading();
             indesignEvents.setBusy(false);
+            finito = true;
         }
     
         xhr.send("Menabo/SvuotaPagina/" + idKitLavorazione + "/" + parseInt(pageName), null, "GET", "application/x-www-form-urlencoded");
         // messaggioUtente("Svuota pagina: Richiesta inviata", "success", true, 3);
+
+        var attese = 0;
+        while (!finito) {
+            if (attese > 600) {
+                messaggioUtente("Code IDX-173 Svuota pagina " + pageName + ": il server non ha risposto entro un minuto", "error");
+                hideLoading();
+                indesignEvents.setBusy(false);
+                break;
+            }
+            attese++;
+            await Utility.sleep(100);
+        }
     }
     catch(e){
         console.log(e);
@@ -8925,6 +8949,115 @@ function attivaDisattivaBollo(bollo, attiva) {
 
 }
 
+//I20-1040: il messaggio di una finestra di svuotamento, a dimensione di testo normale: una
+//frase, l'elenco e la domanda. I valori entrano come testo, non come HTML.
+function messaggioSvuotamento(introduzione, righe, domanda) {
+    var contenitore = $('<div></div>').css({ fontSize: '13px', color: 'black' });
+    contenitore.append($('<div></div>').text(introduzione).css({ fontWeight: 'bold', marginBottom: '6px' }));
+    righe.forEach(riga => contenitore.append($('<div></div>').text("• " + riga).css({ paddingLeft: '8px' })));
+    contenitore.append($('<div></div>').text(domanda).css({ marginTop: '10px' }));
+    return contenitore;
+}
+
+/// I20-1040: le scelte dell'operatore prima di svuotare delle pagine, o null se annulla.
+///
+/// Una referenza che il server ha in una pagina da svuotare e che nel documento sta in un'altra
+/// pagina e' stata spostata a mano: senza intervento lo svuotamento ne cancellerebbe il record.
+/// Per riconoscerla serve la mappa di tutto il documento, letta solo se la pre-analisi ha
+/// referenze presenti solo sul server. Le referenze in pagina ma non registrate sul server, lo
+/// svuotamento le toglieva senza chiedere. Per ognuno dei due casi, se c'e', una finestra.
+///
+/// Un terzo caso: referenze che stanno in una pagina da svuotare ma che il server registra su
+/// un'altra pagina, perche' l'operatore le ha portate li'. Svuotando senza chiedere sparivano dal
+/// documento e dal server.
+///
+/// Restituisce { spostate, aggiornaSpostate, mantenuteRegistrateAltrove, daMantenere }:
+/// daMantenere sono le referenze che restano nel documento, con la loro pagina.
+async function decisioniPrimaDelloSvuotamento(preAnalisi, pagine) {
+    var pagineDaSvuotare = pagine.map(p => p.toString());
+    var ciSonoSoloSulServer = (preAnalisi.resultPaginas || []).some(p =>
+        ReportIntegrita._codiciConId(p.codiciPresentiSoloSulServerConId, p.codiciPresentiSoloSulServer).length > 0);
+
+    var listaDocumento = null;
+    if (ciSonoSoloSulServer) {
+        showLoading("Ricerca delle referenze spostate in altre pagine...");
+        var mappaDocumento = await confronti.mappaturaImpaginato(null, false, true);
+        listaDocumento = mappaDocumento != null ? confronti.semplificazioneMappaImpaginato(mappaDocumento) : null;
+    }
+    var daDecidere = ReportIntegrita.classificaPerSvuotamento(preAnalisi.resultPaginas, listaDocumento, pagineDaSvuotare);
+    var decisioni = { spostate: daDecidere.spostate, aggiornaSpostate: false, mantenuteRegistrateAltrove: [], daMantenere: [] };
+
+    if (daDecidere.spostate.length > 0) {
+        hideLoading();
+        var sceltaSpostate = await Modali.confirmCustom(
+            messaggioSvuotamento(
+                "Le seguenti referenze risultano registrate su una pagina da svuotare, ma nel documento si trovano su un'altra pagina:",
+                daDecidere.spostate.map(r => r.codice + ": registrata a pagina " + r.paginaServer + ", presente a pagina " + r.paginaDocumento),
+                "Si desidera aggiornare la pagina registrata prima dello svuotamento?"),
+            "Aggiorna la pagina e svuota", "aggiorna", "Svuota comunque", "svuota");
+        if (sceltaSpostate == null || !sceltaSpostate.result) {
+            return null;
+        }
+        decisioni.aggiornaSpostate = sceltaSpostate.hiddenVal == "aggiorna";
+    }
+
+    if (daDecidere.registrateAltrove.length > 0) {
+        hideLoading();
+        //La pagina dove il server le registra, se la lista degli impaginati si legge.
+        var impaginati = await Utility.getListaCodiciImpaginati({ nullSeFallisce: true });
+        var paginaRegistrata = (r) => {
+            var trovato = Array.isArray(impaginati) && r.idRec > 0 ? impaginati.find(i => parseInt(i.idRec) === r.idRec) : null;
+            return trovato != null && trovato.nomePagina != null ? "registrata a pagina " + trovato.nomePagina : "registrata su un'altra pagina";
+        };
+        var sceltaRegistrateAltrove = await Modali.confirmCustom(
+            messaggioSvuotamento(
+                "Le seguenti referenze si trovano in una pagina da svuotare, ma risultano registrate su un'altra pagina:",
+                daDecidere.registrateAltrove.map(r => r.codice + ": " + paginaRegistrata(r) + ", presente a pagina " + r.pagina),
+                "Si desidera rimuoverle insieme alla pagina o mantenerle nel documento, registrate sulla pagina in cui si trovano?"),
+            "Rimuovi insieme alla pagina", "rimuovi", "Mantieni nel documento", "mantieni");
+        if (sceltaRegistrateAltrove == null || !sceltaRegistrateAltrove.result) {
+            return null;
+        }
+        if (sceltaRegistrateAltrove.hiddenVal == "mantieni") {
+            decisioni.mantenuteRegistrateAltrove = daDecidere.registrateAltrove;
+            decisioni.daMantenere = decisioni.daMantenere.concat(daDecidere.registrateAltrove);
+        }
+    }
+
+    if (daDecidere.nonRegistrate.length > 0) {
+        hideLoading();
+        var sceltaNonRegistrate = await Modali.confirmCustom(
+            messaggioSvuotamento(
+                "Le seguenti referenze sono presenti nelle pagine da svuotare, ma non risultano impaginate sul server:",
+                daDecidere.nonRegistrate.map(r => r.codice + ": pagina " + r.pagina),
+                "Si desidera rimuoverle insieme alla pagina o mantenerle nel documento?"),
+            "Rimuovi insieme alla pagina", "rimuovi", "Mantieni nel documento", "mantieni");
+        if (sceltaNonRegistrate == null || !sceltaNonRegistrate.result) {
+            return null;
+        }
+        if (sceltaNonRegistrate.hiddenVal == "mantieni") {
+            decisioni.daMantenere = decisioni.daMantenere.concat(daDecidere.nonRegistrate);
+        }
+    }
+
+    return decisioni;
+}
+
+/// I20-1040: le referenze spostate nel formato della pre-analisi, come "impaginate a pagina
+/// differente" della pagina dove stanno: syncImpaginatoConServer porta il loro record a quella
+/// pagina, senza toccare altro.
+function preAnalisiPerSpostate(spostate) {
+    var perPagina = {};
+    (spostate || []).forEach(r => {
+        if (perPagina[r.paginaDocumento] == null) {
+            perPagina[r.paginaDocumento] = { nomePagina: r.paginaDocumento, codiciImpaginatiAPaginaDifferente: [], codiciImpaginatiAPaginaDifferenteConId: [] };
+        }
+        perPagina[r.paginaDocumento].codiciImpaginatiAPaginaDifferente.push(r.codice);
+        perPagina[r.paginaDocumento].codiciImpaginatiAPaginaDifferenteConId.push({ codice: r.codice, idRec: r.idRec });
+    });
+    return Object.keys(perPagina).map(k => perPagina[k]);
+}
+
 /// Esegue lo svuotamento scelto nella finestra: le pagine di un intervallo, una per una, o
 /// tutto il documento.
 ///
@@ -8974,12 +9107,15 @@ async function selectionModalSvuota(mode){
             if (preAnalisi == null) {
                 messaggioUtente("Code IDX-130 Errore durante l'analisi delle pagine: risposta nulla", "error");
             } else {
-                messaggioUtente("Code IDX-130 Errore durante l'analisi delle pagine: " + preAnalisi.error, "error");
+                //Il server manda gli errori in errors, non in error.
+                messaggioUtente("Code IDX-130 Errore durante l'analisi delle pagine: " + (Array.isArray(preAnalisi.errors) ? preAnalisi.errors.join(", ") : preAnalisi.error), "error");
             }
 
             hideLoading()
 
-            if (Modali.confirm("Errore durante l'analisi delle pagine, le pagine non sono state sincronizzate, vuoi comunque procedere con lo svuotamento?")) {
+            //I20-1040: Modali.confirm e' asincrona. Senza await la condizione era una promessa,
+            //sempre vera: la domanda compariva ma lo svuotamento partiva senza aspettare.
+            if (await Modali.confirm("Errore durante l'analisi delle pagine, le pagine non sono state sincronizzate, vuoi comunque procedere con lo svuotamento?")) {
                 showLoading("Svuotamento in corso, l'operazione potrebbe richiedere un po' di tempo...");
                 for (const page of pagine) {
                     await svuotaPaginaByPageName(page);
@@ -9056,18 +9192,58 @@ async function selectionModalSvuota(mode){
                 serveSync = true;
             }
         }
+        //I20-1040: prima di toccare il server, le referenze su cui decide l'operatore.
+        var decisioni = await decisioniPrimaDelloSvuotamento(preAnalisi, pagine);
+        if (decisioni == null) {
+            messaggioUtente("Code IDX-171 Svuotamento annullato", "warning", false, 3);
+            hideLoading();
+            return;
+        }
+        showLoading("Svuotamento in corso, l'operazione potrebbe richiedere un po' di tempo...");
+
         var mappa = null;
         if(serveMappa){
             mappa = await confronti.mappaturaImpaginato(pagineRange, false, true);
         }
 
         if(serveSync){
-            await ReportIntegrita.syncImpaginatoConServer(mappa, preAnalisi);
+            //I20-1040: le referenze che l'operatore mantiene nella pagina che svuota non passano a
+            //quella pagina adesso: Menabo/SvuotaPagina le cancellerebbe. Passano dopo.
+            var preAnalisiDaSincronizzare = decisioni.mantenuteRegistrateAltrove.length > 0
+                ? { esito: preAnalisi.esito, errors: preAnalisi.errors, resultPaginas: ReportIntegrita.preAnalisiSenza(preAnalisi.resultPaginas, decisioni.mantenuteRegistrateAltrove) }
+                : preAnalisi;
+            await ReportIntegrita.syncImpaginatoConServer(mappa, preAnalisiDaSincronizzare);
         }
 
+        //I20-1040: le referenze spostate passano sul server alla pagina dove stanno, cosi' lo
+        //svuotamento non ne cancella il record. Se il server non conferma ci si ferma: svuotare
+        //cancellerebbe proprio quello che l'operatore ha chiesto di tenere.
+        if (decisioni.aggiornaSpostate) {
+            var esitoSpostate = await ReportIntegrita.syncImpaginatoConServer(null, { resultPaginas: preAnalisiPerSpostate(decisioni.spostate) });
+            if (esitoSpostate !== "Completed") {
+                messaggioUtente("Code IDX-172 La pagina delle referenze spostate non è stata aggiornata sul server: svuotamento interrotto", "error");
+                hideLoading();
+                return;
+            }
+        }
 
-        for (const page of pagine) {
-            await svuotaPaginaByPageName(page);
+        //I20-1040: prima le pagine con referenze mantenute ma registrate altrove: subito dopo il
+        //loro svuotamento il record passa a quella pagina. Se la pagina dove erano registrate si
+        //svuota anche lei, cosi' il record ha gia' cambiato pagina e non si cancella.
+        var conMantenute = (page) => decisioni.mantenuteRegistrateAltrove.some(m => m.pagina == page.toString());
+        var ordine = pagine.filter(conMantenute).concat(pagine.filter(page => !conMantenute(page)));
+        for (const page of ordine) {
+            await svuotaPaginaByPageName(page, decisioni.daMantenere.filter(m => m.pagina == page.toString()));
+
+            var daRegistrare = decisioni.mantenuteRegistrateAltrove.filter(m => m.pagina == page.toString());
+            if (daRegistrare.length > 0) {
+                var esitoMantenute = await ReportIntegrita.syncImpaginatoConServer(null, {
+                    resultPaginas: preAnalisiPerSpostate(daRegistrare.map(m => ({ codice: m.codice, idRec: m.idRec, paginaDocumento: m.pagina })))
+                });
+                if (esitoMantenute !== "Completed") {
+                    messaggioUtente("Code IDX-174 Le referenze mantenute a pagina " + page + " non sono state registrate su quella pagina: verificare con il Report Integrità", "error");
+                }
+            }
         }
 
         messaggioUtente("Svuotamento completato", "success", false, 3);

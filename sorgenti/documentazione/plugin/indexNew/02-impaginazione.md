@@ -74,6 +74,45 @@ referenza sola.
 
 `rimuoviRefImpaginata` (226) — vedi sotto — e `svuotaMenabo` (129), che svuota l'intero menabò.
 
+**Svuota pagina** (`selectionModalSvuota`, `svuotaPaginaByPageName`), rivisto in I20-1040:
+
+1. **Pre-analisi** delle sole pagine da svuotare (`ReportIntegrita.preAnalisiMismatchNumeriPagina`).
+   Se fallisce, la domanda «vuoi comunque procedere?» ora si **aspetta** (`await Modali.confirm`):
+   prima la condizione era una promessa, sempre vera, e lo svuotamento partiva senza risposta.
+   Il messaggio IDX-130 legge gli errori da `errors`, come li manda il server.
+2. **Le decisioni dell'operatore** (`decisioniPrimaDelloSvuotamento`), classificate da
+   `ReportIntegrita.classificaPerSvuotamento`:
+   - **referenze spostate**: il server le ha in una pagina da svuotare, ma nel documento stanno in
+     un'altra. Per vederle serve la mappa di **tutto** il documento, letta solo se la pre-analisi
+     ha referenze «presenti solo sul server». Prima la mappa copriva solo le pagine da svuotare:
+     la referenza restava «solo sul server», la sync (con `applicaImpaginazioni` falso) la
+     ignorava, e `Menabo/SvuotaPagina` ne cancellava il record senza dire niente. Finestra:
+     «Aggiorna la pagina e svuota» (il record passa alla pagina dove sta, via
+     `syncImpaginatoConServer` nel caso «impaginate a pagina differente», `preAnalisiPerSpostate`),
+     «Svuota comunque» (come prima), Annulla. Se il server non conferma l'aggiornamento lo
+     svuotamento si ferma (IDX-172);
+   - **referenze non registrate sul server** ma presenti nella pagina: prima si toglievano senza
+     chiedere. Finestra: «Rimuovi insieme alla pagina», «Mantieni nel documento», Annulla. Quelle
+     mantenute `svuotaPaginaByPageName` le salta (secondo argomento, `daMantenere`);
+   - **referenze registrate su un'altra pagina** ma portate dall'operatore in una pagina da
+     svuotare (le «impaginate a pagina differente» della pre-analisi): prima la sync le portava a
+     quella pagina e lo svuotamento le cancellava, dal documento e dal server. Finestra:
+     «Rimuovi insieme alla pagina» (come prima), «Mantieni nel documento», Annulla. La pagina dove
+     il server le registra si legge da `Utility.getListaCodiciImpaginati`. Quelle mantenute escono
+     dalla sync di prima (`ReportIntegrita.preAnalisiSenza`) e passano alla loro pagina **dopo** lo
+     svuotamento di quella pagina, che si svuota per prima: altrimenti `Menabo/SvuotaPagina` ne
+     cancellerebbe il record (IDX-174 se il server non conferma);
+   - le referenze che il server ha ma che nel documento non ci sono più da nessuna parte sono state
+     tolte a mano: il record si cancella senza chiedere, come prima.
+
+   Annulla in una qualunque delle finestre ferma tutto (IDX-171), prima di toccare server e documento.
+3. **Lo svuotamento, una pagina alla volta**: `svuotaPaginaByPageName` ora aspetta la risposta del
+   server (al più un minuto, IDX-173), e «Svuotamento completato» arriva alla fine. Prima le
+   richieste partivano tutte insieme e il messaggio arrivava subito.
+
+Lato server, `PreAnalisiMismatch` lascia l'esito falso se una pagina va in errore: prima la pagina
+successiva lo rimetteva a vero, e l'errore si perdeva.
+
 ### Rimediare
 
 `fixRefImpaginata` (256), che sistema una referenza impaginata male senza rifare tutto il box.

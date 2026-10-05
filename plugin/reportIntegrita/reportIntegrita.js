@@ -176,6 +176,7 @@ const ReportIntegrita = {
                         console.error("syncImpaginatoConServer: Errore durante il parsing della risposta JSON: " + e, "error");
                         messaggioUtente("Code CNF-011: Errore durante il parsing della risposta JSON: " + e, "error");
                         inProcess = false;
+                        stato = "Fallita";
                         return;
                     }
                 }
@@ -183,6 +184,7 @@ const ReportIntegrita = {
                 //mi dovrebbe tornare un oggetto con due parametri, esito, error
                 if (!objResult.esito) {
                     messaggioUtente("Code CNF-010: Errore durante la sincronizzazione dell'impaginato: " + objResult.error, "error");
+                    stato = "Fallita";
                     return;
                 }
 
@@ -211,6 +213,8 @@ const ReportIntegrita = {
             catch (e) {
                 console.error(e);
                 messaggioUtente("Code CNF-013: Errore generico durante la sincronizzazione dell'impaginato: " + e, "error");
+                //Prima lo stato restava "InProgress" e l'attesa sotto non finiva.
+                stato = "Fallita";
             }
         };
 
@@ -225,6 +229,7 @@ const ReportIntegrita = {
 
         xhrInProcess.onerror = function () {
             messaggioUtente("Code CNF-014: Errore di connessione al server durante la sincronizzazione dell'impaginato", "error");
+            stato = "Fallita";
         }
 
         //I20-1004: annullata, non arrivera' piu' niente. Il messaggio l'ha gia' dato abort.
@@ -254,9 +259,112 @@ const ReportIntegrita = {
             await Utility.sleep(100);
         }
 
+        //I20-1040: "Fallita" se il server ha rifiutato o la risposta non si e' letta, cosi'
+        //chi deve fermarsi lo sa (lo svuotamento). Il Report Integrita' controlla solo null e
+        //prosegue come prima, ma senza piu' aspettare il timeout.
+        if (stato === "Fallita") {
+            return stato;
+        }
+
         stato = "Completed";
 
         return stato;
+    },
+
+    /// I20-1040: prima di svuotare delle pagine, le referenze su cui l'operatore deve decidere.
+    ///
+    /// resultPaginas e' la pre-analisi (Menabo/PreAnalisiMismatch) delle sole pagine da svuotare;
+    /// listaDocumento la mappa di tutto il documento ridotta da semplificazioneMappaImpaginato,
+    /// o null se non serve; pagineDaSvuotare i nomi delle pagine.
+    ///
+    ///   spostate       il server le ha in una pagina da svuotare, ma nel documento stanno in
+    ///                  un'altra pagina, che non si svuota: { codice, idRec, paginaServer,
+    ///                  paginaDocumento }. Senza intervento lo svuotamento ne cancellerebbe il
+    ///                  record, e resterebbero in pagina come non impaginate.
+    ///   nonRegistrate  stanno in una pagina da svuotare ma il server non le ha impaginate:
+    ///                  { codice, idRec, pagina }.
+    ///   registrateAltrove  stanno in una pagina da svuotare ma il server le ha impaginate su
+    ///                  un'altra pagina, perche' l'operatore le ha portate li': { codice, idRec,
+    ///                  pagina }. Svuotando senza chiedere sparivano dal documento e dal server.
+    ///
+    /// Le referenze che il server ha ma che nel documento non ci sono piu' da nessuna parte non
+    /// entrano: sono state tolte a mano, e il loro record si cancella con lo svuotamento.
+    classificaPerSvuotamento(resultPaginas, listaDocumento, pagineDaSvuotare) {
+        const daSvuotare = (Array.isArray(pagineDaSvuotare) ? pagineDaSvuotare : []).map(p => String(p));
+        const pagineDocumento = listaDocumento != null && Array.isArray(listaDocumento.listRefPerPagina)
+            ? listaDocumento.listRefPerPagina
+            : [];
+        const spostate = [];
+        const nonRegistrate = [];
+        const registrateAltrove = [];
+
+        (Array.isArray(resultPaginas) ? resultPaginas : []).forEach(pagina => {
+            if (pagina == null) {
+                return;
+            }
+            const nomePagina = String(pagina.nomePagina);
+
+            ReportIntegrita._codiciConId(pagina.codiciPresentiSoloSulServerConId, pagina.codiciPresentiSoloSulServer).forEach(codice => {
+                const dove = pagineDocumento.find(p => p != null
+                    && daSvuotare.indexOf(String(p.nomePagina)) < 0
+                    && ReportIntegrita._codiciConId(p.codiciConId, p.codici).some(c => ReportIntegrita._stessaReferenza(c, codice)));
+                if (dove != null) {
+                    spostate.push({ codice: codice.codice, idRec: codice.idRec, paginaServer: nomePagina, paginaDocumento: String(dove.nomePagina) });
+                }
+            });
+
+            ReportIntegrita._codiciConId(pagina.codiciNonImpaginatiSulServerConId, pagina.codiciNonImpaginatiSulServer).forEach(codice => {
+                nonRegistrate.push({ codice: codice.codice, idRec: codice.idRec, pagina: nomePagina });
+            });
+
+            ReportIntegrita._codiciConId(pagina.codiciImpaginatiAPaginaDifferenteConId, pagina.codiciImpaginatiAPaginaDifferente).forEach(codice => {
+                registrateAltrove.push({ codice: codice.codice, idRec: codice.idRec, pagina: nomePagina });
+            });
+        });
+
+        return { spostate: spostate, nonRegistrate: nonRegistrate, registrateAltrove: registrateAltrove };
+    },
+
+    /// I20-1040: la pre-analisi senza le referenze indicate fra le "impaginate a pagina
+    /// differente". Sono quelle che l'operatore mantiene nella pagina che svuota: portarle a quella
+    /// pagina prima dello svuotamento vorrebbe dire farle cancellare da Menabo/SvuotaPagina. Si
+    /// portano dopo. Restituisce una copia, la pre-analisi ricevuta non cambia.
+    preAnalisiSenza(resultPaginas, referenze) {
+        const daTogliere = Array.isArray(referenze) ? referenze : [];
+        const resta = (codice) => !daTogliere.some(r => ReportIntegrita._stessaReferenza(r, codice));
+        return (Array.isArray(resultPaginas) ? resultPaginas : []).map(pagina => {
+            if (pagina == null) {
+                return pagina;
+            }
+            const copia = Object.assign({}, pagina);
+            copia.codiciImpaginatiAPaginaDifferenteConId = ReportIntegrita._codiciConId(pagina.codiciImpaginatiAPaginaDifferenteConId, null).filter(resta);
+            copia.codiciImpaginatiAPaginaDifferente = (Array.isArray(pagina.codiciImpaginatiAPaginaDifferente) ? pagina.codiciImpaginatiAPaginaDifferente : [])
+                .filter(c => resta({ codice: String(c), idRec: 0 }) || copia.codiciImpaginatiAPaginaDifferenteConId.some(k => k.codice === String(c)));
+            return copia;
+        });
+    },
+
+    /// Una lista di codici della pre-analisi come { codice, idRec }: quella con l'idRec se c'e',
+    /// altrimenti quella di soli codici, con idRec 0. Come NormalizzaListaConFallback del server.
+    _codiciConId(listaConId, listaCodici) {
+        const conId = (Array.isArray(listaConId) ? listaConId : [])
+            .filter(c => c != null && c.codice != null && String(c.codice) !== "")
+            .map(c => ({ codice: String(c.codice), idRec: !isNaN(parseInt(c.idRec)) ? parseInt(c.idRec) : 0 }));
+        if (conId.length > 0) {
+            return conId;
+        }
+        return (Array.isArray(listaCodici) ? listaCodici : [])
+            .filter(c => c != null && String(c) !== "")
+            .map(c => ({ codice: String(c), idRec: 0 }));
+    },
+
+    /// Due codici sono la stessa referenza se il codice e' uguale e, quando entrambi hanno
+    /// l'idRec, anche quello: lo stesso codice puo' stare in due record del tracciato.
+    _stessaReferenza(a, b) {
+        if (a == null || b == null || String(a.codice).toLowerCase() !== String(b.codice).toLowerCase()) {
+            return false;
+        }
+        return !(a.idRec > 0 && b.idRec > 0) || a.idRec === b.idRec;
     },
 
     percorsoFileReport(idKit = null) {
