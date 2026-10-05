@@ -160,7 +160,8 @@ const schermata = leggiFileDelPlugin("segnalazioni/schermata.js").replace(/\r/g,
 test("la schermata legge il documento e offre vai al box, risolvi e risolvi tutte", () => {
     assert.match(schermata, /Segnalazioni\.leggiDocumento\(SchermataSegnalazioni\._documento\(\)\)/);
     assert.match(schermata, /\.text\("Vai al box"\)/);
-    assert.match(schermata, /\.text\("Risolvi"\)\.on\('click', \(\) => \{\s*Segnalazioni\.risolviVoce\(lettura\.box, indice\);\s*SchermataSegnalazioni\.riempi\(elenco\);/);
+    //I20-1044: fra il testo e il clic c'e' lo stile che tiene il pulsante intero.
+    assert.match(schermata, /\.text\("Risolvi"\)(?:\.css\([^)]*\))?\.on\('click', \(\) => \{\s*Segnalazioni\.risolviVoce\(lettura\.box, indice\);\s*SchermataSegnalazioni\.riempi\(elenco\);/);
     assert.match(schermata, /Modali\.popup\("Segnalazioni di impaginazione", elenco, "xl", SchermataSegnalazioni\.allaChiusura\)/);
     assert.match(schermata, /\.text\("Nessuna segnalazione nel documento\."\)/);
     //I testi entrano come testo, non come HTML.
@@ -175,6 +176,38 @@ test("risolvi tutte chiede conferma dentro il popup, non con Modali.confirm che 
 
 test("vai al box porta alla pagina e seleziona il box, come il Report Integrita'", () => {
     assert.match(schermata, /app\.activeWindow\.activePage = box\.parentPage;\s*\}\s*app\.selection = \[box\];/);
+});
+
+/* ---- I20-1044: la schermata col pannello stretto ---- */
+
+test("dei codici del gruppo si vedono i primi due, poi i puntini", () => {
+    assert.strictEqual(SchermataSegnalazioni.codiciAbbreviati("6771109,5062150,3104458,4410021"), "6771109, 5062150, …");
+    assert.strictEqual(SchermataSegnalazioni.codiciAbbreviati("6771109, 5062150"), "6771109, 5062150");
+    assert.strictEqual(SchermataSegnalazioni.codiciAbbreviati("6771109"), "6771109");
+    assert.strictEqual(SchermataSegnalazioni.codiciAbbreviati("6771109,5062150,3104458", Infinity), "6771109, 5062150, 3104458");
+    assert.strictEqual(SchermataSegnalazioni.codiciAbbreviati(null), "");
+});
+
+test("il nome del box e' breve, e completo nel suggerimento", () => {
+    global.Utility = { getDnaOfBox: () => ({ codice_gruppo: "1,2,3" }) };
+    try {
+        assert.deepStrictEqual(SchermataSegnalazioni._nomeBox({ label: "BOX12" }), { breve: "Box BOX12 · gruppo 1, 2, …", completo: "Box BOX12 · gruppo 1, 2, 3" });
+    }
+    finally {
+        delete global.Utility;
+    }
+    assert.match(schermata, /\.text\(nomeBox\.breve\)\.attr\('title', nomeBox\.completo\)/);
+});
+
+test("restringendo il pannello i testi si stringono e i pulsanti restano dentro", () => {
+    //I testi possono scendere sotto la loro parola piu' lunga, e le parole lunghe vanno a capo.
+    assert.match(schermata, /_testoCheSiRestringe\(elemento\) \{\s*return elemento\.css\(\{ flex: '1 1 0', minWidth: '0', overflowWrap: 'anywhere', wordBreak: 'break-word' \}\);/);
+    assert.match(schermata, /const testo = SchermataSegnalazioni\._testoCheSiRestringe\(\$\('<span><\/span>'\)\);/);
+    //L'intestazione va a capo, i pulsanti non si stringono.
+    assert.match(schermata, /const testata = \$\('<div><\/div>'\)\.css\(\{ display: 'flex', flexWrap: 'wrap'/);
+    assert.match(schermata, /\.text\("Vai al box"\)\.css\(\{ flexShrink: '0' \}\)/);
+    assert.match(schermata, /const azioniTutte = \$\('<span><\/span>'\)\.css\(\{ flexShrink: '0' \}\);/);
+    assert.match(schermata, /\.text\("Risolvi"\)\.css\(\{ flexShrink: '0' \}\)/);
 });
 
 /* ---- dove si apre ---- */

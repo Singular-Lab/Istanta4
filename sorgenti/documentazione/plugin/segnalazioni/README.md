@@ -80,6 +80,13 @@ su quel volantino: 6339 ms contro 90 ms, con gli stessi bollini.
 - Dopo ogni risoluzione l'elenco si **rilegge dal documento**: gli indici e i box, che il bollino
   ridisegnato regruppa, cambiano.
 
+**Col pannello stretto** (I20-1044): restringendo il pannello i pulsanti finivano oltre il bordo
+destro, perché nelle righe flex i testi non scendevano sotto la loro parola più lunga (i codici del
+gruppo uniti da virgole, le etichette come `foto_extra$logo_attributo_it$tipo_3`). Ora i testi si
+restringono e spezzano le parole lunghe (`_testoCheSiRestringe`), i pulsanti non si stringono, e
+l'intestazione del box manda a capo i pulsanti se non c'è spazio. Del gruppo si vedono i primi due
+codici e poi i puntini (`codiciAbbreviati`: «6771109, 5062150, …»); tutti nel suggerimento del nome.
+
 **Dove si apre:**
 - dal pulsante **«Segnalazioni»** in Menabò → Filtri, accanto a Conteggio e Impagina;
 - **da sola a fine impaginazione**, se il giro ha prodotto segnalazioni (`apriSeCiSono`): Volantino

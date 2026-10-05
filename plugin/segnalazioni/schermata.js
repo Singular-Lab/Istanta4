@@ -11,7 +11,7 @@
  *
  * Usa le globali di indexNew come gli altri moduli: $, Modali, Utility, app, docInLavorazione,
  * messaggioUtente, aggiornaBadgeSegnalazioniTracciato (lotto 3). Le funzioni che non toccano il
- * documento (perPagina, conta, coloreCss, testoRiepilogo) sono pure.
+ * documento (perPagina, conta, coloreCss, testoRiepilogo, codiciAbbreviati) sono pure.
  */
 
 const Segnalazioni = require('./segnalazioni');
@@ -56,6 +56,16 @@ const SchermataSegnalazioni = {
             testo += " (" + riepilogo.errori + (riepilogo.errori === 1 ? " errore" : " errori") + ")";
         }
         return testo;
+    },
+
+    /// I20-1044: i codici di un gruppo da mostrare: i primi due e poi i puntini, "6771109,
+    /// 5062150, …". Un gruppo puo' avere decine di articoli, e la riga diventava lunghissima.
+    codiciAbbreviati(codiceGruppo, quanti = 2) {
+        const codici = String(codiceGruppo == null ? "" : codiceGruppo).split(",").map(c => c.trim()).filter(c => c !== "");
+        if (codici.length <= quanti) {
+            return codici.join(", ");
+        }
+        return codici.slice(0, quanti).join(", ") + ", …";
     },
 
     /// Quanti box e quante segnalazioni.
@@ -145,33 +155,47 @@ const SchermataSegnalazioni = {
     },
 
     /// Il nome del box sulla schermata: la meccanica e il codice gruppo, se il DNA si legge.
+    /// I20-1044: breve con i soli primi codici del gruppo, completo per il suggerimento.
     _nomeBox(box) {
-        let nome = "Box";
+        let breve = "Box";
+        let completo = "Box";
         try {
-            nome = "Box " + (box.label || "");
+            breve = completo = "Box " + (box.label || "");
             const dna = Utility.getDnaOfBox(box);
             if (dna != null && dna.codice_gruppo) {
-                nome += " · gruppo " + dna.codice_gruppo;
+                breve += " · gruppo " + SchermataSegnalazioni.codiciAbbreviati(dna.codice_gruppo);
+                completo += " · gruppo " + SchermataSegnalazioni.codiciAbbreviati(dna.codice_gruppo, Infinity);
             }
         }
         catch (e) {
             //resta il nome che c'e'
         }
-        return nome;
+        return { breve: breve, completo: completo };
+    },
+
+    //I20-1044: un testo dentro una riga flex che si restringe col pannello. Senza minWidth 0 non
+    //scende sotto la sua parola piu' lunga - i codici del gruppo uniti dalle virgole, le etichette
+    //come foto_extra$logo_attributo_it$tipo_3 - e restringendo il pannello la riga restava larga,
+    //con i pulsanti fuori dal bordo destro. Le parole troppo lunghe vanno a capo.
+    _testoCheSiRestringe(elemento) {
+        return elemento.css({ flex: '1 1 0', minWidth: '0', overflowWrap: 'anywhere', wordBreak: 'break-word' });
     },
 
     _bloccoBox(lettura, elenco) {
         const blocco = $('<div></div>').css({ margin: '4px 0 8px 0', padding: '6px', border: '1px solid #ddd', borderRadius: '4px' });
 
-        const testata = $('<div></div>').css({ display: 'flex', alignItems: 'center', gap: '6px' });
+        //I20-1044: se non c'e' spazio, i pulsanti vanno a capo sotto il nome invece di uscire a destra.
+        const testata = $('<div></div>').css({ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px' });
         testata.append(SchermataSegnalazioni._pallino(etichettaSegnalazioni.gravitaPeggiore(lettura.voci)));
-        testata.append($('<span></span>').text(SchermataSegnalazioni._nomeBox(lettura.box)).css({ flexGrow: '1', fontWeight: 'bold' }));
+        const nomeBox = SchermataSegnalazioni._nomeBox(lettura.box);
+        testata.append(SchermataSegnalazioni._testoCheSiRestringe($('<span></span>').text(nomeBox.breve).attr('title', nomeBox.completo))
+            .css({ fontWeight: 'bold', flexBasis: '120px' }));
 
-        const vai = $('<button type="button"></button>').text("Vai al box")
+        const vai = $('<button type="button"></button>').text("Vai al box").css({ flexShrink: '0' })
             .on('click', () => SchermataSegnalazioni.vaiAlBox(lettura.box));
 
         //"Risolvi tutte" chiede conferma dentro il popup: la conferma di Modali starebbe sotto.
-        const azioniTutte = $('<span></span>');
+        const azioniTutte = $('<span></span>').css({ flexShrink: '0' });
         const tutte = $('<button type="button"></button>').text("Risolvi tutte")
             .on('click', () => {
                 azioniTutte.empty();
@@ -193,7 +217,7 @@ const SchermataSegnalazioni = {
         lettura.voci.forEach((voce, indice) => {
             const riga = $('<div></div>').css({ display: 'flex', alignItems: 'flex-start', gap: '6px', marginTop: '4px', paddingLeft: '16px' });
             riga.append(SchermataSegnalazioni._pallino(voce.g).css({ marginTop: '3px' }));
-            const testo = $('<span></span>').css({ flexGrow: '1' });
+            const testo = SchermataSegnalazioni._testoCheSiRestringe($('<span></span>'));
             if (voce.c) {
                 testo.append($('<b></b>').text(voce.c + " "));
             }
@@ -204,7 +228,7 @@ const SchermataSegnalazioni = {
                 testo.append($('<span></span>').text(" (bollino vecchio)").css({ color: '#777', fontStyle: 'italic' }));
             }
             riga.append(testo);
-            riga.append($('<button type="button"></button>').text("Risolvi").on('click', () => {
+            riga.append($('<button type="button"></button>').text("Risolvi").css({ flexShrink: '0' }).on('click', () => {
                 Segnalazioni.risolviVoce(lettura.box, indice);
                 SchermataSegnalazioni.riempi(elenco);
             }));
