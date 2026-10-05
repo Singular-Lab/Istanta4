@@ -15,6 +15,51 @@
 ///
 /// La documentazione sta in sorgenti/documentazione/plugin/indexNew/.
 
+//I20-1045: a volte, all'avvio, InDesign non rende disponibile app (require('indesign').app vale
+//undefined e in quella sessione non arriva piu'). Prima di caricare qualunque altra cosa si
+//controlla: se manca, il pannello si ricarica da solo, fino a un massimo di tentativi, e questo
+//file si ferma qui. Il resto - eventi, agenzia, interfaccia - non parte senza app.
+const AvvioPannello = require('./avvioPannello');
+
+/// I20-1045: il messaggio dell'avvio mancato, in #loadingPanel. Questo file si carica
+/// nell'<head>, prima del body: si aspetta che il riquadro esista. Con conRiprova aggiunge il
+/// pulsante che azzera i tentativi e ricarica.
+function mostraAvvioPannello(testo, conRiprova, attese = 100) {
+    const riquadro = document.getElementById("loadingPanel");
+    if (riquadro == null) {
+        if (attese > 0) {
+            setTimeout(function () { mostraAvvioPannello(testo, conRiprova, attese - 1); }, 50);
+        }
+        return;
+    }
+
+    riquadro.style.display = "flex";
+    riquadro.style.flexDirection = "column";
+    const titolo = riquadro.querySelector("h1");
+    if (titolo != null) {
+        titolo.textContent = testo;
+    }
+    if (conRiprova && document.getElementById("riprovaAvvioPannello") == null) {
+        const pulsante = document.createElement("button");
+        pulsante.id = "riprovaAvvioPannello";
+        pulsante.textContent = "Riprova";
+        pulsante.addEventListener("click", function () {
+            AvvioPannello.scriviStato(localStorage, null);
+            location.reload();
+        });
+        riquadro.appendChild(pulsante);
+    }
+}
+
+if (!AvvioPannello.controlla({
+    indesign: require('indesign'),
+    storage: typeof localStorage !== "undefined" ? localStorage : null,
+    ricarica: function () { location.reload(); },
+    mostra: mostraAvvioPannello
+})) {
+    throw new Error("I20-1045: InDesign non ha reso disponibile app, il Plugin non parte (vedi avvioPannello.js).");
+}
+
 const uxp = require('uxp');
 const { storage } = require('uxp');
 const fs = require('fs');
