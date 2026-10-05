@@ -30,6 +30,16 @@ direttamente:
 - `parseMeccanica_provvisorioCompiled(objRef, allEtichette, canale)` → traduce le etichette di una
   referenza nella **meccanica** del box. È la funzione più lunga del file, quasi seicento righe, ed
   è il cuore di ciò che distingue un cliente dall'altro.
+- Edro21, **stili della base** in `getRefCompiledInBox_Css`: per ogni formato speciale `base_A_…` per
+  il canale SC e `base_P_…` per gli altri (SDB, BDP, Piacersi, B&F, Verso Natura, Parmigiano). Vale
+  l'ultimo applicato. Dal I20-1046 c'è **Artisti della Qualità** (`base_A_ADQnaz` / `base_P_ADQnaz`),
+  riconosciuto da `artistiDellaQualita(objItem)`: il campo `art_qual` è un testo non vuoto, lo stesso
+  criterio del server, che allora aggiunge i loghi `Logo_ADQnaz` e `Margherita_ADQnaz`. Viene per
+  ultimo, quindi vince su tutti gli altri; non vale per i box focus.
+  Se la ref è anche del **Buono del Paese**, il logo (`foto_extra$Logo_BDP$…`) e lo sfondo
+  (`sfondo$sfondo_bdp$…`), che il core ha già messo nel box, si **nascondono**
+  (`elementoBuonoDelPaese`): starebbero sotto quelli di ADQ. Si fa nel custom e non nel server, per
+  non toccare `AgenziaLib.dll`.
 - `setCustomFixFoto(box)` → la sistemazione delle foto a modo del cliente, al posto di quella
   standard. `indexNew` la cerca **prima** di chiamare `SistemazioneFoto.fixFoto`: se c'è, comanda questa. Lei, dall'agenzia, chiama `CssFramework.fixFoto`, che rimanda allo stesso modulo — vedi [sistemazioneFoto](sistemazioneFoto/README.md).
   Edro21 prova il box in due disposizioni, la descrizione dov'è o spostata in basso a sinistra.

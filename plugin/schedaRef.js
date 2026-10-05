@@ -2176,7 +2176,7 @@ const schedaRef = {
                                     else {
                                         //Valore assegnato forzato
                                         contInstr.append("<input style=\"width:100px;vertical-align:middle;\" class=\"fieldCambioStrutturale\" type=\"text\" readonly disabled id=\"" + istruzione.field + "\" value=\"" + istruzione.valore + "\"></input>");
-                                        panelAzioneEl.append('<div class="row" style="display:block;"><div class="col" style="display:block;"><div style="color: white;width:100%;">'+istruzione.field +'</div><div style="100%"><input type="text" class="fieldCambioStrutturale singular-inputTextfield" id="'+istruzione.field +'" readonly style="width: 90%; color: black; background:#dcdc82;" value="'+istruzione.valore+'"></input></div></div></div>');
+                                        panelAzioneEl.append('<div class="row" style="display:block;"><div class="col" style="display:block;"><div style="color: white;width:100%;">'+istruzione.field +'</div><div style="width:100%"><input type="text" class="fieldCambioStrutturale singular-inputTextfield" id="'+istruzione.field +'" readonly style="width: 90%; color: black; background:#dcdc82;" value="'+istruzione.valore+'"></input></div></div></div>');
 
                                     }
                                 }

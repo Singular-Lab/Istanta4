@@ -106,15 +106,15 @@ public class ComposizioneBoxTests
         var percorso = TrovaSorgenteEdro21();
         var root = JsonConvert.DeserializeObject<DbFrameworkCss>(File.ReadAllText(percorso));
 
-        var boxConRegola = root!.dbRidimensionamentiAllineamenti.modificheCssPerKit
-            .SelectMany(m => m.operazioniPerBox)
-            .Where(op => op.nomiBox.Contains("BOX41"))
+        var kitConBox41 = root!.dbRidimensionamentiAllineamenti.modificheCssPerKit
+            .Where(m => m.operazioniPerBox.Any(op => op.nomiBox.Contains("BOX41")))
             .ToList();
 
-        Assert.NotEmpty(boxConRegola);
+        Assert.NotEmpty(kitConBox41);
 
-        foreach (var box in boxConRegola)
+        foreach (var kit in kitConBox41)
         {
+            var box = kit.operazioniPerBox.Single(op => op.nomiBox.Contains("BOX41"));
             var duplicazione = Assert.Single(box.duplicazioni);
             Assert.Equal("sy_ombra", duplicazione.etichettaSorgente);
             Assert.Contains("immagine*", duplicazione.bersagli);
@@ -125,8 +125,18 @@ public class ComposizioneBoxTests
             var ordine = Assert.Single(box.ordiniZ);
             Assert.Equal("dietro", ordine.posizione);
             Assert.Contains("sy_ombra*", ordine.etichette);
-            Assert.Contains("parentesi_BeF", ordine.etichette);
             Assert.Contains("immagine*", ordine.rispettoA);
+
+            //I20-1046: le parentesi stanno dietro le foto solo nel kit SC. Nel kit SS/CN/CY stanno
+            //davanti: e' una scelta voluta, fatta dall'editor del server e confermata dall'operatore.
+            if (kit.kit.canaliValidi.Contains("SC"))
+            {
+                Assert.Contains("parentesi_BeF", ordine.etichette);
+            }
+            else
+            {
+                Assert.DoesNotContain("parentesi_BeF", ordine.etichette);
+            }
         }
     }
 
