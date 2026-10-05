@@ -769,7 +769,7 @@ const pluginMiddleware = {
                 return contenutoKitInLavorazione.records;
             }
 
-            const lista = readFile(pathLavorazione + "/listaKit" + idKitLavorazione + ".json");
+            const lista = readFile(Utility.percorsoListaKit(idKitLavorazione));
             if (lista != null && Array.isArray(lista.records)) {
                 return lista.records;
             }

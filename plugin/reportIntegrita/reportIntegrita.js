@@ -1155,7 +1155,7 @@ const ReportIntegrita = {
     /// ricontrollo.
     _aggiornaListaKitConRecordFreschi(recordsFreschi) {
         try {
-            const percorso = pathLavorazione + "/listaKit" + idKitLavorazione + ".json";
+            const percorso = Utility.percorsoListaKit(idKitLavorazione);
             const lista = readFile(percorso);
 
             if (lista == null || !Array.isArray(lista.records)) {
@@ -1748,7 +1748,7 @@ const ReportIntegrita = {
             return stato.listaKit;
         }
 
-        let lista = readFile(pathLavorazione + "/listaKit" + idKitLavorazione + ".json");
+        let lista = readFile(Utility.percorsoListaKit(idKitLavorazione));
 
         if (typeof lista === "string") {
             try {
@@ -3489,7 +3489,7 @@ const ReportIntegrita = {
             }
 
             //2. La lista: quella scaricata da meno di un'ora si puo' riusare, se l'operatore vuole.
-            const listaLocale = readFile(pathLavorazione + "/listaKit" + idKit + ".json");
+            const listaLocale = readFile(Utility.percorsoListaKit(idKit));
             let usaListaLocale = reportIntegritaAvvio.listaERecente(
                 listaLocale != null ? listaLocale["DataScaricamento"] : null);
 
@@ -3671,7 +3671,7 @@ const ReportIntegrita = {
         }
 
         //recuperiamo dalla lista scaricata le schedeRefs con i codici gruppo presenti in pagina
-        var lista = readFile(pathLavorazione + "/listaKit" + idKitLavorazione + ".json");
+        var lista = readFile(Utility.percorsoListaKit(idKitLavorazione));
         if (lista == null || lista.records == null) {
             messaggioUtente("Code IDX-165 Confronto: lista del kit non disponibile in locale", "error", false, 10);
             hideLoading();

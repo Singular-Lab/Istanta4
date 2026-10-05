@@ -3882,7 +3882,7 @@ const schedaRef = {
 
             //creiamo una funzione richiamabile
             let applicaCambiStrutturali = function () {
-                var originFile = readFile(pathLavorazione + "/listaKit" + idKitLavorazione + ".json");
+                var originFile = readFile(Utility.percorsoListaKit(idKitLavorazione));
                 if (originFile == null) {
                     //currentSelection = null;
                     messaggioUtente("Code SRF-30 ATTENZIONE - La lista tracciato non è stata scaricata", "warning");

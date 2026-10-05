@@ -57,6 +57,21 @@ nome cinque membri — `parseLabel`, `getFieldByLabel`, `setCampoDNA`, `cercaChi
 - `getListaCodiciImpaginati(opzioni)` → chiede al server i codici impaginati. Se la chiamata non
   riesce restituisce una lista vuota, oppure `null` con `{ nullSeFallisce: true }` (I20-1031): così
   chi mostra un conteggio distingue «nessuno» da «non lo so».
+- **La lista del kit** (I20-1034): il file si chiama `CN_TO_listaKit302.json`, con le sigle di
+  canale e area della lavorazione davanti al nome di sempre, per riconoscerlo nella cartella. Il
+  nome lo sa solo `utility.js`; prima lo costruivano a mano tredici punti di `indexNew`,
+  `ficoProcess`, `filtri`, `pluginMiddleware`, `schedaRef` e `reportIntegrita`.
+  - `nomeFileListaKit(idKit, canale, area)` → il nome, con le sole sigle che ci sono;
+  - `eFileListaKit(nome, idKit)` → se un file è la lista di quel kit: finisce con
+    `listaKit<id>.json`, e prima c'è l'inizio del nome o un `_` (`listaKit1302` non è `302`);
+  - `percorsoNuovaListaKit(idKit)` → dove scrive lo scaricamento: il nome con le sigle della
+    lavorazione aperta, senza sigle per un altro kit;
+  - `percorsoListaKit(idKit)` → da dove si legge: il nome atteso se c'è, altrimenti un file della
+    cartella che finisce come lui (`fs.readdirSync`), per esempio la lista scaricata prima senza
+    sigle; altrimenti il nome atteso, che dirà «non trovato» (FIP-05 riporta quel nome).
+
+  I file vecchi senza sigle non si rinominano né si tolgono, per decisione dell'operatore: restano
+  leggibili finché non c'è quello nuovo.
 - `moveToPasteBoard`, `impostaValHiddenVal`.
 
 `getLetturaFacilitataDellaParola`, che la issue metteva nel testo, **è andata in

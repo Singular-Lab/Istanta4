@@ -2253,7 +2253,7 @@ const filtri = {
     /// Guarda nel tracciato quali valori esistono davvero per quel campo, cosi' la tendina
     /// propone solo cose che si possono trovare.
     trovaValoriPerTendinaValueDelFiltro(chiave, scope = null){
-        let listaTracciato = readFile(pathLavorazione + "/listaKit" + idKitLavorazione + ".json");
+        let listaTracciato = readFile(Utility.percorsoListaKit(idKitLavorazione));
         if(listaTracciato == null){
             messaggioUtente("Code FLT-01 Lista non scaricata, si consiglia di scaricarla dalla schermata home per accedere alle informazioni delle corrispondenze filtro", "warning");
             return [];
@@ -2624,7 +2624,7 @@ const filtri = {
             let listImpaginati = await Utility.getListaCodiciImpaginati();
             //cerchiamo nel file listaKit + idKitLavorazione + ".json" i record che soddisfano tutti i criteri del filtro
     
-            let listaTracciato = readFile(pathLavorazione + "/listaKit" + idKitLavorazione + ".json");
+            let listaTracciato = readFile(Utility.percorsoListaKit(idKitLavorazione));
 
             if(listaTracciato == null){
                 messaggioUtente("Code FLT-00 Lista non scaricata", "error");

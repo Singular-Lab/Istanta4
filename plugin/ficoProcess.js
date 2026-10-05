@@ -1298,9 +1298,9 @@ const FicoProcess=
                 let fileName = "";
                 if (actionFormat == "web") {
 
-                    var file = readFile(pathLavorazione + "/listaKit" + idKitLavorazione + ".json");
+                    var file = readFile(Utility.percorsoListaKit(idKitLavorazione));
                     if (file == null) {
-                        messaggioUtente("Code FIP-05 Errore: File listaKit" + idKitLavorazione + ".json non trovato", "error");
+                        messaggioUtente("Code FIP-05 Errore: File " + Utility.percorsoListaKit(idKitLavorazione).split("/").pop() + " non trovato", "error");
                         return;
                     }
 
@@ -1355,9 +1355,9 @@ const FicoProcess=
                         if (metaIncluded)
                         {
 
-                            var file = readFile(pathLavorazione + "/listaKit" + idKitLavorazione + ".json");
+                            var file = readFile(Utility.percorsoListaKit(idKitLavorazione));
                             if (file == null) {
-                                messaggioUtente("Code FIP-05 Errore: File listaKit" + idKitLavorazione + ".json non trovato", "error");
+                                messaggioUtente("Code FIP-05 Errore: File " + Utility.percorsoListaKit(idKitLavorazione).split("/").pop() + " non trovato", "error");
                                 return;
                             }
                             
@@ -1408,9 +1408,9 @@ const FicoProcess=
                             listaLineareRef = listaLineareRef.concat(localDbDataset[r].listaRef);
                         }
 
-                         var file = readFile(pathLavorazione + "/listaKit" + idKitLavorazione + ".json");
+                         var file = readFile(Utility.percorsoListaKit(idKitLavorazione));
                             if (file == null) {
-                                messaggioUtente("Code FIP-05 Errore: File listaKit" + idKitLavorazione + ".json non trovato", "error");
+                                messaggioUtente("Code FIP-05 Errore: File " + Utility.percorsoListaKit(idKitLavorazione).split("/").pop() + " non trovato", "error");
                                 return;
                             }
                         
@@ -1814,7 +1814,7 @@ const FicoProcess=
 
 
                     //Leggo la lista che DEVE essere aggiornata
-                    var file = readFile(pathLavorazione + "/listaKit" + idKitLavorazione + ".json");
+                    var file = readFile(Utility.percorsoListaKit(idKitLavorazione));
 
                     let pages = app.activeDocument.pages;
 
