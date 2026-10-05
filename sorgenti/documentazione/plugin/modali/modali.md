@@ -22,6 +22,12 @@ mescolati dentro. Uscito da `utility.js` in I20-1012. Panoramica: [README.md](RE
   `message` può essere un testo o un elemento.
 - `confirmCustom(message, testo1, valore1, testo2, valore2)` → uno o due pulsanti dal testo
   scelto, più Annulla. Restituisce `{ result, hiddenVal }`: `hiddenVal` dice quale pulsante.
+  Fino a I20-1040 aspettava che `hiddenVal` fosse impostato, e Annulla non lo imposta: con Annulla
+  l'attesa non finiva. Ora aspetta la risposta, qualunque sia; con Annulla `result` è `false`.
+  Dal I20-1040 `message` può essere anche un elemento, inserito com'è (un testo resta in un
+  titolo). Se il messaggio non ci sta, prende in pixel lo spazio sopra i pulsanti e scorre: in
+  UXP un contenitore scorre solo con un'altezza esplicita, e col solo `max-height` del riquadro
+  il testo lungo veniva tagliato.
 - `popup(title, message, taglia, alChiudi, contenutoIntestazione)` → un avviso, e attende.
   **Ha un contratto da conoscere:** rimuove il popup **prima** di chiamare `alChiudi`, e il suo
   ciclo di attesa non finisce da solo.

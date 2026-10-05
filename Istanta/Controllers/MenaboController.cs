@@ -10239,7 +10239,12 @@ double.TryParse(percorso.ToString(), out double valore16))
                 })
                 .ToList();
                     resultPagina esitoPagina = new resultPagina();
-                    res.esito = true;
+                    //I20-1040: una pagina in errore lascia l'esito falso; prima la pagina dopo lo
+                    //rimetteva a vero e l'errore si perdeva, e lo svuotamento procedeva senza chiedere.
+                    if (res.errors.Count == 0)
+                    {
+                        res.esito = true;
+                    }
                     esitoPagina.nomePagina = pag.nomePagina;
                     try
                     {

@@ -17,7 +17,15 @@ stesso oggetto. Panoramica: [README.md](README.md).
 2. **`preAnalisiMismatchNumeriPagina(rangePagine, mappa)`** e **`syncImpaginatoConServer(...)`** —
    le referenze finite su una pagina diversa da quella prevista, e l'allineamento col server. Usano
    la mappa del motore (`confronti.mappaturaImpaginato`, `confronti.semplificazioneMappaImpaginato`).
-   Una richiesta annullata non li lascia appesi (I20-1004).
+   Una richiesta annullata non li lascia appesi (I20-1004). Dal I20-1040 `syncImpaginatoConServer`
+   restituisce **«Fallita»** se il server rifiuta o la risposta non si legge (prima aspettava il
+   timeout e diceva comunque «Completed», o restava appeso dopo un'eccezione): il Report controlla
+   solo `null` e prosegue come prima, lo svuotamento di pagina si ferma.
+   Usati anche da **Svuota pagina** (I20-1040), con **`classificaPerSvuotamento`**, che dalla
+   pre-analisi e dalla mappa di tutto il documento separa le referenze spostate in un'altra pagina
+   da quelle non registrate sul server e da quelle registrate su un'altra pagina (`_codiciConId`,
+   `_stessaReferenza`), e con **`preAnalisiSenza`**, che toglie dalla sync le referenze mantenute: vedi
+   [indexNew, 02](../indexNew/02-impaginazione.md).
 3. **`applicaConfronto(mappa)`** — il confronto box per box, arrivato da `indexNew.js`: per ogni
    elemento della mappa trova il box (`boxDellElementoMappa`), lo confronta coi record
    (`preAnalisiBoxMappato`, che passa da `confronti.confrontoBoxCompiledFieldPreAnalisi`), raccoglie
