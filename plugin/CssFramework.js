@@ -2077,6 +2077,181 @@ const CssFramework =
     /// Azzerata a ogni applicaRidimensionamento, cioe' una volta per box.
     etichetteSegnalate: [],
 
+    /// I20-1042: gli spostamenti in griglia (CSF-008) in attesa del controllo di fine box.
+    /// fixOverflowFromBox gira molte volte per box - dopo il ridimensionamento e dopo ogni regola
+    /// di allineamento - e solo dopo arrivano il fix foto e le regole dopoFixFoto, che ricollocano
+    /// gli elementi. Segnalare subito voleva dire avvisare di posizioni intermedie: l'operatore
+    /// andava a vedere il box e non trovava niente. Qui si annota dove la correzione ha messo
+    /// l'elemento; controllaSpostamentiGrigliaPendenti, a fine box, segnala solo quelli rimasti li'.
+    spostamentiGrigliaPendenti: null,
+
+    /// Annota lo spostamento appena fatto. Un elemento spostato di nuovo nella stessa direzione
+    /// aggiorna la sua annotazione: conta la posizione dell'ultima correzione. Le annotazioni di
+    /// un altro box, rimaste da un'impaginazione interrotta, si buttano.
+    annotaSpostamentoGriglia(box, pageItem, direzione) {
+        try {
+            var boxKey = this.getBoxKeySegnalazioniConflitti(box);
+            var boxLabel = box && box.label ? box.label : "";
+            var pendente = this.spostamentiGrigliaPendenti;
+            if (!pendente || (pendente.boxKey != boxKey && pendente.boxLabel != boxLabel)) {
+                pendente = { boxKey: boxKey, boxLabel: boxLabel, spostamenti: [] };
+                this.spostamentiGrigliaPendenti = pendente;
+            }
+
+            var itemKey = this.getItemKeySegnalazioniConflitti(pageItem, Utility.parseLabel(pageItem.label));
+            var annotazione = {
+                itemKey: itemKey,
+                item: pageItem,
+                label: pageItem.label != "" ? Utility.parseLabel(pageItem.label) : "senza etichetta",
+                direzione: direzione,
+                bounds: pageItem.geometricBounds.slice()
+            };
+
+            var esistente = pendente.spostamenti.findIndex(s => s.itemKey == itemKey && s.direzione == direzione);
+            if (esistente >= 0) {
+                pendente.spostamenti[esistente] = annotazione;
+            }
+            else {
+                pendente.spostamenti.push(annotazione);
+            }
+        }
+        catch (error) {
+            console.error("Errore nell'annotazione dello spostamento in griglia");
+            console.error(error);
+        }
+    },
+
+    /// Il controllo di fine box, dopo il fix foto e le regole dopoFixFoto. Un elemento che sta
+    /// ancora dove la correzione l'ha messo e' rimasto nella posizione forzata: CSF-008, nel banner
+    /// e nel bollino del box. Se un passaggio successivo l'ha ricollocato, la segnalazione parlava
+    /// di una posizione che non esiste piu' e si scarta. Le annotazioni si consumano comunque.
+    controllaSpostamentiGrigliaPendenti(box) {
+        var pendente = this.spostamentiGrigliaPendenti;
+        this.spostamentiGrigliaPendenti = null;
+        try {
+            if (!pendente || pendente.spostamenti.length == 0 || !box) {
+                return;
+            }
+
+            //Solo gli elementi che stanno davvero in questo box: un'annotazione di un box
+            //omonimo, rimasta da un errore, non deve finire qui.
+            var chiaviDelBox = [];
+            for (var i = 0; i < box.allPageItems.length; i++) {
+                chiaviDelBox.push(this.getItemKeySegnalazioniConflitti(box.allPageItems[i], Utility.parseLabel(box.allPageItems[i].label)));
+            }
+
+            var boxLabel = box.label != "" ? box.label : "senza etichetta";
+            for (var s = 0; s < pendente.spostamenti.length; s++) {
+                var spostamento = pendente.spostamenti[s];
+                var item = spostamento.item;
+                if (!item || item.isValid === false || chiaviDelBox.indexOf(spostamento.itemKey) < 0 || !this.elementoVisibilePerSegnalazioniConflitti(item)) {
+                    continue;
+                }
+
+                if (!this.stessiBounds(item.geometricBounds, spostamento.bounds, 0.05)) {
+                    console.log("CSF-008 scartato: " + spostamento.label + " spostato " + spostamento.direzione + " e poi ricollocato.");
+                    continue;
+                }
+
+                var msg = "Code CSF-008: Elemento " + spostamento.label + " nel box " + boxLabel + " spostato " + spostamento.direzione + " per rientrare nei limiti della griglia. Verificare le dimensioni dell'elemento.";
+                messaggioUtente(msg, "warning");
+                addSegnalazione(msg, "warning", 2, true, ["CSF-008", "orange"]);
+            }
+        }
+        catch (error) {
+            console.error("Errore nel controllo degli spostamenti in griglia per la box " + (box && box.label ? box.label : ""));
+            console.error(error);
+        }
+    },
+
+    /// Due bounds uguali a meno della tolleranza, lato per lato.
+    stessiBounds(a, b, tolleranza) {
+        if (!a || !b || a.length != 4 || b.length != 4) {
+            return false;
+        }
+        for (var i = 0; i < 4; i++) {
+            if (Math.abs(a[i] - b[i]) > tolleranza) {
+                return false;
+            }
+        }
+        return true;
+    },
+
+    /// I quattro lati della griglia, nell'ordine in cui fixOverflowFromBox li controlla. indice e'
+    /// la posizione nei bounds [y1, x1, y2, x2]; minimo dice se si esce verso il valore piu'
+    /// piccolo (sopra, a sinistra), verticale se lo spostamento e' sull'asse Y.
+    latiGriglia: [
+        { indice: 0, opposto: 2, minimo: true, verticale: true, direzione: "verso il basso" },
+        { indice: 1, opposto: 3, minimo: true, verticale: false, direzione: "verso destra" },
+        { indice: 2, opposto: 0, minimo: false, verticale: true, direzione: "verso l'alto" },
+        { indice: 3, opposto: 1, minimo: false, verticale: false, direzione: "verso sinistra" }
+    ],
+
+    /// Riporta dentro la griglia un elemento che ne esce da un lato. Una casella di testo prova
+    /// prima a stringersi fino al limite; se cosi' andrebbe in overflow, o non le resterebbe
+    /// spazio, torna com'era e si sposta. Lo spostamento aggiorna la mappa del box, sullo stesso
+    /// asse, perche' le regole che seguono la leggono. Torna true se l'elemento e' stato spostato
+    /// di piu' di 1 mm: e' la soglia sotto la quale non si segnala.
+    riportaLatoInGriglia(box, pageItem, boxInGrigliaBounds, lato, mappaBoxOriginale) {
+        var limite = boxInGrigliaBounds[lato.indice];
+        var fuori = lato.minimo
+            ? pageItem.geometricBounds[lato.indice] < limite - 0.05
+            : pageItem.geometricBounds[lato.indice] > limite + 0.05;
+        if (!fuori) {
+            return false;
+        }
+
+        if (this.isTextFrame(pageItem)) {
+            var originalBounds = pageItem.geometricBounds;
+            var ridotti = originalBounds.slice();
+            ridotti[lato.indice] = lato.minimo
+                ? Math.max(originalBounds[lato.indice], limite)
+                : Math.min(originalBounds[lato.indice], limite);
+            //quello che resta fra il lato ridotto e quello opposto
+            var spazio = lato.minimo
+                ? originalBounds[lato.opposto] - ridotti[lato.indice]
+                : ridotti[lato.indice] - originalBounds[lato.opposto];
+            var cantReduce = !(spazio > 0);
+            if (!cantReduce) {
+                pageItem.geometricBounds = ridotti;
+            }
+
+            //ridotto senza overflow: resta cosi', nessuno spostamento
+            if (!pageItem.properties.overflows && !cantReduce) {
+                return false;
+            }
+            pageItem.geometricBounds = originalBounds;
+        }
+
+        var etichetta = pageItem.label != "" ? Utility.parseLabel(pageItem.label) : "senza etichetta";
+        console.warn("Elemento " + etichetta + " spostato " + lato.direzione + " per rientrare nei limiti della griglia.");
+
+        var movimento = limite - pageItem.geometricBounds[lato.indice];
+        var oltreSoglia = Math.abs(movimento) > 1;
+        pageItem.move(undefined, lato.verticale ? [0, movimento] : [movimento, 0]);
+
+        //se la mappaBox e' presente aggiorniamo i bounds dell'elemento sull'asse dello spostamento
+        if (mappaBoxOriginale) {
+            var item = mappaBoxOriginale[Utility.parseLabel(pageItem.label)];
+            if (item) {
+                if (lato.verticale) {
+                    item.bounds[0] += movimento;
+                    item.bounds[2] += movimento;
+                }
+                else {
+                    item.bounds[1] += movimento;
+                    item.bounds[3] += movimento;
+                }
+            }
+        }
+
+        //I20-1042: non si segnala qui, si annota: lo decide il controllo di fine box.
+        if (oltreSoglia) {
+            this.annotaSpostamentoGriglia(box, pageItem, lato.direzione);
+        }
+        return oltreSoglia;
+    },
+
     /// Chi e' uscito dai bordi del box rientra. Su una casella di testo prova PRIMA a
     /// stringerla, e solo se andrebbe in overflow la sposta.
     fixOverflowFromBox(boxInGrigliaBounds, box, mappaBoxOriginale = null){
@@ -2092,220 +2267,11 @@ const CssFramework =
                 continue;
             }
             var moved = false;
-            if (pageItem.geometricBounds[0] < boxInGrigliaBounds[0] - 0.05) {
-                //prima di muoverlo, se è un textframe, proviamo a ridurlo per vedere se lo possiamo far rientrare nel limite senza mandarlo in overflow
-                if (this.isTextFrame(pageItem)) {
-                    var cantReduce = false;
-                    var originalBounds = pageItem.geometricBounds;
-                    var bounds0 = Math.max(pageItem.geometricBounds[0], boxInGrigliaBounds[0]);
-                    if (pageItem.geometricBounds[2] - bounds0 > 0) {
-                        pageItem.geometricBounds = [
-                            bounds0,
-                            pageItem.geometricBounds[1],
-                            pageItem.geometricBounds[2],
-                            pageItem.geometricBounds[3]
-                        ];
-                    }
-                    else{
-                        cantReduce = true;
-                    }
-
-                    //se è in overflow anche dopo la riduzione lo ripristiniamo e continuiamo con lo spostamento, altrimenti manteniamo la riduzione
-                    if (pageItem.properties.overflows || cantReduce) {
-                        pageItem.geometricBounds = originalBounds;
-                        console.warn("Elemento " + (pageItem.label != "" ? Utility.parseLabel(pageItem.label) : "senza etichetta") + " spostato verso il basso per rientrare nei limiti della griglia.");
-                        //mandiamo il messaggioUtente solo il margine di spostamento è superiore a 1
-                        if (Math.abs(boxInGrigliaBounds[0] - pageItem.geometricBounds[0]) > 1) {
-                            messaggioUtente("Code CSF-008: Elemento " + (pageItem.label != "" ? Utility.parseLabel(pageItem.label) : "senza etichetta") +" spostato verso il basso per rientrare nei limiti della griglia. Verificare le dimensioni dell'elemento.", "warning");
-                            moved = true;
-                        }
-                        var movementY = boxInGrigliaBounds[0] - pageItem.geometricBounds[0];
-                        pageItem.move(undefined, [0, movementY]);
-                        //se la mappaBox è presente cerchiamo l'elemento con quell'etichetta e aggiorniamo i suoi bounds con quelli attuali del pageItem
-                        if (mappaBoxOriginale) {
-                            var item = mappaBoxOriginale[Utility.parseLabel(pageItem.label)];
-                            if (item) {
-                                item.bounds[0] += movementY;
-                                item.bounds[2] += movementY;
-                            }
-                        }
-                    }
-                }
-                else{
-                    console.warn("Elemento " + (pageItem.label != "" ? Utility.parseLabel(pageItem.label) : "senza etichetta") + " spostato verso il basso per rientrare nei limiti della griglia.");
-                    //mandiamo il messaggioUtente solo il margine di spostamento è superiore a 1
-                    if (Math.abs(boxInGrigliaBounds[0] - pageItem.geometricBounds[0]) > 1) {
-                        messaggioUtente("Code CSF-008: Elemento " + (pageItem.label != "" ? Utility.parseLabel(pageItem.label) : "senza etichetta") +" spostato verso il basso per rientrare nei limiti della griglia. Verificare le dimensioni dell'elemento.", "warning");
-                        moved = true;
-                    }
-                    var movementY = boxInGrigliaBounds[0] - pageItem.geometricBounds[0];
-                    pageItem.move(undefined, [0, movementY]);
-                        //se la mappaBox è presente cerchiamo l'elemento con quell'etichetta e aggiorniamo i suoi bounds con quelli attuali del pageItem
-                            if (mappaBoxOriginale) {
-                                var item = mappaBoxOriginale[Utility.parseLabel(pageItem.label)];
-                                if (item) {
-                                    item.bounds[0] += movementY;
-                                    item.bounds[2] += movementY;
-                                }
-                            }
-                }
-            }
-            if (pageItem.geometricBounds[1] < boxInGrigliaBounds[1] - 0.05) {
-                if (this.isTextFrame(pageItem)) {
-                    var cantReduce = false;
-                    var originalBounds = pageItem.geometricBounds;
-                    var bounds1 = Math.max(pageItem.geometricBounds[1], boxInGrigliaBounds[1]);
-                    if (pageItem.geometricBounds[3] - bounds1 > 0) {
-                        pageItem.geometricBounds = [
-                            pageItem.geometricBounds[0],
-                            bounds1,
-                            pageItem.geometricBounds[2],
-                            pageItem.geometricBounds[3]
-                        ];
-                    }
-                    else{
-                        cantReduce = true;
-                    }
-                    if (pageItem.properties.overflows || cantReduce) {
-                        pageItem.geometricBounds = originalBounds;
-                        console.warn("Elemento " + (pageItem.label != "" ? Utility.parseLabel(pageItem.label) : "senza etichetta") + " spostato verso destra per rientrare nei limiti della griglia.");
-                        if (Math.abs(boxInGrigliaBounds[1] - pageItem.geometricBounds[1]) > 1) {
-                            messaggioUtente("Code CSF-008: Elemento " + (pageItem.label != "" ? Utility.parseLabel(pageItem.label) : "senza etichetta") +" spostato verso destra per rientrare nei limiti della griglia. Verificare le dimensioni dell'elemento.", "warning");
-                            moved = true;
-                        }
-                        var movementX = boxInGrigliaBounds[1] - pageItem.geometricBounds[1];
-                        pageItem.move(undefined, [movementX, 0]);
-                        //se la mappaBox è presente cerchiamo l'elemento con quell'etichetta e aggiorniamo i suoi bounds con quelli attuali del pageItem
-                        if (mappaBoxOriginale) {
-                            var item = mappaBoxOriginale[Utility.parseLabel(pageItem.label)];
-                            if (item) {
-                                item.bounds[1] += movementX;
-                                item.bounds[3] += movementX;
-                            }
-                        }
-                    }
-                }
-                else {
-                    console.warn("Elemento " + (pageItem.label != "" ? Utility.parseLabel(pageItem.label) : "senza etichetta") + " spostato verso destra per rientrare nei limiti della griglia.");
-                    if (Math.abs(boxInGrigliaBounds[1] - pageItem.geometricBounds[1]) > 1) {
-                        messaggioUtente("Code CSF-008: Elemento " + (pageItem.label != "" ? Utility.parseLabel(pageItem.label) : 'senza etichetta') +" spostato verso destra per rientrare nei limiti della griglia. Verificare le dimensioni dell'elemento.", "warning");
-                        moved = true;
-                    }
-                    pageItem.move(undefined, [boxInGrigliaBounds[1] - pageItem.geometricBounds[1], 0]);
-                    //se la mappaBox è presente cerchiamo l'elemento con quell'etichetta e aggiorniamo i suoi bounds con quelli attuali del pageItem
-                    if (mappaBoxOriginale) {
-                        var item = mappaBoxOriginale[Utility.parseLabel(pageItem.label)];
-                        if (item) {
-                            item.bounds[1] += boxInGrigliaBounds[1] - pageItem.geometricBounds[1];
-                            item.bounds[3] += boxInGrigliaBounds[1] - pageItem.geometricBounds[1];
-                        }
-                    }
-                }
-            }
-            if (pageItem.geometricBounds[2] > boxInGrigliaBounds[2] + 0.05) {
-                if (this.isTextFrame(pageItem)) {
-                    var cantReduce = false;
-                    var originalBounds = pageItem.geometricBounds;
-                    var bounds2 = Math.min(pageItem.geometricBounds[2], boxInGrigliaBounds[2]);
-                    if (bounds2 - pageItem.geometricBounds[0] > 0) {
-                        pageItem.geometricBounds = [
-                            pageItem.geometricBounds[0],
-                            pageItem.geometricBounds[1],
-                            bounds2,
-                            pageItem.geometricBounds[3]
-                        ];
-                    }
-                    else{
-                        cantReduce = true;
-                    }
-                    if (pageItem.properties.overflows || cantReduce) {
-                        pageItem.geometricBounds = originalBounds;
-                        console.warn('Elemento '+(pageItem.label != "" ? Utility.parseLabel(pageItem.label) : "senza etichetta") +' spostato verso l\'alto per rientrare nei limiti della griglia.');
-                        if (Math.abs(boxInGrigliaBounds[2] - pageItem.geometricBounds[2]) > 1) {
-                            messaggioUtente("Code CSF-008: Elemento " + (pageItem.label != "" ? Utility.parseLabel(pageItem.label) : "senza etichetta") +" spostato verso l'alto per rientrare nei limiti della griglia. Verificare le dimensioni dell'elemento.", "warning");
-                            moved = true;
-                        }
-                        var movementY = boxInGrigliaBounds[2] - pageItem.geometricBounds[2];
-                        pageItem.move(undefined, [0, movementY]);
-                        //se la mappaBox è presente cerchiamo l'elemento con quell'etichetta e aggiorniamo i suoi bounds con quelli attuali del pageItem
-                        if (mappaBoxOriginale) {
-                            var item = mappaBoxOriginale[Utility.parseLabel(pageItem.label)];
-                            if (item) {
-                                item.bounds[1] += movementY;
-                                item.bounds[3] += movementY;
-                            }
-                        }
-                    }
-                }
-                else {
-                    console.warn('Elemento '+(pageItem.label != "" ? Utility.parseLabel(pageItem.label) : "senza etichetta") +' spostato verso l\'alto per rientrare nei limiti della griglia.');
-                    if (Math.abs(boxInGrigliaBounds[2] - pageItem.geometricBounds[2]) > 1) {
-                        messaggioUtente("Code CSF-008: Elemento " + (pageItem.label != "" ? Utility.parseLabel(pageItem.label) : "senza etichetta") +" spostato verso l'alto per rientrare nei limiti della griglia. Verificare le dimensioni dell'elemento.", "warning");
-                        moved = true;
-                    }
-                    var movementY = boxInGrigliaBounds[2] - pageItem.geometricBounds[2];
-                    pageItem.move(undefined, [0, movementY]);
-                    //se la mappaBox è presente cerchiamo l'elemento con quell'etichetta e aggiorniamo i suoi bounds con quelli attuali del pageItem
-                    if (mappaBoxOriginale) {
-                        var item = mappaBoxOriginale[Utility.parseLabel(pageItem.label)];
-                        if (item) {
-                            item.bounds[1] += movementY;
-                            item.bounds[3] += movementY;
-                        }
-                    }
-                }
-            }
-            if (pageItem.geometricBounds[3] > boxInGrigliaBounds[3] + 0.05) {
-                if (this.isTextFrame(pageItem)) {
-                    var cantReduce = false;
-                    var originalBounds = pageItem.geometricBounds;
-                    var bounds3 = Math.min(pageItem.geometricBounds[3], boxInGrigliaBounds[3])
-                    if (bounds3 - pageItem.geometricBounds[1] > 0) {
-                        pageItem.geometricBounds = [
-                            pageItem.geometricBounds[0],
-                            pageItem.geometricBounds[1],
-                            pageItem.geometricBounds[2],
-                            bounds3
-                        ];
-                    }
-                    else{
-                        cantReduce = true;
-                    }
-                    if (pageItem.properties.overflows || cantReduce) {
-                        pageItem.geometricBounds = originalBounds;
-                        console.warn('Elemento '+(pageItem.label != "" ? Utility.parseLabel(pageItem.label) : "senza etichetta") +' spostato verso sinistra per rientrare nei limiti della griglia.');
-                        if (Math.abs(boxInGrigliaBounds[3] - pageItem.geometricBounds[3]) > 1) {
-                            messaggioUtente("Code CSF-008: Elemento " + (pageItem.label != "" ? Utility.parseLabel(pageItem.label) : "senza etichetta") +" spostato verso sinistra per rientrare nei limiti della griglia. Verificare le dimensioni dell'elemento.", "warning");
-                            moved = true;
-                        }
-                        var movementX = boxInGrigliaBounds[3] - pageItem.geometricBounds[3];
-                        pageItem.move(undefined, [movementX, 0]);
-                        //se la mappaBox è presente cerchiamo l'elemento con quell'etichetta e aggiorniamo i suoi bounds con quelli attuali del pageItem
-                        if (mappaBoxOriginale) {
-                            var item = mappaBoxOriginale[Utility.parseLabel(pageItem.label)];
-                            if (item) {
-                                item.bounds[0] += movementX;
-                                item.bounds[2] += movementX;
-                            }
-                        }
-                    }
-                }
-                else {
-                    console.warn('Elemento '+(pageItem.label != "" ? Utility.parseLabel(pageItem.label) : "senza etichetta") +' spostato verso sinistra per rientrare nei limiti della griglia.');
-                    if (Math.abs(boxInGrigliaBounds[3] - pageItem.geometricBounds[3]) > 1) {
-                        messaggioUtente("Code CSF-008: Elemento " + (pageItem.label != "" ? Utility.parseLabel(pageItem.label) : "senza etichetta") +" spostato verso sinistra per rientrare nei limiti della griglia. Verificare le dimensioni dell'elemento.", "warning");
-                        moved = true;
-                    }
-                    var movementX = boxInGrigliaBounds[3] - pageItem.geometricBounds[3];
-                    pageItem.move(undefined, [movementX, 0]);
-                    //se la mappaBox è presente cerchiamo l'elemento con quell'etichetta e aggiorniamo i suoi bounds con quelli attuali del pageItem
-                    if (mappaBoxOriginale) {
-                        var item = mappaBoxOriginale[Utility.parseLabel(pageItem.label)];
-                        if (item) {
-                            item.bounds[0] += movementX;
-                            item.bounds[2] += movementX;
-                        }
-                    }
+            //I20-1042: i quattro lati facevano la stessa cosa in quattro copie, e due copie su
+            //quattro aggiornavano la mappa sull'asse sbagliato. Ora e' un lato alla volta.
+            for (var l = 0; l < this.latiGriglia.length; l++) {
+                if (this.riportaLatoInGriglia(box, pageItem, boxInGrigliaBounds, this.latiGriglia[l], mappaBoxOriginale)) {
+                    moved = true;
                 }
             }
 
