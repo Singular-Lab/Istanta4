@@ -125,3 +125,20 @@ test("la barra dei Nuovi del Report Integrita', il modello, c'e' ancora", () => 
     assert.match(pannelli, /_crBarraScorrimentoNuovi\(state\) \{/);
     assert.match(pannelli, /PASSO_SCORRIMENTO: 160,/);
 });
+
+//I20-1043: la lista mostrava anche la barra orizzontale nativa, subito sopra la nostra. In UXP non
+//scorre (vedi sopra): era un doppione. In orizzontale si taglia, in verticale resta la rotella.
+test("la lista non ha la barra orizzontale nativa, e in verticale scorre ancora", () => {
+    const html = leggiFileDelPlugin("index.html").replace(/\r/g, "");
+
+    const regola = html.substring(html.indexOf("#Tab1Viewport {"), html.indexOf("}", html.indexOf("#Tab1Viewport {")));
+    assert.match(regola, /overflow-x: hidden;/);
+    assert.match(regola, /overflow-y: auto;/);
+    assert.doesNotMatch(regola, /(^|\s)overflow: /);
+
+    const tag = html.match(/<div id="Tab1Viewport" style="([^"]*)">/);
+    assert.ok(tag, "manca #Tab1Viewport");
+    assert.match(tag[1], /overflow-x:\s*hidden;/);
+    assert.match(tag[1], /overflow-y:\s*auto;/);
+    assert.doesNotMatch(tag[1], /(^|[;\s])overflow:/);
+});

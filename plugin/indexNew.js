@@ -7370,7 +7370,8 @@ const COLORE_BADGE_TRACCIATO = "rgb(45,140,235)";
 function riepilogoSegnalazioniTracciato() {
     try {
         const documento = docInLavorazione != null ? docInLavorazione : (app.documents.length > 0 ? app.activeDocument : null);
-        return Segnalazioni.riepilogoPerRecord(Segnalazioni.leggiDocumento(documento));
+        //I20-1043: riusato per qualche secondo, invece di rileggere il documento a ogni ridisegno.
+        return Segnalazioni.riepilogoTracciato(documento);
     }
     catch (e) {
         console.warn("Segnalazioni non lette per il tracciato:", e);
@@ -7392,7 +7393,9 @@ function coloraBadgeTracciato($badge, riepilogo) {
 
 /// Ricolora i badge gia' disegnati, senza rifare il tracciato. La chiama la schermata delle
 /// segnalazioni quando si chiude: dopo un "Risolvi" il colore di prima non e' piu' vero.
+/// I20-1043: per questo il riepilogo si rilegge sempre, senza riusare quello in memoria.
 function aggiornaBadgeSegnalazioniTracciato() {
+    Segnalazioni.invalidaRiepilogoTracciato();
     const riepilogo = riepilogoSegnalazioniTracciato();
     $("#ElementiTracciato .badge-pagina-tracciato").each(function () {
         coloraBadgeTracciato($(this), riepilogo[$(this).attr("idRec")]);

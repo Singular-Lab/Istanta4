@@ -14,6 +14,68 @@ const barraScorrimento = require('./reportIntegrita/barraScorrimento');
 /// pagina: i criteri, se e' attiva, se e' bloccata.
 const filtri = {
 
+    /// I20-1043: la ricerca del campo di testo parte quando l'operatore smette di scrivere.
+    /// Partiva a ogni tasto, e ogni giro costava circa 1,1 s a pannello bloccato (misurati
+    /// durante I20-1043): scrivendo a velocita' normale i giri si accodavano, fino a sei insieme,
+    /// e la lista si aggiornava secondi dopo.
+    RITARDO_RICERCA_TESTO_MS: 300,
+
+    _ricercheTesto: new Map(),
+
+    /// Rimanda esegui di RITARDO_RICERCA_TESTO_MS, annullando quella gia' in attesa per la
+    /// stessa chiave (il campo). esegui riceve una funzione che dice se la ricerca e' ancora
+    /// l'ultima chiesta per quel campo: se nel frattempo l'operatore ha scritto ancora, il
+    /// risultato non va disegnato. orologio serve ai test; di norma sono setTimeout e clearTimeout.
+    programmaRicercaTesto(chiave, esegui, orologio = null) {
+        const tempo = orologio || { setTimeout: setTimeout, clearTimeout: clearTimeout };
+        const ricerche = filtri._ricercheTesto;
+        const precedente = ricerche.get(chiave);
+        if (precedente != null && precedente.timer != null) {
+            tempo.clearTimeout(precedente.timer);
+        }
+
+        const numero = (precedente != null ? precedente.numero : 0) + 1;
+        const voce = { numero: numero, timer: null };
+        voce.timer = tempo.setTimeout(function () {
+            voce.timer = null;
+            esegui(function () {
+                const attuale = ricerche.get(chiave);
+                return attuale != null && attuale.numero === numero;
+            });
+        }, filtri.RITARDO_RICERCA_TESTO_MS);
+        ricerche.set(chiave, voce);
+        return numero;
+    },
+
+    /// I20-1043: per quanto la lista degli impaginati si riusa nella ricerca, invece di chiederla
+    /// al server a ogni ricerca.
+    RIUSO_IMPAGINATI_MS: 10000,
+
+    _impaginatiInMemoria: null,
+
+    /// Vero se la lista in memoria e' dello stesso kit e ha meno di RIUSO_IMPAGINATI_MS.
+    impaginatiRiusabili(inMemoria, kit, ora) {
+        return inMemoria != null && inMemoria.kit === kit &&
+            ora - inMemoria.quando >= 0 && ora - inMemoria.quando < filtri.RIUSO_IMPAGINATI_MS;
+    },
+
+    /// Gli impaginati per ricercaFiltro. Una lista non scaricata non si tiene: la ricerca
+    /// dopo ci riprova. Come prima, in errore la ricerca prosegue con una lista vuota.
+    async impaginatiPerRicerca(ora = Date.now()) {
+        const kit = typeof idKitLavorazione !== "undefined" ? idKitLavorazione : null;
+        if (filtri.impaginatiRiusabili(filtri._impaginatiInMemoria, kit, ora)) {
+            return filtri._impaginatiInMemoria.lista;
+        }
+
+        const lista = await Utility.getListaCodiciImpaginati({ nullSeFallisce: true });
+        if (lista == null) {
+            filtri._impaginatiInMemoria = null;
+            return [];
+        }
+        filtri._impaginatiInMemoria = { kit: kit, quando: ora, lista: lista };
+        return lista;
+    },
+
     /// I20-1031: le presenze impaginate di Menabo/getListaImpaginati raggruppate per pagina, una
     /// per box: { "5": [ { codiceGruppo, idRec, nomePagina }, ... ] }. Le voci senza pagina non
     /// appartengono a nessuna riga della griglia e si scartano.
@@ -1864,12 +1926,17 @@ const filtri = {
                         .attr('title', 'Scrivi il valore da cercare') // Tooltip aggiunto
                         .val('')
                         .css({ width: (isTracciato?'200px':'30%'), height:'30px', marginRight: '10px' ,display: 'none', color: 'lightblue' }) // Nascondiamo il campo di testo
-                        .on('keyup', async function () {
+                        .on('keyup', function () {
+                            let campo = this;
                             let filtro = $(this).closest('.filtro');
-                            var resRicerca = await me.ricercaFiltro(filtro);
-                            if(isTracciato){
-                                aggiornaTracciatoPostRicerca(resRicerca);
-                            }
+                            //I20-1043: si cerca quando l'operatore smette di scrivere, e il risultato
+                            //di una ricerca superata non si disegna.
+                            me.programmaRicercaTesto(campo, async function (eAncoraValida) {
+                                var resRicerca = await me.ricercaFiltro(filtro);
+                                if(isTracciato && eAncoraValida()){
+                                    await aggiornaTracciatoPostRicerca(resRicerca);
+                                }
+                            });
                         })
                 )
                 .append(
@@ -2621,7 +2688,7 @@ const filtri = {
                 return Date.UTC(year, month - 1, day);
             };
 
-            let listImpaginati = await Utility.getListaCodiciImpaginati();
+            let listImpaginati = await filtri.impaginatiPerRicerca();
             //cerchiamo nel file listaKit + idKitLavorazione + ".json" i record che soddisfano tutti i criteri del filtro
     
             let listaTracciato = readFile(pathLavorazione + "/listaKit" + idKitLavorazione + ".json");
