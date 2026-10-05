@@ -271,6 +271,66 @@ const sceltaSpazio = {
         return scelto;
     },
 
+    //I20-1025: sotto questo scarto, in millimetri, due disposizioni valgono ugualmente centrate:
+    //differenze piu' piccole sono rumore delle misure, e non devono spostare la descrizione.
+    scartoCentratura: 0.5,
+
+    /*
+     * I20-1025: fra due disposizioni del box gia' provate, quale tenere: "prima" o "seconda".
+     * prima e seconda sono { area, distanzaDalCentro } della prova di fixFoto, o null se in quella
+     * disposizione le foto non trovano posto. Serve a chi prova il box in due modi - Edro21
+     * sposta la descrizione - e prima decideva solo con l'area.
+     *
+     * Con l'area massima vince la seconda solo se e' piu' grande, come prima: a parita' resta la
+     * prima, che non sposta niente. Col criterio centrato, fra le disposizioni la cui area sta
+     * dentro la tolleranza rispetto alla piu' grande vince la piu' centrata; a pari centratura
+     * (entro scartoCentratura) decide di nuovo l'area. Una disposizione senza posto per le foto
+     * non vince mai, se l'altra ce l'ha.
+     */
+    preferisciDisposizione(prima, seconda, preferenza) {
+        const valida = function (prova) {
+            return prova != null && isFinite(Number(prova.area)) && Number(prova.area) > 0;
+        };
+        if (!valida(seconda)) {
+            return "prima";
+        }
+        if (!valida(prima)) {
+            return "seconda";
+        }
+
+        const areaPrima = Math.floor(Number(prima.area));
+        const areaSeconda = Math.floor(Number(seconda.area));
+        const perArea = areaSeconda > areaPrima ? "seconda" : "prima";
+
+        const opzioni = sceltaSpazio.normalizzaPreferenza(preferenza);
+        if (opzioni.modo !== sceltaSpazio.centrato) {
+            return perArea;
+        }
+
+        const soglia = Math.max(areaPrima, areaSeconda) * opzioni.tolleranzaArea;
+        const primaAmmessa = areaPrima >= soglia;
+        const secondaAmmessa = areaSeconda >= soglia;
+        if (primaAmmessa && !secondaAmmessa) {
+            return "prima";
+        }
+        if (secondaAmmessa && !primaAmmessa) {
+            return "seconda";
+        }
+
+        const distanzaPrima = Number(prima.distanzaDalCentro);
+        const distanzaSeconda = Number(seconda.distanzaDalCentro);
+        if (!isFinite(distanzaPrima) || !isFinite(distanzaSeconda)) {
+            return perArea;
+        }
+        if (distanzaSeconda < distanzaPrima - sceltaSpazio.scartoCentratura) {
+            return "seconda";
+        }
+        if (distanzaPrima < distanzaSeconda - sceltaSpazio.scartoCentratura) {
+            return "prima";
+        }
+        return perArea;
+    },
+
     /*
      * Una riga per il log: cosa c'era da scegliere e cosa si e' scelto.
      * Serve al collaudo, dove l'unica cosa che si vede e' dove e' finita la foto.

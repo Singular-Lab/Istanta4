@@ -25,6 +25,17 @@ const CssFramework =
         return SistemazioneFoto.fixFoto(box, candidateRects, obstacles, projection);
     },
 
+    /// I20-1025: rimanda a SistemazioneFoto.proiezioneFixFoto. La prova di fixFoto con l'area e la
+    /// distanza dal centro: le agenzie che provano il box in due modi (Edro21) la confrontano.
+    proiezioneFixFoto(box, candidateRects, obstacles) {
+        return SistemazioneFoto.proiezioneFixFoto(box, candidateRects, obstacles);
+    },
+
+    /// I20-1025: rimanda a SistemazioneFoto.preferisciDisposizione: "prima" o "seconda".
+    preferisciDisposizioneFoto(box, prima, seconda) {
+        return SistemazioneFoto.preferisciDisposizione(box, prima, seconda);
+    },
+
     /// Rimanda a SistemazioneFoto.safeFitToContent: la usa anche getRealBounds, qui sotto.
     safeFitToContent(textFrame) {
         return SistemazioneFoto.safeFitToContent(textFrame);
@@ -243,7 +254,8 @@ const CssFramework =
     },
 
     /*
-     * Preferenza del box su come scegliere lo spazio delle foto. Null: area massima, come sempre.
+     * Preferenza del box su come scegliere lo spazio delle foto: la sua, o quella di default del kit.
+     * Null: area massima, come sempre.
      */
     /// I20-1009: la usa solo sistemazioneFoto, ma resta qui perche' legge la configurazione CSS
     /// del box attraverso contestoCss, che e' di CssFramework.
@@ -254,7 +266,21 @@ const CssFramework =
         }
 
         var elementoBox = this.getElementoBoxDB(box, contesto.DBallineamenti, contesto.DBDefault);
-        return elementoBox != null ? elementoBox.sceltaSpazioFoto : null;
+        if (elementoBox != null && elementoBox.sceltaSpazioFoto != null) {
+            return elementoBox.sceltaSpazioFoto;
+        }
+
+        //I20-1025: un box senza preferenza sua prende quella della voce di default del kit
+        //(nomiBox vuoto), poi di quella del framework di default, come fa gia' il ridimensionamento.
+        //Cosi' il cliente la scrive una volta per tutti i box, e chi ne vuole un'altra la dice per se'.
+        var voceDiDefault = function (db) {
+            return Array.isArray(db) ? db.find(el => el != null && Array.isArray(el.nomiBox) && el.nomiBox.length == 0) : null;
+        };
+        var predefinita = voceDiDefault(contesto.DBallineamenti);
+        if (predefinita == null || predefinita.sceltaSpazioFoto == null) {
+            predefinita = voceDiDefault(contesto.DBDefault);
+        }
+        return predefinita != null && predefinita.sceltaSpazioFoto != null ? predefinita.sceltaSpazioFoto : null;
     },
 
     /*
