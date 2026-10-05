@@ -49,6 +49,7 @@ class InddEvents {
 
     isBusy=false;
     asleep=false;
+    avvisoAppMancante=false;
 
     //I20-981: il Report Integrita' tiene isBusy per tutto il tempo in cui resta aperto, e
     //con isBusy questo ciclo si fermava prima di accorgersi del cambio di documento. Il
@@ -120,8 +121,18 @@ class InddEvents {
 
             try {
 
-                if (me.asleep || app == null)
+                if (me.asleep)
                     return;
+
+                //I20-1045: senza app il ciclo non puo' far niente. Usciva in silenzio, e il pannello
+                //restava su "Avvio in corso" senza un log; ora lo dice, una volta sola.
+                if (app == null) {
+                    if (!me.avvisoAppMancante) {
+                        me.avvisoAppMancante = true;
+                        console.error("I20-1045: InDesign non ha reso disponibile app: il ciclo degli eventi non parte.");
+                    }
+                    return;
+                }
 
                 if(document.getElementById("wrapper").clientWidth != lastWidthDimension || document.getElementById("wrapper").clientHeight != lastHeightDimension){
                     onresizeWindow();
