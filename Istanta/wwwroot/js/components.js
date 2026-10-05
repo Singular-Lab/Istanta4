@@ -814,12 +814,13 @@ function addMismatchKeyVisual(keyInMismatch, itemToModify, style, ignoraValue, f
 // ORIGINE DEL DATO: da quale file xlsx arriva la referenza
 // ============================================================================
 
-// Riempie il campo XLS della riga. Quando le istanze sono piu' d'una - la stessa
-// referenza importata in aree o canali diversi, ognuno con il suo file - scrivere
-// il nome di UN file solo dice una mezza verita': e' il file del record scelto
-// come rappresentante, e non dice niente degli altri. In quel caso al posto del
-// nome compare un bottone che apre l'elenco completo. Con una sola istanza resta
-// il nome scritto, che si legge senza dover cliccare.
+// Riempie il campo XLS della riga. Quando le istanze arrivano da piu' file - la
+// stessa referenza importata da tracciati diversi - scrivere il nome di UN file solo
+// dice una mezza verita': e' il file del record scelto come rappresentante, e non
+// dice niente degli altri. In quel caso al posto del nome compare un bottone che
+// apre l'elenco completo. Il numero fra parentesi conta i file, non le aree/canali:
+// un tracciato copre spesso piu' aree, e contarle gonfiava il numero (I20-1041).
+// Con un file solo resta il nome scritto, che si legge senza dover cliccare.
 // L'elenco arriva dal server in obj.origini (RevisoreController.getListaRevisione2).
 function renderOrigineXls(htmlItem, obj) {
     let campo = htmlItem.find("#xls_file");
@@ -827,23 +828,24 @@ function renderOrigineXls(htmlItem, obj) {
         return;
 
     let origini = obj.origini || [];
+    let perFile = raggruppaOriginiXls(origini);
 
-    if (origini.length > 1) {
-        campo.html("<b>XLS (" + origini.length + ")</b>");
-        campo.attr("title", "Referenza presente in " + origini.length + " tracciati: clicca per l'elenco");
+    if (perFile.length > 1) {
+        campo.html("<b>XLS (" + perFile.length + ")</b>");
+        campo.attr("title", "Referenza presente in " + perFile.length + " tracciati: clicca per l'elenco");
         campo.css("cursor", "pointer");
         campo.off("click").on("click", function (e) {
             e.preventDefault();
-            mostraOriginiXls(origini);
+            mostraOriginiXls(perFile);
         });
     }
     else {
-        // Una sola origine (o nessuna informazione): il comportamento di prima.
+        // Un solo file (o nessuna informazione): il comportamento di prima.
         // Attenzione ai nomi: in C# la classe OrigineTracciato ha Area, Canale e Xlsx
         // con l'iniziale maiuscola, ma la serializzazione li manda in minuscolo. Qui
         // vanno letti come arrivano sul filo, altrimenti si legge undefined in silenzio.
-        let nome = origini.length === 1
-            ? origini[0].xlsx
+        let nome = perFile.length === 1
+            ? perFile[0].xlsx
             : (obj.recordInTracciato ? obj.recordInTracciato[keyTracciatoXlsx] : "");
         campo.text(nome != null ? nome : "");
         campo.off("click");
@@ -851,9 +853,36 @@ function renderOrigineXls(htmlItem, obj) {
     }
 }
 
-// Riempie e apre la modale con l'elenco delle origini: una riga per area/canale,
-// con il file da cui quell'istanza e' stata importata.
-function mostraOriginiXls(origini) {
+// Raggruppa le origini per file xlsx: un elemento per file, con le aree/canali che
+// ne sono state importate ("TO / CN"). L'ordine e' quello di arrivo, sia dei file
+// sia delle aree dentro il file. Le origini senza nome file stanno insieme in un
+// gruppo con xlsx vuoto, perche' non c'e' modo di dire se vengono dallo stesso.
+function raggruppaOriginiXls(origini) {
+    let gruppi = [];
+    let perNome = {};
+
+    (origini || []).forEach(function (o) {
+        let xlsx = o.xlsx != null ? String(o.xlsx) : "";
+        let gruppo = perNome[xlsx];
+        if (gruppo === undefined) {
+            gruppo = { xlsx: xlsx, areeCanali: [] };
+            perNome[xlsx] = gruppo;
+            gruppi.push(gruppo);
+        }
+
+        let areaCanale = [o.area, o.canale]
+            .filter(function (v) { return v != null && v !== ""; })
+            .join(" / ");
+        if (areaCanale !== "" && gruppo.areeCanali.indexOf(areaCanale) === -1)
+            gruppo.areeCanali.push(areaCanale);
+    });
+
+    return gruppi;
+}
+
+// Riempie e apre la modale con l'elenco delle origini: una riga per file xlsx, con
+// accanto le aree/canali importate da quel file, una per riga.
+function mostraOriginiXls(perFile) {
     let corpo = $("#originiXlsBody");
     corpo.empty();
 
@@ -861,20 +890,29 @@ function mostraOriginiXls(origini) {
         "<th>Area / Canale</th><th>File xlsx</th></tr></thead><tbody></tbody></table>");
     let tbody = tabella.find("tbody");
 
-    for (let i = 0; i < origini.length; i++) {
-        let o = origini[i];
-        let areaCanale = [o.area, o.canale]
-            .filter(function (v) { return v != null && v !== ""; })
-            .join(" / ");
+    for (let i = 0; i < perFile.length; i++) {
+        let g = perFile[i];
 
         let tr = $("<tr></tr>");
         // .text() e non .html(): i nomi dei file arrivano dai dati importati e non
         // devono poter iniettare markup nella pagina.
-        tr.append($("<td></td>").text(areaCanale !== "" ? areaCanale : "-"));
-        tr.append($("<td></td>").text(o.xlsx != null && o.xlsx !== "" ? o.xlsx : "-"));
+        let cellaAree = $("<td></td>");
+        if (g.areeCanali.length === 0)
+            cellaAree.text("-");
+        g.areeCanali.forEach(function (ac) {
+            cellaAree.append($("<div></div>").text(ac));
+        });
+        tr.append(cellaAree);
+        tr.append($("<td class='align-middle'></td>").text(g.xlsx !== "" ? g.xlsx : "-"));
         tbody.append(tr);
     }
 
     corpo.append(tabella);
     new bootstrap.Modal(document.getElementById("originiXlsModal")).show();
+}
+
+// I20-1041: in Node si esporta per i test (tests/istanta-web). Nella pagina module
+// non esiste e questa riga non fa nulla.
+if (typeof module !== "undefined" && module.exports) {
+    module.exports = { raggruppaOriginiXls: raggruppaOriginiXls };
 }
