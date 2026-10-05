@@ -32,6 +32,11 @@ direttamente:
   è il cuore di ciò che distingue un cliente dall'altro.
 - `setCustomFixFoto(box)` → la sistemazione delle foto a modo del cliente, al posto di quella
   standard. `indexNew` la cerca **prima** di chiamare `SistemazioneFoto.fixFoto`: se c'è, comanda questa. Lei, dall'agenzia, chiama `CssFramework.fixFoto`, che rimanda allo stesso modulo — vedi [sistemazioneFoto](sistemazioneFoto/README.md).
+  Edro21 prova il box in due disposizioni, la descrizione dov'è o spostata in basso a sinistra.
+  Fino a I20-1025 teneva quella con l'area maggiore (`Math.floor(area1) >= Math.floor(area2)`, con
+  NaN quando una prova non trovava posto); ora le prova con `CssFramework.proiezioneFixFoto`, che
+  dice anche quanto la foto dista dal centro, e decide con `CssFramework.preferisciDisposizioneFoto`,
+  cioè con la preferenza del box ([sceltaSpazio](sistemazioneFoto/sceltaSpazio.md)).
 - `impaginazioneFotoExtraCustom(...)` → come vanno impaginate foto extra e loghi.
 - `getEtichetteEsclusePerFixDescrizione()`, `decodificaNomeFile(fullPath)`.
 

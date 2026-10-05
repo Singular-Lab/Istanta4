@@ -113,20 +113,37 @@ public class RegoleMomentoESpazioFotoTests
     }
 
     /// <summary>
-    /// Gli altri box non devono aver preso la regola per sbaglio: la centratura vale solo
-    /// dove il disegno la richiede.
+    /// I20-1025: nel Volantino di Edro21 anche gli altri box centrano le foto, accettando un po'
+    /// di grandezza in meno: a ogni reimpaginazione la foto cambiava dimensione e posizione per
+    /// pochi millimetri d'area. La regola sta una volta sola nella voce di default del kit
+    /// (nomiBox vuoto), che il Plugin usa per i box senza una regola loro; il BOX41 tiene la sua,
+    /// centrata solo in orizzontale. Il PoP non passa dal fix foto di Edro21 e resta com'era.
     /// </summary>
     [Fact]
-    public void Gli_altri_box_di_Edro21_restano_sul_criterio_dell_area_massima()
+    public void Gli_altri_box_del_volantino_di_Edro21_centrano_le_foto_dalla_voce_di_default()
     {
         var percorso = TrovaSorgenteEdro21();
         var root = JsonConvert.DeserializeObject<DbFrameworkCss>(File.ReadAllText(percorso));
+        var kits = root!.dbRidimensionamentiAllineamenti.modificheCssPerKit;
 
-        var altriBox = root!.dbRidimensionamentiAllineamenti.modificheCssPerKit
-            .SelectMany(m => m.operazioniPerBox)
-            .Where(op => !op.nomiBox.Contains("BOX41"));
+        var volantino = kits.Where(m => m.kit.kitTipoLavorazioniValide.Contains(1)).ToList();
+        Assert.NotEmpty(volantino);
 
-        Assert.All(altriBox, box => Assert.Null(box.sceltaSpazioFoto));
+        foreach (var kit in volantino)
+        {
+            var predefinita = kit.operazioniPerBox.Single(op => op.nomiBox.Count == 0);
+            Assert.NotNull(predefinita.sceltaSpazioFoto);
+            Assert.Equal("centrato", predefinita.sceltaSpazioFoto!.modo);
+            Assert.Equal("xy", predefinita.sceltaSpazioFoto.asseCentratura);
+            Assert.Equal(0.7, predefinita.sceltaSpazioFoto.tolleranzaArea);
+
+            //Gli altri box non hanno una regola loro: prendono quella di default.
+            var altriBox = kit.operazioniPerBox.Where(op => op.nomiBox.Count > 0 && !op.nomiBox.Contains("BOX41"));
+            Assert.All(altriBox, box => Assert.Null(box.sceltaSpazioFoto));
+        }
+
+        var pop = kits.Where(m => !m.kit.kitTipoLavorazioniValide.Contains(1)).SelectMany(m => m.operazioniPerBox);
+        Assert.All(pop, box => Assert.Null(box.sceltaSpazioFoto));
     }
 
     private static string TrovaSorgenteEdro21()

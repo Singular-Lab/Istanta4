@@ -38,7 +38,10 @@ completo del valore:
    `FrameworkCssController/scaricaAllineamenti` e ne salva una copia in `allineamenti.json` nella
    cartella di lavorazione;
 3. `CssFramework.getSceltaSpazioFoto(box)` pesca `elementoBox.sceltaSpazioFoto` cercando il box per
-   meccanica;
+   meccanica. Dal I20-1025, se il box non ne ha una sua, prende quella della **voce di default del
+   kit** (`nomiBox` vuoto), poi di quella del framework di default, come fa già il
+   ridimensionamento: il cliente la scrive una volta per tutti i box, e chi ne vuole un'altra la
+   dice per sé. Le sovrastrutture la cambiano solo se ne indicano una;
 4. `normalizzaPreferenza` lo mette in sicurezza.
 
 Se una foto è davvero molto più grande di lato, lo scarto viene superato e **vince di nuovo l'area**.
@@ -46,6 +49,11 @@ Se una foto è davvero molto più grande di lato, lo scarto viene superato e **v
 **Oggi lo usa Edro21 sul BOX41**, con `modo: "centrato"`, `tolleranzaArea: 0.7` e
 `asseCentratura: "x"`: centrate in orizzontale, dove stanno le parentesi, mentre in verticale
 continua a comandare l'area.
+
+**Dal I20-1025 anche gli altri box del Volantino di Edro21** centrano le foto: la voce di default
+dei due kit del Volantino ha `modo: "centrato"`, `tolleranzaArea: 0.7`, `asseCentratura: "xy"`.
+Reimpaginando un box la foto cambiava dimensione e posizione per pochi millimetri d'area; ora resta
+al centro. Il PoP non passa dal fix foto di Edro21 e non ha preferenze.
 
 ## Variabili globali
 
@@ -77,6 +85,13 @@ di chi risponde.
 - `normalizzaEstensioni(estensioni)` e `restringiCandidati(candidati, estensioni)` → lo spazio da
   riservare attorno alle foto, che restringe i candidati prima della scelta.
 - `scegli(candidati, boundsGruppo, preferenza, larghezzaBase, altezzaBase)` → la decisione finale.
+- `preferisciDisposizione(prima, seconda, preferenza)` (I20-1025) → fra due **disposizioni** del
+  box già provate (`{ area, distanzaDalCentro }`, o null se le foto non trovano posto), quale
+  tenere: `"prima"` o `"seconda"`. Con l'area massima vince la seconda solo se è più grande, a
+  parità resta la prima. Col criterio centrato, fra quelle dentro la tolleranza vince la più
+  centrata; a pari centratura, entro `scartoCentratura` (mezzo millimetro, rumore delle misure),
+  decide l'area. Una disposizione senza posto non vince mai, se l'altra ce l'ha. La usa il fix foto
+  di Edro21 tramite `CssFramework.proiezioneFixFoto` e `CssFramework.preferisciDisposizioneFoto`.
 - `descriviScelta(...)` e `fattoriDiNormalizzazione(...)`.
 
 **Test:** `node --test tests/plugin/sceltaSpazio.test.js`

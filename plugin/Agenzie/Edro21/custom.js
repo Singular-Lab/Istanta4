@@ -1189,7 +1189,8 @@ const customAgenzia={
             return box;
         }
 
-        var area1 = CssFramework.fixFoto(box, res1.candidate, res1.obstacles, true);
+        //I20-1025: la prova dice anche quanto la foto sta lontana dal centro, non solo l'area.
+        var prova1 = CssFramework.proiezioneFixFoto(box, res1.candidate, res1.obstacles);
 
 
         var items = box.allPageItems;
@@ -1352,10 +1353,14 @@ const customAgenzia={
         }
 
         var res2 = CssFramework.getSpazioImpaginazione(box);
-        var area2 = CssFramework.fixFoto(box, res2.candidate, res2.obstacles, true);
+        var prova2 = CssFramework.proiezioneFixFoto(box, res2.candidate, res2.obstacles);
 
-        //teniamo il box con area maggiore, eliminiamo l'altro e poi restituiamo il box tenuto
-        if (Math.floor(area1) >= Math.floor(area2)) {
+        //I20-1025: prima si teneva la disposizione con l'area maggiore, e pochi millimetri
+        //bastavano a spostare descrizione e foto a ogni reimpaginazione. Ora decide la preferenza
+        //del box (CssFramework.getSceltaSpazioFoto): col criterio centrato, entro la tolleranza
+        //vince la foto piu' centrata. Una prova senza posto per le foto non vince piu': prima
+        //dava NaN e il confronto sceglieva sempre la seconda.
+        if (CssFramework.preferisciDisposizioneFoto(box, prova1, prova2) === "prima") {
             descrizione.geometricBounds = oldBounds;
             CssFramework.fixCollisioneTracciaBaseSingolo(box, descrizione);
             CssFramework.fixFoto(box, res1.candidate, res1.obstacles);

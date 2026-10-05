@@ -18,6 +18,13 @@ Panoramica del concetto: [README.md](README.md).
 Con **`projection = true` calcola soltanto l'area occupata senza toccare il documento**: serve a
 sapere quanto spazio servirebbe, prima di decidere.
 
+Dal I20-1025 c'è anche **`proiezioneFixFoto(box, candidateRects, obstacles)`**: la stessa prova, che
+restituisce `{ area, distanzaDalCentro }` (la distanza del gruppo dal centro della base, sull'asse
+della preferenza del box), oppure `null` se le foto non trovano posto. `fixFoto` in prova, senza
+posto, restituisce `undefined`: chi confrontava due prove con `Math.floor` otteneva `NaN`. Con
+**`preferisciDisposizione(box, prima, seconda)`** si sceglie fra due prove con la preferenza del box
+(vedi [sceltaSpazio](sceltaSpazio.md)). Le usa Edro21, attraverso i rimandi di `CssFramework`.
+
 Lo chiamano `indexNew.js` e `schedaRef.js` su `SistemazioneFoto`, `custom.js` in radice e
 l'agenzia Edro21 su `CssFramework`, attraverso il rimando: sempre dopo `getSpazioImpaginazione` e
 passandogli entrambi i risultati.

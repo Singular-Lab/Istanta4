@@ -467,8 +467,27 @@ const SistemazioneFoto = {
         }
     },
 
+    /// I20-1025: prova fixFoto senza toccare il documento e restituisce { area, distanzaDalCentro },
+    /// o null se le foto non trovano posto. fixFoto in prova restituisce solo l'area, e senza
+    /// posto undefined: chi confrontava due prove con Math.floor otteneva NaN e sceglieva sempre
+    /// la seconda.
+    proiezioneFixFoto(box, candidateRects, obstacles) {
+        this.ultimaProiezione = null;
+        this.fixFoto(box, candidateRects, obstacles, true);
+        return this.ultimaProiezione;
+    },
+
+    /// I20-1025: fra due prove di proiezioneFixFoto del box, quale tenere ("prima" o "seconda"),
+    /// con la preferenza del box sullo spazio delle foto: tolleranza e centratura, non solo l'area.
+    preferisciDisposizione(box, prima, seconda) {
+        return sceltaSpazio.preferisciDisposizione(prima, seconda, cssFramework().getSceltaSpazioFoto(box));
+    },
+
     /// Il corpo di fixFoto. Si chiama solo da li': e' fixFoto a garantire il ripristino.
     eseguiFixFoto(box, candidateRects, obstacles, projection) {
+
+        //I20-1025: l'esito di questa prova, per proiezioneFixFoto. Resta null nelle uscite senza posto.
+        this.ultimaProiezione = null;
 
         var base = this.trovaBase(box);
 
@@ -697,6 +716,12 @@ const SistemazioneFoto = {
 
         //calcoliamo l'area finale occupato dal gruppo
         let areaFinale = (absoluteBounds[2] - absoluteBounds[0]) * (absoluteBounds[3] - absoluteBounds[1]);
+        //I20-1025: il gruppo e' centrato nel candidato, quindi la sua distanza dal centro della base
+        //e' quella del candidato, sull'asse che il box chiede.
+        this.ultimaProiezione = {
+            area: areaFinale,
+            distanzaDalCentro: sceltaSpazio.distanzaDalCentro(bestCandidate, larghezzaBase, altezzaBase, sceltaSpazio.normalizzaPreferenza(preferenzaSpazio).asseCentratura)
+        };
         if (!projection && !cssFramework().sospendiControlloSegnalazioniConflitti) {
             cssFramework().controllaSegnalazioniConflittiPendenti(box);
         }
