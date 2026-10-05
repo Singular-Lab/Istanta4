@@ -5029,6 +5029,8 @@ async function callAllOperationFixBox(boxImpaginato, bounds, itemRef, garbageKey
     boxImpaginato = CssFramework.applicaOperazioniDopoFixFoto(boxImpaginato, bounds);
 
     CssFramework.controllaSegnalazioniConflittiPendenti(boxImpaginato);
+    //I20-1042: gli spostamenti in griglia si segnalano solo ora, quando nessuno sposta piu' niente.
+    CssFramework.controllaSpostamentiGrigliaPendenti(boxImpaginato);
 
     return boxImpaginato;
 }
