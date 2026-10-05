@@ -298,7 +298,8 @@ test("il tracciato legge le segnalazioni una volta per ridisegno e colora il bad
 
     //Una lettura per ridisegno, passata a ogni riga.
     assert.match(indexNew, /const riepilogoSegnalazioni = riepilogoSegnalazioniTracciato\(\);[\s\S]{0,200}?creaElementoTracciato\(record, first, riepilogoSegnalazioni\)/);
-    assert.match(indexNew, /return Segnalazioni\.riepilogoPerRecord\(Segnalazioni\.leggiDocumento\(documento\)\);/);
+    //I20-1043: la lettura passa da Segnalazioni.riepilogoTracciato, che la riusa per qualche secondo.
+    assert.match(indexNew, /return Segnalazioni\.riepilogoTracciato\(documento\);/);
 
     //Il badge: classe e idRec per ricolorarlo, colore e suggerimento dal riepilogo, blu senza.
     const crea = indexNew.substring(indexNew.indexOf("function creaElementoTracciato("));

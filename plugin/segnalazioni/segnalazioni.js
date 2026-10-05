@@ -98,6 +98,9 @@ const Segnalazioni = {
     /// vecchi. Serve prima di rifare un box: le segnalazioni vecchie non valgono piu', e il
     /// bollino nuovo non deve sommarsi al vecchio.
     togliDalBox(box) {
+        //I20-1043: ogni scrittura dei bollini passa da qui (applicaAlBox, i due Risolvi, il box
+        //rifatto): il riepilogo del tracciato non vale piu'.
+        Segnalazioni.invalidaRiepilogoTracciato();
         Segnalazioni.bolliniDelBox(box).concat(Segnalazioni.bolliniVecchiDelBox(box).map(vecchio => vecchio.ovale)).forEach(bollino => {
             try {
                 bollino.remove();
@@ -216,6 +219,47 @@ const Segnalazioni = {
     /// La chiave di una referenza nella mappa di riepilogoPerRecord: l'idRec come numero
     /// scritto in testo, perche' il DNA lo ha in testo e il tracciato in numero. null se non
     /// e' un idRec.
+    /// I20-1043: per quanto il riepilogo del tracciato si riusa senza rileggere il documento.
+    /// La lettura costa 300-400 ms a pannello bloccato (misurati durante I20-1043), e la ricerca
+    /// del tracciato la chiedeva a ogni tasto.
+    RIUSO_RIEPILOGO_MS: 10000,
+
+    _riepilogoInMemoria: null,
+
+    /// Il riepilogo di riepilogoPerRecord per il documento, riusato se e' dello stesso documento
+    /// e ha meno di RIUSO_RIEPILOGO_MS. Chi cambia i bollini lo invalida (togliDalBox); il tempo
+    /// copre quello che cambia fuori dal Plugin, come un box cancellato a mano.
+    riepilogoTracciato(documento, ora = Date.now(), dnaDelBox) {
+        const chiave = Segnalazioni._chiaveDocumento(documento);
+        const inMemoria = Segnalazioni._riepilogoInMemoria;
+        if (inMemoria != null && chiave != null && inMemoria.chiave === chiave &&
+            ora - inMemoria.quando >= 0 && ora - inMemoria.quando < Segnalazioni.RIUSO_RIEPILOGO_MS) {
+            return inMemoria.valore;
+        }
+
+        const valore = Segnalazioni.riepilogoPerRecord(Segnalazioni.leggiDocumento(documento), dnaDelBox);
+        Segnalazioni._riepilogoInMemoria = chiave != null ? { chiave: chiave, quando: ora, valore: valore } : null;
+        return valore;
+    },
+
+    invalidaRiepilogoTracciato() {
+        Segnalazioni._riepilogoInMemoria = null;
+    },
+
+    //L'id del documento, o il documento stesso se non si legge: due letture di
+    //app.activeDocument possono dare due oggetti diversi per lo stesso documento.
+    _chiaveDocumento(documento) {
+        if (documento == null) {
+            return null;
+        }
+        try {
+            return documento.id != null ? "id:" + documento.id : documento;
+        }
+        catch (e) {
+            return documento;
+        }
+    },
+
     chiaveRecord(idRec) {
         const numero = parseInt(idRec);
         return isNaN(numero) ? null : String(numero);

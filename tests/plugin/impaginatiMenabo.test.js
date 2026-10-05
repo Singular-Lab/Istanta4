@@ -305,6 +305,10 @@ test("con nullSeFallisce la chiamata fallita restituisce null; senza, come prima
 
     //Errore e tempo scaduto: i due casi in cui oggi tornava [].
     assert.strictEqual(corpo.split("return opzioni.nullSeFallisce ? null : [];").length - 1, 2);
-    //Chi la chiama senza opzioni - la ricerca dei filtri, il tracciato della Home - non cambia.
-    assert.match(leggiFileDelPlugin("filtri.js"), /let listImpaginati = await Utility\.getListaCodiciImpaginati\(\);/);
+    //Chi la chiama senza opzioni - il tracciato della Home - non cambia. La ricerca dei filtri dal
+    //I20-1043 passa da filtri.impaginatiPerRicerca, che la chiama con nullSeFallisce e torna una
+    //lista vuota se fallisce, come prima (lo prova anche ricercaTestoFiltri.test.js).
+    const filtriJs = leggiFileDelPlugin("filtri.js");
+    assert.match(filtriJs, /let listImpaginati = await filtri\.impaginatiPerRicerca\(\);/);
+    assert.match(filtriJs, /const lista = await Utility\.getListaCodiciImpaginati\(\{ nullSeFallisce: true \}\);\s*if \(lista == null\) \{\s*filtri\._impaginatiInMemoria = null;\s*return \[\];/);
 });
