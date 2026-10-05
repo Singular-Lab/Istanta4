@@ -192,6 +192,9 @@ const customAgenzia={
         //Come gli stili vicini della base, non vale per i box focus, che hanno uno stile loro.
         //Si calcola una volta qui, perche' serve a piu' elementi del ciclo: la base e lo sfondo.
         var formatoParmigiano = meccanica.indexOf("focus") < 0 && sovrastrutture.refConditionVera(objItem, [{ campo: "Descrizioni.Descrizione1", contiene: "parmigiano reggiano" }]);
+        //I20-1046: Artisti della Qualita', con lo stesso criterio del server, che per la stessa ref
+        //aggiunge i loghi Logo_ADQnaz e Margherita_ADQnaz. Neanche lui vale per i box focus.
+        var formatoArtistiQualita = meccanica.indexOf("focus") < 0 && this.artistiDellaQualita(objItem);
 
         for (var $xa = 0; $xa < box.allPageItems.length; $xa++) {
             try {
@@ -272,6 +275,14 @@ const customAgenzia={
                         meta_meccanica.azioni.push(a_eff);
                     }
 
+                    //I20-1046: per SC lo stile e' base_A_ADQnaz, per gli altri canali base_P_ADQnaz
+                    //(ADQ nazionale). Viene per ultimo fra gli stili della base: su una ref Artisti
+                    //della Qualita' vince lui, anche sul Parmigiano.
+                    if (formatoArtistiQualita) {
+                        var a_eff = { tipo: "effect", campo_indd: "base", name: canale == "SC" ? "base_A_ADQnaz" : "base_P_ADQnaz" };
+                        meta_meccanica.azioni.push(a_eff);
+                    }
+
                     
 
                     for (var a = 0; a < meta_meccanica.azioni.length; a++) {
@@ -337,6 +348,12 @@ const customAgenzia={
                     if (objItem.codiceBox == "solo_descr") {
                         obj_da_cestinare.push(pItem);
                     }
+                }
+                else if (formatoArtistiQualita && this.elementoBuonoDelPaese(pItem.label)) {
+                    //I20-1046: su una ref Artisti della Qualita' il logo e lo sfondo del Buono del Paese,
+                    //che il core ha gia' messo nel box, starebbero sotto quelli di ADQ. Si nascondono,
+                    //come lo sfondo del Parmigiano: il Plugin salta gli elementi invisibili dove conta.
+                    pItem.visible = false;
                 }
                 else if (formatoParmigiano && nome_proprieta.indexOf("sfondo") == 0) {
                     //I20-1026: il campo sfondo del master non serve nel formato Parmigiano: la base fa
@@ -1135,6 +1152,28 @@ const customAgenzia={
     //     return stringPath + ".Chiave=tipo_volantino&" + stringPath + ".Operatore=0&" + stringPath + ".Valore=V - volantino&";
     // },
 
+
+    /// I20-1046: se la ref e' Artisti della Qualita': il campo art_qual e' un testo non vuoto, lo
+    /// stesso criterio del server (AgenziaLib, Edro21.cs), che allora aggiunge i loghi Logo_ADQnaz e
+    /// Margherita_ADQnaz. Il campo si cerca sulla ref e, se li' non c'e', nel suo record del tracciato.
+    artistiDellaQualita(objItem) {
+        if (objItem == null) {
+            return false;
+        }
+        var valore = objItem.art_qual;
+        if (valore == null && objItem.recordInTracciato != null) {
+            valore = objItem.recordInTracciato.art_qual;
+        }
+        return typeof valore === "string" && valore !== "";
+    },
+
+    /// I20-1046: se un elemento del box e' il logo o lo sfondo del Buono del Paese, come li mette il
+    /// core: il logo "foto_extra$Logo_BDP$tipo_3" (FotoPlacer), lo sfondo nel campo
+    /// "sfondo$sfondo_bdp$tipo_5". Il confronto e' senza maiuscole, come le sigle nella source.
+    elementoBuonoDelPaese(etichetta) {
+        var e = String(etichetta == null ? "" : etichetta).replace("X_", "").toLowerCase();
+        return e.indexOf("foto_extra$logo_bdp$") == 0 || e.indexOf("sfondo$sfondo_bdp$") == 0;
+    },
 
     /// I20-1026: se il testo della descrizione tocca un logo che fa da ostacolo alla foto - le foto
     /// extra elencate in exceptionElementsToIgnoreFixFoto, come il payoff e i testi del Parmigiano,

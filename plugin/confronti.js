@@ -19,6 +19,18 @@ const RicollegaEsiti = require('./ricollegaEsiti');
 const fs = require('fs');
 const NoRenderElementi = require('./noRenderElementi');
 
+/// I20-1046: gli elementi del box che decidono le regole e non l'operatore: la base (e gli altri
+/// campi base*, a cui il custom del cliente da' lo stile oggetto del formato) e i loghi e gli sfondi
+/// automatici (foto_extra$..., sfondo$...), che si vedono o no secondo il record. Dopo un cambio
+/// strutturale per questi valgono visibilita' e stile oggetto del box nuovo.
+function elementoDecisoDalleRegole(etichetta) {
+    var e = String(etichetta == null ? "" : etichetta);
+    if (e.indexOf("X_") == 0) {
+        e = e.substring(2);
+    }
+    return e.indexOf("base") == 0 || e.indexOf("foto_extra$") == 0 || e.indexOf("sfondo$") == 0;
+}
+
 const confronti = {
     /// Guarda un box impaginato e dice cosa non corrisponde piu' al dato del
     /// server: e' il confronto vero, quello da cui nascono le segnalazioni.
@@ -95,6 +107,28 @@ const confronti = {
                     campoBox2 = box2campi.find(campo2 => campo2.isValid && Utility.parseLabel(campo2.label) == Utility.parseLabel(campo.label));
                     if (campoBox2 == undefined) {
                         return;
+                    }
+
+                    //I20-1046: visibilita' e stile oggetto della base e dei loghi e sfondi automatici
+                    //li decidono le regole: vale il box nuovo, e la differenza conta come le altre, quindi
+                    //il box vecchio resta come clone. Prima il confronto guardava solo testi, stili di
+                    //paragrafo e immagini: la forzatura di Artisti della Qualita' (base ADQ, logo e sfondo
+                    //del Buono del Paese nascosti) spariva con il box nuovo, e il clone non c'era.
+                    if (elementoDecisoDalleRegole(campo.label)) {
+                        let cambiatoDalleRegole = false;
+                        if (campo.visible !== campoBox2.visible) {
+                            campo.visible = campoBox2.visible;
+                            cambiatoDalleRegole = true;
+                        }
+                        let stileVecchio = campo.appliedObjectStyle != null && campo.appliedObjectStyle.isValid ? campo.appliedObjectStyle.name : null;
+                        let stileNuovo = campoBox2.appliedObjectStyle != null && campoBox2.appliedObjectStyle.isValid ? campoBox2.appliedObjectStyle.name : null;
+                        if (stileNuovo != null && stileNuovo !== stileVecchio) {
+                            campo.appliedObjectStyle = campoBox2.appliedObjectStyle;
+                            cambiatoDalleRegole = true;
+                        }
+                        if (cambiatoDalleRegole && listCampiConDifferenze.find(c => c == Utility.parseLabel(campo.label)) == null) {
+                            listCampiConDifferenze.push(Utility.parseLabel(campo.label));
+                        }
                     }
 
                     //controlliamo il costruttore per decidere come agire, quelli che ci interessano sono textFrames e rectangles

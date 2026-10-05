@@ -28,6 +28,14 @@ rimasto il motore, che **non usa niente del report** e lo usano in tanti.
 
 - `confrontoBox(box1, box2, forzaReimpaginazione)` → **308 righe.** Due box a confronto: quando un
   box viene rifatto, porta nel nuovo quello che l'operatore aveva cambiato a mano nel vecchio.
+  Con la stessa meccanica tiene una **copia del box vecchio** e ci riporta dal nuovo testi, stili di
+  paragrafo e immagini cambiate; se ci sono differenze il vecchio resta come **clone** sul livello
+  `cloneVecchioImpaginato`, spostato di 10, altrimenti si cancella. Dal I20-1046 per gli elementi
+  **decisi dalle regole** — la base e i campi `base*`, i loghi e gli sfondi automatici
+  (`foto_extra$…`, `sfondo$…`; `elementoDecisoDalleRegole`, fuori dall'oggetto) — riporta anche
+  **visibilità e stile oggetto**, e contano come differenze. Prima una forzatura che cambiava solo
+  quelli (Artisti della Qualità di Edro21: base ADQ, logo e sfondo del Buono del Paese nascosti)
+  spariva con il box nuovo, senza clone.
 - `confrontoBoxCompiledFieldPreAnalisi(...)` → **389 righe.** Un box e i suoi record: cosa non
   corrisponde più. È il confronto fatto sui campi già compilati, senza rileggere il box: la via
   veloce. **`checkMD5` a `false` salta il confronto degli hash delle foto**, che è la parte cara.
