@@ -117,6 +117,41 @@ const schedaRef = {
         return this.apertaDalReport !== true;
     },
 
+    /// I20-1049: le azioni sul box offerte dalla scheda aperta, e se la sua ref e' un gruppo.
+    /// Le imposta la schermata di edit quando costruisce la sezione.
+    azioniStrutturaliDisponibili: [],
+    azioniDiGruppo: false,
+
+    /// I20-1049: le azioni sul box gia' aggiunte, nell'ordine dei pannelli.
+    azioniStrutturaliAggiunte() {
+        const disponibili = this.azioniStrutturaliDisponibili || [];
+        return $("#azioni_strutturali").children(".panel").toArray()
+            .map(el => disponibili.find(a => "az_" + a.id == el.id))
+            .filter(a => a != null);
+    },
+
+    /// I20-1049: l'opzione con cui applicare le azioni scelte, "tutto" o "primario". Con una sola
+    /// opzione valida e' quella, senza chiederla; altrimenti la sceglie l'operatore dalla
+    /// tendina. Fuori da un gruppo non c'e' niente da scegliere.
+    opzioneAzioniStrutturali() {
+        if (!this.azioniDiGruppo) {
+            return null;
+        }
+        const opzioni = cambiStrutturaliJs.opzioniComuni(this.azioniStrutturaliAggiunte());
+        if (opzioni.length == 1) {
+            return opzioni[0];
+        }
+        return $("#cmbTipoSalvataggioStrutturale").val();
+    },
+
+    /// I20-1049: la tendina gruppo/primario si vede solo per un gruppo, con almeno un'azione
+    /// aggiunta e piu' di un'opzione valida. Con "Seleziona un'azione" e nessuna azione
+    /// aggiunta resta nascosta. RESET non cambia.
+    aggiornaTendinaOpzioniStrutturali() {
+        const opzioni = cambiStrutturaliJs.opzioniComuni(this.azioniStrutturaliAggiunte());
+        $("#cmbTipoSalvataggioStrutturale").css("display", this.azioniDiGruppo && opzioni.length > 1 ? "" : "none");
+    },
+
     /// Il primario del gruppo e il suo tracciato: la regola del sottogruppo e' la stessa che
     /// usa la preanalisi, se c'e' comanda lui. Altrimenti si allineerebbe il box a un dato
     /// diverso da quello con cui viene giudicato.
@@ -2064,6 +2099,8 @@ const schedaRef = {
                 //Implementazioni path di cambio strutturale
 
                 let cambiStrutturali = await cambiStrutturaliJs.getCambioStrutturalePath(primario, box);
+                me.azioniStrutturaliDisponibili = cambiStrutturali;
+                me.azioniDiGruppo = primario.recordInTracciato["Referenza.Codice"] != primario.recordInTracciato["Scatto.CodiceGruppo"];
                 if (cambiStrutturali.length > 0) {
                     //Scansiono groupIndd per capire quali labels ci sono
                     let labInBox = Utility.getAllFieldsInGroup(box);
@@ -2134,6 +2171,13 @@ const schedaRef = {
                         //if ($("#azioni_strutturali").find(".act" + val).length <= 0) {
                         if ($("#azioni_strutturali").find("#az_" + val).length <= 0) {
                             let objCS = cambiStrutturali.find(cs => cs.id == val);
+
+                            //I20-1049: al salvataggio l'opzione gruppo/primario e' una sola per tutte le
+                            //azioni: una che non ne ha in comune con quelle gia' aggiunte non si aggiunge.
+                            if (me.azioniDiGruppo && cambiStrutturaliJs.opzioniComuni(me.azioniStrutturaliAggiunte().concat([objCS])).length == 0) {
+                                messaggioUtente("Code SRF-99 L'azione \"" + objCS.titolo + "\" non si può applicare insieme a quelle già scelte: valgono per parti diverse del gruppo", "warning", false, 5);
+                                return;
+                            }
                             
                             let panelAzione = template_panelAzione.replace("$tit", objCS.titolo).replace("$id", objCS.id);
                             let panelAzioneEl = $(panelAzione); 
@@ -2187,6 +2231,7 @@ const schedaRef = {
 
                             //$("#azioni_strutturali").append(contInstr);
                             $("#azioni_strutturali").append(panelAzioneEl);
+                            me.aggiornaTendinaOpzioniStrutturali();
 
                             let tester = panelAzioneEl.find(".delAzButton");
 
@@ -2194,6 +2239,7 @@ const schedaRef = {
                                 console.log("Rimuovo azione strutturale: ");
                                 console.log($(this).closest(".panel"));
                                 $(this).closest(".panel").remove();
+                                me.aggiornaTendinaOpzioniStrutturali();
                             });
 
 
@@ -2228,10 +2274,11 @@ const schedaRef = {
                     testataCampiOffertaLeft.append(spPicker);
 
 
-                    if (primario.recordInTracciato["Referenza.Codice"] != primario.recordInTracciato["Scatto.CodiceGruppo"]) {
-                        //Se si tratta di un gruppo metto la scelta del estendi a tutto il gruppo o solo primario
+                    if (me.azioniDiGruppo) {
+                        //Se si tratta di un gruppo metto la scelta del estendi a tutto il gruppo o solo primario.
+                        //I20-1049: nasce nascosta, la mostra aggiornaTendinaOpzioniStrutturali quando serve.
                         //let cmbMode = $("<select id=\"cmbTipoSalvataggioStrutturale\"><option selected value=\"tutto\">Per tutto il gruppo</option><option value=\"primario\">Solo il primario</option></select>")
-                        let cmbMode = $("<sp-picker id=\"cmbTipoSalvataggioStrutturale\">")
+                        let cmbMode = $("<sp-picker id=\"cmbTipoSalvataggioStrutturale\" style=\"display:none;\">")
                         cmbMode.on('change', function (e) {
                             let val = e.target.selectedOptions[0]._properties.values().next().value;
                             $(this).val(val);
@@ -2254,6 +2301,7 @@ const schedaRef = {
                         .on('click', function () {
 
                             $("#azioni_strutturali").empty();
+                            me.aggiornaTendinaOpzioniStrutturali();
                             me.editRefFieldController.checkStato();
                             
                         });
@@ -4010,7 +4058,8 @@ const schedaRef = {
         params += "&idRec=" + encodeURIComponent(this.schedeRefDati[0].idRec);
 
         let kAz = "azioni[0]";
-        if ($("#cmbTipoSalvataggioStrutturale").val() == "primario") {
+        //I20-1049: con una sola opzione valida la tendina non si vede, e l'opzione e' quella.
+        if (this.opzioneAzioniStrutturali() == "primario") {
             params += "&" + kAz + ".codice=" + encodeURIComponent(this.schedeRefDati[0].recordInTracciato["Referenza.Codice"]);
         }
 

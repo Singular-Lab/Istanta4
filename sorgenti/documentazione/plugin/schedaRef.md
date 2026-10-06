@@ -52,6 +52,12 @@ sta lavorando l'operatore» guarda lì. Con lei: `multiSelection`, `schedeRefDat
   automatica di una foto trovata nella cartella.
 - `getRiscontriFotoConNome`, `buildMessaggioRiscontriFoto` → cosa dire quando più foto hanno lo
   stesso nome.
+- `azioniStrutturaliAggiunte`, `opzioneAzioniStrutturali`, `aggiornaTendinaOpzioniStrutturali` →
+  le azioni sul box già aggiunte, l'opzione gruppo/primario con cui salvarle, e quando mostrare la
+  tendina della scelta. La tendina si vede solo per un gruppo con almeno un'azione e più di
+  un'opzione valida; con una sola opzione si usa quella. Lo stato è in `azioniStrutturaliDisponibili`
+  e `azioniDiGruppo`. La regola sulle opzioni è in [cambiStrutturali](cambiStrutturali.md)
+  (I20-1049).
 
 ---
 
