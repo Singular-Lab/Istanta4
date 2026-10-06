@@ -68,6 +68,15 @@ intervalli, un controllo alla volta, col documento attivo letto da InDesign, e p
 `ReportIntegrita.chiudiSeNonValePiu(documentoAttuale)`, che usa `deveChiudereReport` di
 [reportIntegrita/avvio](reportIntegrita/avvio.md). Vedi [reportIntegrita/flusso.md](reportIntegrita/flusso.md).
 
+## Il controllo periodico della versione — I20-1047
+
+Il ciclo, subito dopo `checkStatus`, chiama `controllaVersionePubblicata()` di `indexNew` quando
+`VersionePlugin.eOraDiControllare(...)` dice che è ora: da loggati, ogni due minuti dall'ultimo
+controllo, compreso quello del login. **Qui resta solo il «quando»**, come per il Report
+Integrità: il confronto e il blocco sono di [versionePlugin](versionePlugin.md) e di `indexNew`.
+Sta dopo il cancello `isBusy`, quindi non interrompe un'operazione lunga: aspetta che finisca.
+`checkStatus` e `getSession` restano ogni 10 s, come prima.
+
 ## Cosa è stato rimosso
 
 `quit()`, tre righe che fermavano il ciclo: nessun chiamante in tutto il Plugin.

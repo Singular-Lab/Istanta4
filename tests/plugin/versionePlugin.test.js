@@ -133,3 +133,48 @@ test('il riquadro di blocco copre il pannello e tiene il testo al centro', () =>
     assert.ok(riquadro.includes('justify-content: center') && riquadro.includes('align-items: center'));
     assert.ok(riquadro.includes('flex-direction: column'), 'titolo e dettaglio stanno uno sotto l\'altro');
 });
+
+/* ---- I20-1047: il controllo anche a sessione aperta ---- */
+
+test("a sessione aperta la versione si ricontrolla ogni due minuti, solo da loggati", () => {
+    const due = VersionePlugin.INTERVALLO_CONTROLLO_MS;
+    assert.strictEqual(due, 120000);
+
+    //Mai controllata: subito, se loggati; mai, se non loggati (serve il server).
+    assert.strictEqual(VersionePlugin.eOraDiControllare(0, 1000, true), true);
+    assert.strictEqual(VersionePlugin.eOraDiControllare(0, 1000, false), false);
+    //Dall'ultimo controllo, compreso quello del login, devono passare due minuti.
+    assert.strictEqual(VersionePlugin.eOraDiControllare(1000, 1000 + due - 1, true), false);
+    assert.strictEqual(VersionePlugin.eOraDiControllare(1000, 1000 + due, true), true);
+    assert.strictEqual(VersionePlugin.eOraDiControllare(1000, 1000 + due, false), false);
+});
+
+test("il ciclo degli eventi ricontrolla la versione con la funzione del login, e il login se lo segna", () => {
+    const eventi = sorgente("plugin/events.js").replace(/\r/g, "");
+    const js = sorgente("plugin/indexNew.js").replace(/\r/g, "");
+
+    assert.match(eventi, /VersionePlugin\.eOraDiControllare\(VersionePlugin\.ultimoControllo, Date\.now\(\), me\.istantaState == IstantaState\.Logged\)\) \{\s*controllaVersionePubblicata\(\);/);
+    //Il controllo periodico viene dopo il ping di 10 s, che resta com'era: la sessione si guarda
+    //ancora con getSession.
+    assert.ok(eventi.indexOf("me.checkStatus(me.checkStatusResonse);") < eventi.indexOf("VersionePlugin.eOraDiControllare("));
+    assert.match(eventi, /INTERVALLO_STATUS = 10000;/);
+    assert.match(eventi, /_xhrCheckSession\.send\("LoginController\/getSession"/);
+
+    //Ogni controllo, al login o periodico, si segna quando parte.
+    const controllo = js.slice(js.indexOf("function controllaVersionePubblicata()"), js.indexOf("function bloccaPerVersioneDisallineata("));
+    assert.match(controllo, /VersionePlugin\.ultimoControllo = Date\.now\(\);/);
+    //E al login c'e' ancora.
+    assert.match(js, /indesignEvents\.addEventListener\(indesignEvents\.EVENT_USER_LOGGED[\s\S]{0,1200}?controllaVersionePubblicata\(\);/);
+});
+
+test("gli indirizzi del manifest e dello zip cambiano davvero a ogni richiesta", () => {
+    const cs = sorgente("Istanta/Controllers/LoginController.cs");
+    //Il commento che spiega il perche' cita ancora il vecchio codice: si guarda solo il codice.
+    const codice = cs.split(/\r?\n/).filter(r => !/^\s*\/\//.test(r)).join("\n");
+
+    //Con il seme fisso il primo numero era sempre lo stesso, e l'indirizzo non cambiava mai.
+    assert.ok(!codice.includes("new Random(999999)"));
+    assert.match(cs, /internal static string ParametroAntiCache\(\)\s*\{\s*return Guid\.NewGuid\(\)\.ToString\("N"\);/);
+    assert.match(cs, /manifest\.json\?c=\{ParametroAntiCache\(\)\}/);
+    assert.match(cs, /\{sourcename\}\.zip\?c=\{ParametroAntiCache\(\)\}/);
+});
