@@ -36,6 +36,45 @@ namespace Istanta.Utility
         const int limit_char_length_indd = 18;
 
         /// <summary>
+        /// Le etichette di un record: quelle gia' raccolte piu' quelle del record, ognuna una
+        /// volta sola, nell'ordine in cui compaiono la prima volta.
+        ///
+        /// Restituisce sempre una lista nuova. In ImpaginaFromInDesignNew le due liste possono
+        /// essere lo stesso oggetto, perche' i record del kit restano in cache tra una chiamata e
+        /// l'altra: aggiungendo la lista a se stessa, le etichette raddoppiavano a ogni
+        /// impaginazione fino a esaurire la memoria (I20-1048).
+        /// </summary>
+        public static List<string> unisciEtichette(IEnumerable<string>? giaRaccolte, IEnumerable<string>? delRecord)
+        {
+            return (giaRaccolte ?? Enumerable.Empty<string>())
+                .Concat(delRecord ?? Enumerable.Empty<string>())
+                .Distinct()
+                .ToList();
+        }
+
+        /// <summary>
+        /// Il valore di una chiave dentro descrizione_gruppo di un record, come lo leggono i
+        /// filtri dell'impaginazione.
+        ///
+        /// Converte solo il valore cercato, con lo stesso convertitore che si usava per tutto
+        /// l'oggetto: prima l'intero descrizione_gruppo diventava un dizionario due volte, per
+        /// ogni record, regola e chiave (I20-1048). Se descrizione_gruppo non e' un oggetto JSON
+        /// la chiave risulta assente.
+        /// </summary>
+        public static bool leggiCampoDescrizioneGruppo(object? descrizioneGruppo, string chiave, out object? valore)
+        {
+            valore = null;
+            if (descrizioneGruppo is not Newtonsoft.Json.Linq.JObject descrizioni
+                || !descrizioni.TryGetValue(chiave, out Newtonsoft.Json.Linq.JToken? token))
+            {
+                return false;
+            }
+
+            valore = token?.ToObject<object>();
+            return true;
+        }
+
+        /// <summary>
         /// Se un codice gruppo contiene quel codice come proprio elemento.
         ///
         /// Il codice gruppo e' una lista separata da virgole, quindi non basta vedere se la
