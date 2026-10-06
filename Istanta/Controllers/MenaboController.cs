@@ -7149,7 +7149,9 @@ double.TryParse(percorso.ToString(), out double valore16))
                     ficoController.HttpContextInRent = HttpContext;
                 }
 
-                PromoLavorazioni? promoLav = ctx2.PromoLavorazionis.Where(f => f.Id == idLavorazione).Include(f=>f.PromoLavorazioniRecords).FirstOrDefault();
+                //I20-1048: senza Include dei record, mai letti da qui: quelli gia' impaginati si
+                //caricano piu' avanti in recordGiaImpaginati.
+                PromoLavorazioni? promoLav = ctx2.PromoLavorazionis.Where(f => f.Id == idLavorazione).FirstOrDefault();
                 //PromoLavorazioni? promoLavConfronto = null;
                 //if (idLavorazioneConfronto != 0)
                 //{
@@ -7199,16 +7201,11 @@ double.TryParse(percorso.ToString(), out double valore16))
                 //        tipoImpaginazione = TipoImpagnazione.ImpaginaTutto;
                 //    }
 
-                IstantaController icItem = new IstantaController(this._config.GetConnectionString("IstandaConnectionDb")!, this.path_external_lib, this.path_external_source, this._dbContextFactory);
-
-                JObject oDeclMecc = JObject.Parse(System.IO.File.ReadAllText(this.path_external_source + "SourceDeclinazioneMeccaniche.json"));
-                DbDeclinazioneMeccaniche? meccDB = oDeclMecc.ToObject<DbDeclinazioneMeccaniche>();
+                //I20-1048: tolti un secondo IstantaController e la lettura di SourceDeclinazioneMeccaniche
+                //e SourceFrameworkCss: si facevano a ogni impaginazione e non li usava nessuno.
 
                 //JObject oMenaboSource = JObject.Parse(System.IO.File.ReadAllText(this.path_external_source + "SourceMenabo.json"));
                 //DbMenabo menaboDB = oMenaboSource.ToObject<DbMenabo>(); //1 riferimento, questa entity va tolta
-
-                JObject oFrameSource = JObject.Parse(System.IO.File.ReadAllText(this.path_external_source + "SourceFrameworkCss.json"));
-                DbFrameworkCss? frameDB = oFrameSource.ToObject<DbFrameworkCss>();
 
 
                 string key_codice_gruppo = Enum.GetName(AddestramentoRuoli.Scatto) + "." + GLOBAL_VARIABLES.keyScattoCodiceGruppo;
@@ -7259,12 +7256,11 @@ double.TryParse(percorso.ToString(), out double valore16))
                     if (itemOriginale.recordInTracciato[GLOBAL_VARIABLES_FICO.keyCodiceGruppo].ToString() == "2907018,6922799,7053334,7231599")
                         "ok".ToString();
 
-                    if (itemOriginale.recordInTracciato.ContainsKey(keyAllEtichette))
-                    {
-                        itemOriginale.allEtichette.AddRange(itemOriginale.recordInTracciato[keyAllEtichette] as List<string>);
-                    }
-                    ///Rimuovi duplicati
-                    itemOriginale.allEtichette.GroupBy(g => g).Select(s => s.Key).ToList();
+                    //I20-1048: i record vengono dalla cache del kit, e dopo la prima impaginazione le due
+                    //liste erano lo stesso oggetto: aggiungerla a se stessa raddoppiava le etichette a ogni
+                    //chiamata, fino a esaurire la memoria. Ora si riparte da una lista nuova, senza doppioni.
+                    itemOriginale.recordInTracciato.TryGetValue(keyAllEtichette, out object? etichetteRecord);
+                    itemOriginale.allEtichette = Utility.Main.unisciEtichette(itemOriginale.allEtichette, etichetteRecord as List<string>);
                     itemOriginale.recordInTracciato[keyAllEtichette] = itemOriginale.allEtichette;
                     itemOriginale.recordInTracciato[keyEtichetteVisual] = itemOriginale.etichetteVisual;
                 }
@@ -7487,12 +7483,12 @@ double.TryParse(percorso.ToString(), out double valore16))
                                         Debug.WriteLine("");
                                     }
 
+                                    //I20-1048: si legge solo la chiave cercata, senza convertire due volte
+                                    //tutto descrizione_gruppo per ogni record, regola e chiave.
                                     if (IsDescrizioneKey(chiave) &&
-                                        f.ContainsKey("descrizione_gruppo"))
+                                        f.TryGetValue("descrizione_gruppo", out object? descrizioneGruppo))
                                     {
-                                        JObject jObjExtra = f["descrizione_gruppo"] as JObject;
-                                        Dictionary<string, object> listExtra = jObjExtra.ToObject<Dictionary<string, object>>();
-                                        return jObjExtra.ToObject<Dictionary<string, object>>().TryGetValue(chiave, out value);
+                                        return Utility.Main.leggiCampoDescrizioneGruppo(descrizioneGruppo, chiave, out value);
                                     }
 
                                     return f.TryGetValue(chiave, out value);
@@ -8324,16 +8320,8 @@ double.TryParse(percorso.ToString(), out double valore16))
 
                     result.Result = new List<ResponseImpagination>();
 
-                    //Raccolgo tutti i formati di lavorazioen tipo VOL
-                    List<string> guidIdsFormatiVol = SingletonConfiguration.DBFORMATI!.source.Where(f => f.tipo == TipoLavorazione.Volantino).Select(s => s.guidID).ToList();
-
-                    //Mi serve innanzitutto di avere a portata i mano il VOL di riferimento delle sole prestazioni che hanno subito variazioni eplicite
-                    List<int> idsPlFormatiVol = this.ctx2.PromoLavorazionis.Where(p => p.GuidPromo == promoLav!.GuidPromo &&
-                    p.GuidCanale == promoLav.GuidCanale &&
-                    p.GuidArea == promoLav.GuidArea && guidIdsFormatiVol.Contains(p.GuidFormato!)
-                    ).Select(s => s.Id).ToList();
-
-                    List<PromoLavorazioniRecord> plrAlteratiNeiFormatiVol = this.ctx2.PromoLavorazioniRecords.Where(p => idsPlFormatiVol.Contains(p.IdLavorazione) && p.Meta != null).ToList();
+                    //I20-1048: tolte le due query sui record dei VOL di riferimento con alterazioni
+                    //esplicite (plrAlteratiNeiFormatiVol): il codice che le usava, qui sotto, e' commentato.
 
                     Console.WriteLine("Impaginazione POP fase 1_2");
 
