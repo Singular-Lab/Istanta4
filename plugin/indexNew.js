@@ -249,6 +249,10 @@ function setVersionePlugin() {
 /// lavoro per un server che non risponde sarebbe un danno peggiore di quello che si previene.
 function controllaVersionePubblicata() {
     try {
+        //I20-1047: lo stesso controllo vale al login e ogni due minuti (events.js): ci si segna
+        //quando e' partito, cosi' quello periodico conta anche questo e non lo ripete subito.
+        VersionePlugin.ultimoControllo = Date.now();
+
         var xhr = new XMLHttpRequestClient();
 
         xhr.onload = function (objResult, parsed) {

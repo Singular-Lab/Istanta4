@@ -182,6 +182,16 @@ class InddEvents {
                         }
                     }
 
+                    //I20-1047: a sessione aperta la versione del Plugin si ricontrolla ogni due minuti
+                    //(VersionePlugin.INTERVALLO_CONTROLLO_MS), con la stessa funzione del login. Prima
+                    //si controllava solo al login, e chi non perdeva mai la sessione non vedeva mai una
+                    //versione nuova. Il ciclo qui e' gia' fermo se il Plugin e' occupato: il blocco non
+                    //arriva a meta' di un'impaginazione. checkStatus e getSession restano ogni 10 s.
+                    if (typeof VersionePlugin !== "undefined" && typeof controllaVersionePubblicata === "function"
+                        && VersionePlugin.eOraDiControllare(VersionePlugin.ultimoControllo, Date.now(), me.istantaState == IstantaState.Logged)) {
+                        controllaVersionePubblicata();
+                    }
+
                     if (app.documents.length > 0) {
                         //console.log("Documenti aperti: "+app.documents.length);
 

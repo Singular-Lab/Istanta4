@@ -13,6 +13,25 @@ const VersionePlugin = {
         nonVerificabile: "nonVerificabile"
     },
 
+    /// I20-1047: ogni quanto, a sessione aperta, si ricontrolla la versione pubblicata. Prima si
+    /// controllava solo al login: chi non perdeva mai la sessione non vedeva mai una versione nuova.
+    INTERVALLO_CONTROLLO_MS: 2 * 60 * 1000,
+
+    /// I20-1047: quando e' partito l'ultimo controllo, al login o periodico (millisecondi; 0 se mai).
+    ultimoControllo: 0,
+
+    /// I20-1047: se e' ora di ricontrollare la versione. Solo da loggati, perche' serve il server;
+    /// senza un controllo precedente si', altrimenti quando e' passato l'intervallo dall'ultimo.
+    eOraDiControllare(ultimoControllo, adesso, loggato, intervallo = VersionePlugin.INTERVALLO_CONTROLLO_MS) {
+        if (!loggato) {
+            return false;
+        }
+        if (!(ultimoControllo > 0)) {
+            return true;
+        }
+        return adesso - ultimoControllo >= intervallo;
+    },
+
     /// Confronta la versione installata con quella pubblicata.
     ///
     /// Quando una delle due non si sa, l'esito non e' "disallineata" ma "non verificabile", e

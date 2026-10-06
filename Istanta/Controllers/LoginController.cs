@@ -1289,6 +1289,17 @@ namespace Istanta.Controllers
         }
 
         /// <summary>
+        /// I20-1047: il parametro "c" che rende unico l'indirizzo del manifest e dello zip del
+        /// Plugin, perche' nessuna cache intermedia restituisca una versione vecchia. Prima era
+        /// new Random(999999).Next(): con il seme fisso il primo numero e' sempre lo stesso
+        /// (1112411752), quindi l'indirizzo non cambiava mai e il trucco non funzionava.
+        /// </summary>
+        internal static string ParametroAntiCache()
+        {
+            return Guid.NewGuid().ToString("N");
+        }
+
+        /// <summary>
         /// I20-987: il manifest del Plugin pubblicato per questo cliente, oppure niente se non
         /// si riesce a leggerlo.
         ///
@@ -1297,10 +1308,8 @@ namespace Istanta.Controllers
         /// </summary>
         private async Task<PluginManifest?> manifestPluginPubblicato()
         {
-            Random rnd = new Random(999999);
-            int rndNum = rnd.Next();
             string k = Crypto.EncryptString(ficoConfig.nomeCliente, ficoConfig.secretKey);
-            string linkManifest = $"https://www.istanta.it/plugin/{k}/manifest.json?c={rndNum}";
+            string linkManifest = $"https://www.istanta.it/plugin/{k}/manifest.json?c={ParametroAntiCache()}";
 
             HttpClient httpClient = httpClientFactory.CreateClient();
             var responseManifest = await httpClient.GetAsync(linkManifest);
@@ -1357,8 +1366,6 @@ namespace Istanta.Controllers
             try
             {
                 //Voglio ottenere un numero randomico
-                Random rnd = new Random(999999);
-                int rndNum = rnd.Next();
                 string k = Crypto.EncryptString(ficoConfig.nomeCliente, ficoConfig.secretKey);
 
                 PluginManifest? manifest = await manifestPluginPubblicato();
@@ -1384,7 +1391,7 @@ namespace Istanta.Controllers
                 
 
                 //string crypt = Crypto.EncryptString(ficoConfig.nomeCliente, "0191ff22-4b1a-7b80-8cb5-8759a1548e02");
-                string link = $"https://www.istanta.it/plugin/{k}/{sourcename}.zip?c={rndNum}";
+                string link = $"https://www.istanta.it/plugin/{k}/{sourcename}.zip?c={ParametroAntiCache()}";
                 //Controllo se la risrsa esiste
 
                 HttpClient httpClient = httpClientFactory.CreateClient();
