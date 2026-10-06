@@ -590,6 +590,13 @@ namespace IstantaLib
         public List<BloccoRegole> Condizione { get; set; } = new List<BloccoRegole>();
         public string LabelElementCorreggo { get; set; } = null;
         public List<CampoInddCoinvolto> CampiInddCoinvolti { get; set; } = new List<CampoInddCoinvolto>();
+
+        /// <summary>
+        /// I20-1049: a chi si puo' applicare l'azione in un gruppo: "tutto" (tutto il gruppo) e/o
+        /// "primario" (solo il primario), gli stessi valori della tendina del Plugin. Vuota vale
+        /// come entrambe; con una sola opzione il Plugin non la chiede e usa quella.
+        /// </summary>
+        public List<string> OpzioniValide { get; set; } = new List<string>();
     }
 
     public class CampoInddCoinvolto

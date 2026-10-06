@@ -12,6 +12,7 @@ e `ficoProcess.js:1886`.
 | nome | cos'è |
 |---|---|
 | `cambiStrutturaliDB` | l'elenco delle strutture scaricato dal server |
+| `OPZIONI_GRUPPO` | `["tutto", "primario"]`: a chi si applica un'azione in un gruppo, nell'ordine della tendina (I20-1049) |
 
 È **cache e stato insieme**, e lo riempiono in due: questo modulo quando lo trova vuoto, e
 `pluginMiddleware.js:32` dalla risposta di inizializzazione. Due strade che scrivono la stessa
@@ -48,9 +49,32 @@ inietta `Utility` come globale.
   minuscole e **tutti falsi su un valore assente**. È il motivo per cui una regola sbagliata non dà
   errore: risponde «no» come se la condizione non fosse soddisfatta.
 - `_mapCambioStrutturaleToLegacy(struttura, record, id)` → traduce una struttura del server nella
-  forma che si aspetta la schermata di edit.
+  forma che si aspetta la schermata di edit. Da I20-1049 porta anche `opzioniValide`.
+- `_opzioniValide(struttura)` → le opzioni che la struttura dichiara in `OpzioniValide`, ripulite e
+  nell'ordine della tendina. **Senza opzioni, o con sole opzioni sconosciute, le ammette tutte**: è
+  il comportamento di prima, e resta quello dei clienti che non le configurano (I20-1049).
+- `opzioniComuni(azioni)` → le opzioni valide per tutte le azioni scelte insieme, perché al
+  salvataggio l'opzione è una sola. Senza azioni nessuna; vuota se due azioni non ne hanno in
+  comune (I20-1049).
 - `_resolveIstruzioneValue(istruzione, record)` → il valore secondo l'operazione: `0` Set scrive il
   valore, `1` AppendText lo accoda a quello che c'è, `2` RemoveText lo toglie e ripulisce i bordi.
+
+## Opzioni gruppo/primario dichiarate dall'azione — I20-1049
+
+Nella scheda ref, per una ref di gruppo, le azioni sul box si applicano a tutto il gruppo o al solo
+primario. Prima la tendina della scelta compariva sempre, anche dove non serviva — a Edro21 non
+serve mai — e anche senza nessuna azione scelta.
+
+Ora ogni azione può dichiarare in `SourceCustomPlugin.json` → `cambiStrutturali` → `OpzioniValide`
+quali opzioni ammette: `"tutto"`, `"primario"` o entrambe. La scheda (vedi
+[schedaRef](schedaRef.md)) mostra la tendina solo per un gruppo con almeno un'azione aggiunta e più
+di un'opzione valida; con una sola applica quella senza chiederla. Un'azione che non ha opzioni in
+comune con quelle già aggiunte non si aggiunge (`SRF-99`). Edro21 dichiara `["tutto"]` su tutte le
+sue azioni.
+
+La proprietà vive in `IstantaLib` (`CambioStrutturale.OpzioniValide`). Le quattro azioni scritte
+nel codice di `AgenziaLib.Edro21.GetCambioStrutturalePath` — la riserva usata solo se la
+configurazione è vuota — non la dichiarano, quindi ammettono entrambe le opzioni.
 
 ## Il difetto corretto in I20-1002
 

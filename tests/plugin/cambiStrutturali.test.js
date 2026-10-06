@@ -119,3 +119,76 @@ test('le regole sul record continuano a funzionare come prima', () => {
     assert.strictEqual(cambiStrutturali._matchRegola(record, { campo: 'promozionale', operatore: EQUALS, value: 'true' }, []), true);
     assert.strictEqual(cambiStrutturali._matchRegola(record, { campo: 'promozionale', operatore: EQUALS, value: 'false' }, []), false);
 });
+
+/* ---- I20-1049: opzioni gruppo/primario dichiarate dall'azione ---- */
+
+const fs = require('node:fs');
+const path = require('node:path');
+const { leggiFileDelPlugin } = require('./fileDelPlugin');
+
+function struttura(opzioni) {
+    const s = { titolo: 'Azione', istruzioni: [], campiInddCoinvolti: [] };
+    if (opzioni !== undefined) {
+        s.opzioniValide = opzioni;
+    }
+    return s;
+}
+
+test('le opzioni dichiarate arrivano alla scheda, nell\'ordine della tendina', () => {
+    assert.deepStrictEqual(cambiStrutturali._mapCambioStrutturaleToLegacy(struttura(['tutto']), {}, 1).opzioniValide, ['tutto']);
+    assert.deepStrictEqual(cambiStrutturali._mapCambioStrutturaleToLegacy(struttura(['primario', 'tutto']), {}, 1).opzioniValide, ['tutto', 'primario']);
+    //Maiuscole e spazi non contano; il nome col maiuscolo, come nel JSON, vale lo stesso.
+    assert.deepStrictEqual(cambiStrutturali._mapCambioStrutturaleToLegacy({ OpzioniValide: [' Primario '] }, {}, 1).opzioniValide, ['primario']);
+});
+
+test('un\'azione che non dichiara opzioni, o ne dichiara di sconosciute, le ammette tutte', () => {
+    assert.deepStrictEqual(cambiStrutturali._mapCambioStrutturaleToLegacy(struttura(), {}, 1).opzioniValide, ['tutto', 'primario']);
+    assert.deepStrictEqual(cambiStrutturali._mapCambioStrutturaleToLegacy(struttura([]), {}, 1).opzioniValide, ['tutto', 'primario']);
+    assert.deepStrictEqual(cambiStrutturali._mapCambioStrutturaleToLegacy(struttura(['gruppo']), {}, 1).opzioniValide, ['tutto', 'primario']);
+    assert.deepStrictEqual(cambiStrutturali._mapCambioStrutturaleToLegacy(struttura(null), {}, 1).opzioniValide, ['tutto', 'primario']);
+});
+
+test('senza azioni scelte non c\'e\' nessuna opzione, e la tendina non si mostra', () => {
+    assert.deepStrictEqual(cambiStrutturali.opzioniComuni([]), []);
+    assert.deepStrictEqual(cambiStrutturali.opzioniComuni(null), []);
+});
+
+test('le opzioni valide per piu\' azioni sono quelle che hanno in comune', () => {
+    const tutte = { opzioniValide: ['tutto', 'primario'] };
+    const soloGruppo = { opzioniValide: ['tutto'] };
+    const soloPrimario = { opzioniValide: ['primario'] };
+
+    assert.deepStrictEqual(cambiStrutturali.opzioniComuni([tutte]), ['tutto', 'primario']);
+    assert.deepStrictEqual(cambiStrutturali.opzioniComuni([soloGruppo]), ['tutto']);
+    assert.deepStrictEqual(cambiStrutturali.opzioniComuni([tutte, soloPrimario]), ['primario']);
+    //Incompatibili: la scheda non lascia aggiungere la seconda.
+    assert.deepStrictEqual(cambiStrutturali.opzioniComuni([soloGruppo, soloPrimario]), []);
+    //Un'azione costruita senza la mappatura vale come se le ammettesse tutte.
+    assert.deepStrictEqual(cambiStrutturali.opzioniComuni([{}, soloGruppo]), ['tutto']);
+});
+
+test('in Edro21 ogni azione sul box vale solo per tutto il gruppo', () => {
+    const percorso = path.join(__dirname, '..', '..', 'Istanta', 'wwwroot', 'external_source', 'Edro21', 'SourceCustomPlugin.json');
+    const azioni = JSON.parse(fs.readFileSync(percorso, 'utf8').replace(/^﻿/, '')).cambiStrutturali;
+
+    assert.ok(azioni.length > 0);
+    for (const azione of azioni) {
+        assert.deepStrictEqual(azione.OpzioniValide, ['tutto'], azione.Titolo);
+        assert.deepStrictEqual(cambiStrutturali.opzioniComuni([cambiStrutturali._mapCambioStrutturaleToLegacy(azione, {}, 1)]), ['tutto']);
+    }
+});
+
+test('la scheda mostra la tendina solo quando serve e salva con l\'opzione implicita', () => {
+    const scheda = leggiFileDelPlugin('schedaRef.js').replace(/\r/g, '');
+
+    //La tendina nasce nascosta e la mostra solo un gruppo con piu' di un'opzione.
+    assert.match(scheda, /<sp-picker id=\\"cmbTipoSalvataggioStrutturale\\" style=\\"display:none;\\">/);
+    assert.match(scheda, /\$\("#cmbTipoSalvataggioStrutturale"\)\.css\("display", this\.azioniDiGruppo && opzioni\.length > 1 \? "" : "none"\);/);
+    //Si ricalcola quando un'azione si aggiunge, si toglie, o si svuota tutto con RESET.
+    assert.strictEqual((scheda.match(/me\.aggiornaTendinaOpzioniStrutturali\(\);/g) || []).length, 3);
+    //Un'azione senza opzioni in comune con quelle gia' scelte non si aggiunge.
+    assert.match(scheda, /opzioniComuni\(me\.azioniStrutturaliAggiunte\(\)\.concat\(\[objCS\]\)\)\.length == 0\) \{\s*messaggioUtente\("Code SRF-99/);
+    //Il salvataggio non legge piu' la tendina direttamente.
+    assert.match(scheda, /if \(this\.opzioneAzioniStrutturali\(\) == "primario"\) \{/);
+    assert.doesNotMatch(scheda, /if \(\$\("#cmbTipoSalvataggioStrutturale"\)\.val\(\) == "primario"\)/);
+});

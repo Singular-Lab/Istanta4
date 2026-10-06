@@ -11,6 +11,10 @@
 const cambiStrutturali = {
     cambiStrutturaliDB: [],
 
+    /// I20-1049: a chi si applica un'azione in un gruppo. "tutto" e' tutto il gruppo, "primario"
+    /// il solo primario: gli stessi valori della tendina della scheda ref, nel suo ordine.
+    OPZIONI_GRUPPO: ["tutto", "primario"],
+
     /// Scarica l'elenco delle strutture da Menabo/getCambioStrutturale e lo memorizza.
     async getCambioStrutturale() {
         return new Promise((resolve, reject) => {
@@ -269,8 +273,30 @@ const cambiStrutturali = {
                 label: Utility.parseLabel(campo.label),
                 item: campo.item ?? null
             })),
-            labelELementCorreggo: struttura.labelElementCorreggo ?? null
+            labelELementCorreggo: struttura.labelElementCorreggo ?? null,
+            opzioniValide: this._opzioniValide(struttura)
         };
+    },
+
+    /// I20-1049: le opzioni valide di una struttura del server, nell'ordine della tendina. Una
+    /// struttura che non le dichiara, o ne dichiara solo di sconosciute, le ammette tutte: e' il
+    /// comportamento di prima, e resta quello dei clienti che non le configurano.
+    _opzioniValide(struttura) {
+        const dichiarate = struttura?.opzioniValide ?? struttura?.OpzioniValide;
+        const nomi = Array.isArray(dichiarate) ? dichiarate.map(o => String(o).trim().toLowerCase()) : [];
+        const valide = this.OPZIONI_GRUPPO.filter(o => nomi.includes(o));
+        return valide.length > 0 ? valide : this.OPZIONI_GRUPPO.slice();
+    },
+
+    /// I20-1049: le opzioni valide per tutte le azioni scelte insieme, perche' al salvataggio
+    /// l'opzione e' una sola. Senza azioni non ce n'e' nessuna, e la tendina non si mostra; con
+    /// una sola si applica quella senza chiederla; vuota se due azioni non ne hanno in comune.
+    opzioniComuni(azioni) {
+        if (!Array.isArray(azioni) || azioni.length === 0) {
+            return [];
+        }
+        return this.OPZIONI_GRUPPO.filter(o =>
+            azioni.every(a => (Array.isArray(a?.opzioniValide) ? a.opzioniValide : this.OPZIONI_GRUPPO).includes(o)));
     },
 
     /// Il valore di un'istruzione secondo la sua operazione: 0 Set scrive il valore,
