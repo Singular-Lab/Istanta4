@@ -26,6 +26,9 @@
 (function () {
     'use strict';
 
+    // la cartella sotto cui e' pubblicato Correggo4, con la barra finale (la scrive Dettaglio.cshtml)
+    var C4_BASE = window.C4_BASE || '/';
+
     // l'id del volantino sta nell'indirizzo: /Volantini/Dettaglio/6
     var pezzi = location.pathname.split('/').filter(function (p) { return p.length > 0; });
     var ID_VOL = parseInt(pezzi[pezzi.length - 1], 10);
@@ -899,7 +902,7 @@ var STILE_REPORT = `
         '  <button type="button" id="tim_filtri" style="display:none" ' +
         'title="Scarica il pacchetto dei filtri da copiare nella cartella di lavorazione del plug-in">' +
         'FILTRI</button>' +
-        '  <a id="tim_guida" href="/guide/guida-timone.pdf?v=j309" target="_blank" rel="noopener" ' +
+        '  <a id="tim_guida" href="' + C4_BASE + 'guide/guida-timone.pdf?v=j309" target="_blank" rel="noopener" ' +
         'title="Guida del timone: cosa fa ogni pulsante (PDF, 5 pagine)">i</a>' +
         '  <span class="sporco" id="tim_sporco" style="display:none"></span>' +
         '  <button type="button" id="tim_annulla" style="display:none">ANNULLA LE MODIFICHE</button>' +
@@ -966,8 +969,8 @@ var STILE_REPORT = `
     /* IL «NO FOTO» DI SISTEMA. Michele, 29/09: «quando non c'e' la foto non mettere senza foto,
        metti quel no foto che abbiamo a sistema su istanta». E' lo stesso file che usa la scheda
        dell'Edit avanzato (in Dettaglio.cshtml la riga e' IMG + 'nofoto.png', con IMG che vale
-       '/immagini-correggo/'): non una scritta inventata da me. */
-    var VIA_NOFOTO = '/immagini-correggo/nofoto.png';
+       C4_BASE + 'immagini-correggo/'): non una scritta inventata da me. */
+    var VIA_NOFOTO = C4_BASE + 'immagini-correggo/nofoto.png';
 
     var ICO_GRAFFETTA = '<svg viewBox="0 0 24 24" aria-hidden="true">' +
                         '<path d="M16.1 6.3 8.4 14a2.1 2.1 0 0 0 3 3l7.2-7.2a4.2 4.2 0 0 0-6-6L4.9 ' +
@@ -2721,7 +2724,7 @@ var STILE_REPORT = `
             schedePerBox[k] = esito;
             mio.attesa.forEach(function (cb) { cb(esito); });
         }
-        chiedi('/Correzioni/Edit/' + encodeURIComponent(k) + '/Scheda').then(function (j) {
+        chiedi(C4_BASE + 'Correzioni/Edit/' + encodeURIComponent(k) + '/Scheda').then(function (j) {
             finito((j && j.ok)
                 ? { stato: 'ok', foto: (j.dati && j.dati.foto) || [] }
                 // il messaggio arriva sempre come campo, ma vale null: senza il «or» qui si
@@ -2736,7 +2739,7 @@ var STILE_REPORT = `
        che usa la scheda dell'Edit avanzato (Views/Volantini/Dettaglio.cshtml, funzione miniatura).
        Il browser non parla mai con Istanta direttamente. */
     function miniaturaDi(guid, larghezza) {
-        return '/Foto/Miniatura?width=' + larghezza + '&guidId=' + encodeURIComponent(guid);
+        return C4_BASE + 'Foto/Miniatura?width=' + larghezza + '&guidId=' + encodeURIComponent(guid);
     }
 
     /* QUANDO ARRIVA UNA SCHEDA si ridisegna, ma non una volta per scheda: le pagine con venti box
@@ -4101,7 +4104,7 @@ var STILE_REPORT = `
             blocchi: (piano.blocchi || []).filter(function (b) { return b.idPagina && b.posizione; })
                 .map(function (b) { return { idPagina: b.idPagina, posizione: b.posizione }; })
         };
-        manda('/Timone/' + ID_VOL + '/Salva', corpo).then(function (r) {
+        manda(C4_BASE + 'Timone/' + ID_VOL + '/Salva', corpo).then(function (r) {
             if (!r.ok) {
                 aggiornaBozza();
                 messaggio('Non si e\' potuto salvare', r.messaggio || '');
@@ -4235,7 +4238,7 @@ var STILE_REPORT = `
     }
 
     function carica() {
-        chiedi('/Timone/' + ID_VOL + '/Piano').then(function (j) {
+        chiedi(C4_BASE + 'Timone/' + ID_VOL + '/Piano').then(function (j) {
             if (!j.ok) { messaggio('Timone', j.messaggio || 'Il timone non e\' disponibile.'); return; }
             salvato = JSON.stringify(j.dati);
             rifaiBozza();
@@ -4263,7 +4266,7 @@ var STILE_REPORT = `
                         'Aprendolo si fotografa il volantino com\'e\' adesso: pagine e referenze entrano ' +
                         'nel piano, e da li\' il Marketing puo\' spostarle. Il volantino non viene toccato.',
                         'Apri il timone', function () {
-                            manda('/Timone/' + ID_VOL + '/Apri').then(function (r) {
+                            manda(C4_BASE + 'Timone/' + ID_VOL + '/Apri').then(function (r) {
                                 if (!r.ok) { messaggio('Non si e\' potuto aprire', r.messaggio || ''); return; }
                                 salvato = JSON.stringify(r.dati);
                                 rifaiBozza();
@@ -4908,7 +4911,7 @@ function rpCostruisci(piano, opzioni) {
                 '<style>' + STILE_REPORT + STILE_PDF + '</style></head>' +
                 '<body class="tim_stampa_report"><div id="tim_report">' + conFoto +
                 '</div></body></html>';
-            return fetch('/Timone/' + ID_VOL + '/Pdf', {
+            return fetch(C4_BASE + 'Timone/' + ID_VOL + '/Pdf', {
                 method: 'POST',
                 credentials: 'same-origin',
                 headers: { 'Content-Type': 'application/json', 'RequestVerificationToken': token() },
@@ -4976,7 +4979,7 @@ function rpCostruisci(piano, opzioni) {
         f.document.open();
         f.document.write(
             '<!doctype html><html lang="it"><head><meta charset="utf-8">' +
-            '<base href="' + location.origin + '/">' +
+            '<base href="' + location.origin + C4_BASE + '">' +
             '<title>' + rpEsc(nome) + '</title>' +
             '<style>' + STILE_REPORT + '</style></head>' +
             '<body class="tim_stampa_report"><div id="tim_report">' +
@@ -5092,7 +5095,7 @@ function rpCostruisci(piano, opzioni) {
             bFiltri.textContent = si ? 'PREPARO…' : 'FILTRI';
         }
         aspetta(true);
-        fetch('/Timone/' + ID_VOL + '/Esporta', { credentials: 'same-origin' })
+        fetch(C4_BASE + 'Timone/' + ID_VOL + '/Esporta', { credentials: 'same-origin' })
             .then(function (r) {
                 if (r.ok) return r.blob().then(function (b) {
                     return { blob: b, nome: nomeDaIntestazione(r, ripiego) };
@@ -5169,7 +5172,7 @@ function rpCostruisci(piano, opzioni) {
             'altre modifiche, l\'avviso torna da se\'.',
             'Sì, ho finito', function () {
                 bFatto.disabled = true;
-                manda('/Timone/' + ID_VOL + '/Sistemato').then(function (r) {
+                manda(C4_BASE + 'Timone/' + ID_VOL + '/Sistemato').then(function (r) {
                     bFatto.disabled = false;
                     if (!r.ok) { messaggio('Non si e\' potuto', r.messaggio || ''); return; }
                     salvato = JSON.stringify(r.dati);
@@ -5309,7 +5312,7 @@ function rpCostruisci(piano, opzioni) {
 
     /* Il bottone si vede solo a chi puo' usare il timone: Marketing e Agenzia. Al Category il
        server risponde 403 e il bottone resta nascosto: nessuna regola di ruolo scritta due volte. */
-    chiedi('/Timone/' + ID_VOL + '/Piano').then(function (j) {
+    chiedi(C4_BASE + 'Timone/' + ID_VOL + '/Piano').then(function (j) {
         if (j && j.ok) bottone.classList.remove('nascosto');
     }).catch(function () { });
 })();

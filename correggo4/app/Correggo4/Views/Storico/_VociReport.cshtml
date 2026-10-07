@@ -28,11 +28,11 @@
                     <div class="rp_testo">
                         @if (v.Tipo == "timbro")
                         {
-                            <img class="rp_simbolo" src="/immagini-correggo/@(v.Simbolo)@(v.Esito == "accettata" ? "_ok" : "").png" alt="">
+                            <img class="rp_simbolo" src="@Url.Content($"~/immagini-correggo/{v.Simbolo}{(v.Esito == "accettata" ? "_ok" : "")}.png")" alt="">
                         }
                         else if (v.Tipo == "ok")
                         {
-                            <img class="rp_simbolo" src="/immagini-correggo/ok.png" alt="">
+                            <img class="rp_simbolo" src="~/immagini-correggo/ok.png" alt="">
                         }
                         <span class="rp_t">@v.Testo</span>
                     </div>
@@ -41,7 +41,7 @@
                         <div class="rp_foto">
                             @foreach (var f in v.Foto)
                             {
-                                <div><img src="/Foto/Miniatura?guidId=@(f.GuidId)&width=50" alt="" loading="lazy"><span>@f.Testo</span></div>
+                                <div><img src="@Url.Content($"~/Foto/Miniatura?guidId={f.GuidId}&width=50")" alt="" loading="lazy"><span>@f.Testo</span></div>
                             }
                         </div>
                     }

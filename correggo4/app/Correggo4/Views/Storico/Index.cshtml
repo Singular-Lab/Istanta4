@@ -3,7 +3,7 @@
     // CONSULTA TUTTI I VOLANTINI (j213): lo STORICO PUBBLICAZIONI dell'originale (ftp.aspx?page=storico).
     Layout = null;
     string nome = (ViewBag.Nome as string) ?? "";
-    string Pag(int p) => "/Storico?pagina=" + p + (Model.Cerca != "" ? "&cerca=" + Uri.EscapeDataString(Model.Cerca) : "");
+    string Pag(int p) => Url.Content("~/Storico?pagina=") + p + (Model.Cerca != "" ? "&cerca=" + Uri.EscapeDataString(Model.Cerca) : "");
 }
 <!DOCTYPE html>
 <html lang="it">
@@ -57,10 +57,10 @@ input[type=checkbox]{width:16px;height:16px}
 <body>
 <header class="hdr">
   <div class="hdr-in">
-    <a class="brand" href="/Volantini"><span class="co">Co</span><span><b>Correggo</b><small>Consulta tutti i volantini</small></span></a>
+    <a class="brand" href="~/Volantini"><span class="co">Co</span><span><b>Correggo</b><small>Consulta tutti i volantini</small></span></a>
     <div class="sp"></div>
     <span style="color:var(--ink-2);font-weight:600">@nome</span>
-    <a class="btn" href="/Volantini">&larr; Torna ai volantini</a>
+    <a class="btn" href="~/Volantini">&larr; Torna ai volantini</a>
   </div>
 </header>
 <main>
@@ -69,15 +69,15 @@ input[type=checkbox]{width:16px;height:16px}
   @if (TempData["Errore"] is string err) { <div class="msg">@err</div> }
 
   <div class="card">
-    <form method="get" action="/Storico" class="barra">
+    <form method="get" action="~/Storico" class="barra">
       <b>@Model.Totale VERSIONI</b>
       <div class="sp"></div>
       <input type="search" name="cerca" value="@Model.Cerca" placeholder="Filtra per nome o promo">
       <button class="btn" type="submit">Filtra</button>
-      @if (Model.Cerca != "") { <a class="btn" href="/Storico">Togli filtro</a> }
+      @if (Model.Cerca != "") { <a class="btn" href="~/Storico">Togli filtro</a> }
     </form>
 
-    <form method="post" action="/Storico/Zip" id="formZip">
+    <form method="post" action="~/Storico/Zip" id="formZip">
       @Html.AntiForgeryToken()
       <input type="hidden" name="cerca" value="@Model.Cerca">
       <input type="hidden" name="pagina" value="@Model.Pagina">
@@ -97,16 +97,16 @@ input[type=checkbox]{width:16px;height:16px}
             <tr>
               <td><input type="checkbox" name="voci" value="@(v.IdVolantino):@(v.Versione)" class="sel"></td>
               <td>
-                <div class="tit"><a href="/Storico/Pdf/@v.IdVolantino/@v.Versione" target="_blank" title="Apri il PDF">@v.Titolo</a>
+                <div class="tit"><a href="@Url.Content($"~/Storico/Pdf/{v.IdVolantino}/{v.Versione}")" target="_blank" title="Apri il PDF">@v.Titolo</a>
                   <span class="pill @(v.Ultima ? "ultima" : "")">versione @v.Versione @(v.Ultima ? "· ultima" : "")</span></div>
                 <div class="promo">@v.Classificazione</div>
               </td>
               <td>@v.Pubblicata.ToString("dd/MM/yyyy HH:mm")</td>
               <td>
                 <div class="azioni">
-                  <a class="btn" href="/Volantini/Dettaglio/@v.IdVolantino?v=@v.Versione" target="_blank">Sola lettura</a>
-                  <a class="btn" href="/Storico/Report/@v.IdVolantino/@v.Versione" target="_blank">Report</a>
-                  <a class="btn" href="/Storico/Pdf/@v.IdVolantino/@v.Versione?scarica=true">PDF</a>
+                  <a class="btn" href="@Url.Content($"~/Volantini/Dettaglio/{v.IdVolantino}?v={v.Versione}")" target="_blank">Sola lettura</a>
+                  <a class="btn" href="@Url.Content($"~/Storico/Report/{v.IdVolantino}/{v.Versione}")" target="_blank">Report</a>
+                  <a class="btn" href="@Url.Content($"~/Storico/Pdf/{v.IdVolantino}/{v.Versione}?scarica=true")">PDF</a>
                 </div>
               </td>
             </tr>

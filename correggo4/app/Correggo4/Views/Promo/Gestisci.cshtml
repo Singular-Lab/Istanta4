@@ -83,10 +83,10 @@ form{margin:0}
 <body>
 <header class="hdr">
   <div class="hdr-in">
-    <a class="brand" href="/Volantini"><span class="co">Co</span><span><b>Correggo</b><small>Gestisci promo</small></span></a>
+    <a class="brand" href="~/Volantini"><span class="co">Co</span><span><b>Correggo</b><small>Gestisci promo</small></span></a>
     <div class="sp"></div>
     <span style="color:var(--ink-2);font-weight:600">@nome</span>
-    <a class="btn" href="/Volantini">&larr; Torna ai volantini</a>
+    <a class="btn" href="~/Volantini">&larr; Torna ai volantini</a>
   </div>
 </header>
 
@@ -98,7 +98,7 @@ form{margin:0}
   @if (TempData["Errore"] is string err) { <div class="msg ko">@err</div> }
 
   <div class="card">
-    <form method="get" action="/Promo/Gestisci" class="riga">
+    <form method="get" action="~/Promo/Gestisci" class="riga">
       <label class="campo">Promo
         <select name="promo" class="promo" onchange="this.form.submit()">
           <option value="">Scegli una promo…</option>
@@ -118,7 +118,7 @@ form{margin:0}
       <h2>Finestra dei Category
         <span class="pill @(Model.FinestraStato == "" ? "vuota" : Model.FinestraStato)">@statoFinestra</span>
       </h2>
-      <form method="post" action="/Promo/Finestra" class="riga">
+      <form method="post" action="~/Promo/Finestra" class="riga">
         @Html.AntiForgeryToken()
         <input type="hidden" name="promo" value="@Model.Scelta">
         <label class="campo">Apre il
@@ -140,7 +140,7 @@ form{margin:0}
         <span class="pill @(ft.Stato == "" ? "vuota" : ft.Stato)">@statoTimone</span>
       </h2>
       <div class="riga">
-        <form method="post" action="/Promo/FinestraTimone" class="riga">
+        <form method="post" action="~/Promo/FinestraTimone" class="riga">
           @Html.AntiForgeryToken()
           <input type="hidden" name="promo" value="@Model.Scelta">
           <label class="campo">Apre il
@@ -155,7 +155,7 @@ form{margin:0}
         </form>
         @if (ft.Impostata && ft.Aperta)
         {
-          <form method="post" action="/Promo/FinestraTimone/Chiudi">
+          <form method="post" action="~/Promo/FinestraTimone/Chiudi">
             @Html.AntiForgeryToken()
             <input type="hidden" name="promo" value="@Model.Scelta">
             <button class="btn pericolo" type="submit">Chiudi adesso</button>
@@ -175,12 +175,12 @@ form{margin:0}
         @if (promoTuttaBloccata) { <span class="pill lock">Bloccata</span> }
       </h2>
       <div class="riga">
-        <form method="post" action="/Promo/Blocco">
+        <form method="post" action="~/Promo/Blocco">
           @Html.AntiForgeryToken()
           <input type="hidden" name="promo" value="@Model.Scelta"><input type="hidden" name="tutta" value="true"><input type="hidden" name="blocca" value="true">
           <button class="btn pericolo" type="submit">Blocca tutti i volantini (1 ora)</button>
         </form>
-        <form method="post" action="/Promo/Blocco">
+        <form method="post" action="~/Promo/Blocco">
           @Html.AntiForgeryToken()
           <input type="hidden" name="promo" value="@Model.Scelta"><input type="hidden" name="tutta" value="true"><input type="hidden" name="blocca" value="false">
           <button class="btn" type="submit">Sblocca tutti</button>
@@ -203,7 +203,7 @@ form{margin:0}
                 <span class="pill lock">Bloccato ancora @(v.BloccoMinuti) min @(v.BloccatoDa != "" ? "· da " + v.BloccatoDa : "")</span>
             }
           </div>
-          <form method="post" action="/Promo/Date" class="riga">
+          <form method="post" action="~/Promo/Date" class="riga">
             @Html.AntiForgeryToken()
             <input type="hidden" name="promo" value="@Model.Scelta">
             <input type="hidden" name="idVol" value="@v.Id">
@@ -220,7 +220,7 @@ form{margin:0}
             <button class="btn primario" type="submit">Salva date</button>
           </form>
           <div class="vol-azioni">
-            <form method="post" action="/Promo/Blocco">
+            <form method="post" action="~/Promo/Blocco">
               @Html.AntiForgeryToken()
               <input type="hidden" name="promo" value="@Model.Scelta"><input type="hidden" name="idVol" value="@v.Id">
               <input type="hidden" name="blocca" value="@(v.Bloccato ? "false" : "true")">
@@ -228,7 +228,7 @@ form{margin:0}
             </form>
             @if (v.Revocabile)
             {
-                <a class="btn" href="/Promo/Revoca/@v.Id">Revoca la versione @v.Versione…</a>
+                <a class="btn" href="@Url.Content($"~/Promo/Revoca/{v.Id}")">Revoca la versione @v.Versione…</a>
             }
             else
             {
