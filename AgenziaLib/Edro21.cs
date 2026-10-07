@@ -254,6 +254,41 @@ namespace AgenziaLib
         }
     }
 
+    /// I20-1053: le ref con distintivita' BENESSERE nella sezione SCELTE DI BENESSERE hanno la
+    /// meccanica sdb (la sezione da sola la accende), ma devono uscire col box normale: nelle pagine
+    /// dedicate la sezione e' gia' tutta Scelte di Benessere, e la testata su ogni box e' di troppo.
+    ///
+    /// La combinazione assegnata non cambia: etichette, revisione e confronti continuano a vederla.
+    /// Cambia la meccanica che guida la grafica (stili, fondi, loghi), che qui perde "_sdb" e arriva
+    /// al Plugin in combinazioneGrafica. Il box lo decide SourceFrameworkCss, che esclude lo stesso
+    /// caso dal BOX12 nella definizione 17: se la condizione cambia qui, va cambiata anche li'.
+    public static class SceltaDiBenessereEdro21
+    {
+        public const string CampoCombinazioneGrafica = "combinazioneGrafica";
+
+        public static bool BoxNormaleInSezioneSdb(Dictionary<string, object> record)
+        {
+            return Testo(record, Edro21Context.Meta.keyCombinazioneAssegnata).Contains("_sdb")
+                && Testo(record, Edro21Context.Meta.distintivita).ToLowerInvariant().Contains("benessere")
+                && Testo(record, Edro21Context.Meta.sezione).ToLowerInvariant().Contains("scelte di benessere");
+        }
+
+        /// La combinazione su cui si decide la grafica del box: quella assegnata, senza "_sdb" quando
+        /// il box deve uscire normale.
+        public static string MeccanicaGrafica(Dictionary<string, object> record)
+        {
+            var combinazione = Testo(record, Edro21Context.Meta.keyCombinazioneAssegnata);
+            return BoxNormaleInSezioneSdb(record) ? combinazione.Replace("_sdb", "") : combinazione;
+        }
+
+        private static string Testo(Dictionary<string, object> record, string chiave)
+        {
+            return record != null && record.TryGetValue(chiave, out var valore) && valore != null
+                ? valore.ToString()
+                : "";
+        }
+    }
+
     internal class Edro21 : IAgenzia
     {
 
@@ -2324,7 +2359,10 @@ namespace AgenziaLib
                     //recItem[keyDescrizioniDescrizione4] = descrizioni_articolo[3];
                     //Meccanica mec2 = interpretaMeccanica(recItem, flag_meccanica_unita);
                     //string meccanica_tradotta = mec2.NomeTraduzione;
-                    string meccanica_tradotta = recItem[key_combinazioneAssegnata].ToString();
+                    //I20-1053: la grafica segue la meccanica grafica, che puo' non avere "_sdb" anche
+                    //quando la combinazione assegnata ce l'ha. Il Plugin la legge da combinazioneGrafica.
+                    string meccanica_tradotta = SceltaDiBenessereEdro21.MeccanicaGrafica(recItem);
+                    recItem[SceltaDiBenessereEdro21.CampoCombinazioneGrafica] = meccanica_tradotta;
                     byte[] str_desc2_bytes = System.Text.Encoding.UTF8.GetBytes(descr_brand);
                     string _brand = System.Text.Encoding.UTF8.GetString(str_desc2_bytes);
                     byte[] str_desc3_bytes = System.Text.Encoding.UTF8.GetBytes(descr_tipo);
@@ -2700,7 +2738,7 @@ namespace AgenziaLib
                         tracciato[i].recordInTracciato[GLOBAL_VARIABLES_FICO.keyFicoNames] = exportNames;
 
                         #region compiledfield
-                        var combinazioneAssegnata = recItem[key_combinazioneAssegnata].ToString();
+                        var combinazioneAssegnata = SceltaDiBenessereEdro21.MeccanicaGrafica(recItem);//I20-1053: stili della meccanica grafica
                         var codiceBox = recItem[key_codiceBox].ToString();
 
                         if (!recItem.ContainsKey(keyM_numero_reparto))
@@ -5418,7 +5456,10 @@ descrizioneEsempio.EndsWith("\r\n");
                     //recItem[keyDescrizioniDescrizione4] = descrizioni_articolo[3];
                     //Meccanica mec2 = interpretaMeccanica(recItem, flag_meccanica_unita);
                     //string meccanica_tradotta = mec2.NomeTraduzione;
-                    string meccanica_tradotta = recItem[key_combinazioneAssegnata].ToString();
+                    //I20-1053: la grafica segue la meccanica grafica, che puo' non avere "_sdb" anche
+                    //quando la combinazione assegnata ce l'ha. Il Plugin la legge da combinazioneGrafica.
+                    string meccanica_tradotta = SceltaDiBenessereEdro21.MeccanicaGrafica(recItem);
+                    recItem[SceltaDiBenessereEdro21.CampoCombinazioneGrafica] = meccanica_tradotta;
                     byte[] str_desc2_bytes = System.Text.Encoding.UTF8.GetBytes(descr_brand);
                     string _brand = System.Text.Encoding.UTF8.GetString(str_desc2_bytes);
                     byte[] str_desc3_bytes = System.Text.Encoding.UTF8.GetBytes(descr_tipo);
@@ -5712,7 +5753,7 @@ descrizioneEsempio.EndsWith("\r\n");
                     #endregion
 
                     #region compiledfield
-                    var combinazioneAssegnata = recItem[key_combinazioneAssegnata].ToString();
+                    var combinazioneAssegnata = SceltaDiBenessereEdro21.MeccanicaGrafica(recItem);//I20-1053: stili della meccanica grafica
                     var codiceBox = recItem[key_codiceBox].ToString();
 
                     if (!recItem.ContainsKey(keyM_numero_reparto))
@@ -11224,7 +11265,9 @@ Descrizione3.EndsWith("\r\n");
                 }
 
 
-                if (oItem[key_combinazioneAssegnata].ToString().ToLower().Contains("_sdb") && tipo_lavorazione == 1)
+                //I20-1053: la meccanica grafica, non quella assegnata: una ref benessere nella sezione
+                //Scelte di Benessere esce col box normale, senza sfondo ne' logo SDB.
+                if (SceltaDiBenessereEdro21.MeccanicaGrafica(oItem).ToLower().Contains("_sdb") && tipo_lavorazione == 1)
                 {
                     //Console.WriteLine("Trovato SDB per articolo " + oItem[keyRefCodice].ToString());
                     sfondo = "sfondo_sdb";

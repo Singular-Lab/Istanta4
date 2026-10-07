@@ -185,7 +185,7 @@ const customAgenzia={
 
         var obj_da_cestinare = new Array();
         var fondoDaPosizionare = objItem["Foto.ExtraAuto"].find(f => f.tipo == 5);
-        var meccanica = objItem.combinazioneAssegnata;
+        var meccanica = this.meccanicaGrafica(objItem);
         //I20-1026: il formato Parmigiano Reggiano. La ref lo e' quando la descrizione1 dice
         //Parmigiano Reggiano, senza distinguere maiuscole e minuscole: lo stesso criterio del
         //server (FormatoParmigianoEdro21) e della sovrastruttura Parmigiano del framework CSS.
@@ -517,7 +517,7 @@ const customAgenzia={
             materiale = "VOL";
         }
 
-        var meccanica = objRef.combinazioneAssegnata;
+        var meccanica = this.meccanicaGrafica(objRef);
         var temaRef = objRef.tema.toLowerCase();
         var tipo_tema = objRef.tipo_tema.toLowerCase();
         var grafica_50al50 = allEtichette.includes("SEZ. 50 AL 50");
@@ -1152,6 +1152,20 @@ const customAgenzia={
     //     return stringPath + ".Chiave=tipo_volantino&" + stringPath + ".Operatore=0&" + stringPath + ".Valore=V - volantino&";
     // },
 
+
+    /// I20-1053: la meccanica su cui si decide la grafica del box. Il server (AgenziaLib, Edro21.cs,
+    /// SceltaDiBenessereEdro21) la scrive in combinazioneGrafica: e' la combinazione assegnata, senza
+    /// "_sdb" per le ref BENESSERE nella sezione SCELTE DI BENESSERE, che escono col box normale.
+    /// Senza il campo, per esempio con un server di prima, vale la combinazione assegnata.
+    meccanicaGrafica(objItem) {
+        if (objItem == null) {
+            return undefined;
+        }
+        if (typeof objItem.combinazioneGrafica === "string" && objItem.combinazioneGrafica !== "") {
+            return objItem.combinazioneGrafica;
+        }
+        return objItem.combinazioneAssegnata;
+    },
 
     /// I20-1046: se la ref e' Artisti della Qualita': il campo art_qual e' un testo non vuoto, lo
     /// stesso criterio del server (AgenziaLib, Edro21.cs), che allora aggiunge i loghi Logo_ADQnaz e
