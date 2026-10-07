@@ -220,6 +220,20 @@
     padding: 4px 8px;
     border-radius: 4px;
 }
+  /* I20-1057: la finestra delle cartelle di sistema (dialogPathDiSistema). Ogni riga ha un
+     bordo a sinistra verde quando il percorso c'e', rosso quando manca. */
+  .finestraPercorsi { padding: 4px 8px; }
+  .introPercorsi { margin: 0 0 12px 0; color: #444444; font-size: 12px; }
+  .rigaPercorso { border: 1px solid #d0d0d0; border-left-width: 4px; border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; background-color: #fafafa; }
+  .rigaPercorso.percorsoImpostato { border-left-color: #2e9e5b; }
+  .rigaPercorso.percorsoMancante { border-left-color: #d64545; }
+  .testaRigaPercorso { display: flex; align-items: baseline; margin-bottom: 6px; }
+  .titoloPercorso { font-weight: bold; font-size: 13px; color: #222222; margin-right: 8px; }
+  .notaPercorso { font-size: 11px; color: #777777; }
+  .corpoRigaPercorso { display: flex; align-items: center; }
+  .valorePercorso { flex: 1; min-height: 16px; margin-right: 8px; padding: 6px 8px; background-color: #eeeeee; border-radius: 4px; font-size: 11px; color: #333333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; user-select: none; }
+  .rigaPercorso.percorsoMancante .valorePercorso { color: #b03030; font-style: italic; }
+  .piedePercorsi { display: flex; justify-content: flex-end; padding: 8px; }
 </style>
 <header>
 
@@ -1175,79 +1189,65 @@
   </div>
 </div>
 
-<!-- <div id="dialogPathLinksLoghi" myname="dialogPathLinksLoghi"
-  style="overflow: auto; display: none; height: 100%; width: 100%;">
-  <div style="height: 90%;">
-    <div class="container" id="bodyPaths">
-      <div style="display: block;">
-    
-
-        <div style="margin-bottom: 1rem; margin-top: 1 rem;">
-          <button onclick="impostaPercorsiDiSistema(0)">Imposta percorso foto</button>
-          <div id="pathFoto"
-            style="margin-top: 0.5rem; padding: 0.4rem 0.6rem; background-color: #e0e0e0; border-radius: 4px; user-select: none; height: 2rem;">
-          </div>
-        </div>
-    
-
-        <div>
-          <button onclick="impostaPercorsiDiSistema(1)">Imposta percorso loghi</button>
-          <div id="pathLoghi"
-            style="margin-top: 0.5rem; padding: 0.4rem 0.6rem; background-color: #e0e0e0; border-radius: 4px; user-select: none; height: 2rem;">
-          </div>
-        </div>
-      </div>
-    </div>
-    
-  </div>
-  <div>
-    <button codice="" id="confermaPercorsi" style="display: none;"
-      onclick="indesignEvents.checkStatus(indesignEvents.checkStatusResonse); Modali.chiudiModal()">Conferma</button>
-  </div>
-</div> -->
-
+<!-- I20-1057: le cinque cartelle di sistema. Ogni riga dice a cosa serve la cartella, mostra il
+     percorso scelto e ha il pulsante per sceglierlo; mostraPercorsoNellaFinestra (indexNew.js) la
+     segna impostata o mancante. Gli id dei percorsi sono quelli che usa indexNew.js. -->
 <div id="dialogPathDiSistema" myname="dialogPathDiSistema"
   style="overflow: auto; display: none; height: 100%; width: 100%;">
-  <div style="height: 90%;">
-    <div class="container" id="bodyPaths">
-      <div style="display: block;">
-    
-        <!-- Riga 1: Foto -->
-        <div style="margin-bottom: 1rem; margin-top: 1 rem;">
-          <button onclick="impostaPercorsiDiSistema(2)">Imposta percorso per i log di sistema</button>
-          <div id="pathLogs"
-            style="margin-top: 0.5rem; padding: 0.4rem 0.6rem; background-color: #e0e0e0; border-radius: 4px; user-select: none; height: 2rem;">
-          </div>
-        </div>
-    
-        <!-- Riga 2: Loghi -->
-        <div>
-          <button onclick="impostaPercorsiDiSistema(3)">Imposta percorso per le esportazioni</button>
-          <div id="pathEsportazione"
-            style="margin-top: 0.5rem; padding: 0.4rem 0.6rem; background-color: #e0e0e0; border-radius: 4px; user-select: none; height: 2rem;">
-          </div>
-        </div>
-
-        <!-- Riga 1: Foto -->
-        <div style="margin-bottom: 1rem; margin-top: 1 rem;">
-          <button onclick="impostaPercorsiDiSistema(0)">Imposta percorso foto</button>
-          <div id="pathFoto"
-            style="margin-top: 0.5rem; padding: 0.4rem 0.6rem; background-color: #e0e0e0; border-radius: 4px; user-select: none; height: 2rem;">
-          </div>
-        </div>
-    
-        <!-- Riga 2: Loghi -->
-        <div>
-          <button onclick="impostaPercorsiDiSistema(1)">Imposta percorso loghi</button>
-          <div id="pathLoghi"
-            style="margin-top: 0.5rem; padding: 0.4rem 0.6rem; background-color: #e0e0e0; border-radius: 4px; user-select: none; height: 2rem;">
-          </div>
-        </div>
+  <div class="finestraPercorsi">
+    <p class="introPercorsi">Indica le cartelle che il plugin usa per questo documento. Quelle che hanno il nome previsto sotto la cartella del documento vengono associate da sole.</p>
+    <div class="rigaPercorso percorsoMancante">
+      <div class="testaRigaPercorso">
+        <span class="titoloPercorso">Links</span>
+        <span class="notaPercorso">le foto dei prodotti</span>
+      </div>
+      <div class="corpoRigaPercorso">
+        <div id="pathFoto" class="valorePercorso"></div>
+        <button class="sceltaPercorso" onclick="impostaPercorsiDiSistema(0)">Scegli...</button>
       </div>
     </div>
-    
+    <div class="rigaPercorso percorsoMancante">
+      <div class="testaRigaPercorso">
+        <span class="titoloPercorso">Loghi</span>
+        <span class="notaPercorso">loghi e bolli</span>
+      </div>
+      <div class="corpoRigaPercorso">
+        <div id="pathLoghi" class="valorePercorso"></div>
+        <button class="sceltaPercorso" onclick="impostaPercorsiDiSistema(1)">Scegli...</button>
+      </div>
+    </div>
+    <div class="rigaPercorso percorsoMancante">
+      <div class="testaRigaPercorso">
+        <span class="titoloPercorso">Esportazione</span>
+        <span class="notaPercorso">i file esportati</span>
+      </div>
+      <div class="corpoRigaPercorso">
+        <div id="pathEsportazione" class="valorePercorso"></div>
+        <button class="sceltaPercorso" onclick="impostaPercorsiDiSistema(3)">Scegli...</button>
+      </div>
+    </div>
+    <div class="rigaPercorso percorsoMancante">
+      <div class="testaRigaPercorso">
+        <span class="titoloPercorso">Logs</span>
+        <span class="notaPercorso">i log del plugin</span>
+      </div>
+      <div class="corpoRigaPercorso">
+        <div id="pathLogs" class="valorePercorso"></div>
+        <button class="sceltaPercorso" onclick="impostaPercorsiDiSistema(2)">Scegli...</button>
+      </div>
+    </div>
+    <div class="rigaPercorso percorsoMancante">
+      <div class="testaRigaPercorso">
+        <span class="titoloPercorso">Lavorazioni</span>
+        <span class="notaPercorso">il file delle lavorazioni: .lavorazioni, lavorazioni o lavorazione</span>
+      </div>
+      <div class="corpoRigaPercorso">
+        <div id="pathLavorazioni" class="valorePercorso"></div>
+        <button class="sceltaPercorso" onclick="impostaPercorsiDiSistema(4)">Scegli...</button>
+      </div>
+    </div>
   </div>
-  <div>
+  <div class="piedePercorsi">
     <button codice="" id="confermaPercorsi" style="display: none;"
       onclick="indesignEvents.checkStatus(indesignEvents.checkStatusResonse); Modali.chiudiModal()">Conferma</button>
   </div>

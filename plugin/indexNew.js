@@ -165,6 +165,10 @@ let defaultPercorsoLinks = "/Links/";
 let defaultPercorsoLoghi = "/Links/Loghi/";
 let defaultPercorsoLogs = "/Logs/";
 let defaultPercorsoEsportazione = "/Export/";
+/// I20-1057: la quinta cartella, quella delle lavorazioni. Non ha un default fisso: si riconosce
+/// per nome sotto la cartella del documento (Utility.nomiCartellaLavorazioni), altrimenti la
+/// sceglie l'operatore. E' li' che vive lavorazioni.json (Utility.percorsoFileLavorazioni).
+let percorsoLavorazioni = "";
 
 
 
@@ -1258,7 +1262,7 @@ async function initLibroInLavorazione()
             let nativePath = fullName.nativePath;
             let sep = Utility.getDirSeparator();
             let _pathDelLibro = nativePath.substring(0, nativePath.lastIndexOf(sep) + 1);
-            let lav = readFile(_pathDelLibro + "lavorazioni.json");
+            let lav = readFile(Utility.percorsoFileLavorazioni(_pathDelLibro));
             let _count = 0;
 
             let _itemTrovati = [];
@@ -2236,7 +2240,7 @@ async function impaginaLibro() {
     let _libroFilePath = await libroInLavorazione.filePath; 
     let _pathLavorazioneLibro = _libroFilePath.nativePath;
     
-    var file = readFile(_pathLavorazioneLibro + "/lavorazioni.json");
+    var file = readFile(Utility.percorsoFileLavorazioni(_pathLavorazioneLibro));
     if (file == null) {
         messaggioUtente("Code IDX-09 Impaginazione libro: Nessuna lavorazione associata al libro", "Error", false, 5);
         return;
@@ -9747,9 +9751,12 @@ async function login(username, password, ricordami = false){
     xhr.send("LoginController/login", formData , "POST");
 }
 
-/// Trova i quattro percorsi di sistema - Links, Loghi, Logs, Esportazione - e, se ne manca
-/// uno, apre la finestra che chiede all'operatore di indicarli. Restituisce true solo
-/// quando ci sono tutti.
+/// Trova i cinque percorsi di sistema - Links, Loghi, Logs, Esportazione, Lavorazioni - e,
+/// se ne manca uno, apre la finestra che chiede all'operatore di indicarli. Restituisce true
+/// solo quando ci sono tutti.
+///
+/// I20-1057: la cartella delle lavorazioni non ha un percorso previsto unico: al passo 2 vale
+/// la prima che c'e' fra .lavorazioni, lavorazioni e lavorazione (Utility.cartellaLavorazioni).
 ///
 /// Tre tentativi in ordine, per ognuno:
 ///   1. quello scritto in lavorazioni.json, ma solo se la cartella esiste davvero: un
@@ -9786,7 +9793,7 @@ async function checkPercorsi(forceOpenModal = false, scope = 'entrambi') {
         }
     }
 
-    const filePath = _pathLavorazione + "/lavorazioni.json";
+    const filePath = Utility.percorsoFileLavorazioni(_pathLavorazione);
 
     var lavorazioni = readFile(filePath);
     var file = lavorazioni?.find(f => f.file == docName);
@@ -9857,11 +9864,27 @@ async function checkPercorsi(forceOpenModal = false, scope = 'entrambi') {
         percorsoEsportazioneNullo = true;
     }
 
+    var percorsoLavorazioniNullo = false;
+    if (file.pathLavorazioni != null && file.pathLavorazioni !== "") {
+        try {
+            //proviamo a cercare la cartella per vedere se esiste davvero
+            const folder = await fs2.getEntryWithUrl("file://" + file.pathLavorazioni);
+            percorsoLavorazioni = file.pathLavorazioni;
+        }
+        catch (e) {
+            percorsoLavorazioniNullo = true;
+        }
+    }
+    else {
+        percorsoLavorazioniNullo = true;
+    }
+
     //stampiamo i 4 path in console
     console.log("Percorso Links: " + percorsoLinks);
     console.log("Percorso Loghi: " + percorsoLoghi);
     console.log("Percorso Logs: " + percorsoLogs);
     console.log("Percorso Esportazione: " + percorsoEsportazione);
+    console.log("Percorso Lavorazioni: " + percorsoLavorazioni);
 
     //per ogni percorso rimasto nullo cerchiamo se è presente la cartella di default ovvero quella il cui percorso è
     //pathLavorazione + percorsoLoghi ecc ecc
@@ -9909,6 +9932,17 @@ async function checkPercorsi(forceOpenModal = false, scope = 'entrambi') {
             forceOpenModal = true;
         }
     }
+    if (percorsoLavorazioniNullo) {
+        //I20-1057: si riconosce per nome; se non c'e' la sceglie l'operatore
+        const cartellaLavorazioni = Utility.cartellaLavorazioni(_pathLavorazione);
+        if (cartellaLavorazioni != null) {
+            impostaPercorsiDiSistema(4, cartellaLavorazioni);
+        }
+        else {
+            percorsoLavorazioni = "";
+            forceOpenModal = true;
+        }
+    }
 
     var lavorazioni = readFile(filePath);
     var file = lavorazioni?.find(f => f.file == docName);
@@ -9922,12 +9956,14 @@ async function checkPercorsi(forceOpenModal = false, scope = 'entrambi') {
         sistema: [
             { key: 'pathLogs', value: percorsoLogs },
             { key: 'pathEsportazione', value: percorsoEsportazione },
+            { key: 'pathLavorazioni', value: percorsoLavorazioni },
         ],
         entrambi: [
             { key: 'pathLinks', value: percorsoLinks },
             { key: 'pathLoghi', value: percorsoLoghi },
             { key: 'pathLogs', value: percorsoLogs },
             { key: 'pathEsportazione', value: percorsoEsportazione },
+            { key: 'pathLavorazioni', value: percorsoLavorazioni },
         ],
     };
 
@@ -9944,31 +9980,28 @@ async function checkPercorsi(forceOpenModal = false, scope = 'entrambi') {
             $("#overlayModal").find("#dialogPathDiSistema").length == 0) {
             Modali.apriModal(
                 "dialogPathDiSistema",
-                "Seleziona i percorsi di sistema (links, loghi, logs, esportazione)",
+                "Cartelle di sistema",
                 false,
                 [],
                 true
             );
 
             //impostiamo i valori dei path già presenti
-            $("#pathFoto").val(percorsoLinks);
-            $("#pathFoto").text(percorsoLinks);
-            $("#pathLoghi").val(percorsoLoghi);
-            $("#pathLoghi").text(percorsoLoghi);
-            $("#pathLogs").val(percorsoLogs);
-            $("#pathLogs").text(percorsoLogs);
-            $("#pathEsportazione").val(percorsoEsportazione);
-            $("#pathEsportazione").text(percorsoEsportazione);
+            mostraPercorsoNellaFinestra("pathFoto", percorsoLinks);
+            mostraPercorsoNellaFinestra("pathLoghi", percorsoLoghi);
+            mostraPercorsoNellaFinestra("pathLogs", percorsoLogs);
+            mostraPercorsoNellaFinestra("pathEsportazione", percorsoEsportazione);
+            mostraPercorsoNellaFinestra("pathLavorazioni", percorsoLavorazioni);
 
-            //Il pulsante di conferma compare solo quando tutti e quattro i percorsi ci sono.
+            //Il pulsante di conferma compare solo quando tutti e cinque i percorsi ci sono.
             //I20-1002: qui la condizione aveva in coda "|| forceOptions != null", ma
             //forceOptions era un parametro rimosso - restano le tre righe commentate in
             //cima alla funzione. Era un identificatore inesistente, quindi ReferenceError
             //ogni volta che mancava un percorso, cioe' proprio nel caso per cui questo
             //ramo esiste. Nessun chiamante ha mai passato forceOptions, percio' quel
             //confronto valeva false anche prima: toglierlo non cambia il comportamento.
-            if (percorsoLinks && percorsoLoghi && percorsoLogs && percorsoEsportazione) {
-                $("#confermaPercorsi").show();
+            if (percorsoLinks && percorsoLoghi && percorsoLogs && percorsoEsportazione && percorsoLavorazioni) {
+                $("#overlayModal").find("#confermaPercorsi").show();
             }
         }
 
@@ -10171,8 +10204,21 @@ function onResizeTab1Tracciato(){
 }
 
 
-/// Registra in lavorazioni.json uno dei quattro percorsi di sistema: 0 Links, 1 Loghi,
-/// 2 Logs, 3 Esportazione.
+/// I20-1057: scrive un percorso nella finestra delle cartelle di sistema e segna la riga come
+/// impostata o mancante. Lavora nella finestra aperta (#overlayModal): il template nascosto
+/// ha gli stessi id, e scrivere li' non si vedrebbe.
+function mostraPercorsoNellaFinestra(idCampo, valore) {
+    const testo = valore ? String(valore) : "";
+    const campo = $("#overlayModal").find("#" + idCampo);
+    campo.val(testo);
+    campo.text(testo !== "" ? testo : "Non impostato");
+    const riga = campo.closest(".rigaPercorso");
+    riga.toggleClass("percorsoImpostato", testo !== "");
+    riga.toggleClass("percorsoMancante", testo === "");
+}
+
+/// Registra in lavorazioni.json uno dei cinque percorsi di sistema: 0 Links, 1 Loghi,
+/// 2 Logs, 3 Esportazione, 4 Lavorazioni (I20-1057).
 ///
 /// Col valore passato lo scrive e basta; senza, apre il dialogo di scelta cartella.
 /// checkPercorsi la usa nel primo modo quando trova la cartella prevista, l'operatore nel
@@ -10218,7 +10264,7 @@ async function impostaPercorsiDiSistema(tipo, value = null){
             // }
             // percorso = percorso.replace(_pathLavorazione, ""); //rimuoviamo il pathLavorazione dal percorso
     
-            var filePath = _pathLavorazione + "/lavorazioni.json";
+            var filePath = Utility.percorsoFileLavorazioni(_pathLavorazione);
             let lavorazioni = readFile(filePath);
     
             _procFiles=[];
@@ -10247,24 +10293,21 @@ async function impostaPercorsiDiSistema(tipo, value = null){
     
                 if (tipo == 0) {
                     percorsoLinks = percorso.endsWith("/") ? percorso : percorso + "/";
-                    $("#pathFoto").val(percorso);
-                    $("#pathFoto").text(percorso);
+                    mostraPercorsoNellaFinestra("pathFoto", percorso);
                     //scriviamo nel file lavorazioni.json il percorso
                     file.pathLinks = percorsoLinks;
                     //scriviamo il file lavorazioni.json
                     messaggioUtente("Percorso per le foto impostato a: " + percorso, "success", false, 0, false, true);
                 } else if (tipo == 1) {
                     percorsoLoghi = percorso.endsWith("/") ? percorso : percorso + "/";
-                    $("#pathLoghi").val(percorso);
-                    $("#pathLoghi").text(percorso);
+                    mostraPercorsoNellaFinestra("pathLoghi", percorso);
                     //scriviamo nel file lavorazioni.json il percorso
                     file.pathLoghi = percorsoLoghi;
                     messaggioUtente("Percorso per i loghi impostato a: " + percorso, "success", false, 0, false, true);
                 } else if (tipo == 2) {
                     //cartella logs
                     percorsoLogs = percorso.endsWith("/") ? percorso : percorso + "/";
-                    $("#pathLogs").val(percorso);
-                    $("#pathLogs").text(percorso);
+                    mostraPercorsoNellaFinestra("pathLogs", percorso);
                     //scriviamo nel file lavorazioni.json il percorso
                     file.pathLogs = percorsoLogs;
                     //scriviamo il file lavorazioni.json
@@ -10272,12 +10315,17 @@ async function impostaPercorsiDiSistema(tipo, value = null){
                 } else if (tipo == 3) {
                     //cartella di esportazione
                     percorsoEsportazione = percorso.endsWith("/") ? percorso : percorso + "/";
-                    $("#pathEsportazione").val(percorso);
-                    $("#pathEsportazione").text(percorso);
+                    mostraPercorsoNellaFinestra("pathEsportazione", percorso);
                     //scriviamo nel file lavorazioni.json il percorso
                     file.pathEsportazione = percorsoEsportazione;
                     //scriviamo il file lavorazioni.json            
                     messaggioUtente("Percorso per l'esportazione impostato a: " + percorso, "success", false, 0, false, true);
+                } else if (tipo == 4) {
+                    //I20-1057: cartella delle lavorazioni
+                    percorsoLavorazioni = percorso.endsWith("/") ? percorso : percorso + "/";
+                    mostraPercorsoNellaFinestra("pathLavorazioni", percorso);
+                    file.pathLavorazioni = percorsoLavorazioni;
+                    messaggioUtente("Percorso per le lavorazioni impostato a: " + percorso, "success", false, 0, false, true);
                 }
             }
     
@@ -10292,8 +10340,9 @@ async function impostaPercorsiDiSistema(tipo, value = null){
         //     $("#confermaPercorsi").show();
         // }
     
-        if (value == null && $("#pathFoto").val() != "" && $("#pathLoghi").val() != "" && $("#pathLogs").val() != "" && $("#pathEsportazione").val() != "") {
-            $("#confermaPercorsi").show();
+        const finestraPercorsi = $("#overlayModal");
+        if (value == null && ["pathFoto", "pathLoghi", "pathLogs", "pathEsportazione", "pathLavorazioni"].every(id => finestraPercorsi.find("#" + id).val() != "")) {
+            finestraPercorsi.find("#confermaPercorsi").show();
         }
 
     }
