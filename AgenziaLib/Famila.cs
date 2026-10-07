@@ -996,7 +996,7 @@ namespace AgenziaLib
             return null;   // come Coopfi
         }
 
-        public List<Dictionary<string, object>> FiltraRecordsPerConteggioRevisione(List<Dictionary<string, object>> records, string utente)
+        public List<Dictionary<string, object>> FiltraRecordsPerConteggioRevisione(List<Dictionary<string, object>> records, string utente, string pathCustomPlugin)
         {
             return records;   // come Coopfi: nessun filtro specifico per Famila
         }

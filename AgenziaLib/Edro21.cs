@@ -14404,14 +14404,219 @@ Descrizione3.EndsWith("\r\n");
             return JsonConvert.SerializeObject(result);
         }
 
-        /// Records che il conteggio delle revisioni deve considerare, con la stessa regola
-        /// della pagina del revisore: vedere FiltroRevisioneReparto. Chiamata da Istanta per
-        /// nome tramite execLibFunction, che lega i parametri per nome: "records" e "utente".
+        /// I20-1051: records che il conteggio delle revisioni deve considerare. Le regole stanno
+        /// nell'external source, in SourceCustomPlugin.disattivazioneRefRules: un record disattivato
+        /// nel revisore (o in entrambi) toglie dal conteggio tutto il suo gruppo. E' la regola della
+        /// pagina del revisore (I20-972): se il conteggio togliesse il solo membro, il gruppo resterebbe
+        /// contato senza che in pagina ci fosse nulla da revisionare. Un singolo ha come codice gruppo
+        /// il proprio codice, quindi si esclude da solo; un record disattivato senza codice gruppo resta.
+        /// L'utente "gg" vede tutto, come in pagina: per lui le regole non si leggono nemmeno.
+        ///
+        /// ATTENZIONE: la pagina (applyFilterToList in agenzia.js) esclude ancora il reparto EX
+        /// scritto nel codice. Finche' le regole di Edro dicono "EX -> entrambi" i due numeri
+        /// coincidono; se le regole cambiano, va cambiata anche la pagina.
+        ///
+        /// Chiamata da Istanta per nome tramite execLibFunction, che lega i parametri per nome:
+        /// "records" e "utente" arrivano dal chiamante, pathCustomPlugin e' il percorso di
+        /// SourceCustomPlugin.json nell'external source.
         public List<Dictionary<string, object>> FiltraRecordsPerConteggioRevisione(
     List<Dictionary<string, object>> records,
-    string utente)
+    string utente,
+    string pathCustomPlugin)
         {
-            return FiltroRevisioneReparto.Filtra(records, utente);
+            if (records == null || records.Count == 0)
+            {
+                return new List<Dictionary<string, object>>();
+            }
+
+            var validi = records.Where(r => r != null).ToList();
+
+            if (utente == UTENTE_CHE_VEDE_TUTTO)
+            {
+                return validi;
+            }
+
+            var regole = RegoleDisattivazioneRef(pathCustomPlugin);
+            if (regole.Count == 0)
+            {
+                return validi;
+            }
+
+            var gruppiEsclusi = validi
+                .Where(r => DisattivatoNelRevisore(r, regole))
+                .Select(CodiceGruppoDelRecord)
+                .Where(codice => !string.IsNullOrEmpty(codice))
+                .ToHashSet();
+
+            if (gruppiEsclusi.Count == 0)
+            {
+                return validi;
+            }
+
+            return validi
+                .Where(r => !gruppiEsclusi.Contains(CodiceGruppoDelRecord(r) ?? ""))
+                .ToList();
+        }
+
+        private const string UTENTE_CHE_VEDE_TUTTO = "gg";
+
+        /// Senza source leggibile non si esclude nulla: il conteggio resta quello di tutti i record, e
+        /// il motivo finisce nel log invece di far fallire la home.
+        private static List<AgenziaCustomPlugin_DisattivazioneRefRule> RegoleDisattivazioneRef(string pathCustomPlugin)
+        {
+            if (string.IsNullOrEmpty(pathCustomPlugin) || !File.Exists(pathCustomPlugin))
+            {
+                IstantaLib.Utility.Logger.Log("FiltraRecordsPerConteggioRevisione: SourceCustomPlugin non trovato (" + pathCustomPlugin + "), nessuna ref esclusa dal conteggio");
+                return new List<AgenziaCustomPlugin_DisattivazioneRefRule>();
+            }
+
+            try
+            {
+                return SourceJson<AgenziaCustomPlugin>(pathCustomPlugin).disattivazioneRefRules
+                    ?? new List<AgenziaCustomPlugin_DisattivazioneRefRule>();
+            }
+            catch (Exception ex)
+            {
+                IstantaLib.Utility.Logger.Log("FiltraRecordsPerConteggioRevisione: SourceCustomPlugin illeggibile, nessuna ref esclusa dal conteggio. " + ex.Message);
+                return new List<AgenziaCustomPlugin_DisattivazioneRefRule>();
+            }
+        }
+
+        /// Vale la prima regola che corrisponde al record, come in pluginMiddleware.getEditabilitaSchedaRef.
+        private static bool DisattivatoNelRevisore(Dictionary<string, object> record, List<AgenziaCustomPlugin_DisattivazioneRefRule> regole)
+        {
+            var regola = regole.FirstOrDefault(r => r != null && SoddisfaBlocchiRegole(record, r.setRegole));
+
+            return regola != null
+                && (regola.disattivato == DisattivazioneRef.Revisore || regola.disattivato == DisattivazioneRef.Entrambi);
+        }
+
+        private static string CodiceGruppoDelRecord(Dictionary<string, object> record)
+        {
+            return record.TryGetValue(GLOBAL_VARIABLES.keyScattoCodiceGruppo, out var codice) && codice != null
+                ? codice.ToString()
+                : null;
+        }
+
+        /// Valutazione delle condizioni come nel Plugin (pluginMiddleware.valutaBlocchiRegole e
+        /// seguenti): le stesse regole nel source devono dire la stessa cosa nei due posti, quindi
+        /// stessi operatori, confronto senza maiuscole e spazi ai bordi, campo letterale prima del
+        /// percorso col punto. Come nel Plugin, isBox non cambia la valutazione.
+        private static bool SoddisfaBlocchiRegole(Dictionary<string, object> record, List<BloccoRegole> blocchi)
+        {
+            return blocchi == null || blocchi.All(blocco => SoddisfaBloccoRegole(record, blocco));
+        }
+
+        private static bool SoddisfaBloccoRegole(Dictionary<string, object> record, BloccoRegole blocco)
+        {
+            if (blocco == null)
+            {
+                return true;
+            }
+
+            return (blocco.Regole ?? new List<RegolaCondizione>()).All(regola => SoddisfaRegola(record, regola))
+                && (blocco.RegoleAnnidate ?? new List<BloccoRegole>()).All(annidato => SoddisfaBloccoRegole(record, annidato));
+        }
+
+        private static bool SoddisfaRegola(Dictionary<string, object> record, RegolaCondizione regola)
+        {
+            if (regola == null)
+            {
+                return true;
+            }
+
+            var valore = ValoreDelCampo(record, regola.Campo);
+            var atteso = NormalizzaPerRegola(regola.Value);
+
+            switch (regola.Operatore)
+            {
+                case OperatoreCondizione.Equals:
+                    return NormalizzaPerRegola(valore) == atteso;
+                case OperatoreCondizione.NotEquals:
+                    return NormalizzaPerRegola(valore) != atteso;
+                case OperatoreCondizione.Contains:
+                    return NormalizzaPerRegola(valore).Contains(atteso);
+                case OperatoreCondizione.NotContains:
+                    return !NormalizzaPerRegola(valore).Contains(atteso);
+                case OperatoreCondizione.In:
+                    return InElencoPerRegola(valore, regola.Value);
+                case OperatoreCondizione.NotIn:
+                    return !InElencoPerRegola(valore, regola.Value);
+                case OperatoreCondizione.Exist:
+                    return !ValoreAssente(valore);
+                case OperatoreCondizione.NotExist:
+                    return ValoreAssente(valore);
+                default:
+                    return false;
+            }
+        }
+
+        private static object ValoreDelCampo(Dictionary<string, object> record, string campo)
+        {
+            if (record == null || string.IsNullOrEmpty(campo))
+            {
+                return null;
+            }
+
+            if (record.TryGetValue(campo, out var letterale))
+            {
+                return letterale;
+            }
+
+            object corrente = record;
+            foreach (var parte in campo.Split('.'))
+            {
+                corrente = corrente switch
+                {
+                    IDictionary<string, object> dizionario => dizionario.TryGetValue(parte, out var v) ? v : null,
+                    JObject oggetto => oggetto[parte],
+                    _ => null
+                };
+
+                if (corrente == null)
+                {
+                    return null;
+                }
+            }
+
+            return corrente;
+        }
+
+        /// Come nel Plugin: assente e' null o la stringa vuota esatta, non una di soli spazi.
+        private static bool ValoreAssente(object valore)
+        {
+            return valore == null
+                || (valore is JValue j && (j.Type == JTokenType.Null || j.Type == JTokenType.String && (string)j == ""))
+                || (valore is string s && s == "");
+        }
+
+        private static string NormalizzaPerRegola(object valore)
+        {
+            if (valore == null || valore is JValue { Type: JTokenType.Null })
+            {
+                return "";
+            }
+
+            return (Convert.ToString(valore, CultureInfo.InvariantCulture) ?? "").ToLowerInvariant().Trim();
+        }
+
+        /// In: "a||b" e' un elenco di valori ammessi; un campo che e' una lista passa se contiene il
+        /// valore; altrimenti basta che il campo contenga il valore, come nel Plugin.
+        private static bool InElencoPerRegola(object valore, string atteso)
+        {
+            var normalizzato = NormalizzaPerRegola(valore);
+
+            if (atteso != null && atteso.Contains("||"))
+            {
+                return atteso.Split("||").Select(NormalizzaPerRegola).Contains(normalizzato);
+            }
+
+            if (valore is System.Collections.IEnumerable lista && !(valore is string))
+            {
+                return lista.Cast<object>().Select(NormalizzaPerRegola).Contains(NormalizzaPerRegola(atteso));
+            }
+
+            return normalizzato.Contains(NormalizzaPerRegola(atteso));
         }
 
 

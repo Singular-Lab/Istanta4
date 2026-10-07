@@ -33,6 +33,39 @@ public class DllAgenziaLibTests
             string.Join(", ", mancanti) + ". Ricompilarla (dotnet build AgenziaLib.csproj -c Release) e ricommitterla.");
     }
 
+    [Fact]
+    public void La_dll_committata_passa_il_SourceCustomPlugin_al_filtro_del_conteggio()
+    {
+        // I20-1051: Istanta riempie pathCustomPlugin per nome. Con la DLL di prima il metodo ha due
+        // soli parametri, la chiamata riesce lo stesso e il conteggio resta sul filtro vecchio.
+        var parametri = ParametriDelMetodoNellaDll(
+            TrovaFile("Istanta/wwwroot/external_lib/AgenziaLib.dll"), "AgenziaLib", "Edro21", "FiltraRecordsPerConteggioRevisione");
+
+        Assert.Equal(new[] { "records", "utente", "pathCustomPlugin" }, parametri);
+    }
+
+    private static List<string> ParametriDelMetodoNellaDll(string percorsoDll, string spazioDeiNomi, string nomeTipo, string nomeMetodo)
+    {
+        using var flusso = File.OpenRead(percorsoDll);
+        using var pe = new PEReader(flusso);
+        var metadati = pe.GetMetadataReader();
+
+        var tipo = metadati.TypeDefinitions
+            .Select(metadati.GetTypeDefinition)
+            .Single(t => metadati.GetString(t.Namespace) == spazioDeiNomi && metadati.GetString(t.Name) == nomeTipo);
+
+        var metodo = tipo.GetMethods()
+            .Select(metadati.GetMethodDefinition)
+            .Single(m => metadati.GetString(m.Name) == nomeMetodo);
+
+        return metodo.GetParameters()
+            .Select(metadati.GetParameter)
+            .OrderBy(p => p.SequenceNumber)
+            .Where(p => p.SequenceNumber > 0)
+            .Select(p => metadati.GetString(p.Name))
+            .ToList();
+    }
+
     private static HashSet<string> MetodiPubbliciNelSorgente(string sorgente)
     {
         // "public void finalizeFields()", "public CompiledField getFieldsValue(string labelName)"...
@@ -57,7 +90,7 @@ public class DllAgenziaLibTests
             .ToHashSet();
     }
 
-    private static string TrovaFile(string relativo)
+    internal static string TrovaFile(string relativo)
     {
         var cartella = new DirectoryInfo(AppContext.BaseDirectory);
         while (cartella != null)
