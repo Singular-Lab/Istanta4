@@ -27,6 +27,11 @@ class SessionCheckManager {
   private sessionCheckInProgress = false;
   private menuFetchInProgress = false;
   private sessionCacheTime = 30000; // 30 secondi di cache
+  /**
+   * True dopo la prima sessione verificata in questa scheda; torna false solo ricaricando.
+   * Chi perde la sessione mentre e dentro vede il dialog; chi entra gia senza va dritto al login.
+   */
+  sessioneGiaAttiva = false;
   private cachedSessionData: {
     sessionResponse?: { is_authenticated: boolean; utente: UtenteResponseDTO };
     policyResponse?: { is_authenticated: boolean; can_go_to_page: boolean; utente: UtenteResponseDTO };
@@ -262,6 +267,10 @@ const SessionCheckWrapper: React.FC<SessionCheckWrapperProps> = ({ WrappedCompon
     setIsAuthenticated(sessionResp.is_authenticated);
     setCanGoToPage(policyResp.can_go_to_page);
 
+    if (sessionResp.is_authenticated) {
+      sessionManager.current.sessioneGiaAttiva = true;
+    }
+
     // Gestione utente
     if (sessionResp.is_authenticated && sessionResp.utente) {
       setUser(sessionResp.utente);
@@ -422,8 +431,23 @@ const SessionCheckWrapper: React.FC<SessionCheckWrapperProps> = ({ WrappedCompon
     navigate(`/login?reason=${loginReason}`, { replace: true });
   }, [navigate, setUser, isIstantaRequired]);
 
+  // Entrato senza sessione (riapertura dopo ore, link diretto): dritto al login, senza
+  // dialog e senza avvisare le altre schede, che se erano dentro mostrano il proprio.
+  const entratoSenzaSessione = is_authenticated === false && !sessionManager.current.sessioneGiaAttiva;
+  useEffect(() => {
+    if (!entratoSenzaSessione) return;
+    ServerCall.resetSessionExpiredFlag();
+    const istantaRichiesto = isIstantaRequired || localStorage.getItem('istanta_login_required') === '1';
+    localStorage.removeItem('istanta_login_required');
+    navigate(istantaRichiesto ? '/login?reason=istanta_required' : '/login', { replace: true });
+  }, [entratoSenzaSessione, isIstantaRequired, navigate]);
+
   // Rendering condizionale - ora tutti gli hooks sono stati chiamati
-  // Dialogo sessione scaduta
+  if (entratoSenzaSessione) {
+    return null;
+  }
+
+  // Dialogo sessione scaduta: la sessione era attiva in questa scheda ed e stata persa
   if (is_authenticated === false) {
     return (
       <>

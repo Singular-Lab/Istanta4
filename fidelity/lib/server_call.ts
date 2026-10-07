@@ -584,10 +584,10 @@ class ServerCall {
       this.onUnauthorizedCallback(istantaRequired);
     } else {
       // 5. FALLBACK: redirect diretto se nessun HOC attivo
-      // Questo accade solo in pagine senza withSessionCheck
+      // Succede solo prima che una pagina protetta sia mai comparsa (dopo, l'HOC lascia una
+      // callback vuota): l'utente sta entrando senza sessione, login pulito senza avviso.
       if (typeof window !== 'undefined' && window.location) {
-        const reason = istantaRequired ? 'istanta_required' : 'session_expired';
-        window.location.href = `/login?reason=${reason}`;
+        window.location.href = istantaRequired ? '/login?reason=istanta_required' : '/login';
       }
     }
   }
