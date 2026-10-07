@@ -7,7 +7,7 @@ import { TracciatiAttributes, type AnalisiMomentoResponse, type AnalisiMomentoTr
 import type { CellaConfronto, IAgenziaLib, MatricePromo, PromoScoreboardInput, StoriaDelCampo } from "../agenzia_lib/types.js";
 import config from '../config';
 import { sequelize } from '../db/SequelizeConnector';
-import { CreateTracciatiDTO, TracciatiResponseDTO } from '../dto';
+import { CreateTracciatiDTO, TracciatiResponseDTO, UpdateTracciatiDTO } from '../dto';
 import { ITracciatoService } from '../interfaces/ITracciatoService';
 import { log } from '../logger';
 import { Area, Canale } from '../models';
@@ -508,6 +508,7 @@ export class TracciatoService implements ITracciatoService {
       id_promo: tracciato.id_promo_tracciati as string,
       context: tracciato.context_tracciati,
       filename: tracciato.filename_tracciati,
+      nome: tracciato.nome_tracciati || tracciato.filename_tracciati,
       stato: tracciato.stato_tracciati,
       ...(getBlob && { blobfile: blob }),
       filesize: blob ? Buffer.from(blob).length : undefined,
@@ -563,13 +564,14 @@ export class TracciatoService implements ITracciatoService {
     }
   }
 
-  async updateTracciato(id: string, data: Partial<CreateTracciatiDTO>): Promise<TracciatiResponseDTO | null> {
+  async updateTracciato(id: string, data: Partial<UpdateTracciatiDTO>): Promise<TracciatiResponseDTO | null> {
     try {
       // Mappa i campi DTO agli attributi del modello
       const updateData: Partial<TracciatiAttributes> = {
         ...(data.id_promo !== undefined && { id_promo_tracciati: data.id_promo }),
         ...(data.context !== undefined && { context_tracciati: data.context }),
         ...(data.filename !== undefined && { filename_tracciati: data.filename }),
+        ...(data.nome !== undefined && { nome_tracciati: data.nome }),
         ...(data.blobfile !== undefined && { blobfile_tracciati: data.blobfile }),
       };
 

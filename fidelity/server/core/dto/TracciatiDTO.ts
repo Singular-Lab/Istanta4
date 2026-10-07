@@ -17,6 +17,7 @@ export interface UpdateTracciatiDTO {
   id_promo?: string;
   context?: any;
   filename?: string;
+  nome?: string;
   blobfile?: Uint8Array;
 }
 
@@ -27,7 +28,10 @@ export interface TracciatiResponseDTO {
   id: string;
   id_promo: string;
   context: any;
+  /** Nome originale del file caricato: non cambia mai, e' quello usato al download */
   filename: string;
+  /** Nome mostrato in FP, modificabile dall'operatore; se mai impostato coincide con filename */
+  nome: string;
   stato: string;
   blobfile?: Uint8Array;
   filesize?: number;

@@ -139,31 +139,21 @@ export class FileManagementController extends BaseController {
 
       const file = req.file;
 
-      // Controllo se esiste già un file con lo stesso nome
-      log.info(Colorize.blue(`Controllo esistenza file con nome: ${file.originalname}`));
+      // Il nome file del marketing si conserva cosi com'e' (I20-957): l'unicita vale solo nella promo,
+      // cosi lo stesso nome puo ripetersi fra promo diverse (es. promo 2025 e 2026)
+      log.info(Colorize.blue(`Controllo esistenza file con nome: ${file.originalname} nella promo ${promo.id}`));
       const getIfFileExists = await Tracciati.findOne({
-        where: { filename_tracciati: file.originalname }
+        where: { filename_tracciati: file.originalname, id_promo_tracciati: promo.id }
       });
       if (getIfFileExists) {
-        log.warn(Colorize.red("File con stesso nome già presente"));
-        this.sendResponse(res, HttpStatusCode.CONFLICT, { message: "File con stesso nome gia presente" });
+        log.warn(Colorize.red("File con stesso nome già presente nella promo"));
+        this.sendResponse(res, HttpStatusCode.CONFLICT, { message: "File con stesso nome gia presente nella promo" });
         return;
       }
 
       // Il file è già in memoria (multer memoryStorage)
       const fileBuffer = file.buffer;
       log.info(Colorize.green(`File buffer ricevuto da multer, size totale: ${fileBuffer.length}`));
-
-      // Controllo se esiste già il file in formato blob
-      log.info(Colorize.blue(`Controllo esistenza file in blob con nome: ${file.originalname}`));
-      const getIfFileExistFromBlob = await Tracciati.findOne({
-        where: { filename_tracciati: file.originalname }
-      });
-      if (getIfFileExistFromBlob) {
-        log.warn(Colorize.red("File già presente (controllo blob)"));
-        this.sendResponse(res, HttpStatusCode.CONFLICT, { message: "File gia presente" });
-        return;
-      }
 
       // Parsing del context dal body della request
       log.info(Colorize.blue("Parsing context dal body della request"));
