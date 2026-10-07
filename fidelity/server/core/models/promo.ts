@@ -1,6 +1,6 @@
 import { DataTypes, Model, Optional } from 'sequelize';
 import { STATO_PROMO } from '../../../lib/enums';
-import type { MenaboLayoutSalvato } from '../../../lib/types';
+import type { MenaboLayoutSalvato, PromoMeta } from '../../../lib/types';
 import { sequelize } from '../db/SequelizeConnector';
 
 /**
@@ -25,6 +25,7 @@ export interface PromoAttributes {
   stato: STATO_PROMO;
   context: object;
   menabo_layout?: MenaboLayoutSalvato | null;
+  meta?: PromoMeta;
   gdo: string;
   createdat?: Date;
   updatedat?: Date;
@@ -43,6 +44,7 @@ class Promo extends Model<PromoAttributes, PromoCreationAttributes> implements P
   declare stato: STATO_PROMO;
   declare context: object;
   declare menabo_layout?: MenaboLayoutSalvato | null;
+  declare meta?: PromoMeta;
   declare gdo: string;
   declare createdat?: Date;
   declare updatedat?: Date;
@@ -176,6 +178,12 @@ const PromoDefine = sequelize.define<Promo>("promo", {
     type: DataTypes.JSONB,
     allowNull: true,
     defaultValue: null,
+  },
+  // Dati della promo che restano in FP (non vanno a Istanta), una chiave per uso
+  meta: {
+    type: DataTypes.JSONB,
+    allowNull: false,
+    defaultValue: {},
   },
   gdo: {
     type: DataTypes.STRING,

@@ -1,6 +1,6 @@
 import type { Request } from "express";
 import type { TIPO_UTENTI } from "../../../lib/enums.js";
-import type { AnalisiMomentoTracciato, CompiledField, DataFields, FantasmaDeciso, GlobalUserFilter, IndesignPluginExport, MenaboDivisioneParams, MenaboLayoutDivisioneSalvata, MenaboRisultato, RecordListino, ReferenzeIstanta, RisultatoConfrontoMomento, TracciatoQueryRequest, TracciatoReport, TracciatoReportWidget, UtentiMeta } from "../../../lib/types.js";
+import type { AnalisiMomentoTracciato, CompiledField, DataFields, DimensioneVisibilitaPromo, FantasmaDeciso, GlobalUserFilter, IndesignPluginExport, MenaboDivisioneParams, MenaboLayoutDivisioneSalvata, MenaboRisultato, RecordListino, ReferenzeIstanta, RisultatoConfrontoMomento, TracciatoQueryRequest, TracciatoReport, TracciatoReportWidget, UtentiMeta } from "../../../lib/types.js";
 import type { PromoContextValue, ReferenzaStoricoDTO } from "../dto/index.js";
 import type { OidcUserClaims } from "../interfaces/IOidcService.js";
 
@@ -364,6 +364,12 @@ export interface IAgenziaLib {
   getReportOptions(): ReportOption[];
 
   getGlobalFiltersForUser(utente: { tipo: TIPO_UTENTI; meta?: UtentiMeta }): GlobalUserFilter;
+
+  /**
+   * Dimensioni (canale e/o area) che l'operatore sceglie come visibili nella promo,
+   * alla creazione e in modifica. Opzionale: senza, la promo vede tutti i canali e le aree.
+   */
+  visibilitaPromo?: DimensioneVisibilitaPromo[];
 
   /**
    * Import del volantino da storico. Opzionale: c'e solo se la GDO ha un sistema

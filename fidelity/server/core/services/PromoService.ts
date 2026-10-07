@@ -11,6 +11,7 @@ import {
   AnalisiMomentoTracciato,
   DataFields,
   DataWebPliant,
+  DimensioneVisibilitaPromo,
   IndesignPluginExport,
   KitStatusDesign,
   KitStatusRunTime,
@@ -42,6 +43,7 @@ import { Utente } from '../models/utenti';
 import type { IPromoRepository } from '../repositories/PromoRepository';
 import { normalizePromoModel } from '../utils/PromoModelUtils';
 import { ServerUtils } from '../utils/ServerUtils';
+import { normalizzaMeta } from './visibilitaPromoUtils';
 dayjs.extend(isBetween);
 
 
@@ -274,7 +276,8 @@ export class PromoService implements IPromoService {
     dataDiInizio: string,
     dataDiFine: string,
     offsetVisibilita: number,
-    context: any
+    context: any,
+    meta?: unknown
   }, idGDO: string, req: ExpressRequest): Promise<PromoResponseDTO> {
     const scadenza = dayjs(data.dataDiScadenza, "DD/MM/YYYY");
     const inizioValidita = dayjs(data.dataDiInizio, "DD/MM/YYYY");
@@ -321,6 +324,8 @@ export class PromoService implements IPromoService {
       data_scadenza: promo.dataScadenza as Date,
       stato: promo.stato as STATO_PROMO,
       context: promo.context as object,
+      // Solo FP: meta non va a Istanta
+      meta: normalizzaMeta(data.meta, {}, this.getVisibilitaOpzioni()),
       offset_visibilita: promo.offsetVisibilita,
       createdat: promo.createdAt as Date,
       updatedat: promo.updatedAt as Date
@@ -345,6 +350,7 @@ export class PromoService implements IPromoService {
       offset_visibilita: result.offset_visibilita,
       stato: result.stato,
       context: result.context as PromoContextItem[],
+      meta: result.meta ?? {},
       gdo: result.gdo,
       is_active: dayjs().isBetween(dayjs(result.validita_dal), dayjs(result.validita_al), null, '[]'),
       is_expired: dayjs().isAfter(dayjs(result.validita_al)),
@@ -352,6 +358,11 @@ export class PromoService implements IPromoService {
       days_since_start: dayjs().diff(dayjs(result.validita_dal), 'day')
     }
     return objToReturn;
+  }
+
+  /** Dimensioni che il cliente puo scegliere come visibili nella promo; vuoto = nessuna scelta. */
+  getVisibilitaOpzioni(): DimensioneVisibilitaPromo[] {
+    return this.agenziaLib.visibilitaPromo ?? [];
   }
 
   async getContestoPerNuovaLavorazione(req: ExpressRequest): Promise<any> {
@@ -1156,6 +1167,7 @@ export class PromoService implements IPromoService {
         offset_visibilita: promoValues.offset_visibilita,
         stato: promoValues.stato,
         context: promoValues.context,
+        meta: promoValues.meta ?? {},
         gdo: promoValues.gdo,
         is_active: dayjs().isBetween(dayjs(promoValues.validita_dal), dayjs(promoValues.validita_al), null, '[]'),
         is_expired: dayjs().isAfter(dayjs(promoValues.validita_al)),
@@ -1311,6 +1323,7 @@ export class PromoService implements IPromoService {
         offset_visibilita: data.offset_visibilita ?? promoValues.offset_visibilita,
         stato: data.stato ?? promoValues.stato,
         context: data.context ?? promoValues.context,
+        meta: normalizzaMeta(data.meta, promoValues.meta, this.getVisibilitaOpzioni()),
         gdo: data.gdo ?? promoValues.gdo
       };
       const updatedPromo = await this.promoRepository.update(

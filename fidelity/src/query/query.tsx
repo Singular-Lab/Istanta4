@@ -3,7 +3,7 @@ import { useMutation, useQueries, useQuery } from "@tanstack/react-query";
 import { Colorize } from "../../lib/Colorize";
 import { TIPO_ATTIVITA } from "../../lib/enums";
 import { ServerCall } from "../../lib/server_call";
-import type { AvvisoManutenzione, Config, DESIGN_KIT_MONGO, FileItemKit, FormatiAttributes, GlobalUserFilter, HubNewsAdminDTO, HubServiceDTO, MenaboLayoutSalvato, MenaboRisultato, PuntiVenditaAttributes, RUNTIME_KIT_MONGO, RaccoglitoreKit, RegoleMenabo, ReportOptionDTO, Ricette, SaveMenaboLayoutRequest, TimelinePromoItem, TipiDiExportAttributes, TracciatoQueryRequest, TracciatoQueryResult, TracciatoReport, TracciatiMomentoResponseDTO } from "../../lib/types";
+import type { AvvisoManutenzione, Config, DESIGN_KIT_MONGO, DimensioneVisibilitaPromo, FileItemKit, FormatiAttributes, GlobalUserFilter, HubNewsAdminDTO, HubServiceDTO, MenaboLayoutSalvato, MenaboRisultato, PuntiVenditaAttributes, RUNTIME_KIT_MONGO, RaccoglitoreKit, RegoleMenabo, ReportOptionDTO, Ricette, SaveMenaboLayoutRequest, TimelinePromoItem, TipiDiExportAttributes, TracciatoQueryRequest, TracciatoQueryResult, TracciatoReport, TracciatiMomentoResponseDTO } from "../../lib/types";
 import type { AuditLogPaginatedResponse, AuditLogSummary } from "../../lib/auditTypes";
 import type { AreaResponseDTO, CanaleResponseDTO, CombinazioneCanaleAreaResponseDTO, CreateFilterTemplateDTO, DisplayContextResponseDTO, DispositivoPuntoVenditaResponseDTO, FilterConditionDTO, FilterTemplateDTO, FormatiResponseDTO, GDOResponseDTO, PromoResponseDTO, PuntoVenditaResponseDTO, RuoloUtenteGDOResponseDTO, TipiDiExportResponseDTO, UpdateFilterTemplateDTO } from "../../server/core/dto";
 
@@ -42,6 +42,15 @@ export const useFetchCanali = () => {
   return useQuery<CanaleResponseDTO[]>({
     queryKey: ['fetchCanali'],
     queryFn: () => ServerCall.get<CanaleResponseDTO[]>("/all_canali"),
+  });
+};
+
+/** Dimensioni che il cliente puo scegliere come visibili nella promo; vuoto = nessuna scelta. */
+export const useFetchVisibilitaOpzioni = () => {
+  return useQuery<DimensioneVisibilitaPromo[]>({
+    queryKey: ['visibilitaOpzioni'],
+    queryFn: () => ServerCall.get<DimensioneVisibilitaPromo[]>("/promo/visibilita-opzioni"),
+    staleTime: Infinity,
   });
 };
 

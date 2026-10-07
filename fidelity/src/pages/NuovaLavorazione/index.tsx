@@ -6,6 +6,7 @@ import PageHeader from "@/components/Base/PageHeader";
 import Skeleton from "@/components/Base/Skeleton";
 import withSessionCheck from "@/components/SessionChecker";
 import ContestoLavorazioneFields from "@/components/ContestoLavorazioneFields";
+import VisibilitaPromoFields from "@/components/VisibilitaPromoFields";
 import { useNotification } from "@/context/NotificationContext";
 import { yupResolver } from "@hookform/resolvers/yup";
 import { useMutation } from "@tanstack/react-query";
@@ -18,6 +19,7 @@ import { useNavigate } from "react-router-dom";
 import * as yup from "yup";
 import { Colorize } from "../../../lib/Colorize";
 import { ServerCall } from "../../../lib/server_call";
+import type { VisibilitaPromo } from "../../../lib/types";
 import { PromoResponseDTO } from "../../../server/core/dto";
 import { useContestoPerNuovaLavorazione } from "../../query/query";
 
@@ -85,6 +87,7 @@ function Main() {
   const [rangeDiDate, setRangeDiDate] = useState("");
   const [fieldValues, setFieldValues] = useState<any>({});
   const [customLabelValue, setCustomLabelValue] = useState("");
+  const [visibilita, setVisibilita] = useState<VisibilitaPromo | null>(null);
   const MAX_CHAR_CUSTOM_LABEL = 40;
   const navigate = useNavigate();
   const { showNotification } = useNotification();
@@ -189,6 +192,7 @@ function Main() {
         dataDiFine: formData.range_di_date.split(" - ")[1],
         offsetVisibilita: formData.offset_visibilita,
         context: filteredContext,
+        meta: { visibilita },
       });
       return response;
     },
@@ -420,6 +424,7 @@ function Main() {
                     </div>
                   )
                 )}
+                <VisibilitaPromoFields value={visibilita} onChange={setVisibilita} className="mt-10 mb-4" />
               </div>
               <div className="flex flex-col-reverse sm:flex-row flex-wrap items-center justify-end gap-3 mt-8 pt-6 border-t border-slate-200/80 dark:border-darkmode-400">
                 <Button

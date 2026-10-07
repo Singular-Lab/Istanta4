@@ -10,7 +10,7 @@ import {
     ServiceUnavailableError,
     UnauthorizedError
 } from "../../../../lib/errors";
-import type { AnalisiMomentoTracciato, DataFields, GlobalUserFilter, IndesignPluginExport, IndesignPluginFiltro, KpiCardItem, MenaboDivisioneParams, MenaboLayoutDivisioneSalvata, MenaboRisultato, RisultatoConfrontoMomento, TracciatoFieldChange, TracciatoReport, TracciatoReportCanaleAreaView, TracciatoReportWidget, TracciatoWidgetGroupedTableGroup, TracciatoWidgetGroupedTableRow, TracciatoWidgetLineChart, TracciatoWidgetPriceDiffExtraFields, TracciatoWidgetPriceDiffRow, TracciatoWidgetScoreboard, TracciatoWidgetScoreboardCodiceRow, TracciatoWidgetScoreboardRow, UtentiMeta } from "../../../../lib/types";
+import type { AnalisiMomentoTracciato, DataFields, DimensioneVisibilitaPromo, GlobalUserFilter, IndesignPluginExport, IndesignPluginFiltro, KpiCardItem, MenaboDivisioneParams, MenaboLayoutDivisioneSalvata, MenaboRisultato, RisultatoConfrontoMomento, TracciatoFieldChange, TracciatoReport, TracciatoReportCanaleAreaView, TracciatoReportWidget, TracciatoWidgetGroupedTableGroup, TracciatoWidgetGroupedTableRow, TracciatoWidgetLineChart, TracciatoWidgetPriceDiffExtraFields, TracciatoWidgetPriceDiffRow, TracciatoWidgetScoreboard, TracciatoWidgetScoreboardCodiceRow, TracciatoWidgetScoreboardRow, UtentiMeta } from "../../../../lib/types";
 import config from "../../config/index";
 import type { OidcUserClaims } from "../../interfaces/IOidcService";
 import type { IUserService } from "../../interfaces/IUserService";
@@ -169,6 +169,9 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
     }];
     private TEMI_ESCLUSI_DA_FORMAT_PLUS = ["PIU VALORE", "SPENDI PUNTI"];
     public CHIAVE_DEDUP_MENABO = "Scatto.CodiceGruppo";
+
+    /** La lista soci contiene tutti i canali/aree: ogni promo tiene solo i suoi (I20-958). */
+    public visibilitaPromo: DimensioneVisibilitaPromo[] = ["canale", "area"];
 
     /**
      * Campi della referenza mostrati nell'anteprima del menabò, nell'ordine indicato.
