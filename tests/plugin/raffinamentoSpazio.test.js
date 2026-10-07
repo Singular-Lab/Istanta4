@@ -252,7 +252,8 @@ test("getSpazioImpaginazione passa l'esito e avvisa con CSF-18 se il calcolo e' 
     const inizio = testo.indexOf("    calcolaSpazioLibero(box, base, obs) {");
     const corpo = testo.slice(inizio, testo.indexOf("\n    },", inizio));
 
-    assert.match(corpo, /spazioLibero\.refineRects\(obs, candidate, baseWidth, baseHeight, 0, esito\)/);
+    //I20-1058: gli ostacoli e le misure sono quelli interni alla traccia della base.
+    assert.match(corpo, /spazioLibero\.refineRects\(ostacoliInterni, candidate, baseWidth, baseHeight, 0, esito\)/);
     assert.match(corpo, /if \(esito\.interrotto\) \{[\s\S]*console\.warn\([\s\S]*messaggioUtente\("Code CSF-18: /);
 });
 
