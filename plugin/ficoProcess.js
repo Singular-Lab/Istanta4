@@ -42,7 +42,7 @@ const FicoProcess=
         //VAriabile globale
         idKitLavorazione = 0;
 
-        var file = readFile(pathLavorazione + "/lavorazioni.json");
+        var file = readFile(Utility.percorsoFileLavorazioni(pathLavorazione));
         
         if(file != null){
             //console.log(file);
@@ -828,7 +828,7 @@ const FicoProcess=
             if (itemsInSearch.length>0)
             {
                 //Devo salvare il kit sul file
-                var filePath = pathLavorazione + "/lavorazioni.json";
+                var filePath = Utility.percorsoFileLavorazioni(pathLavorazione);
                 //leggiamo il file di lavorazione e guardiamo se ha almeno un elemento, se lo ha proviamo a leggere il suo pathLinks e pathLoghi
                 let file = readFile(filePath);
                 if (file == null)
@@ -837,13 +837,14 @@ const FicoProcess=
                     //messaggioUtente("Errore: File lavorazioni.json non trovato", "error");
                     //return;
                     appendToFile(filePath, "");
-                    file== readFile(filePath);
+                    file = readFile(filePath) || [];//I20-1057: era "file==", e qui si andava in errore
                 }
                 //controlliamo se il file è vuoto
                 let pathLinks = "";
                 let pathLoghi = "";
                 let pathLogs = "";
                 let pathEsportazione = "";
+                let pathLavorazioni = "";
                 if (file.length>0){
                     let item = file[0];
                     if (item.pathLinks!=null && item.pathLinks!="")
@@ -862,6 +863,10 @@ const FicoProcess=
                     {
                         pathEsportazione = item.pathEsportazione;
                     }
+                    if (item.pathLavorazioni!=null && item.pathLavorazioni!="")
+                    {
+                        pathLavorazioni = item.pathLavorazioni;
+                    }
                 }
 
                 //facciamo prima un controllo se nel file esiste già un elemento con questo file
@@ -874,11 +879,12 @@ const FicoProcess=
                     existingItems.pathLoghi = pathLoghi;
                     existingItems.pathLogs = pathLogs;
                     existingItems.pathEsportazione = pathEsportazione;
+                    existingItems.pathLavorazioni = pathLavorazioni;
                     //riscriviamo il file
                     fs.writeFileSync(filePath, JSON.stringify(file));
                 }
                 else{
-                    appendToFile(filePath, {file:app.activeDocument.name, id:itemsInSearch[0].id, pathLinks:pathLinks, pathLoghi:pathLoghi, pathLogs:pathLogs, pathEsportazione:pathEsportazione ,details:itemsInSearch[0]});
+                    appendToFile(filePath, {file:app.activeDocument.name, id:itemsInSearch[0].id, pathLinks:pathLinks, pathLoghi:pathLoghi, pathLogs:pathLogs, pathEsportazione:pathEsportazione, pathLavorazioni:pathLavorazioni ,details:itemsInSearch[0]});
                 }
                 
     
@@ -897,7 +903,7 @@ const FicoProcess=
                 {
                     let lavorazioneItem = objResult.records[0];
                     //Scrivo il file di lavorazione o lo aggiungo al file di lavorazione
-                    var filePath = pathLavorazione + "/lavorazioni.json";
+                    var filePath = Utility.percorsoFileLavorazioni(pathLavorazione);
                     appendToFile(filePath, {file:app.activeDocument.name, id:lavorazioneItem.id,details:lavorazioneItem});
     
                     //Adesso posso procedere con il processare il kit
@@ -1035,7 +1041,7 @@ const FicoProcess=
 
             if (itemsInSearch.length > 0) {
                 //Devo salvare il kit sul file
-                var filePath = _pathLavorazione + "/lavorazioni.json";
+                var filePath = Utility.percorsoFileLavorazioni(_pathLavorazione);
                 //leggiamo il file di lavorazione e guardiamo se ha almeno un elemento, se lo ha proviamo a leggere il suo pathLinks e pathLoghi
                 let file = readFile(filePath);
                 if (file == null) {
@@ -1043,13 +1049,14 @@ const FicoProcess=
                     //messaggioUtente("Errore: File lavorazioni.json non trovato", "error");
                     //return;
                     appendToFile(filePath);
-                    file == readFile(filePath);
+                    file = readFile(filePath) || [];//I20-1057: era "file ==", un confronto
                 }
                 //controlliamo se il file è vuoto
                 let pathLinks = "";
                 let pathLoghi = "";
                 let pathLogs = "";
                 let pathEsportazione = "";
+                let pathLavorazioni = "";
                 if (file!=null && file.length > 0) 
                 {
                     let item = file[0];
@@ -1064,6 +1071,9 @@ const FicoProcess=
                     }
                     if (item.pathEsportazione != null && item.pathEsportazione != "") {
                         pathEsportazione = item.pathEsportazione;
+                    }
+                    if (item.pathLavorazioni != null && item.pathLavorazioni != "") {
+                        pathLavorazioni = item.pathLavorazioni;
                     }
                 }
 
@@ -1080,11 +1090,12 @@ const FicoProcess=
                     existingItems.pathLoghi = pathLoghi;
                     existingItems.pathLogs = pathLogs;
                     existingItems.pathEsportazione = pathEsportazione;
+                    existingItems.pathLavorazioni = pathLavorazioni;
                     //riscriviamo il file
                     fs.writeFileSync(filePath, JSON.stringify(file));
                 }
                 else {
-                    appendToFile(filePath, { file: nomeFile, id: itemsInSearch[0].id, pathLinks: pathLinks, pathLoghi: pathLoghi, pathLogs: pathLogs, pathEsportazione: pathEsportazione, details: itemsInSearch[0] });
+                    appendToFile(filePath, { file: nomeFile, id: itemsInSearch[0].id, pathLinks: pathLinks, pathLoghi: pathLoghi, pathLogs: pathLogs, pathEsportazione: pathEsportazione, pathLavorazioni: pathLavorazioni, details: itemsInSearch[0] });
                 }
 
                 return this.lavoraKitMassivo_Queue(indice + 1);
@@ -1106,7 +1117,7 @@ const FicoProcess=
                 if (objResult.esito && objResult.records.length > 0) {
                     let lavorazioneItem = objResult.records[0];
                     //Scrivo il file di lavorazione o lo aggiungo al file di lavorazione
-                    var filePath = _pathLavorazione + "/lavorazioni.json";
+                    var filePath = Utility.percorsoFileLavorazioni(_pathLavorazione);
                     appendToFile(filePath, { file: nomeFile, id: lavorazioneItem.id, details: lavorazioneItem });
 
                     return me.lavoraKitMassivo_Queue(indice + 1);
@@ -1740,7 +1751,7 @@ const FicoProcess=
             };
     
     
-            var file = readFile(pathLavorazione + "/lavorazioni.json");
+            var file = readFile(Utility.percorsoFileLavorazioni(pathLavorazione));
             if(file == null){
                 hideLoading();
                 messaggioUtente("Code FIP-14 Errore: File lavorazioni.json non trovato", "error");
@@ -2109,7 +2120,7 @@ const FicoProcess=
                     };
 
 
-                    var file = readFile(pathLavorazione + "/lavorazioni.json");
+                    var file = readFile(Utility.percorsoFileLavorazioni(pathLavorazione));
                     if(file == null){
                         hideLoading();
                         messaggioUtente("Errore: File lavorazioni.json non trovato", "error");

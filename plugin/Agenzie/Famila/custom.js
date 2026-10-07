@@ -60,7 +60,7 @@ const customAgenzia={
     },
 
     setLavorazione(){
-        var filePath = pathLavorazione + "/lavorazioni.json";
+        var filePath = Utility.percorsoFileLavorazioni(pathLavorazione);//I20-1057
         let lavorazioni = readFile(filePath);
         //lavorazione è una lista di oggetti noi dobbiamo trovare qullo con la chiave file = al nome del file aperto di indesign
         var lavorazione = lavorazioni.find(lavorazione => lavorazione.file == app.activeDocument.name);

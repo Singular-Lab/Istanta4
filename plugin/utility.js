@@ -440,6 +440,75 @@ const Utility=
         return pathLavorazione + "/" + (altro != null ? altro : atteso);
     },
 
+    /// I20-1057: i nomi della cartella delle lavorazioni, in ordine di preferenza. Vale il primo
+    /// che c'e' sotto la cartella del documento, senza distinguere maiuscole e minuscole.
+    nomiCartellaLavorazioni() {
+        return [".lavorazioni", "lavorazioni", "lavorazione"];
+    },
+
+    _senzaBarraFinale(percorso) {
+        return String(percorso ?? "").replace(/[\\/]+$/, "");
+    },
+
+    /// I20-1057: la cartella delle lavorazioni sotto base (la cartella del documento, o del libro),
+    /// senza barra finale; null se non ce n'e' nessuna. Una voce con uno di quei nomi che non e' una
+    /// cartella non conta: readdirSync riesce solo sulle cartelle.
+    cartellaLavorazioni(base) {
+        const fs = require('fs');
+        const radice = Utility._senzaBarraFinale(base);
+        let voci = [];
+        try {
+            voci = fs.readdirSync(radice) || [];
+        }
+        catch (e) {
+            return null;
+        }
+        for (const nome of Utility.nomiCartellaLavorazioni()) {
+            const trovata = voci.find(v => String(v).toLowerCase() === nome);
+            if (trovata == null) {
+                continue;
+            }
+            const percorso = radice + "/" + trovata;
+            try {
+                fs.readdirSync(percorso);
+                return percorso;
+            }
+            catch (e) {
+                //non e' una cartella: si prova il nome dopo
+            }
+        }
+        return null;
+    },
+
+    /// I20-1057: dove leggere e scrivere lavorazioni.json per i documenti della cartella base.
+    /// E' l'unico punto che lo sa: chi legge o scrive il file passa da qui.
+    ///  - nella cartella delle lavorazioni, se il file e' li';
+    ///  - altrimenti nella cartella del documento, se e' li': il file di prima resta in uso finche'
+    ///    l'operatore non lo sposta;
+    ///  - se non c'e' da nessuna parte, nella cartella delle lavorazioni, dove nasce quello nuovo;
+    ///  - senza cartella delle lavorazioni, nella cartella del documento, come prima.
+    percorsoFileLavorazioni(base) {
+        const fs = require('fs');
+        const nome = "lavorazioni.json";
+        const radice = Utility._senzaBarraFinale(base);
+        const cartella = Utility.cartellaLavorazioni(radice);
+        const contiene = (percorso) => {
+            try {
+                return (fs.readdirSync(percorso) || []).indexOf(nome) >= 0;
+            }
+            catch (e) {
+                return false;
+            }
+        };
+        if (cartella != null && contiene(cartella)) {
+            return cartella + "/" + nome;
+        }
+        if (contiene(radice)) {
+            return radice + "/" + nome;
+        }
+        return (cartella != null ? cartella : radice) + "/" + nome;
+    },
+
     async getListaCodiciImpaginati(opzioni = {}){
         var result = null;
         var error = null;
