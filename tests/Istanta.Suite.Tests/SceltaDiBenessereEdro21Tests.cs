@@ -154,4 +154,32 @@ public class SceltaDiBenessereEdro21Tests : IDisposable
     {
         Assert.Equal("BOX1", CodiceBox("TP_MM", "BENESSERE", "SCELTE DI BENESSERE"));
     }
+
+    /* ---- I20-1055: le azioni Forza e Rimuovi format SDB ---- */
+
+    private static List<(string Campo, IstantaLib.OperatoreCondizione Operatore, string Value)> Regole(IstantaLib.CambioStrutturale azione)
+        => azione.Condizione.Single().Regole.Select(r => (r.Campo, r.Operatore, r.Value)).ToList();
+
+    [Theory]
+    [InlineData("Forza format SDB")]
+    [InlineData("Rimuovi format SDB")]
+    public void Nella_sezione_Scelte_di_Benessere_le_azioni_SDB_non_si_offrono(string titolo)
+    {
+        // Le definizioni di riserva in AgenziaLib, che il Plugin usa se il SourceCustomPlugin non ne ha.
+        var azione = new Edro21().GetCambioStrutturalePath().Single(a => a.Titolo == titolo);
+
+        Assert.Contains(("sezione", IstantaLib.OperatoreCondizione.NotContains, "scelte di benessere"), Regole(azione));
+    }
+
+    [Theory]
+    [InlineData("Forza format SDB")]
+    [InlineData("Rimuovi format SDB")]
+    public void La_riserva_in_AgenziaLib_e_il_SourceCustomPlugin_di_Edro21_hanno_le_stesse_condizioni(string titolo)
+    {
+        var json = JObject.Parse(File.ReadAllText(DllAgenziaLibTests.TrovaFile("Istanta/wwwroot/external_source/Edro21/SourceCustomPlugin.json")));
+        var dalSource = json["cambiStrutturali"]!.ToObject<List<IstantaLib.CambioStrutturale>>()!.Single(a => a.Titolo == titolo);
+        var dallaRiserva = new Edro21().GetCambioStrutturalePath().Single(a => a.Titolo == titolo);
+
+        Assert.Equal(Regole(dallaRiserva), Regole(dalSource));
+    }
 }
