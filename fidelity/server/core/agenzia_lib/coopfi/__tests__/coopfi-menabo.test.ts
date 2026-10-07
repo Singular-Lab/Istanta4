@@ -47,6 +47,31 @@ describe("coopfi menabo", () => {
     ]);
   });
 
+  it("dichiara i campi anteprima presenti nei record, sul naming effettivo", async () => {
+    const conPrezzoPromo = { tema: "Ortofrutta", "Scatto.CodiceGruppo": "G001", reparto: "58-01", prezzo_promo: "1,49" };
+    const conPrezzo = { tema: "Vini", "Scatto.CodiceGruppo": "G002", reparto: "62-03", prezzo: "3,90" };
+    const senzaPrezzo = { tema: "Pane", "Scatto.CodiceGruppo": "G003", reparto: "70-01" };
+
+    const result = await sut.getDatoPerMenabo([
+      buildTracciato("canale-1", "area-1", [conPrezzoPromo]),
+      buildTracciato("canale-2", "area-1", [conPrezzo]),
+      buildTracciato("canale-3", "area-1", [senzaPrezzo]),
+    ], { tipoDivisione: "canale", dataDivisione: [] });
+
+    const [primo, secondo, terzo] = result.risultati;
+    // prezzo_promo vince su prezzo, ma se c'è solo prezzo si usa quello (naming per GDO)
+    expect(primo.campi_anteprima).toEqual([
+      { nome_campo: "reparto", label: "Reparto" },
+      { nome_campo: "prezzo_promo", label: "Prezzo promo" },
+    ]);
+    expect(secondo.campi_anteprima).toEqual([
+      { nome_campo: "reparto", label: "Reparto" },
+      { nome_campo: "prezzo", label: "Prezzo promo" },
+    ]);
+    // campo assente nei record → non viene dichiarato
+    expect(terzo.campi_anteprima).toEqual([{ nome_campo: "reparto", label: "Reparto" }]);
+  });
+
   it("splits results by area", async () => {
     const record = { tema: "Ortofrutta", "Scatto.CodiceGruppo": "G001", codice_referenza: "001" };
 

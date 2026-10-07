@@ -78,8 +78,9 @@ interface PlacedItem {
 interface RecordPreviewItem {
     descrizione: string;
     codice: string;
-    reparto: string;
     foto_url?: string;
+    /** Record grezzo: l'anteprima ne mostra i campi scelti dall'utente (vedi campiAnteprima). */
+    record: Record<string, string>;
 }
 
 interface PlacedDragPayload {
@@ -169,14 +170,13 @@ function getRecordPreview(record: Record<string, string>): RecordPreviewItem {
         cleanRecordText(record["Descrizioni.Descrizione3"]),
     ].filter(Boolean).join(" ") || "—";
     const codice = cleanRecordText(record["Scatto.CodiceGruppo"]) || cleanRecordText(record["Referenza.Codice"]) || "—";
-    const reparto = cleanRecordText(record["reparto"]) || "—";
     const fotoUrl = cleanRecordText(record["Foto.OriginUri"]);
 
     return {
         descrizione,
         codice,
-        reparto,
         foto_url: fotoUrl || undefined,
+        record,
     };
 }
 
@@ -312,6 +312,8 @@ export default function MenaboCanvas({
     }, [regoleMenabo, canaleSelezionato]);
 
     const pagesFromRegole = useMemo(() => divisioneSelezionata?.pagine ?? [], [divisioneSelezionata]);
+    // Campi referenza dell'anteprima: li dichiara l'agenzia lib (nome campo reale + label)
+    const campiAnteprima = useMemo(() => canaleSelezionato?.campi_anteprima ?? [], [canaleSelezionato]);
     const { user } = useUser();
     const [pageCount, setPageCount] = useState(0);
     const [items, setItems] = useState<PlacedItem[]>([]);
@@ -694,6 +696,7 @@ export default function MenaboCanvas({
         () => selectedGroupItems.flatMap(item => item.records.map(getRecordPreview)),
         [selectedGroupItems],
     );
+
     const copyCodiciTimeoutRef = useRef<number | null>(null);
 
     const handleCopiaCodici = useCallback(() => {
@@ -2134,6 +2137,7 @@ export default function MenaboCanvas({
                                 </div>
                             </div>
 
+
                             <div className="grid grid-cols-2 gap-2 border-b border-slate-200/80 px-4 py-3 text-xs dark:border-darkmode-400">
                                 <div className="rounded border border-slate-200/80 bg-slate-50 px-2.5 py-2 dark:border-darkmode-400 dark:bg-darkmode-700/40">
                                     <div className="text-slate-400">Referenze</div>
@@ -2198,10 +2202,25 @@ export default function MenaboCanvas({
                                                     >
                                                         {preview.descrizione}
                                                     </div>
-                                                    <div className="mt-2 inline-flex max-w-full items-center gap-1 rounded border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-500 dark:border-darkmode-400 dark:bg-darkmode-600 dark:text-slate-300">
-                                                        <Lucide icon="Layers3" className="h-3 w-3 flex-shrink-0" />
-                                                        <span className="truncate">{preview.reparto}</span>
-                                                    </div>
+                                                    {campiAnteprima.length > 0 && (
+                                                        <div className="mt-2 flex flex-wrap gap-1">
+                                                            {campiAnteprima.map(campo => {
+                                                                const valore = cleanRecordText(preview.record[campo.nome_campo]);
+                                                                if (!valore) return null;
+
+                                                                return (
+                                                                    <span
+                                                                        key={campo.nome_campo}
+                                                                        className="inline-flex max-w-full items-center gap-1 rounded border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-500 dark:border-darkmode-400 dark:bg-darkmode-600 dark:text-slate-300"
+                                                                        title={`${campo.label}: ${valore}`}
+                                                                    >
+                                                                        <span className="text-slate-400">{campo.label}</span>
+                                                                        <span className="truncate text-slate-700 dark:text-slate-100">{valore}</span>
+                                                                    </span>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
                                         ))}

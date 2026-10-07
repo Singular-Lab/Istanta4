@@ -171,6 +171,17 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
     public CHIAVE_DEDUP_MENABO = "Scatto.CodiceGruppo";
 
     /**
+     * Campi della referenza mostrati nell'anteprima del menabò, nell'ordine indicato.
+     * Per ogni voce si prende la prima chiave presente nei record della sezione: il
+     * naming dipende da `data_fields_refs` (config per GDO), quindi non è fisso e il
+     * client non può indovinarlo. Aggiungere un campo = aggiungere una riga qui.
+     */
+    private CAMPI_ANTEPRIMA_MENABO: { chiavi: string[]; label: string }[] = [
+        { chiavi: ["reparto"], label: "Reparto" },
+        { chiavi: ["prezzo_promo", "prezzo"], label: "Prezzo promo" },
+    ];
+
+    /**
      * Temi che, su richiesta di Calonaci (Coopfi), NON devono comparire nel report PDF:
      * né tra le referenze Entranti, né tra le Uscenti, né nelle Variazioni.
      * Restano invece visibili nella vista a schermo su FP (il filtro è applicato solo
@@ -273,16 +284,25 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
             }
 
             const campiFiltro: MenaboRisultato['risultati'][number]['campi_filtro'] = [];
-            const campiFiltroVisti = new Set<string>();
+            // chiave lowercase → nome campo reale, per risolvere i campi anteprima sul naming effettivo
+            const campiPerChiave = new Map<string, string>();
             for (const recordEntry of recordsUnici) {
                 const record = recordEntry.record;
                 for (const key of Object.keys(record)) {
                     const nomeCampo = key.trim();
                     const dedupKey = String(nomeCampo ?? "").trim().toLowerCase();
-                    if (!nomeCampo || campiFiltroVisti.has(dedupKey)) continue;
-                    campiFiltroVisti.add(dedupKey);
+                    if (!nomeCampo || campiPerChiave.has(dedupKey)) continue;
+                    campiPerChiave.set(dedupKey, nomeCampo);
                     campiFiltro.push({ nome_campo: nomeCampo });
                 }
+            }
+
+            const campiAnteprima: MenaboRisultato['risultati'][number]['campi_anteprima'] = [];
+            for (const { chiavi, label } of this.CAMPI_ANTEPRIMA_MENABO) {
+                const nomeCampo = chiavi
+                    .map((chiave) => campiPerChiave.get(chiave.toLowerCase()))
+                    .find((nome): nome is string => Boolean(nome));
+                if (nomeCampo) campiAnteprima.push({ nome_campo: nomeCampo, label });
             }
 
             const groups = new Map<string, {
@@ -343,16 +363,6 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
                 valore_campo: group.valore_campo,
                 conteggio: group.records.length,
                 records: group.records,
-                records_preview: group.records.map(r => ({
-                    descrizione: (
-                        (r['Descrizioni.Descrizione1'] ?? '') +
-                        (r['Descrizioni.Descrizione2'] ?? '') +
-                        (r['Descrizioni.Descrizione3'] ?? '')
-                    ).trim() || "—",
-                    codice: String(r[this.CHIAVE_DEDUP_MENABO] ?? "").trim() || String(r['Referenza.Codice'] ?? "").trim() || "—",
-                    reparto: String(r['reparto'] ?? "").trim() || "—",
-                    foto_url: String(r['Foto.OriginUri'] ?? "").trim() || undefined,
-                })), // Per ora non abbiamo dati specifici da mostrare nella preview, ma lasciamo la struttura pronta per eventuali implementazioni future
                 chiavi_sottogruppi: this.getMenaboSubgroupKeys(group.nome_campo, group.valore_campo)
             }));
 
@@ -376,6 +386,7 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
                 id: sectionId,
                 label,
                 campi_filtro: campiFiltro,
+                campi_anteprima: campiAnteprima,
                 raggruppamento,
             });
         }

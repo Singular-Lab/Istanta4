@@ -33,14 +33,14 @@ class PuntoVendita extends Model<PuntiVenditaAttributes, PuntiVenditaCreationAtt
   }
 
   public getCoordinate(): { lat: number; lon: number } | null {
-    if (this.lat_puntivendita && this.lon_puntivendita) {
+    if (this.lat_puntivendita != null && this.lon_puntivendita != null) {
       return { lat: this.lat_puntivendita, lon: this.lon_puntivendita };
     }
     return null;
   }
 
   public hasCoordinate(): boolean {
-    return !!(this.lat_puntivendita && this.lon_puntivendita);
+    return this.lat_puntivendita != null && this.lon_puntivendita != null;
   }
 
   public getNomeDisplay(): string {

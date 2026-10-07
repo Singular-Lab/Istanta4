@@ -256,11 +256,25 @@ const ReferenzeInVolantinoBox: React.FC<ReferenzeInVolantinoBoxProps> = ({
                                         competitorParams.set("categoria", categoriaParam);
                                     }
 
+                                    const fuoriListino = ref.origine === "fuori_listino";
+
                                     return (
                                         <div
                                             key={ref.id || idx}
-                                            className="flex flex-col p-3 rounded-lg border border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm transition-all"
+                                            className={clsx(
+                                                "flex flex-col p-3 rounded-lg border bg-white hover:shadow-sm transition-all",
+                                                fuoriListino
+                                                    ? "border-warning/40 ring-1 ring-warning/20 hover:border-warning/60"
+                                                    : "border-slate-200 hover:border-slate-300"
+                                            )}
                                         >
+                                            {/* Nel volantino c'era, a listino no: l'ha compilata una persona. */}
+                                            {fuoriListino && (
+                                                <div className="mb-2 inline-flex items-center gap-1 self-start rounded-md border border-warning/30 bg-warning/10 px-2 py-0.5 text-[10px] font-medium text-warning">
+                                                    <Lucide icon="TriangleAlert" className="h-3 w-3" />
+                                                    Fuori listino
+                                                </div>
+                                            )}
                                             <div className="w-full aspect-square rounded-lg overflow-hidden bg-slate-100 flex items-center justify-center mb-3">
                                                 {foto ? (
                                                     <img

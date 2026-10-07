@@ -1283,7 +1283,8 @@ export interface ReferenzeIstanta {
   guidIdKitRuntime: string;
   compiledFields: CompiledField[];
   deletedFields: string[];
-  foto: string[];
+  /** Nome del link InDesign e guidId dell'asset Olimpo per ogni foto (guidId assente finché l'upload non è confermato). */
+  foto: Array<{ nome: string; guidId?: string }>;
   fotoGruppo?: string;
   meccanica: string;
   codiceBox: string;
@@ -1309,6 +1310,76 @@ export interface ReferenzeIstanta {
   aspectRatio?: number;
 }
 
+
+/**
+ * Un record del listino della GDO, come lo restituisce il suo sistema di storico.
+ * I campi dipendono dal cliente: li interpreta solo la sua agenzia lib.
+ */
+export type RecordListino = Record<string, unknown>;
+
+/**
+ * Cosa ha deciso l'operatore su un box fantasma: o lo ha compilato a mano, una
+ * referenza per codice del DNA, oppure lo ha ignorato di proposito e il box resta
+ * nel volantino senza dato a sistema. Delle due, FP deve sapere quale.
+ */
+export interface FantasmaDeciso {
+  groupId?: number;
+  pag?: number;
+  dna?: string;
+  ignorato: boolean;
+  referenze: RecordListino[];
+}
+
+/**
+ * L'esito dell'importazione da storico su una lavorazione. La sua presenza dice
+ * che il kit e stato recuperato dallo storico: sono le referenze a ereditarlo dal
+ * kit, non il contrario, quindi non c'e niente da marcare riga per riga.
+ */
+export interface ImportStorico {
+  /** Quando e arrivato l'ultimo invio del plugin. */
+  importatoIl: string;
+  nomeFile?: string;
+  /** A listino ma senza un box nel volantino: non hanno una referenza a sistema. */
+  nonImpaginate: RecordListino[];
+  /** L'operatore ha proseguito lasciando le non impaginate da sistemare. */
+  lasciapassareNonImpaginate: boolean;
+  /**
+   * Nel volantino ma non a listino, compilate a mano dall'operatore. Si tiene il
+   * codice box perche e con quello che si ritrovano tra le referenze del kit.
+   */
+  fuoriListino: Array<{ codiceBox: string; pag?: number; codice?: string; descrizione?: string }>;
+  /** Box fuori listino che l'operatore ha deciso di ignorare: nessuna referenza creata. */
+  fuoriListinoIgnorati: number;
+  /** Quanti box ha letto il plugin nel volantino. Assente sugli import precedenti. */
+  boxNelVolantino?: number;
+  /** Quante referenze sono arrivate dal listino. Assente sugli import precedenti. */
+  referenzeDaListino?: number;
+  /** Ogni box fuori listino, compilato o ignorato, con cosa c'era scritto. Assente sugli import precedenti. */
+  boxFuoriListino?: BoxFuoriListino[];
+}
+
+/** Un box fuori listino come resta nel report: cosa c'era nel volantino e cosa si e deciso. */
+export interface BoxFuoriListino {
+  groupId?: number | string;
+  dna?: string;
+  pag?: number;
+  /** Ignorato di proposito: resta nel volantino senza referenza a sistema. */
+  ignorato: boolean;
+  /** Il testo letto nel box: e l'unico modo per capire di che prodotto si parlava. */
+  testoBox: string[];
+  /** Le referenze compilate a mano dall'operatore, vuote se il box e stato ignorato. */
+  referenze: RecordListino[];
+}
+
+/** Cosa manca per poter accettare un fantasma: una riga per campo mancante. */
+export interface FantasmaIncompleto {
+  groupId?: number;
+  pag?: number;
+  /** Indice della referenza dentro il box, 1-based: e come la vede l'operatore. */
+  referenza?: number;
+  campi: string[];
+  motivo: string;
+}
 
 export type FotoGruppoReferenze = {
   id: string;
@@ -2438,6 +2509,16 @@ export interface MenaboCampoFiltro {
   nome_campo: string;
 }
 
+/**
+ * Campo della referenza da mostrare nell'anteprima del menabò.
+ * Lo decide l'agenzia lib: il nome della chiave dipende dal tracciato e dalla
+ * mappatura `data_fields_refs` della GDO, quindi non è noto al client.
+ */
+export interface MenaboCampoAnteprima {
+  nome_campo: string;
+  label: string;
+}
+
 export interface MenaboSottogruppoChiave {
   nome_campo: string;
   label: string;
@@ -2448,12 +2529,6 @@ export interface MenaboRaggruppamento {
   valore_campo: string;
   conteggio: number;
   records: Array<Record<string, string>>;
-  records_preview: Array<{
-    descrizione: string;
-    codice: string;
-    reparto: string;
-    foto_url?: string;
-  }>
   chiavi_sottogruppi?: MenaboSottogruppoChiave[];
 }
 
@@ -2466,6 +2541,8 @@ export interface MenaboRisultatoCanale {
   id: string;    // sectionKey usato da CoopFi (guidCanale | guidArea | guidCanale:guidArea, lowercase)
   label: string; // testo display (per ora = guid, in futuro nome canale/area)
   campi_filtro: MenaboCampoFiltro[];
+  /** Campi referenza mostrati nell'anteprima, nell'ordine deciso dall'agenzia lib */
+  campi_anteprima: MenaboCampoAnteprima[];
   raggruppamento: MenaboRaggruppamento[];
 }
 

@@ -1,4 +1,4 @@
-import type { FlyerInsights, FlyerInsightsConfig, ReferenzaPosizione } from "@/types/flyerInsights";
+import type { FlyerInsights, FlyerInsightsConfig, OrigineStorico, ReferenzaPosizione } from "@/types/flyerInsights";
 import type { icons } from "lucide-react";
 import { STATO_LAVORAZIONE_KIT_RUNTIME, TIPO_KIT_DESIGN, TIPO_LAVORAZIONE } from "../../../lib/enums";
 import { FileItemKit, OggettoTipiDiExport, RUNTIME_KIT_MONGO } from "../../../lib/types";
@@ -59,6 +59,8 @@ export interface StatsGridProps {
   exportTypesCount: number;
   exportTypesList: string[];
   referenzeCount?: number;
+  /** Valorizzata solo se la lavorazione viene dallo storico. */
+  origineStorico?: OrigineStorico;
   paginAnalizzate?: number;
   productionDuration?: string | null;
   isTimerLive?: boolean;
@@ -91,6 +93,8 @@ export interface InfoBadgesProps {
   nomeCanale?: string;
   tipoKit?: TIPO_KIT_DESIGN | string;
   tipoLavorazione?: TIPO_LAVORAZIONE;
+  /** Valorizzata solo se la lavorazione viene dallo storico. */
+  origineStorico?: OrigineStorico;
 }
 
 // ============================================
@@ -252,7 +256,7 @@ export interface ActionPanelProps {
 // ============================================
 
 // Re-export FlyerInsights type from centralized types
-export type { FlyerInsights, FlyerInsightsConfig, ReferenzaPosizione } from "@/types/flyerInsights";
+export type { BoxFuoriListino, FlyerInsights, FlyerInsightsConfig, OrigineStorico, ReferenzaPosizione, ReferenzaStorico } from "@/types/flyerInsights";
 
 export interface RepartoGroup {
   sigla: string;

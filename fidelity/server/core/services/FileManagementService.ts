@@ -39,6 +39,19 @@ import { normalizePromoModel } from '../utils/PromoModelUtils';
 import { ServerUtils } from '../utils/ServerUtils';
 import { TraduttoreReferenze } from '../utils/Translator';
 
+/**
+ * Il modello PG vuole `foto` come array piatto di guidId (stringhe): il plugin manda
+ * oggetti { nome, guidId } (il nome serve solo per il retry lato plugin), quindi qui
+ * si appiattisce tenendo solo i guidId gia valorizzati — quelli non ancora caricati
+ * hanno guidId vuoto e non sono referenziabili in Olimpo, si scartano.
+ */
+function appiattisciFoto(foto: ReferenzeIstanta['foto']): string[] {
+  if (!Array.isArray(foto)) return [];
+  return foto
+    .map((f: any) => (typeof f === 'string' ? f : f?.guidId))
+    .filter((guidId: unknown): guidId is string => typeof guidId === 'string' && guidId.length > 0);
+}
+
 /** Converts a ReferenzeIstanta (camelCase) to snake_case for the Referenze PG model */
 function referenzaToSnakeCase(ref: ReferenzeIstanta): any {
   return {
@@ -46,7 +59,7 @@ function referenzaToSnakeCase(ref: ReferenzeIstanta): any {
     compiled_fields: ref.compiledFields ?? (ref as any).compiled_fields,
     deleted_fields: ref.deletedFields ?? (ref as any).deleted_fields,
     data_fields: ref.dataFields ?? (ref as any).data_fields,
-    foto: ref.foto,
+    foto: appiattisciFoto(ref.foto),
     meccanica: ref.meccanica,
     codice_box: ref.codiceBox ?? (ref as any).codice_box,
     foto_extra: ref.fotoExtra ?? (ref as any).foto_extra,

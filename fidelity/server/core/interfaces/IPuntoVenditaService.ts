@@ -2,10 +2,11 @@ import { PuntoVenditaResponseDTO } from '../dto';
 import {
   CreateDispositivoPuntoVenditaDTO,
   DispositivoPuntoVenditaResponseDTO,
-  UpdateDispositivoPuntoVenditaDTO,
-  PuntiVenditaPaginatedResponseDTO
+  PuntiVenditaPaginatedResponseDTO,
+  UpdateDispositivoPuntoVenditaDTO
 } from '../dto/PuntoVenditaDTO';
 import { DispositivoMetadata } from '../models/punto_vendita/dispositivi_punto_vendita';
+import type { PuntoVenditaTextInput } from '../utils/puntoVenditaNormalization';
 
 export interface IPuntoVenditaService {
   // CRUD Operations
@@ -42,6 +43,25 @@ export interface IPuntoVenditaService {
     citta?: string;
   }): Promise<PuntoVenditaResponseDTO[]>;
   getAllPuntiVenditaFromIdGDO(idGDO: string): Promise<PuntoVenditaResponseDTO[]>;
+  getPuntiVenditaForPlugin(idGdo: string | undefined, idArea: string, idCanale: string): Promise<PuntoVenditaResponseDTO[]>;
+  checkPuntiVenditaForPlugin(idGdo: string | undefined, idArea: string, idCanale: string, items: PuntoVenditaTextInput[]): Promise<{
+    results: Array<{
+      input: PuntoVenditaTextInput;
+      stato: 'present' | 'missing' | 'possibleDuplicate';
+      puntoVendita?: PuntoVenditaResponseDTO;
+    }>;
+    presenti: Array<{ input: PuntoVenditaTextInput; puntoVendita: PuntoVenditaResponseDTO }>;
+    mancanti: PuntoVenditaTextInput[];
+    possibiliDuplicati: Array<{ input: PuntoVenditaTextInput; puntoVendita: PuntoVenditaResponseDTO }>;
+  }>;
+  loadPuntiVenditaForPlugin(idGdo: string | undefined, idArea: string, idCanale: string, items: PuntoVenditaTextInput[]): Promise<{
+    matched: Array<{ input: PuntoVenditaTextInput; puntoVendita: PuntoVenditaResponseDTO }>;
+    created: Array<{ input: PuntoVenditaTextInput; puntoVendita: PuntoVenditaResponseDTO }>;
+    updated: Array<{ input: PuntoVenditaTextInput; puntoVendita: PuntoVenditaResponseDTO }>;
+    missing: PuntoVenditaTextInput[];
+    possibleDuplicates: Array<{ input: PuntoVenditaTextInput; puntoVendita: PuntoVenditaResponseDTO }>;
+    duplicates: Array<{ key: string; puntoVenditaIds: string[] }>;
+  }>;
 
   // Paginated Operations
   getAllPuntiVenditaPaginated(params: {

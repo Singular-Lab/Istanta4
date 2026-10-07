@@ -1,10 +1,14 @@
 import { EXPORT_DI_SISTEMA } from '../../../lib/enums';
 import { wrapDatabaseError } from '../../../lib/errors';
-import { FileItemKit } from '../../../lib/types';
+import { FileItemKit, ImportStorico, RecordListino } from '../../../lib/types';
+import type { IAgenziaLib } from '../agenzia_lib/types';
 import config from '../config';
 import {
+  BoxFuoriListinoDTO,
   FlyerInsightsDTO,
+  OrigineStoricoDTO,
   ReferenzaPosizioneDTO,
+  ReferenzaStoricoDTO,
   RiepilogoMeccanicaDTO,
   RiepilogoPaginaDTO,
   RiepilogoRepartoDTO
@@ -14,14 +18,19 @@ import { IVolantinoService } from '../interfaces/IVolantinoService';
 import { TipiDiExport } from '../models';
 import { FilesRuntime } from '../models/files_runtime';
 import { Referenze } from '../models/referenze';
+import { RuntimeKit } from '../models/runtime_kit';
 import { ReferenzeGruppo } from '../models/referenze_gruppo';
+import { chiaveBox } from '../utils/fantasmi';
 
 /**
  * Autonomous VolantinoService with its own implementation.
  * Manages volantino (flyer) file queries and insights.
  */
 export class VolantinoService implements IVolantinoService {
-  constructor(private readonly configService: IConfigService) { }
+  constructor(
+    private readonly configService: IConfigService,
+    private readonly agenziaLib: IAgenziaLib
+  ) { }
 
   async prendiIVolantiniCaricatiDaDB(): Promise<any> {
     try {
@@ -72,9 +81,60 @@ export class VolantinoService implements IVolantinoService {
       const referenzePg = await Referenze.findAll({ where: { id_runtime_kit: guidIdKitRuntime }, raw: true });
       const referenze = referenzePg as unknown as any[];
 
+      /*
+        L'origine sta sul kit, non sulla singola referenza: se la lavorazione e
+        stata recuperata dallo storico lo sono tutte le sue referenze. Le fuori
+        listino si riconoscono per codice box, che e il ponte verso il box del
+        volantino da cui sono state compilate.
+      */
+      const kitRow = await RuntimeKit.findOne({
+        where: { id: guidIdKitRuntime }, attributes: ['import_storico'], raw: true
+      }) as { import_storico?: ImportStorico | null } | null;
+      const importStorico = kitRow?.import_storico ?? null;
+      const codiciBoxFuoriListino = new Set(
+        (importStorico?.fuoriListino ?? []).map((voce) => String(voce.codiceBox)).filter(Boolean)
+      );
+      // I campi dei record sono del cliente: li legge la sua agenzia lib. Senza storico
+      // (es. CLIENT_ID diverso da quello dell'import) si mostra il record campo per campo.
+      const referenzaStorico = (record: RecordListino): ReferenzaStoricoDTO =>
+        this.agenziaLib.storicoVolantino?.referenzaPerReport(record) ?? {
+          codice: '',
+          descrizione: '',
+          campi: Object.entries(record)
+            .filter(([, valore]) => ['string', 'number', 'boolean'].includes(typeof valore) && String(valore).trim() !== '')
+            .map(([label, valore]) => ({ label, valore: String(valore) }))
+        };
+      // Gli import precedenti avevano solo la lista piatta dei compilati: si ricostruiscono i box da li.
+      const boxFuoriListino: BoxFuoriListinoDTO[] = importStorico?.boxFuoriListino
+        ? importStorico.boxFuoriListino.map((box) => ({
+          codiceBox: chiaveBox(box),
+          pag: box.pag,
+          ignorato: box.ignorato,
+          testoBox: box.testoBox ?? [],
+          referenze: (box.referenze ?? []).map(referenzaStorico)
+        }))
+        : Array.from((importStorico?.fuoriListino ?? []).reduce((perBox, voce) => {
+          const codiceBox = String(voce.codiceBox);
+          const box = perBox.get(codiceBox) ?? { codiceBox, pag: voce.pag, ignorato: false, testoBox: [], referenze: [] };
+          box.referenze.push({ codice: voce.codice ?? '', descrizione: voce.descrizione ?? '', campi: [] });
+          return perBox.set(codiceBox, box);
+        }, new Map<string, BoxFuoriListinoDTO>()).values());
+      const origineStorico: OrigineStoricoDTO | undefined = importStorico ? {
+        importatoIl: importStorico.importatoIl,
+        nomeFile: importStorico.nomeFile,
+        boxNelVolantino: importStorico.boxNelVolantino,
+        referenzeDaListino: importStorico.referenzeDaListino,
+        nonImpaginate: (importStorico.nonImpaginate ?? []).map(referenzaStorico),
+        lasciapassareNonImpaginate: importStorico.lasciapassareNonImpaginate === true,
+        totaleFuoriListino: (importStorico.fuoriListino ?? []).length,
+        fuoriListinoIgnorati: importStorico.fuoriListinoIgnorati ?? 0,
+        boxFuoriListino
+      } : undefined;
+
       if (!referenze || referenze.length === 0) {
         return {
           guidIdKitRuntime,
+          origineStorico,
           totaleReferenze: 0,
           totalePagine: totalePaginePdf,
           riepilogoPagine: [],
@@ -142,6 +202,9 @@ export class VolantinoService implements IVolantinoService {
 
         // Mappa campi dinamici dalla config
         const mapped: Record<string, any> = { id: ref.id, posizione };
+        if (origineStorico) {
+          mapped.origine = codiciBoxFuoriListino.has(String(ref.codice_box)) ? 'fuori_listino' : 'listino';
+        }
         for (const [dtoField, sourcePath] of Object.entries(fieldMapping)) {
           mapped[dtoField] = resolveFieldValue(normalizedRef, sourcePath);
         }
@@ -158,9 +221,12 @@ export class VolantinoService implements IVolantinoService {
 
         // Trasforma gli URL delle foto con il prefisso OLYMPUS
         if (mapped.foto && Array.isArray(mapped.foto)) {
-          mapped.foto = mapped.foto.map((f: string) =>
-            f.startsWith('http') ? f : `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${f}&performante=true`
-          );
+          mapped.foto = mapped.foto
+            .map((f: any) => typeof f === 'string' ? f : f?.guidId)
+            .filter(Boolean)
+            .map((f: string) =>
+              f.startsWith('http') ? f : `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${f}&performante=true`
+            );
         }
         if (mapped.fotoGruppo && typeof mapped.fotoGruppo === 'string' && !mapped.fotoGruppo.startsWith('http')) {
           mapped.fotoGruppo = `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${mapped.fotoGruppo}&performante=true`;
@@ -253,6 +319,7 @@ export class VolantinoService implements IVolantinoService {
 
       return {
         guidIdKitRuntime,
+        origineStorico,
         totaleReferenze: referenzeDTO.length,
         totalePagine: actualTotalePagine,
         riepilogoPagine,

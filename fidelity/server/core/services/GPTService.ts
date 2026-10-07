@@ -293,9 +293,12 @@ export class GPTService implements IGPTService {
 
     realResultRefs = realResultRefs.map(ref => ({
       ...ref,
-      foto: (ref.foto || []).map((foto: string) =>
-        `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${foto}`
-      )
+      foto: (ref.foto || [])
+        .map((f: any) => typeof f === "string" ? f : f?.guidId)
+        .filter(Boolean)
+        .map((guidId: string) =>
+          `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${guidId}`
+        )
     }));
 
     return realResultRefs as ReferenzeIstanta[];
@@ -811,9 +814,12 @@ export class GPTService implements IGPTService {
         }) as any[];
         referenzeIstanta = referenzeIstanta.map(ref => ({
           ...ref,
-          foto: (ref.foto || []).map((fotoId: string) =>
-            `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${fotoId}`
-          )
+          foto: (ref.foto || [])
+            .map((f: any) => typeof f === "string" ? f : f?.guidId)
+            .filter(Boolean)
+            .map((guidId: string) =>
+              `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${guidId}`
+            )
         }));
       }
 
@@ -1003,9 +1009,12 @@ export class GPTService implements IGPTService {
           groupElements: referenza.group_elements,
           codiceBox: referenza.codice_box,
           dataFields: referenza.data_fields,
-          foto: (referenza.foto || []).map((fotoId: string) =>
-            `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${fotoId}`
-          ),
+          foto: (referenza.foto || [])
+            .map((f: any) => typeof f === "string" ? f : f?.guidId)
+            .filter(Boolean)
+            .map((guidId: string) =>
+              `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${guidId}`
+            ),
           approfondimento: appRaw ? {
             ...appRaw,
             dataCreazione: appRaw.data_creazione,

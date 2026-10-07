@@ -7,7 +7,8 @@ import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { EXPORT_DI_SISTEMA, STATO_LOG_FILE } from '../../../lib/enums';
 import { BadRequestError } from '../../../lib/errors';
-import type { CompiledField, DataFields, FileItemKit, FileItemKitLog, ReferenzeIstanta } from '../../../lib/types';
+import type { FantasmaDeciso, FileItemKit, FileItemKitLog, ImportStorico, ReferenzeIstanta } from '../../../lib/types';
+import type { IAgenziaLib, PluginPayloadRef, SyncJsonPluginPayload } from '../agenzia_lib/types';
 import { BaseController } from '../base/BaseController';
 import config from '../config';
 import { uploadMaterialiPubblicazioni, uploadOlimpoImages } from '../config/multerConfig';
@@ -16,14 +17,14 @@ import {
   CreateFilterTemplateDTO,
   FilterTemplateEndpointType,
   UpdateFilterTemplateDTO,
-  type CreateStatisticheApiDTO,
-  type PromoContextValue
+  type CreateStatisticheApiDTO
 } from '../dto';
 import type { IAreaService } from '../interfaces/IAreaService';
 import type { ICanaleService } from '../interfaces/ICanaleService';
 import type { IExternalApiService } from '../interfaces/IExternalApiService';
 import type { IKitRuntimeService } from '../interfaces/IKitRuntimeService';
 import type { IPromoService } from '../interfaces/IPromoService';
+import { IPuntoVenditaService } from '../interfaces/IPuntoVenditaService';
 import type { IReferenzeService } from '../interfaces/IReferenzeService';
 import type { ITipoExportService } from '../interfaces/ITipoExportService';
 import { log } from '../logger';
@@ -32,6 +33,7 @@ import { ephemeralTokenAuthMiddleware } from '../middleware/ephemeralTokenAuthMi
 import { permissionGuard } from '../middleware/permissionGuard';
 import { FilterTemplateService } from '../services/FilterTemplateService';
 import { StatisticheApiService } from '../services/StatisticheApiService';
+import { chiaveBox, fantasmiIncompleti, indicizzaPerBox, reportFuoriListino } from '../utils/fantasmi';
 import { ServerUtils } from '../utils/ServerUtils';
 
 interface JSONMetaFoto {
@@ -40,43 +42,20 @@ interface JSONMetaFoto {
   FileName?: string;
   FileHash?: string;
 }
-interface SyncJsonPluginPayload {
-  promo: string;
-  promoId?: string;
-  canale?: string;
-  canaleId?: string;
-  area?: string;
-  areaId?: string;
-  kitGuidId?: string;
-  fileName: string;
-  scannedAt: string; // ISO date string
-  refs: unknown[];   // se vuoi, sostituisci con BoxRecord[]
-  pv?: string;
-  pageCount?: number;
-  docName?: string;
-  exportPath: string;
-  // "nome_field": "ap_name",
-  // "user_value": "LA SPEZIA"
-  promoContext?: Array<{ nome_field: string, user_value: PromoContextValue }>
+/** Porta le foto del plugin al formato { nome, guidId }, anche quando arrivano come semplici nomi. */
+function normalizePluginRefs(refs: unknown[]): PluginPayloadRef[] {
+  return refs.map((raw) => {
+    const ref = (raw && typeof raw === "object" ? raw : {}) as PluginPayloadRef;
+    const foto = Array.isArray(ref.foto)
+      ? ref.foto.map((photo) => typeof photo === "string" ? { nome: photo } : {
+        nome: String(photo?.nome ?? ""),
+        ...(photo?.guidId ? { guidId: String(photo.guidId) } : {})
+      })
+      : [];
+    return { ...ref, foto };
+  });
 }
 
-
-interface SyncJsonPluginRef {
-  groupId?: number | string;
-  dna?: string;
-  compiledFields?: CompiledField[];
-  dataFields?: DataFields;
-  foto: Array<string>
-  pag?: number;
-  x?: number;
-  y?: number;
-  w?: number;
-  h?: number;
-  wPage?: number;
-  hPage?: number;
-  percIngombro?: number;
-  aspectRatio?: number;
-}
 export class ExternalApiController extends BaseController {
   private externalApiService: IExternalApiService;
   private statisticheApiService: StatisticheApiService;
@@ -145,7 +124,7 @@ export class ExternalApiController extends BaseController {
       authMiddleware,
       permissionGuard('api.gestisci_plugin'),
       (req, res, next) => {
-        uploadOlimpoImages.single('file')(req, res, (err) => {
+        (uploadOlimpoImages.single('file') as any)(req, res, (err: any) => {
           if (err instanceof multer.MulterError) {
             return res.status(400).json({ success: false, error: err.code, message: err.message });
           } else if (err) {
@@ -159,7 +138,7 @@ export class ExternalApiController extends BaseController {
     this.router.post("/sync_json_plugin",
       authMiddleware,
       (req, res, next) => {
-        uploadMaterialiPubblicazioni.single('file')(req, res, (err) => {
+        (uploadMaterialiPubblicazioni.single('file') as any)(req, res, (err: any) => {
           if (err instanceof multer.MulterError) {
             return res.status(400).json({ success: false, error: err.code, message: err.message });
           } else if (err) {
@@ -170,6 +149,10 @@ export class ExternalApiController extends BaseController {
       },
       this.sync_json_plugin.bind(this)
     )
+    this.router.post("/plugin/punti-vendita",
+      authMiddleware,
+      this.getPluginPuntiVendita.bind(this)
+    );
     // Route per gestione interazione plugin
 
   }
@@ -177,9 +160,9 @@ export class ExternalApiController extends BaseController {
 
 
   private async sync_json_plugin(req: Request, res: Response): Promise<void> {
+    let payload: SyncJsonPluginPayload | undefined;
     try {
       let payloadString = req.body.payload;
-      let payload: SyncJsonPluginPayload
       try {
         payload = JSON.parse(payloadString);
       } catch {
@@ -190,6 +173,7 @@ export class ExternalApiController extends BaseController {
       const file = req.file;
       const kitRuntimeService = container.get<IKitRuntimeService>(TYPES.KitRuntimeService);
       const referenzeService = container.get<IReferenzeService>(TYPES.ReferenzeService)
+      const pvService = container.get<IPuntoVenditaService>(TYPES.PuntoVenditaService);
       //#region NOTE: controllo dei campi
       if (!ServerUtils.checkIfValueIsValid(file)) {
         throw new BadRequestError({
@@ -236,6 +220,11 @@ export class ExternalApiController extends BaseController {
           message: "Non esiste nessuna kit runtime con questo id"
         })
       }
+      if (kitRuntime.guidArea !== payload.areaId || kitRuntime.guidCanale !== payload.canaleId) {
+        throw new BadRequestError({
+          message: `Il kit ${payload.kitGuidId} appartiene ad area/canale ${kitRuntime.guidArea}/${kitRuntime.guidCanale}, non a ${payload.areaId}/${payload.canaleId}`
+        })
+      }
       const tipoExportVOL = await container.get<ITipoExportService>(TYPES.TipoExportService).getTipoExportByCodice(EXPORT_DI_SISTEMA.VOL)
       if (!ServerUtils.checkIfValueIsValid(tipoExportVOL)) {
         throw new BadRequestError({
@@ -243,8 +232,15 @@ export class ExternalApiController extends BaseController {
         })
       }
       //#endregion
+      // Ogni GDO ha il suo storico (CONAD CNO: DB1): sapere come recuperarlo e compito della sua agenzia lib.
+      const storico = container.get<IAgenziaLib>(TYPES.AgenziaLib).storicoVolantino;
+      if (!storico) {
+        throw new BadRequestError({
+          message: "L'import del volantino da storico non e disponibile per questo cliente"
+        })
+      }
       /*
-        prima di passare il payload al DB1 aggiungiamo la chiave
+        prima di passare il payload allo storico aggiungiamo la chiave
         promoContext prendendo il dato dalla promo e ripulendolo del dato non necessario
       */
       const promoContext = promo.context.map(c => {
@@ -258,13 +254,56 @@ export class ExternalApiController extends BaseController {
         promoContext
       }
 
-      //NOTE ora dobbiamo mandare al DB1 questo payload per avere indietro il dato migliorato
-      const resultDB1 = await ServerUtils.sendToFICOApi<SyncJsonPluginPayload>(
-        req,
-        config.DBUNO_URL + "/UploadVolStorico.ashx",
-        "POST",
-        payload
-      )
+      // Conferme e decisioni sono roba nostra: lo storico riceve il payload senza.
+      const { confermaFantasmi, fantasmi: fantasmiDecisi, lasciapassareOrfanelli, ...payloadStorico } = payload;
+      const pluginRefs = normalizePluginRefs(payloadStorico.refs);
+      const confronto = await storico.confronta(req, { ...payloadStorico, refs: pluginRefs });
+      // Verso il plugin restano i nomi di sempre: orfanelli e fantasmi.
+      const orfanelli = confronto.nonImpaginate;
+      const fantasmi = confronto.fuoriListino;
+      /*
+        I due casi non pesano uguale.
+        Orfanelli: sono in lista ma non nell'export, cioe box non raggruppati nel volantino. Il
+        dato esiste ed e validato: si sistema l'impaginato quando si vuole e intanto, col
+        lasciapassare dell'operatore, si salva lo stesso.
+        Fantasmi: box del volantino che in lista non ci sono, quindi nessuno li ha validati. Di
+        ognuno serve una decisione: o lo si compila a mano, o lo si ignora di proposito.
+      */
+      if (orfanelli.length > 0 && lasciapassareOrfanelli !== true) {
+        res.status(200).json({
+          success: false,
+          esito: false,
+          error: `Sono presenti ${orfanelli.length} referenze non raggruppate (orfanelli): serve il lasciapassare dell'operatore`,
+          orfanelli,
+          fantasmi
+        });
+        return;
+      }
+      const decisi: FantasmaDeciso[] = Array.isArray(fantasmiDecisi) ? fantasmiDecisi : [];
+      if (fantasmi.length > 0 && confermaFantasmi !== true) {
+        res.status(200).json({
+          success: false,
+          esito: false,
+          error: `Sono presenti ${fantasmi.length} box fuori lista (fantasmi): serve la conferma dell'operatore`,
+          orfanelli,
+          fantasmi
+        });
+        return;
+      }
+      // Riprovare la conferma con i dati a meta e l'errore piu facile da fare:
+      // si dice quale box e quale campo, non un generico "dati incompleti".
+      const incompleti = fantasmi.length > 0 ? fantasmiIncompleti(fantasmi, decisi, storico.campiObbligatoriFuoriListino) : [];
+      if (incompleti.length > 0) {
+        res.status(200).json({
+          success: false,
+          esito: false,
+          error: `${incompleti.length} segnalazioni sui fantasmi: compila i campi mancanti o ignora il box`,
+          orfanelli,
+          fantasmi,
+          fantasmiIncompleti: incompleti
+        });
+        return;
+      }
       /*
         da questo punto dobbiamo prendere e caricare il file
         per tipo di export VOL per prendere poi le referenze
@@ -292,7 +331,8 @@ export class ExternalApiController extends BaseController {
         content: {
           id: string,
           file_name: string,
-          json_meta: string
+          json_meta: string,
+          pagine?: number | string
         }
       }>(
         req,
@@ -308,7 +348,18 @@ export class ExternalApiController extends BaseController {
         })
       }
 
-      let files = await kitRuntimeService.getFilesRuntimeByIdKitRuntime(resultDB1.data.kitGuidId);
+      const payloadPageCount = Number(payload.pageCount);
+      const olympusPageCount = Number(resultUpload.data.content.pagine);
+      if (Number.isFinite(payloadPageCount) && payloadPageCount > 1 && Number.isFinite(olympusPageCount) && olympusPageCount <= 1) {
+        throw new BadRequestError({
+          message: `Il PDF caricato su OLYMPUS contiene ${olympusPageCount} pagina, ma il payload ne dichiara ${payloadPageCount}`
+        })
+      }
+      const resolvedPageCount = Number.isFinite(olympusPageCount) && olympusPageCount > 0
+        ? olympusPageCount
+        : (Number.isFinite(payloadPageCount) && payloadPageCount > 0 ? payloadPageCount : undefined);
+
+      let files = await kitRuntimeService.getFilesRuntimeByIdKitRuntime(payload.kitGuidId);
       if (!files) {
         throw new BadRequestError({
           message: "Kit non trovato"
@@ -319,8 +370,8 @@ export class ExternalApiController extends BaseController {
       const ricercaPerId = files.find(f => f.id_olimpo_cloud === resultUpload.data.content.id);
 
       let newFile: FileItemKit = {
-        id: '',
-        id_runtime: '',
+        id: resultUpload.data.content.id,
+        id_runtime: payload.kitGuidId,
         direttive: '',
         nome: '',
         nome_originale: '',
@@ -328,14 +379,14 @@ export class ExternalApiController extends BaseController {
         meta_olimpo_cloud: undefined,
         tipo_export: '',
         tipo_export_codice: '',
-        pages: resultDB1.data.pageCount
+        pages: resolvedPageCount
       };
 
       let isNewFile = false;
       if (!fileCercatoPerNome && !ricercaPerId) {
         newFile = {
           id: uuidv4(),
-          id_runtime: resultDB1.data.kitGuidId,
+          id_runtime: payload.kitGuidId,
           id_olimpo_cloud: resultUpload.data.content.id,
           nome_originale: resultUpload.data.content.file_name,
           nome: fileResolve,
@@ -343,7 +394,8 @@ export class ExternalApiController extends BaseController {
           direttive: "",
           isOptional: false,
           meta_olimpo_cloud: resultUpload.data.content.json_meta,
-          tipo_export_codice: tipoExportVOL.codice
+          tipo_export_codice: tipoExportVOL.codice,
+          pages: resolvedPageCount
         };
         isNewFile = true;
         files.push(newFile);
@@ -351,16 +403,19 @@ export class ExternalApiController extends BaseController {
         const index = files.indexOf(fileCercatoPerNome);
         files[index].id_olimpo_cloud = resultUpload.data.content.id;
         files[index].meta_olimpo_cloud = resultUpload.data.content.json_meta;
+        files[index].pages = resolvedPageCount;
         newFile = files[index];
       } else if (!fileCercatoPerNome && ricercaPerId) {
         const index = files.indexOf(ricercaPerId);
         files[index].nome = fileResolve;
         files[index].meta_olimpo_cloud = resultUpload.data.content.json_meta;
+        files[index].pages = resolvedPageCount;
         newFile = files[index];
       } else if (fileCercatoPerNome && ricercaPerId) {
         const index = files.indexOf(fileCercatoPerNome);
         files[index].id_olimpo_cloud = resultUpload.data.content.id;
         files[index].meta_olimpo_cloud = resultUpload.data.content.json_meta;
+        files[index].pages = resolvedPageCount;
         newFile = files[index];
       }
 
@@ -372,11 +427,11 @@ export class ExternalApiController extends BaseController {
         await kitRuntimeService.updateSingleFileRuntime(newFile);
       }
 
-      const existLog = await kitRuntimeService.getFileRunTimeLogByNomeFileEIdKitRuntime(fileResolve, resultDB1.data.kitGuidId);
+      const existLog = await kitRuntimeService.getFileRunTimeLogByNomeFileEIdKitRuntime(fileResolve, payload.kitGuidId);
       if (ServerUtils.checkIfValueIsValid(existLog)) {
         const log: FileItemKitLog = {
           id: uuidv4(),
-          guid_kit_runtime: resultDB1.data.kitGuidId,
+          guid_kit_runtime: payload.kitGuidId,
           nome_file: fileResolve,
           data_registrazione: new Date(),
           versione: existLog?.versione ? existLog.versione + 1 : 1,
@@ -387,7 +442,7 @@ export class ExternalApiController extends BaseController {
       } else {
         const newLog: FileItemKitLog = {
           id: uuidv4(),
-          guid_kit_runtime: resultDB1.data.kitGuidId,
+          guid_kit_runtime: payload.kitGuidId,
           nome_file: fileResolve,
           data_registrazione: new Date(),
           versione: existLog?.versione ? existLog.versione + 1 : 1,
@@ -401,9 +456,9 @@ export class ExternalApiController extends BaseController {
         }
         await kitRuntimeService.insertNewFileRuntimeLog(newLog)
       }
+
       //adesso salviamo i dati nuovi delle referenze
-      const refsDaMappare = Array.isArray((resultDB1.data as any)?.refs) ? (resultDB1.data as any).refs as SyncJsonPluginRef[] : [];
-      const datoReferenze: ReferenzeIstanta[] = refsDaMappare.map((ref) => {
+      const datoReferenze: ReferenzeIstanta[] = confronto.lista.map((ref) => {
         const compiledFields = (Array.isArray(ref.compiledFields) ? ref.compiledFields : []).map((field) => ({
           labelName: field.labelName,
           paragraphName: field.paragraphName,
@@ -419,7 +474,7 @@ export class ExternalApiController extends BaseController {
         return {
           _id: uuidv4(),
           id: uuidv4(),
-          guidIdKitRuntime: resultDB1.data.kitGuidId,
+          guidIdKitRuntime: payload.kitGuidId,
           idPromo: payload.promoId,
           contextPromo: payload.promoContext ?? [],
           contextTracciato: [],
@@ -429,9 +484,9 @@ export class ExternalApiController extends BaseController {
           foto: ref.foto,
           fotoGruppo: '',
           meccanica: '',
-          codiceBox: "",
+          codiceBox: String(ref.groupId ?? ref.dataFields?.["Referenza.Codice"] ?? ref.dna ?? uuidv4()),
           fotoExtra: [],
-          groupElements: [],
+          groupElements: Array.isArray(ref.groupElements) ? ref.groupElements : [],
           dataFields: ref.dataFields,
           pag: ref.pag,
           x: ref.x,
@@ -446,18 +501,165 @@ export class ExternalApiController extends BaseController {
           updatedAt: new Date()
         };
       });
-      await referenzeService.bulkCreateReferenze(datoReferenze)
+      /*
+        I fantasmi accettati diventano referenze come le altre: stessa lavorazione,
+        stesso kit. Si distinguono solo per origine "plugin", perche il dato lo ha
+        scritto una persona e lo storico non ne sa niente. Gli ignorati non lasciano traccia:
+        l'operatore ha deciso che quel box resta nel volantino senza referenza.
+      */
+      const fantasmiPerBox = indicizzaPerBox(fantasmi);
+      const referenzeFantasma: ReferenzeIstanta[] = decisi
+        .filter((fantasma) => !fantasma.ignorato)
+        .flatMap((fantasma) => {
+          const box = fantasmiPerBox.get(chiaveBox(fantasma));
+          return (fantasma.referenze ?? []).map((referenza, indice) => ({
+            _id: uuidv4(),
+            id: uuidv4(),
+            guidIdKitRuntime: payload.kitGuidId,
+            idPromo: payload.promoId,
+            contextPromo: payload.promoContext ?? [],
+            contextTracciato: [],
+            visibile: true,
+            compiledFields: [],
+            deletedFields: [],
+            foto: [],
+            fotoGruppo: '',
+            ...storico.referenzaFuoriListino(referenza),
+            codiceBox: String(fantasma.groupId ?? (storico.referenzaPerReport(referenza).codice || uuidv4())),
+            fotoExtra: [],
+            groupElements: [],
+            pag: fantasma.pag ?? box?.pag,
+            // La posizione e del box, non della referenza: la porta solo la prima, cosi
+            // in mappa il box compare una volta e l'ingombro della pagina non si moltiplica.
+            ...(indice === 0 && box ? {
+              x: box.x,
+              y: box.y,
+              w: box.w,
+              h: box.h,
+              wPage: box.wPage,
+              hPage: box.hPage,
+              percIngombro: box.percIngombro,
+              aspectRatio: box.aspectRatio
+            } : {}),
+            createdAt: new Date(),
+            updatedAt: new Date()
+          }));
+        });
 
+      // Un sync descrive lo stato completo del kit: sostituisce le referenze precedenti
+      // invece di accodarle, cosi un re-sync non duplica ne lascia dati vecchi (es. guidId rotti).
+      await referenzeService.bulkEliminateReferenzeFromGuidIdKitRuntime(payload.kitGuidId);
+      await referenzeService.bulkCreateReferenze(datoReferenze.concat(referenzeFantasma))
+
+      /*
+        Da qui la lavorazione e "recuperata dallo storico": l'esito sta sul kit e le
+        sue referenze lo ereditano, senza doverle marcare una per una. Le non
+        impaginate non sono referenze (nel volantino non ci sono), quindi vivono solo
+        qui; le fuori listino si ritrovano tra le referenze del kit per codice box.
+      */
+      const esitoImport: ImportStorico = {
+        importatoIl: new Date().toISOString(),
+        nomeFile: fileResolve,
+        nonImpaginate: orfanelli,
+        lasciapassareNonImpaginate: lasciapassareOrfanelli === true,
+        fuoriListino: decisi
+          .filter((fantasma) => !fantasma.ignorato)
+          .flatMap((fantasma) => (fantasma.referenze ?? []).map((referenza) => {
+            const { codice, descrizione } = storico.referenzaPerReport(referenza);
+            return { codiceBox: String(fantasma.groupId ?? codice), pag: fantasma.pag, codice, descrizione };
+          })),
+        fuoriListinoIgnorati: decisi.filter((fantasma) => fantasma.ignorato).length,
+        boxNelVolantino: pluginRefs.length,
+        referenzeDaListino: datoReferenze.length,
+        boxFuoriListino: reportFuoriListino(fantasmi, decisi)
+      };
+      await kitRuntimeService.salvaImportStorico(payload.kitGuidId, esitoImport)
+      // I PV del plugin sono testo: prima di qualsiasi import li risolviamo
+      // contro l'anagrafica normalizzando citta, indirizzo e telefono.
+      const puntiVendita = (payload.pvData?.gruppi ?? []).flatMap((gruppo) =>
+        gruppo.puntiVendita.map((puntoVendita) => ({
+          nome: puntoVendita.nome ?? puntoVendita.citta ?? "",
+          citta: puntoVendita.citta ?? "",
+          cap: puntoVendita.cap,
+          provincia: puntoVendita.provincia,
+          regione: puntoVendita.regione,
+          indirizzo: puntoVendita.indirizzo ?? "",
+          telefono: puntoVendita.telefono ?? "",
+          lat: puntoVendita.lat,
+          lon: puntoVendita.lon,
+        }))
+      );
+      const pvLoad = puntiVendita.length > 0 && payload.areaId && payload.canaleId
+        ? await pvService.loadPuntiVenditaForPlugin(
+          req.session.id_gdo as string | undefined,
+          payload.areaId as string,
+          payload.canaleId as string,
+          puntiVendita
+        )
+        : { matched: [], created: [], updated: [], missing: [], possibleDuplicates: [], duplicates: [] };
       res.status(200).json({
         success: true,
-        message: "Payload valido"
+        message: "Payload valido",
+        fantasmi,
+        /* Cosa e stato scritto davvero, cosi il plugin puo dirlo nel riepilogo. */
+        referenzeCreate: datoReferenze.length,
+        referenzeFantasmaCreate: referenzeFantasma.length,
+        fantasmiIgnorati: decisi.filter((fantasma) => fantasma.ignorato).length,
+        orfanelliIgnorati: orfanelli.length,
+        pvMatched: pvLoad.matched.length,
+        pvCreated: pvLoad.created.length,
+        pvUpdated: pvLoad.updated.length,
+        pvMissing: pvLoad.missing.length,
+        pvPossibleDuplicates: pvLoad.possibleDuplicates,
+        pvDuplicates: pvLoad.duplicates
       });
     } catch (e: any) {
+      log.error('Errore durante la sincronizzazione del plugin (sync_json_plugin)', e, {
+        path: req.path,
+        method: req.method,
+        userId: req.session?.id_utente,
+        promoId: payload?.promoId,
+      })
       this.handleError(res, e)
     } finally {
       if (req.file?.path && fs.existsSync(req.file.path)) {
         await fs.promises.unlink(req.file.path)
       }
+    }
+  }
+
+  private async getPluginPuntiVendita(req: Request, res: Response): Promise<void> {
+    try {
+      const { areaId, canaleId, puntiVendita } = req.body as {
+        areaId?: string;
+        canaleId?: string;
+        puntiVendita?: Array<{
+          nome?: string;
+          citta?: string;
+          cap?: string;
+          provincia?: string;
+          regione?: string;
+          indirizzo?: string;
+          telefono?: string;
+          lat?: number;
+          lon?: number;
+        }>;
+      };
+      if (!areaId || !canaleId) {
+        res.status(400).json({ success: false, error: 'areaId e canaleId sono obbligatori' });
+        return;
+      }
+
+      const pvService = container.get<IPuntoVenditaService>(TYPES.PuntoVenditaService);
+      const result = await pvService.checkPuntiVenditaForPlugin(
+        req.session.id_gdo,
+        areaId,
+        canaleId,
+        Array.isArray(puntiVendita) ? puntiVendita : []
+      );
+      res.status(200).json({ success: true, ...result });
+    } catch (error) {
+      this.handleError(res, error);
     }
   }
 
@@ -514,12 +716,20 @@ export class ExternalApiController extends BaseController {
         formData,
       );
 
-      if (response.data.error) {
-        res.status(500).json({ success: false, error: response.data.error });
+      if (!response.data || response.data.error) {
+        res.status(500).json({
+          success: false,
+          error: response.data?.error || response.statusText || 'Errore durante il caricamento della foto su OLYMPUS',
+        });
         return;
       }
 
-      res.json({ success: true, data: response.data.record });
+      const record = response.data.record;
+      res.json({
+        success: true,
+        data: record,
+        guidId: record?.Id,
+      });
     } catch (error: any) {
       log.error('Errore in sync_foto_plugin', { error: error.message });
       this.handleError(res, error);

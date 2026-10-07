@@ -1,6 +1,7 @@
 import { Op } from 'sequelize';
 import { DatabaseError, NotFoundError } from '../../../lib/errors';
 import { CombinazioneCanaleAreaAttributes, PuntiVenditaAttributes } from '../../../lib/types';
+import { sequelize } from '../db/SequelizeConnector';
 import { AreaResponseDTO, CanaleResponseDTO, CreatePuntoVenditaDTO, PuntoVenditaResponseDTO } from '../dto';
 import { DisplayContextResponseDTO } from '../dto/DisplayContextDTO';
 import {
@@ -15,6 +16,8 @@ import { Area, Canale, CombinazioneCanaleArea, PuntoVendita, PuntoVenditaUtenti 
 import { DisplayContextPuntoVendita } from '../models/punto_vendita/display_context_punto_vendita';
 import { DispositivoMetadata, DispositivoPuntoVendita } from '../models/punto_vendita/dispositivi_punto_vendita';
 import type { IPuntoVenditaRepository } from '../repositories/PuntoVenditaRepository';
+import { geocodifica } from '../utils/geocodifica';
+import { buildPuntoVenditaKey, isLikelySamePuntoVendita, PuntoVenditaTextInput, stessaPosizione } from '../utils/puntoVenditaNormalization';
 
 export class PuntoVenditaService implements IPuntoVenditaService {
 
@@ -376,13 +379,13 @@ export class PuntoVenditaService implements IPuntoVenditaService {
         citta_puntivendita: data.citta ?? "",
         cap_puntivendita: data.cap ?? "",
         indirizzo_puntivendita: data.indirizzo ?? "",
-        provincia_puntivendita: data.provincia ?? "",
+        provincia_puntivendita: data.provincia?.trim() || undefined,
         regione_puntivendita: data.regione ?? "",
-        telefono_puntivendita: data.telefono ?? "",
+        telefono_puntivendita: data.telefono?.trim() || undefined,
         id_combinazione_canale_area_puntivendita: data.id_combinazione_canale_area ?? "",
         id_gdo_puntivendita: data.id_gdo ?? "",
-        lat_puntivendita: (data as any).coordinate?.lat ?? null,
-        lon_puntivendita: (data as any).coordinate?.lon ?? null,
+        lat_puntivendita: data.lat ?? (data as any).coordinate?.lat ?? null,
+        lon_puntivendita: data.lon ?? (data as any).coordinate?.lon ?? null,
         createdat: new Date(),
       }
       const created = await this.puntoVenditaRepository.create(dataToCreate);
@@ -620,6 +623,174 @@ export class PuntoVenditaService implements IPuntoVenditaService {
         entity: 'PuntoVendita',
       });
     }
+  }
+
+  async getPuntiVenditaForPlugin(idGdo: string | undefined, idArea: string, idCanale: string): Promise<PuntoVenditaResponseDTO[]> {
+    const combinazione = await CombinazioneCanaleArea.findOne({
+      where: {
+        id_area_combinazione_canale_area: idArea,
+        id_canale_combinazione_canale_area: idCanale,
+        ...(idGdo ? { id_gdo_combinazione_canale_area: idGdo } : {}),
+      },
+    });
+    if (!combinazione) return [];
+
+    const puntiVendita = await this.getPuntiVenditaByGDOId(combinazione.id_gdo_combinazione_canale_area);
+    return puntiVendita.filter(puntoVendita =>
+      puntoVendita.id_combinazione_canale_area === combinazione.id_combinazione_canale_area
+    );
+  }
+
+  async checkPuntiVenditaForPlugin(idGdo: string | undefined, idArea: string, idCanale: string, items: PuntoVenditaTextInput[]) {
+    const presenti = await this.getPuntiVenditaForPlugin(idGdo, idArea, idCanale);
+    const byKey = new Map<string, PuntoVenditaResponseDTO[]>();
+    for (const puntoVendita of presenti) {
+      const key = buildPuntoVenditaKey(puntoVendita).value;
+      byKey.set(key, [...(byKey.get(key) ?? []), puntoVendita]);
+    }
+
+    const presentiResult: Array<{ input: PuntoVenditaTextInput; puntoVendita: PuntoVenditaResponseDTO }> = [];
+    const mancanti: PuntoVenditaTextInput[] = [];
+    const possibiliDuplicati: Array<{ input: PuntoVenditaTextInput; puntoVendita: PuntoVenditaResponseDTO }> = [];
+    const results = items.map(input => {
+      const candidates = byKey.get(buildPuntoVenditaKey(input).value) ?? [];
+      if (candidates.length > 0) {
+        const result = { input, puntoVendita: candidates[0] };
+        presentiResult.push(result);
+        return { ...result, stato: 'present' as const };
+      }
+
+      const possible = presenti.find(puntoVendita => isLikelySamePuntoVendita(input, puntoVendita));
+      if (possible) {
+        const result = { input, puntoVendita: possible };
+        possibiliDuplicati.push(result);
+        return { ...result, stato: 'possibleDuplicate' as const };
+      }
+
+      mancanti.push(input);
+      return { input, stato: 'missing' as const };
+    });
+
+    return { results, presenti: presentiResult, mancanti, possibiliDuplicati };
+  }
+
+  async loadPuntiVenditaForPlugin(idGdo: string | undefined, idArea: string, idCanale: string, items: PuntoVenditaTextInput[]) {
+    const combinazione = await CombinazioneCanaleArea.findOne({
+      where: {
+        id_area_combinazione_canale_area: idArea,
+        id_canale_combinazione_canale_area: idCanale,
+        ...(idGdo ? { id_gdo_combinazione_canale_area: idGdo } : {}),
+      },
+    });
+    if (!combinazione) {
+      throw new NotFoundError({
+        message: `Combinazione area/canale non trovata per il punto vendita del plugin: ${idArea}/${idCanale}`,
+        entityType: 'CombinazioneCanaleArea',
+        entityId: `${idArea}/${idCanale}`,
+      });
+    }
+    const effectiveGdoId = combinazione.id_gdo_combinazione_canale_area;
+    const puntiVendita = await this.getPuntiVenditaByGDOId(effectiveGdoId);
+
+    const byKey = new Map<string, PuntoVenditaResponseDTO[]>();
+    for (const puntoVendita of puntiVendita) {
+      const key = buildPuntoVenditaKey(puntoVendita).value;
+      const values = byKey.get(key) ?? [];
+      values.push(puntoVendita);
+      byKey.set(key, values);
+    }
+
+    const matched: Array<{ input: PuntoVenditaTextInput; puntoVendita: PuntoVenditaResponseDTO }> = [];
+    const created: Array<{ input: PuntoVenditaTextInput; puntoVendita: PuntoVenditaResponseDTO }> = [];
+    const updated: Array<{ input: PuntoVenditaTextInput; puntoVendita: PuntoVenditaResponseDTO }> = [];
+    const missing: PuntoVenditaTextInput[] = [];
+    const possibleDuplicates: Array<{ input: PuntoVenditaTextInput; puntoVendita: PuntoVenditaResponseDTO }> = [];
+    const duplicateKeys = new Map<string, string[]>();
+    for (const input of items) {
+      const key = buildPuntoVenditaKey(input).value;
+      const candidates = byKey.get(key) ?? [];
+      if (candidates.length === 0) {
+        const possible = puntiVendita.find((puntoVendita) => isLikelySamePuntoVendita(input, puntoVendita));
+        if (possible) {
+          possibleDuplicates.push({ input, puntoVendita: possible });
+          const puntoVendita = await this.updatePluginPuntoVendita(possible, input);
+          if (puntoVendita) updated.push({ input, puntoVendita });
+        } else {
+          const coordinate = await this.resolvePluginCoordinates(input);
+          const puntoVendita = await this.createPuntoVendita({
+            nome: input.nome ?? input.citta ?? '',
+            citta: input.citta ?? '',
+            cap: input.cap?.trim() ?? '',
+            provincia: input.provincia,
+            regione: input.regione,
+            indirizzo: input.indirizzo ?? '',
+            telefono: input.telefono ?? '',
+            id_gdo: effectiveGdoId,
+            id_combinazione_canale_area: combinazione.id_combinazione_canale_area,
+            ...coordinate,
+          });
+          created.push({ input, puntoVendita });
+          byKey.set(key, [puntoVendita]);
+        }
+      } else {
+        const puntoVendita = await this.updatePluginPuntoVendita(candidates[0], input);
+        matched.push({ input, puntoVendita: puntoVendita ?? candidates[0] });
+        if (puntoVendita) updated.push({ input, puntoVendita });
+        if (candidates.length > 1) duplicateKeys.set(key, candidates.map((candidate) => candidate.id));
+      }
+    }
+
+    if (created.length > 0 || updated.length > 0) {
+      try {
+        await sequelize.query('SELECT refresh_mv_combinazioni()');
+      } catch (error) {
+        log.warn('Punti vendita importati, ma aggiornamento della view combinazioni non riuscito', {
+          error: error instanceof Error ? error.message : String(error),
+          created: created.length,
+        });
+      }
+    }
+
+    return {
+      matched,
+      created,
+      updated,
+      missing,
+      possibleDuplicates,
+      duplicates: [...duplicateKeys].map(([key, puntoVenditaIds]) => ({ key, puntoVenditaIds })),
+    };
+  }
+
+  private async updatePluginPuntoVendita(
+    puntoVendita: PuntoVenditaResponseDTO,
+    input: PuntoVenditaTextInput,
+  ): Promise<PuntoVenditaResponseDTO | null> {
+    const coordinate = await this.resolvePluginCoordinates(input, puntoVendita);
+    return this.updatePuntoVendita(puntoVendita.id, {
+      ...(input.nome?.trim() ? { nome: input.nome.trim() } : {}),
+      ...(input.citta?.trim() ? { citta: input.citta.trim() } : {}),
+      ...(input.cap?.trim() ? { cap: input.cap.trim() } : {}),
+      ...(input.provincia?.trim() ? { provincia: input.provincia.trim() } : {}),
+      ...(input.regione?.trim() ? { regione: input.regione.trim() } : {}),
+      ...(input.indirizzo?.trim() ? { indirizzo: input.indirizzo.trim() } : {}),
+      ...(input.telefono?.trim() ? { telefono: input.telefono.trim() } : {}),
+      ...coordinate,
+    });
+  }
+
+  private async resolvePluginCoordinates(
+    input: PuntoVenditaTextInput,
+    esistente?: PuntoVenditaResponseDTO,
+  ): Promise<{ lat?: number; lon?: number }> {
+    if (Number.isFinite(input.lat) && Number.isFinite(input.lon)) {
+      return { lat: input.lat, lon: input.lon };
+    }
+    if (!input.citta && !input.indirizzo) return {};
+    // Ogni sync rimanda gli stessi PV: se in anagrafica hanno gia le coordinate e il
+    // plugin non ne cambia citta o indirizzo, non si torna a chiederle a Nominatim.
+    if (esistente?.has_coordinate && stessaPosizione(input, esistente)) return {};
+
+    return geocodifica([input.indirizzo, input.citta].filter(Boolean).join(', '));
   }
 
   async getAllPuntiVenditaPaginated(params: {

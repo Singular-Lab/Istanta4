@@ -1,5 +1,5 @@
 import { Request } from 'express';
-import { DESIGN_KIT_MONGO, FileItemKit, FileItemKitLog, RUNTIME_KIT_MONGO } from '../../../lib/types';
+import { DESIGN_KIT_MONGO, FileItemKit, FileItemKitLog, ImportStorico, RUNTIME_KIT_MONGO } from '../../../lib/types';
 
 export interface IKitRuntimeService {
   /** Retrieval */
@@ -75,5 +75,7 @@ export interface IKitRuntimeService {
   updateSingleFileRuntime(data: FileItemKit): Promise<any>;
   updateSingleFileRuntimeLog(data: FileItemKitLog): Promise<any>;
   getKitManualeDaId(idKit: string): Promise<any>;
+  /** Marca la lavorazione come recuperata dallo storico e ne registra l'esito. */
+  salvaImportStorico(idKitRuntime: string, esito: ImportStorico): Promise<any>;
   clearAllFilesKitRuntime(idKitRuntime: string, guidIdExport: string): Promise<boolean>
 }

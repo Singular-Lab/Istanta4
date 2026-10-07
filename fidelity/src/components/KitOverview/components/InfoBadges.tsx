@@ -1,3 +1,4 @@
+import dayjs from "dayjs";
 import { TIPO_KIT_DESIGN, TIPO_LAVORAZIONE } from "../../../../lib/enums";
 import { FC } from "react";
 import { InfoBadgesProps } from "../types";
@@ -10,7 +11,8 @@ const InfoBadges: FC<InfoBadgesProps> = ({
   nomeArea,
   nomeCanale,
   tipoKit,
-  tipoLavorazione
+  tipoLavorazione,
+  origineStorico
 }) => {
   // Formatta il tipo kit per la visualizzazione
   const formatTipoKit = (tipo?: TIPO_KIT_DESIGN | string) => {
@@ -33,6 +35,15 @@ const InfoBadges: FC<InfoBadgesProps> = ({
 
   return (
     <div className="flex flex-wrap gap-3">
+      {/* Il kit viene dallo storico: da qui lo ereditano tutte le sue referenze. */}
+      {origineStorico && (
+        <InfoBadge
+          icon="History"
+          label="Recuperato dallo storico"
+          value={dayjs(origineStorico.importatoIl).format("DD/MM/YYYY HH:mm")}
+          variant="info"
+        />
+      )}
       {nomeArea && (
         <InfoBadge
           icon="MapPin"

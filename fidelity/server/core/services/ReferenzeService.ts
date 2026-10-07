@@ -27,6 +27,19 @@ import type { IPromoRepository } from '../repositories/PromoRepository';
 import { normalizePromoModel } from '../utils/PromoModelUtils';
 import { ServerUtils } from '../utils/ServerUtils';
 
+/**
+ * Il modello PG vuole `foto` come array piatto di guidId (stringhe): il plugin manda
+ * oggetti { nome, guidId } (il nome serve solo per il retry lato plugin), quindi qui
+ * si appiattisce tenendo solo i guidId gia valorizzati — quelli non ancora caricati
+ * hanno guidId vuoto e non sono referenziabili in Olimpo, si scartano.
+ */
+function appiattisciFoto(foto: ReferenzeIstanta['foto']): string[] {
+  if (!Array.isArray(foto)) return [];
+  return foto
+    .map((f: any) => (typeof f === 'string' ? f : f?.guidId))
+    .filter((guidId: unknown): guidId is string => typeof guidId === 'string' && guidId.length > 0);
+}
+
 /** Converts a ReferenzeIstanta (camelCase) to snake_case for the Referenze PG model */
 function referenzaToSnakeCase(ref: ReferenzeIstanta): any {
   return {
@@ -34,7 +47,7 @@ function referenzaToSnakeCase(ref: ReferenzeIstanta): any {
     compiled_fields: ref.compiledFields ?? (ref as any).compiled_fields,
     deleted_fields: ref.deletedFields ?? (ref as any).deleted_fields,
     data_fields: ref.dataFields ?? (ref as any).data_fields,
-    foto: ref.foto,
+    foto: appiattisciFoto(ref.foto),
     meccanica: ref.meccanica,
     codice_box: ref.codiceBox ?? (ref as any).codice_box,
     foto_extra: ref.fotoExtra ?? (ref as any).foto_extra,
@@ -163,9 +176,12 @@ export class ReferenzeService implements IReferenzeService {
 
       if (result) {
         result.foto = Array.isArray(result.foto)
-          ? result.foto.map((fotoId: string) =>
-              `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${fotoId}`
-            )
+          ? result.foto
+              .map((f: any) => typeof f === "string" ? f : f?.guidId)
+              .filter(Boolean)
+              .map((guidId: string) =>
+                `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${guidId}`
+              )
           : [];
       }
 
@@ -267,7 +283,10 @@ export class ReferenzeService implements IReferenzeService {
       const referenze = await Promise.all(
         kitRuntime.flatMap((kit) =>
           kit.webpliant.map(async (ref: any) => {
-            ref.foto = ref.foto?.map((f: string) => `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${f}&performante=true`) || [];
+            ref.foto = ref.foto
+              ?.map((f: any) => typeof f === "string" ? f : f?.guidId)
+              .filter(Boolean)
+              .map((guidId: string) => `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${guidId}&performante=true`) || [];
             let refGruppo = refsGruppo.find(r => r.codice_referenza === (ref as any).data_fields?.codice_referenza && r.id_area === data.idArea && r.id_canale === data.idCanale);
             if (!refGruppo) {
               refGruppo = refsGruppo.find(r => r.codice_referenza === (ref as any).data_fields?.codice_referenza && r.id_area === undefined && r.id_canale === undefined);
@@ -506,9 +525,12 @@ export class ReferenzeService implements IReferenzeService {
       referenze = referenze.map((ref) => {
         const raw = ref as any;
         const fotoTransformed = Array.isArray(raw.foto)
-          ? raw.foto.map((f: string) =>
-              `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${f}&performante=true`
-            )
+          ? raw.foto
+              .map((f: any) => typeof f === "string" ? f : f?.guidId)
+              .filter(Boolean)
+              .map((guidId: string) =>
+                `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${guidId}&performante=true`
+              )
           : [];
         const fotoExtraTransformed = Array.isArray(raw.foto_extra)
           ? raw.foto_extra.map((f: any) => ({
