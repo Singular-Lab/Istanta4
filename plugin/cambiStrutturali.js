@@ -315,8 +315,16 @@ const cambiStrutturali = {
             }
 
             case 2: { // TipoOperazione.RemoveText
+                //I20-1055: senza distinguere maiuscole e minuscole, come le condizioni. La lista
+                //scrive BENESSERE, la regola toglie "benessere": l'azione compariva ma non aveva
+                //effetto.
                 const currentValue = this._getNestedValue(record, istruzione.field) ?? "";
-                return String(currentValue).replaceAll(String(istruzione.valore ?? ""), "").trim();
+                const daTogliere = String(istruzione.valore ?? "");
+                if (daTogliere === "") {
+                    return String(currentValue).trim();
+                }
+                const testo = new RegExp(daTogliere.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+                return String(currentValue).replace(testo, "").trim();
             }
 
             default:

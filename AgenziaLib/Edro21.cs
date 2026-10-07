@@ -14082,10 +14082,25 @@ Descrizione3.EndsWith("\r\n");
                                 Campo = Campi.Distintivita,
                                 Operatore = OperatoreCondizione.NotContains,
                                 Value = "benessere"
-                            }
+                            },
+                            RegolaFuoriSezioneSceltaDiBenessere()
                         }
                     }
                 }
+            };
+        }
+
+        /// I20-1055: nella sezione SCELTE DI BENESSERE il box lo governa la sezione (I20-1053):
+        /// togliere la distintivita' non lo cambia, aggiungerla lo fa uscire normale. Forza e
+        /// Rimuovi format SDB li' non si offrono. La stessa regola e' nel SourceCustomPlugin di
+        /// Edro21, che e' l'elenco che il Plugin usa davvero: queste sono la riserva.
+        private static RegolaCondizione RegolaFuoriSezioneSceltaDiBenessere()
+        {
+            return new RegolaCondizione
+            {
+                Campo = Campi.Sezione,
+                Operatore = OperatoreCondizione.NotContains,
+                Value = "scelte di benessere"
             };
         }
 
@@ -14117,7 +14132,8 @@ Descrizione3.EndsWith("\r\n");
                                 Campo = Campi.Distintivita,
                                 Operatore = OperatoreCondizione.Contains,
                                 Value = "benessere"
-                            }
+                            },
+                            RegolaFuoriSezioneSceltaDiBenessere()
                         }
                     }
                 }

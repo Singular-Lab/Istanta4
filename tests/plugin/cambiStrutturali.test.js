@@ -192,3 +192,65 @@ test('la scheda mostra la tendina solo quando serve e salva con l\'opzione impli
     assert.match(scheda, /if \(this\.opzioneAzioniStrutturali\(\) == "primario"\) \{/);
     assert.doesNotMatch(scheda, /if \(\$\("#cmbTipoSalvataggioStrutturale"\)\.val\(\) == "primario"\)/);
 });
+
+/* ---- I20-1055: Forza e Rimuovi format SDB in Edro21 ---- */
+
+//Le azioni come le riceve il Plugin: il server le serializza in camelCase.
+function inCamelCase(valore) {
+    if (Array.isArray(valore)) {
+        return valore.map(inCamelCase);
+    }
+    if (valore !== null && typeof valore === 'object') {
+        return Object.fromEntries(Object.entries(valore).map(([k, v]) => [k.charAt(0).toLowerCase() + k.slice(1), inCamelCase(v)]));
+    }
+    return valore;
+}
+
+function azioneEdro21(titolo) {
+    const percorso = path.join(__dirname, '..', '..', 'Istanta', 'wwwroot', 'external_source', 'Edro21', 'SourceCustomPlugin.json');
+    const azione = JSON.parse(fs.readFileSync(percorso, 'utf8').replace(/^﻿/, '')).cambiStrutturali.find(a => a.Titolo === titolo);
+    assert.ok(azione, titolo + ' non trovata');
+    return inCamelCase(azione);
+}
+
+function offerta(titolo, record) {
+    return cambiStrutturali._matchCambioStrutturale(record, azioneEdro21(titolo).condizione, []);
+}
+
+test('Rimuovi format SDB toglie benessere scritto in qualunque modo', () => {
+    const istruzione = azioneEdro21('Rimuovi format SDB').istruzioni[0];
+
+    //E' il caso della issue: la lista scrive BENESSERE, la regola toglie "benessere".
+    assert.strictEqual(cambiStrutturali._resolveIstruzioneValue(istruzione, { distintivita: 'BENESSERE' }), '');
+    assert.strictEqual(cambiStrutturali._resolveIstruzioneValue(istruzione, { distintivita: 'Benessere' }), '');
+    //E' l'inverso di Forza format SDB, che accoda " benessere".
+    assert.strictEqual(cambiStrutturali._resolveIstruzioneValue(istruzione, { distintivita: 'CONVENIENZA benessere' }), 'CONVENIENZA');
+    assert.strictEqual(cambiStrutturali._resolveIstruzioneValue(istruzione, { distintivita: 'CONVENIENZA' }), 'CONVENIENZA');
+});
+
+test('RemoveText tratta il valore come testo, non come espressione regolare', () => {
+    const togli = (valore, attuale) => cambiStrutturali._resolveIstruzioneValue({ operazione: 2, field: 'f', valore: valore }, { f: attuale });
+
+    assert.strictEqual(togli('a.b', 'XaXb a.b'), 'XaXb');
+    assert.strictEqual(togli('(1)', 'prezzo (1)'), 'prezzo');
+    assert.strictEqual(togli('', '  invariato '), 'invariato');
+    assert.strictEqual(togli('x', undefined), '');
+});
+
+test('nella sezione Scelte di Benessere Forza e Rimuovi format SDB non si offrono', () => {
+    for (const sezione of ['SCELTE DI BENESSERE', 'scelte di benessere', 'FOCUS SCELTE DI BENESSERE']) {
+        assert.strictEqual(offerta('Forza format SDB', { distintivita: 'CONVENIENZA', sezione: sezione }), false, sezione);
+        assert.strictEqual(offerta('Rimuovi format SDB', { distintivita: 'BENESSERE', sezione: sezione }), false, sezione);
+    }
+});
+
+test('fuori dalla sezione Scelte di Benessere le due azioni restano come prima', () => {
+    for (const sezione of ['TANTE ALTRE OFFERTE', 'BENESSERE', '', undefined]) {
+        const conSezione = (distintivita) => sezione === undefined ? { distintivita: distintivita } : { distintivita: distintivita, sezione: sezione };
+
+        assert.strictEqual(offerta('Forza format SDB', conSezione('CONVENIENZA')), true, String(sezione));
+        assert.strictEqual(offerta('Rimuovi format SDB', conSezione('CONVENIENZA')), false, String(sezione));
+        assert.strictEqual(offerta('Forza format SDB', conSezione('BENESSERE')), false, String(sezione));
+        assert.strictEqual(offerta('Rimuovi format SDB', conSezione('BENESSERE')), true, String(sezione));
+    }
+});
