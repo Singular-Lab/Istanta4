@@ -169,8 +169,8 @@ public class VolantiniController : Controller
                     ? (int)Math.Ceiling((v.DataScadenzaBlocco!.Value - adesso).TotalMinutes)
                     : null,
                 Miniatura = correnti.Count == 0 ? "" :
-                    "/volantini/" + Uri.EscapeDataString(v.Classificazione) + "/" +
-                    Uri.EscapeDataString(v.Titolo) + $"/thumbs/pag{correnti[0].Numero}_{versione}.jpg"
+                    Indirizzi.Con(HttpContext, "/volantini/" + Uri.EscapeDataString(v.Classificazione) + "/" +
+                    Uri.EscapeDataString(v.Titolo) + $"/thumbs/pag{correnti[0].Numero}_{versione}.jpg")
             };
 
             pdfs.Add((v.Classificazione, v.DataScadenza, v.DataValiditaInizio, v.DataValiditaFine,
@@ -274,8 +274,8 @@ public class VolantiniController : Controller
             .ToListAsync();
 
         // la stessa radice che usa il Dettaglio per le immagini delle pagine
-        string radice = "/volantini/" + Uri.EscapeDataString(vol.Classificazione)
-                        + "/" + Uri.EscapeDataString(vol.Titolo) + "/";
+        string radice = Indirizzi.Con(HttpContext, "/volantini/" + Uri.EscapeDataString(vol.Classificazione)
+                        + "/" + Uri.EscapeDataString(vol.Titolo) + "/");
         PaginaAffiancata Pagina(short n) =>
             new() { Numero = n, Url = radice + $"pag{n}_v{versione}.jpg" };
 
@@ -339,7 +339,7 @@ public class VolantiniController : Controller
             Scadenza = vol.DataScadenza,
             // Miniature lette dal server (FotoController): prima Olimpo:ThumbUrl non era configurato
             // e le foto della scheda non si vedevano.
-            UrlFoto = config["Olimpo:ThumbUrl"] is { Length: > 0 } thumb ? thumb : "/Foto/Miniatura"
+            UrlFoto = config["Olimpo:ThumbUrl"] is { Length: > 0 } thumb ? thumb : Indirizzi.Con(HttpContext, "/Foto/Miniatura")
         };
 
         var pagine = await ctx.VolantiniPagines
@@ -366,8 +366,8 @@ public class VolantiniController : Controller
                               Autore = u != null ? u.Nome + " " + u.Cognome : "—"
                           }).ToListAsync();
 
-        string radice = "/volantini/" + Uri.EscapeDataString(vol.Classificazione)
-                        + "/" + Uri.EscapeDataString(vol.Titolo) + "/";
+        string radice = Indirizzi.Con(HttpContext, "/volantini/" + Uri.EscapeDataString(vol.Classificazione)
+                        + "/" + Uri.EscapeDataString(vol.Titolo) + "/");
 
         foreach (var p in pagine)
         {
@@ -516,7 +516,7 @@ public class VolantiniController : Controller
                                                   short pagina = 0)
     {
         if (string.IsNullOrWhiteSpace(descrizione))
-            return Redirect($"/Volantini/Dettaglio/{idVolantino}?pag={pagina}");
+            return LocalRedirect(Url.Content($"~/Volantini/Dettaglio/{idVolantino}?pag={pagina}"));
 
         var elemento = await ctx.VolantiniPagineElementis.FirstOrDefaultAsync(e => e.Id == idElemento);
         if (elemento == null) return NotFound();
@@ -535,6 +535,6 @@ public class VolantiniController : Controller
         });
 
         await ctx.SaveChangesAsync();
-        return Redirect($"/Volantini/Dettaglio/{idVolantino}?pag={pagina}&box={idElemento}");
+        return LocalRedirect(Url.Content($"~/Volantini/Dettaglio/{idVolantino}?pag={pagina}&box={idElemento}"));
     }
 }

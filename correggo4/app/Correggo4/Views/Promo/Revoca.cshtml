@@ -45,7 +45,7 @@ th{color:var(--ink-3);font-weight:600;font-size:12px}
 <body>
 <header class="hdr">
   <div class="hdr-in">
-    <a class="brand" href="/Volantini"><span class="co">Co</span><span><b>Correggo</b><small>Gestisci promo</small></span></a>
+    <a class="brand" href="~/Volantini"><span class="co">Co</span><span><b>Correggo</b><small>Gestisci promo</small></span></a>
     <div class="sp"></div>
     <span style="color:var(--ink-2);font-weight:600">@nome</span>
   </div>
@@ -103,13 +103,13 @@ th{color:var(--ink-3);font-weight:600;font-size:12px}
     }
 
     <div class="bottoni">
-      <form method="post" action="/Promo/Revoca/@Model.IdVolantino">
+      <form method="post" action="@Url.Content($"~/Promo/Revoca/{Model.IdVolantino}")">
         @Html.AntiForgeryToken()
         <input type="hidden" name="versione" value="@Model.Versione">
         <input type="hidden" name="promo" value="@Model.Classificazione">
         <button class="btn pericolo" type="submit">Procedi con la revoca</button>
       </form>
-      <a class="btn" href="/Promo/Gestisci?promo=@Uri.EscapeDataString(Model.Classificazione)">Annulla</a>
+      <a class="btn" href="@Url.Content("~/Promo/Gestisci?promo=" + Uri.EscapeDataString(Model.Classificazione))">Annulla</a>
     </div>
   </div>
 </main>

@@ -36,10 +36,12 @@ public sealed partial class ServizioPropagazione
 
     private readonly Correggo4Context ctx;
     private readonly ILogger<ServizioPropagazione> log;
+    private readonly IHttpContextAccessor http;
 
-    public ServizioPropagazione(Correggo4Context ctx, ILogger<ServizioPropagazione> log)
+    public ServizioPropagazione(Correggo4Context ctx, ILogger<ServizioPropagazione> log,
+                                IHttpContextAccessor http)
     {
-        this.ctx = ctx; this.log = log;
+        this.ctx = ctx; this.log = log; this.http = http;
     }
 
     // ------------------------------------------------------------------ creazione della catena
@@ -630,8 +632,8 @@ public sealed partial class ServizioPropagazione
             Bloccato = dati.IdAutoreBlocco != null && dati.DataScadenzaBlocco != null && dati.DataScadenzaBlocco > adesso,
             GiorniAllaScadenza = (int)Math.Floor((dati.DataScadenza - adesso).TotalDays),
             // stesso indirizzo che usa l'editor per le pagine (VolantiniController.CorrezioniAsync)
-            UrlPagina = "/volantini/" + Uri.EscapeDataString(dati.Classificazione) + "/"
-                        + Uri.EscapeDataString(dati.Titolo) + $"/pag{dati.Numero}_v{dati.Versione}.jpg",
+            UrlPagina = Indirizzi.Con(http.HttpContext, "/volantini/" + Uri.EscapeDataString(dati.Classificazione) + "/"
+                        + Uri.EscapeDataString(dati.Titolo) + $"/pag{dati.Numero}_v{dati.Versione}.jpg"),
             Px = (double)dati.PosizioneX,
             Py = (double)dati.PosizioneY,
             Pw = (double)dati.BoxL,

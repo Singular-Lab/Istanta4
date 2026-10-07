@@ -356,6 +356,11 @@ a.act,a.v-thumb{text-decoration:none;color:inherit}
   .tab{padding:0 8px;font-size:14px}
 }
 </style>
+<script>
+    /* La cartella sotto cui e' pubblicato Correggo4 (http://dominio/cartella/), con la barra finale:
+       le chiamate al server e i link costruiti qui la mettono davanti ai percorsi dell'applicazione. */
+    window.C4_BASE = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Content("~/")));
+</script>
 </head>
 <body>
 
@@ -380,7 +385,7 @@ a.act,a.v-thumb{text-decoration:none;color:inherit}
 }
 <header class="hdr">
   <div class="hdr-in">
-    <a class="brand" href="/Volantini" aria-label="Correggo — home">
+    <a class="brand" href="~/Volantini" aria-label="Correggo — home">
       <span class="co">Co</span>
       <span><b>Correggo</b><small>Hub correzioni</small></span>
     </a>
@@ -395,20 +400,20 @@ a.act,a.v-thumb{text-decoration:none;color:inherit}
     }
     <div class="hdr-sp"></div>
     @* CONSULTA TUTTI I VOLANTINI (j213): per tutti, come ftp.aspx:58 e Home.aspx dell'originale *@
-    <a class="logout" href="/Storico" style="display:inline-flex;align-items:center;text-decoration:none">Consulta tutti i volantini</a>
+    <a class="logout" href="~/Storico" style="display:inline-flex;align-items:center;text-decoration:none">Consulta tutti i volantini</a>
     @if (!User.IsInRole("Agenzia"))
     {
         @* LEGENDA (j216): il manuale di Correggo in PDF. Solo Category e Marketing: l'Agenzia non corregge
            (decisione di Michele del 14/9). Il PDF lo serve /Legenda, non sta in wwwroot. *@
-        <a class="logout" href="/Legenda" target="_blank" rel="noopener" title="Legenda: il manuale di Correggo (PDF)"
+        <a class="logout" href="~/Legenda" target="_blank" rel="noopener" title="Legenda: il manuale di Correggo (PDF)"
            style="display:inline-flex;align-items:center;gap:6px;text-decoration:none">
-            <img src="/immagini-correggo/infoButton.png" alt="" style="width:18px;height:18px">LEGENDA
+            <img src="~/immagini-correggo/infoButton.png" alt="" style="width:18px;height:18px">LEGENDA
         </a>
     }
     @if (User.IsInRole("Agenzia"))
     {
         @* GESTISCI PROMO (j209): solo Agenzia, come Home.aspx:299 dell'originale *@
-        <a class="logout" href="/Promo/Gestisci" style="display:inline-flex;align-items:center;text-decoration:none;background:var(--teal-700);border-color:var(--teal-700);color:#fff">Gestisci promo</a>
+        <a class="logout" href="~/Promo/Gestisci" style="display:inline-flex;align-items:center;text-decoration:none;background:var(--teal-700);border-color:var(--teal-700);color:#fff">Gestisci promo</a>
     }
     @* j243: la campanella apre la tendina delle notifiche. Prima non faceva niente. *@
     <button class="bell" type="button" id="bell" title="Notifiche"
@@ -420,7 +425,7 @@ a.act,a.v-thumb{text-decoration:none;color:inherit}
       <div class="avatar" aria-hidden="true">@iniziali</div>
       <div class="me-t"><b>@nome</b><span><span class="role">@(Model.PuoCorreggere ? "GDO" : "Agenzia")</span>@(Model.PuoCorreggere ? "può correggere" : "sola lettura")</span></div>
     </div>
-    <form method="post" action="/Account/Logout" style="margin:0">
+    <form method="post" action="~/Account/Logout" style="margin:0">
       @Html.AntiForgeryToken()
       <button class="logout" type="submit">Esci</button>
     </form>
@@ -444,11 +449,11 @@ a.act,a.v-thumb{text-decoration:none;color:inherit}
     <div class="camps" id="camps"></div>
     @if (Model.MostraScadute)
     {
-        <a class="more" href="/Volantini">Nascondi le promo non più valide</a>
+        <a class="more" href="~/Volantini">Nascondi le promo non più valide</a>
     }
     else if (Model.PromoScadute > 0)
     {
-        <a class="more" href="/Volantini?scadute=true">Mostra anche le promo non più valide (@Model.PromoScadute)</a>
+        <a class="more" href="~/Volantini?scadute=true">Mostra anche le promo non più valide (@Model.PromoScadute)</a>
     }
   </aside>
 
@@ -636,7 +641,7 @@ const STILE_COMMENTI = `
     testo.value = ""; msg.textContent = ""; invia.disabled = false;
     velo.classList.add("on");
     testo.focus();
-    fetch("/Correzioni/Commenti/" + idVol, { credentials: "same-origin" })
+    fetch(C4_BASE + "Correzioni/Commenti/" + idVol, { credentials: "same-origin" })
       .then(r => r.json())
       .then(j => {
         if (!j.ok) { lista.innerHTML = `<div class="cvuoto">${esc(j.messaggio || "Non si e' potuto leggere i commenti.")}</div>`; return; }
@@ -656,7 +661,7 @@ const STILE_COMMENTI = `
     const t = testo.value.trim();
     if (!t || volAperto == null) return;
     invia.disabled = true; msg.textContent = "";
-    fetch("/Correzioni/Commenti/" + volAperto, {
+    fetch(C4_BASE + "Correzioni/Commenti/" + volAperto, {
       method: "POST", credentials: "same-origin",
       headers: { "Content-Type": "application/json", "RequestVerificationToken": token() },
       body: JSON.stringify({ testo: t })
@@ -678,7 +683,7 @@ const STILE_COMMENTI = `
 
   // i pallini di tutte le card, con una sola chiamata
   function conta() {
-    fetch("/Correzioni/Commenti", { credentials: "same-origin" })
+    fetch(C4_BASE + "Correzioni/Commenti", { credentials: "same-origin" })
       .then(r => r.json())
       .then(j => { if (j.ok) (j.dati.conti || []).forEach(c => pallino(c.idVol, c.quanti)); })
       .catch(() => {});
@@ -811,12 +816,12 @@ function cardVol(v){
   const editIco   = v.stato==="approvato" ? "eye" : "edit";
   return `<article class="vcard" data-id="${v.id}">
     <div class="v-body">
-      <a class="v-thumb ${v.stato==="bloccato"?"locked":""}" href="/Volantini/Dettaglio/${v.id}" title="Apri ${esc(v.titolo)}">${fly(v)}<span class="pages">${v.pagine} pag.</span></a>
+      <a class="v-thumb ${v.stato==="bloccato"?"locked":""}" href="${C4_BASE}Volantini/Dettaglio/${v.id}" title="Apri ${esc(v.titolo)}">${fly(v)}<span class="pages">${v.pagine} pag.</span></a>
       <div class="v-side">
         <div class="v-tags">${tags.join("")}</div>
         ${stato}${lock}
         <div class="v-actions">
-          <a class="act primary" href="/Volantini/Dettaglio/${v.id}">${ico(editIco)} ${editLabel}</a>
+          <a class="act primary" href="${C4_BASE}Volantini/Dettaglio/${v.id}">${ico(editIco)} ${editLabel}</a>
           <button class="act" type="button" data-commenti="${v.id}" data-titolo="${esc(v.titolo)}"
                   title="Appunti su questo volantino">${ico("chat")} Commenti <span class="badge cbadge cbadge-${v.id}" hidden></span></button>
         </div>
@@ -986,7 +991,7 @@ const STILE_NOTIFICHE = `
   }
 
   function carica(){
-    fetch("/Notifiche", { credentials:"same-origin" })
+    fetch(C4_BASE + "Notifiche", { credentials:"same-origin" })
       .then(r => r.json())
       .then(j => {
         if(!j.ok) { lista.innerHTML = `<div class="nvuoto">Non si e' potuto leggere le notifiche.</div>`; return; }
@@ -1010,7 +1015,7 @@ const STILE_NOTIFICHE = `
 
   bLette.addEventListener("click", () => {
     bLette.disabled = true;
-    fetch("/Notifiche/Lette", { method:"POST", credentials:"same-origin",
+    fetch(C4_BASE + "Notifiche/Lette", { method:"POST", credentials:"same-origin",
         headers:{ "RequestVerificationToken": token() } })
       .then(r => r.json())
       .then(j => { if(j.ok){ numerino(0); carica(); } else bLette.disabled = false; })
@@ -1052,7 +1057,7 @@ const STILE_NOTIFICHE = `
 
   /* ---------- il giro di ogni minuto ---------- */
   function giro(){
-    fetch("/Notifiche/Nuove?dopo=" + ultimoId, { credentials:"same-origin" })
+    fetch(C4_BASE + "Notifiche/Nuove?dopo=" + ultimoId, { credentials:"same-origin" })
       .then(r => r.json())
       .then(j => {
         if(!j.ok) return;
@@ -1080,7 +1085,7 @@ const STILE_NOTIFICHE = `
   function toggleNotif(){
     const on = notif.getAttribute("aria-checked") !== "true";
     mostraInterruttore(on);
-    fetch("/Notifiche/Email", { method:"POST", credentials:"same-origin",
+    fetch(C4_BASE + "Notifiche/Email", { method:"POST", credentials:"same-origin",
         headers:{ "Content-Type":"application/json", "RequestVerificationToken": token() },
         body: JSON.stringify({ attive: on }) })
       .then(r => r.json())
@@ -1101,7 +1106,7 @@ const STILE_NOTIFICHE = `
    L'elenco si riempie dopo il primo disegno, percio' si ridisegna - ma solo se c'e' qualcosa:
    ridisegnare per niente farebbe sfarfallare la pagina a ogni apertura. */
 (function () {
-  fetch("/Timone/DaSistemare", { credentials: "same-origin" })
+  fetch(C4_BASE + "Timone/DaSistemare", { credentials: "same-origin" })
     .then(r => r.json())
     .then(j => {
       if (!j || !j.ok || !j.dati) return;

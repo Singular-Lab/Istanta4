@@ -47,7 +47,11 @@ public class AccountController : Controller
         await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme,
                                       new ClaimsPrincipal(identita));
 
-        return Redirect(string.IsNullOrWhiteSpace(returnUrl) ? "/" : returnUrl);
+        // returnUrl lo compone il cookie di autenticazione con la cartella di pubblicazione davanti
+        // (/cartella/Volantini): si segue solo se resta dentro Correggo4, mai verso un altro sito.
+        return !string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl)
+            ? LocalRedirect(returnUrl)
+            : LocalRedirect(Url.Content("~/"));
     }
 
     [HttpPost]
@@ -55,6 +59,6 @@ public class AccountController : Controller
     public async Task<IActionResult> Logout()
     {
         await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-        return Redirect("/Account/Login");
+        return RedirectToAction(nameof(Login));
     }
 }

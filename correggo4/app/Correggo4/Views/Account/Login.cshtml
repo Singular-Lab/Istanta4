@@ -20,7 +20,7 @@
         <div class="alert alert-danger py-2 small">@ViewBag.Errore</div>
     }
 
-    <form method="post" action="/Account/Login" class="card card-body shadow-sm">
+    <form method="post" action="~/Account/Login" class="card card-body shadow-sm">
         @Html.AntiForgeryToken()
         <input type="hidden" name="returnUrl" value="@ViewBag.ReturnUrl" />
         <div class="mb-3">

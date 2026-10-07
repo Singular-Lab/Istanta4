@@ -4,7 +4,7 @@
     // "TOTALE" = tutte le versioni, "OK/VISTO" = solo gli OK, come le due spunte dell'originale.
     // Le voci sono nel parziale _VociReport (j214), lo stesso della finestra dell'editor.
     Layout = null;
-    string Link(bool tutte, bool ok) => $"/Storico/Report/{Model.IdVolantino}/{Model.Versione}?tutte={(tutte ? "true" : "false")}&ok={(ok ? "true" : "false")}";
+    string Link(bool tutte, bool ok) => Url.Content($"~/Storico/Report/{Model.IdVolantino}/{Model.Versione}?tutte={(tutte ? "true" : "false")}&ok={(ok ? "true" : "false")}");
 }
 <!DOCTYPE html>
 <html lang="it">
@@ -60,7 +60,7 @@ select{height:32px;border:1px solid var(--line);border-radius:8px;padding:0 8px;
     <div class="comandi">
       @if (!Model.Prodotto && !Model.Tutte && Model.Versioni.Count > 1)
       {
-        <select onchange="location.href='/Storico/Report/@Model.IdVolantino/'+this.value+'?ok=@(Model.OkVisto ? "true" : "false")'">
+        <select onchange="location.href='@Url.Content($"~/Storico/Report/{Model.IdVolantino}/")'+this.value+'?ok=@(Model.OkVisto ? "true" : "false")'">
           @foreach (var ver in Model.Versioni)
           {
               <option value="@ver" selected="@(ver == Model.Versione)">Versione @ver</option>

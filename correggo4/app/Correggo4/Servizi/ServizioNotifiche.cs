@@ -41,8 +41,12 @@ public sealed class ServizioNotifiche
     public const string TagChiusa = "fin_ch_";
 
     private readonly Correggo4Context ctx;
+    private readonly IHttpContextAccessor http;
 
-    public ServizioNotifiche(Correggo4Context ctx) => this.ctx = ctx;
+    public ServizioNotifiche(Correggo4Context ctx, IHttpContextAccessor http)
+    {
+        this.ctx = ctx; this.http = http;
+    }
 
     // ------------------------------------------------------------------ lettura
 
@@ -70,6 +74,7 @@ public sealed class ServizioNotifiche
         var voci = righe.Select(r =>
         {
             var (testo, link, semaforo) = Frase(r.Tag, r.promo, r.titolo, r.IdVolantino);
+            link = Indirizzi.ConOpzionale(http.HttpContext, link);
             return new
             {
                 id = r.Id,
@@ -123,6 +128,7 @@ public sealed class ServizioNotifiche
         var nuove = righe.Select(r =>
         {
             var (testo, link, semaforo) = Frase(r.Tag, r.promo, r.titolo, r.IdVolantino);
+            link = Indirizzi.ConOpzionale(http.HttpContext, link);
             return new { id = r.Id, testo, link, semaforo, data = r.DataRegistrazione };
         }).ToList();
 

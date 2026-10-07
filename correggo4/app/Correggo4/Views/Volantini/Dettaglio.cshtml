@@ -6,7 +6,7 @@
     var ci = CultureInfo.InvariantCulture;
     bool puoCorreggere = User.IsInRole("GDO");
     int pagAttiva = int.TryParse(Context.Request.Query["pag"], out int pq) ? pq : 1;
-    var img = "/immagini-correggo";
+    var img = Url.Content("~/immagini-correggo");
     var co = Model.Correzioni;
     // Correzioni aperte per pagina (note e timbri non ancora accettati): il pallino del pannello.
     Func<int, int> aperteDiPagina = idp =>
@@ -690,11 +690,16 @@
     /* icona dello storico sul prodotto (icon_has_strorico, 35px in basso a sinistra del box) */
     .ico_storico { position: absolute; width: 30px; height: 30px; z-index: 7; cursor: pointer; transform: translate(6px, calc(-100% - 6px)); }
 </style>
+<script>
+    /* La cartella sotto cui e' pubblicato Correggo4 (http://dominio/cartella/), con la barra finale:
+       le chiamate al server e i link costruiti qui la mettono davanti ai percorsi dell'applicazione. */
+    window.C4_BASE = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Content("~/")));
+</script>
 </head>
 <body>
 
 <div class="barra_alta">
-    <img class="logo" src="@img/Icon_Correggo.png" alt="Correggo" onclick="location.href='/Volantini'">
+    <img class="logo" src="@img/Icon_Correggo.png" alt="Correggo" onclick="location.href='@Url.Content("~/Volantini")'">
     <div class="titolo_zona">
         <img class="dropdown" src="@img/dropdown_titvol.png" alt="" title="Cambia volantino">
         <span>@Model.Titolo &ndash; VERSIONE N&deg; @Model.Versione</span>
@@ -704,7 +709,7 @@
         @if (!User.IsInRole("Agenzia"))
         {
             @* LEGENDA (j216): il manuale in PDF, accanto al nome. Solo Category e Marketing. *@
-            <a class="legenda_btn" href="/Legenda" target="_blank" rel="noopener" title="Legenda: il manuale di Correggo (PDF)">
+            <a class="legenda_btn" href="~/Legenda" target="_blank" rel="noopener" title="Legenda: il manuale di Correggo (PDF)">
                 <img src="@img/infoButton.png" alt="Legenda">
             </a>
         }
@@ -715,7 +720,7 @@
         <button type="button" class="nascosto" id="tTimone"
                 title="TIMONE - il piano di rimpaginazione">TIMONE</button>
         <span class="utente">@User.Identity?.Name</span>
-        <form method="post" action="/Account/Logout" style="margin:0;">
+        <form method="post" action="~/Account/Logout" style="margin:0;">
             @Html.AntiForgeryToken()
             <button type="submit" class="chiudi_bar">ESCI</button>
         </form>
@@ -829,7 +834,7 @@
                (LetturaAffiancata.aspx con target="_blank"). Fino a ieri era un'immagine e basta:
                aveva il cursore a manina e non succedeva niente, che e' il modo piu' sicuro di far
                credere a chi lavora che il programma sia rotto. *@
-            <a href="/Volantini/Affiancata/@Model.Id" target="_blank" rel="noopener"
+            <a href="@Url.Content($"~/Volantini/Affiancata/{Model.Id}")" target="_blank" rel="noopener"
                title="Lettura affiancata: tutto il volantino a pagine affiancate, in una finestra nuova">
                 <img src="@img/ico_visione_affiancata.png" alt="Lettura affiancata">
             </a>
@@ -1104,7 +1109,7 @@
         }
 
         function giro() {
-            fetch('/Notifiche/Nuove?dopo=' + ultimoId, { credentials: 'same-origin' })
+            fetch(C4_BASE + 'Notifiche/Nuove?dopo=' + ultimoId, { credentials: 'same-origin' })
                 .then(function (r) { return r.json(); })
                 .then(function (j) {
                     if (!j || !j.ok) return;
@@ -1158,7 +1163,7 @@
        (solo per chi scrive: l'Agenzia non ha limiti) e la risposta serve anche al lucchetto. */
     function caricaPolicy() {
         if (policyPromessa) return policyPromessa;
-        policyPromessa = apiGet('/Correzioni/PolicyPagine/' + ID_VOL).then(function (j) {
+        policyPromessa = apiGet(C4_BASE + 'Correzioni/PolicyPagine/' + ID_VOL).then(function (j) {
             if (!j.ok) { policyPromessa = null; return null; }
             policyPagine = {};
             (j.dati.pagine || []).forEach(function (p) { policyPagine[p.numero] = p.policyOk; });
@@ -1353,7 +1358,7 @@
        qui si nascondono solo i bottoni che il server rifiuterebbe comunque.
        ===================================================================== */
     var stato = JSON.parse(document.getElementById('datiCorrezioni').textContent);
-    var IMG = '/immagini-correggo/';
+    var IMG = C4_BASE + 'immagini-correggo/';
     var NOMI_TIMBRI = {};
     document.querySelectorAll('.timbro_img').forEach(function (bt) { NOMI_TIMBRI[bt.dataset.simbolo] = bt.title; });
     var scarto = 0;          // differenza fra orologio del browser e del server, in ms
@@ -1503,7 +1508,7 @@
             ev.stopPropagation();
             if (!confirm("Sicuro di voler confermare l'attuazione della correzione?")) return;
             im.style.pointerEvents = 'none';
-            api('/Correzioni/' + tipo + '/' + id + '/Accetta').then(function (j) {
+            api(C4_BASE + 'Correzioni/' + tipo + '/' + id + '/Accetta').then(function (j) {
                 if (!j.ok) {
                     im.style.pointerEvents = '';
                     suggerisci(j.messaggio || 'La correzione non si e\' potuta accettare.', 6000);
@@ -1527,7 +1532,7 @@
             ev.stopPropagation();
             if (!confirm("Sicuro di voler confermare l'attuazione della correzione?")) return;
             im.style.pointerEvents = 'none';
-            api('/Correzioni/Propagazione/' + r.idCatena + '/Conferma', { selezionati: [r.id], ancheIlPilota: false })
+            api(C4_BASE + 'Correzioni/Propagazione/' + r.idCatena + '/Conferma', { selezionati: [r.id], ancheIlPilota: false })
                 .then(function (j) {
                     if (!j.ok) {
                         im.style.pointerEvents = '';
@@ -1881,7 +1886,7 @@
         suBottone('annulla', chiudiPop);
         var bs = suBottone('salva', function () {
             inCorso(bs, true); errorePop('');
-            api('/Correzioni/Nota', { idBox: Number(idBox), testo: pop.querySelector('textarea').value, x: x, y: y })
+            api(C4_BASE + 'Correzioni/Nota', { idBox: Number(idBox), testo: pop.querySelector('textarea').value, x: x, y: y })
                 .then(function (j) { if (j.ok) chiudiPop(); else { errorePop(j.messaggio); inCorso(bs, false); } });
         });
     }
@@ -1907,18 +1912,18 @@
 
         var bs = suBottone('salva', function () {
             inCorso(bs, true); errorePop('');
-            api('/Correzioni/Nota/' + n.id, { testo: pop.querySelector('textarea').value })
+            api(C4_BASE + 'Correzioni/Nota/' + n.id, { testo: pop.querySelector('textarea').value })
                 .then(function (j) { if (j.ok) chiudiPop(); else { errorePop(j.messaggio); inCorso(bs, false); } });
         });
         var be = suBottone('elimina', function () {
             if (be.dataset.conferma !== '1') { be.dataset.conferma = '1'; be.textContent = 'Sicuro? Elimina'; return; }
             inCorso(be, true); errorePop('');
-            api('/Correzioni/Nota/' + n.id + '/Elimina')
+            api(C4_BASE + 'Correzioni/Nota/' + n.id + '/Elimina')
                 .then(function (j) { if (j.ok) chiudiPop(); else { errorePop(j.messaggio); inCorso(be, false); } });
         });
         var ba = suBottone('accetta', function () {
             inCorso(ba, true); errorePop('');
-            api('/Correzioni/Nota/' + n.id + '/Accetta')
+            api(C4_BASE + 'Correzioni/Nota/' + n.id + '/Accetta')
                 .then(function (j) { if (j.ok) chiudiPop(); else { errorePop(j.messaggio); inCorso(ba, false); } });
         });
         if (ba) {
@@ -1948,12 +1953,12 @@
         var be = suBottone('elimina', function () {
             if (be.dataset.conferma !== '1') { be.dataset.conferma = '1'; be.textContent = 'Sicuro? Elimina'; return; }
             inCorso(be, true); errorePop('');
-            api('/Correzioni/Timbro/' + t.id + '/Elimina')
+            api(C4_BASE + 'Correzioni/Timbro/' + t.id + '/Elimina')
                 .then(function (j) { if (j.ok) chiudiPop(); else { errorePop(j.messaggio); inCorso(be, false); } });
         });
         var ba = suBottone('accetta', function () {
             inCorso(ba, true); errorePop('');
-            api('/Correzioni/Timbro/' + t.id + '/Accetta')
+            api(C4_BASE + 'Correzioni/Timbro/' + t.id + '/Accetta')
                 .then(function (j) { if (j.ok) chiudiPop(); else { errorePop(j.messaggio); inCorso(ba, false); } });
         });
     }
@@ -1967,13 +1972,13 @@
             (togli ? '<div class="pc_bottoni"><button class="bottone" data-azione="togli">Togli OK</button></div>' : ''), ev);
         var bt = suBottone('togli', function () {
             inCorso(bt, true); errorePop('');
-            api('/Correzioni/Box/' + idBox + '/Ok', { attivo: false })
+            api(C4_BASE + 'Correzioni/Box/' + idBox + '/Ok', { attivo: false })
                 .then(function (j) { if (j.ok) chiudiPop(); else { errorePop(j.messaggio); inCorso(bt, false); } });
         });
     }
 
     function nuovoTimbro(idBox, simbolo, x, y, ev) {
-        api('/Correzioni/Timbro', { idBox: Number(idBox), simbolo: simbolo, x: x, y: y })
+        api(C4_BASE + 'Correzioni/Timbro', { idBox: Number(idBox), simbolo: simbolo, x: x, y: y })
             .then(function (j) {
                 if (!j.ok) mostraPop('Timbro non messo', '<div class="pc_testo">' + esc(j.messaggio) + '</div>', ev);
             });
@@ -1981,7 +1986,7 @@
 
     function cambiaOk(idBox, ev) {
         var presente = stato.ok.some(function (x) { return String(x.idBox) === String(idBox); });
-        api('/Correzioni/Box/' + idBox + '/Ok', { attivo: !presente })
+        api(C4_BASE + 'Correzioni/Box/' + idBox + '/Ok', { attivo: !presente })
             .then(function (j) {
                 if (!j.ok) mostraPop('OK visto', '<div class="pc_testo">' + esc(j.messaggio) + '</div>', ev);
             });
@@ -2018,7 +2023,7 @@
             bt.addEventListener('click', function () {
                 var ta = zona.querySelector('textarea'), er = zona.querySelector('[data-errore-modale]');
                 bt.disabled = true; er.textContent = '';
-                api('/Correzioni/Nota', { idBox: Number(boxInModale.id), testo: ta.value, x: boxInModale.x, y: boxInModale.y })
+                api(C4_BASE + 'Correzioni/Nota', { idBox: Number(boxInModale.id), testo: ta.value, x: boxInModale.x, y: boxInModale.y })
                     .then(function (j) {
                         bt.disabled = false;
                         if (j.ok) { ta.value = ''; } else { er.textContent = j.messaggio; }
@@ -2448,7 +2453,7 @@
     }
 
     function caricaGemelliEdit(id, parte, cassetta) {
-        apiGet('/Correzioni/Edit/' + id + '/Gemelli/' + parte).then(function (j) {
+        apiGet(C4_BASE + 'Correzioni/Edit/' + id + '/Gemelli/' + parte).then(function (j) {
             if (!document.body.contains(cassetta)) return;
             if (!j.ok) {
                 var v = cassetta.querySelector('.ea_prop_vuoto');
@@ -2485,7 +2490,7 @@
         cassetta.querySelectorAll('[data-gem]').forEach(function (cb) {
             cb.addEventListener('change', function () {
                 cb.disabled = true;
-                api('/Correzioni/Edit/' + id + '/Propaga/' + parte,
+                api(C4_BASE + 'Correzioni/Edit/' + id + '/Propaga/' + parte,
                     { idGemello: Number(cb.dataset.gem), propaga: cb.checked })
                     .then(function (j) {
                         if (!j.ok) suggerisci(j.messaggio || 'Non si e\' potuto propagare.', 7000);
@@ -2510,7 +2515,7 @@
     }
 
     function eseguiEdit(id, parte, azione, bottone, errore) {
-        var url = '/Correzioni/Edit/' + encodeURIComponent(id) + '/', corpo = {};
+        var url = C4_BASE + 'Correzioni/Edit/' + encodeURIComponent(id) + '/', corpo = {};
         if (azione === 'salva') {
             if (parte === 'offerta') { url += 'Offerta'; corpo = raccogliOfferta(); }
             else {
@@ -2567,7 +2572,7 @@
     function caricaSchedaFoto(id) {
         schedaFoto = { id: String(id), stato: 'carico' };
         tabLoghi = 'prodotto';
-        apiGet('/Correzioni/Edit/' + encodeURIComponent(id) + '/Scheda').then(function (j) {
+        apiGet(C4_BASE + 'Correzioni/Edit/' + encodeURIComponent(id) + '/Scheda').then(function (j) {
             if (!schedaFoto || schedaFoto.id !== String(id)) return;   // nel frattempo si e' aperto un altro prodotto
             schedaFoto = j.ok ? { id: String(id), stato: 'ok', foto: j.dati.foto || [] }
                               : { id: String(id), stato: 'errore', errore: j.messaggio };
@@ -2678,7 +2683,7 @@
         suggerisci('Carico «' + file.name + '»… con i file grandi ci vuole qualche minuto.', 8000);
         var corpo = new FormData();
         corpo.append('file', file, file.name);
-        fetch('/Correzioni/Edit/' + id + '/Foto/' + encodeURIComponent(codice), {
+        fetch(C4_BASE + 'Correzioni/Edit/' + id + '/Foto/' + encodeURIComponent(codice), {
             method: 'POST', credentials: 'same-origin',
             headers: { 'RequestVerificationToken': token() }, body: corpo
         })
@@ -2703,7 +2708,7 @@
         document.getElementById('sfTitolo').textContent = 'Foto di ' + codice + ' in Istanta: clicca quella da usare';
         gr.innerHTML = '<div class="vuoto">Carico le foto…</div>';
         ov.classList.add('visibile');
-        apiGet('/Correzioni/Foto/' + encodeURIComponent(codice)).then(function (j) {
+        apiGet(C4_BASE + 'Correzioni/Foto/' + encodeURIComponent(codice)).then(function (j) {
             if (!ov.classList.contains('visibile')) return;
             if (!j.ok) { gr.innerHTML = '<div class="ea_errore">' + esc(j.messaggio) + '</div>'; return; }
             var corrente = fotoCorrenti[codice] ? fotoCorrenti[codice].guid : '';
@@ -2766,7 +2771,7 @@
             if (catalogoLoghi === null) {
                 cont.innerHTML = '<span class="vuoto">Carico il catalogo…</span>';
                 catalogoLoghi = { caricamento: true };
-                apiGet('/Correzioni/Loghi').then(function (j) {
+                apiGet(C4_BASE + 'Correzioni/Loghi').then(function (j) {
                     catalogoLoghi = j.ok ? { lista: j.dati || [] } : { errore: j.messaggio };
                     if (boxInModale && String(boxInModale.id) === String(id)) disegnaLoghi(id);
                 });
@@ -2887,7 +2892,7 @@
     var ID_VOL = document.getElementById('tReport').dataset.idVol;
 
     function caricaReport() {
-        var base = '/Storico/Report/' + ID_VOL + '/' + stato.versione;
+        var base = C4_BASE + 'Storico/Report/' + ID_VOL + '/' + stato.versione;
         var q = repBox ? 'box=' + encodeURIComponent(repBox) : 'tutte=' + repTot.checked + '&ok=' + repOk.checked;
         document.getElementById('rStampa').href = base + '?tutte=' + repTot.checked + '&ok=' + repOk.checked;
         repOk.disabled = repTot.disabled = true;
@@ -2974,7 +2979,7 @@
     }
 
     function caricaCatena(id) {
-        apiGet('/Correzioni/Propagazione/' + id).then(function (j) {
+        apiGet(C4_BASE + 'Correzioni/Propagazione/' + id).then(function (j) {
             if (!catVelo.classList.contains('visibile')) return;
             if (!j.ok) { catFinestra.innerHTML = '<div class="cat_vuoto">' + esc(j.messaggio || 'Propagazione non disponibile.') + '</div>'; return; }
             catCatena = j.dati;
@@ -3073,7 +3078,7 @@
     var DOMANDA_ELIMINA = 'Sicuro di voler eliminare l\'intera propagazione?';
 
     function conferma(selezionati, ancheIlPilota) {
-        return api('/Correzioni/Propagazione/' + catCatena.id + '/Conferma',
+        return api(C4_BASE + 'Correzioni/Propagazione/' + catCatena.id + '/Conferma',
                    { selezionati: selezionati, ancheIlPilota: !!ancheIlPilota })
             .then(function (j) {
                 if (!j.ok) suggerisci(j.messaggio || 'Non si e\' potuto confermare.', 7000);
@@ -3101,7 +3106,7 @@
         be.onclick = function () {
             if (!confirm(DOMANDA_ELIMINA)) return;
             be.disabled = true;
-            api('/Correzioni/Propagazione/' + c.id + '/Elimina', {}).then(function (j) {
+            api(C4_BASE + 'Correzioni/Propagazione/' + c.id + '/Elimina', {}).then(function (j) {
                 if (!j.ok) {
                     be.disabled = false;
                     suggerisci(j.messaggio || 'Non si e\' potuto eliminare la propagazione.', 7000);
@@ -3166,7 +3171,7 @@
         catFinestra.querySelectorAll('[data-prop]').forEach(function (cb) {
             cb.addEventListener('change', function () {
                 cb.disabled = true;
-                api('/Correzioni/Propagazione/Elemento/' + cb.dataset.prop + '/Attiva', { attiva: cb.checked })
+                api(C4_BASE + 'Correzioni/Propagazione/Elemento/' + cb.dataset.prop + '/Attiva', { attiva: cb.checked })
                     .then(function (j) {
                         if (!j.ok) { suggerisci(j.messaggio || 'Non si e\' potuto cambiare.', 6000); }
                         caricaCatena(c.id);
@@ -3242,7 +3247,7 @@
             if (attiva && c.promoDiverse &&
                 !confirm('ATTENZIONE, ci sono propagazioni appartenenti a promo diverse. Attivo comunque su tutti?')) return;
             bt.disabled = true;
-            api('/Correzioni/Propagazione/' + c.id + '/AttivaTutti', { attiva: attiva }).then(function (j) {
+            api(C4_BASE + 'Correzioni/Propagazione/' + c.id + '/AttivaTutti', { attiva: attiva }).then(function (j) {
                 if (!j.ok) suggerisci(j.messaggio || 'Non si e\' potuto cambiare.', 6000);
                 else if (j.dati && j.dati.saltati > 0) suggerisci(j.dati.cambiati + ' cambiati, ' + j.dati.saltati + ' saltati (bloccati o già fatti).', 6000);
                 caricaCatena(c.id);
@@ -3257,7 +3262,7 @@
     /* Ricarica lo stato delle correzioni senza ricaricare la pagina: serve dopo un'attivazione e
        mentre il demone costruisce le catene (il megafono passa da "in costruzione" a lampeggiante). */
     function aggiornaStato() {
-        return apiGet('/Correzioni/Stato/' + ID_VOL).then(function (j) {
+        return apiGet(C4_BASE + 'Correzioni/Stato/' + ID_VOL).then(function (j) {
             if (j.ok && j.dati && j.dati.stato) { stato = j.dati.stato; aggiornaScarto(); disegna(); }
         });
     }
@@ -3360,7 +3365,8 @@
 @* La versione nell'indirizzo serve a una cosa sola: fare in modo che il browser si accorga che
    il file e' cambiato. Era rimasta a j286 mentre il timone e' andato avanti fino a j306, e con una
    copia vecchia in cache si vedono cose che sul server non ci sono piu' - e' il genere di dubbio
-   che fa perdere mezz'ora a tutti e due. Va cambiata ogni volta che si cambia timone.js. *@
-<script src="/js/timone.js?v=j328"></script>
+   che fa perdere mezz'ora a tutti e due. Ora la mette asp-append-version, calcolata dal contenuto
+   del file: cambia da sola a ogni modifica di timone.js, niente piu' numeri da ricordare. *@
+<script src="~/js/timone.js" asp-append-version="true"></script>
 </body>
 </html>
