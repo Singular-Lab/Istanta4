@@ -7,11 +7,44 @@ namespace Istanta.Suite.Tests;
 
 /// <summary>
 /// I20-972: il conteggio delle revisioni in home deve leggere i dati come la pagina del
-/// revisore. Qui si verificano le parti pure: il filtro di agenzia sul reparto EX, la
-/// deduplica per versione e la scelta della descrizione nazionale.
+/// revisore. Qui si verificano le parti pure: il filtro di agenzia, la deduplica per versione
+/// e la scelta della descrizione nazionale.
+///
+/// I20-1051: il filtro di agenzia sta in Edro21 e legge le regole di disattivazione dal
+/// SourceCustomPlugin. Ogni test ne scrive uno suo in una cartella temporanea: per default la
+/// regola di Edro, reparto EX disattivato in entrambi.
 /// </summary>
-public class ConteggioRevisioneTests
+public class ConteggioRevisioneTests : IDisposable
 {
+    private readonly string _cartella = Path.Combine(Path.GetTempPath(), "i20-1051-" + Guid.NewGuid().ToString("N"));
+
+    public ConteggioRevisioneTests()
+    {
+        Directory.CreateDirectory(_cartella);
+    }
+
+    public void Dispose()
+    {
+        Directory.Delete(_cartella, true);
+    }
+
+    private static string Regola(string disattivato, string reparto = "EX")
+        => "{\"disattivato\":\"" + disattivato + "\",\"setRegole\":[{\"Id\":1,\"Deepness\":0,\"Regole\":[{\"isBox\":false,"
+            + "\"Campo\":\"sigla_reparto\",\"Operatore\":0,\"Value\":\"" + reparto + "\"}],\"RegoleAnnidate\":[]}]}";
+
+    private static string Source(params string[] regole)
+        => "{\"disattivazioneRefRules\":[" + string.Join(",", regole) + "]}";
+
+    private string ScriviSource(string json)
+    {
+        var percorso = Path.Combine(_cartella, "SourceCustomPlugin.json");
+        File.WriteAllText(percorso, json);
+        return percorso;
+    }
+
+    private List<Dictionary<string, object>> Filtra(List<Dictionary<string, object>> records, string utente, string? source = null)
+        => new Edro21().FiltraRecordsPerConteggioRevisione(records, utente, ScriviSource(source ?? Source(Regola("entrambi"))));
+
     private static Dictionary<string, object> Record(string codice, string codiceGruppo, string? reparto)
     {
         var r = new Dictionary<string, object>
@@ -29,20 +62,20 @@ public class ConteggioRevisioneTests
     private static List<string> Codici(IEnumerable<Dictionary<string, object>> records)
         => records.Select(r => r[AgenziaLib.Tipi.GLOBAL_VARIABLES.keyRefCodice].ToString()!).OrderBy(x => x).ToList();
 
+    private static List<Dictionary<string, object>> GruppoConUnEX() => new()
+    {
+        Record("A1", "A1,A2,A3", "EX"),
+        Record("A2", "A1,A2,A3", "OR"),
+        Record("A3", "A1,A2,A3", "OR"),
+        Record("B1", "B1", "OR")
+    };
+
     [Fact]
     public void Un_gruppo_con_un_solo_membro_EX_sparisce_per_intero_come_in_pagina()
     {
-        // E' il caso della issue: la pagina toglieva tutto il gruppo, il conteggio solo il membro EX,
+        // E' il caso di I20-972: la pagina toglieva tutto il gruppo, il conteggio solo il membro EX,
         // e il gruppo restava conteggiato senza che in pagina ci fosse nulla da revisionare.
-        var records = new List<Dictionary<string, object>>
-        {
-            Record("A1", "A1,A2,A3", "EX"),
-            Record("A2", "A1,A2,A3", "OR"),
-            Record("A3", "A1,A2,A3", "OR"),
-            Record("B1", "B1", "OR")
-        };
-
-        var filtrati = FiltroRevisioneReparto.Filtra(records, "mario");
+        var filtrati = Filtra(GruppoConUnEX(), "mario");
 
         Assert.Equal(new[] { "B1" }, Codici(filtrati));
     }
@@ -56,7 +89,7 @@ public class ConteggioRevisioneTests
             Record("S2", "S2", "OR")
         };
 
-        var filtrati = FiltroRevisioneReparto.Filtra(records, "mario");
+        var filtrati = Filtra(records, "mario");
 
         Assert.Equal(new[] { "S2" }, Codici(filtrati));
     }
@@ -71,7 +104,7 @@ public class ConteggioRevisioneTests
             Record("N1", "N1", null)
         };
 
-        var filtrati = FiltroRevisioneReparto.Filtra(records, "mario");
+        var filtrati = Filtra(records, "mario");
 
         Assert.Equal(new[] { "G1", "G2", "N1" }, Codici(filtrati));
     }
@@ -81,7 +114,7 @@ public class ConteggioRevisioneTests
     {
         var records = new List<Dictionary<string, object>> { Record("S1", "S1", "ex"), Record("S2", "S2", "OR") };
 
-        Assert.Equal(new[] { "S2" }, Codici(FiltroRevisioneReparto.Filtra(records, "mario")));
+        Assert.Equal(new[] { "S2" }, Codici(Filtra(records, "mario")));
     }
 
     [Fact]
@@ -95,7 +128,7 @@ public class ConteggioRevisioneTests
             Record("S1", "S1", "EX")
         };
 
-        var filtrati = FiltroRevisioneReparto.Filtra(records, "gg");
+        var filtrati = Filtra(records, "gg");
 
         Assert.Equal(new[] { "A1", "A2", "S1" }, Codici(filtrati));
     }
@@ -112,7 +145,7 @@ public class ConteggioRevisioneTests
         };
         var records = new List<Dictionary<string, object>> { senzaGruppo, Record("S2", "S2", "OR") };
 
-        var filtrati = FiltroRevisioneReparto.Filtra(records, "mario");
+        var filtrati = Filtra(records, "mario");
 
         Assert.Equal(new[] { "S2", "X1" }, Codici(filtrati));
     }
@@ -120,11 +153,58 @@ public class ConteggioRevisioneTests
     [Fact]
     public void Liste_vuote_o_con_buchi_non_fanno_saltare_il_filtro()
     {
-        Assert.Empty(FiltroRevisioneReparto.Filtra(null!, "mario"));
-        Assert.Empty(FiltroRevisioneReparto.Filtra(new List<Dictionary<string, object>>(), "mario"));
+        Assert.Empty(Filtra(null!, "mario"));
+        Assert.Empty(Filtra(new List<Dictionary<string, object>>(), "mario"));
 
         var conBuco = new List<Dictionary<string, object>> { null!, Record("S2", "S2", "OR") };
-        Assert.Equal(new[] { "S2" }, Codici(FiltroRevisioneReparto.Filtra(conBuco, null!)));
+        Assert.Equal(new[] { "S2" }, Codici(Filtra(conBuco, null!)));
+    }
+
+    [Fact]
+    public void Una_regola_revisore_esclude_il_gruppo_come_entrambi()
+    {
+        var filtrati = Filtra(GruppoConUnEX(), "mario", Source(Regola("revisore")));
+
+        Assert.Equal(new[] { "B1" }, Codici(filtrati));
+    }
+
+    [Fact]
+    public void Una_regola_solo_plugin_o_nessuno_non_tocca_il_conteggio()
+    {
+        // "plugin" blocca la scheda ref nel Plugin, ma la ref resta da revisionare.
+        Assert.Equal(new[] { "A1", "A2", "A3", "B1" }, Codici(Filtra(GruppoConUnEX(), "mario", Source(Regola("plugin")))));
+        Assert.Equal(new[] { "A1", "A2", "A3", "B1" }, Codici(Filtra(GruppoConUnEX(), "mario", Source(Regola("nessuno")))));
+    }
+
+    [Fact]
+    public void Vale_la_prima_regola_che_corrisponde_al_record()
+    {
+        // Come nel Plugin: la seconda regola, pur corrispondendo, non si guarda.
+        var filtrati = Filtra(GruppoConUnEX(), "mario", Source(Regola("nessuno"), Regola("entrambi")));
+
+        Assert.Equal(new[] { "A1", "A2", "A3", "B1" }, Codici(filtrati));
+    }
+
+    [Fact]
+    public void Senza_regole_o_senza_source_non_si_esclude_nulla()
+    {
+        Assert.Equal(new[] { "A1", "A2", "A3", "B1" }, Codici(Filtra(GruppoConUnEX(), "mario", "{}")));
+        Assert.Equal(new[] { "A1", "A2", "A3", "B1" }, Codici(Filtra(GruppoConUnEX(), "mario", Source())));
+
+        var edro = new Edro21();
+        Assert.Equal(4, edro.FiltraRecordsPerConteggioRevisione(GruppoConUnEX(), "mario", Path.Combine(_cartella, "manca.json")).Count);
+        Assert.Equal(4, edro.FiltraRecordsPerConteggioRevisione(GruppoConUnEX(), "mario", null!).Count);
+    }
+
+    [Fact]
+    public void Un_source_nel_formato_di_prima_esclude_ancora_le_EX()
+    {
+        // Un SourceCustomPlugin non ancora risalvato ha editSchedaRefRules con valido false: vale
+        // come "entrambi", cioe' quello che Edro faceva prima di I20-1051.
+        const string legacy = "{\"editSchedaRefRules\":[{\"valido\":false,\"setRegole\":[{\"Id\":1,\"Deepness\":0,"
+            + "\"Regole\":[{\"isBox\":false,\"Campo\":\"sigla_reparto\",\"Operatore\":0,\"Value\":\"EX\"}],\"RegoleAnnidate\":[]}]}]}";
+
+        Assert.Equal(new[] { "B1" }, Codici(Filtra(GruppoConUnEX(), "mario", legacy)));
     }
 
     private record Rec(string Label, int Tracciato, int Versione, string Codice);

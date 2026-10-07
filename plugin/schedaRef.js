@@ -184,6 +184,27 @@ const schedaRef = {
         return campo != null ? campo.content : null;
     },
 
+    /// Se la scheda deve chiedere all'operatore di convalidare la firma: si', quando la firma
+    /// della revisione non e' quella del tracciato. Solo un singolo porta la firma con se'.
+    ///
+    /// I20-1051: una ref disattivata nel Plugin non si modifica e non si salva, quindi non c'e'
+    /// niente da convalidare: niente messaggio "Convalidare firma" e niente pulsante giallo.
+    richiedeConvalidaFirma(primario, refEditabile) {
+        if (!refEditabile) {
+            return false;
+        }
+
+        const firmaConvalidata = (
+            primario != null &&
+            primario.recordInTracciato != null &&
+            primario.recordInTracciato["Tracciato.Firma"] == primario.firmaRevisione &&
+            primario.firmaRevisione != "" &&
+            primario.firmaRevisione != null
+        );
+
+        return !firmaConvalidata;
+    },
+
     /// Del verdetto della preanalisi si guarda solo il campo che stiamo per riscrivere. La
     /// preanalisi giudica tutto il box e non i soli campi che le passi: le foto extra che
     /// stanno nel box e non nell'elenco che le hai dato risultano tutte in piu', e gli
@@ -1222,11 +1243,7 @@ const schedaRef = {
         }
         var refEditabile = pluginMiddleware.getEditabilitaSchedaRef != null ? pluginMiddleware.getEditabilitaSchedaRef(primario.recordInTracciato) : true;
 
-        let convalidaFirmaRevisione = (
-            primario.recordInTracciato["Tracciato.Firma"] == primario.firmaRevisione &&
-            primario.firmaRevisione != "" &&
-            primario.firmaRevisione != null//Deve essere un singolo per portarsi dietro la firma
-        ); //Se è un gruppo è già convalidato
+        let convalidaFirmaRevisione = !this.richiedeConvalidaFirma(primario, refEditabile);
 
         this.resetInitSchedaRef();
         //writeDebugMessageForCrash("Reset init scheda ref");

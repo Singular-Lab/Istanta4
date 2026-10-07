@@ -56,7 +56,8 @@ sono **ventidue classi `AgenziaCustomPlugin_*`** che insieme descrivono la forma
 `_CampiFiltro`, `_ViewColonneTracciato`, `_SchemaDescrizioni`, `_StileUniversale`,
 `_GrandezzaBoxRevisione`, `_RegoleIstruzioni`, `_RequireIngombriSetDiRegole`, `_InfoExtraCommand`,
 `_EtichetteCommand`, `_FitTypeLogoRule`, `_KeyLabel`, `_SchemaOrdinamentoConPesi`,
-`_EditSchedaRefRules`, `_DecodificaNomeFilePerRicercaKit` (+ `Rule`, `Levels`), `_LibreriaIndd`,
+`_DisattivazioneRefRule` (enum `DisattivazioneRef`; `_EditSchedaRefRules` resta solo per leggere i source
+precedenti a I20-1051), `_DecodificaNomeFilePerRicercaKit` (+ `Rule`, `Levels`), `_LibreriaIndd`,
 `_PolicyImpaginazioneMechanism`, `_CampiSoggettiAOverflow`.
 
 > **Non cercare chi le nomina.** Sono proprietà annidate dentro un tipo padre: chi deserializza il

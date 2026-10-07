@@ -978,7 +978,50 @@ namespace IstantaLib
         public Byte modeConfronto{ get; set; } = 1;//Specificare quali sono le modalità
 
         public string[] schemasNotEditable { get; set; }//Specifica quali degli stili rappresentati su scheda revisione NON possono essere editati       
-        public List<AgenziaCustomPlugin_EditSchedaRefRules> editSchedaRefRules { get; set; }
+        /// I20-1051: dove una ref e' disattivata (Plugin, revisore, entrambi o nessuno). Vale la prima
+        /// regola che corrisponde al record. Sostituisce editSchedaRefRules, che diceva solo se la
+        /// scheda ref era modificabile.
+        ///
+        /// Replace: con la lista gia' creata Newtonsoft la riempirebbe senza passare dal setter, e non
+        /// si saprebbe se il file aveva la chiave nuova (vedi editSchedaRefRulesLegacy).
+        [JsonProperty(ObjectCreationHandling = ObjectCreationHandling.Replace)]
+        public List<AgenziaCustomPlugin_DisattivazioneRefRule> disattivazioneRefRules
+        {
+            get => _disattivazioneRefRules;
+            set
+            {
+                _disattivazioneRefRules = value ?? new List<AgenziaCustomPlugin_DisattivazioneRefRule>();
+                _disattivazioneRefRulesNelFile = true;
+            }
+        }
+        private List<AgenziaCustomPlugin_DisattivazioneRefRule> _disattivazioneRefRules = new List<AgenziaCustomPlugin_DisattivazioneRefRule>();
+        private bool _disattivazioneRefRulesNelFile;
+
+        /// I20-1051: i source scritti prima del rename hanno ancora editSchedaRefRules. Si legge e si
+        /// converte, ma non si scrive: il primo salvataggio lascia solo la chiave nuova.
+        /// valido false voleva dire scheda non modificabile nel Plugin, e sullo stesso reparto EX Edro
+        /// escludeva dal conteggio delle revisioni con una regola scritta nel codice: insieme fanno
+        /// "entrambi". Se il file ha anche la chiave nuova, vince quella, in qualunque ordine arrivino.
+        [JsonProperty("editSchedaRefRules")]
+        private List<AgenziaCustomPlugin_EditSchedaRefRules> editSchedaRefRulesLegacy
+        {
+            set
+            {
+                if (value == null || _disattivazioneRefRulesNelFile)
+                {
+                    return;
+                }
+
+                _disattivazioneRefRules = value
+                    .Where(r => r != null)
+                    .Select(r => new AgenziaCustomPlugin_DisattivazioneRefRule
+                    {
+                        disattivato = r.valido ? DisattivazioneRef.Nessuno : DisattivazioneRef.Entrambi,
+                        setRegole = r.setRegole ?? new List<BloccoRegole>()
+                    })
+                    .ToList();
+            }
+        }
 
         /// I20-976: avvisi da mostrare quando cambia il primario di un gruppo nella scheda ref.
         /// Vuoto: nessun avviso, e resta il solo comportamento core.
@@ -1143,14 +1186,36 @@ namespace IstantaLib
         public string regex { get; set; }
     }
 
+    /// Forma delle regole prima di I20-1051: serve solo a leggere i source non ancora risalvati,
+    /// vedi AgenziaCustomPlugin.editSchedaRefRulesLegacy.
     public class AgenziaCustomPlugin_EditSchedaRefRules
     {
         public bool valido { get; set; }
         public List<BloccoRegole> setRegole { get; set; }
     }
 
+    /// I20-1051: se il record soddisfa setRegole, la ref e' disattivata dove dice disattivato.
+    public class AgenziaCustomPlugin_DisattivazioneRefRule
+    {
+        public DisattivazioneRef disattivato { get; set; } = DisattivazioneRef.Nessuno;
+        public List<BloccoRegole> setRegole { get; set; } = new List<BloccoRegole>();
+    }
+
+    /// I20-1051: dove una ref e' disattivata. Plugin: la scheda ref non si modifica e non chiede la
+    /// convalida della firma. Revisore: la ref, con tutto il suo gruppo, non entra nel conteggio delle
+    /// revisioni. Nel JSON si scrive come testo ("nessuno", "plugin", "revisore", "entrambi"), perche'
+    /// il source si modifica a mano dall'editor di Istanta.
+    [JsonConverter(typeof(Newtonsoft.Json.Converters.StringEnumConverter), typeof(Newtonsoft.Json.Serialization.CamelCaseNamingStrategy))]
+    public enum DisattivazioneRef
+    {
+        Nessuno,
+        Plugin,
+        Revisore,
+        Entrambi
+    }
+
     /// Avviso che il Plugin mostra quando l'operatore cambia il primario di un gruppo.
-    /// Vale la prima regola che corrisponde al record, come per editSchedaRefRules.
+    /// Vale la prima regola che corrisponde al record, come per disattivazioneRefRules.
     ///
     /// Riscaricare la scheda dopo il cambio e allineare il box sono comportamenti core, di
     /// tutti i clienti. Qui resta solo cio' che una singola agenzia ha da dire in piu': in

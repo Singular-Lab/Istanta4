@@ -434,11 +434,16 @@ const pluginMiddleware = {
             }
         }
 
-        const rules = me.customPluginDB?.editSchedaRefRules || [];
+        //I20-1051: le regole dicono dove la ref e' disattivata ("plugin", "revisore", "entrambi",
+        //"nessuno"). Qui conta solo il Plugin: la scheda non si modifica se la prima regola che
+        //corrisponde dice "plugin" o "entrambi". "revisore" riguarda il conteggio in Istanta.
+        //Il server converte da se' i source col vecchio editSchedaRefRules: qui arriva solo questa chiave.
+        const rules = me.customPluginDB?.disattivazioneRefRules || [];
 
         for (const rule of rules) {
             if (me.valutaBlocchiRegole(itemRef, rule.setRegole)) {
-                return rule.valido;
+                const disattivato = me.normalize(rule.disattivato);
+                return disattivato !== "plugin" && disattivato !== "entrambi";
             }
         }
 
