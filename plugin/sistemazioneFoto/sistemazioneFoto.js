@@ -25,6 +25,7 @@
 const { FitOptions, ClippingPathType } = require('indesign');
 const spazioLibero = require('./spazioLibero');
 const sceltaSpazio = require('./sceltaSpazio');
+const etichettaSegnalazioni = require('../segnalazioni/etichetta');
 
 /// CssFramework, chiesto quando serve: vedi l'intestazione.
 function cssFramework() {
@@ -216,6 +217,9 @@ const SistemazioneFoto = {
     /// Quali elementi del box sono ostacoli per le foto, in coordinate relative alla base.
     /// Non lo sono le foto stesse, le loro etichette e gli sfondi: le foto vengono collocate
     /// tutte insieme dal fixFoto, e lo sfondo sta dietro a tutto.
+    /// I20-1059: non lo e' nemmeno il bollino delle segnalazioni, che il Plugin disegna sopra il
+    /// box: in alto a sinistra toglieva 10 mm allo spazio delle foto, e il fix foto lanciato da
+    /// solo, dopo l'impaginazione, le lasciava piccole anche dopo aver fatto posto.
     /// Il cliente puo' intervenire da custom.js con ignoreElementsFixFoto per aggiungerne,
     /// exceptionElementsToIgnoreFixFoto per fare eccezioni, customPadding per dare a un elemento
     /// un margine suo.
@@ -255,6 +259,9 @@ const SistemazioneFoto = {
         try {
             for (let i = 0; i < box.allPageItems.length; i++) {
                 const item = box.allPageItems[i];
+                if (etichettaSegnalazioni.eDiSegnalazioni(item.label)) {
+                    continue;
+                }
                 //controlliamo se l'elemento è valido e non è uno degli elementi da ignorare (se la label inizia con uno degli ignoreElements)
                 //se però è presente in exception non lo ignoriamo
                 if (
@@ -283,6 +290,9 @@ const SistemazioneFoto = {
         
             for (let i = 0; i < box.allPageItems.length; i++) {
                 const item = box.allPageItems[i];
+                if (etichettaSegnalazioni.eDiSegnalazioni(item.label)) {
+                    continue;
+                }
                 //controlliamo se l'elemento è valido e non è uno degli elementi da ignorare (se la label inizia con uno degli ignoreElements)
                 if (item.isValid && item.label != "" && (!ignoreElements.some(ignore => item.label && cssFramework().makeRegexFromGroupName(ignore).test(Utility.parseLabel(item.label))) || exception.some(exc => item.label && cssFramework().makeRegexFromGroupName(exc).test(Utility.parseLabel(item.label))))) {
                     //aggiungiamo l'elemento come ostacolo
