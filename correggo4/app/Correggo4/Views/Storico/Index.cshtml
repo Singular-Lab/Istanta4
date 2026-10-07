@@ -1,0 +1,148 @@
+@model Correggo4.Models.Vista.StoricoPubblicazioni
+@{
+    // CONSULTA TUTTI I VOLANTINI (j213): lo STORICO PUBBLICAZIONI dell'originale (ftp.aspx?page=storico).
+    Layout = null;
+    string nome = (ViewBag.Nome as string) ?? "";
+    string Pag(int p) => "/Storico?pagina=" + p + (Model.Cerca != "" ? "&cerca=" + Uri.EscapeDataString(Model.Cerca) : "");
+}
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Consulta tutti i volantini &middot; Correggo4</title>
+<style>
+:root{--teal:#60cbbb;--teal-700:#2a8a7c;--teal-50:#e8f7f4;--co:#8dc63f;--ink:#1f2a30;--ink-2:#4a5860;--ink-3:#7c8a91;--line:#dfe5e8;--bg:#f1f4f5;
+      --ok-bg:#dcf3e6;--ok-fg:#1d7a45;--shadow:0 1px 2px rgba(20,40,50,.06),0 2px 8px rgba(20,40,50,.06)}
+*{box-sizing:border-box}
+body{margin:0;font-family:"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;color:var(--ink);background:var(--bg);font-size:14px}
+.hdr{background:#fff;border-top:4px solid var(--teal);box-shadow:0 1px 0 var(--line),0 2px 10px rgba(20,40,50,.05)}
+.hdr-in{display:flex;align-items:center;gap:16px;padding:10px 28px;min-height:64px}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink)}
+.brand .co{width:36px;height:36px;border-radius:8px;background:var(--co);color:#fff;display:grid;place-items:center;font-weight:800}
+.brand small{display:block;font-size:11px;color:var(--ink-3);margin-top:-2px}
+.sp{flex:1}
+.btn{border:1px solid var(--line);background:#fff;border-radius:8px;height:34px;padding:0 12px;cursor:pointer;color:var(--ink-2);
+     font-size:13px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:6px;font-family:inherit;white-space:nowrap}
+.btn:hover{border-color:#c4ced3;color:var(--ink)}
+.btn.primario{background:var(--teal-700);border-color:var(--teal-700);color:#fff}
+.btn[disabled]{opacity:.5;cursor:default}
+main{max-width:1100px;margin:24px auto;padding:0 20px}
+h1{font-size:22px;margin:0 0 4px}
+.sotto{color:var(--ink-3);margin:0 0 16px}
+.msg{padding:10px 14px;border-radius:8px;margin-bottom:14px;font-weight:600;background:#fde2e0;color:#9b2a22}
+.card{background:#fff;border-radius:10px;box-shadow:var(--shadow);overflow:hidden}
+.barra{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.barra b{font-size:12px;letter-spacing:.06em;color:var(--ink-2)}
+.barra input[type=search]{height:34px;border:1px solid var(--line);border-radius:8px;padding:0 10px;font-family:inherit;font-size:14px;min-width:260px}
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:9px 16px;border-bottom:1px solid var(--line);vertical-align:middle}
+th{font-size:12px;color:var(--ink-3);font-weight:600;background:#fafbfb}
+tr:hover td{background:#f7fbfa}
+.tit{font-weight:650}
+.tit a{color:var(--ink);text-decoration:none}
+.tit a:hover{text-decoration:underline}
+.promo{font-size:12px;color:var(--ink-3)}
+.pill{font-size:11px;font-weight:700;padding:1px 8px;border-radius:10px;background:var(--bg);color:var(--ink-2);margin-left:6px}
+.pill.ultima{background:var(--ok-bg);color:var(--ok-fg)}
+.azioni{display:flex;gap:6px;justify-content:flex-end}
+.vuoto{padding:30px;text-align:center;color:var(--ink-3)}
+.pager{display:flex;gap:6px;justify-content:center;padding:14px;flex-wrap:wrap}
+.pager a,.pager span{min-width:34px;height:32px;display:inline-grid;place-items:center;border:1px solid var(--line);border-radius:8px;
+     text-decoration:none;color:var(--ink-2);font-weight:600;padding:0 8px;background:#fff}
+.pager span.corrente{background:var(--teal-700);border-color:var(--teal-700);color:#fff}
+input[type=checkbox]{width:16px;height:16px}
+</style>
+</head>
+<body>
+<header class="hdr">
+  <div class="hdr-in">
+    <a class="brand" href="/Volantini"><span class="co">Co</span><span><b>Correggo</b><small>Consulta tutti i volantini</small></span></a>
+    <div class="sp"></div>
+    <span style="color:var(--ink-2);font-weight:600">@nome</span>
+    <a class="btn" href="/Volantini">&larr; Torna ai volantini</a>
+  </div>
+</header>
+<main>
+  <h1>Storico pubblicazioni</h1>
+  <p class="sotto">Ogni versione di ogni volantino, dalla più recente. Si consulta in sola lettura.</p>
+  @if (TempData["Errore"] is string err) { <div class="msg">@err</div> }
+
+  <div class="card">
+    <form method="get" action="/Storico" class="barra">
+      <b>@Model.Totale VERSIONI</b>
+      <div class="sp"></div>
+      <input type="search" name="cerca" value="@Model.Cerca" placeholder="Filtra per nome o promo">
+      <button class="btn" type="submit">Filtra</button>
+      @if (Model.Cerca != "") { <a class="btn" href="/Storico">Togli filtro</a> }
+    </form>
+
+    <form method="post" action="/Storico/Zip" id="formZip">
+      @Html.AntiForgeryToken()
+      <input type="hidden" name="cerca" value="@Model.Cerca">
+      <input type="hidden" name="pagina" value="@Model.Pagina">
+      @if (Model.Voci.Count == 0)
+      {
+          <div class="vuoto">@(Model.Cerca != "" ? "Nessun volantino con questo nome." : "Nessun volantino pubblicato.")</div>
+      }
+      else
+      {
+        <table>
+          <tr>
+            <th style="width:34px"><input type="checkbox" id="tutti" title="Seleziona tutti"></th>
+            <th>Volantino</th><th>Pubblicato</th><th style="text-align:right">Apri</th>
+          </tr>
+          @foreach (var v in Model.Voci)
+          {
+            <tr>
+              <td><input type="checkbox" name="voci" value="@(v.IdVolantino):@(v.Versione)" class="sel"></td>
+              <td>
+                <div class="tit"><a href="/Storico/Pdf/@v.IdVolantino/@v.Versione" target="_blank" title="Apri il PDF">@v.Titolo</a>
+                  <span class="pill @(v.Ultima ? "ultima" : "")">versione @v.Versione @(v.Ultima ? "· ultima" : "")</span></div>
+                <div class="promo">@v.Classificazione</div>
+              </td>
+              <td>@v.Pubblicata.ToString("dd/MM/yyyy HH:mm")</td>
+              <td>
+                <div class="azioni">
+                  <a class="btn" href="/Volantini/Dettaglio/@v.IdVolantino?v=@v.Versione" target="_blank">Sola lettura</a>
+                  <a class="btn" href="/Storico/Report/@v.IdVolantino/@v.Versione" target="_blank">Report</a>
+                  <a class="btn" href="/Storico/Pdf/@v.IdVolantino/@v.Versione?scarica=true">PDF</a>
+                </div>
+              </td>
+            </tr>
+          }
+        </table>
+        <div class="barra" style="border-bottom:0;border-top:1px solid var(--line)">
+          <button class="btn primario" type="submit" id="bZip" disabled>Scarica i selezionati (zip)</button>
+          <span class="promo" id="nSel"></span>
+        </div>
+      }
+    </form>
+
+    @if (Model.Pagine > 1)
+    {
+      <div class="pager">
+        @if (Model.Pagina > 1) { <a href="@Pag(1)">«</a> }
+        @for (int p = Math.Max(1, Model.Pagina - 5); p <= Math.Min(Model.Pagine, Model.Pagina + 5); p++)
+        {
+            if (p == Model.Pagina) { <span class="corrente">@p</span> } else { <a href="@Pag(p)">@p</a> }
+        }
+        @if (Model.Pagina < Model.Pagine) { <a href="@Pag(Model.Pagine)">»</a> }
+      </div>
+    }
+  </div>
+</main>
+<script>
+(function () {
+  var sel = document.querySelectorAll('.sel'), b = document.getElementById('bZip'), n = document.getElementById('nSel'), t = document.getElementById('tutti');
+  function conta() {
+    var k = Array.prototype.filter.call(sel, function (c) { return c.checked; }).length;
+    if (b) b.disabled = k === 0;
+    if (n) n.textContent = k ? k + (k === 1 ? ' selezionato' : ' selezionati') : '';
+  }
+  sel.forEach(function (c) { c.addEventListener('change', conta); });
+  if (t) t.addEventListener('change', function () { sel.forEach(function (c) { c.checked = t.checked; }); conta(); });
+})();
+</script>
+</body>
+</html>

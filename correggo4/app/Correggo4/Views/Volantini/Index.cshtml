@@ -1,69 +1,1117 @@
-@model List<Correggo4.Controllers.RigaVolantino>
+@model Correggo4.Models.Vista.HubVolantini
+@using System.Text.Json
 @{
+    // Home di Correggo4: hub delle correzioni (promo -> PDF per canale -> card).
+    // Grafica approvata sul prototipo dell'11/9/2026; la vecchia tabella e' in Index.cshtml.pre-hub.
+    // Layout = null come Dettaglio: pagina autonoma, niente Bootstrap.
     ViewData["Title"] = "Volantini";
+    Layout = null;
+
+    string jsonHome = JsonSerializer.Serialize(Model, new JsonSerializerOptions
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase   // l'encoder di default scappa < > & : sicuro dentro <script>
+    });
+
+    string nome = string.IsNullOrWhiteSpace(Model.NomeUtente) ? "Utente" : Model.NomeUtente.Trim();
+    string iniziali = string.Concat(nome.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                                        .Take(2).Select(p => char.ToUpperInvariant(p[0])));
+
+    // j243: stato iniziale della campanella e dell'interruttore delle email. Si calcola qui e
+    // non dentro gli attributi per non mettere espressioni con le virgolette in mezzo al markup.
+    string emailOn = Model.EmailNotifiche ? "true" : "false";
+    string emailTxt = Model.EmailNotifiche ? "Attive" : "Silenziate";
+    string emailIco = Model.EmailNotifiche ? "#i-bell" : "#i-bell-off";
+    // hidden="@bellNascosto": Razor con un bool false cancella l'attributo, con true lo scrive
+    bool bellNascosto = Model.NotificheNonLette == 0;
+    string bellNumero = Model.NotificheNonLette > 99 ? "99+" : Model.NotificheNonLette.ToString();
+}
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Volantini &middot; Correggo4</title>
+<style>
+/* ============================================================
+   Correggo4 — Home (hub correzioni) · Views/Volantini/Index.cshtml
+   Palette ereditata dall'editor (correggo4-interfaccia.md):
+   barra #60cbbb · logo Co #8dc63f · rail #9edcd9
+   ============================================================ */
+:root{
+  --teal:#60cbbb;
+  --teal-600:#3fae9d;
+  --teal-700:#2a8a7c;
+  --teal-50:#e8f7f4;
+  --co:#8dc63f;
+  --ink:#1f2a30;
+  --ink-2:#4a5860;
+  --ink-3:#7c8a91;
+  --line:#dfe5e8;
+  --bg:#f1f4f5;
+  --card:#ffffff;
+  --ok-bg:#dcf3e6;  --ok-fg:#1d7a45;
+  --rev-bg:#fff0c2; --rev-fg:#8a5a00;
+  --lock:#c8352e;
+  --dot:#e0342b;
+  --slate:#3d4a52;
+  --shadow:0 1px 2px rgba(20,40,50,.06),0 2px 8px rgba(20,40,50,.06);
+  --shadow-hi:0 2px 4px rgba(20,40,50,.08),0 8px 24px rgba(20,40,50,.10);
+  --r:10px;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  font:14px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  color:var(--ink);background:var(--bg);
+  -webkit-font-smoothing:antialiased;
+}
+button{font:inherit;color:inherit}
+svg.i{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+
+/* ---------- Header ---------- */
+.hdr{
+  position:sticky;top:0;z-index:20;
+  background:#fff;border-top:4px solid var(--teal);
+  box-shadow:0 1px 0 var(--line),0 2px 10px rgba(20,40,50,.05);
+}
+.hdr-in{display:flex;align-items:center;gap:18px;height:64px;padding-inline:28px}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink)}
+.co{
+  width:36px;height:36px;border-radius:8px;background:var(--co);
+  color:#fff;font-weight:800;font-size:17px;letter-spacing:-.5px;
+  display:grid;place-items:center;
+}
+.brand b{font-size:18px;font-weight:700;letter-spacing:-.2px}
+.brand small{display:block;font-size:11px;color:var(--ink-3);font-weight:500;margin-top:-2px}
+.sep{width:1px;height:30px;background:var(--line)}
+.logo-slot{
+  height:34px;min-width:120px;padding-inline:12px;border:1.5px dashed #c4ced3;border-radius:6px;
+  display:grid;place-items:center;color:var(--ink-3);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;
+}
+.hdr-sp{flex:1}
+.bell{
+  position:relative;width:40px;height:40px;border-radius:50%;border:0;background:transparent;cursor:pointer;
+  display:grid;place-items:center;color:var(--ink-2);
+}
+.bell:hover{background:var(--bg)}
+.bell svg.i{width:22px;height:22px}
+.bell .n{
+  position:absolute;top:6px;right:6px;min-width:16px;height:16px;padding-inline:4px;border-radius:8px;
+  background:var(--dot);color:#fff;font-size:10px;font-weight:700;display:grid;place-items:center;
+  box-shadow:0 0 0 2px #fff;
+}
+.me{display:flex;align-items:center;gap:10px;padding:4px 8px 4px 4px;border-radius:24px}
+.avatar{
+  width:38px;height:38px;border-radius:50%;background:var(--teal-50);color:var(--teal-700);
+  display:grid;place-items:center;font-weight:700;font-size:14px;
+}
+.me-t b{display:block;font-size:14px;font-weight:650}
+.me-t span{font-size:12px;color:var(--ink-3)}
+.me-t .role{
+  display:inline-block;font-size:10px;font-weight:700;letter-spacing:.06em;
+  background:var(--teal-50);color:var(--teal-700);padding:1px 6px;border-radius:4px;margin-right:6px;
+}
+.logout{
+  border:1px solid var(--line);background:#fff;border-radius:8px;height:34px;padding-inline:12px;
+  cursor:pointer;color:var(--ink-2);font-size:13px;font-weight:600;
+}
+.logout:hover{border-color:#c4ced3;color:var(--ink)}
+
+/* ---------- Barra filtri ---------- */
+.bar{background:#fff;border-bottom:1px solid var(--line)}
+.bar-in{display:flex;align-items:center;gap:28px;padding-inline:28px;min-height:62px;flex-wrap:wrap}
+.tabs{display:flex;gap:6px;align-self:stretch}
+.tab{
+  position:relative;border:0;background:none;cursor:pointer;padding:0 14px;height:62px;
+  font-size:15px;color:var(--ink-2);font-weight:500;display:flex;align-items:center;gap:8px;
+}
+.tab .c{font-size:11.5px;font-weight:700;color:var(--ink-3);background:var(--bg);padding:1px 7px;border-radius:10px}
+.tab:hover{color:var(--ink)}
+.tab[aria-selected="true"]{color:var(--ink);font-weight:650}
+.tab[aria-selected="true"]::after{
+  content:"";position:absolute;left:10px;right:10px;bottom:0;height:3px;border-radius:3px 3px 0 0;background:var(--teal);
+}
+.tab[aria-selected="true"] .c{background:var(--teal-50);color:var(--teal-700)}
+.search{
+  flex:1;max-width:620px;margin-left:auto;display:flex;align-items:center;gap:10px;
+  height:42px;padding-inline:14px;border:1px solid #cfd8dc;border-radius:9px;background:#fff;color:var(--ink-3);
+}
+.search:focus-within{border-color:var(--teal);box-shadow:0 0 0 3px rgba(96,203,187,.25)}
+.search input{border:0;outline:0;flex:1;font:inherit;font-size:15px;color:var(--ink);background:transparent;min-width:0}
+.search kbd{
+  font:600 11px/1 inherit;color:var(--ink-3);border:1px solid var(--line);border-bottom-width:2px;
+  border-radius:4px;padding:3px 6px;background:var(--bg);
 }
 
-<div class="d-flex align-items-baseline justify-content-between mb-3">
-    <div>
-        <h1 class="h4 mb-0">Correggo4</h1>
-        <span class="text-muted small">@Model.Count volantini</span>
+/* ---------- Layout principale ---------- */
+.main{
+  display:grid;grid-template-columns:300px 1fr;gap:0;
+  max-width:1480px;margin-inline:auto;padding:28px 28px 110px;
+}
+.side{padding-right:28px;border-right:1px solid var(--line)}
+.content{padding-left:28px;min-width:0}
+h2.sec{font-size:19px;font-weight:700;margin:4px 0 16px;letter-spacing:-.2px;display:flex;align-items:baseline;gap:8px}
+h2.sec small{font-size:12.5px;font-weight:500;color:var(--ink-3)}
+
+/* ---------- Promo attive ---------- */
+.camps{display:flex;flex-direction:column;gap:12px}
+.camp{
+  position:relative;width:100%;
+  background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+  box-shadow:var(--shadow);transition:box-shadow .15s,border-color .15s;overflow:hidden;
+}
+.camp::before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:var(--st,#c4ced3);z-index:1}
+.camp:hover{box-shadow:var(--shadow-hi)}
+.camp[aria-current="true"]{border-color:var(--teal);box-shadow:0 0 0 2px var(--teal),var(--shadow-hi)}
+.camp-head{
+  display:block;width:100%;text-align:left;cursor:pointer;border:0;background:none;
+  padding:14px 14px 12px 20px;
+}
+
+/* menu a tendina dei PDF caricati, divisi per canale */
+.pdf-tog{
+  display:flex;align-items:center;gap:8px;width:100%;border:0;border-top:1px solid #edf1f2;background:#fafbfb;
+  padding:9px 14px 9px 20px;cursor:pointer;font-size:12.5px;font-weight:600;color:var(--ink-2);text-align:left;
+}
+.pdf-tog:hover{background:var(--teal-50);color:var(--teal-700)}
+.pdf-tog svg.i{width:16px;height:16px}
+.pdf-tog .chev{margin-left:auto;transition:transform .18s}
+.pdf-tog[aria-expanded="true"] .chev{transform:rotate(180deg)}
+.pdfs{border-top:1px solid #edf1f2;padding:6px 8px 10px 14px;background:#fafbfb}
+.pdf-can{
+  display:flex;align-items:center;gap:8px;width:100%;border:0;background:none;cursor:pointer;text-align:left;
+  padding:8px 6px 4px;font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3);
+}
+.pdf-can .sw-c{width:8px;height:8px;border-radius:2px;background:var(--kc)}
+.pdf-can .n{margin-left:auto;font-weight:600;letter-spacing:0;text-transform:none}
+.pdf-can:hover,.pdf-can.on{color:var(--teal-700)}
+.pdf{
+  display:flex;align-items:center;gap:8px;width:100%;border:0;background:none;cursor:pointer;text-align:left;
+  padding:6px 6px;border-radius:6px;font-size:13px;color:var(--ink);
+}
+.pdf:hover{background:#fff;box-shadow:0 0 0 1px var(--line)}
+.pdf.on{background:#fff;box-shadow:0 0 0 1.5px var(--teal)}
+.pdf .fi{
+  flex:none;width:22px;height:26px;border-radius:3px;background:#fff;border:1px solid #d5dde0;position:relative;
+  font-size:6.5px;font-weight:800;color:var(--lock);display:grid;place-items:end center;padding-bottom:3px;letter-spacing:.02em;
+}
+.pdf .fi::before{content:"";position:absolute;right:-1px;top:-1px;width:7px;height:7px;background:#fafbfb;border-left:1px solid #d5dde0;border-bottom:1px solid #d5dde0;border-radius:0 0 0 2px}
+.pdf .nm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:550}
+.pdf .mt{font-size:11.5px;color:var(--ink-3);white-space:nowrap}
+.pdf .st{flex:none;min-width:18px;height:18px;padding-inline:5px;border-radius:9px;font-size:10.5px;font-weight:700;display:grid;place-items:center}
+.pdf .st.a{background:var(--dot);color:#fff}
+.pdf .st.ok{background:var(--ok-bg);color:var(--ok-fg)}
+.pdf .st.lk{background:var(--lock);color:#fff}
+.pdf .st svg.i{width:11px;height:11px;stroke-width:2.6}
+/* j317: la casella TIMONE che lampeggia. Michele (01/10): «una volta che il marketing ha chiuso
+   la finestra farei apparire una casella con scritto TIMONE che lampeggia, cosi' che l'agenzia
+   possa capire subito che deve entrare nel volantino e fare prima le modifiche del marketing».
+   La vede solo l'Agenzia: l'elenco dei volantini da sistemare arriva dal server, che a tutti gli
+   altri risponde vuoto. E' bordeaux come tutto quello che e' del timone.
+   Il lampeggio e' lento e non spegne mai del tutto la scritta: una cosa che sbatte restando
+   leggibile si nota, una che sparisce e torna fa venire solo il mal di testa. Con
+   prefers-reduced-motion resta ferma: a chi ha detto al computer che le animazioni gli danno
+   fastidio non si lampeggia in faccia lo stesso. */
+.pdf .st.tim{background:#7a1e2d;color:#fff;letter-spacing:.4px;padding-inline:7px;
+  animation:timLampeggia 1.25s ease-in-out infinite}
+@@keyframes timLampeggia{0%,100%{opacity:1}50%{opacity:.42}}
+@@media (prefers-reduced-motion: reduce){.pdf .st.tim{animation:none}}
+
+.vcard.flash{animation:flash 1.6s ease-out}
+@@keyframes flash{0%,35%{box-shadow:0 0 0 3px var(--teal),var(--shadow-hi)}100%{box-shadow:var(--shadow)}}
+.camp-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.camp-top .pill{margin-top:2px}
+.camp-name{font-size:17px;font-weight:700;letter-spacing:-.2px}
+.camp-meta{display:flex;justify-content:space-between;margin-top:8px;font-size:13px;color:var(--ink-2)}
+.camp-meta .open{color:var(--ink-3)}
+.camp-meta .open.has{color:var(--lock);font-weight:600}
+.camp-bar{height:4px;border-radius:2px;background:#edf1f2;margin-top:10px;overflow:hidden}
+.camp-bar i{display:block;height:100%;background:var(--teal)}
+
+.pill{
+  display:inline-flex;align-items:center;gap:5px;white-space:nowrap;
+  font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+  padding:4px 9px;border-radius:6px;line-height:1;
+}
+.pill svg.i{width:12px;height:12px;stroke-width:2.4}
+.p-rev{background:var(--rev-bg);color:var(--rev-fg)}
+.p-ok{background:var(--ok-bg);color:var(--ok-fg)}
+.p-lock{background:var(--lock);color:#fff}
+.p-area{background:var(--slate);color:#fff}
+.p-soft{background:var(--bg);color:var(--ink-2)}
+
+/* ---------- Testata contenuto ---------- */
+.c-head{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:18px}
+.c-head h1{font-size:24px;font-weight:750;letter-spacing:-.3px;margin:0}
+.c-sub{color:var(--ink-3);font-size:13px}
+.c-sp{flex:1}
+.sel{
+  appearance:none;-webkit-appearance:none;height:38px;border:1px solid #cfd8dc;border-radius:8px;background:#fff;
+  padding:0 34px 0 12px;font:inherit;font-size:14px;color:var(--ink);cursor:pointer;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%234a5860' stroke-width='1.8'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 12px center;
+}
+.sel:focus{outline:0;border-color:var(--teal);box-shadow:0 0 0 3px rgba(96,203,187,.25)}
+
+/* ---------- Card volantino ---------- */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(330px,100%),1fr));gap:18px}
+.vcard{
+  background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);
+  padding:14px 14px 0;display:flex;flex-direction:column;transition:box-shadow .15s,transform .15s;
+}
+.vcard:hover{box-shadow:var(--shadow-hi);transform:translateY(-1px)}
+.v-body{display:flex;gap:16px;flex:1}
+.v-thumb{position:relative;flex:none;width:118px;cursor:pointer;align-self:flex-start}
+.v-thumb .pages{
+  position:absolute;right:6px;bottom:6px;font-size:10px;font-weight:700;background:rgba(31,42,48,.78);color:#fff;
+  padding:2px 6px;border-radius:4px;
+}
+.v-thumb.locked::after{
+  content:"";position:absolute;inset:0;border-radius:4px;background:rgba(255,255,255,.35);
+}
+.v-side{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+.v-tags{display:flex;gap:6px;flex-wrap:wrap}
+.v-state{font-size:14.5px;font-weight:600;display:flex;align-items:center;gap:8px;margin-top:2px}
+.v-state .dot{
+  min-width:22px;height:22px;padding-inline:6px;border-radius:11px;background:var(--dot);color:#fff;
+  font-size:12px;font-weight:700;display:grid;place-items:center;
+}
+.v-state.done{color:var(--ok-fg)}
+.v-state.done svg.i{stroke-width:2.4}
+.v-lockinfo{font-size:12px;color:var(--lock);margin-top:-2px}
+.v-actions{display:flex;flex-direction:column;gap:2px;margin-top:4px}
+.act{
+  display:flex;align-items:center;gap:10px;border:0;background:none;cursor:pointer;text-align:left;
+  padding:6px 8px;margin-left:-8px;border-radius:7px;font-size:14px;font-weight:550;color:var(--ink);
+}
+.act:hover{background:var(--teal-50);color:var(--teal-700)}
+.act .badge{margin-left:auto;font-size:11.5px;font-weight:700;color:var(--ink-3);background:var(--bg);padding:1px 7px;border-radius:9px}
+.act.primary svg.i{color:var(--teal-700)}
+.act[disabled]{color:#b3bec3;cursor:default;background:none}
+.v-foot{
+  display:flex;align-items:baseline;justify-content:space-between;gap:10px;
+  border-top:1px solid #edf1f2;margin:14px -14px 0;padding:11px 14px 12px;
+}
+.v-title{font-size:15.5px;font-weight:700;letter-spacing:-.1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.v-ver{font-size:12.5px;color:var(--ink-3);white-space:nowrap}
+.v-ver b{color:var(--ink-2)}
+
+/* ---------- Miniatura volantino (finta) ---------- */
+.fly{
+  width:118px;aspect-ratio:1/1.414;max-width:100%;background:#fff;border-radius:4px;overflow:hidden;
+  box-shadow:0 0 0 1px #dde3e6,0 3px 8px rgba(20,40,50,.14);
+  display:flex;flex-direction:column;padding:6px;gap:4px;
+}
+.fly .fh{height:18px;border-radius:2px;background:var(--fc);display:flex;align-items:center;padding-inline:4px;gap:3px}
+.fly .fh i{display:block;height:3px;border-radius:2px;background:rgba(255,255,255,.9)}
+.fly .fhero{height:40px;border-radius:2px;background:linear-gradient(135deg,var(--fc2),#fff 140%);position:relative}
+.fly .fhero::after{content:"";position:absolute;right:6px;top:8px;width:22px;height:22px;border-radius:50%;background:var(--fc);opacity:.9}
+.fly .fg{flex:1;display:grid;grid-template-columns:1fr 1fr 1fr;gap:3px}
+.fly .fg i{border-radius:2px;background:#f0f2f3;position:relative}
+.fly .fg i::after{content:"";position:absolute;left:3px;right:40%;bottom:3px;height:3px;border-radius:2px;background:var(--fc);opacity:.7}
+.fly .ff{height:6px;border-radius:2px;background:#e7eaec}
+
+.fly-img{
+  display:block;width:118px;aspect-ratio:1/1.414;max-width:100%;object-fit:cover;object-position:top;background:#fff;border-radius:4px;
+  box-shadow:0 0 0 1px #dde3e6,0 3px 8px rgba(20,40,50,.14);
+}
+a.act,a.v-thumb{text-decoration:none;color:inherit}
+.logo-img{height:34px;width:auto;display:block}
+.more{display:block;margin-top:14px;font-size:12.5px;color:var(--teal-700);text-decoration:none;font-weight:600}
+.more:hover{text-decoration:underline}
+
+/* ---------- Stato vuoto ---------- */
+.empty{
+  border:1.5px dashed #cfd8dc;border-radius:12px;padding:40px 20px;text-align:center;color:var(--ink-3);background:rgba(255,255,255,.5)
+}
+.empty b{display:block;color:var(--ink-2);font-size:15px;margin-bottom:4px}
+
+/* ---------- Toggle notifiche ---------- */
+.notif{
+  position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:30;
+  display:flex;align-items:center;gap:12px;background:#fff;border:1px solid var(--line);border-radius:14px;
+  padding:10px 16px 10px 12px;box-shadow:0 6px 24px rgba(20,40,50,.16);cursor:pointer;
+}
+.notif .ic{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;background:var(--bg);color:var(--ink-2)}
+.notif .ic svg.i{width:20px;height:20px}
+.notif b{font-size:14.5px;font-weight:650;display:block}
+.notif span{font-size:12px;color:var(--ink-3)}
+.sw{width:38px;height:22px;border-radius:11px;background:#cfd8dc;position:relative;transition:background .15s;margin-left:6px}
+.sw::after{content:"";position:absolute;left:3px;top:3px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2);transition:left .15s}
+.notif[aria-checked="true"] .sw{background:var(--teal)}
+.notif[aria-checked="true"] .sw::after{left:19px}
+.notif[aria-checked="true"] .ic{background:var(--teal-50);color:var(--teal-700)}
+
+/* ---------- Stretto ---------- */
+@@media (max-width:980px){
+  .main{grid-template-columns:minmax(0,1fr);padding-inline:16px}
+  .side{padding-right:0;border-right:0;border-bottom:1px solid var(--line);padding-bottom:20px;margin-bottom:22px}
+  .content{padding-left:0}
+  .hdr-in,.bar-in{padding-inline:16px}
+  .search{max-width:none;flex-basis:100%;margin:0 0 12px}
+}
+@@media (max-width:640px){
+  .brand small,.sep,.logo-slot,.me-t,.search kbd{display:none}
+  .grid{grid-template-columns:1fr}
+  .tab{padding:0 8px;font-size:14px}
+}
+</style>
+</head>
+<body>
+
+<!-- SVG sprite -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></symbol>
+  <symbol id="i-bell-off" viewBox="0 0 24 24"><path d="M8.7 3A6 6 0 0 1 18 8a21.3 21.3 0 0 0 .6 5"/><path d="M17 17H3s3-2 3-9a4.67 4.67 0 0 1 .3-1.7"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/><path d="m2 2 20 20"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.4 2.6a2.1 2.1 0 1 1 3 3L12 15l-4 1 1-4Z"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9 9 0 0 1-4-1L3 20l1.2-4.2A8.4 8.4 0 0 1 3 11.5 8.5 8.5 0 0 1 12 3a8.5 8.5 0 0 1 9 8.5Z"/></symbol>
+  <symbol id="i-history" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-files" viewBox="0 0 24 24"><path d="M15 2H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V6Z"/><path d="M15 2v4h4"/><path d="M5 6H4a1 1 0 0 0-1 1v13a2 2 0 0 0 2 2h10a1 1 0 0 0 1-1v-1"/></symbol>
+</svg>
+
+@if (TempData["Avviso"] is string avvisoHome)
+{
+    <div style="background:#fff0c2;color:#8a5a00;font-weight:600;padding:10px 28px;border-bottom:1px solid #f0d98a">@avvisoHome</div>
+}
+<header class="hdr">
+  <div class="hdr-in">
+    <a class="brand" href="/Volantini" aria-label="Correggo — home">
+      <span class="co">Co</span>
+      <span><b>Correggo</b><small>Hub correzioni</small></span>
+    </a>
+    <span class="sep" aria-hidden="true"></span>
+    @if (string.IsNullOrWhiteSpace(Model.LogoCliente))
+    {
+        <div class="logo-slot" title="Logo del cliente: impostare Cliente:LogoUrl in appsettings.json">Logo cliente</div>
+    }
+    else
+    {
+        <img class="logo-img" src="@Model.LogoCliente" alt="Logo cliente" />
+    }
+    <div class="hdr-sp"></div>
+    @* CONSULTA TUTTI I VOLANTINI (j213): per tutti, come ftp.aspx:58 e Home.aspx dell'originale *@
+    <a class="logout" href="/Storico" style="display:inline-flex;align-items:center;text-decoration:none">Consulta tutti i volantini</a>
+    @if (!User.IsInRole("Agenzia"))
+    {
+        @* LEGENDA (j216): il manuale di Correggo in PDF. Solo Category e Marketing: l'Agenzia non corregge
+           (decisione di Michele del 14/9). Il PDF lo serve /Legenda, non sta in wwwroot. *@
+        <a class="logout" href="/Legenda" target="_blank" rel="noopener" title="Legenda: il manuale di Correggo (PDF)"
+           style="display:inline-flex;align-items:center;gap:6px;text-decoration:none">
+            <img src="/immagini-correggo/infoButton.png" alt="" style="width:18px;height:18px">LEGENDA
+        </a>
+    }
+    @if (User.IsInRole("Agenzia"))
+    {
+        @* GESTISCI PROMO (j209): solo Agenzia, come Home.aspx:299 dell'originale *@
+        <a class="logout" href="/Promo/Gestisci" style="display:inline-flex;align-items:center;text-decoration:none;background:var(--teal-700);border-color:var(--teal-700);color:#fff">Gestisci promo</a>
+    }
+    @* j243: la campanella apre la tendina delle notifiche. Prima non faceva niente. *@
+    <button class="bell" type="button" id="bell" title="Notifiche"
+            aria-label="Notifiche, @Model.NotificheNonLette non lette">
+      <svg class="i"><use href="#i-bell"/></svg>
+      <span class="n" id="bellN" hidden="@bellNascosto">@bellNumero</span>
+    </button>
+    <div class="me">
+      <div class="avatar" aria-hidden="true">@iniziali</div>
+      <div class="me-t"><b>@nome</b><span><span class="role">@(Model.PuoCorreggere ? "GDO" : "Agenzia")</span>@(Model.PuoCorreggere ? "può correggere" : "sola lettura")</span></div>
     </div>
-    <div class="small text-muted">
-        @User.Identity?.Name
-        <span class="badge bg-secondary-subtle text-secondary-emphasis ms-1">
-            @(User.IsInRole("GDO") ? "GDO" : "Agenzia")
-        </span>
-        <form method="post" action="/Account/Logout" class="d-inline ms-2">
-            @Html.AntiForgeryToken()
-            <button class="btn btn-link btn-sm p-0 align-baseline">esci</button>
-        </form>
+    <form method="post" action="/Account/Logout" style="margin:0">
+      @Html.AntiForgeryToken()
+      <button class="logout" type="submit">Esci</button>
+    </form>
+  </div>
+</header>
+
+<nav class="bar" aria-label="Filtri">
+  <div class="bar-in">
+    @* Tab Tutte / In lavorazione / Approvate tolti l'11/9/2026: "Approvato" non esiste (vedi correggo4-correzioni.md). *@
+    <label class="search">
+      <svg class="i"><use href="#i-search"/></svg>
+      <input id="q" type="search" placeholder="Cerca promo o PDF" autocomplete="off">
+      <kbd>/</kbd>
+    </label>
+  </div>
+</nav>
+
+<main class="main">
+  <aside class="side">
+    <h2 class="sec">Promo attive <small id="campCount"></small></h2>
+    <div class="camps" id="camps"></div>
+    @if (Model.MostraScadute)
+    {
+        <a class="more" href="/Volantini">Nascondi le promo non più valide</a>
+    }
+    else if (Model.PromoScadute > 0)
+    {
+        <a class="more" href="/Volantini?scadute=true">Mostra anche le promo non più valide (@Model.PromoScadute)</a>
+    }
+  </aside>
+
+  <section class="content" aria-live="polite">
+    <div class="c-head">
+      <div>
+        <h1 id="cTitle"></h1>
+        <div class="c-sub" id="cSub"></div>
+      </div>
+      <div class="c-sp"></div>
+      <select class="sel" id="fCanale" aria-label="Filtra per canale"></select>
+      <select class="sel" id="fArea" aria-label="Filtra per area"></select>
     </div>
+    <div class="grid" id="grid"></div>
+  </section>
+</main>
+
+@* j243: l'interruttore adesso si salva davvero, e dice cosa governa: le email di avviso
+   (decisione di Michele del 16/9). La campanella non si silenzia: quella e' il semaforo. *@
+<div class="notif" id="notif" role="switch" aria-checked="@emailOn" tabindex="0"
+     title="Le email di avviso quando cambia qualcosa sui volantini">
+  <div class="ic"><svg class="i"><use href="@emailIco"/></svg></div>
+  <div><b>Notifiche email</b><span id="notifTxt">@emailTxt</span></div>
+  <div class="sw" aria-hidden="true"></div>
 </div>
 
-@if (Model.Count == 0)
-{
-    <div class="alert alert-light border">Nessun volantino pubblicato.</div>
+<script>
+/* ============================================================
+   Dati dal controller (VolantiniController.Index -> HubVolantini).
+   promo = classificazione · PDF = volantino (classificazione, titolo)
+   ============================================================ */
+const DATI = @Html.Raw(jsonHome);
+const UTENTE = { ruolo: DATI.puoCorreggere ? "GDO" : "Agenzia" };
+const SENZA_CANALE = "Senza canale";
+
+/* colore stabile per canale: i canali non sono tabellati, si ricava dal nome */
+const TAVOLOZZA = [
+  { c:"#2a8a7c", c2:"#bfe9e2" }, { c:"#d9822b", c2:"#fbe0c3" }, { c:"#6b5bb5", c2:"#dcd6f3" },
+  { c:"#c8352e", c2:"#f6d0cd" }, { c:"#2f6db3", c2:"#cfe0f4" }, { c:"#8a6d1f", c2:"#efe3c0" }
+];
+const CANALI = new Proxy({}, { get(_, nome){
+  if (nome === SENZA_CANALE) return { c:"#7c8a91", c2:"#e3e8ea" };
+  let h = 0; for (const ch of String(nome)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return TAVOLOZZA[h % TAVOLOZZA.length];
+}});
+
+function tempoFa(iso){
+  if (!iso) return "";
+  const min = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (min < 1) return "adesso";
+  if (min < 60) return `${min} min fa`;
+  const ore = Math.round(min / 60);
+  if (ore < 24) return `${ore} or${ore===1?"a":"e"} fa`;
+  const gg = Math.round(ore / 24);
+  if (gg === 1) return "ieri";
+  if (gg < 7) return `${gg} giorni fa`;
+  return new Date(iso).toLocaleDateString("it-IT", { day:"numeric", month:"short" });
 }
-else
-{
-    <div class="table-responsive">
-        <table class="table table-sm align-middle">
-            <thead>
-                <tr class="text-uppercase small text-muted">
-                    <th>Titolo</th>
-                    <th>Promo</th>
-                    <th class="text-center">Ver.</th>
-                    <th class="text-center">Pagine</th>
-                    <th class="text-center">Box</th>
-                    <th class="text-center">Correzioni</th>
-                    <th>Validit&agrave;</th>
-                </tr>
-            </thead>
-            <tbody>
-            @foreach (var v in Model)
-            {
-                <tr>
-                    <td class="fw-semibold">
-                        <a href="/Volantini/Dettaglio/@v.Id" class="text-decoration-none">@v.Titolo</a>
-                    </td>
-                    <td class="small">@v.Classificazione</td>
-                    <td class="text-center small">@v.Versione</td>
-                    <td class="text-center">@v.Pagine</td>
-                    <td class="text-center">@v.Box</td>
-                    <td class="text-center">
-                        @if (v.Note > 0)
-                        {
-                            <span class="badge bg-warning-subtle text-warning-emphasis">@v.Note</span>
-                        }
-                        else
-                        {
-                            <span class="text-muted">0</span>
-                        }
-                    </td>
-                    <td class="small">@v.ValiditaInizio.ToString("dd/MM/yy") &ndash; @v.ValiditaFine.ToString("dd/MM/yy")</td>
-                </tr>
-            }
-            </tbody>
-        </table>
+const dataBreve = iso => iso ? new Date(iso).toLocaleDateString("it-IT", { day:"2-digit", month:"2-digit" }) : "";
+
+/* j317: i volantini dove l'Agenzia ha del lavoro di timone da fare. Si riempie poco dopo, con
+   una chiamata al server (in fondo al file). Sta dichiarato qui, in alto, perche' pdfPerCanale lo
+   legge al primo disegno: dichiarandolo in fondo il primo disegno morirebbe sulla zona morta
+   temporale della const, e la home resterebbe vuota. */
+const TIMONE_DA_FARE = new Set();
+
+const CAMPAGNE = DATI.promo.map(p => ({
+  classificazione: p.classificazione,
+  aggiornato: tempoFa(p.aggiornata),
+  validita: p.validitaInizio ? `valida ${dataBreve(p.validitaInizio)} – ${dataBreve(p.validitaFine)}` : "",
+  volantini: p.volantini.map(v => ({
+    id: v.id, titolo: v.titolo,
+    canale: v.canale || SENZA_CANALE, area: v.area || "",
+    versione: v.versione, pagine: v.pagine, miniatura: v.miniatura,
+    stato: v.stato, aperte: v.aperte, commenti: v.commenti, bloccoMin: v.bloccoMinuti
+  }))
+}));
+
+/* ---------- derivati ---------- */
+function statoCampagna(c){ return c.volantini.every(v => v.stato === "approvato") ? "approvato" : "revisione"; }
+function aperteCampagna(c){ return c.volantini.reduce((s,v)=>s+v.aperte,0); }
+function approvati(c){ return c.volantini.filter(v=>v.stato==="approvato").length; }
+
+// j241: Michele vuole solo "correzioni", senza "aperte"
+const correzioniAperte = n => n === 1 ? "1 correzione" : `${n} correzioni`;
+
+/* ---------- stato UI ---------- */
+const PRIMA = CAMPAGNE.length ? CAMPAGNE[0].classificazione : null;
+const S = { filtro:"tutte", q:"", sel:PRIMA, canale:"", area:"", hl:null,
+            aperta:PRIMA };  // una sola tendina PDF aperta alla volta
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch]));
+const ico = id => `<svg class="i"><use href="#i-${id}"/></svg>`;
+
+/* ============================================================
+   j241 - COMMENTI DEL VOLANTINO
+   Il bottone "Commenti" della card apre un riquadro su questa stessa pagina (niente finestre
+   nuove del browser): l'elenco dei commenti di quel volantino, col nome e la data, e una casella
+   per scriverne uno. Sono appunti generici sul volantino, non la chat di una singola correzione
+   (quella dell'originale, `volantini_correzzioni_messaggistica`, resta fuori).
+   Lo stile sta qui dentro per tenere la modifica in un unico punto del file.
+   ============================================================ */
+const STILE_COMMENTI = `
+#cvelo { position: fixed; inset: 0; background: #36383a94; z-index: 300; display: none; }
+#cvelo.on { display: block; }
+#cbox { width: 560px; max-width: calc(100% - 32px); max-height: calc(100vh - 120px);
+        margin: 60px auto 0; background: #fff; border-radius: 12px; overflow: hidden;
+        display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+#cbox .ctesta { background: #2a8a7c; color: #fff; padding: 10px 14px; display: flex; gap: 10px;
+                align-items: center; font-weight: 700; }
+#cbox .ctesta button { margin-left: auto; border: 0; background: #ffffff2e; color: #fff;
+                       border-radius: 6px; padding: 4px 10px; cursor: pointer; font: inherit; }
+#clista { padding: 12px 14px; overflow-y: auto; flex: 1 1 auto; min-height: 90px; }
+#clista .cuno { border-bottom: 1px solid #eee; padding: 8px 0; }
+#clista .cuno:last-child { border-bottom: 0; }
+#clista .cchi { font-size: 12px; color: #555; margin-bottom: 2px; }
+#clista .cchi b { color: #222; }
+#clista .ctesto { white-space: pre-wrap; }
+#clista .cvuoto { color: #666; text-align: center; padding: 18px 0; }
+#cscrivi { border-top: 1px solid #e6e6e6; padding: 10px 14px; }
+#cscrivi textarea { width: 100%; height: 66px; resize: vertical; font: inherit; padding: 6px 8px;
+                    border: 1px solid #bbb; border-radius: 6px; box-sizing: border-box; }
+#cscrivi .criga { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+#cscrivi button { background: #2a8a7c; color: #fff; border: 0; border-radius: 6px;
+                  padding: 7px 14px; cursor: pointer; font: inherit; font-weight: 700; }
+#cscrivi button[disabled] { opacity: .5; cursor: default; }
+#cscrivi .cmsg { font-size: 12px; color: #a33; }
+.badge.cbadge { background: #2a8a7c; color: #fff; }
+`;
+
+(function commenti() {
+  const stile = document.createElement("style");
+  stile.textContent = STILE_COMMENTI;
+  document.head.appendChild(stile);
+
+  const velo = document.createElement("div");
+  velo.id = "cvelo";
+  velo.innerHTML = `<div id="cbox">
+      <div class="ctesta"><span id="ctitolo">Commenti</span><button type="button" id="cchiudi">CHIUDI</button></div>
+      <div id="clista"></div>
+      <div id="cscrivi">
+        <textarea id="ctesto" maxlength="2000" placeholder="Scrivi un appunto su questo volantino…"></textarea>
+        <div class="criga"><button type="button" id="cinvia">Scrivi</button><span class="cmsg" id="cmsg"></span></div>
+      </div>
+    </div>`;
+  document.body.appendChild(velo);
+
+  const lista = velo.querySelector("#clista");
+  const testo = velo.querySelector("#ctesto");
+  const msg = velo.querySelector("#cmsg");
+  const invia = velo.querySelector("#cinvia");
+  let volAperto = null;
+
+  const dataOra = iso => iso ? new Date(iso).toLocaleString("it-IT",
+      { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
+
+  function token() {
+    const i = document.querySelector('input[name="__RequestVerificationToken"]');
+    return i ? i.value : "";
+  }
+
+  function disegna(commenti) {
+    if (!commenti || !commenti.length) {
+      lista.innerHTML = `<div class="cvuoto">Ancora nessun commento su questo volantino.</div>`;
+      return;
+    }
+    lista.innerHTML = commenti.map(c => `<div class="cuno">
+        <div class="cchi"><b>${esc(c.autore)}</b>${c.tipoAutore ? " · " + esc(c.tipoAutore) : ""} · ${dataOra(c.data)}</div>
+        <div class="ctesto">${esc(c.testo)}</div>
+      </div>`).join("");
+  }
+
+  function pallino(idVol, quanti) {
+    document.querySelectorAll(".cbadge-" + idVol).forEach(b => {
+      b.textContent = quanti || "";
+      b.hidden = !quanti;
+    });
+  }
+
+  function apri(idVol, titolo) {
+    volAperto = idVol;
+    velo.querySelector("#ctitolo").textContent = "Commenti · " + titolo;
+    lista.innerHTML = `<div class="cvuoto">Carico…</div>`;
+    testo.value = ""; msg.textContent = ""; invia.disabled = false;
+    velo.classList.add("on");
+    testo.focus();
+    fetch("/Correzioni/Commenti/" + idVol, { credentials: "same-origin" })
+      .then(r => r.json())
+      .then(j => {
+        if (!j.ok) { lista.innerHTML = `<div class="cvuoto">${esc(j.messaggio || "Non si e' potuto leggere i commenti.")}</div>`; return; }
+        disegna(j.dati.commenti);
+        pallino(idVol, j.dati.quanti);
+      })
+      .catch(() => { lista.innerHTML = `<div class="cvuoto">Server non raggiungibile.</div>`; });
+  }
+
+  function chiudi() { velo.classList.remove("on"); volAperto = null; }
+
+  velo.querySelector("#cchiudi").addEventListener("click", chiudi);
+  velo.addEventListener("click", e => { if (e.target === velo) chiudi(); });
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && velo.classList.contains("on")) chiudi(); });
+
+  invia.addEventListener("click", () => {
+    const t = testo.value.trim();
+    if (!t || volAperto == null) return;
+    invia.disabled = true; msg.textContent = "";
+    fetch("/Correzioni/Commenti/" + volAperto, {
+      method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json", "RequestVerificationToken": token() },
+      body: JSON.stringify({ testo: t })
+    }).then(r => r.json()).then(j => {
+      invia.disabled = false;
+      if (!j.ok) { msg.textContent = j.messaggio || "Non si e' potuto scrivere il commento."; return; }
+      testo.value = "";
+      disegna(j.dati.commenti);
+      pallino(volAperto, j.dati.quanti);
+    }).catch(() => { invia.disabled = false; msg.textContent = "Server non raggiungibile."; });
+  });
+
+  document.addEventListener("click", e => {
+    const b = e.target.closest ? e.target.closest("[data-commenti]") : null;
+    if (!b) return;
+    e.preventDefault();
+    apri(Number(b.dataset.commenti), b.dataset.titolo || "");
+  });
+
+  // i pallini di tutte le card, con una sola chiamata
+  function conta() {
+    fetch("/Correzioni/Commenti", { credentials: "same-origin" })
+      .then(r => r.json())
+      .then(j => { if (j.ok) (j.dati.conti || []).forEach(c => pallino(c.idVol, c.quanti)); })
+      .catch(() => {});
+  }
+  window.addEventListener("load", () => setTimeout(conta, 300));
+})();
+
+function matchQ(c){
+  if(!S.q) return true;
+  const q = S.q.toLowerCase();
+  return c.classificazione.toLowerCase().includes(q) || c.volantini.some(v => v.titolo.toLowerCase().includes(q));
+}
+function campagneVisibili(){
+  return CAMPAGNE.filter(c => (S.filtro==="tutte" || statoCampagna(c)===S.filtro) && matchQ(c));
+}
+
+// DEPRECATO (11/9/2026) - statoCampagna, pillStato, approvati e renderTabs servivano allo stato
+// "In revisione / Approvato" e ai tab, tolti su richiesta di Michele: nel Correggo originale un
+// volantino "approvato" non esiste (nessuno scrive quello stato) e il controller non lo produce mai.
+// Restano solo per non riscoprirlo: se si decide cosa significa "approvato", il controller deve
+// valorizzare PdfHub.Stato = "approvato" e qui si rimettono la pill in renderCamps e i tab nel markup.
+function pillStato(st){
+  if(st==="approvato") return `<span class="pill p-ok">Approvato</span>`;
+  return `<span class="pill p-rev">In revisione</span>`;
+}
+
+function renderTabs(){
+  if(!$("#tabs")) return;   // tab tolti: vedi DEPRECATO sopra
+  const base = CAMPAGNE.filter(matchQ);
+  $('[data-c="tutte"]').textContent = base.length;
+  $('[data-c="revisione"]').textContent = base.filter(c=>statoCampagna(c)==="revisione").length;
+  $('[data-c="approvato"]').textContent = base.filter(c=>statoCampagna(c)==="approvato").length;
+  document.querySelectorAll(".tab").forEach(t => t.setAttribute("aria-selected", t.dataset.f===S.filtro));
+}
+
+function renderCamps(list){
+  $("#campCount").textContent = list.length ? `${list.length}` : "";
+  if(!list.length){
+    $("#camps").innerHTML = `<div class="empty"><b>Nessuna promo</b>${CAMPAGNE.length ? "Prova a cambiare filtro o ricerca." : "Non ci sono promo attive."}</div>`;
+    return;
+  }
+  const q = S.q.toLowerCase();
+  $("#camps").innerHTML = list.map(c => {
+    const k = c.classificazione;
+    const st = statoCampagna(c), ap = aperteCampagna(c), n = c.volantini.length, ok = approvati(c);
+    const col = st==="approvato" ? "var(--ok-fg)" : "#e5a200";
+    const qInCamp = !q || k.toLowerCase().includes(q);
+    const pdfVis = c.volantini.filter(v => qInCamp || v.titolo.toLowerCase().includes(q));
+    const open = S.aperta===k || (!!q && !qInCamp);
+    return `<div class="camp" aria-current="${k===S.sel}" style="--st:${col}">
+      <button class="camp-head" type="button" data-k="${esc(k)}">
+        <div class="camp-top"><span class="camp-name">${esc(k)}</span></div>
+        <div class="camp-meta">
+          <span>${n} PDF</span>
+          <span class="open ${ap?"has":""}">${ap ? correzioniAperte(ap) : "nessuna aperta"}</span>
+        </div>
+      </button>
+      <button class="pdf-tog" type="button" data-tog="${esc(k)}" aria-expanded="${open}">
+        ${ico("files")} PDF caricati per canale ${ico("chev").replace('class="i"','class="i chev"')}
+      </button>
+      ${open ? `<div class="pdfs">${pdfPerCanale(c, pdfVis)}</div>` : ""}
+    </div>`;
+  }).join("");
+}
+
+/* nella tendina il prefisso della promo è ridondante: si mostra solo la parte che distingue il PDF
+   (nome completo nel tooltip). Se il titolo non segue la convenzione, resta intero. */
+function nomeBreve(titolo, promo){
+  const p = promo + "_";
+  return titolo.startsWith(p) && titolo.length > p.length ? titolo.slice(p.length) : titolo;
+}
+
+/* tendina: PDF della promo raggruppati per canale */
+function pdfPerCanale(c, vols){
+  const perCanale = {};
+  vols.forEach(v => (perCanale[v.canale] ||= []).push(v));
+  const k = c.classificazione;
+  return Object.keys(perCanale).sort((a,b) => (a===SENZA_CANALE) - (b===SENZA_CANALE) || a.localeCompare(b)).map(can => {
+    const kc = (CANALI[can]||{c:"#7c8a91"}).c;
+    const on = k===S.sel && S.canale===can;
+    return `<button class="pdf-can ${on?"on":""}" type="button" data-k="${esc(k)}" data-can="${esc(can)}" style="--kc:${kc}">
+        <span class="sw-c"></span>${esc(can)}<span class="n">${perCanale[can].length}</span>
+      </button>` +
+      perCanale[can].map(v => {
+        const st = v.stato==="approvato" ? `<span class="st ok" title="Approvato">${ico("check")}</span>`
+                 : v.stato==="bloccato"  ? `<span class="st lk" title="Bloccato">${ico("lock")}</span>`
+                 : v.aperte ? `<span class="st a" title="${v.aperte} correzioni">${v.aperte}</span>` : "";
+        // j317: la casella del timone sta PRIMA delle altre: e' quella che dice «entra qui adesso»
+        const tim = TIMONE_DA_FARE.has(v.id)
+          ? `<span class="st tim" title="Il Marketing ha chiuso la finestra e ha chiesto delle modifiche col timone: entra nel volantino e riportale sull'impaginato">TIMONE</span>`
+          : "";
+        return `<button class="pdf ${S.hl===v.id?"on":""}" type="button" data-k="${esc(k)}" data-id="${v.id}" title="${esc(v.titolo)}.pdf">
+          <span class="fi">PDF</span><span class="nm">${esc(nomeBreve(v.titolo, k))}</span><span class="mt">v${v.versione} · ${v.pagine}p</span>${tim}${st}
+        </button>`;
+      }).join("");
+  }).join("");
+}
+
+function fly(v){
+  if (v.miniatura) {
+    return `<img class="fly-img" src="${esc(v.miniatura)}" alt="Pagina 1 di ${esc(v.titolo)}" loading="lazy"
+              onerror="this.outerHTML=flyFinta(${v.id})">`;
+  }
+  return flyFinta(v.id);
+}
+function flyFinta(id){
+  const v = CAMPAGNE.flatMap(c => c.volantini).find(x => x.id === id) || {};
+  const k = CANALI[v.canale] || {c:"#7c8a91",c2:"#e3e8ea"};
+  return `<div class="fly" style="--fc:${k.c};--fc2:${k.c2}">
+    <div class="fh"><i style="width:34%"></i><i style="width:18%;opacity:.6"></i></div>
+    <div class="fhero"></div>
+    <div class="fg">${"<i></i>".repeat(9)}</div>
+    <div class="ff"></div>
+  </div>`;
+}
+
+function cardVol(v){
+  const puoCorreggere = UTENTE.ruolo === "GDO";
+  let stato;
+  if(v.stato==="approvato"){
+    stato = `<div class="v-state done">${ico("check")} Approvato</div>`;
+  } else {
+    stato = `<div class="v-state">${v.aperte ? `<span class="dot">${v.aperte}</span> correzion${v.aperte===1?"e":"i"}` : "Nessuna correzione"}</div>`;
+  }
+  const tags = [`<span class="pill p-area">${esc(v.canale)}${v.area ? " · " + esc(v.area) : ""}</span>`];
+  if(v.stato==="bloccato") tags.push(`<span class="pill p-lock">${ico("lock")} Bloccato</span>`);
+  const lock = v.stato==="bloccato" ? `<div class="v-lockinfo">Si sblocca tra ${v.bloccoMin} min</div>` : "";
+  // Dall'11/9 anche l'Agenzia lavora nell'editor (accetta le correzioni): per tutti "Apri editor".
+  const editLabel = v.stato==="approvato" ? "Apri in lettura" : "Apri editor";
+  const editIco   = v.stato==="approvato" ? "eye" : "edit";
+  return `<article class="vcard" data-id="${v.id}">
+    <div class="v-body">
+      <a class="v-thumb ${v.stato==="bloccato"?"locked":""}" href="/Volantini/Dettaglio/${v.id}" title="Apri ${esc(v.titolo)}">${fly(v)}<span class="pages">${v.pagine} pag.</span></a>
+      <div class="v-side">
+        <div class="v-tags">${tags.join("")}</div>
+        ${stato}${lock}
+        <div class="v-actions">
+          <a class="act primary" href="/Volantini/Dettaglio/${v.id}">${ico(editIco)} ${editLabel}</a>
+          <button class="act" type="button" data-commenti="${v.id}" data-titolo="${esc(v.titolo)}"
+                  title="Appunti su questo volantino">${ico("chat")} Commenti <span class="badge cbadge cbadge-${v.id}" hidden></span></button>
+        </div>
+      </div>
     </div>
+    <div class="v-foot">
+      <span class="v-title" title="${esc(v.titolo)}">${esc(v.titolo)}</span>
+      <span class="v-ver">Ver. <b>${v.versione}</b></span>
+    </div>
+  </article>`;
 }
+
+function fillSelect(el, label, values, cur){
+  el.innerHTML = `<option value="">${label}</option>` + values.map(x => `<option ${x===cur?"selected":""}>${esc(x)}</option>`).join("");
+}
+
+function renderContent(list){
+  const c = list.find(x => x.classificazione===S.sel);
+  const grid = $("#grid");
+  if(!c){
+    $("#cTitle").textContent = "—"; $("#cSub").textContent = "";
+    $("#fCanale").hidden = $("#fArea").hidden = true;
+    grid.innerHTML = `<div class="empty" style="grid-column:1/-1"><b>Seleziona una promo</b>I PDF caricati compariranno qui.</div>`;
+    return;
+  }
+  $("#fCanale").hidden = $("#fArea").hidden = false;
+  const n = c.volantini.length, ok = approvati(c), ap = aperteCampagna(c);
+  $("#cTitle").textContent = c.classificazione;
+  $("#cSub").textContent = [`${n} PDF`, ok && `${ok} approvat${ok===1?"o":"i"}`, correzioniAperte(ap), c.validita, c.aggiornato && `aggiornata ${c.aggiornato}`].filter(Boolean).join(" · ");
+  fillSelect($("#fCanale"), "Tutti i canali", [...new Set(c.volantini.map(v=>v.canale))], S.canale);
+  const aree = [...new Set(c.volantini.map(v=>v.area).filter(Boolean))];
+  fillSelect($("#fArea"), "Tutte le aree", aree, S.area);
+  $("#fArea").hidden = aree.length === 0;
+
+  const q = S.q.toLowerCase();
+  const qInCamp = c.classificazione.toLowerCase().includes(q);
+  const vols = c.volantini
+    .filter(v => !S.canale || v.canale===S.canale)
+    .filter(v => !S.area || v.area===S.area)
+    .filter(v => !q || qInCamp || v.titolo.toLowerCase().includes(q))
+    // prima quelli che richiedono attenzione
+    .sort((a,b) => (a.stato==="approvato") - (b.stato==="approvato") || b.aperte - a.aperte);
+
+  grid.innerHTML = vols.length ? vols.map(cardVol).join("")
+    : `<div class="empty" style="grid-column:1/-1"><b>Nessun volantino</b>Nessun risultato con questi filtri.</div>`;
+}
+
+function render(){
+  const list = campagneVisibili();
+  if(!list.some(c => c.classificazione===S.sel) && list.length) { S.sel = list[0].classificazione; S.canale = S.area = ""; }
+  renderTabs(); renderCamps(list); renderContent(list);
+}
+
+/* ---------- eventi ---------- */
+$("#tabs")?.addEventListener("click", e => {   // tab tolti l'11/9: resta innocuo
+  const t = e.target.closest(".tab"); if(!t) return;
+  S.filtro = t.dataset.f; render();
+});
+$("#camps").addEventListener("click", e => {
+  const tog = e.target.closest("[data-tog]");
+  if(tog){ const k = tog.dataset.tog; S.aperta = (S.aperta===k) ? null : k; render(); return; }
+  const pdf = e.target.closest(".pdf");
+  if(pdf){
+    S.sel = pdf.dataset.k; S.canale = S.area = ""; S.hl = +pdf.dataset.id; render();
+    const card = document.querySelector(`.vcard[data-id="${S.hl}"]`);
+    if(card){ card.scrollIntoView({behavior:"smooth", block:"center"}); card.classList.remove("flash"); void card.offsetWidth; card.classList.add("flash"); }
+    return;
+  }
+  const can = e.target.closest(".pdf-can");
+  if(can){ S.sel = can.dataset.k; S.area = ""; S.hl = null; S.canale = (S.canale===can.dataset.can) ? "" : can.dataset.can; render(); return; }
+  const head = e.target.closest(".camp-head"); if(!head) return;
+  S.sel = head.dataset.k; S.canale = S.area = ""; S.hl = null; S.aperta = head.dataset.k; render();
+});
+$("#q").addEventListener("input", e => { S.q = e.target.value.trim(); render(); });
+$("#fCanale").addEventListener("change", e => { S.canale = e.target.value; render(); });
+$("#fArea").addEventListener("change", e => { S.area = e.target.value; render(); });
+document.addEventListener("keydown", e => {
+  if(e.key === "/" && document.activeElement !== $("#q")) { e.preventDefault(); $("#q").focus(); }
+});
+/* ============================================================
+   j243 - CAMPANELLA, INTERRUTTORE DELLE EMAIL, SEMAFORO CHE SUONA
+
+   La campanella apre una tendina con le notifiche (prima non faceva niente) e c'e' il bottone
+   "Segna tutte come lette": il numerino non si azzera da solo aprendo, e' una scelta di Michele.
+   L'interruttore della colonna di sinistra governa le EMAIL di avviso e viene salvato sul server.
+   Ogni minuto la pagina chiede se e' arrivato qualcosa: quando arriva il SEMAFORO (una finestra
+   dei Category che si apre o si chiude) suona un din-don, compare una barra verde e nella
+   linguetta del browser appare il numero, cosi' chi sta aspettando il via se ne accorge.
+   Avvertenza: i browser non lasciano suonare una pagina se non ci si e' mai cliccato dentro;
+   in quel caso la barra e il titolo si vedono comunque.
+   ============================================================ */
+const STILE_NOTIFICHE = `
+#npan { position: fixed; top: 58px; right: 14px; width: 390px; max-width: calc(100% - 28px);
+        max-height: 70vh; background: #fff; border: 1px solid var(--line); border-radius: 12px;
+        box-shadow: 0 12px 30px rgba(0,0,0,.22); z-index: 320; display: flex;
+        flex-direction: column; overflow: hidden; }
+/* senza questa riga il display:flex vince sull'attributo hidden e la tendina resta aperta */
+#npan[hidden] { display: none; }
+#npan .ntesta { display: flex; align-items: center; gap: 8px; padding: 9px 12px;
+                background: var(--teal-700); color: #fff; }
+#npan .ntesta b { font-size: 14px; }
+#npan .ntesta button { margin-left: auto; border: 0; background: #ffffff2e; color: #fff;
+                       border-radius: 6px; padding: 4px 9px; cursor: pointer; font: inherit;
+                       font-size: 12px; }
+#npan .ntesta button[disabled] { opacity: .5; cursor: default; }
+#nlista { overflow-y: auto; padding: 4px 0; }
+#nlista .nuna { display: block; padding: 9px 12px; border-bottom: 1px solid #f0f3f4;
+                text-decoration: none; color: var(--ink); }
+#nlista .nuna:last-child { border-bottom: 0; }
+#nlista .nuna:hover { background: var(--teal-50); }
+#nlista .nuna.da_leggere { background: #f4fbf9; border-left: 3px solid var(--teal); }
+#nlista .nuna.semaforo b { color: #1d7a34; }
+#nlista .nquando { display: block; font-size: 11.5px; color: var(--ink-3); margin-top: 3px; }
+#nlista .nvuoto { padding: 22px 12px; text-align: center; color: var(--ink-3); }
+#nbarra { position: fixed; left: 0; right: 0; top: 0; z-index: 330; background: #1d7a34;
+          color: #fff; padding: 10px 14px; display: flex; align-items: center; gap: 12px;
+          font-weight: 600; box-shadow: 0 2px 10px rgba(0,0,0,.25); }
+#nbarra a { color: #fff; text-decoration: underline; }
+#nbarra button { margin-left: auto; border: 0; background: #ffffff2e; color: #fff;
+                 border-radius: 6px; padding: 3px 9px; cursor: pointer; font: inherit; }
+`;
+
+(function notifiche(){
+  const stile = document.createElement("style");
+  stile.textContent = STILE_NOTIFICHE;
+  document.head.appendChild(stile);
+
+  const bell = document.getElementById("bell");
+  const badge = document.getElementById("bellN");
+  const notif = document.getElementById("notif");
+  const TITOLO = document.title;
+  let ultimoId = 0, suono = null;
+
+  const pan = document.createElement("div");
+  pan.id = "npan"; pan.hidden = true;
+  pan.innerHTML = `<div class="ntesta"><b>Notifiche</b>
+      <button type="button" id="nlette">Segna tutte come lette</button></div>
+    <div id="nlista"><div class="nvuoto">Carico&hellip;</div></div>`;
+  document.body.appendChild(pan);
+  const lista = pan.querySelector("#nlista");
+  const bLette = pan.querySelector("#nlette");
+
+  function token(){
+    const i = document.querySelector('input[name="__RequestVerificationToken"]');
+    return i ? i.value : "";
+  }
+  const quando = iso => iso ? new Date(iso).toLocaleString("it-IT",
+      { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" }) : "";
+
+  function numerino(n){
+    if(badge){ badge.textContent = n > 99 ? "99+" : String(n); badge.hidden = !n; }
+    document.title = n > 0 ? "(" + n + ") " + TITOLO : TITOLO;
+    if(bell) bell.setAttribute("aria-label", "Notifiche, " + n + " non lette");
+  }
+
+  function disegna(voci){
+    if(!voci || !voci.length){
+      lista.innerHTML = `<div class="nvuoto">Nessuna notifica.<br>Qui arriva il via quando si apre la finestra dei Category.</div>`;
+      return;
+    }
+    lista.innerHTML = voci.map(v => {
+      const cl = "nuna" + (v.letta ? "" : " da_leggere") + (v.semaforo ? " semaforo" : "");
+      const testo = `<b>${esc(v.testo)}</b><span class="nquando">${quando(v.data)}</span>`;
+      return v.link ? `<a class="${cl}" href="${esc(v.link)}">${testo}</a>`
+                    : `<div class="${cl}">${testo}</div>`;
+    }).join("");
+  }
+
+  function carica(){
+    fetch("/Notifiche", { credentials:"same-origin" })
+      .then(r => r.json())
+      .then(j => {
+        if(!j.ok) { lista.innerHTML = `<div class="nvuoto">Non si e' potuto leggere le notifiche.</div>`; return; }
+        disegna(j.dati.voci);
+        numerino(j.dati.quanteNonLette);
+        if(j.dati.ultimoId > ultimoId) ultimoId = j.dati.ultimoId;
+        bLette.disabled = !j.dati.quanteNonLette;
+      })
+      .catch(() => { lista.innerHTML = `<div class="nvuoto">Server non raggiungibile.</div>`; });
+  }
+
+  function apri(){ pan.hidden = false; carica(); }
+  function chiudi(){ pan.hidden = true; }
+
+  if(bell) bell.addEventListener("click", e => { e.stopPropagation(); pan.hidden ? apri() : chiudi(); });
+  document.addEventListener("click", e => {
+    if(pan.hidden || pan.contains(e.target) || (bell && bell.contains(e.target))) return;
+    chiudi();
+  });
+  document.addEventListener("keydown", e => { if(e.key === "Escape") chiudi(); });
+
+  bLette.addEventListener("click", () => {
+    bLette.disabled = true;
+    fetch("/Notifiche/Lette", { method:"POST", credentials:"same-origin",
+        headers:{ "RequestVerificationToken": token() } })
+      .then(r => r.json())
+      .then(j => { if(j.ok){ numerino(0); carica(); } else bLette.disabled = false; })
+      .catch(() => { bLette.disabled = false; });
+  });
+
+  /* ---------- il din-don ---------- */
+  function dindon(){
+    try{
+      const C = window.AudioContext || window.webkitAudioContext;
+      if(!C) return;
+      suono = suono || new C();
+      if(suono.state === "suspended") suono.resume();
+      const t0 = suono.currentTime;
+      [[784, 0], [1046, 0.17]].forEach(function(nota){
+        const o = suono.createOscillator(), g = suono.createGain();
+        o.type = "sine"; o.frequency.value = nota[0];
+        g.gain.setValueAtTime(0.0001, t0 + nota[1]);
+        g.gain.exponentialRampToValueAtTime(0.22, t0 + nota[1] + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + nota[1] + 0.40);
+        o.connect(g); g.connect(suono.destination);
+        o.start(t0 + nota[1]); o.stop(t0 + nota[1] + 0.45);
+      });
+    }catch(e){ /* niente suono: restano la barra e il titolo */ }
+  }
+
+  /* ---------- la barra verde ---------- */
+  let orologioBarra = null;
+  function barra(testo, link){
+    let b = document.getElementById("nbarra");
+    if(!b){ b = document.createElement("div"); b.id = "nbarra"; document.body.appendChild(b); }
+    b.innerHTML = `<span>${esc(testo)}</span>` +
+                  (link ? ` <a href="${esc(link)}">Vai</a>` : "") +
+                  `<button type="button" aria-label="Chiudi">&times;</button>`;
+    b.querySelector("button").addEventListener("click", () => b.remove());
+    clearTimeout(orologioBarra);
+    orologioBarra = setTimeout(() => { const x = document.getElementById("nbarra"); if(x) x.remove(); }, 120000);
+  }
+
+  /* ---------- il giro di ogni minuto ---------- */
+  function giro(){
+    fetch("/Notifiche/Nuove?dopo=" + ultimoId, { credentials:"same-origin" })
+      .then(r => r.json())
+      .then(j => {
+        if(!j.ok) return;
+        const d = j.dati;
+        numerino(d.quanteNonLette);
+        if(d.ultimoId > ultimoId){
+          ultimoId = d.ultimoId;
+          const semafori = (d.nuove || []).filter(x => x.semaforo);
+          if(semafori.length){ dindon(); barra(semafori[0].testo, semafori[0].link); }
+          if(!pan.hidden) carica();
+        }
+      })
+      .catch(() => {});
+  }
+  giro();
+  setInterval(giro, 60000);
+  document.addEventListener("visibilitychange", () => { if(!document.hidden) giro(); });
+
+  /* ---------- l'interruttore delle email ---------- */
+  function mostraInterruttore(on){
+    notif.setAttribute("aria-checked", on ? "true" : "false");
+    $("#notifTxt").textContent = on ? "Attive" : "Silenziate";
+    notif.querySelector(".ic use").setAttribute("href", on ? "#i-bell" : "#i-bell-off");
+  }
+  function toggleNotif(){
+    const on = notif.getAttribute("aria-checked") !== "true";
+    mostraInterruttore(on);
+    fetch("/Notifiche/Email", { method:"POST", credentials:"same-origin",
+        headers:{ "Content-Type":"application/json", "RequestVerificationToken": token() },
+        body: JSON.stringify({ attive: on }) })
+      .then(r => r.json())
+      .then(j => { if(!j.ok) mostraInterruttore(!on); })
+      .catch(() => { mostraInterruttore(!on); });
+  }
+  notif.addEventListener("click", toggleNotif);
+  notif.addEventListener("keydown", e => { if(e.key===" "||e.key==="Enter"){ e.preventDefault(); toggleNotif(); } });
+})();
+
+/* ---------- j317: i volantini che aspettano l'Agenzia ----------
+   Una chiamata sola, al caricamento. Il server risponde con l'elenco dei volantini dove il
+   Marketing ha chiuso la finestra e ha davvero salvato delle modifiche nel timone; a chi non e'
+   l'Agenzia risponde con un elenco vuoto, quindi qui non c'e' nessuna regola di ruolo da tenere
+   allineata - sta tutta in Servizi/ServizioTimone.cs.
+   Perche' non arriva insieme al resto della home: cosi' la rotta che disegna la home non si tocca.
+   Se un domani servisse anche altrove, e' una riga di fetch.
+   L'elenco si riempie dopo il primo disegno, percio' si ridisegna - ma solo se c'e' qualcosa:
+   ridisegnare per niente farebbe sfarfallare la pagina a ogni apertura. */
+(function () {
+  fetch("/Timone/DaSistemare", { credentials: "same-origin" })
+    .then(r => r.json())
+    .then(j => {
+      if (!j || !j.ok || !j.dati) return;
+      (j.dati.volantini || []).forEach(id => TIMONE_DA_FARE.add(Number(id)));
+      if (TIMONE_DA_FARE.size) render();
+    })
+    .catch(() => {});
+})();
+
+render();
+</script>
+</body>
+</html>

@@ -39,6 +39,12 @@ public sealed class BoxReferenza
     public List<CampoReferenza> Tracciato { get; set; } = new(); // da itemRefStringfied
     public List<string> Azioni { get; set; } = new();
     public List<NotaSuBox> Note { get; set; } = new();
+
+    // Edit avanzato (j200): le azioni con le istruzioni, la descrizione coi tag delle fasce e la
+    // posizione degli elementi figli (x, y, larghezza, altezza) per colorarli nel ritaglio.
+    public List<Correggo4.Servizi.AzioneReferenza> Schema { get; set; } = new();
+    public string DescrizioneGrezza { get; set; } = "";
+    public Dictionary<string, double[]> Figli { get; set; } = new();
 }
 
 public sealed class PaginaCorrezione
@@ -65,4 +71,11 @@ public sealed class VolantinoInCorrezione
     public List<PaginaCorrezione> Pagine { get; set; } = new();
     public int TotaleCorrezioni => Pagine.Sum(p => p.Correzioni);
     public string UrlFoto { get; set; } = "";
+
+    /// <summary>Aperto dallo storico (?v=): niente scritture (j213). UltimaVersione per l'avviso.</summary>
+    public bool SolaLettura { get; set; }
+    public short UltimaVersione { get; set; }
+
+    /// <summary>Note, timbri e OK visto per l'editor (ServizioCorrezioni.CaricaAsync).</summary>
+    public StatoCorrezioni Correzioni { get; set; } = new();
 }

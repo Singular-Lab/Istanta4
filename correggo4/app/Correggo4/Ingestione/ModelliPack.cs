@@ -1,3 +1,6 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
 namespace Correggo4.Ingestione;
 
 // Struttura del JSON dentro un file .pack, ricostruita leggendo
@@ -39,6 +42,14 @@ public class CorreggoSchemaCampiDellaRef
     public decimal[]? bounds { get; set; }           // [top, left, bottom, right]
     public byte pag { get; set; }
     public List<CorreggoAzioneSullaRef>? azioni { get; set; }
+
+    /// <summary>
+    /// Tutto cio' che il pacchetto contiene e questa classe non nomina (11/9/2026). Prima andava
+    /// perso: ImportatorePack salva lo schema con JsonSerializer.Serialize(rif), quindi solo le
+    /// proprieta' dichiarate arrivavano in volantini_pagine_elementi.contenuto.
+    /// </summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? Altro { get; set; }
 }
 
 public class CorreggoAzioneSullaRef
@@ -48,6 +59,30 @@ public class CorreggoAzioneSullaRef
     public string? compiledValue { get; set; }
     public string? labelIndd { get; set; }
     public decimal[]? bounds { get; set; }
+
+    /// <summary>
+    /// Istruzioni a livello di campo (IstantaLib FicoTypes.Correggo_IstruzioneCampoDellaRef):
+    /// quali campi l'Edit avanzato rende modificabili e con quali valori. Mancavano dall'ingestione
+    /// fino all'11/9/2026: senza, la scheda non sa quali campi mostrare.
+    /// </summary>
+    public List<CorreggoIstruzioneCampoDellaRef>? istruzioni { get; set; }
+
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? Altro { get; set; }
+}
+
+public class CorreggoIstruzioneCampoDellaRef
+{
+    public string? tipoDato { get; set; }        // "string" | "number" | "array" ...
+    public string? field { get; set; }           // es. "prezzo_promo", "Descrizioni$Peso"
+    // null: il valore lo mette l'utente; uno: va solo confermato; piu' d'uno: tendina.
+    public string[]? valore { get; set; }
+    public string? autocomplete { get; set; }
+    public bool primary { get; set; }
+    public int triggerActionId { get; set; }
+
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? Altro { get; set; }
 }
 
 /// <summary>Un .pack decodificato: metadati, PDF e l'utente che l'ha depositato.</summary>

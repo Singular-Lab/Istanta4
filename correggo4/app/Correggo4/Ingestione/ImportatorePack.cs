@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Correggo4.Data;
 using Correggo4.Models;
+using Correggo4.Servizi;
 using Microsoft.EntityFrameworkCore;
 
 namespace Correggo4.Ingestione;
@@ -20,12 +21,15 @@ public sealed class ImportatorePack
 
     private readonly Correggo4Context ctx;
     private readonly EstrattorePagine estrattore;
+    private readonly ServizioPropagazione propagazione;   // eredita' delle catene (j226)
     private readonly ILogger<ImportatorePack> log;
 
-    public ImportatorePack(Correggo4Context ctx, EstrattorePagine estrattore, ILogger<ImportatorePack> log)
+    public ImportatorePack(Correggo4Context ctx, EstrattorePagine estrattore,
+                           ServizioPropagazione propagazione, ILogger<ImportatorePack> log)
     {
         this.ctx = ctx;
         this.estrattore = estrattore;
+        this.propagazione = propagazione;
         this.log = log;
     }
 
@@ -271,6 +275,23 @@ public sealed class ImportatorePack
             {
                 vol.ProgressPubblicazione = (short)(10 + 90 * esito.Box / referenze.Count);
             }
+        }
+
+        // --- eredita' delle catene di propagazione (j226) ---
+        // Il publisher dell'originale la faceva qui, dopo aver scritto i box della versione nuova.
+        // Sta dentro un try: una propagazione che non riesce non deve far fallire una pubblicazione.
+        try
+        {
+            var er = await propagazione.EreditaAsync(vol.Id, versione.Versione);
+            if (er.Irrisolte + er.Riportate + er.Nuove > 0)
+                esito.Avvisi.Add($"Propagazioni: {er.Irrisolte} irrisolte, {er.Riportate} riportate, " +
+                                 $"{er.Nuove} nuove proposte");
+        }
+        catch (Exception ex)
+        {
+            log.LogWarning(ex, "Eredita' delle propagazioni non riuscita per {Titolo} v{Ver}",
+                           titolo, versione.Versione);
+            esito.Avvisi.Add("Eredita' delle propagazioni non riuscita: " + ex.Message);
         }
 
         vol.TotPubblicazioni = (short)(vol.TotPubblicazioni + 1);

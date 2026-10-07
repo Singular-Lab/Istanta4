@@ -24,6 +24,25 @@ builder.Services.AddDbContext<Correggo4Context>(opt =>
 
 builder.Services.AddSingleton<EstrattorePagine>();
 builder.Services.AddScoped<ImportatorePack>();
+builder.Services.AddScoped<Correggo4.Servizi.ServizioCorrezioni>();
+// Passo 2 dell'Edit avanzato (j206): Olimpo e Istanta per foto e loghi. Il segreto Fico arriva dalla
+// variabile d'ambiente Fico__Secret (/etc/istanta4-correggo4.env), non da appsettings.
+builder.Services.AddHttpClient("fico", c => c.Timeout = TimeSpan.FromSeconds(30));
+builder.Services.AddScoped<Correggo4.Servizi.ClienteFico>();
+// Gestisci promo (j209): finestra Category, date, blocco, revoca.
+builder.Services.AddScoped<Correggo4.Servizi.ServizioPromo>();
+// Consulta tutti i volantini (j213): storico, PDF, zip, report.
+builder.Services.AddScoped<Correggo4.Servizi.ServizioStorico>();
+
+// Propagazioni (j222): il motore delle catene e il demone che le costruisce, come il vecchio Correggo.
+builder.Services.AddScoped<Correggo4.Servizi.ServizioPropagazione>();
+// j243: le notifiche della campanella e il semaforo del demone
+builder.Services.AddScoped<Correggo4.Servizi.ServizioNotifiche>();
+// j251: il TIMONE (piano di rimpaginazione del Marketing). Vedi claude/timone-specifica.md.
+builder.Services.AddScoped<Correggo4.Servizi.ServizioTimone>();
+builder.Services.AddHostedService<Correggo4.Servizi.DemonePropagazioni>();
+// L'editor chiama /Correzioni/... con fetch: il token antiforgery viaggia in questo header.
+builder.Services.AddAntiforgery(o => o.HeaderName = "RequestVerificationToken");
 
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(opt =>

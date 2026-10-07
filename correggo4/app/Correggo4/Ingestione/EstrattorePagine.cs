@@ -31,11 +31,17 @@ public sealed class EstrattorePagine
 
     private static string Pulisci(string s) => s.Replace("/", "_").Replace("..", "_");
 
+    /// <summary>Nome del PDF di una versione, accanto alle sue pagine (j213, "consulta tutti i volantini").</summary>
+    public static string NomePdf(string titolo, short versione) => $"{Pulisci(titolo)}_v{versione}.pdf";
+
     public List<PaginaEstratta> Estrai(byte[] pdf, string classificazione, string titolo,
                                        short versione, IReadOnlyList<byte> numeriPagina)
     {
         string cartella = CartellaDi(classificazione, titolo);
         Directory.CreateDirectory(Path.Combine(cartella, "thumbs"));
+
+        // Il PDF si tiene (j213): lo storico lo apre e lo scarica. L'originale lo salvava in publish/volantini.
+        File.WriteAllBytes(Path.Combine(cartella, NomePdf(titolo, versione)), pdf);
 
         var impostazioni = new MagickReadSettings
         {

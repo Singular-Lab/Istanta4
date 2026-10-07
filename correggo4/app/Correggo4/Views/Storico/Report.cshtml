@@ -1,0 +1,82 @@
+@model Correggo4.Models.Vista.ReportCorrezioni
+@{
+    // Report delle correzioni (j213): report.html dell'originale, pagina per pagina, stampabile.
+    // "TOTALE" = tutte le versioni, "OK/VISTO" = solo gli OK, come le due spunte dell'originale.
+    // Le voci sono nel parziale _VociReport (j214), lo stesso della finestra dell'editor.
+    Layout = null;
+    string Link(bool tutte, bool ok) => $"/Storico/Report/{Model.IdVolantino}/{Model.Versione}?tutte={(tutte ? "true" : "false")}&ok={(ok ? "true" : "false")}";
+}
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Report @Model.Titolo &middot; Correggo4</title>
+<style>
+:root{--teal:#60cbbb;--teal-700:#2a8a7c;--ink:#1f2a30;--ink-2:#4a5860;--ink-3:#7c8a91;--line:#dfe5e8;--bg:#f1f4f5}
+*{box-sizing:border-box}
+body{margin:0;font-family:"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;color:var(--ink);background:var(--bg);font-size:14px}
+main{max-width:960px;margin:0 auto;padding:22px 20px 40px}
+.testa{display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:16px}
+.testa h1{font-size:26px;margin:0}
+.testa .promo{color:var(--ink-3)}
+.sp{flex:1}
+.comandi{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.btn{border:1px solid var(--line);background:#fff;border-radius:8px;height:32px;padding:0 12px;cursor:pointer;color:var(--ink-2);
+     font-size:13px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;font-family:inherit}
+.btn.on{background:var(--teal-700);border-color:var(--teal-700);color:#fff}
+select{height:32px;border:1px solid var(--line);border-radius:8px;padding:0 8px;font-family:inherit}
+.rp_versione{font-size:16px;font-weight:700;margin:22px 0 6px}
+.rp_pag{background:#8fa7a7;color:#fff;font-weight:700;padding:7px 12px;border-radius:6px;margin:16px 0 8px}
+.rp_pag_piccola{padding:4px 10px;font-size:12px;margin:8px 0 6px}
+.rp_prodotto{font-weight:700;margin:-2px 0 8px}
+.rp_voce{display:flex;background:#fff;border-radius:8px;margin-bottom:8px;overflow:hidden;box-shadow:0 1px 2px rgba(20,40,50,.06);break-inside:avoid}
+.rp_lab{width:210px;flex:0 0 210px;padding:10px 12px;border-right:1px solid var(--line);font-weight:700;font-size:13px}
+.rp_cont{flex:1;padding:10px 12px}
+.rp_det{font-size:12px;color:var(--ink-3);margin-bottom:4px}
+.rp_t{white-space:pre-wrap}
+.rp_simbolo{width:34px;height:34px;vertical-align:middle;margin-right:6px}
+.rp_foto div{display:flex;align-items:center;gap:8px;margin-top:4px;font-size:13px}
+.rp_foto img{width:50px;height:50px;object-fit:contain;background:#fff;border:1px solid var(--line)}
+.rp_esito{margin-top:6px;padding:3px 8px;border-radius:4px;font-size:12px;font-weight:700;display:inline-block}
+.rp_esito.accettata{background:#a3eca3}
+.rp_esito.irrisolta{background:#dd7800;color:#fff}
+.rp_esito.attesa{background:#fff0c2;color:#8a5a00}
+.rp_vuoto{background:#fff;border-radius:8px;padding:20px;color:var(--ink-3);text-align:center}
+@@media print{
+  body{background:#fff} .comandi{display:none}
+  .rp_voce{box-shadow:none;border:1px solid #ccc}
+}
+</style>
+</head>
+<body>
+<main>
+  <div class="testa">
+    <div>
+      <h1>@Model.Titolo</h1>
+      <div class="promo">@Model.Classificazione &middot; @(Model.Tutte ? "tutte le versioni" : "versione " + Model.Versione) &middot; @(Model.OkVisto ? "OK visto" : "correzioni")</div>
+    </div>
+    <div class="sp"></div>
+    <div class="comandi">
+      @if (!Model.Prodotto && !Model.Tutte && Model.Versioni.Count > 1)
+      {
+        <select onchange="location.href='/Storico/Report/@Model.IdVolantino/'+this.value+'?ok=@(Model.OkVisto ? "true" : "false")'">
+          @foreach (var ver in Model.Versioni)
+          {
+              <option value="@ver" selected="@(ver == Model.Versione)">Versione @ver</option>
+          }
+        </select>
+      }
+      @if (!Model.Prodotto)
+      {
+        <a class="btn @(Model.Tutte ? "on" : "")" href="@Link(!Model.Tutte, Model.OkVisto)">Totale</a>
+        <a class="btn @(Model.OkVisto ? "on" : "")" href="@Link(Model.Tutte, !Model.OkVisto)">OK/Visto</a>
+      }
+      <button class="btn" type="button" onclick="window.print()">Stampa</button>
+    </div>
+  </div>
+
+  @await Html.PartialAsync("_VociReport", Model)
+</main>
+</body>
+</html>
