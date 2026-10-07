@@ -1,8 +1,8 @@
 /// I20-1009: i rettangoli liberi di un box, dato dove stanno gli ostacoli.
 ///
 /// E' il calcolo dietro getSpazioImpaginazione di sistemazioneFoto: per ogni ostacolo lo
-/// spazio sopra, sotto, a sinistra e a destra (generateCandidateRects), poi ogni candidato
-/// spezzato sugli altri ostacoli finche' nessuno collide piu' (refineRects), e tre potature.
+/// spazio sopra, sotto, a sinistra e a destra (generateCandidateRects), poi da quei candidati
+/// si tolgono gli ostacoli uno alla volta, tenendo i rettangoli liberi piu' grandi (refineRects).
 ///
 /// Lavora su numeri - rettangoli { x, y, width, height } in coordinate relative alla base -
 /// e non tocca InDesign: si carica sotto Node ed e' verificato da
@@ -96,99 +96,66 @@ const spazioLibero = {
         return results;
     },
 
-    /// Il cuore del gruppo: spezza ogni candidato sugli ostacoli che lo attraversano, e ripete
-    /// finche' nessuno collide piu'. Alla fine toglie i duplicati, scarta i candidati piu'
-    /// piccoli di un quarto della base per lato e quelli contenuti in altri.
+    /// Il cuore del gruppo: toglie dai candidati gli ostacoli, uno alla volta. Ogni candidato
+    /// che un ostacolo attraversa lascia il posto ai pezzi che restano liberi attorno a lui
+    /// (intersectRect); dopo ogni ostacolo si tolgono i doppioni e i rettangoli contenuti in un
+    /// altro. Alla fine si scartano i candidati piu' piccoli di un quarto della base per lato.
     ///
-    /// Il ciclo finisce sempre, in al piu' tanti giri quanti sono gli ostacoli piu' uno: ogni
-    /// pezzo nato da una spezzatura porta in obstacleRefs l'ostacolo che l'ha spezzato, e su
-    /// quello non viene piu' spezzato; un rettangolo che a un giro non collide con niente non
-    /// collide piu', perche' gli ostacoli non cambiano. Quindi a ogni giro chi resta da
-    /// spezzare ha un ostacolo in piu' nei suoi obstacleRefs, e gli ostacoli sono finiti.
+    /// I20-1060: prima ogni candidato si spezzava su tutti gli ostacoli insieme, e i pezzi ai
+    /// lati di un ostacolo erano alti solo quanto lui: lo spazio a destra di un ostacolo
+    /// piccolo in un angolo, alto quanto la base, non nasceva mai. Ora i pezzi sono i
+    /// rettangoli liberi piu' grandi, e un ostacolo alla volta con la potatura ne restano pochi:
+    /// sul box Edro21 della issue, 12 ostacoli, da circa 900 rettangoli a meno di 100.
     ///
-    /// La guardia e' quel numero, obstacles.length + 1. Se scatta la regola qui sopra e' stata
-    /// rotta, e i candidati restituiti sono quelli parziali dell'ultimo giro: esito.interrotto
-    /// lo dice, e getSpazioImpaginazione lo fa sapere.
-    /// I20-1011: prima la guardia era a mille giri, e un secondo limite a dieci milioni di
-    /// rettangoli si controllava solo all'inizio di ogni giro. Non potevano scattare, e se
-    /// l'avessero fatto nessuno l'avrebbe saputo.
+    /// Il calcolo fa un giro per ostacolo e finisce sempre. La guardia sta sul numero di
+    /// rettangoli: se dopo un ostacolo ne restano piu' di limiteRettangoli il calcolo si ferma
+    /// li', esito.interrotto lo dice e getSpazioImpaginazione lo fa sapere. Con i box
+    /// reali non succede: 50 ostacoli a caso ne lasciano meno di 500.
     ///
-    /// esito, se passato, si riempie con { iterazioni, rettangoli, ostacoli, interrotto }.
+    /// esito, se passato, si riempie con { iterazioni, rettangoli, ostacoli, interrotto }:
+    /// iterazioni sono gli ostacoli tolti, rettangoli il massimo dei pezzi in un giro.
     refineRects(obstacles, contours, boxWidth, boxHeight, tolerance = 0, esito = null) {
-        let currentRects = [...contours];
-        let changed = true;
-        let emergencycounter = 0;
+        let currentRects = this.reduceResult(this.removeDuplicateRects([...contours]));
         let rettangoliAlPicco = currentRects.length;
-        const limiteIterazioni = obstacles.length + 1;
-        while (changed && emergencycounter < limiteIterazioni) {
-            changed = false;
+        let iterazioni = 0;
+        let interrotto = false;
+
+        for (const obs of obstacles) {
             const newRects = [];
-
             for (const rect of currentRects) {
-                let collided = false;
-
-                for (const obs of obstacles) {
-                    // evita di controllare ostacoli già considerati
-                    if (rect.obstacleRefs.includes(obs)) continue;
-
-                    // test collisione
-                    const collides =
-                        rect.x < obs.x + obs.width &&
-                        rect.x + rect.width > obs.x &&
-                        rect.y < obs.y + obs.height &&
-                        rect.y + rect.height > obs.y;
-
-                    if (collides) {
-                        collided = true;
-                        const inter = this.intersectRect(rect, obs, tolerance);
-                        if (inter.length > 0) {
-                            //aggiungiamo i risultati
-                            for (const r of inter) {
-                                newRects.push({
-                                    ...r,
-                                    direction: rect.direction,
-                                    obstacleRefs: [...rect.obstacleRefs, obs]
-                                });
-                            }
-                            changed = true;
-                        }
-                        
-                    }
-                }
-
-                if (!collided) {
-                    newRects.push(rect);
+                for (const r of this.intersectRect(rect, obs, tolerance)) {
+                    newRects.push(r);
                 }
             }
+            rettangoliAlPicco = Math.max(rettangoliAlPicco, newRects.length);
+            currentRects = this.reduceResult(this.removeDuplicateRects(newRects));
+            iterazioni++;
 
-            currentRects = newRects;
-            currentRects = this.removeDuplicateRects(currentRects);
-            rettangoliAlPicco = Math.max(rettangoliAlPicco, currentRects.length);
-            emergencycounter++;
+            if (currentRects.length > this.limiteRettangoli) {
+                interrotto = true;
+                break;
+            }
         }
 
         if (esito != null) {
-            esito.iterazioni = emergencycounter;
+            esito.iterazioni = iterazioni;
             esito.rettangoli = rettangoliAlPicco;
             esito.ostacoli = obstacles.length;
-            //Uscito con changed ancora vero: l'ha fermato la guardia, non la convergenza.
-            esito.interrotto = changed;
+            esito.interrotto = interrotto;
         }
 
-        let cleanedRects = this.removeDuplicateRects(currentRects);
-        cleanedRects = this.removeRectsToSmall(cleanedRects, boxWidth / 4, boxHeight / 4); // rimuove rettangoli troppo piccoli
-
-        //Se vogliamo più aree possiamo disattivare questa funzione, le aree che toglie non sono sbagliate ma sono sottoaree di quelle rimaste
-        cleanedRects = this.reduceResult(cleanedRects);
-        return cleanedRects;
+        return this.removeRectsToSmall(currentRects, boxWidth / 4, boxHeight / 4); // rimuove rettangoli troppo piccoli
     },
 
-    /// Cosa resta di un rettangolo tolto di mezzo un ostacolo: fino a quattro pezzi, sopra,
-    /// sotto, a sinistra e a destra. I pezzi laterali sono alti quanto la sola fascia
-    /// dell'ostacolo, cosi' non si sovrappongono a quelli sopra e sotto.
-    intersectRect(rect, obs, tolerance = 0.0001) {
-        const results = [];
+    /// La guardia di refineRects: oltre questi rettangoli il calcolo si ferma.
+    limiteRettangoli: 20000,
 
+    /// Cosa resta libero di un rettangolo tolto di mezzo un ostacolo: fino a quattro pezzi,
+    /// sopra, sotto, a sinistra e a destra dell'ostacolo. I20-1060: ognuno e' il rettangolo
+    /// libero piu' grande da quel lato, quindi i pezzi si sovrappongono: quelli laterali sono
+    /// alti quanto il rettangolo, non piu' quanto la sola fascia dell'ostacolo. Se l'ostacolo
+    /// non lo tocca, il rettangolo resta com'e'.
+    intersectRect(rect, obs, tolerance = 0.0001) {
         // Coordinate di intersezione
         const interX1 = Math.max(rect.x, obs.x);
         const interY1 = Math.max(rect.y, obs.y);
@@ -200,55 +167,27 @@ const spazioLibero = {
             return [rect];
         }
 
-        // ---- SPLIT IN 4 PEZZI POSSIBILI ----
-        const newRefs = [...rect.obstacleRefs, obs];
+        const results = [];
+        const newRefs = [...(rect.obstacleRefs || []), obs];
 
         // Sopra l'ostacolo
         if (interY1 > rect.y) {
-            results.push({
-                x: rect.x,
-                y: rect.y,
-                width: rect.width,
-                height: interY1 - rect.y,
-                direction: rect.direction,
-                obstacleRefs: newRefs
-            });
+            results.push({ x: rect.x, y: rect.y, width: rect.width, height: interY1 - rect.y, direction: rect.direction, obstacleRefs: newRefs });
         }
 
         // Sotto l'ostacolo
         if (interY2 < rect.y + rect.height) {
-            results.push({
-                x: rect.x,
-                y: interY2,
-                width: rect.width,
-                height: (rect.y + rect.height) - interY2,
-                direction: rect.direction,
-                obstacleRefs: newRefs
-            });
+            results.push({ x: rect.x, y: interY2, width: rect.width, height: (rect.y + rect.height) - interY2, direction: rect.direction, obstacleRefs: newRefs });
         }
 
         // A sinistra dell'ostacolo
         if (interX1 > rect.x) {
-            results.push({
-                x: rect.x,
-                y: Math.max(interY1, rect.y),
-                width: interX1 - rect.x,
-                height: Math.min(interY2, rect.y + rect.height) - Math.max(interY1, rect.y),
-                direction: rect.direction,
-                obstacleRefs: newRefs
-            });
+            results.push({ x: rect.x, y: rect.y, width: interX1 - rect.x, height: rect.height, direction: rect.direction, obstacleRefs: newRefs });
         }
 
         // A destra dell'ostacolo
         if (interX2 < rect.x + rect.width) {
-            results.push({
-                x: interX2,
-                y: Math.max(interY1, rect.y),
-                width: (rect.x + rect.width) - interX2,
-                height: Math.min(interY2, rect.y + rect.height) - Math.max(interY1, rect.y),
-                direction: rect.direction,
-                obstacleRefs: newRefs
-            });
+            results.push({ x: interX2, y: rect.y, width: (rect.x + rect.width) - interX2, height: rect.height, direction: rect.direction, obstacleRefs: newRefs });
         }
 
         // Filtra eventuali rettangoli con area nulla
@@ -286,22 +225,18 @@ const spazioLibero = {
     },
 
     /// Toglie i candidati interamente contenuti in un altro: non sono sbagliati, sono sottoaree
-    /// di uno piu' grande. Disattivandola si ottengono piu' aree fra cui scegliere.
+    /// di uno piu' grande. I20-1060: si confronta ognuno con tutti gli altri, non solo con quelli
+    /// che lo precedono, e restano nell'ordine in cui sono arrivati. Fra due uguali resta il
+    /// primo, ma removeDuplicateRects li ha gia' tolti.
     reduceResult(res) {
-        const reduced = [];
-        for (const r of res) {
-            const isContained = reduced.some(existing =>
-                existing !== r && // ✅ evita di confrontare con se stesso
-                r.x >= existing.x &&
-                r.y >= existing.y &&
-                r.x + r.width <= existing.x + existing.width &&
-                r.y + r.height <= existing.y + existing.height
-            );
-            if (!isContained) {
-                reduced.push(r);
-            }
-        }
-        return reduced; // ✅ restituisce il risultato
+        const tolleranza = 0.0001;
+        const contiene = function (esterno, interno) {
+            return interno.x >= esterno.x - tolleranza &&
+                interno.y >= esterno.y - tolleranza &&
+                interno.x + interno.width <= esterno.x + esterno.width + tolleranza &&
+                interno.y + interno.height <= esterno.y + esterno.height + tolleranza;
+        };
+        return res.filter((r, i) => !res.some((altro, j) => j !== i && contiene(altro, r) && (!contiene(r, altro) || j < i)));
     },
 };
 
