@@ -98,7 +98,7 @@ function Main() {
     register,
     handleSubmit,
     setValue,
-    formState: { errors },
+    formState: { errors, isSubmitting },
     trigger,
     control,
   } = useForm({
@@ -208,9 +208,21 @@ function Main() {
       console.log("Lavorazione partita con successo");
     },
     onError: (error: any) => {
-      console.log(error);
+      showNotification(
+        <div className="flex flex-row items-center">
+          <Lucide icon="CircleAlert" className="text-danger w-8 h-8" />
+          <div className="ml-4 mr-4">
+            <div className="font-bold">Promozione non creata</div>
+            <div className="mt-1 text-slate-500">{error?.message}</div>
+          </div>
+        </div>
+      );
     },
   });
+
+  // Bloccato dal primo click: la validazione e asincrona e prima che la chiamata
+  // parta un secondo click creerebbe un'altra promo
+  const inCreazione = isSubmitting || faiPartitireLavorazione.isPending;
 
   const onSubmit = async (data: any) => {
     const isValid = await trigger();
@@ -428,21 +440,21 @@ function Main() {
               </div>
               <div className="flex flex-col-reverse sm:flex-row flex-wrap items-center justify-end gap-3 mt-8 pt-6 border-t border-slate-200/80 dark:border-darkmode-400">
                 <Button
-                  disabled={isLoadingContestoPerNuovaLavorazione || faiPartitireLavorazione.isPending}
+                  disabled={isLoadingContestoPerNuovaLavorazione || inCreazione}
                   variant={
-                    isLoadingContestoPerNuovaLavorazione || faiPartitireLavorazione.isPending
+                    isLoadingContestoPerNuovaLavorazione || inCreazione
                       ? "pending"
                       : "primary"
                   }
                   type="submit"
-                  aria-busy={isLoadingContestoPerNuovaLavorazione || faiPartitireLavorazione.isPending}
+                  aria-busy={isLoadingContestoPerNuovaLavorazione || inCreazione}
                 >
                   {isLoadingContestoPerNuovaLavorazione ? (
                     <>
                       <Lucide icon="Loader" className="w-4 h-4 mr-2 animate-spin" />
                       <span>Caricamento dati...</span>
                     </>
-                  ) : faiPartitireLavorazione.isPending ? (
+                  ) : inCreazione ? (
                     <>
                       <Lucide icon="Loader" className="w-4 h-4 mr-2 animate-spin" />
                       <span>Creazione in corso...</span>
