@@ -114,15 +114,24 @@ const SistemazioneFoto = {
 
     /// Il resto di getSpazioImpaginazione, una volta che base e ostacoli ci sono: candidati
     /// grossolani e raffinamento.
+    ///
+    /// I20-1058: lo spazio si cerca dentro la traccia della base, non sui suoi bordi geometrici:
+    /// con una traccia al centro meta' dello spessore cadeva nello spazio libero, e la foto finiva
+    /// sul bordo. Il calcolo si fa nel rettangolo interno alla traccia - ostacoli spostati, misure
+    /// ridotte - e i candidati tornano poi nelle coordinate della base. Il paddingBox del cliente
+    /// vale cosi' dal bordo interno della traccia. Senza traccia lo spostamento e' zero e non
+    /// cambia niente. Gli ostacoli restituiti restano quelli ricevuti: fixFoto li ripristina.
     calcolaSpazioLibero(box, base, obs) {
-        let baseWidth = base.geometricBounds[3] - base.geometricBounds[1];
-        let baseHeight = base.geometricBounds[2] - base.geometricBounds[0];
+        let traccia = cssFramework().insetTracciaBase(base);
+        let baseWidth = base.geometricBounds[3] - base.geometricBounds[1] - 2 * traccia;
+        let baseHeight = base.geometricBounds[2] - base.geometricBounds[0] - 2 * traccia;
+        let ostacoliInterni = obs.map(o => Object.assign({}, o, { x: o.x - traccia, y: o.y - traccia }));
 
         //calcoliamo i rettangoli liberi
         //Il margine attorno agli ostacoli e' del cliente: se custom.js non lo dice vale il
         //default di spazioLibero.
         let paddingBox = customAgenzia && customAgenzia.paddingBox ? customAgenzia.paddingBox : null;
-        let candidate = spazioLibero.generateCandidateRects(baseWidth, baseHeight, obs, 0, paddingBox);
+        let candidate = spazioLibero.generateCandidateRects(baseWidth, baseHeight, ostacoliInterni, 0, paddingBox);
 
         //refiniamo i rettangoli liberi
         //I20-1011: l'esito dice come e' andato il raffinamento. La riga in console serve a
@@ -130,7 +139,8 @@ const SistemazioneFoto = {
         //tempo, cresce in fretta con gli ostacoli.
         let esito = {};
         let inizioRaffinamento = Date.now();
-        let refinedRects = spazioLibero.refineRects(obs, candidate, baseWidth, baseHeight, 0, esito);
+        let refinedRects = spazioLibero.refineRects(ostacoliInterni, candidate, baseWidth, baseHeight, 0, esito)
+            .map(r => Object.assign({}, r, { x: r.x + traccia, y: r.y + traccia }));
         let codiceGruppo = this.codiceGruppoDelBox(box);
         console.log("refineRects " + codiceGruppo + ": " + esito.ostacoli + " ostacoli, " + esito.iterazioni + " iterazioni, " +
             esito.rettangoli + " rettangoli, " + (Date.now() - inizioRaffinamento) + " ms");

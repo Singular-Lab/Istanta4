@@ -2373,26 +2373,20 @@ const CssFramework =
         }
     },
 
-    /// Allontana gli elementi dalla traccia del bordo della base, di uno spessore piu' la
-    /// distanza configurata. Se la base non c'e' o non e' valida non fa niente.
-    fixCollisioneTracciaBase(box, gruppoElementi, evitaTracciaImpostazioni, lati = null) {
-        var useTextBounds = false;
-        var distance = 0;
-        if (evitaTracciaImpostazioni && evitaTracciaImpostazioni.useTextBounds != null) {
-            useTextBounds = evitaTracciaImpostazioni.useTextBounds;
-        }
-        if (evitaTracciaImpostazioni && evitaTracciaImpostazioni.distance != null && !isNaN(evitaTracciaImpostazioni.distance)) {
-            distance = evitaTracciaImpostazioni.distance;
-        }
-
-        var base = Utility.getFieldByLabel("base", box);
+    /// I20-1058: quanto la traccia del bordo entra nella base, in millimetri. InDesign misura lo
+    /// spessore in punti e geometricBounds sta sul tracciato: una traccia interna entra di tutto
+    /// lo spessore, una al centro della meta', una esterna per niente; se l'allineamento non si
+    /// legge, prudenti, della meta'. Senza base valida o senza traccia vale 0.
+    /// E' il bordo che evitano i gruppi di allineamento (fixCollisioneTracciaBase) e da cui parte
+    /// lo spazio per le foto (sistemazioneFoto.calcolaSpazioLibero).
+    insetTracciaBase(base) {
         if (base == null || !base.isValid) {
-            return;
+            return 0;
         }
 
-        var stroke = base.strokeWeight;
-        if (stroke == null || stroke <= 0) {
-            return;
+        var stroke = Number(base.strokeWeight);
+        if (!isFinite(stroke) || stroke <= 0) {
+            return 0;
         }
 
         var inset = 0;
@@ -2416,11 +2410,27 @@ const CssFramework =
             inset = stroke / 2;
         }
 
+        return inset * 0.352777778; // convertiamo da punti a mm (1pt = 0.352777778 mm)
+    },
+
+    /// Allontana gli elementi dalla traccia del bordo della base, di uno spessore piu' la
+    /// distanza configurata. Se la base non c'e' o non e' valida non fa niente.
+    fixCollisioneTracciaBase(box, gruppoElementi, evitaTracciaImpostazioni, lati = null) {
+        var useTextBounds = false;
+        var distance = 0;
+        if (evitaTracciaImpostazioni && evitaTracciaImpostazioni.useTextBounds != null) {
+            useTextBounds = evitaTracciaImpostazioni.useTextBounds;
+        }
+        if (evitaTracciaImpostazioni && evitaTracciaImpostazioni.distance != null && !isNaN(evitaTracciaImpostazioni.distance)) {
+            distance = evitaTracciaImpostazioni.distance;
+        }
+
+        var base = Utility.getFieldByLabel("base", box);
+        //I20-1058: quanto la traccia entra nella base lo dice insetTracciaBase, come al fix foto.
+        var inset = this.insetTracciaBase(base);
         if (inset <= 0) {
             return;
         }
-
-        inset = inset * 0.352777778; // convertiamo da punti a mm (1pt = 0.352777778 mm)
 
         //I20-1054: gli elementi del gruppo, con i bounds su cui si misura la traccia
         var elementiGruppo = [];
@@ -2541,41 +2551,11 @@ const CssFramework =
 
     fixCollisioneTracciaBaseSingolo(box, singolo, useTextBounds = false, distance = 0) {
         var base = Utility.getFieldByLabel("base", box);
-        if (base == null || !base.isValid) {
-            return;
-        }
-
-        var stroke = base.strokeWeight;
-        if (stroke == null || stroke <= 0) {
-            return;
-        }
-
-        var inset = 0;
-        try {
-            switch (base.strokeAlignment.toString()) {
-                case "INSIDE_ALIGNMENT":
-                    inset = stroke;
-                    break;
-                case "CENTER_ALIGNMENT":
-                    inset = stroke / 2;
-                    break;
-                case "OUTSIDE_ALIGNMENT":
-                    inset = 0;
-                    break;
-                default:
-                    inset = stroke / 2;
-                    break;
-            }
-        } catch (e) {
-            // fallback prudente: in caso di valore non leggibile
-            inset = stroke / 2;
-        }
-
+        //I20-1058: quanto la traccia entra nella base lo dice insetTracciaBase, come al fix foto.
+        var inset = this.insetTracciaBase(base);
         if (inset <= 0) {
             return;
         }
-
-        inset = inset * 0.352777778; // convertiamo da punti a mm (1pt = 0.352777778 mm)
 
         var bounds = useTextBounds ? this.getRealBounds(singolo) : singolo.geometricBounds; // [top, left, bottom, right]
 
