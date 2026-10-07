@@ -57,6 +57,7 @@ export class PromoController extends BaseController {
     this.router.get('/promo/storico', authMiddleware, permissionGuard('promo.visualizza'), this.getAllPromosStorico.bind(this));
     this.router.get('/promo/contesto', authMiddleware, permissionGuard('promo.crea'), this.getContestoPerNuovaLavorazione.bind(this));
     this.router.get('/promo/contesto-importazione', authMiddleware, permissionGuard('promo.crea'), this.get_contesto_per_importazione.bind(this));
+    this.router.get('/promo/visibilita-opzioni', authMiddleware, permissionGuard('promo.visualizza'), this.getVisibilitaOpzioni.bind(this));
     this.router.get('/promo/dashboard', authMiddleware, permissionGuard('promo.visualizza'), this.getPromozioniInCorsoPerDashboard.bind(this));
     this.router.get('/promo/test-notifica', this.testNotifica.bind(this));
 
@@ -1386,6 +1387,10 @@ export class PromoController extends BaseController {
     } catch (error) {
       this.handleError(res, error as Error);
     }
+  }
+
+  private getVisibilitaOpzioni(_req: ExpressRequest, res: Response): void {
+    this.sendResponse(res, HttpStatusCode.OK, this.promoService.getVisibilitaOpzioni());
   }
 
   private async get_contesto_per_importazione(req: ExpressRequest, res: Response): Promise<void> {

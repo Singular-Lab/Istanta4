@@ -21,6 +21,7 @@ import { TracciatiRepository } from '../repositories/TracciatiRepository';
 import type { ITracciatiSchemaRepository } from '../repositories/TracciatiSchemaRepository';
 import { TracciatiSchemaRepository } from '../repositories/TracciatiSchemaRepository';
 import { ServerUtils } from '../utils/ServerUtils';
+import { confrontaConVisibilita, filtraPerVisibilita } from './visibilitaPromoUtils.js';
 import { removeSinglesIncludedInGroups as _removeSinglesUtil, resolveGroupMembersFromScattoCodice as _resolveGroupMembersUtil } from './TracciatoScoreboardUtils.js';
 
 
@@ -1052,9 +1053,11 @@ export class TracciatoService implements ITracciatoService {
         confrontiConIdMap.get(secondario)!.push({ momentoId: primario, confrontoId, terremotoDegradoMassimo: terremoto });
       }
 
-      return momenti.map((m) =>
-        this.mapMomentoToDTO(m, true, confrontiConRisultatoMap.get(m.id) ?? [], confrontiConIdMap.get(m.id) ?? [])
-      );
+      const visibilita = (await Promo.findByPk(idPromo, { attributes: ['meta'] }))?.meta?.visibilita ?? null;
+      return momenti.map((m) => ({
+        ...this.mapMomentoToDTO(m, true, confrontiConRisultatoMap.get(m.id) ?? [], confrontiConIdMap.get(m.id) ?? []),
+        avvisoVisibilita: confrontaConVisibilita(m.risultato, visibilita),
+      }));
     } catch (error) {
       log.error('Error in getMomentiPerPromo:', error);
       throw new DatabaseError({
@@ -1155,12 +1158,21 @@ export class TracciatoService implements ITracciatoService {
         oggettoPerIstantaAnalisi
       );
       log.info("DATO IN ARRIVO DA ISTANTA " + String(analisiData.esito))
+      // Il momento tiene solo i canali/aree visibili nella promo: confronti, report
+      // e menabò derivano da qui. Cambiando la scelta il momento va ricalcolato.
+      const visibilita = (await Promo.findByPk(momento.id_promo, { attributes: ['meta'] }))?.meta?.visibilita ?? null;
+      const tracciati = Array.isArray(analisiData.tracciati)
+        ? filtraPerVisibilita(analisiData.tracciati, visibilita)
+        : analisiData.tracciati;
       // Persiste solo l'array tracciati nel campo `risultato` del momento
       const updated = await this.momentoRepository.update(idMomento, {
-        risultato: analisiData.tracciati,
+        risultato: tracciati,
         updatedat: new Date(),
       });
-      return this.mapMomentoToDTO(updated ?? momento, true);
+      return {
+        ...this.mapMomentoToDTO(updated ?? momento, true),
+        avvisoVisibilita: confrontaConVisibilita(tracciati, visibilita),
+      };
     } catch (error) {
       log.error('Error in calcolaRisultatoMomento:', error);
       throw error instanceof NotFoundError

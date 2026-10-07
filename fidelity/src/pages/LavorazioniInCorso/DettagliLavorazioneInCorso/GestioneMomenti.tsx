@@ -10,8 +10,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { ServerCall } from "../../../../lib/server_call";
-import type { TipoSchema, TracciatoReport, TracciatiMomentoConfrontoResponseDTO, TracciatiMomentoResponseDTO, TracciatiSchemaConfronto, TracciatiSchemaResponseDTO } from "../../../../lib/types";
+import type { AvvisoVisibilitaMomento, TipoSchema, TracciatoReport, TracciatiMomentoConfrontoResponseDTO, TracciatiMomentoResponseDTO, TracciatiSchemaConfronto, TracciatiSchemaResponseDTO } from "../../../../lib/types";
 import type { TracciatiResponseDTO } from "../../../../server/core/dto";
+import { useFetchAree, useFetchCanali } from "../../../query/query";
 dayjs.locale("it");
 
 interface GestioneMomentiProps {
@@ -142,6 +143,28 @@ const getFloatingDropdownStyle = (
       ? { bottom: window.innerHeight - rect.top + gap }
       : { top: rect.bottom + gap }),
   };
+};
+
+// ─── AvvisoVisibilita ────────────────────────────────────────────────────────
+
+/** Il risultato del momento non corrisponde ai canali/aree visibili nella promo. */
+const AvvisoVisibilita: React.FC<{ avviso: AvvisoVisibilitaMomento }> = ({ avviso }) => {
+  const { data: canali } = useFetchCanali();
+  const { data: aree } = useFetchAree();
+  const codici = (guids: string[], anagrafica?: Array<{ id: string; codice: string }>) =>
+    guids.map((g) => anagrafica?.find((x) => x.id.toLowerCase() === g)?.codice ?? g);
+  const fuori = [...codici(avviso.canaliFuori, canali), ...codici(avviso.areeFuori, aree)].join(", ");
+  const mancanti = [...codici(avviso.canaliMancanti, canali), ...codici(avviso.areeMancanti, aree)].join(", ");
+
+  return (
+    <div className="flex items-start gap-1.5 px-2.5 py-2 text-xs rounded-lg border border-warning/30 bg-warning/5 text-warning">
+      <Lucide icon="TriangleAlert" className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+      <div className="flex flex-col gap-1">
+        {fuori && <span>Non visibili in questa promo: {fuori}. Rimuovi il risultato e rilancia l'analisi.</span>}
+        {mancanti && <span>Scelti come visibili ma senza dati nel momento: {mancanti}.</span>}
+      </div>
+    </div>
+  );
 };
 
 // ─── MomentoCard ─────────────────────────────────────────────────────────────
@@ -529,6 +552,7 @@ const MomentoCard: React.FC<MomentoCardProps> = ({
               <Lucide icon="CheckCircle2" className="w-4 h-4" />
               Risultato disponibile
             </div>
+            {momento.avvisoVisibilita && <AvvisoVisibilita avviso={momento.avvisoVisibilita} />}
             {showConfirmReset ? (
               <div className="flex items-center gap-1.5">
                 <span className="flex-1 text-xs text-slate-500">Rimuovere il risultato?</span>

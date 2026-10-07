@@ -1,6 +1,6 @@
 import { Request as ExpressRequest } from 'express';
 import { STATO_PROMO } from '../../../lib/enums';
-import { DataWebPliant, IndesignPluginExport, MenaboLayoutDivisioneSalvata, MenaboLayoutSalvato, NuovaPromoPerDashboard, SaveMenaboLayoutRequest } from '../../../lib/types';
+import { DataWebPliant, DimensioneVisibilitaPromo, IndesignPluginExport, MenaboLayoutDivisioneSalvata, MenaboLayoutSalvato, NuovaPromoPerDashboard, SaveMenaboLayoutRequest } from '../../../lib/types';
 import { CreatePromoDTO, PromoResponseDTO, UpdatePromoDTO } from '../dto';
 export interface IPromoService {
   // Basic CRUD operations
@@ -24,8 +24,10 @@ export interface IPromoService {
     dataDiInizio: string,
     dataDiFine: string,
     offsetVisibilita: number,
-    context: any
+    context: any,
+    meta?: unknown
   }, idGDO: string, req: ExpressRequest): Promise<PromoResponseDTO>;
+  getVisibilitaOpzioni(): DimensioneVisibilitaPromo[];
   getContestoPerNuovaLavorazione(req: ExpressRequest): Promise<any>;
   get_contesto_per_importazione(req: ExpressRequest): Promise<any>;
   creaInizioLavorazione(data: CreatePromoDTO): Promise<PromoResponseDTO>;

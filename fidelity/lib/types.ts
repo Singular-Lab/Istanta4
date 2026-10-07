@@ -429,6 +429,33 @@ export type AnalisiMomentoTracciato = {
   records: DataFields[];
 };
 
+/** Dimensioni della visibilita che un cliente puo scegliere sulla promo. */
+export type DimensioneVisibilitaPromo = 'canale' | 'area';
+
+/**
+ * Canali e aree visibili nella promo. Il risultato dei momenti tiene solo questi;
+ * una lista vuota non filtra quella dimensione.
+ */
+export type VisibilitaPromo = {
+  canali: string[];
+  aree: string[];
+};
+
+/** Dati della promo che restano in FP (non vanno a Istanta). Si estende per chiave. */
+export type PromoMeta = {
+  visibilita?: VisibilitaPromo;
+};
+
+/** Disallineamento fra il risultato di un momento e la visibilita della promo (GUID). */
+export type AvvisoVisibilitaMomento = {
+  /** Presenti nel risultato ma non visibili nella promo: il momento va ricalcolato. */
+  canaliFuori: string[];
+  areeFuori: string[];
+  /** Scelti come visibili ma assenti dal risultato. */
+  canaliMancanti: string[];
+  areeMancanti: string[];
+};
+
 /** Tracciato arricchito con i delta restituiti da Istanta `/FicoProcess/analisiConfronto` */
 export type ConfrontoTracciato = AnalisiMomentoTracciato & {
   uscenti?: number;
@@ -485,6 +512,8 @@ export interface TracciatiMomentoResponseDTO {
   snapshot: boolean;
   risultato?: AnalisiMomentoTracciato[] | null;
   hasRisultato: boolean;
+  /** Presente solo se la promo ha canali/aree visibili scelti e il risultato non vi corrisponde. */
+  avvisoVisibilita?: AvvisoVisibilitaMomento | null;
   createdat?: string;
   updatedat?: string;
 };

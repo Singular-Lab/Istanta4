@@ -6,6 +6,7 @@ import Lucide from "@/components/Base/Lucide";
 import PageHeader from "@/components/Base/PageHeader";
 import Skeleton from "@/components/Base/Skeleton";
 import ContestoLavorazioneFields from "@/components/ContestoLavorazioneFields";
+import VisibilitaPromoFields from "@/components/VisibilitaPromoFields";
 import EmptyState from "@/components/EmptyState";
 import { PreviewImmaginePdf } from "@/components/PreviewImmaginePdf";
 import { useNotification } from "@/context/NotificationContext";
@@ -584,6 +585,8 @@ function Main() {
       queryClient.invalidateQueries({ queryKey: ["promo", idPromo] }),
       queryClient.invalidateQueries({ queryKey: ["tracciatiPromo", idPromo] }),
       queryClient.invalidateQueries({ queryKey: ["lavorazioniInCorso"] }),
+      // l'avviso di visibilita dei momenti dipende dalla promo
+      queryClient.invalidateQueries({ queryKey: ["tracciatiMomenti", idPromo] }),
     ]);
 
     await Promise.all([
@@ -1232,6 +1235,7 @@ function Main() {
       offset_visibilita: currentPromoData.offset_visibilita,
       stato: currentPromoData.stato,
       gdo: currentPromoData.gdo,
+      meta: currentPromoData.meta ?? {},
     });
 
     const fieldDefs = dataContestoPerNuovaLavorazione;
@@ -2506,6 +2510,12 @@ function Main() {
             </div>
           </div>
         ) : null}
+
+        <VisibilitaPromoFields
+          value={editFormData.meta?.visibilita}
+          onChange={(visibilita) => handleEditFieldChange("meta", { ...editFormData.meta, visibilita })}
+          className="mt-2"
+        />
 
         <div className="flex justify-end space-x-3 pt-4 border-t border-slate-200">
           <Button
