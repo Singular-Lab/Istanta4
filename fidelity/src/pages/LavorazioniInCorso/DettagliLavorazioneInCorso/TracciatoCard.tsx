@@ -1,10 +1,11 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Fragment, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { TIPO_UTENTI } from "../../../../lib/enums";
 import { ServerCall } from "../../../../lib/server_call";
 import type { TracciatiResponseDTO } from "../../../../server/core/dto";
 import Button from "../../../components/Base/Button";
+import { FormInput } from "../../../components/Base/Form";
 import { Dialog } from "../../../components/Base/Headless";
 import LoadingIcon from "../../../components/Base/LoadingIcon";
 import Lucide from "../../../components/Base/Lucide";
@@ -115,6 +116,18 @@ const TracciatoCard: React.FC<TracciatoCardProps> = ({
     const { user } = useUser()
     const navigate = useNavigate();
     const [showDialogEliminazioneDefinitiva, setShowDialogEliminazioneDefinitiva] = useState<boolean>(false);
+    const queryClient = useQueryClient();
+    const [showDialogRinomina, setShowDialogRinomina] = useState<boolean>(false);
+    const [nuovoNome, setNuovoNome] = useState<string>("");
+    // Cambia solo il nome mostrato in FP: il file del marketing e il suo nome restano quelli originali
+    const rinominaMutation = useMutation({
+        mutationFn: (nome: string) =>
+            ServerCall.put<TracciatiResponseDTO>(`/tracciati/${tracciato.id}/nome`, { nome }),
+        onSuccess: async () => {
+            setShowDialogRinomina(false);
+            await queryClient.invalidateQueries({ queryKey: ["tracciatiPromo", tracciato.id_promo] });
+        },
+    });
     const statusImportazioneQuery = useQuery({
         queryKey: ["statusImportazione", tracciato.id],
         queryFn: async () => {
@@ -190,9 +203,14 @@ const TracciatoCard: React.FC<TracciatoCardProps> = ({
                     <div className="flex-1 min-w-0 space-y-2">
                         <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
-                                <h4 className="font-semibold text-slate-800 truncate text-sm">
-                                    {tracciato.filename}
+                                <h4 className="font-semibold text-slate-800 truncate text-sm" title={tracciato.nome}>
+                                    {tracciato.nome}
                                 </h4>
+                                {tracciato.nome !== tracciato.filename && (
+                                    <div className="text-xs text-slate-500 truncate" title={tracciato.filename}>
+                                        File originale: {tracciato.filename}
+                                    </div>
+                                )}
 
                                 <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
                                     <div className="flex items-center gap-1">
@@ -338,6 +356,19 @@ const TracciatoCard: React.FC<TracciatoCardProps> = ({
                         >
                             <Lucide icon="Download" className="w-4 h-4" />
                         </button>
+                        {!promoStorico && (
+                            <button
+                                onClick={() => {
+                                    setNuovoNome(tracciato.nome);
+                                    rinominaMutation.reset();
+                                    setShowDialogRinomina(true);
+                                }}
+                                className="flex-shrink-0 w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-800 transition-all duration-200 flex items-center justify-center group-hover:scale-105"
+                                title="Rinomina tracciato"
+                            >
+                                <Lucide icon="Pencil" className="w-4 h-4" />
+                            </button>
+                        )}
                         {(canDeleteTracciato && !promoStorico) && (
                             <button
                                 onClick={() => {
@@ -372,7 +403,7 @@ const TracciatoCard: React.FC<TracciatoCardProps> = ({
                             <p>
                                 Stai per eliminare definitivamente il tracciato:
                                 {" "}
-                                <span className="font-semibold text-slate-800">{tracciato.filename}</span>
+                                <span className="font-semibold text-slate-800">{tracciato.nome}</span>
                             </p>
                             <p className="mt-2 text-danger font-medium">
                                 Questa azione non può essere annullata.
@@ -412,6 +443,66 @@ const TracciatoCard: React.FC<TracciatoCardProps> = ({
                             )}
                         </Button>
                     </Dialog.Footer>
+                </Dialog.Panel>
+            </Dialog>
+
+            <Dialog
+                open={showDialogRinomina}
+                onClose={() => {
+                    if (rinominaMutation.isPending) return;
+                    setShowDialogRinomina(false);
+                }}
+            >
+                <Dialog.Panel>
+                    <form
+                        onSubmit={(e) => {
+                            e.preventDefault();
+                            if (nuovoNome.trim()) rinominaMutation.mutate(nuovoNome.trim());
+                        }}
+                    >
+                        <Dialog.Title>
+                            <div className="flex items-center gap-2">
+                                <Lucide icon="Pencil" className="w-5 h-5 text-primary" />
+                                <h2 className="text-base font-medium">Rinomina tracciato</h2>
+                            </div>
+                        </Dialog.Title>
+                        <Dialog.Description>
+                            <div className="py-2 text-sm text-slate-600 space-y-2">
+                                <FormInput
+                                    type="text"
+                                    value={nuovoNome}
+                                    maxLength={255}
+                                    autoFocus
+                                    onChange={(e) => setNuovoNome(e.target.value)}
+                                />
+                                <p className="text-xs text-slate-500">
+                                    Cambia solo il nome mostrato in FP. Il file resta {tracciato.filename}.
+                                </p>
+                                {rinominaMutation.isError && (
+                                    <p className="text-xs text-danger">Rinomina non riuscita, riprova.</p>
+                                )}
+                            </div>
+                        </Dialog.Description>
+                        <Dialog.Footer className="px-5 py-3 text-right border-t border-slate-200/60">
+                            <Button
+                                type="button"
+                                variant="outline-secondary"
+                                className="w-24 mr-2"
+                                onClick={() => setShowDialogRinomina(false)}
+                                disabled={rinominaMutation.isPending}
+                            >
+                                Annulla
+                            </Button>
+                            <Button
+                                type="submit"
+                                variant="primary"
+                                className="w-24"
+                                disabled={rinominaMutation.isPending || !nuovoNome.trim()}
+                            >
+                                Salva
+                            </Button>
+                        </Dialog.Footer>
+                    </form>
                 </Dialog.Panel>
             </Dialog>
         </Fragment>

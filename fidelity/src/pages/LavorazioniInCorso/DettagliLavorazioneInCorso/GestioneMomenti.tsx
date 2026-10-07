@@ -420,7 +420,7 @@ const MomentoCard: React.FC<MomentoCardProps> = ({
                   <div className="flex items-center gap-2 min-w-0">
                     <Lucide icon="FileSpreadsheet" className="w-4 h-4 text-primary shrink-0" />
                     <span className="text-sm text-slate-700 break-words whitespace-normal max-w-full" title={t.filename}>
-                      {t.filename}
+                      {t.nome}
                     </span>
                   </div>
                   <button
@@ -467,7 +467,7 @@ const MomentoCard: React.FC<MomentoCardProps> = ({
                     onClick={() => handleAdd(t.id)}
                   >
                     <Lucide icon="FileSpreadsheet" className="w-4 h-4 text-primary shrink-0" />
-                    <span className="break-words whitespace-normal max-w-full text-slate-700" title={t.filename}>{t.filename}</span>
+                    <span className="break-words whitespace-normal max-w-full text-slate-700" title={t.filename}>{t.nome}</span>
                   </button>
                 ))}
               </div>,

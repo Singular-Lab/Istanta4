@@ -389,6 +389,7 @@ export type TracciatiAttributes = {
   context_tracciati: any;
   stato_tracciati?: string;
   filename_tracciati: string;
+  nome_tracciati?: string | null;
   blobfile_tracciati: Uint8Array;
   createdat?: Date;
   updatedat?: Date;

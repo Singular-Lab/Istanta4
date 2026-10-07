@@ -11,6 +11,7 @@ class TracciatiClass extends Model<TracciatiAttributes, TracciatiCreationAttribu
   declare context_tracciati: any;
   declare stato_tracciati?: string;
   declare filename_tracciati: string;
+  declare nome_tracciati?: string | null;
   declare blobfile_tracciati: Uint8Array;
   declare createdat?: Date;
   declare updatedat: Date;
@@ -35,6 +36,11 @@ const Tracciati = sequelize.define<TracciatiClass>("tracciati", {
   filename_tracciati: {
     type: DataTypes.STRING,
     allowNull: false
+  },
+  // Nome mostrato in FP; null = si mostra filename_tracciati, che resta il nome originale del file
+  nome_tracciati: {
+    type: DataTypes.STRING,
+    allowNull: true
   },
   blobfile_tracciati: {
     type: DataTypes.BLOB,

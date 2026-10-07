@@ -361,7 +361,7 @@ const DettaglioAnteprimaTracciato: React.FC = () => {
                     >
                         <Badge variant="info" className="flex items-center gap-1.5">
                             <Lucide icon="FileSpreadsheet" className="w-3.5 h-3.5" />
-                            {tracciato.filename || "Tracciato"}
+                            {tracciato.nome || tracciato.filename || "Tracciato"}
                         </Badge>
                         {tracciato.blobfile && (
                             <Badge variant="info" className="flex items-center gap-1.5">

@@ -3,6 +3,7 @@ import { HttpStatusCode } from '../../../lib/enums';
 import { BaseController } from '../base/BaseController';
 import { ITracciatoService } from '../interfaces/ITracciatoService';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { permissionGuard } from '../middleware/permissionGuard';
 import { ServerUtils } from '../utils/ServerUtils';
 
 export class TracciatoController extends BaseController {
@@ -38,6 +39,7 @@ export class TracciatoController extends BaseController {
         this.router.post('/tracciati/schemi/:idSchema/applica', authMiddleware, this.applicaSchema.bind(this));
         this.router.get('/tracciati/:idTracciato/parse', authMiddleware, this.parseTracciatoById.bind(this));
         this.router.get('/tracciati/:idTracciato/download', authMiddleware, this.scaricaTracciato.bind(this));
+        this.router.put('/tracciati/:idTracciato/nome', authMiddleware, permissionGuard('file.upload_tracciato'), this.rinominaTracciato.bind(this));
         this.router.get('/tracciati/:idTracciato', authMiddleware, this.getTracciatoById.bind(this));
         this.router.delete('/tracciati/:idTracciato', authMiddleware, this.deleteTracciato.bind(this));
     }
@@ -146,6 +148,31 @@ export class TracciatoController extends BaseController {
             res.status(HttpStatusCode.INTERNAL_SERVER_ERROR).json({
                 message: "Errore durante il download del tracciato",
                 error: error.message
+            });
+        }
+    }
+
+    // Cambia solo il nome mostrato in FP: file, filename originale e importazione in Istanta restano invariati
+    private async rinominaTracciato(req: Request, res: Response): Promise<void> {
+        try {
+            const nome = typeof req.body?.nome === 'string' ? req.body.nome.trim() : '';
+            if (!nome || nome.length > 255) {
+                res.status(HttpStatusCode.BAD_REQUEST).json({
+                    message: "Il nome del tracciato è obbligatorio e non può superare i 255 caratteri"
+                });
+                return;
+            }
+
+            const tracciato = await this.tracciatoService.updateTracciato(req.params.idTracciato, { nome });
+            if (!tracciato) {
+                res.status(HttpStatusCode.NOT_FOUND).json({ message: "Tracciato non trovato" });
+                return;
+            }
+
+            res.status(HttpStatusCode.OK).json({ ...tracciato, blobfile: undefined });
+        } catch (error: any) {
+            res.status(HttpStatusCode.INTERNAL_SERVER_ERROR).json({
+                message: "Errore durante la rinomina del tracciato"
             });
         }
     }
