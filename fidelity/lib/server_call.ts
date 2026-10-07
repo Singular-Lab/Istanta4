@@ -14,6 +14,7 @@ import {
   UnauthorizedError,
   ValidationError
 } from './errors';
+import { condividiInVolo } from './richiesteInVolo';
 
 /**
  * Interfaccia per gli errori che arrivano dal server
@@ -1263,7 +1264,20 @@ class ServerCall {
     }
   }
 
-  public static post = async <T>(url: string, data: object | FormData, isFileUpload = false, customHeaders?: Record<string, string>): Promise<T> => {
+  /**
+   * POST JSON identiche mentre la prima e ancora in corso (doppio click su un pulsante
+   * di creazione) partono una volta sola e ricevono la stessa risposta. Gli upload
+   * FormData restano esclusi: non si confrontano e hanno gia il loro blocco.
+   */
+  public static post = <T>(url: string, data: object | FormData, isFileUpload = false, customHeaders?: Record<string, string>): Promise<T> =>
+    data instanceof FormData
+      ? this.inviaPost<T>(url, data, customHeaders)
+      : condividiInVolo(
+        `POST ${url} ${JSON.stringify(data)} ${JSON.stringify(customHeaders ?? {})}`,
+        () => this.inviaPost<T>(url, data, customHeaders)
+      );
+
+  private static inviaPost = async <T>(url: string, data: object | FormData, customHeaders?: Record<string, string>): Promise<T> => {
     await this.ensureCSRFToken();
 
     const headers = new Headers();

@@ -15,6 +15,19 @@ export function normalizePromoModel(promo: { dataValues?: PromoAttributes } | Pr
   return ((promo as any)?.dataValues ?? promo) as PromoAttributes;
 }
 
+type NomeEValidita = { nome_promo: string; validita_dal: Date | string; validita_al: Date | string };
+
+/**
+ * Stessa promo caricata due volte: nome uguale a meno di maiuscole e spazi
+ * iniziali/finali, stessi giorni di inizio e fine validita (l'ora non conta).
+ */
+export function isStessaPromo(a: NomeEValidita, b: NomeEValidita): boolean {
+  const nome = (valore: string) => String(valore ?? '').trim().toLowerCase();
+  return nome(a.nome_promo) === nome(b.nome_promo)
+    && dayjs(a.validita_dal).isSame(b.validita_dal, 'day')
+    && dayjs(a.validita_al).isSame(b.validita_al, 'day');
+}
+
 /**
  * Transforms promotion dates into Italian human-readable validity strings.
  * Used for WebPliant carousel display and promo presentation.

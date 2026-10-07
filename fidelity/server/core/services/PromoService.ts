@@ -41,7 +41,7 @@ import { RuntimeKit } from '../models/runtime_kit';
 import { TracciatiMomento } from '../models/tracciati_momento';
 import { Utente } from '../models/utenti';
 import type { IPromoRepository } from '../repositories/PromoRepository';
-import { normalizePromoModel } from '../utils/PromoModelUtils';
+import { isStessaPromo, normalizePromoModel } from '../utils/PromoModelUtils';
 import { ServerUtils } from '../utils/ServerUtils';
 import { normalizzaMeta } from './visibilitaPromoUtils';
 dayjs.extend(isBetween);
@@ -283,6 +283,29 @@ export class PromoService implements IPromoService {
     const inizioValidita = dayjs(data.dataDiInizio, "DD/MM/YYYY");
     if (scadenza.isValid() && inizioValidita.isValid() && !scadenza.isBefore(inizioValidita)) {
       throw new BadRequestError({ message: 'La data di scadenza deve essere precedente alla data di inizio validità' });
+    }
+
+    // La stessa promo caricata due volte si blocca prima di Istanta, che la registrerebbe.
+    // ponytail: controlla e poi inserisce, due richieste nello stesso istante passano
+    // entrambe; per chiuderlo serve un indice univoco, possibile solo senza duplicati storici
+    if (inizioValidita.isValid()) {
+      const nuova = {
+        nome_promo: data.titolo,
+        validita_dal: inizioValidita.toDate(),
+        validita_al: dayjs(data.dataDiFine, "DD/MM/YYYY").toDate(),
+      };
+      const stessoInizio = await this.promoRepository.findAllWithOptions({
+        where: {
+          validita_dal: {
+            [Op.gte]: inizioValidita.startOf('day').toDate(),
+            [Op.lt]: inizioValidita.add(1, 'day').startOf('day').toDate(),
+          },
+        },
+        attributes: ['nome_promo', 'validita_dal', 'validita_al'],
+      });
+      if (stessoInizio.some((p) => isStessaPromo(normalizePromoModel(p), nuova))) {
+        throw new BadRequestError({ message: 'Esiste già una promo con lo stesso nome e le stesse date' });
+      }
     }
 
     const promo: any = {
