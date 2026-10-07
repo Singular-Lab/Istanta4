@@ -1555,7 +1555,7 @@ string siglaTracciato)
         }
 
         public List<Dictionary<string, object>> FiltraRecordsPerConteggioRevisione(
-List<Dictionary<string, object>> records, string utente)
+List<Dictionary<string, object>> records, string utente, string pathCustomPlugin)
         {
             return records;
         }

@@ -1,7 +1,7 @@
 {
-  "id": "IST-ge6ntl",
+  "id": "PluginIstantaImpaginazione",
   "name": "IstantaImpaginazione",
-  "version": "2.0.1",
+  "version": "2.1.1",
   "main": "index.html",
   "manifestVersion": 5,
   "host": [

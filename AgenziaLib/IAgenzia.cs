@@ -57,7 +57,8 @@ namespace AgenziaLib
         string GetMetaPerRevisioneDaGruppiMultipli(WrapperPerGetGarante wrap);
 
         string GetMetaPerRevisioneDaGruppiMultipliBatch(WrapperBatchPerGetGarante batch);
-        List<Dictionary<string, object>> FiltraRecordsPerConteggioRevisione(List<Dictionary<string, object>> records, string utente);
+        //pathCustomPlugin: execLibFunction lo riempie col percorso di SourceCustomPlugin.json (I20-1051).
+        List<Dictionary<string, object>> FiltraRecordsPerConteggioRevisione(List<Dictionary<string, object>> records, string utente, string pathCustomPlugin);
         string CheckFirmaPluginGarantitaBatch(WrapperBatchCheckFirmaPlugin batch);
     }
 }
