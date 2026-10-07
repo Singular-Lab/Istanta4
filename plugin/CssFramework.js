@@ -2375,7 +2375,7 @@ const CssFramework =
 
     /// Allontana gli elementi dalla traccia del bordo della base, di uno spessore piu' la
     /// distanza configurata. Se la base non c'e' o non e' valida non fa niente.
-    fixCollisioneTracciaBase(box, gruppoElementi, evitaTracciaImpostazioni) {
+    fixCollisioneTracciaBase(box, gruppoElementi, evitaTracciaImpostazioni, lati = null) {
         var useTextBounds = false;
         var distance = 0;
         if (evitaTracciaImpostazioni && evitaTracciaImpostazioni.useTextBounds != null) {
@@ -2422,62 +2422,121 @@ const CssFramework =
 
         inset = inset * 0.352777778; // convertiamo da punti a mm (1pt = 0.352777778 mm)
 
-        var minX = null;
-        var maxX = null;
-        var minY = null;
-        var maxY = null;
-
+        //I20-1054: gli elementi del gruppo, con i bounds su cui si misura la traccia
+        var elementiGruppo = [];
         for (var i = 0; i < gruppoElementi.length; i++) {
             var elementi = gruppoElementi[i].elementi;
             for (var j = 0; j < elementi.length; j++) {
                 var item = elementi[j].item;
                 if (item && item.isValid) {
-                    var bounds = useTextBounds ? this.getRealBounds(item) : item.geometricBounds; // [top, left, bottom, right]\
-
-                    if (minX == null || bounds[1] < minX) minX = bounds[1];
-                    if (maxX == null || bounds[3] > maxX) maxX = bounds[3];
-                    if (minY == null || bounds[0] < minY) minY = bounds[0];
-                    if (maxY == null || bounds[2] > maxY) maxY = bounds[2];
+                    var bounds = useTextBounds ? this.getRealBounds(item) : item.geometricBounds; // [top, left, bottom, right]
+                    elementiGruppo.push({ item: item, bounds: bounds });
                 }
             }
         }
 
-        if (minX == null || maxX == null || minY == null || maxY == null) {
+        if (elementiGruppo.length == 0) {
             return;
         }
 
         var baseBounds = base.geometricBounds; // [top, left, bottom, right]
-        var innerTop = baseBounds[0] + inset + distance;
-        var innerLeft = baseBounds[1] + inset + distance;
-        var innerBottom = baseBounds[2] - inset - distance;
-        var innerRight = baseBounds[3] - inset - distance;
+        var interno = [
+            baseBounds[0] + inset + distance,
+            baseBounds[1] + inset + distance,
+            baseBounds[2] - inset - distance,
+            baseBounds[3] - inset - distance
+        ];
 
-        var offsetX = 0;
-        var offsetY = 0;
-
-        if (minX < innerLeft) {
-            offsetX = innerLeft - minX;
-        } else if (maxX > innerRight) {
-            offsetX = innerRight - maxX;
-        }
-
-        if (minY < innerTop) {
-            offsetY = innerTop - minY;
-        } else if (maxY > innerBottom) {
-            offsetY = innerBottom - maxY;
-        }
-
-        if (offsetX !== 0 || offsetY !== 0) {
-            for (var i = 0; i < gruppoElementi.length; i++) {
-                var elementi = gruppoElementi[i].elementi;
-                for (var j = 0; j < elementi.length; j++) {
-                    var item = elementi[j].item;
-                    if (item && item.isValid) {
-                        item.move(undefined, [offsetX, offsetY]);
-                    }
-                }
+        //I20-1054: si evita la traccia solo dai lati a cui il gruppo e' ancorato. Un gruppo ancorato
+        //in basso che tocca la traccia in alto non scende: scendendo spingeva fuori dal fondo gli
+        //elementi ancorati, e fixOverflowFromBox li riportava dentro uno per uno, accavallati.
+        var spostamento = this.spostamentoTracciaBase(elementiGruppo.map(el => el.bounds), interno, lati || this.latiTracciaBaseTutti());
+        if (spostamento[0] !== 0 || spostamento[1] !== 0) {
+            for (var k = 0; k < elementiGruppo.length; k++) {
+                elementiGruppo[k].item.move(undefined, [spostamento[0], spostamento[1]]);
             }
         }
+    },
+
+    /// I20-1054: i lati della traccia da evitare quando il gruppo non e' ancorato a un lato: tutti.
+    latiTracciaBaseTutti() {
+        return { x: { inizio: true, fine: true }, y: { inizio: true, fine: true } };
+    },
+
+    /// I20-1054: i lati della traccia che un gruppo evita, asse per asse, dalla sua ancora statica.
+    /// L'ancora e' quella che applica followStaticAnchor: la prima con le condizioni valide
+    /// (verificaCondizioni riceve listSetCondizioni), e solo sugli assi che l'ancora che segue un
+    /// altro gruppo non ha gia' allineato (riuscitiDaFollow). Ancorato in alto o a sinistra: solo il
+    /// lato iniziale; in basso o a destra: solo quello finale; al centro, senza ancora o con l'asse
+    /// seguito: tutti e due, come prima.
+    latiTracciaBase(staticAnchor, riuscitiDaFollow, verificaCondizioni) {
+        var lati = this.latiTracciaBaseTutti();
+        if (!staticAnchor || staticAnchor.length == 0) {
+            return lati;
+        }
+
+        var ancora = null;
+        for (var i = 0; i < staticAnchor.length; i++) {
+            var candidata = staticAnchor[i];
+            if (candidata.listSetCondizioni && candidata.listSetCondizioni.length > 0 &&
+                !(verificaCondizioni && verificaCondizioni(candidata.listSetCondizioni))) {
+                continue;
+            }
+            ancora = candidata;
+            break;
+        }
+        if (ancora == null) {
+            return lati;
+        }
+
+        //Come in followStaticAnchor: senza lato vale l'inizio (left, top).
+        function latoDaEvitare(asse) {
+            switch (asse.allineaAlLato) {
+                case 1:
+                    return { inizio: false, fine: true };
+                case 2:
+                    return { inizio: true, fine: true };
+                default:
+                    return { inizio: true, fine: false };
+            }
+        }
+
+        if (ancora.xAnchor && !(riuscitiDaFollow && riuscitiDaFollow.x)) {
+            lati.x = latoDaEvitare(ancora.xAnchor);
+        }
+        if (ancora.yAnchor && !(riuscitiDaFollow && riuscitiDaFollow.y)) {
+            lati.y = latoDaEvitare(ancora.yAnchor);
+        }
+        return lati;
+    },
+
+    /// I20-1054: lo spostamento [x, y] che tiene il gruppo dentro la traccia, guardando su ogni asse
+    /// solo i lati indicati in lati. boundsElementi sono i bounds [top, left, bottom, right] degli
+    /// elementi, interno lo spazio dentro la traccia nello stesso formato. Il gruppo si sposta tutto.
+    spostamentoTracciaBase(boundsElementi, interno, lati) {
+        var spostamento = [0, 0];
+        if (boundsElementi.length == 0) {
+            return spostamento;
+        }
+
+        //posizione nello spostamento, lati del box su quell'asse, indici dei due lati nei bounds
+        var assi = [
+            { posizione: 0, lati: lati.x, primo: 1, ultimo: 3 },
+            { posizione: 1, lati: lati.y, primo: 0, ultimo: 2 }
+        ];
+        for (var a = 0; a < assi.length; a++) {
+            var asse = assi[a];
+            var inizio = Math.min.apply(null, boundsElementi.map(function (b) { return b[asse.primo]; }));
+            var fine = Math.max.apply(null, boundsElementi.map(function (b) { return b[asse.ultimo]; }));
+
+            if (asse.lati.inizio && inizio < interno[asse.primo]) {
+                spostamento[asse.posizione] = interno[asse.primo] - inizio;
+            }
+            else if (asse.lati.fine && fine > interno[asse.ultimo]) {
+                spostamento[asse.posizione] = interno[asse.ultimo] - fine;
+            }
+        }
+        return spostamento;
     },
 
     fixCollisioneTracciaBaseSingolo(box, singolo, useTextBounds = false, distance = 0) {
@@ -4395,6 +4454,11 @@ const CssFramework =
                 allineamentiRiusciti = this.FollowAnchorGruppo(mappaBoxOriginale, listGruppoAllineamento, allineamentoSingolo.followAnchor, elementAllineamento, elementAllineamentoDefault, elementDefaultAllineamento, elementDefaultAllineamentoDefault, itemRef, box, isItemLinkGruppo);
             }
 
+            //I20-1054: i lati della traccia da evitare si leggono dall'ancora statica prima di applicarla,
+            //con le stesse condizioni e sapendo quali assi ha gia' allineato l'ancora che segue.
+            let latiTracciaBase = this.latiTracciaBase(allineamentoSingolo.staticAnchor, allineamentiRiusciti,
+                listSetCondizioni => this.checkAllConditions(mappaBoxOriginale, itemRef, listSetCondizioni, box));
+
             if (allineamentoSingolo.staticAnchor != null && allineamentoSingolo.staticAnchor.length > 0) {
                 allineamentiRiusciti = this.followStaticAnchor(box, listGruppoAllineamento, allineamentoSingolo.staticAnchor, mappaBoxOriginale, itemRef, allineamentiRiusciti, isItemLinkGruppo);
             }
@@ -4404,7 +4468,7 @@ const CssFramework =
             }
 
             if (allineamentoSingolo.evitaTracciaAllineamento && allineamentoSingolo.evitaTracciaAllineamento.evitaTracciaBase) {
-                this.fixCollisioneTracciaBase(box, listGruppoAllineamento, allineamentoSingolo.evitaTracciaAllineamento);
+                this.fixCollisioneTracciaBase(box, listGruppoAllineamento, allineamentoSingolo.evitaTracciaAllineamento, latiTracciaBase);
             }
 
             box = this.fixOverflowFromBox(boundsBoxImpaginato, box, mappaBoxOriginale);
