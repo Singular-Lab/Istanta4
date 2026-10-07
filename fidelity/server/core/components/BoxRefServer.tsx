@@ -16,6 +16,12 @@ import {
   Struttura
 } from '../../../lib/types';
 
+/** referenza.foto arriva già trasformato in URL (string[]) dal service; gestisce anche il formato raw {nome,guidId}. */
+function toPhotoUrls(foto: ReferenzeIstanta['foto'] | undefined): string[] {
+  if (!Array.isArray(foto)) return [];
+  return foto.map((f) => typeof f === 'string' ? f : f?.guidId).filter((f): f is string => Boolean(f));
+}
+
 // ============================================
 // INTERFACCE
 // ============================================
@@ -589,7 +595,7 @@ export function generaContenutoDinamicoServer({
             const fotoGruppo = [referenza.fotoGruppo];
             return renderPhotos(fotoGruppo, attributi, undefined);
           } else {
-            return renderPhotos(referenza.foto || [], attributi, undefined);
+            return renderPhotos(toPhotoUrls(referenza.foto), attributi, undefined);
           }
         }
         return null;
@@ -700,7 +706,7 @@ export function generaContenutoDinamicoServer({
     }
 
     const photos = referenza.fotoGruppo == undefined || (referenza.fotoSingolaForzata === true && referenza.fotoGruppo)
-      ? referenza.foto || []
+      ? toPhotoUrls(referenza.foto)
       : [referenza.fotoGruppo];
 
     // Filtra gli attributi specifici dell'img che non devono essere sul div wrapper

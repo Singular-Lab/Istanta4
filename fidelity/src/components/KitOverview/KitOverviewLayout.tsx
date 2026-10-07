@@ -18,6 +18,7 @@ import {
   HeroBanner,
   InfoBadges,
   KitInfo,
+  ReportStoricoBox,
   StatsGrid,
   Timeline,
   buildTimelineEvents
@@ -230,6 +231,7 @@ const KitOverviewLayout: FC<KitOverviewLayoutProps> = ({
         exportTypesCount={exportTypes.length}
         exportTypesList={exportTypes}
         referenzeCount={flyerInsights?.totaleReferenze}
+        origineStorico={flyerInsights?.origineStorico}
         paginAnalizzate={flyerInsights?.totalePagine}
         productionDuration={productionDuration}
         isTimerLive={isTimerLive}
@@ -247,6 +249,7 @@ const KitOverviewLayout: FC<KitOverviewLayoutProps> = ({
         nomeCanale={lavorazione.nomeCanale}
         tipoKit={lavorazione.tipo}
         tipoLavorazione={tipoLavorazione}
+        origineStorico={flyerInsights?.origineStorico}
       />
 
       {/* Main Content Grid */}
@@ -262,6 +265,11 @@ const KitOverviewLayout: FC<KitOverviewLayoutProps> = ({
                 exportCodes={exportCodes}
               />
             </div>
+          )}
+
+          {/* Report import da storico: sotto gli insights, cosi le anomalie si vedono prima dei file */}
+          {showVolantinoComponents && flyerInsights?.origineStorico && (
+            <ReportStoricoBox origineStorico={flyerInsights.origineStorico} />
           )}
 
           {/* File Section */}

@@ -428,7 +428,10 @@ function bindServices() {
     )
   );
   container.bind<IVolantinoService>(TYPES.VolantinoService).toDynamicValue(
-    (context) => new VolantinoService(context.get<IConfigService>(TYPES.ConfigService))
+    (context) => new VolantinoService(
+      context.get<IConfigService>(TYPES.ConfigService),
+      context.get<IAgenziaLib>(TYPES.AgenziaLib)
+    )
   );
 
   // Permessi

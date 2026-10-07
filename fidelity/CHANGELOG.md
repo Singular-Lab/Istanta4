@@ -1,3 +1,85 @@
+## [2.18.001] - 2026-10-01
+
+### Aggiunto
+- **Report completo dell'import da storico nella panoramica del kit**: il banner `NonImpaginateBox` è sostituito da `ReportStoricoBox` (stile di `ReferenzeInVolantinoBox`/`FlyerInsights`), posizionato sotto gli insights del volantino. Mostra data e file dell'import, i contatori (box nel volantino, referenze da listino, non impaginate, box fuori listino compilati e ignorati), due tab con ricerca: **Non impaginate** (orfanelli, come card referenza) e **Fuori listino** (fantasmi, un riquadro per box con pagina, esito Compilato/Ignorato, testo letto nel volantino e referenze compilate).
+- **`ImportStorico` più esaustivo** (`runtime_kit.import_storico`, JSONB, nessuna migration): nuovi campi opzionali `boxNelVolantino`, `referenzeDaListino` e `boxFuoriListino[]`, che conserva anche i box **ignorati** (prima restava solo il conteggio) e il testo del box. Gli import precedenti restano leggibili: i box vengono ricostruiti dalla vecchia lista `fuoriListino`.
+- **Agenzia lib `conadcno`**: `ConadcnoAgenziaLib` estende `DefaultAgenziaLib`, che era già il comportamento usato dal loader per questo cliente, e aggiunge lo storico dei volantini su DB1.
+
+### Modificato
+- **Import da storico indipendente dal cliente**: tutto ciò che riguarda DB1 (chiamata a `UploadVolStorico.ashx` e controllo dell'esito, recupero dei `guidId` delle foto, tipo `DB1XmlRecord`, campi obbligatori dei fuori listino, lettura dei record) passa da `ExternalApiController`, `lib/types.ts` e `VolantinoService` a `agenzia_lib/conadcno/storico-db1.ts`. Nuova capacità opzionale `IAgenziaLib.storicoVolantino` (`confronta`, `campiObbligatoriFuoriListino`, `referenzaFuoriListino`, `referenzaPerReport`): il flusso (decisioni dell'operatore, referenze, report) resta in FP ed è uguale per tutte le GDO, mentre ogni GDO dice solo come confrontare il volantino col proprio listino. Senza la capacità, `sync_json_plugin` risponde 400 "import da storico non disponibile per questo cliente". La risposta al plugin mantiene le chiavi `orfanelli`/`fantasmi`.
+- **Record di listino neutri**: in `lib/types.ts` `DB1XmlRecord` è sostituito da `RecordListino`; il DTO del report (`ReferenzaStoricoDTO`) espone `codice`, `descrizione` e i `campi` (`label`/`valore`) scelti dalla lib del cliente, e la UI li stampa così come arrivano.
+
+### Corretto
+- **Referenze fuori listino illeggibili nelle schede del kit**: venivano salvate con i nomi dei campi DB1 (`codice`, `descrizione1`, `prezzo_offerta`…), mentre `flyerInsightsConfig.json` legge i nomi FP (`codice_referenza`, `descrizione_uno`, `prezzo`…), quindi in "Referenze in Volantino" comparivano come "N/D" senza codice né prezzo. La lib `conadcno` aggiunge gli alias FP senza togliere né sovrascrivere i campi DB1. In più la prima referenza di ogni box eredita la posizione del box (x/y/w/h, ingombro), così compare nella mappa del volantino una sola volta. Vale per i sync successivi a questa versione.
+
+## [2.17.020] - 2026-09-30
+
+### Corretto
+- **Crash del logger in `sync_json_plugin`**: `log.error(e)` passava l'eccezione come primo argomento (`msg: string` atteso), causando `TypeError: value.replace is not a function` in `toSingleLine` e mascherando l'errore originale del plugin. Ora `log.error` riceve un messaggio descrittivo, l'oggetto errore e un contesto strutturato (`path`, `method`, `userId`, `promoId`). Risolta anche la conseguente perdita di scope di `payload` (dichiarato dentro il blocco `try`, non visibile nel `catch`).
+
+## [2.17.019] - 2026-09-25
+
+### Corretto
+- **`foto` salvata come oggetti invece di guidId**: `FileManagementService.referenzaToSnakeCase` (usata dal flusso VOL Upload) era una copia duplicata di quella in `ReferenzeService.ts` e non applicava l'appiattimento a soli `guidId` gia introdotto li — le referenze caricate da quel percorso salvavano ancora `foto` come array di oggetti `{ nome, guidId }` invece dell'array piatto di stringhe atteso dal modello PG e dai punti di lettura (thumbnail OLYMPUS). Applicato lo stesso `appiattisciFoto` anche in `FileManagementService.ts`.
+
+## [2.17.018] - 2026-09-24
+
+### Corretto
+- **Sync storico VOL: errore DB1 non gestito**: un `500` (o qualunque status non-ok) di `UploadVolStorico.ashx` restituiva `{ data: null }`, letto come "nessun orfanello/fantasma" — il flusso proseguiva a caricare il file e salvare referenze vuote sopra dati mai arrivati. Ora si verifica `resultDB1.data?.esito` e si lancia `ExternalApiError` (502) con lo status originale di DB1 in `statusCode`.
+
+## [2.17.017] - 2026-09-22
+
+### Modificato
+- **Verifica punti vendita plugin**: l’endpoint non restituisce più soltanto l’elenco anagrafico, ma confronta i PV inviati dal plugin con quelli già presenti per area/canale e classifica ogni voce come `present`, `missing` o `possibleDuplicate`, senza creare dati durante il controllo.
+
+## [2.17.016] - 2026-09-22
+
+### Aggiunto
+- **Plugin punti vendita**: la conferma del wizard è consentita anche senza punti vendita; aggiunto l’endpoint `POST /api/external/plugin/punti-vendita` per verificare quelli già presenti nella combinazione area/canale.
+
+## [2.17.015] - 2026-09-22
+
+### Corretto
+- **Plugin export foto — `guidId` perso prima della sincronizzazione FP**: dopo il caricamento su OLYMPUS il JSON veniva aggiornato tramite `patchExportAll`, ma la richiesta a FP usava ancora lo snapshot precedente delle referenze. Ora il JSON viene riletto prima di `sync_json_plugin`, includendo i `guidId` restituiti da OLYMPUS.
+
+## [2.17.014] - 2026-09-22
+
+### Corretto
+- **Import punti vendita dal plugin con autenticazione Bearer**: quando la sessione non contiene `id_gdo`, il GDO viene ricavato dalla combinazione area/canale del payload; l’import non viene più saltato con risposta positiva e conteggi a zero.
+
+## [2.17.013] - 2026-09-22
+
+### Corretto
+- **Punti vendita del plugin — completamento dati anagrafici**: i campi ricevuti dal plugin aggiornano anche i punti vendita già trovati o riconosciuti come possibile duplicato; coordinate e posizione vengono così mantenute nell'anagrafica FP. La risposta espone `pvUpdated`.
+
+## [2.17.012] - 2026-09-22
+
+### Corretto
+- **Import punti vendita dal plugin**: salvate le coordinate eventualmente presenti, geolocalizzati i nuovi punti vendita tramite indirizzo e città quando possibile e aggiornata la materialized view delle combinazioni dopo la creazione.
+
+## [2.17.011] - 2026-09-21
+
+### Corretto
+- **`ExternalApiController` — punti vendita del plugin importati nell'anagrafica FP**: i punti vendita ricevuti da `sync_json_plugin`, anche quando sono pochi, vengono ora creati per la GDO e la combinazione area/canale del payload se non sono già presenti. La risposta espone anche il conteggio `pvCreated`.
+
+## [2.17.010] - 2026-09-16
+
+### Aggiunto
+- **Menabò — campi referenza dell'anteprima dichiarati dall'agenzia lib**: nuovo `campi_anteprima: { nome_campo, label }[]` in `MenaboRisultatoCanale`, popolato da `CoopfiAgenziaLib.getDatoPerMenabo`. La lib risolve i candidati (`reparto`, poi `prezzo_promo` con fallback `prezzo`) sulle chiavi realmente presenti nei record della sezione: il naming dipende da `data_fields_refs` della GDO e non è noto al client. Il pannello "Anteprima referenze" del menabò mostra un chip `Label: valore` per ogni campo dichiarato (i valori vuoti vengono saltati), al posto del solo reparto hardcoded — quindi ora si vede anche il **prezzo promo**. Aggiungere un campo = una riga in `CAMPI_ANTEPRIMA_MENABO`, senza toccare il frontend.
+
+### Rimosso
+- **`MenaboRaggruppamento.records_preview`**: struttura mai consumata dal client (l'anteprima si costruisce dai `records`, che contengono già tutti i campi del tracciato). Eliminata dal tipo e dalla costruzione in `CoopfiAgenziaLib`, sostituita da `campi_anteprima`.
+
+## [2.17.009] - 2026-09-11
+
+### Corretto
+- **`ExternalApiController` — conteggio pagine PDF storico coerente con OLYMPUS**: il flusso `sync_json_plugin` ora legge `pagine` dalla risposta di OLYMPUS, salva sempre il valore `pages` nel file runtime nuovo o aggiornato e blocca il salvataggio referenze quando OLYMPUS dichiara una sola pagina ma il payload ne attende più di una.
+
+## [2.17.008] - 2026-09-11
+
+### Corretto
+- **`ExternalApiController` — import storico da DB1 usa `lista` e blocca gli orfanelli**: il flusso `sync_json_plugin` ora legge le referenze da `lista`, preserva `groupElements` nel formato `ReferenzeIstanta` e interrompe la risposta con `esito: false` quando DB1 restituisce elementi in `orfanelli`, evitando salvataggi incompleti.
+
 ## [2.17.007] - 2026-07-08
 
 ### Corretto

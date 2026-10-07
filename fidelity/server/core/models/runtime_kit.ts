@@ -1,5 +1,6 @@
 import { DataTypes, Model, Optional } from 'sequelize';
 import { STATO_LAVORAZIONE_KIT_RUNTIME, TIPO_KIT_DESIGN } from '../../../lib/enums';
+import type { ImportStorico } from '../../../lib/types';
 import { sequelize } from '../db/SequelizeConnector';
 
 /**
@@ -60,6 +61,8 @@ export interface RuntimeKitAttributes {
     id_runtime?: string;
   }>;
   tags: Array<string>;
+  /** Esito dell'ultima importazione da storico: se c'e, il kit viene da li. */
+  import_storico?: ImportStorico | null;
   inizio_lavorazione?: Date;
   fine_lavorazione?: Date;
   createdAt: Date;
@@ -121,6 +124,7 @@ class RuntimeKit extends Model<RuntimeKitAttributes, RuntimeKitCreationAttribute
     id_runtime?: string;
   }>;
   declare tags: Array<string>;
+  declare import_storico?: ImportStorico | null;
   declare inizio_lavorazione?: Date;
   declare fine_lavorazione?: Date;
   declare createdAt: Date;
@@ -468,6 +472,12 @@ const RuntimeKitDefine = sequelize.define<RuntimeKit>("runtime_kit", {
         msg: "I tags non possono essere null"
       }
     }
+  },
+  // Null finche la lavorazione non viene importata dallo storico dal plugin.
+  import_storico: {
+    type: DataTypes.JSONB,
+    allowNull: true,
+    defaultValue: null
   },
   createdAt: {
     type: DataTypes.DATE,

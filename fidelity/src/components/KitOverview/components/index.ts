@@ -5,6 +5,7 @@ export { default as InfoBadge } from "./InfoBadge";
 export { default as InfoBadges } from "./InfoBadges";
 export { default as KitInfo } from "./KitInfo";
 export { default as KitPreStartView } from "./KitPreStartView";
+export { default as ReportStoricoBox } from "./ReportStoricoBox";
 export { default as StatCard } from "./StatCard";
 export { default as StatsGrid } from "./StatsGrid";
 export { default as Timeline, buildTimelineEvents } from "./Timeline";

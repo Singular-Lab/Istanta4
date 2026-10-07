@@ -2,8 +2,8 @@ import Button from "@/components/Base/Button";
 import Lucide from "@/components/Base/Lucide";
 import EmptyState from "@/components/EmptyState";
 import { PermissionGate } from "@/components/PermissionGate";
-import { PERMISSIONS } from "@/constants/permissions";
 import { PreviewImmaginePdf } from "@/components/PreviewImmaginePdf";
+import { PERMISSIONS } from "@/constants/permissions";
 import { FC, useMemo, useState } from "react";
 import { FileItemKit, OggettoTipiDiExport } from "../../../../lib/types";
 import { FileStats } from "../types";
@@ -182,7 +182,7 @@ const FileList: FC<FileListProps> = ({
                               title="Elimina file"
                               onClick={() => onDelete(file.id!)}
                             >
-                              <Lucide icon="Trash2" className="h-3.5 w-3.5" />
+                              <Lucide icon="Trash" className="h-3.5 w-3.5" />
                             </Button>
                           </PermissionGate>
                         )}

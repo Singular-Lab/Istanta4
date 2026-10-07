@@ -26,6 +26,7 @@ const StatsGrid: FC<StatsGridProps> = ({
   exportTypesCount,
   exportTypesList,
   referenzeCount = 0,
+  origineStorico,
   paginAnalizzate,
   productionDuration,
   isTimerLive,
@@ -144,7 +145,9 @@ const StatsGrid: FC<StatsGridProps> = ({
         iconBg="bg-success/10"
         value={referenzeCount}
         label="Referenze"
-        sublabel={paginAnalizzate ? `${paginAnalizzate} pagine analizzate` : undefined}
+        sublabel={origineStorico && origineStorico.totaleFuoriListino > 0
+          ? `di cui ${origineStorico.totaleFuoriListino} fuori listino`
+          : paginAnalizzate ? `${paginAnalizzate} pagine analizzate` : undefined}
       />
       <StatCard
         icon="Clock"

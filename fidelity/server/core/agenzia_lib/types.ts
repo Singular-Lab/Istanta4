@@ -1,5 +1,7 @@
+import type { Request } from "express";
 import type { TIPO_UTENTI } from "../../../lib/enums.js";
-import type { AnalisiMomentoTracciato, DataFields, GlobalUserFilter, IndesignPluginExport, MenaboDivisioneParams, MenaboLayoutDivisioneSalvata, MenaboRisultato, RisultatoConfrontoMomento, TracciatoQueryRequest, TracciatoReport, TracciatoReportWidget, UtentiMeta } from "../../../lib/types.js";
+import type { AnalisiMomentoTracciato, CompiledField, DataFields, FantasmaDeciso, GlobalUserFilter, IndesignPluginExport, MenaboDivisioneParams, MenaboLayoutDivisioneSalvata, MenaboRisultato, RecordListino, ReferenzeIstanta, RisultatoConfrontoMomento, TracciatoQueryRequest, TracciatoReport, TracciatoReportWidget, UtentiMeta } from "../../../lib/types.js";
+import type { PromoContextValue, ReferenzaStoricoDTO } from "../dto/index.js";
 import type { OidcUserClaims } from "../interfaces/IOidcService.js";
 
 // ── Tipi di base ──────────────────────────────────────────────────────────────
@@ -172,6 +174,122 @@ export interface ReportOption {
   plugins: ReportOptionPlugin[];
 }
 
+// ── Import del volantino da storico ───────────────────────────────────────────
+
+export interface PluginPhotoRef {
+  nome: string;
+  guidId?: string;
+}
+
+/** Un box del volantino come lo invia il plugin InDesign. */
+export interface PluginPayloadRef {
+  groupId?: number | string;
+  dna?: string;
+  compiledFields?: CompiledField[];
+  dataFields?: DataFields;
+  foto?: Array<PluginPhotoRef | string>;
+  [key: string]: unknown;
+}
+
+/** Un box del volantino col dato che il sistema di storico della GDO gli ha associato. */
+export interface SyncJsonPluginRef {
+  groupId?: number | string;
+  dna?: string;
+  compiledFields?: CompiledField[];
+  dataFields?: DataFields;
+  /** Foto Olimpo: il nome identifica il link InDesign, guidId identifica l'asset remoto. */
+  foto: PluginPhotoRef[];
+  pag?: number;
+  x?: number;
+  y?: number;
+  w?: number;
+  h?: number;
+  wPage?: number;
+  hPage?: number;
+  percIngombro?: number;
+  aspectRatio?: number;
+  groupElements?: DataFields[];
+}
+
+export interface SyncJsonPluginPayload {
+  promo: string;
+  promoId?: string;
+  canale?: string;
+  canaleId?: string;
+  area?: string;
+  areaId?: string;
+  kitGuidId?: string;
+  fileName: string;
+  scannedAt: string; // ISO date string
+  refs: unknown[];
+  pv?: string;
+  pvData?: {
+    testo: string;
+    paragrafi: Array<{ style: string; text: string }>;
+    gruppi: Array<{
+      intestazione: string;
+      style: string;
+      puntiVendita: Array<{
+        testo: string;
+        nome?: string;
+        citta?: string;
+        cap?: string;
+        provincia?: string;
+        regione?: string;
+        indirizzo?: string;
+        telefono?: string;
+        lat?: number;
+        lon?: number;
+      }>;
+    }>;
+  };
+  pageCount?: number;
+  docName?: string;
+  exportPath: string;
+  // "nome_field": "ap_name",
+  // "user_value": "LA SPEZIA"
+  promoContext?: Array<{ nome_field: string, user_value: PromoContextValue }>
+  /** Il plugin lo rimanda a true quando l'operatore conferma i fantasmi gia segnalati. */
+  confermaFantasmi?: boolean;
+  /** Cosa si e deciso di ogni fantasma segnalato: compilato oppure ignorato. */
+  fantasmi?: FantasmaDeciso[];
+  /**
+   * Gli orfanelli sono in lista e mancano solo dal volantino: e un problema di
+   * impaginazione, non di dati. Con il lasciapassare si salva lo stesso.
+   */
+  lasciapassareOrfanelli?: boolean;
+}
+
+/** Il sistema di storico riceve il payload senza le decisioni dell'operatore: quelle sono di FP. */
+export type PayloadConfrontoStorico = Omit<SyncJsonPluginPayload, 'confermaFantasmi' | 'fantasmi' | 'lasciapassareOrfanelli' | 'refs'> & {
+  refs: PluginPayloadRef[];
+};
+
+/** Il volantino confrontato col listino della GDO. */
+export interface EsitoConfrontoStorico {
+  /** Box trovati a listino, col dato di listino: diventano le referenze del kit. */
+  lista: SyncJsonPluginRef[];
+  /** A listino ma senza un box nel volantino (orfanelli). */
+  nonImpaginate: RecordListino[];
+  /** Nel volantino ma non a listino (fantasmi): di ognuno l'operatore decide. */
+  fuoriListino: SyncJsonPluginRef[];
+}
+
+/**
+ * Come una GDO recupera un volantino dallo storico. Il flusso (decisioni
+ * dell'operatore, referenze, report) e di FP ed e uguale per tutti; la lib dice
+ * solo come confrontare il volantino col listino e come leggere i record del suo sistema.
+ */
+export interface StoricoVolantinoAgenzia {
+  confronta(req: Request, payload: PayloadConfrontoStorico): Promise<EsitoConfrontoStorico>;
+  /** Campi da compilare perche un box fuori listino diventi una referenza. */
+  campiObbligatoriFuoriListino: Array<{ campo: string; etichetta: string }>;
+  /** Da record compilato a mano a dato della referenza FP. */
+  referenzaFuoriListino(record: RecordListino): Pick<ReferenzeIstanta, 'dataFields' | 'meccanica'>;
+  /** Da record di listino a voce del report, coi campi che contano per questo cliente. */
+  referenzaPerReport(record: RecordListino): ReferenzaStoricoDTO;
+}
+
 // ── Interfaccia AgenziaLib ────────────────────────────────────────────────────
 
 export interface IAgenziaLib {
@@ -246,4 +364,10 @@ export interface IAgenziaLib {
   getReportOptions(): ReportOption[];
 
   getGlobalFiltersForUser(utente: { tipo: TIPO_UTENTI; meta?: UtentiMeta }): GlobalUserFilter;
+
+  /**
+   * Import del volantino da storico. Opzionale: c'e solo se la GDO ha un sistema
+   * di storico da cui recuperarlo; senza, il plugin riceve un errore esplicito.
+   */
+  storicoVolantino?: StoricoVolantinoAgenzia;
 }

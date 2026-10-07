@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { Colorize } from '../../../lib/Colorize';
 import { EVENTI_WEBHOOK, EXPORT_DI_SISTEMA, STATO_COMBINAZIONI, STATO_LAVORAZIONE_KIT_RUNTIME, STATO_LOG_FILE, TIPO_KIT_DESIGN, TIPO_LAVORAZIONE } from '../../../lib/enums';
 import { BusinessError, DatabaseError, ForbiddenError, NotFoundError, ServiceUnavailableError, wrapDatabaseError, wrapNotFoundError } from '../../../lib/errors';
-import { DESIGN_KIT_MONGO, FileItemKit, FileItemKitLog, OggettoTipiDiExport, PaylodKitPubblicato, RUNTIME_KIT_MONGO, TipiDiExportAttributes } from '../../../lib/types';
+import { DESIGN_KIT_MONGO, FileItemKit, FileItemKitLog, ImportStorico, OggettoTipiDiExport, PaylodKitPubblicato, RUNTIME_KIT_MONGO, TipiDiExportAttributes } from '../../../lib/types';
 import config from '../config';
 import { sequelize } from '../db';
 import { IIstantaService } from '../interfaces/IIstantaService';
@@ -1173,6 +1173,34 @@ export class KitRuntimeService implements IKitRuntimeService {
 
   }
 
+
+  /**
+   * L'esito dell'importazione sta sul kit, non sulle singole referenze: e la
+   * lavorazione a venire dallo storico e tutte le sue referenze lo ereditano.
+   * Un nuovo invio sovrascrive il precedente, perche vale l'ultimo.
+   */
+  async salvaImportStorico(idKitRuntime: string, esito: ImportStorico): Promise<any> {
+    try {
+      const kit = await RuntimeKit.findOne({ where: { id: idKitRuntime }, raw: false });
+      if (kit === null) {
+        throw wrapNotFoundError(new Error("Kit runtime non trovato"), {
+          message: 'Kit runtime not found',
+          entityId: idKitRuntime,
+          entityType: 'RuntimeKit'
+        });
+      }
+      kit.import_storico = esito;
+      await kit.save();
+      return kit.get({ plain: true });
+    } catch (error) {
+      throw wrapDatabaseError(new Error("Errore durante il salvataggio dell'import da storico"), {
+        message: "Errore durante il salvataggio dell'import da storico",
+        operation: 'updateOne',
+        entity: 'RuntimeKit',
+        details: { idKitRuntime, error }
+      });
+    }
+  }
 
   async mettiInStatoDiEliminazione(id: string): Promise<any> {
     try {

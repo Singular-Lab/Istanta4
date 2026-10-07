@@ -484,10 +484,11 @@ class ServerUtils {
         } catch (error: any) {
             log.error(Colorize.bgRed(error.message));
 
-            // Gestione errori Axios
+            // Gestione errori Axios — il body dell'errore (es. { error: "..." } di Olimpo)
+            // va preservato: senza, il chiamante perde il motivo vero del fallimento.
             if (error.response) {
                 return {
-                    data: null as any,
+                    data: (error.response.data ?? null) as any,
                     status: error.response.status,
                     statusText: error.response.statusText || error.message,
                 } as ApiResponse<T>;
