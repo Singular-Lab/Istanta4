@@ -375,6 +375,32 @@ const VolantiniSkeleton: React.FC = () => (
 const showMomenti = import.meta.env.VITE_MOMENTI_ATTIVI === 'true';
 const showMenabo = import.meta.env.VITE_MENABO_ATTIVO === 'true';
 
+type OrdineTracciati = "recenti" | "meno_recenti" | "nome_az" | "nome_za";
+
+const ORDINI_TRACCIATI: Array<{ valore: OrdineTracciati; etichetta: string }> = [
+  { valore: "recenti", etichetta: "Più recenti" },
+  { valore: "meno_recenti", etichetta: "Meno recenti" },
+  { valore: "nome_az", etichetta: "Nome A→Z" },
+  { valore: "nome_za", etichetta: "Nome Z→A" },
+];
+
+/** Copia ordinata dei tracciati: per data di caricamento (senza data in fondo) o per nome visualizzato. */
+const ordinaTracciati = (tracciati: TracciatiResponseDTO[], ordine: OrdineTracciati) => {
+  const data = (t: TracciatiResponseDTO) => (t.createdat ? new Date(t.createdat).getTime() : NaN);
+  const nome = (t: TracciatiResponseDTO) => t.nome || t.filename || "";
+  return [...tracciati].sort((a, b) => {
+    if (ordine === "nome_az" || ordine === "nome_za") {
+      const confronto = nome(a).localeCompare(nome(b), "it", { numeric: true, sensitivity: "base" });
+      return ordine === "nome_az" ? confronto : -confronto;
+    }
+    const [dataA, dataB] = [data(a), data(b)];
+    if (Number.isNaN(dataA) || Number.isNaN(dataB)) {
+      return Number(Number.isNaN(dataA)) - Number(Number.isNaN(dataB));
+    }
+    return ordine === "recenti" ? dataB - dataA : dataA - dataB;
+  });
+};
+
 function Main() {
   const refDropzone = useRef<any>(null);
   const location = useLocation();
@@ -401,6 +427,7 @@ function Main() {
   const [isUpdating, setIsUpdating] = useState(false);
 
   const [isEditing, setIsEditing] = useState(false);
+  const [ordineTracciati, setOrdineTracciati] = useState<OrdineTracciati>("recenti");
   const [editFormData, setEditFormData] = useState<
     UpdatePromoDTO & { id: string }
   >({} as UpdatePromoDTO & { id: string });
@@ -2232,7 +2259,7 @@ function Main() {
               <div>
                 {renderUploadForm()}
                 <div className="max-h-96 space-y-3 overflow-y-scroll">
-                  {tracciati.map((tracciato: TracciatiResponseDTO) => (
+                  {ordinaTracciati(tracciati, ordineTracciati).map((tracciato: TracciatiResponseDTO) => (
                     <TracciatoCard
                       key={tracciato.id}
                       tracciato={tracciato}
@@ -2962,6 +2989,24 @@ function Main() {
                     </p>
                   </div>
                 </div>
+                {(tracciatiQuery.data?.length ?? 0) > 1 && (
+                  <div className="flex items-center gap-1.5">
+                    <Lucide icon="ArrowUpDown" className="w-4 h-4 text-slate-400" />
+                    <FormSelect
+                      formSelectSize="sm"
+                      className="w-auto"
+                      aria-label="Ordina i tracciati"
+                      value={ordineTracciati}
+                      onChange={(e) => setOrdineTracciati(e.target.value as OrdineTracciati)}
+                    >
+                      {ORDINI_TRACCIATI.map((o) => (
+                        <option key={o.valore} value={o.valore}>
+                          {o.etichetta}
+                        </option>
+                      ))}
+                    </FormSelect>
+                  </div>
+                )}
               </div>
               {renderTracciatiContent()}
             </div>
