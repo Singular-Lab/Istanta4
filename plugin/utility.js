@@ -823,10 +823,16 @@ const Utility=
 
         var result = null;
         var baseOld = null;
-        for (var i = 0; i < box.allPageItems.length; i++) {
-            var item = box.allPageItems[i];
-            if (item.label && item.label.includes("$DNA$")) {
-                var parts = item.label.split("$");
+        var partiBase = null;
+        //I20-1056: in UXP ogni lettura di allPageItems interroga di nuovo InDesign e rifa'
+        //l'elenco: letto nella condizione del ciclo, costava un elenco nuovo a ogni giro. Lo
+        //stesso per la label, letta fino a tre volte per elemento.
+        var elementi = box.allPageItems;
+        for (var i = 0; i < elementi.length; i++) {
+            var item = elementi[i];
+            var etichetta = item.label;
+            if (etichetta && etichetta.includes("$DNA$")) {
+                var parts = etichetta.split("$");
                 result = {
                     label: parts[0], //la parte 1 ora è DNA
                     item: item,
@@ -838,17 +844,18 @@ const Utility=
                 };
                 break;
             }
-            else if (item.label && item.label.startsWith("base$")) {
+            else if (etichetta && etichetta.startsWith("base$")) {
                 baseOld = item;
+                partiBase = etichetta.split("$");
             }
         }
         var res = result != null ? result : (baseOld != null ? {
             label: "base",
             item: baseOld,
-            boxLabel: baseOld.label.split("$")[1],
-            codice: baseOld.label.split("$")[2],
-            codice_gruppo: baseOld.label.split("$")[3],
-            idRec: baseOld.label.split("$")[4],
+            boxLabel: partiBase[1],
+            codice: partiBase[2],
+            codice_gruppo: partiBase[3],
+            idRec: partiBase[4],
             oldBoxFormat: true
         } : null);
 

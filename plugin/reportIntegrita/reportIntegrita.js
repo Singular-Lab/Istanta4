@@ -1087,6 +1087,10 @@ const ReportIntegrita = {
             };
         }
 
+        //I20-1056, lotto 5: il numero di segnalazioni si rilegge dal box prima di tutto il resto,
+        //cosi' resta giusto anche se il ricontrollo del dato non riesce.
+        this._aggiornaSegnalazioniDelRecord(record, box);
+
         const records = await this._leggiSchedaRefAggiornata(stato.codiceGruppo, stato.idRec);
 
         this._tracciaScheda("ricontrollo:schedaRiletta", {
@@ -1959,6 +1963,8 @@ const ReportIntegrita = {
             filtered.numeroPagina = reportRecord.numeroPagina ?? filtered.numeroPagina;
             filtered.elementoPaginaMappa = reportRecord.elementoPaginaMappa || filtered.elementoPaginaMappa;
             filtered.schedaRef = reportRecord.schedaRef || filtered.schedaRef;
+            //I20-1056, lotto 5: il numero di segnalazioni e' quello del report, non quello salvato.
+            filtered.segnalazioniImpaginazione = reportRecord.segnalazioniImpaginazione;
 
             if (key === "recordCambiati") {
                 filtered.preAnalisi = filtered.preAnalisi || {};
@@ -3577,6 +3583,20 @@ const ReportIntegrita = {
         let listaScaricata = false;
 
         try {
+            //0. I20-1056, lotto 5: prima di tutto, anche di riaprire un report, le segnalazioni di
+            //impaginazione rimaste nel documento. Si rilegge il documento: l'ultimo controllo in
+            //memoria puo' dire cose che nel frattempo l'operatore ha gia' sistemato.
+            const avviso = await ReportIntegrita.avvisoSegnalazioniPrimaDelReport();
+
+            if (avviso.azione === "vai") {
+                await ReportIntegrita.vaiASegnalazioniDalReport(avviso.lette);
+                return;
+            }
+
+            if (avviso.azione !== "procedi") {
+                return;
+            }
+
             //1. Un report gia' salvato si puo' riaprire, se non e' troppo vecchio.
             const reportLocale = ReportIntegrita.leggiReportIntegritaLocale(idKit);
             if (reportLocale != null) {
@@ -3587,6 +3607,9 @@ const ReportIntegrita = {
                 }
 
                 if (azioneReport === "open") {
+                    //I20-1056, lotto 5: i numeri accanto ai record sono quelli di adesso, non quelli
+                    //salvati con il report.
+                    ReportIntegrita.assegnaSegnalazioniAlReport(reportLocale.report, avviso.lette);
                     ReportIntegrita.compilaReportConfronto(reportLocale.report, {
                         wrapper: reportLocale,
                         skipSave: true,
@@ -3664,7 +3687,7 @@ const ReportIntegrita = {
             //5. Il confronto box per box e l'apertura del report.
             showLoading("Inizio confronto box...");
             await Utility.sleep(100);
-            await ReportIntegrita.applicaConfronto(mappa);
+            await ReportIntegrita.applicaConfronto(mappa, avviso.lette);
 
             console.log("Report integrità: sequenza completa in " + ((Date.now() - inizio) / 1000).toFixed(1) + " s");
         }
@@ -3693,6 +3716,94 @@ const ReportIntegrita = {
         }
     },
 
+    /// I20-1056, lotto 5: l'avviso delle segnalazioni di impaginazione prima del report. Rilegge i
+    /// bollini di tutto il documento (90-400 ms misurati, piu' i 100 per far comparire il
+    /// caricamento: il tempo va in console) e, se ce ne sono, chiede all'operatore cosa fare.
+    /// Torna { azione: "procedi" | "vai" | "annulla", lette }. Se la lettura non riesce si procede
+    /// senza numeri, dicendolo: non si puo' affermare che il documento sia pulito.
+    async avvisoSegnalazioniPrimaDelReport() {
+        let lette = null;
+        showLoading("Controllo delle segnalazioni...");
+        try {
+            await Utility.sleep(100);
+            const inizio = Date.now();
+            lette = SchermataSegnalazioni.letturaControllata(null);
+            console.log("Report integrità: controllo delle segnalazioni in " + (Date.now() - inizio) + " ms");
+        }
+        finally {
+            hideLoading();
+        }
+
+        if (lette == null) {
+            messaggioUtente("Code IDX-176 Segnalazioni di impaginazione non controllate: il report prosegue senza", "warning", false, 6);
+            return { azione: "procedi", lette: null };
+        }
+
+        const testo = SchermataSegnalazioni.testoAvvisoReport(lette);
+        if (testo === "") {
+            return { azione: "procedi", lette };
+        }
+
+        //L'ordine dei pulsanti e' quello scelto dall'operatore: prima l'azione suggerita.
+        const azione = await this._confirmTreAzioniReport(testo
+            + "<br><span style=\"font-weight:normal;\">Conviene sistemarle prima del report integrità.</span>", [
+            { value: "vai", label: "Vai a segnalazioni", color: "#007bff", tooltip: "Annulla il report e apre la schermata delle segnalazioni nel menabò" },
+            { value: "procedi", label: "Procedi comunque", color: "#6c757d", tooltip: "Fa il report integrità senza sistemare le segnalazioni" },
+            { value: "annulla", label: "Annulla", color: "#dc3545" }
+        ]);
+        return { azione, lette };
+    },
+
+    /// I20-1056, lotto 5: "Vai a segnalazioni" dall'avviso: il report non parte, si apre il menabo'
+    /// come dal suo pulsante e poi la schermata di tutto il documento, con la lettura appena fatta.
+    /// I filtri del menabo' si aspettano: hanno un loro caricamento, che coprirebbe la schermata.
+    async vaiASegnalazioniDalReport(lette) {
+        try {
+            jsIndexControls.changeImage($("#menaboTab"));
+            jsIndexControls.changeSubMenu($("#menaboTab").attr("subTab"));
+            await filtriJs.visualizzaHomePageFiltri();
+        }
+        catch (err) {
+            console.error("Menabo' non aperto dall'avviso delle segnalazioni:", err);
+        }
+        await SchermataSegnalazioni.apri({ lette });
+    },
+
+    /// I20-1056, lotto 5: i numeri di segnalazioni accanto ai record dei pannelli Cambiati ed
+    /// Eliminati, dalla lettura dell'avviso. Solo quei record: nessuno entra nel report per le sole
+    /// segnalazioni. Senza lettura (non riuscita) si tolgono anche quelli salvati, che sarebbero
+    /// vecchi.
+    assegnaSegnalazioniAlReport(report, lette) {
+        if (report == null) {
+            return;
+        }
+        try {
+            const records = [].concat(report.recordCambiati || [], report.recordUsciti || []);
+            const conSegnalazioni = SchermataSegnalazioni.assegnaAiRecord(records, Array.isArray(lette) ? lette : []);
+            console.log("Report integrità: " + conSegnalazioni + " record con segnalazioni di impaginazione");
+        }
+        catch (err) {
+            console.error("Segnalazioni non assegnate ai record del report:", err);
+        }
+    },
+
+    /// I20-1056, lotto 5: alla chiusura della scheda aperta dal report, il numero del record si
+    /// rilegge dal suo box: nella scheda le segnalazioni si possono risolvere.
+    _aggiornaSegnalazioniDelRecord(record, box) {
+        try {
+            const riepilogo = SchermataSegnalazioni.riepilogoVoci(Segnalazioni.leggiDalBox(box));
+            if (riepilogo != null) {
+                record.segnalazioniImpaginazione = riepilogo;
+            }
+            else {
+                delete record.segnalazioniImpaginazione;
+            }
+        }
+        catch (err) {
+            console.error("Segnalazioni del record non rilette:", err);
+        }
+    },
+
     //I20-981: il confronto del Report Integrita', box per box.
     //Prima questa funzione serviva due flussi: il report e il "Fix integrità" senza report.
     //Il secondo e' stato rimosso dal picker su richiesta, e con lui sono spariti il ramo che
@@ -3701,7 +3812,9 @@ const ReportIntegrita = {
     //locale, che il chiamante ha appena verificato o riscaricato.
     /// Applica il confronto alla mappa dell'impaginato, appoggiandosi a
     /// reportConfronti.js per le differenze sui campi osservati dall'agenzia. 359 righe.
-    async applicaConfronto(mappa) {
+    /// I20-1056, lotto 5: letteSegnalazioni e' la lettura dei bollini fatta all'avvio, che da' i
+    /// numeri accanto ai record; null se non e' riuscita.
+    async applicaConfronto(mappa, letteSegnalazioni = null) {
         console.log(mappa);
         showLoading("Controllo dei box in pagina per ricerca differenze...");
         await Utility.sleep(10);
@@ -4040,6 +4153,7 @@ const ReportIntegrita = {
 
                     var reportFilePath = ReportIntegrita.percorsoFileReport(idKitLavorazione);
                     messaggioUtente("Report confronto creato con successo: " + reportFilePath, "success", false, 10);
+                    ReportIntegrita.assegnaSegnalazioniAlReport(reportObj, letteSegnalazioni);
                     ReportIntegrita.compilaReportConfronto(reportObj);
 
                     //I20-981: il csv nasce da solo insieme al report. Solo qui, che e' l'unico

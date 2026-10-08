@@ -37,13 +37,16 @@ const Segnalazioni = {
     POSIZIONE_BOLLINO: POSIZIONE_BOLLINO,
 
     /// I bollini di segnalazioni dentro un box (di norma uno solo).
+    /// I20-1056: l'elenco si legge una volta: in UXP ogni lettura di allPageItems lo rifa'
+    /// interrogando InDesign, e nella condizione del ciclo lo si rifaceva a ogni giro.
     bolliniDelBox(box) {
-        if (box == null || box.allPageItems == null) {
+        const elementi = box != null ? box.allPageItems : null;
+        if (elementi == null) {
             return [];
         }
         const trovati = [];
-        for (let i = 0; i < box.allPageItems.length; i++) {
-            const elemento = box.allPageItems[i];
+        for (let i = 0; i < elementi.length; i++) {
+            const elemento = elementi[i];
             if (elemento != null && etichettaSegnalazioni.eDiSegnalazioni(elemento.label)) {
                 trovati.push(elemento);
             }

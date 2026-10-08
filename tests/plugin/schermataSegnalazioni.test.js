@@ -604,3 +604,167 @@ test("nel menabo' i pulsanti stanno su una riga senza che il testo sbordi, e c'e
     assert.doesNotMatch(riga, /<div style="width: 100%; align-items: center; display: flex;">/);
     assert.match(riga, /<div style="flex: 1 1 auto; min-width: 0;/);
 });
+
+/* ---- I20-1056, lotto 5: Report Integrita' e ottimizzazioni ---- */
+
+test("l'avviso prima del report dice quante segnalazioni, in quanti box e quanti errori", () => {
+    assert.strictEqual(SchermataSegnalazioni.testoAvvisoReport([]), "");
+    assert.strictEqual(SchermataSegnalazioni.testoAvvisoReport([{ pagina: "1", box: {}, voci: [] }]), "");
+    assert.strictEqual(SchermataSegnalazioni.testoAvvisoReport([{ pagina: "1", box: {}, voci: [DUE[1]] }]),
+        "Nel documento c'è 1 segnalazione di impaginazione irrisolta in 1 box.");
+    assert.strictEqual(SchermataSegnalazioni.testoAvvisoReport([
+        { pagina: "1", box: {}, voci: DUE },
+        { pagina: "2", box: {}, voci: [DUE[1]] }
+    ]), "Nel documento ci sono 3 segnalazioni di impaginazione irrisolte in 2 box (1 errore).");
+});
+
+test("il riepilogo delle voci di un box: quante, quanti errori, la gravita' peggiore", () => {
+    assert.strictEqual(SchermataSegnalazioni.riepilogoVoci([]), null);
+    assert.strictEqual(SchermataSegnalazioni.riepilogoVoci(null), null);
+    assert.deepStrictEqual(SchermataSegnalazioni.riepilogoVoci(DUE), {
+        segnalazioni: 2, errori: 1, gravita: "error",
+        voci: [{ g: "error", c: "CSF-009", t: "oltre la griglia" }, { g: "warning", c: "CSF-013", t: "conflitto" }]
+    });
+    assert.strictEqual(SchermataSegnalazioni.riepilogoVoci([DUE[1]]).gravita, "warning");
+});
+
+test("i numeri vanno ai record del report per id del box, e un box che nel report non c'e' non entra", () => {
+    const cambiato = { inddId: 101, elementoMappa: { refId: 101, idRec: 7 } };
+    const uscito = { inddId: 102, elementoMappa: { refId: 102, idRec: 8 } };
+    const pulito = { inddId: 103, elementoMappa: { refId: 103, idRec: 9 }, segnalazioniImpaginazione: { segnalazioni: 4 } };
+    const records = [cambiato, uscito, pulito];
+    const dnaLetti = [];
+
+    const quanti = SchermataSegnalazioni.assegnaAiRecord(records, [
+        { pagina: "1", box: { id: 101 }, voci: DUE },
+        { pagina: "1", box: { id: 102 }, voci: [DUE[1]] },
+        { pagina: "2", box: { id: 999 }, voci: DUE }
+    ], (box) => { dnaLetti.push(box.id); return { idRec: "55" }; });
+
+    assert.strictEqual(quanti, 2);
+    assert.strictEqual(cambiato.segnalazioniImpaginazione.segnalazioni, 2);
+    assert.strictEqual(cambiato.segnalazioniImpaginazione.gravita, "error");
+    assert.strictEqual(uscito.segnalazioniImpaginazione.segnalazioni, 1);
+    assert.strictEqual(uscito.segnalazioniImpaginazione.gravita, "warning");
+    //Il numero salvato prima non vale piu': il box non ha piu' bollini.
+    assert.strictEqual(pulito.segnalazioniImpaginazione, undefined);
+    //Il DNA si legge solo per il box che per id non si e' trovato, e non aggiunge record.
+    assert.deepStrictEqual(dnaLetti, [999]);
+    assert.strictEqual(records.length, 3);
+});
+
+test("se l'id del box non torna (report riaperto, bollino ridisegnato) il record si trova per idRec", () => {
+    const record = { inddId: 101, elementoMappa: { refId: 101, idRec: 7 } };
+
+    SchermataSegnalazioni.assegnaAiRecord([record], [{ pagina: "1", box: { id: 500 }, voci: [DUE[0]] }], () => ({ idRec: "7" }));
+
+    assert.strictEqual(record.segnalazioniImpaginazione.segnalazioni, 1);
+});
+
+test("senza lettura i numeri si tolgono tutti, e un DNA che non si legge non ferma niente", () => {
+    const record = { inddId: 101, elementoMappa: { idRec: 7 }, segnalazioniImpaginazione: { segnalazioni: 3 } };
+    assert.strictEqual(SchermataSegnalazioni.assegnaAiRecord([record], []), 0);
+    assert.strictEqual(record.segnalazioniImpaginazione, undefined);
+
+    assert.strictEqual(SchermataSegnalazioni.assegnaAiRecord([record], [{ pagina: "1", box: { id: 5 }, voci: DUE }],
+        () => { throw new Error("box non valido"); }), 0);
+});
+
+test("il suggerimento del numero sul record elenca le voci con il dizionario del cliente", () => {
+    const testo = SchermataSegnalazioni.testoSegnalazioniDelRecord(
+        SchermataSegnalazioni.riepilogoVoci([{ g: "error", c: "CSF-009", t: "campo_offerta oltre la griglia" }, DUE[1]]),
+        [{ label: "campo_offerta", traduzione: "ANZICHE'" }]);
+    assert.match(testo, /^2 segnalazioni di impaginazione irrisolte:/);
+    assert.match(testo, /• CSF-009 ANZICHE' \(campo_offerta\) oltre la griglia/);
+    assert.match(testo, /• CSF-013 conflitto$/);
+    assert.strictEqual(SchermataSegnalazioni.testoSegnalazioniDelRecord(null, []), "");
+});
+
+test("la schermata aperta con una lettura gia' fatta non rilegge e non mostra il caricamento", () => conSchermataFinta(async (eventi) => {
+    SchermataSegnalazioni._leggi = () => { eventi.push("leggi"); return []; };
+
+    const esito = await SchermataSegnalazioni.apri({ lette: [{ pagina: "1", box: {}, voci: DUE }] });
+
+    assert.strictEqual(esito, true);
+    assert.deepStrictEqual(eventi, ["chiudi", "disegna", "popup"]);
+}));
+
+test("una lettura che non riesce e' null per il report, una lista vuota per gli altri", () => {
+    const salvaDocumento = SchermataSegnalazioni._documento;
+    const salvaErrore = console.error;
+    SchermataSegnalazioni._documento = () => { throw new Error("documento chiuso"); };
+    console.error = () => {};
+    try {
+        assert.strictEqual(SchermataSegnalazioni.letturaControllata(null), null);
+        assert.deepStrictEqual(SchermataSegnalazioni._leggi(null), []);
+    }
+    finally {
+        SchermataSegnalazioni._documento = salvaDocumento;
+        console.error = salvaErrore;
+    }
+});
+
+test("i bollini del box si cercano leggendo l'elenco degli elementi una volta sola", () => {
+    const { box } = boxConBollino(DUE);
+    const elementi = box.allPageItems;
+    let letture = 0;
+    const contato = { label: box.label, get allPageItems() { letture++; return elementi; } };
+
+    assert.strictEqual(Segnalazioni.bolliniDelBox(contato).length, 1);
+    assert.strictEqual(letture, 1);
+    assert.deepStrictEqual(Segnalazioni.bolliniDelBox(null), []);
+});
+
+test("anche il DNA del box legge l'elenco degli elementi una volta sola", () => {
+    const utility = leggiFileDelPlugin("utility.js").replace(/\r/g, "");
+    const corpo = utility.substring(utility.indexOf("getDnaOfBox: function (box) {"), utility.indexOf("getBoxFromElementOfBox("));
+    assert.match(corpo, /var elementi = box\.allPageItems;\s*for \(var i = 0; i < elementi\.length; i\+\+\) \{\s*var item = elementi\[i\];/);
+    assert.strictEqual((corpo.match(/box\.allPageItems/g) || []).length, 1);
+});
+
+/* ---- I20-1056, lotto 5: il Report Integrita', sul sorgente ---- */
+
+const flussoReport = leggiFileDelPlugin("reportIntegrita/reportIntegrita.js").replace(/\r/g, "");
+const pannelliReport = leggiFileDelPlugin("reportIntegrita/pannelli.js").replace(/\r/g, "");
+
+test("l'avviso delle segnalazioni viene prima di tutto, anche della domanda Riapri / Nuovo", () => {
+    const avvio = flussoReport.substring(flussoReport.indexOf("async avviaReportIntegrita("), flussoReport.indexOf("async avvisoSegnalazioniPrimaDelReport("));
+    const avviso = avvio.indexOf("await ReportIntegrita.avvisoSegnalazioniPrimaDelReport();");
+    assert.ok(avviso > 0);
+    assert.ok(avviso < avvio.indexOf("leggiReportIntegritaLocale(idKit)"));
+    //Vai: si va alle segnalazioni e il report non parte. Annulla: il report non parte.
+    assert.match(avvio, /if \(avviso\.azione === "vai"\) \{\s*await ReportIntegrita\.vaiASegnalazioniDalReport\(avviso\.lette\);\s*return;\s*\}\s*if \(avviso\.azione !== "procedi"\) \{\s*return;\s*\}/);
+    //Riapri e report nuovo usano la stessa lettura per i numeri.
+    assert.match(avvio, /ReportIntegrita\.assegnaSegnalazioniAlReport\(reportLocale\.report, avviso\.lette\);\s*ReportIntegrita\.compilaReportConfronto\(reportLocale\.report,/);
+    assert.match(avvio, /await ReportIntegrita\.applicaConfronto\(mappa, avviso\.lette\);/);
+    assert.match(flussoReport, /ReportIntegrita\.assegnaSegnalazioniAlReport\(reportObj, letteSegnalazioni\);\s*ReportIntegrita\.compilaReportConfronto\(reportObj\);/);
+});
+
+test("l'avviso rilegge il documento e offre Vai a segnalazioni, Procedi comunque e Annulla, in quest'ordine", () => {
+    const avviso = flussoReport.substring(flussoReport.indexOf("async avvisoSegnalazioniPrimaDelReport("), flussoReport.indexOf("async vaiASegnalazioniDalReport("));
+    assert.match(avviso, /SchermataSegnalazioni\.letturaControllata\(null\)/);
+    assert.match(avviso, /Code IDX-176/);
+    assert.match(avviso, /if \(testo === ""\) \{\s*return \{ azione: "procedi", lette \};/);
+    const vai = avviso.indexOf('label: "Vai a segnalazioni"');
+    const procedi = avviso.indexOf('label: "Procedi comunque"');
+    const annulla = avviso.indexOf('label: "Annulla"');
+    assert.ok(vai > 0 && vai < procedi && procedi < annulla);
+});
+
+test("Vai a segnalazioni apre il menabo' e poi la schermata con la lettura gia' fatta", () => {
+    const vai = flussoReport.substring(flussoReport.indexOf("async vaiASegnalazioniDalReport("), flussoReport.indexOf("assegnaSegnalazioniAlReport(report, lette) {"));
+    assert.match(vai, /jsIndexControls\.changeImage\(\$\("#menaboTab"\)\);/);
+    assert.match(vai, /await filtriJs\.visualizzaHomePageFiltri\(\);/);
+    assert.match(vai, /await SchermataSegnalazioni\.apri\(\{ lette \}\);/);
+});
+
+test("il numero si vede accanto al codice dei Cambiati e degli Eliminati, e si rilegge chiudendo la scheda", () => {
+    assert.strictEqual((pannelliReport.match(/left\.appendChild\(this\._conSegnalazioniImpaginazione\(codice, item\)\);/g) || []).length, 2);
+    assert.match(pannelliReport, /numero\.style\.backgroundColor = SchermataSegnalazioni\.coloreCss\(riepilogo\.gravita\);/);
+    //Il ricontrollo dopo la scheda rilegge il box prima di chiedere il dato al server.
+    const ricontrollo = flussoReport.substring(flussoReport.indexOf("async _ricontrollaReferenzaDopoScheda("));
+    assert.ok(ricontrollo.indexOf("this._aggiornaSegnalazioniDelRecord(record, box);") > 0);
+    assert.ok(ricontrollo.indexOf("this._aggiornaSegnalazioniDelRecord(record, box);") < ricontrollo.indexOf("this._leggiSchedaRefAggiornata("));
+    //Nella vista whitelist il numero e' quello del report.
+    assert.match(flussoReport, /filtered\.segnalazioniImpaginazione = reportRecord\.segnalazioniImpaginazione;/);
+});
