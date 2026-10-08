@@ -31,7 +31,7 @@ function corpoMembro(intestazione) {
 //Un disco finto: le chiavi sono le cartelle, i valori le voci che contengono. readdirSync riesce
 //solo sulle cartelle, come quello vero.
 function utilityCon(cartelle) {
-    const membri = ["nomiCartellaLavorazioni(", "_senzaBarraFinale(", "cartellaLavorazioni(", "percorsoFileLavorazioni("].map(corpoMembro);
+    const membri = ["nomiCartellaLavorazioni(", "_senzaBarraFinale(", "cartellaLavorazioni("].map(corpoMembro);
     const fabbrica = new Function("require", "const Utility = ({\n" + membri.join(",\n") + "\n});\nreturn Utility;");
     return fabbrica((nome) => {
         assert.strictEqual(nome, "fs");
@@ -81,29 +81,9 @@ test("la cartella del documento puo' arrivare con la barra finale, come quella d
     assert.strictEqual(u.cartellaLavorazioni("/libro\\"), "/libro/.lavorazioni");
 });
 
-/* ---- dove sta lavorazioni.json ---- */
-
-test("il file nella cartella delle lavorazioni vince", () => {
-    const u = utilityCon({ "/doc": [".lavorazioni", "lavorazioni.json"], "/doc/.lavorazioni": ["lavorazioni.json"] });
-    assert.strictEqual(u.percorsoFileLavorazioni("/doc"), "/doc/.lavorazioni/lavorazioni.json");
-});
-
-test("il file di prima nella cartella del documento resta in uso finche' non lo si sposta", () => {
-    const u = utilityCon({ "/doc": [".lavorazioni", "lavorazioni.json"], "/doc/.lavorazioni": [] });
-    assert.strictEqual(u.percorsoFileLavorazioni("/doc"), "/doc/lavorazioni.json");
-});
-
-test("se il file non c'e' ancora nasce nella cartella delle lavorazioni", () => {
-    const u = utilityCon({ "/doc": ["lavorazione"], "/doc/lavorazione": [] });
-    assert.strictEqual(u.percorsoFileLavorazioni("/doc"), "/doc/lavorazione/lavorazioni.json");
-});
-
-test("senza cartella delle lavorazioni tutto resta come prima", () => {
-    assert.strictEqual(utilityCon({ "/doc": ["lavorazioni.json"] }).percorsoFileLavorazioni("/doc"), "/doc/lavorazioni.json");
-    assert.strictEqual(utilityCon({ "/doc": [] }).percorsoFileLavorazioni("/doc"), "/doc/lavorazioni.json");
-    //Il libro passava la cartella con la barra finale e il nome attaccato: il percorso e' lo stesso.
-    assert.strictEqual(utilityCon({ "/libro": ["lavorazioni.json"] }).percorsoFileLavorazioni("/libro/"), "/libro/lavorazioni.json");
-});
+/* ---- dove stanno i file delle lavorazioni ----
+ * I20-1061: da qui in poi ogni macchina ha il suo file, e i lavorazioni.json di I20-1057 si leggono
+ * soltanto: i casi sono in lavorazioniPerMacchina.test.js. */
 
 /* ---- chi usa il file ---- */
 
@@ -118,9 +98,13 @@ test("nessuno costruisce piu' a mano il percorso di lavorazioni.json", () => {
         assert.doesNotMatch(file.testo, /\+\s*"\/?lavorazioni\.json"/, file.nome);
     }
 
-    //I punti che leggono o scrivono il file passano tutti dall'unico che sa dove sta.
-    const usi = daControllare.filter(f => f.nome !== "custom.js").reduce((n, f) => n + (f.testo.match(/Utility\.percorsoFileLavorazioni\(/g) || []).length, 0);
-    assert.ok(usi >= 14, "usi trovati: " + usi);
+    //I20-1061: chi legge passa da voceLavorazione, chi scrive dal file di questa macchina. Il file
+    //comune non lo legge piu' nessuno direttamente.
+    const tutti = daControllare.filter(f => f.nome !== "custom.js");
+    const conta = (re) => tutti.reduce((n, f) => n + (f.testo.match(re) || []).length, 0);
+    assert.strictEqual(conta(/Utility\.percorsoFileLavorazioni\(/g), 0);
+    assert.ok(conta(/Utility\.voceLavorazione\(/g) >= 10, "letture: " + conta(/Utility\.voceLavorazione\(/g));
+    assert.strictEqual(conta(/Utility\.salvaVoceLavorazione\(/g), 4);
 });
 
 test("ficoProcess non perde il file nuovo e copia anche il percorso delle lavorazioni", () => {
@@ -128,9 +112,8 @@ test("ficoProcess non perde il file nuovo e copia anche il percorso delle lavora
 
     //Era "file== readFile(...)": un confronto, e subito dopo file.length andava in errore.
     assert.doesNotMatch(fico, /file\s*==\s*readFile\(/);
-    assert.strictEqual((fico.match(/file = readFile\(filePath\) \|\| \[\];/g) || []).length, 2);
-
-    assert.strictEqual((fico.match(/existingItems\.pathLavorazioni = pathLavorazioni;/g) || []).length, 2);
+    //I20-1061: i percorsi da riprendere si leggono dal file di questa macchina, sempre un elenco.
+    assert.strictEqual((fico.match(/let file = Utility\.leggiFileLavorazioni\(filePath\);/g) || []).length, 2);
     assert.match(fico, /pathLavorazioni:pathLavorazioni ,details:/);
     assert.match(fico, /pathLavorazioni: pathLavorazioni, details:/);
 });
