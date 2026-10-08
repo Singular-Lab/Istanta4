@@ -165,20 +165,20 @@ var intervalSpeed=100;
 /// alla radice, che non esiste. Vale null finche' qualcuno non la riassegna.
 var dbMastro = readFile(pathLavorazione + "/dbMastro.json");
 let useCompiledField = true;
-/// I quattro percorsi di lavoro, ognuno col suo gemello defaultPercorso*: i primi si possono
-/// cambiare, i secondi dicono da cosa si riparte.
+/// I due percorsi delle immagini, ognuno col suo gemello defaultPercorso*: i primi si possono
+/// cambiare, i secondi dicono da cosa si riparte. Sono gli unici che sceglie l'operatore.
 let percorsoLinks = "/Links/";
 let percorsoLoghi = "/Links/Loghi/";
-let percorsoLogs = "/Logs/";
-let percorsoEsportazione = "/Export/";
 let defaultPercorsoLinks = "/Links/";
 let defaultPercorsoLoghi = "/Links/Loghi/";
-let defaultPercorsoLogs = "/Logs/";
-let defaultPercorsoEsportazione = "/Export/";
-/// I20-1057: la quinta cartella, quella delle lavorazioni. Non ha un default fisso: si riconosce
-/// per nome sotto la cartella del documento (Utility.nomiCartellaLavorazioni), altrimenti la
-/// sceglie l'operatore. E' li' che vive lavorazioni.json (Utility.percorsoFileLavorazioni).
-let percorsoLavorazioni = "";
+/// I20-1065: le cartelle che il Plugin crea da solo sotto quella del documento, all'apertura
+/// (preparaCartelleDiSistema): logs ed export, con la barra finale, e la cartella dei dati di
+/// questa postazione, SingularData/<idMacchina>, senza. Vuote finche' non sono pronte.
+/// Al posto di percorsoLogs, percorsoEsportazione e percorsoLavorazioni (I20-1057), che sceglieva
+/// l'operatore.
+var logPath = "";
+var exportPath = "";
+var SingularPath = "";
 
 
 
@@ -1094,6 +1094,10 @@ async function initDocumentInLavorazione()
     var pluginPathTmp = await fs2.getPluginFolder();
     pluginPath = pluginPathTmp.nativePath;
 
+    //I20-1065: logs, export e SingularData prima di leggere la lavorazione: la sua voce, la lista
+    //del kit e i filtri stanno nella cartella dei dati di questa postazione.
+    await preparaCartelleDiSistema(pathLavorazione);
+
 
 
 
@@ -1274,6 +1278,8 @@ async function initLibroInLavorazione()
             let nativePath = fullName.nativePath;
             let sep = Utility.getDirSeparator();
             let _pathDelLibro = nativePath.substring(0, nativePath.lastIndexOf(sep) + 1);
+            //I20-1065: le cartelle di sistema del libro, prima di cercarne le lavorazioni
+            await preparaCartelleDiSistema(_pathDelLibro);
             //I20-1061: ogni file del libro si cerca con voceLavorazione: nel file di questa macchina,
             //poi in quelli delle altre (da cui viene copiato qui).
             let lav = [];
@@ -2475,19 +2481,31 @@ async function impaginaLibroTask(indice)
 
 }
 
-/// Rilegge da disco lo stato del libro: <nomeLibro>_register.json, nella cartella del
-/// libro. Restituisce null se il file non c'e' ancora.
+/// Rilegge da disco lo stato del libro: <nomeLibro>_register.json. Restituisce null se il file
+/// non c'e' ancora.
 ///
 /// E' questo file che rende ripartibili impaginazione ed esportazione: tiene lo stato, la
 /// coda dei documenti e, per ognuno, l'ultima pagina andata a buon fine.
+///
+/// I20-1065: sta nella cartella dei dati di questa postazione (percorsoStatoLibro). Finche' li'
+/// non c'e', si legge quello scritto prima nella cartella del libro, che non si scrive piu': la
+/// prossima registrazione va nel posto nuovo.
 async function leggiStatoLavorazioneLibro()
 {
     let _libroFilePath = await libroInLavorazione.filePath; 
     let _pathLavorazioneLibro = _libroFilePath.nativePath;
-    let filePath=_pathLavorazioneLibro+Utility.getDirSeparator()+libroInLavorazione.name+"_register.json";
-    let file = readFile(filePath);
+    let file = readFile(percorsoStatoLibro(_pathLavorazioneLibro));
+    if (file == null) {
+        file = readFile(_pathLavorazioneLibro+Utility.getDirSeparator()+libroInLavorazione.name+"_register.json");
+    }
 
     return file;
+}
+
+/// I20-1065: dove sta lo stato del libro, nella cartella dei dati di questa postazione sotto
+/// quella del libro.
+function percorsoStatoLibro(cartellaLibro) {
+    return Utility.cartellaDatiMacchina(cartellaLibro, idMacchina()) + "/" + libroInLavorazione.name + "_register.json";
 }
 
 /// Scrive su disco jobImpaginazioneLibro, nello stesso file che legge
@@ -2503,7 +2521,7 @@ async function registraStatoLavorazioneLibro()
 {
     let _libroFilePath = await libroInLavorazione.filePath; 
     let _pathLavorazioneLibro = _libroFilePath.nativePath;
-    let filePath=_pathLavorazioneLibro+Utility.getDirSeparator()+libroInLavorazione.name+"_register.json";
+    let filePath = percorsoStatoLibro(_pathLavorazioneLibro);
 
     let file = readFile(filePath);
     if (file == null)
@@ -2876,7 +2894,7 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
             var req = "";
             var filterIndex = 0;
             if (docInLavorazione != null) {
-                var listaRefEscluse = readFile(pathLavorazione + "/listaRefEscluse.json");
+                var listaRefEscluse = readFile(Utility.percorsoDati("listaRefEscluse.json"));
                 var filtriJson = readFile(filtriJs.getNomeFileFiltriJson());
 
                 var pagineRange = "";
@@ -2927,7 +2945,7 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                         continue;
                     }
 
-                    //leggiamo in var listaRefEscluse = readFile(pathLavorazione + "/listaRefEscluse.json");
+                    //leggiamo in var listaRefEscluse = readFile(Utility.percorsoDati("listaRefEscluse.json"));
                     //cerchiamo se la pagina corrente è presente in listaRefEscluse
                     //se c'è prendiamo tutti i codici gruppo degli elementi in listaEscluse e li mettiamo in un array
 
@@ -3332,8 +3350,9 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
 
                 console.log(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>RISULTATO FILTRO CONTEGGIO");
                 console.log(objResult);
-                clearFile(pathLavorazione + "/log.txt");
-                var logFilePath = pathLavorazione + "/log.txt";
+                //I20-1065: nella cartella dei log; se non e' pronta, dove stava prima
+                var logFilePath = (cartellaDeiLog() || pathLavorazione + "/") + "log.txt";
+                clearFile(logFilePath);
                 var logContent = "";
                 var currentDate = new Date();
                 logContent += currentDate.toLocaleDateString() + " alle " + currentDate.toLocaleTimeString() + " operazione di " + (impagina ? "impaginazione" : "conteggio") + " iniziata\n";
@@ -3370,7 +3389,7 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                         showLoading("Compilazione del risultato di conteggio");
                         await Utility.sleep(100);
                         //var boxConteggioTemplate = libreria.assets.itemByName("Box Conteggio").placeAsset(docInLavorazione)[0];
-                        var filePath = pathLavorazione + "/listaRefConteggio.json";
+                        var filePath = Utility.percorsoDati("listaRefConteggio.json");
                         clearFile(filePath);
                         logContent += "ripulisco la lista di ref avanzate\n ";
                         let date = new Date().toLocaleString('it-IT')
@@ -4115,8 +4134,9 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
             async function impaginaLista(objResult, parsed) {
                 console.log(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>RIUSLTATO FILTRO CONTEGGIO");
                 console.log(objResult);
-                clearFile(pathLavorazione + "/logImpaginazionePop.txt");
-                var logFilePath = pathLavorazione + "/logImpaginazionePop.txt";
+                //I20-1065: nella cartella dei log; se non e' pronta, dove stava prima
+                var logFilePath = (cartellaDeiLog() || pathLavorazione + "/") + "logImpaginazionePop.txt";
+                clearFile(logFilePath);
                 var logContent = "";
                 var currentDate = new Date();
                 logContent += currentDate.toLocaleDateString() + " alle " + currentDate.toLocaleTimeString() + " operazione di impaginazione Pop iniziata\n";
@@ -4155,7 +4175,7 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
 
 
                     //Si salva solo per PoP, per VOL è frammentata solitamente
-                    let filePathSaveData = pathLavorazione + "/listaImpaginata" + idKitLavorazione + ".json";
+                    let filePathSaveData = Utility.percorsoDati("listaImpaginata" + idKitLavorazione + ".json");
                     clearFile(filePathSaveData);
                     appendToFile(filePathSaveData, objResult);
 
@@ -4538,7 +4558,7 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                 //messaggioUtente("Filtro: Richiesta inviata", "success", true, 0, true);
             }
             else if (restartFromIndexPoP > 0) {
-                let localDbDataset= readFile(pathLavorazione+"/listaImpaginata"+idKitLavorazione+".json");
+                let localDbDataset= readFile(Utility.percorsoDati("listaImpaginata"+idKitLavorazione+".json"));
                 //controlliamo che il file sia un json valido
                 if(localDbDataset == null || localDbDataset == ""){
                     throw "Impossibile leggere il file di impaginazione locale per la ripresa dell'impaginazione.";
@@ -5023,7 +5043,7 @@ function stampaSegnalazioni(reportImpaginazioneObj = { segnalazioni: [] }) {
     //il colore del messaggio dipende dal typeMessage più grave presente nelle segnalazioni.
     if (reportImpaginazioneObj.segnalazioni.length > 0) {
         var nomeFileReport = "reportSegnalazioni_" + idKitLavorazione + "_" + new Date().getDate() + "_" + new Date().getMonth() + "_" + new Date().getFullYear() + "__" + new Date().getHours() + ":" + new Date().getMinutes() + ":" + new Date().getSeconds() + ".txt";
-        var percorsoFileReport = /*pathLavorazione +*/ percorsoLogs + nomeFileReport;
+        var percorsoFileReport = cartellaDeiLog() + nomeFileReport;
         var reportContent = "Segnalazioni durante l'impaginazione:\n\n";
 
         var typeMessagePiuGrave = "success";
@@ -7917,14 +7937,12 @@ var cartellaAssenteCheck = false;
 //perche' in UXP le misure su cui :visible si basa non sono affidabili.
 /// I20-1018: la cartella in cui scrivere i log, per messaggioUtente e writeDebugMessageForCrash.
 ///
-/// percorsoLogs parte da "/Logs/", relativo alla lavorazione, e impostaPercorsiDiSistema lo
-/// rende assoluto: da file.pathLogs di lavorazioni.json, o da pathLavorazione + "/Logs/" se
-/// manca. Da li' in poi si usa com'e'; concatenarci davanti pathLavorazione dava un percorso
-/// inesistente. Prima che succeda, pero', si scrive gia': aprendo una lavorazione nuova,
-/// impostaPercorsiDiSistema per foto e loghi scrive nel log prima che tocchi ai log, e in quel
-/// momento il valore relativo va ancora completato. Vuoto vuol dire che la cartella non c'e'.
+/// I20-1065: e' logs sotto la cartella del documento, che il Plugin crea da solo all'apertura
+/// (preparaCartelleDiSistema), con la barra finale. Vuota finche' non e' pronta: in quel momento
+/// i messaggi vanno solo in console, senza dire che la cartella manca (lo direbbe una volta sola,
+/// e poi non lo direbbe piu' quando manca davvero).
 function cartellaDeiLog() {
-    return percorsoLogs === defaultPercorsoLogs ? pathLavorazione + percorsoLogs : percorsoLogs;
+    return logPath || "";
 }
 
 /// I20-981: dove scrivere un messaggio all'operatore.
@@ -8225,7 +8243,7 @@ async function messaggioUtente(msg, style, loading = false, tempo = 0, dontWrite
             return n < 10 ? '0' + n : '' + n;
         }
 
-        var logPath = cartellaDeiLog();
+        var cartellaLog = cartellaDeiLog();
 
         var date = new Date();
         var logMessage = {
@@ -8244,8 +8262,8 @@ async function messaggioUtente(msg, style, loading = false, tempo = 0, dontWrite
 
         writeFileInConsole(logMessage);
 
-        if (!dontWriteInLogs) {
-            var logFile = logPath + "log_" + date.getDate() + "-" + (date.getMonth() + 1) + "-" + date.getFullYear() + ".txt";
+        if (!dontWriteInLogs && cartellaLog !== "") {
+            var logFile = cartellaLog + "log_" + date.getDate() + "-" + (date.getMonth() + 1) + "-" + date.getFullYear() + ".txt";
             var file = readFile(logFile);
             if (file == null) {
                 try {
@@ -8352,7 +8370,10 @@ function writeDebugMessageForCrash(msg) {
             return n < 10 ? '0' + n : '' + n;
         }
 
-        var logPath = cartellaDeiLog();
+        var cartellaLog = cartellaDeiLog();
+        if (cartellaLog === "") {
+            return;
+        }
 
         var date = new Date();
         var logMessage = {
@@ -8363,7 +8384,7 @@ function writeDebugMessageForCrash(msg) {
         };
 
 
-        var logFile = logPath + "Debuglog_" + date.getDate() + "-" + (date.getMonth() + 1) + "-" + date.getFullYear() + ".txt";
+        var logFile = cartellaLog + "Debuglog_" + date.getDate() + "-" + (date.getMonth() + 1) + "-" + date.getFullYear() + ".txt";
         var file = readFile(logFile);
         if (file == null) {
             try {
@@ -9944,37 +9965,58 @@ async function login(username, password, ricordami = false){
     xhr.send("LoginController/login", formData , "POST");
 }
 
-/// Trova i cinque percorsi di sistema - Links, Loghi, Logs, Esportazione, Lavorazioni - e,
-/// se ne manca uno, apre la finestra che chiede all'operatore di indicarli. Restituisce true
-/// solo quando ci sono tutti.
+/// I20-1065: crea, se mancano, le cartelle logs, export e SingularData/<idMacchina> sotto base (la
+/// cartella del documento, o quella del libro), senza chiedere niente all'operatore, e ne fissa i
+/// percorsi: logPath, exportPath, SingularPath. Va chiamata all'apertura, prima di leggere
+/// qualsiasi file della lavorazione: il file delle lavorazioni, la lista del kit e i filtri stanno
+/// in SingularPath.
+/// Se non ci riesce lo dice all'operatore (IDX-177) e lascia i percorsi vuoti. Restituisce true se
+/// le cartelle sono pronte.
+async function preparaCartelleDiSistema(base) {
+    logPath = "";
+    exportPath = "";
+    SingularPath = "";
+    if (!base) {
+        return false;
+    }
+    try {
+        const cartelle = await Utility.preparaCartelleDiSistema(base, idMacchina(), fs2);
+        logPath = cartelle.logPath;
+        exportPath = cartelle.exportPath;
+        SingularPath = cartelle.SingularPath;
+        //la cartella dei log adesso c'e': se mancasse ancora, va detto di nuovo
+        cartellaAssenteCheck = false;
+        return true;
+    }
+    catch (e) {
+        console.error("Cartelle di sistema non create sotto " + base + ":", e);
+        messaggioUtente("Code IDX-177 Cartelle di sistema (logs, export, SingularData) non create nella cartella del documento: " + e, "error");
+        return false;
+    }
+}
+
+/// Trova i percorsi delle immagini - Links e Loghi - e, se ne manca uno, apre la finestra che
+/// chiede all'operatore di indicarli. Restituisce true solo quando ci sono tutti e due.
 ///
-/// I20-1057: la cartella delle lavorazioni non ha un percorso previsto unico: al passo 2 vale
-/// la prima che c'e' fra .lavorazioni, lavorazioni e lavorazione (Utility.cartellaLavorazioni).
+/// I20-1065: sono gli unici che si chiedono. logs, export e SingularData il Plugin li crea da
+/// solo (preparaCartelleDiSistema); la cartella delle lavorazioni di I20-1057 non c'e' piu'.
 ///
 /// Tre tentativi in ordine, per ognuno:
-///   1. quello scritto in lavorazioni.json, ma solo se la cartella esiste davvero: un
+///   1. quello scritto nella voce della lavorazione, ma solo se la cartella esiste davvero: un
 ///      percorso registrato e poi spostato varrebbe come assente;
 ///   2. la cartella prevista sotto la lavorazione (defaultPercorso...), che se c'e' viene
 ///      anche registrata;
 ///   3. niente, e allora si chiede.
-///
-/// scope serve a chiedere solo una parte: linksLoghi sono i percorsi delle immagini,
-/// sistema quelli di log ed esportazione. La finestra pero' e' sempre la stessa e li mostra
-/// tutti e quattro.
 ///
 /// Col libro aperto e nessun documento, i percorsi si cercano a partire dal primo file del
 /// libro: sono gli stessi per tutti.
 ///
 /// DA SPOSTARE (task di divisione): questa e impostaPercorsiDiSistema sono i percorsi di
 /// lavoro, un concetto a se'. Starebbero in un js loro.
-async function checkPercorsi(forceOpenModal = false, scope = 'entrambi') {
+async function checkPercorsi(forceOpenModal = false) {
     
     let _pathLavorazione = pathLavorazione;
     let docName = docInLavorazione!=null?docInLavorazione.name:"";
-    // if (forceOptions != null) {
-    //     _pathLavorazione = forceOptions.pathLavorazione || _pathLavorazione;
-    //     docName = forceOptions.docName || docName;
-    // }
 
     if (_pathLavorazione == "" || docName == "") {
         if (libroInLavorazione!=null)
@@ -9997,14 +10039,12 @@ async function checkPercorsi(forceOpenModal = false, scope = 'entrambi') {
     }
     var percorsoLinksNullo = false;
     var percorsoLoghiNullo = false;
-    var percorsoLogsNullo = false;
-    var percorsoEsportazioneNullo = false;
 
     // --- Imposta variabili globali se valorizzate nel JSON ---
     if (file.pathLinks != null && file.pathLinks !== "") {
         try {
             //proviamo a cercare la cartella per vedere se esiste davvero
-            const folder = await fs2.getEntryWithUrl("file://" + /*_pathLavorazione +*/ file.pathLinks);
+            const folder = await fs2.getEntryWithUrl("file://" + file.pathLinks);
             percorsoLinks = file.pathLinks;
         }
         catch (e) {
@@ -10018,7 +10058,7 @@ async function checkPercorsi(forceOpenModal = false, scope = 'entrambi') {
     if (file.pathLoghi != null && file.pathLoghi !== "") {
         try {
             //proviamo a cercare la cartella per vedere se esiste davvero
-            const folder = await fs2.getEntryWithUrl("file://" + /*_pathLavorazione +*/ file.pathLoghi);
+            const folder = await fs2.getEntryWithUrl("file://" + file.pathLoghi);
             percorsoLoghi = file.pathLoghi;
         }
         catch (e) {
@@ -10029,55 +10069,11 @@ async function checkPercorsi(forceOpenModal = false, scope = 'entrambi') {
         percorsoLoghiNullo = true;
     }
 
-    if (file.pathLogs != null && file.pathLogs !== "") {
-        try {
-            //proviamo a cercare la cartella per vedere se esiste davvero
-            const folder = await fs2.getEntryWithUrl("file://" + /*_pathLavorazione +*/ file.pathLogs);
-            percorsoLogs = file.pathLogs;
-        }
-        catch (e) {
-            percorsoLogsNullo = true;
-        }
-    }
-    else {
-        percorsoLogsNullo = true;
-    }
-
-    if (file.pathEsportazione != null && file.pathEsportazione !== "") {
-        try {
-            //proviamo a cercare la cartella per vedere se esiste davvero
-            const folder = await fs2.getEntryWithUrl("file://" + /*_pathLavorazione +*/ file.pathEsportazione);
-            percorsoEsportazione = file.pathEsportazione;
-        }
-        catch (e) {            
-            percorsoEsportazioneNullo = true;
-        }
-    }
-    else {
-        percorsoEsportazioneNullo = true;
-    }
-
-    var percorsoLavorazioniNullo = false;
-    if (file.pathLavorazioni != null && file.pathLavorazioni !== "") {
-        try {
-            //proviamo a cercare la cartella per vedere se esiste davvero
-            const folder = await fs2.getEntryWithUrl("file://" + file.pathLavorazioni);
-            percorsoLavorazioni = file.pathLavorazioni;
-        }
-        catch (e) {
-            percorsoLavorazioniNullo = true;
-        }
-    }
-    else {
-        percorsoLavorazioniNullo = true;
-    }
-
-    //stampiamo i 4 path in console
     console.log("Percorso Links: " + percorsoLinks);
     console.log("Percorso Loghi: " + percorsoLoghi);
-    console.log("Percorso Logs: " + percorsoLogs);
-    console.log("Percorso Esportazione: " + percorsoEsportazione);
-    console.log("Percorso Lavorazioni: " + percorsoLavorazioni);
+    console.log("Percorso Logs: " + logPath);
+    console.log("Percorso Export: " + exportPath);
+    console.log("Percorso SingularData: " + SingularPath);
 
     //per ogni percorso rimasto nullo cerchiamo se è presente la cartella di default ovvero quella il cui percorso è
     //pathLavorazione + percorsoLoghi ecc ecc
@@ -10085,7 +10081,7 @@ async function checkPercorsi(forceOpenModal = false, scope = 'entrambi') {
         //controlliamo se esiste la cartella pathLavorazione + percorsoLinks
         try {
             const folder = await fs2.getEntryWithUrl("file://" + _pathLavorazione + defaultPercorsoLinks);
-            impostaPercorsiDiSistema(0, _pathLavorazione + defaultPercorsoLinks);
+            await impostaPercorsiDiSistema(0, _pathLavorazione + defaultPercorsoLinks);
         }
         catch (e) {
             percorsoLinks = "";
@@ -10096,7 +10092,7 @@ async function checkPercorsi(forceOpenModal = false, scope = 'entrambi') {
     if (percorsoLoghiNullo) {
         try {
             const folder = await fs2.getEntryWithUrl("file://" + _pathLavorazione + defaultPercorsoLoghi);
-            impostaPercorsiDiSistema(1, _pathLavorazione + defaultPercorsoLoghi);
+            await impostaPercorsiDiSistema(1, _pathLavorazione + defaultPercorsoLoghi);
         }
         catch (e) {
             percorsoLoghi = "";
@@ -10104,70 +10100,13 @@ async function checkPercorsi(forceOpenModal = false, scope = 'entrambi') {
 
         }
     }
-    if (percorsoLogsNullo) {
-        try {
-            const folder = await fs2.getEntryWithUrl("file://" + _pathLavorazione + defaultPercorsoLogs);
-            impostaPercorsiDiSistema(2, _pathLavorazione + defaultPercorsoLogs);
-        }
-        catch (e) {
-            percorsoLogs = "";
-            forceOpenModal = true;
-
-        }
-    }
-    if (percorsoEsportazioneNullo) {
-        try {
-            const folder = await fs2.getEntryWithUrl("file://" + _pathLavorazione + defaultPercorsoEsportazione);
-            impostaPercorsiDiSistema(3, _pathLavorazione + defaultPercorsoEsportazione);
-        }
-        catch (e) {
-            percorsoEsportazione = "";
-            forceOpenModal = true;
-        }
-    }
-    if (percorsoLavorazioniNullo) {
-        //I20-1057: si riconosce per nome; se non c'e' la sceglie l'operatore
-        const cartellaLavorazioni = Utility.cartellaLavorazioni(_pathLavorazione);
-        if (cartellaLavorazioni != null) {
-            impostaPercorsiDiSistema(4, cartellaLavorazioni);
-        }
-        else {
-            percorsoLavorazioni = "";
-            forceOpenModal = true;
-        }
-    }
-
-    file = Utility.voceLavorazione(_pathLavorazione, idMacchina(), docName, libroDelDoc);
-
-    // --- Definisce i campi richiesti in base allo scope ---
-    const requirementsByScope = {
-        linksLoghi: [
-            { key: 'pathLinks', value: percorsoLinks },
-            { key: 'pathLoghi', value: percorsoLoghi },
-        ],
-        sistema: [
-            { key: 'pathLogs', value: percorsoLogs },
-            { key: 'pathEsportazione', value: percorsoEsportazione },
-            { key: 'pathLavorazioni', value: percorsoLavorazioni },
-        ],
-        entrambi: [
-            { key: 'pathLinks', value: percorsoLinks },
-            { key: 'pathLoghi', value: percorsoLoghi },
-            { key: 'pathLogs', value: percorsoLogs },
-            { key: 'pathEsportazione', value: percorsoEsportazione },
-            { key: 'pathLavorazioni', value: percorsoLavorazioni },
-        ],
-    };
-
-    const required = requirementsByScope[scope] || requirementsByScope.entrambi;
 
     // --- Verifica mancanti ---
-    const missing = required.filter(r => r.value == null || r.value === "");
+    const missing = [percorsoLinks, percorsoLoghi].filter(valore => valore == null || valore === "");
     if (missing.length > 0 || forceOpenModal) {
         
         console.log("apro il dialog!");
 
-        // Apri SEMPRE lo stesso dialog anche per links/loghi
         if ($("#overlayModal").css("display") == "none" &&
             $("#overlayModal").find("#dialogPathDiSistema").length == 0) {
             Modali.apriModal(
@@ -10181,18 +10120,12 @@ async function checkPercorsi(forceOpenModal = false, scope = 'entrambi') {
             //impostiamo i valori dei path già presenti
             mostraPercorsoNellaFinestra("pathFoto", percorsoLinks);
             mostraPercorsoNellaFinestra("pathLoghi", percorsoLoghi);
-            mostraPercorsoNellaFinestra("pathLogs", percorsoLogs);
-            mostraPercorsoNellaFinestra("pathEsportazione", percorsoEsportazione);
-            mostraPercorsoNellaFinestra("pathLavorazioni", percorsoLavorazioni);
 
-            //Il pulsante di conferma compare solo quando tutti e cinque i percorsi ci sono.
-            //I20-1002: qui la condizione aveva in coda "|| forceOptions != null", ma
-            //forceOptions era un parametro rimosso - restano le tre righe commentate in
-            //cima alla funzione. Era un identificatore inesistente, quindi ReferenceError
-            //ogni volta che mancava un percorso, cioe' proprio nel caso per cui questo
-            //ramo esiste. Nessun chiamante ha mai passato forceOptions, percio' quel
-            //confronto valeva false anche prima: toglierlo non cambia il comportamento.
-            if (percorsoLinks && percorsoLoghi && percorsoLogs && percorsoEsportazione && percorsoLavorazioni) {
+            //Il pulsante di conferma compare solo quando ci sono tutti e due i percorsi.
+            //I20-1002: qui la condizione aveva in coda "|| forceOptions != null", con
+            //forceOptions parametro rimosso: un identificatore inesistente, quindi ReferenceError
+            //ogni volta che mancava un percorso. Nessun chiamante l'ha mai passato.
+            if (percorsoLinks && percorsoLoghi) {
                 $("#overlayModal").find("#confermaPercorsi").show();
             }
         }
@@ -10409,8 +10342,9 @@ function mostraPercorsoNellaFinestra(idCampo, valore) {
     riga.toggleClass("percorsoMancante", testo === "");
 }
 
-/// Registra in lavorazioni.json uno dei cinque percorsi di sistema: 0 Links, 1 Loghi,
-/// 2 Logs, 3 Esportazione, 4 Lavorazioni (I20-1057).
+/// Registra nella voce della lavorazione uno dei due percorsi delle immagini: 0 Links, 1 Loghi.
+/// I20-1065: logs, export e le lavorazioni (2, 3 e 4 fino a I20-1057) non si scelgono piu':
+/// le crea il Plugin (preparaCartelleDiSistema).
 ///
 /// Col valore passato lo scrive e basta; senza, apre il dialogo di scelta cartella.
 /// checkPercorsi la usa nel primo modo quando trova la cartella prevista, l'operatore nel
@@ -10497,44 +10431,15 @@ async function impostaPercorsiDiSistema(tipo, value = null){
                     //scriviamo nel file lavorazioni.json il percorso
                     file.pathLoghi = percorsoLoghi;
                     messaggioUtente("Percorso per i loghi impostato a: " + percorso, "success", false, 0, false, true);
-                } else if (tipo == 2) {
-                    //cartella logs
-                    percorsoLogs = percorso.endsWith("/") ? percorso : percorso + "/";
-                    mostraPercorsoNellaFinestra("pathLogs", percorso);
-                    //scriviamo nel file lavorazioni.json il percorso
-                    file.pathLogs = percorsoLogs;
-                    //scriviamo il file lavorazioni.json
-                    messaggioUtente("Percorso per i logs impostato a: " + percorso, "success", false, 0, false, true);
-                } else if (tipo == 3) {
-                    //cartella di esportazione
-                    percorsoEsportazione = percorso.endsWith("/") ? percorso : percorso + "/";
-                    mostraPercorsoNellaFinestra("pathEsportazione", percorso);
-                    //scriviamo nel file lavorazioni.json il percorso
-                    file.pathEsportazione = percorsoEsportazione;
-                    //scriviamo il file lavorazioni.json            
-                    messaggioUtente("Percorso per l'esportazione impostato a: " + percorso, "success", false, 0, false, true);
-                } else if (tipo == 4) {
-                    //I20-1057: cartella delle lavorazioni
-                    percorsoLavorazioni = percorso.endsWith("/") ? percorso : percorso + "/";
-                    mostraPercorsoNellaFinestra("pathLavorazioni", percorso);
-                    file.pathLavorazioni = percorsoLavorazioni;
-                    messaggioUtente("Percorso per le lavorazioni impostato a: " + percorso, "success", false, 0, false, true);
                 }
             }
     
             fs.writeFileSync(filePath, JSON.stringify(lavorazioni));        
         }
     
-        //se sia pathFoto che pathLoghi .val sono diversi da "" allora abilitiamo il pulsante di salvataggio
-        // if ((tipo == 0 || tipo == 1) && $("#pathFoto").val() != "" && $("#pathLoghi").val() != "") {
-        //     $("#confermaPercorsi").show();
-        // }
-        // else if((tipo == 2 || tipo == 3) && $("#pathLogs").val() != "" && $("#pathEsportazione").val() != "") {
-        //     $("#confermaPercorsi").show();
-        // }
-    
+        //se sia pathFoto che pathLoghi sono impostati abilitiamo il pulsante di conferma
         const finestraPercorsi = $("#overlayModal");
-        if (value == null && ["pathFoto", "pathLoghi", "pathLogs", "pathEsportazione", "pathLavorazioni"].every(id => finestraPercorsi.find("#" + id).val() != "")) {
+        if (value == null && ["pathFoto", "pathLoghi"].every(id => finestraPercorsi.find("#" + id).val() != "")) {
             finestraPercorsi.find("#confermaPercorsi").show();
         }
 

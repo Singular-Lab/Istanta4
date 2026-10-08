@@ -415,33 +415,32 @@ const Utility=
 
     /// I20-1034: dove scrivere la lista del kit appena scaricata: il nome con le sigle. I file con
     /// un altro nome per lo stesso kit (per esempio il vecchio senza sigle) restano dove sono.
+    /// I20-1065: nella cartella dei dati di questa postazione (Utility.cartellaDati).
     percorsoNuovaListaKit(idKit) {
         const sigle = Utility._sigleListaKit(idKit);
-        return pathLavorazione + "/" + Utility.nomeFileListaKit(idKit, sigle[0], sigle[1]);
+        return Utility.percorsoDati(Utility.nomeFileListaKit(idKit, sigle[0], sigle[1]));
     },
 
     /// I20-1034: da dove leggere la lista del kit. Il file col nome atteso, se c'e'; altrimenti
     /// un altro file della cartella che finisce con listaKit<idKit>.json, con sigle diverse o
     /// senza (le liste scaricate prima); altrimenti il nome atteso, che dira' "non trovato".
+    /// I20-1065: la cartella e' quella dei dati di questa postazione.
     percorsoListaKit(idKit) {
         const sigle = Utility._sigleListaKit(idKit);
         const atteso = Utility.nomeFileListaKit(idKit, sigle[0], sigle[1]);
-        let nomi = [];
-        try {
-            nomi = require('fs').readdirSync(pathLavorazione) || [];
-        }
-        catch (e) {
-            nomi = [];
-        }
+        const cartella = Utility.cartellaDati();
+        const nomi = Utility._vociDellaCartella(cartella);
         if (nomi.indexOf(atteso) >= 0) {
-            return pathLavorazione + "/" + atteso;
+            return cartella + "/" + atteso;
         }
         const altro = nomi.find(n => Utility.eFileListaKit(n, idKit));
-        return pathLavorazione + "/" + (altro != null ? altro : atteso);
+        return cartella + "/" + (altro != null ? altro : atteso);
     },
 
     /// I20-1057: i nomi della cartella delle lavorazioni, in ordine di preferenza. Vale il primo
     /// che c'e' sotto la cartella del documento, senza distinguere maiuscole e minuscole.
+    /// I20-1065: la cartella delle lavorazioni non si usa piu' (al suo posto c'e' SingularData): si
+    /// cerca solo per ritrovare i file delle lavorazioni scritti prima.
     nomiCartellaLavorazioni() {
         return [".lavorazioni", "lavorazioni", "lavorazione"];
     },
@@ -480,14 +479,14 @@ const Utility=
         return null;
     },
 
-    /// I20-1061: ogni macchina scrive le sue lavorazioni in un file suo, <idMacchina>_Lavorazioni.json.
-    /// Con un file solo, due postazioni sulla stessa cartella Dropbox lo riscrivevano a turno e
-    /// Dropbox ne faceva copie di conflitto.
+    /// I20-1061: il nome del file delle lavorazioni di una macchina prima di I20-1065,
+    /// <idMacchina>_Lavorazioni.json, in .lavorazioni o nella cartella del documento. Ora si legge
+    /// soltanto, per ritrovare le lavorazioni avviate prima.
     nomeFileLavorazioniMacchina(idMacchina) {
         return idMacchina + "_Lavorazioni.json";
     },
 
-    /// Le cartelle in cui possono stare i file delle lavorazioni dei documenti di base: quella
+    /// Le cartelle in cui possono stare i file delle lavorazioni di prima di I20-1065: quella
     /// delle lavorazioni, se c'e', poi quella del documento (dove stava lavorazioni.json prima).
     _cartelleFileLavorazioni(base) {
         const radice = Utility._senzaBarraFinale(base);
@@ -504,40 +503,118 @@ const Utility=
         }
     },
 
-    /// Il file di questa macchina: dove c'e' gia'; altrimenti nella cartella delle lavorazioni, o in
-    /// quella del documento se la cartella delle lavorazioni non c'e'.
-    percorsoFileLavorazioniMacchina(base, idMacchina) {
-        const nome = Utility.nomeFileLavorazioniMacchina(idMacchina);
-        const cartelle = Utility._cartelleFileLavorazioni(base);
-        for (const cartella of cartelle) {
-            if (Utility._vociDellaCartella(cartella).indexOf(nome) >= 0) {
-                return cartella + "/" + nome;
-            }
-        }
-        return cartelle[0] + "/" + nome;
+    /// I20-1065: le cartelle che il Plugin crea da solo sotto la cartella del documento (o del
+    /// libro), senza chiederle all'operatore: i log, i file esportati e i dati del Plugin. Dentro
+    /// SingularData ogni postazione ha una cartella sua, col suo identificativo (idMacchina): due
+    /// postazioni sulla stessa cartella condivisa non si riscrivono i file a vicenda.
+    CARTELLA_LOGS: "logs",
+    CARTELLA_EXPORT: "export",
+    CARTELLA_DATI: "SingularData",
+    NOME_FILE_LAVORAZIONI: "lavorazioni.json",
+
+    /// I20-1065: la cartella dei dati di una postazione sotto base, senza barra finale.
+    cartellaDatiMacchina(base, idMacchina) {
+        return Utility._senzaBarraFinale(base) + "/" + Utility.CARTELLA_DATI + "/" + idMacchina;
     },
 
-    /// I file delle lavorazioni delle altre macchine, poi i lavorazioni.json di prima di I20-1061:
-    /// si leggono per ritrovare una lavorazione gia' avviata, ma non si scrivono mai.
+    /// I20-1065: la cartella dei dati di questa postazione per la lavorazione aperta: SingularPath,
+    /// fissato all'apertura del documento; prima che lo sia, quella che sara'.
+    cartellaDati() {
+        if (typeof SingularPath !== "undefined" && SingularPath) {
+            return Utility._senzaBarraFinale(SingularPath);
+        }
+        return Utility.cartellaDatiMacchina(pathLavorazione, typeof idMacchina === "function" ? idMacchina() : "");
+    },
+
+    /// I20-1065: dove sta un file di lavoro del documento - lista del kit, filtri, allineamenti,
+    /// conteggio, report integrita' -: nella cartella dei dati di questa postazione. Non si scrivono
+    /// piu' nella cartella del documento.
+    percorsoDati(nomeFile) {
+        return Utility.cartellaDati() + "/" + nomeFile;
+    },
+
+    /// I20-1065: crea sotto base, se mancano, logs, export, SingularData e la cartella di questa
+    /// postazione, senza chiedere niente all'operatore. Con fullAccess il Plugin crea cartelle
+    /// partendo da quella del documento (getEntryWithUrl e createFolder, provato in console
+    /// dall'operatore); fs.mkdirSync in UXP invece non crea niente (vedi idMacchina). Una cartella
+    /// che c'e' gia' si riusa, anche se ha le maiuscole diverse (Logs, Export).
+    /// Restituisce logPath ed exportPath con la barra finale, come li usano log ed esportazione, e
+    /// SingularPath senza. Se una cartella non si crea, lancia l'errore.
+    async preparaCartelleDiSistema(base, idMacchina, fileSystem = null) {
+        const lfs = fileSystem || require('uxp').storage.localFileSystem;
+        const radice = await lfs.getEntryWithUrl("file://" + Utility._senzaBarraFinale(base));
+        const logs = await Utility._cartellaFiglia(radice, Utility.CARTELLA_LOGS);
+        const esportazione = await Utility._cartellaFiglia(radice, Utility.CARTELLA_EXPORT);
+        const dati = await Utility._cartellaFiglia(radice, Utility.CARTELLA_DATI);
+        const postazione = await Utility._cartellaFiglia(dati, idMacchina);
+        return {
+            logPath: Utility._senzaBarraFinale(logs.nativePath) + "/",
+            exportPath: Utility._senzaBarraFinale(esportazione.nativePath) + "/",
+            SingularPath: Utility._senzaBarraFinale(postazione.nativePath)
+        };
+    },
+
+    /// La sottocartella nome di cartella: quella che c'e', o una nuova.
+    async _cartellaFiglia(cartella, nome) {
+        try {
+            const esistente = await cartella.getEntry(nome);
+            if (esistente != null && esistente.isFolder) {
+                return esistente;
+            }
+        }
+        catch (e) {
+            //non c'e': si crea
+        }
+        return await cartella.createFolder(nome);
+    },
+
+    /// I20-1065: il file delle lavorazioni di questa postazione, lavorazioni.json nella sua
+    /// cartella dei dati.
+    percorsoFileLavorazioniMacchina(base, idMacchina) {
+        return Utility.cartellaDatiMacchina(base, idMacchina) + "/" + Utility.NOME_FILE_LAVORAZIONI;
+    },
+
+    /// I20-1065: dove cercare la voce di un documento che nel file di questa postazione non c'e', in
+    /// quest'ordine: il file di questa postazione di prima di I20-1065, quelli delle altre postazioni
+    /// in SingularData, poi i file delle altre macchine e i lavorazioni.json di prima. Si leggono
+    /// soltanto, non si scrivono mai.
+    /// Per ognuno: il percorso, la cartella da cui copiare i file di lavoro del documento (quella
+    /// della postazione, o quella del documento per i file di prima) e l'origine: "mia" (il file di
+    /// prima di questa postazione), "postazione" (un'altra postazione), "vecchia" (gli altri di prima).
     fileLavorazioniAltri(base, idMacchina) {
-        const mio = Utility.nomeFileLavorazioniMacchina(idMacchina).toLowerCase();
-        const altreMacchine = [];
+        const radice = Utility._senzaBarraFinale(base);
+        const cartellaDati = radice + "/" + Utility.CARTELLA_DATI;
+        const mioDiPrima = Utility.nomeFileLavorazioniMacchina(idMacchina).toLowerCase();
+        const mie = [];
+        const postazioni = [];
+        const altreDiPrima = [];
         const vecchi = [];
-        for (const cartella of Utility._cartelleFileLavorazioni(base)) {
+        for (const voce of Utility._vociDellaCartella(cartellaDati).slice().sort()) {
+            if (String(voce) === String(idMacchina)) {
+                continue;
+            }
+            const cartella = cartellaDati + "/" + voce;
+            const file = Utility._vociDellaCartella(cartella).find(n => String(n).toLowerCase() === Utility.NOME_FILE_LAVORAZIONI);
+            if (file != null) {
+                postazioni.push({ percorso: cartella + "/" + file, cartella: cartella, origine: "postazione" });
+            }
+        }
+        for (const cartella of Utility._cartelleFileLavorazioni(radice)) {
             for (const voce of Utility._vociDellaCartella(cartella).slice().sort()) {
                 const nome = String(voce).toLowerCase();
-                if (nome === mio) {
-                    continue;
+                const sorgente = { percorso: cartella + "/" + voce, cartella: radice };
+                if (nome === mioDiPrima) {
+                    mie.push(Object.assign(sorgente, { origine: "mia" }));
                 }
-                if (nome.endsWith("_lavorazioni.json")) {
-                    altreMacchine.push(cartella + "/" + voce);
+                else if (nome.endsWith("_lavorazioni.json")) {
+                    altreDiPrima.push(Object.assign(sorgente, { origine: "vecchia" }));
                 }
-                else if (nome === "lavorazioni.json") {
-                    vecchi.push(cartella + "/" + voce);
+                else if (nome === Utility.NOME_FILE_LAVORAZIONI) {
+                    vecchi.push(Object.assign(sorgente, { origine: "vecchia" }));
                 }
             }
         }
-        return altreMacchine.concat(vecchi);
+        return mie.concat(postazioni, altreDiPrima, vecchi);
     },
 
     /// Le voci di un file delle lavorazioni; un elenco vuoto se il file manca o non si legge.
@@ -563,11 +640,69 @@ const Utility=
         return voci.find(v => v != null && v.file == nomeFile) || null;
     },
 
+    /// I20-1065: i nomi dei file del report integrita' e della sua whitelist per un kit, scritti qui
+    /// soltanto: li usano il report (percorsoFileReport) e la copia dei file di lavoro.
+    nomeFileReportIntegrita(idKit) {
+        return "reportIntegrita_" + idKit + ".json";
+    },
+
+    nomeFileWhitelistIntegrita(idKit) {
+        return "whitelistIntegrita_" + idKit + ".json";
+    },
+
+    /// I20-1065: i file di lavoro di un documento presenti in una cartella: la lista del suo kit, gli
+    /// allineamenti, il conteggio con le referenze escluse e i filtri (della cartella o del
+    /// documento). Con tutti anche il report integrita', la whitelist e la lista impaginata del kit
+    /// e lo stato del libro: si copiano cosi' dai file di prima, per non perdere lo storico; da
+    /// un'altra postazione no.
+    fileDiLavoro(cartella, idKit, nomeFile, nomeLibro = null, tutti = false) {
+        const nomi = ["allineamenti.json", "listaRefConteggio.json", "listaRefEscluse.json", "Filtri.json"];
+        const senzaEstensione = String(nomeFile == null ? "" : nomeFile).replace(/\.[^/.]+$/, "");
+        if (senzaEstensione !== "") {
+            nomi.push("Filtri" + senzaEstensione + ".json");
+        }
+        if (tutti) {
+            nomi.push(Utility.nomeFileReportIntegrita(idKit), Utility.nomeFileWhitelistIntegrita(idKit),
+                "listaImpaginata" + idKit + ".json");
+            if (nomeLibro) {
+                nomi.push(nomeLibro + "_register.json");
+            }
+        }
+        return Utility._vociDellaCartella(cartella).filter(n => nomi.indexOf(String(n)) >= 0
+            || (idKit != null && Utility.eFileListaKit(n, idKit)));
+    },
+
+    /// I20-1065: copia i file nomi dalla cartella da alla cartella a, solo quelli che in a mancano:
+    /// quello che la postazione ha gia' e' piu' recente. Gli originali non si toccano. Restituisce i
+    /// nomi copiati; un file che non si copia si segnala in console e non ferma gli altri.
+    copiaFileDiLavoro(da, a, nomi) {
+        const fs = require('fs');
+        const presenti = Utility._vociDellaCartella(a);
+        const copiati = [];
+        (Array.isArray(nomi) ? nomi : []).forEach(nome => {
+            if (presenti.indexOf(nome) >= 0) {
+                return;
+            }
+            try {
+                fs.writeFileSync(a + "/" + nome, fs.readFileSync(da + "/" + nome, 'utf8'));
+                copiati.push(nome);
+            }
+            catch (e) {
+                console.error("I20-1065: " + nome + " non copiato da " + da + " in " + a + ": " + e);
+            }
+        });
+        return copiati;
+    },
+
     /// I20-1061: la voce della lavorazione di un documento, per questa macchina.
-    /// Si cerca nel file della macchina, poi in quelli delle altre e nei lavorazioni.json di prima.
-    /// Se c'e' solo altrove, se ne copiano nel file della macchina i riferimenti - file, id, dettagli
-    /// e libro - ma non i percorsi, che sono di chi li ha scritti: sulla macchina si ritrovano da soli
-    /// o li chiede la finestra delle cartelle. null vuol dire che la lavorazione e' da iniziare.
+    /// Si cerca nel file della postazione, poi negli altri (fileLavorazioniAltri). Se c'e' solo
+    /// altrove, se ne copiano nel file della postazione i riferimenti - file, id, dettagli e libro -
+    /// ma non i percorsi di Links e Loghi, che sono di chi li ha scritti: sulla macchina si ritrovano
+    /// da soli o li chiede la finestra delle cartelle. I20-1065: tranne quando vengono dal file di
+    /// prima di questa stessa postazione, che li aveva scelti qui.
+    /// I20-1065: con la voce si copiano nella cartella della postazione i file di lavoro del
+    /// documento (fileDiLavoro), cosi' il lavoro prosegue senza richiedere il kit.
+    /// null vuol dire che la lavorazione e' da iniziare.
     voceLavorazione(base, idMacchina, nomeFile, nomeLibro = null) {
         const percorsoMio = Utility.percorsoFileLavorazioniMacchina(base, idMacchina);
         const mie = Utility.leggiFileLavorazioni(percorsoMio);
@@ -575,8 +710,8 @@ const Utility=
         if (mia != null) {
             return mia;
         }
-        for (const altro of Utility.fileLavorazioniAltri(base, idMacchina)) {
-            const trovata = Utility._voceNellElenco(Utility.leggiFileLavorazioni(altro), nomeFile, nomeLibro);
+        for (const sorgente of Utility.fileLavorazioniAltri(base, idMacchina)) {
+            const trovata = Utility._voceNellElenco(Utility.leggiFileLavorazioni(sorgente.percorso), nomeFile, nomeLibro);
             if (trovata == null) {
                 continue;
             }
@@ -584,6 +719,13 @@ const Utility=
             const libro = nomeLibro || trovata.libro;
             if (libro) {
                 copia.libro = libro;
+            }
+            if (sorgente.origine === "mia") {
+                ["pathLinks", "pathLoghi"].forEach(campo => {
+                    if (trovata[campo]) {
+                        copia[campo] = trovata[campo];
+                    }
+                });
             }
             mie.push(copia);
             try {
@@ -593,6 +735,8 @@ const Utility=
                 //la lavorazione si carica lo stesso; alla prossima apertura si ritenta la copia
                 console.error("I20-1061: copia della lavorazione in " + percorsoMio + " non riuscita: " + e);
             }
+            Utility.copiaFileDiLavoro(sorgente.cartella, Utility.cartellaDatiMacchina(base, idMacchina),
+                Utility.fileDiLavoro(sorgente.cartella, copia.id, nomeFile, libro || null, sorgente.origine !== "postazione"));
             return copia;
         }
         return null;

@@ -6,6 +6,8 @@
  * riconoscendo il file da come finisce: i file scaricati prima, senza sigle, restano leggibili.
  * Il nome lo sa un punto solo, utility.js: i tredici punti che lo costruivano a mano passano da li'.
  *
+ * I20-1065: il file sta nella cartella dei dati di questa postazione (SingularData/<idMacchina>).
+ *
  * utility.js fa require('indesign'): le funzioni si prendono dal sorgente e si costruiscono con i
  * globali del Plugin passati da fuori, come in contestoPromoLibreria.test.js.
  *
@@ -26,14 +28,26 @@ function corpoMembro(intestazione) {
 }
 
 //Utility con le sole funzioni della lista del kit, e i globali del Plugin che usano.
+//I20-1065: la lista del kit sta nella cartella dei dati di questa postazione, SingularPath.
+const DATI = "/lavorazione/SingularData/mac_AAAAAAAAAA";
+
+function costanti() {
+    const inizio = sorgente.indexOf("    CARTELLA_LOGS:");
+    const fine = sorgente.indexOf("\n", sorgente.indexOf("    NOME_FILE_LAVORAZIONI:"));
+    return sorgente.substring(inizio, fine).replace(/,\s*$/, "");
+}
+
 function utilityCon(ambiente) {
-    const membri = ["nomeFileListaKit(", "eFileListaKit(", "_sigleListaKit(", "percorsoNuovaListaKit(", "percorsoListaKit("].map(corpoMembro);
-    const fabbrica = new Function("pathLavorazione", "idKitLavorazione", "ficoProcess", "require",
-        "const Utility = ({\n" + membri.join(",\n") + "\n});\nreturn Utility;");
+    const membri = ["nomeFileListaKit(", "eFileListaKit(", "_sigleListaKit(", "percorsoNuovaListaKit(", "percorsoListaKit(",
+        "_senzaBarraFinale(", "_vociDellaCartella(", "cartellaDatiMacchina(", "cartellaDati(", "percorsoDati("].map(corpoMembro);
+    const fabbrica = new Function("pathLavorazione", "idKitLavorazione", "ficoProcess", "SingularPath", "idMacchina", "require",
+        "const Utility = ({\n" + costanti() + ",\n" + membri.join(",\n") + "\n});\nreturn Utility;");
     return fabbrica(
         ambiente.pathLavorazione || "/lavorazione",
         ambiente.idKitLavorazione,
         ambiente.ficoProcess,
+        "SingularPath" in ambiente ? ambiente.SingularPath : DATI,
+        () => "mac_AAAAAAAAAA",
         (nome) => {
             assert.strictEqual(nome, "fs");
             return { readdirSync: () => { if (ambiente.cartella == null) { throw new Error("cartella non leggibile"); } return ambiente.cartella; } };
@@ -71,26 +85,33 @@ test("la lista di un kit si riconosce da come finisce, con o senza sigle", () =>
 /* ---- scrivere e leggere ---- */
 
 test("si scrive col nome della lavorazione aperta, senza sigle per un altro kit", () => {
-    assert.strictEqual(utilityCon({ idKitLavorazione: 302, ficoProcess: CN_TO }).percorsoNuovaListaKit(302), "/lavorazione/CN_TO_listaKit302.json");
-    assert.strictEqual(utilityCon({ idKitLavorazione: 301, ficoProcess: CN_TO }).percorsoNuovaListaKit(302), "/lavorazione/listaKit302.json");
+    assert.strictEqual(utilityCon({ idKitLavorazione: 302, ficoProcess: CN_TO }).percorsoNuovaListaKit(302), DATI + "/CN_TO_listaKit302.json");
+    assert.strictEqual(utilityCon({ idKitLavorazione: 301, ficoProcess: CN_TO }).percorsoNuovaListaKit(302), DATI + "/listaKit302.json");
     //Senza i dettagli di canale e area, ficoProcess restituisce 0.
     const senzaDettagli = { getCanaleLavorazioneCorrente: () => 0, getAreaLavorazioneCorrente: () => 0 };
-    assert.strictEqual(utilityCon({ idKitLavorazione: 302, ficoProcess: senzaDettagli }).percorsoNuovaListaKit(302), "/lavorazione/listaKit302.json");
+    assert.strictEqual(utilityCon({ idKitLavorazione: 302, ficoProcess: senzaDettagli }).percorsoNuovaListaKit(302), DATI + "/listaKit302.json");
 });
 
 test("si legge il file col nome atteso, e se manca quello che finisce come lui", () => {
     const cartella = ["listaKit301.json", "listaKit302.json", "CN_TO_listaKit302.json", "lavorazioni.json"];
-    assert.strictEqual(utilityCon({ idKitLavorazione: 302, ficoProcess: CN_TO, cartella }).percorsoListaKit(302), "/lavorazione/CN_TO_listaKit302.json");
+    assert.strictEqual(utilityCon({ idKitLavorazione: 302, ficoProcess: CN_TO, cartella }).percorsoListaKit(302), DATI + "/CN_TO_listaKit302.json");
 
     //Le liste scaricate prima, senza sigle, restano leggibili.
-    assert.strictEqual(utilityCon({ idKitLavorazione: 302, ficoProcess: CN_TO, cartella: ["listaKit302.json"] }).percorsoListaKit(302), "/lavorazione/listaKit302.json");
+    assert.strictEqual(utilityCon({ idKitLavorazione: 302, ficoProcess: CN_TO, cartella: ["listaKit302.json"] }).percorsoListaKit(302), DATI + "/listaKit302.json");
     //E una lista con le sigle si trova anche quando le sigle non si conoscono.
-    assert.strictEqual(utilityCon({ idKitLavorazione: 302, ficoProcess: null, cartella: ["SS_TO_listaKit302.json"] }).percorsoListaKit(302), "/lavorazione/SS_TO_listaKit302.json");
+    assert.strictEqual(utilityCon({ idKitLavorazione: 302, ficoProcess: null, cartella: ["SS_TO_listaKit302.json"] }).percorsoListaKit(302), DATI + "/SS_TO_listaKit302.json");
 });
 
 test("senza file, o con la cartella che non si legge, il nome atteso dira' non trovato", () => {
-    assert.strictEqual(utilityCon({ idKitLavorazione: 302, ficoProcess: CN_TO, cartella: ["listaKit1302.json"] }).percorsoListaKit(302), "/lavorazione/CN_TO_listaKit302.json");
-    assert.strictEqual(utilityCon({ idKitLavorazione: 302, ficoProcess: CN_TO, cartella: null }).percorsoListaKit(302), "/lavorazione/CN_TO_listaKit302.json");
+    assert.strictEqual(utilityCon({ idKitLavorazione: 302, ficoProcess: CN_TO, cartella: ["listaKit1302.json"] }).percorsoListaKit(302), DATI + "/CN_TO_listaKit302.json");
+    assert.strictEqual(utilityCon({ idKitLavorazione: 302, ficoProcess: CN_TO, cartella: null }).percorsoListaKit(302), DATI + "/CN_TO_listaKit302.json");
+});
+
+test("I20-1065: la lista del kit sta nella cartella dei dati della postazione, anche prima che SingularPath sia fissato", () => {
+    assert.strictEqual(utilityCon({ idKitLavorazione: 302, ficoProcess: CN_TO }).percorsoNuovaListaKit(302), DATI + "/CN_TO_listaKit302.json");
+    //Prima di preparaCartelleDiSistema: la cartella che sara', sotto quella del documento.
+    assert.strictEqual(utilityCon({ idKitLavorazione: 302, ficoProcess: CN_TO, SingularPath: "", pathLavorazione: "/doc" }).percorsoNuovaListaKit(302),
+        "/doc/SingularData/mac_AAAAAAAAAA/CN_TO_listaKit302.json");
 });
 
 /* ---- chi lo usa ---- */

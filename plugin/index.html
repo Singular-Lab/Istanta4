@@ -1192,13 +1192,15 @@
   </div>
 </div>
 
-<!-- I20-1057: le cinque cartelle di sistema. Ogni riga dice a cosa serve la cartella, mostra il
+<!-- I20-1057: le cartelle di sistema. Ogni riga dice a cosa serve la cartella, mostra il
      percorso scelto e ha il pulsante per sceglierlo; mostraPercorsoNellaFinestra (indexNew.js) la
-     segna impostata o mancante. Gli id dei percorsi sono quelli che usa indexNew.js. -->
+     segna impostata o mancante. Gli id dei percorsi sono quelli che usa indexNew.js.
+     I20-1065: si chiedono solo Links e Loghi; logs, export e SingularData il plugin le crea da
+     solo sotto la cartella del documento (preparaCartelleDiSistema). -->
 <div id="dialogPathDiSistema" myname="dialogPathDiSistema"
   style="overflow: auto; display: none; height: 100%; width: 100%;">
   <div class="finestraPercorsi">
-    <p class="introPercorsi">Indica le cartelle che il plugin usa per questo documento. Quelle che hanno il nome previsto sotto la cartella del documento vengono associate da sole.</p>
+    <p class="introPercorsi">Indica le cartelle delle foto e dei loghi per questo documento. Quelle che hanno il nome previsto sotto la cartella del documento vengono associate da sole; le cartelle logs, export e SingularData il plugin le crea da solo.</p>
     <div class="rigaPercorso percorsoMancante">
       <div class="testaRigaPercorso">
         <span class="titoloPercorso">Links</span>
@@ -1217,36 +1219,6 @@
       <div class="corpoRigaPercorso">
         <div id="pathLoghi" class="valorePercorso"></div>
         <button class="sceltaPercorso" onclick="impostaPercorsiDiSistema(1)">Scegli...</button>
-      </div>
-    </div>
-    <div class="rigaPercorso percorsoMancante">
-      <div class="testaRigaPercorso">
-        <span class="titoloPercorso">Esportazione</span>
-        <span class="notaPercorso">i file esportati</span>
-      </div>
-      <div class="corpoRigaPercorso">
-        <div id="pathEsportazione" class="valorePercorso"></div>
-        <button class="sceltaPercorso" onclick="impostaPercorsiDiSistema(3)">Scegli...</button>
-      </div>
-    </div>
-    <div class="rigaPercorso percorsoMancante">
-      <div class="testaRigaPercorso">
-        <span class="titoloPercorso">Logs</span>
-        <span class="notaPercorso">i log del plugin</span>
-      </div>
-      <div class="corpoRigaPercorso">
-        <div id="pathLogs" class="valorePercorso"></div>
-        <button class="sceltaPercorso" onclick="impostaPercorsiDiSistema(2)">Scegli...</button>
-      </div>
-    </div>
-    <div class="rigaPercorso percorsoMancante">
-      <div class="testaRigaPercorso">
-        <span class="titoloPercorso">Lavorazioni</span>
-        <span class="notaPercorso">il file delle lavorazioni: .lavorazioni, lavorazioni o lavorazione</span>
-      </div>
-      <div class="corpoRigaPercorso">
-        <div id="pathLavorazioni" class="valorePercorso"></div>
-        <button class="sceltaPercorso" onclick="impostaPercorsiDiSistema(4)">Scegli...</button>
       </div>
     </div>
   </div>

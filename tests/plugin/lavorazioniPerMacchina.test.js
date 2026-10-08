@@ -1,5 +1,8 @@
 /*
  * I20-1061: un file delle lavorazioni per ogni macchina.
+ * I20-1065: il file ora e' lavorazioni.json in SingularData/<idMacchina>, con accanto i file di
+ * lavoro del documento; quelli di prima (<idMacchina>_Lavorazioni.json, lavorazioni.json) si leggono
+ * soltanto, e quando la voce viene da li' o da un'altra postazione arrivano anche i file di lavoro.
  *
  * Con un solo lavorazioni.json nella cartella Dropbox, due postazioni sullo stesso documento lo
  * riscrivevano a turno e Dropbox ne faceva copie di conflitto. Ora ogni macchina scrive solo il suo
@@ -24,8 +27,14 @@ const path = require("node:path");
 const { leggiFileDelPlugin } = require("./fileDelPlugin");
 
 const ID = "mac-mini-di-sm2_k3F9a2Lp0Q";
-const MIO = ID + "_Lavorazioni.json";
-const ALTRO = "pc-ufficio_Zx81QwErTy_Lavorazioni.json";
+const ALTRA_ID = "pc-ufficio_Zx81QwErTy";
+//I20-1065: ogni postazione ha la sua cartella in SingularData, con dentro lavorazioni.json.
+const MIA = "/doc/SingularData/" + ID;
+const MIO = MIA + "/lavorazioni.json";
+const ALTRA = "/doc/SingularData/" + ALTRA_ID;
+//I nomi dei file di prima di I20-1065, che si leggono soltanto.
+const MIO_DI_PRIMA = ID + "_Lavorazioni.json";
+const ALTRO_DI_PRIMA = ALTRA_ID + "_Lavorazioni.json";
 
 /* ---- il disco finto ---- */
 
@@ -59,9 +68,20 @@ function disco(cartelle, file = {}) {
             d.scritture.push(p);
         }
         //Niente mkdirSync: UXP non crea cartelle cosi' (I20-1061, prova sul campo dell'operatore).
+        //Le crea preparaCartelleDiSistema (I20-1065), vedi cartelleDiSistema.test.js.
     };
     d.json = (p) => JSON.parse(d.file[p]);
     return d;
+}
+
+//La cartella del documento con SingularData e la cartella di questa postazione gia' create, come
+//all'apertura; piu' quello che serve al caso.
+function conDati(extra = {}) {
+    const cartelle = { "/doc": ["SingularData"], "/doc/SingularData": [ID], [MIA]: [] };
+    Object.keys(extra).forEach(k => {
+        cartelle[k] = k === "/doc" || k === "/doc/SingularData" ? cartelle[k].concat(extra[k]) : extra[k];
+    });
+    return cartelle;
 }
 
 /* ---- le funzioni di utility.js ---- */
@@ -75,11 +95,21 @@ function corpoMembro(intestazione) {
     return utility.substring(inizio, fine + "\n    }".length);
 }
 
+//Le costanti delle cartelle, cosi' come sono nel sorgente.
+function costanti() {
+    const inizio = utility.indexOf("    CARTELLA_LOGS:");
+    const fine = utility.indexOf("\n", utility.indexOf("    NOME_FILE_LAVORAZIONI:"));
+    assert.ok(inizio > 0 && fine > inizio);
+    return utility.substring(inizio, fine).replace(/,\s*$/, "");
+}
+
 function utilityCon(d) {
-    const membri = ["nomiCartellaLavorazioni(", "_senzaBarraFinale(", "cartellaLavorazioni(", "nomeFileLavorazioniMacchina(",
-        "_cartelleFileLavorazioni(", "_vociDellaCartella(", "percorsoFileLavorazioniMacchina(", "fileLavorazioniAltri(",
-        "leggiFileLavorazioni(", "_voceNellElenco(", "voceLavorazione(", "salvaVoceLavorazione(", "libroDelDocumento("].map(corpoMembro);
-    const fabbrica = new Function("require", "const Utility = ({\n" + membri.join(",\n") + "\n});\nreturn Utility;");
+    const membri = ["eFileListaKit(", "nomiCartellaLavorazioni(", "_senzaBarraFinale(", "cartellaLavorazioni(", "nomeFileLavorazioniMacchina(",
+        "_cartelleFileLavorazioni(", "_vociDellaCartella(", "cartellaDatiMacchina(", "percorsoFileLavorazioniMacchina(",
+        "fileLavorazioniAltri(", "leggiFileLavorazioni(", "_voceNellElenco(", "nomeFileReportIntegrita(", "nomeFileWhitelistIntegrita(",
+        "fileDiLavoro(", "copiaFileDiLavoro(",
+        "voceLavorazione(", "salvaVoceLavorazione(", "libroDelDocumento("].map(corpoMembro);
+    const fabbrica = new Function("require", "const Utility = ({\n" + costanti() + ",\n" + membri.join(",\n") + "\n});\nreturn Utility;");
     return fabbrica((nome) => {
         assert.strictEqual(nome, "fs");
         return d.fs;
@@ -88,88 +118,140 @@ function utilityCon(d) {
 
 const kit = (id, titolo) => ({ guidId: "g-" + id, meta: JSON.stringify({ titolo: titolo }) });
 
-/* ---- il file della macchina ---- */
+/* ---- il file della postazione ---- */
 
-test("il file di una macchina porta il suo identificativo", () => {
-    assert.strictEqual(utilityCon(disco({})).nomeFileLavorazioniMacchina(ID), MIO);
+test("il file di prima di una macchina portava il suo identificativo", () => {
+    assert.strictEqual(utilityCon(disco({})).nomeFileLavorazioniMacchina(ID), MIO_DI_PRIMA);
 });
 
-test("il file della macchina nasce nella cartella delle lavorazioni, o in quella del documento se manca", () => {
-    const conCartella = utilityCon(disco({ "/doc": [".lavorazioni"], "/doc/.lavorazioni": [] }));
-    assert.strictEqual(conCartella.percorsoFileLavorazioniMacchina("/doc", ID), "/doc/.lavorazioni/" + MIO);
-
-    const senza = utilityCon(disco({ "/doc": [] }));
-    assert.strictEqual(senza.percorsoFileLavorazioniMacchina("/doc/", ID), "/doc/" + MIO);
-
-    //Scritto quando la cartella non c'era, resta in uso dov'e'.
-    const giaFuori = utilityCon(disco({ "/doc": [".lavorazioni", MIO], "/doc/.lavorazioni": [] }));
-    assert.strictEqual(giaFuori.percorsoFileLavorazioniMacchina("/doc", ID), "/doc/" + MIO);
+test("il file della postazione e' lavorazioni.json nella sua cartella di SingularData", () => {
+    const u = utilityCon(disco({}));
+    assert.strictEqual(u.percorsoFileLavorazioniMacchina("/doc", ID), MIO);
+    assert.strictEqual(u.percorsoFileLavorazioniMacchina("/doc/", ID), MIO);
+    assert.strictEqual(u.cartellaDatiMacchina("/doc/", ID), MIA);
 });
 
-test("gli altri file sono quelli delle altre macchine, poi i lavorazioni.json di prima", () => {
-    const u = utilityCon(disco({
+test("gli altri file: il mio di prima, le altre postazioni, poi i file di prima delle altre macchine", () => {
+    const u = utilityCon(disco(conDati({
         "/doc": [".lavorazioni", "lavorazioni.json", "documento.indd"],
-        "/doc/.lavorazioni": [MIO, ALTRO, "lavorazioni.json", "lavorazioni (copia in conflitto).json"]
-    }));
+        "/doc/SingularData": [ALTRA_ID, "appunti.txt"],
+        [ALTRA]: ["lavorazioni.json", "listaKit7.json"],
+        "/doc/.lavorazioni": [MIO_DI_PRIMA, ALTRO_DI_PRIMA, "lavorazioni.json", "lavorazioni (copia in conflitto).json"]
+    })));
     assert.deepStrictEqual(u.fileLavorazioniAltri("/doc", ID), [
-        "/doc/.lavorazioni/" + ALTRO,
-        "/doc/.lavorazioni/lavorazioni.json",
-        "/doc/lavorazioni.json"
+        { percorso: "/doc/.lavorazioni/" + MIO_DI_PRIMA, cartella: "/doc", origine: "mia" },
+        { percorso: ALTRA + "/lavorazioni.json", cartella: ALTRA, origine: "postazione" },
+        { percorso: "/doc/.lavorazioni/" + ALTRO_DI_PRIMA, cartella: "/doc", origine: "vecchia" },
+        { percorso: "/doc/.lavorazioni/lavorazioni.json", cartella: "/doc", origine: "vecchia" },
+        { percorso: "/doc/lavorazioni.json", cartella: "/doc", origine: "vecchia" }
     ]);
 });
 
 /* ---- trovare la lavorazione ---- */
 
-test("la voce nel file della macchina vince, e non si scrive nulla", () => {
-    const d = disco({ "/doc": [".lavorazioni"], "/doc/.lavorazioni": [MIO, ALTRO] }, {
-        ["/doc/.lavorazioni/" + MIO]: JSON.stringify([{ file: "A.indd", id: 1, details: kit(1, "mio") }]),
-        ["/doc/.lavorazioni/" + ALTRO]: JSON.stringify([{ file: "A.indd", id: 2, details: kit(2, "altro") }])
+test("la voce nel file della postazione vince, e non si scrive nulla", () => {
+    const d = disco(conDati({ "/doc/SingularData": [ALTRA_ID], [MIA]: ["lavorazioni.json"], [ALTRA]: ["lavorazioni.json"] }), {
+        [MIO]: JSON.stringify([{ file: "A.indd", id: 1, details: kit(1, "mio") }]),
+        [ALTRA + "/lavorazioni.json"]: JSON.stringify([{ file: "A.indd", id: 2, details: kit(2, "altro") }])
     });
 
     assert.strictEqual(utilityCon(d).voceLavorazione("/doc", ID, "A.indd").id, 1);
     assert.deepStrictEqual(d.scritture, []);
 });
 
-test("seconda postazione: la lavorazione di un'altra macchina si copia senza i percorsi", () => {
-    const voceAltra = { file: "A.indd", id: 7, details: kit(7, "Kit A"), pathLinks: "/Users/altro/Links/", pathLoghi: "/Users/altro/Loghi/", pathLogs: "/x/", pathEsportazione: "/y/", pathLavorazioni: "/z/" };
-    const d = disco({ "/doc": [".lavorazioni"], "/doc/.lavorazioni": [ALTRO] }, {
-        ["/doc/.lavorazioni/" + ALTRO]: JSON.stringify([voceAltra])
+test("seconda postazione: la voce si copia senza i percorsi, con i file di lavoro del documento", () => {
+    const voceAltra = { file: "A.indd", id: 7, details: kit(7, "Kit A"), pathLinks: "/Users/altro/Links/", pathLoghi: "/Users/altro/Loghi/", pathLogs: "/x/", pathEsportazione: "/y/" };
+    const d = disco(conDati({
+        "/doc/SingularData": [ALTRA_ID],
+        [MIA]: ["allineamenti.json"],
+        [ALTRA]: ["lavorazioni.json", "CN_TO_listaKit7.json", "listaKit8.json", "allineamenti.json", "listaRefConteggio.json",
+            "listaRefEscluse.json", "Filtri.json", "reportIntegrita_7.json", "whitelistIntegrita_7.json", "listaImpaginata7.json"]
+    }), {
+        [ALTRA + "/lavorazioni.json"]: JSON.stringify([voceAltra]),
+        [ALTRA + "/CN_TO_listaKit7.json"]: "[\"kit\"]",
+        [ALTRA + "/listaKit8.json"]: "[\"altro kit\"]",
+        [ALTRA + "/allineamenti.json"]: "[\"dell'altra\"]",
+        [MIA + "/allineamenti.json"]: "[\"mio\"]",
+        [ALTRA + "/listaRefConteggio.json"]: "[1]",
+        [ALTRA + "/listaRefEscluse.json"]: "[2]",
+        [ALTRA + "/Filtri.json"]: "[3]",
+        [ALTRA + "/reportIntegrita_7.json"]: "{}",
+        [ALTRA + "/whitelistIntegrita_7.json"]: "{}",
+        [ALTRA + "/listaImpaginata7.json"]: "[]"
     });
-    const prima = d.file["/doc/.lavorazioni/" + ALTRO];
+    const prima = Object.assign({}, d.file);
 
     const voce = utilityCon(d).voceLavorazione("/doc", ID, "A.indd");
 
     assert.deepStrictEqual(voce, { file: "A.indd", id: 7, details: kit(7, "Kit A") });
-    assert.deepStrictEqual(d.json("/doc/.lavorazioni/" + MIO), [voce]);
-    //Il file dell'altra macchina non si tocca.
-    assert.strictEqual(d.file["/doc/.lavorazioni/" + ALTRO], prima);
-    assert.deepStrictEqual(d.scritture, ["/doc/.lavorazioni/" + MIO]);
+    assert.deepStrictEqual(d.json(MIO), [voce]);
+    //La lista del kit e gli altri file di lavoro arrivano: si prosegue senza richiedere il kit.
+    assert.strictEqual(d.file[MIA + "/CN_TO_listaKit7.json"], "[\"kit\"]");
+    assert.strictEqual(d.file[MIA + "/listaRefConteggio.json"], "[1]");
+    assert.strictEqual(d.file[MIA + "/listaRefEscluse.json"], "[2]");
+    assert.strictEqual(d.file[MIA + "/Filtri.json"], "[3]");
+    //Quello che la postazione ha gia' non si sovrascrive.
+    assert.strictEqual(d.file[MIA + "/allineamenti.json"], "[\"mio\"]");
+    //Da un'altra postazione non arrivano report, whitelist, lista impaginata, ne' file di altri kit.
+    for (const nome of ["listaKit8.json", "reportIntegrita_7.json", "whitelistIntegrita_7.json", "listaImpaginata7.json"]) {
+        assert.strictEqual(d.file[MIA + "/" + nome], undefined, nome);
+    }
+    //I file dell'altra postazione non si toccano.
+    Object.keys(prima).forEach(p => assert.strictEqual(d.file[p], prima[p], p));
+    assert.ok(d.scritture.every(p => p.startsWith(MIA + "/")), d.scritture.join(", "));
 });
 
-test("un documento del lavorazioni.json di prima si ritrova e si copia, e il vecchio file resta com'e'", () => {
-    const d = disco({ "/doc": ["lavorazioni.json"] }, {
-        "/doc/lavorazioni.json": JSON.stringify([{ file: "B.indd", id: 3, details: kit(3, "Kit B"), pathLinks: "/vecchio/" }])
+test("un documento lavorato prima di I20-1065 si copia con tutti i suoi file, e quelli di prima restano com'erano", () => {
+    const d = disco(conDati({
+        "/doc": [".lavorazioni", "listaKit3.json", "Filtri.json", "allineamenti.json", "reportIntegrita_3.json",
+            "whitelistIntegrita_3.json", "listaImpaginata3.json", "Volantino.indb_register.json"],
+        "/doc/.lavorazioni": [ALTRO_DI_PRIMA]
+    }), {
+        ["/doc/.lavorazioni/" + ALTRO_DI_PRIMA]: JSON.stringify([{ file: "B.indd", id: 3, details: kit(3, "Kit B"), pathLinks: "/vecchio/" }]),
+        "/doc/listaKit3.json": "[\"kit\"]",
+        "/doc/Filtri.json": "[\"filtri\"]",
+        "/doc/allineamenti.json": "[\"regole\"]",
+        "/doc/reportIntegrita_3.json": "{\"report\":1}",
+        "/doc/whitelistIntegrita_3.json": "{\"wl\":1}",
+        "/doc/listaImpaginata3.json": "[\"imp\"]",
+        "/doc/Volantino.indb_register.json": "{\"stato\":1}"
     });
+    const prima = Object.assign({}, d.file);
 
-    const voce = utilityCon(d).voceLavorazione("/doc", ID, "B.indd");
+    const voce = utilityCon(d).voceLavorazione("/doc", ID, "B.indd", "Volantino.indb");
 
     assert.strictEqual(voce.id, 3);
+    //I percorsi erano di un'altra macchina: non si portano.
     assert.strictEqual(voce.pathLinks, undefined);
-    assert.deepStrictEqual(d.scritture, ["/doc/" + MIO]);
-    assert.deepStrictEqual(d.json("/doc/lavorazioni.json")[0].pathLinks, "/vecchio/");
+    for (const nome of ["listaKit3.json", "Filtri.json", "allineamenti.json", "reportIntegrita_3.json",
+        "whitelistIntegrita_3.json", "listaImpaginata3.json", "Volantino.indb_register.json"]) {
+        assert.strictEqual(d.file[MIA + "/" + nome], prima["/doc/" + nome], nome);
+    }
+    Object.keys(prima).forEach(p => assert.strictEqual(d.file[p], prima[p], p));
 });
 
-test("le altre macchine si guardano prima dei file di prima", () => {
-    const d = disco({ "/doc": [".lavorazioni", "lavorazioni.json"], "/doc/.lavorazioni": [ALTRO] }, {
-        ["/doc/.lavorazioni/" + ALTRO]: JSON.stringify([{ file: "A.indd", id: 20, details: kit(20, "nuova") }]),
+test("dal file di prima di questa stessa postazione si tengono i percorsi di Links e Loghi", () => {
+    const d = disco(conDati({ "/doc": [".lavorazioni"], "/doc/.lavorazioni": [MIO_DI_PRIMA] }), {
+        ["/doc/.lavorazioni/" + MIO_DI_PRIMA]: JSON.stringify([{ file: "A.indd", id: 4, details: kit(4, "Kit"),
+            pathLinks: "/mio/Links/", pathLoghi: "/mio/Links/Loghi/", pathLogs: "/mio/Logs/", pathLavorazioni: "/mio/.lavorazioni/" }])
+    });
+
+    const voce = utilityCon(d).voceLavorazione("/doc", ID, "A.indd");
+
+    assert.deepStrictEqual(voce, { file: "A.indd", id: 4, details: kit(4, "Kit"), pathLinks: "/mio/Links/", pathLoghi: "/mio/Links/Loghi/" });
+});
+
+test("le altre postazioni si guardano prima dei file di prima delle altre macchine", () => {
+    const d = disco(conDati({ "/doc": ["lavorazioni.json"], "/doc/SingularData": [ALTRA_ID], [ALTRA]: ["lavorazioni.json"] }), {
+        [ALTRA + "/lavorazioni.json"]: JSON.stringify([{ file: "A.indd", id: 20, details: kit(20, "nuova") }]),
         "/doc/lavorazioni.json": JSON.stringify([{ file: "A.indd", id: 10, details: kit(10, "vecchia") }])
     });
     assert.strictEqual(utilityCon(d).voceLavorazione("/doc", ID, "A.indd").id, 20);
 });
 
-test("la seconda volta la voce si legge dal file della macchina, senza ricopiarla", () => {
-    const d = disco({ "/doc": [".lavorazioni"], "/doc/.lavorazioni": [ALTRO] }, {
-        ["/doc/.lavorazioni/" + ALTRO]: JSON.stringify([{ file: "A.indd", id: 7, details: kit(7, "Kit A") }])
+test("la seconda volta la voce si legge dal file della postazione, senza ricopiarla", () => {
+    const d = disco(conDati({ "/doc/SingularData": [ALTRA_ID], [ALTRA]: ["lavorazioni.json"] }), {
+        [ALTRA + "/lavorazioni.json"]: JSON.stringify([{ file: "A.indd", id: 7, details: kit(7, "Kit A") }])
     });
     const u = utilityCon(d);
 
@@ -177,16 +259,31 @@ test("la seconda volta la voce si legge dal file della macchina, senza ricopiarl
     u.voceLavorazione("/doc", ID, "A.indd");
 
     assert.strictEqual(d.scritture.length, 1);
-    assert.strictEqual(d.json("/doc/.lavorazioni/" + MIO).length, 1);
+    assert.strictEqual(d.json(MIO).length, 1);
 });
 
 test("un documento che non c'e' in nessun file va alla ricerca kit, e non si scrive niente", () => {
-    const d = disco({ "/doc": [".lavorazioni", "lavorazioni.json"], "/doc/.lavorazioni": [ALTRO] }, {
-        ["/doc/.lavorazioni/" + ALTRO]: JSON.stringify([{ file: "A.indd", id: 7, details: kit(7, "Kit A") }]),
+    const d = disco(conDati({ "/doc": ["lavorazioni.json"], "/doc/SingularData": [ALTRA_ID], [ALTRA]: ["lavorazioni.json"] }), {
+        [ALTRA + "/lavorazioni.json"]: JSON.stringify([{ file: "A.indd", id: 7, details: kit(7, "Kit A") }]),
         "/doc/lavorazioni.json": "non e' json"
     });
 
     assert.strictEqual(utilityCon(d).voceLavorazione("/doc", ID, "Z.indd"), null);
+    assert.deepStrictEqual(d.scritture, []);
+});
+
+test("senza la cartella della postazione la voce si trova lo stesso, e la copia si ritenta la volta dopo", () => {
+    const d = disco({ "/doc": ["lavorazioni.json"] }, {
+        "/doc/lavorazioni.json": JSON.stringify([{ file: "A.indd", id: 5, details: kit(5, "Kit") }])
+    });
+    const errori = console.error;
+    console.error = () => {};
+    try {
+        assert.strictEqual(utilityCon(d).voceLavorazione("/doc", ID, "A.indd").id, 5);
+    }
+    finally {
+        console.error = errori;
+    }
     assert.deepStrictEqual(d.scritture, []);
 });
 
@@ -197,7 +294,7 @@ test("in un libro vale prima la voce di quel libro, poi quella col solo nome del
         { file: "A.indd", id: 1, details: kit(1, "senza libro") },
         { file: "A.indd", id: 2, details: kit(2, "libro 1"), libro: "Volantino.indb" }
     ];
-    const d = disco({ "/doc": [MIO] }, { ["/doc/" + MIO]: JSON.stringify(voci) });
+    const d = disco(conDati({ [MIA]: ["lavorazioni.json"] }), { [MIO]: JSON.stringify(voci) });
     const u = utilityCon(d);
 
     assert.strictEqual(u.voceLavorazione("/doc", ID, "A.indd", "Volantino.indb").id, 2);
@@ -206,11 +303,11 @@ test("in un libro vale prima la voce di quel libro, poi quella col solo nome del
 });
 
 test("copiando la voce di un file del libro, la copia porta il libro", () => {
-    const d = disco({ "/doc": ["lavorazioni.json"] }, {
+    const d = disco(conDati({ "/doc": ["lavorazioni.json"] }), {
         "/doc/lavorazioni.json": JSON.stringify([{ file: "A.indd", id: 5, details: kit(5, "Kit") }])
     });
     assert.strictEqual(utilityCon(d).voceLavorazione("/doc", ID, "A.indd", "Volantino.indb").libro, "Volantino.indb");
-    assert.strictEqual(d.json("/doc/" + MIO)[0].libro, "Volantino.indb");
+    assert.strictEqual(d.json(MIO)[0].libro, "Volantino.indb");
 });
 
 test("il libro del documento e' il .indb nella sua cartella", () => {
@@ -232,10 +329,10 @@ test("il libro del documento e' il .indb nella sua cartella", () => {
 
 /* ---- scrivere ---- */
 
-test("si scrive solo nel file della macchina, aggiornando la voce che c'e' gia'", () => {
-    const d = disco({ "/doc": [".lavorazioni", "lavorazioni.json"], "/doc/.lavorazioni": [MIO, ALTRO] }, {
-        ["/doc/.lavorazioni/" + MIO]: JSON.stringify([{ file: "A.indd", id: 1, details: kit(1, "vecchio"), pathLinks: "/mio/Links/" }]),
-        ["/doc/.lavorazioni/" + ALTRO]: JSON.stringify([]),
+test("si scrive solo nel file della postazione, aggiornando la voce che c'e' gia'", () => {
+    const d = disco(conDati({ "/doc": ["lavorazioni.json"], "/doc/SingularData": [ALTRA_ID], [MIA]: ["lavorazioni.json"], [ALTRA]: ["lavorazioni.json"] }), {
+        [MIO]: JSON.stringify([{ file: "A.indd", id: 1, details: kit(1, "vecchio"), pathLinks: "/mio/Links/" }]),
+        [ALTRA + "/lavorazioni.json"]: JSON.stringify([]),
         "/doc/lavorazioni.json": JSON.stringify([])
     });
     const u = utilityCon(d);
@@ -243,12 +340,12 @@ test("si scrive solo nel file della macchina, aggiornando la voce che c'e' gia'"
     u.salvaVoceLavorazione("/doc", ID, { file: "A.indd", id: 9, details: kit(9, "nuovo") });
     u.salvaVoceLavorazione("/doc", ID, { file: "B.indd", id: 4, details: kit(4, "B"), libro: "Volantino.indb" });
 
-    const mie = d.json("/doc/.lavorazioni/" + MIO);
+    const mie = d.json(MIO);
     assert.strictEqual(mie.length, 2);
     assert.strictEqual(mie[0].id, 9);
     assert.strictEqual(mie[0].pathLinks, "/mio/Links/");
     assert.strictEqual(mie[1].libro, "Volantino.indb");
-    assert.deepStrictEqual(d.scritture, ["/doc/.lavorazioni/" + MIO, "/doc/.lavorazioni/" + MIO]);
+    assert.deepStrictEqual(d.scritture, [MIO, MIO]);
 });
 
 /* ---- l'identificativo della macchina (indexNew.js) ---- */

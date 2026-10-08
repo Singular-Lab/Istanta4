@@ -8,6 +8,9 @@
  * vale ancora "/Logs/", relativo alla lavorazione. La cartella la dice ora cartellaDeiLog, per
  * writeDebugMessageForCrash e per messaggioUtente.
  *
+ * I20-1065: la cartella dei log e' logs sotto quella del documento, creata dal Plugin all'apertura
+ * (logPath). Finche' non c'e' i messaggi vanno a video e in console, non su file.
+ *
  * indexNew.js fa require('indesign') e sotto Node non si carica: la funzione si estrae dal
  * sorgente e si esegue con i valori delle variabili che legge.
  *
@@ -38,51 +41,39 @@ function corpoFunzione(testo, intestazione) {
     assert.fail(`corpo di ${intestazione} non delimitato`);
 }
 
-//Il valore di partenza come e' scritto davvero, per non ripeterlo a mano qui.
-const defaultPercorsoLogs = (indexNew.match(/let defaultPercorsoLogs = "([^"]*)";/) || [])[1];
-
-//cartellaDeiLog con le variabili che legge date da fuori.
+//I20-1065: cartellaDeiLog con logPath dato da fuori. La cartella logs la crea il Plugin
+//all'apertura (preparaCartelleDiSistema): la scelta dell'operatore e il valore relativo "/Logs/"
+//non ci sono piu'.
 const corpo = corpoFunzione(indexNew, 'function cartellaDeiLog()');
-const crea = new Function('percorsoLogs', 'defaultPercorsoLogs', 'pathLavorazione', corpo + '\nreturn cartellaDeiLog();');
-const cartella = (percorsoLogs, pathLavorazione) => crea(percorsoLogs, defaultPercorsoLogs, pathLavorazione);
+const crea = new Function('logPath', corpo + '\nreturn cartellaDeiLog();');
 
-const LAVORAZIONE = '/Users/operatore/Lavori/Promo_42';
-
-test('il valore di partenza e\' la cartella Logs dentro la lavorazione', () => {
-    assert.strictEqual(defaultPercorsoLogs, '/Logs/');
+test('la cartella dei log e\' logs sotto il documento, come l\'ha preparata il Plugin', () => {
+    assert.strictEqual(crea('/Users/operatore/Lavori/Promo_42/logs/'), '/Users/operatore/Lavori/Promo_42/logs/');
 });
 
-//Il caso della issue: percorsoLogs assoluto, da lavorazioni.json o dal default gia' completato.
-test('un percorso assoluto si usa com\'e\', senza metterci davanti la lavorazione', () => {
-    assert.strictEqual(cartella('/Users/operatore/Lavori/Promo_42/Logs/', LAVORAZIONE), '/Users/operatore/Lavori/Promo_42/Logs/');
-    assert.strictEqual(cartella('/Volumes/Condivisa/Logs/', LAVORAZIONE), '/Volumes/Condivisa/Logs/');
+//Prima che le cartelle siano pronte non c'e' un posto dove scrivere, e non si inventa.
+test('finche\' le cartelle non sono pronte la cartella dei log e\' vuota', () => {
+    assert.strictEqual(crea(''), '');
+    assert.strictEqual(crea(undefined), '');
 });
 
-//Aprendo una lavorazione nuova si scrive nel log prima che percorsoLogs diventi assoluto.
-test('il valore di partenza viene completato con la cartella della lavorazione', () => {
-    assert.strictEqual(cartella('/Logs/', LAVORAZIONE), LAVORAZIONE + '/Logs/');
-});
-
-//Vuoto vuol dire cartella assente: li' l'IDX-98 e' vero, e non si deve inventare un percorso.
-test('una cartella dei log assente resta assente', () => {
-    assert.strictEqual(cartella('', LAVORAZIONE), '');
-});
-
-test('writeDebugMessageForCrash e messaggioUtente chiedono la cartella a cartellaDeiLog', () => {
+test('writeDebugMessageForCrash e messaggioUtente chiedono la cartella a cartellaDeiLog, e senza non scrivono', () => {
     const crash = corpoFunzione(indexNew, 'function writeDebugMessageForCrash(msg)');
     const messaggio = corpoFunzione(indexNew, 'async function messaggioUtente(');
 
-    assert.match(crash, /var logPath = cartellaDeiLog\(\);/);
-    assert.match(messaggio, /var logPath = cartellaDeiLog\(\);/);
+    assert.match(crash, /var cartellaLog = cartellaDeiLog\(\);\s*if \(cartellaLog === ""\) \{\s*return;\s*\}/);
+    assert.match(messaggio, /var cartellaLog = cartellaDeiLog\(\);/);
+    //Il messaggio va comunque a video e in console: solo il file aspetta la cartella. Senza
+    //questo controllo il primo messaggio diceva "cartella logs assente" e poi non piu'.
+    assert.match(messaggio, /if \(!dontWriteInLogs && cartellaLog !== ""\) \{/);
 });
 
-test('fuori da cartellaDeiLog nessuno concatena piu\' lavorazione e cartella dei log', () => {
-    //Si guarda il codice, non i commenti che raccontano il difetto.
-    const codice = indexNew.split('\n').filter(r => !r.trim().startsWith('//')).join('\n');
-    const occorrenze = codice.match(/pathLavorazione \+ percorsoLogs/g) || [];
-
-    assert.strictEqual(occorrenze.length, 1);
-    assert.match(corpo, /pathLavorazione \+ percorsoLogs/);
+test('nessuno usa piu\' i percorsi dei log e dell\'esportazione scelti dall\'operatore', () => {
+    const { fileDelPlugin, leggiFileDelPlugin } = require('./fileDelPlugin');
+    for (const file of fileDelPlugin()) {
+        const codice = leggiFileDelPlugin(file).split('\n').filter(r => !r.trim().startsWith('//')).join('\n');
+        assert.doesNotMatch(codice, /\bpercorsoLogs\b|\bdefaultPercorsoLogs\b|\bpercorsoEsportazione\b|\bpercorsoLavorazioni\b/, file);
+    }
 });
 
 /* ---- I20-1038: la riga di log dice da quale macchina viene, e IDX-27 dice dove e' scattato ---- */

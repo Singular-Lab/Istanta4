@@ -582,8 +582,8 @@ const filtri = {
 
         //Al body adesso creiamo le varie righe, avremo una riga per ogni pagina del documento
         let lastElement = null;
-        const listaRefConteggio = readFile(pathLavorazione + "/listaRefConteggio.json");
-        const listaEscluse = readFile(pathLavorazione + "/listaRefEscluse.json");
+        const listaRefConteggio = readFile(Utility.percorsoDati("listaRefConteggio.json"));
+        const listaEscluse = readFile(Utility.percorsoDati("listaRefEscluse.json"));
         //I20-1031: i box impaginati di ogni pagina secondo Istanta, chiesti una volta per ridisegno.
         //null se la chiamata non riesce: la colonna dira' "?" invece di un "Nessuna" che non e' vero.
         const listaImpaginati = await Utility.getListaCodiciImpaginati({ nullSeFallisce: true });
@@ -2524,7 +2524,7 @@ const filtri = {
         if (!controlloNomeFile) {
             nomeFileSenzaEstensione = "";
         }
-        return pathLavorazione + "/Filtri" + nomeFileSenzaEstensione + ".json";
+        return Utility.percorsoDati("Filtri" + nomeFileSenzaEstensione + ".json");
     },
 
     /// Congela una pagina perche' non venga toccata dagli spostamenti di filtri.

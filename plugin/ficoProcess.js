@@ -838,11 +838,9 @@ const FicoProcess=
                 //leggiamo il file di lavorazione e guardiamo se ha almeno un elemento, se lo ha proviamo a leggere il suo pathLinks e pathLoghi
                 let file = Utility.leggiFileLavorazioni(filePath);
                 //controlliamo se il file è vuoto
+                //I20-1065: solo Links e Loghi; logs, export e i dati li crea il Plugin
                 let pathLinks = "";
                 let pathLoghi = "";
-                let pathLogs = "";
-                let pathEsportazione = "";
-                let pathLavorazioni = "";
                 if (file.length>0){
                     let item = file[0];
                     if (item.pathLinks!=null && item.pathLinks!="")
@@ -853,22 +851,10 @@ const FicoProcess=
                     {
                         pathLoghi = item.pathLoghi;
                     }
-                    if (item.pathLogs!=null && item.pathLogs!="")
-                    {
-                        pathLogs = item.pathLogs;
-                    }
-                    if (item.pathEsportazione!=null && item.pathEsportazione!="")
-                    {
-                        pathEsportazione = item.pathEsportazione;
-                    }
-                    if (item.pathLavorazioni!=null && item.pathLavorazioni!="")
-                    {
-                        pathLavorazioni = item.pathLavorazioni;
-                    }
                 }
 
                 //La voce del documento si aggiorna se c'e' gia', altrimenti si aggiunge
-                let voce = {file:app.activeDocument.name, id:itemsInSearch[0].id, pathLinks:pathLinks, pathLoghi:pathLoghi, pathLogs:pathLogs, pathEsportazione:pathEsportazione, pathLavorazioni:pathLavorazioni ,details:itemsInSearch[0]};
+                let voce = {file:app.activeDocument.name, id:itemsInSearch[0].id, pathLinks:pathLinks, pathLoghi:pathLoghi, details:itemsInSearch[0]};
                 let libro = libroDelDocumentoInLavorazione(app.activeDocument.name, pathLavorazione);
                 if (libro) {
                     voce.libro = libro;
@@ -1039,11 +1025,9 @@ const FicoProcess=
                 //leggiamo il file di lavorazione e guardiamo se ha almeno un elemento, se lo ha proviamo a leggere il suo pathLinks e pathLoghi
                 let file = Utility.leggiFileLavorazioni(filePath);
                 //controlliamo se il file è vuoto
+                //I20-1065: solo Links e Loghi; logs, export e i dati li crea il Plugin
                 let pathLinks = "";
                 let pathLoghi = "";
-                let pathLogs = "";
-                let pathEsportazione = "";
-                let pathLavorazioni = "";
                 if (file!=null && file.length > 0) 
                 {
                     let item = file[0];
@@ -1053,22 +1037,13 @@ const FicoProcess=
                     if (item.pathLoghi != null && item.pathLoghi != "") {
                         pathLoghi = item.pathLoghi;
                     }
-                    if (item.pathLogs != null && item.pathLogs != "") {
-                        pathLogs = item.pathLogs;
-                    }
-                    if (item.pathEsportazione != null && item.pathEsportazione != "") {
-                        pathEsportazione = item.pathEsportazione;
-                    }
-                    if (item.pathLavorazioni != null && item.pathLavorazioni != "") {
-                        pathLavorazioni = item.pathLavorazioni;
-                    }
                 }
 
 
 
                 //facciamo prima un controllo se nel file esiste già un elemento con questo file
 
-                let voce = { file: nomeFile, id: itemsInSearch[0].id, pathLinks: pathLinks, pathLoghi: pathLoghi, pathLogs: pathLogs, pathEsportazione: pathEsportazione, pathLavorazioni: pathLavorazioni, details: itemsInSearch[0] };
+                let voce = { file: nomeFile, id: itemsInSearch[0].id, pathLinks: pathLinks, pathLoghi: pathLoghi, details: itemsInSearch[0] };
                 let libro = libroDelDocumentoInLavorazione(nomeFile, _pathLavorazione);
                 if (libro) {
                     voce.libro = libro;
@@ -1384,18 +1359,18 @@ const FicoProcess=
                         //Esporta tutto in unico OPDF
                         //app.activeDocument.asynchronousExportFile(ExportFormat.PDF_TYPE, pathLavorazione + "/" + fileName, false, templateObj);
                         app.pdfExportPreferences.pageRange = "";
-                        app.activeDocument.exportFile(ExportFormat.PDF_TYPE, /*pathLavorazione +*/ percorsoEsportazione + fileName, false, templateObj);
+                        app.activeDocument.exportFile(ExportFormat.PDF_TYPE, exportPath + fileName, false, templateObj);
 
                         //recuperiamo l'ultima pagina di indesign
                         let lastPage = app.activeDocument.pages.item(-1);
-                        job.push({ fileName: /*pathLavorazione +*/ percorsoEsportazione + fileName, fileOnlyName: fileName, meta: me.listaElementiMateriali, page: lastPage.name });
+                        job.push({ fileName: exportPath + fileName, fileOnlyName: fileName, meta: me.listaElementiMateriali, page: lastPage.name });
                     }
                     else {
                         //Esportas pagina per pagina
                         //Solitamente è un PoP - Ma ci torneremo sopra proabilmente
                         let pagine = app.activeDocument.pages;
 
-                        let localDbDataset = readFile(pathLavorazione + "/listaImpaginata" + idKitLavorazione + ".json")[0].result;
+                        let localDbDataset = readFile(Utility.percorsoDati("listaImpaginata" + idKitLavorazione + ".json"))[0].result;
                         let listaLineareRef = [];
                         for (let r = 0; r < localDbDataset.length; r++) {
                             listaLineareRef = listaLineareRef.concat(localDbDataset[r].listaRef);
@@ -1483,7 +1458,7 @@ const FicoProcess=
                             app.pdfExportPreferences.pageRange = pagItem.name;
 
                             try {
-                                let file_name = /*pathLavorazione +*/ percorsoEsportazione + fileName;
+                                let file_name = exportPath + fileName;
                                 app.activeDocument.exportFile(ExportFormat.PDF_TYPE, file_name, false, templateObj);
                                 console.log("Stream creato!");
 
@@ -1503,8 +1478,8 @@ const FicoProcess=
 
                                             let nuovoNomeFile = fileNameDeclinazione.replace("{{pag}}", pagItem.name);
                                             nuovoNomeFile = nuovoNomeFile.replace("{{contatore}}", contatore);
-                                            Utility.duplicaFile(/*pathLavorazione +*/ percorsoEsportazione + fileName, /*pathLavorazione +*/ percorsoEsportazione + nuovoNomeFile);
-                                            job.push({ fileName: /*pathLavorazione +*/ percorsoEsportazione + nuovoNomeFile, fileOnlyName: nuovoNomeFile, meta: objMeta, page: pagItem.name, objItem: objItem });
+                                            Utility.duplicaFile(exportPath + fileName, exportPath + nuovoNomeFile);
+                                            job.push({ fileName: exportPath + nuovoNomeFile, fileOnlyName: nuovoNomeFile, meta: objMeta, page: pagItem.name, objItem: objItem });
                                         }
                                     }
                                 }
@@ -2137,8 +2112,8 @@ const FicoProcess=
 
                     let templateObj = app.pdfExportPresets.itemByName(tipoExportObj.codice);
                     app.pdfExportPreferences.pageRange = "";
-                    app.activeDocument.exportFile(ExportFormat.PDF_TYPE, /*pathLavorazione +*/ percorsoEsportazione + fileName, false, templateObj);
-                    const fileBuffer = fs.readFileSync(/*pathLavorazione +*/ percorsoEsportazione + fileName);
+                    app.activeDocument.exportFile(ExportFormat.PDF_TYPE, exportPath + fileName, false, templateObj);
+                    const fileBuffer = fs.readFileSync(exportPath + fileName);
 
                     fd.append("file", fileBuffer);
 
