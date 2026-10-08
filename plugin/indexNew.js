@@ -8001,15 +8001,18 @@ function nomeMacchina(os = null) {
 }
 
 /// I20-1061: l'identificativo di questa macchina, che da' il nome al suo file delle lavorazioni
-/// (<idMacchina>_Lavorazioni.json). Deve identificarla e non cambiare mai: si genera una volta sola
-/// - il nome della macchina, per riconoscerla a occhio, e 10 caratteri casuali, che la rendono
-/// unica - e da li' in poi si rilegge e basta, anche se il nome della macchina cambia.
+/// (<idMacchina>_Lavorazioni.json). Identifica la macchina e non deve cambiare mai: si genera una
+/// volta sola - il nome della macchina, per riconoscerla a occhio, e 10 caratteri casuali, che la
+/// rendono unica - e da li' in poi si rilegge e basta, anche se il nome della macchina cambia.
 /// Si conserva in un file della macchina, fuori dal Plugin, cosi' resiste a reinstallazioni e
-/// aggiornamenti: /Users/Shared/Istanta su macOS, C:/ProgramData/Istanta su Windows, la home come
-/// ripiego. Una copia sta nel localStorage del Plugin: se il file sparisce, si ricrea con lo
-/// stesso identificativo. Uno nuovo nasce solo se mancano tutti e due.
-/// ambiente serve ai test: { fs, os, storage, nome, codice }.
+/// aggiornamenti, e in una copia nel localStorage del Plugin: se il file sparisce si riscrive con
+/// lo stesso identificativo. Uno nuovo nasce solo se mancano tutti e due.
+/// Il file sta direttamente in una cartella che esiste gia' (percorsiFileIdMacchina): UXP non crea
+/// cartelle con fs.mkdirSync, e la prima versione, che ci provava, non scriveva niente. Se nessuna
+/// scrittura riesce l'operatore lo vede (IDX-175): l'identificativo resterebbe solo nel Plugin.
+/// ambiente serve ai test: { fs, os, storage, nome, codice, avvisa }.
 var idMacchinaCache = null;
+var idMacchinaAvvisoDato = false;
 const CHIAVE_ID_MACCHINA = "istanta.idMacchina";
 function idMacchina(ambiente = null) {
     if (idMacchinaCache != null && ambiente == null) {
@@ -8029,25 +8032,27 @@ function idMacchina(ambiente = null) {
             os: modOs,
             storage: typeof localStorage !== "undefined" ? localStorage : null,
             nome: function () { return nomeMacchina(); },
-            codice: function () { return Utility.generateId(10); }
+            codice: function () { return Utility.generateId(10); },
+            avvisa: function (testo) { messaggioUtente(testo, "warning"); }
         };
     }
     var valido = function (id) { return typeof id === "string" && /^[A-Za-z0-9-]+_[A-Za-z0-9]{10}$/.test(id); };
     var percorsi = percorsiFileIdMacchina(amb.os);
 
     var id = null;
-    for (var i = 0; i < percorsi.length && id == null; i++) {
+    var trovatoIn = null;
+    for (var i = 0; i < percorsi.lettura.length && id == null; i++) {
         try {
-            var letto = JSON.parse(amb.fs.readFileSync(percorsi[i].file, 'utf8')).id;
+            var letto = JSON.parse(amb.fs.readFileSync(percorsi.lettura[i], 'utf8')).id;
             if (valido(letto)) {
                 id = letto;
+                trovatoIn = percorsi.lettura[i];
             }
         }
         catch (e) {
             //non c'e' o non si legge: si prova il prossimo
         }
     }
-    var daRiscrivere = id == null;
     if (id == null) {
         try {
             var conservato = amb.storage != null ? amb.storage.getItem(CHIAVE_ID_MACCHINA) : null;
@@ -8064,21 +8069,25 @@ function idMacchina(ambiente = null) {
         id = nome + "_" + amb.codice();
     }
 
-    if (daRiscrivere) {
+    //Si scrive se il file non c'era, o se c'era solo nella posizione della prima versione.
+    if (percorsi.scrittura.indexOf(trovatoIn) < 0) {
         var scritto = false;
-        for (var j = 0; j < percorsi.length && !scritto; j++) {
+        for (var j = 0; j < percorsi.scrittura.length && !scritto; j++) {
             try {
-                try {
-                    amb.fs.mkdirSync(percorsi[j].cartella, { recursive: true });
-                }
-                catch (e) {
-                    //la cartella puo' esserci gia', o mkdirSync mancare: decide la scrittura
-                }
-                amb.fs.writeFileSync(percorsi[j].file, JSON.stringify({ id: id }));
+                amb.fs.writeFileSync(percorsi.scrittura[j], JSON.stringify({ id: id }));
                 scritto = true;
             }
             catch (e) {
-                console.error("I20-1061: identificativo della macchina non scritto in " + percorsi[j].file + ": " + e);
+                console.error("I20-1061: identificativo della macchina non scritto in " + percorsi.scrittura[j] + ": " + e);
+            }
+        }
+        if (!scritto && trovatoIn == null && !idMacchinaAvvisoDato) {
+            idMacchinaAvvisoDato = true;
+            try {
+                amb.avvisa("Code IDX-175 Identificativo della macchina non salvato su disco: resta solo nel plugin (" + id + ")");
+            }
+            catch (e) {
+                //l'avviso non deve fermare la lavorazione
             }
         }
     }
@@ -8097,10 +8106,11 @@ function idMacchina(ambiente = null) {
     return id;
 }
 
-/// Dove si conserva l'identificativo della macchina, in ordine: la cartella comune a tutti gli
-/// utenti del computer, poi la home dell'utente.
+/// Dove si conserva l'identificativo della macchina. scrittura: file direttamente in cartelle che
+/// esistono gia', in ordine la cartella comune a tutti gli utenti del computer e la home.
+/// lettura: le stesse, poi le posizioni della prima versione di I20-1061 (una sottocartella
+/// Istanta), nel caso li' la scrittura fosse riuscita.
 function percorsiFileIdMacchina(os) {
-    var percorsi = [];
     var piattaforma = "";
     try {
         piattaforma = os != null ? String(os.platform()) : "";
@@ -8108,22 +8118,26 @@ function percorsiFileIdMacchina(os) {
     catch (e) {
         piattaforma = "";
     }
-    if (piattaforma === "darwin") {
-        percorsi.push("/Users/Shared/Istanta");
-    }
-    else if (piattaforma.indexOf("win") === 0) {
-        percorsi.push("C:/ProgramData/Istanta");
-    }
+    var home = "";
     try {
-        var home = os != null ? String(os.homedir()).replace(/[\\/]+$/, "") : "";
-        if (home !== "") {
-            percorsi.push(home + "/.istanta");
-        }
+        home = os != null ? String(os.homedir()).replace(/[\\/]+$/, "") : "";
     }
     catch (e) {
-        //nessuna home: resta la cartella comune
+        home = "";
     }
-    return percorsi.map(function (cartella) { return { cartella: cartella, file: cartella + "/idMacchina.json" }; });
+    var comune = piattaforma === "darwin" ? "/Users/Shared" : (piattaforma.indexOf("win") === 0 ? "C:/ProgramData" : "");
+
+    var scrittura = [];
+    var primaVersione = [];
+    if (comune !== "") {
+        scrittura.push(comune + "/istanta-idMacchina.json");
+        primaVersione.push(comune + "/Istanta/idMacchina.json");
+    }
+    if (home !== "") {
+        scrittura.push(home + "/.istanta-idMacchina.json");
+        primaVersione.push(home + "/.istanta/idMacchina.json");
+    }
+    return { scrittura: scrittura, lettura: scrittura.concat(primaVersione) };
 }
 
 /// I20-1061: il libro del documento in lavorazione, per cercarne la voce: il .indb nella sua

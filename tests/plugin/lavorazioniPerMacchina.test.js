@@ -57,12 +57,8 @@ function disco(cartelle, file = {}) {
             }
             d.file[p] = String(contenuto);
             d.scritture.push(p);
-        },
-        mkdirSync: (p) => {
-            if (!Object.prototype.hasOwnProperty.call(d.cartelle, p)) {
-                d.cartelle[p] = [];
-            }
         }
+        //Niente mkdirSync: UXP non crea cartelle cosi' (I20-1061, prova sul campo dell'operatore).
     };
     d.json = (p) => JSON.parse(d.file[p]);
     return d;
@@ -272,6 +268,7 @@ function storage(iniziale = {}) {
 }
 
 const mac = { platform: () => "darwin", homedir: () => "/Users/sm2" };
+const nonAvvisare = () => { throw new Error("avviso inatteso"); };
 const win = { platform: () => "win32", homedir: () => "C:\\Users\\sm2" };
 
 test("la prima volta l'identificativo nasce e si conserva nella cartella comune e nel plugin", () => {
@@ -279,10 +276,11 @@ test("la prima volta l'identificativo nasce e si conserva nella cartella comune 
     const d = disco({ "/Users/Shared": [] });
     const s = storage();
 
-    const id = idMacchina({ fs: d.fs, os: mac, storage: s, nome: () => "Mac Mini di sm2.local", codice: () => "k3F9a2Lp0Q" });
+    const id = idMacchina({ fs: d.fs, os: mac, storage: s, nome: () => "Mac Mini di sm2.local", codice: () => "k3F9a2Lp0Q", avvisa: nonAvvisare });
 
     assert.strictEqual(id, "Mac-Mini-di-sm2-local_k3F9a2Lp0Q");
-    assert.deepStrictEqual(d.json("/Users/Shared/Istanta/idMacchina.json"), { id: id });
+    //Direttamente in /Users/Shared, che c'e' sempre: nessuna cartella da creare.
+    assert.deepStrictEqual(d.json("/Users/Shared/istanta-idMacchina.json"), { id: id });
     assert.strictEqual(s.dati["istanta.idMacchina"], id);
 });
 
@@ -290,65 +288,92 @@ test("l'identificativo non cambia piu', neanche se cambia il nome della macchina
     const { idMacchina } = funzioniIdMacchina();
     const d = disco({ "/Users/Shared": [] });
     const s = storage();
-    const primo = idMacchina({ fs: d.fs, os: mac, storage: s, nome: () => "mac-mini", codice: () => "AAAAAAAAAA" });
+    const primo = idMacchina({ fs: d.fs, os: mac, storage: s, nome: () => "mac-mini", codice: () => "AAAAAAAAAA", avvisa: nonAvvisare });
 
-    const dopo = idMacchina({ fs: d.fs, os: mac, storage: s, nome: () => "mac-mini-2", codice: () => "BBBBBBBBBB" });
+    const dopo = idMacchina({ fs: d.fs, os: mac, storage: s, nome: () => "mac-mini-2", codice: () => "BBBBBBBBBB", avvisa: nonAvvisare });
 
     assert.strictEqual(dopo, primo);
     assert.strictEqual(d.scritture.length, 1);
 });
 
-test("se il file sparisce si ricrea con lo stesso identificativo conservato nel plugin", () => {
+test("l'identificativo rimasto solo nel plugin si scrive su disco identico", () => {
+    //E' il Mac dell'operatore dopo la prima versione: il file non era stato scritto.
     const { idMacchina } = funzioniIdMacchina();
-    const d = disco({ "/Users/Shared": [] });
-    const s = storage({ "istanta.idMacchina": "mac-mini_AAAAAAAAAA" });
+    const d = disco({ "/Users/Shared": [], "/Users/sm2": [] });
+    const s = storage({ "istanta.idMacchina": "sm2_b8yQMMSqxt" });
 
-    const id = idMacchina({ fs: d.fs, os: mac, storage: s, nome: () => "altro", codice: () => "BBBBBBBBBB" });
+    const id = idMacchina({ fs: d.fs, os: mac, storage: s, nome: () => "altro", codice: () => "BBBBBBBBBB", avvisa: nonAvvisare });
 
-    assert.strictEqual(id, "mac-mini_AAAAAAAAAA");
-    assert.deepStrictEqual(d.json("/Users/Shared/Istanta/idMacchina.json"), { id: "mac-mini_AAAAAAAAAA" });
+    assert.strictEqual(id, "sm2_b8yQMMSqxt");
+    assert.deepStrictEqual(d.json("/Users/Shared/istanta-idMacchina.json"), { id: "sm2_b8yQMMSqxt" });
 });
 
 test("il file vince sulla copia del plugin, che si riallinea", () => {
     const { idMacchina } = funzioniIdMacchina();
-    const d = disco({ "/Users/Shared": ["Istanta"], "/Users/Shared/Istanta": ["idMacchina.json"] }, {
-        "/Users/Shared/Istanta/idMacchina.json": JSON.stringify({ id: "mac-mini_AAAAAAAAAA" })
+    const d = disco({ "/Users/Shared": ["istanta-idMacchina.json"] }, {
+        "/Users/Shared/istanta-idMacchina.json": JSON.stringify({ id: "mac-mini_AAAAAAAAAA" })
     });
     const s = storage({ "istanta.idMacchina": "vecchio_CCCCCCCCCC" });
 
-    assert.strictEqual(idMacchina({ fs: d.fs, os: mac, storage: s, nome: () => "x", codice: () => "BBBBBBBBBB" }), "mac-mini_AAAAAAAAAA");
+    assert.strictEqual(idMacchina({ fs: d.fs, os: mac, storage: s, nome: () => "x", codice: () => "BBBBBBBBBB", avvisa: nonAvvisare }), "mac-mini_AAAAAAAAAA");
     assert.strictEqual(s.dati["istanta.idMacchina"], "mac-mini_AAAAAAAAAA");
     assert.deepStrictEqual(d.scritture, []);
+});
+
+test("un file nella posizione della prima versione vale, e si riscrive in quella nuova", () => {
+    const { idMacchina } = funzioniIdMacchina();
+    const d = disco({ "/Users/Shared": ["Istanta"], "/Users/Shared/Istanta": ["idMacchina.json"] }, {
+        "/Users/Shared/Istanta/idMacchina.json": JSON.stringify({ id: "mac-mini_AAAAAAAAAA" })
+    });
+
+    assert.strictEqual(idMacchina({ fs: d.fs, os: mac, storage: storage(), nome: () => "x", codice: () => "BBBBBBBBBB", avvisa: nonAvvisare }), "mac-mini_AAAAAAAAAA");
+    assert.deepStrictEqual(d.json("/Users/Shared/istanta-idMacchina.json"), { id: "mac-mini_AAAAAAAAAA" });
 });
 
 test("se la cartella comune non e' scrivibile si usa la home", () => {
     const { idMacchina } = funzioniIdMacchina();
     const d = disco({ "/Users/sm2": [] });
-    d.fs.mkdirSync = (p) => {
-        if (p.indexOf("/Users/Shared") === 0) {
-            throw new Error("EACCES " + p);
-        }
-        d.cartelle[p] = d.cartelle[p] || [];
-    };
 
-    const id = idMacchina({ fs: d.fs, os: mac, storage: storage(), nome: () => "mac", codice: () => "AAAAAAAAAA" });
+    const id = idMacchina({ fs: d.fs, os: mac, storage: storage(), nome: () => "mac", codice: () => "AAAAAAAAAA", avvisa: nonAvvisare });
 
-    assert.deepStrictEqual(d.json("/Users/sm2/.istanta/idMacchina.json"), { id: id });
+    assert.deepStrictEqual(d.json("/Users/sm2/.istanta-idMacchina.json"), { id: id });
+});
+
+test("se non si riesce a scrivere da nessuna parte l'operatore lo vede, una volta sola", () => {
+    const { idMacchina } = funzioniIdMacchina();
+    const d = disco({});
+    const avvisi = [];
+    const avvisa = (testo) => avvisi.push(testo);
+    const s = storage();
+
+    const id = idMacchina({ fs: d.fs, os: mac, storage: s, nome: () => "mac", codice: () => "AAAAAAAAAA", avvisa: avvisa });
+    idMacchina({ fs: d.fs, os: mac, storage: s, nome: () => "mac", codice: () => "BBBBBBBBBB", avvisa: avvisa });
+
+    assert.strictEqual(avvisi.length, 1);
+    assert.match(avvisi[0], /^Code IDX-175 /);
+    //Resta almeno nel plugin, e la seconda volta e' lo stesso.
+    assert.strictEqual(s.dati["istanta.idMacchina"], id);
 });
 
 test("su Windows la cartella comune e' ProgramData", () => {
     const { percorsiFileIdMacchina } = funzioniIdMacchina();
-    assert.deepStrictEqual(percorsiFileIdMacchina(win).map(p => p.file), ["C:/ProgramData/Istanta/idMacchina.json", "C:\\Users\\sm2/.istanta/idMacchina.json"]);
-    assert.deepStrictEqual(percorsiFileIdMacchina(mac).map(p => p.file), ["/Users/Shared/Istanta/idMacchina.json", "/Users/sm2/.istanta/idMacchina.json"]);
+    assert.deepStrictEqual(percorsiFileIdMacchina(win).scrittura, ["C:/ProgramData/istanta-idMacchina.json", "C:\\Users\\sm2/.istanta-idMacchina.json"]);
+    assert.deepStrictEqual(percorsiFileIdMacchina(mac).scrittura, ["/Users/Shared/istanta-idMacchina.json", "/Users/sm2/.istanta-idMacchina.json"]);
+    assert.deepStrictEqual(percorsiFileIdMacchina(mac).lettura.slice(2), ["/Users/Shared/Istanta/idMacchina.json", "/Users/sm2/.istanta/idMacchina.json"]);
 });
 
 test("un identificativo scritto male non vale e se ne fa uno nuovo", () => {
     const { idMacchina } = funzioniIdMacchina();
-    const d = disco({ "/Users/Shared": ["Istanta"], "/Users/Shared/Istanta": ["idMacchina.json"] }, {
-        "/Users/Shared/Istanta/idMacchina.json": JSON.stringify({ id: "../nome strano" })
+    const d = disco({ "/Users/Shared": ["istanta-idMacchina.json"] }, {
+        "/Users/Shared/istanta-idMacchina.json": JSON.stringify({ id: "../nome strano" })
     });
 
-    assert.strictEqual(idMacchina({ fs: d.fs, os: mac, storage: storage(), nome: () => "mac", codice: () => "AAAAAAAAAA" }), "mac_AAAAAAAAAA");
+    assert.strictEqual(idMacchina({ fs: d.fs, os: mac, storage: storage(), nome: () => "mac", codice: () => "AAAAAAAAAA", avvisa: nonAvvisare }), "mac_AAAAAAAAAA");
+});
+
+test("l'identificativo non prova piu' a creare cartelle", () => {
+    const corpo = indice.substring(indice.indexOf("var idMacchinaCache = null;"), indice.indexOf("/// I20-1061: il libro del documento in lavorazione"));
+    assert.doesNotMatch(corpo, /mkdirSync\(/);
 });
 
 /* ---- chi usa cosa ---- */
