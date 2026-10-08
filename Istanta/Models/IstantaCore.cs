@@ -2674,6 +2674,19 @@ namespace Istanta.Models
 
             }
         }
+        /// <summary>
+        /// MD5 di un file letto in streaming, senza caricarlo in memoria: stessa stringa di
+        /// GetMD5HashFromFile (esadecimale maiuscolo, senza trattini), che e' quella confrontata
+        /// con articoli_foto.hash e con la deduplicazione di Olimpo. Le foto grezze del SYNC FOTO
+        /// lette con File.ReadAllBytes finivano tutte nel Large Object Heap e i GC che ne
+        /// seguivano fermavano l'intero processo.
+        /// </summary>
+        public static string GetMD5HashFromPath(string path)
+        {
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read,
+                                              1024 * 1024, FileOptions.SequentialScan);
+            return Convert.ToHexString(MD5.HashData(stream));
+        }
         public static string EncryptString(string Message, string Passphrase)
         {
             byte[] Results;
