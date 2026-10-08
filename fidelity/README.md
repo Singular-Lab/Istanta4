@@ -43,10 +43,10 @@ Fidelity Promotion è un'applicazione full-stack che integra:
 ## Quick Start
 
 ### Prerequisiti
-- Node.js >= 18.x
+- Node.js >= 20.x
 - PostgreSQL >= 14.x
 - MongoDB >= 6.x
-- npm
+- Yarn: basta un `yarn` qualsiasi (anche 1.x): la versione del progetto, 4.18.1, e' in `.yarn/releases` e viene usata automaticamente
 
 ### Installazione
 
@@ -56,26 +56,26 @@ git clone https://github.com/Singular-Lab/fidelity_promotion.git
 cd fidelity_promotion
 
 # Installa dipendenze
-npm install
+yarn install
 
 # Configura variabili d'ambiente: crea .env con le variabili
 # validate in server/core/config/index.ts
 
 # Sincronizza database PostgreSQL
-npm run models:sync
+yarn models:sync
 
 # Avvia in development
-npm run dev
+yarn dev
 ```
 
 ### Build Production
 
 ```bash
 # Build completo
-npm run build
+yarn build
 
 # Start production server
-npm start
+yarn start
 ```
 
 ## Struttura Progetto
@@ -278,40 +278,40 @@ OLYMPUS_IP_ADDRESS=http://...
 
 ### Development
 ```bash
-npm run dev              # Dev mode (client + server concorrenti)
-npm run dev:debug        # Debug mode con Node inspector
-npm run dev:server       # Solo server (porta 3010)
-npm run dev:client       # Solo client Vite (porta 3009)
+yarn dev              # Dev mode (client + server concorrenti)
+yarn dev:debug        # Debug mode con Node inspector
+yarn dev:server       # Solo server (porta 3010)
+yarn dev:client       # Solo client Vite (porta 3009)
 ```
 
 ### Build & Production
 ```bash
-npm run build            # Build production completo
-npm run build:client     # Build solo frontend
-npm start                # Start production server
-npm run clean            # Rimuovi dist folder
+yarn build            # Build production completo
+yarn build:client     # Build solo frontend
+yarn start                # Start production server
+yarn clean            # Rimuovi dist folder
 ```
 
 ### Database
 ```bash
-npm run models:sync              # Sync schema database
-npm run models:sync:force        # Force sync (DROP tables - DISTRUTTIVO)
-npm run models:status            # Check status modelli
-npm run models:check             # Verifica connessione DB
-npm run models:sync-model        # Sync singolo modello
-npm run models:sync-db-objects   # Sync oggetti DB custom (views, enum)
+yarn models:sync              # Sync schema database
+yarn models:sync:force        # Force sync (DROP tables - DISTRUTTIVO)
+yarn models:status            # Check status modelli
+yarn models:check             # Verifica connessione DB
+yarn models:sync-model        # Sync singolo modello
+yarn models:sync-db-objects   # Sync oggetti DB custom (views, enum)
 ```
 
 ### Testing & Quality
 ```bash
-npm test                         # Vitest in watch mode
-npm run test:server              # Test una volta (server e lib)
-npm run test:server:coverage     # Coverage report
-npm run lint                     # Lint frontend
-npm run lint:fix                 # Fix automatico lint
-npm run type-check               # TypeScript check
-npm run security-check           # npm audit
-npm run deps-check               # Check dipendenze inutilizzate
+yarn test                         # Vitest in watch mode
+yarn test:server              # Test una volta (server e lib)
+yarn test:server:coverage     # Coverage report
+yarn lint                     # Lint frontend
+yarn lint:fix                 # Fix automatico lint
+yarn type-check               # TypeScript check
+yarn security-check           # audit delle vulnerabilita' (yarn npm audit)
+yarn deps-check               # Check dipendenze inutilizzate
 ```
 
 ## Architettura Backend
@@ -379,12 +379,7 @@ const fp = new FP('http://localhost:3010/api');
 
 ## CI/CD
 
-GitHub Actions workflows:
-1. **CI** (`.github/workflows/ci.yml`) - type-check, lint, security, build — trigger su push/PR a main
-2. **Deploy** (`.github/workflows/deploy.yml`) - packaging dopo CI
-3. **Cleanup** (`.github/workflows/cleanup.yml`) - pulizia artifact settimanale (domenica 2:00 UTC)
-
-Dependabot configurato per aggiornamenti npm settimanali con freeze su major versions critiche.
+La CI e' quella della suite (`.github/workflows/ci.yml` nella root del repository): per fidelity installa con `yarn install --immutable` ed esegue type-check, lint, audit delle dipendenze di runtime, test, build e build dell'immagine di produzione.
 
 ## License
 

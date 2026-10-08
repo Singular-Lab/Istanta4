@@ -11,14 +11,13 @@
     "clean": "rimraf dist",
     "check:rolldown-binding": "node scripts/checkRolldownBinding.mjs",
     "check:rolldown-binding:advice": "node scripts/checkRolldownBinding.mjs --advice",
-    "deps:reinstall:clean": "rimraf node_modules package-lock.json && npm install",
+    "deps:reinstall:clean": "rimraf node_modules && yarn install",
     "dev": "cross-env concurrently --names client,server --prefix \"[{name}]\" --prefix-colors cyan,magenta \"vite\" \"tsx server/index.ts\"",
     "dev:debug": "cross-env concurrently --names client,server --prefix \"[{name}]\" --prefix-colors cyan,magenta \"vite\" \"tsx --inspect server/index.ts\"",
     "dev:server": "cross-env NODE_ENV=development tsx server/index.ts",
     "dev:client": "vite",
-    "prebuild:client": "npm run check:rolldown-binding",
-    "build:client": "vite build --mode production",
-    "build": "npm run clean && npm run build:client",
+    "build:client": "node scripts/checkRolldownBinding.mjs && vite build --mode production",
+    "build": "yarn clean && yarn build:client",
     "benchmark:rolldown:baseline": "node scripts/rolldown/benchmark.mjs --label baseline --lazybarrel false",
     "benchmark:rolldown:post": "node scripts/rolldown/benchmark.mjs --label post --lazybarrel false",
     "benchmark:rolldown:lazybarrel": "node scripts/rolldown/benchmark.mjs --label lazybarrel --lazybarrel true",
@@ -28,10 +27,9 @@
     "lint:fix": "eslint \"src/**/*.tsx\" --fix",
     "type-check": "tsc --noEmit",
     "type-check:server": "tsc -p server/tsconfig.json --noEmit",
-    "security-check": "npm audit --audit-level=moderate",
-    "deps-check": "npx depcheck --ignores=\"@types/*\"",
-    "deps-update": "npx npm-check-updates --errorLevel 2",
-    "ci": "npm run type-check && npm run type-check:server && npm run lint && npm run security-check && npm run build",
+    "security-check": "yarn npm audit --all --recursive --environment production --severity moderate --no-deprecations",
+    "deps-check": "depcheck --ignores=\"@types/*\"",
+    "ci": "yarn type-check && yarn type-check:server && yarn lint && yarn security-check && yarn build",
     "models:sync": "tsx server/core/scripts/initializeModels.ts sync",
     "models:sync:force": "tsx server/core/scripts/initializeModels.ts sync --force",
     "models:status": "tsx server/core/scripts/initializeModels.ts status",
@@ -61,6 +59,10 @@
     "docker:test:down": "docker compose -f docker-compose.test.yml down",
     "docker:test:logs": "docker compose -f docker-compose.test.yml logs -f app",
     "docker:test:prune": "docker compose -f docker-compose.test.yml down -v && docker image prune -f"
+  },
+  "resolutions": {
+    "@types/express": "4.17.21",
+    "@types/express-serve-static-core": "4.19.6"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.5",
@@ -117,7 +119,6 @@
     "globals": "^16.3.0",
     "lightningcss": "^1.27.0",
     "lodash": "^4.17.21",
-    "npm-check-updates": "^19.3.1",
     "postcss": "^8.5.3",
     "postcss-advanced-variables": "^5.0.0",
     "postcss-cli": "^11.0.1",
@@ -147,5 +148,6 @@
     "@react-pdf/pdfkit": "^5.1.1",
     "@react-pdf/renderer": "^4.5.1",
     "pako": "^1.0.11"
-  }
+  },
+  "packageManager": "yarn@4.18.1"
 }

@@ -57,6 +57,10 @@ services:
     # Attenzione: l'applicazione non ha migrazioni, quindi questa sincronia è di
     # fatto l'unico meccanismo che crea le tabelle nuove. Spegnendola, lo schema
     # di ogni release successiva va applicato a mano.
+    #
+    # Sync e avvio passano da tsx caricato come loader di node, senza package
+    # manager: e' quello che fanno gli script models:sync e start, e funziona con
+    # le immagini costruite sia con npm sia con yarn.
     command:
       - sh
       - -c
@@ -65,9 +69,9 @@ services:
           echo "[compose] models:sync saltato (FIDELITY_SYNC_MODELS=no)"
         else
           echo "[compose] models:sync in corso..."
-          npm run models:sync || echo "[compose] models:sync terminato con errori: guarda sopra"
+          node --import tsx server/core/scripts/initializeModels.ts sync || echo "[compose] models:sync terminato con errori: guarda sopra"
         fi
-        exec npm start
+        exec node --import tsx server/index.ts
     env_file:
       - fidelity.env
     environment:
