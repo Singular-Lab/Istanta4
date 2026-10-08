@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import 'express-session';
 import { log } from '../logger';
-import nodemailer from 'nodemailer';
+import nodemailer, { type Transporter } from 'nodemailer';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { BaseController } from '../base/BaseController';
@@ -17,7 +17,7 @@ import {
 } from '../utils/passwordResetToken';
 
 export class EmailController extends BaseController {
-    private transporter: nodemailer.Transporter;
+    private transporter: Transporter;
 
     constructor(
         private userService: IUserService
