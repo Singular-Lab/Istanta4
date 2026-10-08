@@ -223,10 +223,12 @@ test("la schermata legge il documento e offre vai al box, risolvi e risolvi tutt
     assert.match(schermata, /\.text\("Vai al box"\)/);
     //I20-1044: fra il testo e il clic c'e' lo stile che tiene il pulsante intero.
     assert.match(schermata, /\.text\("Risolvi"\)(?:\.css\([^)]*\))?\.on\('click', \(\) => \{\s*Segnalazioni\.risolviVoce\(lettura\.box, indice\);\s*SchermataSegnalazioni\.riempi\(elenco\);/);
-    assert.match(schermata, /Modali\.popup\("Segnalazioni di impaginazione", elenco, "xl", SchermataSegnalazioni\.allaChiusura\)/);
+    //I20-1056, lotto 2: il conteggio va accanto al titolo.
+    assert.match(schermata, /Modali\.popup\("Segnalazioni di impaginazione", elenco, "xl", SchermataSegnalazioni\.allaChiusura, null, conteggio\)/);
     assert.match(schermata, /\.text\(Array\.isArray\(pagine\) \? "Nessuna segnalazione nelle pagine impaginate\." : "Nessuna segnalazione nel documento\."\)/);
     //I testi entrano come testo, non come HTML.
-    assert.match(schermata, /\$\('<span><\/span>'\)\.text\(voce\.t \|\| ""\)/);
+    //I20-1056, lotto 2: con il dizionario del cliente, sempre come testo.
+    assert.match(schermata, /\$\('<span><\/span>'\)\.text\(SchermataSegnalazioni\.traduciTesto\(voce\.t \|\| "", contesto\.traduzioni\)\)/);
 });
 
 test("risolvi tutte chiede conferma dentro il popup, non con Modali.confirm che starebbe sotto", () => {
@@ -249,15 +251,130 @@ test("dei codici del gruppo si vedono i primi due, poi i puntini", () => {
     assert.strictEqual(SchermataSegnalazioni.codiciAbbreviati(null), "");
 });
 
-test("il nome del box e' breve, e completo nel suggerimento", () => {
-    global.Utility = { getDnaOfBox: () => ({ codice_gruppo: "1,2,3" }) };
+test("del box si leggono la meccanica, il codice gruppo e l'idRec", () => {
+    global.Utility = { getDnaOfBox: () => ({ codice_gruppo: "1,2,3", idRec: "77" }) };
     try {
-        assert.deepStrictEqual(SchermataSegnalazioni._nomeBox({ label: "BOX12" }), { breve: "Box BOX12 · gruppo 1, 2, …", completo: "Box BOX12 · gruppo 1, 2, 3" });
+        assert.deepStrictEqual(SchermataSegnalazioni._datiBox({ label: "BOX12" }), { meccanica: "BOX12", codiceGruppo: "1,2,3", idRec: "77" });
     }
     finally {
         delete global.Utility;
     }
-    assert.match(schermata, /\.text\(nomeBox\.breve\)\.attr\('title', nomeBox\.completo\)/);
+    //Senza DNA leggibile resta la sola meccanica.
+    global.Utility = { getDnaOfBox: () => null };
+    try {
+        assert.deepStrictEqual(SchermataSegnalazioni._datiBox({ label: "BOX1" }), { meccanica: "BOX1", codiceGruppo: "", idRec: null });
+    }
+    finally {
+        delete global.Utility;
+    }
+});
+
+/* ---- I20-1056, lotto 2: riconoscere il box ---- */
+
+const TRADUZIONI = [
+    { label: "campo_offerta", traduzione: "ANZICHè" },
+    { label: "campo_offerta_KgL_sconto", traduzione: "PREZZI AL KG/L" },
+    { label: "foto_extra$logo_it", traduzione: "LOGO IT" },
+    { label: "vuota", traduzione: "  " }
+];
+
+test("le etichette citate nelle segnalazioni usano il dizionario del cliente", () => {
+    const t = (testo) => SchermataSegnalazioni.traduciTesto(testo, TRADUZIONI);
+
+    assert.strictEqual(t("Code CSF-009: L'elemento con etichetta campo_offerta nel box BOX12"), "Code CSF-009: L'elemento con etichetta ANZICHè (campo_offerta) nel box BOX12");
+    //Vince la piu' lunga: campo_offerta e' l'inizio di campo_offerta_KgL_sconto.
+    assert.strictEqual(t("campo_offerta_KgL_sconto non dovrebbe toccare campo_offerta."), "PREZZI AL KG/L (campo_offerta_KgL_sconto) non dovrebbe toccare ANZICHè (campo_offerta).");
+    //Le etichette con il dollaro, intere.
+    assert.strictEqual(t("Conflitto: foto_extra$logo_it non dovrebbe toccare foto_extra$logo_itx"), "Conflitto: LOGO IT (foto_extra$logo_it) non dovrebbe toccare foto_extra$logo_itx");
+    //Dentro un'altra parola non si traduce; una traduzione vuota non e' una traduzione.
+    assert.strictEqual(t("mycampo_offerta e vuota"), "mycampo_offerta e vuota");
+    //Senza dizionario e senza testo, com'era.
+    assert.strictEqual(SchermataSegnalazioni.traduciTesto("campo_offerta", []), "campo_offerta");
+    assert.strictEqual(SchermataSegnalazioni.traduciTesto(null, TRADUZIONI), "");
+});
+
+test("la descrizione del box e' quella del tracciato, unita da |", () => {
+    const records = [
+        { recordInTracciato: { idRec: 77, "Descrizioni.Descrizione1": "CAFFE'", "Descrizioni.Descrizione2": " ", "Descrizioni.Descrizione3": "250 g" } },
+        { recordInTracciato: { idRec: "78", descrizione_gruppo: { "Descrizioni.Descrizione1": "GRUPPO" } } }
+    ];
+    assert.strictEqual(SchermataSegnalazioni.descrizioneDelRecord(records, "77"), "CAFFE' | 250 g");
+    assert.strictEqual(SchermataSegnalazioni.descrizioneDelRecord(records, 78), "GRUPPO");
+    assert.strictEqual(SchermataSegnalazioni.descrizioneDelRecord(records, "99"), "");
+    assert.strictEqual(SchermataSegnalazioni.descrizioneDelRecord(records, null), "");
+    assert.strictEqual(SchermataSegnalazioni.descrizioneDelRecord(null, "77"), "");
+});
+
+test("una descrizione lunga si abbrevia con i puntini, e intera va nel suggerimento", () => {
+    const lunga = "x".repeat(SchermataSegnalazioni.LUNGHEZZA_DESCRIZIONE + 10);
+    assert.strictEqual(SchermataSegnalazioni.abbrevia(lunga), "x".repeat(SchermataSegnalazioni.LUNGHEZZA_DESCRIZIONE) + "…");
+    assert.strictEqual(SchermataSegnalazioni.abbrevia("corta"), "corta");
+    assert.strictEqual(SchermataSegnalazioni.abbrevia("parola   altra", 9), "parola…");
+    assert.match(schermata, /riga\.attr\('title', descrizione\);/);
+    assert.match(schermata, /fontSize: '11px', color: '#666'/);
+});
+
+test("il conteggio accanto al titolo dice segnalazioni e box", () => {
+    const lette = [{ voci: [{}, {}] }, { voci: [{}] }];
+    assert.strictEqual(SchermataSegnalazioni.testoConteggio(lette), "3 segnalazioni in 2 box");
+    assert.strictEqual(SchermataSegnalazioni.testoConteggio([{ voci: [{}] }]), "1 segnalazione in 1 box");
+    assert.strictEqual(SchermataSegnalazioni.testoConteggio([]), "");
+    //E si aggiorna a ogni ridisegno, cioe' dopo ogni Risolvi.
+    assert.match(schermata, /const conteggio = elenco\.data\('conteggio'\);\s*if \(conteggio != null\) \{\s*conteggio\.text\(SchermataSegnalazioni\.testoConteggio\(lette\)\);/);
+});
+
+test("il codice gruppo si copia intero, come testo", async () => {
+    const copiati = [];
+    await SchermataSegnalazioni.copiaCodice("6771109,5062150,3104458", { writeText: (t) => { copiati.push(t); } });
+    await SchermataSegnalazioni.copiaCodice(12345, { writeText: (t) => { copiati.push(t); } });
+    assert.deepStrictEqual(copiati, ["6771109,5062150,3104458", "12345"]);
+    await assert.rejects(SchermataSegnalazioni.copiaCodice("1", {}));
+    assert.match(schermata, /SchermataSegnalazioni\.copiaCodice\(datiBox\.codiceGruppo\)/);
+});
+
+test("Modali.popup mette il contenuto accanto al titolo, e senza resta com'era", () => {
+    const modali = leggiFileDelPlugin("modali/modali.js").replace(/\r/g, "");
+    assert.match(modali, /async popup\(title, message, taglia = "md", alChiudi = null, contenutoIntestazione = null, accantoAlTitolo = null\) \{/);
+    assert.match(modali, /gruppoSinistro\.append\(titleText\)\.append\(accantoAlTitolo\);/);
+    assert.match(modali, /else \{\s*titleBar\.append\(titleText\)\.append\(gruppoDestro\);/);
+});
+
+test("le pagine sono separate da una testata ben visibile", () => {
+    assert.match(schermata, /borderBottom: '2px solid #8ab661', backgroundColor: '#eef7e3'/);
+});
+
+test("Vai al box apre la scheda in vista controllata e torna alla schermata", () => {
+    const corpo = (inizio) => {
+        const da = schermata.indexOf(inizio);
+        assert.notStrictEqual(da, -1, inizio);
+        return schermata.substring(da, schermata.indexOf("\n    },\n", da));
+    };
+    const apri = corpo("    vaiAlBox(box, elenco = null) {");
+    //Eventi fermi prima di selezionare, schermata staccata, blocco e scheda dal report.
+    //(la prima selezione del corpo e' quella del box senza DNA, che seleziona soltanto)
+    const fermi = apri.indexOf("SchermataSegnalazioni._eventiFermi(true);");
+    const selezioneControllata = apri.indexOf("if (!SchermataSegnalazioni._selezionaBox(box)) {");
+    assert.ok(fermi > 0 && selezioneControllata > fermi, "eventi fermi prima della selezione");
+    assert.match(apri, /const popup = elenco\.closest\("#popup"\);/);
+    assert.match(apri, /popup\.detach\(\);/);
+    assert.match(apri, /ReportIntegrita\._applicaBloccoSchedaDalReport\(\);/);
+    assert.match(apri, /schedaRef\.apertaDalReport = true;/);
+    assert.match(apri, /schedaRef\.initSchedaRef\(ReportIntegrita\._refPerSchedaDalReport\(box, dna\)\);/);
+    //Senza DNA si seleziona soltanto.
+    assert.match(apri, /if \(dna == null \|\| elenco == null \|\| !schedaDisponibile\) \{\s*const selezionato = SchermataSegnalazioni\._selezionaBox\(box\);/);
+
+    const chiudi = corpo("    chiudiScheda() {");
+    assert.match(chiudi, /SchermataSegnalazioni\._schedaAperta = null;/);
+    assert.match(chiudi, /ReportIntegrita\._terminaSchedaDalReport\(\);\s*SchermataSegnalazioni\._eventiFermi\(false\);\s*\$\("body"\)\.append\(stato\.popup\);/);
+    assert.match(chiudi, /SchermataSegnalazioni\.riempi\(stato\.elenco\);/);
+    assert.match(chiudi, /_evidenziaBox\(stato\.elenco, stato\.idRec\)/);
+
+    //La X ha il suo id: quella del report porta al report.
+    assert.match(schermata, /\$\('<div id="chiudiSchedaDalleSegnalazioni">✕<\/div>'\)/);
+    assert.match(schermata, /"Chiudi la scheda e torna alle segnalazioni"/);
+    //Il box rifatto si ritrova come nel report.
+    assert.match(schermata, /ReportIntegrita\._resolveBoxByCodiceGruppo\(stato\.record\)/);
+    assert.match(schermata, /\.on\('click', \(\) => SchermataSegnalazioni\.vaiAlBox\(lettura\.box, elenco\)\)/);
 });
 
 test("restringendo il pannello i testi si stringono e i pulsanti restano dentro", () => {

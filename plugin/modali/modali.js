@@ -130,7 +130,9 @@ const Modali = {
     /// e' il posto delle scelte che si leggono quando il popup si chiude, non delle azioni.
     /// Mostra un popup e attende. ATTENZIONE al contratto: rimuove il popup PRIMA di chiamare
     /// alChiudi, e il suo ciclo di attesa non finisce da solo.
-    async popup(title, message, taglia = "md", alChiudi = null, contenutoIntestazione = null) {
+    /// accantoAlTitolo (I20-1056): un elemento da mostrare subito dopo il titolo, per esempio un
+    /// conteggio che deve restare sotto gli occhi mentre il contenuto scorre.
+    async popup(title, message, taglia = "md", alChiudi = null, contenutoIntestazione = null, accantoAlTitolo = null) {
         try {
             let me = this;
             me.nascondiHidebleElements();
@@ -204,7 +206,14 @@ const Modali = {
             }
 
             gruppoDestro.append(closeButton);
-            titleBar.append(titleText).append(gruppoDestro);
+            if (accantoAlTitolo != null) {
+                let gruppoSinistro = $('<div style="display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px; min-width: 0;"></div>');
+                gruppoSinistro.append(titleText).append(accantoAlTitolo);
+                titleBar.append(gruppoSinistro).append(gruppoDestro);
+            }
+            else {
+                titleBar.append(titleText).append(gruppoDestro);
+            }
     
             // Finestra centrale
             let dialog = $(`

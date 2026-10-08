@@ -21,6 +21,10 @@
 
 const Segnalazioni = require('./segnalazioni');
 const etichettaSegnalazioni = require('./etichetta');
+//I20-1056, lotto 2: le stesse regole del Report Integrita' per il dizionario del cliente e per la
+//descrizione della referenza. Sono moduli puri: si caricano anche sotto Node.
+const reportIntegritaAvvio = require('../reportIntegrita/avvio');
+const reportConfrontoCsv = require('../reportIntegrita/csv');
 
 //I colori della schermata, gli stessi del bollino: rosso gli errori, arancione i warning.
 const COLORE_CSS = { error: "#c62828", warning: "#ef6c00", notifica: "#1565c0" };
@@ -28,6 +32,17 @@ const COLORE_CSS = { error: "#c62828", warning: "#ef6c00", notifica: "#1565c0" }
 const SchermataSegnalazioni = {
 
     ID_ELENCO: "elencoSegnalazioniImpaginazione",
+
+    /// I20-1056, lotto 2: oltre quanti caratteri la descrizione si abbrevia. Circa due righe nel
+    /// pannello: UXP non sa tagliare per righe, e il testo appena disegnato non si misura bene.
+    LUNGHEZZA_DESCRIZIONE: 120,
+
+    /// I20-1056, lotto 2: ogni quanto, con la scheda aperta dalla schermata, si riafferma il blocco
+    /// e si controlla se il box e' stato rifatto. Lo stesso del Report Integrita'.
+    INTERVALLO_VIGILANZA_SCHEDA: 600,
+
+    /// La scheda aperta da "Vai al box", finche' la si chiude: { box, elenco, popup, record, idRec, timer }.
+    _schedaAperta: null,
 
     /// Il colore di una gravita' sulla schermata.
     coloreCss(gravita) {
@@ -136,9 +151,12 @@ const SchermataSegnalazioni = {
             const elenco = $('<div></div>').attr('id', SchermataSegnalazioni.ID_ELENCO)
                 .css({ width: '100%', color: 'black', fontSize: '12px' });
             elenco.data('pagine', pagine);
+            //I20-1056, lotto 2: il conteggio sta accanto al titolo, cosi' non scorre via.
+            const conteggio = $('<span></span>').css({ fontSize: '12px', fontWeight: 'normal', color: '#555' });
+            elenco.data('conteggio', conteggio);
             SchermataSegnalazioni._disegna(elenco, lette, pagine);
             //Il popup aspetta finche' non lo si chiude: non si aspetta qui.
-            Modali.popup("Segnalazioni di impaginazione", elenco, "xl", SchermataSegnalazioni.allaChiusura);
+            Modali.popup("Segnalazioni di impaginazione", elenco, "xl", SchermataSegnalazioni.allaChiusura, null, conteggio);
             return true;
         }
         finally {
@@ -234,22 +252,120 @@ const SchermataSegnalazioni = {
     _disegna(elenco, lette, pagine) {
         elenco.empty();
 
+        //I20-1056, lotto 2: il conteggio e' accanto al titolo del popup, e si aggiorna a ogni giro.
+        const conteggio = elenco.data('conteggio');
+        if (conteggio != null) {
+            conteggio.text(SchermataSegnalazioni.testoConteggio(lette));
+        }
+
         const perPagina = SchermataSegnalazioni.perPagina(lette);
         if (perPagina.length === 0) {
             elenco.append($('<div></div>').text(Array.isArray(pagine) ? "Nessuna segnalazione nelle pagine impaginate." : "Nessuna segnalazione nel documento.").css({ padding: '8px' }));
             return;
         }
 
-        const totali = SchermataSegnalazioni.conta(lette);
-        elenco.append($('<div></div>')
-            .text(totali.segnalazioni + (totali.segnalazioni === 1 ? " segnalazione" : " segnalazioni") + " in " + totali.box + " box")
-            .css({ fontWeight: 'bold', marginBottom: '6px' }));
+        const contesto = {
+            traduzioni: SchermataSegnalazioni._traduzioni(),
+            records: SchermataSegnalazioni._recordsDellaLavorazione()
+        };
 
-        perPagina.forEach(pagina => {
-            elenco.append($('<div></div>').text("Pagina " + pagina.pagina)
-                .css({ fontWeight: 'bold', fontSize: '13px', marginTop: '10px', borderBottom: '1px solid #999' }));
-            pagina.box.forEach(lettura => elenco.append(SchermataSegnalazioni._bloccoBox(lettura, elenco)));
+        perPagina.forEach((pagina, indice) => {
+            //I20-1056, lotto 2: la testata di pagina come quella del Report Integrita', perche' si
+            //veda dove finisce una pagina e comincia l'altra.
+            elenco.append($('<div></div>').text("Pagina " + pagina.pagina).attr('data-pagina', String(pagina.pagina))
+                .css({
+                    fontWeight: '700', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '.4px',
+                    padding: '6px 8px', marginTop: indice === 0 ? '0' : '14px', marginBottom: '4px',
+                    borderBottom: '2px solid #8ab661', backgroundColor: '#eef7e3'
+                }));
+            pagina.box.forEach(lettura => elenco.append(SchermataSegnalazioni._bloccoBox(lettura, elenco, contesto)));
         });
+    },
+
+    /// I20-1056, lotto 2: il testo del conteggio accanto al titolo.
+    testoConteggio(lette) {
+        const totali = SchermataSegnalazioni.conta(lette);
+        if (totali.segnalazioni === 0) {
+            return "";
+        }
+        return totali.segnalazioni + (totali.segnalazioni === 1 ? " segnalazione" : " segnalazioni") + " in " + totali.box + " box";
+    },
+
+    /// I20-1056, lotto 2: il dizionario del cliente sulle etichette degli elementi citate nel testo
+    /// di una segnalazione (CSF-008, CSF-009, CSF-013 nominano gli elementi del box), nella forma
+    /// delle differenze rilevate: "ANZICHE' (campo_offerta)". Un'etichetta si riconosce intera,
+    /// non dentro un'altra parola, e vince la piu' lunga: campo_offerta_KgL_sconto non diventa
+    /// "ANZICHE' (campo_offerta)_KgL_sconto". Il passaggio e' uno solo, cosi' una traduzione non
+    /// viene ritradotta. Il codice e il resto del testo restano com'erano.
+    /// Solo a schermo: il bollino tiene il testo vero, che "Risolvi" usa per riconoscere la voce.
+    traduciTesto(testo, traduzioni) {
+        const originale = testo == null ? "" : String(testo);
+        const elenco = (Array.isArray(traduzioni) ? traduzioni : [])
+            .filter(t => t != null && t.label != null && String(t.label) !== "" && t.traduzione != null && String(t.traduzione).trim() !== "")
+            .sort((a, b) => String(b.label).length - String(a.label).length);
+        if (originale === "" || elenco.length === 0) {
+            return originale;
+        }
+        const protetta = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const etichette = new RegExp("(^|[^A-Za-z0-9_$])(" + elenco.map(t => protetta(String(t.label))).join("|") + ")(?=$|[^A-Za-z0-9_$])", "g");
+        return originale.replace(etichette, (intero, prima, etichetta) => prima + reportIntegritaAvvio.etichettaSegnalazione(etichetta, elenco));
+    },
+
+    /// I20-1056, lotto 2: la descrizione della referenza del box, come la mostra il tracciato: le
+    /// descrizioni unite da " | ", o quella del gruppo se c'e'. Vuota se la referenza non e' nella
+    /// lista della lavorazione.
+    descrizioneDelRecord(records, idRec) {
+        const chiave = Segnalazioni.chiaveRecord(idRec);
+        if (chiave == null) {
+            return "";
+        }
+        const trovato = (Array.isArray(records) ? records : []).find(r => r != null && r.recordInTracciato != null
+            && Segnalazioni.chiaveRecord(r.recordInTracciato.idRec) === chiave);
+        return trovato != null ? reportConfrontoCsv.descrizioneComposta(trovato.recordInTracciato) : "";
+    },
+
+    /// Un testo lungo, abbreviato con i puntini: il testo intero va nel suggerimento.
+    abbrevia(testo, massimo = SchermataSegnalazioni.LUNGHEZZA_DESCRIZIONE) {
+        const intero = testo == null ? "" : String(testo);
+        if (intero.length <= massimo) {
+            return intero;
+        }
+        return intero.substring(0, massimo).replace(/\s+$/, "") + "…";
+    },
+
+    /// I20-1056, lotto 2: copia negli appunti il codice gruppo intero. Una stringa, sempre: gli
+    /// appunti di UXP rifiutano il resto.
+    copiaCodice(codiceGruppo, appunti = null) {
+        const testo = String(codiceGruppo == null ? "" : codiceGruppo);
+        const destinazione = appunti != null ? appunti : (typeof navigator !== "undefined" ? navigator.clipboard : null);
+        if (destinazione == null || typeof destinazione.writeText !== "function") {
+            return Promise.reject(new Error("appunti non disponibili"));
+        }
+        return Promise.resolve(destinazione.writeText(testo));
+    },
+
+    _traduzioni() {
+        try {
+            if (typeof ReportIntegrita !== "undefined" && typeof ReportIntegrita.traduzioniLabelSegnalazioni === "function") {
+                return ReportIntegrita.traduzioniLabelSegnalazioni();
+            }
+        }
+        catch (e) {
+            //senza dizionario le etichette restano quelle vere
+        }
+        return [];
+    },
+
+    _recordsDellaLavorazione() {
+        try {
+            if (typeof pluginMiddleware !== "undefined" && typeof pluginMiddleware.recordsDellaLavorazione === "function") {
+                return pluginMiddleware.recordsDellaLavorazione();
+            }
+        }
+        catch (e) {
+            //senza lista non c'e' la descrizione
+        }
+        return [];
     },
 
     _pallino(gravita) {
@@ -259,23 +375,22 @@ const SchermataSegnalazioni = {
         });
     },
 
-    /// Il nome del box sulla schermata: la meccanica e il codice gruppo, se il DNA si legge.
-    /// I20-1044: breve con i soli primi codici del gruppo, completo per il suggerimento.
-    _nomeBox(box) {
-        let breve = "Box";
-        let completo = "Box";
+    /// Il box sulla schermata: la meccanica (l'etichetta del box) e, se il DNA si legge, il codice
+    /// gruppo e l'idRec della referenza.
+    _datiBox(box) {
+        const dati = { meccanica: "", codiceGruppo: "", idRec: null };
         try {
-            breve = completo = "Box " + (box.label || "");
+            dati.meccanica = box.label || "";
             const dna = Utility.getDnaOfBox(box);
-            if (dna != null && dna.codice_gruppo) {
-                breve += " · gruppo " + SchermataSegnalazioni.codiciAbbreviati(dna.codice_gruppo);
-                completo += " · gruppo " + SchermataSegnalazioni.codiciAbbreviati(dna.codice_gruppo, Infinity);
+            if (dna != null) {
+                dati.codiceGruppo = dna.codice_gruppo || "";
+                dati.idRec = dna.idRec;
             }
         }
         catch (e) {
-            //resta il nome che c'e'
+            //resta quello che c'e'
         }
-        return { breve: breve, completo: completo };
+        return dati;
     },
 
     //I20-1044: un testo dentro una riga flex che si restringe col pannello. Senza minWidth 0 non
@@ -286,18 +401,41 @@ const SchermataSegnalazioni = {
         return elemento.css({ flex: '1 1 0', minWidth: '0', overflowWrap: 'anywhere', wordBreak: 'break-word' });
     },
 
-    _bloccoBox(lettura, elenco) {
+    _bloccoBox(lettura, elenco, contesto = {}) {
         const blocco = $('<div></div>').css({ margin: '4px 0 8px 0', padding: '6px', border: '1px solid #ddd', borderRadius: '4px' });
+        const datiBox = SchermataSegnalazioni._datiBox(lettura.box);
+        //I20-1056, lotto 2: per ritrovare il box tornando dalla scheda, anche se nel frattempo e' stato rifatto.
+        const chiave = Segnalazioni.chiaveRecord(datiBox.idRec);
+        if (chiave != null) {
+            blocco.attr('data-idrec', chiave);
+        }
 
         //I20-1044: se non c'e' spazio, i pulsanti vanno a capo sotto il nome invece di uscire a destra.
         const testata = $('<div></div>').css({ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px' });
         testata.append(SchermataSegnalazioni._pallino(etichettaSegnalazioni.gravitaPeggiore(lettura.voci)));
-        const nomeBox = SchermataSegnalazioni._nomeBox(lettura.box);
-        testata.append(SchermataSegnalazioni._testoCheSiRestringe($('<span></span>').text(nomeBox.breve).attr('title', nomeBox.completo))
-            .css({ fontWeight: 'bold', flexBasis: '120px' }));
+        const nome = SchermataSegnalazioni._testoCheSiRestringe($('<span></span>')).css({ fontWeight: 'bold', flexBasis: '120px' });
+        nome.append($('<span></span>').text("Box " + datiBox.meccanica));
+        if (datiBox.codiceGruppo) {
+            //I20-1056, lotto 2: il codice gruppo, abbreviato a schermo, si copia intero con un clic.
+            const codice = $('<span></span>').text(SchermataSegnalazioni.codiciAbbreviati(datiBox.codiceGruppo))
+                .attr('title', "Clicca per copiare: " + SchermataSegnalazioni.codiciAbbreviati(datiBox.codiceGruppo, Infinity))
+                .css({ cursor: 'pointer', textDecoration: 'underline dotted', fontWeight: 'normal' })
+                .on('click', () => {
+                    SchermataSegnalazioni.copiaCodice(datiBox.codiceGruppo)
+                        .then(() => {
+                            //La conferma sta qui: un messaggio del Plugin finirebbe sotto il popup.
+                            codice.css({ backgroundColor: '#c8e6c9' });
+                            setTimeout(() => codice.css({ backgroundColor: '' }), 600);
+                        })
+                        .catch(e => console.error("Code SGN-04 Codice non copiato:", e));
+                });
+            nome.append($('<span></span>').text(" · gruppo "));
+            nome.append(codice);
+        }
+        testata.append(nome);
 
         const vai = $('<button type="button"></button>').text("Vai al box").css({ flexShrink: '0' })
-            .on('click', () => SchermataSegnalazioni.vaiAlBox(lettura.box));
+            .on('click', () => SchermataSegnalazioni.vaiAlBox(lettura.box, elenco));
 
         //"Risolvi tutte" chiede conferma dentro il popup: la conferma di Modali starebbe sotto.
         const azioniTutte = $('<span></span>').css({ flexShrink: '0' });
@@ -319,6 +457,18 @@ const SchermataSegnalazioni = {
         testata.append(azioniTutte);
         blocco.append(testata);
 
+        //I20-1056, lotto 2: la descrizione della referenza, in piccolo, abbreviata oltre due righe circa.
+        const descrizione = SchermataSegnalazioni.descrizioneDelRecord(contesto.records, datiBox.idRec);
+        if (descrizione !== "") {
+            const breve = SchermataSegnalazioni.abbrevia(descrizione);
+            const riga = $('<div></div>').text(breve)
+                .css({ fontSize: '11px', color: '#666', marginTop: '2px', paddingLeft: '16px', maxHeight: '30px', overflow: 'hidden', overflowWrap: 'anywhere' });
+            if (breve !== descrizione) {
+                riga.attr('title', descrizione);
+            }
+            blocco.append(riga);
+        }
+
         lettura.voci.forEach((voce, indice) => {
             const riga = $('<div></div>').css({ display: 'flex', alignItems: 'flex-start', gap: '6px', marginTop: '4px', paddingLeft: '16px' });
             riga.append(SchermataSegnalazioni._pallino(voce.g).css({ marginTop: '3px' }));
@@ -326,7 +476,8 @@ const SchermataSegnalazioni = {
             if (voce.c) {
                 testo.append($('<b></b>').text(voce.c + " "));
             }
-            testo.append($('<span></span>').text(voce.t || ""));
+            //I20-1056, lotto 2: le etichette degli elementi con il dizionario del cliente.
+            testo.append($('<span></span>').text(SchermataSegnalazioni.traduciTesto(voce.t || "", contesto.traduzioni)));
             //Lotto 4: un bollino di prima del I20-1029 mostrava solo il codice o una frase breve, e
             //il messaggio intero non c'e'. Lo si dice, perche' il testo corto non sembri un errore.
             if (voce.vecchio) {
@@ -343,17 +494,209 @@ const SchermataSegnalazioni = {
         return blocco;
     },
 
-    /// Porta alla pagina del box e lo seleziona, come fa il Report Integrita'.
-    vaiAlBox(box) {
+    /// Porta alla pagina del box e lo seleziona, come fa il Report Integrita'. false se non si puo'.
+    _selezionaBox(box) {
         try {
             if (box.parentPage) {
                 app.activeWindow.activePage = box.parentPage;
             }
             app.selection = [box];
+            return true;
         }
         catch (e) {
             console.error("Code SGN-02 Box non raggiungibile:", e);
             messaggioUtente("Code SGN-02 Il box non si raggiunge: potrebbe essere stato tolto o spostato. Riapri le segnalazioni.", "warning", false, 5);
+            return false;
+        }
+    },
+
+    /// I20-1056, lotto 2: "Vai al box" apre la scheda ref del box in vista controllata, come il
+    /// "Trova" del Report Integrita': menu bloccati, eventi fermi, si esce solo con la X. La
+    /// schermata non si distrugge: si stacca dalla pagina e si rimette alla chiusura della scheda,
+    /// riletta e posizionata sullo stesso box. Staccarla serve anche perche' la scheda apre i suoi
+    /// popup con lo stesso id #popup, e chiudendoli toglierebbe la schermata nascosta.
+    /// Riusa i pezzi della scheda dal report (ReportIntegrita, schedaRef), senza cambiarli.
+    /// Un box senza DNA leggibile (finito dentro un altro gruppo) si seleziona soltanto.
+    vaiAlBox(box, elenco = null) {
+        if (SchermataSegnalazioni._schedaAperta != null) {
+            return false;
+        }
+
+        let dna = null;
+        try {
+            dna = Utility.getDnaOfBox(box);
+        }
+        catch (e) {
+            dna = null;
+        }
+        const schedaDisponibile = typeof schedaRef !== "undefined" && typeof ReportIntegrita !== "undefined";
+        if (dna == null || elenco == null || !schedaDisponibile) {
+            const selezionato = SchermataSegnalazioni._selezionaBox(box);
+            if (selezionato && dna == null) {
+                messaggioUtente("Code SGN-03 Il box non ha un dna leggibile: e' selezionato, ma la scheda non si puo' aprire", "warning", false, 5);
+            }
+            return false;
+        }
+
+        //Fermi prima di selezionare: altrimenti la selezione aprirebbe la scheda per conto suo.
+        SchermataSegnalazioni._eventiFermi(true);
+        if (!SchermataSegnalazioni._selezionaBox(box)) {
+            SchermataSegnalazioni._eventiFermi(false);
+            return false;
+        }
+
+        let pagina = null;
+        try {
+            pagina = box.parentPage != null ? box.parentPage.name : null;
+        }
+        catch (e) {
+            pagina = null;
+        }
+
+        const popup = elenco.closest("#popup");
+        SchermataSegnalazioni._schedaAperta = {
+            box: box,
+            elenco: elenco,
+            popup: popup,
+            idRec: dna.idRec,
+            //Per ritrovare il box se la scheda lo rifa': la forma che il Report Integrita' sa leggere.
+            record: { codiceGruppo: dna.codice_gruppo, elementoMappa: { idRec: dna.idRec, pagina: pagina } },
+            timer: null,
+            riaggancioInCorso: false
+        };
+
+        popup.detach();
+        Modali.mostraHidebleElements();
+
+        $("#refImage").show();
+        SchermataSegnalazioni._creaChiusuraScheda();
+        ReportIntegrita._applicaBloccoSchedaDalReport();
+
+        showLoading("Caricamento scheda REF");
+        schedaRef.apertaDalReport = true;
+        schedaRef.setInvalidated(false);
+        schedaRef.initSchedaRef(ReportIntegrita._refPerSchedaDalReport(box, dna));
+
+        //initSchedaRef libera gli eventi uscendo: si riaffermano qui e a ogni giro del vigilante.
+        ReportIntegrita._applicaBloccoSchedaDalReport();
+        SchermataSegnalazioni._schedaAperta.timer = setInterval(
+            () => SchermataSegnalazioni._vigilaScheda(), SchermataSegnalazioni.INTERVALLO_VIGILANZA_SCHEDA);
+        return true;
+    },
+
+    _eventiFermi(fermi) {
+        if (typeof indesignEvents !== "undefined" && indesignEvents != null && typeof indesignEvents.setBusy === "function") {
+            indesignEvents.setBusy(fermi);
+        }
+    },
+
+    /// La X della scheda aperta dalla schermata: l'unica via d'uscita, come dal Report Integrita'.
+    _creaChiusuraScheda() {
+        $("#chiudiSchedaDalleSegnalazioni").remove();
+
+        const testata = $("#referenza");
+        testata.css("display", "flex");
+        testata.css("align-items", "center");
+        testata.css("justify-content", "space-between");
+
+        const bottone = $('<div id="chiudiSchedaDalleSegnalazioni">✕</div>');
+        bottone.css("color", "white");
+        bottone.css("cursor", "pointer");
+        bottone.css("padding", "0px 10px");
+        bottone.css("font-size", "14px");
+        bottone.on("click", () => SchermataSegnalazioni.chiudiScheda());
+        testata.append(bottone);
+
+        const elemento = document.getElementById("chiudiSchedaDalleSegnalazioni");
+        if (elemento != null && typeof Tooltip !== "undefined") {
+            Tooltip.impostaTooltip(elemento, "Chiudi la scheda e torna alle segnalazioni");
+        }
+    },
+
+    /// Reimpagina e cambi strutturali rifanno il box: la scheda si ripunta sul box nuovo, cercato
+    /// per codice gruppo come fa il Report Integrita'. Se non c'e' piu', si torna alla schermata.
+    _vigilaScheda() {
+        const stato = SchermataSegnalazioni._schedaAperta;
+        if (stato == null) {
+            return;
+        }
+
+        ReportIntegrita._applicaBloccoSchedaDalReport();
+
+        if (stato.riaggancioInCorso || !schedaRef.serveRiaggancioDalReport(stato.box)) {
+            return;
+        }
+
+        stato.riaggancioInCorso = true;
+        const box = ReportIntegrita._resolveBoxByCodiceGruppo(stato.record);
+        const dna = box != null ? Utility.getDnaOfBox(box) : null;
+        if (box == null || dna == null) {
+            messaggioUtente("Code SGN-05 Il box non e' piu' in pagina: la scheda si chiude e si torna alle segnalazioni", "warning", false, 6);
+            stato.riaggancioInCorso = false;
+            SchermataSegnalazioni.chiudiScheda();
+            return;
+        }
+
+        try {
+            app.selection = [box];
+        }
+        catch (e) {
+            console.error("Errore selezione del box rifatto:", e);
+        }
+        schedaRef.setBusy(false);
+        schedaRef.setInvalidated(false);
+        stato.box = box;
+
+        showLoading("Ricarico la scheda sul box rifatto");
+        schedaRef.initSchedaRef(ReportIntegrita._refPerSchedaDalReport(box, dna));
+        stato.riaggancioInCorso = false;
+        ReportIntegrita._applicaBloccoSchedaDalReport();
+    },
+
+    /// La X: la scheda si chiude e torna la schermata, riletta - nella scheda il box puo' essere
+    /// stato rifatto o risolto - e posizionata sullo stesso box.
+    chiudiScheda() {
+        const stato = SchermataSegnalazioni._schedaAperta;
+        if (stato == null) {
+            return;
+        }
+        //Una volta sola: la X si puo' premere due volte, e il vigilante puo' arrivarci insieme.
+        SchermataSegnalazioni._schedaAperta = null;
+        if (stato.timer != null) {
+            clearInterval(stato.timer);
+        }
+
+        $("#chiudiSchedaDalleSegnalazioni").remove();
+        ReportIntegrita._terminaSchedaDalReport();
+        SchermataSegnalazioni._eventiFermi(false);
+
+        $("body").append(stato.popup);
+        Modali.nascondiHidebleElements();
+        SchermataSegnalazioni.riempi(stato.elenco);
+        setTimeout(() => SchermataSegnalazioni._evidenziaBox(stato.elenco, stato.idRec), 50);
+    },
+
+    /// Porta sotto gli occhi il blocco del box e lo evidenzia per un momento. Il ridisegno riparte
+    /// dall'alto, e un box che non si vede sembra sparito.
+    _evidenziaBox(elenco, idRec) {
+        const chiave = Segnalazioni.chiaveRecord(idRec);
+        if (chiave == null) {
+            return;
+        }
+        try {
+            const blocco = elenco.find('[data-idrec="' + chiave + '"]').first();
+            const elemento = blocco.get(0);
+            const contenitore = elenco.parent().get(0);
+            if (elemento == null || contenitore == null) {
+                return;
+            }
+            const scarto = elemento.getBoundingClientRect().top - contenitore.getBoundingClientRect().top;
+            contenitore.scrollTop = Math.max(0, contenitore.scrollTop + scarto - 20);
+            blocco.css({ outline: '2px solid #ef6c00' });
+            setTimeout(() => blocco.css({ outline: '' }), 2500);
+        }
+        catch (e) {
+            //non posizionata: la schermata c'e' comunque
         }
     }
 };
