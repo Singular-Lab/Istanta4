@@ -1,7 +1,7 @@
 //EDRO21
 const { app, FitOptions, LocationOptions, Justification, VerticalJustification, NestedStyleDelimiters, CornerOptions, StrokeAlignment } = require('indesign');
 //I20-1026: il riconoscimento del formato Parmigiano e' lo stesso delle regole del framework CSS.
-const sovrastrutture = require('./cssFramework/sovrastrutture');
+const sovrastrutture = require('../../cssFramework/sovrastrutture');
 
 const customAgenzia={
 

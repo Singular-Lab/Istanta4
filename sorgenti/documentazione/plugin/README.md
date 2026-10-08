@@ -22,8 +22,9 @@ peggio di una documentazione assente, perché fa perdere tempo invece di farne r
    altri dipendono. Molti file del Plugin non si caricano sotto Node proprio per questo; i moduli
    nati di recente (`versionePlugin`, `reportIntegrita/avvio`) sono l'eccezione voluta, scritti
    apposta per essere verificabili da soli.
-2. **`ipconfig.json` e `custom.js` cambiano per cliente**, montati da `monta-cliente.sh`. Quello che
-   trovi nel repository è l'ultimo montaggio fatto su quella macchina, non il prodotto.
+2. **Il cliente si sceglie per postazione.** Dal I20-1064 `plugin/clienteAttivo.json`, scritto da
+   `monta-cliente.sh`, indica l'ipconfig del cliente in `Agenzie/<Cliente>/`, e l'ipconfig il suo
+   `custom.js` d'archivio, che il Plugin legge direttamente: non ci sono più copie in radice.
 3. **Il Plugin ha residui.** Dove un file è morto o svuotato questa documentazione lo dice, perché
    serve anche a indicare cosa *non* vale la pena guardare.
 
@@ -57,7 +58,7 @@ restano i file grandi che parlano con InDesign e i moduli che sono un concetto d
 - **I nomi dentro la cartella non ripetono il prefisso del vecchio ospite.** `cssSpazioFoto.js`,
   entrato in `sistemazioneFoto/`, è diventato `sceltaSpazio.js`.
 - **Il file da cui il concetto esce tiene dei rimandi** di una riga per i membri che chiamano le
-  agenzie. `Agenzie/*/custom.js` fa `require('./utility')` e `require('./CssFramework')` e usa quei
+  agenzie. `Agenzie/*/custom.js` fa `require('../../utility')` e `require('../../CssFramework')` e usa quei
   membri per nome: senza rimandi, ogni spostamento romperebbe un cliente. **Il core chiama il
   modulo nuovo direttamente**, e un test lo controlla.
 - **I test restano in `tests/plugin/`**, senza sottocartelle: la CI lancia

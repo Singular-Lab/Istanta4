@@ -23,9 +23,10 @@ cd Istanta4
 ```
 
 **La seconda riga non è facoltativa.** Dal 15/09/2026 i file che dicono quale cliente è montato non
-stanno in git — clonando non ce li hai, e senza di loro il front-end e il plugin non hanno il file
-del cliente. `monta-cliente.sh` li copia dagli archivi, scrive `ISTANTA_CLIENTE` nel profilo di
-avvio e ti elenca quello che manca ancora. I clienti riconosciuti sono `Edro21`, `Coopfi`, `Pac`,
+stanno in git — clonando non ce li hai, e senza di loro il server e il plugin non sanno quale
+cliente usare. `monta-cliente.sh` scrive `ISTANTA_CLIENTE` nel profilo di avvio e
+`plugin/clienteAttivo.json` per il plugin, crea l'ipconfig del cliente dal modello se manca (gli
+indirizzi vanno scritti a mano) e ti elenca quello che manca ancora. I clienti riconosciuti sono `Edro21`, `Coopfi`, `Pac`,
 `Trea`, `Famila` e `Gross`; dettagli in
 [02-modello-multicliente.md](02-modello-multicliente.md).
 
@@ -176,17 +177,16 @@ sorgenti, la build è pulita, e a runtime gira quello vecchio.
 
 ## 7. Il front-end del cliente
 
-Se hai lanciato `./monta-cliente.sh <Cliente>` al passo 1 è già a posto, e lo stesso vale per
-`plugin/custom.js`. La copia a mano equivalente sarebbe:
+Se hai lanciato `./monta-cliente.sh <Cliente>` al passo 1 è già a posto. Il plugin non usa più una
+copia di `custom.js` in radice (I20-1064): legge `plugin/Agenzie/<Cliente>/custom.js` attraverso
+`plugin/clienteAttivo.json` e l'ipconfig del cliente. L'equivalente a mano sarebbe:
 
 ```bash
-cp Istanta/wwwroot/js/<cliente>/agenzia.js Istanta/wwwroot/js/agenzia.js
-cp plugin/Agenzie/<Cliente>/custom.js      plugin/custom.js
+echo '{ "ipconfig": "Agenzie/<Cliente>/ipconfig.json" }' > plugin/clienteAttivo.json
+sed "s/__CLIENTE__/<Cliente>/" plugin/Agenzie/ipconfig.template.json > plugin/Agenzie/<Cliente>/ipconfig.json
 ```
 
-ma lo script è preferibile: conosce la mappa dei nomi (il cliente `Coopfi` ha la cartella
-javascript `js/coop/`) e si rifiuta di sovrascrivere una radice che differisce dall'archivio,
-il che eviterebbe di perdere una correzione che lì non è più recuperabile.
+ma lo script è preferibile: conosce la mappa dei nomi e non sovrascrive un ipconfig che c'è già.
 
 Controlla la prima riga del file nella radice: dev'essere `//<NomeCliente>`.
 Poi ricopia i file statici in `pubblicato/wwwroot/js/`.

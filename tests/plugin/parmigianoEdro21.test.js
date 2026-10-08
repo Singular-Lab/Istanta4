@@ -230,7 +230,8 @@ test("le caratteristiche sono il livello 6 di ogni Loghi_DX dei kit volantino, s
 
 test("il custom di Edro21 applica base_A_Parmigiano per SC e base_P_Parmigiano per gli altri", () => {
     const custom = leggi("plugin/Agenzie/Edro21/custom.js");
-    assert.match(custom, /const sovrastrutture = require\('\.\/cssFramework\/sovrastrutture'\);/);
+    //I20-1064: il custom si carica dalla sua cartella, plugin/Agenzie/Edro21/.
+    assert.match(custom, /const sovrastrutture = require\('\.\.\/\.\.\/cssFramework\/sovrastrutture'\);/);
     assert.match(custom, /sovrastrutture\.refConditionVera\(objItem, \[\{ campo: "Descrizioni\.Descrizione1", contiene: "parmigiano reggiano" \}\]\)/);
     assert.match(custom, /name: canale == "SC" \? "base_A_Parmigiano" : "base_P_Parmigiano"/);
     //Dopo gli altri stili della base: su una ref Parmigiano vince lui.

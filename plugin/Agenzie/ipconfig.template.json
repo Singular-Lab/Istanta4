@@ -1,0 +1,8 @@
+{
+  "testMode": false,
+  "olimpoIp": "",
+  "olimpoIpTestMode": "",
+  "istantaIp": "",
+  "istantaIpTestMode": "",
+  "custom": "Agenzie/__CLIENTE__/custom.js"
+}

@@ -1,10 +1,9 @@
 # custom.js
 
-**Cosa è:** il file dell'agenzia, copiato in radice da `monta-cliente.sh` dalla cartella
-`plugin/Agenzie/<Cliente>/`.
-
-**Quello che trovi nel repository è l'ultimo cliente montato su quella macchina, non il prodotto.**
-La prima riga dice quale: oggi `//EDRO21`.
+**Cosa è:** il file dell'agenzia, `plugin/Agenzie/<Cliente>/custom.js`. Dal I20-1064 il Plugin lo
+legge direttamente da lì, senza copie in radice: lo indica la voce `custom` dell'ipconfig del
+cliente, che a sua volta è indicato da `plugin/clienteAttivo.json` (vedi [ipconfig](ipconfig.md)).
+Le correzioni si fanno nell'archivio, che è in git. La prima riga dice di quale cliente è.
 
 ## Cosa contiene
 
