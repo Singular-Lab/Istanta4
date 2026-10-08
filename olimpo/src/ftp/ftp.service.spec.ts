@@ -70,10 +70,9 @@ describe('FtpService (SFTP mode)', () => {
    * (per questo il ramo merged non la riaggiunge). Il test ora fissa il
    * comportamento reale, root compresa.
    *
-   * Resta aperta per chi governa il contratto tipografia una domanda che nessun
-   * test puo' decidere: se l'utenza SFTP e' gia' confinata nella cartella del
-   * cliente, prefissare la root creerebbe una cartella annidata di troppo sul
-   * server della tipografia. In quel caso va corretto il servizio, non questo test.
+   * Confermato il 2026-10-08 (I20-969): l'utenza SFTP della tipografia non e'
+   * confinata nella cartella del cliente, quindi la root del contratto va creata
+   * e l'albero parte da li'.
    */
   it('connects with expected credentials and uploads under contratto.root', async () => {
     const contratto: any = {
@@ -172,6 +171,56 @@ describe('FtpService (SFTP mode)', () => {
     expect(mergedCall).toBeDefined();
     expect(mergedCall[1]).not.toContain('ROOT_CONTRATTO');
     expect(mockEnd).toHaveBeenCalledTimes(1);
+  });
+
+  it('deposits a merged group in a virtual_dir from getVirtualDirectories without repeating contratto.root', async () => {
+    const contratto: any = {
+      root: 'ROOT_CONTRATTO',
+      dictionary: {},
+      root_file_tree: [
+        {
+          priority: 1,
+          conditions: [{ field: 'nome', operator: 'contains', value: 'A1' }],
+          on_respect_condition: { commands: ['mkdir'], dirname: ['folder_AREA'] },
+          on_error: { commands: [] },
+          fallback: { action: 'mkdir', dirname: [] },
+        },
+      ],
+    };
+
+    const dirs = await service.getVirtualDirectories([
+      {
+        contrattoElaborato: contratto,
+        codiceArea: 'A1',
+        codiceCanale: 'C1',
+        files: [{ id: 'file-1', nome: 'input.pdf', id_olimpo_cloud: 'mat-1' }],
+      } as any,
+    ]);
+
+    //La directory virtuale proposta a Fidelity contiene gia' la root.
+    expect(dirs).toHaveLength(1);
+    expect(dirs[0].path).toBe(path.join('ROOT_CONTRATTO', 'folder_AREA'));
+
+    const kit: any = {
+      titolo: 'Kit merged',
+      codiceArea: 'A1',
+      codiceCanale: 'C1',
+      files: [
+        {
+          id: 'file-merged',
+          nome: 'merged.zip',
+          id_olimpo_cloud: 'mat-1',
+          is_merged_group: true,
+          virtual_dir: dirs[0].path,
+        },
+      ],
+    };
+
+    await service.creaPathFromContrattoTipografia(contratto, kit, undefined, sftpConfig);
+
+    //Il ramo merged deposita nella virtual_dir scelta senza riaggiungere la root.
+    expect(mockPut).toHaveBeenCalledTimes(1);
+    expect(mockPut.mock.calls[0][1]).toBe('ROOT_CONTRATTO/folder_AREA/merged.zip');
   });
 
   it('propagates upload errors and still closes SFTP connection', async () => {
