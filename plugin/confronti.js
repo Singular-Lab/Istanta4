@@ -587,7 +587,10 @@ const confronti = {
                             return {
                                 tipo: "extra",
                                 data: nomeFile,
-                                sigla: classificato != null ? classificato.chiave : ""
+                                sigla: classificato != null ? classificato.chiave : "",
+                                //I20-1070: tipo e tipo_N della label, per chi vuole tenere la foto nel dato.
+                                tipoElemento: classificato != null ? classificato.tipo : null,
+                                tipoFoto: NoRenderElementi.tipoFotoDellaLabel(campo.label)
                             };
                         }
                     }
@@ -608,7 +611,7 @@ const confronti = {
             //I20-1068: le stesse foto extra del box, con la sigla accanto al nome del file.
             let extraNelBox = risultati
                 .filter(x => x?.tipo === "extra")
-                .map(x => ({ nome: x.data, sigla: x.sigla }));
+                .map(x => ({ nome: x.data, sigla: x.sigla, tipoElemento: x.tipoElemento, tipoFoto: x.tipoFoto }));
 
             //controlliamo se nel box1 sono presenti i campi eliminati dai deletedFields
             deletedFields.forEach(deletedField => {
@@ -693,7 +696,8 @@ const confronti = {
                         }
                         var tipoExtra = foto.tipo == 3 ? NoRenderElementi.TIPO.logo : NoRenderElementi.TIPO.fotoExtra;
                         if (NoRenderElementi.daSegnalareComeMancante(elementiNoRender, tipoExtra, foto.sigla)) {
-                            differenze.push({ label: foto.nome, difference: "foto extra mancante nel box: " + foto.nome });
+                            differenze.push({ label: foto.nome, difference: "foto extra mancante nel box: " + foto.nome,
+                                tipo: "extraMancante", famiglia: "extra", sigla: foto.sigla, tipoElemento: tipoExtra, nome: foto.nome });
                         }
                     }
                     else {
@@ -719,7 +723,8 @@ const confronti = {
                         let campoBox1 = box1campi.find(campo => campo.isValid && Utility.parseLabel(campo.label).includes(foto.sigla));
                         if (campoBox1 == undefined) {
                             if (!foto.escluso) {
-                                differenze.push({ label: foto.sigla, difference: "foto extraAuto mancante nel box: " + foto.sigla });
+                                differenze.push({ label: foto.sigla, difference: "foto extraAuto mancante nel box: " + foto.sigla,
+                                    tipo: "extraMancante", famiglia: "extraAuto", sigla: foto.sigla, tipoElemento: confronti.tipoElementoExtra(foto), nome: foto.nome });
                             }
                         }
                         else {
@@ -748,7 +753,8 @@ const confronti = {
                                     listFotoExtraBox1 = listFotoExtraBox1.filter(f => f != cambiata.nomeNelBox);
                                 }
                                 else {
-                                    differenze.push({ label: foto.nome, difference: "foto extraAuto mancante nel box: " + foto.nome });
+                                    differenze.push({ label: foto.nome, difference: "foto extraAuto mancante nel box: " + foto.nome,
+                                        tipo: "extraMancante", famiglia: "extraAuto", sigla: foto.sigla, tipoElemento: confronti.tipoElementoExtra(foto), nome: foto.nome });
                                 }
                             }
                             else {
@@ -762,7 +768,11 @@ const confronti = {
 
             //scorriamo listFotoExtraBox1, sono tutti elementi che non ci dovrebbero essere
             listFotoExtraBox1.forEach(foto => {
-                differenze.push({ label: foto, difference: "foto extra in più nel box originale: " + foto });
+                //I20-1070: con sigla e tipo della label l'operatore puo' tenerla solo per questa lavorazione.
+                let nelBox = extraNelBox.find(e => e.nome == foto);
+                differenze.push({ label: foto, difference: "foto extra in più nel box originale: " + foto,
+                    tipo: "extraInPiu", sigla: nelBox != null ? nelBox.sigla : "", tipoElemento: nelBox != null ? nelBox.tipoElemento : null,
+                    tipoFoto: nelBox != null ? nelBox.tipoFoto : 0, nome: foto });
             });
 
             //I20-968, caso opposto: l'elemento e' in noRender ma nel documento qualcuno lo ha
@@ -1093,9 +1103,23 @@ const confronti = {
             nomeNelBox: stessaSigla.nome,
             differenza: {
                 label: sigla,
-                difference: prefisso + " con immagine diversa da quella del server: nel box " + stessaSigla.nome + ", sul server " + foto.nome
+                difference: prefisso + " con immagine diversa da quella del server: nel box " + stessaSigla.nome + ", sul server " + foto.nome,
+                //I20-1070: quello che serve alla finestra delle differenze per tenere l'immagine
+                //del box o ricollegare quella del server.
+                tipo: "immagineExtraCambiata",
+                famiglia: prefisso === "foto extraAuto" ? "extraAuto" : "extra",
+                sigla: sigla,
+                tipoElemento: confronti.tipoElementoExtra(foto),
+                nomeNelBox: stessaSigla.nome,
+                nomeServer: foto.nome
             }
         };
+    },
+
+    /// I20-1070: il tipo di elemento del box di una foto extra del dato: tipo 3 (TipoFoto.Logo)
+    /// e' un logo, il resto una foto extra. E' lo stesso tipo di noRender e del meta.
+    tipoElementoExtra(foto) {
+        return foto != null && foto.tipo == 3 ? NoRenderElementi.TIPO.logo : NoRenderElementi.TIPO.fotoExtra;
     },
 
     decodeSpecialCharacters(text) {

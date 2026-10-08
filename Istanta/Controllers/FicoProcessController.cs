@@ -2767,10 +2767,11 @@ namespace Istanta.Controllers
 
                         Dictionary<string, bool> noRenderPerRef = new Dictionary<string, bool>();
                         Dictionary<string, List<RevisioneNoRenderFromIndd>> noRenderElementiPerGruppo = new Dictionary<string, List<RevisioneNoRenderFromIndd>>();
+                        Dictionary<string, List<RevisioneExtraLavorazioneFromIndd>> extraLavorazionePerGruppo = new Dictionary<string, List<RevisioneExtraLavorazioneFromIndd>>();
 
                         if (mode == FicoCombinazioneKitReadMode.Advanced)
                         {
-                            var listeModificate = updateDatiFromMetaPromoLavorazioni(recordsFiltrati, idLavorazione, kit/*, confronto*/, noRenderPerRef, noRenderElementiPerGruppo);
+                            var listeModificate = updateDatiFromMetaPromoLavorazioni(recordsFiltrati, idLavorazione, kit/*, confronto*/, noRenderPerRef, noRenderElementiPerGruppo, extraLavorazionePerGruppo);
                             recordsFiltrati = listeModificate;
                         }
 
@@ -2816,6 +2817,9 @@ namespace Istanta.Controllers
                                     }
                                 }
                             }
+
+                            //I20-1070: le foto extra decise dall'operatore per questa lavorazione.
+                            applicaExtraDellaLavorazione(resultGlobale.records, extraLavorazionePerGruppo);
                         }
 
                         if (resultGlobale.tipoLavorazione == TipoLavorazione.PoP)
@@ -4253,7 +4257,105 @@ namespace Istanta.Controllers
             }
         }
 
-        public List<ArticoloInKit> updateDatiFromMetaPromoLavorazioni(List<ArticoloInKit> artInkit, int idLavorazione, FicoRuntimeKit kit/*, bool confronto = false*/, Dictionary<string, bool>? noRenderPerRef = null, Dictionary<string, List<RevisioneNoRenderFromIndd>>? noRenderElementiPerGruppo = null)
+        /// <summary>
+        /// I20-1070: applica ai record le foto extra decise dall'operatore per questa lavorazione.
+        /// Si chiama dopo l'export di agenzia, che e' quando Foto.ExtraAuto esiste. Sovrascrivi
+        /// cambia il nome della foto con quella sigla; Aggiungi mette in Foto.ExtraAuto una voce che
+        /// il dato non ha; Escludi la segna esclusa (ExtraAuto) o non attiva (Extra). Le decisioni
+        /// restano nel record sotto extraLavorazione, cosi' il Plugin le mostra e le puo' togliere.
+        /// </summary>
+        public static void applicaExtraDellaLavorazione(List<ArticoloInKit>? records, Dictionary<string, List<RevisioneExtraLavorazioneFromIndd>>? perGruppo)
+        {
+            if (records == null || perGruppo == null || perGruppo.Count == 0)
+                return;
+
+            var keyCodGruppo = Enum.GetName(AddestramentoRuoli.Scatto) + "." + GLOBAL_VARIABLES.keyScattoCodiceGruppo;
+            var keyExtraAuto = Enum.GetName(AddestramentoRuoli.Foto) + "." + GLOBAL_VARIABLES.keyFotoExtraAuto;
+            var keyExtra = Enum.GetName(AddestramentoRuoli.Foto) + "." + GLOBAL_VARIABLES.keyFotoExtra;
+
+            foreach (var record in records)
+            {
+                if (record?.recordInTracciato == null)
+                    continue;
+
+                record.recordInTracciato.TryGetValue(keyCodGruppo, out var codGruppoObj);
+                var codGruppo = codGruppoObj?.ToString();
+                if (codGruppo == null || !perGruppo.TryGetValue(codGruppo, out var voci) || voci == null || voci.Count == 0)
+                    continue;
+
+                var automatiche = listaTipizzata<LogoBollo>(record.recordInTracciato, keyExtraAuto);
+                var manuali = listaTipizzata<LogoBollo_ExtraNoAuto>(record.recordInTracciato, keyExtra);
+
+                foreach (var voce in voci)
+                {
+                    if (string.IsNullOrWhiteSpace(voce.sigla))
+                        continue;
+
+                    switch (voce.azione)
+                    {
+                        case AzioneExtraLavorazione.Sovrascrivi:
+                            if (string.IsNullOrWhiteSpace(voce.nome))
+                                break;
+                            foreach (var logo in automatiche.Where(l => l.sigla == voce.sigla))
+                                logo.nome = voce.nome;
+                            foreach (var extra in manuali.Where(e => e.sigla == voce.sigla))
+                                extra.nome = voce.nome;
+                            break;
+
+                        case AzioneExtraLavorazione.Aggiungi:
+                            if (string.IsNullOrWhiteSpace(voce.nome) || automatiche.Any(l => l.sigla == voce.sigla))
+                                break;
+                            automatiche.Add(new LogoBollo
+                            {
+                                id = "",
+                                nome = voce.nome,
+                                guidId = "",
+                                sigla = voce.sigla,
+                                dataModifica = "",
+                                tipo = voce.tipoFoto > 0 ? (TipoFoto)voce.tipoFoto : (voce.tipo == TipoElementoBox.Logo ? TipoFoto.Logo : TipoFoto.Foto),
+                                escluso = false
+                            });
+                            record.recordInTracciato[keyExtraAuto] = automatiche;
+                            break;
+
+                        case AzioneExtraLavorazione.Escludi:
+                            foreach (var logo in automatiche.Where(l => l.sigla == voce.sigla))
+                                logo.escluso = true;
+                            foreach (var extra in manuali.Where(e => e.sigla == voce.sigla))
+                                extra.attiva = false;
+                            break;
+                    }
+                }
+
+                record.recordInTracciato[GLOBAL_VARIABLES.keyExtraLavorazione] = voci;
+            }
+        }
+
+        /// <summary>
+        /// La lista sotto una chiave del record, com'e' dopo l'export di agenzia (tipizzata) o come
+        /// torna da una cache (JArray o testo JSON): in questi due casi la si riscrive tipizzata, cosi'
+        /// le modifiche restano. Senza chiave, una lista vuota non legata al record.
+        /// </summary>
+        private static List<T> listaTipizzata<T>(Dictionary<string, object> record, string chiave)
+        {
+            if (!record.TryGetValue(chiave, out var valore) || valore == null)
+                return new List<T>();
+            if (valore is List<T> lista)
+                return lista;
+
+            List<T>? letta = null;
+            if (valore is JArray array)
+                letta = array.ToObject<List<T>>();
+            else if (valore is string testo && testo.TrimStart().StartsWith("["))
+                letta = JsonConvert.DeserializeObject<List<T>>(testo);
+
+            if (letta == null)
+                return new List<T>();
+            record[chiave] = letta;
+            return letta;
+        }
+
+        public List<ArticoloInKit> updateDatiFromMetaPromoLavorazioni(List<ArticoloInKit> artInkit, int idLavorazione, FicoRuntimeKit kit/*, bool confronto = false*/, Dictionary<string, bool>? noRenderPerRef = null, Dictionary<string, List<RevisioneNoRenderFromIndd>>? noRenderElementiPerGruppo = null, Dictionary<string, List<RevisioneExtraLavorazioneFromIndd>>? extraLavorazionePerGruppo = null)
         {
             var keyCodGruppo = Enum.GetName(AddestramentoRuoli.Scatto) + "." + GLOBAL_VARIABLES.keyScattoCodiceGruppo;
             var keyRefCodice = Enum.GetName(AddestramentoRuoli.Referenza) + "." + GLOBAL_VARIABLES.keyRefCodice;
@@ -4439,6 +4541,14 @@ namespace Istanta.Controllers
                         noRenderElementiPerGruppo[group.Key.CodiceGruppo] = storeField.noRender;
                     }
                     raccogliNoRenderDelleFoto(group.Key.CodiceGruppo, storeField.noRender, noRenderPerRef);
+                }
+
+                //I20-1070: le foto extra decise per questa lavorazione. Solo dal meta di questa
+                //lavorazione, non dal passato: un file del box di allora potrebbe non stare nella
+                //cartella Loghi di adesso.
+                if (storeField.extraLavorazione != null && storeField.extraLavorazione.Count > 0 && extraLavorazionePerGruppo != null)
+                {
+                    extraLavorazionePerGruppo[group.Key.CodiceGruppo] = storeField.extraLavorazione;
                 }
 
                 foreach (var item in group)

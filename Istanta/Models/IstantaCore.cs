@@ -94,6 +94,9 @@ namespace Istanta.Models
         //Elementi del box (campi, loghi, foto extra) che il Plugin deve impaginare ma non rendere visibili.
         //Le foto primarie/secondarie non passano di qui: viaggiano dentro membriGruppoFoto.
         public static readonly string keyNoRenderElementi = "noRenderElementi";
+        //I20-1070: le foto extra decise dall'operatore per questa sola lavorazione: immagine del box al
+        //posto di quella del server, foto extra in piu' tenuta, foto extra esclusa.
+        public static readonly string keyExtraLavorazione = "extraLavorazione";
 
 
         //Con queste combinazioni di chiave, si chiede al core di recuperare la descrizione dall'archivio per far uscire le ref indicate con questo attributo
@@ -987,6 +990,70 @@ namespace Istanta.Models
             return (elementi != null && elementi.Count > 0) ? elementi : null;
         }
 
+        public static RichiestaExtraLavorazione? leggiRichiestaExtraLavorazione(string richiesta)
+        {
+            return Newtonsoft.Json.JsonConvert.DeserializeObject<RichiestaExtraLavorazione>(richiesta, settings);
+        }
+
+        /// <summary>
+        /// I20-1070: cosa non va in una richiesta, o null se e' buona. Sovrascrivi e Aggiungi vogliono
+        /// il nome del file del box; togliere una decisione vuole solo sigla e tipo.
+        /// </summary>
+        public static string? erroreDellaRichiestaExtraLavorazione(RichiestaExtraLavorazione? richiesta)
+        {
+            if (richiesta?.voce == null)
+            {
+                return "manca la voce della foto extra.";
+            }
+            var voce = richiesta.voce;
+            if (string.IsNullOrWhiteSpace(voce.sigla))
+            {
+                return "manca la sigla della foto extra.";
+            }
+            if (voce.tipo != TipoElementoBox.Logo && voce.tipo != TipoElementoBox.FotoExtra)
+            {
+                return $"il tipo {voce.tipo} non e' una foto extra.";
+            }
+            if (richiesta.rimuovi)
+            {
+                return null;
+            }
+            if (!Enum.IsDefined(typeof(AzioneExtraLavorazione), voce.azione))
+            {
+                return $"l'azione {(int)voce.azione} non esiste.";
+            }
+            if (voce.azione != AzioneExtraLavorazione.Escludi && string.IsNullOrWhiteSpace(voce.nome))
+            {
+                return $"per {voce.azione} serve il nome del file nel box.";
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// I20-1070: registra o toglie nel meta la decisione su una foto extra. Una voce per sigla e
+        /// tipo: una decisione nuova sulla stessa foto sostituisce la precedente. Senza voci la
+        /// chiave sparisce, come per noRender.
+        /// </summary>
+        public static void applicaExtraLavorazione(RevisioneMetaPromoLavorazioni meta, RichiestaExtraLavorazione? richiesta)
+        {
+            if (meta == null || richiesta?.voce == null || string.IsNullOrWhiteSpace(richiesta.voce.sigla))
+            {
+                return;
+            }
+
+            var voce = richiesta.voce;
+            meta.extraLavorazione ??= new List<RevisioneExtraLavorazioneFromIndd>();
+            meta.extraLavorazione.RemoveAll(v => v.tipo == voce.tipo && v.sigla == voce.sigla);
+            if (!richiesta.rimuovi)
+            {
+                meta.extraLavorazione.Add(voce);
+            }
+            if (meta.extraLavorazione.Count == 0)
+            {
+                meta.extraLavorazione = null;
+            }
+        }
+
         /// <summary>
         /// Porta nella struttura noRender le foto che i meta storici marcavano dentro ps, e
         /// consuma il flag storico azzerandolo.
@@ -1073,6 +1140,12 @@ namespace Istanta.Models
         /// Le foto primarie/secondarie non stanno qui, hanno la loro opzione dentro ps.
         /// </summary>
         public List<RevisioneNoRenderFromIndd>? noRender { get; set; }
+        /// <summary>
+        /// I20-1070: le foto extra decise dall'operatore per questa sola lavorazione. Una voce per
+        /// sigla e tipo; togliere la decisione toglie la voce. Non si eredita dalle lavorazioni
+        /// passate: una lavorazione nuova riparte dal dato del server.
+        /// </summary>
+        public List<RevisioneExtraLavorazioneFromIndd>? extraLavorazione { get; set; }
     }
 
     /// <summary>
@@ -1106,6 +1179,45 @@ namespace Istanta.Models
         public string? chiave { get; set; }
         /// <summary>Nome leggibile mostrato dal Plugin: nome del logo, nome della foto.</summary>
         public string? nome { get; set; }
+    }
+
+    /// <summary>
+    /// I20-1070: cosa l'operatore ha deciso per una foto extra, in questa sola lavorazione.
+    /// </summary>
+    public enum AzioneExtraLavorazione
+    {
+        /// <summary>Stessa sigla, immagine del box al posto di quella del server.</summary>
+        Sovrascrivi = 1,
+        /// <summary>Una foto extra che sta nel box senza corrispondenza nel dato, tenuta solo qui.</summary>
+        Aggiungi = 2,
+        /// <summary>Una foto extra che il dato vuole e che in questa lavorazione non si vuole.</summary>
+        Escludi = 3
+    }
+
+    /// <summary>
+    /// I20-1070: una foto extra decisa dall'operatore per questa lavorazione. La foto si riconosce
+    /// da tipo (logo o foto extra) e sigla, la chiave della label nel box.
+    /// </summary>
+    public class RevisioneExtraLavorazioneFromIndd
+    {
+        public TipoElementoBox tipo { get; set; }
+        public string? sigla { get; set; }
+        public AzioneExtraLavorazione azione { get; set; }
+        /// <summary>Il file del box (Sovrascrivi, Aggiungi).</summary>
+        public string? nome { get; set; }
+        /// <summary>Il nome che il dato dava quando l'operatore ha deciso: il Plugin lo mostra accanto alla decisione.</summary>
+        public string? nomeServer { get; set; }
+        /// <summary>Il tipo_N della label del box (Aggiungi): e' il TipoFoto della voce che si crea.</summary>
+        public int tipoFoto { get; set; }
+    }
+
+    /// <summary>
+    /// I20-1070: la richiesta del Plugin, una decisione da registrare o da togliere.
+    /// </summary>
+    public class RichiestaExtraLavorazione
+    {
+        public bool rimuovi { get; set; } = false;
+        public RevisioneExtraLavorazioneFromIndd? voce { get; set; }
     }
 
     //Legato al campo LABEL della rappresentazione grafica
@@ -2575,7 +2687,9 @@ namespace Istanta.Models
         cambioPagina = 11,
         rimuoviMetaFoto = 12,
         login=13,
-        updateNoRender = 14
+        updateNoRender = 14,
+        //I20-1070: una decisione su una foto extra per questa sola lavorazione, registrata o tolta.
+        updateExtraLavorazione = 15
     }
 
     public enum senderOperazione

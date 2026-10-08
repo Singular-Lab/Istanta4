@@ -4514,7 +4514,7 @@ const schedaRef = {
     ///
     /// Le righe non sono riquadri: un filetto colorato a sinistra basta a separarle e toglie
     /// dalla finestra una dozzina di bordi che non dicevano niente.
-    riempiElencoSegnalazioni(contenitore, intestazione, differenze, vociBollino = []) {
+    riempiElencoSegnalazioni(contenitore, intestazione, differenze, vociBollino = [], dopoAzione = null) {
         contenitore.empty();
         intestazione.empty();
 
@@ -4576,7 +4576,427 @@ const schedaRef = {
             dettaglio.css({ "font-size": "12px", "color": "#767676" });
 
             riga.append(campo).append(dettaglio);
+            //I20-1070: sulle foto extra l'operatore puo' decidere da qui, senza toccare il box.
+            this.aggiungiAzioniDifferenza(riga, diff, dopoAzione);
             contenitore.append(riga);
+        });
+    },
+
+    /* ---------- I20-1070: le foto extra decise per questa lavorazione ---------- */
+
+    /// Le tre decisioni possibili, come le conosce il server (AzioneExtraLavorazione).
+    AZIONE_EXTRA: { sovrascrivi: 1, aggiungi: 2, escludi: 3 },
+
+    /// Quali azioni spettano a una differenza della preanalisi. Su una foto extra con
+    /// l'immagine cambiata si puo' tenere quella del box o usare quella del server; su una in
+    /// piu' tenerla solo per questa lavorazione; su una mancante escluderla per questa
+    /// lavorazione. Senza sigla non c'e' una chiave per il meta, e niente azioni.
+    azioniPerDifferenza(diff) {
+        if (diff == null || diff.sigla == null || String(diff.sigla) === "") {
+            return [];
+        }
+        if (diff.tipo === "immagineExtraCambiata") {
+            return ["tieniBox", "usaServer"];
+        }
+        if (diff.tipo === "extraInPiu") {
+            return ["tieniLavorazione"];
+        }
+        if (diff.tipo === "extraMancante") {
+            return ["escludiLavorazione"];
+        }
+        return [];
+    },
+
+    /// La richiesta per il server, da una differenza e dall'azione scelta. Null se l'azione
+    /// non e' una decisione da registrare: usaServer tocca il box, non il dato.
+    richiestaExtraLavorazione(diff, azione) {
+        if (diff == null || diff.sigla == null || String(diff.sigla) === "") {
+            return null;
+        }
+        var voce = { tipo: diff.tipoElemento, sigla: String(diff.sigla), azione: 0, nome: null, nomeServer: null, tipoFoto: diff.tipoFoto || 0 };
+        if (azione === "tieniBox") {
+            voce.azione = this.AZIONE_EXTRA.sovrascrivi;
+            voce.nome = diff.nomeNelBox;
+            voce.nomeServer = diff.nomeServer;
+        }
+        else if (azione === "tieniLavorazione") {
+            voce.azione = this.AZIONE_EXTRA.aggiungi;
+            voce.nome = diff.nome;
+        }
+        else if (azione === "escludiLavorazione") {
+            voce.azione = this.AZIONE_EXTRA.escludi;
+            voce.nomeServer = diff.nome;
+        }
+        else {
+            return null;
+        }
+        return { rimuovi: false, voce: voce };
+    },
+
+    /// La richiesta con cui si toglie una decisione gia' presa.
+    richiestaRimozioneExtraLavorazione(voce) {
+        return { rimuovi: true, voce: { tipo: voce.tipo, sigla: voce.sigla, azione: voce.azione, nome: voce.nome, nomeServer: voce.nomeServer, tipoFoto: voce.tipoFoto || 0 } };
+    },
+
+    /// Applica ai record in memoria quello che il server fara' alla prossima lettura, cosi' la
+    /// preanalisi rifatta subito vede la decisione senza riscaricare la scheda. Specchio di
+    /// FicoProcessController.applicaExtraDellaLavorazione.
+    applicaExtraLavorazioneAiRecord(records, voce) {
+        var azioni = this.AZIONE_EXTRA;
+        (records || []).forEach(function (record) {
+            var rec = record != null ? record.recordInTracciato : null;
+            if (rec == null) {
+                return;
+            }
+            var automatiche = Array.isArray(rec["Foto.ExtraAuto"]) ? rec["Foto.ExtraAuto"] : null;
+            var manuali = Array.isArray(rec["Foto.Extra"]) ? rec["Foto.Extra"] : null;
+
+            if (voce.azione === azioni.sovrascrivi && voce.nome) {
+                (automatiche || []).filter(l => l.sigla == voce.sigla).forEach(l => { l.nome = voce.nome; });
+                (manuali || []).filter(e => e.sigla == voce.sigla).forEach(e => { e.nome = voce.nome; });
+            }
+            else if (voce.azione === azioni.aggiungi && voce.nome) {
+                if (automatiche == null) {
+                    automatiche = [];
+                    rec["Foto.ExtraAuto"] = automatiche;
+                }
+                if (!automatiche.some(l => l.sigla == voce.sigla)) {
+                    automatiche.push({ id: "", nome: voce.nome, guidId: "", sigla: voce.sigla, dataModifica: "", tipo: voce.tipoFoto > 0 ? voce.tipoFoto : (voce.tipo === NoRenderElementi.TIPO.logo ? 3 : 1), escluso: false });
+                }
+            }
+            else if (voce.azione === azioni.escludi) {
+                (automatiche || []).filter(l => l.sigla == voce.sigla).forEach(l => { l.escluso = true; });
+                (manuali || []).filter(e => e.sigla == voce.sigla).forEach(e => { e.attiva = false; });
+            }
+
+            var decise = (Array.isArray(rec.extraLavorazione) ? rec.extraLavorazione : []).filter(v => !(v.tipo == voce.tipo && v.sigla == voce.sigla));
+            decise.push(voce);
+            rec.extraLavorazione = decise;
+        });
+    },
+
+    /// Le decisioni gia' prese per il box aperto, dal record primario.
+    extraLavorazioneInMemoria() {
+        var primario = (this.schedeRefDati || []).find(r => r != null && r.recordInTracciato != null && r.recordInTracciato.StatoSelezione == 1);
+        var lista = primario != null ? primario.recordInTracciato.extraLavorazione : null;
+        return Array.isArray(lista) ? lista : [];
+    },
+
+    /// Come si legge una decisione nell'elenco della finestra.
+    descriviExtraLavorazione(voce) {
+        if (voce == null) {
+            return "";
+        }
+        var sigla = voce.sigla == null ? "" : String(voce.sigla);
+        if (voce.azione === this.AZIONE_EXTRA.sovrascrivi) {
+            return sigla + ": tenuta l'immagine del box " + voce.nome + (voce.nomeServer ? " al posto di " + voce.nomeServer : "");
+        }
+        if (voce.azione === this.AZIONE_EXTRA.aggiungi) {
+            return sigla + ": " + voce.nome + " tenuta solo per questa lavorazione";
+        }
+        if (voce.azione === this.AZIONE_EXTRA.escludi) {
+            return sigla + ": esclusa per questa lavorazione";
+        }
+        return sigla;
+    },
+
+    /// L'idRec del box aperto, dal suo DNA; 0 se non si legge.
+    idRecDelBoxAperto() {
+        try {
+            var dna = this.refSelected != null ? Utility.getDnaOfBox(this.refSelected.item) : null;
+            if (dna != null && dna.idRec != null && dna.idRec !== "" && !isNaN(parseInt(dna.idRec))) {
+                return parseInt(dna.idRec);
+            }
+        }
+        catch (e) {
+            console.warn("Impossibile recuperare idRec dal box", e);
+        }
+        return 0;
+    },
+
+    /// Manda al server una decisione, da registrare o da togliere. Torna true se il server
+    /// l'ha registrata; gli errori si dicono qui.
+    salvaExtraLavorazione(richiesta) {
+        var me = this;
+        return new Promise(function (resolve) {
+            var schedaRef = me.schedeRefDati;
+            if (schedaRef == null || schedaRef.length < 1 || richiesta == null) {
+                resolve(false);
+                return;
+            }
+            var formData = new FormData();
+            formData.append("idLavorazione", idKitLavorazione);
+            formData.append("CodiceGruppo", schedaRef[0].recordInTracciato["Scatto.CodiceGruppo"]);
+            formData.append("idRec", me.idRecDelBoxAperto());
+            formData.append("richiesta", JSON.stringify(richiesta));
+
+            var xhr = new XMLHttpRequestClient();
+            xhr.onload = function (objResult, parsed) {
+                if (!parsed) {
+                    try {
+                        objResult = JSON.parse(objResult);
+                    }
+                    catch (e) {
+                        messaggioUtente("Code SRF-100 Foto extra: risposta del server non leggibile: " + e, "error");
+                        resolve(false);
+                        return;
+                    }
+                }
+                if (objResult == null || objResult.esito === false) {
+                    messaggioUtente("Code SRF-101 Foto extra: il server non ha registrato la decisione" + (objResult != null && objResult.error ? ": " + objResult.error : ""), "error");
+                    resolve(false);
+                    return;
+                }
+                resolve(true);
+            };
+            xhr.onerror = function () {
+                resolve(false);
+            };
+            xhr.send("Menabo/modificaExtraLavorazione/0", formData, "PUT");
+        });
+    },
+
+    /// L'elemento del box di quella foto extra: la label porta la sigla, il file collegato il nome.
+    /// Senza sigla o senza nome si cerca per l'altro soltanto.
+    elementoExtraDelBox(sigla, nomeFile) {
+        var box = this.refSelected != null ? this.refSelected.item : null;
+        if (box == null || !box.isValid) {
+            return null;
+        }
+        var nomePrimaria = pluginMiddleware.getCampo("nomeFotoPrimaria");
+        var nomeSecondaria = pluginMiddleware.getCampo("nomeFotoSecondaria");
+        for (var i = 0; i < box.allPageItems.length; i++) {
+            var item = box.allPageItems[i];
+            try {
+                if (!item.isValid || item.constructorName !== "Rectangle" || item.graphics.length == 0) {
+                    continue;
+                }
+                var classificato = NoRenderElementi.classificaLabel(item.label, nomePrimaria, nomeSecondaria);
+                if (classificato == null || (classificato.tipo !== NoRenderElementi.TIPO.logo && classificato.tipo !== NoRenderElementi.TIPO.fotoExtra)) {
+                    continue;
+                }
+                var nomeCollegato = String(item.graphics.item(0).itemLink.filePath).split("/").pop();
+                if ((sigla == null || sigla === "" || classificato.chiave == sigla) && (nomeFile == null || nomeFile === "" || nomeCollegato == nomeFile)) {
+                    return item;
+                }
+            }
+            catch (e) {
+                //un elemento che non si legge non e' quello cercato
+            }
+        }
+        return null;
+    },
+
+    /// Copia nella cartella Loghi il file collegato nel box, se non c'e' gia': e' da li' che la
+    /// reimpaginazione prende le foto extra. Il box non si tocca.
+    copiaFileDelBoxInLoghi(sigla, nomeFile) {
+        try {
+            var item = this.elementoExtraDelBox(sigla, nomeFile);
+            if (item == null || nomeFile == null || nomeFile === "") {
+                return false;
+            }
+            var fs = require('fs');
+            var origine = String(item.graphics.item(0).itemLink.filePath);
+            var destinazione = percorsoLoghi + nomeFile;
+            if (origine.replace(/\\/g, "/") === destinazione.replace(/\\/g, "/")) {
+                return true;
+            }
+            try {
+                fs.readFileSync(destinazione);
+                return true;
+            }
+            catch (nonCe) {
+                //non c'e' ancora: si copia
+            }
+            fs.writeFileSync(destinazione, fs.readFileSync(origine));
+            return true;
+        }
+        catch (e) {
+            console.error("Code SRF-102 Copia della foto extra nella cartella Loghi non riuscita: " + e);
+            messaggioUtente("Code SRF-102 Non sono riuscito a copiare " + nomeFile + " nella cartella Loghi: la reimpaginazione potrebbe non trovarla", "warning", false, 6);
+            return false;
+        }
+    },
+
+    /// Esegue una decisione scelta nella finestra: la registra sul server, la riflette nei
+    /// record in memoria, copia il file nei Loghi se la decisione tiene un file del box, e
+    /// poi rifa' l'analisi.
+    async eseguiAzioneExtra(diff, azione, dopoAzione) {
+        var richiesta = this.richiestaExtraLavorazione(diff, azione);
+        if (richiesta == null) {
+            return false;
+        }
+        var registrata = await this.salvaExtraLavorazione(richiesta);
+        if (!registrata) {
+            return false;
+        }
+        if (richiesta.voce.azione !== this.AZIONE_EXTRA.escludi) {
+            this.copiaFileDelBoxInLoghi(richiesta.voce.sigla, richiesta.voce.nome);
+        }
+        this.applicaExtraLavorazioneAiRecord(this.schedeRefDati, richiesta.voce);
+        messaggioUtente("Foto extra " + richiesta.voce.sigla + ": decisione registrata per questa lavorazione", "success", false, 5);
+        if (dopoAzione) {
+            await dopoAzione();
+        }
+        return true;
+    },
+
+    /// Toglie una decisione: il server la cancella, la scheda si riscarica cosi' il dato torna
+    /// esatto, e l'analisi si rifa'.
+    async togliExtraLavorazione(voce, dopoAzione) {
+        var registrata = await this.salvaExtraLavorazione(this.richiestaRimozioneExtraLavorazione(voce));
+        if (!registrata) {
+            return false;
+        }
+        var schedaRef = this.schedeRefDati;
+        var codice = schedaRef != null && schedaRef.length > 0 ? schedaRef[0].recordInTracciato["Scatto.CodiceGruppo"] : this.codiceDellaRefAperta();
+        var ricaricata = await this.ricaricaDatiScheda(codice, this.idRecDelBoxAperto());
+        if (!ricaricata) {
+            messaggioUtente("Code SRF-103 Decisione tolta, ma la scheda non si e' riscaricata: riaprila per vedere il dato aggiornato", "warning", false, 6);
+        }
+        if (dopoAzione) {
+            await dopoAzione();
+        }
+        return true;
+    },
+
+    /// Il file del server per una foto extra con immagine cambiata, se sta nella cartella Loghi
+    /// ed e' identico per md5 a quello collegato nel box. Torna il percorso, o null.
+    async fileDelServerIdentico(diff) {
+        try {
+            if (diff == null || diff.nomeServer == null || diff.nomeServer === "") {
+                return null;
+            }
+            var item = this.elementoExtraDelBox(diff.sigla, diff.nomeNelBox);
+            if (item == null) {
+                return null;
+            }
+            var percorso = percorsoLoghi + diff.nomeServer;
+            var hashServer = await ReperimentoFoto.hashDelFile(percorso);
+            if (hashServer == null) {
+                return null;
+            }
+            var hashBox = await ReperimentoFoto.getLinkHash(item);
+            if (!hashBox.success || hashBox.hash == null) {
+                return null;
+            }
+            return String(hashBox.hash).toUpperCase() === String(hashServer).toUpperCase() ? percorso : null;
+        }
+        catch (e) {
+            console.warn("Confronto fra l'immagine del box e quella del server non riuscito", e);
+            return null;
+        }
+    },
+
+    /// Ricollega il riquadro all'immagine del server, identica per contenuto: il riquadro
+    /// resta dov'e' e com'e', cambia solo il file a cui punta. Poi rifa' l'analisi.
+    async ricollegaAllImmagineDelServer(diff, dopoAzione) {
+        try {
+            var percorso = await this.fileDelServerIdentico(diff);
+            if (percorso == null) {
+                messaggioUtente("Code SRF-104 L'immagine del server non e' nella cartella Loghi o non e' identica a quella del box: non ricollegata", "warning", false, 6);
+                return false;
+            }
+            var item = this.elementoExtraDelBox(diff.sigla, diff.nomeNelBox);
+            var link = item.graphics.item(0).itemLink;
+            link.relink(percorso);
+            link.update();
+            messaggioUtente("Foto extra " + diff.sigla + ": ricollegata a " + diff.nomeServer, "success", false, 5);
+            if (dopoAzione) {
+                await dopoAzione();
+            }
+            return true;
+        }
+        catch (e) {
+            console.error("Code SRF-105 Ricollegamento all'immagine del server non riuscito: " + e);
+            messaggioUtente("Code SRF-105 Ricollegamento non riuscito: " + (e && e.message ? e.message : e), "error");
+            return false;
+        }
+    },
+
+    /// I pulsanti delle azioni su una riga della finestra delle differenze.
+    aggiungiAzioniDifferenza(riga, diff, dopoAzione) {
+        var azioni = this.azioniPerDifferenza(diff);
+        if (azioni.length === 0) {
+            return;
+        }
+        var me = this;
+        var testi = {
+            tieniBox: ["Tieni l'immagine del box", "Il box non cambia: per questa lavorazione il dato usa l'immagine che sta nel box"],
+            usaServer: ["Usa l'immagine del server", "Ricollega il riquadro all'immagine del server, identica per contenuto: il risultato non cambia"],
+            tieniLavorazione: ["Tieni solo per questa lavorazione", "La foto extra resta nel dato di questa sola lavorazione"],
+            escludiLavorazione: ["Escludi per questa lavorazione", "Per questa lavorazione il dato non chiede piu' questa foto extra"]
+        };
+        var barra = $('<div></div>');
+        barra.css({ "display": "flex", "gap": "6px", "margin-top": "4px", "flex-wrap": "wrap" });
+
+        azioni.forEach(function (azione) {
+            var pulsante = $('<button></button>').text(testi[azione][0]);
+            pulsante.css({ "font-size": "11px", "padding": "2px 6px" });
+            Tooltip.impostaTooltip(pulsante[0], testi[azione][1]);
+            pulsante.on("click", async function () {
+                pulsante.prop("disabled", true);
+                try {
+                    if (azione === "usaServer") {
+                        await me.ricollegaAllImmagineDelServer(diff, dopoAzione);
+                    }
+                    else {
+                        await me.eseguiAzioneExtra(diff, azione, dopoAzione);
+                    }
+                }
+                finally {
+                    pulsante.prop("disabled", false);
+                }
+            });
+            barra.append(pulsante);
+
+            //Usa l'immagine del server solo se c'e' ed e' identica: lo si verifica dopo aver
+            //disegnato la riga, perche' leggere i file e' asincrono.
+            if (azione === "usaServer") {
+                me.fileDelServerIdentico(diff).then(function (percorso) {
+                    if (percorso == null) {
+                        pulsante.remove();
+                    }
+                });
+            }
+        });
+        riga.append(barra);
+    },
+
+    /// La sezione della finestra con le decisioni gia' prese per il box, ognuna col suo Togli.
+    riempiSezioneExtraLavorazione(sezione, dopoAzione) {
+        sezione.empty();
+        var voci = this.extraLavorazioneInMemoria();
+        if (voci.length === 0) {
+            sezione.css("display", "none");
+            return;
+        }
+        sezione.css("display", "block");
+        var me = this;
+
+        var titolo = $('<div></div>').text("Foto extra decise per questa lavorazione (" + voci.length + ")");
+        titolo.css({ "font-size": "13px", "font-weight": "600", "color": "#2c2c2c", "border-top": "1px solid #ddd", "padding-top": "8px" });
+        sezione.append(titolo);
+
+        voci.forEach(function (voce) {
+            var riga = $('<div></div>');
+            riga.css({ "display": "flex", "align-items": "center", "gap": "8px", "padding": "3px 0 3px 8px", "border-left": "2px solid #767676", "margin-top": "6px" });
+            var testo = $('<span></span>').text(me.descriviExtraLavorazione(voce));
+            testo.css({ "font-size": "12px", "color": "#2c2c2c", "flex": "1 1 auto" });
+            var togli = $('<button></button>').text("Togli");
+            togli.css({ "font-size": "11px", "padding": "2px 6px", "flex": "0 0 auto" });
+            Tooltip.impostaTooltip(togli[0], "Toglie la decisione: il dato torna a quello del server e la differenza, se c'e', ricompare");
+            togli.on("click", async function () {
+                togli.prop("disabled", true);
+                try {
+                    await me.togliExtraLavorazione(voce, dopoAzione);
+                }
+                finally {
+                    togli.prop("disabled", false);
+                }
+            });
+            riga.append(testo).append(togli);
+            sezione.append(riga);
         });
     },
 
@@ -4702,6 +5122,8 @@ const schedaRef = {
 
                     <div id="segnalazioniElenco" style="width: 100%; max-height: 220px; overflow-y: auto; padding-right: 4px; box-sizing: border-box;"></div>
 
+                    <div id="segnalazioniExtraLavorazione" style="width: 100%; max-height: 160px; overflow-y: auto; padding-right: 4px; box-sizing: border-box; display: none;"></div>
+
                     <div id="segnalazioniBollinoScheda" style="width: 100%; max-height: 220px; overflow-y: auto; padding-right: 4px; box-sizing: border-box;"></div>
                 </div>
             `);
@@ -4710,9 +5132,22 @@ const schedaRef = {
             const elenco = contenuto.find("#segnalazioniElenco");
             const azioni = contenuto.find("#segnalazioniAzioni");
             const sezioneBollino = contenuto.find("#segnalazioniBollinoScheda");
+            const sezioneExtra = contenuto.find("#segnalazioniExtraLavorazione");
 
-            this.riempiElencoSegnalazioni(elenco, intestazione, this.segnalazioniInMemoria() || [], this.vociBollinoInMemoria());
+            //I20-1070: dopo una decisione sulle foto extra la preanalisi si rifa' e tutto si
+            //ridisegna. E' lo stesso lavoro del pulsante Aggiorna, che da qui in poi lo chiama.
+            const rifaiAnalisi = async function () {
+                const box = me.refSelected != null ? me.refSelected.item : null;
+                me.memorizzaSegnalazioni(await me.differenzeDatiNelBox(box, me.schedeRefDati));
+                me.leggiVociBollino(box);
+                me.riempiElencoSegnalazioni(elenco, intestazione, me.segnalazioniInMemoria(), me.vociBollinoInMemoria(), rifaiAnalisi);
+                me.riempiSezioneBollino(sezioneBollino, elenco, intestazione);
+                me.riempiSezioneExtraLavorazione(sezioneExtra, rifaiAnalisi);
+            };
+
+            this.riempiElencoSegnalazioni(elenco, intestazione, this.segnalazioniInMemoria() || [], this.vociBollinoInMemoria(), rifaiAnalisi);
             this.riempiSezioneBollino(sezioneBollino, elenco, intestazione);
+            this.riempiSezioneExtraLavorazione(sezioneExtra, rifaiAnalisi);
 
             //Rifa' la pre analisi adesso: e' il modo per vedere l'effetto delle correzioni senza
             //chiudere e riaprire la scheda. Icona, non scritta: sta sulla riga dello stato.
@@ -4734,12 +5169,7 @@ const schedaRef = {
             aggiorna.on("click", async function () {
                 try {
                     me.lampeggiaContenuto(contenuto);
-
-                    const box = me.refSelected != null ? me.refSelected.item : null;
-                    me.memorizzaSegnalazioni(await me.differenzeDatiNelBox(box, me.schedeRefDati));
-                    me.leggiVociBollino(box);
-                    me.riempiElencoSegnalazioni(elenco, intestazione, me.segnalazioniInMemoria(), me.vociBollinoInMemoria());
-                    me.riempiSezioneBollino(sezioneBollino, elenco, intestazione);
+                    await rifaiAnalisi();
                 }
                 catch (err) {
                     console.error("Code SRF-96 Aggiornamento delle segnalazioni non riuscito: " + err);

@@ -9984,7 +9984,8 @@ double.TryParse(percorso.ToString(), out double valore16))
 
                     Dictionary<string, bool> noRenderPerRef = new Dictionary<string, bool>();
                     Dictionary<string, List<RevisioneNoRenderFromIndd>> noRenderElementiPerGruppo = new Dictionary<string, List<RevisioneNoRenderFromIndd>>();
-                    var listeModificate = ficoController.updateDatiFromMetaPromoLavorazioni(prepLista.records, idLavorazione, kit!, noRenderPerRef, noRenderElementiPerGruppo);
+                    Dictionary<string, List<RevisioneExtraLavorazioneFromIndd>> extraLavorazionePerGruppo = new Dictionary<string, List<RevisioneExtraLavorazioneFromIndd>>();
+                    var listeModificate = ficoController.updateDatiFromMetaPromoLavorazioni(prepLista.records, idLavorazione, kit!, noRenderPerRef, noRenderElementiPerGruppo, extraLavorazionePerGruppo);
                     prepLista.records = listeModificate;
                     //logAss.WriteLine("GET SCHEDA REF >> step9");
 
@@ -10027,6 +10028,9 @@ double.TryParse(percorso.ToString(), out double valore16))
                                 }
                             }
                         }
+
+                        //I20-1070: le foto extra decise dall'operatore per questa lavorazione.
+                        FicoProcessController.applicaExtraDellaLavorazione(resultGlobale.records, extraLavorazionePerGruppo);
                     }
                 }
                 else
@@ -11349,6 +11353,57 @@ double.TryParse(percorso.ToString(), out double valore16))
                 return Ok(result);
             }
         }
+        public class InddObjExtraLavorazioneRequest
+        {
+            public int idLavorazione { get; set; }
+            public string? CodiceGruppo { get; set; }
+
+            public int idRec { get; set; } = 0;
+            /// <summary>
+            /// La decisione, serializzata dal Plugin: { rimuovi, voce: { tipo, sigla, azione, nome, nomeServer, tipoFoto } }.
+            /// </summary>
+            public string? richiesta { get; set; }
+        }
+
+        /// <summary>
+        /// I20-1070: registra, o toglie, una decisione dell'operatore su una foto extra per questa sola
+        /// lavorazione. Il box non si tocca: da qui in poi il dato di questa lavorazione la riflette
+        /// (scheda, Report Integrita', reimpaginazione). Risponde con l'errore se la registrazione non
+        /// riesce, invece di dire sempre esito positivo.
+        /// </summary>
+        [HttpPut]
+        [Route("Menabo/modificaExtraLavorazione/{idOperazione}")]
+        public IActionResult modificaExtraLavorazione(InddObjExtraLavorazioneRequest dato, int idOperazione)
+        {
+            BoolResult result = new BoolResult();
+
+            try
+            {
+                RichiestaExtraLavorazione richiesta = MetaPromoLavorazioni.leggiRichiestaExtraLavorazione(dato.richiesta ?? "")
+                    ?? throw new ErroreIstanta("lettura della richiesta", "la decisione sulla foto extra non si legge.");
+                string? nonValida = MetaPromoLavorazioni.erroreDellaRichiestaExtraLavorazione(richiesta);
+                if (nonValida != null)
+                    throw new ErroreIstanta("lettura della richiesta", nonValida);
+
+                PromoLavorazioniRecord plrItem = trovaRecordDellaLavorazione(dato.idLavorazione, dato.CodiceGruppo, dato.idRec);
+
+                string esito = registraAttivitaMenabo(idOperazione, dato.CodiceGruppo!, "modificaExtraLavorazione", tipoOperazione.updateExtraLavorazione,
+                    JsonConvert.SerializeObject(richiesta), plrItem.Id);
+                if (esito != "ok")
+                    throw new ErroreIstanta("registrazione della decisione", esito);
+
+                result.Esito = true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Errore in modificaExtraLavorazione (codiceGruppo {dato?.CodiceGruppo}, idLavorazione {dato?.idLavorazione}): " + ex.ToString());
+                result.error = DescrizioneErrori.Breve("modificaExtraLavorazione", ex);
+                result.Esito = false;
+            }
+
+            return Ok(result);
+        }
+
         /// <summary>
         /// Trova il record della lavorazione su cui registrare una modifica dell'operatore.
         /// Cerca il match esatto su idRec, poi ripiega sul record fratello (stesso tracciato,
