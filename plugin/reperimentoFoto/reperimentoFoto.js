@@ -1175,6 +1175,41 @@ const ReperimentoFoto = {
     },
     /// Pausa. E' una delle otto funzioni che meritano davvero il nome di questo file.,
 
+    /// I20-1070: l'md5 di un file dato il suo percorso, con la stessa cache di getLinkHash. Null se
+    /// il file non c'e' o non si legge: chi chiama decide cosa farne.
+    async hashDelFile(filePath) {
+        try {
+            const fs = require("uxp").storage.localFileSystem;
+            const fileEntry = await fs.getEntryWithUrl("file://" + filePath);
+
+            //I20-981: leggere il file e calcolarne l'md5 e' il costo dominante del Report
+            //Integrita', che lo fa per ogni foto di ogni box. La chiave della cache porta
+            //dentro dimensione e data di modifica, quindi una foto sostituita non puo'
+            //riusare l'hash vecchio. Se i metadati non si leggono si calcola e non si
+            //conserva nulla.
+            let chiaveCache = null;
+            try {
+                chiaveCache = cacheHashFoto.chiave(filePath, await fileEntry.getMetadata());
+            }
+            catch (exMeta) {
+                chiaveCache = null;
+            }
+
+            const hashInCache = cacheHashFoto.ottieni(chiaveCache);
+            if (hashInCache != null) {
+                return hashInCache;
+            }
+
+            const data = await fileEntry.read({ format: require("uxp").storage.formats.binary });
+            const hash = scaricamentoFoto.md5ArrayBuffer(new Uint8Array(data));
+            cacheHashFoto.memorizza(chiaveCache, hash);
+            return hash;
+        }
+        catch (ex) {
+            return null;
+        }
+    },
+
     /// L'md5 dell'immagine collegata a un riquadro, per sapere se e' ancora quella del server.
     /// Passa da cacheHashFoto, perche' il calcolo su centinaia di file e' il costo dominante del
     /// Report Integrita'.
@@ -1214,32 +1249,12 @@ const ReperimentoFoto = {
     
             const filePath = link.filePath;
 
-            const fs = require("uxp").storage.localFileSystem;
-            const fileEntry = await fs.getEntryWithUrl("file://" + filePath);
-
-            //I20-981: leggere il file e calcolarne l'md5 e' il costo dominante del Report
-            //Integrita', che lo fa per ogni foto di ogni box. La chiave della cache porta
-            //dentro dimensione e data di modifica, quindi una foto sostituita non puo'
-            //riusare l'hash vecchio. Se i metadati non si leggono si calcola e non si
-            //conserva nulla.
-            let chiaveCache = null;
-            try {
-                chiaveCache = cacheHashFoto.chiave(filePath, await fileEntry.getMetadata());
-            }
-            catch (exMeta) {
-                chiaveCache = null;
-            }
-
-            const hashInCache = cacheHashFoto.ottieni(chiaveCache);
-            if (hashInCache != null) {
-                result.hash = hashInCache;
-            }
-            else {
-                const data = await fileEntry.read({ format: require("uxp").storage.formats.binary });
-                const byteArray = new Uint8Array(data);
-
-                result.hash = scaricamentoFoto.md5ArrayBuffer(byteArray);
-                cacheHashFoto.memorizza(chiaveCache, result.hash);
+            //I20-1070: il calcolo sta in hashDelFile, che serve anche a confrontare un file dei
+            //Loghi con quello collegato nel box.
+            result.hash = await ReperimentoFoto.hashDelFile(filePath);
+            if (result.hash == null) {
+                result.error = "Immagine non leggibile: " + filePath;
+                return result;
             }
     
             if (link.status.toString() == "LINK_OUT_OF_DATE") {

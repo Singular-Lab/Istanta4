@@ -62,6 +62,14 @@ var NoRenderElementi = (function () {
         return { tipo: TIPO.campo, chiave: testo.split("$")[0] };
     }
 
+    /// I20-1070: il tipo_N della label di una foto extra (foto_extra$<sigla>$tipo_<n>): e' il
+    /// TipoFoto di IstantaLib, 3 per i loghi. 0 se la label non lo porta.
+    function tipoFotoDellaLabel(label) {
+        var parti = pulisci(label).split("$");
+        var n = parseInt(pulisci(parti[2]).replace("tipo_", ""), 10);
+        return isNaN(n) ? 0 : n;
+    }
+
     /// Nome mostrato nel modal: per i loghi nome e sigla, per le immagini il nome della foto.
     function descriviElemento(elemento) {
         if (elemento == null) {
@@ -388,6 +396,7 @@ var NoRenderElementi = (function () {
         TIPO: TIPO,
         TIPO_FOTO: TIPO_FOTO,
         classificaLabel: classificaLabel,
+        tipoFotoDellaLabel: tipoFotoDellaLabel,
         descriviElemento: descriviElemento,
         componiLista: componiLista,
         elementiDaSalvare: elementiDaSalvare,

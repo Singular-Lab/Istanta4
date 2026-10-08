@@ -117,6 +117,11 @@ namespace Istanta.Utility
                             List<RevisioneNoRenderFromIndd>? elementiNoRender = MetaPromoLavorazioni.leggiElementiNoRender(operazione.FormData!);
                             storeField!.noRender = MetaPromoLavorazioni.normalizzaElementiNoRender(elementiNoRender);
                         }
+                        else if (operazione.TipoOperazione == (Byte)tipoOperazione.updateExtraLavorazione)
+                        {
+                            //I20-1070: una decisione su una foto extra per volta, registrata o tolta.
+                            MetaPromoLavorazioni.applicaExtraLavorazione(storeField!, MetaPromoLavorazioni.leggiRichiestaExtraLavorazione(operazione.FormData!));
+                        }
                         else if (operazione.TipoOperazione == (Byte)tipoOperazione.rimuoviMetaFoto)
                         {
                             RevisioneFotoFromIndd? upFotoField = JsonConvert.DeserializeObject<RevisioneFotoFromIndd>(operazione.FormData!);

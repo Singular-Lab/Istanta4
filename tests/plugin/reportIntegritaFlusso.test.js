@@ -208,18 +208,21 @@ test('il report si chiude quando cambia il documento, senza chiedere', () => {
 });
 
 test('l\'hash di una foto si ricalcola solo se la foto e\' cambiata', () => {
+    //I20-1070: il calcolo con la cache sta in hashDelFile, che getLinkHash chiama sul file del link.
     const getLinkHash = corpoFunzione(utility, 'async getLinkHash(rectangle) {');
+    const hashDelFile = corpoFunzione(utility, 'async hashDelFile(filePath) {');
+    assert.match(getLinkHash, /result\.hash = await ReperimentoFoto\.hashDelFile\(filePath\);/);
 
-    const posCache = getLinkHash.indexOf('cacheHashFoto.ottieni(chiaveCache)');
-    const posLettura = getLinkHash.indexOf('fileEntry.read(');
-    const posMemorizza = getLinkHash.indexOf('cacheHashFoto.memorizza(');
+    const posCache = hashDelFile.indexOf('cacheHashFoto.ottieni(chiaveCache)');
+    const posLettura = hashDelFile.indexOf('fileEntry.read(');
+    const posMemorizza = hashDelFile.indexOf('cacheHashFoto.memorizza(');
 
-    assert.ok(posCache > 0, 'getLinkHash non consulta la cache');
+    assert.ok(posCache > 0, 'hashDelFile non consulta la cache');
     assert.ok(posCache < posLettura, 'il file si legge solo se la cache non risponde');
     assert.ok(posMemorizza > posLettura);
 
     //La chiave porta dentro l'impronta del file: percorso e metadati.
-    assert.match(getLinkHash, /cacheHashFoto\.chiave\(filePath, await fileEntry\.getMetadata\(\)\)/);
+    assert.match(hashDelFile, /cacheHashFoto\.chiave\(filePath, await fileEntry\.getMetadata\(\)\)/);
     //Lo stato del link non si mette in cache: si rilegge sempre.
     assert.match(getLinkHash, /if \(link\.status\.toString\(\) == "LINK_OUT_OF_DATE"\)/);
 });

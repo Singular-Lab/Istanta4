@@ -32,13 +32,11 @@ test("stessa sigla e immagine diversa: una sola segnalazione, con i due nomi", (
 
     const esito = confronti.fotoExtraConImmagineCambiata(foto, ["Logo_BDP_2025.psd", "Logo_SDB.psd"], NEL_BOX, "foto extraAuto");
 
-    assert.deepStrictEqual(esito, {
-        nomeNelBox: "Logo_BDP_2025.psd",
-        differenza: {
-            label: "Logo_BDP",
-            difference: "foto extraAuto con immagine diversa da quella del server: nel box Logo_BDP_2025.psd, sul server Logo_BDP_2026.psd"
-        }
-    });
+    assert.strictEqual(esito.nomeNelBox, "Logo_BDP_2025.psd");
+    assert.strictEqual(esito.differenza.label, "Logo_BDP");
+    assert.strictEqual(esito.differenza.difference, "foto extraAuto con immagine diversa da quella del server: nel box Logo_BDP_2025.psd, sul server Logo_BDP_2026.psd");
+    //I20-1070: i campi per le azioni della finestra delle differenze stanno in extraLavorazione.test.js.
+    assert.strictEqual(esito.differenza.tipo, "immagineExtraCambiata");
 });
 
 test("il prefisso distingue le foto extra manuali da quelle automatiche", () => {
@@ -87,7 +85,8 @@ test("la catalogazione delle foto extra del box tiene la sigla della label", () 
 
     assert.match(testo, /let classificato = NoRenderElementi\.classificaLabel\(campo\.label, pluginMiddleware\.getCampo\("nomeFotoPrimaria"\), pluginMiddleware\.getCampo\("nomeFotoSecondaria"\)\);/);
     assert.match(testo, /tipo: "extra",\s*data: nomeFile,\s*sigla: classificato != null \? classificato\.chiave : ""/);
-    assert.match(testo, /let extraNelBox = risultati\s*\.filter\(x => x\?\.tipo === "extra"\)\s*\.map\(x => \(\{ nome: x\.data, sigla: x\.sigla \}\)\);/);
+    //I20-1070: accanto a nome e sigla viaggiano anche tipo e tipo_N della label.
+    assert.match(testo, /let extraNelBox = risultati\s*\.filter\(x => x\?\.tipo === "extra"\)\s*\.map\(x => \(\{ nome: x\.data, sigla: x\.sigla, tipoElemento: x\.tipoElemento, tipoFoto: x\.tipoFoto \}\)\);/);
 });
 
 test("i rami delle foto extra manuali e automatiche chiedono prima se l'immagine e' cambiata", () => {
