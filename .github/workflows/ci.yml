@@ -158,91 +158,85 @@ jobs:
         if: steps.changes.outputs.correggo4 == 'true'
         run: dotnet build correggo4/app/Correggo4/Correggo4.csproj -c Release
 
+      # Fidelity e Olimpo usano Yarn 4: il `yarn` del runner passa da solo alla
+      # versione versionata in .yarn/releases (yarnPath in .yarnrc.yml).
       - name: Set up Node.js for Fidelity
         if: steps.changes.outputs.fidelity == 'true'
         uses: actions/setup-node@v6
         with:
           node-version: 26
+          cache: yarn
+          cache-dependency-path: fidelity/yarn.lock
 
-      # The server currently declares Express 4 types. Transitive middleware
-      # dependencies otherwise hoist Express 5 types alongside the server copy.
-      - name: Align Fidelity Express types
-        if: steps.changes.outputs.fidelity == 'true'
-        working-directory: fidelity
-        shell: bash
-        run: |
-          node --input-type=commonjs <<'NODE'
-          const fs = require('node:fs');
-          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-          pkg.overrides = {
-            ...pkg.overrides,
-            '@types/express': '4.17.21',
-            '@types/express-serve-static-core': '4.19.6'
-          };
-          fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
-          NODE
-
+      # --immutable: la CI fallisce se yarn.lock non corrisponde ai package.json.
       - name: Install Fidelity dependencies
         if: steps.changes.outputs.fidelity == 'true'
         working-directory: fidelity
-        run: npm install --install-strategy=hoisted --legacy-peer-deps --no-audit --no-fund
+        run: yarn install --immutable
 
+      # I tipi di Express sono fissati da "resolutions" in fidelity/package.json.
       - name: Inspect Fidelity Express types
         if: steps.changes.outputs.fidelity == 'true'
         working-directory: fidelity
-        run: npm ls @types/express @types/express-serve-static-core
+        run: yarn why @types/express && yarn why @types/express-serve-static-core
 
       - name: Type-check Fidelity client
         if: steps.changes.outputs.fidelity == 'true'
         working-directory: fidelity
-        run: npm run type-check
+        run: yarn type-check
 
       - name: Type-check Fidelity server
         if: steps.changes.outputs.fidelity == 'true'
         working-directory: fidelity
-        run: npm run type-check:server
+        run: yarn type-check:server
 
       - name: Lint Fidelity client
         if: steps.changes.outputs.fidelity == 'true'
         working-directory: fidelity
-        run: npm run lint
+        run: yarn lint
 
       # Solo le dipendenze di runtime: una vulnerabilita' alta o critica blocca la CI.
+      # I pacchetti deprecati non sono vulnerabilita' e non la bloccano.
       - name: Audit Fidelity dependencies
         if: steps.changes.outputs.fidelity == 'true'
         working-directory: fidelity
-        run: npm audit --omit=dev --audit-level=high
+        run: yarn npm audit --all --recursive --environment production --severity high --no-deprecations
 
       - name: Test Fidelity
         if: steps.changes.outputs.fidelity == 'true'
         working-directory: fidelity
-        run: npm run test:server
+        run: yarn test:server
 
       - name: Build Fidelity
         if: steps.changes.outputs.fidelity == 'true'
         working-directory: fidelity
-        run: npm run build
+        run: yarn build
 
       - name: Set up Node.js for Olimpo
         if: steps.changes.outputs.olimpo == 'true'
         uses: actions/setup-node@v6
         with:
           node-version: 22
+          cache: yarn
+          cache-dependency-path: |
+            olimpo/yarn.lock
+            olimpo/ui/yarn.lock
 
       - name: Install Olimpo dependencies
         if: steps.changes.outputs.olimpo == 'true'
         working-directory: olimpo
-        run: npm install --legacy-peer-deps --no-audit --no-fund
+        run: yarn install --immutable
 
       - name: Test Olimpo
         if: steps.changes.outputs.olimpo == 'true'
         working-directory: olimpo
-        run: npm test -- --runInBand
+        run: yarn test --runInBand
 
+      # build installa anche ui/ dal suo yarn.lock, con --immutable.
       - name: Build Olimpo
         if: steps.changes.outputs.olimpo == 'true'
         working-directory: olimpo
-        run: npm run build
+        run: yarn build
 
       - name: Validate Plugin manifest
         if: steps.changes.outputs.plugin == 'true'

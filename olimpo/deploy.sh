@@ -18,16 +18,19 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
-echo "$(color_text 3 'Installazione dei pacchetti npm...')"
-npm install > /dev/null 2>&1
+# Yarn versionato nel repository: sul server non serve installarlo.
+YARN="node .yarn/releases/yarn-4.18.1.cjs"
+
+echo "$(color_text 3 'Installazione dei pacchetti con yarn...')"
+$YARN install --immutable > /dev/null 2>&1
 
 if [ $? -ne 0 ]; then
-  echo "$(color_text 1 'Errore durante npm install')"
+  echo "$(color_text 1 'Errore durante yarn install')"
   exit 1
 fi
 
 echo "$(color_text 3 'Costruzione del progetto...')"
-npm run build > /dev/null 2>&1
+$YARN build > /dev/null 2>&1
 
 if [ $? -ne 0 ]; then
   echo "$(color_text 1 'Errore durante la build del progetto')"

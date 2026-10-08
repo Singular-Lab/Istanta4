@@ -20,7 +20,10 @@ deprecati
 .cursor/
 .cursor/
 *.local
-yarn.lock
+# Yarn 4: yarn.lock e il binario in .yarn/releases sono versionati, il resto no
+.yarn/*
+!.yarn/releases
+.pnp.*
 # Editor directories and files
 
 .vscode

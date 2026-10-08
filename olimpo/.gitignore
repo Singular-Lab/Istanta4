@@ -73,6 +73,11 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 # Lock files
 package-lock.json
-yarn.lock
+# Yarn 4: yarn.lock e il binario in .yarn/releases sono versionati, il resto no
+.yarn/*
+!.yarn/releases
+# ui/ e' un progetto Yarn a parte: usa il binario di Olimpo, qui ha solo lo stato locale
+/ui/.yarn
+.pnp.*
 pnpm-lock.yaml
 .codex

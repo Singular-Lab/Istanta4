@@ -2,14 +2,15 @@ FROM node:26-slim AS builder
 
 WORKDIR /app
 
-# Copia i package.json di tutti i workspace prima di installare le dipendenze (cache layer)
-COPY package*.json ./
-COPY server/package*.json ./server/
-COPY src/package*.json ./src/
+# Manifest, lockfile e Yarn versionato prima del sorgente (cache layer).
+# Yarn si invoca dal binario in .yarn/releases: l'immagine non deve avere
+# ne' Yarn ne' Corepack. Aggiornando Yarn va aggiornato anche questo nome.
+COPY package.json yarn.lock .yarnrc.yml ./
+COPY .yarn/releases ./.yarn/releases
+COPY server/package.json ./server/
+COPY src/package.json ./src/
 
-# Il repository storico non versiona package-lock.json: installa i workspace
-# senza dipendere da un lockfile assente.
-RUN npm install --install-strategy=hoisted --legacy-peer-deps --no-audit --no-fund
+RUN node .yarn/releases/yarn-4.18.1.cjs install --immutable
 
 # Copia il sorgente completo per la build del client
 COPY . .
@@ -22,14 +23,15 @@ ENV VITE_API_URL=$VITE_API_URL
 ENV VITE_WS_URL=$VITE_WS_URL
 
 # Build del client (Vite -> dist/)
-RUN npm run build
+RUN node .yarn/releases/yarn-4.18.1.cjs build
 
 FROM node:26-slim AS runtime
 
 WORKDIR /app
 
-# Runtime minimale: copia solo cio che serve davvero
-COPY --from=builder /app/package.json /app/package-lock.json ./
+# Runtime minimale: copia solo cio che serve davvero. Il server parte con tsx
+# diretto (vedi entrypoint): qui non serve un package manager ne' il lockfile.
+COPY --from=builder /app/package.json ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/server ./server
 COPY --from=builder /app/lib ./lib
