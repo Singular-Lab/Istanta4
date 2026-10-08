@@ -197,7 +197,7 @@ const ReportIntegrita = {
                         if (paginaObj.records && paginaObj.records.length > 0) {
                             for (let j = 0; j < paginaObj.records.length; j++) {
                                 let gruppoRecords = paginaObj.records[j];
-                                var box = await impaginazioneSingoloIndd(gruppoRecords, paginaObj.nomePagina, applicaImpaginazioni);
+                                var box = await impaginazioneSingoloIndd(gruppoRecords, paginaObj.nomePagina, applicaImpaginazioni, undefined, false, null, false, false);//I20-1056: niente schermata a ogni box
 
                                 if (box == null) {
                                     messaggioUtente("Code CNF-012: Errore durante l'impaginazione della pagina " + paginaObj.nomePagina, "error");
@@ -3409,7 +3409,8 @@ const ReportIntegrita = {
                 null,
                 false,
                 null,
-                true
+                true,
+                false //I20-1056: dal Report Integrita' niente schermata delle segnalazioni
             );
 
             this._removeNuovoRowData(rowData);

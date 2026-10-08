@@ -135,35 +135,96 @@ test("i colori della schermata sono quelli del bollino: rosso gli errori, aranci
     assert.strictEqual(SchermataSegnalazioni.coloreCss("warning"), "#ef6c00");
 });
 
-test("a fine impaginazione la schermata si apre solo se il giro ha prodotto segnalazioni", () => {
-    let aperture = 0;
+test("a fine impaginazione la schermata guarda solo le pagine impaginate", () => {
+    //I20-1056: decidono i bollini di quelle pagine, non il report del giro.
+    const chiamate = [];
     const apri = SchermataSegnalazioni.apri;
-    SchermataSegnalazioni.apri = () => { aperture++; };
+    SchermataSegnalazioni.apri = (opzioni) => { chiamate.push(opzioni); return Promise.resolve(true); };
     try {
-        SchermataSegnalazioni.apriSeCiSono({ segnalazioni: [] });
-        SchermataSegnalazioni.apriSeCiSono(null);
-        SchermataSegnalazioni.apriSeCiSono({});
-        assert.strictEqual(aperture, 0);
-
         SchermataSegnalazioni.apriSeCiSono({ segnalazioni: [{ codiceGruppo: "1" }] });
-        assert.strictEqual(aperture, 1);
+        SchermataSegnalazioni.apriSeCiSono({ segnalazioni: [{ codiceGruppo: "1" }] }, []);
+        SchermataSegnalazioni.apriSeCiSono(null, [null, ""]);
+        assert.strictEqual(chiamate.length, 0);
+
+        SchermataSegnalazioni.apriSeCiSono({ segnalazioni: [] }, ["11", "10"]);
+        assert.deepStrictEqual(chiamate, [{ pagine: ["11", "10"], soloSeCiSono: true, aFineImpaginazione: true }]);
     }
     finally {
         SchermataSegnalazioni.apri = apri;
     }
 });
 
+test("le pagine di un giro sono quelle del risultato, una volta sola, dal punto di ripartenza", () => {
+    const risultato = { result: [{ pag: 11 }, { pag: 10 }, { pag: 11 }, { pag: null }, {}, { pag: "12" }] };
+    assert.deepStrictEqual(SchermataSegnalazioni.pagineDelRisultato(risultato), ["11", "10", "12"]);
+    assert.deepStrictEqual(SchermataSegnalazioni.pagineDelRisultato(risultato, 1), ["10", "11", "12"]);
+    assert.deepStrictEqual(SchermataSegnalazioni.pagineDelRisultato(null), []);
+    assert.deepStrictEqual(SchermataSegnalazioni.pagineDelRisultato({ result: "x" }), []);
+});
+
+/* ---- I20-1056: una schermata sola, con il caricamento ---- */
+
+//Un jQuery minimo: quanto basta perche' apri costruisca l'elenco.
+function conSchermataFinta(prova) {
+    const eventi = [];
+    const finto = () => {
+        const el = { dati: {} };
+        el.attr = () => el; el.css = () => el; el.text = () => el; el.append = () => el; el.empty = () => el;
+        el.data = (k, v) => { if (v === undefined) { return el.dati[k]; } el.dati[k] = v; return el; };
+        el.closest = () => ({ remove: () => eventi.push("chiudi") });
+        return el;
+    };
+    const salva = { $: global.$, Modali: global.Modali, showLoading: global.showLoading, hideLoading: global.hideLoading };
+    const originali = { _leggi: SchermataSegnalazioni._leggi, _disegna: SchermataSegnalazioni._disegna };
+    global.$ = finto;
+    global.Modali = { popup: () => eventi.push("popup") };
+    global.showLoading = () => eventi.push("caricamento");
+    global.hideLoading = () => eventi.push("fine caricamento");
+    SchermataSegnalazioni._disegna = () => eventi.push("disegna");
+    return Promise.resolve(prova(eventi)).finally(() => {
+        Object.assign(SchermataSegnalazioni, originali);
+        Object.keys(salva).forEach(k => { if (salva[k] === undefined) { delete global[k]; } else { global[k] = salva[k]; } });
+    });
+}
+
+test("click ripetuti: il caricamento, poi una sola schermata", () => conSchermataFinta(async (eventi) => {
+    SchermataSegnalazioni._leggi = () => { eventi.push("leggi"); return [{ pagina: "1", box: {}, voci: [{ g: "error", t: "x" }] }]; };
+
+    const prima = SchermataSegnalazioni.apri();
+    const seconda = SchermataSegnalazioni.apri();
+    const terza = SchermataSegnalazioni.apri();
+    const esiti = await Promise.all([prima, seconda, terza]);
+
+    assert.deepStrictEqual(esiti, [false, false, true]);
+    assert.strictEqual(eventi.filter(e => e === "popup").length, 1);
+    assert.strictEqual(eventi.filter(e => e === "leggi").length, 1);
+    //Prima di aprirne una si chiude quella che c'e', e il caricamento si chiude alla fine.
+    assert.deepStrictEqual(eventi.slice(eventi.indexOf("leggi")), ["leggi", "chiudi", "disegna", "popup", "fine caricamento"]);
+    assert.strictEqual(eventi[0], "caricamento");
+}));
+
+test("a fine impaginazione si legge subito, sotto il caricamento dell'impaginazione", () => conSchermataFinta(async (eventi) => {
+    SchermataSegnalazioni._leggi = (pagine) => { eventi.push("leggi " + pagine.join(",")); return []; };
+
+    const esito = SchermataSegnalazioni.apri({ pagine: ["10"], soloSeCiSono: true, aFineImpaginazione: true });
+    //Prima che chi chiama tolga il suo caricamento: niente attese.
+    assert.deepStrictEqual(eventi, ["leggi 10"]);
+    //Nessun bollino in quelle pagine: la schermata non si apre.
+    assert.strictEqual(await esito, false);
+    assert.deepStrictEqual(eventi, ["leggi 10"]);
+}));
+
 /* ---- la schermata, sul sorgente ---- */
 
 const schermata = leggiFileDelPlugin("segnalazioni/schermata.js").replace(/\r/g, "");
 
 test("la schermata legge il documento e offre vai al box, risolvi e risolvi tutte", () => {
-    assert.match(schermata, /Segnalazioni\.leggiDocumento\(SchermataSegnalazioni\._documento\(\)\)/);
+    assert.match(schermata, /const documento = SchermataSegnalazioni\._documento\(\);\s*return Array\.isArray\(pagine\) \? Segnalazioni\.leggiPagine\(documento, pagine\) : Segnalazioni\.leggiDocumento\(documento\);/);
     assert.match(schermata, /\.text\("Vai al box"\)/);
     //I20-1044: fra il testo e il clic c'e' lo stile che tiene il pulsante intero.
     assert.match(schermata, /\.text\("Risolvi"\)(?:\.css\([^)]*\))?\.on\('click', \(\) => \{\s*Segnalazioni\.risolviVoce\(lettura\.box, indice\);\s*SchermataSegnalazioni\.riempi\(elenco\);/);
     assert.match(schermata, /Modali\.popup\("Segnalazioni di impaginazione", elenco, "xl", SchermataSegnalazioni\.allaChiusura\)/);
-    assert.match(schermata, /\.text\("Nessuna segnalazione nel documento\."\)/);
+    assert.match(schermata, /\.text\(Array\.isArray\(pagine\) \? "Nessuna segnalazione nelle pagine impaginate\." : "Nessuna segnalazione nel documento\."\)/);
     //I testi entrano come testo, non come HTML.
     assert.match(schermata, /\$\('<span><\/span>'\)\.text\(voce\.t \|\| ""\)/);
 });
@@ -226,11 +287,20 @@ test("si apre da sola a fine impaginazione di Volantino, PoP e singola, ma non d
 
     assert.match(indexNew, /const SchermataSegnalazioni = require\('\.\/segnalazioni\/schermata'\);/);
     //Volantino: dopo il report, solo se si impagina.
-    assert.match(indexNew, /stampaSegnalazioni\(reportImpaginazioneObj\);\s*\/\/[^\n]*\n[^\n]*\n\s*if \(impagina\) \{\s*SchermataSegnalazioni\.apriSeCiSono\(reportImpaginazioneObj\);/);
+    assert.match(indexNew, /stampaSegnalazioni\(reportImpaginazioneObj\);\s*\/\/[^\n]*\n[^\n]*\n\s*if \(impagina\) \{\s*SchermataSegnalazioni\.apriSeCiSono\(reportImpaginazioneObj, SchermataSegnalazioni\.pagineDelRisultato\(objResult\)\);/);
     //PoP: report e schermata, fuori dal giro di un libro.
-    assert.match(indexNew, /if \(!\(jobImpaginazioneLibro\.stato == 1 && jobImpaginazioneLibro\.queue\.length > 0\)\) \{\s*stampaSegnalazioni\(reportImpaginazioneObj\);\s*SchermataSegnalazioni\.apriSeCiSono\(reportImpaginazioneObj\);/);
+    assert.match(indexNew, /if \(!\(jobImpaginazioneLibro\.stato == 1 && jobImpaginazioneLibro\.queue\.length > 0\)\) \{\s*stampaSegnalazioni\(reportImpaginazioneObj\);\s*\/\/[^\n]*\n\s*SchermataSegnalazioni\.apriSeCiSono\(reportImpaginazioneObj, SchermataSegnalazioni\.pagineDelRisultato\(objResult, restartFromIndexPoP\)\);/);
     //Singola: solo fuori dalle operazioni massive.
-    assert.match(indexNew, /if\(!massiveOperation\)\{\s*stampaSegnalazioni\(reportImpaginazioneObj\);\s*rimuoviSimboli\(\);[\s\S]{0,300}?SchermataSegnalazioni\.apriSeCiSono\(reportImpaginazioneObj\);/);
+    //I20-1056: solo se si impagina un box nuovo, e solo per la sua pagina.
+    assert.match(indexNew, /if\(!massiveOperation\)\{\s*stampaSegnalazioni\(reportImpaginazioneObj\);\s*rimuoviSimboli\(\);[\s\S]{0,700}?if \(apriSegnalazioni\) \{\s*SchermataSegnalazioni\.apriSeCiSono\(reportImpaginazioneObj, \[String\(pagina\)\]\);/);
+
+    //I20-1056: rifare un box non la apre: Reimpagina della scheda (anche dal riallineamento) e
+    //Report Integrita' passano apriSegnalazioni = false.
+    const scheda = leggiFileDelPlugin("schedaRef.js").replace(/\r/g, "");
+    assert.match(scheda, /impaginazioneSingoloIndd\(schedaRef, pagina, false, null, false, bounds, false, false\);/);
+    const report = leggiFileDelPlugin("reportIntegrita/reportIntegrita.js").replace(/\r/g, "");
+    assert.match(report, /impaginazioneSingoloIndd\(gruppoRecords, paginaObj\.nomePagina, applicaImpaginazioni, undefined, false, null, false, false\)/);
+    assert.match(report, /null,\s*true,\s*false \/\/I20-1056/);
 
     //Fix referenza: il report si', la schermata no.
     const fix = indexNew.substring(indexNew.indexOf("async function fixRefImpaginata("));

@@ -2553,7 +2553,8 @@ const schedaRef = {
             return;
         }
 
-        impaginazioneSingoloIndd(schedaRef, pagina, false, null, false, bounds);
+        //I20-1056: rifare un box non apre la schermata delle segnalazioni: restano nel suo bollino.
+        impaginazioneSingoloIndd(schedaRef, pagina, false, null, false, bounds, false, false);
     },
 
     mostraSecondaSchermataClonazione(element, idKitLavorazione, selezioneClonazione, allElementGruppo, skipImpaginazione) {

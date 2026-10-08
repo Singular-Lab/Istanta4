@@ -9,6 +9,11 @@
  * Mostra tutte le segnalazioni del documento, non solo quelle dell'ultimo giro: quelle non
  * risolte dei giri prima restano nei bollini, e devono restare visibili.
  *
+ * I20-1056, lotto 1: aperta a fine impaginazione mostra solo le pagine impaginate, e si apre solo
+ * se li' ci sono bollini; rifare un box non la apre (impaginazioneSingoloIndd, apriSegnalazioni).
+ * Dal pulsante mostra tutto il documento con il caricamento. Ne resta aperta una sola: una
+ * richiesta nuova annulla quella in corso.
+ *
  * Usa le globali di indexNew come gli altri moduli: $, Modali, Utility, app, docInLavorazione,
  * messaggioUtente, aggiornaBadgeSegnalazioniTracciato (lotto 3). Le funzioni che non toccano il
  * documento (perPagina, conta, coloreCss, testoRiepilogo, codiciAbbreviati) sono pure.
@@ -90,13 +95,81 @@ const SchermataSegnalazioni = {
         }
     },
 
-    /// Apre il popup con le segnalazioni del documento.
-    apri() {
-        const elenco = $('<div></div>').attr('id', SchermataSegnalazioni.ID_ELENCO)
-            .css({ width: '100%', color: 'black', fontSize: '12px' });
-        SchermataSegnalazioni.riempi(elenco);
-        //Il popup aspetta finche' non lo si chiude: non si aspetta qui.
-        Modali.popup("Segnalazioni di impaginazione", elenco, "xl", SchermataSegnalazioni.allaChiusura);
+    /// I20-1056: il turno dell'ultima richiesta di apertura. Una richiesta che, finita la lettura,
+    /// non e' piu' l'ultima, non apre niente: con i click ripetuti si aprivano popup uno sopra
+    /// l'altro (dieci, nella prova dell'operatore).
+    _turno: 0,
+
+    /// Apre il popup con le segnalazioni.
+    /// opzioni.pagine: solo quelle pagine (nomi), altrimenti tutto il documento.
+    /// opzioni.soloSeCiSono: se non c'e' nessun bollino non si apre niente.
+    /// opzioni.aFineImpaginazione: il caricamento lo mostra gia' l'impaginazione, e chi chiama lo
+    /// chiude subito dopo: la lettura si fa qui e ora, senza attese. Dal pulsante invece si mostra
+    /// il caricamento e lo si lascia disegnare prima di leggere.
+    /// Restituisce true se la schermata si e' aperta.
+    async apri(opzioni = {}) {
+        const turno = ++SchermataSegnalazioni._turno;
+        const pagine = Array.isArray(opzioni.pagine) ? opzioni.pagine : null;
+        const conCaricamento = !opzioni.aFineImpaginazione;
+
+        if (conCaricamento) {
+            SchermataSegnalazioni._caricamento(true);
+        }
+        try {
+            if (conCaricamento) {
+                //UXP non ridisegna mentre si legge il documento: si lascia comparire il caricamento.
+                await new Promise(fatto => setTimeout(fatto, 100));
+                if (turno !== SchermataSegnalazioni._turno) {
+                    return false;
+                }
+            }
+
+            const lette = SchermataSegnalazioni._leggi(pagine);
+            if (turno !== SchermataSegnalazioni._turno) {
+                return false;
+            }
+            if (opzioni.soloSeCiSono && lette.length === 0) {
+                return false;
+            }
+
+            SchermataSegnalazioni.chiudiAperta();
+            const elenco = $('<div></div>').attr('id', SchermataSegnalazioni.ID_ELENCO)
+                .css({ width: '100%', color: 'black', fontSize: '12px' });
+            elenco.data('pagine', pagine);
+            SchermataSegnalazioni._disegna(elenco, lette, pagine);
+            //Il popup aspetta finche' non lo si chiude: non si aspetta qui.
+            Modali.popup("Segnalazioni di impaginazione", elenco, "xl", SchermataSegnalazioni.allaChiusura);
+            return true;
+        }
+        finally {
+            if (conCaricamento && turno === SchermataSegnalazioni._turno) {
+                SchermataSegnalazioni._caricamento(false);
+            }
+        }
+    },
+
+    /// I20-1056: toglie la schermata gia' aperta, se c'e'. Chiamata prima di aprirne un'altra.
+    chiudiAperta() {
+        try {
+            $("#" + SchermataSegnalazioni.ID_ELENCO).closest("#popup").remove();
+        }
+        catch (e) {
+            //niente da chiudere
+        }
+    },
+
+    _caricamento(mostra) {
+        try {
+            if (mostra && typeof showLoading === "function") {
+                showLoading("Lettura delle segnalazioni...");
+            }
+            else if (!mostra && typeof hideLoading === "function") {
+                hideLoading();
+            }
+        }
+        catch (e) {
+            //il caricamento non deve fermare la schermata
+        }
     },
 
     /// Lotto 3: chiusa la schermata, i badge di pagina del tracciato si ricolorano: dopo un
@@ -108,30 +181,62 @@ const SchermataSegnalazioni = {
         }
     },
 
-    /// A fine impaginazione: apre la schermata solo se il giro ha prodotto segnalazioni.
-    apriSeCiSono(reportImpaginazioneObj) {
-        if (reportImpaginazioneObj != null && Array.isArray(reportImpaginazioneObj.segnalazioni)
-            && reportImpaginazioneObj.segnalazioni.length > 0) {
-            SchermataSegnalazioni.apri();
+    /// I20-1056: le pagine impaginate da un giro, dal risultato del server: i nomi in testo, una
+    /// volta sola, dall'indice da cui il giro e' ripartito (PoP).
+    pagineDelRisultato(risultato, daIndice = 0) {
+        const nomi = [];
+        const elencoRisultati = risultato != null && Array.isArray(risultato.result) ? risultato.result : [];
+        for (let i = Math.max(0, daIndice || 0); i < elencoRisultati.length; i++) {
+            const voce = elencoRisultati[i];
+            if (voce == null || voce.pag == null || String(voce.pag) === "") {
+                continue;
+            }
+            const nome = String(voce.pag);
+            if (nomi.indexOf(nome) < 0) {
+                nomi.push(nome);
+            }
         }
+        return nomi;
     },
 
-    /// Riempie l'elenco rileggendo il documento. Dopo ogni "Risolvi" si rifa' da capo: gli
-    /// indici delle segnalazioni e i box (che il bollino ridisegnato regruppa) cambiano.
-    riempi(elenco) {
-        elenco.empty();
+    /// A fine impaginazione: la schermata si apre solo se le pagine impaginate hanno bollini - quelli
+    /// nati ora e quelli rimasti dai giri prima - e mostra solo quelle pagine, dalla prima in ordine
+    /// di pagina. Senza pagine non si apre. Il report del giro resta il parametro di prima: le sue
+    /// segnalazioni sono gia' nei bollini.
+    apriSeCiSono(reportImpaginazioneObj, pagine = null) {
+        const nomi = Array.isArray(pagine) ? pagine.filter(nome => nome != null && String(nome) !== "") : [];
+        if (nomi.length === 0) {
+            return Promise.resolve(false);
+        }
+        return SchermataSegnalazioni.apri({ pagine: nomi, soloSeCiSono: true, aFineImpaginazione: true });
+    },
 
-        let lette = [];
+    /// Le letture dei bollini: delle sole pagine indicate, o di tutto il documento.
+    _leggi(pagine) {
         try {
-            lette = Segnalazioni.leggiDocumento(SchermataSegnalazioni._documento());
+            const documento = SchermataSegnalazioni._documento();
+            return Array.isArray(pagine) ? Segnalazioni.leggiPagine(documento, pagine) : Segnalazioni.leggiDocumento(documento);
         }
         catch (e) {
             console.error("Code SGN-01 Segnalazioni non lette dal documento:", e);
+            return [];
         }
+    },
 
-        const pagine = SchermataSegnalazioni.perPagina(lette);
-        if (pagine.length === 0) {
-            elenco.append($('<div></div>').text("Nessuna segnalazione nel documento.").css({ padding: '8px' }));
+    /// Riempie l'elenco rileggendo il documento, o le sole pagine con cui la schermata si e'
+    /// aperta. Dopo ogni "Risolvi" si rifa' da capo: gli indici delle segnalazioni e i box (che il
+    /// bollino ridisegnato regruppa) cambiano.
+    riempi(elenco) {
+        const pagine = elenco.data('pagine');
+        SchermataSegnalazioni._disegna(elenco, SchermataSegnalazioni._leggi(Array.isArray(pagine) ? pagine : null), pagine);
+    },
+
+    _disegna(elenco, lette, pagine) {
+        elenco.empty();
+
+        const perPagina = SchermataSegnalazioni.perPagina(lette);
+        if (perPagina.length === 0) {
+            elenco.append($('<div></div>').text(Array.isArray(pagine) ? "Nessuna segnalazione nelle pagine impaginate." : "Nessuna segnalazione nel documento.").css({ padding: '8px' }));
             return;
         }
 
@@ -140,7 +245,7 @@ const SchermataSegnalazioni = {
             .text(totali.segnalazioni + (totali.segnalazioni === 1 ? " segnalazione" : " segnalazioni") + " in " + totali.box + " box")
             .css({ fontWeight: 'bold', marginBottom: '6px' }));
 
-        pagine.forEach(pagina => {
+        perPagina.forEach(pagina => {
             elenco.append($('<div></div>').text("Pagina " + pagina.pagina)
                 .css({ fontWeight: 'bold', fontSize: '13px', marginTop: '10px', borderBottom: '1px solid #999' }));
             pagina.box.forEach(lettura => elenco.append(SchermataSegnalazioni._bloccoBox(lettura, elenco)));

@@ -178,6 +178,26 @@ const Segnalazioni = {
         return risultato;
     },
 
+    /// I20-1056: come leggiDocumento, ma solo per le pagine con quei nomi. Dopo un'impaginazione
+    /// la schermata guarda solo le pagine impaginate: e' piu' veloce e mostra solo quello che
+    /// riguarda il giro appena fatto. L'ordine e' quello delle pagine nel documento, non quello
+    /// dei nomi ricevuti. Senza nomi non si legge niente.
+    leggiPagine(documento, nomiPagine) {
+        const risultato = [];
+        const nomi = new Set((Array.isArray(nomiPagine) ? nomiPagine : []).map(nome => String(nome)));
+        if (documento == null || documento.pages == null || nomi.size === 0) {
+            return risultato;
+        }
+
+        elenco(documento.pages).forEach(pagina => {
+            if (pagina == null || !nomi.has(String(pagina.name))) {
+                return;
+            }
+            elenco(pagina.groups).forEach(gruppo => Segnalazioni._bolliniNelGruppo(gruppo, pagina.name, 1, risultato));
+        });
+        return risultato;
+    },
+
     /// Lotto 3: le segnalazioni per referenza, per colorare il badge di pagina del tracciato.
     /// Dalle letture di leggiDocumento: { idRec: { gravita, segnalazioni, errori } }, con la
     /// gravita' peggiore e i conteggi di tutti i box della referenza (di norma uno). Il box si

@@ -3864,9 +3864,9 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                     rimuoviSimboli();
                     stampaSegnalazioni(reportImpaginazioneObj);
                     //I20-1029, lotto 2: se l'impaginazione ha prodotto segnalazioni, la schermata si
-                    //apre da sola.
+                    //apre da sola. I20-1056: solo con le pagine impaginate, e solo se li' ci sono bollini.
                     if (impagina) {
-                        SchermataSegnalazioni.apriSeCiSono(reportImpaginazioneObj);
+                        SchermataSegnalazioni.apriSeCiSono(reportImpaginazioneObj, SchermataSegnalazioni.pagineDelRisultato(objResult));
                     }
 
                     //scriviamo il log
@@ -4452,7 +4452,8 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                     //alla volta e si chiudono, e la schermata non avrebbe niente da mostrare.
                     if (!(jobImpaginazioneLibro.stato == 1 && jobImpaginazioneLibro.queue.length > 0)) {
                         stampaSegnalazioni(reportImpaginazioneObj);
-                        SchermataSegnalazioni.apriSeCiSono(reportImpaginazioneObj);
+                        //I20-1056: solo con le pagine impaginate in questo giro.
+                        SchermataSegnalazioni.apriSeCiSono(reportImpaginazioneObj, SchermataSegnalazioni.pagineDelRisultato(objResult, restartFromIndexPoP));
                     }
 
                     if (jobImpaginazioneLibro.stato == 2 || jobImpaginazioneLibro.stato == 4) {
@@ -7749,7 +7750,7 @@ async function impaginaSingolo(codice, pagina, byPassBloccoGiaImpaginato = false
 /// L'operazione e' idempotente.
 ///
 /// La variabile `found` viene assegnata e mai letta: e' un residuo.
-async function impaginazioneSingoloIndd(records, pagina, cercaInPaginaPerConfronto, mappaPagina, massiveOperation = false, bounds = null, richiederRicollegamento = false) {
+async function impaginazioneSingoloIndd(records, pagina, cercaInPaginaPerConfronto, mappaPagina, massiveOperation = false, bounds = null, richiederRicollegamento = false, apriSegnalazioni = true) {
     try {
         //I20-981: primario, tracciato del primario e foto stanno in datiPrimarioPerConfronto,
         //che usa anche la preanalisi del Report Integrita'.
@@ -7871,7 +7872,12 @@ async function impaginazioneSingoloIndd(records, pagina, cercaInPaginaPerConfron
             rimuoviSimboli();
             //I20-1029, lotto 2: la schermata, se il box ha segnalazioni. Le operazioni massive del
             //Report Integrita' non passano di qui: la aprirebbero a ogni box.
-            SchermataSegnalazioni.apriSeCiSono(reportImpaginazioneObj);
+            //I20-1056: solo quando si impagina un box nuovo, e solo per la sua pagina. Chi rifa' un
+            //box gia' impaginato (Reimpagina, riallineamento, Report Integrita') passa
+            //apriSegnalazioni = false: le segnalazioni restano nel bollino del box.
+            if (apriSegnalazioni) {
+                SchermataSegnalazioni.apriSeCiSono(reportImpaginazioneObj, [String(pagina)]);
+            }
         }
 
         //Ricollegamento, confronto e rimozione dei simboli possono rifare elementi del box,
