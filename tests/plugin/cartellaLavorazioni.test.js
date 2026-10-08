@@ -7,6 +7,10 @@
  * lavorazioni.json si legge e si scrive li'; un file di prima nella cartella del documento resta in
  * uso finche' l'operatore non lo sposta.
  *
+ * I20-1065: la cartella delle lavorazioni non si usa piu' (al suo posto SingularData, vedi
+ * cartelleDiSistema.test.js): si cerca solo per ritrovare i file di prima, e i casi qui sotto valgono
+ * ancora per quello. La finestra chiede soltanto Links e Loghi.
+ *
  * utility.js fa require('indesign'): le funzioni si prendono dal sorgente con un fs finto, come in
  * nomeListaKit.test.js. Il resto si controlla sul sorgente.
  *
@@ -103,42 +107,51 @@ test("nessuno costruisce piu' a mano il percorso di lavorazioni.json", () => {
     const tutti = daControllare.filter(f => f.nome !== "custom.js");
     const conta = (re) => tutti.reduce((n, f) => n + (f.testo.match(re) || []).length, 0);
     assert.strictEqual(conta(/Utility\.percorsoFileLavorazioni\(/g), 0);
-    assert.ok(conta(/Utility\.voceLavorazione\(/g) >= 10, "letture: " + conta(/Utility\.voceLavorazione\(/g));
+    //I20-1065: erano almeno 10; checkPercorsi rileggeva la voce una seconda volta dopo aver registrato i
+    //percorsi, e quella rilettura non serve piu'. Ora il conto e' esatto: indexNew 3, ficoProcess 3, un
+    //custom.js per cliente.
+    assert.strictEqual(conta(/Utility\.voceLavorazione\(/g), 9);
     assert.strictEqual(conta(/Utility\.salvaVoceLavorazione\(/g), 4);
 });
 
-test("ficoProcess non perde il file nuovo e copia anche il percorso delle lavorazioni", () => {
+test("ficoProcess non perde il file nuovo e riprende solo i percorsi di Links e Loghi", () => {
     const fico = leggiFileDelPlugin("ficoProcess.js").replace(/\r/g, "");
 
     //Era "file== readFile(...)": un confronto, e subito dopo file.length andava in errore.
     assert.doesNotMatch(fico, /file\s*==\s*readFile\(/);
     //I20-1061: i percorsi da riprendere si leggono dal file di questa macchina, sempre un elenco.
     assert.strictEqual((fico.match(/let file = Utility\.leggiFileLavorazioni\(filePath\);/g) || []).length, 2);
-    assert.match(fico, /pathLavorazioni:pathLavorazioni ,details:/);
-    assert.match(fico, /pathLavorazioni: pathLavorazioni, details:/);
+    //I20-1065: logs, export e lavorazioni non si scrivono piu' nella voce: le crea il Plugin.
+    assert.match(fico, /pathLinks:pathLinks, pathLoghi:pathLoghi, details:/);
+    assert.match(fico, /pathLinks: pathLinks, pathLoghi: pathLoghi, details:/);
+    assert.doesNotMatch(fico, /pathLogs|pathEsportazione|pathLavorazioni/);
 });
 
-test("checkPercorsi chiede anche la cartella delle lavorazioni e la riconosce per nome", () => {
+test("checkPercorsi chiede soltanto Links e Loghi", () => {
     const indice = leggiFileDelPlugin("indexNew.js").replace(/\r/g, "");
     const inizio = indice.indexOf("async function checkPercorsi(");
     const corpo = indice.substring(inizio, indice.indexOf("\n}\n", inizio));
 
-    assert.match(corpo, /entrambi: \[[\s\S]*?\{ key: 'pathLavorazioni', value: percorsoLavorazioni \},[\s\S]*?\],/);
-    assert.match(corpo, /Utility\.cartellaLavorazioni\(_pathLavorazione\)/);
-    assert.match(corpo, /impostaPercorsiDiSistema\(4, cartellaLavorazioni\)/);
-    assert.match(corpo, /percorsoEsportazione && percorsoLavorazioni\) \{/);
+    assert.match(corpo, /const missing = \[percorsoLinks, percorsoLoghi\]\.filter\(/);
+    assert.match(corpo, /if \(percorsoLinks && percorsoLoghi\) \{/);
+    assert.doesNotMatch(corpo, /pathLogs|pathEsportazione|pathLavorazioni|cartellaLavorazioni/);
+    //Le cartelle previste si registrano prima di decidere se aprire la finestra.
+    assert.match(corpo, /await impostaPercorsiDiSistema\(0, _pathLavorazione \+ defaultPercorsoLinks\);/);
+    assert.match(corpo, /await impostaPercorsiDiSistema\(1, _pathLavorazione \+ defaultPercorsoLoghi\);/);
 
     const imposta = indice.substring(indice.indexOf("async function impostaPercorsiDiSistema("));
-    assert.match(imposta, /else if \(tipo == 4\) \{[\s\S]*?file\.pathLavorazioni = percorsoLavorazioni;/);
+    const corpoImposta = imposta.substring(0, imposta.indexOf("\n}\n"));
+    assert.doesNotMatch(corpoImposta, /tipo == [234]/);
+    assert.match(corpoImposta, /\["pathFoto", "pathLoghi"\]\.every\(/);
 });
 
-test("la finestra ha una riga per ognuna delle cinque cartelle", () => {
+test("la finestra ha una riga per Links e una per Loghi, e nient'altro", () => {
     const html = fs.readFileSync(path.join(__dirname, "..", "..", "plugin", "index.html"), "utf8").replace(/\r/g, "");
     const inizio = html.indexOf('<div id="dialogPathDiSistema"');
     assert.notStrictEqual(inizio, -1);
     const finestra = html.substring(inizio, html.indexOf('<div id="dialogEsportaLibro"', inizio));
 
-    const righe = [["pathFoto", 0], ["pathLoghi", 1], ["pathEsportazione", 3], ["pathLogs", 2], ["pathLavorazioni", 4]];
+    const righe = [["pathFoto", 0], ["pathLoghi", 1]];
     assert.strictEqual((finestra.match(/class="rigaPercorso percorsoMancante"/g) || []).length, righe.length);
     for (const [id, tipo] of righe) {
         assert.match(finestra, new RegExp('<div id="' + id + '" class="valorePercorso"></div>\\s*<button class="sceltaPercorso" onclick="impostaPercorsiDiSistema\\(' + tipo + '\\)">'), id);
@@ -146,4 +159,7 @@ test("la finestra ha una riga per ognuna delle cinque cartelle", () => {
         assert.strictEqual((html.match(new RegExp('id="' + id + '"', "g")) || []).length, 1, id);
     }
     assert.match(finestra, /id="confermaPercorsi"/);
+    for (const tolto of ["pathEsportazione", "pathLogs", "pathLavorazioni"]) {
+        assert.strictEqual(html.indexOf('id="' + tolto + '"'), -1, tolto);
+    }
 });

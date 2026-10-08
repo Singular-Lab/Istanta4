@@ -75,7 +75,7 @@ const CssFramework =
                     try
                     {
                         var allineamentiDB = objResult;
-                        fs.writeFileSync(pathLavorazione + "/allineamenti.json", JSON.stringify(allineamentiDB));
+                        fs.writeFileSync(Utility.percorsoDati("allineamenti.json"), JSON.stringify(allineamentiDB));
                         callback(null, allineamentiDB); // Passiamo `null` come primo argomento per indicare che non c'è errore
                     }catch(e){
                         //I20-1002: qui il console.error era commentato. Se la copia di riserva in
@@ -391,7 +391,7 @@ const CssFramework =
                 return esito;
             }
 
-            var file = readFile(pathLavorazione + "/allineamenti.json");
+            var file = readFile(Utility.percorsoDati("allineamenti.json"));
             if (!file || !Array.isArray(file.modificheCssPerKit)) {
                 return esito;
             }
@@ -1795,7 +1795,7 @@ const CssFramework =
                         console.log(file);
                     }
                     if (err) {
-                        file = readFile(pathLavorazione + "/allineamenti.json");
+                        file = readFile(Utility.percorsoDati("allineamenti.json"));
                         if (!file) {
                             console.error("Non è stato possibile leggere il file di allineamenti in locale. Operazione annullata.");
                             return;
@@ -1957,7 +1957,7 @@ const CssFramework =
                 return result;
             }
             else{
-                var file = readFile(pathLavorazione + "/allineamenti.json");
+                var file = readFile(Utility.percorsoDati("allineamenti.json"));
                 if (!file) {
                     console.error("Non è stato possibile leggere il file di allineamenti in locale. Operazione annullata.");
                     return {
@@ -3963,7 +3963,7 @@ const CssFramework =
                         console.log(file);
                     }
                     if (err) {
-                        file = readFile(pathLavorazione + "/allineamenti.json");
+                        file = readFile(Utility.percorsoDati("allineamenti.json"));
                         if (!file) {
                             console.error("Non è stato possibile leggere il file di allineamenti in locale. Operazione annullata.");
                             return box;
@@ -4074,7 +4074,7 @@ const CssFramework =
                 });
             }
             else{
-                var file = readFile(pathLavorazione + "/allineamenti.json");
+                var file = readFile(Utility.percorsoDati("allineamenti.json"));
                 if (!file) {
                     console.error("Non è stato possibile leggere il file di allineamenti in locale. Operazione annullata.");
                     return;

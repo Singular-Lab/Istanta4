@@ -369,12 +369,12 @@ const ReportIntegrita = {
 
     percorsoFileReport(idKit = null) {
         const kit = idKit != null ? idKit : (typeof idKitLavorazione !== "undefined" ? idKitLavorazione : "kit");
-        return pathLavorazione + "/reportIntegrita_" + kit + ".json";
+        return Utility.percorsoDati(Utility.nomeFileReportIntegrita(kit));
     },
 
     _getWhitelistIntegritaFilePath(idKit = null) {
         const kit = idKit != null ? idKit : (typeof idKitLavorazione !== "undefined" ? idKitLavorazione : "kit");
-        return pathLavorazione + "/whitelistIntegrita_" + kit + ".json";
+        return Utility.percorsoDati(Utility.nomeFileWhitelistIntegrita(kit));
     },
 
     _formatReportDate(dateValue) {
@@ -1643,12 +1643,12 @@ const ReportIntegrita = {
     },
 
     /// La cartella dove finiscono i csv: quella scelta per questa sessione, altrimenti la
-    /// cartella di esportazione configurata nei percorsi di sistema.
+    /// cartella di esportazione (I20-1065: export sotto la cartella del documento, exportPath).
     cartellaCsvReport() {
         const scelta = this._cartellaCsvSessione;
         const cartella = scelta != null && scelta !== ""
             ? String(scelta)
-            : (typeof percorsoEsportazione !== "undefined" ? String(percorsoEsportazione || "") : "");
+            : (typeof exportPath !== "undefined" ? String(exportPath || "") : "");
 
         if (!cartella) {
             throw new Error("cartella di export non configurata");

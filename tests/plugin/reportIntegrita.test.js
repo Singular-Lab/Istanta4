@@ -188,7 +188,9 @@ test("events guarda a intervalli, ma a decidere la chiusura e' il report", () =>
 test("il nome del file del report e' scritto in un posto solo", () => {
     let occorrenze = 0;
     for (const relativo of fileDelPlugin()) {
-        occorrenze += (senzaCommenti(leggiFileDelPlugin(relativo)).match(/["']\/reportIntegrita_["']/g) || []).length;
+        //I20-1065: il nome sta in utility.js (nomeFileReportIntegrita), senza la barra: la cartella
+        //la mette percorsoDati.
+        occorrenze += (senzaCommenti(leggiFileDelPlugin(relativo)).match(/["']\/?reportIntegrita_["']/g) || []).length;
     }
     assert.strictEqual(occorrenze, 1);
     assert.doesNotMatch(leggiFileDelPlugin("reportIntegrita/reportIntegrita.js"), /_getReportIntegritaFilePath/);

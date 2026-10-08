@@ -150,7 +150,7 @@ const griglia = {
                     includiIcon.on('click', function () {
                         //ci recuperiamo da listaRefConteggio la pagina pageName, leggiamo il suo codice filtro e prendiamo tutte le pagine (inclusa se stessa) con lo stesso codice filtro
                         //facciamo un array con i nomi delle pagine e lo passiamo a modalSelezioneElementoIncludiEscludi
-                        var obj = readFile(pathLavorazione + "/listaRefConteggio.json");
+                        var obj = readFile(Utility.percorsoDati("listaRefConteggio.json"));
                         var pagine = [];
                         if (obj != null) {
                             let pagCercata = obj.find(f => f.Pag == pageName);
@@ -190,7 +190,7 @@ const griglia = {
                         if (res.result) {
                             var pagine = [];
                             if (res.hiddenVal == 2) {
-                                var obj = readFile(pathLavorazione + "/listaRefConteggio.json");
+                                var obj = readFile(Utility.percorsoDati("listaRefConteggio.json"));
                                 if (obj != null) {
                                     let pagCercata = obj.find(f => f.Pag == pageName);
                                     if (pagCercata != null) {
@@ -234,7 +234,7 @@ const griglia = {
                         if (res.result) {
                             var pagine = [];
                             if (res.hiddenVal == 2) {
-                                var obj = readFile(pathLavorazione + "/listaRefConteggio.json");
+                                var obj = readFile(Utility.percorsoDati("listaRefConteggio.json"));
                                 if (obj != null) {
                                     let pagCercata = obj.find(f => f.Pag == pageName);
                                     if (pagCercata != null) {
@@ -440,7 +440,7 @@ const griglia = {
             return null;
         }
 
-        var obj = readFile(pathLavorazione + "/listaRefConteggio.json");
+        var obj = readFile(Utility.percorsoDati("listaRefConteggio.json"));
         if (obj == null) {
             return null;
         }
@@ -510,7 +510,7 @@ const griglia = {
         row.append(text);
         $("#mostraAvanzate").append(row);
         $("#mostraAvanzate").append('<br>');
-        var obj = readFile(pathLavorazione + "/listaRefEscluse.json");
+        var obj = readFile(Utility.percorsoDati("listaRefEscluse.json"));
         if (obj != null) {
             let pagCercata = obj.find(f => f.Pag == pagName);
             if (pagCercata != null) {
@@ -607,7 +607,7 @@ const griglia = {
         $("#mostraAvanzate").append(row);
         $("#mostraAvanzate").append('<br>');
 
-        var obj = readFile(pathLavorazione + "/listaRefConteggio.json");
+        var obj = readFile(Utility.percorsoDati("listaRefConteggio.json"));
         console.log(obj);
 
         if (obj != null) {
@@ -1030,7 +1030,7 @@ const griglia = {
         var mappaGriglia = this.mappaturaGriglia(griglia);
 
         var pagName = griglia.parentPage.name;
-        var obj = readFile(pathLavorazione + "/listaRefConteggio.json");
+        var obj = readFile(Utility.percorsoDati("listaRefConteggio.json"));
 
         //cancelliamo le info della pagina in listaRefAvanzate
         if (obj != null) {
@@ -1038,7 +1038,7 @@ const griglia = {
             //rimuoviamo la pagina dalla lista
             if (pagCercata != null) {
                 obj = obj.filter(f => f.Pag != pagName);
-                fs.writeFileSync(pathLavorazione + "/listaRefConteggio.json", JSON.stringify(obj));
+                fs.writeFileSync(Utility.percorsoDati("listaRefConteggio.json"), JSON.stringify(obj));
             }
         }
 
@@ -1214,12 +1214,12 @@ const griglia = {
         }
 
         if (codiceFiltro != null) {
-            var obj = readFile(pathLavorazione + "/listaRefConteggio.json");
+            var obj = readFile(Utility.percorsoDati("listaRefConteggio.json"));
             if (obj == null) {
                 messaggioUtente("Code GRD-18 Errore: impossibile trovare il file listaRefConteggio.json", "error");
                 return false;
             }
-            var objEscluse = readFile(pathLavorazione + "/listaRefEscluse.json");
+            var objEscluse = readFile(Utility.percorsoDati("listaRefEscluse.json"));
             if (objEscluse == null) {
                 objEscluse = [];
             }
@@ -1259,7 +1259,7 @@ const griglia = {
                         //scriviamo il file
                     }
 
-                    fs.writeFileSync(pathLavorazione + "/listaRefEscluse.json", JSON.stringify(objEscluse));
+                    fs.writeFileSync(Utility.percorsoDati("listaRefEscluse.json"), JSON.stringify(objEscluse));
 
                     if (gruppo != null) {
                         var listaImpaginate = JSON.parse(paginaEl.listaImpaginate);
@@ -1336,7 +1336,7 @@ const griglia = {
                         return false;
                     }
                     //scriviamo il file
-                    fs.writeFileSync(pathLavorazione + "/listaRefConteggio.json", JSON.stringify(obj));
+                    fs.writeFileSync(Utility.percorsoDati("listaRefConteggio.json"), JSON.stringify(obj));
                 }
             } else {
                 messaggioUtente("Code GRD-20 Errore: impossibile trovare il file listaRefConteggio.json", "error");
@@ -1365,13 +1365,13 @@ const griglia = {
             var pagName = box.parentPage.name;
     
             //leggiamo il file listaRefEscluse e cerchiamo la pagina
-            var obj = readFile(pathLavorazione + "/listaRefEscluse.json");
+            var obj = readFile(Utility.percorsoDati("listaRefEscluse.json"));
             if (obj != null) {
                 var pagineConElementoCercato = obj.filter(f => f.listaEscluse != null && f.listaEscluse.find(f => sameCodiceFiltro(makeCodiceFiltroFromItemRef(f), codiceFiltro)) != null);
                 if (pagineConElementoCercato != null && pagineConElementoCercato.length > 0) {
                     var el = pagineConElementoCercato[0].listaEscluse.find(f => sameCodiceFiltro(makeCodiceFiltroFromItemRef(f), codiceFiltro));
                     //spostiamo l'elemento in listaRefConteggio
-                    var objConteggio = readFile(pathLavorazione + "/listaRefConteggio.json");
+                    var objConteggio = readFile(Utility.percorsoDati("listaRefConteggio.json"));
                     if (objConteggio == null) {
                         objConteggio = [];
                     }
@@ -1485,14 +1485,14 @@ const griglia = {
     
     
                     //scriviamo il file
-                    fs.writeFileSync(pathLavorazione + "/listaRefConteggio.json", JSON.stringify(objConteggio));
+                    fs.writeFileSync(Utility.percorsoDati("listaRefConteggio.json"), JSON.stringify(objConteggio));
                     //scriviamo il file
-                    fs.writeFileSync(pathLavorazione + "/listaRefEscluse.json", JSON.stringify(obj));
+                    fs.writeFileSync(Utility.percorsoDati("listaRefEscluse.json"), JSON.stringify(obj));
     
                 }
                 else {
                     //cerchiamo l'elemento nelle avanzate
-                    var objConteggio = readFile(pathLavorazione + "/listaRefConteggio.json");
+                    var objConteggio = readFile(Utility.percorsoDati("listaRefConteggio.json"));
                     if (objConteggio == null) {
                         messaggioUtente("Code GRD-23 Errore: impossibile trovare il file listaRefConteggio.json", "error");
                     }
@@ -1599,7 +1599,7 @@ const griglia = {
 
     
                     //scriviamo il file
-                    fs.writeFileSync(pathLavorazione + "/listaRefConteggio.json", JSON.stringify(objConteggio));
+                    fs.writeFileSync(Utility.percorsoDati("listaRefConteggio.json"), JSON.stringify(objConteggio));
                 }
             } else {
                 messaggioUtente("Code GRD-25 Errore: impossibile trovare il file listaRefEscluse.json", "error");
@@ -1657,7 +1657,7 @@ const griglia = {
                 row.append(text);
                 $("#headerIncludiEscludi").append(row);
                 //creiamo una lista degli elementi contenuti in listaRefEscluse
-                var obj = readFile(pathLavorazione + "/listaRefEscluse.json");
+                var obj = readFile(Utility.percorsoDati("listaRefEscluse.json"));
                 let listaCodiciGiaScritti = [];
                 if (obj != null) {
                     for (var i = 0; i < pagCercate.length; i++) {
@@ -1770,7 +1770,7 @@ const griglia = {
                     }
                 }
                 //adesso ripetiamo l'operazione per gli elementi in listaRefConteggio, listaAvanzati di ogni pagina in pagCercate
-                var objConteggio = readFile(pathLavorazione + "/listaRefConteggio.json");
+                var objConteggio = readFile(Utility.percorsoDati("listaRefConteggio.json"));
                 if (objConteggio != null) {
                     for (var i = 0; i < pagCercate.length; i++) {
                         var pagCercata = objConteggio.find(f => f.Pag == pagCercate[i]);
@@ -1864,7 +1864,7 @@ const griglia = {
                 var pagCercata = null;
 
                 //leggiamo il file listaRefConteggio e leggiamo la pagCercata (sarà solo una)
-                var obj = readFile(pathLavorazione + "/listaRefConteggio.json");
+                var obj = readFile(Utility.percorsoDati("listaRefConteggio.json"));
                 if (obj != null) {
                     var pagCercata = obj.find(f => f.Pag == pagCercate[0]);
                 }
@@ -2017,7 +2017,7 @@ const griglia = {
                 var res = await Modali.confirmCustom("Escludere l'elemento da tutte le pagine associate al filtro o solo dalla pagina corrente?", "Pagina "+pageName, 1, "Pagine filtro", 2);
                 if (res.result) {
                     if (res.hiddenVal == 2) {
-                        var obj = readFile(pathLavorazione + "/listaRefConteggio.json");
+                        var obj = readFile(Utility.percorsoDati("listaRefConteggio.json"));
                         if (obj != null) {
                             let pagCercata = obj.find(f => f.Pag == pageName);
                             if (pagCercata != null) {
@@ -2286,7 +2286,7 @@ const griglia = {
     rimuoviDaEsclusi(codiceFiltro, pagName, svuotaTutto = false) {
         //cerchiamo in listarefAvanzati il codice e lo rimuoviamo, se la pagina è null lo rimuoviamo da tutte le pagine
         //altrimenti lo rimuoviamo solo dalla pagina specificata
-        var obj = readFile(pathLavorazione + "/listaRefEscluse.json");
+        var obj = readFile(Utility.percorsoDati("listaRefEscluse.json"));
         if (obj != null) {
             for (var i = 0; i < obj.length; i++) {
                 let pagCercata = obj[i];
@@ -2310,7 +2310,7 @@ const griglia = {
                     }
                 }
             }
-            fs.writeFileSync(pathLavorazione + "/listaRefEscluse.json", JSON.stringify(obj));
+            fs.writeFileSync(Utility.percorsoDati("listaRefEscluse.json"), JSON.stringify(obj));
             this.mostraElementiAvanzati(pagName);
         }
         else {
@@ -2493,7 +2493,7 @@ const griglia = {
                 }
                 else {
                     //essendo a pagine diverse dobbiamo aggiornare i due impaginati
-                    var obj = readFile(pathLavorazione + "/listaRefConteggio.json");
+                    var obj = readFile(Utility.percorsoDati("listaRefConteggio.json"));
 
                     //cerchiamo le due pagine in obj, per ogni pagina cerchiamo il codice che dovrebbe essere a quella pagina
                     //se troviamo entrambi i codici allora procediamo a scambiare i dati
@@ -2535,7 +2535,7 @@ const griglia = {
                             pagCercate[0].listaImpaginate = JSON.stringify(listaImpaginatePagina1);
                             pagCercate[1].listaImpaginate = JSON.stringify(listaImpaginatePagina2);
                             //ora scriviamo i dati nel file
-                            fs.writeFileSync(pathLavorazione + "/listaRefConteggio.json", JSON.stringify(obj))
+                            fs.writeFileSync(Utility.percorsoDati("listaRefConteggio.json"), JSON.stringify(obj))
                         }
                         else if (el1 == null) {
                             if(gruppo.codiceAssociato == null || gruppo.codiceAssociato == ""){
@@ -2550,7 +2550,7 @@ const griglia = {
                                 pagCercate[0].listaImpaginate = JSON.stringify(listaImpaginatePagina1);
                                 pagCercate[1].listaImpaginate = JSON.stringify(listaImpaginatePagina2);
                                 //ora scriviamo i dati nel file
-                                fs.writeFileSync(pathLavorazione + "/listaRefConteggio.json", JSON.stringify(obj));
+                                fs.writeFileSync(Utility.percorsoDati("listaRefConteggio.json"), JSON.stringify(obj));
                             }
                             else{
                                 messaggioUtente("Code GRD-37 Il dato dell'impaginato di pagina "+pageName+ " non risulta sincronizzato alla griglia, si consiglia di ripetere il conteggio per effettuare la sincronizzazione", "warning");
@@ -2568,7 +2568,7 @@ const griglia = {
                                 pagCercate[0].listaImpaginate = JSON.stringify(listaImpaginatePagina1);
                                 pagCercate[1].listaImpaginate = JSON.stringify(listaImpaginatePagina2);
                                 //ora scriviamo i dati nel file
-                                fs.writeFileSync(pathLavorazione + "/listaRefConteggio.json", JSON.stringify(obj));
+                                fs.writeFileSync(Utility.percorsoDati("listaRefConteggio.json"), JSON.stringify(obj));
                             }
                             else{
                                 messaggioUtente("Code GRD-38 Il dato dell'impaginato di pagina "+pageNameBoxSelezionato+ " non risulta sincronizzato alla griglia, si consiglia di ripetere il conteggio per effettuare la sincronizzazione", "warning");
