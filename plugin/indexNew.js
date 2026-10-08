@@ -65,7 +65,17 @@ const { storage } = require('uxp');
 const fs = require('fs');
 const fs2 = require('uxp').storage.localFileSystem;
 const { app, Justification, FitOptions, LocationOptions, File, ColorModel, Folder, ExportFormat, ContentType, SaveOptions, CoordinateSpaces, AnchorPoint, ResizeMethods} = require('indesign');
-const customAgenzia = require('./custom');
+//I20-1064: il cliente non si copia piu' in radice. clienteAttivo.json, scritto da
+//monta-cliente.sh, dice quale ipconfig usare, e l'ipconfig quale custom.js d'archivio leggere.
+//Se un anello manca il Plugin non parte e lo dice nel riquadro di avvio.
+const ConfigurazioneCliente = require('./configurazioneCliente');
+const configurazioneCliente = ConfigurazioneCliente.carica(function (percorso) { return require('./' + percorso); });
+if (configurazioneCliente.errore != null) {
+    console.error("I20-1064: " + configurazioneCliente.errore);
+    mostraAvvioPannello(configurazioneCliente.errore, false);
+    throw new Error("I20-1064: " + configurazioneCliente.errore);
+}
+const customAgenzia = configurazioneCliente.customAgenzia;
 const XMLHttpRequestClient = require('./XMLHttpRequestClient');
 const { parse, format } = require('path');
 //I20-1015: lo scaricamento delle foto, ex cmd.js. Lo usano come globale schedaFoto e
@@ -88,7 +98,7 @@ const schedaRef = require('./schedaRef');
 const ReperimentoFoto = require('./reperimentoFoto/reperimentoFoto');
 const schedaArtwork = require('./schedaArtwork');
 const manifesto = require("./manifest.json");
-const ipconfig = require("./ipconfig.json");
+const ipconfig = configurazioneCliente.ipconfig;
 const confronti = require('./confronti');
 //I20-1014: il Report Integrita' ha una cartella sua. events.js e index.html lo usano da qui.
 const ReportIntegrita = require('./reportIntegrita/reportIntegrita');
