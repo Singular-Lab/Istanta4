@@ -20,8 +20,15 @@ import { PromoResponseDTO } from "../../../server/core/dto";
 import EmptyState from "../../components/EmptyState";
 import PermissionGate from "../../components/PermissionGate";
 
+// Istanta non elimina definitivamente una promo con importazioni, tracciati o lavorazioni (I20-1052)
+const RIFIUTI_ELIMINAZIONE_DEFINITIVA = [
+  "importazioni_esistenti_per_questa_promo",
+  "tracciati_esistenti_per_questa_promo",
+  "lavorazioni_esistenti_per_questa_promo",
+];
+
 function Main() {
-  const [showDialogEliminazione, setShowDialogEliminazione] = useState<{ show: boolean; idPromo: string; stato?: string; isDeletable?: boolean; numero_kit_collegati?: number }>();
+  const [showDialogEliminazione, setShowDialogEliminazione] = useState<{ show: boolean; idPromo: string; stato?: string; isDeletable?: boolean; numero_kit_collegati?: number; motivoRifiuto?: string }>();
   const [loadingEliminazione, setLoadingEliminazione] = useState(false);
   const { showNotification } = useNotification();
   const navigate = useNavigate();
@@ -102,8 +109,14 @@ function Main() {
       setShowDialogEliminazione({ show: false, idPromo: "", numero_kit_collegati: 0 });
       data.refetch();
     },
-    onError(error: CustomError) {
+    onError(error: CustomError, variables) {
       console.log(error);
+      // Istanta rifiuta l'eliminazione definitiva: la modale resta aperta e propone quella non definitiva
+      if (variables.isDeletable && RIFIUTI_ELIMINAZIONE_DEFINITIVA.includes(error?.details?.codice as string)) {
+        setLoadingEliminazione(false);
+        setShowDialogEliminazione((prev) => prev && { ...prev, isDeletable: false, motivoRifiuto: error.message });
+        return;
+      }
       if (error.httpStatus == 403) {
         showNotification(
           <div className="flex flex-row items-center">
@@ -462,6 +475,11 @@ function Main() {
                         </>
                       ) : (
                         <>
+                          {showDialogEliminazione?.motivoRifiuto && (
+                            <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-danger">
+                              <span className="font-semibold">Eliminazione definitiva non possibile.</span> {showDialogEliminazione.motivoRifiuto}
+                            </div>
+                          )}
                           Sei sicuro di voler eliminare questa lavorazione? <br />
                           <span className="text-slate-500">La lavorazione verrà spostata nella sezione "Eliminate" e potrà essere ripristinata.</span>
                           {showDialogEliminazione?.numero_kit_collegati && showDialogEliminazione.numero_kit_collegati > 0 && (

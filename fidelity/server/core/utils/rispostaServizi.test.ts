@@ -43,6 +43,18 @@ describe('verificaRisposta', () => {
       .toBe('Istanta: la naming convention è usata da un tipo di export');
   });
 
+  it('i codici noti arrivano al client in details.codice, il testo libero no', () => {
+    const conCodice = () => verificaRisposta(ok({ esito: false, error: 'importazioni_esistenti_per_questa_promo' }), 'ISTANTA', '/x');
+    const conTesto = () => verificaRisposta(errore(400, { esito: false, error: 'Area già esistente' }), 'ISTANTA', '/x');
+    const dettagli = (fn: () => unknown) => {
+      try { fn(); } catch (e) { return (e as ExternalApiError).details; }
+    };
+
+    expect(dettagli(conCodice)).toMatchObject({ codice: 'importazioni_esistenti_per_questa_promo' });
+    expect(messaggio(conCodice)).toBe('Istanta: la promo ha delle importazioni collegate');
+    expect(dettagli(conTesto)).not.toHaveProperty('codice');
+  });
+
   it.each([
     [{ esito: false, errorCode: 0, error: 'no_login' }],
     [{ login: false, error: 'no_login_byolympus' }],

@@ -36,6 +36,7 @@ import { FilesRuntime } from '../models/files_runtime';
 import { PromoAttributes } from '../models/promo';
 import { Referenze } from '../models/referenze';
 import { RuntimeKit } from '../models/runtime_kit';
+import { Tracciati } from '../models/tracciati';
 import { TracciatiMomento } from '../models/tracciati_momento';
 import type { IPromoRepository } from '../repositories/PromoRepository';
 import { isStessaPromo, normalizePromoModel } from '../utils/PromoModelUtils';
@@ -44,6 +45,12 @@ import { verificaRisposta } from '../utils/rispostaServizi';
 import { normalizzaMeta } from './visibilitaPromoUtils';
 dayjs.extend(isBetween);
 
+
+// Istanta rifiuta l'eliminazione definitiva di una promo con importazioni, tracciati o
+// lavorazioni (I20-1052): niente kit e niente tracciati, altrimenti solo eliminazione non definitiva
+async function eliminabileDefinitivamente(idPromo: string, kitCollegati: number): Promise<boolean> {
+  return kitCollegati === 0 && (await Tracciati.count({ where: { id_promo_tracciati: idPromo } })) === 0;
+}
 
 export class PromoService implements IPromoService {
   constructor(
@@ -298,6 +305,8 @@ export class PromoService implements IPromoService {
             [Op.gte]: inizioValidita.startOf('day').toDate(),
             [Op.lt]: inizioValidita.add(1, 'day').startOf('day').toDate(),
           },
+          // Una promo eliminata non blocca: si elimina e si ricrea (I20-1052)
+          stato: { [Op.ne]: STATO_PROMO.ELIMINATA },
         },
         attributes: ['nome_promo', 'validita_dal', 'validita_al'],
       });
@@ -687,7 +696,7 @@ export class PromoService implements IPromoService {
         where: { id_promo: promo.id_promo },
         raw: true
       });
-      const isDeletable = kitCollegati.length === 0;
+      const isDeletable = await eliminabileDefinitivamente(promo.id_promo, kitCollegati.length);
       const objToReturn: PromoResponseDTO = {
         id: promo.id_promo,
         nome: promo.nome_promo,
@@ -731,7 +740,7 @@ export class PromoService implements IPromoService {
           where: { id_promo: promoData.id_promo },
           raw: true
         });
-        const isDeletable = kitCollegati.length === 0;
+        const isDeletable = await eliminabileDefinitivamente(promoData.id_promo, kitCollegati.length);
         return {
           id: promoData.id_promo,
           nome: promoData.nome_promo,
@@ -885,7 +894,7 @@ export class PromoService implements IPromoService {
           where: { id_promo: promoData.id_promo },
           raw: true
         });
-        const isDeletable = kitCollegati.length === 0;
+        const isDeletable = await eliminabileDefinitivamente(promoData.id_promo, kitCollegati.length);
 
         return {
           id: promoData.id_promo,
@@ -945,7 +954,7 @@ export class PromoService implements IPromoService {
           where: { id_promo: p.id_promo },
           raw: true
         });
-        const isDeletable = kitCollegati.length === 0;
+        const isDeletable = await eliminabileDefinitivamente(p.id_promo, kitCollegati.length);
         return {
           id: p.id_promo,
           nome: p.nome_promo,
