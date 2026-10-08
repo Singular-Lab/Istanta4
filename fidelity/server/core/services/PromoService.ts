@@ -320,16 +320,21 @@ export class PromoService implements IPromoService {
       updatedAt: new Date()
     };
 
-    const chiamataIstantaResult = await ServerUtils.sendToFICOApi<{ esito: boolean }>(
+    const chiamataIstantaResult = await ServerUtils.sendToFICOApi<{ esito: boolean, error?: string }>(
       req,
       config.ISTANTA_IP_ADDRESS + "/FicoProcess/inizioNuovaLavorazione",
       "PUT",
       promo
     );
 
-    if (!chiamataIstantaResult.data.esito) {
-      throw wrapApiError(new Error("Errore durante la chiamata all'API di Istanta"), {
-        message: "Errore durante la chiamata all'API di Istanta",
+    if (!chiamataIstantaResult.data?.esito) {
+      // Su risposta non OK sendToFICOApi restituisce data null e il corpo di Istanta in statusText;
+      // senza sessione Istanta risponde 401 con error "no_login..." (controller o LoginMiddleWare)
+      const erroreIstanta = chiamataIstantaResult.data?.error || chiamataIstantaResult.statusText || 'risposta vuota';
+      throw wrapApiError(new Error(erroreIstanta), {
+        message: erroreIstanta.includes('no_login')
+          ? "Istanta non ha riconosciuto l'utente: la promo non è stata creata"
+          : "Errore durante la chiamata all'API di Istanta",
         service: 'ISTANTA',
         endpoint: '/FicoProcess/inizioNuovaLavorazione'
       });

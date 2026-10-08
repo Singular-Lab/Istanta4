@@ -5,7 +5,6 @@ import { Request } from 'express';
 import { Op } from 'sequelize';
 import { v4 as uuidv4 } from 'uuid';
 import { log } from '../logger';
-import { Colorize } from '../../../lib/Colorize';
 import { decryptString, encryptString } from '../../../lib/encryption';
 import { CATEGORIA_ATTIVITA, STATO_LAVORAZIONE_KIT_RUNTIME, STATO_ORDINI_STAMPA, TIPO_ATTIVITA } from '../../../lib/enums';
 import { BadRequestError, ExternalApiError, NotFoundError, wrapDatabaseError } from '../../../lib/errors';
@@ -172,7 +171,7 @@ export class OrdiniStampaService implements IOrdiniStampaService {
       const result = await OrdiniDiStampa.create(ordineStampa);
       return result;
     } catch (error) {
-      console.error(Colorize.bgRed('Errore durante la creazione dell\'ordine di stampa:'), error);
+      log.error('Errore durante la creazione dell\'ordine di stampa:', error);
       throw wrapDatabaseError(new Error("Errore durante la creazione dell'ordine di stampa"), {
         message: "Errore durante la creazione dell'ordine di stampa",
         operation: 'create',
@@ -189,7 +188,7 @@ export class OrdiniStampaService implements IOrdiniStampaService {
       });
       return ordini;
     } catch (error) {
-      console.error(Colorize.bgRed('Errore durante il recupero degli ordini di stampa per promo:'), error);
+      log.error('Errore durante il recupero degli ordini di stampa per promo:', error);
       throw wrapDatabaseError(new Error("Errore durante il recupero degli ordini di stampa per promo"), {
         message: "Errore durante il recupero degli ordini di stampa per promo",
         operation: 'findAll',
@@ -214,7 +213,7 @@ export class OrdiniStampaService implements IOrdiniStampaService {
       await ordine.save();
       return ordine;
     } catch (error) {
-      console.error(Colorize.bgRed('Errore durante l\'aggiornamento dello stato dell\'ordine di stampa:'), error);
+      log.error('Errore durante l\'aggiornamento dello stato dell\'ordine di stampa:', error);
       if (error instanceof NotFoundError) {
         throw error;
       }
@@ -243,7 +242,7 @@ export class OrdiniStampaService implements IOrdiniStampaService {
 
       return result > 0;
     } catch (error) {
-      console.error(Colorize.bgRed('Errore durante l\'eliminazione dell\'ordine di stampa:'), error);
+      log.error('Errore durante l\'eliminazione dell\'ordine di stampa:', error);
       if (error instanceof NotFoundError) {
         throw error;
       }
@@ -288,7 +287,7 @@ export class OrdiniStampaService implements IOrdiniStampaService {
 
       return mappedDTO;
     } catch (error) {
-      console.error(Colorize.bgRed('Errore durante il recupero degli ordini in corso:'), error);
+      log.error('Errore durante il recupero degli ordini in corso:', error);
       throw wrapDatabaseError(new Error("Errore durante il recupero degli ordini in corso"), {
         message: "Errore durante il recupero degli ordini in corso",
         operation: 'findAll',
@@ -933,7 +932,7 @@ export class OrdiniStampaService implements IOrdiniStampaService {
 
       return mappedDTO;
     } catch (error) {
-      console.error(Colorize.bgRed('Errore durante il recupero degli ordini finiti:'), error);
+      log.error('Errore durante il recupero degli ordini finiti:', error);
       throw wrapDatabaseError(new Error("Errore durante il recupero degli ordini finiti"), {
         message: "Errore durante il recupero degli ordini finiti",
         operation: 'findAll',
@@ -948,7 +947,7 @@ export class OrdiniStampaService implements IOrdiniStampaService {
       const result = await OrdiniDiStampa.create(data);
       return result;
     } catch (error) {
-      console.error(Colorize.bgRed('Errore durante la creazione dell\'ordine di stampa:'), error);
+      log.error('Errore durante la creazione dell\'ordine di stampa:', error);
       throw wrapDatabaseError(new Error("Errore durante la creazione dell'ordine di stampa"), {
         message: "Errore durante la creazione dell'ordine di stampa",
         operation: 'create',
@@ -994,7 +993,7 @@ export class OrdiniStampaService implements IOrdiniStampaService {
       };
       return promoData;
     } catch (error) {
-      console.error(Colorize.bgRed('Errore durante il recupero della promo:'), error);
+      log.error('Errore durante il recupero della promo:', error);
       if (error instanceof NotFoundError) {
         throw error;
       }
@@ -1034,7 +1033,7 @@ export class OrdiniStampaService implements IOrdiniStampaService {
       }
       return objContrattoDTO;
     } catch (error) {
-      console.error(Colorize.bgRed('Errore durante il recupero del contratto tipografia:'), error);
+      log.error('Errore durante il recupero del contratto tipografia:', error);
       if (error instanceof NotFoundError) {
         throw error;
       }
@@ -1053,7 +1052,7 @@ export class OrdiniStampaService implements IOrdiniStampaService {
       return Buffer.from(response.data, "binary");
     } catch (error: any) {
       if (error instanceof Error) {
-        console.error(Colorize.bgRed('Errore durante il recupero del file da Olimpo:'), error.message);
+        log.error('Errore durante il recupero del file da Olimpo:', error.message);
         throw wrapDatabaseError(new Error("Errore durante il recupero del file"), {
           message: "Errore durante il recupero del file",
           operation: 'get',
@@ -1061,7 +1060,7 @@ export class OrdiniStampaService implements IOrdiniStampaService {
           details: { id },
         });
       } else {
-        console.error(Colorize.bgRed('Errore sconosciuto durante il recupero del file da Olimpo:'), error);
+        log.error('Errore sconosciuto durante il recupero del file da Olimpo:', error);
         throw wrapDatabaseError(new Error("Errore sconosciuto durante il recupero del file"), {
           message: "Errore sconosciuto durante il recupero del file",
           operation: 'get',
@@ -1084,7 +1083,7 @@ export class OrdiniStampaService implements IOrdiniStampaService {
       }
       return ordine;
     } catch (error) {
-      console.error(Colorize.bgRed('Errore durante il recupero dell\'ordine:'), error);
+      log.error('Errore durante il recupero dell\'ordine:', error);
       if (error instanceof NotFoundError) {
         throw error;
       }
@@ -1113,7 +1112,7 @@ export class OrdiniStampaService implements IOrdiniStampaService {
       }
       return ordine;
     } catch (error) {
-      console.error(Colorize.bgRed('Errore durante il recupero degli invii:'), error);
+      log.error('Errore durante il recupero degli invii:', error);
       if (error instanceof NotFoundError) {
         throw error;
       }
@@ -1148,7 +1147,7 @@ export class OrdiniStampaService implements IOrdiniStampaService {
 
       return null;
     } catch (error) {
-      console.error(Colorize.bgRed('Errore durante il recupero del report Excel:'), error);
+      log.error('Errore durante il recupero del report Excel:', error);
       throw wrapDatabaseError(new Error("Errore durante il recupero del report Excel"), {
         message: "Errore durante il recupero del report Excel",
         operation: 'findByPk',
@@ -1299,7 +1298,7 @@ export class OrdiniStampaService implements IOrdiniStampaService {
       emitToClients(`${socketId}_result`, resultData);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Errore sconosciuto durante il raggruppamento';
-      console.error(Colorize.bgRed(`[groupFilesByEquality] ${message}`));
+      log.error(`[groupFilesByEquality] ${message}`);
 
       // Store failed state
       const job = this.groupingJobs.get(idOrdineDiStampa);
