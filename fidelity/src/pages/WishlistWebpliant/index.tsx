@@ -40,7 +40,7 @@ const WishlistWebpliant: React.FC = () => {
     } = webpliantParams;
 
     // Sistema di eventi per la gestione della wishlist
-    const { events: wishlistEvents } = useWishlistEvents();
+    const { events: wishlistEvents, notifyItemRemoved } = useWishlistEvents();
 
     // 🔍 DEBUG: Log completo dello stato del sistema webpliant (solo al mount)
     useEffect(() => {
@@ -273,7 +273,6 @@ const WishlistWebpliant: React.FC = () => {
                                                 await ServerCall.post("/deleteWishlistItem", { codice: item.codice_referenza, wishlistId: sessionWishlistId });
                                                 
                                                 // Emetti evento per notificare altri componenti
-                                                const { notifyItemRemoved } = useWishlistEvents();
                                                 notifyItemRemoved(item.codice_referenza as string, sessionWishlistId);
                                                 
                                                 console.log('✅ Item removed from wishlist:', item.codice_referenza);

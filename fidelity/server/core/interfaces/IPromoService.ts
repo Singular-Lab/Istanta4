@@ -68,7 +68,6 @@ export interface IPromoService {
     data_inizio_promo_corrente: string;
     data_fine_promo_corrente: string;
   }[]>;
-  testNotifica(req: ExpressRequest): Promise<void>;
   getPromoByNome(nome: string): Promise<PromoResponseDTO>
   getDatoPerMenabo(idPromo: string, canale?: string): Promise<any>;
   getMenaboLayout(idPromo: string): Promise<MenaboLayoutSalvato | null>;

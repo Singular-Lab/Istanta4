@@ -472,40 +472,13 @@ export function sessionSecurityLogger(req: Request, res: Response, next: NextFun
       });
     }
 
-    // Aggiorna i dati della sessione
+    // Aggiorna i dati della sessione. lastActivity resta compito di authMiddleware:
+    // aggiornarlo qui, prima del controllo, renderebbe irraggiungibile il timeout per ruolo.
     req.session.lastIP = currentIP;
     req.session.lastUserAgent = currentUserAgent;
-    req.session.lastActivity = new Date();
   }
 
   next();
-}
-
-/**
- * Middleware per prevenire attacchi di session fixation
- */
-export function sessionFixationPrevention(req: Request, res: Response, next: NextFunction): void {
-  // Se è una richiesta di login e la sessione esiste già
-  if (req.path.includes('/login') && req.method === 'POST' && req.sessionID) {
-    const oldSessionId = req.sessionID;
-
-    req.session.regenerate((err) => {
-      if (err) {
-        log.error('Failed to regenerate session', err);
-        return next(err);
-      }
-
-      log.info('Session regenerated for security', {
-        oldSessionId,
-        newSessionId: req.sessionID,
-        ip: req.ip
-      });
-
-      next();
-    });
-  } else {
-    next();
-  }
 }
 
 /**

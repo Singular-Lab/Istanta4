@@ -105,7 +105,7 @@ export const cleanupScheduler = new EphemeralTokenCleanupScheduler();
 
 /**
  * Script standalone per cleanup manuale
- * Eseguibile con: node -r ts-node/register cleanup-ephemeral-tokens.ts
+ * Eseguibile con: npx tsx server/core/scripts/cleanup-ephemeral-tokens.ts
  */
 if (require.main === module) {
     (async () => {

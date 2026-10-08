@@ -312,12 +312,12 @@ export class ExternalApiController extends BaseController {
 
       const formData = new FormData();
       const filePath = req.file.path;
-      const fileResolve = payload.fileName || req.file.filename;
+      const fileResolve = payload.fileName || req.file.originalname;
       const fileBuffer = fs.readFileSync(filePath);
       const fileBlob = new Blob([fileBuffer], { type: 'application/pdf' });
       const hash = crypto.createHash('md5').update(fileBuffer).digest('hex');
 
-      formData.append("file", fileBlob, path.basename(req.file.filename));
+      formData.append("file", fileBlob, path.basename(req.file.originalname));
       formData.append("json_meta_materiale", JSON.stringify({
         Id: "",
         FileHash: hash,

@@ -33,7 +33,7 @@ const envSchema = z.object({
     DB_POSTGRESQL_HOST: z.string(),
 
     // Configurazione sicurezza
-    FICO_SECRET: z.string(),
+    FICO_SECRET: z.string().min(1), // firma i token di reset e cifra i contesti FICO: vuoto li renderebbe forgiabili
     AD_TENANT_ID: z.string().optional(),
     SALT_ROUNDS: z.string().regex(/^\d+$/).transform(Number),
     INTERNAL_REQUEST_SECRET: z.string().optional(),
@@ -52,7 +52,7 @@ const envSchema = z.object({
     VITE_OLYMPUS_IP_ADDRESS: z.string().url(),
     OLYMPUS_IP_ADDRESS_CORS: z.string().url(),
     VITE_OLYMPUS_IP_ADDRESS_CORS: z.string().url(),
-    SESSION_SECRET: z.string(),
+    SESSION_SECRET: z.string().min(1),
     WS_PORT: z.string().regex(/^\d+$/).transform(Number).default('3400'),
     // Configurazione percorsi
     ICONE_INSEGNA_DIR: z.string(),

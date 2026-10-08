@@ -25,6 +25,8 @@ export interface IUserService {
   deleteUser(id: string, tipoUtente: string): Promise<boolean>;
   getAllUsers(): Promise<UtenteResponseDTO[]>;
   getUserByEmail(email: string): Promise<UtenteResponseDTO | null>;
+  /** Hash della password attuale ('' se l'utente non ne ha una), null se l'utente non esiste. */
+  getPasswordHashByEmail(email: string): Promise<string | null>;
 
   // Authentication
   login(email: string, password: string, selectedUserType?: TIPO_UTENTI): Promise<{ success: boolean; user?: UtenteResponseDTO; message?: string }>;

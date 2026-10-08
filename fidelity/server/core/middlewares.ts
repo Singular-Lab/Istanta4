@@ -13,7 +13,6 @@ import { errorHandler } from './middleware/errorHandler';
 import { apiRateLimiter } from './middleware/rateLimiter';
 import { csrfProtection } from './middleware/csrfProtection';
 import { applySecurityMiddlewares } from './middleware/securityMiddleware';
-import { sessionMiddleware } from './session';
 
 // Estendi la sessione per TypeScript
 declare module 'express-session' {
@@ -55,9 +54,9 @@ export function applyMiddlewares(app: Express) {
   // Middleware di compressione
   app.use(compressionMiddleware);
 
-  // Middleware per parsing delle richieste
+  // Middleware per parsing delle richieste.
+  // La sessione e' montata in server.ts prima di questi middleware.
   app.use(cookieParser());
-  app.use(sessionMiddleware);
 
   // Timeout dinamico delle sessioni
   // app.use(dynamicSessionTimeout);

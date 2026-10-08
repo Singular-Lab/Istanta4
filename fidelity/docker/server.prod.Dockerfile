@@ -51,6 +51,9 @@ RUN mkdir -p /home/node/insegne /app/uploads/tmp /app/public/uploads/materiali_P
 
 RUN chmod +x docker/server-entrypoint.prod.sh
 
+# L'immagine gira non-root anche se avviata senza il `user: node` del compose.
+USER node
+
 EXPOSE 3010 3400
 
 CMD ["sh", "docker/server-entrypoint.prod.sh"]

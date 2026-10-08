@@ -206,6 +206,26 @@ function reducer(state: State, action: Action): State {
   }
 }
 
+/**
+ * Riporta nello stato della timeline quale popover e' aperto. Gli hook non possono
+ * stare nella render-prop del Popover, quindi l'effetto vive in questo figlio.
+ */
+function PopoverOpenSync({ open, popoverId, openPopoverId, dispatch }: {
+  open: boolean;
+  popoverId: string;
+  openPopoverId: string | null;
+  dispatch: React.Dispatch<Action>;
+}) {
+  useEffect(() => {
+    if (open) {
+      dispatch({ type: "SET_OPEN_POPOVER", payload: popoverId });
+    } else if (openPopoverId === popoverId) {
+      dispatch({ type: "SET_OPEN_POPOVER", payload: null });
+    }
+  }, [open, popoverId]);
+  return null;
+}
+
 // ============================================================================
 // COMPONENTE
 // ============================================================================
@@ -1239,15 +1259,14 @@ const PromotionTimeline: React.FC<PromotionTimelineProps> = ({
                               )}>
                                 <Popover data-popover className="z-[9999]">
                                   {({ open, close }) => {
-                                    React.useEffect(() => {
-                                      if (open) {
-                                        dispatch({ type: "SET_OPEN_POPOVER", payload: `popover-${i}` });
-                                      } else if (openPopoverId === `popover-${i}`) {
-                                        dispatch({ type: "SET_OPEN_POPOVER", payload: null });
-                                      }
-                                    }, [open, i]);
                                     return (
                                       <>
+                                        <PopoverOpenSync
+                                          open={open}
+                                          popoverId={`popover-${i}`}
+                                          openPopoverId={openPopoverId}
+                                          dispatch={dispatch}
+                                        />
                                         <Popover.Button
                                           as={Button}
                                           variant="primary"

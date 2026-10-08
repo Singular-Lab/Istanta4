@@ -19,9 +19,7 @@ import {
   MenaboLayoutSalvato,
   NuovaPromoPerDashboard,
   SaveMenaboLayoutRequest,
-  SystemNotification,
 } from '../../../lib/types';
-import { emitToClients } from '../../ws-server';
 import type { IAgenziaLib } from '../agenzia_lib/types';
 import config from '../config';
 import { sequelize } from '../db';
@@ -39,7 +37,6 @@ import { PromoAttributes } from '../models/promo';
 import { Referenze } from '../models/referenze';
 import { RuntimeKit } from '../models/runtime_kit';
 import { TracciatiMomento } from '../models/tracciati_momento';
-import { Utente } from '../models/utenti';
 import type { IPromoRepository } from '../repositories/PromoRepository';
 import { isStessaPromo, normalizePromoModel } from '../utils/PromoModelUtils';
 import { ServerUtils } from '../utils/ServerUtils';
@@ -1550,28 +1547,5 @@ export class PromoService implements IPromoService {
 
   async generateIndesignPluginJson(layout: MenaboLayoutDivisioneSalvata): Promise<IndesignPluginExport> {
     return this.agenziaLib.buildIndesignPluginJson(layout);
-  }
-
-  async testNotifica(req: ExpressRequest): Promise<void> {
-    try {
-      log.info('Tentativo di invio notifica di test...');
-      const utente = req.session.id_utente;
-      const utenteModel = await Utente.findByPk(utente);
-      if (!utenteModel) {
-        throw new NotFoundError({ message: `Utente con id ${utente} non trovato.`, entityType: 'Utente' });
-      }
-      const notifica: SystemNotification = {
-        titolo: 'Notifica di Prova',
-        messaggio: `una notifica di prova inviata dal server! ${utenteModel.nome_utenti} ${utenteModel.cognome_utenti}`,
-        tipo: 'success'
-      };
-
-      emitToClients('notifica', notifica);
-
-      log.info('Notifica di test inviata con successo');
-    } catch (error) {
-      log.error('Errore durante l\'invio della notifica di test:', error);
-      throw error;
-    }
   }
 }

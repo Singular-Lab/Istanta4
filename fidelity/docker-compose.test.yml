@@ -53,7 +53,9 @@ services:
       redis:
         condition: service_started
     healthcheck:
-      test: ["CMD-SHELL", "nc -z 127.0.0.1 ${NODE_PORT:-3010} || exit 1"]
+      # node:26-slim non contiene nc: il controllo usa node e l'endpoint /health
+      # (503 se PostgreSQL o Redis non rispondono).
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:${NODE_PORT:-3010}/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 3

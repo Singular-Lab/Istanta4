@@ -19,6 +19,9 @@ import { Ricette as RicetteModel } from '../models/ricette';
 import { RuntimeKit as KitRunTimeModel } from '../models/runtime_kit';
 import { ServerUtils } from '../utils/ServerUtils';
 
+// Quoting dei valori che entrano in un literal SQL: lo fa Sequelize, non a mano.
+const sqlString = (value: unknown): string => ReferenzeIstantaModel.sequelize!.escape(String(value));
+
 dayjs.extend(isBetween);
 
 export class GPTService implements IGPTService {
@@ -218,9 +221,7 @@ export class GPTService implements IGPTService {
 
     let ingredientiWhere: any;
     if (codiciPerReferenze.length > 0) {
-      const codesLiteral = codiciPerReferenze
-        .map((c: string) => `'${String(c).replace(/'/g, "''")}'`)
-        .join(',');
+      const codesLiteral = codiciPerReferenze.map(sqlString).join(',');
       ingredientiWhere = literal(
         `EXISTS (SELECT 1 FROM jsonb_array_elements(ingredienti) AS elem WHERE elem->>'ean' IN (${codesLiteral}))`
       );
@@ -282,9 +283,7 @@ export class GPTService implements IGPTService {
 
     let realResultRefs: any[] = [];
     if (codiciPerReferenze.length > 0) {
-      const codesLiteral = codiciPerReferenze
-        .map(c => `'${String(c).replace(/'/g, "''")}'`)
-        .join(',');
+      const codesLiteral = codiciPerReferenze.map(sqlString).join(',');
       realResultRefs = await ReferenzeIstantaModel.findAll({
         where: literal(`data_fields->>'codice_referenza' IN (${codesLiteral})`),
         raw: true
@@ -805,9 +804,7 @@ export class GPTService implements IGPTService {
       const codiciVini = approfondimentiVini.map((v: any) => v.codice);
       let referenzeIstanta: any[] = [];
       if (codiciVini.length > 0) {
-        const codesLiteral = codiciVini
-          .map((c: string) => `'${String(c).replace(/'/g, "''")}'`)
-          .join(',');
+        const codesLiteral = codiciVini.map(sqlString).join(',');
         referenzeIstanta = await ReferenzeIstantaModel.findAll({
           where: literal(`data_fields->>'codice_referenza' IN (${codesLiteral})`),
           raw: true
@@ -967,7 +964,7 @@ export class GPTService implements IGPTService {
       const guidIdKits = tuttiIKitPerPromozione.map(kit => kit.id);
       const viniLiterals = Object.entries(queryViniConfig).map(([key, val]) => {
         const jsonbField = key.replace(/^dataFields\./, '');
-        return literal(`data_fields->>'${jsonbField}' = '${String(val).replace(/'/g, "''")}'`);
+        return literal(`data_fields->>${sqlString(jsonbField)} = ${sqlString(val)}`);
       });
 
       const tutteLeReferenzePerKit = await ReferenzeIstantaModel.findAll({
