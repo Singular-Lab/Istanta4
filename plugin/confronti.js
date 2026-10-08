@@ -579,10 +579,15 @@ const confronti = {
                         if (campo.graphics.length > 0) {
                             let fullPath = campo.graphics.item(0).itemLink.filePath;
                             let nomeFile = fullPath.split("/").pop();
+                            //I20-1068: con il nome del file si tiene la sigla della label
+                            //(foto_extra$<sigla>$tipo_<n>): serve a riconoscere la stessa foto
+                            //extra con l'immagine cambiata.
+                            let classificato = NoRenderElementi.classificaLabel(campo.label, pluginMiddleware.getCampo("nomeFotoPrimaria"), pluginMiddleware.getCampo("nomeFotoSecondaria"));
 
                             return {
                                 tipo: "extra",
-                                data: nomeFile
+                                data: nomeFile,
+                                sigla: classificato != null ? classificato.chiave : ""
                             };
                         }
                     }
@@ -599,6 +604,11 @@ const confronti = {
             listFotoExtraBox1 = risultati
                 .filter(x => x?.tipo === "extra")
                 .map(x => x.data);
+
+            //I20-1068: le stesse foto extra del box, con la sigla accanto al nome del file.
+            let extraNelBox = risultati
+                .filter(x => x?.tipo === "extra")
+                .map(x => ({ nome: x.data, sigla: x.sigla }));
 
             //controlliamo se nel box1 sono presenti i campi eliminati dai deletedFields
             deletedFields.forEach(deletedField => {
@@ -673,6 +683,14 @@ const confronti = {
                         if (!foto.attiva) {
                             return;
                         }
+                        //I20-1068: stessa sigla nel box ma immagine diversa: una segnalazione sola, non
+                        //una mancante e una in piu'.
+                        var cambiata = confronti.fotoExtraConImmagineCambiata(foto, listFotoExtraBox1, extraNelBox, "foto extra");
+                        if (cambiata != null) {
+                            differenze.push(cambiata.differenza);
+                            listFotoExtraBox1 = listFotoExtraBox1.filter(f => f != cambiata.nomeNelBox);
+                            return;
+                        }
                         var tipoExtra = foto.tipo == 3 ? NoRenderElementi.TIPO.logo : NoRenderElementi.TIPO.fotoExtra;
                         if (NoRenderElementi.daSegnalareComeMancante(elementiNoRender, tipoExtra, foto.sigla)) {
                             differenze.push({ label: foto.nome, difference: "foto extra mancante nel box: " + foto.nome });
@@ -722,7 +740,16 @@ const confronti = {
                         }
                         else {
                             if (fotoCorrispondente == undefined) {
-                                differenze.push({ label: foto.nome, difference: "foto extraAuto mancante nel box: " + foto.nome });
+                                //I20-1068: e' il caso della issue: il logo ha la stessa sigla ma l'immagine
+                                //e' cambiata. Prima uscivano "mancante" e "in piu'" insieme.
+                                var cambiata = confronti.fotoExtraConImmagineCambiata(foto, listFotoExtraBox1, extraNelBox, "foto extraAuto");
+                                if (cambiata != null) {
+                                    differenze.push(cambiata.differenza);
+                                    listFotoExtraBox1 = listFotoExtraBox1.filter(f => f != cambiata.nomeNelBox);
+                                }
+                                else {
+                                    differenze.push({ label: foto.nome, difference: "foto extraAuto mancante nel box: " + foto.nome });
+                                }
                             }
                             else {
                                 //togliamo la foto dalla lista
@@ -1037,6 +1064,38 @@ const confronti = {
         }
 
         return lista;
+    },
+
+    /// I20-1068: una foto extra che il server vuole nel box e che per nome di file non c'e'. Se nel
+    /// box c'e' un elemento con la stessa sigla - la label e' foto_extra$<sigla>$tipo_<n> - e un
+    /// file diverso, non sono due foto, una mancante e una in piu': e' la stessa foto con
+    /// l'immagine cambiata, e la segnalazione e' una sola, con i due nomi.
+    ///
+    /// foto e' la voce del server ({ nome, sigla }), nomiNelBox i file del box non ancora
+    /// spiegati da un'altra foto, extraNelBox [{ nome, sigla }] di tutte le foto extra del box,
+    /// prefisso il nome della famiglia nel testo ("foto extra", "foto extraAuto").
+    /// Torna null se nel box non c'e' nessun elemento con quella sigla, altrimenti
+    /// { differenza, nomeNelBox }: nomeNelBox e' il file del box da non contare piu' fra quelli
+    /// in piu'. Non guarda InDesign: si prova sotto Node.
+    fotoExtraConImmagineCambiata(foto, nomiNelBox, extraNelBox, prefisso) {
+        var sigla = foto != null && foto.sigla != null ? String(foto.sigla) : "";
+        if (sigla === "" || !Array.isArray(extraNelBox)) {
+            return null;
+        }
+        var nomi = Array.isArray(nomiNelBox) ? nomiNelBox : [];
+        var stessaSigla = extraNelBox.find(e => e != null && String(e.sigla == null ? "" : e.sigla) === sigla &&
+            e.nome != foto.nome && nomi.includes(e.nome));
+        if (stessaSigla == null) {
+            return null;
+        }
+
+        return {
+            nomeNelBox: stessaSigla.nome,
+            differenza: {
+                label: sigla,
+                difference: prefisso + " con immagine diversa da quella del server: nel box " + stessaSigla.nome + ", sul server " + foto.nome
+            }
+        };
     },
 
     decodeSpecialCharacters(text) {

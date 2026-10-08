@@ -16,7 +16,10 @@ const Module = require("node:module");
 const { fileDelPlugin, leggiFileDelPlugin } = require("./fileDelPlugin");
 
 const MOTORE = ["confrontoBox", "confrontoBoxCompiledFieldPreAnalisi", "mappaturaImpaginato",
-    "semplificazioneMappaImpaginato", "decodeSpecialCharacters"];
+    "semplificazioneMappaImpaginato", "decodeSpecialCharacters",
+    //I20-1068: la decisione sul logo con l'immagine cambiata, membro puro del motore.
+    "fotoExtraConImmagineCambiata"
+];
 const DA_INDEXNEW = ["avviaReportIntegrita", "applicaConfronto", "preAnalisiBoxMappato",
     "nomiPagineDelDocumento", "boxDellElementoMappa"];
 const FILE_DEL_REPORT = ["reportIntegrita/reportIntegrita.js", "reportIntegrita/pannelli.js"];
@@ -89,7 +92,7 @@ function nomiNudi(nomi) {
 
 /* ---- le due meta' ---- */
 
-test("confronti.js e' rimasto il motore: cinque membri, nessuno del report", () => {
+test("confronti.js e' rimasto il motore: sei membri, nessuno del report", () => {
     const { confronti } = caricaConStub();
     assert.deepStrictEqual(Object.keys(confronti).sort(), [...MOTORE].sort());
 });
