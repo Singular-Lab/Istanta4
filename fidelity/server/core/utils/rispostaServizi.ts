@@ -42,11 +42,14 @@ export function verificaRisposta<T = any>(
   }
   // Con HTTP 2xx statusText e solo la reason phrase ("OK"), non un motivo
   const grezzo = testoErrore(data) || (httpOk ? '' : risposta.statusText ?? '');
+  const codice = grezzo.trim();
   throw new ExternalApiError({
     message: messaggioPerOperatore(NOMI[servizio], status, grezzo, endpoint),
     service: servizio,
     endpoint,
     statusCode: typeof status === 'number' ? status : undefined,
+    // Solo i codici noti arrivano al client: l'interfaccia ci decide sopra (es. eliminazione promo)
+    details: Object.hasOwn(CODICI_NOTI, codice) ? { codice } : undefined,
     cause: new Error(grezzo || `HTTP ${status}`),
   });
 }
@@ -73,5 +76,5 @@ function messaggioPerOperatore(nome: string, status: number | string, grezzo: st
   if (!motivo || motivo.startsWith('<')) {
     return status >= 300 ? `${nome} ha risposto con un errore (HTTP ${status})` : `${nome} non ha confermato l'operazione`;
   }
-  return `${nome}: ${CODICI_NOTI[motivo] ?? motivo.slice(0, 300)}`;
+  return `${nome}: ${Object.hasOwn(CODICI_NOTI, motivo) ? CODICI_NOTI[motivo] : motivo.slice(0, 300)}`;
 }

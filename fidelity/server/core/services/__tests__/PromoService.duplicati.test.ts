@@ -1,6 +1,8 @@
 import dayjs from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
+import { Op } from 'sequelize';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { STATO_PROMO } from '../../../../lib/enums';
 import { BadRequestError } from '../../../../lib/errors';
 import { isStessaPromo } from '../../utils/PromoModelUtils';
 import { ServerUtils } from '../../utils/ServerUtils';
@@ -26,9 +28,12 @@ const richiesta = (override: Record<string, unknown> = {}) => ({
   ...override,
 });
 
-function makeService() {
+function makeService(esistenti: Array<Record<string, unknown>> = [ESISTENTE]) {
   const promoRepository = {
-    findAllWithOptions: vi.fn().mockResolvedValue([ESISTENTE]),
+    // Applica il filtro sullo stato come farebbe il database
+    findAllWithOptions: vi.fn(async ({ where }: any) =>
+      esistenti.filter((p) => !where?.stato || p.stato !== where.stato[Op.ne])
+    ),
     create: vi.fn(async (promo: unknown) => promo),
   };
   const service = new PromoService({} as any, {} as any, promoRepository as any, {} as any, {} as any);
@@ -58,6 +63,15 @@ describe('PromoService.inizioNuovaLavorazione: promo duplicate', () => {
     await expect(
       service.inizioNuovaLavorazione(richiesta({ titolo: 'A2619_SC_04-09-26_BIS' }), 'utente', {} as any)
     ).resolves.toMatchObject({ nome: 'A2619_SC_04-09-26_BIS' });
+    expect(istanta).toHaveBeenCalledTimes(1);
+  });
+
+  it('crea la promo se quella con stesso nome e date e stata eliminata (I20-1052)', async () => {
+    const { service, istanta } = makeService([{ ...ESISTENTE, stato: STATO_PROMO.ELIMINATA }]);
+
+    await expect(
+      service.inizioNuovaLavorazione(richiesta(), 'utente', {} as any)
+    ).resolves.toMatchObject({ nome: 'A2619_SC_04-09-26' });
     expect(istanta).toHaveBeenCalledTimes(1);
   });
 
