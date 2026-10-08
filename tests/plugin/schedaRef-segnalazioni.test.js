@@ -323,3 +323,78 @@ test('il pulsante della descrizione si legge dalle segnalazioni della scheda', (
     schedaRef.dimenticaSegnalazioni();
     assert.strictEqual(schedaRef.segnalazioniInMemoria(), null);
 });
+
+/* ---- I20-1056, lotto 4: le segnalazioni di impaginazione del bollino nella scheda ---- */
+
+const { leggiFileDelPlugin } = require('./fileDelPlugin');
+const DUE_WARNING = [{ g: 'warning', c: 'CSF-013', t: 'a' }, { g: 'warning', c: null, t: 'b' }];
+const UN_ERRORE = [{ g: 'error', c: 'CSF-009', t: 'c' }];
+
+test('il segnalino: solo differenze come prima, solo segnalazioni col loro colore, entrambe X+Y rosso', () => {
+    //Solo differenze: rosso e il numero, il suggerimento di sempre.
+    assert.deepStrictEqual(schedaRef.segnalinoScheda(DUE_DIFFERENZE, []), { testo: '2', colore: '#b21d1d', suggerimento: '2 differenze fra il box e il dato - clicca per rivederle' });
+    assert.strictEqual(schedaRef.segnalinoScheda(UNA_DIFFERENZA, null).suggerimento, '1 differenza fra il box e il dato - clicca per rivederla');
+
+    //Solo segnalazioni: il colore della piu' grave e il loro numero.
+    assert.deepStrictEqual(schedaRef.segnalinoScheda([], DUE_WARNING), { testo: '2', colore: '#ef6c00', suggerimento: '2 segnalazioni di impaginazione - clicca per rivederle' });
+    assert.strictEqual(schedaRef.segnalinoScheda(null, DUE_WARNING.concat(UN_ERRORE)).colore, '#c62828');
+
+    //Entrambe: rosso e X+Y.
+    assert.deepStrictEqual(schedaRef.segnalinoScheda(DUE_DIFFERENZE.concat(UNA_DIFFERENZA), DUE_WARNING), {
+        testo: '3+2', colore: '#b21d1d', suggerimento: '3 differenze fra il box e il dato e 2 segnalazioni di impaginazione - clicca per rivederle'
+    });
+
+    //Niente da risolvere: niente segnalino.
+    assert.strictEqual(schedaRef.segnalinoScheda([], []), null);
+    assert.strictEqual(schedaRef.segnalinoScheda(null, null), null);
+});
+
+test('la finestra si apre da sola anche per le sole segnalazioni, e il silenzio vale anche per loro', () => {
+    pulisci();
+    assert.strictEqual(schedaRef.deveAprirsiDaSola([], '5329719', DUE_WARNING), true);
+    assert.strictEqual(schedaRef.deveAprirsiDaSola([], '5329719', []), false);
+    assert.strictEqual(schedaRef.deveAprirsiDaSola([], '5329719'), false);
+
+    schedaRef.silenziaSegnalazioniDellaRef('5329719');
+    assert.strictEqual(schedaRef.deveAprirsiDaSola([], '5329719', DUE_WARNING), false);
+    pulisci();
+});
+
+test('le segnalazioni del bollino si leggono dal box e si dimenticano con la scheda', () => {
+    pulisci();
+    const box = { nome: 'box' };
+    global.Segnalazioni = { leggiDalBox: (b) => (b === box ? DUE_WARNING : []) };
+    try {
+        assert.deepStrictEqual(schedaRef.vociBollinoInMemoria(), []);
+        assert.deepStrictEqual(schedaRef.leggiVociBollino(box), DUE_WARNING);
+        assert.deepStrictEqual(schedaRef.vociBollinoInMemoria(), DUE_WARNING);
+        assert.deepStrictEqual(schedaRef.leggiVociBollino(null), []);
+
+        global.Segnalazioni = { leggiDalBox: () => { throw new Error('box non valido'); } };
+        assert.deepStrictEqual(schedaRef.leggiVociBollino(box), []);
+
+        schedaRef.dimenticaSegnalazioni();
+        assert.deepStrictEqual(schedaRef.vociBollinoInMemoria(), []);
+    }
+    finally {
+        delete global.Segnalazioni;
+    }
+});
+
+test('nella finestra le segnalazioni stanno nella loro sezione e si risolvono come dalla schermata', () => {
+    const scheda = leggiFileDelPlugin('schedaRef.js').replace(/\r/g, '');
+    const schermata = leggiFileDelPlugin('segnalazioni/schermata.js').replace(/\r/g, '');
+
+    //La sezione nella finestra, riempita anche dall'Aggiorna.
+    assert.match(scheda, /<div id="segnalazioniBollinoScheda"/);
+    assert.strictEqual((scheda.match(/riempiSezioneBollino\(sezioneBollino, elenco, intestazione\);/g) || []).length, 2);
+    //La stessa resa della schermata, e dopo ogni risoluzione segnalino e icona del menabo'.
+    assert.match(scheda, /SchermataSegnalazioni\.elencoVociDelBox\(box, voci, function \(\) \{\s*me\.leggiVociBollino\(box\);[\s\S]{0,400}?me\.aggiornaPulsanteSegnalazioni\(\);[\s\S]{0,200}?SchermataSegnalazioni\.controllaPagine\(\[box\.parentPage\.name\]\);/);
+    //All'apertura della scheda si legge il bollino e se ne tiene conto per aprirsi da sola.
+    assert.match(scheda, /me\.leggiVociBollino\(box\);\s*me\.aggiornaPulsanteSegnalazioni\(\);[\s\S]{0,300}?me\.deveAprirsiDaSola\(segnalazioniDellaScheda, codice, me\.vociBollinoInMemoria\(\)\)/);
+
+    //Schermata e scheda usano le stesse righe e lo stesso "Risolvi tutte".
+    assert.match(schermata, /lettura\.voci\.forEach\(\(voce, indice\) => blocco\.append\(SchermataSegnalazioni\._rigaVoce\(lettura\.box, voce, indice, contesto, ridisegna\)\)\);/);
+    assert.match(schermata, /testata\.append\(SchermataSegnalazioni\._azioniTutte\(lettura\.box, ridisegna\)\);/);
+    assert.match(schermata, /elencoVociDelBox\(box, voci, alCambio\) \{[\s\S]*?SchermataSegnalazioni\._azioniTutte\(box, alCambio\)[\s\S]*?SchermataSegnalazioni\._rigaVoce\(box, voce, indice, contesto, alCambio\)/);
+});

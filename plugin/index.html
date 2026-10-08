@@ -548,17 +548,20 @@
             </div>
           </div> -->
           <div id="filtriTab" style="width: 100%; display: none; overflow:hidden " class="tabcontent">
-            <div class="row" id="comandiInterfacciaAdvanced" style="width: 100%; display: flex; justify-content:start; height: 10%;">
-              <sp-action-button id="bOpt1Advanced" name="bOpt1Advanced" style="font-size: 12px; margin:1px;"
+            <!-- I20-1056, lotto 3: i pulsanti non si restringono e il loro testo non va a capo; la casella
+                 della cache prende lo spazio che resta e, se serve, si accorcia. -->
+            <div class="row" id="comandiInterfacciaAdvanced" style="width: 100%; display: flex; align-items: center; justify-content:start; height: 10%; min-height: 36px;">
+              <sp-action-button id="bOpt1Advanced" name="bOpt1Advanced" style="font-size: 12px; margin:1px; flex-shrink: 0; white-space: nowrap;"
                 onclick="conteggia();"><span style="display:flex;align-items:center;gap:6px;"><img src="images/conteggio.png" style="width:16px;height:16px;object-fit:contain;"><span>Conteggio</span></span></sp-action-button>
-              <sp-action-button id="bOpt2Advanced" name="bOpt2" style="font-size: 12px; margin:1px;"><span style="display:flex;align-items:center;gap:6px;"><img src="images/impagina.png" style="width:16px;height:16px;object-fit:contain;"><span>Impagina</span></span></sp-action-button>
+              <sp-action-button id="bOpt2Advanced" name="bOpt2" style="font-size: 12px; margin:1px; flex-shrink: 0; white-space: nowrap;"><span style="display:flex;align-items:center;gap:6px;"><img src="images/impagina.png" style="width:16px;height:16px;object-fit:contain;"><span>Impagina</span></span></sp-action-button>
               <!-- I20-1029: le segnalazioni di impaginazione del documento, con Risolvi (segnalazioni/schermata.js). -->
-              <sp-action-button id="segnalazioniImpaginazioneButton" name="segnalazioniImpaginazione" style="font-size: 12px; margin:1px;"
-                onclick="SchermataSegnalazioni.apri()"><span>Segnalazioni</span></sp-action-button>
+              <!-- I20-1056, lotto 3: l'icona numerata con le segnalazioni irrisolte all'ultimo controllo. -->
+              <sp-action-button id="segnalazioniImpaginazioneButton" name="segnalazioniImpaginazione" style="font-size: 12px; margin:1px; flex-shrink: 0; white-space: nowrap;"
+                onclick="SchermataSegnalazioni.apri()"><span>Segnalazioni</span><span id="iconaSegnalazioniImpaginazione" style="display: none; margin-left: 6px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; color: white; font-size: 10px; font-weight: bold; line-height: 16px; text-align: center; background-color: #c62828;"></span></sp-action-button>
               
               <!-- I20-1028: spuntata di default. E' l'unica delle due caselle che il codice legge (noCacheCheck in indexNew.js). -->
-              <div style="width: 100%; align-items: center; display: flex;">
-                <input type="checkbox" id="cacheCheckAdvanced" checked> <label style="color: white;">Utilizza cache se disponibile</label>
+              <div style="flex: 1 1 auto; min-width: 0; margin-left: 6px; align-items: center; display: flex; overflow: hidden;">
+                <input type="checkbox" id="cacheCheckAdvanced" checked> <label style="color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Utilizza cache se disponibile</label>
               </div>
             </div>
             <div id="filtriBody" style="height: 90%; overflow: hidden;">

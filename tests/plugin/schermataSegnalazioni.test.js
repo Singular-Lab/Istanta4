@@ -135,42 +135,107 @@ test("i colori della schermata sono quelli del bollino: rosso gli errori, aranci
     assert.strictEqual(SchermataSegnalazioni.coloreCss("warning"), "#ef6c00");
 });
 
-test("a fine impaginazione la schermata si apre solo se il giro ha prodotto segnalazioni", () => {
-    let aperture = 0;
+test("a fine impaginazione la schermata guarda solo le pagine impaginate", () => {
+    //I20-1056: decidono i bollini di quelle pagine, non il report del giro.
+    const chiamate = [];
     const apri = SchermataSegnalazioni.apri;
-    SchermataSegnalazioni.apri = () => { aperture++; };
+    SchermataSegnalazioni.apri = (opzioni) => { chiamate.push(opzioni); return Promise.resolve(true); };
     try {
-        SchermataSegnalazioni.apriSeCiSono({ segnalazioni: [] });
-        SchermataSegnalazioni.apriSeCiSono(null);
-        SchermataSegnalazioni.apriSeCiSono({});
-        assert.strictEqual(aperture, 0);
-
         SchermataSegnalazioni.apriSeCiSono({ segnalazioni: [{ codiceGruppo: "1" }] });
-        assert.strictEqual(aperture, 1);
+        SchermataSegnalazioni.apriSeCiSono({ segnalazioni: [{ codiceGruppo: "1" }] }, []);
+        SchermataSegnalazioni.apriSeCiSono(null, [null, ""]);
+        assert.strictEqual(chiamate.length, 0);
+
+        SchermataSegnalazioni.apriSeCiSono({ segnalazioni: [] }, ["11", "10"]);
+        assert.deepStrictEqual(chiamate, [{ pagine: ["11", "10"], soloSeCiSono: true, aFineImpaginazione: true }]);
     }
     finally {
         SchermataSegnalazioni.apri = apri;
     }
 });
 
+test("le pagine di un giro sono quelle del risultato, una volta sola, dal punto di ripartenza", () => {
+    const risultato = { result: [{ pag: 11 }, { pag: 10 }, { pag: 11 }, { pag: null }, {}, { pag: "12" }] };
+    assert.deepStrictEqual(SchermataSegnalazioni.pagineDelRisultato(risultato), ["11", "10", "12"]);
+    assert.deepStrictEqual(SchermataSegnalazioni.pagineDelRisultato(risultato, 1), ["10", "11", "12"]);
+    assert.deepStrictEqual(SchermataSegnalazioni.pagineDelRisultato(null), []);
+    assert.deepStrictEqual(SchermataSegnalazioni.pagineDelRisultato({ result: "x" }), []);
+});
+
+/* ---- I20-1056: una schermata sola, con il caricamento ---- */
+
+//Un jQuery minimo: quanto basta perche' apri costruisca l'elenco.
+function conSchermataFinta(prova) {
+    const eventi = [];
+    const finto = () => {
+        const el = { dati: {} };
+        el.attr = () => el; el.css = () => el; el.text = () => el; el.append = () => el; el.empty = () => el;
+        el.data = (k, v) => { if (v === undefined) { return el.dati[k]; } el.dati[k] = v; return el; };
+        el.closest = () => ({ remove: () => eventi.push("chiudi") });
+        return el;
+    };
+    const salva = { $: global.$, Modali: global.Modali, showLoading: global.showLoading, hideLoading: global.hideLoading };
+    const originali = { _leggi: SchermataSegnalazioni._leggi, _disegna: SchermataSegnalazioni._disegna };
+    global.$ = finto;
+    global.Modali = { popup: () => eventi.push("popup") };
+    global.showLoading = () => eventi.push("caricamento");
+    global.hideLoading = () => eventi.push("fine caricamento");
+    SchermataSegnalazioni._disegna = () => eventi.push("disegna");
+    return Promise.resolve(prova(eventi)).finally(() => {
+        Object.assign(SchermataSegnalazioni, originali);
+        Object.keys(salva).forEach(k => { if (salva[k] === undefined) { delete global[k]; } else { global[k] = salva[k]; } });
+    });
+}
+
+test("click ripetuti: il caricamento, poi una sola schermata", () => conSchermataFinta(async (eventi) => {
+    SchermataSegnalazioni._leggi = () => { eventi.push("leggi"); return [{ pagina: "1", box: {}, voci: [{ g: "error", t: "x" }] }]; };
+
+    const prima = SchermataSegnalazioni.apri();
+    const seconda = SchermataSegnalazioni.apri();
+    const terza = SchermataSegnalazioni.apri();
+    const esiti = await Promise.all([prima, seconda, terza]);
+
+    assert.deepStrictEqual(esiti, [false, false, true]);
+    assert.strictEqual(eventi.filter(e => e === "popup").length, 1);
+    assert.strictEqual(eventi.filter(e => e === "leggi").length, 1);
+    //Prima di aprirne una si chiude quella che c'e', e il caricamento si chiude alla fine.
+    assert.deepStrictEqual(eventi.slice(eventi.indexOf("leggi")), ["leggi", "chiudi", "disegna", "popup", "fine caricamento"]);
+    assert.strictEqual(eventi[0], "caricamento");
+}));
+
+test("a fine impaginazione si legge subito, sotto il caricamento dell'impaginazione", () => conSchermataFinta(async (eventi) => {
+    SchermataSegnalazioni._leggi = (pagine) => { eventi.push("leggi " + pagine.join(",")); return []; };
+
+    const esito = SchermataSegnalazioni.apri({ pagine: ["10"], soloSeCiSono: true, aFineImpaginazione: true });
+    //Prima che chi chiama tolga il suo caricamento: niente attese.
+    assert.deepStrictEqual(eventi, ["leggi 10"]);
+    //Nessun bollino in quelle pagine: la schermata non si apre.
+    assert.strictEqual(await esito, false);
+    assert.deepStrictEqual(eventi, ["leggi 10"]);
+}));
+
 /* ---- la schermata, sul sorgente ---- */
 
 const schermata = leggiFileDelPlugin("segnalazioni/schermata.js").replace(/\r/g, "");
 
 test("la schermata legge il documento e offre vai al box, risolvi e risolvi tutte", () => {
-    assert.match(schermata, /Segnalazioni\.leggiDocumento\(SchermataSegnalazioni\._documento\(\)\)/);
+    assert.match(schermata, /const documento = SchermataSegnalazioni\._documento\(\);\s*const lette = Array\.isArray\(pagine\) \? Segnalazioni\.leggiPagine\(documento, pagine\) : Segnalazioni\.leggiDocumento\(documento\);/);
     assert.match(schermata, /\.text\("Vai al box"\)/);
     //I20-1044: fra il testo e il clic c'e' lo stile che tiene il pulsante intero.
-    assert.match(schermata, /\.text\("Risolvi"\)(?:\.css\([^)]*\))?\.on\('click', \(\) => \{\s*Segnalazioni\.risolviVoce\(lettura\.box, indice\);\s*SchermataSegnalazioni\.riempi\(elenco\);/);
-    assert.match(schermata, /Modali\.popup\("Segnalazioni di impaginazione", elenco, "xl", SchermataSegnalazioni\.allaChiusura\)/);
-    assert.match(schermata, /\.text\("Nessuna segnalazione nel documento\."\)/);
+    //I20-1056, lotto 4: la riga e' condivisa con la scheda ref; nella schermata alCambio rifa' l'elenco.
+    assert.match(schermata, /\.text\("Risolvi"\)(?:\.css\([^)]*\))?\.on\('click', \(\) => \{\s*Segnalazioni\.risolviVoce\(box, indice\);\s*alCambio\(\);/);
+    assert.match(schermata, /const ridisegna = \(\) => SchermataSegnalazioni\.riempi\(elenco\);/);
+    //I20-1056, lotto 2: il conteggio va accanto al titolo.
+    assert.match(schermata, /Modali\.popup\("Segnalazioni di impaginazione", elenco, "xl", SchermataSegnalazioni\.allaChiusura, null, conteggio\)/);
+    assert.match(schermata, /\.text\(Array\.isArray\(pagine\) \? "Nessuna segnalazione nelle pagine impaginate\." : "Nessuna segnalazione nel documento\."\)/);
     //I testi entrano come testo, non come HTML.
-    assert.match(schermata, /\$\('<span><\/span>'\)\.text\(voce\.t \|\| ""\)/);
+    //I20-1056, lotto 2: con il dizionario del cliente, sempre come testo.
+    assert.match(schermata, /\$\('<span><\/span>'\)\.text\(SchermataSegnalazioni\.traduciTesto\(voce\.t \|\| "", contesto\.traduzioni\)\)/);
 });
 
 test("risolvi tutte chiede conferma dentro il popup, non con Modali.confirm che starebbe sotto", () => {
     assert.match(schermata, /\.text\("Sicuro\? "\)/);
-    assert.match(schermata, /\.text\("Sì"\)\.on\('click', \(\) => \{\s*Segnalazioni\.risolviTutte\(lettura\.box\);/);
+    assert.match(schermata, /\.text\("Sì"\)\.on\('click', \(\) => \{\s*Segnalazioni\.risolviTutte\(box\);\s*alCambio\(\);/);
     assert.doesNotMatch(schermata, /Modali\.confirm/);
 });
 
@@ -188,15 +253,130 @@ test("dei codici del gruppo si vedono i primi due, poi i puntini", () => {
     assert.strictEqual(SchermataSegnalazioni.codiciAbbreviati(null), "");
 });
 
-test("il nome del box e' breve, e completo nel suggerimento", () => {
-    global.Utility = { getDnaOfBox: () => ({ codice_gruppo: "1,2,3" }) };
+test("del box si leggono la meccanica, il codice gruppo e l'idRec", () => {
+    global.Utility = { getDnaOfBox: () => ({ codice_gruppo: "1,2,3", idRec: "77" }) };
     try {
-        assert.deepStrictEqual(SchermataSegnalazioni._nomeBox({ label: "BOX12" }), { breve: "Box BOX12 · gruppo 1, 2, …", completo: "Box BOX12 · gruppo 1, 2, 3" });
+        assert.deepStrictEqual(SchermataSegnalazioni._datiBox({ label: "BOX12" }), { meccanica: "BOX12", codiceGruppo: "1,2,3", idRec: "77" });
     }
     finally {
         delete global.Utility;
     }
-    assert.match(schermata, /\.text\(nomeBox\.breve\)\.attr\('title', nomeBox\.completo\)/);
+    //Senza DNA leggibile resta la sola meccanica.
+    global.Utility = { getDnaOfBox: () => null };
+    try {
+        assert.deepStrictEqual(SchermataSegnalazioni._datiBox({ label: "BOX1" }), { meccanica: "BOX1", codiceGruppo: "", idRec: null });
+    }
+    finally {
+        delete global.Utility;
+    }
+});
+
+/* ---- I20-1056, lotto 2: riconoscere il box ---- */
+
+const TRADUZIONI = [
+    { label: "campo_offerta", traduzione: "ANZICHè" },
+    { label: "campo_offerta_KgL_sconto", traduzione: "PREZZI AL KG/L" },
+    { label: "foto_extra$logo_it", traduzione: "LOGO IT" },
+    { label: "vuota", traduzione: "  " }
+];
+
+test("le etichette citate nelle segnalazioni usano il dizionario del cliente", () => {
+    const t = (testo) => SchermataSegnalazioni.traduciTesto(testo, TRADUZIONI);
+
+    assert.strictEqual(t("Code CSF-009: L'elemento con etichetta campo_offerta nel box BOX12"), "Code CSF-009: L'elemento con etichetta ANZICHè (campo_offerta) nel box BOX12");
+    //Vince la piu' lunga: campo_offerta e' l'inizio di campo_offerta_KgL_sconto.
+    assert.strictEqual(t("campo_offerta_KgL_sconto non dovrebbe toccare campo_offerta."), "PREZZI AL KG/L (campo_offerta_KgL_sconto) non dovrebbe toccare ANZICHè (campo_offerta).");
+    //Le etichette con il dollaro, intere.
+    assert.strictEqual(t("Conflitto: foto_extra$logo_it non dovrebbe toccare foto_extra$logo_itx"), "Conflitto: LOGO IT (foto_extra$logo_it) non dovrebbe toccare foto_extra$logo_itx");
+    //Dentro un'altra parola non si traduce; una traduzione vuota non e' una traduzione.
+    assert.strictEqual(t("mycampo_offerta e vuota"), "mycampo_offerta e vuota");
+    //Senza dizionario e senza testo, com'era.
+    assert.strictEqual(SchermataSegnalazioni.traduciTesto("campo_offerta", []), "campo_offerta");
+    assert.strictEqual(SchermataSegnalazioni.traduciTesto(null, TRADUZIONI), "");
+});
+
+test("la descrizione del box e' quella del tracciato, unita da |", () => {
+    const records = [
+        { recordInTracciato: { idRec: 77, "Descrizioni.Descrizione1": "CAFFE'", "Descrizioni.Descrizione2": " ", "Descrizioni.Descrizione3": "250 g" } },
+        { recordInTracciato: { idRec: "78", descrizione_gruppo: { "Descrizioni.Descrizione1": "GRUPPO" } } }
+    ];
+    assert.strictEqual(SchermataSegnalazioni.descrizioneDelRecord(records, "77"), "CAFFE' | 250 g");
+    assert.strictEqual(SchermataSegnalazioni.descrizioneDelRecord(records, 78), "GRUPPO");
+    assert.strictEqual(SchermataSegnalazioni.descrizioneDelRecord(records, "99"), "");
+    assert.strictEqual(SchermataSegnalazioni.descrizioneDelRecord(records, null), "");
+    assert.strictEqual(SchermataSegnalazioni.descrizioneDelRecord(null, "77"), "");
+});
+
+test("una descrizione lunga si abbrevia con i puntini, e intera va nel suggerimento", () => {
+    const lunga = "x".repeat(SchermataSegnalazioni.LUNGHEZZA_DESCRIZIONE + 10);
+    assert.strictEqual(SchermataSegnalazioni.abbrevia(lunga), "x".repeat(SchermataSegnalazioni.LUNGHEZZA_DESCRIZIONE) + "…");
+    assert.strictEqual(SchermataSegnalazioni.abbrevia("corta"), "corta");
+    assert.strictEqual(SchermataSegnalazioni.abbrevia("parola   altra", 9), "parola…");
+    assert.match(schermata, /riga\.attr\('title', descrizione\);/);
+    assert.match(schermata, /fontSize: '11px', color: '#666'/);
+});
+
+test("il conteggio accanto al titolo dice segnalazioni e box", () => {
+    const lette = [{ voci: [{}, {}] }, { voci: [{}] }];
+    assert.strictEqual(SchermataSegnalazioni.testoConteggio(lette), "3 segnalazioni in 2 box");
+    assert.strictEqual(SchermataSegnalazioni.testoConteggio([{ voci: [{}] }]), "1 segnalazione in 1 box");
+    assert.strictEqual(SchermataSegnalazioni.testoConteggio([]), "");
+    //E si aggiorna a ogni ridisegno, cioe' dopo ogni Risolvi.
+    assert.match(schermata, /const conteggio = elenco\.data\('conteggio'\);\s*if \(conteggio != null\) \{\s*conteggio\.text\(SchermataSegnalazioni\.testoConteggio\(lette\)\);/);
+});
+
+test("il codice gruppo si copia intero, come testo", async () => {
+    const copiati = [];
+    await SchermataSegnalazioni.copiaCodice("6771109,5062150,3104458", { writeText: (t) => { copiati.push(t); } });
+    await SchermataSegnalazioni.copiaCodice(12345, { writeText: (t) => { copiati.push(t); } });
+    assert.deepStrictEqual(copiati, ["6771109,5062150,3104458", "12345"]);
+    await assert.rejects(SchermataSegnalazioni.copiaCodice("1", {}));
+    assert.match(schermata, /SchermataSegnalazioni\.copiaCodice\(datiBox\.codiceGruppo\)/);
+});
+
+test("Modali.popup mette il contenuto accanto al titolo, e senza resta com'era", () => {
+    const modali = leggiFileDelPlugin("modali/modali.js").replace(/\r/g, "");
+    assert.match(modali, /async popup\(title, message, taglia = "md", alChiudi = null, contenutoIntestazione = null, accantoAlTitolo = null\) \{/);
+    assert.match(modali, /gruppoSinistro\.append\(titleText\)\.append\(accantoAlTitolo\);/);
+    assert.match(modali, /else \{\s*titleBar\.append\(titleText\)\.append\(gruppoDestro\);/);
+});
+
+test("le pagine sono separate da una testata ben visibile", () => {
+    assert.match(schermata, /borderBottom: '2px solid #8ab661', backgroundColor: '#eef7e3'/);
+});
+
+test("Vai al box apre la scheda in vista controllata e torna alla schermata", () => {
+    const corpo = (inizio) => {
+        const da = schermata.indexOf(inizio);
+        assert.notStrictEqual(da, -1, inizio);
+        return schermata.substring(da, schermata.indexOf("\n    },\n", da));
+    };
+    const apri = corpo("    vaiAlBox(box, elenco = null) {");
+    //Eventi fermi prima di selezionare, schermata staccata, blocco e scheda dal report.
+    //(la prima selezione del corpo e' quella del box senza DNA, che seleziona soltanto)
+    const fermi = apri.indexOf("SchermataSegnalazioni._eventiFermi(true);");
+    const selezioneControllata = apri.indexOf("if (!SchermataSegnalazioni._selezionaBox(box)) {");
+    assert.ok(fermi > 0 && selezioneControllata > fermi, "eventi fermi prima della selezione");
+    assert.match(apri, /const popup = elenco\.closest\("#popup"\);/);
+    assert.match(apri, /popup\.detach\(\);/);
+    assert.match(apri, /ReportIntegrita\._applicaBloccoSchedaDalReport\(\);/);
+    assert.match(apri, /schedaRef\.apertaDalReport = true;/);
+    assert.match(apri, /schedaRef\.initSchedaRef\(ReportIntegrita\._refPerSchedaDalReport\(box, dna\)\);/);
+    //Senza DNA si seleziona soltanto.
+    assert.match(apri, /if \(dna == null \|\| elenco == null \|\| !schedaDisponibile\) \{\s*const selezionato = SchermataSegnalazioni\._selezionaBox\(box\);/);
+
+    const chiudi = corpo("    chiudiScheda() {");
+    assert.match(chiudi, /SchermataSegnalazioni\._schedaAperta = null;/);
+    assert.match(chiudi, /ReportIntegrita\._terminaSchedaDalReport\(\);\s*SchermataSegnalazioni\._eventiFermi\(false\);\s*\$\("body"\)\.append\(stato\.popup\);/);
+    assert.match(chiudi, /SchermataSegnalazioni\.riempi\(stato\.elenco\);/);
+    assert.match(chiudi, /_evidenziaBox\(stato\.elenco, stato\.idRec\)/);
+
+    //La X ha il suo id: quella del report porta al report.
+    assert.match(schermata, /\$\('<div id="chiudiSchedaDalleSegnalazioni">✕<\/div>'\)/);
+    assert.match(schermata, /"Chiudi la scheda e torna alle segnalazioni"/);
+    //Il box rifatto si ritrova come nel report.
+    assert.match(schermata, /ReportIntegrita\._resolveBoxByCodiceGruppo\(stato\.record\)/);
+    assert.match(schermata, /\.on\('click', \(\) => SchermataSegnalazioni\.vaiAlBox\(lettura\.box, elenco\)\)/);
 });
 
 test("restringendo il pannello i testi si stringono e i pulsanti restano dentro", () => {
@@ -226,11 +406,20 @@ test("si apre da sola a fine impaginazione di Volantino, PoP e singola, ma non d
 
     assert.match(indexNew, /const SchermataSegnalazioni = require\('\.\/segnalazioni\/schermata'\);/);
     //Volantino: dopo il report, solo se si impagina.
-    assert.match(indexNew, /stampaSegnalazioni\(reportImpaginazioneObj\);\s*\/\/[^\n]*\n[^\n]*\n\s*if \(impagina\) \{\s*SchermataSegnalazioni\.apriSeCiSono\(reportImpaginazioneObj\);/);
+    assert.match(indexNew, /stampaSegnalazioni\(reportImpaginazioneObj\);\s*\/\/[^\n]*\n[^\n]*\n\s*if \(impagina\) \{\s*SchermataSegnalazioni\.apriSeCiSono\(reportImpaginazioneObj, SchermataSegnalazioni\.pagineDelRisultato\(objResult\)\);/);
     //PoP: report e schermata, fuori dal giro di un libro.
-    assert.match(indexNew, /if \(!\(jobImpaginazioneLibro\.stato == 1 && jobImpaginazioneLibro\.queue\.length > 0\)\) \{\s*stampaSegnalazioni\(reportImpaginazioneObj\);\s*SchermataSegnalazioni\.apriSeCiSono\(reportImpaginazioneObj\);/);
+    assert.match(indexNew, /if \(!\(jobImpaginazioneLibro\.stato == 1 && jobImpaginazioneLibro\.queue\.length > 0\)\) \{\s*stampaSegnalazioni\(reportImpaginazioneObj\);\s*\/\/[^\n]*\n\s*SchermataSegnalazioni\.apriSeCiSono\(reportImpaginazioneObj, SchermataSegnalazioni\.pagineDelRisultato\(objResult, restartFromIndexPoP\)\);/);
     //Singola: solo fuori dalle operazioni massive.
-    assert.match(indexNew, /if\(!massiveOperation\)\{\s*stampaSegnalazioni\(reportImpaginazioneObj\);\s*rimuoviSimboli\(\);[\s\S]{0,300}?SchermataSegnalazioni\.apriSeCiSono\(reportImpaginazioneObj\);/);
+    //I20-1056: solo se si impagina un box nuovo, e solo per la sua pagina.
+    assert.match(indexNew, /if\(!massiveOperation\)\{\s*stampaSegnalazioni\(reportImpaginazioneObj\);\s*rimuoviSimboli\(\);[\s\S]{0,700}?if \(apriSegnalazioni\) \{\s*SchermataSegnalazioni\.apriSeCiSono\(reportImpaginazioneObj, \[String\(pagina\)\]\);/);
+
+    //I20-1056: rifare un box non la apre: Reimpagina della scheda (anche dal riallineamento) e
+    //Report Integrita' passano apriSegnalazioni = false.
+    const scheda = leggiFileDelPlugin("schedaRef.js").replace(/\r/g, "");
+    assert.match(scheda, /impaginazioneSingoloIndd\(schedaRef, pagina, false, null, false, bounds, false, false\);/);
+    const report = leggiFileDelPlugin("reportIntegrita/reportIntegrita.js").replace(/\r/g, "");
+    assert.match(report, /impaginazioneSingoloIndd\(gruppoRecords, paginaObj\.nomePagina, applicaImpaginazioni, undefined, false, null, false, false\)/);
+    assert.match(report, /null,\s*true,\s*false \/\/I20-1056/);
 
     //Fix referenza: il report si', la schermata no.
     const fix = indexNew.substring(indexNew.indexOf("async function fixRefImpaginata("));
@@ -345,4 +534,73 @@ test("il tracciato legge le segnalazioni una volta per ridisegno e colora il bad
 
     //Ricolorare senza ridisegnare: i badge gia' disegnati, per idRec.
     assert.match(indexNew, /function aggiornaBadgeSegnalazioniTracciato\(\) \{[\s\S]{0,200}?\$\("#ElementiTracciato \.badge-pagina-tracciato"\)\.each/);
+});
+
+/* ---- I20-1056, lotto 3: l'icona del menabo' ---- */
+
+const lettura = (pagina, ...gravita) => ({ pagina: pagina, box: {}, voci: gravita.map(g => ({ g: g, t: "x" })) });
+
+test("l'ultimo controllo tiene i numeri pagina per pagina", () => {
+    SchermataSegnalazioni._ultimoControllo = null;
+
+    //Tutto il documento: un errore in pagina 3, due warning in pagina 5.
+    SchermataSegnalazioni.registraControllo("id:1", [lettura("3", "error"), lettura("5", "warning"), lettura("5", "warning")]);
+    assert.deepStrictEqual(SchermataSegnalazioni.riepilogoControllo("id:1"), { segnalazioni: 3, errori: 1, gravita: "error" });
+
+    //Si rifa' la pagina 5 e i warning spariscono: solo quella pagina cambia, a zero.
+    SchermataSegnalazioni.registraControllo("id:1", [], ["5"]);
+    assert.deepStrictEqual(SchermataSegnalazioni.riepilogoControllo("id:1"), { segnalazioni: 1, errori: 1, gravita: "error" });
+
+    //Si risolve l'errore in pagina 3.
+    SchermataSegnalazioni.registraControllo("id:1", [], ["3"]);
+    assert.deepStrictEqual(SchermataSegnalazioni.riepilogoControllo("id:1"), { segnalazioni: 0, errori: 0, gravita: null });
+
+    //Una pagina con soli warning: arancione.
+    SchermataSegnalazioni.registraControllo("id:1", [lettura("7", "warning")], ["7"]);
+    assert.strictEqual(SchermataSegnalazioni.riepilogoControllo("id:1").gravita, "warning");
+});
+
+test("una lettura completa sostituisce tutto, e un altro documento riparte da zero", () => {
+    SchermataSegnalazioni._ultimoControllo = null;
+    SchermataSegnalazioni.registraControllo("id:1", [lettura("3", "error"), lettura("4", "warning")]);
+    SchermataSegnalazioni.registraControllo("id:1", [lettura("9", "warning")]);
+    assert.deepStrictEqual(SchermataSegnalazioni.riepilogoControllo("id:1"), { segnalazioni: 1, errori: 0, gravita: "warning" });
+
+    //Il controllo e' di un altro documento: per questo non c'e' niente.
+    assert.deepStrictEqual(SchermataSegnalazioni.riepilogoControllo("id:2"), { segnalazioni: 0, errori: 0, gravita: null });
+    SchermataSegnalazioni.registraControllo("id:2", [lettura("1", "error")], ["1"]);
+    assert.deepStrictEqual(SchermataSegnalazioni.riepilogoControllo("id:2"), { segnalazioni: 1, errori: 1, gravita: "error" });
+    assert.deepStrictEqual(SchermataSegnalazioni.riepilogoControllo("id:1"), { segnalazioni: 0, errori: 0, gravita: null });
+    SchermataSegnalazioni._ultimoControllo = null;
+});
+
+test("il suggerimento dell'icona dice quante e quanti errori; a zero non c'e'", () => {
+    assert.strictEqual(SchermataSegnalazioni.testoIcona({ segnalazioni: 3, errori: 1 }), "3 segnalazioni irrisolte (1 errore) all'ultimo controllo");
+    assert.strictEqual(SchermataSegnalazioni.testoIcona({ segnalazioni: 1, errori: 0 }), "1 segnalazione irrisolta all'ultimo controllo");
+    assert.strictEqual(SchermataSegnalazioni.testoIcona({ segnalazioni: 0, errori: 0 }), "");
+    //Nascosta a zero, colorata con la gravita' peggiore.
+    assert.match(schermata, /if \(riepilogo\.segnalazioni === 0\) \{\s*icona\.text\(""\)\.attr\('title', ""\)\.css\(\{ display: 'none' \}\);/);
+    assert.match(schermata, /backgroundColor: SchermataSegnalazioni\.coloreCss\(riepilogo\.gravita\)/);
+});
+
+test("ogni lettura dei bollini e' un controllo che aggiorna l'icona", () => {
+    assert.match(schermata, /SchermataSegnalazioni\.registraControllo\(Segnalazioni\._chiaveDocumento\(documento\), lette, pagine\);\s*SchermataSegnalazioni\.aggiornaIcona\(\);/);
+
+    const indexNew = leggiFileDelPlugin("indexNew.js").replace(/\r/g, "");
+    //Dopo un Reimpagina: la sola pagina del box, senza schermata.
+    assert.match(indexNew, /if \(apriSegnalazioni\) \{\s*SchermataSegnalazioni\.apriSeCiSono\(reportImpaginazioneObj, \[String\(pagina\)\]\);\s*\}\s*else \{\s*\/\/[^\n]*\n\s*SchermataSegnalazioni\.controllaPagine\(\[String\(pagina\)\]\);/);
+    //All'apertura del documento: tutto, dopo i percorsi.
+    assert.match(indexNew, /checkForLoghiCore\(\);\s*\/\/[^\n]*\n\s*SchermataSegnalazioni\.controllaDocumento\(\);/);
+});
+
+test("nel menabo' i pulsanti stanno su una riga senza che il testo sbordi, e c'e' l'icona", () => {
+    const html = leggiFileDelPlugin("index.html").replace(/\r/g, "");
+    const riga = html.substring(html.indexOf('<div class="row" id="comandiInterfacciaAdvanced"'), html.indexOf('<div id="filtriBody"'));
+    for (const id of ["bOpt1Advanced", "bOpt2Advanced", "segnalazioniImpaginazioneButton"]) {
+        assert.match(riga, new RegExp('id="' + id + '"[^>]*style="[^"]*flex-shrink: 0; white-space: nowrap;'), id);
+    }
+    assert.match(riga, /<span id="iconaSegnalazioniImpaginazione" style="display: none;/);
+    //La casella della cache non prende piu' tutta la riga.
+    assert.doesNotMatch(riga, /<div style="width: 100%; align-items: center; display: flex;">/);
+    assert.match(riga, /<div style="flex: 1 1 auto; min-width: 0;/);
 });

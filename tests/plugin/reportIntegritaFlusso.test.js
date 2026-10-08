@@ -162,7 +162,7 @@ test('la preanalisi usa il box che la mappa ha gia\' in mano', () => {
 });
 
 test('impaginazioneSingoloIndd impagina e non fa altro', () => {
-    assert.match(indexNew, /async function impaginazioneSingoloIndd\(records, pagina, cercaInPaginaPerConfronto, mappaPagina, massiveOperation = false, bounds = null, richiederRicollegamento = false\) \{/);
+    assert.match(indexNew, /async function impaginazioneSingoloIndd\(records, pagina, cercaInPaginaPerConfronto, mappaPagina, massiveOperation = false, bounds = null, richiederRicollegamento = false, apriSegnalazioni = true\) \{/);
 
     //I parametri morti non devono tornare da nessuna parte: chi li passasse per posizione
     //finirebbe per impaginare con i bounds sbagliati.
