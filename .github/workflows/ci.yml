@@ -75,6 +75,11 @@ jobs:
                 AgenziaLib/*)
                   agenzialib=true
                   ;;
+                tests/plugin/*)
+                  # I test del Plugin girano con Node e verificano solo il Plugin:
+                  # non devono far partire la build e i test .NET.
+                  plugin=true
+                  ;;
                 tests/*)
                   # La suite di test .NET copre Istanta e AgenziaLib: sono quelli
                   # da verificare, non l'intera suite.
