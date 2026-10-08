@@ -1195,6 +1195,8 @@ async function initDocumentInLavorazione()
                     return;
                 }
                 checkForLoghiCore();
+                //I20-1056, lotto 3: il primo controllo dei bollini del documento, per l'icona del menabo'.
+                SchermataSegnalazioni.controllaDocumento();
             }
             
         }
@@ -7877,6 +7879,10 @@ async function impaginazioneSingoloIndd(records, pagina, cercaInPaginaPerConfron
             //apriSegnalazioni = false: le segnalazioni restano nel bollino del box.
             if (apriSegnalazioni) {
                 SchermataSegnalazioni.apriSeCiSono(reportImpaginazioneObj, [String(pagina)]);
+            }
+            else {
+                //I20-1056, lotto 3: niente schermata, ma l'icona del menabo' si aggiorna sulla pagina del box.
+                SchermataSegnalazioni.controllaPagine([String(pagina)]);
             }
         }
 

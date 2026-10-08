@@ -44,6 +44,14 @@ const SchermataSegnalazioni = {
     /// La scheda aperta da "Vai al box", finche' la si chiude: { box, elenco, popup, record, idRec, timer }.
     _schedaAperta: null,
 
+    /// I20-1056, lotto 3: l'icona del pulsante Segnalazioni del menabo'.
+    ID_ICONA: "iconaSegnalazioniImpaginazione",
+
+    /// I20-1056, lotto 3: l'ultimo controllo dei bollini del documento, pagina per pagina:
+    /// { chiave, pagine: { nome: { segnalazioni, errori, gravita } } }. Solo i numeri: i dati della
+    /// schermata si rileggono sempre.
+    _ultimoControllo: null,
+
     /// Il colore di una gravita' sulla schermata.
     coloreCss(gravita) {
         return COLORE_CSS[gravita] || COLORE_CSS.notifica;
@@ -230,14 +238,107 @@ const SchermataSegnalazioni = {
     },
 
     /// Le letture dei bollini: delle sole pagine indicate, o di tutto il documento.
+    /// I20-1056, lotto 3: ogni lettura e' un controllo, e aggiorna l'icona del menabo'.
     _leggi(pagine) {
         try {
             const documento = SchermataSegnalazioni._documento();
-            return Array.isArray(pagine) ? Segnalazioni.leggiPagine(documento, pagine) : Segnalazioni.leggiDocumento(documento);
+            const lette = Array.isArray(pagine) ? Segnalazioni.leggiPagine(documento, pagine) : Segnalazioni.leggiDocumento(documento);
+            SchermataSegnalazioni.registraControllo(Segnalazioni._chiaveDocumento(documento), lette, pagine);
+            SchermataSegnalazioni.aggiornaIcona();
+            return lette;
         }
         catch (e) {
             console.error("Code SGN-01 Segnalazioni non lette dal documento:", e);
             return [];
+        }
+    },
+
+    /// I20-1056, lotto 3: un controllo senza schermata, per la sola icona: le pagine indicate
+    /// (dopo un Reimpagina, quella del box) o tutto il documento (alla sua apertura).
+    controllaPagine(pagine) {
+        if (!Array.isArray(pagine) || pagine.length === 0) {
+            return;
+        }
+        SchermataSegnalazioni._leggi(pagine);
+    },
+
+    controllaDocumento() {
+        SchermataSegnalazioni._leggi(null);
+    },
+
+    /// I20-1056, lotto 3: registra una lettura nell'ultimo controllo. Una lettura di tutto il
+    /// documento (pagine null) sostituisce tutto; una di alcune pagine aggiorna solo quelle, anche a
+    /// zero se li' non c'e' piu' niente. Un altro documento riparte da capo.
+    registraControllo(chiaveDocumento, lette, pagine = null) {
+        let controllo = SchermataSegnalazioni._ultimoControllo;
+        if (controllo == null || controllo.chiave !== chiaveDocumento || !Array.isArray(pagine)) {
+            controllo = { chiave: chiaveDocumento, pagine: {} };
+        }
+        if (Array.isArray(pagine)) {
+            pagine.forEach(nome => { controllo.pagine[String(nome)] = { segnalazioni: 0, errori: 0, gravita: null }; });
+        }
+        (Array.isArray(lette) ? lette : []).forEach(lettura => {
+            const nome = String(lettura.pagina);
+            const pagina = controllo.pagine[nome] || (controllo.pagine[nome] = { segnalazioni: 0, errori: 0, gravita: null });
+            const voci = Array.isArray(lettura.voci) ? lettura.voci : [];
+            pagina.segnalazioni += voci.length;
+            pagina.errori += voci.filter(voce => etichettaSegnalazioni.gravita(voce.g) === "error").length;
+            pagina.gravita = etichettaSegnalazioni.gravitaPeggiore((pagina.gravita != null ? [{ g: pagina.gravita }] : []).concat(voci));
+        });
+        SchermataSegnalazioni._ultimoControllo = controllo;
+        return controllo;
+    },
+
+    /// I20-1056, lotto 3: quante segnalazioni irrisolte all'ultimo controllo del documento, quanti
+    /// errori e la gravita' peggiore. Zero se il controllo e' di un altro documento.
+    riepilogoControllo(chiaveDocumento) {
+        const riepilogo = { segnalazioni: 0, errori: 0, gravita: null };
+        const controllo = SchermataSegnalazioni._ultimoControllo;
+        if (controllo == null || controllo.chiave !== chiaveDocumento) {
+            return riepilogo;
+        }
+        Object.keys(controllo.pagine).forEach(nome => {
+            const pagina = controllo.pagine[nome];
+            riepilogo.segnalazioni += pagina.segnalazioni;
+            riepilogo.errori += pagina.errori;
+            if (pagina.gravita != null) {
+                riepilogo.gravita = etichettaSegnalazioni.gravitaPeggiore([{ g: pagina.gravita }].concat(riepilogo.gravita != null ? [{ g: riepilogo.gravita }] : []));
+            }
+        });
+        return riepilogo;
+    },
+
+    /// Il suggerimento dell'icona: "3 segnalazioni irrisolte (1 errore) all'ultimo controllo".
+    testoIcona(riepilogo) {
+        if (riepilogo == null || !(riepilogo.segnalazioni > 0)) {
+            return "";
+        }
+        let testo = riepilogo.segnalazioni + (riepilogo.segnalazioni === 1 ? " segnalazione irrisolta" : " segnalazioni irrisolte");
+        if (riepilogo.errori > 0) {
+            testo += " (" + riepilogo.errori + (riepilogo.errori === 1 ? " errore" : " errori") + ")";
+        }
+        return testo + " all'ultimo controllo";
+    },
+
+    /// L'icona numerata del pulsante Segnalazioni: rossa con almeno un errore, arancione con soli
+    /// warning, nascosta senza segnalazioni.
+    aggiornaIcona() {
+        try {
+            const icona = $("#" + SchermataSegnalazioni.ID_ICONA);
+            if (icona.length === 0) {
+                return;
+            }
+            const riepilogo = SchermataSegnalazioni.riepilogoControllo(Segnalazioni._chiaveDocumento(SchermataSegnalazioni._documento()));
+            if (riepilogo.segnalazioni === 0) {
+                icona.text("").attr('title', "").css({ display: 'none' });
+                return;
+            }
+            icona.text(String(riepilogo.segnalazioni))
+                .attr('title', SchermataSegnalazioni.testoIcona(riepilogo))
+                .css({ display: 'inline-block', backgroundColor: SchermataSegnalazioni.coloreCss(riepilogo.gravita) });
+        }
+        catch (e) {
+            //l'icona non deve fermare niente
         }
     },
 

@@ -219,7 +219,7 @@ test("a fine impaginazione si legge subito, sotto il caricamento dell'impaginazi
 const schermata = leggiFileDelPlugin("segnalazioni/schermata.js").replace(/\r/g, "");
 
 test("la schermata legge il documento e offre vai al box, risolvi e risolvi tutte", () => {
-    assert.match(schermata, /const documento = SchermataSegnalazioni\._documento\(\);\s*return Array\.isArray\(pagine\) \? Segnalazioni\.leggiPagine\(documento, pagine\) : Segnalazioni\.leggiDocumento\(documento\);/);
+    assert.match(schermata, /const documento = SchermataSegnalazioni\._documento\(\);\s*const lette = Array\.isArray\(pagine\) \? Segnalazioni\.leggiPagine\(documento, pagine\) : Segnalazioni\.leggiDocumento\(documento\);/);
     assert.match(schermata, /\.text\("Vai al box"\)/);
     //I20-1044: fra il testo e il clic c'e' lo stile che tiene il pulsante intero.
     assert.match(schermata, /\.text\("Risolvi"\)(?:\.css\([^)]*\))?\.on\('click', \(\) => \{\s*Segnalazioni\.risolviVoce\(lettura\.box, indice\);\s*SchermataSegnalazioni\.riempi\(elenco\);/);
@@ -532,4 +532,73 @@ test("il tracciato legge le segnalazioni una volta per ridisegno e colora il bad
 
     //Ricolorare senza ridisegnare: i badge gia' disegnati, per idRec.
     assert.match(indexNew, /function aggiornaBadgeSegnalazioniTracciato\(\) \{[\s\S]{0,200}?\$\("#ElementiTracciato \.badge-pagina-tracciato"\)\.each/);
+});
+
+/* ---- I20-1056, lotto 3: l'icona del menabo' ---- */
+
+const lettura = (pagina, ...gravita) => ({ pagina: pagina, box: {}, voci: gravita.map(g => ({ g: g, t: "x" })) });
+
+test("l'ultimo controllo tiene i numeri pagina per pagina", () => {
+    SchermataSegnalazioni._ultimoControllo = null;
+
+    //Tutto il documento: un errore in pagina 3, due warning in pagina 5.
+    SchermataSegnalazioni.registraControllo("id:1", [lettura("3", "error"), lettura("5", "warning"), lettura("5", "warning")]);
+    assert.deepStrictEqual(SchermataSegnalazioni.riepilogoControllo("id:1"), { segnalazioni: 3, errori: 1, gravita: "error" });
+
+    //Si rifa' la pagina 5 e i warning spariscono: solo quella pagina cambia, a zero.
+    SchermataSegnalazioni.registraControllo("id:1", [], ["5"]);
+    assert.deepStrictEqual(SchermataSegnalazioni.riepilogoControllo("id:1"), { segnalazioni: 1, errori: 1, gravita: "error" });
+
+    //Si risolve l'errore in pagina 3.
+    SchermataSegnalazioni.registraControllo("id:1", [], ["3"]);
+    assert.deepStrictEqual(SchermataSegnalazioni.riepilogoControllo("id:1"), { segnalazioni: 0, errori: 0, gravita: null });
+
+    //Una pagina con soli warning: arancione.
+    SchermataSegnalazioni.registraControllo("id:1", [lettura("7", "warning")], ["7"]);
+    assert.strictEqual(SchermataSegnalazioni.riepilogoControllo("id:1").gravita, "warning");
+});
+
+test("una lettura completa sostituisce tutto, e un altro documento riparte da zero", () => {
+    SchermataSegnalazioni._ultimoControllo = null;
+    SchermataSegnalazioni.registraControllo("id:1", [lettura("3", "error"), lettura("4", "warning")]);
+    SchermataSegnalazioni.registraControllo("id:1", [lettura("9", "warning")]);
+    assert.deepStrictEqual(SchermataSegnalazioni.riepilogoControllo("id:1"), { segnalazioni: 1, errori: 0, gravita: "warning" });
+
+    //Il controllo e' di un altro documento: per questo non c'e' niente.
+    assert.deepStrictEqual(SchermataSegnalazioni.riepilogoControllo("id:2"), { segnalazioni: 0, errori: 0, gravita: null });
+    SchermataSegnalazioni.registraControllo("id:2", [lettura("1", "error")], ["1"]);
+    assert.deepStrictEqual(SchermataSegnalazioni.riepilogoControllo("id:2"), { segnalazioni: 1, errori: 1, gravita: "error" });
+    assert.deepStrictEqual(SchermataSegnalazioni.riepilogoControllo("id:1"), { segnalazioni: 0, errori: 0, gravita: null });
+    SchermataSegnalazioni._ultimoControllo = null;
+});
+
+test("il suggerimento dell'icona dice quante e quanti errori; a zero non c'e'", () => {
+    assert.strictEqual(SchermataSegnalazioni.testoIcona({ segnalazioni: 3, errori: 1 }), "3 segnalazioni irrisolte (1 errore) all'ultimo controllo");
+    assert.strictEqual(SchermataSegnalazioni.testoIcona({ segnalazioni: 1, errori: 0 }), "1 segnalazione irrisolta all'ultimo controllo");
+    assert.strictEqual(SchermataSegnalazioni.testoIcona({ segnalazioni: 0, errori: 0 }), "");
+    //Nascosta a zero, colorata con la gravita' peggiore.
+    assert.match(schermata, /if \(riepilogo\.segnalazioni === 0\) \{\s*icona\.text\(""\)\.attr\('title', ""\)\.css\(\{ display: 'none' \}\);/);
+    assert.match(schermata, /backgroundColor: SchermataSegnalazioni\.coloreCss\(riepilogo\.gravita\)/);
+});
+
+test("ogni lettura dei bollini e' un controllo che aggiorna l'icona", () => {
+    assert.match(schermata, /SchermataSegnalazioni\.registraControllo\(Segnalazioni\._chiaveDocumento\(documento\), lette, pagine\);\s*SchermataSegnalazioni\.aggiornaIcona\(\);/);
+
+    const indexNew = leggiFileDelPlugin("indexNew.js").replace(/\r/g, "");
+    //Dopo un Reimpagina: la sola pagina del box, senza schermata.
+    assert.match(indexNew, /if \(apriSegnalazioni\) \{\s*SchermataSegnalazioni\.apriSeCiSono\(reportImpaginazioneObj, \[String\(pagina\)\]\);\s*\}\s*else \{\s*\/\/[^\n]*\n\s*SchermataSegnalazioni\.controllaPagine\(\[String\(pagina\)\]\);/);
+    //All'apertura del documento: tutto, dopo i percorsi.
+    assert.match(indexNew, /checkForLoghiCore\(\);\s*\/\/[^\n]*\n\s*SchermataSegnalazioni\.controllaDocumento\(\);/);
+});
+
+test("nel menabo' i pulsanti stanno su una riga senza che il testo sbordi, e c'e' l'icona", () => {
+    const html = leggiFileDelPlugin("index.html").replace(/\r/g, "");
+    const riga = html.substring(html.indexOf('<div class="row" id="comandiInterfacciaAdvanced"'), html.indexOf('<div id="filtriBody"'));
+    for (const id of ["bOpt1Advanced", "bOpt2Advanced", "segnalazioniImpaginazioneButton"]) {
+        assert.match(riga, new RegExp('id="' + id + '"[^>]*style="[^"]*flex-shrink: 0; white-space: nowrap;'), id);
+    }
+    assert.match(riga, /<span id="iconaSegnalazioniImpaginazione" style="display: none;/);
+    //La casella della cache non prende piu' tutta la riga.
+    assert.doesNotMatch(riga, /<div style="width: 100%; align-items: center; display: flex;">/);
+    assert.match(riga, /<div style="flex: 1 1 auto; min-width: 0;/);
 });
