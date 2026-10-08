@@ -181,9 +181,9 @@ describe("coopfi menabo", () => {
       ],
     });
 
-    // I gruppi/tema normali producono un unico filtro per tema, senza criterio reparto,
-    // e con limite 0 (il tetto è dato dal limite di pagina). Diversi reparti sotto lo
-    // stesso tema NON generano filtri separati.
+    // I gruppi/tema normali producono un unico filtro per tema, senza criterio reparto:
+    // diversi reparti sotto lo stesso tema NON generano filtri separati. Ogni filtro ha
+    // come limite le referenze del proprio tema, non quelle dell'intero gruppo (I20-966).
     expect(payload).toEqual({
       source: [
         {
@@ -193,14 +193,14 @@ describe("coopfi menabo", () => {
           limite: 12,
           filtri: [
             {
-              limite: 0,
+              limite: 2,
               ordine: 1,
               criteri: [
                 { chiave: "tema", operatore: "=", valore: "Ortofrutta" },
               ],
             },
             {
-              limite: 0,
+              limite: 1,
               ordine: 2,
               criteri: [
                 { chiave: "tema", operatore: "=", valore: "123" },
@@ -327,5 +327,132 @@ describe("coopfi menabo", () => {
         },
       ],
     });
+  });
+
+  // I20-966: un tema trascinato intero usciva con limite 0 («Ill.» nel plug-in) e, sulla
+  // pagina condivisa, si prendeva anche i posti dell'EX TRIPLA.
+  it("gives a whole tema split over two pages the limit of its referenze on each page", () => {
+    const sprintSourceKey = JSON.stringify(["canale-1", "tema", "SPRINT", 0]);
+    const exTriplaSourceKey = JSON.stringify([
+      JSON.stringify(["canale-1", "format1", "FORMAT+", 1]),
+      "sub",
+      "tema",
+      "EX TRIPLA",
+    ]);
+    const sprint = (reparto: string) => ({ tema: "SPRINT", reparto });
+    const exTripla = { tema: "EX TRIPLA", reparto: "Drogheria" };
+
+    const payload = sut.buildIndesignPluginJson({
+      divisionId: "canale-1",
+      divisionLabel: "Canale 1",
+      pageCount: 4,
+      updatedAt: new Date().toISOString(),
+      pages: [
+        {
+          pageIndex: 2,
+          pageNumber: 3,
+          referenzePerPagina: 12,
+          groups: [
+            {
+              id: "g-sprint-p2",
+              groupId: "g-sprint",
+              sourceKey: sprintSourceKey,
+              label: "SPRINT",
+              colorIdx: 0,
+              recordKeys: ["s1", "s2", "s3"],
+              records: [sprint("Drogheria"), sprint("Bevande"), sprint("Bevande")],
+              recordCount: 3,
+            },
+            {
+              id: "g-extripla-p2",
+              groupId: "g-extripla",
+              sourceKey: exTriplaSourceKey,
+              label: "FORMAT+ · EX TRIPLA",
+              colorIdx: 1,
+              recordKeys: ["e1", "e2"],
+              records: [exTripla, exTripla],
+              recordCount: 2,
+            },
+          ],
+        },
+        {
+          pageIndex: 3,
+          pageNumber: 4,
+          referenzePerPagina: 12,
+          groups: [
+            {
+              id: "g-sprint-p3",
+              groupId: "g-sprint",
+              sourceKey: sprintSourceKey,
+              label: "SPRINT",
+              colorIdx: 0,
+              recordKeys: ["s4", "s5"],
+              records: [sprint("Freschi"), sprint("Freschi")],
+              recordCount: 2,
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(payload).toEqual({
+      source: [
+        {
+          pagina: "3",
+          active: false,
+          blocco: false,
+          limite: 12,
+          filtri: [
+            { limite: 3, ordine: 1, criteri: [{ chiave: "tema", operatore: "=", valore: "SPRINT" }] },
+            { limite: 2, ordine: 2, criteri: [{ chiave: "tema", operatore: "=", valore: "EX TRIPLA" }] },
+          ],
+        },
+        {
+          pagina: "4",
+          active: false,
+          blocco: false,
+          limite: 12,
+          filtri: [
+            { limite: 2, ordine: 1, criteri: [{ chiave: "tema", operatore: "=", valore: "SPRINT" }] },
+          ],
+        },
+      ],
+    });
+  });
+
+  it("sums the referenze of different jolly temi in the single `tema in JOLLY` filter", () => {
+    const payload = sut.buildIndesignPluginJson({
+      divisionId: "canale-1",
+      divisionLabel: "Canale 1",
+      pageCount: 2,
+      updatedAt: new Date().toISOString(),
+      pages: [
+        {
+          pageIndex: 1,
+          pageNumber: 2,
+          referenzePerPagina: 12,
+          groups: [
+            {
+              id: "g-jolly-p1",
+              groupId: "g-jolly",
+              sourceKey: JSON.stringify(["canale-1", "tema", "JOLLY A", 0]),
+              label: "JOLLY",
+              colorIdx: 0,
+              recordKeys: ["j1", "j2", "j3"],
+              records: [
+                { tema: "JOLLY A", reparto: "Drogheria" },
+                { tema: "JOLLY A", reparto: "Bevande" },
+                { tema: "jolly b", reparto: "Freschi" },
+              ],
+              recordCount: 3,
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(payload.source[0].filtri).toEqual([
+      { limite: 3, ordine: 1, criteri: [{ chiave: "tema", operatore: "in", valore: "JOLLY" }] },
+    ]);
   });
 });

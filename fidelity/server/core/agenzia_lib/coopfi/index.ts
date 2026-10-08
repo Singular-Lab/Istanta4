@@ -2215,11 +2215,11 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
                     const { field: secondaryFieldRaw, esplicito: repartoEsplicito } = resolveSecondaryField(group.sourceKey);
                     // Il criterio secondario (es. reparto) va aggiunto SOLO quando il sottogruppo è
                     // stato trascinato esplicitamente. I gruppi/tema normali restano un unico filtro
-                    // per tema, senza suddivisione per reparto: il tetto è il limite di pagina.
+                    // per tema, senza suddivisione per reparto.
                     const secondaryField = repartoEsplicito && secondaryFieldRaw && secondaryFieldRaw !== primaryField
                         ? secondaryFieldRaw
                         : "";
-                    const seen = new Set<string>();
+                    const perFiltro = new Map<string, IndesignPluginFiltro>();
                     for (const record of group.records) {
                         const primary = normalizeFieldValue(record[primaryField]);
                         if (!primary) continue;
@@ -2233,21 +2233,27 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
                             ? normalizeFieldValue(record[secondaryField])
                             : "";
                         const pairKey = `${criterioTema.valore}\0${secondary}`;
-                        if (seen.has(pairKey)) continue;
-                        seen.add(pairKey);
+                        const esistente = perFiltro.get(pairKey);
+                        if (esistente) {
+                            esistente.limite++;
+                            continue;
+                        }
 
-                        filtri.push({
-                            // Il limite per-filtro serve solo ai sottogruppi trascinati esplicitamente
-                            // (es. FORMAT+ suddiviso per tema). Per i gruppi/tema normali il tetto è
-                            // dato dal limite di pagina (referenzePerPagina), quindi i singoli filtri
-                            // per reparto NON devono ereditare il conteggio della pagina.
-                            limite: repartoEsplicito ? group.recordCount : 0,
+                        const filtro: IndesignPluginFiltro = {
+                            // Le referenze che il menabò mette su questa pagina per questo filtro, sia
+                            // per il tema trascinato intero sia per il sottogruppo (I20-966): con 0 il
+                            // plug-in lo legge «Ill.» e, su una pagina condivisa, si prende anche i
+                            // posti degli altri temi. Contato per filtro, non per gruppo: un FORMAT+
+                            // intero genera un filtro per tema e ognuno ha le sue referenze.
+                            limite: 1,
                             ordine: filtri.length + 1,
                             criteri: [
                                 criterioTema,
                                 ...(secondary ? [{ chiave: secondaryField, operatore: "=" as const, valore: secondary }] : []),
                             ],
-                        });
+                        };
+                        perFiltro.set(pairKey, filtro);
+                        filtri.push(filtro);
                     }
                 }
 
