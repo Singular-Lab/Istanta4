@@ -633,7 +633,7 @@ class InddEvents {
         //console.log("checkStatusResonse > step 2");
 
         if (login > 0) {
-            //if (me.istantaState != login) {
+            if (me.istantaState != login) {
                 me.istantaState = login;
 
                 if (login == IstantaState.Logged) {
@@ -648,7 +648,7 @@ class InddEvents {
                     console.log("ISTANTA DOWN");
                     me.fireEvent(me.EVENT_ISTANTA_DOWN, []);
                 }
-            //}
+            }
         }
         else {
             if (me.istantaState == IstantaState.NotLogged) {
