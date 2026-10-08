@@ -8588,6 +8588,10 @@ function cercaRecordInTracciato(Codice) {
                     }
                     //mi dovrebbe tornare un oggetto con due parametri, esito, error se l'operazione è fallita, sennò mi arriva una menaboRef
                     if (objResult.esito != null && !objResult.esito) {
+                        //I20-1062: la traccia completa del server, per chi guarda la console.
+                        if (objResult.dettaglio) {
+                            console.error("Dettaglio dell'errore del server:", objResult.dettaglio);
+                        }
                         messaggioUtente("Code IDX-107 CercaRecordInTracciato: Errore durante la ricerca su server: " + objResult.error, "error");
                         return;
                     }

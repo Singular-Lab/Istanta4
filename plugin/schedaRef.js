@@ -366,7 +366,9 @@ const schedaRef = {
                 console.log("step1");
                 if (error != null) {
                     console.error("Errore durante la richiesta:", error);
-                    messaggioUtente("Code SRF-03 Errore generico durante la richiesta", "error");
+                    //I20-1062: il motivo che arriva dal client HTTP si dice, invece di coprirlo con un messaggio generico.
+                    var motivo = typeof error === "string" ? error : (error && error.message ? error.message : "");
+                    messaggioUtente("Code SRF-03 Errore generico durante la richiesta" + (motivo ? ": " + motivo : ""), "error");
                     hideLoading();
                     me.setBusy(false);
                     return;
@@ -381,6 +383,10 @@ const schedaRef = {
                     }
                     else {
                         console.error("Errore durante la richiesta:", schedaRef.error);
+                        //I20-1062: error e' il messaggio breve; la traccia completa del server sta in dettaglio.
+                        if (schedaRef.dettaglio) {
+                            console.error("Dettaglio dell'errore del server:", schedaRef.dettaglio);
+                        }
                         messaggioUtente("Code SRF-04 Errore sul server durante la richiesta: " + schedaRef.error, "error");
                         hideLoading();
                         me.setBusy(false);

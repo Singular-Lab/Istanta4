@@ -1285,6 +1285,9 @@ namespace Istanta.Models
         public Int64 IdRecInLavorazione { get; set; }
         public TipoLavorazione tipoLavorazione { get; set; }
         public string? error { get; set; }
+        //I20-1062: la traccia completa dell'errore. In error c'e' il messaggio breve per
+        //l'operatore; questa il Plugin la scrive nei log senza mostrarla.
+        public string? dettaglio { get; set; }
         public string? warn { get; set; }
         public bool esito { get; set; }
         public int errorCode { get; set; }

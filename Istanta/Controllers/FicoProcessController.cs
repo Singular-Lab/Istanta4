@@ -3518,7 +3518,8 @@ namespace Istanta.Controllers
                     canale = s.Canale,
                     guidId = s.GuidId,
                     tipo = s.Tipo!.Value,
-                    attiva = s.Attiva!.Value,
+                    //I20-1062: Attiva vuoto nel database dava un InvalidOperationException senza dire quale foto.
+                    attiva = s.Attiva ?? throw new ErroreIstanta("foto dell'articolo", $"la foto {s.NomeReale} (id {s.Id}) dell'articolo {artItem.Codice} ha Attiva vuoto nel database."),
                     statoSelezione = (s.StatoSelezione.HasValue ? s.StatoSelezione.Value : (Byte)StatoSelezioneFoto.NonSelezionata),
                     puntatore = s.Puntatore
                 }).ToList();
@@ -4132,13 +4133,31 @@ namespace Istanta.Controllers
             TracciatoResultKit result = new TracciatoResultKit();
 
 
+            //I20-1062: il risultato non e' mai piu' null. Se il formato non e' ne' PoP ne' Volantino
+            //agenziaFunc e' vuoto, e se il cliente non ha il metodo execLibFunction restituisce "":
+            //in tutti e due i casi il cast dava null e il chiamante si rompeva su result.errors con
+            //un NullReferenceException. Ora errors dice quale metodo, di quale cliente.
+            string metodo = $"AgenziaLib.{this.ficoConf.Value.nomeCliente}.{agenziaFunc}";
             try
             {
-                result = (icItem.execLibFunction($"AgenziaLib.{this.ficoConf.Value.nomeCliente}.{agenziaFunc}", objParams) as TracciatoResultKit)!;
+                if (string.IsNullOrEmpty(agenziaFunc))
+                {
+                    result.errors = $"nessuna esportazione di agenzia per il formato {kit.guidFormato}: non e' ne' PoP ne' Volantino.";
+                }
+                else
+                {
+                    result = icItem.execLibFunction(metodo, objParams) as TracciatoResultKit
+                        ?? new TracciatoResultKit() { errors = $"{metodo} non esiste in AgenziaLib.dll, o non restituisce un TracciatoResultKit." };
+                }
             }
             catch (Exception ex)
             {
-                result.errors = ex.ToString();
+                //Le eccezioni della dll arrivano dentro una TargetInvocationException: il messaggio
+                //utile e' in quella interna. La traccia completa resta nel log.
+                Console.WriteLine($"Errore in {metodo}: " + ex.ToString());
+                Exception radice = DescrizioneErrori.Radice(ex);
+                string? punto = DescrizioneErrori.PuntoNelCodice(radice);
+                result = new TracciatoResultKit() { errors = $"{metodo}: {radice.GetType().Name}" + (punto != null ? $" in {punto}" : "") + $" - {radice.Message}" };
             }
 
             return result;
@@ -4245,7 +4264,7 @@ namespace Istanta.Controllers
             var kitGrouped = artInkit
                 .GroupBy(f => new
                 {
-                    CodiceGruppo = f.recordInTracciato[keyCodGruppo].ToString(),
+                    CodiceGruppo = RecordTracciato.Richiesto(f.recordInTracciato, keyCodGruppo, "dati dalle lavorazioni passate", $"il record {f.IdRec}").ToString(),
                     Label = f.label
                 });
 
@@ -4302,9 +4321,12 @@ namespace Istanta.Controllers
                     //SingletonConfiguration.DBFORMATI.source.FirstOrDefault(f => f.guidID == Utility.Main.getFicoRuntimeKit(p.IdPromoLavorazioniNavigation!.Meta).guidFormato).tipo == TipoLavorazione.Volantino);
                     
                     
+                    //I20-1062: una lavorazione passata il cui formato non e' piu' in SourceFormati.json non
+                    //si puo' dire Volantino, e si salta: prima dava NullReferenceException e fermava la scheda.
                     List<PromoLavorazioniRecord?> plrInACList = _listPassato.OrderByDescending(o => o.RegisterDate).Where(p =>
+                    p.IdPromoLavorazioniNavigation != null &&
                     p.IdPromoLavorazioniNavigation.GuidArea == kit.guidArea && p.IdPromoLavorazioniNavigation.GuidCanale == kit.guidCanale &&
-                    SingletonConfiguration.DBFORMATI.source.FirstOrDefault(f => f.guidID == Utility.Main.getFicoRuntimeKit(p.IdPromoLavorazioniNavigation!.Meta).guidFormato).tipo == TipoLavorazione.Volantino).ToList();
+                    Formati.CercaTipo(Utility.Main.getFicoRuntimeKit(p.IdPromoLavorazioniNavigation.Meta)?.guidFormato) == TipoLavorazione.Volantino).ToList();
 
 
                     if (plrInACList.Count > 0)
@@ -4359,7 +4381,7 @@ namespace Istanta.Controllers
                                         }
                                     }
 
-                                    var fotoScelta = recPassato.foto!.FirstOrDefault(f => f.codRef == item.recordInTracciato[keyRefCodice].ToString() && f.tipo == TipoFoto.Foto);
+                                    var fotoScelta = recPassato.foto?.FirstOrDefault(f => f.codRef == item.recordInTracciato[keyRefCodice].ToString() && f.tipo == TipoFoto.Foto);
                                     if (fotoScelta != null)
                                     {
                                         var artFotoItem = this.ctx.ArticoliFotos.Include(f => f.IdArticoloNavigation).FirstOrDefault(f => f.IdArticoloNavigation.Codice == fotoScelta.codRef && f.NomeReale == fotoScelta.nomeFoto);

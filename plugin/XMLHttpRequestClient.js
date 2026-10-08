@@ -122,9 +122,12 @@ class XMLHttpRequestClient
                     catch{
                     }
                 }
-                console.warn('Code HRC-01: Request failed.  Returned status of ' + _xhr.status + (response != null && response.error != null ? (" - " + response.error) : ""));
-                messaggioUtente("Code HRC-01: Errore durante la comunicazione col server ("+url+"): " + _xhr.status + (response != null && response.error != null ? (" - " + response.error) : ""), "error");
-                me.onerror((response != null && response.error != null ? response.error : _xhr.status));
+                //I20-1062: il motivo puo' stare in error, detail o message, secondo chi ha risposto
+                //(i 500 del revisore usano error, ProblemDetails di ASP.NET detail). Prima si leggeva solo error.
+                var motivo = response != null ? (response.error ?? response.detail ?? response.message ?? null) : null;
+                console.warn('Code HRC-01: Request failed.  Returned status of ' + _xhr.status + (motivo != null ? (" - " + motivo) : ""));
+                messaggioUtente("Code HRC-01: Errore durante la comunicazione col server ("+url+"): " + _xhr.status + (motivo != null ? (" - " + motivo) : ""), "error");
+                me.onerror((motivo != null ? motivo : _xhr.status));
             }
         }
 

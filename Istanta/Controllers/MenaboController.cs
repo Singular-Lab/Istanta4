@@ -9409,8 +9409,15 @@ double.TryParse(percorso.ToString(), out double valore16))
                 if (lavorazione == null)
                     throw new Exception("Lavorazione (id:" + idLavorazione + ") non trovata nel database durante il recupero della schedaRef.");
                 //FicoCombinazioneKit kit = JsonConvert.DeserializeObject<FicoCombinazioneKit>(plItem.Meta);
-                FicoRuntimeKit? kit = JsonConvert.DeserializeObject<FicoRuntimeKit>(lavorazione!.Meta!);
-                Formato? objFormato = Utility.SingletonConfiguration.DBFORMATI!.source.Where(w => w.guidID == kit!.guidFormato).FirstOrDefault();
+                //I20-1062: senza Meta, o con un Meta che non si legge, prima usciva un NullReferenceException nudo.
+                if (string.IsNullOrWhiteSpace(lavorazione.Meta))
+                    throw new ErroreIstanta("lettura della lavorazione", $"la lavorazione {idLavorazione} non ha il Meta del kit.");
+                FicoRuntimeKit? kit = JsonConvert.DeserializeObject<FicoRuntimeKit>(lavorazione.Meta);
+                if (kit == null)
+                    throw new ErroreIstanta("lettura della lavorazione", $"il Meta del kit della lavorazione {idLavorazione} non si legge.");
+                //I20-1062: il formato del kit si cerca dove serve, con Formati.Trova: con OnlyMeta non
+                //serve, e un formato sconosciuto non deve fermare la scheda.
+                string formatoDelKit = $"kit della lavorazione {idLavorazione}";
                 //Console.WriteLine("Get scheda step 1_1");
 
                 PromoLavorazioniRecord? lavoriazioneRecord = null;
@@ -9439,7 +9446,7 @@ double.TryParse(percorso.ToString(), out double valore16))
                     else
                     {
                         var tracciati = ficoController.getTracciatiFromIdkitLavorazione(idLavorazione);
-                        idTracciato = getTracciatoByCodice(tracciati, codiceGruppo, objFormato.tipo == TipoLavorazione.PoP);
+                        idTracciato = getTracciatoByCodice(tracciati, codiceGruppo, Formati.Trova(kit.guidFormato, formatoDelKit).tipo == TipoLavorazione.PoP);
 
                         if (idTracciato == 0)
                         {
@@ -9616,7 +9623,8 @@ double.TryParse(percorso.ToString(), out double valore16))
                 var gruppo = gruppoRecords
                     .Select(t =>
                     {
-                        var recordInTracciato = Utility.Main.getJsonObject(t.Dato!);
+                        var recordInTracciato = Utility.Main.getJsonObject(t.Dato!)
+                            ?? throw new ErroreIstanta("lettura del gruppo", $"il Dato del record {t.Id} del gruppo {codiceGruppo} non si legge.");
 
                         recordInTracciato[GLOBAL_VARIABLES.keyRefIdRec] = t.Id;
 
@@ -9759,7 +9767,9 @@ double.TryParse(percorso.ToString(), out double valore16))
                     .ToDictionary(g => g.Key, g => g.First());
 
                 //Il formato della lavorazione e' lo stesso per tutti i record del gruppo.
-                Formato? formatoLavorazione = SingletonConfiguration.DBFORMATI!.source.FirstOrDefault(f => f.guidID == lavorazione.GuidFormato);
+                //I20-1062: e' il caso della issue: un formato assente da SourceFormati.json dava un
+                //NullReferenceException qualche riga piu' sotto. Si cerca solo se c'e' un record.
+                Formato? formatoLavorazione = gruppo.Count > 0 ? Formati.Trova(lavorazione.GuidFormato, $"lavorazione {idLavorazione}") : null;
 
                 foreach (var rec in gruppo)
                 {
@@ -9768,7 +9778,7 @@ double.TryParse(percorso.ToString(), out double valore16))
 
 
 
-                    string? _cod = rec.recordInTracciato![k_cod].ToString();
+                    string? _cod = RecordTracciato.Richiesto(rec.recordInTracciato, k_cod, "lettura del gruppo", $"il record {rec.idRec} del gruppo {codiceGruppo}").ToString();
 
                     //logAss.WriteLine($"GET SCHEDA REF >> step6 {_cod}");
 
@@ -9777,11 +9787,11 @@ double.TryParse(percorso.ToString(), out double valore16))
                     art_list.Add(artItem!);
 
 
-                    Formato? formatoLav = formatoLavorazione;
-                    rec.formato = formatoLav!;
+                    Formato formatoLav = formatoLavorazione!;
+                    rec.formato = formatoLav;
 
 
-                    ArticoloInRevisione revResult = ficoController.impacchettaInfoRecord(rec, artItem!, gruppo, tracciato, DescrGruppo, formatoLav!.tipo);
+                    ArticoloInRevisione revResult = ficoController.impacchettaInfoRecord(rec, artItem!, gruppo, tracciato, DescrGruppo, formatoLav.tipo);
 
 
 
@@ -9833,13 +9843,22 @@ double.TryParse(percorso.ToString(), out double valore16))
                 Console.WriteLine($"getSchedaRef tappa 2 (articoli e impacchettamento): {swScheda.ElapsedMilliseconds} ms");
 
                 var resultAutoPS = await Utility.Selezionatore.selezioneAutomaticaRefInMenabo(gruppo, this.ctx2, this._fico_conf.Value.nomeCliente, this.path_external_lib, true);
+                //I20-1062: l'esito prima si ignorava del tutto. Non si ferma la scheda - per un cliente
+                //senza selezione automatica in AgenziaLib fallirebbe ogni volta - ma lo si dice.
+                string? avvisoSelezione = null;
+                if (!resultAutoPS.Esito)
+                {
+                    avvisoSelezione = $"selezione automatica del gruppo {codiceGruppo} non riuscita: {DescrizioneErrori.PrimaRiga(resultAutoPS.error)}";
+                    Console.WriteLine("getSchedaRef: " + avvisoSelezione + "\n" + resultAutoPS.error);
+                }
 
                 //if (recDeclinati.Count > 0)
                 //    gruppo.AddRange(recDeclinati);
 
                 if(gruppo.Count > 1)
                 {
-                    gruppo = gruppo.OrderBy(g => Convert.ToByte(g.recordInTracciato![keyXMLSelezione])).ToList();
+                    gruppo = gruppo.OrderBy(g => Convert.ToByte(RecordTracciato.Richiesto(g.recordInTracciato, keyXMLSelezione, "ordinamento per selezione",
+                        $"il record {g.idRec} del gruppo {codiceGruppo}" + (avvisoSelezione != null ? " (" + avvisoSelezione + ")" : "")))).ToList();
                 }
 
                 //logAss.WriteLine("GET SCHEDA REF >> step8");
@@ -9890,8 +9909,9 @@ double.TryParse(percorso.ToString(), out double valore16))
                 if (mode != FicoCombinazioneKitReadMode.OnlyMeta)
                 {
                     string agenziaFunc = "";
+                    TipoLavorazione tipoFormatoKit = Formati.Trova(kit.guidFormato, formatoDelKit).tipo;
 
-                    if (objFormato!.tipo == TipoLavorazione.PoP)
+                    if (tipoFormatoKit == TipoLavorazione.PoP)
                     {
                         ////POP
                         //try
@@ -9927,7 +9947,7 @@ double.TryParse(percorso.ToString(), out double valore16))
                         agenziaFunc = "esportaPoP";
 
                     }
-                    else if (objFormato.tipo == TipoLavorazione.Volantino)
+                    else if (tipoFormatoKit == TipoLavorazione.Volantino)
                     {
                         ////VOL
                         //try
@@ -9975,8 +9995,7 @@ double.TryParse(percorso.ToString(), out double valore16))
                     }
                     else if (resultAgenzia.errors != "")
                     {
-                        result.error += resultAgenzia.errors;
-                        throw new Exception(resultAgenzia.errors);
+                        throw new ErroreIstanta("esportazione di agenzia", resultAgenzia.errors);
                     }
                     else
                     {
@@ -9993,8 +10012,9 @@ double.TryParse(percorso.ToString(), out double valore16))
                         {
                             if (itemLista.recordInTracciato.ContainsKey(keyFotoExtraAuto) && (itemLista.recordInTracciato[keyFotoExtraAuto] as List<LogoBollo>)!.Count > 0)
                             {
-                                var fotoEscluse = this.ctx.Articolis.Include(f => f.FotoEscluses).Where(f => f.Codice == itemLista.recordInTracciato[keyCodiceRef].ToString()).FirstOrDefault()!.FotoEscluses;
-                                if (fotoEscluse!.Count > 0)
+                                //I20-1062: una ref che non e' fra gli Articoli non ha foto escluse; prima dava NullReferenceException.
+                                var fotoEscluse = this.ctx.Articolis.Include(f => f.FotoEscluses).Where(f => f.Codice == itemLista.recordInTracciato[keyCodiceRef].ToString()).FirstOrDefault()?.FotoEscluses;
+                                if (fotoEscluse != null && fotoEscluse.Count > 0)
                                 {
                                     foreach (var logoBollo in (itemLista.recordInTracciato[keyFotoExtraAuto] as List<LogoBollo>)!)
                                     {
@@ -10031,6 +10051,7 @@ double.TryParse(percorso.ToString(), out double valore16))
                     }).ToList(),
                     IdRecInLavorazione = lavoriazioneRecord != null ? lavoriazioneRecord.Id : 0,
                     error = "",
+                    warn = avvisoSelezione,
                     esito = true,
                 };
 
@@ -10052,12 +10073,15 @@ double.TryParse(percorso.ToString(), out double valore16))
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Errore in getSchedaRef: " + ex.ToString());
+                //I20-1062: all'operatore il messaggio breve (passo e motivo, o tipo e riga), nel log e
+                //in dettaglio la traccia completa.
+                Console.WriteLine($"Errore in getSchedaRef (codiceGruppo {codiceGruppo}, idLavorazione {idLavorazione}, idRec {idRec}): " + ex.ToString());
 
                 result = new ArticoloInRevisioneKitResult()
                 {
                     records = new List<ArticoloInKit>(),
-                    error = ex.ToString(),
+                    error = DescrizioneErrori.Breve("getSchedaRef", ex),
+                    dettaglio = DescrizioneErrori.Dettaglio(ex),
                     esito = false,
                     errorCode = result.errorCode,
                 };
@@ -10100,7 +10124,8 @@ double.TryParse(percorso.ToString(), out double valore16))
 
                         if (gruppoResult == null || !gruppoResult.esito)
                         {
-                            throw new Exception("Gruppo " + richiesta.codiceGruppo + " non trovato da LeggiTracciatiRecord");
+                            //I20-1062: l'errore di getSchedaRef arriva al Plugin, invece di "non trovato".
+                            throw ErroreIstanta.Inoltrato(gruppoResult?.error, "Gruppo " + richiesta.codiceGruppo + " non trovato da getSchedaRef");
                         }
                     }
                     else
@@ -10132,14 +10157,8 @@ double.TryParse(percorso.ToString(), out double valore16))
 
                         if (gruppoResult == null || !gruppoResult.esito)
                         {
-                            if (gruppoResult.error != "")
-                            {
-                                throw new Exception("Gruppo " + richiesta.codiceGruppo + " è stato registrato l'errore: "+gruppoResult.error);
-                            }
-                            else
-                            {
-                                throw new Exception("Gruppo " + richiesta.codiceGruppo + " non trovato da LeggiTracciatiRecord");
-                            }
+                            //I20-1062: l'errore di getSchedaRef e' gia' descritto, passa cosi' com'e'.
+                            throw ErroreIstanta.Inoltrato(gruppoResult?.error, "Gruppo " + richiesta.codiceGruppo + " non trovato da getSchedaRef");
                         }
                     }
                     else
@@ -10188,10 +10207,13 @@ double.TryParse(percorso.ToString(), out double valore16))
             }
             catch (Exception ex)
             {
+                //I20-1062: messaggio breve per il Plugin, traccia completa nel log e in dettaglio.
+                Console.WriteLine($"Errore in impaginaSingolo (codiceGruppo {richiesta?.codiceGruppo}, idLavorazione {richiesta?.idLavorazione}): " + ex.ToString());
                 result = new ArticoloInRevisioneKitResult()
                 {
                     records = new List<ArticoloInKit>(),
-                    error = ex.ToString(),
+                    error = DescrizioneErrori.Breve("impaginaSingolo", ex),
+                    dettaglio = DescrizioneErrori.Dettaglio(ex),
                     esito = false,
                 };
             }
@@ -11030,7 +11052,10 @@ double.TryParse(percorso.ToString(), out double valore16))
 
                             if (gruppoResult == null || !gruppoResult.esito)
                             {
-                                _err = "Non trovato in tracciato. L'elemento potrebbe essere uscito dalla lista o essere non più valido.";
+                                //I20-1062: se impaginaSingolo ha detto perche', si dice quello.
+                                _err = !string.IsNullOrWhiteSpace(gruppoResult?.error)
+                                    ? gruppoResult!.error!
+                                    : "Non trovato in tracciato. L'elemento potrebbe essere uscito dalla lista o essere non più valido.";
                             }
                         }
                         else
@@ -12324,7 +12349,8 @@ double.TryParse(percorso.ToString(), out double valore16))
 
                             if (schedaRefResult == null || !schedaRefResult.esito)
                             {
-                                throw new Exception("Gruppo " + obj.codiceGruppo + " non trovato da getSchedaRef");
+                                //I20-1062: l'errore di getSchedaRef arriva al Plugin, invece di "non trovato".
+                                throw ErroreIstanta.Inoltrato(schedaRefResult?.error, "Gruppo " + obj.codiceGruppo + " non trovato da getSchedaRef");
                             }
 
                         }
@@ -12386,9 +12412,11 @@ double.TryParse(percorso.ToString(), out double valore16))
             }
             catch (Exception ex)
             {
-                Console.WriteLine("setCambioStrutturale error -> " + ex.StackTrace.ToString());
+                //I20-1062: messaggio breve per il Plugin, traccia completa nel log. Prima si scriveva
+                //ex.StackTrace.ToString(), che e' null per un'eccezione mai lanciata.
+                Console.WriteLine("setCambioStrutturale error -> " + ex.ToString());
                 result.esito = false;
-                result.error = ex.ToString();
+                result.error = DescrizioneErrori.Breve("setCambioStrutturale", ex);
             }
 
             return Ok(result);
