@@ -753,7 +753,7 @@ const pannelli = {
                     }
 
                     const duplicateControl = this._crDuplicateControl(item, "recordCambiati");
-                    left.appendChild(codice);
+                    left.appendChild(this._conSegnalazioniImpaginazione(codice, item));
                     if (duplicateControl) {
                         left.appendChild(duplicateControl);
                     }
@@ -879,7 +879,7 @@ const pannelli = {
                     left.style.minWidth = "0";
                     left.style.gap = "4px";
 
-                    left.appendChild(codice);
+                    left.appendChild(this._conSegnalazioniImpaginazione(codice, item));
 
                     const duplicateControl = this._crDuplicateControl(item, "recordUsciti");
                     if (duplicateControl) {
@@ -1532,6 +1532,45 @@ const pannelli = {
         elemento.addEventListener("click", () => this.copiaCodiceGruppo(testo));
 
         return elemento;
+    },
+
+    /// I20-1056, lotto 5: il codice del record con accanto, se il box ne ha, il numero delle sue
+    /// segnalazioni di impaginazione irrisolte, colorato come l'icona del menabo' (rosso con almeno
+    /// un errore, arancione con soli avvisi); il suggerimento le elenca. Senza segnalazioni torna
+    /// il codice cosi' com'e', e la riga resta quella di prima.
+    _conSegnalazioniImpaginazione(codice, record) {
+        const riepilogo = record?.segnalazioniImpaginazione ?? record?._fullReportRecord?.segnalazioniImpaginazione;
+        if (riepilogo == null || !(riepilogo.segnalazioni > 0)) {
+            return codice;
+        }
+
+        const riga = document.createElement("div");
+        riga.style.display = "flex";
+        riga.style.alignItems = "center";
+        riga.style.gap = "6px";
+        riga.style.minWidth = "0";
+
+        codice.style.flex = "0 1 auto";
+        riga.appendChild(codice);
+
+        const numero = document.createElement("span");
+        numero.textContent = String(riepilogo.segnalazioni);
+        numero.style.display = "inline-block";
+        numero.style.flexShrink = "0";
+        numero.style.minWidth = "16px";
+        numero.style.height = "16px";
+        numero.style.padding = "0 4px";
+        numero.style.borderRadius = "8px";
+        numero.style.color = "white";
+        numero.style.fontSize = "10px";
+        numero.style.fontWeight = "bold";
+        numero.style.lineHeight = "16px";
+        numero.style.textAlign = "center";
+        numero.style.backgroundColor = SchermataSegnalazioni.coloreCss(riepilogo.gravita);
+        Tooltip.impostaTooltip(numero, SchermataSegnalazioni.testoSegnalazioniDelRecord(riepilogo, this.traduzioniLabelSegnalazioni()));
+        riga.appendChild(numero);
+
+        return riga;
     },
 
     copiaCodiceGruppo(codiceGruppo) {

@@ -129,11 +129,15 @@ const SchermataSegnalazioni = {
     /// opzioni.aFineImpaginazione: il caricamento lo mostra gia' l'impaginazione, e chi chiama lo
     /// chiude subito dopo: la lettura si fa qui e ora, senza attese. Dal pulsante invece si mostra
     /// il caricamento e lo si lascia disegnare prima di leggere.
+    /// opzioni.lette (I20-1056, lotto 5): una lettura appena fatta da chi chiama, con le stesse
+    /// pagine; la schermata la usa invece di rileggere, e non serve il caricamento. La usa il
+    /// Report Integrita', che ha appena controllato il documento per decidere se avvisare.
     /// Restituisce true se la schermata si e' aperta.
     async apri(opzioni = {}) {
         const turno = ++SchermataSegnalazioni._turno;
         const pagine = Array.isArray(opzioni.pagine) ? opzioni.pagine : null;
-        const conCaricamento = !opzioni.aFineImpaginazione;
+        const giaLette = Array.isArray(opzioni.lette) ? opzioni.lette : null;
+        const conCaricamento = !opzioni.aFineImpaginazione && giaLette == null;
 
         if (conCaricamento) {
             SchermataSegnalazioni._caricamento(true);
@@ -147,7 +151,7 @@ const SchermataSegnalazioni = {
                 }
             }
 
-            const lette = SchermataSegnalazioni._leggi(pagine);
+            const lette = giaLette != null ? giaLette : SchermataSegnalazioni._leggi(pagine);
             if (turno !== SchermataSegnalazioni._turno) {
                 return false;
             }
@@ -240,6 +244,14 @@ const SchermataSegnalazioni = {
     /// Le letture dei bollini: delle sole pagine indicate, o di tutto il documento.
     /// I20-1056, lotto 3: ogni lettura e' un controllo, e aggiorna l'icona del menabo'.
     _leggi(pagine) {
+        const lette = SchermataSegnalazioni.letturaControllata(pagine);
+        return lette != null ? lette : [];
+    },
+
+    /// I20-1056, lotto 5: come _leggi, ma se la lettura non riesce torna null invece di una lista
+    /// vuota. Il Report Integrita' deve poter distinguere "nessuna segnalazione" da "non ho letto":
+    /// nel secondo caso non puo' dire all'operatore che il documento e' pulito.
+    letturaControllata(pagine) {
         try {
             const documento = SchermataSegnalazioni._documento();
             const lette = Array.isArray(pagine) ? Segnalazioni.leggiPagine(documento, pagine) : Segnalazioni.leggiDocumento(documento);
@@ -249,7 +261,7 @@ const SchermataSegnalazioni = {
         }
         catch (e) {
             console.error("Code SGN-01 Segnalazioni non lette dal documento:", e);
-            return [];
+            return null;
         }
     },
 
@@ -390,6 +402,134 @@ const SchermataSegnalazioni = {
             return "";
         }
         return totali.segnalazioni + (totali.segnalazioni === 1 ? " segnalazione" : " segnalazioni") + " in " + totali.box + " box";
+    },
+
+    /// I20-1056, lotto 5: l'avviso prima del Report Integrita', o "" se non c'e' niente da dire:
+    /// "Nel documento ci sono 3 segnalazioni di impaginazione irrisolte in 2 box (1 errore)."
+    testoAvvisoReport(lette) {
+        const totali = SchermataSegnalazioni.conta(lette);
+        if (totali.segnalazioni === 0) {
+            return "";
+        }
+        const errori = (Array.isArray(lette) ? lette : []).reduce((totale, lettura) => totale
+            + (Array.isArray(lettura.voci) ? lettura.voci.filter(voce => etichettaSegnalazioni.gravita(voce.g) === "error").length : 0), 0);
+        let testo = (totali.segnalazioni === 1
+            ? "Nel documento c'è 1 segnalazione di impaginazione irrisolta"
+            : "Nel documento ci sono " + totali.segnalazioni + " segnalazioni di impaginazione irrisolte")
+            + " in " + totali.box + " box";
+        if (errori > 0) {
+            testo += " (" + errori + (errori === 1 ? " errore" : " errori") + ")";
+        }
+        return testo + ".";
+    },
+
+    /// I20-1056, lotto 5: le voci di un box ridotte a quello che il report mostra accanto al record:
+    /// quante, quanti errori, la gravita' peggiore e le voci per il suggerimento. null se non ce ne
+    /// sono.
+    riepilogoVoci(voci) {
+        const elenco = Array.isArray(voci) ? voci.filter(voce => voce != null) : [];
+        if (elenco.length === 0) {
+            return null;
+        }
+        return {
+            segnalazioni: elenco.length,
+            errori: elenco.filter(voce => etichettaSegnalazioni.gravita(voce.g) === "error").length,
+            gravita: etichettaSegnalazioni.gravitaPeggiore(elenco),
+            voci: elenco.map(voce => ({ g: voce.g, c: voce.c, t: voce.t }))
+        };
+    },
+
+    /// I20-1056, lotto 5: mette in record.segnalazioniImpaginazione il riepilogo dei bollini del suo
+    /// box, dalla lettura del documento. Tocca solo i record ricevuti: un box con le sole
+    /// segnalazioni, che nel report non c'e', non ci entra.
+    /// Il box si riconosce dall'id (inddId, l'id del gruppo nella mappatura). Se l'id non torna,
+    /// come in un report riaperto dopo che un bollino e' stato ridisegnato (il gruppo cambia), si
+    /// prova con l'idRec del DNA (dnaDelBox, di norma Utility.getDnaOfBox), letto solo per quei box.
+    /// Torna quanti record hanno segnalazioni.
+    assegnaAiRecord(records, lette, dnaDelBox) {
+        const leggiDna = typeof dnaDelBox === "function" ? dnaDelBox : (box) => Utility.getDnaOfBox(box);
+        const elencoRecord = (Array.isArray(records) ? records : []).filter(record => record != null);
+        elencoRecord.forEach(record => { delete record.segnalazioniImpaginazione; });
+
+        const aggiungi = (mappa, chiave, record) => {
+            if (chiave == null || chiave === "") {
+                return;
+            }
+            if (!mappa.has(chiave)) {
+                mappa.set(chiave, []);
+            }
+            mappa.get(chiave).push(record);
+        };
+        const perId = new Map();
+        elencoRecord.forEach(record => {
+            const id = record.inddId != null ? record.inddId : (record.elementoMappa != null ? record.elementoMappa.refId : null);
+            aggiungi(perId, id != null ? String(id) : null, record);
+        });
+
+        const vociDelRecord = new Map();
+        const accumula = (record, voci) => vociDelRecord.set(record, (vociDelRecord.get(record) || []).concat(voci));
+        const senzaId = [];
+        (Array.isArray(lette) ? lette : []).forEach(lettura => {
+            const voci = Array.isArray(lettura.voci) ? lettura.voci : [];
+            if (voci.length === 0) {
+                return;
+            }
+            let id = null;
+            try {
+                id = lettura.box != null && lettura.box.id != null ? String(lettura.box.id) : null;
+            }
+            catch (e) {
+                id = null;
+            }
+            const trovati = id != null ? perId.get(id) : null;
+            if (trovati != null) {
+                trovati.forEach(record => accumula(record, voci));
+            }
+            else {
+                senzaId.push(lettura);
+            }
+        });
+
+        if (senzaId.length > 0) {
+            const perIdRec = new Map();
+            elencoRecord.filter(record => !vociDelRecord.has(record)).forEach(record => {
+                aggiungi(perIdRec, Segnalazioni.chiaveRecord(record.elementoMappa != null ? record.elementoMappa.idRec : null), record);
+            });
+            senzaId.forEach(lettura => {
+                let dna = null;
+                try {
+                    dna = leggiDna(lettura.box);
+                }
+                catch (e) {
+                    dna = null;
+                }
+                const trovati = perIdRec.get(Segnalazioni.chiaveRecord(dna != null ? dna.idRec : null));
+                if (trovati != null) {
+                    trovati.forEach(record => accumula(record, lettura.voci));
+                }
+            });
+        }
+
+        vociDelRecord.forEach((voci, record) => {
+            record.segnalazioniImpaginazione = SchermataSegnalazioni.riepilogoVoci(etichettaSegnalazioni.senzaDoppioni(voci));
+        });
+        return vociDelRecord.size;
+    },
+
+    /// I20-1056, lotto 5: il suggerimento del numero accanto al record del report: quante e le
+    /// voci, con il dizionario del cliente. Sulla stessa riga, separate da un pallino: il riquadro
+    /// del suggerimento (tooltip.js) scrive il testo cosi' com'e', e non andrebbe a capo.
+    testoSegnalazioniDelRecord(riepilogo, traduzioni) {
+        if (riepilogo == null || !(riepilogo.segnalazioni > 0)) {
+            return "";
+        }
+        const righe = [riepilogo.segnalazioni + (riepilogo.segnalazioni === 1
+            ? " segnalazione di impaginazione irrisolta:"
+            : " segnalazioni di impaginazione irrisolte:")];
+        (Array.isArray(riepilogo.voci) ? riepilogo.voci : []).forEach(voce => {
+            righe.push("• " + (voce.c ? voce.c + " " : "") + SchermataSegnalazioni.traduciTesto(voce.t || "", traduzioni));
+        });
+        return righe.join(" ");
     },
 
     /// I20-1056, lotto 2: il dizionario del cliente sulle etichette degli elementi citate nel testo

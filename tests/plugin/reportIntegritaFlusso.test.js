@@ -134,7 +134,8 @@ test('il fix senza report non e\' piu\' offerto', () => {
     //Con lui sono spariti i due rami che il report non usava: i bollini in pagina e il
     //recupero delle schede dal server.
     //I20-1014: applicaConfronto e' un membro del report, non piu' una funzione di indexNew.
-    assert.match(confronti, /async applicaConfronto\(mappa\) \{/);
+    //I20-1056, lotto 5: con la lettura dei bollini dell'avvio, per i numeri accanto ai record.
+    assert.match(confronti, /async applicaConfronto\(mappa, letteSegnalazioni = null\) \{/);
     assert.doesNotMatch(indexNew, /function applicaConfronto\(/);
     assert.doesNotMatch(applicaConfronto, /getSchedeRefsMassivo/);
     assert.doesNotMatch(applicaConfronto, /addBollinoCustom/);
