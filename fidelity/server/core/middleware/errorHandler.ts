@@ -1,8 +1,7 @@
 import { NextFunction, Request, Response } from 'express';
 import { HttpStatusCode } from '../../../lib/enums';
 import { AppError } from '../../../lib/errors/AppError';
-import { serializeError, wrapExternalError } from '../../../lib/errors/errorUtils';
-import config from '../config/index';
+import { GENERIC_ERROR_MESSAGE, redactErrorForClient, serializeError, wrapExternalError } from '../../../lib/errors/errorUtils';
 import { log } from '../logger';
 import { AuditLogService } from '../services/AuditLogService';
 
@@ -86,19 +85,19 @@ function determineStatusCode(error: any): number {
  * il discriminante usato dal client (server_call.ts) per creare errori strutturati.
  */
 function buildErrorPayload(error: NodeJS.ErrnoException, req: Request, includeStackTrace: boolean): Record<string, unknown> {
+  const isApplicationError = error instanceof AppError;
   let toSerialize: unknown = error;
 
-  if (!(error instanceof AppError)) {
+  if (!isApplicationError) {
     toSerialize = wrapExternalError(error, {
-      message: error?.message || 'Si è verificato un errore imprevisto',
+      message: error?.message || GENERIC_ERROR_MESSAGE,
       httpStatus: HttpStatusCode.INTERNAL_SERVER_ERROR,
     });
   }
 
-  const serialized = serializeError(toSerialize);
+  const serialized = redactErrorForClient(serializeError(toSerialize), isApplicationError);
 
-  // In produzione, rimuovi lo stack trace
-  if (config.NODE_ENV === 'production' || !includeStackTrace) {
+  if (!includeStackTrace) {
     delete serialized.stack;
   }
 

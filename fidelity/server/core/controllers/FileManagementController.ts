@@ -43,9 +43,11 @@ export class FileManagementController extends BaseController {
   }
 
   protected setupRoutes(): void {
-    // Upload routes (with multer middleware)
+    // Upload routes. Autenticazione e permesso vengono verificati PRIMA di multer:
+    // una richiesta rifiutata non deve scrivere nulla su disco ne' occupare memoria.
     this.router.post(
       '/invioMaterialeAdFP',
+      authMiddleware,
       (req, res, next) => {
         uploadMaterialiPubblicazioni.single('file')(req, res, (err) => {
           if (err instanceof multer.MulterError) {
@@ -56,18 +58,17 @@ export class FileManagementController extends BaseController {
           next();
         });
       },
-      authMiddleware,
       this.invioMaterialeAdFP.bind(this)
     );
 
-    this.router.post('/uploadTracciato/:idPromo', uploadTracciati.single('file'), authMiddleware, permissionGuard('file.upload_tracciato'), this.uploadTracciato.bind(this));
-    this.router.post('/uploadMateriale', uploadMaterialiPubblicazioni.single('file'), authMiddleware, permissionGuard('file.upload_materiale'), this.uploadMateriale.bind(this));
-    this.router.post('/uploadKitManuali/:idPromo/:idKit', uploadMaterialiPubblicazioni.array('file'), authMiddleware, permissionGuard('file.upload_kit_manuali'), this.uploadKitManuali.bind(this));
-    this.router.post('/replaceFileKitRuntime/:idFile', uploadForzatoImmaginiOlimpo.single('file'), authMiddleware, permissionGuard('file.sostituisci'), this.replaceFileKitRuntime.bind(this));
-    this.router.post('/uploadForzatoImmaginiOlimpo', uploadForzatoImmaginiOlimpo.single('file'), authMiddleware, permissionGuard('file.upload_olympus'), this.uploadForzatoImmaginiOlimpo.bind(this));
-    this.router.post('/updateImmagineReferenza', uploadForzatoImmaginiOlimpo.single('file'), authMiddleware, permissionGuard('file.aggiorna_immagine_referenza'), this.updateImmagineReferenza.bind(this));
-    this.router.post('/updateImmagineGruppoReferenza', uploadForzatoImmaginiOlimpo.single('file'), authMiddleware, permissionGuard('file.aggiorna_immagine_referenza'), this.updateImmagineGruppoReferenza.bind(this));
-    this.router.post('/process-rejected-zip', processZipInMemory.single('file'), authMiddleware, permissionGuard('file.upload_materiale'), this.processRejectedZip.bind(this));
+    this.router.post('/uploadTracciato/:idPromo', authMiddleware, permissionGuard('file.upload_tracciato'), uploadTracciati.single('file'), this.uploadTracciato.bind(this));
+    this.router.post('/uploadMateriale', authMiddleware, permissionGuard('file.upload_materiale'), uploadMaterialiPubblicazioni.single('file'), this.uploadMateriale.bind(this));
+    this.router.post('/uploadKitManuali/:idPromo/:idKit', authMiddleware, permissionGuard('file.upload_kit_manuali'), uploadMaterialiPubblicazioni.array('file'), this.uploadKitManuali.bind(this));
+    this.router.post('/replaceFileKitRuntime/:idFile', authMiddleware, permissionGuard('file.sostituisci'), uploadForzatoImmaginiOlimpo.single('file'), this.replaceFileKitRuntime.bind(this));
+    this.router.post('/uploadForzatoImmaginiOlimpo', authMiddleware, permissionGuard('file.upload_olympus'), uploadForzatoImmaginiOlimpo.single('file'), this.uploadForzatoImmaginiOlimpo.bind(this));
+    this.router.post('/updateImmagineReferenza', authMiddleware, permissionGuard('file.aggiorna_immagine_referenza'), uploadForzatoImmaginiOlimpo.single('file'), this.updateImmagineReferenza.bind(this));
+    this.router.post('/updateImmagineGruppoReferenza', authMiddleware, permissionGuard('file.aggiorna_immagine_referenza'), uploadForzatoImmaginiOlimpo.single('file'), this.updateImmagineGruppoReferenza.bind(this));
+    this.router.post('/process-rejected-zip', authMiddleware, permissionGuard('file.upload_materiale'), processZipInMemory.single('file'), this.processRejectedZip.bind(this));
 
     // File listing and retrieval
     this.router.get('/getAllFiles', authMiddleware, permissionGuard('file.download'), this.getAllFiles.bind(this));

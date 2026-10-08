@@ -197,6 +197,17 @@ jobs:
         working-directory: fidelity
         run: npm run type-check:server
 
+      - name: Lint Fidelity client
+        if: steps.changes.outputs.fidelity == 'true'
+        working-directory: fidelity
+        run: npm run lint
+
+      # Solo le dipendenze di runtime: una vulnerabilita' alta o critica blocca la CI.
+      - name: Audit Fidelity dependencies
+        if: steps.changes.outputs.fidelity == 'true'
+        working-directory: fidelity
+        run: npm audit --omit=dev --audit-level=high
+
       - name: Test Fidelity
         if: steps.changes.outputs.fidelity == 'true'
         working-directory: fidelity

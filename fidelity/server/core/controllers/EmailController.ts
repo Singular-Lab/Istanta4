@@ -4,12 +4,17 @@ import { log } from '../logger';
 import nodemailer from 'nodemailer';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { decryptString, encryptString } from '../../../lib/encryption';
 import { BaseController } from '../base/BaseController';
 import config from '../config';
-import type { UtenteResponseDTO } from '../dto';
 import { RecuperoPasswordEmail } from '../email-templates/RecuperoPasswordEmail';
 import type { IUserService } from '../interfaces/IUserService';
+import { passwordResetRateLimiter } from '../middleware/rateLimiter';
+import {
+    createPasswordResetToken,
+    readPasswordResetTokenEmail,
+    verifyPasswordResetToken,
+    type PasswordResetTokenCheck
+} from '../utils/passwordResetToken';
 
 export class EmailController extends BaseController {
     private transporter: nodemailer.Transporter;
@@ -32,9 +37,9 @@ export class EmailController extends BaseController {
     }
 
     protected setupRoutes(): void {
-        this.router.post("/recupero-password", this.recuperoPassword.bind(this));
+        this.router.post("/recupero-password", passwordResetRateLimiter, this.recuperoPassword.bind(this));
         this.router.get("/validate-reset-token", this.validateResetToken.bind(this));
-        this.router.post("/reset-password", this.resetPassword.bind(this));
+        this.router.post("/reset-password", passwordResetRateLimiter, this.resetPassword.bind(this));
     }
 
 
@@ -46,13 +51,27 @@ export class EmailController extends BaseController {
         return `<!DOCTYPE html>${html}`;
     }
 
-    private generateContextJson(user: UtenteResponseDTO): string {
-        const encryptedString = encryptString(JSON.stringify({
-            email: user.email,
-            timestamp: new Date().toISOString()
-        }), config.FICO_SECRET);
-        // Sostituisci + con -pl- per evitare che diventi spazio nell'URL
-        return encryptedString.replace(/\+/g, "-pl-");
+    /**
+     * Verifica il token del collegamento di reset. Un token di un utente
+     * inesistente vale come non valido, per non rivelare quali email esistono.
+     */
+    private async checkResetToken(ctx: unknown): Promise<PasswordResetTokenCheck> {
+        // ctx arriva da query o body: puo' essere un array o un oggetto.
+        if (typeof ctx !== 'string') {
+            return 'invalid';
+        }
+
+        const email = readPasswordResetTokenEmail(ctx);
+        if (!email) {
+            return 'invalid';
+        }
+
+        const passwordHash = await this.userService.getPasswordHashByEmail(email);
+        if (passwordHash === null) {
+            return 'invalid';
+        }
+
+        return verifyPasswordResetToken(ctx, passwordHash, config.FICO_SECRET);
     }
 
     private async recuperoPassword(req: Request, res: Response): Promise<void> {
@@ -64,15 +83,16 @@ export class EmailController extends BaseController {
 
             // Verifica se l'utente esiste
             const user = await this.userService.getUserByEmail(email);
+            const passwordHash = user ? await this.userService.getPasswordHashByEmail(user.email) : null;
 
-            if (!user) {
+            if (!user || passwordHash === null) {
                 // Non rivelare che l'email non esiste
                 res.status(200).json({ message: genericMessage });
                 return;
             }
 
             // Genera token di reset
-            const resetToken = this.generateContextJson(user);
+            const resetToken = createPasswordResetToken(user.email, passwordHash, config.FICO_SECRET);
 
 
             // Costruisci il link di reset
@@ -108,31 +128,6 @@ export class EmailController extends BaseController {
     }
 
     /**
-     * Decodifica e valida il context token
-     */
-    private decodeContext(ctx: string): { email: string; timestamp: string } | null {
-        try {
-            // Riconverti -pl- in + (che era stato sostituito per evitare problemi URL)
-            const restoredCtx = ctx.replace(/-pl-/g, "+");
-            const decrypted = decryptString(restoredCtx, config.FICO_SECRET);
-            return JSON.parse(decrypted);
-        } catch (error) {
-            log.warn('Errore nella decodifica del context token', { error });
-            return null;
-        }
-    }
-
-    /**
-     * Verifica se il token è scaduto (24 ore)
-     */
-    private isTokenExpired(timestamp: string): boolean {
-        const tokenDate = new Date(timestamp);
-        const now = new Date();
-        const hoursDiff = (now.getTime() - tokenDate.getTime()) / (1000 * 60 * 60);
-        return hoursDiff > 24;
-    }
-
-    /**
      * Valida il reset token e restituisce i dati utente
      */
     private async validateResetToken(req: Request, res: Response): Promise<void> {
@@ -144,19 +139,19 @@ export class EmailController extends BaseController {
                 return;
             }
 
-            const contextData = this.decodeContext(ctx);
+            const check = await this.checkResetToken(ctx);
 
-            if (!contextData) {
+            if (check === 'invalid') {
                 res.status(400).json({ error: 'Token non valido' });
                 return;
             }
 
-            if (this.isTokenExpired(contextData.timestamp)) {
+            if (check === 'expired') {
                 res.status(400).json({ error: 'Token scaduto' });
                 return;
             }
 
-            const user = await this.userService.getUserByEmail(contextData.email);
+            const user = await this.userService.getUserByEmail(readPasswordResetTokenEmail(ctx)!);
 
             if (!user) {
                 res.status(404).json({ error: 'Utente non trovato' });
@@ -196,19 +191,19 @@ export class EmailController extends BaseController {
                 return;
             }
 
-            const contextData = this.decodeContext(ctx);
+            const check = await this.checkResetToken(ctx);
 
-            if (!contextData) {
+            if (check === 'invalid') {
                 res.status(400).json({ error: 'Token non valido' });
                 return;
             }
 
-            if (this.isTokenExpired(contextData.timestamp)) {
+            if (check === 'expired') {
                 res.status(400).json({ error: 'Token scaduto. Richiedi un nuovo link di reset.' });
                 return;
             }
 
-            const user = await this.userService.getUserByEmail(contextData.email);
+            const user = await this.userService.getUserByEmail(readPasswordResetTokenEmail(ctx)!);
 
             if (!user) {
                 res.status(404).json({ error: 'Utente non trovato' });

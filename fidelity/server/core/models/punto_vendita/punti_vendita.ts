@@ -62,27 +62,6 @@ class PuntoVendita extends Model<PuntiVenditaAttributes, PuntiVenditaCreationAtt
     });
   }
 
-  public static async findNearby(lat: number, lon: number, radiusKm: number = 10): Promise<PuntoVendita[]> {
-    // Query per trovare punti vendita nel raggio specificato
-    const query = `
-            SELECT *,
-                   (6371 * acos(cos(radians(?)) * cos(radians(lat_puntivendita)) *
-                    cos(radians(lon_puntivendita) - radians(?)) +
-                    sin(radians(?)) * sin(radians(lat_puntivendita))) AS distance
-            FROM punti_vendita
-            WHERE lat_puntivendita IS NOT NULL
-              AND lon_puntivendita IS NOT NULL
-            HAVING distance <= ?
-            ORDER BY distance
-        `;
-
-    return await sequelize.query(query, {
-      replacements: [lat, lon, lat, radiusKm],
-      model: PuntoVendita,
-      mapToModel: true
-    });
-  }
-
   public static async countByRegione(): Promise<Array<{ regione: string; count: number }>> {
     return await PuntoVendita.findAll({
       attributes: [

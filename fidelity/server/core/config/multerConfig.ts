@@ -1,4 +1,5 @@
 import multer, { FileFilterCallback, StorageEngine } from 'multer';
+import { randomUUID } from 'node:crypto';
 import path from 'path';
 import fs from 'fs';
 import { Request } from 'express';
@@ -142,7 +143,9 @@ export const createDiskStorage = (
 export const storageConfigs = {
   tmp: createDiskStorage(TMP_DIR),
   tmpWithTimestamp: createDiskStorage(TMP_DIR, (req, file) => `${Date.now()}-${file.originalname}`),
-  materialiPOP: createDiskStorage(MATERIALI_POP_DIR, (req, file) => file.originalname),
+  // Nome su disco univoco: due caricamenti con lo stesso nome non si sovrascrivono
+  // e il nome inviato dal client non entra nel path. Il nome logico resta file.originalname.
+  materialiPOP: createDiskStorage(MATERIALI_POP_DIR, (req, file) => `${randomUUID()}${path.extname(path.basename(file.originalname))}`),
 };
 
 // ============================================
@@ -211,11 +214,16 @@ export const uploadTracciati = multer({
 /**
  * Upload configuration for materiali pubblicazioni
  * - Disk storage (materiali_POP directory)
- * - 200 MB field limit
+ * - 200 MB file limit
+ * - 200 MB field limit: il campo meta inviato da Istanta con l'export puo' superare
+ *   il limite di default di multer (1 MB)
  */
 export const uploadMaterialiPubblicazioni = multer({
   storage: storageConfigs.materialiPOP,
-  limits: { fieldSize: FILE_SIZE_LIMITS.EXTRA_LARGE }
+  limits: {
+    fileSize: FILE_SIZE_LIMITS.EXTRA_LARGE,
+    fieldSize: FILE_SIZE_LIMITS.EXTRA_LARGE
+  }
 });
 
 /**

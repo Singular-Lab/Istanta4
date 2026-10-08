@@ -1,7 +1,6 @@
 import { Request, Response } from 'express';
 import 'express-session';
 import { Optional } from 'sequelize';
-import { encryptString } from '../../../lib/encryption';
 import { CATEGORIA_ATTIVITA, HttpStatusCode, STATO_UTENTI, TIPO_ATTIVITA, TIPO_UTENTI } from '../../../lib/enums';
 import { ApplicationError, BadRequestError, UnauthorizedError } from '../../../lib/errors';
 import { GlobalUserFilter, UtenteAttributes } from '../../../lib/types';
@@ -150,7 +149,6 @@ export class UserController extends BaseController {
     this.router.get("/autentica_utente_ad", this.autenticaUtenteAD.bind(this));
 
 
-    this.router.put("/return_json", this.returnJson.bind(this));
     this.router.put('/update_profile', authMiddleware, this.updateProfile.bind(this));
     this.router.put('/update_password', authMiddleware, this.updatePasswordSelf.bind(this));
 
@@ -991,29 +989,6 @@ export class UserController extends BaseController {
       res.status(HttpStatusCode.OK).json(result);
     } catch (error) {
       console.error('Error in autenticaUtenteAD:', error);
-      this.handleError(res, error as Error);
-    }
-  }
-
-  private async returnJson(req: Request, res: Response): Promise<void> {
-    try {
-      // Ensure data is a string before passing to crypto
-      const data = req.body.data;
-      let text: string;
-
-      if (typeof data === 'string') {
-        text = data;
-      } else if (data && typeof data === 'object') {
-        text = JSON.stringify(data);
-      } else {
-        throw new BadRequestError({ message: 'Il campo data deve essere una stringa o un oggetto serializzabile', details: { field: 'data' } });
-      }
-
-      const secret = process.env.FICO_SECRET || '';
-      const encryptedData = encryptString(text, secret);
-      res.status(HttpStatusCode.OK).json(encryptedData);
-    } catch (error) {
-      console.error('Error in returnJson:', error);
       this.handleError(res, error as Error);
     }
   }

@@ -107,7 +107,9 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
             headers: {
               'fico-secret': config.FICO_SECRET as string,
               'Authorization': `Bearer ${token}`
-            }
+            },
+            // Senza timeout un Olympus bloccato tiene appese tutte le richieste con bearer.
+            timeout: 10_000
           });
           if (!result.data || result.data.error) {
             throw new UnauthorizedError({

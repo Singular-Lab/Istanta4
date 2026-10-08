@@ -1880,55 +1880,6 @@ class ServerCall {
     };
   }
   /**
-   * Utility per gestire automaticamente i retry per errori retryable
-   */
-  public static async withRetry<T>(
-    operation: () => Promise<T>,
-    maxRetries: number = 3,
-    delayMs: number = 1000
-  ): Promise<T> {
-    let lastError: CustomError;
-
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        return await operation();
-      } catch (error: any) {
-        lastError = error instanceof CustomError ? error : this.handleGenericError(error);
-
-        // Se non è retryable o è l'ultimo tentativo, rilancia l'errore
-        if (!lastError.canRetry() || attempt === maxRetries) {
-          throw lastError;
-        }
-
-        // Aspetta prima del prossimo tentativo
-        await new Promise(resolve => setTimeout(resolve, delayMs * attempt));
-      }
-    }
-
-    throw lastError!;
-  }
-
-  /**
-   * Utility per gestire errori con callback personalizzati
-   */
-  public static async withErrorHandling<T>(
-    operation: () => Promise<T>,
-    errorHandler?: (error: CustomError) => void
-  ): Promise<T> {
-    try {
-      return await operation();
-    } catch (error: any) {
-      const customError = error instanceof CustomError ? error : this.handleGenericError(error);
-
-      if (errorHandler) {
-        errorHandler(customError);
-      }
-
-      throw customError;
-    }
-  }
-
-  /**
    * Utility per verificare se un errore è di autenticazione
    */
   public static isAuthenticationError(error: CustomError): boolean {
@@ -2028,67 +1979,6 @@ class ServerCall {
     }
 
     return customError.getPreciseErrorData();
-  }
-
-  /**
-   * Esempio di utilizzo dei dati di errore precisi
-   * Questo metodo mostra come gestire gli errori e accedere ai dati specifici
-   */
-  public static async exampleUsage(): Promise<void> {
-    try {
-      // Esempio di chiamata che potrebbe fallire
-      await this.get('/api/users/123');
-    } catch (error: any) {
-      // Ottieni i dati di errore precisi
-      const errorData = this.handleErrorWithPreciseData(error);
-
-      // Ora puoi accedere direttamente ai dati specifici dell'errore
-      console.log('Nome errore:', errorData.name);
-      console.log('Messaggio:', errorData.message);
-      console.log('Codice:', errorData.code);
-      console.log('Status HTTP:', errorData.httpStatus);
-      console.log('Tipo client:', errorData.clientType);
-      console.log('È retryable:', errorData.isRetryable);
-      console.log('Messaggio utente:', errorData.userMessage);
-      console.log('Azione richiesta:', errorData.actionRequired);
-      console.log('Dettagli:', errorData.details);
-      console.log('Timestamp:', errorData.timestamp);
-
-      // Gestione specifica per tipo di errore
-      switch (errorData.clientType) {
-        case ClientErrorType.AUTHENTICATION:
-          console.log('Reindirizza al login');
-          break;
-        case ClientErrorType.AUTHORIZATION:
-          console.log('Mostra messaggio di permessi insufficienti');
-          break;
-        case ClientErrorType.VALIDATION:
-          console.log('Mostra errori di validazione nei campi');
-          break;
-        case ClientErrorType.RATE_LIMIT:
-          console.log('Mostra messaggio di rate limiting');
-          const retryAfter = errorData.details?.retryAfter as number;
-          if (retryAfter) {
-            console.log(`Riprova tra ${retryAfter} secondi`);
-          }
-          break;
-        case ClientErrorType.NETWORK:
-          console.log('Gestisci errore di rete');
-          break;
-        default:
-          console.log('Gestisci come errore generico');
-      }
-
-      // Esempio di utilizzo dei dati per l'UI
-      if (errorData.isRetryable) {
-        console.log('Puoi riprovare questa operazione');
-      }
-
-      // Esempio di logging per debugging
-      if (errorData.stack) {
-        console.error('Stack trace:', errorData.stack);
-      }
-    }
   }
 }
 

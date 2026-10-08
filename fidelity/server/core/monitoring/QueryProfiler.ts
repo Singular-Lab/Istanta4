@@ -296,22 +296,6 @@ export class QueryProfiler {
   }
 
   /**
-   * Analyzes query and provides EXPLAIN output (PostgreSQL specific)
-   */
-  public async explainQuery(sql: string): Promise<any[]> {
-    try {
-      const results = await this.sequelize.query<any[]>(
-        `EXPLAIN ANALYZE ${sql}`,
-        { type: QueryTypes.SELECT }
-      );
-      return results;
-    } catch (error) {
-      log.error('Failed to explain query', { error: (error as Error).message });
-      throw error;
-    }
-  }
-
-  /**
    * Gets slow queries from pg_stat_statements (if available)
    */
   public async getSlowQueriesFromDb(thresholdMs: number = 100, limit: number = 20): Promise<any[]> {

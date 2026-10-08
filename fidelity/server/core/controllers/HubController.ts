@@ -102,8 +102,8 @@ export class HubController extends BaseController {
 
     // Admin — tutti i servizi raggruppati per codice
     this.router.get('/hub-services/admin', authMiddleware, this.getHubServicesAdmin.bind(this));
-    this.router.post('/hub-services/assets/document', uploadHubServiceDocumentMiddleware, authMiddleware, this.uploadHubServiceDocument.bind(this));
-    this.router.post('/hub-services/assets/video', uploadHubServiceVideoMiddleware, authMiddleware, this.uploadHubServiceVideo.bind(this));
+    this.router.post('/hub-services/assets/document', authMiddleware, uploadHubServiceDocumentMiddleware, this.uploadHubServiceDocument.bind(this));
+    this.router.post('/hub-services/assets/video', authMiddleware, uploadHubServiceVideoMiddleware, this.uploadHubServiceVideo.bind(this));
 
     // Admin CRUD — Auth Providers
     this.router.post('/auth-providers', authMiddleware, this.createAuthProvider.bind(this));

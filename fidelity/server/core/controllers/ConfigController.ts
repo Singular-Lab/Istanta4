@@ -53,7 +53,7 @@ export class ConfigController extends BaseController {
     this.router.get('/getStiliToText', this.getStiliToText.bind(this));
     this.router.get('/get_config', this.get_config.bind(this));
     this.router.post('/saveConfig', authMiddleware, permissionGuard('impostazioni.modifica_generali'), this.saveConfig.bind(this));
-    this.router.post('/caricaStiliInConfig', uploadCss.single('file'), authMiddleware, permissionGuard('impostazioni.modifica_generali'), this.caricaStiliInConfig.bind(this));
+    this.router.post('/caricaStiliInConfig', authMiddleware, permissionGuard('impostazioni.modifica_generali'), uploadCss.single('file'), this.caricaStiliInConfig.bind(this));
     this.router.get('/getConfigWebPliantFromVolantino', this.getConfigWebPliantFromVolantino.bind(this));
     this.router.get('/getColorGDO', this.getColorGDO.bind(this));
     this.router.post('/saveWebpliantConfig', authMiddleware, permissionGuard('impostazioni.modifica_generali'), this.saveWebpliantConfig.bind(this));

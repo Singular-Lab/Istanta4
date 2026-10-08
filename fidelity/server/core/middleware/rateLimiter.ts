@@ -1,19 +1,11 @@
 import { NextFunction, Request, Response } from 'express';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
-import slowDown from 'express-slow-down';
 import { RateLimitError } from '../../../lib/errors/application/RateLimitError';
 import { sendAppError } from '../../../lib/errors/errorUtils';
 import { getRedisClient } from '../../src/shared/cache/redis.client';
 import { log } from '../logger';
 import { AuditLogService } from '../services/AuditLogService';
 import { RedisRateLimitStore } from './RedisRateLimitStore';
-
-function isRedisClientReady(redis: unknown): boolean {
-  if (!redis || typeof redis !== 'object') return false;
-
-  const client = redis as { isReady?: boolean };
-  return client.isReady === true;
-}
 
 type RateLimitOptions = Omit<NonNullable<Parameters<typeof rateLimit>[0]>, 'store'>;
 type StoreMode = 'redis' | 'memory';
@@ -28,9 +20,10 @@ function createBootstrapRateLimiter(prefix: string, options: RateLimitOptions) {
   let lastMode: StoreMode | null = null;
 
   const getRedisLimiter = (): ReturnType<typeof rateLimit> | null => {
+    // getRedisClient restituisce il client solo quando la connessione e' 'ready'.
     const redis = getRedisClient();
 
-    if (!isRedisClientReady(redis)) {
+    if (!redis) {
       return null;
     }
 
@@ -149,18 +142,6 @@ export const apiRateLimiter = createBootstrapRateLimiter('rl:api:', {
 });
 
 /**
- * Slow down middleware per rallentare le richieste successive
- * Utile per operazioni costose come registrazioni o reset password
- */
-export const slowDownMiddleware = slowDown({
-  windowMs: 15 * 60 * 1000, // 15 minuti
-  delayAfter: 2, // Inizia a rallentare dopo 2 richieste
-  delayMs: () => 500, // Incrementa il delay di 500ms per ogni richiesta
-  maxDelayMs: 20000, // Massimo 20 secondi di delay
-  keyGenerator: generateIPKey,
-});
-
-/**
  * Rate limiter specifico per operazioni di registrazione
  */
 export const registrationRateLimiter = createBootstrapRateLimiter('rl:reg:', {
@@ -219,33 +200,3 @@ export const passwordResetRateLimiter = createBootstrapRateLimiter('rl:pwd-reset
     }));
   }
 });
-
-/**
- * Crea un rate limiter personalizzato
- */
-export const createCustomRateLimiter = (options: {
-  windowMs: number;
-  max: number;
-  message: string;
-  keyGenerator?: (req: Request) => string;
-}) => {
-  return rateLimit({
-    windowMs: options.windowMs,
-    max: options.max,
-    message: {
-      error: 'Rate limit exceeded',
-      message: options.message,
-      retryAfter: options.windowMs
-    },
-    standardHeaders: true,
-    legacyHeaders: false,
-    keyGenerator: options.keyGenerator || generateIPKey,
-    handler: (req: Request, res: Response) => {
-      sendAppError(res, new RateLimitError({
-        message: options.message,
-        limitType: 'custom',
-        retryAfter: Math.floor(options.windowMs / 1000)
-      }));
-    }
-  });
-};

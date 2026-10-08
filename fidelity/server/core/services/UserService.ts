@@ -539,6 +539,11 @@ export class UserService implements IUserService {
     }
   }
 
+  async getPasswordHashByEmail(email: string): Promise<string | null> {
+    const user = await this.userRepository.findByEmail(email);
+    return user ? (user.password_utenti ?? '') : null;
+  }
+
   async login(email: string, password: string, selectedUserType?: TIPO_UTENTI): Promise<{ success: boolean; user?: UtenteResponseDTO; message?: string }> {
     try {
       const user = await this.userRepository.findByEmail(email);
@@ -1800,7 +1805,7 @@ export class UserService implements IUserService {
           'Authorization': `Bearer ${data.publicKey}`
         }
       });
-      console.log(result.data);
+      // result.data contiene la privateKey dell'utente: non va loggato.
       const user = await this.userRepository.findOneByOptions({
         where: {
           email_utenti: result.data.username,

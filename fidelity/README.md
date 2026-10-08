@@ -38,7 +38,7 @@ Fidelity Promotion è un'applicazione full-stack che integra:
 - **Socket.IO Server** con clustering
 - **node-cron** per task pianificati
 - **PM2** per process management
-- **Winston** per logging avanzato
+- **Pino** per logging strutturato
 
 ## Quick Start
 
@@ -58,9 +58,8 @@ cd fidelity_promotion
 # Installa dipendenze
 npm install
 
-# Configura variabili d'ambiente
-cp .env.example .env
-# Modifica .env con le tue configurazioni
+# Configura variabili d'ambiente: crea .env con le variabili
+# validate in server/core/config/index.ts
 
 # Sincronizza database PostgreSQL
 npm run models:sync
@@ -301,29 +300,18 @@ npm run models:status            # Check status modelli
 npm run models:check             # Verifica connessione DB
 npm run models:sync-model        # Sync singolo modello
 npm run models:sync-db-objects   # Sync oggetti DB custom (views, enum)
-npm run migrate:lowercase        # Migrazione colonne lowercase
-npm run migrate:verify           # Verifica stato migrazione
 ```
 
 ### Testing & Quality
 ```bash
-npm test                         # Run tests (Vitest)
-npm run test:server              # Test server una volta
-npm run test:server:watch        # Watch mode
+npm test                         # Vitest in watch mode
+npm run test:server              # Test una volta (server e lib)
 npm run test:server:coverage     # Coverage report
-npm run test:server:ci           # Test + coverage per CI
 npm run lint                     # Lint frontend
 npm run lint:fix                 # Fix automatico lint
 npm run type-check               # TypeScript check
 npm run security-check           # npm audit
 npm run deps-check               # Check dipendenze inutilizzate
-```
-
-### Log Management
-```bash
-npm run logs:cleanup             # Pulizia log vecchi
-npm run logs:cleanup:dry-run     # Preview pulizia
-npm run logs:cleanup:force       # Forza pulizia con retention personalizzata
 ```
 
 ## Architettura Backend

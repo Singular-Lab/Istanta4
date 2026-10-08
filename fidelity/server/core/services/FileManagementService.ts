@@ -868,7 +868,8 @@ export class FileManagementService implements IFileManagementService {
         fs.mkdirSync(dir);
       }
 
-      const fileResolve = nomeFile;
+      // nomeFile arriva dal client: basename impedisce di scrivere fuori da dir.
+      const fileResolve = path.basename(String(nomeFile));
       const newFilePath = path.resolve(dir, fileResolve);
 
       if (file.mimetype === 'application/json') {
@@ -1643,8 +1644,9 @@ export class FileManagementService implements IFileManagementService {
       }
       // Create uploads directory if it doesn't exist
 
-      // Save file with new name
-      const newFilePath = path.resolve(dir, nomeFile);
+      // Save file with new name. nomeFile arriva dal chiamante: basename impedisce
+      // di scrivere o cancellare fuori da dir.
+      const newFilePath = path.resolve(dir, path.basename(String(nomeFile)));
       const fileExtension = path.extname(file.originalname).toLowerCase();
 
       // Get export type
@@ -2121,7 +2123,7 @@ export class FileManagementService implements IFileManagementService {
       } catch (error: any) {
         throw error;
       }
-      const nomeFile = file.filename;
+      const nomeFile = file.originalname; // su disco il file ha un nome univoco, questo e' il nome logico
       const fileBuffer = await fs.promises.readFile(file.path);
       const hash = crypto.createHash('md5').update(fileBuffer).digest('hex');
 

@@ -32,6 +32,8 @@ dayjs.locale('it');
 import config from './config/index';
 import { sequelize } from './db/SequelizeConnector';
 import { httpLogger, log } from './logger';
+import { authMiddleware } from './middleware/authMiddleware';
+import { permissionGuard } from './middleware/permissionGuard';
 import { applyErrorHandler, applyMiddlewares } from './middlewares';
 import {
   getConnectionMonitor,
@@ -99,7 +101,8 @@ export async function createHttpApp() {
     });
   }));
 
-  app.get('/api/health/db/queries', asyncHandler(async (req, res) => {
+  // Espone SQL e struttura delle query: riservato agli amministratori.
+  app.get('/api/health/db/queries', authMiddleware, permissionGuard('impostazioni.modifica_generali'), asyncHandler(async (req, res) => {
     const profiler = getQueryProfiler();
     if (!profiler) {
       res.status(503).json({ status: 'error', message: 'Query profiler non inizializzato' });

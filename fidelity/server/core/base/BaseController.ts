@@ -1,6 +1,6 @@
 import { Express, Response, Router } from 'express';
 import { HttpStatusCode } from '../../../lib/enums';
-import { AppError, isAppError, serializeError, wrapExternalError } from '../../../lib/errors';
+import { AppError, isAppError, redactErrorForClient, serializeError, wrapExternalError } from '../../../lib/errors';
 import { IController } from '../interfaces/IController';
 import { log } from '../logger';
 
@@ -47,7 +47,7 @@ export abstract class BaseController implements IController {
         ...ctx,
         httpStatus: appError.httpStatus,
       });
-      res.status(appError.httpStatus).json(serializeError(appError));
+      res.status(appError.httpStatus).json(redactErrorForClient(serializeError(appError), true));
       return;
     }
 
@@ -57,7 +57,7 @@ export abstract class BaseController implements IController {
         message: 'Si è verificato un errore imprevisto',
         httpStatus: HttpStatusCode.INTERNAL_SERVER_ERROR,
       });
-      res.status(wrappedError.httpStatus).json(serializeError(wrappedError));
+      res.status(wrappedError.httpStatus).json(redactErrorForClient(serializeError(wrappedError), false));
       return;
     }
 
@@ -72,7 +72,7 @@ export abstract class BaseController implements IController {
         httpStatus: HttpStatusCode.INTERNAL_SERVER_ERROR,
       }
     );
-    res.status(unknownWrapped.httpStatus).json(serializeError(unknownWrapped));
+    res.status(unknownWrapped.httpStatus).json(redactErrorForClient(serializeError(unknownWrapped), false));
   }
 
   /**
