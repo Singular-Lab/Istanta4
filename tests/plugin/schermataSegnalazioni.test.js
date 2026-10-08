@@ -222,7 +222,9 @@ test("la schermata legge il documento e offre vai al box, risolvi e risolvi tutt
     assert.match(schermata, /const documento = SchermataSegnalazioni\._documento\(\);\s*const lette = Array\.isArray\(pagine\) \? Segnalazioni\.leggiPagine\(documento, pagine\) : Segnalazioni\.leggiDocumento\(documento\);/);
     assert.match(schermata, /\.text\("Vai al box"\)/);
     //I20-1044: fra il testo e il clic c'e' lo stile che tiene il pulsante intero.
-    assert.match(schermata, /\.text\("Risolvi"\)(?:\.css\([^)]*\))?\.on\('click', \(\) => \{\s*Segnalazioni\.risolviVoce\(lettura\.box, indice\);\s*SchermataSegnalazioni\.riempi\(elenco\);/);
+    //I20-1056, lotto 4: la riga e' condivisa con la scheda ref; nella schermata alCambio rifa' l'elenco.
+    assert.match(schermata, /\.text\("Risolvi"\)(?:\.css\([^)]*\))?\.on\('click', \(\) => \{\s*Segnalazioni\.risolviVoce\(box, indice\);\s*alCambio\(\);/);
+    assert.match(schermata, /const ridisegna = \(\) => SchermataSegnalazioni\.riempi\(elenco\);/);
     //I20-1056, lotto 2: il conteggio va accanto al titolo.
     assert.match(schermata, /Modali\.popup\("Segnalazioni di impaginazione", elenco, "xl", SchermataSegnalazioni\.allaChiusura, null, conteggio\)/);
     assert.match(schermata, /\.text\(Array\.isArray\(pagine\) \? "Nessuna segnalazione nelle pagine impaginate\." : "Nessuna segnalazione nel documento\."\)/);
@@ -233,7 +235,7 @@ test("la schermata legge il documento e offre vai al box, risolvi e risolvi tutt
 
 test("risolvi tutte chiede conferma dentro il popup, non con Modali.confirm che starebbe sotto", () => {
     assert.match(schermata, /\.text\("Sicuro\? "\)/);
-    assert.match(schermata, /\.text\("Sì"\)\.on\('click', \(\) => \{\s*Segnalazioni\.risolviTutte\(lettura\.box\);/);
+    assert.match(schermata, /\.text\("Sì"\)\.on\('click', \(\) => \{\s*Segnalazioni\.risolviTutte\(box\);\s*alCambio\(\);/);
     assert.doesNotMatch(schermata, /Modali\.confirm/);
 });
 

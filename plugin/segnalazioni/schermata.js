@@ -538,24 +538,9 @@ const SchermataSegnalazioni = {
         const vai = $('<button type="button"></button>').text("Vai al box").css({ flexShrink: '0' })
             .on('click', () => SchermataSegnalazioni.vaiAlBox(lettura.box, elenco));
 
-        //"Risolvi tutte" chiede conferma dentro il popup: la conferma di Modali starebbe sotto.
-        const azioniTutte = $('<span></span>').css({ flexShrink: '0' });
-        const tutte = $('<button type="button"></button>').text("Risolvi tutte")
-            .on('click', () => {
-                azioniTutte.empty();
-                azioniTutte.append($('<span></span>').text("Sicuro? ").css({ fontWeight: 'bold' }));
-                azioniTutte.append($('<button type="button"></button>').text("Sì").on('click', () => {
-                    Segnalazioni.risolviTutte(lettura.box);
-                    SchermataSegnalazioni.riempi(elenco);
-                }));
-                azioniTutte.append($('<button type="button"></button>').text("No").on('click', () => {
-                    SchermataSegnalazioni.riempi(elenco);
-                }));
-            });
-        azioniTutte.append(tutte);
-
+        const ridisegna = () => SchermataSegnalazioni.riempi(elenco);
         testata.append(vai);
-        testata.append(azioniTutte);
+        testata.append(SchermataSegnalazioni._azioniTutte(lettura.box, ridisegna));
         blocco.append(testata);
 
         //I20-1056, lotto 2: la descrizione della referenza, in piccolo, abbreviata oltre due righe circa.
@@ -570,29 +555,65 @@ const SchermataSegnalazioni = {
             blocco.append(riga);
         }
 
-        lettura.voci.forEach((voce, indice) => {
-            const riga = $('<div></div>').css({ display: 'flex', alignItems: 'flex-start', gap: '6px', marginTop: '4px', paddingLeft: '16px' });
-            riga.append(SchermataSegnalazioni._pallino(voce.g).css({ marginTop: '3px' }));
-            const testo = SchermataSegnalazioni._testoCheSiRestringe($('<span></span>'));
-            if (voce.c) {
-                testo.append($('<b></b>').text(voce.c + " "));
-            }
-            //I20-1056, lotto 2: le etichette degli elementi con il dizionario del cliente.
-            testo.append($('<span></span>').text(SchermataSegnalazioni.traduciTesto(voce.t || "", contesto.traduzioni)));
-            //Lotto 4: un bollino di prima del I20-1029 mostrava solo il codice o una frase breve, e
-            //il messaggio intero non c'e'. Lo si dice, perche' il testo corto non sembri un errore.
-            if (voce.vecchio) {
-                testo.append($('<span></span>').text(" (bollino vecchio)").css({ color: '#777', fontStyle: 'italic' }));
-            }
-            riga.append(testo);
-            riga.append($('<button type="button"></button>').text("Risolvi").css({ flexShrink: '0' }).on('click', () => {
-                Segnalazioni.risolviVoce(lettura.box, indice);
-                SchermataSegnalazioni.riempi(elenco);
-            }));
-            blocco.append(riga);
-        });
+        lettura.voci.forEach((voce, indice) => blocco.append(SchermataSegnalazioni._rigaVoce(lettura.box, voce, indice, contesto, ridisegna)));
 
         return blocco;
+    },
+
+    /// "Risolvi tutte" per un box, con la conferma dentro il popup: la conferma di Modali
+    /// starebbe sotto. alCambio ridisegna chi la mostra (la schermata o la scheda ref).
+    _azioniTutte(box, alCambio) {
+        const azioniTutte = $('<span></span>').css({ flexShrink: '0' });
+        const tutte = $('<button type="button"></button>').text("Risolvi tutte")
+            .on('click', () => {
+                azioniTutte.empty();
+                azioniTutte.append($('<span></span>').text("Sicuro? ").css({ fontWeight: 'bold' }));
+                azioniTutte.append($('<button type="button"></button>').text("Sì").on('click', () => {
+                    Segnalazioni.risolviTutte(box);
+                    alCambio();
+                }));
+                azioniTutte.append($('<button type="button"></button>').text("No").on('click', () => {
+                    alCambio();
+                }));
+            });
+        azioniTutte.append(tutte);
+        return azioniTutte;
+    },
+
+    /// Una segnalazione del box, con "Risolvi". La stessa riga nella schermata e nella scheda ref
+    /// (I20-1056, lotto 4): si risolve allo stesso modo da tutte e due.
+    _rigaVoce(box, voce, indice, contesto, alCambio) {
+        const riga = $('<div></div>').css({ display: 'flex', alignItems: 'flex-start', gap: '6px', marginTop: '4px', paddingLeft: '16px' });
+        riga.append(SchermataSegnalazioni._pallino(voce.g).css({ marginTop: '3px' }));
+        const testo = SchermataSegnalazioni._testoCheSiRestringe($('<span></span>'));
+        if (voce.c) {
+            testo.append($('<b></b>').text(voce.c + " "));
+        }
+        //I20-1056, lotto 2: le etichette degli elementi con il dizionario del cliente.
+        testo.append($('<span></span>').text(SchermataSegnalazioni.traduciTesto(voce.t || "", contesto.traduzioni)));
+        //Lotto 4: un bollino di prima del I20-1029 mostrava solo il codice o una frase breve, e
+        //il messaggio intero non c'e'. Lo si dice, perche' il testo corto non sembri un errore.
+        if (voce.vecchio) {
+            testo.append($('<span></span>').text(" (bollino vecchio)").css({ color: '#777', fontStyle: 'italic' }));
+        }
+        riga.append(testo);
+        riga.append($('<button type="button"></button>').text("Risolvi").css({ flexShrink: '0' }).on('click', () => {
+            Segnalazioni.risolviVoce(box, indice);
+            alCambio();
+        }));
+        return riga;
+    },
+
+    /// I20-1056, lotto 4: le segnalazioni di un box per la scheda ref: "Risolvi tutte" e le righe,
+    /// come nella schermata. alCambio rilegge e ridisegna dopo ogni risoluzione.
+    elencoVociDelBox(box, voci, alCambio) {
+        const contesto = { traduzioni: SchermataSegnalazioni._traduzioni() };
+        const elenco = $('<div></div>');
+        const azioni = $('<div></div>').css({ display: 'flex', justifyContent: 'flex-end' });
+        azioni.append(SchermataSegnalazioni._azioniTutte(box, alCambio));
+        elenco.append(azioni);
+        (Array.isArray(voci) ? voci : []).forEach((voce, indice) => elenco.append(SchermataSegnalazioni._rigaVoce(box, voce, indice, contesto, alCambio)));
+        return elenco;
     },
 
     /// Porta alla pagina del box e lo seleziona, come fa il Report Integrita'. false se non si puo'.

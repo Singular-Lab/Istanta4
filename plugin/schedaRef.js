@@ -7,6 +7,8 @@ const variantiDescrizione = require('./variantiDescrizione');
 //I20-1007: i tratti di stile stanno in testoTag.js. La scheda lo importa, perche' sotto Node
 //la globale di indexNew non c'e'.
 const TestoTag = require('./testoTag');
+//I20-1056, lotto 4: la gravita' delle segnalazioni del bollino, per il segnalino della scheda.
+const etichettaDelBollino = require('./segnalazioni/etichetta');
 
 /// I20-1002: la scheda della referenza - quello che l'operatore vede e modifica quando
 /// seleziona un box nel documento.
@@ -54,6 +56,10 @@ const schedaRef = {
     //non la rifa': prima ripartiva a ogni ritorno, e su box pesanti si aspettava ogni volta.
     //null vuol dire "non ancora fatta per questa scheda"; la svuota svuotaRef.
     segnalazioniDelBox: null,
+
+    //I20-1056, lotto 4: le segnalazioni di impaginazione del bollino del box della scheda. Si
+    //rileggono a ogni apertura della schermata di edit: costano poco, e un Reimpagina le cambia.
+    vociBollinoDelBox: null,
 
     //I20-992: le referenze per cui l'operatore ha chiesto di non rivedere le segnalazioni, e
     //l'interruttore che le silenzia tutte. Vivono in memoria e basta: riavviare il plugin o
@@ -2378,12 +2384,14 @@ const schedaRef = {
             }
 
             const segnalazioniDellaScheda = me.segnalazioniInMemoria() || [];
+            //I20-1056, lotto 4: anche le segnalazioni di impaginazione del bollino del box.
+            me.leggiVociBollino(box);
             me.aggiornaPulsanteSegnalazioni();
 
             //I20-992: proposta una volta per scheda. Si segna prima del setTimeout, perche'
             //quello che conta e' la decisione presa qui: se si segnasse dentro la finestra,
             //due passaggi ravvicinati dalla schermata di edit ne aprirebbero due.
-            if (me.deveAprirsiDaSola(segnalazioniDellaScheda, codice)) {
+            if (me.deveAprirsiDaSola(segnalazioniDellaScheda, codice, me.vociBollinoInMemoria())) {
                 me.segnaSegnalazioniGiaProposte();
                 setTimeout(function () {
                     me.mostraModalSegnalazioni();
@@ -4257,6 +4265,45 @@ const schedaRef = {
 
     dimenticaSegnalazioni() {
         this.segnalazioniDelBox = null;
+        this.vociBollinoDelBox = null;
+    },
+
+    /// I20-1056, lotto 4: le segnalazioni del bollino del box, lette dal documento.
+    leggiVociBollino(box) {
+        try {
+            this.vociBollinoDelBox = box != null && typeof Segnalazioni !== "undefined" ? Segnalazioni.leggiDalBox(box) : [];
+        }
+        catch (e) {
+            console.error("Code SRF-99 Segnalazioni del bollino non lette: " + e);
+            this.vociBollinoDelBox = [];
+        }
+        return this.vociBollinoDelBox;
+    },
+
+    vociBollinoInMemoria() {
+        return Array.isArray(this.vociBollinoDelBox) ? this.vociBollinoDelBox : [];
+    },
+
+    /// I20-1056, lotto 4: il segnalino accanto al codice, dalle differenze (X) e dalle segnalazioni
+    /// del bollino (Y). Solo differenze: rosso, "X", come prima. Solo segnalazioni: il colore della
+    /// piu' grave, "Y". Tutte e due: rosso, "X+Y". null se non c'e' niente da risolvere.
+    segnalinoScheda(differenze, voci) {
+        const x = Array.isArray(differenze) ? differenze.length : 0;
+        const y = Array.isArray(voci) ? voci.length : 0;
+        if (x === 0 && y === 0) {
+            return null;
+        }
+        const testoX = x === 1 ? "1 differenza fra il box e il dato" : x + " differenze fra il box e il dato";
+        const testoY = y === 1 ? "1 segnalazione di impaginazione" : y + " segnalazioni di impaginazione";
+        if (y === 0) {
+            return { testo: String(x), colore: "#b21d1d", suggerimento: x === 1 ? testoX + " - clicca per rivederla" : testoX + " - clicca per rivederle" };
+        }
+        if (x === 0) {
+            const gravita = etichettaDelBollino.gravitaPeggiore(voci);
+            const colore = gravita === "error" ? "#c62828" : (gravita === "warning" ? "#ef6c00" : "#1565c0");
+            return { testo: String(y), colore: colore, suggerimento: testoY + (y === 1 ? " - clicca per rivederla" : " - clicca per rivederle") };
+        }
+        return { testo: x + "+" + y, colore: "#b21d1d", suggerimento: testoX + " e " + testoY + " - clicca per rivederle" };
     },
 
     /// I20-992: la finestra si e' proposta da sola per questa scheda, e non lo rifara'.
@@ -4290,8 +4337,10 @@ const schedaRef = {
     /// edit si rifa' a ogni ritorno - dalle foto, dalla struttura, dopo aver applicato la
     /// descrizione dal server - e senza questo controllo l'avviso tornava davanti ogni volta,
     /// anche a chi non aveva chiesto nessun silenzio.
-    deveAprirsiDaSola(differenze, codice) {
-        if (!this.ciSonoSegnalazioniIrrisolte(differenze)) {
+    /// I20-1056, lotto 4: si apre anche per le sole segnalazioni del bollino (voci), con le stesse
+    /// regole: silenziare vale per tutte e due.
+    deveAprirsiDaSola(differenze, codice, voci = []) {
+        if (!this.ciSonoSegnalazioniIrrisolte(differenze) && !(Array.isArray(voci) && voci.length > 0)) {
             return false;
         }
         if (this.modalSegnalazioniGiaProposto) {
@@ -4414,17 +4463,17 @@ const schedaRef = {
         try {
             $("#segnalazioniBoxButton").remove();
 
-            const segnalazioni = this.segnalazioniInMemoria();
-            if (!this.ciSonoSegnalazioniIrrisolte(segnalazioni)) {
+            //I20-1056, lotto 4: le differenze e le segnalazioni di impaginazione del bollino.
+            const dati = this.segnalinoScheda(this.segnalazioniInMemoria(), this.vociBollinoInMemoria());
+            if (dati == null) {
                 return;
             }
 
-            const quante = segnalazioni.length;
             const me = this;
             const segnalino = $('<span id="segnalazioniBoxButton"></span>');
 
             //Il solo numero: il senso lo da' il suggerimento, e la riga resta pulita.
-            segnalino.text(String(quante));
+            segnalino.text(dati.testo);
             segnalino.css({
                 "display": "inline-block",
                 "height": "16px",
@@ -4433,7 +4482,7 @@ const schedaRef = {
                 "font-size": "10px",
                 "font-weight": "700",
                 "border-radius": "3px",
-                "background-color": "#b21d1d",
+                "background-color": dati.colore,
                 "color": "#fff",
                 "margin-right": "8px",
                 "cursor": "pointer"
@@ -4441,9 +4490,7 @@ const schedaRef = {
 
             //In UXP elemento.title come proprieta' non crea l'attributo e il suggerimento
             //resta muto: si passa sempre da qui.
-            Tooltip.impostaTooltip(segnalino[0], quante === 1
-                ? "1 differenza fra il box e il dato - clicca per rivederla"
-                : quante + " differenze fra il box e il dato - clicca per rivederle");
+            Tooltip.impostaTooltip(segnalino[0], dati.suggerimento);
 
             segnalino.on("click", function () {
                 me.mostraModalSegnalazioni();
@@ -4461,11 +4508,19 @@ const schedaRef = {
     ///
     /// Le righe non sono riquadri: un filetto colorato a sinistra basta a separarle e toglie
     /// dalla finestra una dozzina di bordi che non dicevano niente.
-    riempiElencoSegnalazioni(contenitore, intestazione, differenze) {
+    riempiElencoSegnalazioni(contenitore, intestazione, differenze, vociBollino = []) {
         contenitore.empty();
         intestazione.empty();
 
         const risolte = !this.ciSonoSegnalazioniIrrisolte(differenze);
+        //I20-1056, lotto 4: senza differenze ma con segnalazioni di impaginazione, il box non e' "tutto
+        //risolto": lo si dice, e le segnalazioni stanno nella loro sezione sotto.
+        if (risolte && Array.isArray(vociBollino) && vociBollino.length > 0) {
+            const nessuna = $('<span></span>').text("Nessuna differenza fra il box e il dato");
+            nessuna.css({ "font-size": "13px", "font-weight": "600", "color": "#1b7f3b" });
+            intestazione.append(nessuna);
+            return;
+        }
         const colore = risolte ? "#1b7f3b" : "#b21d1d";
 
         const pallino = $('<span></span>');
@@ -4517,6 +4572,39 @@ const schedaRef = {
             riga.append(campo).append(dettaglio);
             contenitore.append(riga);
         });
+    },
+
+    /// I20-1056, lotto 4: la sezione delle segnalazioni di impaginazione del bollino del box, con
+    /// "Risolvi" e "Risolvi tutte" come nella schermata delle segnalazioni (la stessa resa). Dopo
+    /// ogni risoluzione si rilegge il bollino, si ridisegna, e si aggiornano il segnalino e
+    /// l'icona del menabo'.
+    riempiSezioneBollino(sezione, elenco, intestazione) {
+        sezione.empty();
+        const voci = this.vociBollinoInMemoria();
+        if (voci.length === 0 || typeof SchermataSegnalazioni === "undefined") {
+            sezione.css("display", "none");
+            return;
+        }
+        sezione.css("display", "block");
+
+        const titolo = $('<div></div>').text("Segnalazioni di impaginazione (" + voci.length + ")");
+        titolo.css({ "font-size": "13px", "font-weight": "600", "color": "#2c2c2c", "border-top": "1px solid #ddd", "padding-top": "8px" });
+        sezione.append(titolo);
+
+        const me = this;
+        const box = this.refSelected != null ? this.refSelected.item : null;
+        sezione.append(SchermataSegnalazioni.elencoVociDelBox(box, voci, function () {
+            me.leggiVociBollino(box);
+            me.riempiElencoSegnalazioni(elenco, intestazione, me.segnalazioniInMemoria() || [], me.vociBollinoInMemoria());
+            me.riempiSezioneBollino(sezione, elenco, intestazione);
+            me.aggiornaPulsanteSegnalazioni();
+            try {
+                SchermataSegnalazioni.controllaPagine([box.parentPage.name]);
+            }
+            catch (e) {
+                //l'icona si riallinea al prossimo controllo
+            }
+        }));
     },
 
     /// Le caselle dell'intestazione: scelte, non azioni. Si leggono quando il popup si chiude,
@@ -4607,14 +4695,18 @@ const schedaRef = {
                     </div>
 
                     <div id="segnalazioniElenco" style="width: 100%; max-height: 220px; overflow-y: auto; padding-right: 4px; box-sizing: border-box;"></div>
+
+                    <div id="segnalazioniBollinoScheda" style="width: 100%; max-height: 220px; overflow-y: auto; padding-right: 4px; box-sizing: border-box;"></div>
                 </div>
             `);
 
             const intestazione = contenuto.find("#segnalazioniIntestazione");
             const elenco = contenuto.find("#segnalazioniElenco");
             const azioni = contenuto.find("#segnalazioniAzioni");
+            const sezioneBollino = contenuto.find("#segnalazioniBollinoScheda");
 
-            this.riempiElencoSegnalazioni(elenco, intestazione, this.segnalazioniInMemoria() || []);
+            this.riempiElencoSegnalazioni(elenco, intestazione, this.segnalazioniInMemoria() || [], this.vociBollinoInMemoria());
+            this.riempiSezioneBollino(sezioneBollino, elenco, intestazione);
 
             //Rifa' la pre analisi adesso: e' il modo per vedere l'effetto delle correzioni senza
             //chiudere e riaprire la scheda. Icona, non scritta: sta sulla riga dello stato.
@@ -4639,7 +4731,9 @@ const schedaRef = {
 
                     const box = me.refSelected != null ? me.refSelected.item : null;
                     me.memorizzaSegnalazioni(await me.differenzeDatiNelBox(box, me.schedeRefDati));
-                    me.riempiElencoSegnalazioni(elenco, intestazione, me.segnalazioniInMemoria());
+                    me.leggiVociBollino(box);
+                    me.riempiElencoSegnalazioni(elenco, intestazione, me.segnalazioniInMemoria(), me.vociBollinoInMemoria());
+                    me.riempiSezioneBollino(sezioneBollino, elenco, intestazione);
                 }
                 catch (err) {
                     console.error("Code SRF-96 Aggiornamento delle segnalazioni non riuscito: " + err);
