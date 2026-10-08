@@ -1262,7 +1262,9 @@ async function initLibroInLavorazione()
             let nativePath = fullName.nativePath;
             let sep = Utility.getDirSeparator();
             let _pathDelLibro = nativePath.substring(0, nativePath.lastIndexOf(sep) + 1);
-            let lav = readFile(Utility.percorsoFileLavorazioni(_pathDelLibro));
+            //I20-1061: ogni file del libro si cerca con voceLavorazione: nel file di questa macchina,
+            //poi in quelli delle altre (da cui viene copiato qui).
+            let lav = [];
             let _count = 0;
 
             let _itemTrovati = [];
@@ -1273,7 +1275,8 @@ async function initLibroInLavorazione()
                     let bcFullname = await bookContent.fullName;
                     let bcNativePath = bcFullname.nativePath;
                     let nomeFile = bcNativePath.substring(bcNativePath.lastIndexOf(sep) + 1);
-                    let cercaInLav = lav.filter(l => l.file == nomeFile);
+                    let voceFile = Utility.voceLavorazione(_pathDelLibro, idMacchina(), nomeFile, book.name);
+                    let cercaInLav = voceFile != null ? [voceFile] : [];
                     if (cercaInLav.length > 0) {
                         //Elenco questo file nel contenuto
                         $("#contanierRiepilogoLibro").append("<div style=\"padding:5px;\">File: " + nomeFile + " - Kit: " + JSON.parse(cercaInLav[0].details.meta).titolo + "</div>");
@@ -2240,8 +2243,15 @@ async function impaginaLibro() {
     let _libroFilePath = await libroInLavorazione.filePath; 
     let _pathLavorazioneLibro = _libroFilePath.nativePath;
     
-    var file = readFile(Utility.percorsoFileLavorazioni(_pathLavorazioneLibro));
-    if (file == null) {
+    //I20-1061: le voci dei file del libro per questa macchina (copiate qui se erano solo altrove)
+    var file = [];
+    for (let k = 0; k < libroInLavorazione.bookContents.length; k++) {
+        let voceDelFile = Utility.voceLavorazione(_pathLavorazioneLibro, idMacchina(), libroInLavorazione.bookContents.item(k).name, libroInLavorazione.name);
+        if (voceDelFile != null) {
+            file.push(voceDelFile);
+        }
+    }
+    if (file.length == 0) {
         messaggioUtente("Code IDX-09 Impaginazione libro: Nessuna lavorazione associata al libro", "Error", false, 5);
         return;
     }
@@ -7990,6 +8000,167 @@ function nomeMacchina(os = null) {
     return nome;
 }
 
+/// I20-1061: l'identificativo di questa macchina, che da' il nome al suo file delle lavorazioni
+/// (<idMacchina>_Lavorazioni.json). Identifica la macchina e non deve cambiare mai: si genera una
+/// volta sola - il nome della macchina, per riconoscerla a occhio, e 10 caratteri casuali, che la
+/// rendono unica - e da li' in poi si rilegge e basta, anche se il nome della macchina cambia.
+/// Si conserva in un file della macchina, fuori dal Plugin, cosi' resiste a reinstallazioni e
+/// aggiornamenti, e in una copia nel localStorage del Plugin: se il file sparisce si riscrive con
+/// lo stesso identificativo. Uno nuovo nasce solo se mancano tutti e due.
+/// Il file sta direttamente in una cartella che esiste gia' (percorsiFileIdMacchina): UXP non crea
+/// cartelle con fs.mkdirSync, e la prima versione, che ci provava, non scriveva niente. Se nessuna
+/// scrittura riesce l'operatore lo vede (IDX-175): l'identificativo resterebbe solo nel Plugin.
+/// ambiente serve ai test: { fs, os, storage, nome, codice, avvisa }.
+var idMacchinaCache = null;
+var idMacchinaAvvisoDato = false;
+const CHIAVE_ID_MACCHINA = "istanta.idMacchina";
+function idMacchina(ambiente = null) {
+    if (idMacchinaCache != null && ambiente == null) {
+        return idMacchinaCache;
+    }
+    var amb = ambiente;
+    if (amb == null) {
+        var modOs = null;
+        try {
+            modOs = require('os');
+        }
+        catch (e) {
+            modOs = null;
+        }
+        amb = {
+            fs: require('fs'),
+            os: modOs,
+            storage: typeof localStorage !== "undefined" ? localStorage : null,
+            nome: function () { return nomeMacchina(); },
+            codice: function () { return Utility.generateId(10); },
+            avvisa: function (testo) { messaggioUtente(testo, "warning"); }
+        };
+    }
+    var valido = function (id) { return typeof id === "string" && /^[A-Za-z0-9-]+_[A-Za-z0-9]{10}$/.test(id); };
+    var percorsi = percorsiFileIdMacchina(amb.os);
+
+    var id = null;
+    var trovatoIn = null;
+    for (var i = 0; i < percorsi.lettura.length && id == null; i++) {
+        try {
+            var letto = JSON.parse(amb.fs.readFileSync(percorsi.lettura[i], 'utf8')).id;
+            if (valido(letto)) {
+                id = letto;
+                trovatoIn = percorsi.lettura[i];
+            }
+        }
+        catch (e) {
+            //non c'e' o non si legge: si prova il prossimo
+        }
+    }
+    if (id == null) {
+        try {
+            var conservato = amb.storage != null ? amb.storage.getItem(CHIAVE_ID_MACCHINA) : null;
+            if (valido(conservato)) {
+                id = conservato;
+            }
+        }
+        catch (e) {
+            //localStorage non disponibile
+        }
+    }
+    if (id == null) {
+        var nome = String(amb.nome() || "macchina").replace(/[^A-Za-z0-9-]+/g, "-").replace(/^-+|-+$/g, "") || "macchina";
+        id = nome + "_" + amb.codice();
+    }
+
+    //Si scrive se il file non c'era, o se c'era solo nella posizione della prima versione.
+    if (percorsi.scrittura.indexOf(trovatoIn) < 0) {
+        var scritto = false;
+        for (var j = 0; j < percorsi.scrittura.length && !scritto; j++) {
+            try {
+                amb.fs.writeFileSync(percorsi.scrittura[j], JSON.stringify({ id: id }));
+                scritto = true;
+            }
+            catch (e) {
+                console.error("I20-1061: identificativo della macchina non scritto in " + percorsi.scrittura[j] + ": " + e);
+            }
+        }
+        if (!scritto && trovatoIn == null && !idMacchinaAvvisoDato) {
+            idMacchinaAvvisoDato = true;
+            try {
+                amb.avvisa("Code IDX-175 Identificativo della macchina non salvato su disco: resta solo nel plugin (" + id + ")");
+            }
+            catch (e) {
+                //l'avviso non deve fermare la lavorazione
+            }
+        }
+    }
+    try {
+        if (amb.storage != null && amb.storage.getItem(CHIAVE_ID_MACCHINA) !== id) {
+            amb.storage.setItem(CHIAVE_ID_MACCHINA, id);
+        }
+    }
+    catch (e) {
+        //localStorage non disponibile: resta il file
+    }
+
+    if (ambiente == null) {
+        idMacchinaCache = id;
+    }
+    return id;
+}
+
+/// Dove si conserva l'identificativo della macchina. scrittura: file direttamente in cartelle che
+/// esistono gia', in ordine la cartella comune a tutti gli utenti del computer e la home.
+/// lettura: le stesse, poi le posizioni della prima versione di I20-1061 (una sottocartella
+/// Istanta), nel caso li' la scrittura fosse riuscita.
+function percorsiFileIdMacchina(os) {
+    var piattaforma = "";
+    try {
+        piattaforma = os != null ? String(os.platform()) : "";
+    }
+    catch (e) {
+        piattaforma = "";
+    }
+    var home = "";
+    try {
+        home = os != null ? String(os.homedir()).replace(/[\\/]+$/, "") : "";
+    }
+    catch (e) {
+        home = "";
+    }
+    var comune = piattaforma === "darwin" ? "/Users/Shared" : (piattaforma.indexOf("win") === 0 ? "C:/ProgramData" : "");
+
+    var scrittura = [];
+    var primaVersione = [];
+    if (comune !== "") {
+        scrittura.push(comune + "/istanta-idMacchina.json");
+        primaVersione.push(comune + "/Istanta/idMacchina.json");
+    }
+    if (home !== "") {
+        scrittura.push(home + "/.istanta-idMacchina.json");
+        primaVersione.push(home + "/.istanta/idMacchina.json");
+    }
+    return { scrittura: scrittura, lettura: scrittura.concat(primaVersione) };
+}
+
+/// I20-1061: il libro del documento in lavorazione, per cercarne la voce: il .indb nella sua
+/// cartella (Utility.libroDelDocumento), scegliendo fra i libri aperti quello che lo contiene.
+function libroDelDocumentoInLavorazione(nomeFile = null, cartella = null) {
+    try {
+        var nome = nomeFile != null ? nomeFile : (docInLavorazione != null ? docInLavorazione.name : app.activeDocument.name);
+        var libriAperti = [];
+        for (var i = 0; i < app.books.count(); i++) {
+            var libro = app.books.item(i);
+            var files = [];
+            for (var j = 0; j < libro.bookContents.length; j++) {
+                files.push(libro.bookContents.item(j).name);
+            }
+            libriAperti.push({ nome: libro.name, files: files });
+        }
+        return Utility.libroDelDocumento(cartella != null ? cartella : pathLavorazione, nome, libriAperti);
+    }
+    catch (e) {
+        return null;
+    }
+}
+
 /// I20-1033: il canale e l'area di una lavorazione, scritti come li legge l'operatore:
 /// "Canale CN · Area TO". Riceve i dettagli di ficoProcess (oggetti con la sigla, oppure 0
 /// quando mancano) e restituisce null se non ce n'e' nessuno.
@@ -9793,10 +9964,10 @@ async function checkPercorsi(forceOpenModal = false, scope = 'entrambi') {
         }
     }
 
-    const filePath = Utility.percorsoFileLavorazioni(_pathLavorazione);
-
-    var lavorazioni = readFile(filePath);
-    var file = lavorazioni?.find(f => f.file == docName);
+    //I20-1061: i percorsi sono di questa macchina, quindi la voce si legge dal suo file
+    //(voceLavorazione ce la copia se era solo nel file di un'altra macchina).
+    const libroDelDoc = docInLavorazione == null && libroInLavorazione != null ? libroInLavorazione.name : libroDelDocumentoInLavorazione(docName, _pathLavorazione);
+    var file = Utility.voceLavorazione(_pathLavorazione, idMacchina(), docName, libroDelDoc);
 
     if (!file) {
         messaggioUtente("Code IDX-143 File lavorazioni.json non trovato", "error");
@@ -9944,8 +10115,7 @@ async function checkPercorsi(forceOpenModal = false, scope = 'entrambi') {
         }
     }
 
-    var lavorazioni = readFile(filePath);
-    var file = lavorazioni?.find(f => f.file == docName);
+    file = Utility.voceLavorazione(_pathLavorazione, idMacchina(), docName, libroDelDoc);
 
     // --- Definisce i campi richiesti in base allo scope ---
     const requirementsByScope = {
@@ -10264,8 +10434,9 @@ async function impostaPercorsiDiSistema(tipo, value = null){
             // }
             // percorso = percorso.replace(_pathLavorazione, ""); //rimuoviamo il pathLavorazione dal percorso
     
-            var filePath = Utility.percorsoFileLavorazioni(_pathLavorazione);
-            let lavorazioni = readFile(filePath);
+            //I20-1061: i percorsi si scrivono solo nel file di questa macchina
+            var filePath = Utility.percorsoFileLavorazioniMacchina(_pathLavorazione, idMacchina());
+            let lavorazioni = Utility.leggiFileLavorazioni(filePath);
     
             _procFiles=[];
             if (docInLavorazione!=null)

@@ -42,11 +42,15 @@ const FicoProcess=
         //VAriabile globale
         idKitLavorazione = 0;
 
-        var file = readFile(Utility.percorsoFileLavorazioni(pathLavorazione));
+        //I20-1061: la voce si cerca nel file di questa macchina, poi in quelli delle altre; se c'e'
+        //solo altrove viene copiata qui, e la lavorazione si carica senza passare dalla ricerca kit.
+        //Resta sincrona fino a idKitLavorazione: initDocumentInLavorazione non aspetta questa funzione.
+        let voceLavorazione = Utility.voceLavorazione(pathLavorazione, idMacchina(), app.activeDocument.name, libroDelDocumentoInLavorazione(app.activeDocument.name));
+        let file = voceLavorazione != null ? [voceLavorazione] : [];
         
         if(file != null){
             //console.log(file);
-            let refFileLavorazione = file.filter(f=>f.file == app.activeDocument.name);
+            let refFileLavorazione = file;
             //console.log(resFileValorazione);
             if (refFileLavorazione.length >= 1)
             {
@@ -828,17 +832,11 @@ const FicoProcess=
             if (itemsInSearch.length>0)
             {
                 //Devo salvare il kit sul file
-                var filePath = Utility.percorsoFileLavorazioni(pathLavorazione);
+                //I20-1061: solo nel file di questa macchina; i percorsi si riprendono dalle sue voci,
+                //perche' sono assoluti e valgono solo qui.
+                var filePath = Utility.percorsoFileLavorazioniMacchina(pathLavorazione, idMacchina());
                 //leggiamo il file di lavorazione e guardiamo se ha almeno un elemento, se lo ha proviamo a leggere il suo pathLinks e pathLoghi
-                let file = readFile(filePath);
-                if (file == null)
-                {
-                    //errore, il file dovrebbe esistere
-                    //messaggioUtente("Errore: File lavorazioni.json non trovato", "error");
-                    //return;
-                    appendToFile(filePath, "");
-                    file = readFile(filePath) || [];//I20-1057: era "file==", e qui si andava in errore
-                }
+                let file = Utility.leggiFileLavorazioni(filePath);
                 //controlliamo se il file è vuoto
                 let pathLinks = "";
                 let pathLoghi = "";
@@ -869,23 +867,13 @@ const FicoProcess=
                     }
                 }
 
-                //facciamo prima un controllo se nel file esiste già un elemento con questo file
-                let existingItems = file.find(f=>f.file==app.activeDocument.name);
-                if (existingItems != null){
-                    existingItems.file = app.activeDocument.name;
-                    existingItems.id = itemsInSearch[0].id;
-                    existingItems.details = itemsInSearch[0];
-                    existingItems.pathLinks = pathLinks;
-                    existingItems.pathLoghi = pathLoghi;
-                    existingItems.pathLogs = pathLogs;
-                    existingItems.pathEsportazione = pathEsportazione;
-                    existingItems.pathLavorazioni = pathLavorazioni;
-                    //riscriviamo il file
-                    fs.writeFileSync(filePath, JSON.stringify(file));
+                //La voce del documento si aggiorna se c'e' gia', altrimenti si aggiunge
+                let voce = {file:app.activeDocument.name, id:itemsInSearch[0].id, pathLinks:pathLinks, pathLoghi:pathLoghi, pathLogs:pathLogs, pathEsportazione:pathEsportazione, pathLavorazioni:pathLavorazioni ,details:itemsInSearch[0]};
+                let libro = libroDelDocumentoInLavorazione(app.activeDocument.name, pathLavorazione);
+                if (libro) {
+                    voce.libro = libro;
                 }
-                else{
-                    appendToFile(filePath, {file:app.activeDocument.name, id:itemsInSearch[0].id, pathLinks:pathLinks, pathLoghi:pathLoghi, pathLogs:pathLogs, pathEsportazione:pathEsportazione, pathLavorazioni:pathLavorazioni ,details:itemsInSearch[0]});
-                }
+                Utility.salvaVoceLavorazione(pathLavorazione, idMacchina(), voce);
                 
     
                 initDocumentInLavorazione();
@@ -903,8 +891,13 @@ const FicoProcess=
                 {
                     let lavorazioneItem = objResult.records[0];
                     //Scrivo il file di lavorazione o lo aggiungo al file di lavorazione
-                    var filePath = Utility.percorsoFileLavorazioni(pathLavorazione);
-                    appendToFile(filePath, {file:app.activeDocument.name, id:lavorazioneItem.id,details:lavorazioneItem});
+                    //I20-1061: nel file di questa macchina
+                    let voce = {file:app.activeDocument.name, id:lavorazioneItem.id,details:lavorazioneItem};
+                    let libro = libroDelDocumentoInLavorazione(app.activeDocument.name, pathLavorazione);
+                    if (libro) {
+                        voce.libro = libro;
+                    }
+                    Utility.salvaVoceLavorazione(pathLavorazione, idMacchina(), voce);
     
                     //Adesso posso procedere con il processare il kit
                     initDocumentInLavorazione();
@@ -1041,16 +1034,10 @@ const FicoProcess=
 
             if (itemsInSearch.length > 0) {
                 //Devo salvare il kit sul file
-                var filePath = Utility.percorsoFileLavorazioni(_pathLavorazione);
+                //I20-1061: solo nel file di questa macchina
+                var filePath = Utility.percorsoFileLavorazioniMacchina(_pathLavorazione, idMacchina());
                 //leggiamo il file di lavorazione e guardiamo se ha almeno un elemento, se lo ha proviamo a leggere il suo pathLinks e pathLoghi
-                let file = readFile(filePath);
-                if (file == null) {
-                    //errore, il file dovrebbe esistere
-                    //messaggioUtente("Errore: File lavorazioni.json non trovato", "error");
-                    //return;
-                    appendToFile(filePath);
-                    file = readFile(filePath) || [];//I20-1057: era "file ==", un confronto
-                }
+                let file = Utility.leggiFileLavorazioni(filePath);
                 //controlliamo se il file è vuoto
                 let pathLinks = "";
                 let pathLoghi = "";
@@ -1081,22 +1068,12 @@ const FicoProcess=
 
                 //facciamo prima un controllo se nel file esiste già un elemento con questo file
 
-                let existingItems = file!=null?file.find(f => f.file == nomeFile):null;
-                if (existingItems != null) {
-                    existingItems.file = nomeFile;
-                    existingItems.id = itemsInSearch[0].id;
-                    existingItems.details = itemsInSearch[0];
-                    existingItems.pathLinks = pathLinks;
-                    existingItems.pathLoghi = pathLoghi;
-                    existingItems.pathLogs = pathLogs;
-                    existingItems.pathEsportazione = pathEsportazione;
-                    existingItems.pathLavorazioni = pathLavorazioni;
-                    //riscriviamo il file
-                    fs.writeFileSync(filePath, JSON.stringify(file));
+                let voce = { file: nomeFile, id: itemsInSearch[0].id, pathLinks: pathLinks, pathLoghi: pathLoghi, pathLogs: pathLogs, pathEsportazione: pathEsportazione, pathLavorazioni: pathLavorazioni, details: itemsInSearch[0] };
+                let libro = libroDelDocumentoInLavorazione(nomeFile, _pathLavorazione);
+                if (libro) {
+                    voce.libro = libro;
                 }
-                else {
-                    appendToFile(filePath, { file: nomeFile, id: itemsInSearch[0].id, pathLinks: pathLinks, pathLoghi: pathLoghi, pathLogs: pathLogs, pathEsportazione: pathEsportazione, pathLavorazioni: pathLavorazioni, details: itemsInSearch[0] });
-                }
+                Utility.salvaVoceLavorazione(_pathLavorazione, idMacchina(), voce);
 
                 return this.lavoraKitMassivo_Queue(indice + 1);
             }
@@ -1117,8 +1094,13 @@ const FicoProcess=
                 if (objResult.esito && objResult.records.length > 0) {
                     let lavorazioneItem = objResult.records[0];
                     //Scrivo il file di lavorazione o lo aggiungo al file di lavorazione
-                    var filePath = Utility.percorsoFileLavorazioni(_pathLavorazione);
-                    appendToFile(filePath, { file: nomeFile, id: lavorazioneItem.id, details: lavorazioneItem });
+                    //I20-1061: nel file di questa macchina
+                    let voce = { file: nomeFile, id: lavorazioneItem.id, details: lavorazioneItem };
+                    let libro = libroDelDocumentoInLavorazione(nomeFile, _pathLavorazione);
+                    if (libro) {
+                        voce.libro = libro;
+                    }
+                    Utility.salvaVoceLavorazione(_pathLavorazione, idMacchina(), voce);
 
                     return me.lavoraKitMassivo_Queue(indice + 1);
                 }
@@ -1751,7 +1733,9 @@ const FicoProcess=
             };
     
     
-            var file = readFile(Utility.percorsoFileLavorazioni(pathLavorazione));
+            //I20-1061: la voce del documento per questa macchina (copiata qui se era solo altrove)
+            var voceLavorazioneExport = Utility.voceLavorazione(pathLavorazione, idMacchina(), app.activeDocument.name, libroDelDocumentoInLavorazione(app.activeDocument.name));
+            var file = voceLavorazioneExport != null ? [voceLavorazioneExport] : null;
             if(file == null){
                 hideLoading();
                 messaggioUtente("Code FIP-14 Errore: File lavorazioni.json non trovato", "error");
@@ -2120,7 +2104,9 @@ const FicoProcess=
                     };
 
 
-                    var file = readFile(Utility.percorsoFileLavorazioni(pathLavorazione));
+                    //I20-1061: la voce del documento per questa macchina (copiata qui se era solo altrove)
+                    var voceLavorazioneExport = Utility.voceLavorazione(pathLavorazione, idMacchina(), app.activeDocument.name, libroDelDocumentoInLavorazione(app.activeDocument.name));
+                    var file = voceLavorazioneExport != null ? [voceLavorazioneExport] : null;
                     if(file == null){
                         hideLoading();
                         messaggioUtente("Errore: File lavorazioni.json non trovato", "error");

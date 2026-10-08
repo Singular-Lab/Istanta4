@@ -480,33 +480,156 @@ const Utility=
         return null;
     },
 
-    /// I20-1057: dove leggere e scrivere lavorazioni.json per i documenti della cartella base.
-    /// E' l'unico punto che lo sa: chi legge o scrive il file passa da qui.
-    ///  - nella cartella delle lavorazioni, se il file e' li';
-    ///  - altrimenti nella cartella del documento, se e' li': il file di prima resta in uso finche'
-    ///    l'operatore non lo sposta;
-    ///  - se non c'e' da nessuna parte, nella cartella delle lavorazioni, dove nasce quello nuovo;
-    ///  - senza cartella delle lavorazioni, nella cartella del documento, come prima.
-    percorsoFileLavorazioni(base) {
-        const fs = require('fs');
-        const nome = "lavorazioni.json";
+    /// I20-1061: ogni macchina scrive le sue lavorazioni in un file suo, <idMacchina>_Lavorazioni.json.
+    /// Con un file solo, due postazioni sulla stessa cartella Dropbox lo riscrivevano a turno e
+    /// Dropbox ne faceva copie di conflitto.
+    nomeFileLavorazioniMacchina(idMacchina) {
+        return idMacchina + "_Lavorazioni.json";
+    },
+
+    /// Le cartelle in cui possono stare i file delle lavorazioni dei documenti di base: quella
+    /// delle lavorazioni, se c'e', poi quella del documento (dove stava lavorazioni.json prima).
+    _cartelleFileLavorazioni(base) {
         const radice = Utility._senzaBarraFinale(base);
         const cartella = Utility.cartellaLavorazioni(radice);
-        const contiene = (percorso) => {
+        return cartella != null ? [cartella, radice] : [radice];
+    },
+
+    _vociDellaCartella(percorso) {
+        try {
+            return require('fs').readdirSync(percorso) || [];
+        }
+        catch (e) {
+            return [];
+        }
+    },
+
+    /// Il file di questa macchina: dove c'e' gia'; altrimenti nella cartella delle lavorazioni, o in
+    /// quella del documento se la cartella delle lavorazioni non c'e'.
+    percorsoFileLavorazioniMacchina(base, idMacchina) {
+        const nome = Utility.nomeFileLavorazioniMacchina(idMacchina);
+        const cartelle = Utility._cartelleFileLavorazioni(base);
+        for (const cartella of cartelle) {
+            if (Utility._vociDellaCartella(cartella).indexOf(nome) >= 0) {
+                return cartella + "/" + nome;
+            }
+        }
+        return cartelle[0] + "/" + nome;
+    },
+
+    /// I file delle lavorazioni delle altre macchine, poi i lavorazioni.json di prima di I20-1061:
+    /// si leggono per ritrovare una lavorazione gia' avviata, ma non si scrivono mai.
+    fileLavorazioniAltri(base, idMacchina) {
+        const mio = Utility.nomeFileLavorazioniMacchina(idMacchina).toLowerCase();
+        const altreMacchine = [];
+        const vecchi = [];
+        for (const cartella of Utility._cartelleFileLavorazioni(base)) {
+            for (const voce of Utility._vociDellaCartella(cartella).slice().sort()) {
+                const nome = String(voce).toLowerCase();
+                if (nome === mio) {
+                    continue;
+                }
+                if (nome.endsWith("_lavorazioni.json")) {
+                    altreMacchine.push(cartella + "/" + voce);
+                }
+                else if (nome === "lavorazioni.json") {
+                    vecchi.push(cartella + "/" + voce);
+                }
+            }
+        }
+        return altreMacchine.concat(vecchi);
+    },
+
+    /// Le voci di un file delle lavorazioni; un elenco vuoto se il file manca o non si legge.
+    leggiFileLavorazioni(percorso) {
+        try {
+            const voci = JSON.parse(require('fs').readFileSync(percorso, 'utf8'));
+            return Array.isArray(voci) ? voci : [];
+        }
+        catch (e) {
+            return [];
+        }
+    },
+
+    /// La voce di un documento in un elenco: se il documento e' in un libro, prima quella di quel
+    /// libro, poi quella col solo nome del file (le voci scritte prima avevano solo quello).
+    _voceNellElenco(voci, nomeFile, nomeLibro) {
+        if (nomeLibro) {
+            const delLibro = voci.find(v => v != null && v.file == nomeFile && v.libro == nomeLibro);
+            if (delLibro != null) {
+                return delLibro;
+            }
+        }
+        return voci.find(v => v != null && v.file == nomeFile) || null;
+    },
+
+    /// I20-1061: la voce della lavorazione di un documento, per questa macchina.
+    /// Si cerca nel file della macchina, poi in quelli delle altre e nei lavorazioni.json di prima.
+    /// Se c'e' solo altrove, se ne copiano nel file della macchina i riferimenti - file, id, dettagli
+    /// e libro - ma non i percorsi, che sono di chi li ha scritti: sulla macchina si ritrovano da soli
+    /// o li chiede la finestra delle cartelle. null vuol dire che la lavorazione e' da iniziare.
+    voceLavorazione(base, idMacchina, nomeFile, nomeLibro = null) {
+        const percorsoMio = Utility.percorsoFileLavorazioniMacchina(base, idMacchina);
+        const mie = Utility.leggiFileLavorazioni(percorsoMio);
+        const mia = Utility._voceNellElenco(mie, nomeFile, nomeLibro);
+        if (mia != null) {
+            return mia;
+        }
+        for (const altro of Utility.fileLavorazioniAltri(base, idMacchina)) {
+            const trovata = Utility._voceNellElenco(Utility.leggiFileLavorazioni(altro), nomeFile, nomeLibro);
+            if (trovata == null) {
+                continue;
+            }
+            const copia = { file: trovata.file, id: trovata.id, details: trovata.details };
+            const libro = nomeLibro || trovata.libro;
+            if (libro) {
+                copia.libro = libro;
+            }
+            mie.push(copia);
             try {
-                return (fs.readdirSync(percorso) || []).indexOf(nome) >= 0;
+                require('fs').writeFileSync(percorsoMio, JSON.stringify(mie));
             }
             catch (e) {
-                return false;
+                //la lavorazione si carica lo stesso; alla prossima apertura si ritenta la copia
+                console.error("I20-1061: copia della lavorazione in " + percorsoMio + " non riuscita: " + e);
             }
-        };
-        if (cartella != null && contiene(cartella)) {
-            return cartella + "/" + nome;
+            return copia;
         }
-        if (contiene(radice)) {
-            return radice + "/" + nome;
+        return null;
+    },
+
+    /// I20-1061: scrive la voce di un documento nel file di questa macchina, aggiornando quella che
+    /// c'e' gia' (la stessa che troverebbe voceLavorazione) invece di aggiungerne un'altra. Gli altri
+    /// file non si toccano. Restituisce la voce salvata.
+    salvaVoceLavorazione(base, idMacchina, voce) {
+        const percorso = Utility.percorsoFileLavorazioniMacchina(base, idMacchina);
+        const voci = Utility.leggiFileLavorazioni(percorso);
+        const esistente = Utility._voceNellElenco(voci, voce.file, voce.libro);
+        let salvata = voce;
+        if (esistente != null) {
+            salvata = Object.assign(esistente, voce);
         }
-        return (cartella != null ? cartella : radice) + "/" + nome;
+        else {
+            voci.push(voce);
+        }
+        require('fs').writeFileSync(percorso, JSON.stringify(voci));
+        return salvata;
+    },
+
+    /// I20-1061: il libro di un documento: il .indb nella cartella del documento. Se ce n'e' piu' di
+    /// uno vale quello aperto che contiene il documento; se nessuno di quelli aperti lo contiene,
+    /// nessun libro (si cerca per il solo nome del file). libriAperti: [{nome, files: [nomi]}].
+    libroDelDocumento(cartella, nomeFile, libriAperti = []) {
+        const nellaCartella = Utility._vociDellaCartella(Utility._senzaBarraFinale(cartella))
+            .filter(v => String(v).toLowerCase().endsWith(".indb"));
+        if (nellaCartella.length === 0) {
+            return null;
+        }
+        const aperto = (libriAperti || []).find(l => l != null && nellaCartella.indexOf(l.nome) >= 0 && (l.files || []).indexOf(nomeFile) >= 0);
+        if (aperto != null) {
+            return aperto.nome;
+        }
+        return nellaCartella.length === 1 ? nellaCartella[0] : null;
     },
 
     async getListaCodiciImpaginati(opzioni = {}){
