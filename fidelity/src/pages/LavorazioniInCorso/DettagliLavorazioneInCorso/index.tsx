@@ -21,6 +21,7 @@ import relativeTime from "dayjs/plugin/relativeTime";
 import React, { Fragment, Suspense, useEffect, useRef, useState } from "react";
 import {
   Await,
+  useAsyncError,
   useLoaderData,
   useLocation,
   useNavigate,
@@ -371,6 +372,12 @@ const VolantiniSkeleton: React.FC = () => (
     ))}
   </div>
 );
+
+// Passa ai figli il messaggio dell'errore rigettato da un <Await> (stringa vuota se assente)
+const ErroreAsync: React.FC<{ children: (messaggio: string) => React.ReactNode }> = ({ children }) => {
+  const error = useAsyncError() as { message?: string } | undefined;
+  return <>{children(error?.message || "")}</>;
+};
 
 const showMomenti = import.meta.env.VITE_MOMENTI_ATTIVI === 'true';
 const showMenabo = import.meta.env.VITE_MENABO_ATTIVO === 'true';
@@ -847,13 +854,19 @@ function Main() {
 
         if (!result.ok) {
           const text = await result.text().catch(() => "");
+          let corpo: { message?: string } | null = null;
+          try {
+            corpo = JSON.parse(text);
+          } catch {
+            // corpo non JSON: resta nei details
+          }
           throw new Error(
             JSON.stringify({
               success: false,
               file: file.name,
               status: result.status,
-              message: "Upload del tracciato non riuscito",
-              details: text || null,
+              message: corpo?.message || "Upload del tracciato non riuscito",
+              details: corpo?.message ? null : text || null,
             })
           );
         }
@@ -916,7 +929,7 @@ function Main() {
           success: false,
           file: "",
           status: 0,
-          message: "Errore sconosciuto",
+          message: error?.message || "Errore sconosciuto",
           details: "",
         };
       }
@@ -953,13 +966,13 @@ function Main() {
   const updatePromoMutation = useMutation({
     mutationFn: async (data: UpdatePromoDTO & { id: string }) => {
       if (!idPromo) throw new Error("idPromo is null");
-      const result = await ServerCall.put<PromoResponseDTO>(
+      const result = await ServerCall.put<PromoResponseDTO & { avvisi?: string[] }>(
         `/promo/${data.id}`,
         data
       );
       return result;
     },
-    onSuccess: async () => {
+    onSuccess: async (result) => {
       showNotification(
         <div className="flex flex-row items-center">
           <Lucide icon="CircleCheck" className="text-success w-8 h-8" />
@@ -968,6 +981,18 @@ function Main() {
           </div>
         </div>
       );
+      if (result?.avvisi?.length) {
+        showNotification(
+          <div className="flex flex-row items-center">
+            <Lucide icon="TriangleAlert" className="text-warning w-8 h-8" />
+            <div className="ml-4 mr-4">
+              <div className="font-bold">Promozione aggiornata con avvisi</div>
+              <div className="mt-1 text-slate-500">{result.avvisi.join(" ")}</div>
+            </div>
+          </div>,
+          { variant: "warning", duration: 10000 }
+        );
+      }
       setIsEditing(false);
       setEditFormData({} as UpdatePromoDTO & { id: string });
       await refreshContent();
@@ -1504,7 +1529,7 @@ function Main() {
                         Si è verificato un errore
                       </h4>
                       <p className="text-sm text-slate-500 mb-4">
-                        Non è stato possibile recuperare i dati delle lavorazioni
+                        <ErroreAsync>{(messaggio) => messaggio || "Non è stato possibile recuperare i dati delle lavorazioni"}</ErroreAsync>
                       </p>
                       <Button
                         variant="outline-primary"
@@ -1713,7 +1738,7 @@ function Main() {
                       ) : contextLavorazioneQuery.isError ? (
                         <EmptyState
                           title="Errore caricamento contesto"
-                          description="Si è verificato un errore durante il caricamento del contesto"
+                          description={contextLavorazioneQuery.error?.message || "Si è verificato un errore durante il caricamento del contesto"}
                           icon="CircleAlert"
                         />
                       ) : (useSharedContext
@@ -2724,12 +2749,16 @@ function Main() {
                 <Await
                   resolve={volantini}
                   errorElement={
-                    <EmptyState
-                      icon="CircleAlert"
-                      title="Errore di caricamento"
-                      description="Non è stato possibile caricare i volantini"
-                      iconColor="text-danger"
-                    />
+                    <ErroreAsync>
+                      {(messaggio) => (
+                        <EmptyState
+                          icon="CircleAlert"
+                          title="Errore di caricamento"
+                          description={messaggio || "Non è stato possibile caricare i volantini"}
+                          iconColor="text-danger"
+                        />
+                      )}
+                    </ErroreAsync>
                   }
                 >
                   {(volantiniResolved: VolantinoKit[] | null) => {
@@ -2861,7 +2890,7 @@ function Main() {
                             Errore di Caricamento
                           </h3>
                           <p className="text-sm text-slate-500">
-                            Impossibile caricare i dati del grafico.
+                            <ErroreAsync>{(messaggio) => messaggio || "Impossibile caricare i dati del grafico."}</ErroreAsync>
                           </p>
                         </div>
                       </div>

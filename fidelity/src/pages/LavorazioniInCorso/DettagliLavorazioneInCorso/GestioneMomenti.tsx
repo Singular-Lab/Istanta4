@@ -1142,11 +1142,12 @@ const GestioneMomenti: React.FC<GestioneMomentiProps> = ({ idPromo, tracciati })
           </span>
         </div>
       );
-    } catch {
+    } catch (e) {
+      const messaggio = (e as Error)?.message;
       showNotification(
         <div className="flex items-center gap-3">
           <Lucide icon="CircleAlert" className="text-danger w-5 h-5 shrink-0" />
-          <span>Errore durante il calcolo del confronto</span>
+          <span>Errore durante il calcolo del confronto{messaggio ? `: ${messaggio}` : ""}</span>
         </div>
       );
     } finally {
@@ -1189,11 +1190,12 @@ const GestioneMomenti: React.FC<GestioneMomentiProps> = ({ idPromo, tracciati })
     try {
       await apiCalcolaRisultato(id);
       invalidate();
-    } catch {
+    } catch (e) {
+      const messaggio = (e as Error)?.message;
       showNotification(
         <div className="flex items-center gap-3">
           <Lucide icon="CircleAlert" className="text-danger w-5 h-5" />
-          <span>Errore durante il calcolo del risultato</span>
+          <span>Errore durante il calcolo del risultato{messaggio ? `: ${messaggio}` : ""}</span>
         </div>
       );
     } finally {
@@ -1220,6 +1222,13 @@ const GestioneMomenti: React.FC<GestioneMomentiProps> = ({ idPromo, tracciati })
   const handleMassiveRun = async () => {
     if (!idPromo || isMassiveRunning || momenti.length === 0) return;
     setIsMassiveRunning(true);
+    // Le singole operazioni fallite non interrompono il run: si contano e si riportano alla fine
+    let falliti = 0;
+    let primoErrore = "";
+    const registraErrore = (e: unknown) => {
+      falliti++;
+      primoErrore ||= (e as Error)?.message || "";
+    };
     try {
       // Fase 1: analisi di tutti i momenti senza risultato
       const momentiSenzaRisultato = momenti.filter((m) => !m.hasRisultato);
@@ -1229,8 +1238,8 @@ const GestioneMomenti: React.FC<GestioneMomentiProps> = ({ idPromo, tracciati })
           setMassiveProgress({ current: i + 1, total: momentiSenzaRisultato.length, phase: 'analisi' });
           try {
             await apiCalcolaRisultato(momentiSenzaRisultato[i].id);
-          } catch {
-            // continua sugli errori
+          } catch (e) {
+            registraErrore(e);
           }
         }
       }
@@ -1283,19 +1292,32 @@ const GestioneMomenti: React.FC<GestioneMomentiProps> = ({ idPromo, tracciati })
             }
             completedConfrontoIds.current.set(pairKey, confrontoId);
             setCompletedConfrontiKeys((prev) => { const s = new Set(prev); s.add(pairKey); return s; });
-          } catch {
-            // continua sugli errori
+          } catch (e) {
+            registraErrore(e);
           }
         }
       }
 
       invalidate();
-      showNotification(
-        <div className="flex items-center gap-3">
-          <Lucide icon="CheckCircle" className="text-success w-5 h-5 shrink-0" />
-          <span>Analisi massiva completata</span>
-        </div>
-      );
+      if (falliti > 0) {
+        showNotification(
+          <div className="flex items-center gap-3">
+            <Lucide icon="TriangleAlert" className="text-warning w-5 h-5 shrink-0" />
+            <span>
+              Analisi massiva completata con {falliti} {falliti === 1 ? "operazione fallita" : "operazioni fallite"}
+              {primoErrore ? `: ${primoErrore}` : ""}
+            </span>
+          </div>,
+          { variant: "warning", duration: 10000 }
+        );
+      } else {
+        showNotification(
+          <div className="flex items-center gap-3">
+            <Lucide icon="CheckCircle" className="text-success w-5 h-5 shrink-0" />
+            <span>Analisi massiva completata</span>
+          </div>
+        );
+      }
     } finally {
       setIsMassiveRunning(false);
       setMassiveProgress(null);

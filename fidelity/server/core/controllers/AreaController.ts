@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import 'express-session';
 import { v4 as uuidv4 } from 'uuid';
 import { HttpStatusCode } from '../../../lib/enums';
-import { NotFoundError, UnauthorizedError, wrapApiError, wrapDatabaseError } from '../../../lib/errors';
+import { DatabaseError, NotFoundError, UnauthorizedError, wrapDatabaseError } from '../../../lib/errors';
 import { BaseController } from '../base/BaseController';
 import config from '../config/index';
 import { CreateAreaDTO } from '../dto';
@@ -13,6 +13,7 @@ import { authMiddleware } from '../middleware/authMiddleware';
 import { permissionGuard } from '../middleware/permissionGuard';
 import { UtentiGDO } from '../models/utenti_gdo';
 import { ServerUtils } from '../utils/ServerUtils';
+import { verificaRisposta } from '../utils/rispostaServizi';
 export class AreaController extends BaseController {
   constructor(private areaService: IAreaService, private gdoService: IGdoService) {
     super('/api');
@@ -116,46 +117,31 @@ export class AreaController extends BaseController {
         sigla: data.codice,
         nome: data.nome
       }
-      try {
-        console.log("dataPerIstanta", dataPerIstanta);
-        console.log("config.ISTANTA_IP_ADDRESS", config.ISTANTA_IP_ADDRESS);
-        const resultChiamataAreaIstanta = await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
+      verificaRisposta(
+        await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
           req,
           config.ISTANTA_IP_ADDRESS + '/ACPV/salvaArea',
           'PUT',
           dataPerIstanta
-        );
-        console.log("resultChiamataAreaIstanta", resultChiamataAreaIstanta);
-        if (!resultChiamataAreaIstanta.data.esito && resultChiamataAreaIstanta.data.error !== "") {
-          throw wrapApiError(new Error(resultChiamataAreaIstanta.data.error), {
-            service: 'FICO API',
-            endpoint: '/ACPV/salvaArea',
-            message: "Errore durante l'inserimento dell'area in istanta",
-            details: { dataPerIstanta }
-          });
-        }
-      } catch (apiError) {
-        throw wrapApiError(apiError, {
-          service: 'FICO API',
-          endpoint: '/ACPV/salvaArea',
-          message: "Errore durante la chiamata all'API esterna",
-          details: { dataPerIstanta }
-        });
-      }
+        ),
+        'ISTANTA',
+        '/ACPV/salvaArea'
+      );
 
       const area = await this.areaService.createArea(data);
-      if (area) {
-        // Determina se è una creazione o un aggiornamento
-        const isUpdate = data.id && data.id !== '';
-        const statusCode = isUpdate ? HttpStatusCode.OK : HttpStatusCode.CREATED;
-        const message = isUpdate ? 'Area aggiornata con successo' : 'Area creata con successo';
-
-        res.status(statusCode).json({
-          ...area,
-          message,
-          isUpdate
-        });
+      if (!area) {
+        throw new DatabaseError({ message: "Errore durante il salvataggio dell'area", entity: 'Area' });
       }
+      // Determina se è una creazione o un aggiornamento
+      const isUpdate = data.id && data.id !== '';
+      const statusCode = isUpdate ? HttpStatusCode.OK : HttpStatusCode.CREATED;
+      const message = isUpdate ? 'Area aggiornata con successo' : 'Area creata con successo';
+
+      res.status(statusCode).json({
+        ...area,
+        message,
+        isUpdate
+      });
     } catch (error) {
       log.error('Errore nel salvataggio area', error);
       this.handleError(res, error);
@@ -184,30 +170,16 @@ export class AreaController extends BaseController {
         }
       }
 
-      try {
-        const resultChiamataAreaIstanta = await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
+      verificaRisposta(
+        await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
           req,
           config.ISTANTA_IP_ADDRESS + '/ACPV/eliminaArea/' + guidID,
           'DELETE',
           undefined
-        );
-
-        if (!resultChiamataAreaIstanta.data.esito && resultChiamataAreaIstanta.data.error !== "") {
-          throw wrapApiError(new Error(resultChiamataAreaIstanta.data.error), {
-            service: 'FICO API',
-            endpoint: '/ACPV/eliminaArea',
-            message: "Errore durante l'eliminazione dell'area in istanta",
-            details: { guidID }
-          });
-        }
-      } catch (apiError) {
-        throw wrapApiError(apiError, {
-          service: 'FICO API',
-          endpoint: '/ACPV/eliminaArea',
-          message: "Errore durante la chiamata all'API esterna",
-          details: { guidID }
-        });
-      }
+        ),
+        'ISTANTA',
+        '/ACPV/eliminaArea'
+      );
 
       const result = await this.areaService.deleteArea(guidID);
       res.status(HttpStatusCode.OK).json(result);

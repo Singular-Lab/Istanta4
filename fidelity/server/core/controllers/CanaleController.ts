@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import 'express-session';
 import { v4 as uuidv4 } from 'uuid';
 import { HttpStatusCode } from '../../../lib/enums';
-import { wrapApiError } from '../../../lib/errors';
+import { DatabaseError } from '../../../lib/errors';
 import { BaseController } from '../base/BaseController';
 import config from '../config';
 import { ICanaleService } from '../interfaces/ICanaleService';
@@ -11,6 +11,7 @@ import { permissionGuard } from '../middleware/permissionGuard';
 import { GDO } from '../models/gdo';
 import { UtentiGDO } from '../models/utenti_gdo';
 import { ServerUtils } from '../utils/ServerUtils';
+import { verificaRisposta } from '../utils/rispostaServizi';
 
 export class CanaleController extends BaseController {
   constructor(private canaleService: ICanaleService) {
@@ -109,35 +110,31 @@ export class CanaleController extends BaseController {
         sigla: data.sigla,
         nome: data.nome
       }
-      const result = await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
-        req,
-        config.ISTANTA_IP_ADDRESS + '/ACPV/salvaCanale',
-        'PUT',
-        dataPerIstanta
+      verificaRisposta(
+        await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
+          req,
+          config.ISTANTA_IP_ADDRESS + '/ACPV/salvaCanale',
+          'PUT',
+          dataPerIstanta
+        ),
+        'ISTANTA',
+        '/ACPV/salvaCanale'
       );
 
-      if (!result.data.esito && result.data.error != "") {
-        throw wrapApiError(new Error(result.data.error), {
-          service: 'FICO API',
-          endpoint: '/ACPV/salvaCanale',
-          message: "Errore durante l'inserimento del canale in istanta",
-          details: { dataPerIstanta }
-        });
-      } else {
-        const canale = await this.canaleService.createCanale(data);
-        if (canale) {
-          // Determina se è una creazione o un aggiornamento
-          const isUpdate = data.id && data.id !== '';
-          const statusCode = isUpdate ? HttpStatusCode.OK : HttpStatusCode.CREATED;
-          const message = isUpdate ? 'Canale aggiornato con successo' : 'Canale creato con successo';
-
-          res.status(statusCode).json({
-            ...canale,
-            message,
-            isUpdate
-          });
-        }
+      const canale = await this.canaleService.createCanale(data);
+      if (!canale) {
+        throw new DatabaseError({ message: 'Errore durante il salvataggio del canale', entity: 'canale' });
       }
+      // Determina se è una creazione o un aggiornamento
+      const isUpdate = data.id && data.id !== '';
+      const statusCode = isUpdate ? HttpStatusCode.OK : HttpStatusCode.CREATED;
+      const message = isUpdate ? 'Canale aggiornato con successo' : 'Canale creato con successo';
+
+      res.status(statusCode).json({
+        ...canale,
+        message,
+        isUpdate
+      });
 
     } catch (error: any) {
       this.handleError(res, error);

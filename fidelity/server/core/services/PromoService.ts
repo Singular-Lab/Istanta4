@@ -6,7 +6,7 @@ import { Op, QueryTypes, type WhereOptions } from 'sequelize';
 import { v4 as uuidv4 } from 'uuid';
 import { Colorize } from '../../../lib/Colorize';
 import { STATO_LAVORAZIONE_KIT_RUNTIME, STATO_PROMO, TIPO_CONTEXT, TIPO_KIT_DESIGN } from '../../../lib/enums';
-import { BadRequestError, DatabaseError, NotFoundError, wrapApiError, wrapDatabaseError, wrapNotFoundError } from '../../../lib/errors';
+import { BadRequestError, DatabaseError, ExternalApiError, NotFoundError, wrapApiError, wrapDatabaseError, wrapNotFoundError } from '../../../lib/errors';
 import {
   AnalisiMomentoTracciato,
   DataFields,
@@ -40,6 +40,7 @@ import { TracciatiMomento } from '../models/tracciati_momento';
 import type { IPromoRepository } from '../repositories/PromoRepository';
 import { isStessaPromo, normalizePromoModel } from '../utils/PromoModelUtils';
 import { ServerUtils } from '../utils/ServerUtils';
+import { verificaRisposta } from '../utils/rispostaServizi';
 import { normalizzaMeta } from './visibilitaPromoUtils';
 dayjs.extend(isBetween);
 
@@ -320,25 +321,16 @@ export class PromoService implements IPromoService {
       updatedAt: new Date()
     };
 
-    const chiamataIstantaResult = await ServerUtils.sendToFICOApi<{ esito: boolean, error?: string }>(
-      req,
-      config.ISTANTA_IP_ADDRESS + "/FicoProcess/inizioNuovaLavorazione",
-      "PUT",
-      promo
+    verificaRisposta(
+      await ServerUtils.sendToFICOApi<{ esito: boolean, error?: string }>(
+        req,
+        config.ISTANTA_IP_ADDRESS + "/FicoProcess/inizioNuovaLavorazione",
+        "PUT",
+        promo
+      ),
+      'ISTANTA',
+      '/FicoProcess/inizioNuovaLavorazione'
     );
-
-    if (!chiamataIstantaResult.data?.esito) {
-      // Su risposta non OK sendToFICOApi restituisce data null e il corpo di Istanta in statusText;
-      // senza sessione Istanta risponde 401 con error "no_login..." (controller o LoginMiddleWare)
-      const erroreIstanta = chiamataIstantaResult.data?.error || chiamataIstantaResult.statusText || 'risposta vuota';
-      throw wrapApiError(new Error(erroreIstanta), {
-        message: erroreIstanta.includes('no_login')
-          ? "Istanta non ha riconosciuto l'utente: la promo non è stata creata"
-          : "Errore durante la chiamata all'API di Istanta",
-        service: 'ISTANTA',
-        endpoint: '/FicoProcess/inizioNuovaLavorazione'
-      });
-    }
     const obj: PromoAttributes = {
       id_promo: promo.guid_id,
       gdo: promo.GDO,
@@ -392,22 +384,18 @@ export class PromoService implements IPromoService {
 
   async getContestoPerNuovaLavorazione(req: ExpressRequest): Promise<any> {
     try {
-      const result = await ServerUtils.sendToFICOApi<{ content: string, esito: boolean, error: string }>(
-        req,
-        config.ISTANTA_IP_ADDRESS + "/FicoProcess/getFormContext/" + TIPO_CONTEXT.NUOVA_LAVORAZIONE,
-        "GET",
-        undefined
+      const data = verificaRisposta<{ content: string, esito: boolean, error: string }>(
+        await ServerUtils.sendToFICOApi<{ content: string, esito: boolean, error: string }>(
+          req,
+          config.ISTANTA_IP_ADDRESS + "/FicoProcess/getFormContext/" + TIPO_CONTEXT.NUOVA_LAVORAZIONE,
+          "GET",
+          undefined
+        ),
+        'ISTANTA',
+        '/FicoProcess/getFormContext'
       );
 
-      if (!result.data.esito) {
-        throw wrapApiError(new Error("Errore durante la chiamata all'API di Istanta"), {
-          message: "Errore durante la chiamata all'API di Istanta",
-          service: 'ISTANTA',
-          endpoint: '/FicoProcess/getFormContext/' + TIPO_CONTEXT.NUOVA_LAVORAZIONE
-        });
-      }
-
-      let context = JSON.parse(result.data.content) as any[];
+      let context = JSON.parse(data.content) as any[];
 
       // Esegui le chiamate in parallelo ma con un intervallo di 200ms tra ciascuna per evitare overload
       const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -472,25 +460,21 @@ export class PromoService implements IPromoService {
                   delete c.chiamata_runtime;
                 }
               } else {
-                const resultChiamataRuntime = await ServerUtils.sendToFICOApi<{ content: string, esito: boolean, error: string }>(
-                  req,
-                  c.chiamata_runtime.url,
-                  c.chiamata_runtime.metodo,
-                  c.chiamata_runtime.body,
+                const resultChiamataRuntime = verificaRisposta<{ content: string, esito: boolean, error: string }>(
+                  await ServerUtils.sendToFICOApi<{ content: string, esito: boolean, error: string }>(
+                    req,
+                    c.chiamata_runtime.url,
+                    c.chiamata_runtime.metodo,
+                    c.chiamata_runtime.body,
+                  ),
+                  'ISTANTA',
+                  'chiamata_runtime del contesto'
                 );
 
-                if (!resultChiamataRuntime.data.esito) {
-                  throw wrapApiError(new Error("Errore durante la chiamata all'API di Istanta"), {
-                    message: "Errore durante la chiamata all'API di Istanta",
-                    service: 'ISTANTA',
-                    endpoint: c.chiamata_runtime.url
-                  });
-                }
-
-                if (typeof resultChiamataRuntime.data.content === "string") {
-                  c.valore = JSON.parse(resultChiamataRuntime.data.content);
+                if (typeof resultChiamataRuntime.content === "string") {
+                  c.valore = JSON.parse(resultChiamataRuntime.content);
                 } else {
-                  c.valore = resultChiamataRuntime.data.content;
+                  c.valore = resultChiamataRuntime.content;
                 }
 
                 if (c.chiamata_runtime) {
@@ -508,6 +492,7 @@ export class PromoService implements IPromoService {
 
       return context;
     } catch (error) {
+      if (error instanceof ExternalApiError) throw error;
       throw wrapDatabaseError(new Error("Errore durante il recupero del contesto per nuova lavorazione"), {
         message: "Errore durante il recupero del contesto per nuova lavorazione",
         operation: 'get',
@@ -521,16 +506,20 @@ export class PromoService implements IPromoService {
   async get_contesto_per_importazione(req: ExpressRequest): Promise<any> {
     try {
       console.log(Colorize.bgBlue(config.ISTANTA_IP_ADDRESS))
-      const result = await ServerUtils.sendToFICOApi<{
-        content: string, esito: boolean, error: string | null
-      }>(
-        req,
-        config.ISTANTA_IP_ADDRESS + '/FicoProcess/getFormContext/' + TIPO_CONTEXT.IMPORTA_LAVORAZIONE,
-        "GET",
-        undefined
+      const result = verificaRisposta<{ content: string, esito: boolean, error: string | null }>(
+        await ServerUtils.sendToFICOApi<{
+          content: string, esito: boolean, error: string | null
+        }>(
+          req,
+          config.ISTANTA_IP_ADDRESS + '/FicoProcess/getFormContext/' + TIPO_CONTEXT.IMPORTA_LAVORAZIONE,
+          "GET",
+          undefined
+        ),
+        'ISTANTA',
+        '/FicoProcess/getFormContext'
       );
 
-      const resultDefinitivo = await ServerUtils.sendToFICOApi<{
+      type SourceFields = {
         list: {
           content: { titolo: string; valore: string }[],
           idField: string,
@@ -541,15 +530,20 @@ export class PromoService implements IPromoService {
           error: string | null
           nullable: boolean
         }[], esito: boolean, error: string | null
-      }>(
-        req,
-        //NOTE abbiamo cambiato la dicitura aggiungendo l'ultimo parametro che è lo scope.
-        //`${config.ISTANTA_IP_ADDRESS}/FicoProcess/getSourceFields/${req.query.guidId}/importInLavorazione`,
-        `${config.ISTANTA_IP_ADDRESS}/FicoProcess/getSourceFields/${req.query.guidId}`,
-        "GET",
-        undefined
+      };
+      const resultDefinitivo = verificaRisposta<SourceFields>(
+        await ServerUtils.sendToFICOApi<SourceFields>(
+          req,
+          //NOTE abbiamo cambiato la dicitura aggiungendo l'ultimo parametro che è lo scope.
+          //`${config.ISTANTA_IP_ADDRESS}/FicoProcess/getSourceFields/${req.query.guidId}/importInLavorazione`,
+          `${config.ISTANTA_IP_ADDRESS}/FicoProcess/getSourceFields/${req.query.guidId}`,
+          "GET",
+          undefined
+        ),
+        'ISTANTA',
+        '/FicoProcess/getSourceFields'
       );
-      const context = JSON.parse(result.data.content)
+      const context = JSON.parse(result.content)
       for (const c of context) {
         if (c.chiamata_runtime !== undefined && c.chiamata_runtime !== false) {
           try {
@@ -608,25 +602,21 @@ export class PromoService implements IPromoService {
                 delete c.chiamata_runtime;
               }
             } else {
-              const resultChiamataRuntime = await ServerUtils.sendToFICOApi<{ content: string, esito: boolean, error: string }>(
-                req,
-                c.chiamata_runtime.url,
-                c.chiamata_runtime.metodo,
-                c.chiamata_runtime.body,
+              const resultChiamataRuntime = verificaRisposta<{ content: string, esito: boolean, error: string }>(
+                await ServerUtils.sendToFICOApi<{ content: string, esito: boolean, error: string }>(
+                  req,
+                  c.chiamata_runtime.url,
+                  c.chiamata_runtime.metodo,
+                  c.chiamata_runtime.body,
+                ),
+                'ISTANTA',
+                'chiamata_runtime del contesto'
               );
 
-              if (!resultChiamataRuntime.data.esito) {
-                throw wrapApiError(new Error("Errore durante la chiamata all'API di Istanta"), {
-                  message: "Errore durante la chiamata all'API di Istanta",
-                  service: 'ISTANTA',
-                  endpoint: c.chiamata_runtime.url
-                });
-              }
-
-              if (typeof resultChiamataRuntime.data.content === "string") {
-                c.valore = JSON.parse(resultChiamataRuntime.data.content);
+              if (typeof resultChiamataRuntime.content === "string") {
+                c.valore = JSON.parse(resultChiamataRuntime.content);
               } else {
-                c.valore = resultChiamataRuntime.data.content;
+                c.valore = resultChiamataRuntime.content;
               }
 
               if (c.chiamata_runtime) {
@@ -634,6 +624,7 @@ export class PromoService implements IPromoService {
               }
             }
           } catch (error) {
+            if (error instanceof ExternalApiError) throw error;
             throw wrapDatabaseError(new Error("Errore durante l'esecuzione della chiamata runtime"), {
               message: "Errore durante l'esecuzione della chiamata runtime",
               operation: 'get',
@@ -647,7 +638,7 @@ export class PromoService implements IPromoService {
           }
         }
       }
-      let contextCiclato = resultDefinitivo.data.list.map(cDef => {
+      let contextCiclato = resultDefinitivo.list.map(cDef => {
         if (!cDef.visible) {
           return null;
         }
@@ -668,6 +659,7 @@ export class PromoService implements IPromoService {
       // let contextResult = [resultAddestramenti.data.content, resultContextPromo.data.content, context]
       return contextCorretto;
     } catch (error) {
+      if (error instanceof ExternalApiError) throw error;
       throw wrapDatabaseError(new Error("Errore durante il recupero del contesto per importazione"), {
         message: "Errore durante il recupero del contesto per importazione",
         operation: 'get',

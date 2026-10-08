@@ -1,4 +1,5 @@
 import Lucide from "@/components/Base/Lucide";
+import { registraNotifica } from "@/utils/erroriServizi";
 import React, { createContext, ReactNode, useCallback, useContext, useEffect, useRef, useState } from "react";
 
 type AnimationType = 'slide' | 'fade' | 'scale';
@@ -134,6 +135,12 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
         setToasts(prev => [...prev, newToast]);
     }, []);
+
+    // Rende showNotification disponibile ai gestori globali di React Query (errori Istanta/Correggo)
+    useEffect(() => {
+        registraNotifica(showNotification);
+        return () => registraNotifica(null);
+    }, [showNotification]);
 
     const getPositionStyles = (position: string) => {
         switch (position) {

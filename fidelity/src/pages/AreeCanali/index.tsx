@@ -242,11 +242,11 @@ function Main() {
       console.log("Errore nell'eliminazione della combinazione", error);
       showNotification(
         <div className="flex flex-row items-center">
-          <Lucide icon="CircleCheck" className="text-success w-8 h-8" />
+          <Lucide icon="CircleAlert" className="text-danger w-8 h-8" />
           <div className="ml-4 mr-4">
             <div className="font-bold">Errore nell'eliminazione della combinazione</div>
             <div className="mt-1 text-slate-500">
-              Si è verificato un errore durante l'eliminazione della combinazione.
+              {error?.message || "Si è verificato un errore durante l'eliminazione della combinazione."}
             </div>
           </div>
         </div>
@@ -263,11 +263,11 @@ function Main() {
       console.log("Errore nell'eliminazione dell'area", error);
       showNotification(
         <div className="flex flex-row items-center">
-          <Lucide icon="CircleCheck" className="text-success w-8 h-8" />
+          <Lucide icon="CircleAlert" className="text-danger w-8 h-8" />
           <div className="ml-4 mr-4">
             <div className="font-bold">Errore nell'eliminazione dell'area</div>
             <div className="mt-1 text-slate-500">
-              Si è verificato un errore durante l'eliminazione dell'area.
+              {error?.message || "Si è verificato un errore durante l'eliminazione dell'area."}
             </div>
           </div>
         </div>
@@ -284,11 +284,11 @@ function Main() {
       console.log("Errore nell'eliminazione del canale ", error);
       showNotification(
         <div className="flex flex-row items-center">
-          <Lucide icon="CircleCheck" className="text-success w-8 h-8" />
+          <Lucide icon="CircleAlert" className="text-danger w-8 h-8" />
           <div className="ml-4 mr-4">
             <div className="font-bold">Errore nell'eliminazione del canale</div>
             <div className="mt-1 text-slate-500">
-              Si è verificato un errore durante l'eliminazione del canale.
+              {error?.message || "Si è verificato un errore durante l'eliminazione del canale."}
             </div>
           </div>
         </div>
@@ -304,6 +304,9 @@ function Main() {
     mutationFn: saveArea,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['fetchAree'] });
+    },
+    onError: (error) => {
+      notifyErrorArea(error);
     }
   });
 
@@ -312,8 +315,8 @@ function Main() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['fetchCanali'] });
     },
-    onError: () => {
-      notifyErrorCanale();
+    onError: (error) => {
+      notifyErrorCanale(error);
     }
   });
 
@@ -322,8 +325,8 @@ function Main() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['fetchCombinazioni'] });
     },
-    onError: () => {
-      notifyErrorCombinazione();
+    onError: (error) => {
+      notifyErrorCombinazione(error);
     }
   });
 
@@ -355,27 +358,27 @@ function Main() {
     );
   };
 
-  const notifyErrorArea = () => {
+  const notifyErrorArea = (error?: Error) => {
     showNotification(
       <div className="flex flex-row items-center">
-        <Lucide icon="CircleAlert" className="text-alert w-8 h-8" />
+        <Lucide icon="CircleAlert" className="text-danger w-8 h-8" />
         <div className="ml-4 mr-4">
           <div className="font-bold">Errore nella creazione dell'area</div>
           <div className="mt-1 text-slate-500">
-            Si è verificato un errore durante la creazione dell'area.
+            {error?.message || "Si è verificato un errore durante la creazione dell'area."}
           </div>
         </div>
       </div>
     );
   };
-  const notifyErrorCanale = () => {
+  const notifyErrorCanale = (error?: Error) => {
     showNotification(
       <div className="flex flex-row items-center">
-        <Lucide icon="CircleAlert" className="text-alert w-8 h-8" />
+        <Lucide icon="CircleAlert" className="text-danger w-8 h-8" />
         <div className="ml-4 mr-4">
           <div className="font-bold">Errore nella creazione del canale</div>
           <div className="mt-1 text-slate-500">
-            Si è verificato un errore durante la creazione del canale.
+            {error?.message || "Si è verificato un errore durante la creazione del canale."}
           </div>
         </div>
       </div>
@@ -392,14 +395,14 @@ function Main() {
       </div>
     );
   };
-  const notifyErrorCombinazione = () => {
+  const notifyErrorCombinazione = (error?: Error) => {
     showNotification(
       <div className="flex flex-row items-center">
-        <Lucide icon="CircleAlert" className="text-alert w-8 h-8" />
+        <Lucide icon="CircleAlert" className="text-danger w-8 h-8" />
         <div className="ml-4 mr-4">
           <div className="font-bold">Errore nella creazione della combinazione</div>
           <div className="mt-1 text-slate-500">
-            Si è verificato un errore durante la creazione della combinazione.
+            {error?.message || "Si è verificato un errore durante la creazione della combinazione."}
           </div>
         </div>
       </div>

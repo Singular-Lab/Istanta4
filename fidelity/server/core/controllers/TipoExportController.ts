@@ -10,6 +10,7 @@ import { ITipoExportService } from '../interfaces/ITipoExportService';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { permissionGuard } from '../middleware/permissionGuard';
 import { ServerUtils } from '../utils/ServerUtils';
+import { verificaRisposta } from '../utils/rispostaServizi';
 
 export class TipoExportController extends BaseController {
 
@@ -61,17 +62,16 @@ export class TipoExportController extends BaseController {
         filtro: exportToCreate.filtri
       };
 
-      const resultIstanta = await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
-        req,
-        `${config.ISTANTA_IP_ADDRESS}/FicoProcess/salvaTipoDiExport`,
-        'PUT',
-        oggettoPerIstanta
+      verificaRisposta(
+        await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
+          req,
+          `${config.ISTANTA_IP_ADDRESS}/FicoProcess/salvaTipoDiExport`,
+          'PUT',
+          oggettoPerIstanta
+        ),
+        'ISTANTA',
+        '/FicoProcess/salvaTipoDiExport'
       );
-
-      if (resultIstanta.data.esito == false) {
-        res.status(HttpStatusCode.INTERNAL_SERVER_ERROR).json({ message: "Errore durante la creazione del tipo di export in istanta", error: resultIstanta.data.error });
-        return;
-      }
 
       const result = await this.tipoExportService.creaTipoExport(exportToCreate);
       res.status(HttpStatusCode.OK).json(result);
@@ -112,20 +112,16 @@ export class TipoExportController extends BaseController {
   private async deleteTipiExport(req: Request, res: Response): Promise<void> {
     try {
       const idTipoExport = req.params.id;
-      const resultChiamataIstanta = await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
-        req,
-        `${config.ISTANTA_IP_ADDRESS}/FicoProcess/eliminaTipoDiExport/${idTipoExport}`,
-        'PUT',
-        undefined
+      verificaRisposta(
+        await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
+          req,
+          `${config.ISTANTA_IP_ADDRESS}/FicoProcess/eliminaTipoDiExport/${idTipoExport}`,
+          'PUT',
+          undefined
+        ),
+        'ISTANTA',
+        '/FicoProcess/eliminaTipoDiExport'
       );
-      if (resultChiamataIstanta.data.error != "") {
-        res.status(HttpStatusCode.INTERNAL_SERVER_ERROR).json({ message: "Errore durante l'eliminazione del tipo di export in istanta", error: resultChiamataIstanta.data.error });
-        return;
-      }
-      if (resultChiamataIstanta.data.esito == false) {
-        res.status(HttpStatusCode.INTERNAL_SERVER_ERROR).json({ message: "Errore durante l'eliminazione del tipo di export in istanta", error: resultChiamataIstanta.data.error });
-        return;
-      }
       const result = await this.tipoExportService.deleteTipoExport(idTipoExport as string);
       res.status(HttpStatusCode.OK).json(result);
     } catch (error: any) {

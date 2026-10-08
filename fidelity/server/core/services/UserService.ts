@@ -6,7 +6,7 @@ import path from 'path';
 import { Op, QueryTypes } from 'sequelize';
 import { decryptString } from '../../../lib/encryption';
 import { CATEGORIA_ATTIVITA, STATO_CANALI_INTERAZIONE, STATO_UTENTI, TIPI_CANALI_INTERAZIONE, TIPO_ATTIVITA, TIPO_UTENTI } from '../../../lib/enums';
-import { ApplicationError, DatabaseError, ForbiddenError, NotFoundError, ValidationError } from '../../../lib/errors';
+import { ApplicationError, DatabaseError, ExternalApiError, ForbiddenError, NotFoundError, ValidationError } from '../../../lib/errors';
 import { PROFILE_PHOTO_MAX_SIZE_BYTES, PROFILE_PHOTO_MAX_SIZE_MB } from '../../../lib/profilePhoto';
 import { DataFields, GdoMenuStructure, MenuElement, MenuStructure, UtenteAttributes, UtentiCanaliInterazioneAttributes, UtentiGDOAttributes, UtentiMeta } from '../../../lib/types';
 import config from '../config';
@@ -25,6 +25,7 @@ import { UtentiGDO } from '../models/utenti_gdo';
 import { WishlistWebpliant } from '../models/wishlist_webpliant';
 import type { IUserRepository } from '../repositories/UserRepository';
 import { ServerUtils } from '../utils/ServerUtils';
+import { verificaRisposta } from '../utils/rispostaServizi';
 export class UserService implements IUserService {
 
   private menuService?: IMenuService;
@@ -1736,26 +1737,31 @@ export class UserService implements IUserService {
 
       // 4. Chiama AuthADLanded su IS con tokenAD nell'header ADToken per verifica e invalidazione
       try {
-        const response = await ServerUtils.sendToFICOApi<{
-          esito: boolean;
-          error?: "token_expired" | "user_not_found" | "no_token";
-        }>(
-          req,
-          config.ISTANTA_IP_ADDRESS + "/FicoProcess/AuthADLanded",
-          "GET",
-          {},
-          {
-            "ADToken": data.tokenAD
-          }
+        type RispostaAuthAD = { esito: boolean; error?: "token_expired" | "user_not_found" | "no_token" };
+        const risposta = verificaRisposta<RispostaAuthAD>(
+          await ServerUtils.sendToFICOApi<RispostaAuthAD>(
+            req,
+            config.ISTANTA_IP_ADDRESS + "/FicoProcess/AuthADLanded",
+            "GET",
+            {},
+            {
+              "ADToken": data.tokenAD
+            }
+          ),
+          'ISTANTA',
+          '/FicoProcess/AuthADLanded',
+          // esito false con un codice (token_expired, user_not_found, no_token) va al frontend: fallisce solo HTTP/rete
+          (d) => typeof d === 'object' && d !== null
         );
 
-        if (response.data.esito) {
+        if (risposta.esito) {
           return { route: "/", queryParams: {} };
         } else {
           // IS ha rifiutato: restituiamo il codice errore al frontend senza lanciare eccezione
-          return { isError: true, errorCode: response.data.error ?? "auth_failed" };
+          return { isError: true, errorCode: risposta.error ?? "auth_failed" };
         }
       } catch (error) {
+        if (error instanceof ExternalApiError) throw error;
         if (error instanceof ValidationError) {
           throw error;
         }
@@ -1766,6 +1772,7 @@ export class UserService implements IUserService {
         });
       }
     } catch (error) {
+      if (error instanceof ExternalApiError) throw error;
       console.error('autenticaUtenteAD failed:', error);
       if (error instanceof ValidationError || error instanceof NotFoundError) {
         throw error;
@@ -1855,27 +1862,24 @@ export class UserService implements IUserService {
         await saveSession();
       }
       try {
-        const response = await ServerUtils.sendToFICOApi<{
-          esito: boolean,
-        }>(
-          req,
-          config.ISTANTA_IP_ADDRESS + "/FicoProcess/AuthLanded",
-          "GET",
-          {},
-          {
-            "Authorization": "Bearer " + data.publicKey
-          }
-        )
-
-        if (response.data.esito) {
-          return data;
-        } else {
-          throw new ValidationError({
-            message: 'Autenticazione fallita, la chiamata AuthLanded non ha restituito esito positivo, con ip: ' + config.ISTANTA_IP_ADDRESS + "/FicoProcess/AuthLanded",
-            field: 'context'
-          });
-        }
+        verificaRisposta<{ esito: boolean }>(
+          await ServerUtils.sendToFICOApi<{
+            esito: boolean,
+          }>(
+            req,
+            config.ISTANTA_IP_ADDRESS + "/FicoProcess/AuthLanded",
+            "GET",
+            {},
+            {
+              "Authorization": "Bearer " + data.publicKey
+            }
+          ),
+          'ISTANTA',
+          '/FicoProcess/AuthLanded'
+        );
+        return data;
       } catch (error) {
+        if (error instanceof ExternalApiError) throw error;
         if (error instanceof ValidationError) {
           throw error;
         }
@@ -1886,6 +1890,7 @@ export class UserService implements IUserService {
         });
       }
     } catch (error) {
+      if (error instanceof ExternalApiError) throw error;
       console.error('Decryption failed:', error);
       if (error instanceof ValidationError) {
         throw error;

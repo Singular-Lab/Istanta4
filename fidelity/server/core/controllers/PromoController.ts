@@ -2,6 +2,7 @@ import dayjs from 'dayjs';
 import { Request as ExpressRequest, Response } from 'express';
 import 'express-session';
 import { CATEGORIA_ATTIVITA, HttpStatusCode, STATO_PROMO, TIPO_ATTIVITA } from '../../../lib/enums';
+import { ExternalApiError } from '../../../lib/errors';
 import type { SaveMenaboLayoutRequest } from '../../../lib/types';
 import { BaseController } from '../base/BaseController';
 import config from '../config';
@@ -14,7 +15,13 @@ import { authMiddleware } from '../middleware/authMiddleware';
 import { permissionGuard } from '../middleware/permissionGuard';
 
 import { AuditLogService } from '../services/AuditLogService';
+import { verificaRisposta } from '../utils/rispostaServizi';
 import { ServerUtils } from '../utils/ServerUtils';
+
+// UpdateVolData.ashx: un volantino che Correggo non ha ancora non e un errore
+const aggiornamentoCorreggoRiuscito = (d: any): boolean =>
+  String(d?.error_detail ?? '').includes('volantino_non_trovato') ||
+  (typeof d === 'object' && d !== null && d.result !== 'error' && d.result !== false && d.esito !== false && !d.error_detail);
 
 export class PromoController extends BaseController {
   constructor(
@@ -209,16 +216,16 @@ export class PromoController extends BaseController {
         ...(data.data_scadenza && { dataScadenza: dayjs(data.data_scadenza).toDate() }),
         ...(data.context !== undefined && data.context !== null ? { context: data.context } : { context: [] }),
       };
-      const resultIstanta = await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
-        req,
-        `${config.ISTANTA_IP_ADDRESS}/FicoProcess/aggiornaPromo`,
-        'PUT',
-        dataPerIstanta
+      verificaRisposta(
+        await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
+          req,
+          `${config.ISTANTA_IP_ADDRESS}/FicoProcess/aggiornaPromo`,
+          'PUT',
+          dataPerIstanta
+        ),
+        'ISTANTA',
+        '/FicoProcess/aggiornaPromo'
       );
-      if (!resultIstanta.data?.esito) {
-        this.sendResponse(res, HttpStatusCode.INTERNAL_SERVER_ERROR, { message: 'Errore durante l\'aggiornamento della promozione in istanta', error: resultIstanta.data?.error });
-        return;
-      }
       const formdataCorreggo = new FormData();
       formdataCorreggo.append('guid_id', data.id);
       if (data.nome) formdataCorreggo.append('nomePromo', data.nome);
@@ -229,39 +236,20 @@ export class PromoController extends BaseController {
       formdataCorreggo.append('dataRegistrazione', dayjs().toISOString());
       // Aggiungi qui gli altri campi se necessario
       // formdataCorreggo.append('altroCampo', data.altroCampo);
-      console.log(config.CORREGGO_IP_ADDRESS);
-      if (config.CORREGGO_IP_ADDRESS !== "" && config.CORREGGO_IP_ADDRESS !== null && config.CORREGGO_IP_ADDRESS !== undefined) {
-        const resultCorreggo = await ServerUtils.sendToFICOApi<{
-          error: any;
-          esito: any;
-          result: boolean,
-          error_detail: string
-        }>(
-          req,
-          `${config.CORREGGO_IP_ADDRESS}/UpdateVolData.ashx`,
-          'POST',
-          formdataCorreggo
-        );
-        if (resultCorreggo?.data) {
-          console.log(resultCorreggo.data);
-          const errorDetail = resultCorreggo.data.error_detail || '';
-          const isVolantinoMissing = typeof errorDetail === 'string' && errorDetail.includes('volantino_non_trovato');
-
-          if (!isVolantinoMissing && errorDetail !== '') {
-            this.sendResponse(res, HttpStatusCode.INTERNAL_SERVER_ERROR, {
-              message: 'Errore durante l\'aggiornamento della promozione in correggo',
-              error: resultCorreggo.data.error
-            });
-            return;
-          }
-
-          if (resultCorreggo.data.esito === false && !isVolantinoMissing) {
-            this.sendResponse(res, HttpStatusCode.INTERNAL_SERVER_ERROR, {
-              message: 'Errore durante l\'aggiornamento della promozione in correggo',
-              error: resultCorreggo.data.error
-            });
-            return;
-          }
+      // Correggo non blocca: Istanta e gia aggiornata, l'operatore riceve un avviso
+      const avvisi: string[] = [];
+      if (config.CORREGGO_IP_ADDRESS) {
+        try {
+          verificaRisposta(
+            await ServerUtils.sendToFICOApi(req, `${config.CORREGGO_IP_ADDRESS}/UpdateVolData.ashx`, 'POST', formdataCorreggo),
+            'CORREGGO',
+            '/UpdateVolData.ashx',
+            aggiornamentoCorreggoRiuscito
+          );
+        } catch (error) {
+          if (!(error instanceof ExternalApiError)) throw error;
+          log.warn("Correggo non ha ricevuto l'aggiornamento della promo", { promoId: data.id, motivo: error.message });
+          avvisi.push(`Correggo non ha ricevuto l'aggiornamento: ${error.message}`);
         }
       }
       const promo = await this.promoService.updatePromo(data.id, data);
@@ -270,7 +258,7 @@ export class PromoController extends BaseController {
         return;
       }
       AuditLogService.getInstance().configurationChanged(req, 'promo', 'update', { promoId: data.id });
-      this.sendResponse(res, HttpStatusCode.OK, promo);
+      this.sendResponse(res, HttpStatusCode.OK, avvisi.length ? { ...promo, avvisi } : promo);
     } catch (error) {
       this.handleError(res, error as Error);
     }
@@ -278,16 +266,16 @@ export class PromoController extends BaseController {
 
   private async deletePromo(req: ExpressRequest, res: Response): Promise<void> {
     try {
-      const resultIstanta = await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
-        req,
-        `${config.ISTANTA_IP_ADDRESS}/FicoProcess/eliminaPromo/${req.params.id}/${true}`,
-        'DELETE',
-        undefined
+      verificaRisposta(
+        await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
+          req,
+          `${config.ISTANTA_IP_ADDRESS}/FicoProcess/eliminaPromo/${req.params.id}/${true}`,
+          'DELETE',
+          undefined
+        ),
+        'ISTANTA',
+        '/FicoProcess/eliminaPromo'
       );
-      if (!resultIstanta.data.esito) {
-        this.sendResponse(res, HttpStatusCode.INTERNAL_SERVER_ERROR, { message: 'Errore durante l\'eliminazione della promozione in istanta', error: resultIstanta.data.error });
-        return;
-      }
       const success = await this.promoService.deletePromo(req.params.id);
       if (!success) {
         this.sendResponse(res, HttpStatusCode.NOT_FOUND, { message: 'Promo not found' });
@@ -305,28 +293,28 @@ export class PromoController extends BaseController {
       const { id, stato } = req.params;
       let result: boolean | null = null;
       if (stato === STATO_PROMO.ELIMINATA) {
-        const resultIstanta = await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
-          req,
-          `${config.ISTANTA_IP_ADDRESS}/FicoProcess/restore/${id}`,
-          'GET',
-          undefined
+        verificaRisposta(
+          await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
+            req,
+            `${config.ISTANTA_IP_ADDRESS}/FicoProcess/restore/${id}`,
+            'GET',
+            undefined
+          ),
+          'ISTANTA',
+          '/FicoProcess/restore'
         );
-        if (!resultIstanta.data.esito) {
-          this.sendResponse(res, HttpStatusCode.INTERNAL_SERVER_ERROR, { message: 'Errore durante l\'eliminazione della promozione in istanta', error: resultIstanta.data.error });
-          return;
-        }
         result = await this.promoService.riportaInLavorazionePromo(id);
       } else {
-        const resultIstanta = await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
-          req,
-          `${config.ISTANTA_IP_ADDRESS}/FicoProcess/eliminaPromo/${id}/${false}`,
-          'DELETE',
-          undefined
+        verificaRisposta(
+          await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
+            req,
+            `${config.ISTANTA_IP_ADDRESS}/FicoProcess/eliminaPromo/${id}/${false}`,
+            'DELETE',
+            undefined
+          ),
+          'ISTANTA',
+          '/FicoProcess/eliminaPromo'
         );
-        if (!resultIstanta.data.esito) {
-          this.sendResponse(res, HttpStatusCode.INTERNAL_SERVER_ERROR, { message: 'Errore durante l\'eliminazione della promozione in istanta', error: resultIstanta.data.error });
-          return;
-        }
         result = await this.promoService.deleteNonPermanentePromo(id);
       }
       this.sendResponse(res, HttpStatusCode.OK, result);

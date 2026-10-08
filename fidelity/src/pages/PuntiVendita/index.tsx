@@ -367,7 +367,7 @@ function Main() {
     },
     onError: (e: any) =>
       showNotification(
-        e?.response?.data?.message ||
+        e?.message ||
         "Errore durante la creazione del punto vendita",
         { variant: "error" }
       ),
@@ -395,7 +395,7 @@ function Main() {
     },
     onError: (e: any) =>
       showNotification(
-        e?.response?.data?.message ||
+        e?.message ||
         "Errore durante la modifica del punto vendita",
         { variant: "error" }
       ),
@@ -405,6 +405,12 @@ function Main() {
     mutationFn: async (id: string) =>
       await ServerCall.delete(`/ACPV/eliminaPV/${id}`),
     onSuccess: () => invalidatePuntiVendita(),
+    onError: (e) =>
+      showNotification(
+        e?.message ||
+        "Errore durante l'eliminazione del punto vendita",
+        { variant: "error" }
+      ),
   });
 
   const mutationBulkImport = useMutation({

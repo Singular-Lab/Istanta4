@@ -14,6 +14,7 @@ import type { IWebhookService } from '../interfaces/IWebhookService';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { permissionGuard } from '../middleware/permissionGuard';
 import { ServerUtils } from '../utils/ServerUtils';
+import { esitoIstanta, verificaRisposta } from '../utils/rispostaServizi';
 import { TraduttoreReferenze } from '../utils/Translator';
 
 export class ReferenzeController extends BaseController {
@@ -60,94 +61,95 @@ export class ReferenzeController extends BaseController {
       const webpliantFields = configWebpliant.data_fields_refs.map((data_field) => data_field.expected_input);
       const runtimekit = await container.get<IKitRuntimeService>(TYPES.KitRuntimeService).getKitRuntimeById(idKitRuntime);
       const runtimekitPerWebhook = await container.get<IKitRuntimeService>(TYPES.KitRuntimeService).getKitRuntimeByIdPerWebhook(idKitRuntime);
-      const resultChiamataKitPassato = await ServerUtils.sendToFICOApi<{ esito: boolean, error: string, results: ReferenzeIstanta[] }>(
-        req,
-        `${config.ISTANTA_IP_ADDRESS}/FicoProcess/downloadKitRuntimeFromFP`,
-        'PUT',
-        {
-          kit: runtimekit,
-          dataFieldsRequest: webpliantFields
-        }
+      // Le referenze esistenti si eliminano solo dopo che Istanta ha restituito quelle nuove
+      const { results: referenze } = verificaRisposta<{ esito: boolean, error: string, results: ReferenzeIstanta[] }>(
+        await ServerUtils.sendToFICOApi(
+          req,
+          `${config.ISTANTA_IP_ADDRESS}/FicoProcess/downloadKitRuntimeFromFP`,
+          'PUT',
+          {
+            kit: runtimekit,
+            dataFieldsRequest: webpliantFields
+          }
+        ),
+        'ISTANTA',
+        '/FicoProcess/downloadKitRuntimeFromFP',
+        // senza la lista non c'è nulla con cui sostituire le referenze: è un fallimento
+        (d) => esitoIstanta(d) && Array.isArray(d.results)
       );
-      if (!resultChiamataKitPassato.data.esito && resultChiamataKitPassato.data.error != "") {
-        res.status(HttpStatusCode.INTERNAL_SERVER_ERROR).json({ message: "Errore durante l'inserimento dell'area in istanta: ", error: resultChiamataKitPassato.data.error });
+      const eliminazioneRefs = await this.referenzeService.bulkEliminateReferenzeFromGuidIdKitRuntime(idKitRuntime);
+      if (eliminazioneRefs.acknowledged == false) {
+        res.status(HttpStatusCode.INTERNAL_SERVER_ERROR).json({ message: "Errore durante l'eliminazione delle referenze", error: eliminazioneRefs.error });
         return;
-      } else {
-        const referenze = resultChiamataKitPassato.data.results;
-        const eliminazioneRefs = await this.referenzeService.bulkEliminateReferenzeFromGuidIdKitRuntime(idKitRuntime);
-        if (eliminazioneRefs.acknowledged == false) {
-          res.status(HttpStatusCode.INTERNAL_SERVER_ERROR).json({ message: "Errore durante l'eliminazione delle referenze", error: eliminazioneRefs.error });
-          return;
-        }
-        const cfg = configWebpliant.data_fields_refs;
-        //aggiunta campi
-        for (let i = 0; i < referenze.length; i++) {
-          const ref = referenze[i];
-          // Traduce i tre insiemi principali una sola volta
-          const dataFields = TraduttoreReferenze.traduci_data_fields(ref.dataFields, cfg);
-          const compiledFields = TraduttoreReferenze.traduci_compiled_fields(ref.compiledFields, cfg);
-          const deletedFields = TraduttoreReferenze.traduci_deleted_fields(ref.deletedFields, cfg);
-
-          // Gruppi: trasforma in-place senza creare nuovi array
-          if (Array.isArray(ref.groupElements) && ref.groupElements.length) {
-            for (let j = 0; j < ref.groupElements.length; j++) {
-              ref.groupElements[j] = TraduttoreReferenze.traduci_data_fields(ref.groupElements[j], cfg);
-            }
-          }
-
-          // Aggiorna il ref in un unico Object.assign (meno property writes sparse)
-          Object.assign(ref, {
-            dataFields,
-            compiledFields,
-            deletedFields,
-            guidIdKitRuntime: idKitRuntime,
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-            idPromo: runtimekit.idPromo,
-            id: uuidv4(),
-          });
-        }
-        const fileLog: FileItemKitLog = {
-          id: uuidv4(),
-          guid_kit_runtime: idKitRuntime,
-          nome_file: "main.json",
-          data_registrazione: new Date(),
-          versione: 1,
-          logs: [
-            {
-              azione: 'Download',
-              messaggio: `File main.json scaricato con successo per kit ${runtimekit.titolo}, ${referenze.length} referenze create`,
-              data_notifica: new Date(),
-              utente_notifica: req.session.id_utente as string
-            }
-          ],
-          stato: STATO_LOG_FILE.PUBBLICATO
-        }
-        log.debug('Tipi di export nel kit runtime', { tipiDiExportInKit: runtimekit.tipiDiExportInKit });
-        if (runtimekit.tipiDiExportInKit && runtimekit.tipiDiExportInKit.some((tipo: OggettoTipiDiExport) =>
-          tipo.useWebhook && (tipo.webhookEvents === EVENTI_WEBHOOK.KIT_MATERIALE_ARRIVATO || tipo.webhookEvents === 'all'))) {
-          try {
-            await container.get<IWebhookService>(TYPES.WebhookService).scatenaEvento({
-              evento: EVENTI_WEBHOOK.KIT_MATERIALE_ARRIVATO,
-              dati: {
-                referenze: referenze,
-                kit: runtimekitPerWebhook
-              },
-              meta: {
-                user_id: req.session.id_utente as string,
-                source: 'webpliant',
-                request_id: uuidv4()
-              }
-            });
-          } catch (webhookError) {
-            log.error("Errore durante l'invio del webhook per kit materiale arrivato", webhookError instanceof Error ? webhookError : new Error(String(webhookError)));
-            // Continuiamo l'esecuzione anche se il webhook fallisce
-          }
-        }
-        await this.referenzeService.bulkCreateReferenze(referenze);
-        await container.get<IKitRuntimeService>(TYPES.KitRuntimeService).insertNewFileRuntimeLog(fileLog);
-        res.status(HttpStatusCode.OK).json({ esito: true, content: referenze, error: "" });
       }
+      const cfg = configWebpliant.data_fields_refs;
+      //aggiunta campi
+      for (let i = 0; i < referenze.length; i++) {
+        const ref = referenze[i];
+        // Traduce i tre insiemi principali una sola volta
+        const dataFields = TraduttoreReferenze.traduci_data_fields(ref.dataFields, cfg);
+        const compiledFields = TraduttoreReferenze.traduci_compiled_fields(ref.compiledFields, cfg);
+        const deletedFields = TraduttoreReferenze.traduci_deleted_fields(ref.deletedFields, cfg);
+
+        // Gruppi: trasforma in-place senza creare nuovi array
+        if (Array.isArray(ref.groupElements) && ref.groupElements.length) {
+          for (let j = 0; j < ref.groupElements.length; j++) {
+            ref.groupElements[j] = TraduttoreReferenze.traduci_data_fields(ref.groupElements[j], cfg);
+          }
+        }
+
+        // Aggiorna il ref in un unico Object.assign (meno property writes sparse)
+        Object.assign(ref, {
+          dataFields,
+          compiledFields,
+          deletedFields,
+          guidIdKitRuntime: idKitRuntime,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          idPromo: runtimekit.idPromo,
+          id: uuidv4(),
+        });
+      }
+      const fileLog: FileItemKitLog = {
+        id: uuidv4(),
+        guid_kit_runtime: idKitRuntime,
+        nome_file: "main.json",
+        data_registrazione: new Date(),
+        versione: 1,
+        logs: [
+          {
+            azione: 'Download',
+            messaggio: `File main.json scaricato con successo per kit ${runtimekit.titolo}, ${referenze.length} referenze create`,
+            data_notifica: new Date(),
+            utente_notifica: req.session.id_utente as string
+          }
+        ],
+        stato: STATO_LOG_FILE.PUBBLICATO
+      }
+      log.debug('Tipi di export nel kit runtime', { tipiDiExportInKit: runtimekit.tipiDiExportInKit });
+      if (runtimekit.tipiDiExportInKit && runtimekit.tipiDiExportInKit.some((tipo: OggettoTipiDiExport) =>
+        tipo.useWebhook && (tipo.webhookEvents === EVENTI_WEBHOOK.KIT_MATERIALE_ARRIVATO || tipo.webhookEvents === 'all'))) {
+        try {
+          await container.get<IWebhookService>(TYPES.WebhookService).scatenaEvento({
+            evento: EVENTI_WEBHOOK.KIT_MATERIALE_ARRIVATO,
+            dati: {
+              referenze: referenze,
+              kit: runtimekitPerWebhook
+            },
+            meta: {
+              user_id: req.session.id_utente as string,
+              source: 'webpliant',
+              request_id: uuidv4()
+            }
+          });
+        } catch (webhookError) {
+          log.error("Errore durante l'invio del webhook per kit materiale arrivato", webhookError instanceof Error ? webhookError : new Error(String(webhookError)));
+          // Continuiamo l'esecuzione anche se il webhook fallisce
+        }
+      }
+      await this.referenzeService.bulkCreateReferenze(referenze);
+      await container.get<IKitRuntimeService>(TYPES.KitRuntimeService).insertNewFileRuntimeLog(fileLog);
+      res.status(HttpStatusCode.OK).json({ esito: true, content: referenze, error: "" });
     } catch (error: any) {
       this.handleError(res, error);
     }

@@ -687,8 +687,10 @@ export const funzioneCaricamentoAuth = async ({ request, params }: { request: Re
   const [auth] = results.map((r) =>
     r.status === "fulfilled" ? r.value : (console.error("Errore:", r.reason), null)
   );
+  // Il messaggio dell'errore (es. Istanta non ha riconosciuto l'utente) lo mostra la pagina Auth
+  const errore = results[0].status === "rejected" ? (results[0].reason as Error)?.message : undefined;
 
-  return { auth };
+  return { auth, errore };
 }
 
 

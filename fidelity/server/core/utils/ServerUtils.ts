@@ -252,7 +252,15 @@ class ServerUtils {
             // Handle text/JSON responses
             const responseText = await response.text();
             if (!response.ok) {
-                throw new Error(responseText || 'Errore durante la comunicazione con l\'altra API');
+                // Stato reale e corpo interpretato: Istanta motiva gli errori nel JSON (es. 401 no_login)
+                let corpoErrore: any = null;
+                try { corpoErrore = responseText ? JSON.parse(responseText) : null; } catch { /* corpo non JSON */ }
+                return {
+                    data: corpoErrore,
+                    status: response.status,
+                    statusText: responseText || response.statusText,
+                    headers: response.headers as any
+                };
             }
 
             // Try to parse as JSON, but handle PDF content gracefully
@@ -285,9 +293,10 @@ class ServerUtils {
             if (typeof error == "string") {
                 error = JSON.parse(error);
             }
+            // Nessuna risposta HTTP (rete, passaporto Olimpo): status 0, il motivo in statusText
             return {
                 data: null as any,
-                status: error.code || 500,
+                status: 0,
                 statusText: error.message,
             } as ApiResponse<T>;
         }
@@ -364,10 +373,10 @@ class ServerUtils {
         } catch (error: any) {
             log.error(Colorize.bgRed(error.message));
 
-            // Gestione errori Axios
+            // Gestione errori Axios: il corpo di Istanta (es. { esito, error }) va conservato
             if (error.response) {
                 return {
-                    data: null as any,
+                    data: (error.response.data ?? null) as any,
                     status: error.response.status,
                     statusText: error.response.statusText || error.message,
                 } as ApiResponse<T>;
@@ -384,7 +393,7 @@ class ServerUtils {
 
             return {
                 data: null as any,
-                status: error.code || error.status || 500,
+                status: 0, // nessuna risposta HTTP, come in sendToFICOApi
                 statusText: error.message || 'Errore durante la comunicazione con l\'API',
             } as ApiResponse<T>;
         }
@@ -505,7 +514,7 @@ class ServerUtils {
 
             return {
                 data: null as any,
-                status: error.code || error.status || 500,
+                status: 0, // nessuna risposta HTTP, come in sendToFICOApi
                 statusText: error.message || 'Errore durante la comunicazione con l\'API',
             } as ApiResponse<T>;
         }

@@ -37,6 +37,7 @@ import { RuntimeKit } from '../models/runtime_kit';
 import type { IPromoRepository } from '../repositories/PromoRepository';
 import { normalizePromoModel } from '../utils/PromoModelUtils';
 import { ServerUtils } from '../utils/ServerUtils';
+import { verificaRisposta } from '../utils/rispostaServizi';
 import { TraduttoreReferenze } from '../utils/Translator';
 
 /**
@@ -2008,21 +2009,18 @@ export class FileManagementService implements IFileManagementService {
       correggoFormData.append('file', new Blob([packBuffer]), packFileName);
 
       const endpoint = `${config.CORREGGO_IP_ADDRESS}/UploadVolFromFP.ashx`;
-      const resultCorreggo = await ServerUtils.sendToFICOApi<{ result: string; errorDetails: string }>(
-        req,
-        endpoint,
-        'POST',
-        correggoFormData,
-        { Authorization: req.headers.authorization as string }
+      verificaRisposta(
+        await ServerUtils.sendToFICOApi<{ result: string; errorDetails: string }>(
+          req,
+          endpoint,
+          'POST',
+          correggoFormData,
+          { Authorization: req.headers.authorization as string }
+        ),
+        'CORREGGO',
+        '/UploadVolFromFP.ashx',
+        (d) => d?.result === 'ok'
       );
-
-      if (resultCorreggo.data.result !== 'ok') {
-        throw wrapExternalError(new Error("Errore invio file a Correggo"), {
-          message: 'Errore invio file a Correggo',
-          httpStatus: resultCorreggo.status,
-          details: { error: resultCorreggo.data.errorDetails }
-        });
-      }
 
       await fs.promises.unlink(file.path);
 
@@ -2092,6 +2090,7 @@ export class FileManagementService implements IFileManagementService {
       };
 
     } catch (error) {
+      if (error instanceof ExternalApiError) throw error;
       throw wrapAppError(new Error("Errore gestione upload Correggo"), {
         message: 'Errore gestione upload Correggo',
         details: { error },
