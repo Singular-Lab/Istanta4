@@ -9,6 +9,7 @@ import { IFormatoService } from '../interfaces/IFormatoService';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { permissionGuard } from '../middleware/permissionGuard';
 import { ServerUtils } from '../utils/ServerUtils';
+import { verificaRisposta } from '../utils/rispostaServizi';
 
 export class FormatoController extends BaseController {
   constructor(private formatoService: IFormatoService) {
@@ -63,20 +64,16 @@ export class FormatoController extends BaseController {
         tipo: formatoToCreate.tipo_lavorazione
       };
 
-      const resultApi = await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
-        req,
-        `${config.ISTANTA_IP_ADDRESS}/FicoProcess/salvaFormato`,
-        'PUT',
-        objToIstanta
+      verificaRisposta(
+        await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
+          req,
+          `${config.ISTANTA_IP_ADDRESS}/FicoProcess/salvaFormato`,
+          'PUT',
+          objToIstanta
+        ),
+        'ISTANTA',
+        '/FicoProcess/salvaFormato'
       );
-      if (resultApi.data.error != "") {
-        res.status(HttpStatusCode.INTERNAL_SERVER_ERROR).json({ message: "Errore durante la creazione del formato in istanta", error: resultApi.data.error });
-        return;
-      }
-      if (resultApi.data.esito == false) {
-        res.status(HttpStatusCode.INTERNAL_SERVER_ERROR).json({ message: "Errore durante la creazione del formato in istanta", error: resultApi.data.error });
-        return;
-      }
 
       const resultCreate = await this.formatoService.createFormato(formatoToCreate);
       res.status(HttpStatusCode.OK).json(resultCreate);
@@ -88,20 +85,16 @@ export class FormatoController extends BaseController {
   private async deleteFormato(req: Request, res: Response): Promise<void> {
     try {
       const idFormato = req.params.id;
-      const resultIstanta = await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
-        req,
-        config.ISTANTA_IP_ADDRESS + '/FicoProcess/eliminaFormato/' + idFormato,
-        'PUT',
-        undefined
+      verificaRisposta(
+        await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
+          req,
+          config.ISTANTA_IP_ADDRESS + '/FicoProcess/eliminaFormato/' + idFormato,
+          'PUT',
+          undefined
+        ),
+        'ISTANTA',
+        '/FicoProcess/eliminaFormato'
       );
-      if (!resultIstanta.data.esito && resultIstanta.data.error !== "") {
-        res.status(HttpStatusCode.INTERNAL_SERVER_ERROR).json({ message: "Errore durante l'eliminazione del formato in istanta", error: resultIstanta.data.error });
-        return;
-      }
-      if (resultIstanta.data.esito == false) {
-        res.status(HttpStatusCode.INTERNAL_SERVER_ERROR).json({ message: "Errore durante l'eliminazione del formato in istanta", error: resultIstanta.data.error });
-        return;
-      }
       const result = await this.formatoService.deleteFormato(idFormato as string);
       res.status(HttpStatusCode.OK).json(result);
     } catch (error: any) {

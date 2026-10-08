@@ -8,6 +8,7 @@ import { log } from '../logger';
 import { NamingConvention } from '../models/naming_convention';
 import { TipiDiExport } from '../models/tipi_di_export';
 import { ServerUtils } from '../utils/ServerUtils';
+import { verificaRisposta } from '../utils/rispostaServizi';
 
 export class NamingConventionService implements INamingConventionService {
 
@@ -60,23 +61,18 @@ export class NamingConventionService implements INamingConventionService {
         combinazione: allUids
       };
 
-      const resultChiamataIstanta = await ServerUtils.sendToFICOApi<{
-        content: any, esito: boolean, error: string
-      }>(
-        req,
-        `${config.ISTANTA_IP_ADDRESS}/FicoProcess/salvaNamingConvention`,
-        'PUT',
-        objIstanta
+      verificaRisposta(
+        await ServerUtils.sendToFICOApi<{
+          content: any, esito: boolean, error: string
+        }>(
+          req,
+          `${config.ISTANTA_IP_ADDRESS}/FicoProcess/salvaNamingConvention`,
+          'PUT',
+          objIstanta
+        ),
+        'ISTANTA',
+        '/FicoProcess/salvaNamingConvention'
       );
-
-      if (!resultChiamataIstanta.data.esito) {
-        throw new ExternalApiError({
-          message: resultChiamataIstanta.data.error,
-          service: 'ISTANTA',
-          endpoint: '/FicoProcess/salvaNamingConvention',
-          details: { objIstanta }
-        });
-      }
 
       let resultCreazioneCombinazioneDesign;
       let isUpdate = false;
@@ -105,6 +101,7 @@ export class NamingConventionService implements INamingConventionService {
         isUpdate
       };
     } catch (error: any) {
+      if (error instanceof ExternalApiError) throw error;
       log.info(error.message);
       throw wrapDatabaseError(new Error("Errore durante la creazione della naming convention"), {
         message: error.message || "Errore durante la creazione della naming convention",
@@ -149,20 +146,17 @@ export class NamingConventionService implements INamingConventionService {
 
   async getAllNamingConventionFromIstanta(req: Request): Promise<any[]> {
     try {
-      const result = await ServerUtils.sendToFICOApi<{ content: any[], esito: boolean, error: string }>(
-        req,
-        `${config.ISTANTA_IP_ADDRESS}/FicoProcess/getAllNamingConventionComponents`,
-        'GET',
-        undefined
+      const data = verificaRisposta<{ content: any[], esito: boolean, error: string }>(
+        await ServerUtils.sendToFICOApi<{ content: any[], esito: boolean, error: string }>(
+          req,
+          `${config.ISTANTA_IP_ADDRESS}/FicoProcess/getAllNamingConventionComponents`,
+          'GET',
+          undefined
+        ),
+        'ISTANTA',
+        '/FicoProcess/getAllNamingConventionComponents'
       );
-      if (!result.data.esito) {
-        throw new ExternalApiError({
-          message: result.data.error || 'Errore API Istanta per naming convention',
-          service: 'Istanta',
-          endpoint: '/FicoProcess/getAllNamingConventionComponents',
-        });
-      }
-      return result.data.content;
+      return data.content;
     } catch (error) {
       if (error instanceof ExternalApiError) throw error;
       throw wrapDatabaseError(new Error("Errore durante il recupero delle naming convention"), {

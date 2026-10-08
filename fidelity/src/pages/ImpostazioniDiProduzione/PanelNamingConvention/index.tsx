@@ -68,11 +68,23 @@ const NamingConventionPanel = forwardRef((props: { onEditNamingConvention?: (con
         }
       } catch (error) {
         console.error('Errore nel caricamento dei campi disponibili:', error);
+        showNotification(
+          <div className="flex flex-row items-center">
+            <Lucide icon="CircleAlert" className="text-danger w-8 h-8" />
+            <div className="ml-4 mr-4">
+              <div className="font-bold">Errore nel caricamento dei campi disponibili</div>
+              <div className="mt-1 text-slate-500">
+                {error instanceof Error && error.message ? error.message : "Impossibile recuperare i campi da Istanta"}
+              </div>
+            </div>
+          </div>,
+          { variant: "error" }
+        );
       }
     };
 
     fetchAvailableFields();
-  }, []);
+  }, [showNotification]);
 
   // Funzione per mappare i campi ai nomi leggibili
   const getFieldDisplayName = (fieldId: string) => {

@@ -132,19 +132,15 @@ const TracciatoCard: React.FC<TracciatoCardProps> = ({
         queryKey: ["statusImportazione", tracciato.id],
         queryFn: async () => {
             if (!tracciato.id) return null;
-            try {
-                const result = await ServerCall.get<{
-                    stato: string;
-                    error: string;
-                    esito: boolean;
-                }>(`/getStatusImportazione?idTracciato=${tracciato.id}`);
-                return result;
-            } catch (error) {
-                ServerCall.handleErrorWithPreciseData(error);
-                return null;
-            }
+            return ServerCall.get<{
+                stato: string;
+                error: string;
+                esito: boolean;
+            }>(`/getStatusImportazione?idTracciato=${tracciato.id}`);
         },
         refetchInterval: (query) => {
+            // In errore non si ripete il polling: il messaggio resta visibile nella card
+            if (query.state.status === "error") return false;
             const data = query.state.data as
                 | { stato: string; error: string; esito: boolean }
                 | null
@@ -295,6 +291,12 @@ const TracciatoCard: React.FC<TracciatoCardProps> = ({
                                             );
                                         }
                                     )}
+                            </div>
+                        )}
+
+                        {statusImportazioneQuery.isError && (
+                            <div className="mt-1 text-xs text-danger">
+                                Stato importazione non disponibile: {statusImportazioneQuery.error?.message}
                             </div>
                         )}
 

@@ -27,6 +27,7 @@ import { getService } from '../../core/di/container';
 import { TYPES } from '../../core/di/types';
 import { IPromoService } from '../interfaces/IPromoService'; // <-- Add this import if not present
 import { ServerUtils } from '../utils/ServerUtils';
+import { verificaRisposta } from '../utils/rispostaServizi';
 
 export class FileManagementController extends BaseController {
   private promoService: IPromoService;
@@ -223,61 +224,8 @@ export class FileManagementController extends BaseController {
       log.info("Status chiamata istanta: " + result.status);
       log.info("-------------------");
 
-      // GESTIONE CASO PARTICOLARE: errore di login/no_login da Istanta
-      if (
-        result?.data &&
-        typeof result.data === "object" &&
-        result.data.error &&
-        typeof result.data.error === "string" &&
-        result.data.error.startsWith("no_login")
-      ) {
-        log.error(Colorize.bgRed("Errore di autenticazione Istanta: " + result.data.error));
-        this.sendResponse(res, HttpStatusCode.UNAUTHORIZED, {
-          message: "Errore autenticazione Istanta",
-          error: result.data.error
-        });
-        return;
-      }
-
-      // GESTIONE CASO: result.data può essere stringa o oggetto
-      if (
-        typeof result.data === "string" &&
-        result.data.includes("no_login")
-      ) {
-        log.error(Colorize.bgRed("Errore di autenticazione Istanta (stringa): " + result.data));
-        this.sendResponse(res, HttpStatusCode.UNAUTHORIZED, {
-          message: "Errore autenticazione Istanta",
-          error: result.data
-        });
-        return;
-      }
-
-      // GESTIONE CASO: result.data.esito === false
-      if (
-        result.data &&
-        typeof result.data === "object" &&
-        result.data.esito === false
-      ) {
-        log.error(Colorize.bgRed("Errore durante la chiamata all'API di Istanta: " + result.data.error));
-        this.sendResponse(res, HttpStatusCode.INTERNAL_SERVER_ERROR, {
-          message: "Errore durante la chiamata all'API di Istanta",
-          error: result.data.error
-        });
-        return;
-      }
-
-      // GESTIONE CASO: result.data non oggetto, non stringa, o struttura inattesa
-      if (
-        !result.data ||
-        (typeof result.data !== "object" && typeof result.data !== "string")
-      ) {
-        log.error(Colorize.bgRed("Risposta inattesa da Istanta: " + JSON.stringify(result.data)));
-        this.sendResponse(res, HttpStatusCode.INTERNAL_SERVER_ERROR, {
-          message: "Risposta inattesa da Istanta",
-          error: result.data
-        });
-        return;
-      }
+      // Istanta risponde 200 anche quando rifiuta il tracciato: vale solo esito true
+      verificaRisposta(result, 'ISTANTA', '/FicoProcess/uploadTracciato', (d) => d?.esito === true);
 
       // Salvataggio tracciato nel database
       log.info(Colorize.bgGreen("Salvataggio tracciato nel database"));

@@ -120,7 +120,7 @@ function Main() {
             <Lucide icon="CircleX" className="text-danger w-10 h-10" />
             <div className="ml-4 mr-4">
               <div className="font-bold">Errore durante l&apos;eliminazione</div>
-              <div className="text-sm text-slate-500">Si è verificato un errore. Riprova o contatta il supporto.</div>
+              <div className="text-sm text-slate-500">{error?.message || "Si è verificato un errore. Riprova o contatta il supporto."}</div>
             </div>
           </div>
         );

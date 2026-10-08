@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { HttpStatusCode } from '../../../lib/enums';
+import { ExternalApiError } from '../../../lib/errors';
 import { BaseController } from '../base/BaseController';
 import { ITracciatoService } from '../interfaces/ITracciatoService';
 import { authMiddleware } from '../middleware/authMiddleware';
@@ -321,6 +322,10 @@ export class TracciatoController extends BaseController {
             const risultato = await this.tracciatoService.calcolaRisultatoMomento(idMomento, req);
             res.status(HttpStatusCode.OK).json(risultato);
         } catch (error: any) {
+            if (error instanceof ExternalApiError) {
+                this.handleError(res, error);
+                return;
+            }
             if (error?.httpStatus === 404) {
                 res.status(HttpStatusCode.NOT_FOUND).json({ message: 'Momento non trovato' });
                 return;
@@ -420,6 +425,10 @@ export class TracciatoController extends BaseController {
             const risultato = await this.tracciatoService.calcolaRisultatoMomentoConfronto(idConfronto, req);
             res.status(HttpStatusCode.OK).json(risultato);
         } catch (error: any) {
+            if (error instanceof ExternalApiError) {
+                this.handleError(res, error);
+                return;
+            }
             if (error?.httpStatus === 400) {
                 res.status(HttpStatusCode.BAD_REQUEST).json({ message: error?.message ?? 'Dati confronto non validi' });
                 return;
@@ -562,6 +571,10 @@ export class TracciatoController extends BaseController {
             const contesto = await this.tracciatoService.getContestoPerConfronto(idPromo, req);
             res.status(HttpStatusCode.OK).json(contesto);
         } catch (error: any) {
+            if (error instanceof ExternalApiError) {
+                this.handleError(res, error);
+                return;
+            }
             console.error('Error starting tracciati compare:', error);
             res.status(HttpStatusCode.INTERNAL_SERVER_ERROR).json({
                 message: "Errore durante l'avvio del confronto tracciati",

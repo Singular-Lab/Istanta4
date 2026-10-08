@@ -4,7 +4,7 @@ import { Op, type WhereOptions } from 'sequelize';
 import { v4 as uuidv4 } from 'uuid';
 import { Colorize } from '../../../lib/Colorize';
 import { FieldType } from '../../../lib/enums';
-import { DatabaseError, ExternalApiError, NotFoundError, wrapApiError, wrapDatabaseError, wrapNotFoundError } from '../../../lib/errors';
+import { DatabaseError, ExternalApiError, NotFoundError, wrapDatabaseError, wrapNotFoundError } from '../../../lib/errors';
 import {
   ContenutoAggiuntivoReferenza,
   FilterCondition,
@@ -26,6 +26,7 @@ import { WorkspaceWebpliant } from '../models/workspace_webpliant';
 import type { IPromoRepository } from '../repositories/PromoRepository';
 import { normalizePromoModel } from '../utils/PromoModelUtils';
 import { ServerUtils } from '../utils/ServerUtils';
+import { verificaRisposta } from '../utils/rispostaServizi';
 
 /**
  * Il modello PG vuole `foto` come array piatto di guidId (stringhe): il plugin manda
@@ -566,7 +567,7 @@ export class ReferenzeService implements IReferenzeService {
 
   async getAllLoghiDaReferenze(req: ExpressRequest): Promise<LoghiReferenza[]> {
     try {
-      const resultDaIstantaPerLoghi = await ServerUtils.sendToFICOApi<{
+      type LoghiBolli = {
         esito: boolean,
         content: {
           id: string;
@@ -577,14 +578,19 @@ export class ReferenzeService implements IReferenzeService {
           tipo: number;
           escluso: boolean;
         }[];
-      }>(
-        req,
-        config.ISTANTA_IP_ADDRESS + "/FicoProcess/getLoghiBolli",
-        "GET",
-        {},
+      };
+      const data = verificaRisposta<LoghiBolli>(
+        await ServerUtils.sendToFICOApi<LoghiBolli>(
+          req,
+          config.ISTANTA_IP_ADDRESS + "/FicoProcess/getLoghiBolli",
+          "GET",
+          {},
+        ),
+        'ISTANTA',
+        '/FicoProcess/getLoghiBolli'
       );
 
-      if (!resultDaIstantaPerLoghi || !resultDaIstantaPerLoghi.data) {
+      if (data.content.length === 0) {
         throw wrapNotFoundError(new Error("Nessun logo trovato"), {
           message: "Nessun logo trovato",
           entityType: "LoghiReferenza",
@@ -592,21 +598,14 @@ export class ReferenzeService implements IReferenzeService {
         });
       }
 
-      if (resultDaIstantaPerLoghi.data.content.length === 0) {
-        throw wrapNotFoundError(new Error("Nessun logo trovato"), {
-          message: "Nessun logo trovato",
-          entityType: "LoghiReferenza",
-          entityId: ""
-        });
-      }
-
-      return resultDaIstantaPerLoghi.data.content.map(r => ({
+      return data.content.map(r => ({
         guidId: config.OLYMPUS_IP_ADDRESS + "/foto/getThumbNailOnDemand?guidId=" + r.guidId,
         sigla: r.sigla,
         tipo: r.tipo,
       }));
 
     } catch (error) {
+      if (error instanceof ExternalApiError) throw error;
       console.error('Errore durante il recupero dei loghi:', error);
       if (error instanceof NotFoundError) {
         throw error;
@@ -842,33 +841,27 @@ export class ReferenzeService implements IReferenzeService {
 
   async getAddestramentiDaIstanta(req: ExpressRequest): Promise<any[]> {
     try {
-      const result = await ServerUtils.sendToFICOApi
-        <{
-          content: {
-            nome: string, id: number, fields: {
-              idAddestramento: number,
-              idCampo: number,
-              indice: number,
-              nomeColonna: string,
-              nomeColonnaOriginale: string,
-              nomeVisualizzato: string
-            }[]
-          }[], esito: boolean, error: string
-        }>
-        (req, `${config.ISTANTA_IP_ADDRESS}/FicoProcess/getAddestramenti/true`, 'GET', undefined);
-      if (!result.data.esito) {
-        throw wrapApiError(new Error(result.data.error), {
-          message: result.data.error,
-          service: 'ISTANTA',
-          endpoint: '/FicoProcess/getAllAddestramenti'
-        });
-      }
-      return result.data.content;
+      type Addestramenti = {
+        content: {
+          nome: string, id: number, fields: {
+            idAddestramento: number,
+            idCampo: number,
+            indice: number,
+            nomeColonna: string,
+            nomeColonnaOriginale: string,
+            nomeVisualizzato: string
+          }[]
+        }[], esito: boolean, error: string
+      };
+      const data = verificaRisposta<Addestramenti>(
+        await ServerUtils.sendToFICOApi<Addestramenti>(req, `${config.ISTANTA_IP_ADDRESS}/FicoProcess/getAddestramenti/true`, 'GET', undefined),
+        'ISTANTA',
+        '/FicoProcess/getAddestramenti'
+      );
+      return data.content;
     } catch (error) {
+      if (error instanceof ExternalApiError) throw error;
       console.error(Colorize.bgRed('Errore durante il recupero degli addestramenti:'), error);
-      if (error instanceof ExternalApiError) {
-        throw error;
-      }
       throw wrapDatabaseError(new Error("Errore durante il recupero degli addestramenti"), {
         message: "Errore durante il recupero degli addestramenti",
         operation: 'sendToFICOApi',

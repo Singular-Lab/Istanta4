@@ -4,7 +4,7 @@ import { Op, Transaction } from 'sequelize';
 import { v4 as uuidv4 } from 'uuid';
 import { Colorize } from '../../../lib/Colorize';
 import { EVENTI_WEBHOOK, EXPORT_DI_SISTEMA, STATO_COMBINAZIONI, STATO_LAVORAZIONE_KIT_RUNTIME, STATO_LOG_FILE, TIPO_KIT_DESIGN, TIPO_LAVORAZIONE } from '../../../lib/enums';
-import { BusinessError, DatabaseError, ForbiddenError, NotFoundError, ServiceUnavailableError, wrapDatabaseError, wrapNotFoundError } from '../../../lib/errors';
+import { BusinessError, DatabaseError, ExternalApiError, ForbiddenError, NotFoundError, ServiceUnavailableError, wrapDatabaseError, wrapNotFoundError } from '../../../lib/errors';
 import { DESIGN_KIT_MONGO, FileItemKit, FileItemKitLog, ImportStorico, OggettoTipiDiExport, PaylodKitPubblicato, RUNTIME_KIT_MONGO, TipiDiExportAttributes } from '../../../lib/types';
 import config from '../config';
 import { sequelize } from '../db';
@@ -412,6 +412,7 @@ export class KitRuntimeService implements IKitRuntimeService {
         volantini: volantini
       };
     } catch (error: any) {
+      if (error instanceof ExternalApiError) throw error;
       if (error instanceof NotFoundError) {
         throw error;
       }

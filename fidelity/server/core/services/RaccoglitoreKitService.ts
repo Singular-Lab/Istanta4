@@ -18,6 +18,7 @@ import { Formati } from '../models/formati';
 import { PuntoVendita } from '../models/punto_vendita/punti_vendita';
 import { RaccoglitoreKit as RaccoglitoreKitModel } from '../models/raccoglitore_kit';
 import { ServerUtils } from '../utils/ServerUtils';
+import { verificaRisposta } from '../utils/rispostaServizi';
 
 /** Maps a raw DesignKit PG row (singular id_area/id_canale) to camelCase shape */
 function mapPgKitToMongo(pgKit: any): any {
@@ -380,20 +381,17 @@ export class RaccoglitoreKitService implements IRaccoglitoreKitService {
 
   async getFiltroContestoDaIstanta(req: Request): Promise<any[]> {
     try {
-      const result = await ServerUtils.sendToFICOApi<{ schemi: any[], esito: boolean, error: string }>(
-        req,
-        `${config.ISTANTA_IP_ADDRESS}/FicoProcess/getSchemasContext`,
-        'GET',
-        undefined
+      const data = verificaRisposta<{ schemi: any[], esito: boolean, error: string }>(
+        await ServerUtils.sendToFICOApi<{ schemi: any[], esito: boolean, error: string }>(
+          req,
+          `${config.ISTANTA_IP_ADDRESS}/FicoProcess/getSchemasContext`,
+          'GET',
+          undefined
+        ),
+        'ISTANTA',
+        '/FicoProcess/getSchemasContext'
       );
-      if (!result.data.esito) {
-        throw new ExternalApiError({
-          message: result.data.error || 'Errore API Istanta per filtri contesto',
-          service: 'Istanta',
-          endpoint: '/FicoProcess/getSchemasContext',
-        });
-      }
-      return result.data.schemi;
+      return data.schemi;
     } catch (error) {
       if (error instanceof ExternalApiError) throw error;
       throw wrapDatabaseError(error, {
@@ -409,20 +407,17 @@ export class RaccoglitoreKitService implements IRaccoglitoreKitService {
 
   async getAllDeclinazioniKitDaIstanta(req: Request): Promise<any> {
     try {
-      const result = await ServerUtils.sendToFICOApi<{ content: any[], esito: boolean, error: string }>(
-        req,
-        `${config.ISTANTA_IP_ADDRESS}/FicoProcess/getAllDeclinazioniKit`,
-        'GET',
-        undefined
+      const data = verificaRisposta<{ content: any[], esito: boolean, error: string }>(
+        await ServerUtils.sendToFICOApi<{ content: any[], esito: boolean, error: string }>(
+          req,
+          `${config.ISTANTA_IP_ADDRESS}/FicoProcess/getAllDeclinazioniKit`,
+          'GET',
+          undefined
+        ),
+        'ISTANTA',
+        '/FicoProcess/getAllDeclinazioniKit'
       );
-      if (!result.data.esito) {
-        throw new ExternalApiError({
-          message: result.data.error || 'Errore API Istanta per declinazioni kit',
-          service: 'Istanta',
-          endpoint: '/FicoProcess/getAllDeclinazioniKit',
-        });
-      }
-      return result.data.content;
+      return data.content;
     } catch (error) {
       if (error instanceof ExternalApiError) throw error;
       throw wrapDatabaseError(error, {

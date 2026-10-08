@@ -32,7 +32,7 @@ function makeService() {
     create: vi.fn(async (promo: unknown) => promo),
   };
   const service = new PromoService({} as any, {} as any, promoRepository as any, {} as any, {} as any);
-  const istanta = vi.spyOn(ServerUtils, 'sendToFICOApi').mockResolvedValue({ data: { esito: true } } as any);
+  const istanta = vi.spyOn(ServerUtils, 'sendToFICOApi').mockResolvedValue({ data: { esito: true }, status: 200 } as any);
   return { service, promoRepository, istanta };
 }
 

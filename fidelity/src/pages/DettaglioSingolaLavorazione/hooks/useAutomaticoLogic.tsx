@@ -81,7 +81,7 @@ function useAutomaticoLogic({
                 } else {
                     showNotification(<div className="flex items-center gap-2">
                         <Lucide icon="X" className="w-4 h-4 text-danger" />
-                        <span>Errore durante la richiesta dei dati</span>
+                        <span>Errore durante la richiesta dei dati{error?.message ? `: ${error.message}` : ""}</span>
                     </div>, { variant: "error" });
                 }
             }
@@ -108,7 +108,7 @@ function useAutomaticoLogic({
             showNotification(
                 <div className="flex items-center gap-2">
                     <Lucide icon="X" className="w-4 h-4 text-danger" />
-                    <span>Si è verificato un errore durante la richiesta delle referenze</span>
+                    <span>Si è verificato un errore durante la richiesta delle referenze{error?.message ? `: ${error.message}` : ""}</span>
                 </div>,
                 { variant: "error" }
             );

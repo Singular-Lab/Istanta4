@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { HttpStatusCode } from '../../../lib/enums';
+import { ExternalApiError } from '../../../lib/errors';
 import { PuntiVenditaAttributes } from '../../../lib/types';
 import { BaseController } from '../base/BaseController';
 import config from '../config';
@@ -9,6 +10,7 @@ import { log } from '../logger';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { permissionGuard } from '../middleware/permissionGuard';
 import { ServerUtils } from '../utils/ServerUtils';
+import { verificaRisposta } from '../utils/rispostaServizi';
 
 export class PuntoVenditaController extends BaseController {
   constructor(private puntoVenditaService: IPuntoVenditaService, private gdoService: IGdoService) {
@@ -260,21 +262,16 @@ export class PuntoVenditaController extends BaseController {
       }
 
       log.info('salvaPV - Sending request to FICO API');
-      const result = await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
-        req,
-        config.ISTANTA_IP_ADDRESS + '/ACPV/salvaPV',
-        'PUT',
-        data
+      verificaRisposta(
+        await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
+          req,
+          config.ISTANTA_IP_ADDRESS + '/ACPV/salvaPV',
+          'PUT',
+          data
+        ),
+        'ISTANTA',
+        '/ACPV/salvaPV'
       );
-
-      if (!result.data.esito && result.data.error != "") {
-        log.error('salvaPV - Error from FICO API', { error: result.data.error });
-        this.sendResponse(res, HttpStatusCode.INTERNAL_SERVER_ERROR, {
-          message: "Errore durante l'inserimento del punto vendita",
-          error: result.data.error
-        });
-        return;
-      }
 
       log.info('salvaPV - FICO API request successful, creating PuntoVendita locally');
       const puntoVenditaData: Partial<PuntiVenditaAttributes> = {
@@ -304,6 +301,7 @@ export class PuntoVenditaController extends BaseController {
         isUpdate
       });
     } catch (error: any) {
+      if (error instanceof ExternalApiError) return this.handleError(res, error);
       log.error('salvaPV - Error', { error });
       this.sendResponse(res, HttpStatusCode.INTERNAL_SERVER_ERROR, {
         message: "Errore durante l'inserimento del punto vendita",
@@ -333,24 +331,21 @@ export class PuntoVenditaController extends BaseController {
         }
       }
 
-      const result = await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
-        req,
-        config.ISTANTA_IP_ADDRESS + '/ACPV/eliminaPV/' + guidID,
-        'DELETE',
-        undefined
+      verificaRisposta(
+        await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
+          req,
+          config.ISTANTA_IP_ADDRESS + '/ACPV/eliminaPV/' + guidID,
+          'DELETE',
+          undefined
+        ),
+        'ISTANTA',
+        '/ACPV/eliminaPV'
       );
-
-      if (!result.data.esito && result.data.error != "") {
-        this.sendResponse(res, HttpStatusCode.INTERNAL_SERVER_ERROR, {
-          message: "Errore durante l'eliminazione del punto vendita",
-          error: result.data.error
-        });
-        return;
-      }
 
       const resultPuntoVenditaEliminato = await this.puntoVenditaService.deletePuntoVendita(guidID);
       this.sendResponse(res, HttpStatusCode.OK, resultPuntoVenditaEliminato);
     } catch (error: any) {
+      if (error instanceof ExternalApiError) return this.handleError(res, error);
       error = JSON.stringify(error);
       this.sendResponse(res, HttpStatusCode.INTERNAL_SERVER_ERROR, {
         message: "Errore durante l'eliminazione del punto vendita"
@@ -398,24 +393,21 @@ export class PuntoVenditaController extends BaseController {
         return;
       }
 
-      const result = await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
-        req,
-        config.ISTANTA_IP_ADDRESS + '/ACPV/modificaPV',
-        'PUT',
-        data
+      verificaRisposta(
+        await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
+          req,
+          config.ISTANTA_IP_ADDRESS + '/ACPV/modificaPV',
+          'PUT',
+          data
+        ),
+        'ISTANTA',
+        '/ACPV/modificaPV'
       );
-
-      if (!result.data.esito && result.data.error != "") {
-        this.sendResponse(res, HttpStatusCode.INTERNAL_SERVER_ERROR, {
-          message: "Errore durante la modifica del punto vendita",
-          error: result.data.error
-        });
-        return;
-      }
 
       const resultPuntoVenditaModificato = await this.puntoVenditaService.updatePuntoVendita(data.guidID, puntoVenditaModificato);
       this.sendResponse(res, HttpStatusCode.OK, resultPuntoVenditaModificato);
     } catch (error: any) {
+      if (error instanceof ExternalApiError) return this.handleError(res, error);
       this.sendResponse(res, HttpStatusCode.INTERNAL_SERVER_ERROR, {
         message: "Errore durante la modifica del punto vendita",
         error: error

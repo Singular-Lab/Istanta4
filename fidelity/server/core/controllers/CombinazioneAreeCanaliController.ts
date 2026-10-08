@@ -1,7 +1,6 @@
 import { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { HttpStatusCode } from '../../../lib/enums';
-import { wrapApiError } from '../../../lib/errors/errorUtils';
 import { BaseController } from '../base/BaseController';
 import config from '../config';
 import { ICombinazioneAreeCanaliService } from '../interfaces/ICombinazioneAreeCanaliService';
@@ -9,6 +8,7 @@ import { authMiddleware } from '../middleware/authMiddleware';
 import { permissionGuard } from '../middleware/permissionGuard';
 import { UtentiGDO } from '../models/utenti_gdo';
 import { ServerUtils } from '../utils/ServerUtils';
+import { verificaRisposta } from '../utils/rispostaServizi';
 export class CombinazioneAreeCanaliController extends BaseController {
   protected setupRoutes(): void {
     this.initializeRoutes();
@@ -88,21 +88,16 @@ export class CombinazioneAreeCanaliController extends BaseController {
         return;
       }
 
-      const result = await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
-        req,
-        config.ISTANTA_IP_ADDRESS + '/ACPV/setCombinazione',
-        'PUT',
-        dataPerIstanta
+      verificaRisposta(
+        await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
+          req,
+          config.ISTANTA_IP_ADDRESS + '/ACPV/setCombinazione',
+          'PUT',
+          dataPerIstanta
+        ),
+        'ISTANTA',
+        '/ACPV/setCombinazione'
       );
-
-      if (!result.data.esito && result.data.error !== "") {
-        throw wrapApiError(new Error(result.data.error), {
-          service: 'FICO API',
-          endpoint: '/ACPV/setCombinazione',
-          message: "Errore durante l'inserimento della combinazione in istanta",
-          details: { dataPerIstanta }
-        });
-      }
 
       const resultCombinazione = await this.combinazioneService.createCombinazione(data);
 
@@ -126,20 +121,16 @@ export class CombinazioneAreeCanaliController extends BaseController {
     try {
       const { guidID } = req.params;
 
-      const result = await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
-        req,
-        config.ISTANTA_IP_ADDRESS + `/ACPV/eliminaCombinazione/${guidID}`,
-        'DELETE',
-        undefined
+      verificaRisposta(
+        await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
+          req,
+          config.ISTANTA_IP_ADDRESS + `/ACPV/eliminaCombinazione/${guidID}`,
+          'DELETE',
+          undefined
+        ),
+        'ISTANTA',
+        '/ACPV/eliminaCombinazione'
       );
-
-      if (!result.data.esito && result.data.error !== "") {
-        res.status(HttpStatusCode.INTERNAL_SERVER_ERROR).json({
-          message: "Errore durante l'eliminazione della combinazione",
-          error: result.data.error
-        });
-        return;
-      }
 
       const success = await this.combinazioneService.deleteCombinazione(guidID);
       if (success) {

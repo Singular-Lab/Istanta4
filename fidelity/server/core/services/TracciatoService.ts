@@ -2,7 +2,7 @@ import { Request } from "express";
 import { Buffer } from "node:buffer";
 import { Op, QueryTypes } from "sequelize";
 import * as XLSX from 'xlsx';
-import { BadRequestError, DatabaseError, NotFoundError } from '../../../lib/errors';
+import { BadRequestError, DatabaseError, ExternalApiError, NotFoundError } from '../../../lib/errors';
 import { TracciatiAttributes, type AnalisiMomentoResponse, type AnalisiMomentoTracciato, type CategoryScoreboardTimeline, type DataFields, type MomentoSelectorQuery, type PromoFilterQuery, type ReportOptionDTO, type RisultatoConfrontoMomento, type SavedPromoScoreboard, type SavedReportConfronto, type SavedReportConfrontoSummary, type TipoSchema, type TracciatiMomentoConfrontoResponseDTO, type TracciatiMomentoResponseDTO, type TracciatiSchemaConfronto, type TracciatiSchemaItem, type TracciatiSchemaResponseDTO, type TracciatoQueryPromoResult, type TracciatoQueryRequest, type TracciatoQueryResult, type TracciatoReport, type TracciatoWidgetScoreAudit, type TracciatoWidgetScoreboardCodiceRow, type TracciatoWidgetScoreboardRow } from '../../../lib/types';
 import type { CellaConfronto, IAgenziaLib, MatricePromo, PromoScoreboardInput, StoriaDelCampo } from "../agenzia_lib/types.js";
 import config from '../config';
@@ -21,6 +21,7 @@ import { TracciatiRepository } from '../repositories/TracciatiRepository';
 import type { ITracciatiSchemaRepository } from '../repositories/TracciatiSchemaRepository';
 import { TracciatiSchemaRepository } from '../repositories/TracciatiSchemaRepository';
 import { ServerUtils } from '../utils/ServerUtils';
+import { verificaRisposta } from '../utils/rispostaServizi';
 import { confrontaConVisibilita, filtraPerVisibilita } from './visibilitaPromoUtils.js';
 import { removeSinglesIncludedInGroups as _removeSinglesUtil, resolveGroupMembersFromScattoCodice as _resolveGroupMembersUtil } from './TracciatoScoreboardUtils.js';
 
@@ -1151,11 +1152,15 @@ export class TracciatoService implements ITracciatoService {
         listeCaricate: momento.tracciati_ids
       }
       // analisiMomento chiamata ad Istanta
-      const { data: analisiData } = await ServerUtils.sendToFICOApi<AnalisiMomentoResponse>(
-        req,
-        `${config.ISTANTA_IP_ADDRESS}/FicoProcess/analisiMomento`,
-        "POST",
-        oggettoPerIstantaAnalisi
+      const analisiData = verificaRisposta<AnalisiMomentoResponse>(
+        await ServerUtils.sendToFICOApi<AnalisiMomentoResponse>(
+          req,
+          `${config.ISTANTA_IP_ADDRESS}/FicoProcess/analisiMomento`,
+          "POST",
+          oggettoPerIstantaAnalisi
+        ),
+        'ISTANTA',
+        '/FicoProcess/analisiMomento'
       );
       log.info("DATO IN ARRIVO DA ISTANTA " + String(analisiData.esito))
       // Il momento tiene solo i canali/aree visibili nella promo: confronti, report
@@ -1174,6 +1179,7 @@ export class TracciatoService implements ITracciatoService {
         avvisoVisibilita: confrontaConVisibilita(tracciati, visibilita),
       };
     } catch (error) {
+      if (error instanceof ExternalApiError) throw error;
       log.error('Error in calcolaRisultatoMomento:', error);
       throw error instanceof NotFoundError
         ? error
@@ -1344,16 +1350,16 @@ export class TracciatoService implements ITracciatoService {
       },
     };
     console.log(payloadIstanta);
-    const { data: analisiConfronto, status, statusText } = await ServerUtils.sendToFICOApi<unknown>(
-      req,
-      `${config.ISTANTA_IP_ADDRESS}/FicoProcess/analisiConfronto`,
-      "POST",
-      payloadIstanta,
+    const analisiConfronto = verificaRisposta<unknown>(
+      await ServerUtils.sendToFICOApi<unknown>(
+        req,
+        `${config.ISTANTA_IP_ADDRESS}/FicoProcess/analisiConfronto`,
+        "POST",
+        payloadIstanta,
+      ),
+      'ISTANTA',
+      '/FicoProcess/analisiConfronto'
     );
-    log.info("STATUS");
-    log.info(status.toString());
-    log.info("STATUS TEXT");
-    log.info(statusText);
     log.info("DATO FINALE");
     log.info(analisiConfronto.toString());
     const confrontoObj = (analisiConfronto && typeof analisiConfronto === 'object')
@@ -2229,7 +2235,7 @@ export class TracciatoService implements ITracciatoService {
       nullable: boolean
     }[], esito: boolean, error: string | null
   }> {
-    const resultContesto = await ServerUtils.sendToFICOApi<{
+    type ContestoConfronto = {
       list: {
         content: { titolo: string; valore: string }[],
         idField: string,
@@ -2240,21 +2246,18 @@ export class TracciatoService implements ITracciatoService {
         error: string | null
         nullable: boolean
       }[], esito: boolean, error: string | null
-    }>(
-      req,
-      //NOTE abbiamo cambiato la dicitura aggiungendo l'ultimo parametro che è lo scope.
-      `${config.ISTANTA_IP_ADDRESS}/FicoProcess/getSourceFields/${req.query.guidId}/importInConfronto`,
-      "GET",
-      undefined
+    };
+    return verificaRisposta<ContestoConfronto>(
+      await ServerUtils.sendToFICOApi<ContestoConfronto>(
+        req,
+        //NOTE abbiamo cambiato la dicitura aggiungendo l'ultimo parametro che è lo scope.
+        `${config.ISTANTA_IP_ADDRESS}/FicoProcess/getSourceFields/${req.query.guidId}/importInConfronto`,
+        "GET",
+        undefined
+      ),
+      'ISTANTA',
+      '/FicoProcess/getSourceFields/importInConfronto'
     );
-    if (resultContesto.data == undefined) {
-      throw new Error(resultContesto.statusText)
-    }
-    if (resultContesto.data.error != undefined) {
-      throw new Error(resultContesto.statusText)
-    }
-    return resultContesto.data
-
   }
 
   // ── Opzioni report per cliente ─────────────────────────────────────────────
