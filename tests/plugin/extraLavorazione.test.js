@@ -194,3 +194,42 @@ test("getLinkHash calcola l'md5 con hashDelFile, che serve anche al confronto co
     assert.match(testo, /result\.hash = await ReperimentoFoto\.hashDelFile\(filePath\);/);
     assert.strictEqual((testo.match(/md5ArrayBuffer\(/g) || []).length, 1, "l'md5 si calcola in un posto solo");
 });
+
+/* ---- I20-1072: le decisioni nella scheda delle foto extra ---- */
+
+const schedaFoto = require("../../plugin/reperimentoFoto/schedaFoto.js");
+
+test("la decisione di una foto si trova per sigla e tipo di elemento: 3 e' un logo, il resto una foto extra", () => {
+    const decisioni = [{ tipo: LOGO, sigla: "Logo_BDP", azione: 1 }, { tipo: FOTO_EXTRA, sigla: "payoff", azione: 3 }];
+
+    assert.strictEqual(schedaFoto.decisioneExtraDellaFoto(decisioni, "Logo_BDP", 3), decisioni[0]);
+    assert.strictEqual(schedaFoto.decisioneExtraDellaFoto(decisioni, "payoff", 1), decisioni[1]);
+    //La stessa sigla con l'altro tipo non e' la stessa foto.
+    assert.strictEqual(schedaFoto.decisioneExtraDellaFoto(decisioni, "Logo_BDP", 1), null);
+    assert.strictEqual(schedaFoto.decisioneExtraDellaFoto(decisioni, "altro", 3), null);
+    assert.strictEqual(schedaFoto.decisioneExtraDellaFoto(decisioni, "", 3), null);
+    assert.strictEqual(schedaFoto.decisioneExtraDellaFoto(null, "Logo_BDP", 3), null);
+});
+
+test("l'etichetta della decisione accanto alla foto", () => {
+    assert.strictEqual(schedaFoto.etichettaDecisioneExtra({ azione: 1 }), "immagine del box per questa lavorazione");
+    assert.strictEqual(schedaFoto.etichettaDecisioneExtra({ azione: 2 }), "solo per questa lavorazione");
+    assert.strictEqual(schedaFoto.etichettaDecisioneExtra({ azione: 3 }), "esclusa per questa lavorazione");
+    assert.strictEqual(schedaFoto.etichettaDecisioneExtra(null), "");
+});
+
+test("la scheda delle foto extra segna le foto decise, con Togli al posto dei comandi per l'articolo", () => {
+    const testo = sorgente("reperimentoFoto/schedaFoto.js");
+    const inizio = testo.indexOf("    FotoExtraPanel(box) {");
+    const pannello = testo.substring(inizio, testo.indexOf("\n    async updateImmagine(", inizio));
+
+    assert.match(pannello, /var decisioni = Array\.isArray\(primario\.recordInTracciato\.extraLavorazione\) \? primario\.recordInTracciato\.extraLavorazione : \[\];/);
+    //Automatiche: con una decisione il pulsante e' il Togli, altrimenti Escludi/Includi come prima.
+    assert.match(pannello, /var decisione = me\.decisioneExtraDellaFoto\(decisioni, elemento\.sigla, elemento\.tipo\);\s*var button;\s*if \(decisione != null\) \{\s*button = me\.pulsanteTogliDecisioneExtra\(decisione, box\);\s*\}\s*else \{\s*button = \$\('<button id="aggiungiButton"/);
+    assert.match(pannello, /row\.append\(text\);\s*if \(decisione != null\) \{\s*row\.append\(me\.segnoDecisioneExtra\(decisione\)\);/);
+    //Manuali: la casella resta ferma e la riga ha segno e Togli.
+    assert.match(pannello, /var decisioneManuale = me\.decisioneExtraDellaFoto\(decisioni, elemento\.sigla, elemento\.tipo\);\s*if \(decisioneManuale != null\) \{\s*checkbox\.prop\("disabled", true\);/);
+    assert.match(pannello, /row\.append\(me\.segnoDecisioneExtra\(decisioneManuale\)\);\s*row\.append\(me\.pulsanteTogliDecisioneExtra\(decisioneManuale, box\)\);/);
+    //Il Togli riusa quello della finestra delle differenze e poi ridisegna pannello, segnalazioni e segnalino.
+    assert.match(testo, /await me\.togliExtraLavorazione\(voce, async function \(\) \{\s*me\.FotoExtraPanel\(box\);\s*me\.memorizzaSegnalazioni\(await me\.differenzeDatiNelBox\(box, me\.schedeRefDati\)\);\s*me\.aggiornaPulsanteSegnalazioni\(\);/);
+});

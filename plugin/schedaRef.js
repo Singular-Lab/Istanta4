@@ -4293,11 +4293,24 @@ const schedaRef = {
     /// I20-1056, lotto 4: il segnalino accanto al codice, dalle differenze (X) e dalle segnalazioni
     /// del bollino (Y). Solo differenze: rosso, "X", come prima. Solo segnalazioni: il colore della
     /// piu' grave, "Y". Tutte e due: rosso, "X+Y". null se non c'e' niente da risolvere.
-    segnalinoScheda(differenze, voci) {
+    /// I20-1072: senza niente da risolvere ma con foto extra decise per questa lavorazione (Z) il
+    /// segnalino resta, verde, "Z": da li' la finestra si riapre e le decisioni si tolgono. Con
+    /// qualcosa da risolvere le decisioni non si contano, la finestra le mostra comunque.
+    segnalinoScheda(differenze, voci, decisioni = []) {
         const x = Array.isArray(differenze) ? differenze.length : 0;
         const y = Array.isArray(voci) ? voci.length : 0;
+        const z = Array.isArray(decisioni) ? decisioni.length : 0;
         if (x === 0 && y === 0) {
-            return null;
+            if (z === 0) {
+                return null;
+            }
+            return {
+                testo: String(z),
+                colore: "#1b7f3b",
+                suggerimento: z === 1
+                    ? "1 foto extra decisa per questa lavorazione - clicca per rivederla"
+                    : z + " foto extra decise per questa lavorazione - clicca per rivederle"
+            };
         }
         const testoX = x === 1 ? "1 differenza fra il box e il dato" : x + " differenze fra il box e il dato";
         const testoY = y === 1 ? "1 segnalazione di impaginazione" : y + " segnalazioni di impaginazione";
@@ -4470,7 +4483,7 @@ const schedaRef = {
             $("#segnalazioniBoxButton").remove();
 
             //I20-1056, lotto 4: le differenze e le segnalazioni di impaginazione del bollino.
-            const dati = this.segnalinoScheda(this.segnalazioniInMemoria(), this.vociBollinoInMemoria());
+            const dati = this.segnalinoScheda(this.segnalazioniInMemoria(), this.vociBollinoInMemoria(), this.extraLavorazioneInMemoria());
             if (dati == null) {
                 return;
             }
@@ -4547,7 +4560,11 @@ const schedaRef = {
             testo.text("Tutte le segnalazioni risolte");
             intestazione.append(pallino).append(testo);
 
-            const nota = $('<div>Il box corrisponde al dato.</div>');
+            //I20-1072: le decisioni per questa lavorazione restano modificabili, dalla sezione sotto.
+            const decise = this.extraLavorazioneInMemoria().length;
+            const nota = $('<div></div>').text(decise === 0
+                ? "Il box corrisponde al dato."
+                : "Il box corrisponde al dato, con " + (decise === 1 ? "1 foto extra decisa" : decise + " foto extra decise") + " per questa lavorazione.");
             nota.css({ "font-size": "12px", "color": "#767676", "padding": "2px 0" });
             contenitore.append(nota);
             return;

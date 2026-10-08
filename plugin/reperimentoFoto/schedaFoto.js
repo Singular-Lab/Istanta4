@@ -1653,6 +1653,63 @@ const schedaFoto = {
         }
     },
 
+    /// I20-1072: la decisione per questa lavorazione presa su una foto extra, o null. tipoFoto e' il
+    /// tipo della foto (3 = logo): nel meta il tipo di elemento e' Logo per 3, FotoExtra per il resto.
+    decisioneExtraDellaFoto(decisioni, sigla, tipoFoto) {
+        if (!Array.isArray(decisioni) || sigla == null || String(sigla) === "") {
+            return null;
+        }
+        var tipoElemento = tipoFoto == 3 ? NoRenderElementi.TIPO.logo : NoRenderElementi.TIPO.fotoExtra;
+        return decisioni.find(v => v != null && String(v.sigla) === String(sigla) && v.tipo == tipoElemento) || null;
+    },
+
+    /// I20-1072: l'etichetta corta della decisione, accanto al nome della foto.
+    etichettaDecisioneExtra(voce) {
+        if (voce == null) {
+            return "";
+        }
+        if (voce.azione === 1) {
+            return "immagine del box per questa lavorazione";
+        }
+        if (voce.azione === 2) {
+            return "solo per questa lavorazione";
+        }
+        if (voce.azione === 3) {
+            return "esclusa per questa lavorazione";
+        }
+        return "decisa per questa lavorazione";
+    },
+
+    /// I20-1072: l'etichetta della decisione come elemento della riga.
+    segnoDecisioneExtra(voce) {
+        var segno = $('<span class="decisioneExtraLavorazione"></span>').text(this.etichettaDecisioneExtra(voce));
+        segno.css({ "font-size": "11px", "color": "#8be28b", "font-style": "italic", "margin-left": "8px" });
+        return segno;
+    },
+
+    /// I20-1072: il Togli di una riga della scheda foto extra: toglie la decisione (la scheda si
+    /// riscarica, come dalla finestra delle differenze), ridisegna il pannello e aggiorna
+    /// segnalazioni e segnalino.
+    pulsanteTogliDecisioneExtra(voce, box) {
+        var me = this;
+        var togli = $('<button class="togliDecisioneExtra" style="color:lightgreen">Togli</button>');
+        Tooltip.impostaTooltip(togli[0], "Toglie la decisione presa per questa lavorazione: la foto torna come la vuole il dato");
+        togli.on('click', async function () {
+            togli.prop("disabled", true);
+            try {
+                await me.togliExtraLavorazione(voce, async function () {
+                    me.FotoExtraPanel(box);
+                    me.memorizzaSegnalazioni(await me.differenzeDatiNelBox(box, me.schedeRefDati));
+                    me.aggiornaPulsanteSegnalazioni();
+                });
+            }
+            finally {
+                togli.prop("disabled", false);
+            }
+        });
+        return togli;
+    },
+
     FotoExtraPanel(box) {
         let me = this;
         var schedaRef = this.schedeRefDati;
@@ -1664,6 +1721,8 @@ const schedaFoto = {
             messaggioUtente("Code SRF-47 Nessun elemento primario trovato", "error");
             return;
         }
+        //I20-1072: le foto extra decise per questa lavorazione (I20-1070), dal record.
+        var decisioni = Array.isArray(primario.recordInTracciato.extraLavorazione) ? primario.recordInTracciato.extraLavorazione : [];
         var extra = primario.recordInTracciato["Foto.Extra"];
         if (extra != null) {
             for (var $i = 0; $i < this.tipiFotoExtra.length; $i++) {
@@ -1699,6 +1758,13 @@ const schedaFoto = {
 
                 //creiamo un checkbox da mettere prima del testo basato sul valore di elemento.attiva
                 var checkbox = $('<input type="checkbox" class="checkboxExtra" ' + (elemento.attiva ? "checked" : "") + '>');
+                //I20-1072: con una decisione per questa lavorazione la casella resta ferma: attivare o
+                //disattivare vale per l'articolo, e prima va tolta la decisione.
+                var decisioneManuale = me.decisioneExtraDellaFoto(decisioni, elemento.sigla, elemento.tipo);
+                if (decisioneManuale != null) {
+                    checkbox.prop("disabled", true);
+                    Tooltip.impostaTooltip(checkbox[0], "Decisa per questa lavorazione: togli la decisione per cambiarla");
+                }
                 checkbox.on('change', function () {
                     var sigla = $(this).parent().attr("sigla");
                     if (sigla == "")
@@ -1729,6 +1795,10 @@ const schedaFoto = {
                 });
                 row.append(impaginaButton);
 
+                if (decisioneManuale != null) {
+                    row.append(me.segnoDecisioneExtra(decisioneManuale));
+                    row.append(me.pulsanteTogliDecisioneExtra(decisioneManuale, box));
+                }
 
                 //centriamo verticalmente il testo
                 row.css("display", "flex");
@@ -1795,14 +1865,26 @@ const schedaFoto = {
                 var row = $('<div class="row align-items-center" sigla="' + elemento.sigla + '" nomeFoto="' + elemento.nome + '" escluso="' + elemento.escluso + '" tipo="' + elemento.tipo + '" style="margin-bottom:10px"></div>');
                 var text = $('<span>' + elemento.nome + '</span>');
                 text.css({ "font-size": "12px", "color": "white" });
-                var button = $('<button id="aggiungiButton" style="color:lightgreen">' + (elemento.escluso ? "Includi" : "Escludi") + '</button>');
+                //I20-1072: una foto decisa per questa lavorazione si segna, e al posto di Escludi/Includi
+                //(che valgono per l'articolo, e su di lei non hanno senso) ha il Togli della decisione.
+                var decisione = me.decisioneExtraDellaFoto(decisioni, elemento.sigla, elemento.tipo);
+                var button;
+                if (decisione != null) {
+                    button = me.pulsanteTogliDecisioneExtra(decisione, box);
+                }
+                else {
+                    button = $('<button id="aggiungiButton" style="color:lightgreen">' + (elemento.escluso ? "Includi" : "Escludi") + '</button>');
 
-                button.on('click', function () {
-                    //passiamo ad escludiFotoExtraAuto l'id, il val del panel, il nome della foto e il box corrispondente alla current selection
-                    me.escludiIncludiFotoExtraAuto($(this).parent().attr("nomeFoto"), $(this).parent().attr("escluso"), box, $(this).parent(), $(this).parent().attr("tipo"), $(this).parent().attr("sigla"));
-                });
+                    button.on('click', function () {
+                        //passiamo ad escludiFotoExtraAuto l'id, il val del panel, il nome della foto e il box corrispondente alla current selection
+                        me.escludiIncludiFotoExtraAuto($(this).parent().attr("nomeFoto"), $(this).parent().attr("escluso"), box, $(this).parent(), $(this).parent().attr("tipo"), $(this).parent().attr("sigla"));
+                    });
+                }
                 row.append(button);
                 row.append(text);
+                if (decisione != null) {
+                    row.append(me.segnoDecisioneExtra(decisione));
+                }
                 row.css("display", "flex");
                 row.css("align-items", "center");
                 panelExtraAuto.append(row);
