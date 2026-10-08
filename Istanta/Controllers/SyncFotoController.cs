@@ -274,7 +274,7 @@ namespace Istanta.Controllers
                                             {
                                                 filename = onlyName,
                                                 queryFilename = "",// (onlyName.IndexOf('_') > 0) ? onlyName.Substring(1, onlyName.IndexOf('_') - 1) : "",
-                                                md5 = Crypto.GetMD5HashFromFile(System.IO.File.ReadAllBytes(fsName)),
+                                                md5 = Crypto.GetMD5HashFromPath(fsName),
                                                 stato = StatoSyncFile.Scanned,
                                                 id = 0,
                                                 zipDirOrigin = zipFilePkgName
@@ -316,7 +316,7 @@ namespace Istanta.Controllers
                             {
                                 filename = fullname,
                                 queryFilename = onlyName,//(onlyName.IndexOf('_') > 0) ? onlyName.Substring(1, onlyName.IndexOf('_') - 1) : "",
-                                md5 = Crypto.GetMD5HashFromFile(System.IO.File.ReadAllBytes(entry)),
+                                md5 = Crypto.GetMD5HashFromPath(entry),
                                 stato = StatoSyncFile.Scanned,
                                 id = 0,
                                 zipDirOrigin = zipFilePkgName
@@ -1084,7 +1084,7 @@ namespace Istanta.Controllers
                 return BadRequest(ex.ToString());
             }   
 
-            Thread.Sleep(1000);
+            await Task.Delay(1000);
 
             System.IO.FileInfo fInfo = new FileInfo(path);
             string destPath = Path.Combine(this._exportPath.Value.path, fInfo.Name);
@@ -1236,20 +1236,17 @@ namespace Istanta.Controllers
 
                 //msg.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
-                byte[] arrBytes = System.IO.File.ReadAllBytes(tempFile);
-
-                var form = new MultipartFormDataContent();
-
-                var fileContent = new ByteArrayContent(arrBytes);
-                fileContent.Headers.ContentType = MediaTypeHeaderValue.Parse("multipart/form-data");
-
-                form.Add(fileContent, "file", Path.GetFileName(tempFile));
-
-                string jsString = JsonConvert.SerializeObject(olympoJson);
-                var contentJson = new StringContent(jsString, Encoding.UTF8, "application/json");
-                form.Add(contentJson, "json_meta_foto");
-
-                var response = await httpClient.PostAsync(uri, form);
+                // Lo zip parte dal disco in streaming: caricarlo intero con ReadAllBytes (centinaia di MB
+                // di foto) saturava la memoria e i GC fermavano tutte le richieste finche' il sync non finiva.
+                // Il form chiude lo stream appena Olimpo risponde, prima di cancellare il file temporaneo.
+                HttpResponseMessage response;
+                using (var form = PacchettoFotoPerOlimpo(
+                           new FileStream(tempFile, FileMode.Open, FileAccess.Read, FileShare.Read, 81920,
+                                          FileOptions.Asynchronous | FileOptions.SequentialScan),
+                           Path.GetFileName(tempFile), JsonConvert.SerializeObject(olympoJson)))
+                {
+                    response = await httpClient.PostAsync(uri, form);
+                }
 
                 //result.error="Olympus response " + response.IsSuccessStatusCode;
 
@@ -1401,7 +1398,7 @@ namespace Istanta.Controllers
                             throw new Exception("Errore eliminazione file temporaneo. Timeout!");
                         }
 
-                        Thread.Sleep(1000);
+                        await Task.Delay(1000);
                     }
                 }
 
@@ -1414,6 +1411,24 @@ namespace Istanta.Controllers
             }
 
             return Ok(result);
+        }
+
+        /// <summary>
+        /// La richiesta di SyncPacchettoFoto verso {Olimpo}/foto/uploadPacchettoFoto: lo zip nel campo
+        /// "file" e i metadati nel campo "json_meta_foto". Prende lo zip come stream, cosi' non passa
+        /// mai intero dalla memoria; lo stream appartiene al form e si chiude con lui.
+        /// Intestazioni e nomi dei campi sono quelli che Olimpo riceve da sempre.
+        /// </summary>
+        public static MultipartFormDataContent PacchettoFotoPerOlimpo(Stream zip, string nomeZip, string jsonMetaFoto)
+        {
+            var form = new MultipartFormDataContent();
+
+            var fileContent = new StreamContent(zip);
+            fileContent.Headers.ContentType = MediaTypeHeaderValue.Parse("multipart/form-data");
+            form.Add(fileContent, "file", nomeZip);
+
+            form.Add(new StringContent(jsonMetaFoto, Encoding.UTF8, "application/json"), "json_meta_foto");
+            return form;
         }
 
         [HttpGet]
