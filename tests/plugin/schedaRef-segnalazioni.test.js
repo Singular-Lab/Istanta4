@@ -423,7 +423,9 @@ test('per le sole decisioni la finestra non si apre da sola, ma il segnalino le 
     assert.strictEqual(schedaRef.deveAprirsiDaSola([], '5329719', []), false);
 
     const scheda = leggiFileDelPlugin('schedaRef.js').replace(/\r/g, '');
-    assert.match(scheda, /const dati = this\.segnalinoScheda\(this\.segnalazioniInMemoria\(\), this\.vociBollinoInMemoria\(\), this\.extraLavorazioneInMemoria\(\)\);/);
+    //I20-1073: con le decisioni il segnalino legge anche gli elementi assenti risolti con noRender.
+    assert.match(scheda, /const dati = this\.segnalinoScheda\(this\.segnalazioniInMemoria\(\), this\.vociBollinoInMemoria\(\), this\.extraLavorazioneInMemoria\(\),\s*this\.risolteNoRenderInMemoria\(\)\);/);
     //E la nota di "tutto risolto" dice che le decisioni ci sono ancora.
-    assert.match(scheda, /"Il box corrisponde al dato, con " \+ \(decise === 1 \? "1 foto extra decisa" : decise \+ " foto extra decise"\) \+ " per questa lavorazione\."/);
+    assert.match(scheda, /conCosa\.push\(\(decise === 1 \? "1 foto extra decisa" : decise \+ " foto extra decise"\) \+ " per questa lavorazione"\);/);
+    assert.match(scheda, /: "Il box corrisponde al dato, con " \+ conCosa\.join\(" e "\) \+ "\."\);/);
 });

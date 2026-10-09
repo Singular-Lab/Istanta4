@@ -392,6 +392,44 @@ var NoRenderElementi = (function () {
         return fotoCambiate(statoPrima, statoDelleFoto(listaDopo)) && fotoAncoraVisibili(listaDopo) > 0;
     }
 
+    /// I20-1073: l'elemento noRender di un'assenza segnalata dalla preanalisi (tipo "mancante": un
+    /// campo, un'etichetta o una foto del gruppo che nel box non c'e'), da mettere in noRender o da
+    /// togliere. Campi ed etichette hanno gia' tipo e chiave; la foto arriva col nome del file, e in
+    /// noRender si salva col codice della referenza: lo si trova fra i membri del gruppo. null se non
+    /// e' un'assenza o se la foto non e' di nessun membro.
+    function elementoDaAssenza(assenza, membriGruppoFoto) {
+        if (assenza == null || assenza.tipo !== "mancante" || pulisci(assenza.chiave) === "") {
+            return null;
+        }
+        if (assenza.tipoElemento === TIPO_FOTO) {
+            var membro = (membriGruppoFoto || []).find(m => m != null && pulisci(m.nomeFoto) === pulisci(assenza.chiave));
+            if (membro == null || pulisci(membro.codRef) === "") {
+                return null;
+            }
+            return { tipo: TIPO_FOTO, chiave: pulisci(membro.codRef), nome: pulisci(membro.nomeFoto) };
+        }
+        if (assenza.tipoElemento !== TIPO.campo && assenza.tipoElemento !== TIPO.etichetta) {
+            return null;
+        }
+        return { tipo: assenza.tipoElemento, chiave: pulisci(assenza.chiave), nome: pulisci(assenza.label) };
+    }
+
+    /// I20-1073: la lista noRender da salvare con elemento in piu', o in meno. Il server sostituisce
+    /// la lista intera, quindi si parte sempre da quella che c'e' e si cambia un elemento solo.
+    function conElemento(elementiMarcati, elemento) {
+        var lista = senzaElemento(elementiMarcati, elemento);
+        if (elemento != null) {
+            lista.push({ tipo: elemento.tipo, chiave: pulisci(elemento.chiave), nome: pulisci(elemento.nome) });
+        }
+        return lista;
+    }
+
+    function senzaElemento(elementiMarcati, elemento) {
+        return (elementiMarcati || [])
+            .filter(e => e != null && !stessoElemento(e, elemento))
+            .map(e => ({ tipo: e.tipo, chiave: pulisci(e.chiave), nome: pulisci(e.nome) }));
+    }
+
     return {
         TIPO: TIPO,
         TIPO_FOTO: TIPO_FOTO,
@@ -413,7 +451,10 @@ var NoRenderElementi = (function () {
         statoDelleFoto: statoDelleFoto,
         fotoAncoraVisibili: fotoAncoraVisibili,
         fotoCambiate: fotoCambiate,
-        proporreFixFoto: proporreFixFoto
+        proporreFixFoto: proporreFixFoto,
+        elementoDaAssenza: elementoDaAssenza,
+        conElemento: conElemento,
+        senzaElemento: senzaElemento
     };
 })();
 
