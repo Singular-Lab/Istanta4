@@ -4,20 +4,20 @@ import type { TracciatiMomentoConfrontiAttributes } from '../models/tracciati_mo
 import { TracciatiMomentoConfronti } from '../models/tracciati_momento_confronti';
 import { BaseRepository } from './BaseRepository';
 import type { IBaseRepository } from './IBaseRepository';
-import { literal, Op } from 'sequelize';
+import { literal, Op, type Transaction } from 'sequelize';
 
 type TracciatiMomentoInstance = InstanceType<typeof TracciatiMomento>;
 type TracciatiMomentoConfrontoInstance = InstanceType<typeof TracciatiMomentoConfronti>;
 
 export interface ITracciatiMomentoRepository
   extends IBaseRepository<TracciatiMomentoInstance, string> {
-  findByPromoId(idPromo: string): Promise<TracciatiMomentoInstance[]>;
-  createConfronto(data: Partial<TracciatiMomentoConfrontiAttributes>): Promise<TracciatiMomentoConfrontoInstance>;
-  findConfrontoById(id: string): Promise<TracciatiMomentoConfrontoInstance | null>;
-  findConfrontoByPair(primario: string, secondario: string): Promise<TracciatiMomentoConfrontoInstance | null>;
-  updateConfronto(id: string, data: Partial<TracciatiMomentoConfrontiAttributes>): Promise<TracciatiMomentoConfrontoInstance | null>;
-  deleteConfronto(id: string): Promise<boolean>;
-  findConfrontiByMomentoId(idMomento: string): Promise<TracciatiMomentoConfrontoInstance[]>;
+  findByPromoId(idPromo: string, transaction?: Transaction): Promise<TracciatiMomentoInstance[]>;
+  createConfronto(data: Partial<TracciatiMomentoConfrontiAttributes>, transaction?: Transaction): Promise<TracciatiMomentoConfrontoInstance>;
+  findConfrontoById(id: string, transaction?: Transaction): Promise<TracciatiMomentoConfrontoInstance | null>;
+  findConfrontoByPair(primario: string, secondario: string, transaction?: Transaction): Promise<TracciatiMomentoConfrontoInstance | null>;
+  updateConfronto(id: string, data: Partial<TracciatiMomentoConfrontiAttributes>, transaction?: Transaction): Promise<TracciatiMomentoConfrontoInstance | null>;
+  deleteConfronto(id: string, transaction?: Transaction): Promise<boolean>;
+  findConfrontiByMomentoId(idMomento: string, transaction?: Transaction): Promise<TracciatiMomentoConfrontoInstance[]>;
   findConfrontiByMomentoIds(ids: string[]): Promise<TracciatiMomentoConfrontoInstance[]>;
   findConfrontiWithRisultatoByMomentoIds(ids: string[]): Promise<TracciatiMomentoConfrontoInstance[]>;
 }
@@ -31,22 +31,23 @@ export class TracciatiMomentoRepository
     super(TracciatiMomento, 'id');
   }
 
-  async findByPromoId(idPromo: string): Promise<TracciatiMomentoInstance[]> {
+  async findByPromoId(idPromo: string, transaction?: Transaction): Promise<TracciatiMomentoInstance[]> {
     return this.model.findAll({
       where: { id_promo: idPromo } as any,
       order: [['ordine', 'ASC'], ['createdat', 'ASC']],
+      transaction,
     });
   }
 
-  async createConfronto(data: Partial<TracciatiMomentoConfrontiAttributes>): Promise<TracciatiMomentoConfrontoInstance> {
-    return this.confrontoModel.create(data as any);
+  async createConfronto(data: Partial<TracciatiMomentoConfrontiAttributes>, transaction?: Transaction): Promise<TracciatiMomentoConfrontoInstance> {
+    return this.confrontoModel.create(data as any, { transaction });
   }
 
-  async findConfrontoById(id: string): Promise<TracciatiMomentoConfrontoInstance | null> {
-    return this.confrontoModel.findOne({ where: { id } as any });
+  async findConfrontoById(id: string, transaction?: Transaction): Promise<TracciatiMomentoConfrontoInstance | null> {
+    return this.confrontoModel.findOne({ where: { id } as any, transaction });
   }
 
-  async findConfrontoByPair(primario: string, secondario: string): Promise<TracciatiMomentoConfrontoInstance | null> {
+  async findConfrontoByPair(primario: string, secondario: string, transaction?: Transaction): Promise<TracciatiMomentoConfrontoInstance | null> {
     return this.confrontoModel.findOne({
       where: {
         [Op.or]: [
@@ -54,21 +55,22 @@ export class TracciatiMomentoRepository
           { primario: secondario, secondario: primario },
         ],
       } as any,
+      transaction,
     });
   }
 
-  async updateConfronto(id: string, data: Partial<TracciatiMomentoConfrontiAttributes>): Promise<TracciatiMomentoConfrontoInstance | null> {
-    const [affectedRows] = await this.confrontoModel.update(data as any, { where: { id } as any });
+  async updateConfronto(id: string, data: Partial<TracciatiMomentoConfrontiAttributes>, transaction?: Transaction): Promise<TracciatiMomentoConfrontoInstance | null> {
+    const [affectedRows] = await this.confrontoModel.update(data as any, { where: { id } as any, transaction });
     if (affectedRows === 0) return null;
-    return this.findConfrontoById(id);
+    return this.findConfrontoById(id, transaction);
   }
 
-  async deleteConfronto(id: string): Promise<boolean> {
-    const deletedRows = await this.confrontoModel.destroy({ where: { id } as any });
+  async deleteConfronto(id: string, transaction?: Transaction): Promise<boolean> {
+    const deletedRows = await this.confrontoModel.destroy({ where: { id } as any, transaction });
     return deletedRows > 0;
   }
 
-  async findConfrontiByMomentoId(idMomento: string): Promise<TracciatiMomentoConfrontoInstance[]> {
+  async findConfrontiByMomentoId(idMomento: string, transaction?: Transaction): Promise<TracciatiMomentoConfrontoInstance[]> {
     return this.confrontoModel.findAll({
       where: {
         [Op.or]: [
@@ -77,6 +79,7 @@ export class TracciatiMomentoRepository
         ],
       } as any,
       order: [['createdat', 'ASC']],
+      transaction,
     });
   }
 

@@ -393,7 +393,8 @@ const InvioCampagnaWhatsapp: FC = () => {
 
     // --- FILTRI UTENTE (sincronizzati su query string) ---
     const [sessoUtenteGuest, setSessoUtenteGuest] = useState<string>(() => {
-        return decodeURIComponent(searchParams.get('f_sesso') as string) ?? '';
+        // Senza parametro decodeURIComponent(null) darebbe la stringa "null"
+        return decodeURIComponent(searchParams.get('f_sesso') ?? '');
     });
 
     // Intervallo di date (es: "2025-01-01 - 2025-01-31")
@@ -477,8 +478,6 @@ const InvioCampagnaWhatsapp: FC = () => {
         9.1594985, // centro Milano di default
     ]);
     const [callAreaRadiusKm, setCallAreaRadiusKm] = useState(5);
-    const [callMinCalls, setCallMinCalls] = useState(0);
-    const [callLastDays, setCallLastDays] = useState(30);
 
     // Modalità aree amministrative (Comuni / Regioni via Overpass)
     const [comuneSearch, setComuneSearch] = useState('');
@@ -519,8 +518,6 @@ const InvioCampagnaWhatsapp: FC = () => {
                             type: 'circle',
                             center: callAreaCenter,
                             radiusKm: callAreaRadiusKm,
-                            minCalls: callMinCalls,
-                            lastDays: callLastDays,
                         };
                     } else {
                         payload.callFilter = {
@@ -528,8 +525,6 @@ const InvioCampagnaWhatsapp: FC = () => {
                             areaId: selectedComuneId ? String(selectedComuneId) : null,
                             areaName: comuneOptions.find(c => c.id === selectedComuneId)?.name ?? null,
                             polygon: selectedComuneGeometry,
-                            minCalls: callMinCalls,
-                            lastDays: callLastDays,
                         };
                     }
                 }
@@ -558,8 +553,6 @@ const InvioCampagnaWhatsapp: FC = () => {
         callFilterMode,
         callAreaCenter,
         callAreaRadiusKm,
-        callMinCalls,
-        callLastDays,
         selectedComuneId,
         selectedComuneGeometry,
         comuneOptions,
@@ -799,16 +792,12 @@ const InvioCampagnaWhatsapp: FC = () => {
                         type: 'circle' as const,
                         center: callAreaCenter,
                         radiusKm: callAreaRadiusKm,
-                        minCalls: callMinCalls,
-                        lastDays: callLastDays,
                     }
                     : {
                         type: callFilterMode, // 'comuni' | 'regioni'
                         areaId: selectedComuneId ? String(selectedComuneId) : null,
                         areaName: comuneOptions.find(c => c.id === selectedComuneId)?.name ?? null,
                         polygon: selectedComuneGeometry, // <-- POLIGONO COMPLETO
-                        minCalls: callMinCalls,
-                        lastDays: callLastDays,
                     }
                 : null,
             userFilters: {
@@ -1915,35 +1904,7 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                                 </div>
 
                                                                 <div className="space-y-2">
-                                                                    <div>
-                                                                        <label className="block text-[11px] font-medium uppercase tracking-wide text-slate-500 mb-1">
-                                                                            Negli ultimi (giorni)
-                                                                        </label>
-                                                                        <FormInput
-                                                                            type="number"
-                                                                            min={1}
-                                                                            value={callLastDays}
-                                                                            onChange={(e) =>
-                                                                                setCallLastDays(Number(e.target.value) || 1)
-                                                                            }
-                                                                        />
-                                                                    </div>
-
-                                                                    {callFilterMode === 'circle' ? (
-                                                                        <div>
-                                                                            <label className="block text-[11px] font-medium uppercase tracking-wide text-slate-500 mb-1">
-                                                                                Min. chiamate nel periodo
-                                                                            </label>
-                                                                            <FormInput
-                                                                                type="number"
-                                                                                min={0}
-                                                                                value={callMinCalls}
-                                                                                onChange={(e) =>
-                                                                                    setCallMinCalls(Number(e.target.value) || 0)
-                                                                                }
-                                                                            />
-                                                                        </div>
-                                                                    ) : (
+                                                                    {callFilterMode !== 'circle' && (
                                                                         <div className="text-[11px] text-slate-500 mt-4">
                                                                             Comune selezionato:{' '}
                                                                             <span className="font-semibold">

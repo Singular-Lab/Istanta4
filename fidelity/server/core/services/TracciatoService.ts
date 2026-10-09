@@ -1,6 +1,6 @@
 import { Request } from "express";
 import { Buffer } from "node:buffer";
-import { Op, QueryTypes } from "sequelize";
+import { Op, QueryTypes, type Transaction } from "sequelize";
 import * as XLSX from 'xlsx';
 import { BadRequestError, DatabaseError, ExternalApiError, NotFoundError } from '../../../lib/errors';
 import { TracciatiAttributes, type AnalisiMomentoResponse, type AnalisiMomentoTracciato, type CategoryScoreboardTimeline, type DataFields, type MomentoSelectorQuery, type PromoFilterQuery, type ReportOptionDTO, type RisultatoConfrontoMomento, type SavedPromoScoreboard, type SavedReportConfronto, type SavedReportConfrontoSummary, type TipoSchema, type TracciatiMomentoConfrontoResponseDTO, type TracciatiMomentoResponseDTO, type TracciatiSchemaConfronto, type TracciatiSchemaItem, type TracciatiSchemaResponseDTO, type TracciatoQueryPromoResult, type TracciatoQueryRequest, type TracciatoQueryResult, type TracciatoReport, type TracciatoWidgetScoreAudit, type TracciatoWidgetScoreboardCodiceRow, type TracciatoWidgetScoreboardRow } from '../../../lib/types';
@@ -72,6 +72,10 @@ type InnerEvento = {
   rec: DataFields;
   campiModificati: string[];
 };
+
+// max+1 e non il numero di momenti: dopo una cancellazione il conteggio collide con un ordine esistente
+const prossimoOrdine = (momenti: { ordine?: number | null }[]): number =>
+  Math.max(-1, ...momenti.map((m) => m.ordine ?? -1)) + 1;
 
 export class TracciatoService implements ITracciatoService {
   constructor(
@@ -1068,19 +1072,32 @@ export class TracciatoService implements ITracciatoService {
     }
   }
 
+  // Ordine e confronti_ids sono read-modify-write: le scritture sui momenti di una promo vanno serializzate
+  private inTransazioneMomenti<T>(idPromo: string, operazione: (t: Transaction) => Promise<T>): Promise<T> {
+    return sequelize.transaction(async (t) => {
+      await sequelize.query('SELECT pg_advisory_xact_lock(hashtext(:chiave))', {
+        replacements: { chiave: `momenti:${idPromo}` },
+        type: QueryTypes.SELECT,
+        transaction: t,
+      });
+      return operazione(t);
+    });
+  }
+
   async createMomento(idPromo: string, nome: string, snapshot = false): Promise<TracciatiMomentoResponseDTO> {
     try {
-      const existing = await this.momentoRepository.findByPromoId(idPromo);
-      const ordine = existing.length;
-      const created = await this.momentoRepository.create({
-        id_promo: idPromo,
-        nome,
-        tracciati_ids: [],
-        confronti_ids: [],
-        ordine,
-        snapshot,
-        createdat: new Date(),
-        updatedat: new Date(),
+      const created = await this.inTransazioneMomenti(idPromo, async (t) => {
+        const existing = await this.momentoRepository.findByPromoId(idPromo, t);
+        return this.momentoRepository.create({
+          id_promo: idPromo,
+          nome,
+          tracciati_ids: [],
+          confronti_ids: [],
+          ordine: prossimoOrdine(existing),
+          snapshot,
+          createdat: new Date(),
+          updatedat: new Date(),
+        }, t);
       });
       return this.mapMomentoToDTO(created, true);
     } catch (error) {
@@ -1113,23 +1130,25 @@ export class TracciatoService implements ITracciatoService {
       const momento = await this.momentoRepository.findById(id);
       if (!momento) return false;
 
-      const confrontiByMomento = await this.momentoRepository.findConfrontiByMomentoId(id);
-      for (const confronto of confrontiByMomento) {
-        await this.momentoRepository.deleteConfronto(confronto.id);
-      }
+      return await this.inTransazioneMomenti(momento.id_promo, async (t) => {
+        const confrontiByMomento = await this.momentoRepository.findConfrontiByMomentoId(id, t);
+        for (const confronto of confrontiByMomento) {
+          await this.momentoRepository.deleteConfronto(confronto.id, t);
+        }
 
-      const samePromo = await this.momentoRepository.findByPromoId(momento.id_promo);
-      for (const other of samePromo) {
-        if (other.id === id) continue;
-        const currentConfronti = (other as any).confronti_ids as string[] | undefined;
-        if (!Array.isArray(currentConfronti) || !currentConfronti.includes(id)) continue;
-        await this.momentoRepository.update(other.id, {
-          confronti_ids: currentConfronti.filter((linkedId) => linkedId !== id),
-          updatedat: new Date(),
-        } as any);
-      }
+        const samePromo = await this.momentoRepository.findByPromoId(momento.id_promo, t);
+        for (const other of samePromo) {
+          if (other.id === id) continue;
+          const currentConfronti = (other as any).confronti_ids as string[] | undefined;
+          if (!Array.isArray(currentConfronti) || !currentConfronti.includes(id)) continue;
+          await this.momentoRepository.update(other.id, {
+            confronti_ids: currentConfronti.filter((linkedId) => linkedId !== id),
+            updatedat: new Date(),
+          } as any, t);
+        }
 
-      return await this.momentoRepository.delete(id);
+        return await this.momentoRepository.delete(id, t);
+      });
     } catch (error) {
       log.error('Error in deleteMomento:', error);
       throw new DatabaseError({
@@ -1190,13 +1209,22 @@ export class TracciatoService implements ITracciatoService {
     }
   }
 
-  async createMomentoConfronto(primario: string, secondario: string, terremotoDegradoMassimo?: number | null): Promise<TracciatiMomentoConfrontoResponseDTO> {
+  async createMomentoConfronto(primario: string, secondario: string, terremotoDegradoMassimo?: number | null, transaction?: Transaction): Promise<TracciatiMomentoConfrontoResponseDTO> {
     if (primario === secondario) {
       throw new BadRequestError({ message: 'primario e secondario devono essere momenti diversi' });
     }
 
-    const momentoA = await this.momentoRepository.findById(primario);
-    const momentoB = await this.momentoRepository.findById(secondario);
+    // Senza la transazione del chiamante (applicaSchema) ne apre una col lock dei momenti della promo
+    if (!transaction) {
+      const idPromo = (await this.momentoRepository.findById(primario))?.id_promo;
+      if (!idPromo) {
+        throw new NotFoundError({ message: 'Momento non trovato', entityType: 'TracciatiMomento' });
+      }
+      return this.inTransazioneMomenti(idPromo, (t) => this.createMomentoConfronto(primario, secondario, terremotoDegradoMassimo, t));
+    }
+
+    const momentoA = await this.momentoRepository.findById(primario, transaction);
+    const momentoB = await this.momentoRepository.findById(secondario, transaction);
 
     if (!momentoA || !momentoB) {
       throw new NotFoundError({ message: 'Momento non trovato', entityType: 'TracciatiMomento' });
@@ -1218,27 +1246,27 @@ export class TracciatoService implements ITracciatoService {
     const tipo: 'lineare' | 'non_lineare' =
       Math.abs((momentoA.ordine ?? 0) - (momentoB.ordine ?? 0)) === 1 ? 'lineare' : 'non_lineare';
 
-    const existing = await this.momentoRepository.findConfrontoByPair(orderedPrimario, orderedSecondario);
+    const existing = await this.momentoRepository.findConfrontoByPair(orderedPrimario, orderedSecondario, transaction);
     if (existing) {
       let confronto = existing;
       if ((existing.tipo !== 'lineare' && existing.tipo !== 'non_lineare') || existing.tipo !== tipo) {
         confronto = await this.momentoRepository.updateConfronto(existing.id, {
           tipo,
           updatedat: new Date(),
-        } as any);
+        } as any, transaction);
       }
 
       if (terremotoDegradoMassimo !== undefined && confronto) {
         confronto = await this.momentoRepository.updateConfronto(confronto.id, {
           terremoto_degrado_massimo: terremotoDegradoMassimo,
           updatedat: new Date(),
-        } as any) ?? confronto;
+        } as any, transaction) ?? confronto;
       }
 
       if (tipo === 'non_lineare') {
         const [aData, bData] = await Promise.all([
-          this.momentoRepository.findById(orderedPrimario),
-          this.momentoRepository.findById(orderedSecondario),
+          this.momentoRepository.findById(orderedPrimario, transaction),
+          this.momentoRepository.findById(orderedSecondario, transaction),
         ]);
 
         const aIds = [...new Set([...(aData?.confronti_ids ?? []), orderedSecondario])];
@@ -1246,11 +1274,11 @@ export class TracciatoService implements ITracciatoService {
         const updates: Promise<unknown>[] = [];
 
         if ((aData?.confronti_ids ?? []).length !== aIds.length) {
-          updates.push(this.momentoRepository.update(orderedPrimario, { confronti_ids: aIds, updatedat: new Date() } as any));
+          updates.push(this.momentoRepository.update(orderedPrimario, { confronti_ids: aIds, updatedat: new Date() } as any, transaction));
         }
 
         if ((bData?.confronti_ids ?? []).length !== bIds.length) {
-          updates.push(this.momentoRepository.update(orderedSecondario, { confronti_ids: bIds, updatedat: new Date() } as any));
+          updates.push(this.momentoRepository.update(orderedSecondario, { confronti_ids: bIds, updatedat: new Date() } as any, transaction));
         }
 
         if (updates.length > 0) {
@@ -1269,18 +1297,18 @@ export class TracciatoService implements ITracciatoService {
       terremoto_degrado_massimo: terremotoDegradoMassimo ?? null,
       createdat: new Date(),
       updatedat: new Date(),
-    });
+    }, transaction);
 
     if (tipo === 'non_lineare') {
       const [aData, bData] = await Promise.all([
-        this.momentoRepository.findById(orderedPrimario),
-        this.momentoRepository.findById(orderedSecondario),
+        this.momentoRepository.findById(orderedPrimario, transaction),
+        this.momentoRepository.findById(orderedSecondario, transaction),
       ]);
       const aIds = [...new Set([...(aData?.confronti_ids ?? []), orderedSecondario])];
       const bIds = [...new Set([...(bData?.confronti_ids ?? []), orderedPrimario])];
       await Promise.all([
-        this.momentoRepository.update(orderedPrimario, { confronti_ids: aIds, updatedat: new Date() } as any),
-        this.momentoRepository.update(orderedSecondario, { confronti_ids: bIds, updatedat: new Date() } as any),
+        this.momentoRepository.update(orderedPrimario, { confronti_ids: aIds, updatedat: new Date() } as any, transaction),
+        this.momentoRepository.update(orderedSecondario, { confronti_ids: bIds, updatedat: new Date() } as any, transaction),
       ]);
     }
 
@@ -2160,61 +2188,63 @@ export class TracciatoService implements ITracciatoService {
       const schema = await this.schemaRepository.findById(idSchema);
       if (!schema) throw new NotFoundError({ message: 'Schema non trovato', entityType: 'TracciatiSchema' });
 
-      const existing = await this.momentoRepository.findByPromoId(idPromo);
-      const baseOrdine = existing.length;
+      return await this.inTransazioneMomenti(idPromo, async (t) => {
+        const existing = await this.momentoRepository.findByPromoId(idPromo, t);
+        const baseOrdine = prossimoOrdine(existing);
 
-      const created: TracciatiMomentoResponseDTO[] = [];
-      for (const item of schema.items) {
-        const momento = await this.momentoRepository.create({
-          id_promo: idPromo,
-          nome: item.nome,
-          tracciati_ids: [],
-          confronti_ids: [],
-          ordine: baseOrdine + (item.ordine ?? 0),
-          snapshot: item.snapshot,
-          createdat: new Date(),
-          updatedat: new Date(),
-        });
-        created.push(this.mapMomentoToDTO(momento, true));
-      }
-
-      if ((schema.confronti ?? []).length > 0 && created.length > 0) {
-        const byOrdine = new Map<number, TracciatiMomentoResponseDTO>();
-        created.forEach((m) => byOrdine.set(m.ordine, m));
-
-        const relazioneById = new Map<string, Set<string>>();
-        created.forEach((m) => relazioneById.set(m.id, new Set<string>()));
-        const uniquePairs = new Map<string, { aId: string; bId: string; terremotoDegradoMassimo?: number | null }>();
-
-        (schema.confronti ?? []).forEach((c) => {
-          const momentoA = byOrdine.get(baseOrdine + c.a) ?? byOrdine.get(c.a);
-          const momentoB = byOrdine.get(baseOrdine + c.b) ?? byOrdine.get(c.b);
-          if (!momentoA || !momentoB || momentoA.id === momentoB.id) return;
-          relazioneById.get(momentoA.id)?.add(momentoB.id);
-          relazioneById.get(momentoB.id)?.add(momentoA.id);
-
-          const key = [momentoA.id, momentoB.id].sort().join('::');
-          if (!uniquePairs.has(key)) {
-            uniquePairs.set(key, { aId: momentoA.id, bId: momentoB.id, terremotoDegradoMassimo: c.terremotoDegradoMassimo ?? null });
-          }
-        });
-
-        for (const pair of uniquePairs.values()) {
-          await this.createMomentoConfronto(pair.aId, pair.bId, pair.terremotoDegradoMassimo);
-        }
-
-        for (const momento of created) {
-          const confronti_ids = [...(relazioneById.get(momento.id) ?? new Set<string>())];
-          if (confronti_ids.length === 0) continue;
-          await this.momentoRepository.update(momento.id, {
-            confronti_ids,
+        const created: TracciatiMomentoResponseDTO[] = [];
+        for (const item of schema.items) {
+          const momento = await this.momentoRepository.create({
+            id_promo: idPromo,
+            nome: item.nome,
+            tracciati_ids: [],
+            confronti_ids: [],
+            ordine: baseOrdine + (item.ordine ?? 0),
+            snapshot: item.snapshot,
+            createdat: new Date(),
             updatedat: new Date(),
-          } as any);
-          momento.confronti_ids = confronti_ids;
+          }, t);
+          created.push(this.mapMomentoToDTO(momento, true));
         }
-      }
 
-      return created;
+        if ((schema.confronti ?? []).length > 0 && created.length > 0) {
+          const byOrdine = new Map<number, TracciatiMomentoResponseDTO>();
+          created.forEach((m) => byOrdine.set(m.ordine, m));
+
+          const relazioneById = new Map<string, Set<string>>();
+          created.forEach((m) => relazioneById.set(m.id, new Set<string>()));
+          const uniquePairs = new Map<string, { aId: string; bId: string; terremotoDegradoMassimo?: number | null }>();
+
+          (schema.confronti ?? []).forEach((c) => {
+            const momentoA = byOrdine.get(baseOrdine + c.a) ?? byOrdine.get(c.a);
+            const momentoB = byOrdine.get(baseOrdine + c.b) ?? byOrdine.get(c.b);
+            if (!momentoA || !momentoB || momentoA.id === momentoB.id) return;
+            relazioneById.get(momentoA.id)?.add(momentoB.id);
+            relazioneById.get(momentoB.id)?.add(momentoA.id);
+
+            const key = [momentoA.id, momentoB.id].sort().join('::');
+            if (!uniquePairs.has(key)) {
+              uniquePairs.set(key, { aId: momentoA.id, bId: momentoB.id, terremotoDegradoMassimo: c.terremotoDegradoMassimo ?? null });
+            }
+          });
+
+          for (const pair of uniquePairs.values()) {
+            await this.createMomentoConfronto(pair.aId, pair.bId, pair.terremotoDegradoMassimo, t);
+          }
+
+          for (const momento of created) {
+            const confronti_ids = [...(relazioneById.get(momento.id) ?? new Set<string>())];
+            if (confronti_ids.length === 0) continue;
+            await this.momentoRepository.update(momento.id, {
+              confronti_ids,
+              updatedat: new Date(),
+            } as any, t);
+            momento.confronti_ids = confronti_ids;
+          }
+        }
+
+        return created;
+      });
     } catch (error) {
       log.error('Error in applicaSchema:', error);
       throw error instanceof NotFoundError

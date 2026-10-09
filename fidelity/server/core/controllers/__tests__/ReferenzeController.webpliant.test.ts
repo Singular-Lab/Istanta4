@@ -1,6 +1,6 @@
 import express from 'express';
 import request from 'supertest';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ServerUtils } from '../../utils/ServerUtils';
 import { ReferenzeController } from '../ReferenzeController';
 
@@ -16,24 +16,31 @@ vi.mock('../../logger', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-// Servizi del container: configurazione Webpliant e kit runtime minimi
+// Servizi del container: configurazione Webpliant, kit runtime e webhook minimi
 const servizi = vi.hoisted(() => ({
   ConfigService: { getConfigWebPliantFromVolantino: async () => ({ data_fields_refs: [] }) },
   KitRuntimeService: {
-    getKitRuntimeById: async () => ({ idPromo: 'p1', titolo: 'VOL TO', tipiDiExportInKit: [] }),
+    getKitRuntimeById: vi.fn(),
     getKitRuntimeByIdPerWebhook: async () => ({}),
     insertNewFileRuntimeLog: async () => undefined,
   },
+  WebhookService: { scatenaEvento: vi.fn(async () => undefined) },
 }));
 vi.mock('../../di', () => ({
   TYPES: { ConfigService: 'ConfigService', KitRuntimeService: 'KitRuntimeService', WebhookService: 'WebhookService' },
   container: { get: (tipo: keyof typeof servizi) => servizi[tipo] },
 }));
 
+const kit = (tipiDiExportInKit: unknown[] = []) => ({ idPromo: 'p1', titolo: 'VOL TO', tipiDiExportInKit });
+
+const rispostaConReferenze = {
+  data: { esito: true, errors: [], results: [{ dataFields: [], compiledFields: [], deletedFields: [] }] },
+  status: 200,
+};
+
 function createApp(rispostaIstanta: { data: unknown; status: number }) {
   const referenzeService = {
-    bulkEliminateReferenzeFromGuidIdKitRuntime: vi.fn(async () => ({ acknowledged: true })),
-    bulkCreateReferenze: vi.fn(async () => undefined),
+    sostituisciReferenzeKit: vi.fn(async () => undefined),
   };
   vi.spyOn(ServerUtils, 'sendToFICOApi').mockResolvedValue(rispostaIstanta as any);
 
@@ -42,6 +49,11 @@ function createApp(rispostaIstanta: { data: unknown; status: number }) {
   new ReferenzeController(referenzeService as any).registerRoutes(app);
   return { app, referenzeService };
 }
+
+beforeEach(() => {
+  servizi.KitRuntimeService.getKitRuntimeById.mockResolvedValue(kit());
+  servizi.WebhookService.scatenaEvento.mockClear();
+});
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -58,20 +70,39 @@ describe('GET /api/richiediReferenzeWebpliant', () => {
     const res = await request(app).get('/api/richiediReferenzeWebpliant?id=k1');
 
     expect(res.status).toBe(502);
-    expect(referenzeService.bulkEliminateReferenzeFromGuidIdKitRuntime).not.toHaveBeenCalled();
-    expect(referenzeService.bulkCreateReferenze).not.toHaveBeenCalled();
+    expect(referenzeService.sostituisciReferenzeKit).not.toHaveBeenCalled();
   });
 
-  it('Istanta restituisce le referenze: sostituisce quelle esistenti', async () => {
-    const { app, referenzeService } = createApp({
-      data: { esito: true, errors: [], results: [{ dataFields: [], compiledFields: [], deletedFields: [] }] },
-      status: 200,
-    });
+  it('Istanta restituisce le referenze: sostituisce quelle esistenti in un solo passo', async () => {
+    const { app, referenzeService } = createApp(rispostaConReferenze);
 
     const res = await request(app).get('/api/richiediReferenzeWebpliant?id=k1');
 
     expect(res.status).toBe(200);
-    expect(referenzeService.bulkEliminateReferenzeFromGuidIdKitRuntime).toHaveBeenCalledWith('k1');
-    expect(referenzeService.bulkCreateReferenze).toHaveBeenCalledOnce();
+    expect(referenzeService.sostituisciReferenzeKit).toHaveBeenCalledOnce();
+    expect(referenzeService.sostituisciReferenzeKit).toHaveBeenCalledWith('k1', expect.any(Array));
+  });
+
+  it('il webhook del kit parte dopo il salvataggio delle referenze', async () => {
+    servizi.KitRuntimeService.getKitRuntimeById.mockResolvedValue(kit([{ useWebhook: true, webhookEvents: 'all' }]));
+    const { app, referenzeService } = createApp(rispostaConReferenze);
+
+    const res = await request(app).get('/api/richiediReferenzeWebpliant?id=k1');
+
+    expect(res.status).toBe(200);
+    expect(servizi.WebhookService.scatenaEvento).toHaveBeenCalledOnce();
+    expect(referenzeService.sostituisciReferenzeKit.mock.invocationCallOrder[0])
+      .toBeLessThan(servizi.WebhookService.scatenaEvento.mock.invocationCallOrder[0]);
+  });
+
+  it('salvataggio fallito: errore e nessun webhook', async () => {
+    servizi.KitRuntimeService.getKitRuntimeById.mockResolvedValue(kit([{ useWebhook: true, webhookEvents: 'all' }]));
+    const { app, referenzeService } = createApp(rispostaConReferenze);
+    referenzeService.sostituisciReferenzeKit.mockRejectedValueOnce(new Error('db non raggiungibile'));
+
+    const res = await request(app).get('/api/richiediReferenzeWebpliant?id=k1');
+
+    expect(res.status).toBe(500);
+    expect(servizi.WebhookService.scatenaEvento).not.toHaveBeenCalled();
   });
 });

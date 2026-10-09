@@ -14,6 +14,7 @@ import {
   ReferenzeIstanta
 } from '../../../lib/types';
 import config from '../config';
+import { sequelize } from '../db/SequelizeConnector';
 import { IReferenzeService } from '../interfaces/IReferenzeService';
 import { IWebPliantService } from '../interfaces/IWebPliantService';
 import { log } from '../logger';
@@ -67,6 +68,28 @@ function referenzaToSnakeCase(ref: ReferenzeIstanta): any {
     createdAt: ref.createdAt ?? new Date(),
     updatedAt: ref.updatedAt ?? new Date(),
   };
+}
+
+/**
+ * Sostituisce le referenze di un kit runtime con un nuovo insieme (spec referenze-webpliant,
+ * "Sostituzione per runtime"). Cancellazione e inserimento stanno in una sola transazione:
+ * se l'inserimento fallisce il kit resta con le referenze di prima, non vuoto.
+ * Esportata anche fuori dalla classe perche FileManagementService non ha il service iniettato.
+ */
+export async function sostituisciReferenzeKit(idKitRuntime: string, referenze: ReferenzeIstanta[]): Promise<any> {
+  try {
+    return await sequelize.transaction(async (transaction) => {
+      await Referenze.destroy({ where: { id_runtime_kit: idKitRuntime }, transaction });
+      return Referenze.bulkCreate(referenze.map(referenzaToSnakeCase), { transaction });
+    });
+  } catch (error) {
+    throw wrapDatabaseError(error, {
+      message: "Errore durante la sostituzione delle referenze del kit",
+      operation: 'replace',
+      entity: 'ReferenzeIstanta',
+      details: { idKitRuntime }
+    });
+  }
 }
 
 /**
@@ -228,33 +251,8 @@ export class ReferenzeService implements IReferenzeService {
     }
   }
 
-  async bulkCreateReferenze(refs: ReferenzeIstanta[]): Promise<any> {
-    try {
-      const pgRefs = refs.map(referenzaToSnakeCase);
-      const result = await Referenze.bulkCreate(pgRefs);
-      return result;
-    } catch (error: any) {
-      throw wrapDatabaseError(new Error("Errore durante la creazione della referenza"), {
-        message: "Errore durante la creazione della referenza",
-        operation: 'insertMany',
-        entity: 'ReferenzeIstanta',
-        details: { error }
-      });
-    }
-  }
-
-  async bulkEliminateReferenzeFromGuidIdKitRuntime(idKitRuntime: string): Promise<any> {
-    try {
-      const result = await Referenze.destroy({ where: { id_runtime_kit: idKitRuntime } });
-      return result;
-    } catch (error) {
-      throw wrapDatabaseError(new Error("Errore durante l'eliminazione delle referenze"), {
-        message: "Errore durante l'eliminazione delle referenze",
-        operation: 'deleteMany',
-        entity: 'ReferenzeIstanta',
-        details: { error }
-      });
-    }
+  async sostituisciReferenzeKit(idKitRuntime: string, referenze: ReferenzeIstanta[]): Promise<any> {
+    return sostituisciReferenzeKit(idKitRuntime, referenze);
   }
 
   // ─── Ricerca ───────────────────────────────────────────────────────

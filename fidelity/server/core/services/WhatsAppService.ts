@@ -1,6 +1,6 @@
 import fetch from 'node-fetch';
 import crypto from 'node:crypto';
-import { Op, QueryTypes } from 'sequelize';
+import { QueryTypes } from 'sequelize';
 import { v4 as uuidv4 } from 'uuid';
 import { log } from '../logger';
 import {
@@ -57,6 +57,19 @@ type MapResult = {
     params: any[];
     details: ParamDetail[];
 };
+
+type FiltroArea = {
+    type: 'circle' | 'comuni' | 'regioni';
+    center?: [number, number];
+    radiusKm?: number;
+    areaId?: string | null;
+    areaName?: string | null;
+    polygon?: [number, number][][];
+};
+
+// Un numero riceve un solo messaggio: la chiave sono le sole cifre, stessa regola in SQL (anteprima) e in JS (invio)
+const TELEFONO_NORMALIZZATO_SQL = `regexp_replace(u.telefono_utenti, '[^0-9]', '', 'g')`;
+const normalizzaTelefono = (telefono: unknown) => String(telefono ?? '').replace(/[^0-9]/g, '');
 
 export class WhatsAppService implements IWhatsAppService {
     private userService: IUserService;
@@ -797,60 +810,6 @@ export class WhatsAppService implements IWhatsAppService {
         return { success: true };
     }
 
-    async inviaBroadcastMessaggi(
-        msg: string
-    ): Promise<{ successo: boolean; errore?: string }> {
-        try {
-            const arrRub = await this.userService.getUtentiWhatsappAttivi();
-            let error = '';
-
-            for (const item of arrRub) {
-                try {
-                    const response = await fetch(
-                        'https://waapi.app/api/v1/instances/30974/client/action/send-message',
-                        {
-                            method: 'POST',
-                            headers: {
-                                accept: 'application/json',
-                                'content-type': 'application/json',
-                                authorization: 'Bearer ' + process.env['WHATSAPP_API_KEY']
-                            },
-                            body: JSON.stringify({
-                                chatId: `39${item.telefono_utenti}@c.us`,
-                                message: msg
-                            })
-                        }
-                    );
-
-                    if (!response.ok) {
-                        error += `Errore nell'invio del messaggio a 39${item.telefono_utenti}: HTTP ${response.status}\n`;
-                    }
-                } catch (err: any) {
-                    error += `Errore nell'invio del messaggio a 39${item.telefono_utenti}: ${err.message}\n`;
-                }
-            }
-
-            if (error) {
-                return { successo: false, errore: error };
-            }
-            return { successo: true };
-        } catch (error) {
-            console.error(
-                Colorize.bgRed(
-                    "Errore durante l'invio dei messaggi broadcast:"
-                ),
-                error
-            );
-            throw new ExternalApiError({
-                message: "Errore durante l'invio dei messaggi broadcast",
-                service: 'WhatsApp',
-                endpoint: 'send-message',
-                details: { code: ErrorCodes.WA_BROADCAST_FAILED },
-                cause: error instanceof Error ? error : undefined
-            });
-        }
-    }
-
     async getAllGDOWhatsapp(): Promise<
         {
             id: string;
@@ -1036,29 +995,33 @@ export class WhatsAppService implements IWhatsAppService {
                 };
             }
 
-            const response = await fetch(
-                `https://graph.facebook.com/v24.0/${credenziali.whatsapp_business_account_id_gdowhatsappnumbers}/message_templates`,
-                {
+            // Meta pagina l'elenco: si segue paging.next fino all'ultima pagina
+            const templates: WhatsAppTemplate[] = [];
+            let url: string | undefined = `https://graph.facebook.com/v24.0/${credenziali.whatsapp_business_account_id_gdowhatsappnumbers}/message_templates?limit=100`;
+            while (url) {
+                const response = await fetch(url, {
                     method: 'GET',
                     headers: {
                         accept: 'application/json',
                         'content-type': 'application/json',
                         authorization: `Bearer ${credenziali.access_token_gdowhatsappnumbers}`
-                    }
+                    },
+                    signal: AbortSignal.timeout(15000)
+                });
+
+                if (!response.ok) {
+                    const error = (await response.json()) as any;
+                    console.error('Errore API Meta:', error);
+                    return {
+                        success: false,
+                        error: `Errore API Meta: ${error.error?.message}`
+                    };
                 }
-            );
 
-            if (!response.ok) {
-                const error = (await response.json()) as any;
-                console.error('Errore API Meta:', error);
-                return {
-                    success: false,
-                    error: `Errore API Meta: ${error.error?.message}`
-                };
+                const data = (await response.json()) as any;
+                templates.push(...((data.data ?? []) as WhatsAppTemplate[]));
+                url = data.paging?.next;
             }
-
-            const data = (await response.json()) as any;
-            const templates = data.data as WhatsAppTemplate[];
             console.log(`Template ricevuti da Meta:`, templates);
 
             const existingTemplates = await GDOWhatsappTemplate.findAll({
@@ -1399,19 +1362,7 @@ export class WhatsAppService implements IWhatsAppService {
         idGdo: string,
         filtri: {
             sesso?: string;
-            callFilter?: {
-                type: 'circle' | 'comuni' | 'regioni';
-                // Per circle
-                center?: [number, number];
-                radiusKm?: number;
-                // Per comuni/regioni
-                areaId?: string | null;
-                areaName?: string | null;
-                polygon?: [number, number][][];
-                // Comuni a entrambi
-                minCalls?: number;
-                lastDays?: number;
-            };
+            callFilter?: FiltroArea;
             dateRange?: string | null; // "YYYY-MM-DD - YYYY-MM-DD"
         }
     ): Promise<{
@@ -1432,17 +1383,6 @@ export class WhatsAppService implements IWhatsAppService {
                 return { count: 0, missing: 0, total: 0, positions: [] };
             }
 
-            // Parsa il dateRange se presente ("YYYY-MM-DD - YYYY-MM-DD")
-            let dataInizio: Date | null = null;
-            let dataFine: Date | null = null;
-            if (filtri.dateRange && typeof filtri.dateRange === 'string') {
-                const parts = filtri.dateRange.split(' - ');
-                if (parts.length === 2) {
-                    dataInizio = new Date(parts[0]);
-                    dataFine = new Date(parts[1]);
-                }
-            }
-
             // Conta tutti i guest attivi (total) - senza filtri
             const total = await Utente.count({
                 where: {
@@ -1452,61 +1392,22 @@ export class WhatsAppService implements IWhatsAppService {
                 }
             });
 
-            // Verifica se c'è un filtro geografico valido
-            const { callFilter } = filtri;
-            const hasGeoFilter = callFilter && (
-                (callFilter.type === 'circle' && callFilter.center && callFilter.radiusKm) ||
-                ((callFilter.type === 'comuni' || callFilter.type === 'regioni') &&
-                    callFilter.polygon && callFilter.polygon.length > 0)
-            );
+            const { where, replacements } = this.filtroDestinatari(utentiGdoIds, filtri);
 
-            let count: number;
-            let positions: { lat: number; lng: number }[];
+            // Telefoni distinti: e' il numero di messaggi che l'invio creera'
+            const [risultato] = await sequelize.query(
+                `SELECT COUNT(DISTINCT ${TELEFONO_NORMALIZZATO_SQL})::int AS count FROM utenti u WHERE ${where}`,
+                { replacements, type: QueryTypes.SELECT }
+            ) as { count: number }[];
+            const count = risultato?.count ?? 0;
 
-            if (hasGeoFilter) {
-                // Query con PostGIS
-                const result = await this.getUtentiCountWithGeoFilter(utentiGdoIds, {
-                    sesso: filtri.sesso,
-                    callFilter,
-                    dataInizio,
-                    dataFine
-                });
-                count = result.count;
-                positions = result.positions;
-            } else {
-                // Query senza filtro geografico
-                const whereGuest: any = {
-                    id_utenti: utentiGdoIds,
-                    tipo_utenti: TIPO_UTENTI.GUEST,
-                    stato_utenti: STATO_UTENTI.ATTIVO
-                };
-
-                if (filtri.sesso && filtri.sesso != "null") {
-                    whereGuest.sesso_utenti = filtri.sesso;
-                }
-
-                if (dataInizio && dataFine) {
-                    whereGuest.datadinascita_utenti = {
-                        [Op.between]: [dataInizio, dataFine]
-                    };
-                }
-
-                count = await Utente.count({ where: whereGuest });
-
-                const positionsRaw = await Utente.findAll({
-                    attributes: ['lat_utenti', 'lon_utenti'],
-                    where: {
-                        ...whereGuest,
-                        lat_utenti: { [Op.ne]: null },
-                        lon_utenti: { [Op.ne]: null }
-                    }
-                });
-
-                positions = positionsRaw.map(pos => ({
-                    lat: pos.lat_utenti!,
-                    lng: pos.lon_utenti!
-                }));
-            }
+            const positions = await sequelize.query(
+                `SELECT u.lat_utenti AS lat, u.lon_utenti AS lng
+                 FROM utenti u
+                 WHERE ${where} AND u.lat_utenti IS NOT NULL AND u.lon_utenti IS NOT NULL
+                 LIMIT 1000`,
+                { replacements, type: QueryTypes.SELECT }
+            ) as { lat: number; lng: number }[];
 
             return {
                 count,
@@ -1533,16 +1434,7 @@ export class WhatsAppService implements IWhatsAppService {
         idGdo: string,
         templateId: string,
         titoloCampagna: string,
-        callFilter: {
-            type: 'circle' | 'comuni' | 'regioni';
-            center?: [number, number];
-            radiusKm?: number;
-            areaId?: string | null;
-            areaName?: string | null;
-            polygon?: [number, number][][];
-            minCalls?: number;
-            lastDays?: number;
-        } | null,
+        callFilter: FiltroArea | null,
         userFilters: {
             sesso?: string | null;
             dateRange?: string | null;
@@ -1575,6 +1467,22 @@ export class WhatsAppService implements IWhatsAppService {
                 });
             }
 
+            // Template di un'altra GDO o non approvato: nessun job, Meta rifiuterebbe comunque ogni invio
+            if (template.id_gdo_gdowhatsapptemplate !== idGdo) {
+                throw new BusinessError({
+                    message: 'Il template non appartiene alla GDO dell\'utente',
+                    rule: 'WA_TEMPLATE_ALTRA_GDO',
+                    details: { templateId }
+                });
+            }
+            if (template.stato_meta_gdowhatsapptemplate !== STATO_GDO_WHATSAPP_TEMPLATE.APPROVED) {
+                throw new BusinessError({
+                    message: `Il template non è approvato da Meta (stato: ${template.stato_meta_gdowhatsapptemplate})`,
+                    rule: 'WA_TEMPLATE_NON_APPROVATO',
+                    details: { templateId, stato: template.stato_meta_gdowhatsapptemplate }
+                });
+            }
+
             const templateMeta = template.json_meta_gdowhatsapptemplate;
             if (!templateMeta) {
                 throw new BadRequestError({
@@ -1602,57 +1510,12 @@ export class WhatsAppService implements IWhatsAppService {
 
             const presetMeta = defaultPreset.json_meta_gdowhatsappreset;
 
-            // 3. Parsa il dateRange se presente ("YYYY-MM-DD - YYYY-MM-DD")
-            let dataInizio: Date | null = null;
-            let dataFine: Date | null = null;
-            if (userFilters.dateRange && typeof userFilters.dateRange === 'string') {
-                const parts = userFilters.dateRange.split(' - ');
-                if (parts.length === 2) {
-                    dataInizio = new Date(parts[0]);
-                    dataFine = new Date(parts[1]);
-                }
-            }
-
-            // 4. Filtra utenti con i criteri forniti - FETCH FULL USER DATA
-            const hasGeoFilter = callFilter && (
-                (callFilter.type === 'circle' && callFilter.center && callFilter.radiusKm) ||
-                ((callFilter.type === 'comuni' || callFilter.type === 'regioni') &&
-                    callFilter.polygon && callFilter.polygon.length > 0)
-            );
-
-            let utenti: any[];
-
-            if (hasGeoFilter) {
-                // Usa la query PostGIS ma recupera tutti i dati dell'utente
-                utenti = await this.getUtentiWithGeoFilter(utentiGdoIds, {
-                    sesso: userFilters.sesso || undefined,
-                    callFilter,
-                    dataInizio,
-                    dataFine
-                });
-            } else {
-                const whereGuest: any = {
-                    id_utenti: utentiGdoIds,
-                    tipo_utenti: TIPO_UTENTI.GUEST,
-                    stato_utenti: STATO_UTENTI.ATTIVO,
-                    telefono_utenti: { [Op.ne]: null }
-                };
-
-                if (userFilters.sesso) {
-                    whereGuest.sesso_utenti = userFilters.sesso;
-                }
-
-                if (dataInizio && dataFine) {
-                    whereGuest.datadinascita_utenti = {
-                        [Op.between]: [dataInizio, dataFine]
-                    };
-                }
-
-                utenti = await Utente.findAll({
-                    where: whereGuest,
-                    raw: true
-                });
-            }
+            // 3. Filtra utenti con gli stessi criteri dell'anteprima - FETCH FULL USER DATA
+            const { where, replacements } = this.filtroDestinatari(utentiGdoIds, { ...userFilters, callFilter });
+            const utenti = await sequelize.query(`SELECT u.* FROM utenti u WHERE ${where}`, {
+                replacements,
+                type: QueryTypes.SELECT
+            }) as any[];
 
             if (utenti.length === 0) {
                 throw new BusinessError({
@@ -1664,12 +1527,16 @@ export class WhatsAppService implements IWhatsAppService {
 
             console.log(Colorize.bgBlue(`📦 Creazione campagna: ${utenti.length} destinatari`));
 
-            // 5. Prepara i messaggi personalizzati per ogni utente
+            // 4. Prepara i messaggi personalizzati per ogni utente
             const jobs: Array<{ telefono: string; body: any }> = [];
+            const telefoniInseriti = new Set<string>();
 
             for (const utente of utenti) {
                 const telefono = utente.telefono_utenti;
-                if (!telefono) continue;
+                // Piu' utenti possono avere lo stesso numero: un solo messaggio per numero
+                const chiaveTelefono = normalizzaTelefono(telefono);
+                if (!chiaveTelefono || telefoniInseriti.has(chiaveTelefono)) continue;
+                telefoniInseriti.add(chiaveTelefono);
 
                 // Mappa i dati dell'utente al formato richiesto
                 const userData: UserData = {
@@ -1708,7 +1575,7 @@ export class WhatsAppService implements IWhatsAppService {
 
             console.log(Colorize.green(`✅ Generati ${jobs.length} messaggi personalizzati`));
 
-            // 6. Crea i job nella queue
+            // 5. Crea i job nella queue
             const queueService = new WhatsappQueueService();
             const result = await queueService.createBulkJobs({
                 titoloCampagna,
@@ -1747,39 +1614,41 @@ export class WhatsAppService implements IWhatsAppService {
 
 
     /**
-     * Query con filtri geografici PostGIS - restituisce i dati completi degli utenti
+     * WHERE (alias u) dei destinatari di una campagna: unico per anteprima e invio,
+     * cosi' il numero mostrato prima dell'avvio e' quello dei messaggi creati.
      */
-    private async getUtentiWithGeoFilter(
+    private filtroDestinatari(
         utentiGdoIds: string[],
-        filtri: {
-            sesso?: string;
-            callFilter?: {
-                type: 'circle' | 'comuni' | 'regioni';
-                center?: [number, number];
-                radiusKm?: number;
-                polygon?: [number, number][][];
-            };
-            dataInizio: Date | null;
-            dataFine: Date | null;
-        }
-    ): Promise<any[]> {
-
-        const { callFilter, sesso, dataInizio, dataFine } = filtri;
-
-        let geoClause = '';
+        filtri: { sesso?: string | null; dateRange?: string | null; callFilter?: FiltroArea | null }
+    ): { where: string; replacements: Record<string, any> } {
+        // Parsa il dateRange se presente ("YYYY-MM-DD - YYYY-MM-DD")
+        const parts = typeof filtri.dateRange === 'string' ? filtri.dateRange.split(' - ') : [];
         const replacements: Record<string, any> = {
             utentiIds: utentiGdoIds,
             tipoUtenti: TIPO_UTENTI.GUEST,
             statoUtenti: STATO_UTENTI.ATTIVO,
-            sesso: sesso || null,
-            dataInizio: dataInizio,
-            dataFine: dataFine
+            // Il client puo' mandare la stringa "null" (filtro sesso vuoto): nessun filtro
+            sesso: filtri.sesso && filtri.sesso !== 'null' ? filtri.sesso : null,
+            dataInizio: parts.length === 2 ? new Date(parts[0]) : null,
+            dataFine: parts.length === 2 ? new Date(parts[1]) : null
         };
 
+        let where = `
+            u.id_utenti IN (:utentiIds)
+            AND u.tipo_utenti = :tipoUtenti
+            AND u.stato_utenti = :statoUtenti
+            AND ${TELEFONO_NORMALIZZATO_SQL} <> ''
+            AND (:sesso IS NULL OR u.sesso_utenti = :sesso)
+            AND (:dataInizio IS NULL OR u.datadinascita_utenti >= :dataInizio)
+            AND (:dataFine IS NULL OR u.datadinascita_utenti <= :dataFine)
+        `;
+
+        const { callFilter } = filtri;
         if (callFilter?.type === 'circle' && callFilter.center && callFilter.radiusKm) {
             // Filtro cerchio
             const [lat, lon] = callFilter.center;
-            geoClause = `
+            where += `
+            AND u.geom_utenti IS NOT NULL
             AND ST_DWithin(
                 u.geom_utenti::geography,
                 ST_SetSRID(ST_MakePoint(:centerLon, :centerLat), 4326)::geography,
@@ -1789,236 +1658,23 @@ export class WhatsAppService implements IWhatsAppService {
             replacements.centerLat = lat;
             replacements.centerLon = lon;
             replacements.radiusMeters = callFilter.radiusKm * 1000;
-
         } else if (
             (callFilter?.type === 'comuni' || callFilter?.type === 'regioni') &&
             callFilter.polygon &&
             callFilter.polygon.length > 0
         ) {
             // Filtro poligono
-            const polygonWkt = this.polygonToWKT(callFilter.polygon);
-            geoClause = `
+            where += `
+            AND u.geom_utenti IS NOT NULL
             AND ST_Contains(
                 ST_GeomFromText(:polygonWkt, 4326),
                 u.geom_utenti
             )
         `;
-            replacements.polygonWkt = polygonWkt;
+            replacements.polygonWkt = this.polygonToWKT(callFilter.polygon);
         }
 
-        const query = `
-        SELECT u.*
-        FROM utenti u
-        WHERE
-            u.id_utenti IN (:utentiIds)
-            AND u.tipo_utenti = :tipoUtenti
-            AND u.stato_utenti = :statoUtenti
-            AND u.geom_utenti IS NOT NULL
-            AND u.telefono_utenti IS NOT NULL
-            AND (:sesso IS NULL OR u.sesso_utenti = :sesso)
-            AND (:dataInizio IS NULL OR u.datadinascita_utenti >= :dataInizio)
-            AND (:dataFine IS NULL OR u.datadinascita_utenti <= :dataFine)
-            ${geoClause}
-    `;
-
-        const result = await sequelize.query(query, {
-            replacements,
-            type: QueryTypes.SELECT
-        }) as any[];
-
-        return result || [];
-    }
-
-    /**
-     * Query con filtri geografici PostGIS - restituisce count e positions
-     * (usata per getAllUtentiGuestWhatsappCount)
-     */
-    private async getUtentiCountWithGeoFilter(
-        utentiGdoIds: string[],
-        filtri: {
-            sesso?: string;
-            callFilter?: {
-                type: 'circle' | 'comuni' | 'regioni';
-                center?: [number, number];
-                radiusKm?: number;
-                polygon?: [number, number][][];
-            };
-            dataInizio: Date | null;
-            dataFine: Date | null;
-        }
-    ): Promise<{ count: number; positions: { lat: number; lng: number }[] }> {
-
-        const { callFilter, sesso, dataInizio, dataFine } = filtri;
-
-        let geoClause = '';
-        const replacements: Record<string, any> = {
-            utentiIds: utentiGdoIds,
-            tipoUtenti: TIPO_UTENTI.GUEST,
-            statoUtenti: STATO_UTENTI.ATTIVO,
-            sesso: sesso || null,
-            dataInizio: dataInizio,
-            dataFine: dataFine
-        };
-
-        if (callFilter?.type === 'circle' && callFilter.center && callFilter.radiusKm) {
-            // Filtro cerchio
-            const [lat, lon] = callFilter.center;
-            geoClause = `
-            AND ST_DWithin(
-                u.geom_utenti::geography,
-                ST_SetSRID(ST_MakePoint(:centerLon, :centerLat), 4326)::geography,
-                :radiusMeters
-            )
-        `;
-            replacements.centerLat = lat;
-            replacements.centerLon = lon;
-            replacements.radiusMeters = callFilter.radiusKm * 1000;
-
-        } else if (
-            (callFilter?.type === 'comuni' || callFilter?.type === 'regioni') &&
-            callFilter.polygon &&
-            callFilter.polygon.length > 0
-        ) {
-            // Filtro poligono
-            const polygonWkt = this.polygonToWKT(callFilter.polygon);
-            geoClause = `
-            AND ST_Contains(
-                ST_GeomFromText(:polygonWkt, 4326),
-                u.geom_utenti
-            )
-        `;
-            replacements.polygonWkt = polygonWkt;
-        }
-
-        const query = `
-        SELECT
-            COUNT(*)::int as count
-        FROM utenti u
-        WHERE
-            u.id_utenti IN (:utentiIds)
-            AND u.tipo_utenti = :tipoUtenti
-            AND u.stato_utenti = :statoUtenti
-            AND u.geom_utenti IS NOT NULL
-            AND (:sesso IS NULL OR u.sesso_utenti = :sesso)
-            AND (:dataInizio IS NULL OR u.datadinascita_utenti >= :dataInizio)
-            AND (:dataFine IS NULL OR u.datadinascita_utenti <= :dataFine)
-            ${geoClause}
-    `;
-
-        const positionsQuery = `
-        SELECT u.lat_utenti as lat, u.lon_utenti as lng
-        FROM utenti u
-        WHERE
-            u.id_utenti IN (:utentiIds)
-            AND u.tipo_utenti = :tipoUtenti
-            AND u.stato_utenti = :statoUtenti
-            AND u.geom_utenti IS NOT NULL
-            AND u.lat_utenti IS NOT NULL
-            AND u.lon_utenti IS NOT NULL
-            AND (:sesso IS NULL OR u.sesso_utenti = :sesso)
-            AND (:dataInizio IS NULL OR u.datadinascita_utenti >= :dataInizio)
-            AND (:dataFine IS NULL OR u.datadinascita_utenti <= :dataFine)
-            ${geoClause}
-        LIMIT 1000
-    `;
-
-        const [countResult] = await sequelize.query(query, {
-            replacements,
-            type: QueryTypes.SELECT
-        }) as any[];
-
-        const positionsResult = await sequelize.query(positionsQuery, {
-            replacements,
-            type: QueryTypes.SELECT
-        }) as { lat: number; lng: number }[];
-
-        return {
-            count: countResult?.count || 0,
-            positions: positionsResult || []
-        };
-    }
-
-    /**
-     * Variante di getUtentiWithGeoFilter che restituisce i telefoni degli utenti
-     */
-    private async getUtentiTelefoniWithGeoFilter(
-        utentiGdoIds: string[],
-        filtri: {
-            sesso?: string;
-            callFilter?: {
-                type: 'circle' | 'comuni' | 'regioni';
-                center?: [number, number];
-                radiusKm?: number;
-                polygon?: [number, number][][];
-            };
-            dataInizio: Date | null;
-            dataFine: Date | null;
-        }
-    ): Promise<string[]> {
-        const { callFilter, sesso, dataInizio, dataFine } = filtri;
-
-        let geoClause = '';
-        const replacements: Record<string, any> = {
-            utentiIds: utentiGdoIds,
-            tipoUtenti: TIPO_UTENTI.GUEST,
-            statoUtenti: STATO_UTENTI.ATTIVO,
-            sesso: sesso || null,
-            dataInizio: dataInizio,
-            dataFine: dataFine
-        };
-
-        if (callFilter?.type === 'circle' && callFilter.center && callFilter.radiusKm) {
-            // Filtro cerchio
-            const [lat, lon] = callFilter.center;
-            geoClause = `
-            AND ST_DWithin(
-                u.geom_utenti::geography,
-                ST_SetSRID(ST_MakePoint(:centerLon, :centerLat), 4326)::geography,
-                :radiusMeters
-            )
-        `;
-            replacements.centerLat = lat;
-            replacements.centerLon = lon;
-            replacements.radiusMeters = callFilter.radiusKm * 1000;
-
-        } else if (
-            (callFilter?.type === 'comuni' || callFilter?.type === 'regioni') &&
-            callFilter.polygon &&
-            callFilter.polygon.length > 0
-        ) {
-            // Filtro poligono
-            const polygonWkt = this.polygonToWKT(callFilter.polygon);
-            geoClause = `
-            AND ST_Contains(
-                ST_GeomFromText(:polygonWkt, 4326),
-                u.geom_utenti
-            )
-        `;
-            replacements.polygonWkt = polygonWkt;
-        }
-
-        const telefoniQuery = `
-        SELECT u.telefono_utenti as telefono
-        FROM utenti u
-        WHERE
-            u.id_utenti IN (:utentiIds)
-            AND u.tipo_utenti = :tipoUtenti
-            AND u.stato_utenti = :statoUtenti
-            AND u.geom_utenti IS NOT NULL
-            AND u.telefono_utenti IS NOT NULL
-            AND u.telefono_utenti != ''
-            AND (:sesso IS NULL OR u.sesso_utenti = :sesso)
-            AND (:dataInizio IS NULL OR u.datadinascita_utenti >= :dataInizio)
-            AND (:dataFine IS NULL OR u.datadinascita_utenti <= :dataFine)
-            ${geoClause}
-    `;
-
-        const telefoniResult = await sequelize.query(telefoniQuery, {
-            replacements,
-            type: QueryTypes.SELECT
-        }) as { telefono: string }[];
-
-        return telefoniResult.map(r => r.telefono);
+        return { where, replacements };
     }
 
     /**

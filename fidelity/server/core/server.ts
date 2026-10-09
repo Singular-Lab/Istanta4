@@ -42,9 +42,11 @@ import {
   initializeQueryProfiler
 } from './monitoring';
 import { applyRoutes } from './routes';
+import { AuditLogService } from './services/AuditLogService';
 import { initializeBackgroundServices } from './services/startup';
 import { sessionMiddleware } from './session';
 import { asyncHandler } from './utils/asyncHandler';
+import { getWhatsappQueueWorker } from './workers/WhatsappQueueWorker';
 import healthRouter from '../src/app/http/health.routes.js';
 import metricsRouter from '../src/app/http/metrics.routes.js';
 import { metricsMiddleware } from '../src/shared/observability/metrics.js';
@@ -218,17 +220,31 @@ export async function createActualServer() {
     });
   });
   // Gestione dei segnali di terminazione
+  let inChiusura = false;
   const handleShutdown = (signal: string) => {
+    // Il segnale può arrivare sia da PM2 sia inoltrato dal primary: si chiude una volta sola
+    if (inChiusura) return;
+    inChiusura = true;
     log.info(`Ricevuto segnale ${signal}, avvio spegnimento controllato...`);
 
     getConnectionMonitor()?.stopMonitoring();
     getQueryProfiler()?.stopProfiling();
 
+    // Nessun nuovo invio WhatsApp durante lo spegnimento
+    const whatsappWorker = getWhatsappQueueWorker();
+    if (whatsappWorker.isActive()) whatsappWorker.stop();
+
+    // Audit in memoria scritto subito, nel caso la chiusura HTTP si blocchi...
+    const audit = AuditLogService.getInstance();
+    void audit.forceFlush();
+
     // Chiudi il server HTTP in modo pulito
     httpServer.close(() => {
       log.info('Server HTTP chiuso con successo');
 
-      closeRedisClient()
+      // ...e di nuovo a richieste concluse, attendendo le scritture su DB
+      audit.forceFlush()
+        .then(() => closeRedisClient())
         .catch(() => undefined)
         .finally(() => {
           log.info('Terminazione processo completata');

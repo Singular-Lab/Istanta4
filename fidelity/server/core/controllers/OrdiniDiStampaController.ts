@@ -117,6 +117,9 @@ export class OrdiniDiStampaController extends BaseController {
       const { idOrdineDiStampa, kitIds } = req.body as { idOrdineDiStampa: string; kitIds: Record<string, boolean> };
       const socketId = `ftp_progress_${idOrdineDiStampa}_${Date.now()}`;
 
+      // Prima della risposta: un secondo avvio dello stesso ordine viene rifiutato subito
+      const statoPrecedente = await this.ordiniStampaService.prenotaInvio(idOrdineDiStampa);
+
       AuditLogService.getInstance().bulkOperation(req, 'ordine_stampa', 'ftp_start', { ordineId: idOrdineDiStampa });
       res.status(HttpStatusCode.OK).json({
         esito: true,
@@ -128,7 +131,8 @@ export class OrdiniDiStampaController extends BaseController {
         req,
         idOrdineDiStampa,
         kitIds,
-        socketId
+        socketId,
+        statoPrecedente
       });
     } catch (error: any) {
       this.handleError(res, error);

@@ -77,11 +77,6 @@ export class ReferenzeController extends BaseController {
         // senza la lista non c'è nulla con cui sostituire le referenze: è un fallimento
         (d) => esitoIstanta(d) && Array.isArray(d.results)
       );
-      const eliminazioneRefs = await this.referenzeService.bulkEliminateReferenzeFromGuidIdKitRuntime(idKitRuntime);
-      if (eliminazioneRefs.acknowledged == false) {
-        res.status(HttpStatusCode.INTERNAL_SERVER_ERROR).json({ message: "Errore durante l'eliminazione delle referenze", error: eliminazioneRefs.error });
-        return;
-      }
       const cfg = configWebpliant.data_fields_refs;
       //aggiunta campi
       for (let i = 0; i < referenze.length; i++) {
@@ -126,6 +121,8 @@ export class ReferenzeController extends BaseController {
         ],
         stato: STATO_LOG_FILE.PUBBLICATO
       }
+      await this.referenzeService.sostituisciReferenzeKit(idKitRuntime, referenze);
+      // Il webhook annuncia referenze gia salvate: parte solo dopo la sostituzione riuscita
       log.debug('Tipi di export nel kit runtime', { tipiDiExportInKit: runtimekit.tipiDiExportInKit });
       if (runtimekit.tipiDiExportInKit && runtimekit.tipiDiExportInKit.some((tipo: OggettoTipiDiExport) =>
         tipo.useWebhook && (tipo.webhookEvents === EVENTI_WEBHOOK.KIT_MATERIALE_ARRIVATO || tipo.webhookEvents === 'all'))) {
@@ -147,7 +144,6 @@ export class ReferenzeController extends BaseController {
           // Continuiamo l'esecuzione anche se il webhook fallisce
         }
       }
-      await this.referenzeService.bulkCreateReferenze(referenze);
       await container.get<IKitRuntimeService>(TYPES.KitRuntimeService).insertNewFileRuntimeLog(fileLog);
       res.status(HttpStatusCode.OK).json({ esito: true, content: referenze, error: "" });
     } catch (error: any) {

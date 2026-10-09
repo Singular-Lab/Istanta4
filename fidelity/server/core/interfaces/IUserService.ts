@@ -84,7 +84,6 @@ export interface IUserService {
     sesso?: string;
     meta?: UtentiMeta;
   }, currentUserId: string): Promise<UtenteAttributes>;
-  getUtentiWhatsappAttivi(): Promise<any[]>;
   autenticaUtenteFico(req: Request): Promise<any>;
   getPrivateKey(idUtente: string): Promise<string | undefined>;
   autenticaUtenteAD(req: Request): Promise<any>;

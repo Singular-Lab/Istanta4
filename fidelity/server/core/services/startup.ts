@@ -22,9 +22,20 @@ export const initializeScheduledJobs = (): void => {
 };
 
 /**
+ * In cluster cron e coda WhatsApp girano solo nel worker 1 (cluster.ts lo riforka con lo stesso indice);
+ * senza cluster (sviluppo) WORKER_INDEX manca e partono come sempre.
+ */
+export const deveAvviareServiziBackground = (workerIndex = process.env.WORKER_INDEX): boolean =>
+  (workerIndex ?? '1') === '1';
+
+/**
  * Inizializza tutti i servizi di background necessari
  */
 export const initializeBackgroundServices = (): void => {
+  if (!deveAvviareServiziBackground()) {
+    log.info(`Worker ${process.env.WORKER_INDEX}: servizi di background non avviati (girano solo nel worker 1)`);
+    return;
+  }
   initializeScheduledJobs();
   // Seed dati di default per Hub (auth providers e servizi)
   //seedHubData().catch(err => log.error('Errore seed hub data:', err));

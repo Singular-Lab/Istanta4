@@ -228,7 +228,9 @@ class ServerUtils {
             const options: RequestInit = {
                 method: method,
                 headers: headers,
-                body: method !== 'GET' && method !== 'HEAD' ? (data instanceof FormData ? data : JSON.stringify(data)) : undefined
+                body: method !== 'GET' && method !== 'HEAD' ? (data instanceof FormData ? data : JSON.stringify(data)) : undefined,
+                // Default alto: Istanta/Olimpo possono fare trasferimenti FTP lunghi. Il timeout finisce nel catch (status 0)
+                signal: AbortSignal.timeout(Number(process.env.FICO_API_TIMEOUT_MS) || 600_000)
             };
             //console.log(Colorize.bgBlue(url));
             // Usa il fetch con il cookie jar isolato.

@@ -550,8 +550,7 @@ export class ExternalApiController extends BaseController {
 
       // Un sync descrive lo stato completo del kit: sostituisce le referenze precedenti
       // invece di accodarle, cosi un re-sync non duplica ne lascia dati vecchi (es. guidId rotti).
-      await referenzeService.bulkEliminateReferenzeFromGuidIdKitRuntime(payload.kitGuidId);
-      await referenzeService.bulkCreateReferenze(datoReferenze.concat(referenzeFantasma))
+      await referenzeService.sostituisciReferenzeKit(payload.kitGuidId, datoReferenze.concat(referenzeFantasma));
 
       /*
         Da qui la lavorazione e "recuperata dallo storico": l'esito sta sul kit e le

@@ -98,6 +98,8 @@ export class AuditLogService {
   private readonly BUFFER_SIZE = 100;
   private readonly FLUSH_INTERVAL = 30000; // 30 secondi
   private repository: IAuditLogRepository | null = null;
+  // Scritture su DB avviate e non ancora concluse: forceFlush le attende
+  private scrittureInCorso = new Set<Promise<void>>();
 
   private readonly SENSITIVE_IP_DETAIL_KEYS = new Set([
     'ip',
@@ -358,9 +360,12 @@ export class AuditLogService {
     // Persistenza su DB (fire-and-forget, non blocca)
     if (this.repository) {
       const rows = events.map(e => this.mapEventToDbRow(e));
-      this.repository.bulkInsert(rows).catch(err => {
-        log.error('AuditLogService: errore persistenza DB', err instanceof Error ? err : new Error(String(err)));
-      });
+      const scrittura: Promise<void> = this.repository.bulkInsert(rows)
+        .catch(err => {
+          log.error('AuditLogService: errore persistenza DB', err instanceof Error ? err : new Error(String(err)));
+        })
+        .finally(() => this.scrittureInCorso.delete(scrittura));
+      this.scrittureInCorso.add(scrittura);
     }
   }
 
@@ -777,10 +782,12 @@ export class AuditLogService {
   }
 
   /**
-   * Forza il flush del buffer (utile per shutdown graceful)
+   * Forza il flush del buffer e si risolve a scritture su DB concluse, comprese quelle
+   * gia' avviate (shutdown graceful). Non rigetta: gli errori di persistenza sono loggati.
    */
-  public forceFlush(): void {
+  public async forceFlush(): Promise<void> {
     this.flushBuffer();
+    await Promise.all(this.scrittureInCorso);
   }
 
   /**

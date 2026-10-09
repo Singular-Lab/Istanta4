@@ -316,7 +316,7 @@ export class FileManagementController extends BaseController {
         this.sendResponse(res, HttpStatusCode.BAD_REQUEST, { message: 'No file uploaded' });
         return;
       }
-      const result = await this.fileManagementService.uploadForzatoImmaginiOlimpo(req.file, req.body.guidId);
+      const result = await this.fileManagementService.uploadForzatoImmaginiOlimpo(req.file, req.body.guidId, req);
       this.sendResponse(res, HttpStatusCode.OK, result);
     } catch (error) {
       this.handleError(res, error as Error);
@@ -329,7 +329,7 @@ export class FileManagementController extends BaseController {
         this.sendResponse(res, HttpStatusCode.BAD_REQUEST, { message: 'No file uploaded' });
         return;
       }
-      const result = await this.fileManagementService.updateImmagineReferenza(req.file, req.body);
+      const result = await this.fileManagementService.updateImmagineReferenza(req.file, req.body, req);
       this.sendResponse(res, HttpStatusCode.OK, result);
     } catch (error) {
       this.handleError(res, error as Error);
@@ -342,7 +342,7 @@ export class FileManagementController extends BaseController {
         this.sendResponse(res, HttpStatusCode.BAD_REQUEST, { message: 'No file uploaded' });
         return;
       }
-      const result = await this.fileManagementService.updateImmagineGruppoReferenza(req.file, req.body);
+      const result = await this.fileManagementService.updateImmagineGruppoReferenza(req.file, req.body, req);
       this.sendResponse(res, HttpStatusCode.OK, result);
     } catch (error) {
       this.handleError(res, error as Error);

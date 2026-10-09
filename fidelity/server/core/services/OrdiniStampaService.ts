@@ -7,11 +7,12 @@ import { v4 as uuidv4 } from 'uuid';
 import { log } from '../logger';
 import { decryptString, encryptString } from '../../../lib/encryption';
 import { CATEGORIA_ATTIVITA, STATO_LAVORAZIONE_KIT_RUNTIME, STATO_ORDINI_STAMPA, TIPO_ATTIVITA } from '../../../lib/enums';
-import { BadRequestError, ExternalApiError, NotFoundError, wrapDatabaseError } from '../../../lib/errors';
+import { BadRequestError, BusinessError, ExternalApiError, NotFoundError, wrapDatabaseError } from '../../../lib/errors';
 import { ContrattoTipografiaAttributes, FileItemKit, FileTreeCondition, FileTreeNode, MergedGroupFile, OrdiniDiStampaAttributes, RUNTIME_KIT_MONGO, RootFileTree, VirtualDirectory } from '../../../lib/types';
 import { emitToClients } from '../../ws-server';
 import { roomUtente } from '../utils/socketRooms';
 import config from '../config';
+import { sequelize } from '../db/SequelizeConnector';
 import { AreaResponseDTO, CanaleResponseDTO, ContrattoTipografiaResponseDTO, type OrdiniDiStampaResponseDTO, type PromoResponseDTO } from '../dto';
 import { IGdoService } from '../interfaces/IGdoService';
 import { IKitRuntimeService } from '../interfaces/IKitRuntimeService';
@@ -35,6 +36,8 @@ interface ProcessFTPPopOlimpoParams {
   idOrdineDiStampa: string;
   kitIds: Record<string, boolean>;
   socketId: string;
+  // Restituito da prenotaInvio: lo stato da ripristinare se l'ordine non risulta completo
+  statoPrecedente: STATO_ORDINI_STAMPA;
 }
 
 interface EmitProgressParams {
@@ -106,6 +109,8 @@ export interface GroupingJobState {
 }
 
 const GROUPING_JOB_TTL_MS = 60 * 60 * 1000; // 1 hour
+// Oltre questa eta' un IN_INVIO e' considerato residuo di un invio interrotto (es. riavvio del server)
+const INVIO_IN_CORSO_MS = 30 * 60 * 1000;
 
 export class OrdiniStampaService implements IOrdiniStampaService {
 
@@ -300,9 +305,31 @@ export class OrdiniStampaService implements IOrdiniStampaService {
 
 
 
-  async processFTPPopOlimpo({ req, idOrdineDiStampa, kitIds, socketId }: ProcessFTPPopOlimpoParams): Promise<void> {
+  /** Porta l'ordine in IN_INVIO e restituisce lo stato da ripristinare a fine invio. */
+  async prenotaInvio(idOrdineDiStampa: string): Promise<STATO_ORDINI_STAMPA> {
+    return sequelize.transaction(async (t) => {
+      // Lock sulla riga: due avvii concorrenti non devono superare entrambi il controllo
+      const ordine = await OrdiniDiStampa.findByPk(idOrdineDiStampa, { transaction: t, lock: t.LOCK.UPDATE });
+      if (!ordine) {
+        throw new NotFoundError({ message: "Ordine di stampa non trovato", entityType: 'OrdiniDiStampa', entityId: idOrdineDiStampa });
+      }
+      const stato = ordine.stato_ordinistampa;
+      const ultimoAggiornamento = ordine.updatedat ? new Date(ordine.updatedat).getTime() : 0;
+      if (stato === STATO_ORDINI_STAMPA.IN_INVIO && Date.now() - ultimoAggiornamento < INVIO_IN_CORSO_MS) {
+        throw new BusinessError({ message: "Invio già in corso per questo ordine", rule: "Un ordine di stampa si invia una volta alla volta" });
+      }
+      // timestamps:false: updatedat va scritto a mano, misura l'eta' del blocco
+      await ordine.update({ stato_ordinistampa: STATO_ORDINI_STAMPA.IN_INVIO, updatedat: new Date() }, { transaction: t });
+      return stato === STATO_ORDINI_STAMPA.IN_INVIO ? STATO_ORDINI_STAMPA.IN_REVISIONE : stato;
+    });
+  }
+
+  async processFTPPopOlimpo({ req, idOrdineDiStampa, kitIds, socketId, statoPrecedente }: ProcessFTPPopOlimpoParams): Promise<void> {
     // Avanzamento ed esito solo a chi ha avviato l'operazione.
     const emit = (event: string, data: unknown) => emitToClients(event, data, roomUtente(req.session.id_utente as string));
+    // L'ordine non resta IN_INVIO: senza completamento torna allo stato precedente
+    let statoFinale = statoPrecedente;
+    let esitoFinale: EmitCompleteParams | undefined;
     try {
       // Funzione di utilità per individuare file duplicati (problema nei kit)
       const fileProblematici = (allKit: RUNTIME_KIT_MONGO[]): FileItemKit[][] => {
@@ -443,6 +470,9 @@ export class OrdiniStampaService implements IOrdiniStampaService {
 
       const totalKits = kitsToProcess.length;
       let processedKits = 0;
+      // Solo i kit confermati da Olimpo entrano nel report: gli altri restano da inviare
+      const kitInviati: any[] = [];
+      const kitFalliti: any[] = [];
 
       // Elaborazione di ciascun kit
       for (const kit of kitsToProcess) {
@@ -490,11 +520,14 @@ export class OrdiniStampaService implements IOrdiniStampaService {
         );
 
         if (!resultAPI.data || !resultAPI.data.esito) {
+          kitFalliti.push(kit);
           emit(`${socketId}_error`, {
             error: `Errore durante la creazione delle cartelle per il kit ${kit.titolo}`,
             kit: kit.titolo,
             esito: false
           } as EmitErrorParams);
+        } else {
+          kitInviati.push(kit);
         }
 
         processedKits++;
@@ -549,7 +582,7 @@ export class OrdiniStampaService implements IOrdiniStampaService {
       excelData.push(headerRow);
 
       // Per ciascun kit, inserisce una riga per il titolo (da fondere) e una o più righe per i file
-      for (const kit of kitsToProcess) {
+      for (const kit of kitInviati) {
         const comboKit = `${kit.codiceCanale} ${kit.codiceArea}`;
         const idxKit = allCombos.indexOf(comboKit);
 
@@ -707,7 +740,7 @@ export class OrdiniStampaService implements IOrdiniStampaService {
       let kitColorIndex = 0;
       const kitBlockColors = [fidelityColors.white, fidelityColors.light];
 
-      for (const kit of kitsToProcess) {
+      for (const kit of kitInviati) {
         const kitColor = kitBlockColors[kitColorIndex % kitBlockColors.length];
         const numFiles = (kit.files && kit.files.length > 0) ? kit.files.length : 1;
 
@@ -828,8 +861,8 @@ export class OrdiniStampaService implements IOrdiniStampaService {
         message: "Report Excel completato"
       } as EmitProgressParams);
 
-      const totalKit = kitsToProcess.length;
-      const totalFiles = kitsToProcess.map(k => k.files ?? []).flat().length;
+      const totalKit = kitInviati.length;
+      const totalFiles = kitInviati.map(k => k.files ?? []).flat().length;
 
       // Verifica se tutti i kit sono stati inviati, anche in momenti differenti
       const promoKit = await this.kitRuntimeService.getAllKitRuntimeByIdPromo(idPromo);
@@ -843,58 +876,58 @@ export class OrdiniStampaService implements IOrdiniStampaService {
         return tipiExportKitNonPresenti.length > 0 ? null : kit;
       }));
       kitFiltered = kitFiltered.filter(kit => kit !== null);
-      const allKitSent = ((previouslySentKitIds?.length ?? 0) + kitsToProcess.length) === kitFiltered.length;
+      // Completo se ogni kit PUBBLICATO e' in un invio, precedente o di questo giro.
+      // kit_guids contiene runtime_kit.id, che nei kit della promo e' guidId.
+      const idInviati = new Set<string>([...(previouslySentKitIds ?? []), ...kitInviati.map(k => k.id)]);
+      const allKitSent = idInviati.size > 0 && kitFiltered
+        .filter(kit => kit.stato_lavorazione === STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO)
+        .every(kit => idInviati.has(kit.guidId));
 
-      // Aggiorna stato dell'ordine
-      await OrdiniDiStampa.update(
-        {
-          stato_ordinistampa: allKitSent ? STATO_ORDINI_STAMPA.FINITO : STATO_ORDINI_STAMPA.IN_REVISIONE,
-        },
-        {
-          where: {
-            id_ordinistampa: idOrdineDiStampa
+      // Senza kit inviati non c'e' nulla da registrare
+      if (kitInviati.length > 0) {
+        // Crea record invio
+        // IMPORTANTE: Salva il buffer direttamente come Buffer, non come Uint8Array
+        // per evitare problemi di conversione durante il recupero
+        await OrdiniDiStampaInvii.create({
+          idutente_ordinistampainvii: req.session.id_utente as string,
+          idordinestampa_ordinistampainvii: idOrdineDiStampa,
+          excel_ordinistampainvii: Buffer.from(buffer),
+          report_ordinistampainvii: {
+            total_files: totalFiles,
+            total_kit: totalKit,
+            file_problematici: fileProblematici(kitInviati),
+            kit_guids: kitInviati.map(k => k.id),
+            kit_falliti: kitFalliti.map(k => k.id)
+          },
+          segnalazione_ordinistampainvii: "",
+          id_ordinistampainvii: uuidv4(),
+          createdat: new Date(),
+          updatedat: new Date()
+        });
+
+        // Crea attività
+        await ServerUtils.CREA_ATTIVITA(
+          req.session.id_utente as string,
+          TIPO_ATTIVITA.INVIO_FILES_FTP,
+          CATEGORIA_ATTIVITA.PUBBLICAZIONE,
+          {
+            id_promo: idPromo,
+            file_totali: totalFiles,
+            kit_totali: totalKit
           }
-        }
-      );
+        );
+      }
 
-      // Crea record invio
-      // IMPORTANTE: Salva il buffer direttamente come Buffer, non come Uint8Array
-      // per evitare problemi di conversione durante il recupero
-      await OrdiniDiStampaInvii.create({
-        idutente_ordinistampainvii: req.session.id_utente as string,
-        idordinestampa_ordinistampainvii: idOrdineDiStampa,
-        excel_ordinistampainvii: Buffer.from(buffer),
-        report_ordinistampainvii: {
-          total_files: totalFiles,
-          total_kit: totalKit,
-          file_problematici: fileProblematici(kitsToProcess),
-          kit_guids: kitsToProcess.map(k => k.id)
-        },
-        segnalazione_ordinistampainvii: "",
-        id_ordinistampainvii: uuidv4(),
-        createdat: new Date(),
-        updatedat: new Date()
-      });
+      // Dopo la registrazione dell'invio: FINITO non deve precedere il report
+      statoFinale = allKitSent ? STATO_ORDINI_STAMPA.FINITO : statoPrecedente;
 
-      // Crea attività
-      await ServerUtils.CREA_ATTIVITA(
-        req.session.id_utente as string,
-        TIPO_ATTIVITA.INVIO_FILES_FTP,
-        CATEGORIA_ATTIVITA.PUBBLICAZIONE,
-        {
-          id_promo: idPromo,
-          file_totali: totalFiles,
-          kit_totali: totalKit
-        }
-      );
-
-      // Emetti successo
-      emit(`${socketId}_complete`, {
-        esito: true,
-        message: "Processo FTP completato con successo",
-        totalFiles,
-        totalKit
-      } as EmitCompleteParams);
+      let message = "Processo FTP completato con successo";
+      if (kitFalliti.length > 0) {
+        message = `${kitInviati.length > 0 ? "Invio completato con errori" : "Nessun kit inviato"}. Kit non inviati: ${kitFalliti.map(k => k.titolo).join(', ')}`;
+      } else if (kitInviati.length === 0) {
+        message = "Nessun kit da inviare: i kit selezionati risultano già inviati o non pubblicati";
+      }
+      esitoFinale = { esito: kitFalliti.length === 0, message, totalFiles, totalKit };
 
     } catch (error: any) {
       console.error('Errore in processFTPPopOlimpo:', error);
@@ -902,6 +935,17 @@ export class OrdiniStampaService implements IOrdiniStampaService {
         error: error.message || "Errore sconosciuto durante il processo FTP",
         esito: false
       } as EmitErrorParams);
+    } finally {
+      try {
+        await OrdiniDiStampa.update({ stato_ordinistampa: statoFinale }, { where: { id_ordinistampa: idOrdineDiStampa } });
+      } catch (error) {
+        log.error(`Stato dell'ordine di stampa ${idOrdineDiStampa} non aggiornato a fine invio`, error);
+      }
+    }
+
+    // Dopo l'aggiornamento dello stato: alla ricezione il client ricarica l'ordine
+    if (esitoFinale) {
+      emit(`${socketId}_complete`, esitoFinale);
     }
   }
 
