@@ -617,6 +617,25 @@ const pluginMiddleware = {
         return null;
     },
 
+    /// I20-1079: gli stili di carattere delle bruciature che il cliente accoda alla descrizione
+    /// (Coop: MAX_PEZZI). Non sono descrizione: il confronto e il salvataggio della descrizione li
+    /// lasciano fuori. Un cliente che non li dichiara non ne ha: elenco vuoto.
+    /// Comanda la configurazione del server; se non la manda (Istanta non ancora aggiornata) vale
+    /// il custom.js del cliente, che per Coop la dichiara anche lui.
+    getStiliBruciaturaDescrizione() {
+        let me = this;
+        const delCustom = typeof customAgenzia !== "undefined" && customAgenzia != null && Array.isArray(customAgenzia.stiliBruciaturaDescrizione)
+            ? customAgenzia.stiliBruciaturaDescrizione
+            : [];
+
+        if (me.callCustom) {
+            return delCustom;
+        }
+
+        const stili = me.customPluginDB?.stiliBruciaturaDescrizione;
+        return Array.isArray(stili) ? stili : delCustom;
+    },
+
     /// NOTA DI DISEGNO (I20-1002): questa e setBolloFOTONOFOUND hanno la forma a due rami come
     /// le altre, quindi sono mediazione - ma cio' che mediano e' un'OPERAZIONE su InDesign, non
     /// un valore di configurazione. Se il middleware debba delegare operazioni oltre che

@@ -79,7 +79,10 @@ test("la preanalisi allega i due valori alle differenze di contenuto e di paragr
     const corpo = testo.substring(testo.indexOf("async confrontoBoxCompiledFieldPreAnalisi("), testo.indexOf("//cataloghiamo le foto presenti nel box1"));
 
     //Campi con stile di paragrafo e campi con stili di carattere: tutte e due le strade.
-    assert.strictEqual((corpo.match(/difference: "contenuto",\s*valoreLocale: confronti\.testoLeggibile\(campoBox1\.contents\), valoreServer: confronti\.testoLeggibile\(compiledField\.content\)/g) || []).length, 2);
+    assert.strictEqual((corpo.match(/difference: "contenuto",\s*valoreLocale: confronti\.testoLeggibile\(campoBox1\.contents\), valoreServer: confronti\.testoLeggibile\(compiledField\.content\)/g) || []).length, 1);
+    //I20-1079: sugli stili di carattere i valori sono quelli confrontati, senza le bruciature della
+    //descrizione; senza bruciature dichiarate sono gli stessi di prima (bruciatureDescrizione.test.js).
+    assert.match(corpo, /let contenutoDelBox = stiliBruciatura\.length > 0 \? trattiDelCampo\.map\(t => t\.contenuto\)\.join\(""\) : campoBox1\.contents;\s*differenze\.push\(\{ label: compiledField\.labelName, difference: "contenuto",\s*valoreLocale: confronti\.testoLeggibile\(contenutoDelBox\), valoreServer: confronti\.testoLeggibile\(confronti\.senzaBruciature\(compiledField\.content, stiliBruciatura\)\) \}\);/);
     assert.match(corpo, /difference: "paragrafo",\s*valoreLocale: campoBox1\.paragraphs\.item\(0\)\.appliedParagraphStyle\.name, valoreServer: \(stile != null && stile\.isValid \? stile\.name : compiledField\.paragraphName\)/);
     //Nessun "contenuto" rimasto senza valori.
     assert.strictEqual((corpo.match(/difference: "contenuto" \}/g) || []).length, 0);
