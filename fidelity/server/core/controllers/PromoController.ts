@@ -18,7 +18,11 @@ import { AuditLogService } from '../services/AuditLogService';
 import { verificaRisposta } from '../utils/rispostaServizi';
 import { ServerUtils } from '../utils/ServerUtils';
 
-// UpdateVolData.ashx: un volantino che Correggo non ha ancora non e un errore
+// Correggo4 allinea nome e date dei volantini della promo (I20-1076): nel Correggo originale era
+// UpdateVolData.ashx, che la nuova suite non espone piu
+const ROTTA_AGGIORNA_PROMO_CORREGGO = '/Promo/AggiornaDaFidelity';
+
+// Un volantino che Correggo non ha ancora non e un errore
 const aggiornamentoCorreggoRiuscito = (d: any): boolean =>
   String(d?.error_detail ?? '').includes('volantino_non_trovato') ||
   (typeof d === 'object' && d !== null && d.result !== 'error' && d.result !== false && d.esito !== false && !d.error_detail);
@@ -241,9 +245,9 @@ export class PromoController extends BaseController {
       if (config.CORREGGO_IP_ADDRESS) {
         try {
           verificaRisposta(
-            await ServerUtils.sendToFICOApi(req, `${config.CORREGGO_IP_ADDRESS}/UpdateVolData.ashx`, 'POST', formdataCorreggo),
+            await ServerUtils.sendToFICOApi(req, `${config.CORREGGO_IP_ADDRESS}${ROTTA_AGGIORNA_PROMO_CORREGGO}`, 'POST', formdataCorreggo),
             'CORREGGO',
-            '/UpdateVolData.ashx',
+            ROTTA_AGGIORNA_PROMO_CORREGGO,
             aggiornamentoCorreggoRiuscito
           );
         } catch (error) {

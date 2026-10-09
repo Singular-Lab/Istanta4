@@ -1,4 +1,5 @@
 using Correggo4.Data;
+using Correggo4.Ingestione;
 using Correggo4.Models;
 using Correggo4.Models.Vista;
 using Microsoft.EntityFrameworkCore;
@@ -21,11 +22,13 @@ public sealed class ServizioPromo
 
     private readonly Correggo4Context ctx;
     private readonly ServizioCorrezioni correzioni;
+    private readonly EstrattorePagine estrattore;
 
-    public ServizioPromo(Correggo4Context ctx, ServizioCorrezioni correzioni)
+    public ServizioPromo(Correggo4Context ctx, ServizioCorrezioni correzioni, EstrattorePagine estrattore)
     {
         this.ctx = ctx;
         this.correzioni = correzioni;
+        this.estrattore = estrattore;
     }
 
     // ------------------------------------------------------------------ lettura
@@ -253,6 +256,167 @@ public sealed class ServizioPromo
         await ctx.SaveChangesAsync();
         await tx.CommitAsync();
         return null;
+    }
+
+    // ------------------------------------------------------------------ aggiornamento da fidelity
+
+    /// <summary>
+    /// Promo/AggiornaDaFidelity, l'UpdateVolData.ashx dell'originale (I20-1076): fidelity-promotion ha
+    /// modificato la promo e Correggo4
+    /// si allinea. Tocca tutti i volantini della promo (volantini.id_promo_fp, che nell'originale era
+    /// "$guid" dentro descrizione) e aggiorna solo i campi ricevuti: fidelity manda le date e il nome solo
+    /// se li ha. Senza volantini risponde "volantino_non_trovato", che fidelity non considera un errore.
+    ///
+    /// Il nome della promo e' la classificazione, che in Correggo4 e' anche la cartella delle pagine
+    /// (EstrattorePagine.CartellaDi), il prefisso di volantini_pagine.path_fisico e la chiave delle finestre
+    /// Category e Timone: rinominarla vuol dire spostare tutto, se no le pagine spariscono e il prossimo
+    /// .pack col nome nuovo creerebbe un volantino doppio. Prima si controllano i conflitti, poi si spostano
+    /// le cartelle e si salva tutto insieme; se il salvataggio fallisce le cartelle tornano al loro posto.
+    /// </summary>
+    public async Task<string?> AggiornaDaFidelityAsync(ServizioCorrezioni.Utente u, Guid idPromo, string? nome,
+                                                      DateTime? inizio, DateTime? fine, DateTime? scadenza)
+    {
+        var vols = await ctx.Volantinis.Where(v => v.IdPromoFp == idPromo).ToListAsync();
+        if (vols.Count == 0) return "volantino_non_trovato";
+
+        // --- rinomina: controlli prima di toccare qualunque cosa
+        string? nuovoNome = string.IsNullOrWhiteSpace(nome) ? null : nome.Trim();
+        var daRinominare = nuovoNome == null ? new List<Volantini>()
+                                             : vols.Where(v => v.Classificazione != nuovoNome).ToList();
+        var spostamenti = new List<(string Da, string A)>();
+        if (daRinominare.Count > 0)
+        {
+            if (nuovoNome!.Length > 80) return "Il nome della promo supera gli 80 caratteri.";
+
+            var idDellaPromo = vols.Select(v => v.Id).ToList();
+            var titoli = daRinominare.Select(v => v.Titolo).ToList();
+            bool occupato = await ctx.Volantinis.AnyAsync(v => v.Classificazione == nuovoNome
+                                                             && titoli.Contains(v.Titolo)
+                                                             && !idDellaPromo.Contains(v.Id));
+            bool doppione = vols.Where(v => daRinominare.Contains(v) || v.Classificazione == nuovoNome)
+                                .GroupBy(v => v.Titolo).Any(g => g.Count() > 1);
+            if (occupato || doppione)
+                return $"Esiste gia' un volantino della promo «{nuovoNome}» con lo stesso titolo.";
+
+            foreach (var v in daRinominare)
+            {
+                string da = estrattore.CartellaDi(v.Classificazione, v.Titolo);
+                string a = estrattore.CartellaDi(nuovoNome, v.Titolo);
+                if (!Directory.Exists(da) || da == a) continue;
+                if (Directory.Exists(a)) return $"La cartella delle pagine di «{nuovoNome}/{v.Titolo}» esiste gia'.";
+                spostamenti.Add((da, a));
+            }
+        }
+
+        // --- date
+        var cambiateLeDate = new List<int>();
+        foreach (var v in vols)
+        {
+            bool cambia = false;
+            if (inizio != null && v.DataValiditaInizio != inizio) { v.DataValiditaInizio = inizio.Value; cambia = true; }
+            if (fine != null && v.DataValiditaFine != fine) { v.DataValiditaFine = fine.Value; cambia = true; }
+            if (scadenza != null && v.DataScadenza != scadenza) { v.DataScadenza = scadenza.Value; cambia = true; }
+            if (cambia) cambiateLeDate.Add(v.Id);
+        }
+
+        // --- nome: volantini, pagine e finestre della promo
+        if (daRinominare.Count > 0)
+        {
+            var vecchiNomi = daRinominare.Select(v => v.Classificazione).Distinct().ToList();
+            var idRinominati = daRinominare.Select(v => v.Id).ToList();
+
+            var pagine = await ctx.VolantiniPagines.Where(p => idRinominati.Contains(p.IdVol)).ToListAsync();
+            foreach (var v in daRinominare)
+            {
+                string prefisso = v.Classificazione + "/";
+                foreach (var p in pagine.Where(p => p.IdVol == v.Id && p.PathFisico != null
+                                                    && p.PathFisico.StartsWith(prefisso, StringComparison.Ordinal)))
+                    p.PathFisico = nuovoNome + "/" + p.PathFisico![prefisso.Length..];
+                v.Classificazione = nuovoNome!;
+            }
+
+            await RinominaFinestreAsync(vecchiNomi, nuovoNome!, idRinominati);
+        }
+
+        if (cambiateLeDate.Count == 0 && daRinominare.Count == 0) return null;
+        if (cambiateLeDate.Count > 0) await NotificaAsync(u, cambiateLeDate, "date");
+
+        // --- prima le cartelle, poi il database; se il database non salva, le cartelle tornano indietro
+        var fatti = new List<(string Da, string A)>();
+        try
+        {
+            foreach (var (da, a) in spostamenti)
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(a)!);
+                Directory.Move(da, a);
+                fatti.Add((da, a));
+            }
+            await ctx.SaveChangesAsync();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or DbUpdateException)
+        {
+            foreach (var (da, a) in Enumerable.Reverse(fatti))
+            {
+                try { Directory.Move(a, da); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+            }
+            return "Aggiornamento della promo non riuscito: " + ex.Message;
+        }
+
+        // la cartella della promo col vecchio nome, se e' rimasta vuota, non serve piu'
+        foreach (var (da, _) in fatti)
+        {
+            string? cartellaPromo = Path.GetDirectoryName(da);
+            try
+            {
+                if (cartellaPromo != null && Directory.Exists(cartellaPromo)
+                    && !Directory.EnumerateFileSystemEntries(cartellaPromo).Any())
+                    Directory.Delete(cartellaPromo);
+            }
+            catch (IOException) { }
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Le finestre Category e Timone sono per promo, con la classificazione come chiave. Passano al nome
+    /// nuovo se la promo nuova non ne ha gia' una; la riga col vecchio nome resta solo se qualche
+    /// volantino di un'altra promo lo usa ancora.
+    /// </summary>
+    private async Task RinominaFinestreAsync(List<string> vecchiNomi, string nuovoNome, List<int> idRinominati)
+    {
+        var ancoraUsati = await ctx.Volantinis
+            .Where(v => vecchiNomi.Contains(v.Classificazione) && !idRinominati.Contains(v.Id))
+            .Select(v => v.Classificazione).Distinct().ToListAsync();
+
+        var category = await ctx.VolantiniFinestreCategories
+            .Where(f => vecchiNomi.Contains(f.Classificazione) || f.Classificazione == nuovoNome).ToListAsync();
+        if (!category.Any(f => f.Classificazione == nuovoNome))
+        {
+            var vecchia = category.FirstOrDefault();
+            if (vecchia != null)
+                ctx.VolantiniFinestreCategories.Add(new VolantiniFinestreCategory
+                {
+                    Classificazione = nuovoNome, DataInizio = vecchia.DataInizio, DataFine = vecchia.DataFine,
+                    IdAutore = vecchia.IdAutore, DataModifica = DateTime.UtcNow
+                });
+        }
+        foreach (var f in category.Where(f => f.Classificazione != nuovoNome && !ancoraUsati.Contains(f.Classificazione)))
+            ctx.VolantiniFinestreCategories.Remove(f);
+
+        var timone = await ctx.TimoneFinestre
+            .Where(f => vecchiNomi.Contains(f.Classificazione) || f.Classificazione == nuovoNome).ToListAsync();
+        if (!timone.Any(f => f.Classificazione == nuovoNome))
+        {
+            var vecchia = timone.FirstOrDefault();
+            if (vecchia != null)
+                ctx.TimoneFinestre.Add(new VolantiniTimoneFinestre
+                {
+                    Classificazione = nuovoNome, DataInizio = vecchia.DataInizio, DataFine = vecchia.DataFine,
+                    IdAutore = vecchia.IdAutore, DataModifica = DateTime.UtcNow
+                });
+        }
+        foreach (var f in timone.Where(f => f.Classificazione != nuovoNome && !ancoraUsati.Contains(f.Classificazione)))
+            ctx.TimoneFinestre.Remove(f);
     }
 
     // ------------------------------------------------------------------ notifiche
