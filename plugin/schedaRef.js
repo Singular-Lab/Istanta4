@@ -2118,6 +2118,12 @@ const schedaRef = {
                 });
                 $("#pulsantiExtra").append(salvaSempre);
             }
+            //I20-1077: lo stesso salvataggio del pulsante, per chi lo chiede da codice (la scelta del
+            //testo del box nella finestra delle differenze). Premere il pulsante con trigger("click")
+            //lo faceva partire due volte: il secondo giro trovava la scheda occupata (SRF-01).
+            me.salvaModificheDellaScheda = function () {
+                me.salvaModifiche(schedaRef, codice, box, meccanica, page);
+            };
 
             $("#salvaButton").css("display", "");
 
@@ -3911,6 +3917,9 @@ const schedaRef = {
         //Vale per questo salvataggio soltanto, anche se si ferma prima.
         const descrizioneDelBox = this.salvaConDescrizioneDelBox === true;
         this.salvaConDescrizioneDelBox = false;
+        //I20-1077: e, per gli altri campi di testo, i testi del box da registrare nella lavorazione.
+        const testiDalBox = Array.isArray(this.testiDalBoxDaSalvare) ? this.testiDalBoxDaSalvare : [];
+        this.testiDalBoxDaSalvare = null;
         try {
             console.log("Salva modifiche " + codice);
 
@@ -3964,6 +3973,9 @@ const schedaRef = {
                 area: varianteScelta != null ? varianteScelta.area : null,
                 canale: varianteScelta != null ? varianteScelta.canale : null
             };
+            if (testiDalBox.length > 0) {
+                req.testiDalBox = testiDalBox;
+            }
 
             //creiamo una funzione richiamabile
             let applicaCambiStrutturali = function () {
@@ -4778,6 +4790,10 @@ const schedaRef = {
         if (this.eDescrizioneInMismatch(diff)) {
             return ["descrizioneServer", "descrizioneBox"];
         }
+        //I20-1077: e cosi' su ogni altro campo di testo con il contenuto diverso.
+        if (this.campoTestoInMismatch(diff) != null) {
+            return ["testoServer", "testoBox"];
+        }
         if (diff == null || diff.sigla == null || String(diff.sigla) === "") {
             return [];
         }
@@ -5114,7 +5130,9 @@ const schedaRef = {
             escludiLavorazione: ["Escludi per questa lavorazione", "Per questa lavorazione il dato non chiede piu' questa foto extra"],
             noRender: ["Metti in noRender", "L'elemento non va nel box: lo si mette fra i noRender e la differenza risulta risolta"],
             descrizioneServer: ["Scegli quella del server", "Il box riprende la descrizione del server, con i suoi stili"],
-            descrizioneBox: ["Scegli quella del box", "La descrizione del box va nel dato della referenza (come Salva modifiche): il box non cambia"]
+            descrizioneBox: ["Scegli quella del box", "La descrizione del box va nel dato della referenza (come Salva modifiche): il box non cambia"],
+            testoServer: ["Scegli quella del server", "Il campo nel box riprende il testo del server, con i suoi stili"],
+            testoBox: ["Scegli quella del box", "Il testo del box vale per questa lavorazione (come Salva modifiche): il box non cambia"]
         };
         //I20-1075: i pulsanti a destra, sotto il problema a cui servono.
         var barra = $('<div></div>');
@@ -5144,6 +5162,19 @@ const schedaRef = {
                     }
                     else if (azione === "descrizioneBox") {
                         me.tieniDescrizioneDelBox();
+                    }
+                    else if (azione === "testoServer") {
+                        await me.applicaCampoDaServer(diff);
+                        //Come per la descrizione: il pannello ricostruito non deve finire sopra la finestra.
+                        if ($("#popup").length > 0) {
+                            Modali.nascondiHidebleElements();
+                        }
+                        if (typeof dopoAzione === "function") {
+                            await dopoAzione();
+                        }
+                    }
+                    else if (azione === "testoBox") {
+                        me.tieniTestoDelBox(diff);
                     }
                     else {
                         await me.eseguiAzioneExtra(diff, azione, dopoAzione);
@@ -5188,14 +5219,97 @@ const schedaRef = {
     /// sulla variante che la scheda puo' modificare, come il Salva. La finestra si chiude con la
     /// sua X: il salvataggio ricarica la scheda, e con lei differenze e segnalino.
     tieniDescrizioneDelBox() {
-        const salva = $("#salvaButton");
-        if (salva.length === 0) {
+        if (typeof this.salvaModificheDellaScheda !== "function") {
             messaggioUtente("Code SRF-108 Salvataggio della scheda non disponibile: la descrizione del box non e' stata salvata", "error", false, 5);
             return false;
         }
         this.salvaConDescrizioneDelBox = true;
         $("#popupCloseButton").trigger("click");
-        salva.trigger("click");
+        //I20-1077: una volta sola, come il pulsante Salva modifiche.
+        this.salvaModificheDellaScheda();
+        return true;
+    },
+
+    /* ---------- I20-1077: gli altri campi di testo in mismatch ---------- */
+
+    /// Il campo compilato di una differenza di contenuto su un campo di testo che non e' la
+    /// descrizione (quella ha le sue azioni, I20-1075), o null. La preanalisi scrive la label senza
+    /// la parte dopo il "$" o, per i campi a stili di carattere, il labelName intero: vanno bene
+    /// tutte e due.
+    campoTestoInMismatch(diff) {
+        if (diff == null || diff.difference !== "contenuto" || this.eDescrizioneInMismatch(diff)) {
+            return null;
+        }
+        const rec = this.recordPrimarioDellaScheda();
+        const campi = rec != null && Array.isArray(rec.compiledFields) ? rec.compiledFields : [];
+        const cercata = String(diff.label || "").toLowerCase();
+        if (cercata === "" || cercata === "descrizione") {
+            return null;
+        }
+        const senzaChiave = (label) => typeof Utility !== "undefined" && Utility != null && typeof Utility.parseLabel === "function"
+            ? Utility.parseLabel(label)
+            : String(label).split("$")[0];
+        return campi.find(c => c != null && c.labelName != null
+            && (String(c.labelName).toLowerCase() === cercata || String(senzaChiave(c.labelName)).toLowerCase() === cercata)) || null;
+    },
+
+    /// Il testo del box nella forma del campo compilato, come lo confronta la preanalisi: per un
+    /// campo con stile di paragrafo il testo semplice, con gli a capo come <br>; per un campo a
+    /// stili di carattere la stringa con i tag degli stili.
+    testoDalBoxPerIlServer(campoCompilato, testoSemplice, testoConTag) {
+        if (campoCompilato != null && campoCompilato.paragraphName && campoCompilato.paragraphName !== "") {
+            return String(testoSemplice == null ? "" : testoSemplice).replace(/\r\n|\r|\n/g, "<br>");
+        }
+        return String(testoConTag == null ? "" : testoConTag);
+    },
+
+    /// "Scegli quella del server": il campo del box riprende il contenuto del server, con i suoi stili,
+    /// come fa applicaDescrizioneDaServer per la descrizione.
+    async applicaCampoDaServer(diff) {
+        try {
+            const campoCompilato = this.campoTestoInMismatch(diff);
+            const box = this.refSelected != null ? this.refSelected.item : null;
+            if (campoCompilato == null || box == null || !box.isValid) {
+                messaggioUtente("Code SRF-109 Il campo non si e' potuto riscrivere: box o dato non trovati", "error", false, 4);
+                return;
+            }
+            const campo = Utility.getFieldByLabel(Utility.parseLabel(campoCompilato.labelName), box);
+            if (campo == null) {
+                messaggioUtente("Code SRF-109 Il box non ha il campo " + campoCompilato.labelName, "warning", false, 4);
+                return;
+            }
+            TestoTag.applicaTagStringToInndTextFrame(campo, campoCompilato.content, box.geometricBounds);
+            messaggioUtente("Campo " + campoCompilato.labelName + " allineato al dato del server", "success", false, 3);
+            //La schermata di edit e la preanalisi leggono il box: si rifanno, come dopo la descrizione.
+            this.dimenticaSegnalazioni();
+            await this.selectSchedaRef(1);
+        }
+        catch (error) {
+            console.error(error);
+            messaggioUtente("Code SRF-110 Errore riscrivendo il campo dal server: " + error.message, "error", false, 5);
+        }
+    },
+
+    /// "Scegli quella del box": come per la descrizione e' il Salva modifiche della scheda; in piu'
+    /// porta il testo del campo letto dal box (testiDalBoxDaSalvare), che il server registra nella
+    /// lavorazione e rimette nel campo compilato finche' il suo dato resta quello di adesso
+    /// (contenutoServer). La finestra si chiude: il salvataggio ricarica la scheda.
+    tieniTestoDelBox(diff) {
+        const campoCompilato = this.campoTestoInMismatch(diff);
+        const box = this.refSelected != null ? this.refSelected.item : null;
+        const campo = campoCompilato != null && box != null ? Utility.getFieldByLabel(Utility.parseLabel(campoCompilato.labelName), box) : null;
+        if (typeof this.salvaModificheDellaScheda !== "function" || campo == null) {
+            messaggioUtente("Code SRF-108 Salvataggio della scheda non disponibile: il testo del box non e' stato salvato", "error", false, 5);
+            return false;
+        }
+        this.testiDalBoxDaSalvare = [{
+            label: campoCompilato.labelName,
+            contenuto: this.testoDalBoxPerIlServer(campoCompilato, campo.contents, TestoTag.componiStringTagFromInndTextFrame(campo)),
+            contenutoServer: campoCompilato.content
+        }];
+        $("#popupCloseButton").trigger("click");
+        //Una volta sola, come il pulsante Salva modifiche.
+        this.salvaModificheDellaScheda();
         return true;
     },
 

@@ -9985,7 +9985,8 @@ double.TryParse(percorso.ToString(), out double valore16))
                     Dictionary<string, bool> noRenderPerRef = new Dictionary<string, bool>();
                     Dictionary<string, List<RevisioneNoRenderFromIndd>> noRenderElementiPerGruppo = new Dictionary<string, List<RevisioneNoRenderFromIndd>>();
                     Dictionary<string, List<RevisioneExtraLavorazioneFromIndd>> extraLavorazionePerGruppo = new Dictionary<string, List<RevisioneExtraLavorazioneFromIndd>>();
-                    var listeModificate = ficoController.updateDatiFromMetaPromoLavorazioni(prepLista.records, idLavorazione, kit!, noRenderPerRef, noRenderElementiPerGruppo, extraLavorazionePerGruppo);
+                    Dictionary<string, List<TestoDalBox>> testiDalBoxPerGruppo = new Dictionary<string, List<TestoDalBox>>();
+                    var listeModificate = ficoController.updateDatiFromMetaPromoLavorazioni(prepLista.records, idLavorazione, kit!, noRenderPerRef, noRenderElementiPerGruppo, extraLavorazionePerGruppo, testiDalBoxPerGruppo);
                     prepLista.records = listeModificate;
                     //logAss.WriteLine("GET SCHEDA REF >> step9");
 
@@ -10031,6 +10032,8 @@ double.TryParse(percorso.ToString(), out double valore16))
 
                         //I20-1070: le foto extra decise dall'operatore per questa lavorazione.
                         FicoProcessController.applicaExtraDellaLavorazione(resultGlobale.records, extraLavorazionePerGruppo);
+                        //I20-1077: i testi del box scelti dall'operatore, nei campi compilati.
+                        FicoProcessController.applicaTestiDalBox(resultGlobale.records, testiDalBoxPerGruppo);
                     }
                 }
                 else

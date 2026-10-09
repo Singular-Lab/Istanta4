@@ -4076,6 +4076,18 @@ out var mismatch);
                 }
                 
 
+                //I20-1077: i campi di testo per cui l'operatore ha scelto il testo del box. I campi
+                //offerta qui sotto si registrano soltanto come attivita': il testo scelto va nel meta
+                //della lavorazione, da dove la lista e la scheda lo rimettono nei campi compilati.
+                if (req.testiDalBox != null && req.testiDalBox.Count > 0)
+                {
+                    RevisioneMetaPromoLavorazioni metaTesti = (plrItem.Meta != null ? MetaPromoLavorazioni.leggi(plrItem.Meta) : null)
+                        ?? new RevisioneMetaPromoLavorazioni();
+                    MetaPromoLavorazioni.applicaTestiDalBox(metaTesti, req.testiDalBox);
+                    plrItem.Meta = JsonConvert.SerializeObject(metaTesti);
+                    this.ctx2.SaveChanges();
+                }
+
                 for (int i = 0; i < req.campi_offerta!.Count; i++)
                 {
                     RevisioneCampiOffertaFromIndd revField = req.campi_offerta[i];

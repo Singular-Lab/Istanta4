@@ -2768,10 +2768,11 @@ namespace Istanta.Controllers
                         Dictionary<string, bool> noRenderPerRef = new Dictionary<string, bool>();
                         Dictionary<string, List<RevisioneNoRenderFromIndd>> noRenderElementiPerGruppo = new Dictionary<string, List<RevisioneNoRenderFromIndd>>();
                         Dictionary<string, List<RevisioneExtraLavorazioneFromIndd>> extraLavorazionePerGruppo = new Dictionary<string, List<RevisioneExtraLavorazioneFromIndd>>();
+                        Dictionary<string, List<TestoDalBox>> testiDalBoxPerGruppo = new Dictionary<string, List<TestoDalBox>>();
 
                         if (mode == FicoCombinazioneKitReadMode.Advanced)
                         {
-                            var listeModificate = updateDatiFromMetaPromoLavorazioni(recordsFiltrati, idLavorazione, kit/*, confronto*/, noRenderPerRef, noRenderElementiPerGruppo, extraLavorazionePerGruppo);
+                            var listeModificate = updateDatiFromMetaPromoLavorazioni(recordsFiltrati, idLavorazione, kit/*, confronto*/, noRenderPerRef, noRenderElementiPerGruppo, extraLavorazionePerGruppo, testiDalBoxPerGruppo);
                             recordsFiltrati = listeModificate;
                         }
 
@@ -2820,6 +2821,8 @@ namespace Istanta.Controllers
 
                             //I20-1070: le foto extra decise dall'operatore per questa lavorazione.
                             applicaExtraDellaLavorazione(resultGlobale.records, extraLavorazionePerGruppo);
+                            //I20-1077: i testi del box scelti dall'operatore, nei campi compilati.
+                            applicaTestiDalBox(resultGlobale.records, testiDalBoxPerGruppo);
                         }
 
                         if (resultGlobale.tipoLavorazione == TipoLavorazione.PoP)
@@ -4258,6 +4261,57 @@ namespace Istanta.Controllers
         }
 
         /// <summary>
+        /// I20-1077: mette nei campi compilati dei record (e del loro sottogruppo) i testi del box
+        /// scelti dall'operatore per questa lavorazione, finche' il server compone per quei campi lo
+        /// stesso contenuto di quando li ha scelti (MetaPromoLavorazioni.applicaTestiDalBoxAiCampi).
+        /// Si chiama dopo l'export di agenzia, che e' quando i campi compilati esistono.
+        /// </summary>
+        public static void applicaTestiDalBox(List<ArticoloInKit>? records, Dictionary<string, List<TestoDalBox>>? perGruppo)
+        {
+            if (records == null || perGruppo == null || perGruppo.Count == 0)
+                return;
+
+            var keyCodGruppo = Enum.GetName(AddestramentoRuoli.Scatto) + "." + GLOBAL_VARIABLES.keyScattoCodiceGruppo;
+
+            foreach (var record in records)
+            {
+                if (record?.recordInTracciato == null)
+                    continue;
+
+                record.recordInTracciato.TryGetValue(keyCodGruppo, out var codGruppoObj);
+                var codGruppo = codGruppoObj?.ToString();
+                if (codGruppo == null || !perGruppo.TryGetValue(codGruppo, out var testi) || testi == null || testi.Count == 0)
+                    continue;
+
+                applicaTestiDalBoxAiCampiDi(record.recordInTracciato, testi);
+                if (record.sottogruppo != null)
+                    applicaTestiDalBoxAiCampiDi(record.sottogruppo, testi);
+            }
+        }
+
+        //I campi compilati di un record possono arrivare come lista, come JArray o come testo:
+        //si portano a lista, si rimettono nel record e si cambiano li'.
+        private static void applicaTestiDalBoxAiCampiDi(Dictionary<string, object> dati, List<TestoDalBox> testi)
+        {
+            if (!dati.TryGetValue(GLOBAL_VARIABLES.keyCompiledFields, out var valore) || valore == null)
+                return;
+
+            List<CompiledField>? campi = valore as List<CompiledField>;
+            if (campi == null)
+            {
+                if (valore is JArray elenco)
+                    campi = elenco.ToObject<List<CompiledField>>();
+                else if (valore is string testo)
+                    campi = JsonConvert.DeserializeObject<List<CompiledField>>(testo);
+                if (campi == null)
+                    return;
+                dati[GLOBAL_VARIABLES.keyCompiledFields] = campi;
+            }
+
+            MetaPromoLavorazioni.applicaTestiDalBoxAiCampi(campi, testi);
+        }
+
+        /// <summary>
         /// I20-1070: applica ai record le foto extra decise dall'operatore per questa lavorazione.
         /// Si chiama dopo l'export di agenzia, che e' quando Foto.ExtraAuto esiste. Sovrascrivi
         /// cambia il nome della foto con quella sigla; Aggiungi mette in Foto.ExtraAuto una voce che
@@ -4355,7 +4409,7 @@ namespace Istanta.Controllers
             return letta;
         }
 
-        public List<ArticoloInKit> updateDatiFromMetaPromoLavorazioni(List<ArticoloInKit> artInkit, int idLavorazione, FicoRuntimeKit kit/*, bool confronto = false*/, Dictionary<string, bool>? noRenderPerRef = null, Dictionary<string, List<RevisioneNoRenderFromIndd>>? noRenderElementiPerGruppo = null, Dictionary<string, List<RevisioneExtraLavorazioneFromIndd>>? extraLavorazionePerGruppo = null)
+        public List<ArticoloInKit> updateDatiFromMetaPromoLavorazioni(List<ArticoloInKit> artInkit, int idLavorazione, FicoRuntimeKit kit/*, bool confronto = false*/, Dictionary<string, bool>? noRenderPerRef = null, Dictionary<string, List<RevisioneNoRenderFromIndd>>? noRenderElementiPerGruppo = null, Dictionary<string, List<RevisioneExtraLavorazioneFromIndd>>? extraLavorazionePerGruppo = null, Dictionary<string, List<TestoDalBox>>? testiDalBoxPerGruppo = null)
         {
             var keyCodGruppo = Enum.GetName(AddestramentoRuoli.Scatto) + "." + GLOBAL_VARIABLES.keyScattoCodiceGruppo;
             var keyRefCodice = Enum.GetName(AddestramentoRuoli.Referenza) + "." + GLOBAL_VARIABLES.keyRefCodice;
@@ -4401,6 +4455,8 @@ namespace Istanta.Controllers
                 }
 
                 RevisioneMetaPromoLavorazioni storeField = new RevisioneMetaPromoLavorazioni();
+                //I20-1077: i testi del box valgono solo dal meta di questa lavorazione, non dal passato.
+                bool metaDiQuestaLavorazione = promoLavorazione != null && promoLavorazione.Meta != null;
                 if (promoLavorazione != null && promoLavorazione.Meta != null)
                 {
                     //storeField = JsonConvert.DeserializeObject<List<RevisioneCampiOffertaFromIndd>>(plrItem.Meta);
@@ -4549,6 +4605,12 @@ namespace Istanta.Controllers
                 if (storeField.extraLavorazione != null && storeField.extraLavorazione.Count > 0 && extraLavorazionePerGruppo != null)
                 {
                     extraLavorazionePerGruppo[group.Key.CodiceGruppo] = storeField.extraLavorazione;
+                }
+
+                //I20-1077: i campi di testo per cui l'operatore ha scelto il testo del box.
+                if (metaDiQuestaLavorazione && storeField.testiDalBox != null && storeField.testiDalBox.Count > 0 && testiDalBoxPerGruppo != null)
+                {
+                    testiDalBoxPerGruppo[group.Key.CodiceGruppo] = storeField.testiDalBox;
                 }
 
                 foreach (var item in group)

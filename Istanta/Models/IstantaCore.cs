@@ -943,6 +943,11 @@ namespace Istanta.Models
         //continuano a comportarsi come prima.
         public string? area { get; set; }
         public string? canale { get; set; }
+        /// <summary>
+        /// I20-1077: i campi di testo per cui l'operatore, dalla finestra delle differenze del Plugin,
+        /// ha scelto il testo del box. Si registrano nel meta della lavorazione (testiDalBox).
+        /// </summary>
+        public List<TestoDalBox>? testiDalBox { get; set; }
 
     }
 
@@ -1027,6 +1032,67 @@ namespace Istanta.Models
                 return $"per {voce.azione} serve il nome del file nel box.";
             }
             return null;
+        }
+
+        /// <summary>
+        /// I20-1077: registra nel meta i testi del box scelti dall'operatore. Una voce per campo
+        /// (labelName, senza distinguere maiuscole): una scelta nuova sullo stesso campo sostituisce
+        /// la precedente. Le voci senza campo o senza testo si ignorano.
+        /// </summary>
+        public static void applicaTestiDalBox(RevisioneMetaPromoLavorazioni meta, List<TestoDalBox>? testi)
+        {
+            if (meta == null || testi == null)
+            {
+                return;
+            }
+
+            foreach (var testo in testi)
+            {
+                if (testo == null || string.IsNullOrWhiteSpace(testo.label) || testo.contenuto == null)
+                {
+                    continue;
+                }
+                meta.testiDalBox ??= new List<TestoDalBox>();
+                meta.testiDalBox.RemoveAll(t => string.Equals(t.label, testo.label, StringComparison.OrdinalIgnoreCase));
+                meta.testiDalBox.Add(testo);
+            }
+        }
+
+        /// <summary>
+        /// I20-1077: mette nei campi compilati di un record i testi del box scelti dall'operatore. Un
+        /// testo vale solo se il server compone ancora, per quel campo, il contenuto che c'era al
+        /// momento della scelta: se il dato e' cambiato (un prezzo nuovo) il testo del box non si
+        /// applica, e la differenza torna. Restituisce quanti campi ha cambiato.
+        /// </summary>
+        public static int applicaTestiDalBoxAiCampi(List<CompiledField>? campi, List<TestoDalBox>? testi)
+        {
+            if (campi == null || testi == null)
+            {
+                return 0;
+            }
+
+            int cambiati = 0;
+            foreach (var testo in testi)
+            {
+                if (testo == null || string.IsNullOrWhiteSpace(testo.label) || testo.contenuto == null)
+                {
+                    continue;
+                }
+                foreach (var campo in campi)
+                {
+                    if (campo == null || !string.Equals(campo.labelName, testo.label, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+                    if (campo.content != testo.contenutoServer)
+                    {
+                        continue;
+                    }
+                    campo.content = testo.contenuto;
+                    cambiati++;
+                }
+            }
+            return cambiati;
         }
 
         /// <summary>
@@ -1146,6 +1212,27 @@ namespace Istanta.Models
         /// passate: una lavorazione nuova riparte dal dato del server.
         /// </summary>
         public List<RevisioneExtraLavorazioneFromIndd>? extraLavorazione { get; set; }
+        /// <summary>
+        /// I20-1077: i campi di testo per cui l'operatore ha scelto il testo del box invece di quello
+        /// composto dal server. Una voce per campo. Non si eredita dalle lavorazioni passate.
+        /// </summary>
+        public List<TestoDalBox>? testiDalBox { get; set; }
+    }
+
+    /// <summary>
+    /// I20-1077: un campo di testo per cui l'operatore, dalla finestra delle differenze del Plugin,
+    /// ha scelto il testo del box. Vale per questa lavorazione e solo finche' il server compone per
+    /// quel campo lo stesso contenuto che c'era al momento della scelta: se il dato cambia, la scelta
+    /// decade e la differenza torna a vedersi.
+    /// </summary>
+    public class TestoDalBox
+    {
+        /// <summary>Il labelName del campo compilato.</summary>
+        public string? label { get; set; }
+        /// <summary>Il testo del box, nella forma del campo compilato.</summary>
+        public string? contenuto { get; set; }
+        /// <summary>Il contenuto che il server componeva quando l'operatore ha scelto.</summary>
+        public string? contenutoServer { get; set; }
     }
 
     /// <summary>

@@ -51,15 +51,19 @@ test("non sul paragrafo, non su altri campi, non senza la descrizione del server
 test("scegli quella del box: si chiude la finestra e si salva la scheda con la descrizione per intero", () => {
     const eventi = [];
     const salvaGlobali = { $: global.$, messaggioUtente: global.messaggioUtente };
+    const salvaPrima = schedaRef.salvaModificheDellaScheda;
     global.$ = (selettore) => ({ length: 1, trigger: (evento) => eventi.push(selettore + " " + evento) });
     global.messaggioUtente = () => {};
+    //I20-1077: il salvataggio si chiama una volta sola, non premendo il pulsante (partiva due volte).
+    schedaRef.salvaModificheDellaScheda = () => eventi.push("salvataggio della scheda");
     try {
         assert.strictEqual(schedaRef.tieniDescrizioneDelBox(), true);
-        assert.deepStrictEqual(eventi, ["#popupCloseButton click", "#salvaButton click"]);
+        assert.deepStrictEqual(eventi, ["#popupCloseButton click", "salvataggio della scheda"]);
         assert.strictEqual(schedaRef.salvaConDescrizioneDelBox, true);
     }
     finally {
         schedaRef.salvaConDescrizioneDelBox = false;
+        schedaRef.salvaModificheDellaScheda = salvaPrima;
         Object.keys(salvaGlobali).forEach(k => { if (salvaGlobali[k] === undefined) { delete global[k]; } else { global[k] = salvaGlobali[k]; } });
     }
 });
@@ -67,14 +71,17 @@ test("scegli quella del box: si chiude la finestra e si salva la scheda con la d
 test("senza il pulsante di salvataggio non si fa niente, e lo si dice", () => {
     const messaggi = [];
     const salvaGlobali = { $: global.$, messaggioUtente: global.messaggioUtente };
+    const salvaPrima = schedaRef.salvaModificheDellaScheda;
     global.$ = () => ({ length: 0, trigger: () => { throw new Error("niente da premere"); } });
     global.messaggioUtente = (testo) => messaggi.push(testo);
+    schedaRef.salvaModificheDellaScheda = undefined;
     try {
         assert.strictEqual(schedaRef.tieniDescrizioneDelBox(), false);
         assert.match(messaggi[0], /^Code SRF-108 /);
         assert.notStrictEqual(schedaRef.salvaConDescrizioneDelBox, true);
     }
     finally {
+        schedaRef.salvaModificheDellaScheda = salvaPrima;
         Object.keys(salvaGlobali).forEach(k => { if (salvaGlobali[k] === undefined) { delete global[k]; } else { global[k] = salvaGlobali[k]; } });
     }
 });
@@ -83,8 +90,13 @@ test("il salvataggio manda la descrizione per intero solo quando lo chiede la fi
     const scheda = leggiFileDelPlugin("schedaRef.js").replace(/\r/g, "");
     const salva = scheda.substring(scheda.indexOf("    salvaModifiche(schedaRef, codice, box, meccanica, page) {"), scheda.indexOf("//Chiedo al controller le operazioni che devo fare"));
     //Si legge e si spegne prima di ogni uscita anticipata.
-    assert.match(salva, /salvaModifiche\(schedaRef, codice, box, meccanica, page\) \{\s*(\/\/[^\n]*\n\s*)*const descrizioneDelBox = this\.salvaConDescrizioneDelBox === true;\s*this\.salvaConDescrizioneDelBox = false;\s*try \{/);
+    //I20-1077: dopo, prima del try, si leggono e si spengono anche i testi del box.
+    assert.match(salva, /salvaModifiche\(schedaRef, codice, box, meccanica, page\) \{\s*(\/\/[^\n]*\n\s*)*const descrizioneDelBox = this\.salvaConDescrizioneDelBox === true;\s*this\.salvaConDescrizioneDelBox = false;[\s\S]*?this\.testiDalBoxDaSalvare = null;\s*try \{/);
     assert.match(scheda, /this\.editRefFieldController\.getOperazioniDiSalvataggioDaFare\(descrizioneEreditata \|\| descrizioneDelBox\);/);
+    //I20-1077: il salvataggio da codice e' lo stesso del pulsante, con i suoi argomenti, e nessuno
+    //preme piu' il pulsante da codice.
+    assert.match(scheda, /me\.salvaModificheDellaScheda = function \(\) \{\s*me\.salvaModifiche\(schedaRef, codice, box, meccanica, page\);\s*\};/);
+    assert.doesNotMatch(scheda, /\$\("#salvaButton"\)\.trigger\(|salva\.trigger\("click"\)/);
 });
 
 test("scegli quella del server applica la descrizione del server, rinasconde i controlli nativi e rifa' la finestra", () => {
