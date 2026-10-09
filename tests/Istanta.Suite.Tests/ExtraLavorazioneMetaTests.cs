@@ -256,12 +256,13 @@ public class ExtraLavorazioneMetaTests
         string fico = Sorgente("Istanta/Controllers/FicoProcessController.cs");
 
         //getSchedaRef: raccolta dal meta e applicazione dopo le foto escluse.
-        Assert.Contains("ficoController.updateDatiFromMetaPromoLavorazioni(prepLista.records, idLavorazione, kit!, noRenderPerRef, noRenderElementiPerGruppo, extraLavorazionePerGruppo);", menabo);
+        //I20-1077: con in coda i testi del box, raccolti dallo stesso meta.
+        Assert.Contains("ficoController.updateDatiFromMetaPromoLavorazioni(prepLista.records, idLavorazione, kit!, noRenderPerRef, noRenderElementiPerGruppo, extraLavorazionePerGruppo, testiDalBoxPerGruppo);", menabo);
         Assert.Contains("FicoProcessController.applicaExtraDellaLavorazione(resultGlobale.records, extraLavorazionePerGruppo);", menabo);
         Assert.True(menabo.IndexOf("MB Scheda 12977 - Escludo foto", StringComparison.Ordinal) < menabo.IndexOf("FicoProcessController.applicaExtraDellaLavorazione(resultGlobale.records, extraLavorazionePerGruppo);", StringComparison.Ordinal));
 
         //processaKitDo, la strada dell'impaginazione.
-        Assert.Contains("updateDatiFromMetaPromoLavorazioni(recordsFiltrati, idLavorazione, kit/*, confronto*/, noRenderPerRef, noRenderElementiPerGruppo, extraLavorazionePerGruppo);", fico);
+        Assert.Contains("updateDatiFromMetaPromoLavorazioni(recordsFiltrati, idLavorazione, kit/*, confronto*/, noRenderPerRef, noRenderElementiPerGruppo, extraLavorazionePerGruppo, testiDalBoxPerGruppo);", fico);
         Assert.Contains("applicaExtraDellaLavorazione(resultGlobale.records, extraLavorazionePerGruppo);", fico);
         Assert.True(fico.IndexOf("FicoProcess 2802 - Escludo foto", StringComparison.Ordinal) < fico.IndexOf("applicaExtraDellaLavorazione(resultGlobale.records, extraLavorazionePerGruppo);", StringComparison.Ordinal));
 
