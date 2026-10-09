@@ -370,6 +370,9 @@ const confronti = {
     async confrontoBoxCompiledFieldPreAnalisi(box1, compiledFields, deletedFields, listFoto, fotoExtra, fotoExtraAuto, checkMD5 = true, elementiNoRender = null, itemRef = null) { //mode 0 -> cambio strutturale, mode 1 -> confrontoMassivo
         let differenze = [];
         let errors = [];
+        //I20-1073: gli elementi assenti dal box che l'operatore ha messo in noRender. Non sono
+        //differenze da risolvere, ma la scheda li mostra come risolti, annullabili.
+        let risolteNoRender = [];
         let me = this;
         try {
             //compiled fields è un array di oggetti con le proprietà label, content, labelName e paragraphName
@@ -403,8 +406,15 @@ const confronti = {
                     var labelCampo = Utility.parseLabel(compiledField.labelName);
                     var classificatoCampo = NoRenderElementi.classificaLabel(labelCampo);
                     //Un elemento in noRender che non c'e' piu' e' un'assenza voluta: non si segnala.
+                    //I20-1073: l'assenza porta tipo e chiave dell'elemento, cosi' la scheda puo' metterlo
+                    //in noRender; quella gia' voluta va fra le risolte.
+                    var assenzaCampo = { label: labelCampo, difference: "non presente", tipo: "mancante",
+                        tipoElemento: classificatoCampo.tipo, chiave: classificatoCampo.chiave };
                     if (NoRenderElementi.daSegnalareComeMancante(elementiNoRender, classificatoCampo.tipo, classificatoCampo.chiave)) {
-                        differenze.push({ label: labelCampo, difference: "non presente" });
+                        differenze.push(assenzaCampo);
+                    }
+                    else {
+                        risolteNoRender.push(assenzaCampo);
                     }
                     return;
                 }
@@ -636,8 +646,15 @@ const confronti = {
             if (listFoto && listFoto.length > 0) {
                 listFoto.forEach(foto => {
                     if (foto.nomeFoto != "" && listFotoBox1.find(f => f.nomeFoto == foto.nomeFoto) == undefined) {
+                        //I20-1073: come per i campi, con il nome del file per chiave (la scheda lo traduce nel
+                        //codice della referenza, che e' la chiave delle foto in noRender).
+                        var assenzaFoto = { label: foto.nomeFoto, difference: "foto mancante nel box: " + foto.nomeFoto, tipo: "mancante",
+                            tipoElemento: NoRenderElementi.TIPO_FOTO, chiave: foto.nomeFoto };
                         if (NoRenderElementi.daSegnalareComeMancante(elementiNoRender, NoRenderElementi.TIPO_FOTO, foto.nomeFoto)) {
-                            differenze.push({ label: foto.nomeFoto, difference: "foto mancante nel box: " + foto.nomeFoto });
+                            differenze.push(assenzaFoto);
+                        }
+                        else {
+                            risolteNoRender.push(assenzaFoto);
                         }
                         //controlliamo se la foto c'è nella cartella di lavorazione
                         var path = /*pathLavorazione +*/ percorsoLinks + foto.nomeFoto;
@@ -808,7 +825,8 @@ const confronti = {
 
         return {
             differenze: differenze,
-            errors: errors
+            errors: errors,
+            risolteNoRender: risolteNoRender
         };
     },
 

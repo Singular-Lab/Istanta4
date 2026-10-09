@@ -180,7 +180,8 @@ test("la finestra delle differenze offre le azioni, la sezione delle decisioni, 
     assert.match(testo, /riempiElencoSegnalazioni\(contenitore, intestazione, differenze, vociBollino = \[\], dopoAzione = null\) \{/);
     assert.match(testo, /riga\.append\(campo\)\.append\(dettaglio\);\s*\/\/I20-1070[^\n]*\n\s*this\.aggiungiAzioniDifferenza\(riga, diff, dopoAzione\);/);
     assert.match(testo, /id="segnalazioniExtraLavorazione"/);
-    assert.match(testo, /const rifaiAnalisi = async function \(\) \{[\s\S]*?me\.riempiSezioneExtraLavorazione\(sezioneExtra, rifaiAnalisi\);\s*\};/);
+    //I20-1073: dopo le decisioni, la sezione degli elementi assenti risolti con noRender.
+    assert.match(testo, /const rifaiAnalisi = async function \(\) \{[\s\S]*?me\.riempiSezioneExtraLavorazione\(sezioneExtra, rifaiAnalisi\);\s*me\.riempiSezioneNoRender\(sezioneNoRender, rifaiAnalisi\);\s*\};/);
     assert.match(testo, /me\.lampeggiaContenuto\(contenuto\);\s*await rifaiAnalisi\(\);/);
     assert.match(testo, /xhr\.send\("Menabo\/modificaExtraLavorazione\/0", formData, "PUT"\);/);
     //Il ricollegamento cambia solo il file del link, non il riquadro.

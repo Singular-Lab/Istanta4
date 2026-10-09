@@ -4272,6 +4272,14 @@ const schedaRef = {
     dimenticaSegnalazioni() {
         this.segnalazioniDelBox = null;
         this.vociBollinoDelBox = null;
+        this.risolteNoRenderDelBox = null;
+    },
+
+    /// I20-1073: gli elementi assenti dal box che l'operatore ha messo in noRender, dall'ultima
+    /// preanalisi (differenzeDatiNelBox). Non sono differenze da risolvere: la finestra li mostra
+    /// come risolti, annullabili, e il segnalino verde li conta con le foto extra decise.
+    risolteNoRenderInMemoria() {
+        return Array.isArray(this.risolteNoRenderDelBox) ? this.risolteNoRenderDelBox : [];
     },
 
     /// I20-1056, lotto 4: le segnalazioni del bollino del box, lette dal documento.
@@ -4296,20 +4304,33 @@ const schedaRef = {
     /// I20-1072: senza niente da risolvere ma con foto extra decise per questa lavorazione (Z) il
     /// segnalino resta, verde, "Z": da li' la finestra si riapre e le decisioni si tolgono. Con
     /// qualcosa da risolvere le decisioni non si contano, la finestra le mostra comunque.
-    segnalinoScheda(differenze, voci, decisioni = []) {
+    /// I20-1073: Z conta anche gli elementi assenti risolti con noRender (risolteNoRender).
+    segnalinoScheda(differenze, voci, decisioni = [], risolteNoRender = []) {
         const x = Array.isArray(differenze) ? differenze.length : 0;
         const y = Array.isArray(voci) ? voci.length : 0;
-        const z = Array.isArray(decisioni) ? decisioni.length : 0;
+        const extra = Array.isArray(decisioni) ? decisioni.length : 0;
+        const noRender = Array.isArray(risolteNoRender) ? risolteNoRender.length : 0;
+        const z = extra + noRender;
         if (x === 0 && y === 0) {
             if (z === 0) {
                 return null;
             }
+            const testoExtra = extra === 1 ? "1 foto extra decisa per questa lavorazione" : extra + " foto extra decise per questa lavorazione";
+            const testoNoRender = noRender === 1 ? "1 elemento assente messo in noRender" : noRender + " elementi assenti messi in noRender";
+            const testi = [];
+            if (extra > 0) {
+                testi.push(testoExtra);
+            }
+            if (noRender > 0) {
+                testi.push(testoNoRender);
+            }
             return {
                 testo: String(z),
                 colore: "#1b7f3b",
-                suggerimento: z === 1
-                    ? "1 foto extra decisa per questa lavorazione - clicca per rivederla"
-                    : z + " foto extra decise per questa lavorazione - clicca per rivederle"
+                //Le foto extra sono "decise": rivederla, rivederle; gli elementi: rivederlo, rivederli.
+                suggerimento: testi.join(", ") + (z === 1
+                    ? (extra === 1 ? " - clicca per rivederla" : " - clicca per rivederlo")
+                    : (noRender === 0 ? " - clicca per rivederle" : " - clicca per rivederli"))
             };
         }
         const testoX = x === 1 ? "1 differenza fra il box e il dato" : x + " differenze fra il box e il dato";
@@ -4483,7 +4504,8 @@ const schedaRef = {
             $("#segnalazioniBoxButton").remove();
 
             //I20-1056, lotto 4: le differenze e le segnalazioni di impaginazione del bollino.
-            const dati = this.segnalinoScheda(this.segnalazioniInMemoria(), this.vociBollinoInMemoria(), this.extraLavorazioneInMemoria());
+            const dati = this.segnalinoScheda(this.segnalazioniInMemoria(), this.vociBollinoInMemoria(), this.extraLavorazioneInMemoria(),
+                this.risolteNoRenderInMemoria());
             if (dati == null) {
                 return;
             }
@@ -4561,10 +4583,19 @@ const schedaRef = {
             intestazione.append(pallino).append(testo);
 
             //I20-1072: le decisioni per questa lavorazione restano modificabili, dalla sezione sotto.
+            //I20-1073: e cosi' gli elementi assenti messi in noRender.
             const decise = this.extraLavorazioneInMemoria().length;
-            const nota = $('<div></div>').text(decise === 0
+            const inNoRender = this.risolteNoRenderInMemoria().length;
+            const conCosa = [];
+            if (decise > 0) {
+                conCosa.push((decise === 1 ? "1 foto extra decisa" : decise + " foto extra decise") + " per questa lavorazione");
+            }
+            if (inNoRender > 0) {
+                conCosa.push(inNoRender === 1 ? "1 elemento assente in noRender" : inNoRender + " elementi assenti in noRender");
+            }
+            const nota = $('<div></div>').text(conCosa.length === 0
                 ? "Il box corrisponde al dato."
-                : "Il box corrisponde al dato, con " + (decise === 1 ? "1 foto extra decisa" : decise + " foto extra decise") + " per questa lavorazione.");
+                : "Il box corrisponde al dato, con " + conCosa.join(" e ") + ".");
             nota.css({ "font-size": "12px", "color": "#767676", "padding": "2px 0" });
             contenitore.append(nota);
             return;
@@ -4632,7 +4663,12 @@ const schedaRef = {
     /// l'immagine cambiata si puo' tenere quella del box o usare quella del server; su una in
     /// piu' tenerla solo per questa lavorazione; su una mancante escluderla per questa
     /// lavorazione. Senza sigla non c'e' una chiave per il meta, e niente azioni.
+    /// I20-1073: su un campo, un'etichetta o una foto del gruppo assenti dal box, metterli in
+    /// noRender, se l'elemento si riconosce (per la foto serve il membro del gruppo).
     azioniPerDifferenza(diff) {
+        if (diff != null && diff.tipo === "mancante") {
+            return this.elementoNoRenderDellAssenza(diff) != null ? ["noRender"] : [];
+        }
         if (diff == null || diff.sigla == null || String(diff.sigla) === "") {
             return [];
         }
@@ -4966,7 +5002,8 @@ const schedaRef = {
             tieniBox: ["Tieni l'immagine del box", "Il box non cambia: per questa lavorazione il dato usa l'immagine che sta nel box"],
             usaServer: ["Usa l'immagine del server", "Ricollega il riquadro all'immagine del server, identica per contenuto: il risultato non cambia"],
             tieniLavorazione: ["Tieni solo per questa lavorazione", "La foto extra resta nel dato di questa sola lavorazione"],
-            escludiLavorazione: ["Escludi per questa lavorazione", "Per questa lavorazione il dato non chiede piu' questa foto extra"]
+            escludiLavorazione: ["Escludi per questa lavorazione", "Per questa lavorazione il dato non chiede piu' questa foto extra"],
+            noRender: ["Metti in noRender", "L'elemento non va nel box: lo si mette fra i noRender e la differenza risulta risolta"]
         };
         var barra = $('<div></div>');
         barra.css({ "display": "flex", "gap": "6px", "margin-top": "4px", "flex-wrap": "wrap" });
@@ -4980,6 +5017,9 @@ const schedaRef = {
                 try {
                     if (azione === "usaServer") {
                         await me.ricollegaAllImmagineDelServer(diff, dopoAzione);
+                    }
+                    else if (azione === "noRender") {
+                        await me.cambiaNoRenderDellAssenza(diff, true, dopoAzione);
                     }
                     else {
                         await me.eseguiAzioneExtra(diff, azione, dopoAzione);
@@ -5039,6 +5079,91 @@ const schedaRef = {
             riga.append(testo).append(togli);
             sezione.append(riga);
         });
+    },
+
+    /* ---------- I20-1073: gli elementi assenti risolti con noRender ---------- */
+
+    /// Il record primario della scheda aperta: da li' si leggono la lista noRender e i membri del
+    /// gruppo, come fa la preanalisi.
+    recordPrimarioDellaScheda() {
+        var primario = (this.schedeRefDati || []).find(f => f != null && f.recordInTracciato != null && f.recordInTracciato.StatoSelezione == 1);
+        return primario != null ? primario.recordInTracciato : null;
+    },
+
+    /// L'elemento noRender di un'assenza della preanalisi, o null se non si riconosce.
+    elementoNoRenderDellAssenza(diff) {
+        var rec = this.recordPrimarioDellaScheda();
+        return NoRenderElementi.elementoDaAssenza(diff, rec != null ? rec.membriGruppoFoto : null);
+    },
+
+    /// Mette in noRender, o ne toglie, l'elemento di un'assenza: la lista noRender del box con
+    /// quell'elemento in piu' o in meno va al server; se la registra, i record della scheda si
+    /// allineano e la finestra si rifa' (dopoAzione). E' lo stesso dato che cambia la schermata
+    /// noRender. Torna true se e' andata.
+    async cambiaNoRenderDellAssenza(diff, inNoRender, dopoAzione) {
+        var elemento = this.elementoNoRenderDellAssenza(diff);
+        var rec = this.recordPrimarioDellaScheda();
+        if (elemento == null || rec == null) {
+            messaggioUtente("Code SRF-106 noRender: elemento non riconosciuto" + (diff != null && diff.label ? ": " + diff.label : ""), "error");
+            return false;
+        }
+        var elementi = inNoRender
+            ? NoRenderElementi.conElemento(rec.noRenderElementi, elemento)
+            : NoRenderElementi.senzaElemento(rec.noRenderElementi, elemento);
+        if (!(await this.inviaNoRender(elementi))) {
+            return false;
+        }
+        this.aggiornaNoRenderNeiRecord(elementi);
+        messaggioUtente("noRender: " + elemento.nome + (inNoRender ? " messo in noRender" : " tolto dal noRender"), "success", false, 5);
+        if (typeof dopoAzione === "function") {
+            await dopoAzione();
+        }
+        return true;
+    },
+
+    /// La sezione della finestra con gli elementi assenti risolti con noRender, ognuno col suo
+    /// Annulla: come le foto extra decise per questa lavorazione.
+    riempiSezioneNoRender(sezione, dopoAzione) {
+        sezione.empty();
+        var risolte = this.risolteNoRenderInMemoria();
+        if (risolte.length === 0) {
+            sezione.css("display", "none");
+            return;
+        }
+        sezione.css("display", "block");
+        var me = this;
+
+        var titolo = $('<div></div>').text("Risolti con noRender (" + risolte.length + ")");
+        titolo.css({ "font-size": "13px", "font-weight": "600", "color": "#2c2c2c", "border-top": "1px solid #ddd", "padding-top": "8px" });
+        sezione.append(titolo);
+
+        risolte.forEach(function (assenza) {
+            var riga = $('<div></div>');
+            riga.css({ "display": "flex", "align-items": "center", "gap": "8px", "padding": "3px 0 3px 8px", "border-left": "2px solid #767676", "margin-top": "6px" });
+            var testo = $('<span></span>').text(me.descriviRisoltaNoRender(assenza));
+            testo.css({ "font-size": "12px", "color": "#2c2c2c", "flex": "1 1 auto" });
+            var annulla = $('<button></button>').text("Annulla");
+            annulla.css({ "font-size": "11px", "padding": "2px 6px", "flex": "0 0 auto" });
+            Tooltip.impostaTooltip(annulla[0], "Toglie l'elemento dal noRender: la differenza torna fra quelle da risolvere");
+            annulla.on("click", async function () {
+                annulla.prop("disabled", true);
+                try {
+                    await me.cambiaNoRenderDellAssenza(assenza, false, dopoAzione);
+                }
+                finally {
+                    annulla.prop("disabled", false);
+                }
+            });
+            riga.append(testo).append(annulla);
+            sezione.append(riga);
+        });
+    },
+
+    /// "descrizione2: non presente nel box, in noRender".
+    descriviRisoltaNoRender(assenza) {
+        var etichetta = typeof ReportIntegrita !== "undefined" ? ReportIntegrita.etichettaSegnalazione(assenza.label) : assenza.label;
+        var cosa = assenza.tipoElemento === NoRenderElementi.TIPO_FOTO ? "foto non presente nel box" : "non presente nel box";
+        return etichetta + ": " + cosa + ", in noRender";
     },
 
     /// I20-1056, lotto 4: la sezione delle segnalazioni di impaginazione del bollino del box, con
@@ -5146,6 +5271,8 @@ const schedaRef = {
             const me = this;
             const codice = this.codiceDellaRefAperta();
 
+            //I20-1073: le sezioni non hanno un'altezza e uno scorrimento loro: scorre solo la finestra,
+            //con una barra sola (con le due, una dentro l'altra, l'operatore non ci si ritrovava).
             const contenuto = $(`
                 <div style="width: 100%; display: flex; flex-direction: column; gap: 10px; font-family: Arial, sans-serif; color: #2c2c2c;">
                     <div style="display: flex; align-items: center; gap: 12px;">
@@ -5161,11 +5288,13 @@ const schedaRef = {
                         <div id="segnalazioniAzioni" style="flex: 0 0 auto;"></div>
                     </div>
 
-                    <div id="segnalazioniElenco" style="width: 100%; max-height: 220px; overflow-y: auto; padding-right: 4px; box-sizing: border-box;"></div>
+                    <div id="segnalazioniElenco" style="width: 100%; padding-right: 4px; box-sizing: border-box;"></div>
 
-                    <div id="segnalazioniExtraLavorazione" style="width: 100%; max-height: 160px; overflow-y: auto; padding-right: 4px; box-sizing: border-box; display: none;"></div>
+                    <div id="segnalazioniExtraLavorazione" style="width: 100%; padding-right: 4px; box-sizing: border-box; display: none;"></div>
 
-                    <div id="segnalazioniBollinoScheda" style="width: 100%; max-height: 220px; overflow-y: auto; padding-right: 4px; box-sizing: border-box;"></div>
+                    <div id="segnalazioniNoRender" style="width: 100%; padding-right: 4px; box-sizing: border-box; display: none;"></div>
+
+                    <div id="segnalazioniBollinoScheda" style="width: 100%; padding-right: 4px; box-sizing: border-box;"></div>
                 </div>
             `);
 
@@ -5174,6 +5303,7 @@ const schedaRef = {
             const azioni = contenuto.find("#segnalazioniAzioni");
             const sezioneBollino = contenuto.find("#segnalazioniBollinoScheda");
             const sezioneExtra = contenuto.find("#segnalazioniExtraLavorazione");
+            const sezioneNoRender = contenuto.find("#segnalazioniNoRender");
 
             //I20-1070: dopo una decisione sulle foto extra la preanalisi si rifa' e tutto si
             //ridisegna. E' lo stesso lavoro del pulsante Aggiorna, che da qui in poi lo chiama.
@@ -5184,11 +5314,13 @@ const schedaRef = {
                 me.riempiElencoSegnalazioni(elenco, intestazione, me.segnalazioniInMemoria(), me.vociBollinoInMemoria(), rifaiAnalisi);
                 me.riempiSezioneBollino(sezioneBollino, elenco, intestazione);
                 me.riempiSezioneExtraLavorazione(sezioneExtra, rifaiAnalisi);
+                me.riempiSezioneNoRender(sezioneNoRender, rifaiAnalisi);
             };
 
             this.riempiElencoSegnalazioni(elenco, intestazione, this.segnalazioniInMemoria() || [], this.vociBollinoInMemoria(), rifaiAnalisi);
             this.riempiSezioneBollino(sezioneBollino, elenco, intestazione);
             this.riempiSezioneExtraLavorazione(sezioneExtra, rifaiAnalisi);
+            this.riempiSezioneNoRender(sezioneNoRender, rifaiAnalisi);
 
             //Rifa' la pre analisi adesso: e' il modo per vedere l'effetto delle correzioni senza
             //chiudere e riaprire la scheda. Icona, non scritta: sta sulla riga dello stato.
@@ -5245,7 +5377,10 @@ const schedaRef = {
      * Le differenze fra i dati della scheda e quello che c'e' nel box, con la stessa pre
      * analisi che gira all'apertura della schermata di edit.
      */
+    /// I20-1073: le assenze gia' risolte con noRender, che la preanalisi restituisce a parte, restano
+    /// in memoria per la finestra e il segnalino (risolteNoRenderInMemoria).
     async differenzeDatiNelBox(box, recordsScheda) {
+        this.risolteNoRenderDelBox = [];
         try {
             if (box == null || !box.isValid) {
                 return [];
@@ -5280,6 +5415,7 @@ const schedaRef = {
                 rec
             );
 
+            this.risolteNoRenderDelBox = preAnalisi != null && Array.isArray(preAnalisi.risolteNoRender) ? preAnalisi.risolteNoRender : [];
             return preAnalisi != null && preAnalisi.differenze != null ? preAnalisi.differenze : [];
         }
         catch (e) {
@@ -6585,58 +6721,83 @@ const schedaRef = {
     /// Salva l'opzione di rendering del box. Gli elementi viaggiano sul nuovo endpoint, le foto
     /// primarie/secondarie restano sul canale P/S di I20-965: sono due dati distinti.
     salvaNoRender() {
-        let me = this;
         var schedaRef = this.schedeRefDati;
         if (schedaRef == null || schedaRef.length < 1) {
             return;
         }
 
-        var codice_gruppo = schedaRef[0].recordInTracciato["Scatto.CodiceGruppo"];
         var lista = this.elementiNoRenderDelBox || [];
         //Le foto viaggiano nella stessa struttura degli altri elementi: una sola chiamata,
         //quindi una sola scrittura sul meta e nessuna corsa fra due salvataggi.
         var elementi = NoRenderElementi.elementiDaSalvare(lista);
 
-        var idRec = 0;
-        try {
-            var dna = Utility.getDnaOfBox(this.refSelected.item);
-            if (dna != null && dna.idRec != null && dna.idRec !== "" && !isNaN(parseInt(dna.idRec))) {
-                idRec = parseInt(dna.idRec);
+        this.inviaNoRender(elementi).then(function (registrato) {
+            if (registrato) {
+                messaggioUtente("noRender: modifiche salvate", "success", false, 5);
             }
-        }
-        catch (e) {
-            console.warn("Impossibile recuperare idRec dal box durante il salvataggio noRender", e);
-        }
-
-        var formData = new FormData();
-        formData.append("idLavorazione", idKitLavorazione);
-        formData.append("CodiceGruppo", codice_gruppo);
-        formData.append("idRec", idRec);
-        formData.append("elementi", JSON.stringify(elementi));
-
-        const xhr = new XMLHttpRequestClient();
-        xhr.onload = async (objResult, parsed) => {
-            if (!parsed) {
-                try {
-                    objResult = JSON.parse(objResult);
-                }
-                catch (e) {
-                    messaggioUtente("Code SRF-52 noRender: errore durante il salvataggio: " + e, "error");
-                    return;
-                }
-            }
-            if (objResult != null && objResult.esito === false) {
-                messaggioUtente("Code SRF-53 noRender: il server ha rifiutato il salvataggio", "error");
-                return;
-            }
-            messaggioUtente("noRender: modifiche salvate", "success", false, 5);
-        };
-
-        xhr.send("Menabo/modificaNoRender" + "/" + 0, formData, "PUT");
+        });
 
         this.aggiornaNoRenderNeiRecord(elementi);
         this.applicaNoRenderAlDocumento();
         this.proponiFixFotoSeServe();
+        //I20-1073: le differenze e il segnalino della scheda seguono il noRender nuovo: un elemento
+        //assente ripristinato torna fra le differenze, uno messo in noRender fra i risolti.
+        this.ricalcolaSegnalazioniDellaScheda();
+    },
+
+    /// I20-1073: manda al server la lista noRender del box, che la sostituisce per intero. La usano
+    /// la schermata noRender e la finestra delle differenze. Torna true se il server l'ha
+    /// registrata; gli errori si dicono qui.
+    inviaNoRender(elementi) {
+        var me = this;
+        return new Promise(function (resolve) {
+            var schedaRef = me.schedeRefDati;
+            if (schedaRef == null || schedaRef.length < 1) {
+                resolve(false);
+                return;
+            }
+            var formData = new FormData();
+            formData.append("idLavorazione", idKitLavorazione);
+            formData.append("CodiceGruppo", schedaRef[0].recordInTracciato["Scatto.CodiceGruppo"]);
+            formData.append("idRec", me.idRecDelBoxAperto());
+            formData.append("elementi", JSON.stringify(elementi || []));
+
+            var xhr = new XMLHttpRequestClient();
+            xhr.onload = function (objResult, parsed) {
+                if (!parsed) {
+                    try {
+                        objResult = JSON.parse(objResult);
+                    }
+                    catch (e) {
+                        messaggioUtente("Code SRF-52 noRender: errore durante il salvataggio: " + e, "error");
+                        resolve(false);
+                        return;
+                    }
+                }
+                if (objResult != null && objResult.esito === false) {
+                    messaggioUtente("Code SRF-53 noRender: il server ha rifiutato il salvataggio", "error");
+                    resolve(false);
+                    return;
+                }
+                resolve(true);
+            };
+            xhr.onerror = function () {
+                resolve(false);
+            };
+            xhr.send("Menabo/modificaNoRender/0", formData, "PUT");
+        });
+    },
+
+    /// I20-1073: rifa' la preanalisi del box aperto e il segnalino, dopo un cambio del noRender.
+    async ricalcolaSegnalazioniDellaScheda() {
+        try {
+            var box = this.refSelected != null ? this.refSelected.item : null;
+            this.memorizzaSegnalazioni(await this.differenzeDatiNelBox(box, this.schedeRefDati));
+            this.aggiornaPulsanteSegnalazioni();
+        }
+        catch (e) {
+            console.error("Code SRF-107 Differenze non ricalcolate dopo il noRender: " + e);
+        }
     },
 
     aggiornaNoRenderNeiRecord(elementi) {
