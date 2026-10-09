@@ -178,10 +178,12 @@ test("la finestra delle differenze offre le azioni, la sezione delle decisioni, 
     const testo = sorgente("schedaRef.js");
 
     assert.match(testo, /riempiElencoSegnalazioni\(contenitore, intestazione, differenze, vociBollino = \[\], dopoAzione = null\) \{/);
-    assert.match(testo, /riga\.append\(campo\)\.append\(dettaglio\);\s*\/\/I20-1070[^\n]*\n\s*this\.aggiungiAzioniDifferenza\(riga, diff, dopoAzione\);/);
-    assert.match(testo, /id="segnalazioniExtraLavorazione"/);
-    //I20-1073: dopo le decisioni, la sezione degli elementi assenti risolti con noRender.
-    assert.match(testo, /const rifaiAnalisi = async function \(\) \{[\s\S]*?me\.riempiSezioneExtraLavorazione\(sezioneExtra, rifaiAnalisi\);\s*me\.riempiSezioneNoRender\(sezioneNoRender, rifaiAnalisi\);\s*\};/);
+    //I20-1075: nei riquadri per elemento; le decisioni stanno nella sezione Risolte.
+    assert.match(testo, /\/\/I20-1070[^\n]*\n\s*me\.aggiungiAzioniDifferenza\(riga, diff, dopoAzione\);/);
+    assert.match(testo, /id="segnalazioniRisolte"/);
+    assert.match(testo.substring(testo.indexOf("    riempiSezioneRisolte(sezione, dopoAzione) {")), /me\.rigaRisolta\(me\.descriviExtraLavorazione\(voce\), "Togli",[\s\S]*?\(\) => me\.togliExtraLavorazione\(voce, dopoAzione\)\)\);/);
+    //I20-1075: la sezione Risolte (decisioni e noRender insieme), poi quella del bollino.
+    assert.match(testo, /const rifaiAnalisi = async function \(\) \{[\s\S]*?me\.riempiSezioneRisolte\(sezioneRisolte, rifaiAnalisi\);\s*me\.riempiSezioneBollino\(sezioneBollino, elenco, intestazione\);\s*\};/);
     assert.match(testo, /me\.lampeggiaContenuto\(contenuto\);\s*await rifaiAnalisi\(\);/);
     assert.match(testo, /xhr\.send\("Menabo\/modificaExtraLavorazione\/0", formData, "PUT"\);/);
     //Il ricollegamento cambia solo il file del link, non il riquadro.
