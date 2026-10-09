@@ -24,6 +24,15 @@ public sealed class FabbricaCorreggo : WebApplicationFactory<Program>
     private readonly string cartella = Path.Combine(Path.GetTempPath(), "correggo4-test-" + Guid.NewGuid().ToString("N"));
     private readonly string nomeDb = "correggo4-" + Guid.NewGuid().ToString("N");
 
+    /// <summary>La cartella dei volantini di questa istanza (Storage:VolantiniPath).</summary>
+    public string CartellaVolantini => Path.Combine(cartella, "volantini");
+
+    /// <summary>
+    /// Olimpo finto per il client "fico": riceve la richiesta e decide la risposta. Va impostato prima
+    /// della prima richiesta; senza, il client "fico" resta quello vero.
+    /// </summary>
+    public Func<HttpRequestMessage, HttpResponseMessage>? OlimpoFinto { get; set; }
+
     public FabbricaCorreggo(string? pathBase = null, IPAddress? ipClient = null)
     {
         this.pathBase = pathBase;
@@ -34,7 +43,8 @@ public sealed class FabbricaCorreggo : WebApplicationFactory<Program>
     {
         builder.UseEnvironment("Development");
         builder.UseSetting("ConnectionStrings:Correggo4Db", "Host=non-usato");
-        builder.UseSetting("Storage:VolantiniPath", Path.Combine(cartella, "volantini"));
+        builder.UseSetting("Storage:VolantiniPath", CartellaVolantini);
+        builder.UseSetting("Fico:OlimpoUrl", "http://olimpo.test/olimpo");
         if (pathBase != null)
             builder.UseSetting("PathBase", pathBase);
 
@@ -48,6 +58,9 @@ public sealed class FabbricaCorreggo : WebApplicationFactory<Program>
             foreach (var d in demone) services.Remove(d);
 
             services.AddSingleton<Microsoft.AspNetCore.Hosting.IStartupFilter>(new FiltroIpClient(ipClient));
+
+            if (OlimpoFinto != null)
+                services.AddHttpClient("fico").ConfigurePrimaryHttpMessageHandler(() => new GestoreFinto(OlimpoFinto));
         });
     }
 
@@ -59,6 +72,12 @@ public sealed class FabbricaCorreggo : WebApplicationFactory<Program>
     {
         base.Dispose(disposing);
         try { if (Directory.Exists(cartella)) Directory.Delete(cartella, true); } catch (IOException) { }
+    }
+
+    private sealed class GestoreFinto(Func<HttpRequestMessage, HttpResponseMessage> risposta) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            => Task.FromResult(risposta(request));
     }
 
     /// <summary>TestServer non ha un indirizzo remoto: lo si mette prima di tutto il resto.</summary>

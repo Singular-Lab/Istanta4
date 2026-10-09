@@ -32,6 +32,9 @@ builder.Services.AddHttpClient("fico", c => c.Timeout = TimeSpan.FromSeconds(30)
 builder.Services.AddScoped<Correggo4.Servizi.ClienteFico>();
 // Gestisci promo (j209): finestra Category, date, blocco, revoca.
 builder.Services.AddScoped<Correggo4.Servizi.ServizioPromo>();
+// Promo/AggiornaDaFidelity (I20-1076, era UpdateVolData.ashx): fidelity aggiorna nome e date della promo,
+// con il Bearer verificato su Olimpo.
+builder.Services.AddScoped<Correggo4.Servizi.IdentitaOlimpo>();
 // Consulta tutti i volantini (j213): storico, PDF, zip, report.
 builder.Services.AddScoped<Correggo4.Servizi.ServizioStorico>();
 
