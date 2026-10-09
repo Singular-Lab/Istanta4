@@ -15,13 +15,16 @@ import { authMiddleware } from '../middleware/authMiddleware';
 import { permissionGuard } from '../middleware/permissionGuard';
 
 import { AuditLogService } from '../services/AuditLogService';
-import { verificaRisposta } from '../utils/rispostaServizi';
+import { esitoIstanta, verificaRisposta } from '../utils/rispostaServizi';
 import { ServerUtils } from '../utils/ServerUtils';
 
 // UpdateVolData.ashx: un volantino che Correggo non ha ancora non e un errore
 const aggiornamentoCorreggoRiuscito = (d: any): boolean =>
   String(d?.error_detail ?? '').includes('volantino_non_trovato') ||
   (typeof d === 'object' && d !== null && d.result !== 'error' && d.result !== false && d.esito !== false && !d.error_detail);
+
+// eliminaPromo definitiva: una promo che Istanta non ha piu e gia eliminata, si completa la cancellazione locale
+const eliminazioneIstantaRiuscita = (d: any): boolean => esitoIstanta(d) || d?.error === 'promo_not_found';
 
 export class PromoController extends BaseController {
   constructor(
@@ -274,7 +277,8 @@ export class PromoController extends BaseController {
           undefined
         ),
         'ISTANTA',
-        '/FicoProcess/eliminaPromo'
+        '/FicoProcess/eliminaPromo',
+        eliminazioneIstantaRiuscita
       );
       const success = await this.promoService.deletePromo(req.params.id);
       if (!success) {
@@ -291,6 +295,12 @@ export class PromoController extends BaseController {
   private async deleteLavorazione(req: ExpressRequest, res: Response): Promise<void> {
     try {
       const { id, stato } = req.params;
+      // :stato e lo stato che l'operatore vede: se nel frattempo e cambiato, eliminare o ripristinare non e piu la sua scelta
+      const promo = await this.promoService.getPromoById(id);
+      if ((promo.stato === STATO_PROMO.ELIMINATA) !== (stato === STATO_PROMO.ELIMINATA)) {
+        this.sendResponse(res, HttpStatusCode.CONFLICT, { message: 'Lo stato della promo è cambiato, ricarica la pagina' });
+        return;
+      }
       let result: boolean | null = null;
       if (stato === STATO_PROMO.ELIMINATA) {
         verificaRisposta(

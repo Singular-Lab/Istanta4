@@ -120,6 +120,8 @@ const ODSInCorsoSection: React.FC<ODSInCorsoSectionProps> = ({ ordini, searchQue
     switch (status) {
       case STATO_ORDINI_STAMPA.IN_REVISIONE:
         return 'In Revisione';
+      case STATO_ORDINI_STAMPA.IN_INVIO:
+        return 'In invio';
       case STATO_ORDINI_STAMPA.FINITO:
         return 'Completato';
       case STATO_ORDINI_STAMPA.REVISIONATO:

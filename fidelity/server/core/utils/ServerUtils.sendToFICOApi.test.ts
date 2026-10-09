@@ -23,6 +23,7 @@ const req = { session: {}, headers: { authorization: 'Bearer test' } } as any;
 
 afterEach(() => {
   fetchMock.mockReset();
+  vi.unstubAllEnvs();
 });
 
 describe('ServerUtils.sendToFICOApi su risposta non OK', () => {
@@ -47,6 +48,19 @@ describe('ServerUtils.sendToFICOApi su risposta non OK', () => {
 
   it('nessuna risposta HTTP: status 0', async () => {
     fetchMock.mockRejectedValue(new Error('connect ECONNREFUSED'));
+
+    const r = await ServerUtils.sendToFICOApi(req, 'http://127.0.0.1:5000/FicoProcess/x', 'GET', undefined);
+
+    expect(r.status).toBe(0);
+    expect(r.data).toBeNull();
+  });
+
+  it('Istanta non risponde entro FICO_API_TIMEOUT_MS: richiesta interrotta, status 0', async () => {
+    vi.stubEnv('FICO_API_TIMEOUT_MS', '20');
+    // fetch che non risponde mai: si sblocca solo quando il signal viene interrotto
+    fetchMock.mockImplementation((_url: string, opzioni: { signal: AbortSignal }) =>
+      new Promise((_, reject) => opzioni.signal.addEventListener('abort', () => reject(opzioni.signal.reason)))
+    );
 
     const r = await ServerUtils.sendToFICOApi(req, 'http://127.0.0.1:5000/FicoProcess/x', 'GET', undefined);
 

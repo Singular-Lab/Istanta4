@@ -1347,10 +1347,11 @@ export class PromoService implements IPromoService {
         validita_al: data.validita_al ? dayjs(data.validita_al).toDate() : promoValues.validita_al,
         data_scadenza: data.data_scadenza ? dayjs(data.data_scadenza).toDate() : promoValues.data_scadenza,
         offset_visibilita: data.offset_visibilita ?? promoValues.offset_visibilita,
-        stato: data.stato ?? promoValues.stato,
+        // Stato e gdo non si cambiano dalla modifica: lo stato segue il ciclo di lavorazione, la gdo e' fissata alla creazione
+        stato: promoValues.stato,
         context: data.context ?? promoValues.context,
         meta: normalizzaMeta(data.meta, promoValues.meta, this.getVisibilitaOpzioni()),
-        gdo: data.gdo ?? promoValues.gdo
+        gdo: promoValues.gdo
       };
       const updatedPromo = await this.promoRepository.update(
         id,

@@ -94,6 +94,8 @@ const PREFIX_TO_RUOLO: Record<string, RUOLO_UTENTE_GDO> = {
 };
 const DEFAULT_TOKEN_TTL_SECONDS = 3600;
 const TOKEN_EXPIRY_SAFETY_WINDOW_MS = 30_000;
+// Coopfi API, MS Graph e Olympus: una chiamata appesa non deve bloccare il login
+const EXTERNAL_HTTP_TIMEOUT_MS = 20_000;
 const LINE_CHART_PALETTE = [
     "#0EA5E9",
     "#22C55E",
@@ -1495,7 +1497,8 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
                     ruoli: haGruppoCheDeveVedereTutto ? [] : this.getRuoliPolicyFromUtenteCoop(
                         utente.meta_utenti?.codice_posizione as string | undefined
                     )
-                })
+                }),
+                signal: AbortSignal.timeout(EXTERNAL_HTTP_TIMEOUT_MS)
             });
 
             if (!response.ok) return undefined;
@@ -1541,7 +1544,7 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
 
             const response = await fetch(
                 `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`,
-                { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body }
+                { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body, signal: AbortSignal.timeout(EXTERNAL_HTTP_TIMEOUT_MS) }
             );
 
             if (!response.ok) return null;
@@ -1566,7 +1569,8 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
             if (!token) return null;
 
             const response = await fetch(`https://graph.microsoft.com/v1.0/users/${oid}/photo/$value`, {
-                headers: { Authorization: `Bearer ${token}` }
+                headers: { Authorization: `Bearer ${token}` },
+                signal: AbortSignal.timeout(EXTERNAL_HTTP_TIMEOUT_MS)
             });
 
             if (!response.ok) return null;
@@ -1920,7 +1924,8 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
                     "Content-Type": "application/x-www-form-urlencoded",
                     "client-key": process.env.AD_CLIENT_KEY
                 },
-                body
+                body,
+                signal: AbortSignal.timeout(EXTERNAL_HTTP_TIMEOUT_MS)
             });
 
             if (!response.ok) {
@@ -2072,11 +2077,8 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
                 "client-key": process.env.AD_CLIENT_KEY ?? ""
             };
 
-            let response: Response;
-            try {
-                response = await fetch(fullUrl, { method: "GET", headers });
-            } catch (networkError) {
-                // Errore di rete (TypeError, ECONNREFUSED, ecc.) — retry con backoff Fibonacci
+            // Errore di rete o timeout (TypeError, ECONNREFUSED, TimeoutError, ecc.) — retry con backoff Fibonacci
+            const attendiDopoErroreRete = async (networkError: unknown) => {
                 if (attempt === maxTransientAttempts) {
                     throw new ServiceUnavailableError({
                         message: "Coopfi API non raggiungibile dopo multipli tentativi",
@@ -2086,6 +2088,13 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
                 }
                 log.warn(`[CoopfiAgenziaLib] Errore di rete (tentativo ${attempt + 1}/${maxTransientAttempts + 1}), retry tra ${fib[attempt]}s`, { url: fullUrl });
                 await new Promise(resolve => setTimeout(resolve, fib[attempt] * 1000));
+            };
+
+            let response: Response;
+            try {
+                response = await fetch(fullUrl, { method: "GET", headers, signal: AbortSignal.timeout(EXTERNAL_HTTP_TIMEOUT_MS) });
+            } catch (networkError) {
+                await attendiDopoErroreRete(networkError);
                 continue;
             }
 
@@ -2093,10 +2102,16 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
             if (response.status === 401) {
                 this.invalidateCachedAccessToken();
                 const refreshedToken = await this.getCoopfiAccessToken(apiBaseUrl);
-                response = await fetch(fullUrl, {
-                    method: "GET",
-                    headers: { ...headers, "Authorization": `Bearer ${refreshedToken}` }
-                });
+                try {
+                    response = await fetch(fullUrl, {
+                        method: "GET",
+                        headers: { ...headers, "Authorization": `Bearer ${refreshedToken}` },
+                        signal: AbortSignal.timeout(EXTERNAL_HTTP_TIMEOUT_MS)
+                    });
+                } catch (networkError) {
+                    await attendiDopoErroreRete(networkError);
+                    continue;
+                }
                 // Se ancora 401 dopo il refresh → errore definitivo, non si può fare altro
                 if (response.status === 401) {
                     await this.throwMappedCoopfiApiError(response, fullUrl);

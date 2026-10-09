@@ -29,6 +29,7 @@ interface BulkStatus {
     total: number;
     success: number;
     failed: number;
+    cancelled?: number;
     pending: number;
     processed: number;
     percentuale: number;
@@ -47,7 +48,7 @@ interface JobStatus {
     total: number;
     telefono: string;
     attempts: number;
-    status: 'PENDING' | 'PROCESSING' | 'SUCCESS' | 'FAILED';
+    status: 'PENDING' | 'PROCESSING' | 'SUCCESS' | 'FAILED' | 'CANCELLED';
     error?: string;
 }
 
@@ -117,6 +118,12 @@ const getJobStatusConfig = (status: JobStatus['status']) => {
                 label: 'Fallito',
                 color: 'error',
                 icon: 'CircleX' as const,
+            };
+        case 'CANCELLED':
+            return {
+                label: 'Annullato',
+                color: 'secondary',
+                icon: 'Ban' as const,
             };
         default:
             return {
@@ -219,7 +226,8 @@ const CampaignCard: React.FC<{
     const statusConfig = getStatusConfig(bulk.status);
     const isActive = bulk.status === 'RUNNING' || bulk.status === 'PENDING';
 
-    const processed = bulk.processed ?? bulk.success + bulk.failed;
+    const cancelled = bulk.cancelled ?? 0;
+    const processed = bulk.processed ?? bulk.success + bulk.failed + cancelled;
     const subtitle =
         bulk.createdAt != null
             ? `Creata ${dayjs(bulk.createdAt).fromNow()} • ${processed}/${bulk.total} processati`
@@ -295,7 +303,7 @@ const CampaignCard: React.FC<{
             </div>
 
             {/* Stats + progress */}
-            <div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-5 items-center">
+            <div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-6 items-center">
                 <div className="text-center md:text-left">
                     <div className="text-xs uppercase tracking-wide text-slate-400">Totali</div>
                     <div className="text-lg font-semibold text-slate-800 dark:text-slate-100">
@@ -309,6 +317,10 @@ const CampaignCard: React.FC<{
                 <div className="text-center md:text-left">
                     <div className="text-xs uppercase tracking-wide text-slate-400">Falliti</div>
                     <div className="text-lg font-semibold text-danger">{bulk.failed}</div>
+                </div>
+                <div className="text-center md:text-left">
+                    <div className="text-xs uppercase tracking-wide text-slate-400">Annullati</div>
+                    <div className="text-lg font-semibold text-slate-500">{cancelled}</div>
                 </div>
                 <div className="text-center md:text-left">
                     <div className="text-xs uppercase tracking-wide text-slate-400">In coda</div>
@@ -431,7 +443,8 @@ const JobDetailsModal: React.FC<{
                                                                         statusConfig.color === 'primary' &&
                                                                         'text-primary animate-spin',
                                                                         statusConfig.color === 'warning' && 'text-warning',
-                                                                        statusConfig.color === 'error' && 'text-danger'
+                                                                        statusConfig.color === 'error' && 'text-danger',
+                                                                        statusConfig.color === 'secondary' && 'text-slate-500'
                                                                     )}
                                                                 />
                                                                 <span className="text-xs">{statusConfig.label}</span>
@@ -562,12 +575,9 @@ const OutboxWhatsapp: React.FC = () => {
                 `/whatsapp/campaigns/${bulkId}/cancel`,
                 {}
             );
+            // Ricarica: i messaggi annullati e lo stato reale della campagna arrivano dal server
             if (response?.success) {
-                setCampaigns(prev =>
-                    prev.map(c =>
-                        c.bulkId === bulkId ? { ...c, status: 'FAILED' as const } : c
-                    )
-                );
+                fetchCampaigns();
             }
         } catch (error) {
             console.error('Errore annullamento campagna:', error);

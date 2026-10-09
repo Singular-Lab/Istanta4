@@ -18,7 +18,7 @@
  * ```
  */
 
-import { Model, ModelStatic, WhereOptions, FindOptions, Order, Op } from 'sequelize';
+import { Model, ModelStatic, WhereOptions, FindOptions, Order, Op, Transaction } from 'sequelize';
 import { IBaseRepository, PaginationOptions, PaginatedResult } from './IBaseRepository';
 import { log } from '../logger';
 
@@ -39,10 +39,10 @@ export abstract class BaseRepository<
   /**
    * Find an entity by its ID
    */
-  async findById(id: TId): Promise<TModel | null> {
+  async findById(id: TId, transaction?: Transaction): Promise<TModel | null> {
     try {
       const where = { [this.primaryKey]: id } as WhereOptions<TAttributes>;
-      return await this.model.findOne({ where });
+      return await this.model.findOne({ where, transaction });
     } catch (error) {
       log.error(`Repository findById error`, error instanceof Error ? error : new Error(String(error)), {
         model: this.model.name,
@@ -101,9 +101,9 @@ export abstract class BaseRepository<
   /**
    * Create a new entity
    */
-  async create(entity: Partial<TAttributes>): Promise<TModel> {
+  async create(entity: Partial<TAttributes>, transaction?: Transaction): Promise<TModel> {
     try {
-      return await this.model.create(entity as any);
+      return await this.model.create(entity as any, { transaction });
     } catch (error) {
       log.error(`Repository create error`, error instanceof Error ? error : new Error(String(error)), {
         model: this.model.name
@@ -115,16 +115,16 @@ export abstract class BaseRepository<
   /**
    * Update an existing entity
    */
-  async update(id: TId, entity: Partial<TAttributes>): Promise<TModel | null> {
+  async update(id: TId, entity: Partial<TAttributes>, transaction?: Transaction): Promise<TModel | null> {
     try {
       const where = { [this.primaryKey]: id } as WhereOptions<TAttributes>;
-      const [affectedRows] = await this.model.update(entity as any, { where });
+      const [affectedRows] = await this.model.update(entity as any, { where, transaction });
 
       if (affectedRows === 0) {
         return null;
       }
 
-      return await this.findById(id);
+      return await this.findById(id, transaction);
     } catch (error) {
       log.error(`Repository update error`, error instanceof Error ? error : new Error(String(error)), {
         model: this.model.name,
@@ -137,10 +137,10 @@ export abstract class BaseRepository<
   /**
    * Delete an entity by ID
    */
-  async delete(id: TId): Promise<boolean> {
+  async delete(id: TId, transaction?: Transaction): Promise<boolean> {
     try {
       const where = { [this.primaryKey]: id } as WhereOptions<TAttributes>;
-      const deletedCount = await this.model.destroy({ where });
+      const deletedCount = await this.model.destroy({ where, transaction });
       return deletedCount > 0;
     } catch (error) {
       log.error(`Repository delete error`, error instanceof Error ? error : new Error(String(error)), {

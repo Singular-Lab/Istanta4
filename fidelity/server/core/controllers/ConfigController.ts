@@ -8,7 +8,7 @@ import { fileURLToPath } from 'url';
 import util from 'util';
 import { v4 as uuidv4 } from 'uuid';
 import { HttpStatusCode, TIPO_UTENTI } from '../../../lib/enums';
-import { BadRequestError, ForbiddenError } from '../../../lib/errors';
+import { BadRequestError, ExternalApiError, ForbiddenError } from '../../../lib/errors';
 import { AvvisoManutenzione, Dashboard, RegoleMenabo } from '../../../lib/types';
 import { emitToClients } from '../../ws-server';
 import { BaseController } from '../base/BaseController';
@@ -191,8 +191,22 @@ export class ConfigController extends BaseController {
       }
       const regexBase64 = /^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)?$/;
 
+      // Un esito negativo di Olympus interrompe il salvataggio: la config non deve puntare a immagini mai caricate
+      const verificaEsitoOlympus = (risposta: { esito: boolean, error: string }) => {
+        if (!risposta.esito) {
+          // Il testo grezzo di Olympus resta nella cause (log), non nel messaggio al client
+          throw new ExternalApiError({
+            message: "Olympus non ha caricato l'immagine della configurazione Webpliant",
+            service: 'OLYMPUS',
+            endpoint: '/foto/updateFotoPathWeb',
+            cause: new Error(risposta.error || 'esito false')
+          });
+        }
+      };
+
       for (const logo of configWebpliant.webpliant.logo_header) {
-        if (regexBase64.test(logo.base64) && !logo.url) {
+        // La regex accetta anche la stringa vuota: senza contenuto non si carica nulla
+        if (logo.base64 && regexBase64.test(logo.base64) && !logo.url) {
           const formData = new FormData();
           const bufferIconaHeader = Buffer.from(logo.base64, 'base64');
           const blobIcona = new Blob([bufferIconaHeader], { type: 'image/png' });
@@ -203,15 +217,12 @@ export class ConfigController extends BaseController {
             formData,
             { headers: { Authorization: req.session.private_key } }
           );
-          if (result.data.esito) {
-            logo.url = `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${result.data.guidId}`;
-          } else {
-            log.error(result.data.error);
-          }
+          verificaEsitoOlympus(result.data);
+          logo.url = `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${result.data.guidId}`;
         }
       }
 
-      if (regexBase64.test(configWebpliant.webpliant.icona_pagina)) {
+      if (configWebpliant.webpliant.icona_pagina && regexBase64.test(configWebpliant.webpliant.icona_pagina)) {
         const formData = new FormData();
         const bufferIconaFavicon = Buffer.from(configWebpliant.webpliant.icona_pagina, 'base64');
         const blobIcona = new Blob([bufferIconaFavicon], { type: 'image/x-icon' });
@@ -222,12 +233,9 @@ export class ConfigController extends BaseController {
           formData,
           { headers: { Authorization: req.session.private_key } }
         );
-        if (result.data.esito) {
-          configWebpliant.webpliant.icona_pagina = result.data.guidId;
-        } else {
-          log.error(result.data.error);
-        }
-      } else if (configWebpliant.webpliant.icona_pagina.startsWith("http")) {
+        verificaEsitoOlympus(result.data);
+        configWebpliant.webpliant.icona_pagina = result.data.guidId;
+      } else if (configWebpliant.webpliant.icona_pagina?.startsWith("http")) {
         const url = new URL(configWebpliant.webpliant.icona_pagina);
         configWebpliant.webpliant.icona_pagina = url.searchParams.get("guidId") || "";
       }

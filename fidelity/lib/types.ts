@@ -691,6 +691,8 @@ export interface GDOWhatsappQueueJobAttributes {
 
   run_at_whatsapp_queue_job: Date;
   last_error_whatsapp_queue_job?: string | null;
+  // Id del messaggio restituito da Meta: prova che l'invio e' avvenuto
+  wamid_whatsapp_queue_job?: string | null;
 
   createdat?: Date;
   updatedat?: Date;

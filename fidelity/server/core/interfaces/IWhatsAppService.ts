@@ -2,7 +2,6 @@ import type { GDOWhatsappTemplateAttributes } from "../../../lib/types";
 import type { GDOResponseDTO } from "../dto/GDODTO";
 
 export interface IWhatsAppService {
-    inviaBroadcastMessaggi(msg: string): Promise<{ successo: boolean; errore?: string }>;
     getCurrentGDOWhatsappForCampaign(id_utente: string): Promise<GDOResponseDTO | null>;
     //TODO attenzione da questo metodo scaturira poi la gestione multi-gdo da SUPERADMIN
     getAllGDOWhatsapp(): Promise<{
@@ -52,9 +51,6 @@ export interface IWhatsAppService {
                 areaId?: string | null;
                 areaName?: string | null;
                 polygon?: [number, number][][];
-                // Comuni a entrambi
-                minCalls?: number;
-                lastDays?: number;
             };
             dateRange?: string | null; // "YYYY-MM-DD - YYYY-MM-DD"
         }): Promise<{
@@ -76,8 +72,6 @@ export interface IWhatsAppService {
             areaId?: string | null;
             areaName?: string | null;
             polygon?: [number, number][][];
-            minCalls?: number;
-            lastDays?: number;
         } | null,
         userFilters: {
             sesso?: string | null;

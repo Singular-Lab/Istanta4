@@ -4,7 +4,7 @@ import { Op, Transaction } from 'sequelize';
 import { v4 as uuidv4 } from 'uuid';
 import { Colorize } from '../../../lib/Colorize';
 import { EVENTI_WEBHOOK, EXPORT_DI_SISTEMA, STATO_COMBINAZIONI, STATO_LAVORAZIONE_KIT_RUNTIME, STATO_LOG_FILE, TIPO_KIT_DESIGN, TIPO_LAVORAZIONE } from '../../../lib/enums';
-import { BusinessError, DatabaseError, ExternalApiError, ForbiddenError, NotFoundError, ServiceUnavailableError, wrapDatabaseError, wrapNotFoundError } from '../../../lib/errors';
+import { BusinessError, DatabaseError, ExternalApiError, ForbiddenError, isAppError, NotFoundError, ServiceUnavailableError, wrapDatabaseError, wrapNotFoundError } from '../../../lib/errors';
 import { DESIGN_KIT_MONGO, FileItemKit, FileItemKitLog, ImportStorico, OggettoTipiDiExport, PaylodKitPubblicato, RUNTIME_KIT_MONGO, TipiDiExportAttributes } from '../../../lib/types';
 import config from '../config';
 import { sequelize } from '../db';
@@ -1216,10 +1216,14 @@ export class KitRuntimeService implements IKitRuntimeService {
       if (result.stato_lavorazione == STATO_LAVORAZIONE_KIT_RUNTIME.ELIMINATO) {
         throw new BusinessError({ message: 'Kit runtime already deleted', rule: 'Kit runtime già eliminato, impossibile eliminare nuovamente' });
       }
+      if (result.stato_lavorazione === STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO) {
+        throw new BusinessError({ message: 'Kit runtime pubblicato, impossibile eliminarlo', rule: 'Kit runtime pubblicato non può essere eliminato' });
+      }
       result.stato_lavorazione = STATO_LAVORAZIONE_KIT_RUNTIME.ELIMINATO;
       await result.save();
       return result.get({ plain: true });
     } catch (error) {
+      if (isAppError(error)) throw error;
       throw wrapDatabaseError(new Error("Errore durante l'eliminazione della lavorazione runtime"), {
         message: "Errore durante l'eliminazione della lavorazione runtime",
         operation: 'deleteOne',
@@ -1248,6 +1252,7 @@ export class KitRuntimeService implements IKitRuntimeService {
         return result.get({ plain: true });
       });
     } catch (error) {
+      if (isAppError(error)) throw error;
       throw wrapDatabaseError(error, {
         message: "Errore durante l'eliminazione del kit runtime",
         operation: 'deleteOne',
@@ -1659,18 +1664,26 @@ export class KitRuntimeService implements IKitRuntimeService {
   async pubblicaKitRuntime(idLavorazione: string, req: Request): Promise<any> {
     try {
       const { result, dati } = await sequelize.transaction(async (t) => {
-        await RuntimeKit.update(
-          { stato_lavorazione: STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO, fine_lavorazione: new Date() },
-          { where: { id: idLavorazione }, validate: false, transaction: t }
-        );
-        const result = await RuntimeKit.findOne({ where: { id: idLavorazione }, raw: true, transaction: t }) as unknown as any;
-        if (!result) {
+        // Lock sulla riga: due pubblicazioni concorrenti non devono superare entrambe il controllo di stato
+        const kit = await RuntimeKit.findOne({ where: { id: idLavorazione }, transaction: t, lock: t.LOCK.UPDATE });
+        if (!kit) {
           throw wrapNotFoundError(new Error("Kit runtime non trovato"), {
             message: 'Kit runtime non trovato',
             entityId: idLavorazione,
             entityType: 'RuntimeKit'
           });
         }
+        if (kit.stato_lavorazione === STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO || kit.stato_lavorazione === STATO_LAVORAZIONE_KIT_RUNTIME.ELIMINATO) {
+          throw new BusinessError({
+            message: kit.stato_lavorazione === STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO ? 'Kit runtime già pubblicato' : 'Kit runtime eliminato, impossibile pubblicarlo',
+            rule: 'Si pubblica solo un kit runtime non ancora pubblicato né eliminato'
+          });
+        }
+        await RuntimeKit.update(
+          { stato_lavorazione: STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO, fine_lavorazione: new Date() },
+          { where: { id: idLavorazione }, validate: false, transaction: t }
+        );
+        const result = await RuntimeKit.findOne({ where: { id: idLavorazione }, raw: true, transaction: t }) as unknown as any;
 
         await this.creaLogPubblicazioneFiles(idLavorazione, req.session.id_utente as string, t);
 
@@ -1713,16 +1726,22 @@ export class KitRuntimeService implements IKitRuntimeService {
         return { result, dati };
       });
 
-      await this.webhookService.scatenaEvento({
-        evento: EVENTI_WEBHOOK.KIT_PUBBLICATO,
-        dati: dati,
-        meta: {
-          source: 'Istanta 2 GDO Suite',
-          request_id: result.id
-        }
-      });
+      // La pubblicazione e' gia' committata: un webhook fallito non la annulla
+      try {
+        await this.webhookService.scatenaEvento({
+          evento: EVENTI_WEBHOOK.KIT_PUBBLICATO,
+          dati: dati,
+          meta: {
+            source: 'Istanta 2 GDO Suite',
+            request_id: result.id
+          }
+        });
+      } catch (error) {
+        log.error(`Webhook KIT_PUBBLICATO non inviato per il kit ${idLavorazione}`, error);
+      }
       return result;
     } catch (error) {
+      if (isAppError(error)) throw error;
       throw wrapDatabaseError(new Error("Errore durante la pubblicazione del kit runtime"), {
         message: "Errore durante la pubblicazione del kit runtime",
         operation: 'updateOne',

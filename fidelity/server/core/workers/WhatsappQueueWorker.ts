@@ -7,8 +7,7 @@ import { BusinessError, ExternalApiError, NotFoundError, ValidationError } from 
 import { ErrorCodes } from '../../../lib/errors/ErrorCodes';
 import { log } from '../logger';
 import { emitToClients } from '../../ws-server';
-import { GDOWhatsappCampagne } from '../models/whatsapp/gdo_whatsapp_campagne';
-import { GDOWhatsappTemplate } from '../models/whatsapp/gdo_whatsapp_template';
+import { gdoDellaCampagna, WhatsappQueueService } from '../services/WhatsappQueueService';
 import { roomGdo } from '../utils/socketRooms';
 import { QUEUE_NAMES } from '../../src/shared/queue/queues.js';
 import { getRedisConnectionOptions } from '../../src/shared/cache/redis.client.js';
@@ -18,6 +17,7 @@ interface BulkProgress {
     total: number;
     success: number;
     failed: number;
+    cancelled: number;
     pending: number;
     startedAt?: Date; // Timestamp di quando è iniziato il primo job
     room: string | null; // Room Socket.IO della GDO della campagna: gli eventi contengono i telefoni
@@ -60,7 +60,7 @@ interface WorkerOptions {
  * - Processa i job PENDING dalla queue
  * - Gestisce retry con exponential backoff
  * - Emette eventi WebSocket per il monitoraggio real-time
- * - Continua fino a quando tutti i job sono SUCCESS o FAILED
+ * - Continua fino a quando tutti i job sono SUCCESS, FAILED o CANCELLED
  */
 export class WhatsappQueueWorker {
     private active = 0;
@@ -74,6 +74,7 @@ export class WhatsappQueueWorker {
     private timer?: NodeJS.Timeout;
     private bullmqWorker?: BullMQWorker;
     private isRunning = false;
+    private readonly queueService = new WhatsappQueueService();
 
     constructor(options?: WorkerOptions) {
         this.concurrency = options?.concurrency ?? 1;
@@ -100,6 +101,8 @@ export class WhatsappQueueWorker {
         if (this.simulationMode) {
             log.warn(`⚠️  MODALITÀ SIMULAZIONE ATTIVA - Errori simulati: ${(this.simulationErrorRate * 100).toFixed(0)}%`);
         }
+
+        this.recuperaJobInterrotti().catch(err => log.error('Errore nel recupero dei job WhatsApp interrotti:', err));
 
         const redisConnection = getRedisConnectionOptions();
 
@@ -190,7 +193,7 @@ export class WhatsappQueueWorker {
 
         if (!this.bulkState.has(bulkId)) {
             // Conta i job per stato per questo bulk
-            const stats = await this.getBulkStats(bulkId);
+            const stats = await this.queueService.getBulkStatus(bulkId);
 
             // Trova il timestamp del primo job creato (startedAt)
             const firstJob = await GDOWhatsappQueueJob.findOne({
@@ -204,6 +207,7 @@ export class WhatsappQueueWorker {
                 total: job.total_whatsapp_queue_job,
                 success: stats.success,
                 failed: stats.failed,
+                cancelled: stats.cancelled,
                 pending: stats.pending,
                 startedAt: firstJob?.createdat ? new Date(firstJob.createdat) : new Date(),
                 room: await this.roomGdoDelBulk(job)
@@ -218,53 +222,31 @@ export class WhatsappQueueWorker {
      * Senza GDO gli eventi del bulk non vengono emessi: contengono i telefoni dei destinatari.
      */
     private async roomGdoDelBulk(job: typeof GDOWhatsappQueueJob.prototype): Promise<string | null> {
-        const campagna = await GDOWhatsappCampagne.findByPk(job.campagna_id_whatsapp_queue_job, {
-            attributes: ['template_id_whatsapp_campagna']
-        });
-        const template = campagna
-            ? await GDOWhatsappTemplate.findByPk(campagna.template_id_whatsapp_campagna, { attributes: ['id_gdo_gdowhatsapptemplate'] })
-            : null;
-        if (!template?.id_gdo_gdowhatsapptemplate) {
+        const idGdo = await gdoDellaCampagna(job.campagna_id_whatsapp_queue_job);
+        if (!idGdo) {
             log.warn(`Bulk ${job.bulk_id_whatsapp_queue_job}: GDO della campagna non trovata, stato non notificato via socket`);
             return null;
         }
-        return roomGdo(template.id_gdo_gdowhatsapptemplate);
+        return roomGdo(idGdo);
     }
 
     /**
-     * Ottiene le statistiche di un bulk dal database
+     * Messaggi rimasti PROCESSING dopo un'interruzione (crash, riavvio): l'esito e' sconosciuto e non
+     * vanno reinviati da soli. Con il wamid di Meta l'invio e' avvenuto, senza diventano FAILED.
      */
-    private async getBulkStats(bulkId: string): Promise<{total: number; success: number; failed: number; pending: number}> {
-        const [successCount, failedCount, pendingCount, totalCount] = await Promise.all([
-            GDOWhatsappQueueJob.count({
-                where: {
-                    bulk_id_whatsapp_queue_job: bulkId,
-                    status_whatsapp_queue_job: GDOWhatsappQueueJobStatus.SUCCESS
-                }
-            }),
-            GDOWhatsappQueueJob.count({
-                where: {
-                    bulk_id_whatsapp_queue_job: bulkId,
-                    status_whatsapp_queue_job: GDOWhatsappQueueJobStatus.FAILED
-                }
-            }),
-            GDOWhatsappQueueJob.count({
-                where: {
-                    bulk_id_whatsapp_queue_job: bulkId,
-                    status_whatsapp_queue_job: GDOWhatsappQueueJobStatus.PENDING
-                }
-            }),
-            GDOWhatsappQueueJob.count({
-                where: { bulk_id_whatsapp_queue_job: bulkId }
-            })
-        ]);
-
-        return {
-            total: totalCount,
-            success: successCount,
-            failed: failedCount,
-            pending: pendingCount
+    private async recuperaJobInterrotti() {
+        const interrotti = {
+            status_whatsapp_queue_job: GDOWhatsappQueueJobStatus.PROCESSING,
+            updatedat: { [Op.lt]: new Date(Date.now() - 10 * 60_000) },
         };
+        await GDOWhatsappQueueJob.update(
+            { status_whatsapp_queue_job: GDOWhatsappQueueJobStatus.SUCCESS, last_error_whatsapp_queue_job: null },
+            { where: { ...interrotti, wamid_whatsapp_queue_job: { [Op.ne]: null } } }
+        );
+        await GDOWhatsappQueueJob.update(
+            { status_whatsapp_queue_job: GDOWhatsappQueueJobStatus.FAILED, last_error_whatsapp_queue_job: 'Invio interrotto: esito sconosciuto' },
+            { where: { ...interrotti, wamid_whatsapp_queue_job: null } }
+        );
     }
 
     /**
@@ -276,11 +258,12 @@ export class WhatsappQueueWorker {
         if (!state?.room) return;
 
         // Rileggi i contatori reali dal database invece di usare quelli in memoria
-        const stats = await this.getBulkStats(bulkId);
+        const stats = await this.queueService.getBulkStatus(bulkId);
 
         const { startedAt } = state;
-        const { total, success, failed, pending } = stats;
-        const processed = success + failed;
+        const { total, success, failed, cancelled, pending } = stats;
+        // Gli annullati contano come processati: una campagna annullata arriva a conclusione
+        const processed = success + failed + cancelled;
         const status = processed >= total ? 'COMPLETED' : 'RUNNING';
 
         // Calcola ETA in tempo reale
@@ -314,6 +297,7 @@ export class WhatsappQueueWorker {
             total,
             success,
             failed,
+            cancelled,
             pending,
             processed,
             percentuale: Math.round((processed / total) * 100),
@@ -356,6 +340,12 @@ export class WhatsappQueueWorker {
      * Tick del worker - cerca e processa job disponibili
      */
     private async tick(bulkId?: string) {
+        try {
+            await this.recuperaJobInterrotti();
+        } catch (error) {
+            log.error('Errore nel recupero dei job WhatsApp interrotti:', error);
+        }
+
         if (this.active >= this.concurrency) {
             return;
         }
@@ -366,7 +356,7 @@ export class WhatsappQueueWorker {
         const now = new Date();
 
         try {
-            await sequelize.transaction(
+            const jobs = await sequelize.transaction(
                 { isolationLevel: Transaction.ISOLATION_LEVELS.READ_COMMITTED },
                 async (t) => {
                     const where: Record<string, any> = {
@@ -385,27 +375,25 @@ export class WhatsappQueueWorker {
                         transaction: t,
                     });
 
-                    if (!jobs.length) {
-                        return;
-                    }
-
-                    log.debug(`📤 Trovati ${jobs.length} job da processare`);
-
-                    // Marca i job come PROCESSING
+                    // Marca i job come PROCESSING; updatedat a mano (timestamps: false) per riconoscere quelli interrotti
                     for (const job of jobs) {
                         job.status_whatsapp_queue_job = GDOWhatsappQueueJobStatus.PROCESSING;
+                        job.updatedat = new Date();
                         await job.save({ transaction: t });
-
-                        await this.ensureBulkState(job);
-                        this.emitJobStatus(job, GDOWhatsappQueueJobStatus.PROCESSING);
-
-                        // Processa il job in background (non blocca la transaction)
-                        this.processJob(job).catch(err =>
-                            log.error(`Errore processJob ${job.id_whatsapp_queue_job}:`, err)
-                        );
                     }
+                    return jobs;
                 }
             );
+
+            if (jobs.length) log.debug(`📤 Trovati ${jobs.length} job da processare`);
+
+            // Invio solo dopo il commit: con un rollback il messaggio gia' partito tornerebbe PENDING e verrebbe reinviato
+            for (const job of jobs) {
+                // Processa il job in background
+                this.processJob(job).catch(err =>
+                    log.error(`Errore processJob ${job.id_whatsapp_queue_job}:`, err)
+                );
+            }
         } catch (error) {
             log.error('Errore durante il tick:', error);
         }
@@ -418,21 +406,27 @@ export class WhatsappQueueWorker {
         this.active++;
 
         try {
+            // Qui e non nel tick: se fallisce, il job torna PENDING invece di restare PROCESSING
+            await this.ensureBulkState(job);
+            this.emitJobStatus(job, GDOWhatsappQueueJobStatus.PROCESSING);
+
             // Incrementa il contatore dei tentativi
             job.attempts_whatsapp_queue_job += 1;
             await job.save();
 
             // Modalità simulazione o invio reale
+            let wamid: string | null = null;
             if (this.simulationMode) {
                 await this.simulateSendMessage(job.to_whatsapp_queue_job, job.body_whatsapp_queue_job);
             } else {
                 // Invio reale: recupera credenziali dal database e invia
-                await this.sendWhatsAppMessage(job);
+                wamid = await this.sendWhatsAppMessage(job);
             }
 
             // Successo!
             job.status_whatsapp_queue_job = GDOWhatsappQueueJobStatus.SUCCESS;
             job.last_error_whatsapp_queue_job = null;
+            job.wamid_whatsapp_queue_job = wamid;
             await job.save();
 
             // Emetti gli aggiornamenti (i contatori vengono letti dal DB in emitBulkStatus)
@@ -443,8 +437,14 @@ export class WhatsappQueueWorker {
             const msg = err?.message ?? String(err);
             log.error(`❌ Errore job ${job.id_whatsapp_queue_job} (tentativo ${job.attempts_whatsapp_queue_job}/${job.max_attempts_whatsapp_queue_job}):`, msg);
 
+            // Errori permanenti (dati non validi, risorse mancanti, 4xx di Meta tranne il 429) non si risolvono ritentando
+            const statusMeta = Number(err instanceof ExternalApiError ? err.details?.statusCode : undefined);
+            const permanente = err instanceof ValidationError
+                || err instanceof NotFoundError
+                || (statusMeta >= 400 && statusMeta < 500 && statusMeta !== 429);
+
             // Retry con exponential backoff
-            if (job.attempts_whatsapp_queue_job < job.max_attempts_whatsapp_queue_job) {
+            if (!permanente && job.attempts_whatsapp_queue_job < job.max_attempts_whatsapp_queue_job) {
                 const delayMs = this.baseBackoffMs * Math.pow(2, job.attempts_whatsapp_queue_job - 1);
 
                 job.status_whatsapp_queue_job = GDOWhatsappQueueJobStatus.PENDING;
@@ -513,8 +513,9 @@ export class WhatsappQueueWorker {
      * Invia un messaggio WhatsApp REALE recuperando le credenziali dal database
      *
      * @param job - Il job completo con campagna_id per recuperare le credenziali
+     * @returns wamid del messaggio restituito da Meta
      */
-    private async sendWhatsAppMessage(job: typeof GDOWhatsappQueueJob.prototype): Promise<void> {
+    private async sendWhatsAppMessage(job: typeof GDOWhatsappQueueJob.prototype): Promise<string | null> {
         const to = job.to_whatsapp_queue_job;
         log.info(`📡 Invio messaggio WhatsApp REALE a ${to}`);
 
@@ -565,7 +566,8 @@ export class WhatsappQueueWorker {
                         'Content-Type': 'application/json',
                         'Accept': 'application/json',
                     },
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify(payload),
+                    signal: AbortSignal.timeout(15000)
                 }
             );
 
@@ -581,12 +583,14 @@ export class WhatsappQueueWorker {
             }
 
             const data = await response.json() as any;
+            const wamid: string | null = data?.messages?.[0]?.id ?? null;
 
-            if (data.messages && data.messages[0]?.id) {
-                log.info(`✅ Messaggio inviato con successo a ${to}, ID: ${data.messages[0].id}`);
+            if (wamid) {
+                log.info(`✅ Messaggio inviato con successo a ${to}, ID: ${wamid}`);
             } else {
                 log.info(`✅ Messaggio inviato a ${to}`);
             }
+            return wamid;
 
         } catch (error: any) {
             // Se è un errore di parsing JSON, è un problema di formato

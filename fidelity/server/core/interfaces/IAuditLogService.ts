@@ -53,5 +53,5 @@ export interface IAuditLogService {
 
     // ── Metriche in-memory ──
     getMetrics(): any;
-    forceFlush(): void;
+    forceFlush(): Promise<void>;
 }

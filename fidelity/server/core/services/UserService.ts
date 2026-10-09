@@ -205,25 +205,6 @@ export class UserService implements IUserService {
       });
     }
   }
-  async getUtentiWhatsappAttivi(): Promise<any[]> {
-    try {
-      const utenti = await this.userRepository.findAllByOptions({
-        where: {
-          tipo_utenti: { [Op.notIn]: [TIPO_UTENTI.SUPERADMIN, TIPO_UTENTI.GUEST] },
-          stato_utenti: STATO_UTENTI.ATTIVO
-        }
-      });
-      return utenti;
-    } catch (error) {
-      log.error('Impossibile recuperare gli utenti WhatsApp attivi', error instanceof Error ? error : new Error(String(error)));
-      throw new DatabaseError({
-        message: 'Errore durante il recupero degli utenti WhatsApp attivi',
-        operation: 'get',
-        entity: 'Utente',
-        cause: error instanceof Error ? error : undefined
-      });
-    }
-  }
   async createUser(data: CreateUtenteDTO): Promise<UtenteResponseDTO> {
     try {
       if (!data.tipo) {

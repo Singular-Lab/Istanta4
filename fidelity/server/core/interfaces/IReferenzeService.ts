@@ -9,8 +9,8 @@ export interface IReferenzeService {
   getReferenzaByCodice(codice: string): Promise<ReferenzeIstanta | null>;
   updateReferenzaWebpliant(data: ReferenzeIstanta): Promise<any>;
   updateReferenza(id: string, data: ReferenzeIstanta): Promise<any>;
-  bulkCreateReferenze(refs: ReferenzeIstanta[]): Promise<any>;
-  bulkEliminateReferenzeFromGuidIdKitRuntime(idKitRuntime: string): Promise<any>;
+  /** Elimina le referenze del kit e inserisce le nuove in un'unica transazione */
+  sostituisciReferenzeKit(idKitRuntime: string, referenze: ReferenzeIstanta[]): Promise<any>;
 
   /** Ricerca */
   ricercaReferenzePromo(data: { query: string; idWorkspace: string; idArea: string; idCanale: string }): Promise<any[]>;

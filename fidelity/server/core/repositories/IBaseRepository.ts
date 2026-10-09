@@ -8,6 +8,8 @@
  * @typeParam TId - The ID type (typically string for UUID)
  */
 
+import type { Transaction } from 'sequelize';
+
 export interface PaginationOptions {
   page: number;
   limit: number;
@@ -27,7 +29,7 @@ export interface IBaseRepository<T, TId = string, TCreate = T> {
   /**
    * Find an entity by its ID
    */
-  findById(id: TId): Promise<T | null>;
+  findById(id: TId, transaction?: Transaction): Promise<T | null>;
 
   /**
    * Find all entities
@@ -42,17 +44,17 @@ export interface IBaseRepository<T, TId = string, TCreate = T> {
   /**
    * Create a new entity
    */
-  create(entity: Partial<TCreate>): Promise<T>;
+  create(entity: Partial<TCreate>, transaction?: Transaction): Promise<T>;
 
   /**
    * Update an existing entity
    */
-  update(id: TId, entity: Partial<TCreate>): Promise<T | null>;
+  update(id: TId, entity: Partial<TCreate>, transaction?: Transaction): Promise<T | null>;
 
   /**
    * Delete an entity by ID
    */
-  delete(id: TId): Promise<boolean>;
+  delete(id: TId, transaction?: Transaction): Promise<boolean>;
 
   /**
    * Check if an entity exists

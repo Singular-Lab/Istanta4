@@ -16,6 +16,7 @@ export type GDOWhatsappQueueJobCreationAttributes = Optional<
     | 'status_whatsapp_queue_job'
     | 'run_at_whatsapp_queue_job'
     | 'last_error_whatsapp_queue_job'
+    | 'wamid_whatsapp_queue_job'
     | 'createdat'
     | 'updatedat'
 >;
@@ -40,6 +41,7 @@ class GDOWhatsappQueueJobClass extends Model<
 
     declare run_at_whatsapp_queue_job: Date;
     declare last_error_whatsapp_queue_job: string | null;
+    declare wamid_whatsapp_queue_job: string | null;
 
     declare createdat?: Date;
     declare updatedat?: Date;
@@ -102,7 +104,8 @@ const GDOWhatsappQueueJob = GDOWhatsappQueueJobClass.init(
         },
 
         status_whatsapp_queue_job: {
-            type: DataTypes.ENUM('PENDING', 'PROCESSING', 'SUCCESS', 'FAILED'),
+            // I valori nuovi dell'enum li aggiunge il sync di Sequelize (ensureEnums)
+            type: DataTypes.ENUM(...Object.values(GDOWhatsappQueueJobStatus)),
             allowNull: false,
             defaultValue: 'PENDING',
         },
@@ -115,6 +118,11 @@ const GDOWhatsappQueueJob = GDOWhatsappQueueJobClass.init(
 
         last_error_whatsapp_queue_job: {
             type: DataTypes.TEXT,
+            allowNull: true,
+        },
+
+        wamid_whatsapp_queue_job: {
+            type: DataTypes.STRING(128),
             allowNull: true,
         },
 

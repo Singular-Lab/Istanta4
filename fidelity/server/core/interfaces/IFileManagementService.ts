@@ -7,9 +7,9 @@ export interface IFileManagementService {
   uploadMateriale(file: Express.Multer.File, data: any, req: Request): Promise<any>;
   uploadKitManuali(idPromo: string, idKit: string, files: Express.Multer.File[], metadata: any, req: Request): Promise<any>;
   replaceFileKitRuntime(idFile: string, file: Express.Multer.File, req: Request): Promise<any>;
-  uploadForzatoImmaginiOlimpo(file: Express.Multer.File, guidId: string): Promise<any>;
-  updateImmagineReferenza(file: Express.Multer.File, data: any): Promise<any>;
-  updateImmagineGruppoReferenza(file: Express.Multer.File, data: any): Promise<any>;
+  uploadForzatoImmaginiOlimpo(file: Express.Multer.File, guidId: string, req: Request): Promise<any>;
+  updateImmagineReferenza(file: Express.Multer.File, data: any, req: Request): Promise<any>;
+  updateImmagineGruppoReferenza(file: Express.Multer.File, data: any, req: Request): Promise<any>;
 
   /** Download */
   downloadFilesAsZip(files: any[]): Promise<Buffer>;

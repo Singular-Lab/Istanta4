@@ -1,12 +1,34 @@
-import { v4 as uuidv4 } from 'uuid';
+import { v4 as uuidv4, validate as isUuid } from 'uuid';
 import { Colorize } from '../../../lib/Colorize';
 import { GDOWhatsappQueueJobStatus } from '../../../lib/enums';
-import { BadRequestError, DatabaseError, ValidationError } from '../../../lib/errors';
+import { DatabaseError, NotFoundError, ValidationError } from '../../../lib/errors';
+import { sequelize } from '../db/SequelizeConnector';
 import { log } from '../logger';
 import { GDOWhatsappQueueJob } from '../models/whatsapp/gdo_whatsapp_message_queue';
 import { GDOWhatsappCampagne } from '../models/whatsapp/gdo_whatsapp_campagne';
+import { GDOWhatsappTemplate } from '../models/whatsapp/gdo_whatsapp_template';
 import { createQueue } from '../../src/shared/queue/bullmq.client.js';
 import { QUEUE_NAMES } from '../../src/shared/queue/queues.js';
+
+// Una sola Queue BullMQ (e una sola connessione Redis) per processo; null se Redis non e' configurato
+let waQueue: ReturnType<typeof createQueue> | undefined;
+function getWaQueue() {
+    if (waQueue === undefined) waQueue = createQueue(QUEUE_NAMES.WHATSAPP);
+    return waQueue;
+}
+
+/**
+ * GDO proprietaria di una campagna: e' quella del suo template (nessuna colonna GDO sulla campagna).
+ */
+export async function gdoDellaCampagna(campagnaId: string): Promise<string | null> {
+    const campagna = await GDOWhatsappCampagne.findByPk(campagnaId, {
+        attributes: ['template_id_whatsapp_campagna']
+    });
+    const template = campagna
+        ? await GDOWhatsappTemplate.findByPk(campagna.template_id_whatsapp_campagna, { attributes: ['id_gdo_gdowhatsapptemplate'] })
+        : null;
+    return template?.id_gdo_gdowhatsapptemplate ?? null;
+}
 
 export interface CreateBulkJobsParams {
     /**
@@ -64,9 +86,6 @@ export interface BulkJobResult {
  * Service per gestire la coda di messaggi WhatsApp
  */
 export class WhatsappQueueService {
-    // Istanza lazy: creata al primo createBulkJobs, null se Redis non disponibile
-    private waQueue = createQueue(QUEUE_NAMES.WHATSAPP);
-
     /**
      * Crea un batch di job nella queue per l'invio di messaggi WhatsApp
      *
@@ -109,62 +128,45 @@ export class WhatsappQueueService {
 
         log.info(Colorize.bgBlue(`📦 Creazione campagna "${titoloCampagna}" (${campagnaId}) con ${total} job...`));
 
+        let created = 0;
         try {
-            // Crea il record della campagna
-            await GDOWhatsappCampagne.create({
-                id_whatsapp_campagna: campagnaId,
-                titolo_whatsapp_campagna: titoloCampagna,
-                template_id_whatsapp_campagna: templateId,
+            // Campagna e job in una sola transazione: un errore a meta' non lascia campagne parziali
+            await sequelize.transaction(async (transaction) => {
+                await GDOWhatsappCampagne.create({
+                    id_whatsapp_campagna: campagnaId,
+                    titolo_whatsapp_campagna: titoloCampagna,
+                    template_id_whatsapp_campagna: templateId,
+                }, { transaction });
+
+                log.debug(`✅ Campagna "${titoloCampagna}" creata con ID ${campagnaId}`);
+
+                // Crea tutti i job in un'unica operazione batch
+                const jobs = telefoni.map((telefono, index) => ({
+                    id_whatsapp_queue_job: uuidv4(),
+                    bulk_id_whatsapp_queue_job: bulkId,
+                    campagna_id_whatsapp_queue_job: campagnaId,
+                    index_whatsapp_queue_job: index + 1,
+                    total_whatsapp_queue_job: total,
+                    to_whatsapp_queue_job: telefono,
+                    body_whatsapp_queue_job: body[index],
+                    attempts_whatsapp_queue_job: 0,
+                    max_attempts_whatsapp_queue_job: maxAttempts,
+                    status_whatsapp_queue_job: GDOWhatsappQueueJobStatus.PENDING,
+                    run_at_whatsapp_queue_job: new Date(),
+                    last_error_whatsapp_queue_job: null,
+                }));
+
+                // Batch insert per performance
+                const BATCH_SIZE = 1000;
+
+                for (let i = 0; i < jobs.length; i += BATCH_SIZE) {
+                    const batch = jobs.slice(i, i + BATCH_SIZE);
+                    await GDOWhatsappQueueJob.bulkCreate(batch, { transaction });
+                    created += batch.length;
+
+                    log.debug(`📤 Creati ${created}/${total} job per bulk ${bulkId}`);
+                }
             });
-
-            log.debug(`✅ Campagna "${titoloCampagna}" creata con ID ${campagnaId}`);
-
-            // Crea tutti i job in un'unica operazione batch
-            const jobs = telefoni.map((telefono, index) => ({
-                id_whatsapp_queue_job: uuidv4(),
-                bulk_id_whatsapp_queue_job: bulkId,
-                campagna_id_whatsapp_queue_job: campagnaId,
-                index_whatsapp_queue_job: index + 1,
-                total_whatsapp_queue_job: total,
-                to_whatsapp_queue_job: telefono,
-                body_whatsapp_queue_job: body[index],
-                attempts_whatsapp_queue_job: 0,
-                max_attempts_whatsapp_queue_job: maxAttempts,
-                status_whatsapp_queue_job: GDOWhatsappQueueJobStatus.PENDING,
-                run_at_whatsapp_queue_job: new Date(),
-                last_error_whatsapp_queue_job: null,
-            }));
-
-            // Batch insert per performance
-            const BATCH_SIZE = 1000;
-            let created = 0;
-
-            for (let i = 0; i < jobs.length; i += BATCH_SIZE) {
-                const batch = jobs.slice(i, i + BATCH_SIZE);
-                await GDOWhatsappQueueJob.bulkCreate(batch);
-                created += batch.length;
-
-                log.debug(`📤 Creati ${created}/${total} job per bulk ${bulkId}`);
-            }
-
-            log.info(Colorize.green(`✅ Bulk ${bulkId} creato con successo: ${created} job pronti per l'invio`));
-
-            // Trigger immediato via BullMQ — il Worker processa senza aspettare il polling
-            if (this.waQueue) {
-                await this.waQueue.add('process-bulk', { bulk_id: bulkId }, {
-                    attempts: 1,
-                    removeOnComplete: true,
-                    removeOnFail: true,
-                });
-                log.debug(`⚡ Bulk ${bulkId} accodato in BullMQ per elaborazione immediata`);
-            }
-
-            return {
-                bulkId,
-                campagnaId,
-                totalJobs: created,
-                createdAt,
-            };
         } catch (error) {
             log.error(Colorize.bgRed(`❌ Errore creazione bulk ${bulkId}:`), error);
             throw new DatabaseError({
@@ -174,6 +176,30 @@ export class WhatsappQueueService {
                 cause: error instanceof Error ? error : undefined,
             });
         }
+
+        log.info(Colorize.green(`✅ Bulk ${bulkId} creato con successo: ${created} job pronti per l'invio`));
+
+        // Trigger dopo il commit: prima il worker non vedrebbe i job. Se fallisce li recupera il polling
+        const waQueue = getWaQueue();
+        if (waQueue) {
+            await waQueue.add('process-bulk', { bulk_id: bulkId }, {
+                attempts: 1,
+                removeOnComplete: true,
+                removeOnFail: true,
+            }).then(
+                () => log.debug(`⚡ Bulk ${bulkId} accodato in BullMQ per elaborazione immediata`),
+                (error) => log.warn(`Bulk ${bulkId} non accodato in BullMQ, lo elabora il polling`, {
+                    message: error instanceof Error ? error.message : String(error),
+                })
+            );
+        }
+
+        return {
+            bulkId,
+            campagnaId,
+            totalJobs: created,
+            createdAt,
+        };
     }
 
     /**
@@ -186,6 +212,7 @@ export class WhatsappQueueService {
         processing: number;
         success: number;
         failed: number;
+        cancelled: number;
         status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED';
     }> {
         try {
@@ -195,6 +222,7 @@ export class WhatsappQueueService {
                 processing,
                 success,
                 failed,
+                cancelled,
             ] = await Promise.all([
                 GDOWhatsappQueueJob.count({
                     where: { bulk_id_whatsapp_queue_job: bulkId }
@@ -223,11 +251,17 @@ export class WhatsappQueueService {
                         status_whatsapp_queue_job: GDOWhatsappQueueJobStatus.FAILED
                     }
                 }),
+                GDOWhatsappQueueJob.count({
+                    where: {
+                        bulk_id_whatsapp_queue_job: bulkId,
+                        status_whatsapp_queue_job: GDOWhatsappQueueJobStatus.CANCELLED
+                    }
+                }),
             ]);
 
-            // Determina lo stato complessivo
+            // Determina lo stato complessivo: gli annullati contano come processati
             let status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED';
-            const completed = success + failed;
+            const completed = success + failed + cancelled;
 
             if (completed >= total) {
                 status = failed === total ? 'FAILED' : 'COMPLETED';
@@ -244,6 +278,7 @@ export class WhatsappQueueService {
                 processing,
                 success,
                 failed,
+                cancelled,
                 status,
             };
         } catch (error) {
@@ -281,14 +316,28 @@ export class WhatsappQueueService {
     }
 
     /**
-     * Cancella tutti i job PENDING di un bulk
-     * (utile per annullare una campagna in corso)
+     * Verifica che il bulk appartenga alla GDO: altrimenti risponde come se non esistesse
+     */
+    async verificaBulkDellaGdo(bulkId: string, idGdo: string | undefined): Promise<void> {
+        const job = idGdo && isUuid(bulkId)
+            ? await GDOWhatsappQueueJob.findOne({
+                where: { bulk_id_whatsapp_queue_job: bulkId },
+                attributes: ['campagna_id_whatsapp_queue_job'],
+            })
+            : null;
+        if (!job || (await gdoDellaCampagna(job.campagna_id_whatsapp_queue_job)) !== idGdo) {
+            throw new NotFoundError({ message: 'Campagna non trovata', entityType: 'whatsapp_campagna', entityId: bulkId });
+        }
+    }
+
+    /**
+     * Annulla tutti i job PENDING di un bulk (CANCELLED: "riprova" non li ripropone)
      */
     async cancelBulk(bulkId: string): Promise<number> {
         try {
             const result = await GDOWhatsappQueueJob.update(
                 {
-                    status_whatsapp_queue_job: GDOWhatsappQueueJobStatus.FAILED,
+                    status_whatsapp_queue_job: GDOWhatsappQueueJobStatus.CANCELLED,
                     last_error_whatsapp_queue_job: 'Campagna annullata dall\'utente',
                 },
                 {
