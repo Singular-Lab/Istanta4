@@ -832,11 +832,37 @@ const ReportIntegrita = {
         }
 
         if (!schedaRef.serveRiaggancioDalReport(stato.box)) {
+            //I20-1074: deselezionare il box vale come la X: si torna al report.
+            if (this._deselezionatoDaChiudere(stato)) {
+                this._tracciaScheda("chiusura:deselezione", { box: this._descriviBox(stato.box) });
+                this._chiudiSchedaDalReport();
+            }
             return;
         }
 
         stato.riaggancioInCorso = true;
         this._riagganciaSchedaDalReport();
+    },
+
+    /// I20-1074: alla vigilanza di una scheda in vista controllata (questa, o quella aperta dalla
+    /// schermata delle segnalazioni): true quando nulla e' selezionato da abbastanza vigilanze di
+    /// fila (reportIntegritaAvvio.contoDeselezione). Mentre la scheda lavora non si conta: Reimpagina
+    /// rifa' il box e per un momento la selezione e' vuota.
+    _deselezionatoDaChiudere(stato) {
+        const esito = reportIntegritaAvvio.contoDeselezione(stato.vigilanzeSenzaSelezione, this._quantiSelezionati(), schedaRef.isBusy === true);
+        stato.vigilanzeSenzaSelezione = esito.conto;
+        return esito.chiudi;
+    },
+
+    /// Quanti oggetti sono selezionati in InDesign; se non si legge, come se qualcosa lo fosse: nel
+    /// dubbio la scheda resta aperta.
+    _quantiSelezionati() {
+        try {
+            return app.selection != null ? app.selection.length : 1;
+        }
+        catch (err) {
+            return 1;
+        }
     },
 
     /// Reimpagina e cambi strutturali rifanno il box: con gli eventi fermi nessuno ripunta la
