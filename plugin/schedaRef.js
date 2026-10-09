@@ -4595,7 +4595,31 @@ const schedaRef = {
             riga.append(campo).append(dettaglio);
             //I20-1070: sulle foto extra l'operatore puo' decidere da qui, senza toccare il box.
             this.aggiungiAzioniDifferenza(riga, diff, dopoAzione);
+            //I20-1071: sotto una differenza di contenuto, il valore nel box e quello del dato.
+            this.aggiungiValoriDifferenza(riga, diff);
             contenitore.append(riga);
+        });
+    },
+
+    /// I20-1071: sotto una differenza di contenuto o di paragrafo, il valore nel box e quello
+    /// del dato, leggibili. Un valore lungo e' abbreviato con i puntini e il testo intero sta nel
+    /// suggerimento: in UXP si da' con Tooltip.impostaTooltip, non con title.
+    aggiungiValoriDifferenza(riga, diff) {
+        const valori = confronti.valoriDifferenza(diff);
+        if (valori == null) {
+            return;
+        }
+        [["nel box", valori.locale], ["sul server", valori.server]].forEach(function (coppia) {
+            const r = $('<div class="valoreDifferenza"></div>');
+            r.css({ "font-size": "12px", "color": "#2c2c2c", "padding-left": "8px" });
+            const etichetta = $('<span></span>').text(coppia[0] + ": ");
+            etichetta.css({ "color": "#767676" });
+            const valore = $('<span></span>').text(coppia[1].breve === "" ? "(vuoto)" : coppia[1].breve);
+            if (coppia[1].abbreviato) {
+                Tooltip.impostaTooltip(valore[0], coppia[1].intero);
+            }
+            r.append(etichetta).append(valore);
+            riga.append(r);
         });
     },
 

@@ -416,7 +416,9 @@ const confronti = {
                         let contentBox1 = campoBox1.contents.replace(/<br\s*\/?>|\s+|\n/gi, '');
                         let contentCompiled = compiledField.content.replace(/<br\s*\/?>|\s+|\n/gi, '');
                         if (contentBox1 != contentCompiled) {
-                            differenze.push({ label: Utility.parseLabel(compiledField.labelName), difference: "contenuto" });
+                            //I20-1071: i due valori, leggibili, per chi guarda la differenza.
+                            differenze.push({ label: Utility.parseLabel(compiledField.labelName), difference: "contenuto",
+                                valoreLocale: confronti.testoLeggibile(campoBox1.contents), valoreServer: confronti.testoLeggibile(compiledField.content) });
                         }
                     }
                     //controlliamo lo stile di paragrafo/carattere
@@ -426,7 +428,9 @@ const confronti = {
                         var stile = TestoTag.parseStile(compiledField.paragraphName, true);
 
                         if (campoBox1.paragraphs.length > 0 && (stile != null && stile.isValid ? stile.name : compiledField.paragraphName) != campoBox1.paragraphs.item(0).appliedParagraphStyle.name) {
-                            differenze.push({ label: Utility.parseLabel(compiledField.labelName), difference: "paragrafo" });
+                            //I20-1071: i due stili, quello nel box e quello atteso.
+                            differenze.push({ label: Utility.parseLabel(compiledField.labelName), difference: "paragrafo",
+                                valoreLocale: campoBox1.paragraphs.item(0).appliedParagraphStyle.name, valoreServer: (stile != null && stile.isValid ? stile.name : compiledField.paragraphName) });
                         }
                     }
                     else {
@@ -528,7 +532,9 @@ const confronti = {
                         stringaConfronto = stringaConfronto.replace(emptyTagRegex, '');
 
                         if (stringaRicomposta != stringaConfronto) {
-                            differenze.push({ label: compiledField.labelName, difference: "contenuto" });
+                            //I20-1071: i due valori, leggibili: il testo del campo e il dato senza i suoi tag.
+                            differenze.push({ label: compiledField.labelName, difference: "contenuto",
+                                valoreLocale: confronti.testoLeggibile(campoBox1.contents), valoreServer: confronti.testoLeggibile(compiledField.content) });
                         }
                     }
                 }
@@ -1120,6 +1126,43 @@ const confronti = {
     /// e' un logo, il resto una foto extra. E' lo stesso tipo di noRender e del meta.
     tipoElementoExtra(foto) {
         return foto != null && foto.tipo == 3 ? NoRenderElementi.TIPO.logo : NoRenderElementi.TIPO.fotoExtra;
+    },
+
+    /// I20-1071: il testo di un campo compilato come lo legge una persona: senza i tag di stile
+    /// (<A.DES_descr_nome_SC>...</A.DES_descr_nome_SC>), senza i tratti _$Hidden che nel box non
+    /// ci sono, con <br>, i ritorni a capo e i caratteri di controllo di InDesign come spazio, e
+    /// gli spazi compattati. Vale anche per il contenuto di un campo InDesign, che tag non ne ha.
+    testoLeggibile(testo) {
+        if (testo == null) {
+            return "";
+        }
+        let leggibile = String(testo);
+        leggibile = leggibile.replace(/<([^>]*_\$Hidden)>[\s\S]*?<\/\1>/g, "");
+        leggibile = leggibile.replace(/<br\s*\/?>/gi, " ");
+        //Un tag di chiusura diventa uno spazio: due tratti di stile uno dietro l'altro non si incollano.
+        leggibile = leggibile.replace(/<\/[^>]+>/g, " ");
+        leggibile = leggibile.replace(/<[^>]+>/g, "");
+        leggibile = leggibile.replace(/[\u0000-\u001f\u2028\u2029]/g, " ");
+        return leggibile.replace(/\s+/g, " ").trim();
+    },
+
+    /// I20-1071: i due valori di una differenza, pronti per la riga: null se la differenza non
+    /// li porta (non presente, eliminato, foto). Oltre massimo caratteri il testo si abbrevia con
+    /// i puntini, e l'intero va nel suggerimento.
+    valoriDifferenza(diff, massimo = 120) {
+        if (diff == null || (diff.valoreLocale == null && diff.valoreServer == null)) {
+            return null;
+        }
+        const prepara = function (valore) {
+            const intero = valore == null ? "" : String(valore);
+            const abbreviato = intero.length > massimo;
+            return {
+                intero: intero,
+                breve: abbreviato ? intero.substring(0, massimo - 1).replace(/\s+$/, "") + "…" : intero,
+                abbreviato: abbreviato
+            };
+        };
+        return { locale: prepara(diff.valoreLocale), server: prepara(diff.valoreServer) };
     },
 
     decodeSpecialCharacters(text) {
