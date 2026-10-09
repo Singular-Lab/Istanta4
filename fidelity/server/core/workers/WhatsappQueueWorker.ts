@@ -443,8 +443,26 @@ export class WhatsappQueueWorker {
                 || err instanceof NotFoundError
                 || (statusMeta >= 400 && statusMeta < 500 && statusMeta !== 429);
 
-            // Retry con exponential backoff
-            if (!permanente && job.attempts_whatsapp_queue_job < job.max_attempts_whatsapp_queue_job) {
+            const daRitentare = !permanente && job.attempts_whatsapp_queue_job < job.max_attempts_whatsapp_queue_job;
+            // cancelBulk annulla solo i PENDING: questo job era in invio e non va rimesso in coda.
+            // Contano gli annullamenti successivi alla presa in carico (updatedat del tick), non quelli prima di "Riprova falliti"
+            const annullata = daRitentare && await GDOWhatsappQueueJob.count({
+                where: {
+                    bulk_id_whatsapp_queue_job: job.bulk_id_whatsapp_queue_job,
+                    status_whatsapp_queue_job: GDOWhatsappQueueJobStatus.CANCELLED,
+                    updatedat: { [Op.gte]: job.updatedat ?? new Date(0) },
+                }
+            }) > 0;
+
+            if (annullata) {
+                job.status_whatsapp_queue_job = GDOWhatsappQueueJobStatus.CANCELLED;
+                job.last_error_whatsapp_queue_job = 'Campagna annullata dall\'utente';
+                await job.save();
+
+                this.emitJobStatus(job, GDOWhatsappQueueJobStatus.CANCELLED, msg);
+                await this.emitBulkStatus(job.bulk_id_whatsapp_queue_job);
+            } else if (daRitentare) {
+                // Retry con exponential backoff
                 const delayMs = this.baseBackoffMs * Math.pow(2, job.attempts_whatsapp_queue_job - 1);
 
                 job.status_whatsapp_queue_job = GDOWhatsappQueueJobStatus.PENDING;

@@ -867,15 +867,11 @@ export class OrdiniStampaService implements IOrdiniStampaService {
       // Verifica se tutti i kit sono stati inviati, anche in momenti differenti
       const promoKit = await this.kitRuntimeService.getAllKitRuntimeByIdPromo(idPromo);
       const contrattoTipografiaConfig = await this.getContrattoTipografia();
-      let kitFiltered = await Promise.all(promoKit.map(async (kit: any) => {
-        const tipiExportKit = kit.tipi_di_export_in_kit;
-        const tipiExportContratto = contrattoTipografiaConfig?.tipi_export;
-        const tipiExportKitNonPresenti = tipiExportKit.filter((tipoExport: any) =>
-          !tipiExportContratto?.includes(tipoExport.tipo_di_export_guid_id)
-        );
-        return tipiExportKitNonPresenti.length > 0 ? null : kit;
-      }));
-      kitFiltered = kitFiltered.filter(kit => kit !== null);
+      // Da inviare se almeno un tipo di export e' nel contratto, come in groupFilesByEquality e getVirtualDirectories
+      const tipiExportContratto = contrattoTipografiaConfig?.tipi_export || [];
+      const kitFiltered = promoKit.filter((kit: any) =>
+        (kit.tipi_di_export_in_kit || []).some((tipoExport: any) => tipiExportContratto.includes(tipoExport.tipo_di_export_guid_id))
+      );
       // Completo se ogni kit PUBBLICATO e' in un invio, precedente o di questo giro.
       // kit_guids contiene runtime_kit.id, che nei kit della promo e' guidId.
       const idInviati = new Set<string>([...(previouslySentKitIds ?? []), ...kitInviati.map(k => k.id)]);

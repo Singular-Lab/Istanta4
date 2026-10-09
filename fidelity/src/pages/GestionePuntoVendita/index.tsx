@@ -3,6 +3,7 @@ import Button from "@/components/Base/Button";
 import withSessionCheck from "@/components/SessionChecker";
 import { FormCheck, FormInput, FormLabel, FormSelect } from "@/components/Base/Form";
 import Lucide from "@/components/Base/Lucide";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
 import type { Map as LeafletMap } from "leaflet";
@@ -258,24 +259,45 @@ const GestionePuntoVendita: React.FC = () => {
     }
   }, [puntoVendita.id, queryClient]);
 
-  const handleDeleteDevice = useCallback(async (device: DispositivoPuntoVenditaResponseDTO) => {
-    if (!confirm(`Eliminare il dispositivo "${device.nome}"?`)) return;
+  // Conferma delle azioni distruttive (elimina dispositivo/contesto, rigenera token)
+  const [conferma, setConferma] = useState<{ title: string; description: string; confirmLabel: string; azione: () => Promise<unknown> } | null>(null);
+  const [confermaLoading, setConfermaLoading] = useState(false);
+
+  const eseguiConferma = async () => {
+    if (!conferma) return;
+    setConfermaLoading(true);
     try {
-      await ServerCall.delete(`/dispositivi/${device.id}`);
-      queryClient.invalidateQueries({ queryKey: ['dispositivi-pv', puntoVendita.id] });
+      await conferma.azione();
     } catch (error) {
-      console.error("Errore nell'eliminazione del dispositivo:", error);
+      console.error("Errore nell'azione confermata:", error);
+    } finally {
+      setConfermaLoading(false);
+      setConferma(null);
     }
+  };
+
+  const handleDeleteDevice = useCallback((device: DispositivoPuntoVenditaResponseDTO) => {
+    setConferma({
+      title: "Eliminare il dispositivo?",
+      description: `Il dispositivo "${device.nome}" verrà eliminato e il suo URL display smetterà di funzionare.`,
+      confirmLabel: "Elimina dispositivo",
+      azione: async () => {
+        await ServerCall.delete(`/dispositivi/${device.id}`);
+        queryClient.invalidateQueries({ queryKey: ['dispositivi-pv', puntoVendita.id] });
+      },
+    });
   }, [puntoVendita.id, queryClient]);
 
-  const handleRegenerateToken = useCallback(async (device: DispositivoPuntoVenditaResponseDTO) => {
-    if (!confirm(`Rigenerare il token per "${device.nome}"? Il vecchio URL non funzionerà più.`)) return;
-    try {
-      await ServerCall.post(`/dispositivi/${device.id}/regenerate-token`, {});
-      queryClient.invalidateQueries({ queryKey: ['dispositivi-pv', puntoVendita.id] });
-    } catch (error) {
-      console.error("Errore nella rigenerazione del token:", error);
-    }
+  const handleRegenerateToken = useCallback((device: DispositivoPuntoVenditaResponseDTO) => {
+    setConferma({
+      title: "Rigenerare il token?",
+      description: `Verrà generato un nuovo token per "${device.nome}": il vecchio URL display non funzionerà più e andrà aggiornato sul dispositivo.`,
+      confirmLabel: "Rigenera token",
+      azione: async () => {
+        await ServerCall.post(`/dispositivi/${device.id}/regenerate-token`, {});
+        queryClient.invalidateQueries({ queryKey: ['dispositivi-pv', puntoVendita.id] });
+      },
+    });
   }, [puntoVendita.id, queryClient]);
 
   // ============================================================
@@ -1072,11 +1094,12 @@ const GestionePuntoVendita: React.FC = () => {
                                 </Menu.Item>
                                 <Menu.Item
                                   className="text-danger"
-                                  onClick={() => {
-                                    if (confirm(`Eliminare il contesto "${ctx.nome}"?`)) {
-                                      deleteContextMutation.mutate(ctx.id);
-                                    }
-                                  }}
+                                  onClick={() => setConferma({
+                                    title: "Eliminare il contesto?",
+                                    description: `Il contesto "${ctx.nome}" verrà eliminato e i dispositivi che lo usano resteranno senza contesto assegnato.`,
+                                    confirmLabel: "Elimina contesto",
+                                    azione: () => deleteContextMutation.mutateAsync(ctx.id),
+                                  })}
                                 >
                                   <Lucide icon="Trash2" className="w-4 h-4 mr-2" /> Elimina
                                 </Menu.Item>
@@ -1669,6 +1692,16 @@ const GestionePuntoVendita: React.FC = () => {
           </Dialog.Footer>
         </Dialog.Panel>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!conferma}
+        title={conferma?.title ?? ""}
+        description={conferma?.description ?? ""}
+        confirmLabel={conferma?.confirmLabel}
+        loading={confermaLoading}
+        onClose={() => !confermaLoading && setConferma(null)}
+        onConfirm={eseguiConferma}
+      />
     </div>
   );
 };

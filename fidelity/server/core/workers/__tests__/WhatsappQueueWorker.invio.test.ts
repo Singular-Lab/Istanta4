@@ -72,6 +72,33 @@ describe('invio dei messaggi della coda WhatsApp', () => {
     expect(job.run_at_whatsapp_queue_job.getTime()).toBeGreaterThan(Date.now());
   });
 
+  it('un job in invio quando la campagna viene annullata non torna in coda dopo un errore 500', async () => {
+    rispostaMeta(500, { error: { message: 'Service unavailable' } });
+    const job = nuovoJob();
+    job.updatedat = new Date(Date.now() - 5_000);
+    const count = vi.spyOn(GDOWhatsappQueueJob, 'count').mockImplementation(async (opzioni: any) =>
+      (opzioni.where.status_whatsapp_queue_job === GDOWhatsappQueueJobStatus.CANCELLED ? 4 : 0) as any);
+
+    await (new WhatsappQueueWorker() as any).processJob(job);
+
+    expect(job.status_whatsapp_queue_job).toBe(GDOWhatsappQueueJobStatus.CANCELLED);
+    // Solo gli annullamenti dopo la presa in carico: un annullamento precedente a "Riprova falliti" non conta
+    const annullati = (count.mock.calls as any[]).map(([o]) => o.where).find((w: any) => w.updatedat);
+    expect(annullati.status_whatsapp_queue_job).toBe(GDOWhatsappQueueJobStatus.CANCELLED);
+    expect(annullati.bulk_id_whatsapp_queue_job).toBe('b1');
+    expect(annullati.updatedat[Op.gte]).toBe(job.updatedat);
+  });
+
+  it('un job in invio quando la campagna viene annullata resta SUCCESS se l\'invio riesce', async () => {
+    rispostaMeta(200, { messages: [{ id: 'wamid.ABC123' }] });
+    const job = nuovoJob();
+    vi.spyOn(GDOWhatsappQueueJob, 'count').mockResolvedValue(4 as any);
+
+    await (new WhatsappQueueWorker() as any).processJob(job);
+
+    expect(job.status_whatsapp_queue_job).toBe(GDOWhatsappQueueJobStatus.SUCCESS);
+  });
+
   it('un invio riuscito salva il wamid restituito da Meta', async () => {
     const chiamataMeta = rispostaMeta(200, { messages: [{ id: 'wamid.ABC123' }] });
     const job = nuovoJob();

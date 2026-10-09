@@ -1,11 +1,14 @@
 import Button from "@/components/Base/Button";
 import { Dialog } from "@/components/Base/Headless";
 import Lucide from "@/components/Base/Lucide";
+import type { ReactNode } from "react";
 
 interface ConfirmDialogProps {
   open: boolean;
   title: string;
-  description: string;
+  description: ReactNode;
+  // Sottotitolo sotto il titolo; default "Azione irreversibile"
+  subtitle?: string;
   confirmLabel?: string;
   confirmVariant?: "danger" | "primary";
   loading?: boolean;
@@ -17,6 +20,7 @@ const ConfirmDialog = ({
   open,
   title,
   description,
+  subtitle = "Azione irreversibile",
   confirmLabel = "Conferma",
   confirmVariant = "danger",
   loading = false,
@@ -32,7 +36,7 @@ const ConfirmDialog = ({
           </div>
           <div>
             <div className="text-base font-semibold text-slate-800">{title}</div>
-            <div className="text-sm font-normal text-slate-500">Azione irreversibile</div>
+            <div className="text-sm font-normal text-slate-500">{subtitle}</div>
           </div>
         </Dialog.Title>
         <Dialog.Description className="text-sm leading-relaxed text-slate-600">
@@ -42,7 +46,7 @@ const ConfirmDialog = ({
           <Button variant="outline-secondary" onClick={onClose} disabled={loading}>
             Annulla
           </Button>
-          <Button variant={confirmVariant} onClick={onConfirm} loading={loading}>
+          <Button variant={confirmVariant} onClick={onConfirm} loading={loading} disabled={loading}>
             {confirmLabel}
           </Button>
         </Dialog.Footer>

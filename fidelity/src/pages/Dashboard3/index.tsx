@@ -14,6 +14,7 @@ import PageHeader from "../../components/Base/PageHeader";
 import EmptyState from "../../components/EmptyState";
 import { PERMISSIONS } from "../../constants/permissions";
 import { usePermission } from "../../context/PermissionContext";
+import { useNotification } from "@/context/NotificationContext";
 
 interface FileAnteprima {
     id: string;
@@ -777,6 +778,7 @@ const CardFilterSelect: FC<CardFilterSelectProps> = ({
 
 const Dashboard3: FC<Dashboard3Props> = ({ embedded = false, loaderDataOverride }) => {
     const routeLoaderData = useLoaderData() as Dashboard3LoaderData | null;
+    const { showNotification } = useNotification();
     const loaderData = loaderDataOverride ?? routeLoaderData;
 
     // Stato per aree e canali (shared)
@@ -819,33 +821,35 @@ const Dashboard3: FC<Dashboard3Props> = ({ embedded = false, loaderDataOverride 
         const loadInitialData = async () => {
             if (!loaderData) return;
 
-            try {
-                const [inCorso, inLavorazione, pubblicatiInLavorazione, areeData, canaliData] = await Promise.all([
-                    loaderData.volantiniInCorsoPromise,
-                    loaderData.volantiniInLavorazionePromise,
-                    loaderData.volantiniPubblicatiInLavorazionePromise,
-                    loaderData.areePromise,
-                    loaderData.canaliPromise
-                ]);
+            // allSettled: un endpoint che fallisce non deve svuotare le altre card
+            const risultati = await Promise.allSettled([
+                loaderData.volantiniInCorsoPromise,
+                loaderData.volantiniInLavorazionePromise,
+                loaderData.volantiniPubblicatiInLavorazionePromise,
+                loaderData.areePromise,
+                loaderData.canaliPromise,
+                // Storico (ultimi 10)
+                ServerCall.get<StoricoVolantini>("/dashboard/storico-volantini?limit=10"),
+            ]);
+            const [inCorso, inLavorazione, pubblicatiInLavorazione, areeData, canaliData, storico] = risultati;
 
-                setVolantiniInCorso(inCorso);
-                setVolantiniInLavorazione(inLavorazione);
-                setVolantiniPubblicatiInLavorazione(pubblicatiInLavorazione);
-                setAree(areeData || []);
-                setCanali(canaliData || []);
+            if (inCorso.status === "fulfilled") setVolantiniInCorso(inCorso.value);
+            if (inLavorazione.status === "fulfilled") setVolantiniInLavorazione(inLavorazione.value);
+            if (pubblicatiInLavorazione.status === "fulfilled") setVolantiniPubblicatiInLavorazione(pubblicatiInLavorazione.value);
+            if (areeData.status === "fulfilled") setAree(areeData.value || []);
+            if (canaliData.status === "fulfilled") setCanali(canaliData.value || []);
+            if (storico.status === "fulfilled") setStoricoVolantini(storico.value);
 
-                // Carica anche lo storico (ultimi 10)
-                const storico = await ServerCall.get<StoricoVolantini>("/dashboard/storico-volantini?limit=10");
-                setStoricoVolantini(storico);
-            } catch (error) {
-                console.error("Errore durante il caricamento iniziale:", error);
-            } finally {
-                setInitialLoading(false);
+            const errori = risultati.filter((r): r is PromiseRejectedResult => r.status === "rejected");
+            if (errori.length > 0) {
+                console.error("Errore durante il caricamento iniziale:", errori.map((e) => e.reason));
+                showNotification("Alcuni dati della dashboard non sono stati caricati. Riprova più tardi.", { variant: "error" });
             }
+            setInitialLoading(false);
         };
 
         loadInitialData();
-    }, [loaderData]);
+    }, [loaderData, showNotification]);
 
     // Funzioni fetch per ogni card
     const fetchVolantiniInCorso = useCallback(async (filter: CardFilter) => {

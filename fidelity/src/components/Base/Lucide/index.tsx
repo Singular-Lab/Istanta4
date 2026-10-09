@@ -1,5 +1,6 @@
 import { icons } from "lucide-react";
 import { twMerge } from "tailwind-merge";
+import { risolviIconaLucide } from "./risolviIconaLucide";
 
 interface LucideProps extends React.ComponentPropsWithoutRef<"svg"> {
   icon: keyof typeof icons | string;
@@ -9,7 +10,7 @@ interface LucideProps extends React.ComponentPropsWithoutRef<"svg"> {
 
 function Lucide(props: LucideProps) {
   const { icon, className, is_color_theme, ...computedProps } = props;
-  const Component = (icons as Record<string, typeof icons[keyof typeof icons]>)[String(icon)];
+  const Component = risolviIconaLucide(String(icon));
 
   // Classe oggetto per lo stile richiesto
   const baseStyle = {

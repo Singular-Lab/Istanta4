@@ -22,12 +22,14 @@ export interface SideMenuState {
   menu: Array<Menu | string>;
   loading: boolean; // Stato di caricamento
   startPage: string | null;
+  error: string | null; // valorizzato se /menu/me fallisce, per mostrare "Riprova" nel layout
 }
 
 const initialState: SideMenuState = {
   menu: [],
   loading: true,
   startPage: null,
+  error: null,
 };
 
 const findStartPagePath = (items: Array<Menu | string>): string | null => {
@@ -71,14 +73,16 @@ export const sideMenuSlice = createSlice({
     builder
       .addCase(fetchSideMenu.pending, (state) => {
         state.loading = true; // Imposta il caricamento a true quando la chiamata è in attesa
+        state.error = null;
       })
       .addCase(fetchSideMenu.fulfilled, (state, action) => {
         state.menu = action.payload;
         state.loading = false; // Imposta il caricamento a false una volta completato
         state.startPage = findStartPagePath(action.payload);
       })
-      .addCase(fetchSideMenu.rejected, (state) => {
+      .addCase(fetchSideMenu.rejected, (state, action) => {
         state.loading = false; // Imposta il caricamento a false in caso di errore
+        state.error = action.error.message || "Impossibile caricare il menu";
       });
   },
 });
@@ -86,5 +90,6 @@ export const sideMenuSlice = createSlice({
 export const selectSideMenu = (state: RootState) => state.sideMenu.menu;
 export const selectSideMenuLoading = (state: RootState) => state.sideMenu.loading;
 export const selectSideMenuStartPage = (state: RootState) => state.sideMenu.startPage;
+export const selectSideMenuError = (state: RootState) => state.sideMenu.error;
 
 export default sideMenuSlice.reducer;

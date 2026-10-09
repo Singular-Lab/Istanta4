@@ -26,7 +26,7 @@ import {
   groupHubServices,
   isDataUriIcon,
 } from "../utils";
-import ConfirmDialog from "./ConfirmDialog";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import ServiceFormDialog from "./ServiceFormDialog";
 
 const buildNotificationContent = (icon: string, title: string, message: string, colorClass: string) => (

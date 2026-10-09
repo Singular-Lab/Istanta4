@@ -12,6 +12,7 @@ const WishlistWebpliant: React.FC = () => {
     const [refLista, setRefLista] = useState<DataFields[] | null>(null);
     const [wishlistLoading, setWishlistLoading] = useState(false);
     const [wishlistError, setWishlistError] = useState<string | null>(null);
+    const [linkCopiato, setLinkCopiato] = useState(false);
     const navigate = useNavigate();
     const { oggettoHeaderWebpliant, setOggettoHeaderWebpliant } = useGestioneHeaderWebpliant();
     
@@ -167,7 +168,11 @@ const WishlistWebpliant: React.FC = () => {
                 .catch((error) => console.error('Errore durante la condivisione:', error));
         } else if (navigator.clipboard) {
             navigator.clipboard.writeText(currentUrl)
-                .then(() => alert('Link copiato negli appunti!'))
+                .then(() => {
+                    // Feedback sul pulsante: i toast globali finirebbero sotto l'header del volantino
+                    setLinkCopiato(true);
+                    setTimeout(() => setLinkCopiato(false), 2500);
+                })
                 .catch((err) => console.error('Errore durante la copia del link:', err));
         } else {
             console.warn('API Web Share e Clipboard non supportate');
@@ -244,7 +249,7 @@ const WishlistWebpliant: React.FC = () => {
                         className={clsx(styleWp["wp-btn"], styleWp["wp-btn-primary"], "mt-auto")}
                         onClick={handleShare}
                     >
-                        Condividi la wishlist
+                        {linkCopiato ? 'Link copiato negli appunti!' : 'Condividi la wishlist'}
                     </button>
                 )}
             </div>

@@ -4,14 +4,18 @@
 import lottieAnimation from "@/assets/animations/animazione_loading_session.lottie?url";
 import Button from '@/components/Base/Button';
 import Lucide from '@/components/Base/Lucide';
-import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import { t } from 'i18next';
 
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { isRouteErrorResponse, useRouteError } from "react-router-dom";
 import { fetchSideMenu, selectSideMenuStartPage } from "../../stores/sideMenuSlice_istanta";
 import type { AppDispatch } from "../../stores/store";
+
+// Lazy come in AppErrorFallback: il router importa ErrorPage nel bundle iniziale
+const DotLottieReact = lazy(() =>
+  import("@lottiefiles/dotlottie-react").then((m) => ({ default: m.DotLottieReact }))
+);
 
 const ErrorPage = () => {
   const error = useRouteError() as any;
@@ -30,12 +34,15 @@ const ErrorPage = () => {
   }
 
   useEffect(() => {
-    dispatch(fetchSideMenu());
-  }, [dispatch]);
+    if (!startPage) {
+      dispatch(fetchSideMenu());
+    }
+  }, [dispatch, startPage]);
 
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-[#03045e] bg-opacity-90 backdrop-blur-md z-[100000] transition-opacity duration-300">
+    // Nel flusso della pagina (non overlay fisso): resa nell'Outlet di Echo, il menu resta visibile
+    <div className="min-h-[calc(100vh-12rem)] flex items-center justify-center p-6 rounded-xl bg-[#03045e] bg-opacity-90">
       <div className="text-center flex flex-col items-center">
         <Lucide
           icon="TriangleAlert"
@@ -77,12 +84,14 @@ const ErrorPage = () => {
           )
         }
         <div className="mt-10">
-          <DotLottieReact
-            autoplay
-            loop
-            data={lottieAnimation}
-            style={{ height: '150px', width: '150px' }}
-          />
+          <Suspense fallback={null}>
+            <DotLottieReact
+              autoplay
+              loop
+              src={lottieAnimation}
+              style={{ height: '150px', width: '150px' }}
+            />
+          </Suspense>
         </div>
       </div>
     </div>

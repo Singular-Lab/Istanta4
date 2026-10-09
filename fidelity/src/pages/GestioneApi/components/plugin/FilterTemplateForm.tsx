@@ -1,6 +1,7 @@
 import Button from "@/components/Base/Button";
 import { FormCheck, FormInput, FormLabel, FormSelect, FormTextarea } from "@/components/Base/Form";
 import Lucide from "@/components/Base/Lucide";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
@@ -67,6 +68,7 @@ function FilterTemplateForm({
   );
   const [metaOptionsError, setMetaOptionsError] = useState<string | null>(null);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [confermaElimina, setConfermaElimina] = useState(false);
 
   const {
     control,
@@ -221,17 +223,12 @@ function FilterTemplateForm({
   const handleDelete = async () => {
     if (mode !== 'edit' || !template) return;
 
-    const confirmed = window.confirm(
-      `Sei sicuro di voler eliminare il template "${template.nome}"? Questa azione non può essere annullata.`
-    );
-
-    if (confirmed) {
-      try {
-        await deleteTemplate.mutateAsync(template.id_filter_template);
-        onSuccess();
-      } catch (error) {
-        console.error('Errore eliminazione template:', error);
-      }
+    try {
+      await deleteTemplate.mutateAsync(template.id_filter_template);
+      setConfermaElimina(false);
+      onSuccess();
+    } catch (error) {
+      console.error('Errore eliminazione template:', error);
     }
   };
 
@@ -729,7 +726,7 @@ function FilterTemplateForm({
                   <Button
                     type="button"
                     variant="outline-danger"
-                    onClick={handleDelete}
+                    onClick={() => setConfermaElimina(true)}
                     disabled={isDeleting}
                   >
                     {isDeleting ? (
@@ -780,6 +777,16 @@ function FilterTemplateForm({
               isRestoring={isRestoring}
             />
           )}
+
+          <ConfirmDialog
+            open={confermaElimina}
+            title="Eliminare il template?"
+            description={`Il template "${template?.nome ?? ""}" verrà eliminato definitivamente.`}
+            confirmLabel="Elimina template"
+            loading={isDeleting}
+            onClose={() => setConfermaElimina(false)}
+            onConfirm={handleDelete}
+          />
         </>
       )}
     </>

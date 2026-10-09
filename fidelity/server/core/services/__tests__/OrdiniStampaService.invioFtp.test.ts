@@ -19,15 +19,16 @@ import { RuntimeKit } from '../../models/runtime_kit';
 import { ServerUtils } from '../../utils/ServerUtils';
 import { OrdiniStampaService } from '../OrdiniStampaService';
 
-// I kit della promo arrivano da getAllKitRuntimeByIdPromo: guidId e' runtime_kit.id
-const kit = (id: string, stato = STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO) => ({
+// I kit della promo arrivano da getAllKitRuntimeByIdPromo: guidId e' runtime_kit.id.
+// Il contratto prevede solo il tipo di export 't1'.
+const kit = (id: string, stato = STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO, tipi = ['t1']) => ({
   id,
   guidId: id,
   titolo: `Kit ${id}`,
   stato_lavorazione: stato,
   id_area: 'a1',
   id_canale: 'c1',
-  tipi_di_export_in_kit: [],
+  tipi_di_export_in_kit: tipi.map(tipo_di_export_guid_id => ({ tipo_di_export_guid_id })),
 });
 
 function preparaInvio(opzioni: {
@@ -36,7 +37,7 @@ function preparaInvio(opzioni: {
   inviiPrecedenti?: string[][];
   esitoOlimpo?: Record<string, boolean>;
 }) {
-  const contratto = { json_contrattotipografia: { root_file_tree: [] }, tipiexport_contrattotipografia: [] };
+  const contratto = { json_contrattotipografia: { root_file_tree: [] }, tipiexport_contrattotipografia: ['t1'] };
   vi.spyOn(OrdiniDiStampa, 'findByPk').mockResolvedValue({ dataValues: { id_ordinistampa: 'o1', id_promo_ordinistampa: 'p1' } } as any);
   vi.spyOn(GDO, 'findAll').mockResolvedValue([{ id_gdo: 'g1' }] as any);
   vi.spyOn(ContrattoTipografia, 'findAll').mockResolvedValue([{ ...contratto, dataValues: contratto }] as any);
@@ -126,6 +127,29 @@ describe('OrdiniStampaService.processFTPPopOlimpo', () => {
     expect(olimpo).toHaveBeenCalledTimes(1);
     expect(creaInvio.mock.calls[0][0].report_ordinistampainvii.kit_guids).toEqual(['k2']);
     expect(eventoFinale()).toMatchObject({ esito: true, totalKit: 1 });
+    expect(statoFinale(aggiornaStato)).toBe(STATO_ORDINI_STAMPA.FINITO);
+  });
+
+  it('un kit con un tipo nel contratto e uno no e\' da inviare: finche\' manca l\'ordine non e\' FINITO', async () => {
+    const { avvia, aggiornaStato, creaInvio } = preparaInvio({
+      selezionati: [kit('k1', undefined, ['t1', 't2'])],
+      kitPromo: [kit('k1', undefined, ['t1', 't2']), kit('k2', undefined, ['t2', 't1'])],
+    });
+
+    await avvia();
+
+    expect(creaInvio.mock.calls[0][0].report_ordinistampainvii.kit_guids).toEqual(['k1']);
+    expect(statoFinale(aggiornaStato)).toBe(STATO_ORDINI_STAMPA.IN_REVISIONE);
+  });
+
+  it('inviati i kit con almeno un tipo nel contratto l\'ordine e\' FINITO; un kit senza tipi nel contratto non conta', async () => {
+    const { avvia, aggiornaStato } = preparaInvio({
+      selezionati: [kit('k1', undefined, ['t1', 't2'])],
+      kitPromo: [kit('k1', undefined, ['t1', 't2']), kit('k2', undefined, ['t2'])],
+    });
+
+    await avvia();
+
     expect(statoFinale(aggiornaStato)).toBe(STATO_ORDINI_STAMPA.FINITO);
   });
 });

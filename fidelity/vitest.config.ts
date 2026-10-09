@@ -8,7 +8,9 @@ export default defineConfig({
     setupFiles: ['./server/__tests__/setup.ts'],
     include: [
       'server/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}',
-      'lib/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'
+      'lib/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}',
+      // Client: solo funzioni pure in .ts, ambiente node senza DOM (niente .tsx)
+      'src/**/*.test.ts'
     ],
     exclude: [
       'node_modules',

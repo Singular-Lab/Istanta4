@@ -237,6 +237,8 @@ export class WhatsAppController extends BaseController {
             if (!titoloCampagna || titoloCampagna.trim() === '') {
                 this.sendResponse(res, HttpStatusCode.BAD_REQUEST, {
                     success: false,
+                    // message e' il campo che il client mostra all'operatore
+                    message: 'Il titolo della campagna è obbligatorio',
                     error: 'Il titolo della campagna è obbligatorio'
                 });
                 return;
@@ -248,6 +250,7 @@ export class WhatsAppController extends BaseController {
             if (!gdo) {
                 this.sendResponse(res, HttpStatusCode.NOT_FOUND, {
                     success: false,
+                    message: 'GDO non trovato per questo utente',
                     error: 'GDO non trovato per questo utente'
                 });
                 return;

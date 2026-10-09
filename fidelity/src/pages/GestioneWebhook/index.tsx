@@ -4,6 +4,7 @@ import { FormCheck, FormInput, FormLabel, FormSelect, FormTextarea } from "@/com
 import { Dialog } from "@/components/Base/Headless";
 import Lucide from "@/components/Base/Lucide";
 import PageHeader from "@/components/Base/PageHeader";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import { PermissionGate } from "@/components/PermissionGate";
 import Table from "@/components/Base/Table";
 import EmptyState from "@/components/EmptyState";
@@ -239,10 +240,13 @@ function GestioneWebhook() {
         setIsDialogOpen(true);
     };
 
-    const handleDeleteWebhook = (id: string) => {
-        if (confirm('Sei sicuro di voler eliminare questo webhook?')) {
-            deleteWebhookMutation.mutate(id);
-        }
+    const [webhookDaEliminare, setWebhookDaEliminare] = useState<WebhookAttributes | null>(null);
+
+    const handleDeleteWebhook = () => {
+        if (!webhookDaEliminare) return;
+        deleteWebhookMutation.mutate(webhookDaEliminare.id_webhook, {
+            onSettled: () => setWebhookDaEliminare(null),
+        });
     };
 
     const handleTestWebhook = (webhook: WebhookAttributes) => {
@@ -506,7 +510,7 @@ function GestioneWebhook() {
                                                             <Button
                                                                 variant="outline-danger"
                                                                 size="sm"
-                                                                onClick={() => handleDeleteWebhook(webhook.id_webhook)}
+                                                                onClick={() => setWebhookDaEliminare(webhook)}
                                                                 className="px-2 py-1"
                                                                 title="Elimina"
                                                             >
@@ -910,6 +914,16 @@ function GestioneWebhook() {
                     </Dialog.Description>
                 </Dialog.Panel>
             </Dialog>
+
+            <ConfirmDialog
+                open={!!webhookDaEliminare}
+                title="Eliminare il webhook?"
+                description={`Il webhook "${webhookDaEliminare?.nome_webhook ?? ""}" verrà eliminato e l'URL ${webhookDaEliminare?.url_webhook ?? ""} non riceverà più eventi.`}
+                confirmLabel="Elimina webhook"
+                loading={deleteWebhookMutation.isPending}
+                onClose={() => !deleteWebhookMutation.isPending && setWebhookDaEliminare(null)}
+                onConfirm={handleDeleteWebhook}
+            />
         </>
     );
 }
