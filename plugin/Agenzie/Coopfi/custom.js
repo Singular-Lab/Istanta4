@@ -41,6 +41,10 @@ const customAgenzia={
         }
     ],
     ignoreElementsFixFoto:["sconto","txt_sconto","sconto_base","sfondo"],
+    //I20-1079: la bruciatura "MAX 4 PEZZI PER CARTA SOCIO" (MAX_PEZZI e varianti) non e' descrizione.
+    //La dichiara anche il SourceCustomPlugin di Coop sul server, che comanda: questa vale finche' il
+    //server non la manda (Istanta non ancora aggiornata). Le due vanno tenute uguali.
+    stiliBruciaturaDescrizione: ["MAX_PEZZI"],
     customPadding: [
     ], 
 

@@ -962,6 +962,13 @@ namespace IstantaLib
         //public List<AgenziaCustomPlugin_RegoleIstruzioni> schemiDescrizioni { get; set; }//Gli schemi descrizioni servono per definire regole di composizione dinamica delle descrizioni in fase di revisione, in questo modo è possibile per le agenzie definire logiche di composizione delle descrizioni diverse a seconda delle esigenze
         public AgenziaCustomPlugin_StileUniversale[] listaStiliUniversali { get; set; }
 
+        /// I20-1079: gli stili di carattere delle bruciature che l'agenzia accoda alla descrizione
+        /// (Coop: "MAX 4 PEZZI PER CARTA SOCIO" con MAX_PEZZI e varianti). Non sono descrizione: il
+        /// Plugin li esclude dal confronto della descrizione e da quello che salva come descrizione.
+        /// Un nome vale per gli stili che cominciano con lui, come per gli stili universali.
+        /// Vuoto: la descrizione si confronta tutta.
+        public List<string> stiliBruciaturaDescrizione { get; set; } = new List<string>();
+
         public AgenziaCustomPlugin_GrandezzaBoxRevisione grandezzeBox { get; set; }//Definisce la grandezza dei box di revisione, in questo modo è possibile per le agenzie gestire la visualizzazione a piacimento
         
         public bool abilitaDescrizioniRegionali { get; set; }

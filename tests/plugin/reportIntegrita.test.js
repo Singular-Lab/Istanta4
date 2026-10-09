@@ -22,7 +22,9 @@ const MOTORE = ["confrontoBox", "confrontoBoxCompiledFieldPreAnalisi", "mappatur
     //I20-1070: il tipo di elemento di una foto extra del dato, per le decisioni della scheda.
     "tipoElementoExtra",
     //I20-1071: i valori leggibili di una differenza di contenuto, per la scheda e per il report.
-    "testoLeggibile", "valoriDifferenza"
+    "testoLeggibile", "valoriDifferenza",
+    //I20-1079: le bruciature della descrizione, fuori dal confronto (solo i clienti che le dichiarano).
+    "stiliBruciaturaDelCampo", "eStileBruciatura", "senzaBruciature", "trattiSenzaBruciature"
 ];
 const DA_INDEXNEW = ["avviaReportIntegrita", "applicaConfronto", "preAnalisiBoxMappato",
     "nomiPagineDelDocumento", "boxDellElementoMappa"];
