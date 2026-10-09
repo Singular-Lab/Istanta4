@@ -885,7 +885,15 @@ const SchermataSegnalazioni = {
 
         ReportIntegrita._applicaBloccoSchedaDalReport();
 
-        if (stato.riaggancioInCorso || !schedaRef.serveRiaggancioDalReport(stato.box)) {
+        if (stato.riaggancioInCorso) {
+            return;
+        }
+
+        if (!schedaRef.serveRiaggancioDalReport(stato.box)) {
+            //I20-1074: deselezionare il box vale come la X: si torna alla schermata.
+            if (ReportIntegrita._deselezionatoDaChiudere(stato)) {
+                SchermataSegnalazioni.chiudiScheda();
+            }
             return;
         }
 

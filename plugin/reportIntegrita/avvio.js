@@ -332,8 +332,26 @@ function etichettaSegnalazione(label, traduzioni) {
     return traduzione + " (" + nome + ")";
 }
 
+//I20-1074: le vigilanze di fila con la selezione vuota dopo cui la scheda aperta in vista
+//controllata si chiude come con la X. Una sola potrebbe essere il box che Reimpagina sta rifacendo,
+//che per un momento non e' selezionato.
+const VIGILANZE_DESELEZIONE = 2;
+
+/// I20-1074: il conto delle vigilanze di fila in cui nulla e' selezionato, e se e' ora di chiudere
+/// la scheda in vista controllata come con la X. Mentre la scheda lavora o si riaggancia a un box
+/// rifatto non si conta: il conto riparte da zero.
+function contoDeselezione(contoPrecedente, quantiSelezionati, inPausa) {
+    if (inPausa) {
+        return { conto: 0, chiudi: false };
+    }
+    const conto = quantiSelezionati > 0 ? 0 : (contoPrecedente > 0 ? contoPrecedente : 0) + 1;
+    return { conto: conto, chiudi: conto >= VIGILANZE_DESELEZIONE };
+}
+
 module.exports = {
     MINUTI_LISTA_RECENTE,
+    VIGILANZE_DESELEZIONE,
+    contoDeselezione,
     ORE_REPORT_DA_CHIEDERE,
     ORE_REPORT_VECCHIO,
     leggiDataItaliana,
