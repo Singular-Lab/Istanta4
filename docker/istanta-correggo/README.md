@@ -181,11 +181,27 @@ nemmeno dopo aver sistemato il percorso, perché gli script di
 
 ### La configurazione di Istanta vive tutta in `istanta.env`
 
-Non c'è nessun `appsettings.json` da montare, e non è una semplificazione: in
-`.gitignore` `appsettings*.json` è escluso — restano solo i `.template.json` —
+In `.gitignore` `appsettings*.json` è escluso — restano solo i `.template.json` —
 quindi la CI costruisce da un clone pulito e **l'immagine non contiene alcun
 appsettings.json**. Il container parte senza valori di default, e ogni chiave
 che serve va dichiarata come variabile d'ambiente.
+
+C'è un'unica eccezione, il file del cliente. `ISTANTA_CLIENTE` in `release.env`
+dice quale cliente è montato su questa installazione: `Program.cs` carica allora
+`appsettings.<cliente>.json` e si ferma se manca, e `/Agenzia/script.js` serve lo
+script di `ScriptAgenzia/<cliente>`. Il file lo prepari tu, sull'host, e il
+compose lo monta in `/app` dal percorso `ISTANTA_CLIENT_CONFIG`. Può contenere
+solo le chiavi proprie del cliente, o anche soltanto `{}`: le variabili
+d'ambiente, `istanta.env` compreso, vincono comunque sul file.
+
+```bash
+echo '{}' | sudo tee /opt/company-ai/projects/istanta4/appsettings.cliente.json
+```
+
+Va creato **prima** di distribuire: un bind mount su un file che non esiste
+diventa una directory vuota, e Istanta non parte. `prepare-target.sh` controlla
+nome, file, JSON e permessi, e — quando l'immagine è già sul target — che in
+`ScriptAgenzia` ci sia la cartella del cliente.
 
 `istanta.env.example` contiene l'intera configurazione del modello
 `Istanta/appsettings.famila.template.json` già tradotta, con la convenzione .NET:

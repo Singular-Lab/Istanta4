@@ -46,7 +46,18 @@ services:
       ConnectionStrings__IstandaConnectionDb: Host=postgres;Port=5432;Database=${ISTANTA_DB_NAME:-istanta};Username=${ISTANTA_DB_USER:-istanta};Password=${ISTANTA_DB_PASSWORD:?Impostare ISTANTA_DB_PASSWORD in release.env}
       ConnectionStrings__IstantaSession: redis:6379
       external_paths__pathLib: /app/external_lib/
+      # Il cliente montato su questa installazione. Program.cs carica
+      # appsettings.<cliente>.json (montato qui sotto) e /Agenzia/script.js serve
+      # lo script di ScriptAgenzia/<cliente>: senza, l'endpoint risponde 500.
+      ISTANTA_CLIENTE: ${ISTANTA_CLIENTE:?Impostare ISTANTA_CLIENTE in release.env, nome del cliente in minuscolo}
     volumes:
+      # appsettings.<cliente>.json: Program.cs lo pretende quando ISTANTA_CLIENTE
+      # e' impostata, e nell'immagine non c'e' (appsettings*.json e' escluso da
+      # git). Le variabili d'ambiente, istanta.env compreso, continuano a
+      # vincere sul file. Bind mount di un FILE: se il percorso sull'host non
+      # esiste Docker crea al suo posto una directory vuota, e l'avvio fallisce;
+      # prepare-target.sh lo controlla prima.
+      - ${ISTANTA_CLIENT_CONFIG:?Impostare ISTANTA_CLIENT_CONFIG in release.env, percorso assoluto del file appsettings del cliente}:/app/appsettings.${ISTANTA_CLIENTE:?Impostare ISTANTA_CLIENTE in release.env}.json:ro
       # Qui il Runner installa AgenziaLib.dll, artifact di tipo File della
       # release: la directory corrisponde alla DestinationPath configurata nel
       # catalogo ControlPlane, dentro la working directory del progetto.

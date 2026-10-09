@@ -226,6 +226,111 @@ verifica_sottodirectory CORREGGO_DATA_DIR "volantini"           "$UID_APP"
 # lettura: può restare di root, basta che esista.
 verifica_dati ISTANTA_EXTERNAL_LIB_DIR
 
+# Il cliente: il nome e il suo file appsettings, che il compose monta in /app.
+# Program.cs pretende il file quando ISTANTA_CLIENTE e' impostata, e un bind mount
+# su un file che non esiste diventa una directory vuota: Istanta non partirebbe.
+verifica_cliente() {
+    local cliente file immagine cartelle
+
+    cliente=$(leggi ISTANTA_CLIENTE)
+    if [ -z "$cliente" ]; then
+        rosso "  manca     ISTANTA_CLIENTE non è valorizzata in release.env"
+        rosso "            Il nome del cliente in minuscolo, es. famila: sceglie"
+        rosso "            appsettings.<cliente>.json e lo script di agenzia."
+        errori=$((errori + 1))
+    else
+        # Stessa regola di ScriptAgenzia.NomeAccettabile: lettere, cifre, - e _.
+        case "$cliente" in
+            *[!A-Za-z0-9_-]*)
+                rosso "  non valido ISTANTA_CLIENTE = $cliente (solo lettere, cifre, - e _)"
+                errori=$((errori + 1))
+                cliente="" ;;
+            *)  verde "  ok        ISTANTA_CLIENTE = $cliente" ;;
+        esac
+    fi
+
+    file=$(leggi ISTANTA_CLIENT_CONFIG)
+    if [ -z "$file" ]; then
+        rosso "  manca     ISTANTA_CLIENT_CONFIG non è valorizzata in release.env"
+        errori=$((errori + 1))
+    else
+        case "$file" in
+            /*) ;;
+            *)  rosso "  relativo  ISTANTA_CLIENT_CONFIG = $file (serve un percorso assoluto)"
+                errori=$((errori + 1))
+                file="" ;;
+        esac
+    fi
+
+    if [ -n "$file" ]; then
+        if [ -d "$file" ]; then
+            rosso "  directory $file è una directory, non un file."
+            rosso "            Succede quando si distribuisce prima di averlo creato: Docker"
+            rosso "            crea una directory al posto del file mancante. Rimuovila"
+            rosso "            (sudo rmdir \"$file\") e metti il file del cliente."
+            errori=$((errori + 1))
+        elif [ ! -f "$file" ]; then
+            rosso "  assente   $file"
+            rosso "            Crealo con le impostazioni proprie del cliente; anche solo {}"
+            rosso "            va bene, perché la configurazione completa è in istanta.env."
+            errori=$((errori + 1))
+        else
+            # Un JSON rotto ferma l'avvio di Istanta: meglio saperlo qui.
+            if command -v python3 >/dev/null 2>&1; then
+                if python3 -c 'import json, sys; json.load(open(sys.argv[1], encoding="utf-8-sig"))' "$file" 2>/dev/null; then
+                    verde "  ok        $file (JSON valido)"
+                else
+                    rosso "  rotto     $file non è JSON valido: Istanta non partirebbe"
+                    errori=$((errori + 1))
+                fi
+            elif command -v jq >/dev/null 2>&1; then
+                if jq empty "$file" >/dev/null 2>&1; then
+                    verde "  ok        $file (JSON valido)"
+                else
+                    rosso "  rotto     $file non è JSON valido: Istanta non partirebbe"
+                    errori=$((errori + 1))
+                fi
+            else
+                giallo "  da fare   $file: né python3 né jq per verificare che sia JSON valido"
+                avvisi=$((avvisi + 1))
+            fi
+            # Puo' contenere segreti: leggibile da Istanta (gruppo 1654), non da altri.
+            if chown "root:$UID_APP" "$file" && chmod 640 "$file"; then
+                verde "  ok        $file (root:$UID_APP, 640)"
+            else
+                rosso "  errore    non riesco ad assegnare $file a root:$UID_APP (serve sudo)"
+                errori=$((errori + 1))
+            fi
+        fi
+    fi
+
+    # Lo script di agenzia sta nell'immagine, in /app/ScriptAgenzia/<cliente>.
+    # Si controlla solo se l'immagine c'e' gia': alla prima installazione la
+    # scarica il Runner, e il controllo si rifa' alla release successiva.
+    [ -n "$cliente" ] || return
+    immagine=$(leggi ISTANTA_IMAGE)
+    if [ -z "$immagine" ] || ! docker image inspect "$immagine" >/dev/null 2>&1; then
+        giallo "  da fare   script di agenzia per $cliente: immagine di Istanta non ancora sul"
+        giallo "            target, si potra' verificare dopo la prima distribuzione."
+        avvisi=$((avvisi + 1))
+        return
+    fi
+    cartelle=$(docker run --rm --entrypoint ls "$immagine" /app/ScriptAgenzia 2>/dev/null)
+    # La cartella si cerca senza distinguere maiuscole e minuscole, come fa
+    # ScriptAgenzia.TrovaCartella: le storiche si chiamano "Maiora", "craiOvest".
+    if printf '%s\n' "$cartelle" | grep -qixF -- "$cliente"; then
+        verde "  ok        script di agenzia per $cliente presente nell'immagine"
+    else
+        giallo "  manca     nessuna cartella ScriptAgenzia per $cliente nell'immagine:"
+        giallo "            /Agenzia/script.js risponderà 500. Presenti: $(printf '%s' "$cartelle" | tr '\n' ' ')"
+        avvisi=$((avvisi + 1))
+    fi
+}
+
+echo
+echo "Cliente"
+verifica_cliente
+
 echo
 echo "Facoltativo"
 verifica_facoltativa PROXY_CERT_DIR \
