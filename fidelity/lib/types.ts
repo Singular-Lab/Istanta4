@@ -360,7 +360,7 @@ export type UtenteAttributes = {
   geom_utenti?: any;
   createdat?: Date;
   updatedat?: Date;
-  meta_utenti?: UtentiMeta;
+  meta_utenti?: UtentiMeta | null;
 };
 
 

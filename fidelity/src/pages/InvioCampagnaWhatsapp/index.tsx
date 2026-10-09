@@ -190,7 +190,7 @@ const getStatusConfig = (
             return {
                 label: status ?? 'Sconosciuto',
                 className: 'bg-slate-100 text-slate-500 dark:bg-darkmode-400/40 dark:text-slate-300',
-                icon: 'CircleHelp',
+                icon: 'CircleQuestionMark',
             };
     }
 };

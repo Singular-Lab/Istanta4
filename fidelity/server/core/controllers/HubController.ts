@@ -157,7 +157,7 @@ export class HubController extends BaseController {
     }
   }
 
-  private async updateAuthProvider(req: Request, res: Response): Promise<void> {
+  private async updateAuthProvider(req: Request<{ id: string }>, res: Response): Promise<void> {
     try {
       if (req.session?.tipo_utente !== TIPO_UTENTI.SUPERADMIN) {
         this.sendResponse(res, HttpStatusCode.FORBIDDEN, { message: 'Solo Superadmin può modificare provider' });
@@ -174,7 +174,7 @@ export class HubController extends BaseController {
     }
   }
 
-  private async deleteAuthProvider(req: Request, res: Response): Promise<void> {
+  private async deleteAuthProvider(req: Request<{ id: string }>, res: Response): Promise<void> {
     try {
       if (req.session?.tipo_utente !== TIPO_UTENTI.SUPERADMIN) {
         this.sendResponse(res, HttpStatusCode.FORBIDDEN, { message: 'Solo Superadmin può eliminare provider' });
@@ -197,7 +197,7 @@ export class HubController extends BaseController {
    * Step 1: Genera l'authorize URL con PKCE e salva state/nonce/code_verifier in sessione.
    * Il frontend chiama GET /api/auth/oidc/authorize/:codice e riceve l'URL a cui fare redirect.
    */
-  private async oidcAuthorize(req: Request, res: Response): Promise<void> {
+  private async oidcAuthorize(req: Request<{ codice: string }>, res: Response): Promise<void> {
     try {
       const { codice } = req.params;
 
@@ -733,7 +733,7 @@ export class HubController extends BaseController {
     }
   }
 
-  private async updateHubService(req: Request, res: Response): Promise<void> {
+  private async updateHubService(req: Request<{ id: string }>, res: Response): Promise<void> {
     try {
       if (req.session?.tipo_utente !== TIPO_UTENTI.SUPERADMIN) {
         this.sendResponse(res, HttpStatusCode.FORBIDDEN, { message: 'Solo Superadmin può modificare servizi' });
@@ -750,7 +750,7 @@ export class HubController extends BaseController {
     }
   }
 
-  private async deleteHubService(req: Request, res: Response): Promise<void> {
+  private async deleteHubService(req: Request<{ id: string }>, res: Response): Promise<void> {
     try {
       if (req.session?.tipo_utente !== TIPO_UTENTI.SUPERADMIN) {
         this.sendResponse(res, HttpStatusCode.FORBIDDEN, { message: 'Solo Superadmin può eliminare servizi' });
@@ -767,7 +767,7 @@ export class HubController extends BaseController {
     }
   }
 
-  private async deleteHubServiceByCode(req: Request, res: Response): Promise<void> {
+  private async deleteHubServiceByCode(req: Request<{ codice: string }>, res: Response): Promise<void> {
     try {
       if (req.session?.tipo_utente !== TIPO_UTENTI.SUPERADMIN) {
         this.sendResponse(res, HttpStatusCode.FORBIDDEN, { message: 'Solo Superadmin può eliminare servizi' });
@@ -822,7 +822,7 @@ export class HubController extends BaseController {
     }
   }
 
-  private async updateHubNews(req: Request, res: Response): Promise<void> {
+  private async updateHubNews(req: Request<{ id: string }>, res: Response): Promise<void> {
     try {
       if (req.session?.tipo_utente !== TIPO_UTENTI.SUPERADMIN) {
         this.sendResponse(res, HttpStatusCode.FORBIDDEN, { message: 'Solo Superadmin può modificare news' });
@@ -839,7 +839,7 @@ export class HubController extends BaseController {
     }
   }
 
-  private async deleteHubNews(req: Request, res: Response): Promise<void> {
+  private async deleteHubNews(req: Request<{ id: string }>, res: Response): Promise<void> {
     try {
       if (req.session?.tipo_utente !== TIPO_UTENTI.SUPERADMIN) {
         this.sendResponse(res, HttpStatusCode.FORBIDDEN, { message: 'Solo Superadmin può eliminare news' });

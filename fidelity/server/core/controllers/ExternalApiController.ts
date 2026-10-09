@@ -1505,7 +1505,7 @@ export class ExternalApiController extends BaseController {
   /**
    * Aggiorna un filter template esistente
    */
-  private async updateFilterTemplate(req: Request, res: Response): Promise<void> {
+  private async updateFilterTemplate(req: Request<{ id: string }>, res: Response): Promise<void> {
     try {
       const { id } = req.params;
       const {
@@ -1579,7 +1579,7 @@ export class ExternalApiController extends BaseController {
   /**
    * Elimina un filter template
    */
-  private async deleteFilterTemplate(req: Request, res: Response): Promise<void> {
+  private async deleteFilterTemplate(req: Request<{ id: string }>, res: Response): Promise<void> {
     try {
       const { id } = req.params;
       const gdoId = req.session.id_gdo as string;
@@ -1619,7 +1619,7 @@ export class ExternalApiController extends BaseController {
   /**
    * Recupera un filter template per ID
    */
-  private async getFilterTemplateById(req: Request, res: Response): Promise<void> {
+  private async getFilterTemplateById(req: Request<{ id: string }>, res: Response): Promise<void> {
     try {
       const { id } = req.params;
       const gdoId = req.session.id_gdo as string;
@@ -1653,7 +1653,7 @@ export class ExternalApiController extends BaseController {
    * Questo endpoint è pubblico (via ephemeral token o API key) e cerca il template
    * solo per slug, dato che gli slug sono già unici per GDO
    */
-  private async getFilterTemplateBySlug(req: Request, res: Response): Promise<void> {
+  private async getFilterTemplateBySlug(req: Request<{ slug: string }>, res: Response): Promise<void> {
     try {
       const { slug } = req.params;
       const versionParam = req.query.version;
@@ -1704,7 +1704,7 @@ export class ExternalApiController extends BaseController {
     }
   }
 
-  private async getFilterTemplateVersionHistory(req: Request, res: Response): Promise<void> {
+  private async getFilterTemplateVersionHistory(req: Request<{ slug: string }>, res: Response): Promise<void> {
     try {
       const { slug } = req.params;
       const gdoId = req.session.id_gdo as string;
@@ -1733,7 +1733,7 @@ export class ExternalApiController extends BaseController {
     }
   }
 
-  private async restoreFilterTemplateVersion(req: Request, res: Response): Promise<void> {
+  private async restoreFilterTemplateVersion(req: Request<{ slug: string }>, res: Response): Promise<void> {
     try {
       const { slug } = req.params;
       const { target_version } = req.body;

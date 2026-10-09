@@ -104,7 +104,7 @@ export class WebPliantController extends BaseController {
     });
   }
 
-  private async prendiWorkspaceDaID(req: Request, res: Response): Promise<void> {
+  private async prendiWorkspaceDaID(req: Request<{ idWorkspace: string }>, res: Response): Promise<void> {
     try {
       const idWorkspace = req.params.idWorkspace;
       const isEditor = await this.puoUsareEditor(req, res);

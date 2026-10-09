@@ -83,7 +83,7 @@ export class LogController extends BaseController {
         }
     }
 
-    private getLogContent(req: Request, res: Response) {
+    private getLogContent(req: Request<{ filename: string }>, res: Response) {
         try {
             const filename = req.params.filename;
             const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
@@ -206,7 +206,7 @@ export class LogController extends BaseController {
         }
     }
 
-    private clearLog(req: Request, res: Response) {
+    private clearLog(req: Request<{ filename: string }>, res: Response) {
         try {
             const filename = req.params.filename;
             const userId = req.session?.id_utente;

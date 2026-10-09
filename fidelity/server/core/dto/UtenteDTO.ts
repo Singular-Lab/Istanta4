@@ -57,7 +57,7 @@ export interface UtenteResponseDTO {
   telefono?: string;
   createdat?: Date;
   updatedat: Date;
-  meta?: UtentiMeta;
+  meta?: UtentiMeta | null;
   nome_completo?: string;
   eta?: number;
   is_attivo?: boolean;

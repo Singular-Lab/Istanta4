@@ -55,7 +55,7 @@ export class DisplayContextController extends BaseController {
         }
     }
 
-    private async getDisplayContextById(req: Request, res: Response): Promise<void> {
+    private async getDisplayContextById(req: Request<{ id: string }>, res: Response): Promise<void> {
         try {
             const id = req.params.id;
             const result = await this.displayContextService.getDisplayContextById(id);
@@ -69,7 +69,7 @@ export class DisplayContextController extends BaseController {
         }
     }
 
-    private async updateDisplayContext(req: Request, res: Response): Promise<void> {
+    private async updateDisplayContext(req: Request<{ id: string }>, res: Response): Promise<void> {
         try {
             const id = req.params.id;
             const result = await this.displayContextService.updateDisplayContext(id, req.body);
@@ -83,7 +83,7 @@ export class DisplayContextController extends BaseController {
         }
     }
 
-    private async deleteDisplayContext(req: Request, res: Response): Promise<void> {
+    private async deleteDisplayContext(req: Request<{ id: string }>, res: Response): Promise<void> {
         try {
             const id = req.params.id;
             const deleted = await this.displayContextService.deleteDisplayContext(id);
@@ -97,7 +97,7 @@ export class DisplayContextController extends BaseController {
         }
     }
 
-    private async getDisplayContextsByGDO(req: Request, res: Response): Promise<void> {
+    private async getDisplayContextsByGDO(req: Request<{ id_gdo: string }>, res: Response): Promise<void> {
         try {
             const id_gdo = req.params.id_gdo;
             const result = await this.displayContextService.getDisplayContextsByGDO(id_gdo);
@@ -107,7 +107,7 @@ export class DisplayContextController extends BaseController {
         }
     }
 
-    private async getDisplayContextsByPV(req: Request, res: Response): Promise<void> {
+    private async getDisplayContextsByPV(req: Request<{ id_pv: string }>, res: Response): Promise<void> {
         try {
             const id_pv = req.params.id_pv;
             const result = await this.displayContextService.getDisplayContextsByPuntoVendita(id_pv);

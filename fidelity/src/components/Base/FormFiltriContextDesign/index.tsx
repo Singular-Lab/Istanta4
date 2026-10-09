@@ -3,11 +3,11 @@ import FormInput from '@/components/Base/Form/FormInput';
 import { Tab } from '@/components/Base/Headless';
 import Lucide from '@/components/Base/Lucide';
 import { useEffect, useRef } from 'react';
-import { Control, FieldErrors, UseFormRegister, UseFormSetValue, useFieldArray } from 'react-hook-form';
+import { Control, FieldErrors, FieldValues, UseFormRegister, UseFormSetValue, useFieldArray } from 'react-hook-form';
 import CondizioniFiltroContext from './CondizioniFiltriContextDesign';
 
-interface ContextFilterFormProps {
-    control: Control<any>;
+interface ContextFilterFormProps<T extends FieldValues> {
+    control: Control<T>;
     register: UseFormRegister<any>;
     setValue: UseFormSetValue<any>;
     errors: FieldErrors<any>;
@@ -17,8 +17,8 @@ interface ContextFilterFormProps {
     retriviedDataFiltriContesto?: any;
 }
 
-const ContextFilterForm = ({
-    control,
+const ContextFilterForm = <T extends FieldValues>({
+    control: controlForm,
     register,
     setValue,
     errors,
@@ -26,7 +26,9 @@ const ContextFilterForm = ({
     namePrefix,
     dataPerContesto,
     retriviedDataFiltriContesto,
-}: ContextFilterFormProps) => {
+}: ContextFilterFormProps<T>) => {
+    // react-hook-form: Control<T> non e' assegnabile a Control<any>; i campi usano percorsi dinamici, quindi qui il form e' non tipizzato
+    const control = controlForm as Control<any>;
     const { fields, append, remove } = useFieldArray({
         control,
         name: namePrefix,

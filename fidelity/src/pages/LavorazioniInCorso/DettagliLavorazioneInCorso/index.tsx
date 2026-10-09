@@ -1617,8 +1617,9 @@ function Main() {
                 options={{
                   dragend: (event) => console.log("Drag end", event),
                   dragenter: (event) => console.log("Drag enter", event),
-                  addedfiles: (dzFiles) => {
-                    const addedFiles = Array.from(dzFiles) as unknown as File[];
+                  // I tipi di dropzone dichiarano addedfiles() senza argomenti, ma l'evento passa i file aggiunti
+                  addedfiles: (dzFiles?: ArrayLike<File>) => {
+                    const addedFiles = Array.from(dzFiles ?? []);
                     handleAddFile(addedFiles);
 
                     // Svuoto la coda interna di Dropzone, se esiste il metodo

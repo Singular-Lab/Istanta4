@@ -80,7 +80,7 @@ export class TipoExportController extends BaseController {
     }
   }
 
-  private async getTipoExportById(req: Request, res: Response): Promise<void> {
+  private async getTipoExportById(req: Request<{ id: string }>, res: Response): Promise<void> {
     try {
       const { id } = req.params;
       const result = await this.tipoExportService.getTipoExportById(id);

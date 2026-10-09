@@ -106,7 +106,7 @@ export class MenuController extends BaseController {
     }
   }
 
-  private async getMenuPerTipoUtente(req: Request, res: Response): Promise<void> {
+  private async getMenuPerTipoUtente(req: Request<{ tipoUtente: string }>, res: Response): Promise<void> {
     try {
       const tipoUtente = req.params.tipoUtente;
       const ruoloGdo = this.getRuoloGdo(req);
@@ -117,7 +117,7 @@ export class MenuController extends BaseController {
     }
   }
 
-  private async saveMenu(req: Request, res: Response): Promise<void> {
+  private async saveMenu(req: Request<{ tipoUtente: string }>, res: Response): Promise<void> {
     try {
       const tipoUtente = req.params.tipoUtente;
       const ruoloGdo = this.getRuoloGdo(req);

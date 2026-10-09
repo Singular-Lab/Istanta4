@@ -1,13 +1,13 @@
 import React, { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
-import { useFieldArray, Control, UseFormRegister, FieldErrors } from 'react-hook-form';
+import { useFieldArray, Control, FieldValues, UseFormRegister, FieldErrors } from 'react-hook-form';
 import Button from '@/components/Base/Button';
 import FormInput from '@/components/Base/Form/FormInput';
 import Lucide from '@/components/Base/Lucide';
 import CondizioniBaseForm from './CondizioniFormFiltriDesign';
 import { Tab } from '@/components/Base/Headless';
 
-interface FilterFormProps {
-    control: Control<any>;
+interface FilterFormProps<T extends FieldValues> {
+    control: Control<T>;
     register: UseFormRegister<any>;
     errors: FieldErrors<any>;
     dataFiltri?: any;
@@ -16,15 +16,17 @@ interface FilterFormProps {
     namePrefix: string;
 }
 
-const FilterForm = ({
-    control,
+const FilterForm = <T extends FieldValues>({
+    control: controlForm,
     register,
     errors,
     dataFiltri,
     dataAddestramenti,
     declinazioneIndex,
     namePrefix,
-}: FilterFormProps) => {
+}: FilterFormProps<T>) => {
+    // react-hook-form: Control<T> non e' assegnabile a Control<any>; i campi usano percorsi dinamici, quindi qui il form e' non tipizzato
+    const control = controlForm as Control<any>;
     const { fields, append, remove } = useFieldArray({
         control,
         name: namePrefix,

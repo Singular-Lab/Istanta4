@@ -403,7 +403,7 @@ export class OrdiniDiStampaController extends BaseController {
     }
   }
 
-  private async deleteMergedGroup(req: Request, res: Response): Promise<void> {
+  private async deleteMergedGroup(req: Request<{ mergedFileId: string }>, res: Response): Promise<void> {
     try {
       const { mergedFileId } = req.params;
       const idOrdineDiStampa = req.query.idOrdineDiStampa as string;

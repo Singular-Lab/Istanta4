@@ -101,7 +101,7 @@ export class FileManagementController extends BaseController {
     }
   }
 
-  private async uploadTracciato(req: Request, res: Response): Promise<void> {
+  private async uploadTracciato(req: Request<{ idPromo: string }>, res: Response): Promise<void> {
     try {
       log.info(Colorize.bgYellow("==== INIZIO uploadTracciato ====")); log.info(Colorize.bgYellow("==== INIZIO uploadTracciato ===="));
       log.info(Colorize.yellow(`Request params: ${JSON.stringify(req.params)}`));
@@ -285,7 +285,7 @@ export class FileManagementController extends BaseController {
     }
   }
 
-  private async uploadKitManuali(req: Request, res: Response): Promise<void> {
+  private async uploadKitManuali(req: Request<{ idPromo: string; idKit: string }>, res: Response): Promise<void> {
     try {
       const { idPromo, idKit } = req.params;
       const files = req.files as Express.Multer.File[];
@@ -297,7 +297,7 @@ export class FileManagementController extends BaseController {
     }
   }
 
-  private async replaceFileKitRuntime(req: Request, res: Response): Promise<void> {
+  private async replaceFileKitRuntime(req: Request<{ idFile: string }>, res: Response): Promise<void> {
     try {
       const { idFile } = req.params;
       if (!req.file) {

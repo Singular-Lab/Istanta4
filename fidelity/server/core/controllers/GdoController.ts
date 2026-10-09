@@ -149,7 +149,7 @@ export class GdoController extends BaseController {
   }
 
 
-  private async getGDOById(req: Request, res: Response): Promise<void> {
+  private async getGDOById(req: Request<{ id: string }>, res: Response): Promise<void> {
     try {
       const gdo = await this.gdoService.getGDOById(req.params.id);
       if (!gdo) {

@@ -992,7 +992,6 @@ export class UserService implements IUserService {
     // WhatsApp
     '/whatsapp/invio-campagna-whatsapp': 'pagina.invio_campagna_whatsapp',
     '/whatsapp/campagne-whatsapp': 'pagina.campagne_whatsapp',
-    '/whatsapp/business-chat': 'pagina.business_chat',
     '/whatsapp/gestione-whatsapp-superadmin': 'pagina.gestione_whatsapp_superadmin',
     '/gestione-whatsapp-admin': 'pagina.gestione_whatsapp_admin',
     // API & Docs

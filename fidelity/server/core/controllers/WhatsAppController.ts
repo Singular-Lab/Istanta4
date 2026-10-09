@@ -335,7 +335,7 @@ export class WhatsAppController extends BaseController {
     /**
      * Le campagne di altre GDO risultano inesistenti (404): i job contengono i telefoni dei clienti
      */
-    private async verificaBulkDellaGdo(req: Request): Promise<string> {
+    private async verificaBulkDellaGdo(req: Request<{ bulkId: string }>): Promise<string> {
         const { bulkId } = req.params;
         const gdo = await this.whatsAppService.getCurrentGDOWhatsappForCampaign(req.session.id_utente as string);
         await this.queueService.verificaBulkDellaGdo(bulkId, gdo?.id);
@@ -345,7 +345,7 @@ export class WhatsAppController extends BaseController {
     /**
      * Ottiene lo stato di una campagna specifica
      */
-    private async getCampaignStatus(req: Request, res: Response): Promise<void> {
+    private async getCampaignStatus(req: Request<{ bulkId: string }>, res: Response): Promise<void> {
         try {
             const bulkId = await this.verificaBulkDellaGdo(req);
 
@@ -363,7 +363,7 @@ export class WhatsAppController extends BaseController {
     /**
      * Ottiene i job (messaggi) di una campagna specifica
      */
-    private async getCampaignJobs(req: Request, res: Response): Promise<void> {
+    private async getCampaignJobs(req: Request<{ bulkId: string }>, res: Response): Promise<void> {
         try {
             const bulkId = await this.verificaBulkDellaGdo(req);
             const limit = req.query.limit ? parseInt(req.query.limit as string) : 100;
@@ -400,7 +400,7 @@ export class WhatsAppController extends BaseController {
     /**
      * Annulla una campagna (mette tutti i job PENDING come CANCELLED)
      */
-    private async cancelCampaign(req: Request, res: Response): Promise<void> {
+    private async cancelCampaign(req: Request<{ bulkId: string }>, res: Response): Promise<void> {
         try {
             const bulkId = await this.verificaBulkDellaGdo(req);
 
@@ -420,7 +420,7 @@ export class WhatsAppController extends BaseController {
     /**
      * Riprova i messaggi falliti di una campagna
      */
-    private async retryCampaign(req: Request, res: Response): Promise<void> {
+    private async retryCampaign(req: Request<{ bulkId: string }>, res: Response): Promise<void> {
         try {
             const bulkId = await this.verificaBulkDellaGdo(req);
 

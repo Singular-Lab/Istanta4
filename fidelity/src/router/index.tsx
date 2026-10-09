@@ -30,7 +30,6 @@ const funzioneCaricamentoDettagliOrdiniDiStampa = createLazyLoader("funzioneCari
 const funzioneCaricamentoDettagliTemplateWhatsappAdmin = createLazyLoader("funzioneCaricamentoDettagliTemplateWhatsappAdmin");
 const funzioneCaricamentoEditWorkspace = createLazyLoader("funzioneCaricamentoEditWorkspace");
 const funzioneCaricamentoGestioneApi = createLazyLoader("funzioneCaricamentoGestioneApi");
-const funzioneCaricamentoGestionePagineSingular = createLazyLoader("funzioneCaricamentoGestionePagineSingular");
 const funzioneCaricamentoGestioneSetupWhatsappSuperAdmin = createLazyLoader("funzioneCaricamentoGestioneSetupWhatsappSuperAdmin");
 const funzioneCaricamentoGestioneTemplatesWhatsappAdmin = createLazyLoader("funzioneCaricamentoGestioneTemplatesWhatsappAdmin");
 const funzioneCaricamentoGestioneWhatsappSuperAdmin = createLazyLoader("funzioneCaricamentoGestioneWhatsappSuperAdmin");
@@ -594,18 +593,6 @@ const routes: RouteObject[] = [
           return { Component: PaginaDettaglioCombinazione };
         },
       },
-      // {
-      //   path: "gestione-pagine-singular",
-      //   lazy: async () => {
-      //     const { default: GestionePagineSingular } = await import(
-      //       "@/pages/GestionePagineSingular"
-      //     );
-      //     return {
-      //       Component: GestionePagineSingular,
-      //       loader: funzioneCaricamentoGestionePagineSingular,
-      //     };
-      //   },
-      // },
       {
         path: "webliant/impostazioni-webpliant",
         lazy: async () => {
@@ -953,15 +940,6 @@ const routes: RouteObject[] = [
         },
       },
       {
-        path: "whatsapp/business-chat",
-        lazy: async () => {
-          const { default: BusinessChatWhatsapp } = await import(
-            "@/pages/BusinessChatWhatsapp"
-          );
-          return { Component: BusinessChatWhatsapp };
-        },
-      },
-      {
         path: "whatsapp/gestione-whatsapp-superadmin",
         lazy: async () => {
           const { default: GestioneWhatsappSuperAdmin } = await import(
@@ -1140,13 +1118,6 @@ const routes: RouteObject[] = [
     },
   },
   {
-    path: "/landing-page",
-    lazy: async () => {
-      const { default: LandingPage } = await import("@/pages/LandingPage");
-      return { Component: LandingPage };
-    },
-  },
-  {
     path: "login",
     lazy: async () => {
       const { default: HubLogin } = await import("@/pages/HubLogin");
@@ -1172,13 +1143,6 @@ const routes: RouteObject[] = [
     lazy: async () => {
       const { default: ResetPassword } = await import("@/pages/ResetPassword");
       return { Component: ResetPassword };
-    },
-  },
-  {
-    path: "register",
-    lazy: async () => {
-      const { default: Register } = await import("@/pages/Register");
-      return { Component: Register };
     },
   },
   {

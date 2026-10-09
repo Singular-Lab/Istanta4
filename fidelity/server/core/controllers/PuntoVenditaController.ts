@@ -66,7 +66,7 @@ export class PuntoVenditaController extends BaseController {
     }
   }
 
-  private async getSingoloDispositivoPuntoVendita(req: Request, res: Response): Promise<void> {
+  private async getSingoloDispositivoPuntoVendita(req: Request<{ id: string }>, res: Response): Promise<void> {
     try {
       const id = req.params.id;
       const dispositivo = await this.puntoVenditaService.getDispositivoById(id);
@@ -110,7 +110,7 @@ export class PuntoVenditaController extends BaseController {
     }
   }
 
-  private async updateDispositivo(req: Request, res: Response): Promise<void> {
+  private async updateDispositivo(req: Request<{ id: string }>, res: Response): Promise<void> {
     try {
       const id = req.params.id;
       const result = await this.puntoVenditaService.updateDispositivo(id, req.body);
@@ -128,7 +128,7 @@ export class PuntoVenditaController extends BaseController {
     }
   }
 
-  private async deleteDispositivo(req: Request, res: Response): Promise<void> {
+  private async deleteDispositivo(req: Request<{ id: string }>, res: Response): Promise<void> {
     try {
       const id = req.params.id;
       const deleted = await this.puntoVenditaService.deleteDispositivo(id);
@@ -146,7 +146,7 @@ export class PuntoVenditaController extends BaseController {
     }
   }
 
-  private async regenerateToken(req: Request, res: Response): Promise<void> {
+  private async regenerateToken(req: Request<{ id: string }>, res: Response): Promise<void> {
     try {
       const id = req.params.id;
       const newToken = await this.puntoVenditaService.regenerateDeviceToken(id);
@@ -310,7 +310,7 @@ export class PuntoVenditaController extends BaseController {
     }
   }
 
-  private async eliminaPV(req: Request, res: Response): Promise<void> {
+  private async eliminaPV(req: Request<{ guidID: string }>, res: Response): Promise<void> {
     try {
       const guidID = req.params.guidID;
 

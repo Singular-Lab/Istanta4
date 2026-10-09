@@ -21,7 +21,7 @@ export class VolantinoController extends BaseController {
     this.router.get('/prendiIVolantiniCaricatiDaDB', authMiddleware, permissionGuard('kit_runtime.visualizza'), this.prendiIVolantiniCaricatiDaDB.bind(this));
   }
 
-  private async getFlyerInsights(req: Request, res: Response): Promise<void> {
+  private async getFlyerInsights(req: Request<{ guidIdKitRuntime: string }>, res: Response): Promise<void> {
     try {
       const { guidIdKitRuntime } = req.params;
       if (!guidIdKitRuntime) {

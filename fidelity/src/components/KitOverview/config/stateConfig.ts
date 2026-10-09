@@ -101,7 +101,7 @@ export const STATE_CONFIG: Record<STATO_LAVORAZIONE_KIT_RUNTIME, StateConfig> = 
   // Stato ELIMINATO - fallback (non dovrebbe mai essere visualizzato)
   [STATO_LAVORAZIONE_KIT_RUNTIME.ELIMINATO]: {
     hero: {
-      icon: "Trash2",
+      icon: "Trash",
       title: "Kit Eliminato",
       subtitle: "Questo kit è stato eliminato",
       gradient: "from-slate-500 via-slate-400 to-slate-300"

@@ -107,7 +107,7 @@ export default function PaginaCreazioneKitDesignAutomatici() {
   });
 
   // Field array for declinazioni (step 2)
-  const { fields, append, remove } = useFieldArray<any>({
+  const { fields, append, remove } = useFieldArray({
     control,
     name: 'declinazioni',
   });

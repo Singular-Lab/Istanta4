@@ -8,7 +8,7 @@ import { PermissionGate } from "@/components/PermissionGate";
 import { PERMISSIONS } from "@/constants/permissions";
 import Skeleton from "@/components/Base/Skeleton";
 import clsx from "clsx";
-import { DropzoneOptions } from "dropzone";
+import type { Dropzone as DropzoneJs, DropzoneOptions } from "dropzone";
 import { FC, useCallback, useMemo, useRef, useState } from "react";
 import { FileItemKit, OggettoTipiDiExport } from "../../../../lib/types";
 import { StatCard } from "../components";
@@ -111,7 +111,7 @@ const FileUploadCard: FC<FileUploadCardProps> = ({
       autoProcessQueue: false,
       maxFiles: 1,
       acceptedFiles: ACCEPTED_FORMATS.join(","),
-      init() {
+      init(this: DropzoneJs) {
         this.on("addedfile", (addedFile) => {
           onFileDrop(addedFile);
           setTimeout(() => this.removeAllFiles(true), 100);

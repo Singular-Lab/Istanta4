@@ -7,11 +7,13 @@ import { useGestioneReferenze } from '@/context/GestioneReferenzeContext';
 import { useFetchAree, useFetchCanali } from '@/query/query';
 import { useMutation } from '@tanstack/react-query';
 import axios from 'axios';
+import type { DropzoneFile } from 'dropzone';
 import parse from 'html-react-parser';
 import React, { forwardRef, Fragment, useEffect, useState } from 'react';
 import { Colorize } from '../../../../lib/Colorize';
 import { ServerCall } from '../../../../lib/server_call';
 import { ReferenzeIstanta } from '../../../../lib/types';
+import { urlFoto } from '@/utils/helper';
 import TabContenutiAggiuntivi from './TabContenutiAggiunitivi';
 
 
@@ -20,8 +22,8 @@ import TabContenutiAggiuntivi from './TabContenutiAggiunitivi';
 interface ImageDisplayProps {
   url: string;
   altText: string;
-  onUploadNuovaFoto: (addedFile: Dropzone.DropzoneFile, referenza: ReferenzeIstanta, url: string) => void;
-  onUploadSostituzioneFoto?: (addedFile: Dropzone.DropzoneFile, referenza: ReferenzeIstanta, url: string) => void;
+  onUploadNuovaFoto: (addedFile: DropzoneFile, referenza: ReferenzeIstanta, url: string) => void;
+  onUploadSostituzioneFoto?: (addedFile: DropzoneFile, referenza: ReferenzeIstanta, url: string) => void;
   referenza: ReferenzeIstanta;
 }
 
@@ -29,7 +31,7 @@ const ImageDisplay: React.FC<ImageDisplayProps> = ({ url, altText, onUploadNuova
   const [isImageValid, setIsImageValid] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [addedFile, setAddedFile] = useState<Dropzone.DropzoneFile | null>(null);
+  const [addedFile, setAddedFile] = useState<DropzoneFile | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState(false);
 
@@ -37,7 +39,7 @@ const ImageDisplay: React.FC<ImageDisplayProps> = ({ url, altText, onUploadNuova
     setIsImageValid(false);
   };
 
-  const handleUpload = async (file: Dropzone.DropzoneFile, isReplacement: boolean = false) => {
+  const handleUpload = async (file: DropzoneFile, isReplacement: boolean = false) => {
     try {
       setIsUploading(true);
       setUploadProgress(0);
@@ -365,10 +367,10 @@ const ImageDisplay: React.FC<ImageDisplayProps> = ({ url, altText, onUploadNuova
 
 // Standalone image uploader for the "Foto Gruppo" section
 export const ImageUploader: React.FC<{
-  onFileSelected: (file: Dropzone.DropzoneFile) => void;
+  onFileSelected: (file: DropzoneFile) => void;
   onUpload: () => void;
   onCancel: () => void;
-  file: Dropzone.DropzoneFile | null;
+  file: DropzoneFile | null;
   isUploading?: boolean;
 }> = ({ onFileSelected, onUpload, onCancel, file, isUploading = false }) => {
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -612,7 +614,7 @@ const GestioneReferenze = forwardRef<GestioneReferenzeHandle, {}>((props, ref) =
   const handleDataFieldsCancel = () => {
     setIsEditingDataFields(false);
   };
-  const handleImmagineReferenzaMancante = async (acceptedFiles: Dropzone.DropzoneFile, ref: ReferenzeIstanta, url: string) => {
+  const handleImmagineReferenzaMancante = async (acceptedFiles: DropzoneFile, ref: ReferenzeIstanta, url: string) => {
     if (acceptedFiles) {
       const file = acceptedFiles;
       const reader = new FileReader();
@@ -638,7 +640,7 @@ const GestioneReferenze = forwardRef<GestioneReferenzeHandle, {}>((props, ref) =
 
 
 
-  const handleImmagineGruppoReferenza = async (acceptedFiles: Dropzone.DropzoneFile, ref: ReferenzeIstanta) => {
+  const handleImmagineGruppoReferenza = async (acceptedFiles: DropzoneFile, ref: ReferenzeIstanta) => {
     if (acceptedFiles) {
       const file = acceptedFiles;
       const reader = new FileReader();
@@ -880,7 +882,7 @@ const GestioneReferenze = forwardRef<GestioneReferenzeHandle, {}>((props, ref) =
             {(referenza?.foto ?? []).length > 0 ? (
               <>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {referenza?.foto.map((url, index) => (
+                  {referenza && urlFoto(referenza.foto).map((url, index) => (
                     <ImageDisplay
                       key={`image-${index}`}
                       url={url}
@@ -1159,9 +1161,9 @@ const GestioneReferenze = forwardRef<GestioneReferenzeHandle, {}>((props, ref) =
       </div>
     </div>
   );
-  const [fileGruppo, setFileGruppo] = useState<Dropzone.DropzoneFile | null>(null);
+  const [fileGruppo, setFileGruppo] = useState<DropzoneFile | null>(null);
   const [isUploadingGruppo, setIsUploadingGruppo] = useState(false);
-  const [fileLogo, setFileLogo] = useState<Dropzone.DropzoneFile | null>(null);
+  const [fileLogo, setFileLogo] = useState<DropzoneFile | null>(null);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [selectedLogoTipo, setSelectedLogoTipo] = useState<string>('bollo');
   const [selectAreaPerFotoGruppo, setSelectAreaPerFotoGruppo] = useState<string>('');
