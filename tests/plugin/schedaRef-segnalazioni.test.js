@@ -398,3 +398,32 @@ test('nella finestra le segnalazioni stanno nella loro sezione e si risolvono co
     assert.match(schermata, /testata\.append\(SchermataSegnalazioni\._azioniTutte\(lettura\.box, ridisegna\)\);/);
     assert.match(schermata, /elencoVociDelBox\(box, voci, alCambio\) \{[\s\S]*?SchermataSegnalazioni\._azioniTutte\(box, alCambio\)[\s\S]*?SchermataSegnalazioni\._rigaVoce\(box, voce, indice, contesto, alCambio\)/);
 });
+
+/* ---- I20-1072: il segnalino con le sole decisioni per questa lavorazione ---- */
+
+const DUE_DECISIONI = [{ tipo: 2, sigla: 'Logo_BDP', azione: 1 }, { tipo: 2, sigla: 'Logo_locale', azione: 2 }];
+
+test('senza niente da risolvere ma con decisioni per questa lavorazione il segnalino resta, verde', () => {
+    assert.deepStrictEqual(schedaRef.segnalinoScheda([], [], DUE_DECISIONI), {
+        testo: '2', colore: '#1b7f3b', suggerimento: '2 foto extra decise per questa lavorazione - clicca per rivederle'
+    });
+    assert.strictEqual(schedaRef.segnalinoScheda(null, null, DUE_DECISIONI.slice(0, 1)).suggerimento, '1 foto extra decisa per questa lavorazione - clicca per rivederla');
+
+    //Con qualcosa da risolvere le decisioni non si contano: le regole restano quelle di prima.
+    assert.deepStrictEqual(schedaRef.segnalinoScheda(UNA_DIFFERENZA, [], DUE_DECISIONI), schedaRef.segnalinoScheda(UNA_DIFFERENZA, []));
+    assert.deepStrictEqual(schedaRef.segnalinoScheda([], DUE_WARNING, DUE_DECISIONI), schedaRef.segnalinoScheda([], DUE_WARNING));
+
+    //Senza decisioni, come prima: niente segnalino.
+    assert.strictEqual(schedaRef.segnalinoScheda([], [], []), null);
+    assert.strictEqual(schedaRef.segnalinoScheda([], []), null);
+});
+
+test('per le sole decisioni la finestra non si apre da sola, ma il segnalino le legge dalla scheda', () => {
+    pulisci();
+    assert.strictEqual(schedaRef.deveAprirsiDaSola([], '5329719', []), false);
+
+    const scheda = leggiFileDelPlugin('schedaRef.js').replace(/\r/g, '');
+    assert.match(scheda, /const dati = this\.segnalinoScheda\(this\.segnalazioniInMemoria\(\), this\.vociBollinoInMemoria\(\), this\.extraLavorazioneInMemoria\(\)\);/);
+    //E la nota di "tutto risolto" dice che le decisioni ci sono ancora.
+    assert.match(scheda, /"Il box corrisponde al dato, con " \+ \(decise === 1 \? "1 foto extra decisa" : decise \+ " foto extra decise"\) \+ " per questa lavorazione\."/);
+});
