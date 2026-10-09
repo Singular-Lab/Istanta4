@@ -3906,6 +3906,11 @@ const schedaRef = {
     /// Manda al server quello che l'operatore ha cambiato. Cosa sia cambiato davvero lo dice
     /// InputEditController, che tiene da parte i valori di partenza.
     salvaModifiche(schedaRef, codice, box, meccanica, page) {
+        //I20-1075: dalla finestra delle differenze, "giusta quella del box": la descrizione si manda
+        //per intero, come per una variante nuova, anche se il controller non ha visto il mismatch.
+        //Vale per questo salvataggio soltanto, anche se si ferma prima.
+        const descrizioneDelBox = this.salvaConDescrizioneDelBox === true;
+        this.salvaConDescrizioneDelBox = false;
         try {
             console.log("Salva modifiche " + codice);
 
@@ -3929,7 +3934,7 @@ const schedaRef = {
                 descrizioneEreditata = true;
             }
             //Chiedo al controller le operazioni che devo fare
-            let opResult = this.editRefFieldController.getOperazioniDiSalvataggioDaFare(descrizioneEreditata);
+            let opResult = this.editRefFieldController.getOperazioniDiSalvataggioDaFare(descrizioneEreditata || descrizioneDelBox);
             console.log(opResult);
 
 
@@ -4544,25 +4549,23 @@ const schedaRef = {
         }
     },
 
-    /// Riscrive lo stato e l'elenco dentro il modal. Tenuto separato dall'apertura perche' lo
+    /// Riscrive il riepilogo e l'elenco dentro il modal. Tenuto separato dall'apertura perche' lo
     /// rifa' anche l'Aggiorna, senza riaprire nulla.
     ///
-    /// Le righe non sono riquadri: un filetto colorato a sinistra basta a separarle e toglie
-    /// dalla finestra una dozzina di bordi che non dicevano niente.
+    /// I20-1075: l'elenco e' a riquadri, uno per elemento del box (raggruppaPerElemento), con dentro i
+    /// suoi problemi, i valori nel box e sul server e i pulsanti. In cima una riga sola dice quanto c'e'
+    /// da risolvere, quanto e' gia' risolto e quante segnalazioni di impaginazione ci sono: il resto
+    /// sta nelle sezioni richiudibili sotto.
     riempiElencoSegnalazioni(contenitore, intestazione, differenze, vociBollino = [], dopoAzione = null) {
         contenitore.empty();
         intestazione.empty();
 
-        const risolte = !this.ciSonoSegnalazioniIrrisolte(differenze);
-        //I20-1056, lotto 4: senza differenze ma con segnalazioni di impaginazione, il box non e' "tutto
-        //risolto": lo si dice, e le segnalazioni stanno nella loro sezione sotto.
-        if (risolte && Array.isArray(vociBollino) && vociBollino.length > 0) {
-            const nessuna = $('<span></span>').text("Nessuna differenza fra il box e il dato");
-            nessuna.css({ "font-size": "13px", "font-weight": "600", "color": "#1b7f3b" });
-            intestazione.append(nessuna);
-            return;
-        }
-        const colore = risolte ? "#1b7f3b" : "#b21d1d";
+        const me = this;
+        const daRisolvere = Array.isArray(differenze) ? differenze.length : 0;
+        const decise = this.extraLavorazioneInMemoria().length;
+        const inNoRender = this.risolteNoRenderInMemoria().length;
+        const impaginazione = Array.isArray(vociBollino) ? vociBollino.length : 0;
+        const colore = daRisolvere > 0 ? "#b21d1d" : (impaginazione > 0 ? "#ef6c00" : "#1b7f3b");
 
         const pallino = $('<span></span>');
         pallino.css({
@@ -4574,18 +4577,18 @@ const schedaRef = {
             "margin-right": "8px",
             "flex": "0 0 auto"
         });
-
-        const testo = $('<span></span>');
+        const testo = $('<span></span>').text(this.testoRiepilogoFinestra(daRisolvere, decise + inNoRender, impaginazione));
         testo.css({ "font-size": "13px", "font-weight": "600", "color": colore });
+        intestazione.append(pallino).append(testo);
 
-        if (risolte) {
-            testo.text("Tutte le segnalazioni risolte");
-            intestazione.append(pallino).append(testo);
-
+        if (daRisolvere === 0) {
+            //I20-1056, lotto 4: senza differenze ma con segnalazioni di impaginazione, il box non e'
+            //"tutto risolto": le segnalazioni stanno nella loro sezione sotto.
+            if (impaginazione > 0) {
+                return;
+            }
             //I20-1072: le decisioni per questa lavorazione restano modificabili, dalla sezione sotto.
             //I20-1073: e cosi' gli elementi assenti messi in noRender.
-            const decise = this.extraLavorazioneInMemoria().length;
-            const inNoRender = this.risolteNoRenderInMemoria().length;
             const conCosa = [];
             if (decise > 0) {
                 conCosa.push((decise === 1 ? "1 foto extra decisa" : decise + " foto extra decise") + " per questa lavorazione");
@@ -4601,35 +4604,133 @@ const schedaRef = {
             return;
         }
 
-        const quante = differenze.length;
-        testo.text(quante === 1
-            ? "Riscontrata 1 differenza nel box"
-            : "Riscontrate " + quante + " differenze nel box");
-        intestazione.append(pallino).append(testo);
-
-        differenze.forEach(diff => {
-            const riga = $('<div></div>');
-            riga.css({
-                "border-left": "2px solid " + colore,
-                "padding": "3px 0 3px 8px",
-                "margin-bottom": "6px"
+        this.raggruppaPerElemento(differenze).forEach(function (gruppo) {
+            const riquadro = $('<div class="riquadroDifferenza"></div>');
+            riquadro.css({
+                "border": "1px solid #e3e3e3",
+                "border-left": "3px solid #b21d1d",
+                "border-radius": "4px",
+                "padding": "6px 8px"
             });
+            const titolo = $('<div></div>').text(ReportIntegrita.etichettaSegnalazione(gruppo.label));
+            titolo.css({ "font-size": "12px", "font-weight": "700", "color": "#2c2c2c" });
+            riquadro.append(titolo);
 
-            const campo = $('<div></div>');
-            campo.text(ReportIntegrita.etichettaSegnalazione(diff.label));
-            campo.css({ "font-size": "12px", "font-weight": "600", "color": "#2c2c2c" });
-
-            const dettaglio = $('<div></div>');
-            dettaglio.text(diff.difference == null ? "" : String(diff.difference));
-            dettaglio.css({ "font-size": "12px", "color": "#767676" });
-
-            riga.append(campo).append(dettaglio);
-            //I20-1070: sulle foto extra l'operatore puo' decidere da qui, senza toccare il box.
-            this.aggiungiAzioniDifferenza(riga, diff, dopoAzione);
-            //I20-1071: sotto una differenza di contenuto, il valore nel box e quello del dato.
-            this.aggiungiValoriDifferenza(riga, diff);
-            contenitore.append(riga);
+            gruppo.differenze.forEach(function (diff, indice) {
+                const riga = $('<div></div>');
+                riga.css({ "padding": "4px 0 2px 0", "border-top": indice === 0 ? "none" : "1px dashed #e3e3e3" });
+                const problema = $('<div></div>').text(me.testoDifferenza(diff));
+                problema.css({ "font-size": "12px", "color": "#555555" });
+                riga.append(problema);
+                //I20-1071: sotto una differenza di contenuto, il valore nel box e quello del dato.
+                me.aggiungiValoriDifferenza(riga, diff);
+                //I20-1070: le decisioni si prendono da qui, senza toccare il box.
+                me.aggiungiAzioniDifferenza(riga, diff, dopoAzione);
+                riquadro.append(riga);
+            });
+            contenitore.append(riquadro);
         });
+    },
+
+    /// I20-1075: la riga di riepilogo della finestra.
+    testoRiepilogoFinestra(daRisolvere, risolte, impaginazione) {
+        let prima;
+        if (daRisolvere > 0) {
+            prima = daRisolvere + " da risolvere";
+        }
+        else if (impaginazione > 0) {
+            prima = "Nessuna differenza fra il box e il dato";
+        }
+        else {
+            prima = "Tutte le segnalazioni risolte";
+        }
+        const parti = [prima];
+        if (risolte > 0) {
+            parti.push(risolte + (risolte === 1 ? " risolta" : " risolte"));
+        }
+        if (impaginazione > 0) {
+            parti.push(impaginazione + " di impaginazione");
+        }
+        return parti.join(" · ");
+    },
+
+    /// I20-1075: le differenze raggruppate per elemento del box (la label), nell'ordine in cui la
+    /// preanalisi le restituisce: [{ label, differenze: [...] }].
+    raggruppaPerElemento(differenze) {
+        const gruppi = [];
+        (Array.isArray(differenze) ? differenze : []).forEach(function (diff) {
+            if (diff == null) {
+                return;
+            }
+            const label = diff.label == null ? "" : String(diff.label);
+            let gruppo = gruppi.find(g => g.label === label);
+            if (gruppo == null) {
+                gruppo = { label: label, differenze: [] };
+                gruppi.push(gruppo);
+            }
+            gruppo.differenze.push(diff);
+        });
+        return gruppi;
+    },
+
+    /// I20-1075: il problema di una differenza come si legge nel suo riquadro. Le diciture brevi della
+    /// preanalisi diventano frasi; le altre restano, senza il nome dell'elemento in coda, che sta gia'
+    /// nel titolo del riquadro ("foto mancante nel box: X" diventa "Foto mancante nel box").
+    testoDifferenza(diff) {
+        if (diff == null) {
+            return "";
+        }
+        const testo = diff.difference == null ? "" : String(diff.difference);
+        const brevi = {
+            "contenuto": "Contenuto diverso",
+            "paragrafo": "Stile di paragrafo diverso",
+            "non presente": "Manca nel box",
+            "eliminato": "Nel box, ma eliminato dal dato"
+        };
+        if (Object.prototype.hasOwnProperty.call(brevi, testo)) {
+            return brevi[testo];
+        }
+        const label = diff.label == null ? "" : String(diff.label);
+        let breve = testo;
+        if (label !== "" && breve.endsWith(": " + label)) {
+            breve = breve.substring(0, breve.length - label.length - 2);
+        }
+        return breve.charAt(0).toUpperCase() + breve.substring(1);
+    },
+
+    /// I20-1075: le sezioni secondarie della finestra (risolte, impaginazione) si aprono da sole solo
+    /// quando non c'e' niente da risolvere; se l'operatore ne apre o chiude una, resta come l'ha
+    /// lasciata finche' la finestra e' aperta.
+    sezioneApertaAllInizio(daRisolvere) {
+        return !(daRisolvere > 0);
+    },
+
+    /// I20-1075: una sezione richiudibile della finestra: una testata col titolo, il numero e una
+    /// freccia, e il corpo, che si restituisce per riempirlo. La scelta dell'operatore sta in
+    /// sezioniFinestra (azzerata all'apertura della finestra).
+    sezioneRichiudibile(sezione, chiave, titolo, quante) {
+        const stato = this.sezioniFinestra || (this.sezioniFinestra = {});
+        const daRisolvere = (this.segnalazioniInMemoria() || []).length;
+        let aperta = stato[chiave] != null ? stato[chiave] : this.sezioneApertaAllInizio(daRisolvere);
+
+        const testata = $('<div></div>');
+        testata.css({ "font-size": "13px", "font-weight": "600", "color": "#2c2c2c", "border-top": "1px solid #ddd", "padding-top": "8px", "cursor": "pointer" });
+        const corpo = $('<div></div>');
+        corpo.css({ "padding-top": "4px" });
+
+        const disegna = function () {
+            testata.text((aperta ? "▾ " : "▸ ") + titolo + " (" + quante + ")");
+            corpo.css("display", aperta ? "block" : "none");
+        };
+        testata.on("click", function () {
+            aperta = !aperta;
+            stato[chiave] = aperta;
+            disegna();
+        });
+        disegna();
+
+        sezione.append(testata).append(corpo);
+        return corpo;
     },
 
     /// I20-1071: sotto una differenza di contenuto o di paragrafo, il valore nel box e quello
@@ -4640,12 +4741,16 @@ const schedaRef = {
         if (valori == null) {
             return;
         }
-        [["nel box", valori.locale], ["sul server", valori.server]].forEach(function (coppia) {
+        //I20-1075: le etichette in grassetto, i valori normali. Le etichette stanno in una colonna larga
+        //quanto la piu' lunga, cosi' i due valori partono dallo stesso punto, e un valore che va a capo
+        //resta allineato sotto se stesso.
+        [["Nel box", valori.locale], ["Sul server", valori.server]].forEach(function (coppia) {
             const r = $('<div class="valoreDifferenza"></div>');
-            r.css({ "font-size": "12px", "color": "#2c2c2c", "padding-left": "8px" });
-            const etichetta = $('<span></span>').text(coppia[0] + ": ");
-            etichetta.css({ "color": "#767676" });
+            r.css({ "display": "flex", "align-items": "flex-start", "font-size": "12px", "color": "#2c2c2c", "padding-left": "8px" });
+            const etichetta = $('<span></span>').text(coppia[0] + ":");
+            etichetta.css({ "font-weight": "700", "color": "#2c2c2c", "flex": "0 0 76px" });
             const valore = $('<span></span>').text(coppia[1].breve === "" ? "(vuoto)" : coppia[1].breve);
+            valore.css({ "flex": "1 1 auto", "min-width": "0" });
             if (coppia[1].abbreviato) {
                 Tooltip.impostaTooltip(valore[0], coppia[1].intero);
             }
@@ -4668,6 +4773,10 @@ const schedaRef = {
     azioniPerDifferenza(diff) {
         if (diff != null && diff.tipo === "mancante") {
             return this.elementoNoRenderDellAssenza(diff) != null ? ["noRender"] : [];
+        }
+        //I20-1075: sulla descrizione in mismatch si sceglie quale delle due e' giusta.
+        if (this.eDescrizioneInMismatch(diff)) {
+            return ["descrizioneServer", "descrizioneBox"];
         }
         if (diff == null || diff.sigla == null || String(diff.sigla) === "") {
             return [];
@@ -5003,15 +5112,16 @@ const schedaRef = {
             usaServer: ["Usa l'immagine del server", "Ricollega il riquadro all'immagine del server, identica per contenuto: il risultato non cambia"],
             tieniLavorazione: ["Tieni solo per questa lavorazione", "La foto extra resta nel dato di questa sola lavorazione"],
             escludiLavorazione: ["Escludi per questa lavorazione", "Per questa lavorazione il dato non chiede piu' questa foto extra"],
-            noRender: ["Metti in noRender", "L'elemento non va nel box: lo si mette fra i noRender e la differenza risulta risolta"]
+            noRender: ["Metti in noRender", "L'elemento non va nel box: lo si mette fra i noRender e la differenza risulta risolta"],
+            descrizioneServer: ["Scegli quella del server", "Il box riprende la descrizione del server, con i suoi stili"],
+            descrizioneBox: ["Scegli quella del box", "La descrizione del box va nel dato della referenza (come Salva modifiche): il box non cambia"]
         };
+        //I20-1075: i pulsanti a destra, sotto il problema a cui servono.
         var barra = $('<div></div>');
-        barra.css({ "display": "flex", "gap": "6px", "margin-top": "4px", "flex-wrap": "wrap" });
+        barra.css({ "display": "flex", "gap": "6px", "margin-top": "4px", "flex-wrap": "wrap", "justify-content": "flex-end" });
 
         azioni.forEach(function (azione) {
-            var pulsante = $('<button></button>').text(testi[azione][0]);
-            pulsante.css({ "font-size": "11px", "padding": "2px 6px" });
-            Tooltip.impostaTooltip(pulsante[0], testi[azione][1]);
+            var pulsante = me.pulsanteFinestra(testi[azione][0], testi[azione][1]);
             pulsante.on("click", async function () {
                 pulsante.prop("disabled", true);
                 try {
@@ -5020,6 +5130,20 @@ const schedaRef = {
                     }
                     else if (azione === "noRender") {
                         await me.cambiaNoRenderDellAssenza(diff, true, dopoAzione);
+                    }
+                    else if (azione === "descrizioneServer") {
+                        await me.applicaDescrizioneDaServer();
+                        //Il pannello di modifica e' stato ricostruito con caselle nuove: in UXP i controlli
+                        //nativi stanno sopra a tutto, e con la finestra ancora aperta vanno rinascosti.
+                        if ($("#popup").length > 0) {
+                            Modali.nascondiHidebleElements();
+                        }
+                        if (typeof dopoAzione === "function") {
+                            await dopoAzione();
+                        }
+                    }
+                    else if (azione === "descrizioneBox") {
+                        me.tieniDescrizioneDelBox();
                     }
                     else {
                         await me.eseguiAzioneExtra(diff, azione, dopoAzione);
@@ -5044,41 +5168,35 @@ const schedaRef = {
         riga.append(barra);
     },
 
-    /// La sezione della finestra con le decisioni gia' prese per il box, ognuna col suo Togli.
-    riempiSezioneExtraLavorazione(sezione, dopoAzione) {
-        sezione.empty();
-        var voci = this.extraLavorazioneInMemoria();
-        if (voci.length === 0) {
-            sezione.css("display", "none");
-            return;
+    /* ---------- I20-1075: la descrizione in mismatch ---------- */
+
+    /// La differenza dice che il contenuto della descrizione del box non e' quello del server: e'
+    /// la riga su cui si sceglie quale delle due e' giusta. Solo il contenuto: una differenza di
+    /// paragrafo non si risolve salvando il testo del box. Solo il campo descrizione della
+    /// referenza, quello che applicaDescrizioneDaServer riscrive.
+    eDescrizioneInMismatch(diff) {
+        if (diff == null || diff.difference !== "contenuto") {
+            return false;
         }
-        sezione.css("display", "block");
-        var me = this;
+        const campo = this.campoDescrizioneCompilatoDelPrimario(this.schedeRefDati);
+        return campo != null && String(diff.label || "").toLowerCase() === String(campo.labelName || "").toLowerCase();
+    },
 
-        var titolo = $('<div></div>').text("Foto extra decise per questa lavorazione (" + voci.length + ")");
-        titolo.css({ "font-size": "13px", "font-weight": "600", "color": "#2c2c2c", "border-top": "1px solid #ddd", "padding-top": "8px" });
-        sezione.append(titolo);
-
-        voci.forEach(function (voce) {
-            var riga = $('<div></div>');
-            riga.css({ "display": "flex", "align-items": "center", "gap": "8px", "padding": "3px 0 3px 8px", "border-left": "2px solid #767676", "margin-top": "6px" });
-            var testo = $('<span></span>').text(me.descriviExtraLavorazione(voce));
-            testo.css({ "font-size": "12px", "color": "#2c2c2c", "flex": "1 1 auto" });
-            var togli = $('<button></button>').text("Togli");
-            togli.css({ "font-size": "11px", "padding": "2px 6px", "flex": "0 0 auto" });
-            Tooltip.impostaTooltip(togli[0], "Toglie la decisione: il dato torna a quello del server e la differenza, se c'e', ricompare");
-            togli.on("click", async function () {
-                togli.prop("disabled", true);
-                try {
-                    await me.togliExtraLavorazione(voce, dopoAzione);
-                }
-                finally {
-                    togli.prop("disabled", false);
-                }
-            });
-            riga.append(testo).append(togli);
-            sezione.append(riga);
-        });
+    /// "Scegli quella del box": e' il Salva modifiche della scheda, con la descrizione mandata per
+    /// intero (salvaConDescrizioneDelBox): il controllo di mismatch del pannello guarda le
+    /// descrizioni una per una e non sempre vede la differenza che vede la preanalisi. Si scrive
+    /// sulla variante che la scheda puo' modificare, come il Salva. La finestra si chiude con la
+    /// sua X: il salvataggio ricarica la scheda, e con lei differenze e segnalino.
+    tieniDescrizioneDelBox() {
+        const salva = $("#salvaButton");
+        if (salva.length === 0) {
+            messaggioUtente("Code SRF-108 Salvataggio della scheda non disponibile: la descrizione del box non e' stata salvata", "error", false, 5);
+            return false;
+        }
+        this.salvaConDescrizioneDelBox = true;
+        $("#popupCloseButton").trigger("click");
+        salva.trigger("click");
+        return true;
     },
 
     /* ---------- I20-1073: gli elementi assenti risolti con noRender ---------- */
@@ -5121,42 +5239,70 @@ const schedaRef = {
         return true;
     },
 
-    /// La sezione della finestra con gli elementi assenti risolti con noRender, ognuno col suo
-    /// Annulla: come le foto extra decise per questa lavorazione.
-    riempiSezioneNoRender(sezione, dopoAzione) {
+    /// I20-1075: la sezione "Risolte": le foto extra decise per questa lavorazione (I20-1070) e gli
+    /// elementi assenti messi in noRender (I20-1073), ognuno col suo Togli o Annulla. Prima erano due
+    /// sezioni.
+    riempiSezioneRisolte(sezione, dopoAzione) {
         sezione.empty();
-        var risolte = this.risolteNoRenderInMemoria();
-        if (risolte.length === 0) {
+        const me = this;
+        const decise = this.extraLavorazioneInMemoria();
+        const inNoRender = this.risolteNoRenderInMemoria();
+        const quante = decise.length + inNoRender.length;
+        if (quante === 0) {
             sezione.css("display", "none");
             return;
         }
         sezione.css("display", "block");
-        var me = this;
 
-        var titolo = $('<div></div>').text("Risolti con noRender (" + risolte.length + ")");
-        titolo.css({ "font-size": "13px", "font-weight": "600", "color": "#2c2c2c", "border-top": "1px solid #ddd", "padding-top": "8px" });
-        sezione.append(titolo);
-
-        risolte.forEach(function (assenza) {
-            var riga = $('<div></div>');
-            riga.css({ "display": "flex", "align-items": "center", "gap": "8px", "padding": "3px 0 3px 8px", "border-left": "2px solid #767676", "margin-top": "6px" });
-            var testo = $('<span></span>').text(me.descriviRisoltaNoRender(assenza));
-            testo.css({ "font-size": "12px", "color": "#2c2c2c", "flex": "1 1 auto" });
-            var annulla = $('<button></button>').text("Annulla");
-            annulla.css({ "font-size": "11px", "padding": "2px 6px", "flex": "0 0 auto" });
-            Tooltip.impostaTooltip(annulla[0], "Toglie l'elemento dal noRender: la differenza torna fra quelle da risolvere");
-            annulla.on("click", async function () {
-                annulla.prop("disabled", true);
-                try {
-                    await me.cambiaNoRenderDellAssenza(assenza, false, dopoAzione);
-                }
-                finally {
-                    annulla.prop("disabled", false);
-                }
-            });
-            riga.append(testo).append(annulla);
-            sezione.append(riga);
+        const corpo = this.sezioneRichiudibile(sezione, "risolte", "Risolte", quante);
+        decise.forEach(function (voce) {
+            corpo.append(me.rigaRisolta(me.descriviExtraLavorazione(voce), "Togli",
+                "Toglie la decisione: il dato torna a quello del server e la differenza, se c'e', ricompare",
+                () => me.togliExtraLavorazione(voce, dopoAzione)));
         });
+        inNoRender.forEach(function (assenza) {
+            corpo.append(me.rigaRisolta(me.descriviRisoltaNoRender(assenza), "Annulla",
+                "Toglie l'elemento dal noRender: la differenza torna fra quelle da risolvere",
+                () => me.cambiaNoRenderDellAssenza(assenza, false, dopoAzione)));
+        });
+    },
+
+    /// Una riga della sezione Risolte: come e' stata risolta, e il pulsante per tornare indietro.
+    rigaRisolta(testo, etichettaPulsante, suggerimento, azione) {
+        const riga = $('<div></div>');
+        riga.css({ "display": "flex", "align-items": "center", "gap": "8px", "padding": "3px 0 3px 8px", "border-left": "3px solid #1b7f3b", "margin-top": "6px" });
+        const scritta = $('<span></span>').text(testo);
+        scritta.css({ "font-size": "12px", "color": "#2c2c2c", "flex": "1 1 auto" });
+        const pulsante = this.pulsanteFinestra(etichettaPulsante, suggerimento);
+        pulsante.on("click", async function () {
+            pulsante.prop("disabled", true);
+            try {
+                await azione();
+            }
+            finally {
+                pulsante.prop("disabled", false);
+            }
+        });
+        riga.append(scritta).append(pulsante);
+        return riga;
+    },
+
+    /// I20-1075: i pulsanti della finestra, piccoli e chiari: prima erano pillole scure grandi quanto
+    /// le scritte, e la finestra sembrava un pannello di comandi.
+    pulsanteFinestra(etichetta, suggerimento) {
+        const pulsante = $('<button></button>').text(etichetta);
+        pulsante.css({
+            "font-size": "11px",
+            "padding": "2px 8px",
+            "flex": "0 0 auto",
+            "background-color": "#ffffff",
+            "color": "#2c2c2c",
+            "border": "1px solid #9a9a9a",
+            "border-radius": "3px",
+            "cursor": "pointer"
+        });
+        Tooltip.impostaTooltip(pulsante[0], suggerimento);
+        return pulsante;
     },
 
     /// "descrizione2: non presente nel box, in noRender".
@@ -5179,15 +5325,14 @@ const schedaRef = {
         }
         sezione.css("display", "block");
 
-        const titolo = $('<div></div>').text("Segnalazioni di impaginazione (" + voci.length + ")");
-        titolo.css({ "font-size": "13px", "font-weight": "600", "color": "#2c2c2c", "border-top": "1px solid #ddd", "padding-top": "8px" });
-        sezione.append(titolo);
+        //I20-1075: richiudibile, come quella delle risolte.
+        const corpo = this.sezioneRichiudibile(sezione, "impaginazione", "Segnalazioni di impaginazione", voci.length);
 
         const me = this;
         const box = this.refSelected != null ? this.refSelected.item : null;
-        sezione.append(SchermataSegnalazioni.elencoVociDelBox(box, voci, function () {
+        corpo.append(SchermataSegnalazioni.elencoVociDelBox(box, voci, function () {
             me.leggiVociBollino(box);
-            me.riempiElencoSegnalazioni(elenco, intestazione, me.segnalazioniInMemoria() || [], me.vociBollinoInMemoria());
+            me.riempiElencoSegnalazioni(elenco, intestazione, me.segnalazioniInMemoria() || [], me.vociBollinoInMemoria(), me.dopoAzioneFinestra);
             me.riempiSezioneBollino(sezione, elenco, intestazione);
             me.aggiornaPulsanteSegnalazioni();
             try {
@@ -5273,28 +5418,25 @@ const schedaRef = {
 
             //I20-1073: le sezioni non hanno un'altezza e uno scorrimento loro: scorre solo la finestra,
             //con una barra sola (con le due, una dentro l'altra, l'operatore non ci si ritrovava).
+            //I20-1075: in cima una riga di riepilogo con l'Aggiorna, sotto i riquadri da risolvere, poi
+            //le sezioni richiudibili delle risolte e delle segnalazioni di impaginazione.
             const contenuto = $(`
-                <div style="width: 100%; display: flex; flex-direction: column; gap: 10px; font-family: Arial, sans-serif; color: #2c2c2c;">
-                    <div style="display: flex; align-items: center; gap: 12px;">
-                        <div style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 10px;">
-                            <div id="segnalazioniIntestazione" style="display: flex; align-items: center; min-width: 0;"></div>
-
-                            <div style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: #767676;">
-                                <span>Per correggere i dati nel box usa il pulsante</span>
-                                <img src="images/reimpaginaFix.png" alt="Correggi" style="width: 16px; height: 16px; object-fit: contain; vertical-align: middle;" />
-                            </div>
-                        </div>
-
+                <div style="width: 100%; display: flex; flex-direction: column; gap: 8px; font-family: Arial, sans-serif; color: #2c2c2c;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <div id="segnalazioniIntestazione" style="flex: 1 1 auto; display: flex; align-items: center; min-width: 0;"></div>
                         <div id="segnalazioniAzioni" style="flex: 0 0 auto;"></div>
                     </div>
 
-                    <div id="segnalazioniElenco" style="width: 100%; padding-right: 4px; box-sizing: border-box;"></div>
+                    <div style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: #767676;">
+                        <span>Per correggere i dati nel box usa il pulsante</span>
+                        <img src="images/reimpaginaFix.png" alt="Correggi" style="width: 14px; height: 14px; object-fit: contain; vertical-align: middle;" />
+                    </div>
 
-                    <div id="segnalazioniExtraLavorazione" style="width: 100%; padding-right: 4px; box-sizing: border-box; display: none;"></div>
+                    <div id="segnalazioniElenco" style="width: 100%; display: flex; flex-direction: column; gap: 8px; box-sizing: border-box;"></div>
 
-                    <div id="segnalazioniNoRender" style="width: 100%; padding-right: 4px; box-sizing: border-box; display: none;"></div>
+                    <div id="segnalazioniRisolte" style="width: 100%; box-sizing: border-box; display: none;"></div>
 
-                    <div id="segnalazioniBollinoScheda" style="width: 100%; padding-right: 4px; box-sizing: border-box;"></div>
+                    <div id="segnalazioniBollinoScheda" style="width: 100%; box-sizing: border-box; display: none;"></div>
                 </div>
             `);
 
@@ -5302,8 +5444,9 @@ const schedaRef = {
             const elenco = contenuto.find("#segnalazioniElenco");
             const azioni = contenuto.find("#segnalazioniAzioni");
             const sezioneBollino = contenuto.find("#segnalazioniBollinoScheda");
-            const sezioneExtra = contenuto.find("#segnalazioniExtraLavorazione");
-            const sezioneNoRender = contenuto.find("#segnalazioniNoRender");
+            const sezioneRisolte = contenuto.find("#segnalazioniRisolte");
+            //I20-1075: ogni apertura riparte dalle sezioni aperte o chiuse secondo quello che c'e'.
+            this.sezioniFinestra = {};
 
             //I20-1070: dopo una decisione sulle foto extra la preanalisi si rifa' e tutto si
             //ridisegna. E' lo stesso lavoro del pulsante Aggiorna, che da qui in poi lo chiama.
@@ -5312,25 +5455,23 @@ const schedaRef = {
                 me.memorizzaSegnalazioni(await me.differenzeDatiNelBox(box, me.schedeRefDati));
                 me.leggiVociBollino(box);
                 me.riempiElencoSegnalazioni(elenco, intestazione, me.segnalazioniInMemoria(), me.vociBollinoInMemoria(), rifaiAnalisi);
+                me.riempiSezioneRisolte(sezioneRisolte, rifaiAnalisi);
                 me.riempiSezioneBollino(sezioneBollino, elenco, intestazione);
-                me.riempiSezioneExtraLavorazione(sezioneExtra, rifaiAnalisi);
-                me.riempiSezioneNoRender(sezioneNoRender, rifaiAnalisi);
             };
+            //Chi ridisegna l'elenco da fuori (la sezione del bollino) passa le stesse azioni.
+            this.dopoAzioneFinestra = rifaiAnalisi;
 
             this.riempiElencoSegnalazioni(elenco, intestazione, this.segnalazioniInMemoria() || [], this.vociBollinoInMemoria(), rifaiAnalisi);
+            this.riempiSezioneRisolte(sezioneRisolte, rifaiAnalisi);
             this.riempiSezioneBollino(sezioneBollino, elenco, intestazione);
-            this.riempiSezioneExtraLavorazione(sezioneExtra, rifaiAnalisi);
-            this.riempiSezioneNoRender(sezioneNoRender, rifaiAnalisi);
 
             //Rifa' la pre analisi adesso: e' il modo per vedere l'effetto delle correzioni senza
             //chiudere e riaprire la scheda. Icona, non scritta: sta sulla riga dello stato.
             const aggiorna = $('<img src="images/refresh.png" alt="Aggiorna">');
             aggiorna.css({
-                //Alta quanto le due righe della colonna a sinistra messe insieme: lo stato, i
-                //10px che le separano e la riga del suggerimento. Le due righe restano dove
-                //sono, l'icona le affianca invece di stare sopra una sola.
-                "height": "30px",
-                "padding": "4px",
+                //I20-1075: sulla riga del riepilogo, alta quanto lei.
+                "height": "18px",
+                "padding": "3px",
                 "box-sizing": "content-box",
                 "border": "1px solid #d0d0d0",
                 "border-radius": "4px",

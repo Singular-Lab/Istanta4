@@ -87,10 +87,16 @@ test("la preanalisi allega i due valori alle differenze di contenuto e di paragr
 
 test("la finestra della scheda e il report mostrano i valori, col testo intero nel suggerimento", () => {
     const scheda = sorgente("schedaRef.js");
-    assert.match(scheda, /this\.aggiungiAzioniDifferenza\(riga, diff, dopoAzione\);\s*\/\/I20-1071[^\n]*\n\s*this\.aggiungiValoriDifferenza\(riga, diff\);/);
+    //I20-1075: nel riquadro dell'elemento i valori stanno sotto il problema, e i pulsanti sotto i valori.
+    assert.match(scheda, /\/\/I20-1071[^\n]*\n\s*me\.aggiungiValoriDifferenza\(riga, diff\);\s*\/\/I20-1070[^\n]*\n\s*me\.aggiungiAzioniDifferenza\(riga, diff, dopoAzione\);/);
     const membroScheda = scheda.substring(scheda.indexOf("    aggiungiValoriDifferenza(riga, diff) {"), scheda.indexOf("/* ---------- I20-1070"));
     assert.match(membroScheda, /const valori = confronti\.valoriDifferenza\(diff\);/);
-    assert.match(membroScheda, /\[\["nel box", valori\.locale\], \["sul server", valori\.server\]\]/);
+    //I20-1075: le etichette in grassetto.
+    assert.match(membroScheda, /\[\["Nel box", valori\.locale\], \["Sul server", valori\.server\]\]/);
+    assert.match(membroScheda, /etichetta\.css\(\{ "font-weight": "700"/);
+    //I valori partono dallo stesso punto: le etichette stanno in una colonna di larghezza fissa.
+    assert.match(membroScheda, /etichetta\.css\(\{ "font-weight": "700", "color": "#2c2c2c", "flex": "0 0 76px" \}\);/);
+    assert.match(membroScheda, /valore\.css\(\{ "flex": "1 1 auto", "min-width": "0" \}\);/);
     assert.match(membroScheda, /if \(coppia\[1\]\.abbreviato\) \{\s*Tooltip\.impostaTooltip\(valore\[0\], coppia\[1\]\.intero\);/);
     assert.doesNotMatch(membroScheda, /\.title\s*=/);
 

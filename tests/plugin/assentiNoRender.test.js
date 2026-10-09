@@ -167,9 +167,11 @@ test("i risolti con noRender si descrivono e contano nel segnalino verde, con le
 
 test("la finestra ha la sezione dei risolti, e il salvataggio della schermata noRender ricalcola le differenze", () => {
     const scheda = sorgente("schedaRef.js");
-    assert.match(scheda, /id="segnalazioniNoRender"/);
-    assert.match(scheda, /const rifaiAnalisi = async function \(\) \{[\s\S]*?me\.riempiSezioneNoRender\(sezioneNoRender, rifaiAnalisi\);\s*\};/);
-    assert.match(scheda, /this\.riempiSezioneNoRender\(sezioneNoRender, rifaiAnalisi\);/);
+    //I20-1075: i risolti con noRender stanno nella sezione Risolte, con le foto extra decise.
+    assert.match(scheda, /id="segnalazioniRisolte"/);
+    assert.match(scheda.substring(scheda.indexOf("    riempiSezioneRisolte(sezione, dopoAzione) {")), /me\.rigaRisolta\(me\.descriviRisoltaNoRender\(assenza\), "Annulla",[\s\S]*?\(\) => me\.cambiaNoRenderDellAssenza\(assenza, false, dopoAzione\)\)\);/);
+    assert.match(scheda, /const rifaiAnalisi = async function \(\) \{[\s\S]*?me\.riempiSezioneRisolte\(sezioneRisolte, rifaiAnalisi\);/);
+    assert.match(scheda, /this\.riempiSezioneRisolte\(sezioneRisolte, rifaiAnalisi\);/);
     assert.match(scheda, /this\.risolteNoRenderDelBox = preAnalisi != null && Array\.isArray\(preAnalisi\.risolteNoRender\) \? preAnalisi\.risolteNoRender : \[\];/);
 
     const salva = scheda.substring(scheda.indexOf("    salvaNoRender() {"), scheda.indexOf("    inviaNoRender(elementi) {"));
@@ -182,7 +184,7 @@ test("la finestra ha la sezione dei risolti, e il salvataggio della schermata no
 test("nella finestra delle differenze scorre solo la finestra: le sezioni non hanno una barra loro", () => {
     const scheda = sorgente("schedaRef.js");
     const finestra = scheda.substring(scheda.indexOf("async mostraModalSegnalazioni() {"), scheda.indexOf("const intestazione = contenuto.find(\"#segnalazioniIntestazione\");"));
-    for (const id of ["segnalazioniElenco", "segnalazioniExtraLavorazione", "segnalazioniNoRender", "segnalazioniBollinoScheda"]) {
+    for (const id of ["segnalazioniElenco", "segnalazioniRisolte", "segnalazioniBollinoScheda"]) {
         const riga = finestra.substring(finestra.indexOf('id="' + id + '"'), finestra.indexOf("</div>", finestra.indexOf('id="' + id + '"')));
         assert.ok(riga.length > 0, id);
         assert.doesNotMatch(riga, /max-height|overflow/, id);
