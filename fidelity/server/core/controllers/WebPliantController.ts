@@ -8,6 +8,7 @@ import config from '../config';
 import { IGdoService } from '../interfaces/IGdoService';
 import { IWebPliantService } from '../interfaces/IWebPliantService';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { jsonGrande } from '../middleware/jsonGrande';
 import { log } from '../logger';
 import { permissionGuard } from '../middleware/permissionGuard';
 import { GDO } from '../models/gdo';
@@ -36,7 +37,7 @@ export class WebPliantController extends BaseController {
     this.router.get('/getIdsWorkspace', authMiddleware, permissionGuard('webpliant.visualizza'), this.getIdsWorkspace.bind(this));
     this.router.get('/getReferenzeWebPliant', this.getReferenzeWebPliant.bind(this));
     this.router.put('/datoMassivoPerWebPliant', authMiddleware, permissionGuard('webpliant.visualizza'), this.datoMassivoPerWebPliant.bind(this));
-    this.router.post('/salva_workspace_webpliant', authMiddleware, permissionGuard('webpliant.configura'), this.salvaWorkspaceWebpliant.bind(this));
+    this.router.post('/salva_workspace_webpliant', authMiddleware, permissionGuard('webpliant.configura'), jsonGrande, this.salvaWorkspaceWebpliant.bind(this));
     this.router.get('/get_field_options_filtri', authMiddleware, permissionGuard('webpliant.visualizza'), this.get_field_options_filtri.bind(this));
     this.router.put('/getCampiDaRaggruppamento', authMiddleware, permissionGuard('webpliant.visualizza'), this.getCampiDaRaggruppamento.bind(this));
   }
@@ -90,10 +91,23 @@ export class WebPliantController extends BaseController {
     }
   }
 
+  /**
+   * La modalita' editor (niente filtro sulle date) e' riservata a chi configura
+   * WebPliant: a tutti gli altri, anonimi compresi, va la vista pubblica.
+   */
+  private puoUsareEditor(req: Request, res: Response): Promise<boolean> {
+    if (req.query.isEditor !== 'true' || !req.session?.id_utente) {
+      return Promise.resolve(false);
+    }
+    return new Promise(resolve => {
+      permissionGuard('webpliant.configura')(req, res, (err?: unknown) => resolve(!err));
+    });
+  }
+
   private async prendiWorkspaceDaID(req: Request, res: Response): Promise<void> {
     try {
       const idWorkspace = req.params.idWorkspace;
-      const isEditor = req.query.isEditor as string === "true";
+      const isEditor = await this.puoUsareEditor(req, res);
       const result = await this.webPliantService.prendiWorkspaceDaID(idWorkspace, isEditor);
       this.sendResponse(res, HttpStatusCode.OK, result);
     } catch (error) {
@@ -136,7 +150,7 @@ export class WebPliantController extends BaseController {
       const dataSelezionata = rawDate ? new Date(rawDate) : new Date();
       const idArea = req.query.idArea as string | undefined;
       const idCanale = req.query.idCanale as string | undefined;
-      const isEditor = req.query.isEditor === 'true';
+      const isEditor = await this.puoUsareEditor(req, res);
       const result = await this.webPliantService.getReferenzeWebPliant(idWorkspace, dataSelezionata, idArea, idCanale, isEditor);
       this.sendResponse(res, HttpStatusCode.OK, result);
     } catch (error) {

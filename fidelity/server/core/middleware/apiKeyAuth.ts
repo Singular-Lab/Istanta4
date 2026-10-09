@@ -74,7 +74,8 @@ export const apiKeyAuthMiddleware = async (req: Request, res: Response, next: Ne
     (req as any).apiKeyInfo = {
       ruoloId: ruoloGDO.id_ruolo_utente_gdo,
       ruolo: ruoloGDO.ruolo_ruolo_utente_gdo,
-      apiKey: apiKey
+      // Solo il prefisso: finisce nelle statistiche e nei log, la chiave intera no.
+      apiKey: apiKey.substring(0, 8) + '...'
     };
 
     log.info('Autenticazione API Key riuscita', {

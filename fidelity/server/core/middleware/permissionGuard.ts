@@ -28,6 +28,12 @@ function getPermessiService(): PermessiService {
 export const permissionGuard = (codicePermesso: string) => {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
+      // Chiamate di servizio gia' autenticate da authMiddleware (bearer di integrazione
+      // o richiesta interna firmata): non hanno sessione ne' ruolo da controllare.
+      if (res.locals.authVia === 'bearer' || res.locals.authVia === 'internal') {
+        return next();
+      }
+
       const tipoUtente = req.session.tipo_utente;
       const userId = req.session.id_utente;
 

@@ -3,6 +3,7 @@ import { HttpStatusCode } from "../../../lib/enums";
 import { BaseController } from "../base/BaseController";
 import { IIstantaService } from "../interfaces/IIstantaService";
 import { authMiddleware } from "../middleware/authMiddleware";
+import { permissionGuard } from "../middleware/permissionGuard";
 export class IstantaController extends BaseController {
 
     /**
@@ -14,7 +15,7 @@ export class IstantaController extends BaseController {
 
     protected setupRoutes(): void {
         this.router.get("/getCombinazioniDaIstanta/:id", authMiddleware, this.getCombinazioniDaIstanta.bind(this));
-        this.router.post("/downloadKitsByTipoDiExport", authMiddleware, this.downloadKitsByTipoDiExport.bind(this));
+        this.router.post("/downloadKitsByTipoDiExport", authMiddleware, permissionGuard("file.download"), this.downloadKitsByTipoDiExport.bind(this));
         this.router.get("/getStatusImportazione", authMiddleware, this.getStatusImportazione.bind(this));
     }
 

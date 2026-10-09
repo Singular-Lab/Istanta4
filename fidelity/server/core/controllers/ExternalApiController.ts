@@ -137,6 +137,7 @@ export class ExternalApiController extends BaseController {
     );
     this.router.post("/sync_json_plugin",
       authMiddleware,
+      permissionGuard('api.gestisci_plugin'),
       (req, res, next) => {
         (uploadMaterialiPubblicazioni.single('file') as any)(req, res, (err: any) => {
           if (err instanceof multer.MulterError) {
@@ -151,6 +152,7 @@ export class ExternalApiController extends BaseController {
     )
     this.router.post("/plugin/punti-vendita",
       authMiddleware,
+      permissionGuard('api.gestisci_plugin'),
       this.getPluginPuntiVendita.bind(this)
     );
     // Route per gestione interazione plugin

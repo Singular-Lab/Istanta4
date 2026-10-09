@@ -166,7 +166,6 @@ class ServerUtils {
                     publicKey: string,
                     privateKey: string
                 }
-                log.info(Colorize.bgGreen(content));
                 if (content.esito) {
                     if (content.privateKey &&
                         content.privateKey !== utente.privatekey_utenti &&
@@ -174,7 +173,6 @@ class ServerUtils {
                         content.privateKey !== null) {
                         utente.privatekey_utenti = content.privateKey;
                         await utente.save({});
-                        log.info(Colorize.bgGreen(utente.privatekey_utenti));
                     }
                     // Salva il jar aggiornato dopo la chiamata, solo se è una sessione esterna
                     if (req.session.isExternalAuth) {
@@ -337,7 +335,6 @@ class ServerUtils {
         try {
             // Ottieni il token usando la funzione esistente
             const publicKey = await this.getPassportFromOlympo(req);
-            log.info(Colorize.bgGreen(publicKey));
 
             if (publicKey === "") {
                 throw this.createErrorObject("Chiave pubblica non fornita", HttpStatusCode.BAD_REQUEST, { data });
@@ -447,7 +444,6 @@ class ServerUtils {
         try {
             // Ottieni il token usando la funzione esistente
             const publicKey = await this.getPassportFromOlympo(req);
-            log.info(Colorize.bgGreen(publicKey));
 
             if (publicKey === "") {
                 throw this.createErrorObject("Chiave privata non fornita", HttpStatusCode.BAD_REQUEST, { url, data, customHeaders });

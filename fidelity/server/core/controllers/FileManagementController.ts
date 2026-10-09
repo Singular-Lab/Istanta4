@@ -16,7 +16,7 @@ import {
 } from '../config/multerConfig';
 import { IFileManagementService } from '../interfaces/IFileManagementService';
 import { log } from '../logger';
-import { authMiddleware } from '../middleware/authMiddleware';
+import { authMiddleware, integrationAuthMiddleware } from '../middleware/authMiddleware';
 import { permissionGuard } from '../middleware/permissionGuard';
 import { Tracciati } from '../models';
 
@@ -48,7 +48,8 @@ export class FileManagementController extends BaseController {
     // una richiesta rifiutata non deve scrivere nulla su disco ne' occupare memoria.
     this.router.post(
       '/invioMaterialeAdFP',
-      authMiddleware,
+      integrationAuthMiddleware,
+      permissionGuard('file.upload_materiale'),
       (req, res, next) => {
         uploadMaterialiPubblicazioni.single('file')(req, res, (err) => {
           if (err instanceof multer.MulterError) {

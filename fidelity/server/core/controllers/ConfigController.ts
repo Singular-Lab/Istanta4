@@ -23,6 +23,7 @@ import {
 import { IConfigService } from '../interfaces/IConfigService';
 import { log } from '../logger';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { jsonGrande } from '../middleware/jsonGrande';
 import { permissionGuard } from '../middleware/permissionGuard';
 import { userRoleGuard } from '../middleware/userRoleGuard';
 import { AuditLogService } from '../services/AuditLogService';
@@ -56,7 +57,7 @@ export class ConfigController extends BaseController {
     this.router.post('/caricaStiliInConfig', authMiddleware, permissionGuard('impostazioni.modifica_generali'), uploadCss.single('file'), this.caricaStiliInConfig.bind(this));
     this.router.get('/getConfigWebPliantFromVolantino', this.getConfigWebPliantFromVolantino.bind(this));
     this.router.get('/getColorGDO', this.getColorGDO.bind(this));
-    this.router.post('/saveWebpliantConfig', authMiddleware, permissionGuard('impostazioni.modifica_generali'), this.saveWebpliantConfig.bind(this));
+    this.router.post('/saveWebpliantConfig', authMiddleware, permissionGuard('impostazioni.modifica_generali'), jsonGrande, this.saveWebpliantConfig.bind(this));
     this.router.post('/saveDashBoardConfig', userRoleGuard([TIPO_UTENTI.SUPERADMIN]), authMiddleware, this.saveDashBoardConfig.bind(this));
     this.router.get('/getDashBoardConfig', authMiddleware, this.getDashBoardConfig.bind(this));
     this.router.get('/getPluginRegistry', authMiddleware, permissionGuard('api.gestisci_plugin'), this.getPluginRegistry.bind(this));

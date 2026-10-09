@@ -10,6 +10,7 @@ import { CATEGORIA_ATTIVITA, STATO_LAVORAZIONE_KIT_RUNTIME, STATO_ORDINI_STAMPA,
 import { BadRequestError, ExternalApiError, NotFoundError, wrapDatabaseError } from '../../../lib/errors';
 import { ContrattoTipografiaAttributes, FileItemKit, FileTreeCondition, FileTreeNode, MergedGroupFile, OrdiniDiStampaAttributes, RUNTIME_KIT_MONGO, RootFileTree, VirtualDirectory } from '../../../lib/types';
 import { emitToClients } from '../../ws-server';
+import { roomUtente } from '../utils/socketRooms';
 import config from '../config';
 import { AreaResponseDTO, CanaleResponseDTO, ContrattoTipografiaResponseDTO, type OrdiniDiStampaResponseDTO, type PromoResponseDTO } from '../dto';
 import { IGdoService } from '../interfaces/IGdoService';
@@ -300,6 +301,8 @@ export class OrdiniStampaService implements IOrdiniStampaService {
 
 
   async processFTPPopOlimpo({ req, idOrdineDiStampa, kitIds, socketId }: ProcessFTPPopOlimpoParams): Promise<void> {
+    // Avanzamento ed esito solo a chi ha avviato l'operazione.
+    const emit = (event: string, data: unknown) => emitToClients(event, data, roomUtente(req.session.id_utente as string));
     try {
       // Funzione di utilità per individuare file duplicati (problema nei kit)
       const fileProblematici = (allKit: RUNTIME_KIT_MONGO[]): FileItemKit[][] => {
@@ -316,7 +319,7 @@ export class OrdiniStampaService implements IOrdiniStampaService {
       };
       // Validazione parametri iniziali
       if (!idOrdineDiStampa || !kitIds) {
-        emitToClients(`${socketId}_error`, {
+        emit(`${socketId}_error`, {
           error: "Id promo mancante",
           esito: false
         } as EmitErrorParams);
@@ -326,7 +329,7 @@ export class OrdiniStampaService implements IOrdiniStampaService {
       // Recupero ordine
       const ordine = await this.getOrdineById(idOrdineDiStampa);
       if (!ordine) {
-        emitToClients(`${socketId}_error`, {
+        emit(`${socketId}_error`, {
           error: "Ordine non trovato",
           esito: false
         } as EmitErrorParams);
@@ -338,7 +341,7 @@ export class OrdiniStampaService implements IOrdiniStampaService {
       // Recupero GDO
       const gdo = (await GDO.findAll())[0];
       if (!gdo) {
-        emitToClients(`${socketId}_error`, {
+        emit(`${socketId}_error`, {
           error: "GDO non trovata",
           esito: false
         } as EmitErrorParams);
@@ -352,7 +355,7 @@ export class OrdiniStampaService implements IOrdiniStampaService {
         }
       });
       if (!data || data.length === 0) {
-        emitToClients(`${socketId}_error`, {
+        emit(`${socketId}_error`, {
           error: "Contratto non trovato",
           esito: false
         } as EmitErrorParams);
@@ -417,14 +420,14 @@ export class OrdiniStampaService implements IOrdiniStampaService {
         }
       });
       if (!promo) {
-        emitToClients(`${socketId}_error`, {
+        emit(`${socketId}_error`, {
           error: "Promo non trovata",
           esito: false
         } as EmitErrorParams);
         return;
       }
 
-      emitToClients(`${socketId}_progress`, {
+      emit(`${socketId}_progress`, {
         fase: "caricamento_dati",
         completato: true,
         message: "Caricamento dati completato"
@@ -443,7 +446,7 @@ export class OrdiniStampaService implements IOrdiniStampaService {
 
       // Elaborazione di ciascun kit
       for (const kit of kitsToProcess) {
-        emitToClients(`${socketId}_progress`, {
+        emit(`${socketId}_progress`, {
           fase: "creazione_cartelle",
           kit: kit.titolo,
           progress: (processedKits + 1) / totalKits,
@@ -487,7 +490,7 @@ export class OrdiniStampaService implements IOrdiniStampaService {
         );
 
         if (!resultAPI.data || !resultAPI.data.esito) {
-          emitToClients(`${socketId}_error`, {
+          emit(`${socketId}_error`, {
             error: `Errore durante la creazione delle cartelle per il kit ${kit.titolo}`,
             kit: kit.titolo,
             esito: false
@@ -497,7 +500,7 @@ export class OrdiniStampaService implements IOrdiniStampaService {
         processedKits++;
       }
 
-      emitToClients(`${socketId}_progress`, {
+      emit(`${socketId}_progress`, {
         fase: "creazione_excel",
         completato: false,
         message: "Creazione report Excel in corso..."
@@ -819,7 +822,7 @@ export class OrdiniStampaService implements IOrdiniStampaService {
 
       /* --------------------------------------------------------------------------------------- */
 
-      emitToClients(`${socketId}_progress`, {
+      emit(`${socketId}_progress`, {
         fase: "creazione_excel",
         completato: true,
         message: "Report Excel completato"
@@ -886,7 +889,7 @@ export class OrdiniStampaService implements IOrdiniStampaService {
       );
 
       // Emetti successo
-      emitToClients(`${socketId}_complete`, {
+      emit(`${socketId}_complete`, {
         esito: true,
         message: "Processo FTP completato con successo",
         totalFiles,
@@ -895,7 +898,7 @@ export class OrdiniStampaService implements IOrdiniStampaService {
 
     } catch (error: any) {
       console.error('Errore in processFTPPopOlimpo:', error);
-      emitToClients(`${socketId}_error`, {
+      emit(`${socketId}_error`, {
         error: error.message || "Errore sconosciuto durante il processo FTP",
         esito: false
       } as EmitErrorParams);
@@ -1163,6 +1166,8 @@ export class OrdiniStampaService implements IOrdiniStampaService {
     socketId: string;
   }): Promise<void> {
     const { req, idOrdineDiStampa, socketId } = params;
+    // Avanzamento ed esito solo a chi ha avviato l'operazione.
+    const emit = (event: string, data: unknown) => emitToClients(event, data, roomUtente(req.session.id_utente as string));
 
     // Track job state
     this.groupingJobs.set(idOrdineDiStampa, {
@@ -1201,7 +1206,7 @@ export class OrdiniStampaService implements IOrdiniStampaService {
         const emptyResult = { totalFiles: 0, analyzedFiles: 0, groupCount: 0, groups: [] as any[], unmatchedIds: [] as string[] };
         const job = this.groupingJobs.get(idOrdineDiStampa);
         if (job) { job.status = 'completed'; job.result = emptyResult; }
-        emitToClients(`${socketId}_result`, emptyResult);
+        emit(`${socketId}_result`, emptyResult);
         return;
       }
 
@@ -1220,7 +1225,7 @@ export class OrdiniStampaService implements IOrdiniStampaService {
         const emptyResult = { totalFiles: 0, analyzedFiles: 0, groupCount: 0, groups: [] as any[], unmatchedIds: [] as string[] };
         const job = this.groupingJobs.get(idOrdineDiStampa);
         if (job) { job.status = 'completed'; job.result = emptyResult; }
-        emitToClients(`${socketId}_result`, emptyResult);
+        emit(`${socketId}_result`, emptyResult);
         return;
       }
 
@@ -1295,7 +1300,7 @@ export class OrdiniStampaService implements IOrdiniStampaService {
         job.result = resultData;
       }
 
-      emitToClients(`${socketId}_result`, resultData);
+      emit(`${socketId}_result`, resultData);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Errore sconosciuto durante il raggruppamento';
       log.error(`[groupFilesByEquality] ${message}`);
@@ -1307,7 +1312,7 @@ export class OrdiniStampaService implements IOrdiniStampaService {
         job.error = message;
       }
 
-      emitToClients(`${socketId}_error`, {
+      emit(`${socketId}_error`, {
         error: message,
         esito: false
       });

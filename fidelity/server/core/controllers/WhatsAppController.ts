@@ -30,7 +30,6 @@ export class WhatsAppController extends BaseController {
         this.router.post("/inviaBroadcastMessaggi", authMiddleware, permissionGuard('whatsapp.invia_campagna'), this.inviaBroadcastMessaggi.bind(this));
 
         // Public registration (no auth)
-        this.router.post("/registraUtenteWhatsapp", this.registraUtenteWhatsapp.bind(this));
 
         // Templates
         this.router.get('/get_all_gdo_whatsapp', authMiddleware, permissionGuard('whatsapp.gestisci_templates'), this.getAllGDOWhatsapp.bind(this));
@@ -72,28 +71,6 @@ export class WhatsAppController extends BaseController {
         } catch (error) {
             res.status(HttpStatusCode.INTERNAL_SERVER_ERROR).json({
                 errore: error instanceof Error ? error.message : "Errore nell'invio dei messaggi"
-            });
-        }
-    }
-
-    private async registraUtenteWhatsapp(req: Request, res: Response): Promise<void> {
-        try {
-            const { email, nome, cognome, password, tipo, residenza, dataDiNascita, gdoScelta, telefono } = req.body;
-            const result = await this.whatsAppService.registraUtenteWhatsapp({
-                email,
-                nome,
-                cognome,
-                password,
-                tipo,
-                residenza,
-                dataDiNascita,
-                gdoScelta,
-                telefono
-            });
-            res.json(result);
-        } catch (error) {
-            res.status(HttpStatusCode.INTERNAL_SERVER_ERROR).json({
-                errore: error instanceof Error ? error.message : "Errore nella registrazione dell'utente"
             });
         }
     }

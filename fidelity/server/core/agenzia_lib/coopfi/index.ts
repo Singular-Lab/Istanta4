@@ -1437,11 +1437,13 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
                     }
                 });
             }
-            await this.initOlympusPassport(userExist.id);
+            // Chiave appena ottenuta da Olympus; se la richiesta fallisce resta quella gia' salvata.
+            const privateKey = await this.initOlympusPassport(userExist.id)
+                ?? await this.userService.getPrivateKey(userExist.id);
 
             return {
                 id: userExist.id,
-                private_key: userExist.private_key,
+                private_key: privateKey,
                 id_gdo: userExist.id_gdo,
                 email: userExist.email,
                 tipo_utente: userExist.tipo,

@@ -110,6 +110,10 @@ export class GdoController extends BaseController {
       res.setHeader('Cache-Control', 'private, max-age=3600');
       res.setHeader('Content-Disposition', 'inline');
       res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      // L'SVG caricato puo' contenere script: aperto direttamente nel browser non deve
+      // eseguire nulla. Dentro <img> gli script non girano comunque.
+      res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
+      res.setHeader('X-Content-Type-Options', 'nosniff');
       res.status(HttpStatusCode.OK).send(gdo.icona_gdo);
 
     } catch (error: any) {

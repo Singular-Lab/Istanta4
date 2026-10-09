@@ -25,10 +25,13 @@ import type { IOidcService, OidcUserClaims } from '../interfaces/IOidcService';
 import type { IUserService } from '../interfaces/IUserService';
 import { log } from '../logger';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { authRateLimiter } from '../middleware/rateLimiter';
+import { userRoleGuard } from '../middleware/userRoleGuard';
 import type { IAuthProviderRepository } from '../repositories/AuthProviderRepository';
 import { AuditLogService } from '../services/AuditLogService';
 import { buildHubUserContext, type HubUserContext } from '../services/hubRoleUtils';
 import { ServerUtils } from '../utils/ServerUtils';
+import { verifyAccessoServizioParams } from '../utils/accessoServizioLink';
 
 function createSingleFileUploadMiddleware(
   upload: ReturnType<typeof uploadHubServiceDocuments.single>
@@ -88,8 +91,9 @@ export class HubController extends BaseController {
     // OIDC — flusso di autenticazione (pubblici)
     this.router.get('/auth/oidc/authorize/:codice', this.oidcAuthorize.bind(this));
     this.router.get('/auth/oidc/callback', this.oidcCallback.bind(this));
-    //HACK questa è una chiamata creata per TEST
-    this.router.get('/auth/oidc/fake-callback', this.oidcFakeCallback.bind(this));
+    // Accesso di servizio: solo con link firmato (OIDC_FAKE_CALLBACK_SECRET),
+    // generato con `yarn auth:link-servizio <email> [oid]`.
+    this.router.get('/auth/oidc/fake-callback', authRateLimiter, this.oidcFakeCallback.bind(this));
 
     // Autenticato — info utente sessione per la dashboard hub
     this.router.get('/hub-user-info', authMiddleware, this.getHubUserInfo.bind(this));
@@ -102,8 +106,9 @@ export class HubController extends BaseController {
 
     // Admin — tutti i servizi raggruppati per codice
     this.router.get('/hub-services/admin', authMiddleware, this.getHubServicesAdmin.bind(this));
-    this.router.post('/hub-services/assets/document', authMiddleware, uploadHubServiceDocumentMiddleware, this.uploadHubServiceDocument.bind(this));
-    this.router.post('/hub-services/assets/video', authMiddleware, uploadHubServiceVideoMiddleware, this.uploadHubServiceVideo.bind(this));
+    // Il ruolo va verificato prima di multer: un upload rifiutato non deve arrivare su disco.
+    this.router.post('/hub-services/assets/document', authMiddleware, userRoleGuard([TIPO_UTENTI.SUPERADMIN]), uploadHubServiceDocumentMiddleware, this.uploadHubServiceDocument.bind(this));
+    this.router.post('/hub-services/assets/video', authMiddleware, userRoleGuard([TIPO_UTENTI.SUPERADMIN]), uploadHubServiceVideoMiddleware, this.uploadHubServiceVideo.bind(this));
 
     // Admin CRUD — Auth Providers
     this.router.post('/auth-providers', authMiddleware, this.createAuthProvider.bind(this));
@@ -342,7 +347,7 @@ export class HubController extends BaseController {
       const auditService = AuditLogService.getInstance();
       auditService.loginSuccess(req, parsed.id, parsed.tipo_utente);
 
-      log.info(`[HubController] OIDC login riuscito per ${email} via fake-callback`);
+      log.info(`[HubController] OIDC login riuscito per ${email}`);
 
       // Redirect alla dashboard
       res.redirect('/hub');
@@ -353,14 +358,31 @@ export class HubController extends BaseController {
   }
   private async oidcFakeCallback(req: Request, res: Response): Promise<void> {
     try {
-      const { oid, email } = req.query;
+      const secret = config.OIDC_FAKE_CALLBACK_SECRET;
+      if (!secret) {
+        this.sendResponse(res, HttpStatusCode.NOT_FOUND, { message: 'Risorsa non trovata' });
+        return;
+      }
+
+      // Le risposte 4xx contano per authRateLimiter, i redirect riusciti no.
+      const esito = verifyAccessoServizioParams(req.query, secret);
+      if (esito !== 'valid') {
+        log.warn('[HubController] Accesso di servizio rifiutato', { esito, ip: req.ip });
+        this.sendResponse(res, HttpStatusCode.FORBIDDEN, {
+          message: esito === 'expired' ? 'Link di accesso scaduto' : 'Link di accesso non valido'
+        });
+        return;
+      }
+
+      const email = req.query.email as string;
+      const oid = (req.query.oid as string | undefined) ?? '';
 
       const falseClaims: OidcUserClaims = {
         sub: "",
-        oid: oid as string,
-        email: email as string
+        oid,
+        email
       }
-      const parsed = await this.agenziaLib.parseUtenteOIDC(email as string, falseClaims);
+      const parsed = await this.agenziaLib.parseUtenteOIDC(email, falseClaims);
 
       // Rigenera la sessione per prevenire session fixation
       await new Promise<void>((resolve, reject) => {
@@ -392,9 +414,9 @@ export class HubController extends BaseController {
 
       // Audit log
       const auditService = AuditLogService.getInstance();
-      auditService.loginSuccess(req, parsed.id, parsed.tipo_utente);
+      auditService.loginSuccess(req, parsed.id, parsed.tipo_utente, 'login_accesso_servizio');
 
-      log.info(`[HubController] OIDC login riuscito per ${email} via fake-callback`);
+      log.warn(`[HubController] Accesso di servizio OIDC per ${email}`);
 
       // Redirect alla dashboard
       res.redirect('/hub');

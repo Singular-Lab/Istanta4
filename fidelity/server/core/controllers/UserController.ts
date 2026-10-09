@@ -13,7 +13,7 @@ import { log } from '../logger';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { csrfTokenEndpoint, csrfTokenGenerator } from '../middleware/csrfProtection';
 import { permissionGuard } from '../middleware/permissionGuard';
-import { authRateLimiter, registrationRateLimiter } from '../middleware/rateLimiter';
+import { authEmailRateLimiter, authRateLimiter, registrationRateLimiter } from '../middleware/rateLimiter';
 import { AuditLogService } from '../services/AuditLogService';
 import { MenuCacheService } from '../services/MenuCacheService';
 import { calculateSessionTimeout } from '../session';
@@ -120,8 +120,8 @@ export class UserController extends BaseController {
     this.router.post('/export_users', authMiddleware, permissionGuard('utenti.esporta'), this.exportUsers.bind(this));
     this.router.post('/dev/hash-password', this.hashPasswordLocalOnly.bind(this));
     // Authentication routes
-    this.router.post('/login_user', authRateLimiter, this.loginUser.bind(this));
-    this.router.post('/check_login_for_multiple_users', authRateLimiter, this.checkLoginForMultipleUsers.bind(this));
+    this.router.post('/login_user', authRateLimiter, authEmailRateLimiter, this.loginUser.bind(this));
+    this.router.post('/check_login_for_multiple_users', authRateLimiter, authEmailRateLimiter, this.checkLoginForMultipleUsers.bind(this));
     this.router.get('/logout-user', authMiddleware, this.logoutUser.bind(this));
     this.router.post('/register-user', registrationRateLimiter, authMiddleware, permissionGuard('utenti.crea'), this.registerUser.bind(this));
 
@@ -408,7 +408,6 @@ export class UserController extends BaseController {
       const user = await this.userService.getUserById(userId);
       const sanitizedUser = user ? { ...user } as Partial<UtenteResponseDTO> : null;
       if (sanitizedUser) {
-        delete sanitizedUser.private_key;
         delete sanitizedUser.outsider;
       }
 
@@ -510,6 +509,9 @@ export class UserController extends BaseController {
         return;
       }
 
+      // La chiave serve alla sessione ma non e' piu' nel DTO dell'utente.
+      const privateKey = await this.userService.getPrivateKey(result.user.id);
+
       // Rigenera la sessione per prevenire session fixation
       req.session.regenerate((err) => {
         if (err) {
@@ -524,7 +526,7 @@ export class UserController extends BaseController {
 
         // Imposta i dati della nuova sessione
         req.session.id_utente = result.user!.id;
-        req.session.private_key = result.user!.private_key;
+        req.session.private_key = privateKey;
         req.session.id_gdo = result.user!.id_gdo;
         req.session.email = result.user!.email;
         req.session.tipo_utente = selectedUserType ? selectedUserType as TIPO_UTENTI : result.user!.tipo;

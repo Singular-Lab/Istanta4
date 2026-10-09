@@ -7,7 +7,7 @@ import { DESIGN_KIT_MONGO } from '../../../lib/types';
 import { BaseController } from '../base/BaseController';
 import { IDesignKitService } from '../interfaces/IDesignKitService';
 import { IKitRuntimeService } from '../interfaces/IKitRuntimeService';
-import { authMiddleware } from '../middleware/authMiddleware';
+import { authMiddleware, integrationAuthMiddleware } from '../middleware/authMiddleware';
 import { permissionGuard } from '../middleware/permissionGuard';
 import { Promo } from '../models/promo';
 import { ServerUtils } from '../utils/ServerUtils';
@@ -28,7 +28,7 @@ export class KitRuntimeController extends BaseController {
     // From ImpostazioniController
     this.router.get('/getAllKitPerGestioneLavorazione/:idPromo', authMiddleware, permissionGuard('kit_runtime.visualizza'), this.getAllKitPerGestioneLavorazione.bind(this));
     this.router.get('/get_kit_per_gestione_lavorazione/:idPromo/:idKit', authMiddleware, permissionGuard('kit_runtime.visualizza'), this.getKitPerGestioneLavorazione.bind(this));
-    this.router.put('/getKitByPromo', authMiddleware, this.getKitByPromo.bind(this));
+    this.router.put('/getKitByPromo', integrationAuthMiddleware, permissionGuard('kit_runtime.crea'), this.getKitByPromo.bind(this));
     this.router.delete('/mettiInStatoDiEliminazione/:id', authMiddleware, permissionGuard('kit_runtime.elimina'), this.mettiInStatoDiEliminazione.bind(this));
     this.router.delete('/eliminaKitRuntime/:id', authMiddleware, permissionGuard('kit_runtime.elimina'), this.eliminaKitRuntime.bind(this));
     this.router.delete('/eliminaFileKitRuntime/:id', authMiddleware, permissionGuard('kit_runtime.elimina_file'), this.eliminaFileKitRuntime.bind(this));
@@ -46,7 +46,7 @@ export class KitRuntimeController extends BaseController {
     this.router.get('/getKitRunTimeById', authMiddleware, permissionGuard('kit_runtime.visualizza'), this.getKitRunTimeById.bind(this));
     this.router.get('/getKitRunTimeFilesPaginated', authMiddleware, permissionGuard('kit_runtime.visualizza'), this.getKitRunTimeFilesPaginated.bind(this));
     //NOTE: questa funzione viene chiamata dall'esterno non mettere il controllo.
-    this.router.delete('/clearAllFilesKitRuntime/:idKitRuntime/:guidIdExport', authMiddleware, this.clearAllFilesKitRuntime.bind(this));
+    this.router.delete('/clearAllFilesKitRuntime/:idKitRuntime/:guidIdExport', integrationAuthMiddleware, permissionGuard('kit_runtime.elimina_file'), this.clearAllFilesKitRuntime.bind(this));
     this.router.get('/getFilesPerGestioneLavorazione/:idKit', authMiddleware, permissionGuard('kit_runtime.visualizza'), this.getFilesPerGestioneLavorazione.bind(this));
   }
 

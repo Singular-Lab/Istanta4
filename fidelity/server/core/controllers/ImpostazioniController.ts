@@ -11,7 +11,8 @@ import { BaseController } from '../base/BaseController';
 import config from '../config';
 import { IConfigService } from '../interfaces/IConfigService';
 import { IImpostazioniService } from '../interfaces/IImpostazioniService';
-import { authMiddleware } from '../middleware/authMiddleware';
+import { authMiddleware, integrationAuthMiddleware } from '../middleware/authMiddleware';
+import { permissionGuard } from '../middleware/permissionGuard';
 import { ServerUtils } from '../utils/ServerUtils';
 
 import { TYPES, container } from '../di';
@@ -24,12 +25,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export class ImpostazioniController extends BaseController {
   protected setupRoutes(): void {
 
-    this.router.put("/update_data_fields_translation_map", authMiddleware, this.updateDataFieldsTranslationMap.bind(this));
+    this.router.put("/update_data_fields_translation_map", authMiddleware, permissionGuard('impostazioni.modifica_generali'), this.updateDataFieldsTranslationMap.bind(this));
     // =========================
     // GESTIONE PAGINE E UI
     // =========================
     this.router.get('/getGestionePagineSingular', authMiddleware, this.getGestionePagineSingular.bind(this));
-    this.router.put('/salvaGestionePagineSingular', authMiddleware, this.salvaGestionePagineSingular.bind(this));
+    this.router.put('/salvaGestionePagineSingular', authMiddleware, permissionGuard('impostazioni.gestisci_pagine_singular'), this.salvaGestionePagineSingular.bind(this));
 
     // =========================
     // PROMOZIONI E TIMELINE
@@ -40,7 +41,7 @@ export class ImpostazioniController extends BaseController {
     // WEBPLIANT E REFERENZE (dipendono da webhookService/configService)
     // =========================
 
-    this.router.get("/richiediConfigMapDatafields", authMiddleware, this.richiediConfigMapDatafields.bind(this));
+    this.router.get("/richiediConfigMapDatafields", integrationAuthMiddleware, this.richiediConfigMapDatafields.bind(this));
 
     // =========================
     // IMPOSTAZIONI QUICK SEARCH
