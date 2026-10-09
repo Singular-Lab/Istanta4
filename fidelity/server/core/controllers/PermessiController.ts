@@ -81,7 +81,7 @@ export class PermessiController extends BaseController {
     }
   }
 
-  private async getPermessiConOverride(req: Request, res: Response): Promise<void> {
+  private async getPermessiConOverride(req: Request<{ tipoUtente: string; idGdo: string }>, res: Response): Promise<void> {
     try {
       const tipoUtente = req.params.tipoUtente as TIPO_UTENTI;
       const idGdo = req.params.idGdo;
@@ -110,7 +110,7 @@ export class PermessiController extends BaseController {
     }
   }
 
-  private async setPermessiRuoloGdo(req: Request, res: Response): Promise<void> {
+  private async setPermessiRuoloGdo(req: Request<{ tipoUtente: string; idGdo: string }>, res: Response): Promise<void> {
     try {
       const tipoUtente = req.params.tipoUtente as TIPO_UTENTI;
       const idGdo = req.params.idGdo;
@@ -129,7 +129,7 @@ export class PermessiController extends BaseController {
     }
   }
 
-  private async resetOverrideGdo(req: Request, res: Response): Promise<void> {
+  private async resetOverrideGdo(req: Request<{ tipoUtente: string; idGdo: string }>, res: Response): Promise<void> {
     try {
       const tipoUtente = req.params.tipoUtente as TIPO_UTENTI;
       const idGdo = req.params.idGdo;

@@ -52,7 +52,7 @@ export class KitRuntimeController extends BaseController {
 
   // === Handlers from ImpostazioniController ===
 
-  private async getAllKitPerGestioneLavorazione(req: Request, res: Response): Promise<void> {
+  private async getAllKitPerGestioneLavorazione(req: Request<{ idPromo: string }>, res: Response): Promise<void> {
     try {
       const idPromo = req.params.idPromo;
       const result = await this.kitRuntimeService.getAllKitPerGestioneLavorazione(idPromo, req);
@@ -62,7 +62,7 @@ export class KitRuntimeController extends BaseController {
     }
   }
 
-  private async getKitPerGestioneLavorazione(req: Request, res: Response): Promise<void> {
+  private async getKitPerGestioneLavorazione(req: Request<{ idPromo: string; idKit: string }>, res: Response): Promise<void> {
     try {
       const idPromo = req.params.idPromo;
       const idKit = req.params.idKit;
@@ -200,7 +200,7 @@ export class KitRuntimeController extends BaseController {
 
 
 
-  private async mettiInStatoDiEliminazione(req: Request, res: Response): Promise<void> {
+  private async mettiInStatoDiEliminazione(req: Request<{ id: string }>, res: Response): Promise<void> {
     try {
       const id = req.params.id;
       const result = await this.kitRuntimeService.mettiInStatoDiEliminazione(id);
@@ -210,7 +210,7 @@ export class KitRuntimeController extends BaseController {
     }
   }
 
-  private async eliminaKitRuntime(req: Request, res: Response): Promise<void> {
+  private async eliminaKitRuntime(req: Request<{ id: string }>, res: Response): Promise<void> {
     try {
       const id = req.params.id;
       const result = await this.kitRuntimeService.eliminaKitRuntime(id);
@@ -220,7 +220,7 @@ export class KitRuntimeController extends BaseController {
     }
   }
 
-  private async eliminaFileKitRuntime(req: Request, res: Response): Promise<void> {
+  private async eliminaFileKitRuntime(req: Request<{ id: string }>, res: Response): Promise<void> {
     try {
       const idFile = req.params.id;
       const result = await this.kitRuntimeService.eliminaFileKitRuntime(idFile);
@@ -301,7 +301,7 @@ export class KitRuntimeController extends BaseController {
 
   // === Handlers from PromoController ===
 
-  private async getKitRuntimeByPromo(req: Request, res: Response): Promise<void> {
+  private async getKitRuntimeByPromo(req: Request<{ idPromo: string }>, res: Response): Promise<void> {
     try {
       const idPromo = req.params.idPromo;
       const allKitRuntime = await this.kitRuntimeService.getAllKitRuntimeByIdPromo(idPromo);
@@ -314,7 +314,7 @@ export class KitRuntimeController extends BaseController {
     }
   }
 
-  private async getAllKitRuntimeByPromo(req: Request, res: Response): Promise<void> {
+  private async getAllKitRuntimeByPromo(req: Request<{ idPromo: string }>, res: Response): Promise<void> {
     try {
       const idPromo = req.params.idPromo;
       const allKitRuntime = await this.kitRuntimeService.getAllKitRuntimeByIdPromo(idPromo);
@@ -364,7 +364,7 @@ export class KitRuntimeController extends BaseController {
     }
   }
 
-  private async clearAllFilesKitRuntime(req: Request, res: Response): Promise<void> {
+  private async clearAllFilesKitRuntime(req: Request<{ idKitRuntime: string; guidIdExport: string }>, res: Response): Promise<void> {
     try {
       const { idKitRuntime, guidIdExport } = req.params;
       await this.kitRuntimeService.clearAllFilesKitRuntime(idKitRuntime, guidIdExport)
@@ -374,7 +374,7 @@ export class KitRuntimeController extends BaseController {
     }
   }
 
-  private async getFilesPerGestioneLavorazione(req: Request, res: Response): Promise<void> {
+  private async getFilesPerGestioneLavorazione(req: Request<{ idKit: string }>, res: Response): Promise<void> {
     try {
       const idKit = req.params.idKit;
       const result = await this.kitRuntimeService.getFilesPerGestioneLavorazione(idKit, req);

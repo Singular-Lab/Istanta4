@@ -4,14 +4,13 @@ import FilterBaseForm from '@/components/Base/FormFiltriDesign';
 import ProprietaForm from '@/components/Base/FormFiltriDesign/ProprietaForm';
 import { Disclosure } from '@/components/Base/Headless';
 import Lucide from '@/components/Base/Lucide';
-import React from 'react';
-import { Control, FieldErrors, UseFormRegister } from 'react-hook-form';
+import { Control, FieldErrors, FieldValues, UseFormRegister } from 'react-hook-form';
 
-interface DeclinazioniSectionProps {
+interface DeclinazioniSectionProps<T extends FieldValues> {
     fields: Array<Record<"id", string> & any>;
     append: (value: any) => void;
     remove: (index: number) => void;
-    control: Control<any>;
+    control: Control<T>;
     register: UseFormRegister<any>;
     errors: FieldErrors<any>;
     dataDeclinazioni: any;
@@ -19,17 +18,19 @@ interface DeclinazioniSectionProps {
     handleRemoveDeclinazione: (index: number) => void;
 }
 
-const DeclinazioniSection: React.FC<DeclinazioniSectionProps> = ({
+const DeclinazioniSection = <T extends FieldValues>({
     fields,
     append,
     remove,
-    control,
+    control: controlForm,
     register,
     errors,
     dataDeclinazioni,
     dataAddestramenti,
     handleRemoveDeclinazione,
-}) => {
+}: DeclinazioniSectionProps<T>) => {
+    // react-hook-form: Control<T> non e' assegnabile a Control<any>; i campi usano percorsi dinamici, quindi qui il form e' non tipizzato
+    const control = controlForm as Control<any>;
     return (
         <div className="space-y-4">
             {/* Header */}

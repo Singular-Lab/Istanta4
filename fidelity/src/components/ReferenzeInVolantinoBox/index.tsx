@@ -19,6 +19,7 @@ interface Referenza {
     categoriaMerceologica?: string;
     categoriaMerce?: string;
     categoriaMarketing?: string;
+    origine?: "listino" | "fuori_listino";
 }
 
 interface GruppoReferenze {

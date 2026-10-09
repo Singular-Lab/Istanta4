@@ -87,7 +87,6 @@ export const PERMESSI_SEED: Omit<PermessoAttributes, 'id_permesso'>[] = [
   // ╚══════════════════════════════════════════════════════════════════╝
   { codice: 'pagina.invio_campagna_whatsapp',       nome: 'Invio Campagna WhatsApp',       descrizione: 'Accesso alla creazione e invio campagne WhatsApp',      categoria: P, risorsa: 'pagine_whatsapp' },
   { codice: 'pagina.campagne_whatsapp',             nome: 'Campagne WhatsApp',             descrizione: 'Accesso alla lista e dettagli campagne WhatsApp',       categoria: P, risorsa: 'pagine_whatsapp' },
-  { codice: 'pagina.business_chat',                 nome: 'Business Chat',                 descrizione: 'Accesso alla business chat WhatsApp',                   categoria: P, risorsa: 'pagine_whatsapp' },
   { codice: 'pagina.gestione_whatsapp_admin',       nome: 'Gestione WhatsApp Admin',       descrizione: 'Accesso alla gestione WhatsApp per admin GDO',          categoria: P, risorsa: 'pagine_whatsapp' },
   { codice: 'pagina.gestione_whatsapp_superadmin',  nome: 'Gestione WhatsApp Superadmin',  descrizione: 'Accesso alla gestione WhatsApp completa (setup, template, preset)', categoria: P, risorsa: 'pagine_whatsapp' },
 
@@ -199,8 +198,6 @@ export const PERMESSI_SEED: Omit<PermessoAttributes, 'id_permesso'>[] = [
   { codice: 'whatsapp.visualizza_campagne', nome: 'Visualizza Campagne',      descrizione: 'Visualizzare la lista e i dettagli delle campagne',           categoria: A, risorsa: 'whatsapp' },
   { codice: 'whatsapp.gestisci_templates',  nome: 'Gestisci Templates',       descrizione: 'Creare, modificare e inviare template WhatsApp a Meta',       categoria: A, risorsa: 'whatsapp' },
   { codice: 'whatsapp.gestisci_presets',    nome: 'Gestisci Presets',         descrizione: 'Creare e modificare preset per template WhatsApp',             categoria: A, risorsa: 'whatsapp' },
-  { codice: 'whatsapp.registra_utente',     nome: 'Registra Utente WhatsApp', descrizione: 'Registrare utenti per WhatsApp Business',                    categoria: A, risorsa: 'whatsapp' },
-  { codice: 'whatsapp.business_chat',       nome: 'Business Chat',            descrizione: 'Inviare e ricevere messaggi nella business chat',             categoria: A, risorsa: 'whatsapp' },
 
   // ╔══════════════════════════════════════════════════════════════════╗
   // ║  AZIONI — API & WEBHOOK                                        ║
@@ -300,7 +297,7 @@ export const PERMESSI_RUOLO_DEFAULTS: Record<string, string[]> = {
     'pagina.ods_in_corso', 'pagina.ods_completati',
     'pagina.webpliant_disponibili',
     'pagina.punti_vendita', 'pagina.gestione_ricette', 'pagina.gestione_vini',
-    'pagina.invio_campagna_whatsapp', 'pagina.campagne_whatsapp', 'pagina.business_chat', 'pagina.gestione_whatsapp_admin',
+    'pagina.invio_campagna_whatsapp', 'pagina.campagne_whatsapp', 'pagina.gestione_whatsapp_admin',
     'pagina.gestione_api', 'pagina.documentazione',
     'pagina.gestione_utenti',
     // Azioni
@@ -314,7 +311,7 @@ export const PERMESSI_RUOLO_DEFAULTS: Record<string, string[]> = {
     'referenze.visualizza',
     'utenti.visualizza',
     'whatsapp.invia_campagna', 'whatsapp.annulla_campagna', 'whatsapp.visualizza_campagne',
-    'whatsapp.gestisci_presets', 'whatsapp.registra_utente', 'whatsapp.business_chat',
+    'whatsapp.gestisci_presets',
     'gdo.gestisci_punti_vendita', 'gdo.gestisci_aree_canali',
     'ai.gestisci_ricette', 'ai.gestisci_vini',
     'api.visualizza_statistiche',

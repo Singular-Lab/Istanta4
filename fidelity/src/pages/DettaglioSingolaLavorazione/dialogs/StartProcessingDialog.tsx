@@ -45,7 +45,7 @@ const StartProcessingDialog = ({ dialogOpen, setDialogOpen, lavorazione, mutatio
                     variant="success"
                     onClick={() => {
                         setDialogOpen(false);
-                        mutationStartLavorazione.mutate({ idPromo } || "");
+                        mutationStartLavorazione.mutate({ idPromo });
                     }}
                     disabled={mutationStartLavorazione.isPending}
                 >

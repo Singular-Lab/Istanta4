@@ -805,7 +805,7 @@ const PromotionTimeline: React.FC<PromotionTimelineProps> = ({
     deleteKeyframe(selectedKeyframe.id);
     dispatch({ type: "SET_SELECTED_KEYFRAME", payload: null });
     dispatch({ type: "SET_INSPECTOR_OPEN", payload: false });
-    notify("Trash2", "Keyframe eliminato", "text-red-600");
+    notify("Trash", "Keyframe eliminato", "text-red-600");
   });
 
   // Shortcut per creare un nuovo keyframe
@@ -981,7 +981,7 @@ const PromotionTimeline: React.FC<PromotionTimelineProps> = ({
             dispatch({ type: "SET_SELECTED_KEYFRAME", payload: null });
             dispatch({ type: "SET_INSPECTOR_OPEN", payload: false });
           }
-          notify("Trash2", "Keyframe eliminato", "text-red-600");
+          notify("Trash", "Keyframe eliminato", "text-red-600");
         },
         variant: "danger" as const
       }
@@ -2115,7 +2115,7 @@ const PromotionTimeline: React.FC<PromotionTimelineProps> = ({
                         deleteKeyframe(selectedKeyframe.id);
                         dispatch({ type: "SET_SELECTED_KEYFRAME", payload: null });
                         dispatch({ type: "SET_INSPECTOR_OPEN", payload: false });
-                        notify("Trash2", "Keyframe eliminato", "text-red-600");
+                        notify("Trash", "Keyframe eliminato", "text-red-600");
                       }}
                       className="flex-1 text-xs"
                     >

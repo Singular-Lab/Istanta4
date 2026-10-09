@@ -148,7 +148,7 @@ export class AreaController extends BaseController {
     }
   }
 
-  private async eliminaArea(req: Request, res: Response): Promise<void> {
+  private async eliminaArea(req: Request<{ guidID: string }>, res: Response): Promise<void> {
     try {
       const guidID = req.params.guidID;
 

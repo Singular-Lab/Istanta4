@@ -26,6 +26,7 @@ import {
   ReferenzeIstanta,
   SitemapType
 } from '../../../lib/types';
+import { urlFoto } from '@/utils/helper';
 
 // Hooks and Contexts
 import { GestioneHeaderWebpliantProvider, useGestioneHeaderWebpliant } from '@/context/GestioneHeaderWebpliant';
@@ -1386,7 +1387,7 @@ const WebpliantLayout: FC<WebpliantLayoutProps> = () => {
             <ul style={{ height: "78%", float: "right" }} className={clsx(stylesWP["wp-list-unstyled"], stylesWP["wp-p-0"], stylesWP["wp-m-0"])}>
               {refLista && refLista.map((ref, i) => (
                 <li key={ref.codice_referenza as string} className={clsx(stylesWP["wp-d-flex"], stylesWP["wp-align-items-center"], stylesWP["wp-mb-2"])}>
-                  <img src={Array.isArray(ref["foto"]) ? ref["foto"][0] : ""} alt="" className="w-14 h-14 mr-2 object-contain" />
+                  <img src={urlFoto(ref["foto"])[0] ?? ""} alt="" className="w-14 h-14 mr-2 object-contain" />
                   <span className={clsx(stylesWP["wp-text-small"], stylesWP["wp-flex-grow-1"])}>
                     {ref?.descrizione_uno} {ref?.descrizione_due} {ref?.descrizione_tre}
                   </span>

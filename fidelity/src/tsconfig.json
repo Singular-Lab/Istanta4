@@ -22,7 +22,7 @@
     "typeRoots": [
       "../node_modules/@types"
     ],
-    "composite": true,
+    "types": [],
     "noEmit": true,
     "jsx": "react-jsx",
     "baseUrl": "..",

@@ -304,7 +304,8 @@ const DettagliKitOrdiniDiStampa: React.FC = () => {
 
       if (!response) return;
 
-      const contentType = response.headers['content-type'] || file.mime || 'application/pdf';
+      const headerContentType = response.headers['content-type'];
+      const contentType = (typeof headerContentType === 'string' && headerContentType) || file.mime || 'application/pdf';
       const blob = new Blob([response.data], { type: contentType });
       const blobUrl = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -442,7 +443,8 @@ const DettagliKitOrdiniDiStampa: React.FC = () => {
         responseType: 'arraybuffer',
         withCredentials: true,
       });
-      const contentType = response.headers['content-type'] || 'application/pdf';
+      const headerContentType = response.headers['content-type'];
+      const contentType = (typeof headerContentType === 'string' && headerContentType) || 'application/pdf';
       const blob = new Blob([response.data], { type: contentType });
       const blobUrl = window.URL.createObjectURL(blob);
       const link = document.createElement('a');

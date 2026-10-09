@@ -7,7 +7,7 @@ import { PreviewImmaginePdf } from "@/components/PreviewImmaginePdf";
 import { useNotification } from "@/context/NotificationContext";
 import { useMutation } from "@tanstack/react-query";
 import clsx from "clsx";
-import { DropzoneOptions } from "dropzone";
+import type { Dropzone as DropzoneJs, DropzoneOptions } from "dropzone";
 import React, { FC, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { ServerCall } from "../../../../lib/server_call";
@@ -462,7 +462,7 @@ const FileErrorsTable: FC<FileErrorsTableProps> = ({
     autoProcessQueue: false,
     maxFiles: 1,
     acceptedFiles: ".zip",
-    init() {
+    init(this: DropzoneJs) {
       this.on("addedfile", (file) => {
         if (processZipFileMutation.isPending) {
           showInfoNotification("Attendi il completamento dell'upload corrente.");

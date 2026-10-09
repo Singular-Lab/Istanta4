@@ -15,17 +15,14 @@ loadEnv({ path: ".env" })
 const chunkRules: Array<{ name: string; test: RegExp }> = [
   { name: "c0", test: /^(react|react-dom|scheduler)(\/|$)/ },
   { name: "c1", test: /^(react-router|react-router-dom|@tanstack\/react-query)(\/|$)/ },
-  { name: "c2", test: /^(@headlessui\/react|@radix-ui\/|framer-motion|react-transition-group|tippy\.js|@tippyjs\/react)(\/|$)/ },
-  { name: "c3", test: /^(@lucide\/|lucide|lucide-react)(\/|$)/ },
-  { name: "c4", test: /^(@ckeditor\/|ckeditor|lexical|@lexical\/|@monaco-editor\/react|monaco-editor)(\/|$)/ },
-  { name: "c5", test: /^(leaflet|leaflet\.markercluster|react-leaflet|react-leaflet-cluster)(\/|$)/ },
+  { name: "c2", test: /^(@headlessui\/react|@radix-ui\/|framer-motion|tippy\.js|@tippyjs\/react)(\/|$)/ },
+  { name: "c3", test: /^(lucide-react)(\/|$)/ },
+  { name: "c4", test: /^(lexical|@lexical\/|@monaco-editor\/react)(\/|$)/ },
+  { name: "c5", test: /^(leaflet|react-leaflet)(\/|$)/ },
   { name: "c6", test: /^(chart\.js)(\/|$)/ },
-  { name: "c7", test: /^(tabulator-tables)(\/|$)/ },
   { name: "c8", test: /^(xlsx)(\/|$)/ },
-  { name: "c9", test: /^(exceljs)(\/|$)/ },
-  { name: "cA", test: /^(jspdf|jspdf-autotable)(\/|$)/ },
-  { name: "cB", test: /^(@dnd-kit\/|react-dnd|react-dnd-html5-backend|react-grid-layout|react-rnd)(\/|$)/ },
-  { name: "cC", test: /^(swiper|zoom-vanilla\.js|tiny-slider|tom-select|litepicker)(\/|$)/ },
+  { name: "cB", test: /^(react-dnd|react-dnd-html5-backend)(\/|$)/ },
+  { name: "cC", test: /^(swiper|tiny-slider|tom-select|litepicker)(\/|$)/ },
   { name: "cD", test: /^(i18next|react-i18next|i18next-browser-languagedetector)(\/|$)/ }
 ]
 
@@ -64,18 +61,12 @@ export default defineConfig(({ mode }) => {
     assetsInclude: ["**/*.lottie"],
 
     define: {
-      __APP_VERSION__: JSON.stringify("v1.2.5"),
-      __API_URL__: JSON.stringify(API_URL),
-      __WS_URL__: JSON.stringify(WS_URL),
-      __DEV__: JSON.stringify(isDevelopment)
+      __WS_URL__: JSON.stringify(WS_URL)
     },
 
     resolve: {
       alias: {
-        "@": fileURLToPath(new URL("./src", import.meta.url)),
-        "tailwind-config": fileURLToPath(
-          new URL("./tailwind.config.js", import.meta.url)
-        )
+        "@": fileURLToPath(new URL("./src", import.meta.url))
       }
     },
 
@@ -143,8 +134,7 @@ export default defineConfig(({ mode }) => {
         "react-dom",
         "react-router-dom",
         "@tanstack/react-query",
-        "leaflet",
-        "leaflet.markercluster"
+        "leaflet"
       ],
       rolldownOptions: {}
     },
@@ -161,9 +151,6 @@ export default defineConfig(({ mode }) => {
       chunkSizeWarningLimit: 600,
       assetsInlineLimit: 4096,
       reportCompressedSize: false,
-      compress: {
-        dropConsole: true,
-      },
       modulePreload: {
         polyfill: true
       },

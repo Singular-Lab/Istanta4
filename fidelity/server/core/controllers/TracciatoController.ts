@@ -58,7 +58,7 @@ export class TracciatoController extends BaseController {
         }
     }
 
-    private async getAllTracciatiPerPromo(req: Request, res: Response): Promise<void> {
+    private async getAllTracciatiPerPromo(req: Request<{ idPromo: string }>, res: Response): Promise<void> {
         try {
             const idPromo = req.params.idPromo;
             if (!ServerUtils.checkIfValueIsValid(idPromo)) {
@@ -77,7 +77,7 @@ export class TracciatoController extends BaseController {
             });
         }
     }
-    private async getTracciatoById(req: Request, res: Response): Promise<void> {
+    private async getTracciatoById(req: Request<{ idTracciato: string }>, res: Response): Promise<void> {
         try {
             const idTracciato = req.params.idTracciato;
             if (!ServerUtils.checkIfValueIsValid(idTracciato)) {
@@ -97,7 +97,7 @@ export class TracciatoController extends BaseController {
         }
     }
 
-    private async parseTracciatoById(req: Request, res: Response): Promise<void> {
+    private async parseTracciatoById(req: Request<{ idTracciato: string }>, res: Response): Promise<void> {
         try {
             const idTracciato = req.params.idTracciato;
             if (!ServerUtils.checkIfValueIsValid(idTracciato)) {
@@ -117,7 +117,7 @@ export class TracciatoController extends BaseController {
         }
     }
 
-    private async scaricaTracciato(req: Request, res: Response): Promise<void> {
+    private async scaricaTracciato(req: Request<{ idTracciato: string }>, res: Response): Promise<void> {
         try {
             const idTracciato = req.params.idTracciato;
 
@@ -154,7 +154,7 @@ export class TracciatoController extends BaseController {
     }
 
     // Cambia solo il nome mostrato in FP: file, filename originale e importazione in Istanta restano invariati
-    private async rinominaTracciato(req: Request, res: Response): Promise<void> {
+    private async rinominaTracciato(req: Request<{ idTracciato: string }>, res: Response): Promise<void> {
         try {
             const nome = typeof req.body?.nome === 'string' ? req.body.nome.trim() : '';
             if (!nome || nome.length > 255) {
@@ -178,7 +178,7 @@ export class TracciatoController extends BaseController {
         }
     }
 
-    private async deleteTracciato(req: Request, res: Response): Promise<void> {
+    private async deleteTracciato(req: Request<{ idTracciato: string }>, res: Response): Promise<void> {
         try {
             const idTracciato = req.params.idTracciato;
 
@@ -228,7 +228,7 @@ export class TracciatoController extends BaseController {
         }
     }
 
-    private async getReportConfrontoById(req: Request, res: Response): Promise<void> {
+    private async getReportConfrontoById(req: Request<{ id: string }>, res: Response): Promise<void> {
         try {
             const id = req.params.id;
             if (!ServerUtils.checkIfValueIsValid(id)) {
@@ -247,7 +247,7 @@ export class TracciatoController extends BaseController {
         }
     }
 
-    private async getMomentiPerPromo(req: Request, res: Response): Promise<void> {
+    private async getMomentiPerPromo(req: Request<{ idPromo: string }>, res: Response): Promise<void> {
         try {
             const idPromo = req.params.idPromo;
             if (!ServerUtils.checkIfValueIsValid(idPromo)) {
@@ -275,7 +275,7 @@ export class TracciatoController extends BaseController {
         }
     }
 
-    private async updateMomento(req: Request, res: Response): Promise<void> {
+    private async updateMomento(req: Request<{ idMomento: string }>, res: Response): Promise<void> {
         try {
             const idMomento = req.params.idMomento;
             if (!ServerUtils.checkIfValueIsValid(idMomento)) {
@@ -294,7 +294,7 @@ export class TracciatoController extends BaseController {
         }
     }
 
-    private async deleteMomento(req: Request, res: Response): Promise<void> {
+    private async deleteMomento(req: Request<{ idMomento: string }>, res: Response): Promise<void> {
         try {
             const idMomento = req.params.idMomento;
             if (!ServerUtils.checkIfValueIsValid(idMomento)) {
@@ -312,7 +312,7 @@ export class TracciatoController extends BaseController {
         }
     }
 
-    private async calcolaRisultatoMomento(req: Request, res: Response): Promise<void> {
+    private async calcolaRisultatoMomento(req: Request<{ idMomento: string }>, res: Response): Promise<void> {
         try {
             const idMomento = req.params.idMomento;
             if (!ServerUtils.checkIfValueIsValid(idMomento)) {
@@ -334,7 +334,7 @@ export class TracciatoController extends BaseController {
         }
     }
 
-    private async resetRisultatoMomento(req: Request, res: Response): Promise<void> {
+    private async resetRisultatoMomento(req: Request<{ idMomento: string }>, res: Response): Promise<void> {
         try {
             const idMomento = req.params.idMomento;
             if (!ServerUtils.checkIfValueIsValid(idMomento)) {
@@ -374,7 +374,7 @@ export class TracciatoController extends BaseController {
         }
     }
 
-    private async getMomentoConfrontoById(req: Request, res: Response): Promise<void> {
+    private async getMomentoConfrontoById(req: Request<{ idConfronto: string }>, res: Response): Promise<void> {
         try {
             const idConfronto = req.params.idConfronto;
             if (!ServerUtils.checkIfValueIsValid(idConfronto)) {
@@ -392,7 +392,7 @@ export class TracciatoController extends BaseController {
         }
     }
 
-    private async updateConfrontoMeta(req: Request, res: Response): Promise<void> {
+    private async updateConfrontoMeta(req: Request<{ idConfronto: string }>, res: Response): Promise<void> {
         try {
             const idConfronto = req.params.idConfronto;
             if (!ServerUtils.checkIfValueIsValid(idConfronto)) {
@@ -415,7 +415,7 @@ export class TracciatoController extends BaseController {
         }
     }
 
-    private async calcolaRisultatoMomentoConfronto(req: Request, res: Response): Promise<void> {
+    private async calcolaRisultatoMomentoConfronto(req: Request<{ idConfronto: string }>, res: Response): Promise<void> {
         try {
             const idConfronto = req.params.idConfronto;
             if (!ServerUtils.checkIfValueIsValid(idConfronto)) {
@@ -441,7 +441,7 @@ export class TracciatoController extends BaseController {
         }
     }
 
-    private async resetRisultatoConfronto(req: Request, res: Response): Promise<void> {
+    private async resetRisultatoConfronto(req: Request<{ idConfronto: string }>, res: Response): Promise<void> {
         try {
             const idConfronto = req.params.idConfronto;
             if (!ServerUtils.checkIfValueIsValid(idConfronto)) {
@@ -497,7 +497,7 @@ export class TracciatoController extends BaseController {
         }
     }
 
-    private async updateSchema(req: Request, res: Response): Promise<void> {
+    private async updateSchema(req: Request<{ idSchema: string }>, res: Response): Promise<void> {
         try {
             const idSchema = req.params.idSchema;
             if (!ServerUtils.checkIfValueIsValid(idSchema)) {
@@ -526,7 +526,7 @@ export class TracciatoController extends BaseController {
         }
     }
 
-    private async deleteSchema(req: Request, res: Response): Promise<void> {
+    private async deleteSchema(req: Request<{ idSchema: string }>, res: Response): Promise<void> {
         try {
             const idSchema = req.params.idSchema;
             if (!ServerUtils.checkIfValueIsValid(idSchema)) {
@@ -541,7 +541,7 @@ export class TracciatoController extends BaseController {
         }
     }
 
-    private async applicaSchema(req: Request, res: Response): Promise<void> {
+    private async applicaSchema(req: Request<{ idSchema: string }>, res: Response): Promise<void> {
         try {
             const idSchema = req.params.idSchema;
             const { idPromo } = req.body ?? {};

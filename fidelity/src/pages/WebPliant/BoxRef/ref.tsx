@@ -7,6 +7,7 @@ import parse from "html-react-parser";
 import React from "react";
 import { v4 as uuidv4 } from "uuid";
 import { CompiledField, Config, ConfigurazioneCampoPersonalizzato, ConfigWebpliant, ForcedStyles, ReferenzeIstanta, Struttura } from "../../../../lib/types";
+import { urlFoto } from "@/utils/helper";
 import styleBox from "./boxref.module.scss";
 
 
@@ -647,7 +648,7 @@ export function generaContenutoDinamico({
               dispatchErrore(msg, arr);
             });
           } else {
-            return renderPhotos(referenza.foto, attributi, (msg, arr) => {
+            return renderPhotos(urlFoto(referenza.foto), attributi, (msg, arr) => {
               dispatchErrore(msg, arr);
             });
           }
@@ -776,7 +777,7 @@ export function generaContenutoDinamico({
           style={stiliPerTag}
           key={uuidv4()}
         >
-          {renderPhotos(referenza.foto, attributi, (msg, arr) => {
+          {renderPhotos(urlFoto(referenza.foto), attributi, (msg, arr) => {
             dispatchErrore(msg, arr);
           })}
           {extraLoghi}

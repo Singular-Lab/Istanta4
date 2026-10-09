@@ -192,7 +192,7 @@ export class PromoController extends BaseController {
     }
   }
 
-  private async getPromoById(req: ExpressRequest, res: Response): Promise<void> {
+  private async getPromoById(req: ExpressRequest<{ idPromo: string }>, res: Response): Promise<void> {
     try {
       const promo = await this.promoService.getPromoById(req.params.idPromo);
       if (!promo) {
@@ -205,7 +205,7 @@ export class PromoController extends BaseController {
     }
   }
 
-  private async updatePromo(req: ExpressRequest, res: Response): Promise<void> {
+  private async updatePromo(req: ExpressRequest<{ id: string }>, res: Response): Promise<void> {
     try {
       const id = req.params.id;
       const data = req.body as UpdatePromoDTO & { id: string };
@@ -267,7 +267,7 @@ export class PromoController extends BaseController {
     }
   }
 
-  private async deletePromo(req: ExpressRequest, res: Response): Promise<void> {
+  private async deletePromo(req: ExpressRequest<{ id: string }>, res: Response): Promise<void> {
     try {
       verificaRisposta(
         await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
@@ -292,7 +292,7 @@ export class PromoController extends BaseController {
     }
   }
 
-  private async deleteLavorazione(req: ExpressRequest, res: Response): Promise<void> {
+  private async deleteLavorazione(req: ExpressRequest<{ id: string; stato: string }>, res: Response): Promise<void> {
     try {
       const { id, stato } = req.params;
       // :stato e lo stato che l'operatore vede: se nel frattempo e cambiato, eliminare o ripristinare non e piu la sua scelta
@@ -409,7 +409,7 @@ export class PromoController extends BaseController {
     }
   }
 
-  private async getMenaboLayout(req: ExpressRequest, res: Response): Promise<void> {
+  private async getMenaboLayout(req: ExpressRequest<{ idPromo: string }>, res: Response): Promise<void> {
     try {
       const result = await this.promoService.getMenaboLayout(req.params.idPromo);
       this.sendResponse(res, HttpStatusCode.OK, result);
@@ -418,7 +418,7 @@ export class PromoController extends BaseController {
     }
   }
 
-  private async saveMenaboLayout(req: ExpressRequest, res: Response): Promise<void> {
+  private async saveMenaboLayout(req: ExpressRequest<{ idPromo: string }>, res: Response): Promise<void> {
     try {
       const payload = req.body as SaveMenaboLayoutRequest;
       const result = await this.promoService.saveMenaboLayout(req.params.idPromo, payload);

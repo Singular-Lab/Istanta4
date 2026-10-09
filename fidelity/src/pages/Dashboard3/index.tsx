@@ -679,7 +679,7 @@ const StoricoVolantiniContent: FC<StoricoVolantiniContentProps> = ({
                         )}
                     </div>
                 ) : (
-                    <EmptyState icon="History" title="Nessun volantino nello storico" description="Lo storico dei volantini apparirà qui" />
+                    <EmptyState icon="RotateCcwClock" title="Nessun volantino nello storico" description="Lo storico dei volantini apparirà qui" />
                 )}
             </div>
 

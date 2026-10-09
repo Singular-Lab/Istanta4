@@ -9,18 +9,12 @@ export const PERMISSIONS = {
   // ── PAGINA ────────────────────────────────────────────────────────
   PAGINA: {
     DASHBOARD: 'pagina.dashboard',
-    DASHBOARD_GDO: 'pagina.dashboard_gdo',
-    DASHBOARD_MARKETING: 'pagina.dashboard_marketing',
-    DASHBOARD_IT: 'pagina.dashboard_it',
     PROFILO_UTENTE: 'pagina.profilo_utente',
     BARCODE_READER: 'pagina.barcode_reader',
     COMPETITOR_ANALYZER: 'pagina.competitor_analyzer',
-    PROMOZIONI_NUOVA: 'pagina.promozioni.nuova',
-    PROMOZIONI_IN_CORSO: 'pagina.promozioni.incorso',
-    PROMOZIONI_STORICO: 'pagina.promozioni.storico',
-    // NUOVA_LAVORAZIONE: 'pagina.nuova_lavorazione',
-    // LAVORAZIONI_IN_CORSO: 'pagina.lavorazioni_in_corso',
-    // STORICO_LAVORAZIONI: 'pagina.storico_lavorazioni',
+    PROMOZIONI_NUOVA: 'pagina.nuova_lavorazione',
+    PROMOZIONI_IN_CORSO: 'pagina.lavorazioni_in_corso',
+    PROMOZIONI_STORICO: 'pagina.storico_lavorazioni',
     // VOLANTINI: 'pagina.volantini',
     STORICO_VOLANTINI: 'pagina.storico_volantini',
     MATERIALI_ATTIVI: 'pagina.materiali_attivi',
@@ -43,7 +37,6 @@ export const PERMISSIONS = {
     GESTIONE_UTENTI: 'pagina.gestione_utenti',
     INVIO_CAMPAGNA_WHATSAPP: 'pagina.invio_campagna_whatsapp',
     CAMPAGNE_WHATSAPP: 'pagina.campagne_whatsapp',
-    BUSINESS_CHAT: 'pagina.business_chat',
     GESTIONE_WHATSAPP_ADMIN: 'pagina.gestione_whatsapp_admin',
     GESTIONE_WHATSAPP_SUPERADMIN: 'pagina.gestione_whatsapp_superadmin',
     GESTIONE_API: 'pagina.gestione_api',
@@ -151,8 +144,6 @@ export const PERMISSIONS = {
     VISUALIZZA_CAMPAGNE: 'whatsapp.visualizza_campagne',
     GESTISCI_TEMPLATES: 'whatsapp.gestisci_templates',
     GESTISCI_PRESETS: 'whatsapp.gestisci_presets',
-    REGISTRA_UTENTE: 'whatsapp.registra_utente',
-    BUSINESS_CHAT: 'whatsapp.business_chat',
   },
 
   // ── AZIONI — API & WEBHOOK ───────────────────────────────────────

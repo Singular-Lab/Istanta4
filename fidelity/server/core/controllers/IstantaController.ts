@@ -19,7 +19,7 @@ export class IstantaController extends BaseController {
         this.router.get("/getStatusImportazione", authMiddleware, this.getStatusImportazione.bind(this));
     }
 
-    private async getCombinazioniDaIstanta(req: Request, res: Response) {
+    private async getCombinazioniDaIstanta(req: Request<{ id: string }>, res: Response) {
         try {
             const istantaId = req.params.id;
             const combinazioni = await this.istantaService.getCombinazioniDaIstanta(istantaId, req);

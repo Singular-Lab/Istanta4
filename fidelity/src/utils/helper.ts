@@ -223,6 +223,11 @@ const slideDown = (
   }, duration);
 };
 
+// Al client `foto` di una referenza arriva gia' come URL delle thumbnail (il server le trasforma);
+// il tipo condiviso ReferenzeIstanta descrive invece il formato { nome, guidId } inviato dal plugin.
+const urlFoto = (foto: unknown): string[] =>
+  Array.isArray(foto) ? foto.filter((f): f is string => typeof f === "string") : [];
+
 export {
   cutText,
   formatDate,
@@ -239,5 +244,6 @@ export {
   JSXToHtml,
   slideUp,
   slideDown,
+  urlFoto,
 };
 

@@ -45,7 +45,7 @@ export class RaccoglitoreKitController extends BaseController {
     }
   }
 
-  private async eliminaRaccoglitoreKit(req: Request, res: Response): Promise<void> {
+  private async eliminaRaccoglitoreKit(req: Request<{ id: string }>, res: Response): Promise<void> {
     try {
       const idRaccoglitore = req.params.id;
       const result = await this.raccoglitoreKitService.eliminaRaccoglitoreKit(idRaccoglitore);

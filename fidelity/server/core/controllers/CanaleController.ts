@@ -141,7 +141,7 @@ export class CanaleController extends BaseController {
     }
   }
 
-  private async eliminaCanale(req: Request, res: Response): Promise<void> {
+  private async eliminaCanale(req: Request<{ guidID: string }>, res: Response): Promise<void> {
     try {
       const session = req.session;
       const guidID = req.params.guidID;

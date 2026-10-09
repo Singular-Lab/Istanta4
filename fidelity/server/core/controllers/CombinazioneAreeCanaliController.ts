@@ -117,7 +117,7 @@ export class CombinazioneAreeCanaliController extends BaseController {
     }
   }
 
-  private async deleteCombinazione(req: Request, res: Response): Promise<void> {
+  private async deleteCombinazione(req: Request<{ guidID: string }>, res: Response): Promise<void> {
     try {
       const { guidID } = req.params;
 
