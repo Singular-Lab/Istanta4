@@ -1111,10 +1111,14 @@ export class TracciatoService implements ITracciatoService {
 
   async updateMomento(id: string, data: { nome?: string; tracciati_ids?: string[]; confronti_ids?: string[]; ordine?: number }): Promise<TracciatiMomentoResponseDTO | null> {
     try {
-      const updated = await this.momentoRepository.update(id, {
+      const momento = await this.momentoRepository.findById(id);
+      if (!momento) return null;
+
+      // Ordine e confronti_ids si scrivono serializzati con le altre operazioni sui momenti della promo
+      const updated = await this.inTransazioneMomenti(momento.id_promo, (t) => this.momentoRepository.update(id, {
         ...data,
         updatedat: new Date(),
-      });
+      }, t));
       return updated ? this.mapMomentoToDTO(updated, true) : null;
     } catch (error) {
       log.error('Error in updateMomento:', error);

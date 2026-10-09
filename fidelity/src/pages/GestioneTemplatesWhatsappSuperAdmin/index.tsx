@@ -11,6 +11,7 @@ import Button from "../../components/Base/Button";
 import PageHeader from "../../components/Base/PageHeader";
 import Table from "../../components/Base/Table";
 import EmptyState from "../../components/EmptyState";
+import { useNotification } from "../../context/NotificationContext";
 
 // Utils
 function toTitle(str: string): string {
@@ -116,6 +117,7 @@ const writeFiltersToURL = (f: Filters) => {
 };
 
 const GestioneTemplatesWhatsappSuperAdmin: React.FC = () => {
+    const { showNotification } = useNotification();
     const [filters, setFilters] = useState<Filters>(() => readFiltersFromURL());
     const debouncedFilters = useDebounced(filters, 300);
 
@@ -169,7 +171,7 @@ const GestioneTemplatesWhatsappSuperAdmin: React.FC = () => {
 
     const syncFromMeta = async () => {
         if (!dettagliGDO?.id && !dettagliGDO?.id_gdo) {
-            alert("ID GDO non disponibile: impossibile sincronizzare.");
+            showNotification("ID GDO non disponibile: impossibile sincronizzare.", { variant: "warning" });
             return;
         }
 
@@ -180,7 +182,7 @@ const GestioneTemplatesWhatsappSuperAdmin: React.FC = () => {
             revalidate();
         } catch (err: any) {
             console.error("Sync da Meta fallito", err);
-            alert(`Errore durante la sincronizzazione: ${err?.message || err}`);
+            showNotification(`Errore durante la sincronizzazione: ${err?.message || err}`, { variant: "error" });
         } finally {
             setSyncing(false);
         }
@@ -378,21 +380,6 @@ const GestioneTemplatesWhatsappSuperAdmin: React.FC = () => {
                                                                     </Button>
                                                                 </>
                                                             )}
-                                                        <PermissionGate permission={PERMISSIONS.WHATSAPP.GESTISCI_TEMPLATES}>
-                                                            <Button
-                                                                size="sm"
-                                                                variant="soft-danger"
-                                                                onClick={() =>
-                                                                    template.id_gdowhatsapptemplate &&
-                                                                    alert(
-                                                                        `Elimina template con ID: ${template.id_gdowhatsapptemplate}`
-                                                                    )
-                                                                }
-                                                                className="text-xs py-1.5 px-3 shadow-sm"
-                                                            >
-                                                                Elimina
-                                                            </Button>
-                                                        </PermissionGate>
                                                     </div>
                                                 </Table.Td>
                                             </Table.Tr>

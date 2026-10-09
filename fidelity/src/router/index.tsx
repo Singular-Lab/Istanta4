@@ -5,6 +5,8 @@ import {
 } from "react-router-dom";
 
 
+import { RouteErrorFallback } from "@/components/AppErrorFallback";
+import ErrorPage from "@/components/ErrorPage";
 import NotFoundPage from "@/components/NotFoundPage";
 
 type LoaderFunctionsModule = typeof import("./loaderFunctions");
@@ -121,7 +123,11 @@ const routes: RouteObject[] = [
         Component: Layout,
       };
     },
-    children: [
+    // Route senza path che avvolge le pagine: l'errore di loader/render compare nell'Outlet di Echo,
+    // con il menu visibile. Gli errori del layout stesso risalgono al fallback impostato in fondo.
+    children: [{
+      errorElement: <ErrorPage />,
+      children: [
       {
         path: "barcode-reader",
         lazy: async () => {
@@ -1044,6 +1050,7 @@ const routes: RouteObject[] = [
         errorElement: <NotFoundPage />,
       },
     ],
+    }],
   },
 
   // NODO /webpliant con error boundary e catch-all locale
@@ -1190,6 +1197,9 @@ const routes: RouteObject[] = [
   // },
 ];
 
-// routes = addErrorElementToRoutes(routes);
+// Route di primo livello (pubbliche e layout Echo): fallback che non chiama /menu/me
+routes.forEach((route) => {
+  route.errorElement ??= <RouteErrorFallback />;
+});
 
 export default routes;

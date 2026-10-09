@@ -45,6 +45,7 @@ import EmptyState from '../../components/EmptyState';
 import { PermissionGate } from '@/components/PermissionGate';
 import withSessionCheck from '../../components/SessionChecker';
 import { PERMISSIONS } from '@/constants/permissions';
+import { useNotification } from '@/context/NotificationContext';
 
 dayjs.extend(customParseFormat);
 
@@ -384,6 +385,7 @@ const InvioCampagnaWhatsapp: FC = () => {
         };
 
     const navigate = useNavigate();
+    const { showNotification } = useNotification();
     // Step gestito da query param ?step=1 / ?step=2
     const [searchParams, setSearchParams] = useSearchParams();
     const [dialogPartenzaCampagna, setDialogPartenzaCampagna] = useState(false);
@@ -580,14 +582,18 @@ const InvioCampagnaWhatsapp: FC = () => {
         if (!selectedTemplateData || !idUtente) return;
         try {
             setIsSendingTest(true);
-            await ServerCall.post<{ success: boolean; error?: string }>(
+            const result = await ServerCall.post<{ success: boolean; error?: string }>(
                 '/whatsapp/invio_di_test_ad_utente',
                 {
                     id_utente: idUtente,
                     id_template: selectedTemplateData.id_gdowhatsapptemplate,
                 },
             );
-            console.log('Invio test a:', idUtente, 'template:', selectedTemplateData.id_gdowhatsapptemplate);
+            // Il server può rispondere 200 con success:false (es. errore Meta)
+            if (result?.success === false) throw new Error(result.error);
+            showNotification('Messaggio di test inviato.', { variant: 'success' });
+        } catch (error: any) {
+            showNotification(error?.message || 'Invio del messaggio di test non riuscito.', { variant: 'error' });
         } finally {
             setIsSendingTest(false);
         }
@@ -888,11 +894,6 @@ const InvioCampagnaWhatsapp: FC = () => {
                             variant="primary"
                             disabled={!titoloCampagna.trim() || isStartingCampaign}
                             onClick={async () => {
-                                if (!titoloCampagna.trim()) {
-                                    alert('Il titolo della campagna è obbligatorio');
-                                    return;
-                                }
-
                                 setIsStartingCampaign(true);
                                 try {
                                     const selectedTemplateData = await templatesWhatsappPromise.then(templates =>
@@ -901,8 +902,9 @@ const InvioCampagnaWhatsapp: FC = () => {
                                     await handleConfirmCampaign(selectedTemplateData);
                                     setDialogPartenzaCampagna(false);
                                     setTitoloCampagna(''); // Reset del campo
-                                } catch (error) {
-                                    console.error('Errore avvio campagna:', error);
+                                } catch (error: any) {
+                                    // Il server spiega il motivo (es. template non approvato o non della GDO)
+                                    showNotification(error?.message || 'Avvio della campagna non riuscito.', { variant: 'error' });
                                 } finally {
                                     setIsStartingCampaign(false);
                                 }
@@ -1517,57 +1519,6 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                         ) : null}
                                                     </div>
 
-                                                    {/* Motivi di esclusione (mock) */}
-                                                    <div className="border border-dashed rounded-lg p-4">
-                                                        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">
-                                                            Motivi di esclusione
-                                                        </h4>
-                                                        <div className="grid sm:grid-cols-3 gap-3 text-xs">
-                                                            <div className="flex items-start gap-2">
-                                                                <Lucide
-                                                                    icon="BellOff"
-                                                                    className="w-4 h-4 mt-0.5 text-slate-400"
-                                                                />
-                                                                <div>
-                                                                    <p className="font-medium text-slate-700 dark:text-slate-100">
-                                                                        Opt-out marketing
-                                                                    </p>
-                                                                    <p className="text-slate-500">
-                                                                        Utenti che hanno disattivato le comunicazioni promozionali.
-                                                                    </p>
-                                                                </div>
-                                                            </div>
-                                                            <div className="flex items-start gap-2">
-                                                                <Lucide
-                                                                    icon="PhoneOff"
-                                                                    className="w-4 h-4 mt-0.5 text-slate-400"
-                                                                />
-                                                                <div>
-                                                                    <p className="font-medium text-slate-700 dark:text-slate-100">
-                                                                        Numero non valido
-                                                                    </p>
-                                                                    <p className="text-slate-500">
-                                                                        Numeri mancanti o non compatibili con WhatsApp.
-                                                                    </p>
-                                                                </div>
-                                                            </div>
-                                                            <div className="flex items-start gap-2">
-                                                                <Lucide
-                                                                    icon="UserX"
-                                                                    className="w-4 h-4 mt-0.5 text-slate-400"
-                                                                />
-                                                                <div>
-                                                                    <p className="font-medium text-slate-700 dark:text-slate-100">
-                                                                        Regole campagna
-                                                                    </p>
-                                                                    <p className="text-slate-500">
-                                                                        Esclusioni basate su filtri o limiti di frequenza.
-                                                                    </p>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
                                                     {/* FILTRO CAMPI UTENTE (con range date) */}
                                                     <div className="border border-dashed rounded-lg p-4 space-y-4">
                                                         <div className="flex items-center justify-between mb-1">
@@ -1665,7 +1616,7 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                                     Filtro zona chiamate
                                                                 </h4>
                                                                 <p className="text-[11px] text-slate-500">
-                                                                    Escludi contatti in base alla zona e allo storico delle chiamate.
+                                                                    Limita la campagna ai soli contatti della zona selezionata.
                                                                 </p>
                                                             </div>
                                                             <FormCheck>
@@ -1897,7 +1848,7 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                                                 ))}
                                                                             </select>
                                                                             <p className="mt-1 text-[11px] text-slate-500">
-                                                                                Il comune selezionato verrà escluso dalla campagna.
+                                                                                La campagna raggiungerà solo i contatti del comune selezionato.
                                                                             </p>
                                                                         </>
                                                                     )}
@@ -1920,13 +1871,11 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                             </div>
 
                                                             <p className="text-[11px] text-slate-500">
-                                                                Quando il filtro è attivo, i contatti{' '}
+                                                                Quando il filtro è attivo, la campagna WhatsApp raggiungerà{' '}
+                                                                <span className="font-semibold">solo</span> i contatti{' '}
                                                                 {callFilterMode === 'circle'
                                                                     ? 'all’interno del cerchio'
-                                                                    : 'nel comune selezionato'}{' '}
-                                                                che rispettano questi criteri verranno{' '}
-                                                                <span className="font-semibold">esclusi</span> dalla campagna
-                                                                WhatsApp.
+                                                                    : 'nel comune selezionato'}.
                                                             </p>
                                                         </div>
                                                     </div>

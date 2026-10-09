@@ -1648,8 +1648,8 @@ export class FileManagementService implements IFileManagementService {
         return await this.handleCorreggoPackUpload(file, nomeFile, meta, guidKitRuntime, tipoExport, tipoDiExportModel, req);
       }
       else {
-        await fs.promises.unlink(newFilePath);
-        throw wrapAppError(new Error("Tipo di file non supportato o tipo di export errato per il tipo di file"), {
+        // newFilePath non e' ancora stato scritto: il temporaneo di multer lo rimuove il finally
+        throw new BadRequestError({
           message: `Tipo di file '${fileExtension}' non supportato per il codice export '${codiceExport}'`,
         });
       }
@@ -1671,9 +1671,8 @@ export class FileManagementService implements IFileManagementService {
         details: { error }
       });
     } finally {
-      if (fs.existsSync(file.path)) {
-        await fs.promises.unlink(file.path)
-      }
+      // force: un temporaneo gia' spostato o rimosso non deve coprire l'errore vero
+      await fs.promises.rm(file.path, { force: true });
     }
   }
 

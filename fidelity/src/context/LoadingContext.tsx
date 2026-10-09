@@ -23,7 +23,7 @@ interface LoadingProviderProps {
 export const LoadingProvider: React.FC<LoadingProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<string | undefined>(undefined);
-  const LOADER_DELAY_MS = 50; // 0 = subito; 50‒100ms evita flicker su navigazioni istantanee
+  const LOADER_DELAY_MS = 200; // sotto i 200ms l'overlay lampeggerebbe sulle navigazioni rapide
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   const showLoader = useCallback((msg?: string) => {

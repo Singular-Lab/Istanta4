@@ -76,6 +76,28 @@ describe('TracciatoService: ordine dei momenti', () => {
   });
 });
 
+describe('TracciatoService.updateMomento', () => {
+  it('scrive nella transazione con il lock dei momenti della sua promo', async () => {
+    const { service, repository, query } = makeService([{ id: 'm0', ordine: 0 }]);
+
+    const aggiornato = await service.updateMomento('m0', { ordine: 5 });
+
+    expect(aggiornato?.ordine).toBe(5);
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('pg_advisory_xact_lock'),
+      expect.objectContaining({ replacements: { chiave: 'momenti:p1' }, transaction: t })
+    );
+    expect(repository.update).toHaveBeenCalledWith('m0', expect.objectContaining({ ordine: 5 }), t);
+  });
+
+  it('un momento inesistente restituisce null senza scrivere', async () => {
+    const { service, repository } = makeService([]);
+
+    await expect(service.updateMomento('mX', { nome: 'X' })).resolves.toBeNull();
+    expect(repository.update).not.toHaveBeenCalled();
+  });
+});
+
 describe('TracciatoService.deleteMomento', () => {
   it('un errore a meta propaga e le scritture fatte usano tutte la stessa transazione', async () => {
     const { service, repository } = makeService([

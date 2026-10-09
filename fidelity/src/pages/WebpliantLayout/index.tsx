@@ -382,6 +382,9 @@ const WebpliantLayout: FC<WebpliantLayoutProps> = () => {
   const { selectedRef, setSelectedRef, color, setColor } = useReferenzeData();
   const [wishlistUpdating, setWishlistUpdating] = useState<boolean>(false);
   const { userLocationChoice, setUserLocationChoice, lat, setLat, lon, setLon } = useGeolocationState();
+  // Feedback locale: i toast globali (z-50) finirebbero sotto aside/header del volantino
+  const [erroreGeolocalizzazione, setErroreGeolocalizzazione] = useState<string | null>(null);
+  const [linkCopiato, setLinkCopiato] = useState(false);
   const { data: allPuntiVendita } = useFetchAllPuntiVendita(idGDO || "");
   const { allPuntiVenditaFiltered, setAllPuntiVenditaFiltered, filtraPuntiVendita } = useGeolocationFilter(allPuntiVendita);
   const { referenza } = useGestioneReferenze();
@@ -533,27 +536,27 @@ const WebpliantLayout: FC<WebpliantLayoutProps> = () => {
   useEffect(() => {
     // Only ask if the menu is open and user hasn't made a choice yet
     if (isMenuVenditaOpen && userLocationChoice === null) {
-      // Ask the user if they want to use geolocation
-      const wantsGeolocation = window.confirm("Vuoi utilizzare la tua posizione per trovare i punti di vendita più vicini?");
+      // Niente confirm: il permesso alla posizione lo chiede già il browser
+      setUserLocationChoice(true);
+      localStorage.setItem('userLocationChoice', 'true');
 
-      // Save user's choice in state and localStorage
-      setUserLocationChoice(wantsGeolocation);
-      localStorage.setItem('userLocationChoice', wantsGeolocation.toString());
-
-      // If user accepts, try to get location
-      if (wantsGeolocation) {
-        if (navigator.geolocation) {
-          navigator.geolocation.getCurrentPosition(
-            filtraPuntiVendita,
-            (error) => {
-              console.error("Error getting location:", error);
-              alert("Unable to retrieve your location. Please check your location settings.");
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          filtraPuntiVendita,
+          (error) => {
+            console.error("Error getting location:", error);
+            if (error.code === error.PERMISSION_DENIED) {
+              // Rifiuto dal prompt del browser: non è un errore da mostrare, non richiedere più
+              setUserLocationChoice(false);
+              localStorage.setItem('userLocationChoice', 'false');
+            } else {
+              setErroreGeolocalizzazione("Impossibile rilevare la tua posizione: controlla le impostazioni di localizzazione oppure cerca per CAP.");
             }
-          );
-        } else {
-          console.warn("Geolocation is not supported by this browser.");
-          alert("Geolocation is not supported by your browser.");
-        }
+          }
+        );
+      } else {
+        console.warn("Geolocation is not supported by this browser.");
+        setErroreGeolocalizzazione("Il tuo browser non supporta la geolocalizzazione: cerca il punto vendita per CAP.");
       }
     }
     // If menu is open and user previously agreed to geolocation
@@ -676,7 +679,10 @@ const WebpliantLayout: FC<WebpliantLayoutProps> = () => {
         .catch((error) => console.error('Errore durante la condivisione:', error));
     } else if (navigator.clipboard) {
       navigator.clipboard.writeText(currentUrl)
-        .then(() => alert('Link copiato negli appunti!'))
+        .then(() => {
+          setLinkCopiato(true);
+          setTimeout(() => setLinkCopiato(false), 2500);
+        })
         .catch((err) => console.error('Errore durante la copia del link:', err));
     } else {
       console.warn('API Web Share e Clipboard non supportate');
@@ -1269,6 +1275,9 @@ const WebpliantLayout: FC<WebpliantLayoutProps> = () => {
           </div>
           <div style={{ height: "87%" }} className={clsx(stylesWP["wp-aside-content"], stylesWP["wp-cart-drawer-items-list"])}>
             <div className={clsx(stylesWP["wp-cart-drawer-item"], stylesWP["wp-d-flex"], stylesWP["wp-flex-column"], "mb-4")}>
+              {erroreGeolocalizzazione && (
+                <p role="alert" className="mb-2 text-sm text-red-600">{erroreGeolocalizzazione}</p>
+              )}
               <input
                 id="capSearch"
                 type="text"
@@ -1414,7 +1423,7 @@ const WebpliantLayout: FC<WebpliantLayoutProps> = () => {
                   }}
                   className={clsx(stylesWP["wp-btn"], stylesWP["wp-btn-sm"], stylesWP["wp-btn-outline-primary"])}
                 >
-                  Condividi Wishlist
+                  {linkCopiato ? "Link copiato negli appunti!" : "Condividi Wishlist"}
                 </button>
               </div>
               <div className={clsx(stylesWP["wp-aside-footer"], "p-4")}>

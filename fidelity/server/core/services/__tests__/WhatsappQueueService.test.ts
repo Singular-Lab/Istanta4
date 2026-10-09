@@ -16,8 +16,21 @@ import { GDOWhatsappCampagne } from '../../models/whatsapp/gdo_whatsapp_campagne
 import { GDOWhatsappQueueJob } from '../../models/whatsapp/gdo_whatsapp_message_queue';
 import { GDOWhatsappPreset } from '../../models/whatsapp/gdo_whatsapp_preset';
 import { GDOWhatsappTemplate } from '../../models/whatsapp/gdo_whatsapp_template';
-import { WhatsAppService } from '../WhatsAppService';
+import { normalizzaTelefono, WhatsAppService } from '../WhatsAppService';
 import { WhatsappQueueService } from '../WhatsappQueueService';
+
+describe('normalizzaTelefono', () => {
+  it('un cellulare italiano con e senza prefisso internazionale e\' lo stesso numero', () => {
+    const chiavi = ['3331234567', '+39 333 1234567', '0039 3331234567', '393331234567'].map(normalizzaTelefono);
+    expect(new Set(chiavi)).toEqual(new Set(['393331234567']));
+  });
+
+  it('un numero estero resta con le sole cifre', () => {
+    expect(normalizzaTelefono('+44 7700 900123')).toBe('447700900123');
+    expect(normalizzaTelefono('0044 7700 900123')).toBe('447700900123');
+    expect(normalizzaTelefono(null)).toBe('');
+  });
+});
 
 describe('WhatsappQueueService: annullamento e riprova', () => {
   it('annullare una campagna porta i messaggi in coda a CANCELLED', async () => {
@@ -96,6 +109,20 @@ describe('WhatsAppService.iniziaInvioCampagnaWhatsApp: creazione dei job', () =>
     expect(coda.add).toHaveBeenCalledWith('process-bulk', { bulk_id: risultato.bulkId }, expect.anything());
   });
 
+  it('lo stesso cellulare con e senza +39 riceve un solo messaggio, al numero come registrato', async () => {
+    vi.spyOn(sequelize, 'query').mockResolvedValue([
+      { id_utenti: 'u1', nome_utenti: 'Anna', telefono_utenti: '333 1234567' },
+      { id_utenti: 'u2', nome_utenti: 'Luca', telefono_utenti: '+39 333 1234567' },
+      { id_utenti: 'u3', nome_utenti: 'Sara', telefono_utenti: '0039 3331234567' },
+    ] as any);
+
+    const risultato = await new WhatsAppService({} as any).iniziaInvioCampagnaWhatsApp('gdo-A', 't1', 'Promo', null, {});
+
+    expect(risultato.totalJobs).toBe(1);
+    const [jobs] = bulkCreate.mock.calls[0] as any[];
+    expect(jobs.map((j: any) => j.to_whatsapp_queue_job)).toEqual(['333 1234567']);
+  });
+
   it.each([
     ['di un\'altra GDO', template({ id_gdo_gdowhatsapptemplate: 'gdo-B' }), /non appartiene alla GDO/],
     ['non approvato da Meta', template({ stato_meta_gdowhatsapptemplate: STATO_GDO_WHATSAPP_TEMPLATE.PENDING }), /non è approvato/],
@@ -124,6 +151,8 @@ describe('WhatsAppService.iniziaInvioCampagnaWhatsApp: creazione dei job', () =>
     const [conteggio, , invio] = query.mock.calls as any[];
     const where = (sql: string) => sql.slice(sql.indexOf('WHERE'));
     expect(conteggio[0]).toContain('COUNT(DISTINCT');
+    // L'anteprima conta con la stessa regola di normalizzaTelefono: cellulare senza prefisso -> "39" davanti
+    expect(conteggio[0]).toMatch(/COUNT\(DISTINCT \(CASE WHEN .*'\^00'.* ~ '\^3\[0-9\]\{9\}\$' THEN '39' \|\|/);
     expect(where(invio[0])).toBe(where(conteggio[0]));
     expect(invio[1].replacements).toEqual(conteggio[1].replacements);
     expect(conteggio[1].replacements.sesso).toBeNull();

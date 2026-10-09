@@ -67,9 +67,14 @@ type FiltroArea = {
     polygon?: [number, number][][];
 };
 
-// Un numero riceve un solo messaggio: la chiave sono le sole cifre, stessa regola in SQL (anteprima) e in JS (invio)
-const TELEFONO_NORMALIZZATO_SQL = `regexp_replace(u.telefono_utenti, '[^0-9]', '', 'g')`;
-const normalizzaTelefono = (telefono: unknown) => String(telefono ?? '').replace(/[^0-9]/g, '');
+// Un numero riceve un solo messaggio, stessa regola in SQL (anteprima) e in JS (invio): sole cifre senza "00" iniziale,
+// e un cellulare italiano senza prefisso (10 cifre che iniziano con 3) prende "39", cosi' con e senza prefisso e' lo stesso numero
+const CIFRE_TELEFONO_SQL = `regexp_replace(regexp_replace(u.telefono_utenti, '[^0-9]', '', 'g'), '^00', '')`;
+const TELEFONO_NORMALIZZATO_SQL = `(CASE WHEN ${CIFRE_TELEFONO_SQL} ~ '^3[0-9]{9}$' THEN '39' || ${CIFRE_TELEFONO_SQL} ELSE ${CIFRE_TELEFONO_SQL} END)`;
+export const normalizzaTelefono = (telefono: unknown) => {
+    const cifre = String(telefono ?? '').replace(/[^0-9]/g, '').replace(/^00/, '');
+    return /^3[0-9]{9}$/.test(cifre) ? `39${cifre}` : cifre;
+};
 
 export class WhatsAppService implements IWhatsAppService {
     private userService: IUserService;

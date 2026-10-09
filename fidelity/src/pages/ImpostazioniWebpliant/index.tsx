@@ -73,20 +73,16 @@ function Main() {
     mutationFn: async (data: {
       nomeWorkspace: string, idArea: string, idCanale: string, idPuntoVendita?: string, webpliant: any[], sitemap: any[]
     }) => {
-      try {
-        // Mappa idPuntoVendita a idPV per il backend MongoDB
-        const payload = {
-          ...data,
-          idPV: data.idPuntoVendita || undefined,
-          idPuntoVendita: undefined
-        };
-        const result = await ServerCall.put("/aggiungiWorkspaceWebPliant", payload);
-        revalidator.revalidate();
-        return result;
-      } catch (error) {
-        console.error("Errore durante la creazione del workspace:", error);
-        return null;
-      }
+      // Nessun catch: l'errore deve arrivare a onError, non diventare un "creato con successo"
+      // Mappa idPuntoVendita a idPV per il backend MongoDB
+      const payload = {
+        ...data,
+        idPV: data.idPuntoVendita || undefined,
+        idPuntoVendita: undefined
+      };
+      const result = await ServerCall.put("/aggiungiWorkspaceWebPliant", payload);
+      revalidator.revalidate();
+      return result;
     },
     onSettled: () => {
       // Ricarica i dati
@@ -128,14 +124,9 @@ function Main() {
     mutationFn: async (data: {
       idWorkspace: string
     }) => {
-      try {
-        const result = await ServerCall.delete(`/eliminaWorkspaceWebPliant?id=${data.idWorkspace}`);
-        revalidator.revalidate();
-        return result;
-      } catch (error) {
-        console.error("Errore durante l'eliminazione del workspace:", error);
-        return null;
-      }
+      const result = await ServerCall.delete(`/eliminaWorkspaceWebPliant?id=${data.idWorkspace}`);
+      revalidator.revalidate();
+      return result;
     },
     onSettled: () => {
       // Ricarica i dati
@@ -239,7 +230,7 @@ function Main() {
                 <Button className='mx-1' onClick={() => setShowDialog(false)} variant="secondary">
                   Annulla
                 </Button>
-                <Button className='mx-1' type="submit" variant="success">
+                <Button className='mx-1' type="submit" variant="success" loading={mutationCreazioneWorkspace.isPending} disabled={mutationCreazioneWorkspace.isPending}>
                   Crea
                 </Button>
               </Dialog.Footer>
@@ -297,7 +288,7 @@ function Main() {
             <Button className='mx-1' onClick={() => setShowDialogClonaWorkspace(false)} variant="secondary">
               Annulla
             </Button>
-            <Button className='mx-1' variant="success" onClick={() => {
+            <Button className='mx-1' variant="success" loading={mutationCreazioneWorkspace.isPending} disabled={mutationCreazioneWorkspace.isPending} onClick={() => {
               mutationCreazioneWorkspace.mutate({
                 nomeWorkspace,
                 idArea: idAreaSelezionata,
@@ -305,8 +296,10 @@ function Main() {
                 idPuntoVendita: idPuntoVenditaSelezionato,
                 webpliant: workspaces?.find((workspace) => workspace.idWorkspace === workspaceDaClonare)?.webpliant || [],
                 sitemap: workspaces?.find((workspace) => workspace.idWorkspace === workspaceDaClonare)?.sitemap || []
+              }, {
+                // Il dialog resta aperto (pulsante in caricamento) fino alla risposta
+                onSettled: () => setShowDialogClonaWorkspace(false),
               });
-              setShowDialogClonaWorkspace(false);
             }}>
               Clona
             </Button>

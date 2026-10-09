@@ -2,6 +2,7 @@ import React, { useState, useEffect, Fragment } from 'react';
 import { Listbox, Transition, Disclosure } from '@headlessui/react';
 import { ChevronDown, Trash2, Plus, SlidersHorizontal, Tag, Filter, Code, Eye, Check, Paintbrush, List, TextSelect } from 'lucide-react';
 import Button from '@/components/Base/Button';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import { FormInput, FormLabel } from '@/components/Base/Form';
 import Lucide from '@/components/Base/Lucide';
 import BoxRef from '@/pages/WebPliant/BoxRef';
@@ -484,6 +485,7 @@ const EditorStiliReferenza: React.FC<{
   const [styles, setStyles] = useState<StileBoxReferenza[]>(config.webpliant.stili || []);
   const [activeStyle, setActiveStyle] = useState<StileBoxReferenza | null>(null);
   const [demoRef] = useState<ReferenzeIstanta>(/* Carica dati dimostrativi */);
+  const [confermaElimina, setConfermaElimina] = useState(false);
 
   useEffect(() => {
     if (activeStyle) {
@@ -502,9 +504,9 @@ const EditorStiliReferenza: React.FC<{
   };
 
   const handleDeleteStyle = (id?: number) => {
-    if (!confirm('Eliminare questo stile?')) return;
     setStyles(styles.filter(s => s.id !== id));
     if (activeStyle?.id === id) setActiveStyle(null);
+    setConfermaElimina(false);
   };
 
   return (
@@ -572,13 +574,21 @@ const EditorStiliReferenza: React.FC<{
               {activeStyle && (
                 <Button
                   variant="outline-danger"
-                  onClick={() => handleDeleteStyle(activeStyle.id)}
+                  onClick={() => setConfermaElimina(true)}
                   icon={<Trash2 />}
                   className="w-full"
                 >
                   Elimina Stile
                 </Button>
               )}
+              <ConfirmDialog
+                open={confermaElimina && !!activeStyle}
+                title="Eliminare lo stile?"
+                description={`Lo stile "${activeStyle?.nome_stile ?? ""}" e le sue condizioni verranno rimossi dalla configurazione del volantino.`}
+                confirmLabel="Elimina stile"
+                onClose={() => setConfermaElimina(false)}
+                onConfirm={() => handleDeleteStyle(activeStyle?.id)}
+              />
             </div>
           </div>
         </div>

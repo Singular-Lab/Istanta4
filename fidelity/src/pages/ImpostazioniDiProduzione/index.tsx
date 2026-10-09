@@ -98,7 +98,7 @@ function Main() {
   const [showDialogModificaTipiExport, setShowDialogModificaTipiExport] = useState(false);
   const [tipiExportEdit, setTipiExportEdit] = useState<TipiExportEditState | null>(null);
   // Form per modifica tipi di export
-  const { register: registerEdit, handleSubmit: handleSubmitEdit, formState: { errors: errorsEdit }, reset: resetEdit, control: controlEdit } = useForm<TipiDiExportAttributes>({
+  const { register: registerEdit, handleSubmit: handleSubmitEdit, formState: { errors: errorsEdit, isSubmitting: isSubmittingEdit }, reset: resetEdit, control: controlEdit } = useForm<TipiDiExportAttributes>({
     resolver: yupResolver(schematipidiexport),
   });
 
@@ -130,8 +130,8 @@ function Main() {
       id_tipiexport: tipiExportEdit.id, // Aggiungi l'ID per la modifica
       is_modifica: true
     };
-    // Chiamata API update con ID
-    ServerCall.put<TipiDiExportAttributes & { id?: string }>(`/creaTipoExport`, processedData)
+    // Chiamata API update con ID (restituita: isSubmitting resta attivo fino alla risposta)
+    return ServerCall.put<TipiDiExportAttributes & { id?: string }>(`/creaTipoExport`, processedData)
       .then(() => {
         setShowDialogModificaTipiExport(false);
         setTipiExportEdit(null);
@@ -522,7 +522,7 @@ function Main() {
               <Dialog.Footer>
                 <div className="flex flex-row justify-end gap-x-3">
                   <Button variant="secondary" onClick={handleCloseDialogCreazioneFormati}>Annulla</Button>
-                  <Button variant="primary" type="submit">Crea</Button>
+                  <Button variant="primary" type="submit" loading={creazioneFormati.isPending} disabled={creazioneFormati.isPending}>Crea</Button>
                 </div>
               </Dialog.Footer>
             </form>
@@ -585,7 +585,7 @@ function Main() {
               <Dialog.Footer>
                 <div className="flex flex-row justify-end gap-x-3">
                   <Button variant="secondary" onClick={handleCloseDialogCreazioneTipiExport}>Annulla</Button>
-                  <Button variant="primary" type="submit">Crea</Button>
+                  <Button variant="primary" type="submit" loading={creazioneTipiDiExport.isPending} disabled={creazioneTipiDiExport.isPending}>Crea</Button>
                 </div>
               </Dialog.Footer>
             </form>
@@ -831,7 +831,7 @@ function Main() {
                   <Dialog.Footer>
                     <div className="flex flex-row justify-end gap-x-3">
                       <Button variant="secondary" onClick={handleCloseDialogModificaTipiExport}>Annulla</Button>
-                      <Button variant="primary" type="submit">Salva</Button>
+                      <Button variant="primary" type="submit" loading={isSubmittingEdit} disabled={isSubmittingEdit}>Salva</Button>
                     </div>
                   </Dialog.Footer>
                 </form>

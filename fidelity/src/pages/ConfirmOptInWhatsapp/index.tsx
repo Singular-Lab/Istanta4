@@ -1,5 +1,6 @@
 import Button from "@/components/Base/Button";
 import { FormInput, FormLabel } from "@/components/Base/Form";
+import { useNotification } from "@/context/NotificationContext";
 import clsx from "clsx";
 import { useForm } from "react-hook-form";
 
@@ -12,9 +13,11 @@ const ConfirmOptInWhatsapp: React.FC<{ showcaseActive?: boolean; topBarActive?: 
     topBarActive = false,
 }) => {
     const { register, handleSubmit, formState } = useForm<FormValues>();
+    const { showNotification } = useNotification();
 
-    const onSubmit = (data: FormValues) => {
-        alert(`Numero confermato: ${data.telefono}`);
+    // Nessun endpoint di conferma opt-in lato server: il numero non viene salvato
+    const onSubmit = () => {
+        showNotification("La conferma del numero non è ancora disponibile: riprova più tardi.", { variant: "warning" });
     };
 
     return (
@@ -45,7 +48,7 @@ const ConfirmOptInWhatsapp: React.FC<{ showcaseActive?: boolean; topBarActive?: 
                     <div className="max-w-md mx-auto p-6 bg-white rounded shadow w-full z-50">
                         <h1 className="text-xl font-bold mb-4">Conferma Opt-In WhatsApp</h1>
                         <p className="mb-6 text-slate-600">
-                            Grazie per aver confermato la tua iscrizione a WhatsApp!
+                            Inserisci il tuo numero per confermare l'iscrizione ai messaggi WhatsApp.
                         </p>
                         <form onSubmit={handleSubmit(onSubmit)}>
                             <FormLabel htmlFor="telefono">Numero di telefono</FormLabel>

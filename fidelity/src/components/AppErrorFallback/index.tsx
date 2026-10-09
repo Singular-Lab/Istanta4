@@ -5,6 +5,7 @@ import lottieAnimation from "@/assets/animations/animazione_loading_session.lott
 import Button from "@/components/Base/Button";
 import Lucide from "@/components/Base/Lucide";
 import { lazy, Suspense } from "react";
+import { isRouteErrorResponse, useRouteError } from "react-router-dom";
 
 const DotLottieReact = lazy(() =>
   import("@lottiefiles/dotlottie-react").then((m) => ({ default: m.DotLottieReact }))
@@ -13,11 +14,12 @@ const DotLottieReact = lazy(() =>
 
 interface AppErrorFallbackProps {
     error?: Error;
+    message?: string;
 }
 
-const AppErrorFallback = ({ error }: AppErrorFallbackProps) => {
+const AppErrorFallback = ({ error, message: messaggio }: AppErrorFallbackProps) => {
     const message =
-        error?.message || "Si è verificato un errore imprevisto nell'applicazione.";
+        messaggio || error?.message || "Si è verificato un errore imprevisto nell'applicazione.";
 
     return (
         <div className="fixed inset-0 flex items-center justify-center bg-[#03045e] bg-opacity-90 backdrop-blur-md z-[100000] transition-opacity duration-300">
@@ -58,6 +60,22 @@ const AppErrorFallback = ({ error }: AppErrorFallbackProps) => {
             </div>
         </div>
     );
+};
+
+/**
+ * errorElement delle route di primo livello. A differenza di ErrorPage non chiama /menu/me:
+ * nelle pagine pubbliche (es. webpliant) il 401 porterebbe l'utente a /login.
+ */
+export const RouteErrorFallback = () => {
+    const error = useRouteError();
+    if (isRouteErrorResponse(error)) {
+        return (
+            <AppErrorFallback
+                message={error.status === 404 ? "Pagina non trovata." : "Impossibile caricare la pagina. Riprova."}
+            />
+        );
+    }
+    return <AppErrorFallback error={error instanceof Error ? error : undefined} />;
 };
 
 export default AppErrorFallback;

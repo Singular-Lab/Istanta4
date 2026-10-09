@@ -260,7 +260,7 @@ function Main() {
                 </Tab.Panels>
               </Tab.Group>
               <div className="flex justify-end mt-6">
-                <Button type="submit" variant="soft-success">
+                <Button type="submit" variant="soft-success" loading={mutationCreazioneDeclinazioni.isPending} disabled={mutationCreazioneDeclinazioni.isPending}>
                   <Lucide icon="Save" className="w-5 h-5 mr-1" />
                   Salva Declinazioni
                 </Button>

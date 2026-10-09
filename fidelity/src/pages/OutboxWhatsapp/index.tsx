@@ -14,7 +14,9 @@ import LoadingIcon from '../../components/Base/LoadingIcon';
 import Lucide from '../../components/Base/Lucide';
 import PageHeader from '../../components/Base/PageHeader';
 import Table from '../../components/Base/Table';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import EmptyState from '../../components/EmptyState';
+import { useNotification } from '../../context/NotificationContext';
 import withSessionCheck from '../../components/SessionChecker';
 import { useSocket } from '../../hooks/useSocket';
 
@@ -487,6 +489,10 @@ const OutboxWhatsapp: React.FC = () => {
     const [campaigns, setCampaigns] = useState<BulkStatus[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedBulkId, setSelectedBulkId] = useState<string | null>(null);
+    const { showNotification } = useNotification();
+    // Campagna in attesa di conferma per annullamento o reinvio
+    const [azioneCampagna, setAzioneCampagna] = useState<{ tipo: 'cancel' | 'retry'; bulk: BulkStatus } | null>(null);
+    const [azioneInCorso, setAzioneInCorso] = useState(false);
 
     // Fetch initial campaigns
     const fetchCampaigns = async () => {
@@ -568,8 +574,6 @@ const OutboxWhatsapp: React.FC = () => {
     }, [socket]);
 
     const handleCancel = async (bulkId: string) => {
-        if (!confirm('Sei sicuro di voler annullare questa campagna?')) return;
-
         try {
             const response: any = await ServerCall.post(
                 `/whatsapp/campaigns/${bulkId}/cancel`,
@@ -581,13 +585,11 @@ const OutboxWhatsapp: React.FC = () => {
             }
         } catch (error) {
             console.error('Errore annullamento campagna:', error);
-            alert("Errore durante l'annullamento della campagna");
+            showNotification("Errore durante l'annullamento della campagna", { variant: 'error' });
         }
     };
 
     const handleRetry = async (bulkId: string) => {
-        if (!confirm('Vuoi riprovare ad inviare i messaggi falliti?')) return;
-
         try {
             const response: any = await ServerCall.post(
                 `/whatsapp/campaigns/${bulkId}/retry`,
@@ -598,8 +600,17 @@ const OutboxWhatsapp: React.FC = () => {
             }
         } catch (error) {
             console.error('Errore retry campagna:', error);
-            alert('Errore durante il retry della campagna');
+            showNotification('Errore durante il reinvio dei messaggi falliti', { variant: 'error' });
         }
+    };
+
+    const eseguiAzioneCampagna = async () => {
+        if (!azioneCampagna) return;
+        setAzioneInCorso(true);
+        const { tipo, bulk } = azioneCampagna;
+        await (tipo === 'cancel' ? handleCancel(bulk.bulkId) : handleRetry(bulk.bulkId));
+        setAzioneInCorso(false);
+        setAzioneCampagna(null);
     };
 
     return (
@@ -695,8 +706,8 @@ const OutboxWhatsapp: React.FC = () => {
                                     key={campaign.bulkId}
                                     bulk={campaign}
                                     onViewDetails={() => setSelectedBulkId(campaign.bulkId)}
-                                    onCancel={() => handleCancel(campaign.bulkId)}
-                                    onRetry={() => handleRetry(campaign.bulkId)}
+                                    onCancel={() => setAzioneCampagna({ tipo: 'cancel', bulk: campaign })}
+                                    onRetry={() => setAzioneCampagna({ tipo: 'retry', bulk: campaign })}
                                 />
                             ))}
                         </AnimatePresence>
@@ -709,6 +720,20 @@ const OutboxWhatsapp: React.FC = () => {
                 isOpen={selectedBulkId !== null}
                 onClose={() => setSelectedBulkId(null)}
                 bulkId={selectedBulkId || ''}
+            />
+
+            <ConfirmDialog
+                open={!!azioneCampagna}
+                title={azioneCampagna?.tipo === 'retry' ? 'Reinviare i messaggi falliti?' : 'Annullare la campagna?'}
+                subtitle={azioneCampagna?.tipo === 'retry' ? 'I messaggi tornano in coda' : undefined}
+                description={azioneCampagna?.tipo === 'retry'
+                    ? `I ${azioneCampagna.bulk.failed} messaggi falliti della campagna "${azioneCampagna.bulk.titolo || azioneCampagna.bulk.bulkId}" verranno rimessi in coda per un nuovo invio.`
+                    : `I ${azioneCampagna?.bulk.pending ?? 0} messaggi ancora in coda della campagna "${azioneCampagna?.bulk.titolo || azioneCampagna?.bulk.bulkId || ''}" non verranno inviati. I messaggi già inviati non vengono toccati.`}
+                confirmLabel={azioneCampagna?.tipo === 'retry' ? 'Reinvia' : 'Annulla campagna'}
+                confirmVariant={azioneCampagna?.tipo === 'retry' ? 'primary' : 'danger'}
+                loading={azioneInCorso}
+                onClose={() => !azioneInCorso && setAzioneCampagna(null)}
+                onConfirm={eseguiAzioneCampagna}
             />
         </div>
     );

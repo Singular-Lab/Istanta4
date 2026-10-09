@@ -339,6 +339,8 @@ export class WhatsappQueueService {
                 {
                     status_whatsapp_queue_job: GDOWhatsappQueueJobStatus.CANCELLED,
                     last_error_whatsapp_queue_job: 'Campagna annullata dall\'utente',
+                    // timestamps: false. Il worker confronta l'annullamento con la presa in carico dei job in invio
+                    updatedat: new Date(),
                 },
                 {
                     where: {

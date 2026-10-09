@@ -4,7 +4,7 @@ import { Dialog } from '@/components/Base/Headless';
 import LoadingIcon from '@/components/Base/LoadingIcon';
 import Lucide from '@/components/Base/Lucide';
 import EmptyState from '@/components/EmptyState';
-import { LoadingState } from '@/components/MultiStepLoader';
+import { useNotification } from '@/context/NotificationContext';
 import { useMutation } from '@tanstack/react-query';
 import axios from 'axios';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -383,13 +383,7 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
   const [showDialogInvioFTP, setShowDialogInvioFTP] = useState(false);
   const navigate = useNavigate();
   const r = useRevalidator();
-  const [oggettiMultiStep] = useState<LoadingState[]>([
-    { text: 'In attesa per il download' },
-    { text: 'Download in corso' },
-    { text: 'Download completato' },
-  ]);
-
-  const [currentStep, setCurrentStep] = useState<number>(0);
+  const { showNotification } = useNotification();
   const [statoSbagliato, setStatoSbagliato] = useState<boolean>(false);
 
   // State per la selezione dei kit
@@ -419,8 +413,8 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
   // Connessioni socket per i due backend
   // Aggiorna gli URL con quelli effettivi dei tuoi server
 
-  const [socketExpress, setSocketExpress] = useState<typeof Socket>();
-  const [socketNest, setSocketNest] = useState<typeof Socket>();
+  const [socketExpress, setSocketExpress] = useState<Socket>();
+  const [socketNest, setSocketNest] = useState<Socket>();
 
   // Grouping state
   const [groupingStatus, setGroupingStatus] = useState<'idle' | 'running' | 'completed' | 'failed'>('idle');
@@ -863,35 +857,16 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
 
   const selectedKitsCount = Object.values(selectedKits).filter(Boolean).length;
 
-  const handleDownloadSelectedZips = async () => {
-    const selectedKitIds = Object.entries(selectedKits)
-      .filter(([_, isSelected]) => isSelected)
-      .map(([kitId]) => kitId);
-    if (selectedKitIds.length === 0) return;
+  const handleDownloadZip = async (idKit: string) => {
     setIsDownloading(true);
     try {
-      if (selectedKitIds.length === 1) {
-        await handleDownloadZip(selectedKitIds[0]);
-        return;
-      }
-      alert("Funzionalità di download multiplo in sviluppo");
-      setIsDownloading(false);
-    } catch (error) {
-      console.error('Errore durante il download dei file ZIP:', error);
-      setIsDownloading(false);
-    }
-  };
-
-  const handleDownloadZip = async (idKit: string) => {
-    try {
       const url = ServerCall.getUrl();
-      setCurrentStep(1);
       const response = await axios.get(`${url}/getFileZipDownload?id=${idKit}`, {
         responseType: 'arraybuffer',
         withCredentials: true,
       });
       if (response.status !== 200) {
-        console.error('Errore durante il download del file ZIP');
+        showNotification('Download del file ZIP non riuscito.', { variant: 'error' });
         return;
       }
       const blob = new Blob([response.data]);
@@ -900,15 +875,16 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
       link.href = blobUrl;
       link.download = 'files.zip';
       document.body.appendChild(link);
-      setCurrentStep(2);
       link.click();
-      setIsDownloading(false);
       setTimeout(() => {
         document.body.removeChild(link);
         window.URL.revokeObjectURL(blobUrl);
       }, 1000);
     } catch (error) {
       console.error('Errore durante il download del file ZIP:', error);
+      showNotification('Download del file ZIP non riuscito.', { variant: 'error' });
+    } finally {
+      setIsDownloading(false);
     }
   };
   // Mutation per l'invio dei file alla tipografia (chiamata a /iniziaFTPPopOlimpo)
@@ -929,11 +905,19 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
     },
     onError: error => {
       console.error('Errore durante l\'invio dei file:', error);
-      setFtpErrorMessage("Errore durante l'invio dei file alla tipografia.");
+      // Il server spiega il rifiuto, es. "Invio già in corso per questo ordine"
+      const messaggio = error?.message || "Errore durante l'invio dei file alla tipografia.";
+      setFtpErrorMessage(messaggio);
+      showNotification(messaggio, { variant: 'error' });
       setIsTransferring(false);
     },
     onSuccess: (data: any) => {
       const { socketId } = data;
+      // A fine invio si smette di ascoltare; i socket restano aperti per gli invii successivi
+      const smettiDiAscoltare = () => ['progress', 'error', 'complete'].forEach(evento => {
+        socketExpress?.off(`${socketId}_${evento}`);
+        socketNest?.off(`${socketId}_${evento}`);
+      });
 
       // Ascolta gli eventi dal backend Express
       socketExpress?.on(`${socketId}_progress`, (raw: unknown) => {
@@ -988,15 +972,25 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
       socketExpress?.on(`${socketId}_error`, (raw: unknown) => {
         const decoded = decodeSocketPayload(raw);
         const err = isObjectRecord(decoded) ? decoded : {};
-        setFtpErrorMessage(toText(err.error) || 'Errore durante il trasferimento');
+        const messaggio = toText(err.error) || 'Errore durante il trasferimento';
+        setFtpErrorMessage(messaggio);
         const kit = toText(err.kit);
-        if (kit) setFtpTransferDetail(prev => ({ ...prev, kit }));
+        // Errore di un singolo kit: il server prosegue con gli altri e chiude con _complete
+        if (kit) {
+          setFtpTransferDetail(prev => ({ ...prev, kit }));
+          return;
+        }
+        // Errore generale: l'invio è terminato
         setIsTransferring(false);
+        showNotification(messaggio, { variant: 'error' });
+        smettiDiAscoltare();
       });
       socketExpress?.on(`${socketId}_complete`, (raw: unknown) => {
         const decoded = decodeSocketPayload(raw);
         const msg = isObjectRecord(decoded) ? decoded : {};
         const message = toText(msg.message);
+        // esito false: alcuni kit non inviati, elencati nel messaggio del server
+        const esito = msg.esito !== false;
         const totalFiles = toFiniteNumber(msg.totalFiles);
         const totalKit = toFiniteNumber(msg.totalKit);
         if (totalKit !== null && totalKit > 0) {
@@ -1012,12 +1006,15 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
           totalKits: totalKit ?? prev.totalKits,
           message: message || '',
         }));
-        setTransferComplete(true);
+        if (esito) {
+          setTransferComplete(true);
+        } else {
+          setFtpErrorMessage(message || 'Alcuni kit non sono stati inviati');
+        }
         setIsTransferring(false);
-        setTimeout(() => {
-          socketExpress.disconnect();
-          r.revalidate();
-        }, 500);
+        showNotification(message || 'Processo completato', { variant: esito ? 'success' : 'warning' });
+        smettiDiAscoltare();
+        setTimeout(() => r.revalidate(), 500);
       });
       // Ascolta gli eventi dal backend NestJS
       socketNest?.on(`${socketId}_progress`, (raw: unknown) => {
@@ -1067,37 +1064,13 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
           message: message || prev.message,
         }));
       });
+      // Olimpo segnala errori di singoli file/kit; l'esito finale arriva dal backend Express con _complete
       socketNest?.on(`${socketId}_error`, (raw: unknown) => {
         const decoded = decodeSocketPayload(raw);
         const err = isObjectRecord(decoded) ? decoded : {};
-        setFtpErrorMessage(toText(err.error) || 'Errore durante il trasferimento');
-        setIsTransferring(false);
-      });
-      socketNest?.on(`${socketId}_complete`, (raw: unknown) => {
-        const decoded = decodeSocketPayload(raw);
-        const msg = isObjectRecord(decoded) ? decoded : {};
-        const message = toText(msg.message);
-        const totalFiles = toFiniteNumber(msg.totalFiles);
-        const totalKit = toFiniteNumber(msg.totalKit);
-        if (totalKit !== null && totalKit > 0) {
-          ftpProgressTrackerRef.current = { activeKitIndex: totalKit, totalKits: totalKit };
-        }
-        setProgress(1);
-        setGlobalProgress(1);
-        setFtpProgressMessage(message || 'Processo completato');
-        setFtpTransferDetail(prev => ({
-          ...prev,
-          fase: 'completato',
-          totalFiles: totalFiles ?? prev.totalFiles,
-          totalKits: totalKit ?? prev.totalKits,
-          message: message || '',
-        }));
-        setTransferComplete(true);
-        setIsTransferring(false);
-        socketNest.disconnect();
-        setTimeout(() => {
-          r.revalidate();
-        }, 2000);
+        const file = toText(err.file);
+        const messaggio = toText(err.error) || 'Errore durante il trasferimento';
+        setFtpErrorMessage(file ? `${file}: ${messaggio}` : messaggio);
       });
     },
   });
@@ -1428,7 +1401,7 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
                         <Lucide icon="ExternalLink" className="w-4 h-4 mr-2 stroke-[1.5]" />
                         Mostra tutti i file ({kit.files.length})
                       </Button>
-                      <Button disabled={kit.files?.length === 0} onClick={() => { handleDownloadZip(kit.guidId); setIsDownloading(true); }} variant="outline-primary" className="text-sm">
+                      <Button disabled={kit.files?.length === 0 || isDownloading} onClick={() => handleDownloadZip(kit.guidId)} variant="outline-primary" className="text-sm">
                         <Lucide icon="Download" className="w-4 h-4 mr-2 stroke-[1.5]" />
                         Scarica ZIP
                       </Button>
