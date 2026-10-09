@@ -724,6 +724,8 @@ const pannelli = {
                             else {
                                 diffRow.textContent = diff?.difference || "-";
                             }
+                            //I20-1071: sotto una differenza di contenuto, il valore nel box e quello del dato.
+                            this.aggiungiValoriDifferenzaNelReport(diffRow, diff);
                             //La chiave della segnalazione resta attaccata alla riga: serve per
                             //far vedere quale se ne sta andando dopo un ricontrollo.
                             diffRow.dataset.segnalazioneKey = this._getSegnalazioneKey(diff);
@@ -1604,6 +1606,36 @@ const pannelli = {
     //I20-981: il riquadro che raccoglie le differenze sui campi osservati dentro una riga.
     //Sta staccato dalle segnalazioni di integrita' e porta il colore dei confronti, cosi' si
     //capisce a colpo d'occhio che parla di un'altra cosa.
+    /// I20-1071: sotto una differenza di contenuto o di paragrafo del box, il valore nel box e
+    /// quello del dato, leggibili; un valore lungo e' abbreviato con i puntini e l'intero sta nel
+    /// suggerimento. Stessa resa della finestra delle differenze della scheda ref.
+    aggiungiValoriDifferenzaNelReport(riga, diff) {
+        const valori = confronti.valoriDifferenza(diff);
+        if (valori == null) {
+            return;
+        }
+        [["nel box", valori.locale], ["sul server", valori.server]].forEach(coppia => {
+            const r = document.createElement("div");
+            r.className = "valoreDifferenza";
+            r.style.paddingLeft = "8px";
+            r.style.fontSize = "11px";
+            r.style.whiteSpace = "normal";
+            r.style.overflowWrap = "anywhere";
+            r.style.minWidth = "0";
+            const etichetta = document.createElement("span");
+            etichetta.textContent = coppia[0] + ": ";
+            etichetta.style.opacity = "0.7";
+            const valore = document.createElement("span");
+            valore.textContent = coppia[1].breve === "" ? "(vuoto)" : coppia[1].breve;
+            if (coppia[1].abbreviato) {
+                Tooltip.impostaTooltip(valore, coppia[1].intero);
+            }
+            r.appendChild(etichetta);
+            r.appendChild(valore);
+            riga.appendChild(r);
+        });
+    },
+
     _crRiquadroConfronto(differenze) {
         const riquadro = document.createElement("div");
         riquadro.style.marginTop = "6px";

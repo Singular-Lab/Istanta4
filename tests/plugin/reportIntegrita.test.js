@@ -20,7 +20,9 @@ const MOTORE = ["confrontoBox", "confrontoBoxCompiledFieldPreAnalisi", "mappatur
     //I20-1068: la decisione sul logo con l'immagine cambiata, membro puro del motore.
     "fotoExtraConImmagineCambiata",
     //I20-1070: il tipo di elemento di una foto extra del dato, per le decisioni della scheda.
-    "tipoElementoExtra"
+    "tipoElementoExtra",
+    //I20-1071: i valori leggibili di una differenza di contenuto, per la scheda e per il report.
+    "testoLeggibile", "valoriDifferenza"
 ];
 const DA_INDEXNEW = ["avviaReportIntegrita", "applicaConfronto", "preAnalisiBoxMappato",
     "nomiPagineDelDocumento", "boxDellElementoMappa"];
@@ -94,7 +96,7 @@ function nomiNudi(nomi) {
 
 /* ---- le due meta' ---- */
 
-test("confronti.js e' rimasto il motore: sette membri, nessuno del report", () => {
+test("confronti.js e' rimasto il motore: nove membri, nessuno del report", () => {
     const { confronti } = caricaConStub();
     assert.deepStrictEqual(Object.keys(confronti).sort(), [...MOTORE].sort());
 });
