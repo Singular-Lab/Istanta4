@@ -22,9 +22,11 @@ vi.mock('../config/multerConfig', () => {
   };
 });
 
-vi.mock('../middleware/authMiddleware', () => ({
-  authMiddleware: (_req: any, res: any) => res.status(401).json({ message: 'Non autenticato' })
-}));
+vi.mock('../middleware/authMiddleware', () => {
+  const rifiuta = (_req: any, res: any) => res.status(401).json({ message: 'Non autenticato' });
+  // invioMaterialeAdFP usa la variante di integrazione: deve rifiutare allo stesso modo
+  return { authMiddleware: rifiuta, integrationAuthMiddleware: rifiuta };
+});
 
 vi.mock('../middleware/permissionGuard', () => ({
   permissionGuard: () => (_req: any, _res: any, next: any) => next()

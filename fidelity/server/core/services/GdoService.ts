@@ -106,7 +106,6 @@ export class GdoService implements IGdoService {
       return ruoli.map((ruolo) => ({
         id: ruolo.id_ruolo_utente_gdo,
         ruolo: ruolo.ruolo_ruolo_utente_gdo,
-        api_key: ruolo.api_key_ruolo_utente_gdo,
         createdat: ruolo.createdat,
         updatedat: ruolo.updatedat,
       }));

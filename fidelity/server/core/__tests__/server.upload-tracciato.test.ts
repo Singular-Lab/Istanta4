@@ -30,7 +30,8 @@ vi.mock('../config/multerConfig', () => {
 });
 
 vi.mock('../middleware/authMiddleware', () => ({
-    authMiddleware: (_req: any, _res: any, next: any) => next()
+    authMiddleware: (_req: any, _res: any, next: any) => next(),
+    integrationAuthMiddleware: (_req: any, _res: any, next: any) => next()
 }));
 
 vi.mock('../middleware/permissionGuard', () => ({

@@ -83,6 +83,16 @@ function isValidSignedInternalRequest(req: Request): boolean {
   return isValid;
 }
 
+/**
+ * Come authMiddleware, ma accetta anche il bearer di Olympus al posto della sessione.
+ * Va usato solo sulle route che Istanta chiama da server (getKitByPromo,
+ * clearAllFilesKitRuntime, richiediConfigMapDatafields, invioMaterialeAdFP).
+ */
+export const integrationAuthMiddleware = (req: Request, res: Response, next: NextFunction) => {
+  res.locals.accettaBearer = true;
+  return authMiddleware(req, res, next);
+};
+
 export const authMiddleware = async (req: Request, res: Response, next: NextFunction) => {
   try {
     if (isValidSignedInternalRequest(req)) {
@@ -90,18 +100,15 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
         method: req.method,
         path: req.originalUrl
       });
+      res.locals.authVia = 'internal';
       return next();
     }
 
-    // Verifica del token JWT in header Authorization
-    if (req.headers['authorization']) {
+    // Bearer di Olympus: vale solo sulle route di integrazione, altrove serve la sessione.
+    if (req.headers['authorization'] && res.locals.accettaBearer) {
       const authHeader = req.headers['authorization'];
-      // Formato standard: "Bearer TOKEN"
-      log.debug('JWT token authentication attempt', { hasToken: !!authHeader });
       if (typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
         try {
-          // In un sistema completo qui andrebbe verificata la validità del token
-          log.info('Autenticazione con token JWT');
           const token = authHeader.split(' ')[1];
           const result = await axios.get(`${config.OLYMPUS_IP_ADDRESS}/auth/checkIdentity`, {
             headers: {
@@ -111,12 +118,11 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
             // Senza timeout un Olympus bloccato tiene appese tutte le richieste con bearer.
             timeout: 10_000
           });
-          if (!result.data || result.data.error) {
-            throw new UnauthorizedError({
-              message: 'Token non valido o scaduto',
-              details: { tokenError: result.data?.error }
-            });
+          // Olympus risponde 200 anche ai token che non riconosce, con autorizzato:false.
+          if (result.data?.autorizzato !== true) {
+            throw new UnauthorizedError({ message: 'Token non valido o scaduto' });
           }
+          res.locals.authVia = 'bearer';
           return next();
         } catch (error) {
           throw new UnauthorizedError({
@@ -125,13 +131,23 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
           });
         }
       } else {
-        log.warn('Header Authorization presente ma formato non valido', { authHeader: String(authHeader) });
+        log.warn('Header Authorization presente ma formato non valido', { path: req.originalUrl });
         throw new BadRequestError({
           message: 'Formato del token non valido',
           details: { authorization: 'Deve essere nel formato "Bearer TOKEN"' }
         });
       }
     }
+
+    if (req.headers['authorization'] && !req.session.id_utente) {
+      // Nessun sistema noto chiama altre route con il bearer: se succede, va visto nei log.
+      log.warn('Bearer ignorato su una route non di integrazione', {
+        path: req.originalUrl,
+        method: req.method,
+        ip: req.ip
+      });
+    }
+
     // Verifica dell'autenticazione tramite sessione
     if (!req.session.id_utente) {
       log.warn('Autenticazione fallita: Nessuna sessione utente valida trovata', {

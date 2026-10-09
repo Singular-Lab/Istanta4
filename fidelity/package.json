@@ -30,6 +30,7 @@
     "security-check": "yarn npm audit --all --recursive --environment production --severity moderate --no-deprecations",
     "deps-check": "depcheck --ignores=\"@types/*\"",
     "ci": "yarn type-check && yarn type-check:server && yarn lint && yarn security-check && yarn build",
+    "auth:link-servizio": "tsx server/core/scripts/generaLinkAccessoServizio.ts",
     "models:sync": "tsx server/core/scripts/initializeModels.ts sync",
     "models:sync:force": "tsx server/core/scripts/initializeModels.ts sync --force",
     "models:status": "tsx server/core/scripts/initializeModels.ts status",

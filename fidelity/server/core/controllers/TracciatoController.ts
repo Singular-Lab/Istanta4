@@ -42,7 +42,7 @@ export class TracciatoController extends BaseController {
         this.router.get('/tracciati/:idTracciato/download', authMiddleware, this.scaricaTracciato.bind(this));
         this.router.put('/tracciati/:idTracciato/nome', authMiddleware, permissionGuard('file.upload_tracciato'), this.rinominaTracciato.bind(this));
         this.router.get('/tracciati/:idTracciato', authMiddleware, this.getTracciatoById.bind(this));
-        this.router.delete('/tracciati/:idTracciato', authMiddleware, this.deleteTracciato.bind(this));
+        this.router.delete('/tracciati/:idTracciato', authMiddleware, permissionGuard('file.upload_tracciato'), this.deleteTracciato.bind(this));
     }
 
     private async getAllTracciati(req: Request, res: Response): Promise<void> {

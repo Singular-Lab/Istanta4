@@ -38,6 +38,8 @@ const envSchema = z.object({
     SALT_ROUNDS: z.string().regex(/^\d+$/).transform(Number),
     INTERNAL_REQUEST_SECRET: z.string().optional(),
     INTERNAL_REQUEST_WINDOW_MS: z.string().regex(/^\d+$/).transform(Number).default('60000'),
+    // Firma i link dell'accesso di servizio OIDC (fake-callback): senza, l'accesso non esiste
+    OIDC_FAKE_CALLBACK_SECRET: z.string().min(32).optional(),
 
     // Configurazione token effimeri
     EPHEMERAL_TOKEN_SECRET: z.string(),

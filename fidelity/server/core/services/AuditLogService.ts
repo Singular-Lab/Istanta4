@@ -366,12 +366,12 @@ export class AuditLogService {
 
   // ─── Convenience methods esistenti ─────────────────────────────────
 
-  public loginSuccess(req: Request, userId: string, userType: TIPO_UTENTI): void {
+  public loginSuccess(req: Request, userId: string, userType: TIPO_UTENTI, action = 'login'): void {
     this.logEvent(AuditEventType.LOGIN_SUCCESS, {
       req,
       userId,
       userType,
-      action: 'login',
+      action,
       result: 'SUCCESS'
     });
   }

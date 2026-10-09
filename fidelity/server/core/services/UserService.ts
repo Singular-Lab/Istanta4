@@ -34,6 +34,12 @@ export class UserService implements IUserService {
     this.menuService = menuService;
   }
 
+  /** Chiave privata Olympus dell'utente: solo per uso interno, mai nelle risposte. */
+  async getPrivateKey(idUtente: string): Promise<string | undefined> {
+    const utente = await this.userRepository.findById(idUtente);
+    return utente?.privatekey_utenti || undefined;
+  }
+
 
   // Metodo per query avanzate sulla Materialized View
   async getUtentiWithFilters(filters: {
@@ -99,7 +105,8 @@ export class UserService implements IUserService {
         type: QueryTypes.SELECT
       });
 
-      return users.map((user: any) => ({
+      // La chiave privata Olympus della vista non esce mai dal server.
+      return users.map(({ private_key: _chiavePrivata, ...user }: any) => ({
         ...user,
         canali_interazione: Array.isArray(user.canali_interazione)
           ? user.canali_interazione
@@ -165,7 +172,8 @@ export class UserService implements IUserService {
       const gdoMap = new Map((gdoAssociations as any[]).map((a: any) => [a.id_utente_utentegdo, a.id_gdo_utentegdo]));
 
       // Trasformazione dei dati dalla Materialized View
-      const utenti = users.map((user: any) => ({
+      // La chiave privata Olympus della vista non esce mai dal server.
+      const utenti = users.map(({ private_key: _chiavePrivata, ...user }: any) => ({
         ...user,
         // Parsing automatico dei campi JSONB (se sono stringhe)
         canali_interazione: typeof user.canali_interazione === 'string'
@@ -191,49 +199,6 @@ export class UserService implements IUserService {
       log.error('Impossibile recuperare gli utenti paginati', error instanceof Error ? error : new Error(String(error)), { page, limit });
       throw new DatabaseError({
         message: 'Errore durante il recupero degli utenti paginati',
-        operation: 'get',
-        entity: 'Utente',
-        cause: error instanceof Error ? error : undefined
-      });
-    }
-  }
-  async registerUserWithChannels(utenteData: Omit<UtenteAttributes, 'id_utenti'> & Partial<Pick<UtenteAttributes, 'id_utenti'>>, utenteGDO: any, utenteCanaliInterazioni: UtentiCanaliInterazioneAttributes): Promise<any> {
-    try {
-      const utente = await this.userRepository.create(utenteData);
-      const localUtenteGDO = await UtentiGDO.create({
-        id_utente_utentegdo: utente.id_utenti,
-        id_gdo_utentegdo: utenteGDO.id_GDO
-      });
-      const localUtenteCanaliInterazioni = await CanaleInterazione.create({
-        idutente_canaliinterazione: utente.id_utenti,
-        id_canaliinterazione: utenteCanaliInterazioni.idCanaleInterazione_UtentiCanaliInterazione,
-        tipo_canaliinterazione: TIPI_CANALI_INTERAZIONE.WHATSAPP,
-        stato_canaliinterazione: STATO_CANALI_INTERAZIONE.ATTIVO
-      });
-      return {
-        utente,
-        localUtenteGDO,
-        localUtenteCanaliInterazioni
-      };
-    }
-    catch (error) {
-      log.error('Impossibile registrare l\'utente con i canali di interazione', error instanceof Error ? error : new Error(String(error)));
-      throw new DatabaseError({
-        message: 'Errore durante la registrazione dell\'utente con i canali di interazione',
-        operation: 'create',
-        entity: 'Utente',
-        cause: error instanceof Error ? error : undefined
-      });
-    }
-  }
-  async checkUserByPhone(phone: string): Promise<any> {
-    try {
-      const user = await this.userRepository.findByPhone(phone);
-      return user;
-    } catch (error) {
-      log.error('Impossibile recuperare l\'utente tramite numero di telefono', error instanceof Error ? error : new Error(String(error)));
-      throw new DatabaseError({
-        message: 'Errore durante il recupero dell\'utente tramite telefono',
         operation: 'get',
         entity: 'Utente',
         cause: error instanceof Error ? error : undefined
@@ -1688,6 +1653,16 @@ export class UserService implements IUserService {
           });
         });
       };
+      // express-session salva da sola a fine richiesta una sessione modificata:
+      // se Istanta non conferma il collegamento la sessione va distrutta.
+      const destroySession = (): Promise<void> => {
+        return new Promise((resolve) => req.session.destroy(() => resolve()));
+      };
+
+      // Sessione nuova (niente session fixation), valida solo dopo la conferma di Istanta.
+      await new Promise<void>((resolve, reject) => {
+        req.session.regenerate((err) => err ? reject(err) : resolve());
+      });
 
       if (!user) {
         // throw new NotFoundError({
@@ -1702,7 +1677,7 @@ export class UserService implements IUserService {
           nome: "Test",
           cognome: "Test",
           email,
-          password: "Test1234@",
+          // Nessuna password locale: l'utente entra solo tramite Istanta (need_ad).
           stato: STATO_UTENTI.ATTIVO,
           residenza: "Rotonda della Pace, 56121 Pisa PI",
           dataDiNascita: new Date().toISOString().split('T')[0],
@@ -1716,7 +1691,6 @@ export class UserService implements IUserService {
         req.session.private_key = newUser.privatekey_utenti;
         req.session.cookie.maxAge = 60 * 60 * 1000; // 1 ora
         req.session.isExternalAuth = true;
-        await saveSession();
       } else {
         // 3. Segna l'utente come AD se non già segnato
         if (!user.meta_utenti?.need_ad) {
@@ -1729,7 +1703,6 @@ export class UserService implements IUserService {
         req.session.private_key = user.privatekey_utenti;
         req.session.cookie.maxAge = 60 * 60 * 1000; // 1 ora
         req.session.isExternalAuth = true;
-        await saveSession();
       }
 
 
@@ -1755,12 +1728,15 @@ export class UserService implements IUserService {
         );
 
         if (risposta.esito) {
+          await saveSession();
           return { route: "/", queryParams: {} };
         } else {
-          // IS ha rifiutato: restituiamo il codice errore al frontend senza lanciare eccezione
+          // IS ha rifiutato (collegamento scaduto o gia' usato): nessuna sessione resta valida.
+          await destroySession();
           return { isError: true, errorCode: risposta.error ?? "auth_failed" };
         }
       } catch (error) {
+        await destroySession();
         if (error instanceof ExternalApiError) throw error;
         if (error instanceof ValidationError) {
           throw error;
@@ -1810,8 +1786,13 @@ export class UserService implements IUserService {
         headers: {
           'fico-secret': config.FICO_SECRET as string,
           'Authorization': `Bearer ${data.publicKey}`
-        }
+        },
+        timeout: 10_000
       });
+      // Olympus risponde 200 anche alle chiavi che non riconosce, con autorizzato:false.
+      if (result.data?.autorizzato !== true) {
+        throw new ValidationError({ message: 'Chiave di accesso non valida', field: 'context' });
+      }
       // result.data contiene la privateKey dell'utente: non va loggato.
       const user = await this.userRepository.findOneByOptions({
         where: {
@@ -1844,10 +1825,19 @@ export class UserService implements IUserService {
         req.session.cookie.maxAge = 60 * 60 * 1000; // 1 ora
         req.session.isExternalAuth = true;
       };
+      // express-session salva da sola a fine richiesta una sessione modificata:
+      // se Istanta non conferma il collegamento la sessione va distrutta.
+      const destroySession = (): Promise<void> => {
+        return new Promise((resolve) => req.session.destroy(() => resolve()));
+      };
+
+      // Sessione nuova (niente session fixation), valida solo dopo la conferma di Istanta.
+      await new Promise<void>((resolve, reject) => {
+        req.session.regenerate((err) => err ? reject(err) : resolve());
+      });
 
       if (user) {
         setSessionData(user);
-        await saveSession();
       } else {
         const newUser = await this.userRepository.create({
           email_utenti: result.data.username,
@@ -1859,7 +1849,6 @@ export class UserService implements IUserService {
           stato_utenti: STATO_UTENTI.ATTIVO
         });
         setSessionData(newUser, true);
-        await saveSession();
       }
       try {
         verificaRisposta<{ esito: boolean }>(
@@ -1877,8 +1866,11 @@ export class UserService implements IUserService {
           'ISTANTA',
           '/FicoProcess/AuthLanded'
         );
-        return data;
+        await saveSession();
+        // publicKey e' il bearer dell'utente su Olympus: al browser servono solo route e parametri.
+        return { route: data.route, queryParams: data.queryParams };
       } catch (error) {
+        await destroySession();
         if (error instanceof ExternalApiError) throw error;
         if (error instanceof ValidationError) {
           throw error;

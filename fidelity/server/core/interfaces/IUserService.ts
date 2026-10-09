@@ -85,9 +85,8 @@ export interface IUserService {
     meta?: UtentiMeta;
   }, currentUserId: string): Promise<UtenteAttributes>;
   getUtentiWhatsappAttivi(): Promise<any[]>;
-  checkUserByPhone(phone: string): Promise<any>;
-  registerUserWithChannels(utenteData: UtenteCreationAttributes, utenteGDO: any, utenteCanaliInterazioni: UtentiCanaliInterazioneAttributes): Promise<any>;
   autenticaUtenteFico(req: Request): Promise<any>;
+  getPrivateKey(idUtente: string): Promise<string | undefined>;
   autenticaUtenteAD(req: Request): Promise<any>;
 
   // User association updates

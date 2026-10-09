@@ -99,7 +99,6 @@ function Main() {
         tipo_utenti: user?.tipo as TIPO_UTENTI,
         stato_utenti: user?.stato as STATO_UTENTI,
         sesso_utenti: gender as UTENTE_GENERE,
-        privatekey_utenti: user?.private_key,
         nome_utenti: name,
         cognome_utenti: surname,
         email_utenti: email,

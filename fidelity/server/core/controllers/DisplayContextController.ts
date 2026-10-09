@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { HttpStatusCode } from '../../../lib/enums';
 import { BaseController } from '../base/BaseController';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { permissionGuard } from '../middleware/permissionGuard';
 import { DisplayContextService } from '../services/DisplayContextService';
 
 export class DisplayContextController extends BaseController {
@@ -14,11 +15,11 @@ export class DisplayContextController extends BaseController {
     }
 
     public initializeRoutes(): void {
-        this.router.post('/display-contexts', authMiddleware, this.createDisplayContext.bind(this));
+        this.router.post('/display-contexts', authMiddleware, permissionGuard('gdo.gestisci_punti_vendita'), this.createDisplayContext.bind(this));
         this.router.get('/display-contexts', authMiddleware, this.getAllDisplayContexts.bind(this));
         this.router.get('/display-contexts/:id', authMiddleware, this.getDisplayContextById.bind(this));
-        this.router.put('/display-contexts/:id', authMiddleware, this.updateDisplayContext.bind(this));
-        this.router.delete('/display-contexts/:id', authMiddleware, this.deleteDisplayContext.bind(this));
+        this.router.put('/display-contexts/:id', authMiddleware, permissionGuard('gdo.gestisci_punti_vendita'), this.updateDisplayContext.bind(this));
+        this.router.delete('/display-contexts/:id', authMiddleware, permissionGuard('gdo.gestisci_punti_vendita'), this.deleteDisplayContext.bind(this));
         this.router.get('/display-contexts/gdo/:id_gdo', authMiddleware, this.getDisplayContextsByGDO.bind(this));
         this.router.get('/display-contexts/pv/:id_pv', authMiddleware, this.getDisplayContextsByPV.bind(this));
     }

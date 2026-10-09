@@ -7,6 +7,9 @@ import { BusinessError, ExternalApiError, NotFoundError, ValidationError } from 
 import { ErrorCodes } from '../../../lib/errors/ErrorCodes';
 import { log } from '../logger';
 import { emitToClients } from '../../ws-server';
+import { GDOWhatsappCampagne } from '../models/whatsapp/gdo_whatsapp_campagne';
+import { GDOWhatsappTemplate } from '../models/whatsapp/gdo_whatsapp_template';
+import { roomGdo } from '../utils/socketRooms';
 import { QUEUE_NAMES } from '../../src/shared/queue/queues.js';
 import { getRedisConnectionOptions } from '../../src/shared/cache/redis.client.js';
 
@@ -17,6 +20,7 @@ interface BulkProgress {
     failed: number;
     pending: number;
     startedAt?: Date; // Timestamp di quando è iniziato il primo job
+    room: string | null; // Room Socket.IO della GDO della campagna: gli eventi contengono i telefoni
 }
 
 interface WorkerOptions {
@@ -201,11 +205,30 @@ export class WhatsappQueueWorker {
                 success: stats.success,
                 failed: stats.failed,
                 pending: stats.pending,
-                startedAt: firstJob?.createdat ? new Date(firstJob.createdat) : new Date()
+                startedAt: firstJob?.createdat ? new Date(firstJob.createdat) : new Date(),
+                room: await this.roomGdoDelBulk(job)
             });
 
             log.debug(`Bulk ${bulkId} inizializzato: ${stats.success}/${stats.total} success, ${stats.failed} failed, ${stats.pending} pending`);
         }
+    }
+
+    /**
+     * Room della GDO proprietaria della campagna (campagna -> template -> GDO).
+     * Senza GDO gli eventi del bulk non vengono emessi: contengono i telefoni dei destinatari.
+     */
+    private async roomGdoDelBulk(job: typeof GDOWhatsappQueueJob.prototype): Promise<string | null> {
+        const campagna = await GDOWhatsappCampagne.findByPk(job.campagna_id_whatsapp_queue_job, {
+            attributes: ['template_id_whatsapp_campagna']
+        });
+        const template = campagna
+            ? await GDOWhatsappTemplate.findByPk(campagna.template_id_whatsapp_campagna, { attributes: ['id_gdo_gdowhatsapptemplate'] })
+            : null;
+        if (!template?.id_gdo_gdowhatsapptemplate) {
+            log.warn(`Bulk ${job.bulk_id_whatsapp_queue_job}: GDO della campagna non trovata, stato non notificato via socket`);
+            return null;
+        }
+        return roomGdo(template.id_gdo_gdowhatsapptemplate);
     }
 
     /**
@@ -250,7 +273,7 @@ export class WhatsappQueueWorker {
      */
     private async emitBulkStatus(bulkId: string) {
         const state = this.bulkState.get(bulkId);
-        if (!state) return;
+        if (!state?.room) return;
 
         // Rileggi i contatori reali dal database invece di usare quelli in memoria
         const stats = await this.getBulkStats(bulkId);
@@ -297,7 +320,7 @@ export class WhatsappQueueWorker {
             status,
             etaSeconds,
             etaCompletion,
-        });
+        }, state.room);
 
         log.debug(`Bulk ${bulkId}: ${success}/${total} success, ${failed} failed, ${pending} pending - ${status} (ETA: ${etaSeconds}s)`);
     }
@@ -310,8 +333,8 @@ export class WhatsappQueueWorker {
         status: GDOWhatsappQueueJobStatus,
         error?: string
     ) {
-        // Emetti via WebSocket
-        emitToClients('whatsapp:job-status', {
+        const room = this.bulkState.get(job.bulk_id_whatsapp_queue_job)?.room;
+        if (room) emitToClients('whatsapp:job-status', {
             jobId: job.id_whatsapp_queue_job,
             bulkId: job.bulk_id_whatsapp_queue_job,
             index: job.index_whatsapp_queue_job,
@@ -320,7 +343,7 @@ export class WhatsappQueueWorker {
             attempts: job.attempts_whatsapp_queue_job,
             status,
             error,
-        });
+        }, room);
 
         if (status === GDOWhatsappQueueJobStatus.SUCCESS) {
             log.debug(`✅ Job ${job.index_whatsapp_queue_job}/${job.total_whatsapp_queue_job} inviato a ${job.to_whatsapp_queue_job}`);

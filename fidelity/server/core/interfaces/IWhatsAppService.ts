@@ -4,17 +4,6 @@ import type { GDOResponseDTO } from "../dto/GDODTO";
 export interface IWhatsAppService {
     inviaBroadcastMessaggi(msg: string): Promise<{ successo: boolean; errore?: string }>;
     getCurrentGDOWhatsappForCampaign(id_utente: string): Promise<GDOResponseDTO | null>;
-    registraUtenteWhatsapp(data: {
-        email: string;
-        nome: string;
-        cognome: string;
-        password: string;
-        tipo: string;
-        residenza: string;
-        dataDiNascita: Date;
-        gdoScelta: string;
-        telefono: string;
-    }): Promise<{ successo: boolean; errore?: string }>;
     //TODO attenzione da questo metodo scaturira poi la gestione multi-gdo da SUPERADMIN
     getAllGDOWhatsapp(): Promise<{
         id: string;
