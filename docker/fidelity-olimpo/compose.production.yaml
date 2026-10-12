@@ -97,26 +97,16 @@ services:
       DB_POSTGRESQL_USER: ${FIDELITY_DB_USER:-fidelity}
       DB_POSTGRESQL_PASSWORD: ${FIDELITY_DB_PASSWORD:?Impostare FIDELITY_DB_PASSWORD in release.env}
       REDIS_URL: redis://redis:6379
-      # Lo schema Zod le dichiara opzionali, ma server/core/models/mongoose.ts
-      # apre la connessione al caricamento del modulo: senza MONGO_URL il
-      # processo termina prima di ascoltare sulla porta.
-      MONGO_URL: mongodb://mongo:27017
-      MONGO_DB_NAME: ${FIDELITY_MONGO_DB:-fidelity}
-      ICONE_INSEGNA_DIR: /home/node/insegne
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
       - ${FIDELITY_CONFIG_DIR:?Impostare FIDELITY_CONFIG_DIR in release.env, percorso assoluto sull'host}:/app/config
-      - fidelity_insegne:/home/node/insegne
-      - fidelity_materiali:/app/public/uploads/materiali_POP
       - fidelity_uploads:/app/uploads
       - fidelity_logs:/app/logs
     depends_on:
       redis:
         condition: service_started
       postgres:
-        condition: service_healthy
-      mongo:
         condition: service_healthy
     healthcheck:
       # node e' sempre presente nell'immagine; wget/curl no. status < 500
@@ -264,29 +254,6 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  mongo:
-    # Fidelity tiene su MongoDB la configurazione di WebPliant (collection
-    # `config`, stili, dashboard). Niente porta pubblicata e niente
-    # autenticazione: e' raggiungibile solo dalla rete interna del progetto.
-    image: mongo:7
-    restart: unless-stopped
-    security_opt:
-      - no-new-privileges:true
-    command: ["--quiet"]
-    volumes:
-      - mongo_data:/data/db
-    healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 20s
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-
   redis:
     # Dipendenza interna di fidelity, non un componente della release: il
     # ControlPlane non la aggiorna e il Runner non la tocca.
@@ -305,9 +272,6 @@ services:
 
 volumes:
   postgres_data:
-  mongo_data:
-  fidelity_insegne:
-  fidelity_materiali:
   fidelity_uploads:
   fidelity_logs:
   olimpo_uploads:

@@ -14,7 +14,6 @@ describe('FileManagementService.invioMaterialeAdFP: tipo di file non supportato'
 
   beforeEach(() => {
     tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'fidelity-invio-'));
-    fs.mkdirSync(path.join(tmpRoot, 'server/core/public/uploads/materiali_POP'), { recursive: true });
     fs.mkdirSync(path.join(tmpRoot, 'temporanei'));
     temporaneo = path.join(tmpRoot, 'temporanei', '3f2a9c1e.txt');
     fs.writeFileSync(temporaneo, 'testo');
@@ -47,5 +46,17 @@ describe('FileManagementService.invioMaterialeAdFP: tipo di file non supportato'
     fs.rmSync(temporaneo);
 
     await expect(invia()).rejects.toMatchObject({ httpStatus: 400, message: expect.stringContaining('non supportato') });
+  });
+
+  it('senza file risponde 400 invece di un errore interno', async () => {
+    const tipoExportService = { getTipoExportById: vi.fn() };
+    const service = new FileManagementService(
+      {} as any, tipoExportService as any, {} as any, {} as any, {} as any, {} as any, {} as any
+    );
+
+    await expect(
+      service.invioMaterialeAdFP('kit-1', 'tipo-1', 'materiale.pdf', '{}', undefined as any, { headers: {} } as any)
+    ).rejects.toMatchObject({ httpStatus: 400, message: 'File del materiale mancante' });
+    expect(tipoExportService.getTipoExportById).not.toHaveBeenCalled();
   });
 });

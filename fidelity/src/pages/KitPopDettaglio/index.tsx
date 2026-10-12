@@ -11,7 +11,7 @@ import React, { Fragment, useEffect, useState } from "react";
 import { useLoaderData, useParams, useRevalidator } from "react-router-dom";
 import { EXPORT_DI_SISTEMA, STATO_LAVORAZIONE_KIT_RUNTIME, TIPO_KIT_DESIGN } from "../../../lib/enums";
 import { ServerCall } from "../../../lib/server_call";
-import { DESIGN_KIT_MONGO, FileItemKit, RUNTIME_KIT_MONGO } from "../../../lib/types";
+import { DESIGN_KIT, FileItemKit, RUNTIME_KIT } from "../../../lib/types";
 
 // Import componenti condivisi da DettaglioSingolaLavorazione
 import ComponentFooter from "../DettaglioSingolaLavorazione/components/ComponentFooter";
@@ -82,8 +82,8 @@ const KitPopDettaglioContent: React.FC<{
         idPromo,
         idCanale: lavorazione.guidCanale,
         idArea: lavorazione.guidArea,
-        idFormato: (lavorazione as DESIGN_KIT_MONGO).guidFormato,
-        idPV: (lavorazione as DESIGN_KIT_MONGO).guidPv ?? null,
+        idFormato: (lavorazione as DESIGN_KIT).guidFormato,
+        idPV: (lavorazione as DESIGN_KIT).guidPv ?? null,
         lettura: false,
       });
       return response;
@@ -346,7 +346,7 @@ const KitPopDettaglioContent: React.FC<{
       {/* Contenuto in base al tab selezionato */}
       {viewTab === 'scheda' ? (
         <KitOverviewPublished
-          lavorazione={lavorazione as RUNTIME_KIT_MONGO}
+          lavorazione={lavorazione as RUNTIME_KIT}
           filesData={filesData}
           isLoadingFiles={isLoadingFiles}
           exportTypes={exportTypes}

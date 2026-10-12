@@ -110,8 +110,10 @@ test("nessuno costruisce piu' a mano il percorso di lavorazioni.json", () => {
     //I20-1065: erano almeno 10; checkPercorsi rileggeva la voce una seconda volta dopo aver registrato i
     //percorsi, e quella rilettura non serve piu'. Ora il conto e' esatto: indexNew 3, ficoProcess 3, un
     //custom.js per cliente.
-    assert.strictEqual(conta(/Utility\.voceLavorazione\(/g), 9);
-    assert.strictEqual(conta(/Utility\.salvaVoceLavorazione\(/g), 4);
+    //I20-1066: piu' una lettura e una scrittura in indexNew, in verificaIndirizziDellaLavorazione (la voce
+    //si confronta con gli indirizzi dell'ipconfig, e una voce di prima riceve quelli attuali).
+    assert.strictEqual(conta(/Utility\.voceLavorazione\(/g), 10);
+    assert.strictEqual(conta(/Utility\.salvaVoceLavorazione\(/g), 5);
 });
 
 test("ficoProcess non perde il file nuovo e riprende solo i percorsi di Links e Loghi", () => {

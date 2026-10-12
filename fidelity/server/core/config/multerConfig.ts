@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import path from 'path';
 import fs from 'fs';
 import { Request } from 'express';
+import { UPLOAD_TMP_DIR } from './percorsi';
 
 /**
  * Centralized Multer configuration for file uploads.
@@ -13,16 +14,9 @@ import { Request } from 'express';
 // DIRECTORY PATHS
 // ============================================
 
-const UPLOAD_BASE_DIR = path.join(process.cwd(), 'uploads');
-const TMP_DIR = path.join(UPLOAD_BASE_DIR, 'tmp');
-const MATERIALI_POP_DIR = path.join(process.cwd(), 'public', 'uploads', 'materiali_POP');
-
-// Ensure directories exist
-[TMP_DIR, MATERIALI_POP_DIR].forEach(dir => {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-});
+// Tutti i file caricati su disco passano da UPLOAD_TMP_DIR, fuori da public/:
+// nessun mount statico la serve. La cartella la crea createDiskStorage al primo upload.
+const TMP_DIR = UPLOAD_TMP_DIR;
 
 // ============================================
 // FILE SIZE LIMITS (in bytes)
@@ -145,7 +139,7 @@ export const storageConfigs = {
   tmpWithTimestamp: createDiskStorage(TMP_DIR, (req, file) => `${Date.now()}-${file.originalname}`),
   // Nome su disco univoco: due caricamenti con lo stesso nome non si sovrascrivono
   // e il nome inviato dal client non entra nel path. Il nome logico resta file.originalname.
-  materialiPOP: createDiskStorage(MATERIALI_POP_DIR, (req, file) => `${randomUUID()}${path.extname(path.basename(file.originalname))}`),
+  materialiPOP: createDiskStorage(TMP_DIR, (req, file) => `${randomUUID()}${path.extname(path.basename(file.originalname))}`),
 };
 
 // ============================================
@@ -213,7 +207,7 @@ export const uploadTracciati = multer({
 
 /**
  * Upload configuration for materiali pubblicazioni
- * - Disk storage (materiali_POP directory)
+ * - Disk storage (cartella dei temporanei)
  * - 200 MB file limit
  * - 200 MB field limit: il campo meta inviato da Istanta con l'export puo' superare
  *   il limite di default di multer (1 MB)

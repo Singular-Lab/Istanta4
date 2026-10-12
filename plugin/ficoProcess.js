@@ -854,7 +854,8 @@ const FicoProcess=
                 }
 
                 //La voce del documento si aggiorna se c'e' gia', altrimenti si aggiunge
-                let voce = {file:app.activeDocument.name, id:itemsInSearch[0].id, pathLinks:pathLinks, pathLoghi:pathLoghi, details:itemsInSearch[0]};
+                //I20-1066: con gli indirizzi del server dell'ipconfig montato: all'apertura si confrontano.
+                let voce = {file:app.activeDocument.name, id:itemsInSearch[0].id, pathLinks:pathLinks, pathLoghi:pathLoghi, details:itemsInSearch[0], ip:ConfigurazioneCliente.indirizziServer(istantaIp, olimpoIp)};
                 let libro = libroDelDocumentoInLavorazione(app.activeDocument.name, pathLavorazione);
                 if (libro) {
                     voce.libro = libro;
@@ -878,7 +879,8 @@ const FicoProcess=
                     let lavorazioneItem = objResult.records[0];
                     //Scrivo il file di lavorazione o lo aggiungo al file di lavorazione
                     //I20-1061: nel file di questa macchina
-                    let voce = {file:app.activeDocument.name, id:lavorazioneItem.id,details:lavorazioneItem};
+                    //I20-1066: con gli indirizzi del server dell'ipconfig montato.
+                    let voce = {file:app.activeDocument.name, id:lavorazioneItem.id,details:lavorazioneItem, ip:ConfigurazioneCliente.indirizziServer(istantaIp, olimpoIp)};
                     let libro = libroDelDocumentoInLavorazione(app.activeDocument.name, pathLavorazione);
                     if (libro) {
                         voce.libro = libro;
@@ -1043,7 +1045,8 @@ const FicoProcess=
 
                 //facciamo prima un controllo se nel file esiste già un elemento con questo file
 
-                let voce = { file: nomeFile, id: itemsInSearch[0].id, pathLinks: pathLinks, pathLoghi: pathLoghi, details: itemsInSearch[0] };
+                //I20-1066: con gli indirizzi del server dell'ipconfig montato.
+                let voce = { file: nomeFile, id: itemsInSearch[0].id, pathLinks: pathLinks, pathLoghi: pathLoghi, details: itemsInSearch[0], ip: ConfigurazioneCliente.indirizziServer(istantaIp, olimpoIp) };
                 let libro = libroDelDocumentoInLavorazione(nomeFile, _pathLavorazione);
                 if (libro) {
                     voce.libro = libro;
@@ -1070,7 +1073,8 @@ const FicoProcess=
                     let lavorazioneItem = objResult.records[0];
                     //Scrivo il file di lavorazione o lo aggiungo al file di lavorazione
                     //I20-1061: nel file di questa macchina
-                    let voce = { file: nomeFile, id: lavorazioneItem.id, details: lavorazioneItem };
+                    //I20-1066: con gli indirizzi del server dell'ipconfig montato.
+                    let voce = { file: nomeFile, id: lavorazioneItem.id, details: lavorazioneItem, ip: ConfigurazioneCliente.indirizziServer(istantaIp, olimpoIp) };
                     let libro = libroDelDocumentoInLavorazione(nomeFile, _pathLavorazione);
                     if (libro) {
                         voce.libro = libro;

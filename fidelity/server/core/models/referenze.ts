@@ -3,7 +3,6 @@ import { sequelize } from '../db/SequelizeConnector';
 
 /**
  * Modello Referenze per gestione referenze istanta
- * Basato sulla struttura MongoDB fornita dall'utente
  */
 
 export interface ReferenzeAttributes {

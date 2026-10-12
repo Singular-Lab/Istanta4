@@ -8,7 +8,7 @@ import { log } from '../logger';
 import { decryptString, encryptString } from '../../../lib/encryption';
 import { CATEGORIA_ATTIVITA, STATO_LAVORAZIONE_KIT_RUNTIME, STATO_ORDINI_STAMPA, TIPO_ATTIVITA } from '../../../lib/enums';
 import { BadRequestError, BusinessError, ExternalApiError, NotFoundError, wrapDatabaseError } from '../../../lib/errors';
-import { ContrattoTipografiaAttributes, FileItemKit, FileTreeCondition, FileTreeNode, MergedGroupFile, OrdiniDiStampaAttributes, RUNTIME_KIT_MONGO, RootFileTree, VirtualDirectory } from '../../../lib/types';
+import { ContrattoTipografiaAttributes, FileItemKit, FileTreeCondition, FileTreeNode, MergedGroupFile, OrdiniDiStampaAttributes, RUNTIME_KIT, RootFileTree, VirtualDirectory } from '../../../lib/types';
 import { emitToClients } from '../../ws-server';
 import { roomUtente } from '../utils/socketRooms';
 import config from '../config';
@@ -332,7 +332,7 @@ export class OrdiniStampaService implements IOrdiniStampaService {
     let esitoFinale: EmitCompleteParams | undefined;
     try {
       // Funzione di utilità per individuare file duplicati (problema nei kit)
-      const fileProblematici = (allKit: RUNTIME_KIT_MONGO[]): FileItemKit[][] => {
+      const fileProblematici = (allKit: RUNTIME_KIT[]): FileItemKit[][] => {
         const fileMap = new Map<string, FileItemKit[]>();
         allKit.forEach(kit => {
           kit.files?.forEach(file => {
@@ -1629,7 +1629,7 @@ function convertConditionValue(
     canali: CanaleResponseDTO[];
     aree: AreaResponseDTO[];
     promo: PromoAttributes;
-    kit: RUNTIME_KIT_MONGO;
+    kit: RUNTIME_KIT;
   }
 ): string {
   switch (condition.field) {
@@ -1658,7 +1658,7 @@ function replaceDirnamePlaceholders(
     canali: CanaleResponseDTO[];
     aree: AreaResponseDTO[];
     promo: PromoAttributes;
-    kit: RUNTIME_KIT_MONGO;
+    kit: RUNTIME_KIT;
   }
 ): string {
   switch (dirname) {
@@ -1682,7 +1682,7 @@ async function processSingleNode(
     canali: CanaleResponseDTO[];
     aree: AreaResponseDTO[];
     promo: PromoAttributes;
-    kit: RUNTIME_KIT_MONGO;
+    kit: RUNTIME_KIT;
   }
 ): Promise<FileTreeNode> {
   if (node.conditions && node.conditions.length > 0) {
@@ -1728,7 +1728,7 @@ export const processaContrattoTipografiaGDO = async (
     canali: CanaleResponseDTO[];
     aree: AreaResponseDTO[];
     promo: PromoAttributes;
-    kit: RUNTIME_KIT_MONGO;
+    kit: RUNTIME_KIT;
   }
 ): Promise<RootFileTree> => {
   try {

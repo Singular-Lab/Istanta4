@@ -3,7 +3,7 @@ import 'express-session';
 import { v4 as uuidv4 } from 'uuid';
 import { CATEGORIA_ATTIVITA, HttpStatusCode, STATO_COMBINAZIONI, TIPO_ATTIVITA, TIPO_KIT_DESIGN } from '../../../lib/enums';
 import { BadRequestError, NotFoundError } from '../../../lib/errors';
-import { DESIGN_KIT_MONGO, FileItemKit, Filtro, OggettoTipiDiExport } from '../../../lib/types';
+import { DESIGN_KIT, FileItemKit, Filtro, OggettoTipiDiExport } from '../../../lib/types';
 import { BaseController } from '../base/BaseController';
 import { TYPES, container } from '../di';
 import { IDesignKitService } from '../interfaces/IDesignKitService';
@@ -73,7 +73,7 @@ export class DesignKitController extends BaseController {
         return;
       }
 
-      let arrayCombinazioniDesign: DESIGN_KIT_MONGO[] = [];
+      let arrayCombinazioniDesign: DESIGN_KIT[] = [];
       const guidIdRaccoglitore = uuidv4();
 
       // Ottieni la GDO dell'utente

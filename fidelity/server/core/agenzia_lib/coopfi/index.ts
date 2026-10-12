@@ -487,7 +487,7 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
         // Campi tracciati: origKey = chiave ISTANTA (usata in TracciatoFieldChange.campo e nelle regole score)
 
 
-        // La chiave effettiva nel record normalizzato dipende dalla config Mongo (data_fields_refs ha
+        // La chiave effettiva nel record normalizzato dipende dalla config (data_fields_refs ha
         // priorità sulla mappa Coopfi): con mappature identità (es. prezzo_promo_kgl → prezzo_promo_kgl)
         // il campo atteso (prezzoPromoKgl) non esiste mai e la variazione non verrebbe rilevata.
         // Si legge quindi con fallback: campo atteso → chiave originale ISTANTA → output mappa Coopfi.

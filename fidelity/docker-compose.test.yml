@@ -5,7 +5,6 @@
 #   - GRAFANA_ADMIN_PASSWORD non obbligatorio (default "admin")
 #   - Porte osservabilità leggermente diverse per non collidere con dev
 #   - Volumi con suffisso _test: non collidono con i dati di produzione/dev
-#   - MONGO_URL punta a host.docker.internal (MongoDB sul host)
 #   - PostgreSQL sul host: raggiunto tramite host.docker.internal
 #
 # Avvio:
@@ -38,16 +37,13 @@ services:
     env_file: .env
     environment:
       NODE_ENV: test
-      # PostgreSQL e MongoDB sul host: raggiungibili tramite host.docker.internal
+      # PostgreSQL sul host: raggiungibile tramite host.docker.internal
       DB_POSTGRESQL_HOST: host.docker.internal
       DB_POSTGRESQL_PORT: ${DB_POSTGRESQL_PORT:-5432}
-      MONGO_URL: "mongodb://host.docker.internal:27017/${MONGO_DB_NAME}"
       REDIS_URL: redis://redis:6379
-      ICONE_INSEGNA_DIR: /home/node/insegne
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - insegne_test_data:/home/node/insegne
       - ./config:/app/config
     depends_on:
       redis:
@@ -180,4 +176,3 @@ services:
 volumes:
   redis_test_data:
   grafana_test_data:
-  insegne_test_data:

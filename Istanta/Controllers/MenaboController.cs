@@ -10030,6 +10030,12 @@ double.TryParse(percorso.ToString(), out double valore16))
                             }
                         }
 
+                        //I20-1082: il POP non decide: prende le decisioni Tutto del volantino della
+                        //stessa promo, area e canale.
+                        if (tipoFormatoKit == TipoLavorazione.PoP)
+                        {
+                            extraLavorazionePerGruppo = FicoProcessController.decisioniDelVolantinoPerIlPop(resultGlobale.records, ficoController.decisioniDeiVolantiniDellaPromo(idLavorazione));
+                        }
                         //I20-1070: le foto extra decise dall'operatore per questa lavorazione.
                         FicoProcessController.applicaExtraDellaLavorazione(resultGlobale.records, extraLavorazionePerGruppo);
                         //I20-1077: i testi del box scelti dall'operatore, nei campi compilati.

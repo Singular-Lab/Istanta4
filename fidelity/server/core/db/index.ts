@@ -1,20 +1,14 @@
 import { sequelize, initializeDatabase as initializeSequelize, closeDatabase as closeSequelize } from './SequelizeConnector';
-import { MongoDBConnection } from './MongoDBConnector';
 
-// Initialize both databases
-export async function initializeDatabase() {
-    await initializeSequelize();
-    await MongoDBConnection.connect();
+// autoSync omesso: decide SequelizeConnector (DB_AUTO_SYNC, o development)
+export async function initializeDatabase(autoSync?: boolean) {
+    await initializeSequelize(autoSync);
 }
 
-// Close both databases
 export async function closeDatabase() {
     await closeSequelize();
-    await MongoDBConnection.disconnect();
 }
 
-// Export the database instances
 export {
-    sequelize,
-    MongoDBConnection
-}; 
+    sequelize
+};

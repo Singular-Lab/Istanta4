@@ -116,11 +116,56 @@ const schedaRef = {
     //report; la scheda lo legge soltanto, per sapere cosa non deve offrire.
     apertaDalReport: false,
 
-    /// Le azioni strutturali offerte dalla schermata di edit non si mostrano quando si arriva
-    /// dal report: da li' si viene a sistemare una segnalazione, e rifare la struttura del
-    /// gruppo e' un'altra cosa, che si fa dalla scheda normale.
+    /// Le azioni strutturali offerte dalla schermata di edit. I20-1083: ci sono anche quando si
+    /// arriva dal report o dalla schermata delle segnalazioni (vista controllata), ma li' l'azione
+    /// cambia il dato senza reimpaginare il box (aggiornaDopoAzioneInVistaControllata).
     mostraAzioniStrutturaliInEdit() {
-        return this.apertaDalReport !== true;
+        return true;
+    },
+
+    /// I20-1083: la scheda e' aperta in vista controllata, dal Report Integrita' o dalla schermata
+    /// delle segnalazioni (tutte e due accendono apertaDalReport).
+    inVistaControllata() {
+        return this.apertaDalReport === true;
+    },
+
+    /// I20-1083: rimette la selezione di InDesign sul box. In vista controllata la scheda si chiude
+    /// se il box resta deselezionato, e la ricarica della scheda non deve sembrare una deselezione.
+    riselezionaBox(box) {
+        try {
+            if (box != null && box.isValid) {
+                app.selection = [box];
+                return true;
+            }
+        }
+        catch (e) {
+            console.error("Code SRF-114 Il box non si e' potuto riselezionare: " + e);
+        }
+        return false;
+    },
+
+    /// I20-1083: un'azione sul box registrata dal server mentre la scheda e' in vista controllata. Il
+    /// dato e' cambiato, ma il box non si reimpagina: si ricarica la scheda, che rifa' la preanalisi
+    /// e quindi ricalcola le segnalazioni del box com'e', e la selezione resta sul box.
+    aggiornaDopoAzioneInVistaControllata() {
+        var box = this.refSelected != null ? this.refSelected.item : null;
+        hideLoading();
+        indesignEvents.setBusy(false);
+        this.riselezionaBox(box);
+        messaggioUtente("Azione registrata: il box non e' stato reimpaginato, le segnalazioni sono state ricalcolate", "success", false, 5);
+        this.dimenticaSegnalazioni();
+        this.initSchedaRef(this.refSelected);
+        this.riselezionaBox(box);
+    },
+
+    /// I20-1083: chiude la finestra delle differenze rilevate, se e' aperta, con la sua X (che fa la
+    /// sua pulizia). Serve quando la scheda in vista controllata si chiude e torna il report.
+    chiudiFinestraDifferenze() {
+        if (typeof $ === "undefined" || $("#popup").length === 0) {
+            return false;
+        }
+        $("#popupCloseButton").trigger("click");
+        return true;
     },
 
     /// I20-1049: le azioni sul box offerte dalla scheda aperta, e se la sua ref e' un gruppo.
@@ -2396,6 +2441,8 @@ const schedaRef = {
             }
 
             const segnalazioniDellaScheda = me.segnalazioniInMemoria() || [];
+            //I20-1081: il box di un tipo diverso da quello del dato si dice subito, in rosso.
+            me.avvisaDifferenzeGravi(segnalazioniDellaScheda);
             //I20-1056, lotto 4: anche le segnalazioni di impaginazione del bollino del box.
             me.leggiVociBollino(box);
             me.aggiornaPulsanteSegnalazioni();
@@ -4403,10 +4450,55 @@ const schedaRef = {
         if (this.modalSegnalazioniGiaProposto) {
             return false;
         }
+        //I20-1081: una differenza grave (il box di un altro tipo) si mostra anche col silenzio.
+        if (this.ciSonoDifferenzeGravi(differenze)) {
+            return true;
+        }
         if (this.segnalazioniSilenziateOvunque) {
             return false;
         }
         return !this.refESilenziata(codice);
+    },
+
+    /* ---------- I20-1081: le differenze gravi, molto visibili ---------- */
+
+    STILE_RIQUADRO_GRAVE: {
+        "border": "2px solid #b21d1d",
+        "border-left": "6px solid #b21d1d",
+        "border-radius": "4px",
+        "padding": "8px 10px",
+        "background-color": "#fdecea"
+    },
+
+    TESTO_RISOLVI_GRAVE: "Il box impaginato non e' del tipo che il dato chiede: usa Reimpagina per rifarlo con il dato.",
+
+    /// Una differenza grave: il box impaginato e' di un tipo diverso da quello del dato. Lo decide
+    /// il motore di confronto (confronti.eDifferenzaGrave).
+    differenzaGrave(diff) {
+        return typeof confronti !== "undefined" && confronti != null && typeof confronti.eDifferenzaGrave === "function"
+            && confronti.eDifferenzaGrave(diff);
+    },
+
+    ciSonoDifferenzeGravi(differenze) {
+        return Array.isArray(differenze) && differenze.some(d => this.differenzaGrave(d));
+    },
+
+    /// Il testo dell'avviso per il box di un altro tipo, o "" se non c'e'.
+    testoAvvisoDifferenzeGravi(differenze) {
+        const grave = Array.isArray(differenze) ? differenze.find(d => this.differenzaGrave(d)) : null;
+        if (grave == null) {
+            return "";
+        }
+        return "Code SRF-111 ATTENZIONE: il box impaginato e' " + grave.valoreLocale + " ma il dato chiede " + grave.valoreServer
+            + ". Usa Reimpagina per rifarlo con il dato.";
+    },
+
+    /// All'apertura della scheda l'avviso rosso, oltre alla finestra.
+    avvisaDifferenzeGravi(differenze) {
+        const testo = this.testoAvvisoDifferenzeGravi(differenze);
+        if (testo !== "") {
+            messaggioUtente(testo, "error", false, 10);
+        }
     },
 
     silenziaSegnalazioniDellaRef(codice) {
@@ -4618,14 +4710,18 @@ const schedaRef = {
 
         this.raggruppaPerElemento(differenze).forEach(function (gruppo) {
             const riquadro = $('<div class="riquadroDifferenza"></div>');
-            riquadro.css({
+            //I20-1081: la differenza grave (il box di un altro tipo) arriva per prima ed e' tutta in rosso.
+            const grave = gruppo.differenze.some(d => me.differenzaGrave(d));
+            riquadro.css(grave ? me.STILE_RIQUADRO_GRAVE : {
                 "border": "1px solid #e3e3e3",
                 "border-left": "3px solid #b21d1d",
                 "border-radius": "4px",
                 "padding": "6px 8px"
             });
-            const titolo = $('<div></div>').text(ReportIntegrita.etichettaSegnalazione(gruppo.label));
-            titolo.css({ "font-size": "12px", "font-weight": "700", "color": "#2c2c2c" });
+            const titolo = $('<div></div>').text((grave ? "⚠ " : "") + ReportIntegrita.etichettaSegnalazione(gruppo.label));
+            titolo.css(grave
+                ? { "font-size": "13px", "font-weight": "700", "color": "#b21d1d" }
+                : { "font-size": "12px", "font-weight": "700", "color": "#2c2c2c" });
             riquadro.append(titolo);
 
             gruppo.differenze.forEach(function (diff, indice) {
@@ -4640,6 +4736,11 @@ const schedaRef = {
                 me.aggiungiAzioniDifferenza(riga, diff, dopoAzione);
                 riquadro.append(riga);
             });
+            if (grave) {
+                const comeRisolvere = $('<div></div>').text(me.TESTO_RISOLVI_GRAVE);
+                comeRisolvere.css({ "font-size": "12px", "font-weight": "700", "color": "#b21d1d", "padding-top": "4px" });
+                riquadro.append(comeRisolvere);
+            }
             contenitore.append(riquadro);
         });
     },
@@ -4776,6 +4877,57 @@ const schedaRef = {
     /// Le tre decisioni possibili, come le conosce il server (AzioneExtraLavorazione).
     AZIONE_EXTRA: { sovrascrivi: 1, aggiungi: 2, escludi: 3 },
 
+    /// I20-1082: per chi vale una decisione presa in un volantino (AmbitoDecisioneLavorazione del server).
+    AMBITO_DECISIONE: { tutto: 0, soloVolantino: 1 },
+
+    /// I20-1082: chiede se la decisione vale solo per il volantino o anche per i POP della stessa promo,
+    /// area e canale. Solo se la configurazione del cliente lo vuole (Coop) e non in un POP, che non
+    /// decide: altrimenti vale per tutto senza chiedere. Null se l'operatore annulla.
+    async chiediAmbitoDecisione() {
+        var chiedi = typeof pluginMiddleware !== "undefined" && pluginMiddleware != null
+            && typeof pluginMiddleware.getChiediAmbitoDecisioniLavorazione === "function"
+            && pluginMiddleware.getChiediAmbitoDecisioniLavorazione() === true;
+        if (!chiedi) {
+            return this.AMBITO_DECISIONE.tutto;
+        }
+        var tipo = typeof ficoProcess !== "undefined" && ficoProcess != null && typeof ficoProcess.getTipoLavorazioneCorrente === "function"
+            ? ficoProcess.getTipoLavorazioneCorrente()
+            : 0;
+        if (tipo == 2) {
+            return this.AMBITO_DECISIONE.tutto;
+        }
+        var risposta = await Modali.confirmCustom("Vale solo per il volantino o anche per i POP?",
+            "Solo volantino", this.AMBITO_DECISIONE.soloVolantino,
+            "Tutto (volantino e POP)", this.AMBITO_DECISIONE.tutto);
+        return risposta != null && risposta.result ? risposta.hiddenVal : null;
+    },
+
+
+    /// I20-1082: la chiave di una foto extra per le decisioni della lavorazione: la sigla o, per le
+    /// extra caricate a mano che non ne hanno, il nome del file, come nella label del box.
+    chiaveExtra(elemento) {
+        if (elemento == null) {
+            return "";
+        }
+        var sigla = elemento.sigla == null ? "" : String(elemento.sigla);
+        if (sigla !== "" && sigla !== "null" && sigla !== "undefined") {
+            return sigla;
+        }
+        return elemento.nome == null ? "" : String(elemento.nome);
+    },
+
+    /// I20-1082: la foto extra manuale di una decisione (specchio di FicoProcessController.stessaExtraManuale).
+    stessaExtraManuale(extra, chiave) {
+        if (extra == null || chiave == null || String(chiave) === "") {
+            return false;
+        }
+        var sigla = extra.sigla == null ? "" : String(extra.sigla);
+        if (sigla !== "") {
+            return sigla == chiave;
+        }
+        return extra.nome == chiave;
+    },
+
     /// Quali azioni spettano a una differenza della preanalisi. Su una foto extra con
     /// l'immagine cambiata si puo' tenere quella del box o usare quella del server; su una in
     /// piu' tenerla solo per questa lavorazione; su una mancante escluderla per questa
@@ -4844,6 +4996,7 @@ const schedaRef = {
     /// preanalisi rifatta subito vede la decisione senza riscaricare la scheda. Specchio di
     /// FicoProcessController.applicaExtraDellaLavorazione.
     applicaExtraLavorazioneAiRecord(records, voce) {
+        var me = this;
         var azioni = this.AZIONE_EXTRA;
         (records || []).forEach(function (record) {
             var rec = record != null ? record.recordInTracciato : null;
@@ -4855,7 +5008,7 @@ const schedaRef = {
 
             if (voce.azione === azioni.sovrascrivi && voce.nome) {
                 (automatiche || []).filter(l => l.sigla == voce.sigla).forEach(l => { l.nome = voce.nome; });
-                (manuali || []).filter(e => e.sigla == voce.sigla).forEach(e => { e.nome = voce.nome; });
+                (manuali || []).filter(e => me.stessaExtraManuale(e, voce.sigla)).forEach(e => { e.nome = voce.nome; });
             }
             else if (voce.azione === azioni.aggiungi && voce.nome) {
                 if (automatiche == null) {
@@ -4868,7 +5021,7 @@ const schedaRef = {
             }
             else if (voce.azione === azioni.escludi) {
                 (automatiche || []).filter(l => l.sigla == voce.sigla).forEach(l => { l.escluso = true; });
-                (manuali || []).filter(e => e.sigla == voce.sigla).forEach(e => { e.attiva = false; });
+                (manuali || []).filter(e => me.stessaExtraManuale(e, voce.sigla)).forEach(e => { e.attiva = false; });
             }
 
             var decise = (Array.isArray(rec.extraLavorazione) ? rec.extraLavorazione : []).filter(v => !(v.tipo == voce.tipo && v.sigla == voce.sigla));
@@ -4890,14 +5043,15 @@ const schedaRef = {
             return "";
         }
         var sigla = voce.sigla == null ? "" : String(voce.sigla);
+        var ambito = this.testoAmbitoDecisione(voce);
         if (voce.azione === this.AZIONE_EXTRA.sovrascrivi) {
-            return sigla + ": tenuta l'immagine del box " + voce.nome + (voce.nomeServer ? " al posto di " + voce.nomeServer : "");
+            return sigla + ": tenuta l'immagine del box " + voce.nome + (voce.nomeServer ? " al posto di " + voce.nomeServer : "") + ambito;
         }
         if (voce.azione === this.AZIONE_EXTRA.aggiungi) {
-            return sigla + ": " + voce.nome + " tenuta solo per questa lavorazione";
+            return sigla + ": " + voce.nome + " tenuta solo per questa lavorazione" + ambito;
         }
         if (voce.azione === this.AZIONE_EXTRA.escludi) {
-            return sigla + ": esclusa per questa lavorazione";
+            return sigla + ": esclusa per questa lavorazione" + ambito;
         }
         return sigla;
     },
@@ -5028,6 +5182,12 @@ const schedaRef = {
         if (richiesta == null) {
             return false;
         }
+        //I20-1082: per Coop, prima per chi vale: solo il volantino o anche i POP.
+        var ambito = await this.chiediAmbitoDecisione();
+        if (ambito == null) {
+            return false;
+        }
+        richiesta.voce.ambito = ambito;
         var registrata = await this.salvaExtraLavorazione(richiesta);
         if (!registrata) {
             return false;
@@ -5998,6 +6158,11 @@ const schedaRef = {
                 }
 
                 if (objResult.esito) {
+                    //I20-1083: in vista controllata l'azione cambia solo il dato: niente box nuovo.
+                    if (me.inVistaControllata()) {
+                        me.aggiornaDopoAzioneInVistaControllata();
+                        return;
+                    }
 
                     showLoading("Impaginazione della referenza");
 

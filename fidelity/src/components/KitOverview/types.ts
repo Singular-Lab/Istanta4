@@ -1,7 +1,7 @@
 import type { FlyerInsights, FlyerInsightsConfig, OrigineStorico, ReferenzaPosizione } from "@/types/flyerInsights";
 import type { icons } from "lucide-react";
 import { STATO_LAVORAZIONE_KIT_RUNTIME, TIPO_KIT_DESIGN, TIPO_LAVORAZIONE } from "../../../lib/enums";
-import { FileItemKit, OggettoTipiDiExport, RUNTIME_KIT_MONGO } from "../../../lib/types";
+import { FileItemKit, OggettoTipiDiExport, RUNTIME_KIT } from "../../../lib/types";
 
 // ============================================
 // HERO BANNER TYPES
@@ -31,7 +31,7 @@ export interface HeroBannerAction {
 }
 
 export interface HeroBannerProps {
-  lavorazione: RUNTIME_KIT_MONGO;
+  lavorazione: RUNTIME_KIT;
   stato: STATO_LAVORAZIONE_KIT_RUNTIME;
   productionDuration?: string | null;
   isTimerLive?: boolean;
@@ -130,7 +130,7 @@ export interface TimelineProps {
 // ============================================
 
 export interface KitInfoProps {
-  lavorazione: RUNTIME_KIT_MONGO;
+  lavorazione: RUNTIME_KIT;
 }
 
 // ============================================
@@ -138,7 +138,7 @@ export interface KitInfoProps {
 // ============================================
 
 export interface KitPreStartViewProps {
-  lavorazione: RUNTIME_KIT_MONGO;
+  lavorazione: RUNTIME_KIT;
   exportTypes: string[];
   tipiDiExportInKit: OggettoTipiDiExport[];
   isManuale: boolean;
@@ -229,7 +229,7 @@ export interface FileSectionProps {
 export interface ActionPanelProps {
   stato: STATO_LAVORAZIONE_KIT_RUNTIME;
   tipoKit: TIPO_KIT_DESIGN;
-  lavorazione: RUNTIME_KIT_MONGO;
+  lavorazione: RUNTIME_KIT;
   // State-dependent props
   canProceed: boolean;
   hasAccepted: boolean;
@@ -265,7 +265,7 @@ export interface RepartoGroup {
 }
 
 export interface KitOverviewLayoutProps {
-  lavorazione: RUNTIME_KIT_MONGO;
+  lavorazione: RUNTIME_KIT;
   filesData?: FileItemKit[];
   isLoadingFiles?: boolean;
   exportTypes: string[];

@@ -13,6 +13,7 @@ import { log } from '../logger';
 import { permissionGuard } from '../middleware/permissionGuard';
 import { GDO } from '../models/gdo';
 import { ServerUtils } from '../utils/ServerUtils';
+import { urlOlimpo } from '../utils/urlOlimpo';
 
 export class WebPliantController extends BaseController {
 
@@ -192,7 +193,7 @@ export class WebPliantController extends BaseController {
                   }
                 }
               );
-              content.srcDesktop = `${config.OLYMPUS_IP_ADDRESS}/materiali/getVideoOnDemand?guidId=${resultAxios.data.content.file}`;
+              content.srcDesktop = urlOlimpo('/materiali/getVideoOnDemand', { guidId: resultAxios.data.content.file });
             }
             else if (content.thumbnailSrcDesktop != undefined && content.thumbnailSrcDesktop.includes("data:image")) {
               const formData = new FormData();
@@ -209,7 +210,7 @@ export class WebPliantController extends BaseController {
                   }
                 }
               );
-              content.thumbnailSrcDesktop = `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${resultAxios.data.record.guidId}`;
+              content.thumbnailSrcDesktop = urlOlimpo('/foto/getThumbNailOnDemand', { guidId: resultAxios.data.record.guidId });
             }
             else if (content.srcMobile && content.srcMobile.includes("data:video/mp4;base64,")) {
               const formDataMobile = new FormData();
@@ -226,7 +227,7 @@ export class WebPliantController extends BaseController {
                   }
                 }
               );
-              content.srcMobile = `${config.OLYMPUS_IP_ADDRESS}/materiali/getVideoOnDemand?guidId=${resultAxios.data.content.file}`;
+              content.srcMobile = urlOlimpo('/materiali/getVideoOnDemand', { guidId: resultAxios.data.content.file });
 
             }
             else if (content.thumbnailSrcMobile != undefined && content.thumbnailSrcMobile.includes("data:image")) {
@@ -244,7 +245,7 @@ export class WebPliantController extends BaseController {
                   }
                 }
               );
-              content.thumbnailSrcMobile = `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${resultAxios.data.record.guidId}`;
+              content.thumbnailSrcMobile = urlOlimpo('/foto/getThumbNailOnDemand', { guidId: resultAxios.data.record.guidId });
             }
             else if (content.src != undefined) {
               if (content.src.includes("data:image")) {
@@ -262,7 +263,7 @@ export class WebPliantController extends BaseController {
                     }
                   }
                 );
-                content.src = `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${resultAxios.data.record.guidId}&performante=true`;
+                content.src = urlOlimpo('/foto/getThumbNailOnDemand', { guidId: resultAxios.data.record.guidId, performante: true });
               }
               if (content.srcMobile != undefined && content.srcMobile.includes("data:image")) {
                 const formData = new FormData();
@@ -279,7 +280,7 @@ export class WebPliantController extends BaseController {
                     }
                   }
                 );
-                content.srcMobile = `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${resultAxios.data.record.guidId}&performante=true`;
+                content.srcMobile = urlOlimpo('/foto/getThumbNailOnDemand', { guidId: resultAxios.data.record.guidId, performante: true });
               }
             }
             else if (content.backgroundImage != undefined) {
@@ -298,7 +299,7 @@ export class WebPliantController extends BaseController {
                     }
                   }
                 );
-                content.backgroundImage = `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${resultAxios.data.record.guidId}&performante=true`;
+                content.backgroundImage = urlOlimpo('/foto/getThumbNailOnDemand', { guidId: resultAxios.data.record.guidId, performante: true });
               }
             }
             else if (content.logo != undefined) {
@@ -317,7 +318,7 @@ export class WebPliantController extends BaseController {
                     }
                   }
                 );
-                content.logo.srcLogoCarosello = `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${resultAxios.data.record.guidId}&?height=${content.logo.height}&width=${content.logo.width}&performante=true`;
+                content.logo.srcLogoCarosello = urlOlimpo('/foto/getThumbNailOnDemand', { guidId: resultAxios.data.record.guidId, height: content.logo.height, width: content.logo.width, performante: true });
               }
             }
             else if (content.banner) {
@@ -336,7 +337,7 @@ export class WebPliantController extends BaseController {
                     }
                   }
                 );
-                content.banner = `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${resultAxios.data.record.guidId}&performante=true`;
+                content.banner = urlOlimpo('/foto/getThumbNailOnDemand', { guidId: resultAxios.data.record.guidId, performante: true });
               }
             }
           } catch (error: any) {

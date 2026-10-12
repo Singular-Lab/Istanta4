@@ -12,7 +12,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLoaderData, useNavigate, useRevalidator } from 'react-router-dom';
 import { STATO_LAVORAZIONE_KIT_RUNTIME, STATO_ORDINI_STAMPA } from '../../../lib/enums';
 import { ServerCall } from '../../../lib/server_call';
-import { FileItemKit, MergedGroupFile, OrdiniDiStampaAttributes, OrdiniDiStampaInviiAttributes, RUNTIME_KIT_MONGO, VirtualDirectory } from '../../../lib/types';
+import { FileItemKit, MergedGroupFile, OrdiniDiStampaAttributes, OrdiniDiStampaInviiAttributes, RUNTIME_KIT, VirtualDirectory } from '../../../lib/types';
 // Importa il client Socket.IO
 import docThumbnailFallback from '@/assets/images/icons/icon_doc_locandinaA4.png';
 import PageHeader from '@/components/Base/PageHeader';
@@ -177,32 +177,15 @@ const extractGroupingMessage = (value: unknown): string => {
   return payload ? toText(payload.message) : '';
 };
 
-const buildGroupingThumbnailUrl = (id: string): string => {
-  const olympusBaseRaw =
-    toText(import.meta.env.VITE_OLYMPUS_IP_ADDRESS)
-    || toText(import.meta.env.VITE_OLYMPUS_IP_ADDRESS_CORS);
+// Olimpo si raggiunge dal proxy di Fidelity sulla stessa origine (server/core/middleware/olimpoProxy.ts)
+const buildGroupingThumbnailUrl = (id: string): string =>
+  `/olimpo/materiali/getThumbnailMaterialePdfs?id=${encodeURIComponent(id)}&page=1`;
 
-  if (!olympusBaseRaw) {
-    return docThumbnailFallback;
-  }
-
-  const olympusBase = olympusBaseRaw.replace(/\/+$/, '');
-  return `${olympusBase}/materiali/getThumbnailMaterialePdfs?&id=${encodeURIComponent(id)}&page=1`;
-};
-
-const buildGroupingPreviewBaseUrl = (id: string): string => {
-  const olympusBaseRaw =
-    toText(import.meta.env.VITE_OLYMPUS_IP_ADDRESS)
-    || toText(import.meta.env.VITE_OLYMPUS_IP_ADDRESS_CORS);
-
-  if (!olympusBaseRaw) return '';
-
-  const olympusBase = olympusBaseRaw.replace(/\/+$/, '');
-  return `${olympusBase}/materiali/getThumbnailMaterialePdfs?&id=${encodeURIComponent(id)}`;
-};
+const buildGroupingPreviewBaseUrl = (id: string): string =>
+  `/olimpo/materiali/getThumbnailMaterialePdfs?id=${encodeURIComponent(id)}`;
 
 const buildGroupingFilesLookup = (
-  kits: RUNTIME_KIT_MONGO[],
+  kits: RUNTIME_KIT[],
   alreadySentKitIds: Set<string>
 ) => {
   const byId = new Map<string, GroupingResultFile>();
@@ -240,7 +223,7 @@ const buildGroupingFilesLookup = (
 
 const normalizeGroupingResultPayload = (
   input: unknown,
-  kits: RUNTIME_KIT_MONGO[],
+  kits: RUNTIME_KIT[],
   alreadySentKitIds: Set<string>
 ): GroupingResult | null => {
   const payload = unwrapGroupingPayload(input);
@@ -370,7 +353,7 @@ const normalizeGroupingResultPayload = (
 
 const RevisioneOrdiniDiStampa: React.FC = () => {
   const { dettagli, ordine, promo, ordiniInvii } = useLoaderData() as {
-    dettagli: RUNTIME_KIT_MONGO[];
+    dettagli: RUNTIME_KIT[];
     ordine: OrdiniDiStampaAttributes;
     promo: PromoResponseDTO;
     ordiniInvii: OrdiniDiStampaInviiAttributes[]
@@ -587,7 +570,8 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
 
   useEffect(() => {
     const expressSocket = io((import.meta.env.VITE_WS_URL as string).replace('/api', ''), { withCredentials: true, transports: ['websocket', 'polling'] });
-    const nestSocket = io(import.meta.env.VITE_OLYMPUS_IP_ADDRESS_CORS, { transports: ['websocket', 'polling'] });
+    // Socket di Olimpo attraverso il proxy /olimpo: solo polling, il proxy non inoltra il websocket
+    const nestSocket = io({ path: '/olimpo/socket.io', transports: ['polling'] });
     setSocketExpress(expressSocket);
     setSocketNest(nestSocket);
 
@@ -1144,7 +1128,7 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
     return problematicFiles.length;
   }, [filteredKitDisponibili]);
   // Funzione per renderizzare gruppi di kit inviati
-  const renderGruppiInvii = (gruppi: { invio: OrdiniDiStampaInviiAttributes; kit: RUNTIME_KIT_MONGO[]; kitTotali: number; }[]) => {
+  const renderGruppiInvii = (gruppi: { invio: OrdiniDiStampaInviiAttributes; kit: RUNTIME_KIT[]; kitTotali: number; }[]) => {
     return gruppi.map((gruppo, index) => (
       <div key={gruppo.invio.id_ordinistampainvii || index} className="border border-slate-200 rounded-lg overflow-hidden shadow-sm">
         {/* Header del gruppo */}
@@ -1323,7 +1307,7 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
   }
 
 
-  const renderDettagli = (dettagli: RUNTIME_KIT_MONGO[]) => {
+  const renderDettagli = (dettagli: RUNTIME_KIT[]) => {
     return dettagli.map((kit) => {
       // Ora questa funzione gestisce solo i kit disponibili (non ancora inviati)
       return (

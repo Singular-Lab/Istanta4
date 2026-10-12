@@ -16,10 +16,11 @@ import {
   FileItemKit,
   FileItemKitLog,
   FotoGruppoReferenze,
-  RUNTIME_KIT_MONGO,
+  RUNTIME_KIT,
   ReferenzeIstanta
 } from '../../../lib/types';
 import config from '../config';
+import { urlOlimpo } from '../utils/urlOlimpo';
 import type { TipiDiExportResponseDTO } from '../dto';
 import { IAreaService } from '../interfaces/IAreaService';
 import { ICanaleService } from '../interfaces/ICanaleService';
@@ -259,8 +260,8 @@ export class FileManagementService implements IFileManagementService {
         return {
           id: f.id_olimpo_cloud ?? '',
           nome: f.nome,
-          url: `${config.OLYMPUS_IP_ADDRESS}/materiali/getThumbnailMaterialePdfs?&id=${f.id_olimpo_cloud}`,
-          url_download: `${config.OLYMPUS_IP_ADDRESS}/materiali/getMaterialePDF?id=${f.id_olimpo_cloud}`,
+          url: urlOlimpo('/materiali/getThumbnailMaterialePdfs', { id: f.id_olimpo_cloud }),
+          url_download: urlOlimpo('/materiali/getMaterialePDF', { id: f.id_olimpo_cloud }),
           id_olimpo_cloud: f.id_olimpo_cloud,
           direttive: f.direttive,
           nome_originale: f.nome_originale,
@@ -326,8 +327,8 @@ export class FileManagementService implements IFileManagementService {
           id: f.id_olimpo_cloud ?? '',
           nome: f.nome,
           nome_originale: f.nome_originale,
-          url: `${config.OLYMPUS_IP_ADDRESS}/materiali/getThumbnailMaterialePdfs?&id=${f.id_olimpo_cloud}`,
-          url_download: `${config.OLYMPUS_IP_ADDRESS}/materiali/getMaterialePDF?id=${f.id_olimpo_cloud}`,
+          url: urlOlimpo('/materiali/getThumbnailMaterialePdfs', { id: f.id_olimpo_cloud }),
+          url_download: urlOlimpo('/materiali/getMaterialePDF', { id: f.id_olimpo_cloud }),
           id_olimpo_cloud: f.id_olimpo_cloud,
           direttive: f.direttive,
           isOptional: f.isOptional,
@@ -465,8 +466,8 @@ export class FileManagementService implements IFileManagementService {
           id: f.id_olimpo_cloud ?? '',
           nome: f.nome,
           nome_originale: f.nome_originale,
-          url: `${config.OLYMPUS_IP_ADDRESS}/materiali/getThumbnailMaterialePdfs?&id=${f.id_olimpo_cloud}`,
-          url_download: `${config.OLYMPUS_IP_ADDRESS}/materiali/getMaterialePDF?id=${f.id_olimpo_cloud}`,
+          url: urlOlimpo('/materiali/getThumbnailMaterialePdfs', { id: f.id_olimpo_cloud }),
+          url_download: urlOlimpo('/materiali/getMaterialePDF', { id: f.id_olimpo_cloud }),
           id_olimpo_cloud: f.id_olimpo_cloud,
           direttive: f.direttive,
           pages: f.pages,
@@ -560,59 +561,6 @@ export class FileManagementService implements IFileManagementService {
     }
   }
 
-  async getKitRunTimeById(id: string, get_files: boolean = true): Promise<any> {
-    try {
-      let kit = await this.kitRuntimeService.getKitRuntimeById(id);
-      if (!kit) {
-        throw wrapNotFoundError(new Error("Kit non trovato"), {
-          message: "Kit non trovato",
-          entityType: "KitRuntime",
-          entityId: id
-        });
-      }
-
-      if (!get_files) {
-        return kit;
-      }
-
-      let files = await this.kitRuntimeService.getFilesRuntimeByIdKitRuntime(id);
-      if (!files) {
-        throw wrapNotFoundError(new Error("Kit senza file"), {
-          message: "Kit senza file",
-          entityType: "KitRuntime",
-          entityId: id
-        });
-      }
-
-      const filesArray = await Promise.all(files.map(async (f: FileItemKit) => {
-        return {
-          id: f.id_olimpo_cloud ?? '',
-          nome: f.nome,
-          url: `${config.OLYMPUS_IP_ADDRESS}/materiali/getThumbnailMaterialePdfs?&id=${f.id_olimpo_cloud}`,
-          url_download: `${config.OLYMPUS_IP_ADDRESS}/materiali/getMaterialePDF?id=${f.id_olimpo_cloud}`,
-          id_olimpo_cloud: f.id_olimpo_cloud,
-          direttive: f.direttive,
-          nome_originale: f.nome_originale,
-          isOptional: f.isOptional,
-          tipo_export: f.tipo_export,
-          id_runtime: f.id_runtime,
-          meta_olimpo_cloud: f.meta_olimpo_cloud,
-          tipo_export_codice: f.tipo_export_codice,
-        };
-      }));
-
-      kit.files = filesArray;
-      return kit;
-    } catch (error) {
-      throw wrapDatabaseError(new Error("Errore durante il recupero del kit runtime"), {
-        message: "Errore durante il recupero del kit runtime",
-        operation: 'get',
-        entity: 'KitRuntime',
-        details: { error }
-      });
-    }
-  }
-
   async getProprietaMetaFilesRuntime(idKitRuntime: string): Promise<string[]> {
     try {
       const resultCreazioneCombinazioneDesign = await FilesRuntime.findAll({
@@ -643,7 +591,7 @@ export class FileManagementService implements IFileManagementService {
       if (!codice) {
         codice = EXPORT_DI_SISTEMA.VOL;
       }
-      const combinazioni = await RuntimeKit.findAll({ raw: true }) as unknown as RUNTIME_KIT_MONGO[];
+      const combinazioni = await RuntimeKit.findAll({ raw: true }) as unknown as RUNTIME_KIT[];
       if (!combinazioni) {
         return [];
       }
@@ -698,8 +646,8 @@ export class FileManagementService implements IFileManagementService {
               tipo_export: file.tipo_export,
               codice_tipiexport: exportType.codice,
               idPromo: combinazione.idPromo,
-              url: `${config.OLYMPUS_IP_ADDRESS}/materiali/getThumbnailMaterialePdfs?&id=${file.id_olimpo_cloud}`,
-              url_download: `${config.OLYMPUS_IP_ADDRESS}/materiali/getMaterialePDF?id=${file.id_olimpo_cloud}`
+              url: urlOlimpo('/materiali/getThumbnailMaterialePdfs', { id: file.id_olimpo_cloud }),
+              url_download: urlOlimpo('/materiali/getMaterialePDF', { id: file.id_olimpo_cloud })
             });
             files.push(fileEntry);
           }
@@ -731,7 +679,7 @@ export class FileManagementService implements IFileManagementService {
       const combinazioni = await RuntimeKit.findAll({
         where: whereClause,
         raw: true
-      }) as unknown as RUNTIME_KIT_MONGO[];
+      }) as unknown as RUNTIME_KIT[];
 
       if (combinazioni.length === 0) {
         return [];
@@ -793,8 +741,8 @@ export class FileManagementService implements IFileManagementService {
               tipo_export: file.tipo_export,
               codice_tipiexport: exportType.codice,
               idPromo: combinazione.idPromo,
-              url: `${config.OLYMPUS_IP_ADDRESS}/materiali/getThumbnailMaterialePdfs?&id=${file.id_olimpo_cloud}`,
-              url_download: `${config.OLYMPUS_IP_ADDRESS}/materiali/getMaterialePDF?id=${file.id_olimpo_cloud}`
+              url: urlOlimpo('/materiali/getThumbnailMaterialePdfs', { id: file.id_olimpo_cloud }),
+              url_download: urlOlimpo('/materiali/getMaterialePDF', { id: file.id_olimpo_cloud })
             });
             files.push(fileEntry);
           }
@@ -1613,15 +1561,9 @@ export class FileManagementService implements IFileManagementService {
     req: ExpressRequest,
   ): Promise<any> {
     try {
-      const dir = path.resolve(process.cwd(), 'server/core/public/uploads/materiali_POP/');
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir);
+      if (!file) {
+        throw new BadRequestError({ message: "File del materiale mancante" });
       }
-      // Create uploads directory if it doesn't exist
-
-      // Save file with new name. nomeFile arriva dal chiamante: basename impedisce
-      // di scrivere o cancellare fuori da dir.
-      const newFilePath = path.resolve(dir, path.basename(String(nomeFile)));
       const fileExtension = path.extname(file.originalname).toLowerCase();
 
       // Get export type
@@ -1636,19 +1578,18 @@ export class FileManagementService implements IFileManagementService {
       const codiceExport = tipoDiExportModel.codice;
 
       if (this.isPdfForStandardExport(fileExtension, codiceExport)) {
-        return await this.handlePdfUpload(file, nomeFile, meta, guidKitRuntime, tipoExport, tipoDiExportModel, newFilePath, req);
+        return await this.handlePdfUpload(file, nomeFile, meta, guidKitRuntime, tipoExport, tipoDiExportModel, req);
       }
       else if (this.isVolFile(fileExtension, codiceExport)) {
         return await this.handleVOLUpload(file, meta, guidKitRuntime, tipoExport, tipoDiExportModel, req)
       }
       else if (this.isWebpliantFile(fileExtension, codiceExport)) {
-        return await this.handleWebpliantUpload(file, nomeFile, guidKitRuntime, newFilePath);
+        return await this.handleWebpliantUpload(file, nomeFile, guidKitRuntime);
       }
       else if (this.isCorreggoPackFile(fileExtension, codiceExport)) {
         return await this.handleCorreggoPackUpload(file, nomeFile, meta, guidKitRuntime, tipoExport, tipoDiExportModel, req);
       }
       else {
-        // newFilePath non e' ancora stato scritto: il temporaneo di multer lo rimuove il finally
         throw new BadRequestError({
           message: `Tipo di file '${fileExtension}' non supportato per il codice export '${codiceExport}'`,
         });
@@ -1671,8 +1612,11 @@ export class FileManagementService implements IFileManagementService {
         details: { error }
       });
     } finally {
-      // force: un temporaneo gia' spostato o rimosso non deve coprire l'errore vero
-      await fs.promises.rm(file.path, { force: true });
+      // force: un temporaneo gia' spostato o rimosso non deve coprire l'errore vero.
+      // Senza file (richiesta incompleta) non c'e' nulla da rimuovere.
+      if (file?.path) {
+        await fs.promises.rm(file.path, { force: true });
+      }
     }
   }
 
@@ -1881,7 +1825,6 @@ export class FileManagementService implements IFileManagementService {
     guidKitRuntime: string,
     tipoExport: string,
     tipoDiExportModel: TipiDiExportResponseDTO,
-    newFilePath: string,
     req: ExpressRequest
   ): Promise<any> {
     if (!this.isValidReferenzeIstantaMeta(meta)) {
@@ -1905,8 +1848,7 @@ export class FileManagementService implements IFileManagementService {
   private async handleWebpliantUpload(
     file: Express.Multer.File,
     nomeFile: string,
-    guidKitRuntime: string,
-    newFilePath: string
+    guidKitRuntime: string
   ): Promise<any> {
     const fileBuffer = await fs.promises.readFile(file.path);
     const fileString = fileBuffer.toString();

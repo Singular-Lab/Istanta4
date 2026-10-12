@@ -3,7 +3,6 @@ import { sequelize } from '../db/SequelizeConnector';
 
 /**
  * Modello WorkspaceWebpliant per gestione workspace webpliant
- * Basato sulla struttura MongoDB fornita dall'utente
  */
 
 export interface WorkspaceWebpliantAttributes {

@@ -39,6 +39,8 @@
     "models:sync-db-objects": "tsx server/core/scripts/initializeModels.ts sync-db-objects",
     "migrate:momenti-linear": "tsx server/core/scripts/migrateMomentiLinear.ts",
     "migrate:momenti-linear:dry-run": "tsx server/core/scripts/migrateMomentiLinear.ts --dry-run",
+    "migrate:olimpo-urls": "tsx server/core/scripts/migrateOlimpoUrls.ts",
+    "migrate:olimpo-urls:dry-run": "tsx server/core/scripts/migrateOlimpoUrls.ts --dry-run",
     "plugin:css": "tsx server/core/scripts/compilePluginCss.ts",
     "test": "vitest",
     "test:server": "vitest run",

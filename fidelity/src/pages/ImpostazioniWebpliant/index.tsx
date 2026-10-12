@@ -74,7 +74,6 @@ function Main() {
       nomeWorkspace: string, idArea: string, idCanale: string, idPuntoVendita?: string, webpliant: any[], sitemap: any[]
     }) => {
       // Nessun catch: l'errore deve arrivare a onError, non diventare un "creato con successo"
-      // Mappa idPuntoVendita a idPV per il backend MongoDB
       const payload = {
         ...data,
         idPV: data.idPuntoVendita || undefined,

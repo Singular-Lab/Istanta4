@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { Request, Response } from 'express';
 import 'express-session';
+import fs from 'fs';
 import multer from 'multer';
 import { v4 as uuidv4 } from "uuid";
 import { Colorize } from '../../../lib/Colorize';
@@ -289,7 +290,14 @@ export class FileManagementController extends BaseController {
     try {
       const { idPromo, idKit } = req.params;
       const files = req.files as Express.Multer.File[];
-      const metadata = JSON.parse(req.body.metadata);
+      let metadata;
+      try {
+        metadata = JSON.parse(req.body.metadata);
+      } catch {
+        // Il service non viene chiamato: i temporanei caricati da multer vanno rimossi qui
+        await Promise.all((files ?? []).map(f => fs.promises.rm(f.path, { force: true })));
+        throw new BadRequestError({ message: 'Metadati dei file non validi' });
+      }
       const result = await this.fileManagementService.uploadKitManuali(idPromo, idKit, files, metadata, req);
       this.sendResponse(res, HttpStatusCode.CREATED, result);
     } catch (error) {

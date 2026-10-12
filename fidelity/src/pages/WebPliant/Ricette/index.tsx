@@ -90,52 +90,6 @@ const Ricette: React.FC = () => {
                                         </div>
                                     </div>
                                 </div>
-                                {/* <div className="product-single__thumbnail">
-                                    <div className="swiper-container">
-                                        <div className="swiper-wrapper">
-                                            <div className="swiper-slide product-single__image-item">
-                                                <img
-                                                    loading="lazy"
-                                                    className="h-auto"
-                                                    src="../images/ricette_conad/r3_2.webp"
-                                                    width={104}
-                                                    height={104}
-                                                    alt=""
-                                                />
-                                            </div>
-                                            <div className="swiper-slide product-single__image-item">
-                                                <img
-                                                    loading="lazy"
-                                                    className="h-auto"
-                                                    src="../images/ricette_conad/r3_1.webp"
-                                                    width={104}
-                                                    height={104}
-                                                    alt=""
-                                                />
-                                            </div>
-                                            <div className="swiper-slide product-single__image-item">
-                                                <img
-                                                    loading="lazy"
-                                                    className="h-auto"
-                                                    src="../images/ricette_conad/r3_3.webp"
-                                                    width={104}
-                                                    height={104}
-                                                    alt=""
-                                                />
-                                            </div>
-                                            <div className="swiper-slide product-single__image-item">
-                                                <img
-                                                    loading="lazy"
-                                                    className="h-auto"
-                                                    src="../images/imgrefCNO/97557.png"
-                                                    width={104}
-                                                    height={104}
-                                                    alt=""
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div> */}
                             </div>
                         </div>
                         <div className={clsx(styleWp["wp-col-lg-5"])}>

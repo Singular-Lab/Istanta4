@@ -28,8 +28,6 @@ Il compose `docker-compose.dev.yml` include:
 | loki        | grafana/loki          | 3100    |
 | promtail    | grafana/promtail      | —       |
 
-**MongoDB non è incluso.** `MONGO_URL` e `MONGO_DB_NAME` sono stati resi opzionali nella config.
-
 Per avviare:
 ```bash
 cp .env.docker.example .env.docker

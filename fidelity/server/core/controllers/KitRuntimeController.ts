@@ -3,7 +3,7 @@ import 'express-session';
 import _ from "lodash";
 import { v4 as uuidv4 } from "uuid";
 import { CATEGORIA_ATTIVITA, HttpStatusCode, STATO_LAVORAZIONE_KIT_RUNTIME, STATO_PROMO, TIPO_ATTIVITA } from '../../../lib/enums';
-import { DESIGN_KIT_MONGO } from '../../../lib/types';
+import { DESIGN_KIT } from '../../../lib/types';
 import { BaseController } from '../base/BaseController';
 import { IDesignKitService } from '../interfaces/IDesignKitService';
 import { IKitRuntimeService } from '../interfaces/IKitRuntimeService';
@@ -92,7 +92,7 @@ export class KitRuntimeController extends BaseController {
         tipoLavorazione?: number
       }
       if (data.id != undefined) {
-        const resultDesignKit = await this.designKitService.getCombinazioneDesignById(data.id) as DESIGN_KIT_MONGO
+        const resultDesignKit = await this.designKitService.getCombinazioneDesignById(data.id) as DESIGN_KIT
         if (resultDesignKit == undefined) {
           res.status(HttpStatusCode.NOT_FOUND).json({ esito: false, content: null, error: "Kit runtime non trovato" });
           return;
@@ -172,7 +172,7 @@ export class KitRuntimeController extends BaseController {
         for (let singleKit of result) {
           singleKit.idPromo = data.idPromo;
         }
-        const resultInizioLavorazionePerIstanta = await this.kitRuntimeService.bulkCreateRuntime(result.map((singleKit: DESIGN_KIT_MONGO) => ({ ...singleKit, idPromo: data.idPromo })) as (DESIGN_KIT_MONGO & { idPromo: string; })[])
+        const resultInizioLavorazionePerIstanta = await this.kitRuntimeService.bulkCreateRuntime(result.map((singleKit: DESIGN_KIT) => ({ ...singleKit, idPromo: data.idPromo })) as (DESIGN_KIT & { idPromo: string; })[])
 
         if (req.session.id_utente) {
           await ServerUtils.CREA_ATTIVITA(

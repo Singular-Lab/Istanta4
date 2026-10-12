@@ -8,7 +8,7 @@
  */
 import React from 'react';
 import { LavorazioneType, FileUpload } from '../types';
-import { RUNTIME_KIT_MONGO } from '../../../../lib/types';
+import { RUNTIME_KIT } from '../../../../lib/types';
 import { STATO_LAVORAZIONE_KIT_RUNTIME } from '../../../../lib/enums';
 import SearchAndFilters from '../components/SearchAndFilters';
 import TabButtons from '../components/TabButtons';
@@ -53,7 +53,7 @@ const ManualeWorkflow: React.FC<ManualeWorkflowProps> = ({
 }) => {
     const { state } = useLavorazione();
     if (!manuale) return null;
-    const statoLavorazione = (lavorazione as RUNTIME_KIT_MONGO).stato_lavorazione;
+    const statoLavorazione = (lavorazione as RUNTIME_KIT).stato_lavorazione;
 
     switch (statoLavorazione) {
         case STATO_LAVORAZIONE_KIT_RUNTIME.IN_LAVORAZIONE:
@@ -154,7 +154,7 @@ const ManualeWorkflow: React.FC<ManualeWorkflowProps> = ({
                             <div className="flex items-center gap-2 text-slate-500 mb-8">
                                 <Lucide icon="Calendar" className="w-4 h-4" />
                                 <span className="text-sm">
-                                    Pubblicato il {new Date((lavorazione as RUNTIME_KIT_MONGO).updatedAt || '').toLocaleDateString('it-IT', {
+                                    Pubblicato il {new Date((lavorazione as RUNTIME_KIT).updatedAt || '').toLocaleDateString('it-IT', {
                                         day: 'numeric',
                                         month: 'long',
                                         year: 'numeric',

@@ -8,11 +8,10 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 public/uploads/*
+uploads/
+.tmp-test/
 coverage/*
 public/images/custom
-public/images/icone_insegna
-dist/images/icone_insegna
-icone_insegne
 node_modules
 dist/
 dist_server

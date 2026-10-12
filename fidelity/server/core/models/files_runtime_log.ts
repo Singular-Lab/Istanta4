@@ -4,7 +4,6 @@ import { sequelize } from '../db/SequelizeConnector';
 
 /**
  * Modello FilesRuntimeLog per gestione log dei file runtime
- * Basato sulla struttura MongoDB fornita dall'utente
  */
 
 export interface FilesRuntimeLogAttributes {

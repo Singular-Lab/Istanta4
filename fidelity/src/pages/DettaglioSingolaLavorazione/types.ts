@@ -1,8 +1,8 @@
-import { DESIGN_KIT_MONGO, RUNTIME_KIT_MONGO, TipiDiExportAttributes, FileItemKit } from "../../../lib/types";
+import { DESIGN_KIT, RUNTIME_KIT, TipiDiExportAttributes, FileItemKit } from "../../../lib/types";
 
 export type LavorazioneType = ((
-    DESIGN_KIT_MONGO & { nomeCanale: string, nomeArea: string, lavorazioneStarted: boolean, isDesignKit: boolean, tipiExport: TipiDiExportAttributes[], numero_referenze_trovate: number }) |
-    RUNTIME_KIT_MONGO & { nomeCanale: string, nomeArea: string, lavorazioneStarted: boolean, isDesignKit: boolean, tipiExport: TipiDiExportAttributes[], numero_referenze_trovate: number });
+    DESIGN_KIT & { nomeCanale: string, nomeArea: string, lavorazioneStarted: boolean, isDesignKit: boolean, tipiExport: TipiDiExportAttributes[], numero_referenze_trovate: number }) |
+    RUNTIME_KIT & { nomeCanale: string, nomeArea: string, lavorazioneStarted: boolean, isDesignKit: boolean, tipiExport: TipiDiExportAttributes[], numero_referenze_trovate: number });
 
 export interface FileUpload {
     id: string;

@@ -16,15 +16,7 @@ vi.mock('../../logger', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-// Il controller all'import crea cartelle di upload e si aggancia al server websocket: qui non serve nessuno dei due
-vi.mock('../../config/multerConfig', () => ({
-  FILE_SIZE_LIMITS: { MEDIUM: 1024 },
-  createDiskStorage: () => undefined,
-  createMimeFilter: () => undefined,
-  createUpload: () => ({ single: () => (_req: any, _res: any, next: any) => next() }),
-  ensureUploadDir: () => undefined,
-}));
-
+// Il controller all'import si aggancia al server websocket: qui non serve
 vi.mock('../../../ws-server', () => ({
   emitToClients: () => undefined,
 }));
@@ -84,5 +76,19 @@ describe('POST /api/saveWebpliantConfig', () => {
     expect(res.status).toBe(200);
     const [salvata] = configService.saveConfigWebPliantFromVolantino.mock.calls[0];
     expect(salvata.webpliant.logo_header[0].url).toMatch(/getThumbNailOnDemand\?guidId=guid-logo$/);
+  });
+
+  it.each([
+    ['relativa al proxy', '/olimpo/foto/getThumbNailOnDemand?guidId=guid-icona'],
+    ['assoluta', 'http://olimpo:3000/foto/getThumbNailOnDemand?guidId=guid-icona'],
+  ])("un'icona della pagina rimandata come URL %s viene salvata come GUID", async (_forma, icona) => {
+    vi.spyOn(axios, 'post').mockRejectedValue(new Error('chiamata non attesa'));
+    const { app, configService } = createApp();
+
+    const res = await request(app).post('/api/saveWebpliantConfig').send(configurazione('', icona));
+
+    expect(res.status).toBe(200);
+    const [salvata] = configService.saveConfigWebPliantFromVolantino.mock.calls[0];
+    expect(salvata.webpliant.icona_pagina).toBe('guid-icona');
   });
 });

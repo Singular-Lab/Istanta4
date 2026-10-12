@@ -18,6 +18,7 @@ import { Referenze as ReferenzeIstantaModel } from '../models/referenze';
 import { Ricette as RicetteModel } from '../models/ricette';
 import { RuntimeKit as KitRunTimeModel } from '../models/runtime_kit';
 import { ServerUtils } from '../utils/ServerUtils';
+import { urlOlimpo } from '../utils/urlOlimpo';
 
 // Quoting dei valori che entrano in un literal SQL: lo fa Sequelize, non a mano.
 const sqlString = (value: unknown): string => ReferenzeIstantaModel.sequelize!.escape(String(value));
@@ -296,7 +297,7 @@ export class GPTService implements IGPTService {
         .map((f: any) => typeof f === "string" ? f : f?.guidId)
         .filter(Boolean)
         .map((guidId: string) =>
-          `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${guidId}`
+          urlOlimpo('/foto/getThumbNailOnDemand', { guidId })
         )
     }));
 
@@ -359,7 +360,7 @@ export class GPTService implements IGPTService {
       fotoRicetta[fotoIndex] = {
         ...fotoRicetta[fotoIndex],
         id_olimpo_cloud: send.data.record.guidId,
-        url: `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${send.data.record.guidId}`,
+        url: urlOlimpo('/foto/getThumbNailOnDemand', { guidId: send.data.record.guidId }),
         meta: {
           id: ricetta.id,
           device: "desktop",
@@ -370,7 +371,7 @@ export class GPTService implements IGPTService {
       await RicetteModel.update({ foto_ricetta: fotoRicetta }, { where: { id: ricetta.id } });
     }
     log.info('Foto ricetta rigenerata con successo');
-    return `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${send.data.record.guidId}`;
+    return urlOlimpo('/foto/getThumbNailOnDemand', { guidId: send.data.record.guidId });
   }
 
   async generaFotoRicetta(params: { apiKey: string; id: string; }, request: Request): Promise<string> {
@@ -443,7 +444,7 @@ export class GPTService implements IGPTService {
     const nuovaFoto: FotoRicetta = {
       main: !hasFotoMain,
       id_olimpo_cloud: send.data.record.guidId,
-      url: `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${send.data.record.guidId}`,
+      url: urlOlimpo('/foto/getThumbNailOnDemand', { guidId: send.data.record.guidId }),
       meta: {
         id: ricetta.titolo,
         device: "desktop",
@@ -458,7 +459,7 @@ export class GPTService implements IGPTService {
 
     log.info('Foto ricetta generata con successo');
 
-    return `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${send.data.record.guidId}`;
+    return urlOlimpo('/foto/getThumbNailOnDemand', { guidId: send.data.record.guidId });
   }
 
   async generaAbbinamentoVino(params: { apiKey: string; id: string; }): Promise<any> {
@@ -815,7 +816,7 @@ export class GPTService implements IGPTService {
             .map((f: any) => typeof f === "string" ? f : f?.guidId)
             .filter(Boolean)
             .map((guidId: string) =>
-              `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${guidId}`
+              urlOlimpo('/foto/getThumbNailOnDemand', { guidId })
             )
         }));
       }
@@ -959,7 +960,7 @@ export class GPTService implements IGPTService {
       }
 
       // Step 3: Trova tutte le referenze per questi kit.
-      // queryViniConfig usa formato { "dataFields.xxx": "value" } (path MongoDB).
+      // queryViniConfig usa formato { "dataFields.xxx": "value" }.
       // Convertiamo in Sequelize JSONB literal: data_fields->>'xxx' = 'value'
       const guidIdKits = tuttiIKitPerPromozione.map(kit => kit.id);
       const viniLiterals = Object.entries(queryViniConfig).map(([key, val]) => {
@@ -1010,7 +1011,7 @@ export class GPTService implements IGPTService {
             .map((f: any) => typeof f === "string" ? f : f?.guidId)
             .filter(Boolean)
             .map((guidId: string) =>
-              `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${guidId}`
+              urlOlimpo('/foto/getThumbNailOnDemand', { guidId })
             ),
           approfondimento: appRaw ? {
             ...appRaw,

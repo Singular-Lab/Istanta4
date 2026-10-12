@@ -231,7 +231,8 @@ test("la scheda delle foto extra segna le foto decise, con Togli al posto dei co
     assert.match(pannello, /var decisione = me\.decisioneExtraDellaFoto\(decisioni, elemento\.sigla, elemento\.tipo\);\s*var button;\s*if \(decisione != null\) \{\s*button = me\.pulsanteTogliDecisioneExtra\(decisione, box\);\s*\}\s*else \{\s*button = \$\('<button id="aggiungiButton"/);
     assert.match(pannello, /row\.append\(text\);\s*if \(decisione != null\) \{\s*row\.append\(me\.segnoDecisioneExtra\(decisione\)\);/);
     //Manuali: la casella resta ferma e la riga ha segno e Togli.
-    assert.match(pannello, /var decisioneManuale = me\.decisioneExtraDellaFoto\(decisioni, elemento\.sigla, elemento\.tipo\);\s*if \(decisioneManuale != null\) \{\s*checkbox\.prop\("disabled", true\);/);
+    //I20-1082: la decisione si cerca per chiave (la sigla, o il nome per le extra caricate a mano).
+    assert.match(pannello, /var decisioneManuale = me\.decisioneExtraDellaFoto\(decisioni, me\.chiaveExtra\(elemento\), elemento\.tipo\);\s*if \(decisioneManuale != null\) \{\s*checkbox\.prop\("disabled", true\);/);
     assert.match(pannello, /row\.append\(me\.segnoDecisioneExtra\(decisioneManuale\)\);\s*row\.append\(me\.pulsanteTogliDecisioneExtra\(decisioneManuale, box\)\);/);
     //Il Togli riusa quello della finestra delle differenze e poi ridisegna pannello, segnalazioni e segnalino.
     assert.match(testo, /await me\.togliExtraLavorazione\(voce, async function \(\) \{\s*me\.FotoExtraPanel\(box\);\s*me\.memorizzaSegnalazioni\(await me\.differenzeDatiNelBox\(box, me\.schedeRefDati\)\);\s*me\.aggiornaPulsanteSegnalazioni\(\);/);

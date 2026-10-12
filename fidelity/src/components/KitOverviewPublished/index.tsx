@@ -15,7 +15,7 @@ import relativeTime from "dayjs/plugin/relativeTime";
 import { FC, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { STATO_LAVORAZIONE_KIT_RUNTIME, STATO_PROMO } from "../../../lib/enums";
-import { FileItemKit, OggettoTipiDiExport, RUNTIME_KIT_MONGO } from "../../../lib/types";
+import { FileItemKit, OggettoTipiDiExport, RUNTIME_KIT } from "../../../lib/types";
 import ReferenzeInVolantinoBox from "../ReferenzeInVolantinoBox";
 
 dayjs.extend(duration);
@@ -23,7 +23,7 @@ dayjs.extend(relativeTime);
 dayjs.locale("it");
 
 interface KitOverviewPublishedProps {
-    lavorazione: RUNTIME_KIT_MONGO;
+    lavorazione: RUNTIME_KIT;
     filesData?: FileItemKit[];
     isLoadingFiles?: boolean;
     exportTypes: string[];

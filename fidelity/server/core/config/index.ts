@@ -13,10 +13,6 @@ const envSchema = z.object({
     PORTA_VITE: z.string().regex(/^\d+$/).transform(Number).default('3000'),
     CLIENT_URL: z.string().url(),
 
-    // Configurazione MongoDB (opzionale — non usato nel setup Docker PostgreSQL-only)
-    MONGO_URL: z.string().url().optional(),
-    MONGO_DB_NAME: z.string().optional(),
-
     // Configurazione OpenAI
     OPENAI_API_KEY: z.string(),
     ASSISTANT_ID: z.string(),
@@ -56,8 +52,6 @@ const envSchema = z.object({
     VITE_OLYMPUS_IP_ADDRESS_CORS: z.string().url(),
     SESSION_SECRET: z.string().min(1),
     WS_PORT: z.string().regex(/^\d+$/).transform(Number).default('3400'),
-    // Configurazione percorsi
-    ICONE_INSEGNA_DIR: z.string(),
 
     //SMTP EMAIL CONFIG
     SMTP_HOST: z.string(),
@@ -80,6 +74,12 @@ const envSchema = z.object({
     // come destinazione per external_fico al posto di service.url; service.url viene
     // passato come parametro ?route=
     FICO_BASE_URL: z.string().url().optional(),
+
+    // Lette direttamente da process.env (SequelizeConnector, server.ts, redis.client):
+    // dichiarate qui perche' l'unico .env caricato e' quello della cartella di avvio
+    DB_POOL_MAX: z.string().optional(),
+    DB_SLOW_QUERY_THRESHOLD: z.string().optional(),
+    REDIS_URL: z.string().optional(),
 
     //AD
 
