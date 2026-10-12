@@ -19,7 +19,6 @@ const test = require("node:test");
 const assert = require("node:assert");
 const { leggiFileDelPlugin } = require("./fileDelPlugin");
 
-const confronti = require("../../plugin/confronti.js");
 const InputEditController = require("../../plugin/InputEditController.js");
 const schedaRef = require("../../plugin/schedaRef.js");
 
@@ -72,10 +71,8 @@ function jQueryFinto(pulsante, azioniStrutturali = 0) {
 
 function globaliDellaScheda(pulsante, azioniStrutturali) {
     return {
-        confronti: confronti,
         pluginMiddleware: {
             getCampo: () => null,
-            getStiliBruciaturaDescrizione: () => ["MAX_PEZZI"],
             getNameStileUniversale: (s) => UNIVERSALI[s] || null
         },
         Utility: { parseLabel: (l) => String(l == null ? "" : l).split("$")[0] },
@@ -221,11 +218,10 @@ test("i campi vuoti che lo schema aggiunge non sono ripetuti, e la descrizione l
     assert.strictEqual(operazioni.revisione.descrizione2, "Fior fiore");
 });
 
-test("i tratti nascosti e le bruciature non contano fra i ripetuti", () => {
+test("i tratti nascosti e quelli senza descrizione fondamentale non contano fra i ripetuti", () => {
     const voci = [
         { stile: "DESCRIZIONE_TIPO", fondamentale: "descrizione3", valore: "condita" },
         { stile: "DESCRIZIONE_TIPO", fondamentale: "descrizione3", valore: "testo nascosto", nascosto: true },
-        { stile: "MAX_PEZZI", fondamentale: "descrizione3", valore: "MAX 4 PEZZI", bruciatura: true },
         { stile: "SENZA_FONDAMENTALE", fondamentale: null, valore: "x" },
         { stile: "SENZA_FONDAMENTALE", fondamentale: null, valore: "y" }
     ];
@@ -262,16 +258,6 @@ test("in sola lettura i testi di un'altra variante non sono una modifica", () =>
         assert.strictEqual(c.descrizioneDiversaDallArchivio(), false);
         assert.strictEqual(c.getOperazioniDiSalvataggioDaFare(false).revisione.descrizione3, NON_TOCCATO);
     });
-});
-
-test("le bruciature restano fuori dal salvataggio come prima", () => {
-    const campi = QUATTRO_UGUALI().concat([campo("MAX_PEZZI", "\nMAX 4 PEZZI PER CARTA SOCIO")]);
-    campi[0].testo = "INSALATA DI MARE CONDITA";
-
-    const operazioni = salvataggio(campi);
-
-    assert.strictEqual(operazioni.revisione.descrizione1, "INSALATA DI MARE CONDITA");
-    assert.doesNotMatch(operazioni.revisione.valoreIndd, /MAX/);
 });
 
 /* ---- il pulsante Salva modifiche ---- */

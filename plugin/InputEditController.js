@@ -336,11 +336,10 @@ class InputEditController {
 
     /// I20-1084: i campi della descrizione, uno per textarea, come li guarda il salvataggio: lo
     /// stile, la descrizione fondamentale a cui porta (null se nessuna), il testo, se il campo ha
-    /// ricevuto una modifica, e se e' un tratto nascosto o di bruciatura.
+    /// ricevuto una modifica, e se e' un tratto nascosto.
     vociDellaDescrizione() {
         const famiglia = this.datasource != null ? this.datasource["descrizione"] : null;
         const lista = famiglia != null && Array.isArray(famiglia.lista) ? famiglia.lista : [];
-        const me = this;
 
         return lista.map(function (el) {
             const stile = $(el).attr("currentcharacterstyle");
@@ -350,8 +349,7 @@ class InputEditController {
                 fondamentale: universale != null ? universale.fondamentale : null,
                 valore: $(el).val(),
                 modificato: $(el).hasClass("textModified"),
-                nascosto: $(el).attr("trattonascosto") == "1",
-                bruciatura: me.eTrattoDiBruciatura("descrizione", stile)
+                nascosto: $(el).attr("trattonascosto") == "1"
             };
         });
     }
@@ -361,12 +359,12 @@ class InputEditController {
     /// tratti per la stessa descrizione non si sa quale mandare al server, e il salvataggio si
     /// ferma. I tratti vuoti non contano: sono quelli che lo schema aggiunge per gli stili
     /// mancanti, o quelli che l'operatore ha svuotato spostandone il testo in un altro. Non
-    /// contano nemmeno i nascosti e le bruciature, che descrizione non sono.
+    /// contano nemmeno i nascosti, che l'operatore non vede.
     static trattiRipetuti(voci) {
         const perFondamentale = {};
 
         (voci || []).forEach(function (voce) {
-            if (voce == null || voce.fondamentale == null || voce.nascosto || voce.bruciatura) {
+            if (voce == null || voce.fondamentale == null || voce.nascosto) {
                 return;
             }
             if (InputEditController.testoPerConfronto(voce.valore) === "") {
@@ -420,7 +418,7 @@ class InputEditController {
         const cambiati = [];
 
         ["descrizione1", "descrizione2", "descrizione3", "descrizione4"].forEach(function (fondamentale, indice) {
-            const sue = (voci || []).filter(v => v != null && v.fondamentale === fondamentale && !v.bruciatura);
+            const sue = (voci || []).filter(v => v != null && v.fondamentale === fondamentale);
             if (sue.length === 0 || ripetuti.some(r => r.fondamentale === fondamentale)) {
                 return;
             }
