@@ -151,6 +151,8 @@ const pannelli = {
         bottone.css("cursor", "pointer");
         bottone.css("padding", "0px 10px");
         bottone.css("font-size", "14px");
+        //I20-1087: la X non si restringe mai: con un codice lungo cede solo il codice.
+        bottone.css("flex", "0 0 auto");
         bottone.on("click", () => this._chiudiSchedaDalReport());
 
         testata.append(bottone);
