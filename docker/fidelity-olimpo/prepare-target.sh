@@ -284,7 +284,7 @@ avvisa_dollaro OLIMPO_DB_PASSWORD
 echo
 echo "Variabili obbligatorie di fidelity.env"
 # L'elenco è quello di server/core/config/index.ts, meno le variabili che imposta
-# il compose (DB_POSTGRESQL_*, NODE_*, WS_PORT, ICONE_INSEGNA_DIR):
+# il compose (DB_POSTGRESQL_*, NODE_*, WS_PORT):
 # quelle in fidelity.env verrebbero comunque ignorate, perché `environment` vince
 # su `env_file`.
 errori_prima=$errori

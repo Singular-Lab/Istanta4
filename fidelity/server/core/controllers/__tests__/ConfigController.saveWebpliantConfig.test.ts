@@ -16,15 +16,7 @@ vi.mock('../../logger', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-// Il controller all'import crea cartelle di upload e si aggancia al server websocket: qui non serve nessuno dei due
-vi.mock('../../config/multerConfig', () => ({
-  FILE_SIZE_LIMITS: { MEDIUM: 1024 },
-  createDiskStorage: () => undefined,
-  createMimeFilter: () => undefined,
-  createUpload: () => ({ single: () => (_req: any, _res: any, next: any) => next() }),
-  ensureUploadDir: () => undefined,
-}));
-
+// Il controller all'import si aggancia al server websocket: qui non serve
 vi.mock('../../../ws-server', () => ({
   emitToClients: () => undefined,
 }));

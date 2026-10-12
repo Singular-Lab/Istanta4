@@ -358,6 +358,12 @@ Sui target installati prima che MongoDB fosse tolto dal compose resta il volume
 cancella: se ne serve una copia, va fatta prima di rimuoverlo a mano con
 `docker volume rm`.
 
+Restano orfani anche `fidelity_insegne` e `fidelity_materiali`, e si possono
+rimuovere con `docker volume rm` senza copia: non contengono dati da conservare.
+Il primo ospitava i CSS degli stili WebPliant di passaggio, che ora restano in
+memoria; il secondo i materiali caricati in attesa di essere inoltrati a Olimpo,
+che ora transitano da `fidelity_uploads` (`/app/uploads/tmp`).
+
 ### Ripristinare
 
 I passi che seguono **cancellano** i database sul target. Prima conviene un

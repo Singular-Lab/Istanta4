@@ -36,17 +36,13 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/server ./server
 COPY --from=builder /app/lib ./lib
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/src/assets/images ./src/assets/images
 COPY --from=builder /app/docker/server-entrypoint.prod.sh ./docker/server-entrypoint.prod.sh
 
 # Directory scrivibili dal runtime non-root:
-# - /home/node/insegne (icone insegne)
-# - /app/uploads/tmp (upload temporanei Multer)
-# - /app/public/uploads/materiali_POP (materiali pubblicazioni)
-# - /app/server/core/public/uploads/materiali_POP (compatibilità con path legacy)
+# - /app/uploads/tmp (file caricati in attesa di elaborazione, vedi server/core/config/percorsi.ts)
 # - /app/logs (LogService)
-RUN mkdir -p /home/node/insegne /app/uploads/tmp /app/public/uploads/materiali_POP /app/server/core/public/uploads/materiali_POP /app/logs \
-  && chown -R node:node /home/node/insegne /app/uploads /app/public/uploads /app/server/core/public/uploads /app/logs
+RUN mkdir -p /app/uploads/tmp /app/logs \
+  && chown -R node:node /app/uploads /app/logs
 
 RUN chmod +x docker/server-entrypoint.prod.sh
 

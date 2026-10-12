@@ -52,8 +52,6 @@ const envSchema = z.object({
     VITE_OLYMPUS_IP_ADDRESS_CORS: z.string().url(),
     SESSION_SECRET: z.string().min(1),
     WS_PORT: z.string().regex(/^\d+$/).transform(Number).default('3400'),
-    // Configurazione percorsi
-    ICONE_INSEGNA_DIR: z.string(),
 
     //SMTP EMAIL CONFIG
     SMTP_HOST: z.string(),

@@ -2,10 +2,8 @@ import axios from 'axios';
 import CleanCSS from 'clean-css';
 import { Request, Response } from 'express';
 import 'express-session';
-import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import util from 'util';
 import { v4 as uuidv4 } from 'uuid';
 import { HttpStatusCode, TIPO_UTENTI } from '../../../lib/enums';
 import { BadRequestError, ExternalApiError, ForbiddenError } from '../../../lib/errors';
@@ -15,10 +13,8 @@ import { BaseController } from '../base/BaseController';
 import config from '../config';
 import {
   FILE_SIZE_LIMITS,
-  createDiskStorage,
   createMimeFilter,
-  createUpload,
-  ensureUploadDir
+  createUpload
 } from '../config/multerConfig';
 import { IConfigService } from '../interfaces/IConfigService';
 import { log } from '../logger';
@@ -36,11 +32,9 @@ const modalitaTipiDiExportReverseMapping: { [key: string]: string } = {
 };
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const nomeDirInsegna = config.ICONE_INSEGNA_DIR as string;
-ensureUploadDir(nomeDirInsegna);
 
+// Il CSS viene minificato e salvato nella configurazione: resta in memoria, mai su disco
 const uploadCss = createUpload({
-  storage: createDiskStorage(nomeDirInsegna, (_req, file) => `${Date.now()}-${file.originalname}`),
   fileSize: FILE_SIZE_LIMITS.MEDIUM,
   fileFilter: createMimeFilter(['text/css'], 'Formato file non valido. Solo CSS accettato.')
 });
@@ -134,15 +128,12 @@ export class ConfigController extends BaseController {
         });
       }
       if (file.mimetype !== "text/css") {
-        await util.promisify(fs.unlink)(file.path);
         throw new BadRequestError({
           message: "Formato file non valido"
         });
       }
-      const fileContent = await util.promisify(fs.readFile)(file.path, 'utf8');
-      const minified = ServerUtils.minifyCSS(fileContent);
-      const result = await this.configService.caricaStiliInConfig(id, minified);
-      await util.promisify(fs.unlink)(file.path);
+      const minified = ServerUtils.minifyCSS(file.buffer.toString('utf8'));
+      await this.configService.caricaStiliInConfig(id, minified);
       res.status(HttpStatusCode.OK).json({ message: "File elaborato e cancellato con successo" });
     } catch (error: any) {
       this.handleError(res, error);
