@@ -24,6 +24,7 @@ import { permissionGuard } from '../middleware/permissionGuard';
 import { userRoleGuard } from '../middleware/userRoleGuard';
 import { AuditLogService } from '../services/AuditLogService';
 import { ServerUtils } from '../utils/ServerUtils';
+import { urlOlimpo } from '../utils/urlOlimpo';
 
 // Mapping for modalita tipi di export
 const modalitaTipiDiExportReverseMapping: { [key: string]: string } = {
@@ -209,7 +210,7 @@ export class ConfigController extends BaseController {
             { headers: { Authorization: req.session.private_key } }
           );
           verificaEsitoOlympus(result.data);
-          logo.url = `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${result.data.guidId}`;
+          logo.url = urlOlimpo('/foto/getThumbNailOnDemand', { guidId: result.data.guidId });
         }
       }
 

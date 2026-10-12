@@ -21,6 +21,7 @@ import {
   StileBoxReferenza,
 } from "../../../../lib/types";
 import { urlFoto } from "@/utils/helper";
+import Lucide from "@/components/Base/Lucide";
 import { useGestioneReferenze } from "@/context/GestioneReferenzeContext";
 import { motion } from "framer-motion";
 import parse from "html-react-parser";
@@ -619,12 +620,7 @@ const BoxRef: React.FC<BoxReferenzeProps> = ({
                       src={ca.contenuto.logo == "custom" ? ca.contenuto.logoUrl : ca.contenuto.logo}
                     />
                   ) : (
-                    <img
-                      alt={"Logo piu dettagli"}
-                      loading="lazy"
-                      width={50}
-                      src={"../../../../images/custom/ico_more_details.png"}
-                    />
+                    <Lucide icon="Info" className="w-12 h-12" aria-label="Logo piu dettagli" />
                   )}
                   {parse(ca.contenuto.descrizione)}
                 </div>

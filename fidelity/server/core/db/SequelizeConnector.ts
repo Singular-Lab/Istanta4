@@ -1,9 +1,7 @@
-import * as dotenv from 'dotenv';
 import { Sequelize } from 'sequelize';
 import { Colorize } from '../../../lib/Colorize';
 import config from '../config/index';
 import { log } from '../logger';
-dotenv.config();
 
 const parsePositiveInt = (value: string | undefined, fallback: number): number => {
   const parsedValue = Number.parseInt(value ?? '', 10);

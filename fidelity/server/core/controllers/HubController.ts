@@ -31,6 +31,7 @@ import type { IAuthProviderRepository } from '../repositories/AuthProviderReposi
 import { AuditLogService } from '../services/AuditLogService';
 import { buildHubUserContext, type HubUserContext } from '../services/hubRoleUtils';
 import { ServerUtils } from '../utils/ServerUtils';
+import { urlOlimpo } from '../utils/urlOlimpo';
 import { verifyAccessoServizioParams } from '../utils/accessoServizioLink';
 
 function createSingleFileUploadMiddleware(
@@ -587,9 +588,9 @@ export class HubController extends BaseController {
         size: req.file.size,
         extension: path.extname(req.file.originalname).toLowerCase() || undefined,
         id_olimpo_cloud: olympusId,
-        download_url: `${config.OLYMPUS_IP_ADDRESS}/materiali/getMaterialePDF?id=${olympusId}`,
+        download_url: urlOlimpo('/materiali/getMaterialePDF', { id: olympusId }),
         preview_url: req.file.mimetype === 'application/pdf'
-          ? `${config.OLYMPUS_IP_ADDRESS}/materiali/getThumbnailMaterialePdfs?&id=${olympusId}`
+          ? urlOlimpo('/materiali/getThumbnailMaterialePdfs', { id: olympusId })
           : undefined,
         pages: result.data.content.pagine,
       });
@@ -655,7 +656,7 @@ export class HubController extends BaseController {
         mime_type: req.file.mimetype || 'video/mp4',
         size: req.file.size,
         guid_id: guidId,
-        url: `${config.OLYMPUS_IP_ADDRESS}/materiali/getVideoOnDemand?guidId=${guidId}`,
+        url: urlOlimpo('/materiali/getVideoOnDemand', { guidId }),
       });
     } catch (error) {
       this.handleError(res, error);

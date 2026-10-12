@@ -75,6 +75,12 @@ const envSchema = z.object({
     // passato come parametro ?route=
     FICO_BASE_URL: z.string().url().optional(),
 
+    // Lette direttamente da process.env (SequelizeConnector, server.ts, redis.client):
+    // dichiarate qui perche' l'unico .env caricato e' quello della cartella di avvio
+    DB_POOL_MAX: z.string().optional(),
+    DB_SLOW_QUERY_THRESHOLD: z.string().optional(),
+    REDIS_URL: z.string().optional(),
+
     //AD
 
 });

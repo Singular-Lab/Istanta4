@@ -156,8 +156,11 @@ export class ConfigService implements IConfigService {
           { id: uuidv4(), webpliant: { css_text: stile, stili: [] } } as any
         );
       } else {
+        // Cambia solo il foglio di stile: logo, icona, data_fields_refs e gli altri
+        // campi della configurazione WebPliant restano quelli salvati
+        const webpliant = (configDoc.get('webpliant') as Record<string, unknown> | null) ?? {};
         await ConfigModel.update(
-          { webpliant: { css_text: stile, stili: [] } } as any,
+          { webpliant: { ...webpliant, css_text: stile } } as any,
           { where: { id } }
         );
       }

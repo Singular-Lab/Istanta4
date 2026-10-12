@@ -8,6 +8,7 @@ import { IWebPliantService } from '../interfaces/IWebPliantService';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { permissionGuard } from '../middleware/permissionGuard';
 import { GDO } from '../models';
+import { motivoSvgNonValido } from '../utils/validaSvg';
 
 export class GdoController extends BaseController {
   constructor(
@@ -60,12 +61,11 @@ export class GdoController extends BaseController {
             return;
           }
 
-          // sicurezza minima: verifica contenuto
-          // const svgString = buffer.toString('utf-8');
-          // if (!svgString.startsWith('<svg') || /<script/i.test(svgString)) {
-          //   this.sendResponse(res, HttpStatusCode.BAD_REQUEST, { message: 'SVG non valido' });
-          //   return;
-          // }
+          const motivo = motivoSvgNonValido(buffer.toString('utf-8'));
+          if (motivo) {
+            this.sendResponse(res, HttpStatusCode.BAD_REQUEST, { message: `SVG non valido: ${motivo}` });
+            return;
+          }
 
           const gdo = await GDO.findByPk(idGDO);
           if (!gdo) {
