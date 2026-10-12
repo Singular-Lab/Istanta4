@@ -3818,6 +3818,9 @@ out var mismatch);
         {
            
             BoolResult result = new BoolResult();
+            //I20-1084: il salvataggio lascia traccia nel log, all'ingresso, all'esito e sull'errore.
+            //Dei testi solo lo stato e la lunghezza.
+            string riassunto = "richiesta non leggibile (" + (reqStr?.Length ?? 0) + " caratteri)";
             
             try
             {
@@ -3825,6 +3828,8 @@ out var mismatch);
                 //Console.WriteLine("RevisioneFromInddRequest RICEVUTO: " + reqStr);
 
                 RevisioneFromInddRequest? req = JsonConvert.DeserializeObject<RevisioneFromInddRequest>(reqStr);
+                riassunto = Utility.SalvataggioRefDaIndd.Riassunto(req);
+                _logger.LogInformation("salvaRefFromIndd: {Richiesta}", riassunto);
 
                 PromoLavorazioniRecord plrItem = this.ctx2.PromoLavorazioniRecords.Include(inc=>inc.IdPromoTracciatiRecordNavigation).FirstOrDefault(f => f.IdLavorazione == req!.idLavorazione && f.CodiceGruppo == req.codice_gruppo)!;
                 string kyeFirma = Enum.GetName(AddestramentoRuoli.Tracciato) + "." + GLOBAL_VARIABLES.keyTracciatoFirma;
@@ -4103,11 +4108,14 @@ out var mismatch);
 
 
                 result.Esito = true;
+                _logger.LogInformation("salvaRefFromIndd riuscito: {Richiesta}, descrizione {Descrizione}",
+                    riassunto, req.revisione!.valore != "" ? "salvata" : "non revisionata");
 
             }
             catch(Exception ex)
             {
                 //Console.WriteLine(ex.ToString());
+                _logger.LogError(ex, "salvaRefFromIndd fallito: {Richiesta}", riassunto);
                 result.error = ex.ToString();
             }
 

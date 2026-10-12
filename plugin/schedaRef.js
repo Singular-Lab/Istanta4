@@ -2133,7 +2133,8 @@ const schedaRef = {
                         if (stile.indexOf("_$Hidden") >= 0) {
                             let nome_stile = stile.replace("_$Hidden", "");
                             let label = '<label style="margin-top: 10px;color:white;">' + nome_stile + '</label><br>';
-                            let textarea = $('<textarea labelCorrispondente="descrizione" currentCharacterStyle="' + nome_stile + '" class="textArea nonCancellareSeVuoto" name="myTextarea" style="height: 50px; width: 100%; background-color:white; color:black;">' + content + '</textarea><br>');
+                            //I20-1084: trattonascosto dice al salvataggio che l'operatore questo campo non lo vede.
+                            let textarea = $('<textarea labelCorrispondente="descrizione" trattonascosto="1" currentCharacterStyle="' + nome_stile + '" class="textArea nonCancellareSeVuoto" name="myTextarea" style="height: 50px; width: 100%; background-color:white; color:black;">' + content + '</textarea><br>');
                             row.append(label).append(textarea);
                         }
                     }
@@ -3993,6 +3994,13 @@ const schedaRef = {
             let opResult = this.editRefFieldController.getOperazioniDiSalvataggioDaFare(descrizioneEreditata || descrizioneDelBox);
             console.log(opResult);
 
+            //I20-1084: due tratti per la stessa descrizione e non si sa quale mandare. Ci si ferma
+            //prima di chiamare il server, e si dice perche'.
+            if (Array.isArray(opResult.trattiRipetuti) && opResult.trattiRipetuti.length > 0) {
+                messaggioUtente("Code SRF-115 " + this.motivoTrattiRipetuti(opResult.trattiRipetuti) + " Non e' stato salvato niente.", "warning", false, 8);
+                return;
+            }
+
 
             if(box == null || box == undefined){
                 box = app.selection[0];
@@ -5300,6 +5308,14 @@ const schedaRef = {
 
         azioni.forEach(function (azione) {
             var pulsante = me.pulsanteFinestra(testi[azione][0], testi[azione][1]);
+            //I20-1084: con tratti ripetuti la descrizione del box non si puo' mandare: il pulsante
+            //resta, spento, e dice perche'.
+            var ripetuti = azione === "descrizioneBox" ? me.trattiRipetutiNelPannello() : [];
+            if (ripetuti.length > 0) {
+                me.spegniSceltaDelBox(pulsante, riga, ripetuti);
+                barra.append(pulsante);
+                return;
+            }
             pulsante.on("click", async function () {
                 pulsante.prop("disabled", true);
                 try {
@@ -5357,6 +5373,42 @@ const schedaRef = {
             }
         });
         riga.append(barra);
+    },
+
+    /* ---------- I20-1084: i tratti della descrizione ripetuti ---------- */
+
+    /// Le descrizioni fondamentali con piu' tratti nei campi della scheda, come le vede il
+    /// salvataggio. Vuoto se la scheda non ha ancora i suoi campi.
+    trattiRipetutiNelPannello() {
+        const controller = this.editRefFieldController;
+        if (controller == null || typeof controller.trattiRipetutiDellaDescrizione !== "function") {
+            return [];
+        }
+        return controller.trattiRipetutiDellaDescrizione();
+    },
+
+    /// Il perche' e il rimedio, per il messaggio del salvataggio e per la finestra.
+    motivoTrattiRipetuti(ripetuti) {
+        return "La descrizione del box ha piu' tratti dello stesso stile (" + InputEditController.nomiDeiTrattiRipetuti(ripetuti)
+            + "): unisci i testi in un solo tratto per stile, oppure usa \"Scegli quella del server\".";
+    },
+
+    /// "Scegli quella del box" spento: si vede, il suggerimento dice perche', e il clic mette
+    /// l'avviso sotto la riga, nella finestra. Non e' disabled: in UXP un pulsante disabilitato non
+    /// riceve il clic, e l'avviso non comparirebbe mai.
+    spegniSceltaDelBox(pulsante, riga, ripetuti) {
+        const motivo = this.motivoTrattiRipetuti(ripetuti);
+        pulsante.css({ "opacity": "0.5", "cursor": "not-allowed" });
+        pulsante.attr("data-spento", "1");
+        Tooltip.impostaTooltip(pulsante[0], motivo);
+        pulsante.on("click", function () {
+            if (riga.find(".avvisoTrattiRipetuti").length > 0) {
+                return;
+            }
+            const avviso = $('<div class="avvisoTrattiRipetuti"></div>').text(motivo);
+            avviso.css({ "color": "#8a4b00", "background-color": "#fff4e0", "border": "1px solid #e0a040", "padding": "4px 6px", "margin-top": "4px", "font-size": "11px" });
+            riga.append(avviso);
+        });
     },
 
     /* ---------- I20-1075: la descrizione in mismatch ---------- */
