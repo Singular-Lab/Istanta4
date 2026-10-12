@@ -83,6 +83,16 @@ describe('proxy /olimpo', () => {
     expect(ricevute).toEqual([]);
   });
 
+  it('con Olimpo irraggiungibile risponde 502', async () => {
+    const app = express();
+    // Porta 9 (discard): nessun servizio in ascolto
+    app.use('/olimpo', creaProxyOlimpo('http://127.0.0.1:9'));
+
+    const res = await request(app).get('/olimpo/foto/getThumbNailOnDemand?guidId=abc');
+
+    expect(res.status).toBe(502);
+  });
+
   it('inoltra il polling di socket.io', async () => {
     const res = await request(createApp()).get('/olimpo/socket.io/?EIO=4&transport=polling');
 

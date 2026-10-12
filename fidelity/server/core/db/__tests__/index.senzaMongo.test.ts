@@ -31,6 +31,12 @@ describe('database di Fidelity senza MongoDB', () => {
     expect(mocks.initializeSequelize).toHaveBeenCalledTimes(1);
   });
 
+  it("initializeDatabase(false) chiede a Sequelize di non sincronizzare lo schema", async () => {
+    await db.initializeDatabase(false);
+
+    expect(mocks.initializeSequelize).toHaveBeenCalledWith(false);
+  });
+
   it('closeDatabase chiude solo PostgreSQL', async () => {
     await expect(db.closeDatabase()).resolves.toBeUndefined();
 

@@ -31,7 +31,8 @@ program
       console.log(Colorize.bgBlue('Avvio migrazione URL Olimpo...'));
       if (isDryRun) console.log(Colorize.bgYellow('[DRY RUN] Nessuna modifica verra applicata'));
 
-      await initializeDatabase();
+      // false: nessun sync dello schema, nemmeno in development. Il dry-run non deve scrivere nulla
+      await initializeDatabase(false);
 
       let totaleRighe = 0;
       let totaleUrl = 0;
