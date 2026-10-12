@@ -1012,6 +1012,9 @@ const ReportIntegrita = {
 
     _terminaSchedaDalReport() {
         try {
+            //I20-1083: la finestra delle differenze della scheda si chiude con lei, e non resta sopra
+            //il report (o la schermata delle segnalazioni) che torna.
+            schedaRef.chiudiFinestraDifferenze();
             $("#chiudiSchedaDalReport").remove();
             $("#referenza").css("display", "");
             $("#referenza").css("justify-content", "");

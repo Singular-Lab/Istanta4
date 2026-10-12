@@ -913,13 +913,13 @@ test('una segnalazione che se ne va lo fa vedere', () => {
     assert.match(chiudi, /this\._riapriReportDopoScheda\(\)[\s\S]*await this\._mostraSegnalazioniRisolte\(piano\)[\s\S]*piano\.applica\(\)/);
 });
 
-test('dalla scheda aperta dal report non si rifa la struttura del gruppo', () => {
-    //Le azioni strutturali della schermata di edit non si offrono a chi e' venuto a sistemare
-    //una segnalazione. La scheda normale resta com'e'.
+test('le azioni sul box ci sono anche nella scheda aperta dal report', () => {
+    //I20-1083: prima non si offrivano a chi era venuto a sistemare una segnalazione. Ora ci sono
+    //anche li', ma l'azione cambia il dato senza reimpaginare (azioniInVistaControllata.test.js).
     assert.strictEqual(schedaRef.mostraAzioniStrutturaliInEdit(), true);
 
     schedaRef.apertaDalReport = true;
-    assert.strictEqual(schedaRef.mostraAzioniStrutturaliInEdit(), false);
+    assert.strictEqual(schedaRef.mostraAzioniStrutturaliInEdit(), true);
     schedaRef.apertaDalReport = false;
 
     const sorgenteScheda = sorgente('schedaRef.js');
