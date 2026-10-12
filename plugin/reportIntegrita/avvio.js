@@ -348,7 +348,36 @@ function contoDeselezione(contoPrecedente, quantiSelezionati, inPausa) {
     return { conto: conto, chiudi: conto >= VIGILANZE_DESELEZIONE };
 }
 
+/// I20-1067: il gruppo che il server restituisce dalla sincronizzazione del report e' gia' un box del
+/// documento? La mappa e' quella della costruzione del report: { pagina: [{ codiceGruppo, idRec }] }.
+/// Si guarda il codice gruppo del primario (o del primo record) e, se tutti e due lo hanno, l'idRec.
+/// Un box gia' nel documento il server lo ha appena registrato: rifarlo non serve, e con una
+/// differenza diventava un box nuovo sfalsato su quello vecchio.
+function gruppoGiaNellaMappa(records, mappa) {
+    if (!Array.isArray(records) || records.length === 0 || mappa == null || typeof mappa !== "object") {
+        return false;
+    }
+    const primario = records.find(r => r != null && r.recordInTracciato != null && r.recordInTracciato.StatoSelezione == 1)
+        || records.find(r => r != null && r.recordInTracciato != null);
+    if (primario == null) {
+        return false;
+    }
+    const codice = primario.recordInTracciato["Scatto.CodiceGruppo"] != null ? String(primario.recordInTracciato["Scatto.CodiceGruppo"]) : "";
+    if (codice === "") {
+        return false;
+    }
+    const idRec = parseInt(primario.idRec);
+    return Object.keys(mappa).some(pagina => (Array.isArray(mappa[pagina]) ? mappa[pagina] : []).some(gruppo => {
+        if (gruppo == null || gruppo.codiceGruppo == null || String(gruppo.codiceGruppo) !== codice) {
+            return false;
+        }
+        const idRecMappa = parseInt(gruppo.idRec);
+        return !(idRec > 0 && idRecMappa > 0) || idRec === idRecMappa;
+    }));
+}
+
 module.exports = {
+    gruppoGiaNellaMappa,
     MINUTI_LISTA_RECENTE,
     VIGILANZE_DESELEZIONE,
     contoDeselezione,

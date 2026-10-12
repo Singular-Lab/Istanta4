@@ -197,6 +197,12 @@ const ReportIntegrita = {
                         if (paginaObj.records && paginaObj.records.length > 0) {
                             for (let j = 0; j < paginaObj.records.length; j++) {
                                 let gruppoRecords = paginaObj.records[j];
+                                //I20-1067: un box gia' nel documento il server lo ha appena registrato: le
+                                //sue differenze le mostra il report, non si rifa' (diventava un box nuovo
+                                //sfalsato su quello vecchio, prima ancora di vedere il report).
+                                if (reportIntegritaAvvio.gruppoGiaNellaMappa(gruppoRecords, mappa)) {
+                                    continue;
+                                }
                                 var box = await impaginazioneSingoloIndd(gruppoRecords, paginaObj.nomePagina, applicaImpaginazioni, undefined, false, null, false, false);//I20-1056: niente schermata a ogni box
 
                                 if (box == null) {
