@@ -110,6 +110,40 @@ describe('sincronizzaTuttiIModelli', () => {
     expect(risultati.map(r => r.modello).sort()).toEqual(attesi);
   });
 
+  it('toglie view e materialized view prima della sync e le ricrea dopo', async () => {
+    // Una view che legge una colonna ne impedisce l'ALTER: al riavvio la sync di
+    // GDO, Area, Utente, Attivita, Canale e CombinazioneCanaleArea falliva.
+    const script: Array<[string, string]> = [
+      ['rimozione', '-- Rimozione degli oggetti derivati'],
+      ['mv_aree_canali', 'CREATE MATERIALIZED VIEW mv_aree_ottimizzata'],
+      ['mv_utenti', 'CREATE MATERIALIZED VIEW IF NOT EXISTS public.mv_utenti_completi'],
+      ['indici_permessi', 'permessi_ruolo_tipo_utente_id_permesso_id_ruolo_utente_gdo'],
+      ['v_attivita', 'DROP VIEW IF EXISTS public.v_attivita CASCADE;'],
+    ];
+    vi.spyOn(sequelize, 'query').mockImplementation(async (sql: unknown) => {
+      const voce = script.find(([, segno]) => String(sql).includes(segno));
+      ordineChiamate.push(`query:${voce?.[0] ?? 'altro'}`);
+      return [[], {}] as never;
+    });
+
+    await modelliManager.sincronizzaTuttiIModelli();
+
+    const primaSync = ordineChiamate.findIndex(voce => voce.startsWith('sync:'));
+    const ultimaSync = ordineChiamate.lastIndexOf(
+      ordineChiamate.filter(voce => voce.startsWith('sync:')).at(-1)!
+    );
+    const indice = (nome: string) => ordineChiamate.indexOf(`query:${nome}`);
+
+    expect(indice('rimozione')).toBeGreaterThan(-1);
+    expect(indice('rimozione')).toBeLessThan(primaSync);
+    //Dopo la sync, in ordine alfabetico dei file.
+    const dopo = ['mv_aree_canali', 'mv_utenti', 'indici_permessi', 'v_attivita'].map(indice);
+    expect(dopo.every(i => i > ultimaSync)).toBe(true);
+    expect(dopo).toEqual([...dopo].sort((a, b) => a - b));
+    //Ogni script una sola volta: la rimozione non viene ripetuta dopo la sync.
+    expect(ordineChiamate.filter(voce => voce === 'query:rimozione')).toHaveLength(1);
+  });
+
   it('non propaga un errore del seed: il rigetto resta catturato', async () => {
     vi.spyOn(RuoloUtenteGDO, 'findAll').mockImplementation(async () => {
       ordineChiamate.push('seed:findAll');

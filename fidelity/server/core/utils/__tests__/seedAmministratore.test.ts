@@ -51,7 +51,52 @@ describe('seed-fidelity.sh: GDO dell\'istanza', () => {
     expect(seed.indexOf('INSERT INTO gdo')).toBeGreaterThan(seed.indexOf('else', da));
   });
 
-  it('si aspetta che la tabella gdo esista gia\'', () => {
-    expect(seed).toContain('for t in auth_providers utenti menu_items gdo; do');
+  it('si aspetta che le tabelle gdo, utenti_gdo e ruolo_utente_gdo esistano gia\'', () => {
+    expect(seed).toContain('for t in auth_providers utenti menu_items gdo utenti_gdo ruolo_utente_gdo; do');
+  });
+});
+
+describe('seed-fidelity.sh: amministratore collegato alla GDO', () => {
+  // Al login Fidelity prende la GDO della sessione da utenti_gdo: senza la riga il
+  // Superadmin entrava senza GDO operativa.
+  const insert = blocco('INSERT INTO utenti_gdo', ';');
+
+  it('collega l\'amministratore alla GDO di CLIENT_ID con il sotto-ruolo ADMIN', () => {
+    expect(insert).toContain("JOIN gdo g ON lower(g.nome_gdo) = lower(:'nome')");
+    expect(insert).toContain("WHERE u.email_utenti = :'email'");
+    expect(insert).toContain("WHERE r.ruolo_ruolo_utente_gdo = 'ADMIN'");
+    expect(seed).toContain('psql_fidelity -v nome="$client_id" -v email="$admin_email"');
+  });
+
+  it('non duplica ne\' sostituisce un collegamento gia\' presente', () => {
+    expect(insert).toContain(
+      'AND NOT EXISTS (SELECT 1 FROM utenti_gdo ug WHERE ug.id_utente_utentegdo = u.id_utenti)'
+    );
+  });
+
+  it('collega solo dopo aver creato la GDO, e lo salta senza CLIENT_ID', () => {
+    expect(seed.indexOf('INSERT INTO utenti_gdo')).toBeGreaterThan(seed.indexOf('INSERT INTO gdo'));
+    const da = seed.indexOf('if [ -z "$client_id" ]');
+    const altrimenti = seed.indexOf('else', da);
+    expect(seed.slice(da, altrimenti)).toContain('saltato   utenti_gdo');
+    expect(seed.indexOf('INSERT INTO utenti_gdo')).toBeGreaterThan(altrimenti);
+  });
+});
+
+describe('seed-fidelity.sh: materialized view', () => {
+  // Fidelity le crea all'avvio con le tabelle ancora vuote: senza refresh la gestione
+  // utenti non mostrerebbe l'amministratore appena seminato.
+  it('aggiorna tutte le materialized view lette da Fidelity, dopo gli inserimenti', () => {
+    expect(seed).toContain(
+      'for v in mv_utenti_completi mv_aree_ottimizzata mv_canali_ottimizzata mv_combinazioni_ottimizzata; do'
+    );
+    expect(seed).toContain('REFRESH MATERIALIZED VIEW public.$v');
+    expect(seed.indexOf('REFRESH MATERIALIZED VIEW')).toBeGreaterThan(seed.indexOf('INSERT INTO utenti_gdo'));
+  });
+
+  it('termina con errore se una materialized view manca', () => {
+    const controllo = blocco('if [ "$viste_mancanti" -gt 0 ]', 'exit 1');
+    //Nessun "fi" prima di exit 1: l'uscita sta dentro il ramo delle viste mancanti.
+    expect(controllo).not.toContain('\nfi\n');
   });
 });
