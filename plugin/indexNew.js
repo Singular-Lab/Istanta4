@@ -320,6 +320,46 @@ function bloccaPerVersioneDisallineata(avviso) {
     $("#istantaDownAlert").css("display", "flex");
 }
 
+/// I20-1066: gli indirizzi di Istanta e Olimpo registrati nella voce della lavorazione contro quelli
+/// dell'ipconfig montato. Uguali: si procede. Una voce di prima, senza indirizzi: riceve quelli
+/// attuali e si procede. Diversi: il Plugin si blocca, come per la versione disallineata, e la
+/// lavorazione non si apre. Se il controllo stesso non riesce non si blocca: lo si dice in console.
+function verificaIndirizziDellaLavorazione() {
+    try {
+        const nomeDocumento = docInLavorazione != null ? docInLavorazione.name : app.activeDocument.name;
+        const voce = Utility.voceLavorazione(pathLavorazione, idMacchina(), nomeDocumento, libroDelDocumentoInLavorazione(nomeDocumento));
+        if (voce == null) {
+            return true;
+        }
+        const attuali = ConfigurazioneCliente.indirizziServer(istantaIp, olimpoIp);
+        const confronto = ConfigurazioneCliente.confrontaIndirizzi(voce.ip, attuali);
+        if (confronto.esito === "uguali") {
+            return true;
+        }
+        if (confronto.esito === "mancanti") {
+            voce.ip = attuali;
+            Utility.salvaVoceLavorazione(pathLavorazione, idMacchina(), voce);
+            return true;
+        }
+        bloccaPerIndirizziDiversi(ConfigurazioneCliente.testoIndirizziDiversi(confronto.diversi));
+        return false;
+    }
+    catch (e) {
+        console.error("Code IDX-178 Indirizzi della lavorazione non verificabili: " + e);
+        return true;
+    }
+}
+
+/// I20-1066: copre il pannello con l'errore a tutta pagina e non lo toglie: col server sbagliato
+/// la lavorazione non si tocca. Come bloccaPerVersioneDisallineata, riusa #istantaDownAlert.
+function bloccaPerIndirizziDiversi(dettaglio) {
+    console.error("Code IDX-179 Il Plugin e' configurato per un altro server - " + dettaglio);
+
+    $("#istantaDownAlert").find("h1").text("Il Plugin è configurato per un altro server");
+    $("#istantaDownAlert").find("h3").text(dettaglio);
+    $("#istantaDownAlert").css("display", "flex");
+}
+
 /// Mette in Links/Loghi le due immagini che il Plugin usa quando una foto manca -
 /// nofoto.png e fotoNoFound.png - copiandole da images/ se non ci sono gia'.
 ///
@@ -1115,6 +1155,10 @@ async function initDocumentInLavorazione()
         let tipo_lavorazione_corrente = ficoProcess.getTipoLavorazioneCorrente();
         if (idKitLavorazione>0 && res)
         {
+            //I20-1066: la lavorazione e' di questo server? Se no il Plugin si ferma qui, bloccato.
+            if (!verificaIndirizziDellaLavorazione()) {
+                return null;
+            }
 
             customAgenzia.setLavorazione();
             if(tipo_lavorazione_corrente==2)

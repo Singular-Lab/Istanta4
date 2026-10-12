@@ -89,6 +89,49 @@ const ConfigurazioneCliente = {
             percorsoIpconfig: ConfigurazioneCliente.normalizza(percorsoIpconfig),
             percorsoCustom: ConfigurazioneCliente.normalizza(percorsoCustom)
         };
+    },
+
+    /* ---------- I20-1066: gli indirizzi del server nella voce della lavorazione ---------- */
+
+    /// Gli indirizzi di Istanta e di Olimpo come si salvano nella voce di lavorazioni.json: quelli
+    /// dell'ipconfig montato quando la voce nasce.
+    indirizziServer(istanta, olimpo) {
+        return {
+            istanta: istanta == null ? "" : String(istanta),
+            olimpo: olimpo == null ? "" : String(olimpo)
+        };
+    },
+
+    /// Un indirizzo da confrontare: senza spazi intorno, senza "/" in fondo, minuscolo.
+    indirizzoConfrontabile(indirizzo) {
+        return String(indirizzo == null ? "" : indirizzo).trim().replace(/\/+$/, "").toLowerCase();
+    },
+
+    /// Gli indirizzi registrati nella voce contro quelli dell'ipconfig attuale. "mancanti" se la
+    /// voce non li ha (e' nata prima di I20-1066), "uguali" o "diversi"; diversi elenca quali, coi
+    /// due valori, per l'errore da mostrare.
+    confrontaIndirizzi(registrati, attuali) {
+        const istantaRegistrato = registrati != null ? ConfigurazioneCliente.indirizzoConfrontabile(registrati.istanta) : "";
+        const olimpoRegistrato = registrati != null ? ConfigurazioneCliente.indirizzoConfrontabile(registrati.olimpo) : "";
+        if (istantaRegistrato === "" && olimpoRegistrato === "") {
+            return { esito: "mancanti", diversi: [] };
+        }
+        const diversi = [];
+        [["Istanta", "istanta"], ["Olimpo", "olimpo"]].forEach(function (coppia) {
+            const registrato = ConfigurazioneCliente.indirizzoConfrontabile(registrati[coppia[1]]);
+            const attuale = ConfigurazioneCliente.indirizzoConfrontabile(attuali != null ? attuali[coppia[1]] : "");
+            if (registrato !== attuale) {
+                diversi.push({ nome: coppia[0], registrato: String(registrati[coppia[1]] == null ? "" : registrati[coppia[1]]), attuale: String(attuali != null && attuali[coppia[1]] != null ? attuali[coppia[1]] : "") });
+            }
+        });
+        return { esito: diversi.length === 0 ? "uguali" : "diversi", diversi: diversi };
+    },
+
+    /// Il dettaglio dell'errore di blocco: gli indirizzi della lavorazione e quelli di adesso.
+    testoIndirizziDiversi(diversi) {
+        const righe = (diversi || []).map(d => d.nome + ": lavorazione " + (d.registrato || "(vuoto)") + " - Plugin " + (d.attuale || "(vuoto)"));
+        return "La lavorazione di questo documento e' stata creata con un altro server. " + righe.join("; ") +
+            ". Montare il cliente giusto (" + ConfigurazioneCliente.MONTAGGIO + ") o correggere l'ipconfig, poi ricaricare il Plugin.";
     }
 };
 
