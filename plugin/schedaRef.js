@@ -4832,6 +4832,31 @@ const schedaRef = {
     /// Le tre decisioni possibili, come le conosce il server (AzioneExtraLavorazione).
     AZIONE_EXTRA: { sovrascrivi: 1, aggiungi: 2, escludi: 3 },
 
+    /// I20-1082: la chiave di una foto extra per le decisioni della lavorazione: la sigla o, per le
+    /// extra caricate a mano che non ne hanno, il nome del file, come nella label del box.
+    chiaveExtra(elemento) {
+        if (elemento == null) {
+            return "";
+        }
+        var sigla = elemento.sigla == null ? "" : String(elemento.sigla);
+        if (sigla !== "" && sigla !== "null" && sigla !== "undefined") {
+            return sigla;
+        }
+        return elemento.nome == null ? "" : String(elemento.nome);
+    },
+
+    /// I20-1082: la foto extra manuale di una decisione (specchio di FicoProcessController.stessaExtraManuale).
+    stessaExtraManuale(extra, chiave) {
+        if (extra == null || chiave == null || String(chiave) === "") {
+            return false;
+        }
+        var sigla = extra.sigla == null ? "" : String(extra.sigla);
+        if (sigla !== "") {
+            return sigla == chiave;
+        }
+        return extra.nome == chiave;
+    },
+
     /// Quali azioni spettano a una differenza della preanalisi. Su una foto extra con
     /// l'immagine cambiata si puo' tenere quella del box o usare quella del server; su una in
     /// piu' tenerla solo per questa lavorazione; su una mancante escluderla per questa
@@ -4900,6 +4925,7 @@ const schedaRef = {
     /// preanalisi rifatta subito vede la decisione senza riscaricare la scheda. Specchio di
     /// FicoProcessController.applicaExtraDellaLavorazione.
     applicaExtraLavorazioneAiRecord(records, voce) {
+        var me = this;
         var azioni = this.AZIONE_EXTRA;
         (records || []).forEach(function (record) {
             var rec = record != null ? record.recordInTracciato : null;
@@ -4911,7 +4937,7 @@ const schedaRef = {
 
             if (voce.azione === azioni.sovrascrivi && voce.nome) {
                 (automatiche || []).filter(l => l.sigla == voce.sigla).forEach(l => { l.nome = voce.nome; });
-                (manuali || []).filter(e => e.sigla == voce.sigla).forEach(e => { e.nome = voce.nome; });
+                (manuali || []).filter(e => me.stessaExtraManuale(e, voce.sigla)).forEach(e => { e.nome = voce.nome; });
             }
             else if (voce.azione === azioni.aggiungi && voce.nome) {
                 if (automatiche == null) {
@@ -4924,7 +4950,7 @@ const schedaRef = {
             }
             else if (voce.azione === azioni.escludi) {
                 (automatiche || []).filter(l => l.sigla == voce.sigla).forEach(l => { l.escluso = true; });
-                (manuali || []).filter(e => e.sigla == voce.sigla).forEach(e => { e.attiva = false; });
+                (manuali || []).filter(e => me.stessaExtraManuale(e, voce.sigla)).forEach(e => { e.attiva = false; });
             }
 
             var decise = (Array.isArray(rec.extraLavorazione) ? rec.extraLavorazione : []).filter(v => !(v.tipo == voce.tipo && v.sigla == voce.sigla));

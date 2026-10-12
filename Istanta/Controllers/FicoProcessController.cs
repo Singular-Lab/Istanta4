@@ -4352,7 +4352,7 @@ namespace Istanta.Controllers
                                 break;
                             foreach (var logo in automatiche.Where(l => l.sigla == voce.sigla))
                                 logo.nome = voce.nome;
-                            foreach (var extra in manuali.Where(e => e.sigla == voce.sigla))
+                            foreach (var extra in manuali.Where(e => stessaExtraManuale(e, voce.sigla)))
                                 extra.nome = voce.nome;
                             break;
 
@@ -4375,7 +4375,7 @@ namespace Istanta.Controllers
                         case AzioneExtraLavorazione.Escludi:
                             foreach (var logo in automatiche.Where(l => l.sigla == voce.sigla))
                                 logo.escluso = true;
-                            foreach (var extra in manuali.Where(e => e.sigla == voce.sigla))
+                            foreach (var extra in manuali.Where(e => stessaExtraManuale(e, voce.sigla)))
                                 extra.attiva = false;
                             break;
                     }
@@ -4383,6 +4383,19 @@ namespace Istanta.Controllers
 
                 record.recordInTracciato[GLOBAL_VARIABLES.keyExtraLavorazione] = voci;
             }
+        }
+
+        /// <summary>
+        /// I20-1082: la foto extra manuale di una decisione. La chiave e' la sigla; le extra caricate a
+        /// mano non ne hanno, e per loro la chiave e' il nome del file, come nella label del box.
+        /// </summary>
+        public static bool stessaExtraManuale(LogoBollo_ExtraNoAuto? extra, string? chiave)
+        {
+            if (extra == null || string.IsNullOrWhiteSpace(chiave))
+                return false;
+            if (!string.IsNullOrWhiteSpace(extra.sigla))
+                return extra.sigla == chiave;
+            return extra.nome == chiave;
         }
 
         /// <summary>
