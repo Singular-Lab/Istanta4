@@ -6,10 +6,11 @@ vi.mock('../../logger', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }
 }));
 
+import { TraduzioneService } from '../../services/TraduzioneService';
 import { TraduzioneController } from '../TraduzioneController';
 
 const app = express();
-new TraduzioneController({} as any).registerRoutes(app);
+new TraduzioneController(new TraduzioneService()).registerRoutes(app);
 
 describe('GET /api/t', () => {
   it('restituisce le traduzioni di una lingua esistente', async () => {
@@ -17,6 +18,14 @@ describe('GET /api/t', () => {
 
     expect(res.status).toBe(200);
     expect(Object.keys(res.body).length).toBeGreaterThan(0);
+  });
+
+  it('con la sola lingua, come la chiede i18next, restituisce la variante regionale', async () => {
+    const regionale = await request(app).get('/api/t').query({ lng: 'it-IT', ns: 'translation' });
+    const res = await request(app).get('/api/t').query({ lng: 'it', ns: 'translation' });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(regionale.body);
   });
 
   it.each([

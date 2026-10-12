@@ -14,7 +14,6 @@ import localeData from 'dayjs/plugin/localeData';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import timezone from 'dayjs/plugin/timezone';
 import utc from 'dayjs/plugin/utc';
-import dotenv from 'dotenv';
 import express from 'express';
 import http from 'node:http';
 import path, { dirname } from 'node:path';
@@ -33,6 +32,7 @@ import config from './config/index';
 import { sequelize } from './db/SequelizeConnector';
 import { httpLogger, log } from './logger';
 import { authMiddleware } from './middleware/authMiddleware';
+import { creaProxyOlimpo } from './middleware/olimpoProxy';
 import { permissionGuard } from './middleware/permissionGuard';
 import { applyErrorHandler, applyMiddlewares } from './middlewares';
 import {
@@ -46,6 +46,7 @@ import { AuditLogService } from './services/AuditLogService';
 import { initializeBackgroundServices } from './services/startup';
 import { sessionMiddleware } from './session';
 import { asyncHandler } from './utils/asyncHandler';
+import { PREFISSO_PROXY_OLIMPO } from './utils/urlOlimpo';
 import { getWhatsappQueueWorker } from './workers/WhatsappQueueWorker';
 import healthRouter from '../src/app/http/health.routes.js';
 import metricsRouter from '../src/app/http/metrics.routes.js';
@@ -57,10 +58,6 @@ import { closeRedisClient, initializeRedisClient } from '../src/shared/cache/red
 const __filename = fileURLToPath(import.meta.url);
 const __dirname_current = dirname(__filename);
 
-dotenv.config({
-  path: path.resolve(__dirname_current, '../.env'), // .env una cartella sopra server/
-});
-
 const projectRoot = path.resolve(__dirname_current, '../../'); // server/core/ -> server/ -> projectRoot/
 log.debug('Project root resolved', { context: 'Bootstrap', projectRoot });
 export const resolvePathFromProjectRoot = (p: string) =>
@@ -71,6 +68,10 @@ const isStaging = process.env.NODE_ENV === "test";
 
 export async function createHttpApp() {
   const app = express();
+
+  // ⓪ Letture dei materiali Olimpo per il browser: prima della sessione e dei body
+  // parser, cosi' le richieste arrivano a Olimpo intatte e senza creare sessioni
+  app.use(PREFISSO_PROXY_OLIMPO, creaProxyOlimpo(config.OLYMPUS_IP_ADDRESS));
 
   // ① Sessione + middleware di base
   app.use(sessionMiddleware);

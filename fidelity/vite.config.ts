@@ -122,6 +122,11 @@ export default defineConfig(({ mode }) => {
           target: API_URL,
           changeOrigin: true,
           rewrite: (path: string) => path.replace(/^\/api/, "")
+        },
+        // Materiali Olimpo: passano dal proxy di sola lettura del server Fidelity
+        "/olimpo": {
+          target: process.env.FIDELITY_SERVER_URL || `http://localhost:${process.env.NODE_PORT || 3001}`,
+          changeOrigin: true
         }
       },
     },

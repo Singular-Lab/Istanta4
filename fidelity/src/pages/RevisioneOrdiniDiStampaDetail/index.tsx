@@ -177,29 +177,12 @@ const extractGroupingMessage = (value: unknown): string => {
   return payload ? toText(payload.message) : '';
 };
 
-const buildGroupingThumbnailUrl = (id: string): string => {
-  const olympusBaseRaw =
-    toText(import.meta.env.VITE_OLYMPUS_IP_ADDRESS)
-    || toText(import.meta.env.VITE_OLYMPUS_IP_ADDRESS_CORS);
+// Olimpo si raggiunge dal proxy di Fidelity sulla stessa origine (server/core/middleware/olimpoProxy.ts)
+const buildGroupingThumbnailUrl = (id: string): string =>
+  `/olimpo/materiali/getThumbnailMaterialePdfs?id=${encodeURIComponent(id)}&page=1`;
 
-  if (!olympusBaseRaw) {
-    return docThumbnailFallback;
-  }
-
-  const olympusBase = olympusBaseRaw.replace(/\/+$/, '');
-  return `${olympusBase}/materiali/getThumbnailMaterialePdfs?&id=${encodeURIComponent(id)}&page=1`;
-};
-
-const buildGroupingPreviewBaseUrl = (id: string): string => {
-  const olympusBaseRaw =
-    toText(import.meta.env.VITE_OLYMPUS_IP_ADDRESS)
-    || toText(import.meta.env.VITE_OLYMPUS_IP_ADDRESS_CORS);
-
-  if (!olympusBaseRaw) return '';
-
-  const olympusBase = olympusBaseRaw.replace(/\/+$/, '');
-  return `${olympusBase}/materiali/getThumbnailMaterialePdfs?&id=${encodeURIComponent(id)}`;
-};
+const buildGroupingPreviewBaseUrl = (id: string): string =>
+  `/olimpo/materiali/getThumbnailMaterialePdfs?id=${encodeURIComponent(id)}`;
 
 const buildGroupingFilesLookup = (
   kits: RUNTIME_KIT[],
@@ -587,7 +570,8 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
 
   useEffect(() => {
     const expressSocket = io((import.meta.env.VITE_WS_URL as string).replace('/api', ''), { withCredentials: true, transports: ['websocket', 'polling'] });
-    const nestSocket = io(import.meta.env.VITE_OLYMPUS_IP_ADDRESS_CORS, { transports: ['websocket', 'polling'] });
+    // Socket di Olimpo attraverso il proxy /olimpo: solo polling, il proxy non inoltra il websocket
+    const nestSocket = io({ path: '/olimpo/socket.io', transports: ['polling'] });
     setSocketExpress(expressSocket);
     setSocketNest(nestSocket);
 

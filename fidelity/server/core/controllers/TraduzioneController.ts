@@ -1,6 +1,4 @@
 import { Request, Response } from 'express';
-import * as fs from 'fs';
-import * as path from 'path';
 import { Colorize } from '../../../lib/Colorize';
 import { HttpStatusCode } from '../../../lib/enums';
 import { BaseController } from '../base/BaseController';
@@ -42,23 +40,8 @@ export class TraduzioneController extends BaseController {
                 return;
             }
 
-            // Read the translation file directly instead of using the service
-            const __dirname = path.resolve();
-            const filePath = path.join(__dirname, `public/locales/${language}/${namespace}.json`);
-
-            // Check if file exists before trying to read it
-            if (!fs.existsSync(filePath)) {
-                // If file doesn't exist, return empty object instead of error
-                log.info(Colorize.yellow(`File di traduzione non trovato: ${filePath}`));
-                res.status(HttpStatusCode.OK).json({});
-                return;
-            }
-
-            const traduzioni = await fs.promises.readFile(filePath, 'utf8');
-
-            // Parse the JSON string into an object before sending
-            const traductionObject = JSON.parse(traduzioni);
-            res.status(HttpStatusCode.OK).json(traductionObject);
+            const traduzioni = await this.traduzioneService.getTraduzioni(language, namespace);
+            res.status(HttpStatusCode.OK).json(traduzioni);
         } catch (error) {
             // Log the error but return empty translations instead of error
             if (error instanceof Error) {

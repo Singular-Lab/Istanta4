@@ -101,6 +101,19 @@ server {
         proxy_intercept_errors off;
     }
 
+    ## ───────────────── MATERIALI OLIMPO ─────────────────────────────────────────
+    # Proxy di sola lettura di Fidelity verso Olimpo (server/core/middleware/olimpoProxy.ts).
+    # ^~ evita che le regole della cache statica intercettino le immagini.
+    location ^~ /olimpo/ {
+        proxy_pass             http://app:${API_PORT};
+        proxy_http_version     1.1;
+        proxy_set_header       Host              $host;
+        proxy_set_header       X-Real-IP         $remote_addr;
+        proxy_set_header       X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header       X-Forwarded-Proto $scheme;
+        proxy_buffering        off;
+    }
+
     ## ───────────────── GRAFANA ──────────────────────────────────────────────────
     location /grafana/ {
         proxy_pass         http://grafana:${GRAFANA_PORT}/;

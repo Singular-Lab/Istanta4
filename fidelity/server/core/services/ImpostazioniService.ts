@@ -18,7 +18,6 @@ import { IWebhookService } from '../interfaces/IWebhookService';
 import { log } from '../logger';
 import { Area } from '../models/aree';
 import { Canale } from '../models/canali';
-import { Config } from '../models/config';
 import { DesignKit } from '../models/design_kit';
 import { Promo } from '../models/promo';
 import { Referenze } from '../models/referenze';
@@ -108,31 +107,6 @@ export class ImpostazioniService implements IImpostazioniService {
         operation: 'create',
         entity: 'DesignKit',
         details: { data },
-      });
-    }
-  }
-
-  async caricaStiliInConfig(id: string, stile: string): Promise<void> {
-    try {
-      const configRecord = await Config.findOne({ where: { id }, raw: true }) as any;
-      if (configRecord == undefined) {
-        await Config.create({
-          id: uuidv4(),
-          webpliant: { css_text: stile, stili: [] }
-        } as any);
-      } else {
-        const updatedWebpliant = { ...(configRecord.webpliant || {}), css_text: stile, stili: [] };
-        await Config.update(
-          { webpliant: updatedWebpliant } as any,
-          { where: { id: configRecord.id } }
-        );
-      }
-    } catch (error: any) {
-      throw wrapDatabaseError(new Error("Errore durante il recupero dei formati"), {
-        message: "Errore durante il recupero dei formati",
-        operation: 'findOne',
-        entity: 'ConfigWebpliant',
-        details: { error }
       });
     }
   }

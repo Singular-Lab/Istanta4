@@ -1176,7 +1176,7 @@ const WebpliantLayout: FC<WebpliantLayoutProps> = () => {
                     <img
                       loading="lazy"
                       className={"h-8"}
-                      src={"/static/images/120x120_pinmap.png"}
+                      src="/images/map-marker.png"
                       alt=""
                     />
                     <div className={clsx(stylesWP["wp-header-tools__item"], stylesWP["wp-header-tools__cart"], stylesWP["wp-js-open-aside"], stylesWP["wp-d-flex"], stylesWP["wp-flex-column"], stylesWP["wp-mt-0"])}>
@@ -1309,7 +1309,7 @@ const WebpliantLayout: FC<WebpliantLayoutProps> = () => {
                       <img
                         loading="lazy"
                         className={stylesWP["wp-cart-drawer-item__img"]}
-                        src="/static/images/120x120_pinmap.png"
+                        src="/images/map-marker.png"
                         alt=""
                       />
                     </a>
@@ -1324,7 +1324,7 @@ const WebpliantLayout: FC<WebpliantLayoutProps> = () => {
                       <img
                         loading="lazy"
                         className={stylesWP["wp-cart-drawer-item__img"]}
-                        src="/static/images/120x120_pinmap.png"
+                        src="/images/map-marker.png"
                         alt=""
                       />
                     </a>

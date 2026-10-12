@@ -86,8 +86,7 @@ const DettagliKitOrdiniDiStampa: React.FC = () => {
   const [mergedOutputName, setMergedOutputName] = useState<string>('');
   const [mergedDownloadUrl, setMergedDownloadUrl] = useState<string | null>(null);
   const [mergedDownloadName, setMergedDownloadName] = useState<string>('file-unito.pdf');
-  const isPdfEqualityCheckAvailable = import.meta.env.VITE_ENABLE_PDF_EQUALITY_WS === 'true'
-    && Boolean(import.meta.env.VITE_OLYMPUS_IP_ADDRESS_CORS);
+  const isPdfEqualityCheckAvailable = import.meta.env.VITE_ENABLE_PDF_EQUALITY_WS === 'true';
   const pdfEqualityUnavailableMessage = 'Raggruppamento/controllo file uguali non disponibile su questo servizio: WebSocket Olimpo non attivo.';
 
   // Debounce search (400ms)
