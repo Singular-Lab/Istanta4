@@ -240,8 +240,21 @@ sudo ./seed-fidelity.sh
 ```
 
 Inserisce il provider `email_password`, l'utente amministratore preso da
-`FIDELITY_ADMIN_*` di `release.env` (password cifrata con bcrypt) e le 33 voci di
-menu del Superadmin.
+`FIDELITY_ADMIN_*` di `release.env` (password cifrata con bcrypt), le 33 voci di
+menu del Superadmin e la GDO dell'istanza, con il nome di `CLIENT_ID` di
+`fidelity.env` (saltata se `CLIENT_ID` è vuoto o `default`).
+
+L'amministratore nasce con la chiave privata vuota: al primo passaporto
+Fidelity si registra su Olimpo con `fico-secret` e salva la chiave che Olimpo
+gli restituisce. Le installazioni seminate prima di questa correzione avevano
+una chiave inventata, che Olimpo rifiuta: l'amministratore non riusciva a
+lavorare con Istanta (nuova lavorazione in errore, `INF_001`). Lo script non
+tocca un amministratore già esistente, quindi lì la chiave va svuotata a mano:
+
+```bash
+docker compose --env-file release.env -f compose.production.yaml exec -T postgres \
+  psql -U fidelity -d fidelity -c "update utenti set privatekey_utenti = '' where email_utenti = '<FIDELITY_ADMIN_EMAIL>'"
+```
 
 Non sta in `postgres-init` per una ragione precisa: `auth_providers`, `utenti` e
 `menu_items` le crea Sequelize quando Fidelity parte, quindi durante
