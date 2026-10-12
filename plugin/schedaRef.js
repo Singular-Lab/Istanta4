@@ -116,11 +116,56 @@ const schedaRef = {
     //report; la scheda lo legge soltanto, per sapere cosa non deve offrire.
     apertaDalReport: false,
 
-    /// Le azioni strutturali offerte dalla schermata di edit non si mostrano quando si arriva
-    /// dal report: da li' si viene a sistemare una segnalazione, e rifare la struttura del
-    /// gruppo e' un'altra cosa, che si fa dalla scheda normale.
+    /// Le azioni strutturali offerte dalla schermata di edit. I20-1083: ci sono anche quando si
+    /// arriva dal report o dalla schermata delle segnalazioni (vista controllata), ma li' l'azione
+    /// cambia il dato senza reimpaginare il box (aggiornaDopoAzioneInVistaControllata).
     mostraAzioniStrutturaliInEdit() {
-        return this.apertaDalReport !== true;
+        return true;
+    },
+
+    /// I20-1083: la scheda e' aperta in vista controllata, dal Report Integrita' o dalla schermata
+    /// delle segnalazioni (tutte e due accendono apertaDalReport).
+    inVistaControllata() {
+        return this.apertaDalReport === true;
+    },
+
+    /// I20-1083: rimette la selezione di InDesign sul box. In vista controllata la scheda si chiude
+    /// se il box resta deselezionato, e la ricarica della scheda non deve sembrare una deselezione.
+    riselezionaBox(box) {
+        try {
+            if (box != null && box.isValid) {
+                app.selection = [box];
+                return true;
+            }
+        }
+        catch (e) {
+            console.error("Code SRF-114 Il box non si e' potuto riselezionare: " + e);
+        }
+        return false;
+    },
+
+    /// I20-1083: un'azione sul box registrata dal server mentre la scheda e' in vista controllata. Il
+    /// dato e' cambiato, ma il box non si reimpagina: si ricarica la scheda, che rifa' la preanalisi
+    /// e quindi ricalcola le segnalazioni del box com'e', e la selezione resta sul box.
+    aggiornaDopoAzioneInVistaControllata() {
+        var box = this.refSelected != null ? this.refSelected.item : null;
+        hideLoading();
+        indesignEvents.setBusy(false);
+        this.riselezionaBox(box);
+        messaggioUtente("Azione registrata: il box non e' stato reimpaginato, le segnalazioni sono state ricalcolate", "success", false, 5);
+        this.dimenticaSegnalazioni();
+        this.initSchedaRef(this.refSelected);
+        this.riselezionaBox(box);
+    },
+
+    /// I20-1083: chiude la finestra delle differenze rilevate, se e' aperta, con la sua X (che fa la
+    /// sua pulizia). Serve quando la scheda in vista controllata si chiude e torna il report.
+    chiudiFinestraDifferenze() {
+        if (typeof $ === "undefined" || $("#popup").length === 0) {
+            return false;
+        }
+        $("#popupCloseButton").trigger("click");
+        return true;
     },
 
     /// I20-1049: le azioni sul box offerte dalla scheda aperta, e se la sua ref e' un gruppo.
@@ -6113,6 +6158,11 @@ const schedaRef = {
                 }
 
                 if (objResult.esito) {
+                    //I20-1083: in vista controllata l'azione cambia solo il dato: niente box nuovo.
+                    if (me.inVistaControllata()) {
+                        me.aggiornaDopoAzioneInVistaControllata();
+                        return;
+                    }
 
                     showLoading("Impaginazione della referenza");
 
