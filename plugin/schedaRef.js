@@ -4832,6 +4832,32 @@ const schedaRef = {
     /// Le tre decisioni possibili, come le conosce il server (AzioneExtraLavorazione).
     AZIONE_EXTRA: { sovrascrivi: 1, aggiungi: 2, escludi: 3 },
 
+    /// I20-1082: per chi vale una decisione presa in un volantino (AmbitoDecisioneLavorazione del server).
+    AMBITO_DECISIONE: { tutto: 0, soloVolantino: 1 },
+
+    /// I20-1082: chiede se la decisione vale solo per il volantino o anche per i POP della stessa promo,
+    /// area e canale. Solo se la configurazione del cliente lo vuole (Coop) e non in un POP, che non
+    /// decide: altrimenti vale per tutto senza chiedere. Null se l'operatore annulla.
+    async chiediAmbitoDecisione() {
+        var chiedi = typeof pluginMiddleware !== "undefined" && pluginMiddleware != null
+            && typeof pluginMiddleware.getChiediAmbitoDecisioniLavorazione === "function"
+            && pluginMiddleware.getChiediAmbitoDecisioniLavorazione() === true;
+        if (!chiedi) {
+            return this.AMBITO_DECISIONE.tutto;
+        }
+        var tipo = typeof ficoProcess !== "undefined" && ficoProcess != null && typeof ficoProcess.getTipoLavorazioneCorrente === "function"
+            ? ficoProcess.getTipoLavorazioneCorrente()
+            : 0;
+        if (tipo == 2) {
+            return this.AMBITO_DECISIONE.tutto;
+        }
+        var risposta = await Modali.confirmCustom("Vale solo per il volantino o anche per i POP?",
+            "Solo volantino", this.AMBITO_DECISIONE.soloVolantino,
+            "Tutto (volantino e POP)", this.AMBITO_DECISIONE.tutto);
+        return risposta != null && risposta.result ? risposta.hiddenVal : null;
+    },
+
+
     /// I20-1082: la chiave di una foto extra per le decisioni della lavorazione: la sigla o, per le
     /// extra caricate a mano che non ne hanno, il nome del file, come nella label del box.
     chiaveExtra(elemento) {
@@ -4972,14 +4998,15 @@ const schedaRef = {
             return "";
         }
         var sigla = voce.sigla == null ? "" : String(voce.sigla);
+        var ambito = this.testoAmbitoDecisione(voce);
         if (voce.azione === this.AZIONE_EXTRA.sovrascrivi) {
-            return sigla + ": tenuta l'immagine del box " + voce.nome + (voce.nomeServer ? " al posto di " + voce.nomeServer : "");
+            return sigla + ": tenuta l'immagine del box " + voce.nome + (voce.nomeServer ? " al posto di " + voce.nomeServer : "") + ambito;
         }
         if (voce.azione === this.AZIONE_EXTRA.aggiungi) {
-            return sigla + ": " + voce.nome + " tenuta solo per questa lavorazione";
+            return sigla + ": " + voce.nome + " tenuta solo per questa lavorazione" + ambito;
         }
         if (voce.azione === this.AZIONE_EXTRA.escludi) {
-            return sigla + ": esclusa per questa lavorazione";
+            return sigla + ": esclusa per questa lavorazione" + ambito;
         }
         return sigla;
     },
@@ -5110,6 +5137,12 @@ const schedaRef = {
         if (richiesta == null) {
             return false;
         }
+        //I20-1082: per Coop, prima per chi vale: solo il volantino o anche i POP.
+        var ambito = await this.chiediAmbitoDecisione();
+        if (ambito == null) {
+            return false;
+        }
+        richiesta.voce.ambito = ambito;
         var registrata = await this.salvaExtraLavorazione(richiesta);
         if (!registrata) {
             return false;

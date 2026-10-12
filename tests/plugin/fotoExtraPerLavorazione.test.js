@@ -241,3 +241,136 @@ test("Link solo qui non collega il logo all'anagrafica: registra la decisione e 
     assert.ok(controlli > 0 && ramo > controlli && server > ramo);
     assert.match(link, /if \(soloPerLavorazione\) \{\s*Modali\.closeAllModal\(\);\s*await me\.registraDecisioneExtraDallaScheda\(me\.richiestaAggiungiSoloQui\(logoData\.fileName, tipo\), box, function \(\) \{\s*return me\.impaginaFotoExtra\(logoData\.fileName, parseInt\(tipo\), box, pathLavorazione, primario\.recordInTracciato, logoData\.fileName\);\s*\}\);\s*return;\s*\}/);
 });
+
+/* ---- I20-1082, lotto 2: solo volantino o tutto ---- */
+
+const fs = require("fs");
+const path = require("path");
+
+//pluginMiddleware.js non si carica sotto Node: il membro si estrae dal sorgente e si esegue davvero.
+function middlewareVero(customPluginDB, callCustom = false, customAgenzia = undefined) {
+    const testo = fs.readFileSync(path.join(__dirname, "..", "..", "plugin", "pluginMiddleware.js"), "utf8");
+    const inizio = testo.indexOf("    getChiediAmbitoDecisioniLavorazione() {");
+    assert.notStrictEqual(inizio, -1, "getChiediAmbitoDecisioniLavorazione non trovata");
+    let livello = 0;
+    let fine = -1;
+    for (let i = inizio; i < testo.length && fine < 0; i++) {
+        if (testo[i] === "{") { livello++; }
+        else if (testo[i] === "}") { livello--; if (livello === 0) { fine = i + 1; } }
+    }
+    const membro = new Function("customAgenzia", "return ({\n" + testo.substring(inizio, fine) + "\n});")(customAgenzia);
+    return Object.assign(membro, { callCustom: callCustom, customPluginDB: customPluginDB });
+}
+
+function sourceCustomPlugin(cliente) {
+    const file = path.join(__dirname, "..", "..", "Istanta", "wwwroot", "external_source", cliente, "SourceCustomPlugin.json");
+    return JSON.parse(fs.readFileSync(file, "utf8").replace(/^﻿/, ""));
+}
+
+function dichiaratoNelCustom(cliente) {
+    const testo = fs.readFileSync(path.join(__dirname, "..", "..", "plugin", "Agenzie", cliente, "custom.js"), "utf8");
+    const trovata = testo.match(/^\s*chiediAmbitoDecisioniLavorazione:\s*(true|false)\s*,/m);
+    return trovata ? trovata[1] === "true" : undefined;
+}
+
+test("chiedere l'ambito lo dice la configurazione del server; se non lo manda, il custom.js", () => {
+    assert.strictEqual(middlewareVero(sourceCustomPlugin("Coopfi")).getChiediAmbitoDecisioniLavorazione(), true);
+    assert.strictEqual(middlewareVero(sourceCustomPlugin("Edro21")).getChiediAmbitoDecisioniLavorazione(), false);
+    //Il server comanda anche quando dice di no.
+    assert.strictEqual(middlewareVero({ chiediAmbitoDecisioniLavorazione: false }, false, { chiediAmbitoDecisioniLavorazione: true }).getChiediAmbitoDecisioniLavorazione(), false);
+    //Istanta non ancora aggiornata: la chiave non arriva e vale il custom.js di Coop.
+    assert.strictEqual(middlewareVero({}, false, { chiediAmbitoDecisioniLavorazione: true }).getChiediAmbitoDecisioniLavorazione(), true);
+    assert.strictEqual(middlewareVero(null, false, {}).getChiediAmbitoDecisioniLavorazione(), false);
+    assert.strictEqual(middlewareVero(null, true, { chiediAmbitoDecisioniLavorazione: true }).getChiediAmbitoDecisioniLavorazione(), true);
+});
+
+test("solo Coop chiede l'ambito, nel SourceCustomPlugin e nel custom.js", () => {
+    assert.strictEqual(sourceCustomPlugin("Coopfi").chiediAmbitoDecisioniLavorazione, true);
+    assert.strictEqual(dichiaratoNelCustom("Coopfi"), true);
+    fs.readdirSync(path.join(__dirname, "..", "..", "plugin", "Agenzie"), { withFileTypes: true })
+        .filter(voce => voce.isDirectory() && voce.name !== "Coopfi"
+            && fs.existsSync(path.join(__dirname, "..", "..", "plugin", "Agenzie", voce.name, "custom.js")))
+        .forEach(voce => assert.strictEqual(dichiaratoNelCustom(voce.name), undefined, voce.name));
+});
+
+function ambiente(chiedi, tipoLavorazione, risposta) {
+    const domande = [];
+    return {
+        domande: domande,
+        globali: {
+            pluginMiddleware: { getChiediAmbitoDecisioniLavorazione: () => chiedi },
+            ficoProcess: { getTipoLavorazioneCorrente: () => tipoLavorazione },
+            Modali: { confirmCustom: async (...argomenti) => { domande.push(argomenti); return risposta; } }
+        }
+    };
+}
+
+test("Coop, in un volantino: si chiede solo volantino o tutto", async () => {
+    const solo = ambiente(true, 1, { result: true, hiddenVal: 1 });
+    await conGlobali(solo.globali, async () => assert.strictEqual(await schedaRef.chiediAmbitoDecisione(), 1));
+    assert.deepStrictEqual(solo.domande[0], ["Vale solo per il volantino o anche per i POP?", "Solo volantino", 1, "Tutto (volantino e POP)", 0]);
+
+    const tutto = ambiente(true, 1, { result: true, hiddenVal: 0 });
+    await conGlobali(tutto.globali, async () => assert.strictEqual(await schedaRef.chiediAmbitoDecisione(), 0));
+
+    const annulla = ambiente(true, 1, { result: false, hiddenVal: null });
+    await conGlobali(annulla.globali, async () => assert.strictEqual(await schedaRef.chiediAmbitoDecisione(), null));
+});
+
+test("chi non lo dichiara, o un POP, non chiede niente e vale per tutto", async () => {
+    const altri = ambiente(false, 1, null);
+    await conGlobali(altri.globali, async () => assert.strictEqual(await schedaRef.chiediAmbitoDecisione(), 0));
+    assert.deepStrictEqual(altri.domande, []);
+
+    const pop = ambiente(true, 2, null);
+    await conGlobali(pop.globali, async () => assert.strictEqual(await schedaRef.chiediAmbitoDecisione(), 0));
+    assert.deepStrictEqual(pop.domande, []);
+
+    await conGlobali({ pluginMiddleware: undefined }, async () => {
+        delete global.pluginMiddleware;
+        assert.strictEqual(await schedaRef.chiediAmbitoDecisione(), 0);
+    });
+});
+
+test("dalla finestra delle differenze la decisione porta l'ambito scelto, e Annulla non la registra", async () => {
+    const mandate = [];
+    const metodi = {
+        salvaExtraLavorazione: async (richiesta) => { mandate.push(richiesta); return true; },
+        copiaFileDelBoxInLoghi: () => true,
+        applicaExtraLavorazioneAiRecord: () => {}
+    };
+    const diff = { label: "Logo_SDB", difference: "...", tipo: "extraMancante", famiglia: "extraAuto", sigla: "Logo_SDB", tipoElemento: LOGO, nome: "Logo_SDB.psd" };
+
+    await conGlobali({ messaggioUtente: () => {} }, () => conMetodi(Object.assign({ chiediAmbitoDecisione: async () => 1 }, metodi), async () => {
+        assert.strictEqual(await schedaRef.eseguiAzioneExtra(diff, "escludiLavorazione", null), true);
+    }));
+    assert.strictEqual(mandate[0].voce.ambito, 1);
+
+    await conGlobali({ messaggioUtente: () => {} }, () => conMetodi(Object.assign({ chiediAmbitoDecisione: async () => null }, metodi), async () => {
+        assert.strictEqual(await schedaRef.eseguiAzioneExtra(diff, "escludiLavorazione", null), false);
+    }));
+    assert.strictEqual(mandate.length, 1);
+});
+
+test("dalla scheda Foto Extra la decisione porta l'ambito scelto, e Annulla non la registra", async () => {
+    const eventi = [];
+    await conGlobali({ messaggioUtente: () => {} }, () => conMetodi(Object.assign(finteDellaScheda(eventi), { chiediAmbitoDecisione: async () => 1 }), async () => {
+        const richiesta = schedaRef.richiestaEscludiSoloQui({ sigla: "Logo_SDB", nome: "Logo_SDB.psd" }, 3);
+        assert.strictEqual(await schedaRef.registraDecisioneExtraDallaScheda(richiesta, {}), true);
+        assert.strictEqual(richiesta.voce.ambito, 1);
+    }));
+
+    const annullati = [];
+    await conGlobali({ messaggioUtente: () => {} }, () => conMetodi(Object.assign(finteDellaScheda(annullati), { chiediAmbitoDecisione: async () => null }), async () => {
+        assert.strictEqual(await schedaRef.registraDecisioneExtraDallaScheda(schedaRef.richiestaAggiungiSoloQui("bollino.png", 2), {}, () => { annullati.push("box"); }), false);
+    }));
+    assert.deepStrictEqual(annullati, []);
+});
+
+test("una decisione solo volantino lo dice accanto alla foto e nella finestra", () => {
+    assert.strictEqual(schedaRef.etichettaDecisioneExtra({ azione: 3, ambito: 1 }), "esclusa per questa lavorazione (solo volantino)");
+    assert.strictEqual(schedaRef.etichettaDecisioneExtra({ azione: 3, ambito: 0 }), "esclusa per questa lavorazione");
+    assert.strictEqual(schedaRef.etichettaDecisioneExtra({ azione: 2 }), "solo per questa lavorazione");
+    assert.strictEqual(schedaRef.descriviExtraLavorazione({ sigla: "Logo_SDB", azione: 3, ambito: 1 }), "Logo_SDB: esclusa per questa lavorazione (solo volantino)");
+    assert.strictEqual(schedaRef.descriviExtraLavorazione({ sigla: "Logo_SDB", azione: 3 }), "Logo_SDB: esclusa per questa lavorazione");
+});

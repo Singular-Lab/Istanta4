@@ -1031,6 +1031,10 @@ namespace Istanta.Models
             {
                 return $"per {voce.azione} serve il nome del file nel box.";
             }
+            if (!Enum.IsDefined(typeof(AmbitoDecisioneLavorazione), voce.ambito))
+            {
+                return $"l'ambito {(int)voce.ambito} non esiste.";
+            }
             return null;
         }
 
@@ -1296,6 +1300,21 @@ namespace Istanta.Models
         public string? nomeServer { get; set; }
         /// <summary>Il tipo_N della label del box (Aggiungi): e' il TipoFoto della voce che si crea.</summary>
         public int tipoFoto { get; set; }
+        /// <summary>I20-1082: per chi vale la decisione presa in un volantino: anche per i POP della stessa
+        /// promo, area e canale (Tutto, anche per le decisioni registrate prima) o solo per il volantino.</summary>
+        public AmbitoDecisioneLavorazione ambito { get; set; } = AmbitoDecisioneLavorazione.Tutto;
+    }
+
+    /// <summary>
+    /// I20-1082: dove vale una decisione per la lavorazione presa in un volantino. Il POP non decide:
+    /// riceve le decisioni Tutto del volantino della stessa promo, area e canale.
+    /// </summary>
+    public enum AmbitoDecisioneLavorazione
+    {
+        /// <summary>Volantino e POP. E' anche il valore delle decisioni registrate prima di I20-1082.</summary>
+        Tutto = 0,
+        /// <summary>Solo il volantino in cui e' stata presa.</summary>
+        SoloVolantino = 1
     }
 
     /// <summary>

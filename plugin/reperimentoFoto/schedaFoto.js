@@ -1663,21 +1663,29 @@ const schedaFoto = {
         return decisioni.find(v => v != null && String(v.sigla) === String(sigla) && v.tipo == tipoElemento) || null;
     },
 
+    /// I20-1082: il pezzo che dice "solo volantino" accanto a una decisione, o "". 1 e'
+    /// AmbitoDecisioneLavorazione.SoloVolantino (schedaRef.AMBITO_DECISIONE).
+    testoAmbitoDecisione(voce) {
+        return voce != null && voce.ambito === 1 ? " (solo volantino)" : "";
+    },
+
     /// I20-1072: l'etichetta corta della decisione, accanto al nome della foto.
     etichettaDecisioneExtra(voce) {
         if (voce == null) {
             return "";
         }
+        //I20-1082: e, se vale solo per il volantino, lo dice.
+        var ambito = this.testoAmbitoDecisione(voce);
         if (voce.azione === 1) {
-            return "immagine del box per questa lavorazione";
+            return "immagine del box per questa lavorazione" + ambito;
         }
         if (voce.azione === 2) {
-            return "solo per questa lavorazione";
+            return "solo per questa lavorazione" + ambito;
         }
         if (voce.azione === 3) {
-            return "esclusa per questa lavorazione";
+            return "esclusa per questa lavorazione" + ambito;
         }
-        return "decisa per questa lavorazione";
+        return "decisa per questa lavorazione" + ambito;
     },
 
     /// I20-1072: l'etichetta della decisione come elemento della riga.
@@ -1761,6 +1769,12 @@ const schedaFoto = {
             messaggioUtente("Code SRF-112 Foto extra senza una chiave: la decisione per questa lavorazione non si puo' registrare", "error", false, 5);
             return false;
         }
+        //I20-1082: per Coop, prima per chi vale: solo il volantino o anche i POP.
+        var ambito = await this.chiediAmbitoDecisione();
+        if (ambito == null) {
+            return false;
+        }
+        richiesta.voce.ambito = ambito;
         var registrata = await this.salvaExtraLavorazione(richiesta);
         if (!registrata) {
             return false;
