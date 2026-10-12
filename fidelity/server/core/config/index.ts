@@ -13,10 +13,6 @@ const envSchema = z.object({
     PORTA_VITE: z.string().regex(/^\d+$/).transform(Number).default('3000'),
     CLIENT_URL: z.string().url(),
 
-    // Configurazione MongoDB (opzionale — non usato nel setup Docker PostgreSQL-only)
-    MONGO_URL: z.string().url().optional(),
-    MONGO_DB_NAME: z.string().optional(),
-
     // Configurazione OpenAI
     OPENAI_API_KEY: z.string(),
     ASSISTANT_ID: z.string(),

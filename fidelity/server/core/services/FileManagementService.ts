@@ -16,7 +16,7 @@ import {
   FileItemKit,
   FileItemKitLog,
   FotoGruppoReferenze,
-  RUNTIME_KIT_MONGO,
+  RUNTIME_KIT,
   ReferenzeIstanta
 } from '../../../lib/types';
 import config from '../config';
@@ -643,7 +643,7 @@ export class FileManagementService implements IFileManagementService {
       if (!codice) {
         codice = EXPORT_DI_SISTEMA.VOL;
       }
-      const combinazioni = await RuntimeKit.findAll({ raw: true }) as unknown as RUNTIME_KIT_MONGO[];
+      const combinazioni = await RuntimeKit.findAll({ raw: true }) as unknown as RUNTIME_KIT[];
       if (!combinazioni) {
         return [];
       }
@@ -731,7 +731,7 @@ export class FileManagementService implements IFileManagementService {
       const combinazioni = await RuntimeKit.findAll({
         where: whereClause,
         raw: true
-      }) as unknown as RUNTIME_KIT_MONGO[];
+      }) as unknown as RUNTIME_KIT[];
 
       if (combinazioni.length === 0) {
         return [];

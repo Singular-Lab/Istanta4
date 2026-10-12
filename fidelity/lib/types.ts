@@ -1019,10 +1019,8 @@ export type RaccoglitoreKit = {
   files?: FileItemKit[];
 }
 
-export interface RaccoglitoreKitMongo extends RaccoglitoreKit, Document { }
 
-
-export type RUNTIME_KIT_MONGO = {
+export type RUNTIME_KIT = {
   _id?: string;
   guidId: string;
   guidArea: string;
@@ -1052,7 +1050,7 @@ export type RUNTIME_KIT_MONGO = {
   updatedAt?: Date;
   createdAt?: Date;
 }
-export type DESIGN_KIT_MONGO = {
+export type DESIGN_KIT = {
   _id?: string;
   guidId: string;
   guidArea: string;
@@ -1227,23 +1225,6 @@ export type Declinazione = {
 }
 
 
-export enum NOMI_MONGODB {
-  combinazioni_design = "combinazioni_design",
-  combinazioni_runtime = "combinazioni_runtime",
-  promo_collection = "promo_collection",
-  raccoglitori_kit = "raccoglitori_kit",
-  ricette_ai_prima_versione = "ricette_ai_prima_versione",
-  workspaces_webpliant = "workspaces_webpliant",
-  config_webpliant = "config_webpliant",
-  files_runtime = "files_runtime",
-  files_runtime_log = "files_runtime_log",
-  referenze_webpliant = "referenze_webpliant",
-  contenuti_aggiuntivi_referenza = "contenuti_aggiuntivi_referenza",
-  referenze_gruppo = "referenze_gruppo",
-  config = "config",
-  approfondimento_vino = "approfondimento_vino"
-}
-
 export type OggettoTipiDiExport = {
   tipoDiExportGuidID: string;
   filtro?: Filtro[] | null;
@@ -1293,7 +1274,7 @@ export type CompiledField = {
   // PostgreSQL / DB format (snake_case)
   paragraph_name?: string;
   label_name?: string;
-  // ISTANTA / MongoDB format (camelCase) — used in the material arrival flow
+  // ISTANTA format (camelCase) — used in the material arrival flow
   paragraphName?: string;
   labelName?: string;
   content?: any;

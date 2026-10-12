@@ -884,8 +884,7 @@ export class ReferenzeService implements IReferenzeService {
   }
 
   // ─── In-Memory Filter Helpers (private) ───────────────────────────
-  // These replace the MongoDB aggregation pipeline filters, applying them
-  // in JavaScript after fetching data from PostgreSQL.
+  // Applied in JavaScript after fetching data from PostgreSQL.
 
   private applyFiltersNew(referenze: ReferenzeIstanta[], filters: Array<FilterCondition[]>): ReferenzeIstanta[] {
     if (!filters || filters.length === 0) return referenze;
@@ -906,7 +905,7 @@ export class ReferenzeService implements IReferenzeService {
   private applyContestoFilters(referenze: ReferenzeIstanta[], filters: FilterConditionContesto[]): ReferenzeIstanta[] {
     if (!filters || filters.length === 0) return referenze;
 
-    // Group filters by field name (same as MongoDB groupedFilters logic)
+    // Group filters by field name
     const groupedFilters = filters.reduce((accumulator: any, filter: FilterConditionContesto) => {
       const fieldName = filter.nome_field.toLowerCase().trim();
       if (!accumulator[fieldName]) {

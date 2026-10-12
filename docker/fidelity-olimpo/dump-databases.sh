@@ -15,16 +15,6 @@
 # Cosa NON esporta, deliberatamente:
 #   redis       sessioni e cache. Perderle significa che gli utenti rifanno il
 #               login, niente di piu'.
-#   mongo       i dati che ci stavano sono gia' stati portati in PostgreSQL. Nel
-#               codice di Fidelity restano tre agganci, nessuno dei quali e' dato
-#               vivo: un endpoint legacy (update_data_fields_translation_map),
-#               il codice della migrazione in PromoController — che non e'
-#               registrato su alcuna rotta — e un `await` a livello di modulo in
-#               models/mongoose.ts che apre la connessione al solo caricamento.
-#               Il servizio resta nel compose finche' quell'ultimo aggancio non
-#               viene sciolto, ma il suo contenuto non e' piu' la fonte di
-#               nulla. Se un giorno tornasse a esserlo, questa riga e' il posto
-#               dove accorgersene.
 #   i file      immagini, materiali, volantini, quello che sta nei volumi
 #               fidelity_* e olimpo_uploads. Sono decine di gigabyte e vanno
 #               trattati con altri strumenti; questo script si ferma ai database

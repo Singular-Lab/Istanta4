@@ -17,7 +17,7 @@ import type { Socket } from 'socket.io-client';
 import io from 'socket.io-client';
 import { ItemDisposition } from '../../../lib/enums';
 import { ServerCall } from '../../../lib/server_call';
-import { FileItemKit, RUNTIME_KIT_MONGO } from '../../../lib/types';
+import { FileItemKit, RUNTIME_KIT } from '../../../lib/types';
 
 const PROPERTY_LABELS: Record<string, string> = {
   nome: 'Nome file',
@@ -51,7 +51,7 @@ type SelectedFileEntry = {
 
 const DettagliKitOrdiniDiStampa: React.FC = () => {
   const { kit, proprieta, idKit } = useLoaderData() as {
-    kit: RUNTIME_KIT_MONGO;
+    kit: RUNTIME_KIT;
     proprieta: {
       data: string[];
       success: boolean;

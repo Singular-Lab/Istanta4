@@ -62,7 +62,7 @@ services:
     depends_on:
       redis:
         condition: service_started
-    # Permette al container di raggiungere i servizi sul host (PostgreSQL, MongoDB, ecc.)
+    # Permette al container di raggiungere i servizi sul host (PostgreSQL, ecc.)
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:

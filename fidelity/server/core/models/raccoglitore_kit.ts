@@ -4,7 +4,6 @@ import { sequelize } from '../db/SequelizeConnector';
 
 /**
  * Modello Volantino per gestione promozioni e volantini
- * Basato sulla struttura MongoDB fornita dall'utente
  */
 
 export interface RaccoglitoreKitAttributes {

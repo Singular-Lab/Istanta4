@@ -13,7 +13,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { icons } from "lucide-react";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { InteractionType } from "../../../../lib/enums";
-import { AttributiCaroselloWebpliant, DESIGN_KIT_MONGO, IPromo, PageLayoutItem, PaginaWebPliant, PolicyDiVisualizzazioneType, Ricette } from "../../../../lib/types";
+import { AttributiCaroselloWebpliant, DESIGN_KIT, IPromo, PageLayoutItem, PaginaWebPliant, PolicyDiVisualizzazioneType, Ricette } from "../../../../lib/types";
 import { PromoResponseDTO, TipiDiExportResponseDTO } from "../../../../server/core/dto";
 import CarouselContent from "./Carousel";
 import GrigliaReferenze from "./GrigliaReferenze";
@@ -299,7 +299,7 @@ export interface ElementSettingsProps {
   };
   pages: PaginaWebPliant[];
   dataPerSelezioneRicette: any;
-  dataPerKitDesign: DESIGN_KIT_MONGO[];
+  dataPerKitDesign: DESIGN_KIT[];
   dataPerTipiExport: TipiDiExportResponseDTO[];
   promos: PromoResponseDTO[];
 }

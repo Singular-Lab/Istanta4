@@ -22,7 +22,7 @@ Cosa non c'è, di proposito:
   come passo successivo, quando questo deployment è verificato.
 - **Istanta e Correggo4**, che sono altri componenti della suite.
 
-PostgreSQL, MongoDB e Redis invece ci sono, e non sono componenti della release:
+PostgreSQL e Redis invece ci sono, e non sono componenti della release:
 il ControlPlane non li conosce e il Runner non li aggiorna. PostgreSQL usa
 l'immagine **PostGIS**, non `postgres` semplice, perché il database di Fidelity
 usa `DataTypes.GEOMETRY`; con l'immagine normale il primo `models:sync`
@@ -42,12 +42,6 @@ Il TLS non è un di più. La CSP dell'applicazione contiene
 arriva ma il browser richiede da solo ogni risorsa in `https` e fallisce con
 `ERR_SSL_PROTOCOL_ERROR`. Con il certificato davanti, gli header di sicurezza
 di Fidelity funzionano come previsto invece di doverli rimuovere.
-
-MongoDB serve a Fidelity per la configurazione di WebPliant. Lo schema Zod
-dichiara `MONGO_URL` opzionale, ma `server/core/models/mongoose.ts` apre la
-connessione al caricamento del modulo: senza, il processo termina prima di
-mettersi in ascolto. Il servizio non pubblica porte e non ha autenticazione,
-perché è raggiungibile solo dalla rete interna del progetto.
 
 Le credenziali stanno in `release.env`, non nei due file d'ambiente delle
 applicazioni: sono la stessa cosa per il container che inizializza il database e
@@ -359,15 +353,10 @@ Non esporta redis — sono sessioni e cache — **né i file**: immagini, materi
 volantini stanno nei volumi Docker e vanno salvati a parte. Lo script lo ripete
 in coda, perché è la cosa che si dà per fatta quando non lo è.
 
-Non esporta nemmeno MongoDB, e vale la pena dire perché. I dati che ci stavano
-sono già stati portati in PostgreSQL; nel codice di Fidelity restano tre agganci,
-nessuno dei quali è dato vivo: l'endpoint legacy
-`PUT /api/update_data_fields_translation_map`, il codice della migrazione in
-`PromoController` — che non è registrato su alcuna rotta — e un `await` a livello
-di modulo in `models/mongoose.ts` che apre la connessione al solo caricamento del
-file. È quest'ultimo a rendere il servizio ancora necessario nel compose, non la
-logica applicativa. Finché non viene sciolto, `mongo` resta acceso ma il suo
-contenuto non è la fonte di nulla.
+Sui target installati prima che MongoDB fosse tolto dal compose resta il volume
+`mongo_data`, che nessun servizio monta più. `docker compose up` non lo
+cancella: se ne serve una copia, va fatta prima di rimuoverlo a mano con
+`docker volume rm`.
 
 ### Ripristinare
 

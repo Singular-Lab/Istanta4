@@ -6,7 +6,7 @@ import SftpClient = require('ssh2-sftp-client');
 
 import { ABSOLUTE_PATH_TYPE } from '@enums/enums';
 import { Colorize } from '@lib/colorize';
-import { FileItemKit, FileTreeAction, FileTreeCondition, FileTreeNode, RootFileTree, RUNTIME_KIT_MONGO } from '@server_types/types';
+import { FileItemKit, FileTreeAction, FileTreeCondition, FileTreeNode, RootFileTree, RUNTIME_KIT } from '@server_types/types';
 import { OlimpoService } from 'src/app.service';
 import { MaterialiService } from 'src/materiali/materiali.service';
 import { Materiali } from 'src/models/materiali.model';
@@ -164,7 +164,7 @@ export class FtpService implements OnModuleInit, OnModuleDestroy {
     /**
    * Verifica se un materiale soddisfa tutte le conditions.
    */
-    private conditionsMet(conditions: FileTreeCondition[], materiale: Materiali, kit: RUNTIME_KIT_MONGO): boolean {
+    private conditionsMet(conditions: FileTreeCondition[], materiale: Materiali, kit: RUNTIME_KIT): boolean {
         const conditionByIncludes = conditions.every((cond) => {
             switch (cond.operator) {
                 case '=':
@@ -291,7 +291,7 @@ export class FtpService implements OnModuleInit, OnModuleDestroy {
         materiale: Materiali,
         dictionary: { [key: string]: string },
         level: number,
-        kit: RUNTIME_KIT_MONGO
+        kit: RUNTIME_KIT
     ): Promise<void> {
         this.logger.log(`[L${level}] processNode: priority=${node.priority}`);
         let newRoot = currentRoot;
@@ -333,7 +333,7 @@ export class FtpService implements OnModuleInit, OnModuleDestroy {
         materiale: Materiali,
         dictionary: { [key: string]: string },
         level: number,
-        kit: RUNTIME_KIT_MONGO,
+        kit: RUNTIME_KIT,
         socketId?: string
     ): Promise<void> {
         this.logger.log(`[L${level}] processTree con ${nodes.length} nodi, currentRoot=${currentRoot}`);
@@ -372,7 +372,7 @@ export class FtpService implements OnModuleInit, OnModuleDestroy {
      */
     async creaPathFromContrattoTipografia(
         contratto: RootFileTree,
-        kit: RUNTIME_KIT_MONGO,
+        kit: RUNTIME_KIT,
         socketId: string | undefined,
         sftpConfig: SftpConfig
     ): Promise<void> {
@@ -496,7 +496,7 @@ export class FtpService implements OnModuleInit, OnModuleDestroy {
         }
     }
 
-    async getVirtualDirectories(kits: RUNTIME_KIT_MONGO[]): Promise<VirtualDirectory[]> {
+    async getVirtualDirectories(kits: RUNTIME_KIT[]): Promise<VirtualDirectory[]> {
         const collectedPaths = new Set<string>();
 
         const executeCommandsVirtual = (
@@ -548,7 +548,7 @@ export class FtpService implements OnModuleInit, OnModuleDestroy {
             materiale: Materiali,
             dictionary: { [key: string]: string },
             level: number,
-            kit: RUNTIME_KIT_MONGO
+            kit: RUNTIME_KIT
         ): void => {
             let newRoot = currentRoot;
             if (this.conditionsMet(node.conditions, materiale, kit)) {
@@ -578,7 +578,7 @@ export class FtpService implements OnModuleInit, OnModuleDestroy {
             materiale: Materiali,
             dictionary: { [key: string]: string },
             level: number,
-            kit: RUNTIME_KIT_MONGO
+            kit: RUNTIME_KIT
         ): void => {
             const sortedNodes = [...nodes].sort((a, b) => a.priority - b.priority);
             let found = false;

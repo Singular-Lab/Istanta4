@@ -3,7 +3,6 @@ import { sequelize } from '../db/SequelizeConnector';
 
 /**
  * Modello Ricette per gestione ricette AI
- * Basato sulla struttura MongoDB fornita dall'utente
  */
 
 export interface RicetteAttributes {

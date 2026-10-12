@@ -34,7 +34,6 @@ Fidelity Promotion è un'applicazione full-stack che integra:
 - **Express 5.2.0** framework
 - **Inversify** per Dependency Injection (IoC container)
 - **PostgreSQL** (Sequelize ORM) - 51+ tabelle
-- **MongoDB** (Mongoose ODM) - Configurazioni dinamiche
 - **Socket.IO Server** con clustering
 - **node-cron** per task pianificati
 - **PM2** per process management
@@ -45,7 +44,6 @@ Fidelity Promotion è un'applicazione full-stack che integra:
 ### Prerequisiti
 - Node.js >= 20.x
 - PostgreSQL >= 14.x
-- MongoDB >= 6.x
 - Yarn: basta un `yarn` qualsiasi (anche 1.x): la versione del progetto, 4.18.1, e' in `.yarn/releases` e viene usata automaticamente
 
 ### Installazione
@@ -91,7 +89,7 @@ fidelity_promotion/
 │       ├── repositories/  # 33 repository (BaseRepository)
 │       ├── interfaces/    # 35 interfacce per DI contracts
 │       ├── dto/           # 34 Data Transfer Objects (Zod)
-│       ├── models/        # 51+ Sequelize + Mongoose models
+│       ├── models/        # 51+ Sequelize models
 │       ├── middleware/    # Security, auth, errors
 │       ├── cron/          # Scheduled tasks
 │       ├── workers/       # Background jobs (WhatsApp queue)
@@ -191,14 +189,6 @@ Sistema gerarchico con ruoli:
 - Webhook & API log
 - Audit log & Statistiche
 
-### MongoDB
-**Collections:**
-- Configurazioni dinamiche
-- Dashboard & Workspace layout
-- Sessioni utente
-- Kit design temporanei
-- Foto e media
-
 ## Sicurezza
 
 - **Session-based authentication** con cookie HTTP-only
@@ -255,10 +245,6 @@ DB_POSTGRESQL_HOST=localhost
 DB_POSTGRESQL_PORT=5432
 DB_POSTGRESQL_USER=postgres
 DB_POSTGRESQL_PASSWORD=your_password
-
-# MongoDB
-MONGO_URL=mongodb://localhost:27017/FIDELITY_PROMOTION
-MONGO_DB_NAME=FIDELITY_PROMOTION
 
 # Security
 FICO_SECRET=your_secret_key

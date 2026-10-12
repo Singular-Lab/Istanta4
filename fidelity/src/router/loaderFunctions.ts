@@ -1,13 +1,13 @@
 import { ServerCall } from "../../lib/server_call";
 import type {
   ConfigWebpliant,
-  DESIGN_KIT_MONGO,
+  DESIGN_KIT,
   FileItemKit,
   IPromo,
   OrdiniDiStampaAttributes,
   OrdiniDiStampaInviiAttributes,
   PuntiVenditaAttributes,
-  RUNTIME_KIT_MONGO,
+  RUNTIME_KIT,
   ReferenzeIstanta,
   Ricette,
   TipiDiExportAttributes,
@@ -339,7 +339,7 @@ export const funzioneDettagliLavorazioniInCorso = async ({ request }: { request:
   const idPromo = pathSegments[pathSegments.length - 1] || "";
 
   type KitResponseType = {
-    lavorazioni: ((DESIGN_KIT_MONGO & { nomeCanale: string, nomeArea: string, lavorazioneStarted: boolean, isDesignKit: boolean }) | (RUNTIME_KIT_MONGO & { nomeCanale: string, nomeArea: string, lavorazioneStarted: boolean, isDesignKit: boolean, files: FileItemKit[], tipiExport: TipiDiExportAttributes[] }))[];
+    lavorazioni: ((DESIGN_KIT & { nomeCanale: string, nomeArea: string, lavorazioneStarted: boolean, isDesignKit: boolean }) | (RUNTIME_KIT & { nomeCanale: string, nomeArea: string, lavorazioneStarted: boolean, isDesignKit: boolean, files: FileItemKit[], tipiExport: TipiDiExportAttributes[] }))[];
     volantini: Array<{
       guidId: string;
       titolo: string;
@@ -356,10 +356,10 @@ export const funzioneDettagliLavorazioniInCorso = async ({ request }: { request:
   const allCanaliGDOPromise = ServerCall.get<CanaleResponseDTO[]>("/allCanaliForGDO");
   const datoGraficoPaginaLavorazioniPromise = kitPromise.then(result => {
     const lavorazioni = result.lavorazioni;
-    const completate = Array.isArray(lavorazioni) ? lavorazioni.filter(item => (item as RUNTIME_KIT_MONGO).stato_lavorazione === STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO).length : 0;
-    const partite = Array.isArray(lavorazioni) ? lavorazioni.filter(item => (item as RUNTIME_KIT_MONGO).stato_lavorazione === STATO_LAVORAZIONE_KIT_RUNTIME.IN_LAVORAZIONE).length : 0;
+    const completate = Array.isArray(lavorazioni) ? lavorazioni.filter(item => (item as RUNTIME_KIT).stato_lavorazione === STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO).length : 0;
+    const partite = Array.isArray(lavorazioni) ? lavorazioni.filter(item => (item as RUNTIME_KIT).stato_lavorazione === STATO_LAVORAZIONE_KIT_RUNTIME.IN_LAVORAZIONE).length : 0;
     const daPartire = Array.isArray(lavorazioni) ? lavorazioni.filter(item => item.isDesignKit === true).length : 0;
-    const inRevisione = Array.isArray(lavorazioni) ? lavorazioni.filter(item => (item as RUNTIME_KIT_MONGO).stato_lavorazione === STATO_LAVORAZIONE_KIT_RUNTIME.IN_REVISIONE).length : 0;
+    const inRevisione = Array.isArray(lavorazioni) ? lavorazioni.filter(item => (item as RUNTIME_KIT).stato_lavorazione === STATO_LAVORAZIONE_KIT_RUNTIME.IN_REVISIONE).length : 0;
     return {
       datasets: [
         {
@@ -592,7 +592,7 @@ export const funzioneCaricamentoDettagliOrdiniDiStampa = async ({ request }: { r
   const totalSteps = 4;
 
 
-  const dettagliOrdineDiStampa = ServerCall.get<RUNTIME_KIT_MONGO[]>(`/getDettagliOrdineDiStampa?id=${idOrdineDiStampa}`);
+  const dettagliOrdineDiStampa = ServerCall.get<RUNTIME_KIT[]>(`/getDettagliOrdineDiStampa?id=${idOrdineDiStampa}`);
   const ordineDiStampa = ServerCall.get<OrdiniDiStampaAttributes>(`/getOrdineDiStampaById?id=${idOrdineDiStampa}`);
   const promoDaIdStampa = ServerCall.get<IPromo>(`/getPromoDaIdStampa?id=${idOrdineDiStampa}`);
   const getOrdiniInvii = ServerCall.get<OrdiniDiStampaInviiAttributes[]>(`/getOrdiniInviiByOrdineStampa?id=${idOrdineDiStampa}`);
@@ -608,7 +608,7 @@ export const funzioneCaricamentoDettagliFineLavorazione = async ({ request }: { 
   const idOrdineDiStampa = new URL(request.url).searchParams.get("id") || "";
   const totalSteps = 4;
 
-  const dettagliOrdineDiStampa = ServerCall.get<RUNTIME_KIT_MONGO[]>(`/getDettagliOrdineDiStampa?id=${idOrdineDiStampa}`);
+  const dettagliOrdineDiStampa = ServerCall.get<RUNTIME_KIT[]>(`/getDettagliOrdineDiStampa?id=${idOrdineDiStampa}`);
   const ordineDiStampa = ServerCall.get<OrdiniDiStampaAttributes>(`/getOrdineDiStampaById?id=${idOrdineDiStampa}`);
   const promoDaIdStampa = ServerCall.get<IPromo>(`/getPromoDaIdStampa?id=${idOrdineDiStampa}`);
   const getOrdiniInvii = ServerCall.get<OrdiniDiStampaInviiAttributes[]>(`/getOrdiniInviiByOrdineStampa?id=${idOrdineDiStampa}`);

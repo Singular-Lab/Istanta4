@@ -3,7 +3,6 @@ import { sequelize } from '../db/SequelizeConnector';
 
 /**
  * Modello ApprofondimentoVino per gestione approfondimenti sui vini
- * Basato sulla struttura MongoDB fornita dall'utente
  */
 
 export interface ApprofondimentoVinoAttributes {

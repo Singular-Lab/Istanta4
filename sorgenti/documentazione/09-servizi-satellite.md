@@ -70,8 +70,7 @@ Dalla struttura dei controller si capisce cosa gestisce: `DesignKitController`,
 `get_all_naming_convention_from_istanta`, `getFiltroContestoDaIstanta`,
 `getAllDeclinazioniKitDaIstanta`: **fidelity legge anche da Istanta**, non solo il contrario.
 
-Ha `mongoose` e `mongodb` fra le dipendenze: **è la spiegazione più probabile del container Mongo**,
-ma non è verificato.
+Usa solo PostgreSQL: MongoDB e `mongoose` sono stati tolti.
 
 ---
 

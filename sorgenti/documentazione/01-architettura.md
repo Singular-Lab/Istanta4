@@ -72,8 +72,8 @@ E in Docker:
 reverse proxy, non c'è.
 
 > Redis serve alla sessione (`AddStackExchangeRedisCache` + `AddSession`, stringa di connessione
-> `IstantaSession`). **Mongo gira ma chi lo usa non è verificato**: Istanta non lo nomina; è
-> plausibile che appartenga a fidelity, che ha `mongoose` fra le dipendenze.
+> `IstantaSession`). **Mongo non serve più a nessun componente**: era di fidelity, che ora usa
+> solo PostgreSQL. Il container si può fermare, dopo averne salvato il volume se serve una copia.
 
 ---
 

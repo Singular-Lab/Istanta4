@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { Colorize } from '../../../lib/Colorize';
 import { EVENTI_WEBHOOK, EXPORT_DI_SISTEMA, STATO_COMBINAZIONI, STATO_LAVORAZIONE_KIT_RUNTIME, STATO_LOG_FILE, TIPO_KIT_DESIGN, TIPO_LAVORAZIONE } from '../../../lib/enums';
 import { BusinessError, DatabaseError, ExternalApiError, ForbiddenError, isAppError, NotFoundError, ServiceUnavailableError, wrapDatabaseError, wrapNotFoundError } from '../../../lib/errors';
-import { DESIGN_KIT_MONGO, FileItemKit, FileItemKitLog, ImportStorico, OggettoTipiDiExport, PaylodKitPubblicato, RUNTIME_KIT_MONGO, TipiDiExportAttributes } from '../../../lib/types';
+import { DESIGN_KIT, FileItemKit, FileItemKitLog, ImportStorico, OggettoTipiDiExport, PaylodKitPubblicato, RUNTIME_KIT, TipiDiExportAttributes } from '../../../lib/types';
 import config from '../config';
 import { sequelize } from '../db';
 import { IIstantaService } from '../interfaces/IIstantaService';
@@ -26,7 +26,7 @@ import { TipiDiExport } from '../models/tipi_di_export';
 import { Utente } from '../models/utenti';
 
 /** Maps a raw PG RuntimeKit (snake_case) to the camelCase shape expected by the client */
-function normalizeRuntimeKitFromPg(raw: any): RUNTIME_KIT_MONGO {
+function normalizeRuntimeKitFromPg(raw: any): RUNTIME_KIT {
   const rawTipi: any[] = raw.tipiDiExportInKit ?? raw.tipi_di_export_in_kit ?? [];
   return {
     ...raw,
@@ -52,7 +52,7 @@ function normalizeRuntimeKitFromPg(raw: any): RUNTIME_KIT_MONGO {
     inizioLavorazione: raw.inizioLavorazione ?? raw.inizio_lavorazione,
     fineLavorazione: raw.fineLavorazione ?? raw.fine_lavorazione,
     files: raw.files ?? raw.files_data ?? [],
-  } as RUNTIME_KIT_MONGO;
+  } as RUNTIME_KIT;
 }
 
 /** Maps a raw PG DesignKit (snake_case) to camelCase shape expected by the client */
@@ -141,10 +141,10 @@ export class KitRuntimeService implements IKitRuntimeService {
           raw: true
         }) as unknown as Promise<any[]>
       ]);
-      const resultCreazioneCombinazioneDesign = _rawDesignKits.map(normalizeDesignKitFromPg) as (DESIGN_KIT_MONGO & { nomeCanale: string, nomeArea: string, lavorazioneStarted: boolean })[];
+      const resultCreazioneCombinazioneDesign = _rawDesignKits.map(normalizeDesignKitFromPg) as (DESIGN_KIT & { nomeCanale: string, nomeArea: string, lavorazioneStarted: boolean })[];
       const getKitRuntime = _rawKitRuntime.map(normalizeRuntimeKitFromPg);
 
-      const runtimeByDesignId = new Map<string, RUNTIME_KIT_MONGO>();
+      const runtimeByDesignId = new Map<string, RUNTIME_KIT>();
       const formatoIds = new Set<string>();
       const tipiExportIds = new Set<string>();
       const runtimeIds: string[] = [];
@@ -439,9 +439,9 @@ export class KitRuntimeService implements IKitRuntimeService {
         },
         raw: true
       });
-      let kitRuntime = _rawKitRuntime1 ? normalizeRuntimeKitFromPg(_rawKitRuntime1) : null as unknown as RUNTIME_KIT_MONGO;
+      let kitRuntime = _rawKitRuntime1 ? normalizeRuntimeKitFromPg(_rawKitRuntime1) : null as unknown as RUNTIME_KIT;
 
-      let kitDesign: DESIGN_KIT_MONGO | null = null;
+      let kitDesign: DESIGN_KIT | null = null;
 
       if (kitRuntime) {
         // Se troviamo un kit runtime, cerchiamo il design kit corrispondente
@@ -461,7 +461,7 @@ export class KitRuntimeService implements IKitRuntimeService {
             },
             raw: true
           });
-          kitRuntime = _rawKitRuntime2 ? normalizeRuntimeKitFromPg(_rawKitRuntime2) : null as unknown as RUNTIME_KIT_MONGO;
+          kitRuntime = _rawKitRuntime2 ? normalizeRuntimeKitFromPg(_rawKitRuntime2) : null as unknown as RUNTIME_KIT;
         }
       }
 
@@ -661,10 +661,10 @@ export class KitRuntimeService implements IKitRuntimeService {
     }
   }
 
-  async getKitRuntimeById(id: string): Promise<RUNTIME_KIT_MONGO> {
+  async getKitRuntimeById(id: string): Promise<RUNTIME_KIT> {
     try {
       const raw = await RuntimeKit.findOne({ where: { id }, raw: true });
-      const resultCreazioneCombinazioneDesign = raw ? normalizeRuntimeKitFromPg(raw) : null as unknown as RUNTIME_KIT_MONGO;
+      const resultCreazioneCombinazioneDesign = raw ? normalizeRuntimeKitFromPg(raw) : null as unknown as RUNTIME_KIT;
 
       // Aggiungi i dati della promozione se presente idPromo
       if (resultCreazioneCombinazioneDesign?.idPromo) {
@@ -718,7 +718,7 @@ export class KitRuntimeService implements IKitRuntimeService {
   }> {
     try {
       const rawKit = await RuntimeKit.findOne({ where: { id }, raw: true });
-      const resultCreazioneCombinazioneDesign = rawKit ? normalizeRuntimeKitFromPg(rawKit) : null as unknown as RUNTIME_KIT_MONGO;
+      const resultCreazioneCombinazioneDesign = rawKit ? normalizeRuntimeKitFromPg(rawKit) : null as unknown as RUNTIME_KIT;
       const area = await Area.findByPk(resultCreazioneCombinazioneDesign.guidArea);
       const canale = await Canale.findByPk(resultCreazioneCombinazioneDesign.guidCanale);
       const formato = await Formati.findByPk(resultCreazioneCombinazioneDesign.guidFormato);
@@ -790,7 +790,7 @@ export class KitRuntimeService implements IKitRuntimeService {
     }
   }
 
-  async getAllKitRuntimeByIdPromo(idPromo: string): Promise<RUNTIME_KIT_MONGO[]> {
+  async getAllKitRuntimeByIdPromo(idPromo: string): Promise<RUNTIME_KIT[]> {
     try {
       const rawKits = await RuntimeKit.findAll({
         where: { id_promo: idPromo },
@@ -840,7 +840,7 @@ export class KitRuntimeService implements IKitRuntimeService {
       );
 
       // Remove null values (filtered out kits)
-      return filteredKits.filter((kit): kit is RUNTIME_KIT_MONGO => kit !== null);
+      return filteredKits.filter((kit): kit is RUNTIME_KIT => kit !== null);
     } catch (error: any) {
       throw wrapDatabaseError(new Error("Errore durante l'aggiornamento delle combinazioni di design"), {
         message: "Errore durante l'aggiornamento delle combinazioni di design",
@@ -985,7 +985,7 @@ export class KitRuntimeService implements IKitRuntimeService {
 
   /** ──────────────── Mutations ──────────────── */
 
-  async createKitRunTime(data: RUNTIME_KIT_MONGO) {
+  async createKitRunTime(data: RUNTIME_KIT) {
     try {
       const kit = await RuntimeKit.findOne({
         where: {
@@ -993,7 +993,7 @@ export class KitRuntimeService implements IKitRuntimeService {
           id_promo: data.idPromo,
         },
         raw: true
-      }) as unknown as RUNTIME_KIT_MONGO;
+      }) as unknown as RUNTIME_KIT;
       if (kit != null) {
         return normalizeRuntimeKitFromPg(kit);
       }
@@ -1041,7 +1041,7 @@ export class KitRuntimeService implements IKitRuntimeService {
     }
   }
 
-  async creaKitRuntimeManuale(idPromo: string, kitDesign: DESIGN_KIT_MONGO) {
+  async creaKitRuntimeManuale(idPromo: string, kitDesign: DESIGN_KIT) {
     try {
       const newId = uuidv4();
 
@@ -1092,9 +1092,9 @@ export class KitRuntimeService implements IKitRuntimeService {
     }
   }
 
-  async bulkCreateRuntime(data: (DESIGN_KIT_MONGO & { idPromo: string })[]): Promise<RUNTIME_KIT_MONGO[]> {
+  async bulkCreateRuntime(data: (DESIGN_KIT & { idPromo: string })[]): Promise<RUNTIME_KIT[]> {
     try {
-      let result: (RUNTIME_KIT_MONGO & { guidIdDesign: string })[] = [];
+      let result: (RUNTIME_KIT & { guidIdDesign: string })[] = [];
       // Estrai gli ID delle combinazioni dal dato in ingresso
 
       await Promise.all(data.map(async (item) => {
@@ -1104,14 +1104,14 @@ export class KitRuntimeService implements IKitRuntimeService {
             id_promo: item.idPromo
           },
           raw: true
-        }) as unknown as RUNTIME_KIT_MONGO[];
+        }) as unknown as RUNTIME_KIT[];
         if (existingCombinations.length == 0) {
           const raccoglitoreKit = await RaccoglitoreKit.findOne({ where: { id: item.guidIdRaccoglitore }, raw: true });
           if (!raccoglitoreKit) {
             throw new NotFoundError({ message: 'Raccoglitore non trovato', entityType: 'raccoglitore_kit', entityId: item.guidIdRaccoglitore });
           }
           const newId = uuidv4();
-          const runtimeKitPromo: RUNTIME_KIT_MONGO & { guidIdDesign: string } = {
+          const runtimeKitPromo: RUNTIME_KIT & { guidIdDesign: string } = {
             ...item,
             guidId: newId,
             filtro: (raccoglitoreKit as any).filtro ? (raccoglitoreKit as any).filtro : [],
@@ -1155,7 +1155,7 @@ export class KitRuntimeService implements IKitRuntimeService {
           };
           await RuntimeKit.create(pgData as any);
           const createdRaw = await RuntimeKit.findByPk(newId, { raw: true });
-          result.push({ ...normalizeRuntimeKitFromPg(createdRaw), guidIdDesign: item.guidId } as RUNTIME_KIT_MONGO & { guidIdDesign: string });
+          result.push({ ...normalizeRuntimeKitFromPg(createdRaw), guidIdDesign: item.guidId } as RUNTIME_KIT & { guidIdDesign: string });
         } else {
           result.push(normalizeRuntimeKitFromPg(existingCombinations[0] as any));
         }
@@ -1546,7 +1546,7 @@ export class KitRuntimeService implements IKitRuntimeService {
   ): Promise<any> {
     try {
       return await sequelize.transaction(async (t) => {
-        const kitRuntime = await RuntimeKit.findOne({ where: { id: idLavorazione }, raw: true, transaction: t }) as unknown as RUNTIME_KIT_MONGO;
+        const kitRuntime = await RuntimeKit.findOne({ where: { id: idLavorazione }, raw: true, transaction: t }) as unknown as RUNTIME_KIT;
         if (!kitRuntime) {
           throw wrapNotFoundError(new Error(`Kit runtime con id ${idLavorazione} non trovato`), {
             message: `Kit runtime con id ${idLavorazione} non trovato`,
@@ -1753,7 +1753,7 @@ export class KitRuntimeService implements IKitRuntimeService {
 
   /** ──────────────── Combinations ──────────────── */
 
-  async getAllKitRuntime(): Promise<RUNTIME_KIT_MONGO[]> {
+  async getAllKitRuntime(): Promise<RUNTIME_KIT[]> {
     try {
       const resultCreazioneCombinazioneDesign = await RuntimeKit.findAll({ raw: true }) as unknown as any[];
       return resultCreazioneCombinazioneDesign.map(normalizeRuntimeKitFromPg);
@@ -1767,7 +1767,7 @@ export class KitRuntimeService implements IKitRuntimeService {
     }
   }
 
-  async getAllCombinazioniRuntimeFilters(filters: { idArea?: string; idCanale?: string; idPv?: string; idPromo?: string; idFormato?: string; id?: string; idTipoExport?: string; idLavorazione?: string; idCombinazione?: string; nome?: string }): Promise<RUNTIME_KIT_MONGO[]> {
+  async getAllCombinazioniRuntimeFilters(filters: { idArea?: string; idCanale?: string; idPv?: string; idPromo?: string; idFormato?: string; id?: string; idTipoExport?: string; idLavorazione?: string; idCombinazione?: string; nome?: string }): Promise<RUNTIME_KIT[]> {
     try {
       // Gestione idLavorazione: stringa di ID separati da virgola -> array per Op.in
       const promoIds = filters.idLavorazione ? filters.idLavorazione.split(',').filter(id => id.trim()) : null;
@@ -2169,13 +2169,13 @@ export class KitRuntimeService implements IKitRuntimeService {
     }
   }
 
-  async getKitManualeDaId(id: string): Promise<DESIGN_KIT_MONGO> {
+  async getKitManualeDaId(id: string): Promise<DESIGN_KIT> {
     try {
       const raw = await DesignKit.findOne({
         where: { id },
         raw: true
       });
-      return normalizeDesignKitFromPg(raw) as unknown as DESIGN_KIT_MONGO;
+      return normalizeDesignKitFromPg(raw) as unknown as DESIGN_KIT;
     } catch (error: any) {
       throw wrapDatabaseError(new Error("Errore durante l'aggiornamento delle combinazioni di design"), {
         message: "Errore durante l'aggiornamento delle combinazioni di design",

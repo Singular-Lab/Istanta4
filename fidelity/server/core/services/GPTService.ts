@@ -959,7 +959,7 @@ export class GPTService implements IGPTService {
       }
 
       // Step 3: Trova tutte le referenze per questi kit.
-      // queryViniConfig usa formato { "dataFields.xxx": "value" } (path MongoDB).
+      // queryViniConfig usa formato { "dataFields.xxx": "value" }.
       // Convertiamo in Sequelize JSONB literal: data_fields->>'xxx' = 'value'
       const guidIdKits = tuttiIKitPerPromozione.map(kit => kit.id);
       const viniLiterals = Object.entries(queryViniConfig).map(([key, val]) => {
