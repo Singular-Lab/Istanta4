@@ -49,14 +49,10 @@ services:
       DB_POSTGRESQL_HOST: host.docker.internal
       DB_POSTGRESQL_PORT: ${DB_POSTGRESQL_PORT:-5432}
       REDIS_URL: redis://redis:6379
-      # In produzione il container non può scrivere percorsi host arbitrari:
-      # usiamo un path interno persistente via named volume.
-      ICONE_INSEGNA_DIR: /home/node/insegne
     extra_hosts:
       # Permette al container di raggiungere PostgreSQL e altri servizi sul host
       - "host.docker.internal:host-gateway"
     volumes:
-      - insegne_data:/home/node/insegne
       - ./config:/app/config
     depends_on:
       redis:
@@ -197,4 +193,3 @@ volumes:
   # → fidelity-coopfi_redis_data, fidelity-conadcno_redis_data, ecc.
   redis_data:
   grafana_data:
-  insegne_data:

@@ -45,8 +45,6 @@ const TEST_ENV: Record<string, string> = {
   OLYMPUS_IP_ADDRESS_CORS: 'http://127.0.0.1:5002',
   VITE_OLYMPUS_IP_ADDRESS_CORS: 'http://127.0.0.1:5002',
 
-  ICONE_INSEGNA_DIR: './.tmp-test/icone-insegna',
-
   SMTP_HOST: '127.0.0.1',
   SMTP_PORT: '1025',
   SMTP_USER: 'test-smtp-user',

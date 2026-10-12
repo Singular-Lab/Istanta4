@@ -122,18 +122,6 @@ export async function createHttpApp() {
   // ② API
   await applyRoutes(app);
 
-  // ③-A Servizi statici specifici (precedentemente in static.ts)
-  const insegneDir = config.ICONE_INSEGNA_DIR as string;
-  if (insegneDir) { // Aggiungo un controllo per sicurezza
-    app.use("/insegne", express.static(insegneDir));
-    log.info(`Servizio statico per /insegne configurato da ${insegneDir}`);
-  }
-  // Path.resolve() qui darà server/core. projectRoot è server/../.. -> root del progetto.
-  // Quindi src/assets/images deve essere relativo a projectRoot
-  const srcAssetsImagesPath = path.resolve(projectRoot, 'src/assets/images');
-  app.use('/src/assets/images', express.static(srcAssetsImagesPath));
-  log.info(`Servizio statico per /src/assets/images configurato da ${srcAssetsImagesPath}`);
-
   // ③-B Client app handling:
   // - production: serve built assets from dist/client
   // - development: redirect HTML routes to Vite dev server

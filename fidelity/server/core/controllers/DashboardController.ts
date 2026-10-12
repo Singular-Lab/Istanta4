@@ -1,15 +1,9 @@
 import { Request, Response } from 'express';
-import fs from 'fs';
-import path from 'path';
 import { HttpStatusCode } from '../../../lib/enums';
 import { BaseController } from '../base/BaseController';
 import { DashboardFilterParams, IDashboardService } from '../interfaces/IDashboardService';
 import { authMiddleware } from '../middleware/authMiddleware';
 export { uploadZip } from '../config/multerConfig';
-
-const TMP_DIR = path.join(process.cwd(), 'uploads', 'tmp');
-
-fs.mkdirSync(TMP_DIR, { recursive: true });
 
 export class DashboardController extends BaseController {
     constructor(private dashboardService: IDashboardService) {

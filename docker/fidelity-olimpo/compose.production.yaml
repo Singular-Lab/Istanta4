@@ -97,13 +97,10 @@ services:
       DB_POSTGRESQL_USER: ${FIDELITY_DB_USER:-fidelity}
       DB_POSTGRESQL_PASSWORD: ${FIDELITY_DB_PASSWORD:?Impostare FIDELITY_DB_PASSWORD in release.env}
       REDIS_URL: redis://redis:6379
-      ICONE_INSEGNA_DIR: /home/node/insegne
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
       - ${FIDELITY_CONFIG_DIR:?Impostare FIDELITY_CONFIG_DIR in release.env, percorso assoluto sull'host}:/app/config
-      - fidelity_insegne:/home/node/insegne
-      - fidelity_materiali:/app/public/uploads/materiali_POP
       - fidelity_uploads:/app/uploads
       - fidelity_logs:/app/logs
     depends_on:
@@ -275,8 +272,6 @@ services:
 
 volumes:
   postgres_data:
-  fidelity_insegne:
-  fidelity_materiali:
   fidelity_uploads:
   fidelity_logs:
   olimpo_uploads:
