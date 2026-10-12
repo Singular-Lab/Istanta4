@@ -390,6 +390,12 @@ const confronti = {
             // - differenze: un array di label dei campi che hanno differenze (sia se hanno valori diversi o stili diversi, sia se nel box sono presenti ma appaiono anche nei deletedFields)
             // - errors: un array di stringhe con gli errori riscontrati durante la pre analisi
 
+            //I20-1081: il box e' del tipo che il dato dice? E' la differenza piu' grave, e va per prima.
+            let boxDiverso = confronti.differenzaCodiceBox(box1.label, itemRef);
+            if (boxDiverso != null) {
+                differenze.push(boxDiverso);
+            }
+
             let box1campi = box1.allPageItems.filter(campo => campo.isValid);
             //var base =  Utility.getFieldByLabel("base", box1);
             let listFotoBox1 = [];
@@ -1150,6 +1156,39 @@ const confronti = {
     /// e' un logo, il resto una foto extra. E' lo stesso tipo di noRender e del meta.
     tipoElementoExtra(foto) {
         return foto != null && foto.tipo == 3 ? NoRenderElementi.TIPO.logo : NoRenderElementi.TIPO.fotoExtra;
+    },
+
+    /* ---------- I20-1081: il tipo di box diverso da quello del dato ---------- */
+
+    /// Il codice del box che il dato chiede: codiceBox o, se vuoto, la combinazione assegnata, come
+    /// fa l'impaginazione quando sceglie il box modello. "" se il dato non lo dice.
+    codiceBoxAtteso(record) {
+        if (record == null) {
+            return "";
+        }
+        const codice = record.codiceBox != null ? String(record.codiceBox).trim() : "";
+        if (codice !== "") {
+            return codice;
+        }
+        return record.combinazioneAssegnata != null ? String(record.combinazioneAssegnata).trim() : "";
+    },
+
+    /// La differenza fra il box impaginato, che ha per label il codice del box modello da cui e'
+    /// nato, e il box che il dato chiede. null se coincidono o se uno dei due codici manca: senza
+    /// codice non si segnala a indovinare. Non ha scelte: si risolve reimpaginando con il dato.
+    differenzaCodiceBox(labelDelBox, record) {
+        const nelBox = labelDelBox != null ? String(labelDelBox).trim() : "";
+        const atteso = confronti.codiceBoxAtteso(record);
+        if (nelBox === "" || atteso === "" || nelBox === atteso) {
+            return null;
+        }
+        return { label: "Tipo di box", difference: "diverso fra box e dato", tipo: "codiceBox",
+            valoreLocale: nelBox, valoreServer: atteso };
+    },
+
+    /// Le differenze gravi, da mostrare in evidenza: per ora il tipo di box diverso dal dato.
+    eDifferenzaGrave(diff) {
+        return diff != null && diff.tipo === "codiceBox";
     },
 
     /* ---------- I20-1079: le bruciature della descrizione ---------- */

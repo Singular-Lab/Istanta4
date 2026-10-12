@@ -2396,6 +2396,8 @@ const schedaRef = {
             }
 
             const segnalazioniDellaScheda = me.segnalazioniInMemoria() || [];
+            //I20-1081: il box di un tipo diverso da quello del dato si dice subito, in rosso.
+            me.avvisaDifferenzeGravi(segnalazioniDellaScheda);
             //I20-1056, lotto 4: anche le segnalazioni di impaginazione del bollino del box.
             me.leggiVociBollino(box);
             me.aggiornaPulsanteSegnalazioni();
@@ -4403,10 +4405,55 @@ const schedaRef = {
         if (this.modalSegnalazioniGiaProposto) {
             return false;
         }
+        //I20-1081: una differenza grave (il box di un altro tipo) si mostra anche col silenzio.
+        if (this.ciSonoDifferenzeGravi(differenze)) {
+            return true;
+        }
         if (this.segnalazioniSilenziateOvunque) {
             return false;
         }
         return !this.refESilenziata(codice);
+    },
+
+    /* ---------- I20-1081: le differenze gravi, molto visibili ---------- */
+
+    STILE_RIQUADRO_GRAVE: {
+        "border": "2px solid #b21d1d",
+        "border-left": "6px solid #b21d1d",
+        "border-radius": "4px",
+        "padding": "8px 10px",
+        "background-color": "#fdecea"
+    },
+
+    TESTO_RISOLVI_GRAVE: "Il box impaginato non e' del tipo che il dato chiede: usa Reimpagina per rifarlo con il dato.",
+
+    /// Una differenza grave: il box impaginato e' di un tipo diverso da quello del dato. Lo decide
+    /// il motore di confronto (confronti.eDifferenzaGrave).
+    differenzaGrave(diff) {
+        return typeof confronti !== "undefined" && confronti != null && typeof confronti.eDifferenzaGrave === "function"
+            && confronti.eDifferenzaGrave(diff);
+    },
+
+    ciSonoDifferenzeGravi(differenze) {
+        return Array.isArray(differenze) && differenze.some(d => this.differenzaGrave(d));
+    },
+
+    /// Il testo dell'avviso per il box di un altro tipo, o "" se non c'e'.
+    testoAvvisoDifferenzeGravi(differenze) {
+        const grave = Array.isArray(differenze) ? differenze.find(d => this.differenzaGrave(d)) : null;
+        if (grave == null) {
+            return "";
+        }
+        return "Code SRF-111 ATTENZIONE: il box impaginato e' " + grave.valoreLocale + " ma il dato chiede " + grave.valoreServer
+            + ". Usa Reimpagina per rifarlo con il dato.";
+    },
+
+    /// All'apertura della scheda l'avviso rosso, oltre alla finestra.
+    avvisaDifferenzeGravi(differenze) {
+        const testo = this.testoAvvisoDifferenzeGravi(differenze);
+        if (testo !== "") {
+            messaggioUtente(testo, "error", false, 10);
+        }
     },
 
     silenziaSegnalazioniDellaRef(codice) {
@@ -4618,14 +4665,18 @@ const schedaRef = {
 
         this.raggruppaPerElemento(differenze).forEach(function (gruppo) {
             const riquadro = $('<div class="riquadroDifferenza"></div>');
-            riquadro.css({
+            //I20-1081: la differenza grave (il box di un altro tipo) arriva per prima ed e' tutta in rosso.
+            const grave = gruppo.differenze.some(d => me.differenzaGrave(d));
+            riquadro.css(grave ? me.STILE_RIQUADRO_GRAVE : {
                 "border": "1px solid #e3e3e3",
                 "border-left": "3px solid #b21d1d",
                 "border-radius": "4px",
                 "padding": "6px 8px"
             });
-            const titolo = $('<div></div>').text(ReportIntegrita.etichettaSegnalazione(gruppo.label));
-            titolo.css({ "font-size": "12px", "font-weight": "700", "color": "#2c2c2c" });
+            const titolo = $('<div></div>').text((grave ? "⚠ " : "") + ReportIntegrita.etichettaSegnalazione(gruppo.label));
+            titolo.css(grave
+                ? { "font-size": "13px", "font-weight": "700", "color": "#b21d1d" }
+                : { "font-size": "12px", "font-weight": "700", "color": "#2c2c2c" });
             riquadro.append(titolo);
 
             gruppo.differenze.forEach(function (diff, indice) {
@@ -4640,6 +4691,11 @@ const schedaRef = {
                 me.aggiungiAzioniDifferenza(riga, diff, dopoAzione);
                 riquadro.append(riga);
             });
+            if (grave) {
+                const comeRisolvere = $('<div></div>').text(me.TESTO_RISOLVI_GRAVE);
+                comeRisolvere.css({ "font-size": "12px", "font-weight": "700", "color": "#b21d1d", "padding-top": "4px" });
+                riquadro.append(comeRisolvere);
+            }
             contenitore.append(riquadro);
         });
     },
