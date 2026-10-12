@@ -3,7 +3,6 @@ import { sequelize } from '../db/SequelizeConnector';
 
 /**
  * Modello ReferenzeGruppo per gestione gruppi foto referenze
- * Basato sulla struttura MongoDB FotoGruppoReferenze
  */
 
 export interface ReferenzeGruppoAttributes {

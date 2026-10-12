@@ -11,7 +11,6 @@ export const TYPES = {
   // INFRASTRUCTURE
   // ============================================
   Database: Symbol.for('Database'),
-  MongoDatabase: Symbol.for('MongoDatabase'),
   Cache: Symbol.for('Cache'),
   Logger: Symbol.for('Logger'),
   EventBus: Symbol.for('EventBus'),

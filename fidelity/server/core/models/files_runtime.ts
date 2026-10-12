@@ -3,7 +3,6 @@ import { sequelize } from '../db/SequelizeConnector';
 
 /**
  * Modello FilesRuntime per gestione file di runtime
- * Basato sulla struttura MongoDB fornita dall'utente
  */
 
 export interface FilesRuntimeAttributes {

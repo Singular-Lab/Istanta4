@@ -9,7 +9,7 @@ import React, { useEffect, useState } from "react";
 import { FieldType, InteractionType } from "../../../../lib/enums";
 import { ServerCall } from "../../../../lib/server_call";
 import {
-  DESIGN_KIT_MONGO,
+  DESIGN_KIT,
   PolicyDiVisualizzazioneType,
   fieldsByInteractionType
 } from "../../../../lib/types";
@@ -328,7 +328,7 @@ const PolicyDiVisualizzazione: React.FC<PolicyDiVisualizzazioneProps> = ({
         return (
           <FormSelect formSelectSize="sm" value={value} onChange={(e) => setPolicyValue(e.target.value)}>
             <option value="">Seleziona un kit</option>
-            {kitAttivi?.map((k: DESIGN_KIT_MONGO) => (
+            {kitAttivi?.map((k: DESIGN_KIT) => (
               <option key={k.guidId} value={k.guidId}>
                 {k.titolo}
               </option>

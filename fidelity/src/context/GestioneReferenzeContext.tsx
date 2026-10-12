@@ -1,13 +1,13 @@
 import { createContext, ReactNode, useContext, useEffect, useState } from "react";
 import { ServerCall } from "../../lib/server_call";
-import { ReferenzeIstanta, RUNTIME_KIT_MONGO } from "../../lib/types";
+import { ReferenzeIstanta, RUNTIME_KIT } from "../../lib/types";
 
 
 
 interface GestioneReferenzeContextProps {
   referenza: ReferenzeIstanta | undefined;
   setReferenza: (referenza: ReferenzeIstanta | undefined) => void;
-  kit: RUNTIME_KIT_MONGO | undefined;
+  kit: RUNTIME_KIT | undefined;
 }
 
 const GestioneReferenzeContext = createContext<GestioneReferenzeContextProps | undefined>(undefined);
@@ -22,7 +22,7 @@ export const useGestioneReferenze = () => {
 
 export const GestioneReferenzeProvider = ({ children }: { children: ReactNode }) => {
   const [referenza, setReferenza] = useState<ReferenzeIstanta>();
-  const [kit, setKit] = useState<RUNTIME_KIT_MONGO>();
+  const [kit, setKit] = useState<RUNTIME_KIT>();
   const handleSetReferenza = (newReferenza: ReferenzeIstanta | undefined) => {
     console.log("setReferenza", newReferenza);
 
@@ -37,7 +37,7 @@ export const GestioneReferenzeProvider = ({ children }: { children: ReactNode })
   useEffect(() => {
     const fetchKit = async () => {
       if (referenza && referenza.guidIdKitRuntime && typeof referenza.guidIdKitRuntime === 'string') {
-        const kit = await ServerCall.get<RUNTIME_KIT_MONGO>(`/getKitRuntimeById?get_files=false&id=${referenza.guidIdKitRuntime}`);
+        const kit = await ServerCall.get<RUNTIME_KIT>(`/getKitRuntimeById?get_files=false&id=${referenza.guidIdKitRuntime}`);
         setKit(kit);
       } else {
         setKit(undefined);

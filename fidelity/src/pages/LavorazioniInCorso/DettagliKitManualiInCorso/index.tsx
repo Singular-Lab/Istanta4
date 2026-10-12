@@ -12,16 +12,16 @@ import dayjs from "dayjs";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLoaderData } from "react-router-dom";
 import { STATO_LAVORAZIONE_KIT_RUNTIME, TIPO_KIT_DESIGN } from "../../../../lib/enums";
-import { DESIGN_KIT_MONGO, RUNTIME_KIT_MONGO, TipiDiExportAttributes } from "../../../../lib/types";
+import { DESIGN_KIT, RUNTIME_KIT, TipiDiExportAttributes } from "../../../../lib/types";
 import { PromoResponseDTO } from "../../../../server/core/dto";
-type Lavorazione = (DESIGN_KIT_MONGO & { nomeCanale: string, nomeArea: string, lavorazioneStarted: boolean, isDesignKit: boolean, tipiExport: TipiDiExportAttributes[] }) | (RUNTIME_KIT_MONGO & { nomeCanale: string, nomeArea: string, lavorazioneStarted: boolean, isDesignKit: boolean, tipiExport: TipiDiExportAttributes[], numero_files: number, numero_referenze: number });
+type Lavorazione = (DESIGN_KIT & { nomeCanale: string, nomeArea: string, lavorazioneStarted: boolean, isDesignKit: boolean, tipiExport: TipiDiExportAttributes[] }) | (RUNTIME_KIT & { nomeCanale: string, nomeArea: string, lavorazioneStarted: boolean, isDesignKit: boolean, tipiExport: TipiDiExportAttributes[], numero_files: number, numero_referenze: number });
 
 const getStatusInfo = (lavorazione: Lavorazione) => {
   if (!lavorazione.lavorazioneStarted) {
     return { text: "Non Avviato", variant: "secondary", icon: "CirclePause" };
   }
   console.log(lavorazione);
-  switch ((lavorazione as RUNTIME_KIT_MONGO).stato_lavorazione) {
+  switch ((lavorazione as RUNTIME_KIT).stato_lavorazione) {
     case STATO_LAVORAZIONE_KIT_RUNTIME.IN_LAVORAZIONE:
       return { text: "In Lavorazione", variant: "primary", icon: "CirclePlay" };
     case STATO_LAVORAZIONE_KIT_RUNTIME.IN_REVISIONE:

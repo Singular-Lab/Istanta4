@@ -326,14 +326,14 @@ export class ExternalApiService implements IExternalApiService {
    */
   private buildOlympusUrl(guidOrUrl: string): string {
     if (typeof guidOrUrl === 'string' && guidOrUrl.startsWith('http')) {
-      return guidOrUrl; // già URL completo (migrazione da MongoDB)
+      return guidOrUrl;
     }
     return `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?performante=true&guidId=${guidOrUrl}`;
   }
 
   /**
    * Mappa le foto di una referenza raw PG agli URL OLYMPUS.
-   * Gestisce sia GUID puri sia URL legacy già formati (migrazione MongoDB → PG).
+   * Gestisce sia GUID puri sia URL legacy già formati.
    */
   private mapFotoToUrls(ref: RawReferenzaRow): ReferenzeIstanta {
     // fotoExtra: normalizza guid_id → guidId e costruisce URL OLYMPUS per ogni logo/bollo

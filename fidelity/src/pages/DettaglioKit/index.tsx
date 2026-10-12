@@ -6,7 +6,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useLoaderData, useParams } from "react-router-dom";
 import { EXPORT_DI_SISTEMA, STATO_LAVORAZIONE_KIT_RUNTIME, TIPO_KIT_DESIGN, TIPO_LAVORAZIONE } from "../../../lib/enums";
 import { ServerCall } from "../../../lib/server_call";
-import { FileItemKit, RUNTIME_KIT_MONGO } from "../../../lib/types";
+import { FileItemKit, RUNTIME_KIT } from "../../../lib/types";
 import { KitProvider, KitType, useKit } from "./context/KitContext";
 import useKitLogic from "./hooks/useKitLogic";
 
@@ -208,7 +208,7 @@ const DettaglioKitContent: React.FC<{
       {/* Main Content */}
       {!lavorazioneStarted ? (
         <KitPreStartView
-          lavorazione={kit as RUNTIME_KIT_MONGO}
+          lavorazione={kit as RUNTIME_KIT}
           exportTypes={exportTypes}
           tipiDiExportInKit={kit.tipiDiExportInKit || []}
           isManuale={isManuale}
@@ -218,7 +218,7 @@ const DettaglioKitContent: React.FC<{
         />
       ) : (
         <KitOverviewLayout
-          lavorazione={kit as RUNTIME_KIT_MONGO}
+          lavorazione={kit as RUNTIME_KIT}
           filesData={filesData}
           isLoadingFiles={isLoadingFiles}
           exportTypes={exportTypes}

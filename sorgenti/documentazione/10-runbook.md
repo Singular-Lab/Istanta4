@@ -234,7 +234,7 @@ I container:
 
 ```bash
 docker ps    # istanta4-postgres :5432, istanta4-redis :6379,
-             # istanta4-mongo :27017, istanta4-adminer :8081
+             # istanta4-mongo :27017 (non più usato), istanta4-adminer :8081
 ```
 
 ## I log — non sono nel journal

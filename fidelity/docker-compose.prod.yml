@@ -53,7 +53,7 @@ services:
       # usiamo un path interno persistente via named volume.
       ICONE_INSEGNA_DIR: /home/node/insegne
     extra_hosts:
-      # Permette al container di raggiungere PostgreSQL, MongoDB e altri servizi sul host
+      # Permette al container di raggiungere PostgreSQL e altri servizi sul host
       - "host.docker.internal:host-gateway"
     volumes:
       - insegne_data:/home/node/insegne

@@ -144,7 +144,7 @@ export type FileItemKit = {
     merged_file_ids?: string[];
     virtual_dir?: any;
 }
-export type RUNTIME_KIT_MONGO = {
+export type RUNTIME_KIT = {
     _id?: string;
     guidId: string;
     guidArea: string;
