@@ -735,6 +735,9 @@ const pannelli = {
                             diffRow.style.wordBreak = "break-word";
                             diffRow.style.overflowWrap = "anywhere";
                             diffRow.style.minWidth = "0";
+                            //I20-1081: il box di un tipo diverso da quello del dato e' grave: in rosso,
+                            //col segnale davanti e il modo di risolverlo.
+                            this._evidenziaDifferenzaGrave(diffRow, diff);
                             diffList.appendChild(diffRow);
                         });
                     }
@@ -1634,6 +1637,29 @@ const pannelli = {
             r.appendChild(valore);
             riga.appendChild(r);
         });
+    },
+
+    /// I20-1081: una differenza grave (confronti.eDifferenzaGrave: il box di un tipo diverso da quello
+    /// del dato) nella riga del report: fondo rosso chiaro, bordo e testo rossi, il segnale davanti e
+    /// sotto il modo di risolverla. Le altre righe restano come sono.
+    _evidenziaDifferenzaGrave(riga, diff) {
+        if (riga == null || !confronti.eDifferenzaGrave(diff)) {
+            return false;
+        }
+        riga.style.backgroundColor = "#fdecea";
+        riga.style.border = "1px solid #b21d1d";
+        riga.style.borderLeft = "5px solid #b21d1d";
+        riga.style.borderRadius = "3px";
+        riga.style.padding = "4px 6px";
+        riga.style.margin = "2px 0";
+        riga.style.color = "#b21d1d";
+        riga.style.fontWeight = "700";
+        riga.insertBefore(document.createTextNode("⚠ "), riga.firstChild);
+        const comeRisolvere = document.createElement("div");
+        comeRisolvere.textContent = "Il box non e' del tipo che il dato chiede: usa Fix per rifarlo con il dato.";
+        comeRisolvere.style.fontSize = "11px";
+        riga.appendChild(comeRisolvere);
+        return true;
     },
 
     _crRiquadroConfronto(differenze) {
