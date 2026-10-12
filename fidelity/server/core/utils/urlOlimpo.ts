@@ -33,8 +33,9 @@ export function urlOlimpo(
 
 /**
  * Converte un URL assoluto di Olimpo, con qualunque host, nella forma relativa servita
- * dal proxy. Restituisce null per URL che non puntano a una lettura di Olimpo, e
- * l'URL invariato se e' gia' relativo al proxy.
+ * dal proxy. L'endpoint puo' essere preceduto da un percorso, quando Olimpo sta dietro
+ * un gateway (OLYMPUS_IP_ADDRESS=http://host:4000/olimpo). Restituisce null per URL che
+ * non puntano a una lettura di Olimpo, e l'URL invariato se e' gia' relativo al proxy.
  */
 export function inUrlOlimpoRelativo(url: string): string | null {
   if (url.startsWith(`${PREFISSO_PROXY_OLIMPO}/`)) return url;
@@ -45,8 +46,10 @@ export function inUrlOlimpoRelativo(url: string): string | null {
     return null;
   }
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
-  if (!(PERCORSI_OLIMPO_LETTURA as readonly string[]).includes(parsed.pathname)) return null;
-  return `${PREFISSO_PROXY_OLIMPO}${parsed.pathname}${parsed.search}`;
+  // Ogni percorso inizia con '/': endsWith confronta segmenti interi
+  const percorso = PERCORSI_OLIMPO_LETTURA.find(p => parsed.pathname.endsWith(p));
+  if (!percorso) return null;
+  return `${PREFISSO_PROXY_OLIMPO}${percorso}${parsed.search}`;
 }
 
 /**

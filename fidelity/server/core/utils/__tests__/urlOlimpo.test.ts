@@ -14,7 +14,16 @@ describe('URL Olimpo per il browser', () => {
       .toBe('/olimpo/foto/getThumbNailOnDemand?guidId=g&performante=true');
   });
 
+  it('riconosce l endpoint anche quando Olimpo sta dietro un gateway con un percorso', () => {
+    expect(inUrlOlimpoRelativo('http://localhost:4000/olimpo/materiali/getThumbnailMaterialePdfs?&id=db29ea15&page=1'))
+      .toBe('/olimpo/materiali/getThumbnailMaterialePdfs?&id=db29ea15&page=1');
+    expect(inUrlOlimpoRelativo('https://gateway.esempio.it/a/b/foto/getThumbNailOnDemand?guidId=g'))
+      .toBe('/olimpo/foto/getThumbNailOnDemand?guidId=g');
+  });
+
   it.each([
+    'http://localhost:4000/olimpo/xmateriali/getMaterialePDF?id=1',
+    'http://localhost:4000/olimpo/materiali/getMaterialePDF/altro?id=1',
     'https://www.google.com/maps?q=1',
     'http://olimpo:3000/materiali/uploadMateriale',
     'non un url',
@@ -26,15 +35,19 @@ describe('URL Olimpo per il browser', () => {
   it('riscrive gli URL annidati e conta le modifiche, senza toccare il resto', () => {
     const meta = {
       documents: [{ id_olimpo_cloud: 'd1', download_url: 'http://olimpo:3000/materiali/getMaterialePDF?id=d1' }],
-      videos: [{ guid_id: 'v1', url: '/olimpo/materiali/getVideoOnDemand?guidId=v1' }],
+      videos: [
+        { guid_id: 'v1', url: '/olimpo/materiali/getVideoOnDemand?guidId=v1' },
+        { guid_id: 'v2', url: 'http://localhost:4000/olimpo/materiali/getVideoOnDemand?guidId=v2' },
+      ],
       sito: 'https://www.esempio.it',
     };
 
     const { valore, modifiche } = riscriviUrlOlimpo(meta);
 
-    expect(modifiche).toBe(1);
+    expect(modifiche).toBe(2);
     expect(valore.documents[0].download_url).toBe('/olimpo/materiali/getMaterialePDF?id=d1');
     expect(valore.videos[0].url).toBe('/olimpo/materiali/getVideoOnDemand?guidId=v1');
+    expect(valore.videos[1].url).toBe('/olimpo/materiali/getVideoOnDemand?guidId=v2');
     expect(valore.sito).toBe('https://www.esempio.it');
   });
 
