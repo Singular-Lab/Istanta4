@@ -209,6 +209,38 @@ public class ExtraLavorazioneMetaTests
     }
 
     [Fact]
+    public void Le_extra_manuali_caricate_a_mano_senza_sigla_si_riconoscono_dal_nome_del_file()
+    {
+        // I20-1082: dalla scheda Foto Extra si esclude solo per questa lavorazione anche una foto
+        // caricata a mano, che non ha sigla: la chiave della decisione e' il nome del file.
+        var record = Record("123", null,
+            new List<LogoBollo_ExtraNoAuto>
+            {
+                new() { sigla = "", nome = "bollino_estate.png", attiva = true },
+                new() { sigla = "payoff", nome = "bollino_estate.png", attiva = true }
+            });
+
+        FicoProcessController.applicaExtraDellaLavorazione(new List<ArticoloInKit> { record },
+            PerGruppo("123", Richiesta(AzioneExtraLavorazione.Escludi, "bollino_estate.png", tipo: TipoElementoBox.FotoExtra, tipoFoto: 2)));
+
+        var manuali = (List<LogoBollo_ExtraNoAuto>)record.recordInTracciato[KeyExtra];
+        Assert.False(manuali[0].attiva);
+        // Una foto con la sua sigla si riconosce solo dalla sigla, anche se il file si chiama uguale.
+        Assert.True(manuali[1].attiva);
+    }
+
+    [Fact]
+    public void La_stessa_extra_manuale_per_sigla_o_per_nome_senza_sigla()
+    {
+        Assert.True(FicoProcessController.stessaExtraManuale(new LogoBollo_ExtraNoAuto { sigla = "payoff", nome = "x.psd" }, "payoff"));
+        Assert.False(FicoProcessController.stessaExtraManuale(new LogoBollo_ExtraNoAuto { sigla = "payoff", nome = "x.psd" }, "x.psd"));
+        Assert.True(FicoProcessController.stessaExtraManuale(new LogoBollo_ExtraNoAuto { sigla = "", nome = "x.psd" }, "x.psd"));
+        Assert.True(FicoProcessController.stessaExtraManuale(new LogoBollo_ExtraNoAuto { sigla = null!, nome = "x.psd" }, "x.psd"));
+        Assert.False(FicoProcessController.stessaExtraManuale(new LogoBollo_ExtraNoAuto { sigla = "", nome = "x.psd" }, ""));
+        Assert.False(FicoProcessController.stessaExtraManuale(null, "x.psd"));
+    }
+
+    [Fact]
     public void Le_decisioni_valgono_solo_per_il_loro_gruppo()
     {
         var mio = Record("123", new List<LogoBollo> { Logo("Logo_BDP", "Logo_BDP.psd") });

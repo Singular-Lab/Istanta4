@@ -969,6 +969,11 @@ namespace IstantaLib
         /// Vuoto: la descrizione si confronta tutta.
         public List<string> stiliBruciaturaDescrizione { get; set; } = new List<string>();
 
+        /// I20-1082: se le decisioni sulle foto extra prese solo per una lavorazione volantino chiedono
+        /// all'operatore se valgono solo per il volantino o anche per i POP della stessa promo, area e
+        /// canale (Coop). Falso: non si chiede e valgono per tutto.
+        public bool chiediAmbitoDecisioniLavorazione { get; set; } = false;
+
         public AgenziaCustomPlugin_GrandezzaBoxRevisione grandezzeBox { get; set; }//Definisce la grandezza dei box di revisione, in questo modo è possibile per le agenzie gestire la visualizzazione a piacimento
         
         public bool abilitaDescrizioniRegionali { get; set; }

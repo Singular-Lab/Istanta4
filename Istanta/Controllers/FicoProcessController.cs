@@ -2819,6 +2819,12 @@ namespace Istanta.Controllers
                                 }
                             }
 
+                            //I20-1082: il POP non decide: prende le decisioni Tutto del volantino della
+                            //stessa promo, area e canale.
+                            if (mode == FicoCombinazioneKitReadMode.Advanced && resultGlobale.tipoLavorazione == TipoLavorazione.PoP)
+                            {
+                                extraLavorazionePerGruppo = decisioniDelVolantinoPerIlPop(resultGlobale.records, decisioniDeiVolantiniDellaPromo(idLavorazione));
+                            }
                             //I20-1070: le foto extra decise dall'operatore per questa lavorazione.
                             applicaExtraDellaLavorazione(resultGlobale.records, extraLavorazionePerGruppo);
                             //I20-1077: i testi del box scelti dall'operatore, nei campi compilati.
@@ -4352,7 +4358,7 @@ namespace Istanta.Controllers
                                 break;
                             foreach (var logo in automatiche.Where(l => l.sigla == voce.sigla))
                                 logo.nome = voce.nome;
-                            foreach (var extra in manuali.Where(e => e.sigla == voce.sigla))
+                            foreach (var extra in manuali.Where(e => stessaExtraManuale(e, voce.sigla)))
                                 extra.nome = voce.nome;
                             break;
 
@@ -4375,7 +4381,7 @@ namespace Istanta.Controllers
                         case AzioneExtraLavorazione.Escludi:
                             foreach (var logo in automatiche.Where(l => l.sigla == voce.sigla))
                                 logo.escluso = true;
-                            foreach (var extra in manuali.Where(e => e.sigla == voce.sigla))
+                            foreach (var extra in manuali.Where(e => stessaExtraManuale(e, voce.sigla)))
                                 extra.attiva = false;
                             break;
                     }
@@ -4383,6 +4389,101 @@ namespace Istanta.Controllers
 
                 record.recordInTracciato[GLOBAL_VARIABLES.keyExtraLavorazione] = voci;
             }
+        }
+
+        /// <summary>
+        /// I20-1082: la foto extra manuale di una decisione. La chiave e' la sigla; le extra caricate a
+        /// mano non ne hanno, e per loro la chiave e' il nome del file, come nella label del box.
+        /// </summary>
+        public static bool stessaExtraManuale(LogoBollo_ExtraNoAuto? extra, string? chiave)
+        {
+            if (extra == null || string.IsNullOrWhiteSpace(chiave))
+                return false;
+            if (!string.IsNullOrWhiteSpace(extra.sigla))
+                return extra.sigla == chiave;
+            return extra.nome == chiave;
+        }
+
+        /// <summary>
+        /// I20-1082: un record di una lavorazione volantino con le sue decisioni sulle foto extra, come
+        /// le legge un POP della stessa promo, area e canale.
+        /// </summary>
+        public class DecisioniDelVolantino
+        {
+            public string? CodiceGruppo { get; set; }
+            public List<RevisioneExtraLavorazioneFromIndd>? voci { get; set; }
+        }
+
+        /// <summary>
+        /// I20-1082: le decisioni che un POP prende dal suo volantino, per codice gruppo del POP. Il POP
+        /// non decide: riceve soltanto le decisioni Tutto, mai quelle SoloVolantino. Il codice gruppo
+        /// del POP puo' essere diverso da quello del volantino (sottogruppi): i record si legano per
+        /// codice della referenza, che deve stare fra i codici del gruppo del volantino. I record del
+        /// volantino arrivano dal piu' recente: vale il primo che ha deciso qualcosa su quel gruppo.
+        /// </summary>
+        public static Dictionary<string, List<RevisioneExtraLavorazioneFromIndd>> decisioniDelVolantinoPerIlPop(List<ArticoloInKit>? recordsPop, List<DecisioniDelVolantino>? volantino)
+        {
+            var perGruppo = new Dictionary<string, List<RevisioneExtraLavorazioneFromIndd>>();
+            if (recordsPop == null || volantino == null || volantino.Count == 0)
+                return perGruppo;
+
+            var keyCodGruppo = Enum.GetName(AddestramentoRuoli.Scatto) + "." + GLOBAL_VARIABLES.keyScattoCodiceGruppo;
+            var keyRefCodice = Enum.GetName(AddestramentoRuoli.Referenza) + "." + GLOBAL_VARIABLES.keyRefCodice;
+            static IEnumerable<string> codiciDi(string? codiceGruppo) =>
+                (codiceGruppo ?? "").Split(',').Select(c => c.Trim()).Where(c => c != "");
+
+            foreach (var record in recordsPop)
+            {
+                if (record?.recordInTracciato == null)
+                    continue;
+                record.recordInTracciato.TryGetValue(keyCodGruppo, out var codGruppoObj);
+                var codGruppo = codGruppoObj?.ToString();
+                if (string.IsNullOrWhiteSpace(codGruppo) || perGruppo.ContainsKey(codGruppo))
+                    continue;
+
+                var codici = new HashSet<string>(codiciDi(codGruppo));
+                if (record.recordInTracciato.TryGetValue(keyRefCodice, out var codiceObj) && !string.IsNullOrWhiteSpace(codiceObj?.ToString()))
+                    codici.Add(codiceObj!.ToString()!.Trim());
+
+                var decisore = volantino.FirstOrDefault(v => v?.voci != null && v.voci.Count > 0 && codiciDi(v.CodiceGruppo).Any(c => codici.Contains(c)));
+                if (decisore == null)
+                    continue;
+
+                var perTutto = decisore.voci!.Where(v => v != null && v.ambito == AmbitoDecisioneLavorazione.Tutto).ToList();
+                if (perTutto.Count > 0)
+                    perGruppo[codGruppo] = perTutto;
+            }
+            return perGruppo;
+        }
+
+        /// <summary>
+        /// I20-1082: le decisioni sulle foto extra delle lavorazioni volantino con la stessa promo, area e
+        /// canale di questa, dalla piu' recente. Vuoto se la lavorazione non si trova o non ha promo.
+        /// </summary>
+        public List<DecisioniDelVolantino> decisioniDeiVolantiniDellaPromo(int idLavorazione)
+        {
+            var lavorazione = this.ctx2.PromoLavorazionis.FirstOrDefault(l => l.Id == idLavorazione);
+            if (lavorazione == null || string.IsNullOrWhiteSpace(lavorazione.GuidPromo))
+                return new List<DecisioniDelVolantino>();
+
+            var volantini = this.ctx2.PromoLavorazionis
+                .Where(l => l.Id != idLavorazione && l.GuidPromo == lavorazione.GuidPromo && l.GuidArea == lavorazione.GuidArea && l.GuidCanale == lavorazione.GuidCanale)
+                .ToList()
+                .Where(l => Formati.CercaTipo(!string.IsNullOrWhiteSpace(l.GuidFormato) ? l.GuidFormato : Utility.Main.getFicoRuntimeKit(l.Meta)?.guidFormato) == TipoLavorazione.Volantino)
+                .OrderByDescending(l => l.RegisterDate)
+                .Select(l => l.Id)
+                .ToList();
+            if (volantini.Count == 0)
+                return new List<DecisioniDelVolantino>();
+
+            return this.ctx2.PromoLavorazioniRecords
+                .Where(r => volantini.Contains(r.IdLavorazione) && r.Meta != null)
+                .ToList()
+                .OrderBy(r => volantini.IndexOf(r.IdLavorazione))
+                .ThenByDescending(r => r.RegisterDate)
+                .Select(r => new DecisioniDelVolantino { CodiceGruppo = r.CodiceGruppo, voci = MetaPromoLavorazioni.leggi(r.Meta!)?.extraLavorazione })
+                .Where(d => d.voci != null && d.voci.Count > 0)
+                .ToList();
         }
 
         /// <summary>

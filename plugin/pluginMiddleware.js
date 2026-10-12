@@ -636,6 +636,23 @@ const pluginMiddleware = {
         return Array.isArray(stili) ? stili : delCustom;
     },
 
+    /// I20-1082: se le decisioni sulle foto extra prese solo per una lavorazione volantino chiedono se
+    /// valgono solo per il volantino o anche per i POP (Coop). Comanda la configurazione del server; se
+    /// non la manda (Istanta non ancora aggiornata) vale il custom.js del cliente. Senza: falso.
+    getChiediAmbitoDecisioniLavorazione() {
+        let me = this;
+        const delCustom = typeof customAgenzia !== "undefined" && customAgenzia != null && typeof customAgenzia.chiediAmbitoDecisioniLavorazione === "boolean"
+            ? customAgenzia.chiediAmbitoDecisioniLavorazione
+            : false;
+
+        if (me.callCustom) {
+            return delCustom;
+        }
+
+        const valore = me.customPluginDB?.chiediAmbitoDecisioniLavorazione;
+        return typeof valore === "boolean" ? valore : delCustom;
+    },
+
     /// NOTA DI DISEGNO (I20-1002): questa e setBolloFOTONOFOUND hanno la forma a due rami come
     /// le altre, quindi sono mediazione - ma cio' che mediano e' un'OPERAZIONE su InDesign, non
     /// un valore di configurazione. Se il middleware debba delegare operazioni oltre che
