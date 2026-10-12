@@ -14,6 +14,7 @@ import {
   ReferenzeIstanta
 } from '../../../lib/types';
 import config from '../config';
+import { guidDaRiferimentoOlimpo, urlFotoOlimpo, urlOlimpo } from '../utils/urlOlimpo';
 import { sequelize } from '../db/SequelizeConnector';
 import { IReferenzeService } from '../interfaces/IReferenzeService';
 import { IWebPliantService } from '../interfaces/IWebPliantService';
@@ -131,6 +132,20 @@ function normalizeReferenzaFromPg(raw: any): ReferenzeIstanta {
   } as ReferenzeIstanta;
 }
 
+/** Riporta a GUID le foto e le foto extra che arrivano come URL Olimpo. */
+export function riferimentiOlimpoComeGuid<T extends object>(data: T): T {
+  const guid = (v: unknown) => (typeof v === 'string' ? guidDaRiferimentoOlimpo(v) : v);
+  const conGuid = (f: any) => (f && typeof f === 'object' && 'guidId' in f ? { ...f, guidId: guid(f.guidId) } : f);
+  const copia: any = { ...data };
+  if (Array.isArray(copia.foto)) {
+    copia.foto = copia.foto.map((f: unknown) => (typeof f === 'string' ? guid(f) : conGuid(f)));
+  }
+  for (const campo of ['foto_extra', 'fotoExtra']) {
+    if (Array.isArray(copia[campo])) copia[campo] = copia[campo].map(conGuid);
+  }
+  return copia;
+}
+
 export class ReferenzeService implements IReferenzeService {
 
   constructor(
@@ -203,9 +218,7 @@ export class ReferenzeService implements IReferenzeService {
           ? result.foto
               .map((f: any) => typeof f === "string" ? f : f?.guidId)
               .filter(Boolean)
-              .map((guidId: string) =>
-                `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${guidId}`
-              )
+              .map((riferimento: string) => urlFotoOlimpo(riferimento))
           : [];
       }
 
@@ -222,7 +235,9 @@ export class ReferenzeService implements IReferenzeService {
 
   async updateReferenzaWebpliant(data: ReferenzeIstanta): Promise<any> {
     try {
-      const result = await Referenze.update(data as any, { where: { id: data.id } });
+      // Il frontend rimanda le foto cosi' come le ha ricevute, gia' trasformate in URL:
+      // nel DB vanno i GUID, da cui gli URL si ricostruiscono a ogni lettura
+      const result = await Referenze.update(riferimentiOlimpoComeGuid(data) as any, { where: { id: data.id } });
       return result;
     } catch (error) {
       throw wrapDatabaseError(new Error("Errore durante l'aggiornamento della referenza"), {
@@ -285,7 +300,7 @@ export class ReferenzeService implements IReferenzeService {
             ref.foto = ref.foto
               ?.map((f: any) => typeof f === "string" ? f : f?.guidId)
               .filter(Boolean)
-              .map((guidId: string) => `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${guidId}&performante=true`) || [];
+              .map((riferimento: string) => urlFotoOlimpo(riferimento, { performante: true })) || [];
             let refGruppo = refsGruppo.find(r => r.codice_referenza === (ref as any).data_fields?.codice_referenza && r.id_area === data.idArea && r.id_canale === data.idCanale);
             if (!refGruppo) {
               refGruppo = refsGruppo.find(r => r.codice_referenza === (ref as any).data_fields?.codice_referenza && r.id_area === undefined && r.id_canale === undefined);
@@ -299,10 +314,10 @@ export class ReferenzeService implements IReferenzeService {
             if (!refGruppo) {
               refGruppo = refsGruppo.find(r => r.codice_referenza === (ref as any).data_fields?.codice_referenza);
             }
-            ref.fotoGruppo = refGruppo ? `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${refGruppo.guid_id_olympo}&performante=true` : undefined;
+            ref.fotoGruppo = refGruppo ? urlOlimpo('/foto/getThumbNailOnDemand', { guidId: refGruppo.guid_id_olympo, performante: true }) : undefined;
             (ref as any).foto_extra = (ref as any).foto_extra?.map((f: LoghiReferenza) => ({
               ...f,
-              guidId: `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${f.guidId}&performante=true`
+              guidId: urlFotoOlimpo(f.guidId, { performante: true })
             })) || [];
             return ref;
           })
@@ -527,14 +542,12 @@ export class ReferenzeService implements IReferenzeService {
           ? raw.foto
               .map((f: any) => typeof f === "string" ? f : f?.guidId)
               .filter(Boolean)
-              .map((guidId: string) =>
-                `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${guidId}&performante=true`
-              )
+              .map((riferimento: string) => urlFotoOlimpo(riferimento, { performante: true }))
           : [];
         const fotoExtraTransformed = Array.isArray(raw.foto_extra)
           ? raw.foto_extra.map((f: any) => ({
               ...f,
-              guidId: `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${f.guid_id ?? f.guidId}&performante=true`,
+              guidId: urlFotoOlimpo(f.guid_id ?? f.guidId, { performante: true }),
               sigla: f.sigla,
               tipo: f.tipo,
             }))
@@ -597,7 +610,7 @@ export class ReferenzeService implements IReferenzeService {
       }
 
       return data.content.map(r => ({
-        guidId: config.OLYMPUS_IP_ADDRESS + "/foto/getThumbNailOnDemand?guidId=" + r.guidId,
+        guidId: urlOlimpo('/foto/getThumbNailOnDemand', { guidId: r.guidId }),
         sigla: r.sigla,
         tipo: r.tipo,
       }));

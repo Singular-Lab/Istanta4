@@ -1,4 +1,5 @@
 import Button from "@/components/Base/Button";
+import { guidIdDaUrlOlimpo } from '@/utils/olimpo';
 import { ClassicEditor } from "@/components/Base/Ckeditor";
 import { FormInline, FormInput, FormLabel, FormSelect } from "@/components/Base/Form";
 import { Dialog, Tab } from "@/components/Base/Headless";
@@ -415,17 +416,7 @@ const Dropzone: React.FC<DropzoneProps> = ({
         );
     }
   };
-  const treatLogoUrl = (url: string) => {
-    try {
-      const urlObj = new URL(url);
-      const guidId = urlObj.searchParams.get("guidId");
-      if (!guidId) return "";
-      return guidId;
-    } catch (error) {
-      console.error("Invalid URL:", url);
-      return url;
-    }
-  }
+  const treatLogoUrl = (url: string) => guidIdDaUrlOlimpo(url) ?? "";
   // Se parentId == "" => root => mostriamo tab Editor / Anteprima / Impostazioni
   if (parentId === "") {
     function handleUpdateRegola(guidId: string, ruleIndex: number, field: string, value: string): void {

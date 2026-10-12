@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { inUrlOlimpoRelativo, riscriviUrlOlimpo, urlOlimpo } from '../urlOlimpo';
+import { guidDaRiferimentoOlimpo, inUrlOlimpoRelativo, isUrlOlimpo, riscriviUrlOlimpo, urlFotoOlimpo, urlOlimpo, urlOlimpoPubblico } from '../urlOlimpo';
 
 describe('URL Olimpo per il browser', () => {
   it('costruisce URL relativi al proxy, con la query codificata', () => {
@@ -55,5 +55,49 @@ describe('URL Olimpo per il browser', () => {
     const valore = { a: ['x'] };
     expect(riscriviUrlOlimpo(valore)).toEqual({ valore, modifiche: 0 });
     expect(riscriviUrlOlimpo(valore).valore).toBe(valore);
+  });
+});
+
+describe('URL Olimpo per chi sta fuori da Fidelity e riferimenti salvati', () => {
+  it('urlOlimpoPubblico antepone l indirizzo pubblico di Fidelity, conservandone il percorso', () => {
+    expect(urlOlimpoPubblico('https://fidelity.esempio.it/', '/materiali/getThumbnailMaterialePdfs', { id: 'f1' }))
+      .toBe('https://fidelity.esempio.it/olimpo/materiali/getThumbnailMaterialePdfs?id=f1');
+    expect(urlOlimpoPubblico('https://esempio.it/fidelity', '/materiali/getMaterialePDF', { id: 'f1' }))
+      .toBe('https://esempio.it/fidelity/olimpo/materiali/getMaterialePDF?id=f1');
+  });
+
+  it.each([
+    ['/olimpo/foto/getThumbNailOnDemand?guidId=g1', true],
+    ['http://olimpo:3000/foto/getThumbNailOnDemand?guidId=g1', true],
+    ['3f2a9c1e-guid', false],
+    ['', false],
+  ])('isUrlOlimpo(%s) = %s', (valore, atteso) => {
+    expect(isUrlOlimpo(valore)).toBe(atteso);
+  });
+
+  it.each([
+    ['g1', 'g1'],
+    ['/olimpo/foto/getThumbNailOnDemand?guidId=g2&performante=true', 'g2'],
+    ['http://localhost:4000/olimpo/foto/getThumbNailOnDemand?guidId=g3', 'g3'],
+    ['http://olimpo:3000/materiali/getMaterialePDF?id=p1', 'p1'],
+    ['https://cdn.esempio.it/immagine.png', 'https://cdn.esempio.it/immagine.png'],
+  ])('guidDaRiferimentoOlimpo(%s) = %s', (valore, atteso) => {
+    expect(guidDaRiferimentoOlimpo(valore)).toBe(atteso);
+  });
+
+  it('urlFotoOlimpo costruisce la miniatura da un GUID o da un URL Olimpo gia salvato, senza avvolgerlo due volte', () => {
+    const atteso = '/olimpo/foto/getThumbNailOnDemand?guidId=g1&performante=true';
+    expect(urlFotoOlimpo('g1', { performante: true })).toBe(atteso);
+    expect(urlFotoOlimpo('http://olimpo:3000/foto/getThumbNailOnDemand?guidId=g1', { performante: true })).toBe(atteso);
+    expect(urlFotoOlimpo(atteso, { performante: true })).toBe(atteso);
+  });
+
+  it('urlFotoOlimpo lascia invariata un immagine che non sta su Olimpo', () => {
+    expect(urlFotoOlimpo('https://cdn.esempio.it/immagine.png')).toBe('https://cdn.esempio.it/immagine.png');
+  });
+
+  it('urlFotoOlimpo con baseFidelity restituisce l URL pubblico', () => {
+    expect(urlFotoOlimpo('g1', { baseFidelity: 'https://fidelity.esempio.it' }))
+      .toBe('https://fidelity.esempio.it/olimpo/foto/getThumbNailOnDemand?guidId=g1');
   });
 });

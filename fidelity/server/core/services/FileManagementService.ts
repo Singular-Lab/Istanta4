@@ -20,6 +20,7 @@ import {
   ReferenzeIstanta
 } from '../../../lib/types';
 import config from '../config';
+import { urlOlimpo } from '../utils/urlOlimpo';
 import type { TipiDiExportResponseDTO } from '../dto';
 import { IAreaService } from '../interfaces/IAreaService';
 import { ICanaleService } from '../interfaces/ICanaleService';
@@ -259,8 +260,8 @@ export class FileManagementService implements IFileManagementService {
         return {
           id: f.id_olimpo_cloud ?? '',
           nome: f.nome,
-          url: `${config.OLYMPUS_IP_ADDRESS}/materiali/getThumbnailMaterialePdfs?&id=${f.id_olimpo_cloud}`,
-          url_download: `${config.OLYMPUS_IP_ADDRESS}/materiali/getMaterialePDF?id=${f.id_olimpo_cloud}`,
+          url: urlOlimpo('/materiali/getThumbnailMaterialePdfs', { id: f.id_olimpo_cloud }),
+          url_download: urlOlimpo('/materiali/getMaterialePDF', { id: f.id_olimpo_cloud }),
           id_olimpo_cloud: f.id_olimpo_cloud,
           direttive: f.direttive,
           nome_originale: f.nome_originale,
@@ -326,8 +327,8 @@ export class FileManagementService implements IFileManagementService {
           id: f.id_olimpo_cloud ?? '',
           nome: f.nome,
           nome_originale: f.nome_originale,
-          url: `${config.OLYMPUS_IP_ADDRESS}/materiali/getThumbnailMaterialePdfs?&id=${f.id_olimpo_cloud}`,
-          url_download: `${config.OLYMPUS_IP_ADDRESS}/materiali/getMaterialePDF?id=${f.id_olimpo_cloud}`,
+          url: urlOlimpo('/materiali/getThumbnailMaterialePdfs', { id: f.id_olimpo_cloud }),
+          url_download: urlOlimpo('/materiali/getMaterialePDF', { id: f.id_olimpo_cloud }),
           id_olimpo_cloud: f.id_olimpo_cloud,
           direttive: f.direttive,
           isOptional: f.isOptional,
@@ -465,8 +466,8 @@ export class FileManagementService implements IFileManagementService {
           id: f.id_olimpo_cloud ?? '',
           nome: f.nome,
           nome_originale: f.nome_originale,
-          url: `${config.OLYMPUS_IP_ADDRESS}/materiali/getThumbnailMaterialePdfs?&id=${f.id_olimpo_cloud}`,
-          url_download: `${config.OLYMPUS_IP_ADDRESS}/materiali/getMaterialePDF?id=${f.id_olimpo_cloud}`,
+          url: urlOlimpo('/materiali/getThumbnailMaterialePdfs', { id: f.id_olimpo_cloud }),
+          url_download: urlOlimpo('/materiali/getMaterialePDF', { id: f.id_olimpo_cloud }),
           id_olimpo_cloud: f.id_olimpo_cloud,
           direttive: f.direttive,
           pages: f.pages,
@@ -560,59 +561,6 @@ export class FileManagementService implements IFileManagementService {
     }
   }
 
-  async getKitRunTimeById(id: string, get_files: boolean = true): Promise<any> {
-    try {
-      let kit = await this.kitRuntimeService.getKitRuntimeById(id);
-      if (!kit) {
-        throw wrapNotFoundError(new Error("Kit non trovato"), {
-          message: "Kit non trovato",
-          entityType: "KitRuntime",
-          entityId: id
-        });
-      }
-
-      if (!get_files) {
-        return kit;
-      }
-
-      let files = await this.kitRuntimeService.getFilesRuntimeByIdKitRuntime(id);
-      if (!files) {
-        throw wrapNotFoundError(new Error("Kit senza file"), {
-          message: "Kit senza file",
-          entityType: "KitRuntime",
-          entityId: id
-        });
-      }
-
-      const filesArray = await Promise.all(files.map(async (f: FileItemKit) => {
-        return {
-          id: f.id_olimpo_cloud ?? '',
-          nome: f.nome,
-          url: `${config.OLYMPUS_IP_ADDRESS}/materiali/getThumbnailMaterialePdfs?&id=${f.id_olimpo_cloud}`,
-          url_download: `${config.OLYMPUS_IP_ADDRESS}/materiali/getMaterialePDF?id=${f.id_olimpo_cloud}`,
-          id_olimpo_cloud: f.id_olimpo_cloud,
-          direttive: f.direttive,
-          nome_originale: f.nome_originale,
-          isOptional: f.isOptional,
-          tipo_export: f.tipo_export,
-          id_runtime: f.id_runtime,
-          meta_olimpo_cloud: f.meta_olimpo_cloud,
-          tipo_export_codice: f.tipo_export_codice,
-        };
-      }));
-
-      kit.files = filesArray;
-      return kit;
-    } catch (error) {
-      throw wrapDatabaseError(new Error("Errore durante il recupero del kit runtime"), {
-        message: "Errore durante il recupero del kit runtime",
-        operation: 'get',
-        entity: 'KitRuntime',
-        details: { error }
-      });
-    }
-  }
-
   async getProprietaMetaFilesRuntime(idKitRuntime: string): Promise<string[]> {
     try {
       const resultCreazioneCombinazioneDesign = await FilesRuntime.findAll({
@@ -698,8 +646,8 @@ export class FileManagementService implements IFileManagementService {
               tipo_export: file.tipo_export,
               codice_tipiexport: exportType.codice,
               idPromo: combinazione.idPromo,
-              url: `${config.OLYMPUS_IP_ADDRESS}/materiali/getThumbnailMaterialePdfs?&id=${file.id_olimpo_cloud}`,
-              url_download: `${config.OLYMPUS_IP_ADDRESS}/materiali/getMaterialePDF?id=${file.id_olimpo_cloud}`
+              url: urlOlimpo('/materiali/getThumbnailMaterialePdfs', { id: file.id_olimpo_cloud }),
+              url_download: urlOlimpo('/materiali/getMaterialePDF', { id: file.id_olimpo_cloud })
             });
             files.push(fileEntry);
           }
@@ -793,8 +741,8 @@ export class FileManagementService implements IFileManagementService {
               tipo_export: file.tipo_export,
               codice_tipiexport: exportType.codice,
               idPromo: combinazione.idPromo,
-              url: `${config.OLYMPUS_IP_ADDRESS}/materiali/getThumbnailMaterialePdfs?&id=${file.id_olimpo_cloud}`,
-              url_download: `${config.OLYMPUS_IP_ADDRESS}/materiali/getMaterialePDF?id=${file.id_olimpo_cloud}`
+              url: urlOlimpo('/materiali/getThumbnailMaterialePdfs', { id: file.id_olimpo_cloud }),
+              url_download: urlOlimpo('/materiali/getMaterialePDF', { id: file.id_olimpo_cloud })
             });
             files.push(fileEntry);
           }

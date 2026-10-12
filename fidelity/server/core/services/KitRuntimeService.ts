@@ -7,6 +7,7 @@ import { EVENTI_WEBHOOK, EXPORT_DI_SISTEMA, STATO_COMBINAZIONI, STATO_LAVORAZION
 import { BusinessError, DatabaseError, ExternalApiError, ForbiddenError, isAppError, NotFoundError, ServiceUnavailableError, wrapDatabaseError, wrapNotFoundError } from '../../../lib/errors';
 import { DESIGN_KIT, FileItemKit, FileItemKitLog, ImportStorico, OggettoTipiDiExport, PaylodKitPubblicato, RUNTIME_KIT, TipiDiExportAttributes } from '../../../lib/types';
 import config from '../config';
+import { urlOlimpo, urlOlimpoPubblico } from '../utils/urlOlimpo';
 import { sequelize } from '../db';
 import { IIstantaService } from '../interfaces/IIstantaService';
 import { IKitRuntimeService } from '../interfaces/IKitRuntimeService';
@@ -320,10 +321,10 @@ export class KitRuntimeService implements IKitRuntimeService {
             const fileWithUrls = {
               ...file,
               url: file.id_olimpo_cloud
-                ? `${config.OLYMPUS_IP_ADDRESS}/materiali/getThumbnailMaterialePdfs?&id=${file.id_olimpo_cloud}`
+                ? urlOlimpo('/materiali/getThumbnailMaterialePdfs', { id: file.id_olimpo_cloud })
                 : file.url,
               url_download: file.id_olimpo_cloud
-                ? `${config.OLYMPUS_IP_ADDRESS}/materiali/getMaterialePDF?id=${file.id_olimpo_cloud}`
+                ? urlOlimpo('/materiali/getMaterialePDF', { id: file.id_olimpo_cloud })
                 : file.url
             };
 
@@ -604,10 +605,10 @@ export class KitRuntimeService implements IKitRuntimeService {
           ...file,
           log: logEntry,
           url: (file.id_olimpo_cloud && file.id_olimpo_cloud !== '')
-            ? `${config.OLYMPUS_IP_ADDRESS}/materiali/getThumbnailMaterialePdfs?&id=${file.id_olimpo_cloud}`
+            ? urlOlimpo('/materiali/getThumbnailMaterialePdfs', { id: file.id_olimpo_cloud })
             : file.url,
           url_download: (file.id_olimpo_cloud && file.id_olimpo_cloud !== '')
-            ? `${config.OLYMPUS_IP_ADDRESS}/materiali/getMaterialePDF?id=${file.id_olimpo_cloud}`
+            ? urlOlimpo('/materiali/getMaterialePDF', { id: file.id_olimpo_cloud })
             : file.url,
         };
       });
@@ -831,7 +832,7 @@ export class KitRuntimeService implements IKitRuntimeService {
             ...f,
             isOptional: f.isOptional ?? f.is_optional ?? false,
             url: f.id_olimpo_cloud
-              ? `${config.OLYMPUS_IP_ADDRESS}/materiali/getThumbnailMaterialePdfs?&id=${f.id_olimpo_cloud}`
+              ? urlOlimpo('/materiali/getThumbnailMaterialePdfs', { id: f.id_olimpo_cloud })
               : f.url,
           })) as FileItemKit[];
           item.files = file;
@@ -1865,10 +1866,10 @@ export class KitRuntimeService implements IKitRuntimeService {
           isOptional: file.isOptional ?? file.is_optional ?? false,
           log: logEntry,
           url: (file.id_olimpo_cloud && file.id_olimpo_cloud !== '')
-            ? `${config.OLYMPUS_IP_ADDRESS}/materiali/getThumbnailMaterialePdfs?&id=${file.id_olimpo_cloud}`
+            ? urlOlimpoPubblico(config.CLIENT_URL, '/materiali/getThumbnailMaterialePdfs', { id: file.id_olimpo_cloud })
             : file.url,
           url_download: (file.id_olimpo_cloud && file.id_olimpo_cloud !== '')
-            ? `${config.OLYMPUS_IP_ADDRESS}/materiali/getMaterialePDF?id=${file.id_olimpo_cloud}`
+            ? urlOlimpoPubblico(config.CLIENT_URL, '/materiali/getMaterialePDF', { id: file.id_olimpo_cloud })
             : file.url,
         };
       });
@@ -1949,10 +1950,10 @@ export class KitRuntimeService implements IKitRuntimeService {
           isOptional: file.isOptional ?? file.is_optional ?? false,
           log: logEntry,
           url: (file.id_olimpo_cloud && file.id_olimpo_cloud !== '')
-            ? `${config.OLYMPUS_IP_ADDRESS}/materiali/getThumbnailMaterialePdfs?&id=${file.id_olimpo_cloud}`
+            ? urlOlimpo('/materiali/getThumbnailMaterialePdfs', { id: file.id_olimpo_cloud })
             : file.url,
           url_download: (file.id_olimpo_cloud && file.id_olimpo_cloud !== '')
-            ? `${config.OLYMPUS_IP_ADDRESS}/materiali/getMaterialePDF?id=${file.id_olimpo_cloud}`
+            ? urlOlimpo('/materiali/getMaterialePDF', { id: file.id_olimpo_cloud })
             : file.url,
         };
       });

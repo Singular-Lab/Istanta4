@@ -2,7 +2,7 @@ import { Op } from 'sequelize';
 import { EXPORT_DI_SISTEMA, STATO_LAVORAZIONE_KIT_RUNTIME, STATO_PROMO, TIPO_LAVORAZIONE } from '../../../lib/enums';
 import { wrapDatabaseError } from '../../../lib/errors';
 import { FileItemKit } from '../../../lib/types';
-import config from '../config';
+import { urlOlimpo } from '../utils/urlOlimpo';
 import { DashboardFilterParams, FileAnteprima, IDashboardService, KitVolantino, StoricoVolantiniDTO, type VolantiniInCorsoDTO, type VolantiniInLavorazioneDTO, type VolantiniPubblicatiInLavorazioneDTO } from '../interfaces/IDashboardService';
 import { FilesRuntime } from '../models/files_runtime';
 import { RuntimeKit } from '../models/runtime_kit';
@@ -27,7 +27,7 @@ export class DashboardService implements IDashboardService {
             tipo_export: f.tipo_export,
             id_olimpo_cloud: f.id_olimpo_cloud,
             thumbnailUrl: f.id_olimpo_cloud
-                ? `${config.OLYMPUS_IP_ADDRESS}/materiali/getThumbnailMaterialePdfs?&id=${f.id_olimpo_cloud}`
+                ? urlOlimpo('/materiali/getThumbnailMaterialePdfs', { id: f.id_olimpo_cloud })
                 : undefined,
             mime: f.mime,
             pages: f.pages

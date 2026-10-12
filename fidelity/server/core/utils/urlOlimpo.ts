@@ -77,3 +77,55 @@ export function riscriviUrlOlimpo<T>(valore: T): { valore: T; modifiche: number 
   const risultato = visita(valore) as T;
   return { valore: modifiche > 0 ? risultato : valore, modifiche };
 }
+
+/**
+ * URL assoluto, servito dal proxy di Fidelity, per chi sta fuori da Fidelity:
+ * widget incorporati in siti di terzi, client delle API esterne, webhook.
+ * baseFidelity e' l'indirizzo pubblico di Fidelity (config.CLIENT_URL); un suo
+ * eventuale percorso viene conservato.
+ */
+export function urlOlimpoPubblico(
+  baseFidelity: string,
+  percorso: PercorsoOlimpoLettura,
+  parametri: Record<string, string | number | boolean | undefined>
+): string {
+  return `${baseFidelity.replace(/\/+$/, '')}${urlOlimpo(percorso, parametri)}`;
+}
+
+/** true se il valore e' un URL di Olimpo, assoluto o gia' relativo al proxy. */
+export function isUrlOlimpo(valore: unknown): valore is string {
+  return typeof valore === 'string'
+    && (valore.startsWith(`${PREFISSO_PROXY_OLIMPO}/`) || /^https?:\/\//i.test(valore));
+}
+
+/**
+ * Riporta al GUID un riferimento Olimpo che il frontend rimanda indietro come URL
+ * (assoluto o /olimpo/...), leggendo guidId o id dalla query. Un valore che non e'
+ * un URL e' gia' un GUID e torna invariato.
+ */
+export function guidDaRiferimentoOlimpo(valore: string): string {
+  if (!isUrlOlimpo(valore) || inUrlOlimpoRelativo(valore) === null) return valore;
+  try {
+    const url = new URL(valore, 'http://fidelity.invalid');
+    return url.searchParams.get('guidId') ?? url.searchParams.get('id') ?? valore;
+  } catch {
+    return valore;
+  }
+}
+
+/**
+ * URL della miniatura di una foto Olimpo a partire da un riferimento salvato, che puo'
+ * essere un GUID o un URL Olimpo (anche legacy, con l'indirizzo interno). Un URL che
+ * non e' di Olimpo (immagine esterna) torna invariato. Con baseFidelity l'URL e'
+ * assoluto pubblico, per chi sta fuori da Fidelity.
+ */
+export function urlFotoOlimpo(
+  riferimento: string,
+  opzioni: { performante?: boolean; baseFidelity?: string } = {}
+): string {
+  if (isUrlOlimpo(riferimento) && inUrlOlimpoRelativo(riferimento) === null) return riferimento;
+  const parametri = { guidId: guidDaRiferimentoOlimpo(riferimento), performante: opzioni.performante || undefined };
+  return opzioni.baseFidelity
+    ? urlOlimpoPubblico(opzioni.baseFidelity, '/foto/getThumbNailOnDemand', parametri)
+    : urlOlimpo('/foto/getThumbNailOnDemand', parametri);
+}

@@ -297,7 +297,7 @@ export class GPTService implements IGPTService {
         .map((f: any) => typeof f === "string" ? f : f?.guidId)
         .filter(Boolean)
         .map((guidId: string) =>
-          `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${guidId}`
+          urlOlimpo('/foto/getThumbNailOnDemand', { guidId })
         )
     }));
 
@@ -816,7 +816,7 @@ export class GPTService implements IGPTService {
             .map((f: any) => typeof f === "string" ? f : f?.guidId)
             .filter(Boolean)
             .map((guidId: string) =>
-              `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${guidId}`
+              urlOlimpo('/foto/getThumbNailOnDemand', { guidId })
             )
         }));
       }
@@ -1011,7 +1011,7 @@ export class GPTService implements IGPTService {
             .map((f: any) => typeof f === "string" ? f : f?.guidId)
             .filter(Boolean)
             .map((guidId: string) =>
-              `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${guidId}`
+              urlOlimpo('/foto/getThumbNailOnDemand', { guidId })
             ),
           approfondimento: appRaw ? {
             ...appRaw,
