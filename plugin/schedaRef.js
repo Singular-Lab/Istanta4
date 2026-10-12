@@ -4585,7 +4585,8 @@ const schedaRef = {
 
         $("#copiaCodiceTitolo").remove();
 
-        const copyButton = $('<img src="images/icon_small_copia.png" style="height: 16px; margin-left:10px; margin-right:10px;" id="copiaCodiceTitolo" codiceGruppo="' + testo + '">');
+        //I20-1087: il copia non si restringe mai.
+        const copyButton = $('<img src="images/icon_small_copia.png" style="height: 16px; margin-left:10px; margin-right:10px; flex: 0 0 auto;" id="copiaCodiceTitolo" codiceGruppo="' + testo + '">');
         copyButton.codice = testo;
 
         copyButton.on('click', function () {
@@ -4600,10 +4601,19 @@ const schedaRef = {
         //codiceRef e' un h3: dentro ci vanno il segnalino, il copy e il testo. La riga e' flex
         //con gli elementi centrati, perche' vertical-align allinea alla meta' della x-height del
         //testo e non al centro della barra: il numerino restava un po' alto.
+        //I20-1087: nella scheda aperta dal report a destra c'e' anche la X, e con un codice gruppo lungo
+        //il primo a cedere era il segnalino, che spariva. Ora segnalino, copia e X non si restringono:
+        //si restringe solo il codice, nel suo span, tagliato se non ci sta; l'intero sta nel
+        //suggerimento e nel copia. L'h3 stesso si restringe dentro la barra.
         $("#codiceRef").empty();
-        $("#codiceRef").css({ "display": "flex", "align-items": "center" });
+        $("#codiceRef").css({ "display": "flex", "align-items": "center", "flex": "1 1 auto", "min-width": "0", "overflow": "hidden" });
         $("#codiceRef").append(copyButton);
-        $("#codiceRef").append(testo.substring(0, 45) + (testo.length > 45 ? "..." : ""));
+        const codiceVisibile = $('<span id="testoCodiceTitolo"></span>').text(testo.substring(0, 45) + (testo.length > 45 ? "..." : ""));
+        codiceVisibile.css({ "flex": "1 1 auto", "min-width": "0", "overflow": "hidden", "white-space": "nowrap", "text-overflow": "ellipsis" });
+        $("#codiceRef").append(codiceVisibile);
+        if (testo !== "") {
+            Tooltip.impostaTooltip(codiceVisibile[0], testo);
+        }
 
         this.aggiornaPulsanteSegnalazioni();
     },
@@ -4643,7 +4653,9 @@ const schedaRef = {
                 "background-color": dati.colore,
                 "color": "#fff",
                 "margin-right": "8px",
-                "cursor": "pointer"
+                "cursor": "pointer",
+                //I20-1087: non si restringe mai, anche con un codice lungo e la X del report.
+                "flex": "0 0 auto"
             });
 
             //In UXP elemento.title come proprieta' non crea l'attributo e il suggerimento
