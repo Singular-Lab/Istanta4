@@ -11,6 +11,23 @@
 /// Non fa require('indesign'): si carica sotto Node, e i test la chiamano. In InDesign il DOM e'
 /// quello di UXP, e il risultato finale si prova solo in collaudo.
 const Modali = {
+    /// I20-1085: il livello delle domande all'operatore (confirm, confirmCustom). Sta davanti a ogni
+    /// finestra del Plugin - il popup delle differenze (9000), i dialoghi a tutto schermo (fino a
+    /// 9999999) - e sotto soltanto i suggerimenti (.jq-tooltip, 2147483647). Prima era 5000, e la
+    /// domanda "Solo volantino / Tutto" nasceva dietro la finestra delle differenze.
+    LIVELLO_CONFERMA: 2147483000,
+
+    /// I20-1085: dopo la risposta a una domanda i controlli nativi del pannello si riaccendono solo se
+    /// non resta aperto un popup: in UXP starebbero sopra la finestra da cui la domanda e' partita.
+    /// Li riaccende poi la X del popup.
+    dopoLaDomanda() {
+        if ($("#popup").length > 0) {
+            return false;
+        }
+        this.mostraHidebleElements();
+        return true;
+    },
+
     /// Se un elemento jQuery si vede davvero: lui e tutti i suoi genitori, fino al body. Serve a
     /// nascondiHidebleElements, che deve ricordarsi solo di quelli che erano visibili.
     isElementVisible(elem) {
@@ -57,7 +74,7 @@ const Modali = {
         try{
             this.nascondiHidebleElements();
             var result = null;
-            var modal = $('<div id="confirmModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); z-index: 5000; display: flex; justify-content: center; align-items: center; padding: 10px;"></div>');
+            var modal = $('<div id="confirmModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); z-index: ' + Modali.LIVELLO_CONFERMA + '; display: flex; justify-content: center; align-items: center; padding: 10px;"></div>');
             //I20-981: il riquadro si adatta al messaggio invece di avere un'altezza fissa, e
             //il testo scorre se e' lungo. Prima, con height 40% e il messaggio in un blocco
             //all'80% senza scorrimento, un testo lungo usciva dal riquadro bianco.
@@ -104,12 +121,12 @@ const Modali = {
             while(result == null){
                 await delay(100);
             }
-            this.mostraHidebleElements();
+            this.dopoLaDomanda();
             return result;
         }
         catch (e) {
             console.error("Errore durante la creazione del confirm: ", e);
-            this.mostraHidebleElements();
+            this.dopoLaDomanda();
             return false; // In caso di errore, consideriamo l'azione annullata
         }
     },
@@ -265,7 +282,7 @@ const Modali = {
     
         var result = null;
         this.nascondiHidebleElements();
-        var modal = $('<div id="confirmModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); z-index: 5000; display: flex; justify-content: center; align-items: center; padding: 10px;"></div>');
+        var modal = $('<div id="confirmModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); z-index: ' + Modali.LIVELLO_CONFERMA + '; display: flex; justify-content: center; align-items: center; padding: 10px;"></div>');
         var dialog = $('<div style="width: 92%; max-width: 460px; min-width: 200px; max-height: 88%; background-color: white; display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch; padding: 14px; box-sizing: border-box; border-radius: 6px;"></div>');
         var messaggio = $('<div style="display: block; flex: 1 1 auto; min-height: 0; overflow: auto;"></div>');
         //I20-1040: come confirm, il messaggio puo' essere un elemento, inserito com'e'; un testo
@@ -346,7 +363,7 @@ const Modali = {
             await delay(100);
         }
     
-        this.mostraHidebleElements();
+        this.dopoLaDomanda();
     
         return objRes;
     },
