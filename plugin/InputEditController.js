@@ -310,15 +310,6 @@ class InputEditController {
 
     }
 
-    /// I20-1079: il tratto della descrizione con uno stile di bruciatura del cliente, che il
-    /// confronto lascia fuori (confronti.stiliBruciaturaDelCampo). Senza stili dichiarati, mai.
-    eTrattoDiBruciatura(key, style) {
-        if (key != "descrizione" || typeof confronti === "undefined" || confronti == null) {
-            return false;
-        }
-        return confronti.eStileBruciatura(style, confronti.stiliBruciaturaDelCampo(key));
-    }
-
     /// Il cuore della classe: confronta i valori attuali con quelli di partenza e restituisce
     /// le sole operazioni necessarie. Senza questo confronto ogni conferma riscriverebbe tutti
     /// i campi, anche quelli che l'operatore non ha toccato.
@@ -343,11 +334,6 @@ class InputEditController {
                 {
                     let el = objFam.lista[i];
                     let style= $(el).attr("currentcharacterstyle");
-                    //I20-1079: la bruciatura (Coop: MAX_PEZZI) sta nel box ma non e' descrizione: non
-                    //si manda al server come tale. Il box resta com'e'.
-                    if (this.eTrattoDiBruciatura(key, style)) {
-                        continue;
-                    }
                     let hasMismatch = $(el).hasClass("mismatchInImpaginato");
                     let textModified = $(el).hasClass("textModified");
                     let parag="none";

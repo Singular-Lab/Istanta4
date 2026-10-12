@@ -465,10 +465,6 @@ const confronti = {
                         //tag si apre sul primo carattere che conta davvero, e un tratto fatto di
                         //soli spazi non ne apre nessuno, esattamente come prima.
                         let trattiDelCampo = TestoTag.trattiDiStileDelCampo(campoBox1);
-                        //I20-1079: nella descrizione la bruciatura (Coop: MAX_PEZZI) non e' descrizione:
-                        //si confronta il resto, nel box e nel dato del server.
-                        let stiliBruciatura = confronti.stiliBruciaturaDelCampo(compiledField.labelName);
-                        trattiDelCampo = confronti.trattiSenzaBruciature(trattiDelCampo, stiliBruciatura);
 
                         for (let t = 0; t < trattiDelCampo.length; t++) {
                             let styleName = trattiDelCampo[t].nome;
@@ -508,7 +504,7 @@ const confronti = {
                             .replace(/[’']/g, "'")
                             .replace(/°/g, '')
                             .replace(/<br\s*\/?>|\s+|\n/gi, '');
-                        let stringaConfronto = confronti.senzaBruciature(compiledField.content, stiliBruciatura)
+                        let stringaConfronto = compiledField.content
                             .replace(/[’']/g, "'")
                             .replace(/°/g, '')
                             .replace(/<br\s*\/?>|\s+|\n/gi, '');
@@ -553,10 +549,8 @@ const confronti = {
 
                         if (stringaRicomposta != stringaConfronto) {
                             //I20-1071: i due valori, leggibili: il testo del campo e il dato senza i suoi tag.
-                            //I20-1079: con le bruciature, i due valori sono quelli confrontati, senza.
-                            let contenutoDelBox = stiliBruciatura.length > 0 ? trattiDelCampo.map(t => t.contenuto).join("") : campoBox1.contents;
                             differenze.push({ label: compiledField.labelName, difference: "contenuto",
-                                valoreLocale: confronti.testoLeggibile(contenutoDelBox), valoreServer: confronti.testoLeggibile(confronti.senzaBruciature(compiledField.content, stiliBruciatura)) });
+                                valoreLocale: confronti.testoLeggibile(campoBox1.contents), valoreServer: confronti.testoLeggibile(compiledField.content) });
                         }
                     }
                 }
@@ -1189,53 +1183,6 @@ const confronti = {
     /// Le differenze gravi, da mostrare in evidenza: per ora il tipo di box diverso dal dato.
     eDifferenzaGrave(diff) {
         return diff != null && diff.tipo === "codiceBox";
-    },
-
-    /* ---------- I20-1079: le bruciature della descrizione ---------- */
-
-    /// Gli stili di carattere delle bruciature che il cliente accoda alla descrizione (Coop:
-    /// "MAX 4 PEZZI PER CARTA SOCIO" con MAX_PEZZI e varianti). Li dichiara la configurazione del
-    /// cliente; chi non li dichiara, come Edro21, non ne ha. Valgono solo per il campo descrizione.
-    stiliBruciaturaDelCampo(labelName) {
-        if (String(labelName == null ? "" : labelName).split("$")[0].toLowerCase() !== "descrizione") {
-            return [];
-        }
-        if (typeof pluginMiddleware === "undefined" || pluginMiddleware == null || typeof pluginMiddleware.getStiliBruciaturaDescrizione !== "function") {
-            return [];
-        }
-        const stili = pluginMiddleware.getStiliBruciaturaDescrizione();
-        return Array.isArray(stili) ? stili : [];
-    },
-
-    /// Uno stile e' di bruciatura se comincia con uno degli stili dichiarati, come per gli stili
-    /// universali: MAX_PEZZI vale anche per MAX_PEZZI_SOCI_DOPPIA.
-    eStileBruciatura(nomeStile, stili) {
-        const nome = String(nomeStile == null ? "" : nomeStile);
-        if (nome === "" || !Array.isArray(stili)) {
-            return false;
-        }
-        return stili.some(s => s != null && String(s) !== "" && nome.startsWith(String(s)));
-    },
-
-    /// Il contenuto con i tag del server senza i tratti di bruciatura: <MAX_PEZZI>...</MAX_PEZZI>
-    /// sparisce con tutto il suo testo. Senza stili dichiarati il contenuto resta com'e'.
-    senzaBruciature(contenuto, stili) {
-        if (contenuto == null) {
-            return contenuto;
-        }
-        if (!Array.isArray(stili) || stili.length === 0) {
-            return String(contenuto);
-        }
-        return String(contenuto).replace(/<([^>\/]+)>[\s\S]*?<\/\1>/g, (blocco, stile) => confronti.eStileBruciatura(stile, stili) ? "" : blocco);
-    },
-
-    /// I tratti del box senza quelli di bruciatura.
-    trattiSenzaBruciature(tratti, stili) {
-        const elenco = Array.isArray(tratti) ? tratti : [];
-        if (!Array.isArray(stili) || stili.length === 0) {
-            return elenco;
-        }
-        return elenco.filter(t => t != null && !confronti.eStileBruciatura(t.nome, stili));
     },
 
     /// I20-1071: il testo di un campo compilato come lo legge una persona: senza i tag di stile

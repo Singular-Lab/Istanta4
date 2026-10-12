@@ -23,8 +23,6 @@ const MOTORE = ["confrontoBox", "confrontoBoxCompiledFieldPreAnalisi", "mappatur
     "tipoElementoExtra",
     //I20-1071: i valori leggibili di una differenza di contenuto, per la scheda e per il report.
     "testoLeggibile", "valoriDifferenza",
-    //I20-1079: le bruciature della descrizione, fuori dal confronto (solo i clienti che le dichiarano).
-    "stiliBruciaturaDelCampo", "eStileBruciatura", "senzaBruciature", "trattiSenzaBruciature",
     //I20-1081: il tipo di box diverso da quello del dato, la differenza grave.
     "codiceBoxAtteso", "differenzaCodiceBox", "eDifferenzaGrave"
 ];
