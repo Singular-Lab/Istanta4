@@ -106,6 +106,21 @@ const routes: RouteObject[] = [
       return { Component: MenaboPromoPage };
     },
   },
+  // Anteprima tracciato full-screen: fuori dal layout Echo, griglia stile Excel.
+  {
+    path: "/promozioni/in-corso/dettagli/:idPromo/anteprima-tracciato/:idTracciato",
+    lazy: async () => {
+      const { default: DettaglioAnteprimaTracciato } = await import("@/pages/DettaglioAnteprimaTracciato");
+      return { Component: DettaglioAnteprimaTracciato };
+    },
+  },
+  {
+    path: "/promozioni/storico/dettagli/:idPromo/anteprima-tracciato/:idTracciato",
+    lazy: async () => {
+      const { default: DettaglioAnteprimaTracciato } = await import("@/pages/DettaglioAnteprimaTracciato");
+      return { Component: DettaglioAnteprimaTracciato };
+    },
+  },
 
   // INDEX: redirect con loader (niente <Navigate/>)
   {
@@ -449,18 +464,6 @@ const routes: RouteObject[] = [
         },
       },
       {
-        path: "promozioni/in-corso/dettagli/:idPromo/anteprima-tracciato/:idTracciato",
-        lazy: async () => {
-          const { default: DettaglioAnteprimaTracciato } = await import(
-            "@/pages/DettaglioAnteprimaTracciato"
-          );
-          return {
-            Component: DettaglioAnteprimaTracciato,
-            loader: funzioneDettagliLavorazioniInCorso,
-          };
-        },
-      },
-      {
         path: "promozioni/storico",
         lazy: async () => {
           const { default: StoricoLavorazioni } = await import(
@@ -469,18 +472,6 @@ const routes: RouteObject[] = [
           return {
             Component: StoricoLavorazioni,
             loader: funzioneCaricamentoStoricoLavorazioni,
-          };
-        },
-      },
-      {
-        path: "promozioni/storico/dettagli/:idPromo/anteprima-tracciato/:idTracciato",
-        lazy: async () => {
-          const { default: DettaglioAnteprimaTracciato } = await import(
-            "@/pages/DettaglioAnteprimaTracciato"
-          );
-          return {
-            Component: DettaglioAnteprimaTracciato,
-            loader: funzioneDettagliLavorazioniInCorso,
           };
         },
       },
