@@ -1,4 +1,5 @@
 import Button from '@/components/Base/Button';
+import { guidIdDaUrlOlimpo } from '@/utils/olimpo';
 import Dropzone, { DropzoneElement } from '@/components/Base/Dropzone';
 import { FormCheck, FormInline, FormSelect } from '@/components/Base/Form';
 import { Slideover, Tab } from '@/components/Base/Headless';
@@ -619,8 +620,7 @@ const GestioneReferenze = forwardRef<GestioneReferenzeHandle, {}>((props, ref) =
       const file = acceptedFiles;
       const reader = new FileReader();
       reader.readAsDataURL(file);
-      const searchParams = new URLSearchParams(new URL(url).search);
-      const guidId = searchParams.get('guidId');
+      const guidId = guidIdDaUrlOlimpo(url);
       console.log(guidId);
       const formData = new FormData();
       formData.append('file', file);

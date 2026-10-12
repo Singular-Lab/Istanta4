@@ -7,6 +7,7 @@ import { EXPORT_DI_SISTEMA } from '../../../lib/enums';
 import { BadRequestError, NotFoundError, ValidationError } from '../../../lib/errors';
 import { ReferenzeIstanta } from '../../../lib/types';
 import config from '../config';
+import { urlOlimpoPubblico, urlFotoOlimpo } from '../utils/urlOlimpo';
 import { sequelize } from '../db/SequelizeConnector';
 import { FilterConditionDTO, FilterTemplateDTO, PromoResponseDTO } from '../dto';
 import { GetCssResponseDTO, GetRefsHtmlResponseDTO, IExternalApiService } from '../interfaces/IExternalApiService';
@@ -325,10 +326,8 @@ export class ExternalApiService implements IExternalApiService {
    * Gestisce sia GUID puri ('6bbf4a46-...') sia URL legacy già completi ('https://...olimpoGUID').
    */
   private buildOlympusUrl(guidOrUrl: string): string {
-    if (typeof guidOrUrl === 'string' && guidOrUrl.startsWith('http')) {
-      return guidOrUrl;
-    }
-    return `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?performante=true&guidId=${guidOrUrl}`;
+    // Chi chiama le API esterne sta fuori da Fidelity: URL assoluto pubblico
+    return urlFotoOlimpo(guidOrUrl, { performante: true, baseFidelity: config.CLIENT_URL });
   }
 
   /**
@@ -659,7 +658,7 @@ export class ExternalApiService implements IExternalApiService {
       files = files.map(file => ({
         ...file,
         url: file.id_olimpo_cloud
-          ? `${config.OLYMPUS_IP_ADDRESS}/materiali/getThumbnailMaterialePdfs?&id=${file.id_olimpo_cloud}`
+          ? urlOlimpoPubblico(config.CLIENT_URL, '/materiali/getThumbnailMaterialePdfs', { id: file.id_olimpo_cloud })
           : file.url,
         _matchPriority: file._matchPriority ?? 0
       }));

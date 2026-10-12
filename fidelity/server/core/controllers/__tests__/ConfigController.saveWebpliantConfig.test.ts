@@ -77,4 +77,18 @@ describe('POST /api/saveWebpliantConfig', () => {
     const [salvata] = configService.saveConfigWebPliantFromVolantino.mock.calls[0];
     expect(salvata.webpliant.logo_header[0].url).toMatch(/getThumbNailOnDemand\?guidId=guid-logo$/);
   });
+
+  it.each([
+    ['relativa al proxy', '/olimpo/foto/getThumbNailOnDemand?guidId=guid-icona'],
+    ['assoluta', 'http://olimpo:3000/foto/getThumbNailOnDemand?guidId=guid-icona'],
+  ])("un'icona della pagina rimandata come URL %s viene salvata come GUID", async (_forma, icona) => {
+    vi.spyOn(axios, 'post').mockRejectedValue(new Error('chiamata non attesa'));
+    const { app, configService } = createApp();
+
+    const res = await request(app).post('/api/saveWebpliantConfig').send(configurazione('', icona));
+
+    expect(res.status).toBe(200);
+    const [salvata] = configService.saveConfigWebPliantFromVolantino.mock.calls[0];
+    expect(salvata.webpliant.icona_pagina).toBe('guid-icona');
+  });
 });

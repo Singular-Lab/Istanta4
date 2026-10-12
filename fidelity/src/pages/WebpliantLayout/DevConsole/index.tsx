@@ -1,6 +1,7 @@
 import Button from '@/components/Base/Button';
 import Dropzone, { DropzoneElement } from '@/components/Base/Dropzone';
 import Lucide from '@/components/Base/Lucide';
+import { guidIdDaUrlOlimpo } from '@/utils/olimpo';
 import { useFetchPromoPerTimeline } from '@/query/query';
 import { Errore, GRAVITA_PROBLEMA } from '@/stores/errorSlice';
 import axios from 'axios';
@@ -128,8 +129,7 @@ const DeveloperConsole = forwardRef<
     async (file: File, logo: any) => {
       try {
         const formData = new FormData();
-        const url = new URL(logo.guidId);
-        const guidParam = url.searchParams.get('guidId');
+        const guidParam = guidIdDaUrlOlimpo(logo.guidId);
         if (!guidParam) return;
         formData.append('guidId', guidParam);
         formData.append('file', file);

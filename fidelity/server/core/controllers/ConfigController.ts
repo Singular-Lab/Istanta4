@@ -24,7 +24,7 @@ import { permissionGuard } from '../middleware/permissionGuard';
 import { userRoleGuard } from '../middleware/userRoleGuard';
 import { AuditLogService } from '../services/AuditLogService';
 import { ServerUtils } from '../utils/ServerUtils';
-import { urlOlimpo } from '../utils/urlOlimpo';
+import { isUrlOlimpo, urlOlimpo } from '../utils/urlOlimpo';
 
 // Mapping for modalita tipi di export
 const modalitaTipiDiExportReverseMapping: { [key: string]: string } = {
@@ -227,8 +227,9 @@ export class ConfigController extends BaseController {
         );
         verificaEsitoOlympus(result.data);
         configWebpliant.webpliant.icona_pagina = result.data.guidId;
-      } else if (configWebpliant.webpliant.icona_pagina?.startsWith("http")) {
-        const url = new URL(configWebpliant.webpliant.icona_pagina);
+      } else if (isUrlOlimpo(configWebpliant.webpliant.icona_pagina)) {
+        // Il frontend rimanda l'URL ricevuto da get_config (assoluto o /olimpo/...): si salva il GUID
+        const url = new URL(configWebpliant.webpliant.icona_pagina, 'http://fidelity.invalid');
         configWebpliant.webpliant.icona_pagina = url.searchParams.get("guidId") || "";
       }
 

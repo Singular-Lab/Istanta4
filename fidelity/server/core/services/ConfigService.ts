@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { TIPO_UTENTI } from "../../../lib/enums";
 import { NotFoundError, wrapDatabaseError } from "../../../lib/errors";
 import { AvvisoManutenzione, Config, ConfigWebpliant, Dashboard, RegoleMenabo } from "../../../lib/types";
-import config from "../config";
+import { urlFotoOlimpo } from "../utils/urlOlimpo";
 import { IConfigService } from "../interfaces/IConfigService";
 import { Config as ConfigModel } from "../models/config";
 import { log } from '../logger/index.js';
@@ -111,7 +111,7 @@ export class ConfigService implements IConfigService {
       if (configWebpliant.webpliant.icona_pagina != undefined) {
         const regexBase64 = /^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)?$/;
         if (!regexBase64.test(configWebpliant.webpliant.icona_pagina)) {
-          const url = `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${configWebpliant.webpliant.icona_pagina}`;
+          const url = urlFotoOlimpo(configWebpliant.webpliant.icona_pagina);
           configWebpliant.webpliant.icona_pagina = url;
         }
       }
@@ -178,7 +178,7 @@ export class ConfigService implements IConfigService {
       const configWebpliant = await ConfigModel.findOne({ raw: true }) as any as Config;
       const regexBase64 = /^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)?$/;
       if (!regexBase64.test(configWebpliant.webpliant.icona_pagina)) {
-        const url = `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${configWebpliant.webpliant.icona_pagina}`;
+        const url = urlFotoOlimpo(configWebpliant.webpliant.icona_pagina);
         configWebpliant.webpliant.icona_pagina = url;
       }
       return configWebpliant.webpliant;
