@@ -618,20 +618,20 @@ const pluginMiddleware = {
     },
 
     /// I20-1082: se le decisioni sulle foto extra prese solo per una lavorazione volantino chiedono se
-    /// valgono solo per il volantino o anche per i POP (Coop). Comanda la configurazione del server; se
-    /// non la manda (Istanta non ancora aggiornata) vale il custom.js del cliente. Senza: falso.
+    /// valgono solo per il volantino o anche per i POP (Coop). La chiave sta nella configurazione del
+    /// cliente sul server: se arriva si legge, altrimenti si ignora (falso). Niente ripiego su custom.js.
     getChiediAmbitoDecisioniLavorazione() {
         let me = this;
-        const delCustom = typeof customAgenzia !== "undefined" && customAgenzia != null && typeof customAgenzia.chiediAmbitoDecisioniLavorazione === "boolean"
-            ? customAgenzia.chiediAmbitoDecisioniLavorazione
-            : false;
 
         if (me.callCustom) {
-            return delCustom;
+            if (typeof customAgenzia !== "undefined" && customAgenzia != null && typeof customAgenzia.chiediAmbitoDecisioniLavorazione === "boolean") {
+                return customAgenzia.chiediAmbitoDecisioniLavorazione;
+            }
+            return false;
         }
 
         const valore = me.customPluginDB?.chiediAmbitoDecisioniLavorazione;
-        return typeof valore === "boolean" ? valore : delCustom;
+        return typeof valore === "boolean" ? valore : false;
     },
 
     /// NOTA DI DISEGNO (I20-1002): questa e setBolloFOTONOFOUND hanno la forma a due rami come

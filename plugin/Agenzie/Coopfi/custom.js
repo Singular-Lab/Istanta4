@@ -41,9 +41,6 @@ const customAgenzia={
         }
     ],
     ignoreElementsFixFoto:["sconto","txt_sconto","sconto_base","sfondo"],
-    //I20-1082: le decisioni sulle foto extra solo per questa lavorazione chiedono se valgono solo per il
-    //volantino o anche per i POP. Lo dichiara anche il SourceCustomPlugin di Coop, che comanda.
-    chiediAmbitoDecisioniLavorazione: true,
     customPadding: [
     ], 
 

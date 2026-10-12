@@ -273,22 +273,24 @@ function dichiaratoNelCustom(cliente) {
     return trovata ? trovata[1] === "true" : undefined;
 }
 
-test("chiedere l'ambito lo dice la configurazione del server; se non lo manda, il custom.js", () => {
+test("chiedere l'ambito lo dice la configurazione del server; se non lo manda, non si chiede", () => {
     assert.strictEqual(middlewareVero(sourceCustomPlugin("Coopfi")).getChiediAmbitoDecisioniLavorazione(), true);
     assert.strictEqual(middlewareVero(sourceCustomPlugin("Edro21")).getChiediAmbitoDecisioniLavorazione(), false);
     //Il server comanda anche quando dice di no.
     assert.strictEqual(middlewareVero({ chiediAmbitoDecisioniLavorazione: false }, false, { chiediAmbitoDecisioniLavorazione: true }).getChiediAmbitoDecisioniLavorazione(), false);
-    //Istanta non ancora aggiornata: la chiave non arriva e vale il custom.js di Coop.
-    assert.strictEqual(middlewareVero({}, false, { chiediAmbitoDecisioniLavorazione: true }).getChiediAmbitoDecisioniLavorazione(), true);
-    assert.strictEqual(middlewareVero(null, false, {}).getChiediAmbitoDecisioniLavorazione(), false);
+    //Istanta non ancora aggiornata: la chiave non arriva e si ignora, qualunque cosa dica il custom.js.
+    assert.strictEqual(middlewareVero({}, false, { chiediAmbitoDecisioniLavorazione: true }).getChiediAmbitoDecisioniLavorazione(), false);
+    assert.strictEqual(middlewareVero(null, false, { chiediAmbitoDecisioniLavorazione: true }).getChiediAmbitoDecisioniLavorazione(), false);
+    assert.strictEqual(middlewareVero({ chiediAmbitoDecisioniLavorazione: "si" }, false, {}).getChiediAmbitoDecisioniLavorazione(), false);
+    //Con custom.js al comando (callCustom, oggi nessun cliente) vale la forma a due rami del middleware.
     assert.strictEqual(middlewareVero(null, true, { chiediAmbitoDecisioniLavorazione: true }).getChiediAmbitoDecisioniLavorazione(), true);
+    assert.strictEqual(middlewareVero(null, true, {}).getChiediAmbitoDecisioniLavorazione(), false);
 });
 
-test("solo Coop chiede l'ambito, nel SourceCustomPlugin e nel custom.js", () => {
+test("solo il SourceCustomPlugin di Coop chiede l'ambito, e nessun custom.js lo dichiara", () => {
     assert.strictEqual(sourceCustomPlugin("Coopfi").chiediAmbitoDecisioniLavorazione, true);
-    assert.strictEqual(dichiaratoNelCustom("Coopfi"), true);
     fs.readdirSync(path.join(__dirname, "..", "..", "plugin", "Agenzie"), { withFileTypes: true })
-        .filter(voce => voce.isDirectory() && voce.name !== "Coopfi"
+        .filter(voce => voce.isDirectory()
             && fs.existsSync(path.join(__dirname, "..", "..", "plugin", "Agenzie", voce.name, "custom.js")))
         .forEach(voce => assert.strictEqual(dichiaratoNelCustom(voce.name), undefined, voce.name));
 });
