@@ -35,6 +35,9 @@ builder.Services.AddScoped<Correggo4.Servizi.ServizioPromo>();
 // Promo/AggiornaDaFidelity (I20-1076, era UpdateVolData.ashx): fidelity aggiorna nome e date della promo,
 // con il Bearer verificato su Olimpo.
 builder.Services.AddScoped<Correggo4.Servizi.IdentitaOlimpo>();
+// OAuthLanded.ashx (I20-1091): ingresso dall'hub di Fidelity col context cifrato. La chiave arriva dalla
+// variabile d'ambiente Fico__SecretKey (uguale a FICO_SECRET di Fidelity), non da appsettings.
+builder.Services.AddScoped<Correggo4.Servizi.AccessoFico>();
 // Consulta tutti i volantini (j213): storico, PDF, zip, report.
 builder.Services.AddScoped<Correggo4.Servizi.ServizioStorico>();
 
