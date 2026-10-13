@@ -1,9 +1,14 @@
 -- =====================================================
 -- SCRIPT COMPLETO PER MATERIALIZED VIEW UTENTI COMPLETI
--- Include: MV, Indici, Trigger e Funzioni di Refresh
+-- Include: MV, Indici, Funzioni di filtro e di Refresh
+--
+-- Eseguito da Fidelity a ogni avvio, dopo la sincronizzazione dei modelli.
+-- Prima della sincronizzazione prima_della_sincronizzazione/rimuovi_oggetti_derivati.sql
+-- l'ha gia' eliminata: qui si ricrea sempre da zero, con i dati presenti.
+-- L'applicazione la aggiorna da se' (UserService) dopo ogni modifica agli utenti.
 -- =====================================================
 
--- 1. RIMOZIONE ESISTENTE (se necessario)
+-- 1. RIMOZIONE ESISTENTE (comprese le funzioni e i trigger delle versioni precedenti)
 -- =====================================================
 DROP MATERIALIZED VIEW IF EXISTS public.mv_utenti_completi CASCADE;
 DROP FUNCTION IF EXISTS public.refresh_mv_utenti_completi() CASCADE;
@@ -41,8 +46,8 @@ AS
             WHEN u.datadinascita_utenti IS NOT NULL THEN EXTRACT(year FROM age(CURRENT_DATE::timestamp with time zone, u.datadinascita_utenti))
             ELSE NULL::numeric
         END AS eta,
-    u.stato_utenti = 'ATTIVO'::"STATO_UTENTI" AS is_attivo,
-    u.tipo_utenti = 'Superadmin'::"TIPO_UTENTE" AS is_admin,
+    u.stato_utenti::text = 'ATTIVO' AS is_attivo,
+    u.tipo_utenti::text = 'Superadmin' AS is_admin,
     COALESCE(jsonb_agg(DISTINCT jsonb_build_object('id', ci.id_canaliinterazione, 'tipo', ci.tipo_canaliinterazione, 'stato', ci.stato_canaliinterazione)) FILTER (WHERE ci.id_canaliinterazione IS NOT NULL), '[]'::jsonb) AS canali_interazione,
         CASE
             WHEN rug.id_ruolo_utente_gdo IS NOT NULL THEN jsonb_build_object('id', rug.id_ruolo_utente_gdo, 'ruolo', rug.ruolo_ruolo_utente_gdo)
@@ -65,12 +70,7 @@ AS
   GROUP BY u.id_utenti, u.outsider_utenti, u.nome_utenti, u.cognome_utenti, u.email_utenti, u.datadinascita_utenti, u.residenza_utenti, u.tipo_utenti, u.stato_utenti, u.sesso_utenti, u.telefono_utenti, u.privatekey_utenti, u.createdat, u.updatedat, u.meta_utenti, rug.id_ruolo_utente_gdo, rug.ruolo_ruolo_utente_gdo, pv.id_puntivendita, pv.nome_puntivendita, ug.id_utentegdo, pvu.id_puntivenditautenti
 WITH DATA;
 
--- 3. IMPOSTAZIONE OWNER
--- =====================================================
-ALTER TABLE IF EXISTS public.mv_utenti_completi
-    OWNER TO postgres;
-
--- 4. CREAZIONE INDICI
+-- 3. CREAZIONE INDICI
 -- =====================================================
 
 -- Indice GIN per canali_interazione (JSONB)
@@ -163,7 +163,7 @@ CREATE INDEX IF NOT EXISTS idx_mv_utenti_completi_totale_canali
     (totale_canali_interazione)
     TABLESPACE pg_default;
 
--- 5. FUNZIONI DI FILTRO PER TIPO UTENTE
+-- 4. FUNZIONI DI FILTRO PER TIPO UTENTE
 -- =====================================================
 
 -- Funzione per ottenere utenti filtrati per tipo utente richiedente
@@ -215,87 +215,7 @@ BEGIN
 END;
 $$;
 
--- Funzione per ottenere utenti con filtri avanzati
-CREATE OR REPLACE FUNCTION public.get_utenti_completi_advanced(
-    p_tipo_utente_richiedente TEXT DEFAULT NULL,
-    p_stato TEXT DEFAULT NULL,
-    p_tipo_utente_filtro TEXT DEFAULT NULL,
-    p_ha_ruolo_gdo BOOLEAN DEFAULT NULL,
-    p_ha_punto_vendita BOOLEAN DEFAULT NULL,
-    p_limit INTEGER DEFAULT NULL,
-    p_offset INTEGER DEFAULT 0
-)
-RETURNS SETOF public.mv_utenti_completi
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-    v_query TEXT;
-    v_where_conditions TEXT := '';
-BEGIN
-    -- Costruisci la query base
-    v_query := 'SELECT * FROM public.mv_utenti_completi';
-
-    -- Applica filtri per tipo utente richiedente
-    IF p_tipo_utente_richiedente IS NOT NULL THEN
-        CASE p_tipo_utente_richiedente
-            WHEN 'Superadmin' THEN
-                -- Nessun filtro aggiuntivo
-                NULL;
-            WHEN 'GDO' THEN
-                v_where_conditions := ' WHERE tipo IN (''GDO'', ''PuntoVendita'')';
-            WHEN 'PuntoVendita' THEN
-                v_where_conditions := ' WHERE tipo = ''PuntoVendita''';
-            WHEN 'Agenzia' THEN
-                v_where_conditions := ' WHERE tipo != ''Superadmin''';
-        END CASE;
-    END IF;
-
-    -- Aggiungi filtri opzionali
-    IF p_stato IS NOT NULL THEN
-        IF v_where_conditions = '' THEN
-            v_where_conditions := ' WHERE stato = ' || quote_literal(p_stato);
-        ELSE
-            v_where_conditions := v_where_conditions || ' AND stato = ' || quote_literal(p_stato);
-        END IF;
-    END IF;
-
-    IF p_tipo_utente_filtro IS NOT NULL THEN
-        IF v_where_conditions = '' THEN
-            v_where_conditions := ' WHERE tipo = ' || quote_literal(p_tipo_utente_filtro);
-        ELSE
-            v_where_conditions := v_where_conditions || ' AND tipo = ' || quote_literal(p_tipo_utente_filtro);
-        END IF;
-    END IF;
-
-    IF p_ha_ruolo_gdo IS NOT NULL THEN
-        IF v_where_conditions = '' THEN
-            v_where_conditions := ' WHERE ha_ruolo_gdo = ' || p_ha_ruolo_gdo;
-        ELSE
-            v_where_conditions := v_where_conditions || ' AND ha_ruolo_gdo = ' || p_ha_ruolo_gdo;
-        END IF;
-    END IF;
-
-    IF p_ha_punto_vendita IS NOT NULL THEN
-        IF v_where_conditions = '' THEN
-            v_where_conditions := ' WHERE ha_punto_vendita = ' || p_ha_punto_vendita;
-        ELSE
-            v_where_conditions := v_where_conditions || ' AND ha_punto_vendita = ' || p_ha_punto_vendita;
-        END IF;
-    END IF;
-
-    -- Aggiungi LIMIT e OFFSET se specificati
-    IF p_limit IS NOT NULL THEN
-        v_where_conditions := v_where_conditions || ' LIMIT ' || p_limit || ' OFFSET ' || p_offset;
-    END IF;
-
-    -- Esegui la query finale
-    RETURN QUERY
-    EXECUTE v_query || v_where_conditions;
-END;
-$$;
-
--- 6. FUNZIONI DI REFRESH
+-- 5. FUNZIONI DI REFRESH
 -- =====================================================
 
 -- Funzione principale per refresh della materialized view
@@ -359,134 +279,7 @@ EXCEPTION
 END;
 $$;
 
--- 6. TRIGGER PER AGGIORNAMENTO AUTOMATICO
--- =====================================================
-
--- Funzione trigger per aggiornamento automatico
-CREATE OR REPLACE FUNCTION public.trigger_refresh_mv_utenti_completi()
-RETURNS trigger
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-    v_should_refresh BOOLEAN := false;
-BEGIN
-    -- Determina se è necessario il refresh basandosi sulla tabella modificata
-    IF TG_TABLE_NAME = 'utenti' THEN
-        v_should_refresh := true;
-    ELSIF TG_TABLE_NAME = 'canali_interazione' THEN
-        v_should_refresh := true;
-    ELSIF TG_TABLE_NAME = 'utenti_gdo' THEN
-        v_should_refresh := true;
-    ELSIF TG_TABLE_NAME = 'ruolo_utente_gdo' THEN
-        v_should_refresh := true;
-    ELSIF TG_TABLE_NAME = 'punti_vendita_utenti' THEN
-        v_should_refresh := true;
-    ELSIF TG_TABLE_NAME = 'punti_vendita' THEN
-        v_should_refresh := true;
-    END IF;
-
-    -- Esegui refresh se necessario
-    IF v_should_refresh THEN
-        -- Usa un job asincrono per evitare blocchi
-        PERFORM pg_notify('mv_refresh', 'mv_utenti_completi');
-
-        -- Log dell'evento
-        RAISE NOTICE 'Schedulato refresh materialized view mv_utenti_completi per modifica tabella: %', TG_TABLE_NAME;
-    END IF;
-
-    -- Ritorna il record appropriato
-    IF TG_OP = 'DELETE' THEN
-        RETURN OLD;
-    ELSE
-        RETURN NEW;
-    END IF;
-END;
-$$;
-
--- 7. CREAZIONE TRIGGER SULLE TABELLE DI RIFERIMENTO
--- =====================================================
-
--- Trigger su tabella utenti
-DROP TRIGGER IF EXISTS trg_mv_utenti_completi_utenti ON public.utenti;
-CREATE TRIGGER trg_mv_utenti_completi_utenti
-    AFTER INSERT OR UPDATE OR DELETE ON public.utenti
-    FOR EACH STATEMENT
-    EXECUTE FUNCTION public.trigger_refresh_mv_utenti_completi();
-
--- Trigger su tabella canali_interazione
-DROP TRIGGER IF EXISTS trg_mv_utenti_completi_canali_interazione ON public.canali_interazione;
-CREATE TRIGGER trg_mv_utenti_completi_canali_interazione
-    AFTER INSERT OR UPDATE OR DELETE ON public.canali_interazione
-    FOR EACH STATEMENT
-    EXECUTE FUNCTION public.trigger_refresh_mv_utenti_completi();
-
--- Trigger su tabella utenti_gdo
-DROP TRIGGER IF EXISTS trg_mv_utenti_completi_utenti_gdo ON public.utenti_gdo;
-CREATE TRIGGER trg_mv_utenti_completi_utenti_gdo
-    AFTER INSERT OR UPDATE OR DELETE ON public.utenti_gdo
-    FOR EACH STATEMENT
-    EXECUTE FUNCTION public.trigger_refresh_mv_utenti_completi();
-
--- Trigger su tabella ruolo_utente_gdo
-DROP TRIGGER IF EXISTS trg_mv_utenti_completi_ruolo_utente_gdo ON public.ruolo_utente_gdo;
-CREATE TRIGGER trg_mv_utenti_completi_ruolo_utente_gdo
-    AFTER INSERT OR UPDATE OR DELETE ON public.ruolo_utente_gdo
-    FOR EACH STATEMENT
-    EXECUTE FUNCTION public.trigger_refresh_mv_utenti_completi();
-
--- Trigger su tabella punti_vendita_utenti
-DROP TRIGGER IF EXISTS trg_mv_utenti_completi_punti_vendita_utenti ON public.punti_vendita_utenti;
-CREATE TRIGGER trg_mv_utenti_completi_punti_vendita_utenti
-    AFTER INSERT OR UPDATE OR DELETE ON public.punti_vendita_utenti
-    FOR EACH STATEMENT
-    EXECUTE FUNCTION public.trigger_refresh_mv_utenti_completi();
-
--- Trigger su tabella punti_vendita
-DROP TRIGGER IF EXISTS trg_mv_utenti_completi_punti_vendita ON public.punti_vendita;
-CREATE TRIGGER trg_mv_utenti_completi_punti_vendita
-    AFTER INSERT OR UPDATE OR DELETE ON public.punti_vendita
-    FOR EACH STATEMENT
-    EXECUTE FUNCTION public.trigger_refresh_mv_utenti_completi();
-
--- 8. FUNZIONE DI LISTENER PER NOTIFICHE
--- =====================================================
-
--- Funzione per gestire le notifiche di refresh
-CREATE OR REPLACE FUNCTION public.handle_mv_refresh_notification()
-RETURNS void
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-    v_notification RECORD;
-BEGIN
-    -- Loop per gestire le notifiche
-    LOOP
-        -- Ascolta le notifiche
-        PERFORM pg_listen('mv_refresh');
-
-        -- Controlla se ci sono notifiche
-        FOR v_notification IN
-            SELECT * FROM pg_notification_queue
-            WHERE channel = 'mv_refresh'
-        LOOP
-            -- Esegui refresh della materialized view
-            PERFORM public.refresh_mv_utenti_completi();
-
-            -- Rimuovi la notifica dalla coda
-            DELETE FROM pg_notification_queue
-            WHERE channel = 'mv_refresh' AND payload = v_notification.payload;
-        END LOOP;
-
-        -- Pausa breve per evitare loop infiniti
-        PERFORM pg_sleep(1);
-    END LOOP;
-END;
-$$;
-
-
--- 10. GRANT PERMISSIONS
+-- 6. GRANT PERMISSIONS
 -- =====================================================
 
 -- Concedi permessi di lettura
@@ -496,19 +289,15 @@ GRANT SELECT ON public.mv_utenti_completi TO PUBLIC;
 GRANT EXECUTE ON FUNCTION public.refresh_mv_utenti_completi() TO PUBLIC;
 GRANT EXECUTE ON FUNCTION public.refresh_mv_utenti_completi_with_params(BOOLEAN, BOOLEAN) TO PUBLIC;
 GRANT EXECUTE ON FUNCTION public.get_utenti_completi_filtered(TEXT) TO PUBLIC;
-GRANT EXECUTE ON FUNCTION public.get_utenti_completi_advanced(TEXT, TEXT, TEXT, BOOLEAN, BOOLEAN, INTEGER, INTEGER) TO PUBLIC;
 
--- 11. COMMENTI E DOCUMENTAZIONE
+-- 7. COMMENTI E DOCUMENTAZIONE
 -- =====================================================
 
 COMMENT ON MATERIALIZED VIEW public.mv_utenti_completi IS
-'Materialized view completa degli utenti con informazioni aggregate su canali di interazione, ruoli GDO e punti vendita collegati. Aggiornata automaticamente tramite trigger.';
+'Materialized view completa degli utenti con informazioni aggregate su canali di interazione, ruoli GDO e punti vendita collegati. Aggiornata dall''applicazione dopo ogni modifica agli utenti.';
 
 COMMENT ON FUNCTION public.get_utenti_completi_filtered(TEXT) IS
 'Funzione per ottenere utenti filtrati per tipo utente richiedente. Parametri: Superadmin (vede tutti), GDO (vede GDO e PuntoVendita), PuntoVendita (vede solo PuntoVendita), Agenzia (vede tutti tranne Superadmin).';
-
-COMMENT ON FUNCTION public.get_utenti_completi_advanced(TEXT, TEXT, TEXT, BOOLEAN, BOOLEAN, INTEGER, INTEGER) IS
-'Funzione avanzata per ottenere utenti con filtri multipli: tipo richiedente, stato, tipo utente, ruolo GDO, punto vendita, limit e offset.';
 
 COMMENT ON FUNCTION public.refresh_mv_utenti_completi() IS
 'Funzione per refresh della materialized view mv_utenti_completi con gestione errori e logging.';
@@ -516,11 +305,7 @@ COMMENT ON FUNCTION public.refresh_mv_utenti_completi() IS
 COMMENT ON FUNCTION public.refresh_mv_utenti_completi_with_params(BOOLEAN, BOOLEAN) IS
 'Funzione per refresh della materialized view con parametri per controllo concorrenza e analisi statistiche.';
 
-COMMENT ON FUNCTION public.trigger_refresh_mv_utenti_completi() IS
-'Funzione trigger per aggiornamento automatico della materialized view quando vengono modificate le tabelle di riferimento.';
-
-
--- 13. PRIMO REFRESH
+-- 8. PRIMO REFRESH
 -- =====================================================
 
 -- Esegui il primo refresh per popolare la materialized view

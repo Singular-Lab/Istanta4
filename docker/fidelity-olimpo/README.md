@@ -244,6 +244,17 @@ Inserisce il provider `email_password`, l'utente amministratore preso da
 menu del Superadmin e la GDO dell'istanza, con il nome di `CLIENT_ID` di
 `fidelity.env` (saltata se `CLIENT_ID` è vuoto o `default`).
 
+Collega poi l'amministratore a quella GDO in `utenti_gdo`, con il sotto-ruolo
+`ADMIN`: è da lì che il login ricava la GDO della sessione, e senza collegamento
+il Superadmin entra senza GDO operativa. Un amministratore già collegato, anche a
+un'altra GDO, resta com'è. Le installazioni seminate prima di questo passo si
+sistemano rilanciando lo script.
+
+Per ultimo aggiorna le materialized view (`mv_utenti_completi`, aree, canali e
+combinazioni), che Fidelity ha creato all'avvio quando le tabelle erano ancora
+vuote. Se una manca lo script termina con errore: vuol dire che all'avvio uno
+script di `server/core/db/scripts` è fallito, e il log di Fidelity dice quale.
+
 L'amministratore nasce con la chiave privata vuota: al primo passaporto
 Fidelity si registra su Olimpo con `fico-secret` e salva la chiave che Olimpo
 gli restituisce. Le installazioni seminate prima di questa correzione avevano

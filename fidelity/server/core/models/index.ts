@@ -202,6 +202,30 @@ const ERRORI_IGNORABILI = [
   '42703',  // PostgreSQL: column does not exist,
   '42883'
 ];
+
+const CARTELLA_SCRIPT = path.join(process.cwd(), '/server/core/db/scripts');
+
+/**
+ * Esegue i file .sql di una cartella (non le sottocartelle), in ordine
+ * alfabetico. Un errore viene registrato e non ferma gli script successivi.
+ */
+async function eseguiScriptSql(cartella: string): Promise<void> {
+  const files = (await readdir(cartella)).filter(file => file.endsWith('.sql')).sort();
+  for (const file of files) {
+    const sql = await readFile(path.join(cartella, file), 'utf-8');
+    try {
+      await sequelize.query(sql);
+    } catch (error: any) {
+      const codice = error.original?.code;
+      if (ERRORI_IGNORABILI.includes(codice)) {
+        log.warn(Colorize.yellow(`⚠️ ${file}: ignorato (${codice})`));
+      } else {
+        log.error(Colorize.red(`❌ Errore script ${file}: [${codice}] ${error.message}`));
+      }
+    }
+  }
+}
+
 export class ModelliManager {
   private static instance: ModelliManager;
   private _modelliSincronizzati: Set<string> = new Set();
@@ -309,6 +333,10 @@ export class ModelliManager {
         .filter((voce): voce is VoceRegistro => voce != null);
     }
 
+    // Le view che leggono una colonna ne impediscono l'ALTER: si tolgono prima
+    // della sincronizzazione e si ricreano dopo.
+    await eseguiScriptSql(path.join(CARTELLA_SCRIPT, 'prima_della_sincronizzazione'));
+
     for (const { chiave, config } of daSincronizzare) {
       const modelStartTime = Date.now();
 
@@ -346,27 +374,9 @@ export class ModelliManager {
         log.error(Colorize.red(`❌ Errore sincronizzazione ${config.nome}: ${messaggioErrore}`));
       }
     }
-    const fileInCartellaScripts = path.join(process.cwd(), '/server/core/db/scripts');
-    const filesInCartellaScripts = await readdir(fileInCartellaScripts);
-    for (const file of filesInCartellaScripts) {
-      if (file.endsWith('.sql')) {
-        const filePath = path.join(fileInCartellaScripts, file);
-        const sql = await readFile(filePath, 'utf-8');
-        try {
-          await sequelize.query(sql);
-          //log.info(Colorize.green(`✅ Script ${file} eseguito con successo`));
-
-        } catch (error: any) {
-          const codice = error.original?.code;
-          if (ERRORI_IGNORABILI.includes(codice)) {
-            log.warn(Colorize.yellow(`⚠️ ${file}: ignorato (${codice})`));
-          } else {
-            log.error(Colorize.red(`❌ Errore script ${file}: [${codice}] ${error.message}`));
-          }
-
-        }
-      }
-    }
+    // View e materialized view si ricreano qui, dopo la sincronizzazione, con i
+    // dati presenti.
+    await eseguiScriptSql(CARTELLA_SCRIPT);
 
     // Seed dei ruoli GDO: qui le tabelle esistono, sia quelle create dai modelli
     // sia quelle toccate dagli script SQL. Girava prima della sincronizzazione,
