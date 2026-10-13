@@ -24,9 +24,9 @@ public class OAuthLandedTests
 
     /// <summary>Olimpo che riconosce solo ChiavePubblica e la descrive con il tipo indicato.</summary>
     private static FabbricaCorreggo App(object tipoUtente, bool autorizzato = true, string? pathBase = null,
-                                        Action? chiamato = null)
+                                        Action? chiamato = null, JsonElement? ruoli = null, string? nomeGdo = null)
     {
-        var app = new FabbricaCorreggo(pathBase);
+        var app = new FabbricaCorreggo(pathBase) { NomeGdo = nomeGdo };
         app.OlimpoFinto = req =>
         {
             chiamato?.Invoke();
@@ -39,7 +39,11 @@ public class OAuthLandedTests
                 username = Email,
                 tipoUtente,
                 autorizzato,
-                userPolicy = new { campi_essenziali = new Dictionary<string, object> { ["nome"] = "Mario", ["cognome"] = "Bianchi" } }
+                userPolicy = new
+                {
+                    campi_essenziali = new Dictionary<string, object> { ["nome"] = "Mario", ["cognome"] = "Bianchi" },
+                    ruoli = ruoli ?? JsonSerializer.SerializeToElement(Array.Empty<object>())
+                }
             });
             return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json) };
         };
@@ -260,6 +264,123 @@ public class OAuthLandedTests
             .GetAsync($"/OAuthLanded.ashx?context={Uri.EscapeDataString(Context())}");
 
         Assert.Contains("Fico:SecretKey", await ErroreAsync(r));
+    }
+
+    // ------------------------------------------------------------------ policy di correzione (PolicyManager)
+
+    private static async Task<UtentiPolicy?> PolicyAsync(FabbricaCorreggo app)
+    {
+        using var scope = app.Services.CreateScope();
+        var ctx = scope.ServiceProvider.GetRequiredService<Correggo4Context>();
+        var u = await ctx.Utentis.AsNoTracking().FirstAsync(x => x.Email == Email);
+        return await ctx.UtentiPolicies.AsNoTracking().FirstOrDefaultAsync(p => p.IdUtente == u.Id);
+    }
+
+    private static async Task PolicyEsistenteAsync(FabbricaCorreggo app, string nota, string json)
+    {
+        using var scope = app.Services.CreateScope();
+        var ctx = scope.ServiceProvider.GetRequiredService<Correggo4Context>();
+        var u = await ctx.Utentis.FirstAsync(x => x.Email == Email);
+        ctx.UtentiPolicies.Add(new UtentiPolicy { IdUtente = u.Id, Nota = nota, Policy = json, DataModifica = DateTime.UtcNow });
+        await ctx.SaveChangesAsync();
+    }
+
+    private const string PolicyManuale = "{\"regole\":[[{\"field\":\"codice_settore\",\"inclusione\":true,\"valori\":[\"40\"]}]],\"tool\":[],\"minVersion\":0}";
+
+    [Fact]
+    public async Task Category_CoopFi_entra_con_la_policy_dei_suoi_reparti()
+    {
+        using var app = App("Category", ruoli: PolicyManagerTests.Ruoli("OCFOPLSGS", "MKTGANAP"), nomeGdo: "CoopFi");
+
+        var r = await EntraAsync(app, Context());
+
+        Assert.Equal(HttpStatusCode.Redirect, r.StatusCode);
+        var riga = await PolicyAsync(app);
+        Assert.NotNull(riga);
+        Assert.StartsWith(Correggo4.Servizi.AccessoFico.NotaAutomatica, riga!.Nota);
+
+        // E' la policy che l'editor applica: solo settore 56, reparti 03 e 04, senza timbri di dimensione.
+        using var scope = app.Services.CreateScope();
+        var correzioni = scope.ServiceProvider.GetRequiredService<Correggo4.Servizi.ServizioCorrezioni>();
+        var policy = await correzioni.PolicyAsync(riga.IdUtente);
+        Assert.NotNull(policy);
+        Assert.Equal(2, policy!.Regole.Count);
+        Assert.False(policy.StrumentoPermesso("timbro", "_3_1_x2"));
+    }
+
+    [Fact]
+    public async Task Category_CoopFi_con_soli_reparti_sconosciuti_va_a_non_autorizzato()
+    {
+        using var app = App("Category", ruoli: PolicyManagerTests.Ruoli("MKTGANAP"), nomeGdo: "CoopFi");
+
+        var r = await EntraAsync(app, Context());
+
+        Assert.Equal(HttpStatusCode.Redirect, r.StatusCode);
+        Assert.StartsWith("/Account/NonAutorizzato?context=", r.Headers.Location?.OriginalString);
+        Assert.False(HaCookie(r));
+        Assert.Null(await PolicyAsync(app));
+
+        var pagina = await app.Client().GetAsync(r.Headers.Location);
+        Assert.Contains("Mario Bianchi", await pagina.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task La_policy_scritta_a_mano_non_si_tocca()
+    {
+        using var app = App("Category", ruoli: PolicyManagerTests.Ruoli("MKTGANAP"), nomeGdo: "CoopFi");
+        await UtenteEsistenteAsync(app, tipo: 6);
+        await PolicyEsistenteAsync(app, "messa da Giulia per la promo di Natale", PolicyManuale);
+
+        var r = await EntraAsync(app, Context());
+
+        // Con la policy manuale il passo salta: niente rifiuto e niente riscrittura.
+        Assert.Equal(HttpStatusCode.Redirect, r.StatusCode);
+        Assert.True(HaCookie(r));
+        var riga = await PolicyAsync(app);
+        Assert.Equal("messa da Giulia per la promo di Natale", riga!.Nota);
+        Assert.Equal(PolicyManuale, riga.Policy);
+    }
+
+    [Fact]
+    public async Task La_policy_automatica_si_riscrive_a_ogni_ingresso()
+    {
+        using var app = App("Category", ruoli: PolicyManagerTests.Ruoli("GV"), nomeGdo: "CoopFi");
+        await UtenteEsistenteAsync(app, tipo: 6);
+        await PolicyEsistenteAsync(app, Correggo4.Servizi.AccessoFico.NotaAutomatica + " settori-reparti: 40", PolicyManuale);
+
+        await EntraAsync(app, Context());
+
+        var riga = await PolicyAsync(app);
+        Assert.Contains("52-01, 52-02", riga!.Nota);
+        Assert.Contains("\"52\"", riga.Policy);
+        Assert.DoesNotContain("\"40\"", riga.Policy);
+    }
+
+    [Fact]
+    public async Task Senza_reparti_la_policy_automatica_si_toglie()
+    {
+        using var app = App("Marketing", nomeGdo: "CoopFi");
+        await UtenteEsistenteAsync(app, tipo: 7);
+        await PolicyEsistenteAsync(app, Correggo4.Servizi.AccessoFico.NotaAutomatica + " settori-reparti: 40", PolicyManuale);
+
+        var r = await EntraAsync(app, Context());
+
+        Assert.Equal(HttpStatusCode.Redirect, r.StatusCode);
+        Assert.Null(await PolicyAsync(app));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("CNO")]
+    public async Task Fuori_da_CoopFi_nessuna_policy_e_si_entra(string? nomeGdo)
+    {
+        using var app = App("Category", ruoli: PolicyManagerTests.Ruoli("MKTGANAP"), nomeGdo: nomeGdo);
+
+        var r = await EntraAsync(app, Context());
+
+        Assert.Equal(HttpStatusCode.Redirect, r.StatusCode);
+        Assert.Equal("/", r.Headers.Location?.OriginalString);
+        Assert.Null(await PolicyAsync(app));
     }
 
     // ------------------------------------------------------------------ pagina utente non autorizzato
