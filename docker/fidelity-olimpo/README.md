@@ -233,7 +233,7 @@ volta e poi resta su, anche attraverso le release, perché instrada per nome di
 servizio:
 
 ```bash
-sudo docker --config /opt/company-ai/runner/docker-config compose --env-file release.env -f compose.production.yaml up -d prox
+sudo docker --config /opt/company-ai/runner/docker-config compose --env-file release.env -f compose.production.yaml up -d proxy
 ```
 
 ### Inizializzazione automatica all'avvio
