@@ -36,7 +36,8 @@ builder.Services.AddScoped<Correggo4.Servizi.ServizioPromo>();
 // con il Bearer verificato su Olimpo.
 builder.Services.AddScoped<Correggo4.Servizi.IdentitaOlimpo>();
 // OAuthLanded.ashx (I20-1091): ingresso dall'hub di Fidelity col context cifrato. La chiave arriva dalla
-// variabile d'ambiente Fico__SecretKey (uguale a FICO_SECRET di Fidelity), non da appsettings.
+// variabile d'ambiente Fico__Secret (uguale a FICO_SECRET di Fidelity e Olimpo, la stessa del
+// passaporto di ClienteFico), non da appsettings.
 builder.Services.AddScoped<Correggo4.Servizi.AccessoFico>();
 // Consulta tutti i volantini (j213): storico, PDF, zip, report.
 builder.Services.AddScoped<Correggo4.Servizi.ServizioStorico>();

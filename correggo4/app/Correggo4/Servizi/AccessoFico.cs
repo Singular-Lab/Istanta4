@@ -20,8 +20,9 @@ namespace Correggo4.Servizi;
 /// Scostamenti decisi con l'utente (13/10/2026):
 ///   - un utente disattivato non entra, come dal form di login;
 ///   - gli errori arrivano al chiamante senza stack trace (finisce nel log).
-/// Configurazione: Fico:SecretKey (variabile d'ambiente Fico__SecretKey, uguale a FICO_SECRET di
-/// Fidelity), Fico:OlimpoUrl e Fico:NomeGdo (nomeGdo dell'originale, oggi solo "CoopFi").
+/// Configurazione: Fico:Secret (variabile d'ambiente Fico__Secret, uguale a FICO_SECRET di Fidelity e
+/// Olimpo: e' lo stesso segreto che ClienteFico manda a Olimpo per il passaporto, uno solo da tenere
+/// allineato), Fico:OlimpoUrl e Fico:NomeGdo (nomeGdo dell'originale, oggi solo "CoopFi").
 /// </summary>
 public sealed class AccessoFico
 {
@@ -49,8 +50,11 @@ public sealed class AccessoFico
 
     private string OlimpoUrl => (config["Fico:OlimpoUrl"] ?? "http://127.0.0.1:3005/olimpo").TrimEnd('/');
 
-    /// <summary>La chiave con cui Fidelity cifra il context (secretKeyFico dell'originale).</summary>
-    public string? Chiave => string.IsNullOrWhiteSpace(config["Fico:SecretKey"]) ? null : config["Fico:SecretKey"];
+    /// <summary>
+    /// La chiave con cui Fidelity cifra il context (secretKeyFico dell'originale): Fico:Secret, la
+    /// stessa del passaporto. Prima era una chiave a parte (Fico:SecretKey), da impostare uguale.
+    /// </summary>
+    public string? Chiave => string.IsNullOrWhiteSpace(config["Fico:Secret"]) ? null : config["Fico:Secret"];
 
     /// <summary>
     /// Esito dell'ingresso: l'utente con cui aprire la sessione, oppure il nome da mostrare nella
@@ -62,7 +66,7 @@ public sealed class AccessoFico
     {
         string? chiave = Chiave;
         if (chiave == null)
-            return new Esito(null, null, "secretKeyFico non configurata (Fico:SecretKey)");
+            return new Esito(null, null, "secretKeyFico non configurata (Fico:Secret)");
         if (string.IsNullOrWhiteSpace(context))
             return new Esito(null, null, "Parametro context mancante");
 
