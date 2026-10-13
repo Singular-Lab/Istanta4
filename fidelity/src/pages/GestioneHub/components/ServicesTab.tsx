@@ -657,6 +657,18 @@ const ServicesTab = () => {
                             <span className={`w-1.5 h-1.5 rounded-full ${activeDotClass}`} />
                             {activeCount} attivi
                           </span>
+                          {group.variants.some((v) => v.gestito) && (
+                            <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-medium text-sky-700">
+                              <Lucide icon="ShieldCheck" className="w-3 h-3" />
+                              Gestito da Fidelity
+                            </span>
+                          )}
+                          {group.variants.some((v) => v.url_non_configurato) && (
+                            <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
+                              <Lucide icon="AlertTriangle" className="w-3 h-3" />
+                              Indirizzo non configurato: non visibile agli utenti
+                            </span>
+                          )}
                           {maintenanceCount > 0 && (
                             <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
                               <Lucide icon="Wrench" className="w-3 h-3" />
@@ -676,14 +688,19 @@ const ServicesTab = () => {
                         <Lucide icon="PencilLine" className="w-4 h-4 mr-1.5" />
                         Modifica
                       </Button>
-                      <Button variant="soft-primary" size="sm" onClick={() => openAddVariantDialog(group.codice)}>
-                        <Lucide icon="Plus" className="w-4 h-4 mr-1.5" />
-                        Variante
-                      </Button>
-                      <Button variant="soft-danger" size="sm" onClick={() => requestGroupDeletion(group.codice, group.nome)}>
-                        <Lucide icon="Trash2" className="w-4 h-4 mr-1.5" />
-                        Elimina
-                      </Button>
+                      {/* Istanta e Correggo li gestisce Fidelity: varianti fisse, si disattivano invece di eliminarli */}
+                      {!group.variants.some((v) => v.gestito) && (
+                        <>
+                          <Button variant="soft-primary" size="sm" onClick={() => openAddVariantDialog(group.codice)}>
+                            <Lucide icon="Plus" className="w-4 h-4 mr-1.5" />
+                            Variante
+                          </Button>
+                          <Button variant="soft-danger" size="sm" onClick={() => requestGroupDeletion(group.codice, group.nome)}>
+                            <Lucide icon="Trash2" className="w-4 h-4 mr-1.5" />
+                            Elimina
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -712,11 +729,13 @@ const ServicesTab = () => {
                                 <span>ord. {variant.ordine}</span>
                               </div>
                             </div>
-                            <div className="flex gap-1.5 shrink-0">
-                              <Button variant="soft-danger" size="sm" onClick={() => requestVariantDeletion(variant)}>
-                                <Lucide icon="Trash2" className="w-3.5 h-3.5" />
-                              </Button>
-                            </div>
+                            {!variant.gestito && (
+                              <div className="flex gap-1.5 shrink-0">
+                                <Button variant="soft-danger" size="sm" onClick={() => requestVariantDeletion(variant)}>
+                                  <Lucide icon="Trash2" className="w-3.5 h-3.5" />
+                                </Button>
+                              </div>
+                            )}
                           </div>
 
                           <div className="text-xs text-slate-400 break-all leading-relaxed">{variant.url}</div>

@@ -37,6 +37,6 @@ export const initializeBackgroundServices = (): void => {
     return;
   }
   initializeScheduledJobs();
-  // Seed dati di default per Hub (auth providers e servizi)
-  //seedHubData().catch(err => log.error('Errore seed hub data:', err));
+  // I dati di default dell'hub (provider e servizi) li crea l'inizializzazione dell'installazione
+  // (server/core/scripts/inizializza.ts), eseguita dal deploy prima del server.
 };

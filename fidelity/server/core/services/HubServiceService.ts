@@ -7,11 +7,15 @@ import { log } from '../logger';
 import type { HubService } from '../models/hub_service';
 import type { IHubServiceRepository } from '../repositories/HubServiceRepository';
 import { normalizeHubServiceRoleValue, type HubUserContext } from './hubRoleUtils';
+import { senzaCampiGestiti, senzaGestito, servizioGestito, urlServizioGestito } from './serviziGestiti';
 
 function toDTO(service: HubService): HubServiceDTO {
   const meta = (service.meta as Record<string, unknown>) ?? undefined;
+  const gestito = servizioGestito(meta);
+  // Un servizio gestito ha l'indirizzo ricavato dalla configurazione (Istanta, Correggo).
+  const urlGestito = gestito ? urlServizioGestito(gestito) : null;
 
-  return {
+  const dto: HubServiceDTO = {
     id: service.id,
     codice: service.codice,
     nome: service.nome,
@@ -31,10 +35,19 @@ function toDTO(service: HubService): HubServiceDTO {
     videos: readHubServiceVideos(meta),
     meta: sanitizeMetaHubService(meta),
   };
+  if (gestito) {
+    dto.gestito = gestito;
+    dto.tipo_url = 'external_fico';
+    dto.url = urlGestito ?? '';
+    dto.url_non_configurato = urlGestito == null;
+  }
+  return dto;
 }
 
 function normalizeServiceInput<T extends Partial<CreateHubServiceInput> & Partial<HubServiceDTO>>(data: T): T {
-  const normalized = { ...data };
+  // Dalla gestione dell'hub un servizio non diventa ne' smette di essere gestito.
+  const { gestito: _gestito, url_non_configurato: _nonConfigurato, ...resto } = data as T & Partial<HubServiceDTO>;
+  const normalized = senzaGestito(resto as T);
 
   if (Object.prototype.hasOwnProperty.call(normalized, 'ruolo_gdo')) {
     normalized.ruolo_gdo = normalizeHubServiceRoleValue(normalized.ruolo_gdo);
@@ -96,7 +109,8 @@ export class HubServiceService implements IHubServiceService {
       const services = context.userType === TIPO_UTENTI.SUPERADMIN
         ? selectServicesForSuperadmin(await this.repository.findAll())
         : await this.repository.findActiveForRole(context);
-      return services.map((service) => toDTO(service));
+      // Un servizio gestito senza indirizzo configurato non si puo' aprire: non lo si mostra.
+      return services.map((service) => toDTO(service)).filter((dto) => !dto.url_non_configurato);
     } catch (error) {
       log.error('HubServiceService.getServicesForRole error:', error);
       throw error;
@@ -186,7 +200,9 @@ export class HubServiceService implements IHubServiceService {
 
   async updateService(id: string, data: Partial<HubServiceDTO>): Promise<HubServiceDTO | null> {
     try {
-      const service = await this.repository.update(id, normalizeServiceInput(data) as any);
+      let dati = normalizeServiceInput(data);
+      if (servizioGestito((await this.repository.findById(id))?.meta)) dati = senzaCampiGestiti(dati as any);
+      const service = await this.repository.update(id, dati as any);
       return service ? toDTO(service) : null;
     } catch (error) {
       log.error('HubServiceService.updateService error:', error);
@@ -196,6 +212,10 @@ export class HubServiceService implements IHubServiceService {
 
   async bulkUpdateServices(ids: string[], patch: BulkUpdateHubServicePatch): Promise<HubServiceDTO[]> {
     try {
+      // Le varianti di un gruppo condividono il codice: se una e' gestita lo sono tutte.
+      const correnti = await Promise.all(ids.map((id) => this.repository.findById(id)));
+      if (correnti.some((s) => servizioGestito(s?.meta))) patch = senzaCampiGestiti(patch as any) as BulkUpdateHubServicePatch;
+      patch = normalizeServiceInput(patch as any) as BulkUpdateHubServicePatch;
       const services = await this.repository.bulkUpdate(ids, patch as any);
 
       // Propaga le modifiche anche alle varianti Superadmin per ogni codice aggiornato,
@@ -223,6 +243,17 @@ export class HubServiceService implements IHubServiceService {
       log.error('HubServiceService.deleteService error:', error);
       throw error;
     }
+  }
+
+  /** Vero se il servizio (per id) e' gestito da Fidelity e quindi non si elimina. */
+  async isServizioGestito(id: string): Promise<boolean> {
+    return servizioGestito((await this.repository.findById(id))?.meta) != null;
+  }
+
+  /** Vero se il codice appartiene a servizi gestiti da Fidelity. */
+  async isCodiceGestito(codice: string): Promise<boolean> {
+    const varianti = await this.repository.findAllByCode(codice);
+    return varianti.some((s) => servizioGestito(s.meta) != null);
   }
 
   async deleteServiceByCode(codice: string): Promise<number> {
