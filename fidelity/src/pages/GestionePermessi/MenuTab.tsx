@@ -507,15 +507,15 @@ export default function MenuTab() {
     },
   });
 
-  // Seed mutation
+  // Ripristino del menu predefinito del Superadmin (solo le sue voci; gli altri menu restano)
   const seedMutation = useMutation({
-    mutationFn: () => ServerCall.post('/menu/seed', {}),
+    mutationFn: () => ServerCall.post('/menu/ripristina-predefiniti', {}),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['menu-items'] });
-      showNotification('Menu importato da JSON con successo', { variant: 'success' });
+      showNotification('Menu predefinito del Superadmin ripristinato', { variant: 'success' });
     },
     onError: () => {
-      showNotification("Errore durante l'importazione del menu", { variant: 'error' });
+      showNotification('Errore durante il ripristino del menu: il menu è rimasto invariato', { variant: 'error' });
     },
   });
 
@@ -735,15 +735,17 @@ export default function MenuTab() {
                   </span>
                 </Button>
               )}
-              <Button
-                variant="outline-secondary"
-                size="sm"
-                onClick={() => setShowSeedDialog(true)}
-                disabled={seedMutation.isPending}
-              >
-                <Lucide icon="Download" className="w-4 h-4 mr-1.5" />
-                {seedMutation.isPending ? 'Importando...' : 'Importa da JSON'}
-              </Button>
+              {selectedTipo === TIPO_UTENTI.SUPERADMIN && (
+                <Button
+                  variant="outline-secondary"
+                  size="sm"
+                  onClick={() => setShowSeedDialog(true)}
+                  disabled={seedMutation.isPending}
+                >
+                  <Lucide icon="RotateCcw" className="w-4 h-4 mr-1.5" />
+                  {seedMutation.isPending ? 'Ripristino...' : 'Ripristina menu predefiniti'}
+                </Button>
+              )}
               <Button
                 variant="primary"
                 size="sm"
@@ -829,7 +831,7 @@ export default function MenuTab() {
         </div>
       )}
 
-      {/* Dialog conferma Seed */}
+      {/* Dialog conferma ripristino del menu predefinito */}
       <Dialog
         open={showSeedDialog}
         onClose={() => setShowSeedDialog(false)}
@@ -837,7 +839,7 @@ export default function MenuTab() {
       >
         <Dialog.Panel>
           <Dialog.Title>
-            <h2 className="mr-auto text-base font-medium">Importa Menu da JSON</h2>
+            <h2 className="mr-auto text-base font-medium">Ripristina menu predefiniti</h2>
           </Dialog.Title>
           <Dialog.Description className="space-y-4">
             <div className="p-4 border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800/30 rounded-lg">
@@ -846,13 +848,13 @@ export default function MenuTab() {
                 Attenzione
               </div>
               <p className="text-sm text-amber-800 dark:text-amber-200">
-                Questa operazione importera la configurazione dal file <code className="bg-amber-100 px-1 rounded">menu.json</code> nel database.
+                Il menu del Superadmin tornerà quello con cui nasce l'installazione.
               </p>
             </div>
             <ul className="list-disc list-inside text-sm text-slate-600 dark:text-slate-400 space-y-1">
-              <li>Tutti i menu esistenti nel database verranno sovrascritti</li>
-              <li>I menu verranno caricati per tutti i tipi utente</li>
-              <li>I codici permesso verranno mappati automaticamente</li>
+              <li>Le voci aggiunte, tolte o spostate nel menu del Superadmin andranno perse</li>
+              <li>I menu degli altri tipi di utente non cambiano</li>
+              <li>Se il ripristino non riesce, il menu resta quello attuale</li>
             </ul>
           </Dialog.Description>
           <Dialog.Footer className="flex justify-end gap-2">
@@ -869,8 +871,8 @@ export default function MenuTab() {
                 seedMutation.mutate();
               }}
             >
-              <Lucide icon="Download" className="w-4 h-4 mr-1.5" />
-              Importa Menu
+              <Lucide icon="RotateCcw" className="w-4 h-4 mr-1.5" />
+              Ripristina
             </Button>
           </Dialog.Footer>
         </Dialog.Panel>

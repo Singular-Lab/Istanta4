@@ -51,9 +51,13 @@ const ServiceFormDialog = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const targetOptions = useMemo(() => buildServiceTargetOptions(gdoRoleOptions), [gdoRoleOptions]);
+  // Istanta e Correggo: indirizzo, tipo e destinatari li decide Fidelity.
+  const gestito = sourceVariant?.gestito ?? group?.variants.find((v) => v.gestito)?.gestito;
   const disabledTargetKeys = useMemo(
-    () => mode === "edit-group" ? new Set<string>() : new Set(existingTargetKeys),
-    [existingTargetKeys, mode]
+    () => gestito
+      ? new Set(targetOptions.map((o) => o.key))
+      : mode === "edit-group" ? new Set<string>() : new Set(existingTargetKeys),
+    [existingTargetKeys, mode, gestito, targetOptions]
   );
 
   useEffect(() => {
@@ -113,7 +117,7 @@ const ServiceFormDialog = ({
   const validate = () => {
     if (!values.codice.trim()) return "Il codice del servizio è obbligatorio.";
     if (!values.nome.trim()) return "Il nome del servizio è obbligatorio.";
-    if (values.tipo_url !== "internal" && !values.url.trim()) return "L'URL del servizio è obbligatorio.";
+    if (!gestito && values.tipo_url !== "internal" && !values.url.trim()) return "L'URL del servizio è obbligatorio.";
 
     if (selectedTargets.length === 0) {
       return "Seleziona almeno un target per la variante.";
@@ -207,7 +211,9 @@ const ServiceFormDialog = ({
                 />
                 <FormCheck.Label className="ml-0 flex-1">
                   <div className="text-sm font-medium text-slate-700">{target.label}</div>
-                  {disabled && <div className="text-xs text-slate-500">Variante già presente</div>}
+                  {disabled && (
+                    <div className="text-xs text-slate-500">{gestito ? "Destinatari stabiliti da Fidelity" : "Variante già presente"}</div>
+                  )}
                 </FormCheck.Label>
               </FormCheck>
             );
@@ -325,7 +331,19 @@ const ServiceFormDialog = ({
                   </div>
 
                   <div className="space-y-4">
-                    {isInternalUrl ? (
+                    {gestito ? (
+                      <div>
+                        <FormLabel htmlFor="service-url">URL</FormLabel>
+                        <FormInput id="service-url" value={sourceVariant?.url ?? ""} readOnly className="mt-2" />
+                        <div className="mt-1 text-xs text-slate-500">
+                          {sourceVariant?.url_non_configurato
+                            ? gestito === "istanta"
+                              ? "Indirizzo non configurato: impostare FICO_BASE_URL o ISTANTA_IP_ADDRESS di Fidelity."
+                              : "Indirizzo non configurato: impostare CORREGGO_IP_ADDRESS di Fidelity."
+                            : "Calcolato da Fidelity dalla configurazione dell'installazione: non si modifica da qui."}
+                        </div>
+                      </div>
+                    ) : isInternalUrl ? (
                       <div className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-700">
                         Per i servizi con tipo URL <strong>Interno</strong>, l'apertura è automatica sulla start page dell'utente.
                       </div>
@@ -363,6 +381,7 @@ const ServiceFormDialog = ({
                           id="service-tipo-url"
                           value={values.tipo_url}
                           onChange={(event) => updateField("tipo_url", event.target.value as HubServiceDTO["tipo_url"])}
+                          disabled={!!gestito}
                           className="mt-2"
                         >
                           {SERVICE_TIPO_URL_OPTIONS.map((option) => (

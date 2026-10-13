@@ -258,12 +258,29 @@ public class OAuthLandedTests
     public async Task Senza_chiave_configurata_non_entra()
     {
         using var base_ = App("GDO");
-        using var app = base_.WithWebHostBuilder(b => b.UseSetting("Fico:SecretKey", ""));
+        using var app = base_.WithWebHostBuilder(b => b.UseSetting("Fico:Secret", ""));
 
         var r = await app.CreateClient(new() { AllowAutoRedirect = false })
             .GetAsync($"/OAuthLanded.ashx?context={Uri.EscapeDataString(Context())}");
 
-        Assert.Contains("Fico:SecretKey", await ErroreAsync(r));
+        Assert.Contains("Fico:Secret", await ErroreAsync(r));
+    }
+
+    [Fact]
+    public async Task La_vecchia_Fico_SecretKey_non_sostituisce_Fico_Secret()
+    {
+        // Un solo segreto (Fico:Secret, come FICO_SECRET di Fidelity): un Fico:SecretKey rimasto
+        // nella configurazione di un'installazione vecchia non basta piu' a entrare.
+        using var base_ = App("GDO");
+        using var app = base_.WithWebHostBuilder(b => b
+            .UseSetting("Fico:Secret", "")
+            .UseSetting("Fico:SecretKey", FabbricaCorreggo.ChiaveFico));
+
+        var r = await app.CreateClient(new() { AllowAutoRedirect = false })
+            .GetAsync($"/OAuthLanded.ashx?context={Uri.EscapeDataString(Context())}");
+
+        Assert.Contains("Fico:Secret", await ErroreAsync(r));
+        Assert.False(HaCookie(r));
     }
 
     // ------------------------------------------------------------------ policy di correzione (PolicyManager)
