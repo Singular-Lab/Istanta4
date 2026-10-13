@@ -180,7 +180,7 @@ services:
     ports:
       # Solo su localhost, per manutenzione: psql, pg_dump. La 5434 per non
       # collidere con un PostgreSQL gia' presente sulla macchina.
-      - "127.0.0.1:${POSTGRES_HOST_PORT:-5434}:5432"
+      - "0.0.0.0:${POSTGRES_HOST_PORT:-5434}:5432"
     healthcheck:
       # Tre controlli, e nessuno e' superfluo.
       #
