@@ -286,6 +286,13 @@ primo avvio. Restano volumi nominati soltanto `istanta_external_source` e
 `istanta_logs` — che l'immagine semina con contenuto già di proprietà di `app` —
 più `postgres_data` e `redis_data`, di immagini che si arrangiano da sole.
 
+`prepare-target.sh` crea sotto `ISTANTA_DATA_DIR` anche `jpg`, `exported_files`,
+`imported_files` ed `estrazioni`, i percorsi che `istanta.env` mette su `/data`.
+Non sono montati a parte, ma Istanta vi scrive file senza creare la directory di
+base, e se manca l'operazione fallisce con `DirectoryNotFoundException`. Se in
+`istanta.env` si cambia uno di quei percorsi, la directory nuova va creata a mano
+con proprietario 1654.
+
 `ai_models` in particolare esiste perché `BackgroundCodeService` vi scrive i
 campioni di addestramento usando `AppContext.BaseDirectory`, percorso nel codice
 e non configurabile. È materia da dismettere lato applicazione, ma finché scrive

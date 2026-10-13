@@ -38,12 +38,16 @@ if [ ! -f release.env ]; then
     exit 1
 fi
 
-# Legge una variabile da release.env senza eseguire il file: contiene password, e
-# un `source` eseguirebbe anche quello che ci fosse dentro per errore.
+# Legge una variabile da un file env senza eseguirlo: contiene password, e un
+# `source` eseguirebbe anche quello che ci fosse dentro per errore.
+#   leggi NOME           da release.env
+#   leggi NOME FILE      da un altro file (correggo4.env); se il file non c'e', vuoto
 # Unica funzione che gira in una subshell, e infatti si limita a stampare: ogni
 # verifica avviene nella shell principale, dove i contatori esistono davvero.
 leggi() {
-    sed -n "s/^$1=//p" release.env | tail -n 1 | tr -d '\r' \
+    local file="${2:-release.env}"
+    [ -f "$file" ] || return 0
+    sed -n "s/^$1=//p" "$file" | tail -n 1 | tr -d '\r' \
         | sed -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'\$/\1/"
 }
 
@@ -220,6 +224,14 @@ verifica_dati ISTANTA_DATA_DIR "$UID_APP"
 verifica_sottodirectory ISTANTA_DATA_DIR  "dataprotection-keys" "$UID_APP"
 # Campioni di addestramento scritti da BackgroundCodeService.
 verifica_sottodirectory ISTANTA_DATA_DIR  "ai_models"           "$UID_APP"
+# I percorsi di istanta.env sotto /data (jpg_path_foto, path_to_export,
+# path_to_import, sync_options__extractPath). Istanta ci scrive file senza mai
+# creare la directory di base: se manca, caricamenti, esportazioni e sync foto
+# falliscono con DirectoryNotFoundException.
+verifica_sottodirectory ISTANTA_DATA_DIR  "jpg"                 "$UID_APP"
+verifica_sottodirectory ISTANTA_DATA_DIR  "exported_files"      "$UID_APP"
+verifica_sottodirectory ISTANTA_DATA_DIR  "imported_files"      "$UID_APP"
+verifica_sottodirectory ISTANTA_DATA_DIR  "estrazioni"          "$UID_APP"
 verifica_dati CORREGGO_DATA_DIR "$UID_APP"
 verifica_sottodirectory CORREGGO_DATA_DIR "volantini"           "$UID_APP"
 # Ci scrive il Runner installando AgenziaLib.dll, e Istanta la legge in sola
@@ -351,6 +363,42 @@ pwd_admin=$(leggi ADMIN_PASSWORD)
 if [ -n "$pwd_admin" ] && [ "${#pwd_admin}" -gt 50 ]; then
     rosso "  lunga     ADMIN_PASSWORD supera i 50 caratteri, limite della colonna utenti.password di Istanta"
     errori=$((errori + 1))
+fi
+
+# Correggo4 parte anche senza queste chiavi, ma senza non si entra da Fidelity,
+# l'Edit avanzato non trova foto e loghi e le policy dei Category restano spente:
+# un'installazione che "funziona" solo in apparenza.
+echo
+echo "correggo4.env (collegamento con Fidelity, Olimpo e Istanta)"
+if [ ! -f correggo4.env ]; then
+    rosso "  assente   correggo4.env: copialo da correggo4.env.example e compilalo"
+    errori=$((errori + 1))
+else
+    for v in Fico__OlimpoUrl Fico__IstantaUrl; do
+        u=$(leggi "$v" correggo4.env)
+        case "$u" in
+            http://*|https://*) verde "  ok        $v = $u" ;;
+            "") rosso "  manca     $v in correggo4.env"; errori=$((errori + 1)) ;;
+            *)  rosso "  non URL   $v = $u (serve http:// o https://)"; errori=$((errori + 1)) ;;
+        esac
+    done
+    if [ -n "$(leggi Fico__Secret correggo4.env)" ]; then
+        verde "  ok        Fico__Secret"
+    else
+        rosso "  manca     Fico__Secret in correggo4.env — lo stesso FICO_SECRET di Fidelity e Olimpo"
+        errori=$((errori + 1))
+    fi
+    if [ -n "$(leggi Fico__SecretKey correggo4.env)" ]; then
+        giallo "  superata  Fico__SecretKey non è più letta: il segreto è solo Fico__Secret"
+        avvisi=$((avvisi + 1))
+    fi
+    gdo=$(leggi Fico__NomeGdo correggo4.env)
+    if [ -n "$gdo" ]; then
+        verde "  ok        Fico__NomeGdo = $gdo"
+    else
+        giallo "  vuota     Fico__NomeGdo: nessuna policy dei Category (giusto per i clienti diversi da CoopFi)"
+        avvisi=$((avvisi + 1))
+    fi
 fi
 
 echo
