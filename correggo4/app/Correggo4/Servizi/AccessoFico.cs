@@ -16,13 +16,12 @@ namespace Correggo4.Servizi;
 ///   3. se l'utente e' autorizzato lo cerca per email e lo crea se manca (tipo FICO da Olimpo, ruolo
 ///      Agenzia per Superadmin e Agenzia, GDO per gli altri, super admin come l'originale), oppure ne
 ///      aggiorna il tipo FICO se e' cambiato.
+///   4. con Fico:NomeGdo = CoopFi ricava dai reparti di Olimpo la policy di correzione (PolicyManager).
 /// Scostamenti decisi con l'utente (13/10/2026):
-///   - la creazione delle policy via PolicyManager non e' portata: il sorgente non c'e', la policy
-///     resta quella di utenti_policy (port in un task a parte);
 ///   - un utente disattivato non entra, come dal form di login;
 ///   - gli errori arrivano al chiamante senza stack trace (finisce nel log).
 /// Configurazione: Fico:SecretKey (variabile d'ambiente Fico__SecretKey, uguale a FICO_SECRET di
-/// Fidelity) e Fico:OlimpoUrl.
+/// Fidelity), Fico:OlimpoUrl e Fico:NomeGdo (nomeGdo dell'originale, oggi solo "CoopFi").
 /// </summary>
 public sealed class AccessoFico
 {
@@ -133,15 +132,63 @@ public sealed class AccessoFico
             }
         }
 
-        // L'originale qui passava i gruppi di Olimpo a PolicyManager.parseGruppi e, se la scansione
-        // falliva per un Category, lo mandava a userNotAuthorized.aspx. PolicyManager non e' portato
-        // (I20-1091, opzione A): i gruppi non si leggono, la policy resta quella di utenti_policy e
-        // questo ramo non scatta finche' il port non arriva.
-        bool gruppiLetti = true;
-        if (!gruppiLetti && tipo == ServizioCorrezioni.TipoFicoCategory)
+        // Come l'originale: i reparti di Olimpo diventano la policy di correzione (PolicyManager), e un
+        // Category di cui non si riconosce nessun reparto va a userNotAuthorized.
+        if (await PolicyDaRepartiAsync(utente, identita.userPolicy, tipo))
             return new Esito(null, $"{utente.Nome} {utente.Cognome}".Trim(), null);
 
         return new Esito(utente, null, null);
+    }
+
+    /// <summary>Inizio della nota delle policy scritte qui: le altre righe sono manuali e non si toccano.</summary>
+    public const string NotaAutomatica = "[auto Fidelity]";
+
+    /// <summary>
+    /// Il passo PolicyManager dell'originale. Vero se l'utente e' un Category da non far entrare.
+    /// Scostamenti decisi con l'utente (13/10/2026):
+    ///   - solo con Fico:NomeGdo = CoopFi; per gli altri clienti (o senza) nessuna policy, e si entra
+    ///     (l'originale per CNO lanciava NotImplementedException e bloccava l'ingresso);
+    ///   - una policy di utenti_policy scritta a mano (nota che non inizia con NotaAutomatica) resta
+    ///     com'e' e il passo salta; l'originale riscriveva sempre il file.
+    /// </summary>
+    private async Task<bool> PolicyDaRepartiAsync(Utenti utente, JsonElement userPolicy, short? tipo)
+    {
+        if (!string.Equals(config["Fico:NomeGdo"]?.Trim(), PolicyManager.ClienteCoopFi, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var riga = await ctx.UtentiPolicies.FirstOrDefaultAsync(p => p.IdUtente == utente.Id);
+        if (riga != null && !riga.Nota.StartsWith(NotaAutomatica, StringComparison.Ordinal))
+            return false;
+
+        var ruoli = userPolicy.ValueKind == JsonValueKind.Object && userPolicy.TryGetProperty("ruoli", out var r)
+            ? r : default;
+        var gruppi = PolicyManager.ParseGruppi(ruoli);
+        if (gruppi.Ignorati.Count > 0)
+            log.LogWarning("Policy di {Utente}: reparti non riconosciuti ignorati: {Reparti}",
+                           utente.Email, string.Join(", ", gruppi.Ignorati));
+
+        // Come l'originale, il Category rifiutato non tocca la policy che aveva.
+        if (gruppi.NessunoRiconosciuto && tipo == ServizioCorrezioni.TipoFicoCategory)
+            return true;
+
+        var policy = PolicyManager.Crea(gruppi.Valori);
+        if (policy == null)
+        {
+            if (riga != null) ctx.UtentiPolicies.Remove(riga);
+        }
+        else
+        {
+            if (riga == null)
+            {
+                riga = new UtentiPolicy { IdUtente = utente.Id };
+                ctx.UtentiPolicies.Add(riga);
+            }
+            riga.Policy = PolicyManager.Json(policy);
+            riga.Nota = $"{NotaAutomatica} settori-reparti: {string.Join(", ", gruppi.Valori)}";
+            riga.DataModifica = DateTime.UtcNow;
+        }
+        await ctx.SaveChangesAsync();
+        return false;
     }
 
     /// <summary>Il tipo FICO come numero: Olimpo oggi lo manda per nome ("Category"), l'originale per numero.</summary>
