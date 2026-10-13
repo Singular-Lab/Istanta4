@@ -230,6 +230,32 @@ servizio:
 sudo docker --config /opt/company-ai/runner/docker-config compose --env-file release.env -f compose.production.yaml up -d prox
 ```
 
+### Inizializzazione automatica all'avvio
+
+A ogni avvio del container, dopo `models:sync` e prima del server, il compose
+esegue `server/core/scripts/inizializza.ts` (si salta con
+`FIDELITY_INIZIALIZZA=no` in `release.env`). Crea **solo ciò che manca**:
+
+- il provider di accesso `email_password`;
+- l'amministratore da `FIDELITY_ADMIN_*` di `release.env`, solo se
+  l'installazione non ha ancora alcun Superadmin;
+- la GDO con il nome di `CLIENT_ID` (saltata se vuoto o `default`) e il
+  collegamento dell'amministratore in `utenti_gdo`, con sotto-ruolo `ADMIN`;
+- il menu del Superadmin, se il Superadmin non ha voci;
+- i servizi dell'hub: "Istanta 2 GDO Suite" se l'hub è vuoto, e i servizi
+  **gestiti** Istanta e Correggo, uno per tipo di utente, se mancano;
+- infine aggiorna le materialized view.
+
+Il log riporta passo per passo cosa ha creato e cosa ha saltato
+(`docker logs <progetto>-fidelity-1 2>&1 | grep inizializza`); un errore non
+ferma il server. Il server parte senza `FIDELITY_ADMIN_PASSWORD` nell'ambiente.
+
+I servizi gestiti hanno l'indirizzo calcolato da Fidelity, non modificabile
+dalla gestione dell'hub: Istanta da `FICO_BASE_URL` (o `ISTANTA_IP_ADDRESS`) più
+`/LoginController/oauth/landed`, Correggo da `CORREGGO_IP_ADDRESS` più
+`/OAuthLanded.ashx`. Devono essere indirizzi raggiungibili dal browser. Si
+disattivano, non si eliminano.
+
 ### Dopo il primo avvio: `seed-fidelity.sh`
 
 Su un database nuovo Fidelity parte ma non ci si entra: non esiste alcun metodo

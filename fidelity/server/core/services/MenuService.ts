@@ -1,62 +1,13 @@
 import fs from 'fs';
 import path from 'path';
 import { TIPO_MENU_ITEM, TIPO_UTENTI } from '../../../lib/enums';
-import { ValidationError } from '../../../lib/errors';
 import type { MenuElement, MenuItem as MenuItemType, MenuStructure } from '../../../lib/types';
 import type { IMenuService, MenuItemDTO } from '../interfaces/IMenuService';
 import { log } from '../logger';
 import { MenuItem } from '../models';
 import { MenuItemRepository } from '../repositories/MenuItemRepository';
-
-/** Mappa pathname → codice_permesso (copiata da UserService.MENU_PATHNAME_PERMISSIONS) */
-const PATHNAME_TO_PERMISSION: Record<string, string> = {
-  '/gdo/dashboard': 'pagina.dashboard',
-  '/superadmin/dashboard': 'pagina.superadmin_dashboard',
-  '/profilo-utente': 'pagina.profilo_utente',
-  '/barcode-reader': 'pagina.barcode_reader',
-  '/competitor-analyzer': 'pagina.competitor_analyzer',
-  '/promozioni': 'pagina.promozioni',
-  '/promozioni/nuova': 'pagina.nuova_lavorazione',
-  '/promozioni/in-corso': 'pagina.lavorazioni_in_corso',
-  '/promozioni/storico': 'pagina.storico_lavorazioni',
-  '/volantini': 'pagina.volantini',
-  '/storico-volantini': 'pagina.storico_volantini',
-  '/materiali-attivi': 'pagina.materiali_attivi',
-  '/materiali-in-corso': 'pagina.materiali_in_corso',
-  '/storico-materiali': 'pagina.storico_materiali',
-  '/contenuti-digitali': 'pagina.contenuti_digitali',
-  '/nuovo-ods': 'pagina.nuovo_ods',
-  '/ods-in-corso': 'pagina.ods_in_corso',
-  '/ods-completati': 'pagina.ods_completati',
-  '/webliant/impostazioni-webpliant': 'pagina.impostazioni_webpliant',
-  '/webliant/webpliant-disponibili': 'pagina.webpliant_disponibili',
-  '/aree-e-canali': 'pagina.aree_e_canali',
-  '/punti-vendita': 'pagina.punti_vendita',
-  '/gestione-ricette': 'pagina.gestione_ricette',
-  '/gestione-approfondimento-vini': 'pagina.gestione_vini',
-  '/impostazioni-tipografia': 'pagina.impostazioni_tipografia',
-  '/impostazioni-di-produzione': 'pagina.impostazioni_produzione',
-  '/gestione-pagine-singular': 'pagina.gestione_pagine_singular',
-  '/gestione-permessi': 'pagina.gestione_permessi',
-  '/gestione-hub': 'pagina.gestione_hub',
-  '/gestione-utenti': 'pagina.gestione_utenti',
-  '/whatsapp/invio-campagna-whatsapp': 'pagina.invio_campagna_whatsapp',
-  '/whatsapp/campagne-whatsapp': 'pagina.campagne_whatsapp',
-  '/whatsapp/gestione-whatsapp-superadmin': 'pagina.gestione_whatsapp_superadmin',
-  '/gestione-whatsapp-admin': 'pagina.gestione_whatsapp_admin',
-  '/gestione-api/statistiche': 'pagina.gestione_api',
-  '/gestione-api/test': 'pagina.gestione_api',
-  '/gestione-api/keys': 'pagina.gestione_api',
-  '/gestione-api/plugin': 'pagina.gestione_api',
-  '/gestione-webhook': 'pagina.gestione_webhook',
-  '/documentazione': 'pagina.documentazione',
-  '/documentazione/panoramica': 'pagina.documentazione',
-  '/documentazione/guida-rapida': 'pagina.documentazione',
-  '/documentazione/api': 'pagina.documentazione',
-  '/documentazione/plugin': 'pagina.documentazione',
-  '/documentazione/filter-templates': 'pagina.documentazione',
-  '/documentazione/statistiche': 'pagina.documentazione',
-};
+import { sequelize } from '../db/SequelizeConnector';
+import { vociMenuSuperadmin } from '../inizializzazione/inizializzaInstallazione';
 
 export class MenuService implements IMenuService {
   private repository: MenuItemRepository;
@@ -170,54 +121,21 @@ export class MenuService implements IMenuService {
   }
 
   /**
-   * Migra i dati da config/menu.json al database.
+   * Riporta il menu del Superadmin a quello predefinito (server/core/inizializzazione/datiPredefiniti.ts).
+   * I menu degli altri tipi di utente non si toccano. Cancellazione e inserimento stanno in una sola
+   * transazione: se l'inserimento fallisce il menu resta quello di prima.
+   * Sostituisce "Importa da JSON", che svuotava i menu di tutti e poi leggeva config/menu.json,
+   * un file che non esiste.
    */
-  async seedMenuDaJson(): Promise<void> {
-    log.info('Seed menu da JSON: inizio...');
-
-    // Svuota la tabella
-    await this.repository.deleteAll();
-    this.cache.clear();
-
-    const pathPerMenu = path.join(process.cwd(), 'config', 'menu.json');
-    const menuParsed = JSON.parse(fs.readFileSync(pathPerMenu, 'utf8')) as MenuStructure;
-
-    const tipoUtenti = menuParsed.TIPO_UTENTI;
-
-    // Normalizza la chiave uppercase del JSON (es. "SUPERADMIN") al valore dell'enum TIPO_UTENTI (es. "Superadmin")
-    const normalizeKey = (key: string): TIPO_UTENTI => {
-      const found = Object.values(TIPO_UTENTI).find(v => v.toUpperCase() === key.toUpperCase());
-      if (!found) throw new ValidationError({
-        message: `Chiave tipo_utente non riconosciuta nel JSON: ${key}`,
-        field: 'tipo_utente',
-        value: key,
-      });
-      return found;
-    };
-
-    for (const [key, value] of Object.entries(tipoUtenti)) {
-      const tipoUtente = normalizeKey(key);
-      if (tipoUtente === TIPO_UTENTI.GDO) {
-        // GDO ha una struttura annidata { GDO_DEVELOPER: [...], GDO_ADMIN: [...], ... }
-        const gdoMenus = value as Record<string, MenuElement[]>;
-        for (const [ruoloKey, menuItems] of Object.entries(gdoMenus)) {
-          const items = this.menuElementsToDB(menuItems as MenuElement[], tipoUtente, ruoloKey);
-          if (items.length > 0) {
-            await this.repository.bulkCreateItems(items);
-          }
-          log.info(`Seed: menu GDO/${ruoloKey} → ${items.length} items`);
-        }
-      } else {
-        // Tipi utente normali: array di MenuElement
-        const items = this.menuElementsToDB(value as MenuElement[], tipoUtente, null);
-        if (items.length > 0) {
-          await this.repository.bulkCreateItems(items);
-        }
-        log.info(`Seed: menu ${tipoUtente} → ${items.length} items`);
-      }
-    }
-
-    log.info('Seed menu da JSON: completato.');
+  async ripristinaMenuPredefiniti(): Promise<number> {
+    const voci = vociMenuSuperadmin();
+    await sequelize.transaction(async (transaction) => {
+      await MenuItem.destroy({ where: { tipo_utente: TIPO_UTENTI.SUPERADMIN }, transaction });
+      await MenuItem.bulkCreate(voci as any[], { transaction });
+    });
+    this.invalidateCache(TIPO_UTENTI.SUPERADMIN);
+    log.info(`Menu predefinito del Superadmin ripristinato: ${voci.length} voci`);
+    return voci.length;
   }
 
   // ============================================
@@ -342,50 +260,6 @@ export class MenuService implements IMenuService {
     }
 
     return dto;
-  }
-
-  /**
-   * Converte MenuElement[] dal JSON in records per il DB.
-   */
-  private menuElementsToDB(
-    elements: MenuElement[],
-    tipoUtente: TIPO_UTENTI,
-    ruoloGdo: string | null
-  ): Omit<any, 'id_menu_item'>[] {
-    const records: any[] = [];
-    let ordinamento = 0;
-
-    for (const el of elements) {
-      if (typeof el === 'string') {
-        // Separator
-        records.push({
-          tipo_utente: tipoUtente,
-          ruolo_gdo: ruoloGdo,
-          titolo: el,
-          tipo: TIPO_MENU_ITEM.SEPARATOR,
-          ordinamento: ordinamento++,
-        });
-      } else {
-        // Menu item
-        const item = el as MenuItemType;
-        records.push({
-          tipo_utente: tipoUtente,
-          ruolo_gdo: ruoloGdo,
-          titolo: item.title,
-          tipo: TIPO_MENU_ITEM.ITEM,
-          icona: item.icon || null,
-          pathname: item.pathname || null,
-          codice_permesso: item.pathname ? (PATHNAME_TO_PERMISSION[item.pathname] || null) : null,
-          disabilitato: item.disabled || false,
-          start_page: item.start_page || false,
-          ordinamento: ordinamento++,
-        });
-
-        // SubMenu non vengono inseriti come righe separate per ora (il campo subMenu e quasi sempre vuoto nel JSON attuale)
-      }
-    }
-
-    return records;
   }
 
   /**

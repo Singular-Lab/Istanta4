@@ -23,5 +23,6 @@ export interface IMenuService {
   getAllMenuConfigurations(): Promise<Record<string, MenuItemDTO[]>>;
   saveMenu(tipoUtente: string, ruoloGdo: string | null, items: MenuItemDTO[]): Promise<void>;
   invalidateCache(tipoUtente?: string, ruoloGdo?: string): void;
-  seedMenuDaJson(): Promise<void>;
+  /** Riporta il solo menu del Superadmin a quello predefinito; restituisce il numero di voci. */
+  ripristinaMenuPredefiniti(): Promise<number>;
 }

@@ -68,6 +68,10 @@ function deriveAssetTitle(fileName: string): string {
   return normalized || fileName;
 }
 
+/** Istanta e Correggo li gestisce Fidelity: l'inizializzazione li ricreerebbe al deploy successivo. */
+const SERVIZIO_GESTITO_NON_ELIMINABILE =
+  'Servizio gestito da Fidelity: non si può eliminare, disattivalo';
+
 export class HubController extends BaseController {
   constructor(
     private authProviderService: IAuthProviderService,
@@ -757,6 +761,10 @@ export class HubController extends BaseController {
         this.sendResponse(res, HttpStatusCode.FORBIDDEN, { message: 'Solo Superadmin può eliminare servizi' });
         return;
       }
+      if (await this.hubServiceService.isServizioGestito(req.params.id)) {
+        this.sendResponse(res, HttpStatusCode.CONFLICT, { message: SERVIZIO_GESTITO_NON_ELIMINABILE });
+        return;
+      }
       const deleted = await this.hubServiceService.deleteService(req.params.id);
       if (!deleted) {
         this.sendResponse(res, HttpStatusCode.NOT_FOUND, { message: 'Servizio non trovato' });
@@ -772,6 +780,10 @@ export class HubController extends BaseController {
     try {
       if (req.session?.tipo_utente !== TIPO_UTENTI.SUPERADMIN) {
         this.sendResponse(res, HttpStatusCode.FORBIDDEN, { message: 'Solo Superadmin può eliminare servizi' });
+        return;
+      }
+      if (await this.hubServiceService.isCodiceGestito(req.params.codice)) {
+        this.sendResponse(res, HttpStatusCode.CONFLICT, { message: SERVIZIO_GESTITO_NON_ELIMINABILE });
         return;
       }
       const count = await this.hubServiceService.deleteServiceByCode(req.params.codice);

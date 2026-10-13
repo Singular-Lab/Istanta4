@@ -58,6 +58,19 @@ services:
     # fatto l'unico meccanismo che crea le tabelle nuove. Spegnendola, lo schema
     # di ogni release successiva va applicato a mano.
     #
+    # Dopo la sincronia gira l'inizializzazione dell'installazione
+    # (server/core/scripts/inizializza.ts): crea solo cio' che manca, cioe' il
+    # metodo di accesso, l'amministratore da FIDELITY_ADMIN_* se non esiste ancora
+    # un Superadmin, la GDO di CLIENT_ID con il suo collegamento, il menu del
+    # Superadmin, i servizi dell'hub (Istanta e Correggo compresi), e aggiorna le
+    # materialized view. Su un'installazione gia' in uso non cambia nulla di quello
+    # che c'e'. FIDELITY_INIZIALIZZA=no in release.env la salta (per esempio subito
+    # dopo un ripristino da dump, se non si vuole nemmeno il collegamento).
+    # Come la sincronia, un suo errore finisce nel log e non ferma il server: il
+    # Runner farebbe rollback di un deployment sano.
+    #
+    # Il server parte senza FIDELITY_ADMIN_PASSWORD: serve solo all'inizializzazione.
+    #
     # Sync e avvio passano da tsx caricato come loader di node, senza package
     # manager: e' quello che fanno gli script models:sync e start, e funziona con
     # le immagini costruite sia con npm sia con yarn.
@@ -71,11 +84,24 @@ services:
           echo "[compose] models:sync in corso..."
           node --import tsx server/core/scripts/initializeModels.ts sync || echo "[compose] models:sync terminato con errori: guarda sopra"
         fi
-        exec node --import tsx server/index.ts
+        if [ "$${FIDELITY_INIZIALIZZA:-si}" = "no" ]; then
+          echo "[compose] inizializzazione saltata (FIDELITY_INIZIALIZZA=no)"
+        else
+          node --import tsx server/core/scripts/inizializza.ts || echo "[compose] inizializzazione terminata con errori: guarda sopra"
+        fi
+        exec env -u FIDELITY_ADMIN_PASSWORD node --import tsx server/index.ts
     env_file:
       - fidelity.env
     environment:
       FIDELITY_SYNC_MODELS: ${FIDELITY_SYNC_MODELS:-si}
+      # Inizializzazione dell'installazione (vedi `command`). Le credenziali
+      # dell'amministratore stanno in release.env e servono solo al primo deploy:
+      # finche' esiste un Superadmin non vengono usate.
+      FIDELITY_INIZIALIZZA: ${FIDELITY_INIZIALIZZA:-si}
+      FIDELITY_ADMIN_EMAIL: ${FIDELITY_ADMIN_EMAIL:-}
+      FIDELITY_ADMIN_PASSWORD: ${FIDELITY_ADMIN_PASSWORD:-}
+      FIDELITY_ADMIN_NOME: ${FIDELITY_ADMIN_NOME:-Amministratore}
+      FIDELITY_ADMIN_COGNOME: ${FIDELITY_ADMIN_COGNOME:-Sistema}
       # Con `production` la CSP applica upgrade-insecure-requests: il browser
       # richiede ogni risorsa in https e su un target senza TLS la pagina resta
       # bianca. Su una macchina di prova raggiunta in chiaro si mette

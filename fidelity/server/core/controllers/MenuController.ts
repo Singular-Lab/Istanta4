@@ -33,8 +33,8 @@ export class MenuController extends BaseController {
     // Salva menu per tipo utente
     this.router.put('/:tipoUtente', authMiddleware, permissionGuard('permessi.gestisci'), this.saveMenu.bind(this));
 
-    // Seed da menu.json
-    this.router.post('/seed', authMiddleware, permissionGuard('permessi.gestisci'), this.seedFromJson.bind(this));
+    // Ripristino del menu predefinito del Superadmin (sostituisce l'import da menu.json)
+    this.router.post('/ripristina-predefiniti', authMiddleware, permissionGuard('permessi.gestisci'), this.ripristinaPredefiniti.bind(this));
   }
 
   private getRuoloGdo(req: Request): string | undefined {
@@ -134,10 +134,10 @@ export class MenuController extends BaseController {
     }
   }
 
-  private async seedFromJson(_req: Request, res: Response): Promise<void> {
+  private async ripristinaPredefiniti(_req: Request, res: Response): Promise<void> {
     try {
-      await this.menuService.seedMenuDaJson();
-      this.sendResponse(res, 200, { message: 'Seed menu da JSON completato' });
+      const voci = await this.menuService.ripristinaMenuPredefiniti();
+      this.sendResponse(res, 200, { message: 'Menu predefinito del Superadmin ripristinato', voci });
     } catch (error) {
       this.handleError(res, error);
     }

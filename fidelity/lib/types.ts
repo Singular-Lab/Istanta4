@@ -116,6 +116,10 @@ export interface HubServiceDTO {
   ordine: number;
   tipo_utente: string;
   ruolo_gdo?: string | null;
+  /** Servizio che Fidelity gestisce da se' (Istanta, Correggo): indirizzo calcolato, non eliminabile. */
+  gestito?: 'istanta' | 'correggo';
+  /** Servizio gestito senza indirizzo pubblico configurato: non compare agli utenti. */
+  url_non_configurato?: boolean;
   redirect_page?: string;
   documents: HubServiceDocumentAsset[];
   videos: HubServiceVideoAsset[];
