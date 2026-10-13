@@ -231,6 +231,9 @@ DisplayContextPuntoVendita.init(
                 fields: ["endpoint_type_display_context"],
             },
             {
+                // Nome esplicito: quello generato supera i 63 caratteri, PostgreSQL
+                // lo tronca e Sequelize prova a ricrearlo a ogni sincronizzazione.
+                name: "display_context_pv_gdo_attivo",
                 fields: ["id_gdo_display_context", "is_active_display_context"],
             },
         ],

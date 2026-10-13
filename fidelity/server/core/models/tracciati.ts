@@ -25,8 +25,10 @@ const Tracciati = sequelize.define<TracciatiClass>("tracciati", {
     defaultValue: sequelize.fn("uuid_generate_v4"),
     primaryKey: true,
   },
+  // Stesso tipo di promo.id_promo: con UUID la chiave esterna non si poteva
+  // creare e la tabella non esisteva sulle installazioni nuove.
   id_promo_tracciati: {
-    type: DataTypes.UUID,
+    type: DataTypes.STRING,
     allowNull: false
   },
   context_tracciati: {

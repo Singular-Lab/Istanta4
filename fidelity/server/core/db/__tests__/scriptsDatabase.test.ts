@@ -22,7 +22,7 @@ describe('script SQL eseguiti all\'avvio', () => {
       'fix_permessi_ruolo_unique_indexes.sql',
       'v_attivita.sql',
     ]);
-    expect(sqlIn(cartellaPrima)).toEqual(['rimuovi_oggetti_derivati.sql']);
+    expect(sqlIn(cartellaPrima)).toEqual(['rimuovi_oggetti_derivati.sql', 'sistema_schema_esistente.sql']);
   });
 
   it('non indicano un proprietario ne\' tipi che Sequelize non crea', () => {
@@ -74,6 +74,30 @@ describe('script SQL eseguiti all\'avvio', () => {
     ]) {
       expect(rimozione).toContain(`DROP ${nome} CASCADE;`);
     }
+  });
+
+  it('prima della sync portano le installazioni esistenti allo schema dei modelli', () => {
+    // Gira a ogni avvio: ogni correzione deve controllare prima lo stato del
+    // database, cosi' su un database vuoto o gia' corretto non fa nulla.
+    const correzioni = leggi(cartellaPrima, 'sistema_schema_esistente.sql');
+
+    // Tracciati: da UUID al tipo di promo.id_promo, solo se e' ancora UUID, e
+    // via le righe di promo che non esistono piu'.
+    expect(correzioni).toMatch(/column_name = 'id_promo_tracciati' AND data_type = 'uuid'[\s\S]*ALTER COLUMN id_promo_tracciati TYPE VARCHAR\(255\)/);
+    expect(correzioni).toMatch(/DELETE FROM public\.tracciati t\s+WHERE NOT EXISTS/);
+
+    // Webhook: da array di enum ad array di VARCHAR, solo se e' ancora di enum,
+    // togliendo prima il default.
+    expect(correzioni).toMatch(/udt_name = '_enum_webhooks_eventi_webhook'[\s\S]*DROP DEFAULT;[\s\S]*TYPE VARCHAR\(255\)\[\]/);
+
+    // Indici troncati: rinominati con i nomi dei modelli, se ci sono.
+    for (const [vecchio, nuovo] of [
+      ['display_context_punto_vendita_id_gdo_display_context_is_active_', 'display_context_pv_gdo_attivo'],
+      ['attivita_utente_id_utente_attivita_utente_id_attivita_attivita_', 'attivita_utente_utente_attivita_uq'],
+    ]) {
+      expect(correzioni).toContain(`['${vecchio}', '${nuovo}']`);
+    }
+    expect(correzioni).toContain("IF to_regclass('public.' || rinomina[i][1]) IS NOT NULL THEN");
   });
 
   it('mantengono le funzioni chiamate dai servizi', () => {

@@ -181,15 +181,17 @@ FilterTemplate.init(
       defaultValue: [],
       comment: 'Array di gruppi di condizioni filtro (Array<FilterCondition[]>)'
     },
+    // Le colonne ENUM non hanno comment: con un comment l'ALTER di Sequelize
+    // genera SQL non valido e la sincronizzazione del modello si ferma.
+    // Tipo di endpoint per cui il template è applicabile
     endpoint_type: {
       type: DataTypes.ENUM('refs', 'refs-html', 'files'),
       allowNull: false,
-      comment: 'Tipo di endpoint per cui il template è applicabile'
     },
+    // Tipo di rendering per il template
     render_type: {
       type: DataTypes.ENUM('carousel', 'grid', 'list'),
       allowNull: true,
-      comment: 'Tipo di rendering per il template'
     },
     auto_scroll: {
       type: DataTypes.BOOLEAN,
