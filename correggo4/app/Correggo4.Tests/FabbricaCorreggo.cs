@@ -24,6 +24,9 @@ public sealed class FabbricaCorreggo : WebApplicationFactory<Program>
     private readonly string cartella = Path.Combine(Path.GetTempPath(), "correggo4-test-" + Guid.NewGuid().ToString("N"));
     private readonly string nomeDb = "correggo4-" + Guid.NewGuid().ToString("N");
 
+    /// <summary>La chiave del context di Fidelity (Fico:SecretKey, I20-1091).</summary>
+    public const string ChiaveFico = "segreto-di-prova-correggo4";
+
     /// <summary>La cartella dei volantini di questa istanza (Storage:VolantiniPath).</summary>
     public string CartellaVolantini => Path.Combine(cartella, "volantini");
 
@@ -45,6 +48,7 @@ public sealed class FabbricaCorreggo : WebApplicationFactory<Program>
         builder.UseSetting("ConnectionStrings:Correggo4Db", "Host=non-usato");
         builder.UseSetting("Storage:VolantiniPath", CartellaVolantini);
         builder.UseSetting("Fico:OlimpoUrl", "http://olimpo.test/olimpo");
+        builder.UseSetting("Fico:SecretKey", ChiaveFico);
         if (pathBase != null)
             builder.UseSetting("PathBase", pathBase);
 
