@@ -390,8 +390,26 @@ che ora transitano da `fidelity_uploads` (`/app/uploads/tmp`).
 
 ### Ripristinare
 
-I passi che seguono **cancellano** i database sul target. Prima conviene un
-`dump-databases.sh`, che è la via di ritorno.
+Il modo normale è `docker/restore-databases.sh` (nella radice di `docker/` del
+repository), che ripristina in un colpo i dump di tutti e due gli stack della
+suite e fa da solo i passi descritti sotto:
+
+```bash
+sudo ./restore-databases.sh /percorso/dei/dump \
+    --fidelity-olimpo  /opt/company-ai/projects/istanta4 \
+    --istanta-correggo /opt/company-ai/projects/istanta-correggo
+```
+
+Nella cartella dei dump vanno `fidelity.dump` e `olimpo.dump` di questo
+`dump-databases.sh` e, se servono, `istanta.dump` e `correggo4.dump` di quello di
+`istanta-correggo`, con i loro `SHA256SUMS`. Lo script verifica impronte e
+leggibilità, chiede di scrivere `RIPRISTINA`, **salva prima i database che sta per
+sostituire** (in `prima-del-ripristino-<data>-<ora>`, accanto ai dump; da lì si
+torna indietro con lo stesso comando), poi ferma le applicazioni, ripristina,
+riallinea i percorsi di Olimpo, svuota Redis e riavvia. `--help` elenca le opzioni.
+
+I passi manuali restano qui come riferimento. **Cancellano** i database sul
+target: prima conviene un `dump-databases.sh`, che è la via di ritorno.
 
 Il formato custom si legge da stdin ma si ripristina meglio da file, quindi si
 copia l'archivio dentro il container:

@@ -456,3 +456,46 @@ un'applicazione dall'interno si usa bash, che c'è.
 ```bash
 docker exec istanta-correggo-istanta-1 bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080 && echo porta aperta'
 ```
+
+## 6. Trasportare i dati da un'altra macchina
+
+Serve per portare su questo target il contenuto di un'altra installazione, per
+esempio per riprodurre in locale un caso reale della produzione.
+
+### Salvare
+
+```bash
+cd /opt/company-ai/projects/istanta-correggo
+sudo ./dump-databases.sh                     # in ./backup/<data>-<ora>/
+sudo ./dump-databases.sh /mnt/nas/istanta    # altrove
+```
+
+Esporta `istanta` e `correggo4` in formato custom (`istanta.dump`,
+`correggo4.dump`), con `SHA256SUMS` e `MANIFEST`. Non tocca niente: le
+applicazioni possono restare in funzione. **Non** salva i file: volantini di
+Correggo4, `external_source` e dati di Istanta stanno nei volumi e nelle cartelle
+dell'host.
+
+### Ripristinare
+
+Con `docker/restore-databases.sh`, lo stesso che ripristina Fidelity e Olimpo:
+
+```bash
+sudo ./restore-databases.sh /percorso/dei/dump \
+    --istanta-correggo /opt/company-ai/projects/istanta-correggo \
+    --fidelity-olimpo  /opt/company-ai/projects/istanta4      # se ci sono anche quei dump
+```
+
+Verifica impronte e leggibilità dei dump, chiede di scrivere `RIPRISTINA`, salva
+prima i database che sta per sostituire (`prima-del-ripristino-<data>-<ora>`,
+accanto ai dump), ferma `istanta` e `correggo4`, ricrea ogni database con il suo
+proprietario, ripristina `correggo4` connesso come `correggo4` (non da
+superutente, altrimenti le tabelle non sarebbero sue), svuota Redis e riavvia.
+`--help` elenca le opzioni; `--pg-istanta-correggo <container>` sostituisce la
+cartella del bundle quando database e ruoli sono quelli predefiniti.
+
+Dopo il ripristino gli `external_source` di Istanta restano quelli del target: si
+riallineano da Settings, sono file portabili.
+
+Il comportamento dello script è coperto da `docker/tests/test-restore-databases.sh`,
+che lavora solo su container usa e getta.

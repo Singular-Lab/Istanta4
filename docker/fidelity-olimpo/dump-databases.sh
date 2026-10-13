@@ -62,9 +62,11 @@ echo "Destinazione: $cartella"
 # Un dump che non si riesce a rileggere è peggio di nessun dump, perché ci si
 # conta sopra. `pg_restore -l` apre l'archivio e ne stampa l'indice senza
 # connettersi a niente: se il file è troncato o corrotto, fallisce qui.
+# Senza nome di file legge da stdin; con /dev/stdin cercherebbe di riposizionarsi
+# in un flusso che arriva da `docker exec -i` e scarterebbe dump buoni.
 verifica_dump_postgres() {
     local file="$1" voci
-    voci=$(docker exec -i "$postgres_c" pg_restore -l /dev/stdin < "$file" 2>/dev/null | grep -c '^[0-9]')
+    voci=$(docker exec -i "$postgres_c" pg_restore -l < "$file" 2>/dev/null | grep -c '^[0-9]')
     if [ "${voci:-0}" -eq 0 ]; then
         rosso "  illeggibile $(basename "$file")"
         errori=$((errori + 1))
