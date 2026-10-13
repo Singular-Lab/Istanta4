@@ -1,4 +1,5 @@
 import bcrypt from 'bcrypt';
+import { randomUUID } from 'node:crypto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RUOLO_UTENTE_GDO, TIPO_UTENTI } from '../../../../lib/enums';
 import { sequelize } from '../../db/SequelizeConnector';
@@ -34,7 +35,8 @@ interface Stato {
 
 let stato: Stato;
 
-const ADMIN = { email: 'admin@esempio.it', password: 'Prova-123', nome: 'Anna', cognome: 'Rossi' };
+// Generata a ogni esecuzione: nessuna password, nemmeno finta, scritta nel repository.
+const ADMIN = { email: 'admin@esempio.it', password: randomUUID(), nome: 'Anna', cognome: 'Rossi' };
 const OPZIONI: OpzioniInizializzazione = { amministratore: ADMIN, clientId: 'Coop Prova' };
 
 /** Il valore di una condizione semplice del where (gli operatori non servono qui). */
