@@ -402,7 +402,7 @@ selettivo del Runner non lo tocca.
 
 ```bash
 cd /opt/company-ai/projects/istanta-correggo
-docker compose --env-file release.env -f compose.production.yaml up -d proxy
+sudo docker --config /opt/company-ai/runner/docker-config compose --env-file release.env -f compose.production.yaml up -d prox
 ```
 
 Le verifiche che contano:

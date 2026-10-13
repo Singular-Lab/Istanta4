@@ -227,7 +227,7 @@ volta e poi resta su, anche attraverso le release, perché instrada per nome di
 servizio:
 
 ```bash
-docker compose --env-file release.env -f compose.production.yaml up -d proxy
+sudo docker --config /opt/company-ai/runner/docker-config compose --env-file release.env -f compose.production.yaml up -d prox
 ```
 
 ### Dopo il primo avvio: `seed-fidelity.sh`
