@@ -87,6 +87,9 @@ const AttivitaUtente = sequelize.define<AttivitaUtenteModel>("attivita_utente", 
   freezeTableName: true,
   indexes: [
     {
+      // Nome esplicito: quello generato supera i 63 caratteri, PostgreSQL lo
+      // tronca e Sequelize prova a ricrearlo a ogni sincronizzazione.
+      name: 'attivita_utente_utente_attivita_uq',
       unique: true,
       fields: ['id_utente_attivita_utente', 'id_attivita_attivita_utente']
     },

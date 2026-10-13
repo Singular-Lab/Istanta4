@@ -56,10 +56,21 @@ Webhook.init({
     },
     field: 'url_webhook'
   },
+  // Array di stringhe, non di ENUM: con ARRAY(ENUM) l'ALTER di Sequelize
+  // converte la colonna nel tipo enum singolo e fallisce. I valori ammessi li
+  // controlla il validatore.
   eventi_webhook: {
-    type: DataTypes.ARRAY(DataTypes.ENUM(...Object.values(EVENTI_WEBHOOK))),
+    type: DataTypes.ARRAY(DataTypes.STRING),
     allowNull: false,
     defaultValue: [],
+    validate: {
+      eventiAmmessi(eventi: unknown) {
+        const ammessi = Object.values(EVENTI_WEBHOOK) as string[];
+        if (!Array.isArray(eventi)) throw new Error('eventi_webhook deve essere un elenco di eventi');
+        const sconosciuti = eventi.filter(evento => !ammessi.includes(evento as string));
+        if (sconosciuti.length > 0) throw new Error(`Eventi webhook non validi: ${sconosciuti.join(', ')}`);
+      }
+    },
     field: 'eventi_webhook'
   },
   stato_webhook: {
