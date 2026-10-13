@@ -59,8 +59,14 @@ scp -r docker/fidelity-olimpo UTENTE@TARGET:/tmp/
 # sul target
 sudo mkdir -p /opt/company-ai/projects/<progetto>
 cd /opt/company-ai/projects/<progetto>
-sudo /tmp/fidelity-olimpo/install-bundle.sh
+sudo bash /tmp/fidelity-olimpo/install-bundle.sh
 ```
+
+Lo script si lancia con `bash` davanti perché arriva in `/tmp` senza permesso
+di esecuzione: `scp` da Windows non trasferisce il bit `+x`, e su alcune
+distribuzioni `/tmp` è montata `noexec`. Invocato direttamente, `sudo` risponde
+`Permission denied`. Gli script copiati nella directory del progetto ricevono
+invece il `+x` da `install-bundle.sh`.
 
 Su una directory vuota copia tutto e crea i tre file d'ambiente dai rispettivi
 esempi, che vanno poi compilati. Su una macchina già installata aggiorna i file

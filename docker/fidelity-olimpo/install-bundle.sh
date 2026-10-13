@@ -6,7 +6,7 @@
 #
 #   # sul target
 #   cd /opt/company-ai/projects/istanta4
-#   sudo /tmp/fidelity-olimpo/install-bundle.sh
+#   sudo bash /tmp/fidelity-olimpo/install-bundle.sh
 #
 # Perché esiste: su una macchina nuova si copia tutto insieme e il bundle è
 # coerente per costruzione. Su una macchina già installata, invece, si tende ad
@@ -36,7 +36,7 @@ destinazione="$PWD"
 if [ "$bundle" = "$destinazione" ]; then
     rosso "Origine e destinazione coincidono."
     rosso "Esegui lo script dalla directory del progetto, indicando il bundle:"
-    rosso "  cd /opt/company-ai/projects/<progetto> && sudo /tmp/fidelity-olimpo/install-bundle.sh"
+    rosso "  cd /opt/company-ai/projects/<progetto> && sudo bash /tmp/fidelity-olimpo/install-bundle.sh"
     exit 1
 fi
 
