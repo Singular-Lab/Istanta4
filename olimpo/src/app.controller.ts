@@ -2,6 +2,7 @@ import { ABSOLUTE_PATH_TYPE } from '@enums/enums';
 import { MultipartFile } from '@fastify/multipart';
 import { Colorize } from '@lib/colorize';
 import ConversionService from '@lib/ConversionService';
+import { percorsoFileTemporaneo } from '@lib/fileTemporanei';
 import {
   Body,
   Controller,
@@ -80,7 +81,7 @@ export class OlimpoController {
     const file = req.body.file;
     console.log(meta_foto);
 
-    const path_pacchetto_zip = path.resolve(__dirname, `../../foto-${uuidv4()}.zip`);
+    const path_pacchetto_zip = percorsoFileTemporaneo(`foto-${uuidv4()}.zip`);
     const path_prima_estrazione_zip = path.resolve(__dirname, process.env.EXTRACTION_PATH);
 
     if (!fs.existsSync(path_prima_estrazione_zip)) {
@@ -239,7 +240,7 @@ export class OlimpoController {
     });
 
     const nome_nuovo_uuid_file = `${uuidv4()}${path.extname(file.filename)}`;
-    const path_file = path.resolve(__dirname, `../../${nome_nuovo_uuid_file}`);
+    const path_file = percorsoFileTemporaneo(nome_nuovo_uuid_file);
     const path_archivio_db = this.PATH_ARCHIVIO_ASSOLUTO;
     const path_web_db = this.PATH_WEB_ASSOLUTO;
 
@@ -375,7 +376,7 @@ export class OlimpoController {
       }
       nome_nuovo_uuid_file = `${nome_nuovo_uuid_file}${extension}`;
     }
-    const path_file = path.resolve(__dirname, `../../${nome_nuovo_uuid_file}`);
+    const path_file = percorsoFileTemporaneo(nome_nuovo_uuid_file);
     const path_archivio_db = this.PATH_ARCHIVIO_ASSOLUTO;
     const path_web_db = this.PATH_WEB_ASSOLUTO;
     const nome_archivio_file_finale = path.join(path_archivio_db.path, nome_nuovo_uuid_file);
