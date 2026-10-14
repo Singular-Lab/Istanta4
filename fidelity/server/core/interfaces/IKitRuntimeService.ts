@@ -25,12 +25,12 @@ export interface IKitRuntimeService {
     promoContext?: { nome_field: string; user_value: string; }[];
     tags?: string[];
     tipoLavorazione?:number
-  }): Promise<any>;
+  }, traccia?: Record<string, unknown>): Promise<any>;
 
   /** Mutations */
   createKitRunTime(data: RUNTIME_KIT): Promise<any>;
   creaKitRuntimeManuale(idPromo: string, data: any): Promise<any>;
-  bulkCreateRuntime(data: (DESIGN_KIT & { idPromo: string })[]): Promise<RUNTIME_KIT[]>;
+  bulkCreateRuntime(data: (DESIGN_KIT & { idPromo: string })[], traccia?: Record<string, unknown>): Promise<RUNTIME_KIT[]>;
   mettiInStatoDiEliminazione(id: string): Promise<any>;
   eliminaKitRuntime(id: string): Promise<any>;
   eliminaFileKitRuntime(id: string): Promise<any>;

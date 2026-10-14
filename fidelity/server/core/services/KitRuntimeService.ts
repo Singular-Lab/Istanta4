@@ -843,7 +843,8 @@ export class KitRuntimeService implements IKitRuntimeService {
       // Remove null values (filtered out kits)
       return filteredKits.filter((kit): kit is RUNTIME_KIT => kit !== null);
     } catch (error: any) {
-      throw wrapDatabaseError(new Error("Errore durante l'aggiornamento delle combinazioni di design"), {
+      // L'errore originale diventa la causa: senza, nei log restava solo il messaggio generico
+      throw wrapDatabaseError(error, {
         message: "Errore durante l'aggiornamento delle combinazioni di design",
         operation: 'find',
         entity: 'RuntimeKit',
@@ -866,10 +867,11 @@ export class KitRuntimeService implements IKitRuntimeService {
     }[],
     tags?: string[]
     tipoLavorazione?: number
-  }) {
+  }, traccia?: Record<string, unknown>) {
     try {
 
       let combinazioni: any[] = [];
+      let formatiDelTipo: number | undefined;
 
       const whereClause: any = {};
       if (data.id) whereClause.id = data.id;
@@ -885,6 +887,7 @@ export class KitRuntimeService implements IKitRuntimeService {
         whereClause.id_formato = {
           [Op.in]: formati.map(f => f.id_formati)
         }
+        formatiDelTipo = formati.length;
       }
       const normalizedTags = (data.tags ?? [])
         .map((tag) => tag?.trim())
@@ -901,6 +904,7 @@ export class KitRuntimeService implements IKitRuntimeService {
       }) as unknown as any[] || [];
 
       if (!combinazioni) return [];
+      const dallaQuery = combinazioni;
 
       // Apply filtro_contesto filter in-memory
       const promoContext = Array.isArray(data.promoContext) ? data.promoContext : [];
@@ -940,7 +944,29 @@ export class KitRuntimeService implements IKitRuntimeService {
         });
       }
 
+      const dopoIlContesto = combinazioni;
       combinazioni = combinazioni.filter((combinazione) => combinazione.stato == STATO_COMBINAZIONI.ATTIVO);
+
+      // Una riga con tutto l'imbuto: quante dalla query, quali escluse e perche, quali restano
+      const etichetta = (c: any) => `${c.titolo ?? 'senza titolo'} (${c.id})`;
+      log.info('Combinazioni design selezionate', {
+        context: 'getKitByPromo',
+        ...traccia,
+        filtri: {
+          id: data.id,
+          idArea: data.idArea,
+          idCanale: data.idCanale,
+          idFormato: data.idFormato,
+          tipoLavorazione: data.tipoLavorazione,
+          formatiDelTipo,
+          tags: normalizedTags.length ? normalizedTags : undefined,
+          promoContext: promoContext.length ? promoContext.map(c => `${c.nome_field}=${c.user_value}`) : undefined,
+        },
+        dallaQuery: dallaQuery.length,
+        esclusePerContesto: dallaQuery.filter(c => !dopoIlContesto.includes(c)).map(etichetta),
+        escluseNonAttive: dopoIlContesto.filter(c => !combinazioni.includes(c)).map(c => `${etichetta(c)} stato=${c.stato}`),
+        selezionate: combinazioni.map(etichetta),
+      });
 
       await Promise.all(combinazioni.map(async (combinazione) => {
         const area = await Area.findByPk(combinazione.id_area);
@@ -975,7 +1001,7 @@ export class KitRuntimeService implements IKitRuntimeService {
       }));
 
     } catch (error: any) {
-      throw wrapDatabaseError(new Error("Errore durante il recupero delle combinazioni"), {
+      throw wrapDatabaseError(error, {
         message: "Errore durante il recupero delle combinazioni",
         operation: 'find',
         entity: 'DesignKit',
@@ -1033,7 +1059,7 @@ export class KitRuntimeService implements IKitRuntimeService {
       });
       return normalizeRuntimeKitFromPg(result.get({ plain: true }));
     } catch (error: any) {
-      throw wrapDatabaseError(new Error("Errore durante la creazione del runtime kit"), {
+      throw wrapDatabaseError(error, {
         message: "Errore durante la creazione del runtime kit",
         operation: 'insertOne',
         entity: 'RuntimeKit',
@@ -1093,12 +1119,15 @@ export class KitRuntimeService implements IKitRuntimeService {
     }
   }
 
-  async bulkCreateRuntime(data: (DESIGN_KIT & { idPromo: string })[]): Promise<RUNTIME_KIT[]> {
+  async bulkCreateRuntime(data: (DESIGN_KIT & { idPromo: string })[], traccia?: Record<string, unknown>): Promise<RUNTIME_KIT[]> {
+    const contestoLog = { context: 'getKitByPromo', ...traccia };
     try {
       let result: (RUNTIME_KIT & { guidIdDesign: string })[] = [];
+      let creati = 0;
       // Estrai gli ID delle combinazioni dal dato in ingresso
 
       await Promise.all(data.map(async (item) => {
+        const design = { idDesign: item.guidId, titolo: item.titolo, idPromo: item.idPromo };
         const existingCombinations = await RuntimeKit.findAll({
           where: {
             id_design: item.guidId,
@@ -1109,6 +1138,7 @@ export class KitRuntimeService implements IKitRuntimeService {
         if (existingCombinations.length == 0) {
           const raccoglitoreKit = await RaccoglitoreKit.findOne({ where: { id: item.guidIdRaccoglitore }, raw: true });
           if (!raccoglitoreKit) {
+            log.warn('Raccoglitore del design non trovato: runtime non creato', { ...contestoLog, ...design, idRaccoglitore: item.guidIdRaccoglitore });
             throw new NotFoundError({ message: 'Raccoglitore non trovato', entityType: 'raccoglitore_kit', entityId: item.guidIdRaccoglitore });
           }
           const newId = uuidv4();
@@ -1157,14 +1187,32 @@ export class KitRuntimeService implements IKitRuntimeService {
           await RuntimeKit.create(pgData as any);
           const createdRaw = await RuntimeKit.findByPk(newId, { raw: true });
           result.push({ ...normalizeRuntimeKitFromPg(createdRaw), guidIdDesign: item.guidId } as RUNTIME_KIT & { guidIdDesign: string });
+          creati++;
+          log.info('Runtime creato', {
+            ...contestoLog,
+            ...design,
+            idRuntime: newId,
+            tipo: item.tipo,
+            canale: item.nomeCanale ?? item.guidCanale,
+            area: item.nomeArea ?? item.guidArea,
+            file: pgData.files_data.length,
+          });
         } else {
           result.push(normalizeRuntimeKitFromPg(existingCombinations[0] as any));
+          log.info('Runtime gia esistente per design e promo: restituito quello', {
+            ...contestoLog,
+            ...design,
+            idRuntime: (existingCombinations[0] as any).id,
+            statoLavorazione: (existingCombinations[0] as any).stato_lavorazione,
+            runtimeTrovati: existingCombinations.length,
+          });
         }
       }));
 
+      log.info('Runtime della promo pronti', { ...contestoLog, design: data.length, creati, esistenti: result.length - creati });
       return result;
     } catch (error: any) {
-      throw wrapDatabaseError(new Error("Errore durante la creazione della combinazione di design"), {
+      throw wrapDatabaseError(error, {
         message: "Errore durante la creazione della combinazione di design",
         operation: 'insertMany',
         entity: 'RuntimeKit',
