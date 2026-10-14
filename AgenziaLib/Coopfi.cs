@@ -168,6 +168,24 @@ namespace AgenziaLib
                 .Select(chiave => descrizioneDiGruppo.TryGetValue(chiave, out object valore) ? valore?.ToString() : null)
                 .ToArray());
         }
+
+        /// <summary>
+        /// DEPRECATO (I20-1100): decisione dell'ufficio marketing Coop del 13/10/2026. Nel PoP non escono mai
+        /// il logo "prodotto in Toscana" (logo_toscana1) ne' il logo bio (logo_bio), che il prodotto sia nel
+        /// volantino o no. Il codice che li inseriva in esportaPoP resta, spento da qui: non e' un bug, non
+        /// riattivarlo senza una nuova decisione del marketing Coop. Il volantino non cambia. La colonna
+        /// logo_toscana1 continua invece a togliere lo sconto piccolo in area A (colonnaToscanaValorizzata).
+        /// </summary>
+        public static readonly bool LoghiToscanaEBioNelPoP = false;
+
+        /// <summary>
+        /// I20-1100: se la colonna logo_toscana1 e' valorizzata, con "x" o "X". Prima la regola dello sconto
+        /// piccolo riconosceva solo la "X" maiuscola.
+        /// </summary>
+        public static bool colonnaToscanaValorizzata(object valore)
+        {
+            return string.Equals(valore?.ToString()?.Trim(), "x", StringComparison.OrdinalIgnoreCase);
+        }
         //Settori/reparti No FOOD
         private readonly string[] settori_no_food = new string[] { "62", "64", "66", "68" };
         private readonly string[] reparti_no_food = new string[] { "01", "02", "03", "04", "05", "06", "07", "09", "11", "12" };
@@ -890,6 +908,12 @@ namespace AgenziaLib
 
                     foreach (string s in loghiFlagInTracciato)
                     {
+                        //DEPRECATO (I20-1100): logo_toscana1 non esce mai nel PoP, decisione dell'ufficio marketing
+                        //Coop del 13/10/2026 (LoghiToscanaEBioNelPoP). L'eccezione "dedicato toscana" qui sotto resta
+                        //senza effetto.
+                        if (s == "logo_toscana1" && !LoghiToscanaEBioNelPoP)
+                            continue;
+
                         if (recItem.ContainsKey(s))
                         {
                             string valLogo = recItem[s].ToString().ToLower();
@@ -1028,9 +1052,12 @@ namespace AgenziaLib
 
                     }
 
-                    if (descr2.ContainsWord(new string[] { "bio" }) ||
+                    //DEPRECATO (I20-1100): logo_bio non esce mai nel PoP, decisione dell'ufficio marketing Coop del
+                    //13/10/2026 (LoghiToscanaEBioNelPoP). Il riconoscimento della parola "bio" resta, spento.
+                    if (LoghiToscanaEBioNelPoP && (
+                        descr2.ContainsWord(new string[] { "bio" }) ||
                         descr3.ContainsWord(new string[] { "bio" }) ||
-                        descr1.ContainsWord(new string[] { "bio" }))
+                        descr1.ContainsWord(new string[] { "bio" })))
 
                     {
                         //Ulteriore controllo per capire se bio è parte di una parola più grande
@@ -1420,7 +1447,8 @@ namespace AgenziaLib
                         {
 
 
-                            bool speciale_toscana = (recItem["logo_toscana1"].ToString() == "X");
+                            //I20-1100: "x" o "X"; vale anche se il logo Toscana non si stampa piu'.
+                            bool speciale_toscana = colonnaToscanaValorizzata(recItem["logo_toscana1"]);
                             bool contiene_evento_eccezionale = contieneUnTemaSpecialeEccezionale(tema.ToUpper());
                             //Console.WriteLine($"Regola x sconto: valore {sconto} spec tosc {speciale_toscana} spec evento ecez {contiene_evento_eccezionale} - tema: {tema}  codice box {codiceBox}");
 
@@ -1510,7 +1538,8 @@ namespace AgenziaLib
                         {
 
 
-                            bool speciale_toscana = (recItem["logo_toscana1"].ToString() == "X");
+                            //I20-1100: "x" o "X"; vale anche se il logo Toscana non si stampa piu'.
+                            bool speciale_toscana = colonnaToscanaValorizzata(recItem["logo_toscana1"]);
                             bool contiene_evento_eccezionale = contieneUnTemaSpecialeEccezionale(tema.ToUpper());
                             //Console.WriteLine($"Regola x sconto: valore {sconto} spec tosc {speciale_toscana} spec evento ecez {contiene_evento_eccezionale} - tema: {tema}  codice box {codiceBox}");
 
@@ -2289,6 +2318,10 @@ namespace AgenziaLib
                             #endregion
 
                             #region validazione logo_toscana1 per il gruppo
+
+                            //DEPRECATO (I20-1100): con logo_toscana1 spento nel PoP (LoghiToscanaEBioNelPoP) il logo non e'
+                            //mai fra i loghi del gruppo e questa validazione resta senza effetto. Decisione dell'ufficio
+                            //marketing Coop del 13/10/2026.
 
                             //Per questo logo TUTTI i singoli del gruppo devono rispettare i requisiti altrimenti non puo uscire il logo
                             if (listaDelGruppo.Count > 1)
