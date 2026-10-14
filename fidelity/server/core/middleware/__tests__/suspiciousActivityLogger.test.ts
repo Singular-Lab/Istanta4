@@ -32,7 +32,7 @@ describe('suspiciousActivityLogger', () => {
   it('chiamata da server senza user agent e con bearer: nessun avviso e nessun audit', async () => {
     const { app, audit } = createApp();
 
-    const res = await request(app).put('/api/getKitByPromo').set('Authorization', 'Bearer 03ceab72').send({ idPromo: 'p1' });
+    const res = await request(app).put('/api/getKitByPromo').set('Authorization', 'Bearer token-di-prova').send({ idPromo: 'p1' });
 
     expect(res.status).toBe(200);
     expect(avvisi()).toHaveLength(0);
@@ -42,7 +42,7 @@ describe('suspiciousActivityLogger', () => {
   it('user agent "-" con bearer: anche questa e una chiamata da server', async () => {
     const { app, audit } = createApp();
 
-    await request(app).put('/api/getKitByPromo').set('User-Agent', '-').set('Authorization', 'Bearer 03ceab72').send({});
+    await request(app).put('/api/getKitByPromo').set('User-Agent', '-').set('Authorization', 'Bearer token-di-prova').send({});
 
     expect(audit).not.toHaveBeenCalled();
   });
@@ -72,9 +72,9 @@ describe('suspiciousActivityLogger', () => {
     await request(app)
       .put('/api/getKitByPromo?token=segreto&pagina=2')
       .set('User-Agent', 'curl/8.0')
-      .set('Authorization', 'Bearer 03ceab72')
-      .set('Cookie', 'connect.sid=abc')
-      .send({ email: 'a@b.it', password: 'Segreta1!' });
+      .set('Authorization', 'Bearer token-di-prova')
+      .set('Cookie', 'connect.sid=sessione-di-prova')
+      .send({ email: 'a@b.it', password: 'password-di-prova' });
 
     const [, ctx] = avvisi()[0] as [string, any];
     expect(ctx.headers.authorization).toBe('[omesso]');
@@ -84,8 +84,8 @@ describe('suspiciousActivityLogger', () => {
     expect(ctx).not.toHaveProperty('body');
     expect(ctx.query).toEqual({ token: '[omesso]', pagina: '2' });
     expect(ctx.path).toBe('/api/getKitByPromo');
-    expect(JSON.stringify(ctx)).not.toContain('03ceab72');
-    expect(JSON.stringify(ctx)).not.toContain('Segreta1!');
+    expect(JSON.stringify(ctx)).not.toContain('token-di-prova');
+    expect(JSON.stringify(ctx)).not.toContain('password-di-prova');
   });
 
   it('un body sospetto viene ancora bloccato', async () => {
