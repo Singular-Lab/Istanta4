@@ -967,6 +967,11 @@ namespace IstantaLib
         /// canale (Coop). Falso: non si chiede e valgono per tutto.
         public bool chiediAmbitoDecisioniLavorazione { get; set; } = false;
 
+        /// I20-1088: se il Plugin, per i meta dei testi del box, non deve segnalare da verificare il
+        /// meta registrato con una versione del record diversa da quella attuale (la lista ricaricata
+        /// con lo stesso valore). Falso: la versione si controlla. Il valore originale si controlla sempre.
+        public bool ignoraVersioneMeta { get; set; } = false;
+
         public AgenziaCustomPlugin_GrandezzaBoxRevisione grandezzeBox { get; set; }//Definisce la grandezza dei box di revisione, in questo modo è possibile per le agenzie gestire la visualizzazione a piacimento
         
         public bool abilitaDescrizioniRegionali { get; set; }

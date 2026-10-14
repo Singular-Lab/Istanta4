@@ -4100,12 +4100,16 @@ out var mismatch);
                 //I20-1077: i campi di testo per cui l'operatore ha scelto il testo del box. I campi
                 //offerta qui sotto si registrano soltanto come attivita': il testo scelto va nel meta
                 //della lavorazione, da dove la lista e la scheda lo rimettono nei campi compilati.
+                //I20-1088: nella riga dell'impaginazione del box (idRec), con la versione attuale del
+                //suo record: e' da li' che il Plugin capira' se la lista e' stata ricaricata.
                 if (req.testiDalBox != null && req.testiDalBox.Count > 0)
                 {
-                    RevisioneMetaPromoLavorazioni metaTesti = (plrItem.Meta != null ? MetaPromoLavorazioni.leggi(plrItem.Meta) : null)
+                    PromoLavorazioniRecord rigaDeiTesti = RecordDellaLavorazione.Trova(this.ctx2, req.idLavorazione, req.codice_gruppo, req.idRec);
+                    byte? versione = RecordDellaLavorazione.VersioneDelRecord(this.ctx2, req.idRec > 0 ? req.idRec : rigaDeiTesti.IdRecordTracciato);
+                    RevisioneMetaPromoLavorazioni metaTesti = (rigaDeiTesti.Meta != null ? MetaPromoLavorazioni.leggi(rigaDeiTesti.Meta) : null)
                         ?? new RevisioneMetaPromoLavorazioni();
-                    MetaPromoLavorazioni.applicaTestiDalBox(metaTesti, req.testiDalBox);
-                    plrItem.Meta = JsonConvert.SerializeObject(metaTesti);
+                    MetaPromoLavorazioni.applicaTestiDalBox(metaTesti, req.testiDalBox, versione);
+                    rigaDeiTesti.Meta = JsonConvert.SerializeObject(metaTesti);
                     this.ctx2.SaveChanges();
                 }
 

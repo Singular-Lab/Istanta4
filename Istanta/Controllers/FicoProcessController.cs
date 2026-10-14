@@ -2769,10 +2769,11 @@ namespace Istanta.Controllers
                         Dictionary<string, List<RevisioneNoRenderFromIndd>> noRenderElementiPerGruppo = new Dictionary<string, List<RevisioneNoRenderFromIndd>>();
                         Dictionary<string, List<RevisioneExtraLavorazioneFromIndd>> extraLavorazionePerGruppo = new Dictionary<string, List<RevisioneExtraLavorazioneFromIndd>>();
                         Dictionary<string, List<TestoDalBox>> testiDalBoxPerGruppo = new Dictionary<string, List<TestoDalBox>>();
+                        Dictionary<string, PromoLavorazioniRecord> righeDeiTesti = new Dictionary<string, PromoLavorazioniRecord>();
 
                         if (mode == FicoCombinazioneKitReadMode.Advanced)
                         {
-                            var listeModificate = updateDatiFromMetaPromoLavorazioni(recordsFiltrati, idLavorazione, kit/*, confronto*/, noRenderPerRef, noRenderElementiPerGruppo, extraLavorazionePerGruppo, testiDalBoxPerGruppo);
+                            var listeModificate = updateDatiFromMetaPromoLavorazioni(recordsFiltrati, idLavorazione, kit/*, confronto*/, noRenderPerRef, noRenderElementiPerGruppo, extraLavorazionePerGruppo, testiDalBoxPerGruppo, righeDeiTesti);
                             recordsFiltrati = listeModificate;
                         }
 
@@ -2828,7 +2829,10 @@ namespace Istanta.Controllers
                             //I20-1070: le foto extra decise dall'operatore per questa lavorazione.
                             applicaExtraDellaLavorazione(resultGlobale.records, extraLavorazionePerGruppo);
                             //I20-1077: i testi del box scelti dall'operatore, nei campi compilati.
-                            applicaTestiDalBox(resultGlobale.records, testiDalBoxPerGruppo);
+                            //I20-1088: con il loro stato; quelli che il server compone ormai da se'
+                            //si tolgono qui, scaricando la lista.
+                            var testiAllineati = applicaTestiDalBox(resultGlobale.records, testiDalBoxPerGruppo, versioniDeiRecordConTesti(resultGlobale.records, testiDalBoxPerGruppo));
+                            togliTestiDalBoxAllineati(testiAllineati, righeDeiTesti);
                         }
 
                         if (resultGlobale.tipoLavorazione == TipoLavorazione.PoP)
@@ -4186,6 +4190,17 @@ namespace Istanta.Controllers
         }
 
         /// <summary>
+        /// I20-1088: la chiave con cui i meta letti dalla riga della lavorazione si ritrovano sui record
+        /// dopo l'export di agenzia. I meta sono dell'impaginazione, non del codice gruppo: lo stesso
+        /// gruppo impaginato due volte (idRec diversi) ha meta distinti. Un record senza idRec resta
+        /// sul solo codice gruppo.
+        /// </summary>
+        public static string chiaveDellImpaginazione(string? codiceGruppo, long idRec)
+        {
+            return idRec > 0 ? (codiceGruppo ?? "") + "#" + idRec : (codiceGruppo ?? "");
+        }
+
+        /// <summary>
         /// Riporta l'opzione noRender letta dai meta della lavorazione sulle voci foto del box.
         /// noRender non e' un dato del record: vive solo dentro membriGruppoFoto, cioe' sulle
         /// primarie/secondarie contenute nel box, mai sul record contenitore.
@@ -4213,7 +4228,7 @@ namespace Istanta.Controllers
 
                 foreach (var membro in membri)
                 {
-                    if (noRenderPerRef.TryGetValue(chiaveNoRenderFoto(codGruppo, membro.codRef), out var noRender))
+                    if (noRenderPerRef.TryGetValue(chiaveNoRenderFoto(chiaveDellImpaginazione(codGruppo, record.IdRec), membro.codRef), out var noRender))
                     {
                         membro.noRender = noRender;
                     }
@@ -4259,7 +4274,7 @@ namespace Istanta.Controllers
                 if (codGruppo == null)
                     continue;
 
-                if (elementiPerGruppo.TryGetValue(codGruppo, out var elementi) && elementi.Count > 0)
+                if (elementiPerGruppo.TryGetValue(chiaveDellImpaginazione(codGruppo, record.IdRec), out var elementi) && elementi.Count > 0)
                 {
                     record.recordInTracciato[GLOBAL_VARIABLES.keyNoRenderElementi] = elementi;
                 }
@@ -4268,14 +4283,18 @@ namespace Istanta.Controllers
 
         /// <summary>
         /// I20-1077: mette nei campi compilati dei record (e del loro sottogruppo) i testi del box
-        /// scelti dall'operatore per questa lavorazione, finche' il server compone per quei campi lo
-        /// stesso contenuto di quando li ha scelti (MetaPromoLavorazioni.applicaTestiDalBoxAiCampi).
+        /// scelti dall'operatore per questa lavorazione (MetaPromoLavorazioni.applicaTestiDalBoxAiCampi).
         /// Si chiama dopo l'export di agenzia, che e' quando i campi compilati esistono.
+        /// I20-1088: i testi sono dell'impaginazione (chiaveDellImpaginazione). Accanto ai campi, sotto
+        /// testiDalBox, lo stato di ogni meta con la versione attuale del record (versioni, per idRec),
+        /// da cui il Plugin capisce se segnalarlo. I meta che il server compone gia' non si
+        /// restituiscono: tornano, per chiave, i campi da togliere dalla riga della lavorazione.
         /// </summary>
-        public static void applicaTestiDalBox(List<ArticoloInKit>? records, Dictionary<string, List<TestoDalBox>>? perGruppo)
+        public static Dictionary<string, HashSet<string>> applicaTestiDalBox(List<ArticoloInKit>? records, Dictionary<string, List<TestoDalBox>>? perGruppo, Dictionary<long, byte>? versioni = null)
         {
+            var allineati = new Dictionary<string, HashSet<string>>();
             if (records == null || perGruppo == null || perGruppo.Count == 0)
-                return;
+                return allineati;
 
             var keyCodGruppo = Enum.GetName(AddestramentoRuoli.Scatto) + "." + GLOBAL_VARIABLES.keyScattoCodiceGruppo;
 
@@ -4286,21 +4305,40 @@ namespace Istanta.Controllers
 
                 record.recordInTracciato.TryGetValue(keyCodGruppo, out var codGruppoObj);
                 var codGruppo = codGruppoObj?.ToString();
-                if (codGruppo == null || !perGruppo.TryGetValue(codGruppo, out var testi) || testi == null || testi.Count == 0)
+                if (codGruppo == null)
+                    continue;
+                var chiave = chiaveDellImpaginazione(codGruppo, record.IdRec);
+                if (!perGruppo.TryGetValue(chiave, out var testi) || testi == null || testi.Count == 0)
                     continue;
 
-                applicaTestiDalBoxAiCampiDi(record.recordInTracciato, testi);
+                byte? versioneAttuale = null;
+                if (versioni != null && versioni.TryGetValue(record.IdRec, out var versione))
+                    versioneAttuale = versione;
+
+                var stati = applicaTestiDalBoxAiCampiDi(record.recordInTracciato, testi, versioneAttuale);
                 if (record.sottogruppo != null)
-                    applicaTestiDalBoxAiCampiDi(record.sottogruppo, testi);
+                    stati.AddRange(applicaTestiDalBoxAiCampiDi(record.sottogruppo, testi, versioneAttuale));
+
+                //Un meta e' superato solo se il server compone il suo testo dovunque il campo c'e'.
+                foreach (var label in stati.Where(st => st.allineato).Select(st => st.label!).Distinct(StringComparer.OrdinalIgnoreCase))
+                {
+                    if (stati.Any(st => !st.allineato && string.Equals(st.label, label, StringComparison.OrdinalIgnoreCase)))
+                        continue;
+                    if (!allineati.TryGetValue(chiave, out var labels))
+                        allineati[chiave] = labels = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    labels.Add(label);
+                }
             }
+            return allineati;
         }
 
         //I campi compilati di un record possono arrivare come lista, come JArray o come testo:
-        //si portano a lista, si rimettono nel record e si cambiano li'.
-        private static void applicaTestiDalBoxAiCampiDi(Dictionary<string, object> dati, List<TestoDalBox> testi)
+        //si portano a lista, si rimettono nel record e si cambiano li'. Lo stato dei meta non
+        //superati va nel record, sotto testiDalBox.
+        private static List<StatoTestoDalBox> applicaTestiDalBoxAiCampiDi(Dictionary<string, object> dati, List<TestoDalBox> testi, byte? versioneAttuale)
         {
             if (!dati.TryGetValue(GLOBAL_VARIABLES.keyCompiledFields, out var valore) || valore == null)
-                return;
+                return new List<StatoTestoDalBox>();
 
             List<CompiledField>? campi = valore as List<CompiledField>;
             if (campi == null)
@@ -4310,11 +4348,68 @@ namespace Istanta.Controllers
                 else if (valore is string testo)
                     campi = JsonConvert.DeserializeObject<List<CompiledField>>(testo);
                 if (campi == null)
-                    return;
+                    return new List<StatoTestoDalBox>();
                 dati[GLOBAL_VARIABLES.keyCompiledFields] = campi;
             }
 
-            MetaPromoLavorazioni.applicaTestiDalBoxAiCampi(campi, testi);
+            var stati = MetaPromoLavorazioni.applicaTestiDalBoxAiCampi(campi, testi, versioneAttuale);
+            var daSegnalare = stati.Where(st => !st.allineato).ToList();
+            if (daSegnalare.Count > 0)
+                dati[GLOBAL_VARIABLES.keyTestiDalBox] = daSegnalare;
+            else
+                dati.Remove(GLOBAL_VARIABLES.keyTestiDalBox);
+            return stati;
+        }
+
+        /// <summary>
+        /// I20-1088: la versione attuale dei record del tracciato, per idRec. Si legge solo per i
+        /// record dei gruppi con meta di testo: senza, nessuna query.
+        /// </summary>
+        public Dictionary<long, byte> versioniDeiRecordConTesti(List<ArticoloInKit>? records, Dictionary<string, List<TestoDalBox>>? perGruppo)
+        {
+            if (records == null || perGruppo == null || perGruppo.Count == 0)
+                return new Dictionary<long, byte>();
+
+            var keyCodGruppo = Enum.GetName(AddestramentoRuoli.Scatto) + "." + GLOBAL_VARIABLES.keyScattoCodiceGruppo;
+            var ids = records
+                .Where(r => r?.recordInTracciato != null && r.IdRec > 0)
+                .Where(r => r.recordInTracciato.TryGetValue(keyCodGruppo, out var cg) && perGruppo.ContainsKey(chiaveDellImpaginazione(cg?.ToString(), r.IdRec)))
+                .Select(r => r.IdRec)
+                .Distinct()
+                .ToList();
+            if (ids.Count == 0)
+                return new Dictionary<long, byte>();
+
+            return this.ctx2.PromoTracciatiRecords.AsNoTracking()
+                .Where(r => ids.Contains(r.Id))
+                .Select(r => new { r.Id, r.Versione })
+                .ToList()
+                .ToDictionary(r => r.Id, r => r.Versione);
+        }
+
+        /// <summary>
+        /// I20-1088: toglie dalle righe della lavorazione i meta dei testi che il server compone ormai
+        /// da se': si fa scaricando la lista, una sola scrittura e solo se c'e' qualcosa da togliere.
+        /// </summary>
+        public void togliTestiDalBoxAllineati(Dictionary<string, HashSet<string>>? allineati, Dictionary<string, PromoLavorazioniRecord>? righe)
+        {
+            if (allineati == null || allineati.Count == 0 || righe == null)
+                return;
+
+            bool cambiato = false;
+            foreach (var voce in allineati)
+            {
+                if (!righe.TryGetValue(voce.Key, out var riga) || riga?.Meta == null)
+                    continue;
+                var meta = MetaPromoLavorazioni.leggi(riga.Meta);
+                if (meta == null || MetaPromoLavorazioni.togliTestiDalBox(meta, voce.Value) == 0)
+                    continue;
+                riga.Meta = JsonConvert.SerializeObject(meta);
+                cambiato = true;
+                IstantaLib.Utility.Logger.Log($"I20-1088 meta dei testi superati tolti da {voce.Key}: {string.Join(", ", voce.Value)}");
+            }
+            if (cambiato)
+                this.ctx2.SaveChanges();
         }
 
         /// <summary>
@@ -4340,7 +4435,7 @@ namespace Istanta.Controllers
 
                 record.recordInTracciato.TryGetValue(keyCodGruppo, out var codGruppoObj);
                 var codGruppo = codGruppoObj?.ToString();
-                if (codGruppo == null || !perGruppo.TryGetValue(codGruppo, out var voci) || voci == null || voci.Count == 0)
+                if (codGruppo == null || !perGruppo.TryGetValue(chiaveDellImpaginazione(codGruppo, record.IdRec), out var voci) || voci == null || voci.Count == 0)
                     continue;
 
                 var automatiche = listaTipizzata<LogoBollo>(record.recordInTracciato, keyExtraAuto);
@@ -4438,7 +4533,10 @@ namespace Istanta.Controllers
                     continue;
                 record.recordInTracciato.TryGetValue(keyCodGruppo, out var codGruppoObj);
                 var codGruppo = codGruppoObj?.ToString();
-                if (string.IsNullOrWhiteSpace(codGruppo) || perGruppo.ContainsKey(codGruppo))
+                if (string.IsNullOrWhiteSpace(codGruppo))
+                    continue;
+                var chiave = chiaveDellImpaginazione(codGruppo, record.IdRec);
+                if (perGruppo.ContainsKey(chiave))
                     continue;
 
                 var codici = new HashSet<string>(codiciDi(codGruppo));
@@ -4451,7 +4549,7 @@ namespace Istanta.Controllers
 
                 var perTutto = decisore.voci!.Where(v => v != null && v.ambito == AmbitoDecisioneLavorazione.Tutto).ToList();
                 if (perTutto.Count > 0)
-                    perGruppo[codGruppo] = perTutto;
+                    perGruppo[chiave] = perTutto;
             }
             return perGruppo;
         }
@@ -4510,7 +4608,7 @@ namespace Istanta.Controllers
             return letta;
         }
 
-        public List<ArticoloInKit> updateDatiFromMetaPromoLavorazioni(List<ArticoloInKit> artInkit, int idLavorazione, FicoRuntimeKit kit/*, bool confronto = false*/, Dictionary<string, bool>? noRenderPerRef = null, Dictionary<string, List<RevisioneNoRenderFromIndd>>? noRenderElementiPerGruppo = null, Dictionary<string, List<RevisioneExtraLavorazioneFromIndd>>? extraLavorazionePerGruppo = null, Dictionary<string, List<TestoDalBox>>? testiDalBoxPerGruppo = null)
+        public List<ArticoloInKit> updateDatiFromMetaPromoLavorazioni(List<ArticoloInKit> artInkit, int idLavorazione, FicoRuntimeKit kit/*, bool confronto = false*/, Dictionary<string, bool>? noRenderPerRef = null, Dictionary<string, List<RevisioneNoRenderFromIndd>>? noRenderElementiPerGruppo = null, Dictionary<string, List<RevisioneExtraLavorazioneFromIndd>>? extraLavorazionePerGruppo = null, Dictionary<string, List<TestoDalBox>>? testiDalBoxPerGruppo = null, Dictionary<string, PromoLavorazioniRecord>? righeDeiTesti = null)
         {
             var keyCodGruppo = Enum.GetName(AddestramentoRuoli.Scatto) + "." + GLOBAL_VARIABLES.keyScattoCodiceGruppo;
             var keyRefCodice = Enum.GetName(AddestramentoRuoli.Referenza) + "." + GLOBAL_VARIABLES.keyRefCodice;
@@ -4536,7 +4634,11 @@ namespace Istanta.Controllers
             {
                 bool _debug = (group.Key.CodiceGruppo == "3150596,3150599,3150600,4831132,4831135");
 
-                var promoLavorazione = ctx2.PromoLavorazioniRecords.Where(f => f.CodiceGruppo! == group.Key.CodiceGruppo && idLavorazione == f.IdLavorazione).FirstOrDefault();
+                //I20-1088: la riga di questa impaginazione, non la prima del codice gruppo: lo stesso
+                //gruppo impaginato due volte ha meta distinti.
+                var righeDelGruppo = ctx2.PromoLavorazioniRecords.Where(f => f.CodiceGruppo! == group.Key.CodiceGruppo && idLavorazione == f.IdLavorazione).ToList();
+                var promoLavorazione = RecordDellaLavorazione.PerLaLettura(righeDelGruppo, group.Select(i => i.IdRec));
+                var chiaviDelGruppo = group.Select(i => chiaveDellImpaginazione(group.Key.CodiceGruppo, i.IdRec)).Distinct().ToList();
                 if (_debug)
                     Console.WriteLine($"Promo lavorazione di {idLavorazione} = {(promoLavorazione != null)}");
                 if (promoLavorazione == null)
@@ -4623,11 +4725,14 @@ namespace Istanta.Controllers
                                 //ereditano una volta sola per codice gruppo.
                                 if (recPassato.noRender != null && recPassato.noRender.Count > 0)
                                 {
-                                    if (noRenderElementiPerGruppo != null)
+                                    foreach (var chiave in chiaviDelGruppo)
                                     {
-                                        noRenderElementiPerGruppo[group.Key.CodiceGruppo] = recPassato.noRender;
+                                        if (noRenderElementiPerGruppo != null)
+                                        {
+                                            noRenderElementiPerGruppo[chiave] = recPassato.noRender;
+                                        }
+                                        raccogliNoRenderDelleFoto(chiave, recPassato.noRender, noRenderPerRef);
                                     }
-                                    raccogliNoRenderDelleFoto(group.Key.CodiceGruppo, recPassato.noRender, noRenderPerRef);
                                 }
                                 foreach (var item in group)
                                 {
@@ -4693,11 +4798,14 @@ namespace Istanta.Controllers
 
                 if (storeField.noRender != null && storeField.noRender.Count > 0)
                 {
-                    if (noRenderElementiPerGruppo != null)
+                    foreach (var chiave in chiaviDelGruppo)
                     {
-                        noRenderElementiPerGruppo[group.Key.CodiceGruppo] = storeField.noRender;
+                        if (noRenderElementiPerGruppo != null)
+                        {
+                            noRenderElementiPerGruppo[chiave] = storeField.noRender;
+                        }
+                        raccogliNoRenderDelleFoto(chiave, storeField.noRender, noRenderPerRef);
                     }
-                    raccogliNoRenderDelleFoto(group.Key.CodiceGruppo, storeField.noRender, noRenderPerRef);
                 }
 
                 //I20-1070: le foto extra decise per questa lavorazione. Solo dal meta di questa
@@ -4705,13 +4813,19 @@ namespace Istanta.Controllers
                 //cartella Loghi di adesso.
                 if (storeField.extraLavorazione != null && storeField.extraLavorazione.Count > 0 && extraLavorazionePerGruppo != null)
                 {
-                    extraLavorazionePerGruppo[group.Key.CodiceGruppo] = storeField.extraLavorazione;
+                    foreach (var chiave in chiaviDelGruppo)
+                        extraLavorazionePerGruppo[chiave] = storeField.extraLavorazione;
                 }
 
                 //I20-1077: i campi di testo per cui l'operatore ha scelto il testo del box.
                 if (metaDiQuestaLavorazione && storeField.testiDalBox != null && storeField.testiDalBox.Count > 0 && testiDalBoxPerGruppo != null)
                 {
-                    testiDalBoxPerGruppo[group.Key.CodiceGruppo] = storeField.testiDalBox;
+                    foreach (var chiave in chiaviDelGruppo)
+                    {
+                        testiDalBoxPerGruppo[chiave] = storeField.testiDalBox;
+                        if (righeDeiTesti != null)
+                            righeDeiTesti[chiave] = promoLavorazione!;
+                    }
                 }
 
                 foreach (var item in group)

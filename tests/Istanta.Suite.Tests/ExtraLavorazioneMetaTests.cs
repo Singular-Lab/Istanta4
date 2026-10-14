@@ -294,13 +294,15 @@ public class ExtraLavorazioneMetaTests
         Assert.True(menabo.IndexOf("MB Scheda 12977 - Escludo foto", StringComparison.Ordinal) < menabo.IndexOf("FicoProcessController.applicaExtraDellaLavorazione(resultGlobale.records, extraLavorazionePerGruppo);", StringComparison.Ordinal));
 
         //processaKitDo, la strada dell'impaginazione.
-        Assert.Contains("updateDatiFromMetaPromoLavorazioni(recordsFiltrati, idLavorazione, kit/*, confronto*/, noRenderPerRef, noRenderElementiPerGruppo, extraLavorazionePerGruppo, testiDalBoxPerGruppo);", fico);
+        //I20-1088: in coda le righe da cui vengono i testi, per togliere quelli che il server compone gia'.
+        Assert.Contains("updateDatiFromMetaPromoLavorazioni(recordsFiltrati, idLavorazione, kit/*, confronto*/, noRenderPerRef, noRenderElementiPerGruppo, extraLavorazionePerGruppo, testiDalBoxPerGruppo, righeDeiTesti);", fico);
         Assert.Contains("applicaExtraDellaLavorazione(resultGlobale.records, extraLavorazionePerGruppo);", fico);
         Assert.True(fico.IndexOf("FicoProcess 2802 - Escludo foto", StringComparison.Ordinal) < fico.IndexOf("applicaExtraDellaLavorazione(resultGlobale.records, extraLavorazionePerGruppo);", StringComparison.Ordinal));
 
         //Dal meta di questa lavorazione soltanto: la raccolta sta dopo quella del noRender della
         //lavorazione corrente, non nel ramo delle lavorazioni passate.
-        Assert.Contains("extraLavorazionePerGruppo[group.Key.CodiceGruppo] = storeField.extraLavorazione;", fico);
+        //I20-1088: per impaginazione (la chiave porta l'idRec), non per il solo codice gruppo.
+        Assert.Contains("extraLavorazionePerGruppo[chiave] = storeField.extraLavorazione;", fico);
         Assert.DoesNotContain("recPassato.extraLavorazione", fico);
     }
 

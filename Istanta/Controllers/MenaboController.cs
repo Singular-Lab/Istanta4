@@ -10039,7 +10039,9 @@ double.TryParse(percorso.ToString(), out double valore16))
                         //I20-1070: le foto extra decise dall'operatore per questa lavorazione.
                         FicoProcessController.applicaExtraDellaLavorazione(resultGlobale.records, extraLavorazionePerGruppo);
                         //I20-1077: i testi del box scelti dall'operatore, nei campi compilati.
-                        FicoProcessController.applicaTestiDalBox(resultGlobale.records, testiDalBoxPerGruppo);
+                        //I20-1088: con il loro stato. Quelli che il server compone ormai da se' qui non si
+                        //restituiscono e basta: si tolgono scaricando la lista.
+                        FicoProcessController.applicaTestiDalBox(resultGlobale.records, testiDalBoxPerGruppo, ficoController.versioniDeiRecordConTesti(resultGlobale.records, testiDalBoxPerGruppo));
                     }
                 }
                 else
@@ -11413,101 +11415,70 @@ double.TryParse(percorso.ToString(), out double valore16))
             return Ok(result);
         }
 
+        public class InddObjTestiDalBoxRequest
+        {
+            public int idLavorazione { get; set; }
+            public string? CodiceGruppo { get; set; }
+            public long idRec { get; set; } = 0;
+            /// <summary>
+            /// Le modifiche, serializzate dal Plugin: { voci: [ { label, azione (1 Aggiorna, 2 Rimuovi), contenutoServer } ] }.
+            /// </summary>
+            public string? richiesta { get; set; }
+        }
+
+        /// <summary>
+        /// I20-1088: aggiorna o toglie i meta dei testi del box di un'impaginazione, tutti in una
+        /// chiamata. Aggiorna porta il valore originale al contenuto attuale del server, che manda il
+        /// Plugin, e la versione a quella attuale del record del box, che si legge qui.
+        /// </summary>
+        [HttpPut]
+        [Route("Menabo/modificaTestiDalBox/{idOperazione}")]
+        public IActionResult modificaTestiDalBox(InddObjTestiDalBoxRequest dato, int idOperazione)
+        {
+            BoolResult result = new BoolResult();
+
+            try
+            {
+                RichiestaTestiDalBox richiesta = MetaPromoLavorazioni.leggiRichiestaTestiDalBox(dato.richiesta ?? "")
+                    ?? throw new ErroreIstanta("lettura della richiesta", "la modifica dei meta dei testi non si legge.");
+                string? nonValida = MetaPromoLavorazioni.erroreDellaRichiestaTestiDalBox(richiesta);
+                if (nonValida != null)
+                    throw new ErroreIstanta("lettura della richiesta", nonValida);
+
+                PromoLavorazioniRecord plrItem = trovaRecordDellaLavorazione(dato.idLavorazione, dato.CodiceGruppo, dato.idRec);
+
+                byte? versione = RecordDellaLavorazione.VersioneDelRecord(this.ctx2, dato.idRec > 0 ? dato.idRec : plrItem.IdRecordTracciato);
+                foreach (var voce in richiesta.voci!.Where(v => v.azione == AzioneTestoDalBox.Aggiorna))
+                    voce.versione = versione;
+
+                string esito = registraAttivitaMenabo(idOperazione, dato.CodiceGruppo!, "modificaTestiDalBox", tipoOperazione.updateTestiDalBox,
+                    JsonConvert.SerializeObject(richiesta), plrItem.Id);
+                if (esito != "ok")
+                    throw new ErroreIstanta("registrazione dei meta", esito);
+
+                result.Esito = true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Errore in modificaTestiDalBox (codiceGruppo {dato?.CodiceGruppo}, idLavorazione {dato?.idLavorazione}): " + ex.ToString());
+                result.error = DescrizioneErrori.Breve("modificaTestiDalBox", ex);
+                result.Esito = false;
+            }
+
+            return Ok(result);
+        }
+
         /// <summary>
         /// Trova il record della lavorazione su cui registrare una modifica dell'operatore.
-        /// Cerca il match esatto su idRec, poi ripiega sul record fratello (stesso tracciato,
-        /// versione, label e codice gruppo) e infine, per i client vecchi senza idRec, sul primo
-        /// record del codice gruppo.
+        /// I20-1088: la regola sta in RecordDellaLavorazione, condivisa con SyncFoto e Revisore:
+        /// match esatto su idRec, poi il record fratello, poi la sola riga del codice gruppo; per
+        /// i client vecchi senza idRec, il primo record del codice gruppo.
         /// </summary>
         private PromoLavorazioniRecord trovaRecordDellaLavorazione(int idLavorazione, string? codiceGruppo, long idRecRichiesto)
         {
-            PromoLavorazioniRecord? plrItem = null;
-
-            long idRec = idRecRichiesto;
-
-            var query = this.ctx2.PromoLavorazioniRecords
-                .Include(i1 => i1.IdPromoTracciatiRecordNavigation)
-                .Where(plr =>
-                    plr.IdLavorazione == idLavorazione &&
-                    plr.CodiceGruppo == codiceGruppo);
-
-            if (idRec > 0)
-            {
-                // 1. Match esatto.
-                plrItem = query.FirstOrDefault(plr =>
-                    plr.IdRecordTracciato == idRec);
-
-                // 2. Fallback fratello.
-                if (plrItem == null)
-                {
-                    var candidati = query.ToList();
-
-                    if (candidati.Count > 0)
-                    {
-                        var recordTarget = this.ctx2.PromoTracciatiRecords
-                            .AsNoTracking()
-                            .Where(r => r.Id == idRec)
-                            .Select(r => new
-                            {
-                                r.Id,
-                                r.IdTracciato,
-                                r.CodiceGruppo,
-                                r.Label,
-                                r.Versione
-                            })
-                            .FirstOrDefault();
-
-                        if (recordTarget != null)
-                        {
-                            var idsCandidati = candidati
-                                .Select(c => c.IdRecordTracciato)
-                                .Distinct()
-                                .ToList();
-
-                            var recordsCandidati = this.ctx2.PromoTracciatiRecords
-                                .AsNoTracking()
-                                .Where(r => idsCandidati.Contains(r.Id))
-                                .Select(r => new
-                                {
-                                    r.Id,
-                                    r.IdTracciato,
-                                    r.CodiceGruppo,
-                                    r.Label,
-                                    r.Versione
-                                })
-                                .ToList();
-
-                            var fratello = recordsCandidati.FirstOrDefault(r =>
-                                r.IdTracciato == recordTarget.IdTracciato &&
-                                r.Versione == recordTarget.Versione &&
-                                r.Label == recordTarget.Label &&
-                                string.Equals(r.CodiceGruppo, recordTarget.CodiceGruppo, StringComparison.OrdinalIgnoreCase)
-                            );
-
-                            if (fratello != null)
-                            {
-                                plrItem = candidati.FirstOrDefault(c =>
-                                    c.IdRecordTracciato == fratello.Id);
-                            }
-                        }
-                    }
-                }
-            }
-            else
-            {
-                // Legacy: vecchi client senza idRec.
-                plrItem = query.FirstOrDefault();
-            }
-
-            if (plrItem == null)
-            {
-                throw new Exception(
-                    $"Nessun elemento trovato, Codice {codiceGruppo} non disponibile"
-                );
-            }
-
-            return plrItem;
+            return RecordDellaLavorazione.Trova(this.ctx2, idLavorazione, codiceGruppo, idRecRichiesto);
         }
+
         private string registraAttivitaMenabo(int id_operazione, string codRef, string url, tipoOperazione tipo, List<RevisioneSelezioneFotoFromIndd>? listaCambiamenti = null, Int64 id_lavorazione_record = 0)
         {
             return registraAttivitaMenabo(id_operazione, codRef, url, tipo,

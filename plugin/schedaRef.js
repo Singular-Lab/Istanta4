@@ -4031,6 +4031,8 @@ const schedaRef = {
             if (testiDalBox.length > 0) {
                 req.testiDalBox = testiDalBox;
             }
+            //I20-1088: il record del box, per la riga della lavorazione dei meta e la loro versione.
+            req.idRec = this.idRecDelBoxAperto();
 
             //creiamo una funzione richiamabile
             let applicaCambiStrutturali = function () {
@@ -4871,13 +4873,18 @@ const schedaRef = {
     /// suggerimento: in UXP si da' con Tooltip.impostaTooltip, non con title.
     aggiungiValoriDifferenza(riga, diff) {
         const valori = confronti.valoriDifferenza(diff);
-        if (valori == null) {
+        //I20-1088: un meta da verificare mostra il suo testo, il valore originale e il server di adesso.
+        const valoriMeta = confronti.valoriDelMeta(diff);
+        if (valoriMeta.length === 0 && valori == null) {
             return;
         }
+        const coppie = valoriMeta.length > 0
+            ? valoriMeta.map(v => [v.etichetta, v])
+            : [["Nel box", valori.locale], ["Sul server", valori.server]];
         //I20-1075: le etichette in grassetto, i valori normali. Le etichette stanno in una colonna larga
         //quanto la piu' lunga, cosi' i due valori partono dallo stesso punto, e un valore che va a capo
         //resta allineato sotto se stesso.
-        [["Nel box", valori.locale], ["Sul server", valori.server]].forEach(function (coppia) {
+        coppie.forEach(function (coppia) {
             const r = $('<div class="valoreDifferenza"></div>');
             r.css({ "display": "flex", "align-items": "flex-start", "font-size": "12px", "color": "#2c2c2c", "padding-left": "8px" });
             const etichetta = $('<span></span>').text(coppia[0] + ":");
@@ -4955,6 +4962,11 @@ const schedaRef = {
     /// I20-1073: su un campo, un'etichetta o una foto del gruppo assenti dal box, metterli in
     /// noRender, se l'elemento si riconosce (per la foto serve il membro del gruppo).
     azioniPerDifferenza(diff) {
+        //I20-1088: un meta del testo da verificare si aggiorna al server di adesso, oppure si lascia
+        //per il testo del server. Toglierlo e basta si fa dalla schermata dei meta.
+        if (diff != null && diff.tipo === "metaDaVerificare") {
+            return ["aggiornaMeta", "metaServer"];
+        }
         if (diff != null && diff.tipo === "mancante") {
             return this.elementoNoRenderDellAssenza(diff) != null ? ["noRender"] : [];
         }
@@ -5312,7 +5324,9 @@ const schedaRef = {
             descrizioneServer: ["Scegli quella del server", "Il box riprende la descrizione del server, con i suoi stili"],
             descrizioneBox: ["Scegli quella del box", "La descrizione del box va nel dato della referenza (come Salva modifiche): il box non cambia"],
             testoServer: ["Scegli quella del server", "Il campo nel box riprende il testo del server, con i suoi stili"],
-            testoBox: ["Scegli quella del box", "Il testo del box vale per questa lavorazione (come Salva modifiche): il box non cambia"]
+            testoBox: ["Scegli quella del box", "Il testo del box vale per questa lavorazione (come Salva modifiche): il box non cambia"],
+            aggiornaMeta: ["Aggiorna meta", "Il meta resta: il testo del server di adesso diventa il suo valore originale, e il box non cambia"],
+            metaServer: ["Usa quella del server", "Il meta si toglie e il campo nel box riprende il testo del server, con i suoi stili"]
         };
         //I20-1075: i pulsanti a destra, sotto il problema a cui servono.
         var barra = $('<div></div>');
@@ -5364,6 +5378,12 @@ const schedaRef = {
                     else if (azione === "testoBox") {
                         me.tieniTestoDelBox(diff);
                     }
+                    else if (azione === "aggiornaMeta") {
+                        await me.aggiornaMetaDelTesto(diff, dopoAzione);
+                    }
+                    else if (azione === "metaServer") {
+                        await me.usaServerAlPostoDelMeta(diff, dopoAzione);
+                    }
                     else {
                         await me.eseguiAzioneExtra(diff, azione, dopoAzione);
                     }
@@ -5385,6 +5405,114 @@ const schedaRef = {
             }
         });
         riga.append(barra);
+    },
+
+    /* ---------- I20-1088: i meta dei testi del box da verificare ---------- */
+
+    /// Le azioni sui meta dei testi, come le conosce il server (AzioneTestoDalBox).
+    AZIONE_TESTO_DAL_BOX: { aggiorna: 1, rimuovi: 2 },
+
+    /// La richiesta per il server da un meta da verificare: Aggiorna porta il contenuto che il
+    /// server compone ora, che diventa il valore originale (la versione la mette il server);
+    /// Rimuovi solo il campo. Null se la differenza non e' un meta.
+    richiestaTestiDalBox(diff, azione) {
+        if (diff == null || diff.tipo !== "metaDaVerificare" || diff.campo == null || String(diff.campo) === "") {
+            return null;
+        }
+        const voce = { label: String(diff.campo), azione: azione };
+        if (azione === this.AZIONE_TESTO_DAL_BOX.aggiorna) {
+            voce.contenutoServer = diff.contenutoServerAttuale == null ? "" : String(diff.contenutoServerAttuale);
+        }
+        return { voci: [voce] };
+    },
+
+    /// Manda al server le modifiche ai meta dei testi del box aperto. Vero se le ha registrate.
+    salvaTestiDalBox(richiesta) {
+        var me = this;
+        return new Promise(function (resolve) {
+            var schedaRef = me.schedeRefDati;
+            if (schedaRef == null || schedaRef.length < 1 || richiesta == null) {
+                resolve(false);
+                return;
+            }
+            var formData = new FormData();
+            formData.append("idLavorazione", idKitLavorazione);
+            formData.append("CodiceGruppo", schedaRef[0].recordInTracciato["Scatto.CodiceGruppo"]);
+            formData.append("idRec", me.idRecDelBoxAperto());
+            formData.append("richiesta", JSON.stringify(richiesta));
+
+            var xhr = new XMLHttpRequestClient();
+            xhr.onload = function (objResult, parsed) {
+                if (!parsed) {
+                    try {
+                        objResult = JSON.parse(objResult);
+                    }
+                    catch (e) {
+                        messaggioUtente("Code SRF-116 Meta del testo: risposta del server non leggibile: " + e, "error");
+                        resolve(false);
+                        return;
+                    }
+                }
+                if (objResult == null || objResult.esito === false) {
+                    messaggioUtente("Code SRF-117 Meta del testo: il server non ha registrato la modifica" + (objResult != null && objResult.error ? ": " + objResult.error : ""), "error");
+                    resolve(false);
+                    return;
+                }
+                resolve(true);
+            };
+            xhr.onerror = function () {
+                resolve(false);
+            };
+            xhr.send("Menabo/modificaTestiDalBox/0", formData, "PUT");
+        });
+    },
+
+    /// Dopo una modifica a un meta la scheda si riscarica: il meta si applica sul server, e il dato
+    /// in memoria ha ancora lo stato di prima.
+    async riscaricaDopoIlMeta() {
+        var schedaRef = this.schedeRefDati;
+        var codice = schedaRef != null && schedaRef.length > 0 ? schedaRef[0].recordInTracciato["Scatto.CodiceGruppo"] : this.codiceDellaRefAperta();
+        var ricaricata = await this.ricaricaDatiScheda(codice, this.idRecDelBoxAperto());
+        if (!ricaricata) {
+            messaggioUtente("Code SRF-118 Meta registrato, ma la scheda non si e' riscaricata: riaprila per vedere il dato aggiornato", "warning", false, 6);
+        }
+        return ricaricata;
+    },
+
+    /// "Aggiorna meta": il meta resta e prende come valore originale il testo che il server compone
+    /// ora, con la versione attuale del record. Il box non cambia, e il meta non si segnala piu'.
+    async aggiornaMetaDelTesto(diff, dopoAzione) {
+        var registrata = await this.salvaTestiDalBox(this.richiestaTestiDalBox(diff, this.AZIONE_TESTO_DAL_BOX.aggiorna));
+        if (!registrata) {
+            return false;
+        }
+        await this.riscaricaDopoIlMeta();
+        messaggioUtente("Meta di " + diff.label + " aggiornato al testo del server di adesso", "success", false, 4);
+        if (typeof dopoAzione === "function") {
+            await dopoAzione();
+        }
+        return true;
+    },
+
+    /// "Usa quella del server": il meta si toglie e il campo del box riprende il testo del server,
+    /// con i suoi stili. Prima la scheda si riscarica: solo dopo il dato ha il testo del server.
+    async usaServerAlPostoDelMeta(diff, dopoAzione) {
+        var registrata = await this.salvaTestiDalBox(this.richiestaTestiDalBox(diff, this.AZIONE_TESTO_DAL_BOX.rimuovi));
+        if (!registrata) {
+            return false;
+        }
+        var ricaricata = await this.riscaricaDopoIlMeta();
+        if (ricaricata) {
+            await this.applicaCampoDaServer({ label: diff.label, difference: "contenuto" });
+            //Come per "Scegli quella del server": il pannello ricostruito non deve finire sopra la finestra.
+            if ($("#popup").length > 0) {
+                Modali.nascondiHidebleElements();
+            }
+        }
+        if (typeof dopoAzione === "function") {
+            await dopoAzione();
+        }
+        return true;
     },
 
     /* ---------- I20-1084: i tratti della descrizione ripetuti ---------- */
@@ -5516,8 +5644,9 @@ const schedaRef = {
 
     /// "Scegli quella del box": come per la descrizione e' il Salva modifiche della scheda; in piu'
     /// porta il testo del campo letto dal box (testiDalBoxDaSalvare), che il server registra nella
-    /// lavorazione e rimette nel campo compilato finche' il suo dato resta quello di adesso
-    /// (contenutoServer). La finestra si chiude: il salvataggio ricarica la scheda.
+    /// lavorazione e rimette nel campo compilato. I20-1088: finche' il meta esiste; se il server poi
+    /// compone altro (contenutoServer) o la lista si ricarica, il meta si segnala da verificare.
+    /// La finestra si chiude: il salvataggio ricarica la scheda.
     tieniTestoDelBox(diff) {
         const campoCompilato = this.campoTestoInMismatch(diff);
         const box = this.refSelected != null ? this.refSelected.item : null;
@@ -5895,7 +6024,9 @@ const schedaRef = {
             );
 
             this.risolteNoRenderDelBox = preAnalisi != null && Array.isArray(preAnalisi.risolteNoRender) ? preAnalisi.risolteNoRender : [];
-            return preAnalisi != null && preAnalisi.differenze != null ? preAnalisi.differenze : [];
+            var differenze = preAnalisi != null && preAnalisi.differenze != null ? preAnalisi.differenze : [];
+            //I20-1088: i meta dei testi da verificare sono differenze da risolvere come le altre.
+            return differenze.concat(confronti.differenzeDeiMeta(rec));
         }
         catch (e) {
             console.error("Code SRF-48 Confronto dei dati del box non riuscito: " + e);

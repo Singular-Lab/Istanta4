@@ -634,6 +634,23 @@ const pluginMiddleware = {
         return typeof valore === "boolean" ? valore : false;
     },
 
+    /// I20-1088: se un meta dei testi del box non si segnala da verificare per la sola versione del
+    /// record cambiata (la lista ricaricata con lo stesso valore). Come chiediAmbitoDecisioniLavorazione:
+    /// la chiave sta nella configurazione del cliente sul server, e senza vale falso (si controlla).
+    getIgnoraVersioneMeta() {
+        let me = this;
+
+        if (me.callCustom) {
+            if (typeof customAgenzia !== "undefined" && customAgenzia != null && typeof customAgenzia.ignoraVersioneMeta === "boolean") {
+                return customAgenzia.ignoraVersioneMeta;
+            }
+            return false;
+        }
+
+        const valore = me.customPluginDB?.ignoraVersioneMeta;
+        return typeof valore === "boolean" ? valore : false;
+    },
+
     /// NOTA DI DISEGNO (I20-1002): questa e setBolloFOTONOFOUND hanno la forma a due rami come
     /// le altre, quindi sono mediazione - ma cio' che mediano e' un'OPERAZIONE su InDesign, non
     /// un valore di configurazione. Se il middleware debba delegare operazioni oltre che

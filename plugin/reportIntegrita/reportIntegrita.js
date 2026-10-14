@@ -3567,7 +3567,7 @@ const ReportIntegrita = {
             return null;
         }
 
-        return await confronti.confrontoBoxCompiledFieldPreAnalisi(
+        var preAnalisi = await confronti.confrontoBoxCompiledFieldPreAnalisi(
             box,
             dati.compiledFields,
             dati.deletedFields,
@@ -3577,6 +3577,15 @@ const ReportIntegrita = {
             true,
             NoRenderElementi.elencoPerSegnalazioni(dati.tracciatoPrimario.noRenderElementi, dati.tracciatoPrimario.membriGruppoFoto),
             dati.tracciatoPrimario);
+
+        //I20-1088: i meta dei testi da verificare fanno del record un cambiato, con origine "meta":
+        //nella riga stanno in un riquadro loro e non chiedono il Fix. Si risolvono dalla scheda.
+        var differenzeMeta = confronti.differenzeDeiMeta(dati.tracciatoPrimario);
+        if (differenzeMeta.length > 0) {
+            preAnalisi = preAnalisi || { differenze: [], errors: [] };
+            preAnalisi.differenze = (preAnalisi.differenze || []).concat(differenzeMeta);
+        }
+        return preAnalisi;
     },
 
     //I nomi delle pagine del documento in lavorazione, nell'ordine in cui stanno nel documento.

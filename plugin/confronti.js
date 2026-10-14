@@ -1222,6 +1222,84 @@ const confronti = {
         return { locale: prepara(diff.valoreLocale), server: prepara(diff.valoreServer) };
     },
 
+    /// I20-1088: se il cliente non vuole che un meta dei testi si segnali per la sola versione del
+    /// record cambiata (ignoraVersioneMeta nella configurazione del plugin). Fuori da InDesign, o
+    /// senza middleware, la versione si controlla.
+    ignoraVersioneMeta() {
+        return typeof pluginMiddleware !== "undefined" && pluginMiddleware != null
+            && typeof pluginMiddleware.getIgnoraVersioneMeta === "function"
+            && pluginMiddleware.getIgnoraVersioneMeta() === true;
+    },
+
+    /// I20-1088: i meta dei testi del box da verificare, come differenze della finestra della scheda
+    /// e del Report Integrita' (origine "meta"). Il server li restituisce col record, sotto
+    /// testiDalBox: il testo del meta, il valore originale e la versione registrati, il contenuto
+    /// che il server compone ora e la versione attuale del record. Un meta e' da verificare se il
+    /// server compone altro rispetto al valore originale, o se il record ha cambiato versione (la
+    /// lista ricaricata, anche con lo stesso valore). La versione non conta se il cliente la ignora
+    /// o se il meta non l'ha registrata (i meta di prima). Il meta intanto continua a valere: e'
+    /// l'operatore a decidere se e' decaduto.
+    differenzeDeiMeta(record, ignoraVersione = confronti.ignoraVersioneMeta()) {
+        const stati = record != null && Array.isArray(record.testiDalBox) ? record.testiDalBox : [];
+        const differenze = [];
+        stati.forEach(function (stato) {
+            if (stato == null || stato.label == null || String(stato.label) === "" || stato.allineato === true) {
+                return;
+            }
+            const originale = stato.contenutoServer == null ? "" : String(stato.contenutoServer);
+            const attuale = stato.contenutoServerAttuale == null ? "" : String(stato.contenutoServerAttuale);
+            const valoreCambiato = originale !== attuale;
+            const versioneCambiata = ignoraVersione !== true && stato.versione != null && stato.versioneAttuale != null
+                && Number(stato.versione) !== Number(stato.versioneAttuale);
+            if (!valoreCambiato && !versioneCambiata) {
+                return;
+            }
+            //La label come quella delle altre differenze del campo (senza la chiave dopo il $),
+            //cosi' nella finestra il meta sta nel riquadro del suo campo; il campo intero va al server.
+            const campo = String(stato.label);
+            const label = typeof Utility !== "undefined" && Utility != null && typeof Utility.parseLabel === "function"
+                ? Utility.parseLabel(campo)
+                : campo.split("$")[0];
+            differenze.push({
+                label: label,
+                campo: campo,
+                difference: valoreCambiato
+                    ? "meta da verificare: il server compone un testo diverso da quello di quando si e' tenuto il box"
+                    : "meta da verificare: la lista e' stata ricaricata (versione " + stato.versione + ", ora " + stato.versioneAttuale + ")",
+                tipo: "metaDaVerificare",
+                origine: "meta",
+                motivo: valoreCambiato ? "valore" : "versione",
+                contenutoMeta: stato.contenuto == null ? "" : String(stato.contenuto),
+                contenutoServer: originale,
+                contenutoServerAttuale: attuale
+            });
+        });
+        return differenze;
+    },
+
+    /// I20-1088: i tre valori di un meta da verificare, leggibili e abbreviati come in
+    /// valoriDifferenza: il testo del meta, il valore originale e quello che il server compone ora.
+    /// Elenco vuoto se la differenza non e' un meta.
+    valoriDelMeta(diff, massimo = 120) {
+        if (diff == null || diff.tipo !== "metaDaVerificare") {
+            return [];
+        }
+        return [
+            ["Nel meta", diff.contenutoMeta],
+            ["Originale", diff.contenutoServer],
+            ["Sul server", diff.contenutoServerAttuale]
+        ].map(function (coppia) {
+            const intero = confronti.testoLeggibile(coppia[1]);
+            const abbreviato = intero.length > massimo;
+            return {
+                etichetta: coppia[0],
+                intero: intero,
+                breve: abbreviato ? intero.substring(0, massimo - 1).replace(/\s+$/, "") + "…" : intero,
+                abbreviato: abbreviato
+            };
+        });
+    },
+
     decodeSpecialCharacters(text) {
         var originalText = text;
         var textString = text.toString();

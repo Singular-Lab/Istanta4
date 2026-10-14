@@ -699,8 +699,11 @@ const pannelli = {
                     //che non tocca il box ma puo' cambiare la pagina in cui va. Si vedono
                     //separate perche' chiedono all'operatore due decisioni diverse.
                     const tutteLeDifferenze = Array.isArray(item?.preAnalisi?.differenze) ? item.preAnalisi.differenze : [];
-                    const segnalazioniIntegrita = tutteLeDifferenze.filter(d => d?.origine !== "confronto");
+                    //I20-1088: i meta dei testi da verificare sono una terza cosa: non chiedono il Fix,
+                    //si risolvono aprendo la scheda con Trova.
+                    const segnalazioniIntegrita = tutteLeDifferenze.filter(d => d?.origine !== "confronto" && d?.origine !== "meta");
                     const differenzeConfronto = tutteLeDifferenze.filter(d => d?.origine === "confronto");
+                    const differenzeMeta = tutteLeDifferenze.filter(d => d?.origine === "meta");
 
                     const differenze = segnalazioniIntegrita;
                     if (tutteLeDifferenze.length === 0) {
@@ -746,6 +749,10 @@ const pannelli = {
 
                     if (differenzeConfronto.length > 0) {
                         diffList.appendChild(this._crRiquadroConfronto(differenzeConfronto));
+                    }
+
+                    if (differenzeMeta.length > 0) {
+                        diffList.appendChild(this._crRiquadroMeta(differenzeMeta));
                     }
 
                     if (item?._hasWhitelistOtherSegnalazioni) {
@@ -1697,6 +1704,65 @@ const pannelli = {
             campo.style.fontWeight = "600";
             riga.appendChild(campo);
             riga.appendChild(document.createTextNode(": " + (differenza?.difference || "")));
+
+            riquadro.appendChild(riga);
+        });
+
+        return riquadro;
+    },
+
+    /// I20-1088: i meta dei testi da verificare di un record, in un riquadro loro: per ognuno il
+    /// campo, il motivo e i tre valori (nel meta, originale, sul server). Nessuna azione: si
+    /// risolvono dalla finestra delle differenze della scheda, che si apre con Trova.
+    _crRiquadroMeta(differenze) {
+        const riquadro = document.createElement("div");
+        riquadro.style.marginTop = "6px";
+        riquadro.style.padding = "4px 6px";
+        riquadro.style.borderLeft = "3px solid #1565c0";
+        riquadro.style.backgroundColor = "#eef3fb";
+        riquadro.style.borderRadius = "3px";
+        riquadro.style.minWidth = "0";
+
+        const titolo = document.createElement("div");
+        titolo.textContent = "Meta da verificare";
+        titolo.style.fontSize = "10px";
+        titolo.style.fontWeight = "700";
+        titolo.style.letterSpacing = "0.3px";
+        titolo.style.textTransform = "uppercase";
+        titolo.style.color = "#1565c0";
+        titolo.style.marginBottom = "2px";
+        Tooltip.impostaTooltip(titolo, "Testi tenuti dal box per questa lavorazione che il server ha cambiato: apri la scheda con Trova per aggiornarli o usare quelli del server");
+        riquadro.appendChild(titolo);
+
+        (differenze || []).forEach(differenza => {
+            const riga = document.createElement("div");
+            riga.style.fontSize = "11px";
+            riga.style.lineHeight = "1.3";
+            riga.style.whiteSpace = "normal";
+            riga.style.overflowWrap = "anywhere";
+            riga.style.minWidth = "0";
+
+            const campo = document.createElement("span");
+            campo.textContent = differenza?.label || "";
+            campo.style.fontWeight = "600";
+            riga.appendChild(campo);
+            riga.appendChild(document.createTextNode(": " + (differenza?.difference || "")));
+
+            confronti.valoriDelMeta(differenza).forEach(valore => {
+                const r = document.createElement("div");
+                r.style.paddingLeft = "8px";
+                const etichetta = document.createElement("span");
+                etichetta.textContent = valore.etichetta + ": ";
+                etichetta.style.fontWeight = "700";
+                const testo = document.createElement("span");
+                testo.textContent = valore.breve === "" ? "(vuoto)" : valore.breve;
+                if (valore.abbreviato) {
+                    Tooltip.impostaTooltip(testo, valore.intero);
+                }
+                r.appendChild(etichetta);
+                r.appendChild(testo);
+                riga.appendChild(r);
+            });
 
             riquadro.appendChild(riga);
         });
