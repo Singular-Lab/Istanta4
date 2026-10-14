@@ -89,6 +89,19 @@ namespace AgenziaLib
                 return false;
             }
         }
+
+        /// <summary>
+        /// I20-1095: negli A7 del PoP Coop non c'e' foto prodotto, per scelta del marketing Coop: ne' la
+        /// foto della primaria ne' le secondarie del gruppo. Loghi e bollini restano. La regola sta qui e
+        /// non nel modello grafico, cosi' e' scritta in un punto solo. Negli altri formati non fa niente.
+        /// </summary>
+        public static void togliFotoProdottoSeA7(Dictionary<string, object> record, string formato)
+        {
+            if (record == null || formato != "A7")
+                return;
+            record[GLOBAL_VARIABLES_FICO.keyFotoNome] = "";
+            record[GLOBAL_VARIABLES_FICO.keyMembriGruppoFoto] = new List<FotoElementoGruppo>();
+        }
         //Settori/reparti No FOOD
         private readonly string[] settori_no_food = new string[] { "62", "64", "66", "68" };
         private readonly string[] reparti_no_food = new string[] { "01", "02", "03", "04", "05", "06", "07", "09", "11", "12" };
@@ -570,6 +583,10 @@ namespace AgenziaLib
                             recItem[GLOBAL_VARIABLES_FICO.keyFotoNome] = curr_fotoPgroup_processed;
                         }
                     }
+
+                    //I20-1095: negli A7 nessuna foto prodotto. Prima della creazione del sottogruppo, che
+                    //copia questo record.
+                    togliFotoProdottoSeA7(recItem, formatoKit);
 
 
                     bool gruppoDeveUscireConISingoliConDescrizioneGruppo = (codice_referenza != codice_gruppo && prezziDiversiInGruppo == false && pesiDiversiInGruppo == false);
