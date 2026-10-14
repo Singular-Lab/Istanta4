@@ -3,7 +3,8 @@ import {
   CreateDispositivoPuntoVenditaDTO,
   DispositivoPuntoVenditaResponseDTO,
   PuntiVenditaPaginatedResponseDTO,
-  UpdateDispositivoPuntoVenditaDTO
+  UpdateDispositivoPuntoVenditaDTO,
+  VolantinoAttivoDTO
 } from '../dto/PuntoVenditaDTO';
 import { DispositivoMetadata } from '../models/punto_vendita/dispositivi_punto_vendita';
 import type { ContestoImportPuntiVendita } from '../services/importPuntiVendita';
@@ -76,5 +77,7 @@ export interface IPuntoVenditaService {
     hasCoordinate?: boolean;
     idCombinazioneCanaleArea?: string;
   }): Promise<PuntiVenditaPaginatedResponseDTO>;
+
+  getVolantiniAttivi(idPv: string): Promise<VolantinoAttivoDTO[]>;
 
 }

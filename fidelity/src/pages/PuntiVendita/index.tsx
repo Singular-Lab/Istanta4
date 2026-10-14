@@ -13,20 +13,20 @@ import { useNotification } from "@/context/NotificationContext";
 import {
   useFetchAllCombinazioneForGDO,
   useFetchPuntiVenditaFromIdGDO,
-  useFetchPuntiVenditaPaginated,
 } from "@/query/query";
 import { yupResolver } from "@hookform/resolvers/yup";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import L from "leaflet";
+import clsx from "clsx";
 import "leaflet/dist/leaflet.css";
-import { useEffect, useMemo, useRef, useState } from "react";
+import _ from "lodash";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
-import { MapContainer, Marker, Popup, TileLayer } from "react-leaflet";
+import { CircleMarker, MapContainer, Popup, TileLayer, useMap } from "react-leaflet";
 import { useNavigate } from "react-router-dom";
 import * as yup from "yup";
 import { ServerCall } from "../../../lib/server_call";
 import { EsitoRigaImportPuntoVenditaDTO, ImportPuntiVenditaResponseDTO, PuntoVenditaResponseDTO } from "../../../server/core/dto";
-import { canaleArea, codiciGdo, indirizzoCompleto } from "../../utils/puntoVendita";
+import { canaleArea, codiciGdo, contaPer, filtraPuntiVendita, indirizzoCompleto } from "../../utils/puntoVendita";
 // Tipi per le risposte aggiornate del server
 interface ServerResponse<T> {
   esito: boolean;
@@ -71,45 +71,37 @@ const coordinataDaForm = (valore: unknown) => {
   return Number.isFinite(numero) ? numero : null;
 };
 
-const normalizeText = (value: string) =>
-  value
-    ? value
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/\s+/g, " ")
-      .toLowerCase()
-      .trim()
-    : "";
-
 const hasValidCoordinates = (pv: PuntoVenditaResponseDTO) =>
   pv.has_coordinate &&
   pv.coordinate &&
   Number.isFinite(pv.coordinate.lat) &&
   Number.isFinite(pv.coordinate.lon);
 
-const createMarkerIcon = (className: string, size: number) =>
-  L.divIcon({
-    className,
-    html: `<span></span>`,
-    iconSize: [size, size],
-    iconAnchor: [size / 2, size / 2],
-  });
+// Un colore per canale, stabile anche filtrando (Tableau 10 senza il grigio)
+const PALETTE_CANALI = ["#4E79A7", "#F28E2B", "#E15759", "#76B7B2", "#59A14F", "#EDC948", "#B07AA1", "#FF9DA7", "#9C755F"];
+const COLORE_SENZA_CANALE = "#94A3B8";
 
-const defaultStoreMarker = createMarkerIcon("pv-marker", 12);
-const highlightStoreMarker = createMarkerIcon("pv-marker pv-marker--highlight", 18);
-const dimmedStoreMarker = createMarkerIcon("pv-marker pv-marker--dimmed", 10);
+/** Inquadra i punti mostrati ogni volta che cambiano ricerca o filtri. */
+function AdattaVista({ punti }: { punti: [number, number][] }) {
+  const map = useMap();
+  useEffect(() => {
+    if (punti.length > 0) map.fitBounds(punti, { padding: [32, 32], maxZoom: 15 });
+  }, [map, punti]);
+  return null;
+}
 
 interface MapPuntiVenditaProps {
   puntiVendita: PuntoVenditaResponseDTO[];
-  highlightedIds?: Set<string>;
-  filtersActive?: boolean;
+  coloreCanale: (pv: PuntoVenditaResponseDTO) => string;
+  onDettagli: (pv: PuntoVenditaResponseDTO) => void;
 }
-const resolvePuntoVenditaId = (pv: PuntoVenditaResponseDTO) =>
-  pv.id ?? (pv as any).guidID ?? (pv as any).guidid ?? `${pv.nome ?? "pv"}-${pv.cap ?? ""}`;
 
-function MapPuntiVendita({ puntiVendita, highlightedIds, filtersActive = false }: MapPuntiVenditaProps) {
-  const validPoints = puntiVendita.filter(hasValidCoordinates);
-  const shouldDimOthers = Boolean(filtersActive && highlightedIds && highlightedIds.size > 0);
+function MapPuntiVendita({ puntiVendita, coloreCanale, onDettagli }: MapPuntiVenditaProps) {
+  const posizionati = useMemo(() => puntiVendita.filter(hasValidCoordinates), [puntiVendita]);
+  const punti = useMemo(
+    () => posizionati.map(pv => [pv.coordinate.lat, pv.coordinate.lon] as [number, number]),
+    [posizionati]
+  );
 
   return (
     <MapContainer
@@ -117,43 +109,73 @@ function MapPuntiVendita({ puntiVendita, highlightedIds, filtersActive = false }
       zoom={6}
       preferCanvas
       scrollWheelZoom={false}
-      doubleClickZoom={false}
-      dragging
-      zoomControl={true}
-      attributionControl={false}
       className="absolute inset-0 rounded-md"
     >
-      {/* CartoDB Positron */}
       <TileLayer
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        attribution="&copy; OpenStreetMap contributors"
+        url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        maxZoom={19}
       />
-
-      {/* Marker */}
-      {validPoints.map(pv => (
-        <Marker
-          key={resolvePuntoVenditaId(pv)}
-          position={[pv.coordinate!.lat, pv.coordinate!.lon]}
-          icon={(() => {
-            const pointId = resolvePuntoVenditaId(pv);
-            const isHighlighted = highlightedIds?.has(pointId);
-            if (isHighlighted) return highlightStoreMarker;
-            if (shouldDimOthers) return dimmedStoreMarker;
-            return defaultStoreMarker;
-          })()}
+      <AdattaVista punti={punti} />
+      {posizionati.map(pv => (
+        <CircleMarker
+          key={pv.id}
+          center={[pv.coordinate.lat, pv.coordinate.lon]}
+          radius={7}
+          pathOptions={{ color: "#FFFFFF", weight: 2, fillColor: coloreCanale(pv), fillOpacity: 0.9 }}
         >
           <Popup>
             <div className="text-sm">
-              <div className="font-semibold">{pv.nome_display}</div>
-              <div>{pv.indirizzo_completo}</div>
-              <div>
-                {pv.cap} {pv.citta}
-              </div>
+              <div className="font-semibold">{pv.nome}</div>
+              <div>{indirizzoCompleto(pv)}</div>
+              <div className="text-slate-500">{canaleArea(pv)}</div>
+              <button type="button" className="mt-2 text-primary underline" onClick={() => onDettagli(pv)}>
+                Dettagli
+              </button>
             </div>
           </Popup>
-        </Marker>
+        </CircleMarker>
       ))}
     </MapContainer>
+  );
+}
+
+interface FiltroChipProps {
+  etichetta: string;
+  tutti: string;
+  voci: { id: string; nome: string; totale: number }[];
+  attivo: string;
+  onScegli: (id: string) => void;
+  colore?: (id: string) => string;
+}
+
+/** Una riga di chip: "Tutti" e una voce per canale o area, ciascuna col numero di punti vendita. */
+function FiltroChip({ etichetta, tutti, voci, attivo, onScegli, colore }: FiltroChipProps) {
+  const chip = (id: string, testo: string, totale: number) => (
+    <button
+      key={id || "tutti"}
+      type="button"
+      aria-pressed={attivo === id}
+      onClick={() => onScegli(id)}
+      className={clsx(
+        "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition-colors",
+        attivo === id
+          ? "border-primary bg-primary/10 font-medium text-primary"
+          : "border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-darkmode-400 dark:text-slate-300 dark:hover:bg-darkmode-400"
+      )}
+    >
+      {id && colore && <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: colore(id) }} />}
+      {testo}
+      <span className="text-slate-400">{totale}</span>
+    </button>
+  );
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="w-16 text-xs uppercase text-slate-500">{etichetta}</span>
+      {chip("", tutti, voci.reduce((somma, v) => somma + v.totale, 0))}
+      {voci.map(v => chip(v.id, v.nome, v.totale))}
+    </div>
   );
 }
 
@@ -191,82 +213,70 @@ function Main() {
     return () => clearTimeout(handler);
   }, [searchTerm]);
 
+  const [filtroCanale, setFiltroCanale] = useState("");
+  const [filtroArea, setFiltroArea] = useState("");
+
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, pageSize]);
+  }, [debouncedSearch, pageSize, filtroCanale, filtroArea]);
 
   /* --------------------------------------------------
    * QUERY
    * ------------------------------------------------*/
   const queryClient = useQueryClient();
   const combinazioniDisponibili = useFetchAllCombinazioneForGDO();
-  const puntiVenditaMapQuery = useFetchPuntiVenditaFromIdGDO();
-  const puntiVenditaMap = puntiVenditaMapQuery.data ?? [];
-  const hasMappablePoints = puntiVenditaMap.some(
-    pv =>
-      pv.has_coordinate &&
-      pv.coordinate &&
-      Number.isFinite(pv.coordinate.lat) &&
-      Number.isFinite(pv.coordinate.lon)
+  // Combinazioni per nome nella tendina del form, raggruppate per canale
+  const combinazioniPerCanale = useMemo(
+    () => Object.entries(_.groupBy(
+      _.sortBy(combinazioniDisponibili.data ?? [], ["nome_canale", "nome_area"]),
+      c => c.nome_canale ?? c.sigla_combinazione
+    )),
+    [combinazioniDisponibili.data]
   );
-  const isMapLoading = puntiVenditaMapQuery.isLoading;
-  const filtersActive = Boolean(debouncedSearch.trim());
+  const puntiVenditaQuery = useFetchPuntiVenditaFromIdGDO();
+  const tuttiPuntiVendita = useMemo(() => puntiVenditaQuery.data ?? [], [puntiVenditaQuery.data]);
+  const hasMappablePoints = tuttiPuntiVendita.some(hasValidCoordinates);
 
-  const puntiVenditaQueryParams = useMemo(() => {
-    const normalizedSearch = debouncedSearch.trim();
-    return {
-      page,
-      pageSize,
-      search: normalizedSearch ? normalizedSearch : undefined,
-    };
-  }, [page, pageSize, debouncedSearch]);
+  // ponytail: ricerca, filtri e pagine nel browser sull'elenco completo, già scaricato per la mappa;
+  // regge qualche migliaio di PV, oltre si torna a /getAllPVFromIdGDO_paginated con i filtri lato server
+  const filtrati = useMemo(
+    () => filtraPuntiVendita(tuttiPuntiVendita, { testo: debouncedSearch, idCanale: filtroCanale, idArea: filtroArea }),
+    [tuttiPuntiVendita, debouncedSearch, filtroCanale, filtroArea]
+  );
+  // Ogni dimensione conta i PV rispettando gli altri filtri, non il proprio
+  const perCanale = useMemo(
+    () => contaPer(filtraPuntiVendita(tuttiPuntiVendita, { testo: debouncedSearch, idArea: filtroArea }), "canale"),
+    [tuttiPuntiVendita, debouncedSearch, filtroArea]
+  );
+  const perArea = useMemo(
+    () => contaPer(filtraPuntiVendita(tuttiPuntiVendita, { testo: debouncedSearch, idCanale: filtroCanale }), "area"),
+    [tuttiPuntiVendita, debouncedSearch, filtroCanale]
+  );
+  const coloriCanale = useMemo(
+    () => new Map(contaPer(tuttiPuntiVendita, "canale").map((c, i) => [c.id, PALETTE_CANALI[i % PALETTE_CANALI.length]])),
+    [tuttiPuntiVendita]
+  );
+  const coloreCanale = useCallback(
+    (pv: PuntoVenditaResponseDTO) => coloriCanale.get(pv.id_canale ?? "") ?? COLORE_SENZA_CANALE,
+    [coloriCanale]
+  );
+  const senzaCoordinate = filtrati.filter(pv => !hasValidCoordinates(pv)).length;
 
-  const puntiVenditaPaginatedQuery =
-    useFetchPuntiVenditaPaginated(puntiVenditaQueryParams);
-  const paginatedData = puntiVenditaPaginatedQuery.data;
-  const puntiVendita = paginatedData?.punti_vendita ?? [];
+  const totalItems = filtrati.length;
+  const totalPages = Math.ceil(totalItems / pageSize);
+  const puntiVendita = filtrati.slice((page - 1) * pageSize, page * pageSize);
   // La colonna dei codici GDO serve solo alle GDO che li hanno (es. id ANACAN di CONAD CNO)
   const mostraCodiciGdo = puntiVendita.some(pv => codiciGdo(pv.meta).length > 0);
-  const highlightedMapIds = useMemo(() => {
-    if (!filtersActive || !puntiVendita.length) {
-      return undefined;
-    }
-    return puntiVendita.reduce<Set<string>>((acc, pv) => {
-      const pointId = resolvePuntoVenditaId(pv);
-      if (pointId) {
-        acc.add(pointId);
-      }
-      return acc;
-    }, new Set());
-  }, [puntiVendita, filtersActive]);
-  const totalItems = paginatedData?.total ?? 0;
-  const totalPages = paginatedData?.total_pages ?? 0;
-  const pageLimit = paginatedData?.limit ?? pageSize;
-  const isTableLoading = puntiVenditaPaginatedQuery.isLoading;
-  const isTableFetching = puntiVenditaPaginatedQuery.isFetching;
+  const isLoading = puntiVenditaQuery.isLoading;
+  const isTableFetching = puntiVenditaQuery.isFetching;
   const pageSizeOptions = [10, 25, 50];
 
+  // Dopo un'eliminazione l'ultima pagina può sparire
   useEffect(() => {
-    if (!paginatedData) {
-      return;
-    }
+    if (totalPages > 0 && page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
-    const metaTotalPages = paginatedData.total_pages ?? 0;
-    const metaTotalItems = paginatedData.total ?? 0;
-
-    if (metaTotalPages === 0 && metaTotalItems === 0) {
-      if (page !== 1) {
-        setPage(1);
-      }
-      return;
-    }
-
-    if (metaTotalPages > 0 && page > metaTotalPages) {
-      setPage(metaTotalPages);
-    }
-  }, [paginatedData, page]);
-
-  const showingFrom = totalItems === 0 ? 0 : (page - 1) * pageLimit + 1;
+  const showingFrom = totalItems === 0 ? 0 : (page - 1) * pageSize + 1;
   const showingTo = totalItems === 0 ? 0 : showingFrom + puntiVendita.length - 1;
   const baseIndex = showingFrom === 0 ? 0 : showingFrom - 1;
   const paginationRange = useMemo<(number | string)[]>(() => {
@@ -303,7 +313,6 @@ function Main() {
 
   const invalidatePuntiVendita = () => {
     queryClient.invalidateQueries({ queryKey: ["dataPuntiVendita"] });
-    queryClient.invalidateQueries({ queryKey: ["dataPuntiVenditaPaginated"] });
   };
 
   /* --------------------------------------------------
@@ -626,10 +635,14 @@ function Main() {
                   className={errors.canaleArea ? "border-danger" : ""}
                 >
                   <option value="">Seleziona</option>
-                  {combinazioniDisponibili.data?.map(c => (
-                    <option key={c.id} value={c.id}>
-                      {c.sigla_combinazione}
-                    </option>
+                  {combinazioniPerCanale.map(([canale, combinazioni]) => (
+                    <optgroup key={canale} label={canale}>
+                      {combinazioni.map(c => (
+                        <option key={c.id} value={c.id}>
+                          {c.nome_area ? `${c.nome_area} (${c.sigla_combinazione})` : c.sigla_combinazione}
+                        </option>
+                      ))}
+                    </optgroup>
                   ))}
                 </FormSelect>
                 {errors.canaleArea && (
@@ -914,9 +927,9 @@ function Main() {
           />
           <div className="mt-3.5">
             <div className="flex flex-col box box--stacked">
-              <div className="relative h-[400px] w-full p-4">
+              <div className="relative h-[440px] w-full p-4">
                 <div className="relative h-full w-full overflow-hidden rounded-2xl border border-slate-200/80 bg-white dark:border-darkmode-500 dark:bg-darkmode-600">
-                  {isMapLoading && (
+                  {isLoading && (
                     <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 px-6 text-center bg-white/80 dark:bg-darkmode-600/80 backdrop-blur-sm">
                       <LoadingIcon icon="tail-spin" color="#1d4ed8" className="w-10 h-10" />
                       <div className="text-sm font-medium text-slate-700 dark:text-slate-200">
@@ -928,15 +941,30 @@ function Main() {
                     </div>
                   )}
 
-                  {!isMapLoading && hasMappablePoints && (
+                  {puntiVenditaQuery.isError && (
+                    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 px-6 text-center">
+                      <Lucide icon="TriangleAlert" className="w-8 h-8 text-danger" />
+                      <p className="text-sm font-medium text-slate-600 dark:text-slate-200">
+                        Punti vendita non caricati
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        {(puntiVenditaQuery.error as Error)?.message || "Errore durante il recupero dei punti vendita"}
+                      </p>
+                      <Button variant="outline-secondary" size="sm" onClick={() => puntiVenditaQuery.refetch()}>
+                        Riprova
+                      </Button>
+                    </div>
+                  )}
+
+                  {!isLoading && hasMappablePoints && (
                     <MapPuntiVendita
-                      puntiVendita={puntiVenditaMap}
-                      highlightedIds={highlightedMapIds}
-                      filtersActive={filtersActive}
+                      puntiVendita={filtrati}
+                      coloreCanale={coloreCanale}
+                      onDettagli={pv => navigate(`/punti-vendita/${pv.id}`)}
                     />
                   )}
 
-                  {!isMapLoading && !hasMappablePoints && (
+                  {!isLoading && !puntiVenditaQuery.isError && !hasMappablePoints && (
                     <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 px-6 text-center">
                       <Lucide icon="MapPin" className="w-8 h-8 text-slate-400" />
                       <p className="text-sm font-medium text-slate-600 dark:text-slate-200">
@@ -949,6 +977,33 @@ function Main() {
                   )}
                 </div>
               </div>
+              {tuttiPuntiVendita.length > 0 && (
+                <div className="flex flex-col gap-3 px-5 pb-5">
+                  <FiltroChip
+                    etichetta="Canale"
+                    tutti="Tutti"
+                    voci={perCanale}
+                    attivo={filtroCanale}
+                    onScegli={setFiltroCanale}
+                    colore={id => coloriCanale.get(id) ?? COLORE_SENZA_CANALE}
+                  />
+                  <FiltroChip
+                    etichetta="Area"
+                    tutti="Tutte"
+                    voci={perArea}
+                    attivo={filtroArea}
+                    onScegli={setFiltroArea}
+                  />
+                  {senzaCoordinate > 0 && (
+                    <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                      <Lucide icon="MapPinOff" className="w-3.5 h-3.5" />
+                      {senzaCoordinate === 1
+                        ? "1 punto vendita filtrato non ha coordinate e non compare sulla mappa."
+                        : `${senzaCoordinate} punti vendita filtrati non hanno coordinate e non compaiono sulla mappa.`}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
           <div className="mt-3.5">
@@ -1040,13 +1095,14 @@ function Main() {
                               <Table.Th>#</Table.Th>
                               <Table.Th>Nome</Table.Th>
                               <Table.Th>Indirizzo</Table.Th>
-                              <Table.Th>Canale / Area</Table.Th>
+                              <Table.Th>Canale</Table.Th>
+                              <Table.Th>Area</Table.Th>
                               {mostraCodiciGdo && <Table.Th>Codice GDO</Table.Th>}
                               <Table.Th className="text-center">Azioni</Table.Th>
                             </Table.Tr>
                           </Table.Thead>
                           <Table.Tbody>
-                            {isTableLoading ? (
+                            {isLoading ? (
                               <Table.Tr>
                                 <Table.Td colSpan={12}>
                                   <div className="flex flex-col items-center justify-center py-10 text-center">
@@ -1060,11 +1116,17 @@ function Main() {
                                   </div>
                                 </Table.Td>
                               </Table.Tr>
+                            ) : puntiVenditaQuery.isError ? (
+                              <Table.Tr>
+                                <Table.Td colSpan={12} className="text-center text-danger">
+                                  Punti vendita non caricati: {(puntiVenditaQuery.error as Error)?.message || "errore durante il recupero"}
+                                </Table.Td>
+                              </Table.Tr>
                             ) : puntiVendita.length === 0 ? (
                               <Table.Tr>
                                 <Table.Td colSpan={12} className="text-center text-slate-500 dark:text-slate-400">
-                                  {debouncedSearch.trim()
-                                    ? "Nessun punto vendita corrisponde alla ricerca"
+                                  {debouncedSearch.trim() || filtroCanale || filtroArea
+                                    ? "Nessun punto vendita corrisponde alla ricerca o ai filtri"
                                     : "Nessun punto vendita disponibile"}
                                 </Table.Td>
                               </Table.Tr>
@@ -1079,7 +1141,13 @@ function Main() {
                                     )}
                                   </Table.Td>
                                   <Table.Td>{indirizzoCompleto(pv)}</Table.Td>
-                                  <Table.Td>{canaleArea(pv)}</Table.Td>
+                                  <Table.Td>
+                                    <span className="inline-flex items-center gap-1.5">
+                                      <span className="h-2.5 w-2.5 flex-none rounded-full" style={{ backgroundColor: coloreCanale(pv) }} />
+                                      {pv.nome_canale || "-"}
+                                    </span>
+                                  </Table.Td>
+                                  <Table.Td>{pv.nome_area || "-"}</Table.Td>
                                   {mostraCodiciGdo && (
                                     <Table.Td>
                                       {codiciGdo(pv.meta).map(c => (
@@ -1130,7 +1198,7 @@ function Main() {
               </div>
               <div className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
                 <div className="text-sm text-slate-500">
-                  {isTableLoading ? (
+                  {isLoading ? (
                     "Caricamento dei punti vendita..."
                   ) : totalItems > 0 ? (
                     <>

@@ -35,6 +35,10 @@ describe('PuntoVenditaService.mapToDTO', () => {
     });
   });
 
+  it('restituisce gli id di canale e area, con cui la pagina filtra elenco e mappa', () => {
+    expect(mappa()).toMatchObject({ id_canale: 'c1', id_area: 'a1' });
+  });
+
   it('senza coordinate il PV risulta senza coordinate', () => {
     expect(mappa().has_coordinate).toBe(false);
   });

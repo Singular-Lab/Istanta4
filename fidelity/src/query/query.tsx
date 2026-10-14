@@ -5,7 +5,7 @@ import { TIPO_ATTIVITA } from "../../lib/enums";
 import { ServerCall } from "../../lib/server_call";
 import type { AvvisoManutenzione, Config, DESIGN_KIT, DimensioneVisibilitaPromo, FileItemKit, FormatiAttributes, GlobalUserFilter, HubNewsAdminDTO, HubServiceDTO, MenaboLayoutSalvato, MenaboRisultato, PuntiVenditaAttributes, RUNTIME_KIT, RaccoglitoreKit, RegoleMenabo, ReportOptionDTO, Ricette, SaveMenaboLayoutRequest, TimelinePromoItem, TipiDiExportAttributes, TracciatoQueryRequest, TracciatoQueryResult, TracciatoReport, TracciatiMomentoResponseDTO } from "../../lib/types";
 import type { AuditLogPaginatedResponse, AuditLogSummary } from "../../lib/auditTypes";
-import type { AreaResponseDTO, CanaleResponseDTO, CombinazioneCanaleAreaResponseDTO, CreateFilterTemplateDTO, DisplayContextResponseDTO, DispositivoPuntoVenditaResponseDTO, FilterConditionDTO, FilterTemplateDTO, FormatiResponseDTO, GDOResponseDTO, PromoResponseDTO, PuntoVenditaResponseDTO, RuoloUtenteGDOResponseDTO, TipiDiExportResponseDTO, UpdateFilterTemplateDTO } from "../../server/core/dto";
+import type { AreaResponseDTO, CanaleResponseDTO, CombinazioneCanaleAreaResponseDTO, CreateFilterTemplateDTO, DisplayContextResponseDTO, DispositivoPuntoVenditaResponseDTO, FilterConditionDTO, FilterTemplateDTO, FormatiResponseDTO, GDOResponseDTO, PromoResponseDTO, PuntoVenditaResponseDTO, RuoloUtenteGDOResponseDTO, TipiDiExportResponseDTO, UpdateFilterTemplateDTO, VolantinoAttivoDTO } from "../../server/core/dto";
 
 
 
@@ -576,7 +576,15 @@ export const useFetchCombinazioneDesignById = (id: string) => {
 export const useFetchAllCombinazioneForGDO = () => {
   return useQuery({
     queryKey: ["combinazioniDisponibili"],
-    queryFn: () => ServerCall.get<{ id: string, sigla_combinazione: string, stato_combinazione: string }[]>("/all_combinazion_for_gdo"),
+    queryFn: () => ServerCall.get<{
+      id: string;
+      sigla_combinazione: string;
+      stato_combinazione: string;
+      id_canale: string;
+      id_area?: string;
+      nome_canale?: string;
+      nome_area?: string;
+    }[]>("/all_combinazion_for_gdo"),
   });
 };
 
@@ -587,37 +595,11 @@ export const useFetchPuntiVenditaFromIdGDO = () => {
   });
 };
 
-export const useFetchPuntiVenditaPaginated = (params: {
-  page?: number;
-  pageSize?: number;
-  search?: string;
-  sortBy?: 'nome' | 'citta' | 'cap' | 'createdat';
-  sortDirection?: 'asc' | 'desc';
-  hasCoordinate?: boolean;
-  idCombinazioneCanaleArea?: string;
-}) => {
+export const useFetchVolantiniAttiviPuntoVendita = (idPv: string) => {
   return useQuery({
-    queryKey: ["dataPuntiVenditaPaginated", params],
-    queryFn: async () => {
-      const queryParams = new URLSearchParams();
-      if (params.page) queryParams.append('page', params.page.toString());
-      if (params.pageSize) queryParams.append('pageSize', params.pageSize.toString());
-      if (params.search) queryParams.append('search', params.search);
-      if (params.sortBy) queryParams.append('sortBy', params.sortBy);
-      if (params.sortDirection) queryParams.append('sortDirection', params.sortDirection);
-      if (params.hasCoordinate !== undefined) queryParams.append('hasCoordinate', params.hasCoordinate.toString());
-      if (params.idCombinazioneCanaleArea) queryParams.append('idCombinazioneCanaleArea', params.idCombinazioneCanaleArea);
-
-      const response = await ServerCall.get<{
-        punti_vendita: PuntoVenditaResponseDTO[];
-        total: number;
-        page: number;
-        limit: number;
-        total_pages: number;
-      }>(`/getAllPVFromIdGDO_paginated?${queryParams.toString()}`);
-      return response;
-    },
-    staleTime: 1000 * 60 * 5, // 5 minuti
+    queryKey: ["volantiniAttiviPuntoVendita", idPv],
+    queryFn: () => ServerCall.get<VolantinoAttivoDTO[]>(`/punti-vendita/${idPv}/volantini-attivi`),
+    enabled: !!idPv,
   });
 };
 
