@@ -1,0 +1,406 @@
+/// I20-1089: i meta del box - quello che questa lavorazione ha cambiato rispetto al dato, per
+/// l'impaginazione del box aperto - e l'interfaccia che li mostra. L'icona blu accanto al segnalino
+/// della scheda ne dice il numero e apre la finestra: per ogni meta il campo, il valore originale e
+/// quello modificato. Solo i meta dei testi (i campi compilati) si tolgono da qui; primarie e
+/// secondarie, foto, foto extra decise per la lavorazione ed elementi in noRender si mostrano
+/// soltanto, e si tolgono dalle loro schermate. Un meta da verificare (I20-1088) porta alle
+/// segnalazioni. Da qui si applica anche un meta nuovo su un campo che non ne ha: rimozioni e meta
+/// nuovi restano in sospeso fino a Salva, che li manda tutti con una richiesta sola e reimpagina
+/// il box.
+///
+/// Non e' un modulo a se': schedaRef.js lo mescola nel proprio oggetto con Object.assign, come
+/// reperimentoFoto/schedaFoto.js, e ogni this qui dentro e' schedaRef. La parte pura (l'elenco dei
+/// meta, i campi per un meta nuovo, la richiesta) si prova sotto Node; il resto parla con InDesign.
+
+const confronti = require('./confronti');
+
+/// StatoSelezioneFoto del server, come lo legge l'operatore.
+const STATI_SELEZIONE = { "0": "non selezionata", "1": "primaria", "2": "secondaria" };
+
+/// TipoElementoBox del server, per gli elementi in noRender.
+const TIPI_ELEMENTO = { "1": "campo", "2": "logo", "3": "foto extra", "4": "etichetta", "5": "foto" };
+
+function senzaChiave(label) {
+    const testo = String(label == null ? "" : label);
+    return typeof Utility !== "undefined" && Utility != null && typeof Utility.parseLabel === "function"
+        ? Utility.parseLabel(testo)
+        : testo.split("$")[0];
+}
+
+const metaDelBox = {
+
+    /// Il record del primario fra quelli della scheda, o null.
+    primarioDeiRecord(records) {
+        const primario = (records || []).find(r => r != null && r.recordInTracciato != null && r.recordInTracciato.StatoSelezione == 1);
+        return primario != null ? primario.recordInTracciato : null;
+    },
+
+    /// Tutti i meta del box, nell'ordine in cui la finestra li mostra: i testi, le primarie/secondarie
+    /// e le foto di ogni referenza del gruppo, le foto extra decise per la lavorazione, gli elementi in
+    /// noRender. Ogni voce: tipo, etichetta, originale, modificato, rimovibile (solo i testi) e, per i
+    /// testi, il campo intero e se e' da verificare; per le foto se il meta viene da una lavorazione
+    /// passata (ereditata).
+    vociMetaDelBox(records, ignoraVersione = confronti.ignoraVersioneMeta()) {
+        const me = this;
+        const rec = this.primarioDeiRecord(records);
+        if (rec == null) {
+            return [];
+        }
+        const voci = [];
+
+        const daVerificare = new Set(confronti.differenzeDeiMeta(rec, ignoraVersione).map(d => d.campo));
+        (Array.isArray(rec.testiDalBox) ? rec.testiDalBox : []).forEach(function (stato) {
+            if (stato == null || stato.label == null || String(stato.label) === "" || stato.allineato === true) {
+                return;
+            }
+            const campo = String(stato.label);
+            voci.push({
+                tipo: "testo",
+                campo: campo,
+                etichetta: senzaChiave(campo),
+                originale: confronti.testoLeggibile(stato.contenutoServer),
+                modificato: confronti.testoLeggibile(stato.contenuto),
+                rimovibile: true,
+                daVerificare: daVerificare.has(campo)
+            });
+        });
+
+        (records || []).forEach(function (record) {
+            const sostituzioni = record != null && record.recordInTracciato != null ? record.recordInTracciato.metaFoto : null;
+            (Array.isArray(sostituzioni) ? sostituzioni : []).forEach(function (sostituzione) {
+                if (sostituzione == null) {
+                    return;
+                }
+                const selezione = sostituzione.tipo === "selezione";
+                const leggi = function (valore) {
+                    if (valore == null || String(valore) === "") {
+                        return selezione ? "non selezionata" : "(nessuna)";
+                    }
+                    return selezione ? (STATI_SELEZIONE[String(valore)] || String(valore)) : String(valore);
+                };
+                voci.push({
+                    tipo: selezione ? "selezione" : "foto",
+                    etichetta: (selezione ? "Primaria/secondaria " : "Foto ") + (sostituzione.codRef || ""),
+                    originale: leggi(sostituzione.originale),
+                    modificato: leggi(sostituzione.modificato),
+                    rimovibile: false,
+                    ereditata: sostituzione.ereditata === true
+                });
+            });
+        });
+
+        (Array.isArray(rec.extraLavorazione) ? rec.extraLavorazione : []).forEach(function (voce) {
+            if (voce == null) {
+                return;
+            }
+            const descritta = typeof me.descriviExtraLavorazione === "function" ? me.descriviExtraLavorazione(voce) : String(voce.sigla || "");
+            const sigla = voce.sigla == null ? "" : String(voce.sigla);
+            voci.push({
+                tipo: "extra",
+                etichetta: "Foto extra " + sigla,
+                originale: voce.nomeServer ? String(voce.nomeServer) : "come nel dato",
+                modificato: descritta.startsWith(sigla + ": ") ? descritta.substring(sigla.length + 2) : descritta,
+                rimovibile: false
+            });
+        });
+
+        (Array.isArray(rec.noRenderElementi) ? rec.noRenderElementi : []).forEach(function (elemento) {
+            if (elemento == null) {
+                return;
+            }
+            const nome = elemento.nome || elemento.chiave || "";
+            const tipo = TIPI_ELEMENTO[String(elemento.tipo)];
+            voci.push({
+                tipo: "noRender",
+                etichetta: senzaChiave(nome) + (tipo ? " (" + tipo + ")" : ""),
+                originale: "nel box",
+                modificato: "in noRender",
+                rimovibile: false
+            });
+        });
+
+        return voci;
+    },
+
+    /// Quanti meta ha il box: il numero dell'icona blu.
+    numeroMetaDelBox(records) {
+        return this.vociMetaDelBox(records).length;
+    },
+
+    /// I campi compilati del primario su cui si puo' applicare un meta nuovo: con un testo, senza un
+    /// meta, non la descrizione (che ha la sua strada, I20-1090). Uno per campo.
+    campiPerNuovoMeta(records) {
+        const rec = this.primarioDeiRecord(records);
+        if (rec == null || !Array.isArray(rec.compiledFields)) {
+            return [];
+        }
+        const conMeta = new Set((Array.isArray(rec.testiDalBox) ? rec.testiDalBox : [])
+            .filter(s => s != null && s.label != null)
+            .map(s => String(s.label).toLowerCase()));
+        const visti = new Set();
+        return rec.compiledFields.filter(function (campo) {
+            if (campo == null || campo.labelName == null || String(campo.labelName) === "" || typeof campo.content !== "string") {
+                return false;
+            }
+            const chiave = String(campo.labelName).toLowerCase();
+            if (senzaChiave(campo.labelName).toLowerCase() === "descrizione" || conMeta.has(chiave) || visti.has(chiave)) {
+                return false;
+            }
+            visti.add(chiave);
+            return true;
+        });
+    },
+
+    /// La richiesta unica per il server dalle modifiche in sospeso: i campi da cui togliere il meta e
+    /// i meta nuovi ({ campo, contenuto, contenutoServer }). Null se non c'e' niente da mandare.
+    richiestaModificheMeta(daRimuovere, daCreare) {
+        const me = this;
+        const voci = [];
+        (daRimuovere || []).forEach(function (campo) {
+            if (campo != null && String(campo) !== "") {
+                voci.push({ label: String(campo), azione: me.AZIONE_TESTO_DAL_BOX.rimuovi });
+            }
+        });
+        (daCreare || []).forEach(function (nuovo) {
+            if (nuovo == null || nuovo.campo == null || String(nuovo.campo) === "") {
+                return;
+            }
+            voci.push({
+                label: String(nuovo.campo),
+                azione: me.AZIONE_TESTO_DAL_BOX.crea,
+                contenuto: nuovo.contenuto == null ? "" : String(nuovo.contenuto),
+                contenutoServer: nuovo.contenutoServer == null ? "" : String(nuovo.contenutoServer)
+            });
+        });
+        return voci.length > 0 ? { voci: voci } : null;
+    },
+
+    /* ---------- in InDesign ---------- */
+
+    /// L'icona blu accanto al segnalino: quanti meta ha il box, e la finestra per vederli. C'e'
+    /// sempre, anche senza meta, perche' da li' se ne applica uno nuovo. Stessa misura del segnalino:
+    /// e' quella che la barra #referenza, alta 25px, tollera.
+    aggiornaIconaMeta() {
+        try {
+            $("#metaBoxButton").remove();
+            const me = this;
+            const quanti = this.numeroMetaDelBox(this.schedeRefDati);
+
+            const icona = $('<span id="metaBoxButton"></span>');
+            icona.text(quanti > 0 ? String(quanti) : "");
+            icona.css({
+                "display": "inline-block",
+                "height": "16px",
+                "min-width": "16px",
+                "line-height": "16px",
+                "padding": "0 3px",
+                "box-sizing": "border-box",
+                "text-align": "center",
+                "font-size": "10px",
+                "font-weight": "700",
+                "border-radius": "3px",
+                "background-color": "#0d47a1",
+                "color": "#fff",
+                "margin-right": "8px",
+                "cursor": "pointer",
+                "flex": "0 0 auto"
+            });
+            Tooltip.impostaTooltip(icona[0], quanti > 0
+                ? (quanti === 1 ? "1 meta di questa lavorazione sul box" : quanti + " meta di questa lavorazione sul box") + " - clicca per vederli"
+                : "Nessun meta sul box - clicca per applicarne uno");
+            icona.on("click", function () {
+                me.mostraFinestraMeta();
+            });
+
+            $("#codiceRef").prepend(icona);
+        }
+        catch (e) {
+            console.error("Code SRF-119 Icona dei meta non aggiornata: " + e);
+        }
+    },
+
+    /// Il testo da cui parte un meta nuovo: quello del campo nel box, nella forma del campo compilato
+    /// (con i tag degli stili); se il box non ha il campo, quello del dato.
+    testoPerNuovoMeta(campoCompilato) {
+        try {
+            const box = this.refSelected != null ? this.refSelected.item : null;
+            const campo = box != null && box.isValid ? Utility.getFieldByLabel(Utility.parseLabel(campoCompilato.labelName), box) : null;
+            if (campo != null) {
+                return this.testoDalBoxPerIlServer(campoCompilato, campo.contents, TestoTag.componiStringTagFromInndTextFrame(campo));
+            }
+        }
+        catch (e) {
+            console.warn("Testo del box per il meta nuovo non letto: " + e);
+        }
+        return campoCompilato != null && campoCompilato.content != null ? String(campoCompilato.content) : "";
+    },
+
+    /// Salva le modifiche ai meta: una richiesta sola, poi la scheda si riscarica (i meta si
+    /// applicano sul server) e il box si reimpagina come con Reimpagina. Vero se il server le ha
+    /// registrate.
+    async salvaModificheMeta(richiesta) {
+        if (richiesta == null) {
+            return false;
+        }
+        const registrata = await this.salvaTestiDalBox(richiesta);
+        if (!registrata) {
+            return false;
+        }
+        await this.riscaricaDopoIlMeta();
+        this.applicaReimpaginazione();
+        messaggioUtente("Meta del box salvati: il box si reimpagina", "success", false, 4);
+        return true;
+    },
+
+    /// La finestra dei meta del box. Le modifiche restano in sospeso finche' non si salva: chiudere
+    /// con la X non manda niente.
+    mostraFinestraMeta() {
+        try {
+            const me = this;
+            const daRimuovere = new Set();
+            const daCreare = [];
+
+            const contenuto = $(`
+                <div style="width: 100%; display: flex; flex-direction: column; gap: 8px; font-family: Arial, sans-serif; color: #2c2c2c;">
+                    <div class="metaElenco" style="width: 100%; display: flex; flex-direction: column; gap: 6px;"></div>
+                    <div class="metaNuovo" style="width: 100%; display: none; flex-direction: column; gap: 4px; border-top: 1px solid #ddd; padding-top: 8px;"></div>
+                    <div class="metaAzioni" style="width: 100%; display: flex; gap: 6px; justify-content: flex-end; border-top: 1px solid #ddd; padding-top: 8px;"></div>
+                </div>
+            `);
+            const elenco = contenuto.find(".metaElenco");
+            const nuovo = contenuto.find(".metaNuovo");
+            const azioni = contenuto.find(".metaAzioni");
+
+            const riga = function (voce) {
+                const r = $('<div></div>');
+                r.css({ "padding": "4px 0 4px 8px", "border-left": "3px solid " + (voce.daVerificare ? "#b21d1d" : "#0d47a1"), "font-size": "12px" });
+                const titolo = $('<div></div>').text(voce.etichetta + (voce.ereditata ? " (da una lavorazione passata)" : ""));
+                titolo.css({ "font-weight": "700" });
+                r.append(titolo);
+                [["Originale", voce.originale], ["Modificato", voce.modificato]].forEach(function (coppia) {
+                    const v = $('<div></div>');
+                    v.css({ "padding-left": "8px" });
+                    v.append($('<span></span>').text(coppia[0] + ": ").css({ "font-weight": "700" }));
+                    v.append($('<span></span>').text(coppia[1] === "" ? "(vuoto)" : coppia[1]));
+                    r.append(v);
+                });
+                return r;
+            };
+
+            const ridisegna = function () {
+                elenco.empty();
+                const voci = me.vociMetaDelBox(me.schedeRefDati);
+                if (voci.length === 0 && daCreare.length === 0) {
+                    elenco.append($('<div></div>').text("Nessun meta sul box.").css({ "font-size": "12px", "color": "#767676" }));
+                }
+                voci.forEach(function (voce) {
+                    const r = riga(voce);
+                    const barra = $('<div></div>');
+                    barra.css({ "display": "flex", "gap": "6px", "justify-content": "flex-end", "margin-top": "4px" });
+                    if (voce.daVerificare) {
+                        const avviso = $('<span></span>').text("Da verificare: il server e' cambiato da quando e' stato scelto");
+                        avviso.css({ "font-size": "11px", "color": "#b21d1d", "margin-right": "auto" });
+                        barra.append(avviso);
+                        const vai = me.pulsanteFinestra("Vai a Segnalazioni", "Apre la finestra delle differenze del box, dove il meta si aggiorna o si lascia per il server");
+                        vai.on("click", async function () {
+                            $("#popupCloseButton").trigger("click");
+                            await me.mostraModalSegnalazioni();
+                        });
+                        barra.append(vai);
+                    }
+                    if (voce.rimovibile) {
+                        const segnato = daRimuovere.has(voce.campo);
+                        if (segnato) {
+                            r.css({ "opacity": "0.5", "text-decoration": "line-through" });
+                        }
+                        const rimuovi = me.pulsanteFinestra(segnato ? "Tieni" : "Rimuovi meta",
+                            segnato ? "Il meta resta" : "Il meta si toglie quando salvi: il campo torna al testo del server");
+                        rimuovi.on("click", function () {
+                            if (daRimuovere.has(voce.campo)) {
+                                daRimuovere.delete(voce.campo);
+                            }
+                            else {
+                                daRimuovere.add(voce.campo);
+                            }
+                            ridisegna();
+                        });
+                        barra.append(rimuovi);
+                    }
+                    if (barra.children().length > 0) {
+                        r.append(barra);
+                    }
+                    elenco.append(r);
+                });
+                daCreare.forEach(function (meta, indice) {
+                    const r = riga({ etichetta: senzaChiave(meta.campo) + " (nuovo)", originale: confronti.testoLeggibile(meta.contenutoServer), modificato: confronti.testoLeggibile(meta.contenuto) });
+                    const togli = me.pulsanteFinestra("Togli", "Il meta nuovo non si applica");
+                    togli.on("click", function () {
+                        daCreare.splice(indice, 1);
+                        ridisegna();
+                    });
+                    r.append($('<div></div>').css({ "display": "flex", "justify-content": "flex-end", "margin-top": "4px" }).append(togli));
+                    elenco.append(r);
+                });
+                salva.prop("disabled", daRimuovere.size === 0 && daCreare.length === 0);
+            };
+
+            //Applica nuovo meta: si sceglie il campo, il testo parte da quello del box e si modifica tutto.
+            const apriNuovo = function () {
+                nuovo.empty();
+                const giaNuovi = new Set(daCreare.map(m => String(m.campo).toLowerCase()));
+                const campi = me.campiPerNuovoMeta(me.schedeRefDati).filter(c => !giaNuovi.has(String(c.labelName).toLowerCase()));
+                if (campi.length === 0) {
+                    nuovo.append($('<div></div>').text("Tutti i campi hanno gia' un meta.").css({ "font-size": "12px", "color": "#767676" }));
+                    nuovo.css("display", "flex");
+                    return;
+                }
+                const scelta = $('<select style="width: 100%;"></select>');
+                campi.forEach(function (campo, indice) {
+                    scelta.append($('<option></option>').attr("value", String(indice)).text(senzaChiave(campo.labelName)));
+                });
+                const testo = $('<textarea style="width: 100%; height: 60px; box-sizing: border-box; background-color: white; color: black;"></textarea>');
+                const riempi = function () {
+                    const campo = campi[parseInt(scelta.val(), 10) || 0];
+                    testo.val(me.testoPerNuovoMeta(campo));
+                };
+                scelta.on("change", riempi);
+                riempi();
+                const aggiungi = me.pulsanteFinestra("Aggiungi", "Il meta nuovo si applica quando salvi");
+                aggiungi.on("click", function () {
+                    const campo = campi[parseInt(scelta.val(), 10) || 0];
+                    daCreare.push({ campo: campo.labelName, contenuto: String(testo.val() == null ? "" : testo.val()), contenutoServer: campo.content });
+                    nuovo.empty().css("display", "none");
+                    ridisegna();
+                });
+                nuovo.append($('<div></div>').text("Campo").css({ "font-size": "12px", "font-weight": "700" }));
+                nuovo.append(scelta);
+                nuovo.append($('<div></div>').text("Testo del meta").css({ "font-size": "12px", "font-weight": "700" }));
+                nuovo.append(testo);
+                nuovo.append($('<div></div>').css({ "display": "flex", "justify-content": "flex-end" }).append(aggiungi));
+                nuovo.css("display", "flex");
+            };
+
+            const applicaNuovo = this.pulsanteFinestra("Applica nuovo meta", "Sceglie un campo senza meta e il testo che deve avere in questa lavorazione");
+            applicaNuovo.on("click", apriNuovo);
+            const salva = this.pulsanteFinestra("Salva", "Manda tutte le modifiche e reimpagina il box");
+            salva.on("click", async function () {
+                const richiesta = me.richiestaModificheMeta([...daRimuovere], daCreare);
+                if (richiesta == null) {
+                    return;
+                }
+                $("#popupCloseButton").trigger("click");
+                await me.salvaModificheMeta(richiesta);
+            });
+            azioni.append(applicaNuovo).append(salva);
+
+            ridisegna();
+            Modali.popup("Meta del box", contenuto, "lg");
+        }
+        catch (e) {
+            console.error("Code SRF-120 Finestra dei meta non aperta: " + e);
+            messaggioUtente("Code SRF-120 Finestra dei meta non aperta: " + e.message, "error", false, 5);
+        }
+    }
+};
+
+module.exports = metaDelBox;

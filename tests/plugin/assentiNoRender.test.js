@@ -150,28 +150,24 @@ test("se il server non registra, i record non cambiano e la finestra non si rifa
     assert.strictEqual(rifatta, 0);
 }));
 
-test("i risolti con noRender si descrivono e contano nel segnalino verde, con le foto extra decise", () => {
-    assert.strictEqual(schedaRef.descriviRisoltaNoRender(Object.assign({}, CAMPO, { label: "x" })).endsWith(": non presente nel box, in noRender"), true);
-    assert.strictEqual(schedaRef.descriviRisoltaNoRender(FOTO).endsWith(": foto non presente nel box, in noRender"), true);
+test("i risolti con noRender non accendono il segnalino: si vedono fra i meta del box (I20-1089)", () => {
+    //Prima tenevano acceso il segnalino, verde; ora sono meta del box, e li conta l'icona blu.
+    assert.strictEqual(schedaRef.segnalinoScheda([], []), null);
+    assert.deepStrictEqual(schedaRef.segnalinoScheda([CAMPO], []).testo, "1");
 
-    assert.deepStrictEqual(schedaRef.segnalinoScheda([], [], [], [CAMPO]), {
-        testo: "1", colore: "#1b7f3b", suggerimento: "1 elemento assente messo in noRender - clicca per rivederlo"
-    });
-    assert.deepStrictEqual(schedaRef.segnalinoScheda([], [], [{ sigla: "Logo_BDP" }], [CAMPO, FOTO]), {
-        testo: "3", colore: "#1b7f3b",
-        suggerimento: "1 foto extra decisa per questa lavorazione, 2 elementi assenti messi in noRender - clicca per rivederli"
-    });
-    //Con qualcosa da risolvere non contano, come le decisioni.
-    assert.deepStrictEqual(schedaRef.segnalinoScheda([CAMPO], [], [], [FOTO]), schedaRef.segnalinoScheda([CAMPO], []));
+    const records = [{ recordInTracciato: { StatoSelezione: 1, noRenderElementi: [{ tipo: TIPO.campo, chiave: "descrizione2", nome: "descrizione2" }] } }];
+    const voci = schedaRef.vociMetaDelBox(records, false);
+    assert.strictEqual(voci.length, 1);
+    assert.strictEqual(voci[0].tipo, "noRender");
+    assert.strictEqual(voci[0].modificato, "in noRender");
+    assert.strictEqual(voci[0].rimovibile, false);
 });
 
-test("la finestra ha la sezione dei risolti, e il salvataggio della schermata noRender ricalcola le differenze", () => {
+test("la finestra non ha piu' la sezione dei risolti, e il salvataggio della schermata noRender ricalcola le differenze", () => {
     const scheda = sorgente("schedaRef.js");
-    //I20-1075: i risolti con noRender stanno nella sezione Risolte, con le foto extra decise.
-    assert.match(scheda, /id="segnalazioniRisolte"/);
-    assert.match(scheda.substring(scheda.indexOf("    riempiSezioneRisolte(sezione, dopoAzione) {")), /me\.rigaRisolta\(me\.descriviRisoltaNoRender\(assenza\), "Annulla",[\s\S]*?\(\) => me\.cambiaNoRenderDellAssenza\(assenza, false, dopoAzione\)\)\);/);
-    assert.match(scheda, /const rifaiAnalisi = async function \(\) \{[\s\S]*?me\.riempiSezioneRisolte\(sezioneRisolte, rifaiAnalisi\);/);
-    assert.match(scheda, /this\.riempiSezioneRisolte\(sezioneRisolte, rifaiAnalisi\);/);
+    //I20-1089: i risolti con noRender si tolgono dalla schermata noRender e si vedono fra i meta.
+    assert.doesNotMatch(scheda, /id="segnalazioniRisolte"/);
+    assert.doesNotMatch(scheda, /riempiSezioneRisolte|descriviRisoltaNoRender/);
     assert.match(scheda, /this\.risolteNoRenderDelBox = preAnalisi != null && Array\.isArray\(preAnalisi\.risolteNoRender\) \? preAnalisi\.risolteNoRender : \[\];/);
 
     const salva = scheda.substring(scheda.indexOf("    salvaNoRender() {"), scheda.indexOf("    inviaNoRender(elementi) {"));
@@ -184,7 +180,7 @@ test("la finestra ha la sezione dei risolti, e il salvataggio della schermata no
 test("nella finestra delle differenze scorre solo la finestra: le sezioni non hanno una barra loro", () => {
     const scheda = sorgente("schedaRef.js");
     const finestra = scheda.substring(scheda.indexOf("async mostraModalSegnalazioni() {"), scheda.indexOf("const intestazione = contenuto.find(\"#segnalazioniIntestazione\");"));
-    for (const id of ["segnalazioniElenco", "segnalazioniRisolte", "segnalazioniBollinoScheda"]) {
+    for (const id of ["segnalazioniElenco", "segnalazioniBollinoScheda"]) {
         const riga = finestra.substring(finestra.indexOf('id="' + id + '"'), finestra.indexOf("</div>", finestra.indexOf('id="' + id + '"')));
         assert.ok(riga.length > 0, id);
         assert.doesNotMatch(riga, /max-height|overflow/, id);

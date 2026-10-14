@@ -4375,37 +4375,14 @@ const schedaRef = {
     /// I20-1056, lotto 4: il segnalino accanto al codice, dalle differenze (X) e dalle segnalazioni
     /// del bollino (Y). Solo differenze: rosso, "X", come prima. Solo segnalazioni: il colore della
     /// piu' grave, "Y". Tutte e due: rosso, "X+Y". null se non c'e' niente da risolvere.
-    /// I20-1072: senza niente da risolvere ma con foto extra decise per questa lavorazione (Z) il
-    /// segnalino resta, verde, "Z": da li' la finestra si riapre e le decisioni si tolgono. Con
-    /// qualcosa da risolvere le decisioni non si contano, la finestra le mostra comunque.
-    /// I20-1073: Z conta anche gli elementi assenti risolti con noRender (risolteNoRender).
-    segnalinoScheda(differenze, voci, decisioni = [], risolteNoRender = []) {
+    /// I20-1089: le foto extra decise per questa lavorazione e gli elementi assenti messi in noRender
+    /// non tengono piu' acceso il segnalino (verde, da I20-1072 e I20-1073): sono meta del box, e si
+    /// vedono dall'icona blu accanto.
+    segnalinoScheda(differenze, voci) {
         const x = Array.isArray(differenze) ? differenze.length : 0;
         const y = Array.isArray(voci) ? voci.length : 0;
-        const extra = Array.isArray(decisioni) ? decisioni.length : 0;
-        const noRender = Array.isArray(risolteNoRender) ? risolteNoRender.length : 0;
-        const z = extra + noRender;
         if (x === 0 && y === 0) {
-            if (z === 0) {
-                return null;
-            }
-            const testoExtra = extra === 1 ? "1 foto extra decisa per questa lavorazione" : extra + " foto extra decise per questa lavorazione";
-            const testoNoRender = noRender === 1 ? "1 elemento assente messo in noRender" : noRender + " elementi assenti messi in noRender";
-            const testi = [];
-            if (extra > 0) {
-                testi.push(testoExtra);
-            }
-            if (noRender > 0) {
-                testi.push(testoNoRender);
-            }
-            return {
-                testo: String(z),
-                colore: "#1b7f3b",
-                //Le foto extra sono "decise": rivederla, rivederle; gli elementi: rivederlo, rivederli.
-                suggerimento: testi.join(", ") + (z === 1
-                    ? (extra === 1 ? " - clicca per rivederla" : " - clicca per rivederlo")
-                    : (noRender === 0 ? " - clicca per rivederle" : " - clicca per rivederli"))
-            };
+            return null;
         }
         const testoX = x === 1 ? "1 differenza fra il box e il dato" : x + " differenze fra il box e il dato";
         const testoY = y === 1 ? "1 segnalazione di impaginazione" : y + " segnalazioni di impaginazione";
@@ -4631,10 +4608,11 @@ const schedaRef = {
     aggiornaPulsanteSegnalazioni() {
         try {
             $("#segnalazioniBoxButton").remove();
+            //I20-1089: l'icona blu dei meta c'e' sempre; il segnalino, se c'e', le va davanti.
+            this.aggiornaIconaMeta();
 
             //I20-1056, lotto 4: le differenze e le segnalazioni di impaginazione del bollino.
-            const dati = this.segnalinoScheda(this.segnalazioniInMemoria(), this.vociBollinoInMemoria(), this.extraLavorazioneInMemoria(),
-                this.risolteNoRenderInMemoria());
+            const dati = this.segnalinoScheda(this.segnalazioniInMemoria(), this.vociBollinoInMemoria());
             if (dati == null) {
                 return;
             }
@@ -4680,16 +4658,14 @@ const schedaRef = {
     ///
     /// I20-1075: l'elenco e' a riquadri, uno per elemento del box (raggruppaPerElemento), con dentro i
     /// suoi problemi, i valori nel box e sul server e i pulsanti. In cima una riga sola dice quanto c'e'
-    /// da risolvere, quanto e' gia' risolto e quante segnalazioni di impaginazione ci sono: il resto
-    /// sta nelle sezioni richiudibili sotto.
+    /// da risolvere e quante segnalazioni di impaginazione ci sono: queste stanno nella sezione
+    /// richiudibile sotto. I20-1089: quello che e' gia' deciso non sta piu' qui, ma fra i meta del box.
     riempiElencoSegnalazioni(contenitore, intestazione, differenze, vociBollino = [], dopoAzione = null) {
         contenitore.empty();
         intestazione.empty();
 
         const me = this;
         const daRisolvere = Array.isArray(differenze) ? differenze.length : 0;
-        const decise = this.extraLavorazioneInMemoria().length;
-        const inNoRender = this.risolteNoRenderInMemoria().length;
         const impaginazione = Array.isArray(vociBollino) ? vociBollino.length : 0;
         const colore = daRisolvere > 0 ? "#b21d1d" : (impaginazione > 0 ? "#ef6c00" : "#1b7f3b");
 
@@ -4703,7 +4679,7 @@ const schedaRef = {
             "margin-right": "8px",
             "flex": "0 0 auto"
         });
-        const testo = $('<span></span>').text(this.testoRiepilogoFinestra(daRisolvere, decise + inNoRender, impaginazione));
+        const testo = $('<span></span>').text(this.testoRiepilogoFinestra(daRisolvere, impaginazione));
         testo.css({ "font-size": "13px", "font-weight": "600", "color": colore });
         intestazione.append(pallino).append(testo);
 
@@ -4713,18 +4689,8 @@ const schedaRef = {
             if (impaginazione > 0) {
                 return;
             }
-            //I20-1072: le decisioni per questa lavorazione restano modificabili, dalla sezione sotto.
-            //I20-1073: e cosi' gli elementi assenti messi in noRender.
-            const conCosa = [];
-            if (decise > 0) {
-                conCosa.push((decise === 1 ? "1 foto extra decisa" : decise + " foto extra decise") + " per questa lavorazione");
-            }
-            if (inNoRender > 0) {
-                conCosa.push(inNoRender === 1 ? "1 elemento assente in noRender" : inNoRender + " elementi assenti in noRender");
-            }
-            const nota = $('<div></div>').text(conCosa.length === 0
-                ? "Il box corrisponde al dato."
-                : "Il box corrisponde al dato, con " + conCosa.join(" e ") + ".");
+            //I20-1089: le decisioni per questa lavorazione e gli assenti in noRender si vedono fra i meta.
+            const nota = $('<div></div>').text("Il box corrisponde al dato.");
             nota.css({ "font-size": "12px", "color": "#767676", "padding": "2px 0" });
             contenitore.append(nota);
             return;
@@ -4768,7 +4734,8 @@ const schedaRef = {
     },
 
     /// I20-1075: la riga di riepilogo della finestra.
-    testoRiepilogoFinestra(daRisolvere, risolte, impaginazione) {
+    /// I20-1089: senza piu' il conto delle risolte, che sono meta del box.
+    testoRiepilogoFinestra(daRisolvere, impaginazione) {
         let prima;
         if (daRisolvere > 0) {
             prima = daRisolvere + " da risolvere";
@@ -4780,9 +4747,6 @@ const schedaRef = {
             prima = "Tutte le segnalazioni risolte";
         }
         const parti = [prima];
-        if (risolte > 0) {
-            parti.push(risolte + (risolte === 1 ? " risolta" : " risolte"));
-        }
         if (impaginazione > 0) {
             parti.push(impaginazione + " di impaginazione");
         }
@@ -5410,7 +5374,7 @@ const schedaRef = {
     /* ---------- I20-1088: i meta dei testi del box da verificare ---------- */
 
     /// Le azioni sui meta dei testi, come le conosce il server (AzioneTestoDalBox).
-    AZIONE_TESTO_DAL_BOX: { aggiorna: 1, rimuovi: 2 },
+    AZIONE_TESTO_DAL_BOX: { aggiorna: 1, rimuovi: 2, crea: 3 },
 
     /// La richiesta per il server da un meta da verificare: Aggiorna porta il contenuto che il
     /// server compone ora, che diventa il valore originale (la versione la mette il server);
@@ -5706,54 +5670,6 @@ const schedaRef = {
         return true;
     },
 
-    /// I20-1075: la sezione "Risolte": le foto extra decise per questa lavorazione (I20-1070) e gli
-    /// elementi assenti messi in noRender (I20-1073), ognuno col suo Togli o Annulla. Prima erano due
-    /// sezioni.
-    riempiSezioneRisolte(sezione, dopoAzione) {
-        sezione.empty();
-        const me = this;
-        const decise = this.extraLavorazioneInMemoria();
-        const inNoRender = this.risolteNoRenderInMemoria();
-        const quante = decise.length + inNoRender.length;
-        if (quante === 0) {
-            sezione.css("display", "none");
-            return;
-        }
-        sezione.css("display", "block");
-
-        const corpo = this.sezioneRichiudibile(sezione, "risolte", "Risolte", quante);
-        decise.forEach(function (voce) {
-            corpo.append(me.rigaRisolta(me.descriviExtraLavorazione(voce), "Togli",
-                "Toglie la decisione: il dato torna a quello del server e la differenza, se c'e', ricompare",
-                () => me.togliExtraLavorazione(voce, dopoAzione)));
-        });
-        inNoRender.forEach(function (assenza) {
-            corpo.append(me.rigaRisolta(me.descriviRisoltaNoRender(assenza), "Annulla",
-                "Toglie l'elemento dal noRender: la differenza torna fra quelle da risolvere",
-                () => me.cambiaNoRenderDellAssenza(assenza, false, dopoAzione)));
-        });
-    },
-
-    /// Una riga della sezione Risolte: come e' stata risolta, e il pulsante per tornare indietro.
-    rigaRisolta(testo, etichettaPulsante, suggerimento, azione) {
-        const riga = $('<div></div>');
-        riga.css({ "display": "flex", "align-items": "center", "gap": "8px", "padding": "3px 0 3px 8px", "border-left": "3px solid #1b7f3b", "margin-top": "6px" });
-        const scritta = $('<span></span>').text(testo);
-        scritta.css({ "font-size": "12px", "color": "#2c2c2c", "flex": "1 1 auto" });
-        const pulsante = this.pulsanteFinestra(etichettaPulsante, suggerimento);
-        pulsante.on("click", async function () {
-            pulsante.prop("disabled", true);
-            try {
-                await azione();
-            }
-            finally {
-                pulsante.prop("disabled", false);
-            }
-        });
-        riga.append(scritta).append(pulsante);
-        return riga;
-    },
-
     /// I20-1075: i pulsanti della finestra, piccoli e chiari: prima erano pillole scure grandi quanto
     /// le scritte, e la finestra sembrava un pannello di comandi.
     pulsanteFinestra(etichetta, suggerimento) {
@@ -5770,13 +5686,6 @@ const schedaRef = {
         });
         Tooltip.impostaTooltip(pulsante[0], suggerimento);
         return pulsante;
-    },
-
-    /// "descrizione2: non presente nel box, in noRender".
-    descriviRisoltaNoRender(assenza) {
-        var etichetta = typeof ReportIntegrita !== "undefined" ? ReportIntegrita.etichettaSegnalazione(assenza.label) : assenza.label;
-        var cosa = assenza.tipoElemento === NoRenderElementi.TIPO_FOTO ? "foto non presente nel box" : "non presente nel box";
-        return etichetta + ": " + cosa + ", in noRender";
     },
 
     /// I20-1056, lotto 4: la sezione delle segnalazioni di impaginazione del bollino del box, con
@@ -5886,7 +5795,8 @@ const schedaRef = {
             //I20-1073: le sezioni non hanno un'altezza e uno scorrimento loro: scorre solo la finestra,
             //con una barra sola (con le due, una dentro l'altra, l'operatore non ci si ritrovava).
             //I20-1075: in cima una riga di riepilogo con l'Aggiorna, sotto i riquadri da risolvere, poi
-            //le sezioni richiudibili delle risolte e delle segnalazioni di impaginazione.
+            //la sezione richiudibile delle segnalazioni di impaginazione. I20-1089: le risolte sono
+            //uscite, sono meta del box.
             const contenuto = $(`
                 <div style="width: 100%; display: flex; flex-direction: column; gap: 8px; font-family: Arial, sans-serif; color: #2c2c2c;">
                     <div style="display: flex; align-items: center; gap: 10px;">
@@ -5901,8 +5811,6 @@ const schedaRef = {
 
                     <div id="segnalazioniElenco" style="width: 100%; display: flex; flex-direction: column; gap: 8px; box-sizing: border-box;"></div>
 
-                    <div id="segnalazioniRisolte" style="width: 100%; box-sizing: border-box; display: none;"></div>
-
                     <div id="segnalazioniBollinoScheda" style="width: 100%; box-sizing: border-box; display: none;"></div>
                 </div>
             `);
@@ -5911,7 +5819,6 @@ const schedaRef = {
             const elenco = contenuto.find("#segnalazioniElenco");
             const azioni = contenuto.find("#segnalazioniAzioni");
             const sezioneBollino = contenuto.find("#segnalazioniBollinoScheda");
-            const sezioneRisolte = contenuto.find("#segnalazioniRisolte");
             //I20-1075: ogni apertura riparte dalle sezioni aperte o chiuse secondo quello che c'e'.
             this.sezioniFinestra = {};
 
@@ -5922,14 +5829,12 @@ const schedaRef = {
                 me.memorizzaSegnalazioni(await me.differenzeDatiNelBox(box, me.schedeRefDati));
                 me.leggiVociBollino(box);
                 me.riempiElencoSegnalazioni(elenco, intestazione, me.segnalazioniInMemoria(), me.vociBollinoInMemoria(), rifaiAnalisi);
-                me.riempiSezioneRisolte(sezioneRisolte, rifaiAnalisi);
                 me.riempiSezioneBollino(sezioneBollino, elenco, intestazione);
             };
             //Chi ridisegna l'elenco da fuori (la sezione del bollino) passa le stesse azioni.
             this.dopoAzioneFinestra = rifaiAnalisi;
 
             this.riempiElencoSegnalazioni(elenco, intestazione, this.segnalazioniInMemoria() || [], this.vociBollinoInMemoria(), rifaiAnalisi);
-            this.riempiSezioneRisolte(sezioneRisolte, rifaiAnalisi);
             this.riempiSezioneBollino(sezioneBollino, elenco, intestazione);
 
             //Rifa' la pre analisi adesso: e' il modo per vedere l'effetto delle correzioni senza
@@ -7620,5 +7525,7 @@ const schedaRef = {
 //I20-1015: la parte foto della scheda sta in reperimentoFoto/schedaFoto.js, ma e' lo stesso
 //oggetto: si mescola qui, e ogni this di quei membri e' schedaRef.
 Object.assign(schedaRef, require('./reperimentoFoto/schedaFoto'));
+//I20-1089: i meta del box e la loro finestra, allo stesso modo.
+Object.assign(schedaRef, require('./metaDelBox'));
 
 module.exports = schedaRef;

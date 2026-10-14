@@ -4,8 +4,9 @@
  * Con le aggiunte degli ultimi task (azioni sulle foto extra, valori nel box e sul server, noRender,
  * descrizione da scegliere) la finestra era diventata un elenco di righe e sezioni tutte uguali.
  * Ora: in cima una riga di riepilogo, poi un riquadro per ogni elemento del box con i suoi problemi,
- * i valori e i pulsanti; sotto, richiudibili, le "Risolte" (foto extra decise e noRender insieme) e
- * le segnalazioni di impaginazione, aperte da sole solo quando non c'e' niente da risolvere.
+ * i valori e i pulsanti; sotto, richiudibile, la sezione delle segnalazioni di impaginazione,
+ * aperta da sola solo quando non c'e' niente da risolvere. I20-1089: le "Risolte" (foto extra
+ * decise e noRender) sono uscite dalla finestra: sono meta del box.
  *
  * schedaRef.js si carica sotto Node: le regole si provano direttamente, la resa sul sorgente.
  *
@@ -44,12 +45,12 @@ test("il problema si legge senza ripetere il nome dell'elemento, che sta nel tit
     assert.strictEqual(schedaRef.testoDifferenza(null), "");
 });
 
-test("la riga di riepilogo dice quanto c'e' da risolvere, quanto e' risolto e le segnalazioni di impaginazione", () => {
-    assert.strictEqual(schedaRef.testoRiepilogoFinestra(4, 2, 1), "4 da risolvere · 2 risolte · 1 di impaginazione");
-    assert.strictEqual(schedaRef.testoRiepilogoFinestra(1, 1, 0), "1 da risolvere · 1 risolta");
-    assert.strictEqual(schedaRef.testoRiepilogoFinestra(0, 0, 2), "Nessuna differenza fra il box e il dato · 2 di impaginazione");
-    assert.strictEqual(schedaRef.testoRiepilogoFinestra(0, 3, 0), "Tutte le segnalazioni risolte · 3 risolte");
-    assert.strictEqual(schedaRef.testoRiepilogoFinestra(0, 0, 0), "Tutte le segnalazioni risolte");
+test("la riga di riepilogo dice quanto c'e' da risolvere e le segnalazioni di impaginazione", () => {
+    //I20-1089: le risolte non si contano piu' qui: sono meta del box.
+    assert.strictEqual(schedaRef.testoRiepilogoFinestra(4, 1), "4 da risolvere · 1 di impaginazione");
+    assert.strictEqual(schedaRef.testoRiepilogoFinestra(1, 0), "1 da risolvere");
+    assert.strictEqual(schedaRef.testoRiepilogoFinestra(0, 2), "Nessuna differenza fra il box e il dato · 2 di impaginazione");
+    assert.strictEqual(schedaRef.testoRiepilogoFinestra(0, 0), "Tutte le segnalazioni risolte");
 });
 
 test("le sezioni secondarie si aprono da sole solo quando non c'e' niente da risolvere", () => {
@@ -58,7 +59,7 @@ test("le sezioni secondarie si aprono da sole solo quando non c'e' niente da ris
     assert.strictEqual(schedaRef.sezioneApertaAllInizio(undefined), true);
 });
 
-test("la finestra: riquadri per elemento, Risolte e impaginazione richiudibili, nel box e sul server in grassetto", () => {
+test("la finestra: riquadri per elemento, impaginazione richiudibile, nel box e sul server in grassetto", () => {
     const scheda = leggiFileDelPlugin("schedaRef.js").replace(/\r/g, "");
 
     const elenco = scheda.substring(scheda.indexOf("    riempiElencoSegnalazioni(contenitore"), scheda.indexOf("    testoRiepilogoFinestra("));
@@ -66,8 +67,9 @@ test("la finestra: riquadri per elemento, Risolte e impaginazione richiudibili, 
     assert.match(elenco, /\$\('<div class="riquadroDifferenza"><\/div>'\)/);
     assert.match(elenco, /me\.testoDifferenza\(diff\)/);
 
-    //Le sezioni secondarie passano dalla stessa sezione richiudibile, e ogni apertura riparte da capo.
-    assert.match(scheda, /this\.sezioneRichiudibile\(sezione, "risolte", "Risolte", quante\)/);
+    //La sezione secondaria passa dalla sezione richiudibile, e ogni apertura riparte da capo.
+    //I20-1089: la sezione Risolte non c'e' piu'.
+    assert.doesNotMatch(scheda, /this\.sezioneRichiudibile\(sezione, "risolte"/);
     assert.match(scheda, /this\.sezioneRichiudibile\(sezione, "impaginazione", "Segnalazioni di impaginazione", voci\.length\)/);
     assert.match(scheda, /this\.sezioniFinestra = \{\};/);
 

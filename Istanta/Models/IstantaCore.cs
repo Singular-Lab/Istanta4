@@ -100,6 +100,9 @@ namespace Istanta.Models
         //I20-1088: i meta dei testi del box di questa impaginazione, con il valore originale e la
         //versione registrati e quelli attuali del server (StatoTestoDalBox): il Plugin li segnala da verificare.
         public static readonly string keyTestiDalBox = "testiDalBox";
+        //I20-1089: le primarie/secondarie e le foto che i meta hanno cambiato in questo record, con il
+        //valore del dato e quello del meta (SostituzioneFotoDaMeta): il Plugin le mostra fra i meta del box.
+        public static readonly string keyMetaFoto = "metaFoto";
 
 
         //Con queste combinazioni di chiave, si chiede al core di recuperare la descrizione dall'archivio per far uscire le ref indicate con questo attributo
@@ -1179,6 +1182,10 @@ namespace Istanta.Models
                 {
                     return $"per aggiornare il meta di {voce.label} serve il contenuto attuale del server.";
                 }
+                if (voce.azione == AzioneTestoDalBox.Crea && (voce.contenuto == null || voce.contenutoServer == null))
+                {
+                    return $"per creare il meta di {voce.label} servono il testo e il contenuto attuale del server.";
+                }
             }
             return null;
         }
@@ -1186,7 +1193,8 @@ namespace Istanta.Models
         /// <summary>
         /// I20-1088: Aggiorna tiene il testo del meta e gli da' come valore originale il contenuto
         /// attuale del server, con la versione della voce; Rimuovi toglie il meta. Un campo senza meta
-        /// non si tocca. Restituisce quanti meta ha cambiato.
+        /// non si tocca. I20-1089: Crea registra un meta nuovo (sostituisce quello del campo, se c'e').
+        /// Restituisce quanti meta ha cambiato.
         /// </summary>
         public static int modificaTestiDalBox(RevisioneMetaPromoLavorazioni meta, RichiestaTestiDalBox? richiesta)
         {
@@ -1204,6 +1212,16 @@ namespace Istanta.Models
                 if (voce.azione == AzioneTestoDalBox.Rimuovi)
                 {
                     cambiati += togliTestiDalBox(meta, new[] { voce.label });
+                    continue;
+                }
+                if (voce.azione == AzioneTestoDalBox.Crea)
+                {
+                    if (voce.contenuto == null)
+                    {
+                        continue;
+                    }
+                    applicaTestiDalBox(meta, new List<TestoDalBox> { new TestoDalBox { label = voce.label, contenuto = voce.contenuto, contenutoServer = voce.contenutoServer, versione = voce.versione } });
+                    cambiati++;
                     continue;
                 }
                 if (voce.azione != AzioneTestoDalBox.Aggiorna || voce.contenutoServer == null || meta.testiDalBox == null)
@@ -1382,17 +1400,35 @@ namespace Istanta.Models
     public enum AzioneTestoDalBox
     {
         Aggiorna = 1,
-        Rimuovi = 2
+        Rimuovi = 2,
+        //I20-1089: un meta nuovo, dall'interfaccia dei meta del Plugin.
+        Crea = 3
     }
 
     public class VoceRichiestaTestoDalBox
     {
         public string? label { get; set; }
         public AzioneTestoDalBox azione { get; set; }
-        /// <summary>Per Aggiorna: il contenuto attuale del server, che diventa il valore originale.</summary>
+        /// <summary>Per Crea: il testo del meta, nella forma del campo compilato.</summary>
+        public string? contenuto { get; set; }
+        /// <summary>Per Aggiorna e Crea: il contenuto attuale del server, che diventa il valore originale.</summary>
         public string? contenutoServer { get; set; }
-        /// <summary>Per Aggiorna: la versione attuale del record, la mette il server.</summary>
+        /// <summary>Per Aggiorna e Crea: la versione attuale del record, la mette il server.</summary>
         public byte? versione { get; set; }
+    }
+
+    /// <summary>
+    /// I20-1089: una primaria/secondaria o una foto che un meta della lavorazione ha cambiato in un
+    /// record: tipo "selezione" (StatoSelezioneFoto come numero) o "foto" (nome del file). Ereditata
+    /// se viene dal meta di una lavorazione passata.
+    /// </summary>
+    public class SostituzioneFotoDaMeta
+    {
+        public string? tipo { get; set; }
+        public string? codRef { get; set; }
+        public string? originale { get; set; }
+        public string? modificato { get; set; }
+        public bool ereditata { get; set; }
     }
 
     /// <summary>I20-1088: le modifiche ai meta dei testi di un'impaginazione, tutte in una chiamata.</summary>

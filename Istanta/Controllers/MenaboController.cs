@@ -11421,7 +11421,7 @@ double.TryParse(percorso.ToString(), out double valore16))
             public string? CodiceGruppo { get; set; }
             public long idRec { get; set; } = 0;
             /// <summary>
-            /// Le modifiche, serializzate dal Plugin: { voci: [ { label, azione (1 Aggiorna, 2 Rimuovi), contenutoServer } ] }.
+            /// Le modifiche, serializzate dal Plugin: { voci: [ { label, azione (1 Aggiorna, 2 Rimuovi, 3 Crea), contenuto, contenutoServer } ] }.
             /// </summary>
             public string? richiesta { get; set; }
         }
@@ -11448,7 +11448,8 @@ double.TryParse(percorso.ToString(), out double valore16))
                 PromoLavorazioniRecord plrItem = trovaRecordDellaLavorazione(dato.idLavorazione, dato.CodiceGruppo, dato.idRec);
 
                 byte? versione = RecordDellaLavorazione.VersioneDelRecord(this.ctx2, dato.idRec > 0 ? dato.idRec : plrItem.IdRecordTracciato);
-                foreach (var voce in richiesta.voci!.Where(v => v.azione == AzioneTestoDalBox.Aggiorna))
+                //I20-1089: anche i meta nuovi prendono la versione attuale del record.
+                foreach (var voce in richiesta.voci!.Where(v => v.azione == AzioneTestoDalBox.Aggiorna || v.azione == AzioneTestoDalBox.Crea))
                     voce.versione = versione;
 
                 string esito = registraAttivitaMenabo(idOperazione, dato.CodiceGruppo!, "modificaTestiDalBox", tipoOperazione.updateTestiDalBox,

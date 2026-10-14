@@ -4201,6 +4201,29 @@ namespace Istanta.Controllers
         }
 
         /// <summary>
+        /// I20-1089: annota nel record una primaria/secondaria ("selezione") o una foto ("foto") che un
+        /// meta cambia, con il valore del dato e quello del meta: il Plugin le mostra fra i meta del box.
+        /// Se il meta non cambia niente non si annota; la stessa referenza annotata di nuovo sostituisce
+        /// la voce di prima.
+        /// </summary>
+        public static void annotaSostituzioneFoto(Dictionary<string, object>? record, string tipo, string? codRef, object? originale, object? modificato, bool ereditata)
+        {
+            if (record == null)
+                return;
+            var prima = originale?.ToString();
+            var dopo = modificato?.ToString();
+            if (prima == dopo)
+                return;
+
+            var sostituzioni = record.TryGetValue(GLOBAL_VARIABLES.keyMetaFoto, out var valore) && valore is List<SostituzioneFotoDaMeta> lista
+                ? lista
+                : new List<SostituzioneFotoDaMeta>();
+            sostituzioni.RemoveAll(st => st.tipo == tipo && st.codRef == codRef);
+            sostituzioni.Add(new SostituzioneFotoDaMeta { tipo = tipo, codRef = codRef, originale = prima, modificato = dopo, ereditata = ereditata });
+            record[GLOBAL_VARIABLES.keyMetaFoto] = sostituzioni;
+        }
+
+        /// <summary>
         /// Riporta l'opzione noRender letta dai meta della lavorazione sulle voci foto del box.
         /// noRender non e' un dato del record: vive solo dentro membriGruppoFoto, cioe' sulle
         /// primarie/secondarie contenute nel box, mai sul record contenitore.
@@ -4741,6 +4764,8 @@ namespace Istanta.Controllers
                                         var psItem = recPassato.ps.FirstOrDefault(f => f.codRef == item.recordInTracciato[keyRefCodice].ToString());
                                         if (psItem != null)
                                         {
+                                            item.recordInTracciato.TryGetValue(keyStatoSelezione, out var statoDelDato);
+                                            annotaSostituzioneFoto(item.recordInTracciato, "selezione", psItem.codRef, statoDelDato, (int)psItem.stato, true);
                                             item.recordInTracciato[keyStatoSelezione] = (int)psItem.stato;
                                         }
                                     }
@@ -4751,6 +4776,8 @@ namespace Istanta.Controllers
                                         var artFotoItem = this.ctx.ArticoliFotos.Include(f => f.IdArticoloNavigation).FirstOrDefault(f => f.IdArticoloNavigation.Codice == fotoScelta.codRef && f.NomeReale == fotoScelta.nomeFoto);
                                         if (artFotoItem != null)
                                         {
+                                            item.recordInTracciato.TryGetValue(Enum.GetName(AddestramentoRuoli.Foto) + "." + GLOBAL_VARIABLES.keyFotoNome, out var fotoDelDato);
+                                            annotaSostituzioneFoto(item.recordInTracciato, "foto", fotoScelta.codRef, fotoDelDato, artFotoItem.NomeReale, true);
                                             item.recordInTracciato[Enum.GetName(AddestramentoRuoli.Foto) + "." + GLOBAL_VARIABLES.keyFotoGuidId] = artFotoItem.GuidId;
                                             item.recordInTracciato[Enum.GetName(AddestramentoRuoli.Foto) + "." + GLOBAL_VARIABLES.keyFotoNome] = artFotoItem.NomeReale;
                                             item.recordInTracciato[Enum.GetName(AddestramentoRuoli.Foto) + "." + GLOBAL_VARIABLES.keyFotoIsMeta] = true;
@@ -4835,6 +4862,9 @@ namespace Istanta.Controllers
                         var fieldGiaEsistente = storeField.ps!.FirstOrDefault(s => s.codRef == item.recordInTracciato[keyRefCodice].ToString());
                         if (fieldGiaEsistente != null)
                         {
+                            //I20-1089: il cambio si annota, per mostrarlo fra i meta del box.
+                            item.recordInTracciato.TryGetValue(keyStatoSelezione, out var statoDelDato);
+                            annotaSostituzioneFoto(item.recordInTracciato, "selezione", fieldGiaEsistente.codRef, statoDelDato, (int)fieldGiaEsistente.stato, false);
                             item.recordInTracciato[keyStatoSelezione] = (int)fieldGiaEsistente.stato;
                         }
                     }
@@ -4846,6 +4876,8 @@ namespace Istanta.Controllers
                             var artFotoItem = this.ctx.ArticoliFotos.Include(f => f.IdArticoloNavigation).FirstOrDefault(f => f.IdArticoloNavigation.Codice == fotoScelta.codRef && f.NomeReale == fotoScelta.nomeFoto);
                             if (artFotoItem != null)
                             {
+                                item.recordInTracciato.TryGetValue(Enum.GetName(AddestramentoRuoli.Foto) + "." + GLOBAL_VARIABLES.keyFotoNome, out var fotoDelDato);
+                                annotaSostituzioneFoto(item.recordInTracciato, "foto", fotoScelta.codRef, fotoDelDato, artFotoItem.NomeReale, false);
                                 item.recordInTracciato[Enum.GetName(AddestramentoRuoli.Foto) + "." + GLOBAL_VARIABLES.keyFotoGuidId] = artFotoItem.GuidId;
                                 item.recordInTracciato[Enum.GetName(AddestramentoRuoli.Foto) + "." + GLOBAL_VARIABLES.keyFotoNome] = artFotoItem.NomeReale;
                                 item.recordInTracciato[Enum.GetName(AddestramentoRuoli.Foto) + "." + GLOBAL_VARIABLES.keyFotoIsMeta] = true;

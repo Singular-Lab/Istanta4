@@ -403,29 +403,25 @@ test('nella finestra le segnalazioni stanno nella loro sezione e si risolvono co
 
 const DUE_DECISIONI = [{ tipo: 2, sigla: 'Logo_BDP', azione: 1 }, { tipo: 2, sigla: 'Logo_locale', azione: 2 }];
 
-test('senza niente da risolvere ma con decisioni per questa lavorazione il segnalino resta, verde', () => {
-    assert.deepStrictEqual(schedaRef.segnalinoScheda([], [], DUE_DECISIONI), {
-        testo: '2', colore: '#1b7f3b', suggerimento: '2 foto extra decise per questa lavorazione - clicca per rivederle'
-    });
-    assert.strictEqual(schedaRef.segnalinoScheda(null, null, DUE_DECISIONI.slice(0, 1)).suggerimento, '1 foto extra decisa per questa lavorazione - clicca per rivederla');
-
-    //Con qualcosa da risolvere le decisioni non si contano: le regole restano quelle di prima.
-    assert.deepStrictEqual(schedaRef.segnalinoScheda(UNA_DIFFERENZA, [], DUE_DECISIONI), schedaRef.segnalinoScheda(UNA_DIFFERENZA, []));
-    assert.deepStrictEqual(schedaRef.segnalinoScheda([], DUE_WARNING, DUE_DECISIONI), schedaRef.segnalinoScheda([], DUE_WARNING));
-
-    //Senza decisioni, come prima: niente segnalino.
-    assert.strictEqual(schedaRef.segnalinoScheda([], [], []), null);
+test('senza niente da risolvere il segnalino non c\'e\', anche con decisioni per questa lavorazione (I20-1089)', () => {
+    //Le decisioni non tengono piu' acceso il segnalino, verde: sono meta del box, e le conta l'icona blu.
     assert.strictEqual(schedaRef.segnalinoScheda([], []), null);
+    assert.strictEqual(schedaRef.segnalinoScheda(null, null), null);
+    assert.deepStrictEqual(schedaRef.segnalinoScheda(UNA_DIFFERENZA, []).testo, '1');
+    assert.deepStrictEqual(schedaRef.segnalinoScheda([], DUE_WARNING).testo, '2');
+
+    const records = [{ recordInTracciato: { StatoSelezione: 1, extraLavorazione: DUE_DECISIONI } }];
+    assert.strictEqual(schedaRef.numeroMetaDelBox(records), 2);
 });
 
-test('per le sole decisioni la finestra non si apre da sola, ma il segnalino le legge dalla scheda', () => {
+test('per le sole decisioni la finestra non si apre da sola, e il segnalino legge solo differenze e bollino', () => {
     pulisci();
     assert.strictEqual(schedaRef.deveAprirsiDaSola([], '5329719', []), false);
 
     const scheda = leggiFileDelPlugin('schedaRef.js').replace(/\r/g, '');
-    //I20-1073: con le decisioni il segnalino legge anche gli elementi assenti risolti con noRender.
-    assert.match(scheda, /const dati = this\.segnalinoScheda\(this\.segnalazioniInMemoria\(\), this\.vociBollinoInMemoria\(\), this\.extraLavorazioneInMemoria\(\),\s*this\.risolteNoRenderInMemoria\(\)\);/);
-    //E la nota di "tutto risolto" dice che le decisioni ci sono ancora.
-    assert.match(scheda, /conCosa\.push\(\(decise === 1 \? "1 foto extra decisa" : decise \+ " foto extra decise"\) \+ " per questa lavorazione"\);/);
-    assert.match(scheda, /: "Il box corrisponde al dato, con " \+ conCosa\.join\(" e "\) \+ "\."\);/);
+    assert.match(scheda, /const dati = this\.segnalinoScheda\(this\.segnalazioniInMemoria\(\), this\.vociBollinoInMemoria\(\)\);/);
+    //L'icona blu dei meta si ridisegna con il segnalino, sempre.
+    assert.match(scheda, /\$\("#segnalazioniBoxButton"\)\.remove\(\);\s*\/\/I20-1089[^\n]*\n\s*this\.aggiornaIconaMeta\(\);/);
+    //La nota di "tutto risolto" non parla piu' delle decisioni.
+    assert.doesNotMatch(scheda, /conCosa\.push/);
 });
