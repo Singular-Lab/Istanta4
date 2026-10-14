@@ -56,6 +56,39 @@ namespace AgenziaLib
     public class Coopfi : IAgenzia
     {
         List<Dictionary<string, object>> lista_tracciato;
+
+        /// <summary>
+        /// I20-1093: conta le referenze di un gruppo nell'esportazione PoP, per farne uscire al piu' tante
+        /// quanti sono i codici del gruppo. Il conteggio riparte a ogni cambio di gruppo: prima continuava
+        /// da quello del gruppo precedente e, con due gruppi consecutivi, una referenza del secondo restava
+        /// senza il suo cartello.
+        /// </summary>
+        public sealed class ContatoreDelGruppo
+        {
+            private string gruppoCorrente = null;
+            private int contate = 0;
+
+            /// <summary>True se la referenza va saltata: il gruppo ha gia' fatto uscire tutte le sue referenze.</summary>
+            public bool Salta(string codiceGruppo)
+            {
+                if (codiceGruppo != gruppoCorrente)
+                {
+                    gruppoCorrente = codiceGruppo;
+                    contate = 0;
+                }
+
+                int numeroElementi = (codiceGruppo ?? "")
+                    .Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
+                    .Length;
+                if (numeroElementi == contate)
+                {
+                    contate = 0;
+                    return true;
+                }
+                contate++;
+                return false;
+            }
+        }
         //Settori/reparti No FOOD
         private readonly string[] settori_no_food = new string[] { "62", "64", "66", "68" };
         private readonly string[] reparti_no_food = new string[] { "01", "02", "03", "04", "05", "06", "07", "09", "11", "12" };
@@ -371,7 +404,8 @@ namespace AgenziaLib
 
                 //lettura del tracciato
                 int counter = 0;
-                int contaRefGruppo = 0;
+                //I20-1093: le referenze di ogni gruppo, contate dall'inizio del gruppo.
+                ContatoreDelGruppo contatoreDelGruppo = new ContatoreDelGruppo();
 
                 string curr_group_processed = "";
                 string curr_fotoPgroup_processed = "";
@@ -500,18 +534,11 @@ namespace AgenziaLib
                         pesiDiversiInGruppo = listaDelGruppo.GroupBy(g => g.recordInTracciato[GLOBAL_VARIABLES_FICO.keyDescrPeso].ToDecimal()).Count() > 1;
 
                         //Console.WriteLine($">>>>>>>>>>>>>>>Analisi Gruppo: Prezzi diversi: {prezziDiversiInGruppo.ToString()} =>>>> Peso Diverso = {pesiDiversiInGruppo.ToString()}");
-                        //conto i numero di elementi nel gruppo
-                        int numeroElementi = codice_gruppo
-                            .Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
-                            .Length;
-
-                        if (numeroElementi == contaRefGruppo)
+                        //I20-1093: al piu' tante referenze quanti sono i codici del gruppo; il conteggio
+                        //riparte a ogni cambio di gruppo.
+                        if (contatoreDelGruppo.Salta(codice_gruppo))
                         {
-                            contaRefGruppo = 0;
                             continue;
-                        } else
-                        {
-                            contaRefGruppo++;
                         }
 
                         if (curr_group_processed != codice_gruppo)
