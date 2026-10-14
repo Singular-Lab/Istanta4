@@ -294,10 +294,20 @@ const TestoTag = {
             tf.contents = built.fullText;
     
             // applica stili ai range
+            //Uno stile di carattere che nel documento non c'e' non si salta in silenzio: il tratto
+            //prenderebbe la formattazione che il riquadro aveva prima (il segnaposto del modello), e la
+            //descrizione uscirebbe con gli stili spostati senza che nessuno se ne accorga. Prende lo
+            //stile nessuno, e il box riceve una segnalazione con i nomi degli stili mancanti.
+            let stiliMancanti = [];
             for (let i = 0; i < built.segments.length; i++) {
                 let seg = built.segments[i];
                 let st = this.parseStile(seg.styleName, false);
-                if (!st) continue;
+                if (!st) {
+                    if (stiliMancanti.indexOf(seg.styleName) < 0) {
+                        stiliMancanti.push(seg.styleName);
+                    }
+                    st = nessCharStyle;
+                }
     
                 try {
                     // characters.itemByRange accetta indici inclusivi
@@ -309,6 +319,12 @@ const TestoTag = {
                 } catch (e) {
                     // ignora errori sui range
                 }
+            }
+
+            if (stiliMancanti.length > 0 && typeof addSegnalazione === "function") {
+                let campo = String(tf.label || "").split("$")[0];
+                addSegnalazione("Code TTG-01 Stili di carattere non trovati nel documento: " + stiliMancanti.join(", ") + (campo !== "" ? " (campo " + campo + ")" : ""),
+                    "warning", 2, true, ["TTG-01", "orange"], "stili_mancanti_" + campo);
             }
 
             // if(built.segments.length==0 && invalidareStileDiCarattere){
@@ -745,16 +761,19 @@ const TestoTag = {
     /// Lo stile di paragrafo o di carattere del documento, dato il nome. "Nome" lo cerca in
     /// radice, "Gruppo.Nome" dentro il gruppo. null se non c'e'.
     parseStile(stile, paragraph = false) {
+        //Uno stile che nel documento non c'e': InDesign restituisce comunque un oggetto, non valido
+        //ma non nullo, e chi lo usava come trovato lo assegnava a vuoto. Se lo dice non valido, null.
+        const valido = trovato => (trovato != null && trovato.isValid === false ? null : trovato);
         //I20-1012: locale. Prima era scritta senza dichiararla, e finiva fra le globali.
         let stileSplitted = stile.split(".");
         //se stileSplitted.length > 1
 
         if(stileSplitted.length == 1){
             if(paragraph){
-                return docInLavorazione.paragraphStyles.item(stileSplitted[0]);
+                return valido(docInLavorazione.paragraphStyles.item(stileSplitted[0]));
             }
             else{
-                return docInLavorazione.characterStyles.item(stileSplitted[0]);
+                return valido(docInLavorazione.characterStyles.item(stileSplitted[0]));
             }
         }
 
@@ -765,7 +784,7 @@ const TestoTag = {
                     for (var $s = 0; $s < docInLavorazione.paragraphStyleGroups.length; $s++) {
                         var gStyle = docInLavorazione.paragraphStyleGroups.item($s);
                         if (gStyle.name == stileSplitted[0])
-                            return docInLavorazione.paragraphStyleGroups.item($s).paragraphStyles.item(stileSplitted[1]);
+                            return valido(docInLavorazione.paragraphStyleGroups.item($s).paragraphStyles.item(stileSplitted[1]));
                     }
                // }  
             }
@@ -777,7 +796,7 @@ const TestoTag = {
                     for (var $s = 0; $s < docInLavorazione.characterStyleGroups.length; $s++) {
                         var gStyle = docInLavorazione.characterStyleGroups.item($s);
                         if (gStyle.name == stileSplitted[0])
-                            return docInLavorazione.characterStyleGroups.item($s).characterStyles.item(stileSplitted[1]);
+                            return valido(docInLavorazione.characterStyleGroups.item($s).characterStyles.item(stileSplitted[1]));
                     }
                 //}  
             }
