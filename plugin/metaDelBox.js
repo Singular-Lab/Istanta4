@@ -175,6 +175,50 @@ const metaDelBox = {
         return voci.length > 0 ? { voci: voci } : null;
     },
 
+    /* ---------- l'attesa delle azioni ---------- */
+
+    /// I20-1089: fra il clic e l'effetto di un'azione che chiama il server c'e' un'attesa, e un
+    /// secondo clic la rifarebbe. Il pulsante si segna "in corso" e si mostra il caricamento, che
+    /// sta sopra le finestre e ferma anche gli altri clic. Falso se il pulsante era gia' in corso:
+    /// quel clic non deve fare niente. Il segno si tiene in un attributo perche' in UXP un pulsante
+    /// disattivato non e' detto che ignori il clic.
+    inizioAttesa(pulsante, testo = "Applicazione in corso...") {
+        if (pulsante != null && typeof pulsante.attr === "function") {
+            if (pulsante.attr("data-incorso") === "1") {
+                return false;
+            }
+            pulsante.attr("data-incorso", "1");
+        }
+        if (typeof showLoading === "function") {
+            showLoading(testo);
+        }
+        return true;
+    },
+
+    /// La fine dell'attesa: via il caricamento e il segno, anche se l'azione e' fallita.
+    fineAttesa(pulsante) {
+        if (typeof hideLoading === "function") {
+            hideLoading();
+        }
+        if (pulsante != null && typeof pulsante.attr === "function") {
+            pulsante.attr("data-incorso", "0");
+        }
+    },
+
+    /// Un'azione con la sua attesa. Falso se il pulsante era gia' in corso e l'azione non e' partita.
+    async eseguiConAttesa(pulsante, testo, azione) {
+        if (!this.inizioAttesa(pulsante, testo)) {
+            return false;
+        }
+        try {
+            await azione();
+            return true;
+        }
+        finally {
+            this.fineAttesa(pulsante);
+        }
+    },
+
     /* ---------- in InDesign ---------- */
 
     /// L'icona blu accanto al segnalino: quanti meta ha il box, e la finestra per vederli. C'e'
@@ -394,8 +438,11 @@ const metaDelBox = {
                 if (richiesta == null) {
                     return;
                 }
-                $("#popupCloseButton").trigger("click");
-                await me.salvaModificheMeta(richiesta);
+                //Il caricamento resta fino alla reimpaginazione: un secondo Salva non riparte.
+                await me.eseguiConAttesa(salva, "Salvataggio dei meta...", async function () {
+                    $("#popupCloseButton").trigger("click");
+                    await me.salvaModificheMeta(richiesta);
+                });
             });
             azioni.append(applicaNuovo).append(salva);
 
@@ -560,10 +607,13 @@ const metaDelBox = {
             const aggiungi = function (testo, azione, ridisegna) {
                 const pulsante = $('<sp-action-button style="font-size: 12px; margin: 4px 6px 8px 0px;"></sp-action-button>').text(testo);
                 pulsante.on("click", async function () {
-                    if (await azione() && ridisegna) {
-                        me.dimenticaSegnalazioni();
-                        await me.selectSchedaRef(1);
-                    }
+                    //I20-1089: con il caricamento, e un clic solo per volta.
+                    await me.eseguiConAttesa(pulsante, "Applicazione in corso...", async function () {
+                        if (await azione() && ridisegna) {
+                            me.dimenticaSegnalazioni();
+                            await me.selectSchedaRef(1);
+                        }
+                    });
                 });
                 contenitore.append(pulsante);
             };

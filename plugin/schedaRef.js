@@ -5340,6 +5340,11 @@ const schedaRef = {
                 return;
             }
             pulsante.on("click", async function () {
+                //I20-1089: fra il clic e l'effetto c'e' un'attesa: si vede il caricamento, e un secondo
+                //clic sullo stesso pulsante non rifa' l'azione.
+                if (!me.inizioAttesa(pulsante)) {
+                    return;
+                }
                 pulsante.prop("disabled", true);
                 try {
                     if (azione === "usaServer") {
@@ -5408,6 +5413,7 @@ const schedaRef = {
                 }
                 finally {
                     pulsante.prop("disabled", false);
+                    me.fineAttesa(pulsante);
                 }
             });
             barra.append(pulsante);
