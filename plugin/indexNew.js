@@ -427,6 +427,9 @@ function applicaNoRenderAgliElementiDelBox(box, elementiNoRender) {
     if (box == null || elementiNoRender == null || elementiNoRender.length == 0) {
         return;
     }
+    //Contenitori del noRender: un campo marcato nasconde anche il contenitore che l'agenzia gli
+    //dichiara (Coop: txt_sconto nel gruppo box_sconto), anche nei meta salvati prima.
+    elementiNoRender = NoRenderElementi.conContenitori(elementiNoRender, pluginMiddleware.getContenitoriNoRender());
 
     var resiInvisibili = 0;
 
