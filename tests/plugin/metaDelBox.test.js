@@ -171,6 +171,91 @@ test("la finestra: Rimuovi solo sui testi, Vai a Segnalazioni sui meta da verifi
     assert.match(meta, /return this\.testoDalBoxPerIlServer\(campoCompilato, campo\.contents, TestoTag\.componiStringTagFromInndTextFrame\(campo\)\);/);
 });
 
+test("la finestra costruisce il suo contenuto con un tag per elemento, mai da un blocco di HTML", () => {
+    //In UXP il blocco di HTML del contenuto non diventava un elemento (due nodi senza tag, nessun
+    //figlio, misurato in collaudo): la finestra si apriva vuota, senza errori.
+    const meta = sorgente("metaDelBox.js");
+    assert.doesNotMatch(meta, /\$\(`/);
+    const finestra = meta.substring(meta.indexOf("    mostraFinestraMeta() {"), meta.indexOf("/* ---------- I20-1090"));
+    assert.match(finestra, /const contenuto = \$\('<div><\/div>'\)\.css\(/);
+    assert.match(finestra, /contenuto\.append\(elenco\)\.append\(nuovo\)\.append\(azioni\);/);
+    //I riquadri si tengono in mano, non si cercano dentro il contenuto.
+    assert.doesNotMatch(finestra, /contenuto\.find\(/);
+    //E la finestra riceve proprio quel contenuto.
+    assert.match(finestra, /Modali\.popup\("Meta del box", contenuto, "lg"\);/);
+});
+
+/* ---- l'attesa delle azioni ---- */
+
+function pulsanteFinto() {
+    const attributi = {};
+    return { attr: (nome, valore) => { if (valore === undefined) { return attributi[nome]; } attributi[nome] = valore; return this; } };
+}
+
+function conCaricamento(eventi, prova) {
+    const salva = { showLoading: global.showLoading, hideLoading: global.hideLoading };
+    global.showLoading = (testo) => eventi.push("mostra:" + testo);
+    global.hideLoading = () => eventi.push("nascondi");
+    return Promise.resolve(prova()).finally(() => {
+        Object.keys(salva).forEach(k => { if (salva[k] === undefined) { delete global[k]; } else { global[k] = salva[k]; } });
+    });
+}
+
+test("un'azione con attesa mostra il caricamento e lo toglie alla fine", () => {
+    const eventi = [];
+    return conCaricamento(eventi, async () => {
+        const pulsante = pulsanteFinto();
+        assert.strictEqual(await schedaRef.eseguiConAttesa(pulsante, "Salvataggio dei meta...", async () => { eventi.push("azione"); }), true);
+        assert.deepStrictEqual(eventi, ["mostra:Salvataggio dei meta...", "azione", "nascondi"]);
+        assert.strictEqual(pulsante.attr("data-incorso"), "0");
+    });
+});
+
+test("un secondo clic mentre l'azione e' in corso non la rifa'", () => {
+    const eventi = [];
+    return conCaricamento(eventi, async () => {
+        const pulsante = pulsanteFinto();
+        let finisci;
+        const prima = schedaRef.eseguiConAttesa(pulsante, "x", () => new Promise(r => { eventi.push("azione"); finisci = r; }));
+        assert.strictEqual(await schedaRef.eseguiConAttesa(pulsante, "x", async () => { eventi.push("seconda azione"); }), false);
+        finisci();
+        assert.strictEqual(await prima, true);
+        assert.deepStrictEqual(eventi, ["mostra:x", "azione", "nascondi"]);
+        //Finita la prima, il pulsante torna utilizzabile.
+        assert.strictEqual(await schedaRef.eseguiConAttesa(pulsante, "x", async () => { eventi.push("terza azione"); }), true);
+    });
+});
+
+test("se l'azione fallisce il caricamento si toglie lo stesso, e senza caricamento l'azione parte comunque", async () => {
+    const eventi = [];
+    await conCaricamento(eventi, async () => {
+        const pulsante = pulsanteFinto();
+        await assert.rejects(schedaRef.eseguiConAttesa(pulsante, "x", async () => { throw new Error("server giu'"); }));
+        assert.deepStrictEqual(eventi, ["mostra:x", "nascondi"]);
+        assert.strictEqual(pulsante.attr("data-incorso"), "0");
+    });
+    const salva = { showLoading: global.showLoading, hideLoading: global.hideLoading };
+    delete global.showLoading;
+    delete global.hideLoading;
+    try {
+        let fatta = false;
+        assert.strictEqual(await schedaRef.eseguiConAttesa(null, "x", async () => { fatta = true; }), true);
+        assert.strictEqual(fatta, true);
+    }
+    finally {
+        Object.keys(salva).forEach(k => { if (salva[k] !== undefined) { global[k] = salva[k]; } });
+    }
+});
+
+test("l'attesa vale nella finestra delle differenze, nel Salva dei meta e nei pulsanti del meta della descrizione", () => {
+    const scheda = sorgente("schedaRef.js");
+    assert.match(scheda, /pulsante\.on\("click", async function \(\) \{\s*(\/\/[^\n]*\n\s*)*if \(!me\.inizioAttesa\(pulsante\)\) \{\s*return;\s*\}/);
+    assert.match(scheda, /pulsante\.prop\("disabled", false\);\s*me\.fineAttesa\(pulsante\);/);
+    const meta = sorgente("metaDelBox.js");
+    assert.match(meta, /await me\.eseguiConAttesa\(salva, "Salvataggio dei meta\.\.\.", async function \(\) \{\s*\$\("#popupCloseButton"\)\.trigger\("click"\);\s*await me\.salvaModificheMeta\(richiesta\);/);
+    assert.match(meta, /await me\.eseguiConAttesa\(pulsante, "Applicazione in corso\.\.\.", async function \(\) \{\s*if \(await azione\(\) && ridisegna\) \{/);
+});
+
 test("l'icona blu dei meta sta nella riga del codice, alta come il segnalino, e c'e' anche senza meta", () => {
     const meta = sorgente("metaDelBox.js");
     const icona = meta.substring(meta.indexOf("    aggiornaIconaMeta() {"), meta.indexOf("    testoPerNuovoMeta(campoCompilato) {"));

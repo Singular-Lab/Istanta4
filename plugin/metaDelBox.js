@@ -175,6 +175,50 @@ const metaDelBox = {
         return voci.length > 0 ? { voci: voci } : null;
     },
 
+    /* ---------- l'attesa delle azioni ---------- */
+
+    /// I20-1089: fra il clic e l'effetto di un'azione che chiama il server c'e' un'attesa, e un
+    /// secondo clic la rifarebbe. Il pulsante si segna "in corso" e si mostra il caricamento, che
+    /// sta sopra le finestre e ferma anche gli altri clic. Falso se il pulsante era gia' in corso:
+    /// quel clic non deve fare niente. Il segno si tiene in un attributo perche' in UXP un pulsante
+    /// disattivato non e' detto che ignori il clic.
+    inizioAttesa(pulsante, testo = "Applicazione in corso...") {
+        if (pulsante != null && typeof pulsante.attr === "function") {
+            if (pulsante.attr("data-incorso") === "1") {
+                return false;
+            }
+            pulsante.attr("data-incorso", "1");
+        }
+        if (typeof showLoading === "function") {
+            showLoading(testo);
+        }
+        return true;
+    },
+
+    /// La fine dell'attesa: via il caricamento e il segno, anche se l'azione e' fallita.
+    fineAttesa(pulsante) {
+        if (typeof hideLoading === "function") {
+            hideLoading();
+        }
+        if (pulsante != null && typeof pulsante.attr === "function") {
+            pulsante.attr("data-incorso", "0");
+        }
+    },
+
+    /// Un'azione con la sua attesa. Falso se il pulsante era gia' in corso e l'azione non e' partita.
+    async eseguiConAttesa(pulsante, testo, azione) {
+        if (!this.inizioAttesa(pulsante, testo)) {
+            return false;
+        }
+        try {
+            await azione();
+            return true;
+        }
+        finally {
+            this.fineAttesa(pulsante);
+        }
+    },
+
     /* ---------- in InDesign ---------- */
 
     /// L'icona blu accanto al segnalino: quanti meta ha il box, e la finestra per vederli. C'e'
@@ -267,16 +311,15 @@ const metaDelBox = {
             const daRimuovere = new Set();
             const daCreare = [];
 
-            const contenuto = $(`
-                <div style="width: 100%; display: flex; flex-direction: column; gap: 8px; font-family: Arial, sans-serif; color: #2c2c2c;">
-                    <div class="metaElenco" style="width: 100%; display: flex; flex-direction: column; gap: 6px;"></div>
-                    <div class="metaNuovo" style="width: 100%; display: none; flex-direction: column; gap: 4px; border-top: 1px solid #ddd; padding-top: 8px;"></div>
-                    <div class="metaAzioni" style="width: 100%; display: flex; gap: 6px; justify-content: flex-end; border-top: 1px solid #ddd; padding-top: 8px;"></div>
-                </div>
-            `);
-            const elenco = contenuto.find(".metaElenco");
-            const nuovo = contenuto.find(".metaNuovo");
-            const azioni = contenuto.find(".metaAzioni");
+            //Il contenitore e i suoi tre riquadri si creano uno per uno, con un tag solo ciascuno, e si
+            //tengono in mano: scritti come un blocco di HTML, in UXP non diventavano elementi (jQuery
+            //restituiva due nodi senza tag e nessun figlio, misurato in collaudo) e la finestra si
+            //apriva vuota, senza errori. Non riportarli a un blocco di HTML.
+            const contenuto = $('<div></div>').css({ "width": "100%", "display": "flex", "flex-direction": "column", "gap": "8px", "font-family": "Arial, sans-serif", "color": "#2c2c2c" });
+            const elenco = $('<div></div>').css({ "width": "100%", "display": "flex", "flex-direction": "column", "gap": "6px" });
+            const nuovo = $('<div></div>').css({ "width": "100%", "display": "none", "flex-direction": "column", "gap": "4px", "border-top": "1px solid #ddd", "padding-top": "8px" });
+            const azioni = $('<div></div>').css({ "width": "100%", "display": "flex", "gap": "6px", "justify-content": "flex-end", "border-top": "1px solid #ddd", "padding-top": "8px" });
+            contenuto.append(elenco).append(nuovo).append(azioni);
 
             const riga = function (voce) {
                 const r = $('<div></div>');
@@ -395,8 +438,11 @@ const metaDelBox = {
                 if (richiesta == null) {
                     return;
                 }
-                $("#popupCloseButton").trigger("click");
-                await me.salvaModificheMeta(richiesta);
+                //Il caricamento resta fino alla reimpaginazione: un secondo Salva non riparte.
+                await me.eseguiConAttesa(salva, "Salvataggio dei meta...", async function () {
+                    $("#popupCloseButton").trigger("click");
+                    await me.salvaModificheMeta(richiesta);
+                });
             });
             azioni.append(applicaNuovo).append(salva);
 
@@ -561,10 +607,13 @@ const metaDelBox = {
             const aggiungi = function (testo, azione, ridisegna) {
                 const pulsante = $('<sp-action-button style="font-size: 12px; margin: 4px 6px 8px 0px;"></sp-action-button>').text(testo);
                 pulsante.on("click", async function () {
-                    if (await azione() && ridisegna) {
-                        me.dimenticaSegnalazioni();
-                        await me.selectSchedaRef(1);
-                    }
+                    //I20-1089: con il caricamento, e un clic solo per volta.
+                    await me.eseguiConAttesa(pulsante, "Applicazione in corso...", async function () {
+                        if (await azione() && ridisegna) {
+                            me.dimenticaSegnalazioni();
+                            await me.selectSchedaRef(1);
+                        }
+                    });
                 });
                 contenitore.append(pulsante);
             };
