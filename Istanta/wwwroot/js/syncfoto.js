@@ -1118,8 +1118,7 @@ class SyncFoto {
             
         }, function (err) {
 
-            console.error("Trovato errore: " + err.message.error);
-            alert(err.message.error);
+            alert(SyncFoto.messaggioRicercaRegistroNonRiuscita(err));
             hideLoading();
         });
     }
@@ -1242,6 +1241,25 @@ class SyncFoto {
         }
         console.error("Download del pacchetto non riuscito", err);
         return "Non è stato possibile preparare il pacchetto da scaricare. Riprova più tardi.";
+    }
+
+    /// Il messaggio per una ricerca nel registro rifiutata. Call.do mette in err.message il codice
+    /// che SyncFoto/ricercaNelRegistro scrive in error: prima si leggeva err.message.error, una
+    /// proprieta' di una stringa, e l'utente vedeva "undefined". Un errore imprevisto porta con se'
+    /// lo stack trace del server, che resta nella console.
+    static messaggioRicercaRegistroNonRiuscita(err) {
+        var codice = err ? err.message : undefined;
+        if (codice === "not_more_40") {
+            return "Si possono cercare al massimo 40 giorni alla volta: restringi l'intervallo di date.";
+        }
+        if (codice === "a_maggiore_di_da") {
+            return "La data finale è precedente a quella iniziale: correggi l'intervallo.";
+        }
+        if (codice === "Date not valid") {
+            return "Indica sia la data di inizio sia quella di fine.";
+        }
+        console.error("Ricerca nel registro non riuscita", err);
+        return "Non è stato possibile cercare nel registro. Riprova più tardi.";
     }
 
 }
