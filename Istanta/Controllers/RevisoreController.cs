@@ -211,6 +211,16 @@ namespace Istanta.Controllers
             return result;
         }
 
+        /// <summary>
+        /// I20-1092: la chiave con cui la lista del revisore tiene una ref singola una volta sola:
+        /// ref, gruppo, area e canale. Senza il gruppo una ref in due gruppi della stessa area e canale
+        /// restava solo nel primo, e l'altro gruppo compariva senza le sue ref.
+        /// </summary>
+        public static string ChiaveSingoloRevisione(string codice, string codiceGruppo, string? area, string? canale)
+        {
+            return $"{codice}|{codiceGruppo}|{area}_{canale}";
+        }
+
         [HttpPost]
         [Route("Revisore/getConteggio")]
         public async Task<IActionResult> getConteggioListaRevisione(RevisoreRequest req)
@@ -1416,7 +1426,12 @@ out var mismatch);
                     }
                     
 
-                    string codSingoloCache = $"{cod}|{qItem.Area}_{qItem.Canale}";
+                    //I20-1092: la ref singola si tiene una volta per gruppo, area e canale. Con la sola
+                    //coppia ref/area-canale una ref che stava in due gruppi nella stessa area e canale
+                    //entrava solo col primo, e il secondo gruppo arrivava al revisore senza le sue ref
+                    //(il revisore di Edro21 non si apriva piu'). I conteggi non cambiano: contano i
+                    //codici distinti (getConteggio, e nel client creaEAggiornaRevisioniCounter).
+                    string codSingoloCache = ChiaveSingoloRevisione(cod, cod_gruppo, qItem.Area, qItem.Canale);
                     string codGruppoCache = $"{cod_gruppo}|{qItem.Area}_{qItem.Canale}";
 
                     if (cod == "4525536")
@@ -1596,7 +1611,8 @@ out var mismatch);
                     }
 
 
-                    string codSingoloCache = $"{cod}|{qItem.Area}_{qItem.Canale}";
+                    //I20-1092: la stessa chiave del primo passaggio (qui non serve, ma non deve dire altro).
+                    string codSingoloCache = ChiaveSingoloRevisione(cod, cod_gruppo, qItem.Area, qItem.Canale);
                     string codGruppoCache = $"{cod_gruppo}|{qItem.Area}_{qItem.Canale}";
 
                     //Poi formo il gruppo
