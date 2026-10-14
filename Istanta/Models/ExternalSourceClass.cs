@@ -3528,6 +3528,31 @@ namespace Istanta.Models
 
         public evitaTracciaGruppo evitaTracciaAllineamento { get; set; } = new evitaTracciaGruppo();
 
+        /// <summary>
+        /// I20-1102: se valorizzato, il gruppo mette i suoi elementi nei riquadri del modello invece
+        /// di impilarli a livelli (plugin/cssFramework/slot.js). Senza, il gruppo resta a livelli; non
+        /// si scrive quando manca, cosi' le configurazioni che non lo usano restano come sono.
+        /// </summary>
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+        public SlotAllineamento? slot { get; set; } = null;
+
+    }
+
+    /// <summary>
+    /// I20-1102: gli slot di un gruppo di allineamento. Gli elementi presenti del gruppo, nell'ordine
+    /// dei livelli, vanno uno per riquadro nell'ordine delle cornici; se il box non ha nessuna delle
+    /// cornici il gruppo si allinea a livelli.
+    /// </summary>
+    public class SlotAllineamento
+    {
+        /// Le etichette dei riquadri del modello, nell'ordine di riempimento.
+        public List<string> cornici { get; set; } = new();
+
+        /// "posizione": centro su centro. "posizioneEDimensione": centro su centro e la misura del riquadro.
+        public string modalita { get; set; } = "posizione";
+
+        /// Le etichette (anche con *) dei riquadri da togliere dal box, pieni o vuoti. Vuoto: le cornici.
+        public List<string> corniciDaRimuovere { get; set; } = new();
     }
 
     public class SegnalazioniConflitti
