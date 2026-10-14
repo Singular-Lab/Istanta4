@@ -18,6 +18,7 @@ class PuntoVendita extends Model<PuntiVenditaAttributes, PuntiVenditaCreationAtt
   declare provincia_puntivendita?: string;
   declare regione_puntivendita?: string;
   declare telefono_puntivendita?: string | undefined;
+  declare meta_puntivendita?: Record<string, unknown> | null;
   declare createdat?: Date;
   declare updatedat: Date;
 
@@ -173,6 +174,11 @@ PuntoVendita.init({
       is: /^[\+]?[0-9\s\-\(\)]{8,20}$/
     },
     field: 'telefono_puntivendita'
+  },
+  meta_puntivendita: {
+    type: DataTypes.JSONB,
+    allowNull: true,
+    field: 'meta_puntivendita'
   }
 }, {
   sequelize,

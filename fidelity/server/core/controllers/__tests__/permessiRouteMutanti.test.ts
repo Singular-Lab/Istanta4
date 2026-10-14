@@ -23,6 +23,7 @@ import { DisplayContextController } from '../DisplayContextController';
 import { IstantaController } from '../IstantaController';
 import { KitRuntimeController } from '../KitRuntimeController';
 import { PromoController } from '../PromoController';
+import { PuntoVenditaController } from '../PuntoVenditaController';
 import { TracciatoController } from '../TracciatoController';
 
 function createApp() {
@@ -37,6 +38,7 @@ function createApp() {
   new KitRuntimeController({} as any, {} as any).registerRoutes(app);
   new DisplayContextController({} as any).registerRoutes(app);
   new IstantaController({} as any).registerRoutes(app);
+  new PuntoVenditaController({} as any, {} as any, {} as any).registerRoutes(app);
   return app;
 }
 
@@ -49,6 +51,7 @@ describe('permessi sulle route che modificano dati', () => {
     ['cancellazione dei file di un kit runtime', 'delete', '/api/clearAllFilesKitRuntime/k1/e1', 'kit_runtime.elimina_file'],
     ['creazione di un contesto display', 'post', '/api/display-contexts', 'gdo.gestisci_punti_vendita'],
     ['download dei kit per tipo di export', 'post', '/api/downloadKitsByTipoDiExport', 'file.download'],
+    ['import dei punti vendita da Excel', 'post', '/api/ACPV/importaPV', 'gdo.gestisci_punti_vendita'],
   ];
 
   it.each(casi)('%s richiede il permesso giusto', async (_nome, metodo, url, permesso) => {

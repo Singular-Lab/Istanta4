@@ -17,6 +17,7 @@ import { ServerCall } from "../../../lib/server_call";
 import type { CreateDisplayContextDTO, DisplayContextResponseDTO, DispositivoPuntoVenditaResponseDTO, PuntoVenditaResponseDTO } from "../../../server/core/dto";
 import { Dialog, Menu } from "../../components/Base/Headless";
 import { usePVDeviceStatus } from "../../hooks/usePVDeviceStatus";
+import { canaleArea, codiciGdo, indirizzoCompleto } from "../../utils/puntoVendita";
 import { operatorOptions } from "../../pages/GestioneApi/constants";
 import type { FilterCondition } from "../../pages/GestioneApi/types";
 import { createEmptyFilterCondition, createEmptyFilterGroup, formatFiltersForApi } from "../../pages/GestioneApi/utils/filterHelpers";
@@ -78,34 +79,26 @@ const GestionePuntoVendita: React.FC = () => {
   const {
     nome,
     nome_display,
-    indirizzo,
-    indirizzo_completo,
     citta,
     provincia,
     regione,
-    cap,
     ragionesociale,
     telefono,
-    sigla_combinazione,
     has_coordinate,
     coordinate,
     numero_utenti_collegati,
+    meta,
   } = puntoVendita;
 
   const displayName = nome_display || nome;
 
-  const displayIndirizzoCompleto =
-    indirizzo_completo ||
-    [
-      indirizzo,
-      cap && citta ? `${cap} ${citta}` : citta || cap,
-      provincia ? `(${provincia})` : "",
-      regione,
-    ]
-      .filter(Boolean)
-      .join(" - ");
+  const displayIndirizzoCompleto = [indirizzoCompleto(puntoVendita), regione].filter(Boolean).join(" - ");
 
   const displayLocationShort = [citta, provincia, regione].filter(Boolean).join(", ");
+
+  const displayCanaleArea = canaleArea(puntoVendita);
+
+  const codici = codiciGdo(meta);
 
   const parseCoordinate = (value?: number | string | null) => {
     if (typeof value === "number") return Number.isFinite(value) ? value : null;
@@ -116,21 +109,12 @@ const GestionePuntoVendita: React.FC = () => {
     return null;
   };
 
-  const lat = parseCoordinate(coordinate?.lat);
-  const lon = parseCoordinate(coordinate?.lon);
-
-  const mapCenter: [number, number] =
-    lat !== null && lon !== null ? [lat, lon] : [41.8719, 12.5674];
+  // Senza coordinate il DTO porta 0,0: niente mappa, invece di una mappa centrata in mare
+  const lat = has_coordinate ? parseCoordinate(coordinate?.lat) : null;
+  const lon = has_coordinate ? parseCoordinate(coordinate?.lon) : null;
+  const posizione: [number, number] | null = lat !== null && lon !== null ? [lat, lon] : null;
 
   const mapZoom = 21;
-
-  const formatCoordinateValue = (value?: number | string) => {
-    const numericValue = typeof value === "number" ? value : Number(value);
-    if (Number.isFinite(numericValue)) {
-      return numericValue.toFixed(4);
-    }
-    return "N/D";
-  };
 
   // ============================================================
   // DISPOSITIVI - DATI REALI DA API
@@ -565,19 +549,21 @@ const GestionePuntoVendita: React.FC = () => {
                 </span>
               </div>
 
-              {/* Sigla combinazione / coordinate */}
+              {/* Canale e area */}
               <div className="flex items-center text-slate-500">
                 <Lucide icon="Signal" className="w-3.5 h-3.5 mr-1.5 stroke-[1.3]" />
-                <span className="text-[0.85rem]">
-                  {sigla_combinazione
-                    ? `Combinazione: ${sigla_combinazione}`
-                    : has_coordinate && coordinate
-                      ? `Lat: ${formatCoordinateValue(coordinate?.lat)}, Lon: ${formatCoordinateValue(
-                        coordinate?.lon
-                      )}`
-                      : "Configurazione non impostata"}
-                </span>
+                <span className="text-[0.85rem]">{displayCanaleArea}</span>
               </div>
+
+              {/* Codici del sistema della GDO (es. id ANACAN) */}
+              {codici.map(c => (
+                <div key={c.etichetta} className="flex items-center text-slate-500">
+                  <Lucide icon="Hash" className="w-3.5 h-3.5 mr-1.5 stroke-[1.3]" />
+                  <span className="text-[0.85rem]">
+                    {c.etichetta}: {c.valore}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -1154,58 +1140,53 @@ const GestionePuntoVendita: React.FC = () => {
 
                   <div className="flex flex-col gap-8">
                     {/* MAPPA */}
-                    <div className="relative w-full h-[220px] rounded-md overflow-hidden">
-                      <MapContainer
-                        center={mapCenter}
-                        zoom={mapZoom}
-                        preferCanvas
-                        scrollWheelZoom={false}
-                        doubleClickZoom={false}
-                        dragging={false}
-                        touchZoom={false}
-                        keyboard={false}
-                        zoomControl={false}
-                        attributionControl={false}
-                        className="absolute inset-0"
-                      >
-                        {typeof coordinate?.lat === "number" &&
-                          typeof coordinate?.lon === "number" && (
-                            <Marker
-                              position={[coordinate.lat, coordinate.lon]}
-                              icon={storeMarker}
-                            />
-                          )}
-                        <TileLayer
-                          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                          attribution="&copy; OpenStreetMap contributors"
-                        />
-                        {/* <TileLayer
-                          url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png"
-                          attribution="&copy; OpenTopoMap contributors"
-                        /> */}
-
-
-                      </MapContainer>
-                    </div>
+                    {posizione ? (
+                      <div className="relative w-full h-[220px] rounded-md overflow-hidden">
+                        <MapContainer
+                          center={posizione}
+                          zoom={mapZoom}
+                          preferCanvas
+                          scrollWheelZoom={false}
+                          doubleClickZoom={false}
+                          dragging={false}
+                          touchZoom={false}
+                          keyboard={false}
+                          zoomControl={false}
+                          attributionControl={false}
+                          className="absolute inset-0"
+                        >
+                          <Marker position={posizione} icon={storeMarker} />
+                          <TileLayer
+                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                            attribution="&copy; OpenStreetMap contributors"
+                          />
+                        </MapContainer>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center gap-2 h-[120px] rounded-md border border-dashed border-slate-300/70 text-center">
+                        <Lucide icon="MapPin" className="w-6 h-6 text-slate-400" />
+                        <span className="text-xs text-slate-500">Coordinate non disponibili</span>
+                      </div>
+                    )}
 
                     {/* DATI GENERALI */}
                     <div className="flex flex-col gap-3.5">
                       <div className="flex items-center">
                         <Lucide
-                          icon="Clipboard"
+                          icon="Briefcase"
                           className="w-4 h-4 mr-2 stroke-[1.3] text-slate-500"
                         />
                         <span className="text-[0.9rem]">
                           Ragione Sociale:
                           <span className="ml-1 font-medium">
-                            {ragionesociale || "Non specificato"}
+                            {ragionesociale || "Non specificata"}
                           </span>
                         </span>
                       </div>
 
                       <div className="flex items-center">
                         <Lucide
-                          icon="Calendar"
+                          icon="MapPin"
                           className="w-4 h-4 mr-2 stroke-[1.3] text-slate-500"
                         />
                         <span className="text-[0.9rem]">
@@ -1218,28 +1199,36 @@ const GestionePuntoVendita: React.FC = () => {
 
                       <div className="flex items-center">
                         <Lucide
-                          icon="Clock"
-                          className="w-4 h-4 mr-2 stroke-[1.3] text-slate-500"
-                        />
-                        <span className="text-[0.9rem] mr-1">Manager:</span>
-                        <span className="text-xs font-medium rounded-md px-1.5 py-px bg-success/10 border border-success/10 text-success">
-                          N.D.
-                        </span>
-                      </div>
-
-                      <div className="flex items-center">
-                        <Lucide
-                          icon="Map"
+                          icon="Signal"
                           className="w-4 h-4 mr-2 stroke-[1.3] text-slate-500"
                         />
                         <span className="text-[0.9rem]">
-                          Posizione:
-                          <span className="ml-1 font-medium">
-                            {sigla_combinazione || displayLocationShort || "Non definita"}
-                          </span>
+                          Canale / Area:
+                          <span className="ml-1 font-medium">{displayCanaleArea}</span>
                         </span>
                       </div>
                     </div>
+
+                    {/* DATI DEL SISTEMA DELLA GDO */}
+                    {codici.length > 0 && (
+                      <div>
+                        <div className="text-xs uppercase text-slate-500">Dati GDO</div>
+                        <div className="mt-3 flex flex-col gap-2">
+                          {codici.map(c => (
+                            <div key={c.etichetta} className="flex items-center">
+                              <Lucide
+                                icon="Hash"
+                                className="w-4 h-4 mr-2 stroke-[1.3] text-slate-500"
+                              />
+                              <span className="text-[0.9rem]">
+                                {c.etichetta}:
+                                <span className="ml-1 font-medium">{c.valore}</span>
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     {/* RECAPITI */}
                     <div>
@@ -1248,7 +1237,7 @@ const GestionePuntoVendita: React.FC = () => {
                       <div className="mt-3">
                         <div className="flex items-center">
                           <Lucide
-                            icon="Calendar"
+                            icon="Phone"
                             className="w-4 h-4 mr-2 stroke-[1.3] text-slate-500"
                           />
                           <span className="text-[0.9rem]">
@@ -1272,7 +1261,7 @@ const GestionePuntoVendita: React.FC = () => {
                     <div>
                       <div className="flex items-center">
                         <Lucide
-                          icon="Clock"
+                          icon="Users"
                           className="w-4 h-4 mr-2 stroke-[1.3] text-slate-500"
                         />
                         <span className="text-[0.9rem] mr-1">Dipendenti collegati:</span>

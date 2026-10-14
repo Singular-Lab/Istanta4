@@ -23,10 +23,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { MapContainer, Marker, Popup, TileLayer } from "react-leaflet";
 import { useNavigate } from "react-router-dom";
-import * as XLSX from "xlsx";
 import * as yup from "yup";
 import { ServerCall } from "../../../lib/server_call";
-import { PuntoVenditaResponseDTO } from "../../../server/core/dto";
+import { EsitoRigaImportPuntoVenditaDTO, ImportPuntiVenditaResponseDTO, PuntoVenditaResponseDTO } from "../../../server/core/dto";
+import { canaleArea, codiciGdo, indirizzoCompleto } from "../../utils/puntoVendita";
 // Tipi per le risposte aggiornate del server
 interface ServerResponse<T> {
   esito: boolean;
@@ -48,19 +48,28 @@ const schema = yup.object().shape({
     .string()
     .required("Il cap è obbligatorio")
     .matches(/^[0-9]{5}$/, "Il CAP deve essere di 5 cifre"),
+  // Facoltativi come nel modello: un PV importato spesso non ha coordinate o telefono
   lat: yup
     .number()
+    .transform((valore, originale) => (originale === "" || originale === null ? undefined : valore))
     .typeError("La latitudine deve essere un numero")
-    .required("La latitudine è obbligatoria"),
+    .optional(),
   lon: yup
     .number()
+    .transform((valore, originale) => (originale === "" || originale === null ? undefined : valore))
     .typeError("La longitudine deve essere un numero")
-    .required("La longitudine è obbligatoria"),
-  ragioneSociale: yup.string().required("La ragione sociale è obbligatoria"),
-  provincia: yup.string().required("La provincia è obbligatoria"),
-  regione: yup.string().required("La regione è obbligatoria"),
-  telefono: yup.string().required("Il telefono è obbligatorio"),
+    .optional(),
+  ragioneSociale: yup.string(),
+  provincia: yup.string(),
+  regione: yup.string(),
+  telefono: yup.string(),
 });
+
+/** Coordinata del form: vuota resta assente (null), non diventa 0. */
+const coordinataDaForm = (valore: unknown) => {
+  const numero = typeof valore === "number" ? valore : parseFloat(String(valore ?? ""));
+  return Number.isFinite(numero) ? numero : null;
+};
 
 const normalizeText = (value: string) =>
   value
@@ -216,6 +225,8 @@ function Main() {
     useFetchPuntiVenditaPaginated(puntiVenditaQueryParams);
   const paginatedData = puntiVenditaPaginatedQuery.data;
   const puntiVendita = paginatedData?.punti_vendita ?? [];
+  // La colonna dei codici GDO serve solo alle GDO che li hanno (es. id ANACAN di CONAD CNO)
+  const mostraCodiciGdo = puntiVendita.some(pv => codiciGdo(pv.meta).length > 0);
   const highlightedMapIds = useMemo(() => {
     if (!filtersActive || !puntiVendita.length) {
       return undefined;
@@ -304,9 +315,17 @@ function Main() {
   const [currentPuntoVendita, setCurrentPuntoVendita] =
     useState<PuntoVenditaResponseDTO | null>(null);
   const [isExcelImportDialogOpen, setIsExcelImportDialogOpen] = useState(false);
-  const [excelData, setExcelData] = useState<any[]>([]);
-  const [validationResults, setValidationResults] = useState<any[]>([]);
+  const [fileImport, setFileImport] = useState<File | null>(null);
+  const [anteprimaImport, setAnteprimaImport] = useState<EsitoRigaImportPuntoVenditaDTO[]>([]);
+  const [esitoImport, setEsitoImport] = useState<ImportPuntiVenditaResponseDTO | null>(null);
   const didSetDefaultCanaleRef = useRef(false);
+
+  const chiudiImport = () => {
+    setIsExcelImportDialogOpen(false);
+    setFileImport(null);
+    setAnteprimaImport([]);
+    setEsitoImport(null);
+  };
 
   /* --------------------------------------------------
    * FIX LOOP INFINITO:
@@ -349,8 +368,8 @@ function Main() {
         ...data,
         guidID: "",
         guidIDCombinazione: data.canaleArea,
-        lat: parseFloat(data.lat) || 0,
-        lon: parseFloat(data.lon) || 0,
+        lat: coordinataDaForm(data.lat),
+        lon: coordinataDaForm(data.lon),
       };
       return await ServerCall.put<ServerResponse<PuntoVenditaResponseDTO>>("/ACPV/salvaPV", payload);
     },
@@ -377,8 +396,9 @@ function Main() {
     mutationFn: async (data: any) => {
       const payload = {
         ...data,
-        lat: parseFloat(data.lat) || 0,
-        lon: parseFloat(data.lon) || 0,
+        guidIDCombinazione: data.canaleArea,
+        lat: coordinataDaForm(data.lat),
+        lon: coordinataDaForm(data.lon),
       };
       return await ServerCall.put<ServerResponse<PuntoVenditaResponseDTO>>("/ACPV/modificaPV", payload);
     },
@@ -413,20 +433,40 @@ function Main() {
       ),
   });
 
-  const mutationBulkImport = useMutation({
-    mutationFn: async (list: any[]) =>
-      await ServerCall.post("/ACPV/importaPV", { puntiVendita: list }),
-    onSuccess: () => {
-      invalidatePuntiVendita();
-      setIsExcelImportDialogOpen(false);
-      setExcelData([]);
-      setValidationResults([]);
-      showNotification("Importazione completata con successo", {
-        variant: "success",
+  // Il server legge il file col tracciato della GDO: con anteprima dice solo cosa farebbe di ogni riga
+  const inviaFileImport = <T,>(file: File, anteprima: boolean) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return ServerCall.post<T>(`/ACPV/importaPV${anteprima ? "?anteprima=true" : ""}`, formData, true);
+  };
+
+  const mutationAnteprimaImport = useMutation({
+    mutationFn: (file: File) => inviaFileImport<{ righe: EsitoRigaImportPuntoVenditaDTO[] }>(file, true),
+    onSuccess: (data) => setAnteprimaImport(data.righe),
+    onError: (e: any) => {
+      setFileImport(null);
+      showNotification(e?.message || "Errore durante la lettura del file Excel", {
+        variant: "error",
       });
     },
-    onError: () =>
-      showNotification("Errore durante l'importazione dei punti vendita", {
+  });
+
+  const mutationBulkImport = useMutation({
+    mutationFn: (file: File) => inviaFileImport<ImportPuntiVenditaResponseDTO>(file, false),
+    onSuccess: (esito) => {
+      invalidatePuntiVendita();
+      const riepilogo = `${esito.total_imported} creati, ${esito.total_updated} aggiornati, ${esito.total_skipped} scartati`;
+      if (esito.errors.length === 0) {
+        chiudiImport();
+        showNotification(`Importazione completata: ${riepilogo}`, { variant: "success" });
+        return;
+      }
+      // Restano visibili le righe non importate, comprese quelle rifiutate da Istanta
+      setEsitoImport(esito);
+      showNotification(`Importazione completata con righe non importate: ${riepilogo}`, { variant: "warning" });
+    },
+    onError: (e: any) =>
+      showNotification(e?.message || "Errore durante l'importazione dei punti vendita", {
         variant: "error",
       }),
   });
@@ -445,8 +485,9 @@ function Main() {
       indirizzo: pv.indirizzo,
       cap: pv.cap,
       canaleArea: pv.id_combinazione_canale_area,
-      lat: pv.lat,
-      lon: pv.lon,
+      // Il DTO porta le coordinate in coordinate, a 0,0 quando mancano
+      lat: pv.has_coordinate ? pv.coordinate?.lat : undefined,
+      lon: pv.has_coordinate ? pv.coordinate?.lon : undefined,
       provincia: pv.provincia,
       regione: pv.regione,
       telefono: pv.telefono,
@@ -461,8 +502,8 @@ function Main() {
       citta: "",
       indirizzo: "",
       cap: "",
-      lat: 0,
-      lon: 0,
+      lat: undefined,
+      lon: undefined,
       provincia: "",
       regione: "",
       telefono: "",
@@ -491,71 +532,15 @@ function Main() {
    * ------------------------------------------------*/
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = ""; // per poter riscegliere lo stesso file dopo averlo corretto
     if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = ev => {
-      try {
-        const wb = XLSX.read(ev.target?.result, { type: "binary" });
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        const json = XLSX.utils.sheet_to_json(ws);
-        setExcelData(json);
-        validateExcelData(json as any[]);
-      } catch {
-        showNotification("Errore durante la lettura del file Excel", {
-          variant: "error",
-        });
-      }
-    };
-    reader.readAsBinaryString(file);
+    setFileImport(file);
+    setAnteprimaImport([]);
+    setEsitoImport(null);
+    mutationAnteprimaImport.mutate(file);
   };
 
-  const validateExcelData = (rows: any[]) => {
-    const results = rows.map((row, idx) => {
-      const errs: string[] = [];
-      if (!row.nome) errs.push("Nome mancante");
-      if (!row.citta) errs.push("Città mancante");
-      if (!row.indirizzo) errs.push("Indirizzo mancante");
-      if (!row.cap) errs.push("CAP mancante");
-      if (!row.canaleArea) errs.push("Canale/Area mancante");
-      const validCA = combinazioniDisponibili.data?.some(
-        c => c.sigla_combinazione === row.canaleArea || c.id === row.canaleArea
-      );
-      if (row.canaleArea && !validCA) errs.push("Canale/Area non valido");
-      if (row.cap && !/^[0-9]{5}$/.test(row.cap.toString()))
-        errs.push("Formato CAP non valido");
-      return { row: idx + 1, data: row, isValid: errs.length === 0, errors: errs };
-    });
-    setValidationResults(results);
-  };
-
-  const prepareDataForImport = () =>
-    validationResults
-      .filter(r => r.isValid)
-      .map(r => {
-        const comb = combinazioniDisponibili.data?.find(
-          c => c.sigla_combinazione === r.data.canaleArea || c.id === r.data.canaleArea
-        );
-        return {
-          nome: r.data.nome,
-          indirizzo: r.data.indirizzo,
-          guidID: "",
-          guidIDCombinazione: comb?.id || "",
-          citta: r.data.citta,
-          cap: r.data.cap.toString(),
-          lat: 0,
-          lon: 0,
-        };
-      });
-
-  const importValidData = () => {
-    const list = prepareDataForImport();
-    if (!list.length) {
-      showNotification("Nessun dato valido da importare", { variant: "warning" });
-      return;
-    }
-    mutationBulkImport.mutate(list);
-  };
+  const righeImportabili = anteprimaImport.filter(r => r.azione !== "scarta").length;
 
   const openFileSelector = () => fileInputRef.current?.click();
 
@@ -769,7 +754,7 @@ function Main() {
       <Dialog
         size="xl"
         open={isExcelImportDialogOpen}
-        onClose={() => setIsExcelImportDialogOpen(false)}
+        onClose={chiudiImport}
       >
         <Dialog.Panel>
           <Dialog.Title>
@@ -791,22 +776,42 @@ function Main() {
                   variant="outline-secondary"
                   className="w-full"
                   onClick={openFileSelector}
+                  disabled={mutationAnteprimaImport.isPending || mutationBulkImport.isPending}
                 >
-                  <Lucide
-                    icon="Upload"
-                    className="stroke-[1.3] w-4 h-4 mr-2"
-                  />
-                  Seleziona file Excel
+                  {mutationAnteprimaImport.isPending ? (
+                    <LoadingIcon icon="oval" className="w-4 h-4 mr-2" />
+                  ) : (
+                    <Lucide
+                      icon="Upload"
+                      className="stroke-[1.3] w-4 h-4 mr-2"
+                    />
+                  )}
+                  {fileImport ? fileImport.name : "Seleziona file Excel"}
                 </Button>
                 <div className="mt-2 text-xs text-gray-500">
-                  Formato richiesto: colonne "nome", "citta", "indirizzo", "cap", "canaleArea"
+                  Il file viene letto con il tracciato previsto per la tua GDO.
                 </div>
               </div>
 
-              {excelData.length > 0 && (
+              {esitoImport && (
                 <div className="col-span-12 mt-4">
                   <h3 className="text-sm font-medium mb-2">
-                    Validazione dati ({excelData.length} record)
+                    {esitoImport.total_imported} creati, {esitoImport.total_updated} aggiornati, {esitoImport.total_skipped} non importati
+                  </h3>
+                  <ul className="max-h-64 overflow-y-auto border rounded p-3 text-xs text-danger">
+                    {esitoImport.errors.map(e => (
+                      <li key={e.row}>
+                        Riga {e.row}: {e.error}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {!esitoImport && anteprimaImport.length > 0 && (
+                <div className="col-span-12 mt-4">
+                  <h3 className="text-sm font-medium mb-2">
+                    Anteprima ({anteprimaImport.length} righe)
                   </h3>
                   <div className="max-h-64 overflow-y-auto border rounded">
                     <Table>
@@ -818,49 +823,49 @@ function Main() {
                           <Table.Th>Indirizzo</Table.Th>
                           <Table.Th>Cap</Table.Th>
                           <Table.Th>Canale/Area</Table.Th>
-                          <Table.Th>Stato</Table.Th>
+                          <Table.Th>Esito</Table.Th>
                         </Table.Tr>
                       </Table.Thead>
                       <Table.Tbody>
-                        {validationResults.map(r => (
+                        {anteprimaImport.map(r => (
                           <Table.Tr
-                            key={r.row}
+                            key={r.riga}
                             className={
-                              !r.isValid ? "bg-danger/5 dark:bg-danger/10" : ""
+                              r.azione === "scarta" ? "bg-danger/5 dark:bg-danger/10" : ""
                             }
                           >
-                            <Table.Td>{r.row}</Table.Td>
-                            <Table.Td>{r.data.nome || "-"}</Table.Td>
-                            <Table.Td>{r.data.citta || "-"}</Table.Td>
-                            <Table.Td>{r.data.indirizzo || "-"}</Table.Td>
-                            <Table.Td>{r.data.cap || "-"}</Table.Td>
-                            <Table.Td>{r.data.canaleArea || "-"}</Table.Td>
+                            <Table.Td>{r.riga}</Table.Td>
+                            <Table.Td>{r.letto?.nome || "-"}</Table.Td>
+                            <Table.Td>{r.letto?.citta || "-"}</Table.Td>
+                            <Table.Td>{r.letto?.indirizzo || "-"}</Table.Td>
+                            <Table.Td>{r.letto?.cap || "-"}</Table.Td>
                             <Table.Td>
-                              {r.isValid ? (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 text-[11px] font-semibold rounded-full bg-success/10 text-success border border-success/20">
-                                  <Lucide
-                                    icon="CircleCheck"
-                                    className="w-3.5 h-3.5"
-                                  />
-                                  Valido
-                                </span>
-                              ) : (
+                              {r.letto?.canaleArea ||
+                                [r.letto?.canale, r.letto?.area].filter(Boolean).join(" / ") ||
+                                "-"}
+                            </Table.Td>
+                            <Table.Td>
+                              {r.azione === "scarta" ? (
                                 <div>
                                   <span className="inline-flex items-center gap-1 px-2.5 py-0.5 text-[11px] font-semibold rounded-full bg-danger/10 text-danger border border-danger/20">
                                     <Lucide
                                       icon="CircleAlert"
                                       className="w-3.5 h-3.5"
                                     />
-                                    Errori
+                                    Scartata
                                   </span>
-                                  <ul className="text-xs ml-5 mt-1 text-danger">
-                                    {r.errors.map((e: string, i: number) => (
-                                      <li key={i} className="list-disc">
-                                        {e}
-                                      </li>
-                                    ))}
-                                  </ul>
+                                  <div className="text-xs mt-1 text-danger">
+                                    {r.errore}
+                                  </div>
                                 </div>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 text-[11px] font-semibold rounded-full bg-success/10 text-success border border-success/20">
+                                  <Lucide
+                                    icon="CircleCheck"
+                                    className="w-3.5 h-3.5"
+                                  />
+                                  {r.azione === "crea" ? "Nuovo" : "Aggiorna"}
+                                </span>
                               )}
                             </Table.Td>
                           </Table.Tr>
@@ -869,9 +874,7 @@ function Main() {
                     </Table>
                   </div>
                   <div className="mt-4 text-sm">
-                    Record validi:{" "}
-                    {validationResults.filter(r => r.isValid).length} /{" "}
-                    {validationResults.length}
+                    Righe importabili: {righeImportabili} / {anteprimaImport.length}
                   </div>
                 </div>
               )}
@@ -881,22 +884,23 @@ function Main() {
             <Button
               variant="outline-danger"
               className="w-20 mr-1"
-              onClick={() => setIsExcelImportDialogOpen(false)}
+              onClick={chiudiImport}
             >
-              Annulla
+              {esitoImport ? "Chiudi" : "Annulla"}
             </Button>
-            <Button
-              variant="primary"
-              className="w-auto"
-              onClick={importValidData}
-              disabled={
-                excelData.length === 0 ||
-                validationResults.filter(r => r.isValid).length === 0
-              }
-            >
-              Importa {validationResults.filter(r => r.isValid).length} record
-              validi
-            </Button>
+            {!esitoImport && (
+              <Button
+                variant="primary"
+                className="w-auto"
+                onClick={() => fileImport && mutationBulkImport.mutate(fileImport)}
+                disabled={!fileImport || righeImportabili === 0 || mutationBulkImport.isPending}
+              >
+                {mutationBulkImport.isPending && (
+                  <LoadingIcon icon="oval" className="w-4 h-4 mr-2" />
+                )}
+                Importa {righeImportabili} righe
+              </Button>
+            )}
           </Dialog.Footer>
         </Dialog.Panel>
       </Dialog>
@@ -997,17 +1001,19 @@ function Main() {
                   </div>
                 </div>
                 <div className="flex flex-col sm:flex-row gap-x-3 gap-y-2 sm:ml-auto">
-                  <Button
-                    variant="outline-secondary"
-                    className="w-full sm:w-auto"
-                    onClick={() => setIsExcelImportDialogOpen(true)}
-                  >
-                    <Lucide
-                      icon="FileSpreadsheet"
-                      className="stroke-[1.3] w-4 h-4 mr-2"
-                    />{" "}
-                    Importa Excel
-                  </Button>
+                  <PermissionGate permission={PERMISSIONS.GDO.GESTISCI_PUNTI_VENDITA} mode="disable">
+                    <Button
+                      variant="outline-secondary"
+                      className="w-full sm:w-auto"
+                      onClick={() => setIsExcelImportDialogOpen(true)}
+                    >
+                      <Lucide
+                        icon="FileSpreadsheet"
+                        className="stroke-[1.3] w-4 h-4 mr-2"
+                      />{" "}
+                      Importa Excel
+                    </Button>
+                  </PermissionGate>
                   <PermissionGate permission={PERMISSIONS.GDO.GESTISCI_PUNTI_VENDITA} mode="disable">
                     <Button
                       variant="outline-secondary"
@@ -1033,10 +1039,9 @@ function Main() {
                             <Table.Tr>
                               <Table.Th>#</Table.Th>
                               <Table.Th>Nome</Table.Th>
-                              <Table.Th>Città</Table.Th>
                               <Table.Th>Indirizzo</Table.Th>
-                              <Table.Th>Cap</Table.Th>
-                              <Table.Th>Canale/Area</Table.Th>
+                              <Table.Th>Canale / Area</Table.Th>
+                              {mostraCodiciGdo && <Table.Th>Codice GDO</Table.Th>}
                               <Table.Th className="text-center">Azioni</Table.Th>
                             </Table.Tr>
                           </Table.Thead>
@@ -1067,11 +1072,23 @@ function Main() {
                               puntiVendita.map((pv, idx) => (
                                 <Table.Tr key={pv.id}>
                                   <Table.Td>{baseIndex + idx + 1}</Table.Td>
-                                  <Table.Td>{pv.nome}</Table.Td>
-                                  <Table.Td>{pv.citta}</Table.Td>
-                                  <Table.Td>{pv.indirizzo}</Table.Td>
-                                  <Table.Td>{pv.cap}</Table.Td>
-                                  <Table.Td>{pv.sigla_combinazione ?? "-"}</Table.Td>
+                                  <Table.Td>
+                                    <div className="font-medium">{pv.nome}</div>
+                                    {pv.ragionesociale && (
+                                      <div className="text-xs text-slate-500">{pv.ragionesociale}</div>
+                                    )}
+                                  </Table.Td>
+                                  <Table.Td>{indirizzoCompleto(pv)}</Table.Td>
+                                  <Table.Td>{canaleArea(pv)}</Table.Td>
+                                  {mostraCodiciGdo && (
+                                    <Table.Td>
+                                      {codiciGdo(pv.meta).map(c => (
+                                        <div key={c.etichetta} className="text-xs">
+                                          <span className="text-slate-500">{c.etichetta}:</span> {c.valore}
+                                        </div>
+                                      ))}
+                                    </Table.Td>
+                                  )}
                                   <Table.Td className="flex justify-center">
                                     <div className="flex gap-2">
                                       <Button

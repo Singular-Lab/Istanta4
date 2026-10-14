@@ -178,7 +178,7 @@ export async function createControllers(): Promise<IController[]> {
     new TraduzioneController(traduzioneService),
     new TracciatoController(traccatoService),
     new ScoreboardController(scoreboardService, userService, agenziaLib),
-    new PuntoVenditaController(puntoVenditaService, gdoService),
+    new PuntoVenditaController(puntoVenditaService, gdoService, agenziaLib),
     new PromoController(promoService, impostazioniService, gdoService),
     new CanaleController(canaleService),
     new AreaController(areaService, gdoService),

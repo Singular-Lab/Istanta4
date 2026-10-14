@@ -1,4 +1,4 @@
-import { Op, type WhereOptions } from 'sequelize';
+import { cast, col, Op, where as condizioneSql, type WhereOptions } from 'sequelize';
 import type { PuntiVenditaAttributes } from '../../../lib/types';
 import { PuntoVendita } from '../models/punto_vendita/punti_vendita';
 import { BaseRepository } from './BaseRepository';
@@ -104,13 +104,16 @@ export class PuntoVenditaRepository
         const andConditions: any[] = [{ id_gdo_puntivendita: idGDO }];
 
         if (search && search.trim()) {
-            const likeValue = `%${search}%`;
+            const likeValue = `%${search.trim()}%`;
             andConditions.push({
                 [Op.or]: [
-                    { nome_puntivendita: { [Op.like]: likeValue } },
-                    { citta_puntivendita: { [Op.like]: likeValue } },
-                    { indirizzo_puntivendita: { [Op.like]: likeValue } },
-                    { cap_puntivendita: { [Op.like]: likeValue } }
+                    { nome_puntivendita: { [Op.iLike]: likeValue } },
+                    { citta_puntivendita: { [Op.iLike]: likeValue } },
+                    { indirizzo_puntivendita: { [Op.iLike]: likeValue } },
+                    { cap_puntivendita: { [Op.iLike]: likeValue } },
+                    // I codici del sistema della GDO (es. id ANACAN) stanno nei meta.
+                    // ponytail: il testo del JSON contiene anche i nomi dei campi; jsonb_each_text se serve cercare solo i valori
+                    condizioneSql(cast(col('meta_puntivendita'), 'text'), { [Op.iLike]: likeValue })
                 ]
             });
         }
