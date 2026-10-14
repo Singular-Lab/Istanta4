@@ -109,6 +109,16 @@ const generateCSPHeader = (directives: Record<string, (string | number)[]>): str
     .join('; ');
 }
 
+// Credenziali, sessioni e firme non devono finire nei log
+const CHIAVE_SENSIBILE = /authorization|cookie|token|secret|signature|api-?key|password/i;
+
+/** Copia in cui i valori delle chiavi sensibili sono sostituiti da [omesso]. */
+function oscuraSensibili(valori: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(valori).map(([chiave, valore]) => [chiave, CHIAVE_SENSIBILE.test(chiave) ? '[omesso]' : valore])
+  );
+}
+
 /**
  * Middleware per logging delle richieste sospette
  */
@@ -297,22 +307,25 @@ export function suspiciousActivityLogger(req: Request, res: Response, next: Next
     /^-$/,
   ];
 
-  const suspiciousAgent = suspiciousUserAgents.some(pattern => pattern.test(userAgent));
+  // Le chiamate da server (Istanta su getKitByPromo e simili) non mandano user agent ma si
+  // autenticano con un bearer: li un user agent vuoto non e sospetto. Gli scanner restano sospetti.
+  const chiamataDaServer = /^-?$/.test(userAgent) && /^Bearer\s+\S/i.test(req.get('Authorization') ?? '');
+  const suspiciousAgent = !chiamataDaServer && suspiciousUserAgents.some(pattern => pattern.test(userAgent));
 
   if (suspiciousUrl || suspiciousBody || suspiciousQuery || suspiciousAgent) {
     log.warn('Suspicious activity detected', {
       ip: req.ip,
       userAgent,
       method: req.method,
-      url,
+      path: req.path,
       suspiciousUrl,
       suspiciousBody,
       suspiciousQuery,
       suspiciousAgent,
-      headers: req.headers,
-      body: req.body,
-      query: req.query,
-      timestamp: new Date().toISOString()
+      headers: oscuraSensibili(req.headers),
+      // Il body puo contenere password e dati personali: nei log solo i nomi dei campi
+      campiBody: req.body && typeof req.body === 'object' ? Object.keys(req.body) : undefined,
+      query: oscuraSensibili(req.query as Record<string, unknown>),
     });
 
     AuditLogService.getInstance().suspiciousActivity(req, 'suspicious_request', {

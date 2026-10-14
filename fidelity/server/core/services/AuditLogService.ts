@@ -344,7 +344,8 @@ export class AuditLogService {
 
       switch (event.severity) {
         case AuditSeverity.CRITICAL:
-          log.error(logMessage, new Error('Critical audit event'), logData);
+          // Nessun Error fittizio: il suo stack indicava solo flushBuffer e allungava la riga
+          log.error(logMessage, undefined, logData);
           break;
         case AuditSeverity.HIGH:
           log.warn(logMessage, logData);
