@@ -308,7 +308,7 @@ test("Salva modifiche si ferma prima di chiamare il server se ci sono tratti rip
 test("il messaggio dice gli stili ripetuti e il rimedio", () => {
     const motivo = schedaRef.motivoTrattiRipetuti([{ fondamentale: "descrizione4", stili: ["DESCRIZIONE_GRAMMATURA"] }]);
 
-    assert.strictEqual(motivo, "La descrizione del box ha piu' tratti dello stesso stile (DESCRIZIONE_GRAMMATURA): unisci i testi in un solo tratto per stile, oppure usa \"Scegli quella del server\".");
+    assert.strictEqual(motivo, "La descrizione del box ha piu' tratti dello stesso stile (DESCRIZIONE_GRAMMATURA): unisci i testi in un solo tratto per stile, oppure usa \"Usa quella del server\".");
 });
 
 test("i ripetuti del pannello li dice il controller della scheda, e senza controller non ce ne sono", () => {
@@ -362,7 +362,8 @@ test("nella finestra \"Scegli quella del box\" resta spento, col motivo nel sugg
     });
 });
 
-test("solo \"Scegli quella del box\" si spegne, e senza il suo click di salvataggio", () => {
+test("solo le scelte che revisionano si spengono, e senza il loro click di salvataggio", () => {
     const scheda = leggiFileDelPlugin("schedaRef.js").replace(/\r/g, "");
-    assert.match(scheda, /var pulsante = me\.pulsanteFinestra\(testi\[azione\]\[0\], testi\[azione\]\[1\]\);\s*(\/\/[^\n]*\n\s*)*var ripetuti = azione === "descrizioneBox" \? me\.trattiRipetutiNelPannello\(\) : \[\];\s*if \(ripetuti\.length > 0\) \{\s*me\.spegniSceltaDelBox\(pulsante, riga, ripetuti\);\s*barra\.append\(pulsante\);\s*return;\s*\}\s*pulsante\.on\("click", async function \(\) \{/);
+    //I20-1090: anche "Revisiona e imposta nei meta": con i tratti ripetuti non si fa niente, nemmeno il meta.
+    assert.match(scheda, /var pulsante = me\.pulsanteFinestra\(testi\[azione\]\[0\], testi\[azione\]\[1\]\);\s*(\/\/[^\n]*\n\s*)*var ripetuti = \(azione === "descrizioneBox" \|\| azione === "revisionaEMeta"\) \? me\.trattiRipetutiNelPannello\(\) : \[\];\s*if \(ripetuti\.length > 0\) \{\s*me\.spegniSceltaDelBox\(pulsante, riga, ripetuti\);\s*barra\.append\(pulsante\);\s*return;\s*\}\s*pulsante\.on\("click", async function \(\) \{/);
 });

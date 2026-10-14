@@ -97,6 +97,12 @@ namespace Istanta.Models
         //I20-1070: le foto extra decise dall'operatore per questa sola lavorazione: immagine del box al
         //posto di quella del server, foto extra in piu' tenuta, foto extra esclusa.
         public static readonly string keyExtraLavorazione = "extraLavorazione";
+        //I20-1088: i meta dei testi del box di questa impaginazione, con il valore originale e la
+        //versione registrati e quelli attuali del server (StatoTestoDalBox): il Plugin li segnala da verificare.
+        public static readonly string keyTestiDalBox = "testiDalBox";
+        //I20-1089: le primarie/secondarie e le foto che i meta hanno cambiato in questo record, con il
+        //valore del dato e quello del meta (SostituzioneFotoDaMeta): il Plugin le mostra fra i meta del box.
+        public static readonly string keyMetaFoto = "metaFoto";
 
 
         //Con queste combinazioni di chiave, si chiede al core di recuperare la descrizione dall'archivio per far uscire le ref indicate con questo attributo
@@ -948,6 +954,11 @@ namespace Istanta.Models
         /// ha scelto il testo del box. Si registrano nel meta della lavorazione (testiDalBox).
         /// </summary>
         public List<TestoDalBox>? testiDalBox { get; set; }
+        /// <summary>
+        /// I20-1088: il record del box da cui si salva (DNA del box). Decide la riga della lavorazione
+        /// in cui vanno i testiDalBox e la loro versione. 0 per i client che non lo mandano.
+        /// </summary>
+        public long idRec { get; set; } = 0;
 
     }
 
@@ -1042,8 +1053,9 @@ namespace Istanta.Models
         /// I20-1077: registra nel meta i testi del box scelti dall'operatore. Una voce per campo
         /// (labelName, senza distinguere maiuscole): una scelta nuova sullo stesso campo sostituisce
         /// la precedente. Le voci senza campo o senza testo si ignorano.
+        /// I20-1088: con la versione del record da cui l'operatore ha scelto, se si conosce.
         /// </summary>
-        public static void applicaTestiDalBox(RevisioneMetaPromoLavorazioni meta, List<TestoDalBox>? testi)
+        public static void applicaTestiDalBox(RevisioneMetaPromoLavorazioni meta, List<TestoDalBox>? testi, byte? versione = null)
         {
             if (meta == null || testi == null)
             {
@@ -1056,6 +1068,10 @@ namespace Istanta.Models
                 {
                     continue;
                 }
+                if (versione.HasValue)
+                {
+                    testo.versione = versione;
+                }
                 meta.testiDalBox ??= new List<TestoDalBox>();
                 meta.testiDalBox.RemoveAll(t => string.Equals(t.label, testo.label, StringComparison.OrdinalIgnoreCase));
                 meta.testiDalBox.Add(testo);
@@ -1063,36 +1079,159 @@ namespace Istanta.Models
         }
 
         /// <summary>
-        /// I20-1077: mette nei campi compilati di un record i testi del box scelti dall'operatore. Un
-        /// testo vale solo se il server compone ancora, per quel campo, il contenuto che c'era al
-        /// momento della scelta: se il dato e' cambiato (un prezzo nuovo) il testo del box non si
-        /// applica, e la differenza torna. Restituisce quanti campi ha cambiato.
+        /// I20-1077: mette nei campi compilati di un record i testi del box scelti dall'operatore.
+        /// I20-1088: il testo vale finche' il meta esiste, anche se il server compone ormai altro: e'
+        /// l'operatore a decidere se il meta e' decaduto. Per ogni meta con il suo campo restituisce lo
+        /// stato, con il contenuto che il server componeva prima del meta e la versione attuale del
+        /// record, da cui il Plugin capisce se segnalarlo. Allineato se il server compone gia' il
+        /// testo del meta: il meta non serve piu'.
         /// </summary>
-        public static int applicaTestiDalBoxAiCampi(List<CompiledField>? campi, List<TestoDalBox>? testi)
+        public static List<StatoTestoDalBox> applicaTestiDalBoxAiCampi(List<CompiledField>? campi, List<TestoDalBox>? testi, byte? versioneAttuale = null)
         {
+            var stati = new List<StatoTestoDalBox>();
             if (campi == null || testi == null)
             {
-                return 0;
+                return stati;
             }
 
-            int cambiati = 0;
             foreach (var testo in testi)
             {
                 if (testo == null || string.IsNullOrWhiteSpace(testo.label) || testo.contenuto == null)
                 {
                     continue;
                 }
+                StatoTestoDalBox? stato = null;
                 foreach (var campo in campi)
                 {
                     if (campo == null || !string.Equals(campo.labelName, testo.label, StringComparison.OrdinalIgnoreCase))
                     {
                         continue;
                     }
-                    if (campo.content != testo.contenutoServer)
+                    stato ??= new StatoTestoDalBox
+                    {
+                        label = testo.label,
+                        contenuto = testo.contenuto,
+                        contenutoServer = testo.contenutoServer,
+                        versione = testo.versione,
+                        contenutoServerAttuale = campo.content,
+                        versioneAttuale = versioneAttuale,
+                        allineato = campo.content == testo.contenuto
+                    };
+                    campo.content = testo.contenuto;
+                }
+                if (stato != null)
+                {
+                    stati.Add(stato);
+                }
+            }
+            return stati;
+        }
+
+        /// <summary>
+        /// I20-1088: toglie dal meta i testi di questi campi. Senza testi la chiave sparisce.
+        /// Restituisce quanti ne ha tolti.
+        /// </summary>
+        public static int togliTestiDalBox(RevisioneMetaPromoLavorazioni meta, IEnumerable<string?>? labels)
+        {
+            if (meta?.testiDalBox == null || labels == null)
+            {
+                return 0;
+            }
+            int tolti = 0;
+            foreach (var label in labels)
+            {
+                if (string.IsNullOrWhiteSpace(label))
+                {
+                    continue;
+                }
+                tolti += meta.testiDalBox.RemoveAll(t => string.Equals(t.label, label, StringComparison.OrdinalIgnoreCase));
+            }
+            if (meta.testiDalBox.Count == 0)
+            {
+                meta.testiDalBox = null;
+            }
+            return tolti;
+        }
+
+        public static RichiestaTestiDalBox? leggiRichiestaTestiDalBox(string richiesta)
+        {
+            return Newtonsoft.Json.JsonConvert.DeserializeObject<RichiestaTestiDalBox>(richiesta, settings);
+        }
+
+        /// <summary>
+        /// I20-1088: cosa non va in una richiesta sui meta dei testi, o null se e' buona. Ogni voce
+        /// vuole il campo e un'azione; Aggiorna vuole anche il contenuto attuale del server.
+        /// </summary>
+        public static string? erroreDellaRichiestaTestiDalBox(RichiestaTestiDalBox? richiesta)
+        {
+            if (richiesta?.voci == null || richiesta.voci.Count == 0)
+            {
+                return "manca il meta da cambiare.";
+            }
+            foreach (var voce in richiesta.voci)
+            {
+                if (voce == null || string.IsNullOrWhiteSpace(voce.label))
+                {
+                    return "manca il campo del meta.";
+                }
+                if (!Enum.IsDefined(typeof(AzioneTestoDalBox), voce.azione))
+                {
+                    return $"l'azione {(int)voce.azione} non esiste.";
+                }
+                if (voce.azione == AzioneTestoDalBox.Aggiorna && voce.contenutoServer == null)
+                {
+                    return $"per aggiornare il meta di {voce.label} serve il contenuto attuale del server.";
+                }
+                if (voce.azione == AzioneTestoDalBox.Crea && (voce.contenuto == null || voce.contenutoServer == null))
+                {
+                    return $"per creare il meta di {voce.label} servono il testo e il contenuto attuale del server.";
+                }
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// I20-1088: Aggiorna tiene il testo del meta e gli da' come valore originale il contenuto
+        /// attuale del server, con la versione della voce; Rimuovi toglie il meta. Un campo senza meta
+        /// non si tocca. I20-1089: Crea registra un meta nuovo (sostituisce quello del campo, se c'e').
+        /// Restituisce quanti meta ha cambiato.
+        /// </summary>
+        public static int modificaTestiDalBox(RevisioneMetaPromoLavorazioni meta, RichiestaTestiDalBox? richiesta)
+        {
+            if (meta == null || richiesta?.voci == null)
+            {
+                return 0;
+            }
+            int cambiati = 0;
+            foreach (var voce in richiesta.voci)
+            {
+                if (voce == null || string.IsNullOrWhiteSpace(voce.label))
+                {
+                    continue;
+                }
+                if (voce.azione == AzioneTestoDalBox.Rimuovi)
+                {
+                    cambiati += togliTestiDalBox(meta, new[] { voce.label });
+                    continue;
+                }
+                if (voce.azione == AzioneTestoDalBox.Crea)
+                {
+                    if (voce.contenuto == null)
                     {
                         continue;
                     }
-                    campo.content = testo.contenuto;
+                    applicaTestiDalBox(meta, new List<TestoDalBox> { new TestoDalBox { label = voce.label, contenuto = voce.contenuto, contenutoServer = voce.contenutoServer, versione = voce.versione } });
+                    cambiati++;
+                    continue;
+                }
+                if (voce.azione != AzioneTestoDalBox.Aggiorna || voce.contenutoServer == null || meta.testiDalBox == null)
+                {
+                    continue;
+                }
+                foreach (var testo in meta.testiDalBox.Where(t => string.Equals(t.label, voce.label, StringComparison.OrdinalIgnoreCase)))
+                {
+                    testo.contenutoServer = voce.contenutoServer;
+                    testo.versione = voce.versione;
                     cambiati++;
                 }
             }
@@ -1225,9 +1364,9 @@ namespace Istanta.Models
 
     /// <summary>
     /// I20-1077: un campo di testo per cui l'operatore, dalla finestra delle differenze del Plugin,
-    /// ha scelto il testo del box. Vale per questa lavorazione e solo finche' il server compone per
-    /// quel campo lo stesso contenuto che c'era al momento della scelta: se il dato cambia, la scelta
-    /// decade e la differenza torna a vedersi.
+    /// ha scelto il testo del box. Vale per questa impaginazione della lavorazione.
+    /// I20-1088: vale finche' il meta esiste. Se il server compone ormai un contenuto diverso dal
+    /// valore originale, o il record ha cambiato versione, il Plugin lo segnala da verificare.
     /// </summary>
     public class TestoDalBox
     {
@@ -1235,8 +1374,67 @@ namespace Istanta.Models
         public string? label { get; set; }
         /// <summary>Il testo del box, nella forma del campo compilato.</summary>
         public string? contenuto { get; set; }
-        /// <summary>Il contenuto che il server componeva quando l'operatore ha scelto.</summary>
+        /// <summary>Il valore originale: il contenuto che il server componeva quando l'operatore ha scelto.</summary>
         public string? contenutoServer { get; set; }
+        /// <summary>I20-1088: la versione del record quando l'operatore ha scelto. Null per i meta di prima.</summary>
+        public byte? versione { get; set; }
+    }
+
+    /// <summary>
+    /// I20-1088: un meta di testo come il server lo restituisce con il record (chiave testiDalBox):
+    /// quello che e' registrato e quello che il server compone ora, prima di applicare il meta.
+    /// </summary>
+    public class StatoTestoDalBox
+    {
+        public string? label { get; set; }
+        public string? contenuto { get; set; }
+        public string? contenutoServer { get; set; }
+        public byte? versione { get; set; }
+        public string? contenutoServerAttuale { get; set; }
+        public byte? versioneAttuale { get; set; }
+        /// <summary>Il server compone gia' il testo del meta: il meta non serve piu'.</summary>
+        public bool allineato { get; set; }
+    }
+
+    /// <summary>I20-1088: cosa fare di un meta di testo.</summary>
+    public enum AzioneTestoDalBox
+    {
+        Aggiorna = 1,
+        Rimuovi = 2,
+        //I20-1089: un meta nuovo, dall'interfaccia dei meta del Plugin.
+        Crea = 3
+    }
+
+    public class VoceRichiestaTestoDalBox
+    {
+        public string? label { get; set; }
+        public AzioneTestoDalBox azione { get; set; }
+        /// <summary>Per Crea: il testo del meta, nella forma del campo compilato.</summary>
+        public string? contenuto { get; set; }
+        /// <summary>Per Aggiorna e Crea: il contenuto attuale del server, che diventa il valore originale.</summary>
+        public string? contenutoServer { get; set; }
+        /// <summary>Per Aggiorna e Crea: la versione attuale del record, la mette il server.</summary>
+        public byte? versione { get; set; }
+    }
+
+    /// <summary>
+    /// I20-1089: una primaria/secondaria o una foto che un meta della lavorazione ha cambiato in un
+    /// record: tipo "selezione" (StatoSelezioneFoto come numero) o "foto" (nome del file). Ereditata
+    /// se viene dal meta di una lavorazione passata.
+    /// </summary>
+    public class SostituzioneFotoDaMeta
+    {
+        public string? tipo { get; set; }
+        public string? codRef { get; set; }
+        public string? originale { get; set; }
+        public string? modificato { get; set; }
+        public bool ereditata { get; set; }
+    }
+
+    /// <summary>I20-1088: le modifiche ai meta dei testi di un'impaginazione, tutte in una chiamata.</summary>
+    public class RichiestaTestiDalBox
+    {
+        public List<VoceRichiestaTestoDalBox>? voci { get; set; }
     }
 
     /// <summary>
@@ -2028,6 +2226,8 @@ namespace Istanta.Models
         public bool validaSoloPerLavorazione { get; set; }
         public int idLavorazione { get; set; }
         public bool propaga { get; set; }
+        //I20-1088: il record del box, per trovare la riga della lavorazione dei meta. 0 se il client non lo manda.
+        public long idRec { get; set; } = 0;
 
 
         public void Normalize()
@@ -2795,7 +2995,9 @@ namespace Istanta.Models
         login=13,
         updateNoRender = 14,
         //I20-1070: una decisione su una foto extra per questa sola lavorazione, registrata o tolta.
-        updateExtraLavorazione = 15
+        updateExtraLavorazione = 15,
+        //I20-1088: i meta dei testi del box aggiornati o tolti.
+        updateTestiDalBox = 16
     }
 
     public enum senderOperazione

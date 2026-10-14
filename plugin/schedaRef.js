@@ -1349,6 +1349,10 @@ const schedaRef = {
             });
             $("#editReferenza").append(bottoneDescrizione);
         }
+        //I20-1090: accanto, i pulsanti del meta della descrizione; si disegnano quando il controller
+        //dei campi c'e' (applicaStatoMetaDescrizione).
+        this.descrizioneDaAllineareNellaScheda = descrizioneDaAllineare === true;
+        $("#editReferenza").append($('<div id="metaDescrizioneScheda" style="display: flex; flex-wrap: wrap;"></div>'));
 
 
         if (codice != $("#elementiArtwork").val()) {
@@ -1396,7 +1400,9 @@ const schedaRef = {
                     }
 
                     var originale = campo.attr("data-solaletturaoriginale") === "1";
-                    campo.prop("readonly", bloccare || originale);
+                    //I20-1090: con la descrizione nei meta i suoi campi restano in sola lettura.
+                    var nelMeta = campo.attr("labelcorrispondente") === "descrizione" && me.statoMetaDescrizione(me.schedeRefDati) != null;
+                    campo.prop("readonly", bloccare || originale || nelMeta);
                     campo.css("opacity", bloccare ? "0.6" : "");
                 });
 
@@ -1503,8 +1509,14 @@ const schedaRef = {
                     //contenuto e' quello composto per lei.
                     if (modificabile) {
                         $("#applicaDescrizioneDaServer").show();
+                        $("#metaDescrizioneScheda").show();
                     }
                     else {
+                        $("#applicaDescrizioneDaServer").hide();
+                        $("#metaDescrizioneScheda").hide();
+                    }
+                    //I20-1090: con la descrizione nei meta, "da server" scriverebbe il meta.
+                    if (me.statoMetaDescrizione(me.schedeRefDati) != null) {
                         $("#applicaDescrizioneDaServer").hide();
                     }
 
@@ -1675,6 +1687,7 @@ const schedaRef = {
                 //Il pulsante viene creato prima delle linguette e finiva sopra di loro. Qui lo si
                 //sposta sotto: append di un elemento che esiste gia' lo muove, non lo duplica.
                 rowOpzioniRegionaliEArtwork.append($("#applicaDescrizioneDaServer"));
+                rowOpzioniRegionaliEArtwork.append($("#metaDescrizioneScheda"));
 
                 disegnaPiu();
 
@@ -2429,6 +2442,8 @@ const schedaRef = {
                 let compiledFields = primario.recordInTracciato.compiledFields;
 
                 me.editRefFieldController = new InputEditController($("#editReferenza"), convalidaFirmaRevisione, [descr1InArchivio, descr2InArchivio, descr3InArchivio, descr4InArchivio, descrIndd], compiledFields);
+                //I20-1090: la descrizione nei meta (sola lettura, niente revisione) e i suoi pulsanti.
+                me.applicaStatoMetaDescrizione();
                 //writeDebugMessageForCrash("Fine try descrizioni regionali e canale");
             }, 5);
 
@@ -3968,6 +3983,10 @@ const schedaRef = {
         //I20-1077: e, per gli altri campi di testo, i testi del box da registrare nella lavorazione.
         const testiDalBox = Array.isArray(this.testiDalBoxDaSalvare) ? this.testiDalBoxDaSalvare : [];
         this.testiDalBoxDaSalvare = null;
+        //I20-1090: e, per "Revisiona e imposta nei meta", la descrizione del box da mettere nel meta
+        //dopo la revisione. Se il salvataggio si ferma prima (tratti ripetuti) non si fa nemmeno questo.
+        const metaDescrizioneDopo = this.metaDescrizioneDaImpostare != null ? this.metaDescrizioneDaImpostare : null;
+        this.metaDescrizioneDaImpostare = null;
         try {
             console.log("Salva modifiche " + codice);
 
@@ -4031,6 +4050,8 @@ const schedaRef = {
             if (testiDalBox.length > 0) {
                 req.testiDalBox = testiDalBox;
             }
+            //I20-1088: il record del box, per la riga della lavorazione dei meta e la loro versione.
+            req.idRec = this.idRecDelBoxAperto();
 
             //creiamo una funzione richiamabile
             let applicaCambiStrutturali = function () {
@@ -4094,7 +4115,7 @@ const schedaRef = {
                 //i cambi strutturali non arriverebbero al documento: documento e server
                 //andrebbero ognuno per conto suo.
                 let xhrSalva = new XMLHttpRequestClient();
-                xhrSalva.onload = (objResult, parsed) => {
+                xhrSalva.onload = async (objResult, parsed) => {
                     try {
                         if (!parsed) {
                             objResult = JSON.parse(objResult);
@@ -4104,6 +4125,10 @@ const schedaRef = {
                         //controlliamo se ci sono stati errori
                         if (objResult.esito) {
                             messaggioUtente("SalvaModifiche: Richiesta completata con successo", "success", false, 5);
+                            //I20-1090: a revisione salvata, il meta della descrizione.
+                            if (metaDescrizioneDopo != null) {
+                                await this.metaDescrizioneDopoLaRevisione(metaDescrizioneDopo);
+                            }
                             applicaCambiStrutturali();
                         }
                         else {
@@ -4373,37 +4398,14 @@ const schedaRef = {
     /// I20-1056, lotto 4: il segnalino accanto al codice, dalle differenze (X) e dalle segnalazioni
     /// del bollino (Y). Solo differenze: rosso, "X", come prima. Solo segnalazioni: il colore della
     /// piu' grave, "Y". Tutte e due: rosso, "X+Y". null se non c'e' niente da risolvere.
-    /// I20-1072: senza niente da risolvere ma con foto extra decise per questa lavorazione (Z) il
-    /// segnalino resta, verde, "Z": da li' la finestra si riapre e le decisioni si tolgono. Con
-    /// qualcosa da risolvere le decisioni non si contano, la finestra le mostra comunque.
-    /// I20-1073: Z conta anche gli elementi assenti risolti con noRender (risolteNoRender).
-    segnalinoScheda(differenze, voci, decisioni = [], risolteNoRender = []) {
+    /// I20-1089: le foto extra decise per questa lavorazione e gli elementi assenti messi in noRender
+    /// non tengono piu' acceso il segnalino (verde, da I20-1072 e I20-1073): sono meta del box, e si
+    /// vedono dall'icona blu accanto.
+    segnalinoScheda(differenze, voci) {
         const x = Array.isArray(differenze) ? differenze.length : 0;
         const y = Array.isArray(voci) ? voci.length : 0;
-        const extra = Array.isArray(decisioni) ? decisioni.length : 0;
-        const noRender = Array.isArray(risolteNoRender) ? risolteNoRender.length : 0;
-        const z = extra + noRender;
         if (x === 0 && y === 0) {
-            if (z === 0) {
-                return null;
-            }
-            const testoExtra = extra === 1 ? "1 foto extra decisa per questa lavorazione" : extra + " foto extra decise per questa lavorazione";
-            const testoNoRender = noRender === 1 ? "1 elemento assente messo in noRender" : noRender + " elementi assenti messi in noRender";
-            const testi = [];
-            if (extra > 0) {
-                testi.push(testoExtra);
-            }
-            if (noRender > 0) {
-                testi.push(testoNoRender);
-            }
-            return {
-                testo: String(z),
-                colore: "#1b7f3b",
-                //Le foto extra sono "decise": rivederla, rivederle; gli elementi: rivederlo, rivederli.
-                suggerimento: testi.join(", ") + (z === 1
-                    ? (extra === 1 ? " - clicca per rivederla" : " - clicca per rivederlo")
-                    : (noRender === 0 ? " - clicca per rivederle" : " - clicca per rivederli"))
-            };
+            return null;
         }
         const testoX = x === 1 ? "1 differenza fra il box e il dato" : x + " differenze fra il box e il dato";
         const testoY = y === 1 ? "1 segnalazione di impaginazione" : y + " segnalazioni di impaginazione";
@@ -4629,10 +4631,11 @@ const schedaRef = {
     aggiornaPulsanteSegnalazioni() {
         try {
             $("#segnalazioniBoxButton").remove();
+            //I20-1089: l'icona blu dei meta c'e' sempre; il segnalino, se c'e', le va davanti.
+            this.aggiornaIconaMeta();
 
             //I20-1056, lotto 4: le differenze e le segnalazioni di impaginazione del bollino.
-            const dati = this.segnalinoScheda(this.segnalazioniInMemoria(), this.vociBollinoInMemoria(), this.extraLavorazioneInMemoria(),
-                this.risolteNoRenderInMemoria());
+            const dati = this.segnalinoScheda(this.segnalazioniInMemoria(), this.vociBollinoInMemoria());
             if (dati == null) {
                 return;
             }
@@ -4678,16 +4681,14 @@ const schedaRef = {
     ///
     /// I20-1075: l'elenco e' a riquadri, uno per elemento del box (raggruppaPerElemento), con dentro i
     /// suoi problemi, i valori nel box e sul server e i pulsanti. In cima una riga sola dice quanto c'e'
-    /// da risolvere, quanto e' gia' risolto e quante segnalazioni di impaginazione ci sono: il resto
-    /// sta nelle sezioni richiudibili sotto.
+    /// da risolvere e quante segnalazioni di impaginazione ci sono: queste stanno nella sezione
+    /// richiudibile sotto. I20-1089: quello che e' gia' deciso non sta piu' qui, ma fra i meta del box.
     riempiElencoSegnalazioni(contenitore, intestazione, differenze, vociBollino = [], dopoAzione = null) {
         contenitore.empty();
         intestazione.empty();
 
         const me = this;
         const daRisolvere = Array.isArray(differenze) ? differenze.length : 0;
-        const decise = this.extraLavorazioneInMemoria().length;
-        const inNoRender = this.risolteNoRenderInMemoria().length;
         const impaginazione = Array.isArray(vociBollino) ? vociBollino.length : 0;
         const colore = daRisolvere > 0 ? "#b21d1d" : (impaginazione > 0 ? "#ef6c00" : "#1b7f3b");
 
@@ -4701,7 +4702,7 @@ const schedaRef = {
             "margin-right": "8px",
             "flex": "0 0 auto"
         });
-        const testo = $('<span></span>').text(this.testoRiepilogoFinestra(daRisolvere, decise + inNoRender, impaginazione));
+        const testo = $('<span></span>').text(this.testoRiepilogoFinestra(daRisolvere, impaginazione));
         testo.css({ "font-size": "13px", "font-weight": "600", "color": colore });
         intestazione.append(pallino).append(testo);
 
@@ -4711,18 +4712,8 @@ const schedaRef = {
             if (impaginazione > 0) {
                 return;
             }
-            //I20-1072: le decisioni per questa lavorazione restano modificabili, dalla sezione sotto.
-            //I20-1073: e cosi' gli elementi assenti messi in noRender.
-            const conCosa = [];
-            if (decise > 0) {
-                conCosa.push((decise === 1 ? "1 foto extra decisa" : decise + " foto extra decise") + " per questa lavorazione");
-            }
-            if (inNoRender > 0) {
-                conCosa.push(inNoRender === 1 ? "1 elemento assente in noRender" : inNoRender + " elementi assenti in noRender");
-            }
-            const nota = $('<div></div>').text(conCosa.length === 0
-                ? "Il box corrisponde al dato."
-                : "Il box corrisponde al dato, con " + conCosa.join(" e ") + ".");
+            //I20-1089: le decisioni per questa lavorazione e gli assenti in noRender si vedono fra i meta.
+            const nota = $('<div></div>').text("Il box corrisponde al dato.");
             nota.css({ "font-size": "12px", "color": "#767676", "padding": "2px 0" });
             contenitore.append(nota);
             return;
@@ -4766,7 +4757,8 @@ const schedaRef = {
     },
 
     /// I20-1075: la riga di riepilogo della finestra.
-    testoRiepilogoFinestra(daRisolvere, risolte, impaginazione) {
+    /// I20-1089: senza piu' il conto delle risolte, che sono meta del box.
+    testoRiepilogoFinestra(daRisolvere, impaginazione) {
         let prima;
         if (daRisolvere > 0) {
             prima = daRisolvere + " da risolvere";
@@ -4778,9 +4770,6 @@ const schedaRef = {
             prima = "Tutte le segnalazioni risolte";
         }
         const parti = [prima];
-        if (risolte > 0) {
-            parti.push(risolte + (risolte === 1 ? " risolta" : " risolte"));
-        }
         if (impaginazione > 0) {
             parti.push(impaginazione + " di impaginazione");
         }
@@ -4871,13 +4860,18 @@ const schedaRef = {
     /// suggerimento: in UXP si da' con Tooltip.impostaTooltip, non con title.
     aggiungiValoriDifferenza(riga, diff) {
         const valori = confronti.valoriDifferenza(diff);
-        if (valori == null) {
+        //I20-1088: un meta da verificare mostra il suo testo, il valore originale e il server di adesso.
+        const valoriMeta = confronti.valoriDelMeta(diff);
+        if (valoriMeta.length === 0 && valori == null) {
             return;
         }
+        const coppie = valoriMeta.length > 0
+            ? valoriMeta.map(v => [v.etichetta, v])
+            : [["Nel box", valori.locale], ["Sul server", valori.server]];
         //I20-1075: le etichette in grassetto, i valori normali. Le etichette stanno in una colonna larga
         //quanto la piu' lunga, cosi' i due valori partono dallo stesso punto, e un valore che va a capo
         //resta allineato sotto se stesso.
-        [["Nel box", valori.locale], ["Sul server", valori.server]].forEach(function (coppia) {
+        coppie.forEach(function (coppia) {
             const r = $('<div class="valoreDifferenza"></div>');
             r.css({ "display": "flex", "align-items": "flex-start", "font-size": "12px", "color": "#2c2c2c", "padding-left": "8px" });
             const etichetta = $('<span></span>').text(coppia[0] + ":");
@@ -4955,12 +4949,22 @@ const schedaRef = {
     /// I20-1073: su un campo, un'etichetta o una foto del gruppo assenti dal box, metterli in
     /// noRender, se l'elemento si riconosce (per la foto serve il membro del gruppo).
     azioniPerDifferenza(diff) {
+        //I20-1088: un meta del testo da verificare si aggiorna al server di adesso, oppure si lascia
+        //per il testo del server. Toglierlo e basta si fa dalla schermata dei meta.
+        if (diff != null && diff.tipo === "metaDaVerificare") {
+            return ["aggiornaMeta", "metaServer"];
+        }
         if (diff != null && diff.tipo === "mancante") {
             return this.elementoNoRenderDellAssenza(diff) != null ? ["noRender"] : [];
         }
         //I20-1075: sulla descrizione in mismatch si sceglie quale delle due e' giusta.
         if (this.eDescrizioneInMismatch(diff)) {
-            return ["descrizioneServer", "descrizioneBox"];
+            //I20-1090: con la descrizione nei meta non si revisiona: si usa il meta o lo si aggiorna.
+            //Senza, oltre al server una scelta sola per il box, secondo dove sta la differenza.
+            if (this.statoMetaDescrizione(this.schedeRefDati) != null) {
+                return ["usaMetaDescrizione", "aggiornaMetaDescrizione"];
+            }
+            return ["descrizioneServer", this.sceltaDelBoxPerLaDescrizione(this.dovePortaLaDescrizioneDelBox())];
         }
         //I20-1077: e cosi' su ogni altro campo di testo con il contenuto diverso.
         if (this.campoTestoInMismatch(diff) != null) {
@@ -5309,10 +5313,17 @@ const schedaRef = {
             tieniLavorazione: ["Tieni solo per questa lavorazione", "La foto extra resta nel dato di questa sola lavorazione"],
             escludiLavorazione: ["Escludi per questa lavorazione", "Per questa lavorazione il dato non chiede piu' questa foto extra"],
             noRender: ["Metti in noRender", "L'elemento non va nel box: lo si mette fra i noRender e la differenza risulta risolta"],
-            descrizioneServer: ["Scegli quella del server", "Il box riprende la descrizione del server, con i suoi stili"],
-            descrizioneBox: ["Scegli quella del box", "La descrizione del box va nel dato della referenza (come Salva modifiche): il box non cambia"],
+            descrizioneServer: ["Usa quella del server", "Il box riprende la descrizione del server, con i suoi stili"],
+            //I20-1090: le scelte del box sulla descrizione, una per volta secondo dove sta la differenza.
+            descrizioneBox: ["Revisiona con valore del box", "Le descrizioni fondamentali del box vanno nel dato della referenza (come Salva modifiche): il box non cambia"],
+            impostaMetaDescrizione: ["Imposta come meta", "La descrizione del box vale per questa lavorazione come meta: il dato e il box non cambiano"],
+            revisionaEMeta: ["Revisiona e imposta nei meta", "Le descrizioni fondamentali del box vanno nel dato della referenza, e la descrizione intera del box diventa il meta: il box non cambia"],
+            usaMetaDescrizione: ["Usa quella del meta", "Il box riprende la descrizione del meta, con i suoi stili"],
+            aggiornaMetaDescrizione: ["Aggiorna il meta con il box", "Il meta della descrizione prende il testo del box: il box non cambia"],
             testoServer: ["Scegli quella del server", "Il campo nel box riprende il testo del server, con i suoi stili"],
-            testoBox: ["Scegli quella del box", "Il testo del box vale per questa lavorazione (come Salva modifiche): il box non cambia"]
+            testoBox: ["Scegli quella del box", "Il testo del box vale per questa lavorazione (come Salva modifiche): il box non cambia"],
+            aggiornaMeta: ["Aggiorna meta", "Il meta resta: il testo del server di adesso diventa il suo valore originale, e il box non cambia"],
+            metaServer: ["Usa quella del server", "Il meta si toglie e il campo nel box riprende il testo del server, con i suoi stili"]
         };
         //I20-1075: i pulsanti a destra, sotto il problema a cui servono.
         var barra = $('<div></div>');
@@ -5322,7 +5333,7 @@ const schedaRef = {
             var pulsante = me.pulsanteFinestra(testi[azione][0], testi[azione][1]);
             //I20-1084: con tratti ripetuti la descrizione del box non si puo' mandare: il pulsante
             //resta, spento, e dice perche'.
-            var ripetuti = azione === "descrizioneBox" ? me.trattiRipetutiNelPannello() : [];
+            var ripetuti = (azione === "descrizioneBox" || azione === "revisionaEMeta") ? me.trattiRipetutiNelPannello() : [];
             if (ripetuti.length > 0) {
                 me.spegniSceltaDelBox(pulsante, riga, ripetuti);
                 barra.append(pulsante);
@@ -5351,6 +5362,27 @@ const schedaRef = {
                     else if (azione === "descrizioneBox") {
                         me.tieniDescrizioneDelBox();
                     }
+                    else if (azione === "revisionaEMeta") {
+                        me.tieniDescrizioneDelBox(true);
+                    }
+                    else if (azione === "impostaMetaDescrizione" || azione === "aggiornaMetaDescrizione" || azione === "usaMetaDescrizione") {
+                        if (azione === "impostaMetaDescrizione") {
+                            await me.impostaDescrizioneComeMeta();
+                        }
+                        else if (azione === "aggiornaMetaDescrizione") {
+                            await me.aggiornaMetaDescrizioneColBox();
+                        }
+                        else {
+                            //Con il meta il campo compilato e' il meta: e' quello che si riscrive nel box.
+                            await me.applicaDescrizioneDaServer();
+                            if ($("#popup").length > 0) {
+                                Modali.nascondiHidebleElements();
+                            }
+                        }
+                        if (typeof dopoAzione === "function") {
+                            await dopoAzione();
+                        }
+                    }
                     else if (azione === "testoServer") {
                         await me.applicaCampoDaServer(diff);
                         //Come per la descrizione: il pannello ricostruito non deve finire sopra la finestra.
@@ -5363,6 +5395,12 @@ const schedaRef = {
                     }
                     else if (azione === "testoBox") {
                         me.tieniTestoDelBox(diff);
+                    }
+                    else if (azione === "aggiornaMeta") {
+                        await me.aggiornaMetaDelTesto(diff, dopoAzione);
+                    }
+                    else if (azione === "metaServer") {
+                        await me.usaServerAlPostoDelMeta(diff, dopoAzione);
                     }
                     else {
                         await me.eseguiAzioneExtra(diff, azione, dopoAzione);
@@ -5387,6 +5425,120 @@ const schedaRef = {
         riga.append(barra);
     },
 
+    /* ---------- I20-1088: i meta dei testi del box da verificare ---------- */
+
+    /// Le azioni sui meta dei testi, come le conosce il server (AzioneTestoDalBox).
+    AZIONE_TESTO_DAL_BOX: { aggiorna: 1, rimuovi: 2, crea: 3 },
+
+    /// La richiesta per il server da un meta da verificare: Aggiorna porta il contenuto che il
+    /// server compone ora, che diventa il valore originale (la versione la mette il server);
+    /// Rimuovi solo il campo. Null se la differenza non e' un meta.
+    richiestaTestiDalBox(diff, azione) {
+        if (diff == null || diff.tipo !== "metaDaVerificare" || diff.campo == null || String(diff.campo) === "") {
+            return null;
+        }
+        const voce = { label: String(diff.campo), azione: azione };
+        if (azione === this.AZIONE_TESTO_DAL_BOX.aggiorna) {
+            voce.contenutoServer = diff.contenutoServerAttuale == null ? "" : String(diff.contenutoServerAttuale);
+        }
+        return { voci: [voce] };
+    },
+
+    /// Manda al server le modifiche ai meta dei testi del box aperto. Vero se le ha registrate.
+    salvaTestiDalBox(richiesta) {
+        var me = this;
+        return new Promise(function (resolve) {
+            var schedaRef = me.schedeRefDati;
+            if (schedaRef == null || schedaRef.length < 1 || richiesta == null) {
+                resolve(false);
+                return;
+            }
+            var formData = new FormData();
+            formData.append("idLavorazione", idKitLavorazione);
+            formData.append("CodiceGruppo", schedaRef[0].recordInTracciato["Scatto.CodiceGruppo"]);
+            formData.append("idRec", me.idRecDelBoxAperto());
+            formData.append("richiesta", JSON.stringify(richiesta));
+
+            var xhr = new XMLHttpRequestClient();
+            xhr.onload = function (objResult, parsed) {
+                if (!parsed) {
+                    try {
+                        objResult = JSON.parse(objResult);
+                    }
+                    catch (e) {
+                        messaggioUtente("Code SRF-116 Meta del testo: risposta del server non leggibile: " + e, "error");
+                        resolve(false);
+                        return;
+                    }
+                }
+                if (objResult == null || objResult.esito === false) {
+                    messaggioUtente("Code SRF-117 Meta del testo: il server non ha registrato la modifica" + (objResult != null && objResult.error ? ": " + objResult.error : ""), "error");
+                    resolve(false);
+                    return;
+                }
+                resolve(true);
+            };
+            xhr.onerror = function () {
+                resolve(false);
+            };
+            xhr.send("Menabo/modificaTestiDalBox/0", formData, "PUT");
+        });
+    },
+
+    /// Dopo una modifica a un meta la scheda si riscarica: il meta si applica sul server, e il dato
+    /// in memoria ha ancora lo stato di prima.
+    async riscaricaDopoIlMeta() {
+        var schedaRef = this.schedeRefDati;
+        var codice = schedaRef != null && schedaRef.length > 0 ? schedaRef[0].recordInTracciato["Scatto.CodiceGruppo"] : this.codiceDellaRefAperta();
+        var ricaricata = await this.ricaricaDatiScheda(codice, this.idRecDelBoxAperto());
+        if (!ricaricata) {
+            messaggioUtente("Code SRF-118 Meta registrato, ma la scheda non si e' riscaricata: riaprila per vedere il dato aggiornato", "warning", false, 6);
+        }
+        return ricaricata;
+    },
+
+    /// "Aggiorna meta": il meta resta e prende come valore originale il testo che il server compone
+    /// ora, con la versione attuale del record. Il box non cambia, e il meta non si segnala piu'.
+    async aggiornaMetaDelTesto(diff, dopoAzione) {
+        var registrata = await this.salvaTestiDalBox(this.richiestaTestiDalBox(diff, this.AZIONE_TESTO_DAL_BOX.aggiorna));
+        if (!registrata) {
+            return false;
+        }
+        await this.riscaricaDopoIlMeta();
+        messaggioUtente("Meta di " + diff.label + " aggiornato al testo del server di adesso", "success", false, 4);
+        if (typeof dopoAzione === "function") {
+            await dopoAzione();
+        }
+        return true;
+    },
+
+    /// "Usa quella del server": il meta si toglie e il campo del box riprende il testo del server,
+    /// con i suoi stili. Prima la scheda si riscarica: solo dopo il dato ha il testo del server.
+    async usaServerAlPostoDelMeta(diff, dopoAzione) {
+        var registrata = await this.salvaTestiDalBox(this.richiestaTestiDalBox(diff, this.AZIONE_TESTO_DAL_BOX.rimuovi));
+        if (!registrata) {
+            return false;
+        }
+        var ricaricata = await this.riscaricaDopoIlMeta();
+        if (ricaricata) {
+            //I20-1090: la descrizione ha la sua strada, con i suoi stili.
+            if (String(diff.label || "").toLowerCase() === "descrizione") {
+                await this.applicaDescrizioneDaServer();
+            }
+            else {
+                await this.applicaCampoDaServer({ label: diff.label, difference: "contenuto" });
+            }
+            //Come per "Scegli quella del server": il pannello ricostruito non deve finire sopra la finestra.
+            if ($("#popup").length > 0) {
+                Modali.nascondiHidebleElements();
+            }
+        }
+        if (typeof dopoAzione === "function") {
+            await dopoAzione();
+        }
+        return true;
+    },
+
     /* ---------- I20-1084: i tratti della descrizione ripetuti ---------- */
 
     /// Le descrizioni fondamentali con piu' tratti nei campi della scheda, come le vede il
@@ -5402,7 +5554,7 @@ const schedaRef = {
     /// Il perche' e il rimedio, per il messaggio del salvataggio e per la finestra.
     motivoTrattiRipetuti(ripetuti) {
         return "La descrizione del box ha piu' tratti dello stesso stile (" + InputEditController.nomiDeiTrattiRipetuti(ripetuti)
-            + "): unisci i testi in un solo tratto per stile, oppure usa \"Scegli quella del server\".";
+            + "): unisci i testi in un solo tratto per stile, oppure usa \"Usa quella del server\".";
     },
 
     /// "Scegli quella del box" spento: si vede, il suggerimento dice perche', e il clic mette
@@ -5442,12 +5594,15 @@ const schedaRef = {
     /// descrizioni una per una e non sempre vede la differenza che vede la preanalisi. Si scrive
     /// sulla variante che la scheda puo' modificare, come il Salva. La finestra si chiude con la
     /// sua X: il salvataggio ricarica la scheda, e con lei differenze e segnalino.
-    tieniDescrizioneDelBox() {
+    /// I20-1090: con eImpostaNeiMeta e' "Revisiona e imposta nei meta": il testo del box si prende
+    /// adesso, e il meta si registra solo a revisione salvata (salvaModifiche).
+    tieniDescrizioneDelBox(eImpostaNeiMeta = false) {
         if (typeof this.salvaModificheDellaScheda !== "function") {
             messaggioUtente("Code SRF-108 Salvataggio della scheda non disponibile: la descrizione del box non e' stata salvata", "error", false, 5);
             return false;
         }
         this.salvaConDescrizioneDelBox = true;
+        this.metaDescrizioneDaImpostare = eImpostaNeiMeta === true ? this.testoDescrizioneDelBoxPerMeta() : null;
         $("#popupCloseButton").trigger("click");
         //I20-1077: una volta sola, come il pulsante Salva modifiche.
         this.salvaModificheDellaScheda();
@@ -5516,8 +5671,9 @@ const schedaRef = {
 
     /// "Scegli quella del box": come per la descrizione e' il Salva modifiche della scheda; in piu'
     /// porta il testo del campo letto dal box (testiDalBoxDaSalvare), che il server registra nella
-    /// lavorazione e rimette nel campo compilato finche' il suo dato resta quello di adesso
-    /// (contenutoServer). La finestra si chiude: il salvataggio ricarica la scheda.
+    /// lavorazione e rimette nel campo compilato. I20-1088: finche' il meta esiste; se il server poi
+    /// compone altro (contenutoServer) o la lista si ricarica, il meta si segnala da verificare.
+    /// La finestra si chiude: il salvataggio ricarica la scheda.
     tieniTestoDelBox(diff) {
         const campoCompilato = this.campoTestoInMismatch(diff);
         const box = this.refSelected != null ? this.refSelected.item : null;
@@ -5577,54 +5733,6 @@ const schedaRef = {
         return true;
     },
 
-    /// I20-1075: la sezione "Risolte": le foto extra decise per questa lavorazione (I20-1070) e gli
-    /// elementi assenti messi in noRender (I20-1073), ognuno col suo Togli o Annulla. Prima erano due
-    /// sezioni.
-    riempiSezioneRisolte(sezione, dopoAzione) {
-        sezione.empty();
-        const me = this;
-        const decise = this.extraLavorazioneInMemoria();
-        const inNoRender = this.risolteNoRenderInMemoria();
-        const quante = decise.length + inNoRender.length;
-        if (quante === 0) {
-            sezione.css("display", "none");
-            return;
-        }
-        sezione.css("display", "block");
-
-        const corpo = this.sezioneRichiudibile(sezione, "risolte", "Risolte", quante);
-        decise.forEach(function (voce) {
-            corpo.append(me.rigaRisolta(me.descriviExtraLavorazione(voce), "Togli",
-                "Toglie la decisione: il dato torna a quello del server e la differenza, se c'e', ricompare",
-                () => me.togliExtraLavorazione(voce, dopoAzione)));
-        });
-        inNoRender.forEach(function (assenza) {
-            corpo.append(me.rigaRisolta(me.descriviRisoltaNoRender(assenza), "Annulla",
-                "Toglie l'elemento dal noRender: la differenza torna fra quelle da risolvere",
-                () => me.cambiaNoRenderDellAssenza(assenza, false, dopoAzione)));
-        });
-    },
-
-    /// Una riga della sezione Risolte: come e' stata risolta, e il pulsante per tornare indietro.
-    rigaRisolta(testo, etichettaPulsante, suggerimento, azione) {
-        const riga = $('<div></div>');
-        riga.css({ "display": "flex", "align-items": "center", "gap": "8px", "padding": "3px 0 3px 8px", "border-left": "3px solid #1b7f3b", "margin-top": "6px" });
-        const scritta = $('<span></span>').text(testo);
-        scritta.css({ "font-size": "12px", "color": "#2c2c2c", "flex": "1 1 auto" });
-        const pulsante = this.pulsanteFinestra(etichettaPulsante, suggerimento);
-        pulsante.on("click", async function () {
-            pulsante.prop("disabled", true);
-            try {
-                await azione();
-            }
-            finally {
-                pulsante.prop("disabled", false);
-            }
-        });
-        riga.append(scritta).append(pulsante);
-        return riga;
-    },
-
     /// I20-1075: i pulsanti della finestra, piccoli e chiari: prima erano pillole scure grandi quanto
     /// le scritte, e la finestra sembrava un pannello di comandi.
     pulsanteFinestra(etichetta, suggerimento) {
@@ -5641,13 +5749,6 @@ const schedaRef = {
         });
         Tooltip.impostaTooltip(pulsante[0], suggerimento);
         return pulsante;
-    },
-
-    /// "descrizione2: non presente nel box, in noRender".
-    descriviRisoltaNoRender(assenza) {
-        var etichetta = typeof ReportIntegrita !== "undefined" ? ReportIntegrita.etichettaSegnalazione(assenza.label) : assenza.label;
-        var cosa = assenza.tipoElemento === NoRenderElementi.TIPO_FOTO ? "foto non presente nel box" : "non presente nel box";
-        return etichetta + ": " + cosa + ", in noRender";
     },
 
     /// I20-1056, lotto 4: la sezione delle segnalazioni di impaginazione del bollino del box, con
@@ -5757,7 +5858,8 @@ const schedaRef = {
             //I20-1073: le sezioni non hanno un'altezza e uno scorrimento loro: scorre solo la finestra,
             //con una barra sola (con le due, una dentro l'altra, l'operatore non ci si ritrovava).
             //I20-1075: in cima una riga di riepilogo con l'Aggiorna, sotto i riquadri da risolvere, poi
-            //le sezioni richiudibili delle risolte e delle segnalazioni di impaginazione.
+            //la sezione richiudibile delle segnalazioni di impaginazione. I20-1089: le risolte sono
+            //uscite, sono meta del box.
             const contenuto = $(`
                 <div style="width: 100%; display: flex; flex-direction: column; gap: 8px; font-family: Arial, sans-serif; color: #2c2c2c;">
                     <div style="display: flex; align-items: center; gap: 10px;">
@@ -5772,8 +5874,6 @@ const schedaRef = {
 
                     <div id="segnalazioniElenco" style="width: 100%; display: flex; flex-direction: column; gap: 8px; box-sizing: border-box;"></div>
 
-                    <div id="segnalazioniRisolte" style="width: 100%; box-sizing: border-box; display: none;"></div>
-
                     <div id="segnalazioniBollinoScheda" style="width: 100%; box-sizing: border-box; display: none;"></div>
                 </div>
             `);
@@ -5782,7 +5882,6 @@ const schedaRef = {
             const elenco = contenuto.find("#segnalazioniElenco");
             const azioni = contenuto.find("#segnalazioniAzioni");
             const sezioneBollino = contenuto.find("#segnalazioniBollinoScheda");
-            const sezioneRisolte = contenuto.find("#segnalazioniRisolte");
             //I20-1075: ogni apertura riparte dalle sezioni aperte o chiuse secondo quello che c'e'.
             this.sezioniFinestra = {};
 
@@ -5793,14 +5892,12 @@ const schedaRef = {
                 me.memorizzaSegnalazioni(await me.differenzeDatiNelBox(box, me.schedeRefDati));
                 me.leggiVociBollino(box);
                 me.riempiElencoSegnalazioni(elenco, intestazione, me.segnalazioniInMemoria(), me.vociBollinoInMemoria(), rifaiAnalisi);
-                me.riempiSezioneRisolte(sezioneRisolte, rifaiAnalisi);
                 me.riempiSezioneBollino(sezioneBollino, elenco, intestazione);
             };
             //Chi ridisegna l'elenco da fuori (la sezione del bollino) passa le stesse azioni.
             this.dopoAzioneFinestra = rifaiAnalisi;
 
             this.riempiElencoSegnalazioni(elenco, intestazione, this.segnalazioniInMemoria() || [], this.vociBollinoInMemoria(), rifaiAnalisi);
-            this.riempiSezioneRisolte(sezioneRisolte, rifaiAnalisi);
             this.riempiSezioneBollino(sezioneBollino, elenco, intestazione);
 
             //Rifa' la pre analisi adesso: e' il modo per vedere l'effetto delle correzioni senza
@@ -5895,7 +5992,9 @@ const schedaRef = {
             );
 
             this.risolteNoRenderDelBox = preAnalisi != null && Array.isArray(preAnalisi.risolteNoRender) ? preAnalisi.risolteNoRender : [];
-            return preAnalisi != null && preAnalisi.differenze != null ? preAnalisi.differenze : [];
+            var differenze = preAnalisi != null && preAnalisi.differenze != null ? preAnalisi.differenze : [];
+            //I20-1088: i meta dei testi da verificare sono differenze da risolvere come le altre.
+            return differenze.concat(confronti.differenzeDeiMeta(rec));
         }
         catch (e) {
             console.error("Code SRF-48 Confronto dei dati del box non riuscito: " + e);
@@ -7489,5 +7588,7 @@ const schedaRef = {
 //I20-1015: la parte foto della scheda sta in reperimentoFoto/schedaFoto.js, ma e' lo stesso
 //oggetto: si mescola qui, e ogni this di quei membri e' schedaRef.
 Object.assign(schedaRef, require('./reperimentoFoto/schedaFoto'));
+//I20-1089: i meta del box e la loro finestra, allo stesso modo.
+Object.assign(schedaRef, require('./metaDelBox'));
 
 module.exports = schedaRef;

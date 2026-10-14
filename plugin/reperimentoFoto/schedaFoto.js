@@ -2345,6 +2345,8 @@ const schedaFoto = {
             formData.append("validaSoloPerLavorazione", validaSoloPerLavorazione ? "true" : "false");
             formData.append("idLavorazione", idKitLavorazione);
             formData.append("propaga", propaga ? "true" : "false");
+            //I20-1088: il record del box, perche' il meta della foto vada nella riga di questa impaginazione.
+            formData.append("idRec", me.idRecDelBoxAperto());
 
 
             return await new Promise((resolve) => {
@@ -2999,6 +3001,8 @@ const schedaFoto = {
         formData.append("tipo", tipo);
         formData.append("idLavorazione", idKitLavorazione);
         formData.append("guidId", idFoto);
+        //I20-1088: il record del box, perche' il meta vada tolto dalla riga di questa impaginazione.
+        formData.append("idRec", me.idRecDelBoxAperto());
 
         var xhr = new XMLHttpRequestClient();
         xhr.onload = (objResult, parsed) => {

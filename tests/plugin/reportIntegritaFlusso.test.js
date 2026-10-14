@@ -533,9 +533,12 @@ test('le differenze di confronto diventano segnalazioni della referenza', () => 
 test('nella riga le due cose restano separate, e il Fix vale solo per l\'integrita\'', () => {
     const pannello = corpoFunzione(confronti, '_buildPanelCambiati(records) {');
 
-    assert.match(pannello, /const segnalazioniIntegrita = tutteLeDifferenze\.filter\(d => d\?\.origine !== "confronto"\)/);
+    //I20-1088: i meta dei testi da verificare sono una terza cosa, fuori dalle segnalazioni di integrita'.
+    assert.match(pannello, /const segnalazioniIntegrita = tutteLeDifferenze\.filter\(d => d\?\.origine !== "confronto" && d\?\.origine !== "meta"\)/);
     assert.match(pannello, /const differenzeConfronto = tutteLeDifferenze\.filter\(d => d\?\.origine === "confronto"\)/);
+    assert.match(pannello, /const differenzeMeta = tutteLeDifferenze\.filter\(d => d\?\.origine === "meta"\)/);
     assert.match(pannello, /this\._crRiquadroConfronto\(differenzeConfronto\)/);
+    assert.match(pannello, /this\._crRiquadroMeta\(differenzeMeta\)/);
 
     //Il Fix rifa' il box: senza segnalazioni di integrita' non c'e' niente da rifare.
     assert.match(pannello, /if \(segnalazioniIntegrita\.length > 0\) \{\s*\n\s*actions\.appendChild\(btnFix\);/);

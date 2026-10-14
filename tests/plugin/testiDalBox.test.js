@@ -47,7 +47,15 @@ test("ogni campo di testo con il contenuto diverso offre server e box; la descri
     //La preanalisi scrive anche il labelName intero, per i campi a stili di carattere.
     assert.deepStrictEqual(schedaRef.azioniPerDifferenza({ label: "prezzo_continuo$KgL", difference: "contenuto" }), ["testoServer", "testoBox"]);
     assert.deepStrictEqual(schedaRef.azioniPerDifferenza({ label: "prezzo_continuo", difference: "contenuto" }), ["testoServer", "testoBox"]);
-    assert.deepStrictEqual(schedaRef.azioniPerDifferenza({ label: "descrizione", difference: "contenuto" }), ["descrizioneServer", "descrizioneBox"]);
+    //I20-1090: sulla descrizione il server e una scelta del box secondo dove sta la differenza.
+    const salvaDove = schedaRef.dovePortaLaDescrizioneDelBox;
+    schedaRef.dovePortaLaDescrizioneDelBox = () => ({ fondamentali: true, altri: false });
+    try {
+        assert.deepStrictEqual(schedaRef.azioniPerDifferenza({ label: "descrizione", difference: "contenuto" }), ["descrizioneServer", "descrizioneBox"]);
+    }
+    finally {
+        schedaRef.dovePortaLaDescrizioneDelBox = salvaDove;
+    }
 }));
 
 test("niente scelta sul paragrafo, sui campi che il server non compone, sulle foto", () => conScheda(() => {

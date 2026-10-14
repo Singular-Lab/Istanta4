@@ -199,6 +199,11 @@ class InputEditController {
                 }
 
                 me.checkStato();
+                //I20-1090: chi costruisce la scheda puo' seguire le modifiche (il pulsante del meta
+                //della descrizione sparisce appena un campo cambia).
+                if (typeof me.dopoModifica === "function") {
+                    me.dopoModifica();
+                }
 
             });
             // $(element).on('keydown', me.onKeyDown);
@@ -302,7 +307,9 @@ class InputEditController {
 
         //$("#salvaButton").prop("disabled", !modificato);
         $("#salvaButton").css("display", modificato || azioniStrutturali ? "block" : "none");
-        if (!this.convalidaFirma) {
+        //I20-1090: con la descrizione nei meta la revisione della descrizione non si fa: firma,
+        //mismatch e differenza dall'archivio non chiedono il Salva.
+        if (!this.convalidaFirma && !this.descrizioneNelMeta) {
             messaggioUtente("Convalidare firma", "warning", false, 3);
             //Il pulsante va fatto vedere a prescindere anche se con testo diverso
             //$("#salvaButton").text("Approva descrizione");
@@ -314,7 +321,7 @@ class InputEditController {
 
         }
 
-        if (this.inMismatch)
+        if (this.inMismatch && !this.descrizioneNelMeta)
         {
             $("#salvaButton").css("display", "block");
         }
@@ -457,12 +464,17 @@ class InputEditController {
         return { valori: valori, cambiati: cambiati, ripetuti: ripetuti };
     }
 
+    /// I20-1090: un campo della descrizione e' stato cambiato rispetto a com'era nel box.
+    descrizioneModificata() {
+        return this.vociDellaDescrizione().some(v => v.modificato);
+    }
+
     /// I20-1084: il testo di almeno una descrizione fondamentale e' diverso da quello in archivio,
     /// oppure una descrizione ha piu' tratti: in tutti e due i casi c'e' da salvare, o da sentirsi
     /// dire perche' non si puo'. Mai in sola lettura e mai coi tratti nascosti: vedi
-    /// decidiFondamentali.
+    /// decidiFondamentali. I20-1090: e mai con la descrizione nei meta.
     descrizioneDiversaDallArchivio() {
-        if (this.solaLettura) {
+        if (this.solaLettura || this.descrizioneNelMeta) {
             return false;
         }
         const voci = this.vociDellaDescrizione().filter(v => !v.nascosto);
@@ -488,6 +500,12 @@ class InputEditController {
 
         for (let key in this.datasource) {
             let objFam = this.datasource[key];
+
+            //I20-1090: con la descrizione nei meta i suoi campi sono in sola lettura e la revisione
+            //non parte; il resto (le Azioni sul box, gli altri campi) si salva come sempre.
+            if (key == "descrizione" && this.descrizioneNelMeta) {
+                continue;
+            }
 
             if (objFam.modificato ||
                 (key=="descrizione" && (!this.convalidaFirma || this.inMismatch || descrizioneEreditata || this.descrizioneDiversaDallArchivio()))
