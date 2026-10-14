@@ -9986,7 +9986,9 @@ double.TryParse(percorso.ToString(), out double valore16))
                     Dictionary<string, List<RevisioneNoRenderFromIndd>> noRenderElementiPerGruppo = new Dictionary<string, List<RevisioneNoRenderFromIndd>>();
                     Dictionary<string, List<RevisioneExtraLavorazioneFromIndd>> extraLavorazionePerGruppo = new Dictionary<string, List<RevisioneExtraLavorazioneFromIndd>>();
                     Dictionary<string, List<TestoDalBox>> testiDalBoxPerGruppo = new Dictionary<string, List<TestoDalBox>>();
-                    var listeModificate = ficoController.updateDatiFromMetaPromoLavorazioni(prepLista.records, idLavorazione, kit!, noRenderPerRef, noRenderElementiPerGruppo, extraLavorazionePerGruppo, testiDalBoxPerGruppo);
+                    //I20-1103: il POP eredita i meta dal volantino della stessa promo, area e canale.
+                    List<FicoProcessController.MetaDelVolantino>? volantinoDelPop = tipoFormatoKit == TipoLavorazione.PoP ? ficoController.metaDeiVolantiniDellaPromo(idLavorazione) : null;
+                    var listeModificate = ficoController.updateDatiFromMetaPromoLavorazioni(prepLista.records, idLavorazione, kit!, noRenderPerRef, noRenderElementiPerGruppo, extraLavorazionePerGruppo, testiDalBoxPerGruppo, null, volantinoDelPop);
                     prepLista.records = listeModificate;
                     //logAss.WriteLine("GET SCHEDA REF >> step9");
 
@@ -10001,6 +10003,13 @@ double.TryParse(percorso.ToString(), out double valore16))
                     }
                     else
                     {
+                        //I20-1103: i meta che le impaginazioni del POP ereditano dal volantino, legati ai
+                        //record come sono dopo l'export, prima di applicare noRender, foto extra e testi.
+                        //I20-1082: il POP non decide: le foto extra le ha solo dal volantino.
+                        HashSet<string>? testiEreditati = null;
+                        if (volantinoDelPop != null)
+                            testiEreditati = FicoProcessController.sostituisciConIMetaDelVolantino(FicoProcessController.metaDelVolantinoPerIlPop(resultAgenzia.liste.SelectMany(l => l.Records).ToList(), volantinoDelPop), noRenderPerRef, noRenderElementiPerGruppo, extraLavorazionePerGruppo, testiDalBoxPerGruppo);
+
                         foreach (var itemLista in resultAgenzia.liste)
                         {
                             //membriGruppoFoto esiste solo dopo l'export di agenzia: e' qui che
@@ -10030,18 +10039,14 @@ double.TryParse(percorso.ToString(), out double valore16))
                             }
                         }
 
-                        //I20-1082: il POP non decide: prende le decisioni Tutto del volantino della
-                        //stessa promo, area e canale.
-                        if (tipoFormatoKit == TipoLavorazione.PoP)
-                        {
-                            extraLavorazionePerGruppo = FicoProcessController.decisioniDelVolantinoPerIlPop(resultGlobale.records, ficoController.decisioniDeiVolantiniDellaPromo(idLavorazione));
-                        }
                         //I20-1070: le foto extra decise dall'operatore per questa lavorazione.
                         FicoProcessController.applicaExtraDellaLavorazione(resultGlobale.records, extraLavorazionePerGruppo);
                         //I20-1077: i testi del box scelti dall'operatore, nei campi compilati.
                         //I20-1088: con il loro stato. Quelli che il server compone ormai da se' qui non si
                         //restituiscono e basta: si tolgono scaricando la lista.
                         FicoProcessController.applicaTestiDalBox(resultGlobale.records, testiDalBoxPerGruppo, ficoController.versioniDeiRecordConTesti(resultGlobale.records, testiDalBoxPerGruppo));
+                        //I20-1103: quelli ereditati dal volantino nel POP si applicano e basta.
+                        FicoProcessController.togliStatoDeiTestiEreditati(resultGlobale.records, testiEreditati);
                     }
                 }
                 else

@@ -2687,6 +2687,10 @@ namespace Istanta.Controllers
                 string error_report = "";
 
 
+                //I20-1103: le righe dei volantini della stessa promo, area e canale, da cui il POP eredita i
+                //meta. Si leggono una volta sola, al primo tracciato che le chiede.
+                List<MetaDelVolantino>? volantinoDellaPromo = null;
+
                 foreach (PromoTracciati tracciato in tracciati)
                 {
 
@@ -2771,9 +2775,14 @@ namespace Istanta.Controllers
                         Dictionary<string, List<TestoDalBox>> testiDalBoxPerGruppo = new Dictionary<string, List<TestoDalBox>>();
                         Dictionary<string, PromoLavorazioniRecord> righeDeiTesti = new Dictionary<string, PromoLavorazioniRecord>();
 
+                        //I20-1103: il POP eredita i meta dal volantino della stessa promo, area e canale.
+                        List<MetaDelVolantino>? volantinoDelPop = null;
+                        if (mode == FicoCombinazioneKitReadMode.Advanced && objFormato.tipo == TipoLavorazione.PoP)
+                            volantinoDelPop = volantinoDellaPromo ??= metaDeiVolantiniDellaPromo(idLavorazione);
+
                         if (mode == FicoCombinazioneKitReadMode.Advanced)
                         {
-                            var listeModificate = updateDatiFromMetaPromoLavorazioni(recordsFiltrati, idLavorazione, kit/*, confronto*/, noRenderPerRef, noRenderElementiPerGruppo, extraLavorazionePerGruppo, testiDalBoxPerGruppo, righeDeiTesti);
+                            var listeModificate = updateDatiFromMetaPromoLavorazioni(recordsFiltrati, idLavorazione, kit/*, confronto*/, noRenderPerRef, noRenderElementiPerGruppo, extraLavorazionePerGruppo, testiDalBoxPerGruppo, righeDeiTesti, volantinoDelPop);
                             recordsFiltrati = listeModificate;
                         }
 
@@ -2788,6 +2797,13 @@ namespace Istanta.Controllers
                         }
                         else
                         {
+                            //I20-1103: i meta che le impaginazioni del POP ereditano dal volantino, legati ai
+                            //record come sono dopo l'export, prima di applicare noRender, foto extra e testi.
+                            //I20-1082: il POP non decide: le foto extra le ha solo dal volantino.
+                            HashSet<string>? testiEreditati = null;
+                            if (volantinoDelPop != null)
+                                testiEreditati = sostituisciConIMetaDelVolantino(metaDelVolantinoPerIlPop(resultAgenzia.liste.SelectMany(l => l.Records).ToList(), volantinoDelPop), noRenderPerRef, noRenderElementiPerGruppo, extraLavorazionePerGruppo, testiDalBoxPerGruppo, righeDeiTesti);
+
                             foreach (var itemLista in resultAgenzia.liste)
                             {
                                 //membriGruppoFoto esiste solo dopo l'export di agenzia: e' qui che
@@ -2820,18 +2836,15 @@ namespace Istanta.Controllers
                                 }
                             }
 
-                            //I20-1082: il POP non decide: prende le decisioni Tutto del volantino della
-                            //stessa promo, area e canale.
-                            if (mode == FicoCombinazioneKitReadMode.Advanced && resultGlobale.tipoLavorazione == TipoLavorazione.PoP)
-                            {
-                                extraLavorazionePerGruppo = decisioniDelVolantinoPerIlPop(resultGlobale.records, decisioniDeiVolantiniDellaPromo(idLavorazione));
-                            }
                             //I20-1070: le foto extra decise dall'operatore per questa lavorazione.
                             applicaExtraDellaLavorazione(resultGlobale.records, extraLavorazionePerGruppo);
                             //I20-1077: i testi del box scelti dall'operatore, nei campi compilati.
                             //I20-1088: con il loro stato; quelli che il server compone ormai da se'
                             //si tolgono qui, scaricando la lista.
                             var testiAllineati = applicaTestiDalBox(resultGlobale.records, testiDalBoxPerGruppo, versioniDeiRecordConTesti(resultGlobale.records, testiDalBoxPerGruppo));
+                            //I20-1103: quelli ereditati dal volantino nel POP si applicano e basta, e non hanno
+                            //una riga di questa lavorazione da cui toglierli.
+                            togliStatoDeiTestiEreditati(resultGlobale.records, testiEreditati);
                             togliTestiDalBoxAllineati(testiAllineati, righeDeiTesti);
                         }
 
@@ -4523,32 +4536,83 @@ namespace Istanta.Controllers
         }
 
         /// <summary>
-        /// I20-1082: un record di una lavorazione volantino con le sue decisioni sulle foto extra, come
-        /// le legge un POP della stessa promo, area e canale.
+        /// I20-1082, I20-1103: una riga di una lavorazione volantino con i suoi meta, come la legge un
+        /// POP della stessa promo, area e canale. Meta e' null se la riga non ne ha.
         /// </summary>
-        public class DecisioniDelVolantino
+        public class MetaDelVolantino
         {
+            public int IdLavorazione { get; set; }
+            public string? Codice { get; set; }
             public string? CodiceGruppo { get; set; }
-            public List<RevisioneExtraLavorazioneFromIndd>? voci { get; set; }
+            public long IdRecordTracciato { get; set; }
+            public RevisioneMetaPromoLavorazioni? Meta { get; set; }
+        }
+
+        private static IEnumerable<string> codiciDelGruppo(string? codiceGruppo) =>
+            (codiceGruppo ?? "").Split(',').Select(c => c.Trim()).Where(c => c != "");
+
+        /// <summary>
+        /// I20-1103: il corrispettivo nel volantino di un'impaginazione del POP, o null se il volantino
+        /// della promo non ha la referenza. Il codice gruppo del POP puo' essere diverso da quello del
+        /// volantino (sottogruppi): le righe si legano per codice della referenza, che deve stare fra i
+        /// codici del gruppo del volantino. Le righe arrivano dal volantino piu' recente: vale il primo
+        /// volantino che ha la referenza, e in quello la riga dello stesso record (lo stesso gruppo
+        /// impaginato due volte), altrimenti la piu' recente. La riga vale anche senza meta: il POP
+        /// allora non eredita niente.
+        /// </summary>
+        public static MetaDelVolantino? corrispettivoNelVolantino(IEnumerable<string>? codici, IEnumerable<long>? idRec, List<MetaDelVolantino>? volantino)
+        {
+            if (codici == null || volantino == null || volantino.Count == 0)
+                return null;
+            var cercati = new HashSet<string>(codici.Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c.Trim()));
+            if (cercati.Count == 0)
+                return null;
+
+            var candidati = volantino
+                .Where(v => v != null && codiciDelGruppo(v.CodiceGruppo).Append(v.Codice?.Trim() ?? "").Any(c => cercati.Contains(c)))
+                .ToList();
+            if (candidati.Count == 0)
+                return null;
+
+            var delVolantino = candidati.Where(v => v.IdLavorazione == candidati[0].IdLavorazione).ToList();
+            var records = new HashSet<long>(idRec ?? Enumerable.Empty<long>());
+            return delVolantino.FirstOrDefault(v => records.Contains(v.IdRecordTracciato)) ?? delVolantino[0];
         }
 
         /// <summary>
-        /// I20-1082: le decisioni che un POP prende dal suo volantino, per codice gruppo del POP. Il POP
-        /// non decide: riceve soltanto le decisioni Tutto, mai quelle SoloVolantino. Il codice gruppo
-        /// del POP puo' essere diverso da quello del volantino (sottogruppi): i record si legano per
-        /// codice della referenza, che deve stare fra i codici del gruppo del volantino. I record del
-        /// volantino arrivano dal piu' recente: vale il primo che ha deciso qualcosa su quel gruppo.
+        /// I20-1103: i meta che il POP eredita dal corrispettivo: tutti, tranne le decisioni sulle foto
+        /// extra prese solo per il volantino (I20-1082). Mai null; vuoto se il corrispettivo non ha meta.
         /// </summary>
-        public static Dictionary<string, List<RevisioneExtraLavorazioneFromIndd>> decisioniDelVolantinoPerIlPop(List<ArticoloInKit>? recordsPop, List<DecisioniDelVolantino>? volantino)
+        public static RevisioneMetaPromoLavorazioni metaPerIlPop(RevisioneMetaPromoLavorazioni? meta)
         {
-            var perGruppo = new Dictionary<string, List<RevisioneExtraLavorazioneFromIndd>>();
+            if (meta == null)
+                return new RevisioneMetaPromoLavorazioni();
+            var perTutto = meta.extraLavorazione?.Where(v => v != null && v.ambito == AmbitoDecisioneLavorazione.Tutto).ToList();
+            return new RevisioneMetaPromoLavorazioni
+            {
+                campiOfferta = meta.campiOfferta,
+                foto = meta.foto,
+                ps = meta.ps,
+                noRender = meta.noRender,
+                extraLavorazione = perTutto != null && perTutto.Count > 0 ? perTutto : null,
+                testiDalBox = meta.testiDalBox
+            };
+        }
+
+        /// <summary>
+        /// I20-1082, I20-1103: i meta che le impaginazioni del POP ereditano dal volantino, per chiave
+        /// dell'impaginazione (chiaveDellImpaginazione) dei record come sono dopo l'export di agenzia.
+        /// Una chiave c'e' quando il corrispettivo esiste, anche se i suoi meta sono vuoti: i meta del
+        /// corrispettivo prendono il posto di quelli del POP.
+        /// </summary>
+        public static Dictionary<string, RevisioneMetaPromoLavorazioni> metaDelVolantinoPerIlPop(List<ArticoloInKit>? recordsPop, List<MetaDelVolantino>? volantino)
+        {
+            var perChiave = new Dictionary<string, RevisioneMetaPromoLavorazioni>();
             if (recordsPop == null || volantino == null || volantino.Count == 0)
-                return perGruppo;
+                return perChiave;
 
             var keyCodGruppo = Enum.GetName(AddestramentoRuoli.Scatto) + "." + GLOBAL_VARIABLES.keyScattoCodiceGruppo;
             var keyRefCodice = Enum.GetName(AddestramentoRuoli.Referenza) + "." + GLOBAL_VARIABLES.keyRefCodice;
-            static IEnumerable<string> codiciDi(string? codiceGruppo) =>
-                (codiceGruppo ?? "").Split(',').Select(c => c.Trim()).Where(c => c != "");
 
             foreach (var record in recordsPop)
             {
@@ -4559,33 +4623,102 @@ namespace Istanta.Controllers
                 if (string.IsNullOrWhiteSpace(codGruppo))
                     continue;
                 var chiave = chiaveDellImpaginazione(codGruppo, record.IdRec);
-                if (perGruppo.ContainsKey(chiave))
+                if (perChiave.ContainsKey(chiave))
                     continue;
 
-                var codici = new HashSet<string>(codiciDi(codGruppo));
+                var codici = codiciDelGruppo(codGruppo).ToList();
                 if (record.recordInTracciato.TryGetValue(keyRefCodice, out var codiceObj) && !string.IsNullOrWhiteSpace(codiceObj?.ToString()))
                     codici.Add(codiceObj!.ToString()!.Trim());
 
-                var decisore = volantino.FirstOrDefault(v => v?.voci != null && v.voci.Count > 0 && codiciDi(v.CodiceGruppo).Any(c => codici.Contains(c)));
-                if (decisore == null)
-                    continue;
-
-                var perTutto = decisore.voci!.Where(v => v != null && v.ambito == AmbitoDecisioneLavorazione.Tutto).ToList();
-                if (perTutto.Count > 0)
-                    perGruppo[chiave] = perTutto;
+                var corrispettivo = corrispettivoNelVolantino(codici, new[] { record.IdRec }, volantino);
+                if (corrispettivo != null)
+                    perChiave[chiave] = metaPerIlPop(corrispettivo.Meta);
             }
-            return perGruppo;
+            return perChiave;
         }
 
         /// <summary>
-        /// I20-1082: le decisioni sulle foto extra delle lavorazioni volantino con la stessa promo, area e
-        /// canale di questa, dalla piu' recente. Vuoto se la lavorazione non si trova o non ha promo.
+        /// I20-1103: mette i meta ereditati dal volantino al posto di quelli del POP, per ogni
+        /// impaginazione che ha il corrispettivo: foto extra, noRender, testi. Le foto extra il POP le
+        /// ha solo dal volantino (I20-1082), anche senza corrispettivo. I testi ereditati tornano fra
+        /// le chiavi da applicare soltanto: nel POP non si segnalano e dal volantino non si tolgono.
+        /// Primarie/secondarie e foto si applicano prima dell'export (updateDatiFromMetaPromoLavorazioni).
         /// </summary>
-        public List<DecisioniDelVolantino> decisioniDeiVolantiniDellaPromo(int idLavorazione)
+        public static HashSet<string> sostituisciConIMetaDelVolantino(Dictionary<string, RevisioneMetaPromoLavorazioni>? perChiave,
+            Dictionary<string, bool>? noRenderPerRef, Dictionary<string, List<RevisioneNoRenderFromIndd>>? noRenderElementiPerGruppo,
+            Dictionary<string, List<RevisioneExtraLavorazioneFromIndd>>? extraLavorazionePerGruppo, Dictionary<string, List<TestoDalBox>>? testiDalBoxPerGruppo,
+            Dictionary<string, PromoLavorazioniRecord>? righeDeiTesti = null)
+        {
+            var testiEreditati = new HashSet<string>();
+            extraLavorazionePerGruppo?.Clear();
+            if (perChiave == null)
+                return testiEreditati;
+
+            foreach (var voce in perChiave)
+            {
+                var chiave = voce.Key;
+                var meta = voce.Value;
+
+                noRenderElementiPerGruppo?.Remove(chiave);
+                if (noRenderPerRef != null)
+                {
+                    foreach (var foto in noRenderPerRef.Keys.Where(k => k.StartsWith(chiaveNoRenderFoto(chiave, ""), StringComparison.Ordinal)).ToList())
+                        noRenderPerRef.Remove(foto);
+                }
+                if (meta.noRender != null && meta.noRender.Count > 0)
+                {
+                    if (noRenderElementiPerGruppo != null)
+                        noRenderElementiPerGruppo[chiave] = meta.noRender;
+                    raccogliNoRenderDelleFoto(chiave, meta.noRender, noRenderPerRef);
+                }
+
+                if (meta.extraLavorazione != null && meta.extraLavorazione.Count > 0 && extraLavorazionePerGruppo != null)
+                    extraLavorazionePerGruppo[chiave] = meta.extraLavorazione;
+
+                testiDalBoxPerGruppo?.Remove(chiave);
+                righeDeiTesti?.Remove(chiave);
+                if (meta.testiDalBox != null && meta.testiDalBox.Count > 0 && testiDalBoxPerGruppo != null)
+                {
+                    testiDalBoxPerGruppo[chiave] = meta.testiDalBox;
+                    testiEreditati.Add(chiave);
+                }
+            }
+            return testiEreditati;
+        }
+
+        /// <summary>
+        /// I20-1103: nel POP i testi ereditati dal volantino stanno nei campi compilati e basta: il record
+        /// (e il suo sottogruppo) non ne riporta lo stato sotto testiDalBox, cosi' il Plugin non li
+        /// segnala da verificare. Si verificano e si risolvono nel volantino.
+        /// </summary>
+        public static void togliStatoDeiTestiEreditati(List<ArticoloInKit>? records, ISet<string>? testiEreditati)
+        {
+            if (records == null || testiEreditati == null || testiEreditati.Count == 0)
+                return;
+
+            var keyCodGruppo = Enum.GetName(AddestramentoRuoli.Scatto) + "." + GLOBAL_VARIABLES.keyScattoCodiceGruppo;
+            foreach (var record in records)
+            {
+                if (record?.recordInTracciato == null)
+                    continue;
+                record.recordInTracciato.TryGetValue(keyCodGruppo, out var codGruppoObj);
+                if (!testiEreditati.Contains(chiaveDellImpaginazione(codGruppoObj?.ToString(), record.IdRec)))
+                    continue;
+                record.recordInTracciato.Remove(GLOBAL_VARIABLES.keyTestiDalBox);
+                record.sottogruppo?.Remove(GLOBAL_VARIABLES.keyTestiDalBox);
+            }
+        }
+
+        /// <summary>
+        /// I20-1082, I20-1103: le righe delle lavorazioni volantino con la stessa promo, area e canale
+        /// di questa, dal volantino piu' recente e in ognuno dalla riga piu' recente, comprese quelle
+        /// senza meta. Vuoto se la lavorazione non si trova o non ha promo.
+        /// </summary>
+        public List<MetaDelVolantino> metaDeiVolantiniDellaPromo(int idLavorazione)
         {
             var lavorazione = this.ctx2.PromoLavorazionis.FirstOrDefault(l => l.Id == idLavorazione);
             if (lavorazione == null || string.IsNullOrWhiteSpace(lavorazione.GuidPromo))
-                return new List<DecisioniDelVolantino>();
+                return new List<MetaDelVolantino>();
 
             var volantini = this.ctx2.PromoLavorazionis
                 .Where(l => l.Id != idLavorazione && l.GuidPromo == lavorazione.GuidPromo && l.GuidArea == lavorazione.GuidArea && l.GuidCanale == lavorazione.GuidCanale)
@@ -4595,15 +4728,21 @@ namespace Istanta.Controllers
                 .Select(l => l.Id)
                 .ToList();
             if (volantini.Count == 0)
-                return new List<DecisioniDelVolantino>();
+                return new List<MetaDelVolantino>();
 
-            return this.ctx2.PromoLavorazioniRecords
-                .Where(r => volantini.Contains(r.IdLavorazione) && r.Meta != null)
+            return this.ctx2.PromoLavorazioniRecords.AsNoTracking()
+                .Where(r => volantini.Contains(r.IdLavorazione))
                 .ToList()
                 .OrderBy(r => volantini.IndexOf(r.IdLavorazione))
                 .ThenByDescending(r => r.RegisterDate)
-                .Select(r => new DecisioniDelVolantino { CodiceGruppo = r.CodiceGruppo, voci = MetaPromoLavorazioni.leggi(r.Meta!)?.extraLavorazione })
-                .Where(d => d.voci != null && d.voci.Count > 0)
+                .Select(r => new MetaDelVolantino
+                {
+                    IdLavorazione = r.IdLavorazione,
+                    Codice = r.Codice,
+                    CodiceGruppo = r.CodiceGruppo,
+                    IdRecordTracciato = r.IdRecordTracciato,
+                    Meta = r.Meta != null ? MetaPromoLavorazioni.leggi(r.Meta) : null
+                })
                 .ToList();
         }
 
@@ -4631,7 +4770,7 @@ namespace Istanta.Controllers
             return letta;
         }
 
-        public List<ArticoloInKit> updateDatiFromMetaPromoLavorazioni(List<ArticoloInKit> artInkit, int idLavorazione, FicoRuntimeKit kit/*, bool confronto = false*/, Dictionary<string, bool>? noRenderPerRef = null, Dictionary<string, List<RevisioneNoRenderFromIndd>>? noRenderElementiPerGruppo = null, Dictionary<string, List<RevisioneExtraLavorazioneFromIndd>>? extraLavorazionePerGruppo = null, Dictionary<string, List<TestoDalBox>>? testiDalBoxPerGruppo = null, Dictionary<string, PromoLavorazioniRecord>? righeDeiTesti = null)
+        public List<ArticoloInKit> updateDatiFromMetaPromoLavorazioni(List<ArticoloInKit> artInkit, int idLavorazione, FicoRuntimeKit kit/*, bool confronto = false*/, Dictionary<string, bool>? noRenderPerRef = null, Dictionary<string, List<RevisioneNoRenderFromIndd>>? noRenderElementiPerGruppo = null, Dictionary<string, List<RevisioneExtraLavorazioneFromIndd>>? extraLavorazionePerGruppo = null, Dictionary<string, List<TestoDalBox>>? testiDalBoxPerGruppo = null, Dictionary<string, PromoLavorazioniRecord>? righeDeiTesti = null, List<MetaDelVolantino>? volantinoDelPop = null)
         {
             var keyCodGruppo = Enum.GetName(AddestramentoRuoli.Scatto) + "." + GLOBAL_VARIABLES.keyScattoCodiceGruppo;
             var keyRefCodice = Enum.GetName(AddestramentoRuoli.Referenza) + "." + GLOBAL_VARIABLES.keyRefCodice;
@@ -4683,7 +4822,20 @@ namespace Istanta.Controllers
                 RevisioneMetaPromoLavorazioni storeField = new RevisioneMetaPromoLavorazioni();
                 //I20-1077: i testi del box valgono solo dal meta di questa lavorazione, non dal passato.
                 bool metaDiQuestaLavorazione = promoLavorazione != null && promoLavorazione.Meta != null;
-                if (promoLavorazione != null && promoLavorazione.Meta != null)
+                //I20-1103: nel POP i meta vengono dal corrispettivo nel volantino della stessa promo, area
+                //e canale, se c'e', anche vuoti: non dai meta del POP ne' dal passato.
+                var corrispettivo = volantinoDelPop != null
+                    ? corrispettivoNelVolantino(codiciDelGruppo(group.Key.CodiceGruppo).Concat(group.Select(i => i.recordInTracciato.TryGetValue(keyRefCodice, out var c) ? c?.ToString() ?? "" : "")), group.Select(i => i.IdRec), volantinoDelPop)
+                    : null;
+                if (corrispettivo != null)
+                {
+                    //Qui le primarie/secondarie e le foto, che decidono l'export di agenzia. noRender, foto
+                    //extra e testi si legano dopo l'export (sostituisciConIMetaDelVolantino).
+                    var ereditati = metaPerIlPop(corrispettivo.Meta);
+                    storeField = new RevisioneMetaPromoLavorazioni { ps = ereditati.ps, foto = ereditati.foto };
+                    metaDiQuestaLavorazione = false;
+                }
+                else if (promoLavorazione != null && promoLavorazione.Meta != null)
                 {
                     //storeField = JsonConvert.DeserializeObject<List<RevisioneCampiOffertaFromIndd>>(plrItem.Meta);
                     storeField = MetaPromoLavorazioni.leggi(promoLavorazione.Meta)!;
@@ -4744,19 +4896,8 @@ namespace Istanta.Controllers
 
                                 //Prendo la foto e anche per le P/S da questo
                                 RevisioneMetaPromoLavorazioni recPassato = MetaPromoLavorazioni.leggi(plrInAC.Meta)!;
-                                //Gli elementi in noRender sono del box, non della singola ref: si
-                                //ereditano una volta sola per codice gruppo.
-                                if (recPassato.noRender != null && recPassato.noRender.Count > 0)
-                                {
-                                    foreach (var chiave in chiaviDelGruppo)
-                                    {
-                                        if (noRenderElementiPerGruppo != null)
-                                        {
-                                            noRenderElementiPerGruppo[chiave] = recPassato.noRender;
-                                        }
-                                        raccogliNoRenderDelleFoto(chiave, recPassato.noRender, noRenderPerRef);
-                                    }
-                                }
+                                //I20-1103: il noRender non si eredita dal passato: vale nella lavorazione
+                                //in cui e' stato messo, e nei POP che lo prendono dal loro volantino.
                                 foreach (var item in group)
                                 {
                                     if (recPassato.ps != null && recPassato.ps.Count > 0)
