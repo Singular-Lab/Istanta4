@@ -269,6 +269,9 @@ namespace Istanta.Models
         public string[]? loghiKeyWordsToSearch { get; set; }
         public string[]? bolliniKeyWordsToSearch { get; set; }
         public string ipUploadGate { get; set; } = String.Empty;
+        // Pulizia notturna di extractPath (PuliziaEstrazioniService). Facoltativi: senza, alle 3 e un mese.
+        public int? oraPuliziaEstrazioni { get; set; }
+        public int? mesiConservazioneEstrazioni { get; set; }
 
     }
 

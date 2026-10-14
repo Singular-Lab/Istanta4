@@ -820,6 +820,9 @@ class SyncFoto {
                     });
 
 
+            }, function (err) {
+                hideLoading();
+                alert(SyncFoto.messaggioDownloadNonRiuscito(err));
             });
         }
         else {
@@ -1220,9 +1223,31 @@ class SyncFoto {
                 hideLoading();
             }
 
+        }, function (err) {
+            hideLoading();
+            alert(SyncFoto.messaggioDownloadNonRiuscito(err));
         });
 
 
     }
 
+    /// Il messaggio per un download dal registro che il server non ha preparato. La pulizia
+    /// notturna elimina i pacchetti dopo il periodo di conservazione: in quel caso il server
+    /// risponde "pacchetto_scaduto", ed e' una cosa normale, non un guasto. Gli altri errori non
+    /// mostrano all'utente i dettagli tecnici, che restano nella console.
+    static messaggioDownloadNonRiuscito(err) {
+        if (err && err.message === "pacchetto_scaduto") {
+            return "Questo pacchetto è scaduto e non si può più scaricare: le foto delle sincronizzazioni " +
+                "restano disponibili per un periodo limitato dopo la scansione, poi vengono eliminate.";
+        }
+        console.error("Download del pacchetto non riuscito", err);
+        return "Non è stato possibile preparare il pacchetto da scaricare. Riprova più tardi.";
+    }
+
+}
+
+//Pulizia estrazioni: in Node si esporta per i test (tests/istanta-web). Nella pagina module
+//non esiste e questa riga non fa nulla.
+if (typeof module !== "undefined" && module.exports) {
+    module.exports = SyncFoto;
 }

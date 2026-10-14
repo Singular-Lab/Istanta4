@@ -348,6 +348,46 @@ echo "Facoltativo"
 verifica_facoltativa PROXY_CERT_DIR \
   "Serve solo al proxy HTTPS: dentro ci vanno fullchain.pem e privkey.pem. Finché è vuota, usa le porte in chiaro."
 
+# Pulizia notturna delle estrazioni di sync foto (PuliziaEstrazioniService).
+# Facoltative: senza, Istanta usa i default e lo si dice soltanto. Un valore
+# presente ma non numerico invece è un errore: .NET non riuscirebbe a leggerlo
+# e Istanta non partirebbe. Un valore fuori intervallo sarebbe ignorato in
+# silenzio a favore del default, e anche questo va detto prima.
+#   verifica_intero_facoltativo NOME MIN MAX "default"
+verifica_intero_facoltativo() {
+    local nome="$1" min="$2" max="$3" predefinito="$4" valore
+    valore=$(leggi "$nome" istanta.env)
+
+    if [ -z "$valore" ]; then
+        giallo "  assente   $nome: si usa il default, $predefinito"
+        avvisi=$((avvisi + 1))
+        return
+    fi
+    case "$valore" in
+        *[!0-9]*) ;;
+        *)
+            if [ "$valore" -ge "$min" ] && [ "$valore" -le "$max" ]; then
+                verde "  ok        $nome = $valore"
+                return
+            fi
+            ;;
+    esac
+    rosso "  non valido $nome = $valore (serve un intero fra $min e $max)"
+    errori=$((errori + 1))
+}
+
+echo
+echo "istanta.env (pulizia delle estrazioni di sync foto)"
+if [ ! -f istanta.env ]; then
+    rosso "  assente   istanta.env: copialo da istanta.env.example e compilalo"
+    errori=$((errori + 1))
+else
+    verifica_intero_facoltativo sync_options__mesiConservazioneEstrazioni 1 120 \
+        "i pacchetti vengono eliminati dopo 1 mese"
+    verifica_intero_facoltativo sync_options__oraPuliziaEstrazioni 0 23 \
+        "la pulizia gira alle 3 di notte"
+fi
+
 echo
 echo "Valori che il compose pretende"
 valore_richiesto ISTANTA_DB_PASSWORD  "password del database di Istanta"
