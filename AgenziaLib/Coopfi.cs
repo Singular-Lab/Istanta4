@@ -1593,16 +1593,14 @@ namespace AgenziaLib
 
                         interprete.removeCompiledField("txt_punti_jolly");
 
-                        stileDescr1 += "_SP";
-                        stileDescr2 += "_SP";
-                        stileDescr3 += "_SP";
-                        stileDescr4 += "_SP";
-
+                        //Il PoP non ha gli stili Superprezzi (_SP): la descrizione usa gli stili normali e il
+                        //prezzo al kg lo stile del riquadro. Con gli stili _SP, che nel documento PoP non ci
+                        //sono, la descrizione usciva con gli stili spostati. Il volantino li tiene.
 
                         //caso1
                         if (prezzo_promo != prezzo_promo_kgl)
                             //specialDescr_superprezziOF = $" - € {MathExt.DecimalRoundToString(prezzo_promo_kgl)}{(prezzo_info_pack_VAL != "" ? " " : "")}{(prezzo_info_pack_VAL == "al kg" ? "a conf." : "al kg")}";
-                            interprete.assignCompiledField("prezzo_promo_kgl", "PREZZO_PROMO_KGL_SP", MathExt.DecimalRoundToString(prezzo_promo_kgl));
+                            interprete.assignCompiledField("prezzo_promo_kgl", "", MathExt.DecimalRoundToString(prezzo_promo_kgl));
 
                         if (prezzo_promo_kgl < prezzo_promo)
                             prezzo_promo = prezzo_promo_kgl;//Veicolamento
