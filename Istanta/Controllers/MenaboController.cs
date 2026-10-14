@@ -10007,8 +10007,15 @@ double.TryParse(percorso.ToString(), out double valore16))
                         //record come sono dopo l'export, prima di applicare noRender, foto extra e testi.
                         //I20-1082: il POP non decide: le foto extra le ha solo dal volantino.
                         HashSet<string>? testiEreditati = null;
+                        Dictionary<string, List<TestoDalBox>>? descrizioniDeiCartelli = null;
                         if (volantinoDelPop != null)
-                            testiEreditati = FicoProcessController.sostituisciConIMetaDelVolantino(FicoProcessController.metaDelVolantinoPerIlPop(resultAgenzia.liste.SelectMany(l => l.Records).ToList(), volantinoDelPop), noRenderPerRef, noRenderElementiPerGruppo, extraLavorazionePerGruppo, testiDalBoxPerGruppo);
+                        {
+                            var recordsDelPop = resultAgenzia.liste.SelectMany(l => l.Records).ToList();
+                            var metaDelPop = FicoProcessController.metaDelVolantinoPerIlPop(recordsDelPop, volantinoDelPop);
+                            //La descrizione di un gruppo del volantino va al solo cartello di gruppo.
+                            descrizioniDeiCartelli = FicoProcessController.descrizioneDelGruppoAlSoloCartello(recordsDelPop, metaDelPop);
+                            testiEreditati = FicoProcessController.sostituisciConIMetaDelVolantino(metaDelPop, noRenderPerRef, noRenderElementiPerGruppo, extraLavorazionePerGruppo, testiDalBoxPerGruppo);
+                        }
 
                         foreach (var itemLista in resultAgenzia.liste)
                         {
@@ -10045,6 +10052,7 @@ double.TryParse(percorso.ToString(), out double valore16))
                         //I20-1088: con il loro stato. Quelli che il server compone ormai da se' qui non si
                         //restituiscono e basta: si tolgono scaricando la lista.
                         FicoProcessController.applicaTestiDalBox(resultGlobale.records, testiDalBoxPerGruppo, ficoController.versioniDeiRecordConTesti(resultGlobale.records, testiDalBoxPerGruppo));
+                        FicoProcessController.applicaDescrizioniAiCartelliDiGruppo(resultGlobale.records, descrizioniDeiCartelli);
                         //I20-1103: quelli ereditati dal volantino nel POP si applicano e basta.
                         FicoProcessController.togliStatoDeiTestiEreditati(resultGlobale.records, testiEreditati);
                     }

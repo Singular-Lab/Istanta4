@@ -2801,8 +2801,15 @@ namespace Istanta.Controllers
                             //record come sono dopo l'export, prima di applicare noRender, foto extra e testi.
                             //I20-1082: il POP non decide: le foto extra le ha solo dal volantino.
                             HashSet<string>? testiEreditati = null;
+                            Dictionary<string, List<TestoDalBox>>? descrizioniDeiCartelli = null;
                             if (volantinoDelPop != null)
-                                testiEreditati = sostituisciConIMetaDelVolantino(metaDelVolantinoPerIlPop(resultAgenzia.liste.SelectMany(l => l.Records).ToList(), volantinoDelPop), noRenderPerRef, noRenderElementiPerGruppo, extraLavorazionePerGruppo, testiDalBoxPerGruppo, righeDeiTesti);
+                            {
+                                var recordsDelPop = resultAgenzia.liste.SelectMany(l => l.Records).ToList();
+                                var metaDelPop = metaDelVolantinoPerIlPop(recordsDelPop, volantinoDelPop);
+                                //La descrizione di un gruppo del volantino va al solo cartello di gruppo.
+                                descrizioniDeiCartelli = descrizioneDelGruppoAlSoloCartello(recordsDelPop, metaDelPop);
+                                testiEreditati = sostituisciConIMetaDelVolantino(metaDelPop, noRenderPerRef, noRenderElementiPerGruppo, extraLavorazionePerGruppo, testiDalBoxPerGruppo, righeDeiTesti);
+                            }
 
                             foreach (var itemLista in resultAgenzia.liste)
                             {
@@ -2842,6 +2849,7 @@ namespace Istanta.Controllers
                             //I20-1088: con il loro stato; quelli che il server compone ormai da se'
                             //si tolgono qui, scaricando la lista.
                             var testiAllineati = applicaTestiDalBox(resultGlobale.records, testiDalBoxPerGruppo, versioniDeiRecordConTesti(resultGlobale.records, testiDalBoxPerGruppo));
+                            applicaDescrizioniAiCartelliDiGruppo(resultGlobale.records, descrizioniDeiCartelli);
                             //I20-1103: quelli ereditati dal volantino nel POP si applicano e basta, e non hanno
                             //una riga di questa lavorazione da cui toglierli.
                             togliStatoDeiTestiEreditati(resultGlobale.records, testiEreditati);
@@ -4691,6 +4699,71 @@ namespace Istanta.Controllers
         /// (e il suo sottogruppo) non ne riporta lo stato sotto testiDalBox, cosi' il Plugin non li
         /// segnala da verificare. Si verificano e si risolvono nel volantino.
         /// </summary>
+        /// <summary>
+        /// Il meta della descrizione che un gruppo del volantino passa al POP vale solo per il cartello di
+        /// gruppo (il sottogruppo), non per i cartelli singoli delle sue referenze, che hanno la propria
+        /// descrizione. Toglie la descrizione dai testi ereditati dai singoli di un gruppo (codice gruppo
+        /// con piu' codici), con liste nuove, senza toccare quelle condivise con le altre righe del
+        /// volantino, e restituisce, per chiave dell'impaginazione, quella da dare al cartello di gruppo
+        /// del record che lo porta. Le referenze singole tengono la descrizione: sono il proprio cartello.
+        /// Le linee da 10 in su e i gruppi "vari" non hanno cartello di gruppo: per loro non passa.
+        /// </summary>
+        public static Dictionary<string, List<TestoDalBox>> descrizioneDelGruppoAlSoloCartello(List<ArticoloInKit>? recordsPop, Dictionary<string, RevisioneMetaPromoLavorazioni>? perChiave)
+        {
+            var perIlCartello = new Dictionary<string, List<TestoDalBox>>();
+            if (recordsPop == null || perChiave == null || perChiave.Count == 0)
+                return perIlCartello;
+
+            var keyCodGruppo = Enum.GetName(AddestramentoRuoli.Scatto) + "." + GLOBAL_VARIABLES.keyScattoCodiceGruppo;
+            static bool eDescrizione(TestoDalBox? testo) =>
+                testo != null && string.Equals((testo.label ?? "").Split('$')[0], "descrizione", StringComparison.OrdinalIgnoreCase);
+
+            foreach (var record in recordsPop)
+            {
+                if (record?.recordInTracciato == null)
+                    continue;
+                record.recordInTracciato.TryGetValue(keyCodGruppo, out var codGruppoObj);
+                var codGruppo = codGruppoObj?.ToString();
+                if (string.IsNullOrWhiteSpace(codGruppo) || codiciDelGruppo(codGruppo).Count() < 2)
+                    continue;
+                var chiave = chiaveDellImpaginazione(codGruppo, record.IdRec);
+                if (!perChiave.TryGetValue(chiave, out var meta) || meta?.testiDalBox == null)
+                    continue;
+
+                var descrizione = meta.testiDalBox.Where(eDescrizione).ToList();
+                if (descrizione.Count == 0)
+                    continue;
+                var altri = meta.testiDalBox.Where(t => !eDescrizione(t)).ToList();
+                meta.testiDalBox = altri.Count > 0 ? altri : null;
+                if (record.sottogruppo != null)
+                    perIlCartello[chiave] = descrizione;
+            }
+            return perIlCartello;
+        }
+
+        /// <summary>
+        /// La descrizione ereditata da un gruppo del volantino, nel solo cartello di gruppo (il sottogruppo)
+        /// del record che lo porta (descrizioneDelGruppoAlSoloCartello). Come gli altri testi ereditati si
+        /// applica e basta: il cartello non ne riporta lo stato.
+        /// </summary>
+        public static void applicaDescrizioniAiCartelliDiGruppo(List<ArticoloInKit>? records, Dictionary<string, List<TestoDalBox>>? perIlCartello)
+        {
+            if (records == null || perIlCartello == null || perIlCartello.Count == 0)
+                return;
+
+            var keyCodGruppo = Enum.GetName(AddestramentoRuoli.Scatto) + "." + GLOBAL_VARIABLES.keyScattoCodiceGruppo;
+            foreach (var record in records)
+            {
+                if (record?.recordInTracciato == null || record.sottogruppo == null)
+                    continue;
+                record.recordInTracciato.TryGetValue(keyCodGruppo, out var codGruppoObj);
+                if (!perIlCartello.TryGetValue(chiaveDellImpaginazione(codGruppoObj?.ToString(), record.IdRec), out var testi) || testi == null || testi.Count == 0)
+                    continue;
+                applicaTestiDalBoxAiCampiDi(record.sottogruppo, testi, null);
+                record.sottogruppo.Remove(GLOBAL_VARIABLES.keyTestiDalBox);
+            }
+        }
+
         public static void togliStatoDeiTestiEreditati(List<ArticoloInKit>? records, ISet<string>? testiEreditati)
         {
             if (records == null || testiEreditati == null || testiEreditati.Count == 0)

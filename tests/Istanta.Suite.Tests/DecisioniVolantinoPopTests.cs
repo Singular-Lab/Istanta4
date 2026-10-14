@@ -165,12 +165,15 @@ public class DecisioniVolantinoPopTests
         string fico = Sorgente("Istanta/Controllers/FicoProcessController.cs");
         string menabo = Sorgente("Istanta/Controllers/MenaboController.cs");
 
-        const string kit = "testiEreditati = sostituisciConIMetaDelVolantino(metaDelVolantinoPerIlPop(resultAgenzia.liste.SelectMany(l => l.Records).ToList(), volantinoDelPop), noRenderPerRef, noRenderElementiPerGruppo, extraLavorazionePerGruppo, testiDalBoxPerGruppo, righeDeiTesti);";
+        //Dal volantino i meta, legati ai record dopo l'export; la descrizione di un gruppo va al solo cartello.
+        Assert.Contains("var metaDelPop = metaDelVolantinoPerIlPop(recordsDelPop, volantinoDelPop);", fico);
+        const string kit = "testiEreditati = sostituisciConIMetaDelVolantino(metaDelPop, noRenderPerRef, noRenderElementiPerGruppo, extraLavorazionePerGruppo, testiDalBoxPerGruppo, righeDeiTesti);";
         Assert.Contains("if (mode == FicoCombinazioneKitReadMode.Advanced && objFormato.tipo == TipoLavorazione.PoP)", fico);
         Assert.True(fico.IndexOf(kit, StringComparison.Ordinal) > 0);
         Assert.True(fico.IndexOf(kit, StringComparison.Ordinal) < fico.IndexOf("applicaExtraDellaLavorazione(resultGlobale.records, extraLavorazionePerGruppo);", StringComparison.Ordinal));
 
-        const string scheda = "testiEreditati = FicoProcessController.sostituisciConIMetaDelVolantino(FicoProcessController.metaDelVolantinoPerIlPop(resultAgenzia.liste.SelectMany(l => l.Records).ToList(), volantinoDelPop), noRenderPerRef, noRenderElementiPerGruppo, extraLavorazionePerGruppo, testiDalBoxPerGruppo);";
+        Assert.Contains("var metaDelPop = FicoProcessController.metaDelVolantinoPerIlPop(recordsDelPop, volantinoDelPop);", menabo);
+        const string scheda = "testiEreditati = FicoProcessController.sostituisciConIMetaDelVolantino(metaDelPop, noRenderPerRef, noRenderElementiPerGruppo, extraLavorazionePerGruppo, testiDalBoxPerGruppo);";
         Assert.Contains("tipoFormatoKit == TipoLavorazione.PoP ? ficoController.metaDeiVolantiniDellaPromo(idLavorazione) : null;", menabo);
         Assert.True(menabo.IndexOf(scheda, StringComparison.Ordinal) > 0);
         Assert.True(menabo.IndexOf(scheda, StringComparison.Ordinal) < menabo.IndexOf("FicoProcessController.applicaExtraDellaLavorazione(resultGlobale.records, extraLavorazionePerGruppo);", StringComparison.Ordinal));

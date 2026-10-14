@@ -274,6 +274,122 @@ public class MetaVolantinoPopTests
         Assert.DoesNotContain("r.Meta != null)", lettura);
     }
 
+    /* ---- la descrizione di un gruppo va al solo cartello di gruppo ---- */
+
+    private static List<CompiledField> Campi(string descrizione) => new()
+    {
+        new() { labelName = "descrizione", content = descrizione },
+        new() { labelName = "prezzo_info_pack", content = "a conf." }
+    };
+
+    private static ArticoloInKit CartelloPop(string codGruppo, string codice, long idRec, bool conCartelloDiGruppo = false)
+    {
+        var record = RecordPop(codGruppo, codice, idRec);
+        record.recordInTracciato[GLOBAL_VARIABLES.keyCompiledFields] = Campi("<DESCRIZIONE_TITOLO>" + codice + "</DESCRIZIONE_TITOLO>");
+        if (conCartelloDiGruppo)
+            record.sottogruppo = new Dictionary<string, object> { [GLOBAL_VARIABLES.keyCompiledFields] = Campi("<DESCRIZIONE_TITOLO_LINEA>GRUPPO</DESCRIZIONE_TITOLO_LINEA>") };
+        return record;
+    }
+
+    private static string Contenuto(Dictionary<string, object> dati, string label) =>
+        ((List<CompiledField>)dati[GLOBAL_VARIABLES.keyCompiledFields]).Single(c => c.labelName == label).content;
+
+    private static readonly TestoDalBox DescrizioneDelVolantino = new() { label = "descrizione", contenuto = "<DESCRIZIONE_TITOLO_LINEA>SALUMI AFFETTATI</DESCRIZIONE_TITOLO_LINEA>", contenutoServer = "x" };
+    private static readonly TestoDalBox InfoPackDelVolantino = new() { label = "prezzo_info_pack", contenuto = "al kg", contenutoServer = "a conf." };
+
+    /// Il giro della lettura del POP, dalle righe del volantino ai campi dei record.
+    private static void LeggiIlPop(List<ArticoloInKit> records, List<FicoProcessController.MetaDelVolantino> volantino)
+    {
+        var metaDelPop = FicoProcessController.metaDelVolantinoPerIlPop(records, volantino);
+        var cartelli = FicoProcessController.descrizioneDelGruppoAlSoloCartello(records, metaDelPop);
+        var testi = new Dictionary<string, List<TestoDalBox>>();
+        var ereditati = FicoProcessController.sostituisciConIMetaDelVolantino(metaDelPop, null, null, new Dictionary<string, List<RevisioneExtraLavorazioneFromIndd>>(), testi);
+        FicoProcessController.applicaTestiDalBox(records, testi);
+        FicoProcessController.applicaDescrizioniAiCartelliDiGruppo(records, cartelli);
+        FicoProcessController.togliStatoDeiTestiEreditati(records, ereditati);
+    }
+
+    [Fact]
+    public void La_descrizione_di_un_gruppo_va_al_cartello_di_gruppo_e_non_ai_singoli()
+    {
+        var primo = CartelloPop("101,102,103", "101", 1, conCartelloDiGruppo: true);
+        var secondo = CartelloPop("101,102,103", "102", 2);
+        var terzo = CartelloPop("101,102,103", "103", 3);
+        var records = new List<ArticoloInKit> { primo, secondo, terzo };
+
+        LeggiIlPop(records, new List<FicoProcessController.MetaDelVolantino>
+        {
+            Riga(1, "101,102,103", new RevisioneMetaPromoLavorazioni { testiDalBox = new() { DescrizioneDelVolantino, InfoPackDelVolantino } })
+        });
+
+        foreach (var (record, codice) in new[] { (primo, "101"), (secondo, "102"), (terzo, "103") })
+        {
+            Assert.Equal("<DESCRIZIONE_TITOLO>" + codice + "</DESCRIZIONE_TITOLO>", Contenuto(record.recordInTracciato, "descrizione"));
+            Assert.Equal("al kg", Contenuto(record.recordInTracciato, "prezzo_info_pack"));
+        }
+        Assert.Equal(DescrizioneDelVolantino.contenuto, Contenuto(primo.sottogruppo!, "descrizione"));
+        Assert.Equal("al kg", Contenuto(primo.sottogruppo!, "prezzo_info_pack"));
+        Assert.False(primo.sottogruppo!.ContainsKey(GLOBAL_VARIABLES.keyTestiDalBox));
+    }
+
+    [Fact]
+    public void Una_referenza_singola_eredita_la_descrizione()
+    {
+        var singola = CartelloPop("200", "200", 4);
+
+        LeggiIlPop(new List<ArticoloInKit> { singola }, new List<FicoProcessController.MetaDelVolantino>
+        {
+            Riga(1, "200", new RevisioneMetaPromoLavorazioni { testiDalBox = new() { DescrizioneDelVolantino } })
+        });
+
+        Assert.Equal(DescrizioneDelVolantino.contenuto, Contenuto(singola.recordInTracciato, "descrizione"));
+        Assert.False(singola.recordInTracciato.ContainsKey(GLOBAL_VARIABLES.keyTestiDalBox));
+    }
+
+    [Fact]
+    public void I_testi_della_riga_del_volantino_restano_quelli()
+    {
+        var meta = new RevisioneMetaPromoLavorazioni { testiDalBox = new() { DescrizioneDelVolantino, InfoPackDelVolantino } };
+
+        LeggiIlPop(new List<ArticoloInKit> { CartelloPop("101,102", "101", 1, true), CartelloPop("101,102", "102", 2) },
+            new List<FicoProcessController.MetaDelVolantino> { Riga(1, "101,102", meta) });
+
+        Assert.Equal(2, meta.testiDalBox!.Count);
+    }
+
+    [Fact]
+    public void Senza_cartello_di_gruppo_la_descrizione_non_passa_ai_singoli()
+    {
+        //Linee da 10 in su e gruppi "vari": nessun sottogruppo, solo cartelli singoli.
+        var record = CartelloPop("101,102", "101", 1);
+        var metaDelPop = new Dictionary<string, RevisioneMetaPromoLavorazioni>
+        {
+            [FicoProcessController.chiaveDellImpaginazione("101,102", 1)] = new() { testiDalBox = new() { DescrizioneDelVolantino } }
+        };
+
+        var cartelli = FicoProcessController.descrizioneDelGruppoAlSoloCartello(new List<ArticoloInKit> { record }, metaDelPop);
+
+        Assert.Empty(cartelli);
+        Assert.Null(metaDelPop.Values.Single().testiDalBox);
+    }
+
+    [Fact]
+    public void Le_due_letture_tolgono_la_descrizione_ai_singoli_e_la_danno_al_cartello()
+    {
+        string fico = Sorgente("Istanta/Controllers/FicoProcessController.cs");
+        string menabo = Sorgente("Istanta/Controllers/MenaboController.cs");
+
+        int separa = fico.IndexOf("descrizioniDeiCartelli = descrizioneDelGruppoAlSoloCartello(recordsDelPop, metaDelPop);", StringComparison.Ordinal);
+        Assert.True(separa > 0 && separa < fico.IndexOf("testiEreditati = sostituisciConIMetaDelVolantino(metaDelPop,", StringComparison.Ordinal));
+        int cartello = fico.IndexOf("applicaDescrizioniAiCartelliDiGruppo(resultGlobale.records, descrizioniDeiCartelli);", StringComparison.Ordinal);
+        Assert.True(cartello > fico.IndexOf("var testiAllineati = applicaTestiDalBox(", StringComparison.Ordinal));
+
+        int separaScheda = menabo.IndexOf("descrizioniDeiCartelli = FicoProcessController.descrizioneDelGruppoAlSoloCartello(recordsDelPop, metaDelPop);", StringComparison.Ordinal);
+        Assert.True(separaScheda > 0 && separaScheda < menabo.IndexOf("testiEreditati = FicoProcessController.sostituisciConIMetaDelVolantino(metaDelPop,", StringComparison.Ordinal));
+        Assert.True(menabo.IndexOf("FicoProcessController.applicaDescrizioniAiCartelliDiGruppo(resultGlobale.records, descrizioniDeiCartelli);", StringComparison.Ordinal)
+            > menabo.IndexOf("FicoProcessController.applicaTestiDalBox(resultGlobale.records, testiDalBoxPerGruppo", StringComparison.Ordinal));
+    }
+
     private static string Sorgente(string relativo) => File.ReadAllText(Percorso(relativo.Replace('/', Path.DirectorySeparatorChar))).Replace("\r", "");
 
     private static string Percorso(string relativo)
