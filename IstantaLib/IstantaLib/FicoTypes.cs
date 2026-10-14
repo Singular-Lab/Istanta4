@@ -972,6 +972,11 @@ namespace IstantaLib
         /// con lo stesso valore). Falso: la versione si controlla. Il valore originale si controlla sempre.
         public bool ignoraVersioneMeta { get; set; } = false;
 
+        /// Contenitori del noRender: per un campo, il gruppo del box che va nascosto con lui quando il
+        /// campo e' in noRender, e che la segnalazione del Plugin indica quando manca insieme al campo
+        /// (Coop: txt_sconto -> box_sconto). Vuoto: nessun contenitore.
+        public Dictionary<string, string> contenitoriNoRender { get; set; } = new Dictionary<string, string>();
+
         public AgenziaCustomPlugin_GrandezzaBoxRevisione grandezzeBox { get; set; }//Definisce la grandezza dei box di revisione, in questo modo è possibile per le agenzie gestire la visualizzazione a piacimento
         
         public bool abilitaDescrizioniRegionali { get; set; }

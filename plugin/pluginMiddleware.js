@@ -634,6 +634,28 @@ const pluginMiddleware = {
         return typeof valore === "boolean" ? valore : false;
     },
 
+    /// Contenitori del noRender: per ogni campo, il contenitore del box che va nascosto con lui e che
+    /// la segnalazione indica quando manca insieme al campo (Coop: txt_sconto -> box_sconto). La
+    /// chiave sta nella configurazione del cliente sul server, come chiediAmbitoDecisioniLavorazione;
+    /// senza, o se non e' una mappa di testi, nessun contenitore.
+    getContenitoriNoRender() {
+        let me = this;
+
+        const valore = me.callCustom
+            ? (typeof customAgenzia !== "undefined" && customAgenzia != null ? customAgenzia.contenitoriNoRender : null)
+            : me.customPluginDB?.contenitoriNoRender;
+        const contenitori = {};
+        if (valore == null || typeof valore !== "object" || Array.isArray(valore)) {
+            return contenitori;
+        }
+        Object.keys(valore).forEach(campo => {
+            if (campo !== "" && typeof valore[campo] === "string" && valore[campo] !== "") {
+                contenitori[campo] = valore[campo];
+            }
+        });
+        return contenitori;
+    },
+
     /// I20-1088: se un meta dei testi del box non si segnala da verificare per la sola versione del
     /// record cambiata (la lista ricaricata con lo stesso valore). Come chiediAmbitoDecisioniLavorazione:
     /// la chiave sta nella configurazione del cliente sul server, e senza vale falso (si controlla).

@@ -31,6 +31,15 @@ function elementoDecisoDalleRegole(etichetta) {
     return e.indexOf("base") == 0 || e.indexOf("foto_extra$") == 0 || e.indexOf("sfondo$") == 0;
 }
 
+/// Contenitori del noRender dichiarati dall'agenzia (pluginMiddleware.getContenitoriNoRender):
+/// {campo: contenitore}, vuoto se non ce ne sono. Per Coop txt_sconto sta nel gruppo box_sconto.
+function contenitoriNoRenderDellAgenzia() {
+    return typeof pluginMiddleware !== "undefined" && pluginMiddleware != null
+        && typeof pluginMiddleware.getContenitoriNoRender === "function"
+        ? pluginMiddleware.getContenitoriNoRender()
+        : {};
+}
+
 const confronti = {
     /// Guarda un box impaginato e dice cosa non corrisponde piu' al dato del
     /// server: e' il confronto vero, quello da cui nascono le segnalazioni.
@@ -397,6 +406,10 @@ const confronti = {
             }
 
             let box1campi = box1.allPageItems.filter(campo => campo.isValid);
+            //Contenitori del noRender: un campo in noRender vale anche per il suo contenitore dichiarato
+            //dall'agenzia (Coop: txt_sconto nel gruppo box_sconto), anche nei meta salvati prima.
+            const contenitori = contenitoriNoRenderDellAgenzia();
+            elementiNoRender = NoRenderElementi.conContenitori(elementiNoRender, contenitori);
             //var base =  Utility.getFieldByLabel("base", box1);
             let listFotoBox1 = [];
             let listFotoExtraBox1 = [];
@@ -411,6 +424,17 @@ const confronti = {
                     //se il campo compilato non è presente nel box1 allora lo aggiungiamo alle differenze
                     var labelCampo = Utility.parseLabel(compiledField.labelName);
                     var classificatoCampo = NoRenderElementi.classificaLabel(labelCampo);
+                    //Contenitori del noRender: se manca anche il contenitore l'operatore ha tolto il gruppo
+                    //intero, e l'assenza e' del contenitore; una sola anche se piu' campi stanno li' dentro.
+                    var contenitoreAssente = NoRenderElementi.contenitoreAssente(classificatoCampo, contenitori,
+                        etichetta => box1campi.some(campo => campo.isValid && Utility.parseLabel(campo.label) == etichetta));
+                    if (contenitoreAssente !== "") {
+                        if (differenze.concat(risolteNoRender).some(d => d != null && d.tipoElemento === NoRenderElementi.TIPO.campo && d.chiave === contenitoreAssente)) {
+                            return;
+                        }
+                        labelCampo = contenitoreAssente;
+                        classificatoCampo = NoRenderElementi.classificaLabel(contenitoreAssente);
+                    }
                     //Un elemento in noRender che non c'e' piu' e' un'assenza voluta: non si segnala.
                     //I20-1073: l'assenza porta tipo e chiave dell'elemento, cosi' la scheda puo' metterlo
                     //in noRender; quella gia' voluta va fra le risolte.

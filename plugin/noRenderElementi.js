@@ -430,6 +430,52 @@ var NoRenderElementi = (function () {
             .map(e => ({ tipo: e.tipo, chiave: pulisci(e.chiave), nome: pulisci(e.nome) }));
     }
 
+    /// Contenitori del noRender: il contenitore che l'agenzia dichiara per un campo
+    /// (contenitoriNoRender del SourceCustomPlugin; per Coop txt_sconto sta nel gruppo box_sconto),
+    /// o "" se non ne ha.
+    function contenitoreDi(chiave, contenitori) {
+        if (contenitori == null || typeof contenitori !== "object") {
+            return "";
+        }
+        var valore = contenitori[pulisci(chiave)];
+        return typeof valore === "string" ? valore : "";
+    }
+
+    /// La lista noRender con, per ogni campo marcato, anche il suo contenitore: nascondere il testo
+    /// di uno sconto lasciando il gruppo che lo disegna darebbe uno sconto senza numero. Vale anche
+    /// per i meta salvati prima, con il solo campo. Senza contenitori la lista resta quella.
+    function conContenitori(elementiMarcati, contenitori) {
+        var lista = (elementiMarcati || []).filter(e => e != null);
+        var aggiunti = [];
+        lista.forEach(function (elemento) {
+            if (elemento.tipo !== TIPO.campo) {
+                return;
+            }
+            var contenitore = contenitoreDi(elemento.chiave, contenitori);
+            if (contenitore === "" || inNoRender(lista, TIPO.campo, contenitore) || inNoRender(aggiunti, TIPO.campo, contenitore)) {
+                return;
+            }
+            aggiunti.push({ tipo: TIPO.campo, chiave: contenitore, nome: contenitore });
+        });
+        return aggiunti.length > 0 ? lista.concat(aggiunti) : lista;
+    }
+
+    /// Il contenitore di un campo assente quando manca anche lui: l'operatore ha tolto il gruppo
+    /// intero, e l'assenza da segnalare (e da mettere in noRender) e' quella del contenitore.
+    /// elemento e' il campo classificato (tipo e chiave); presenteNelBox(etichetta) dice se il box ha
+    /// un elemento con quella label. "" se il campo non ha contenitore o se il contenitore c'e':
+    /// allora manca davvero solo il campo.
+    function contenitoreAssente(elemento, contenitori, presenteNelBox) {
+        if (elemento == null || elemento.tipo !== TIPO.campo) {
+            return "";
+        }
+        var contenitore = contenitoreDi(elemento.chiave, contenitori);
+        if (contenitore === "" || (typeof presenteNelBox === "function" && presenteNelBox(contenitore))) {
+            return "";
+        }
+        return contenitore;
+    }
+
     return {
         TIPO: TIPO,
         TIPO_FOTO: TIPO_FOTO,
@@ -454,7 +500,10 @@ var NoRenderElementi = (function () {
         proporreFixFoto: proporreFixFoto,
         elementoDaAssenza: elementoDaAssenza,
         conElemento: conElemento,
-        senzaElemento: senzaElemento
+        senzaElemento: senzaElemento,
+        contenitoreDi: contenitoreDi,
+        conContenitori: conContenitori,
+        contenitoreAssente: contenitoreAssente
     };
 })();
 
