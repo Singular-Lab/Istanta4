@@ -58,6 +58,29 @@ namespace AgenziaLib
         List<Dictionary<string, object>> lista_tracciato;
 
         /// <summary>
+        /// I20-1096: nelle linee da 10 referenze in su ogni referenza esce come cartello linea, e i cartelli
+        /// sono tutti uguali (la descrizione di gruppo con LINEA davanti): ne escono al piu' Massimo per
+        /// gruppo. Conta solo il numero, non quali referenze li generano. Il conteggio e' per codice
+        /// gruppo, anche se le referenze della linea non sono consecutive nella lista.
+        /// </summary>
+        public sealed class CartelliDellaLinea
+        {
+            public const int Massimo = 10;
+            private readonly Dictionary<string, int> usciti = new Dictionary<string, int>();
+
+            /// <summary>True se la linea ha gia' fatto uscire i suoi cartelli e la referenza va saltata.</summary>
+            public bool Salta(string codiceGruppo)
+            {
+                string chiave = codiceGruppo ?? "";
+                usciti.TryGetValue(chiave, out int giaUsciti);
+                if (giaUsciti >= Massimo)
+                    return true;
+                usciti[chiave] = giaUsciti + 1;
+                return false;
+            }
+        }
+
+        /// <summary>
         /// I20-1093: conta le referenze di un gruppo nell'esportazione PoP, per farne uscire al piu' tante
         /// quanti sono i codici del gruppo. Il conteggio riparte a ogni cambio di gruppo: prima continuava
         /// da quello del gruppo precedente e, con due gruppi consecutivi, una referenza del secondo restava
@@ -419,6 +442,8 @@ namespace AgenziaLib
                 int counter = 0;
                 //I20-1093: le referenze di ogni gruppo, contate dall'inizio del gruppo.
                 ContatoreDelGruppo contatoreDelGruppo = new ContatoreDelGruppo();
+                //I20-1096: i cartelli gia' usciti per ogni linea da 10 referenze in su.
+                CartelliDellaLinea cartelliDellaLinea = new CartelliDellaLinea();
 
                 string curr_group_processed = "";
                 string curr_fotoPgroup_processed = "";
@@ -661,6 +686,13 @@ namespace AgenziaLib
 #warning Trovare una soluzione piu brillante se possibile. Questa forzatura non è mai molto bella
                             codiceBox = "BOX_STD";
                         }
+                    }
+
+                    //I20-1096: nelle linee da 10 referenze in su al piu' 10 cartelli linea per gruppo, tutti
+                    //uguali: le referenze oltre il decimo non escono.
+                    if (isLineaMaggioreUguale10 && cartelliDellaLinea.Salta(codice_gruppo))
+                    {
+                        continue;
                     }
 
 
