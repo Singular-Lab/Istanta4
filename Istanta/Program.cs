@@ -158,6 +158,7 @@ builder.Services.AddSession(options =>
 //});
 
 builder.Services.AddHostedService<BackgroundCodeService>();
+builder.Services.AddHostedService<PuliziaEstrazioniService>();
 
 
 /*builder.Services.AddSingleton<IConfiguration>(builder.Configuration);

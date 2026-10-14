@@ -1003,6 +1003,24 @@ namespace Istanta.Controllers
             return Ok(result);
         }
 
+        /// Codice dell'errore con cui downloadPacchettoFoto risponde 410: la pagina lo traduce nel
+        /// messaggio di pacchetto scaduto (syncfoto.js, messaggioDownloadNonRiuscito).
+        public const string CodicePacchettoScaduto = "pacchetto_scaduto";
+
+        /// Vero quando almeno uno dei file richiesti non c'e' piu' nella cartella delle estrazioni,
+        /// cioe' quando la pulizia notturna ha gia' eliminato il pacchetto da cui proveniva.
+        /// Il percorso e' costruito come lo costruisce downloadPacchettoFoto.
+        public static bool PacchettoScaduto(string cartellaEstrazioni, IEnumerable<SyncFile>? files)
+        {
+            if (files == null)
+            {
+                return false;
+            }
+
+            return files.Any(sf => !System.IO.File.Exists(
+                Path.Combine(cartellaEstrazioni + System.IO.Path.DirectorySeparatorChar + sf.zipDirOrigin, sf.filename)));
+        }
+
         [DisableRequestSizeLimit]
         [HttpPut]
         [Route("SyncFoto/downloadPacchettoFoto")]
@@ -1049,6 +1067,14 @@ namespace Istanta.Controllers
 
 
                 //}
+
+                // La pulizia notturna elimina i pacchetti dopo il periodo di conservazione: se manca
+                // anche un solo file il pacchetto e' scaduto, e si dice questo invece di creare uno
+                // zip incompleto.
+                if (PacchettoScaduto(this.extract_sync_path, request.files))
+                {
+                    return StatusCode(StatusCodes.Status410Gone, new { error = CodicePacchettoScaduto });
+                }
 
                 zipName += $"{statoMatched}.zip";
                 path = Path.Combine(this.extract_sync_path, zipName);
