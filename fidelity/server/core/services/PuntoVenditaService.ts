@@ -18,6 +18,7 @@ import { DispositivoMetadata, DispositivoPuntoVendita } from '../models/punto_ve
 import type { IPuntoVenditaRepository } from '../repositories/PuntoVenditaRepository';
 import { geocodifica } from '../utils/geocodifica';
 import { buildPuntoVenditaKey, isLikelySamePuntoVendita, PuntoVenditaTextInput, stessaPosizione } from '../utils/puntoVenditaNormalization';
+import type { ContestoImportPuntiVendita } from './importPuntiVendita';
 
 export class PuntoVenditaService implements IPuntoVenditaService {
 
@@ -317,6 +318,8 @@ export class PuntoVenditaService implements IPuntoVenditaService {
       provincia: pv.provincia_puntivendita,
       regione: pv.regione_puntivendita,
       telefono: pv.telefono_puntivendita,
+      ragionesociale: pv.ragionesociale_puntivendita,
+      meta: pv.meta_puntivendita ?? undefined,
       id_combinazione_canale_area: pv.id_combinazione_canale_area_puntivendita,
       id_gdo: pv.id_gdo_puntivendita || '',
       indirizzo_completo: pv.indirizzo_puntivendita,
@@ -327,7 +330,9 @@ export class PuntoVenditaService implements IPuntoVenditaService {
       has_coordinate: lat !== null && lon !== null,
       createdat: pv.createdat ?? new Date(),
       updatedat: pv.updatedat ?? new Date(),
-      sigla_combinazione: `${canale?.codice ?? ''}${area?.codice ?? ''}`
+      sigla_combinazione: `${canale?.codice ?? ''}${area?.codice ?? ''}`,
+      nome_canale: canale?.nome,
+      nome_area: area?.nome,
     };
   }
   async getAllPuntiVendita(): Promise<PuntoVenditaResponseDTO[]> {
@@ -375,10 +380,12 @@ export class PuntoVenditaService implements IPuntoVenditaService {
     try {
       // il dato è questo
       const dataToCreate: PuntiVenditaAttributes = {
+        ...(data.id ? { id_puntivendita: data.id } : {}),
         nome_puntivendita: data.nome ?? "",
         citta_puntivendita: data.citta ?? "",
         cap_puntivendita: data.cap ?? "",
         indirizzo_puntivendita: data.indirizzo ?? "",
+        ragionesociale_puntivendita: data.ragionesociale?.trim() || undefined,
         provincia_puntivendita: data.provincia?.trim() || undefined,
         regione_puntivendita: data.regione ?? "",
         telefono_puntivendita: data.telefono?.trim() || undefined,
@@ -386,6 +393,7 @@ export class PuntoVenditaService implements IPuntoVenditaService {
         id_gdo_puntivendita: data.id_gdo ?? "",
         lat_puntivendita: data.lat ?? (data as any).coordinate?.lat ?? null,
         lon_puntivendita: data.lon ?? (data as any).coordinate?.lon ?? null,
+        meta_puntivendita: data.meta,
         createdat: new Date(),
       }
       const created = await this.puntoVenditaRepository.create(dataToCreate);
@@ -427,6 +435,7 @@ export class PuntoVenditaService implements IPuntoVenditaService {
       if (data.provincia !== undefined) updatePayload.provincia_puntivendita = data.provincia;
       if (data.regione !== undefined) updatePayload.regione_puntivendita = data.regione;
       if (data.telefono !== undefined) updatePayload.telefono_puntivendita = data.telefono;
+      if (data.meta !== undefined) updatePayload.meta_puntivendita = data.meta;
 
       const ragioneSocialeValue = (data as any).ragioneSociale ?? data.ragionesociale;
       if (ragioneSocialeValue !== undefined) {
@@ -623,6 +632,36 @@ export class PuntoVenditaService implements IPuntoVenditaService {
         entity: 'PuntoVendita',
       });
     }
+  }
+
+  /** Canali, aree, combinazioni e PV della GDO, contro cui l'import valida le righe del file. */
+  async getContestoImport(idGdo: string): Promise<ContestoImportPuntiVendita> {
+    const [canali, aree, combinazioni, esistenti] = await Promise.all([
+      Canale.findAll({ where: { id_gdo_canali: idGdo } }),
+      Area.findAll({ where: { id_gdo_aree: idGdo } }),
+      CombinazioneCanaleArea.findAll({ where: { id_gdo_combinazione_canale_area: idGdo } }),
+      PuntoVendita.findAll({ where: { id_gdo_puntivendita: idGdo } }),
+    ]);
+    const codiceCanale = new Map(canali.map(c => [c.id_canali, c.codice_canali]));
+    const codiceArea = new Map(aree.map(a => [a.id_aree, a.codice_aree]));
+    return {
+      canali: canali.map(c => ({ id: c.id_canali, codice: c.codice_canali, nome: c.nome_canali })),
+      aree: aree.map(a => ({ id: a.id_aree, codice: a.codice_aree, nome: a.nome_aree })),
+      combinazioni: combinazioni.map(c => ({
+        id: c.id_combinazione_canale_area,
+        idCanale: c.id_canale_combinazione_canale_area,
+        idArea: c.id_area_combinazione_canale_area,
+        // Stessa sigla che la pagina mostra (getAllCombinazioniForGDOReworked)
+        sigla: `${codiceCanale.get(c.id_canale_combinazione_canale_area)}_${codiceArea.get(c.id_area_combinazione_canale_area)}`,
+      })),
+      esistenti: esistenti.map(pv => ({
+        id: pv.id_puntivendita,
+        nome: pv.nome_puntivendita,
+        indirizzo: pv.indirizzo_puntivendita,
+        cap: pv.cap_puntivendita,
+        meta: pv.meta_puntivendita ?? undefined,
+      })),
+    };
   }
 
   async getPuntiVenditaForPlugin(idGdo: string | undefined, idArea: string, idCanale: string): Promise<PuntoVenditaResponseDTO[]> {

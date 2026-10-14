@@ -629,6 +629,7 @@ export type PuntiVenditaAttributes = {
   provincia_puntivendita?: string; // Nuovo campo opzionale
   regione_puntivendita?: string; // Nuovo campo opzionale
   telefono_puntivendita?: string; // Nuovo campo opzionale aggiunto
+  meta_puntivendita?: Record<string, unknown> | null; // Dati del sistema della GDO, es. la chiave dell'import
   createdat?: Date;
   updatedat?: Date;
   idCanale_puntiVendita?: string; // Nuovo campo opzionale
