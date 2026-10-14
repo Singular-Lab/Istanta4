@@ -1300,6 +1300,65 @@ const confronti = {
         });
     },
 
+    /// I20-1090: dove sta la differenza fra la descrizione del box e quella del server: nelle
+    /// quattro descrizioni fondamentali, negli altri tratti (gli stili che non sono fondamentali,
+    /// come le bruciature di Coop), o in entrambi. trattiBox come li legge TestoTag.trattiDiStileDelCampo
+    /// ({ nome, nomeCompleto, contenuto }), trattiServer come TestoTag.parseContent ({ stile, content });
+    /// fondamentaleDi(stile) dice a quale descrizione porta uno stile ("descrizione1".."descrizione4")
+    /// o null. Gli stili si confrontano senza gruppo, i testi senza spazi, a capo e <br>, e i tratti
+    /// nascosti del server non contano: nel box non ci sono.
+    dovePortaLaDescrizione(trattiBox, trattiServer, fondamentaleDi) {
+        const senzaGruppo = function (stile) {
+            const testo = stile == null ? "" : String(stile);
+            const punto = testo.lastIndexOf(".");
+            return punto >= 0 ? testo.substring(punto + 1) : testo;
+        };
+        const pulito = function (testo) {
+            return String(testo == null ? "" : testo)
+                .replace(/<br\s*\/?>/gi, "")
+                .replace(/[\u2018\u2019]/g, "'")
+                .replace(/[\s\u0000-\u001f\u2028\u2029]/g, "");
+        };
+        const fondamentale = function (stile) {
+            const trovata = typeof fondamentaleDi === "function" ? fondamentaleDi(stile) : null;
+            return trovata == null || trovata === "" ? null : String(trovata);
+        };
+        const riassumi = function (tratti) {
+            const fondamentali = {};
+            const altri = [];
+            tratti.forEach(function (tratto) {
+                const testo = pulito(tratto.testo);
+                if (testo === "") {
+                    return;
+                }
+                const quale = fondamentale(tratto.stile);
+                if (quale != null) {
+                    fondamentali[quale] = (fondamentali[quale] || "") + testo;
+                }
+                else {
+                    altri.push(tratto.stile + ":" + testo);
+                }
+            });
+            return { fondamentali: fondamentali, altri: altri.join("|") };
+        };
+
+        const box = riassumi((trattiBox || []).filter(t => t != null).map(function (t) {
+            return { stile: senzaGruppo(t.nomeCompleto != null && t.nomeCompleto !== "" ? t.nomeCompleto : t.nome), testo: t.contenuto };
+        }));
+        const server = riassumi((trattiServer || []).filter(t => t != null && !String(t.stile || "").endsWith("_$Hidden")).map(function (t) {
+            return { stile: senzaGruppo(t.stile), testo: t.content };
+        }));
+
+        const quali = new Set(Object.keys(box.fondamentali).concat(Object.keys(server.fondamentali)));
+        let fondamentaliDiverse = false;
+        quali.forEach(function (quale) {
+            if ((box.fondamentali[quale] || "") !== (server.fondamentali[quale] || "")) {
+                fondamentaliDiverse = true;
+            }
+        });
+        return { fondamentali: fondamentaliDiverse, altri: box.altri !== server.altri };
+    },
+
     decodeSpecialCharacters(text) {
         var originalText = text;
         var textString = text.toString();

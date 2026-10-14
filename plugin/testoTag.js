@@ -661,6 +661,21 @@ const TestoTag = {
         return risultato;
     },
 
+    /// I20-1090: i tratti di un campo come testo con i tag, nella forma del campo compilato:
+    /// <Gruppo.Nome>testo</Gruppo.Nome>. Il nome completo dello stile, col gruppo, e' quello che
+    /// applicaTagStringToInndTextFrame sa ritrovare nel documento; un tratto senza stile resta testo.
+    stringaConTagDeiTratti(tratti) {
+        return (tratti || []).map(function (tratto) {
+            if (tratto == null) {
+                return '';
+            }
+            const contenuto = tratto.contenuto == null ? '' : String(tratto.contenuto);
+            const nome = tratto.nomeCompleto != null && String(tratto.nomeCompleto) !== '' ? String(tratto.nomeCompleto)
+                : (tratto.nome != null ? String(tratto.nome) : '');
+            return nome === '' ? contenuto : '<' + nome + '>' + contenuto + '</' + nome + '>';
+        }).join('');
+    },
+
     /// Gli stili nell'ordine in cui compaiono, uno stile ripetuto piu' avanti compare di nuovo.
     /// E' la lista con cui si riconosce lo schema della descrizione.
     stiliInOrdine(tratti) {

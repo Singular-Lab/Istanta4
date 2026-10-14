@@ -90,10 +90,13 @@ test("senza primario o senza meta l'elenco e' vuoto", () => {
 
 /* ---- il meta nuovo ---- */
 
-test("un meta nuovo si applica sui campi con un testo, senza meta, non sulla descrizione, uno per campo", () => {
+test("un meta nuovo si applica sui campi con un testo e senza meta, descrizione compresa (I20-1090), uno per campo", () => {
     const campi = schedaRef.campiPerNuovoMeta(scheda({ compiledFields: CAMPI, testiDalBox: [testo({ label: "PREZZO_INFO_PACK" })] }));
 
-    assert.deepStrictEqual(campi.map(c => c.labelName), ["prezzo_continuo$KgL"]);
+    assert.deepStrictEqual(campi.map(c => c.labelName), ["descrizione", "prezzo_continuo$KgL"]);
+    //Con il meta della descrizione, la descrizione non si propone piu'.
+    assert.deepStrictEqual(schedaRef.campiPerNuovoMeta(scheda({ compiledFields: CAMPI, testiDalBox: [testo({ label: "descrizione" })] })).map(c => c.labelName),
+        ["prezzo_info_pack", "prezzo_continuo$KgL"]);
     assert.deepStrictEqual(schedaRef.campiPerNuovoMeta(scheda({})), []);
 });
 
@@ -155,7 +158,7 @@ test("senza modifiche, o se il server non registra, non si riscarica e non si re
 
 test("la finestra: Rimuovi solo sui testi, Vai a Segnalazioni sui meta da verificare, Salva solo con modifiche", () => {
     const meta = sorgente("metaDelBox.js");
-    const finestra = meta.substring(meta.indexOf("    mostraFinestraMeta() {"));
+    const finestra = meta.substring(meta.indexOf("    mostraFinestraMeta() {"), meta.indexOf("/* ---------- I20-1090"));
 
     assert.match(finestra, /if \(voce\.daVerificare\) \{[\s\S]*?me\.pulsanteFinestra\("Vai a Segnalazioni"/);
     assert.match(finestra, /\$\("#popupCloseButton"\)\.trigger\("click"\);\s*await me\.mostraModalSegnalazioni\(\);/);

@@ -1349,6 +1349,10 @@ const schedaRef = {
             });
             $("#editReferenza").append(bottoneDescrizione);
         }
+        //I20-1090: accanto, i pulsanti del meta della descrizione; si disegnano quando il controller
+        //dei campi c'e' (applicaStatoMetaDescrizione).
+        this.descrizioneDaAllineareNellaScheda = descrizioneDaAllineare === true;
+        $("#editReferenza").append($('<div id="metaDescrizioneScheda" style="display: flex; flex-wrap: wrap;"></div>'));
 
 
         if (codice != $("#elementiArtwork").val()) {
@@ -1396,7 +1400,9 @@ const schedaRef = {
                     }
 
                     var originale = campo.attr("data-solaletturaoriginale") === "1";
-                    campo.prop("readonly", bloccare || originale);
+                    //I20-1090: con la descrizione nei meta i suoi campi restano in sola lettura.
+                    var nelMeta = campo.attr("labelcorrispondente") === "descrizione" && me.statoMetaDescrizione(me.schedeRefDati) != null;
+                    campo.prop("readonly", bloccare || originale || nelMeta);
                     campo.css("opacity", bloccare ? "0.6" : "");
                 });
 
@@ -1503,8 +1509,14 @@ const schedaRef = {
                     //contenuto e' quello composto per lei.
                     if (modificabile) {
                         $("#applicaDescrizioneDaServer").show();
+                        $("#metaDescrizioneScheda").show();
                     }
                     else {
+                        $("#applicaDescrizioneDaServer").hide();
+                        $("#metaDescrizioneScheda").hide();
+                    }
+                    //I20-1090: con la descrizione nei meta, "da server" scriverebbe il meta.
+                    if (me.statoMetaDescrizione(me.schedeRefDati) != null) {
                         $("#applicaDescrizioneDaServer").hide();
                     }
 
@@ -1675,6 +1687,7 @@ const schedaRef = {
                 //Il pulsante viene creato prima delle linguette e finiva sopra di loro. Qui lo si
                 //sposta sotto: append di un elemento che esiste gia' lo muove, non lo duplica.
                 rowOpzioniRegionaliEArtwork.append($("#applicaDescrizioneDaServer"));
+                rowOpzioniRegionaliEArtwork.append($("#metaDescrizioneScheda"));
 
                 disegnaPiu();
 
@@ -2429,6 +2442,8 @@ const schedaRef = {
                 let compiledFields = primario.recordInTracciato.compiledFields;
 
                 me.editRefFieldController = new InputEditController($("#editReferenza"), convalidaFirmaRevisione, [descr1InArchivio, descr2InArchivio, descr3InArchivio, descr4InArchivio, descrIndd], compiledFields);
+                //I20-1090: la descrizione nei meta (sola lettura, niente revisione) e i suoi pulsanti.
+                me.applicaStatoMetaDescrizione();
                 //writeDebugMessageForCrash("Fine try descrizioni regionali e canale");
             }, 5);
 
@@ -3968,6 +3983,10 @@ const schedaRef = {
         //I20-1077: e, per gli altri campi di testo, i testi del box da registrare nella lavorazione.
         const testiDalBox = Array.isArray(this.testiDalBoxDaSalvare) ? this.testiDalBoxDaSalvare : [];
         this.testiDalBoxDaSalvare = null;
+        //I20-1090: e, per "Revisiona e imposta nei meta", la descrizione del box da mettere nel meta
+        //dopo la revisione. Se il salvataggio si ferma prima (tratti ripetuti) non si fa nemmeno questo.
+        const metaDescrizioneDopo = this.metaDescrizioneDaImpostare != null ? this.metaDescrizioneDaImpostare : null;
+        this.metaDescrizioneDaImpostare = null;
         try {
             console.log("Salva modifiche " + codice);
 
@@ -4096,7 +4115,7 @@ const schedaRef = {
                 //i cambi strutturali non arriverebbero al documento: documento e server
                 //andrebbero ognuno per conto suo.
                 let xhrSalva = new XMLHttpRequestClient();
-                xhrSalva.onload = (objResult, parsed) => {
+                xhrSalva.onload = async (objResult, parsed) => {
                     try {
                         if (!parsed) {
                             objResult = JSON.parse(objResult);
@@ -4106,6 +4125,10 @@ const schedaRef = {
                         //controlliamo se ci sono stati errori
                         if (objResult.esito) {
                             messaggioUtente("SalvaModifiche: Richiesta completata con successo", "success", false, 5);
+                            //I20-1090: a revisione salvata, il meta della descrizione.
+                            if (metaDescrizioneDopo != null) {
+                                await this.metaDescrizioneDopoLaRevisione(metaDescrizioneDopo);
+                            }
                             applicaCambiStrutturali();
                         }
                         else {
@@ -4936,7 +4959,12 @@ const schedaRef = {
         }
         //I20-1075: sulla descrizione in mismatch si sceglie quale delle due e' giusta.
         if (this.eDescrizioneInMismatch(diff)) {
-            return ["descrizioneServer", "descrizioneBox"];
+            //I20-1090: con la descrizione nei meta non si revisiona: si usa il meta o lo si aggiorna.
+            //Senza, oltre al server una scelta sola per il box, secondo dove sta la differenza.
+            if (this.statoMetaDescrizione(this.schedeRefDati) != null) {
+                return ["usaMetaDescrizione", "aggiornaMetaDescrizione"];
+            }
+            return ["descrizioneServer", this.sceltaDelBoxPerLaDescrizione(this.dovePortaLaDescrizioneDelBox())];
         }
         //I20-1077: e cosi' su ogni altro campo di testo con il contenuto diverso.
         if (this.campoTestoInMismatch(diff) != null) {
@@ -5285,8 +5313,13 @@ const schedaRef = {
             tieniLavorazione: ["Tieni solo per questa lavorazione", "La foto extra resta nel dato di questa sola lavorazione"],
             escludiLavorazione: ["Escludi per questa lavorazione", "Per questa lavorazione il dato non chiede piu' questa foto extra"],
             noRender: ["Metti in noRender", "L'elemento non va nel box: lo si mette fra i noRender e la differenza risulta risolta"],
-            descrizioneServer: ["Scegli quella del server", "Il box riprende la descrizione del server, con i suoi stili"],
-            descrizioneBox: ["Scegli quella del box", "La descrizione del box va nel dato della referenza (come Salva modifiche): il box non cambia"],
+            descrizioneServer: ["Usa quella del server", "Il box riprende la descrizione del server, con i suoi stili"],
+            //I20-1090: le scelte del box sulla descrizione, una per volta secondo dove sta la differenza.
+            descrizioneBox: ["Revisiona con valore del box", "Le descrizioni fondamentali del box vanno nel dato della referenza (come Salva modifiche): il box non cambia"],
+            impostaMetaDescrizione: ["Imposta come meta", "La descrizione del box vale per questa lavorazione come meta: il dato e il box non cambiano"],
+            revisionaEMeta: ["Revisiona e imposta nei meta", "Le descrizioni fondamentali del box vanno nel dato della referenza, e la descrizione intera del box diventa il meta: il box non cambia"],
+            usaMetaDescrizione: ["Usa quella del meta", "Il box riprende la descrizione del meta, con i suoi stili"],
+            aggiornaMetaDescrizione: ["Aggiorna il meta con il box", "Il meta della descrizione prende il testo del box: il box non cambia"],
             testoServer: ["Scegli quella del server", "Il campo nel box riprende il testo del server, con i suoi stili"],
             testoBox: ["Scegli quella del box", "Il testo del box vale per questa lavorazione (come Salva modifiche): il box non cambia"],
             aggiornaMeta: ["Aggiorna meta", "Il meta resta: il testo del server di adesso diventa il suo valore originale, e il box non cambia"],
@@ -5300,7 +5333,7 @@ const schedaRef = {
             var pulsante = me.pulsanteFinestra(testi[azione][0], testi[azione][1]);
             //I20-1084: con tratti ripetuti la descrizione del box non si puo' mandare: il pulsante
             //resta, spento, e dice perche'.
-            var ripetuti = azione === "descrizioneBox" ? me.trattiRipetutiNelPannello() : [];
+            var ripetuti = (azione === "descrizioneBox" || azione === "revisionaEMeta") ? me.trattiRipetutiNelPannello() : [];
             if (ripetuti.length > 0) {
                 me.spegniSceltaDelBox(pulsante, riga, ripetuti);
                 barra.append(pulsante);
@@ -5328,6 +5361,27 @@ const schedaRef = {
                     }
                     else if (azione === "descrizioneBox") {
                         me.tieniDescrizioneDelBox();
+                    }
+                    else if (azione === "revisionaEMeta") {
+                        me.tieniDescrizioneDelBox(true);
+                    }
+                    else if (azione === "impostaMetaDescrizione" || azione === "aggiornaMetaDescrizione" || azione === "usaMetaDescrizione") {
+                        if (azione === "impostaMetaDescrizione") {
+                            await me.impostaDescrizioneComeMeta();
+                        }
+                        else if (azione === "aggiornaMetaDescrizione") {
+                            await me.aggiornaMetaDescrizioneColBox();
+                        }
+                        else {
+                            //Con il meta il campo compilato e' il meta: e' quello che si riscrive nel box.
+                            await me.applicaDescrizioneDaServer();
+                            if ($("#popup").length > 0) {
+                                Modali.nascondiHidebleElements();
+                            }
+                        }
+                        if (typeof dopoAzione === "function") {
+                            await dopoAzione();
+                        }
                     }
                     else if (azione === "testoServer") {
                         await me.applicaCampoDaServer(diff);
@@ -5467,7 +5521,13 @@ const schedaRef = {
         }
         var ricaricata = await this.riscaricaDopoIlMeta();
         if (ricaricata) {
-            await this.applicaCampoDaServer({ label: diff.label, difference: "contenuto" });
+            //I20-1090: la descrizione ha la sua strada, con i suoi stili.
+            if (String(diff.label || "").toLowerCase() === "descrizione") {
+                await this.applicaDescrizioneDaServer();
+            }
+            else {
+                await this.applicaCampoDaServer({ label: diff.label, difference: "contenuto" });
+            }
             //Come per "Scegli quella del server": il pannello ricostruito non deve finire sopra la finestra.
             if ($("#popup").length > 0) {
                 Modali.nascondiHidebleElements();
@@ -5494,7 +5554,7 @@ const schedaRef = {
     /// Il perche' e il rimedio, per il messaggio del salvataggio e per la finestra.
     motivoTrattiRipetuti(ripetuti) {
         return "La descrizione del box ha piu' tratti dello stesso stile (" + InputEditController.nomiDeiTrattiRipetuti(ripetuti)
-            + "): unisci i testi in un solo tratto per stile, oppure usa \"Scegli quella del server\".";
+            + "): unisci i testi in un solo tratto per stile, oppure usa \"Usa quella del server\".";
     },
 
     /// "Scegli quella del box" spento: si vede, il suggerimento dice perche', e il clic mette
@@ -5534,12 +5594,15 @@ const schedaRef = {
     /// descrizioni una per una e non sempre vede la differenza che vede la preanalisi. Si scrive
     /// sulla variante che la scheda puo' modificare, come il Salva. La finestra si chiude con la
     /// sua X: il salvataggio ricarica la scheda, e con lei differenze e segnalino.
-    tieniDescrizioneDelBox() {
+    /// I20-1090: con eImpostaNeiMeta e' "Revisiona e imposta nei meta": il testo del box si prende
+    /// adesso, e il meta si registra solo a revisione salvata (salvaModifiche).
+    tieniDescrizioneDelBox(eImpostaNeiMeta = false) {
         if (typeof this.salvaModificheDellaScheda !== "function") {
             messaggioUtente("Code SRF-108 Salvataggio della scheda non disponibile: la descrizione del box non e' stata salvata", "error", false, 5);
             return false;
         }
         this.salvaConDescrizioneDelBox = true;
+        this.metaDescrizioneDaImpostare = eImpostaNeiMeta === true ? this.testoDescrizioneDelBoxPerMeta() : null;
         $("#popupCloseButton").trigger("click");
         //I20-1077: una volta sola, come il pulsante Salva modifiche.
         this.salvaModificheDellaScheda();

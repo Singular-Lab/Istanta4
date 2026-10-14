@@ -2,9 +2,10 @@
  * I20-1075: la descrizione in mismatch si sistema dalla finestra delle differenze.
  *
  * Sotto "descrizione / contenuto" la finestra mostra il testo nel box e quello del server (I20-1071).
- * Da li' l'operatore sceglie quale e' giusto: "Scegli quella del server" fa quello che fa "Applica
- * descrizione da server" e poi rifa' la finestra; "Scegli quella del box" salva la descrizione del box
- * nel dato, come il Salva modifiche della scheda ma mandandola per intero.
+ * Da li' l'operatore sceglie quale e' giusto: "Usa quella del server" fa quello che fa "Applica
+ * descrizione da server" e poi rifa' la finestra; "Revisiona con valore del box" salva la descrizione
+ * del box nel dato, come il Salva modifiche della scheda ma mandandola per intero.
+ * I20-1090: la scelta del box dipende da dove sta la differenza (vedi metaDescrizione.test.js).
  *
  * schedaRef.js si carica sotto Node: le decisioni si provano direttamente, il resto sul sorgente.
  *
@@ -33,9 +34,17 @@ function conScheda(compiledFields, prova) {
 const DESCRIZIONE = [{ labelName: "descrizione", content: "<DES_descr_nome>Arista dissossata di suino</DES_descr_nome>" }];
 
 test("sulla differenza di contenuto della descrizione si sceglie fra box e server", () => conScheda(DESCRIZIONE, () => {
-    //Prima quella del server, poi quella del box, come le ha chieste l'operatore.
-    assert.deepStrictEqual(schedaRef.azioniPerDifferenza(CONTENUTO), ["descrizioneServer", "descrizioneBox"]);
-    assert.deepStrictEqual(schedaRef.azioniPerDifferenza(Object.assign({}, CONTENUTO, { label: "Descrizione" })), ["descrizioneServer", "descrizioneBox"]);
+    //Prima quella del server, poi quella del box, come le ha chieste l'operatore. I20-1090: con la
+    //differenza nelle sole descrizioni fondamentali la scelta del box e' la revisione.
+    const salva = schedaRef.dovePortaLaDescrizioneDelBox;
+    schedaRef.dovePortaLaDescrizioneDelBox = () => ({ fondamentali: true, altri: false });
+    try {
+        assert.deepStrictEqual(schedaRef.azioniPerDifferenza(CONTENUTO), ["descrizioneServer", "descrizioneBox"]);
+        assert.deepStrictEqual(schedaRef.azioniPerDifferenza(Object.assign({}, CONTENUTO, { label: "Descrizione" })), ["descrizioneServer", "descrizioneBox"]);
+    }
+    finally {
+        schedaRef.dovePortaLaDescrizioneDelBox = salva;
+    }
 }));
 
 test("non sul paragrafo, non su altri campi, non senza la descrizione del server", () => {
@@ -91,7 +100,8 @@ test("il salvataggio manda la descrizione per intero solo quando lo chiede la fi
     const salva = scheda.substring(scheda.indexOf("    salvaModifiche(schedaRef, codice, box, meccanica, page) {"), scheda.indexOf("//Chiedo al controller le operazioni che devo fare"));
     //Si legge e si spegne prima di ogni uscita anticipata.
     //I20-1077: dopo, prima del try, si leggono e si spengono anche i testi del box.
-    assert.match(salva, /salvaModifiche\(schedaRef, codice, box, meccanica, page\) \{\s*(\/\/[^\n]*\n\s*)*const descrizioneDelBox = this\.salvaConDescrizioneDelBox === true;\s*this\.salvaConDescrizioneDelBox = false;[\s\S]*?this\.testiDalBoxDaSalvare = null;\s*try \{/);
+    //I20-1090: e la descrizione da mettere nel meta dopo la revisione.
+    assert.match(salva, /salvaModifiche\(schedaRef, codice, box, meccanica, page\) \{\s*(\/\/[^\n]*\n\s*)*const descrizioneDelBox = this\.salvaConDescrizioneDelBox === true;\s*this\.salvaConDescrizioneDelBox = false;[\s\S]*?this\.testiDalBoxDaSalvare = null;[\s\S]*?this\.metaDescrizioneDaImpostare = null;\s*try \{/);
     assert.match(scheda, /this\.editRefFieldController\.getOperazioniDiSalvataggioDaFare\(descrizioneEreditata \|\| descrizioneDelBox\);/);
     //I20-1077: il salvataggio da codice e' lo stesso del pulsante, con i suoi argomenti, e nessuno
     //preme piu' il pulsante da codice.
@@ -99,10 +109,11 @@ test("il salvataggio manda la descrizione per intero solo quando lo chiede la fi
     assert.doesNotMatch(scheda, /\$\("#salvaButton"\)\.trigger\(|salva\.trigger\("click"\)/);
 });
 
-test("scegli quella del server applica la descrizione del server, rinasconde i controlli nativi e rifa' la finestra", () => {
+test("usa quella del server applica la descrizione del server, rinasconde i controlli nativi e rifa' la finestra", () => {
     const scheda = leggiFileDelPlugin("schedaRef.js").replace(/\r/g, "");
     //Il pannello di modifica si ricostruisce con caselle nuove, che in UXP starebbero sopra la finestra.
     assert.match(scheda, /else if \(azione === "descrizioneServer"\) \{\s*await me\.applicaDescrizioneDaServer\(\);\s*(\/\/[^\n]*\n\s*)*if \(\$\("#popup"\)\.length > 0\) \{\s*Modali\.nascondiHidebleElements\(\);\s*\}\s*if \(typeof dopoAzione === "function"\) \{\s*await dopoAzione\(\);\s*\}\s*\}\s*else if \(azione === "descrizioneBox"\) \{\s*me\.tieniDescrizioneDelBox\(\);\s*\}/);
-    assert.match(scheda, /descrizioneServer: \["Scegli quella del server", /);
-    assert.match(scheda, /descrizioneBox: \["Scegli quella del box", /);
+    //I20-1090: le etichette dicono cosa succede.
+    assert.match(scheda, /descrizioneServer: \["Usa quella del server", /);
+    assert.match(scheda, /descrizioneBox: \["Revisiona con valore del box", /);
 });

@@ -128,7 +128,7 @@ const metaDelBox = {
     },
 
     /// I campi compilati del primario su cui si puo' applicare un meta nuovo: con un testo, senza un
-    /// meta, non la descrizione (che ha la sua strada, I20-1090). Uno per campo.
+    /// meta. Uno per campo. I20-1090: anche la descrizione, come ogni altro campo.
     campiPerNuovoMeta(records) {
         const rec = this.primarioDeiRecord(records);
         if (rec == null || !Array.isArray(rec.compiledFields)) {
@@ -143,7 +143,7 @@ const metaDelBox = {
                 return false;
             }
             const chiave = String(campo.labelName).toLowerCase();
-            if (senzaChiave(campo.labelName).toLowerCase() === "descrizione" || conMeta.has(chiave) || visti.has(chiave)) {
+            if (conMeta.has(chiave) || visti.has(chiave)) {
                 return false;
             }
             visti.add(chiave);
@@ -223,6 +223,13 @@ const metaDelBox = {
     /// (con i tag degli stili); se il box non ha il campo, quello del dato.
     testoPerNuovoMeta(campoCompilato) {
         try {
+            //I20-1090: la descrizione con i nomi completi degli stili, come il suo meta dalla scheda.
+            if (campoCompilato != null && senzaChiave(campoCompilato.labelName).toLowerCase() === "descrizione") {
+                const testo = this.testoDescrizioneDelBoxPerMeta();
+                if (testo != null) {
+                    return testo;
+                }
+            }
             const box = this.refSelected != null ? this.refSelected.item : null;
             const campo = box != null && box.isValid ? Utility.getFieldByLabel(Utility.parseLabel(campoCompilato.labelName), box) : null;
             if (campo != null) {
@@ -399,6 +406,186 @@ const metaDelBox = {
         catch (e) {
             console.error("Code SRF-120 Finestra dei meta non aperta: " + e);
             messaggioUtente("Code SRF-120 Finestra dei meta non aperta: " + e.message, "error", false, 5);
+        }
+    },
+
+    /* ---------- I20-1090: la descrizione nei meta ---------- */
+
+    /// Lo stato del meta della descrizione nel primario (come in testiDalBox), o null se non c'e'.
+    statoMetaDescrizione(records) {
+        const rec = this.primarioDeiRecord(records);
+        const stati = rec != null && Array.isArray(rec.testiDalBox) ? rec.testiDalBox : [];
+        return stati.find(s => s != null && s.label != null && s.allineato !== true && senzaChiave(s.label).toLowerCase() === "descrizione") || null;
+    },
+
+    /// La scelta per il box sulla riga della descrizione, da dove sta la differenza: le sole
+    /// fondamentali si revisionano, i soli altri tratti vanno nel meta, tutti e due fanno le due
+    /// cose. Se non si riconosce dove sta (la preanalisi l'ha vista, il confronto per tratti no), il
+    /// meta: tiene la descrizione del box senza toccare il dato.
+    sceltaDelBoxPerLaDescrizione(dove) {
+        const fondamentali = dove != null && dove.fondamentali === true;
+        const altri = dove != null && dove.altri === true;
+        if (fondamentali && altri) {
+            return "revisionaEMeta";
+        }
+        return fondamentali ? "descrizioneBox" : "impostaMetaDescrizione";
+    },
+
+    /// Dove sta la differenza fra la descrizione del box aperto e quella del server, o null se non
+    /// si legge.
+    dovePortaLaDescrizioneDelBox() {
+        try {
+            const campoCompilato = this.campoDescrizioneCompilatoDelPrimario(this.schedeRefDati);
+            const box = this.refSelected != null ? this.refSelected.item : null;
+            const campo = box != null && box.isValid ? Utility.getFieldByLabel("descrizione", box) : null;
+            if (campoCompilato == null || campo == null) {
+                return null;
+            }
+            return confronti.dovePortaLaDescrizione(TestoTag.trattiDiStileDelCampo(campo), TestoTag.parseContent(String(campoCompilato.content)),
+                function (stile) {
+                    const universale = pluginMiddleware.getNameStileUniversale(stile);
+                    return universale != null ? universale.fondamentale : null;
+                });
+        }
+        catch (e) {
+            console.warn("Code SRF-121 Differenza della descrizione non classificata: " + e);
+            return null;
+        }
+    },
+
+    /// La descrizione del box aperto come testo con i tag, con il nome completo degli stili: il
+    /// contenuto del suo meta. null se il box non ha la descrizione.
+    testoDescrizioneDelBoxPerMeta() {
+        const box = this.refSelected != null ? this.refSelected.item : null;
+        const campo = box != null && box.isValid ? Utility.getFieldByLabel("descrizione", box) : null;
+        return campo != null ? TestoTag.stringaConTagDeiTratti(TestoTag.trattiDiStileDelCampo(campo)) : null;
+    },
+
+    /// "Imposta come meta" e "Applica descrizione del box nel meta": la descrizione del box diventa il
+    /// meta, con valore originale quella che il server compone ora. Il box non cambia; la scheda si
+    /// riscarica. Vero se il server l'ha registrato.
+    async impostaDescrizioneComeMeta() {
+        const campo = this.campoDescrizioneCompilatoDelPrimario(this.schedeRefDati);
+        const testo = this.testoDescrizioneDelBoxPerMeta();
+        if (campo == null || testo == null) {
+            messaggioUtente("Code SRF-122 Descrizione del box o del server non trovata: il meta non e' stato impostato", "error", false, 5);
+            return false;
+        }
+        const registrata = await this.salvaTestiDalBox({ voci: [{ label: campo.labelName, azione: this.AZIONE_TESTO_DAL_BOX.crea, contenuto: testo, contenutoServer: String(campo.content) }] });
+        if (!registrata) {
+            return false;
+        }
+        await this.riscaricaDopoIlMeta();
+        messaggioUtente("Descrizione del box impostata come meta", "success", false, 4);
+        return true;
+    },
+
+    /// Dopo "Revisiona e imposta nei meta", a revisione salvata: la scheda si riscarica, cosi' il
+    /// valore originale del meta e' la descrizione che il server compone dopo la revisione; se il
+    /// server compone gia' il testo del box, il meta non serve.
+    async metaDescrizioneDopoLaRevisione(testo) {
+        if (testo == null) {
+            return false;
+        }
+        if (!(await this.riscaricaDopoIlMeta())) {
+            return false;
+        }
+        const campo = this.campoDescrizioneCompilatoDelPrimario(this.schedeRefDati);
+        if (campo == null) {
+            return false;
+        }
+        if (String(campo.content) === String(testo)) {
+            return true;
+        }
+        return await this.salvaTestiDalBox({ voci: [{ label: campo.labelName, azione: this.AZIONE_TESTO_DAL_BOX.crea, contenuto: String(testo), contenutoServer: String(campo.content) }] });
+    },
+
+    /// "Aggiorna descrizione nel meta" e "Aggiorna il meta con il box": il meta prende il testo del
+    /// box; il valore originale resta quello che il server compone ora.
+    async aggiornaMetaDescrizioneColBox() {
+        const stato = this.statoMetaDescrizione(this.schedeRefDati);
+        const testo = this.testoDescrizioneDelBoxPerMeta();
+        if (stato == null || testo == null) {
+            return false;
+        }
+        const registrata = await this.salvaTestiDalBox({ voci: [{ label: String(stato.label), azione: this.AZIONE_TESTO_DAL_BOX.crea, contenuto: testo,
+            contenutoServer: stato.contenutoServerAttuale == null ? "" : String(stato.contenutoServerAttuale) }] });
+        if (!registrata) {
+            return false;
+        }
+        await this.riscaricaDopoIlMeta();
+        messaggioUtente("Meta della descrizione aggiornato al box", "success", false, 4);
+        return true;
+    },
+
+    /// "Rimuovi descrizione nel meta": come Rimuovi dall'interfaccia dei meta, la scheda si riscarica
+    /// e il box si reimpagina con la descrizione del server.
+    async rimuoviMetaDescrizione() {
+        const stato = this.statoMetaDescrizione(this.schedeRefDati);
+        return stato != null ? await this.salvaModificheMeta(this.richiestaModificheMeta([String(stato.label)], [])) : false;
+    },
+
+    /// Nella schermata di modifica: con la descrizione nei meta i suoi campi sono in sola lettura, la
+    /// revisione non parte (InputEditController.descrizioneNelMeta) e "Applica descrizione da server"
+    /// non si offre, perche' scriverebbe il meta. Poi i pulsanti del meta.
+    applicaStatoMetaDescrizione() {
+        const me = this;
+        const conMeta = this.statoMetaDescrizione(this.schedeRefDati) != null;
+        const controller = this.editRefFieldController;
+        if (controller != null) {
+            controller.descrizioneNelMeta = conMeta;
+            controller.dopoModifica = function () {
+                me.aggiornaPulsantiMetaDescrizione();
+            };
+            controller.checkStato();
+        }
+        if (conMeta) {
+            $('#editReferenza textarea[labelcorrispondente="descrizione"]').prop("readonly", true).css("opacity", "0.6");
+            $("#applicaDescrizioneDaServer").hide();
+        }
+        this.aggiornaPulsantiMetaDescrizione();
+    },
+
+    /// I pulsanti del meta della descrizione, accanto ad "Applica descrizione da server". Senza meta:
+    /// "Applica descrizione del box nel meta" se il box e' diverso dal server e i campi sono ancora
+    /// quelli del box (sparisce appena se ne cambia uno). Con il meta: "Rimuovi descrizione nel meta"
+    /// e, se il box e' diverso dal meta, "Aggiorna descrizione nel meta".
+    aggiornaPulsantiMetaDescrizione() {
+        try {
+            const contenitore = $("#metaDescrizioneScheda");
+            if (contenitore.length === 0) {
+                return;
+            }
+            contenitore.empty();
+            const me = this;
+            const aggiungi = function (testo, azione, ridisegna) {
+                const pulsante = $('<sp-action-button style="font-size: 12px; margin: 4px 6px 8px 0px;"></sp-action-button>').text(testo);
+                pulsante.on("click", async function () {
+                    if (await azione() && ridisegna) {
+                        me.dimenticaSegnalazioni();
+                        await me.selectSchedaRef(1);
+                    }
+                });
+                contenitore.append(pulsante);
+            };
+
+            const stato = this.statoMetaDescrizione(this.schedeRefDati);
+            if (stato == null) {
+                const controller = this.editRefFieldController;
+                const modificata = controller != null && typeof controller.descrizioneModificata === "function" && controller.descrizioneModificata();
+                if (this.descrizioneDaAllineareNellaScheda === true && !modificata) {
+                    aggiungi("Applica descrizione del box nel meta", () => me.impostaDescrizioneComeMeta(), true);
+                }
+                return;
+            }
+            aggiungi("Rimuovi descrizione nel meta", () => me.rimuoviMetaDescrizione(), false);
+            const testo = this.testoDescrizioneDelBoxPerMeta();
+            if (testo != null && testo !== String(stato.contenuto == null ? "" : stato.contenuto)) {
+                aggiungi("Aggiorna descrizione nel meta", () => me.aggiornaMetaDescrizioneColBox(), true);
+            }
+        }
+        catch (e) {
+            console.error("Code SRF-123 Pulsanti del meta della descrizione non aggiornati: " + e);
         }
     }
 };

@@ -26,7 +26,9 @@ const MOTORE = ["confrontoBox", "confrontoBoxCompiledFieldPreAnalisi", "mappatur
     //I20-1081: il tipo di box diverso da quello del dato, la differenza grave.
     "codiceBoxAtteso", "differenzaCodiceBox", "eDifferenzaGrave",
     //I20-1088: i meta dei testi da verificare, per la scheda e per il report.
-    "ignoraVersioneMeta", "differenzeDeiMeta", "valoriDelMeta"
+    "ignoraVersioneMeta", "differenzeDeiMeta", "valoriDelMeta",
+    //I20-1090: dove sta la differenza della descrizione, per la scelta del box.
+    "dovePortaLaDescrizione"
 ];
 const DA_INDEXNEW = ["avviaReportIntegrita", "applicaConfronto", "preAnalisiBoxMappato",
     "nomiPagineDelDocumento", "boxDellElementoMappa"];
