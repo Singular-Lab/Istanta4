@@ -132,10 +132,41 @@ namespace AgenziaLib
         /// usa la descrizione della propria referenza, anche con prezzi e pesi tutti uguali (prima prendeva
         /// quella di gruppo e mostrava tutti i gusti). Il cartello di gruppo non passa da qui e resta con
         /// tutti i gusti.
+        /// I20-1099: anche nei gruppi con "vari"/"varie" a prezzo unico, i cui cartelli sono tutti uguali.
         /// </summary>
-        public static bool singoloConDescrizioneDiGruppo(bool inGruppo, bool haDescrizioneDiGruppo, bool lineaDa10InSu)
+        public static bool singoloConDescrizioneDiGruppo(bool inGruppo, bool haDescrizioneDiGruppo, bool lineaDa10InSu, bool gustiVariAPrezzoUnico = false)
         {
-            return inGruppo && haDescrizioneDiGruppo && lineaDa10InSu;
+            return inGruppo && haDescrizioneDiGruppo && (lineaDa10InSu || gustiVariAPrezzoUnico);
+        }
+
+        /// <summary>
+        /// I20-1099: se una delle descrizioni contiene "vari" o "varie" come parola a se', senza distinguere
+        /// maiuscole e minuscole: "varieta'" o "variegato" no. I separatori di riga delle descrizioni ($br,
+        /// &lt;br&gt;) valgono come spazi.
+        /// </summary>
+        public static bool descrizioneConGustiVari(params string[] descrizioni)
+        {
+            if (descrizioni == null)
+                return false;
+            foreach (string descrizione in descrizioni)
+            {
+                if (string.IsNullOrEmpty(descrizione))
+                    continue;
+                string testo = System.Text.RegularExpressions.Regex.Replace(descrizione, @"<br\s*/?>|\$br", " ", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                if (System.Text.RegularExpressions.Regex.IsMatch(testo, @"(?<!\p{L})varie?(?!\p{L})", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant))
+                    return true;
+            }
+            return false;
+        }
+
+        /// <summary>I20-1099: descrizioneConGustiVari sulle quattro descrizioni della descrizione di gruppo.</summary>
+        public static bool descrizioneDiGruppoConGustiVari(Dictionary<string, object> descrizioneDiGruppo)
+        {
+            if (descrizioneDiGruppo == null)
+                return false;
+            return descrizioneConGustiVari(new[] { GLOBAL_VARIABLES.keyDescr1, GLOBAL_VARIABLES.keyDescr2, GLOBAL_VARIABLES.keyDescr3, GLOBAL_VARIABLES.keyDescr4 }
+                .Select(chiave => descrizioneDiGruppo.TryGetValue(chiave, out object valore) ? valore?.ToString() : null)
+                .ToArray());
         }
         //Settori/reparti No FOOD
         private readonly string[] settori_no_food = new string[] { "62", "64", "66", "68" };
@@ -627,6 +658,13 @@ namespace AgenziaLib
 
 
                     bool gruppoDeveUscireConISingoliConDescrizioneGruppo = (codice_referenza != codice_gruppo && prezziDiversiInGruppo == false && pesiDiversiInGruppo == false);
+
+                    //I20-1099: un gruppo con "vari"/"varie" nella descrizione di gruppo e tutte le referenze allo
+                    //stesso prezzo esce con un cartello per referenza, tutti con la descrizione di gruppo, e senza
+                    //il cartello di gruppo. Con prezzi diversi restano i cartelli singoli.
+                    bool gruppoConGustiVari = codice_referenza != codice_gruppo && !prezziDiversiInGruppo
+                        && recItem.ContainsKey(GLOBAL_VARIABLES.keyXMLDescrizioneGruppo)
+                        && descrizioneDiGruppoConGustiVari(recItem[GLOBAL_VARIABLES.keyXMLDescrizioneGruppo] as Dictionary<string, object>);
 
                     if (gruppoDeveUscireConISingoliConDescrizioneGruppo && recItem.ContainsKey(GLOBAL_VARIABLES.keyXMLDescrizioneGruppo))//codice_referenza != codice_gruppo && prezziDiversiInGruppo==false && pesiDiversiInGruppo==false )//codice_gruppo.Contains(",") && recItem.ContainsKey(GLOBAL_VARIABLES.keyXMLDescrizioneGruppo))
                     {
@@ -1933,7 +1971,8 @@ namespace AgenziaLib
 
 
                     //I20-1098: il singolo usa la propria descrizione; quella di gruppo solo nelle linee da 10 in su.
-                    if (singoloConDescrizioneDiGruppo(codice_referenza != codice_gruppo, recItem.ContainsKey(GLOBAL_VARIABLES.keyXMLDescrizioneGruppo), isLineaMaggioreUguale10))
+                    //I20-1099: e nei gruppi con "vari"/"varie" a prezzo unico.
+                    if (singoloConDescrizioneDiGruppo(codice_referenza != codice_gruppo, recItem.ContainsKey(GLOBAL_VARIABLES.keyXMLDescrizioneGruppo), isLineaMaggioreUguale10, gruppoConGustiVari))
                     {
 
                         Descrizione1 = (recItem[GLOBAL_VARIABLES.keyXMLDescrizioneGruppo] as Dictionary<string, object>)[GLOBAL_VARIABLES.keyDescr1].ToString();
@@ -2092,7 +2131,8 @@ namespace AgenziaLib
                     bool BOXLINEA_xSingoliBOXSTD = recItem[key_codiceBox].ToString() == "BOX_LINEA" && codiceBox != "BOX_LINEA";
 
                     bool eludi = false;
-                    if (!eludi && codice_gruppo != codice_referenza && !isLineaMaggioreUguale10) // (recItem.ContainsKey(keySottogruppo))
+                    //I20-1099: i gruppi con "vari"/"varie" a prezzo unico non hanno il cartello di gruppo.
+                    if (!eludi && codice_gruppo != codice_referenza && !isLineaMaggioreUguale10 && !gruppoConGustiVari) // (recItem.ContainsKey(keySottogruppo))
                     {
                         //Console.WriteLine($"Creazione sottogruppo ### {recItem[key_codiceBox].ToString()} ---- {codice_referenza} ---- {codiceBox}");
 
