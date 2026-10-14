@@ -73,7 +73,8 @@ public class PopCoopLineeTests
 
         // Sotto i 10 non cambia niente: cartelli singoli (BOX_STD) e il sottogruppo, che e' il cartello linea.
         Assert.Contains("if (!isLineaMaggioreUguale10)", esporta);
-        Assert.Contains("if (!eludi && codice_gruppo != codice_referenza && !isLineaMaggioreUguale10)", esporta);
+        // I20-1099: il sottogruppo esclude anche i gruppi con "vari"/"varie" a prezzo unico.
+        Assert.Contains("if (!eludi && codice_gruppo != codice_referenza && !isLineaMaggioreUguale10 && !gruppoConGustiVari)", esporta);
     }
 
     private static string Sorgente(string relativo) => File.ReadAllText(Percorso(relativo.Replace('/', Path.DirectorySeparatorChar))).Replace("\r", "");

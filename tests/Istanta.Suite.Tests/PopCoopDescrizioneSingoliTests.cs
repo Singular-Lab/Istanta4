@@ -41,7 +41,8 @@ public class PopCoopDescrizioneSingoliTests
         int fine = coop.IndexOf("public TracciatoResultKit esportaVolantino(", StringComparison.Ordinal);
         string esporta = coop.Substring(inizio, fine - inizio);
 
-        int regola = esporta.IndexOf("if (singoloConDescrizioneDiGruppo(codice_referenza != codice_gruppo, recItem.ContainsKey(GLOBAL_VARIABLES.keyXMLDescrizioneGruppo), isLineaMaggioreUguale10))", StringComparison.Ordinal);
+        // I20-1099: con in coda i gruppi con "vari"/"varie" a prezzo unico.
+        int regola = esporta.IndexOf("if (singoloConDescrizioneDiGruppo(codice_referenza != codice_gruppo, recItem.ContainsKey(GLOBAL_VARIABLES.keyXMLDescrizioneGruppo), isLineaMaggioreUguale10, gruppoConGustiVari))", StringComparison.Ordinal);
         Assert.True(regola > 0);
         // Subito dopo, la descrizione 1 del cartello viene da quella di gruppo.
         Assert.True(esporta.IndexOf("Descrizione1 = (recItem[GLOBAL_VARIABLES.keyXMLDescrizioneGruppo]", regola, StringComparison.Ordinal) > regola);
