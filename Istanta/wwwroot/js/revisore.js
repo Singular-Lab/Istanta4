@@ -482,6 +482,13 @@
                 mostraFirma = this.agenzia.mostraFirmaTracciato();
             }
             let htmlItem = renderRecordRevisione("template", dataItem, this.agenzia, me.List, this.olimpoIp, false, null, null, revInstance.modalitaSottogruppi, mostraFirma);
+            //I20-1092: un elemento che non si puo' disegnare (per esempio un gruppo di cui non arriva
+            //nessuna ref) si salta, con l'errore in console: prima fermava il caricamento dell'intera
+            //pagina, e il revisore non si apriva piu'.
+            if (!Revisore.elementoDisegnabile(htmlItem)) {
+                console.error(Revisore.testoElementoNonDisegnabile(dataItem, revInstance.modalitaSottogruppi));
+                continue;
+            }
             if (this.agenzia.compilaBoxConInformazioniCustom != null) {
                 this.agenzia.compilaBoxConInformazioniCustom(htmlItem, dataItem);
             }
@@ -2728,6 +2735,23 @@
                 }
             }
         });
+    }
+
+    /// I20-1092: un elemento della lista si puo' disegnare se renderRecordRevisione ha restituito un
+    /// elemento jQuery. Un gruppo di cui non si trova nessuna ref restituisce undefined, e passarlo a
+    /// compilaBoxConInformazioniCustom fermava il caricamento dell'intera pagina.
+    static elementoDisegnabile(htmlItem) {
+        return htmlItem != null && typeof htmlItem.find === "function";
+    }
+
+    /// I20-1092: l'errore in console per un elemento saltato: cosa e', con quale codice, e perche'.
+    static testoElementoNonDisegnabile(dataItem, modalitaSottogruppi = false) {
+        const rec = dataItem != null && dataItem.recordInTracciato != null ? dataItem.recordInTracciato : {};
+        const chiaveGruppo = modalitaSottogruppi ? "Scatto.CodiceSottogruppo" : "Scatto.CodiceGruppo";
+        const codice = dataItem != null && dataItem.isGruppo ? rec[chiaveGruppo] : rec["Referenza.Codice"];
+        return "Code REV-01 Revisore: elemento non disegnabile, saltato - " + (dataItem != null && dataItem.isGruppo ? "gruppo " : "ref ") +
+            (codice != null && String(codice) !== "" ? codice : "(senza codice)") +
+            (dataItem != null && dataItem.isGruppo ? ": nella lista non c'e' nessuna sua ref" : ": record senza dati del tracciato");
     }
 
     /// I20-982: i campi di un record come vanno mostrati nella colonna di sinistra: vale il
