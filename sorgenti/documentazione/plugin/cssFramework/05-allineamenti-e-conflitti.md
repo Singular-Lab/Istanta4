@@ -25,6 +25,40 @@ Panoramica del file: [README.md](README.md).
 
   **È la funzione più grande del file**, 797 righe.
 
+### Gruppi a slot (I20-1102)
+
+Un gruppo può dichiarare `slot` al posto della disposizione a livelli: i suoi elementi vanno in
+**riquadri disegnati nel modello del box**, in un ordine di riempimento che non deve partire da un
+estremo (cosa che i livelli non sanno fare). Nasce per i loghi del PoP di Coop.
+
+```json
+"slot": { "cornici": ["slot_logo1", "slot_logo2", "slot_logo3"],
+          "modalita": "posizioneEDimensione",
+          "corniciDaRimuovere": ["slot_logo*"] }
+```
+
+- `cornici` → le etichette dei riquadri, **nell'ordine di riempimento**. Il primo elemento presente
+  va nella prima, il secondo nella seconda, e così via; un riquadro che nel box manca si salta.
+- `modalita` → `"posizione"`: il centro dell'elemento va sul centro del riquadro e l'elemento tiene
+  la sua misura; `"posizioneEDimensione"`: prende anche la misura del riquadro. Poi vale il
+  `finalFit` del gruppo, come sempre.
+- `corniciDaRimuovere` → le etichette (anche con `*`) dei riquadri da **togliere dal box, pieni o
+  vuoti**. Senza, si tolgono le `cornici`.
+- Gli elementi e la loro **priorità** sono quelli dei livelli (`ordinamentoLivelli`), come in un gruppo
+  a livelli; si prendono tutti quelli che corrispondono, una volta sola, e non quelli nascosti
+  (`visible = false`).
+- Gli elementi **in più degli slot** vanno in alto a destra nel box, uno sotto l'altro, e il bollino
+  del box riceve un avviso `CSF-24` con il nome del gruppo.
+- Se il box **non ha nessuno dei riquadri**, il gruppo si allinea a livelli con le sue ancore, come se
+  `slot` non ci fosse: così lo stesso gruppo vale per le meccaniche con e senza slot.
+- Ancore, spaziatura e direzione di lettura non si usano negli slot: la posizione la dà il riquadro.
+  Il gruppo va messo in un `ordine` successivo a quello di chi sposta i riquadri.
+
+Il piano (chi va dove, chi resta fuori) sta nel modulo puro `cssFramework/slot.js`; l'esecuzione sul
+documento in `allineaASlot`, chiamata da `allineamenti` prima di `AllineamentoInternoGruppo`. Il campo
+è `Allineamento.slot` (`SlotAllineamento`) in `Istanta/Models/ExternalSourceClass.cs`: senza, la
+configurazione lo perderebbe. L'editor web del framework non lo mostra ancora.
+
 ## Ancorare
 
 - `FollowAnchorGruppo(...)` → fa seguire un gruppo a un altro.

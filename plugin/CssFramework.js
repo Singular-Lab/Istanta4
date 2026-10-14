@@ -8,6 +8,8 @@ const SistemazioneFoto = require('./sistemazioneFoto/sistemazioneFoto');
 const cssRegoleConflitti = require('./cssFramework/regoleConflitti');
 //I20-1026: le sovrastrutture, le condizioni sulla ref e sulla forma del box, la regola disattiva.
 const sovrastrutture = require('./cssFramework/sovrastrutture');
+//I20-1102: il piano dei gruppi di allineamento a slot.
+const cssSlot = require('./cssFramework/slot');
 const FotoPlacer = require('./reperimentoFoto/fotoPlacer');
 
 const CssFramework =
@@ -4416,6 +4418,16 @@ const CssFramework =
                 isItemLinkGruppo = false;
             }
 
+            //I20-1102: un gruppo a slot mette i suoi elementi nei riquadri del modello. Se il box non
+            //ne ha nessuno, il gruppo prosegue come gruppo a livelli, con le sue ancore.
+            if (allineamentoSingolo.slot != null && this.allineaASlot(box, allineamentoSingolo, gruppoElementi, mappaBoxOriginale, itemRef)) {
+                if (allineamentoSingolo.finalFit && allineamentoSingolo.finalFit.length > 0) {
+                    this.finalFit(mappaBoxOriginale, allineamentoSingolo.finalFit);
+                }
+                box = this.fixOverflowFromBox(boundsBoxImpaginato, box, mappaBoxOriginale);
+                continue;
+            }
+
             let listGruppoAllineamento = this.AllineamentoInternoGruppo(
                 box,
                 allineamentoSingolo.nomeGruppo,
@@ -4456,6 +4468,85 @@ const CssFramework =
         }
 
         return box;
+    },
+
+    /// I20-1102: esegue un gruppo a slot (cssFramework/slot.js). Gli elementi presenti e visibili del
+    /// gruppo, nell'ordine dei suoi livelli, vanno nei riquadri delle cornici presenti nel box, nel
+    /// loro ordine: centro su centro, e con la misura del riquadro in modalita' posizioneEDimensione.
+    /// Quelli in piu' vanno in alto a destra nel box, e il bollino lo dice. Poi i riquadri da
+    /// rimuovere si tolgono, pieni o vuoti. Falso, senza toccare niente, se il box non ha nessuna
+    /// delle cornici: allora il gruppo si allinea a livelli, come senza slot.
+    allineaASlot(box, allineamento, gruppoElementi, mappaBoxOriginale, itemRef) {
+        const slot = allineamento.slot;
+        const cornici = (Array.isArray(slot.cornici) ? slot.cornici : [])
+            .map(nome => ({ nome: nome, voce: mappaBoxOriginale[nome] }))
+            .filter(c => c.voce != null && !c.voce.eliminato && c.voce.item != null && c.voce.item.isValid)
+            .map(c => ({ nome: c.nome, bounds: c.voce.item.geometricBounds }));
+        if (cornici.length === 0) {
+            return false;
+        }
+
+        //I livelli con condizioni non vere non contano, come in AllineamentoInternoGruppo.
+        const livelli = (allineamento.ordinamentoLivelli || []).filter(livello =>
+            !(livello.listSetCondizioni && livello.listSetCondizioni.length > 0) ||
+            this.checkAllConditions(mappaBoxOriginale, itemRef, livello.listSetCondizioni, box));
+        const nomiCornici = new Set(cornici.map(c => c.nome));
+        const presenti = [];
+        (gruppoElementi || []).forEach(voce => {
+            if (voce == null || voce.eliminato || voce.item == null || !voce.item.isValid || voce.item.visible === false) {
+                return;
+            }
+            const chiave = Utility.parseLabel(voce.label);
+            if (nomiCornici.has(chiave) || presenti.some(p => p.chiave === chiave)) {
+                return;
+            }
+            presenti.push({ chiave: chiave, voce: voce, bounds: voce.item.geometricBounds });
+        });
+        const elementi = cssSlot.elementiInOrdine(livelli, presenti, (etichetta, chiave) => this.makeRegexFromGroupName(etichetta).test(chiave));
+
+        const piano = cssSlot.pianifica(cornici, elementi, slot.modalita, box.geometricBounds);
+        const daElemento = new Map(elementi.map(e => [e.chiave, e.voce]));
+        const piazza = (chiave, bounds, ridimensiona) => {
+            const voce = daElemento.get(chiave);
+            try {
+                if (ridimensiona) {
+                    voce.item.geometricBounds = bounds;
+                }
+                else {
+                    const attuali = voce.item.geometricBounds;
+                    voce.item.move(undefined, [bounds[1] - attuali[1], bounds[0] - attuali[0]]);
+                }
+                voce.bounds = cssSlot.boundsRelativi(voce.item.geometricBounds, box.geometricBounds);
+            }
+            catch (e) {
+                console.error("Code CSF-25 Elemento " + chiave + " non piazzato nel gruppo a slot " + allineamento.nomeGruppo + ": " + e);
+            }
+        };
+        piano.assegnati.forEach(a => piazza(a.chiave, a.bounds, slot.modalita === cssSlot.MODALITA_POSIZIONE_E_DIMENSIONE));
+        piano.inEccesso.forEach(a => piazza(a.chiave, a.bounds, false));
+
+        if (piano.inEccesso.length > 0) {
+            addSegnalazione("Code CSF-24 Gruppo " + allineamento.nomeGruppo + ": " + elementi.length + " elementi per " + cornici.length + " slot, "
+                + piano.inEccesso.map(e => e.chiave).join(", ") + " in alto a destra nel box", "warning", 2, true, ["CSF-24", "orange"], "slot_in_eccesso_" + allineamento.nomeGruppo);
+        }
+
+        //I riquadri si tolgono tutti, anche quelli rimasti vuoti.
+        cssSlot.corniciDaRimuovere(slot).forEach(etichetta => {
+            const regex = this.makeRegexFromGroupName(etichetta);
+            for (var key in mappaBoxOriginale) {
+                const voce = mappaBoxOriginale[key];
+                if (regex.test(key) && voce != null && !voce.eliminato && voce.item != null && voce.item.isValid) {
+                    try {
+                        voce.item.remove();
+                    }
+                    catch (e) {
+                        console.error("Code CSF-25 Riquadro " + key + " del gruppo a slot " + allineamento.nomeGruppo + " non rimosso: " + e);
+                    }
+                }
+            }
+        });
+        this.updateMap(mappaBoxOriginale);
+        return true;
     },
 
     /// Fa seguire un gruppo a un altro. La struttura dell'ancora e' descritta qui sotto: per
