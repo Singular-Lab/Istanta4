@@ -125,6 +125,18 @@ namespace AgenziaLib
             record[GLOBAL_VARIABLES_FICO.keyFotoNome] = "";
             record[GLOBAL_VARIABLES_FICO.keyMembriGruppoFoto] = new List<FotoElementoGruppo>();
         }
+
+        /// <summary>
+        /// I20-1098: se il cartello singolo di una referenza in gruppo usa la descrizione di gruppo. Solo nelle
+        /// linee da 10 referenze in su, i cui cartelli linea sono tutti uguali; negli altri gruppi il singolo
+        /// usa la descrizione della propria referenza, anche con prezzi e pesi tutti uguali (prima prendeva
+        /// quella di gruppo e mostrava tutti i gusti). Il cartello di gruppo non passa da qui e resta con
+        /// tutti i gusti.
+        /// </summary>
+        public static bool singoloConDescrizioneDiGruppo(bool inGruppo, bool haDescrizioneDiGruppo, bool lineaDa10InSu)
+        {
+            return inGruppo && haDescrizioneDiGruppo && lineaDa10InSu;
+        }
         //Settori/reparti No FOOD
         private readonly string[] settori_no_food = new string[] { "62", "64", "66", "68" };
         private readonly string[] reparti_no_food = new string[] { "01", "02", "03", "04", "05", "06", "07", "09", "11", "12" };
@@ -1920,7 +1932,8 @@ namespace AgenziaLib
 
 
 
-                    if (codice_referenza != codice_gruppo && recItem.ContainsKey(GLOBAL_VARIABLES.keyXMLDescrizioneGruppo) && ((prezziDiversiInGruppo == false && pesiDiversiInGruppo == false) || isLineaMaggioreUguale10))//codice_gruppo.Contains(",") && recItem.ContainsKey(GLOBAL_VARIABLES.keyXMLDescrizioneGruppo))
+                    //I20-1098: il singolo usa la propria descrizione; quella di gruppo solo nelle linee da 10 in su.
+                    if (singoloConDescrizioneDiGruppo(codice_referenza != codice_gruppo, recItem.ContainsKey(GLOBAL_VARIABLES.keyXMLDescrizioneGruppo), isLineaMaggioreUguale10))
                     {
 
                         Descrizione1 = (recItem[GLOBAL_VARIABLES.keyXMLDescrizioneGruppo] as Dictionary<string, object>)[GLOBAL_VARIABLES.keyDescr1].ToString();
