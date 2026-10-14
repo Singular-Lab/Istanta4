@@ -21,7 +21,7 @@ import { canaleArea, codiciGdo, indirizzoCompleto } from "../../utils/puntoVendi
 import { operatorOptions } from "../../pages/GestioneApi/constants";
 import type { FilterCondition } from "../../pages/GestioneApi/types";
 import { createEmptyFilterCondition, createEmptyFilterGroup, formatFiltersForApi } from "../../pages/GestioneApi/utils/filterHelpers";
-import { useFetchDisplayContextsByPuntoVendita, useFetchDispositiviPuntoVendita, useFetchFilesFieldValues, useFetchFilesMetadataFields } from "../../query/query";
+import { useFetchDisplayContextsByPuntoVendita, useFetchDispositiviPuntoVendita, useFetchFilesFieldValues, useFetchFilesMetadataFields, useFetchVolantiniAttiviPuntoVendita } from "../../query/query";
 
 // Componente per input valore filtro con caricamento dinamico
 interface ContextFilterValueInputProps {
@@ -60,6 +60,68 @@ const ContextFilterValueInput: React.FC<ContextFilterValueInputProps> = ({
         <option key={i} value={val}>{val}</option>
       ))}
     </FormSelect>
+  );
+};
+
+const formattaData = (data: Date | string) =>
+  new Date(data).toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Europe/Rome" });
+
+/** Volantini delle promo valide, dai kit pubblicati con la stessa area e lo stesso canale del punto vendita. */
+const VolantiniAttivi: React.FC<{ idPv: string; canaleArea: string }> = ({ idPv, canaleArea }) => {
+  const { data: volantini = [], isLoading, isError, error, refetch } = useFetchVolantiniAttiviPuntoVendita(idPv);
+
+  return (
+    <div className="flex flex-col p-5 box box--stacked">
+      <div className="flex items-center gap-3 pb-5 mb-5 border-b border-dashed border-slate-300/70">
+        <h2>Volantini attivi</h2>
+        <span className="ml-auto text-xs text-slate-500">{canaleArea}</span>
+      </div>
+      {isLoading ? (
+        <div className="flex items-center gap-2 text-sm text-slate-500">
+          <Lucide icon="Loader" className="w-4 h-4 animate-spin" /> Caricamento volantini...
+        </div>
+      ) : isError ? (
+        <div className="flex flex-col items-start gap-2 text-sm">
+          <span className="text-danger">
+            Volantini non caricati: {(error as Error)?.message || "errore durante il recupero"}
+          </span>
+          <Button variant="outline-secondary" size="sm" onClick={() => refetch()}>
+            Riprova
+          </Button>
+        </div>
+      ) : volantini.length === 0 ? (
+        <div className="flex flex-col items-center gap-2 py-6 text-center text-slate-500">
+          <Lucide icon="FileSearch" className="w-8 h-8 text-slate-400" />
+          <span className="text-sm">Nessun volantino attivo per questo canale e quest'area</span>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-6">
+          {volantini.map(v => (
+            <div key={v.id_kit}>
+              <div className="flex flex-wrap items-baseline gap-x-2 mb-3">
+                <span className="font-medium">{v.promo.nome}</span>
+                <span className="text-xs text-slate-500">
+                  dal {formattaData(v.promo.validita_dal)} al {formattaData(v.promo.validita_al)}
+                </span>
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 2xl:grid-cols-3">
+                {v.files.map(f => (
+                  <div key={f.id} className="overflow-hidden rounded-lg border border-slate-200/70 dark:border-darkmode-400">
+                    <img src={f.url} alt={f.nome} loading="lazy" className="h-40 w-full object-cover object-top bg-slate-50" />
+                    <div className="flex items-center gap-2 p-3">
+                      <span className="truncate text-sm" title={f.nome}>{f.nome}</span>
+                      <a href={f.url_download} download className="ml-auto flex flex-none items-center text-sm text-primary">
+                        <Lucide icon="Download" className="w-4 h-4 mr-1 stroke-[1.3]" /> PDF
+                      </a>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -114,7 +176,7 @@ const GestionePuntoVendita: React.FC = () => {
   const lon = has_coordinate ? parseCoordinate(coordinate?.lon) : null;
   const posizione: [number, number] | null = lat !== null && lon !== null ? [lat, lon] : null;
 
-  const mapZoom = 21;
+  const mapZoom = 17;
 
   // ============================================================
   // DISPOSITIVI - DATI REALI DA API
@@ -579,6 +641,8 @@ const GestionePuntoVendita: React.FC = () => {
           {/* COLONNA SINISTRA */}
           <div className="col-span-12 xl:col-span-8">
             <div className="flex flex-col gap-y-7">
+              <VolantiniAttivi idPv={puntoVendita.id} canaleArea={displayCanaleArea} />
+
               {/* Activity Feed */}
               <div className="flex flex-col h-full p-5 box box--stacked">
                 <div className="pb-5 mb-5 border-b border-dashed border-slate-300/70">
@@ -1152,13 +1216,13 @@ const GestionePuntoVendita: React.FC = () => {
                           touchZoom={false}
                           keyboard={false}
                           zoomControl={false}
-                          attributionControl={false}
                           className="absolute inset-0"
                         >
                           <Marker position={posizione} icon={storeMarker} />
                           <TileLayer
-                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                            attribution="&copy; OpenStreetMap contributors"
+                            url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+                            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                            maxZoom={19}
                           />
                         </MapContainer>
                       </div>

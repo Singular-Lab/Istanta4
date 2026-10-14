@@ -605,21 +605,6 @@ body.loading-active>*:not(.loading-overlay) {
   box-shadow: 0 0 0 3px rgb(var(--color-primary) / 0.25);
 }
 
-.pv-marker--highlight span {
-  background: rgb(var(--color-warning) / 1);
-  border-color: rgb(var(--color-warning) / 0.4);
-  box-shadow:
-    0 0 0 6px rgb(var(--color-warning) / 0.35),
-    0 0 12px rgb(var(--color-warning) / 0.6);
-}
-
-.pv-marker--dimmed span {
-  background: rgb(var(--color-secondary) / 1);
-  border-color: rgb(var(--color-light) / 1);
-  box-shadow: 0 0 0 1px rgb(var(--color-secondary) / 0.4);
-  opacity: 0.6;
-}
-
 /* ── Loading Overlay (sostituisce framer-motion + lottie inline) ── */
 .loading-overlay-backdrop {
   position: fixed;

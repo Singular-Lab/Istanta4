@@ -63,9 +63,21 @@ export interface PuntoVenditaResponseDTO {
   nome_display: string;
   has_coordinate: boolean;
   sigla_combinazione?: string;
+  id_canale?: string;
+  id_area?: string;
   nome_canale?: string;
   nome_area?: string;
   numero_utenti_collegati?: number;
+}
+
+/**
+ * Volantino di una promo valida, da un kit runtime pubblicato della combinazione del punto vendita
+ */
+export interface VolantinoAttivoDTO {
+  id_kit: string;
+  titolo_kit?: string;
+  promo: { id: string; nome: string; validita_dal: Date; validita_al: Date };
+  files: { id: string; nome: string; url: string; url_download: string }[];
 }
 
 /**

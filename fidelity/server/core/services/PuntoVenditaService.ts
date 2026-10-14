@@ -1,4 +1,5 @@
 import { Op } from 'sequelize';
+import { EXPORT_DI_SISTEMA, STATO_LAVORAZIONE_KIT_RUNTIME, STATO_PROMO } from '../../../lib/enums';
 import { DatabaseError, NotFoundError } from '../../../lib/errors';
 import { CombinazioneCanaleAreaAttributes, PuntiVenditaAttributes } from '../../../lib/types';
 import { sequelize } from '../db/SequelizeConnector';
@@ -8,15 +9,18 @@ import {
   CreateDispositivoPuntoVenditaDTO,
   DispositivoPuntoVenditaResponseDTO,
   UpdateDispositivoPuntoVenditaDTO,
-  type PuntiVenditaPaginatedResponseDTO
+  type PuntiVenditaPaginatedResponseDTO,
+  type VolantinoAttivoDTO
 } from '../dto/PuntoVenditaDTO';
 import { IPuntoVenditaService } from '../interfaces/IPuntoVenditaService';
 import { log } from '../logger';
-import { Area, Canale, CombinazioneCanaleArea, PuntoVendita, PuntoVenditaUtenti } from '../models';
+import { Area, Canale, CombinazioneCanaleArea, FilesRuntime, PuntoVendita, PuntoVenditaUtenti, RuntimeKit, TipiDiExport } from '../models';
+import { Promo } from '../models/promo';
 import { DisplayContextPuntoVendita } from '../models/punto_vendita/display_context_punto_vendita';
 import { DispositivoMetadata, DispositivoPuntoVendita } from '../models/punto_vendita/dispositivi_punto_vendita';
 import type { IPuntoVenditaRepository } from '../repositories/PuntoVenditaRepository';
 import { geocodifica } from '../utils/geocodifica';
+import { urlOlimpo } from '../utils/urlOlimpo';
 import { buildPuntoVenditaKey, isLikelySamePuntoVendita, PuntoVenditaTextInput, stessaPosizione } from '../utils/puntoVenditaNormalization';
 import type { ContestoImportPuntiVendita } from './importPuntiVendita';
 
@@ -331,6 +335,8 @@ export class PuntoVenditaService implements IPuntoVenditaService {
       createdat: pv.createdat ?? new Date(),
       updatedat: pv.updatedat ?? new Date(),
       sigla_combinazione: `${canale?.codice ?? ''}${area?.codice ?? ''}`,
+      id_canale: combo.id_canale_combinazione_canale_area,
+      id_area: combo.id_area_combinazione_canale_area ?? undefined,
       nome_canale: canale?.nome,
       nome_area: area?.nome,
     };
@@ -372,6 +378,72 @@ export class PuntoVenditaService implements IPuntoVenditaService {
         cause: error instanceof Error ? error : undefined,
         operation: 'get',
         entity: 'PuntoVendita',
+      });
+    }
+  }
+
+  /** Volantini attivi ora: PDF VOL dei kit runtime PUBBLICATI, della combinazione del PV, di promo VALIDA o VALIDA_CON_ERRORI. */
+  async getVolantiniAttivi(idPv: string): Promise<VolantinoAttivoDTO[]> {
+    const pv = await this.puntoVenditaRepository.findById(idPv) as PuntiVenditaAttributes | null;
+    if (!pv) {
+      throw new NotFoundError({ message: 'Punto vendita non trovato', entityType: 'PuntoVendita', entityId: idPv });
+    }
+    try {
+      const combo = await CombinazioneCanaleArea.findByPk(pv.id_combinazione_canale_area_puntivendita);
+      if (!combo) return [];
+
+      const promoAttive = await Promo.findAll({
+        where: { stato: { [Op.in]: [STATO_PROMO.VALIDA, STATO_PROMO.VALIDA_CON_ERRORI] } },
+        raw: true,
+      });
+      if (promoAttive.length === 0) return [];
+
+      const [kits, tipiVolantino] = await Promise.all([
+        RuntimeKit.findAll({
+          where: {
+            id_promo: { [Op.in]: promoAttive.map(p => p.id_promo) },
+            id_area: combo.id_area_combinazione_canale_area,
+            id_canale: combo.id_canale_combinazione_canale_area,
+            stato_lavorazione: STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO,
+          },
+          raw: true,
+        }),
+        TipiDiExport.findAll({ where: { codice_tipiexport: EXPORT_DI_SISTEMA.VOL }, raw: true }),
+      ]);
+      if (kits.length === 0 || tipiVolantino.length === 0) return [];
+
+      const files = await FilesRuntime.findAll({
+        where: {
+          id_runtime: { [Op.in]: kits.map(k => k.id) },
+          tipo_export: { [Op.in]: tipiVolantino.map(t => t.id_tipiexport) },
+        },
+        raw: true,
+      });
+      const promoPerId = new Map(promoAttive.map(p => [p.id_promo, p]));
+
+      return kits.flatMap(kit => {
+        const promo = promoPerId.get(kit.id_promo)!;
+        const filesKit = files.filter(f => f.id_runtime === kit.id && f.id_olimpo_cloud);
+        if (filesKit.length === 0) return [];
+        return [{
+          id_kit: kit.id,
+          titolo_kit: kit.titolo,
+          promo: { id: promo.id_promo, nome: promo.nome_promo, validita_dal: promo.validita_dal, validita_al: promo.validita_al },
+          files: filesKit.map(f => ({
+            id: f.id,
+            nome: f.nome ?? '',
+            url: urlOlimpo('/materiali/getThumbnailMaterialePdfs', { id: f.id_olimpo_cloud }),
+            url_download: urlOlimpo('/materiali/getMaterialePDF', { id: f.id_olimpo_cloud }),
+          })),
+        }];
+      });
+    } catch (error) {
+      log.error('Errore durante il recupero dei volantini attivi del punto vendita', error, { idPv });
+      throw new DatabaseError({
+        message: 'Errore durante il recupero dei volantini attivi del punto vendita',
+        cause: error instanceof Error ? error : undefined,
+        operation: 'get',
+        entity: 'RuntimeKit',
       });
     }
   }
