@@ -171,6 +171,20 @@ test("la finestra: Rimuovi solo sui testi, Vai a Segnalazioni sui meta da verifi
     assert.match(meta, /return this\.testoDalBoxPerIlServer\(campoCompilato, campo\.contents, TestoTag\.componiStringTagFromInndTextFrame\(campo\)\);/);
 });
 
+test("la finestra costruisce il suo contenuto con un tag per elemento, mai da un blocco di HTML", () => {
+    //In UXP il blocco di HTML del contenuto non diventava un elemento (due nodi senza tag, nessun
+    //figlio, misurato in collaudo): la finestra si apriva vuota, senza errori.
+    const meta = sorgente("metaDelBox.js");
+    assert.doesNotMatch(meta, /\$\(`/);
+    const finestra = meta.substring(meta.indexOf("    mostraFinestraMeta() {"), meta.indexOf("/* ---------- I20-1090"));
+    assert.match(finestra, /const contenuto = \$\('<div><\/div>'\)\.css\(/);
+    assert.match(finestra, /contenuto\.append\(elenco\)\.append\(nuovo\)\.append\(azioni\);/);
+    //I riquadri si tengono in mano, non si cercano dentro il contenuto.
+    assert.doesNotMatch(finestra, /contenuto\.find\(/);
+    //E la finestra riceve proprio quel contenuto.
+    assert.match(finestra, /Modali\.popup\("Meta del box", contenuto, "lg"\);/);
+});
+
 test("l'icona blu dei meta sta nella riga del codice, alta come il segnalino, e c'e' anche senza meta", () => {
     const meta = sorgente("metaDelBox.js");
     const icona = meta.substring(meta.indexOf("    aggiornaIconaMeta() {"), meta.indexOf("    testoPerNuovoMeta(campoCompilato) {"));

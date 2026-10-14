@@ -209,7 +209,6 @@ const metaDelBox = {
                 ? (quanti === 1 ? "1 meta di questa lavorazione sul box" : quanti + " meta di questa lavorazione sul box") + " - clicca per vederli"
                 : "Nessun meta sul box - clicca per applicarne uno");
             icona.on("click", function () {
-                /*[I20-1089 DIAGNOSI]*/ console.log("[I20-1089 DIAGNOSI] clic sull'icona, meta contati: " + quanti);
                 me.mostraFinestraMeta();
             });
 
@@ -268,19 +267,15 @@ const metaDelBox = {
             const daRimuovere = new Set();
             const daCreare = [];
 
-            const contenuto = $(`
-                <div style="width: 100%; display: flex; flex-direction: column; gap: 8px; font-family: Arial, sans-serif; color: #2c2c2c;">
-                    <div class="metaElenco" style="width: 100%; display: flex; flex-direction: column; gap: 6px;"></div>
-                    <div class="metaNuovo" style="width: 100%; display: none; flex-direction: column; gap: 4px; border-top: 1px solid #ddd; padding-top: 8px;"></div>
-                    <div class="metaAzioni" style="width: 100%; display: flex; gap: 6px; justify-content: flex-end; border-top: 1px solid #ddd; padding-top: 8px;"></div>
-                </div>
-            `);
-            const elenco = contenuto.find(".metaElenco");
-            const nuovo = contenuto.find(".metaNuovo");
-            const azioni = contenuto.find(".metaAzioni");
-            /*[I20-1089 DIAGNOSI]*/ console.log("[I20-1089 DIAGNOSI] record della scheda: " + (me.schedeRefDati || []).length + ", meta letti: " + me.vociMetaDelBox(me.schedeRefDati).length);
-            /*[I20-1089 DIAGNOSI]*/ console.log("[I20-1089 DIAGNOSI] contenuto: length " + contenuto.length + ", tag " + (contenuto[0] ? contenuto[0].tagName : "-") + ", figli DOM " + (contenuto[0] && contenuto[0].children ? contenuto[0].children.length : "-") + ", nodi " + (contenuto[0] && contenuto[0].childNodes ? contenuto[0].childNodes.length : "-"));
-            /*[I20-1089 DIAGNOSI]*/ console.log("[I20-1089 DIAGNOSI] find per classe: elenco " + elenco.length + ", nuovo " + nuovo.length + ", azioni " + azioni.length + "; querySelector .metaElenco " + (contenuto[0] && contenuto[0].querySelector ? (contenuto[0].querySelector(".metaElenco") != null) : "n/d") + "; getElementsByClassName " + (contenuto[0] ? typeof contenuto[0].getElementsByClassName : "-"));
+            //Il contenitore e i suoi tre riquadri si creano uno per uno, con un tag solo ciascuno, e si
+            //tengono in mano: scritti come un blocco di HTML, in UXP non diventavano elementi (jQuery
+            //restituiva due nodi senza tag e nessun figlio, misurato in collaudo) e la finestra si
+            //apriva vuota, senza errori. Non riportarli a un blocco di HTML.
+            const contenuto = $('<div></div>').css({ "width": "100%", "display": "flex", "flex-direction": "column", "gap": "8px", "font-family": "Arial, sans-serif", "color": "#2c2c2c" });
+            const elenco = $('<div></div>').css({ "width": "100%", "display": "flex", "flex-direction": "column", "gap": "6px" });
+            const nuovo = $('<div></div>').css({ "width": "100%", "display": "none", "flex-direction": "column", "gap": "4px", "border-top": "1px solid #ddd", "padding-top": "8px" });
+            const azioni = $('<div></div>').css({ "width": "100%", "display": "flex", "gap": "6px", "justify-content": "flex-end", "border-top": "1px solid #ddd", "padding-top": "8px" });
+            contenuto.append(elenco).append(nuovo).append(azioni);
 
             const riga = function (voce) {
                 const r = $('<div></div>');
@@ -405,14 +400,9 @@ const metaDelBox = {
             azioni.append(applicaNuovo).append(salva);
 
             ridisegna();
-            /*[I20-1089 DIAGNOSI]*/ console.log("[I20-1089 DIAGNOSI] dopo ridisegna: figli elenco " + elenco.children().length + ", figli azioni " + azioni.children().length + ", html del contenuto " + String(contenuto.html() || "").length + " caratteri");
             Modali.popup("Meta del box", contenuto, "lg");
-            /*[I20-1089 DIAGNOSI]*/ console.log(">>> [I20-1089 DIAGNOSI] finestra aperta: #popup " + $("#popup").length + ", .metaElenco dentro " + $("#popup").find(".metaElenco").length + ", figli " + $("#popup").find(".metaElenco").children().length + ", pulsanti " + $("#popup").find("button").length + ", html " + String($("#popup").html() || "").length + " caratteri");
-            /*[I20-1089 DIAGNOSI]*/ console.log("[I20-1089 DIAGNOSI] html della finestra (inizio): " + String($("#popup").html() || "").replace(/\s+/g, " ").substring(0, 600));
-            /*[I20-1089 DIAGNOSI]*/ setTimeout(function () { console.log("[I20-1089 DIAGNOSI] dopo 500 ms: .metaElenco " + $("#popup").find(".metaElenco").length + ", figli " + $("#popup").find(".metaElenco").children().length + ", pulsanti " + $("#popup").find("button").length + ", altezza contenuto " + (contenuto[0] && contenuto[0].getBoundingClientRect ? JSON.stringify(contenuto[0].getBoundingClientRect()) : "n/d") + ", display " + contenuto.css("display")); }, 500);
         }
         catch (e) {
-            /*[I20-1089 DIAGNOSI]*/ console.log("[I20-1089 DIAGNOSI] eccezione: " + e + " | " + (e && e.stack ? e.stack : ""));
             console.error("Code SRF-120 Finestra dei meta non aperta: " + e);
             messaggioUtente("Code SRF-120 Finestra dei meta non aperta: " + e.message, "error", false, 5);
         }
