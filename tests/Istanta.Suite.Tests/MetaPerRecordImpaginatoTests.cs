@@ -149,15 +149,15 @@ public class MetaPerRecordImpaginatoTests
     {
         var pop10 = Box(10);
         var pop20 = Box(20);
-        var volantino = new List<FicoProcessController.DecisioniDelVolantino>
+        var volantino = new List<FicoProcessController.MetaDelVolantino>
         {
-            new() { CodiceGruppo = "123", voci = new() { new() { tipo = TipoElementoBox.Logo, sigla = "Logo_BDP", azione = AzioneExtraLavorazione.Escludi, ambito = AmbitoDecisioneLavorazione.Tutto } } }
+            new() { IdLavorazione = 1, CodiceGruppo = "123", Meta = new RevisioneMetaPromoLavorazioni { extraLavorazione = new() { new() { tipo = TipoElementoBox.Logo, sigla = "Logo_BDP", azione = AzioneExtraLavorazione.Escludi, ambito = AmbitoDecisioneLavorazione.Tutto } } } }
         };
 
-        var perGruppo = FicoProcessController.decisioniDelVolantinoPerIlPop(new List<ArticoloInKit> { pop10, pop20 }, volantino);
+        var perGruppo = FicoProcessController.metaDelVolantinoPerIlPop(new List<ArticoloInKit> { pop10, pop20 }, volantino);
 
-        Assert.Equal("Logo_BDP", perGruppo[FicoProcessController.chiaveDellImpaginazione("123", 10)].Single().sigla);
-        Assert.Equal("Logo_BDP", perGruppo[FicoProcessController.chiaveDellImpaginazione("123", 20)].Single().sigla);
+        Assert.Equal("Logo_BDP", perGruppo[FicoProcessController.chiaveDellImpaginazione("123", 10)].extraLavorazione!.Single().sigla);
+        Assert.Equal("Logo_BDP", perGruppo[FicoProcessController.chiaveDellImpaginazione("123", 20)].extraLavorazione!.Single().sigla);
     }
 
     /* ---- dove si usa ---- */

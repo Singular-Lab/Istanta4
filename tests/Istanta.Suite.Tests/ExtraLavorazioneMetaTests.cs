@@ -289,13 +289,15 @@ public class ExtraLavorazioneMetaTests
 
         //getSchedaRef: raccolta dal meta e applicazione dopo le foto escluse.
         //I20-1077: con in coda i testi del box, raccolti dallo stesso meta.
-        Assert.Contains("ficoController.updateDatiFromMetaPromoLavorazioni(prepLista.records, idLavorazione, kit!, noRenderPerRef, noRenderElementiPerGruppo, extraLavorazionePerGruppo, testiDalBoxPerGruppo);", menabo);
+        //I20-1103: in coda le righe dei volantini da cui il POP eredita i meta.
+        Assert.Contains("ficoController.updateDatiFromMetaPromoLavorazioni(prepLista.records, idLavorazione, kit!, noRenderPerRef, noRenderElementiPerGruppo, extraLavorazionePerGruppo, testiDalBoxPerGruppo, null, volantinoDelPop);", menabo);
         Assert.Contains("FicoProcessController.applicaExtraDellaLavorazione(resultGlobale.records, extraLavorazionePerGruppo);", menabo);
         Assert.True(menabo.IndexOf("MB Scheda 12977 - Escludo foto", StringComparison.Ordinal) < menabo.IndexOf("FicoProcessController.applicaExtraDellaLavorazione(resultGlobale.records, extraLavorazionePerGruppo);", StringComparison.Ordinal));
 
         //processaKitDo, la strada dell'impaginazione.
         //I20-1088: in coda le righe da cui vengono i testi, per togliere quelli che il server compone gia'.
-        Assert.Contains("updateDatiFromMetaPromoLavorazioni(recordsFiltrati, idLavorazione, kit/*, confronto*/, noRenderPerRef, noRenderElementiPerGruppo, extraLavorazionePerGruppo, testiDalBoxPerGruppo, righeDeiTesti);", fico);
+        //I20-1103: e quelle dei volantini da cui il POP eredita i meta.
+        Assert.Contains("updateDatiFromMetaPromoLavorazioni(recordsFiltrati, idLavorazione, kit/*, confronto*/, noRenderPerRef, noRenderElementiPerGruppo, extraLavorazionePerGruppo, testiDalBoxPerGruppo, righeDeiTesti, volantinoDelPop);", fico);
         Assert.Contains("applicaExtraDellaLavorazione(resultGlobale.records, extraLavorazionePerGruppo);", fico);
         Assert.True(fico.IndexOf("FicoProcess 2802 - Escludo foto", StringComparison.Ordinal) < fico.IndexOf("applicaExtraDellaLavorazione(resultGlobale.records, extraLavorazionePerGruppo);", StringComparison.Ordinal));
 

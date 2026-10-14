@@ -11,6 +11,7 @@ namespace Istanta.Suite.Tests;
 /// i POP della stessa promo, area e canale (ambito Tutto, anche per quelle registrate prima), oppure
 /// solo per il volantino (SoloVolantino). Il POP non ha la scheda ref e non decide: riceve. Se
 /// chiedere l'ambito lo dichiara l'agenzia nel SourceCustomPlugin: Coop si', gli altri no.
+/// I20-1103: le decisioni arrivano con gli altri meta del corrispettivo nel volantino (MetaVolantinoPopTests).
 /// </summary>
 public class DecisioniVolantinoPopTests
 {
@@ -34,8 +35,19 @@ public class DecisioniVolantinoPopTests
         };
     }
 
-    private static FicoProcessController.DecisioniDelVolantino Volantino(string codiceGruppo, params RevisioneExtraLavorazioneFromIndd[] voci) =>
-        new() { CodiceGruppo = codiceGruppo, voci = voci.ToList() };
+    private static FicoProcessController.MetaDelVolantino Volantino(string codiceGruppo, params RevisioneExtraLavorazioneFromIndd[] voci) =>
+        Volantino(1, codiceGruppo, voci);
+
+    private static FicoProcessController.MetaDelVolantino Volantino(int idLavorazione, string codiceGruppo, params RevisioneExtraLavorazioneFromIndd[] voci) =>
+        new() { IdLavorazione = idLavorazione, CodiceGruppo = codiceGruppo, Meta = voci.Length > 0 ? new RevisioneMetaPromoLavorazioni { extraLavorazione = voci.ToList() } : null };
+
+    // Le foto extra che il POP riceve, per impaginazione, come le applica la lettura della lista.
+    private static Dictionary<string, List<RevisioneExtraLavorazioneFromIndd>> DecisioniPerIlPop(List<ArticoloInKit>? pop, List<FicoProcessController.MetaDelVolantino>? volantino)
+    {
+        var extra = new Dictionary<string, List<RevisioneExtraLavorazioneFromIndd>>();
+        FicoProcessController.sostituisciConIMetaDelVolantino(FicoProcessController.metaDelVolantinoPerIlPop(pop, volantino), null, null, extra, null);
+        return extra;
+    }
 
     /* ---- l'ambito nel meta ---- */
 
@@ -74,12 +86,12 @@ public class DecisioniVolantinoPopTests
     public void Il_POP_riceve_le_decisioni_Tutto_e_non_quelle_solo_volantino()
     {
         var pop = new List<ArticoloInKit> { RecordPop("123", "123", "Logo_BDP", "Logo_SDB") };
-        var volantino = new List<FicoProcessController.DecisioniDelVolantino>
+        var volantino = new List<FicoProcessController.MetaDelVolantino>
         {
             Volantino("123", Escludi("Logo_BDP"), Escludi("Logo_SDB", AmbitoDecisioneLavorazione.SoloVolantino))
         };
 
-        var perGruppo = FicoProcessController.decisioniDelVolantinoPerIlPop(pop, volantino);
+        var perGruppo = DecisioniPerIlPop(pop, volantino);
         FicoProcessController.applicaExtraDellaLavorazione(pop, perGruppo);
 
         Assert.Equal("Logo_BDP", perGruppo["123"].Single().sigla);
@@ -93,9 +105,9 @@ public class DecisioniVolantinoPopTests
     {
         // Nel POP il codice gruppo puo' essere un sottogruppo: conta la referenza, che sta nel gruppo del volantino.
         var pop = new List<ArticoloInKit> { RecordPop("SUB-7", "4569074") };
-        var volantino = new List<FicoProcessController.DecisioniDelVolantino> { Volantino("4569070,4569074,4569080", Escludi("Logo_BDP")) };
+        var volantino = new List<FicoProcessController.MetaDelVolantino> { Volantino("4569070,4569074,4569080", Escludi("Logo_BDP")) };
 
-        var perGruppo = FicoProcessController.decisioniDelVolantinoPerIlPop(pop, volantino);
+        var perGruppo = DecisioniPerIlPop(pop, volantino);
 
         Assert.Equal("Logo_BDP", perGruppo["SUB-7"].Single().sigla);
     }
@@ -104,45 +116,47 @@ public class DecisioniVolantinoPopTests
     public void Un_POP_senza_la_referenza_nel_volantino_non_riceve_niente()
     {
         var pop = new List<ArticoloInKit> { RecordPop("999", "999") };
-        var volantino = new List<FicoProcessController.DecisioniDelVolantino> { Volantino("123", Escludi("Logo_BDP")) };
+        var volantino = new List<FicoProcessController.MetaDelVolantino> { Volantino("123", Escludi("Logo_BDP")) };
 
-        Assert.Empty(FicoProcessController.decisioniDelVolantinoPerIlPop(pop, volantino));
+        Assert.Empty(DecisioniPerIlPop(pop, volantino));
     }
 
     [Fact]
-    public void Vale_il_volantino_piu_recente_che_ha_deciso_sul_gruppo()
+    public void Vale_il_volantino_piu_recente_che_ha_il_gruppo_anche_senza_decisioni()
     {
+        // L'elenco arriva gia' dal piu' recente. I20-1103: il corrispettivo senza meta comanda, il POP
+        // non va a cercare le decisioni di un volantino piu' vecchio.
         var pop = new List<ArticoloInKit> { RecordPop("123", "123") };
-        // L'elenco arriva gia' dal piu' recente.
-        var volantino = new List<FicoProcessController.DecisioniDelVolantino>
+        var volantino = new List<FicoProcessController.MetaDelVolantino>
         {
-            Volantino("123"),
-            Volantino("123", Escludi("Logo_recente")),
-            Volantino("123", Escludi("Logo_vecchio"))
+            Volantino(3, "123"),
+            Volantino(2, "123", Escludi("Logo_recente")),
+            Volantino(1, "123", Escludi("Logo_vecchio"))
         };
 
-        Assert.Equal("Logo_recente", FicoProcessController.decisioniDelVolantinoPerIlPop(pop, volantino)["123"].Single().sigla);
+        Assert.Empty(DecisioniPerIlPop(pop, volantino));
+        Assert.Equal("Logo_recente", DecisioniPerIlPop(pop, volantino.Skip(1).ToList())["123"].Single().sigla);
     }
 
     [Fact]
     public void Se_il_volantino_piu_recente_ha_deciso_solo_per_se_il_POP_non_prende_quelle_vecchie()
     {
         var pop = new List<ArticoloInKit> { RecordPop("123", "123") };
-        var volantino = new List<FicoProcessController.DecisioniDelVolantino>
+        var volantino = new List<FicoProcessController.MetaDelVolantino>
         {
             Volantino("123", Escludi("Logo_recente", AmbitoDecisioneLavorazione.SoloVolantino)),
             Volantino("123", Escludi("Logo_vecchio"))
         };
 
-        Assert.Empty(FicoProcessController.decisioniDelVolantinoPerIlPop(pop, volantino));
+        Assert.Empty(DecisioniPerIlPop(pop, volantino));
     }
 
     [Fact]
     public void Senza_record_o_senza_volantino_non_succede_niente()
     {
-        Assert.Empty(FicoProcessController.decisioniDelVolantinoPerIlPop(null, new List<FicoProcessController.DecisioniDelVolantino> { Volantino("123", Escludi("Logo_BDP")) }));
-        Assert.Empty(FicoProcessController.decisioniDelVolantinoPerIlPop(new List<ArticoloInKit> { RecordPop("123", "123") }, null));
-        Assert.Empty(FicoProcessController.decisioniDelVolantinoPerIlPop(new List<ArticoloInKit> { RecordPop("123", "123") }, new List<FicoProcessController.DecisioniDelVolantino>()));
+        Assert.Empty(DecisioniPerIlPop(null, new List<FicoProcessController.MetaDelVolantino> { Volantino("123", Escludi("Logo_BDP")) }));
+        Assert.Empty(DecisioniPerIlPop(new List<ArticoloInKit> { RecordPop("123", "123") }, null));
+        Assert.Empty(DecisioniPerIlPop(new List<ArticoloInKit> { RecordPop("123", "123") }, new List<FicoProcessController.MetaDelVolantino>()));
     }
 
     [Fact]
@@ -151,18 +165,18 @@ public class DecisioniVolantinoPopTests
         string fico = Sorgente("Istanta/Controllers/FicoProcessController.cs");
         string menabo = Sorgente("Istanta/Controllers/MenaboController.cs");
 
-        const string kit = "extraLavorazionePerGruppo = decisioniDelVolantinoPerIlPop(resultGlobale.records, decisioniDeiVolantiniDellaPromo(idLavorazione));";
-        Assert.Contains("if (mode == FicoCombinazioneKitReadMode.Advanced && resultGlobale.tipoLavorazione == TipoLavorazione.PoP)", fico);
+        const string kit = "testiEreditati = sostituisciConIMetaDelVolantino(metaDelVolantinoPerIlPop(resultAgenzia.liste.SelectMany(l => l.Records).ToList(), volantinoDelPop), noRenderPerRef, noRenderElementiPerGruppo, extraLavorazionePerGruppo, testiDalBoxPerGruppo, righeDeiTesti);";
+        Assert.Contains("if (mode == FicoCombinazioneKitReadMode.Advanced && objFormato.tipo == TipoLavorazione.PoP)", fico);
         Assert.True(fico.IndexOf(kit, StringComparison.Ordinal) > 0);
         Assert.True(fico.IndexOf(kit, StringComparison.Ordinal) < fico.IndexOf("applicaExtraDellaLavorazione(resultGlobale.records, extraLavorazionePerGruppo);", StringComparison.Ordinal));
 
-        const string scheda = "extraLavorazionePerGruppo = FicoProcessController.decisioniDelVolantinoPerIlPop(resultGlobale.records, ficoController.decisioniDeiVolantiniDellaPromo(idLavorazione));";
-        Assert.Contains("if (tipoFormatoKit == TipoLavorazione.PoP)", menabo);
+        const string scheda = "testiEreditati = FicoProcessController.sostituisciConIMetaDelVolantino(FicoProcessController.metaDelVolantinoPerIlPop(resultAgenzia.liste.SelectMany(l => l.Records).ToList(), volantinoDelPop), noRenderPerRef, noRenderElementiPerGruppo, extraLavorazionePerGruppo, testiDalBoxPerGruppo);";
+        Assert.Contains("tipoFormatoKit == TipoLavorazione.PoP ? ficoController.metaDeiVolantiniDellaPromo(idLavorazione) : null;", menabo);
         Assert.True(menabo.IndexOf(scheda, StringComparison.Ordinal) > 0);
         Assert.True(menabo.IndexOf(scheda, StringComparison.Ordinal) < menabo.IndexOf("FicoProcessController.applicaExtraDellaLavorazione(resultGlobale.records, extraLavorazionePerGruppo);", StringComparison.Ordinal));
 
         // Il volantino e' quello della stessa promo, area e canale, di tipo Volantino, dal piu' recente.
-        int inizio = fico.IndexOf("public List<DecisioniDelVolantino> decisioniDeiVolantiniDellaPromo(int idLavorazione)", StringComparison.Ordinal);
+        int inizio = fico.IndexOf("public List<MetaDelVolantino> metaDeiVolantiniDellaPromo(int idLavorazione)", StringComparison.Ordinal);
         string lettura = fico.Substring(inizio, fico.IndexOf("/// <summary>", inizio, StringComparison.Ordinal) - inizio);
         Assert.Contains("l.GuidPromo == lavorazione.GuidPromo && l.GuidArea == lavorazione.GuidArea && l.GuidCanale == lavorazione.GuidCanale", lettura);
         Assert.Contains("== TipoLavorazione.Volantino", lettura);
