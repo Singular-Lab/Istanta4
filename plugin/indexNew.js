@@ -208,6 +208,9 @@ var datiRefInEsame = [];
 var cacheLoghi = {};
 let idKitLavorazione=0;
 let segnalazioniBoxImpaginato = [];
+//I20-1104: il box che si sta impaginando, per i messaggi della console: { codiceGruppo, pagina,
+//documento, leggiBox }. Lo imposta impaginaBox e lo legge messaggioUtente; null fuori dall'impaginazione.
+let contestoBoxInImpaginazione = null;
 
 /// Il pezzo di HTML di un bottone dei filtri: icona a sinistra, etichetta a destra.
 /// Non tocca la pagina, restituisce soltanto la stringa.
@@ -5350,8 +5353,51 @@ function makeRegexFromFieldName(groupName) {
 
 
 /// IMPAGINAZIONE. Costruisce il singolo box: prende la meccanica dalla libreria, compila i
-/// campi, colloca le foto, applica il CSS. 751 righe.
-async function impaginaBox(meccanica, pagCoinvolta, bounds, itemRef, pathLavorazione, listElementiNonImpaginati, tipoLavorazione, reportImpaginazioneObj, preAnalisi = null, refConfronto = null, docOperazione = docInLavorazione) {
+/// campi, colloca le foto, applica il CSS.
+///
+/// I20-1104: e' l'involucro. Finche' il box si impagina, i messaggi della console sanno da quale
+/// box vengono (contestoBoxInImpaginazione, letto da messaggioUtente): qualunque modulo li scriva,
+/// CssFramework, sistemazione foto, campi, loghi. Il corpo e' impaginaBoxNelContesto; il finally
+/// rimette il contesto di prima per ogni uscita, anche con un errore.
+async function impaginaBox(meccanica, pagCoinvolta, bounds, itemRef, ...altri) {
+    var contestoPrecedente = contestoBoxInImpaginazione;
+    contestoBoxInImpaginazione = contestoDelBox(itemRef, pagCoinvolta, altri[6]);
+    try {
+        return await impaginaBoxNelContesto(meccanica, pagCoinvolta, bounds, itemRef, ...altri);
+    }
+    finally {
+        contestoBoxInImpaginazione = contestoPrecedente;
+    }
+}
+
+/// I20-1104: il contesto dei messaggi di un box che si impagina. leggiBox lo imposta il corpo di
+/// impaginaBox appena ha la sua variabile del box: il box viene rifatto piu' volte (raggruppamenti,
+/// bindRefData, sistemazioni), e cosi' si legge sempre quello di adesso.
+function contestoDelBox(itemRef, pagCoinvolta, docOperazione) {
+    var pagina = null;
+    var documento = null;
+    try {
+        pagina = pagCoinvolta != null ? pagCoinvolta.name : null;
+    }
+    catch (e) {
+        pagina = null;
+    }
+    try {
+        var doc = docOperazione != null ? docOperazione : docInLavorazione;
+        documento = doc != null ? doc.name : null;
+    }
+    catch (e) {
+        documento = null;
+    }
+    return {
+        codiceGruppo: itemRef != null ? itemRef["Scatto.CodiceGruppo"] : null,
+        pagina: pagina,
+        documento: documento,
+        leggiBox: null
+    };
+}
+
+async function impaginaBoxNelContesto(meccanica, pagCoinvolta, bounds, itemRef, pathLavorazione, listElementiNonImpaginati, tipoLavorazione, reportImpaginazioneObj, preAnalisi = null, refConfronto = null, docOperazione = docInLavorazione) {
     try{
         if (preAnalisi != null && preAnalisi.differenze.length == 0) {
             return {
@@ -5362,6 +5408,8 @@ async function impaginaBox(meccanica, pagCoinvolta, bounds, itemRef, pathLavoraz
         }
         var doc = docOperazione;
         var boxImpaginato = null;
+        //I20-1104: da qui i messaggi della console leggono il box di adesso, anche quando viene rifatto.
+        if (contestoBoxInImpaginazione != null) contestoBoxInImpaginazione.leggiBox = function () { return boxImpaginato; };
         //I20-1029: le segnalazioni partono vuote per ogni box. Se il box di prima e' andato in
         //errore prima di chiuderle, non devono passare a questo.
         segnalazioniBoxImpaginato = [];
@@ -8331,6 +8379,36 @@ function contestoLavorazioneCorrente() {
     }
 }
 
+/// I20-1104: il riferimento al box di un messaggio, dal contesto dell'impaginazione in corso:
+/// { codiceGruppo, idBox, pagina, documento }, oppure null fuori dall'impaginazione. Il box si legge
+/// adesso, perche' durante l'impaginazione viene rifatto e cambia id; la pagina e' quella del box se
+/// si legge, altrimenti quella in cui si impagina. Non fallisce mai: un messaggio non deve perdersi
+/// per colpa del suo contesto.
+function riferimentoBoxDelMessaggio(contesto) {
+    if (contesto == null) {
+        return null;
+    }
+    var riferimento = {
+        codiceGruppo: contesto.codiceGruppo != null ? String(contesto.codiceGruppo) : "",
+        idBox: null,
+        pagina: contesto.pagina,
+        documento: contesto.documento
+    };
+    try {
+        var box = typeof contesto.leggiBox === "function" ? contesto.leggiBox() : null;
+        if (box != null && box.isValid) {
+            riferimento.idBox = box.id;
+            if (box.parentPage != null && box.parentPage.name) {
+                riferimento.pagina = box.parentPage.name;
+            }
+        }
+    }
+    catch (e) {
+        //Il box puo' non esserci ancora o non piu': resta il gruppo, con la pagina dell'impaginazione.
+    }
+    return riferimento;
+}
+
 async function messaggioUtente(msg, style, loading = false, tempo = 0, dontWriteInLogs = false, modal = false) {
     try {
         if (msg == null || msg == "") {
@@ -8358,6 +8436,12 @@ async function messaggioUtente(msg, style, loading = false, tempo = 0, dontWrite
         var lavorazioneMessaggio = contestoLavorazioneCorrente();
         if (lavorazioneMessaggio != null) {
             logMessage.lavorazione = lavorazioneMessaggio;
+        }
+        //I20-1104: il box da cui viene il messaggio, se nasce mentre se ne impagina uno: per la console
+        //(gruppo, pagina, Trova) e per il file di log.
+        var boxDelMessaggio = riferimentoBoxDelMessaggio(contestoBoxInImpaginazione);
+        if (boxDelMessaggio != null) {
+            logMessage.box = boxDelMessaggio;
         }
 
         writeFileInConsole(logMessage);
@@ -9804,12 +9888,28 @@ function writeFileInConsole(logMessage) {
     if (logMessage.lavorazione) {
         messaggio.append($('<div class="lavorazioneMessaggio" style="font-size: 10px; margin-top: 2px;"></div>').text(logMessage.lavorazione));
     }
+    //I20-1104: il box da cui viene il messaggio, se e' nato impaginandone uno: gruppo e pagina, e Trova
+    //per raggiungerlo. Anche nei log riletti con leggiLog.
+    var testoBox = testoBoxDelMessaggio(logMessage.box);
+    if (testoBox !== "") {
+        var rigaBox = $('<div class="boxMessaggio" style="font-size: 10px; margin-top: 2px;"></div>').text(testoBox + " ");
+        if (logMessage.box.idBox != null) {
+            var riferimentoBox = logMessage.box;
+            rigaBox.append($('<span class="trovaBoxMessaggio" style="text-decoration: underline; cursor: pointer; font-weight: bold;">Trova</span>')
+                .on('click', function () {
+                    trovaBoxDelMessaggio(riferimentoBox);
+                }));
+        }
+        messaggio.append(rigaBox);
+    }
     var x = $('<span style="font-size: 10px; cursor: pointer; margin-left:5px;">X</span>');
     var copyButton = $('<img src="images/copyToClipBoard.png" style="height: 10px; margin-left:5px;" msg="' + msg + '">');
     copyButton.msg = msg;
     //I20-1033: chi copia il messaggio si porta dietro anche canale e area.
-    if (logMessage.lavorazione) {
-        copyButton.attr("msg", msg + " [" + logMessage.lavorazione + "]");
+    //I20-1104: e il box da cui viene.
+    var contestoCopia = [logMessage.lavorazione, testoBox].filter(function (t) { return t; }).join(" · ");
+    if (contestoCopia !== "") {
+        copyButton.attr("msg", msg + " [" + contestoCopia + "]");
     }
 
     copyButton.on('click', function () {
@@ -9869,7 +9969,89 @@ function writeFileInConsole(logMessage) {
     else if (style == "error") {
         $("#consoleIcon").css("background-color", "red");
     }
-    //$("#debugLogs").prepend(div); 
+    //$("#debugLogs").prepend(div);
+}
+
+/// I20-1104: "Gruppo X · pag. N" per un messaggio nato impaginando un box, "" per gli altri.
+function testoBoxDelMessaggio(box) {
+    if (box == null || !box.codiceGruppo) {
+        return "";
+    }
+    return "Gruppo " + box.codiceGruppo + (box.pagina ? " · pag. " + box.pagina : "");
+}
+
+/// I20-1104: il box di un messaggio della console nel documento doc. esito: "trovato" (con box),
+/// "altroDocumento" (il messaggio e' nato in un altro documento), "nessunDocumento", "assente" (il box
+/// e' stato rifatto o cancellato: l'id non c'e' piu'). Si cerca per id fra gli elementi di primo
+/// livello e, se serve, fra tutti.
+function cercaBoxDelMessaggio(riferimento, doc) {
+    if (riferimento == null || riferimento.idBox == null) {
+        return { esito: "assente" };
+    }
+    if (doc == null) {
+        return { esito: "nessunDocumento" };
+    }
+    try {
+        if (riferimento.documento && doc.name !== riferimento.documento) {
+            return { esito: "altroDocumento" };
+        }
+    }
+    catch (e) {
+        //Senza il nome del documento si prova comunque a cercare.
+    }
+
+    var box = null;
+    try {
+        box = doc.pageItems.itemByID(riferimento.idBox);
+        if (box == null || !box.isValid) {
+            box = null;
+        }
+    }
+    catch (e) {
+        box = null;
+    }
+    if (box == null) {
+        try {
+            var tutti = doc.allPageItems || [];
+            for (var i = 0; i < tutti.length; i++) {
+                if (tutti[i].id === riferimento.idBox) {
+                    box = tutti[i];
+                    break;
+                }
+            }
+        }
+        catch (e) {
+            box = null;
+        }
+    }
+    return box != null ? { esito: "trovato", box: box } : { esito: "assente" };
+}
+
+/// I20-1104: il Trova della console. Porta al box come la schermata delle segnalazioni (lo seleziona
+/// e mostra la sua pagina), oppure dice perche' non si puo'.
+function trovaBoxDelMessaggio(riferimento) {
+    var doc = null;
+    try {
+        doc = app.documents.length > 0 ? app.activeDocument : null;
+    }
+    catch (e) {
+        doc = null;
+    }
+    var gruppo = riferimento != null ? riferimento.codiceGruppo : "";
+    var trovato = cercaBoxDelMessaggio(riferimento, doc);
+    if (trovato.esito === "trovato") {
+        SchermataSegnalazioni._selezionaBox(trovato.box);
+    }
+    else if (trovato.esito === "altroDocumento") {
+        messaggioUtente("Code IDX-184 Il box del gruppo " + gruppo + " sta nel documento " + riferimento.documento + ": apri quel documento e riprova", "warning", false, 8, true);
+    }
+    else if (trovato.esito === "nessunDocumento") {
+        messaggioUtente("Code IDX-185 Nessun documento aperto in cui cercare il box del gruppo " + gruppo, "warning", false, 8, true);
+    }
+    else {
+        messaggioUtente("Code IDX-186 Il box del gruppo " + gruppo + " non c'e' piu' nel documento: e' stato rifatto o cancellato", "warning", false, 8, true);
+    }
+    return trovato.esito;
 }
 
 /// Svuota la console interna, azzera il contatore dei non letti e rimette l'icona verde.
