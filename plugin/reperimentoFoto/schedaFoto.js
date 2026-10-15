@@ -1532,9 +1532,16 @@ const schedaFoto = {
                     }
                     console.log("Risposta");
                     if (!objResult2.esito) {
+                        //I20-1069: error e' il messaggio breve; la traccia completa del server sta in dettaglio.
+                        if (objResult2.dettaglio) {
+                            console.error("Dettaglio dell'errore del server:", objResult2.dettaglio);
+                        }
                         messaggioUtente("Code SRF-39 Edit P/S: Errore durante il salvataggio delle modifiche: " + objResult2.error, "error");
                         return;
                     }
+                    //I20-1069: la conferma solo con le primarie e secondarie registrate. Prima stava in
+                    //onreadystatechange e compariva per ogni risposta 200, anche con il salvataggio fallito.
+                    messaggioUtente("Edit P/S: Richiesta completata con successo", "success", false, 5);
 
                     try {
                         //aggiorniamo il dato in schedaRef
@@ -1629,17 +1636,11 @@ const schedaFoto = {
                 };
 
                 xhr.onreadystatechange = function () {
-                    if (xhr.readyState == 4) {
-                        if (xhr.status == 200) {
-                            messaggioUtente("Edit P/S: Richiesta completata con successo", "success", false, 5);
-                        } else {
-                            //messaggioUtente("Edit P/S: Errore durante la richiesta: " + xhr.status, "error");
-                        }
-                    }
                 };
 
-                xhr.onerror = function () {
-                    //messaggioUtente("Edit P/S: Errore di rete", "error");
+                //I20-1069: prima non diceva niente, e restava "Richiesta inviata".
+                xhr.onerror = function (motivo) {
+                    messaggioUtente("Code SRF-124 Edit P/S: richiesta non riuscita: " + XMLHttpRequestClient.testoErrore(motivo), "error");
                 };
 
                 xhr.send("Menabo/modificaPrimarieSecondarie" + "/" + 0, formData, "PUT");

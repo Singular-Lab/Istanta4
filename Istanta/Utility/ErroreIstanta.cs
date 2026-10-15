@@ -1,6 +1,8 @@
 ﻿using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using IstantaLib;
+using Microsoft.EntityFrameworkCore;
 
 namespace Istanta.Utility
 {
@@ -26,6 +28,29 @@ namespace Istanta.Utility
         public static ErroreIstanta Inoltrato(string? giaDescritto, string riserva)
         {
             return new ErroreIstanta(null, string.IsNullOrWhiteSpace(giaDescritto) ? riserva : giaDescritto);
+        }
+
+        /// I20-1069: la sessione dell'operatore non c'e' piu'. Prima chi faceva Int16.Parse della
+        /// sessione riceveva "no session" e l'operatore vedeva un FormatException.
+        public static ErroreIstanta SessioneScaduta()
+        {
+            return new ErroreIstanta("lettura della sessione", "la sessione di Istanta e' scaduta: rifare l'accesso al Plugin.");
+        }
+
+        /// I20-1069: l'errore di una processaKit che non ha dato la lista, da inoltrare cosi' com'e'.
+        /// "noLogin" e' la sua risposta senza sessione (altri chiamanti la leggono, e resta quella):
+        /// all'operatore si dice che la sessione e' scaduta.
+        public static ErroreIstanta DiProcessaKit(string? errore, bool haRisposto, int idLavorazione)
+        {
+            if (!haRisposto)
+            {
+                return new ErroreIstanta("lettura della lista del kit", $"processaKit non ha restituito la lista della lavorazione {idLavorazione}.");
+            }
+            if (errore == "noLogin")
+            {
+                return SessioneScaduta();
+            }
+            return Inoltrato(errore, $"processaKit non ha preparato la lista della lavorazione {idLavorazione}, senza dire perche'.");
         }
     }
 
@@ -55,11 +80,25 @@ namespace Istanta.Utility
             }
             else
             {
-                string? punto = PuntoNelCodice(radice);
-                testo = $"{chiamata}: {radice.GetType().Name}" + (punto != null ? $" in {punto}" : "") + $" - {radice.Message}";
+                testo = $"{chiamata}: {Motivo(radice)}";
             }
 
             return Accorcia(testo);
+        }
+
+        /// I20-1069: il perche' di un errore senza il nome della chiamata, per chi lo avvolge in un
+        /// ErroreIstanta del suo passo: di un ErroreIstanta il messaggio, di un errore imprevisto
+        /// tipo, punto del codice e messaggio ("NullReferenceException in FicoProcessController.cs:3111 - ...").
+        public static string Motivo(Exception ex)
+        {
+            Exception radice = Radice(ex);
+            if (radice is ErroreIstanta)
+            {
+                return radice.Message;
+            }
+
+            string? punto = PuntoNelCodice(radice);
+            return $"{radice.GetType().Name}" + (punto != null ? $" in {punto}" : "") + $" - {radice.Message}";
         }
 
         /// La traccia completa, per i log e per il campo dettaglio.
@@ -74,7 +113,8 @@ namespace Istanta.Utility
         public static Exception Radice(Exception ex)
         {
             Exception corrente = ex;
-            while ((corrente is TargetInvocationException || corrente is AggregateException) && corrente.InnerException != null)
+            //I20-1069: anche DbUpdateException, che di suo dice solo "see the inner exception".
+            while ((corrente is TargetInvocationException || corrente is AggregateException || corrente is DbUpdateException) && corrente.InnerException != null)
             {
                 corrente = corrente.InnerException;
             }
@@ -183,7 +223,9 @@ namespace Istanta.Utility
     /// lanciava KeyNotFoundException con la sola chiave, senza dire di quale record.
     public static class RecordTracciato
     {
-        public static object Richiesto(Dictionary<string, object>? record, string chiave, string passo, string diChi)
+        /// I20-1069: [NotNull] dice al compilatore che, se ritorna, il record c'e': chi prima scriveva
+        /// record![chiave] non ha bisogno di rimettere il "!" alle righe successive.
+        public static object Richiesto([NotNull] Dictionary<string, object>? record, string chiave, string passo, string diChi)
         {
             if (record == null)
             {

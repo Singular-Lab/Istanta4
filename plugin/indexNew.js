@@ -1989,6 +1989,22 @@ function scaricaContenutoKit(idKit, noCacheValue = null, callback = null, skipMo
             }
             console.log(objResult);
 
+            //I20-1069: una risposta d'errore non e' una lista. Prima finiva nel file listaKit come se
+            //lo fosse: il tracciato si svuotava e il motivo non lo vedeva nessuno. Ora la lista di prima
+            //resta quella in uso, l'operatore legge il motivo, e chi aspetta la lista lo viene a sapere.
+            if (objResult == null || objResult.esito === false) {
+                var motivo = objResult != null && objResult.error ? objResult.error : "Istanta non ha restituito la lista";
+                if (objResult != null && objResult.dettaglio) {
+                    console.error("Dettaglio dell'errore del server:", objResult.dettaglio);
+                }
+                messaggioUtente("Code IDX-180 Lista del kit non scaricata, resta quella di prima: " + motivo, "error");
+                xhrInProcess = null;
+                if (onErrore != null && typeof onErrore === "function") {
+                    onErrore(motivo);
+                }
+                return;
+            }
+
             //salviamo il risultato in un file json
             //I20-1034: il nome porta davanti canale e area della lavorazione (CN_TO_listaKit302.json).
             var filePath = Utility.percorsoNuovaListaKit(idKit);
@@ -2015,6 +2031,13 @@ function scaricaContenutoKit(idKit, noCacheValue = null, callback = null, skipMo
 
             tracciatoOnlineScaricato = true;
             //scaricaTracciatoLocale(idTracciato);
+
+            //I20-1069: la lista e' arrivata, ma alcuni record non si sono completati (descrizioni, foto,
+            //firma): Istanta dice quali e perche'.
+            if (objResult.warn) {
+                console.warn("Avviso del server sulla lista del kit:", objResult.warn);
+                messaggioUtente("Code IDX-181 Lista del kit scaricata, ma con " + objResult.warn, "warning");
+            }
 
             xhrInProcess = null;
 
@@ -3419,6 +3442,10 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                     }
 
                     if(objResult.error != null && objResult.error != ""){
+                        //I20-1069: error e' il messaggio breve; la traccia completa del server sta in dettaglio.
+                        if (objResult.dettaglio) {
+                            console.error("Dettaglio dell'errore del server:", objResult.dettaglio);
+                        }
                         messaggioUtente("Code IDX-25 Filtro: Errore durante l'elaborazione del filtro: " + objResult.error, "error");
                         logContent += "Code IDX-25 Filtro: Errore durante l'elaborazione del filtro: " + objResult.error + "\n";
                         cbkEnd?.("error");
@@ -3426,6 +3453,12 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                     }
                     else if (objResult.result.length == 0) {
                         messaggioUtente("Code IDX-26 Filtro: Operazione riuscita ma nessun elemento è stato trovato tra i non impaginati con i filtri impostati", "warning");
+                    }
+                    //I20-1069: record della lista che Istanta non ha completato (descrizioni, foto, firma).
+                    if (objResult.warn) {
+                        console.warn("Avviso del server sulla lista del kit:", objResult.warn);
+                        messaggioUtente("Code IDX-182 Filtro: la lista del kit ha " + objResult.warn, "warning");
+                        logContent += "Code IDX-182 Filtro: la lista del kit ha " + objResult.warn + "\n";
                     }
 
                     var boxInGriglia = null;
@@ -3973,8 +4006,10 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                 }
             };
 
-            xhrInProcess.onerror = function () {
-                messaggioUtente("Code IDX-30 Filtro: Errore di rete", "error");
+            //I20-1069: prima "Errore di rete" sempre, anche quando il server aveva spiegato il motivo
+            //(gia' mostrato da HRC-01, che questo messaggio copriva).
+            xhrInProcess.onerror = function (motivo) {
+                messaggioUtente("Code IDX-30 Filtro: richiesta non riuscita: " + XMLHttpRequestClient.testoErrore(motivo), "error");
                 hideLoading();
             };
             console.log("Menabo/ImpaginaFromInDesignNew/" + idKitLavorazione + "/" + impagina + "/" + noCacheCheck);
@@ -4202,6 +4237,10 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                         return;
                     }
                     if (objResult.error != null && objResult.error != "") {
+                        //I20-1069: error e' il messaggio breve; la traccia completa del server sta in dettaglio.
+                        if (objResult.dettaglio) {
+                            console.error("Dettaglio dell'errore del server:", objResult.dettaglio);
+                        }
                         messaggioUtente("Code IDX-34 Filtro: Errore durante l'elaborazione del filtro: " + objResult.error, "error");
                         logContent += "Code IDX-34 Filtro: Errore durante l'elaborazione del filtro: " + objResult.error + "\n";
                         cbkEnd?.("error");
@@ -4595,8 +4634,9 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                     }
                 };
     
-                xhrInProcess.onerror = function () {
-                    messaggioUtente("Code IDX-39 Filtro: Errore di rete", "error");
+                //I20-1069: il motivo vero, come IDX-30.
+                xhrInProcess.onerror = function (motivo) {
+                    messaggioUtente("Code IDX-39 Filtro: richiesta non riuscita: " + XMLHttpRequestClient.testoErrore(motivo), "error");
                     hideLoading();
                 };
     
@@ -7716,9 +7756,10 @@ function creaElementoTracciato(obj, isFirst, riepilogoSegnalazioni = {}) {
 /// callback e la funzione e' async: senza, tornerebbe prima che l'impaginazione sia
 /// avvenuta. Se l'attesa scade si avvisa l'operatore.
 ///
-/// Attenzione: res diventa vero solo sul cammino che va a buon fine. Se il server risponde
-/// con un errore l'operatore vede il messaggio dell'errore, ma questa funzione aspetta
-/// comunque i venti secondi e poi aggiunge un timeout che timeout non e'.
+/// I20-1069: l'attesa finisce quando la richiesta e' finita, bene o male (finito). Prima
+/// guardava solo res, che diventa vero solo sul cammino che va a buon fine: dopo un errore
+/// del server l'operatore ne vedeva il messaggio e, venti secondi dopo, un IDX-94 "Timeout"
+/// che timeout non era e lo copriva.
 async function impaginaSingolo(codice, pagina, byPassBloccoGiaImpaginato = false, idRec = null) {
     showLoading("Scaricamento del dato");
     indesignEvents.setBusy(true);
@@ -7730,7 +7771,7 @@ async function impaginaSingolo(codice, pagina, byPassBloccoGiaImpaginato = false
 
     var xhr = new XMLHttpRequestClient();
 
-    var res = false;
+    var finito = false;
     xhr.onload = async (objResult, parsed) => {
         try{
             if (!parsed) {
@@ -7744,12 +7785,20 @@ async function impaginaSingolo(codice, pagina, byPassBloccoGiaImpaginato = false
             console.log(objResult);
             if(!objResult.esito){
                 console.error(objResult.error);
+                //I20-1069: error e' il messaggio breve; la traccia completa del server sta in dettaglio.
+                if (objResult.dettaglio) {
+                    console.error("Dettaglio dell'errore del server:", objResult.dettaglio);
+                }
                 messaggioUtente("Code IDX-90 Impaginazione singolo, errore durante il recupero del dato: " + objResult.error, "error");
                 return;
             }
+            //I20-1069: la scheda del gruppo puo' arrivare con un avviso di getSchedaRef.
+            if (objResult.warn) {
+                console.warn("Avviso del server sull'impaginazione singola:", objResult.warn);
+                messaggioUtente("Code IDX-183 Impaginazione singolo: " + objResult.warn, "warning");
+            }
 
             var box = await impaginazioneSingoloIndd(objResult.records, pagina);
-            res = true;
             if(box == null){
                 messaggioUtente("Code IDX-91 Impaginazione singolo: Fallita impaginazione del box con codice "+codice, "error");
             }
@@ -7760,6 +7809,7 @@ async function impaginaSingolo(codice, pagina, byPassBloccoGiaImpaginato = false
             indesignEvents.setBusy(false);
         }
         finally {
+            finito = true;
             hideLoading();
             indesignEvents.setBusy(false);
         }
@@ -7769,14 +7819,17 @@ async function impaginaSingolo(codice, pagina, byPassBloccoGiaImpaginato = false
         if (xhr.readyState == 4) {
             if (xhr.status == 200) {
             } else {
+                finito = true;
                 hideLoading();
                 indesignEvents.setBusy(false);
             }
         }
     };
 
-    xhr.onerror = function () {
-        messaggioUtente("Code IDX-93 Impaginazione singolo: Errore di rete", "error");
+    //I20-1069: il motivo vero, come IDX-30.
+    xhr.onerror = function (motivo) {
+        finito = true;
+        messaggioUtente("Code IDX-93 Impaginazione singolo: richiesta non riuscita: " + XMLHttpRequestClient.testoErrore(motivo), "error");
         hideLoading();
         indesignEvents.setBusy(false);
     }
@@ -7791,12 +7844,12 @@ async function impaginaSingolo(codice, pagina, byPassBloccoGiaImpaginato = false
     xhr.send("Menabo/impaginaSingolo", formData, "PUT");
 
     var securityCounter = 0;
-    while(!res && securityCounter < 200){
+    while(!finito && securityCounter < 200){
         await Utility.sleep(100);
         securityCounter++;
     }
 
-    if(securityCounter >= 200){
+    if(!finito){
         messaggioUtente("Code IDX-94 Impaginazione singolo: Timeout durante l'impaginazione del singolo", "error");
     }
 }
