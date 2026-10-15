@@ -724,7 +724,7 @@ namespace Istanta.Migrations.Contesto1
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<DateTime>("DataCaricamento")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("FileAddestramento")
                         .IsRequired()
@@ -870,10 +870,10 @@ namespace Istanta.Migrations.Contesto1
                         .HasColumnType("text");
 
                     b.Property<DateTime>("DataRegistrazione")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime?>("DataScadenza")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("NomePromo")
                         .IsRequired()
@@ -883,10 +883,10 @@ namespace Istanta.Migrations.Contesto1
                         .HasColumnType("smallint");
 
                     b.Property<DateTime?>("ValiditaAl")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime?>("ValiditaDal")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("guidID")
                         .HasColumnType("text");
@@ -905,7 +905,7 @@ namespace Istanta.Migrations.Contesto1
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<DateTime>("DataCaricamento")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<int>("IdAddestramento")
                         .HasColumnType("integer");
@@ -982,7 +982,7 @@ namespace Istanta.Migrations.Contesto1
                         .HasColumnType("text");
 
                     b.Property<DateTime>("RegisterDate")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<byte>("Stato")
                         .HasColumnType("smallint");
@@ -1031,7 +1031,7 @@ namespace Istanta.Migrations.Contesto1
                         .HasColumnType("smallint");
 
                     b.Property<DateTime?>("RegisterDate")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.HasKey("Id");
 
@@ -1060,7 +1060,7 @@ namespace Istanta.Migrations.Contesto1
                         .HasColumnType("bigint");
 
                     b.Property<DateTime?>("RegisterDate")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<byte>("TipoAzione")
                         .HasColumnType("smallint");
@@ -1149,7 +1149,7 @@ namespace Istanta.Migrations.Contesto1
                         .HasColumnType("boolean");
 
                     b.Property<DateTime?>("DataRegistrazione")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("Dato")
                         .HasColumnType("text");
