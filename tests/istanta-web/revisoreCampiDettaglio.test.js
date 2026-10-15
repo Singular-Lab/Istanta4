@@ -105,7 +105,8 @@ test('il valore parte come testo, anche quando arriva vuoto', () => {
 
 // La nota esiste nelle librerie di piu' clienti: la modifica non e' di uno solo.
 test('ogni cliente che ha il campo ne dichiara la chiave sul tracciato', () => {
-    const clienti = ['edro21', 'famila', 'pac', 'trea'];
+    //I20-1107: anche coopfi, che e' tornato la copia di edro21 usata dalla produzione Coop.
+    const clienti = ['edro21', 'coopfi', 'famila', 'pac', 'trea'];
 
     for (const cliente of clienti) {
         const agenzia = sorgente('Istanta/ScriptAgenzia/' + cliente + '/agenzia.js');
@@ -127,7 +128,7 @@ test('il rilevamento sta nel revisore, non nelle librerie di agenzia', () => {
     assert.ok(revisore.includes('$(document).on("input", "[campoTracciato]"'),
         'senza ascolto il bordo rosso non compare mai, e l\'ascolto vale per i campi di tutti');
 
-    for (const cliente of ['edro21', 'famila', 'pac', 'trea']) {
+    for (const cliente of ['edro21', 'coopfi', 'famila', 'pac', 'trea']) {
         const agenzia = sorgente('Istanta/ScriptAgenzia/' + cliente + '/agenzia.js');
         assert.ok(!agenzia.includes('controlChangeCampiTracciato'),
             'la regola non va duplicata in ' + cliente);
