@@ -492,10 +492,14 @@ namespace Istanta.Utility
             if (corrispondenza != null)
                 return corrispondenza;
 
-            var possibileCorrispondenza = lavorazioniRec
-                .FirstOrDefault(f => f.CodiceGruppo == codiceGruppo);
+            //I20-1104: tutte le righe del codice gruppo, non solo la prima. Lo stesso gruppo impaginato
+            //con due label (main e soci) ha due righe: guardando solo la prima, il secondario di una
+            //label restava in lista mentre il suo primario era escluso, e il raggruppamento si fermava.
+            var righeDelGruppo = lavorazioniRec
+                .Where(f => f.CodiceGruppo == codiceGruppo)
+                .ToList();
 
-            if (possibileCorrispondenza == null)
+            if (righeDelGruppo.Count == 0)
                 return null;
 
             var elementoIdRecIndicato = articoliInKit
@@ -515,10 +519,7 @@ namespace Istanta.Utility
                     f.label == label)
                 .ToList();
 
-            if (elementiGruppo.Any(f => f.IdRec == possibileCorrispondenza.IdRecordTracciato))
-                return possibileCorrispondenza;
-
-            return null;
+            return righeDelGruppo.FirstOrDefault(r => elementiGruppo.Any(f => f.IdRec == r.IdRecordTracciato));
         }
 
     }
