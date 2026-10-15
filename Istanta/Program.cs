@@ -273,6 +273,10 @@ builder.Services.Configure<BrotliCompressionProviderOptions>(options =>
 
 var app = builder.Build();
 
+// I20-1106: le migration pendenti dei due contesti si applicano qui, all'avvio. Prima si
+// applicavano a mano con dotnet ef database update, che sul compilato distribuito in produzione
+// non c'e'. Si spegne con Migrazioni__ApplicaAllAvvio=false.
+Migrazioni.ApplicaAllAvvio(app.Services, app.Configuration, app.Logger);
 
 var defaultCulture = new CultureInfo("en-GB");
 CultureInfo.DefaultThreadCurrentCulture = defaultCulture;

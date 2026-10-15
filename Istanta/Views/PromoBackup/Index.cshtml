@@ -1,0 +1,87 @@
+﻿@page
+@using Istanta.Models_2
+@model Istanta.Views.PromoBackup.IndexModel
+@inject Microsoft.AspNetCore.Http.IHttpContextAccessor HttpContextAccessor
+@inject Microsoft.EntityFrameworkCore.IDbContextFactory<Istanta.Models_2.Edro21_DbContext2> FabbricaCtx2
+@{
+    // I20-1106: tutte le promo non eliminate, dalla piu' recente. Non solo quelle attive come in
+    // Confronti: un ripristino puo' servire anche a una promo chiusa.
+    List<Promo> lista_promo;
+    using (Edro21_DbContext2 ctx2 = FabbricaCtx2.CreateDbContext())
+    {
+        lista_promo = ctx2.Promos
+            .Where(p => p.Stato != (Byte)StatoPromo.Eliminata)
+            .OrderByDescending(p => p.DataRegistrazione)
+            .ToList();
+    }
+}
+
+<head>
+    <title>Backup promo</title>
+</head>
+
+<h2>Backup promo</h2>
+<p class="text-muted">
+    Salva lo stato dei record dei tracciati o delle lavorazioni di una promo, e da un backup dell'elenco lo ripristina.
+    Il ripristino riscrive i record di quel tipo come erano nel backup; prima fa un backup di sicurezza dello stato attuale.
+</p>
+
+<div class="container p-4" style="width:auto;" id="backupPromoContainer">
+    <div class="row">
+        <div class="col-6">
+            <label for="TendinaPromo" class="form-label">Promo</label>
+            <select class="form-select" id="TendinaPromo">
+                <option value="0">Seleziona una promo</option>
+                @foreach (var promo in lista_promo)
+                {
+                    <option value="@promo.Id">@promo.NomePromo (@promo.DataRegistrazione.ToString("dd/MM/yyyy"))</option>
+                }
+            </select>
+        </div>
+        <div class="col-6 text-end align-self-end" id="rowAzioni" style="display:none;">
+            <button class="btn btn-primary" id="btnBackupTracciati">Backup record tracciati</button>
+            <button class="btn btn-primary" id="btnBackupLavorazioni">Backup record lavorazioni</button>
+        </div>
+    </div>
+    <div class="row pt-4" id="rowElenco" style="display:none;">
+        <div class="col">
+            <h4>Backup della promo</h4>
+            <p id="pNessunBackup" style="display:none;">Nessun backup per questa promo.</p>
+            <table class="table table-striped" id="tabellaBackup" style="display:none;">
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Tipo</th>
+                        <th>Origine</th>
+                        <th class="text-end">Record</th>
+                        <th class="text-end"></th>
+                    </tr>
+                </thead>
+                <tbody id="corpoBackup"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]" src="~/js/backupPromo.js?v=1"></script>
+
+<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]" type="text/javascript">
+
+    let backupPromo;
+    function documentReady() {
+        backupPromo = new BackupPromo("corpoBackup");
+
+        $("#TendinaPromo").on("change", function () {
+            backupPromo.cambiaPromo(parseInt($(this).val(), 10) || 0);
+        });
+
+        $("#btnBackupTracciati").on("click", function () {
+            backupPromo.crea(BackupPromo.TIPO_TRACCIATI);
+        });
+
+        $("#btnBackupLavorazioni").on("click", function () {
+            backupPromo.crea(BackupPromo.TIPO_LAVORAZIONI);
+        });
+    }
+
+</script>

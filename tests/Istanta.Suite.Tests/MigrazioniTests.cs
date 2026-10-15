@@ -5,6 +5,9 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Migrations.Operations;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace Istanta.Suite.Tests;
@@ -12,6 +15,8 @@ namespace Istanta.Suite.Tests;
 /// <summary>
 /// I20-994: i due contesti passano alle migration di EF, partendo da una Baseline vuota,
 /// e la prima migration vera allarga articoli.ean a 300 e Attivita.contract a 5000.
+/// I20-1106: la seconda crea promo_backup, e le migration pendenti le applica Istanta all'avvio,
+/// perche' sul compilato distribuito in produzione dotnet ef non c'e'.
 /// Nessun test si connette a un database: i contesti si costruiscono dalle fabbriche di
 /// design time, con una connessione che non punta a niente.
 /// </summary>
@@ -56,6 +61,61 @@ public class MigrazioniTests
         Assert.Contains("Migrazioni.StoricoContesto2", programma);
     }
 
+    // I20-1106: le migration pendenti si applicano all'avvio, perche' sul compilato distribuito
+    // dotnet ef non c'e'. Program.cs deve chiamare proprio questo metodo, che ha l'interruttore.
+    [Fact]
+    public void L_applicazione_applica_le_migration_all_avvio()
+    {
+        var programma = File.ReadAllText(TrovaFile("Istanta/Program.cs"));
+
+        Assert.Contains("Migrazioni.ApplicaAllAvvio(app.Services, app.Configuration, app.Logger)", programma);
+    }
+
+    [Fact]
+    public void L_interruttore_vale_true_se_manca_e_false_lo_spegne()
+    {
+        Assert.True(Migrazioni.DaApplicareAllAvvio(new ConfigurationBuilder().Build()));
+        Assert.True(Migrazioni.DaApplicareAllAvvio(Configurazione("true")));
+        Assert.False(Migrazioni.DaApplicareAllAvvio(Configurazione("false")));
+    }
+
+    // Spento, non deve nemmeno cercare i contesti: con un contenitore vuoto, cercarli lancerebbe.
+    [Fact]
+    public void Con_l_interruttore_spento_non_si_toccano_i_contesti()
+    {
+        var servizi = new ServiceCollection().BuildServiceProvider();
+
+        Migrazioni.ApplicaAllAvvio(servizi, Configurazione("false"), NullLogger.Instance);
+    }
+
+    // Acceso, con un contenitore senza contesti registrati si ferma subito: e' il segno che li cerca.
+    [Fact]
+    public void Con_l_interruttore_acceso_cerca_i_contesti()
+    {
+        var servizi = new ServiceCollection().BuildServiceProvider();
+
+        Assert.Throws<InvalidOperationException>(() => Migrazioni.ApplicaAllAvvio(servizi, Configurazione("true"), NullLogger.Instance));
+    }
+
+    // I20-1106: il bundle crea lo schema della Baseline; cio' che arriva con una migration lo crea
+    // Istanta all'avvio. Se qualcuno aggiungesse promo_backup anche al DDL, al primo avvio la
+    // migration la troverebbe gia' creata e l'applicazione si fermerebbe.
+    [Fact]
+    public void Il_DDL_del_bundle_resta_lo_schema_della_Baseline()
+    {
+        var ddl = File.ReadAllText(TrovaFile("docker/istanta-correggo/schemas/istanta/01-istanta.sql"));
+
+        Assert.DoesNotContain("promo_backup", ddl);
+        Assert.DoesNotContain("__EFMigrationsHistory", ddl);
+    }
+
+    private static IConfiguration Configurazione(string valore)
+    {
+        return new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { [Migrazioni.ChiaveApplicaAllAvvio] = valore })
+            .Build();
+    }
+
     [Fact]
     public void Le_migration_sono_quelle_attese_e_in_ordine()
     {
@@ -66,7 +126,7 @@ public class MigrazioniTests
         var nomi2 = ctx2.GetService<IMigrationsAssembly>().Migrations.Keys.Select(NomeSenzaData).ToList();
 
         Assert.Equal(new[] { "Baseline", "EanA300ContractA5000" }, nomi1);
-        Assert.Equal(new[] { "Baseline" }, nomi2);
+        Assert.Equal(new[] { "Baseline", "PromoBackup" }, nomi2);
     }
 
     // Lo schema c'e' gia' su ogni database: la Baseline lo registra e basta.
@@ -104,6 +164,32 @@ public class MigrazioniTests
         Assert.Equal(300, ean.MaxLength);
         Assert.Equal(30, ean.OldColumn.MaxLength);
         Assert.True(ean.IsNullable);
+    }
+
+    // I20-1106: la migration crea la sola tabella dei backup, con la chiave esterna in cascata
+    // verso promo e l'indice sulla promo. Giu', toglie la tabella e basta.
+    [Fact]
+    public void La_migration_PromoBackup_crea_solo_la_tabella_promo_backup()
+    {
+        using var ctx = Contesto2();
+
+        var migration = CreaMigration(ctx, "PromoBackup");
+
+        Assert.Equal(2, migration.UpOperations.Count);
+        var tabella = Assert.IsType<CreateTableOperation>(migration.UpOperations[0]);
+        Assert.Equal("promo_backup", tabella.Name);
+        Assert.Equal(new[] { "id", "id_promo", "tipo", "data_backup", "origine", "conteggio", "contenuto" }, tabella.Columns.Select(c => c.Name).ToArray());
+        Assert.Equal("text", tabella.Columns.Single(c => c.Name == "contenuto").ColumnType);
+        Assert.Equal(200, tabella.Columns.Single(c => c.Name == "origine").MaxLength);
+        var fk = Assert.Single(tabella.ForeignKeys);
+        Assert.Equal("promo", fk.PrincipalTable);
+        Assert.Equal(ReferentialAction.Cascade, fk.OnDelete);
+        var indice = Assert.IsType<CreateIndexOperation>(migration.UpOperations[1]);
+        Assert.Equal("promo_backup", indice.Table);
+        Assert.Equal(new[] { "id_promo" }, indice.Columns);
+
+        var giu = Assert.Single(migration.DownOperations);
+        Assert.Equal("promo_backup", Assert.IsType<DropTableOperation>(giu).Name);
     }
 
     // Se qualcuno cambia il modello senza generare la migration, questo test lo dice prima che

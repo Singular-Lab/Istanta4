@@ -79,9 +79,8 @@ riavviati: i mount e le variabili si fissano alla creazione.
 
 ## 1. Gli schemi
 
-Nessuna delle due applicazioni crea il proprio schema all'avvio — non ci sono
-migrazioni EF applicate a runtime. Gli schemi sono **già in questa cartella** e
-vengono applicati al primo avvio di PostgreSQL:
+Nessuna delle due applicazioni crea il proprio schema all'avvio. Gli schemi sono
+**già in questa cartella** e vengono applicati al primo avvio di PostgreSQL:
 
 ```
 schemas/istanta/01-istanta.sql   -> database di Istanta,   applicato come utente istanta
@@ -89,8 +88,18 @@ schemas/correggo4/01-schema.sql  -> database di Correggo4, applicato come utente
 ```
 
 Risultato verificato: **25 tabelle** per Istanta, 21 per Correggo4, e le 25
-corrispondono esattamente a quelle che i contesti EF mappano — nessuna in più,
-nessuna in meno.
+corrispondono esattamente a quelle della Baseline dei contesti EF — nessuna in
+più, nessuna in meno.
+
+Da I20-1106 Istanta applica da sola, **all'avvio**, le migration EF pendenti dei
+suoi due contesti (`Migrazioni.ApplicaAllAvvio` in `Program.cs`; si spegne con
+`Migrazioni__ApplicaAllAvvio=false` in `istanta.env`). Il primo avvio su un
+database appena creato dal bundle applica quindi `EanA300ContractA5000` e
+`PromoBackup`; su un database che esiste già applica solo quelle che mancano
+nelle sue tabelle `__EFMigrationsHistory_ctx1` e `__EFMigrationsHistory_ctx2`.
+Per questo `01-istanta.sql` resta lo schema della Baseline e **non va esteso a
+mano** con le tabelle o le colonne che arrivano con una migration: all'avvio la
+migration le troverebbe già create e Istanta si fermerebbe.
 
 ### `01-istanta.sql` è generato, non copiato
 
@@ -117,10 +126,11 @@ Esclusa anche `promo_lavorazioni_records_register`: il codice non la usa più �
 compare solo come entità e come collezione di navigazione, in nessuna query — e
 nei file sorgente esisteva comunque solo col vecchio nome PascalCase.
 
-**Va rigenerato** se cambiano i `ToTable` dei contesti o i due file sorgente.
-L'alternativa strutturale, che elimina il problema alla radice, è generare il
-DDL direttamente dai contesti con `dotnet ef dbcontext script`: uno schema così
-non può divergere dal codice.
+**Va rigenerato** solo se cambia la Baseline dei contesti o i due file sorgente:
+le modifiche successive viaggiano con la loro migration, che Istanta applica
+all'avvio. L'alternativa strutturale, che elimina il problema alla radice, è
+generare il DDL direttamente dai contesti con `dotnet ef dbcontext script`: uno
+schema così non può divergere dal codice.
 
 ## 2. Catalogo ControlPlane
 
