@@ -2838,6 +2838,60 @@ function grigliaDallaLibreria(libreria, nomeGriglia, suffix, pagina) {
     throw errore;
 }
 
+/// I20-1108: i box impaginati vanno sul livello InPagina, che arriva dal modello del documento.
+/// Se il documento non lo ha, l'impaginazione si fermava con un errore di InDesign: ora il livello
+/// si crea all'avvio dell'impaginazione (in cima, come un livello nuovo di InDesign) e la console
+/// lo dice. Se c'e' gia' si usa quello, senza crearne un secondo e senza spostare niente.
+/// Il livello porta anche le meccaniche: impaginaBox cerca i modelli dei box solo fra i gruppi di
+/// InPagina nelle mastro "meccaniche". Creato vuoto non bastava (prova dell'operatore: ogni box
+/// usciva con "Meccanica non trovata"), quindi ci si spostano le meccaniche delle mastro. Se non ce
+/// ne sono non si crea niente e l'impaginazione si ferma, invece di riempire le pagine di errori.
+/// Restituisce il livello, o null se l'impaginazione non puo' partire (gia' detto all'operatore).
+function assicuraLivelloInPagina(doc) {
+    var livello = doc.layers.itemByName("InPagina");
+    if (livello != null && livello.isValid) {
+        return livello;
+    }
+
+    //Le meccaniche come le cerca impaginaBox: gruppi con etichetta nelle mastro "meccaniche" e
+    //nelle loro declinazioni di agenzia ("meccaniche" + suffisso).
+    var meccaniche = [];
+    for (var i = 0; i < doc.masterSpreads.length; i++) {
+        var mastro = doc.masterSpreads.item(i);
+        if (String(mastro.baseName).toLowerCase().indexOf("meccaniche") !== 0) {
+            continue;
+        }
+        for (var j = 0; j < mastro.groups.length; j++) {
+            var gruppo = mastro.groups.item(j);
+            if (gruppo.label != null && gruppo.label !== "") {
+                meccaniche.push(gruppo);
+            }
+        }
+    }
+    if (meccaniche.length === 0) {
+        messaggioUtente("Code IDX-190 Il documento non ha il livello InPagina e nella pagina mastro meccaniche non ci sono meccaniche: l'impaginazione si ferma, va sistemato il documento", "error");
+        return null;
+    }
+
+    livello = doc.layers.add({ name: "InPagina" });
+    var spostate = 0;
+    var rimaste = [];
+    for (var m = 0; m < meccaniche.length; m++) {
+        try {
+            meccaniche[m].itemLayer = livello;
+            spostate++;
+        }
+        catch (e) {
+            rimaste.push(meccaniche[m].label);
+        }
+    }
+    messaggioUtente("Code IDX-187 Il documento non aveva il livello InPagina: e' stato creato e ci sono state spostate " + spostate + " meccaniche dalla pagina mastro", "warning");
+    if (rimaste.length > 0) {
+        messaggioUtente("Code IDX-189 Queste meccaniche non si sono potute spostare sul livello InPagina (livello bloccato?): " + rimaste.join(", "), "warning");
+    }
+    return livello;
+}
+
 async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, idKitLavorazione, impagina = false, cbkEnd = null, restartFromIndexPoP = 0) {
     var noCacheCheck = !($("#cacheCheckAdvanced").is(":checked"));
 
@@ -2894,13 +2948,28 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
         }
     }
     catch (ex) {
-        messaggioUtente("Errore durante il recupero della libreria: " + ex.message, "Error", false, 5); 
+        messaggioUtente("Errore durante il recupero della libreria: " + ex.message, "Error", false, 5);
         hideLoading();
         cbkEnd?.("error");
         return;
     }
 
-
+    //I20-1108: il livello InPagina serve a impaginare, non al conteggio, che non modifica il documento.
+    if (impagina) {
+        try {
+            if (assicuraLivelloInPagina(docInLavorazione) == null) {
+                hideLoading();
+                cbkEnd?.("error");
+                return;
+            }
+        }
+        catch (ex) {
+            messaggioUtente("Code IDX-188 Impossibile creare il livello InPagina nel documento: " + ex.message, "Error", false, 5);
+            hideLoading();
+            cbkEnd?.("error");
+            return;
+        }
+    }
 
 
     if (tipo_lavorazione_corrente== 1) {
@@ -7846,6 +7915,10 @@ async function impaginaSingolo(codice, pagina, byPassBloccoGiaImpaginato = false
                 messaggioUtente("Code IDX-183 Impaginazione singolo: " + objResult.warn, "warning");
             }
 
+            //I20-1108: anche il singolo box va sul livello InPagina; se manca si crea, con le meccaniche.
+            if (assicuraLivelloInPagina(docInLavorazione) == null) {
+                return;
+            }
             var box = await impaginazioneSingoloIndd(objResult.records, pagina);
             if(box == null){
                 messaggioUtente("Code IDX-91 Impaginazione singolo: Fallita impaginazione del box con codice "+codice, "error");
