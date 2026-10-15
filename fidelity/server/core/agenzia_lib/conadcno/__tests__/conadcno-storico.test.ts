@@ -1,6 +1,9 @@
-import { describe, expect, it } from "vitest";
+import type { Request } from "express";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { IUserService } from "../../../interfaces/IUserService";
+import { ServerUtils } from "../../../utils/ServerUtils";
 import { DefaultAgenziaLib } from "../../default/index.js";
+import type { PayloadConfrontoStorico } from "../../types.js";
 import { ConadcnoAgenziaLib } from "../index.js";
 import { mergePluginPhotoRefs, storicoVolantinoDB1 } from "../storico-db1.js";
 
@@ -9,6 +12,31 @@ describe("ConadcnoAgenziaLib", () => {
     const userService = {} as IUserService;
     expect(new ConadcnoAgenziaLib(userService).storicoVolantino).toBe(storicoVolantinoDB1);
     expect(new DefaultAgenziaLib(userService).storicoVolantino).toBeUndefined();
+  });
+});
+
+describe("storicoVolantinoDB1.confronta: timeout verso DB1", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+  });
+
+  const timeoutPassato = async () => {
+    const invio = vi.spyOn(ServerUtils, "sendToFICOApi").mockResolvedValue({
+      data: { esito: true, error: "", lista: [], orfanelli: [], fantasmi: [] }, status: 200, statusText: "OK",
+    } as any);
+    await storicoVolantinoDB1.confronta({} as Request, { refs: [] } as unknown as PayloadConfrontoStorico);
+    return invio.mock.calls[0][5];
+  };
+
+  it("di default aspetta 30 minuti, non i 10 del timeout generico", async () => {
+    vi.stubEnv("DB1_TIMEOUT_MS", "");
+    expect(await timeoutPassato()).toBe(30 * 60_000);
+  });
+
+  it("DB1_TIMEOUT_MS lo regola senza deploy", async () => {
+    vi.stubEnv("DB1_TIMEOUT_MS", "2700000");
+    expect(await timeoutPassato()).toBe(2_700_000);
   });
 });
 

@@ -157,7 +157,10 @@ export const storicoVolantinoDB1: StoricoVolantinoAgenzia = {
       req,
       config.DBUNO_URL + "/UploadVolStorico.ashx",
       "POST",
-      payload
+      payload,
+      undefined,
+      // Il confronto di un volantino intero puo superare i 10 minuti del timeout generico ("The operation was aborted.")
+      Number(process.env.DB1_TIMEOUT_MS) || 30 * 60_000
     );
     // sendToFICOApi non lancia sugli status non-ok: li incapsula in { data: null, status, statusText }.
     // Senza questo controllo un 500 di DB1 veniva letto come "nessun orfanello/fantasma" e il flusso
