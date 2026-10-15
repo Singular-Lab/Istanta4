@@ -201,6 +201,41 @@ namespace AgenziaLib
                 return stile;
             return stile + "_LINEA";
         }
+
+        /// <summary>
+        /// Le referenze che non escono nel PoP, in ogni formato: tema jolly, sprint o extra tripla, e i Jolly
+        /// evidenziati, che nascono dal tema VENDITE PROPOSITIVE e "jolly" nel tema non ce l'hanno. tema e' gia'
+        /// in minuscolo.
+        /// </summary>
+        public static bool esclusaDalPoP(string tema, string codiceBox)
+        {
+            return tema.Contains("jolly") || tema.Contains("sprint") || tema.Replace(" ", "").Contains("extripla")
+                || codiceBox == "BOX_JOLLY_EVIDENZIATO";
+        }
+
+        /// <summary>
+        /// Il box con cui la referenza esce nel PoP. Nell'A3 verticale i Superprezzi ortofrutta escono come
+        /// BOX_STD, con le sue regole, i suoi stili e le regole del CssFramework dello STD. Negli altri formati il
+        /// box resta quello del record.
+        /// </summary>
+        public static string boxNelPoP(string codiceBox, string formato)
+        {
+            if (formato == "A3_VERTICALI" && codiceBox == "BOX_SuperprezziOF")
+                return "BOX_STD";
+            return codiceBox;
+        }
+
+        /// <summary>
+        /// Se sul cartello PoP compare lo sconto piccolo: area A, sconto sopra lo 0 e sotto il 25%, senza
+        /// colonna Toscana e senza tema eccezionale, la stessa condizione con cui esportaPoP mette
+        /// sconto_piccolo. Solo allora il prezzo dello STD ha lo stile
+        /// PREZZO_STD_SCONTO_PICCOLO; prima lo prendeva con qualunque sconto sotto il 25%, anche zero e in
+        /// ogni area.
+        /// </summary>
+        public static bool scontoPiccoloNelPoP(string siglaArea, decimal sconto, bool specialeToscana, bool eventoEccezionale)
+        {
+            return siglaArea == "A" && !specialeToscana && !eventoEccezionale && sconto > 0 && sconto < 25;
+        }
         //Settori/reparti No FOOD
         private readonly string[] settori_no_food = new string[] { "62", "64", "66", "68" };
         private readonly string[] reparti_no_food = new string[] { "01", "02", "03", "04", "05", "06", "07", "09", "11", "12" };
@@ -599,7 +634,7 @@ namespace AgenziaLib
 
                     if (formatoKit == "A3_ORIZZONTALI")
                     {
-                        if (tema.Contains("jolly") || tema.Contains("sprint") || tema.Replace(" ", "").Contains("extripla"))
+                        if (esclusaDalPoP(tema, recItem[key_codiceBox].ToString()))
                         {
                             //Console.WriteLine("Intercettato!");
                             continue;
@@ -607,14 +642,14 @@ namespace AgenziaLib
                     }
                     else if (formatoKit == "A3_VERTICALI")
                     {
-                        if (tema.Contains("jolly") || tema.Contains("sprint") || tema.Replace(" ", "").Contains("extripla"))
+                        if (esclusaDalPoP(tema, recItem[key_codiceBox].ToString()))
                         {
                             continue;
                         }
                     }
                     else if (formatoKit == "A7")
                     {
-                        if (tema.Contains("jolly") || tema.Contains("sprint") || tema.Replace(" ", "").Contains("extripla"))
+                        if (esclusaDalPoP(tema, recItem[key_codiceBox].ToString()))
                         {
                             continue;
                         }
@@ -754,6 +789,14 @@ namespace AgenziaLib
                     string siglaFormatoKit = formatiDB.source.FirstOrDefault(a => a.guidID == kit.guidFormato).codice;
 
                     var codiceBox = recItem[key_codiceBox].ToString();
+
+                    //Nell'A3 verticale i Superprezzi escono come STD, anche nel record: dal box del record il
+                    //Plugin sceglie il modello e le regole del CssFramework.
+                    if (boxNelPoP(codiceBox, formatoKit) != codiceBox)
+                    {
+                        codiceBox = boxNelPoP(codiceBox, formatoKit);
+                        recItem[key_codiceBox] = codiceBox;
+                    }
 
                     //forzature meccanica per Codicebox
                     /*if (codiceBox == "BOX_SuperprezziOF")
@@ -1503,7 +1546,8 @@ namespace AgenziaLib
                                 recItem["colore_sconto_speciale"] = _codifica.ToUpper();
 
                             }
-                            if (sconto < 25)
+                            //Lo stile dello sconto piccolo solo se lo sconto piccolo c'e' davvero.
+                            if (scontoPiccoloNelPoP(siglaAreaKit, sconto, speciale_toscana, contiene_evento_eccezionale))
                             {
                                 stile_prezzo_promo = "PREZZO_STD_SCONTO_PICCOLO";
                                 interprete.assignCompiledField("prezzo_promo", stile_prezzo_promo, $"€ {prezzo_promo}");
@@ -1589,11 +1633,7 @@ namespace AgenziaLib
                                 recItem["colore_sconto_speciale"] = _codifica.ToUpper();
 
                             }
-                            if (sconto < 25)
-                            {
-                                stile_prezzo_promo = "PREZZO_STD_SCONTO_PICCOLO";
-                                interprete.assignCompiledField("prezzo_promo", stile_prezzo_promo, $"€ {prezzo_promo}");
-                            }
+                            //Nel 1+1 lo sconto piccolo viene sempre tolto (piu' sotto): il prezzo resta PREZZO_PROMO.
 
                         }
 
