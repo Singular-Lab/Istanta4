@@ -240,6 +240,53 @@ const ReperimentoFoto = {
         return stato;
     },
 
+    /// Le immagini di un pacchetto divise per cartella. Le foto extra di una ref (loghi, bollini,
+    /// ambientate caricati sulla ref) vanno nella cartella Loghi, da cui l'impaginazione le piazza;
+    /// le foto del prodotto in Links. Il server da' il tipo solo alle foto extra: senza tipo, o
+    /// con il tipo Foto (1), e' una foto. Una risposta che non e' una lista, un errore del server,
+    /// resta intera fra le foto: lo scaricamento fallisce come prima.
+    dividiPacchettoPerCartella(lista) {
+        if (!Array.isArray(lista)) {
+            return { foto: lista, extra: [] };
+        }
+        var foto = [];
+        var extra = [];
+        lista.forEach(function (immagine) {
+            if (immagine == null) {
+                return;
+            }
+            if (Number(immagine.tipo) > 1) {
+                extra.push(immagine);
+            }
+            else {
+                foto.push(immagine);
+            }
+        });
+        return { foto: foto, extra: extra };
+    },
+
+    /// Scarica nella cartella Loghi le foto extra di un pacchetto, prima delle foto, con le stesse
+    /// notifiche dell'operazione tranne la fine: la fine la da' lo scaricamento delle foto, che
+    /// parte dopo. Restituisce true se l'operatore ha annullato: allora le foto non si scaricano.
+    async scaricaFotoExtraNeiLoghi(extra, objProcess, idOperazione) {
+        if (!Array.isArray(extra) || extra.length == 0) {
+            return false;
+        }
+        var annullata = false;
+        var cartellaLoghi = await fs2.getEntryWithUrl("file://" + /*pathLavorazione +*/ percorsoLoghi);
+        var processoExtra = Object.assign({}, objProcess, {
+            onAbort: async function (message = null) {
+                annullata = true;
+                if (objProcess.onAbort != null) {
+                    await objProcess.onAbort(message);
+                }
+            },
+            onComplete: null
+        });
+        await scaricamentoFoto.downloadImages(extra, processoExtra, cartellaLoghi, idOperazione);
+        return annullata;
+    },
+
     /// Lo scaricamento massivo del pacchetto foto, con barra di avanzamento e
     /// possibilita' di interruzione. 348 righe.
     async avviaSyncPacchettoFoto(mode, callback, codici = []){
@@ -354,7 +401,11 @@ const ReperimentoFoto = {
                                 }
                             }
                         };
-                        await scaricamentoFoto.downloadImages(data, objProcess, folder, codiceSyncFoto);
+                        //Le foto extra delle ref vanno nella cartella Loghi, prima delle foto in Links.
+                        var pacchetto = ReperimentoFoto.dividiPacchettoPerCartella(data);
+                        if (!await ReperimentoFoto.scaricaFotoExtraNeiLoghi(pacchetto.extra, objProcess, codiceSyncFoto)) {
+                            await scaricamentoFoto.downloadImages(pacchetto.foto, objProcess, folder, codiceSyncFoto);
+                        }
                     }
                     catch (e) {
                         console.log(e);
@@ -568,7 +619,11 @@ const ReperimentoFoto = {
                                 syncFotoInCorso = syncFotoInCorso.filter(id => id !== codiceSyncFotoMode2);
                             }
                         };
-                        await scaricamentoFoto.downloadImages(data.lista, objProcess, folder, codiceSyncFotoMode2);
+                        //Le foto extra delle ref vanno nella cartella Loghi, prima delle foto in Links.
+                        var pacchettoCodici = ReperimentoFoto.dividiPacchettoPerCartella(data.lista);
+                        if (!await ReperimentoFoto.scaricaFotoExtraNeiLoghi(pacchettoCodici.extra, objProcess, codiceSyncFotoMode2)) {
+                            await scaricamentoFoto.downloadImages(pacchettoCodici.foto, objProcess, folder, codiceSyncFotoMode2);
+                        }
 
                         //I20-1027: la fine si mostra sempre, non solo quando c'e' una callback: senza,
                         //la finestra restava senza croce.
