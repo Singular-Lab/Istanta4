@@ -186,6 +186,21 @@ namespace AgenziaLib
         {
             return string.Equals(valore?.ToString()?.Trim(), "x", StringComparison.OrdinalIgnoreCase);
         }
+
+        /// <summary>
+        /// Lo stile della descrizione del cartello di gruppo nel PoP, per un gruppo marcato linea. Gli stili
+        /// _LINEA esistono solo per BOX_LINEA, i cui singoli sotto le 10 referenze escono come BOX_STD (il box
+        /// vero e' quello del record), e per BOX_doppio_SCONTO_LINEA, il cui stile ha gia' _LINEA: il suffisso
+        /// va una volta sola. Gli altri box che con IS_LINEA restano tali (esclusiva soci, SpendiPunti, doppio
+        /// sconto, Jolly, Sprint) tengono il proprio stile, come nel volantino.
+        /// </summary>
+        public static string stileDescrizioneCartelloDiLinea(string stile, string boxDelGruppo)
+        {
+            bool boxDiLinea = boxDelGruppo == "BOX_LINEA" || boxDelGruppo == "BOX_doppio_SCONTO_LINEA";
+            if (!boxDiLinea || stile.EndsWith("_LINEA"))
+                return stile;
+            return stile + "_LINEA";
+        }
         //Settori/reparti No FOOD
         private readonly string[] settori_no_food = new string[] { "62", "64", "66", "68" };
         private readonly string[] reparti_no_food = new string[] { "01", "02", "03", "04", "05", "06", "07", "09", "11", "12" };
@@ -2258,10 +2273,15 @@ namespace AgenziaLib
                             var interpreteSottogruppo = interprete.Clone();
 
                             if (is_linea) {
-                                descrizione = $"<{stileDescr1}_LINEA>{Descrizione1}</{stileDescr1}_LINEA>";
-                                descrizione += $"<{stileDescr2}_LINEA>{Descrizione2}</{stileDescr2}_LINEA>";
-                                descrizione += $"<{stileDescr4}_LINEA>{Descrizione4}</{stileDescr4}_LINEA>";
-                                descrizione += $"<{stileDescr3}_LINEA>{Descrizione3}</{stileDescr3}_LINEA>";
+                                string boxDelGruppo = recItem[key_codiceBox].ToString();
+                                string stileLinea1 = stileDescrizioneCartelloDiLinea(stileDescr1, boxDelGruppo);
+                                string stileLinea2 = stileDescrizioneCartelloDiLinea(stileDescr2, boxDelGruppo);
+                                string stileLinea3 = stileDescrizioneCartelloDiLinea(stileDescr3, boxDelGruppo);
+                                string stileLinea4 = stileDescrizioneCartelloDiLinea(stileDescr4, boxDelGruppo);
+                                descrizione = $"<{stileLinea1}>{Descrizione1}</{stileLinea1}>";
+                                descrizione += $"<{stileLinea2}>{Descrizione2}</{stileLinea2}>";
+                                descrizione += $"<{stileLinea4}>{Descrizione4}</{stileLinea4}>";
+                                descrizione += $"<{stileLinea3}>{Descrizione3}</{stileLinea3}>";
                             } else
                             {
                                 descrizione = $"<{stileDescr1}>{Descrizione1}</{stileDescr1}>";
