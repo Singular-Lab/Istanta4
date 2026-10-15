@@ -749,6 +749,10 @@ const schedaRef = {
                         if (objResult.error != null && objResult.error != "") {
                             messaggioUtente("Code SRF-13 Ricollegamento fallito: " + objResult.error, "error");
                             console.error("Code SRF-13 Ricollegamento fallito: " + objResult.error);
+                            //I20-1069: la traccia completa del server, per chi guarda la console.
+                            if (objResult.dettaglio) {
+                                console.error("Dettaglio dell'errore del server:", objResult.dettaglio);
+                            }
                         }
                         
                         if (objResult.codici.length > 0){
@@ -821,10 +825,11 @@ const schedaRef = {
                     console.log(xhr);
                 };
 
-                xhr.onerror = function () {
+                //I20-1069: prima solo "error" in console: con Istanta spento il ricollegamento non diceva niente.
+                xhr.onerror = function (motivo) {
                     indesignEvents.setBusy(false);
                     hideLoading();
-                    console.log("error");
+                    messaggioUtente("Code SRF-126 Ricollegamento: richiesta non riuscita: " + XMLHttpRequestClient.testoErrore(motivo), "error");
                 };
                 //creiamo un formData con codiceGruppo e il nome della pagina a cui si trova il box
                 var canaleObj = ficoProcess.getCanaleLavorazioneCorrente();
@@ -6377,6 +6382,11 @@ const schedaRef = {
                 }
                 else {
                     messaggioUtente("Code SRF-64 Errore durante il salvataggio delle modifiche: " + objResult.error, "error");
+                    //I20-1069: error dice anche quanti record erano gia' salvati, se il cambio si e' fermato a
+                    //meta'; la traccia completa del server va in console.
+                    if (objResult.dettaglio) {
+                        console.error("Dettaglio dell'errore del server:", objResult.dettaglio);
+                    }
                     hideLoading();
                     indesignEvents.setBusy(false);
                 }
@@ -6386,14 +6396,18 @@ const schedaRef = {
             } catch (e) {
                 // Gestione dell'errore e chiamata alla callback con l'errore
                 console.error(e);
+                //I20-1069: prima solo in console, e l'operatore non sapeva che il box non era stato rifatto.
+                messaggioUtente("Code SRF-127 Cambio strutturale: il box non e' stato reimpaginato: " + (e && e.message ? e.message : e), "error");
                 hideLoading();
                 indesignEvents.setBusy(false);
                 //Eseguo la reimpaginazione
             }
         };
 
-        xhr.onerror = function (e) {
+        //I20-1069: prima nessun messaggio, e il cambio sembrava fatto.
+        xhr.onerror = function (motivo) {
             // Gestione degli errori di rete e chiamata alla callback con l'errore
+            messaggioUtente("Code SRF-128 Cambio strutturale: richiesta non riuscita: " + XMLHttpRequestClient.testoErrore(motivo), "error");
             hideLoading();
             indesignEvents.setBusy(false);
         };
@@ -7364,13 +7378,19 @@ const schedaRef = {
                     }
                 }
                 if (objResult != null && objResult.esito === false) {
-                    messaggioUtente("Code SRF-53 noRender: il server ha rifiutato il salvataggio", "error");
+                    //I20-1069: con il motivo, e la traccia del server in console.
+                    if (objResult.dettaglio) {
+                        console.error("Dettaglio dell'errore del server:", objResult.dettaglio);
+                    }
+                    messaggioUtente("Code SRF-53 noRender: il server ha rifiutato il salvataggio" + (objResult.error ? ": " + objResult.error : ""), "error");
                     resolve(false);
                     return;
                 }
                 resolve(true);
             };
-            xhr.onerror = function () {
+            //I20-1069: prima nessun messaggio, e il noRender sembrava salvato.
+            xhr.onerror = function (motivo) {
+                messaggioUtente("Code SRF-125 noRender: richiesta non riuscita: " + XMLHttpRequestClient.testoErrore(motivo), "error");
                 resolve(false);
             };
             xhr.send("Menabo/modificaNoRender/0", formData, "PUT");

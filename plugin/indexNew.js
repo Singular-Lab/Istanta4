@@ -7756,9 +7756,10 @@ function creaElementoTracciato(obj, isFirst, riepilogoSegnalazioni = {}) {
 /// callback e la funzione e' async: senza, tornerebbe prima che l'impaginazione sia
 /// avvenuta. Se l'attesa scade si avvisa l'operatore.
 ///
-/// Attenzione: res diventa vero solo sul cammino che va a buon fine. Se il server risponde
-/// con un errore l'operatore vede il messaggio dell'errore, ma questa funzione aspetta
-/// comunque i venti secondi e poi aggiunge un timeout che timeout non e'.
+/// I20-1069: l'attesa finisce quando la richiesta e' finita, bene o male (finito). Prima
+/// guardava solo res, che diventa vero solo sul cammino che va a buon fine: dopo un errore
+/// del server l'operatore ne vedeva il messaggio e, venti secondi dopo, un IDX-94 "Timeout"
+/// che timeout non era e lo copriva.
 async function impaginaSingolo(codice, pagina, byPassBloccoGiaImpaginato = false, idRec = null) {
     showLoading("Scaricamento del dato");
     indesignEvents.setBusy(true);
@@ -7770,7 +7771,7 @@ async function impaginaSingolo(codice, pagina, byPassBloccoGiaImpaginato = false
 
     var xhr = new XMLHttpRequestClient();
 
-    var res = false;
+    var finito = false;
     xhr.onload = async (objResult, parsed) => {
         try{
             if (!parsed) {
@@ -7784,12 +7785,20 @@ async function impaginaSingolo(codice, pagina, byPassBloccoGiaImpaginato = false
             console.log(objResult);
             if(!objResult.esito){
                 console.error(objResult.error);
+                //I20-1069: error e' il messaggio breve; la traccia completa del server sta in dettaglio.
+                if (objResult.dettaglio) {
+                    console.error("Dettaglio dell'errore del server:", objResult.dettaglio);
+                }
                 messaggioUtente("Code IDX-90 Impaginazione singolo, errore durante il recupero del dato: " + objResult.error, "error");
                 return;
             }
+            //I20-1069: la scheda del gruppo puo' arrivare con un avviso di getSchedaRef.
+            if (objResult.warn) {
+                console.warn("Avviso del server sull'impaginazione singola:", objResult.warn);
+                messaggioUtente("Code IDX-183 Impaginazione singolo: " + objResult.warn, "warning");
+            }
 
             var box = await impaginazioneSingoloIndd(objResult.records, pagina);
-            res = true;
             if(box == null){
                 messaggioUtente("Code IDX-91 Impaginazione singolo: Fallita impaginazione del box con codice "+codice, "error");
             }
@@ -7800,6 +7809,7 @@ async function impaginaSingolo(codice, pagina, byPassBloccoGiaImpaginato = false
             indesignEvents.setBusy(false);
         }
         finally {
+            finito = true;
             hideLoading();
             indesignEvents.setBusy(false);
         }
@@ -7809,6 +7819,7 @@ async function impaginaSingolo(codice, pagina, byPassBloccoGiaImpaginato = false
         if (xhr.readyState == 4) {
             if (xhr.status == 200) {
             } else {
+                finito = true;
                 hideLoading();
                 indesignEvents.setBusy(false);
             }
@@ -7817,6 +7828,7 @@ async function impaginaSingolo(codice, pagina, byPassBloccoGiaImpaginato = false
 
     //I20-1069: il motivo vero, come IDX-30.
     xhr.onerror = function (motivo) {
+        finito = true;
         messaggioUtente("Code IDX-93 Impaginazione singolo: richiesta non riuscita: " + XMLHttpRequestClient.testoErrore(motivo), "error");
         hideLoading();
         indesignEvents.setBusy(false);
@@ -7832,12 +7844,12 @@ async function impaginaSingolo(codice, pagina, byPassBloccoGiaImpaginato = false
     xhr.send("Menabo/impaginaSingolo", formData, "PUT");
 
     var securityCounter = 0;
-    while(!res && securityCounter < 200){
+    while(!finito && securityCounter < 200){
         await Utility.sleep(100);
         securityCounter++;
     }
 
-    if(securityCounter >= 200){
+    if(!finito){
         messaggioUtente("Code IDX-94 Impaginazione singolo: Timeout durante l'impaginazione del singolo", "error");
     }
 }

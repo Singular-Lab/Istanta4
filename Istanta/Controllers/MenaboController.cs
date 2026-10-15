@@ -10160,23 +10160,27 @@ double.TryParse(percorso.ToString(), out double valore16))
         public async Task<IActionResult> impaginaSingolo([FromForm] RichiestaImpaginazioneSingolo richiesta, FicoCombinazioneKitReadMode mode = FicoCombinazioneKitReadMode.Classic, bool skipSave = false)
         {
             ArticoloInRevisioneKitResult result = new ArticoloInRevisioneKitResult();
+            //I20-1069: la traccia di un errore di getSchedaRef, che il catch passa al Plugin al posto della propria.
+            string? dettaglioDiGetSchedaRef = null;
 
             try
             {
                 var db = this.ctx2;
 
                 var session = SessionIstantaObject.GetSession(HttpContext);
-                Int16 id_utente = Int16.Parse(session);
+                //I20-1069: senza sessione Int16.Parse dava un FormatException.
+                if (!Int16.TryParse(session, out Int16 id_utente))
+                    throw ErroreIstanta.SessioneScaduta();
 
                 if(richiesta.pagina <= 0)
                 {
-                    throw new Exception("E' stata richiesta per l'impaginazione la pagina non valida di numero: " + richiesta.pagina);
+                    throw new ErroreIstanta("controllo della pagina", $"la pagina {richiesta.pagina} richiesta per il gruppo {richiesta.codiceGruppo} non e' valida.");
                 }
 
                 var giaImpaginato = this.ctx2.PromoLavorazioniRecords.Where(f => f.IdLavorazione == richiesta.idLavorazione && f.CodiceGruppo == richiesta.codiceGruppo && (richiesta.idRec != 0 ? richiesta.idRec == f.IdRecordTracciato : true)).FirstOrDefault();
                 if(giaImpaginato != null && !richiesta.byPassBloccoGiaImpaginato)
                 {
-                    throw new Exception("L'elemento richiesto è già impaginato");
+                    throw new ErroreIstanta("controllo dell'impaginato", $"il gruppo {richiesta.codiceGruppo} e' gia' impaginato a pagina {giaImpaginato.Pagina}.");
                 }
                 else if(giaImpaginato != null && richiesta.byPassBloccoGiaImpaginato)
                 {
@@ -10189,6 +10193,8 @@ double.TryParse(percorso.ToString(), out double valore16))
 
                         if (gruppoResult == null || !gruppoResult.esito)
                         {
+                            //I20-1069: anche la traccia di getSchedaRef arriva al Plugin.
+                            dettaglioDiGetSchedaRef = gruppoResult?.dettaglio;
                             //I20-1062: l'errore di getSchedaRef arriva al Plugin, invece di "non trovato".
                             throw ErroreIstanta.Inoltrato(gruppoResult?.error, "Gruppo " + richiesta.codiceGruppo + " non trovato da getSchedaRef");
                         }
@@ -10201,10 +10207,11 @@ double.TryParse(percorso.ToString(), out double valore16))
                         }
                         else
                         {
-                            throw new Exception("Errore nel tentativo di leggere il risultato di LeggiTracciatiRecord");
+                            throw new ErroreIstanta("lettura della scheda", $"getSchedaRef non ha restituito la scheda del gruppo {richiesta.codiceGruppo}.");
                         }
                     }
                     result.records = gruppoResult.records;
+                    result.warn = gruppoResult.warn;
                 }
                 else
                 {
@@ -10222,6 +10229,8 @@ double.TryParse(percorso.ToString(), out double valore16))
 
                         if (gruppoResult == null || !gruppoResult.esito)
                         {
+                            //I20-1069: anche la traccia di getSchedaRef arriva al Plugin.
+                            dettaglioDiGetSchedaRef = gruppoResult?.dettaglio;
                             //I20-1062: l'errore di getSchedaRef e' gia' descritto, passa cosi' com'e'.
                             throw ErroreIstanta.Inoltrato(gruppoResult?.error, "Gruppo " + richiesta.codiceGruppo + " non trovato da getSchedaRef");
                         }
@@ -10234,15 +10243,18 @@ double.TryParse(percorso.ToString(), out double valore16))
                         }
                         else
                         {
-                            throw new Exception("Errore nel tentativo di leggere il risultato di LeggiTracciatiRecord");
+                            throw new ErroreIstanta("lettura della scheda", $"getSchedaRef non ha restituito la scheda del gruppo {richiesta.codiceGruppo}.");
                         }
                     }
 
-                    var primario = gruppoResult.records.First(f => Convert.ToByte(f.recordInTracciato[GLOBAL_VARIABLES.keyXMLSelezione]) == (Byte)1);
+                    //I20-1069: prima First e l'indicizzatore: senza primario, o senza StatoSelezione, un'eccezione
+                    //senza dati, e il controllo qui sotto non scattava mai.
+                    var primario = gruppoResult.records.FirstOrDefault(f => Convert.ToByte(RecordTracciato.Richiesto(f.recordInTracciato, GLOBAL_VARIABLES.keyXMLSelezione,
+                        "scelta del primario", $"il record {f.IdRec} del gruppo {richiesta.codiceGruppo}")) == (Byte)TipoSelezioneMenabo.Primaria);
 
                     if(primario == null)
                     {
-                        throw new Exception("Nessun elemento primario trovato");
+                        throw new ErroreIstanta("scelta del primario", $"il gruppo {richiesta.codiceGruppo} non ha un record primario.");
                     }
 
 
@@ -10259,6 +10271,7 @@ double.TryParse(percorso.ToString(), out double valore16))
                     db.PromoLavorazioniRecords.Add(nuovoRecord);
 
                     result.records = gruppoResult.records;
+                    result.warn = gruppoResult.warn;
 
                 }
 
@@ -10278,7 +10291,8 @@ double.TryParse(percorso.ToString(), out double valore16))
                 {
                     records = new List<ArticoloInKit>(),
                     error = DescrizioneErrori.Breve("impaginaSingolo", ex),
-                    dettaglio = DescrizioneErrori.Dettaglio(ex),
+                    //I20-1069: per un errore di getSchedaRef la traccia e' la sua.
+                    dettaglio = dettaglioDiGetSchedaRef ?? DescrizioneErrori.Dettaglio(ex),
                     esito = false,
                 };
             }
@@ -10878,7 +10892,34 @@ double.TryParse(percorso.ToString(), out double valore16))
 
                 return Ok(gruppoResult);
             }
-            
+
+        }
+
+        /// I20-1069: le pagine di un intervallo come "1,3-5": 1, 3, 4, 5. Un valore che non e' una
+        /// pagina dice quale; il ciclo e' su int, cosi' un intervallo che arriva a 255 finisce.
+        public static List<Byte> PagineDellIntervallo(string? rangePagine)
+        {
+            List<Byte> pagine = new List<Byte>();
+            if (string.IsNullOrWhiteSpace(rangePagine))
+            {
+                return pagine;
+            }
+
+            foreach (string blocco in rangePagine.Split(','))
+            {
+                string[] estremi = blocco.Split('-');
+                if (estremi.Length > 2 || !Byte.TryParse(estremi[0].Trim(), out Byte da)
+                    || !Byte.TryParse(estremi[estremi.Length - 1].Trim(), out Byte a) || da > a)
+                {
+                    throw new ErroreIstanta("lettura delle pagine", $"'{blocco}' in '{rangePagine}' non e' una pagina o un intervallo di pagine valido (da 0 a 255, come 3 o 3-5).");
+                }
+
+                for (int pagina = da; pagina <= a; pagina++)
+                {
+                    pagine.Add((Byte)pagina);
+                }
+            }
+            return pagine;
         }
 
         [HttpPut]
@@ -10889,43 +10930,40 @@ double.TryParse(percorso.ToString(), out double valore16))
 
             try
             {
-                RichiestaRicollegamentoBox request = JsonConvert.DeserializeObject<RichiestaRicollegamentoBox>(stringRequest);
+                //I20-1069: una richiesta che non si legge (per esempio una pagina che non e' un numero)
+                //dice perche', con il campo e il valore che Newtonsoft riporta.
+                RichiestaRicollegamentoBox request;
+                try
+                {
+                    request = JsonConvert.DeserializeObject<RichiestaRicollegamentoBox>(stringRequest)
+                        ?? throw new ErroreIstanta("lettura della richiesta", "la richiesta di ricollegamento e' vuota.");
+                }
+                catch (JsonException exJson)
+                {
+                    throw new ErroreIstanta("lettura della richiesta", "la richiesta di ricollegamento non si legge: " + exJson.Message, exJson);
+                }
+                if (request.elementoDaRicollegare == null)
+                    throw new ErroreIstanta("lettura della richiesta", "la richiesta non dice quale box ricollegare.");
+
                 PromoLavorazioni pl = await this.ctx2.PromoLavorazionis.Include(i2 => i2.PromoLavorazioniRecords).AsSplitQuery().FirstOrDefaultAsync(f => f.Id == request.idLavorazione);
 
                 //I20-986: il controllo viene prima della lettura. Stava dopo, quindi con una
                 //lavorazione inesistente si sollevava un errore di riferimento nullo e questo
                 //messaggio, che dice all'operatore cos'e' successo, non usciva mai.
+                //I20-1069: una frase per l'operatore, invece del codice "lavorazione_inesistente".
                 if (pl == null)
                 {
-                    result.error = "lavorazione_inesistente";
-                    return Ok(result);
+                    throw new ErroreIstanta("lettura della lavorazione", $"la lavorazione {request.idLavorazione} non esiste.");
                 }
 
-                FicoRuntimeKit? kit = JsonConvert.DeserializeObject<FicoRuntimeKit>(pl.Meta!);
+                FicoRuntimeKit kit = (string.IsNullOrWhiteSpace(pl.Meta) ? null : JsonConvert.DeserializeObject<FicoRuntimeKit>(pl.Meta))
+                    ?? throw new ErroreIstanta("lettura della lavorazione", $"la lavorazione {request.idLavorazione} non ha il Meta del kit, o non si legge.");
 
 
                 result.idLavorazione = request.idLavorazione;
-                List<Byte> _pagineCoinvolte = new List<byte>();
-                if (request.rangePagine != null)
-                {
-                    string[] blocchi = request.rangePagine.Split(',');
-                    foreach (string b in blocchi)
-                    {
-                        string[] microRange = b.Split('-');
-                        if (microRange.Length == 1)
-                        {
-                            _pagineCoinvolte.Add(Byte.Parse(microRange[0]));
-                        }
-                        else
-                        {
-                            for (Byte b2 = Byte.Parse(microRange[0]); b2 <= Byte.Parse(microRange[1]); b2++)
-                            {
-                                // Your logic for each number in the microRange
-                                _pagineCoinvolte.Add(b2);
-                            }
-                        }
-                    }
-                }
+                //I20-1069: prima Byte.Parse e un ciclo su Byte: un valore non numerico rompeva tutto senza dire
+                //quale, e un intervallo che arrivava a 255 non finiva mai (il byte torna a 0).
+                List<Byte> _pagineCoinvolte = PagineDellIntervallo(request.rangePagine);
 
 
                 Promo promo = await this.ctx2.Promos.FirstOrDefaultAsync(p => p.guidID == pl.GuidPromo);
@@ -10934,8 +10972,7 @@ double.TryParse(percorso.ToString(), out double valore16))
                 //l'identificativo per riconoscere i riscontri della stessa promo.
                 if (promo == null)
                 {
-                    result.error = "promo_inesistente";
-                    return Ok(result);
+                    throw new ErroreIstanta("lettura della promo", $"la promo {pl.GuidPromo} della lavorazione {request.idLavorazione} non esiste.");
                 }
 
                 if (ficoController == null)
@@ -11028,13 +11065,14 @@ double.TryParse(percorso.ToString(), out double valore16))
                     {
                         //prendiamo il primo elemento e vediamo se appare più volte
                         var el = itemsInTracciato[0];
+                        //I20-1069: con il passo e il gruppo, invece di un'Exception generica.
                         if (itemsInTracciato.Count(f=>f.Codice == el.Codice) > 1)
                         {
-                            throw new Exception("Elemento con più istanze nello stesso tracciato e idRec non corrispondente, impossibile effettuare il ricollegamento.");
+                            throw new ErroreIstanta("ricerca nel tracciato", $"il gruppo {request.elementoDaRicollegare.codiceGruppo} ha piu' istanze nello stesso tracciato e l'idRec {request.elementoDaRicollegare.idRec} non corrisponde: impossibile ricollegare.");
                         }
                         else
                         {
-                            throw new Exception("Mismatch tra il numero di elementi trovati e quelli attesi durante la ricerca in tracciato per il ricollegamento.");
+                            throw new ErroreIstanta("ricerca nel tracciato", $"il gruppo {request.elementoDaRicollegare.codiceGruppo} ha {itemsInTracciato.Count} record nel tracciato, ma i suoi codici sono {listCodici.Count}.");
                         }
                     }
                 }
@@ -11053,8 +11091,8 @@ double.TryParse(percorso.ToString(), out double valore16))
 
                     if (occorrenze > 1)
                     {
-                        throw new Exception(
-                            $"Ricollegamento ambiguo: il codice gruppo {request.elementoDaRicollegare.codiceGruppo} " +
+                        throw new ErroreIstanta("ricerca nel tracciato",
+                            $"ricollegamento ambiguo: il codice gruppo {request.elementoDaRicollegare.codiceGruppo} " +
                             "è presente in più occorrenze. Passare idRec per disambiguare."
                         );
                     }
@@ -11180,6 +11218,9 @@ double.TryParse(percorso.ToString(), out double valore16))
                             IActionResult? elementi = null;
                             elementi = await LeggiTracciatoRecord(request.elementoDaRicollegare.codiceGruppo, 0, false, false, false, true, true);
                             List<List<Dictionary<string, object>>> riscontroTracciati = new List<List<Dictionary<string, object>>>();
+                            //I20-1069: se la lettura dello storico fallisce, LeggiTracciatoRecord risponde con un
+                            //BoolResult d'errore. Prima si ignorava e il box risultava "inesistente nello storico".
+                            string? erroreDelloStorico = null;
                             if (elementi is OkObjectResult)
                             {
                                 var okResult = elementi as OkObjectResult;
@@ -11187,10 +11228,19 @@ double.TryParse(percorso.ToString(), out double valore16))
                                 {
                                     riscontroTracciati = (okResult.Value as List<List<Dictionary<string, object>>>)!;
                                 }
+                                else if (okResult.Value is BoolResult letturaFallita && !letturaFallita.Esito)
+                                {
+                                    Console.WriteLine($"ricollegaBox: lettura dello storico del gruppo {request.elementoDaRicollegare.codiceGruppo} non riuscita: {letturaFallita.error}");
+                                    erroreDelloStorico = "lettura dello storico: " + DescrizioneErrori.PrimaRiga(letturaFallita.error);
+                                }
 
                             }
 
-                            if (riscontroTracciati.Count == 0)
+                            if (erroreDelloStorico != null)
+                            {
+                                result.codici.Add(new RicollegamentoBoxItem() { error = erroreDelloStorico });
+                            }
+                            else if (riscontroTracciati.Count == 0)
                             {
                                 RicollegamentoBoxItem item = new RicollegamentoBoxItem();
 
@@ -11270,8 +11320,11 @@ double.TryParse(percorso.ToString(), out double valore16))
             {
                 //I20-986: all'operatore arriva il motivo, non lo stack trace intero dentro una
                 //finestra di messaggio. Il dettaglio non si perde: finisce nel registro.
+                //I20-1069: il motivo con passo, o tipo e riga per un errore imprevisto (ex.Message di un
+                //NullReferenceException non diceva dove); la traccia anche in dettaglio, per la console.
                 _logger?.LogError(ex, "Ricollegamento del box non riuscito");
-                result.error = ex.Message;
+                result.error = DescrizioneErrori.Breve("ricollegaBox", ex);
+                result.dettaglio = DescrizioneErrori.Dettaglio(ex);
                 result.idRecSelezionato = 0;
             }
 
@@ -11339,13 +11392,16 @@ double.TryParse(percorso.ToString(), out double valore16))
 
             try
             {
-                List<RevisioneSelezioneFotoFromIndd> ps =
-                    MetaPromoLavorazioni.leggiSelezioniFoto(dato.ps!)!;
+                //I20-1069: senza le primarie e secondarie i meta non si salvavano, e la risposta era comunque "successo".
+                List<RevisioneSelezioneFotoFromIndd> ps = (string.IsNullOrWhiteSpace(dato.ps) ? null : MetaPromoLavorazioni.leggiSelezioniFoto(dato.ps))
+                    ?? throw new ErroreIstanta("lettura della richiesta", $"le primarie e secondarie del gruppo {dato.CodiceGruppo} non si leggono.");
 
                 PromoLavorazioniRecord? plrItem = trovaRecordDellaLavorazione(
                     dato.idLavorazione, dato.CodiceGruppo, dato.idRec);
 
-                registraAttivitaMenabo(
+                //I20-1069: prima l'esito si ignorava e la risposta era sempre "successo", anche con il
+                //salvataggio fallito. Ora si fa come modificaExtraLavorazione.
+                string esito = registraAttivitaMenabo(
                     idOperazione,
                     dato.CodiceGruppo!,
                     "modificaPrimarieSecondarie",
@@ -11353,13 +11409,18 @@ double.TryParse(percorso.ToString(), out double valore16))
                     ps,
                     plrItem.Id
                 );
+                if (esito != "ok")
+                    throw new ErroreIstanta("registrazione della decisione", esito);
 
                 result.Esito = true;
                 return Ok(result);
             }
             catch (Exception ex)
             {
-                result.error = ex.ToString();
+                //I20-1069: messaggio breve per il Plugin, traccia completa nel log e in dettaglio.
+                Console.WriteLine($"Errore in modificaPrimarieSecondarie (codiceGruppo {dato?.CodiceGruppo}, idLavorazione {dato?.idLavorazione}): " + ex.ToString());
+                result.error = DescrizioneErrori.Breve("modificaPrimarieSecondarie", ex);
+                result.dettaglio = DescrizioneErrori.Dettaglio(ex);
                 result.Esito = false;
                 return Ok(result);
             }
@@ -11395,7 +11456,8 @@ double.TryParse(percorso.ToString(), out double valore16))
                 PromoLavorazioniRecord? plrItem = trovaRecordDellaLavorazione(
                     dato.idLavorazione, dato.CodiceGruppo, dato.idRec);
 
-                registraAttivitaMenabo(
+                //I20-1069: come modificaPrimarieSecondarie, prima la risposta era sempre "successo".
+                string esito = registraAttivitaMenabo(
                     idOperazione,
                     dato.CodiceGruppo!,
                     "modificaNoRender",
@@ -11403,13 +11465,18 @@ double.TryParse(percorso.ToString(), out double valore16))
                     elementi,
                     plrItem.Id
                 );
+                if (esito != "ok")
+                    throw new ErroreIstanta("registrazione della decisione", esito);
 
                 result.Esito = true;
                 return Ok(result);
             }
             catch (Exception ex)
             {
-                result.error = ex.ToString();
+                //I20-1069: messaggio breve per il Plugin, traccia completa nel log e in dettaglio.
+                Console.WriteLine($"Errore in modificaNoRender (codiceGruppo {dato?.CodiceGruppo}, idLavorazione {dato?.idLavorazione}): " + ex.ToString());
+                result.error = DescrizioneErrori.Breve("modificaNoRender", ex);
+                result.dettaglio = DescrizioneErrori.Dettaglio(ex);
                 result.Esito = false;
                 return Ok(result);
             }
@@ -11555,8 +11622,12 @@ double.TryParse(percorso.ToString(), out double valore16))
 
             if (id_operazione == 0)
             {
+                //I20-1069: senza sessione int.Parse dava un FormatException.
+                if (!int.TryParse(session, out int autore))
+                    return ErroreIstanta.SessioneScaduta().Message;
+
                 var nuovaOperazione = new RegistroOperazioni();
-                nuovaOperazione.Autore = int.Parse(session);
+                nuovaOperazione.Autore = autore;
                 nuovaOperazione.TipoOperazione = (byte)tipo;// tipoOperazione.updateFoto;
                 nuovaOperazione.CodiceAssociato = codRef;
                 nuovaOperazione.Url = url;
@@ -11570,6 +11641,11 @@ double.TryParse(percorso.ToString(), out double valore16))
                 }
 
                 int idAttivita = (int)register.addOperazione(nuovaOperazione, true, session, DateTime.Now);
+                //I20-1069: l'Id c'e' anche quando sono i meta a non essersi salvati: Register lo dice in Errore.
+                if (register.Errore != null)
+                {
+                    return register.Errore;
+                }
                 if (idAttivita == 0)
                 {
                     return "Impossibile aggiungere l'operazione ai task del registro operazioni";
@@ -12251,7 +12327,8 @@ double.TryParse(percorso.ToString(), out double valore16))
 
             if (recordTarget == null)
             {
-                throw new Exception("Record tracciato con idRec " + idRec + " non trovato");
+                //I20-1069: con il passo e cosa fare, invece di un'Exception senza passo.
+                throw new ErroreIstanta("lettura del record", $"il record {idRec} del gruppo {codiceGruppo} non e' piu' nel tracciato: riscaricare la lista e riprovare.");
             }
 
             var matchEsatto = candidati.FirstOrDefault(c => c.IdRecordTracciato == idRec);
@@ -12409,6 +12486,8 @@ double.TryParse(percorso.ToString(), out double valore16))
         public async Task<IActionResult> setCambioStrutturale([FromForm] CambioMetaRecordTracciatoRequest obj, int idLavorazione, int idOperazione)
         {
             CambioStrutturaleResponse result = new CambioStrutturaleResponse();
+            //I20-1069: la traccia di un errore di cambioMetaRecordInLavorazione, che il catch passa al Plugin.
+            string? dettaglioDelCambio = null;
             try
             {
                 string report = "";
@@ -12420,7 +12499,10 @@ double.TryParse(percorso.ToString(), out double valore16))
                     CambioMetaRecordTracciatoResponse resultSet = ((op as OkObjectResult)!.Value as CambioMetaRecordTracciatoResponse)!;
                     if (!resultSet!.esito)
                     {
-                        throw new Exception("Esito negativo dell'operazione. Attenzione adesso il dato può essere compromesso: Error:" + resultSet.error + " Report: " + report);
+                        //I20-1069: resultSet.error dice gia' il motivo e quanti record erano gia' salvati; prima
+                        //ci finiva l'intera traccia, e il messaggio tagliato a 160 caratteri ne perdeva il motivo.
+                        dettaglioDelCambio = resultSet.dettaglio;
+                        throw ErroreIstanta.Inoltrato(resultSet.error, $"cambio strutturale del gruppo {obj.codiceGruppo} non riuscito, senza motivo: il dato puo' essere compromesso.");
                     }
                     else
                     {
@@ -12469,8 +12551,12 @@ double.TryParse(percorso.ToString(), out double valore16))
                         Console.WriteLine("setCambioStrutturale -> preparazione recInTrac");
 
                         Dictionary<string, object> res = new Dictionary<string, object>();
-                        var primario = schedaRefResult.records.Where(f => Convert.ToByte(f.recordInTracciato[GLOBAL_VARIABLES.keyXMLSelezione]) == (Byte)TipoSelezioneMenabo.Primaria).FirstOrDefault();
-                        primario!.recordInTracciato[keyAllEtichette] = primario.allEtichette;
+                        //I20-1069: dopo il cambio il gruppo puo' restare senza primario, o un record senza
+                        //StatoSelezione: prima un NullReferenceException o un KeyNotFoundException senza dati.
+                        var primario = schedaRefResult.records.Where(f => Convert.ToByte(RecordTracciato.Richiesto(f.recordInTracciato, GLOBAL_VARIABLES.keyXMLSelezione,
+                            "scelta del primario", $"il record {f.IdRec} del gruppo {obj.codiceGruppo}")) == (Byte)TipoSelezioneMenabo.Primaria).FirstOrDefault()
+                            ?? throw new ErroreIstanta("scelta del primario", $"dopo il cambio strutturale il gruppo {obj.codiceGruppo} non ha un record primario.");
+                        primario.recordInTracciato[keyAllEtichette] = primario.allEtichette;
                         primario.recordInTracciato[keyEtichetteVisual] = primario.etichetteVisual;
                         primario.recordInTracciato[GLOBAL_VARIABLES.keyRefIdRec] = primario.IdRec;
 
@@ -12482,7 +12568,8 @@ double.TryParse(percorso.ToString(), out double valore16))
 
                         if (!resLista.esito)
                         {
-                            throw new Exception(resLista.error);
+                            //I20-1069: il motivo dentro il passo, come in ImpaginaFromInDesignNew.
+                            throw new ErroreIstanta("raggruppamento della lista", resLista.error);
                         }
 
                         //result.listaGruppi.AddRange(resLista.listaGruppi);
@@ -12503,6 +12590,8 @@ double.TryParse(percorso.ToString(), out double valore16))
                 Console.WriteLine("setCambioStrutturale error -> " + ex.ToString());
                 result.esito = false;
                 result.error = DescrizioneErrori.Breve("setCambioStrutturale", ex);
+                //I20-1069: la traccia per la console del Plugin; per un errore del cambio e' la sua.
+                result.dettaglio = dettaglioDelCambio ?? DescrizioneErrori.Dettaglio(ex);
             }
 
             return Ok(result);
@@ -12521,9 +12610,11 @@ double.TryParse(percorso.ToString(), out double valore16))
             string keyAllEtichette = GLOBAL_VARIABLES.allEtichette;
             string keyEtichetteVisual = GLOBAL_VARIABLES.etichetteVisual;
             var session = SessionIstantaObject.GetSession(HttpContext);
-            Int16 id_utente = Int16.Parse(session);
             try
             {
+                //I20-1069: prima fuori dal try, con Int16.Parse: senza sessione un FormatException al chiamante.
+                if (!Int16.TryParse(session, out Int16 id_utente))
+                    throw ErroreIstanta.SessioneScaduta();
 
                 string key_codice_gruppo = Enum.GetName(AddestramentoRuoli.Scatto) + "." + GLOBAL_VARIABLES.keyScattoCodiceGruppo;
                 string keyCodiceRef = Enum.GetName(AddestramentoRuoli.Referenza) + "." + GLOBAL_VARIABLES.keyRefCodice;
@@ -12549,7 +12640,7 @@ double.TryParse(percorso.ToString(), out double valore16))
 
                 if (plr == null)
                 {
-                    throw new Exception("Record lavorazione non trovato per il codice " + obj.codiceGruppo);
+                    throw new ErroreIstanta("lettura del record", $"il gruppo {obj.codiceGruppo} non e' impaginato nella lavorazione {idLavorazione}.");
                 }
 
                 //int id_tracciato = plr.IdPromoTracciatiRecordNavigation.IdTracciato;
@@ -12562,7 +12653,7 @@ double.TryParse(percorso.ToString(), out double valore16))
 
                 if (id_tracciato == 0)
                 {
-                    throw new Exception("Record con id " + plr.IdRecordTracciato + " non trovato in PromoTracciatiRecords");
+                    throw new ErroreIstanta("lettura del record", $"il record {plr.IdRecordTracciato} del gruppo {obj.codiceGruppo} non e' fra i record dei tracciati.");
                 }
 
                 //Scarico addestramento con cui è stato caricato questo record
@@ -12577,53 +12668,66 @@ double.TryParse(percorso.ToString(), out double valore16))
 );
                 //lAss.WriteLine($"Azione di cambio strutturale {obj.azioni!.Count}");
 
-                foreach (CambioMetaRecordTracciatoAzioneRequest act in obj.azioni)
+                //I20-1069: i record a cui si applica un'azione: tutto il gruppo, una ref o un sottogruppo.
+                //Si calcolano prima di salvare, per poter dire quanti su quanti erano gia' salvati se
+                //il salvataggio, che avviene record per record, si ferma a meta'.
+                Func<CambioMetaRecordTracciatoAzioneRequest, List<PromoTracciatiRecord>> recordDellAzione = act =>
                 {
-                    Dictionary<string, string> attributi = act.attributi;
-
-                    //Voglio clonare ptrList in ptrList_Act
-                    List<PromoTracciatiRecord> ptrList_Act = ptrList;
-
                     if (act.codice != null && act.codice != "")
                     {
                         //Filtro per singola ref
-                        //ptrList_Act = new List<PromoTracciatiRecord>();
-                        ptrList_Act = ptrList
+                        var perCodice = ptrList
     .Where(f => string.Equals(f.Codice, act.codice, StringComparison.OrdinalIgnoreCase))
     .ToList();
 
-                        if (ptrList_Act.Count == 0)
+                        if (perCodice.Count == 0)
                         {
-                            throw new Exception($"Record {act.codice} non trovato nel gruppo {obj.codiceGruppo}");
+                            throw new ErroreIstanta("scelta dei record", $"la ref {act.codice} non e' nel gruppo {obj.codiceGruppo}.");
                         }
-                        //ptrList_Act.Add(ptrList.FirstOrDefault(f => f.Codice == act.codice)!);
+                        return perCodice;
                     }
-                    else if (act.codiceSottoGruppo != null && act.codiceSottoGruppo != "")
+                    if (act.codiceSottoGruppo != null && act.codiceSottoGruppo != "")
                     {
-                        //string[] codiciSottogruppo = act.codiceSottoGruppo.Split(',');
                         //Filtro per sottogruppo
-                        //ptrList_Act = new List<PromoTracciatiRecord>();
                         var codiciSottogruppo = act.codiceSottoGruppo
     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
     .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-                        ptrList_Act = ptrList
+                        var perSottogruppo = ptrList
                             .Where(f => f.Codice != null && codiciSottogruppo.Contains(f.Codice))
                             .ToList();
 
-                        if (ptrList_Act.Count == 0)
+                        if (perSottogruppo.Count == 0)
                         {
-                            throw new Exception($"Sottogruppo {act.codiceSottoGruppo} non trovato nel gruppo {obj.codiceGruppo}");
+                            throw new ErroreIstanta("scelta dei record", $"il sottogruppo {act.codiceSottoGruppo} non e' nel gruppo {obj.codiceGruppo}.");
                         }
-                        //ptrList_Act.AddRange(ptrList.Where(f => codiciSottogruppo.Contains(f.Codice)));
+                        return perSottogruppo;
                     }
+                    return ptrList;
+                };
+
+                var azioniConRecord = (obj.azioni ?? new List<CambioMetaRecordTracciatoAzioneRequest>()).Select(act => (act, records: recordDellAzione(act))).ToList();
+                result.totale = azioniConRecord.Sum(a => a.records.Count);
+
+                //I20-1069: senza addestramento non si sa di che tipo sono i campi da cambiare; prima
+                //adItem! dava un NullReferenceException dentro il ciclo, dopo aver gia' salvato altri record.
+                if (adItem == null && azioniConRecord.Any(a => a.act.attributi != null && a.act.attributi.Count > 0 && a.records.Count > 0))
+                {
+                    throw new ErroreIstanta("lettura dell'addestramento",
+                        $"il record {plr.IdRecordTracciato} del gruppo {obj.codiceGruppo} non ha l'addestramento della lista (IdAddestramento): non si sa di che tipo sono i campi da cambiare.");
+                }
+
+                foreach (var (act, ptrList_Act) in azioniConRecord)
+                {
+                    Dictionary<string, string> attributi = act.attributi;
 
                     foreach (PromoTracciatiRecord ptr in ptrList_Act)
                     {
-                        
+
                         //lAss.WriteLine($">>>>>>>>>>>Cambio strtturale per {ptr.Codice}");
 
-                        Dictionary<string, object> metaRef = Utility.Main.getJsonObject(ptr.Dato!)!;
+                        Dictionary<string, object> metaRef = Utility.Main.getJsonObject(ptr.Dato!)
+                            ?? throw new ErroreIstanta("lettura del record", $"il Dato del record {ptr.Id} (ref {ptr.Codice}) non si legge.");
                         Dictionary<string, object> alterazioniObj = new Dictionary<string, object>();
 
                         if (metaRef.ContainsKey(GLOBAL_VARIABLES.keyAlterazioni))
@@ -12660,6 +12764,7 @@ double.TryParse(percorso.ToString(), out double valore16))
 
                             //Attenzione al tipo
                             //Qui va fatto un controllo sul tipo di addestramento usato e quindi tipo di dato del campo specificato
+                            //adItem c'e': senza, I20-1069 si ferma prima del ciclo.
                             SchemaCampiExcel? schemaCampoAddestramento = adItem!.SchemaCampiExcels.FirstOrDefault(af => af.NomeColonna == kParsed);
                             object? val = null;
 
@@ -12708,7 +12813,8 @@ double.TryParse(percorso.ToString(), out double valore16))
 #warning VULNERABILITA'. Quello che avviene adesso sul controllo della chiave CORE Descirizoni per il processo di cambio strutturale NON è corretto e potrebbe portare a dele brutte sorprese. Quando torneremo a parlare DA PLUGIN del tratamento delle descrizioni regionali, dovrmeo fare un pensiero sull'esporre i parametri PESO e UM al pari dei campi descrittivi 1,2,3,4
                             if (kParsed.Split('.')[0] == "Descrizioni")
                             {
-                                Articoli? artItem = this.ctx.Articolis.Include(inc => inc.ArticoliDescrizionis).FirstOrDefault(a => a.Codice == metaRef[GLOBAL_VARIABLES_FICO.keyRefCodice].ToString());
+                                string codiceDelRecord = RecordTracciato.Richiesto(metaRef, GLOBAL_VARIABLES_FICO.keyRefCodice, "aggiornamento della descrizione", $"il record {ptr.Id}").ToString()!;
+                                Articoli? artItem = this.ctx.Articolis.Include(inc => inc.ArticoliDescrizionis).FirstOrDefault(a => a.Codice == codiceDelRecord);
                                 if (artItem != null)
                                 {
                                     ArticoliDescrizioni? artDescrItem = artItem.ArticoliDescrizionis!.OrderByDescending(o => o.DataUltimaRicezione).FirstOrDefault();
@@ -12730,6 +12836,8 @@ double.TryParse(percorso.ToString(), out double valore16))
                         }
 
                         this.ctx2.SaveChanges();
+                        //I20-1069: da qui il record e' salvato; se il ciclo si ferma dopo, l'errore lo conta.
+                        result.salvati++;
 
                         var register = new Register(_config.GetConnectionString("IstandaConnectionDb")!, this._dbContextFactory, dbContextFactory2: this._dbContextFactory2);
                         if (idOperazione == 0)
@@ -12740,7 +12848,7 @@ double.TryParse(percorso.ToString(), out double valore16))
                             nuovaOperazione.Area = "";
                             nuovaOperazione.Canale = "";
                             nuovaOperazione.Stato = (byte)statoOperazioni.risolta;
-                            nuovaOperazione.Autore = int.Parse(session);
+                            nuovaOperazione.Autore = id_utente;
                             nuovaOperazione.TipoOperazione = (byte)tipoOperazione.cambioMeta;
                             nuovaOperazione.CodiceAssociato = obj.codiceGruppo;
                             nuovaOperazione.FormData = JsonConvert.SerializeObject(new { azioni = obj.azioni, recTracciatoVersion = ptr.Versione, recTracciaoId = ptr.Id });
@@ -12750,6 +12858,9 @@ double.TryParse(percorso.ToString(), out double valore16))
                             nuovaOperazione.idPromoLavorazione = idLavorazione;
                             nuovaOperazione.idPromoLavorazioniRecord = plr.Id;
                             register.addOperazione(nuovaOperazione, true, session, DateTime.Now);
+                            //I20-1069: prima un errore della registrazione restava in console.
+                            if (register.Errore != null)
+                                throw new ErroreIstanta("registrazione del cambio", $"ref {ptr.Codice}: {register.Errore}");
                         }
                         else
                         {
@@ -12763,12 +12874,29 @@ double.TryParse(percorso.ToString(), out double valore16))
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.StackTrace.ToString());
+                //I20-1069: prima ex.StackTrace (null per un'eccezione mai lanciata) in console e l'intera traccia
+                //in error. Ora il motivo breve e, se il ciclo si e' fermato dopo aver salvato qualcosa, quanti
+                //record su quanti: si salva record per record, e il dato e' modificato solo in parte.
+                Console.WriteLine($"Errore nel cambio strutturale (gruppo {obj?.codiceGruppo}, lavorazione {idLavorazione}, salvati {result.salvati} su {result.totale}): " + ex.ToString());
                 result.esito = false;
-                result.error = ex.ToString();
+                result.error = TestoCambioNonRiuscito(result.salvati, result.totale, ex);
+                result.dettaglio = DescrizioneErrori.Dettaglio(ex);
                 return Ok(result);
             }
             return Ok(result);
+        }
+
+        /// I20-1069: l'errore di un cambio strutturale. Se prima di fermarsi aveva gia' salvato dei
+        /// record lo dice per primo, perche' il messaggio breve si taglia in coda: il dato e' cambiato
+        /// solo in parte, e l'operatore deve saperlo prima ancora del perche'.
+        public static string TestoCambioNonRiuscito(int salvati, int totale, Exception ex)
+        {
+            string motivo = DescrizioneErrori.Breve("cambio strutturale", ex);
+            if (salvati <= 0)
+            {
+                return motivo;
+            }
+            return $"Salvati {salvati} record su {totale}, dato modificato solo in parte. {motivo}";
         }
 
 

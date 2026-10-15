@@ -26,8 +26,15 @@ namespace Istanta.Utility
             //this.ctx = new edro21_dbContext(conn_string);
         }
 
+        /// I20-1069: perche' l'ultima addOperazione non ha salvato tutto (l'operazione o i meta del
+        /// record della lavorazione), oppure null. addOperazione restituisce l'Id dell'operazione,
+        /// che c'e' anche quando sono i meta a non essersi salvati: chi deve sapere se la decisione
+        /// e' stata registrata guarda qui.
+        public string? Errore { get; private set; }
+
         public long addOperazione(RegistroOperazioni operazione, bool confirmed, string session, DateTime registerDate)
         {
+            Errore = null;
             try
             {
                 if (session == null || session.ToLower() == "no session")
@@ -143,12 +150,17 @@ namespace Istanta.Utility
                     else
                     {
                         //Non dovremmo mai e poi mai trovarci qui. Salterebbe il controllo almeno due chiamate prima di questa
+                        //I20-1069: ma se succede la decisione non e' salvata, e chi chiama deve saperlo.
+                        Errore = $"il record {operazione.idPromoLavorazioniRecord.Value} della lavorazione non esiste: la decisione non e' stata salvata.";
                     }
                 }
             }
             catch (Exception ex)
             {
                 Console.WriteLine("Errore durante l'aggiunta dell'operazione: " + ex.ToString());
+                //I20-1069: prima l'errore restava in console, e chi chiamava, visto l'Id dell'operazione
+                //gia' salvata, credeva che anche i meta lo fossero.
+                Errore = "salvataggio dell'operazione: " + DescrizioneErrori.Motivo(ex);
             }
 
 

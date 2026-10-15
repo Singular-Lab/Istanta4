@@ -2,6 +2,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using IstantaLib;
+using Microsoft.EntityFrameworkCore;
 
 namespace Istanta.Utility
 {
@@ -112,7 +113,8 @@ namespace Istanta.Utility
         public static Exception Radice(Exception ex)
         {
             Exception corrente = ex;
-            while ((corrente is TargetInvocationException || corrente is AggregateException) && corrente.InnerException != null)
+            //I20-1069: anche DbUpdateException, che di suo dice solo "see the inner exception".
+            while ((corrente is TargetInvocationException || corrente is AggregateException || corrente is DbUpdateException) && corrente.InnerException != null)
             {
                 corrente = corrente.InnerException;
             }

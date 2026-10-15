@@ -52,7 +52,8 @@ test("IDX-30, IDX-39 e IDX-93 mostrano il motivo, e nessuno dice piu' solo Error
     const indexNew = sorgente("indexNew.js");
     assert.match(indexNew, /xhrInProcess\.onerror = function \(motivo\) \{\s*messaggioUtente\("Code IDX-30 Filtro: richiesta non riuscita: " \+ XMLHttpRequestClient\.testoErrore\(motivo\), "error"\);/);
     assert.match(indexNew, /xhrInProcess\.onerror = function \(motivo\) \{\s*messaggioUtente\("Code IDX-39 Filtro: richiesta non riuscita: " \+ XMLHttpRequestClient\.testoErrore\(motivo\), "error"\);/);
-    assert.match(indexNew, /xhr\.onerror = function \(motivo\) \{\s*messaggioUtente\("Code IDX-93 Impaginazione singolo: richiesta non riuscita: " \+ XMLHttpRequestClient\.testoErrore\(motivo\), "error"\);/);
+    //Dal gruppo 2 l'onerror di IDX-93 segna anche la fine dell'attesa (finito = true) prima del messaggio.
+    assert.match(indexNew, /xhr\.onerror = function \(motivo\) \{\s*(finito = true;\s*)?messaggioUtente\("Code IDX-93 Impaginazione singolo: richiesta non riuscita: " \+ XMLHttpRequestClient\.testoErrore\(motivo\), "error"\);/);
     assert.doesNotMatch(indexNew, /"Code IDX-(30|39|93) [^"]*Errore di rete"/);
 });
 
