@@ -16,6 +16,8 @@ class PuliziaListe {
         this.idPromo = 0;
         this.idImportazione = 0;
         this.nomeLista = "";
+        this.guidCanale = "";
+        this.guidArea = "";
         this.righe = [];
         this.selezionati = {};
         this.attive = { manuale: true, daLista: true, impaginato: true };
@@ -105,6 +107,24 @@ class PuliziaListe {
             .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
+    /// La richiesta del report: canale e area solo se scelti, altrimenti null (= tutti).
+    static richiestaReport(idPromo, idImportazione, guidCanale, guidArea) {
+        return {
+            idPromo: idPromo,
+            idImportazione: idImportazione,
+            guidCanale: guidCanale ? String(guidCanale) : null,
+            guidArea: guidArea ? String(guidArea) : null
+        };
+    }
+
+    /// Il filtro usato, per il titolo del report: niente se non c'e'.
+    static descriviFiltro(nomeCanale, nomeArea) {
+        var parti = [];
+        if (nomeCanale) parti.push("canale " + nomeCanale);
+        if (nomeArea) parti.push("area " + nomeArea);
+        return parti.join(", ");
+    }
+
     /* ================= la pagina ================= */
 
     cambiaPromo(idPromo) {
@@ -115,11 +135,44 @@ class PuliziaListe {
         var $lista = $("#TendinaLista");
         $lista.empty().prop("disabled", true);
         $("#btnAvviaReport").hide();
+        this.guidCanale = "";
+        this.guidArea = "";
+        $("#TendinaCanale").empty().append("<option value=''>Tutti</option>").prop("disabled", true);
+        $("#TendinaArea").empty().append("<option value=''>Tutte</option>").prop("disabled", true);
         if (!idPromo) {
             $lista.append("<option value='0'>Seleziona prima una promo</option>");
             return;
         }
+        this.caricaCanaliAree();
         this.caricaListe();
+    }
+
+    /// I canali e le aree dei tracciati della promo: il filtro si sceglie fra questi.
+    caricaCanaliAree() {
+        var me = this;
+        Call.do("Confronti", "canaliAreeDellaPromo/" + me.idPromo, "GET", null, me, function (res) {
+            if (!res || !res.esito) {
+                mostraMessaggio("Canali e aree della promo non letti: " + PuliziaListe.esc(me.motivo(res)), "warning");
+                return;
+            }
+            var $canale = $("#TendinaCanale");
+            var $area = $("#TendinaArea");
+            (res.canali || []).forEach(function (c) {
+                $canale.append("<option value='" + PuliziaListe.esc(c.guid) + "'>" + PuliziaListe.esc(c.nome) + "</option>");
+            });
+            (res.aree || []).forEach(function (a) {
+                $area.append("<option value='" + PuliziaListe.esc(a.guid) + "'>" + PuliziaListe.esc(a.nome) + "</option>");
+            });
+            $canale.prop("disabled", (res.canali || []).length === 0);
+            $area.prop("disabled", (res.aree || []).length === 0);
+        });
+    }
+
+    /// Cambiato il filtro, il report in pagina non vale piu': si rifa' con Avvia report.
+    cambiaFiltro() {
+        this.guidCanale = $("#TendinaCanale").val() || "";
+        this.guidArea = $("#TendinaArea").val() || "";
+        this.nascondiReport();
     }
 
     caricaListe() {
@@ -168,7 +221,11 @@ class PuliziaListe {
         if (!me.idPromo || !me.idImportazione) return;
         nascondiMessaggio();
         showLoading("Lettura della lista e dei record");
-        Call.doWithLargePayload("Confronti", "puliziaListeReport", "PUT", { idPromo: me.idPromo, idImportazione: me.idImportazione }, me, function (res) {
+        var richiesta = PuliziaListe.richiestaReport(me.idPromo, me.idImportazione, me.guidCanale, me.guidArea);
+        var filtro = PuliziaListe.descriviFiltro(
+            me.guidCanale ? $("#TendinaCanale option:selected").text() : "",
+            me.guidArea ? $("#TendinaArea option:selected").text() : "");
+        Call.doWithLargePayload("Confronti", "puliziaListeReport", "PUT", richiesta, me, function (res) {
             hideLoading();
             if (!res || !res.esito) {
                 mostraMessaggio("Report non riuscito: " + PuliziaListe.esc(me.motivo(res)), "danger");
@@ -177,7 +234,7 @@ class PuliziaListe {
             me.righe = PuliziaListe.ordina(res.righe);
             me.selezionati = {};
             me.attive = { manuale: true, daLista: true, impaginato: true };
-            $("#reportTitolo").text(" - " + (res.nomeLista || me.nomeLista) + " (" + (res.label || "") + "), " + (res.codiciInLista || 0) + " codici in lista, tipi: " + ((res.tipi || []).join(", ") || "nessuno"));
+            $("#reportTitolo").text(" - " + (res.nomeLista || me.nomeLista) + " (" + (res.label || "") + ")" + (filtro ? ", " + filtro : "") + ", " + (res.codiciInLista || 0) + " codici in lista, tipi: " + ((res.tipi || []).join(", ") || "nessuno"));
             if ((res.tipi || []).length === 0) {
                 mostraMessaggio("Nessun tipo di record definito nelle regole del cliente: il report e' vuoto per forza. Apri le regole e definiscine almeno uno.", "warning");
             }
@@ -209,7 +266,7 @@ class PuliziaListe {
             h += "<td>" + PuliziaListe.esc(r.codiceGruppo) + "</td>";
             h += "<td>" + PuliziaListe.esc(r.descrizione) + "</td>";
             h += "<td>" + PuliziaListe.esc(r.label) + " / " + PuliziaListe.esc(r.versione) + "</td>";
-            h += "<td>" + PuliziaListe.esc(r.tracciato) + "</td>";
+            h += "<td title='" + PuliziaListe.esc(r.tracciato) + "'>" + PuliziaListe.esc(r.canale) + " / " + PuliziaListe.esc(r.area) + "</td>";
             h += "<td>" + (r.manuale ? "<span class='badge bg-warning text-dark'>manuale</span>" : "<span class='badge bg-primary'>da lista</span>") + "</td>";
             h += "<td>" + PuliziaListe.esc(r.tipo) + "</td>";
             var valori = [];

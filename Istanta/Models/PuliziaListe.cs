@@ -19,6 +19,8 @@ namespace Istanta.Models
         public string label { get; set; } = string.Empty;
         public byte versione { get; set; }
         public string tracciato { get; set; } = string.Empty;
+        public string canale { get; set; } = string.Empty;
+        public string area { get; set; } = string.Empty;
         public byte modalitaInserimento { get; set; }
         /// <summary>Importato a mano (modalita_inserimento 2): nel report viene prima degli altri.</summary>
         public bool manuale { get; set; }
@@ -61,6 +63,76 @@ namespace Istanta.Models
         public Dictionary<string, object>? dato { get; set; }
         public List<string> etichette { get; set; } = new List<string>();
         public string tracciato { get; set; } = string.Empty;
+        public string? guidCanale { get; set; }
+        public string? guidArea { get; set; }
+        public string canale { get; set; } = string.Empty;
+        public string area { get; set; } = string.Empty;
+    }
+
+    /// <summary>
+    /// I codici della lista scelta, per sezione (canale e area) e tutti insieme. Un record si
+    /// confronta con la sezione del suo canale e della sua area, che e' il tracciato che
+    /// l'importazione crea per quella combinazione; se la lista non ha quella sezione, con l'intera
+    /// lista: cosi' una lista che non copre una combinazione non fa segnalare tutti i suoi record.
+    /// </summary>
+    public class CodiciLista
+    {
+        public HashSet<string> tutti { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        public Dictionary<string, HashSet<string>> perCombinazione { get; } = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+
+        public CodiciLista()
+        {
+        }
+
+        /// <summary>Una lista senza sezioni: tutti i codici valgono per ogni canale e area.</summary>
+        public CodiciLista(IEnumerable<string?> codici)
+        {
+            foreach (var codice in codici)
+            {
+                Aggiungi(null, null, codice);
+            }
+        }
+
+        public static string Chiave(string? guidCanale, string? guidArea)
+        {
+            return (guidCanale ?? string.Empty).Trim() + "|" + (guidArea ?? string.Empty).Trim();
+        }
+
+        public void Aggiungi(string? guidCanale, string? guidArea, string? codice)
+        {
+            string pulito = PuliziaListe.NormalizzaCodice(codice);
+            if (pulito.Length == 0)
+            {
+                return;
+            }
+            tutti.Add(pulito);
+            if (guidCanale == null && guidArea == null)
+            {
+                return;
+            }
+            string chiave = Chiave(guidCanale, guidArea);
+            if (!perCombinazione.TryGetValue(chiave, out var sezione))
+            {
+                sezione = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                perCombinazione[chiave] = sezione;
+            }
+            sezione.Add(pulito);
+        }
+
+        public bool HaSezione(string? guidCanale, string? guidArea)
+        {
+            return perCombinazione.ContainsKey(Chiave(guidCanale, guidArea));
+        }
+
+        public bool InLista(string? guidCanale, string? guidArea, string? codice)
+        {
+            string pulito = PuliziaListe.NormalizzaCodice(codice);
+            if (perCombinazione.TryGetValue(Chiave(guidCanale, guidArea), out var sezione))
+            {
+                return sezione.Contains(pulito);
+            }
+            return tutti.Contains(pulito);
+        }
     }
 
     public class PianoEliminazione
@@ -376,12 +448,17 @@ namespace Istanta.Models
             return insieme;
         }
 
-        /// <summary>I codici Referenza.Codice dei record di cio' che leggiDatoExcel restituisce (una voce per lista, con Records).</summary>
-        public static HashSet<string> CodiciDellaLista(IEnumerable<Dictionary<string, object>>? liste)
+        /// <summary>
+        /// I codici Referenza.Codice di cio' che leggiDatoExcel restituisce: una voce per sezione
+        /// della lista, con guidCanale, guidArea e i suoi Records.
+        /// </summary>
+        public static CodiciLista CodiciPerCombinazione(IEnumerable<Dictionary<string, object>>? liste)
         {
-            var codici = new List<string?>();
+            var codici = new CodiciLista();
             foreach (var lista in liste ?? Enumerable.Empty<Dictionary<string, object>>())
             {
+                string? guidCanale = lista.TryGetValue(GLOBAL_VARIABLES.keyCanaleGuid, out var c) ? Testo(c) : null;
+                string? guidArea = lista.TryGetValue(GLOBAL_VARIABLES.keyAreaGuid, out var a) ? Testo(a) : null;
                 if (!lista.TryGetValue("Records", out var records) || records == null)
                 {
                     continue;
@@ -389,18 +466,34 @@ namespace Istanta.Models
                 IEnumerable<object>? elenco = records as IEnumerable<object>;
                 foreach (var record in elenco ?? Enumerable.Empty<object>())
                 {
-                    switch (record)
+                    string? codice = record switch
                     {
-                        case JObject jo:
-                            codici.Add(jo[GLOBAL_VARIABLES_FICO.keyRefCodice]?.ToString());
-                            break;
-                        case IDictionary<string, object> d:
-                            codici.Add(d.TryGetValue(GLOBAL_VARIABLES_FICO.keyRefCodice, out var c) ? Testo(c) : null);
-                            break;
-                    }
+                        JObject jo => jo[GLOBAL_VARIABLES_FICO.keyRefCodice]?.ToString(),
+                        IDictionary<string, object> d => d.TryGetValue(GLOBAL_VARIABLES_FICO.keyRefCodice, out var v) ? Testo(v) : null,
+                        _ => null
+                    };
+                    codici.Aggiungi(guidCanale, guidArea, codice);
                 }
             }
-            return InsiemeCodici(codici);
+            return codici;
+        }
+
+        /// <summary>Tutti i codici della lista, senza sezioni.</summary>
+        public static HashSet<string> CodiciDellaLista(IEnumerable<Dictionary<string, object>>? liste)
+        {
+            return CodiciPerCombinazione(liste).tutti;
+        }
+
+        /// <summary>I record dei tracciati del canale e/o dell'area scelti; un filtro vuoto non filtra.</summary>
+        public static List<PromoTracciatiRecord> FiltraPerCanaleArea(IEnumerable<PromoTracciatiRecord> records, string? guidCanale, string? guidArea)
+        {
+            bool perCanale = !string.IsNullOrWhiteSpace(guidCanale);
+            bool perArea = !string.IsNullOrWhiteSpace(guidArea);
+            return records
+                .Where(r =>
+                    (!perCanale || string.Equals(r.IdTracciatoNavigation?.guidCanale?.Trim(), guidCanale!.Trim(), StringComparison.OrdinalIgnoreCase)) &&
+                    (!perArea || string.Equals(r.IdTracciatoNavigation?.guidArea?.Trim(), guidArea!.Trim(), StringComparison.OrdinalIgnoreCase)))
+                .ToList();
         }
 
         public static bool Manuale(PromoTracciatiRecord r)
@@ -539,7 +632,7 @@ namespace Istanta.Models
             string? label,
             IList<TipoRecordPulizia> tipi,
             IEnumerable<RecordDaValutare> records,
-            ISet<string> codiciInLista,
+            CodiciLista codici,
             IDictionary<long, Impaginazione> impaginati)
         {
             var report = new ReportPulizia
@@ -547,7 +640,7 @@ namespace Istanta.Models
                 nomeLista = nomeLista ?? string.Empty,
                 label = label ?? string.Empty,
                 tipi = tipi.Select(t => t.Nome ?? string.Empty).ToList(),
-                codiciInLista = codiciInLista.Count
+                codiciInLista = codici.tutti.Count
             };
             var campi = CampiDelleRegole(tipi);
 
@@ -558,7 +651,7 @@ namespace Istanta.Models
                 {
                     continue;
                 }
-                if (codiciInLista.Contains(NormalizzaCodice(r.record.Codice)))
+                if (codici.InLista(r.guidCanale, r.guidArea, r.record.Codice))
                 {
                     continue;
                 }
@@ -573,6 +666,8 @@ namespace Istanta.Models
                     label = r.record.Label ?? string.Empty,
                     versione = r.record.Versione,
                     tracciato = r.tracciato ?? string.Empty,
+                    canale = r.canale ?? string.Empty,
+                    area = r.area ?? string.Empty,
                     modalitaInserimento = r.record.ModalitaInserimento,
                     manuale = Manuale(r.record),
                     impaginato = bloccato,

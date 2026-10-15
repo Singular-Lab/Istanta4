@@ -1720,10 +1720,10 @@ namespace Istanta.Controllers
                 {
                     throw new Exception("Lettura della lista non riuscita: " + letta.errors);
                 }
-                var codiciInLista = PuliziaListe.CodiciDellaLista(letta.liste);
+                var codici = PuliziaListe.CodiciPerCombinazione(letta.liste);
 
-                // 2. I record della promo con quella label, tutte le versioni.
-                var records = await RecordDellaPromoConLabel(promo, label);
+                // 2. I record della promo con quella label, tutte le versioni, nel canale e nell'area scelti se indicati.
+                var records = PuliziaListe.FiltraPerCanaleArea(await RecordDellaPromoConLabel(promo, label), req.guidCanale, req.guidArea);
 
                 // 3. I tipi di record del cliente, riletti dal file.
                 var tipi = new ExternalSourceClass(this.path_external_source).getPuliziaListe().source;
@@ -1735,7 +1735,7 @@ namespace Istanta.Controllers
                 // 5. Chi non si puo' eliminare.
                 var impaginati = await ImpaginatiDellaPromo(promo, records);
 
-                report = PuliziaListe.ComponiReport(importazione.NomeFile, label, tipi, daValutare, codiciInLista, impaginati);
+                report = PuliziaListe.ComponiReport(importazione.NomeFile, label, tipi, daValutare, codici, impaginati);
             }
             catch (Exception ex)
             {
@@ -1877,8 +1877,56 @@ namespace Istanta.Controllers
             {
                 record = r,
                 dato = PuliziaListe.LeggiDato(r.Dato),
-                tracciato = r.IdTracciatoNavigation?.Sigla ?? string.Empty
+                tracciato = r.IdTracciatoNavigation?.Sigla ?? string.Empty,
+                guidCanale = r.IdTracciatoNavigation?.guidCanale,
+                guidArea = r.IdTracciatoNavigation?.guidArea,
+                canale = NomeSicuro(() => r.IdTracciatoNavigation?.Canale, r.IdTracciatoNavigation?.guidCanale),
+                area = NomeSicuro(() => r.IdTracciatoNavigation?.Area, r.IdTracciatoNavigation?.guidArea)
             }).ToList();
+        }
+
+        /// <summary>Canale e Area del tracciato si risolvono dall'ACPV; se non e' caricato, resta il guid.</summary>
+        private static string NomeSicuro(Func<string?> nome, string? ripiego)
+        {
+            try
+            {
+                return nome() ?? ripiego ?? string.Empty;
+            }
+            catch
+            {
+                return ripiego ?? string.Empty;
+            }
+        }
+
+        /// <summary>I canali e le aree dei tracciati della promo, per restringere la pulizia.</summary>
+        [HttpGet]
+        [Route("Confronti/canaliAreeDellaPromo/{idPromo}")]
+        public async Task<IActionResult> canaliAreeDellaPromo(int idPromo)
+        {
+            var risposta = new CanaliAreeRisposta();
+            try
+            {
+                var tracciati = await this.ctx2.PromoTracciatis.Where(t => t.IdPromo == idPromo).ToListAsync();
+                risposta.canali = tracciati
+                    .Where(t => !string.IsNullOrWhiteSpace(t.guidCanale))
+                    .GroupBy(t => t.guidCanale!.Trim(), StringComparer.OrdinalIgnoreCase)
+                    .Select(g => new VoceAcpv { guid = g.Key, nome = NomeSicuro(() => g.First().Canale, g.Key) })
+                    .OrderBy(v => v.nome, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                risposta.aree = tracciati
+                    .Where(t => !string.IsNullOrWhiteSpace(t.guidArea))
+                    .GroupBy(t => t.guidArea!.Trim(), StringComparer.OrdinalIgnoreCase)
+                    .Select(g => new VoceAcpv { guid = g.Key, nome = NomeSicuro(() => g.First().Area, g.Key) })
+                    .OrderBy(v => v.nome, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                risposta.esito = true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Canali e aree della promo {IdPromo} non letti", idPromo);
+                risposta.error = ex.Message;
+            }
+            return Ok(risposta);
         }
 
         /// <summary>
@@ -1963,6 +2011,23 @@ namespace Istanta.Controllers
     {
         public int idPromo { get; set; }
         public int idImportazione { get; set; }
+        /// <summary>Facoltativi: vuoti o assenti vuol dire tutti.</summary>
+        public string? guidCanale { get; set; }
+        public string? guidArea { get; set; }
+    }
+
+    public class VoceAcpv
+    {
+        public string guid { get; set; } = string.Empty;
+        public string nome { get; set; } = string.Empty;
+    }
+
+    public class CanaliAreeRisposta
+    {
+        public bool esito { get; set; }
+        public string error { get; set; } = string.Empty;
+        public List<VoceAcpv> canali { get; set; } = new List<VoceAcpv>();
+        public List<VoceAcpv> aree { get; set; } = new List<VoceAcpv>();
     }
 
     public class RichiestaEliminazionePulizia

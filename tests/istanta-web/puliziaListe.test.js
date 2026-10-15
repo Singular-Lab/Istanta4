@@ -143,9 +143,22 @@ test('l\'eliminazione chiede due conferme prima di chiamare il server, e non par
     assert.ok(elimina.indexOf('if (ids.length === 0) return;') < elimina.indexOf('confirm('));
 });
 
-test('il report si chiede al server con promo e lista, e il pulsante ELIMINA resta spento senza selezione', () => {
+test('la richiesta del report porta canale e area solo se scelti, e il titolo descrive il filtro', () => {
+    assert.deepStrictEqual(PuliziaListe.richiestaReport(7, 12, '', ''), { idPromo: 7, idImportazione: 12, guidCanale: null, guidArea: null });
+    assert.deepStrictEqual(PuliziaListe.richiestaReport(7, 12, 'C1', null), { idPromo: 7, idImportazione: 12, guidCanale: 'C1', guidArea: null });
+    assert.deepStrictEqual(PuliziaListe.richiestaReport(7, 12, '', 'A1'), { idPromo: 7, idImportazione: 12, guidCanale: null, guidArea: 'A1' });
+    assert.deepStrictEqual(PuliziaListe.richiestaReport(7, 12, 'C1', 'A1'), { idPromo: 7, idImportazione: 12, guidCanale: 'C1', guidArea: 'A1' });
+
+    assert.strictEqual(PuliziaListe.descriviFiltro('', ''), '');
+    assert.strictEqual(PuliziaListe.descriviFiltro('SS', ''), 'canale SS');
+    assert.strictEqual(PuliziaListe.descriviFiltro('', 'Toscana'), 'area Toscana');
+    assert.strictEqual(PuliziaListe.descriviFiltro('SS', 'Toscana'), 'canale SS, area Toscana');
+});
+
+test('il report si chiede al server con promo, lista e filtro, e il pulsante ELIMINA resta spento senza selezione', () => {
     const report = corpoMembro(sorgente, 'avviaReport() {');
-    assert.ok(report.includes('Call.doWithLargePayload("Confronti", "puliziaListeReport", "PUT", { idPromo: me.idPromo, idImportazione: me.idImportazione }'));
+    assert.ok(report.includes('PuliziaListe.richiestaReport(me.idPromo, me.idImportazione, me.guidCanale, me.guidArea)'));
+    assert.ok(report.includes('Call.doWithLargePayload("Confronti", "puliziaListeReport", "PUT", richiesta'));
 
     const pulsanti = corpoMembro(sorgente, 'aggiornaPulsanti() {');
     assert.ok(pulsanti.includes('$("#btnElimina").prop("disabled", quanti === 0)'));

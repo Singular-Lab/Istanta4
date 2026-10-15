@@ -35,7 +35,7 @@
 
 <div class="container p-4" style="width:auto;" id="puliziaContainer">
     <div class="row">
-        <div class="col-4">
+        <div class="col-3">
             <label for="TendinaPromo" class="form-label">Promo</label>
             <select class="form-select" id="TendinaPromo">
                 <option value="0">Seleziona una promo</option>
@@ -59,13 +59,25 @@
                 }
             </select>
         </div>
-        <div class="col-5">
+        <div class="col-2">
+            <label for="TendinaCanale" class="form-label">Canale</label>
+            <select class="form-select" id="TendinaCanale" disabled>
+                <option value="">Tutti</option>
+            </select>
+        </div>
+        <div class="col-2">
+            <label for="TendinaArea" class="form-label">Area</label>
+            <select class="form-select" id="TendinaArea" disabled>
+                <option value="">Tutte</option>
+            </select>
+        </div>
+        <div class="col-3">
             <label for="TendinaLista" class="form-label">Lista caricata</label>
             <select class="form-select" id="TendinaLista" disabled>
                 <option value="0">Seleziona prima una promo</option>
             </select>
         </div>
-        <div class="col-3 text-end align-self-end">
+        <div class="col-2 text-end align-self-end">
             <button class="btn btn-primary" id="btnAvviaReport" style="display:none;">Avvia report</button>
         </div>
     </div>
@@ -123,7 +135,7 @@
                             <th>Gruppo</th>
                             <th>Descrizione</th>
                             <th>Label / ver.</th>
-                            <th>Tracciato</th>
+                            <th>Canale / Area</th>
                             <th>Origine</th>
                             <th>Tipo</th>
                             <th>Campi delle regole</th>
@@ -154,6 +166,10 @@
 
         $("#TendinaLista").on("change", function () {
             puliziaListe.cambiaLista(parseInt($(this).val(), 10) || 0);
+        });
+
+        $("#TendinaCanale, #TendinaArea").on("change", function () {
+            puliziaListe.cambiaFiltro();
         });
 
         $("#btnAvviaReport").on("click", function () {
