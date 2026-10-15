@@ -13,6 +13,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion.Internal;
 using DocumentFormat.OpenXml.Drawing.Diagrams;
+using Istanta.Utility;
 
 namespace Istanta.Controllers
 {
@@ -298,7 +299,20 @@ namespace Istanta.Controllers
         }
 
 
+        /// I20-1069: come execLibFunction, per i metodi di AgenziaLib senza cui il chiamante non puo'
+        /// proseguire. Se il metodo manca lo dice, invece di restituire "": chi lo riceveva finiva in un
+        /// "Value cannot be null" o in un "elemento non trovato" che parlavano d'altro.
+        public object execLibFunctionRichiesta(string algoritmo, Dictionary<string, object> dataset)
+        {
+            return execLibFunction(algoritmo, dataset, true);
+        }
+
         public object execLibFunction(string algoritmo, Dictionary<string,object> dataset)
+        {
+            return execLibFunction(algoritmo, dataset, false);
+        }
+
+        private object execLibFunction(string algoritmo, Dictionary<string,object> dataset, bool richiesto)
         {
             string[] _p = algoritmo.Split('(');
             string _func = _p[0];
@@ -313,6 +327,11 @@ namespace Istanta.Controllers
             var ty = caricaTipoAgenzia(dllFile, _dllNamespace + "." + _dllTipo);
             var mth = ty.GetMethod(_dllMth);
             var obj = Activator.CreateInstance(ty);
+
+            if (mth == null && richiesto)
+            {
+                throw new ErroreIstanta("libreria del cliente", ErroreDiMetodoMancante(_dllMth, _dllTipo));
+            }
 
             if (mth == null)
             {
@@ -335,7 +354,10 @@ namespace Istanta.Controllers
 
                 if (pi!.Name!.IndexOf("path") < 0)
                 {
-                    _objP[po] = dataset[pi.Name];
+                    //I20-1069: un parametro che Istanta non passa dice quale, invece di un KeyNotFoundException.
+                    if (!dataset.TryGetValue(pi.Name, out object? valore))
+                        throw new ErroreIstanta("libreria del cliente", $"il metodo {_dllMth} di AgenziaLib.{_dllTipo} vuole il parametro {pi.Name}, che Istanta non passa: la dll e Istanta non sono della stessa versione.");
+                    _objP[po] = valore;
                 }
                 else
                 {
@@ -348,6 +370,13 @@ namespace Istanta.Controllers
 
             object? objResult = mth!.Invoke(obj, _objP);
             return objResult!;
+        }
+
+        /// I20-1069: il motivo per un metodo che AgenziaLib.dll non ha: quale metodo, di quale cliente,
+        /// e perche' di solito succede.
+        public static string ErroreDiMetodoMancante(string metodo, string cliente)
+        {
+            return $"il metodo {metodo} non c'e' in AgenziaLib.dll per il cliente {cliente}: la dll e' probabilmente di una versione precedente, va ricompilata e ricopiata.";
         }
     }
 

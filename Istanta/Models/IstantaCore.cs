@@ -1733,6 +1733,8 @@ namespace Istanta.Models
         public List<ArticoloInRevisione> Data { get; set; } = new List<ArticoloInRevisione>();
         public List<ArticoloInRevisione> ArticoliObsoleti { get; set; } = new List<ArticoloInRevisione>();
         public string? Error { get; set; }
+        //I20-1069: in Error il messaggio breve per l'operatore, qui la traccia completa per la console.
+        public string? Dettaglio { get; set; }
     }
 
     public class DescrizioniSottogruppi { 
