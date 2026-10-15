@@ -165,6 +165,9 @@ class PuliziaListe {
             });
             $canale.prop("disabled", (res.canali || []).length === 0);
             $area.prop("disabled", (res.aree || []).length === 0);
+            if ((res.canali || []).length === 0 && (res.aree || []).length === 0) {
+                mostraMessaggio("La promo non ha tracciati con canale o area: il filtro resta su Tutti.", "info");
+            }
         });
     }
 

@@ -1878,8 +1878,8 @@ namespace Istanta.Controllers
                 record = r,
                 dato = PuliziaListe.LeggiDato(r.Dato),
                 tracciato = r.IdTracciatoNavigation?.Sigla ?? string.Empty,
-                guidCanale = r.IdTracciatoNavigation?.guidCanale,
-                guidArea = r.IdTracciatoNavigation?.guidArea,
+                chiaveCanale = PuliziaListe.ChiaveCanale(r.IdTracciatoNavigation),
+                chiaveArea = PuliziaListe.ChiaveArea(r.IdTracciatoNavigation),
                 canale = NomeSicuro(() => r.IdTracciatoNavigation?.Canale, r.IdTracciatoNavigation?.guidCanale),
                 area = NomeSicuro(() => r.IdTracciatoNavigation?.Area, r.IdTracciatoNavigation?.guidArea)
             }).ToList();
@@ -1907,16 +1907,20 @@ namespace Istanta.Controllers
             try
             {
                 var tracciati = await this.ctx2.PromoTracciatis.Where(t => t.IdPromo == idPromo).ToListAsync();
+                // La chiave e' il guid se c'e', altrimenti il nome: l'importazione scrive sempre i nomi
+                // e i guid solo quando la lista li porta.
                 risposta.canali = tracciati
-                    .Where(t => !string.IsNullOrWhiteSpace(t.guidCanale))
-                    .GroupBy(t => t.guidCanale!.Trim(), StringComparer.OrdinalIgnoreCase)
-                    .Select(g => new VoceAcpv { guid = g.Key, nome = NomeSicuro(() => g.First().Canale, g.Key) })
+                    .Select(t => new { chiave = PuliziaListe.ChiaveCanale(t), tracciato = t })
+                    .Where(x => x.chiave.Length > 0)
+                    .GroupBy(x => x.chiave, StringComparer.OrdinalIgnoreCase)
+                    .Select(g => new VoceAcpv { guid = g.Key, nome = NomeSicuro(() => g.First().tracciato.Canale, g.Key) })
                     .OrderBy(v => v.nome, StringComparer.OrdinalIgnoreCase)
                     .ToList();
                 risposta.aree = tracciati
-                    .Where(t => !string.IsNullOrWhiteSpace(t.guidArea))
-                    .GroupBy(t => t.guidArea!.Trim(), StringComparer.OrdinalIgnoreCase)
-                    .Select(g => new VoceAcpv { guid = g.Key, nome = NomeSicuro(() => g.First().Area, g.Key) })
+                    .Select(t => new { chiave = PuliziaListe.ChiaveArea(t), tracciato = t })
+                    .Where(x => x.chiave.Length > 0)
+                    .GroupBy(x => x.chiave, StringComparer.OrdinalIgnoreCase)
+                    .Select(g => new VoceAcpv { guid = g.Key, nome = NomeSicuro(() => g.First().tracciato.Area, g.Key) })
                     .OrderBy(v => v.nome, StringComparer.OrdinalIgnoreCase)
                     .ToList();
                 risposta.esito = true;

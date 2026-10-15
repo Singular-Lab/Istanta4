@@ -270,7 +270,7 @@ public class PuliziaListeTests
         var to = RecordNelTracciato(2, "123", "TO", "A");
         var records = new[] { ss, to }.Select(r => new RecordDaValutare
         {
-            record = r, dato = PuliziaListe.LeggiDato(r.Dato), guidCanale = r.IdTracciatoNavigation.guidCanale, guidArea = r.IdTracciatoNavigation.guidArea, canale = r.IdTracciatoNavigation.guidCanale!, area = "A"
+            record = r, dato = PuliziaListe.LeggiDato(r.Dato), chiaveCanale = PuliziaListe.ChiaveCanale(r.IdTracciatoNavigation), chiaveArea = PuliziaListe.ChiaveArea(r.IdTracciatoNavigation), canale = r.IdTracciatoNavigation.guidCanale!, area = "A"
         });
         var codici = new CodiciLista();
         codici.Aggiungi("TO", "A", "123");
@@ -436,6 +436,59 @@ public class PuliziaListeTests
 
         Assert.NotNull(db.source);
         Assert.Empty(db.source);
+    }
+
+    private static PromoTracciatiRecord RecordConNomi(long id, string codice, string canale, string area)
+    {
+        var r = Record(id, codice, "{\"tema\":\"fuori depliant\"}");
+        r.IdTracciatoNavigation = new PromoTracciati { Id = 11, IdPromo = 44, Canale = canale, Area = area, Sigla = canale + area };
+        return r;
+    }
+
+    // L'importazione scrive sempre i nomi e i guid solo quando la lista li porta: la chiave e' il
+    // guid se c'e', altrimenti il nome. Sul collaudo i tracciati erano senza guid e le tendine vuote.
+    [Fact]
+    public void La_chiave_di_canale_e_area_e_il_guid_se_c_e_altrimenti_il_nome()
+    {
+        var conGuid = RecordNelTracciato(1, "1", " C1 ", "A1").IdTracciatoNavigation;
+        var senzaGuid = RecordConNomi(2, "2", " SS ", "Toscana").IdTracciatoNavigation;
+
+        Assert.Equal("C1", PuliziaListe.ChiaveCanale(conGuid));
+        Assert.Equal("A1", PuliziaListe.ChiaveArea(conGuid));
+        Assert.Equal("SS", PuliziaListe.ChiaveCanale(senzaGuid));
+        Assert.Equal("Toscana", PuliziaListe.ChiaveArea(senzaGuid));
+        Assert.Equal("", PuliziaListe.ChiaveCanale(null));
+    }
+
+    [Fact]
+    public void Il_filtro_vale_anche_sui_tracciati_senza_guid_per_nome()
+    {
+        var records = new[] { RecordConNomi(1, "1", "SS", "A"), RecordConNomi(2, "2", "TO", "A"), RecordConNomi(3, "3", "TO", "B") };
+
+        Assert.Equal(new long[] { 2, 3 }, PuliziaListe.FiltraPerCanaleArea(records, "to", null).Select(r => r.Id).ToArray());
+        Assert.Equal(new long[] { 1, 2 }, PuliziaListe.FiltraPerCanaleArea(records, null, "A").Select(r => r.Id).ToArray());
+        Assert.Equal(new long[] { 3 }, PuliziaListe.FiltraPerCanaleArea(records, "TO", "B").Select(r => r.Id).ToArray());
+    }
+
+    [Fact]
+    public void Le_sezioni_della_lista_senza_guid_si_riconoscono_dal_nome()
+    {
+        var liste = JsonConvert.DeserializeObject<List<Dictionary<string, object>>>(
+            "[{\"Canale\":\"SS\",\"Area\":\"A\",\"Records\":[{\"Referenza.Codice\":\"123\"}]},{\"Canale\":\"TO\",\"Area\":\"A\",\"Records\":[{\"Referenza.Codice\":\"456\"}]}]")!;
+
+        var codici = PuliziaListe.CodiciPerCombinazione(liste);
+
+        Assert.True(codici.HaSezione("SS", "A"));
+        Assert.True(codici.InLista("SS", "A", "123"));
+        Assert.False(codici.InLista("SS", "A", "456"));
+        Assert.True(codici.InLista("TO", "A", "456"));
+
+        // Con il guid la sezione usa il guid, non il nome: e' la stessa chiave dei tracciati.
+        var conGuid = JsonConvert.DeserializeObject<List<Dictionary<string, object>>>(
+            "[{\"guidCanale\":\"C1\",\"guidArea\":\"A1\",\"Canale\":\"SS\",\"Area\":\"A\",\"Records\":[{\"Referenza.Codice\":\"123\"}]}]")!;
+        var codiciGuid = PuliziaListe.CodiciPerCombinazione(conGuid);
+        Assert.True(codiciGuid.HaSezione("C1", "A1"));
+        Assert.False(codiciGuid.HaSezione("SS", "A"));
     }
 
     private static string TrovaFile(string relativo)

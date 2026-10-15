@@ -63,8 +63,9 @@ namespace Istanta.Models
         public Dictionary<string, object>? dato { get; set; }
         public List<string> etichette { get; set; } = new List<string>();
         public string tracciato { get; set; } = string.Empty;
-        public string? guidCanale { get; set; }
-        public string? guidArea { get; set; }
+        /// <summary>La chiave del canale e dell'area del tracciato (PuliziaListe.ChiaveCanale/ChiaveArea): guid se c'e', altrimenti nome.</summary>
+        public string? chiaveCanale { get; set; }
+        public string? chiaveArea { get; set; }
         public string canale { get; set; } = string.Empty;
         public string area { get; set; } = string.Empty;
     }
@@ -457,8 +458,9 @@ namespace Istanta.Models
             var codici = new CodiciLista();
             foreach (var lista in liste ?? Enumerable.Empty<Dictionary<string, object>>())
             {
-                string? guidCanale = lista.TryGetValue(GLOBAL_VARIABLES.keyCanaleGuid, out var c) ? Testo(c) : null;
-                string? guidArea = lista.TryGetValue(GLOBAL_VARIABLES.keyAreaGuid, out var a) ? Testo(a) : null;
+                // La chiave della sezione: il guid se c'e', altrimenti il nome, come per i tracciati.
+                string? chiaveCanale = ChiaveDellaSezione(lista, GLOBAL_VARIABLES.keyCanaleGuid, GLOBAL_VARIABLES.keyCanale);
+                string? chiaveArea = ChiaveDellaSezione(lista, GLOBAL_VARIABLES.keyAreaGuid, GLOBAL_VARIABLES.keyArea);
                 if (!lista.TryGetValue("Records", out var records) || records == null)
                 {
                     continue;
@@ -472,10 +474,21 @@ namespace Istanta.Models
                         IDictionary<string, object> d => d.TryGetValue(GLOBAL_VARIABLES_FICO.keyRefCodice, out var v) ? Testo(v) : null,
                         _ => null
                     };
-                    codici.Aggiungi(guidCanale, guidArea, codice);
+                    codici.Aggiungi(chiaveCanale, chiaveArea, codice);
                 }
             }
             return codici;
+        }
+
+        private static string? ChiaveDellaSezione(Dictionary<string, object> lista, string chiaveGuid, string chiaveNome)
+        {
+            string guid = lista.TryGetValue(chiaveGuid, out var g) ? Testo(g).Trim() : string.Empty;
+            if (guid.Length > 0)
+            {
+                return guid;
+            }
+            string nome = lista.TryGetValue(chiaveNome, out var n) ? Testo(n).Trim() : string.Empty;
+            return nome.Length > 0 ? nome : null;
         }
 
         /// <summary>Tutti i codici della lista, senza sezioni.</summary>
@@ -484,15 +497,48 @@ namespace Istanta.Models
             return CodiciPerCombinazione(liste).tutti;
         }
 
-        /// <summary>I record dei tracciati del canale e/o dell'area scelti; un filtro vuoto non filtra.</summary>
-        public static List<PromoTracciatiRecord> FiltraPerCanaleArea(IEnumerable<PromoTracciatiRecord> records, string? guidCanale, string? guidArea)
+        /// <summary>
+        /// La chiave con cui si riconosce il canale di un tracciato: il guid se c'e', altrimenti il
+        /// nome. L'importazione scrive sempre i nomi e i guid solo quando la lista li porta
+        /// (OperationsController.importaVolantino): sui dati senza guid la tendina, il filtro e le
+        /// sezioni della lista si riconoscono dal nome.
+        /// </summary>
+        public static string ChiaveCanale(PromoTracciati? tracciato)
         {
-            bool perCanale = !string.IsNullOrWhiteSpace(guidCanale);
-            bool perArea = !string.IsNullOrWhiteSpace(guidArea);
+            return Chiave(tracciato?.guidCanale, () => tracciato?.Canale);
+        }
+
+        public static string ChiaveArea(PromoTracciati? tracciato)
+        {
+            return Chiave(tracciato?.guidArea, () => tracciato?.Area);
+        }
+
+        private static string Chiave(string? guid, Func<string?> nome)
+        {
+            if (!string.IsNullOrWhiteSpace(guid))
+            {
+                return guid.Trim();
+            }
+            try
+            {
+                return (nome() ?? string.Empty).Trim();
+            }
+            catch
+            {
+                // Il nome si risolve dall'ACPV, che potrebbe non essere caricato.
+                return string.Empty;
+            }
+        }
+
+        /// <summary>I record dei tracciati del canale e/o dell'area scelti, per chiave; un filtro vuoto non filtra.</summary>
+        public static List<PromoTracciatiRecord> FiltraPerCanaleArea(IEnumerable<PromoTracciatiRecord> records, string? canale, string? area)
+        {
+            bool perCanale = !string.IsNullOrWhiteSpace(canale);
+            bool perArea = !string.IsNullOrWhiteSpace(area);
             return records
                 .Where(r =>
-                    (!perCanale || string.Equals(r.IdTracciatoNavigation?.guidCanale?.Trim(), guidCanale!.Trim(), StringComparison.OrdinalIgnoreCase)) &&
-                    (!perArea || string.Equals(r.IdTracciatoNavigation?.guidArea?.Trim(), guidArea!.Trim(), StringComparison.OrdinalIgnoreCase)))
+                    (!perCanale || string.Equals(ChiaveCanale(r.IdTracciatoNavigation), canale!.Trim(), StringComparison.OrdinalIgnoreCase)) &&
+                    (!perArea || string.Equals(ChiaveArea(r.IdTracciatoNavigation), area!.Trim(), StringComparison.OrdinalIgnoreCase)))
                 .ToList();
         }
 
@@ -651,7 +697,7 @@ namespace Istanta.Models
                 {
                     continue;
                 }
-                if (codici.InLista(r.guidCanale, r.guidArea, r.record.Codice))
+                if (codici.InLista(r.chiaveCanale, r.chiaveArea, r.record.Codice))
                 {
                     continue;
                 }
