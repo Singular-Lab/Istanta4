@@ -25,6 +25,8 @@ namespace Istanta.Models
         /// <summary>Impaginato, nel menabo' o in un gruppo impaginato: si vede, non si elimina.</summary>
         public bool impaginato { get; set; }
         public string motivoImpaginato { get; set; } = string.Empty;
+        /// <summary>Le lavorazioni in cui e' impaginato, descritte con tipo (PoP o Volantino), formato e titolo.</summary>
+        public List<string> lavorazioni { get; set; } = new List<string>();
         /// <summary>Il tipo di record delle regole del cliente che lo ha riconosciuto.</summary>
         public string tipo { get; set; } = string.Empty;
         /// <summary>I valori dei campi che le regole guardano, per far vedere perche' il record e' qui.</summary>
@@ -67,6 +69,13 @@ namespace Istanta.Models
         public List<SegnalazioneRipristino> saltati { get; } = new List<SegnalazioneRipristino>();
     }
 
+    /// <summary>Perche' un record non si puo' eliminare: il motivo per l'avviso e le lavorazioni in cui sta.</summary>
+    public class Impaginazione
+    {
+        public string motivo { get; set; } = string.Empty;
+        public List<string> lavorazioni { get; set; } = new List<string>();
+    }
+
     public class EliminazionePuliziaRisposta
     {
         public bool esito { get; set; }
@@ -87,8 +96,9 @@ namespace Istanta.Models
     {
         public const string ORIGINE_BACKUP = "Pulizia liste";
 
-        public const string MOTIVO_IMPAGINATO = "impaginato in una lavorazione";
-        public const string MOTIVO_SECONDARIA_IMPAGINATA = "in un gruppo impaginato";
+        /// <summary>I primi due sono prefissi: seguono le lavorazioni, descritte da DescriviLavorazione.</summary>
+        public const string MOTIVO_IMPAGINATO = "impaginato in";
+        public const string MOTIVO_SECONDARIA_IMPAGINATA = "in un gruppo impaginato in";
         public const string MOTIVO_NEL_MENABO = "presente nel menabo'";
         public const string MOTIVO_NON_TROVATO = "non e' fra i record della promo";
 
@@ -399,17 +409,45 @@ namespace Istanta.Models
         }
 
         /// <summary>
-        /// Quali record non si possono eliminare, con il motivo: quelli a cui una riga di
-        /// lavorazione della promo e' legata, quelli il cui codice sta nel codice gruppo di una riga
-        /// di lavorazione con la stessa label del suo primario (le secondarie non hanno una riga
-        /// propria), e quelli riferiti dal menabo'. Il database rifiuterebbe comunque i primi e gli
-        /// ultimi; le secondarie le rifiuta la lavorazione, che resterebbe con un gruppo a meta'.
+        /// Come una lavorazione si presenta nell'avviso: il tipo (PoP o Volantino) e il codice del
+        /// formato del kit, poi il titolo. Senza formato resta "lavorazione N", senza titolo resta
+        /// la sola testa.
         /// </summary>
-        public static Dictionary<long, string> Impaginati(
+        public static string DescriviLavorazione(TipoLavorazione? tipo, string? codiceFormato, string? titolo, int idLavorazione)
+        {
+            string nome = string.IsNullOrWhiteSpace(titolo) ? string.Empty : titolo.Trim();
+            string testa;
+            if (tipo == null)
+            {
+                testa = "lavorazione " + idLavorazione;
+            }
+            else
+            {
+                testa = tipo == TipoLavorazione.PoP ? "PoP" : "Volantino";
+                if (!string.IsNullOrWhiteSpace(codiceFormato))
+                {
+                    testa += " " + codiceFormato.Trim();
+                }
+            }
+            return nome.Length == 0 ? testa : testa + " · " + nome;
+        }
+
+        /// <summary>
+        /// Quali record non si possono eliminare, con il motivo e le lavorazioni: quelli a cui una
+        /// riga di lavorazione della promo e' legata, quelli il cui codice sta nel codice gruppo di
+        /// una riga di lavorazione con la stessa label del suo primario (le secondarie non hanno una
+        /// riga propria), e quelli riferiti dal menabo'. Il database rifiuterebbe comunque i primi e
+        /// gli ultimi; le secondarie le rifiuta la lavorazione, che resterebbe con un gruppo a meta'.
+        /// Le lavorazioni arrivano gia' descritte (DescriviLavorazione), per id; una che manca si
+        /// presenta come "lavorazione N". Chi e' primario in una lavorazione ed e' anche secondario
+        /// in un'altra conta come primario.
+        /// </summary>
+        public static Dictionary<long, Impaginazione> Impaginati(
             IEnumerable<PromoTracciatiRecord> records,
             IEnumerable<PromoLavorazioniRecord> righeLavorazioni,
             IDictionary<long, string?> labelDeiPrimari,
-            IEnumerable<long> idNelMenabo)
+            IEnumerable<long> idNelMenabo,
+            IDictionary<int, string> lavorazioni)
         {
             var elenco = records.ToList();
             var perId = elenco.ToDictionary(r => r.Id);
@@ -417,13 +455,18 @@ namespace Istanta.Models
                 .Where(r => !string.IsNullOrWhiteSpace(r.Codice))
                 .GroupBy(r => NormalizzaCodice(r.Codice), StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
-            var motivi = new Dictionary<long, string>();
+            var comePrimario = new Dictionary<long, List<string>>();
+            var comeSecondaria = new Dictionary<long, List<string>>();
 
             foreach (var riga in righeLavorazioni)
             {
+                string lavorazione = lavorazioni.TryGetValue(riga.IdLavorazione, out var descrizione) && !string.IsNullOrWhiteSpace(descrizione)
+                    ? descrizione
+                    : "lavorazione " + riga.IdLavorazione;
+
                 if (perId.ContainsKey(riga.IdRecordTracciato))
                 {
-                    motivi[riga.IdRecordTracciato] = MOTIVO_IMPAGINATO;
+                    Aggiungi(comePrimario, riga.IdRecordTracciato, lavorazione);
                 }
 
                 labelDeiPrimari.TryGetValue(riga.IdRecordTracciato, out var labelPrimario);
@@ -443,8 +486,21 @@ namespace Istanta.Models
                         {
                             continue;
                         }
-                        motivi.TryAdd(r.Id, MOTIVO_SECONDARIA_IMPAGINATA);
+                        Aggiungi(comeSecondaria, r.Id, lavorazione);
                     }
+                }
+            }
+
+            var motivi = new Dictionary<long, Impaginazione>();
+            foreach (var r in elenco)
+            {
+                if (comePrimario.TryGetValue(r.Id, out var primario))
+                {
+                    motivi[r.Id] = new Impaginazione { motivo = MOTIVO_IMPAGINATO + " " + string.Join("; ", primario), lavorazioni = primario };
+                }
+                else if (comeSecondaria.TryGetValue(r.Id, out var secondaria))
+                {
+                    motivi[r.Id] = new Impaginazione { motivo = MOTIVO_SECONDARIA_IMPAGINATA + " " + string.Join("; ", secondaria), lavorazioni = secondaria };
                 }
             }
 
@@ -452,11 +508,24 @@ namespace Istanta.Models
             {
                 if (perId.ContainsKey(id))
                 {
-                    motivi.TryAdd(id, MOTIVO_NEL_MENABO);
+                    motivi.TryAdd(id, new Impaginazione { motivo = MOTIVO_NEL_MENABO });
                 }
             }
 
             return motivi;
+        }
+
+        private static void Aggiungi(Dictionary<long, List<string>> mappa, long id, string lavorazione)
+        {
+            if (!mappa.TryGetValue(id, out var elenco))
+            {
+                elenco = new List<string>();
+                mappa[id] = elenco;
+            }
+            if (!elenco.Contains(lavorazione))
+            {
+                elenco.Add(lavorazione);
+            }
         }
 
         /* ===== il report ===== */
@@ -471,7 +540,7 @@ namespace Istanta.Models
             IList<TipoRecordPulizia> tipi,
             IEnumerable<RecordDaValutare> records,
             ISet<string> codiciInLista,
-            IDictionary<long, string> impaginati)
+            IDictionary<long, Impaginazione> impaginati)
         {
             var report = new ReportPulizia
             {
@@ -494,7 +563,7 @@ namespace Istanta.Models
                     continue;
                 }
 
-                bool bloccato = impaginati.TryGetValue(r.record.Id, out var motivo);
+                bool bloccato = impaginati.TryGetValue(r.record.Id, out var impaginazione);
                 report.righe.Add(new RigaReportPulizia
                 {
                     id = r.record.Id,
@@ -507,7 +576,8 @@ namespace Istanta.Models
                     modalitaInserimento = r.record.ModalitaInserimento,
                     manuale = Manuale(r.record),
                     impaginato = bloccato,
-                    motivoImpaginato = bloccato ? motivo! : string.Empty,
+                    motivoImpaginato = bloccato ? impaginazione!.motivo : string.Empty,
+                    lavorazioni = bloccato ? impaginazione!.lavorazioni.ToList() : new List<string>(),
                     tipo = tipo.Nome ?? string.Empty,
                     valoriRegole = campi.ToDictionary(c => c, c => ValoreDelCampo(r.dato, c))
                 });
@@ -555,7 +625,7 @@ namespace Istanta.Models
         /// e un id che non e' della promo non si tocca. Ricalcolato sul server al momento
         /// dell'eliminazione, non sul report che l'operatore ha davanti.
         /// </summary>
-        public static PianoEliminazione PianificaEliminazione(IEnumerable<long> idRichiesti, IEnumerable<PromoTracciatiRecord> recordDellaPromo, IDictionary<long, string> impaginati)
+        public static PianoEliminazione PianificaEliminazione(IEnumerable<long> idRichiesti, IEnumerable<PromoTracciatiRecord> recordDellaPromo, IDictionary<long, Impaginazione> impaginati)
         {
             var piano = new PianoEliminazione();
             var perId = recordDellaPromo.ToDictionary(r => r.Id);
@@ -567,9 +637,9 @@ namespace Istanta.Models
                     piano.saltati.Add(new SegnalazioneRipristino { id = id, codice = string.Empty, motivo = MOTIVO_NON_TROVATO });
                     continue;
                 }
-                if (impaginati.TryGetValue(id, out var motivo))
+                if (impaginati.TryGetValue(id, out var impaginazione))
                 {
-                    piano.saltati.Add(new SegnalazioneRipristino { id = id, codice = record.Codice ?? string.Empty, motivo = motivo });
+                    piano.saltati.Add(new SegnalazioneRipristino { id = id, codice = record.Codice ?? string.Empty, motivo = impaginazione.motivo });
                     continue;
                 }
                 piano.daEliminare.Add(id);

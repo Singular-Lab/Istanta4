@@ -1917,10 +1917,27 @@ namespace Istanta.Controllers
         }
 
         /// <summary>Chi, fra i record dati, non si puo' eliminare e perche' (PuliziaListe.Impaginati).</summary>
-        private async Task<Dictionary<long, string>> ImpaginatiDellaPromo(Promo promo, List<PromoTracciatiRecord> records)
+        private async Task<Dictionary<long, Impaginazione>> ImpaginatiDellaPromo(Promo promo, List<PromoTracciatiRecord> records)
         {
             string guid = promo.guidID ?? string.Empty;
-            var idLavorazioni = await this.ctx2.PromoLavorazionis.Where(l => l.GuidPromo == guid).Select(l => l.Id).ToListAsync();
+            var lavorazioni = await this.ctx2.PromoLavorazionis.Where(l => l.GuidPromo == guid).Select(l => new { l.Id, l.GuidFormato, l.Meta }).ToListAsync();
+            var idLavorazioni = lavorazioni.Select(l => l.Id).ToList();
+
+            // Come ogni lavorazione si presenta nell'avviso: tipo (PoP o Volantino) e codice dal
+            // formato del kit, titolo dal Meta.
+            var formati = SingletonConfiguration.DBFORMATI?.source ?? new List<Formato>();
+            var descrizioni = lavorazioni.ToDictionary(
+                l => l.Id,
+                l =>
+                {
+                    var formato = formati.FirstOrDefault(f => f.guidID == l.GuidFormato);
+                    return PuliziaListe.DescriviLavorazione(
+                        formato == null ? (TipoLavorazione?)null : formato.tipo,
+                        formato?.codice,
+                        LavorazioniDellaPromo.TitoloDalMeta(l.Meta, l.Id),
+                        l.Id);
+                });
+
             var righe = idLavorazioni.Count == 0
                 ? new List<PromoLavorazioniRecord>()
                 : await this.ctx2.PromoLavorazioniRecords.Where(r => idLavorazioni.Contains(r.IdLavorazione)).AsNoTracking().ToListAsync();
@@ -1936,7 +1953,7 @@ namespace Istanta.Controllers
                 ? new List<long>()
                 : await this.ctx2.MenaboRefs.Where(m => m.IdRecord != null && idRecords.Contains(m.IdRecord.Value)).Select(m => m.IdRecord!.Value).Distinct().ToListAsync();
 
-            return PuliziaListe.Impaginati(records, righe, labelDeiPrimari, nelMenabo);
+            return PuliziaListe.Impaginati(records, righe, labelDeiPrimari, nelMenabo, descrizioni);
         }
 
         #endregion

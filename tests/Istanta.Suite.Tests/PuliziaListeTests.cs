@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using Istanta.Models;
 using Istanta.Models_2;
+using IstantaLib;
 using Newtonsoft.Json;
 using Xunit;
 
@@ -53,7 +54,13 @@ public class PuliziaListeTests
         return new RecordDaValutare { record = r, dato = PuliziaListe.LeggiDato(r.Dato), etichette = etichette.ToList(), tracciato = "SS" };
     }
 
-    private static readonly Dictionary<long, string> NessunImpaginato = new Dictionary<long, string>();
+    private static readonly Dictionary<long, Impaginazione> NessunImpaginato = new Dictionary<long, Impaginazione>();
+
+    private static readonly Dictionary<int, string> Lavorazioni = new Dictionary<int, string>
+    {
+        [5] = "Volantino · P2611 TO",
+        [6] = "PoP A3_VERTICALI · P2611 A3"
+    };
 
     /* ---- gli operatori ---- */
 
@@ -255,12 +262,15 @@ public class PuliziaListeTests
         var lavorazioni = new[] { new PromoLavorazioniRecord { Id = 900, IdLavorazione = 5, IdRecordTracciato = 1, Codice = "101", CodiceGruppo = "101,102" } };
         var labelDeiPrimari = new Dictionary<long, string?> { [1] = "VOL" };
 
-        var impaginati = PuliziaListe.Impaginati(records, lavorazioni, labelDeiPrimari, new long[] { 4, 999 });
+        var impaginati = PuliziaListe.Impaginati(records, lavorazioni, labelDeiPrimari, new long[] { 4, 999 }, Lavorazioni);
 
-        Assert.Equal(PuliziaListe.MOTIVO_IMPAGINATO, impaginati[1]);
-        Assert.Equal(PuliziaListe.MOTIVO_SECONDARIA_IMPAGINATA, impaginati[2]);
+        // L'avviso dice dove: la lavorazione con il suo tipo.
+        Assert.Equal("impaginato in Volantino · P2611 TO", impaginati[1].motivo);
+        Assert.Equal(new[] { "Volantino · P2611 TO" }, impaginati[1].lavorazioni.ToArray());
+        Assert.Equal("in un gruppo impaginato in Volantino · P2611 TO", impaginati[2].motivo);
         Assert.False(impaginati.ContainsKey(3));
-        Assert.Equal(PuliziaListe.MOTIVO_NEL_MENABO, impaginati[4]);
+        Assert.Equal(PuliziaListe.MOTIVO_NEL_MENABO, impaginati[4].motivo);
+        Assert.Empty(impaginati[4].lavorazioni);
         Assert.False(impaginati.ContainsKey(5));
 
         var tipi = new List<TipoRecordPulizia> { Tipo("FUORI DEPLIANT", R("tema", "IN", "fuori depliant")) };
@@ -268,11 +278,14 @@ public class PuliziaListeTests
         Assert.Equal(5, report.righe.Count);
         Assert.Equal(3, report.contatori.impaginati);
         Assert.Equal(PuliziaListe.MOTIVO_NEL_MENABO, report.righe.Single(r => r.id == 4).motivoImpaginato);
+        Assert.Equal("impaginato in Volantino · P2611 TO", report.righe.Single(r => r.id == 1).motivoImpaginato);
+        Assert.Equal(new[] { "Volantino · P2611 TO" }, report.righe.Single(r => r.id == 1).lavorazioni.ToArray());
+        Assert.Empty(report.righe.Single(r => r.id == 5).lavorazioni);
 
         var piano = PuliziaListe.PianificaEliminazione(new long[] { 1, 2, 3, 4, 5, 77, 5 }, records, impaginati);
         Assert.Equal(new long[] { 3, 5 }, piano.daEliminare.ToArray());
         Assert.Equal(4, piano.saltati.Count);
-        Assert.Equal(PuliziaListe.MOTIVO_IMPAGINATO, piano.saltati.Single(s => s.id == 1).motivo);
+        Assert.Equal("impaginato in Volantino · P2611 TO", piano.saltati.Single(s => s.id == 1).motivo);
         Assert.Equal("102", piano.saltati.Single(s => s.id == 2).codice);
         Assert.Equal(PuliziaListe.MOTIVO_NON_TROVATO, piano.saltati.Single(s => s.id == 77).motivo);
     }
@@ -283,9 +296,44 @@ public class PuliziaListeTests
         var records = new List<PromoTracciatiRecord> { Record(2, "102", "{}", label: "POP", codiceGruppo: "101,102") };
         var lavorazioni = new[] { new PromoLavorazioniRecord { Id = 900, IdLavorazione = 5, IdRecordTracciato = 1, CodiceGruppo = "101,102" } };
 
-        var impaginati = PuliziaListe.Impaginati(records, lavorazioni, new Dictionary<long, string?>(), Array.Empty<long>());
+        // Senza la descrizione della lavorazione 5, l'avviso dice almeno il suo numero.
+        var impaginati = PuliziaListe.Impaginati(records, lavorazioni, new Dictionary<long, string?>(), Array.Empty<long>(), new Dictionary<int, string>());
 
-        Assert.Equal(PuliziaListe.MOTIVO_SECONDARIA_IMPAGINATA, impaginati[2]);
+        Assert.Equal("in un gruppo impaginato in lavorazione 5", impaginati[2].motivo);
+    }
+
+    [Fact]
+    public void La_lavorazione_si_descrive_con_tipo_formato_e_titolo()
+    {
+        Assert.Equal("PoP A3_VERTICALI · P2611 A3", PuliziaListe.DescriviLavorazione(TipoLavorazione.PoP, "A3_VERTICALI", "P2611 A3", 7));
+        Assert.Equal("Volantino · P2611 TO", PuliziaListe.DescriviLavorazione(TipoLavorazione.Volantino, null, " P2611 TO ", 7));
+        Assert.Equal("Volantino A4", PuliziaListe.DescriviLavorazione(TipoLavorazione.Volantino, "A4", "", 7));
+        // Formato sconosciuto (DBFORMATI non caricato o guid non trovato): resta il numero della lavorazione.
+        Assert.Equal("lavorazione 7 · P2611", PuliziaListe.DescriviLavorazione(null, "A4", "P2611", 7));
+        Assert.Equal("lavorazione 7", PuliziaListe.DescriviLavorazione(null, null, null, 7));
+    }
+
+    // Un record impaginato sia nel Volantino sia nel PoP: l'avviso le nomina tutte e due, nell'ordine.
+    [Fact]
+    public void Un_record_in_piu_lavorazioni_le_nomina_tutte()
+    {
+        var records = new List<PromoTracciatiRecord>
+        {
+            Record(1, "101", "{}", codiceGruppo: "101,102"),
+            Record(2, "102", "{}", codiceGruppo: "101,102")
+        };
+        var righe = new[]
+        {
+            new PromoLavorazioniRecord { Id = 900, IdLavorazione = 5, IdRecordTracciato = 1, CodiceGruppo = "101,102" },
+            new PromoLavorazioniRecord { Id = 901, IdLavorazione = 6, IdRecordTracciato = 1, CodiceGruppo = "101,102" },
+            new PromoLavorazioniRecord { Id = 902, IdLavorazione = 6, IdRecordTracciato = 1, CodiceGruppo = "101,102" }   // due volte nella stessa: una sola voce
+        };
+
+        var impaginati = PuliziaListe.Impaginati(records, righe, new Dictionary<long, string?> { [1] = "VOL" }, Array.Empty<long>(), Lavorazioni);
+
+        Assert.Equal("impaginato in Volantino · P2611 TO; PoP A3_VERTICALI · P2611 A3", impaginati[1].motivo);
+        Assert.Equal(new[] { "Volantino · P2611 TO", "PoP A3_VERTICALI · P2611 A3" }, impaginati[1].lavorazioni.ToArray());
+        Assert.Equal("in un gruppo impaginato in Volantino · P2611 TO; PoP A3_VERTICALI · P2611 A3", impaginati[2].motivo);
     }
 
     [Fact]
