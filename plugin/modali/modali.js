@@ -375,7 +375,9 @@ const Modali = {
     apriModal(modalId, titolo, bottoneChiusura = true, idElementiInTestata = [], hideBehind = true, scrollRules = null){
 
         console.log("Apro modale!");
-    
+        //I20-1105: il controllo della X e' della finestra che lo registra, non passa alla successiva.
+        this.controlloPrimaDiChiudere = null;
+
         //var dialog = $("#"+modalId).clone();
         var dialog = cloneElementWithEvents($("#"+modalId));
         console.log(dialog);
@@ -456,9 +458,46 @@ const Modali = {
         $("#overlayModal"+suffissoOverlayModal).find("#bodyModal").empty();
     },
 
+    /// I20-1105: chi apre la modale principale puo' registrare un controllo per la X: una funzione
+    /// che restituisce il testo dell'avviso se chiudere adesso farebbe perdere qualcosa (modifiche
+    /// non salvate), oppure null. Vale fino alla chiusura o all'apertura di un'altra modale.
+    controlloPrimaDiChiudere: null,
+
+    impostaControlloPrimaDiChiudere(controllo) {
+        this.controlloPrimaDiChiudere = typeof controllo === "function" ? controllo : null;
+    },
+
+    /// I20-1105: la X della modale principale. Se il controllo registrato ha un avviso, chiede
+    /// "Esci senza salvare" o "Annulla", e chiude solo nel primo caso; senza controllo, o senza
+    /// niente da perdere, chiude come prima. Le chiusure fatte dal codice passano da chiudiModal e
+    /// non chiedono: chi chiude dopo aver salvato non deve ricevere domande. Torna true se ha chiuso.
+    async chiudiModalDallaX() {
+        var controllo = this.controlloPrimaDiChiudere;
+        if (typeof controllo === "function") {
+            var avviso = null;
+            try {
+                avviso = controllo();
+            }
+            catch (e) {
+                //Un controllo rotto non deve impedire di chiudere: si dice in console e si chiude.
+                console.error("Controllo prima di chiudere la finestra non riuscito", e);
+            }
+            if (avviso) {
+                var risposta = await this.confirmCustom(avviso, "Esci senza salvare");
+                if (risposta == null || !risposta.result) {
+                    return false;
+                }
+            }
+        }
+        this.chiudiModal();
+        return true;
+    },
+
     /// Chiude la modale principale, rimette il pannello e, se apriModal aveva delle scrollRules,
     /// riporta il contenitore dove l'operatore l'aveva lasciato.
     chiudiModal(){
+        //I20-1105: chiusa la finestra, il suo controllo della X non serve piu'.
+        this.controlloPrimaDiChiudere = null;
         $("#overlayModal").hide();
         $("#mainContent").show();
         $("#overlayModal").find("#bodyModal").empty();
