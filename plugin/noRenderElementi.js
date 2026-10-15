@@ -352,6 +352,45 @@ var NoRenderElementi = (function () {
         return stato;
     }
 
+    /// I20-1105: la fotografia del noRender di tutti gli elementi della schermata, per tipo e
+    /// chiave. Si prende all'apertura e dopo ogni salvataggio riuscito: confrontandola con la
+    /// lista di adesso si sa se ci sono modifiche non salvate.
+    function statoDiRendering(lista) {
+        var stato = {};
+        var elementi = lista || [];
+
+        for (var i = 0; i < elementi.length; i++) {
+            var elemento = elementi[i];
+            if (elemento == null || elemento.chiave == null) {
+                continue;
+            }
+            stato[elemento.tipo + "|" + elemento.chiave] = elemento.noRender === true;
+        }
+
+        return stato;
+    }
+
+    /// I20-1105: quanti elementi hanno un noRender diverso dalla fotografia salvata. Un elemento
+    /// cambiato e poi rimesso com'era non conta: non c'e' niente da perdere.
+    function modificheNonSalvate(lista, statoSalvato) {
+        var adesso = statoDiRendering(lista);
+        var salvato = statoSalvato || {};
+        var diverse = 0;
+
+        for (var chiave in adesso) {
+            if (!Object.prototype.hasOwnProperty.call(adesso, chiave)) {
+                continue;
+            }
+            //Un elemento che la fotografia non conosce conta come visibile: e' cosi' che si salva.
+            var prima = Object.prototype.hasOwnProperty.call(salvato, chiave) ? salvato[chiave] : false;
+            if (adesso[chiave] !== prima) {
+                diverse++;
+            }
+        }
+
+        return diverse;
+    }
+
     /// Quante foto restano da mostrare nel box.
     function fotoAncoraVisibili(lista) {
         var stato = statoDelleFoto(lista);
@@ -495,6 +534,8 @@ var NoRenderElementi = (function () {
         daSegnalareComeRiattivato: daSegnalareComeRiattivato,
         segnalazioneElementoRiattivato: segnalazioneElementoRiattivato,
         statoDelleFoto: statoDelleFoto,
+        statoDiRendering: statoDiRendering,
+        modificheNonSalvate: modificheNonSalvate,
         fotoAncoraVisibili: fotoAncoraVisibili,
         fotoCambiate: fotoCambiate,
         proporreFixFoto: proporreFixFoto,
