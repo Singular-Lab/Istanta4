@@ -34,6 +34,21 @@ namespace Istanta.Models
         }
 
         /// <summary>
+        /// I20-1106: gli switch di Npgsql che l'applicazione ha sempre impostato all'avvio, in un
+        /// posto solo. Il primo cambia il modello: con il comportamento legacy un DateTime senza
+        /// HasColumnType e' "timestamp without time zone" invece di "timestamp with time zone".
+        /// Devono valere anche per dotnet ef (le fabbriche qui sotto) e per i test, altrimenti gli
+        /// snapshot descrivono un modello diverso da quello che gira e Migrate() all'avvio si ferma
+        /// per "pending model changes". Npgsql li legge una volta sola: vanno impostati prima che
+        /// un contesto venga creato.
+        /// </summary>
+        public static void ImpostaComportamentoNpgsql()
+        {
+            AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+            AppContext.SetSwitch("Npgsql.DisableDateTimeInfinityConversions", true);
+        }
+
+        /// <summary>
         /// I20-1106: chiave di configurazione che spegne l'applicazione delle migration all'avvio
         /// (variabile d'ambiente Migrazioni__ApplicaAllAvvio=false). Senza, vale true.
         /// </summary>
@@ -113,6 +128,7 @@ namespace Istanta.Models
     {
         public edro21_dbContext CreateDbContext(string[] args)
         {
+            Migrazioni.ImpostaComportamentoNpgsql();
             var options = new DbContextOptionsBuilder<edro21_dbContext>();
             Migrazioni.UsaPostgres(options, Migrazioni.ConnessioneDesignTime, Migrazioni.StoricoContesto1);
             return new edro21_dbContext(options.Options);
@@ -123,6 +139,7 @@ namespace Istanta.Models
     {
         public Edro21_DbContext2 CreateDbContext(string[] args)
         {
+            Migrazioni.ImpostaComportamentoNpgsql();
             var options = new DbContextOptionsBuilder<Edro21_DbContext2>();
             Migrazioni.UsaPostgres(options, Migrazioni.ConnessioneDesignTime, Migrazioni.StoricoContesto2);
             return new Edro21_DbContext2(options.Options);

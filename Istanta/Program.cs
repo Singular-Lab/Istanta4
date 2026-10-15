@@ -29,8 +29,9 @@ using System.Globalization;
 using System.Text.RegularExpressions;
 using Istanta.Models_2;
 
-AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
-AppContext.SetSwitch("Npgsql.DisableDateTimeInfinityConversions", true);
+// I20-1106: gli switch di Npgsql stanno in Migrazioni, condivisi con dotnet ef e con i test: il
+// modello che gira deve essere quello degli snapshot, altrimenti Migrate() all'avvio si ferma.
+Migrazioni.ImpostaComportamentoNpgsql();
 
 
 var logPath = Path.Combine(AppContext.BaseDirectory, "logs", "log-.txt");

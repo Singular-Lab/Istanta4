@@ -31,7 +31,7 @@ namespace Istanta.Migrations.Contesto2
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
                     b.Property<DateTime>("DataRegistrazione")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<long>("IdAttivita")
                         .HasColumnType("bigint");
@@ -69,13 +69,13 @@ namespace Istanta.Migrations.Contesto2
                         .HasColumnType("text");
 
                     b.Property<DateTime?>("DataFine")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime?>("DataInizio")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime>("DataInserimento")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<long?>("IdParent")
                         .HasColumnType("bigint");
@@ -561,7 +561,7 @@ namespace Istanta.Migrations.Contesto2
                         .HasColumnType("bigint");
 
                     b.Property<DateTime?>("RegisterDate")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<byte>("TipoAzione")
                         .HasColumnType("smallint");

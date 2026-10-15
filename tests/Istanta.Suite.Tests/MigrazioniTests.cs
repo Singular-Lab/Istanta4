@@ -16,7 +16,9 @@ namespace Istanta.Suite.Tests;
 /// I20-994: i due contesti passano alle migration di EF, partendo da una Baseline vuota,
 /// e la prima migration vera allarga articoli.ean a 300 e Attivita.contract a 5000.
 /// I20-1106: la seconda crea promo_backup, e le migration pendenti le applica Istanta all'avvio,
-/// perche' sul compilato distribuito in produzione dotnet ef non c'e'.
+/// perche' sul compilato distribuito in produzione dotnet ef non c'e'. Le TimestampSenzaFuso
+/// riallineano gli snapshot al modello che gira davvero, con il comportamento legacy di Npgsql sui
+/// timestamp, senza toccare lo schema.
 /// Nessun test si connette a un database: i contesti si costruiscono dalle fabbriche di
 /// design time, con una connessione che non punta a niente.
 /// </summary>
@@ -125,8 +127,8 @@ public class MigrazioniTests
         var nomi1 = ctx1.GetService<IMigrationsAssembly>().Migrations.Keys.Select(NomeSenzaData).ToList();
         var nomi2 = ctx2.GetService<IMigrationsAssembly>().Migrations.Keys.Select(NomeSenzaData).ToList();
 
-        Assert.Equal(new[] { "Baseline", "EanA300ContractA5000" }, nomi1);
-        Assert.Equal(new[] { "Baseline", "PromoBackup" }, nomi2);
+        Assert.Equal(new[] { "Baseline", "EanA300ContractA5000", "TimestampSenzaFuso" }, nomi1);
+        Assert.Equal(new[] { "Baseline", "PromoBackup", "TimestampSenzaFuso" }, nomi2);
     }
 
     // Lo schema c'e' gia' su ogni database: la Baseline lo registra e basta.
@@ -143,6 +145,51 @@ public class MigrazioniTests
                 Assert.Empty(baseline.DownOperations);
             }
         }
+    }
+
+    // I20-1106: gli snapshot erano stati generati senza il comportamento legacy di Npgsql, e le
+    // colonne DateTime senza tipo esplicito vi risultavano "with time zone". Le colonne diverse
+    // stanno tutte in entita' raggiunte per navigazione, senza ToTable, che nessun database ha:
+    // le TimestampSenzaFuso registrano lo snapshot giusto e non toccano lo schema, come la Baseline.
+    [Fact]
+    public void Le_TimestampSenzaFuso_riallineano_lo_snapshot_senza_toccare_lo_schema()
+    {
+        foreach (var ctx in new DbContext[] { Contesto1(), Contesto2() })
+        {
+            using (ctx)
+            {
+                var migration = CreaMigration(ctx, "TimestampSenzaFuso");
+
+                Assert.Empty(migration.UpOperations);
+                Assert.Empty(migration.DownOperations);
+            }
+        }
+    }
+
+    // I20-1106: a runtime un DateTime senza HasColumnType e' "timestamp without time zone"; anche
+    // qui, e per dotnet ef, deve esserlo, su una colonna che nessun mapping configura. Se questo
+    // test fallisce, gli snapshot che si generano descrivono un modello diverso da quello che gira.
+    [Fact]
+    public void Il_modello_di_design_time_usa_i_timestamp_senza_fuso_come_a_runtime()
+    {
+        using var ctx1 = Contesto1();
+
+        var dataRegistrazione = ctx1.Model.FindEntityType(typeof(Promo))!.FindProperty(nameof(Promo.DataRegistrazione))!;
+
+        Assert.Equal("timestamp without time zone", dataRegistrazione.GetColumnType());
+    }
+
+    // I20-1106: gli switch di Npgsql stanno in un posto solo, e Program.cs e le due fabbriche di
+    // design time li prendono da li'.
+    [Fact]
+    public void L_applicazione_e_le_fabbriche_impostano_gli_switch_di_Npgsql_da_Migrazioni()
+    {
+        var programma = File.ReadAllText(TrovaFile("Istanta/Program.cs"));
+        var migrazioni = File.ReadAllText(TrovaFile("Istanta/Models/Migrazioni.cs"));
+
+        Assert.Contains("Migrazioni.ImpostaComportamentoNpgsql();", programma);
+        Assert.DoesNotContain("AppContext.SetSwitch(\"Npgsql", programma);
+        Assert.Equal(2, migrazioni.Split("Migrazioni.ImpostaComportamentoNpgsql();").Length - 1);
     }
 
     [Fact]
