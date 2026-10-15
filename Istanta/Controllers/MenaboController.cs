@@ -348,12 +348,19 @@ namespace Istanta.Controllers
 
                 var promise = await ficoController.processaKit(idLavorazione, FicoCombinazioneKitReadMode.Advanced, noCache);
                 var okResult = promise as OkObjectResult;
-                result = (okResult!.Value as ArticoloInRevisioneKitResult)!;
+                ArticoloInRevisioneKitResult? risposta = okResult?.Value as ArticoloInRevisioneKitResult;
 
-                if (!result.esito)
+                if (risposta == null || !risposta.esito)
                 {
-                    throw new Exception(result.error);
+                    //I20-1069: l'errore di processaKit e' gia' descritto, e la sua traccia e' gia' in dettaglio:
+                    //passa cosi' com'e', invece di diventare il messaggio di una nuova eccezione.
+                    result.error = DescrizioneErrori.Breve("getListaTracciatoNew", ErroreIstanta.DiProcessaKit(risposta?.error, risposta != null, idLavorazione));
+                    result.dettaglio = risposta?.dettaglio;
+                    result.esito = false;
+                    Console.WriteLine($"getListaTracciatoNew (lavorazione {idLavorazione}): {result.error}");
+                    return Ok(result);
                 }
+                result = risposta;
                 //List<Dictionary<string, object>> listaFiltrata = result.records.Where(f => (Byte)f.recordInTracciato[GLOBAL_VARIABLES.keyXMLSelezione] == (Byte)TipoSelezioneMenabo.Primaria).Select(f => f.recordInTracciato).ToList();
                 if(result.tipoLavorazione != TipoLavorazione.PoP)
                 {
@@ -368,11 +375,12 @@ namespace Istanta.Controllers
             }
             catch (Exception ex)
             {
+                //I20-1069: messaggio breve per il Plugin, traccia completa nel log e in dettaglio.
+                Console.WriteLine($"Errore in getListaTracciatoNew (lavorazione {idLavorazione}): " + ex.ToString());
 
-                //Console.WriteLine($"Scarico kit error {ex.ToString()}");
-
-                result.error = "getListaTracciatoNew -> " + ex.ToString();
-                ex.ToString();
+                result.error = DescrizioneErrori.Breve("getListaTracciatoNew", ex);
+                result.dettaglio = DescrizioneErrori.Dettaglio(ex);
+                result.esito = false;
             }
 
             return Ok(result);
@@ -7030,6 +7038,8 @@ double.TryParse(percorso.ToString(), out double valore16))
 
 
             List<string> codiciImpaginatiInQuestaImpaginazione = new List<string>();
+            //I20-1069: la traccia di un errore di processaKit, che il catch passa al Plugin al posto della propria.
+            string? dettaglioDiProcessaKit = null;
 
             try
             {
@@ -7105,7 +7115,7 @@ double.TryParse(percorso.ToString(), out double valore16))
                     var msg = string.Join(", ", codiciDuplicati.Select(c =>
                         c.IsConId ? $"{c.Codice} / idRec {c.IdRec}" : c.Codice));
 
-                    throw new Exception($"Codici forzati duplicati: {msg}");
+                    throw new ErroreIstanta("controllo dei codici forzati", $"codici forzati duplicati: {msg}");
                 }
 
                 // Lanciamo un errore se ci sono duplicati
@@ -7135,7 +7145,7 @@ double.TryParse(percorso.ToString(), out double valore16))
 
                             if (numForzati > spaziDisponibili)
                             {
-                                throw new Exception($"Pagina {filtro.Pag}: troppi codici forzati ({numForzati}) rispetto agli spazi disponibili ({spaziDisponibili})");
+                                throw new ErroreIstanta("controllo dei codici forzati", $"pagina {filtro.Pag}: troppi codici forzati ({numForzati}) rispetto agli spazi disponibili ({spaziDisponibili})");
                             }
                         }
                     }
@@ -7159,7 +7169,12 @@ double.TryParse(percorso.ToString(), out double valore16))
                 //}
 
                 string session = SessionIstantaObject.GetSession(HttpContext);
-                Int16 id_utente = Int16.Parse(session);
+                //I20-1069: senza sessione GetSession restituisce "no session", e Int16.Parse dava all'operatore
+                //un FormatException. Prima la lavorazione: senza, processaKit non ha niente da preparare.
+                if (!Int16.TryParse(session, out Int16 id_utente))
+                    throw ErroreIstanta.SessioneScaduta();
+                if (promoLav == null)
+                    throw new ErroreIstanta("lettura della lavorazione", $"la lavorazione {idLavorazione} non esiste.");
 
 
                 //if (confronto)
@@ -7220,23 +7235,19 @@ double.TryParse(percorso.ToString(), out double valore16))
 
                 //var res = await ficoController.processaKit(idLavorazione, (confronto ? IstantaLib.FicoCombinazioneKitReadMode.Advanced : IstantaLib.FicoCombinazioneKitReadMode.Classic), noCache, "", confronto);
                 var res = await ficoController.processaKit(idLavorazione, IstantaLib.FicoCombinazioneKitReadMode.Advanced, noCache, ""/*, confronto*/);
-                List<IstantaLib.ArticoloInKit>? listaOriginale = null;
-
-                if (res is OkObjectResult)
+                //I20-1069: l'errore di processaKit e' gia' descritto e passa cosi' com'e', con la sua traccia in
+                //dettaglio. Prima diventava "Fallimento durante il processamento del kit: " + l'intera traccia, e
+                //una risposta senza lista finiva in un NullReferenceException piu' sotto.
+                ArticoloInRevisioneKitResult? esito = (res as OkObjectResult)?.Value as ArticoloInRevisioneKitResult;
+                if (esito == null || !esito.esito)
                 {
-                    var okResult = res as OkObjectResult;
-                    if (okResult!.Value is ArticoloInRevisioneKitResult)
-                    {
-                        var esito = (okResult.Value as ArticoloInRevisioneKitResult);
-                        if (esito!.esito == false)
-                        {
-                            throw new Exception("Fallimento durante il processamento del kit da ficoController: " + esito.error);
-                        }
-
-                        result.tipoLavorazione = esito.tipoLavorazione;
-                        listaOriginale = esito.records;
-                    }
+                    dettaglioDiProcessaKit = esito?.dettaglio;
+                    throw ErroreIstanta.DiProcessaKit(esito?.error, esito != null, idLavorazione);
                 }
+
+                result.tipoLavorazione = esito.tipoLavorazione;
+                result.warn = esito.warn;
+                List<IstantaLib.ArticoloInKit> listaOriginale = esito.records;
 
                 if (result.tipoLavorazione == TipoLavorazione.Volantino && (filtri == null || filtri.Filters == null || filtri.Filters.Count == 0))
                 {
@@ -7244,17 +7255,18 @@ double.TryParse(percorso.ToString(), out double valore16))
                     return Ok(result);
                 }
 
-                PromoLavorazioni? plItem = this.ctx2.PromoLavorazionis.FirstOrDefault(pl => pl.Id == idLavorazione);
+                PromoLavorazioni plItem = promoLav;
 
-                Promo? promo = this.ctx2.Promos.Where(w => w.guidID == plItem!.GuidPromo).FirstOrDefault();
+                Promo? promo = this.ctx2.Promos.Where(w => w.guidID == plItem.GuidPromo).FirstOrDefault()
+                    ?? throw new ErroreIstanta("lettura della promo", $"la promo {plItem.GuidPromo} della lavorazione {idLavorazione} non esiste.");
 
 
 
-                foreach (var itemOriginale in listaOriginale!)
+                foreach (var itemOriginale in listaOriginale)
                 {
                     itemOriginale.recordInTracciato["idRec"] = itemOriginale.IdRec;
-                    if (itemOriginale.recordInTracciato[GLOBAL_VARIABLES_FICO.keyCodiceGruppo].ToString() == "2907018,6922799,7053334,7231599")
-                        "ok".ToString();
+                    //I20-1069: qui c'era un residuo di debug (il gruppo 2907018,...) che lanciava
+                    //KeyNotFoundException su qualunque record senza codice gruppo.
 
                     //I20-1048: i record vengono dalla cache del kit, e dopo la prima impaginazione le due
                     //liste erano lo stesso oggetto: aggiungerla a se stessa raddoppiava le etichette a ogni
@@ -7345,7 +7357,8 @@ double.TryParse(percorso.ToString(), out double valore16))
                     var resLista = OttieniListaImpaginazione(listaOriginale);
                     if (!resLista.esito)
                     {
-                        throw new Exception(resLista.error);
+                        //I20-1069: il motivo dentro il passo, invece della traccia come messaggio di una nuova eccezione.
+                        throw new ErroreIstanta("raggruppamento della lista", resLista.error);
                     }
 
                     List<Dictionary<string, object>> listaFiltrata = resLista.listaGruppi;
@@ -7960,14 +7973,15 @@ double.TryParse(percorso.ToString(), out double valore16))
                                 }
                                 float elementiMediPerPagina = totalElements / pagConsecutive;
 
-                                Formato? formato = SingletonConfiguration.DBFORMATI!.source.Where(f => f.guidID == promoLav!.GuidFormato).FirstOrDefault();
-                                FormatoDettagli? frmDtl = formato!.dettagliGriglie.Where(d => d.pag == pag).FirstOrDefault();
+                                //I20-1069: un formato assente da SourceFormati.json dava un NullReferenceException.
+                                Formato formato = Formati.Trova(promoLav.GuidFormato, $"lavorazione {idLavorazione}");
+                                FormatoDettagli? frmDtl = formato.dettagliGriglie.Where(d => d.pag == pag).FirstOrDefault();
                                 if (frmDtl == null)
                                 {
-                                    throw new Exception("Il formato per pagina " + pag + " non è stato specificato, aggiornare SourceFormati.json nella cartella externalSource");
+                                    throw new ErroreIstanta("scelta della griglia", $"il formato {formato.guidID} non ha le griglie della pagina {pag}: aggiornare SourceFormati.json nella cartella externalSource.");
                                 }
                                 List<regoleGriglia> regoleGriglie = formato.regoleGriglie;
-                                filtroCorrispondente.Griglia = findGriglia(pag, elementiMediPerPagina, pagConsecutive, frmDtl, regoleGriglie, primoElementDaCuiLeggereTracciatoContext, promo!, plItem!);
+                                filtroCorrispondente.Griglia = findGriglia(pag, elementiMediPerPagina, pagConsecutive, frmDtl, regoleGriglie, primoElementDaCuiLeggereTracciatoContext, promo, plItem);
                             }
                             else if (CalcolaEspressione(filtroCorrispondente.Griglia.nomeGriglia!) != filtroCorrispondente.Griglia.numeroBox)
                             {
@@ -8380,6 +8394,9 @@ double.TryParse(percorso.ToString(), out double valore16))
 
                             if(filtroCorrispondente != null)
                             {
+                                //I20-1069: un filtro di pagina senza griglia dava un NullReferenceException senza pagina.
+                                if (filtroCorrispondente.Griglia == null)
+                                    throw new ErroreIstanta("scelta della griglia", $"il filtro della pagina {filtroCorrispondente.Pag} non ha la griglia.");
                                 if(filtri.GriglieValide == null || filtri.GriglieValide.Count == 0)
                                 {
                                     griglia = filtroCorrispondente.Griglia.nomeGriglia;
@@ -8601,9 +8618,12 @@ double.TryParse(percorso.ToString(), out double valore16))
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Impaginazione POP ERROR 2 " + ex.ToString());
+                //I20-1069: al Plugin il messaggio breve (passo e motivo, o tipo e riga); nel log e in dettaglio
+                //la traccia completa, che per un errore di processaKit e' la sua.
+                Console.WriteLine($"Errore in ImpaginaFromInDesignNew (lavorazione {idLavorazione}, impagina {impagina}): " + ex.ToString());
 
-                result.error = ex.ToString();
+                result.error = DescrizioneErrori.Breve("ImpaginaFromInDesignNew", ex);
+                result.dettaglio = dettaglioDiProcessaKit ?? DescrizioneErrori.Dettaglio(ex);
                 return Ok(result);
             }
 
@@ -8704,8 +8724,15 @@ double.TryParse(percorso.ToString(), out double valore16))
             return datoStr.Equals(regolaStr, StringComparison.OrdinalIgnoreCase);
         }
 
-        public static int CalcolaEspressione(string input)
+        public static int CalcolaEspressione(string? input)
         {
+            //I20-1069: prima un formato nullo dava un NullReferenceException, e uno sbagliato "Espressione
+            //non valida" senza dire quale: l'operatore non sapeva quale griglia correggere.
+            if (string.IsNullOrWhiteSpace(input))
+                throw new ErroreIstanta("calcolo della griglia", "la griglia non ha il formato (atteso come 4x3 o 4x3+1).");
+
+            string originale = input;
+
             // Sostituisci 'x' con '*' per coerenza interna
             input = input.Replace("x", "*");
 
@@ -8713,7 +8740,7 @@ double.TryParse(percorso.ToString(), out double valore16))
             var match = Regex.Match(input, @"^(\d+)\*(\d+)([\+\-]\d+)?$");
 
             if (!match.Success)
-                throw new ArgumentException("Espressione non valida");
+                throw new ErroreIstanta("calcolo della griglia", $"il formato di griglia '{originale}' non e' valido (atteso come 4x3 o 4x3+1).");
 
             int primo = int.Parse(match.Groups[1].Value);
             int secondo = int.Parse(match.Groups[2].Value);
@@ -8753,20 +8780,23 @@ double.TryParse(percorso.ToString(), out double valore16))
             string key_codiceRef = Enum.GetName(AddestramentoRuoli.Referenza) + "." + GLOBAL_VARIABLES.keyRefCodice;
             try
             {
+                //I20-1069: un campo mancante dice di quale record e di quale gruppo, invece di un
+                //KeyNotFoundException con la sola chiave.
                 var groupedRecords = lista
         .GroupBy(f => new
         {
             f.label,
-            CodiceGruppo = f.recordInTracciato[key_codice_gruppo]
+            CodiceGruppo = RecordTracciato.Richiesto(f.recordInTracciato, key_codice_gruppo, "raggruppamento della lista", $"il record {f.IdRec}")
         });
 
                 foreach (var item in groupedRecords)
                 {
                     ////List<Dictionary<string, object>> listaFiltrata = listaOriginale.Where(f => (Byte)f.recordInTracciato[GLOBAL_VARIABLES.keyXMLSelezione] == (Byte)TipoSelezioneMenabo.Primaria).Select(f => f.recordInTracciato).ToList();
-                    Dictionary<string, object>? primario = item.Where(f => Convert.ToByte(f.recordInTracciato[keyXMLSelezione]) == (Byte)TipoSelezioneMenabo.Primaria).Select(f => f.recordInTracciato).FirstOrDefault();
+                    Dictionary<string, object>? primario = item.Where(f => Convert.ToByte(RecordTracciato.Richiesto(f.recordInTracciato, keyXMLSelezione, "scelta del primario",
+                        $"il record {f.IdRec} del gruppo {item.Key.CodiceGruppo}")) == (Byte)TipoSelezioneMenabo.Primaria).Select(f => f.recordInTracciato).FirstOrDefault();
                     if (primario == null)
                     {
-                        throw new Exception($"Primario non trovato in OttieniListaImpaginazione GRUPPO:{item.FirstOrDefault()!.recordInTracciato[GLOBAL_VARIABLES_FICO.keyCodiceGruppo]}");
+                        throw new ErroreIstanta("scelta del primario", $"il gruppo {item.Key.CodiceGruppo} non ha un record primario.");
                     }
 
                     //List<FotoElementoGruppo> membriGruppoFoto = getFotoSecondarieGruppo(item.Select(s => s.recordInTracciato).ToList(), new List<PromoLavorazioniRecord>());
@@ -8779,8 +8809,10 @@ double.TryParse(percorso.ToString(), out double valore16))
             }
             catch (Exception ex)
             {
+                //I20-1069: il motivo, senza la traccia: chi chiama lo mette dentro il suo passo. La traccia va nel log.
+                Console.WriteLine("Errore in OttieniListaImpaginazione: " + ex.ToString());
                 result.esito = false;
-                result.error = ex.ToString();
+                result.error = DescrizioneErrori.Motivo(ex);
                 result.listaGruppi.Clear();
             }
 
@@ -8844,7 +8876,7 @@ double.TryParse(percorso.ToString(), out double valore16))
             {
                 if (formatoDettagli.griglie.Count == 0)
                 {
-                    throw new Exception("Nessuna griglia inserita nei formati");
+                    throw new ErroreIstanta("scelta della griglia", "il formato non ha griglie per questa pagina (SourceFormati.json).");
                 }
                 int referenzeArrotondate = numeroPagine > 1 ? (int)Math.Round(referenzePerPagina) : (int)Math.Ceiling(referenzePerPagina);
 
@@ -8902,7 +8934,8 @@ double.TryParse(percorso.ToString(), out double valore16))
                     }
                     catch (Exception exSilenzioso)
                     {
-                        Console.WriteLine($"[catch muto] MenaboController.cs riga ~10709: {exSilenzioso.Message}");
+                        //I20-1069: la griglia sbagliata si salta come prima, ma si dice quale.
+                        Console.WriteLine($"Scelta della griglia, pagina {pag}: griglia '{griglia}' saltata - {DescrizioneErrori.Motivo(exSilenzioso)}");
                     }
                 }
 
@@ -8941,7 +8974,9 @@ double.TryParse(percorso.ToString(), out double valore16))
                 //    grigliaRichiesta.Righe.Add(riga);
                 //}
                 logAssistent.Write("Selezione griglia errore: " + ex.Message);
-                throw new Exception("Errore durante la selezione della griglia: " + ex.Message);
+                //I20-1069: prima si rilanciava il solo messaggio, perdendo tipo, riga e pagina. Ora la pagina
+                //si dice, e l'errore originale resta dentro.
+                throw new ErroreIstanta("scelta della griglia", $"pagina {pag}: {DescrizioneErrori.Motivo(ex)}", ex);
 
             }
 
@@ -8959,7 +8994,7 @@ double.TryParse(percorso.ToString(), out double valore16))
             {
                 if (griglieValide == null || griglieValide.Count == 0)
                 {
-                    throw new Exception("Nessuna griglia valida trovata");
+                    throw new ErroreIstanta("scelta della griglia", "il Plugin non ha mandato nessuna griglia valida (griglie della libreria per il canale).");
                 }
                 int referenzeArrotondate = numeroPagine > 1 ? (int)Math.Round(referenzePerPagina) : (int)Math.Ceiling(referenzePerPagina);
 
@@ -9010,7 +9045,8 @@ double.TryParse(percorso.ToString(), out double valore16))
                     }
                     catch (Exception exSilenzioso)
                     {
-                        Console.WriteLine($"[catch muto] MenaboController.cs riga ~10814: {exSilenzioso.Message}");
+                        //I20-1069: la griglia sbagliata si salta come prima, ma si dice quale.
+                        Console.WriteLine($"Scelta della griglia: griglia '{griglia?.nomeGriglia}' formato '{griglia?.formato}' saltata - {DescrizioneErrori.Motivo(exSilenzioso)}");
                     }
                 }
 
@@ -9026,7 +9062,8 @@ double.TryParse(percorso.ToString(), out double valore16))
             catch (Exception ex)
             {
                 logAssistent.Write("Selezione griglia errore: " + ex.Message);
-                throw new Exception("Errore durante la selezione della griglia: " + ex.Message);
+                //I20-1069: prima si rilanciava il solo messaggio, perdendo tipo e riga; l'errore originale resta dentro.
+                throw new ErroreIstanta("scelta della griglia", DescrizioneErrori.Motivo(ex), ex);
 
             }
 

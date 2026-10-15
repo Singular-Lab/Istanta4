@@ -2173,6 +2173,11 @@ namespace Istanta.Models
         public TipoLavorazione tipoLavorazione { get; set; }
         public List<ResponseImpagination>? Result { get; set; }
         public string? error;
+        //I20-1069: in error il messaggio breve per l'operatore, qui la traccia completa che il Plugin
+        //scrive in console senza mostrarla.
+        public string? dettaglio;
+        //I20-1069: l'avviso di processaKit sui record della lista non completati.
+        public string? warn;
     }
 
     public class FileIndd
