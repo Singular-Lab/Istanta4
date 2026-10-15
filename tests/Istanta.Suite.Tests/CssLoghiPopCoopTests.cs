@@ -13,6 +13,10 @@ namespace Istanta.Suite.Tests;
 /// Nel PoP: Logo_FiorFiore scritto senza asterischi, Logo_Fru_Swing_Nero mancante,
 /// Logo_BancodelGusto con fit 1 (CONTENT_TO_FRAME, senza proporzioni); nel volantino e nel PoP:
 /// *LOGO_VIVIVERDE* e *logo_senzaolioPalma* che prendevano anche _BIO e Coop.
+/// Le foto extra caricate a mano hanno nomi imprevedibili: nel PoP le prendono i pattern generici
+/// *foto_extra$*$tipo_3* e *foto_extra$*$tipo_2*, in livelli in coda validi solo con gli slot, dove
+/// ogni elemento si prende una volta sola (CssFotoExtraManualiPopCoopTests). I livelli sempre attivi
+/// restano uno per logo.
 /// </summary>
 public class CssLoghiPopCoopTests
 {
@@ -45,6 +49,12 @@ public class CssLoghiPopCoopTests
     private static IEnumerable<JObject> PostRidimensionamenti(JObject operazione) =>
         (operazione["postRidimensionamenti"] as JArray)?.Cast<JObject>() ?? Enumerable.Empty<JObject>();
 
+    /// I pattern che prendono le foto extra caricate a mano: non sono sigle di loghi.
+    private static bool Generico(string pattern) => pattern.StartsWith("*foto_extra$");
+
+    /// Un livello senza condizioni vale in ogni box, con e senza slot.
+    private static bool SempreAttivo(JToken livello) => !(livello["listSetCondizioni"] is JArray condizioni && condizioni.Count > 0);
+
     private static List<JObject> OperazioniConLoghi(int tipoLavorazione) =>
         Operazioni(Css(), tipoLavorazione).Where(o => Loghi(o) != null).ToList();
 
@@ -56,6 +66,7 @@ public class CssLoghiPopCoopTests
         return Operazioni(css, 1).Concat(Operazioni(css, 2))
             .Select(Loghi).Where(a => a != null)
             .SelectMany(a => a!["gruppoEtichette"]!.Values<string>())
+            .Where(p => !Generico(p!))
             .Select(p => p!.Trim('*').Trim('$'))
             .Where(s => !s.Contains('.'))
             .Distinct()
@@ -81,7 +92,7 @@ public class CssLoghiPopCoopTests
 
                 Assert.True(PostRidimensionamenti(operazione).Any(g => Prende(g["gruppoEtichette"], etichetta)), dove + ": nessun ridimensionamento");
                 Assert.True(Prende(loghi["gruppoEtichette"], etichetta), dove + ": fuori dal gruppo Loghi");
-                Assert.Equal(1, loghi["ordinamentoLivelli"]!.Count(l => Prende(l["elementi"], etichetta)));
+                Assert.Equal(1, loghi["ordinamentoLivelli"]!.Where(SempreAttivo).Count(l => Prende(l["elementi"], etichetta)));
                 Assert.True(loghi["finalFit"]!.Any(f => Prende(f["nomiElementi"], etichetta)), dove + ": nessun fit finale");
             }
         }
@@ -112,7 +123,8 @@ public class CssLoghiPopCoopTests
                 .Where(f => Prende(f["nomiElementi"], Etichetta("Logo_FiorFiore")))
                 .Select(f => string.Join(",", f["fit"]!.Values<int>()))
                 .ToList();
-            Assert.Equal(new[] { "3" }, fit);
+            //Prima il fit generico delle foto extra, poi il suo: conta l'ultimo, che riempie.
+            Assert.Equal(new[] { "2", "3" }, fit);
         }
     }
 
@@ -139,7 +151,7 @@ public class CssLoghiPopCoopTests
         {
             foreach (var sigla in new[] { "LOGO_VIVIVERDE", "LOGO_VIVIVERDE_BIO", "logo_senzaolioPalma", "logo_senzaolioPalmaCoop" })
             {
-                Assert.Equal(1, Loghi(operazione)!["ordinamentoLivelli"]!.Count(l => Prende(l["elementi"], Etichetta(sigla))));
+                Assert.Equal(1, Loghi(operazione)!["ordinamentoLivelli"]!.Where(SempreAttivo).Count(l => Prende(l["elementi"], Etichetta(sigla))));
             }
         }
     }
