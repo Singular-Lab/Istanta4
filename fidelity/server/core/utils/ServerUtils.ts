@@ -194,10 +194,11 @@ class ServerUtils {
      * @param {HttpMethod} method - The HTTP method to use for the request.
      * @param {any} data - The data to send in the body of the request.
      * @param {Record<string, string>} [customHeaders] - Optional additional headers to send with the request.
+     * @param {number} [timeoutMs] - Timeout di questa chiamata; senza, FICO_API_TIMEOUT_MS o 10 minuti.
      * @returns {Promise<ApiResponse<T>>} - A promise that resolves to the API response.
      * @throws Will throw an error if the request fails or the response is not ok.
      */
-    static async sendToFICOApi<T>(req: Request, url: string, method: HttpMethod | string, data: any, customHeaders?: Record<string, string>): Promise<ApiResponse<T>> {
+    static async sendToFICOApi<T>(req: Request, url: string, method: HttpMethod | string, data: any, customHeaders?: Record<string, string>, timeoutMs?: number): Promise<ApiResponse<T>> {
         const jar = await this.getRequestCookieJar(req);
 
         const fetchWithCookies = fetchCookie(fetch, jar);
@@ -230,7 +231,7 @@ class ServerUtils {
                 headers: headers,
                 body: method !== 'GET' && method !== 'HEAD' ? (data instanceof FormData ? data : JSON.stringify(data)) : undefined,
                 // Default alto: Istanta/Olimpo possono fare trasferimenti FTP lunghi. Il timeout finisce nel catch (status 0)
-                signal: AbortSignal.timeout(Number(process.env.FICO_API_TIMEOUT_MS) || 600_000)
+                signal: AbortSignal.timeout(timeoutMs ?? (Number(process.env.FICO_API_TIMEOUT_MS) || 600_000))
             };
             //console.log(Colorize.bgBlue(url));
             // Usa il fetch con il cookie jar isolato.

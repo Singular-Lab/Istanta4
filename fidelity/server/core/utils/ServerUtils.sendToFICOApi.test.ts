@@ -67,4 +67,20 @@ describe('ServerUtils.sendToFICOApi su risposta non OK', () => {
     expect(r.status).toBe(0);
     expect(r.data).toBeNull();
   });
+
+  it('il timeout della singola chiamata prevale su FICO_API_TIMEOUT_MS', async () => {
+    vi.stubEnv('FICO_API_TIMEOUT_MS', '20');
+    // risponde dopo 100 ms: oltre il timeout generico, entro quello della chiamata
+    fetchMock.mockImplementation((_url: string, opzioni: { signal: AbortSignal }) =>
+      new Promise((ok, reject) => {
+        const t = setTimeout(() => ok(risposta(200, '{"esito":true}')), 100);
+        opzioni.signal.addEventListener('abort', () => { clearTimeout(t); reject(opzioni.signal.reason); });
+      })
+    );
+
+    const r = await ServerUtils.sendToFICOApi(req, 'http://127.0.0.1:5000/UploadVolStorico.ashx', 'POST', {}, undefined, 5_000);
+
+    expect(r.status).toBe(200);
+    expect(r.data).toEqual({ esito: true });
+  });
 });
