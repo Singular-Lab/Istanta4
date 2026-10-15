@@ -1457,6 +1457,98 @@ namespace Istanta.Controllers
             return form;
         }
 
+        /// Le foto extra di una ref che la sincronizzazione del Plugin scarica nella cartella Loghi,
+        /// da cui l'impaginazione le piazza. Solo quelle con un file proprio: un puntatore rimanda a
+        /// un logo dell'archivio Loghi/Bolli, che arriva con getPacchettoLoghiBolliAsContract. Anche
+        /// le disattivate: l'operatore le riattiva dal Plugin senza rifare la sincronizzazione.
+        /// Tipo dice al Plugin che e' una foto extra; le foto del prodotto restano senza.
+        public static List<FileOlympoSync> FotoExtraDaScaricare(IEnumerable<LogoBollo_ExtraNoAuto>? fotoExtra)
+        {
+            if (fotoExtra == null)
+            {
+                return new List<FileOlympoSync>();
+            }
+
+            return fotoExtra
+                .Where(f => f != null && !f.puntatore && !string.IsNullOrEmpty(f.guidId) && f.tipo != (Byte)TipoFoto.Foto)
+                .Select(f => new FileOlympoSync
+                {
+                    Id = f.guidId,
+                    FileName = f.nome,
+                    IdRef = f.id.ToString(),
+                    Tipo = (TipoFoto)f.tipo
+                }).ToList();
+        }
+
+        /// Le foto extra di una ref come le mette nel record FicoProcess.impacchettaInfoRecord: quelle
+        /// che non sono foto del prodotto, tranne quelle riservate a un altro canale o a un'altra area.
+        public static List<LogoBollo_ExtraNoAuto> FotoExtraDellaRef(IEnumerable<ArticoliFoto>? foto, string? area, string? canale)
+        {
+            if (foto == null)
+            {
+                return new List<LogoBollo_ExtraNoAuto>();
+            }
+
+            return foto
+                .Where(f => f.Tipo.HasValue && f.Tipo != (Byte)TipoFoto.Foto)
+                .Where(f => f.Canale == null || f.Canale == canale)
+                .Where(f => f.Area == null || f.Area == area)
+                .Select(f => new LogoBollo_ExtraNoAuto
+                {
+                    id = f.Id,
+                    nome = f.NomeReale,
+                    area = f.Area,
+                    canale = f.Canale,
+                    guidId = f.GuidId,
+                    tipo = f.Tipo!.Value,
+                    attiva = f.Attiva ?? false,
+                    puntatore = f.Puntatore
+                }).ToList();
+        }
+
+        /// Foto.Extra di un record del kit: una lista nel record appena costruito, un JArray o una
+        /// stringa JSON quando il record e' passato da una serializzazione.
+        public static List<LogoBollo_ExtraNoAuto>? LeggiFotoExtra(object? valore)
+        {
+            if (valore is List<LogoBollo_ExtraNoAuto> lista)
+            {
+                return lista;
+            }
+            if (valore is JArray array)
+            {
+                return array.ToObject<List<LogoBollo_ExtraNoAuto>>();
+            }
+            if (valore is string testo && testo != "")
+            {
+                return JsonConvert.DeserializeObject<List<LogoBollo_ExtraNoAuto>>(testo);
+            }
+            return null;
+        }
+
+        /// Olimpo risponde con hash e dimensione ma il tipo non lo conosce: lo rimettiamo dalle
+        /// richieste, per id e nome del file. Le foto del prodotto restano senza tipo.
+        public static List<FileOlympoSync> ConTipoDelleRichieste(List<FileOlympoSync>? risposta, IEnumerable<FileOlympoSync> richieste)
+        {
+            if (risposta == null)
+            {
+                return new List<FileOlympoSync>();
+            }
+
+            var tipi = richieste
+                .Where(r => r.Tipo != 0 && r.Id != null)
+                .GroupBy(r => (r.Id!, r.FileName ?? ""))
+                .ToDictionary(g => g.Key, g => g.First().Tipo);
+
+            foreach (var voce in risposta)
+            {
+                if (voce.Id != null && tipi.TryGetValue((voce.Id, voce.FileName ?? ""), out var tipo))
+                {
+                    voce.Tipo = tipo;
+                }
+            }
+            return risposta;
+        }
+
         [HttpGet]
         [Route("SyncFoto/attivaDisattivaFotoExtra/{guidId}/{attiva}")]
         public async Task<IActionResult> attivaDisattivaFotoExtra(string guidId, bool attiva)
@@ -2522,6 +2614,16 @@ namespace Istanta.Controllers
                     }
                 }
 
+                //Le foto extra dei record del kit, quelle che l'impaginazione piazza dalla cartella Loghi.
+                string k_foto_extra = Enum.GetName(AddestramentoRuoli.Foto) + "." + GLOBAL_VARIABLES.keyFotoExtra;
+                foreach (var record in result.records)
+                {
+                    if (record.recordInTracciato != null && record.recordInTracciato.TryGetValue(k_foto_extra, out var fotoExtra))
+                    {
+                        fotoRichieste.AddRange(FotoExtraDaScaricare(LeggiFotoExtra(fotoExtra)));
+                    }
+                }
+
                 List<FileOlympoSync> fotoNoValide = fotoRichieste.Where(f => f.Id == "").ToList();
                 fotoRichieste = fotoRichieste.Where(f => f.Id != null && f.Id != "").ToList();
                 //int skip = (pagina - 1) * elementiPagine;
@@ -2554,7 +2656,7 @@ namespace Istanta.Controllers
                     var dataOlympo = JsonConvert.DeserializeObject<List<FileOlympoSync>>(responseBody);
 
                     //Console.WriteLine($"RRisposta di OLYMPO {dataOlympo.Count}");
-                    return Ok(dataOlympo);
+                    return Ok(ConTipoDelleRichieste(dataOlympo, fotoRichieste));
                     ////Console.WriteLine(responseBody);
                 }
                 else
@@ -2643,6 +2745,9 @@ namespace Istanta.Controllers
                 {
                     //ATTENZIONE: se si entra qui significa che questa ref NON ha foto, questo deve essre gesitto da plugin NON più con una foto fittizia fatta di cod.psd con un NOFOTO.
                 }
+
+                //Le foto extra della ref, per la cartella Loghi da cui l'impaginazione le piazza.
+                fotoRichieste.AddRange(FotoExtraDaScaricare(FotoExtraDellaRef(art.ArticoliFotos, area, canale)));
             }
 
             fotoRichieste = fotoRichieste.Where(f => f.Id != null && f.Id != "").ToList();
@@ -2660,7 +2765,7 @@ namespace Istanta.Controllers
                 var dataOlympo = JsonConvert.DeserializeObject<List<FileOlympoSync>>(responseBody);
 
                 Console.WriteLine($"RRisposta di OLYMPO {dataOlympo.Count}");
-                result.lista = dataOlympo;
+                result.lista = ConTipoDelleRichieste(dataOlympo, fotoRichieste);
                 return Ok(result);
             }
             else
