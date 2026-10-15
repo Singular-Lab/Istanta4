@@ -1720,10 +1720,10 @@ namespace Istanta.Controllers
                 {
                     throw new Exception("Lettura della lista non riuscita: " + letta.errors);
                 }
-                var codiciInLista = PuliziaListe.CodiciDellaLista(letta.liste);
+                var codici = PuliziaListe.CodiciPerCombinazione(letta.liste);
 
-                // 2. I record della promo con quella label, tutte le versioni.
-                var records = await RecordDellaPromoConLabel(promo, label);
+                // 2. I record della promo con quella label, tutte le versioni, nel canale e nell'area scelti se indicati.
+                var records = PuliziaListe.FiltraPerCanaleArea(await RecordDellaPromoConLabel(promo, label), req.guidCanale, req.guidArea);
 
                 // 3. I tipi di record del cliente, riletti dal file.
                 var tipi = new ExternalSourceClass(this.path_external_source).getPuliziaListe().source;
@@ -1735,7 +1735,7 @@ namespace Istanta.Controllers
                 // 5. Chi non si puo' eliminare.
                 var impaginati = await ImpaginatiDellaPromo(promo, records);
 
-                report = PuliziaListe.ComponiReport(importazione.NomeFile, label, tipi, daValutare, codiciInLista, impaginati);
+                report = PuliziaListe.ComponiReport(importazione.NomeFile, label, tipi, daValutare, codici, impaginati);
             }
             catch (Exception ex)
             {
@@ -1877,8 +1877,60 @@ namespace Istanta.Controllers
             {
                 record = r,
                 dato = PuliziaListe.LeggiDato(r.Dato),
-                tracciato = r.IdTracciatoNavigation?.Sigla ?? string.Empty
+                tracciato = r.IdTracciatoNavigation?.Sigla ?? string.Empty,
+                chiaveCanale = PuliziaListe.ChiaveCanale(r.IdTracciatoNavigation),
+                chiaveArea = PuliziaListe.ChiaveArea(r.IdTracciatoNavigation),
+                canale = NomeSicuro(() => r.IdTracciatoNavigation?.Canale, r.IdTracciatoNavigation?.guidCanale),
+                area = NomeSicuro(() => r.IdTracciatoNavigation?.Area, r.IdTracciatoNavigation?.guidArea)
             }).ToList();
+        }
+
+        /// <summary>Canale e Area del tracciato si risolvono dall'ACPV; se non e' caricato, resta il guid.</summary>
+        private static string NomeSicuro(Func<string?> nome, string? ripiego)
+        {
+            try
+            {
+                return nome() ?? ripiego ?? string.Empty;
+            }
+            catch
+            {
+                return ripiego ?? string.Empty;
+            }
+        }
+
+        /// <summary>I canali e le aree dei tracciati della promo, per restringere la pulizia.</summary>
+        [HttpGet]
+        [Route("Confronti/canaliAreeDellaPromo/{idPromo}")]
+        public async Task<IActionResult> canaliAreeDellaPromo(int idPromo)
+        {
+            var risposta = new CanaliAreeRisposta();
+            try
+            {
+                var tracciati = await this.ctx2.PromoTracciatis.Where(t => t.IdPromo == idPromo).ToListAsync();
+                // La chiave e' il guid se c'e', altrimenti il nome: l'importazione scrive sempre i nomi
+                // e i guid solo quando la lista li porta.
+                risposta.canali = tracciati
+                    .Select(t => new { chiave = PuliziaListe.ChiaveCanale(t), tracciato = t })
+                    .Where(x => x.chiave.Length > 0)
+                    .GroupBy(x => x.chiave, StringComparer.OrdinalIgnoreCase)
+                    .Select(g => new VoceAcpv { guid = g.Key, nome = NomeSicuro(() => g.First().tracciato.Canale, g.Key) })
+                    .OrderBy(v => v.nome, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                risposta.aree = tracciati
+                    .Select(t => new { chiave = PuliziaListe.ChiaveArea(t), tracciato = t })
+                    .Where(x => x.chiave.Length > 0)
+                    .GroupBy(x => x.chiave, StringComparer.OrdinalIgnoreCase)
+                    .Select(g => new VoceAcpv { guid = g.Key, nome = NomeSicuro(() => g.First().tracciato.Area, g.Key) })
+                    .OrderBy(v => v.nome, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                risposta.esito = true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Canali e aree della promo {IdPromo} non letti", idPromo);
+                risposta.error = ex.Message;
+            }
+            return Ok(risposta);
         }
 
         /// <summary>
@@ -1917,10 +1969,27 @@ namespace Istanta.Controllers
         }
 
         /// <summary>Chi, fra i record dati, non si puo' eliminare e perche' (PuliziaListe.Impaginati).</summary>
-        private async Task<Dictionary<long, string>> ImpaginatiDellaPromo(Promo promo, List<PromoTracciatiRecord> records)
+        private async Task<Dictionary<long, Impaginazione>> ImpaginatiDellaPromo(Promo promo, List<PromoTracciatiRecord> records)
         {
             string guid = promo.guidID ?? string.Empty;
-            var idLavorazioni = await this.ctx2.PromoLavorazionis.Where(l => l.GuidPromo == guid).Select(l => l.Id).ToListAsync();
+            var lavorazioni = await this.ctx2.PromoLavorazionis.Where(l => l.GuidPromo == guid).Select(l => new { l.Id, l.GuidFormato, l.Meta }).ToListAsync();
+            var idLavorazioni = lavorazioni.Select(l => l.Id).ToList();
+
+            // Come ogni lavorazione si presenta nell'avviso: tipo (PoP o Volantino) e codice dal
+            // formato del kit, titolo dal Meta.
+            var formati = SingletonConfiguration.DBFORMATI?.source ?? new List<Formato>();
+            var descrizioni = lavorazioni.ToDictionary(
+                l => l.Id,
+                l =>
+                {
+                    var formato = formati.FirstOrDefault(f => f.guidID == l.GuidFormato);
+                    return PuliziaListe.DescriviLavorazione(
+                        formato == null ? (TipoLavorazione?)null : formato.tipo,
+                        formato?.codice,
+                        LavorazioniDellaPromo.TitoloDalMeta(l.Meta, l.Id),
+                        l.Id);
+                });
+
             var righe = idLavorazioni.Count == 0
                 ? new List<PromoLavorazioniRecord>()
                 : await this.ctx2.PromoLavorazioniRecords.Where(r => idLavorazioni.Contains(r.IdLavorazione)).AsNoTracking().ToListAsync();
@@ -1936,7 +2005,7 @@ namespace Istanta.Controllers
                 ? new List<long>()
                 : await this.ctx2.MenaboRefs.Where(m => m.IdRecord != null && idRecords.Contains(m.IdRecord.Value)).Select(m => m.IdRecord!.Value).Distinct().ToListAsync();
 
-            return PuliziaListe.Impaginati(records, righe, labelDeiPrimari, nelMenabo);
+            return PuliziaListe.Impaginati(records, righe, labelDeiPrimari, nelMenabo, descrizioni);
         }
 
         #endregion
@@ -1946,6 +2015,23 @@ namespace Istanta.Controllers
     {
         public int idPromo { get; set; }
         public int idImportazione { get; set; }
+        /// <summary>Facoltativi: vuoti o assenti vuol dire tutti.</summary>
+        public string? guidCanale { get; set; }
+        public string? guidArea { get; set; }
+    }
+
+    public class VoceAcpv
+    {
+        public string guid { get; set; } = string.Empty;
+        public string nome { get; set; } = string.Empty;
+    }
+
+    public class CanaliAreeRisposta
+    {
+        public bool esito { get; set; }
+        public string error { get; set; } = string.Empty;
+        public List<VoceAcpv> canali { get; set; } = new List<VoceAcpv>();
+        public List<VoceAcpv> aree { get; set; } = new List<VoceAcpv>();
     }
 
     public class RichiestaEliminazionePulizia

@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using Istanta.Models;
 using Istanta.Models_2;
+using IstantaLib;
 using Newtonsoft.Json;
 using Xunit;
 
@@ -53,7 +54,13 @@ public class PuliziaListeTests
         return new RecordDaValutare { record = r, dato = PuliziaListe.LeggiDato(r.Dato), etichette = etichette.ToList(), tracciato = "SS" };
     }
 
-    private static readonly Dictionary<long, string> NessunImpaginato = new Dictionary<long, string>();
+    private static readonly Dictionary<long, Impaginazione> NessunImpaginato = new Dictionary<long, Impaginazione>();
+
+    private static readonly Dictionary<int, string> Lavorazioni = new Dictionary<int, string>
+    {
+        [5] = "Volantino · P2611 TO",
+        [6] = "PoP A3_VERTICALI · P2611 A3"
+    };
 
     /* ---- gli operatori ---- */
 
@@ -201,7 +208,7 @@ public class PuliziaListeTests
             DaValutare(Record(5, "050", "{\"tema\":\"Fuori Depliant\"}", modalita: 1, versione: 2)),
             DaValutare(Record(6, "050", "{\"tema\":\"Fuori Depliant\"}", modalita: 1, versione: 1))
         };
-        var inLista = PuliziaListe.InsiemeCodici(new[] { " 456 ", "999" });
+        var inLista = new CodiciLista(new[] { " 456 ", "999" });
 
         var report = PuliziaListe.ComponiReport("lista.xlsx", "VOL", tipi, records, inLista, NessunImpaginato);
 
@@ -226,17 +233,74 @@ public class PuliziaListeTests
     }
 
     [Fact]
-    public void I_codici_della_lista_si_leggono_dai_Records_di_ogni_lista()
+    public void I_codici_della_lista_si_leggono_per_sezione_canale_area_e_tutti_insieme()
     {
         var liste = JsonConvert.DeserializeObject<List<Dictionary<string, object>>>(
-            "[{\"Area\":\"A\",\"Records\":[{\"Referenza.Codice\":\"123\"},{\"Referenza.Codice\":\" 456\"}]},{\"Area\":\"B\",\"Records\":[{\"Referenza.Codice\":\"789\"},{\"altro\":1}]}]")!;
+            "[{\"guidCanale\":\"C1\",\"guidArea\":\"A1\",\"Records\":[{\"Referenza.Codice\":\"123\"},{\"Referenza.Codice\":\" 456\"}]}," +
+            "{\"guidCanale\":\"C2\",\"guidArea\":\"A1\",\"Records\":[{\"Referenza.Codice\":\"789\"},{\"altro\":1}]}]")!;
 
-        var codici = PuliziaListe.CodiciDellaLista(liste);
+        var codici = PuliziaListe.CodiciPerCombinazione(liste);
 
-        Assert.Equal(3, codici.Count);
-        Assert.Contains("456", codici);
-        Assert.Contains("789", codici);
-        Assert.Empty(PuliziaListe.CodiciDellaLista(null));
+        Assert.Equal(3, codici.tutti.Count);
+        Assert.Equal(2, codici.perCombinazione.Count);
+        Assert.True(codici.InLista("C1", "A1", "456"));
+        Assert.False(codici.InLista("C1", "A1", "789"));          // 789 c'e' solo nella sezione C2/A1
+        Assert.True(codici.InLista("C2", "A1", "789"));
+        // Una sezione che la lista non ha: si confronta con l'intera lista.
+        Assert.False(codici.HaSezione("C3", "A9"));
+        Assert.True(codici.InLista("C3", "A9", "789"));
+        Assert.False(codici.InLista("C3", "A9", "000"));
+        Assert.Equal(3, PuliziaListe.CodiciDellaLista(liste).Count);
+        Assert.Empty(PuliziaListe.CodiciPerCombinazione(null).tutti);
+    }
+
+    private static PromoTracciatiRecord RecordNelTracciato(long id, string codice, string guidCanale, string guidArea, string dato = "{\"tema\":\"fuori depliant\"}")
+    {
+        var r = Record(id, codice, dato);
+        r.IdTracciatoNavigation = new PromoTracciati { Id = 10, IdPromo = 44, guidCanale = guidCanale, guidArea = guidArea, Sigla = guidCanale + guidArea };
+        return r;
+    }
+
+    // Un codice uscito dalla sezione SS ma ancora in quella TO: si segnala il record del tracciato SS, non quello di TO.
+    [Fact]
+    public void Un_codice_ancora_in_lista_solo_in_un_altro_canale_viene_segnalato_nel_suo()
+    {
+        var tipi = new List<TipoRecordPulizia> { Tipo("FUORI DEPLIANT", R("tema", "IN", "fuori depliant")) };
+        var ss = RecordNelTracciato(1, "123", "SS", "A");
+        var to = RecordNelTracciato(2, "123", "TO", "A");
+        var records = new[] { ss, to }.Select(r => new RecordDaValutare
+        {
+            record = r, dato = PuliziaListe.LeggiDato(r.Dato), chiaveCanale = PuliziaListe.ChiaveCanale(r.IdTracciatoNavigation), chiaveArea = PuliziaListe.ChiaveArea(r.IdTracciatoNavigation), canale = r.IdTracciatoNavigation.guidCanale!, area = "A"
+        });
+        var codici = new CodiciLista();
+        codici.Aggiungi("TO", "A", "123");
+        codici.Aggiungi("SS", "A", "999");
+
+        var report = PuliziaListe.ComponiReport("l", "VOL", tipi, records, codici, NessunImpaginato);
+
+        var riga = Assert.Single(report.righe);
+        Assert.Equal(1, riga.id);
+        Assert.Equal("SS", riga.canale);
+        Assert.Equal("A", riga.area);
+    }
+
+    [Fact]
+    public void Il_filtro_per_canale_e_area_e_facoltativo_e_vale_anche_per_uno_solo_dei_due()
+    {
+        var records = new[]
+        {
+            RecordNelTracciato(1, "1", "SS", "A"),
+            RecordNelTracciato(2, "2", "SS", "B"),
+            RecordNelTracciato(3, "3", "TO", "A"),
+            RecordNelTracciato(4, "4", "TO", "B")
+        };
+
+        Assert.Equal(new long[] { 1, 2, 3, 4 }, PuliziaListe.FiltraPerCanaleArea(records, null, null).Select(r => r.Id).ToArray());
+        Assert.Equal(new long[] { 1, 2, 3, 4 }, PuliziaListe.FiltraPerCanaleArea(records, "", " ").Select(r => r.Id).ToArray());
+        Assert.Equal(new long[] { 1, 2 }, PuliziaListe.FiltraPerCanaleArea(records, "ss", null).Select(r => r.Id).ToArray());
+        Assert.Equal(new long[] { 1, 3 }, PuliziaListe.FiltraPerCanaleArea(records, null, "A").Select(r => r.Id).ToArray());
+        Assert.Equal(new long[] { 4 }, PuliziaListe.FiltraPerCanaleArea(records, "TO", "B").Select(r => r.Id).ToArray());
+        Assert.Empty(PuliziaListe.FiltraPerCanaleArea(records, "XX", null));
     }
 
     /* ---- gli impaginati e l'eliminazione ---- */
@@ -255,24 +319,30 @@ public class PuliziaListeTests
         var lavorazioni = new[] { new PromoLavorazioniRecord { Id = 900, IdLavorazione = 5, IdRecordTracciato = 1, Codice = "101", CodiceGruppo = "101,102" } };
         var labelDeiPrimari = new Dictionary<long, string?> { [1] = "VOL" };
 
-        var impaginati = PuliziaListe.Impaginati(records, lavorazioni, labelDeiPrimari, new long[] { 4, 999 });
+        var impaginati = PuliziaListe.Impaginati(records, lavorazioni, labelDeiPrimari, new long[] { 4, 999 }, Lavorazioni);
 
-        Assert.Equal(PuliziaListe.MOTIVO_IMPAGINATO, impaginati[1]);
-        Assert.Equal(PuliziaListe.MOTIVO_SECONDARIA_IMPAGINATA, impaginati[2]);
+        // L'avviso dice dove: la lavorazione con il suo tipo.
+        Assert.Equal("impaginato in Volantino · P2611 TO", impaginati[1].motivo);
+        Assert.Equal(new[] { "Volantino · P2611 TO" }, impaginati[1].lavorazioni.ToArray());
+        Assert.Equal("in un gruppo impaginato in Volantino · P2611 TO", impaginati[2].motivo);
         Assert.False(impaginati.ContainsKey(3));
-        Assert.Equal(PuliziaListe.MOTIVO_NEL_MENABO, impaginati[4]);
+        Assert.Equal(PuliziaListe.MOTIVO_NEL_MENABO, impaginati[4].motivo);
+        Assert.Empty(impaginati[4].lavorazioni);
         Assert.False(impaginati.ContainsKey(5));
 
         var tipi = new List<TipoRecordPulizia> { Tipo("FUORI DEPLIANT", R("tema", "IN", "fuori depliant")) };
-        var report = PuliziaListe.ComponiReport("l", "VOL", tipi, records.Select(r => DaValutare(r)), new HashSet<string>(), impaginati);
+        var report = PuliziaListe.ComponiReport("l", "VOL", tipi, records.Select(r => DaValutare(r)), new CodiciLista(), impaginati);
         Assert.Equal(5, report.righe.Count);
         Assert.Equal(3, report.contatori.impaginati);
         Assert.Equal(PuliziaListe.MOTIVO_NEL_MENABO, report.righe.Single(r => r.id == 4).motivoImpaginato);
+        Assert.Equal("impaginato in Volantino · P2611 TO", report.righe.Single(r => r.id == 1).motivoImpaginato);
+        Assert.Equal(new[] { "Volantino · P2611 TO" }, report.righe.Single(r => r.id == 1).lavorazioni.ToArray());
+        Assert.Empty(report.righe.Single(r => r.id == 5).lavorazioni);
 
         var piano = PuliziaListe.PianificaEliminazione(new long[] { 1, 2, 3, 4, 5, 77, 5 }, records, impaginati);
         Assert.Equal(new long[] { 3, 5 }, piano.daEliminare.ToArray());
         Assert.Equal(4, piano.saltati.Count);
-        Assert.Equal(PuliziaListe.MOTIVO_IMPAGINATO, piano.saltati.Single(s => s.id == 1).motivo);
+        Assert.Equal("impaginato in Volantino · P2611 TO", piano.saltati.Single(s => s.id == 1).motivo);
         Assert.Equal("102", piano.saltati.Single(s => s.id == 2).codice);
         Assert.Equal(PuliziaListe.MOTIVO_NON_TROVATO, piano.saltati.Single(s => s.id == 77).motivo);
     }
@@ -283,9 +353,44 @@ public class PuliziaListeTests
         var records = new List<PromoTracciatiRecord> { Record(2, "102", "{}", label: "POP", codiceGruppo: "101,102") };
         var lavorazioni = new[] { new PromoLavorazioniRecord { Id = 900, IdLavorazione = 5, IdRecordTracciato = 1, CodiceGruppo = "101,102" } };
 
-        var impaginati = PuliziaListe.Impaginati(records, lavorazioni, new Dictionary<long, string?>(), Array.Empty<long>());
+        // Senza la descrizione della lavorazione 5, l'avviso dice almeno il suo numero.
+        var impaginati = PuliziaListe.Impaginati(records, lavorazioni, new Dictionary<long, string?>(), Array.Empty<long>(), new Dictionary<int, string>());
 
-        Assert.Equal(PuliziaListe.MOTIVO_SECONDARIA_IMPAGINATA, impaginati[2]);
+        Assert.Equal("in un gruppo impaginato in lavorazione 5", impaginati[2].motivo);
+    }
+
+    [Fact]
+    public void La_lavorazione_si_descrive_con_tipo_formato_e_titolo()
+    {
+        Assert.Equal("PoP A3_VERTICALI · P2611 A3", PuliziaListe.DescriviLavorazione(TipoLavorazione.PoP, "A3_VERTICALI", "P2611 A3", 7));
+        Assert.Equal("Volantino · P2611 TO", PuliziaListe.DescriviLavorazione(TipoLavorazione.Volantino, null, " P2611 TO ", 7));
+        Assert.Equal("Volantino A4", PuliziaListe.DescriviLavorazione(TipoLavorazione.Volantino, "A4", "", 7));
+        // Formato sconosciuto (DBFORMATI non caricato o guid non trovato): resta il numero della lavorazione.
+        Assert.Equal("lavorazione 7 · P2611", PuliziaListe.DescriviLavorazione(null, "A4", "P2611", 7));
+        Assert.Equal("lavorazione 7", PuliziaListe.DescriviLavorazione(null, null, null, 7));
+    }
+
+    // Un record impaginato sia nel Volantino sia nel PoP: l'avviso le nomina tutte e due, nell'ordine.
+    [Fact]
+    public void Un_record_in_piu_lavorazioni_le_nomina_tutte()
+    {
+        var records = new List<PromoTracciatiRecord>
+        {
+            Record(1, "101", "{}", codiceGruppo: "101,102"),
+            Record(2, "102", "{}", codiceGruppo: "101,102")
+        };
+        var righe = new[]
+        {
+            new PromoLavorazioniRecord { Id = 900, IdLavorazione = 5, IdRecordTracciato = 1, CodiceGruppo = "101,102" },
+            new PromoLavorazioniRecord { Id = 901, IdLavorazione = 6, IdRecordTracciato = 1, CodiceGruppo = "101,102" },
+            new PromoLavorazioniRecord { Id = 902, IdLavorazione = 6, IdRecordTracciato = 1, CodiceGruppo = "101,102" }   // due volte nella stessa: una sola voce
+        };
+
+        var impaginati = PuliziaListe.Impaginati(records, righe, new Dictionary<long, string?> { [1] = "VOL" }, Array.Empty<long>(), Lavorazioni);
+
+        Assert.Equal("impaginato in Volantino · P2611 TO; PoP A3_VERTICALI · P2611 A3", impaginati[1].motivo);
+        Assert.Equal(new[] { "Volantino · P2611 TO", "PoP A3_VERTICALI · P2611 A3" }, impaginati[1].lavorazioni.ToArray());
+        Assert.Equal("in un gruppo impaginato in Volantino · P2611 TO; PoP A3_VERTICALI · P2611 A3", impaginati[2].motivo);
     }
 
     [Fact]
@@ -331,6 +436,59 @@ public class PuliziaListeTests
 
         Assert.NotNull(db.source);
         Assert.Empty(db.source);
+    }
+
+    private static PromoTracciatiRecord RecordConNomi(long id, string codice, string canale, string area)
+    {
+        var r = Record(id, codice, "{\"tema\":\"fuori depliant\"}");
+        r.IdTracciatoNavigation = new PromoTracciati { Id = 11, IdPromo = 44, Canale = canale, Area = area, Sigla = canale + area };
+        return r;
+    }
+
+    // L'importazione scrive sempre i nomi e i guid solo quando la lista li porta: la chiave e' il
+    // guid se c'e', altrimenti il nome. Sul collaudo i tracciati erano senza guid e le tendine vuote.
+    [Fact]
+    public void La_chiave_di_canale_e_area_e_il_guid_se_c_e_altrimenti_il_nome()
+    {
+        var conGuid = RecordNelTracciato(1, "1", " C1 ", "A1").IdTracciatoNavigation;
+        var senzaGuid = RecordConNomi(2, "2", " SS ", "Toscana").IdTracciatoNavigation;
+
+        Assert.Equal("C1", PuliziaListe.ChiaveCanale(conGuid));
+        Assert.Equal("A1", PuliziaListe.ChiaveArea(conGuid));
+        Assert.Equal("SS", PuliziaListe.ChiaveCanale(senzaGuid));
+        Assert.Equal("Toscana", PuliziaListe.ChiaveArea(senzaGuid));
+        Assert.Equal("", PuliziaListe.ChiaveCanale(null));
+    }
+
+    [Fact]
+    public void Il_filtro_vale_anche_sui_tracciati_senza_guid_per_nome()
+    {
+        var records = new[] { RecordConNomi(1, "1", "SS", "A"), RecordConNomi(2, "2", "TO", "A"), RecordConNomi(3, "3", "TO", "B") };
+
+        Assert.Equal(new long[] { 2, 3 }, PuliziaListe.FiltraPerCanaleArea(records, "to", null).Select(r => r.Id).ToArray());
+        Assert.Equal(new long[] { 1, 2 }, PuliziaListe.FiltraPerCanaleArea(records, null, "A").Select(r => r.Id).ToArray());
+        Assert.Equal(new long[] { 3 }, PuliziaListe.FiltraPerCanaleArea(records, "TO", "B").Select(r => r.Id).ToArray());
+    }
+
+    [Fact]
+    public void Le_sezioni_della_lista_senza_guid_si_riconoscono_dal_nome()
+    {
+        var liste = JsonConvert.DeserializeObject<List<Dictionary<string, object>>>(
+            "[{\"Canale\":\"SS\",\"Area\":\"A\",\"Records\":[{\"Referenza.Codice\":\"123\"}]},{\"Canale\":\"TO\",\"Area\":\"A\",\"Records\":[{\"Referenza.Codice\":\"456\"}]}]")!;
+
+        var codici = PuliziaListe.CodiciPerCombinazione(liste);
+
+        Assert.True(codici.HaSezione("SS", "A"));
+        Assert.True(codici.InLista("SS", "A", "123"));
+        Assert.False(codici.InLista("SS", "A", "456"));
+        Assert.True(codici.InLista("TO", "A", "456"));
+
+        // Con il guid la sezione usa il guid, non il nome: e' la stessa chiave dei tracciati.
+        var conGuid = JsonConvert.DeserializeObject<List<Dictionary<string, object>>>(
+            "[{\"guidCanale\":\"C1\",\"guidArea\":\"A1\",\"Canale\":\"SS\",\"Area\":\"A\",\"Records\":[{\"Referenza.Codice\":\"123\"}]}]")!;
+        var codiciGuid = PuliziaListe.CodiciPerCombinazione(conGuid);
+        Assert.True(codiciGuid.HaSezione("C1", "A1"));
+        Assert.False(codiciGuid.HaSezione("SS", "A"));
     }
 
     private static string TrovaFile(string relativo)

@@ -19,12 +19,16 @@ namespace Istanta.Models
         public string label { get; set; } = string.Empty;
         public byte versione { get; set; }
         public string tracciato { get; set; } = string.Empty;
+        public string canale { get; set; } = string.Empty;
+        public string area { get; set; } = string.Empty;
         public byte modalitaInserimento { get; set; }
         /// <summary>Importato a mano (modalita_inserimento 2): nel report viene prima degli altri.</summary>
         public bool manuale { get; set; }
         /// <summary>Impaginato, nel menabo' o in un gruppo impaginato: si vede, non si elimina.</summary>
         public bool impaginato { get; set; }
         public string motivoImpaginato { get; set; } = string.Empty;
+        /// <summary>Le lavorazioni in cui e' impaginato, descritte con tipo (PoP o Volantino), formato e titolo.</summary>
+        public List<string> lavorazioni { get; set; } = new List<string>();
         /// <summary>Il tipo di record delle regole del cliente che lo ha riconosciuto.</summary>
         public string tipo { get; set; } = string.Empty;
         /// <summary>I valori dei campi che le regole guardano, per far vedere perche' il record e' qui.</summary>
@@ -59,12 +63,90 @@ namespace Istanta.Models
         public Dictionary<string, object>? dato { get; set; }
         public List<string> etichette { get; set; } = new List<string>();
         public string tracciato { get; set; } = string.Empty;
+        /// <summary>La chiave del canale e dell'area del tracciato (PuliziaListe.ChiaveCanale/ChiaveArea): guid se c'e', altrimenti nome.</summary>
+        public string? chiaveCanale { get; set; }
+        public string? chiaveArea { get; set; }
+        public string canale { get; set; } = string.Empty;
+        public string area { get; set; } = string.Empty;
+    }
+
+    /// <summary>
+    /// I codici della lista scelta, per sezione (canale e area) e tutti insieme. Un record si
+    /// confronta con la sezione del suo canale e della sua area, che e' il tracciato che
+    /// l'importazione crea per quella combinazione; se la lista non ha quella sezione, con l'intera
+    /// lista: cosi' una lista che non copre una combinazione non fa segnalare tutti i suoi record.
+    /// </summary>
+    public class CodiciLista
+    {
+        public HashSet<string> tutti { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        public Dictionary<string, HashSet<string>> perCombinazione { get; } = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+
+        public CodiciLista()
+        {
+        }
+
+        /// <summary>Una lista senza sezioni: tutti i codici valgono per ogni canale e area.</summary>
+        public CodiciLista(IEnumerable<string?> codici)
+        {
+            foreach (var codice in codici)
+            {
+                Aggiungi(null, null, codice);
+            }
+        }
+
+        public static string Chiave(string? guidCanale, string? guidArea)
+        {
+            return (guidCanale ?? string.Empty).Trim() + "|" + (guidArea ?? string.Empty).Trim();
+        }
+
+        public void Aggiungi(string? guidCanale, string? guidArea, string? codice)
+        {
+            string pulito = PuliziaListe.NormalizzaCodice(codice);
+            if (pulito.Length == 0)
+            {
+                return;
+            }
+            tutti.Add(pulito);
+            if (guidCanale == null && guidArea == null)
+            {
+                return;
+            }
+            string chiave = Chiave(guidCanale, guidArea);
+            if (!perCombinazione.TryGetValue(chiave, out var sezione))
+            {
+                sezione = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                perCombinazione[chiave] = sezione;
+            }
+            sezione.Add(pulito);
+        }
+
+        public bool HaSezione(string? guidCanale, string? guidArea)
+        {
+            return perCombinazione.ContainsKey(Chiave(guidCanale, guidArea));
+        }
+
+        public bool InLista(string? guidCanale, string? guidArea, string? codice)
+        {
+            string pulito = PuliziaListe.NormalizzaCodice(codice);
+            if (perCombinazione.TryGetValue(Chiave(guidCanale, guidArea), out var sezione))
+            {
+                return sezione.Contains(pulito);
+            }
+            return tutti.Contains(pulito);
+        }
     }
 
     public class PianoEliminazione
     {
         public List<long> daEliminare { get; } = new List<long>();
         public List<SegnalazioneRipristino> saltati { get; } = new List<SegnalazioneRipristino>();
+    }
+
+    /// <summary>Perche' un record non si puo' eliminare: il motivo per l'avviso e le lavorazioni in cui sta.</summary>
+    public class Impaginazione
+    {
+        public string motivo { get; set; } = string.Empty;
+        public List<string> lavorazioni { get; set; } = new List<string>();
     }
 
     public class EliminazionePuliziaRisposta
@@ -87,8 +169,9 @@ namespace Istanta.Models
     {
         public const string ORIGINE_BACKUP = "Pulizia liste";
 
-        public const string MOTIVO_IMPAGINATO = "impaginato in una lavorazione";
-        public const string MOTIVO_SECONDARIA_IMPAGINATA = "in un gruppo impaginato";
+        /// <summary>I primi due sono prefissi: seguono le lavorazioni, descritte da DescriviLavorazione.</summary>
+        public const string MOTIVO_IMPAGINATO = "impaginato in";
+        public const string MOTIVO_SECONDARIA_IMPAGINATA = "in un gruppo impaginato in";
         public const string MOTIVO_NEL_MENABO = "presente nel menabo'";
         public const string MOTIVO_NON_TROVATO = "non e' fra i record della promo";
 
@@ -366,12 +449,18 @@ namespace Istanta.Models
             return insieme;
         }
 
-        /// <summary>I codici Referenza.Codice dei record di cio' che leggiDatoExcel restituisce (una voce per lista, con Records).</summary>
-        public static HashSet<string> CodiciDellaLista(IEnumerable<Dictionary<string, object>>? liste)
+        /// <summary>
+        /// I codici Referenza.Codice di cio' che leggiDatoExcel restituisce: una voce per sezione
+        /// della lista, con guidCanale, guidArea e i suoi Records.
+        /// </summary>
+        public static CodiciLista CodiciPerCombinazione(IEnumerable<Dictionary<string, object>>? liste)
         {
-            var codici = new List<string?>();
+            var codici = new CodiciLista();
             foreach (var lista in liste ?? Enumerable.Empty<Dictionary<string, object>>())
             {
+                // La chiave della sezione: il guid se c'e', altrimenti il nome, come per i tracciati.
+                string? chiaveCanale = ChiaveDellaSezione(lista, GLOBAL_VARIABLES.keyCanaleGuid, GLOBAL_VARIABLES.keyCanale);
+                string? chiaveArea = ChiaveDellaSezione(lista, GLOBAL_VARIABLES.keyAreaGuid, GLOBAL_VARIABLES.keyArea);
                 if (!lista.TryGetValue("Records", out var records) || records == null)
                 {
                     continue;
@@ -379,18 +468,78 @@ namespace Istanta.Models
                 IEnumerable<object>? elenco = records as IEnumerable<object>;
                 foreach (var record in elenco ?? Enumerable.Empty<object>())
                 {
-                    switch (record)
+                    string? codice = record switch
                     {
-                        case JObject jo:
-                            codici.Add(jo[GLOBAL_VARIABLES_FICO.keyRefCodice]?.ToString());
-                            break;
-                        case IDictionary<string, object> d:
-                            codici.Add(d.TryGetValue(GLOBAL_VARIABLES_FICO.keyRefCodice, out var c) ? Testo(c) : null);
-                            break;
-                    }
+                        JObject jo => jo[GLOBAL_VARIABLES_FICO.keyRefCodice]?.ToString(),
+                        IDictionary<string, object> d => d.TryGetValue(GLOBAL_VARIABLES_FICO.keyRefCodice, out var v) ? Testo(v) : null,
+                        _ => null
+                    };
+                    codici.Aggiungi(chiaveCanale, chiaveArea, codice);
                 }
             }
-            return InsiemeCodici(codici);
+            return codici;
+        }
+
+        private static string? ChiaveDellaSezione(Dictionary<string, object> lista, string chiaveGuid, string chiaveNome)
+        {
+            string guid = lista.TryGetValue(chiaveGuid, out var g) ? Testo(g).Trim() : string.Empty;
+            if (guid.Length > 0)
+            {
+                return guid;
+            }
+            string nome = lista.TryGetValue(chiaveNome, out var n) ? Testo(n).Trim() : string.Empty;
+            return nome.Length > 0 ? nome : null;
+        }
+
+        /// <summary>Tutti i codici della lista, senza sezioni.</summary>
+        public static HashSet<string> CodiciDellaLista(IEnumerable<Dictionary<string, object>>? liste)
+        {
+            return CodiciPerCombinazione(liste).tutti;
+        }
+
+        /// <summary>
+        /// La chiave con cui si riconosce il canale di un tracciato: il guid se c'e', altrimenti il
+        /// nome. L'importazione scrive sempre i nomi e i guid solo quando la lista li porta
+        /// (OperationsController.importaVolantino): sui dati senza guid la tendina, il filtro e le
+        /// sezioni della lista si riconoscono dal nome.
+        /// </summary>
+        public static string ChiaveCanale(PromoTracciati? tracciato)
+        {
+            return Chiave(tracciato?.guidCanale, () => tracciato?.Canale);
+        }
+
+        public static string ChiaveArea(PromoTracciati? tracciato)
+        {
+            return Chiave(tracciato?.guidArea, () => tracciato?.Area);
+        }
+
+        private static string Chiave(string? guid, Func<string?> nome)
+        {
+            if (!string.IsNullOrWhiteSpace(guid))
+            {
+                return guid.Trim();
+            }
+            try
+            {
+                return (nome() ?? string.Empty).Trim();
+            }
+            catch
+            {
+                // Il nome si risolve dall'ACPV, che potrebbe non essere caricato.
+                return string.Empty;
+            }
+        }
+
+        /// <summary>I record dei tracciati del canale e/o dell'area scelti, per chiave; un filtro vuoto non filtra.</summary>
+        public static List<PromoTracciatiRecord> FiltraPerCanaleArea(IEnumerable<PromoTracciatiRecord> records, string? canale, string? area)
+        {
+            bool perCanale = !string.IsNullOrWhiteSpace(canale);
+            bool perArea = !string.IsNullOrWhiteSpace(area);
+            return records
+                .Where(r =>
+                    (!perCanale || string.Equals(ChiaveCanale(r.IdTracciatoNavigation), canale!.Trim(), StringComparison.OrdinalIgnoreCase)) &&
+                    (!perArea || string.Equals(ChiaveArea(r.IdTracciatoNavigation), area!.Trim(), StringComparison.OrdinalIgnoreCase)))
+                .ToList();
         }
 
         public static bool Manuale(PromoTracciatiRecord r)
@@ -399,17 +548,45 @@ namespace Istanta.Models
         }
 
         /// <summary>
-        /// Quali record non si possono eliminare, con il motivo: quelli a cui una riga di
-        /// lavorazione della promo e' legata, quelli il cui codice sta nel codice gruppo di una riga
-        /// di lavorazione con la stessa label del suo primario (le secondarie non hanno una riga
-        /// propria), e quelli riferiti dal menabo'. Il database rifiuterebbe comunque i primi e gli
-        /// ultimi; le secondarie le rifiuta la lavorazione, che resterebbe con un gruppo a meta'.
+        /// Come una lavorazione si presenta nell'avviso: il tipo (PoP o Volantino) e il codice del
+        /// formato del kit, poi il titolo. Senza formato resta "lavorazione N", senza titolo resta
+        /// la sola testa.
         /// </summary>
-        public static Dictionary<long, string> Impaginati(
+        public static string DescriviLavorazione(TipoLavorazione? tipo, string? codiceFormato, string? titolo, int idLavorazione)
+        {
+            string nome = string.IsNullOrWhiteSpace(titolo) ? string.Empty : titolo.Trim();
+            string testa;
+            if (tipo == null)
+            {
+                testa = "lavorazione " + idLavorazione;
+            }
+            else
+            {
+                testa = tipo == TipoLavorazione.PoP ? "PoP" : "Volantino";
+                if (!string.IsNullOrWhiteSpace(codiceFormato))
+                {
+                    testa += " " + codiceFormato.Trim();
+                }
+            }
+            return nome.Length == 0 ? testa : testa + " · " + nome;
+        }
+
+        /// <summary>
+        /// Quali record non si possono eliminare, con il motivo e le lavorazioni: quelli a cui una
+        /// riga di lavorazione della promo e' legata, quelli il cui codice sta nel codice gruppo di
+        /// una riga di lavorazione con la stessa label del suo primario (le secondarie non hanno una
+        /// riga propria), e quelli riferiti dal menabo'. Il database rifiuterebbe comunque i primi e
+        /// gli ultimi; le secondarie le rifiuta la lavorazione, che resterebbe con un gruppo a meta'.
+        /// Le lavorazioni arrivano gia' descritte (DescriviLavorazione), per id; una che manca si
+        /// presenta come "lavorazione N". Chi e' primario in una lavorazione ed e' anche secondario
+        /// in un'altra conta come primario.
+        /// </summary>
+        public static Dictionary<long, Impaginazione> Impaginati(
             IEnumerable<PromoTracciatiRecord> records,
             IEnumerable<PromoLavorazioniRecord> righeLavorazioni,
             IDictionary<long, string?> labelDeiPrimari,
-            IEnumerable<long> idNelMenabo)
+            IEnumerable<long> idNelMenabo,
+            IDictionary<int, string> lavorazioni)
         {
             var elenco = records.ToList();
             var perId = elenco.ToDictionary(r => r.Id);
@@ -417,13 +594,18 @@ namespace Istanta.Models
                 .Where(r => !string.IsNullOrWhiteSpace(r.Codice))
                 .GroupBy(r => NormalizzaCodice(r.Codice), StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
-            var motivi = new Dictionary<long, string>();
+            var comePrimario = new Dictionary<long, List<string>>();
+            var comeSecondaria = new Dictionary<long, List<string>>();
 
             foreach (var riga in righeLavorazioni)
             {
+                string lavorazione = lavorazioni.TryGetValue(riga.IdLavorazione, out var descrizione) && !string.IsNullOrWhiteSpace(descrizione)
+                    ? descrizione
+                    : "lavorazione " + riga.IdLavorazione;
+
                 if (perId.ContainsKey(riga.IdRecordTracciato))
                 {
-                    motivi[riga.IdRecordTracciato] = MOTIVO_IMPAGINATO;
+                    Aggiungi(comePrimario, riga.IdRecordTracciato, lavorazione);
                 }
 
                 labelDeiPrimari.TryGetValue(riga.IdRecordTracciato, out var labelPrimario);
@@ -443,8 +625,21 @@ namespace Istanta.Models
                         {
                             continue;
                         }
-                        motivi.TryAdd(r.Id, MOTIVO_SECONDARIA_IMPAGINATA);
+                        Aggiungi(comeSecondaria, r.Id, lavorazione);
                     }
+                }
+            }
+
+            var motivi = new Dictionary<long, Impaginazione>();
+            foreach (var r in elenco)
+            {
+                if (comePrimario.TryGetValue(r.Id, out var primario))
+                {
+                    motivi[r.Id] = new Impaginazione { motivo = MOTIVO_IMPAGINATO + " " + string.Join("; ", primario), lavorazioni = primario };
+                }
+                else if (comeSecondaria.TryGetValue(r.Id, out var secondaria))
+                {
+                    motivi[r.Id] = new Impaginazione { motivo = MOTIVO_SECONDARIA_IMPAGINATA + " " + string.Join("; ", secondaria), lavorazioni = secondaria };
                 }
             }
 
@@ -452,11 +647,24 @@ namespace Istanta.Models
             {
                 if (perId.ContainsKey(id))
                 {
-                    motivi.TryAdd(id, MOTIVO_NEL_MENABO);
+                    motivi.TryAdd(id, new Impaginazione { motivo = MOTIVO_NEL_MENABO });
                 }
             }
 
             return motivi;
+        }
+
+        private static void Aggiungi(Dictionary<long, List<string>> mappa, long id, string lavorazione)
+        {
+            if (!mappa.TryGetValue(id, out var elenco))
+            {
+                elenco = new List<string>();
+                mappa[id] = elenco;
+            }
+            if (!elenco.Contains(lavorazione))
+            {
+                elenco.Add(lavorazione);
+            }
         }
 
         /* ===== il report ===== */
@@ -470,15 +678,15 @@ namespace Istanta.Models
             string? label,
             IList<TipoRecordPulizia> tipi,
             IEnumerable<RecordDaValutare> records,
-            ISet<string> codiciInLista,
-            IDictionary<long, string> impaginati)
+            CodiciLista codici,
+            IDictionary<long, Impaginazione> impaginati)
         {
             var report = new ReportPulizia
             {
                 nomeLista = nomeLista ?? string.Empty,
                 label = label ?? string.Empty,
                 tipi = tipi.Select(t => t.Nome ?? string.Empty).ToList(),
-                codiciInLista = codiciInLista.Count
+                codiciInLista = codici.tutti.Count
             };
             var campi = CampiDelleRegole(tipi);
 
@@ -489,12 +697,12 @@ namespace Istanta.Models
                 {
                     continue;
                 }
-                if (codiciInLista.Contains(NormalizzaCodice(r.record.Codice)))
+                if (codici.InLista(r.chiaveCanale, r.chiaveArea, r.record.Codice))
                 {
                     continue;
                 }
 
-                bool bloccato = impaginati.TryGetValue(r.record.Id, out var motivo);
+                bool bloccato = impaginati.TryGetValue(r.record.Id, out var impaginazione);
                 report.righe.Add(new RigaReportPulizia
                 {
                     id = r.record.Id,
@@ -504,10 +712,13 @@ namespace Istanta.Models
                     label = r.record.Label ?? string.Empty,
                     versione = r.record.Versione,
                     tracciato = r.tracciato ?? string.Empty,
+                    canale = r.canale ?? string.Empty,
+                    area = r.area ?? string.Empty,
                     modalitaInserimento = r.record.ModalitaInserimento,
                     manuale = Manuale(r.record),
                     impaginato = bloccato,
-                    motivoImpaginato = bloccato ? motivo! : string.Empty,
+                    motivoImpaginato = bloccato ? impaginazione!.motivo : string.Empty,
+                    lavorazioni = bloccato ? impaginazione!.lavorazioni.ToList() : new List<string>(),
                     tipo = tipo.Nome ?? string.Empty,
                     valoriRegole = campi.ToDictionary(c => c, c => ValoreDelCampo(r.dato, c))
                 });
@@ -555,7 +766,7 @@ namespace Istanta.Models
         /// e un id che non e' della promo non si tocca. Ricalcolato sul server al momento
         /// dell'eliminazione, non sul report che l'operatore ha davanti.
         /// </summary>
-        public static PianoEliminazione PianificaEliminazione(IEnumerable<long> idRichiesti, IEnumerable<PromoTracciatiRecord> recordDellaPromo, IDictionary<long, string> impaginati)
+        public static PianoEliminazione PianificaEliminazione(IEnumerable<long> idRichiesti, IEnumerable<PromoTracciatiRecord> recordDellaPromo, IDictionary<long, Impaginazione> impaginati)
         {
             var piano = new PianoEliminazione();
             var perId = recordDellaPromo.ToDictionary(r => r.Id);
@@ -567,9 +778,9 @@ namespace Istanta.Models
                     piano.saltati.Add(new SegnalazioneRipristino { id = id, codice = string.Empty, motivo = MOTIVO_NON_TROVATO });
                     continue;
                 }
-                if (impaginati.TryGetValue(id, out var motivo))
+                if (impaginati.TryGetValue(id, out var impaginazione))
                 {
-                    piano.saltati.Add(new SegnalazioneRipristino { id = id, codice = record.Codice ?? string.Empty, motivo = motivo });
+                    piano.saltati.Add(new SegnalazioneRipristino { id = id, codice = record.Codice ?? string.Empty, motivo = impaginazione.motivo });
                     continue;
                 }
                 piano.daEliminare.Add(id);
