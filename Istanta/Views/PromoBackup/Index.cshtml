@@ -4,15 +4,15 @@
 @inject Microsoft.AspNetCore.Http.IHttpContextAccessor HttpContextAccessor
 @inject Microsoft.EntityFrameworkCore.IDbContextFactory<Istanta.Models_2.Edro21_DbContext2> FabbricaCtx2
 @{
-    // I20-1106: tutte le promo non eliminate, dalla piu' recente. Non solo quelle attive come in
-    // Confronti: un ripristino puo' servire anche a una promo chiusa.
-    List<Promo> lista_promo;
+    // I20-1106: tutte le promo non eliminate, non solo quelle attive come in Confronti, perche' un
+    // ripristino puo' servire anche a una promo chiusa; ma le attive vengono prime, in un gruppo
+    // loro. La regola e' in BackupPromo.PromoPerLaTendina.
+    TendinaPromo tendina;
     using (Edro21_DbContext2 ctx2 = FabbricaCtx2.CreateDbContext())
     {
-        lista_promo = ctx2.Promos
-            .Where(p => p.Stato != (Byte)StatoPromo.Eliminata)
-            .OrderByDescending(p => p.DataRegistrazione)
-            .ToList();
+        tendina = BackupPromo.PromoPerLaTendina(
+            ctx2.Promos.Where(p => p.Stato != (Byte)StatoPromo.Eliminata).ToList(),
+            DateTime.Now);
     }
 }
 
@@ -32,9 +32,23 @@
             <label for="TendinaPromo" class="form-label">Promo</label>
             <select class="form-select" id="TendinaPromo">
                 <option value="0">Seleziona una promo</option>
-                @foreach (var promo in lista_promo)
+                @if (tendina.attive.Count > 0)
                 {
-                    <option value="@promo.Id">@promo.NomePromo (@promo.DataRegistrazione.ToString("dd/MM/yyyy"))</option>
+                    <optgroup label="Promo attive">
+                        @foreach (var promo in tendina.attive)
+                        {
+                            <option value="@promo.Id">@promo.NomePromo (@promo.DataRegistrazione.ToString("dd/MM/yyyy"))</option>
+                        }
+                    </optgroup>
+                }
+                @if (tendina.altre.Count > 0)
+                {
+                    <optgroup label="Promo chiuse o scadute">
+                        @foreach (var promo in tendina.altre)
+                        {
+                            <option value="@promo.Id">@promo.NomePromo (@promo.DataRegistrazione.ToString("dd/MM/yyyy"))</option>
+                        }
+                    </optgroup>
                 }
             </select>
         </div>

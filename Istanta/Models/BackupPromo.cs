@@ -179,6 +179,13 @@ namespace Istanta.Models
         public List<SegnalazioneRipristino> nonInseribili { get; } = new List<SegnalazioneRipristino>();
     }
 
+    /// <summary>Le promo della tendina di Backup promo, divise fra attive e non, ognuna dalla piu' recente.</summary>
+    public class TendinaPromo
+    {
+        public List<Promo> attive { get; } = new List<Promo>();
+        public List<Promo> altre { get; } = new List<Promo>();
+    }
+
     /// <summary>
     /// I20-1106 (Lotto 1): backup e ripristino dei record di una promo, senza database. Il
     /// controller passa cio' che legge, e questa classe decide cosa diventa: il backup da salvare,
@@ -187,6 +194,27 @@ namespace Istanta.Models
     /// </summary>
     public static class BackupPromo
     {
+        /// <summary>
+        /// Tutte le promo non eliminate, le attive davanti: un ripristino puo' servire anche a una
+        /// promo chiusa, ma di solito serve a una in corso. Attiva vuol dire aperta e non ancora
+        /// scaduta, la stessa regola della pagina Confronti. Dentro ogni gruppo, dalla piu' recente.
+        /// </summary>
+        public static TendinaPromo PromoPerLaTendina(IEnumerable<Promo> promo, DateTime adesso)
+        {
+            var tendina = new TendinaPromo();
+            foreach (var p in promo.Where(p => p.Stato != (byte)StatoPromo.Eliminata).OrderByDescending(p => p.DataRegistrazione))
+            {
+                (PromoAttiva(p, adesso) ? tendina.attive : tendina.altre).Add(p);
+            }
+            return tendina;
+        }
+
+        /// <summary>Aperta e con una scadenza ancora da venire. Senza scadenza non e' attiva.</summary>
+        public static bool PromoAttiva(Promo p, DateTime adesso)
+        {
+            return p.Stato == (byte)StatoPromo.Aperta && p.DataScadenza.HasValue && p.DataScadenza.Value > adesso;
+        }
+
         public const string ORIGINE_OPERATORE = "Richiesta dell'operatore";
         public const string ORIGINE_PRE_RIPRISTINO = "Pre-ripristino";
 

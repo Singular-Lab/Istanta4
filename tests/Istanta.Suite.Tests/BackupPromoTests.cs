@@ -344,4 +344,38 @@ public class BackupPromoTests
         Assert.Equal("Record delle lavorazioni", BackupPromo.DescriviTipo(2));
         Assert.Equal("Tipo sconosciuto (9)", BackupPromo.DescriviTipo(9));
     }
+
+    /* ---- la tendina delle promo ---- */
+
+    private static Promo PromoDi(int id, StatoPromo stato, DateTime? scadenza, DateTime registrazione)
+    {
+        return new Promo { Id = id, NomePromo = "P" + id, Stato = (byte)stato, DataScadenza = scadenza, DataRegistrazione = registrazione };
+    }
+
+    // Tutte le promo tranne le eliminate, ma le attive davanti, e dentro ogni gruppo la piu' recente prima.
+    [Fact]
+    public void Nella_tendina_le_promo_attive_vengono_prima_e_ogni_gruppo_e_dal_piu_recente()
+    {
+        var promo = new[]
+        {
+            PromoDi(1, StatoPromo.Aperta, Adesso.AddDays(10), new DateTime(2026, 10, 1)),     // attiva
+            PromoDi(2, StatoPromo.Chiusa, Adesso.AddDays(10), new DateTime(2026, 10, 5)),     // chiusa: non attiva anche se non scaduta
+            PromoDi(3, StatoPromo.Aperta, Adesso.AddDays(-1), new DateTime(2026, 10, 9)),     // aperta ma scaduta
+            PromoDi(4, StatoPromo.Aperta, Adesso.AddDays(3), new DateTime(2026, 10, 3)),      // attiva, registrata dopo la 1
+            PromoDi(5, StatoPromo.Eliminata, Adesso.AddDays(10), new DateTime(2026, 10, 8))   // eliminata: fuori
+        };
+
+        var tendina = BackupPromo.PromoPerLaTendina(promo, Adesso);
+
+        Assert.Equal(new[] { 4, 1 }, tendina.attive.Select(p => p.Id).ToArray());
+        Assert.Equal(new[] { 3, 2 }, tendina.altre.Select(p => p.Id).ToArray());
+    }
+
+    [Fact]
+    public void Una_promo_senza_scadenza_o_scaduta_proprio_adesso_non_e_attiva()
+    {
+        Assert.False(BackupPromo.PromoAttiva(PromoDi(1, StatoPromo.Aperta, null, Adesso), Adesso));
+        Assert.False(BackupPromo.PromoAttiva(PromoDi(2, StatoPromo.Aperta, Adesso, Adesso), Adesso));
+        Assert.True(BackupPromo.PromoAttiva(PromoDi(3, StatoPromo.Aperta, Adesso.AddMinutes(1), Adesso), Adesso));
+    }
 }
