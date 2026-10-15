@@ -1120,13 +1120,14 @@ namespace AgenziaLib
                     if (codiceBox == "BOX_SpendiPunti")
                         stile_sconto_speciale = "SCONTO_SPENDIPUNTI";
                     if (codiceBox == "BOX_ESCLUSIVA_SOCI")
-                        stile_sconto_speciale = "SCONTO_SOCI_DOPPIA";
+                        stile_sconto_speciale = "SCONTO_SOCI_ESCLUSIVA";
 
 
                     //variazioni stile_prezzo_promo_kgl
                     if (codiceBox == "BOX_ESCLUSIVA_SOCI")
                     {
-                        stile_prezzo_promo_kgl = "PREZZO_PROMO_KGL_SOCI_DOPPIA";
+                        //Nel PoP l'esclusiva soci ha i suoi stili: sconto e prezzo di paragrafo, prezzo al kg di carattere.
+                        stile_prezzo_promo_kgl = "PREZZO_PROMO_KGL_SOCI_ESCLUSIVA";
                     }
 
                     // stili info Pack
@@ -1866,9 +1867,7 @@ namespace AgenziaLib
                     }
                     else if (codiceBox == "BOX_ESCLUSIVA_SOCI")
                     {
-                        stile_prezzo_promo = "PREZZO_PROMO_SOCI_DOPPIA";
-                        if (siglaAreaKit.StartsWith("A"))
-                            stile_prezzo_promo = "PREZZO_PROMO_ESCLUSIVA_SOCI";
+                        stile_prezzo_promo = "PREZZO_PROMO_SOCI_ESCLUSIVA";
 
 
                         stileDescr1 += "_SPENDIPUNTI";
