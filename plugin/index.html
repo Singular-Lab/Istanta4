@@ -778,7 +778,8 @@
           <div class="row" id="messaggiUtenteModal" style="position: fixed; width:76%; align-self: self-start; z-index: 9999;">
           </div>
           <h2 id="modalTitle" style="margin: 0; display: block;">Titolo</h2>
-          <button id="closeModal" onclick="Modali.chiudiModal()" style="height: 25px;cursor: pointer;">&times;</button>
+          <!-- I20-1105: la X chiede conferma se la finestra ha registrato un controllo (modifiche non salvate). -->
+          <button id="closeModal" onclick="Modali.chiudiModalDallaX()" style="height: 25px;cursor: pointer;">&times;</button>
         </div>
     
         <!-- Body -->
@@ -1274,16 +1275,23 @@
   </div>
 </div>
 
+<!-- I20-1105: scorre solo la lista. Prima la lista aveva overflow: scroll (barra sempre presente) e,
+     con il piede, sforava la finestra, che scorreva a sua volta: due barre. La finestra non scorre,
+     e l'altezza in pixel della lista la fissa schedaRef.apriModalNoRender (AltezzaScorrimento). -->
 <div id="dialogNoRender" myname="dialogNoRender"
-  style="overflow: none; display: none; height: 100%; width: 100%;">
-  <div style="height: 90%; overflow: scroll;">
+  style="overflow: hidden; display: none; height: 100%; width: 100%;">
+  <div id="listaNoRender" style="overflow-y: auto;">
     <div class="container" id="bodyNoRender">
 
     </div>
   </div>
-  <div style="display: flex;">
-    <button id="salvaNoRender" style="display: block;"
-      onclick="schedaRef.salvaNoRender();">Salva</button>
+  <!-- I20-1105: il salvataggio non si vedeva. Verde pieno e a pillola, a destra: diverso per colore e
+       forma dai pulsanti grigi degli elementi e dal blu e dal rosso delle conferme. E' un riquadro
+       cliccabile e non un button: in UXP il button ignora il colore di sfondo e restava grigio. -->
+  <div style="display: flex; justify-content: flex-end; padding-top: 8px;">
+    <div id="salvaNoRender" role="button"
+      style="display: flex; align-items: center; justify-content: center; min-width: 150px; height: 32px; padding: 0 18px; background-color: #28a745; color: white; border-radius: 16px; font-weight: bold; font-size: 13px; cursor: pointer;"
+      onclick="schedaRef.salvaNoRender();">Salva modifiche</div>
   </div>
 </div>
 

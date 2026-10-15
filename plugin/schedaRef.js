@@ -2,6 +2,8 @@
 const InputEditController = require('./InputEditController');
 const XMLHttpRequestClient = require('./XMLHttpRequestClient');
 const NoRenderElementi = require('./noRenderElementi');
+//I20-1105: l'altezza in pixel della lista noRender, l'unico modo perche' in UXP scorra davvero.
+const AltezzaScorrimento = require('./altezzaScorrimento');
 const RicollegaEsiti = require('./ricollegaEsiti');
 const variantiDescrizione = require('./variantiDescrizione');
 //I20-1007: i tratti di stile stanno in testoTag.js. La scheda lo importa, perche' sotto Node
@@ -40,6 +42,8 @@ const schedaRef = {
     schedeRefDati: [],
     //Stato del modal noRender: la lista degli elementi del box con la loro opzione di rendering.
     elementiNoRenderDelBox: null,
+    //I20-1105: il noRender com'e' salvato (all'apertura, o dopo l'ultimo salvataggio riuscito).
+    statoNoRenderSalvato: null,
     urlAnteprimaPsd: null,
     multiSchedeRef: [],
     editRefFieldController: null,
@@ -7139,10 +7143,17 @@ const schedaRef = {
         try {
             this.elementiNoRenderDelBox = this.leggiElementiDelBox(this.refSelected.item, primario);
             this.statoFotoAllApertura = NoRenderElementi.statoDelleFoto(this.elementiNoRenderDelBox);
+            //I20-1105: com'e' salvato il noRender, per sapere alla X se ci sono modifiche da perdere.
+            this.statoNoRenderSalvato = NoRenderElementi.statoDiRendering(this.elementiNoRenderDelBox);
             //apriModal clona il dialog dentro bodyModal: la lista va disegnata dopo l'apertura,
             //cosi' si scrive nel clone e i gestori dei bottoni restano vivi.
             Modali.apriModal('dialogNoRender', 'Elementi non renderizzati', true, [], true);
+            //I20-1105: dopo apriModal, che azzera il controllo della finestra precedente.
+            Modali.impostaControlloPrimaDiChiudere(function () {
+                return me.avvisoModificheNoRender();
+            });
             this.disegnaListaNoRender();
+            this.fissaAltezzaListaNoRender();
         }
         catch (e) {
             //Un modal vuoto non dice niente a chi lo guarda: meglio un errore leggibile.
@@ -7321,6 +7332,53 @@ const schedaRef = {
         }
     },
 
+    /// I20-1105: la lista della schermata noRender prende in pixel lo spazio che resta sopra il
+    /// Salva, e scorre lei sola. Il margine tiene il piede (pulsante e spaziatura). Si cerca il
+    /// clone dentro #overlayModal: il modello in index.html ha lo stesso id.
+    ///
+    /// Subito dopo l'apertura UXP non ha ancora le misure (zero, e l'altezza non si fissa): si
+    /// riprova ogni 50 ms, come fanno le conferme, per al massimo un secondo. Se non si riesce,
+    /// scorre la finestra come prima di I20-1105: una barra sola, mai una lista tagliata.
+    /// Torna l'altezza fissata, o null.
+    fissaAltezzaListaNoRender(tentativo = 0) {
+        var me = this;
+        var altezza = null;
+        try {
+            var contenitore = $("#overlayModal").find("#bodyModal")[0];
+            var lista = $("#overlayModal").find("#listaNoRender")[0];
+            altezza = AltezzaScorrimento.fissaAltezza(contenitore, lista, { margine: 56 });
+        }
+        catch (e) {
+            console.error("noRender: altezza della lista non fissata", e);
+        }
+
+        if (altezza != null) {
+            return altezza;
+        }
+        if (tentativo < 20) {
+            setTimeout(function () {
+                me.fissaAltezzaListaNoRender(tentativo + 1);
+            }, 50);
+            return null;
+        }
+
+        //Ripiego: la finestra torna a scorrere, come prima, cosi' nessun elemento resta irraggiungibile.
+        console.warn("noRender: altezza della lista non fissata dopo " + tentativo + " tentativi, scorre la finestra");
+        $("#overlayModal").find("#dialogNoRender").css("overflow", "auto");
+        return null;
+    },
+
+    /// I20-1105: l'avviso della X della schermata noRender, oppure null se non c'e' niente da
+    /// perdere. Un elemento cambiato e poi rimesso com'era non conta.
+    avvisoModificheNoRender() {
+        var diverse = NoRenderElementi.modificheNonSalvate(this.elementiNoRenderDelBox, this.statoNoRenderSalvato);
+        if (diverse === 0) {
+            return null;
+        }
+        return "Ci sono modifiche al noRender non salvate (" + diverse + (diverse === 1 ? " elemento" : " elementi") +
+            "). Uscire senza salvare?";
+    },
+
     /// Salva l'opzione di rendering del box. Gli elementi viaggiano sul nuovo endpoint, le foto
     /// primarie/secondarie restano sul canale P/S di I20-965: sono due dati distinti.
     salvaNoRender() {
@@ -7334,8 +7392,13 @@ const schedaRef = {
         //quindi una sola scrittura sul meta e nessuna corsa fra due salvataggi.
         var elementi = NoRenderElementi.elementiDaSalvare(lista);
 
+        //I20-1105: la fotografia di quello che si sta salvando. Diventa "salvato" solo se Istanta lo
+        //registra: se il salvataggio fallisce, la X deve continuare ad avvisare.
+        var statoInviato = NoRenderElementi.statoDiRendering(lista);
+        var me = this;
         this.inviaNoRender(elementi).then(function (registrato) {
             if (registrato) {
+                me.statoNoRenderSalvato = statoInviato;
                 messaggioUtente("noRender: modifiche salvate", "success", false, 5);
             }
         });
