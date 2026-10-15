@@ -25,7 +25,7 @@ namespace Istanta.MiddleWare
     {
 
         private RequestDelegate _next;
-        private string[] pagine = { "", "/" ,"/Tracciati", "/Confronti", "/SyncFoto","/Archivio", "/Aree", "/MenaboSettings", "/Etichette", "/DeclinazioniMeccaniche", "/FrameworkCss", "/TaskManager", "/AllineamentiBox", "/PromoBackup" };
+        private string[] pagine = { "", "/" ,"/Tracciati", "/Confronti", "/SyncFoto","/Archivio", "/Aree", "/MenaboSettings", "/Etichette", "/DeclinazioniMeccaniche", "/FrameworkCss", "/TaskManager", "/AllineamentiBox", "/PromoBackup", "/Confronti/PuliziaListe" };
         private edro21_dbContext ctx;
         private readonly string olUrl;
         private readonly OlympusUserPolicyRequest[] olympusUserPolycy;

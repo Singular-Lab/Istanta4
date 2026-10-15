@@ -1929,6 +1929,31 @@ namespace Istanta.Models
 
         #endregion
 
+        #region PuliziaListe
+        /// <summary>
+        /// I20-1106 (Lotto 2): i tipi di record della pulizia delle liste. Se il file manca lo crea
+        /// vuoto, come getFormati: nei volumi di produzione seminati prima di questa funzione non c'e'.
+        /// Non lo segnala fra le sorgenti da compilare: per i clienti senza regole un file vuoto e'
+        /// la configurazione giusta.
+        /// </summary>
+        public DbPuliziaListe getPuliziaListe()
+        {
+            string percorso = this.pathExternal + "Source" + DbPuliziaListe.dbSourceName;
+            if (!File.Exists(percorso))
+            {
+                DbPuliziaListe crea = new DbPuliziaListe();
+                crea.SetExternalPath(this.pathExternal);
+                crea.SaveChanges();
+            }
+
+            JObject? o1 = JObject.Parse(System.IO.File.ReadAllText(percorso));
+            DbPuliziaListe? db = o1.ToObject<DbPuliziaListe>();
+            db!.SetExternalPath(this.pathExternal);
+            return db;
+        }
+
+        #endregion
+
         #region customPlugin
         public DbCustomPlugin getCustomPluginAgenzia()
         {
@@ -2420,6 +2445,75 @@ namespace Istanta.Models
         }
 
 
+    }
+
+    #endregion
+
+    #region PuliziaListe
+
+    /// <summary>
+    /// I20-1106 (Lotto 2): i tipi di record che la pulizia delle liste considera, per cliente
+    /// (SourcePuliziaListe.json). Un record corrisponde a un tipo se almeno un set di Regole sui
+    /// campi e' soddisfatto (stesso formato e stessi operatori delle etichette) e, se ci sono
+    /// RegoleEtichette, anche almeno un loro set (presenza o assenza di etichette, come nelle
+    /// declinazioni meccaniche). Un tipo senza regole non riconosce nulla. La valutazione e' in
+    /// Models/PuliziaListe.cs.
+    /// </summary>
+    public class DbPuliziaListe
+    {
+        public static readonly string dbSourceName = "PuliziaListe.json";
+
+        private string pathExternalSource = "";
+
+        public List<TipoRecordPulizia> source { get; set; } = new List<TipoRecordPulizia>();
+
+        public void SetExternalPath(string pathExternalSource)
+        {
+            this.pathExternalSource = pathExternalSource + "Source" + DbPuliziaListe.dbSourceName;
+        }
+
+        public BoolResult SetJsonSource(string jsonStr)
+        {
+            BoolResult br = new BoolResult();
+            try
+            {
+                var db = JsonConvert.DeserializeObject<DbPuliziaListe>(jsonStr);
+                this.source = db!.source ?? new List<TipoRecordPulizia>();
+                this.SaveChanges();
+
+                br.Esito = true;
+            }
+            catch (Exception ex)
+            {
+                br.Esito = false;
+                br.error = ex.ToString();
+                return br;
+            }
+
+            return br;
+        }
+
+        public bool SaveChanges()
+        {
+            string jsonStr = JsonConvert.SerializeObject(this);
+
+            using (StreamWriter sw = new StreamWriter(this.pathExternalSource, false))
+            {
+                sw.WriteLine(jsonStr);
+            }
+
+            return true;
+        }
+    }
+
+    public class TipoRecordPulizia
+    {
+        public Int64 Id { get; set; }
+        public string Nome { get; set; } = "";
+        /// <summary>OR fra i set, AND dentro ogni set: come EtichettaItem.Regole.</summary>
+        public List<List<RegolaComparazioneEtichetta>> Regole { get; set; } = new List<List<RegolaComparazioneEtichetta>>();
+        /// <summary>OR fra i set, AND dentro: come DeclinazioneMeccanica.Regole.</summary>
+        public List<List<RegolaComparazionePerEtichetta>> RegoleEtichette { get; set; } = new List<List<RegolaComparazionePerEtichetta>>();
     }
 
     #endregion
