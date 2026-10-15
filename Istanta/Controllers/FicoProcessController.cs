@@ -48,6 +48,13 @@ namespace Istanta.Controllers
         public List<ArticoliDescrizioni> archivio_descr_gruppo = new List<ArticoliDescrizioni>();
         public TipoLavorazione tipoLavorazione { get; set; }
         public string? error;
+        //I20-1069: in error il messaggio breve, qui la traccia completa.
+        public string? dettaglio;
+        //I20-1069: l'eccezione da cui viene error, per chi la rilancia senza perderne tipo e riga.
+        public Exception? eccezione;
+        //I20-1069: i record che non si sono completati (descrizioni, foto, firma), uno per riga:
+        //la lista arriva lo stesso, e il Plugin li mostra come avviso.
+        public List<string> avvisi = new List<string>();
     }
 
     class LoghiBolliPerCorreggo
@@ -2045,6 +2052,25 @@ namespace Istanta.Controllers
             return Ok(result);
         }
 
+        /// I20-1069: l'avviso per l'operatore sui record della lista che non si sono completati. Il
+        /// Plugin ne mostra circa 200 caratteri: i primi tre per esteso, gli altri contati; l'elenco
+        /// intero sta nel log di Istanta.
+        public static string AvvisoRecordNonCompletati(IReadOnlyCollection<string> avvisi)
+        {
+            const int mostrati = 3;
+            string elenco = string.Join("; ", avvisi.Take(mostrati));
+            string altri = avvisi.Count > mostrati ? $"; e altri {avvisi.Count - mostrati} (elenco completo nel log di Istanta)" : "";
+            return $"{avvisi.Count} record della lista non completati (senza descrizioni, foto o firma): {elenco}{altri}";
+        }
+
+        /// I20-1069: la riga d'avviso di un record che impacchettaInfoRecord non ha completato: quale
+        /// record, di quale gruppo, e perche'.
+        public static string AvvisoRecordNonCompletato(object? idRec, string? codice, string? codiceGruppo, Exception ex)
+        {
+            string gruppo = !string.IsNullOrEmpty(codiceGruppo) && codiceGruppo != codice ? $" gruppo {codiceGruppo}" : "";
+            return $"ref {codice}{gruppo} (record {idRec}): {DescrizioneErrori.Motivo(ex)}";
+        }
+
         //Chiamata effettuata da diverse parti per effettuare il processo di un kit
         [HttpGet]
         [Route("FicoProcess/processaKit/{id}/{mode}/{noCache}")]//{guidId}/{guidRaccoglitore}/{guidPromo}/{guidArea}/{guidCanale}/{guidFormato}")]
@@ -2098,13 +2124,20 @@ namespace Istanta.Controllers
                         //w.GuidCanale == guidCanale &&
                         //w.GuidArea == guidArea).ToList();
 
-                        IstantaLib.Utility.Logger.Log($"Guid promo {plItem!.GuidPromo}");
+                        //I20-1069: lavorazione, promo e kit mancanti davano un NullReferenceException senza dati.
+                        if (plItem == null)
+                            throw new ErroreIstanta("lettura della lavorazione", $"la lavorazione {id} non esiste.");
+
+                        IstantaLib.Utility.Logger.Log($"Guid promo {plItem.GuidPromo}");
 
                         Promo? promo = this.ctx2.Promos.Where(w => w.guidID == plItem.GuidPromo).FirstOrDefault();
+                        if (promo == null)
+                            throw new ErroreIstanta("lettura della promo", $"la promo {plItem.GuidPromo} della lavorazione {id} non esiste.");
 
                         //Console.WriteLine($"Step 2_2");
 
-                        List<FicoContextField> promoContext = JsonConvert.DeserializeObject<List<FicoContextField>>(promo!.Context!)!;
+                        List<FicoContextField> promoContext = (promo.Context == null ? null : JsonConvert.DeserializeObject<List<FicoContextField>>(promo.Context))
+                            ?? throw new ErroreIstanta("lettura della promo", $"la promo {plItem.GuidPromo} della lavorazione {id} non ha il contesto.");
 
                         FicoCombinazioniKitResponse resultFP = new FicoCombinazioniKitResponse();
 
@@ -2112,7 +2145,8 @@ namespace Istanta.Controllers
                         //Console.WriteLine($"Step 3");
 
                         //FicoCombinazioneKit kit = JsonConvert.DeserializeObject<FicoCombinazioneKit>(plItem.Meta);
-                        FicoRuntimeKit? kit = JsonConvert.DeserializeObject<FicoRuntimeKit>(plItem.Meta!);
+                        FicoRuntimeKit? kit = (string.IsNullOrWhiteSpace(plItem.Meta) ? null : JsonConvert.DeserializeObject<FicoRuntimeKit>(plItem.Meta))
+                            ?? throw new ErroreIstanta("lettura della lavorazione", $"la lavorazione {id} non ha il Meta del kit, o non si legge.");
 
                         if (guidIdTipiDiExport != "")
                         {
@@ -2146,7 +2180,7 @@ namespace Istanta.Controllers
                         });
 
                         if (punteggioTracciati.Count() <= 0)
-                            throw new Exception("no tracciati found");
+                            throw new ErroreIstanta("scelta dei tracciati", $"la promo {plItem.GuidPromo} non ha tracciati per l'area, il canale e il PV del kit della lavorazione {id}.");
 
                         //Console.WriteLine($"Step 4");
 
@@ -2192,7 +2226,7 @@ namespace Istanta.Controllers
                         if (maxVal < 0)
                         {
                             IstantaLib.Utility.Logger.Log($"Nessun vincitore");
-                            throw new Exception("Nessun punteggio valido");
+                            throw new ErroreIstanta("scelta dei tracciati", $"nessun tracciato della promo {plItem.GuidPromo} corrisponde al filtro di contesto del kit della lavorazione {id}.");
                             //Nessun vincitore
                             ////si passa oltre
                             //Console.WriteLine("Nessun vincitore!");
@@ -2229,7 +2263,9 @@ namespace Istanta.Controllers
 
                                 if (kitResult.error != null && kitResult.error != "")
                                 {
+                                    //I20-1069: kitResult.error e' gia' il messaggio breve; la traccia sta in dettaglio.
                                     result.error = kitResult.error;
+                                    result.dettaglio = kitResult.dettaglio;
                                     error_report += $"{result.error}\n";
                                     this._cache.Remove(kitCacheId);
                                 }
@@ -2240,6 +2276,11 @@ namespace Istanta.Controllers
 
                                     result.records.AddRange(kitResult.records);
 
+                                    //I20-1069: i record che non si sono completati arrivano con la lista, e il Plugin lo dice.
+                                    if (kitResult.avvisi.Count > 0)
+                                    {
+                                        result.warn = AvvisoRecordNonCompletati(kitResult.avvisi);
+                                    }
 
                                     result.esito = true;
                                 }
@@ -2247,12 +2288,14 @@ namespace Istanta.Controllers
                             }
                             catch (Exception exProKit)
                             {
-                                error_report += $"{exProKit.ToString()}\n";
+                                Console.WriteLine($"Errore in processaKit (lavorazione {id}): " + exProKit.ToString());
+                                error_report += DescrizioneErrori.Breve("processaKit", exProKit) + "\n";
+                                result.dettaglio = DescrizioneErrori.Dettaglio(exProKit);
                             }
                         }
 
 
-                        result.error = error_report;
+                        result.error = error_report.TrimEnd('\n');
 
                         //Console.WriteLine($"Step error report {error_report}");
 
@@ -2265,9 +2308,11 @@ namespace Istanta.Controllers
                     }
                     catch (Exception ex)
                     {
-                        //Console.WriteLine($"Step error {ex.ToString()}");
+                        //I20-1069: messaggio breve per chi chiama, traccia completa nel log e in dettaglio.
+                        Console.WriteLine($"Errore in processaKit (lavorazione {id}): " + ex.ToString());
 
-                        result.error = "processaKit -> " + ex.ToString();
+                        result.error = DescrizioneErrori.Breve("processaKit", ex);
+                        result.dettaglio = DescrizioneErrori.Dettaglio(ex);
                         result.esito = false;
                         return Ok(result);
                     }
@@ -2681,8 +2726,9 @@ namespace Istanta.Controllers
 
                 List<FicoContextField> promoContext = (pItem.Context == null ? new List<FicoContextField>() : JsonConvert.DeserializeObject<List<FicoContextField>>(pItem.Context))!;
 
-                Formato? objFormato = Utility.SingletonConfiguration.DBFORMATI!.source.Where(w => w.guidID == kit.guidFormato).FirstOrDefault();
-                resultGlobale.tipoLavorazione = objFormato!.tipo;
+                //I20-1069: un formato assente da SourceFormati.json dava un NullReferenceException qui sotto.
+                Formato objFormato = Formati.Trova(kit.guidFormato, $"kit della lavorazione {idLavorazione}");
+                resultGlobale.tipoLavorazione = objFormato.tipo;
                 //IstantaController icItem = new IstantaController(this.connString, this.extarnalLibPath, this.extarnalSourcePath);
                 string error_report = "";
 
@@ -2705,12 +2751,19 @@ namespace Istanta.Controllers
 
                     if (resultPreparazione.error != null && resultPreparazione.error != "")
                     {
-                        throw new Exception(resultPreparazione.error);
+                        //I20-1069: prima la traccia diventava il messaggio di una nuova eccezione, e il
+                        //Plugin la riceveva avvolta due o tre volte. Ora si dice il passo, con l'originale dentro.
+                        if (resultPreparazione.eccezione != null)
+                        {
+                            throw new ErroreIstanta($"impacchettamento del tracciato {tracciato.Id}", DescrizioneErrori.Motivo(resultPreparazione.eccezione), resultPreparazione.eccezione);
+                        }
+                        throw new ErroreIstanta($"impacchettamento del tracciato {tracciato.Id}", resultPreparazione.error);
                     }
 
-                    ////Console.WriteLine($"Impacchettamento records. Ci sono errori? {resultPreparazione.error}");
-                    ///
-                    var recTest = resultPreparazione.records.FirstOrDefault(r => r.recordInTracciato[keyCodiceRef].ToString() == "881763");
+                    resultGlobale.avvisi.AddRange(resultPreparazione.avvisi);
+
+                    //I20-1069: qui c'era un residuo di debug (la ricerca del codice 881763) che lanciava
+                    //KeyNotFoundException su qualunque record senza codice.
 
                     //Adesso è il momento di selezionare in base al FILTRO del kit
                     List<ArticoloInKit> recordsFiltrati = new List<ArticoloInKit>();
@@ -2793,7 +2846,10 @@ namespace Istanta.Controllers
 
                         if (resultAgenzia.errors != "")
                         {
-                            error_report += resultAgenzia.errors;
+                            //I20-1069: si dice quale passo e quale tracciato; il testo intero di AgenziaLib va nel log e in dettaglio.
+                            Console.WriteLine($"Errore di {agenziaFunc} (lavorazione {idLavorazione}, tracciato {tracciato.Id}): " + resultAgenzia.errors);
+                            error_report += $"processaKit, esportazione di agenzia ({agenziaFunc}) del tracciato {tracciato.Id}: {DescrizioneErrori.PrimaRiga(resultAgenzia.errors)}\n";
+                            resultGlobale.dettaglio = (resultGlobale.dettaglio != null ? resultGlobale.dettaglio + "\n" : "") + resultAgenzia.errors;
                         }
                         else
                         {
@@ -2824,10 +2880,11 @@ namespace Istanta.Controllers
                             {
                                 if (itemLista.recordInTracciato.ContainsKey(keyFotoExtraAuto) && (itemLista.recordInTracciato[keyFotoExtraAuto] as List<LogoBollo>)!.Count > 0)
                                 {
-                                    string codRef = itemLista.recordInTracciato[keyCodiceRef].ToString();
+                                    string codRef = RecordTracciato.Richiesto(itemLista.recordInTracciato, keyCodiceRef, "foto escluse", $"il record {itemLista.IdRec}").ToString()!;
 
-                                    var fotoEscluse = this.ctx.Articolis.Include(f => f.FotoEscluses).Where(f => f.Codice == codRef).FirstOrDefault()!.FotoEscluses;
-                                    if (fotoEscluse!.Count > 0)
+                                    //I20-1069: una ref che non e' fra gli Articoli non ha foto escluse; prima dava NullReferenceException.
+                                    var fotoEscluse = this.ctx.Articolis.Include(f => f.FotoEscluses).Where(f => f.Codice == codRef).FirstOrDefault()?.FotoEscluses;
+                                    if (fotoEscluse != null && fotoEscluse.Count > 0)
                                     {
 
                                         foreach (var logoBollo in (itemLista.recordInTracciato[keyFotoExtraAuto] as List<LogoBollo>)!)
@@ -2866,7 +2923,7 @@ namespace Istanta.Controllers
                                     List<ArticoloInKit> recordsFiltratiExport = new List<ArticoloInKit>();
                                     foreach (var itemLista in resultGlobale.records)
                                     {
-                                        List<ArticoloInKitExportName> _artExpNames = (itemLista.recordInTracciato[GLOBAL_VARIABLES_FICO.keyFicoNames] as List<ArticoloInKitExportName>)!;
+                                        List<ArticoloInKitExportName> _artExpNames = (RecordTracciato.Richiesto(itemLista.recordInTracciato, GLOBAL_VARIABLES_FICO.keyFicoNames, "filtro dei tipi di export", $"il record {itemLista.IdRec}") as List<ArticoloInKitExportName>)!;
 
                                         ArticoloInKitExportName? expArtInKit = _artExpNames.FirstOrDefault(n => n.guidIdTipoExport == expInKit.tipoDiExportGuidID);
 
@@ -2881,7 +2938,7 @@ namespace Istanta.Controllers
 
                                         if (itemLista.sottogruppo != null)
                                         {
-                                            List<ArticoloInKitExportName> _artExpNamesSott = (itemLista.recordInTracciato[GLOBAL_VARIABLES_FICO.keyFicoNames] as List<ArticoloInKitExportName>)!;
+                                            List<ArticoloInKitExportName> _artExpNamesSott = (RecordTracciato.Richiesto(itemLista.recordInTracciato, GLOBAL_VARIABLES_FICO.keyFicoNames, "filtro dei tipi di export", $"il record {itemLista.IdRec}") as List<ArticoloInKitExportName>)!;
 
                                             ArticoloInKitExportName? expArtInKitSott = _artExpNamesSott.FirstOrDefault(n => n.guidIdTipoExport == expInKit.tipoDiExportGuidID);
 
@@ -2914,13 +2971,18 @@ namespace Istanta.Controllers
 
                 resultGlobale.archivio_descr_gruppo = archivio_descr_gruppo;
                 resultGlobale.archivio_refs = archivio_refs;
-                resultGlobale.error = error_report;
+                resultGlobale.error = error_report.TrimEnd('\n');
 
                 return resultGlobale;
             }
             catch (Exception ex)
             {
-                resultGlobale.error = ex.ToString();
+                //I20-1069: messaggio breve con passo e motivo, traccia in dettaglio. Prima tutta la traccia
+                //finiva in error, e processaKit la passava cosi' al Plugin.
+                Console.WriteLine($"Errore in processaKit (lavorazione {idLavorazione}): " + ex.ToString());
+                resultGlobale.error = DescrizioneErrori.Breve("processaKit", ex);
+                resultGlobale.dettaglio = DescrizioneErrori.Dettaglio(ex);
+                resultGlobale.eccezione = ex;
                 return resultGlobale;
             }
         }
@@ -3044,7 +3106,9 @@ namespace Istanta.Controllers
                 var tRecordsJson = tRecordsDb
                     .Select(t =>
                     {
-                        var recordInTracciato = Utility.Main.getJsonObject(t.Dato!);
+                        //I20-1069: un Dato vuoto dava un NullReferenceException senza dire quale record.
+                        var recordInTracciato = Utility.Main.getJsonObject(t.Dato!)
+                            ?? throw new ErroreIstanta("lettura del tracciato", $"il Dato del record {t.Id} del tracciato {tItem.Id} non si legge.");
 
                         recordInTracciato[GLOBAL_VARIABLES.keyRefIdRec] = t.Id;
 
@@ -3108,8 +3172,10 @@ namespace Istanta.Controllers
 
 
 
-                            string? _cod = rec.recordInTracciato![k_cod].ToString();
-                            string? _codGruppo = rec.recordInTracciato[k_codgruppo].ToString();
+                            //I20-1069: un campo mancante dice di quale record e di quale tracciato.
+                            string diQualeRecord = $"il record {rec.idRec} del tracciato {tItem.Id}";
+                            string? _cod = RecordTracciato.Richiesto(rec.recordInTracciato, k_cod, "lettura del tracciato", diQualeRecord).ToString();
+                            string? _codGruppo = RecordTracciato.Richiesto(rec.recordInTracciato, k_codgruppo, "lettura del tracciato", diQualeRecord).ToString();
 
                             //Controllo se è già stato scaricato nel processo massivo di preparazione tracciati
                             //if (_cod == "6050479")
@@ -3221,7 +3287,7 @@ namespace Istanta.Controllers
                             }
 
                             //Preparazione del singolo
-                            Articoli? artItem = archivio_refs.Where(a => a.Codice == rec.recordInTracciato[k_cod].ToString()).FirstOrDefault();
+                            Articoli? artItem = archivio_refs.Where(a => a.Codice == _cod).FirstOrDefault();
                             //Articoli? artItem =            .Where(a => a.Codice == rec.recordInTracciato[k_cod].ToString()).FirstOrDefault();
 
                             //Console.WriteLine("Impacchetto record " + artItem.Codice);
@@ -3248,10 +3314,14 @@ namespace Istanta.Controllers
                             }
                             catch (Exception ex)
                             {
-                                //Console.WriteLine(ex.ToString());
-                                ex.ToString();
+                                //I20-1069: prima l'errore si ignorava e il break lasciava senza descrizioni,
+                                //foto e firma tutti i record successivi del tracciato, senza dirlo. Ora resta
+                                //incompleto solo questo record, come prima con la firma vuota, gli altri si
+                                //completano, e l'avviso arriva al Plugin con la lista.
+                                string avviso = AvvisoRecordNonCompletato(rec.idRec, _cod, _codGruppo, ex);
+                                Console.WriteLine($"Record non completato nel tracciato {tItem.Id}: {avviso}\n{ex}");
+                                result.avvisi.Add(avviso);
                                 rec.recordInTracciato![keyFirmaRevisione] = "";
-                                break;
                             }
                             //Duplico il record per ogni declinazione
                             //Lo faccio qui MA ovviamente è da valutare a chi livello è bene che entri
@@ -3412,7 +3482,9 @@ namespace Istanta.Controllers
                         var okResult = selezioneAutomaticaResult as BoolResult;
                         if (okResult.Esito == false)
                         {
-                            throw new Exception("Fallimento durante la selezione automatica di primarie/secondarie: " + okResult.error);
+                            //I20-1069: di okResult.error, spesso un ex.ToString() di AgenziaLib, si dice la prima riga; il resto va nel log.
+                            Console.WriteLine($"Selezione automatica non riuscita nel tracciato {tItem.Id}: {okResult.error}");
+                            throw new ErroreIstanta("selezione automatica di primarie e secondarie", $"tracciato {tItem.Id}: {DescrizioneErrori.PrimaRiga(okResult.error)}");
                         }
                     }
 
@@ -3433,13 +3505,18 @@ namespace Istanta.Controllers
                         label = s.label
                     }).ToList(),
                     archivio_descr_gruppo = archivio_descr_gruppo,
-                    archivio_refs = archivio_refs
+                    archivio_refs = archivio_refs,
+                    //I20-1069: gli avvisi dei record non completati, raccolti qui sopra nel risultato di prima.
+                    avvisi = result.avvisi
                 };
             }
             catch (Exception ex)
             {
-                //Console.WriteLine(ex.ToString());
-                result.error = ex.ToString();
+                //I20-1069: chi chiama rilancia l'eccezione dentro il suo passo, senza perderne tipo e riga.
+                Console.WriteLine($"Errore nell'impacchettamento del tracciato {tItem.Id}: " + ex.ToString());
+                result.error = DescrizioneErrori.Motivo(ex);
+                result.dettaglio = DescrizioneErrori.Dettaglio(ex);
+                result.eccezione = ex;
             }
 
             return result;
@@ -3465,7 +3542,8 @@ namespace Istanta.Controllers
             string k_multiplex = Enum.GetName(AddestramentoRuoli.Scatto) + "." + GLOBAL_VARIABLES.keyScattoCodiceGruppoMultiplex;
             string k_cod = Enum.GetName(AddestramentoRuoli.Referenza) + "." + GLOBAL_VARIABLES.keyRefCodice;
 
-            string? _cod = rec.recordInTracciato![k_cod].ToString();
+            //I20-1069: un campo mancante dice di quale record.
+            string? _cod = RecordTracciato.Richiesto(rec.recordInTracciato, k_cod, "lettura del record", $"il record {rec.idRec}").ToString();
 
             if (_cod == "2617525")
                 "break".ToString();
@@ -3601,7 +3679,7 @@ namespace Istanta.Controllers
             //Controllo se è parte di un gruppo
             //Per procedere anche con le selezioni
 
-            string? _codGruppo = rec.recordInTracciato[k_codgruppo].ToString();
+            string? _codGruppo = RecordTracciato.Richiesto(rec.recordInTracciato, k_codgruppo, "lettura del record", $"il record {rec.idRec} (ref {_cod})").ToString();
 
 
             if (_cod != _codGruppo)

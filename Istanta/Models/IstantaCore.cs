@@ -878,6 +878,8 @@ namespace Istanta.Models
         public bool Esito { get; set; }
         public ErrorCodes errorCode { get; set; } = ErrorCodes.None;
         public string error { get; set; } = String.Empty;
+        //I20-1069: in error il messaggio breve per l'operatore, qui la traccia completa per la console.
+        public string? dettaglio { get; set; }
     }
 
     public class PromoLavorazioniResult
@@ -1731,6 +1733,8 @@ namespace Istanta.Models
         public List<ArticoloInRevisione> Data { get; set; } = new List<ArticoloInRevisione>();
         public List<ArticoloInRevisione> ArticoliObsoleti { get; set; } = new List<ArticoloInRevisione>();
         public string? Error { get; set; }
+        //I20-1069: in Error il messaggio breve per l'operatore, qui la traccia completa per la console.
+        public string? Dettaglio { get; set; }
     }
 
     public class DescrizioniSottogruppi { 
@@ -2173,6 +2177,11 @@ namespace Istanta.Models
         public TipoLavorazione tipoLavorazione { get; set; }
         public List<ResponseImpagination>? Result { get; set; }
         public string? error;
+        //I20-1069: in error il messaggio breve per l'operatore, qui la traccia completa che il Plugin
+        //scrive in console senza mostrarla.
+        public string? dettaglio;
+        //I20-1069: l'avviso di processaKit sui record della lista non completati.
+        public string? warn;
     }
 
     public class FileIndd
@@ -2282,6 +2291,8 @@ namespace Istanta.Models
         public int idRecSelezionato = 0;
         public int idLavorazione { get; set; }
         public string error;
+        //I20-1069: in error il messaggio breve per l'operatore, qui la traccia completa per la console.
+        public string? dettaglio;
     }
     public class RicollegamentoBoxItem
     {
@@ -2400,6 +2411,11 @@ namespace Istanta.Models
     {
         public bool esito = true;
         public string error = "";
+        //I20-1069: la traccia completa dell'errore, e quanti record su quanti erano gia' salvati:
+        //si salva record per record, e un errore a meta' lascia il dato modificato in parte.
+        public string? dettaglio;
+        public int salvati;
+        public int totale;
         //public Dictionary<string, object> refItem = new Dictionary<string, object>();
     }
 
@@ -2408,6 +2424,9 @@ namespace Istanta.Models
         public bool esito = true;
 
         public string error = "";
+
+        //I20-1069: in error il messaggio breve per l'operatore, qui la traccia completa per la console.
+        public string? dettaglio;
 
         public Dictionary<string, object> item = new Dictionary<string, object>();
     }
