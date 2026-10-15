@@ -4,7 +4,9 @@
  * L'impaginazione piazza le foto extra di una ref (loghi, bollini, ambientate caricati sulla ref)
  * dalla cartella Loghi, ma la sincronizzazione scaricava solo le foto del prodotto, in Links, e
  * l'archivio Loghi/Bolli. Ora il server da' anche le foto extra, col loro tipo, e il pacchetto
- * completo (modo 0) e la lista di codici (modo 2) le scaricano in Loghi prima delle foto.
+ * completo (modo 0) e la lista di codici (modo 2) le scaricano in Loghi prima delle foto. La sync
+ * loghi (modo 1), l'unica che parte prima di un'impaginazione massiva senza pacchetto completo,
+ * passa la lavorazione aperta e il server le aggiunge all'archivio Loghi/Bolli.
  *
  * dividiPacchettoPerCartella e' pura e si prova qui: reperimentoFoto.js si carica sotto Node
  * togliendo di mezzo require('indesign'). Lo scaricamento parla con il disco e si prova sul sorgente.
@@ -98,4 +100,22 @@ test("pacchetto completo e lista di codici: prima le foto extra in Loghi, le fot
     //Le foto non passano piu' intere allo scaricamento nei Links.
     assert.ok(testo.indexOf("downloadImages(data, objProcess, folder, codiceSyncFoto)") < 0);
     assert.ok(testo.indexOf("downloadImages(data.lista, objProcess, folder, codiceSyncFotoMode2)") < 0);
+});
+
+/* ---- la sync loghi ---- */
+
+test("la sync loghi passa la lavorazione aperta, per avere anche le foto extra delle sue ref", () => {
+    const testo = sorgente();
+
+    assert.match(testo, /var parametriLoghi = idKitLavorazione \? "\?id_lavorazione=" \+ idKitLavorazione : "";\n\s*xhr\.send\("SyncFoto\/getPacchettoLoghiBolliAsContract" \+ parametriLoghi, null, "GET", null\);/);
+    assert.ok(testo.indexOf('xhr.send("SyncFoto/getPacchettoLoghiBolliAsContract", null, "GET", null);') < 0);
+});
+
+test("l'elenco dei loghi della scheda resta il solo archivio: nessuna lavorazione passata", () => {
+    const indexNew = leggiFileDelPlugin("indexNew.js").replace(/\r/g, "");
+    const inizio = indexNew.indexOf("function getLoghiBolliData(callback) {");
+    const corpo = indexNew.substring(inizio, indexNew.indexOf("\n}\n", inizio));
+
+    assert.ok(inizio > 0, "manca getLoghiBolliData");
+    assert.match(corpo, /xhr\.send\("SyncFoto\/getPacchettoLoghiBolliAsContract", null, "GET", null\);/);
 });

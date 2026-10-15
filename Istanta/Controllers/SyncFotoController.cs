@@ -1525,6 +1525,27 @@ namespace Istanta.Controllers
             return null;
         }
 
+        /// Le foto extra da scaricare di tutti i record di un kit, quelle che l'impaginazione piazza
+        /// dalla cartella Loghi. Le usano il pacchetto completo e la sync loghi della lavorazione.
+        public static List<FileOlympoSync> FotoExtraDeiRecord(IEnumerable<ArticoloInKit>? records)
+        {
+            var richieste = new List<FileOlympoSync>();
+            if (records == null)
+            {
+                return richieste;
+            }
+
+            string k_foto_extra = Enum.GetName(AddestramentoRuoli.Foto) + "." + GLOBAL_VARIABLES.keyFotoExtra;
+            foreach (var record in records)
+            {
+                if (record?.recordInTracciato != null && record.recordInTracciato.TryGetValue(k_foto_extra, out var fotoExtra))
+                {
+                    richieste.AddRange(FotoExtraDaScaricare(LeggiFotoExtra(fotoExtra)));
+                }
+            }
+            return richieste;
+        }
+
         /// Olimpo risponde con hash e dimensione ma il tipo non lo conosce: lo rimettiamo dalle
         /// richieste, per id e nome del file. Le foto del prodotto restano senza tipo.
         public static List<FileOlympoSync> ConTipoDelleRichieste(List<FileOlympoSync>? risposta, IEnumerable<FileOlympoSync> richieste)
@@ -2615,14 +2636,7 @@ namespace Istanta.Controllers
                 }
 
                 //Le foto extra dei record del kit, quelle che l'impaginazione piazza dalla cartella Loghi.
-                string k_foto_extra = Enum.GetName(AddestramentoRuoli.Foto) + "." + GLOBAL_VARIABLES.keyFotoExtra;
-                foreach (var record in result.records)
-                {
-                    if (record.recordInTracciato != null && record.recordInTracciato.TryGetValue(k_foto_extra, out var fotoExtra))
-                    {
-                        fotoRichieste.AddRange(FotoExtraDaScaricare(LeggiFotoExtra(fotoExtra)));
-                    }
-                }
+                fotoRichieste.AddRange(FotoExtraDeiRecord(result.records));
 
                 List<FileOlympoSync> fotoNoValide = fotoRichieste.Where(f => f.Id == "").ToList();
                 fotoRichieste = fotoRichieste.Where(f => f.Id != null && f.Id != "").ToList();
@@ -2845,7 +2859,10 @@ namespace Istanta.Controllers
 
         [HttpGet]
         [Route("SyncFoto/getPacchettoLoghiBolliAsContract")]
-        public async Task<IActionResult> getPacchettoLoghiBolliAsContract()
+        //id_lavorazione, facoltativo: con la lavorazione aperta nel Plugin la sync loghi porta anche le
+        //foto extra delle sue ref, che l'impaginazione piazza dalla cartella Loghi. Senza, come
+        //nell'elenco dei loghi della scheda, resta il solo archivio Loghi/Bolli.
+        public async Task<IActionResult> getPacchettoLoghiBolliAsContract(int id_lavorazione = 0)
         {
 
             if (ficoController == null)
@@ -2866,6 +2883,11 @@ namespace Istanta.Controllers
 
             }
 
+            if (id_lavorazione > 0)
+            {
+                fotoRichieste.AddRange(await FotoExtraDellaLavorazione(id_lavorazione));
+            }
+
             //var resSync = ph.generaPacchettoFoto(dictionarySupporto, altaPathObject);
             //using var httpClient = new HttpClient();
             string uri = olympusServerUrl + "/foto/getInfoMassivo";
@@ -2877,7 +2899,7 @@ namespace Istanta.Controllers
             if (response.IsSuccessStatusCode)
             {
                 var responseBody = await response.Content.ReadAsStringAsync();
-                var dataOlympo = JsonConvert.DeserializeObject<List<FileOlympoSync>>(responseBody);
+                var dataOlympo = ConTipoDelleRichieste(JsonConvert.DeserializeObject<List<FileOlympoSync>>(responseBody), fotoRichieste);
 
                 foreach (var item in dataOlympo)
                 {
@@ -2897,6 +2919,25 @@ namespace Istanta.Controllers
                 return Ok(response.StatusCode);
             }
 
+        }
+
+        /// Le foto extra delle ref di una lavorazione, per la sync loghi. Il kit si legge con la cache:
+        /// la sync loghi parte a ogni impaginazione massiva, e di solito il Plugin il kit l'ha appena
+        /// chiesto. Se non si legge, la sync loghi porta comunque l'archivio: niente foto extra.
+        private async Task<List<FileOlympoSync>> FotoExtraDellaLavorazione(int id_lavorazione)
+        {
+            try
+            {
+                ficoController.HttpContextInRent = HttpContext;
+                var promise = await ficoController.processaKit(id_lavorazione, FicoCombinazioneKitReadMode.Advanced);
+                var kit = (promise as OkObjectResult)?.Value as ArticoloInRevisioneKitResult;
+                return FotoExtraDeiRecord(kit?.records);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Foto extra della lavorazione {IdLavorazione} non lette per la sync loghi", id_lavorazione);
+                return new List<FileOlympoSync>();
+            }
         }
 
         [HttpGet]

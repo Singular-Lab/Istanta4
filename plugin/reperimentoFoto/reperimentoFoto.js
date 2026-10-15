@@ -544,7 +544,10 @@ const ReperimentoFoto = {
 
                 xhr.onNoConnection = async function () { }
 
-                xhr.send("SyncFoto/getPacchettoLoghiBolliAsContract", null, "GET", null);
+                //Con una lavorazione aperta arrivano anche le foto extra delle sue ref, che l'impaginazione
+                //piazza da questa cartella. Prima di un'impaginazione massiva senza pacchetto completo parte solo questa.
+                var parametriLoghi = idKitLavorazione ? "?id_lavorazione=" + idKitLavorazione : "";
+                xhr.send("SyncFoto/getPacchettoLoghiBolliAsContract" + parametriLoghi, null, "GET", null);
 
             }
             catch (e) {
