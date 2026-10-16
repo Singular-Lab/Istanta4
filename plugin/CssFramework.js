@@ -2277,14 +2277,37 @@ const CssFramework =
     },
 
     /// Stringe una casella di testo fino al limite del lato da cui esce. Resta stretta solo se il
-    /// testo non va in overflow e le resta spazio fra il lato ridotto e quello opposto; altrimenti
-    /// torna com'era. Torna true se e' rimasta stretta. Il corpo del testo non cambia.
+    /// testo non va in overflow e le resta spazio fra il lato ridotto e quello opposto. Se fino al
+    /// limite il testo non ci sta, sui lati sinistro e destro la casella si stringe almeno fino a
+    /// dove finisce il suo testo (bordoDelTesto), sempre senza overflow: chi la contiene si spostera'
+    /// solo del resto. Altrimenti torna com'era. Torna true solo se e' arrivata al limite. Il corpo
+    /// del testo non cambia.
     stringiTestoAlLimite(casella, limite, lato) {
         var originalBounds = casella.geometricBounds;
+        if (this.stringiLatoFinoA(casella, originalBounds, lato, limite)) {
+            return true;
+        }
+
+        //Nel PoP Coop "al kg" a corpo 50 e' largo 43 mm in una casella di 59: fino al bordo del box
+        //ne restavano 34, e la casella tornava com'era con tutti i suoi 16 mm vuoti.
+        var bordo = this.bordoDelTesto(casella, lato);
+        if (bordo != null) {
+            this.stringiLatoFinoA(casella, originalBounds, lato, bordo);
+        }
+        return false;
+    },
+
+    /// Porta il lato della casella a valore, solo verso l'interno. Resta cosi' se le resta spazio
+    /// fra il lato ridotto e quello opposto e il testo non va in overflow; altrimenti la casella torna
+    /// ai bounds originali. Torna true se e' rimasta ridotta.
+    stringiLatoFinoA(casella, originalBounds, lato, valore) {
         var ridotti = originalBounds.slice();
         ridotti[lato.indice] = lato.minimo
-            ? Math.max(originalBounds[lato.indice], limite)
-            : Math.min(originalBounds[lato.indice], limite);
+            ? Math.max(originalBounds[lato.indice], valore)
+            : Math.min(originalBounds[lato.indice], valore);
+        if (ridotti[lato.indice] == originalBounds[lato.indice]) {
+            return false;
+        }
         //quello che resta fra il lato ridotto e quello opposto
         var spazio = lato.minimo
             ? originalBounds[lato.opposto] - ridotti[lato.indice]
@@ -2299,6 +2322,31 @@ const CssFramework =
         }
         casella.geometricBounds = originalBounds;
         return false;
+    },
+
+    /// Dove finisce il testo di una casella sul lato sinistro o destro, dalle sue righe come in
+    /// getRealBounds, con il margine interno e mezzo millimetro di respiro. null sui lati alto e
+    /// basso, o se le righe non si leggono.
+    bordoDelTesto(casella, lato) {
+        if (lato.verticale) {
+            return null;
+        }
+        try {
+            var righe = casella.lines.everyItem().getElements();
+            if (!righe || righe.length == 0) {
+                return null;
+            }
+            var inset = casella.textFramePreferences.insetSpacing;
+            var insetSinistro = Number(inset[1] != null ? inset[1] : inset) || 0;
+            var insetDestro = Number(inset[3] != null ? inset[3] : inset) || 0;
+            var respiro = 0.5;
+            if (lato.minimo) {
+                return Math.min(...righe.map(r => r.horizontalOffset)) - insetSinistro - respiro;
+            }
+            return Math.max(...righe.map(r => r.endHorizontalOffset)) + insetDestro + respiro;
+        } catch (e) {
+            return null;
+        }
     },
 
     /// Le caselle di testo visibili di un gruppo, anche in gruppi annidati, che escono dal lato si
