@@ -549,9 +549,43 @@ const FicoProcess=
     //     xhr.send("FicoProcess/getTipiDiExport", null, "GET");
     // },
 
+    /// I20-1115: le promo del menu "Seleziona Kit" dalla piu' recente, secondo la data in cui sono
+    /// state create in Istanta (dataRegistrazione); a parita' prima quella creata dopo (id piu' alto),
+    /// e in fondo quelle senza data. getPromoAperte le restituisce senza ordine e il menu le mostrava
+    /// cosi', le piu' vecchie in alto: per le ultime bisognava scorrere. Si ordina qui e non sul server
+    /// perche' lo stesso elenco serve alla pagina web delle promo. Si lavora su una copia.
+    ordinaPromoPerKit: function (lista) {
+        if (!Array.isArray(lista)) {
+            return [];
+        }
+        var tempo = function (promo) {
+            var t = promo != null && promo.dataRegistrazione != null ? Date.parse(promo.dataRegistrazione) : NaN;
+            return isNaN(t) ? null : t;
+        };
+        return lista.slice().sort(function (a, b) {
+            var ta = tempo(a);
+            var tb = tempo(b);
+            if (ta !== tb) {
+                if (ta == null) {
+                    return 1;
+                }
+                if (tb == null) {
+                    return -1;
+                }
+                return tb - ta;
+            }
+            return ((b && b.id) || 0) - ((a && a.id) || 0);
+        });
+    },
+
     refreshPromo: async function () {
         try {
             let objResult = await this.requestFicoData("Tracciati/getPromoAperte");
+
+            //I20-1115: le ultime create in alto. Una risposta che non e' un elenco resta com'era.
+            if (Array.isArray(objResult)) {
+                objResult = this.ordinaPromoPerKit(objResult);
+            }
 
             this.listaPromoAperte = objResult;
 
