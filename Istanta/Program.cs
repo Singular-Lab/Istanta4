@@ -29,8 +29,9 @@ using System.Globalization;
 using System.Text.RegularExpressions;
 using Istanta.Models_2;
 
-AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
-AppContext.SetSwitch("Npgsql.DisableDateTimeInfinityConversions", true);
+// I20-1106: gli switch di Npgsql stanno in Migrazioni, condivisi con dotnet ef e con i test: il
+// modello che gira deve essere quello degli snapshot, altrimenti Migrate() all'avvio si ferma.
+Migrazioni.ImpostaComportamentoNpgsql();
 
 
 var logPath = Path.Combine(AppContext.BaseDirectory, "logs", "log-.txt");
@@ -273,6 +274,10 @@ builder.Services.Configure<BrotliCompressionProviderOptions>(options =>
 
 var app = builder.Build();
 
+// I20-1106: le migration pendenti dei due contesti si applicano qui, all'avvio. Prima si
+// applicavano a mano con dotnet ef database update, che sul compilato distribuito in produzione
+// non c'e'. Si spegne con Migrazioni__ApplicaAllAvvio=false.
+Migrazioni.ApplicaAllAvvio(app.Services, app.Configuration, app.Logger);
 
 var defaultCulture = new CultureInfo("en-GB");
 CultureInfo.DefaultThreadCurrentCulture = defaultCulture;

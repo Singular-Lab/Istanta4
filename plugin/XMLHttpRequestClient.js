@@ -17,9 +17,27 @@ class XMLHttpRequestClient
     descrizione = null;
     url = null;
 
-    constructor() 
+    constructor()
     {
         this.xhr = new XMLHttpRequest();
+    }
+
+    /// I20-1069: il perche' di una richiesta fallita, in parole per l'operatore, da quello che
+    /// onerror riceve: il motivo scritto dal server, uno stato HTTP, "timeout", oppure 0 quando
+    /// Istanta non ha risposto affatto. Prima chi gestiva onerror diceva sempre "Errore di rete",
+    /// anche quando il server aveva spiegato il motivo, e copriva il messaggio HRC-01.
+    static testoErrore(motivo)
+    {
+        if (motivo == null || motivo === "" || motivo === 0 || motivo === "0") {
+            return "Istanta non risponde (errore di rete)";
+        }
+        if (motivo === "timeout") {
+            return "Istanta non ha risposto in tempo (timeout)";
+        }
+        if (typeof motivo === "number") {
+            return "Istanta ha risposto con lo stato " + motivo;
+        }
+        return String(motivo);
     }
 
     onload()

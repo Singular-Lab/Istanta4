@@ -31,7 +31,7 @@ namespace Istanta.Migrations.Contesto2
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
                     b.Property<DateTime>("DataRegistrazione")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<long>("IdAttivita")
                         .HasColumnType("bigint");
@@ -69,13 +69,13 @@ namespace Istanta.Migrations.Contesto2
                         .HasColumnType("text");
 
                     b.Property<DateTime?>("DataFine")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime?>("DataInizio")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime>("DataInserimento")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<long?>("IdParent")
                         .HasColumnType("bigint");
@@ -335,6 +335,49 @@ namespace Istanta.Migrations.Contesto2
                     b.ToTable("promo", (string)null);
                 });
 
+            modelBuilder.Entity("Istanta.Models_2.PromoBackup", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("Conteggio")
+                        .HasColumnType("integer")
+                        .HasColumnName("conteggio");
+
+                    b.Property<string>("Contenuto")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("contenuto");
+
+                    b.Property<DateTime>("DataBackup")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("data_backup");
+
+                    b.Property<int>("IdPromo")
+                        .HasColumnType("integer")
+                        .HasColumnName("id_promo");
+
+                    b.Property<string>("Origine")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("origine");
+
+                    b.Property<byte>("Tipo")
+                        .HasColumnType("smallint")
+                        .HasColumnName("tipo")
+                        .HasComment("1-record dei tracciati 2-record delle lavorazioni");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IdPromo");
+
+                    b.ToTable("promo_backup", (string)null);
+                });
+
             modelBuilder.Entity("Istanta.Models_2.PromoImportazioni", b =>
                 {
                     b.Property<int>("Id")
@@ -518,7 +561,7 @@ namespace Istanta.Migrations.Contesto2
                         .HasColumnType("bigint");
 
                     b.Property<DateTime?>("RegisterDate")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<byte>("TipoAzione")
                         .HasColumnType("smallint");
@@ -880,6 +923,18 @@ namespace Istanta.Migrations.Contesto2
                     b.Navigation("IdPaginaNavigation");
 
                     b.Navigation("IdRecordNavigation");
+                });
+
+            modelBuilder.Entity("Istanta.Models_2.PromoBackup", b =>
+                {
+                    b.HasOne("Istanta.Models_2.Promo", "IdPromoNavigation")
+                        .WithMany()
+                        .HasForeignKey("IdPromo")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("FK_promo_backup_promo");
+
+                    b.Navigation("IdPromoNavigation");
                 });
 
             modelBuilder.Entity("Istanta.Models_2.PromoImportazioni", b =>

@@ -107,12 +107,57 @@ public class FotoExtraNellaSyncTests
         string sorgente = File.ReadAllText(DllAgenziaLibTests.TrovaFile("Istanta/Controllers/SyncFotoController.cs")).Replace("\r", "");
 
         string kit = Tra(sorgente, "public async Task<IActionResult> getPacchettoFotoAsContract(", "public async Task<IActionResult> getFotosAsContractNew(");
-        Assert.Contains("fotoRichieste.AddRange(FotoExtraDaScaricare(LeggiFotoExtra(fotoExtra)));", kit);
+        Assert.Contains("fotoRichieste.AddRange(FotoExtraDeiRecord(result.records));", kit);
         Assert.Contains("return Ok(ConTipoDelleRichieste(dataOlympo, fotoRichieste));", kit);
 
         string codici = Tra(sorgente, "public async Task<IActionResult> getFotosAsContractNew(", "public ArticoliFoto getFoto(");
         Assert.Contains("fotoRichieste.AddRange(FotoExtraDaScaricare(FotoExtraDellaRef(art.ArticoliFotos, area, canale)));", codici);
         Assert.Contains("result.lista = ConTipoDelleRichieste(dataOlympo, fotoRichieste);", codici);
+    }
+
+    private static ArticoloInKit Record(object? fotoExtra)
+    {
+        var record = new ArticoloInKit { recordInTracciato = new Dictionary<string, object>(), sottogruppo = new Dictionary<string, object>() };
+        if (fotoExtra != null)
+        {
+            record.recordInTracciato["Foto.Extra"] = fotoExtra;
+        }
+        return record;
+    }
+
+    [Fact]
+    public void Le_foto_extra_di_un_kit_si_raccolgono_da_tutti_i_suoi_record()
+    {
+        var records = new[]
+        {
+            Record(new List<LogoBollo_ExtraNoAuto> { Extra(1, "g-logo", "logo_cliente.ai", TipoFoto.Logo), Extra(2, "g-archivio", "Logo_FiorFiore.psd", TipoFoto.Logo, puntatore: true) }),
+            Record(null),
+            Record(JArray.FromObject(new List<LogoBollo_ExtraNoAuto> { Extra(3, "g-bollino", "bollino.psd", TipoFoto.Bollino) }))
+        };
+
+        var richieste = SyncFotoController.FotoExtraDeiRecord(records);
+
+        Assert.Equal(new[] { "g-logo", "g-bollino" }, richieste.Select(r => r.Id));
+        Assert.Equal(new[] { TipoFoto.Logo, TipoFoto.Bollino }, richieste.Select(r => r.Tipo));
+        Assert.Empty(SyncFotoController.FotoExtraDeiRecord(null));
+    }
+
+    [Fact]
+    public void La_sync_loghi_porta_le_foto_extra_della_lavorazione_solo_se_la_riceve()
+    {
+        string sorgente = File.ReadAllText(DllAgenziaLibTests.TrovaFile("Istanta/Controllers/SyncFotoController.cs")).Replace("\r", "");
+
+        string loghi = Tra(sorgente, "public async Task<IActionResult> getPacchettoLoghiBolliAsContract(int id_lavorazione = 0)", "[Route(\"SyncFoto/getInfoFoto/{guid}\")]");
+        Assert.Contains("if (id_lavorazione > 0)\n            {\n                fotoRichieste.AddRange(await FotoExtraDellaLavorazione(id_lavorazione));", loghi);
+        Assert.Contains("var dataOlympo = ConTipoDelleRichieste(JsonConvert.DeserializeObject<List<FileOlympoSync>>(responseBody), fotoRichieste);", loghi);
+
+        //Un kit che non si legge non ferma la sync loghi: l'archivio arriva comunque.
+        string lettura = Tra(sorgente, "private async Task<List<FileOlympoSync>> FotoExtraDellaLavorazione(int id_lavorazione)", "[HttpGet]");
+        Assert.Contains("try", lettura);
+        Assert.Contains("ficoController.processaKit(id_lavorazione, FicoCombinazioneKitReadMode.Advanced);", lettura);
+        Assert.Contains("return FotoExtraDeiRecord(kit?.records);", lettura);
+        Assert.Contains("catch (Exception ex)", lettura);
+        Assert.Contains("return new List<FileOlympoSync>();", lettura);
     }
 
     private static string Tra(string testo, string inizio, string fine)

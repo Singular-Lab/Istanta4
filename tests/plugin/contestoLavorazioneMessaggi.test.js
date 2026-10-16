@@ -79,7 +79,9 @@ test("in console canale e area stanno sotto il testo, come testo e non come HTML
     const scritturaConsole = corpoFunzione("function writeFileInConsole(logMessage) {");
 
     assert.match(scritturaConsole, /if \(logMessage\.lavorazione\) \{\s*messaggio\.append\(\$\('<div class="lavorazioneMessaggio"[^']*'\)\.text\(logMessage\.lavorazione\)\);/);
-    assert.match(scritturaConsole, /copyButton\.attr\("msg", msg \+ " \[" \+ logMessage\.lavorazione \+ "\]"\);/);
+    //I20-1104: fra le parentesi del copiato, dopo canale e area, c'e' anche il box del messaggio.
+    assert.match(scritturaConsole, /var contestoCopia = \[logMessage\.lavorazione, testoBox\]\.filter\(function \(t\) \{ return t; \}\)\.join\(" · "\);/);
+    assert.match(scritturaConsole, /copyButton\.attr\("msg", msg \+ " \[" \+ contestoCopia \+ "\]"\);/);
 });
 
 test("lo stesso messaggio da due lavorazioni diverse non si raggruppa", () => {

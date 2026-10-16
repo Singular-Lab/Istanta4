@@ -206,11 +206,14 @@ test("la lavorazione si controlla prima di leggerla", () => {
     const azione = cs.slice(inizio, inizio + 4000);
 
     const controllo = azione.indexOf("if (pl == null)");
-    const lettura = azione.indexOf("pl.Meta!");
+    //I20-1069: la lettura del Meta ora controlla anche che ci sia.
+    const lettura = azione.indexOf("JsonConvert.DeserializeObject<FicoRuntimeKit>(pl.Meta)");
 
     assert.ok(controllo > 0 && lettura > 0);
     assert.ok(controllo < lettura, "letta prima del controllo, la lavorazione inesistente dava un errore di riferimento nullo");
-    assert.ok(azione.includes("promo_inesistente"), "anche la promo puo' mancare e piu' avanti se ne legge l'identificativo");
+    //I20-1069: lavorazione e promo mancanti si dicono con una frase, non piu' con i codici lavorazione_inesistente e promo_inesistente.
+    assert.match(azione, /if \(pl == null\)\s*\{(\s*\/\/[^\n]*)*\s*throw new ErroreIstanta\("lettura della lavorazione", \$"la lavorazione \{request\.idLavorazione\} non esiste\."\);/);
+    assert.match(azione, /if \(promo == null\)\s*\{\s*throw new ErroreIstanta\("lettura della promo", /, "anche la promo puo' mancare e piu' avanti se ne legge l'identificativo");
 });
 
 test("all'operatore arriva il motivo, non lo stack trace", () => {
@@ -218,7 +221,10 @@ test("all'operatore arriva il motivo, non lo stack trace", () => {
     const inizio = cs.indexOf("public async Task<IActionResult> ricollegaBox(");
     const azione = cs.slice(inizio, cs.indexOf("public class InddObjImpostazionePrimarieSecondarieRequest", inizio));
 
-    assert.ok(azione.includes("result.error = ex.Message;"));
+    //I20-1069: il motivo breve di DescrizioneErrori (passo e motivo, o tipo e riga), invece di ex.Message;
+    //la traccia anche in dettaglio, che il Plugin scrive in console senza mostrarla.
+    assert.ok(azione.includes("result.error = DescrizioneErrori.Breve(\"ricollegaBox\", ex);"));
+    assert.ok(azione.includes("result.dettaglio = DescrizioneErrori.Dettaglio(ex);"));
     assert.ok(!azione.includes("result.error = ex.ToString();"));
     assert.ok(azione.includes("_logger?.LogError(ex"), "il dettaglio non si perde, va nel registro");
 });

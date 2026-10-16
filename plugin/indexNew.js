@@ -208,6 +208,9 @@ var datiRefInEsame = [];
 var cacheLoghi = {};
 let idKitLavorazione=0;
 let segnalazioniBoxImpaginato = [];
+//I20-1104: il box che si sta impaginando, per i messaggi della console: { codiceGruppo, pagina,
+//documento, leggiBox }. Lo imposta impaginaBox e lo legge messaggioUtente; null fuori dall'impaginazione.
+let contestoBoxInImpaginazione = null;
 
 /// Il pezzo di HTML di un bottone dei filtri: icona a sinistra, etichetta a destra.
 /// Non tocca la pagina, restituisce soltanto la stringa.
@@ -1989,6 +1992,22 @@ function scaricaContenutoKit(idKit, noCacheValue = null, callback = null, skipMo
             }
             console.log(objResult);
 
+            //I20-1069: una risposta d'errore non e' una lista. Prima finiva nel file listaKit come se
+            //lo fosse: il tracciato si svuotava e il motivo non lo vedeva nessuno. Ora la lista di prima
+            //resta quella in uso, l'operatore legge il motivo, e chi aspetta la lista lo viene a sapere.
+            if (objResult == null || objResult.esito === false) {
+                var motivo = objResult != null && objResult.error ? objResult.error : "Istanta non ha restituito la lista";
+                if (objResult != null && objResult.dettaglio) {
+                    console.error("Dettaglio dell'errore del server:", objResult.dettaglio);
+                }
+                messaggioUtente("Code IDX-180 Lista del kit non scaricata, resta quella di prima: " + motivo, "error");
+                xhrInProcess = null;
+                if (onErrore != null && typeof onErrore === "function") {
+                    onErrore(motivo);
+                }
+                return;
+            }
+
             //salviamo il risultato in un file json
             //I20-1034: il nome porta davanti canale e area della lavorazione (CN_TO_listaKit302.json).
             var filePath = Utility.percorsoNuovaListaKit(idKit);
@@ -2015,6 +2034,13 @@ function scaricaContenutoKit(idKit, noCacheValue = null, callback = null, skipMo
 
             tracciatoOnlineScaricato = true;
             //scaricaTracciatoLocale(idTracciato);
+
+            //I20-1069: la lista e' arrivata, ma alcuni record non si sono completati (descrizioni, foto,
+            //firma): Istanta dice quali e perche'.
+            if (objResult.warn) {
+                console.warn("Avviso del server sulla lista del kit:", objResult.warn);
+                messaggioUtente("Code IDX-181 Lista del kit scaricata, ma con " + objResult.warn, "warning");
+            }
 
             xhrInProcess = null;
 
@@ -2812,6 +2838,60 @@ function grigliaDallaLibreria(libreria, nomeGriglia, suffix, pagina) {
     throw errore;
 }
 
+/// I20-1108: i box impaginati vanno sul livello InPagina, che arriva dal modello del documento.
+/// Se il documento non lo ha, l'impaginazione si fermava con un errore di InDesign: ora il livello
+/// si crea all'avvio dell'impaginazione (in cima, come un livello nuovo di InDesign) e la console
+/// lo dice. Se c'e' gia' si usa quello, senza crearne un secondo e senza spostare niente.
+/// Il livello porta anche le meccaniche: impaginaBox cerca i modelli dei box solo fra i gruppi di
+/// InPagina nelle mastro "meccaniche". Creato vuoto non bastava (prova dell'operatore: ogni box
+/// usciva con "Meccanica non trovata"), quindi ci si spostano le meccaniche delle mastro. Se non ce
+/// ne sono non si crea niente e l'impaginazione si ferma, invece di riempire le pagine di errori.
+/// Restituisce il livello, o null se l'impaginazione non puo' partire (gia' detto all'operatore).
+function assicuraLivelloInPagina(doc) {
+    var livello = doc.layers.itemByName("InPagina");
+    if (livello != null && livello.isValid) {
+        return livello;
+    }
+
+    //Le meccaniche come le cerca impaginaBox: gruppi con etichetta nelle mastro "meccaniche" e
+    //nelle loro declinazioni di agenzia ("meccaniche" + suffisso).
+    var meccaniche = [];
+    for (var i = 0; i < doc.masterSpreads.length; i++) {
+        var mastro = doc.masterSpreads.item(i);
+        if (String(mastro.baseName).toLowerCase().indexOf("meccaniche") !== 0) {
+            continue;
+        }
+        for (var j = 0; j < mastro.groups.length; j++) {
+            var gruppo = mastro.groups.item(j);
+            if (gruppo.label != null && gruppo.label !== "") {
+                meccaniche.push(gruppo);
+            }
+        }
+    }
+    if (meccaniche.length === 0) {
+        messaggioUtente("Code IDX-190 Il documento non ha il livello InPagina e nella pagina mastro meccaniche non ci sono meccaniche: l'impaginazione si ferma, va sistemato il documento", "error");
+        return null;
+    }
+
+    livello = doc.layers.add({ name: "InPagina" });
+    var spostate = 0;
+    var rimaste = [];
+    for (var m = 0; m < meccaniche.length; m++) {
+        try {
+            meccaniche[m].itemLayer = livello;
+            spostate++;
+        }
+        catch (e) {
+            rimaste.push(meccaniche[m].label);
+        }
+    }
+    messaggioUtente("Code IDX-187 Il documento non aveva il livello InPagina: e' stato creato e ci sono state spostate " + spostate + " meccaniche dalla pagina mastro", "warning");
+    if (rimaste.length > 0) {
+        messaggioUtente("Code IDX-189 Queste meccaniche non si sono potute spostare sul livello InPagina (livello bloccato?): " + rimaste.join(", "), "warning");
+    }
+    return livello;
+}
+
 async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, idKitLavorazione, impagina = false, cbkEnd = null, restartFromIndexPoP = 0) {
     var noCacheCheck = !($("#cacheCheckAdvanced").is(":checked"));
 
@@ -2868,13 +2948,28 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
         }
     }
     catch (ex) {
-        messaggioUtente("Errore durante il recupero della libreria: " + ex.message, "Error", false, 5); 
+        messaggioUtente("Errore durante il recupero della libreria: " + ex.message, "Error", false, 5);
         hideLoading();
         cbkEnd?.("error");
         return;
     }
 
-
+    //I20-1108: il livello InPagina serve a impaginare, non al conteggio, che non modifica il documento.
+    if (impagina) {
+        try {
+            if (assicuraLivelloInPagina(docInLavorazione) == null) {
+                hideLoading();
+                cbkEnd?.("error");
+                return;
+            }
+        }
+        catch (ex) {
+            messaggioUtente("Code IDX-188 Impossibile creare il livello InPagina nel documento: " + ex.message, "Error", false, 5);
+            hideLoading();
+            cbkEnd?.("error");
+            return;
+        }
+    }
 
 
     if (tipo_lavorazione_corrente== 1) {
@@ -3419,6 +3514,10 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                     }
 
                     if(objResult.error != null && objResult.error != ""){
+                        //I20-1069: error e' il messaggio breve; la traccia completa del server sta in dettaglio.
+                        if (objResult.dettaglio) {
+                            console.error("Dettaglio dell'errore del server:", objResult.dettaglio);
+                        }
                         messaggioUtente("Code IDX-25 Filtro: Errore durante l'elaborazione del filtro: " + objResult.error, "error");
                         logContent += "Code IDX-25 Filtro: Errore durante l'elaborazione del filtro: " + objResult.error + "\n";
                         cbkEnd?.("error");
@@ -3426,6 +3525,12 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                     }
                     else if (objResult.result.length == 0) {
                         messaggioUtente("Code IDX-26 Filtro: Operazione riuscita ma nessun elemento è stato trovato tra i non impaginati con i filtri impostati", "warning");
+                    }
+                    //I20-1069: record della lista che Istanta non ha completato (descrizioni, foto, firma).
+                    if (objResult.warn) {
+                        console.warn("Avviso del server sulla lista del kit:", objResult.warn);
+                        messaggioUtente("Code IDX-182 Filtro: la lista del kit ha " + objResult.warn, "warning");
+                        logContent += "Code IDX-182 Filtro: la lista del kit ha " + objResult.warn + "\n";
                     }
 
                     var boxInGriglia = null;
@@ -3973,8 +4078,10 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                 }
             };
 
-            xhrInProcess.onerror = function () {
-                messaggioUtente("Code IDX-30 Filtro: Errore di rete", "error");
+            //I20-1069: prima "Errore di rete" sempre, anche quando il server aveva spiegato il motivo
+            //(gia' mostrato da HRC-01, che questo messaggio copriva).
+            xhrInProcess.onerror = function (motivo) {
+                messaggioUtente("Code IDX-30 Filtro: richiesta non riuscita: " + XMLHttpRequestClient.testoErrore(motivo), "error");
                 hideLoading();
             };
             console.log("Menabo/ImpaginaFromInDesignNew/" + idKitLavorazione + "/" + impagina + "/" + noCacheCheck);
@@ -4202,6 +4309,10 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                         return;
                     }
                     if (objResult.error != null && objResult.error != "") {
+                        //I20-1069: error e' il messaggio breve; la traccia completa del server sta in dettaglio.
+                        if (objResult.dettaglio) {
+                            console.error("Dettaglio dell'errore del server:", objResult.dettaglio);
+                        }
                         messaggioUtente("Code IDX-34 Filtro: Errore durante l'elaborazione del filtro: " + objResult.error, "error");
                         logContent += "Code IDX-34 Filtro: Errore durante l'elaborazione del filtro: " + objResult.error + "\n";
                         cbkEnd?.("error");
@@ -4595,8 +4706,9 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                     }
                 };
     
-                xhrInProcess.onerror = function () {
-                    messaggioUtente("Code IDX-39 Filtro: Errore di rete", "error");
+                //I20-1069: il motivo vero, come IDX-30.
+                xhrInProcess.onerror = function (motivo) {
+                    messaggioUtente("Code IDX-39 Filtro: richiesta non riuscita: " + XMLHttpRequestClient.testoErrore(motivo), "error");
                     hideLoading();
                 };
     
@@ -4722,7 +4834,14 @@ async function fixRefImpaginata() {
             //     messaggioUtente("Code IDX-42 fixRef: elemento con etichetta Base non trovata nel box", "error");
             //     return;
             // }
+            //I20-1109: prima i controlli che non toccano il documento, poi la domanda, poi il lavoro.
+            //Prima il box si ridimensionava per prova e gli elementi si spostavano anche con Annulla.
             var dna = null;
+            //Senza selezione app.selection[0] non c'e' e si finiva nell'errore generico IDX-50.
+            if (app.selection == null || app.selection.length == 0) {
+                messaggioUtente("Code IDX-42 fixRef: nessun box selezionato, seleziona il box da sistemare", "error");
+                return;
+            }
             var box = Utility.getBoxFromElementOfBox(app.selection[0]);
             if (box == null) {
                 messaggioUtente("Code IDX-42 fixRef: elemento selezionato non è un box valido", "error");
@@ -4760,6 +4879,18 @@ async function fixRefImpaginata() {
                 }
             }
 
+            //I20-1109: la domanda prima di qualunque modifica: con Annulla il documento resta com'e'.
+            indesignEvents.setBusy(true);
+
+            var confirmRes = await Modali.confirm("Ridimensionare il box alle dimensioni desiderate");
+            if (!confirmRes) {
+                indesignEvents.setBusy(false);
+                return;
+            }
+
+            //Il ridimensionamento di prova e il rifacimento del box richiedono tempo: si vede che si lavora.
+            showLoading("Fix referenza in corso");
+
             //se i bounds sono larghi o alti diversi dagli original (se ci sono)
             if (originalBounds != null) {
                 var widthOriginal = originalBounds[3] - originalBounds[1];
@@ -4780,14 +4911,16 @@ async function fixRefImpaginata() {
             }
 
             //ora la dimensione è corretta, mappiamo
-            for (var j = 0; j < app.selection[0].allPageItems.length; j++) {
-                if (app.selection[0].allPageItems[j].label != "") {
+            //I20-1109: gli elementi del box intero, non della selezione: selezionando un elemento interno
+            //la mappa aveva solo quello, e gli altri risultavano aggiunti illegalmente (IDX-45/46).
+            for (var j = 0; j < box.allPageItems.length; j++) {
+                if (box.allPageItems[j].label != "") {
                     //aggiungiamo in mappa una chiave della label e valore l'item selezionato
-                    map[Utility.parseLabel(app.selection[0].allPageItems[j].label)] = app.selection[0].allPageItems[j].geometricBounds;
+                    map[Utility.parseLabel(box.allPageItems[j].label)] = box.allPageItems[j].geometricBounds;
                 }
                 else {
                     //lo aggiungiamo usando l'id univoco
-                    map[app.selection[0].allPageItems[j].id] = app.selection[0].allPageItems[j].geometricBounds;
+                    map[box.allPageItems[j].id] = box.allPageItems[j].geometricBounds;
                 }
             }
             
@@ -4836,14 +4969,10 @@ async function fixRefImpaginata() {
     
         if (listItemDaFixare.length == 0) {
             messaggioUtente("Code IDX-43 fixRef: Nessuna ref valida selezionata", "error");
+            indesignEvents.setBusy(false);
+            hideLoading();
             return;
         }
-
-
-    
-        indesignEvents.setBusy(true);
-    
-        var confirmRes = await Modali.confirm("Ridimensionare il box alle dimensioni desiderate");
 
 
         for (var a = 0; a < listItemDaFixare.length; a++) {
@@ -4853,6 +4982,7 @@ async function fixRefImpaginata() {
             if (bounds == null) {
                 messaggioUtente("Code IDX-44 fixRef: Impossibile recuperare i bounds del box selezionato", "error");
                 indesignEvents.setBusy(false);
+                hideLoading();
                 return;
             }
 
@@ -4884,6 +5014,7 @@ async function fixRefImpaginata() {
     
         if(!confirmRes){
             indesignEvents.setBusy(false);
+            hideLoading();
 
             return;
         }
@@ -4947,19 +5078,22 @@ async function fixRefImpaginata() {
                 );
 
                 indesignEvents.setBusy(false);
+                hideLoading();
                 return;
             }
         }
         //creiamo il file di report con le segnalazioni
-        
+
         indesignEvents.setBusy(false);
-        
+        hideLoading();
+
         messaggioUtente("Code IDX-49 fixRef: Operazione completata con successo", "success", false, 3);
         
         stampaSegnalazioni(reportObj);
     }
     catch(ex){
         indesignEvents.setBusy(false);
+        hideLoading();
         messaggioUtente("Code IDX-50 fixRef: Errore durante l'elaborazione: " + ex.toString(), "error");
         console.error(ex);
     }
@@ -5310,8 +5444,51 @@ function makeRegexFromFieldName(groupName) {
 
 
 /// IMPAGINAZIONE. Costruisce il singolo box: prende la meccanica dalla libreria, compila i
-/// campi, colloca le foto, applica il CSS. 751 righe.
-async function impaginaBox(meccanica, pagCoinvolta, bounds, itemRef, pathLavorazione, listElementiNonImpaginati, tipoLavorazione, reportImpaginazioneObj, preAnalisi = null, refConfronto = null, docOperazione = docInLavorazione) {
+/// campi, colloca le foto, applica il CSS.
+///
+/// I20-1104: e' l'involucro. Finche' il box si impagina, i messaggi della console sanno da quale
+/// box vengono (contestoBoxInImpaginazione, letto da messaggioUtente): qualunque modulo li scriva,
+/// CssFramework, sistemazione foto, campi, loghi. Il corpo e' impaginaBoxNelContesto; il finally
+/// rimette il contesto di prima per ogni uscita, anche con un errore.
+async function impaginaBox(meccanica, pagCoinvolta, bounds, itemRef, ...altri) {
+    var contestoPrecedente = contestoBoxInImpaginazione;
+    contestoBoxInImpaginazione = contestoDelBox(itemRef, pagCoinvolta, altri[6]);
+    try {
+        return await impaginaBoxNelContesto(meccanica, pagCoinvolta, bounds, itemRef, ...altri);
+    }
+    finally {
+        contestoBoxInImpaginazione = contestoPrecedente;
+    }
+}
+
+/// I20-1104: il contesto dei messaggi di un box che si impagina. leggiBox lo imposta il corpo di
+/// impaginaBox appena ha la sua variabile del box: il box viene rifatto piu' volte (raggruppamenti,
+/// bindRefData, sistemazioni), e cosi' si legge sempre quello di adesso.
+function contestoDelBox(itemRef, pagCoinvolta, docOperazione) {
+    var pagina = null;
+    var documento = null;
+    try {
+        pagina = pagCoinvolta != null ? pagCoinvolta.name : null;
+    }
+    catch (e) {
+        pagina = null;
+    }
+    try {
+        var doc = docOperazione != null ? docOperazione : docInLavorazione;
+        documento = doc != null ? doc.name : null;
+    }
+    catch (e) {
+        documento = null;
+    }
+    return {
+        codiceGruppo: itemRef != null ? itemRef["Scatto.CodiceGruppo"] : null,
+        pagina: pagina,
+        documento: documento,
+        leggiBox: null
+    };
+}
+
+async function impaginaBoxNelContesto(meccanica, pagCoinvolta, bounds, itemRef, pathLavorazione, listElementiNonImpaginati, tipoLavorazione, reportImpaginazioneObj, preAnalisi = null, refConfronto = null, docOperazione = docInLavorazione) {
     try{
         if (preAnalisi != null && preAnalisi.differenze.length == 0) {
             return {
@@ -5322,6 +5499,8 @@ async function impaginaBox(meccanica, pagCoinvolta, bounds, itemRef, pathLavoraz
         }
         var doc = docOperazione;
         var boxImpaginato = null;
+        //I20-1104: da qui i messaggi della console leggono il box di adesso, anche quando viene rifatto.
+        if (contestoBoxInImpaginazione != null) contestoBoxInImpaginazione.leggiBox = function () { return boxImpaginato; };
         //I20-1029: le segnalazioni partono vuote per ogni box. Se il box di prima e' andato in
         //errore prima di chiuderle, non devono passare a questo.
         segnalazioniBoxImpaginato = [];
@@ -7716,9 +7895,10 @@ function creaElementoTracciato(obj, isFirst, riepilogoSegnalazioni = {}) {
 /// callback e la funzione e' async: senza, tornerebbe prima che l'impaginazione sia
 /// avvenuta. Se l'attesa scade si avvisa l'operatore.
 ///
-/// Attenzione: res diventa vero solo sul cammino che va a buon fine. Se il server risponde
-/// con un errore l'operatore vede il messaggio dell'errore, ma questa funzione aspetta
-/// comunque i venti secondi e poi aggiunge un timeout che timeout non e'.
+/// I20-1069: l'attesa finisce quando la richiesta e' finita, bene o male (finito). Prima
+/// guardava solo res, che diventa vero solo sul cammino che va a buon fine: dopo un errore
+/// del server l'operatore ne vedeva il messaggio e, venti secondi dopo, un IDX-94 "Timeout"
+/// che timeout non era e lo copriva.
 async function impaginaSingolo(codice, pagina, byPassBloccoGiaImpaginato = false, idRec = null) {
     showLoading("Scaricamento del dato");
     indesignEvents.setBusy(true);
@@ -7730,7 +7910,7 @@ async function impaginaSingolo(codice, pagina, byPassBloccoGiaImpaginato = false
 
     var xhr = new XMLHttpRequestClient();
 
-    var res = false;
+    var finito = false;
     xhr.onload = async (objResult, parsed) => {
         try{
             if (!parsed) {
@@ -7744,12 +7924,24 @@ async function impaginaSingolo(codice, pagina, byPassBloccoGiaImpaginato = false
             console.log(objResult);
             if(!objResult.esito){
                 console.error(objResult.error);
+                //I20-1069: error e' il messaggio breve; la traccia completa del server sta in dettaglio.
+                if (objResult.dettaglio) {
+                    console.error("Dettaglio dell'errore del server:", objResult.dettaglio);
+                }
                 messaggioUtente("Code IDX-90 Impaginazione singolo, errore durante il recupero del dato: " + objResult.error, "error");
                 return;
             }
+            //I20-1069: la scheda del gruppo puo' arrivare con un avviso di getSchedaRef.
+            if (objResult.warn) {
+                console.warn("Avviso del server sull'impaginazione singola:", objResult.warn);
+                messaggioUtente("Code IDX-183 Impaginazione singolo: " + objResult.warn, "warning");
+            }
 
+            //I20-1108: anche il singolo box va sul livello InPagina; se manca si crea, con le meccaniche.
+            if (assicuraLivelloInPagina(docInLavorazione) == null) {
+                return;
+            }
             var box = await impaginazioneSingoloIndd(objResult.records, pagina);
-            res = true;
             if(box == null){
                 messaggioUtente("Code IDX-91 Impaginazione singolo: Fallita impaginazione del box con codice "+codice, "error");
             }
@@ -7760,6 +7952,7 @@ async function impaginaSingolo(codice, pagina, byPassBloccoGiaImpaginato = false
             indesignEvents.setBusy(false);
         }
         finally {
+            finito = true;
             hideLoading();
             indesignEvents.setBusy(false);
         }
@@ -7769,14 +7962,17 @@ async function impaginaSingolo(codice, pagina, byPassBloccoGiaImpaginato = false
         if (xhr.readyState == 4) {
             if (xhr.status == 200) {
             } else {
+                finito = true;
                 hideLoading();
                 indesignEvents.setBusy(false);
             }
         }
     };
 
-    xhr.onerror = function () {
-        messaggioUtente("Code IDX-93 Impaginazione singolo: Errore di rete", "error");
+    //I20-1069: il motivo vero, come IDX-30.
+    xhr.onerror = function (motivo) {
+        finito = true;
+        messaggioUtente("Code IDX-93 Impaginazione singolo: richiesta non riuscita: " + XMLHttpRequestClient.testoErrore(motivo), "error");
         hideLoading();
         indesignEvents.setBusy(false);
     }
@@ -7791,12 +7987,12 @@ async function impaginaSingolo(codice, pagina, byPassBloccoGiaImpaginato = false
     xhr.send("Menabo/impaginaSingolo", formData, "PUT");
 
     var securityCounter = 0;
-    while(!res && securityCounter < 200){
+    while(!finito && securityCounter < 200){
         await Utility.sleep(100);
         securityCounter++;
     }
 
-    if(securityCounter >= 200){
+    if(!finito){
         messaggioUtente("Code IDX-94 Impaginazione singolo: Timeout durante l'impaginazione del singolo", "error");
     }
 }
@@ -8278,6 +8474,36 @@ function contestoLavorazioneCorrente() {
     }
 }
 
+/// I20-1104: il riferimento al box di un messaggio, dal contesto dell'impaginazione in corso:
+/// { codiceGruppo, idBox, pagina, documento }, oppure null fuori dall'impaginazione. Il box si legge
+/// adesso, perche' durante l'impaginazione viene rifatto e cambia id; la pagina e' quella del box se
+/// si legge, altrimenti quella in cui si impagina. Non fallisce mai: un messaggio non deve perdersi
+/// per colpa del suo contesto.
+function riferimentoBoxDelMessaggio(contesto) {
+    if (contesto == null) {
+        return null;
+    }
+    var riferimento = {
+        codiceGruppo: contesto.codiceGruppo != null ? String(contesto.codiceGruppo) : "",
+        idBox: null,
+        pagina: contesto.pagina,
+        documento: contesto.documento
+    };
+    try {
+        var box = typeof contesto.leggiBox === "function" ? contesto.leggiBox() : null;
+        if (box != null && box.isValid) {
+            riferimento.idBox = box.id;
+            if (box.parentPage != null && box.parentPage.name) {
+                riferimento.pagina = box.parentPage.name;
+            }
+        }
+    }
+    catch (e) {
+        //Il box puo' non esserci ancora o non piu': resta il gruppo, con la pagina dell'impaginazione.
+    }
+    return riferimento;
+}
+
 async function messaggioUtente(msg, style, loading = false, tempo = 0, dontWriteInLogs = false, modal = false) {
     try {
         if (msg == null || msg == "") {
@@ -8305,6 +8531,12 @@ async function messaggioUtente(msg, style, loading = false, tempo = 0, dontWrite
         var lavorazioneMessaggio = contestoLavorazioneCorrente();
         if (lavorazioneMessaggio != null) {
             logMessage.lavorazione = lavorazioneMessaggio;
+        }
+        //I20-1104: il box da cui viene il messaggio, se nasce mentre se ne impagina uno: per la console
+        //(gruppo, pagina, Trova) e per il file di log.
+        var boxDelMessaggio = riferimentoBoxDelMessaggio(contestoBoxInImpaginazione);
+        if (boxDelMessaggio != null) {
+            logMessage.box = boxDelMessaggio;
         }
 
         writeFileInConsole(logMessage);
@@ -9751,12 +9983,28 @@ function writeFileInConsole(logMessage) {
     if (logMessage.lavorazione) {
         messaggio.append($('<div class="lavorazioneMessaggio" style="font-size: 10px; margin-top: 2px;"></div>').text(logMessage.lavorazione));
     }
+    //I20-1104: il box da cui viene il messaggio, se e' nato impaginandone uno: gruppo e pagina, e Trova
+    //per raggiungerlo. Anche nei log riletti con leggiLog.
+    var testoBox = testoBoxDelMessaggio(logMessage.box);
+    if (testoBox !== "") {
+        var rigaBox = $('<div class="boxMessaggio" style="font-size: 10px; margin-top: 2px;"></div>').text(testoBox + " ");
+        if (logMessage.box.idBox != null) {
+            var riferimentoBox = logMessage.box;
+            rigaBox.append($('<span class="trovaBoxMessaggio" style="text-decoration: underline; cursor: pointer; font-weight: bold;">Trova</span>')
+                .on('click', function () {
+                    trovaBoxDelMessaggio(riferimentoBox);
+                }));
+        }
+        messaggio.append(rigaBox);
+    }
     var x = $('<span style="font-size: 10px; cursor: pointer; margin-left:5px;">X</span>');
     var copyButton = $('<img src="images/copyToClipBoard.png" style="height: 10px; margin-left:5px;" msg="' + msg + '">');
     copyButton.msg = msg;
     //I20-1033: chi copia il messaggio si porta dietro anche canale e area.
-    if (logMessage.lavorazione) {
-        copyButton.attr("msg", msg + " [" + logMessage.lavorazione + "]");
+    //I20-1104: e il box da cui viene.
+    var contestoCopia = [logMessage.lavorazione, testoBox].filter(function (t) { return t; }).join(" · ");
+    if (contestoCopia !== "") {
+        copyButton.attr("msg", msg + " [" + contestoCopia + "]");
     }
 
     copyButton.on('click', function () {
@@ -9816,7 +10064,89 @@ function writeFileInConsole(logMessage) {
     else if (style == "error") {
         $("#consoleIcon").css("background-color", "red");
     }
-    //$("#debugLogs").prepend(div); 
+    //$("#debugLogs").prepend(div);
+}
+
+/// I20-1104: "Gruppo X · pag. N" per un messaggio nato impaginando un box, "" per gli altri.
+function testoBoxDelMessaggio(box) {
+    if (box == null || !box.codiceGruppo) {
+        return "";
+    }
+    return "Gruppo " + box.codiceGruppo + (box.pagina ? " · pag. " + box.pagina : "");
+}
+
+/// I20-1104: il box di un messaggio della console nel documento doc. esito: "trovato" (con box),
+/// "altroDocumento" (il messaggio e' nato in un altro documento), "nessunDocumento", "assente" (il box
+/// e' stato rifatto o cancellato: l'id non c'e' piu'). Si cerca per id fra gli elementi di primo
+/// livello e, se serve, fra tutti.
+function cercaBoxDelMessaggio(riferimento, doc) {
+    if (riferimento == null || riferimento.idBox == null) {
+        return { esito: "assente" };
+    }
+    if (doc == null) {
+        return { esito: "nessunDocumento" };
+    }
+    try {
+        if (riferimento.documento && doc.name !== riferimento.documento) {
+            return { esito: "altroDocumento" };
+        }
+    }
+    catch (e) {
+        //Senza il nome del documento si prova comunque a cercare.
+    }
+
+    var box = null;
+    try {
+        box = doc.pageItems.itemByID(riferimento.idBox);
+        if (box == null || !box.isValid) {
+            box = null;
+        }
+    }
+    catch (e) {
+        box = null;
+    }
+    if (box == null) {
+        try {
+            var tutti = doc.allPageItems || [];
+            for (var i = 0; i < tutti.length; i++) {
+                if (tutti[i].id === riferimento.idBox) {
+                    box = tutti[i];
+                    break;
+                }
+            }
+        }
+        catch (e) {
+            box = null;
+        }
+    }
+    return box != null ? { esito: "trovato", box: box } : { esito: "assente" };
+}
+
+/// I20-1104: il Trova della console. Porta al box come la schermata delle segnalazioni (lo seleziona
+/// e mostra la sua pagina), oppure dice perche' non si puo'.
+function trovaBoxDelMessaggio(riferimento) {
+    var doc = null;
+    try {
+        doc = app.documents.length > 0 ? app.activeDocument : null;
+    }
+    catch (e) {
+        doc = null;
+    }
+    var gruppo = riferimento != null ? riferimento.codiceGruppo : "";
+    var trovato = cercaBoxDelMessaggio(riferimento, doc);
+    if (trovato.esito === "trovato") {
+        SchermataSegnalazioni._selezionaBox(trovato.box);
+    }
+    else if (trovato.esito === "altroDocumento") {
+        messaggioUtente("Code IDX-184 Il box del gruppo " + gruppo + " sta nel documento " + riferimento.documento + ": apri quel documento e riprova", "warning", false, 8, true);
+    }
+    else if (trovato.esito === "nessunDocumento") {
+        messaggioUtente("Code IDX-185 Nessun documento aperto in cui cercare il box del gruppo " + gruppo, "warning", false, 8, true);
+    }
+    else {
+        messaggioUtente("Code IDX-186 Il box del gruppo " + gruppo + " non c'e' piu' nel documento: e' stato rifatto o cancellato", "warning", false, 8, true);
+    }
+    return trovato.esito;
 }
 
 /// Svuota la console interna, azzera il contatore dei non letti e rimette l'icona verde.

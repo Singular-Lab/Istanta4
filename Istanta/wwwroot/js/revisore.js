@@ -105,6 +105,8 @@
             Call.do("Tracciati", "GetTracciatiPromo/" + idPromo, "GET", null, ME, function (result, sender) {
                 console.log("Risultato di GetTracciatiPromo");
                 console.log(result);
+                //I20-1069: un errore si dice, invece di finire nella lista dei tracciati.
+                if (Revisore.mostraErroreDellaChiamata(result, "Tracciati della promo non caricati")) return;
                 if (typeof result !== 'string') {
                     ME.listTracciati = ME.listTracciati.concat(result);
 
@@ -159,6 +161,8 @@
         else {
             if (idTracciati.length >= 1) {
                 Call.do("Tracciati", "GetTracciatiPromoByIdTracc/" + idTracciati[0], "GET", null, ME, function (result, sender) {
+                    //I20-1069: un errore si dice, invece di finire nella lista dei tracciati.
+                    if (Revisore.mostraErroreDellaChiamata(result, "Tracciati della promo non caricati")) return;
                     if (typeof result !== 'string') {
                         ME.listTracciati = ME.listTracciati.concat(result);
 
@@ -334,6 +338,9 @@
         Call.do("Revisore", "getListaRevisione2", "POST", obj, this, function (result, sender) {
             console.log("....getListaRevisione -> RESULT");
             console.log(result);
+            //I20-1069: prima error non si leggeva: una risposta d'errore dava un TypeError su result.data e lo
+            //spinner restava acceso. Ora si dice il motivo, il caricamento si spegne, e una lista parziale non arriva.
+            if (Revisore.mostraErroreDellaChiamata(result, "Lista del revisore non caricata")) return;
 
             if (sender.agenzia.applyFilterToList != null) {
                 result.data = sender.agenzia.applyFilterToList(result.data);
@@ -978,7 +985,9 @@
             console.log(result);
             // Se il server ha fallito, adesso lo dice: prima tornava 200 con [] e non si capiva niente.
             if (result == null || !Array.isArray(result)) {
-                let _msg = (result && result.error) ? result.error : "Salvataggio non riuscito";
+                //I20-1069: il motivo vero. Su un errore HTTP result.error e' il testo di stato di jQuery ("error"),
+                //e il motivo del server sta in result.message: Call.motivoDellErrore li distingue.
+                let _msg = Call.motivoDellErrore(result) || "Salvataggio non riuscito";
                 console.error("Salvataggio fallito:", result);
                 if (typeof mostraMessaggio === "function") mostraMessaggio(_msg, "danger");
                 else alert("Salvataggio non riuscito: " + _msg);
@@ -2486,6 +2495,8 @@
         if (add) {
             Call.do("Revisore", "AggiungiASottogruppo/" + idRec + "/" + idRecPilota + "/" + IdTracciato + "/" + propaga, "GET", null, ME, function (result, sender) {
                 console.log(result);
+                //I20-1069: prima un errore spegneva il caricamento senza dire niente.
+                if (Revisore.mostraErroreDellaChiamata(result, "Aggiunta al sottogruppo non riuscita")) return;
                 if (result.error == null || result.error == "") {
                     result.idRecDaModificare.forEach(function (item) {
                         ME.List.find(f => f.idRec == item).recordInTracciato[keyScattoCodiceSottogruppo] = result.codiceSottogruppo;
@@ -2527,6 +2538,8 @@
         else {
             Call.do("Revisore", "RimuoviDaSottogruppo/" + idRec + "/" + idRecPilota + "/" + IdTracciato + "/" + propaga, "GET", null, ME, function (result, sender) {
                 console.log(result);
+                //I20-1069: prima un errore spegneva il caricamento senza dire niente.
+                if (Revisore.mostraErroreDellaChiamata(result, "Rimozione dal sottogruppo non riuscita")) return;
                 if (result.error == null || result.error == "") {
 
                     delete ME.List.find(f => f.idRec == idRec).recordInTracciato[keyScattoCodiceSottogruppo];
@@ -2735,6 +2748,28 @@
                 }
             }
         });
+    }
+
+    /// I20-1069: se la risposta di una chiamata a Istanta non e' andata bene, lo dice all'operatore con il
+    /// motivo (Call.motivoDellErrore), spegne il caricamento e restituisce true: il chiamante si ferma.
+    /// Prima le callback usavano la risposta senza guardarla: un errore diventava un TypeError con lo
+    /// spinner acceso, o la sola parola "error".
+    static mostraErroreDellaChiamata(result, cosa) {
+        const motivo = Call.motivoDellErrore(result);
+        if (motivo == null) {
+            return false;
+        }
+        console.error(cosa + ":", motivo, result);
+        if (typeof mostraMessaggio === "function") {
+            mostraMessaggio(cosa + ": " + motivo, "danger");
+        }
+        else {
+            alert(cosa + ": " + motivo);
+        }
+        if (typeof hideLoading === "function") {
+            hideLoading();
+        }
+        return true;
     }
 
     /// I20-1092: un elemento della lista si puo' disegnare se renderRecordRevisione ha restituito un
@@ -3075,6 +3110,8 @@
 
                 Call.do("Revisore", "getArticoliDescrizioniSottogruppi/" + idPromo, "PUT", codiciList, this, function (result, sender) {
                     console.log(result);
+                    //I20-1069: un errore si dice, invece di un TypeError su result.sort.
+                    if (Revisore.mostraErroreDellaChiamata(result, "Descrizioni dei sottogruppi non caricate")) return;
                     result.sort(function (a, b) {
                         var codiceGruppoA = me.List.find(f => !f.isGruppo && f.recordInTracciato[keyScattoCodiceSottogruppo] != null && f.recordInTracciato[keyScattoCodiceSottogruppo] == a.codiceSottogruppo).recordInTracciato[keyScattoCodiceGruppo];
                         var codiceGruppoB = me.List.find(f => !f.isGruppo && f.recordInTracciato[keyScattoCodiceSottogruppo] != null && f.recordInTracciato[keyScattoCodiceSottogruppo] == b.codiceSottogruppo).recordInTracciato[keyScattoCodiceGruppo];
@@ -3223,6 +3260,8 @@
         // Eseguiamo la chiamata al controller Revisore sul metodo "checkLastModifica" con POST
         Call.do("Revisore", "checkLastModifica", "POST", data, this, function (result, sender) {
             console.log(result);
+            //I20-1069: un errore si dice, invece di aprire la finestra delle operazioni vuota.
+            if (Revisore.mostraErroreDellaChiamata(result, "Ultime modifiche non caricate")) return;
             hideLoading();
             sender.mostraOperazioniModal(result);
         });
@@ -3431,6 +3470,8 @@
             showLoading();
             Call.do("Revisore", "elimina/" + IdTracciato + "/0/0", "PUT", { coda: [obj] }, ME, function (result, sender) {
                 console.log(result);
+                //I20-1069: su un errore HTTP prima l'avviso diceva solo "error".
+                if (Revisore.mostraErroreDellaChiamata(result, "Errore durante l'eliminazione")) return;
                 //creo il messaggio
                 if (!result.esito) {
                     console.log(result.error);
@@ -3661,6 +3702,8 @@
         let isGruppo = codice.includes(",");
         Call.do("Revisore", "salvaCampoInDatoTracciato/" + IdTracciato + "/" + idPromo, "PUT", { stringhe : valori }, this, function (result, sender) {
             console.log(result);
+            //I20-1069: prima il campo si aggiornava nella pagina anche se il salvataggio era fallito.
+            if (Revisore.mostraErroreDellaChiamata(result, "Campo non salvato")) return;
             var records = sender.List.filter(f => !f.isGruppo && (isGruppo ? f.recordInTracciato[keyScattoCodiceGruppo] == codice : f.recordInTracciato[keyRefCodice] == codice));
 
             records.forEach(item => {

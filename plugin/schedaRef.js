@@ -2,6 +2,8 @@
 const InputEditController = require('./InputEditController');
 const XMLHttpRequestClient = require('./XMLHttpRequestClient');
 const NoRenderElementi = require('./noRenderElementi');
+//I20-1105: l'altezza in pixel della lista noRender, l'unico modo perche' in UXP scorra davvero.
+const AltezzaScorrimento = require('./altezzaScorrimento');
 const RicollegaEsiti = require('./ricollegaEsiti');
 const variantiDescrizione = require('./variantiDescrizione');
 //I20-1007: i tratti di stile stanno in testoTag.js. La scheda lo importa, perche' sotto Node
@@ -40,6 +42,8 @@ const schedaRef = {
     schedeRefDati: [],
     //Stato del modal noRender: la lista degli elementi del box con la loro opzione di rendering.
     elementiNoRenderDelBox: null,
+    //I20-1105: il noRender com'e' salvato (all'apertura, o dopo l'ultimo salvataggio riuscito).
+    statoNoRenderSalvato: null,
     urlAnteprimaPsd: null,
     multiSchedeRef: [],
     editRefFieldController: null,
@@ -749,6 +753,10 @@ const schedaRef = {
                         if (objResult.error != null && objResult.error != "") {
                             messaggioUtente("Code SRF-13 Ricollegamento fallito: " + objResult.error, "error");
                             console.error("Code SRF-13 Ricollegamento fallito: " + objResult.error);
+                            //I20-1069: la traccia completa del server, per chi guarda la console.
+                            if (objResult.dettaglio) {
+                                console.error("Dettaglio dell'errore del server:", objResult.dettaglio);
+                            }
                         }
                         
                         if (objResult.codici.length > 0){
@@ -821,10 +829,11 @@ const schedaRef = {
                     console.log(xhr);
                 };
 
-                xhr.onerror = function () {
+                //I20-1069: prima solo "error" in console: con Istanta spento il ricollegamento non diceva niente.
+                xhr.onerror = function (motivo) {
                     indesignEvents.setBusy(false);
                     hideLoading();
-                    console.log("error");
+                    messaggioUtente("Code SRF-126 Ricollegamento: richiesta non riuscita: " + XMLHttpRequestClient.testoErrore(motivo), "error");
                 };
                 //creiamo un formData con codiceGruppo e il nome della pagina a cui si trova il box
                 var canaleObj = ficoProcess.getCanaleLavorazioneCorrente();
@@ -6377,6 +6386,11 @@ const schedaRef = {
                 }
                 else {
                     messaggioUtente("Code SRF-64 Errore durante il salvataggio delle modifiche: " + objResult.error, "error");
+                    //I20-1069: error dice anche quanti record erano gia' salvati, se il cambio si e' fermato a
+                    //meta'; la traccia completa del server va in console.
+                    if (objResult.dettaglio) {
+                        console.error("Dettaglio dell'errore del server:", objResult.dettaglio);
+                    }
                     hideLoading();
                     indesignEvents.setBusy(false);
                 }
@@ -6386,14 +6400,18 @@ const schedaRef = {
             } catch (e) {
                 // Gestione dell'errore e chiamata alla callback con l'errore
                 console.error(e);
+                //I20-1069: prima solo in console, e l'operatore non sapeva che il box non era stato rifatto.
+                messaggioUtente("Code SRF-127 Cambio strutturale: il box non e' stato reimpaginato: " + (e && e.message ? e.message : e), "error");
                 hideLoading();
                 indesignEvents.setBusy(false);
                 //Eseguo la reimpaginazione
             }
         };
 
-        xhr.onerror = function (e) {
+        //I20-1069: prima nessun messaggio, e il cambio sembrava fatto.
+        xhr.onerror = function (motivo) {
             // Gestione degli errori di rete e chiamata alla callback con l'errore
+            messaggioUtente("Code SRF-128 Cambio strutturale: richiesta non riuscita: " + XMLHttpRequestClient.testoErrore(motivo), "error");
             hideLoading();
             indesignEvents.setBusy(false);
         };
@@ -7125,10 +7143,17 @@ const schedaRef = {
         try {
             this.elementiNoRenderDelBox = this.leggiElementiDelBox(this.refSelected.item, primario);
             this.statoFotoAllApertura = NoRenderElementi.statoDelleFoto(this.elementiNoRenderDelBox);
+            //I20-1105: com'e' salvato il noRender, per sapere alla X se ci sono modifiche da perdere.
+            this.statoNoRenderSalvato = NoRenderElementi.statoDiRendering(this.elementiNoRenderDelBox);
             //apriModal clona il dialog dentro bodyModal: la lista va disegnata dopo l'apertura,
             //cosi' si scrive nel clone e i gestori dei bottoni restano vivi.
             Modali.apriModal('dialogNoRender', 'Elementi non renderizzati', true, [], true);
+            //I20-1105: dopo apriModal, che azzera il controllo della finestra precedente.
+            Modali.impostaControlloPrimaDiChiudere(function () {
+                return me.avvisoModificheNoRender();
+            });
             this.disegnaListaNoRender();
+            this.fissaAltezzaListaNoRender();
         }
         catch (e) {
             //Un modal vuoto non dice niente a chi lo guarda: meglio un errore leggibile.
@@ -7307,6 +7332,53 @@ const schedaRef = {
         }
     },
 
+    /// I20-1105: la lista della schermata noRender prende in pixel lo spazio che resta sopra il
+    /// Salva, e scorre lei sola. Il margine tiene il piede (pulsante e spaziatura). Si cerca il
+    /// clone dentro #overlayModal: il modello in index.html ha lo stesso id.
+    ///
+    /// Subito dopo l'apertura UXP non ha ancora le misure (zero, e l'altezza non si fissa): si
+    /// riprova ogni 50 ms, come fanno le conferme, per al massimo un secondo. Se non si riesce,
+    /// scorre la finestra come prima di I20-1105: una barra sola, mai una lista tagliata.
+    /// Torna l'altezza fissata, o null.
+    fissaAltezzaListaNoRender(tentativo = 0) {
+        var me = this;
+        var altezza = null;
+        try {
+            var contenitore = $("#overlayModal").find("#bodyModal")[0];
+            var lista = $("#overlayModal").find("#listaNoRender")[0];
+            altezza = AltezzaScorrimento.fissaAltezza(contenitore, lista, { margine: 56 });
+        }
+        catch (e) {
+            console.error("noRender: altezza della lista non fissata", e);
+        }
+
+        if (altezza != null) {
+            return altezza;
+        }
+        if (tentativo < 20) {
+            setTimeout(function () {
+                me.fissaAltezzaListaNoRender(tentativo + 1);
+            }, 50);
+            return null;
+        }
+
+        //Ripiego: la finestra torna a scorrere, come prima, cosi' nessun elemento resta irraggiungibile.
+        console.warn("noRender: altezza della lista non fissata dopo " + tentativo + " tentativi, scorre la finestra");
+        $("#overlayModal").find("#dialogNoRender").css("overflow", "auto");
+        return null;
+    },
+
+    /// I20-1105: l'avviso della X della schermata noRender, oppure null se non c'e' niente da
+    /// perdere. Un elemento cambiato e poi rimesso com'era non conta.
+    avvisoModificheNoRender() {
+        var diverse = NoRenderElementi.modificheNonSalvate(this.elementiNoRenderDelBox, this.statoNoRenderSalvato);
+        if (diverse === 0) {
+            return null;
+        }
+        return "Ci sono modifiche al noRender non salvate (" + diverse + (diverse === 1 ? " elemento" : " elementi") +
+            "). Uscire senza salvare?";
+    },
+
     /// Salva l'opzione di rendering del box. Gli elementi viaggiano sul nuovo endpoint, le foto
     /// primarie/secondarie restano sul canale P/S di I20-965: sono due dati distinti.
     salvaNoRender() {
@@ -7320,8 +7392,13 @@ const schedaRef = {
         //quindi una sola scrittura sul meta e nessuna corsa fra due salvataggi.
         var elementi = NoRenderElementi.elementiDaSalvare(lista);
 
+        //I20-1105: la fotografia di quello che si sta salvando. Diventa "salvato" solo se Istanta lo
+        //registra: se il salvataggio fallisce, la X deve continuare ad avvisare.
+        var statoInviato = NoRenderElementi.statoDiRendering(lista);
+        var me = this;
         this.inviaNoRender(elementi).then(function (registrato) {
             if (registrato) {
+                me.statoNoRenderSalvato = statoInviato;
                 messaggioUtente("noRender: modifiche salvate", "success", false, 5);
             }
         });
@@ -7364,13 +7441,19 @@ const schedaRef = {
                     }
                 }
                 if (objResult != null && objResult.esito === false) {
-                    messaggioUtente("Code SRF-53 noRender: il server ha rifiutato il salvataggio", "error");
+                    //I20-1069: con il motivo, e la traccia del server in console.
+                    if (objResult.dettaglio) {
+                        console.error("Dettaglio dell'errore del server:", objResult.dettaglio);
+                    }
+                    messaggioUtente("Code SRF-53 noRender: il server ha rifiutato il salvataggio" + (objResult.error ? ": " + objResult.error : ""), "error");
                     resolve(false);
                     return;
                 }
                 resolve(true);
             };
-            xhr.onerror = function () {
+            //I20-1069: prima nessun messaggio, e il noRender sembrava salvato.
+            xhr.onerror = function (motivo) {
+                messaggioUtente("Code SRF-125 noRender: richiesta non riuscita: " + XMLHttpRequestClient.testoErrore(motivo), "error");
                 resolve(false);
             };
             xhr.send("Menabo/modificaNoRender/0", formData, "PUT");

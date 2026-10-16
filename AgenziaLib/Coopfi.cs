@@ -186,6 +186,46 @@ namespace AgenziaLib
         {
             return string.Equals(valore?.ToString()?.Trim(), "x", StringComparison.OrdinalIgnoreCase);
         }
+
+        /// <summary>
+        /// Lo stile della descrizione del cartello di gruppo nel PoP, per un gruppo marcato linea. Gli stili
+        /// _LINEA esistono solo per BOX_LINEA, i cui singoli sotto le 10 referenze escono come BOX_STD (il box
+        /// vero e' quello del record), e per BOX_doppio_SCONTO_LINEA, il cui stile ha gia' _LINEA: il suffisso
+        /// va una volta sola. Gli altri box che con IS_LINEA restano tali (esclusiva soci, SpendiPunti, doppio
+        /// sconto, Jolly, Sprint) tengono il proprio stile, come nel volantino.
+        /// </summary>
+        public static string stileDescrizioneCartelloDiLinea(string stile, string boxDelGruppo)
+        {
+            bool boxDiLinea = boxDelGruppo == "BOX_LINEA" || boxDelGruppo == "BOX_doppio_SCONTO_LINEA";
+            if (!boxDiLinea || stile.EndsWith("_LINEA"))
+                return stile;
+            return stile + "_LINEA";
+        }
+
+        /// <summary>
+        /// Le referenze che non escono nel PoP. In ogni formato: tema jolly, sprint o extra tripla, e i Jolly
+        /// evidenziati, che nascono dal tema VENDITE PROPOSITIVE e "jolly" nel tema non ce l'hanno. Nell'A3
+        /// verticale anche i Superprezzi ortofrutta (BOX_SuperprezziOF): prima vi uscivano come BOX_STD, ora
+        /// non escono affatto. tema e' gia' in minuscolo.
+        /// </summary>
+        public static bool esclusaDalPoP(string tema, string codiceBox, string formato)
+        {
+            return tema.Contains("jolly") || tema.Contains("sprint") || tema.Replace(" ", "").Contains("extripla")
+                || codiceBox == "BOX_JOLLY_EVIDENZIATO"
+                || (formato == "A3_VERTICALI" && codiceBox == "BOX_SuperprezziOF");
+        }
+
+        /// <summary>
+        /// Se sul cartello PoP compare lo sconto piccolo: area A, sconto sopra lo 0 e sotto il 25%, senza
+        /// colonna Toscana e senza tema eccezionale, la stessa condizione con cui esportaPoP mette
+        /// sconto_piccolo. Solo allora il prezzo dello STD ha lo stile
+        /// PREZZO_STD_SCONTO_PICCOLO; prima lo prendeva con qualunque sconto sotto il 25%, anche zero e in
+        /// ogni area.
+        /// </summary>
+        public static bool scontoPiccoloNelPoP(string siglaArea, decimal sconto, bool specialeToscana, bool eventoEccezionale)
+        {
+            return siglaArea == "A" && !specialeToscana && !eventoEccezionale && sconto > 0 && sconto < 25;
+        }
         //Settori/reparti No FOOD
         private readonly string[] settori_no_food = new string[] { "62", "64", "66", "68" };
         private readonly string[] reparti_no_food = new string[] { "01", "02", "03", "04", "05", "06", "07", "09", "11", "12" };
@@ -584,7 +624,7 @@ namespace AgenziaLib
 
                     if (formatoKit == "A3_ORIZZONTALI")
                     {
-                        if (tema.Contains("jolly") || tema.Contains("sprint") || tema.Replace(" ", "").Contains("extripla"))
+                        if (esclusaDalPoP(tema, recItem[key_codiceBox].ToString(), formatoKit))
                         {
                             //Console.WriteLine("Intercettato!");
                             continue;
@@ -592,14 +632,14 @@ namespace AgenziaLib
                     }
                     else if (formatoKit == "A3_VERTICALI")
                     {
-                        if (tema.Contains("jolly") || tema.Contains("sprint") || tema.Replace(" ", "").Contains("extripla"))
+                        if (esclusaDalPoP(tema, recItem[key_codiceBox].ToString(), formatoKit))
                         {
                             continue;
                         }
                     }
                     else if (formatoKit == "A7")
                     {
-                        if (tema.Contains("jolly") || tema.Contains("sprint") || tema.Replace(" ", "").Contains("extripla"))
+                        if (esclusaDalPoP(tema, recItem[key_codiceBox].ToString(), formatoKit))
                         {
                             continue;
                         }
@@ -1120,13 +1160,14 @@ namespace AgenziaLib
                     if (codiceBox == "BOX_SpendiPunti")
                         stile_sconto_speciale = "SCONTO_SPENDIPUNTI";
                     if (codiceBox == "BOX_ESCLUSIVA_SOCI")
-                        stile_sconto_speciale = "SCONTO_SOCI_DOPPIA";
+                        stile_sconto_speciale = "SCONTO_SOCI_ESCLUSIVA";
 
 
                     //variazioni stile_prezzo_promo_kgl
                     if (codiceBox == "BOX_ESCLUSIVA_SOCI")
                     {
-                        stile_prezzo_promo_kgl = "PREZZO_PROMO_KGL_SOCI_DOPPIA";
+                        //Nel PoP l'esclusiva soci ha i suoi stili: sconto e prezzo di paragrafo, prezzo al kg di carattere.
+                        stile_prezzo_promo_kgl = "PREZZO_PROMO_KGL_SOCI_ESCLUSIVA";
                     }
 
                     // stili info Pack
@@ -1487,7 +1528,8 @@ namespace AgenziaLib
                                 recItem["colore_sconto_speciale"] = _codifica.ToUpper();
 
                             }
-                            if (sconto < 25)
+                            //Lo stile dello sconto piccolo solo se lo sconto piccolo c'e' davvero.
+                            if (scontoPiccoloNelPoP(siglaAreaKit, sconto, speciale_toscana, contiene_evento_eccezionale))
                             {
                                 stile_prezzo_promo = "PREZZO_STD_SCONTO_PICCOLO";
                                 interprete.assignCompiledField("prezzo_promo", stile_prezzo_promo, $"€ {prezzo_promo}");
@@ -1573,11 +1615,7 @@ namespace AgenziaLib
                                 recItem["colore_sconto_speciale"] = _codifica.ToUpper();
 
                             }
-                            if (sconto < 25)
-                            {
-                                stile_prezzo_promo = "PREZZO_STD_SCONTO_PICCOLO";
-                                interprete.assignCompiledField("prezzo_promo", stile_prezzo_promo, $"€ {prezzo_promo}");
-                            }
+                            //Nel 1+1 lo sconto piccolo viene sempre tolto (piu' sotto): il prezzo resta PREZZO_PROMO.
 
                         }
 
@@ -1866,9 +1904,7 @@ namespace AgenziaLib
                     }
                     else if (codiceBox == "BOX_ESCLUSIVA_SOCI")
                     {
-                        stile_prezzo_promo = "PREZZO_PROMO_SOCI_DOPPIA";
-                        if (siglaAreaKit.StartsWith("A"))
-                            stile_prezzo_promo = "PREZZO_PROMO_ESCLUSIVA_SOCI";
+                        stile_prezzo_promo = "PREZZO_PROMO_SOCI_ESCLUSIVA";
 
 
                         stileDescr1 += "_SPENDIPUNTI";
@@ -2259,10 +2295,15 @@ namespace AgenziaLib
                             var interpreteSottogruppo = interprete.Clone();
 
                             if (is_linea) {
-                                descrizione = $"<{stileDescr1}_LINEA>{Descrizione1}</{stileDescr1}_LINEA>";
-                                descrizione += $"<{stileDescr2}_LINEA>{Descrizione2}</{stileDescr2}_LINEA>";
-                                descrizione += $"<{stileDescr4}_LINEA>{Descrizione4}</{stileDescr4}_LINEA>";
-                                descrizione += $"<{stileDescr3}_LINEA>{Descrizione3}</{stileDescr3}_LINEA>";
+                                string boxDelGruppo = recItem[key_codiceBox].ToString();
+                                string stileLinea1 = stileDescrizioneCartelloDiLinea(stileDescr1, boxDelGruppo);
+                                string stileLinea2 = stileDescrizioneCartelloDiLinea(stileDescr2, boxDelGruppo);
+                                string stileLinea3 = stileDescrizioneCartelloDiLinea(stileDescr3, boxDelGruppo);
+                                string stileLinea4 = stileDescrizioneCartelloDiLinea(stileDescr4, boxDelGruppo);
+                                descrizione = $"<{stileLinea1}>{Descrizione1}</{stileLinea1}>";
+                                descrizione += $"<{stileLinea2}>{Descrizione2}</{stileLinea2}>";
+                                descrizione += $"<{stileLinea4}>{Descrizione4}</{stileLinea4}>";
+                                descrizione += $"<{stileLinea3}>{Descrizione3}</{stileLinea3}>";
                             } else
                             {
                                 descrizione = $"<{stileDescr1}>{Descrizione1}</{stileDescr1}>";
