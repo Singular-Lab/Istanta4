@@ -27,10 +27,14 @@ vi.mock('../../logger', () => ({
 }));
 
 // Il ruolo GDO di questi test non ha alcun permesso
-vi.mock('../../services/PermessiService', () => ({
-  PermessiService: class { getPermessiUtente = vi.fn().mockResolvedValue([]); },
+vi.mock('../../accessi/contestoAccesso', () => ({
+  leggiContestoAccesso: async (req: any) => req.session?.id_utente
+    ? { idUtente: req.session.id_utente, tipo: req.session.tipo_utente, idGdo: null, idRuoloGdo: null, superadmin: false }
+    : null,
 }));
-vi.mock('../../repositories/PermessiRepository', () => ({ PermessiRepository: class {} }));
+vi.mock('../../accessi/RisolutoreAccessi', () => ({
+  RisolutoreAccessi: { get: () => ({ puo: async () => false }) },
+}));
 
 import { authMiddleware, integrationAuthMiddleware } from '../authMiddleware';
 import { permissionGuard } from '../permissionGuard';

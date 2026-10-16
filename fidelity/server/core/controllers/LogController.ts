@@ -4,7 +4,8 @@ import { authMiddleware } from '../middleware/authMiddleware';
 import { BaseController } from '../base/BaseController';
 import { LogService, LogSearchParams } from '../services/LogService';
 import fs from 'fs';
-import { userRoleGuard } from '../middleware/userRoleGuard';
+import { permissionGuard } from '../middleware/permissionGuard';
+import { PERMESSI } from '../../../lib/accessi/catalogo';
 
 export class LogController extends BaseController {
     private logService: LogService;
@@ -15,7 +16,7 @@ export class LogController extends BaseController {
     }
 
     protected setupRoutes(): void {
-        const guard = [authMiddleware, userRoleGuard([TIPO_UTENTI.SUPERADMIN])];
+        const guard = [authMiddleware, permissionGuard(PERMESSI.SISTEMA.LOG)];
 
         this.router.get(`/list`, ...guard, this.getLogFiles.bind(this));
         this.router.get(`/audit`, ...guard, this.getAuditInfo.bind(this));

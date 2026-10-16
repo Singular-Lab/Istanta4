@@ -7,6 +7,12 @@ vi.mock('../../middleware/authMiddleware', () => ({
   authMiddleware: (_req: any, _res: any, next: any) => next(),
 }));
 
+// Le rotte di eliminazione sono sotto sistema.gestisci_hub: il permesso lo verifica permissionGuard.test.ts,
+// qui si verifica solo la regola sui servizi gestiti.
+vi.mock('../../middleware/permissionGuard', () => ({
+  permissionGuard: () => (_req: any, _res: any, next: any) => next(),
+}));
+
 import { HubController } from '../HubController';
 
 /** Istanta e Correggo li gestisce Fidelity: dalla gestione dell'hub si disattivano, non si eliminano. */

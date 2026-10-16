@@ -22,9 +22,9 @@ export class PluginAnalyticsController extends BaseController {
     this.router.post('/beacon', ephemeralTokenAuthMiddleware, this.handleBeacon.bind(this));
 
     // Admin endpoints - auth via sessione + permesso dedicato
-    this.router.get('/stats', authMiddleware, permissionGuard('plugin_analytics.visualizza'), this.getStats.bind(this));
-    this.router.get('/events', authMiddleware, permissionGuard('plugin_analytics.visualizza'), this.getEvents.bind(this));
-    this.router.get('/monitor', authMiddleware, permissionGuard('plugin_analytics.visualizza'), this.getMonitor.bind(this));
+    this.router.get('/stats', authMiddleware, permissionGuard('api.visualizza_statistiche'), this.getStats.bind(this));
+    this.router.get('/events', authMiddleware, permissionGuard('api.visualizza_statistiche'), this.getEvents.bind(this));
+    this.router.get('/monitor', authMiddleware, permissionGuard('api.visualizza_statistiche'), this.getMonitor.bind(this));
   }
 
   /**

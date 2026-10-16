@@ -21,7 +21,7 @@ import { log } from '../logger';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { jsonGrande } from '../middleware/jsonGrande';
 import { permissionGuard } from '../middleware/permissionGuard';
-import { userRoleGuard } from '../middleware/userRoleGuard';
+import { PERMESSI } from '../../../lib/accessi/catalogo';
 import { AuditLogService } from '../services/AuditLogService';
 import { ServerUtils } from '../utils/ServerUtils';
 import { isUrlOlimpo, urlOlimpo } from '../utils/urlOlimpo';
@@ -53,13 +53,13 @@ export class ConfigController extends BaseController {
     this.router.get('/getConfigWebPliantFromVolantino', this.getConfigWebPliantFromVolantino.bind(this));
     this.router.get('/getColorGDO', this.getColorGDO.bind(this));
     this.router.post('/saveWebpliantConfig', authMiddleware, permissionGuard('impostazioni.modifica_generali'), jsonGrande, this.saveWebpliantConfig.bind(this));
-    this.router.post('/saveDashBoardConfig', userRoleGuard([TIPO_UTENTI.SUPERADMIN]), authMiddleware, this.saveDashBoardConfig.bind(this));
+    this.router.post('/saveDashBoardConfig', authMiddleware, permissionGuard(PERMESSI.SISTEMA.CONFIGURAZIONE), this.saveDashBoardConfig.bind(this));
     this.router.get('/getDashBoardConfig', authMiddleware, this.getDashBoardConfig.bind(this));
     this.router.get('/getPluginRegistry', authMiddleware, permissionGuard('api.gestisci_plugin'), this.getPluginRegistry.bind(this));
     this.router.get('/getFlyerInsightsConfig', this.getFlyerInsightsConfig.bind(this));
     this.router.get('/avviso-manutenzione', authMiddleware, this.getAvvisoManutenzione.bind(this));
-    this.router.post('/avviso-manutenzione', authMiddleware, userRoleGuard([TIPO_UTENTI.SUPERADMIN]), this.saveAvvisoManutenzione.bind(this));
-    this.router.delete('/avviso-manutenzione', authMiddleware, userRoleGuard([TIPO_UTENTI.SUPERADMIN]), this.deleteAvvisoManutenzione.bind(this));
+    this.router.post('/avviso-manutenzione', authMiddleware, permissionGuard(PERMESSI.SISTEMA.MANUTENZIONE), this.saveAvvisoManutenzione.bind(this));
+    this.router.delete('/avviso-manutenzione', authMiddleware, permissionGuard(PERMESSI.SISTEMA.MANUTENZIONE), this.deleteAvvisoManutenzione.bind(this));
     this.router.get('/regole-menabo', authMiddleware, this.getRegoleMenabo.bind(this));
     this.router.post('/regole-menabo', authMiddleware, permissionGuard('impostazioni.modifica_generali'), this.saveRegoleMenabo.bind(this));
     this.router.delete('/regole-menabo', authMiddleware, permissionGuard('impostazioni.modifica_generali'), this.deleteRegoleMenabo.bind(this));
@@ -86,23 +86,6 @@ export class ConfigController extends BaseController {
   }
   private async saveDashBoardConfig(req: Request, res: Response): Promise<void> {
     try {
-      // Verifica che solo il super admin possa salvare il layout
-      const tipoUtente = req.session.tipo_utente;
-      if (tipoUtente !== TIPO_UTENTI.SUPERADMIN) {
-        log.warn('Tentativo di salvataggio dashboard da utente non autorizzato', {
-          userId: req.session.id_utente,
-          tipoUtente,
-          ip: req.ip
-        });
-        throw new ForbiddenError({
-          message: 'Solo il super amministratore può modificare il layout della dashboard',
-          details: {
-            requiredRole: TIPO_UTENTI.SUPERADMIN,
-            currentRole: tipoUtente
-          }
-        });
-      }
-
       // Leggi il ruolo target dal body (quale dashboard si sta salvando)
       const { dashboard, role } = req.body as { dashboard: Dashboard; role: TIPO_UTENTI };
 

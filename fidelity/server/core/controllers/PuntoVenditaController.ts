@@ -9,6 +9,7 @@ import { uploadSpreadsheet } from '../config/multerConfig';
 import type { CreatePuntoVenditaDTO, ImportPuntiVenditaResponseDTO } from '../dto';
 import { IGdoService } from '../interfaces/IGdoService';
 import { IPuntoVenditaService } from '../interfaces/IPuntoVenditaService';
+import { gdoOperativaPerRichiesta } from '../accessi/contestoAccesso';
 import { log } from '../logger';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { permissionGuard } from '../middleware/permissionGuard';
@@ -466,9 +467,11 @@ export class PuntoVenditaController extends BaseController {
 
   private async getAllPV(req: Request, res: Response): Promise<void> {
     try {
-      let idGDO = req.query.IdGDO as string;
-      if (idGDO == undefined) {
-        idGDO = req.session.id_gdo!
+      // Superadmin e Agenzia scelgono la GDO; per gli altri vale quella della sessione (ruoli-permessi)
+      const idGDO = await gdoOperativaPerRichiesta(req, res, req.query.IdGDO);
+      if (!idGDO) {
+        this.sendResponse(res, HttpStatusCode.BAD_REQUEST, { message: 'GDO non specificata' });
+        return;
       }
       const result = await this.puntoVenditaService.getAllPuntiVenditaFromIdGDO(idGDO);
       this.sendResponse(res, HttpStatusCode.OK, result);

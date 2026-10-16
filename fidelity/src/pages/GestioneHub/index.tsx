@@ -4,10 +4,8 @@ import PageHeader from "@/components/Base/PageHeader";
 import withSessionCheck from "@/components/SessionChecker";
 import { PERMISSIONS } from "@/constants/permissions";
 import { usePermissionContext } from "@/context/PermissionContext";
-import { useUser } from "@/context/UserContext";
 import { useFetchHubNewsAdmin, useFetchHubServicesAdmin } from "@/query/query";
 import { useMemo } from "react";
-import { TIPO_UTENTI } from "../../../lib/enums";
 import NewsTab from "./components/NewsTab";
 import ServicesTab from "./components/ServicesTab";
 import UnauthorizedState from "./components/UnauthorizedState";
@@ -17,11 +15,9 @@ const tabClassName =
   "first:rounded-l-[0.6rem] last:rounded-r-[0.6rem] [&[aria-selected='true']_button]:text-current [&[aria-selected='true']_button]:text-primary [&[aria-selected='true']_button]:font-semibold [&[aria-selected='true']_button]:shadow-sm [&[aria-selected='true']_button]:bg-primary/[0.05] [&[aria-selected='true']_button]:border-primary/[0.2]";
 
 function GestioneHub() {
-  const { user } = useUser();
   const { hasPermission, loading } = usePermissionContext();
 
-  const isSuperadmin = user?.tipo === TIPO_UTENTI.SUPERADMIN;
-  const canAccess = Boolean(isSuperadmin && (user?.is_admin || hasPermission(PERMISSIONS.PAGINA.GESTIONE_HUB)));
+  const canAccess = hasPermission(PERMISSIONS.SISTEMA.GESTISCI_HUB);
 
   const { data: groupedServices = {} } = useFetchHubServicesAdmin(canAccess);
   const { data: newsArchive = [] } = useFetchHubNewsAdmin(canAccess);

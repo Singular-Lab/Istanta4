@@ -599,7 +599,10 @@ export type PermessoRuoloGdoAttributes = {
 export type MenuItemAttributes = {
   id_menu_item?: string;
   tipo_utente: TIPO_UTENTI;
+  /** @deprecated chiave testuale "GDO_<NOME>": si usa id_ruolo_utente_gdo. */
   ruolo_gdo?: string | null;
+  /** Sotto-ruolo GDO del menu (null = menu base del tipo). */
+  id_ruolo_utente_gdo?: string | null;
   titolo: string;
   tipo: string;
   icona?: string | null;

@@ -28,7 +28,6 @@ declare module 'express-session' {
     lastIP?: string;
     lastUserAgent?: string;
     lastActivity?: Date;
-    permessi_cache?: string[];
   }
 }
 

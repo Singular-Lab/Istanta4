@@ -4,7 +4,8 @@ import { HttpStatusCode, TIPO_UTENTI } from '../../../lib/enums';
 import { BaseController } from '../base/BaseController';
 import { AuditLogFilterSchema } from '../dto/AuditLogDTO';
 import { authMiddleware } from '../middleware/authMiddleware';
-import { userRoleGuard } from '../middleware/userRoleGuard';
+import { permissionGuard } from '../middleware/permissionGuard';
+import { PERMESSI } from '../../../lib/accessi/catalogo';
 import { AuditLogService } from '../services/AuditLogService';
 
 export class AuditLogController extends BaseController {
@@ -13,7 +14,7 @@ export class AuditLogController extends BaseController {
     }
 
     protected setupRoutes(): void {
-        const guard = [authMiddleware, userRoleGuard([TIPO_UTENTI.SUPERADMIN])];
+        const guard = [authMiddleware, permissionGuard(PERMESSI.SISTEMA.AUDIT)];
 
         this.router.get('/', ...guard, this.getAuditLogs.bind(this));
         this.router.get('/summary', ...guard, this.getSummary.bind(this));
