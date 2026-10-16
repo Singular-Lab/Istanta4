@@ -1674,15 +1674,8 @@
                             || item2.recordInTracciato[keyScattoCodiceGruppo] == null))
                             && codice != "") {
                         }
-                        else if ((item2.recordInTracciato[keyDescr1] != null && !item2.recordInTracciato[keyDescr1].toLowerCase().includes(nome.toLowerCase()) || item2.recordInTracciato[keyDescr1] == null) && nome != "") {
-                        }
-                        else if ((item2.recordInTracciato[keyDescr2] != null && !item2.recordInTracciato[keyDescr2].toLowerCase().includes(brand.toLowerCase()) || item2.recordInTracciato[keyDescr2] == null) && brand != "") {
-                        }
-                        else if ((item2.recordInTracciato[keyDescr3] != null && !item2.recordInTracciato[keyDescr3].toLowerCase().includes(tipo_gusto.toLowerCase()) || item2.recordInTracciato[keyDescr3] == null) && tipo_gusto != "") {
-                        }
-                        else if ((item2.recordInTracciato[keyDescr4] != null && !item2.recordInTracciato[keyDescr4].toLowerCase().includes(grammatura.toLowerCase()) || item2.recordInTracciato[keyDescr4] == null) && grammatura != "") {
-                        }
-                        else if ((item2.recordInTracciato.Segmento != null && !item2.recordInTracciato.Referenza.Segmento.toLowerCase().includes(segmento.toLowerCase()) || item2.recordInTracciato.Referenza == null || item2.recordInTracciato.Referenza.Segmento == null) && segmento != "") {
+                        //I20-1111: revisione e tracciato, e il segmento dove sta davvero (vedi corrispondeAiCampiDellaRicerca).
+                        else if (!Revisore.corrispondeAiCampiDellaRicerca(item2, nome, brand, tipo_gusto, grammatura, segmento)) {
                         }
                         else if (item2.recordInTracciato[keyRefCodice] != null || (codice == "" && nome == "" && brand == "" && tipo_gusto == "" && grammatura == "" && segmento == "")) {
                             gruppoValido = true;
@@ -1703,15 +1696,8 @@
                                     || item.recordInTracciato[keyScattoCodiceGruppo] == null))
                             && codice != "") {
                         }
-                        else if ((item.recordInTracciato[keyDescr1] != null && !item.recordInTracciato[keyDescr1].toLowerCase().includes(nome.toLowerCase()) || item.recordInTracciato[keyDescr1] == null) && nome != "") {
-                        }
-                        else if ((item.recordInTracciato[keyDescr2] != null && !item.recordInTracciato[keyDescr2].toLowerCase().includes(brand.toLowerCase()) || item.recordInTracciato[keyDescr2] == null) && brand != "") {
-                        }
-                        else if ((item.recordInTracciato[keyDescr3] != null && !item.recordInTracciato[keyDescr3].toLowerCase().includes(tipo_gusto.toLowerCase()) || item.recordInTracciato[keyDescr3] == null) && tipo_gusto != "") {
-                        }
-                        else if ((item.recordInTracciato[keyDescr4] != null && !item.recordInTracciato[keyDescr4].toLowerCase().includes(grammatura.toLowerCase()) || item.recordInTracciato[keyDescr4] == null) && grammatura != "") {
-                        }
-                        else if ((item.recordInTracciato.Segmento != null && !item.recordInTracciato.Referenza.Segmento.toLowerCase().includes(segmento.toLowerCase()) || item.recordInTracciato.Referenza == null || item.recordInTracciato.Referenza.Segmento == null) && segmento != "") {
+                        //I20-1111: revisione e tracciato, e il segmento dove sta davvero (vedi corrispondeAiCampiDellaRicerca).
+                        else if (!Revisore.corrispondeAiCampiDellaRicerca(item, nome, brand, tipo_gusto, grammatura, segmento)) {
                         }
                         else if (item.recordInTracciato[keyRefCodice] != null || (codice == "" && nome == "" && brand == "" && tipo_gusto == "" && grammatura == "" && segmento == "")) {
                             ListRicerca.push(item);
@@ -1730,15 +1716,8 @@
                                 || item.recordInTracciato[keyScattoCodiceGruppo] == null))
                         && codice != "") {
                     }
-                    else if ((item.recordInTracciato[keyDescr1] != null && !item.recordInTracciato[keyDescr1].toLowerCase().includes(nome.toLowerCase()) || item.recordInTracciato[keyDescr1] == null) && nome != "") {
-                    }
-                    else if ((item.recordInTracciato[keyDescr2] != null && !item.recordInTracciato[keyDescr2].toLowerCase().includes(brand.toLowerCase()) || item.recordInTracciato[keyDescr2] == null) && brand != "") {
-                    }
-                    else if ((item.recordInTracciato[keyDescr3] != null && !item.recordInTracciato[keyDescr3].toLowerCase().includes(tipo_gusto.toLowerCase()) || item.recordInTracciato[keyDescr3] == null) && tipo_gusto != "") {
-                    }
-                    else if ((item.recordInTracciato[keyDescr4] != null && !item.recordInTracciato[keyDescr4].toLowerCase().includes(grammatura.toLowerCase()) || item.recordInTracciato[keyDescr4] == null) && grammatura != "") {
-                    }
-                    else if ((item.recordInTracciato.Segmento != null && !item.recordInTracciato.Referenza.Segmento.toLowerCase().includes(segmento.toLowerCase()) || item.recordInTracciato.Referenza == null || item.recordInTracciato.Referenza.Segmento == null) && segmento != "") {
+                    //I20-1111: revisione e tracciato, e il segmento dove sta davvero (vedi corrispondeAiCampiDellaRicerca).
+                    else if (!Revisore.corrispondeAiCampiDellaRicerca(item, nome, brand, tipo_gusto, grammatura, segmento)) {
                     }
                     else if (item.recordInTracciato[keyRefCodice] != null || (codice == "" && nome == "" && brand == "" && tipo_gusto == "" && grammatura == "" && segmento == "")) {
                         ListRicerca.push(item);
@@ -1791,9 +1770,10 @@
                                     }
                                 }
 
+                                //I20-1111: si guarda l'articolo del gruppo (item2), come per il nome: prima si leggeva il gruppo.
                                 if (!childIgnorato && brand != "") {
-                                    if (item.recordRevisionato.descrizione2 != null) {
-                                        if (!item.recordRevisionato.descrizione2.toLowerCase().includes(brand.toLowerCase())) {
+                                    if (item2.recordRevisionato.descrizione2 != null) {
+                                        if (!item2.recordRevisionato.descrizione2.toLowerCase().includes(brand.toLowerCase())) {
                                             childIgnorato = true;
                                         }
                                     }
@@ -1803,8 +1783,8 @@
                                 }
 
                                 if (!childIgnorato && tipo_gusto != "") {
-                                    if (item.recordRevisionato.descrizione3 != null) {
-                                        if (!item.recordRevisionato.descrizione3.toLowerCase().includes(tipo_gusto.toLowerCase())) {
+                                    if (item2.recordRevisionato.descrizione3 != null) {
+                                        if (!item2.recordRevisionato.descrizione3.toLowerCase().includes(tipo_gusto.toLowerCase())) {
                                             childIgnorato = true;
                                         }
                                     }
@@ -1814,8 +1794,8 @@
                                 }
 
                                 if (!childIgnorato && grammatura != "") {
-                                    if (item.recordRevisionato.descrizione4 != null) {
-                                        if (!item.recordRevisionato.descrizione4.toLowerCase().includes(grammatura.toLowerCase())) {
+                                    if (item2.recordRevisionato.descrizione4 != null) {
+                                        if (!item2.recordRevisionato.descrizione4.toLowerCase().includes(grammatura.toLowerCase())) {
                                             childIgnorato = true;
                                         }
                                     }
@@ -1825,8 +1805,8 @@
                                 }
 
                                 if (!childIgnorato && segmento != "") {
-                                    if (item.recordRevisionato.idArticoloNavigation != null && item.recordRevisionato.idArticoloNavigation.segmento != null) {
-                                        if (!item.recordRevisionato.idArticoloNavigation.segmento.toLowerCase().includes(segmento.toLowerCase())) {
+                                    if (item2.recordRevisionato.idArticoloNavigation != null && item2.recordRevisionato.idArticoloNavigation.segmento != null) {
+                                        if (!item2.recordRevisionato.idArticoloNavigation.segmento.toLowerCase().includes(segmento.toLowerCase())) {
                                             childIgnorato = true;
                                         }
                                     }
@@ -2748,6 +2728,36 @@
                 }
             }
         });
+    }
+
+    /// I20-1111: un record risponde alla ricerca se ogni campo compilato del filtro e' contenuto, senza
+    /// badare alle maiuscole, in quello che l'operatore legge o in quello che arriva dal tracciato.
+    /// Prima Nome, Brand, Tipo-Gusto e Grammatura si cercavano solo nella descrizione grezza del
+    /// tracciato (colonna sinistra) mentre l'operatore scrive quella revisionata (colonna destra), e un
+    /// tracciato senza Descrizione3/4 non trovava mai niente; il segmento si leggeva da
+    /// recordInTracciato.Referenza.Segmento, che non esiste: le chiavi sono piatte. I campi vuoti non filtrano.
+    static corrispondeAiCampiDellaRicerca(record, nome, brand, tipoGusto, grammatura, segmento) {
+        const tracciato = (record && record.recordInTracciato) || {};
+        const revisione = (record && record.recordRevisionato) || {};
+        //Le chiavi stanno in utility.js, che sotto Node non c'e'.
+        const descr1 = typeof keyDescr1 !== "undefined" ? keyDescr1 : "Descrizioni.Descrizione1";
+        const descr2 = typeof keyDescr2 !== "undefined" ? keyDescr2 : "Descrizioni.Descrizione2";
+        const descr3 = typeof keyDescr3 !== "undefined" ? keyDescr3 : "Descrizioni.Descrizione3";
+        const descr4 = typeof keyDescr4 !== "undefined" ? keyDescr4 : "Descrizioni.Descrizione4";
+        const contiene = function (cercato, valori) {
+            if (cercato == null || String(cercato) === "") {
+                return true;
+            }
+            const ago = String(cercato).toLowerCase();
+            return valori.some(function (valore) { return valore != null && String(valore).toLowerCase().includes(ago); });
+        };
+        const segmentoArchivio = revisione.idArticoloNavigation != null ? revisione.idArticoloNavigation.segmento : null;
+
+        return contiene(nome, [revisione.descrizione1, tracciato[descr1]])
+            && contiene(brand, [revisione.descrizione2, tracciato[descr2]])
+            && contiene(tipoGusto, [revisione.descrizione3, tracciato[descr3]])
+            && contiene(grammatura, [revisione.descrizione4, tracciato[descr4]])
+            && contiene(segmento, [tracciato["segmento"], tracciato["Referenza.Segmento"], segmentoArchivio]);
     }
 
     /// I20-1069: se la risposta di una chiamata a Istanta non e' andata bene, lo dice all'operatore con il
