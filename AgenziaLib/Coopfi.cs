@@ -226,6 +226,47 @@ namespace AgenziaLib
         {
             return siglaArea == "A" && !specialeToscana && !eventoEccezionale && sconto > 0 && sconto < 25;
         }
+
+        /// <summary>
+        /// I gruppi del PoP i cui cartelli singoli sono per intero il cartello di gruppo, in tutti i formati:
+        /// settore 58 con reparto 02, 03, 04, 05, 06 o 08, settore 56 con reparto 03 o 04. I codici si
+        /// confrontano come numeri ("3" e "03" sono lo stesso reparto); senza codici la regola non vale.
+        /// </summary>
+        public static bool singoliComeIlGruppo(object codiceSettore, object codiceReparto)
+        {
+            if (!int.TryParse(codiceSettore?.ToString()?.Trim(), out int settore) || !int.TryParse(codiceReparto?.ToString()?.Trim(), out int reparto))
+                return false;
+            if (settore == 58)
+                return reparto == 2 || reparto == 3 || reparto == 4 || reparto == 5 || reparto == 6 || reparto == 8;
+            if (settore == 56)
+                return reparto == 3 || reparto == 4;
+            return false;
+        }
+
+        /// <summary>
+        /// Quello che un cartello singolo prende per intero dal cartello di gruppo: i campi compilati e quelli
+        /// tolti (descrizione, prezzi, sconti, mastro...), il box e i loghi. Resta del singolo solo l'identita'
+        /// (codice referenza, gruppo, nome del file) e la sua anagrafica grezza.
+        /// </summary>
+        public static readonly string[] chiaviDelCartelloDiGruppo = { "compiledFields", "deletedFields", "codiceBox", GLOBAL_VARIABLES.keyFotoExtraAuto, "Foto.Extra" };
+
+        /// <summary>
+        /// Il cartello singolo diventa per intero il cartello di gruppo (singoliComeIlGruppo). Una chiave che il
+        /// cartello di gruppo non ha si toglie anche dal singolo, cosi' non restano dati misti. I valori si
+        /// copiano, il singolo non condivide liste col gruppo.
+        /// </summary>
+        public static void ripetiIlCartelloDiGruppo(Dictionary<string, object> singolo, Dictionary<string, object> cartelloDiGruppo)
+        {
+            foreach (string chiave in chiaviDelCartelloDiGruppo)
+            {
+                if (!cartelloDiGruppo.TryGetValue(chiave, out object valore))
+                {
+                    singolo.Remove(chiave);
+                    continue;
+                }
+                singolo[chiave] = valore == null || valore is string ? valore : JsonConvert.DeserializeObject(JsonConvert.SerializeObject(valore), valore.GetType());
+            }
+        }
         //Settori/reparti No FOOD
         private readonly string[] settori_no_food = new string[] { "62", "64", "66", "68" };
         private readonly string[] reparti_no_food = new string[] { "01", "02", "03", "04", "05", "06", "07", "09", "11", "12" };
@@ -476,6 +517,8 @@ namespace AgenziaLib
             result.liste[0].Records = new List<ArticoloInKit>();
             result.liste[0].errors = "";// = new List<Dictionary<string, object>>();
             List<string> _cacheSottogruppi = new List<string>();
+            //I cartelli di gruppo gia' creati, per i gruppi i cui singoli li ripetono per intero (singoliComeIlGruppo).
+            Dictionary<string, Dictionary<string, object>> _cartelliDiGruppo = new Dictionary<string, Dictionary<string, object>>();
             try
             {
                 //requestParams = formRequest;
@@ -2449,6 +2492,7 @@ namespace AgenziaLib
                             //FINE CODIFICA DEL NOME
 
                             _cacheSottogruppi.Add(codice_gruppo);
+                            _cartelliDiGruppo[codice_gruppo] = artInKit.sottogruppo;
 
                         }
                         else if (inCache)
@@ -2466,6 +2510,15 @@ namespace AgenziaLib
                     {
                         //Adesso posso cambiarlo davvero
                         recItem[GLOBAL_VARIABLES.codiceBox] = "BOX_STD";
+                    }
+
+                    //Nei gruppi di singoliComeIlGruppo il singolo e' per intero il cartello di gruppo, anche il primo
+                    //membro da cui il cartello e' nato. Dopo tutte le altre regole, cosi' niente lo cambia piu'.
+                    if (codice_referenza != codice_gruppo
+                        && singoliComeIlGruppo(recItem.GetValueOrDefault("codice_settore"), recItem.GetValueOrDefault("codice_reparto"))
+                        && _cartelliDiGruppo.TryGetValue(codice_gruppo, out Dictionary<string, object> cartelloDiGruppo))
+                    {
+                        ripetiIlCartelloDiGruppo(recItem, cartelloDiGruppo);
                     }
 
 
