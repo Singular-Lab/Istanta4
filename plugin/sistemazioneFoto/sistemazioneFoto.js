@@ -509,16 +509,6 @@ const SistemazioneFoto = {
         //I20-1025: l'esito di questa prova, per proiezioneFixFoto. Resta null nelle uscite senza posto.
         this.ultimaProiezione = null;
 
-        //DIAGNOSTICA (TASK-2455cc20): da togliere a diagnosi finita.
-        console.log("[DIAG-FOTO] sistemazioneFoto ripiego-senza-tracciato v1 - box " + box.label + ", gruppo " + this.codiceGruppoDelBox(box) + (projection ? " (prova di disposizione)" : ""));
-        try {
-            var policyDiag = pluginMiddleware.getCampo("policyImpaginazioneMechanism");
-            console.log("[DIAG-FOTO] policy clippingPath: " + JSON.stringify(policyDiag) + ", paddingFoto: " + JSON.stringify(customAgenzia ? customAgenzia.paddingFoto : null));
-        }
-        catch (eDiag) {
-            console.log("[DIAG-FOTO] policy non leggibile: " + eDiag);
-        }
-
         var base = this.trovaBase(box);
 
         if (customAgenzia.calcoloDistanziamentoFoto != null) {
@@ -564,8 +554,6 @@ const SistemazioneFoto = {
             }
             let esitoMisura = {};
             let boundsFoto = this.getRealBoundsOfFoto(foto, paddingFoto, esitoMisura);
-            console.log("[DIAG-FOTO] foto " + i + " " + Utility.parseLabel(foto.label) + ": origine " + esitoMisura.origine + ", misura " + JSON.stringify(boundsFoto) +
-                ", " + (boundsFoto[3] - boundsFoto[1]) + " x " + (boundsFoto[2] - boundsFoto[0]));
             if (esitoMisura.origine != null && esitoMisura.origine !== "tracciato") {
                 senzaTracciato.push(Utility.parseLabel(foto.label));
             }
@@ -625,14 +613,11 @@ const SistemazioneFoto = {
         //I20-978: prima di disporle, le foto tornano tutte alla stessa scala. Senza questo, un
         //fix foto girato su un gruppo ridotto lascia ingrandite le foto rimaste e la foto
         //riattivata dopo, mai toccata, risulta piu' piccola per sempre.
-        var fattoriDiag = this.normalizzaScalaDelleFoto(fotos);
-        console.log("[DIAG-FOTO] fattori di scala " + JSON.stringify(fattoriDiag) + ", misure dopo la normalizzazione " +
-            JSON.stringify(fotos.map(f => [f.larghezzaFoto, f.altezzaFoto])) + ", configurazione per " + fotos.length + " foto: " + JSON.stringify(distanzFoto));
+        this.normalizzaScalaDelleFoto(fotos);
 
         var res = this.getRaggruppamentoFoto(fotos, distanzFoto)
         var boundsGruppo = res.boundsGruppo;
         fotos = res.fotos;
-        console.log("[DIAG-FOTO] bounds del gruppo " + JSON.stringify(boundsGruppo) + ", foto disposte " + JSON.stringify(fotos.map(f => f.bounds)));
 
         //Una misura che non e' un numero rende inservibile tutto il gruppo: nessun candidato lo
         //ospiterebbe e il fix foto uscirebbe in silenzio, con le foto sovrapposte. Lo si dice.
@@ -1116,17 +1101,7 @@ const SistemazioneFoto = {
         catch (e) {
             riquadro = null;
         }
-        var immagineDiag = this.ingombroDellImmagine(img);
-        var misura = this.ingombroDellaFoto(foto_vertex_list, immagineDiag, riquadro, offset);
-        try {
-            var verticiDiag = (foto_vertex_list || []).reduce((n, g) => n + (g && g.vertx ? g.vertx.length : 0), 0);
-            var graficaDiag = img == null ? "nessun riquadro" : img.images.length > 0 ? "image" : img.epss.length > 0 ? "eps" : img.pdfs.length > 0 ? "pdf" : img.graphics.length > 0 ? "graphic" : "vuoto";
-            console.log("[DIAG-FOTO] misura " + (img != null ? Utility.parseLabel(img.label) : "?") + ": grafica " + graficaDiag + ", vertici " + verticiDiag +
-                ", immagine " + JSON.stringify(immagineDiag) + ", riquadro " + JSON.stringify(riquadro) + " -> " + misura.origine + " " + JSON.stringify(misura.bounds));
-        }
-        catch (eDiag) {
-            console.log("[DIAG-FOTO] misura non descrivibile: " + eDiag);
-        }
+        var misura = this.ingombroDellaFoto(foto_vertex_list, this.ingombroDellImmagine(img), riquadro, offset);
         if (esito != null) {
             esito.origine = misura.origine;
         }
