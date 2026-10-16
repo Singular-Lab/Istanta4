@@ -217,8 +217,9 @@ test("una casella di testo che stretta andrebbe in overflow si sposta e si segna
 
 /* ---- le caselle di testo dentro un gruppo ---- */
 
-//Una casella di testo il cui testo e' largo larghezzaTesto: va in overflow se il riquadro e' piu'
-//stretto, come InDesign la vede dopo che il riquadro e' cambiato.
+//Una casella di testo il cui testo, su una riga allineata a sinistra e senza margini interni, e'
+//largo larghezzaTesto: va in overflow se il riquadro e' piu' stretto, come InDesign la vede dopo
+//che il riquadro e' cambiato. Le righe dicono dove il testo comincia e finisce.
 function casella(label, bounds, larghezzaTesto) {
     const c = elemento(label, bounds, { overflows: false });
     Object.defineProperty(c, "properties", {
@@ -227,6 +228,12 @@ function casella(label, bounds, larghezzaTesto) {
             return { parentStory: {}, textFramePreferences: {}, contents: "testo", overflows: b[3] - b[1] < larghezzaTesto };
         }
     });
+    c.textFramePreferences = { insetSpacing: [0, 0, 0, 0] };
+    c.lines = {
+        everyItem: () => ({
+            getElements: () => [{ horizontalOffset: c.geometricBounds[1], endHorizontalOffset: c.geometricBounds[1] + larghezzaTesto }]
+        })
+    };
     return c;
 }
 
@@ -267,11 +274,11 @@ test("un gruppo che rientra stringendo la casella quasi vuota non si sposta, non
     assert.deepStrictEqual(segnalazioni, []);
 });
 
-test("una casella del gruppo che stretta andrebbe in overflow torna com'era e il gruppo si sposta come prima", () => {
+test("una casella del gruppo che il suo testo riempie gia' torna com'era e il gruppo si sposta come prima", () => {
     azzera();
     //Un prezzo piu' corto, che lascia al gruppo lo spazio per rientrare spostandosi.
     const prezzo = casella("prezzo_promo", [48, 40, 141.75, 267.97], 220);
-    const infoPack = casella("prezzo_info_pack", [121.14, 273.17, 141.75, 332.07], 50);
+    const infoPack = casella("prezzo_info_pack", [121.14, 273.17, 141.75, 332.07], 58.8);
     const b = box("BOX_STD", [gruppo("gruppo_prezzo", [prezzo, infoPack])]);
 
     CssFramework.fixOverflowFromBox(BOX_PREZZO, b);
@@ -282,6 +289,40 @@ test("una casella del gruppo che stretta andrebbe in overflow torna com'era e il
     assert.ok(Math.abs((infoPack.geometricBounds[3] - infoPack.geometricBounds[1]) - 58.9) < 1e-9);
     assert.ok(Math.abs(prezzo.geometricBounds[1] - (40 - 25.07)) < 1e-9);
     assert.ok(segnalazioni.some(s => /CSF-008: Elemento gruppo_prezzo nel box BOX_STD spostato verso sinistra/.test(s.testo)));
+});
+
+test("una casella che non entra fino al bordo si stringe fino alla fine del testo: il gruppo si sposta solo del resto", () => {
+    azzera();
+    //Il collaudo: "al kg" a corpo 50 e' largo 43,02 mm; fino al bordo ne restano 33,83. La casella
+    //si stringe a 273,17 + 43,02 + 0,5 di respiro = 316,69 e il gruppo si sposta di 9,69 mm.
+    const prezzo = casella("prezzo_promo", [48, 27.25, 141.75, 267.97], 240);
+    const infoPack = casella("prezzo_info_pack", [121.14, 273.17, 141.75, 332.07], 43.02);
+    const b = box("BOX_STD", [gruppo("gruppo_prezzo", [prezzo, infoPack])]);
+
+    CssFramework.fixOverflowFromBox(BOX_PREZZO, b);
+    CssFramework.controllaSpostamentiGrigliaPendenti(b);
+
+    assert.ok(Math.abs((infoPack.geometricBounds[3] - infoPack.geometricBounds[1]) - 43.52) < 1e-9);
+    assert.ok(Math.abs(infoPack.geometricBounds[3] - 307) < 1e-9);
+    assert.strictEqual(infoPack.properties.overflows, false);
+    assert.ok(Math.abs(prezzo.geometricBounds[1] - (27.25 - 9.69)) < 1e-9);
+    assert.ok(Math.abs((prezzo.geometricBounds[3] - prezzo.geometricBounds[1]) - (267.97 - 27.25)) < 1e-9);
+    assert.strictEqual(prezzo.properties.overflows, false);
+    assert.ok(!messaggi.some(m => /CSF-009/.test(m.testo)), "niente CSF-009");
+    assert.ok(segnalazioni.some(s => /CSF-008: Elemento gruppo_prezzo nel box BOX_STD spostato verso sinistra/.test(s.testo)));
+});
+
+test("sui lati alto e basso la casella non si stringe fino alla fine del testo", () => {
+    azzera();
+    const infoPack = casella("prezzo_info_pack", [395, 273.17, 420, 300], 20);
+    Object.defineProperty(infoPack, "properties", { get: () => ({ parentStory: {}, textFramePreferences: {}, contents: "testo", overflows: infoPack.geometricBounds[2] - infoPack.geometricBounds[0] < 20 }) });
+    const b = box("BOX_STD", [gruppo("gruppo_prezzo", [infoPack])]);
+
+    CssFramework.fixOverflowFromBox(BOX_PREZZO, b);
+
+    //Esce di 10 mm dal fondo: stretta fino a 410 andrebbe in overflow, quindi torna alta 25 e il gruppo sale di 10.
+    assert.ok(Math.abs(infoPack.geometricBounds[0] - 385) < 1e-9);
+    assert.ok(Math.abs(infoPack.geometricBounds[2] - 410) < 1e-9);
 });
 
 test("la casella stretta resta stretta anche se non basta: lo spostamento si accorcia", () => {
