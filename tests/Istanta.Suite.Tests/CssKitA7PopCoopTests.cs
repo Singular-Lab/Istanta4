@@ -16,6 +16,8 @@ namespace Istanta.Suite.Tests;
 /// della percentuale di FiorFiore (21,981 x 6,647 mm, data dall'operatore) con le stesse proporzioni.
 /// Seconda: nel doppio sconto le distanze degli allineamenti, ridotte dello stesso fattore, e la
 /// descrizione, che nell'A7 sta di lato e segue il prezzo soci alla distanza dell'info pack.
+/// Terza: nell'esclusiva soci lo sconto non e' impilato e resta dove lo mette la meccanica, e la pila ha
+/// la spaziatura dell'A3 ridotta dello stesso fattore.
 /// </summary>
 public class CssKitA7PopCoopTests
 {
@@ -240,9 +242,30 @@ public class CssKitA7PopCoopTests
         var esclusiva = Operazioni(KitA7()).Single(o => o["nomiBox"]!.Values<string>().SequenceEqual(new[] { "BOX_ESCLUSIVA_SOCI" }));
         var livelli = Gruppo(esclusiva, "Campi_PrincipaliEsclusivaSoci")["ordinamentoLivelli"]!.Cast<JObject>().ToList();
 
-        Assert.Equal(new[] { "banda_inferiore_mastro", "descrizione", "box_risparmi", "prezzo_continuo", "prezzo_promo_kgl", "gruppo_prezzo2", "box_sconto" },
+        Assert.Equal(new[] { "banda_inferiore_mastro", "descrizione", "box_risparmi", "prezzo_continuo", "prezzo_promo_kgl", "gruppo_prezzo2" },
             livelli.Select(l => (string)l["elementi"]!.Single()!));
         Assert.All(livelli, l => Assert.Equal(JTokenType.Null, l["listSetCondizioni"]!.Type));
+    }
+
+    [Fact]
+    public void Nell_A7_lo_sconto_dell_esclusiva_soci_resta_dove_lo_mette_la_meccanica_e_la_pila_e_piu_stretta()
+    {
+        var esclusivaA7 = Operazioni(KitA7()).Single(o => o["nomiBox"]!.Values<string>().SequenceEqual(new[] { "BOX_ESCLUSIVA_SOCI" }));
+        var esclusivaA3 = Operazioni(KitA3()).Single(o => o["nomiBox"]!.Values<string>().SequenceEqual(new[] { "BOX_ESCLUSIVA_SOCI" }));
+        var pilaA7 = Gruppo(esclusivaA7, "Campi_PrincipaliEsclusivaSoci");
+        var pilaA3 = Gruppo(esclusivaA3, "Campi_PrincipaliEsclusivaSoci");
+
+        //Nessun gruppo di allineamento dell'A7 muove box_sconto; il ridimensionamento in altezza resta.
+        Assert.DoesNotContain(esclusivaA7["allineamenti"]!.Cast<JObject>(), g => g["gruppoEtichette"]!.Values<string>().Contains("box_sconto"));
+        Assert.Contains(esclusivaA7["ridimensionamenti"]!, r => r["gruppoEtichette"]!.Values<string>().Contains("box_sconto"));
+
+        //La spaziatura dell'A3 ridotta del fattore dei loghi.
+        Assert.Equal(2.0, (double)pilaA3["spacingLivelli"]!);
+        Assert.Equal(0.483, (double)pilaA7["spacingLivelli"]!);
+        Assert.Equal(2.0 * Riduzione, (double)pilaA7["spacingLivelli"]!, 3);
+
+        //Nell'A3 lo sconto resta in cima alla pila.
+        Assert.Equal("box_sconto", (string)pilaA3["ordinamentoLivelli"]!.Last()["elementi"]!.Single()!);
     }
 
     [Fact]
