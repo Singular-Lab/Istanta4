@@ -40,6 +40,51 @@ describe("storicoVolantinoDB1.confronta: timeout verso DB1", () => {
   });
 });
 
+describe("storicoVolantinoDB1.confronta: fantasmi presenti in un altro tracciato", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  const record = { codice: "4969665", descrizione1: "POLPA POMODORO CONAD 400G", codice_scatto: "2718130", prezzo_offerta: 0.79 };
+  const box = {
+    groupId: 8, pag: 4, x: 10, y: 20, w: 60, h: 40, dna: "$dna{\n5\n4969665\n}",
+    compiledFields: [{ labelName: "descrizione", content: "Polpa di pomodoro" }],
+    foto: ["polpa.psd"],
+  };
+  const confronta = async (fantasmi: unknown[]) => {
+    vi.spyOn(ServerUtils, "sendToFICOApi").mockResolvedValue({
+      data: { esito: true, error: "", lista: [], orfanelli: [], fantasmi }, status: 200, statusText: "OK",
+    } as any);
+    return storicoVolantinoDB1.confronta({} as Request, {
+      refs: [{ groupId: 8, dna: box.dna, foto: [{ nome: "polpa.psd", guidId: "g-polpa" }] }],
+    } as unknown as PayloadConfrontoStorico);
+  };
+
+  it("col record di DB1 il box diventa una referenza di lista: testi, foto e posizione del box, dato del record", async () => {
+    const esito = await confronta([{ ...box, resolution: JSON.stringify({ warningCode: "02_codref_guest", codice: "4969665", record }) }]);
+    expect(esito.fuoriListino).toEqual([]);
+    expect(esito.lista).toHaveLength(1);
+    const [ospite] = esito.lista;
+    expect(ospite).toMatchObject({ groupId: 8, pag: 4, x: 10, compiledFields: box.compiledFields, foto: [{ nome: "polpa.psd", guidId: "g-polpa" }] });
+    expect(ospite.dataFields).toMatchObject({ codice: "4969665", codice_referenza: "4969665", descrizione_uno: "POLPA POMODORO CONAD 400G", prezzo: 0.79 });
+    expect(ospite).not.toHaveProperty("resolution");
+  });
+
+  it("accetta il warning anche gia oggetto", async () => {
+    const esito = await confronta([{ ...box, resolution: { warningCode: "02_codref_guest", record } }]);
+    expect(esito.lista).toHaveLength(1);
+  });
+
+  it("senza record, con un altro warning o illeggibile resta un fantasma da decidere", async () => {
+    const esito = await confronta([
+      { ...box, groupId: 1, resolution: JSON.stringify({ warningCode: "02_codref_guest", codice: "4969665" }) },
+      { ...box, groupId: 2, resolution: JSON.stringify({ warningCode: "01_codscatto_same", codiceScatto: "5", codiceGruppoAtteso: "6" }) },
+      { ...box, groupId: 3, resolution: "{rotto" },
+      { ...box, groupId: 4 },
+    ]);
+    expect(esito.lista).toEqual([]);
+    expect(esito.fuoriListino.map((fantasma) => fantasma.groupId)).toEqual([1, 2, 3, 4]);
+  });
+});
+
 describe("storicoVolantinoDB1.referenzaFuoriListino", () => {
   it("aggiunge i nomi FP letti dalle schede del kit senza togliere quelli DB1", () => {
     const { dataFields, meccanica } = storicoVolantinoDB1.referenzaFuoriListino({

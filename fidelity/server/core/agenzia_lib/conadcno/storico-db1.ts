@@ -145,6 +145,56 @@ const ALIAS_FP: Array<[keyof DB1XmlRecord, string]> = [
   ['anziche', 'prezzo_anziche'],
 ];
 
+/**
+ * Il record DB1 come lo leggono le schede del kit: i campi DB1 restano, si aggiungono gli
+ * alias FP (senza, la scheda mostra "N/D", senza codice ne prezzo) senza sovrascrivere niente.
+ */
+function datiFP(record: Record<string, unknown>): DataFields {
+  const dataFields: Record<string, unknown> = { ...record };
+  for (const [campoDB1, campoFP] of ALIAS_FP) {
+    const valore = record[campoDB1];
+    if (dataFields[campoFP] === undefined && valore !== undefined && valore !== null && valore !== '') {
+      dataFields[campoFP] = valore;
+    }
+  }
+  return dataFields as DataFields;
+}
+
+/**
+ * Il warning che DB1 mette su un box nel campo `resolution`: l'oggetto C# `I_FP_Warning`
+ * serializzato in stringa (lo si accetta anche gia oggetto). Null se manca o non si legge.
+ */
+function warningDi(ref: SyncJsonPluginRef): { warningCode?: string; record?: unknown } | null {
+  const raw = (ref as { resolution?: unknown }).resolution;
+  try {
+    const warning = typeof raw === 'string' ? JSON.parse(raw || 'null') : raw;
+    return warning && typeof warning === 'object' ? warning : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fantasmi col codice in un altro tracciato (warning `02_codref_guest`): DB1 manda il
+ * record completo, quindi non sono fuori listino e nessuno deve deciderli. Diventano
+ * referenze come quelle di lista: il box del plugin (testi, foto, posizione) col dato
+ * del record nei dataFields. Gli altri restano fantasmi da decidere.
+ */
+export function separaOspiti(fantasmi: SyncJsonPluginRef[]): { ospiti: SyncJsonPluginRef[]; fantasmi: SyncJsonPluginRef[] } {
+  const ospiti: SyncJsonPluginRef[] = [];
+  const restanti: SyncJsonPluginRef[] = [];
+  for (const fantasma of fantasmi) {
+    const warning = warningDi(fantasma);
+    if (warning?.warningCode === '02_codref_guest' && warning.record && typeof warning.record === 'object') {
+      const { resolution: _resolution, ...box } = fantasma as SyncJsonPluginRef & { resolution?: unknown };
+      ospiti.push({ ...box, dataFields: datiFP(warning.record as Record<string, unknown>) });
+    } else {
+      restanti.push(fantasma);
+    }
+  }
+  return { ospiti, fantasmi: restanti };
+}
+
 const euro = (valore: unknown) =>
   valore == null || valore === '' || !Number.isFinite(Number(valore)) ? undefined : `€ ${Number(valore).toFixed(2)}`;
 
@@ -173,10 +223,13 @@ export const storicoVolantinoDB1: StoricoVolantinoAgenzia = {
         statusCode: risultato.status
       });
     }
+    // I fantasmi che DB1 ha trovato in un altro tracciato vanno in lista col loro record.
+    const { ospiti, fantasmi } = separaOspiti(Array.isArray(risultato.data.fantasmi) ? risultato.data.fantasmi : []);
+    const lista = Array.isArray(risultato.data.lista) ? risultato.data.lista : [];
     return {
-      lista: Array.isArray(risultato.data.lista) ? mergePluginPhotoRefs(risultato.data.lista, payload.refs) : [],
+      lista: mergePluginPhotoRefs([...lista, ...ospiti], payload.refs),
       nonImpaginate: Array.isArray(risultato.data.orfanelli) ? risultato.data.orfanelli : [],
-      fuoriListino: Array.isArray(risultato.data.fantasmi) ? risultato.data.fantasmi : [],
+      fuoriListino: fantasmi,
     };
   },
 
@@ -186,20 +239,9 @@ export const storicoVolantinoDB1: StoricoVolantinoAgenzia = {
     { campo: 'descrizione1', etichetta: 'Descrizione 1' },
   ],
 
-  /**
-   * Il plugin compila il fuori listino coi nomi DB1: senza i nomi FP le schede del
-   * kit non lo leggono (resta "N/D", senza codice ne prezzo). Si aggiungono gli
-   * alias senza togliere i campi DB1 e senza sovrascrivere niente.
-   */
+  /** Il plugin compila il fuori listino coi nomi DB1: lo si legge come i record di DB1. */
   referenzaFuoriListino(record) {
-    const dataFields: Record<string, unknown> = { ...record };
-    for (const [campoDB1, campoFP] of ALIAS_FP) {
-      const valore = record[campoDB1];
-      if (dataFields[campoFP] === undefined && valore !== undefined && valore !== null && valore !== '') {
-        dataFields[campoFP] = valore;
-      }
-    }
-    return { dataFields: dataFields as DataFields, meccanica: String(record.meccanica ?? '') };
+    return { dataFields: datiFP(record), meccanica: String(record.meccanica ?? '') };
   },
 
   referenzaPerReport(record) {
