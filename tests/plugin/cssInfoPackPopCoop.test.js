@@ -34,7 +34,7 @@ const FILE_CSS = path.join(__dirname, "..", "..", "Istanta", "wwwroot", "externa
 
 function ancoraInfoPackDelPoP() {
     const kit = JSON.parse(fs.readFileSync(FILE_CSS, "utf8")).dbRidimensionamentiAllineamenti.modificheCssPerKit;
-    const pop = kit.find(k => k.kit.kitTipoLavorazioniValide.length == 1 && k.kit.kitTipoLavorazioniValide[0] == 2);
+    const pop = kit.find(k => k.kit.kitTipoLavorazioniValide.length == 1 && k.kit.kitTipoLavorazioniValide[0] == 2 && (k.kit.kitFormatiValidi || []).length == 0);
     const generica = pop.operazioniPerBox.find(o => o.nomiBox.length == 0);
     return generica.allineamenti.find(a => a.nomeGruppo == "prezzo_info_pack_FIX").followAnchor[0];
 }

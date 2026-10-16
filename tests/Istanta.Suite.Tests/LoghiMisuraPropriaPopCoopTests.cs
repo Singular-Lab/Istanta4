@@ -24,7 +24,7 @@ public class LoghiMisuraPropriaPopCoopTests
     private static IEnumerable<JObject> OperazioniConLoghi()
     {
         var pop = JObject.Parse(File.ReadAllText(DllAgenziaLibTests.TrovaFile(FileCss)))["dbRidimensionamentiAllineamenti"]!["modificheCssPerKit"]!
-            .Cast<JObject>().Single(k => k["kit"]!["kitTipoLavorazioniValide"]!.Values<int>().SequenceEqual(new[] { 2 }));
+            .Cast<JObject>().Single(k => k["kit"]!["kitTipoLavorazioniValide"]!.Values<int>().SequenceEqual(new[] { 2 }) && !k["kit"]!["kitFormatiValidi"]!.Any());
         return pop["operazioniPerBox"]!.Cast<JObject>()
             .Where(o => !o["nomiBox"]!.Any() || o["nomiBox"]!.Values<string>().SequenceEqual(new[] { "BOX_doppio_SCONTO" }));
     }
@@ -112,7 +112,7 @@ public class LoghiMisuraPropriaPopCoopTests
         var riletto = JsonConvert.DeserializeObject<DbFrameworkCss>(JsonConvert.SerializeObject(db))!;
 
         var slot = riletto.dbRidimensionamentiAllineamenti.modificheCssPerKit
-            .Where(k => k.kit.kitTipoLavorazioniValide.Contains(2))
+            .Where(k => k.kit.kitTipoLavorazioniValide.Contains(2) && (k.kit.kitFormatiValidi == null || k.kit.kitFormatiValidi.Count == 0))
             .SelectMany(k => k.operazioniPerBox).SelectMany(o => o.allineamenti)
             .First(a => a.nomeGruppo == "Loghi").slot!;
         var destra = slot.eccezioni![0];

@@ -39,7 +39,7 @@ const FILE_CSS = path.join(__dirname, "..", "..", "Istanta", "wwwroot", "externa
 
 function gruppoLoghiDelPoP(box) {
     const kit = JSON.parse(fs.readFileSync(FILE_CSS, "utf8")).dbRidimensionamentiAllineamenti.modificheCssPerKit;
-    const pop = kit.find(k => k.kit.kitTipoLavorazioniValide.length == 1 && k.kit.kitTipoLavorazioniValide[0] == 2);
+    const pop = kit.find(k => k.kit.kitTipoLavorazioniValide.length == 1 && k.kit.kitTipoLavorazioniValide[0] == 2 && (k.kit.kitFormatiValidi || []).length == 0);
     const operazione = pop.operazioniPerBox.find(o => box == null ? o.nomiBox.length == 0 : o.nomiBox.length == 1 && o.nomiBox[0] == box);
     return operazione.allineamenti.find(a => a.nomeGruppo == "Loghi");
 }
