@@ -203,26 +203,16 @@ namespace AgenziaLib
         }
 
         /// <summary>
-        /// Le referenze che non escono nel PoP, in ogni formato: tema jolly, sprint o extra tripla, e i Jolly
-        /// evidenziati, che nascono dal tema VENDITE PROPOSITIVE e "jolly" nel tema non ce l'hanno. tema e' gia'
-        /// in minuscolo.
+        /// Le referenze che non escono nel PoP. In ogni formato: tema jolly, sprint o extra tripla, e i Jolly
+        /// evidenziati, che nascono dal tema VENDITE PROPOSITIVE e "jolly" nel tema non ce l'hanno. Nell'A3
+        /// verticale anche i Superprezzi ortofrutta (BOX_SuperprezziOF): prima vi uscivano come BOX_STD, ora
+        /// non escono affatto. tema e' gia' in minuscolo.
         /// </summary>
-        public static bool esclusaDalPoP(string tema, string codiceBox)
+        public static bool esclusaDalPoP(string tema, string codiceBox, string formato)
         {
             return tema.Contains("jolly") || tema.Contains("sprint") || tema.Replace(" ", "").Contains("extripla")
-                || codiceBox == "BOX_JOLLY_EVIDENZIATO";
-        }
-
-        /// <summary>
-        /// Il box con cui la referenza esce nel PoP. Nell'A3 verticale i Superprezzi ortofrutta escono come
-        /// BOX_STD, con le sue regole, i suoi stili e le regole del CssFramework dello STD. Negli altri formati il
-        /// box resta quello del record.
-        /// </summary>
-        public static string boxNelPoP(string codiceBox, string formato)
-        {
-            if (formato == "A3_VERTICALI" && codiceBox == "BOX_SuperprezziOF")
-                return "BOX_STD";
-            return codiceBox;
+                || codiceBox == "BOX_JOLLY_EVIDENZIATO"
+                || (formato == "A3_VERTICALI" && codiceBox == "BOX_SuperprezziOF");
         }
 
         /// <summary>
@@ -634,7 +624,7 @@ namespace AgenziaLib
 
                     if (formatoKit == "A3_ORIZZONTALI")
                     {
-                        if (esclusaDalPoP(tema, recItem[key_codiceBox].ToString()))
+                        if (esclusaDalPoP(tema, recItem[key_codiceBox].ToString(), formatoKit))
                         {
                             //Console.WriteLine("Intercettato!");
                             continue;
@@ -642,14 +632,14 @@ namespace AgenziaLib
                     }
                     else if (formatoKit == "A3_VERTICALI")
                     {
-                        if (esclusaDalPoP(tema, recItem[key_codiceBox].ToString()))
+                        if (esclusaDalPoP(tema, recItem[key_codiceBox].ToString(), formatoKit))
                         {
                             continue;
                         }
                     }
                     else if (formatoKit == "A7")
                     {
-                        if (esclusaDalPoP(tema, recItem[key_codiceBox].ToString()))
+                        if (esclusaDalPoP(tema, recItem[key_codiceBox].ToString(), formatoKit))
                         {
                             continue;
                         }
@@ -789,14 +779,6 @@ namespace AgenziaLib
                     string siglaFormatoKit = formatiDB.source.FirstOrDefault(a => a.guidID == kit.guidFormato).codice;
 
                     var codiceBox = recItem[key_codiceBox].ToString();
-
-                    //Nell'A3 verticale i Superprezzi escono come STD, anche nel record: dal box del record il
-                    //Plugin sceglie il modello e le regole del CssFramework.
-                    if (boxNelPoP(codiceBox, formatoKit) != codiceBox)
-                    {
-                        codiceBox = boxNelPoP(codiceBox, formatoKit);
-                        recItem[key_codiceBox] = codiceBox;
-                    }
 
                     //forzature meccanica per Codicebox
                     /*if (codiceBox == "BOX_SuperprezziOF")
