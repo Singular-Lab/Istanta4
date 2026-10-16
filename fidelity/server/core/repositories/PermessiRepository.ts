@@ -1,4 +1,4 @@
-import { QueryTypes } from 'sequelize';
+import { QueryTypes, Transaction } from 'sequelize';
 import { TIPO_UTENTI } from '../../../lib/enums';
 import { BadRequestError } from '../../../lib/errors';
 import { PermessoAttributes } from '../../../lib/types';
@@ -341,5 +341,98 @@ export class PermessiRepository {
       permessi.map(p => ({ ...p, createdat: new Date(), updatedat: new Date() })) as any[],
       { ignoreDuplicates: true }
     );
+  }
+
+  /**
+   * Scrive un livello di permessi nella transazione data.
+   * `valori`: id_permesso → true/false (riga impostata) oppure null (riga tolta: il livello eredita).
+   * Senza idGdo scrive su permessi_ruolo (tipo o tipo + sotto-ruolo), con idGdo sugli override.
+   */
+  async scriviLivello(
+    scope: { tipo: TIPO_UTENTI; idRuoloGdo?: string | null; idGdo?: string | null },
+    valori: Map<string, boolean | null>,
+    transaction: Transaction
+  ): Promise<void> {
+    if (valori.size === 0) return;
+    const idRuoloGdo = scope.idRuoloGdo ?? null;
+    const idGdo = scope.idGdo ?? null;
+    await this.ensureSubRoleSupported(idRuoloGdo ?? undefined);
+    await this.lockScope(
+      transaction,
+      idGdo
+        ? `permessi_ruolo_gdo:${idGdo}:${scope.tipo}:${idRuoloGdo ?? '_base_'}`
+        : `permessi_ruolo:${scope.tipo}:${idRuoloGdo ?? '_base_'}`
+    );
+
+    const ids = Array.from(valori.keys());
+    const dove: any = { tipo_utente: scope.tipo, id_ruolo_utente_gdo: idRuoloGdo, id_permesso: ids };
+    if (idGdo) {
+      await PermessoRuoloGdo.destroy({ where: { ...dove, id_gdo: idGdo }, transaction });
+    } else {
+      await PermessoRuolo.destroy({ where: dove, transaction });
+    }
+
+    const adesso = new Date();
+    const righe: any[] = [];
+    valori.forEach((abilitato, id_permesso) => {
+      if (abilitato === null) return;
+      righe.push({
+        ...(idGdo ? { id_gdo: idGdo } : {}),
+        tipo_utente: scope.tipo,
+        id_permesso,
+        id_ruolo_utente_gdo: idRuoloGdo,
+        abilitato,
+        createdat: adesso,
+        updatedat: adesso,
+      });
+    });
+    if (righe.length === 0) return;
+    if (idGdo) await PermessoRuoloGdo.bulkCreate(righe, { transaction });
+    else await PermessoRuolo.bulkCreate(righe, { transaction });
+  }
+
+  /** Toglie tutte le righe di un livello di override (la GDO torna a ereditare). */
+  async svuotaOverride(
+    scope: { tipo: TIPO_UTENTI; idRuoloGdo?: string | null; idGdo: string },
+    transaction: Transaction
+  ): Promise<number> {
+    return PermessoRuoloGdo.destroy({
+      where: { id_gdo: scope.idGdo, tipo_utente: scope.tipo, id_ruolo_utente_gdo: scope.idRuoloGdo ?? null },
+      transaction,
+    });
+  }
+
+  /** Allinea la tabella `permessi` al catalogo: inserisce i codici nuovi e aggiorna nome e gruppo. */
+  async allineaCatalogo(
+    voci: Array<{ codice: string; nome: string; descrizione: string; categoria: string; risorsa: string }>,
+    transaction?: Transaction
+  ): Promise<Map<string, string>> {
+    const adesso = new Date();
+    for (const voce of voci) {
+      await sequelize.query(
+        `INSERT INTO permessi (id_permesso, codice, nome, descrizione, categoria, risorsa, createdat, updatedat)
+         VALUES (uuid_generate_v4(), :codice, :nome, :descrizione, :categoria, :risorsa, :adesso, :adesso)
+         ON CONFLICT (codice) DO UPDATE
+           SET nome = EXCLUDED.nome, descrizione = EXCLUDED.descrizione,
+               categoria = EXCLUDED.categoria, risorsa = EXCLUDED.risorsa, updatedat = EXCLUDED.updatedat`,
+        { replacements: { ...voce, adesso }, transaction }
+      );
+    }
+    const righe = await sequelize.query<{ id_permesso: string; codice: string }>(
+      `SELECT id_permesso, codice FROM permessi`,
+      { type: QueryTypes.SELECT, transaction }
+    );
+    return new Map(righe.map(r => [r.codice, r.id_permesso]));
+  }
+
+  /** Cancella dal catalogo i codici dati, con le righe di ruoli e override che li usano. */
+  async rimuoviCodici(codici: string[], transaction?: Transaction): Promise<number> {
+    if (codici.length === 0) return 0;
+    const replacements = { codici };
+    const sottoquery = `SELECT id_permesso FROM permessi WHERE codice IN (:codici)`;
+    await sequelize.query(`DELETE FROM permessi_ruolo_gdo WHERE id_permesso IN (${sottoquery})`, { replacements, transaction });
+    await sequelize.query(`DELETE FROM permessi_ruolo WHERE id_permesso IN (${sottoquery})`, { replacements, transaction });
+    const [, meta] = await sequelize.query(`DELETE FROM permessi WHERE codice IN (:codici)`, { replacements, transaction }) as any;
+    return typeof meta?.rowCount === 'number' ? meta.rowCount : 0;
   }
 }

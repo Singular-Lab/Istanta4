@@ -1,4 +1,6 @@
 import "@/assets/css/themes/echo.css";
+import { usePermissionContext } from "@/context/PermissionContext";
+import { PERMISSIONS } from "@/constants/permissions";
 import "@/assets/css/vendors/simplebar.css";
 import logoSVG from "@/assets/images/logo.svg";
 import Button from "@/components/Base/Button";
@@ -6,7 +8,7 @@ import Lucide from "@/components/Base/Lucide";
 import { useAppDispatch, useAppSelector } from "@/stores/hooks";
 import { fetchSideMenu, selectSideMenu, selectSideMenuError } from "@/stores/sideMenuSlice_istanta";
 import clsx from "clsx";
-import { createRef, Fragment, startTransition, useEffect, useState } from "react";
+import { createRef, Fragment, startTransition, useContext, useEffect, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { FormattedMenu, nestedMenu } from "./side-menu";
 //@ts-ignore
@@ -22,7 +24,8 @@ import MaintenanceBanner from "@/components/MaintenanceBanner";
 import MaintenanceModal from "@/components/MaintenanceModal";
 import NotificationsPanel from "@/components/NotificationsPanel";
 import QuickSearch from "@/components/QuickSearch";
-import withSessionCheck from "@/components/SessionChecker";
+import AccessoNegato, { DentroLayoutContext } from "@/components/AccessoNegato";
+import withSessionCheck, { AccessoPaginaContext } from "@/components/SessionChecker";
 import SwitchAccount from "@/components/SwitchAccount";
 import { useUser } from "@/context/UserContext.tsx";
 import { SocketProvider } from "@/hooks/useSocket";
@@ -64,6 +67,8 @@ const findStartPageItem = (
 };
 
 function Layout() {
+  const accessoConsentito = useContext(AccessoPaginaContext);
+  const { hasPermission } = usePermissionContext();
 
   const { user } = useUser();
   const dispatch = useAppDispatch();
@@ -582,7 +587,7 @@ function Layout() {
                       >
                         <Lucide icon={isFullScreen ? "Minimize" : "Expand"} className="w-[18px] h-[18px]" />
                       </button>
-                      {user?.tipo === TIPO_UTENTI.SUPERADMIN && (
+                      {hasPermission(PERMISSIONS.SISTEMA.MANUTENZIONE) && (
                         <button
                           type="button"
                           className={`relative p-2 text-white rounded-full hover:bg-white/5 ${avviso.data?.attivo ? "text-amber-300" : ""}`}
@@ -737,7 +742,7 @@ function Layout() {
           >
             <div className="px-1 sm:px-5 mt-16">
               <div className="mx-1 sm:mx-5">
-                <Outlet />
+                {accessoConsentito ? <Outlet /> : <AccessoNegato />}
               </div>
             </div>
           </div>
@@ -747,4 +752,12 @@ function Layout() {
   );
 }
 
-export default withSessionCheck(Layout);
+// L'accesso negato si mostra al posto della pagina, con il menu ancora disponibile.
+const LayoutConMenu = (props: Record<string, never>) => (
+  <DentroLayoutContext.Provider value={true}>
+    <Layout {...props} />
+  </DentroLayoutContext.Provider>
+);
+(LayoutConMenu as unknown as { mostraAccessoNegatoNelLayout: boolean }).mostraAccessoNegatoNelLayout = true;
+
+export default withSessionCheck(LayoutConMenu);

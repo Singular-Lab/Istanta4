@@ -8,6 +8,7 @@ import config from '../config/index';
 import { CreateAreaDTO } from '../dto';
 import { IAreaService } from '../interfaces/IAreaService';
 import { IGdoService } from '../interfaces/IGdoService';
+import { gdoOperativaPerRichiesta } from '../accessi/contestoAccesso';
 import { log } from '../logger';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { permissionGuard } from '../middleware/permissionGuard';
@@ -81,14 +82,9 @@ export class AreaController extends BaseController {
       if (data.id === "") {
         data.id = uuidv4();
       }
-      if (!data.id_gdo) {
-        if (req.session.id_utente) {
-          const gdo = await this.gdoService.getGDOByUtenteId(req.session.id_utente);
-          if (gdo) {
-            data.id_gdo = gdo.id as string;
-          }
-        }
-      }
+      // Solo Superadmin e Agenzia (o le chiamate di servizio) scelgono la GDO; gli altri usano la propria.
+      const gdoDellArea = await gdoOperativaPerRichiesta(req, res, data.id_gdo);
+      if (gdoDellArea) data.id_gdo = gdoDellArea;
 
       if (req.headers['authorization']) {
         const area = await this.areaService.createArea(data);

@@ -1,139 +1,121 @@
-import fs from 'fs';
-import path from 'path';
 import { TIPO_MENU_ITEM, TIPO_UTENTI } from '../../../lib/enums';
-import type { MenuElement, MenuItem as MenuItemType, MenuStructure } from '../../../lib/types';
+import { BadRequestError } from '../../../lib/errors';
+import { paginaPer, puoAprirePagina } from '../../../lib/accessi/pagine';
+import type { CodicePermesso } from '../../../lib/accessi/catalogo';
+import type { MenuElement, MenuItem as MenuItemType } from '../../../lib/types';
+import type { ContestoAccesso } from '../accessi/contestoAccesso';
+import { RisolutoreAccessi } from '../accessi/RisolutoreAccessi';
+import { incrementaVersionePermessi, leggiVersionePermessi } from '../accessi/versionePermessi';
+import { sequelize } from '../db/SequelizeConnector';
 import type { IMenuService, MenuItemDTO } from '../interfaces/IMenuService';
+import { vociMenuSuperadmin } from '../inizializzazione/inizializzaInstallazione';
 import { log } from '../logger';
 import { MenuItem } from '../models';
 import { MenuItemRepository } from '../repositories/MenuItemRepository';
-import { sequelize } from '../db/SequelizeConnector';
-import { vociMenuSuperadmin } from '../inizializzazione/inizializzaInstallazione';
+
+/**
+ * Tiene nel menu solo le voci delle pagine consentite. Una voce senza pagina resta
+ * se ha almeno una sottovoce visibile; un'intestazione di sezione resta solo se
+ * sotto ha almeno una voce.
+ */
+export const filtraMenu = (menu: MenuElement[], puoAprire: (percorso: string) => boolean): MenuElement[] => {
+  const voci: MenuElement[] = [];
+  for (const elemento of menu) {
+    if (typeof elemento === 'string') {
+      voci.push(elemento);
+      continue;
+    }
+    const sottovoci = Array.isArray(elemento.subMenu)
+      ? (filtraMenu(elemento.subMenu, puoAprire) as MenuItemType[])
+      : [];
+    const consentita = elemento.pathname ? puoAprire(elemento.pathname) : sottovoci.length > 0;
+    if (!consentita) continue;
+    voci.push({ ...elemento, subMenu: sottovoci });
+  }
+  return voci.filter((elemento, i) => {
+    if (typeof elemento !== 'string') return true;
+    const successivo = voci[i + 1];
+    return successivo !== undefined && typeof successivo !== 'string';
+  });
+};
 
 export class MenuService implements IMenuService {
-  private repository: MenuItemRepository;
-  private cache = new Map<string, { data: MenuElement[]; expires: number }>();
-  private CACHE_TTL = 5 * 60 * 1000; // 5 minuti
+  private cache = new Map<string, { versione: number; menu: MenuElement[] }>();
 
-  constructor(repository: MenuItemRepository) {
-    this.repository = repository;
-  }
-
-  private cacheKey(tipoUtente: string, ruoloGdo?: string): string {
-    return `${tipoUtente}::${ruoloGdo || '_base_'}`;
-  }
+  constructor(
+    private readonly repository: MenuItemRepository,
+    private readonly risolutore: RisolutoreAccessi = RisolutoreAccessi.get()
+  ) { }
 
   /**
-   * Restituisce il menu nel formato MenuElement[] (compatibile col frontend attuale).
+   * Menu del tipo e del sotto-ruolo; un sotto-ruolo senza menu proprio usa quello base del tipo.
+   * La cache segue la versione dei permessi, che cambia anche quando si salva un menu.
    */
-  async getMenuPerUtente(tipoUtente: string, ruoloGdo?: string): Promise<MenuElement[]> {
-    const key = this.cacheKey(tipoUtente, ruoloGdo);
-    const cached = this.cache.get(key);
-    if (cached && cached.expires > Date.now()) {
-      return cached.data;
-    }
+  async getMenuConfigurato(tipoUtente: TIPO_UTENTI, idRuoloGdo?: string | null): Promise<MenuElement[]> {
+    const versione = await leggiVersionePermessi();
+    const chiave = `${tipoUtente}|${idRuoloGdo || ''}`;
+    const inCache = this.cache.get(chiave);
+    if (inCache && inCache.versione === versione) return inCache.menu;
 
-    // Verifica se ci sono dati in DB, altrimenti fallback a JSON
-    const count = await this.repository.count();
-    if (count === 0) {
-      return this.ensureHubManagementEntry(this.getMenuFromJson(tipoUtente, ruoloGdo), tipoUtente);
-    }
+    let menu: MenuElement[] = [];
+    if (idRuoloGdo) menu = await this.repository.findMenuRuntimeByTipoUtente(tipoUtente, idRuoloGdo);
+    if (menu.length === 0) menu = await this.repository.findMenuRuntimeByTipoUtente(tipoUtente, null);
+    menu = this.ensureHubManagementEntry(menu, tipoUtente);
 
-    const menuElements = this.ensureHubManagementEntry(
-      await this.repository.findMenuRuntimeByTipoUtente(tipoUtente, ruoloGdo),
-      tipoUtente
-    );
-
-    this.cache.set(key, { data: menuElements, expires: Date.now() + this.CACHE_TTL });
-    return menuElements;
+    if (inCache) this.cache.clear();
+    this.cache.set(chiave, { versione, menu });
+    return menu;
   }
 
-  /**
-   * Restituisce i menu items nel formato DTO (per la UI admin di gestione).
-   */
-  async getMenuItemsPerUtente(tipoUtente: string, ruoloGdo?: string): Promise<MenuItemDTO[]> {
-    const items = await this.repository.findByTipoUtente(tipoUtente, ruoloGdo);
+  async getMenuDiUtente(contesto: ContestoAccesso): Promise<MenuElement[]> {
+    const menu = await this.getMenuConfigurato(contesto.tipo, contesto.idRuoloGdo);
+    if (contesto.superadmin) return menu;
+    const permessi = await this.risolutore.permessiDi(contesto);
+    return filtraMenu(menu, percorso => puoAprirePagina(percorso, (codice: CodicePermesso) => permessi.has(codice)));
+  }
+
+  async getMenuItemsPerUtente(tipoUtente: TIPO_UTENTI, idRuoloGdo?: string | null): Promise<MenuItemDTO[]> {
+    const items = await this.repository.findByTipoUtente(tipoUtente, idRuoloGdo ?? null);
     return items.map((item: any) => this.modelToDTO(item));
   }
 
-  /**
-   * Restituisce tutte le configurazioni menu raggruppate per chiave.
-   */
-  async getAllMenuConfigurations(): Promise<Record<string, MenuItemDTO[]>> {
-    const all = await this.repository.findAll();
-    const grouped: Record<string, MenuItemDTO[]> = {};
-
-    for (const item of all) {
-      const key = this.cacheKey(item.getDataValue('tipo_utente'), item.getDataValue('ruolo_gdo'));
-      if (!grouped[key]) grouped[key] = [];
-      grouped[key].push(this.modelToDTO(item));
+  /** Sostituisce il menu del tipo (e del sotto-ruolo) in una transazione. */
+  async saveMenu(tipoUtente: TIPO_UTENTI, idRuoloGdo: string | null, items: MenuItemDTO[]): Promise<void> {
+    if (!(Object.keys(TIPO_UTENTI) as Array<keyof typeof TIPO_UTENTI>).some(k => TIPO_UTENTI[k] === tipoUtente)) {
+      throw new BadRequestError({ message: 'Tipo utente non valido', details: { tipoUtente } });
     }
 
-    return grouped;
-  }
-
-  /**
-   * Salva il menu per un tipo utente (e opzionalmente un ruolo GDO).
-   * Cancella i vecchi items e li ricrea, poi invalida la cache.
-   */
-  async saveMenu(tipoUtente: string, ruoloGdo: string | null, items: MenuItemDTO[]): Promise<void> {
-    // Cancella tutti i menu items esistenti per questa configurazione
-    await this.repository.deleteByTipoUtente(tipoUtente, ruoloGdo);
-
-    // Crea i nuovi items con sotto-menu
-    const flatItems = this.flattenDTOsForInsert(items, tipoUtente, ruoloGdo);
-
-    if (flatItems.length > 0) {
-      // Prima inserisci i parent (senza id_parent)
-      const parents = flatItems.filter(i => !i.id_parent);
-      const created = await this.repository.bulkCreateItems(parents);
-
-      // Poi inserisci i children con id_parent risolti
-      const children = flatItems.filter(i => i.id_parent);
-      if (children.length > 0) {
-        // Mappa temporanea ordine → id creato
-        const parentMap = new Map<number, string>();
-        for (const c of created) {
-          parentMap.set(c.getDataValue('ordinamento'), c.getDataValue('id_menu_item'));
+    await sequelize.transaction(async (transaction) => {
+      await this.repository.deleteByTipoUtente(tipoUtente, idRuoloGdo, transaction);
+      for (const item of items) {
+        const [padre] = await this.repository.bulkCreateItems([this.recordDa(item, tipoUtente, idRuoloGdo, null)], transaction);
+        const sottovoci = item.tipo === TIPO_MENU_ITEM.SEPARATOR ? [] : (item.subMenu ?? []);
+        if (sottovoci.length > 0) {
+          const idPadre = padre.getDataValue('id_menu_item') as string;
+          await this.repository.bulkCreateItems(
+            sottovoci.map(sub => this.recordDa({ ...sub, tipo: TIPO_MENU_ITEM.ITEM as 'item', start_page: false }, tipoUtente, idRuoloGdo, idPadre)),
+            transaction
+          );
         }
-
-        const resolvedChildren = children.map(child => ({
-          ...child,
-          id_parent: parentMap.get(child._parentOrd as number) || null,
-        }));
-
-        await this.repository.bulkCreateItems(
-          resolvedChildren.map(({ _parentOrd, ...rest }) => rest) as any[]
-        );
       }
-    }
-
-    this.invalidateCache(tipoUtente, ruoloGdo || undefined);
-    log.info(`Menu salvato per ${tipoUtente}${ruoloGdo ? ` (ruolo: ${ruoloGdo})` : ''}: ${items.length} items`);
-  }
-
-  invalidateCache(tipoUtente?: string, ruoloGdo?: string): void {
-    if (tipoUtente) {
-      const key = this.cacheKey(tipoUtente, ruoloGdo);
-      this.cache.delete(key);
-    } else {
-      this.cache.clear();
-    }
+      await incrementaVersionePermessi(transaction);
+    });
+    log.info(`Menu salvato per ${tipoUtente}${idRuoloGdo ? ` (sotto-ruolo ${idRuoloGdo})` : ''}: ${items.length} voci`);
   }
 
   /**
    * Riporta il menu del Superadmin a quello predefinito (server/core/inizializzazione/datiPredefiniti.ts).
-   * I menu degli altri tipi di utente non si toccano. Cancellazione e inserimento stanno in una sola
-   * transazione: se l'inserimento fallisce il menu resta quello di prima.
-   * Sostituisce "Importa da JSON", che svuotava i menu di tutti e poi leggeva config/menu.json,
-   * un file che non esiste.
+   * I menu degli altri tipi di utente non si toccano. Cancellazione, inserimento e incremento della
+   * versione dei permessi stanno in una sola transazione: se l'inserimento fallisce il menu resta
+   * quello di prima; se riesce, ogni worker ricarica il menu alla richiesta successiva.
    */
   async ripristinaMenuPredefiniti(): Promise<number> {
     const voci = vociMenuSuperadmin();
     await sequelize.transaction(async (transaction) => {
       await MenuItem.destroy({ where: { tipo_utente: TIPO_UTENTI.SUPERADMIN }, transaction });
       await MenuItem.bulkCreate(voci as any[], { transaction });
+      await incrementaVersionePermessi(transaction);
     });
-    this.invalidateCache(TIPO_UTENTI.SUPERADMIN);
     log.info(`Menu predefinito del Superadmin ripristinato: ${voci.length} voci`);
     return voci.length;
   }
@@ -142,24 +124,23 @@ export class MenuService implements IMenuService {
   // PRIVATE HELPERS
   // ============================================
 
-  /**
-   * Fallback: legge il menu dal file JSON (per retrocompatibilita se il DB e vuoto).
-   */
-  private getMenuFromJson(tipoUtente: string, ruoloGdo?: string): MenuElement[] {
-    try {
-      const pathPerMenu = path.join(process.cwd(), 'config', 'menu.json');
-      const menuParsed = JSON.parse(fs.readFileSync(pathPerMenu, 'utf8')) as MenuStructure;
-
-      if (tipoUtente === 'GDO' && ruoloGdo) {
-        const gdoMenus = menuParsed.TIPO_UTENTI.GDO as any;
-        return gdoMenus[ruoloGdo] || gdoMenus['GDO_ADMIN'] || [];
-      }
-
-      const menu = (menuParsed.TIPO_UTENTI as any)[tipoUtente.toUpperCase()];
-      return Array.isArray(menu) ? menu : [];
-    } catch {
-      return [];
-    }
+  private recordDa(item: MenuItemDTO, tipoUtente: TIPO_UTENTI, idRuoloGdo: string | null, idParent: string | null) {
+    const pathname = item.pathname || null;
+    return {
+      tipo_utente: tipoUtente,
+      ruolo_gdo: null,
+      id_ruolo_utente_gdo: idRuoloGdo,
+      titolo: item.titolo,
+      tipo: item.tipo,
+      icona: item.icona || null,
+      pathname,
+      // Non si sceglie a mano: è il permesso che la pagina richiede nel catalogo.
+      codice_permesso: pathname ? (paginaPer(pathname)?.permesso ?? null) : null,
+      disabilitato: item.disabilitato || false,
+      start_page: item.start_page || false,
+      ordinamento: item.ordinamento,
+      id_parent: idParent,
+    };
   }
 
   private ensureHubManagementEntry(menu: MenuElement[], tipoUtente: string): MenuElement[] {
@@ -197,57 +178,19 @@ export class MenuService implements IMenuService {
   }
 
   /**
-   * Converte DB items nel formato MenuElement[] del frontend.
-   */
-  private dbItemsToMenuElements(items: any[]): MenuElement[] {
-    const result: MenuElement[] = [];
-
-    for (const item of items) {
-      const tipo = item.getDataValue('tipo');
-
-      if (tipo === TIPO_MENU_ITEM.SEPARATOR) {
-        result.push(item.getDataValue('titolo'));
-      } else {
-        const menuItem: MenuItemType = {
-          icon: item.getDataValue('icona') || undefined,
-          pathname: item.getDataValue('pathname') || undefined,
-          title: item.getDataValue('titolo'),
-          disabled: item.getDataValue('disabilitato') || undefined,
-          start_page: item.getDataValue('start_page') || undefined,
-          subMenu: [],
-        };
-
-        // SubMenu
-        const subMenuItems = (item as any).subMenu;
-        if (subMenuItems && Array.isArray(subMenuItems) && subMenuItems.length > 0) {
-          menuItem.subMenu = subMenuItems.map((sub: any) => ({
-            icon: sub.getDataValue('icona') || undefined,
-            pathname: sub.getDataValue('pathname') || undefined,
-            title: sub.getDataValue('titolo'),
-            disabled: sub.getDataValue('disabilitato') || undefined,
-          }));
-        }
-
-        result.push(menuItem);
-      }
-    }
-
-    return result;
-  }
-
-  /**
    * Converte un model Sequelize in un DTO per la UI.
    */
   private modelToDTO(item: any): MenuItemDTO {
+    const pathname = item.getDataValue('pathname');
     const dto: MenuItemDTO = {
       id_menu_item: item.getDataValue('id_menu_item'),
       tipo_utente: item.getDataValue('tipo_utente'),
-      ruolo_gdo: item.getDataValue('ruolo_gdo'),
+      id_ruolo_utente_gdo: item.getDataValue('id_ruolo_utente_gdo'),
       titolo: item.getDataValue('titolo'),
       tipo: item.getDataValue('tipo') as 'separator' | 'item',
       icona: item.getDataValue('icona'),
-      pathname: item.getDataValue('pathname'),
-      codice_permesso: item.getDataValue('codice_permesso'),
+      pathname,
+      codice_permesso: pathname ? (paginaPer(pathname)?.permesso ?? null) : null,
       disabilitato: item.getDataValue('disabilitato'),
       start_page: item.getDataValue('start_page'),
       ordinamento: item.getDataValue('ordinamento'),
@@ -260,54 +203,5 @@ export class MenuService implements IMenuService {
     }
 
     return dto;
-  }
-
-  /**
-   * Appiattisce i DTO per l'inserimento nel DB, gestendo i subMenu.
-   */
-  private flattenDTOsForInsert(
-    items: MenuItemDTO[],
-    tipoUtente: string,
-    ruoloGdo: string | null
-  ): any[] {
-    const result: any[] = [];
-
-    for (const item of items) {
-      const record: any = {
-        tipo_utente: tipoUtente,
-        ruolo_gdo: ruoloGdo,
-        titolo: item.titolo,
-        tipo: item.tipo,
-        icona: item.icona || null,
-        pathname: item.pathname || null,
-        codice_permesso: item.codice_permesso || null,
-        disabilitato: item.disabilitato || false,
-        start_page: item.start_page || false,
-        ordinamento: item.ordinamento,
-        id_parent: null,
-      };
-      result.push(record);
-
-      if (item.subMenu && item.subMenu.length > 0) {
-        for (const sub of item.subMenu) {
-          result.push({
-            tipo_utente: tipoUtente,
-            ruolo_gdo: ruoloGdo,
-            titolo: sub.titolo,
-            tipo: TIPO_MENU_ITEM.ITEM,
-            icona: sub.icona || null,
-            pathname: sub.pathname || null,
-            codice_permesso: sub.codice_permesso || null,
-            disabilitato: sub.disabilitato || false,
-            start_page: false,
-            ordinamento: sub.ordinamento,
-            id_parent: '__pending__',
-            _parentOrd: item.ordinamento,
-          });
-        }
-      }
-    }
-
-    return result;
   }
 }

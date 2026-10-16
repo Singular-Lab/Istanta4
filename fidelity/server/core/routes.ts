@@ -196,7 +196,7 @@ export async function createControllers(): Promise<IController[]> {
     new DisplayController(puntoVenditaService, externalApiService),
     new DisplayContextController(displayContextService),
     new PermessiController(permessiService),
-    new MenuController(menuService, userService, badgeService),
+    new MenuController(menuService, badgeService),
     new AuditLogController(),
     new HubController(authProviderService, hubServiceService, hubNewsService, menuService, userService, oidcService, authProviderRepository, agenziaLib),
   ];

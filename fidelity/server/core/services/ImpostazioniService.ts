@@ -1,13 +1,11 @@
 import dayjs from 'dayjs';
 import { Request } from 'express';
 import 'express-session';
-import { readFileSync } from 'fs';
-import path from 'path';
 import { Op } from 'sequelize';
 import { v4 as uuidv4 } from 'uuid';
 import { STATO_LAVORAZIONE_KIT_RUNTIME, STATO_PROMO, TIPO_UTENTI } from '../../../lib/enums';
 import { DatabaseError, NotFoundError, wrapDatabaseError, wrapNotFoundError } from '../../../lib/errors';
-import { GDOAttributes, GdoMenuStructure, MenuElement, MenuItem, MenuStructure, OggettoTipiDiExport, RaccoglitoreKit, TimelinePromoItem } from '../../../lib/types';
+import { GDOAttributes, MenuElement, MenuItem, OggettoTipiDiExport, RaccoglitoreKit, TimelinePromoItem } from '../../../lib/types';
 import { TYPES, container } from '../di';
 import { IImpostazioniService } from '../interfaces/IImpostazioniService';
 import { IIstantaService } from '../interfaces/IIstantaService';
@@ -16,6 +14,8 @@ import type { ITipoExportService } from '../interfaces/ITipoExportService';
 import { IUserService } from '../interfaces/IUserService';
 import { IWebhookService } from '../interfaces/IWebhookService';
 import { log } from '../logger';
+import { leggiContestoAccesso } from '../accessi/contestoAccesso';
+import { RisolutoreAccessi } from '../accessi/RisolutoreAccessi';
 import { Area } from '../models/aree';
 import { Canale } from '../models/canali';
 import { DesignKit } from '../models/design_kit';
@@ -224,74 +224,20 @@ export class ImpostazioniService implements IImpostazioniService {
         raw: true
       }) as any[];
 
-      const userId = req.session.id_utente as string | undefined;
-      const tipoUtente = req.session.tipo_utente as TIPO_UTENTI | undefined;
-      let ruoloGdoKey: string | undefined;
-
-      if (userId && tipoUtente === TIPO_UTENTI.GDO) {
-        ruoloGdoKey = await this.userService.resolveGdoRuoloKey(userId);
-      }
-
-      let menuPerUtenteConSessione: MenuElement[] = [];
-      try {
-        if (tipoUtente) {
-          menuPerUtenteConSessione = await this.menuService.getMenuPerUtente(tipoUtente, ruoloGdoKey);
-        }
-      } catch {
-        menuPerUtenteConSessione = [];
-      }
-
-      // Fallback emergenziale su JSON se il menu runtime non è disponibile
-      if (!Array.isArray(menuPerUtenteConSessione) || menuPerUtenteConSessione.length === 0) {
-        const pathPerMenu = path.join(process.cwd(), 'config', 'menu.json');
-        const menuParsed = JSON.parse(readFileSync(pathPerMenu, 'utf8')) as MenuStructure;
-
-        if (tipoUtente === TIPO_UTENTI.GDO) {
-          const gdoMenus = menuParsed.TIPO_UTENTI.GDO as GdoMenuStructure;
-          menuPerUtenteConSessione = gdoMenus[ruoloGdoKey || 'GDO_ADMIN'] || gdoMenus.GDO_ADMIN || [];
-        } else {
-          const userType = tipoUtente?.toUpperCase();
-          if (userType && Object.prototype.hasOwnProperty.call(menuParsed.TIPO_UTENTI, userType)) {
-            const maybeMenu = menuParsed.TIPO_UTENTI[userType as keyof typeof menuParsed.TIPO_UTENTI];
-            menuPerUtenteConSessione = Array.isArray(maybeMenu) ? maybeMenu : [];
-          } else {
-            menuPerUtenteConSessione = [];
-          }
-        }
-      }
+      // Solo le pagine che l'utente puo' aprire: menu e controllo pagine usano gli stessi permessi.
+      const contesto = await leggiContestoAccesso(req);
+      const menuPerUtenteConSessione: MenuElement[] = contesto
+        ? await this.menuService.getMenuDiUtente(contesto).catch(() => [] as MenuElement[])
+        : [];
 
       const quickSearchItems: QuickSearchItem[] = [];
 
-      const flattenMenuPaths = (menu: MenuElement[]): string[] => {
-        const paths: string[] = [];
-
-        const walk = (items: MenuElement[]) => {
-          for (const item of items) {
-            if (typeof item === 'string') {
-              continue;
-            }
-
-            if (item.pathname && typeof item.pathname === 'string') {
-              paths.push(item.pathname);
-            }
-
-            if (Array.isArray(item.subMenu) && item.subMenu.length > 0) {
-              walk(item.subMenu);
-            }
-          }
-        };
-
-        walk(menu);
-        return paths;
-      };
-
-      const allMenuPaths = flattenMenuPaths(menuPerUtenteConSessione);
-
-      const hasPageInMenu = (targetPath: string) => {
-        return allMenuPaths.some((menuPath) =>
-          menuPath === targetPath || targetPath.startsWith(`${menuPath}/`)
-        );
-      };
+      const risolutore = RisolutoreAccessi.get();
+      const pagineConsentite = new Map<string, boolean>();
+      for (const pagina of ['/promozioni/in-corso', '/promozioni/storico']) {
+        pagineConsentite.set(pagina, contesto ? await risolutore.puoAprire(contesto, pagina) : false);
+      }
+      const hasPageInMenu = (targetPath: string) => pagineConsentite.get(targetPath) === true;
 
       allPromoWithLavorazioni.forEach(promo => {
         const kitInLavorazione = allKitRuntime.filter((kit: any) => kit.id_promo === promo.id_promo);

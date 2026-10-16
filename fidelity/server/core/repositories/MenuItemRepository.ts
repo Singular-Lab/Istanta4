@@ -1,4 +1,4 @@
-import { QueryTypes } from 'sequelize';
+import { QueryTypes, Transaction } from 'sequelize';
 import { TIPO_MENU_ITEM } from '../../../lib/enums';
 import { MenuItemAttributes } from '../../../lib/types';
 import { MenuItem } from '../models';
@@ -15,13 +15,24 @@ export class MenuItemRepository {
     }
   }
 
-  async findByTipoUtente(tipoUtente: string, ruoloGdo?: string | null): Promise<any[]> {
+  /**
+   * Menu di un tipo: con idRuoloGdo quello del sotto-ruolo, senza quello base.
+   * Le righe storiche con la sola chiave testuale ruolo_gdo, non collegate a un
+   * sotto-ruolo, non finiscono mai nel menu base.
+   */
+  private filtroRuolo(idRuoloGdo: string | null): Record<string, unknown> {
+    return idRuoloGdo
+      ? { id_ruolo_utente_gdo: idRuoloGdo }
+      : { id_ruolo_utente_gdo: null, ruolo_gdo: null };
+  }
+
+  async findByTipoUtente(tipoUtente: string, idRuoloGdo: string | null): Promise<any[]> {
     this.ensureMenuItemAssociations();
 
     return MenuItem.findAll({
       where: {
         tipo_utente: tipoUtente,
-        ruolo_gdo: ruoloGdo ?? null,
+        ...this.filtroRuolo(idRuoloGdo),
         id_parent: null,
       },
       include: [{
@@ -40,7 +51,7 @@ export class MenuItemRepository {
    * Restituisce direttamente il menu nel formato runtime frontend
    * (string separatori + object items), costruito da query SQL.
    */
-  async findMenuRuntimeByTipoUtente(tipoUtente: string, ruoloGdo?: string | null): Promise<any[]> {
+  async findMenuRuntimeByTipoUtente(tipoUtente: string, idRuoloGdo: string | null): Promise<any[]> {
     const rows = await MenuItem.sequelize!.query<{ menu_entry: unknown }>(
       `
       SELECT
@@ -77,7 +88,8 @@ export class MenuItemRepository {
         END AS menu_entry
       FROM menu_items parent
       WHERE parent.tipo_utente = :tipoUtente
-        AND parent.ruolo_gdo IS NOT DISTINCT FROM :ruoloGdo
+        AND parent.id_ruolo_utente_gdo IS NOT DISTINCT FROM :idRuoloGdo
+        AND (CAST(:idRuoloGdo AS uuid) IS NOT NULL OR parent.ruolo_gdo IS NULL)
         AND parent.id_parent IS NULL
         AND NULLIF(trim(parent.titolo), '') IS NOT NULL
       ORDER BY parent.ordinamento ASC
@@ -85,7 +97,7 @@ export class MenuItemRepository {
       {
         replacements: {
           tipoUtente,
-          ruoloGdo: ruoloGdo ?? null,
+          idRuoloGdo: idRuoloGdo ?? null,
           separatorType: TIPO_MENU_ITEM.SEPARATOR,
         },
         type: QueryTypes.SELECT,
@@ -107,49 +119,24 @@ export class MenuItemRepository {
       });
   }
 
-  async findAll(): Promise<any[]> {
-    this.ensureMenuItemAssociations();
-
-    return MenuItem.findAll({
-      where: { id_parent: null },
-      include: [{
-        model: MenuItem,
-        as: 'subMenu',
-        required: false,
-      }],
-      order: [
-        ['tipo_utente', 'ASC'],
-        ['ruolo_gdo', 'ASC'],
-        ['ordinamento', 'ASC'],
-      ],
-    });
-  }
-
-  async bulkCreateItems(items: Omit<MenuItemAttributes, 'id_menu_item'>[]): Promise<any[]> {
+  async bulkCreateItems(items: Omit<MenuItemAttributes, 'id_menu_item'>[], transaction?: Transaction): Promise<any[]> {
     return MenuItem.bulkCreate(
       items.map(item => ({
         ...item,
         createdat: new Date(),
         updatedat: new Date(),
       })) as any[],
-      { ignoreDuplicates: false }
+      { ignoreDuplicates: false, transaction }
     );
   }
 
-  async deleteByTipoUtente(tipoUtente: string, ruoloGdo?: string | null): Promise<number> {
+  async deleteByTipoUtente(tipoUtente: string, idRuoloGdo: string | null, transaction?: Transaction): Promise<number> {
     return MenuItem.destroy({
       where: {
         tipo_utente: tipoUtente,
-        ruolo_gdo: ruoloGdo ?? null,
+        ...this.filtroRuolo(idRuoloGdo),
       },
+      transaction,
     });
-  }
-
-  async deleteAll(): Promise<number> {
-    return MenuItem.destroy({ where: {} });
-  }
-
-  async count(): Promise<number> {
-    return MenuItem.count();
   }
 }

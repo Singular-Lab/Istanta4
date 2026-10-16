@@ -1,318 +1,190 @@
 import { TIPO_UTENTI } from '../../../lib/enums';
+import { BadRequestError } from '../../../lib/errors';
+import { CodicePermesso, ePermessoDiSistema, esistePermesso, TUTTI_I_PERMESSI } from '../../../lib/accessi/catalogo';
+import { sequelize } from '../db/SequelizeConnector';
+import type { ContestoAccesso } from '../accessi/contestoAccesso';
+import { combinaLivelli, LivelliRuolo, RisolutoreAccessi } from '../accessi/RisolutoreAccessi';
+import { incrementaVersionePermessi } from '../accessi/versionePermessi';
+import type {
+  AmbitoPermessi,
+  ConfigurazionePermessi,
+  ConfrontoRuoli,
+  IPermessiService,
+  ModificaPermesso,
+  RuoliGestibili,
+  StatoPermesso,
+} from '../interfaces/IPermessiService';
 import { log } from '../logger';
-import { Permesso, PermessoRuolo, PermessoRuoloGdo, UtentiGDO } from '../models';
+import { GDO } from '../models';
 import { RuoloUtenteGDO } from '../models/ruolo_gdo';
-import type { IPermessiService, PermessoConStatoDTO, PermessoDTO } from '../interfaces/IPermessiService';
 import { PermessiRepository } from '../repositories/PermessiRepository';
-import { PERMESSI_SEED, PERMESSI_RUOLO_DEFAULTS } from '../scripts/seedPermessi';
+
+/** Tipi i cui permessi si gestiscono: il Superadmin li ha sempre tutti. */
+export const TIPI_GESTIBILI: TIPO_UTENTI[] = (Object.keys(TIPO_UTENTI) as Array<keyof typeof TIPO_UTENTI>)
+  .map(k => TIPO_UTENTI[k])
+  .filter(t => t !== TIPO_UTENTI.SUPERADMIN);
+
+const VUOTO = new Map<string, boolean>();
+
+/**
+ * Livelli da cui un ambito eredita e livello che scrive.
+ * Ordine di risoluzione: tipo → sotto-ruolo → override GDO → override GDO e sotto-ruolo.
+ */
+export const livelliDiAmbito = (ambito: AmbitoPermessi, livelli: LivelliRuolo) => {
+  const conRuolo = !!ambito.idRuoloGdo;
+  const conGdo = !!ambito.idGdo;
+  if (!conGdo && !conRuolo) return { proprio: livelli.tipo, ereditati: [] as Map<string, boolean>[] };
+  if (!conGdo) return { proprio: livelli.sottoRuolo, ereditati: [livelli.tipo] };
+  if (!conRuolo) return { proprio: livelli.gdo, ereditati: [livelli.tipo] };
+  return { proprio: livelli.gdoSottoRuolo, ereditati: [livelli.tipo, livelli.sottoRuolo, livelli.gdo] };
+};
+
+/** Stato di ogni permesso del catalogo in un ambito. Funzione pura: la usano servizio e test. */
+export const statoPermessi = (ambito: AmbitoPermessi, livelli: LivelliRuolo): StatoPermesso[] => {
+  const { proprio, ereditati } = livelliDiAmbito(ambito, livelli);
+  const conGdo = !!ambito.idGdo;
+  const conRuolo = !!ambito.idRuoloGdo;
+  // Effetto reale per un utente di questo ambito: si considerano solo i livelli fino a qui.
+  const efficaci = new Set(combinaLivelli({
+    tipo: livelli.tipo,
+    sottoRuolo: conRuolo ? livelli.sottoRuolo : VUOTO,
+    gdo: conGdo ? livelli.gdo : VUOTO,
+    gdoSottoRuolo: conGdo && conRuolo ? livelli.gdoSottoRuolo : VUOTO,
+  }));
+
+  return TUTTI_I_PERMESSI.map(voce => {
+    let ereditato = false;
+    for (const livello of ereditati) {
+      if (livello.has(voce.codice)) ereditato = livello.get(voce.codice)!;
+    }
+    const impostato = !voce.sistema && proprio.has(voce.codice);
+    const abilitato = voce.sistema ? false : (impostato ? proprio.get(voce.codice)! : ereditato);
+    return {
+      codice: voce.codice,
+      abilitato,
+      impostato,
+      ereditato,
+      efficace: efficaci.has(voce.codice),
+    };
+  });
+};
 
 export class PermessiService implements IPermessiService {
-  private repository: PermessiRepository;
-  private seedChecked = false;
+  constructor(
+    private readonly repository: PermessiRepository,
+    private readonly risolutore: RisolutoreAccessi = RisolutoreAccessi.get()
+  ) { }
 
-  constructor(repository: PermessiRepository) {
-    this.repository = repository;
+  async getRuoliGestibili(): Promise<RuoliGestibili> {
+    const [ruoli, gdo] = await Promise.all([
+      RuoloUtenteGDO.findAll({ order: [['ruolo_ruolo_utente_gdo', 'ASC']] }),
+      GDO.findAll({ attributes: ['id_gdo', 'nome_gdo'], order: [['nome_gdo', 'ASC']] }),
+    ]);
+    return {
+      tipi: TIPI_GESTIBILI,
+      ruoliGdo: ruoli.map(r => ({ id: r.id_ruolo_utente_gdo, nome: r.ruolo_ruolo_utente_gdo })),
+      gdo: gdo.map(g => ({ id: g.id_gdo, nome: g.nome_gdo })),
+    };
   }
 
-  /**
-   * Verifica se i permessi esistono nel catalogo, altrimenti esegue il seed automatico.
-   * Viene eseguito una sola volta per istanza del service.
-   */
-  private async ensureSeeded(): Promise<void> {
-    if (this.seedChecked) return;
-    try {
-      // Migra automaticamente i vincoli legacy se presenti
-      const migrated = await this.repository.migrateLegacyConstraint();
-      if (migrated) {
-        log.info('Vincolo legacy permessi_ruolo migrato con successo (2 → 3 colonne).');
-      }
-
-      const migratedGdo = await this.repository.migrateLegacyGdoConstraint();
-      if (migratedGdo) {
-        log.info('Vincolo legacy permessi_ruolo_gdo migrato con successo (3 → 4 colonne con COALESCE).');
-      }
-
-      const count = await Permesso.count();
-      if (count === 0) {
-        log.info('Nessun permesso trovato nel catalogo. Eseguo seed automatico...');
-        await this.seedPermessiIniziali();
-      }
-    } catch (error) {
-      log.warn('Impossibile verificare/eseguire seed permessi:', error);
+  private async validaAmbito(ambito: AmbitoPermessi): Promise<void> {
+    if (TIPI_GESTIBILI.indexOf(ambito.tipo) < 0) {
+      throw new BadRequestError({ message: 'Tipo utente non gestibile', details: { tipo: ambito.tipo } });
     }
-    this.seedChecked = true;
+    if (ambito.idRuoloGdo && !(await RuoloUtenteGDO.findByPk(ambito.idRuoloGdo))) {
+      throw new BadRequestError({ message: 'Sotto-ruolo GDO inesistente', details: { idRuoloGdo: ambito.idRuoloGdo } });
+    }
+    if (ambito.idGdo && !(await GDO.findByPk(ambito.idGdo))) {
+      throw new BadRequestError({ message: 'GDO inesistente', details: { idGdo: ambito.idGdo } });
+    }
   }
 
-  async getAllPermessi(): Promise<PermessoDTO[]> {
-    await this.ensureSeeded();
-    const permessi = await this.repository.findAllPermessi();
-    return permessi.map(p => ({
-      id_permesso: p.getDataValue('id_permesso'),
-      codice: p.getDataValue('codice'),
-      nome: p.getDataValue('nome'),
-      descrizione: p.getDataValue('descrizione'),
-      categoria: p.getDataValue('categoria'),
-      risorsa: p.getDataValue('risorsa'),
-    }));
+  async getConfigurazione(ambito: AmbitoPermessi): Promise<ConfigurazionePermessi> {
+    await this.validaAmbito(ambito);
+    const livelli = await this.risolutore.leggiLivelli(ambito);
+    return {
+      ambito,
+      eredita: !!(ambito.idGdo || ambito.idRuoloGdo),
+      permessi: statoPermessi(ambito, livelli),
+    };
   }
 
-  async getPermessiPerRuolo(tipoUtente: TIPO_UTENTI, idRuoloGdo?: string): Promise<PermessoConStatoDTO[]> {
-    await this.ensureSeeded();
-    const tuttIPermessi = await this.repository.findAllPermessi();
-    const permessiRuolo = await this.repository.findPermessiPerRuolo(tipoUtente, idRuoloGdo);
+  async salvaConfigurazione(ambito: AmbitoPermessi, modifiche: ModificaPermesso[]): Promise<ConfigurazionePermessi> {
+    await this.validaAmbito(ambito);
 
-    const ruoloMap = new Map<string, boolean>();
-    for (const pr of permessiRuolo) {
-      ruoloMap.set(pr.id_permesso, pr.abilitato);
+    const sconosciuti = modifiche.filter(m => !esistePermesso(m.codice)).map(m => m.codice);
+    if (sconosciuti.length > 0) {
+      throw new BadRequestError({ message: 'Permessi sconosciuti', details: { codici: sconosciuti } });
+    }
+    const diSistema = modifiche.filter(m => ePermessoDiSistema(m.codice)).map(m => m.codice);
+    if (diSistema.length > 0) {
+      throw new BadRequestError({
+        message: 'I permessi di sistema appartengono solo al Superadmin e non si possono assegnare',
+        details: { codici: diSistema },
+      });
     }
 
-    return tuttIPermessi.map(p => {
-      const id = p.getDataValue('id_permesso');
-      return {
-        id_permesso: id,
-        codice: p.getDataValue('codice'),
-        nome: p.getDataValue('nome'),
-        descrizione: p.getDataValue('descrizione'),
-        categoria: p.getDataValue('categoria'),
-        risorsa: p.getDataValue('risorsa'),
-        abilitato: ruoloMap.get(id) ?? false,
-      };
+    const idPerCodice = new Map<string, string>();
+    for (const p of await this.repository.findAllPermessi()) {
+      idPerCodice.set(p.getDataValue('codice'), p.getDataValue('id_permesso'));
+    }
+    const eredita = !!(ambito.idGdo || ambito.idRuoloGdo);
+    const valori = new Map<string, boolean | null>();
+    for (const m of modifiche) {
+      const id = idPerCodice.get(m.codice);
+      if (!id) throw new BadRequestError({ message: 'Permesso non presente nel catalogo', details: { codice: m.codice } });
+      // Il livello del tipo non eredita da nulla: "togliere il valore" significa disabilitare.
+      valori.set(id, m.abilitato === null ? (eredita ? null : false) : !!m.abilitato);
+    }
+
+    await sequelize.transaction(async (transaction) => {
+      await this.repository.scriviLivello(ambito, valori, transaction);
+      await incrementaVersionePermessi(transaction);
     });
+    log.info(`Permessi aggiornati per ${descriviAmbito(ambito)}: ${modifiche.length} modifiche`);
+    return this.getConfigurazione(ambito);
   }
 
-  /**
-   * Risolve i permessi effettivi con logica a 4 livelli (priorita crescente):
-   * 1. permessi_ruolo base (tipo_utente, id_ruolo_utente_gdo IS NULL)
-   * 2. permessi_ruolo per sotto-ruolo GDO (tipo_utente, id_ruolo_utente_gdo = X) - solo se idRuoloGdo
-   * 3. permessi_ruolo_gdo base (id_gdo, tipo_utente, id_ruolo_utente_gdo IS NULL) - solo se idGdo
-   * 4. permessi_ruolo_gdo per sotto-ruolo (id_gdo, tipo_utente, id_ruolo_utente_gdo = X) - solo se idGdo + idRuoloGdo
-   */
-  async getPermessiEffettivi(tipoUtente: TIPO_UTENTI, idGdo?: string, idRuoloGdo?: string): Promise<string[]> {
-    await this.ensureSeeded();
-    // Superadmin bypass: tutti i permessi
-    if (tipoUtente === TIPO_UTENTI.SUPERADMIN) {
-      const tutti = await this.repository.findAllPermessi();
-      return tutti.map(p => p.getDataValue('codice'));
-    }
-
-    // Livello 1: permessi base del tipo_utente (id_ruolo_utente_gdo IS NULL)
-    const permessiBase = await this.repository.findPermessiPerRuolo(tipoUtente);
-
-    const mappa = new Map<string, { codice: string; abilitato: boolean }>();
-    for (const pr of permessiBase) {
-      if (pr.codice) {
-        mappa.set(pr.id_permesso, { codice: pr.codice, abilitato: pr.abilitato });
-      }
-    }
-
-    // Livello 2: override sotto-ruolo GDO (sovrascrive livello 1)
-    if (idRuoloGdo) {
-      const permessiRuoloGdo = await this.repository.findPermessiPerRuolo(tipoUtente, idRuoloGdo);
-      for (const pr of permessiRuoloGdo) {
-        if (pr.codice) {
-          mappa.set(pr.id_permesso, { codice: pr.codice, abilitato: pr.abilitato });
-        }
-      }
-    }
-
-    // Livello 3: override GDO base (sovrascrive livelli 1-2)
-    if (idGdo) {
-      const overridesBase = await this.repository.findPermessiOverrideGdo(idGdo, tipoUtente);
-      for (const ovr of overridesBase) {
-        if (ovr.codice) {
-          mappa.set(ovr.id_permesso, { codice: ovr.codice, abilitato: ovr.abilitato });
-        }
-      }
-    }
-
-    // Livello 4: override GDO + sotto-ruolo (sovrascrive tutto)
-    if (idGdo && idRuoloGdo) {
-      const overridesRuolo = await this.repository.findPermessiOverrideGdo(idGdo, tipoUtente, idRuoloGdo);
-      for (const ovr of overridesRuolo) {
-        if (ovr.codice) {
-          mappa.set(ovr.id_permesso, { codice: ovr.codice, abilitato: ovr.abilitato });
-        }
-      }
-    }
-
-    return Array.from(mappa.values())
-      .filter(v => v.abilitato)
-      .map(v => v.codice);
-  }
-
-  async getPermessiEffettiviConDettagli(tipoUtente: TIPO_UTENTI, idGdo?: string, idRuoloGdo?: string): Promise<PermessoConStatoDTO[]> {
-    await this.ensureSeeded();
-    const tuttIPermessi = await this.repository.findAllPermessi();
-
-    // Livello 1: base tipo_utente
-    const permessiBase = await this.repository.findPermessiPerRuolo(tipoUtente);
-    const baseMap = new Map<string, boolean>();
-    for (const pr of permessiBase) {
-      baseMap.set(pr.id_permesso, pr.abilitato);
-    }
-
-    // Livello 2: sotto-ruolo GDO
-    const ruoloGdoMap = new Map<string, boolean>();
-    if (idRuoloGdo) {
-      const permessiRuoloGdo = await this.repository.findPermessiPerRuolo(tipoUtente, idRuoloGdo);
-      for (const pr of permessiRuoloGdo) {
-        ruoloGdoMap.set(pr.id_permesso, pr.abilitato);
-      }
-    }
-
-    // Livello 3: override GDO base
-    const overrideBaseMap = new Map<string, boolean>();
-    if (idGdo) {
-      const overridesBase = await this.repository.findPermessiOverrideGdo(idGdo, tipoUtente);
-      for (const ovr of overridesBase) {
-        overrideBaseMap.set(ovr.id_permesso, ovr.abilitato);
-      }
-    }
-
-    // Livello 4: override GDO + sotto-ruolo
-    const overrideRuoloMap = new Map<string, boolean>();
-    if (idGdo && idRuoloGdo) {
-      const overridesRuolo = await this.repository.findPermessiOverrideGdo(idGdo, tipoUtente, idRuoloGdo);
-      for (const ovr of overridesRuolo) {
-        overrideRuoloMap.set(ovr.id_permesso, ovr.abilitato);
-      }
-    }
-
-    return tuttIPermessi.map(p => {
-      const id = p.getDataValue('id_permesso');
-
-      // Risolvi dal livello piu specifico al meno specifico
-      let abilitato = baseMap.get(id) ?? false;
-      let is_override = false;
-
-      if (ruoloGdoMap.has(id)) {
-        abilitato = ruoloGdoMap.get(id)!;
-        is_override = true;
-      }
-      if (overrideBaseMap.has(id)) {
-        abilitato = overrideBaseMap.get(id)!;
-        is_override = true;
-      }
-      if (overrideRuoloMap.has(id)) {
-        abilitato = overrideRuoloMap.get(id)!;
-        is_override = true;
-      }
-
-      return {
-        id_permesso: id,
-        codice: p.getDataValue('codice'),
-        nome: p.getDataValue('nome'),
-        descrizione: p.getDataValue('descrizione'),
-        categoria: p.getDataValue('categoria'),
-        risorsa: p.getDataValue('risorsa'),
-        abilitato,
-        is_override,
-      };
+  async ripristinaOverride(ambito: AmbitoPermessi & { idGdo: string }): Promise<number> {
+    await this.validaAmbito(ambito);
+    let rimossi = 0;
+    await sequelize.transaction(async (transaction) => {
+      rimossi = await this.repository.svuotaOverride(ambito, transaction);
+      await incrementaVersionePermessi(transaction);
     });
+    log.info(`Override rimossi per ${descriviAmbito(ambito)}: ${rimossi}`);
+    return rimossi;
   }
 
-  async getPermessiUtente(userId: string): Promise<string[]> {
-    const { Utente } = await import('../models');
-    const utente = await Utente.findByPk(userId);
-    if (!utente) return [];
-
-    const tipoUtente = utente.tipo_utenti;
-
-    // Superadmin bypass
-    if (tipoUtente === TIPO_UTENTI.SUPERADMIN) {
-      const tutti = await this.repository.findAllPermessi();
-      return tutti.map(p => p.getDataValue('codice'));
-    }
-
-    // Cerca id_gdo e id_ruolo_utente_gdo
-    let idGdo: string | undefined;
-    let idRuoloGdo: string | undefined;
-    const utenteGdo = await UtentiGDO.findOne({ where: { id_utente_utentegdo: userId } });
-    if (utenteGdo) {
-      idGdo = utenteGdo.id_gdo_utentegdo;
-      idRuoloGdo = utenteGdo.id_ruolo_utente_gdo ?? undefined;
-    }
-
-    return this.getPermessiEffettivi(tipoUtente, idGdo, idRuoloGdo);
-  }
-
-  async setPermessiRuolo(tipoUtente: TIPO_UTENTI, permessi: { id_permesso: string; abilitato: boolean }[], idRuoloGdo?: string): Promise<void> {
-    await this.ensureSeeded();
-    await this.repository.bulkUpsertPermessiRuolo(tipoUtente, permessi, idRuoloGdo);
-    log.info(`Permessi ruolo aggiornati per ${tipoUtente}${idRuoloGdo ? ` (ruolo GDO: ${idRuoloGdo})` : ''}: ${permessi.length} permessi`);
-  }
-
-  async setPermessiRuoloGdo(idGdo: string, tipoUtente: TIPO_UTENTI, permessi: { id_permesso: string; abilitato: boolean }[], idRuoloGdo?: string): Promise<void> {
-    await this.ensureSeeded();
-    await this.repository.bulkUpsertPermessiRuoloGdo(idGdo, tipoUtente, permessi, idRuoloGdo);
-    log.info(`Override GDO aggiornati per ${tipoUtente} in GDO ${idGdo}${idRuoloGdo ? ` (ruolo GDO: ${idRuoloGdo})` : ''}: ${permessi.length} permessi`);
-  }
-
-  async resetOverrideGdo(idGdo: string, tipoUtente?: TIPO_UTENTI, idRuoloGdo?: string): Promise<void> {
-    await this.repository.deleteOverrideGdo(idGdo, tipoUtente, idRuoloGdo);
-    log.info(`Override GDO rimossi per GDO ${idGdo}${tipoUtente ? ` ruolo ${tipoUtente}` : ''}${idRuoloGdo ? ` (ruolo GDO: ${idRuoloGdo})` : ''}`);
-  }
-
-  /**
-   * Svuota tutte e 3 le tabelle dei permessi e riesegue il seed completo.
-   * Utile quando il catalogo dei permessi cambia (nuove pagine/azioni).
-   */
-  async reseedPermessi(): Promise<void> {
-    log.info('Reseed permessi: pulizia tabelle...');
-    await PermessoRuoloGdo.destroy({ where: {} });
-    await PermessoRuolo.destroy({ where: {} });
-    await Permesso.destroy({ where: {} });
-    this.seedChecked = false;
-    await this.seedPermessiIniziali();
-    log.info('Reseed permessi completato.');
-  }
-
-  async seedPermessiIniziali(): Promise<void> {
-    log.info('Seed permessi iniziali...');
-
-    // Migra vincolo legacy se presente (idempotente)
-    await this.repository.migrateLegacyConstraint();
-
-    // 1. Inserisci i permessi nel catalogo
-    await this.repository.bulkCreatePermessi(PERMESSI_SEED);
-    log.info(`Seed: ${PERMESSI_SEED.length} permessi inseriti nel catalogo`);
-
-    // 2. Per ogni tipo_utente, inserisci i permessi di default (id_ruolo_utente_gdo = NULL)
-    const tuttIPermessi = await this.repository.findAllPermessi();
-    const codiceToId = new Map<string, string>();
-    for (const p of tuttIPermessi) {
-      codiceToId.set(p.getDataValue('codice'), p.getDataValue('id_permesso'));
-    }
-
-    for (const [tipoUtente, codiciAbilitati] of Object.entries(PERMESSI_RUOLO_DEFAULTS)) {
-      const permessi = Array.from(codiceToId.entries()).map(([codice, id_permesso]) => ({
-        id_permesso,
-        abilitato: codiciAbilitati.includes(codice),
-      }));
-
-      await this.repository.bulkUpsertPermessiRuolo(tipoUtente as TIPO_UTENTI, permessi);
-      log.info(`Seed: permessi default per ${tipoUtente} configurati (${codiciAbilitati.length} abilitati)`);
-    }
-
-    // 3. Per ogni sotto-ruolo GDO, crea permessi basati sui default GDO
-    try {
-      const ruoliGdo = await RuoloUtenteGDO.findAll();
-      const gdoDefaults = PERMESSI_RUOLO_DEFAULTS[TIPO_UTENTI.GDO] || [];
-
-      for (const ruolo of ruoliGdo) {
-        const idRuolo = ruolo.id_ruolo_utente_gdo;
-        const permessi = Array.from(codiceToId.entries()).map(([codice, id_permesso]) => ({
-          id_permesso,
-          abilitato: gdoDefaults.includes(codice),
-        }));
-
-        await this.repository.bulkUpsertPermessiRuolo(TIPO_UTENTI.GDO, permessi, idRuolo);
-        log.info(`Seed: permessi default per sotto-ruolo GDO "${ruolo.ruolo_ruolo_utente_gdo}" configurati`);
+  async getConfronto(idGdo?: string | null): Promise<ConfrontoRuoli> {
+    const ruoli = await RuoloUtenteGDO.findAll({ order: [['ruolo_ruolo_utente_gdo', 'ASC']] });
+    const colonne: ConfrontoRuoli['colonne'] = [];
+    for (const tipo of TIPI_GESTIBILI) {
+      colonne.push({
+        chiave: tipo,
+        tipo,
+        idRuoloGdo: null,
+        etichetta: tipo,
+        permessi: Array.from(await this.risolutore.permessiDelRuolo({ tipo, idGdo })),
+      });
+      if (tipo !== TIPO_UTENTI.GDO) continue;
+      for (const r of ruoli) {
+        colonne.push({
+          chiave: `${tipo}:${r.id_ruolo_utente_gdo}`,
+          tipo,
+          idRuoloGdo: r.id_ruolo_utente_gdo,
+          etichetta: `${tipo} · ${r.ruolo_ruolo_utente_gdo}`,
+          permessi: Array.from(await this.risolutore.permessiDelRuolo({ tipo, idRuoloGdo: r.id_ruolo_utente_gdo, idGdo })),
+        });
       }
-    } catch (error) {
-      log.warn('Impossibile eseguire seed per sotto-ruoli GDO:', error);
     }
+    return { colonne };
+  }
 
-    log.info('Seed permessi completato.');
+  async getPermessiEffettivi(contesto: ContestoAccesso): Promise<CodicePermesso[]> {
+    return Array.from(await this.risolutore.permessiDi(contesto));
   }
 }
+
+const descriviAmbito = (ambito: AmbitoPermessi) =>
+  `${ambito.tipo}${ambito.idRuoloGdo ? ` (sotto-ruolo ${ambito.idRuoloGdo})` : ''}${ambito.idGdo ? ` in GDO ${ambito.idGdo}` : ''}`;

@@ -1,17 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { PERMESSI_SEED } from "../../server/core/scripts/seedPermessi";
+import { PERMESSI, TUTTI_I_PERMESSI } from "../../lib/accessi/catalogo";
 import { PERMISSIONS } from "./permissions";
 
-const valori = (nodo: object): string[] =>
-  Object.values(nodo).flatMap((v) => (typeof v === "string" ? [v] : valori(v)));
-
 describe("PERMISSIONS", () => {
-  it("usa solo codici presenti nel catalogo del server", () => {
-    const codiciServer = new Set(PERMESSI_SEED.map((p) => p.codice));
-    expect(valori(PERMISSIONS).filter((c) => !codiciServer.has(c))).toEqual([]);
+  it("sono le costanti del catalogo condiviso con il server", () => {
+    expect(PERMISSIONS).toBe(PERMESSI);
   });
 
-  it("usa per le lavorazioni in corso il permesso della rotta /promozioni/in-corso", () => {
-    expect(PERMISSIONS.PAGINA.PROMOZIONI_IN_CORSO).toBe("pagina.lavorazioni_in_corso");
+  it("non contengono più permessi di pagina: le pagine dipendono dall'accesso all'area", () => {
+    expect(TUTTI_I_PERMESSI.filter((p) => p.codice.indexOf("pagina.") === 0)).toEqual([]);
+    expect(PERMISSIONS.PROMO.VISUALIZZA).toBe("promo.visualizza");
   });
 });
