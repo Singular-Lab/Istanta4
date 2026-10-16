@@ -14,6 +14,8 @@ namespace Istanta.Suite.Tests;
 /// prende il primo kit valido per tipo e formato, e il kit PoP senza formato vale anche per l'A7:
 /// il kit A7 sta prima. Prima differenza voluta: le misure dei tre loghi con misura propria, ridotte
 /// della percentuale di FiorFiore (21,981 x 6,647 mm, data dall'operatore) con le stesse proporzioni.
+/// Seconda: nel doppio sconto le distanze degli allineamenti, ridotte dello stesso fattore, e la
+/// descrizione, che nell'A7 sta di lato e segue il prezzo soci alla distanza dell'info pack.
 /// </summary>
 public class CssKitA7PopCoopTests
 {
@@ -27,6 +29,30 @@ public class CssKitA7PopCoopTests
         ("Logo_BancodelGusto", "65", "32.637", "15.71", "7.888"),
         ("Logo_OrigineItalia", "54.84", "14.4", "13.254", "3.48")
     };
+
+    private const double Riduzione = 21.981 / 90.949;
+
+    //Distanza in x dei gruppi del doppio sconto: A3 e A7 (A3 per il fattore dei loghi, al millesimo).
+    private static readonly (string gruppo, double a3, double a7)[] DistanzeDoppioSconto =
+    {
+        ("prezzo_info_pack_FIX", -7.25, -1.752),
+        ("prezzo_info_pack_SOCI_DOPPIAFIX", -7.25, -1.752),
+        ("DistanzaInfoePromo", -14.33, -3.463),
+        ("Loghi", -12.7, -3.069)
+    };
+
+    private static bool DoppioSconto(JObject operazione) => operazione["nomiBox"]!.Values<string>().SequenceEqual(new[] { "BOX_doppio_SCONTO" });
+
+    //Il gruppo senza la distanza in x dell'ancora, per confrontare il resto.
+    private static JObject SenzaDistanzaX(JObject gruppo)
+    {
+        var copia = (JObject)gruppo.DeepClone();
+        foreach (var ancora in copia["followAnchor"]!.Cast<JObject>().Where(a => a["xAnchor"]!.Type == JTokenType.Object))
+        {
+            ((JObject)ancora["xAnchor"]!).Remove("distance");
+        }
+        return copia;
+    }
 
     private static readonly string[] SoloA3VEsclusivaSoci = { "prezzo_promo_kgl_su_info_pack_SOCI_DOPPIA", "prezzo_promo_kgl_su_prezzo_promo" };
 
@@ -99,11 +125,19 @@ public class CssKitA7PopCoopTests
             var nomiA3 = a3[i]["allineamenti"]!.Select(g => (string)g["nomeGruppo"]!).ToList();
             var nomiA7 = a7[i]["allineamenti"]!.Select(g => (string)g["nomeGruppo"]!).ToList();
             bool esclusivaSoci = a3[i]["nomiBox"]!.Values<string>().SequenceEqual(new[] { "BOX_ESCLUSIVA_SOCI" });
-            Assert.Equal(nomiA3.Where(n => !esclusivaSoci || !SoloA3VEsclusivaSoci.Contains(n)), nomiA7);
-
-            foreach (var nome in nomiA7.Where(n => n != "Loghi" && n != "Campi_PrincipaliEsclusivaSoci"))
+            var attesi = nomiA3.Where(n => !esclusivaSoci || !SoloA3VEsclusivaSoci.Contains(n)).ToList();
+            if (DoppioSconto(a3[i]))
             {
-                Assert.True(JToken.DeepEquals(Gruppo(a3[i], nome), Gruppo(a7[i], nome)), nome);
+                attesi.Add("descrizione_accanto_al_prezzo_soci");
+            }
+            Assert.Equal(attesi, nomiA7);
+
+            foreach (var nome in nomiA7.Where(n => n != "Loghi" && n != "Campi_PrincipaliEsclusivaSoci" && n != "descrizione_accanto_al_prezzo_soci"))
+            {
+                bool distanzaRidotta = DoppioSconto(a3[i]) && DistanzeDoppioSconto.Any(d => d.gruppo == nome);
+                var a3g = distanzaRidotta ? SenzaDistanzaX(Gruppo(a3[i], nome)) : Gruppo(a3[i], nome);
+                var a7g = distanzaRidotta ? SenzaDistanzaX(Gruppo(a7[i], nome)) : Gruppo(a7[i], nome);
+                Assert.True(JToken.DeepEquals(a3g, a7g), nome);
             }
         }
         Assert.DoesNotContain("A3_VERTICALI", KitA7().ToString());
@@ -128,8 +162,53 @@ public class CssKitA7PopCoopTests
             var a3 = Gruppo(Operazioni(KitA3()).Single(o => JToken.DeepEquals(o["nomiBox"], operazione["nomiBox"])), "Loghi");
             Assert.True(JToken.DeepEquals(a3["slot"]!["eccezioni"]![1], eccezioni[1]), "eccezione al centro");
             Assert.True(JToken.DeepEquals(a3["ordinamentoLivelli"], Gruppo(operazione, "Loghi")["ordinamentoLivelli"]));
-            Assert.True(JToken.DeepEquals(a3["followAnchor"], Gruppo(operazione, "Loghi")["followAnchor"]));
+            Assert.True(JToken.DeepEquals(SenzaDistanzaX(a3)["followAnchor"], SenzaDistanzaX(Gruppo(operazione, "Loghi"))["followAnchor"]));
         }
+    }
+
+    [Fact]
+    public void Nel_doppio_sconto_dell_A7_le_distanze_sono_quelle_dell_A3_ridotte_come_i_loghi()
+    {
+        var a7 = Operazioni(KitA7()).Single(DoppioSconto);
+        var a3 = Operazioni(KitA3()).Single(DoppioSconto);
+
+        foreach (var (gruppo, distanzaA3, distanzaA7) in DistanzeDoppioSconto)
+        {
+            double inA3 = (double)Gruppo(a3, gruppo)["followAnchor"]![0]!["xAnchor"]!["distance"]!;
+            double inA7 = (double)Gruppo(a7, gruppo)["followAnchor"]![0]!["xAnchor"]!["distance"]!;
+            Assert.Equal(distanzaA3, inA3);
+            Assert.Equal(distanzaA7, inA7);
+            Assert.Equal(distanzaA3 * Riduzione, inA7, 3);
+        }
+        //Il generico del kit A7 non cambia in questo giro: l'info pack resta a 5,2 mm.
+        var generica = Operazioni(KitA7()).Single(o => !o["nomiBox"]!.Any());
+        Assert.Equal(-5.2, (double)Gruppo(generica, "prezzo_info_pack_FIX")["followAnchor"]![0]!["xAnchor"]!["distance"]!);
+    }
+
+    [Fact]
+    public void Nel_doppio_sconto_dell_A7_la_descrizione_segue_il_prezzo_soci_alla_distanza_dell_info_pack()
+    {
+        var doppio = Operazioni(KitA7()).Single(DoppioSconto);
+        var descrizione = Gruppo(doppio, "descrizione_accanto_al_prezzo_soci");
+        var infoPack = Gruppo(doppio, "prezzo_info_pack_FIX");
+
+        Assert.Equal(new[] { "descrizione" }, descrizione["gruppoEtichette"]!.Values<string>());
+        Assert.Equal(new[] { "descrizione" }, descrizione["ordinamentoLivelli"]!.Single()["elementi"]!.Values<string>());
+        var ancora = descrizione["followAnchor"]!.Single();
+        Assert.Equal(new[] { "prezzo_promo_SOCI_DOPPIA" }, ancora["nomiGruppiSeguiti"]!.Values<string>());
+        //Lato sinistro della descrizione sul lato destro del testo del prezzo soci, solo in orizzontale.
+        Assert.Equal(1, (int)ancora["xAnchor"]!["allineaAlLato"]!);
+        Assert.Equal(0, (int)ancora["xAnchor"]!["allineaLato"]!);
+        Assert.Equal((double)infoPack["followAnchor"]![0]!["xAnchor"]!["distance"]!, (double)ancora["xAnchor"]!["distance"]!);
+        Assert.Equal(JTokenType.Null, ancora["yAnchor"]!.Type);
+        Assert.True((bool)ancora["useTextBounds"]!);
+        Assert.Equal(JTokenType.Null, descrizione["listSetCondizioni"]!.Type);
+        //Dopo DistanzaInfoePromo, che sposta il gruppo del prezzo soci.
+        Assert.True((int)descrizione["ordine"]! > (int)Gruppo(doppio, "DistanzaInfoePromo")["ordine"]!);
+
+        //Nel kit A3 la descrizione del doppio sconto non ha questa regola.
+        var doppioA3 = Operazioni(KitA3()).Single(DoppioSconto);
+        Assert.DoesNotContain(doppioA3["allineamenti"]!, g => (string?)g["nomeGruppo"] == "descrizione_accanto_al_prezzo_soci");
     }
 
     [Fact]
