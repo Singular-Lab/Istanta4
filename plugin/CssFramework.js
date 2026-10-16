@@ -4504,6 +4504,18 @@ const CssFramework =
         });
         const elementi = cssSlot.elementiInOrdine(livelli, presenti, (etichetta, chiave) => this.makeRegexFromGroupName(etichetta).test(chiave));
 
+        //Le eccezioni del gruppo: alcuni elementi vanno nello slot con modalita' e allineamento
+        //orizzontale propri, sotto le loro condizioni (box, formato del kit...). Vale la prima valida.
+        elementi.forEach(elemento => {
+            const eccezione = cssSlot.eccezioneDi(slot.eccezioni, elemento.chiave,
+                (etichetta, chiave) => this.makeRegexFromGroupName(etichetta).test(chiave),
+                listSetCondizioni => this.checkAllConditions(mappaBoxOriginale, itemRef, listSetCondizioni, box));
+            if (eccezione != null) {
+                elemento.modalita = eccezione.modalita || slot.modalita;
+                elemento.allineamentoOrizzontale = eccezione.allineamentoOrizzontale || "";
+            }
+        });
+
         const piano = cssSlot.pianifica(cornici, elementi, slot.modalita, box.geometricBounds);
         const daElemento = new Map(elementi.map(e => [e.chiave, e.voce]));
         const piazza = (chiave, bounds, ridimensiona) => {
@@ -4522,7 +4534,8 @@ const CssFramework =
                 console.error("Code CSF-25 Elemento " + chiave + " non piazzato nel gruppo a slot " + allineamento.nomeGruppo + ": " + e);
             }
         };
-        piano.assegnati.forEach(a => piazza(a.chiave, a.bounds, slot.modalita === cssSlot.MODALITA_POSIZIONE_E_DIMENSIONE));
+        const modalitaPerElemento = new Map(elementi.map(e => [e.chiave, cssSlot.modalitaDi(e, slot.modalita)]));
+        piano.assegnati.forEach(a => piazza(a.chiave, a.bounds, modalitaPerElemento.get(a.chiave) === cssSlot.MODALITA_POSIZIONE_E_DIMENSIONE));
         piano.inEccesso.forEach(a => piazza(a.chiave, a.bounds, false));
 
         if (piano.inEccesso.length > 0) {
