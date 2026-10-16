@@ -248,7 +248,35 @@ namespace AgenziaLib
         /// tolti (descrizione, prezzi, sconti, mastro...), il box e i loghi. Resta del singolo solo l'identita'
         /// (codice referenza, gruppo, nome del file) e la sua anagrafica grezza.
         /// </summary>
-        public static readonly string[] chiaviDelCartelloDiGruppo = { "compiledFields", "deletedFields", "codiceBox", GLOBAL_VARIABLES.keyFotoExtraAuto, "Foto.Extra" };
+        public static readonly string[] chiaviDelCartelloDiGruppo = { "compiledFields", "deletedFields", "codiceBox", GLOBAL_VARIABLES.keyFotoExtraAuto, "Foto.Extra",
+            GLOBAL_VARIABLES_FICO.keyFotoNome, GLOBAL_VARIABLES_FICO.keyMembriGruppoFoto };
+
+        /// <summary>
+        /// Il cartello singolo di una referenza in gruppo che usa la propria descrizione ha solo la propria
+        /// foto: per il cartello di gruppo, che nasce copiando il record, ogni membro aveva ereditato la foto
+        /// della primaria e l'elenco di tutte le foto del gruppo. membriGruppoFoto diventa un elenco nuovo con
+        /// la sola foto propria, come primaria (da li' il Plugin legge anche il suo noRender); senza foto,
+        /// vuoto. L'elenco del gruppo, condiviso fra i membri, non si tocca.
+        /// </summary>
+        public static void fotoDelSingolo(Dictionary<string, object> record, string fotoPropria)
+        {
+            if (record == null)
+                return;
+            string foto = fotoPropria ?? "";
+            record[GLOBAL_VARIABLES_FICO.keyFotoNome] = foto;
+            var membri = new List<FotoElementoGruppo>();
+            if (foto != "")
+            {
+                membri.Add(new FotoElementoGruppo()
+                {
+                    codRef = record.TryGetValue(GLOBAL_VARIABLES_FICO.keyRefCodice, out object codice) ? codice?.ToString() : "",
+                    nomeFoto = foto,
+                    statoSelezione = 1,
+                    hash = record.TryGetValue(GLOBAL_VARIABLES_FICO.keyFotoHash, out object hash) ? hash?.ToString() : ""
+                });
+            }
+            record[GLOBAL_VARIABLES_FICO.keyMembriGruppoFoto] = membri;
+        }
 
         /// <summary>
         /// Il cartello singolo diventa per intero il cartello di gruppo (singoliComeIlGruppo). Una chiave che il
@@ -706,6 +734,10 @@ namespace AgenziaLib
                     bool pesiDiversiInGruppo = false;
 
                     var listaDelGruppo = new List<ArticoloInKit>();
+
+                    //La foto propria della referenza, prima che il membro di un gruppo erediti quella della primaria
+                    //per il cartello di gruppo: il singolo con la propria descrizione la riavra' (fotoDelSingolo).
+                    string fotoPropriaDelSingolo = recItem.TryGetValue(GLOBAL_VARIABLES_FICO.keyFotoNome, out object fotoPropria) ? fotoPropria?.ToString() ?? "" : "";
 
                     //gestione delle tipologie di gruppo
                     if (codice_referenza != codice_gruppo)//codice_gruppo.Contains(",") && recItem.ContainsKey(GLOBAL_VARIABLES.keyXMLDescrizioneGruppo))
@@ -2078,8 +2110,10 @@ namespace AgenziaLib
 
                     //I20-1098: il singolo usa la propria descrizione; quella di gruppo solo nelle linee da 10 in su.
                     //I20-1099: e nei gruppi con "vari"/"varie" a prezzo unico.
+                    bool singoloConLaPropriaDescrizione = true;
                     if (singoloConDescrizioneDiGruppo(codice_referenza != codice_gruppo, recItem.ContainsKey(GLOBAL_VARIABLES.keyXMLDescrizioneGruppo), isLineaMaggioreUguale10, gruppoConGustiVari))
                     {
+                        singoloConLaPropriaDescrizione = false;
 
                         Descrizione1 = (recItem[GLOBAL_VARIABLES.keyXMLDescrizioneGruppo] as Dictionary<string, object>)[GLOBAL_VARIABLES.keyDescr1].ToString();
                         Descrizione2 = (recItem[GLOBAL_VARIABLES.keyXMLDescrizioneGruppo] as Dictionary<string, object>)[GLOBAL_VARIABLES.keyDescr2].ToString();
@@ -2510,6 +2544,14 @@ namespace AgenziaLib
                     {
                         //Adesso posso cambiarlo davvero
                         recItem[GLOBAL_VARIABLES.codiceBox] = "BOX_STD";
+                    }
+
+                    //Il singolo di un gruppo con la propria descrizione ha solo la propria foto. Dopo la creazione del
+                    //cartello di gruppo, che tiene le foto del gruppo; negli A7 resta senza foto.
+                    if (codice_referenza != codice_gruppo && singoloConLaPropriaDescrizione)
+                    {
+                        fotoDelSingolo(recItem, fotoPropriaDelSingolo);
+                        togliFotoProdottoSeA7(recItem, formatoKit);
                     }
 
                     //Nei gruppi di singoliComeIlGruppo il singolo e' per intero il cartello di gruppo, anche il primo
