@@ -1428,6 +1428,11 @@ const schedaRef = {
             if (quanteValgono > 1 || quanteSeNePossonoCreare > 0) {
                 var linguette = $('<div id="tabVariantiDescrizione" style="display:flex; flex-wrap:wrap; align-items:flex-end; border-bottom:1px solid #777; margin:6px 0 0 0; width:100%;"></div>');
 
+                //I20-1110: la spiegazione del piu' e' una riga fra le linguette e i campi, non un
+                //suggerimento: il riquadro del Tooltip si posava sopra i campi di testo, e in UXP i
+                //campi stanno sopra a tutto, quindi lo coprivano e non si leggeva.
+                var spiegazioneCreaVariante = $('<div class="spiegazioneCreaVariante" style="display:none; width:100%; margin:4px 0 0 0; font-size:11px; color:#cccccc;">Crea una descrizione regionale per questa lavorazione</div>');
+
                 //I testi che il box ha all'apertura, cioe' l'impaginato. Si ricordano una volta
                 //sola, prima che qualcuno li tocchi: sono quelli che la variante modificabile
                 //deve mostrare, ed e' il confronto fra loro e l'archivio a far emergere il
@@ -1566,7 +1571,9 @@ const schedaRef = {
                     //dice per esteso cosa si sta per perdere. La nazionale non ha la crocetta,
                     //e il server rifiuta comunque di eliminarla su richiesta del Plugin.
                     if (variantiDescrizione.siPuoChiudere(variante)) {
-                        var crocetta = $('<span title="Elimina questa variante">&#10005;</span>');
+                        //I20-1110: senza suggerimento, finiva sotto i campi come quello del piu';
+                        //la conferma al clic dice gia' quale descrizione si elimina.
+                        var crocetta = $('<span>&#10005;</span>');
                         crocetta.css({ "margin-left": "8px", "cursor": "pointer", "opacity": "0.7" });
                         crocetta.on("click", async function (evento) {
                             evento.stopPropagation();
@@ -1605,6 +1612,8 @@ const schedaRef = {
                 //aperto, e la riga d'archivio nasce al primo salvataggio.
                 var disegnaPiu = function () {
                     linguette.find(".creaVariante").remove();
+                    //Il piu' tolto col mouse sopra non manda l'uscita: la spiegazione resterebbe accesa.
+                    spiegazioneCreaVariante.hide();
 
                     var creabili = variantiDescrizione.variantiCreabili(elencoVarianti, areaLav, canaleLav);
                     var nazionale = elencoVarianti.filter(function (v) { return variantiDescrizione.specificita(v) === 0; })[0];
@@ -1613,7 +1622,7 @@ const schedaRef = {
                         return;
                     }
 
-                    var piu = $('<div class="creaVariante" title="Crea una descrizione regionale per questa lavorazione">+</div>');
+                    var piu = $('<div class="creaVariante">+</div>');
                     piu.css({
                         "padding": "3px 10px",
                         "margin-left": "4px",
@@ -1623,6 +1632,13 @@ const schedaRef = {
                         "border-radius": "4px 4px 0 0",
                         "font-size": "11px",
                         "color": "#cccccc"
+                    });
+
+                    piu.on("mouseenter", function () {
+                        spiegazioneCreaVariante.show();
+                    });
+                    piu.on("mouseleave", function () {
+                        spiegazioneCreaVariante.hide();
                     });
 
                     //Le possibilita' si mostrano come voci cliccabili accanto al piu'. In UXP
@@ -1692,6 +1708,7 @@ const schedaRef = {
                 };
 
                 rowOpzioniRegionaliEArtwork.append(linguette);
+                rowOpzioniRegionaliEArtwork.append(spiegazioneCreaVariante);
 
                 //Il pulsante viene creato prima delle linguette e finiva sopra di loro. Qui lo si
                 //sposta sotto: append di un elemento che esiste gia' lo muove, non lo duplica.
