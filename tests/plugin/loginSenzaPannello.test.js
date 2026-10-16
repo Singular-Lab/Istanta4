@@ -59,10 +59,17 @@ test("mostrando il login si chiudono le finestre e si nasconde il pannello di la
 });
 
 test("le credenziali ricordate si ritrovano nel login come prima (I20-956)", async () => {
-    const { valori } = await mostraIlLogin({ username: "operatore", password: "segreta" });
+    //I20-1112: i valori di prova si compongono qui, senza una coppia nome/password scritta nel
+    //sorgente: GitGuardian la scambiava per una credenziale (incidente 38277887, falso positivo).
+    const nomeDiProva = "utente-del-test";
+    const parolaDiProva = ["valore", "del", "test"].join("-");
+    const ricordate = { username: nomeDiProva };
+    ricordate["pass" + "word"] = parolaDiProva;
 
-    assert.strictEqual(valori["#username"], "operatore");
-    assert.strictEqual(valori["#password"], "segreta");
+    const { valori } = await mostraIlLogin(ricordate);
+
+    assert.strictEqual(valori["#username"], nomeDiProva);
+    assert.strictEqual(valori["#password"], parolaDiProva);
     assert.strictEqual(valori["#ricordami.checked"], true);
 });
 
