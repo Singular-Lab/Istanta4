@@ -1116,6 +1116,9 @@ namespace IstantaLib
 
         public decimal amountH { get; set; } = 3; // quanto espande top/bottom
         public decimal amountW { get; set; } = 3; // quanto espande left/right
+
+        // I tipi di lavorazione in cui la voce vale (1 volantino, 2 PoP); vuota vale per tutti.
+        public List<int> tipiLavorazione { get; set; } = new List<int>();
     }
 
     public class AgenziaCustomPlugin_SchemaDescrizioni
