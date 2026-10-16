@@ -115,7 +115,7 @@ public class CssLoghiPopCoopTests
     }
 
     [Fact]
-    public void Nel_PoP_il_FiorFiore_riempie_proporzionalmente_come_nel_volantino()
+    public void Nel_PoP_il_FiorFiore_si_adatta_in_proporzione_alla_sua_misura()
     {
         foreach (var operazione in OperazioniConLoghi(2))
         {
@@ -123,8 +123,9 @@ public class CssLoghiPopCoopTests
                 .Where(f => Prende(f["nomiElementi"], Etichetta("Logo_FiorFiore")))
                 .Select(f => string.Join(",", f["fit"]!.Values<int>()))
                 .ToList();
-            //Prima il fit generico delle foto extra, poi il suo: conta l'ultimo, che riempie.
-            Assert.Equal(new[] { "2", "3" }, fit);
+            //Prima il fit generico delle foto extra, poi il suo. Il FiorFiore esce con la sua misura e
+            //l'immagine adattata in proporzione (2): riempire (3) la taglierebbe.
+            Assert.Equal(new[] { "2", "2" }, fit);
         }
     }
 
