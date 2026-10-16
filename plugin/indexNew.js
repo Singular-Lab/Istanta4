@@ -10006,7 +10006,10 @@ function writeFileInConsole(logMessage) {
         var rigaBox = $('<div class="boxMessaggio" style="font-size: 10px; margin-top: 2px;"></div>').text(testoBox + " ");
         if (logMessage.box.idBox != null) {
             var riferimentoBox = logMessage.box;
-            rigaBox.append($('<span class="trovaBoxMessaggio" style="text-decoration: underline; cursor: pointer; font-weight: bold;">Trova</span>')
+            //I20-1114: un riquadro col bordo bianco, che si stacca dal testo su ogni colore di messaggio:
+            //la parola sottolineata a 10px si confondeva. Uno span e non un button: in UXP il button
+            //ignora lo stile.
+            rigaBox.append($('<span class="trovaBoxMessaggio" role="button" style="display: inline-block; margin-left: 6px; padding: 1px 8px; border: 1px solid white; border-radius: 4px; font-size: 11px; font-weight: bold; cursor: pointer;">Trova</span>')
                 .on('click', function () {
                     trovaBoxDelMessaggio(riferimentoBox);
                 }));
