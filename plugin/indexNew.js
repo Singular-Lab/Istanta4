@@ -4834,7 +4834,14 @@ async function fixRefImpaginata() {
             //     messaggioUtente("Code IDX-42 fixRef: elemento con etichetta Base non trovata nel box", "error");
             //     return;
             // }
+            //I20-1109: prima i controlli che non toccano il documento, poi la domanda, poi il lavoro.
+            //Prima il box si ridimensionava per prova e gli elementi si spostavano anche con Annulla.
             var dna = null;
+            //Senza selezione app.selection[0] non c'e' e si finiva nell'errore generico IDX-50.
+            if (app.selection == null || app.selection.length == 0) {
+                messaggioUtente("Code IDX-42 fixRef: nessun box selezionato, seleziona il box da sistemare", "error");
+                return;
+            }
             var box = Utility.getBoxFromElementOfBox(app.selection[0]);
             if (box == null) {
                 messaggioUtente("Code IDX-42 fixRef: elemento selezionato non è un box valido", "error");
@@ -4872,6 +4879,18 @@ async function fixRefImpaginata() {
                 }
             }
 
+            //I20-1109: la domanda prima di qualunque modifica: con Annulla il documento resta com'e'.
+            indesignEvents.setBusy(true);
+
+            var confirmRes = await Modali.confirm("Ridimensionare il box alle dimensioni desiderate");
+            if (!confirmRes) {
+                indesignEvents.setBusy(false);
+                return;
+            }
+
+            //Il ridimensionamento di prova e il rifacimento del box richiedono tempo: si vede che si lavora.
+            showLoading("Fix referenza in corso");
+
             //se i bounds sono larghi o alti diversi dagli original (se ci sono)
             if (originalBounds != null) {
                 var widthOriginal = originalBounds[3] - originalBounds[1];
@@ -4892,14 +4911,16 @@ async function fixRefImpaginata() {
             }
 
             //ora la dimensione è corretta, mappiamo
-            for (var j = 0; j < app.selection[0].allPageItems.length; j++) {
-                if (app.selection[0].allPageItems[j].label != "") {
+            //I20-1109: gli elementi del box intero, non della selezione: selezionando un elemento interno
+            //la mappa aveva solo quello, e gli altri risultavano aggiunti illegalmente (IDX-45/46).
+            for (var j = 0; j < box.allPageItems.length; j++) {
+                if (box.allPageItems[j].label != "") {
                     //aggiungiamo in mappa una chiave della label e valore l'item selezionato
-                    map[Utility.parseLabel(app.selection[0].allPageItems[j].label)] = app.selection[0].allPageItems[j].geometricBounds;
+                    map[Utility.parseLabel(box.allPageItems[j].label)] = box.allPageItems[j].geometricBounds;
                 }
                 else {
                     //lo aggiungiamo usando l'id univoco
-                    map[app.selection[0].allPageItems[j].id] = app.selection[0].allPageItems[j].geometricBounds;
+                    map[box.allPageItems[j].id] = box.allPageItems[j].geometricBounds;
                 }
             }
             
@@ -4948,14 +4969,10 @@ async function fixRefImpaginata() {
     
         if (listItemDaFixare.length == 0) {
             messaggioUtente("Code IDX-43 fixRef: Nessuna ref valida selezionata", "error");
+            indesignEvents.setBusy(false);
+            hideLoading();
             return;
         }
-
-
-    
-        indesignEvents.setBusy(true);
-    
-        var confirmRes = await Modali.confirm("Ridimensionare il box alle dimensioni desiderate");
 
 
         for (var a = 0; a < listItemDaFixare.length; a++) {
@@ -4965,6 +4982,7 @@ async function fixRefImpaginata() {
             if (bounds == null) {
                 messaggioUtente("Code IDX-44 fixRef: Impossibile recuperare i bounds del box selezionato", "error");
                 indesignEvents.setBusy(false);
+                hideLoading();
                 return;
             }
 
@@ -4996,6 +5014,7 @@ async function fixRefImpaginata() {
     
         if(!confirmRes){
             indesignEvents.setBusy(false);
+            hideLoading();
 
             return;
         }
@@ -5059,19 +5078,22 @@ async function fixRefImpaginata() {
                 );
 
                 indesignEvents.setBusy(false);
+                hideLoading();
                 return;
             }
         }
         //creiamo il file di report con le segnalazioni
-        
+
         indesignEvents.setBusy(false);
-        
+        hideLoading();
+
         messaggioUtente("Code IDX-49 fixRef: Operazione completata con successo", "success", false, 3);
         
         stampaSegnalazioni(reportObj);
     }
     catch(ex){
         indesignEvents.setBusy(false);
+        hideLoading();
         messaggioUtente("Code IDX-50 fixRef: Errore durante l'elaborazione: " + ex.toString(), "error");
         console.error(ex);
     }
