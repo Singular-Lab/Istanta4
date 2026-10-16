@@ -164,7 +164,7 @@ function datiFP(record: Record<string, unknown>): DataFields {
  * Il warning che DB1 mette su un box nel campo `resolution`: l'oggetto C# `I_FP_Warning`
  * serializzato in stringa (lo si accetta anche gia oggetto). Null se manca o non si legge.
  */
-function warningDi(ref: SyncJsonPluginRef): { warningCode?: string; record?: unknown } | null {
+function warningDi(ref: SyncJsonPluginRef): { warningCode?: string; elementi?: unknown } | null {
   const raw = (ref as { resolution?: unknown }).resolution;
   try {
     const warning = typeof raw === 'string' ? JSON.parse(raw || 'null') : raw;
@@ -175,19 +175,41 @@ function warningDi(ref: SyncJsonPluginRef): { warningCode?: string; record?: unk
 }
 
 /**
- * Fantasmi col codice in un altro tracciato (warning `02_codref_guest`): DB1 manda il
- * record completo, quindi non sono fuori listino e nessuno deve deciderli. Diventano
- * referenze come quelle di lista: il box del plugin (testi, foto, posizione) col dato
- * del record nei dataFields. Gli altri restano fantasmi da decidere.
+ * Il primario di un gruppo trovato in un altro tracciato: l'elemento il cui codice e il
+ * nome di una foto del box senza estensione (le foto si chiamano col codice: 4023057.psd).
+ */
+export function primarioDelGruppo(elementi: DB1XmlRecord[], foto: SyncJsonPluginRef['foto']): DB1XmlRecord | undefined {
+  return (foto ?? [])
+    .map((f) => String((typeof f === 'string' ? f : f?.nome) ?? '').trim().replace(/\.[^.]*$/, ''))
+    .filter(Boolean)
+    .map((nome) => elementi.find((elemento) => String(elemento.codice ?? '').trim() === nome))
+    .find(Boolean);
+}
+
+/**
+ * Fantasmi col codice in un altro tracciato (warning `02_codref_guest`, C# `FP_WarningCodInAltroTracciato`):
+ * DB1 manda gli `elementi` del gruppo. Se una foto del box dice qual e il primario non sono
+ * fuori listino e nessuno deve deciderli: diventano referenze come quelle di lista, il box del
+ * plugin (testi, foto, posizione) col primario nei dataFields e il gruppo nei groupElements,
+ * tutti coi nomi FP. Senza primario, o con un altro warning, restano fantasmi da decidere.
  */
 export function separaOspiti(fantasmi: SyncJsonPluginRef[]): { ospiti: SyncJsonPluginRef[]; fantasmi: SyncJsonPluginRef[] } {
   const ospiti: SyncJsonPluginRef[] = [];
   const restanti: SyncJsonPluginRef[] = [];
   for (const fantasma of fantasmi) {
     const warning = warningDi(fantasma);
-    if (warning?.warningCode === '02_codref_guest' && warning.record && typeof warning.record === 'object') {
+    const elementi = warning?.warningCode === '02_codref_guest' && Array.isArray(warning.elementi)
+      ? warning.elementi.filter((elemento): elemento is DB1XmlRecord => !!elemento && typeof elemento === 'object')
+      : [];
+    const primario = primarioDelGruppo(elementi, fantasma.foto);
+    if (primario) {
       const { resolution: _resolution, ...box } = fantasma as SyncJsonPluginRef & { resolution?: unknown };
-      ospiti.push({ ...box, dataFields: datiFP(warning.record as Record<string, unknown>) });
+      ospiti.push({
+        ...box,
+        dataFields: datiFP(primario),
+        // Come i gruppi di Istanta (FicoProcessController): tutti gli elementi, primario per primo; un singolo non ne ha.
+        groupElements: elementi.length > 1 ? [primario, ...elementi.filter((elemento) => elemento !== primario)].map(datiFP) : [],
+      });
     } else {
       restanti.push(fantasma);
     }

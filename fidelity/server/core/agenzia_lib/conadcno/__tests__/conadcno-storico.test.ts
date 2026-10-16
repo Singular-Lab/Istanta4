@@ -43,39 +43,44 @@ describe("storicoVolantinoDB1.confronta: timeout verso DB1", () => {
 describe("storicoVolantinoDB1.confronta: fantasmi presenti in un altro tracciato", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  const record = { codice: "4969665", descrizione1: "POLPA POMODORO CONAD 400G", codice_scatto: "2718130", prezzo_offerta: 0.79 };
+  const primario = { codice: "4969665", descrizione1: "POLPA POMODORO CONAD 400G", codice_scatto: "2718130", prezzo_offerta: 0.79, peso: 400 };
+  const secondario = { codice: "1404871", descrizione1: "PASSATA CONAD 700G", codice_scatto: "2718130", prezzo_offerta: 0.99 };
   const box = {
-    groupId: 8, pag: 4, x: 10, y: 20, w: 60, h: 40, dna: "$dna{\n5\n4969665\n}",
+    groupId: 8, pag: 4, x: 10, y: 20, w: 60, h: 40, dna: "$dna{\n2718130\n1404871,4969665\n}",
     compiledFields: [{ labelName: "descrizione", content: "Polpa di pomodoro" }],
-    foto: ["polpa.psd"],
+    foto: ["4969665.psd"],
   };
+  const guest = (elementi: unknown[]) => JSON.stringify({ warningCode: "02_codref_guest", codiceGruppo: "2718130", elementi });
   const confronta = async (fantasmi: unknown[]) => {
     vi.spyOn(ServerUtils, "sendToFICOApi").mockResolvedValue({
       data: { esito: true, error: "", lista: [], orfanelli: [], fantasmi }, status: 200, statusText: "OK",
     } as any);
     return storicoVolantinoDB1.confronta({} as Request, {
-      refs: [{ groupId: 8, dna: box.dna, foto: [{ nome: "polpa.psd", guidId: "g-polpa" }] }],
+      refs: [{ groupId: 8, dna: box.dna, foto: [{ nome: "4969665.psd", guidId: "g-polpa" }] }],
     } as unknown as PayloadConfrontoStorico);
   };
 
-  it("col record di DB1 il box diventa una referenza di lista: testi, foto e posizione del box, dato del record", async () => {
-    const esito = await confronta([{ ...box, resolution: JSON.stringify({ warningCode: "02_codref_guest", codice: "4969665", record }) }]);
+  it("il primario e l'elemento col codice della foto: dataFields suoi, il gruppo nei groupElements, nomi FP", async () => {
+    const esito = await confronta([{ ...box, resolution: guest([secondario, primario]) }]);
     expect(esito.fuoriListino).toEqual([]);
     expect(esito.lista).toHaveLength(1);
     const [ospite] = esito.lista;
-    expect(ospite).toMatchObject({ groupId: 8, pag: 4, x: 10, compiledFields: box.compiledFields, foto: [{ nome: "polpa.psd", guidId: "g-polpa" }] });
-    expect(ospite.dataFields).toMatchObject({ codice: "4969665", codice_referenza: "4969665", descrizione_uno: "POLPA POMODORO CONAD 400G", prezzo: 0.79 });
+    expect(ospite).toMatchObject({ groupId: 8, pag: 4, x: 10, compiledFields: box.compiledFields, foto: [{ nome: "4969665.psd", guidId: "g-polpa" }] });
+    expect(ospite.dataFields).toMatchObject({ codice: "4969665", codice_referenza: "4969665", descrizione_uno: "POLPA POMODORO CONAD 400G", prezzo: 0.79, descrizione_peso: 400 });
+    expect(ospite.groupElements?.map((elemento) => elemento.codice_referenza)).toEqual(["4969665", "1404871"]);
+    expect(ospite.groupElements?.[1]).toMatchObject({ descrizione_uno: "PASSATA CONAD 700G", prezzo: 0.99, scatto_codice: "2718130" });
     expect(ospite).not.toHaveProperty("resolution");
   });
 
-  it("accetta il warning anche gia oggetto", async () => {
-    const esito = await confronta([{ ...box, resolution: { warningCode: "02_codref_guest", record } }]);
+  it("un elemento solo: niente groupElements; il warning puo arrivare gia oggetto e la foto con qualunque estensione", async () => {
+    const esito = await confronta([{ ...box, foto: [{ nome: "4969665.tif" }], resolution: { warningCode: "02_codref_guest", elementi: [primario] } }]);
     expect(esito.lista).toHaveLength(1);
+    expect(esito.lista[0].groupElements).toEqual([]);
   });
 
-  it("senza record, con un altro warning o illeggibile resta un fantasma da decidere", async () => {
+  it("senza primario, con un altro warning o illeggibile resta un fantasma da decidere", async () => {
     const esito = await confronta([
-      { ...box, groupId: 1, resolution: JSON.stringify({ warningCode: "02_codref_guest", codice: "4969665" }) },
+      { ...box, groupId: 1, resolution: guest([primario, secondario]), foto: ["altra.psd"] },
       { ...box, groupId: 2, resolution: JSON.stringify({ warningCode: "01_codscatto_same", codiceScatto: "5", codiceGruppoAtteso: "6" }) },
       { ...box, groupId: 3, resolution: "{rotto" },
       { ...box, groupId: 4 },
