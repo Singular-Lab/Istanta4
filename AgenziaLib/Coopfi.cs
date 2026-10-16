@@ -203,16 +203,48 @@ namespace AgenziaLib
         }
 
         /// <summary>
-        /// Le referenze che non escono nel PoP. In ogni formato: tema jolly, sprint o extra tripla, e i Jolly
-        /// evidenziati, che nascono dal tema VENDITE PROPOSITIVE e "jolly" nel tema non ce l'hanno. Nell'A3
-        /// verticale anche i Superprezzi ortofrutta (BOX_SuperprezziOF): prima vi uscivano come BOX_STD, ora
-        /// non escono affatto. tema e' gia' in minuscolo.
+        /// Le referenze che non escono nel PoP. In ogni formato: tema jolly o extra tripla, e i Jolly
+        /// evidenziati, che nascono dal tema VENDITE PROPOSITIVE e "jolly" nel tema non ce l'hanno. Il tema
+        /// sprint negli A3: negli A7 esce con il cartello Sprint (boxSprintNegliA7). Nell'A3 verticale anche i
+        /// Superprezzi ortofrutta (BOX_SuperprezziOF): prima vi uscivano come BOX_STD, ora non escono affatto.
+        /// tema e' gia' in minuscolo.
         /// </summary>
         public static bool esclusaDalPoP(string tema, string codiceBox, string formato)
         {
-            return tema.Contains("jolly") || tema.Contains("sprint") || tema.Replace(" ", "").Contains("extripla")
+            return tema.Contains("jolly") || (tema.Contains("sprint") && formato != "A7") || tema.Replace(" ", "").Contains("extripla")
                 || codiceBox == "BOX_JOLLY_EVIDENZIATO"
                 || (formato == "A3_VERTICALI" && codiceBox == "BOX_SuperprezziOF");
+        }
+
+        /// <summary>
+        /// Il box di una referenza negli A7 del PoP: con "sprint" nel tema e' BOX_SPRINT, qualunque box le
+        /// abbiano dato le regole di assegnazione. Negli altri formati, e senza sprint nel tema, resta il suo.
+        /// tema e' gia' in minuscolo.
+        /// </summary>
+        public static string boxSprintNegliA7(string tema, string formato, string codiceBox)
+        {
+            return formato == "A7" && tema.Contains("sprint") ? "BOX_SPRINT" : codiceBox;
+        }
+
+        /// <summary>
+        /// La dicitura dei bollini del cartello Sprint negli A7, in txt_punti_sprint: "1 BOLLINO" con un solo
+        /// bollino, "3 BOLLINI" con piu' bollini.
+        /// </summary>
+        public static string scrittaBolliniSprint(int bollini)
+        {
+            return bollini == 1 ? "1 BOLLINO" : $"{bollini} BOLLINI";
+        }
+
+        /// <summary>
+        /// Stile e dicitura dello sconto del BOX_LINEA nel PoP, per i cartelli della linea e per il cartello di
+        /// gruppo. Negli A7 lo stile e' SCONTO_LINEA_STOPPER e la dicitura ha il meno, "-30%"; negli altri
+        /// formati SCONTO_LINEA con la sola percentuale, come prima.
+        /// </summary>
+        public static (string stile, string dicitura) scontoDellaLineaNelPoP(decimal sconto, string formato)
+        {
+            if (formato == "A7")
+                return ("SCONTO_LINEA_STOPPER", $"-{(int)sconto}%");
+            return ("SCONTO_LINEA", $"{(int)sconto}%");
         }
 
         /// <summary>
@@ -720,7 +752,9 @@ namespace AgenziaLib
                         continue;
                     }
 
-
+                    //Negli A7 il tema sprint esce con il cartello Sprint. Prima del gruppo, perche' il cartello di
+                    //gruppo nasce copiando questo record.
+                    recItem[key_codiceBox] = boxSprintNegliA7(tema, formatoKit, recItem[key_codiceBox].ToString());
 
                     var gruppo = tracciato.Where(t => t.recordInTracciato[GLOBAL_VARIABLES_FICO.keyCodiceGruppo].ToString() == codice_gruppo);
 
@@ -1744,9 +1778,8 @@ namespace AgenziaLib
                             recItem["colore_sconto_speciale"] = _codifica.ToUpper();
 
                         }
-                        //string sconto_str = $"-{(int)sconto}%";
-                        string sconto_str = $"{(int)sconto}%";
-                        interprete.assignCompiledField("txt_sconto", "SCONTO_LINEA", sconto_str);
+                        var scontoLinea = scontoDellaLineaNelPoP(sconto, formatoKit);
+                        interprete.assignCompiledField("txt_sconto", scontoLinea.stile, scontoLinea.dicitura);
                     }
                     else if (codiceBox == "BOX_JOLLY")
                     {
@@ -1771,20 +1804,35 @@ namespace AgenziaLib
                         int n_bonus;
                         Int32.TryParse(recItem["N_BonusCartacei"].ToString(), out n_bonus);
 
-                        //interprete.assignCompiledField("txt_punti_sprint", "", $"<{stile_punti_sprint}>+{n_bonus}</{stile_punti_sprint}>");
-                        interprete.assignCompiledField("txt_punti_sprint", stile_punti_sprint, $"+{n_bonus}");
+                        if (formatoKit == "A7")
+                        {
+                            //Negli A7 la dicitura sta tutta in txt_punti_sprint, "1 BOLLINO" o "3 BOLLINI": il campo
+                            //bollino non serve. La descrizione ha i suoi stili _SPRINT.
+                            interprete.assignCompiledField("txt_punti_sprint", stile_punti_sprint, scrittaBolliniSprint(n_bonus));
+                            interprete.removeCompiledField("bollino");
 
-                        string scritta_bollino = "bollino";
-                        if (n_bonus > 1)
-                            scritta_bollino = "bollini";
+                            stileDescr1 += "_SPRINT";
+                            stileDescr2 += "_SPRINT";
+                            stileDescr3 += "_SPRINT";
+                            stileDescr4 += "_SPRINT";
+                        }
+                        else
+                        {
+                            //interprete.assignCompiledField("txt_punti_sprint", "", $"<{stile_punti_sprint}>+{n_bonus}</{stile_punti_sprint}>");
+                            interprete.assignCompiledField("txt_punti_sprint", stile_punti_sprint, $"+{n_bonus}");
 
-                        interprete.assignCompiledField("bollino", "", $"<{stile_bollino_sprint}>{scritta_bollino}</{stile_bollino_sprint}>");
+                            string scritta_bollino = "bollino";
+                            if (n_bonus > 1)
+                                scritta_bollino = "bollini";
+
+                            interprete.assignCompiledField("bollino", "", $"<{stile_bollino_sprint}>{scritta_bollino}</{stile_bollino_sprint}>");
 
 
-                        stileDescr1 += "_JOLLY";
-                        stileDescr2 += "_JOLLY";
-                        stileDescr3 += "_JOLLY";
-                        stileDescr4 += "_JOLLY";
+                            stileDescr1 += "_JOLLY";
+                            stileDescr2 += "_JOLLY";
+                            stileDescr3 += "_JOLLY";
+                            stileDescr4 += "_JOLLY";
+                        }
                     }
                     else if (codiceBox == "BOX_SpendiPunti")
                     {
@@ -2057,6 +2105,8 @@ namespace AgenziaLib
                         interprete.assignCompiledField(GLOBAL_VARIABLES_FICO.compiledFieldKeyMastro, "", "ma-PiùValoreAlSocio");
                     } else if (codiceBox == "BOX_JOLLY") {
                         interprete.assignCompiledField(GLOBAL_VARIABLES_FICO.compiledFieldKeyMastro, "", "ma-Jolly");
+                    } else if (codiceBox == "BOX_SPRINT" && formatoKit == "A7") {
+                        interprete.assignCompiledField(GLOBAL_VARIABLES_FICO.compiledFieldKeyMastro, "", "ma-Sprint");
                     } else {
                         interprete.assignCompiledField(GLOBAL_VARIABLES_FICO.compiledFieldKeyMastro, "", "ma-Offerta");
                     }
@@ -2421,8 +2471,8 @@ namespace AgenziaLib
                                 //Console.WriteLine("Assegno lo sconto");
                                 //L'unico altro parametro che devo assegnare è il txt_sconto.
                                 //Il box linea non ne ha altri
-                                string sconto_str = $"{(int)sconto}%";
-                                interpreteSottogruppo.assignCompiledField("txt_sconto", "SCONTO_LINEA", sconto_str);
+                                var scontoLinea = scontoDellaLineaNelPoP(sconto, formatoKit);
+                                interpreteSottogruppo.assignCompiledField("txt_sconto", scontoLinea.stile, scontoLinea.dicitura);
                                 interpreteSottogruppo.assignCompiledField(GLOBAL_VARIABLES_FICO.compiledFieldKeyMastro, "", "ma-Linea");
                             }
 

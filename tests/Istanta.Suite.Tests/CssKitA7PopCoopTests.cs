@@ -12,13 +12,22 @@ namespace Istanta.Suite.Tests;
 /// BOX_STD, BOX_1+1, BOX_doppio_SCONTO_LINEA e BOX_SpendiPunti senza condizione di formato, il prezzo
 /// al kg dell'esclusiva soci resta impilato, e le regole solo A3 verticale non ci sono. Il Plugin
 /// prende il primo kit valido per tipo e formato, e il kit PoP senza formato vale anche per l'A7:
-/// il kit A7 sta prima.
+/// il kit A7 sta prima. Prima differenza voluta: le misure dei tre loghi con misura propria, ridotte
+/// della percentuale di FiorFiore (21,981 x 6,647 mm, data dall'operatore) con le stesse proporzioni.
 /// </summary>
 public class CssKitA7PopCoopTests
 {
     private const string FileCss = "Istanta/wwwroot/external_source/Coopfi/SourceFrameworkCss.json";
     private static readonly string[] BoxVerticaliA3O = { "BOX_STD", "BOX_1+1", "BOX_doppio_SCONTO_LINEA", "BOX_SpendiPunti" };
     //I due gruppi che in A3 verticale agganciano il prezzo al kg dell'esclusiva soci al prezzo.
+    //Misura A3 e misura A7 dei loghi con misura propria.
+    private static readonly (string logo, string a3w, string a3h, string a7w, string a7h)[] MisureLoghi =
+    {
+        ("Logo_FiorFiore", "90.949", "27.502", "21.981", "6.647"),
+        ("Logo_BancodelGusto", "65", "32.637", "15.71", "7.888"),
+        ("Logo_OrigineItalia", "54.84", "14.4", "13.254", "3.48")
+    };
+
     private static readonly string[] SoloA3VEsclusivaSoci = { "prezzo_promo_kgl_su_info_pack_SOCI_DOPPIA", "prezzo_promo_kgl_su_prezzo_promo" };
 
     private static List<JObject> Kit() =>
@@ -58,10 +67,24 @@ public class CssKitA7PopCoopTests
         Assert.Equal(a3.Select(o => string.Join(",", o["nomiBox"]!.Values<string>())), a7.Select(o => string.Join(",", o["nomiBox"]!.Values<string>())));
         for (int i = 0; i < a3.Count; i++)
         {
-            foreach (var sezione in new[] { "ridimensionamenti", "postRidimensionamenti", "segnalazioniConflitti" })
+            foreach (var sezione in new[] { "ridimensionamenti", "segnalazioniConflitti" })
             {
                 Assert.True(JToken.DeepEquals(a3[i][sezione], a7[i][sezione]), sezione + " di " + a3[i]["nomiBox"]);
             }
+
+            //I post ridimensionamenti sono gli stessi, salvo la misura dei tre loghi.
+            var postA3 = (JArray)a3[i]["postRidimensionamenti"]!.DeepClone();
+            var postA7 = (JArray)a7[i]["postRidimensionamenti"]!.DeepClone();
+            Assert.Equal(postA3.Count, postA7.Count);
+            foreach (var post in postA3.Concat(postA7).Cast<JObject>().Where(g => MisureLoghi.Any(m => m.logo == (string?)g["nomeGruppo"])))
+            {
+                foreach (var r in post["ridimensionamenti"]!.Cast<JObject>())
+                {
+                    r.Remove("setWidth");
+                    r.Remove("setHeight");
+                }
+            }
+            Assert.True(JToken.DeepEquals(postA3, postA7), "postRidimensionamenti di " + a3[i]["nomiBox"]);
         }
     }
 
@@ -106,6 +129,29 @@ public class CssKitA7PopCoopTests
             Assert.True(JToken.DeepEquals(a3["slot"]!["eccezioni"]![1], eccezioni[1]), "eccezione al centro");
             Assert.True(JToken.DeepEquals(a3["ordinamentoLivelli"], Gruppo(operazione, "Loghi")["ordinamentoLivelli"]));
             Assert.True(JToken.DeepEquals(a3["followAnchor"], Gruppo(operazione, "Loghi")["followAnchor"]));
+        }
+    }
+
+    [Fact]
+    public void Nell_A7_i_loghi_hanno_la_misura_ridotta_come_FiorFiore_e_le_stesse_proporzioni()
+    {
+        var a7 = Operazioni(KitA7());
+        var a3 = Operazioni(KitA3());
+        double riduzione = 21.981 / 90.949;
+        var it = System.Globalization.CultureInfo.InvariantCulture;
+
+        foreach (var (logo, a3w, a3h, a7w, a7h) in MisureLoghi)
+        {
+            //Nell'operazione generica e in quella del doppio sconto, in A7; l'A3 non cambia.
+            var gruppiA7 = a7.SelectMany(o => o["postRidimensionamenti"]!.Cast<JObject>()).Where(g => (string?)g["nomeGruppo"] == logo).ToList();
+            var gruppiA3 = a3.SelectMany(o => o["postRidimensionamenti"]!.Cast<JObject>()).Where(g => (string?)g["nomeGruppo"] == logo).ToList();
+            Assert.Equal(2, gruppiA7.Count);
+            Assert.All(gruppiA7, g => Assert.Equal((a7w, a7h), ((string)g["ridimensionamenti"]!.Single()["setWidth"]!, (string)g["ridimensionamenti"]!.Single()["setHeight"]!)));
+            Assert.All(gruppiA3, g => Assert.Equal((a3w, a3h), ((string)g["ridimensionamenti"]!.Single()["setWidth"]!, (string)g["ridimensionamenti"]!.Single()["setHeight"]!)));
+
+            //Ridotte della percentuale di FiorFiore, al millesimo di mm.
+            Assert.Equal(double.Parse(a3w, it) * riduzione, double.Parse(a7w, it), 3);
+            Assert.Equal(double.Parse(a3h, it) * riduzione, double.Parse(a7h, it), 3);
         }
     }
 
