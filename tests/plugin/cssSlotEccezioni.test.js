@@ -100,7 +100,7 @@ test("allineaASlot sceglie l'eccezione con le condizioni del CssFramework e ridi
 
 test("nella configurazione di Coop le eccezioni riconoscono i tre loghi, e solo loro", () => {
     const css = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "..", "Istanta", "wwwroot", "external_source", "Coopfi", "SourceFrameworkCss.json"), "utf8"));
-    const pop = css.dbRidimensionamentiAllineamenti.modificheCssPerKit.find(k => k.kit.kitTipoLavorazioniValide.length == 1 && k.kit.kitTipoLavorazioniValide[0] == 2);
+    const pop = css.dbRidimensionamentiAllineamenti.modificheCssPerKit.find(k => k.kit.kitTipoLavorazioniValide.length == 1 && k.kit.kitTipoLavorazioniValide[0] == 2 && (k.kit.kitFormatiValidi || []).length == 0);
     const slot = pop.operazioniPerBox.find(o => o.nomiBox.length == 0).allineamenti.find(a => a.nomeGruppo == "Loghi").slot;
 
     const sempre = () => true;

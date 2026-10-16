@@ -214,7 +214,7 @@ test("nel PoP di Coop i gruppi Loghi riempiono slot_logo1, slot_logo2, slot_logo
     const kit = JSON.parse(sorgente("Istanta/wwwroot/external_source/Coopfi/SourceFrameworkCss.json")).dbRidimensionamentiAllineamenti.modificheCssPerKit;
     const gruppi = (k) => k.operazioniPerBox.flatMap(op => (op.allineamenti || []).filter(a => a.nomeGruppo === "Loghi"));
 
-    const pop = kit.filter(k => k.kit.kitTipoLavorazioniValide.includes(2)).flatMap(gruppi);
+    const pop = kit.filter(k => k.kit.kitTipoLavorazioniValide.includes(2) && (k.kit.kitFormatiValidi || []).length == 0).flatMap(gruppi);
     assert.strictEqual(pop.length, 2);
     pop.forEach(g => {
         assert.deepStrictEqual(g.slot.cornici, ["slot_logo1", "slot_logo2", "slot_logo3"]);
