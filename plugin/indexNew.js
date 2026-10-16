@@ -2180,6 +2180,14 @@ async function showLogin()
     }
 
     hideLoading();
+
+    //I20-1112: il login copre il pannello, ma in UXP i campi di testo stanno sopra a tutto: con la
+    //sessione persa e una scheda ref aperta le sue descrizioni restavano disegnate sopra il login.
+    //Il logout manuale nascondeva gia' il pannello e chiudeva le finestre; qui lo fanno tutti i
+    //ritorni al login. Dopo l'accesso il pannello torna come dopo un logout manuale.
+    Modali.closeAllModal();
+    $("#mainContent").hide();
+
     $("#loginPanel").css("display", "flex");
 
 
