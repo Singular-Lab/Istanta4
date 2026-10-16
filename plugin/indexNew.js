@@ -1173,7 +1173,6 @@ async function initDocumentInLavorazione()
                 // $("#syncRimaste").hide();
                 // $("#svuotaCodaSync").hide();
                 $("#bOpt2Advanced").hide();
-                $("#bOpt1Advanced").html(getFiltroButtonMarkup('impagina.png', 'Impagina'));
                 $("#opzioniAddizionali").hide();
                 $("#svuotaPagina").hide();
             }
@@ -1184,8 +1183,8 @@ async function initDocumentInLavorazione()
                 $("#bOpt2Advanced").show();
                 $("#opzioniAddizionali").show();
                 $("#svuotaPagina").show();
-                $("#bOpt1Advanced").html(getFiltroButtonMarkup('conteggio.png', 'Conteggio'));
             }
+            setFiltroButtonsDefaultMarkup();
             $("#dialogSelectKit").css("display","none");
             $("#wrapper").css("display","block");
             $("#loginPanel").css("display","none");
@@ -2217,16 +2216,25 @@ const bOpt1 = document.getElementById("bOpt1Advanced");
 const bOpt2 = document.getElementById("bOpt2Advanced");
 var lastSelections = [];
 
-/// Rimette i due bottoni grossi al loro aspetto normale: Conteggio a sinistra, Impagina a
-/// destra.
+/// Rimette i due bottoni grossi al loro aspetto normale per il tipo di lavorazione corrente.
+/// Nel volantino: Conteggio a sinistra, Impagina a destra. Nel PoP (tipo 2) il bottone di
+/// destra e' nascosto e quello di sinistra impagina, quindi si chiama Impagina.
 ///
-/// Serve dopo che initDocumentInLavorazione li ha cambiati per una lavorazione di tipo 2,
-/// che di bottoni ne mostra uno solo.
+/// La chiamano initDocumentInLavorazione e la fine di ogni conteggio o impaginazione. Prima
+/// scriveva sempre Conteggio, e nel PoP il bottone cambiava nome dopo ogni impaginazione.
 ///
 /// DA SPOSTARE (task di divisione): in filtri.js con getFiltroButtonMarkup.
 function setFiltroButtonsDefaultMarkup() {
+    let pop = false;
+    try {
+        pop = ficoProcess.getTipoLavorazioneCorrente() == 2;
+    } catch (e) {
+        pop = false;
+    }
     if (bOpt1 != null) {
-        bOpt1.innerHTML = getFiltroButtonMarkup('conteggio.png', 'Conteggio');
+        bOpt1.innerHTML = pop
+            ? getFiltroButtonMarkup('impagina.png', 'Impagina')
+            : getFiltroButtonMarkup('conteggio.png', 'Conteggio');
     }
     if (bOpt2 != null) {
         bOpt2.innerHTML = getFiltroButtonMarkup('impagina.png', 'Impagina');
