@@ -63,6 +63,7 @@ namespace Istanta.Controllers
         private readonly Edro21_DbContext2 ctx2;
         private readonly ILogger<LoginController> _logger;
         private readonly string externalSourcePath = "";
+        private readonly string externalLibPath = "";
         private readonly string passKeyRecovery = "istn_recoveryP";
         private readonly IOptions<AuthADOptions> _authAD_options;
         private readonly FicoConfig ficoConfig;
@@ -88,6 +89,7 @@ namespace Istanta.Controllers
             _authAD_options = authAD_options;
 
             externalSourcePath = external_lib.Value.pathSource;
+            externalLibPath = external_lib.Value.pathLib;
             ficoConfig = fico_config.Value;
             this.httpClientFactory = httpClientFactory;
             
@@ -1259,33 +1261,7 @@ namespace Istanta.Controllers
 
         private string getAgenziaVersionDo()
         {
-            string result = "";
-            //Come recupero la versione di una dll su disco
-            string pathDll = Path.Combine(AppContext.BaseDirectory, "wwwroot", "external_lib", "AgenziaLib.dll");
-            if (System.IO.File.Exists(pathDll))
-            {
-                var bytes = System.IO.File.ReadAllBytes(pathDll);
-                var assembly = Assembly.Load(bytes);
-                var versionAttribute = assembly.GetName().Version;
-
-                if (versionAttribute != null)
-                {
-                    result = $"{versionAttribute.Major}.{versionAttribute.Minor}.{versionAttribute.Build}";
-                    if (result.IndexOf("+") > 0)
-                    {
-                        result = result.Substring(0, result.IndexOf("+"));
-                    }
-                }
-                else
-                {
-
-                    result = "Version not found";
-                }
-
-            }
-
-            return result;
-
+            return VersioneAgenziaLib.Leggi(VersioneAgenziaLib.PercorsoDll(externalLibPath));
         }
 
         /// <summary>
