@@ -47,6 +47,9 @@ function Main() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [newEmailAddress, setNewEmailAddress] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [passwordDisattivazione, setPasswordDisattivazione] = useState("");
+  const [confermaDisattivazione, setConfermaDisattivazione] = useState(false);
+  const [disattivazioneInCorso, setDisattivazioneInCorso] = useState(false);
   const { user, setUser } = useUser();
   const { showNotification } = useNotification();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -181,6 +184,18 @@ function Main() {
       showNotification(msg, { variant: 'error' });
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleDisattivaAccount = async () => {
+    setDisattivazioneInCorso(true);
+    try {
+      await ServerCall.post('/utente/disattiva-account', { password: passwordDisattivazione });
+      // Le sessioni sono già chiuse dal server: ricarico da zero per svuotare lo stato dell'app
+      window.location.assign('/login');
+    } catch (err: unknown) {
+      showNotification(err instanceof Error ? err.message : "Errore durante la disattivazione dell'account", { variant: 'error' });
+      setDisattivazioneInCorso(false);
     }
   };
 
@@ -1343,15 +1358,51 @@ function Main() {
                 <div className="flex items-center pb-5 mb-6 font-medium border-b border-dashed border-slate-300/70 text-[0.94rem]">
                   Disattivazione Account
                 </div>
-                {/* ponytail: nessun endpoint di auto-eliminazione; l'eliminazione resta all'amministratore (DELETE /deleteUser) */}
-                <Alert variant="outline-warning" className="flex items-start">
-                  <Lucide icon="AlertTriangle" className="w-6 h-6 mr-2 mt-0.5 shrink-0" />
-                  <div>
-                    {isOutsider
-                      ? "Gli account con autenticazione esterna (OIDC) non possono essere eliminati da questo pannello. Contatta l'amministratore del sistema per procedere."
-                      : "L'eliminazione dell'account non è ancora disponibile da questo pannello. Contatta l'amministratore del sistema per procedere."}
-                  </div>
-                </Alert>
+                {isOutsider ? (
+                  <Alert variant="outline-warning" className="flex items-start">
+                    <Lucide icon="AlertTriangle" className="w-6 h-6 mr-2 mt-0.5 shrink-0" />
+                    <div>
+                      Gli account con autenticazione esterna (OIDC) non possono essere disattivati da questo pannello. Contatta l'amministratore del sistema per procedere.
+                    </div>
+                  </Alert>
+                ) : (
+                  <>
+                    <div className="leading-relaxed">
+                      Disattivando l'account perderai l'accesso a Fidelity e verranno chiuse tutte le tue sessioni aperte. I tuoi dati restano conservati: per riattivare l'account contatta l'amministratore.
+                    </div>
+                    <div className="mt-5">
+                      <FormLabel htmlFor="password-disattivazione">Password attuale</FormLabel>
+                      <FormInput
+                        id="password-disattivazione"
+                        type="password"
+                        autoComplete="current-password"
+                        value={passwordDisattivazione}
+                        onChange={(e) => setPasswordDisattivazione(e.target.value)}
+                      />
+                    </div>
+                    <FormCheck className="mt-4">
+                      <FormCheck.Input
+                        id="conferma-disattivazione"
+                        type="checkbox"
+                        checked={confermaDisattivazione}
+                        onChange={(e) => setConfermaDisattivazione(e.target.checked)}
+                      />
+                      <FormCheck.Label htmlFor="conferma-disattivazione">
+                        Confermo di voler disattivare il mio account.
+                      </FormCheck.Label>
+                    </FormCheck>
+                    <div className="flex justify-end pt-5 mt-6 border-t border-dashed border-slate-300/70">
+                      <Button
+                        variant="outline-danger"
+                        className="w-full px-4 border-danger/50 bg-danger/5 md:w-auto"
+                        onClick={handleDisattivaAccount}
+                        disabled={!confermaDisattivazione || !passwordDisattivazione || disattivazioneInCorso}
+                      >
+                        {disattivazioneInCorso ? "Disattivazione in corso..." : "Disattiva account"}
+                      </Button>
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>

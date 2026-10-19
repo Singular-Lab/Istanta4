@@ -152,6 +152,7 @@ export class UserController extends BaseController {
 
     this.router.put('/update_profile', authMiddleware, this.updateProfile.bind(this));
     this.router.put('/update_password', authMiddleware, this.updatePasswordSelf.bind(this));
+    this.router.post('/utente/disattiva-account', authMiddleware, this.disattivaAccountSelf.bind(this));
 
     // Global filters
     this.router.get('/utenti/me/global-filters', authMiddleware, this.getGlobalFilters.bind(this));
@@ -280,6 +281,26 @@ export class UserController extends BaseController {
 
       await this.userService.verifyAndUpdatePassword(userId, currentPassword, newPassword);
       res.status(HttpStatusCode.OK).json({ success: true, message: 'Password aggiornata con successo' });
+    } catch (error) {
+      this.handleError(res, error as Error);
+    }
+  }
+
+  // Agisce sempre sull'utente della sessione, mai su un id ricevuto nel body
+  private async disattivaAccountSelf(req: Request, res: Response): Promise<void> {
+    try {
+      const userId = req.session.id_utente as string;
+      if (!userId) {
+        throw new UnauthorizedError({ message: 'Utente non autorizzato' });
+      }
+
+      await this.userService.disattivaAccount(userId, req.body?.password);
+      AuditLogService.getInstance().userUpdated(req, userId, { stato: STATO_UTENTI.DISATTIVO, motivo: 'disattivazione dal profilo' });
+
+      req.session.destroy(() => {
+        res.clearCookie('sid_fidelity_promo');
+        res.status(HttpStatusCode.OK).json({ success: true, message: 'Account disattivato' });
+      });
     } catch (error) {
       this.handleError(res, error as Error);
     }

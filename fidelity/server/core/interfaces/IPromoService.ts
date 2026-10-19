@@ -10,6 +10,8 @@ export interface IPromoService {
   deletePromo(id: string): Promise<boolean>;
   getAllPromo(): Promise<PromoResponseDTO[]>;
   getCurrentPromoCount(): Promise<number>;
+  contaPromoSenzaOrdineDiStampa(): Promise<number>;
+  getPromoSenzaOrdineDiStampa(): Promise<PromoResponseDTO[]>;
   getAllPromoStorico(): Promise<PromoResponseDTO[]>;
   getAllPromoTimeline(): Promise<PromoResponseDTO[]>;
 

@@ -2,6 +2,7 @@ import clsx from 'clsx';
 import dayjs from 'dayjs';
 import React, { useEffect, useState } from 'react';
 import { useLoaderData, useRevalidator } from 'react-router-dom';
+import ConfirmDialog from "@/components/ConfirmDialog";
 import { PermissionGate } from "@/components/PermissionGate";
 import withSessionCheck from "@/components/SessionChecker";
 import { PERMISSIONS } from "@/constants/permissions";
@@ -76,6 +77,27 @@ const GestionePresetsWhatsappSuperAdmin: React.FC = () => {
     const [isLoadingNewDefault, setIsLoadingNewDefault] = useState(false);
     const [selectedPreset, setSelectedPreset] = useState<string | undefined>(undefined);
     const [isEditing, setIsEditing] = useState(false);
+    const [presetDaEliminare, setPresetDaEliminare] = useState<GDOWhatsappPresetAttributes | null>(null);
+    const [eliminazioneInCorso, setEliminazioneInCorso] = useState(false);
+
+    const eliminaPreset = async () => {
+        if (!presetDaEliminare) return;
+        setEliminazioneInCorso(true);
+        try {
+            await ServerCall.delete(`/whatsapp/preset/${presetDaEliminare.id_gdowhatsappreset}`);
+            showNotification('Preset eliminato', { variant: 'success' });
+            if (selectedPreset === presetDaEliminare.id_gdowhatsappreset) {
+                setSelectedPreset(undefined);
+                setIsEditing(false);
+            }
+            setPresetDaEliminare(null);
+            revalidate();
+        } catch (error: unknown) {
+            showNotification(error instanceof Error ? error.message : "Errore durante l'eliminazione del preset", { variant: 'error' });
+        } finally {
+            setEliminazioneInCorso(false);
+        }
+    };
     const components = template?.json_meta_gdowhatsapptemplate?.components || [];
 
     // ---------------- PARAMETRI TESTO (header/body/footer) -------------------
@@ -314,6 +336,15 @@ const GestionePresetsWhatsappSuperAdmin: React.FC = () => {
 
     return (
         <div>
+            <ConfirmDialog
+                open={!!presetDaEliminare}
+                title="Eliminare il preset?"
+                description={<>Il preset <strong>{presetDaEliminare?.nome_preset_gdowhatsappreset}</strong> verrà eliminato. Le campagne già inviate non cambiano.</>}
+                confirmLabel="Elimina"
+                loading={eliminazioneInCorso}
+                onClose={() => setPresetDaEliminare(null)}
+                onConfirm={eliminaPreset}
+            />
             <PageHeader
                 title="Gestione Presets WhatsApp Super Admin"
                 description="In questa pagina puoi gestire i presets di WhatsApp per il Super Admin."
@@ -414,6 +445,16 @@ const GestionePresetsWhatsappSuperAdmin: React.FC = () => {
                                                         >
                                                             <Lucide icon="Pen" className="w-4 h-4 mr-1" />
                                                             Modifica
+                                                        </Button>
+                                                    </PermissionGate>
+                                                    <PermissionGate permission={PERMISSIONS.WHATSAPP.GESTISCI_PRESETS} mode="disable">
+                                                        <Button
+                                                            size="xs"
+                                                            variant="outline-danger"
+                                                            title="Elimina"
+                                                            onClick={() => setPresetDaEliminare(preset)}
+                                                        >
+                                                            <Lucide icon="Trash2" className="w-4 h-4 mr-1" /> Elimina
                                                         </Button>
                                                     </PermissionGate>
                                                 </div>

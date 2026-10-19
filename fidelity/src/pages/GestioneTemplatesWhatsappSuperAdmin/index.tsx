@@ -1,6 +1,7 @@
 import React, { Fragment, useEffect, useMemo, useState } from "react";
 import { useLoaderData, useNavigate, useRevalidator } from "react-router-dom";
 import { STATO_GDO_WHATSAPP_TEMPLATE } from "../../../lib/enums";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import { PermissionGate } from "@/components/PermissionGate";
 import withSessionCheck from "@/components/SessionChecker";
 import { PERMISSIONS } from "@/constants/permissions";
@@ -130,6 +131,23 @@ const GestioneTemplatesWhatsappSuperAdmin: React.FC = () => {
     const { revalidate } = useRevalidator();
 
     const [syncing, setSyncing] = useState(false);
+    const [templateDaEliminare, setTemplateDaEliminare] = useState<GDOWhatsappTemplateAttributes | null>(null);
+    const [eliminazioneInCorso, setEliminazioneInCorso] = useState(false);
+
+    const eliminaTemplate = async () => {
+        if (!templateDaEliminare) return;
+        setEliminazioneInCorso(true);
+        try {
+            await ServerCall.delete(`/whatsapp/template/${templateDaEliminare.id_gdowhatsapptemplate}`);
+            showNotification("Template eliminato", { variant: "success" });
+            setTemplateDaEliminare(null);
+            revalidate();
+        } catch (error: unknown) {
+            showNotification(error instanceof Error ? error.message : "Errore durante l'eliminazione del template", { variant: "error" });
+        } finally {
+            setEliminazioneInCorso(false);
+        }
+    };
 
     const templatesCount = templatesWhatsapp?.length ?? 0;
 
@@ -192,8 +210,27 @@ const GestioneTemplatesWhatsappSuperAdmin: React.FC = () => {
         (t) => t.stato_meta_gdowhatsapptemplate === STATO_GDO_WHATSAPP_TEMPLATE.CREATED_BUT_NOT_SYNCED
     );
 
+    // Un template già inviato a Meta viene eliminato anche lì, e Meta non permette di riusare il nome per un po'
+    const giaSuMeta = !!(templateDaEliminare?.json_meta_gdowhatsapptemplate as { id?: string } | undefined)?.id;
+
     return (
         <Fragment>
+            <ConfirmDialog
+                open={!!templateDaEliminare}
+                title="Eliminare il template?"
+                description={
+                    <>
+                        Il template <strong>{templateDaEliminare?.nome_template_gdowhatsapptemplate}</strong> verrà eliminato
+                        {giaSuMeta
+                            ? " anche su Meta, per questa lingua. Le campagne già inviate restano consultabili; Meta non permette di riusare subito lo stesso nome."
+                            : " insieme ai suoi preset."}
+                    </>
+                }
+                confirmLabel="Elimina"
+                loading={eliminazioneInCorso}
+                onClose={() => setTemplateDaEliminare(null)}
+                onConfirm={eliminaTemplate}
+            />
             <div className="space-y-6">
                 {/* HEADER */}
                 <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
@@ -381,6 +418,17 @@ const GestioneTemplatesWhatsappSuperAdmin: React.FC = () => {
                                                                     </Button>
                                                                 </>
                                                             )}
+                                                        <PermissionGate permission={PERMISSIONS.WHATSAPP.GESTISCI_TEMPLATES} mode="disable">
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline-danger"
+                                                                title="Elimina"
+                                                                onClick={() => setTemplateDaEliminare(template)}
+                                                                className="text-xs py-1.5 px-3 shadow-sm"
+                                                            >
+                                                                Elimina
+                                                            </Button>
+                                                        </PermissionGate>
                                                     </div>
                                                 </Table.Td>
                                             </Table.Tr>

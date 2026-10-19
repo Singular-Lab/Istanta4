@@ -33,18 +33,25 @@ export class BadgeService {
             // 2) Ordini di stampa in corso -> /ods-in-corso
             let odsCount = 0;
             try {
-                // OrdiniStampaService espone getAllOrdiniDiStampaInCorso
-                // @ts-ignore
                 const ordini = await this.ordiniStampaService.getAllOrdiniDiStampaInCorso();
                 odsCount = Array.isArray(ordini) ? ordini.length : 0;
             } catch (err) {
                 log.error('Error counting ordini di stampa for badges', err instanceof Error ? err : String(err));
             }
 
+            // 3) Promo da cui creare un ordine di stampa -> /nuovo-ods (stesso criterio dell'elenco della pagina)
+            let nuovoOdsCount = 0;
+            try {
+                nuovoOdsCount = await this.promoService.contaPromoSenzaOrdineDiStampa();
+            } catch (err) {
+                log.error('Error counting promo senza ordine di stampa for badges', err instanceof Error ? err : String(err));
+            }
+
             // Map of candidate badges
             const candidateBadges: Record<string, { count: number; variant?: 'info' | 'warning' | 'error' }> = {
                 '/promozioni/in-corso': { count: promoCount, variant: 'info' },
                 '/ods-in-corso': { count: odsCount, variant: 'info' },
+                '/nuovo-ods': { count: nuovoOdsCount, variant: 'warning' },
             };
 
             // Solo i badge delle pagine che l'utente puo' aprire

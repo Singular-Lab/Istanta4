@@ -23,7 +23,6 @@
     "/embed",
     "/preview",
     "/public",
-    "/whatsapp/confirm-opt-in",
   ];
 
   const path = window.location.pathname;

@@ -21,13 +21,14 @@ vi.mock('../../logger', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
+import { ForbiddenError } from '../../../../lib/errors';
 import config from '../../config';
 import { createAccessoServizioParams } from '../../utils/accessoServizioLink';
 import { HubController } from '../HubController';
 
 const SEGRETO = 'segreto-di-test-lungo-almeno-trentadue-caratteri';
 
-function createApp() {
+function createApp(verificaAccountAttivo = vi.fn().mockResolvedValue(undefined)) {
   const session: Record<string, any> = {
     regenerate: (cb: (err?: unknown) => void) => cb(),
     save: (cb: (err?: unknown) => void) => cb(),
@@ -48,11 +49,14 @@ function createApp() {
     }),
   };
 
+  // Prima di aprire la sessione l'accesso di servizio verifica che l'account sia attivo
+  const userService = { verificaAccountAttivo };
+
   new HubController(
-    {} as any, {} as any, {} as any, undefined, undefined, undefined, undefined, agenziaLib as any
+    {} as any, {} as any, {} as any, undefined, userService as any, undefined, undefined, agenziaLib as any
   ).registerRoutes(app);
 
-  return { app, session, agenziaLib };
+  return { app, session, agenziaLib, verificaAccountAttivo };
 }
 
 function link(params: Record<string, string>) {
@@ -119,5 +123,21 @@ describe('accesso di servizio OIDC (fake-callback)', () => {
     expect(agenziaLib.parseUtenteOIDC).toHaveBeenCalledWith('mario@esempio.it', expect.objectContaining({ oid: 'oid-1' }));
     expect(session.id_utente).toBe('u1');
     expect(audit.loginSuccess).toHaveBeenCalledWith(expect.anything(), 'u1', TIPO_UTENTI.SUPERADMIN, 'login_accesso_servizio');
+  });
+
+  it('con un link valido per un account disattivato non apre la sessione', async () => {
+    (config as any).OIDC_FAKE_CALLBACK_SECRET = SEGRETO;
+    const { app, session, verificaAccountAttivo } = createApp(
+      vi.fn().mockRejectedValue(new ForbiddenError({ message: "Account disattivato. Contatta l'amministratore." }))
+    );
+    const params = createAccessoServizioParams('mario@esempio.it', 'oid-1', SEGRETO);
+
+    const res = await request(app).get(link({ ...params }));
+
+    expect(verificaAccountAttivo).toHaveBeenCalledWith('u1');
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toContain('reason=oidc_access_denied');
+    expect(session.id_utente).toBeUndefined();
+    expect(audit.loginSuccess).not.toHaveBeenCalled();
   });
 });

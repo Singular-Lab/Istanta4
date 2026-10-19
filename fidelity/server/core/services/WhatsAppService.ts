@@ -1,10 +1,11 @@
 import fetch from 'node-fetch';
 import crypto from 'node:crypto';
-import { QueryTypes } from 'sequelize';
+import { Op, QueryTypes } from 'sequelize';
 import { v4 as uuidv4 } from 'uuid';
 import { log } from '../logger';
 import {
     CATEGORIA_TEMPLATE_WHATSAPP,
+    GDOWhatsappQueueJobStatus,
     STATO_GDO_WHATSAPP_TEMPLATE,
     STATO_UTENTI,
     TIPO_UTENTI
@@ -30,6 +31,8 @@ import type { GDOResponseDTO } from '../dto';
 import type { IUserService } from '../interfaces/IUserService';
 import { IWhatsAppService } from '../interfaces/IWhatsAppService';
 import { GDO, Utente, UtentiGDO } from '../models';
+import { GDOWhatsappCampagne } from '../models/whatsapp/gdo_whatsapp_campagne';
+import { GDOWhatsappQueueJob } from '../models/whatsapp/gdo_whatsapp_message_queue';
 import { GDOWhatsappNumbers } from '../models/whatsapp/gdo_whatsapp_numbers';
 import { GDOWhatsappPreset } from '../models/whatsapp/gdo_whatsapp_preset';
 import { GDOWhatsappTemplate } from '../models/whatsapp/gdo_whatsapp_template';
@@ -932,7 +935,10 @@ export class WhatsAppService implements IWhatsAppService {
     > {
         try {
             const templates = await GDOWhatsappTemplate.findAll({
-                where: { id_gdo_gdowhatsapptemplate: idGdo }
+                where: {
+                    id_gdo_gdowhatsapptemplate: idGdo,
+                    stato_meta_gdowhatsapptemplate: { [Op.ne]: STATO_GDO_WHATSAPP_TEMPLATE.DELETED }
+                }
             });
 
             const templatesWithPresetCount = await Promise.all(
@@ -1310,6 +1316,104 @@ export class WhatsAppService implements IWhatsAppService {
                 }).message
             };
         }
+    }
+
+    /**
+     * Elimina un preset. idGdoAmmessa null = Superadmin (qualunque GDO); per gli altri il preset
+     * di un'altra GDO risulta inesistente. Il predefinito si elimina solo se è l'ultimo del modello.
+     */
+    async eliminaPresetTemplateWhatsapp(id_preset: string, idGdoAmmessa: string | null): Promise<void> {
+        const preset = await GDOWhatsappPreset.findByPk(id_preset);
+        const template = preset
+            ? await GDOWhatsappTemplate.findByPk(preset.id_template_gdowhatsappreset, { attributes: ['id_gdo_gdowhatsapptemplate'] })
+            : null;
+        if (!preset || !template || (idGdoAmmessa !== null && template.id_gdo_gdowhatsapptemplate !== idGdoAmmessa)) {
+            throw new NotFoundError({ message: 'Preset non trovato', entityType: 'GDOWhatsappPreset', entityId: id_preset });
+        }
+        if (preset.is_default_gdowhatsappreset) {
+            const altri = await GDOWhatsappPreset.count({
+                where: {
+                    id_template_gdowhatsappreset: preset.id_template_gdowhatsappreset,
+                    id_gdowhatsappreset: { [Op.ne]: id_preset }
+                }
+            });
+            if (altri > 0) {
+                throw new BusinessError({
+                    message: 'Imposta prima un altro preset come predefinito',
+                    rule: 'Il preset predefinito si elimina solo se è l\'ultimo del modello'
+                });
+            }
+        }
+        await preset.destroy();
+    }
+
+    /**
+     * Elimina un modello. Mai inviato a Meta: si cancella con i suoi preset.
+     * Già su Meta: si cancella su Meta (solo quella lingua, con hsm_id) e resta in Fidelity come DELETED,
+     * perché le campagne inviate lo usano per GDO, outbox e credenziali.
+     */
+    async eliminaTemplateWhatsapp(id_template: string, idGdoAmmessa: string | null): Promise<void> {
+        const template = await GDOWhatsappTemplate.findByPk(id_template);
+        if (
+            !template ||
+            template.stato_meta_gdowhatsapptemplate === STATO_GDO_WHATSAPP_TEMPLATE.DELETED ||
+            (idGdoAmmessa !== null && template.id_gdo_gdowhatsapptemplate !== idGdoAmmessa)
+        ) {
+            throw new NotFoundError({ message: 'Template non trovato', entityType: 'GDOWhatsappTemplate', entityId: id_template });
+        }
+
+        const meta = template.json_meta_gdowhatsapptemplate as unknown as { id?: string; name?: string } | null;
+        if (!meta?.id) {
+            await sequelize.transaction(async (transaction) => {
+                await GDOWhatsappPreset.destroy({ where: { id_template_gdowhatsappreset: id_template }, transaction });
+                await template.destroy({ transaction });
+            });
+            return;
+        }
+
+        const campagne = await GDOWhatsappCampagne.findAll({
+            where: { template_id_whatsapp_campagna: id_template },
+            attributes: ['id_whatsapp_campagna']
+        });
+        const inCoda = campagne.length === 0 ? 0 : await GDOWhatsappQueueJob.count({
+            where: {
+                campagna_id_whatsapp_queue_job: { [Op.in]: campagne.map((c) => c.id_whatsapp_campagna) },
+                status_whatsapp_queue_job: { [Op.in]: [GDOWhatsappQueueJobStatus.PENDING, GDOWhatsappQueueJobStatus.PROCESSING] }
+            }
+        });
+        if (inCoda > 0) {
+            throw new BusinessError({
+                message: 'Il template ha invii in corso: eliminalo quando le campagne sono concluse o annullate',
+                rule: 'Un template con messaggi da inviare non si elimina'
+            });
+        }
+
+        const credenziali = await GDOWhatsappNumbers.findOne({
+            where: { id_gdo_gdowhatsappnumbers: template.id_gdo_gdowhatsapptemplate }
+        });
+        if (!credenziali) {
+            throw new BusinessError({ message: 'Credenziali WhatsApp non trovate per il GDO', rule: 'Serve il canale WhatsApp della GDO' });
+        }
+
+        const query = new URLSearchParams({ hsm_id: meta.id, name: meta.name ?? '' });
+        const response = await fetch(
+            `https://graph.facebook.com/v24.0/${credenziali.whatsapp_business_account_id_gdowhatsappnumbers}/message_templates?${query}`,
+            {
+                method: 'DELETE',
+                headers: { accept: 'application/json', authorization: `Bearer ${credenziali.access_token_gdowhatsappnumbers}` }
+            }
+        );
+        if (!response.ok) {
+            const error = (await response.json().catch(() => ({}))) as any;
+            throw new ExternalApiError({
+                service: 'Meta WhatsApp API',
+                statusCode: response.status,
+                message: `Errore API Meta: ${error?.error?.message ?? response.statusText}`,
+                details: error
+            });
+        }
+
+        await template.update({ stato_meta_gdowhatsapptemplate: STATO_GDO_WHATSAPP_TEMPLATE.DELETED });
     }
 
     async setDefaultPresetTemplateWhatsapp(

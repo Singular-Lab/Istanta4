@@ -18,11 +18,14 @@ import { PuntoVendita } from '../models/punto_vendita/punti_vendita';
 import { PuntoVenditaUtenti } from '../models/punto_vendita/punti_vendita_utenti';
 import { RuoloUtenteGDO } from '../models/ruolo_gdo';
 import { UtentiAnonimi } from '../models/utenti_anonimi';
+import { Utente } from '../models/utenti';
 import { UtentiGDO } from '../models/utenti_gdo';
 import { WishlistWebpliant } from '../models/wishlist_webpliant';
 import type { IUserRepository } from '../repositories/UserRepository';
 import { ServerUtils } from '../utils/ServerUtils';
 import { verificaRisposta } from '../utils/rispostaServizi';
+
+export const ACCOUNT_NON_ATTIVO = "Account disattivato. Contatta l'amministratore.";
 /**
  * Chi puo' aprire la sessione come GDO o Punto Vendita: gli utenti registrati con
  * uno di questi tipi o come IT/Category. Un Guest, un Marketing o un'Agenzia
@@ -530,6 +533,9 @@ export class UserService implements IUserService {
       if (!isPasswordValid) {
         return { success: false, message: 'Email o password non valide' };
       }
+      if (user.stato_utenti !== STATO_UTENTI.ATTIVO) {
+        return { success: false, message: ACCOUNT_NON_ATTIVO };
+      }
 
       const userResponseDTO = toUtenteResponseDTO(user);
 
@@ -629,6 +635,9 @@ export class UserService implements IUserService {
           entityType: 'Utente',
           entityId: email
         });
+      }
+      if (utenteSingolo.stato_utenti !== STATO_UTENTI.ATTIVO) {
+        throw new ForbiddenError({ message: ACCOUNT_NON_ATTIVO });
       }
 
       const utentePuntoVendita = await PuntoVenditaUtenti.findOne({ where: { idutenti_puntivenditautenti: utenteSingolo.id_utenti } });
@@ -766,6 +775,44 @@ export class UserService implements IUserService {
         cause: error instanceof Error ? error : undefined
       });
     }
+  }
+
+  /** Rifiuta l'accesso di un account non ATTIVO (per esempio dopo il ritorno da un fornitore OIDC). */
+  async verificaAccountAttivo(userId: string): Promise<void> {
+    const utente = await this.userRepository.findById(userId);
+    if (!utente || utente.stato_utenti !== STATO_UTENTI.ATTIVO) {
+      throw new ForbiddenError({ message: ACCOUNT_NON_ATTIVO });
+    }
+  }
+
+  /**
+   * L'utente disattiva il proprio account: stato DISATTIVO, dati conservati, tutte le sessioni chiuse.
+   * Lo riattiva solo un amministratore (PUT /updateUser).
+   */
+  async disattivaAccount(userId: string, password: string): Promise<void> {
+    const utente = await this.userRepository.findById(userId);
+    if (!utente) {
+      throw new NotFoundError({ message: 'Utente non trovato', entityType: 'Utente', entityId: userId });
+    }
+    if (utente.outsider_utenti === true || !utente.password_utenti) {
+      throw new ForbiddenError({ message: "Gli account con autenticazione esterna si disattivano dall'amministratore" });
+    }
+    if (!password || !(await bcrypt.compare(password, utente.password_utenti))) {
+      throw new ValidationError({ message: 'La password non è corretta', field: 'password' });
+    }
+    if (utente.tipo_utenti === TIPO_UTENTI.SUPERADMIN) {
+      const superadminAttivi = await Utente.count({
+        where: { tipo_utenti: TIPO_UTENTI.SUPERADMIN, stato_utenti: STATO_UTENTI.ATTIVO },
+      });
+      if (superadminAttivi <= 1) {
+        throw new ForbiddenError({ message: "Sei l'ultimo Superadmin attivo: il tuo account non può essere disattivato" });
+      }
+    }
+
+    await this.userRepository.update(userId, { stato_utenti: STATO_UTENTI.DISATTIVO });
+    // connect-pg-simple: la sessione è un JSON con id_utente al primo livello
+    await sequelize.query(`DELETE FROM sessions WHERE sess->>'id_utente' = :id`, { replacements: { id: userId } });
+    await this.refreshMaterializedView();
   }
 
   async verifyAndUpdatePassword(userId: string, currentPassword: string, newPassword: string): Promise<boolean> {

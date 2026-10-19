@@ -336,8 +336,8 @@ export const AREE: DefinizioneArea[] = [
     accesso: { codice: P.WHATSAPP.VISUALIZZA_CAMPAGNE, nome: 'Consultare le campagne', descrizione: 'Vedere le campagne WhatsApp e il loro stato.' },
     azioni: [
       { codice: P.WHATSAPP.INVIA_CAMPAGNA, nome: 'Inviare campagne', descrizione: 'Preparare e avviare una campagna.' },
-      { codice: P.WHATSAPP.GESTISCI_PRESETS, nome: 'Gestire i preset', descrizione: 'Creare e modificare i preset dei messaggi.' },
-      { codice: P.WHATSAPP.GESTISCI_TEMPLATES, nome: 'Gestire i template', descrizione: 'Creare template e sincronizzarli con Meta.' },
+      { codice: P.WHATSAPP.GESTISCI_PRESETS, nome: 'Gestire i preset', descrizione: 'Creare, modificare ed eliminare i preset dei messaggi.' },
+      { codice: P.WHATSAPP.GESTISCI_TEMPLATES, nome: 'Gestire i template', descrizione: 'Creare template, sincronizzarli con Meta ed eliminarli, anche su Meta.' },
       { codice: P.WHATSAPP.ANNULLA_CAMPAGNA, nome: 'Annullare campagne', descrizione: 'Fermare una campagna in corso.', pericolosa: true },
     ],
   },

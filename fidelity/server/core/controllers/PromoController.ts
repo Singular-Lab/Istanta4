@@ -54,6 +54,7 @@ export class PromoController extends BaseController {
     this.router.get('/promo', authMiddleware, permissionGuard('promo.visualizza'), this.getAllPromos.bind(this));
     this.router.get('/promo/filtered', authMiddleware, permissionGuard('promo.visualizza'), this.getAllPromosFiltered.bind(this));
     this.router.get('/promo/in-corso', authMiddleware, permissionGuard('promo.visualizza'), this.getAllPromosInCorso.bind(this));
+    this.router.get('/promo/senza-ordine-stampa', authMiddleware, permissionGuard('ordini_stampa.crea'), this.getPromoSenzaOrdineDiStampa.bind(this));
     this.router.get('/promo/timeline', authMiddleware, permissionGuard('promo.visualizza'), this.getAllPromosTimeline.bind(this));
     this.router.get('/promo/storico', authMiddleware, permissionGuard('promo.visualizza'), this.getAllPromosStorico.bind(this));
     this.router.get('/promo/contesto', authMiddleware, permissionGuard('promo.crea'), this.getContestoPerNuovaLavorazione.bind(this));
@@ -182,6 +183,14 @@ export class PromoController extends BaseController {
           return dateB - dateA;
         });
       this.sendResponse(res, HttpStatusCode.OK, promosInCorso);
+    } catch (error) {
+      this.handleError(res, error as Error);
+    }
+  }
+
+  private async getPromoSenzaOrdineDiStampa(_req: ExpressRequest, res: Response): Promise<void> {
+    try {
+      this.sendResponse(res, HttpStatusCode.OK, await this.promoService.getPromoSenzaOrdineDiStampa());
     } catch (error) {
       this.handleError(res, error as Error);
     }

@@ -34,6 +34,8 @@ export interface IUserService {
   register(userData: UtenteCreationAttributes): Promise<UtenteResponseDTO>;
   updatePassword(userId: string, newPassword: string): Promise<boolean>;
   verifyAndUpdatePassword(userId: string, currentPassword: string, newPassword: string): Promise<boolean>;
+  disattivaAccount(userId: string, password: string): Promise<void>;
+  verificaAccountAttivo(userId: string): Promise<void>;
 
   // User operations
   getAllUtentiOperatori(userId: string): Promise<UtenteResponseDTO[]>;
