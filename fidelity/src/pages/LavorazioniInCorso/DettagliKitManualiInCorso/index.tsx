@@ -11,7 +11,7 @@ import clsx from "clsx";
 import dayjs from "dayjs";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLoaderData } from "react-router-dom";
-import { STATO_LAVORAZIONE_KIT_RUNTIME, TIPO_KIT_DESIGN } from "../../../../lib/enums";
+import { STATO_LAVORAZIONE_KIT_RUNTIME, STATO_PROMO, TIPO_KIT_DESIGN } from "../../../../lib/enums";
 import { DESIGN_KIT, RUNTIME_KIT, TipiDiExportAttributes } from "../../../../lib/types";
 import { PromoResponseDTO } from "../../../../server/core/dto";
 type Lavorazione = (DESIGN_KIT & { nomeCanale: string, nomeArea: string, lavorazioneStarted: boolean, isDesignKit: boolean, tipiExport: TipiDiExportAttributes[] }) | (RUNTIME_KIT & { nomeCanale: string, nomeArea: string, lavorazioneStarted: boolean, isDesignKit: boolean, tipiExport: TipiDiExportAttributes[], numero_files: number, numero_referenze: number });
@@ -40,6 +40,8 @@ interface LoaderData {
 function DettagliKitManualiInCorso() {
 
   const { lavorazioniManuali, datiLavorazione } = useLoaderData() as LoaderData;
+  // Promo in uno stato finale (attiva o archiviata): i kit non si modificano più
+  const promoChiusa = [STATO_PROMO.VALIDA, STATO_PROMO.VALIDA_CON_ERRORI, STATO_PROMO.ARCHIVIATA].includes(datiLavorazione?.stato as STATO_PROMO);
 
   const [lavorazioni, setLavorazioni] = useState<Lavorazione[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -225,9 +227,9 @@ function DettagliKitManualiInCorso() {
                       const isManuale = lavorazione.tipo === TIPO_KIT_DESIGN.MANUALE;
                       const statusInfo = getStatusInfo(lavorazione);
                       return (
-                        <Table.Tr key={lavorazione.guidId} className={clsx("[&_td]:last:border-b-0", datiLavorazione?.is_active && "opacity-60 bg-slate-50")}>
+                        <Table.Tr key={lavorazione.guidId} className={clsx("[&_td]:last:border-b-0", promoChiusa && "opacity-60 bg-slate-50")}>
                           <Table.Td className="py-4 border-dashed dark:bg-darkmode-600">
-                            <FormCheck.Input type="checkbox" checked={selectedLavorazioni.includes(lavorazione.guidId)} onChange={(e) => handleSelectOne(e, lavorazione.guidId)} disabled={datiLavorazione?.is_active || false} />
+                            <FormCheck.Input type="checkbox" checked={selectedLavorazioni.includes(lavorazione.guidId)} onChange={(e) => handleSelectOne(e, lavorazione.guidId)} disabled={promoChiusa} />
                           </Table.Td>
                           <Table.Td className="py-4 border-dashed w-80 dark:bg-darkmode-600">
                             <div>
@@ -263,7 +265,7 @@ function DettagliKitManualiInCorso() {
                           </Table.Td>
                           <Table.Td className="relative py-4 border-dashed dark:bg-darkmode-600">
                             <div className="flex items-center justify-center">
-                              {datiLavorazione?.is_active ? (
+                              {promoChiusa ? (
                                 <Button variant="secondary" size="sm" className="px-2 py-1" disabled>
                                   <Lucide icon="Lock" className="w-4 h-4" />
                                 </Button>

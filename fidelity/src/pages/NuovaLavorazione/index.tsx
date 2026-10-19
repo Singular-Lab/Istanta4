@@ -26,7 +26,7 @@ import { useContestoPerNuovaLavorazione } from "../../query/query";
 dayjs.extend(customParseFormat);
 
 const schema = yup.object().shape({
-  nome_promo: yup.string().required("Il nome della lavorazioneè obbligatorio"),
+  nome_promo: yup.string().required("Il nome della lavorazione è obbligatorio"),
   data_scandenza_promo: yup.string().required("La data di scadenza è obbligatoria"),
   range_di_date: yup.string()
     .required("La data di inizio e fine sono obbligatorie")

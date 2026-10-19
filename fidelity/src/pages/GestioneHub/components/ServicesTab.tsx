@@ -496,7 +496,7 @@ const ServicesTab = () => {
             <div>
               <div className="text-lg font-semibold text-slate-800">Servizi Hub</div>
               <div className="text-sm text-slate-500 mt-0.5">
-                Gestisci gruppi servizio e varianti per target. Servizi disponibili per tutti i tipi utente eccetto Superadmin e Guest.
+                Gestisci gruppi servizio e varianti per target. Servizi disponibili per tutti i tipi utente tranne Guest; il Superadmin vede sempre tutti i servizi.
               </div>
             </div>
             <div className="flex flex-col gap-3 lg:items-end">

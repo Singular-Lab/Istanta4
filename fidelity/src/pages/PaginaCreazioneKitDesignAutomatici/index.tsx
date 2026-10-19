@@ -312,7 +312,7 @@ export default function PaginaCreazioneKitDesignAutomatici() {
               <span>
                 Esiste già un template con questa combinazione!
                 <br />
-                Sovrascrivi il template esistente oppure cambia i dati.
+                Cambia i dati per creare una nuova combinazione.
               </span>
             </div>
           </Dialog.Description>
@@ -320,9 +320,6 @@ export default function PaginaCreazioneKitDesignAutomatici() {
             <div className="flex justify-end gap-3">
               <Button variant="secondary" onClick={() => setShowDialogTemplateEsisteGia(false)}>
                 Cambia valori
-              </Button>
-              <Button variant="danger" onClick={() => setShowDialogTemplateEsisteGia(false)}>
-                Sovrascrivi
               </Button>
             </div>
           </Dialog.Footer>

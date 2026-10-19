@@ -55,4 +55,26 @@ describe("ConfirmDialog", () => {
     expect(onConfirm).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
   });
+
+  it("usa l'icona di pericolo solo per le conferme distruttive", async () => {
+    const { unmount } = render(
+      <ConfirmDialog open title="Eliminare?" description="" onClose={vi.fn()} onConfirm={vi.fn()} />
+    );
+    expect(await screen.findByTestId("icona-conferma")).toHaveClass("text-danger");
+    unmount();
+
+    render(
+      <ConfirmDialog
+        open
+        title="Reinviare i messaggi?"
+        description=""
+        confirmVariant="primary"
+        onClose={vi.fn()}
+        onConfirm={vi.fn()}
+      />
+    );
+    const icona = await screen.findByTestId("icona-conferma");
+    expect(icona).toHaveClass("text-primary");
+    expect(icona).not.toHaveClass("text-danger");
+  });
 });

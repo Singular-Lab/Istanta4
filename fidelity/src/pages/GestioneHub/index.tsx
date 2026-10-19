@@ -29,7 +29,7 @@ function GestioneHub() {
     <>
       <PageHeader
         title="Gestione Hub"
-        description="Configura servizi e news dell'Hub. I servizi sono assegnabili a tutti i tipi utente (esclusi Superadmin e Guest)."
+        description="Configura servizi e news dell'Hub. I servizi sono assegnabili a tutti i tipi utente tranne Guest; il Superadmin vede sempre tutti i servizi."
       />
 
       {loading ? (

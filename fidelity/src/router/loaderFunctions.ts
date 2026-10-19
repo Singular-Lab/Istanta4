@@ -934,22 +934,3 @@ export const funzioneCaricamentoMaterialiPromo = async ({ request }: { request: 
     preselectedPromoId: idPromo
   };
 };
-
-// Loader per Kit POP
-export const funzioneCaricamentoKitPop = async ({ request }: { request: Request }) => {
-  const url = new URL(request.url);
-  const pathSegments = url.pathname.split("/");
-
-  // Estrai idPromo e idKit dal percorso
-  // Per un URL come /promozioni/in-corso/dettagli/:idPromo/pop/:idKit
-  const idKit = pathSegments.pop() || ""; // Ultimo segmento (idKit)
-  pathSegments.pop(); // Rimuove "pop"
-  const idPromo = pathSegments.pop() || ""; // Segmento idPromo
-
-  const kitPromise = ServerCall.get<any>(`/get_kit_per_gestione_lavorazione/${idPromo}/${idKit}`);
-  const results = await Promise.allSettled([kitPromise]);
-  const [kit] = results.map((r) =>
-    r.status === "fulfilled" ? r.value : (console.error("Errore:", r.reason), null)
-  );
-  return { kit };
-};

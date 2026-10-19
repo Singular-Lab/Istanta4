@@ -22,7 +22,7 @@ const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
   isPending
 }) => {
   return (
-    <Dialog open={open} onClose={onClose}>
+    <Dialog open={open} onClose={isPending ? () => {} : onClose}>
       <Dialog.Panel>
         <Dialog.Title>
           <div className="flex items-center">
@@ -53,10 +53,7 @@ const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
         <Dialog.Footer className="flex justify-end gap-4">
           <Button
             variant="primary"
-            onClick={() => {
-              onClose();
-              onConfirm();
-            }}
+            onClick={onConfirm}
             disabled={isPending}
           >
             {isPending ? (

@@ -35,7 +35,6 @@ const funzioneCaricamentoGestioneTemplatesWhatsappAdmin = createLazyLoader("funz
 const funzioneCaricamentoGestioneWhatsappSuperAdmin = createLazyLoader("funzioneCaricamentoGestioneWhatsappSuperAdmin");
 const funzioneCaricamentoImpostazioniTipografia = createLazyLoader("funzioneCaricamentoImpostazioniTipografia");
 const funzioneCaricamentoInvioCampagnaWhatsapp = createLazyLoader("funzioneCaricamentoInvioCampagnaWhatsapp");
-const funzioneCaricamentoKitPop = createLazyLoader("funzioneCaricamentoKitPop");
 const funzioneCaricamentoMaterialiAttivi = createLazyLoader("funzioneCaricamentoMaterialiAttivi");
 const funzioneCaricamentoMaterialiInCorso = createLazyLoader("funzioneCaricamentoMaterialiInCorso");
 const funzioneCaricamentoMaterialiPromo = createLazyLoader("funzioneCaricamentoMaterialiPromo");
@@ -440,14 +439,13 @@ const routes: RouteObject[] = [
         },
       },
       {
+        // Il kit POP usa la stessa pagina dei kit: DettaglioKit gestisce anche il POP
         path: "promozioni/in-corso/dettagli/:idPromo/pop/:idKit",
         lazy: async () => {
-          const { default: KitPopDettaglio } = await import(
-            "@/pages/KitPopDettaglio"
-          );
+          const { default: DettaglioKit } = await import("@/pages/DettaglioKit");
           return {
-            Component: KitPopDettaglio,
-            loader: funzioneCaricamentoKitPop,
+            Component: DettaglioKit,
+            loader: funzioneDettagliKit,
           };
         },
       },

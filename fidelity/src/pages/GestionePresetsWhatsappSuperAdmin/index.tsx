@@ -204,7 +204,7 @@ const GestionePresetsWhatsappSuperAdmin: React.FC = () => {
                     <div className="flex flex-row items-center">
                         <Lucide icon="CircleX" className="text-danger w-8 h-8" />
                         <div className="ml-4 mr-4">
-                            <div className="font-bold">Errore nella creazione del preset</div>
+                            <div className="font-bold">Errore nella modifica del preset</div>
                             <div className="mt-1 text-slate-500">
                                 {result.error || 'Si è verificato un errore sconosciuto.'}
                             </div>
@@ -414,15 +414,6 @@ const GestionePresetsWhatsappSuperAdmin: React.FC = () => {
                                                         >
                                                             <Lucide icon="Pen" className="w-4 h-4 mr-1" />
                                                             Modifica
-                                                        </Button>
-                                                    </PermissionGate>
-                                                    <PermissionGate permission={PERMISSIONS.WHATSAPP.GESTISCI_PRESETS}>
-                                                        <Button
-                                                            size="xs"
-                                                            variant="outline-danger"
-                                                            title="Elimina"
-                                                        >
-                                                            <Lucide icon="Trash2" className="w-4 h-4 mr-1" /> Elimina
                                                         </Button>
                                                     </PermissionGate>
                                                 </div>

@@ -1744,7 +1744,7 @@ const PromotionTimeline: React.FC<PromotionTimelineProps> = ({
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-700 mb-1">
-                      Nome
+                      Promozione
                     </label>
                     <FormSelect
                       value={selectedKeyframe.promoId || ''}

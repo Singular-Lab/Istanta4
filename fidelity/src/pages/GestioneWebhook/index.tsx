@@ -37,7 +37,6 @@ function GestioneWebhook() {
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [editingWebhook, setEditingWebhook] = useState<WebhookAttributes | null>(null);
     const [searchQuery, setSearchQuery] = useState("");
-    const [selectedWebhooks, setSelectedWebhooks] = useState<string[]>([]);
     const [testDialogOpen, setTestDialogOpen] = useState(false);
     const [statsDialogOpen, setStatsDialogOpen] = useState(false);
     const [selectedWebhookForAction, setSelectedWebhookForAction] = useState<WebhookAttributes | null>(null);
@@ -300,22 +299,6 @@ function GestioneWebhook() {
         }
     };
 
-    const handleSelectAll = (checked: boolean) => {
-        if (checked) {
-            setSelectedWebhooks(filteredWebhooks.map((w: WebhookAttributes) => w.id_webhook));
-        } else {
-            setSelectedWebhooks([]);
-        }
-    };
-
-    const handleSelectWebhook = (id: string, checked: boolean) => {
-        if (checked) {
-            setSelectedWebhooks(prev => [...prev, id]);
-        } else {
-            setSelectedWebhooks(prev => prev.filter(wId => wId !== id));
-        }
-    };
-
     const getStatusBadge = (status: string) => {
         switch (status) {
             case STATO_WEBHOOK.ATTIVO:
@@ -396,13 +379,6 @@ function GestioneWebhook() {
                             <Table bordered className="border-b border-slate-200/60">
                                 <Table.Thead>
                                     <Table.Tr>
-                                        <Table.Td className="w-5 py-4 font-medium border-t bg-slate-50 border-slate-200/60 text-slate-500">
-                                            <FormCheck.Input
-                                                type="checkbox"
-                                                onChange={(e) => handleSelectAll(e.target.checked)}
-                                                checked={selectedWebhooks.length === filteredWebhooks.length && filteredWebhooks.length > 0}
-                                            />
-                                        </Table.Td>
                                         <Table.Td className="py-4 font-medium border-t bg-slate-50 border-slate-200/60 text-slate-500">
                                             Webhook
                                         </Table.Td>
@@ -426,7 +402,7 @@ function GestioneWebhook() {
                                 <Table.Tbody>
                                     {isLoading ? (
                                         <Table.Tr>
-                                            <Table.Td colSpan={7} className="py-8 text-center">
+                                            <Table.Td colSpan={6} className="py-8 text-center">
                                                 <div className="flex items-center justify-center">
                                                     <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mr-2"></div>
                                                     Caricamento webhook...
@@ -436,13 +412,6 @@ function GestioneWebhook() {
                                     ) : filteredWebhooks.length > 0 ? (
                                         filteredWebhooks.map((webhook: WebhookAttributes) => (
                                             <Table.Tr key={webhook.id_webhook} className="[&_td]:last:border-b-0">
-                                                <Table.Td className="py-4 border-dashed dark:bg-darkmode-600">
-                                                    <FormCheck.Input
-                                                        type="checkbox"
-                                                        checked={selectedWebhooks.includes(webhook.id_webhook)}
-                                                        onChange={(e) => handleSelectWebhook(webhook.id_webhook, e.target.checked)}
-                                                    />
-                                                </Table.Td>
                                                 <Table.Td className="py-4 border-dashed dark:bg-darkmode-600">
                                                     <div>
                                                         <div className="font-medium text-sm mb-1">{webhook.descrizione_webhook}</div>
@@ -523,7 +492,7 @@ function GestioneWebhook() {
                                         ))
                                     ) : (
                                         <Table.Tr>
-                                            <Table.Td colSpan={7} className="py-8 border-dashed dark:bg-darkmode-600">
+                                            <Table.Td colSpan={6} className="py-8 border-dashed dark:bg-darkmode-600">
                                                 <EmptyState
                                                     icon="Webhook"
                                                     title="Nessun webhook trovato"
@@ -751,7 +720,7 @@ function GestioneWebhook() {
                 <Dialog.Panel>
                     <Dialog.Title>
                         <h2 className="mr-auto text-base font-medium">
-                            Test Webhook: {selectedWebhookForAction?.descrizione_webhook}
+                            Test Webhook: {selectedWebhookForAction?.nome_webhook}
                         </h2>
                     </Dialog.Title>
                     <Dialog.Description>
@@ -819,7 +788,7 @@ function GestioneWebhook() {
                 <Dialog.Panel>
                     <Dialog.Title>
                         <h2 className="mr-auto text-base font-medium">
-                            Statistiche Webhook: {selectedWebhookForAction?.descrizione_webhook}
+                            Statistiche Webhook: {selectedWebhookForAction?.nome_webhook}
                         </h2>
                     </Dialog.Title>
                     <Dialog.Description>

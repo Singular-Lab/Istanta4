@@ -5,6 +5,7 @@ import LoadingIcon from "@/components/Base/LoadingIcon";
 import Lucide from "@/components/Base/Lucide";
 import PageHeader from "@/components/Base/PageHeader";
 import Pagination from "@/components/Base/Pagination";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import { PermissionGate } from "@/components/PermissionGate";
 import Table from "@/components/Base/Table";
 import withSessionCheck from "@/components/SessionChecker";
@@ -186,6 +187,7 @@ function Main() {
   const formRef = useRef<HTMLFormElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { showNotification } = useNotification();
+  const [pvDaEliminare, setPvDaEliminare] = useState<PuntoVenditaResponseDTO | null>(null);
   const navigate = useNavigate()
   const {
     register,
@@ -433,7 +435,11 @@ function Main() {
   const mutationDelete = useMutation({
     mutationFn: async (id: string) =>
       await ServerCall.delete(`/ACPV/eliminaPV/${id}`),
-    onSuccess: () => invalidatePuntiVendita(),
+    onSuccess: () => {
+      invalidatePuntiVendita();
+      setPvDaEliminare(null);
+      showNotification("Punto vendita eliminato", { variant: "success" });
+    },
     onError: (e) =>
       showNotification(
         e?.message ||
@@ -483,7 +489,6 @@ function Main() {
   /* --------------------------------------------------
    * HANDLERS CRUD
    * ------------------------------------------------*/
-  const handleDelete = (id: string) => mutationDelete.mutate(id);
 
   const handleModify = (pv: PuntoVenditaResponseDTO) => {
     setIsEditMode(true);
@@ -559,6 +564,15 @@ function Main() {
    * ------------------------------------------------*/
   return (
     <>
+      <ConfirmDialog
+        open={!!pvDaEliminare}
+        title="Eliminare il punto vendita?"
+        description={<>Il punto vendita <strong>{pvDaEliminare?.nome}</strong> verrà eliminato.</>}
+        confirmLabel="Elimina"
+        loading={mutationDelete.isPending}
+        onClose={() => setPvDaEliminare(null)}
+        onConfirm={() => pvDaEliminare && mutationDelete.mutate(pvDaEliminare.id as string)}
+      />
       {/* Dialog creazione/modifica punto vendita */}
       <Dialog
         size="lg"
@@ -1170,7 +1184,7 @@ function Main() {
                                         <Button
                                           variant="outline-danger"
                                           size="sm"
-                                          onClick={() => handleDelete(pv.id as string)}
+                                          onClick={() => setPvDaEliminare(pv)}
                                         >
                                           Elimina
                                         </Button>

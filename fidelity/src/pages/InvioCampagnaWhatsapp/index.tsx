@@ -1408,6 +1408,7 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                             description="Seleziona un template per visualizzarne l'anteprima."
                                                             icon="MonitorX"
                                                             buttonText="Torna Indietro"
+                                                            buttonIcon="ArrowLeft"
                                                             iconColor="w-10 h-10 text-danger"
                                                             onButtonClick={handleBackToSelection}
                                                         />
@@ -1815,14 +1816,14 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                                     ) : (
                                                                         <>
                                                                             <label className="block text-[11px] font-medium uppercase tracking-wide text-slate-500 mb-1">
-                                                                                Comune (admin_level=8)
+                                                                                {callFilterMode === 'regioni' ? 'Regione' : 'Comune'}
                                                                             </label>
                                                                             <div className="flex gap-2 mb-2">
                                                                                 <FormInput
                                                                                     type="text"
                                                                                     value={comuneSearch}
                                                                                     onChange={(e) => setComuneSearch(e.target.value)}
-                                                                                    placeholder="Es. Milano, Torino..."
+                                                                                    placeholder={callFilterMode === 'regioni' ? 'Es. Lombardia, Toscana...' : 'Es. Milano, Torino...'}
                                                                                     className="flex-1"
                                                                                 />
                                                                                 <Button
@@ -1839,7 +1840,7 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                                                 value={selectedComuneId ?? ''}
                                                                                 onChange={(e) => handleSelectComune(e.target.value)}
                                                                             >
-                                                                                <option value="">Seleziona un comune...</option>
+                                                                                <option value="">Seleziona {callFilterMode === 'regioni' ? 'una regione' : 'un comune'}...</option>
                                                                                 {comuneOptions.map((opt) => (
                                                                                     <option key={opt.id} value={opt.id}>
                                                                                         {opt.name}
@@ -1848,7 +1849,7 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                                                 ))}
                                                                             </select>
                                                                             <p className="mt-1 text-[11px] text-slate-500">
-                                                                                La campagna raggiungerà solo i contatti del comune selezionato.
+                                                                                La campagna raggiungerà solo i contatti {callFilterMode === 'regioni' ? 'della regione selezionata' : 'del comune selezionato'}.
                                                                             </p>
                                                                         </>
                                                                     )}
@@ -1857,13 +1858,13 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                                 <div className="space-y-2">
                                                                     {callFilterMode !== 'circle' && (
                                                                         <div className="text-[11px] text-slate-500 mt-4">
-                                                                            Comune selezionato:{' '}
+                                                                            {callFilterMode === 'regioni' ? 'Regione selezionata' : 'Comune selezionato'}:{' '}
                                                                             <span className="font-semibold">
                                                                                 {selectedComuneId
                                                                                     ? comuneOptions.find(
                                                                                         (c) => c.id === selectedComuneId,
                                                                                     )?.name ?? selectedComuneId
-                                                                                    : 'nessuno'}
+                                                                                    : callFilterMode === 'regioni' ? 'nessuna' : 'nessuno'}
                                                                             </span>
                                                                         </div>
                                                                     )}
@@ -1875,7 +1876,7 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                                 <span className="font-semibold">solo</span> i contatti{' '}
                                                                 {callFilterMode === 'circle'
                                                                     ? 'all’interno del cerchio'
-                                                                    : 'nel comune selezionato'}.
+                                                                    : callFilterMode === 'regioni' ? 'nella regione selezionata' : 'nel comune selezionato'}.
                                                             </p>
                                                         </div>
                                                     </div>
@@ -1887,7 +1888,7 @@ const InvioCampagnaWhatsapp: FC = () => {
                             </div>
                         </div>
                         {/* Mockup + invio test + conferma */}
-                        <Suspense fallback={<span>Loading...</span>}>
+                        <Suspense fallback={<MessagePreviewSkeleton />}>
                             <Await resolve={templatesWhatsappPromise}>
                                 {(templates: (GDOWhatsappTemplateAttributes & { has_preset: boolean })[]) => {
                                     const selectedTemplateData = templates.find(

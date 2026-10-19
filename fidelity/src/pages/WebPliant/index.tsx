@@ -143,7 +143,7 @@ const SidebarMenu: React.FC<{
             styleWp["wp-mb-0"]
           )}
         >
-          Filter By
+          Filtra per
         </h3>
         <button
           className={clsx(
