@@ -4404,17 +4404,22 @@ namespace AgenziaLib
                     //HttpClient hCli = new HttpClient();
                     //hCli.DefaultRequestHeaders.Add("Authorization", "Bearer " + pubKey);
 
-                    var contentParam = new StringContent(JsonConvert.SerializeObject(suggerimentiRequest), Encoding.UTF8, "application/json");
-                    string url = "https://istantabusiness.it/api/gdo/get_descrizioni_byArrayEan.php";
-                    var response = httpClient.PostAsync(url, contentParam);
-                    //var response = await hCli.PutAsync(url, content);
 
-                    if (response.Result.IsSuccessStatusCode)
+                    try
                     {
+                        var contentParam = new StringContent(JsonConvert.SerializeObject(suggerimentiRequest), Encoding.UTF8, "application/json");
+                        string url = "https://istantabusiness.it/api/gdo/get_descrizioni_byArrayEan.php";
+                        var response = httpClient.PostAsync(url, contentParam);
+                        //var response = await hCli.PutAsync(url, content);
 
-                        var contentResponse = response.Result.Content.ReadAsStringAsync().Result;
-                        archivioSuggerimenti = JsonConvert.DeserializeObject<ISTBusinessSuggerimentiResponse>(contentResponse);
+                        if (response.Result.IsSuccessStatusCode)
+                        {
+
+                            var contentResponse = response.Result.Content.ReadAsStringAsync().Result;
+                            archivioSuggerimenti = JsonConvert.DeserializeObject<ISTBusinessSuggerimentiResponse>(contentResponse);
+                        }
                     }
+                    catch{}
                 }
 
 
