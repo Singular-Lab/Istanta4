@@ -5,15 +5,29 @@ import { MENU_SUPERADMIN } from '../../inizializzazione/datiPredefiniti';
 import { MenuItem } from '../../models';
 import { MenuService } from '../MenuService';
 
+// Il risolutore e la versione dei permessi stanno nel DB: qui si verifica solo che il ripristino li coinvolga.
+vi.mock('../../accessi/RisolutoreAccessi', () => ({ RisolutoreAccessi: { get: () => ({}) } }));
+vi.mock('../../accessi/versionePermessi', () => ({
+  leggiVersionePermessi: vi.fn(async () => 1),
+  incrementaVersionePermessi: vi.fn(async () => 2),
+}));
+vi.mock('../../logger', () => ({ log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } }));
+
+import { incrementaVersionePermessi } from '../../accessi/versionePermessi';
+
 /**
  * "Ripristina menu predefiniti" ha preso il posto di "Importa da JSON", che svuotava i menu di tutti i
  * tipi di utente e poi leggeva config/menu.json, un file che non esiste.
+ * Specifiche: installazione-iniziale "Ripristino del menu predefinito del Superadmin";
+ * ruoli-permessi "Modifiche ai permessi applicate subito" (il menu si invalida su ogni worker).
  */
 describe('MenuService.ripristinaMenuPredefiniti', () => {
   let tabella: any[];
+  const transazione = { id: 'tx' };
 
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.mocked(incrementaVersionePermessi).mockClear();
     tabella = [
       { tipo_utente: TIPO_UTENTI.SUPERADMIN, titolo: 'Voce personalizzata' },
       { tipo_utente: TIPO_UTENTI.AGENZIA, titolo: 'Menu Agenzia' },
@@ -23,7 +37,7 @@ describe('MenuService.ripristinaMenuPredefiniti', () => {
     vi.spyOn(sequelize, 'transaction').mockImplementation((async (callback: any) => {
       const copia = [...tabella];
       try {
-        return await callback({});
+        return await callback(transazione);
       } catch (errore) {
         tabella = copia;
         throw errore;
@@ -48,11 +62,19 @@ describe('MenuService.ripristinaMenuPredefiniti', () => {
     expect(tabella).toContainEqual({ tipo_utente: TIPO_UTENTI.AGENZIA, titolo: 'Menu Agenzia' });
   });
 
-  it('se l inserimento fallisce il menu resta quello di prima', async () => {
+  it('incrementa la versione dei permessi nella stessa transazione, cosi ogni worker ricarica il menu', async () => {
+    await servizio().ripristinaMenuPredefiniti();
+
+    expect(incrementaVersionePermessi).toHaveBeenCalledTimes(1);
+    expect(incrementaVersionePermessi).toHaveBeenCalledWith(transazione);
+  });
+
+  it('se l inserimento fallisce il menu resta quello di prima e la versione non cambia', async () => {
     vi.spyOn(MenuItem, 'bulkCreate').mockRejectedValue(new Error('vincolo violato'));
 
     await expect(servizio().ripristinaMenuPredefiniti()).rejects.toThrow('vincolo violato');
     expect(tabella).toContainEqual({ tipo_utente: TIPO_UTENTI.SUPERADMIN, titolo: 'Voce personalizzata' });
     expect(tabella).toHaveLength(2);
+    expect(incrementaVersionePermessi).not.toHaveBeenCalled();
   });
 });

@@ -1,19 +1,16 @@
 import axios from 'axios';
 import bcrypt from 'bcrypt';
 import { Request } from 'express';
-import fs from 'fs';
-import path from 'path';
 import { Op, QueryTypes } from 'sequelize';
 import { decryptString } from '../../../lib/encryption';
 import { CATEGORIA_ATTIVITA, STATO_CANALI_INTERAZIONE, STATO_UTENTI, TIPI_CANALI_INTERAZIONE, TIPO_ATTIVITA, TIPO_UTENTI } from '../../../lib/enums';
 import { ApplicationError, DatabaseError, ExternalApiError, ForbiddenError, NotFoundError, ValidationError } from '../../../lib/errors';
 import { PROFILE_PHOTO_MAX_SIZE_BYTES, PROFILE_PHOTO_MAX_SIZE_MB } from '../../../lib/profilePhoto';
-import { DataFields, GdoMenuStructure, MenuElement, MenuStructure, UtenteAttributes, UtentiCanaliInterazioneAttributes, UtentiGDOAttributes, UtentiMeta } from '../../../lib/types';
+import { DataFields, UtenteAttributes, UtentiCanaliInterazioneAttributes, UtentiGDOAttributes, UtentiMeta } from '../../../lib/types';
 import config from '../config';
 import { sequelize } from '../db/SequelizeConnector';
 import { log } from '../logger';
 import { CreateUtenteDTO, UpdateUtenteDTO, UtentePaginatedResponseDTO, UtenteResponseDTO, toUtenteAttributes, toUtenteResponseDTO, updateUtenteAttributes } from '../dto';
-import type { IMenuService } from '../interfaces/IMenuService';
 import { IUserService } from '../interfaces/IUserService';
 import { CanaleInterazione } from '../models/canali_interazione';
 import { GDO } from '../models/gdo';
@@ -26,12 +23,25 @@ import { WishlistWebpliant } from '../models/wishlist_webpliant';
 import type { IUserRepository } from '../repositories/UserRepository';
 import { ServerUtils } from '../utils/ServerUtils';
 import { verificaRisposta } from '../utils/rispostaServizi';
+/**
+ * Chi puo' aprire la sessione come GDO o Punto Vendita: gli utenti registrati con
+ * uno di questi tipi o come IT/Category. Un Guest, un Marketing o un'Agenzia
+ * associati a una GDO non ottengono i permessi GDO scegliendo quel tipo al login.
+ */
+export const TIPI_AMMESSI_COME_GDO: TIPO_UTENTI[] = [
+  TIPO_UTENTI.GDO,
+  TIPO_UTENTI.PUNTOVENDITA,
+  TIPO_UTENTI.IT,
+  TIPO_UTENTI.CATEGORY,
+];
+
+export const puoEntrareComeGdoOPuntoVendita = (tipoRegistrato: TIPO_UTENTI | string | undefined | null): boolean =>
+  !!tipoRegistrato && TIPI_AMMESSI_COME_GDO.indexOf(tipoRegistrato as TIPO_UTENTI) >= 0;
+
 export class UserService implements IUserService {
 
-  private menuService?: IMenuService;
 
-  constructor(private readonly userRepository: IUserRepository, menuService?: IMenuService) {
-    this.menuService = menuService;
+  constructor(private readonly userRepository: IUserRepository) {
   }
 
   /** Chiave privata Olympus dell'utente: solo per uso interno, mai nelle risposte. */
@@ -374,9 +384,24 @@ export class UserService implements IUserService {
     await sequelize.query(`REFRESH MATERIALIZED VIEW mv_utenti_completi;`);
   }
 
-  async deleteUser(id: string, tipoUtente: string): Promise<boolean> {
+  /**
+   * Elimina un utente. Il tipo di chi elimina limita i tipi eliminabili; chi non opera
+   * per piu' GDO (tutti tranne Superadmin e Agenzia) puo' eliminare solo utenti della
+   * propria GDO.
+   */
+  async deleteUser(id: string, chiamante: { tipo: TIPO_UTENTI; idGdo: string | null }): Promise<boolean> {
     try {
-      const tipo = tipoUtente as TIPO_UTENTI;
+      const tipo = chiamante.tipo;
+      if (tipo !== TIPO_UTENTI.SUPERADMIN && tipo !== TIPO_UTENTI.AGENZIA) {
+        const associazione = await UtentiGDO.findOne({ where: { id_utente_utentegdo: id } });
+        if (!chiamante.idGdo || !associazione || associazione.id_gdo_utentegdo !== chiamante.idGdo) {
+          throw new ForbiddenError({
+            message: 'Puoi eliminare solo utenti della tua GDO',
+            resource: 'utenti',
+            action: 'elimina',
+          });
+        }
+      }
       if (tipo === TIPO_UTENTI.SUPERADMIN) {
         const result = await this.userRepository.destroyWhere({ where: { id_utenti: id } });
         await sequelize.query(`
@@ -415,7 +440,7 @@ export class UserService implements IUserService {
       return false;
     } catch (error) {
       console.error('Errore durante l\'eliminazione dell\'utente:', error);
-      if (error instanceof ValidationError) {
+      if (error instanceof ValidationError || error instanceof ForbiddenError) {
         throw error;
       }
       throw new DatabaseError({
@@ -521,14 +546,14 @@ export class UserService implements IUserService {
       if (selectedUserType) {
         // Verifica che l'utente abbia effettivamente accesso al tipo selezionato
         if (selectedUserType === TIPO_UTENTI.GDO) {
-          if (!hasGdo) {
+          if (!hasGdo || !puoEntrareComeGdoOPuntoVendita(user.tipo_utenti)) {
             return { success: false, message: 'Non hai accesso come utente GDO' };
           }
           return { success: true, user: { ...userResponseDTO, tipo: selectedUserType, id_gdo: hasGdo.id_gdo_utentegdo } };
         }
         else if (selectedUserType === TIPO_UTENTI.PUNTOVENDITA) {
           const utentePuntoVendita = await PuntoVenditaUtenti.findOne({ where: { idutenti_puntivenditautenti: user.id_utenti } });
-          if (!utentePuntoVendita) {
+          if (!utentePuntoVendita || !puoEntrareComeGdoOPuntoVendita(user.tipo_utenti)) {
             return { success: false, message: 'Non hai accesso come utente Punto Vendita' };
           }
           return { success: true, user: { ...userResponseDTO, tipo: selectedUserType, id_gdo: hasGdo?.id_gdo_utentegdo } };
@@ -873,187 +898,12 @@ export class UserService implements IUserService {
       const ruoloGDO = await RuoloUtenteGDO.findOne({
         where: { id_ruolo_utente_gdo: ruoloUtenteGDO.id_ruolo_utente_gdo }
       });
+      // Chiave testuale usata dall'hub per i destinatari ("GDO_ADMIN"); permessi e menu usano l'id.
       return ruoloGDO?.ruolo_ruolo_utente_gdo
-        ? 'GDO_' + ruoloGDO.ruolo_ruolo_utente_gdo
+        ? 'GDO_' + ruoloGDO.ruolo_ruolo_utente_gdo.trim().toUpperCase().replace(/^GDO_/, '')
         : undefined;
     }
     return undefined;
-  }
-
-  async user_menu(userId: string, tipoUtente: TIPO_UTENTI): Promise<any> {
-    try {
-      let ruoloGdoKey: string | undefined;
-
-      if (tipoUtente !== TIPO_UTENTI.SUPERADMIN) {
-        ruoloGdoKey = await this.resolveGdoRuoloKey(userId);
-      }
-
-      // Usa MenuService se disponibile, altrimenti fallback a JSON
-      if (this.menuService) {
-        const menuUtente = await this.menuService.getMenuPerUtente(tipoUtente, ruoloGdoKey);
-
-        if (!menuUtente || (Array.isArray(menuUtente) && menuUtente.length === 0)) {
-          throw new NotFoundError({
-            message: 'Menu non definito per il tipo di utente',
-            entityType: 'Menu',
-            entityId: tipoUtente
-          });
-        }
-
-        return menuUtente;
-      }
-
-      // Fallback: lettura da file JSON
-      const pathPerMenu = path.join(process.cwd(), 'config', 'menu.json');
-      const menuParsed = JSON.parse(fs.readFileSync(pathPerMenu, 'utf8')) as MenuStructure;
-
-      let menuUtente: MenuElement[] | GdoMenuStructure = [];
-      if (tipoUtente === TIPO_UTENTI.GDO) {
-        menuUtente = menuParsed["TIPO_UTENTI"].GDO[ruoloGdoKey || 'GDO_ADMIN'];
-      } else {
-        const menuKey = tipoUtente.toUpperCase();
-        if (menuParsed.TIPO_UTENTI.hasOwnProperty(menuKey)) {
-          menuUtente = menuParsed.TIPO_UTENTI[menuKey as keyof typeof menuParsed.TIPO_UTENTI];
-        } else {
-          throw new NotFoundError({
-            message: 'Menu non definito per il tipo di utente',
-            entityType: 'Menu',
-            entityId: tipoUtente,
-          });
-        }
-      }
-      if (!menuUtente) {
-        throw new NotFoundError({
-          message: 'Menu non definito per il tipo di utente',
-          entityType: 'Menu',
-          entityId: tipoUtente
-        });
-      }
-
-      return menuUtente;
-    } catch (error) {
-      console.error('Errore durante il recupero del menu per utente:', error);
-      if (error instanceof NotFoundError) {
-        throw error;
-      }
-      throw new DatabaseError({
-        message: 'Errore durante il recupero del menu per utente',
-        operation: 'get',
-        entity: 'Menu',
-        cause: error instanceof Error ? error : undefined
-      });
-    }
-  }
-
-
-  /**
-   * Mappa pathname del menu -> codice permesso pagina.
-   * Usata per filtrare le singole voci del menu in base ai permessi dell'utente.
-   */
-  private static MENU_PATHNAME_PERMISSIONS: Record<string, string> = {
-    '/gdo/dashboard': 'pagina.dashboard',
-    '/superadmin/dashboard': 'pagina.superadmin_dashboard',
-    '/profilo-utente': 'pagina.profilo_utente',
-    '/barcode-reader': 'pagina.barcode_reader',
-    '/competitor-analyzer': 'pagina.competitor_analyzer',
-    // Promozioni
-    '/promozioni': 'pagina.promozioni',
-    '/promozioni/nuova': 'pagina.nuova_lavorazione',
-    '/promozioni/in-corso': 'pagina.lavorazioni_in_corso',
-    '/promozioni/storico': 'pagina.storico_lavorazioni',
-    // Volantini
-    '/volantini': 'pagina.volantini',
-    '/storico-volantini': 'pagina.storico_volantini',
-    // Materiali
-    '/materiali-attivi': 'pagina.materiali_attivi',
-    '/materiali-in-corso': 'pagina.materiali_in_corso',
-    '/storico-materiali': 'pagina.storico_materiali',
-    '/contenuti-digitali': 'pagina.contenuti_digitali',
-    // Ordini di Stampa
-    '/nuovo-ods': 'pagina.nuovo_ods',
-    '/ods-in-corso': 'pagina.ods_in_corso',
-    '/ods-completati': 'pagina.ods_completati',
-    // WebPliant
-    '/webliant/impostazioni-webpliant': 'pagina.impostazioni_webpliant',
-    '/webliant/webpliant-disponibili': 'pagina.webpliant_disponibili',
-    // Servizi
-    '/aree-e-canali': 'pagina.aree_e_canali',
-    '/punti-vendita': 'pagina.punti_vendita',
-    '/gestione-ricette': 'pagina.gestione_ricette',
-    '/gestione-approfondimento-vini': 'pagina.gestione_vini',
-    // Impostazioni
-    '/impostazioni-tipografia': 'pagina.impostazioni_tipografia',
-    '/impostazioni-di-produzione': 'pagina.impostazioni_produzione',
-    '/gestione-pagine-singular': 'pagina.gestione_pagine_singular',
-    '/gestione-permessi': 'pagina.gestione_permessi',
-    '/gestione-hub': 'pagina.gestione_hub',
-    // Utenti
-    '/gestione-utenti': 'pagina.gestione_utenti',
-    // WhatsApp
-    '/whatsapp/invio-campagna-whatsapp': 'pagina.invio_campagna_whatsapp',
-    '/whatsapp/campagne-whatsapp': 'pagina.campagne_whatsapp',
-    '/whatsapp/gestione-whatsapp-superadmin': 'pagina.gestione_whatsapp_superadmin',
-    '/gestione-whatsapp-admin': 'pagina.gestione_whatsapp_admin',
-    // API & Docs
-    '/gestione-api/statistiche': 'pagina.gestione_api',
-    '/gestione-api/test': 'pagina.gestione_api',
-    '/gestione-api/keys': 'pagina.gestione_api',
-    '/gestione-api/plugin': 'pagina.gestione_api',
-    '/gestione-webhook': 'pagina.gestione_webhook',
-    '/documentazione': 'pagina.documentazione',
-  };
-
-  private async filterMenuByPermissions(menu: MenuElement[], userId: string): Promise<MenuElement[]> {
-    try {
-      const { PermessiService } = await import('./PermessiService');
-      const { PermessiRepository } = await import('../repositories/PermessiRepository');
-      const service = new PermessiService(new PermessiRepository());
-      const permessiUtente = await service.getPermessiUtente(userId);
-
-      const filtered: MenuElement[] = [];
-      let lastWasHeader = false;
-
-      for (const item of menu) {
-        if (typeof item === 'string') {
-          // E' un header di sezione — aggiungiamo provvisoriamente e rimuoviamo se vuoto dopo
-          filtered.push(item);
-          lastWasHeader = true;
-        } else {
-          // E' una voce di menu con pathname
-          const pathname = (item as any).pathname as string | undefined;
-          if (pathname) {
-            const permCode = UserService.MENU_PATHNAME_PERMISSIONS[pathname];
-            // Se non ha un permesso mappato, lo mostra sempre; se ha un permesso, verifica
-            if (!permCode || permessiUtente.includes(permCode)) {
-              filtered.push(item);
-              lastWasHeader = false;
-            }
-          } else {
-            filtered.push(item);
-            lastWasHeader = false;
-          }
-        }
-      }
-
-      // Rimuovi header di sezione rimasti orfani (senza voci sotto)
-      const cleaned: MenuElement[] = [];
-      for (let i = 0; i < filtered.length; i++) {
-        if (typeof filtered[i] === 'string') {
-          // Verifica se la prossima voce e un'altra stringa o fine array (= sezione vuota)
-          const next = filtered[i + 1];
-          if (next !== undefined && typeof next !== 'string') {
-            cleaned.push(filtered[i]);
-          }
-        } else {
-          cleaned.push(filtered[i]);
-        }
-      }
-
-      return cleaned;
-    } catch (error) {
-      console.error('Errore nel filtraggio menu per permessi, restituisco menu completo:', error);
-      return menu;
-    }
   }
 
   async generaNuovaSessioneWebpliant(meta: any): Promise<any> {

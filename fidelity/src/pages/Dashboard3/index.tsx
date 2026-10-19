@@ -193,7 +193,7 @@ const VolantiniSkeleton: FC = () => (
 );
 
 const KitCard: FC<{ kit: KitVolantino; showValidita?: boolean, routeClickable?: boolean }> = ({ kit, showValidita, routeClickable = false }) => {
-    const canAccessPromo = usePermission(PERMISSIONS.PAGINA.PROMOZIONI_IN_CORSO);
+    const canAccessPromo = usePermission(PERMISSIONS.PROMO.VISUALIZZA);
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
     const [isDownloading, setIsDownloading] = useState(false);
     const file = kit.files?.[0];

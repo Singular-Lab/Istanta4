@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Fragment, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { TIPO_UTENTI } from "../../../../lib/enums";
 import { ServerCall } from "../../../../lib/server_call";
 import type { TracciatiResponseDTO } from "../../../../server/core/dto";
 import Button from "../../../components/Base/Button";
@@ -9,7 +8,8 @@ import { FormInput } from "../../../components/Base/Form";
 import { Dialog } from "../../../components/Base/Headless";
 import LoadingIcon from "../../../components/Base/LoadingIcon";
 import Lucide from "../../../components/Base/Lucide";
-import { useUser } from "../../../context/UserContext";
+import { usePermissionContext } from "../../../context/PermissionContext";
+import { PERMISSIONS } from "../../../constants/permissions";
 
 type TracciatoCardProps = {
     tracciato: TracciatiResponseDTO;
@@ -113,7 +113,7 @@ const TracciatoCard: React.FC<TracciatoCardProps> = ({
     isDeletingTracciato = false,
     promoStorico = false,
 }) => {
-    const { user } = useUser()
+    const { hasPermission } = usePermissionContext();
     const navigate = useNavigate();
     const [showDialogEliminazioneDefinitiva, setShowDialogEliminazioneDefinitiva] = useState<boolean>(false);
     const queryClient = useQueryClient();
@@ -300,7 +300,7 @@ const TracciatoCard: React.FC<TracciatoCardProps> = ({
                             </div>
                         )}
 
-                        {(statusData?.error && (user?.tipo == TIPO_UTENTI.SUPERADMIN || user?.tipo == TIPO_UTENTI.AGENZIA)) && (
+                        {(statusData?.error && hasPermission(PERMISSIONS.FILE.UPLOAD_TRACCIATO)) && (
                             <div className="mt-1 text-xs text-danger">
                                 {(() => {
                                     const fullError = statusData.error;

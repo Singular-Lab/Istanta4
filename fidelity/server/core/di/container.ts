@@ -261,8 +261,7 @@ function bindServices() {
   );
   container.bind<IUserService>(TYPES.UserService).toDynamicValue(
     (context) => new UserService(
-      context.get<IUserRepository>(TYPES.UserRepository),
-      context.get<IMenuService>(TYPES.MenuService)
+      context.get<IUserRepository>(TYPES.UserRepository)
     )
   );
   container

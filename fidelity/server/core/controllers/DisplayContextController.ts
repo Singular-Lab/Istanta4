@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
-import { HttpStatusCode } from '../../../lib/enums';
+import { HttpStatusCode, TIPO_UTENTI } from '../../../lib/enums';
+import { gdoOperativaPerRichiesta, operaPerPiuGdo } from '../accessi/contestoAccesso';
 import { BaseController } from '../base/BaseController';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { permissionGuard } from '../middleware/permissionGuard';
@@ -27,6 +28,7 @@ export class DisplayContextController extends BaseController {
     private async createDisplayContext(req: Request, res: Response): Promise<void> {
         try {
             const data = req.body;
+            data.id_gdo = await gdoOperativaPerRichiesta(req, res, data.id_gdo);
             if (!data.nome || !data.endpoint_type || !data.id_gdo) {
                 this.sendResponse(res, HttpStatusCode.BAD_REQUEST, {
                     message: "Campi obbligatori mancanti: nome, endpoint_type, id_gdo"
@@ -42,8 +44,17 @@ export class DisplayContextController extends BaseController {
 
     private async getAllDisplayContexts(req: Request, res: Response): Promise<void> {
         try {
+            // Superadmin e Agenzia possono filtrare su qualunque GDO (o tutte); gli altri vedono solo la propria.
+            const multiGdo = operaPerPiuGdo(req.session?.tipo_utente as TIPO_UTENTI | undefined);
+            const idGdo = multiGdo
+                ? (req.query.id_gdo as string | undefined)
+                : (await gdoOperativaPerRichiesta(req, res)) ?? undefined;
+            if (!multiGdo && !idGdo) {
+                this.sendResponse(res, HttpStatusCode.OK, []);
+                return;
+            }
             const filters = {
-                id_gdo: req.query.id_gdo as string | undefined,
+                id_gdo: idGdo,
                 id_puntivendita: req.query.id_puntivendita as string | undefined,
                 endpoint_type: req.query.endpoint_type as any,
                 is_active: req.query.is_active !== undefined ? req.query.is_active === 'true' : undefined,
@@ -99,8 +110,8 @@ export class DisplayContextController extends BaseController {
 
     private async getDisplayContextsByGDO(req: Request<{ id_gdo: string }>, res: Response): Promise<void> {
         try {
-            const id_gdo = req.params.id_gdo;
-            const result = await this.displayContextService.getDisplayContextsByGDO(id_gdo);
+            const id_gdo = await gdoOperativaPerRichiesta(req, res, req.params.id_gdo);
+            const result = id_gdo ? await this.displayContextService.getDisplayContextsByGDO(id_gdo) : [];
             this.sendResponse(res, HttpStatusCode.OK, result);
         } catch (error) {
             this.handleError(res, error);

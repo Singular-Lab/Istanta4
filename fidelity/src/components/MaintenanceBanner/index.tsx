@@ -1,10 +1,10 @@
 import Lucide from "@/components/Base/Lucide";
-import { useUser } from "@/context/UserContext";
+import { usePermissionContext } from "@/context/PermissionContext";
+import { PERMISSIONS } from "@/constants/permissions";
 import { useSocket } from "@/hooks/useSocket";
 import { useFetchAvvisoManutenzione } from "@/query/query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { TIPO_UTENTI } from "../../../lib/enums";
 import { ServerCall } from "../../../lib/server_call";
 import { AvvisoManutenzione } from "../../../lib/types";
 
@@ -21,7 +21,7 @@ function calcMinutiRimanenti(avviso: AvvisoManutenzione): number {
 }
 
 export default function MaintenanceBanner() {
-  const { user } = useUser();
+  const { hasPermission } = usePermissionContext();
   const { data: avvisoRemoto } = useFetchAvvisoManutenzione();
   const [avviso, setAvviso] = useState<AvvisoManutenzione | null | undefined>(undefined);
   const [minutiRimanenti, setMinutiRimanenti] = useState<number>(0);
@@ -65,7 +65,7 @@ export default function MaintenanceBanner() {
   if (!avviso?.attivo) return null;
 
   const isCountdown = !!avviso.minutiRimanenti;
-  const isSuperadmin = user?.tipo === TIPO_UTENTI.SUPERADMIN;
+  const isSuperadmin = hasPermission(PERMISSIONS.SISTEMA.MANUTENZIONE);
 
   return (
     <div className="fixed top-0 left-0 right-0 z-[60] bg-amber-500 text-white px-5 py-2.5 flex items-center justify-between gap-3 shadow-sm">
