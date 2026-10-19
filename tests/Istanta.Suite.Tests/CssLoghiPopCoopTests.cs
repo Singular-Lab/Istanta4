@@ -40,7 +40,7 @@ public class CssLoghiPopCoopTests
     private static IEnumerable<JObject> Operazioni(JObject css, int tipoLavorazione) =>
         css["dbRidimensionamentiAllineamenti"]!["modificheCssPerKit"]!.Cast<JObject>()
             .Where(k => k["kit"]!["kitTipoLavorazioniValide"]!.Values<int>().SequenceEqual(new[] { tipoLavorazione })
-                        && !k["kit"]!["areeValide"]!.Any())
+                        && !k["kit"]!["areeValide"]!.Any() && !k["kit"]!["kitFormatiValidi"]!.Any())
             .SelectMany(k => k["operazioniPerBox"]!.Cast<JObject>());
 
     private static JObject? Loghi(JObject operazione) =>

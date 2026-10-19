@@ -18,7 +18,7 @@ public class CssPrezzoKglPopCoopTests
 
     private static IEnumerable<JObject> Operazioni(int tipoLavorazione) =>
         Kit().Cast<JObject>()
-            .Where(k => k["kit"]!["kitTipoLavorazioniValide"]!.Values<int>().SequenceEqual(new[] { tipoLavorazione }))
+            .Where(k => k["kit"]!["kitTipoLavorazioniValide"]!.Values<int>().SequenceEqual(new[] { tipoLavorazione }) && !k["kit"]!["kitFormatiValidi"]!.Any())
             .SelectMany(k => k["operazioniPerBox"]!.Cast<JObject>());
 
     private static JObject Gruppo(string nome)

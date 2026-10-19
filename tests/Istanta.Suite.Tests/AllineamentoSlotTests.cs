@@ -18,7 +18,7 @@ public class AllineamentoSlotTests
 
     private static List<Allineamento> GruppiLoghi(DbFrameworkCss db, int tipoLavorazione) =>
         db.dbRidimensionamentiAllineamenti.modificheCssPerKit
-            .Where(k => k.kit.kitTipoLavorazioniValide.Contains(tipoLavorazione))
+            .Where(k => k.kit.kitTipoLavorazioniValide.Contains(tipoLavorazione) && (k.kit.kitFormatiValidi == null || k.kit.kitFormatiValidi.Count == 0))
             .SelectMany(k => k.operazioniPerBox)
             .SelectMany(op => op.allineamenti)
             .Where(a => a.nomeGruppo == "Loghi")

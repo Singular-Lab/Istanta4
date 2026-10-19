@@ -8,7 +8,8 @@ namespace Istanta.Suite.Tests;
 /// - nell'A3 verticale i Superprezzi ortofrutta (BOX_SuperprezziOF) non escono; prima (#211) vi uscivano
 ///   come BOX_STD. Negli altri formati restano col loro box;
 /// - i Jolly evidenziati (BOX_JOLLY_EVIDENZIATO, tema VENDITE PROPOSITIVE) non escono in nessun formato,
-///   come i temi jolly, sprint ed extra tripla;
+///   come i temi jolly ed extra tripla; il tema sprint non esce negli A3 (negli A7 e' il cartello Sprint,
+///   vedi PopCoopA7Tests);
 /// - il prezzo di STD ha lo stile PREZZO_STD_SCONTO_PICCOLO solo quando lo sconto piccolo c'e' davvero;
 ///   prima lo prendeva con qualunque sconto sotto il 25%, anche zero e in ogni area. Nel 1+1 lo sconto
 ///   piccolo viene sempre tolto, e il prezzo resta PREZZO_PROMO.
@@ -56,11 +57,10 @@ public class PopCoopA3VerticaleTests
     [Theory]
     [InlineData("vendite propositive", "BOX_JOLLY_EVIDENZIATO", true)]
     [InlineData("jolly", "BOX_JOLLY", true)]
-    [InlineData("sprint", "BOX_SPRINT", true)]
     [InlineData("ex tripla", "BOX_STD", true)]
     [InlineData("superprezzi of", "BOX_SuperprezziOF", false)]
     [InlineData("", "BOX_STD", false)]
-    public void Non_escono_jolly_sprint_extra_tripla_e_jolly_evidenziati(string tema, string box, bool esclusa)
+    public void Non_escono_jolly_extra_tripla_e_jolly_evidenziati(string tema, string box, bool esclusa)
     {
         //In ogni formato: qui il formato e' l'A3 orizzontale, dove i Superprezzi escono.
         Assert.Equal(esclusa, Coopfi.esclusaDalPoP(tema, box, "A3_ORIZZONTALI"));
@@ -69,6 +69,13 @@ public class PopCoopA3VerticaleTests
             Assert.True(Coopfi.esclusaDalPoP(tema, box, "A3_VERTICALI"));
             Assert.True(Coopfi.esclusaDalPoP(tema, box, "A7"));
         }
+    }
+
+    [Fact]
+    public void Il_tema_sprint_non_esce_negli_A3()
+    {
+        Assert.True(Coopfi.esclusaDalPoP("sprint", "BOX_SPRINT", "A3_ORIZZONTALI"));
+        Assert.True(Coopfi.esclusaDalPoP("sprint", "BOX_SPRINT", "A3_VERTICALI"));
     }
 
     [Fact]

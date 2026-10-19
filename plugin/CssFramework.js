@@ -2217,38 +2217,27 @@ const CssFramework =
 
     /// Riporta dentro la griglia un elemento che ne esce da un lato. Una casella di testo prova
     /// prima a stringersi fino al limite; se cosi' andrebbe in overflow, o non le resterebbe
-    /// spazio, torna com'era e si sposta. Lo spostamento aggiorna la mappa del box, sullo stesso
-    /// asse, perche' le regole che seguono la leggono. Torna true se l'elemento e' stato spostato
-    /// di piu' di 1 mm: e' la soglia sotto la quale non si segnala.
+    /// spazio, torna com'era e si sposta. Un gruppo prova prima a stringere, con la stessa regola,
+    /// le sue caselle di testo che escono da quel lato: se cosi' rientra, non si sposta. Lo
+    /// spostamento aggiorna la mappa del box, sullo stesso asse, perche' le regole che seguono la
+    /// leggono. Torna true se l'elemento e' stato spostato di piu' di 1 mm: e' la soglia sotto la
+    /// quale non si segnala.
     riportaLatoInGriglia(box, pageItem, boxInGrigliaBounds, lato, mappaBoxOriginale) {
         var limite = boxInGrigliaBounds[lato.indice];
-        var fuori = lato.minimo
-            ? pageItem.geometricBounds[lato.indice] < limite - 0.05
-            : pageItem.geometricBounds[lato.indice] > limite + 0.05;
-        if (!fuori) {
+        if (!this.fuoriDalLato(pageItem, limite, lato)) {
             return false;
         }
 
         if (this.isTextFrame(pageItem)) {
-            var originalBounds = pageItem.geometricBounds;
-            var ridotti = originalBounds.slice();
-            ridotti[lato.indice] = lato.minimo
-                ? Math.max(originalBounds[lato.indice], limite)
-                : Math.min(originalBounds[lato.indice], limite);
-            //quello che resta fra il lato ridotto e quello opposto
-            var spazio = lato.minimo
-                ? originalBounds[lato.opposto] - ridotti[lato.indice]
-                : ridotti[lato.indice] - originalBounds[lato.opposto];
-            var cantReduce = !(spazio > 0);
-            if (!cantReduce) {
-                pageItem.geometricBounds = ridotti;
-            }
-
             //ridotto senza overflow: resta cosi', nessuno spostamento
-            if (!pageItem.properties.overflows && !cantReduce) {
+            if (this.stringiTestoAlLimite(pageItem, limite, lato)) {
                 return false;
             }
-            pageItem.geometricBounds = originalBounds;
+        }
+        //Un gruppo, per esempio il prezzo con l'info pack: le caselle che si sono strette restano
+        //strette anche se non basta, perche' accorciano lo spostamento senza overflow.
+        else if (this.stringiTestiDelGruppo(pageItem, limite, lato) && !this.fuoriDalLato(pageItem, limite, lato)) {
+            return false;
         }
 
         var etichetta = pageItem.label != "" ? Utility.parseLabel(pageItem.label) : "senza etichetta";
@@ -2278,6 +2267,109 @@ const CssFramework =
             this.annotaSpostamentoGriglia(box, pageItem, lato.direzione);
         }
         return oltreSoglia;
+    },
+
+    /// Se l'elemento esce dal lato della griglia, oltre la tolleranza di 0,05 mm.
+    fuoriDalLato(pageItem, limite, lato) {
+        return lato.minimo
+            ? pageItem.geometricBounds[lato.indice] < limite - 0.05
+            : pageItem.geometricBounds[lato.indice] > limite + 0.05;
+    },
+
+    /// Stringe una casella di testo fino al limite del lato da cui esce. Resta stretta solo se il
+    /// testo non va in overflow e le resta spazio fra il lato ridotto e quello opposto. Se fino al
+    /// limite il testo non ci sta, sui lati sinistro e destro la casella si stringe almeno fino a
+    /// dove finisce il suo testo (bordoDelTesto), sempre senza overflow: chi la contiene si spostera'
+    /// solo del resto. Altrimenti torna com'era. Torna true solo se e' arrivata al limite. Il corpo
+    /// del testo non cambia.
+    stringiTestoAlLimite(casella, limite, lato) {
+        var originalBounds = casella.geometricBounds;
+        if (this.stringiLatoFinoA(casella, originalBounds, lato, limite)) {
+            return true;
+        }
+
+        //Nel PoP Coop "al kg" a corpo 50 e' largo 43 mm in una casella di 59: fino al bordo del box
+        //ne restavano 34, e la casella tornava com'era con tutti i suoi 16 mm vuoti.
+        var bordo = this.bordoDelTesto(casella, lato);
+        if (bordo != null) {
+            this.stringiLatoFinoA(casella, originalBounds, lato, bordo);
+        }
+        return false;
+    },
+
+    /// Porta il lato della casella a valore, solo verso l'interno. Resta cosi' se le resta spazio
+    /// fra il lato ridotto e quello opposto e il testo non va in overflow; altrimenti la casella torna
+    /// ai bounds originali. Torna true se e' rimasta ridotta.
+    stringiLatoFinoA(casella, originalBounds, lato, valore) {
+        var ridotti = originalBounds.slice();
+        ridotti[lato.indice] = lato.minimo
+            ? Math.max(originalBounds[lato.indice], valore)
+            : Math.min(originalBounds[lato.indice], valore);
+        if (ridotti[lato.indice] == originalBounds[lato.indice]) {
+            return false;
+        }
+        //quello che resta fra il lato ridotto e quello opposto
+        var spazio = lato.minimo
+            ? originalBounds[lato.opposto] - ridotti[lato.indice]
+            : ridotti[lato.indice] - originalBounds[lato.opposto];
+        if (!(spazio > 0)) {
+            return false;
+        }
+
+        casella.geometricBounds = ridotti;
+        if (!casella.properties.overflows) {
+            return true;
+        }
+        casella.geometricBounds = originalBounds;
+        return false;
+    },
+
+    /// Dove finisce il testo di una casella sul lato sinistro o destro, dalle sue righe come in
+    /// getRealBounds, con il margine interno e mezzo millimetro di respiro. null sui lati alto e
+    /// basso, o se le righe non si leggono.
+    bordoDelTesto(casella, lato) {
+        if (lato.verticale) {
+            return null;
+        }
+        try {
+            var righe = casella.lines.everyItem().getElements();
+            if (!righe || righe.length == 0) {
+                return null;
+            }
+            var inset = casella.textFramePreferences.insetSpacing;
+            var insetSinistro = Number(inset[1] != null ? inset[1] : inset) || 0;
+            var insetDestro = Number(inset[3] != null ? inset[3] : inset) || 0;
+            var respiro = 0.5;
+            if (lato.minimo) {
+                return Math.min(...righe.map(r => r.horizontalOffset)) - insetSinistro - respiro;
+            }
+            return Math.max(...righe.map(r => r.endHorizontalOffset)) + insetDestro + respiro;
+        } catch (e) {
+            return null;
+        }
+    },
+
+    /// Le caselle di testo visibili di un gruppo, anche in gruppi annidati, che escono dal lato si
+    /// stringono fino al limite con stringiTestoAlLimite. Il gruppo del prezzo usciva dal box per
+    /// l'info pack, la cui casella era quasi vuota, e veniva spostato e rimpicciolito (CSF-009),
+    /// con il prezzo in overset. Torna true se almeno una casella e' rimasta stretta.
+    stringiTestiDelGruppo(gruppo, limite, lato) {
+        var figli = gruppo.allPageItems;
+        if (!figli || !(figli.length > 0)) {
+            return false;
+        }
+
+        var stretta = false;
+        for (var i = 0; i < figli.length; i++) {
+            var figlio = figli[i];
+            if (figlio.visible === false || !this.isTextFrame(figlio) || !this.fuoriDalLato(figlio, limite, lato)) {
+                continue;
+            }
+            if (this.stringiTestoAlLimite(figlio, limite, lato)) {
+                stretta = true;
+            }
+        }
+        return stretta;
     },
 
     /// Chi e' uscito dai bordi del box rientra. Su una casella di testo prova PRIMA a
