@@ -1,5 +1,6 @@
 import Lucide from "@/components/Base/Lucide";
 import { useNotification } from '@/context/NotificationContext';
+import { normalizzaFiltroContesto } from '@/utils/filtroContesto';
 import { useMutation } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { TIPO_KIT_DESIGN } from "../../../../lib/enums";
@@ -94,16 +95,9 @@ export const useCombinazioneMutations = (idCombinazione: string, refetchCombinaz
 
     const mutateCreazioneFiltroContext = useMutation({
         mutationFn: async (data: FiltroContextData) => {
-            const filtroContextCondizioniFix = data.filtroContesto.map(filtro => ({
-                ...filtro,
-                condizioni: filtro.condizioni.map(cond => ({
-                    ...cond,
-                    nome_field: `${cond.schemaScelto}.${cond.colonna}`,
-                })),
-            }));
             return await ServerCall.put("/creaFiltroContestoPerRaccoglitoreById", {
                 ...data,
-                filtroContesto: filtroContextCondizioniFix,
+                filtroContesto: normalizzaFiltroContesto(data.filtroContesto),
                 idCombinazione: data.idCombinazione || idCombinazione,
             });
         },
