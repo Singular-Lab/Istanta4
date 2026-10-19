@@ -88,6 +88,21 @@ describe("storicoVolantinoDB1.confronta: fantasmi presenti in un altro tracciato
     expect(esito.lista).toEqual([]);
     expect(esito.fuoriListino.map((fantasma) => fantasma.groupId)).toEqual([1, 2, 3, 4]);
   });
+
+  it("un box che DB1 ha gia arricchito col suo record va in lista com'e, tranne lo scatto da correggere", async () => {
+    const dataFields = { "Referenza.Codice": "4714340", "Descrizioni.Descrizione1": "Hamburger di pollo CONAD", prezzo_offerta: 1.6 };
+    const scattoSbagliato = JSON.stringify({ warningCode: "01_codscatto_same", codiceScatto: "758662", codiceGruppoAtteso: "758663" });
+    const esito = await confronta([
+      { ...box, groupId: 5, foto: ["altra.psd"], dataFields, resolution: guest([primario]) },
+      { ...box, groupId: 6, dataFields },
+      { ...box, groupId: 7, dataFields, resolution: scattoSbagliato },
+      { ...box, groupId: 8, dataFields: { prezzo_offerta: 1.6 } },
+    ]);
+    expect(esito.lista.map((ref) => ref.groupId)).toEqual([5, 6]);
+    expect(esito.lista[0]).toMatchObject({ dataFields, compiledFields: box.compiledFields });
+    expect(esito.lista[0]).not.toHaveProperty("resolution");
+    expect(esito.fuoriListino.map((fantasma) => fantasma.groupId)).toEqual([7, 8]);
+  });
 });
 
 describe("storicoVolantinoDB1.referenzaFuoriListino", () => {

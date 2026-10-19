@@ -186,12 +186,21 @@ export function primarioDelGruppo(elementi: DB1XmlRecord[], foto: SyncJsonPlugin
     .find(Boolean);
 }
 
+/** Il codice referenza nei dataFields che DB1 mette su un box: c'e solo se ne ha trovato il record. */
+const codiceDB1 = (dataFields?: DataFields) => {
+  const campi = (dataFields ?? {}) as Record<string, unknown>;
+  return String(campi['Referenza.Codice'] ?? campi.codice_referenza ?? campi.codice ?? '').trim();
+};
+
 /**
- * Fantasmi col codice in un altro tracciato (warning `02_codref_guest`, C# `FP_WarningCodInAltroTracciato`):
- * DB1 manda gli `elementi` del gruppo. Se una foto del box dice qual e il primario non sono
- * fuori listino e nessuno deve deciderli: diventano referenze come quelle di lista, il box del
- * plugin (testi, foto, posizione) col primario nei dataFields e il gruppo nei groupElements,
- * tutti coi nomi FP. Senza primario, o con un altro warning, restano fantasmi da decidere.
+ * Fantasmi che non sono fuori listino, e che nessuno deve decidere: diventano referenze come
+ * quelle di lista, col box del plugin (testi, foto, posizione).
+ * - Codice in un altro tracciato (warning `02_codref_guest`, C# `FP_WarningCodInAltroTracciato`):
+ *   DB1 manda gli `elementi` del gruppo; se una foto del box dice qual e il primario, lui nei
+ *   dataFields e il gruppo nei groupElements, tutti coi nomi FP.
+ * - Box che DB1 ha gia arricchito col suo record (dataFields con un codice): resta com'e.
+ *   Tranne lo scatto sbagliato (`01_codscatto_same`): il plugin corregge il DNA nel documento e rimanda.
+ * Il resto (nessun record, warning illeggibile) resta fantasma da decidere.
  */
 export function separaOspiti(fantasmi: SyncJsonPluginRef[]): { ospiti: SyncJsonPluginRef[]; fantasmi: SyncJsonPluginRef[] } {
   const ospiti: SyncJsonPluginRef[] = [];
@@ -202,14 +211,16 @@ export function separaOspiti(fantasmi: SyncJsonPluginRef[]): { ospiti: SyncJsonP
       ? warning.elementi.filter((elemento): elemento is DB1XmlRecord => !!elemento && typeof elemento === 'object')
       : [];
     const primario = primarioDelGruppo(elementi, fantasma.foto);
+    const { resolution: _resolution, ...box } = fantasma as SyncJsonPluginRef & { resolution?: unknown };
     if (primario) {
-      const { resolution: _resolution, ...box } = fantasma as SyncJsonPluginRef & { resolution?: unknown };
       ospiti.push({
         ...box,
         dataFields: datiFP(primario),
         // Come i gruppi di Istanta (FicoProcessController): tutti gli elementi, primario per primo; un singolo non ne ha.
         groupElements: elementi.length > 1 ? [primario, ...elementi.filter((elemento) => elemento !== primario)].map(datiFP) : [],
       });
+    } else if (codiceDB1(fantasma.dataFields) && warning?.warningCode !== '01_codscatto_same') {
+      ospiti.push(box);
     } else {
       restanti.push(fantasma);
     }
