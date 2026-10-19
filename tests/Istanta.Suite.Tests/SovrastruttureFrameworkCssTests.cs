@@ -79,6 +79,29 @@ public class SovrastruttureFrameworkCssTests
     }
 
     [Fact]
+    public void Il_blocco_unico_di_una_regola_si_legge_e_sopravvive_al_salvataggio()
+    {
+        // I20-1113: senza la proprieta' nella classe, il Plugin riceverebbe la regola senza
+        // bloccoUnico e ricomporrebbe la colonna per livelli.
+        var letta = JsonConvert.DeserializeObject<Allineamento>(
+            "{\"nomeGruppo\":\"Parmigiano_Prezzi_Payoff\",\"bloccoUnico\":true,\"gruppoEtichette\":[\"prezzo_offerta_gruppo\"]}");
+        Assert.True(letta!.bloccoUnico);
+
+        var riletta = JsonConvert.DeserializeObject<Allineamento>(JsonConvert.SerializeObject(letta));
+        Assert.True(riletta!.bloccoUnico);
+    }
+
+    [Fact]
+    public void Una_regola_senza_blocco_unico_non_lo_scrive()
+    {
+        // Le configurazioni in esercizio restano identiche dopo un salvataggio dall'editor.
+        var regola = JsonConvert.DeserializeObject<Allineamento>("{\"nomeGruppo\":\"Campi_DX\"}");
+
+        Assert.Null(regola!.bloccoUnico);
+        Assert.DoesNotContain("bloccoUnico", JsonConvert.SerializeObject(regola));
+    }
+
+    [Fact]
     public void Un_ancora_senza_percentuale_resta_in_millimetri()
     {
         var ancora = JsonConvert.DeserializeObject<FollowOnY>("{\"distance\":2.5}");
@@ -109,6 +132,13 @@ public class SovrastruttureFrameworkCssTests
                 var bollo = Assert.Single(parmigiano.operazioni.allineamenti, a => a.nomeGruppo == "Parmigiano_BolloMesi");
                 Assert.Equal("dopoFixFoto", bollo.fase);
                 Assert.Equal(25, bollo.followAnchor.Single().yAnchor!.distancePercentuale);
+
+                // I20-1113: le due regole del box verticale, con il blocco unico dei prezzi.
+                var prezzi = Assert.Single(parmigiano.operazioni.allineamenti, a => a.nomeGruppo == "Parmigiano_Prezzi_Payoff");
+                Assert.True(prezzi.bloccoUnico);
+                Assert.Equal(new[] { "*Parmigiano_payoff*" }, prezzi.followAnchor.Single().nomiGruppiSeguiti);
+                var caratteristiche = Assert.Single(parmigiano.operazioni.allineamenti, a => a.nomeGruppo == "Parmigiano_Caratteristiche_SX_TOP");
+                Assert.Null(caratteristiche.bloccoUnico);
             }
         }
     }

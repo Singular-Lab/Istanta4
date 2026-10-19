@@ -125,6 +125,10 @@ test("il payoff non e' mai disattivato", () => {
 
 /* ---- dove si mette ---- */
 
+//I20-1113: la lettura dei livelli che, nel motore, mette ogni livello SOPRA il precedente, cosi' il
+//livello 1 sta in basso. Si chiama righe_top_to_bottom, ed e' la 2: il nome si legge al contrario.
+const LETTURA_LIVELLO_1_IN_BASSO = 2;
+
 function allineamento(k, nome) {
     const trovato = sovrastrutturaParmigiano(k).operazioni.allineamenti.find(a => a.nomeGruppo === nome);
     assert.ok(trovato, nome);
@@ -145,8 +149,10 @@ test("payoff e testi in basso a sinistra, fuori dalla traccia, il payoff sopra i
         assert.strictEqual(ancora.xAnchor.applyToSingleLevels, true);
         assert.strictEqual(ancora.yAnchor.applyToSingleLevels, false);
         assert.strictEqual(gruppo.evitaTracciaAllineamento.evitaTracciaBase, true);
-        //Righe dal basso verso l'alto: il livello 1 (i testi) sta sotto il livello 2 (il payoff).
-        assert.strictEqual(gruppo.letturaLivelli, 3);
+        //I20-1113: il livello 1 (i testi) sta sotto il livello 2 (il payoff). Lo fa la lettura 2, come nei
+        //Campi_DX che partono dal fondo: nel motore la 3 mette ogni livello SOTTO il precedente, e con lei il
+        //testo finiva sopra il payoff (vedi il test sulle letture qui sotto). Qui prima c'era 3.
+        assert.strictEqual(gruppo.letturaLivelli, LETTURA_LIVELLO_1_IN_BASSO);
         const livelloDi = sigla => gruppo.ordinamentoLivelli.find(l => l.elementi.some(e => regex(e).test(label(sigla)))).livello;
         assert.ok(livelloDi(SIGLA.verticale) < livelloDi(SIGLA.payoff));
         assert.ok(livelloDi(SIGLA.orizzontale) < livelloDi(SIGLA.payoff));
@@ -328,4 +334,117 @@ test("i gruppi principali evitano la traccia della base in tutti i box dei kit v
         }
     }
     assert.ok(trovati >= 20, "regole trovate: " + trovati);
+});
+
+/* ---- I20-1113: il box verticale ---- */
+
+//I20-1113: la produzione ha chiesto, per il box verticale, le caratteristiche in alto a sinistra fuori
+//dalla traccia e i prezzi all'altezza del payoff. Due regole della sovrastruttura, solo per la forma alta,
+//dopo tutte le altre (ordine 999999): le caratteristiche restano anche nei Loghi_DX, per i box larghi.
+const ORDINE_DOPO_LE_ALTRE = 1000000;
+
+function soloFormaAlta(gruppo) {
+    const insiemi = gruppo.listSetCondizioni || [];
+    assert.strictEqual(insiemi.length, 1, gruppo.nomeGruppo);
+    const condizioni = insiemi[0].setCondizioni;
+    assert.strictEqual(condizioni.length, 1, gruppo.nomeGruppo);
+    assert.deepStrictEqual(condizioni[0].formaBoxCondition, [{ forme: ["alto"], rapporto: 1.6 }], gruppo.nomeGruppo);
+}
+
+test("box verticale: le caratteristiche in alto a sinistra, fuori dalla traccia, dopo i Loghi_DX", () => {
+    for (const k of kitVolantino) {
+        const gruppo = allineamento(k, "Parmigiano_Caratteristiche_SX_TOP");
+        soloFormaAlta(gruppo);
+        assert.strictEqual(gruppo.ordine, ORDINE_DOPO_LE_ALTRE);
+
+        assert.ok(gruppo.gruppoEtichette.every(e => regex(e).test(label(SIGLA.caratteristiche))));
+        const ancora = gruppo.staticAnchor[0];
+        //x: lato sinistro; y: lato alto. A 1 mm, come Loghi_DX dall'altra parte.
+        assert.strictEqual(ancora.xAnchor.allineaAlLato, 0);
+        assert.strictEqual(ancora.xAnchor.allineaLato, 0);
+        assert.strictEqual(ancora.yAnchor.allineaAlLato, 0);
+        assert.strictEqual(ancora.yAnchor.allineaLato, 0);
+        assert.strictEqual(ancora.xAnchor.distance, "1");
+        assert.strictEqual(ancora.yAnchor.distance, "1");
+        assert.strictEqual(gruppo.evitaTracciaAllineamento.evitaTracciaBase, true);
+        assert.ok(gruppo.finalFit.some(f => f.nomiElementi.some(e => regex(e).test(label(SIGLA.caratteristiche)))));
+        assert.notStrictEqual(gruppo.bloccoUnico, true);
+    }
+});
+
+test("box verticale: la colonna dei prezzi sale intera finche' il suo fondo e' sul fondo del payoff", () => {
+    //Tutti gli elementi che un Campi_DX dei kit volantino puo' avere: il box ha i suoi, gli altri mancano.
+    const elementiCampiDX = new Set();
+    for (const k of kitVolantino) {
+        for (const voce of k.operazioniPerBox) {
+            for (const a of (voce.allineamenti || []).filter(a => a.nomeGruppo === "Campi_DX")) {
+                (a.gruppoEtichette || []).forEach(e => elementiCampiDX.add(e));
+            }
+        }
+    }
+    assert.ok(elementiCampiDX.has("prezzo_offerta_gruppo"));
+
+    for (const k of kitVolantino) {
+        const gruppo = allineamento(k, "Parmigiano_Prezzi_Payoff");
+        soloFormaAlta(gruppo);
+        assert.strictEqual(gruppo.ordine, ORDINE_DOPO_LE_ALTRE);
+
+        //Un blocco solo: niente ricomposizione per livelli, la disposizione di Campi_DX resta.
+        assert.strictEqual(gruppo.bloccoUnico, true);
+        for (const e of elementiCampiDX) {
+            assert.ok(gruppo.gruppoEtichette.includes(e), "manca " + e);
+        }
+        assert.ok(gruppo.gruppoEtichette.includes("sy_etto"), "l'ALL'ETTO segue il prezzo");
+
+        //Solo in verticale, fondo su fondo, sull'etichetta del payoff: un gruppo con etichette a
+        //asterisco non si risolve come gruppo seguito, l'etichetta si'.
+        assert.strictEqual(gruppo.staticAnchor, null);
+        assert.strictEqual(gruppo.followAnchor.length, 1);
+        const segui = gruppo.followAnchor[0];
+        assert.deepStrictEqual(segui.nomiGruppiSeguiti, ["*Parmigiano_payoff*"]);
+        assert.ok(regex(segui.nomiGruppiSeguiti[0]).test(label(SIGLA.payoff)));
+        assert.strictEqual(segui.xAnchor, null);
+        assert.strictEqual(segui.yAnchor.allineaAlLato, 1);
+        assert.strictEqual(segui.yAnchor.allineaLato, 1);
+        assert.strictEqual(segui.yAnchor.distance, 0);
+        //Come i Campi_DX: evita la traccia della base a distanza zero.
+        assert.strictEqual(gruppo.evitaTracciaAllineamento.evitaTracciaBase, true);
+        assert.strictEqual(gruppo.evitaTracciaAllineamento.distance, 0);
+    }
+});
+
+test("le regole del box verticale vengono dopo quelle che sistemano payoff, loghi e prezzi", () => {
+    for (const k of kitVolantino) {
+        const sv = sovrastrutturaParmigiano(k);
+        const sotto = allineamento(k, "Parmigiano_SX_BOTTOM");
+        assert.ok(sotto.ordine < ORDINE_DOPO_LE_ALTRE);
+        for (const voce of k.operazioniPerBox) {
+            for (const a of (voce.allineamenti || []).filter(a => a.nomeGruppo === "Campi_DX" || a.nomeGruppo === "Loghi_DX")) {
+                assert.ok(a.ordine < ORDINE_DOPO_LE_ALTRE, a.nomeGruppo + " " + JSON.stringify(voce.nomiBox));
+            }
+        }
+        assert.ok(sv.operazioni.allineamenti.some(a => a.nomeGruppo === "Parmigiano_Prezzi_Payoff"));
+    }
+});
+
+test("nel motore la lettura 2 mette ogni livello sopra il precedente, la 3 sotto", () => {
+    //I20-1113: Parmigiano_SX_BOTTOM usava la 3 credendo dal nome che il livello 1 andasse in basso, e il
+    //testo verticale finiva sopra il payoff. Qui si legge dal motore cosa fanno davvero le due letture.
+    const motore = leggi("plugin/CssFramework.js");
+    const letture = motore.substring(motore.indexOf("    enumLetturaLivelli(numericValue){"));
+    assert.match(letture, /case 2:\s*return "righe_top_to_bottom";/);
+    assert.match(letture, /case 3:\s*return "righe_bottom_to_top";/);
+
+    const spazio = motore.substring(motore.indexOf("//ora applichiamo lo Spacing tra i gruppi se c'è"));
+    //top_to_bottom: il fondo del livello va sopra la cima del precedente.
+    assert.match(spazio, /case "righe_top_to_bottom":[\s\S]*?var spostamento = \(gruppoPrecedente\.bounds\[0\] - Spacing\) - gruppo\.bounds\[2\];/);
+    //bottom_to_top: la cima del livello va sotto il fondo del precedente.
+    assert.match(spazio, /case "righe_bottom_to_top":[\s\S]*?var spostamento = \(gruppoPrecedente\.bounds\[2\] \+ Spacing\) - gruppo\.bounds\[0\];/);
+
+    //I Campi_DX partono dal fondo con la stessa lettura.
+    for (const k of kitVolantino) {
+        const generale = k.operazioniPerBox.find(v => (v.nomiBox || []).length === 0 && (v.allineamenti || []).some(a => a.nomeGruppo === "Campi_DX"));
+        assert.ok(generale);
+        assert.strictEqual(generale.allineamenti.find(a => a.nomeGruppo === "Campi_DX").letturaLivelli, LETTURA_LIVELLO_1_IN_BASSO);
+    }
 });

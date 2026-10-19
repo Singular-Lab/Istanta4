@@ -3489,6 +3489,52 @@ const CssFramework =
 
     },
 
+    /// I20-1113: il gruppo di una regola con bloccoUnico, nella forma che restituisce
+    /// AllineamentoInternoGruppo: un livello solo con tutti gli elementi presenti e non eliminati,
+    /// nelle posizioni in cui si trovano, e il loro ingombro. Niente ricomposizione per livelli:
+    /// ancore e agganci spostano ogni elemento del livello della stessa quantita', quindi la
+    /// disposizione che hanno dato le regole precedenti (la colonna dei prezzi di un box, per
+    /// esempio) resta com'e'. Un elemento preso da piu' etichette conta una volta. Senza elementi,
+    /// nessun livello: la regola non sposta niente, come un gruppo a livelli vuoto.
+    gruppoInBlocco(gruppoElementi) {
+        var elementi = [];
+        var visti = [];
+        for (var i = 0; i < (gruppoElementi || []).length; i++) {
+            var el = gruppoElementi[i];
+            if (el == null || el.eliminato || el.item == null || visti.indexOf(el.item) >= 0) {
+                continue;
+            }
+            visti.push(el.item);
+            var b = el.item.geometricBounds;
+            elementi.push({
+                item: el.item,
+                label: Utility.parseLabel(el.label),
+                bounds: [b[0], b[1], b[2], b[3]],
+                eliminato: false
+            });
+        }
+
+        if (elementi.length === 0) {
+            return [];
+        }
+
+        return [{
+            bounds: [
+                Math.min(...elementi.map(e => e.bounds[0])),
+                Math.min(...elementi.map(e => e.bounds[1])),
+                Math.max(...elementi.map(e => e.bounds[2])),
+                Math.max(...elementi.map(e => e.bounds[3]))
+            ],
+            elementi: elementi,
+            elementiEliminati: [],
+            elementiOrdinati: [],
+            livelloEliminato: false,
+            InternalAnchor: this.enumInternalAnchor(0),
+            InternalSpacing: 0,
+            allineaATextBounds: false
+        }];
+    },
+
     /// Se una regola si applica a questo box: elementi che devono esserci, elementi che non
     /// devono esserci, contatti fra etichette e le altre condizioni descritte qui sotto.
     checkCondition(mappaBoxOriginale, itemRef, condizione, box) {
@@ -4520,16 +4566,20 @@ const CssFramework =
                 continue;
             }
 
-            let listGruppoAllineamento = this.AllineamentoInternoGruppo(
-                box,
-                allineamentoSingolo.nomeGruppo,
-                gruppoElementi, // Create a deep copy to avoid modifying the original structure
-                JSON.parse(JSON.stringify(allineamentoSingolo.ordinamentoLivelli)),
-                allineamentoSingolo.letturaLivelli,
-                allineamentoSingolo.spacingLivelli,
-                mappaBoxOriginale, // Create a deep copy to avoid modifying the original structure
-                itemRef
-            );
+            //I20-1113: con bloccoUnico gli elementi non si ricompongono per livelli: restano dove sono e
+            //ancore, agganci ed evita traccia li spostano tutti insieme, come un blocco solo.
+            let listGruppoAllineamento = allineamentoSingolo.bloccoUnico === true
+                ? this.gruppoInBlocco(gruppoElementi)
+                : this.AllineamentoInternoGruppo(
+                    box,
+                    allineamentoSingolo.nomeGruppo,
+                    gruppoElementi, // Create a deep copy to avoid modifying the original structure
+                    JSON.parse(JSON.stringify(allineamentoSingolo.ordinamentoLivelli)),
+                    allineamentoSingolo.letturaLivelli,
+                    allineamentoSingolo.spacingLivelli,
+                    mappaBoxOriginale, // Create a deep copy to avoid modifying the original structure
+                    itemRef
+                );
             let allineamentiRiusciti = {
                 x: false,
                 y: false
