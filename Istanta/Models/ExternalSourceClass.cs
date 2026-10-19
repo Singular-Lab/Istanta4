@@ -3630,6 +3630,15 @@ namespace Istanta.Models
         [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
         public SlotAllineamento? slot { get; set; } = null;
 
+        /// <summary>
+        /// I20-1113: se vero, il gruppo non si ricompone per livelli: gli elementi restano dove sono e
+        /// ancore, agganci ed evita traccia li spostano tutti insieme, come un blocco solo
+        /// (CssFramework.gruppoInBlocco nel Plugin). Va dichiarato qui, altrimenti sparirebbe passando
+        /// dalle classi C#; non si scrive quando manca, cosi' le configurazioni esistenti restano come sono.
+        /// </summary>
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+        public bool? bloccoUnico { get; set; } = null;
+
     }
 
     /// <summary>
