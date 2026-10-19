@@ -1173,7 +1173,6 @@ async function initDocumentInLavorazione()
                 // $("#syncRimaste").hide();
                 // $("#svuotaCodaSync").hide();
                 $("#bOpt2Advanced").hide();
-                $("#bOpt1Advanced").html(getFiltroButtonMarkup('impagina.png', 'Impagina'));
                 $("#opzioniAddizionali").hide();
                 $("#svuotaPagina").hide();
             }
@@ -1184,8 +1183,8 @@ async function initDocumentInLavorazione()
                 $("#bOpt2Advanced").show();
                 $("#opzioniAddizionali").show();
                 $("#svuotaPagina").show();
-                $("#bOpt1Advanced").html(getFiltroButtonMarkup('conteggio.png', 'Conteggio'));
             }
+            setFiltroButtonsDefaultMarkup();
             $("#dialogSelectKit").css("display","none");
             $("#wrapper").css("display","block");
             $("#loginPanel").css("display","none");
@@ -2180,6 +2179,14 @@ async function showLogin()
     }
 
     hideLoading();
+
+    //I20-1112: il login copre il pannello, ma in UXP i campi di testo stanno sopra a tutto: con la
+    //sessione persa e una scheda ref aperta le sue descrizioni restavano disegnate sopra il login.
+    //Il logout manuale nascondeva gia' il pannello e chiudeva le finestre; qui lo fanno tutti i
+    //ritorni al login. Dopo l'accesso il pannello torna come dopo un logout manuale.
+    Modali.closeAllModal();
+    $("#mainContent").hide();
+
     $("#loginPanel").css("display", "flex");
 
 
@@ -2209,16 +2216,25 @@ const bOpt1 = document.getElementById("bOpt1Advanced");
 const bOpt2 = document.getElementById("bOpt2Advanced");
 var lastSelections = [];
 
-/// Rimette i due bottoni grossi al loro aspetto normale: Conteggio a sinistra, Impagina a
-/// destra.
+/// Rimette i due bottoni grossi al loro aspetto normale per il tipo di lavorazione corrente.
+/// Nel volantino: Conteggio a sinistra, Impagina a destra. Nel PoP (tipo 2) il bottone di
+/// destra e' nascosto e quello di sinistra impagina, quindi si chiama Impagina.
 ///
-/// Serve dopo che initDocumentInLavorazione li ha cambiati per una lavorazione di tipo 2,
-/// che di bottoni ne mostra uno solo.
+/// La chiamano initDocumentInLavorazione e la fine di ogni conteggio o impaginazione. Prima
+/// scriveva sempre Conteggio, e nel PoP il bottone cambiava nome dopo ogni impaginazione.
 ///
 /// DA SPOSTARE (task di divisione): in filtri.js con getFiltroButtonMarkup.
 function setFiltroButtonsDefaultMarkup() {
+    let pop = false;
+    try {
+        pop = ficoProcess.getTipoLavorazioneCorrente() == 2;
+    } catch (e) {
+        pop = false;
+    }
     if (bOpt1 != null) {
-        bOpt1.innerHTML = getFiltroButtonMarkup('conteggio.png', 'Conteggio');
+        bOpt1.innerHTML = pop
+            ? getFiltroButtonMarkup('impagina.png', 'Impagina')
+            : getFiltroButtonMarkup('conteggio.png', 'Conteggio');
     }
     if (bOpt2 != null) {
         bOpt2.innerHTML = getFiltroButtonMarkup('impagina.png', 'Impagina');
@@ -9990,7 +10006,10 @@ function writeFileInConsole(logMessage) {
         var rigaBox = $('<div class="boxMessaggio" style="font-size: 10px; margin-top: 2px;"></div>').text(testoBox + " ");
         if (logMessage.box.idBox != null) {
             var riferimentoBox = logMessage.box;
-            rigaBox.append($('<span class="trovaBoxMessaggio" style="text-decoration: underline; cursor: pointer; font-weight: bold;">Trova</span>')
+            //I20-1114: un riquadro col bordo bianco, che si stacca dal testo su ogni colore di messaggio:
+            //la parola sottolineata a 10px si confondeva. Uno span e non un button: in UXP il button
+            //ignora lo stile.
+            rigaBox.append($('<span class="trovaBoxMessaggio" role="button" style="display: inline-block; margin-left: 6px; padding: 1px 8px; border: 1px solid white; border-radius: 4px; font-size: 11px; font-weight: bold; cursor: pointer;">Trova</span>')
                 .on('click', function () {
                     trovaBoxDelMessaggio(riferimentoBox);
                 }));

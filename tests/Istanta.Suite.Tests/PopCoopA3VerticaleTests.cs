@@ -5,10 +5,11 @@ namespace Istanta.Suite.Tests;
 
 /// <summary>
 /// Tre regole del PoP Coop:
-/// - nell'A3 verticale i Superprezzi ortofrutta (BOX_SuperprezziOF) escono come BOX_STD, anche nel
-///   record, perche' dal box del record il Plugin sceglie modello e regole del CssFramework;
+/// - nell'A3 verticale i Superprezzi ortofrutta (BOX_SuperprezziOF) non escono; prima (#211) vi uscivano
+///   come BOX_STD. Negli altri formati restano col loro box;
 /// - i Jolly evidenziati (BOX_JOLLY_EVIDENZIATO, tema VENDITE PROPOSITIVE) non escono in nessun formato,
-///   come i temi jolly, sprint ed extra tripla;
+///   come i temi jolly ed extra tripla; il tema sprint non esce negli A3 (negli A7 e' il cartello Sprint,
+///   vedi PopCoopA7Tests);
 /// - il prezzo di STD ha lo stile PREZZO_STD_SCONTO_PICCOLO solo quando lo sconto piccolo c'e' davvero;
 ///   prima lo prendeva con qualunque sconto sotto il 25%, anche zero e in ogni area. Nel 1+1 lo sconto
 ///   piccolo viene sempre tolto, e il prezzo resta PREZZO_PROMO.
@@ -29,29 +30,26 @@ public class PopCoopA3VerticaleTests
 
     private static string Pop() => Tra(Sorgente(), "public TracciatoResultKit esportaPoP(", "public TracciatoResultKit esportaVolantino(");
 
-    /* ---- Superprezzi come STD nell'A3 verticale ---- */
+    /* ---- Superprezzi esclusi dall'A3 verticale ---- */
 
     [Theory]
-    [InlineData("BOX_SuperprezziOF", "A3_VERTICALI", "BOX_STD")]
-    [InlineData("BOX_SuperprezziOF", "A3_ORIZZONTALI", "BOX_SuperprezziOF")]
-    [InlineData("BOX_SuperprezziOF", "A7", "BOX_SuperprezziOF")]
-    [InlineData("BOX_STD", "A3_VERTICALI", "BOX_STD")]
-    [InlineData("BOX_1+1", "A3_VERTICALI", "BOX_1+1")]
-    public void Nell_A3_verticale_i_Superprezzi_escono_come_STD(string box, string formato, string atteso)
+    [InlineData("BOX_SuperprezziOF", "A3_VERTICALI", true)]
+    [InlineData("BOX_SuperprezziOF", "A3_ORIZZONTALI", false)]
+    [InlineData("BOX_SuperprezziOF", "A7", false)]
+    [InlineData("BOX_STD", "A3_VERTICALI", false)]
+    [InlineData("BOX_1+1", "A3_VERTICALI", false)]
+    public void Nell_A3_verticale_i_Superprezzi_non_escono(string box, string formato, bool esclusa)
     {
-        Assert.Equal(atteso, Coopfi.boxNelPoP(box, formato));
+        Assert.Equal(esclusa, Coopfi.esclusaDalPoP("superprezzi of", box, formato));
     }
 
     [Fact]
-    public void Il_box_STD_dei_Superprezzi_finisce_anche_nel_record_prima_delle_regole_del_box()
+    public void I_Superprezzi_non_si_convertono_piu_in_STD()
     {
-        string pop = Pop();
-        string conversione = "if (boxNelPoP(codiceBox, formatoKit) != codiceBox)\n                    {\n                        codiceBox = boxNelPoP(codiceBox, formatoKit);\n                        recItem[key_codiceBox] = codiceBox;\n                    }";
+        string coop = Sorgente();
 
-        int dove = pop.IndexOf(conversione, StringComparison.Ordinal);
-        Assert.True(dove > pop.IndexOf("var codiceBox = recItem[key_codiceBox].ToString();", StringComparison.Ordinal));
-        //Prima di ogni regola che guarda il box dei Superprezzi.
-        Assert.True(dove < pop.IndexOf("if (codiceBox == \"BOX_SuperprezziOF\")", StringComparison.Ordinal));
+        Assert.DoesNotContain("boxNelPoP", coop);
+        Assert.DoesNotContain("recItem[key_codiceBox] = codiceBox;", Pop());
     }
 
     /* ---- Jolly evidenziati esclusi ---- */
@@ -59,13 +57,25 @@ public class PopCoopA3VerticaleTests
     [Theory]
     [InlineData("vendite propositive", "BOX_JOLLY_EVIDENZIATO", true)]
     [InlineData("jolly", "BOX_JOLLY", true)]
-    [InlineData("sprint", "BOX_SPRINT", true)]
     [InlineData("ex tripla", "BOX_STD", true)]
     [InlineData("superprezzi of", "BOX_SuperprezziOF", false)]
     [InlineData("", "BOX_STD", false)]
-    public void Non_escono_jolly_sprint_extra_tripla_e_jolly_evidenziati(string tema, string box, bool esclusa)
+    public void Non_escono_jolly_extra_tripla_e_jolly_evidenziati(string tema, string box, bool esclusa)
     {
-        Assert.Equal(esclusa, Coopfi.esclusaDalPoP(tema, box));
+        //In ogni formato: qui il formato e' l'A3 orizzontale, dove i Superprezzi escono.
+        Assert.Equal(esclusa, Coopfi.esclusaDalPoP(tema, box, "A3_ORIZZONTALI"));
+        if (esclusa)
+        {
+            Assert.True(Coopfi.esclusaDalPoP(tema, box, "A3_VERTICALI"));
+            Assert.True(Coopfi.esclusaDalPoP(tema, box, "A7"));
+        }
+    }
+
+    [Fact]
+    public void Il_tema_sprint_non_esce_negli_A3()
+    {
+        Assert.True(Coopfi.esclusaDalPoP("sprint", "BOX_SPRINT", "A3_ORIZZONTALI"));
+        Assert.True(Coopfi.esclusaDalPoP("sprint", "BOX_SPRINT", "A3_VERTICALI"));
     }
 
     [Fact]
@@ -73,7 +83,7 @@ public class PopCoopA3VerticaleTests
     {
         string filtro = Tra(Pop(), "if (formatoKit == \"A3_ORIZZONTALI\")", "var gruppo = tracciato.Where(");
 
-        Assert.Equal(3, filtro.Split("if (esclusaDalPoP(tema, recItem[key_codiceBox].ToString()))").Length - 1);
+        Assert.Equal(3, filtro.Split("if (esclusaDalPoP(tema, recItem[key_codiceBox].ToString(), formatoKit))").Length - 1);
         Assert.DoesNotContain("tema.Contains(\"jolly\")", filtro);
     }
 

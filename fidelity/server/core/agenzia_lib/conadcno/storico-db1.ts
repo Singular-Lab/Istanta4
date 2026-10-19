@@ -145,6 +145,89 @@ const ALIAS_FP: Array<[keyof DB1XmlRecord, string]> = [
   ['anziche', 'prezzo_anziche'],
 ];
 
+/**
+ * Il record DB1 come lo leggono le schede del kit: i campi DB1 restano, si aggiungono gli
+ * alias FP (senza, la scheda mostra "N/D", senza codice ne prezzo) senza sovrascrivere niente.
+ */
+function datiFP(record: Record<string, unknown>): DataFields {
+  const dataFields: Record<string, unknown> = { ...record };
+  for (const [campoDB1, campoFP] of ALIAS_FP) {
+    const valore = record[campoDB1];
+    if (dataFields[campoFP] === undefined && valore !== undefined && valore !== null && valore !== '') {
+      dataFields[campoFP] = valore;
+    }
+  }
+  return dataFields as DataFields;
+}
+
+/**
+ * Il warning che DB1 mette su un box nel campo `resolution`: l'oggetto C# `I_FP_Warning`
+ * serializzato in stringa (lo si accetta anche gia oggetto). Null se manca o non si legge.
+ */
+function warningDi(ref: SyncJsonPluginRef): { warningCode?: string; elementi?: unknown } | null {
+  const raw = (ref as { resolution?: unknown }).resolution;
+  try {
+    const warning = typeof raw === 'string' ? JSON.parse(raw || 'null') : raw;
+    return warning && typeof warning === 'object' ? warning : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Il primario di un gruppo trovato in un altro tracciato: l'elemento il cui codice e il
+ * nome di una foto del box senza estensione (le foto si chiamano col codice: 4023057.psd).
+ */
+export function primarioDelGruppo(elementi: DB1XmlRecord[], foto: SyncJsonPluginRef['foto']): DB1XmlRecord | undefined {
+  return (foto ?? [])
+    .map((f) => String((typeof f === 'string' ? f : f?.nome) ?? '').trim().replace(/\.[^.]*$/, ''))
+    .filter(Boolean)
+    .map((nome) => elementi.find((elemento) => String(elemento.codice ?? '').trim() === nome))
+    .find(Boolean);
+}
+
+/** Il codice referenza nei dataFields che DB1 mette su un box: c'e solo se ne ha trovato il record. */
+const codiceDB1 = (dataFields?: DataFields) => {
+  const campi = (dataFields ?? {}) as Record<string, unknown>;
+  return String(campi['Referenza.Codice'] ?? campi.codice_referenza ?? campi.codice ?? '').trim();
+};
+
+/**
+ * Fantasmi che non sono fuori listino, e che nessuno deve decidere: diventano referenze come
+ * quelle di lista, col box del plugin (testi, foto, posizione).
+ * - Codice in un altro tracciato (warning `02_codref_guest`, C# `FP_WarningCodInAltroTracciato`):
+ *   DB1 manda gli `elementi` del gruppo; se una foto del box dice qual e il primario, lui nei
+ *   dataFields e il gruppo nei groupElements, tutti coi nomi FP.
+ * - Box che DB1 ha gia arricchito col suo record (dataFields con un codice): resta com'e.
+ *   Tranne lo scatto sbagliato (`01_codscatto_same`): il plugin corregge il DNA nel documento e rimanda.
+ * Il resto (nessun record, warning illeggibile) resta fantasma da decidere.
+ */
+export function separaOspiti(fantasmi: SyncJsonPluginRef[]): { ospiti: SyncJsonPluginRef[]; fantasmi: SyncJsonPluginRef[] } {
+  const ospiti: SyncJsonPluginRef[] = [];
+  const restanti: SyncJsonPluginRef[] = [];
+  for (const fantasma of fantasmi) {
+    const warning = warningDi(fantasma);
+    const elementi = warning?.warningCode === '02_codref_guest' && Array.isArray(warning.elementi)
+      ? warning.elementi.filter((elemento): elemento is DB1XmlRecord => !!elemento && typeof elemento === 'object')
+      : [];
+    const primario = primarioDelGruppo(elementi, fantasma.foto);
+    const { resolution: _resolution, ...box } = fantasma as SyncJsonPluginRef & { resolution?: unknown };
+    if (primario) {
+      ospiti.push({
+        ...box,
+        dataFields: datiFP(primario),
+        // Come i gruppi di Istanta (FicoProcessController): tutti gli elementi, primario per primo; un singolo non ne ha.
+        groupElements: elementi.length > 1 ? [primario, ...elementi.filter((elemento) => elemento !== primario)].map(datiFP) : [],
+      });
+    } else if (codiceDB1(fantasma.dataFields) && warning?.warningCode !== '01_codscatto_same') {
+      ospiti.push(box);
+    } else {
+      restanti.push(fantasma);
+    }
+  }
+  return { ospiti, fantasmi: restanti };
+}
+
 const euro = (valore: unknown) =>
   valore == null || valore === '' || !Number.isFinite(Number(valore)) ? undefined : `€ ${Number(valore).toFixed(2)}`;
 
@@ -173,10 +256,13 @@ export const storicoVolantinoDB1: StoricoVolantinoAgenzia = {
         statusCode: risultato.status
       });
     }
+    // I fantasmi che DB1 ha trovato in un altro tracciato vanno in lista col loro record.
+    const { ospiti, fantasmi } = separaOspiti(Array.isArray(risultato.data.fantasmi) ? risultato.data.fantasmi : []);
+    const lista = Array.isArray(risultato.data.lista) ? risultato.data.lista : [];
     return {
-      lista: Array.isArray(risultato.data.lista) ? mergePluginPhotoRefs(risultato.data.lista, payload.refs) : [],
+      lista: mergePluginPhotoRefs([...lista, ...ospiti], payload.refs),
       nonImpaginate: Array.isArray(risultato.data.orfanelli) ? risultato.data.orfanelli : [],
-      fuoriListino: Array.isArray(risultato.data.fantasmi) ? risultato.data.fantasmi : [],
+      fuoriListino: fantasmi,
     };
   },
 
@@ -186,20 +272,9 @@ export const storicoVolantinoDB1: StoricoVolantinoAgenzia = {
     { campo: 'descrizione1', etichetta: 'Descrizione 1' },
   ],
 
-  /**
-   * Il plugin compila il fuori listino coi nomi DB1: senza i nomi FP le schede del
-   * kit non lo leggono (resta "N/D", senza codice ne prezzo). Si aggiungono gli
-   * alias senza togliere i campi DB1 e senza sovrascrivere niente.
-   */
+  /** Il plugin compila il fuori listino coi nomi DB1: lo si legge come i record di DB1. */
   referenzaFuoriListino(record) {
-    const dataFields: Record<string, unknown> = { ...record };
-    for (const [campoDB1, campoFP] of ALIAS_FP) {
-      const valore = record[campoDB1];
-      if (dataFields[campoFP] === undefined && valore !== undefined && valore !== null && valore !== '') {
-        dataFields[campoFP] = valore;
-      }
-    }
-    return { dataFields: dataFields as DataFields, meccanica: String(record.meccanica ?? '') };
+    return { dataFields: datiFP(record), meccanica: String(record.meccanica ?? '') };
   },
 
   referenzaPerReport(record) {

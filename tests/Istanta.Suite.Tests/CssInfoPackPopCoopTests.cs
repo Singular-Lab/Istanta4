@@ -18,7 +18,7 @@ public class CssInfoPackPopCoopTests
 
     private static JObject Operazione(string? box)
     {
-        var pop = Kit().Single(k => k["kit"]!["kitTipoLavorazioniValide"]!.Values<int>().SequenceEqual(new[] { 2 }));
+        var pop = Kit().Single(k => k["kit"]!["kitTipoLavorazioniValide"]!.Values<int>().SequenceEqual(new[] { 2 }) && !k["kit"]!["kitFormatiValidi"]!.Any());
         return pop["operazioniPerBox"]!.Cast<JObject>()
             .Single(o => box == null ? !o["nomiBox"]!.Any() : o["nomiBox"]!.Values<string>().SequenceEqual(new[] { box }));
     }

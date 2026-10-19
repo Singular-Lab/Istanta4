@@ -3647,6 +3647,28 @@ namespace Istanta.Models
 
         /// Le etichette (anche con *) dei riquadri da togliere dal box, pieni o vuoti. Vuoto: le cornici.
         public List<string> corniciDaRimuovere { get; set; } = new();
+
+        /// Eccezioni per alcuni elementi: modalita' e allineamento orizzontale propri, sotto condizioni.
+        /// Vale la prima che nomina l'elemento e le cui condizioni sono vere. Non si scrive quando manca,
+        /// cosi' le configurazioni che non la usano restano come sono.
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+        public List<SlotEccezione>? eccezioni { get; set; } = null;
+    }
+
+    /// Un'eccezione del gruppo a slot (plugin/cssFramework/slot.js, eccezioneDi).
+    public class SlotEccezione
+    {
+        /// Le etichette degli elementi (anche con *).
+        public List<string> elementi { get; set; } = new();
+
+        /// "posizione" (la propria misura) o "posizioneEDimensione" (la misura dello slot).
+        public string modalita { get; set; } = "posizione";
+
+        /// Con la sola posizione: "centro", "destra" (bordo destro sullo slot) o "sinistra".
+        public string allineamentoOrizzontale { get; set; } = "centro";
+
+        /// Quando vale l'eccezione: le condizioni del CssFramework. Vuote: sempre.
+        public List<SetCondizioni> listSetCondizioni { get; set; } = new List<SetCondizioni>();
     }
 
     public class SegnalazioniConflitti

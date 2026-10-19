@@ -266,6 +266,7 @@ const TestoTag = {
                 if (overflowDirectionCustom) {
                     overflowDirection.vertical = overflowDirectionCustom.vertical;
                     overflowDirection.horizontal = overflowDirectionCustom.horizontal;
+                    overflowDirection.ancoraOrizzontale = overflowDirectionCustom.ancoraOrizzontale || "";
                 }
             }
 
@@ -393,6 +394,14 @@ const TestoTag = {
                 //ripristino larghezza originale
                 tf.geometricBounds = [tf.geometricBounds[0], tfBounds[1], tf.geometricBounds[2], tfBounds[3]];
             }
+            else {
+                //Il campo e' cresciuto in orizzontale: se la configurazione lo aggancia a un bordo, quel
+                //bordo resta dov'era nel modello (boundsOrizzontaliDopoOverflow).
+                let orizzontali = this.boundsOrizzontaliDopoOverflow(tfBounds, tf.geometricBounds, overflowDirection.ancoraOrizzontale);
+                if (orizzontali != null) {
+                    tf.geometricBounds = [tf.geometricBounds[0], orizzontali[0], tf.geometricBounds[2], orizzontali[1]];
+                }
+            }
 
             //occupiamoci di eventuali sforamenti dai bounds del box
 
@@ -435,6 +444,21 @@ const TestoTag = {
             return false;
         }
         
+    },
+
+    /// I bordi orizzontali [sinistra, destra] di un campo cresciuto in larghezza, secondo l'aggancio
+    /// della configurazione (campiSoggettiAOverflow, w): "right" tiene il bordo sinistro del modello e
+    /// cresce verso destra, "left" tiene il bordo destro e cresce verso sinistra. Senza aggancio null:
+    /// il campo resta dove l'ha lasciato l'adattamento al contenuto, come prima.
+    boundsOrizzontaliDopoOverflow(boundsOriginali, boundsNuovi, ancora) {
+        let larghezza = boundsNuovi[3] - boundsNuovi[1];
+        if (ancora === "right") {
+            return [boundsOriginali[1], boundsOriginali[1] + larghezza];
+        }
+        if (ancora === "left") {
+            return [boundsOriginali[3] - larghezza, boundsOriginali[3]];
+        }
+        return null;
     },
 
     /// Da che parte puo' crescere un campo quando il testo non ci sta, secondo la sua etichetta: la

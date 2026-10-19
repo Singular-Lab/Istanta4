@@ -27,6 +27,8 @@ const cssSlot = {
 
     MODALITA_POSIZIONE: "posizione",
     MODALITA_POSIZIONE_E_DIMENSIONE: "posizioneEDimensione",
+    ALLINEAMENTO_DESTRA: "destra",
+    ALLINEAMENTO_SINISTRA: "sinistra",
 
     /// Le etichette dei riquadri da togliere dal box: quelle dichiarate, o le cornici.
     corniciDaRimuovere(slot) {
@@ -70,14 +72,48 @@ const cssSlot = {
 
     /// Dove va un elemento nello slot: con la sola posizione tiene la sua misura e mette il centro
     /// sul centro dello slot; con la dimensione prende proprio i bounds dello slot.
-    boundsNelloSlot(elemento, slot, modalita) {
+    /// allineamentoOrizzontale vale con la sola posizione: "destra" lascia il centro verticale e
+    /// porta il bordo destro su quello dello slot, "sinistra" il bordo sinistro; altro, il centro.
+    boundsNelloSlot(elemento, slot, modalita, allineamentoOrizzontale) {
         if (modalita === cssSlot.MODALITA_POSIZIONE_E_DIMENSIONE) {
             return slot.slice();
         }
         const alto = elemento[2] - elemento[0];
         const largo = elemento[3] - elemento[1];
         const centro = cssSlot.centro(slot);
-        return [centro[0] - alto / 2, centro[1] - largo / 2, centro[0] + alto / 2, centro[1] + largo / 2];
+        let sinistra = centro[1] - largo / 2;
+        if (allineamentoOrizzontale === cssSlot.ALLINEAMENTO_DESTRA) {
+            sinistra = slot[3] - largo;
+        }
+        else if (allineamentoOrizzontale === cssSlot.ALLINEAMENTO_SINISTRA) {
+            sinistra = slot[1];
+        }
+        return [centro[0] - alto / 2, sinistra, centro[0] + alto / 2, sinistra + largo];
+    },
+
+    /// L'eccezione del gruppo che vale per un elemento: la prima che lo nomina (corrisponde, come
+    /// per i livelli) e le cui condizioni sono vere (condizioniVere riceve la sua listSetCondizioni).
+    /// null se nessuna. Un'eccezione dice la modalita' e l'allineamento orizzontale dell'elemento.
+    eccezioneDi(eccezioni, chiave, corrisponde, condizioniVere) {
+        const elenco = Array.isArray(eccezioni) ? eccezioni : [];
+        for (const eccezione of elenco) {
+            if (eccezione == null || !Array.isArray(eccezione.elementi)) {
+                continue;
+            }
+            if (!eccezione.elementi.some(etichetta => corrisponde(etichetta, chiave))) {
+                continue;
+            }
+            if (condizioniVere == null || condizioniVere(eccezione.listSetCondizioni)) {
+                return eccezione;
+            }
+        }
+        return null;
+    },
+
+    /// La modalita' con cui un elemento va nello slot: la sua, se un'eccezione gliel'ha data, o
+    /// quella del gruppo.
+    modalitaDi(elemento, modalita) {
+        return elemento != null && elemento.modalita ? elemento.modalita : modalita;
     },
 
     /// Il piano del gruppo. cornici: i riquadri presenti nel box, nell'ordine di riempimento,
@@ -92,7 +128,7 @@ const cssSlot = {
         let dallAlto = boxBounds[0];
         lista.forEach(function (elemento, indice) {
             if (indice < slot.length) {
-                assegnati.push({ chiave: elemento.chiave, slot: slot[indice].nome, bounds: cssSlot.boundsNelloSlot(elemento.bounds, slot[indice].bounds, modalita) });
+                assegnati.push({ chiave: elemento.chiave, slot: slot[indice].nome, bounds: cssSlot.boundsNelloSlot(elemento.bounds, slot[indice].bounds, cssSlot.modalitaDi(elemento, modalita), elemento.allineamentoOrizzontale) });
                 return;
             }
             const alto = elemento.bounds[2] - elemento.bounds[0];

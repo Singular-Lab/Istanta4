@@ -31,7 +31,7 @@ public class CssFotoExtraManualiPopCoopTests
     {
         var pop = JObject.Parse(File.ReadAllText(DllAgenziaLibTests.TrovaFile(FileCss)))["dbRidimensionamentiAllineamenti"]!["modificheCssPerKit"]!
             .Cast<JObject>()
-            .Single(k => k["kit"]!["kitTipoLavorazioniValide"]!.Values<int>().SequenceEqual(new[] { 2 }));
+            .Single(k => k["kit"]!["kitTipoLavorazioniValide"]!.Values<int>().SequenceEqual(new[] { 2 }) && !k["kit"]!["kitFormatiValidi"]!.Any());
         return pop["operazioniPerBox"]!.Cast<JObject>()
             .Where(o => !o["nomiBox"]!.Any() || o["nomiBox"]!.Values<string>().SequenceEqual(new[] { "BOX_doppio_SCONTO" }));
     }

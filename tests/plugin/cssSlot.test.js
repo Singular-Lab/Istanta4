@@ -214,9 +214,15 @@ test("nel PoP di Coop i gruppi Loghi riempiono slot_logo1, slot_logo2, slot_logo
     const kit = JSON.parse(sorgente("Istanta/wwwroot/external_source/Coopfi/SourceFrameworkCss.json")).dbRidimensionamentiAllineamenti.modificheCssPerKit;
     const gruppi = (k) => k.operazioniPerBox.flatMap(op => (op.allineamenti || []).filter(a => a.nomeGruppo === "Loghi"));
 
-    const pop = kit.filter(k => k.kit.kitTipoLavorazioniValide.includes(2)).flatMap(gruppi);
+    const pop = kit.filter(k => k.kit.kitTipoLavorazioniValide.includes(2) && (k.kit.kitFormatiValidi || []).length == 0).flatMap(gruppi);
     assert.strictEqual(pop.length, 2);
-    pop.forEach(g => assert.deepStrictEqual(g.slot, { cornici: ["slot_logo1", "slot_logo2", "slot_logo3"], modalita: "posizioneEDimensione", corniciDaRimuovere: ["slot_logo*"] }));
+    pop.forEach(g => {
+        assert.deepStrictEqual(g.slot.cornici, ["slot_logo1", "slot_logo2", "slot_logo3"]);
+        assert.strictEqual(g.slot.modalita, "posizioneEDimensione");
+        assert.deepStrictEqual(g.slot.corniciDaRimuovere, ["slot_logo*"]);
+        //Le eccezioni dei loghi con la loro misura: vedi cssSlotEccezioni.test.js.
+        assert.ok(Array.isArray(g.slot.eccezioni) && g.slot.eccezioni.length > 0);
+    });
 
     const volantino = kit.filter(k => k.kit.kitTipoLavorazioniValide.includes(1)).flatMap(gruppi);
     assert.ok(volantino.length > 0 && volantino.every(g => g.slot === undefined));

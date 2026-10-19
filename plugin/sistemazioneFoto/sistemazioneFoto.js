@@ -543,6 +543,8 @@ const SistemazioneFoto = {
         console.log(listFoto);
 
         var fotos = [];
+        //Le foto misurate senza tracciato di ritaglio, per la segnalazione CSF-26.
+        var senzaTracciato = [];
         for (let i = 0; i < listFoto.length; i++) {
             let foto = listFoto[i];
             //calcoliamo i bounds della foto
@@ -550,7 +552,11 @@ const SistemazioneFoto = {
             if(customAgenzia && customAgenzia.paddingFoto) {
                 paddingFoto = customAgenzia.paddingFoto;
             }
-            let boundsFoto = this.getRealBoundsOfFoto(foto, paddingFoto);
+            let esitoMisura = {};
+            let boundsFoto = this.getRealBoundsOfFoto(foto, paddingFoto, esitoMisura);
+            if (esitoMisura.origine != null && esitoMisura.origine !== "tracciato") {
+                senzaTracciato.push(Utility.parseLabel(foto.label));
+            }
             let obj = {
                 object: foto,
                 bounds: boundsFoto,
@@ -571,6 +577,14 @@ const SistemazioneFoto = {
         }
 
         console.log(fotos);
+
+        //Una foto senza tracciato di ritaglio (la rilevazione dei bordi e' spenta nella policy del
+        //cliente, o il file non ne ha) si dispone secondo l'immagine intera: l'operatore lo sa dal box.
+        if (senzaTracciato.length > 0 && !projection) {
+            var testoSenzaTracciato = "Code CSF-26: Foto senza tracciato di ritaglio, disposte secondo l'immagine intera: " + senzaTracciato.join(", ");
+            console.warn(testoSenzaTracciato);
+            addSegnalazione(testoSenzaTracciato, "warning", 2, false);
+        }
 
         //cerchiamo in calcoloDistanziamentoFoto l'oggetto che ha foto uguale alla lunghezza della lista delle foto
         var distanzFoto = this.calcoloDistanziamentoFoto.find(d => d.foto == fotos.length);
@@ -604,6 +618,22 @@ const SistemazioneFoto = {
         var res = this.getRaggruppamentoFoto(fotos, distanzFoto)
         var boundsGruppo = res.boundsGruppo;
         fotos = res.fotos;
+
+        //Una misura che non e' un numero rende inservibile tutto il gruppo: nessun candidato lo
+        //ospiterebbe e il fix foto uscirebbe in silenzio, con le foto sovrapposte. Lo si dice.
+        if (!boundsGruppo.every(valore => isFinite(valore))) {
+            var testoMisure = "Code CSF-27: Nel box con codice gruppo " + this.codiceGruppoDelBox(box) + " le misure delle foto non sono valide: le foto non vengono sistemate.";
+            console.warn(testoMisure);
+            if (!projection) {
+                messaggioUtente(testoMisure, "warning");
+                addSegnalazione(testoMisure, "warning", 2, false);
+            }
+            this.ripristinaOstacoli(obstacles);
+            if (!projection && !cssFramework().sospendiControlloSegnalazioniConflitti) {
+                cssFramework().controllaSegnalazioniConflittiPendenti(box);
+            }
+            return;
+        }
 
         //ora che abbiamo i bounds del gruppo cerchiamo fra i candidati quello che lo ospita meglio.
         //Di norma "meglio" vuol dire piu' grande; il box puo' chiedere di privilegiare la
@@ -1054,37 +1084,103 @@ const SistemazioneFoto = {
 
     /// L'ingombro reale dell'immagine dentro il riquadro, che non coincide col riquadro:
     /// e' quello che conta per disporre le foto senza spazi vuoti fra l'una e l'altra.
-    getRealBoundsOfFoto(img, offset)//Funione da spostare in Utility (ora è occupata)
+    ///
+    /// Si misura dal tracciato di ritaglio. Una foto che non ne ha - la rilevazione dei bordi e'
+    /// spenta nella policy del cliente e il file non porta un tracciato Photoshop - risultava 0x0:
+    /// il suo rapporto d'aspetto diventava NaN, con lui le misure di tutto il gruppo, e il fix foto
+    /// lasciava le foto sovrapposte. Ora si ripiega sull'immagine visibile nel riquadro, e senza
+    /// immagine sul riquadro (ingombroDellaFoto). esito, se c'e', riceve in origine da dove viene
+    /// la misura: "tracciato", "immagine", "riquadro" o "nessuna".
+    getRealBoundsOfFoto(img, offset, esito = null)//Funione da spostare in Utility (ora è occupata)
     {
-        //img.graphics[0].clippingPath.clippingType = ClippingPathType.ALPHA_CHANNEL;
-        let xmin=-1;
-        let xmax=-1;
-        let ymin=-1;
-        let ymax=-1;
+        var foto_vertex_list = this.getVertex(img, offset);
+        var riquadro = null;
+        try {
+            riquadro = img != null ? img.geometricBounds : null;
+        }
+        catch (e) {
+            riquadro = null;
+        }
+        var misura = this.ingombroDellaFoto(foto_vertex_list, this.ingombroDellImmagine(img), riquadro, offset);
+        if (esito != null) {
+            esito.origine = misura.origine;
+        }
+        return misura.bounds; // [ymin, xmin, ymax, xmax]
+    },
 
-        var foto_vertex_list=this.getVertex(img, offset);
-       
-        for (var $vtx=0; $vtx<foto_vertex_list.length; $vtx++)
-        {
-            var foto_vertex=foto_vertex_list[$vtx];
-            for (var $v=0; $v<foto_vertex.vertx.length; $v++)
-            {
-
-                var myx=foto_vertex.vertx[$v];
-                var myy=foto_vertex.verty[$v];
-
-                if (xmin==-1 || xmin>myx)
-                    xmin=myx;
-                if (xmax==-1 || xmax<myx)
-                    xmax=myx;
-                if (ymin==-1 || ymin>myy)
-                    ymin=myy;
-                if (ymax==-1 || ymax<myy)
-                    ymax=myy;
+    /// L'ingombro della grafica dentro il riquadro (immagine, eps, pdf), cosi' com'e' posata: puo'
+    /// uscire dal riquadro. Null se il riquadro e' vuoto o la grafica non si legge.
+    ingombroDellImmagine(img) {
+        try {
+            if (img == null) {
+                return null;
             }
-        } 
+            var raccolte = [img.images, img.epss, img.pdfs, img.graphics];
+            for (var r = 0; r < raccolte.length; r++) {
+                var raccolta = raccolte[r];
+                if (raccolta != null && raccolta.length > 0) {
+                    return raccolta.item(0).geometricBounds;
+                }
+            }
+        }
+        catch (e) {
+            console.log("Ingombro dell'immagine non leggibile: " + e);
+        }
+        return null;
+    },
 
-        return [ymin-offset[0], xmin-offset[1], ymax+offset[0], xmax+offset[1]]; // [ymin, xmin, ymax, xmax]
+    /// La misura di una foto per il fix foto, senza InDesign. vertici e' quello che da' getVertex
+    /// (gruppi di vertx e verty), ingombroImmagine e riquadro sono [alto, sinistra, basso, destra].
+    ///   - con i vertici del tracciato, il loro ingombro, come sempre;
+    ///   - senza vertici, l'immagine visibile: la sua parte dentro il riquadro;
+    ///   - senza immagine, o se non tocca il riquadro, il riquadro;
+    ///   - se nemmeno il riquadro e' una misura valida, NaN: il fix foto lo segnala (CSF-27).
+    /// offset e' il padding della foto e si applica come al tracciato.
+    ingombroDellaFoto(vertici, ingombroImmagine, riquadro, offset) {
+        var padding = Array.isArray(offset) ? offset : [0, 0];
+        var xmin = null;
+        var xmax = null;
+        var ymin = null;
+        var ymax = null;
+        (vertici || []).forEach(function (gruppo) {
+            var xs = gruppo && gruppo.vertx ? gruppo.vertx : [];
+            var ys = gruppo && gruppo.verty ? gruppo.verty : [];
+            for (var v = 0; v < xs.length; v++) {
+                var x = xs[v];
+                var y = ys[v];
+                if (!isFinite(x) || !isFinite(y)) {
+                    continue;
+                }
+                xmin = xmin == null || x < xmin ? x : xmin;
+                xmax = xmax == null || x > xmax ? x : xmax;
+                ymin = ymin == null || y < ymin ? y : ymin;
+                ymax = ymax == null || y > ymax ? y : ymax;
+            }
+        });
+        if (xmin != null) {
+            return { bounds: [ymin - padding[0], xmin - padding[1], ymax + padding[0], xmax + padding[1]], origine: "tracciato" };
+        }
+
+        var valido = function (b) {
+            return Array.isArray(b) && b.length === 4 && b.every(function (n) { return typeof n === "number" && isFinite(n); }) && b[2] > b[0] && b[3] > b[1];
+        };
+        var conPadding = function (b) {
+            return [b[0] - padding[0], b[1] - padding[1], b[2] + padding[0], b[3] + padding[1]];
+        };
+
+        if (valido(ingombroImmagine)) {
+            var visibile = valido(riquadro)
+                ? [Math.max(ingombroImmagine[0], riquadro[0]), Math.max(ingombroImmagine[1], riquadro[1]),
+                    Math.min(ingombroImmagine[2], riquadro[2]), Math.min(ingombroImmagine[3], riquadro[3])]
+                : ingombroImmagine;
+            if (valido(visibile)) {
+                return { bounds: conPadding(visibile), origine: "immagine" };
+            }
+        }
+        if (valido(riquadro)) {
+            return { bounds: conPadding(riquadro), origine: "riquadro" };
+        }
+        return { bounds: [NaN, NaN, NaN, NaN], origine: "nessuna" };
     },
 };
 

@@ -40,6 +40,71 @@ describe("storicoVolantinoDB1.confronta: timeout verso DB1", () => {
   });
 });
 
+describe("storicoVolantinoDB1.confronta: fantasmi presenti in un altro tracciato", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  const primario = { codice: "4969665", descrizione1: "POLPA POMODORO CONAD 400G", codice_scatto: "2718130", prezzo_offerta: 0.79, peso: 400 };
+  const secondario = { codice: "1404871", descrizione1: "PASSATA CONAD 700G", codice_scatto: "2718130", prezzo_offerta: 0.99 };
+  const box = {
+    groupId: 8, pag: 4, x: 10, y: 20, w: 60, h: 40, dna: "$dna{\n2718130\n1404871,4969665\n}",
+    compiledFields: [{ labelName: "descrizione", content: "Polpa di pomodoro" }],
+    foto: ["4969665.psd"],
+  };
+  const guest = (elementi: unknown[]) => JSON.stringify({ warningCode: "02_codref_guest", codiceGruppo: "2718130", elementi });
+  const confronta = async (fantasmi: unknown[]) => {
+    vi.spyOn(ServerUtils, "sendToFICOApi").mockResolvedValue({
+      data: { esito: true, error: "", lista: [], orfanelli: [], fantasmi }, status: 200, statusText: "OK",
+    } as any);
+    return storicoVolantinoDB1.confronta({} as Request, {
+      refs: [{ groupId: 8, dna: box.dna, foto: [{ nome: "4969665.psd", guidId: "g-polpa" }] }],
+    } as unknown as PayloadConfrontoStorico);
+  };
+
+  it("il primario e l'elemento col codice della foto: dataFields suoi, il gruppo nei groupElements, nomi FP", async () => {
+    const esito = await confronta([{ ...box, resolution: guest([secondario, primario]) }]);
+    expect(esito.fuoriListino).toEqual([]);
+    expect(esito.lista).toHaveLength(1);
+    const [ospite] = esito.lista;
+    expect(ospite).toMatchObject({ groupId: 8, pag: 4, x: 10, compiledFields: box.compiledFields, foto: [{ nome: "4969665.psd", guidId: "g-polpa" }] });
+    expect(ospite.dataFields).toMatchObject({ codice: "4969665", codice_referenza: "4969665", descrizione_uno: "POLPA POMODORO CONAD 400G", prezzo: 0.79, descrizione_peso: 400 });
+    expect(ospite.groupElements?.map((elemento) => elemento.codice_referenza)).toEqual(["4969665", "1404871"]);
+    expect(ospite.groupElements?.[1]).toMatchObject({ descrizione_uno: "PASSATA CONAD 700G", prezzo: 0.99, scatto_codice: "2718130" });
+    expect(ospite).not.toHaveProperty("resolution");
+  });
+
+  it("un elemento solo: niente groupElements; il warning puo arrivare gia oggetto e la foto con qualunque estensione", async () => {
+    const esito = await confronta([{ ...box, foto: [{ nome: "4969665.tif" }], resolution: { warningCode: "02_codref_guest", elementi: [primario] } }]);
+    expect(esito.lista).toHaveLength(1);
+    expect(esito.lista[0].groupElements).toEqual([]);
+  });
+
+  it("senza primario, con un altro warning o illeggibile resta un fantasma da decidere", async () => {
+    const esito = await confronta([
+      { ...box, groupId: 1, resolution: guest([primario, secondario]), foto: ["altra.psd"] },
+      { ...box, groupId: 2, resolution: JSON.stringify({ warningCode: "01_codscatto_same", codiceScatto: "5", codiceGruppoAtteso: "6" }) },
+      { ...box, groupId: 3, resolution: "{rotto" },
+      { ...box, groupId: 4 },
+    ]);
+    expect(esito.lista).toEqual([]);
+    expect(esito.fuoriListino.map((fantasma) => fantasma.groupId)).toEqual([1, 2, 3, 4]);
+  });
+
+  it("un box che DB1 ha gia arricchito col suo record va in lista com'e, tranne lo scatto da correggere", async () => {
+    const dataFields = { "Referenza.Codice": "4714340", "Descrizioni.Descrizione1": "Hamburger di pollo CONAD", prezzo_offerta: 1.6 };
+    const scattoSbagliato = JSON.stringify({ warningCode: "01_codscatto_same", codiceScatto: "758662", codiceGruppoAtteso: "758663" });
+    const esito = await confronta([
+      { ...box, groupId: 5, foto: ["altra.psd"], dataFields, resolution: guest([primario]) },
+      { ...box, groupId: 6, dataFields },
+      { ...box, groupId: 7, dataFields, resolution: scattoSbagliato },
+      { ...box, groupId: 8, dataFields: { prezzo_offerta: 1.6 } },
+    ]);
+    expect(esito.lista.map((ref) => ref.groupId)).toEqual([5, 6]);
+    expect(esito.lista[0]).toMatchObject({ dataFields, compiledFields: box.compiledFields });
+    expect(esito.lista[0]).not.toHaveProperty("resolution");
+    expect(esito.fuoriListino.map((fantasma) => fantasma.groupId)).toEqual([7, 8]);
+  });
+});
+
 describe("storicoVolantinoDB1.referenzaFuoriListino", () => {
   it("aggiunge i nomi FP letti dalle schede del kit senza togliere quelli DB1", () => {
     const { dataFields, meccanica } = storicoVolantinoDB1.referenzaFuoriListino({

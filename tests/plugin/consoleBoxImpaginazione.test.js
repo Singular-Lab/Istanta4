@@ -155,3 +155,15 @@ test("la console mostra gruppo, pagina e Trova, e il copia se li porta dietro", 
     assert.match(scrivi, />Trova<\/span>'\)\s*\.on\('click', function \(\) \{\s*trovaBoxDelMessaggio\(riferimentoBox\);/);
     assert.match(scrivi, /copyButton\.attr\("msg", msg \+ " \[" \+ contestoCopia \+ "\]"\);/);
 });
+
+test("Trova si vede: un riquadro col bordo bianco staccato dal testo, non una parola sottolineata (I20-1114)", () => {
+    const scrivi = corpoDi("function writeFileInConsole(");
+    const trova = scrivi.match(/<span class="trovaBoxMessaggio"[^>]*>Trova<\/span>/);
+    assert.ok(trova, "manca il Trova");
+    assert.match(trova[0], /role="button"/);
+    assert.match(trova[0], /border: 1px solid white;/);
+    assert.match(trova[0], /border-radius: 4px;/);
+    assert.match(trova[0], /margin-left: 6px;/);
+    assert.match(trova[0], /padding: 1px 8px;/);
+    assert.doesNotMatch(trova[0], /text-decoration: underline/);
+});

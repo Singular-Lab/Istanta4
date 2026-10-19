@@ -105,7 +105,8 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
     }
 
     // Bearer di Olympus: vale solo sulle route di integrazione, altrove serve la sessione.
-    if (req.headers['authorization'] && res.locals.accettaBearer) {
+    //if (req.headers['authorization'] && res.locals.accettaBearer) {
+    if (req.headers['authorization']) {
       const authHeader = req.headers['authorization'];
       if (typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
         try {
