@@ -79,7 +79,7 @@ const GestioneSetupWhatsappSuperAdmin: React.FC = () => {
     return (
         <Fragment>
             <PageHeader
-                title={`Gestione Whatsapp per ${dettagliGDO?.nome}`}
+                title={"Gestione Whatsapp" + (dettagliGDO?.nome ? ` per ${dettagliGDO.nome}` : "")}
                 description="Gestisci il setup per il cliente"
             />
 

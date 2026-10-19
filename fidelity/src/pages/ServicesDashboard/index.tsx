@@ -218,7 +218,7 @@ const ServicesDashboard: React.FC = () => {
           <UserWelcome
             email={userInfo.email}
             tipoUtente={userInfo.tipo_utente}
-            servicesCount={services.length}
+            servicesCount={loadingServices ? undefined : services.length}
             photo={userInfo.photo}
             ruoloGDO={userInfo.ruolo_gdo_key}
           />

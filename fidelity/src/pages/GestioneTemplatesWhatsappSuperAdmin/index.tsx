@@ -322,8 +322,9 @@ const GestioneTemplatesWhatsappSuperAdmin: React.FC = () => {
                                                                 size="sm"
                                                                 variant="soft-danger"
                                                                 onClick={() => {
+                                                                    // ponytail: niente pagina di dettaglio; la nuova versione mostra il template da correggere
                                                                     navigate(
-                                                                        "dettaglio?id=" +
+                                                                        "nuova-versione?id=" +
                                                                         template.id_gdowhatsapptemplate
                                                                     );
                                                                 }}
@@ -406,6 +407,7 @@ const GestioneTemplatesWhatsappSuperAdmin: React.FC = () => {
                                 icon="CircleAlert"
                                 iconColor="text-danger"
                                 buttonText="Torna indietro"
+                                buttonIcon="ArrowLeft"
                                 onButtonClick={() => {
                                     navigate("/whatsapp/gestione-whatsapp-superadmin", { replace: true });
                                 }}

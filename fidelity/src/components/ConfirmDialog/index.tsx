@@ -31,8 +31,15 @@ const ConfirmDialog = ({
     <Dialog open={open} onClose={onClose} size="md" centered>
       <Dialog.Panel>
         <Dialog.Title className="gap-3">
-          <div className="w-10 h-10 rounded-full bg-danger/10 text-danger flex items-center justify-center">
-            <Lucide icon="TriangleAlert" className="w-5 h-5" />
+          <div
+            data-testid="icona-conferma"
+            className={
+              confirmVariant === "danger"
+                ? "w-10 h-10 rounded-full bg-danger/10 text-danger flex items-center justify-center"
+                : "w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center"
+            }
+          >
+            <Lucide icon={confirmVariant === "danger" ? "TriangleAlert" : "Info"} className="w-5 h-5" />
           </div>
           <div>
             <div className="text-base font-semibold text-slate-800">{title}</div>

@@ -7,6 +7,15 @@ const getDateFormat = (format: string | undefined) => {
   return format !== undefined ? format : "D MMM, YYYY";
 };
 
+// Default italiani: senza lang Litepicker segue la lingua del browser, e pulsanti e tooltip restano in inglese.
+// buttonText e tooltipText vengono fusi da Litepicker con i suoi default (frecce comprese).
+const opzioniLitepicker = (options: LitepickerProps["options"]) => ({
+  tooltipText: { one: "giorno", other: "giorni" },
+  buttonText: { apply: "Applica", cancel: "Annulla", reset: "Azzera" },
+  ...options,
+  lang: options.lang ?? "it-IT",
+});
+
 const setValue = (props: LitepickerProps) => {
   const format = getDateFormat(props.options.format);
   if (props.value && !props.value.length) {
@@ -28,10 +37,9 @@ const setValue = (props: LitepickerProps) => {
 const init = (el: LitepickerElement, props: LitepickerProps) => {
   const format = getDateFormat(props.options.format);
   el.litePickerInstance = new Litepicker({
-    ...props.options,
+    ...opzioniLitepicker(props.options),
     element: el,
     format: format,
-    lang: props.lang,
     setup: (picker: any) => {
       if (picker.on) {
         picker.on(
@@ -64,4 +72,4 @@ const reInit = (el: LitepickerElement, props: LitepickerProps) => {
   init(el, props);
 };
 
-export { init, reInit, setValue };
+export { init, opzioniLitepicker, reInit, setValue };

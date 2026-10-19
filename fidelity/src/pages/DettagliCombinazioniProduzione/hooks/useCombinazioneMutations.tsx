@@ -88,8 +88,8 @@ export const useCombinazioneMutations = (idCombinazione: string, refetchCombinaz
         mutationFn: async ({ idCombinazione, data }: { idCombinazione: string; data: DeclinazioneData }) => {
             return await ServerCall.put('/creaDeclinazioniPerRaccoglitoreById', { data, idCombinazione });
         },
-        onError: (error: Error) => showErrorNotification("Errore durante l'attivazione della combinazione", error),
-        onSuccess: () => showSuccessNotification("Attivazione combinazione avvenuta con successo"),
+        onError: (error: Error) => showErrorNotification("Errore durante il salvataggio delle declinazioni", error),
+        onSuccess: () => showSuccessNotification("Declinazioni salvate con successo"),
     });
 
     const mutateCreazioneFiltroContext = useMutation({

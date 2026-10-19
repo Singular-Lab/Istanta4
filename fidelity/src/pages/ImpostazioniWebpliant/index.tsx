@@ -2,10 +2,9 @@ import Badge from '@/components/Base/Badge';
 import Button from '@/components/Base/Button';
 import FileIcon from '@/components/Base/FileIcon';
 import { FormInput, FormLabel, FormSelect } from '@/components/Base/Form';
-import { Dialog, Menu, Popover } from '@/components/Base/Headless';
+import { Dialog, Menu } from '@/components/Base/Headless';
 import Lucide from '@/components/Base/Lucide';
 import PageHeader from '@/components/Base/PageHeader';
-import TomSelect from '@/components/Base/TomSelect';
 import EmptyState from '@/components/EmptyState';
 import { useNotification } from '@/context/NotificationContext';
 import { yupResolver } from '@hookform/resolvers/yup';
@@ -41,6 +40,7 @@ function Main() {
   const [nomeWorkspace, setNomeWorkspace] = useState<string>("");
   const { showNotification } = useNotification();
   const revalidator = useRevalidator();
+  const [ricercaWorkspace, setRicercaWorkspace] = useState("");
   const { aree, canali, workspaces, puntiVendita } = useLoaderData() as {
     aree: AreaResponseDTO[],
     canali: CanaleResponseDTO[],
@@ -61,6 +61,10 @@ function Main() {
     }[]
   }
 
+
+  const workspacesVisibili = workspaces?.filter((w) =>
+    w.nomeWorkspace?.toLowerCase().includes(ricercaWorkspace.trim().toLowerCase())
+  );
 
   // usa lo schema yup e hookform
 
@@ -379,105 +383,16 @@ function Main() {
                     type="text"
                     placeholder="Ricerca Workspace"
                     className="pl-9 sm:w-64 rounded-[0.5rem]"
+                    value={ricercaWorkspace}
+                    onChange={(e) => setRicercaWorkspace(e.target.value)}
                   />
                 </div>
               </div>
-              <div className="flex flex-col sm:flex-row gap-x-3 gap-y-2 sm:ml-auto">
-                <Menu>
-                  <Menu.Button
-                    as={Button}
-                    variant="outline-secondary"
-                    className="w-full sm:w-auto"
-                  >
-                    <Lucide
-                      icon="Download"
-                      className="stroke-[1.3] w-4 h-4 mr-2"
-                    />
-                    Export
-                    <Lucide
-                      icon="ChevronDown"
-                      className="stroke-[1.3] w-4 h-4 ml-2"
-                    />
-                  </Menu.Button>
-                  <Menu.Items className="w-40">
-                    <Menu.Item>
-                      <Lucide icon="ChartBarIncreasing" className="w-4 h-4 mr-2" />{" "}
-                      PDF
-                    </Menu.Item>
-                    <Menu.Item>
-                      <Lucide icon="ChartBarIncreasing" className="w-4 h-4 mr-2" />
-                      CSV
-                    </Menu.Item>
-                  </Menu.Items>
-                </Menu>
-                <Popover className="inline-block">
-                  {({ close }) => (
-                    <>
-                      <Popover.Button
-                        as={Button}
-                        variant="outline-secondary"
-                        className="w-full sm:w-auto"
-                      >
-                        <Lucide
-                          icon="ArrowDownWideNarrow"
-                          className="stroke-[1.3] w-4 h-4 mr-2"
-                        />
-                        Filter
-                        <div className="flex items-center justify-center h-5 px-1.5 ml-2 text-xs font-medium border rounded-full bg-slate-100">
-                          3
-                        </div>
-                      </Popover.Button>
-                      <Popover.Panel placement="bottom-end">
-                        <div className="p-2">
-                          <div>
-                            <div className="text-left text-slate-500">
-                              Uploader
-                            </div>
-                            <TomSelect
-                              className="flex-1 mt-2"
-                              options={{
-                                placeholder: "Search user",
-                              }} value={''} onChange={function (e: { target: { value: string | string[]; }; preventDefault: () => void; }): void {
-                                throw new Error('Function not implemented.');
-                              }}                                                    >
-
-                            </TomSelect>
-                          </div>
-                          <div className="mt-3">
-                            <div className="text-left text-slate-500">
-                              File Type
-                            </div>
-                            <FormSelect className="flex-1 mt-2">
-                              <option value="Document">Document</option>
-                              <option value="Music">Music</option>
-                              <option value="Video">Video</option>
-                            </FormSelect>
-                          </div>
-                          <div className="flex items-center mt-4">
-                            <Button
-                              variant="secondary"
-                              onClick={() => {
-                                close();
-                              }}
-                              className="w-32 ml-auto"
-                            >
-                              Close
-                            </Button>
-                            <Button variant="primary" className="w-32 ml-2">
-                              Apply
-                            </Button>
-                          </div>
-                        </div>
-                      </Popover.Panel>
-                    </>
-                  )}
-                </Popover>
-              </div>
             </div>
-            {workspaces && workspaces.length > 0 ? (
+            {workspacesVisibili && workspacesVisibili.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 p-6">
                 {/* Workspace Card */}
-                {workspaces.map((value, index) => (
+                {workspacesVisibili.map((value, index) => (
                   <Link preventScrollReset target="_blank" rel="noopener noreferrer" to={`/webliant/impostazioni-webpliant/workspace?id=${value.idWorkspace}`} key={index} className="relative px-3 pt-8 pb-5 rounded-[0.6rem] border border-slate-200/80 hover:bg-slate-50 cursor-pointer transition shadow-sm">
                     <FileIcon
                       className="w-2/4 mx-auto"
@@ -522,10 +437,6 @@ function Main() {
                         />
                       </Menu.Button>
                       <Menu.Items className="w-52">
-                        <Menu.Item onClick={(e: React.MouseEvent) => { e.preventDefault(); }}>
-                          <Lucide icon="Users" className="w-4 h-4 mr-2" />{" "}
-                          Copia Workspace
-                        </Menu.Item>
                         <Menu.Item onClick={(e: React.MouseEvent) => {
                           e.preventDefault();
                           setShowDialogEliminaWorkspace(true);

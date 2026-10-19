@@ -2256,10 +2256,10 @@ function Main() {
 
   useEffect(() => {
     const isLoading = confrontoQuery.isLoading || scoreboardQuery.isLoading;
-    if (!report && !isLoading) {
+    if (!report && !isLoading && !isMultiReport) {
       navigate(fallbackPath, { replace: true });
     }
-  }, [report, confrontoQuery.isLoading, scoreboardQuery.isLoading, navigate, fallbackPath]);
+  }, [report, isMultiReport, confrontoQuery.isLoading, scoreboardQuery.isLoading, navigate, fallbackPath]);
 
   const pdfMutation = useMutation({
     mutationFn: async () => {
@@ -2317,6 +2317,14 @@ function Main() {
   }
 
   if (!report) {
+    if (confrontoQuery.isLoading || scoreboardQuery.isLoading) {
+      return (
+        <div className="box box--stacked p-8 flex flex-col items-center gap-3 text-slate-400">
+          <Lucide icon="Loader" className="h-7 w-7 animate-spin" />
+          <span className="text-sm">Caricamento confronto…</span>
+        </div>
+      );
+    }
     return null;
   }
 

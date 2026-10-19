@@ -54,7 +54,7 @@ const schemaFormati: yup.ObjectSchema<FormatiResponseDTO> = yup.object().shape({
   nome: yup.string().required("Il nome è obbligatorio"),
   codice: yup.string().required("Il codice è obbligatorio"),
   descrizione: yup.string().required("La descrizione è obbligatoria"),
-  tipo_lavorazione: yup.number().required('Il tipo di lavorazione è obbligatorio').oneOf([1, 2], 'Seleziona un tipo di lavorazione valido'),
+  tipo_lavorazione: yup.number().transform(value => (isNaN(value) || value === null || value === undefined) ? undefined : Number(value)).required('Il tipo di lavorazione è obbligatorio').oneOf([1, 2], 'Seleziona un tipo di lavorazione valido'),
   updatedat: yup.date().optional(),
   createdat: yup.date().optional(),
 });
@@ -231,7 +231,7 @@ function Main() {
         <div className="flex flex-row items-center">
           <Lucide icon="CircleAlert" className="text-danger w-8 h-8" />
           <div className="ml-4 mr-4">
-            <div className="font-bold">Errore durante l'aggiornamento del raccoglitore</div>
+            <div className="font-bold">Errore durante il salvataggio del tipo di export</div>
             <div className="mt-1 text-slate-500">
               {error.message}
             </div>
@@ -288,7 +288,7 @@ function Main() {
         <div className="flex flex-row items-center">
           <Lucide icon="CircleAlert" className="text-danger w-8 h-8" />
           <div className="ml-4 mr-4">
-            <div className="font-bold">Errore durante l'aggiornamento del raccoglitore</div>
+            <div className="font-bold">Errore durante il salvataggio del formato</div>
             <div className="mt-1 text-slate-500">
               {error.message}
             </div>
@@ -352,7 +352,7 @@ function Main() {
         <div className="flex flex-row items-center">
           <Lucide icon="CircleAlert" className="text-danger w-8 h-8" />
           <div className="ml-4 mr-4">
-            <div className="font-bold">Errore durante l'aggiornamento del raccoglitore</div>
+            <div className="font-bold">Errore durante il salvataggio della naming convention</div>
             <div className="mt-1 text-slate-500">
               {error.message}
             </div>
@@ -546,7 +546,7 @@ function Main() {
                 </div>
                 <div className="col-span-1">
                   <FormLabel htmlFor="descrizione_export">Codice</FormLabel>
-                  <FormInput placeholder="Descrizione" id="descrizione_export" {...register("codice_tipiexport")} />
+                  <FormInput placeholder="Codice" id="descrizione_export" {...register("codice_tipiexport")} />
                   {errors.codice_tipiexport && <p className="text-red-500">{errors.codice_tipiexport.message}</p>}
                 </div>
                 <div className="col-span-1">
@@ -795,7 +795,7 @@ function Main() {
                     </div>
                     <div className="col-span-1">
                       <FormLabel htmlFor="descrizione_export_edit">Codice</FormLabel>
-                      <FormInput placeholder="Descrizione" id="descrizione_export_edit" {...registerEdit("codice_tipiexport")} />
+                      <FormInput placeholder="Codice" id="descrizione_export_edit" {...registerEdit("codice_tipiexport")} />
                       {errorsEdit.codice_tipiexport && <p className="text-red-500">{errorsEdit.codice_tipiexport.message}</p>}
                     </div>
                     <div className="col-span-1">

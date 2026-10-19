@@ -63,7 +63,7 @@ function Main() {
       }
 
       if (result) {
-        if (stato === "IN_LAVORAZIONE") {
+        if (stato !== STATO_PROMO.ELIMINATA) {
           if (isDeletable) {
             showNotification(
               <div className="flex flex-row items-center">
@@ -85,8 +85,7 @@ function Main() {
               </div>
             );
           }
-        }
-        if (stato === "ELIMINATA") {
+        } else {
           showNotification(
             <div className="flex flex-row items-center">
               <Lucide icon="Check" className="text-success w-10 h-10" />
@@ -454,7 +453,7 @@ function Main() {
                 <Dialog.Description>
                   <div className="text-center py-4">
                     <Lucide icon="TriangleAlert" className="w-16 h-16 mx-auto text-danger mb-4" />
-                    <p className="text-slate-600">
+                    <div className="text-slate-600">
                       {showDialogEliminazione?.isDeletable ? (
                         <>
                           <span className="font-semibold text-danger">ATTENZIONE:</span> Stai per eliminare definitivamente questa lavorazione. <br />
@@ -482,22 +481,22 @@ function Main() {
                           )}
                           Sei sicuro di voler eliminare questa lavorazione? <br />
                           <span className="text-slate-500">La lavorazione verrà spostata nella sezione "Eliminate" e potrà essere ripristinata.</span>
-                          {showDialogEliminazione?.numero_kit_collegati && showDialogEliminazione.numero_kit_collegati > 0 && (
+                          {(showDialogEliminazione?.numero_kit_collegati ?? 0) > 0 && (
                             <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
                               <div className="flex items-center gap-2">
                                 <Lucide icon="Package" className="w-4 h-4 text-amber-600" />
                                 <span className="font-medium text-amber-800">
-                                  {showDialogEliminazione.numero_kit_collegati} kit collegati
+                                  {showDialogEliminazione?.numero_kit_collegati} kit collegati
                                 </span>
                               </div>
                               <p className="text-sm text-amber-700 mt-1">
-                                Questa lavorazione ha {showDialogEliminazione.numero_kit_collegati} kit associati che potrebbero essere influenzati dall'eliminazione.
+                                Questa lavorazione ha {showDialogEliminazione?.numero_kit_collegati} kit associati che potrebbero essere influenzati dall'eliminazione.
                               </p>
                             </div>
                           )}
                         </>
                       )}
-                    </p>
+                    </div>
                   </div>
                 </Dialog.Description>
                 <Dialog.Footer className="px-5 py-3 text-right border-t border-slate-200/60 dark:border-darkmode-400">
@@ -707,6 +706,15 @@ function Main() {
                     <Lucide icon="Loader" className="w-10 h-10 text-primary animate-spin" />
                     <div className="mt-3 text-slate-500">Caricamento in corso...</div>
                   </div>
+                ) : data.isError ? (
+                  <EmptyState
+                    icon="CircleX"
+                    iconColor="text-danger"
+                    title="Lavorazioni non caricate"
+                    description={data.error?.message || "Impossibile caricare le lavorazioni in corso."}
+                    buttonText="Riprova"
+                    onButtonClick={() => data.refetch()}
+                  />
                 ) : filteredData.length === 0 ? (
                   <EmptyState
                     icon="CircleAlert"

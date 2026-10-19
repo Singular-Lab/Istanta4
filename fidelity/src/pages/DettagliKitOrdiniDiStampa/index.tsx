@@ -205,7 +205,7 @@ const DettagliKitOrdiniDiStampa: React.FC = () => {
       case 'IN_REVISIONE':
         return 'bg-pending/10 text-pending border-pending/20';
       case 'IN_LAVORAZIONE':
-        return 'bg-danger/10 text-danger border-danger/20';
+        return 'bg-info/10 text-info border-info/20';
       case 'PUBBLICATO':
       case 'ACCETTATO':
         return 'bg-success/10 text-success border-success/20';
