@@ -92,7 +92,7 @@ const InLavorazioneConErroriActions: FC<InLavorazioneConErroriActionsProps> = ({
             Elimina
           </Button>
         </PermissionGate>
-        <PermissionGate permission={PERMISSIONS.KIT_RUNTIME.RIPORTA_IN_LAVORAZIONE} mode="disable">
+        <PermissionGate permission={PERMISSIONS.KIT_RUNTIME.ELIMINA} mode="disable">
           <Button
             variant="outline-warning"
             size="xs"

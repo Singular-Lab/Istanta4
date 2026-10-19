@@ -45,6 +45,7 @@ import { useUser } from "../../../context/UserContext";
 import { useContestoPerNuovaLavorazione } from "../../../query/query";
 import GestioneMomenti from "./GestioneMomenti";
 import TracciatoCard from "./TracciatoCard";
+import { formattaData, formattaDataOra } from "@/utils/dataPromo";
 dayjs.extend(localizedFormat);
 dayjs.extend(relativeTime);
 dayjs.extend(customParseFormat);
@@ -459,6 +460,7 @@ function Main() {
   const [editFieldValues, setEditFieldValues] = useState<{ [key: string]: any }>({});
   const [editCustomLabelValue, setEditCustomLabelValue] = useState<string>("");
   const [editContextErrors, setEditContextErrors] = useState<{ [fieldName: string]: string }>({});
+  const [editFieldErrors, setEditFieldErrors] = useState<{ [field: string]: string }>({});
 
   const { showNotification } = useNotification();
   const revalidator = useRevalidator();
@@ -546,7 +548,7 @@ function Main() {
     stato === STATO_PROMO.ARCHIVIATA;
 
   const isExpired = currentPromoData?.validita_al
-    ? dayjs().isAfter(dayjs(currentPromoData.validita_al, "DD/MM/YYYY"), "day") ||
+    ? dayjs().isAfter(dayjs(currentPromoData.validita_al), "day") ||
     isPromoFinalState(currentPromoData?.stato)
     : isPromoFinalState(currentPromoData?.stato);
 
@@ -1151,11 +1153,13 @@ function Main() {
   };
 
   // Validazione contesto condiviso
-  const validateSharedContext = (): boolean => {
+  // Campi obbligatori e lunghezza della label personalizzata di un contesto
+  const erroriContesto = (
+    currentContext: (ContextLavorazione & { user_value: any })[],
+    currentFieldValues: { [key: string]: any },
+    labelValue: string
+  ) => {
     const errors: { [fieldName: string]: string } = {};
-
-    const currentContext = contextLavorazione;
-    const currentFieldValues = fieldValues;
 
     currentContext.forEach((c) => {
       // se le dipendenze non sono soddisfatte, il campo è "nascosto" -> non lo validiamo
@@ -1168,7 +1172,7 @@ function Main() {
 
       // caso speciale idLabel + label personalizzata
       if (c.nome_field === "idLabel" && currentFieldValues["idLabel"] === "lblpers") {
-        value = customLabelValue;
+        value = labelValue;
       }
 
       const hasValue =
@@ -1192,6 +1196,12 @@ function Main() {
       }
     });
 
+    return errors;
+  };
+
+  // Validazione contesto condiviso
+  const validateSharedContext = (): boolean => {
+    const errors = erroriContesto(contextLavorazione, fieldValues, customLabelValue);
     setContextErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -1316,6 +1326,7 @@ function Main() {
     }
     setEditCustomLabelValue("");
     setEditContextErrors({});
+    setEditFieldErrors({});
 
     setIsEditing(true);
   };
@@ -1327,6 +1338,7 @@ function Main() {
     setEditFieldValues({});
     setEditCustomLabelValue("");
     setEditContextErrors({});
+    setEditFieldErrors({});
   };
 
   const handleEditContextChange = (fieldName: string, value: any) => {
@@ -1352,15 +1364,15 @@ function Main() {
     });
   };
 
-  const validateEditForm = (): string[] => {
-    const errors: string[] = [];
+  const validateEditForm = (): { [field: string]: string } => {
+    const errors: { [field: string]: string } = {};
 
     if (!editFormData.id) {
-      errors.push("L'ID della lavorazione è obbligatorio");
+      errors.id = "L'ID della lavorazione è obbligatorio";
     }
 
     if (!editFormData.nome || editFormData.nome.trim() === "") {
-      errors.push("Il nome della lavorazione è obbligatorio");
+      errors.nome = "Il nome della lavorazione è obbligatorio";
     }
 
     if (editFormData.validita_dal && editFormData.validita_al) {
@@ -1368,9 +1380,7 @@ function Main() {
       const dataFine = dayjs(editFormData.validita_al);
 
       if (dataInizio.isAfter(dataFine)) {
-        errors.push(
-          "La data di inizio deve essere precedente alla data di fine"
-        );
+        errors.validita_al = "La data di inizio deve essere precedente alla data di fine";
       }
     }
 
@@ -1379,9 +1389,7 @@ function Main() {
       const dataScadenza = dayjs(editFormData.data_scadenza);
 
       if (dataScadenza.isAfter(dataInizio)) {
-        errors.push(
-          "La data di scadenza non può essere successiva alla data di inizio"
-        );
+        errors.data_scadenza = "La data di scadenza non può essere successiva alla data di inizio";
       }
     }
 
@@ -1389,14 +1397,21 @@ function Main() {
       editFormData.offset_visibilita !== undefined &&
       editFormData.offset_visibilita < 0
     ) {
-      errors.push("L'offset di visibilità deve essere un numero positivo");
+      errors.offset_visibilita = "L'offset di visibilità deve essere un numero positivo";
     }
 
     return errors;
   };
 
   const handleEditSave = async () => {
-    const validationErrors = validateEditForm();
+    const fieldErrors = validateEditForm();
+    const contestoErrors = erroriContesto(editContextLavorazione, editFieldValues, editCustomLabelValue);
+    setEditFieldErrors(fieldErrors);
+    setEditContextErrors(contestoErrors);
+    const validationErrors = Object.values(fieldErrors);
+    if (Object.keys(contestoErrors).length > 0) {
+      validationErrors.push("Correggi i campi evidenziati nelle specifiche di lavorazione");
+    }
 
     if (validationErrors.length > 0) {
       showNotification(
@@ -1443,7 +1458,16 @@ function Main() {
       ...prev,
       [field]: value,
     }));
+    setEditFieldErrors((prev) => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
   };
+
+  const erroreCampo = (field: string) =>
+    editFieldErrors[field] ? <p className="text-xs text-danger">{editFieldErrors[field]}</p> : null;
 
   const getStatusBadgeProps = (stato: STATO_PROMO) => {
     switch (stato) {
@@ -1470,10 +1494,7 @@ function Main() {
     }
   };
 
-  const formatDate = (date: string | Date | undefined) => {
-    if (!date) return "N/A";
-    return dayjs(date).format("[Il] DD/MM/YYYY [Alle] HH:mm:ss");
-  };
+  const formatDate = formattaDataOra;
 
   const isEndDateNear = (endDate: string | Date | undefined) => {
     if (!endDate) return false;
@@ -1598,7 +1619,7 @@ function Main() {
               <h4 className="font-medium text-danger">Lavorazione Scaduta</h4>
             </div>
             <p className="text-sm text-slate-600">
-              Questa lavorazione è scaduta il {formatDate(currentPromoData?.data_scadenza)}. Non è più possibile caricare nuovi tracciati.
+              Questa lavorazione è scaduta il {formattaData(currentPromoData?.data_scadenza)}. Non è più possibile caricare nuovi tracciati.
             </p>
           </div>
         );
@@ -1962,7 +1983,7 @@ function Main() {
                                                 }}
                                                 className="w-full text-sm mt-1"
                                               />
-                                              {currentCustomLabelValue.length > MAX_CHAR_CUSTOM_LABEL && (
+                                              {!errorMessage && currentCustomLabelValue.length > MAX_CHAR_CUSTOM_LABEL && (
                                                 <p className="mt-1 text-xs text-danger">
                                                   La label non può superare {MAX_CHAR_CUSTOM_LABEL} caratteri
                                                 </p>
@@ -2300,7 +2321,7 @@ function Main() {
                         deleteTracciatoMutation.isPending &&
                         deleteTracciatoMutation.variables === String(tracciato.id)
                       }
-                      promoStorico={promoQuery.data?.is_active || false}
+                      promoStorico={isPromoFinalState(currentPromoData?.stato)}
                     />
                   ))}
                 </div>
@@ -2415,10 +2436,11 @@ function Main() {
               id="nome"
               value={editFormData.nome || ""}
               onChange={(e) => handleEditFieldChange("nome", e.target.value)}
-              className="w-full"
+              className={clsx("w-full", editFieldErrors.nome && "border-danger")}
               placeholder="Inserisci il nome della lavorazione"
               required
             />
+            {erroreCampo("nome")}
           </div>
 
           <div className="space-y-2">
@@ -2439,9 +2461,10 @@ function Main() {
                   parseInt(e.target.value) || 0
                 )
               }
-              className="w-full"
+              className={clsx("w-full", editFieldErrors.offset_visibilita && "border-danger")}
               placeholder="Offset visibilità"
             />
+            {erroreCampo("offset_visibilita")}
             <p className="text-xs text-slate-500">
               Numero di giorni di anticipo per la visibilità
             </p>
@@ -2468,8 +2491,9 @@ function Main() {
                   e.target.value ? new Date(e.target.value) : undefined
                 )
               }
-              className="w-full"
+              className={clsx("w-full", editFieldErrors.validita_dal && "border-danger")}
             />
+            {erroreCampo("validita_dal")}
             <p className="text-xs text-slate-500">
               Data di inizio della promozione
             </p>
@@ -2496,8 +2520,9 @@ function Main() {
                   e.target.value ? new Date(e.target.value) : undefined
                 )
               }
-              className="w-full"
+              className={clsx("w-full", editFieldErrors.validita_al && "border-danger")}
             />
+            {erroreCampo("validita_al")}
             <p className="text-xs text-slate-500">
               Data di fine della promozione
             </p>
@@ -2524,8 +2549,9 @@ function Main() {
                   e.target.value ? new Date(e.target.value) : undefined
                 )
               }
-              className="w-full"
+              className={clsx("w-full", editFieldErrors.data_scadenza && "border-danger")}
             />
+            {erroreCampo("data_scadenza")}
             <p className="text-xs text-slate-500">
               Data di scadenza per la lavorazione
             </p>
@@ -2650,7 +2676,7 @@ function Main() {
                 <p className="text-sm text-orange-700 mt-1">
                   La lavorazione scadrà il{" "}
                   <strong>
-                    {formatDate(currentPromoData.validita_al)}
+                    {formattaData(currentPromoData.validita_al)}
                   </strong>
                   . Assicurati di completare tutte le attività prima della
                   scadenza.

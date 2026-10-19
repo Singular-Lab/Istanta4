@@ -88,7 +88,7 @@ const ImpostazioniTipografia: React.FC = () => {
         <>
           <div className="flex items-center gap-x-2">
             <Lucide icon="X" className="text-danger" />
-            <span>Si e verificato un errore durante l'aggiornamento del contratto tipografia</span>
+            <span>Si è verificato un errore durante l'aggiornamento del contratto tipografia</span>
           </div>
         </>
       );
@@ -257,7 +257,7 @@ const ImpostazioniTipografia: React.FC = () => {
                           <>
                             <div className="flex items-center gap-x-2">
                               <Lucide icon="X" className="text-warning" />
-                              <span>Il nome del contratto e obbligatorio</span>
+                              <span>Il nome del contratto è obbligatorio</span>
                             </div>
                           </>
                         );

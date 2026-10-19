@@ -13,7 +13,6 @@ function GetRefsTestPanel({ fieldOptions, apiKey, isLoading, testResponse, onTes
   const [selectedTemplates, setSelectedTemplates] = useState<string[]>([]);
   const [filterGroups, setFilterGroups] = useState<FilterCondition[][]>([[]]);
   const [responseSearch, setResponseSearch] = useState("");
-  const [showSearchInResponse, setShowSearchInResponse] = useState(false);
   const [fullscreenOpen, setFullscreenOpen] = useState(false);
   const [fullscreenSearch, setFullscreenSearch] = useState("");
 
@@ -333,7 +332,7 @@ function GetRefsTestPanel({ fieldOptions, apiKey, isLoading, testResponse, onTes
                 {isLoading ? (
                   <>
                     <Lucide icon="Loader" className="w-4 h-4 mr-2 animate-spin" />
-                    Testing getRefs...
+                    Test getRefs in corso...
                   </>
                 ) : (
                   <>
@@ -441,7 +440,7 @@ function GetRefsTestPanel({ fieldOptions, apiKey, isLoading, testResponse, onTes
               </div>
             </div>
 
-            {testResponse && showSearchInResponse && (
+            {testResponse && (
               <div className="mb-4">
                 <FormInput
                   type="text"

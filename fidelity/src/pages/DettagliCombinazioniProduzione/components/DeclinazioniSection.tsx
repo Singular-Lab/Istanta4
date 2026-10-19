@@ -38,7 +38,7 @@ const DeclinazioniSection = <T extends FieldValues>({
                 <div className="text-sm text-slate-600">
                     {fields.length === 0
                         ? 'Nessuna declinazione presente'
-                        : `${fields.length} declinazione${fields.length > 1 ? 'i' : ''}`}
+                        : `${fields.length} ${fields.length === 1 ? 'declinazione' : 'declinazioni'}`}
                 </div>
                 <Button
                     type="button"

@@ -15,7 +15,6 @@ function GetFilesTestPanel({ apiKey, isLoading, testResponse, onTest, onUpdateTe
   const [selectedTipoExport, setSelectedTipoExport] = useState<string[]>(defaultSelectedTypes);
   const [filterGroups, setFilterGroups] = useState<FilterCondition[][]>([[]]);
   const [responseSearch, setResponseSearch] = useState("");
-  const [showSearchInResponse, setShowSearchInResponse] = useState(false);
   const [fullscreenOpen, setFullscreenOpen] = useState(false);
   const [fullscreenSearch, setFullscreenSearch] = useState("");
 
@@ -300,7 +299,7 @@ function GetFilesTestPanel({ apiKey, isLoading, testResponse, onTest, onUpdateTe
               {isLoading ? (
                 <>
                   <Lucide icon="Loader" className="w-4 h-4 mr-2 animate-spin" />
-                  Testing getFiles...
+                  Test getFiles in corso...
                 </>
               ) : (
                 <>
@@ -377,7 +376,7 @@ function GetFilesTestPanel({ apiKey, isLoading, testResponse, onTest, onUpdateTe
             </div>
           </div>
 
-          {testResponse && showSearchInResponse && (
+          {testResponse && (
             <div className="mb-4">
               <FormInput
                 type="text"

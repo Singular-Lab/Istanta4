@@ -1,5 +1,6 @@
 import Lucide from "@/components/Base/Lucide";
 import { useNotification } from '@/context/NotificationContext';
+import { normalizzaFiltroContesto } from '@/utils/filtroContesto';
 import { useMutation } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { TIPO_KIT_DESIGN } from "../../../../lib/enums";
@@ -88,22 +89,15 @@ export const useCombinazioneMutations = (idCombinazione: string, refetchCombinaz
         mutationFn: async ({ idCombinazione, data }: { idCombinazione: string; data: DeclinazioneData }) => {
             return await ServerCall.put('/creaDeclinazioniPerRaccoglitoreById', { data, idCombinazione });
         },
-        onError: (error: Error) => showErrorNotification("Errore durante l'attivazione della combinazione", error),
-        onSuccess: () => showSuccessNotification("Attivazione combinazione avvenuta con successo"),
+        onError: (error: Error) => showErrorNotification("Errore durante il salvataggio delle declinazioni", error),
+        onSuccess: () => showSuccessNotification("Declinazioni salvate con successo"),
     });
 
     const mutateCreazioneFiltroContext = useMutation({
         mutationFn: async (data: FiltroContextData) => {
-            const filtroContextCondizioniFix = data.filtroContesto.map(filtro => ({
-                ...filtro,
-                condizioni: filtro.condizioni.map(cond => ({
-                    ...cond,
-                    nome_field: `${cond.schemaScelto}.${cond.colonna}`,
-                })),
-            }));
             return await ServerCall.put("/creaFiltroContestoPerRaccoglitoreById", {
                 ...data,
-                filtroContesto: filtroContextCondizioniFix,
+                filtroContesto: normalizzaFiltroContesto(data.filtroContesto),
                 idCombinazione: data.idCombinazione || idCombinazione,
             });
         },

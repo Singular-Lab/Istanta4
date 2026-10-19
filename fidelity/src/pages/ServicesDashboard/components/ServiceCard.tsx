@@ -168,28 +168,26 @@ const ServiceCard: React.FC<ServiceCardProps> = ({
             </>
           )}
         </button>
-        {import.meta.env.DEV && (
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              onInfoClick();
-            }}
-            disabled={isInfoDisabled}
-            className={clsx(
-              "ml-auto inline-flex items-center gap-1.5 rounded-full px-2.5 py-1",
-              "text-xs font-medium",
-              "bg-theme-1/10 text-theme-1 border border-theme-1/20",
-              "hover:bg-theme-1/20 hover:border-theme-1/30",
-              "transition-colors focus:outline-none focus:ring-2 focus:ring-theme-1/30",
-              "disabled:cursor-not-allowed disabled:opacity-50"
-            )}
-            aria-label={`Mostra info su ${service.nome}`}
-          >
-            <Lucide icon="Info" className="w-3 h-3" />
-            <span>Info</span>
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onInfoClick();
+          }}
+          disabled={isInfoDisabled}
+          className={clsx(
+            "ml-auto inline-flex items-center gap-1.5 rounded-full px-2.5 py-1",
+            "text-xs font-medium",
+            "bg-theme-1/10 text-theme-1 border border-theme-1/20",
+            "hover:bg-theme-1/20 hover:border-theme-1/30",
+            "transition-colors focus:outline-none focus:ring-2 focus:ring-theme-1/30",
+            "disabled:cursor-not-allowed disabled:opacity-50"
+          )}
+          aria-label={`Mostra info su ${service.nome}`}
+        >
+          <Lucide icon="Info" className="w-3 h-3" />
+          <span>Info</span>
+        </button>
       </div>
 
     </div>

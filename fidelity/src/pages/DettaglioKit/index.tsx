@@ -92,7 +92,11 @@ const DettaglioKitContent: React.FC<{
     : { text: "Automatico", icon: "Zap", className: "bg-blue-100 text-blue-700 border border-blue-200" };
 
   // Handlers for actions
-  const handleStartRevision = () => setDialogOpenAvvioRevisione(true);
+  // Con file rifiutati si caricano prima i file corretti, poi parte la revisione
+  const handleStartRevision = () =>
+    stato === STATO_LAVORAZIONE_KIT_RUNTIME.IN_LAVORAZIONE_CON_ERRORI
+      ? setDialogOpenRevisioneConErrori(true)
+      : setDialogOpenAvvioRevisione(true);
   const handlePublish = () => setDialogOpenPubblicaKitRuntime(true);
   const handleRejectAndRework = () => setDialogOpenRiportaInLavorazione(true);
   const handleDelete = () => setDialogOpenEliminaLavorazione(true);
@@ -201,7 +205,7 @@ const DettaglioKitContent: React.FC<{
         setDialogOpen={setDialogOpenRevisioneConErrori}
         lavorazione={kit as any}
         filesRejected={state.rejected}
-        mutationRiportaInLavorazione={mutationRiportaInLavorazione as any}
+        mutationAvvioRevisione={mutationAvvioRevisione as any}
         stagedFiles={state.staged}
       />
 

@@ -58,6 +58,7 @@ export class DesignKitController extends BaseController {
         quantitaCopie: number,
         declinazioni?: any[],
         filtri?: Filtro[],
+        filtroContesto?: any[],
         tipo: TIPO_KIT_DESIGN,
         tipiDiExportInKit: OggettoTipiDiExport[],
         files?: FileItemKit[]
@@ -187,7 +188,7 @@ export class DesignKitController extends BaseController {
                   guidIdRaccoglitore: guidIdRaccoglitore,
                   stato: STATO_COMBINAZIONI.ATTIVO,
                   declinazioni: data.declinazioni ?? [],
-                  filtroContesto: [],
+                  filtroContesto: data.filtroContesto ?? [],
                   tipo: data.tipo,
                   files: data.files
                 });
@@ -204,7 +205,7 @@ export class DesignKitController extends BaseController {
                   guidIdRaccoglitore: guidIdRaccoglitore,
                   stato: STATO_COMBINAZIONI.ATTIVO,
                   declinazioni: data.declinazioni ?? [],
-                  filtroContesto: [],
+                  filtroContesto: data.filtroContesto ?? [],
                   tipo: data.tipo,
                 });
               }
@@ -228,7 +229,7 @@ export class DesignKitController extends BaseController {
                     guidIdRaccoglitore: guidIdRaccoglitore,
                     stato: STATO_COMBINAZIONI.ATTIVO,
                     declinazioni: data.declinazioni ?? [],
-                    filtroContesto: [],
+                    filtroContesto: data.filtroContesto ?? [],
                     tipo: data.tipo,
                     files: data.files
                   });
@@ -245,7 +246,7 @@ export class DesignKitController extends BaseController {
                     guidIdRaccoglitore: guidIdRaccoglitore,
                     declinazioni: data.declinazioni ?? [],
                     stato: STATO_COMBINAZIONI.ATTIVO,
-                    filtroContesto: [],
+                    filtroContesto: data.filtroContesto ?? [],
                     tipo: data.tipo,
                   });
                 }
@@ -272,6 +273,7 @@ export class DesignKitController extends BaseController {
         titolo: data.titolo,
         filtro: data.filtri ?? [],
         declinazioni: data.declinazioni ?? [],
+        filtroContesto: data.filtroContesto ?? [],
         tipiDiExportInKit: data.tipiDiExportInKit,
         quantita: data.quantitaCopie,
         guidFormato: data.guidFormato,

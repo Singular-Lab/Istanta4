@@ -218,18 +218,6 @@ function Main() {
       <div className="col-span-12">
         <div className="flex flex-col md:h-10 gap-y-3 md:items-center md:flex-row">
           <PageHeader title="Impostazioni Account" />
-          <div className="flex flex-col sm:flex-row gap-x-3 gap-y-2 md:ml-auto">
-            <Button
-              variant="primary"
-              className="group-[.mode--light]:!bg-white/[0.12] group-[.mode--light]:!text-slate-200 group-[.mode--light]:!border-transparent"
-            >
-              <Lucide
-                icon="ExternalLink"
-                className="stroke-[1.3] w-4 h-4 mr-3"
-              />{" "}
-              Vai al Mio Profilo
-            </Button>
-          </div>
         </div>
         {error && (
           <Alert variant="danger" className="mt-4">
@@ -435,7 +423,7 @@ function Main() {
                     className="flex items-center text-slate-500"
                   >
                     Chi può vedere la tua foto del profilo?
-                    <Tippy as="div" content="Low" className="ml-1.5">
+                    <Tippy as="div" content="Scegli chi può vedere la tua foto del profilo" className="ml-1.5">
                       <Lucide
                         icon="Info"
                         className="w-3.5 h-3.5 text-slate-500 stroke-[1.3]"
@@ -1355,46 +1343,15 @@ function Main() {
                 <div className="flex items-center pb-5 mb-6 font-medium border-b border-dashed border-slate-300/70 text-[0.94rem]">
                   Disattivazione Account
                 </div>
-                {isOutsider ? (
-                  <Alert variant="outline-warning" className="flex items-start">
-                    <Lucide icon="AlertTriangle" className="w-6 h-6 mr-2 mt-0.5 shrink-0" />
-                    <div>
-                      Gli account con autenticazione esterna (OIDC) non possono essere eliminati da questo pannello. Contatta l'amministratore del sistema per procedere.
-                    </div>
-                  </Alert>
-                ) : (
-                  <>
-                    <div>
-                      <div className="leading-relaxed">
-                        Avviando il processo di eliminazione dell'account, perderai l'accesso a tutti i servizi della piattaforma e i tuoi dati personali verranno rimossi definitivamente. Hai una finestra di 10 giorni per annullare la richiesta se necessario.
-                      </div>
-                      <FormCheck className="mt-5">
-                        <FormCheck.Input
-                          id="checkbox-switch-1"
-                          type="checkbox"
-                          value=""
-                        />
-                        <FormCheck.Label htmlFor="checkbox-switch-1">
-                          Confermo di voler eliminare il mio account.
-                        </FormCheck.Label>
-                      </FormCheck>
-                    </div>
-                    <div className="flex flex-col-reverse gap-3 pt-5 mt-6 border-t border-dashed md:flex-row md:justify-end border-slate-300/70">
-                      <Button
-                        variant="outline-secondary"
-                        className="w-full px-4 md:w-auto"
-                      >
-                        Maggiori Informazioni
-                      </Button>
-                      <Button
-                        variant="outline-danger"
-                        className="w-full px-4 border-danger/50 bg-danger/5 md:w-auto"
-                      >
-                        Elimina Account
-                      </Button>
-                    </div>
-                  </>
-                )}
+                {/* ponytail: nessun endpoint di auto-eliminazione; l'eliminazione resta all'amministratore (DELETE /deleteUser) */}
+                <Alert variant="outline-warning" className="flex items-start">
+                  <Lucide icon="AlertTriangle" className="w-6 h-6 mr-2 mt-0.5 shrink-0" />
+                  <div>
+                    {isOutsider
+                      ? "Gli account con autenticazione esterna (OIDC) non possono essere eliminati da questo pannello. Contatta l'amministratore del sistema per procedere."
+                      : "L'eliminazione dell'account non è ancora disponibile da questo pannello. Contatta l'amministratore del sistema per procedere."}
+                  </div>
+                </Alert>
               </div>
             )}
           </div>

@@ -213,13 +213,13 @@ const BarCodeReaderComponent: React.FC = () => {
       <section className="shop-main d-flex mr-1 pt-xl-5" style={{ marginRight: "2.25rem", marginLeft: "2.55rem" }}>
         <div className="col-12">
           <div className="d-flex flex-column align-items-center mb-4">
-            <h1>Barcode Reader</h1>
+            <h1>Lettore codici a barre</h1>
           </div>
           <div className="d-flex flex-column gap-3">
             <div className="card">
               <div className="card-body">
                 {hasPermission === null ? (
-                  <p>Requesting camera permission...</p>
+                  <p>Richiesta del permesso per la fotocamera...</p>
                 ) : hasPermission ? (
                   <>
                     {barcode ? (
@@ -235,13 +235,10 @@ const BarCodeReaderComponent: React.FC = () => {
                               referenza={referenza}
                               config={dataConfig.data as any}
                             />
-                            <Button onClick={restartScanning} className="btn btn-warning w-100 mt-3">
-                              Vai alla pagina di dettaglio
-                            </Button>
                           </>
                         )}
                         <Button onClick={restartScanning} className="btn btn-primary w-100 mt-3">
-                          Scannerizza un'altro codice
+                          Scannerizza un altro codice
                         </Button>
                       </>
                     ) : (
@@ -265,7 +262,7 @@ const BarCodeReaderComponent: React.FC = () => {
                     )}
                   </>
                 ) : (
-                  <p>Permission to access the camera was denied.</p>
+                  <p>Accesso alla fotocamera negato.</p>
                 )}
               </div>
             </div>

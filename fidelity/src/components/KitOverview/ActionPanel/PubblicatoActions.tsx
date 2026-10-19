@@ -7,21 +7,17 @@ import { FC } from "react";
 
 interface PubblicatoActionsProps {
   onDownloadZip?: () => void;
-  onRework: () => void;
   isDownloading?: boolean;
-  isProcessing?: boolean;
 }
 
 /**
  * Action buttons for PUBBLICATO state
  * - Primary: Download ZIP
- * - Secondary: Rework kit
+ * Niente "Rilavora": rilavorare elimina il runtime, e un runtime pubblicato non si elimina.
  */
 const PubblicatoActions: FC<PubblicatoActionsProps> = ({
   onDownloadZip,
-  onRework,
   isDownloading = false,
-  isProcessing = false
 }) => {
   return (
     <div className="flex flex-col gap-3">
@@ -58,20 +54,6 @@ const PubblicatoActions: FC<PubblicatoActionsProps> = ({
           </Button>
         </PermissionGate>
       )}
-
-      {/* Secondary action - Rework */}
-      <PermissionGate permission={PERMISSIONS.KIT_RUNTIME.RIPORTA_IN_LAVORAZIONE} mode="disable">
-        <Button
-          variant="outline-warning"
-          size="sm"
-          className="w-full"
-          onClick={onRework}
-          disabled={isProcessing}
-        >
-          <Lucide icon="RotateCcw" className="w-4 h-4 mr-2" />
-          Rilavora Kit
-        </Button>
-      </PermissionGate>
     </div>
   );
 };

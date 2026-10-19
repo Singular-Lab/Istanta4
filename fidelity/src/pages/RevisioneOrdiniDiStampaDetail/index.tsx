@@ -23,6 +23,7 @@ import io from 'socket.io-client';
 import type { PromoResponseDTO } from '../../../server/core/dto';
 import DirectoryPicker from '../../components/DirectoryPicker';
 import { PreviewImmaginePdf } from '../../components/PreviewImmaginePdf';
+import { contaSelezionati, selezioneDaInviare } from './selezioneKit';
 
 type GroupingResultFile = {
   id_olimpo_cloud: string;
@@ -831,15 +832,8 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
     setSelectedKits(newSelectedKits);
   };
 
-  const getAllKitsSelection = () => {
-    const allKitsSelection: Record<string, boolean> = {};
-    filteredKitDisponibili?.forEach(kit => {
-      allKitsSelection[kit.guidId] = !!selectedKits[kit.guidId];
-    });
-    return allKitsSelection;
-  };
-
-  const selectedKitsCount = Object.values(selectedKits).filter(Boolean).length;
+  const selezioneInvio = selezioneDaInviare(kitDisponibili, selectedKits);
+  const selectedKitsCount = contaSelezionati(selezioneInvio);
 
   const handleDownloadZip = async (idKit: string) => {
     setIsDownloading(true);
@@ -996,6 +990,8 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
           setFtpErrorMessage(message || 'Alcuni kit non sono stati inviati');
         }
         setIsTransferring(false);
+        // I kit inviati escono da kitDisponibili alla revalidate, e con loro dal conteggio
+        setSelectAll(false);
         showNotification(message || 'Processo completato', { variant: esito ? 'success' : 'warning' });
         smettiDiAscoltare();
         setTimeout(() => r.revalidate(), 500);
@@ -1340,6 +1336,8 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
             <div className="flex items-center gap-x-4 mt-4 sm:mt-0 sm:ml-auto">
               <div
                 className={`px-3 py-1 text-xs rounded-full border font-medium ${kit.stato_lavorazione === STATO_LAVORAZIONE_KIT_RUNTIME.IN_LAVORAZIONE
+                  ? 'bg-blue-100/80 text-blue-800 border-blue-200/80'
+                  : kit.stato_lavorazione === STATO_LAVORAZIONE_KIT_RUNTIME.IN_LAVORAZIONE_CON_ERRORI
                   ? 'bg-red-100/80 text-red-800 border-red-200/80'
                   : kit.stato_lavorazione === STATO_LAVORAZIONE_KIT_RUNTIME.IN_REVISIONE
                     ? 'bg-yellow-100/80 text-yellow-800 border-yellow-200/80'
@@ -1348,7 +1346,9 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
                       : 'bg-gray-100/80 text-gray-800 border-gray-200/80'
                   }`}
               >
-                {kit.stato_lavorazione?.replace(/_/g, ' ')}
+                {kit.stato_lavorazione
+                  ? kit.stato_lavorazione.charAt(0) + kit.stato_lavorazione.slice(1).replace(/_/g, ' ').toLowerCase()
+                  : ''}
               </div>
               <div className="cursor-pointer p-1.5 rounded-md hover:bg-slate-100" onClick={() => toggleKitExpansion(kit.guidId)}>
                 <Lucide icon={expandedKits[kit.guidId] ? 'ChevronUp' : 'ChevronDown'} className="w-5 h-5 stroke-[1.5] text-slate-500" />
@@ -1435,7 +1435,7 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
             <Button
               onClick={() => {
                 setShowDialogInvioFTP(false);
-                mutationInvioFileFTP.mutate(getAllKitsSelection());
+                mutationInvioFileFTP.mutate(selezioneInvio);
               }}
               variant="primary"
             >
@@ -2101,7 +2101,7 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
                   </div>
                   <Button
                     onClick={() => setShowDialogInvioFTP(true)}
-                    disabled={!(Object.values(selectedKits).filter(Boolean).length > 0) || isTransferring}
+                    disabled={selectedKitsCount === 0 || isTransferring}
                     variant="primary"
                     className="text-sm min-w-48"
                   >

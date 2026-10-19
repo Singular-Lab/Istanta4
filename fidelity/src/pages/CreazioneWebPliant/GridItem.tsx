@@ -2,7 +2,6 @@ import Lucide from "@/components/Base/Lucide";
 import { useKeyframeEvents } from "@/context/KeyframeEventContext";
 import { useUser } from "@/context/UserContext";
 import clsx from "clsx";
-import dayjs from "dayjs";
 import parse from "html-react-parser";
 import { lazy, memo, Suspense, useCallback, useMemo, useRef } from "react";
 import { useDrag, useDrop, XYCoord } from "react-dnd";
@@ -66,7 +65,7 @@ const GridItem: React.FC<GridItemProps> = ({
   activeTool
 }) => {
 
-  const { id, content, children, type, duration, alias } = element; // Rinominato 'alias' in 'elementAlias' per risolvere l'errore di ridichiarazione
+  const { id, content, children, type, alias } = element; // Rinominato 'alias' in 'elementAlias' per risolvere l'errore di ridichiarazione
   const user = useUser();
   const { isComponentVisible, recordModification, hasActiveKeyframeFor, getComponentModifications } = useKeyframeEvents();
   const combinedRef = useRef<HTMLDivElement>(null);
@@ -97,54 +96,6 @@ const GridItem: React.FC<GridItemProps> = ({
     ...element,
     content: effectiveContent
   }), [element, effectiveContent]);
-
-  // Determina se l'elemento ha una duration attiva
-  const hasActiveDuration = useMemo(() => {
-    if (!duration) return false;
-
-    try {
-      const startDate = dayjs(duration.start_date);
-      const endDate = dayjs(duration.end_date);
-
-      // Verifica se entrambe le date sono valide
-      if (!startDate.isValid() || !endDate.isValid()) return false;
-
-      // Verifica se c'è almeno una data impostata
-      return duration.start_date || duration.end_date;
-    } catch (error) {
-      console.error('Errore nella verifica della duration:', error);
-      return false;
-    }
-  }, [duration]);
-
-  // Determina se la duration è scaduta
-  const isDurationExpired = useMemo(() => {
-    if (!hasActiveDuration || !duration?.end_date) return false;
-
-    try {
-      const endDate = dayjs(duration.end_date);
-      return endDate.isValid() && endDate.isBefore(dayjs(), 'day');
-    } catch (error) {
-      console.error('Errore nella verifica della scadenza:', error);
-      return false;
-    }
-  }, [hasActiveDuration, duration]);
-
-  // Determina se la duration è imminente (entro 7 giorni)
-  const isDurationImminent = useMemo(() => {
-    if (!hasActiveDuration || !duration?.end_date) return false;
-
-    try {
-      const endDate = dayjs(duration.end_date);
-      const now = dayjs();
-      const daysUntilExpiry = endDate.diff(now, 'day');
-
-      return endDate.isValid() && daysUntilExpiry >= 0 && daysUntilExpiry <= 7;
-    } catch (error) {
-      console.error('Errore nella verifica della scadenza imminente:', error);
-      return false;
-    }
-  }, [hasActiveDuration, duration]);
 
   // Memorizziamo i props per evitare rerendering non necessari e flickering
   const stableCarouselProps = useMemo(() => {
@@ -525,41 +476,6 @@ const GridItem: React.FC<GridItemProps> = ({
     }
   }, [hasActiveKeyframeFor, moveElement, recordModification]);
 
-  // Determina le classi CSS in base allo stato della duration
-  const getDurationClasses = () => {
-    if (!hasActiveDuration) return {};
-
-    if (isDurationExpired) {
-      return {
-        border: "ring-2 ring-red-500 dark:ring-red-400",
-        badge: "bg-red-500 text-white",
-        icon: "CalendarX" as const,
-        tooltip: "Scaduto",
-        text: "Scaduto"
-      };
-    }
-
-    if (isDurationImminent) {
-      return {
-        border: "ring-2 ring-orange-500 dark:ring-orange-400",
-        badge: "bg-orange-500 text-white",
-        icon: "Clock" as const,
-        tooltip: "Scade presto",
-        text: "Scade presto"
-      };
-    }
-
-    return {
-      border: "ring-2 ring-green-500 dark:ring-green-400",
-      badge: "bg-green-500 text-white",
-      icon: "Calendar" as const,
-      tooltip: "Attivo",
-      text: "Attivo"
-    };
-  };
-
-  const durationClasses = getDurationClasses();
-
   if (!element) return null;
 
   // Se il componente non è visibile, non renderizzarlo
@@ -579,9 +495,7 @@ const GridItem: React.FC<GridItemProps> = ({
           ? isHybrid
             ? "ring-2 ring-pink-500 shadow-lg shadow-pink-500/25 dark:ring-pink-400 dark:shadow-pink-500/20"
             : "ring-2 ring-primary shadow-lg shadow-primary/25 dark:ring-primary dark:shadow-primary/20"
-          : hasActiveDuration
-            ? durationClasses.border
-            : isHybrid
+          : isHybrid
               ? "ring-1 ring-pink-200 hover:ring-2 hover:ring-pink-400 dark:ring-pink-800"
               : "ring-1 ring-slate-200 hover:ring-2 hover:ring-primary/50 dark:ring-slate-800"
       )}
@@ -592,20 +506,6 @@ const GridItem: React.FC<GridItemProps> = ({
         <div className="flex justify-between items-center gap-2 w-full">
           {/* Badge a sinistra */}
           <div className="flex flex-wrap items-center gap-2">
-            {/* Badge indicatore duration */}
-            {hasActiveDuration && durationClasses.icon && (
-              <div
-                className={clsx(
-                  "px-2 py-1 rounded-full text-xs font-medium shadow-sm flex items-center gap-1",
-                  durationClasses.badge
-                )}
-                title={durationClasses.tooltip}
-              >
-                <Lucide icon={durationClasses.icon} className="w-3 h-3" />
-                <span className="text-xs">{durationClasses.text}</span>
-              </div>
-            )}
-
             {/* Badge ibrido */}
             {isHybrid && (
               <div

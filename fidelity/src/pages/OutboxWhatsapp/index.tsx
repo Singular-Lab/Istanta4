@@ -696,6 +696,7 @@ const OutboxWhatsapp: React.FC = () => {
                         title="Nessuna campagna"
                         description="Non hai ancora inviato campagne WhatsApp. Inizia creando la tua prima campagna."
                         buttonText="Crea campagna"
+                        buttonIcon="Plus"
                         onButtonClick={() => navigate('/whatsapp/invio-campagna-whatsapp?step=1')}
                     />
                 ) : (
