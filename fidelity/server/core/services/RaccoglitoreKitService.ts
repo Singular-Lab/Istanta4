@@ -530,6 +530,7 @@ export class RaccoglitoreKitService implements IRaccoglitoreKitService {
         titolo: data.titolo,
         filtro: data.filtro ?? [],
         declinazioni: data.declinazioni ?? [],
+        filtro_contesto: d.filtroContesto ?? [],
         tipi_di_export_in_kit: (data.tipiDiExportInKit || []).map((t: OggettoTipiDiExport) => ({
           tipo_di_export_guid_id: t.tipoDiExportGuidID,
           filtro: t.filtro ?? [],

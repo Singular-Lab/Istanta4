@@ -144,10 +144,18 @@ const routes: RouteObject[] = [
       {
         path: "barcode-reader",
         lazy: async () => {
-          const { default: BarCodeReaderComponent } = await import(
-            "@/pages/BarCodeReader"
-          );
-          return { Component: BarCodeReaderComponent };
+          const [{ default: BarCodeReaderComponent }, { GestioneReferenzeProvider }] = await Promise.all([
+            import("@/pages/BarCodeReader"),
+            import("@/context/GestioneReferenzeContext"),
+          ]);
+          // Fuori da WebPliant manca il provider che BoxRef usa per mostrare la referenza scansionata
+          return {
+            Component: () => (
+              <GestioneReferenzeProvider>
+                <BarCodeReaderComponent />
+              </GestioneReferenzeProvider>
+            ),
+          };
         },
       },
       {
