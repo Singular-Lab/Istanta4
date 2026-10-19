@@ -33,7 +33,8 @@ import { Area } from '../models/aree';
 import { Canale } from '../models/canali';
 import { DesignKit } from '../models/design_kit';
 import { FilesRuntime } from '../models/files_runtime';
-import { PromoAttributes } from '../models/promo';
+import { OrdiniDiStampa } from '../models/ordini_di_stampa';
+import { Promo, PromoAttributes } from '../models/promo';
 import { Referenze } from '../models/referenze';
 import { RuntimeKit } from '../models/runtime_kit';
 import { Tracciati } from '../models/tracciati';
@@ -170,6 +171,31 @@ export class PromoService implements IPromoService {
         });
       }
     }
+  }
+
+  // Promo proponibili per un nuovo ordine di stampa: in corso, non eliminate, ancora senza ordine.
+  // ponytail: legge id e stato di tutte le promo; con tabelle grandi passare a un NOT EXISTS in SQL
+  private async idPromoSenzaOrdineDiStampa(): Promise<Set<string>> {
+    const statiEsclusi = [STATO_PROMO.VALIDA, STATO_PROMO.VALIDA_CON_ERRORI, STATO_PROMO.ARCHIVIATA, STATO_PROMO.ELIMINATA];
+    const [promo, ordini] = await Promise.all([
+      Promo.findAll({ attributes: ['id_promo', 'stato'], raw: true }),
+      OrdiniDiStampa.findAll({ attributes: ['id_promo_ordinistampa'], raw: true }),
+    ]);
+    const conOrdine = new Set(ordini.map((o) => o.id_promo_ordinistampa));
+    return new Set(
+      promo.filter((p) => !statiEsclusi.includes(p.stato) && !conOrdine.has(p.id_promo)).map((p) => p.id_promo)
+    );
+  }
+
+  async contaPromoSenzaOrdineDiStampa(): Promise<number> {
+    return (await this.idPromoSenzaOrdineDiStampa()).size;
+  }
+
+  async getPromoSenzaOrdineDiStampa(): Promise<PromoResponseDTO[]> {
+    const [ids, promo] = await Promise.all([this.idPromoSenzaOrdineDiStampa(), this.getAllPromo()]);
+    return promo
+      .filter((p) => ids.has(p.id))
+      .sort((a, b) => new Date(b.data_registrazione ?? 0).getTime() - new Date(a.data_registrazione ?? 0).getTime());
   }
 
   async getCurrentPromoCount(): Promise<number> {

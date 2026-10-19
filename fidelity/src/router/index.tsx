@@ -326,16 +326,9 @@ const routes: RouteObject[] = [
         },
       },
       {
+        // La vecchia panoramica lavorava su dati finti: tutto ciò che mostrava è nelle pagine in corso e storico
         path: "promozioni",
-        lazy: async () => {
-          const { default: Promozioni } = await import(
-            "@/pages/Promozioni"
-          );
-          return {
-            Component: Promozioni,
-            // loader: funzioneLavorazioniInCorso,
-          };
-        },
+        loader: () => redirect("/promozioni/in-corso"),
       },
       {
         path: "report/tracciati",
@@ -1141,15 +1134,6 @@ const routes: RouteObject[] = [
       const { default: ResetPassword } = await import("@/pages/ResetPassword");
       return { Component: ResetPassword };
     },
-  },
-  {
-    path: "whatsapp/confirm-opt-in/:ctx",
-    lazy: async () => {
-      const { default: ConfirmOptIn } = await import(
-        "@/pages/ConfirmOptInWhatsapp"
-      );
-      return { Component: ConfirmOptIn, loader: async () => null };
-    }
   },
   // {
   //   path: "*",

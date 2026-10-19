@@ -39,6 +39,8 @@ export interface IWhatsAppService {
     creaPresetTemplateWhatsapp(id_template: string, nome_preset: string, contenuto_preset: any): Promise<{ success: boolean; newPresetId?: string; error?: string }>;
     modificaPresetTemplateWhatsapp(id_preset: string, nome_preset: string, contenuto_preset: any): Promise<{ success: boolean; error?: string }>;
     setDefaultPresetTemplateWhatsapp(id_preset: string): Promise<{ success: boolean; error?: string }>;
+    eliminaPresetTemplateWhatsapp(id_preset: string, idGdoAmmessa: string | null): Promise<void>;
+    eliminaTemplateWhatsapp(id_template: string, idGdoAmmessa: string | null): Promise<void>;
     getAllUtentiGuestWhatsappCount(idGdo: string,
         filtri: {
             sesso?: string;

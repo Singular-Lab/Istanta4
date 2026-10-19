@@ -311,6 +311,8 @@ export class HubController extends BaseController {
       }
 
       const parsed = await this.agenziaLib.parseUtenteOIDC(email, claims);
+      // Un account disattivato o bloccato non apre la sessione: ForbiddenError -> reason=oidc_access_denied
+      await this.userService.verificaAccountAttivo(parsed.id);
 
       // Rigenera la sessione per prevenire session fixation
       await new Promise<void>((resolve, reject) => {
@@ -381,6 +383,9 @@ export class HubController extends BaseController {
         email
       }
       const parsed = await this.agenziaLib.parseUtenteOIDC(email, falseClaims);
+      // Un account disattivato o bloccato non apre la sessione: ForbiddenError -> reason=oidc_access_denied
+      if (!this.userService) throw new ForbiddenError({ message: "Verifica dello stato dell'account non disponibile" });
+      await this.userService.verificaAccountAttivo(parsed.id);
 
       // Rigenera la sessione per prevenire session fixation
       await new Promise<void>((resolve, reject) => {

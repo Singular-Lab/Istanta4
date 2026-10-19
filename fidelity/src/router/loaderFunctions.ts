@@ -622,7 +622,8 @@ export const funzioneCaricamentoDettagliFineLavorazione = async ({ request }: { 
 
 // Unified ODS Loader Functions (New Pattern)
 export const funzioneCaricamentoNuovoODS = async () => {
-  const promo = await ServerCall.get<PromoResponseDTO[]>("/promo/in-corso");
+  // Solo le promo in corso che non hanno ancora un ordine di stampa
+  const promo = await ServerCall.get<PromoResponseDTO[]>("/promo/senza-ordine-stampa");
   return {
     title: "Nuovo Ordine di Stampa",
     description: "Crea un nuovo ordine di stampa da una promozione attiva",
