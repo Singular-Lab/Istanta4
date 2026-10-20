@@ -506,6 +506,8 @@ indesignEvents.addEventListener(indesignEvents.EVENT_NEW_DOCUMENT_SELECTED, asyn
     //}
 
     $("#nomeKitInLavorazione").text("");
+    //I20-1116: il segnalino della testata e l'icona del menabo' erano del documento di prima.
+    SchermataSegnalazioni.aggiornaIcona();
 
     await initDocumentInLavorazione();
     if (docInLavorazione==null)
@@ -540,6 +542,8 @@ indesignEvents.addEventListener(indesignEvents.EVENT_NO_DOCUMENT_OPENED, async f
         docInLavorazione = null;
 
         $("#nomeKitInLavorazione").text("");
+        //I20-1116: senza documento il segnalino della testata non ha niente da contare.
+        SchermataSegnalazioni.aggiornaIcona();
         $("#dialogSelectKit").css("display","none");        
         $("#wrapper").css("display","block");
     }
@@ -6342,6 +6346,8 @@ var currentTimeoutId = null;
 tracciatoVisualizzato = false;
 lastWidthDimension = 0;
 lastHeightDimension = 0;
+//I20-1116, lotto 2: la larghezza del pannello all'ultimo onresizeWindow, per la vista affiancata.
+lastPannelloDimension = 0;
 
 
 
@@ -10622,6 +10628,9 @@ async function logout(){
 function onresizeWindow(){
     try{
         setTimeout(function () {
+            //I20-1116, lotto 2: prima le larghezze: la vista affiancata restringe #wrapper e le barre fisse.
+            lastPannelloDimension = SchermataSegnalazioni.larghezzaPannello();
+            SchermataSegnalazioni.adattaVista();
             lastWidthDimension = document.getElementById("wrapper").clientWidth;
             lastHeightDimension = document.getElementById("wrapper").clientHeight;
             footerHeight = document.getElementById("footer").clientHeight;

@@ -262,6 +262,19 @@ namespace Istanta.Controllers
 
 
         [HttpGet]
+        [Route("Tracciati/reportAttivita/{idAttivita:int}")]
+        public async Task<IActionResult> reportAttivita(int idAttivita)
+        {
+            string? report = await ReportAttivita.LeggiAsync(this.path_to_import, idAttivita);
+            if (report == null)
+            {
+                return NotFound("Report non disponibile per l'attivita' " + idAttivita);
+            }
+
+            return Content(report, "application/json");
+        }
+
+        [HttpGet]
         [Route("Tracciati/GetTracciatiPromo/{idPromo}")]
         public async Task<IActionResult> GetTracciatiPromo(int idPromo)
         {

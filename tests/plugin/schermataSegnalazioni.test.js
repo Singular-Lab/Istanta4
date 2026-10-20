@@ -226,7 +226,9 @@ test("la schermata legge il documento e offre vai al box, risolvi e risolvi tutt
     assert.match(schermata, /\.text\("Risolvi"\)(?:\.css\([^)]*\))?\.on\('click', \(\) => \{\s*Segnalazioni\.risolviVoce\(box, indice\);\s*alCambio\(\);/);
     assert.match(schermata, /const ridisegna = \(\) => SchermataSegnalazioni\.riempi\(elenco\);/);
     //I20-1056, lotto 2: il conteggio va accanto al titolo.
-    assert.match(schermata, /Modali\.popup\("Segnalazioni di impaginazione", elenco, "xl", SchermataSegnalazioni\.allaChiusura, null, conteggio\)/);
+    //I20-1116: il titolo e' una costante, la stessa del popup e della colonna della vista affiancata.
+    assert.strictEqual(SchermataSegnalazioni.TITOLO, "Segnalazioni di impaginazione");
+    assert.match(schermata, /Modali\.popup\(SchermataSegnalazioni\.TITOLO, elenco, "xl", SchermataSegnalazioni\.allaChiusura, null, conteggio\)/);
     assert.match(schermata, /\.text\(Array\.isArray\(pagine\) \? "Nessuna segnalazione nelle pagine impaginate\." : "Nessuna segnalazione nel documento\."\)/);
     //I testi entrano come testo, non come HTML.
     //I20-1056, lotto 2: con il dizionario del cliente, sempre come testo.
@@ -767,4 +769,294 @@ test("il numero si vede accanto al codice dei Cambiati e degli Eliminati, e si r
     assert.ok(ricontrollo.indexOf("this._aggiornaSegnalazioniDelRecord(record, box);") < ricontrollo.indexOf("this._leggiSchedaRefAggiornata("));
     //Nella vista whitelist il numero e' quello del report.
     assert.match(flussoReport, /filtered\.segnalazioniImpaginazione = reportRecord\.segnalazioniImpaginazione;/);
+});
+
+/* ---- I20-1116: il segnalino delle segnalazioni nella testata ---- */
+
+//Un jQuery finto per il segnalino e l'icona: gli elementi per selettore, con quello che
+//aggiornaIcona usa (text, css, attr). Registra l'ultimo stato di ciascuno.
+function testataFinta() {
+    const elemento = () => {
+        const el = { length: 1, testo: "", stile: {}, attributi: {} };
+        el.text = (t) => { el.testo = t; return el; };
+        el.css = (s) => { Object.assign(el.stile, s); return el; };
+        el.attr = (n, v) => { el.attributi[n] = v; return el; };
+        return el;
+    };
+    const elementi = {
+        "#segnalinoSegnalazioni": elemento(),
+        "#testoSegnalinoSegnalazioni": elemento(),
+        "#iconaSegnalazioniImpaginazione": elemento()
+    };
+    return { elementi, $: (sel) => elementi[sel] || { length: 0 } };
+}
+
+function conTestata(documento, fn) {
+    const testata = testataFinta();
+    const prima = { $: global.$, docInLavorazione: global.docInLavorazione };
+    global.$ = testata.$;
+    global.docInLavorazione = documento;
+    try {
+        fn(testata.elementi);
+    }
+    finally {
+        global.$ = prima.$;
+        global.docInLavorazione = prima.docInLavorazione;
+        SchermataSegnalazioni._ultimoControllo = null;
+    }
+}
+
+test("I20-1116: il segnalino dice quante segnalazioni, col colore della piu' grave", () => {
+    const stato = SchermataSegnalazioni.statoSegnalino({ segnalazioni: 3, errori: 1, gravita: "error" });
+    assert.strictEqual(stato.visibile, true);
+    assert.strictEqual(stato.testo, "3 segnalazioni");
+    assert.strictEqual(stato.colore, "#c62828");
+    assert.strictEqual(stato.suggerimento, "3 segnalazioni irrisolte (1 errore) all'ultimo controllo: clicca per aprire le segnalazioni");
+
+    const soloWarning = SchermataSegnalazioni.statoSegnalino({ segnalazioni: 1, errori: 0, gravita: "warning" });
+    assert.strictEqual(soloWarning.testo, "1 segnalazione");
+    assert.strictEqual(soloWarning.colore, "#ef6c00");
+});
+
+test("I20-1116: senza segnalazioni il segnalino non si vede", () => {
+    assert.strictEqual(SchermataSegnalazioni.statoSegnalino({ segnalazioni: 0, errori: 0, gravita: null }).visibile, false);
+    assert.strictEqual(SchermataSegnalazioni.statoSegnalino(null).visibile, false);
+});
+
+test("I20-1116: l'icona del menabo' e il segnalino si aggiornano insieme, e spariscono insieme", () => {
+    conTestata({ id: 7 }, (el) => {
+        SchermataSegnalazioni.registraControllo("id:7", [lettura("3", "error"), lettura("5", "warning")]);
+        SchermataSegnalazioni.aggiornaIcona();
+        assert.strictEqual(el["#segnalinoSegnalazioni"].stile.display, "flex");
+        assert.strictEqual(el["#testoSegnalinoSegnalazioni"].testo, "2 segnalazioni");
+        assert.strictEqual(el["#testoSegnalinoSegnalazioni"].stile.backgroundColor, "#c62828");
+        assert.strictEqual(el["#iconaSegnalazioniImpaginazione"].testo, "2");
+
+        //Tutto risolto: le pagine rilette a zero.
+        SchermataSegnalazioni.registraControllo("id:7", [], ["3", "5"]);
+        SchermataSegnalazioni.aggiornaIcona();
+        assert.strictEqual(el["#segnalinoSegnalazioni"].stile.display, "none");
+        assert.strictEqual(el["#iconaSegnalazioniImpaginazione"].stile.display, "none");
+    });
+});
+
+test("I20-1116: con un altro documento il segnalino del documento controllato non resta", () => {
+    conTestata({ id: 8 }, (el) => {
+        SchermataSegnalazioni.registraControllo("id:7", [lettura("3", "error")]);
+        SchermataSegnalazioni.aggiornaIcona();
+        assert.strictEqual(el["#segnalinoSegnalazioni"].stile.display, "none");
+    });
+});
+
+test("I20-1116: il clic sul segnalino apre tutto il documento, non con la scheda in vista controllata", async () => {
+    const apri = SchermataSegnalazioni.apri;
+    const prima = global.indesignEvents;
+    const aperture = [];
+    SchermataSegnalazioni.apri = (opzioni) => { aperture.push(opzioni); return Promise.resolve(true); };
+    try {
+        global.indesignEvents = { vistaControllataAperta: () => false };
+        assert.strictEqual(await SchermataSegnalazioni.apriDalSegnalino(), true);
+        //Senza opzioni: tutto il documento, col caricamento, come dal pulsante del menabo'.
+        assert.deepStrictEqual(aperture, [undefined]);
+
+        global.indesignEvents = { vistaControllataAperta: () => true };
+        assert.strictEqual(await SchermataSegnalazioni.apriDalSegnalino(), false);
+        assert.strictEqual(aperture.length, 1);
+    }
+    finally {
+        SchermataSegnalazioni.apri = apri;
+        global.indesignEvents = prima;
+    }
+});
+
+test("I20-1116: il segnalino sta in fondo alla riga delle linguette, centrato con loro, nascosto finche' non ci sono segnalazioni", () => {
+    const html = leggiFileDelPlugin("index.html").replace(/\r/g, "");
+    //Sotto il nome del kit non c'e' piu': #kitSelezionato e' tornato vuoto come prima.
+    const kit = html.substring(html.indexOf('<div id="kitSelezionato"'), html.indexOf('<div class="row" id="messaggiUtente"'));
+    assert.doesNotMatch(kit, /segnalinoSegnalazioni/);
+    //Nella riga delle linguette, dopo la barra.
+    const righe = html.substring(html.indexOf("<!-- Qui inserisco il tab -->"), html.indexOf('<div class="row subMenuTabs"'));
+    assert.ok(righe.indexOf('id="barraTab"') < righe.indexOf('id="appoggioSegnalino"'));
+    //L'appoggio e' largo zero, spinto a destra e alto quanto la riga: la testata non si allunga.
+    assert.match(righe, /<div id="appoggioSegnalino" style="position: relative; width: 0px; margin-left: auto; align-self: stretch;">/);
+    //Fisso con right 0: al bordo del pannello lo aggancia il motore grafico. Alto quanto le linguette,
+    //con il testo centrato: allineato a Home, Menabo', Utility.
+    assert.match(righe, /<div id="segnalinoSegnalazioni" style="display: none; position: fixed; right: 0px; height: 27px; align-items: center;[^"]*"\s*onclick="SchermataSegnalazioni\.apriDalSegnalino\(\)">\s*<span id="testoSegnalinoSegnalazioni"/);
+    //Esce dal bordo destro e lo avvolge: arrotondato a sinistra, piega scura a destra, niente parte piatta a sinistra.
+    const testo = righe.substring(righe.indexOf('<span id="testoSegnalinoSegnalazioni"'));
+    assert.match(testo, /border-right: 3px solid rgba\(0, 0, 0, 0\.35\); border-radius: 8px 0 0 8px;/);
+    assert.doesNotMatch(testo.substring(0, testo.indexOf(">")), /border-left/);
+    //La testata e' fissa: il segnalino e' dentro, quindi resta visibile cambiando sezione.
+    const intestazione = html.substring(html.indexOf('<div id="header"'), html.indexOf('<div class="row subMenuTabs"'));
+    assert.match(html.substring(html.indexOf('<div id="header"'), html.indexOf('<div id="header"') + 200), /position: fixed;/);
+    assert.match(intestazione, /id="segnalinoSegnalazioni"/);
+});
+
+test("I20-1116: cambiando documento o restando senza, il segnalino si riallinea", () => {
+    const indexNew = leggiFileDelPlugin("indexNew.js").replace(/\r/g, "");
+    assert.match(indexNew, /docInLavorazione = args\[0\];[\s\S]{0,400}\$\("#nomeKitInLavorazione"\)\.text\(""\);\s*\/\/I20-1116[^\n]*\n\s*SchermataSegnalazioni\.aggiornaIcona\(\);\s*await initDocumentInLavorazione\(\);/);
+    assert.match(indexNew, /docInLavorazione = null;\s*\$\("#nomeKitInLavorazione"\)\.text\(""\);\s*\/\/I20-1116[^\n]*\n\s*SchermataSegnalazioni\.aggiornaIcona\(\);/);
+});
+
+/* ---- I20-1116, lotto 2: la vista affiancata a pannello largo ---- */
+
+test("I20-1116 lotto 2: dal doppio della larghezza minima la schermata e' una colonna, sotto un popup", () => {
+    assert.strictEqual(SchermataSegnalazioni.formaSchermata(524), "popup");
+    assert.strictEqual(SchermataSegnalazioni.formaSchermata(1047), "popup");
+    assert.strictEqual(SchermataSegnalazioni.formaSchermata(1048), "colonna");
+    assert.strictEqual(SchermataSegnalazioni.formaSchermata(1600), "colonna");
+    //Senza misura (0) resta il popup di sempre.
+    assert.strictEqual(SchermataSegnalazioni.formaSchermata(0), "popup");
+    //La colonna comincia dopo il Plugin di sinistra e il margine del corpo.
+    assert.strictEqual(SchermataSegnalazioni.inizioColonna(), 532);
+});
+
+test("I20-1116 lotto 2: a sinistra le barre fisse prendono la larghezza minima del pannello", () => {
+    assert.deepStrictEqual(SchermataSegnalazioni.confinamenti(), [
+        { selettore: "#wrapper", larghezza: 524 },
+        { selettore: "#header", larghezza: 524 },
+        { selettore: "#footerRef", larghezza: 524 },
+        { selettore: "#footer", larghezza: 514 },
+        { selettore: "#messaggiUtente", larghezza: 498 }
+    ]);
+});
+
+test("I20-1116 lotto 2: chiusa la colonna le barre tornano alla larghezza di prima", () => {
+    const elementi = {};
+    SchermataSegnalazioni.confinamenti().forEach(voce => { elementi[voce.selettore] = { style: { width: "100%" } }; });
+    elementi["#messaggiUtente"].style.width = "95%";
+    const prima = global.document;
+    global.document = { querySelector: (sel) => elementi[sel] || null };
+    try {
+        SchermataSegnalazioni._confinaPannello(true);
+        assert.strictEqual(elementi["#header"].style.width, "524px");
+        assert.strictEqual(elementi["#footer"].style.width, "514px");
+        //Una seconda volta non cambia la larghezza da rimettere.
+        SchermataSegnalazioni._confinaPannello(true);
+        SchermataSegnalazioni._confinaPannello(false);
+        assert.strictEqual(elementi["#header"].style.width, "100%");
+        assert.strictEqual(elementi["#wrapper"].style.width, "100%");
+        assert.strictEqual(elementi["#messaggiUtente"].style.width, "95%");
+    }
+    finally {
+        global.document = prima;
+        SchermataSegnalazioni._confinati = null;
+    }
+});
+
+test("I20-1116 lotto 2: Vai al box dalla colonna seleziona il box, senza vista controllata", () => {
+    const seleziona = SchermataSegnalazioni._selezionaBox;
+    const prima = { $: global.$, ReportIntegrita: global.ReportIntegrita };
+    const selezionati = [];
+    const blocchi = [];
+    SchermataSegnalazioni._selezionaBox = (box) => { selezionati.push(box); return true; };
+    //Con la colonna aperta conta solo questo: elenco.closest, in UXP, non la riconosceva.
+    global.$ = (sel) => ({ length: sel === "#colonnaSegnalazioni" ? 1 : 0 });
+    global.ReportIntegrita = { _applicaBloccoSchedaDalReport: () => blocchi.push(true) };
+    try {
+        const box = { label: "BOX12" };
+        const elenco = { closest: () => ({ length: 0 }) };
+        assert.strictEqual(SchermataSegnalazioni.vaiAlBox(box, elenco), true);
+        assert.deepStrictEqual(selezionati, [box]);
+        //Niente vista controllata: menu al loro posto, nessuna scheda "aperta dalle segnalazioni".
+        assert.strictEqual(blocchi.length, 0);
+        assert.strictEqual(SchermataSegnalazioni._schedaAperta, null);
+    }
+    finally {
+        SchermataSegnalazioni._selezionaBox = seleziona;
+        global.$ = prima.$;
+        global.ReportIntegrita = prima.ReportIntegrita;
+    }
+});
+
+test("I20-1116: Vai al box centra la vista sul box selezionato, senza cambiare lo zoom", () => {
+    const prima = global.app;
+    const zoom = [];
+    const finestra = { activePage: null };
+    Object.defineProperty(finestra, "zoomPercentage", { get: () => 75, set: (v) => zoom.push(v) });
+    global.app = { activeWindow: finestra, selection: [] };
+    try {
+        const pagina = { name: "4" };
+        const box = { parentPage: pagina };
+        assert.strictEqual(SchermataSegnalazioni._selezionaBox(box), true);
+        assert.strictEqual(finestra.activePage, pagina);
+        assert.deepStrictEqual(global.app.selection, [box]);
+        assert.deepStrictEqual(zoom, [75]);
+    }
+    finally {
+        global.app = prima;
+    }
+});
+
+test("I20-1116: se il centraggio non riesce la selezione resta", () => {
+    const finestra = {};
+    Object.defineProperty(finestra, "zoomPercentage", { get: () => { throw new Error("nessuna vista"); } });
+    const errore = console.error;
+    console.error = () => {};
+    try {
+        assert.strictEqual(SchermataSegnalazioni.centraSullaSelezione(finestra), false);
+        assert.strictEqual(SchermataSegnalazioni.centraSullaSelezione(null), false);
+    }
+    finally {
+        console.error = errore;
+    }
+});
+
+test("I20-1116 lotto 2: la colonna si apre a pannello largo, si rilegge e segue il pannello", () => {
+    //apri sceglie la forma dalla larghezza del pannello.
+    assert.match(schermataLotto2(), /if \(SchermataSegnalazioni\.formaSchermata\(SchermataSegnalazioni\.larghezzaPannello\(\)\) === "colonna"\) \{\s*SchermataSegnalazioni\._apriColonna\(elenco\);\s*return true;\s*\}/);
+    //Dopo un controllo da fuori (risoluzione dalla scheda, Reimpagina, documento aperto) la colonna si rilegge.
+    assert.match(schermataLotto2(), /controllaPagine\(pagine\) \{[\s\S]*?SchermataSegnalazioni\._leggi\(pagine\);\s*SchermataSegnalazioni\._rileggiColonna\(\);/);
+    assert.match(schermataLotto2(), /controllaDocumento\(\) \{\s*SchermataSegnalazioni\._leggi\(null\);\s*SchermataSegnalazioni\._rileggiColonna\(\);/);
+    //Chi apre una schermata nuova chiude anche la colonna.
+    assert.match(schermataLotto2(), /chiudiAperta\(\) \{[\s\S]*?SchermataSegnalazioni\.chiudiColonna\(false\);\s*\}/);
+    //Fra titolo e conteggio della colonna un margine vero: UXP ignora gap, e si leggevano attaccati.
+    assert.match(schermataLotto2(), /\.text\(SchermataSegnalazioni\.TITOLO\)\.css\(\{[^}]*marginRight: '10px' \}\)/);
+
+    //Il ciclo degli eventi guarda anche la larghezza del pannello; onresizeWindow adatta la vista.
+    const eventi = leggiFileDelPlugin("events.js").replace(/\r/g, "");
+    assert.match(eventi, /SchermataSegnalazioni\.larghezzaPannello\(\) != lastPannelloDimension\)\)\{\s*onresizeWindow\(\);/);
+    const indexNew = leggiFileDelPlugin("indexNew.js").replace(/\r/g, "");
+    assert.match(indexNew, /function onresizeWindow\(\)\{\s*try\{\s*setTimeout\(function \(\) \{\s*\/\/I20-1116[^\n]*\n\s*lastPannelloDimension = SchermataSegnalazioni\.larghezzaPannello\(\);\s*SchermataSegnalazioni\.adattaVista\(\);/);
+});
+
+function schermataLotto2() {
+    return leggiFileDelPlugin("segnalazioni/schermata.js").replace(/\r/g, "");
+}
+
+test("I20-1116: il segnalino resta agganciato al bordo, all'altezza delle linguette; nella vista affiancata contro la colonna", () => {
+    const prima = { document: global.document, $: global.$, log: console.log };
+    const segnalino = { style: { right: "0px" }, offsetWidth: 110 };
+    let riga = { top: 70, right: 487, height: 27 };
+    let colonnaAperta = false;
+    global.document = { getElementById: (id) => ({ appoggioSegnalino: { getBoundingClientRect: () => riga }, segnalinoSegnalazioni: segnalino })[id] || null };
+    global.$ = (sel) => ({ length: sel === "#colonnaSegnalazioni" && colonnaAperta ? 1 : 0 });
+    console.log = () => {};
+    try {
+        //Al bordo del pannello, senza calcoli, e all'altezza della riga delle linguette.
+        SchermataSegnalazioni._allineaSegnalino();
+        assert.strictEqual(segnalino.style.right, "0px");
+        assert.strictEqual(segnalino.style.left, "auto");
+        assert.strictEqual(segnalino.style.top, "70px");
+        //Vista affiancata: finisce dove comincia la colonna (532).
+        colonnaAperta = true;
+        SchermataSegnalazioni._allineaSegnalino();
+        assert.strictEqual(segnalino.style.right, "auto");
+        assert.strictEqual(segnalino.style.left, "422px");
+        //Chiusa la colonna torna al bordo.
+        colonnaAperta = false;
+        SchermataSegnalazioni._allineaSegnalino();
+        assert.strictEqual(segnalino.style.right, "0px");
+        assert.strictEqual(segnalino.style.left, "auto");
+        //Senza misure l'altezza resta quella di prima, e il segnalino resta al bordo.
+        riga = { top: 0, right: 0, height: 0 };
+        SchermataSegnalazioni._allineaSegnalino();
+        assert.strictEqual(segnalino.style.top, "70px");
+        assert.strictEqual(segnalino.style.right, "0px");
+    }
+    finally {
+        global.document = prima.document;
+        global.$ = prima.$;
+        console.log = prima.log;
+    }
 });

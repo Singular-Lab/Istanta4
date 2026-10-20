@@ -320,6 +320,21 @@
               onclick="jsIndexControls.changeImage($(this)), jsIndexControls.changeSubMenu('Tab9', true)">
           </div>
         </div>
+        <!--I20-1116: il segnalino delle segnalazioni di impaginazione, in fondo alla riga delle linguette e
+            centrato con loro, visibile da ogni sezione perche' la testata e' fissa (segnalazioni/schermata.js,
+            aggiornaIcona). L'appoggio e' largo zero e alto quanto la riga: la riga non si allunga, e la
+            testata, fissa sopra uno spazio di altezza fissa (#spazioHeader), non copre il contenuto.
+            Il segnalibro esce dal bordo destro del pannello e lo avvolge: arrotondato a sinistra, dritto a
+            destra con una piega scura sul bordo. E' fisso con right 0: lo aggancia al bordo del pannello il
+            motore grafico, come la colonna della vista affiancata; le misure del layout, in UXP, non tornavano
+            e il testo veniva tagliato. _allineaSegnalino lo mette all'altezza della riga e, nella vista
+            affiancata, contro la colonna. Una coda a rondine fatta coi bordi, in UXP, non si vedeva.-->
+        <div id="appoggioSegnalino" style="position: relative; width: 0px; margin-left: auto; align-self: stretch;">
+          <div id="segnalinoSegnalazioni" style="display: none; position: fixed; right: 0px; height: 27px; align-items: center; cursor: pointer;"
+            onclick="SchermataSegnalazioni.apriDalSegnalino()">
+            <span id="testoSegnalinoSegnalazioni" style="padding: 0 10px 0 9px; border-right: 3px solid rgba(0, 0, 0, 0.35); border-radius: 8px 0 0 8px; color: white; font-size: 10px; font-weight: bold; line-height: 16px; white-space: nowrap; background-color: #c62828;"></span>
+          </div>
+        </div>
       </div>
       <div class="row subMenuTabs"
         style="display: flex; margin: 0px; padding: 0px; background: linear-gradient(to bottom, #333 97%, #cfc9ce 100%,);">
