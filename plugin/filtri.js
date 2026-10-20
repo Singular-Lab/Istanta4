@@ -1585,59 +1585,27 @@ const filtri = {
                         .on('click', async function () {
                             const isPaste = $(this).attr('src').includes('paste.png');
                             if (isPaste) {
+                                //I20-1118: l'incolla passa dalla stessa strada dei criteri salvati (applicaCriterio):
+                                //chiave, operatore e valore dai campi nascosti della copia, poi la ricerca. Prima faceva
+                                //scattare il cambio della chiave, che svuotava il valore e lanciava la ricerca quando il
+                                //valore non c'era ancora, e non la rifaceva: la tendina restava su "Seleziona valore",
+                                //la descrizione senza valore e i conteggi a zero.
                                 const criterioCopia = JSON.parse(localStorage.getItem('criterioCopia'));
                                 if (criterioCopia) {
-                                    // Imposta chiave picker e hidden
-                                    Menu.setPickerValue(criterioHtml.find('.filtro-chiave'), criterioCopia.chiave, false);
-                                    criterioHtml.find('.filtro-chiave-hidden').val(criterioCopia.chiaveHidden || criterioCopia.chiave);
-
-                                    
-                                    criterioHtml.find('.filtro-chiave').trigger('change');
-                                    await Utility.sleep(10); // Attendi un momento per assicurarti che gli eventi di cambio siano gestiti
-                                    // Se la chiave in tendina è '' allora nascondi la tendina chiave e mostra l'hidden
-                                    if (criterioCopia.chiave === '' || criterioCopia.chiaveHidden === '') {
-                                        criterioHtml.find('.filtro-chiave').css({ display: 'none' });
-                                        criterioHtml.find('.filtro-chiave-hidden').css({ display: 'block' });
-                                        // assicura che l'operatore sia visibile
-                                        criterioHtml.find('.filtro-operatore').css({ display: 'block' });
-                                    }
-                                    // Trigger per mostrare/nascondere controlli in base alla chiave
-                                    // Imposta operatore
-                                    Menu.setPickerValue(criterioHtml.find('.filtro-operatore'), criterioCopia.operatore, false);
-
-                                    // Imposta valore hidden
-                                    criterioHtml.find('.filtro-valore-hidden').val(criterioCopia.valore);
-
-
-                                    // Imposta valore tendina (se presente) oppure campo testo
-                                    const campoAssociato = pluginMiddleware.getCampo("campiFiltro").find(c => c.campoAssociato === (criterioCopia.chiaveHidden || criterioCopia.chiave));
-                                    if (campoAssociato && isCampoData(campoAssociato)) {
-                                        criterioHtml.find('.filtro-valore-tendina').css({ display: 'none' });
-                                        showDatePickerForCampo(criterioHtml, criterioCopia.valore);
-                                    } else if (campoAssociato && campoAssociato.tendina) {
-                                        const valoreTendina = criterioCopia.valoreTendina != null ? criterioCopia.valoreTendina : criterioCopia.valore;
-
-                                        // Se il valore tendina è '', nascondi la tendina e mostra l'hidden
-                                        if (valoreTendina === '') {
-                                            criterioHtml.find('.filtro-valore-tendina').css({ display: 'none' });
-                                            criterioHtml.find('.filtro-valore-hidden').css({ display: 'block' });
-                                            hideDatePicker(criterioHtml);
-                                        } else {
-                                            Menu.setPickerValue(criterioHtml.find('.filtro-valore-tendina'), valoreTendina, false);
-                                            // se impostiamo la tendina, assicuriamoci che l'hidden sia nascosto
-                                            criterioHtml.find('.filtro-valore-hidden').css({ display: 'none' });
-                                            criterioHtml.find('.filtro-valore-tendina').css({ display: 'block' });
-                                            hideDatePicker(criterioHtml);
-                                        }
-                                    } else {
-                                        criterioHtml.find('.filtro-valore-hidden').css({ display: 'block' });
-                                        criterioHtml.find('.filtro-valore-tendina').css({ display: 'none' });
-                                        hideDatePicker(criterioHtml);
-                                    }
+                                    applicaCriterio({
+                                        chiave: criterioCopia.chiaveHidden || criterioCopia.chiave,
+                                        operatore: criterioCopia.operatore,
+                                        valore: criterioCopia.valore
+                                    });
 
                                     // Cambia icona in copia
                                     $(this).attr('src', 'images/copy.png');
                                     $(this).attr('title', 'Copia criterio filtro');
+
+                                    var resRicerca = await me.ricercaFiltro(criterioHtml.closest('.filtro'));
+                                    if (isTracciato) {
+                                        aggiornaTracciatoPostRicerca(resRicerca);
+                                    }
                                 } else {
                                     Modali.popup('Errore', 'Nessun criterio copiato trovato.');
                                 }
@@ -1687,6 +1655,14 @@ const filtri = {
                                 if (campoByLabel != null) {
                                     selectedValue = campoByLabel.campoAssociato;
                                 }
+                            }
+
+                            //I20-1118: un cambio che non cambia la chiave non svuota il criterio. UXP manda il
+                            //cambio anche quando la voce la sceglie il codice (l'incolla, con applicaCriterio), un
+                            //attimo dopo: arrivava qui e cancellava il valore appena incollato.
+                            const chiaveAttuale = String(chiaveHidden.val() || '').trim();
+                            if (selectedValue !== '' && selectedValue === chiaveAttuale) {
+                                return;
                             }
 
                             if (selectedValue === 'Valore Libero') {
@@ -1967,8 +1943,10 @@ const filtri = {
                 )
         );
 
-        if(criterio != null){
-            //se criterio non è null, significa che stiamo modificando un criterio esistente, quindi dobbiamo popolare i campi con i valori del criterio
+        //I20-1118: popola il criterio con chiave, operatore e valore. La usano i criteri salvati, alla
+        //creazione, e l'incolla di un criterio copiato: le due strade mostrano il criterio allo stesso modo.
+        const applicaCriterio = (criterio) => {
+            //popoliamo i campi con i valori del criterio
             criterioHtml.find('.filtro-chiave-hidden').val(criterio.chiave);
             //criterioHtml.find('.filtro-valore-hidden').text(criterio.chiave);
 
@@ -2063,6 +2041,11 @@ const filtri = {
                 
             }
 
+        };
+
+        if(criterio != null){
+            //se criterio non è null, significa che stiamo modificando un criterio esistente
+            applicaCriterio(criterio);
         }
 
         // Stato finale UI criterio: se la chiave e' di tipo data, il date picker deve restare visibile.
