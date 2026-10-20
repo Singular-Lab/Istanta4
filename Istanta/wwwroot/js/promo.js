@@ -887,8 +887,10 @@ class Promo {
 
         let me = this;
 
+        // Il report si chiede al controller: sta in path_to_import, che in Docker e' /data/imported_files/
+        // e non sotto wwwroot, quindi come file statico rispondeva 404.
         let rndVersion = Math.floor(Math.random() * 999999);
-        $.getJSON('imported_files/' + id_attivita + '/Report.json?v' + rndVersion, function (data) {
+        $.getJSON("/" + getWebAppRootFolder() + 'Tracciati/reportAttivita/' + id_attivita + '?v' + rndVersion, function (data) {
             console.log(data);
 
             me.repordDbCache = data;
@@ -1103,6 +1105,9 @@ class Promo {
 
             $("#ReportAttivita").modal("show");
             hideLoading();
+        }).fail(function (xhr) {
+            hideLoading();
+            alert(xhr.status === 404 ? "Report non disponibile per questa attività." : "Impossibile leggere il report dell'attività.");
         });
     }
 
