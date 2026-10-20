@@ -134,7 +134,10 @@ class InddEvents {
                     return;
                 }
 
-                if(document.getElementById("wrapper").clientWidth != lastWidthDimension || document.getElementById("wrapper").clientHeight != lastHeightDimension){
+                //I20-1116, lotto 2: anche la larghezza del pannello. Nella vista affiancata #wrapper
+                //resta fermo alla larghezza di sinistra, e allargare o stringere il pannello non si vedrebbe.
+                if(document.getElementById("wrapper").clientWidth != lastWidthDimension || document.getElementById("wrapper").clientHeight != lastHeightDimension
+                    || (typeof SchermataSegnalazioni !== "undefined" && SchermataSegnalazioni.larghezzaPannello() != lastPannelloDimension)){
                     onresizeWindow();
                 }
 

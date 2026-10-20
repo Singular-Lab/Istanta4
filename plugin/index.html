@@ -294,16 +294,7 @@
             <h5 id="nomeKitInLavorazione" style="color:white; font-size: 10px;"></h5>
           </div>
           <div id="kitSelezionato" style="width: 100%; display: flex; justify-content: flex-end; margin:0px; align-items: center;">
-            <!--I20-1116: il segnalino delle segnalazioni di impaginazione, sotto il nome del kit, visibile da
-                ogni sezione perche' la testata e' fissa (segnalazioni/schermata.js, aggiornaIcona). Basso, per
-                allungare il meno possibile la testata, che sta sopra uno spazio di altezza fissa.
-                Il segnalibro e' una linguetta: angoli di destra arrotondati e una banda scura a sinistra.
-                Una coda a rondine fatta coi bordi, in UXP, non si vedeva.-->
-            <div id="segnalinoSegnalazioni" style="display: none; flex-shrink: 0; height: 14px; margin-top: 2px; cursor: pointer;"
-              onclick="SchermataSegnalazioni.apriDalSegnalino()">
-              <span id="testoSegnalinoSegnalazioni" style="padding: 0 8px 0 5px; border-left: 3px solid rgba(0, 0, 0, 0.35); border-radius: 0 7px 7px 0; color: white; font-size: 10px; font-weight: bold; line-height: 14px; white-space: nowrap; background-color: #c62828;"></span>
-            </div>
-
+            
           </div>
         </div>
         <div class="row" id="messaggiUtente" style="position: fixed; width:95%; align-self: self-start;">
@@ -327,6 +318,21 @@
               onclick="jsIndexControls.changeImage($(this)), jsIndexControls.changeSubMenu('Tab12', true)">
             <img id="artworkTab" src="images/header_artwork_button.png" active="false" subTab="Tab9" style="cursor:pointer; padding-left: 2px;  display: none;"
               onclick="jsIndexControls.changeImage($(this)), jsIndexControls.changeSubMenu('Tab9', true)">
+          </div>
+        </div>
+        <!--I20-1116: il segnalino delle segnalazioni di impaginazione, in fondo alla riga delle linguette e
+            centrato con loro, visibile da ogni sezione perche' la testata e' fissa (segnalazioni/schermata.js,
+            aggiornaIcona). L'appoggio e' largo zero e alto quanto la riga: la riga non si allunga, e la
+            testata, fissa sopra uno spazio di altezza fissa (#spazioHeader), non copre il contenuto.
+            Il segnalibro esce dal bordo destro del pannello e lo avvolge: arrotondato a sinistra, dritto a
+            destra con una piega scura sul bordo. E' fisso con right 0: lo aggancia al bordo del pannello il
+            motore grafico, come la colonna della vista affiancata; le misure del layout, in UXP, non tornavano
+            e il testo veniva tagliato. _allineaSegnalino lo mette all'altezza della riga e, nella vista
+            affiancata, contro la colonna. Una coda a rondine fatta coi bordi, in UXP, non si vedeva.-->
+        <div id="appoggioSegnalino" style="position: relative; width: 0px; margin-left: auto; align-self: stretch;">
+          <div id="segnalinoSegnalazioni" style="display: none; position: fixed; right: 0px; height: 27px; align-items: center; cursor: pointer;"
+            onclick="SchermataSegnalazioni.apriDalSegnalino()">
+            <span id="testoSegnalinoSegnalazioni" style="padding: 0 10px 0 9px; border-right: 3px solid rgba(0, 0, 0, 0.35); border-radius: 8px 0 0 8px; color: white; font-size: 10px; font-weight: bold; line-height: 16px; white-space: nowrap; background-color: #c62828;"></span>
           </div>
         </div>
       </div>

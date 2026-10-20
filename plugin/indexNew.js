@@ -6346,6 +6346,8 @@ var currentTimeoutId = null;
 tracciatoVisualizzato = false;
 lastWidthDimension = 0;
 lastHeightDimension = 0;
+//I20-1116, lotto 2: la larghezza del pannello all'ultimo onresizeWindow, per la vista affiancata.
+lastPannelloDimension = 0;
 
 
 
@@ -10626,6 +10628,9 @@ async function logout(){
 function onresizeWindow(){
     try{
         setTimeout(function () {
+            //I20-1116, lotto 2: prima le larghezze: la vista affiancata restringe #wrapper e le barre fisse.
+            lastPannelloDimension = SchermataSegnalazioni.larghezzaPannello();
+            SchermataSegnalazioni.adattaVista();
             lastWidthDimension = document.getElementById("wrapper").clientWidth;
             lastHeightDimension = document.getElementById("wrapper").clientHeight;
             footerHeight = document.getElementById("footer").clientHeight;
