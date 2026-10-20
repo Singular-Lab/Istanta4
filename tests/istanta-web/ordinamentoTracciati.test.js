@@ -205,7 +205,8 @@ test('senza il modulo gli elenchi si disegnano comunque', () => {
 
     const usi = [...promo.matchAll(/ordinamentoTracciati\.\w+\(/g)].map(trovato => trovato.index);
 
-    assert.strictEqual(usi.length, 2, 'due usi del modulo: le promo e i tracciati');
+    //I20-1119: il terzo uso e' il contesto del tracciato, sotto la stessa protezione.
+    assert.strictEqual(usi.length, 3, 'tre usi del modulo: le promo, i tracciati e il loro contesto');
 
     for (const uso of usi) {
         const protezione = promo.lastIndexOf(guardia, uso);
@@ -222,4 +223,49 @@ test('il layout carica il modulo prima di promo.js', () => {
 
     assert.ok(modulo > 0, 'senza il tag lo script non esiste nella pagina');
     assert.ok(modulo < pagina, 'promo.js lo usa mentre disegna, deve essere gia\' caricato');
+});
+
+/* ---- I20-1119: tracciati con la stessa sigla, distinti dal contesto ---- */
+
+const CONTESTO_MC = JSON.stringify([{ nome_field: 'tema', user_value: 'MC' }]);
+
+test('la voce di un tracciato porta la sigla e il suo contesto', () => {
+    assert.strictEqual(ordinamentoTracciati.etichetta({ sigla: 'SCTO', context: CONTESTO_MC }), 'SCTO · tema: MC');
+    assert.strictEqual(ordinamentoTracciati.etichetta({
+        sigla: 'SCTO',
+        context: JSON.stringify([{ nome_field: 'materiale', user_value: 'BB' }, { nome_field: 'tema', user_value: 'RIC' }])
+    }), 'SCTO · materiale: BB, tema: RIC');
+});
+
+test('due tracciati SC/TO con tema diverso hanno voci diverse', () => {
+    const mc = ordinamentoTracciati.etichetta({ sigla: 'SCTO', context: CONTESTO_MC });
+    const ric = ordinamentoTracciati.etichetta({ sigla: 'SCTO', context: JSON.stringify([{ nome_field: 'tema', user_value: 'RIC' }]) });
+    assert.notStrictEqual(mc, ric);
+});
+
+test('senza contesto, o con un contesto che non si legge, resta la sola sigla', () => {
+    assert.strictEqual(ordinamentoTracciati.etichetta({ sigla: 'SCSA', context: null }), 'SCSA');
+    assert.strictEqual(ordinamentoTracciati.etichetta({ sigla: 'SCSA', context: '' }), 'SCSA');
+    assert.strictEqual(ordinamentoTracciati.etichetta({ sigla: 'SCSA', context: '[]' }), 'SCSA');
+    assert.strictEqual(ordinamentoTracciati.etichetta({ sigla: 'SCSA', context: '{rotto' }), 'SCSA');
+    //I valori vuoti non si mostrano.
+    assert.strictEqual(ordinamentoTracciati.etichetta({ sigla: 'SCSA', context: JSON.stringify([{ nome_field: 'tema', user_value: ' ' }]) }), 'SCSA');
+    assert.deepStrictEqual(ordinamentoTracciati.campiDelContesto(undefined), []);
+});
+
+test('il revisore scrive le voci con il contesto e ordina per sigla prima di crearle', () => {
+    const revisore = sorgente('Istanta/wwwroot/js/revisore.js').replace(/\r/g, '');
+    const compila = revisore.substring(revisore.indexOf('    compilaTracciati() {'), revisore.indexOf('    socketOnMessage(message) {'));
+    assert.strictEqual((compila.match(/\.text\(Revisore\.etichettaTracciato\(item\)\);/g) || []).length, 2);
+    assert.doesNotMatch(compila, /\.text\(item\.sigla\)/);
+    const ordina = compila.indexOf('ME.listTracciati = sender.agenzia.applicaSchemaDiOrdinamentoTracciati(ME.listTracciati, "sigla");');
+    assert.ok(ordina > 0 && ordina < compila.indexOf('Revisore.etichettaTracciato(item)'));
+    //Il vecchio riordino per testo delle voci non c'e' piu': con il contesto nel testo non riconoscerebbe la sigla.
+    assert.doesNotMatch(compila, /applicaSchemaDiOrdinamentoTracciati\(_list, ""\)/);
+    assert.match(revisore, /static etichettaTracciato\(tracciato\) \{[\s\S]*?ordinamentoTracciati\.etichetta\(tracciato\)/);
+});
+
+test('la pagina Tracciati mostra il contesto del tracciato, non solo quello della promo', () => {
+    const promo = sorgente('Istanta/wwwroot/js/promo.js').replace(/\r/g, '');
+    assert.match(promo, /ordinamentoTracciati\.campiDelContesto\(trItem\.context\)/);
 });

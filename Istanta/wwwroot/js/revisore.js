@@ -110,47 +110,22 @@
                 if (typeof result !== 'string') {
                     ME.listTracciati = ME.listTracciati.concat(result);
 
+                    //I20-1119: l'ordine per canale e area si fa sulla sigla dei tracciati, prima di creare
+                    //le voci. Il testo delle voci porta anche il contesto del tracciato, e lo schema
+                    //dell'agenzia riconosce solo la sigla: prima si riordinavano le voci per testo.
+                    if (sender.agenzia.applicaSchemaDiOrdinamentoTracciati != null) {
+                        ME.listTracciati = sender.agenzia.applicaSchemaDiOrdinamentoTracciati(ME.listTracciati, "sigla");
+                    }
+
                     var selectElement = $("#CmbTracciato");
 
                     // Aggiungi opzioni dinamicamente
                     ME.listTracciati.forEach(function (item) {
                         var optionElement = $("<option>")
                             .val(item.id)
-                            .text(item.sigla);
+                            .text(Revisore.etichettaTracciato(item));
                         selectElement.append(optionElement);
                     });
-
-                    //if (sender.agenzia.ordinaListaSelezioneTracciato != null) {
-                    //    sender.agenzia.ordinaListaSelezioneTracciato();
-                    //}
-
-                    if (sender.agenzia.applicaSchemaDiOrdinamentoTracciati != null) {
-                        const $select = $("#CmbTracciato");
-                        const $options = $select.find("option");
-                        const $firstOption = $options.filter('[value="0"]');
-
-                        let _list = [];
-                        $("#CmbTracciato").find("option").each(function () {
-                            let _lab = $(this)[0].label;
-                            if (_lab != "Tutti i tracciati") {
-                                _list.push(_lab);
-                            }
-                        });
-
-                        _list = sender.agenzia.applicaSchemaDiOrdinamentoTracciati(_list, "");
-
-
-                        let _optionsOrdered = [];
-                        for (let i = 0; i < _list.length; i++) {
-                            _optionsOrdered.push($("#CmbTracciato").find("option").filter(function () { return $(this).text() == _list[i]; }));
-                        }
-
-                        // Svuota e reinserisce le option
-                        $select.empty();
-                        if ($firstOption.length>0) $select.append($firstOption);
-                        $select.append(_optionsOrdered);
-
-                    }
 
                 }
                 else {
@@ -172,7 +147,7 @@
                         ME.listTracciati.forEach(function (item) {
                             var optionElement = $("<option>")
                                 .val(item.id)
-                                .text(item.sigla);
+                                .text(Revisore.etichettaTracciato(item));
                             selectElement.append(optionElement);
                         });
                         selectElement.val(idTracciati);
@@ -2758,6 +2733,17 @@
             && contiene(tipoGusto, [revisione.descrizione3, tracciato[descr3]])
             && contiene(grammatura, [revisione.descrizione4, tracciato[descr4]])
             && contiene(segmento, [tracciato["segmento"], tracciato["Referenza.Segmento"], segmentoArchivio]);
+    }
+
+    /// I20-1119: la voce di un tracciato nella lista "Seleziona Tracciato": la sigla e il contesto del
+    /// tracciato, "SCTO · tema: MC". Una promo puo' avere piu' tracciati con la stessa sigla, distinti
+    /// dal contesto, e con la sola sigla sembravano doppioni. La regola sta in ordinamentoTracciati.js,
+    /// condivisa con la pagina Tracciati; se non c'e' resta la sigla.
+    static etichettaTracciato(tracciato) {
+        if (typeof ordinamentoTracciati !== "undefined" && ordinamentoTracciati != null && typeof ordinamentoTracciati.etichetta === "function") {
+            return ordinamentoTracciati.etichetta(tracciato);
+        }
+        return tracciato != null && tracciato.sigla != null ? String(tracciato.sigla) : "";
     }
 
     /// I20-1069: se la risposta di una chiamata a Istanta non e' andata bene, lo dice all'operatore con il
