@@ -17,6 +17,11 @@
  * di cui non si trova l'importazione ha data ignota e finisce in fondo, senza scompaginare
  * l'ordine per sigla degli altri: meglio un posto prevedibile che un confronto inventato.
  *
+ * I20-1119: qui c'e' anche come si chiama un tracciato nelle liste. Una promo puo' avere piu'
+ * tracciati con lo stesso canale e area, distinti dal contesto del tracciato (per esempio il tema):
+ * l'importazione ne crea uno nuovo quando il contesto non coincide. Con la sola sigla sembravano
+ * doppioni, nel revisore e nella pagina Tracciati.
+ *
  * Il modulo non dipende dal browser. In Node si esporta per i test (tests/istanta-web).
  */
 
@@ -122,6 +127,50 @@ const ordinamentoTracciati = {
             return -1;
         }
         return b.istante - a.istante;
+    },
+
+    /// I20-1119: i campi di un contesto salvato ([{nome_field, user_value}], in JSON), come
+    /// "tema: MC". I valori vuoti si saltano; un contesto che manca o non si legge non ne ha.
+    campiDelContesto(contesto) {
+        let campi = contesto;
+        if (typeof contesto === "string") {
+            if (contesto.trim() === "") {
+                return [];
+            }
+            try {
+                campi = JSON.parse(contesto);
+            }
+            catch (e) {
+                return [];
+            }
+        }
+        if (!Array.isArray(campi)) {
+            return [];
+        }
+
+        const testi = [];
+        campi.forEach(campo => {
+            if (campo == null || campo.nome_field == null) {
+                return;
+            }
+            const valore = campo.user_value == null ? "" : String(campo.user_value).trim();
+            if (valore !== "") {
+                testi.push(campo.nome_field + ": " + valore);
+            }
+        });
+        return testi;
+    },
+
+    /// I20-1119: il nome del tracciato nelle liste: la sigla e il suo contesto, "SCTO · tema: MC".
+    /// Senza contesto resta la sola sigla.
+    etichetta(tracciato) {
+        if (tracciato == null) {
+            return "";
+        }
+        const sigla = tracciato.sigla != null ? tracciato.sigla : (tracciato.Sigla != null ? tracciato.Sigla : "");
+        const contesto = tracciato.context != null ? tracciato.context : tracciato.Context;
+        const campi = ordinamentoTracciati.campiDelContesto(contesto);
+        return campi.length > 0 ? sigla + " · " + campi.join(", ") : String(sigla);
     }
 
 };
