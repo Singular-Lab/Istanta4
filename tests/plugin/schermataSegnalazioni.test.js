@@ -768,3 +768,122 @@ test("il numero si vede accanto al codice dei Cambiati e degli Eliminati, e si r
     //Nella vista whitelist il numero e' quello del report.
     assert.match(flussoReport, /filtered\.segnalazioniImpaginazione = reportRecord\.segnalazioniImpaginazione;/);
 });
+
+/* ---- I20-1116: il segnalino delle segnalazioni nella testata ---- */
+
+//Un jQuery finto per il segnalino e l'icona: gli elementi per selettore, con quello che
+//aggiornaIcona usa (text, css, attr). Registra l'ultimo stato di ciascuno.
+function testataFinta() {
+    const elemento = () => {
+        const el = { length: 1, testo: "", stile: {}, attributi: {} };
+        el.text = (t) => { el.testo = t; return el; };
+        el.css = (s) => { Object.assign(el.stile, s); return el; };
+        el.attr = (n, v) => { el.attributi[n] = v; return el; };
+        return el;
+    };
+    const elementi = {
+        "#segnalinoSegnalazioni": elemento(),
+        "#testoSegnalinoSegnalazioni": elemento(),
+        "#iconaSegnalazioniImpaginazione": elemento()
+    };
+    return { elementi, $: (sel) => elementi[sel] || { length: 0 } };
+}
+
+function conTestata(documento, fn) {
+    const testata = testataFinta();
+    const prima = { $: global.$, docInLavorazione: global.docInLavorazione };
+    global.$ = testata.$;
+    global.docInLavorazione = documento;
+    try {
+        fn(testata.elementi);
+    }
+    finally {
+        global.$ = prima.$;
+        global.docInLavorazione = prima.docInLavorazione;
+        SchermataSegnalazioni._ultimoControllo = null;
+    }
+}
+
+test("I20-1116: il segnalino dice quante segnalazioni, col colore della piu' grave", () => {
+    const stato = SchermataSegnalazioni.statoSegnalino({ segnalazioni: 3, errori: 1, gravita: "error" });
+    assert.strictEqual(stato.visibile, true);
+    assert.strictEqual(stato.testo, "3 segnalazioni");
+    assert.strictEqual(stato.colore, "#c62828");
+    assert.strictEqual(stato.suggerimento, "3 segnalazioni irrisolte (1 errore) all'ultimo controllo: clicca per aprire le segnalazioni");
+
+    const soloWarning = SchermataSegnalazioni.statoSegnalino({ segnalazioni: 1, errori: 0, gravita: "warning" });
+    assert.strictEqual(soloWarning.testo, "1 segnalazione");
+    assert.strictEqual(soloWarning.colore, "#ef6c00");
+});
+
+test("I20-1116: senza segnalazioni il segnalino non si vede", () => {
+    assert.strictEqual(SchermataSegnalazioni.statoSegnalino({ segnalazioni: 0, errori: 0, gravita: null }).visibile, false);
+    assert.strictEqual(SchermataSegnalazioni.statoSegnalino(null).visibile, false);
+});
+
+test("I20-1116: l'icona del menabo' e il segnalino si aggiornano insieme, e spariscono insieme", () => {
+    conTestata({ id: 7 }, (el) => {
+        SchermataSegnalazioni.registraControllo("id:7", [lettura("3", "error"), lettura("5", "warning")]);
+        SchermataSegnalazioni.aggiornaIcona();
+        assert.strictEqual(el["#segnalinoSegnalazioni"].stile.display, "flex");
+        assert.strictEqual(el["#testoSegnalinoSegnalazioni"].testo, "2 segnalazioni");
+        assert.strictEqual(el["#testoSegnalinoSegnalazioni"].stile.backgroundColor, "#c62828");
+        assert.strictEqual(el["#iconaSegnalazioniImpaginazione"].testo, "2");
+
+        //Tutto risolto: le pagine rilette a zero.
+        SchermataSegnalazioni.registraControllo("id:7", [], ["3", "5"]);
+        SchermataSegnalazioni.aggiornaIcona();
+        assert.strictEqual(el["#segnalinoSegnalazioni"].stile.display, "none");
+        assert.strictEqual(el["#iconaSegnalazioniImpaginazione"].stile.display, "none");
+    });
+});
+
+test("I20-1116: con un altro documento il segnalino del documento controllato non resta", () => {
+    conTestata({ id: 8 }, (el) => {
+        SchermataSegnalazioni.registraControllo("id:7", [lettura("3", "error")]);
+        SchermataSegnalazioni.aggiornaIcona();
+        assert.strictEqual(el["#segnalinoSegnalazioni"].stile.display, "none");
+    });
+});
+
+test("I20-1116: il clic sul segnalino apre tutto il documento, non con la scheda in vista controllata", async () => {
+    const apri = SchermataSegnalazioni.apri;
+    const prima = global.indesignEvents;
+    const aperture = [];
+    SchermataSegnalazioni.apri = (opzioni) => { aperture.push(opzioni); return Promise.resolve(true); };
+    try {
+        global.indesignEvents = { vistaControllataAperta: () => false };
+        assert.strictEqual(await SchermataSegnalazioni.apriDalSegnalino(), true);
+        //Senza opzioni: tutto il documento, col caricamento, come dal pulsante del menabo'.
+        assert.deepStrictEqual(aperture, [undefined]);
+
+        global.indesignEvents = { vistaControllataAperta: () => true };
+        assert.strictEqual(await SchermataSegnalazioni.apriDalSegnalino(), false);
+        assert.strictEqual(aperture.length, 1);
+    }
+    finally {
+        SchermataSegnalazioni.apri = apri;
+        global.indesignEvents = prima;
+    }
+});
+
+test("I20-1116: il segnalino sta nella testata sotto il nome del kit, nascosto finche' non ci sono segnalazioni", () => {
+    const html = leggiFileDelPlugin("index.html").replace(/\r/g, "");
+    const testata = html.substring(html.indexOf('<div id="UserAndTracciato"'), html.indexOf('<div class="row" id="messaggiUtente"'));
+    //Nella riga sua, sotto quella del nome del kit, non accanto.
+    const rigaKit = testata.substring(testata.indexOf('<div id="rigaSelezioneTracciato"'), testata.indexOf('<div id="kitSelezionato"'));
+    assert.match(rigaKit, /id="nomeKitInLavorazione"/);
+    assert.doesNotMatch(rigaKit, /segnalinoSegnalazioni/);
+    const sotto = testata.substring(testata.indexOf('<div id="kitSelezionato"'));
+    assert.match(sotto, /<div id="segnalinoSegnalazioni" style="display: none;[^"]*"\s*onclick="SchermataSegnalazioni\.apriDalSegnalino\(\)">\s*<span id="testoSegnalinoSegnalazioni"/);
+    //La testata e' fissa: il segnalino e' dentro, quindi resta visibile cambiando sezione.
+    const intestazione = html.substring(html.indexOf('<div id="header"'), html.indexOf('<div class="row" id="messaggiUtente"'));
+    assert.match(html.substring(html.indexOf('<div id="header"'), html.indexOf('<div id="header"') + 200), /position: fixed;/);
+    assert.match(intestazione, /id="segnalinoSegnalazioni"/);
+});
+
+test("I20-1116: cambiando documento o restando senza, il segnalino si riallinea", () => {
+    const indexNew = leggiFileDelPlugin("indexNew.js").replace(/\r/g, "");
+    assert.match(indexNew, /docInLavorazione = args\[0\];[\s\S]{0,400}\$\("#nomeKitInLavorazione"\)\.text\(""\);\s*\/\/I20-1116[^\n]*\n\s*SchermataSegnalazioni\.aggiornaIcona\(\);\s*await initDocumentInLavorazione\(\);/);
+    assert.match(indexNew, /docInLavorazione = null;\s*\$\("#nomeKitInLavorazione"\)\.text\(""\);\s*\/\/I20-1116[^\n]*\n\s*SchermataSegnalazioni\.aggiornaIcona\(\);/);
+});

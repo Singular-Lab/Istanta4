@@ -506,6 +506,8 @@ indesignEvents.addEventListener(indesignEvents.EVENT_NEW_DOCUMENT_SELECTED, asyn
     //}
 
     $("#nomeKitInLavorazione").text("");
+    //I20-1116: il segnalino della testata e l'icona del menabo' erano del documento di prima.
+    SchermataSegnalazioni.aggiornaIcona();
 
     await initDocumentInLavorazione();
     if (docInLavorazione==null)
@@ -540,6 +542,8 @@ indesignEvents.addEventListener(indesignEvents.EVENT_NO_DOCUMENT_OPENED, async f
         docInLavorazione = null;
 
         $("#nomeKitInLavorazione").text("");
+        //I20-1116: senza documento il segnalino della testata non ha niente da contare.
+        SchermataSegnalazioni.aggiornaIcona();
         $("#dialogSelectKit").css("display","none");        
         $("#wrapper").css("display","block");
     }

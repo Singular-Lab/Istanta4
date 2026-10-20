@@ -294,7 +294,16 @@
             <h5 id="nomeKitInLavorazione" style="color:white; font-size: 10px;"></h5>
           </div>
           <div id="kitSelezionato" style="width: 100%; display: flex; justify-content: flex-end; margin:0px; align-items: center;">
-            
+            <!--I20-1116: il segnalino delle segnalazioni di impaginazione, sotto il nome del kit, visibile da
+                ogni sezione perche' la testata e' fissa (segnalazioni/schermata.js, aggiornaIcona). Basso, per
+                allungare il meno possibile la testata, che sta sopra uno spazio di altezza fissa.
+                Il segnalibro e' una linguetta: angoli di destra arrotondati e una banda scura a sinistra.
+                Una coda a rondine fatta coi bordi, in UXP, non si vedeva.-->
+            <div id="segnalinoSegnalazioni" style="display: none; flex-shrink: 0; height: 14px; margin-top: 2px; cursor: pointer;"
+              onclick="SchermataSegnalazioni.apriDalSegnalino()">
+              <span id="testoSegnalinoSegnalazioni" style="padding: 0 8px 0 5px; border-left: 3px solid rgba(0, 0, 0, 0.35); border-radius: 0 7px 7px 0; color: white; font-size: 10px; font-weight: bold; line-height: 14px; white-space: nowrap; background-color: #c62828;"></span>
+            </div>
+
           </div>
         </div>
         <div class="row" id="messaggiUtente" style="position: fixed; width:95%; align-self: self-start;">

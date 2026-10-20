@@ -16,7 +16,11 @@
  *
  * Usa le globali di indexNew come gli altri moduli: $, Modali, Utility, app, docInLavorazione,
  * messaggioUtente, aggiornaBadgeSegnalazioniTracciato (lotto 3). Le funzioni che non toccano il
- * documento (perPagina, conta, coloreCss, testoRiepilogo, codiciAbbreviati) sono pure.
+ * documento (perPagina, conta, coloreCss, testoRiepilogo, codiciAbbreviati, statoSegnalino) sono pure.
+ *
+ * I20-1116: oltre all'icona del menabo', il segnalino a segnalibro nella testata, sotto il nome
+ * utente: stessi numeri e stesso colore, aggiornato insieme all'icona, visibile da ogni sezione
+ * del Plugin. Cliccandolo si apre la schermata di tutto il documento, come dal pulsante.
  */
 
 const Segnalazioni = require('./segnalazioni');
@@ -46,6 +50,10 @@ const SchermataSegnalazioni = {
 
     /// I20-1056, lotto 3: l'icona del pulsante Segnalazioni del menabo'.
     ID_ICONA: "iconaSegnalazioniImpaginazione",
+
+    /// I20-1116: il segnalino della testata, sotto il nome utente, e il suo testo.
+    ID_SEGNALINO: "segnalinoSegnalazioni",
+    ID_TESTO_SEGNALINO: "testoSegnalinoSegnalazioni",
 
     /// I20-1056, lotto 3: l'ultimo controllo dei bollini del documento, pagina per pagina:
     /// { chiave, pagine: { nome: { segnalazioni, errori, gravita } } }. Solo i numeri: i dati della
@@ -332,15 +340,31 @@ const SchermataSegnalazioni = {
         return testo + " all'ultimo controllo";
     },
 
+    /// I20-1116: come mostrare il segnalino della testata dal riepilogo dell'ultimo controllo:
+    /// { visibile, testo, colore, suggerimento }. Senza segnalazioni non si vede.
+    statoSegnalino(riepilogo) {
+        if (riepilogo == null || !(riepilogo.segnalazioni > 0)) {
+            return { visibile: false, testo: "", colore: null, suggerimento: "" };
+        }
+        return {
+            visibile: true,
+            testo: riepilogo.segnalazioni + (riepilogo.segnalazioni === 1 ? " segnalazione" : " segnalazioni"),
+            colore: SchermataSegnalazioni.coloreCss(riepilogo.gravita),
+            suggerimento: SchermataSegnalazioni.testoIcona(riepilogo) + ": clicca per aprire le segnalazioni"
+        };
+    },
+
     /// L'icona numerata del pulsante Segnalazioni: rossa con almeno un errore, arancione con soli
-    /// warning, nascosta senza segnalazioni.
+    /// warning, nascosta senza segnalazioni. I20-1116: insieme a lei il segnalino della testata.
+    /// Un documento diverso da quello controllato (o nessun documento) li nasconde entrambi.
     aggiornaIcona() {
         try {
+            const riepilogo = SchermataSegnalazioni.riepilogoControllo(Segnalazioni._chiaveDocumento(SchermataSegnalazioni._documento()));
+            SchermataSegnalazioni._aggiornaSegnalino(riepilogo);
             const icona = $("#" + SchermataSegnalazioni.ID_ICONA);
             if (icona.length === 0) {
                 return;
             }
-            const riepilogo = SchermataSegnalazioni.riepilogoControllo(Segnalazioni._chiaveDocumento(SchermataSegnalazioni._documento()));
             if (riepilogo.segnalazioni === 0) {
                 icona.text("").attr('title', "").css({ display: 'none' });
                 return;
@@ -352,6 +376,37 @@ const SchermataSegnalazioni = {
         catch (e) {
             //l'icona non deve fermare niente
         }
+    },
+
+    /// I20-1116: il segnalino a segnalibro, una linguetta col testo colorata con la gravita'.
+    _aggiornaSegnalino(riepilogo) {
+        const segnalino = $("#" + SchermataSegnalazioni.ID_SEGNALINO);
+        if (segnalino.length === 0) {
+            return;
+        }
+        const stato = SchermataSegnalazioni.statoSegnalino(riepilogo);
+        if (!stato.visibile) {
+            segnalino.attr('title', "").css({ display: 'none' });
+            return;
+        }
+        $("#" + SchermataSegnalazioni.ID_TESTO_SEGNALINO).text(stato.testo).css({ backgroundColor: stato.colore });
+        segnalino.attr('title', stato.suggerimento).css({ display: 'flex' });
+    },
+
+    /// I20-1116: il clic sul segnalino apre la schermata di tutto il documento, come il pulsante
+    /// del menabo'. Con una scheda in vista controllata (dal Report Integrita' o da qui) non fa
+    /// niente: si esce da quella con la sua X, e un popup sopra la lascerebbe a meta'.
+    apriDalSegnalino() {
+        try {
+            if (typeof indesignEvents !== "undefined" && indesignEvents != null
+                && typeof indesignEvents.vistaControllataAperta === "function" && indesignEvents.vistaControllataAperta()) {
+                return Promise.resolve(false);
+            }
+        }
+        catch (e) {
+            //senza eventi non c'e' vista controllata
+        }
+        return SchermataSegnalazioni.apri();
     },
 
     /// Riempie l'elenco rileggendo il documento, o le sole pagine con cui la schermata si e'
