@@ -16,7 +16,19 @@
  *
  * Usa le globali di indexNew come gli altri moduli: $, Modali, Utility, app, docInLavorazione,
  * messaggioUtente, aggiornaBadgeSegnalazioniTracciato (lotto 3). Le funzioni che non toccano il
- * documento (perPagina, conta, coloreCss, testoRiepilogo, codiciAbbreviati) sono pure.
+ * documento (perPagina, conta, coloreCss, testoRiepilogo, codiciAbbreviati, statoSegnalino) sono pure.
+ *
+ * I20-1116: oltre all'icona del menabo', il segnalino a segnalibro nella testata, in fondo alla riga
+ * delle linguette e attaccato al bordo destro del pannello: stessi numeri e stesso colore,
+ * aggiornato insieme all'icona, visibile da ogni sezione
+ * del Plugin. Cliccandolo si apre la schermata di tutto il documento, come dal pulsante.
+ *
+ * I20-1116, lotto 2: la vista affiancata. Con il pannello largo almeno il doppio della sua
+ * larghezza minima la schermata non e' un popup ma una colonna fissa a destra, non modale: a
+ * sinistra il Plugin resta com'e', alla larghezza minima, e si usa insieme alla colonna. Gli
+ * elementi fissi del Plugin che restano sempre a schermo (testata, barre in fondo, messaggi) si
+ * confinano a sinistra; le finestre modali restano a tutto pannello. adattaVista, chiamata da
+ * onresizeWindow, passa da popup a colonna e ritorno quando il pannello cambia larghezza.
  */
 
 const Segnalazioni = require('./segnalazioni');
@@ -46,6 +58,23 @@ const SchermataSegnalazioni = {
 
     /// I20-1056, lotto 3: l'icona del pulsante Segnalazioni del menabo'.
     ID_ICONA: "iconaSegnalazioniImpaginazione",
+
+    /// I20-1116: il segnalino della testata, in fondo alla riga delle linguette, e il suo testo.
+    ID_SEGNALINO: "segnalinoSegnalazioni",
+    ID_TESTO_SEGNALINO: "testoSegnalinoSegnalazioni",
+
+    /// I20-1116, lotto 2: la vista affiancata. La larghezza minima del pannello (manifest.json) e'
+    /// quella con cui il Plugin resta a sinistra; dal doppio in su la schermata diventa colonna.
+    LARGHEZZA_SINISTRA: 524,
+    SOGLIA_AFFIANCATA: 1048,
+    /// Il margine del corpo della pagina: gli elementi fissi senza left partono da li'.
+    MARGINE_CORPO: 8,
+    ID_COLONNA: "colonnaSegnalazioni",
+    TITOLO: "Segnalazioni di impaginazione",
+
+    /// Gli elementi fissi che restano a schermo, con la larghezza originale, finche' la colonna e'
+    /// aperta: { elemento, larghezza }.
+    _confinati: null,
 
     /// I20-1056, lotto 3: l'ultimo controllo dei bollini del documento, pagina per pagina:
     /// { chiave, pagine: { nome: { segnalazioni, errori, gravita } } }. Solo i numeri: i dati della
@@ -167,8 +196,13 @@ const SchermataSegnalazioni = {
             const conteggio = $('<span></span>').css({ fontSize: '12px', fontWeight: 'normal', color: '#555' });
             elenco.data('conteggio', conteggio);
             SchermataSegnalazioni._disegna(elenco, lette, pagine);
+            //I20-1116, lotto 2: a pannello largo una colonna a destra invece del popup.
+            if (SchermataSegnalazioni.formaSchermata(SchermataSegnalazioni.larghezzaPannello()) === "colonna") {
+                SchermataSegnalazioni._apriColonna(elenco);
+                return true;
+            }
             //Il popup aspetta finche' non lo si chiude: non si aspetta qui.
-            Modali.popup("Segnalazioni di impaginazione", elenco, "xl", SchermataSegnalazioni.allaChiusura, null, conteggio);
+            Modali.popup(SchermataSegnalazioni.TITOLO, elenco, "xl", SchermataSegnalazioni.allaChiusura, null, conteggio);
             return true;
         }
         finally {
@@ -185,6 +219,162 @@ const SchermataSegnalazioni = {
         }
         catch (e) {
             //niente da chiudere
+        }
+        //I20-1116, lotto 2: o la colonna della vista affiancata.
+        SchermataSegnalazioni.chiudiColonna(false);
+    },
+
+    /// I20-1116, lotto 2: la larghezza del pannello. Non quella di #wrapper, che nella vista
+    /// affiancata resta ferma alla larghezza di sinistra.
+    larghezzaPannello() {
+        try {
+            const candidati = [
+                typeof window !== "undefined" ? window.innerWidth : 0,
+                typeof document !== "undefined" && document.documentElement != null ? document.documentElement.clientWidth : 0,
+                typeof document !== "undefined" && document.body != null ? document.body.clientWidth : 0
+            ];
+            const trovata = candidati.find(l => l > 0);
+            return trovata != null ? trovata : 0;
+        }
+        catch (e) {
+            return 0;
+        }
+    },
+
+    /// I20-1116, lotto 2: popup o colonna, dalla larghezza del pannello.
+    formaSchermata(larghezzaPannello) {
+        return larghezzaPannello >= SchermataSegnalazioni.SOGLIA_AFFIANCATA ? "colonna" : "popup";
+    },
+
+    /// I20-1116, lotto 2: dove comincia la colonna: dopo il Plugin di sinistra e il margine del corpo.
+    inizioColonna() {
+        return SchermataSegnalazioni.LARGHEZZA_SINISTRA + SchermataSegnalazioni.MARGINE_CORPO;
+    },
+
+    /// I20-1116, lotto 2: gli elementi fissi sempre a schermo e la larghezza che prendono nella
+    /// vista affiancata. #footer ha 5px di riempimento per lato, che si aggiungono alla larghezza.
+    confinamenti(larghezzaSinistra = SchermataSegnalazioni.LARGHEZZA_SINISTRA) {
+        return [
+            { selettore: "#wrapper", larghezza: larghezzaSinistra },
+            { selettore: "#header", larghezza: larghezzaSinistra },
+            { selettore: "#footerRef", larghezza: larghezzaSinistra },
+            { selettore: "#footer", larghezza: larghezzaSinistra - 10 },
+            { selettore: "#messaggiUtente", larghezza: Math.round(larghezzaSinistra * 0.95) }
+        ];
+    },
+
+    /// I20-1116, lotto 2: confina a sinistra gli elementi fissi, o rimette la larghezza di prima.
+    /// Si tocca solo la larghezza: il resto dello stile puo' cambiare intanto, e deve restare.
+    _confinaPannello(confina) {
+        if (confina) {
+            if (SchermataSegnalazioni._confinati != null) {
+                return;
+            }
+            SchermataSegnalazioni._confinati = [];
+            SchermataSegnalazioni.confinamenti().forEach(voce => {
+                const elemento = document.querySelector(voce.selettore);
+                if (elemento == null) {
+                    return;
+                }
+                SchermataSegnalazioni._confinati.push({ elemento: elemento, larghezza: elemento.style.width });
+                elemento.style.width = voce.larghezza + "px";
+            });
+            return;
+        }
+        (SchermataSegnalazioni._confinati || []).forEach(voce => { voce.elemento.style.width = voce.larghezza; });
+        SchermataSegnalazioni._confinati = null;
+    },
+
+    /// I20-1116, lotto 2: la schermata come colonna fissa a destra, non modale: titolo, conteggio,
+    /// X e l'elenco che scorre. Sta sotto le finestre modali (popup 9000, conferme), che possono
+    /// coprirla finche' sono aperte, e sopra il resto del pannello.
+    _apriColonna(elenco) {
+        const colonna = $('<div></div>').attr('id', SchermataSegnalazioni.ID_COLONNA).css({
+            position: 'fixed', top: '0px', bottom: '0px', right: '0px', left: SchermataSegnalazioni.inizioColonna() + 'px',
+            backgroundColor: 'white', borderLeft: '2px solid #333', boxSizing: 'border-box', zIndex: '900',
+            display: 'flex', flexDirection: 'column'
+        });
+        const titolo = $('<div></div>').css({
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center', flex: '0 0 auto',
+            backgroundColor: '#f1f1f1', padding: '5px 8px', boxSizing: 'border-box'
+        });
+        const sinistra = $('<div></div>').css({ display: 'flex', alignItems: 'baseline', flexWrap: 'wrap', gap: '10px', minWidth: '0' });
+        //UXP non applica gap: lo spazio fra titolo e conteggio lo da' il margine.
+        sinistra.append($('<span></span>').text(SchermataSegnalazioni.TITOLO).css({ fontSize: '16px', fontWeight: 'bold', color: 'black', marginRight: '10px' }));
+        if (elenco.data('conteggio') != null) {
+            sinistra.append(elenco.data('conteggio'));
+        }
+        const chiudi = $('<button type="button"></button>').html('&times;')
+            .css({ backgroundColor: 'transparent', border: 'none', fontSize: '18px', cursor: 'pointer' })
+            .on('click', () => SchermataSegnalazioni.chiudiColonna(true));
+        titolo.append(sinistra).append(chiudi);
+        const corpo = $('<div></div>').css({ flex: '1 1 auto', minHeight: '0', overflowY: 'auto', padding: '8px', boxSizing: 'border-box' });
+        corpo.append(elenco);
+        colonna.append(titolo).append(corpo);
+        $("body").append(colonna);
+        SchermataSegnalazioni._confinaPannello(true);
+        SchermataSegnalazioni._allineaSegnalino();
+    },
+
+    /// I20-1116, lotto 2: chiude la colonna e rimette il Plugin a tutta larghezza. conAvviso: come
+    /// la X del popup, i badge del tracciato si ricolorano.
+    chiudiColonna(conAvviso = true) {
+        const colonna = $("#" + SchermataSegnalazioni.ID_COLONNA);
+        if (!(colonna.length > 0)) {
+            return false;
+        }
+        colonna.remove();
+        SchermataSegnalazioni._confinaPannello(false);
+        SchermataSegnalazioni._allineaSegnalino();
+        if (conAvviso) {
+            SchermataSegnalazioni.allaChiusura();
+        }
+        return true;
+    },
+
+    /// I20-1116, lotto 2: il pannello ha cambiato larghezza (onresizeWindow). Sotto la soglia la
+    /// colonna torna popup; sopra, il popup aperto diventa colonna. L'elenco si sposta com'e', con
+    /// le sue pagine e il suo conteggio. Con la scheda aperta da "Vai al box" in vista controllata
+    /// il popup e' staccato dalla pagina, e non si tocca: si riattacca alla chiusura della scheda.
+    adattaVista() {
+        //Il segnalino segue il bordo del pannello, anche quando la forma non cambia.
+        SchermataSegnalazioni._allineaSegnalino();
+        try {
+            const forma = SchermataSegnalazioni.formaSchermata(SchermataSegnalazioni.larghezzaPannello());
+            const colonna = $("#" + SchermataSegnalazioni.ID_COLONNA);
+            if (colonna.length > 0) {
+                if (forma === "colonna") {
+                    return;
+                }
+                const elenco = colonna.find("#" + SchermataSegnalazioni.ID_ELENCO).detach();
+                SchermataSegnalazioni.chiudiColonna(false);
+                Modali.popup(SchermataSegnalazioni.TITOLO, elenco, "xl", SchermataSegnalazioni.allaChiusura, null, elenco.data('conteggio'));
+                return;
+            }
+            if (forma !== "colonna" || SchermataSegnalazioni._schedaAperta != null) {
+                return;
+            }
+            const elenco = $("#" + SchermataSegnalazioni.ID_ELENCO);
+            const popup = elenco.closest("#popup");
+            if (elenco.length === 0 || popup.length === 0) {
+                return;
+            }
+            elenco.detach();
+            popup.remove();
+            Modali.mostraHidebleElements();
+            SchermataSegnalazioni._apriColonna(elenco);
+        }
+        catch (e) {
+            console.error("Code SGN-06 Vista delle segnalazioni non adattata al pannello:", e);
+        }
+    },
+
+    /// I20-1116, lotto 2: la colonna si rilegge quando il documento e' stato ricontrollato da fuori
+    /// (una risoluzione dalla scheda ref, un Reimpagina, un documento appena aperto).
+    _rileggiColonna() {
+        const elenco = $("#" + SchermataSegnalazioni.ID_COLONNA).find("#" + SchermataSegnalazioni.ID_ELENCO);
+        if (elenco.length > 0) {
+            SchermataSegnalazioni.riempi(elenco);
         }
     },
 
@@ -272,10 +462,12 @@ const SchermataSegnalazioni = {
             return;
         }
         SchermataSegnalazioni._leggi(pagine);
+        SchermataSegnalazioni._rileggiColonna();
     },
 
     controllaDocumento() {
         SchermataSegnalazioni._leggi(null);
+        SchermataSegnalazioni._rileggiColonna();
     },
 
     /// I20-1056, lotto 3: registra una lettura nell'ultimo controllo. Una lettura di tutto il
@@ -332,15 +524,31 @@ const SchermataSegnalazioni = {
         return testo + " all'ultimo controllo";
     },
 
+    /// I20-1116: come mostrare il segnalino della testata dal riepilogo dell'ultimo controllo:
+    /// { visibile, testo, colore, suggerimento }. Senza segnalazioni non si vede.
+    statoSegnalino(riepilogo) {
+        if (riepilogo == null || !(riepilogo.segnalazioni > 0)) {
+            return { visibile: false, testo: "", colore: null, suggerimento: "" };
+        }
+        return {
+            visibile: true,
+            testo: riepilogo.segnalazioni + (riepilogo.segnalazioni === 1 ? " segnalazione" : " segnalazioni"),
+            colore: SchermataSegnalazioni.coloreCss(riepilogo.gravita),
+            suggerimento: SchermataSegnalazioni.testoIcona(riepilogo) + ": clicca per aprire le segnalazioni"
+        };
+    },
+
     /// L'icona numerata del pulsante Segnalazioni: rossa con almeno un errore, arancione con soli
-    /// warning, nascosta senza segnalazioni.
+    /// warning, nascosta senza segnalazioni. I20-1116: insieme a lei il segnalino della testata.
+    /// Un documento diverso da quello controllato (o nessun documento) li nasconde entrambi.
     aggiornaIcona() {
         try {
+            const riepilogo = SchermataSegnalazioni.riepilogoControllo(Segnalazioni._chiaveDocumento(SchermataSegnalazioni._documento()));
+            SchermataSegnalazioni._aggiornaSegnalino(riepilogo);
             const icona = $("#" + SchermataSegnalazioni.ID_ICONA);
             if (icona.length === 0) {
                 return;
             }
-            const riepilogo = SchermataSegnalazioni.riepilogoControllo(Segnalazioni._chiaveDocumento(SchermataSegnalazioni._documento()));
             if (riepilogo.segnalazioni === 0) {
                 icona.text("").attr('title', "").css({ display: 'none' });
                 return;
@@ -352,6 +560,69 @@ const SchermataSegnalazioni = {
         catch (e) {
             //l'icona non deve fermare niente
         }
+    },
+
+    /// I20-1116: il segnalino a segnalibro, una linguetta col testo colorata con la gravita'.
+    _aggiornaSegnalino(riepilogo) {
+        const segnalino = $("#" + SchermataSegnalazioni.ID_SEGNALINO);
+        if (segnalino.length === 0) {
+            return;
+        }
+        const stato = SchermataSegnalazioni.statoSegnalino(riepilogo);
+        if (!stato.visibile) {
+            segnalino.attr('title', "").css({ display: 'none' });
+            return;
+        }
+        $("#" + SchermataSegnalazioni.ID_TESTO_SEGNALINO).text(stato.testo).css({ backgroundColor: stato.colore });
+        segnalino.attr('title', stato.suggerimento).css({ display: 'flex' });
+        SchermataSegnalazioni._allineaSegnalino();
+    },
+
+    /// I20-1116: il segnalino esce dal bordo destro del pannello, come un segnalibro che lo avvolge.
+    /// E' fisso con right 0 (index.html): al bordo lo aggancia il motore grafico, senza misure, perche'
+    /// le misure orizzontali del layout in UXP non tornavano e il testo veniva tagliato. Qui si fissa
+    /// solo l'altezza, quella della riga delle linguette, e nella vista affiancata il lato sinistro, cosi'
+    /// che finisca contro la colonna. Senza misure resta agganciato al bordo del pannello.
+    _allineaSegnalino() {
+        try {
+            const appoggio = document.getElementById("appoggioSegnalino");
+            const segnalino = document.getElementById(SchermataSegnalazioni.ID_SEGNALINO);
+            if (appoggio == null || segnalino == null) {
+                return;
+            }
+            const riga = appoggio.getBoundingClientRect();
+            if (riga != null && riga.height > 0) {
+                segnalino.style.top = Math.round(riga.top) + "px";
+            }
+            const larghezza = segnalino.offsetWidth || 0;
+            if ($("#" + SchermataSegnalazioni.ID_COLONNA).length > 0 && larghezza > 0) {
+                segnalino.style.right = "auto";
+                segnalino.style.left = Math.round(SchermataSegnalazioni.inizioColonna() - larghezza) + "px";
+            }
+            else {
+                segnalino.style.left = "auto";
+                segnalino.style.right = "0px";
+            }
+        }
+        catch (e) {
+            //resta dov'e'
+        }
+    },
+
+    /// I20-1116: il clic sul segnalino apre la schermata di tutto il documento, come il pulsante
+    /// del menabo'. Con una scheda in vista controllata (dal Report Integrita' o da qui) non fa
+    /// niente: si esce da quella con la sua X, e un popup sopra la lascerebbe a meta'.
+    apriDalSegnalino() {
+        try {
+            if (typeof indesignEvents !== "undefined" && indesignEvents != null
+                && typeof indesignEvents.vistaControllataAperta === "function" && indesignEvents.vistaControllataAperta()) {
+                return Promise.resolve(false);
+            }
+        }
+        catch (e) {
+            //senza eventi non c'e' vista controllata
+        }
+        return SchermataSegnalazioni.apri();
     },
 
     /// Riempie l'elenco rileggendo il documento, o le sole pagine con cui la schermata si e'
@@ -756,6 +1027,25 @@ const SchermataSegnalazioni = {
         return elenco;
     },
 
+    /// I20-1116: centra la finestra di InDesign sulla selezione senza cambiare lo zoom: riassegnare
+    /// lo zoom corrente la ricentra sugli oggetti selezionati. Se non riesce la selezione resta com'e'.
+    /// La finestra e' quella del documento: con il pannello flottante sopra, il centro puo' cadere
+    /// ancora sotto il Plugin; agganciato, la finestra e' lo spazio libero e il box si vede.
+    centraSullaSelezione(finestra) {
+        try {
+            if (finestra == null) {
+                return false;
+            }
+            const zoom = finestra.zoomPercentage;
+            finestra.zoomPercentage = zoom;
+            return true;
+        }
+        catch (e) {
+            console.error("Code SGN-07 Vista non centrata sul box:", e);
+            return false;
+        }
+    },
+
     /// Porta alla pagina del box e lo seleziona, come fa il Report Integrita'. false se non si puo'.
     _selezionaBox(box) {
         try {
@@ -763,6 +1053,8 @@ const SchermataSegnalazioni = {
                 app.activeWindow.activePage = box.parentPage;
             }
             app.selection = [box];
+            //I20-1116: la vista si centra sul box, che altrimenti puo' restare fuori o dietro il pannello.
+            SchermataSegnalazioni.centraSullaSelezione(app.activeWindow);
             return true;
         }
         catch (e) {
@@ -782,6 +1074,14 @@ const SchermataSegnalazioni = {
     vaiAlBox(box, elenco = null) {
         if (SchermataSegnalazioni._schedaAperta != null) {
             return false;
+        }
+
+        //I20-1116, lotto 2: dalla colonna della vista affiancata si seleziona soltanto il box: la
+        //scheda ref si apre a sinistra come per ogni selezione, con tutti i menu, e la colonna resta.
+        //Basta che la colonna sia aperta: la schermata e' una sola, quindi il pulsante e' suo.
+        //elenco.closest sulla colonna, in UXP, non la riconosceva, e si finiva nella vista controllata.
+        if ($("#" + SchermataSegnalazioni.ID_COLONNA).length > 0) {
+            return SchermataSegnalazioni._selezionaBox(box);
         }
 
         let dna = null;
