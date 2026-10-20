@@ -6,3 +6,7 @@
 
 # Il binario di Yarn versionato non va toccato dalla conversione dei fine riga.
 **/.yarn/releases/** binary
+
+# JSZip e' caricato con integrity sha512: un solo byte diverso (CRLF su Windows) e il
+# browser rifiuta lo script, e lo zip della sincronizzazione foto non parte.
+Istanta/wwwroot/lib/jszip/** -text

@@ -4,7 +4,7 @@
 }
 
 @inject Microsoft.AspNetCore.Http.IHttpContextAccessor HttpContextAccessor
-<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]" src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" integrity="sha512-XMVd28F1oH/O71fzwBnV7HucLxVwtxf26XV8P4wPk26EDxuGZ91N8bsOttmnomcCD3CS5ZMRL50H0GgOHvegtg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]" src="~/lib/jszip/dist/jszip.min.js" integrity="sha512-XMVd28F1oH/O71fzwBnV7HucLxVwtxf26XV8P4wPk26EDxuGZ91N8bsOttmnomcCD3CS5ZMRL50H0GgOHvegtg=="></script>
 
 <input type="hidden" id="ipUploadGate" value="@ViewBag.ipUploadGate" />
 <input type="hidden" id="ipOlympus" value="@ViewBag.ipOlympus" />
