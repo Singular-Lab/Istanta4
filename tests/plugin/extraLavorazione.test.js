@@ -191,7 +191,8 @@ test("la finestra delle differenze offre le azioni e rifa' l'analisi dopo; le de
     assert.match(testo, /me\.lampeggiaContenuto\(contenuto\);\s*await rifaiAnalisi\(\);/);
     assert.match(testo, /xhr\.send\("Menabo\/modificaExtraLavorazione\/0", formData, "PUT"\);/);
     //Il ricollegamento cambia solo il file del link, non il riquadro.
-    assert.match(testo, /link\.relink\(percorso\);\s*link\.update\(\);/);
+    //In UXP relink vuole l'URL file:// del percorso, non la stringa (foto da ricollegare, 21/10/2026).
+    assert.match(testo, /link\.relink\(this\.urlDiPercorso\(percorso\)\);\s*link\.update\(\);/);
     assert.doesNotMatch(testo.substring(testo.indexOf("async ricollegaAllImmagineDelServer("), testo.indexOf("aggiungiAzioniDifferenza(riga, diff, dopoAzione) {")), /\.fit\(|geometricBounds/);
 });
 

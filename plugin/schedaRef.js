@@ -4998,6 +4998,10 @@ const schedaRef = {
         if (this.campoTestoInMismatch(diff) != null) {
             return ["testoServer", "testoBox"];
         }
+        //Il collegamento della foto e' rotto ma il file sta nei Links: si ricollega da qui.
+        if (diff != null && diff.tipo === "linkRotto") {
+            return ["ricollegaLinks"];
+        }
         if (diff == null || diff.sigla == null || String(diff.sigla) === "") {
             return [];
         }
@@ -5313,7 +5317,8 @@ const schedaRef = {
             }
             var item = this.elementoExtraDelBox(diff.sigla, diff.nomeNelBox);
             var link = item.graphics.item(0).itemLink;
-            link.relink(percorso);
+            //Come in ricollegaAllaCartellaLinks: relink vuole l'URL file://, non la stringa.
+            link.relink(this.urlDiPercorso(percorso));
             link.update();
             messaggioUtente("Foto extra " + diff.sigla + ": ricollegata a " + diff.nomeServer, "success", false, 5);
             if (dopoAzione) {
@@ -5324,6 +5329,78 @@ const schedaRef = {
         catch (e) {
             console.error("Code SRF-105 Ricollegamento all'immagine del server non riuscito: " + e);
             messaggioUtente("Code SRF-105 Ricollegamento non riuscito: " + (e && e.message ? e.message : e), "error");
+            return false;
+        }
+    },
+
+    /// Il riquadro del box la cui immagine collegata ha quel nome di file, anche con il
+    /// collegamento rotto: il nome resta nel link. Null se non c'e'.
+    riquadroDellaFotoCollegata(nomeFile) {
+        var box = this.refSelected != null ? this.refSelected.item : null;
+        if (box == null || !box.isValid || nomeFile == null || String(nomeFile) === "") {
+            return null;
+        }
+        for (var i = 0; i < box.allPageItems.length; i++) {
+            var item = box.allPageItems[i];
+            try {
+                if (!item.isValid || item.constructorName !== "Rectangle" || item.graphics.length == 0) {
+                    continue;
+                }
+                var link = item.graphics.item(0).itemLink;
+                if (link != null && String(link.filePath).split("/").pop() == String(nomeFile)) {
+                    return item;
+                }
+            }
+            catch (e) {
+                //un elemento che non si legge non e' quello cercato
+            }
+        }
+        return null;
+    },
+
+    /// Il percorso nei Links a cui ricollegare una foto col collegamento rotto: quello che la
+    /// differenza porta (percorsoNeiLinks), altrimenti la cartella Links piu' il nome. Null senza nome.
+    percorsoNeiLinksPerRicollegare(diff) {
+        if (diff == null) {
+            return null;
+        }
+        if (diff.percorsoNeiLinks != null && String(diff.percorsoNeiLinks) !== "") {
+            return String(diff.percorsoNeiLinks);
+        }
+        var nome = diff.nomeFoto != null && String(diff.nomeFoto) !== "" ? String(diff.nomeFoto) : (diff.label != null ? String(diff.label) : "");
+        if (nome === "") {
+            return null;
+        }
+        var cartella = typeof percorsoLinks !== "undefined" && percorsoLinks != null ? String(percorsoLinks) : "";
+        return cartella + nome;
+    },
+
+    /// Ricollega il riquadro di una foto col collegamento rotto al file della cartella Links: il
+    /// riquadro resta dov'e' e com'e', cambia solo il file a cui punta. Poi rifa' l'analisi.
+    async ricollegaAllaCartellaLinks(diff, dopoAzione) {
+        try {
+            var nome = diff != null ? (diff.nomeFoto || diff.label || "") : "";
+            var percorso = this.percorsoNeiLinksPerRicollegare(diff);
+            var item = percorso != null ? this.riquadroDellaFotoCollegata(nome) : null;
+            if (item == null) {
+                messaggioUtente("Code SRF-129 Il riquadro della foto " + nome + " non si trova nel box: non ricollegato", "warning", false, 6);
+                return false;
+            }
+            var link = item.graphics.item(0).itemLink;
+            //In UXP relink vuole l'URL file:// del percorso: la stringa, che place accetta, viene
+            //respinta ("Impossibile creare la risorsa di collegamento dall'URI specificato"),
+            //almeno con gli spazi nel percorso. Provato dalla console il 21/10/2026.
+            link.relink(this.urlDiPercorso(percorso));
+            link.update();
+            messaggioUtente("Foto " + nome + ": ricollegata alla cartella Links", "success", false, 5);
+            if (dopoAzione) {
+                await dopoAzione();
+            }
+            return true;
+        }
+        catch (e) {
+            console.error("Code SRF-130 Ricollegamento alla cartella Links non riuscito: " + e);
+            messaggioUtente("Code SRF-130 Ricollegamento non riuscito: " + (e && e.message ? e.message : e), "error");
             return false;
         }
     },
@@ -5351,7 +5428,8 @@ const schedaRef = {
             testoServer: ["Scegli quella del server", "Il campo nel box riprende il testo del server, con i suoi stili"],
             testoBox: ["Scegli quella del box", "Il testo del box vale per questa lavorazione (come Salva modifiche): il box non cambia"],
             aggiornaMeta: ["Aggiorna meta", "Il meta resta: il testo del server di adesso diventa il suo valore originale, e il box non cambia"],
-            metaServer: ["Usa quella del server", "Il meta si toglie e il campo nel box riprende il testo del server, con i suoi stili"]
+            metaServer: ["Usa quella del server", "Il meta si toglie e il campo nel box riprende il testo del server, con i suoi stili"],
+            ricollegaLinks: ["Ricollega alla cartella Links", "Il riquadro resta dov'e': cambia solo il file a cui punta, quello della cartella Links della lavorazione"]
         };
         //I20-1075: i pulsanti a destra, sotto il problema a cui servono.
         var barra = $('<div></div>');
@@ -5377,6 +5455,9 @@ const schedaRef = {
                 try {
                     if (azione === "usaServer") {
                         await me.ricollegaAllImmagineDelServer(diff, dopoAzione);
+                    }
+                    else if (azione === "ricollegaLinks") {
+                        await me.ricollegaAllaCartellaLinks(diff, dopoAzione);
                     }
                     else if (azione === "noRender") {
                         await me.cambiaNoRenderDellAssenza(diff, true, dopoAzione);
