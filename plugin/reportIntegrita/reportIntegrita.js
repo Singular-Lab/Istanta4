@@ -28,6 +28,8 @@
 /// scaricaContenutoKitAsync, datiPrimarioPerConfronto, ...), come faceva confronti.js.
 
 const confronti = require('../confronti');
+//I20-1124: la versione precedente di un box rifatto, sul suo livello.
+const VersionePrecedente = require('../versionePrecedente');
 const XMLHttpRequestClient = require('../XMLHttpRequestClient');
 const { app, PDFExportOptions, CompressionQuality } = require('indesign');
 const fs = require('fs');
@@ -1101,6 +1103,13 @@ const ReportIntegrita = {
     /// al posto del report.
     async _apriSchedaDalReport(payloadId, payload) {
         if (this._schedaDalReport != null) {
+            return;
+        }
+
+        //I20-1124: la versione precedente di un box si seleziona e basta: la scheda non si apre,
+        //ne' in vista controllata ne' accanto al report.
+        if (reportIntegritaAvvio.eRecordVersionePrecedente(payload?.record)) {
+            this._findElemento(payload);
             return;
         }
 
@@ -2227,7 +2236,8 @@ const ReportIntegrita = {
 
                 dettagli.forEach(dettaglio => {
                     voci.push({
-                        stato: stato,
+                        //I20-1124: le versioni precedenti portano il contrassegno "Clone".
+                        stato: reportConfrontoCsv.statoVoce(stato, record?.versionePrecedente === true),
                         pagina: this._getReportRecordPage(record),
                         codiceGruppo: record?.codiceGruppo || "",
                         etichetta: dati.etichetta,
@@ -2676,6 +2686,10 @@ const ReportIntegrita = {
                 await this._apriSchedaDalReport(payloadId, payload);
                 break;
 
+            case "tornaInPagina":
+                await this._tornaInPaginaVersionePrecedente(payloadId, payload);
+                break;
+
             case "info":
                 this._openInfoReportRecord(payload.record);
                 break;
@@ -3095,6 +3109,13 @@ const ReportIntegrita = {
         messaggioUtente("Code CNF-023: " + riepilogo, errori > 0 ? "warning" : "success", false, 8);
     },
 
+    /// Il Fix di una riga: rifa' il box dal dato. I20-1124: e' un Reimpagina a tutti gli effetti.
+    /// Il box nuovo si ritrova su InPagina per codice gruppo e idRec, perche' il valore restituito
+    /// dall'impaginazione puo' essere un box che il confronto ha gia' rimosso; poi lo si rianalizza
+    /// come alla chiusura della scheda, e la riga resta finche' ha qualcosa da dire: a volte il
+    /// problema sopravvive alla reimpaginazione, ed e' un sintomo di agenzia o di meccanica che
+    /// si deve vedere. La versione precedente che il confronto ha tenuto entra subito fra i box da
+    /// eliminare, col contrassegno Clone, e il csv si riscrive.
     async _fixElemento(payloadId, payload) {
         const ok = await this._confirmReportAction("fixSingle", "Procedere con il fix di questa segnalazione?");
         if (!ok) return;
@@ -3130,20 +3151,224 @@ const ReportIntegrita = {
 
             rimuoviSimboli();
 
+            if (box == null) {
+                console.log("Fix non eseguito", payload);
+                return;
+            }
 
-            if (box != null){
+            const codiceGruppo = record?.codiceGruppo;
+            const idRec = record?.elementoMappa?.idRec != null ? record.elementoMappa.idRec : null;
+
+            let boxNuovo = VersionePrecedente.boxInPaginaPer(docInLavorazione, codiceGruppo, idRec, Utility.getDnaOfBox);
+            if (boxNuovo == null && box.boxAggiunto != null && box.boxAggiunto.isValid) {
+                boxNuovo = box.boxAggiunto;
+            }
+
+            if (boxNuovo == null) {
+                //Senza un box da rianalizzare la riga esce dal report, com'era prima.
                 await this._dissolviRiga(payloadId);
-
                 const key = this._getReportCategoryFromTipo(payload?.tipo);
                 this._removeRecordFromArray(this._confrontoReportState?.report?.[key], record);
                 this._removeConfrontoPayload(payloadId);
-                this._saveCurrentReportAndWhitelist();
-                this._refreshConfrontoReportUi();
             }
+            else {
+                const piano = await this._ricontrollaReferenzaDopoScheda({ record, box: boxNuovo, codiceGruppo, idRec, payloadId });
+                if (piano != null) {
+                    await this._applicaPianoRicontrollo(piano);
+                }
+                else {
+                    this._aggiornaRiferimentiBox(record, boxNuovo);
+                }
+            }
+
+            this._aggiungiVersionePrecedenteTenuta(codiceGruppo, idRec);
+            this._saveCurrentReportAndWhitelist();
+            this._refreshConfrontoReportUi();
+            await this._riscriviCsvDelReport();
+
             console.log("Fix completato", payload);
 
         } catch (err) {
             console.error("Errore durante il fix:", err);
+        }
+    },
+
+    /* ---------- I20-1124: le versioni precedenti dei box nel report ---------- */
+
+    /// Le versioni precedenti entrano nel report alla sua nascita: i cloni fra i box da eliminare,
+    /// le versioni senza box in pagina fra i modificati (reportIntegritaAvvio decide).
+    aggiungiVersioniPrecedenti(reportObj, versioniPrecedenti, mappa) {
+        if (reportObj == null || versioniPrecedenti == null) {
+            return;
+        }
+        const classificate = reportIntegritaAvvio.classificaVersioniPrecedenti(versioniPrecedenti, mappa);
+        classificate.daEliminare.forEach(voce => reportObj.recordUsciti.push(reportIntegritaAvvio.recordVersionePrecedente(voce, true)));
+        classificate.daRiportare.forEach(voce => reportObj.recordCambiati.push(reportIntegritaAvvio.recordVersionePrecedente(voce, false)));
+    },
+
+    /// "Torna in pagina" su una versione precedente senza box in pagina: il box torna su InPagina,
+    /// opaco, dov'era. Sul server non si registra niente; se la referenza non risulta impaginata
+    /// (getSchedaRef con errorCode 8) la si ricollega in automatico. Poi il box si rianalizza come
+    /// alla chiusura della scheda e la riga va nella categoria che le spetta, senza rifare il
+    /// report; il csv si riscrive nello stesso file.
+    async _tornaInPaginaVersionePrecedente(payloadId, payload) {
+        const record = payload?.record;
+        const box = this._resolveBoxFromRecord(record);
+
+        if (box == null || !box.isValid) {
+            messaggioUtente("Code CNF-91 La versione precedente non si trova piu' nel documento", "warning", false, 5);
+            return;
+        }
+
+        try {
+            VersionePrecedente.riportaInPagina(box, docInLavorazione);
+        }
+        catch (err) {
+            console.error("Code CNF-92 Torna in pagina non riuscito:", err);
+            messaggioUtente("Code CNF-92 Torna in pagina non riuscito: " + (err && err.message ? err.message : err), "error", false, 6);
+            return;
+        }
+
+        record.versionePrecedente = false;
+        if (record.elementoMappa != null) {
+            record.elementoMappa.versionePrecedente = false;
+        }
+
+        const dna = Utility.getDnaOfBox(box);
+        const codiceGruppo = dna != null ? dna.codice_gruppo : record?.codiceGruppo;
+        const idRec = dna != null ? dna.idRec : (record?.elementoMappa?.idRec != null ? record.elementoMappa.idRec : null);
+
+        const lettura = await this._leggiSchedaRefConStato(codiceGruppo, idRec);
+        if (lettura.nonImpaginata) {
+            const esito = await this._ricollegaDalReport(box);
+            (esito.messaggi || []).forEach(m => messaggioUtente(m.testo, m.tipo, false, 5));
+            if (esito.esito !== "ricollegato") {
+                messaggioUtente("Code CNF-93 Box riportato in pagina ma non ricollegato: " + (esito.messaggio || esito.esito), "warning", false, 8);
+                this._aggiornaRiferimentiBox(record, box);
+                this._saveCurrentReportAndWhitelist();
+                this._refreshConfrontoReportUi();
+                await this._riscriviCsvDelReport();
+                return;
+            }
+        }
+
+        const piano = await this._ricontrollaReferenzaDopoScheda({ record, box, codiceGruppo, idRec, payloadId });
+        if (piano != null) {
+            await this._applicaPianoRicontrollo(piano);
+        }
+        else {
+            this._aggiornaRiferimentiBox(record, box);
+            this._saveCurrentReportAndWhitelist();
+            this._refreshConfrontoReportUi();
+        }
+
+        await this._riscriviCsvDelReport();
+    },
+
+    /// La scheda riletta dal server, distinguendo la referenza che il server non considera
+    /// impaginata (errorCode 8): e' il caso in cui va ricollegata.
+    _leggiSchedaRefConStato(codiceGruppo, idRec) {
+        return new Promise(resolve => {
+            let risposto = false;
+
+            const rispondi = (valore) => {
+                if (risposto) {
+                    return;
+                }
+                risposto = true;
+                resolve(valore);
+            };
+
+            setTimeout(() => rispondi({ records: null, nonImpaginata: false }), this.ATTESA_MASSIMA_RILETTURA_SCHEDA);
+
+            try {
+                schedaRef.getSchedaRef(codiceGruppo, (errore, risultato) => {
+                    if (errore == null && risultato != null && risultato.errorCode == 8) {
+                        rispondi({ records: null, nonImpaginata: true });
+                        return;
+                    }
+                    if (errore != null || risultato == null || (risultato.error != null && risultato.error !== "")) {
+                        console.error("Rilettura della scheda non riuscita:", errore || risultato?.error);
+                        rispondi({ records: null, nonImpaginata: false });
+                        return;
+                    }
+                    rispondi({ records: risultato.records || null, nonImpaginata: false });
+                }, idRec, true);
+            }
+            catch (err) {
+                console.error("Rilettura della scheda non partita:", err);
+                rispondi({ records: null, nonImpaginata: false });
+            }
+        });
+    },
+
+    //Il ricollegamento passa dal server: oltre questa attesa si lascia perdere e lo si dice.
+    ATTESA_MASSIMA_RICOLLEGAMENTO: 30000,
+
+    /// Il ricollegamento di un box come lo attende il report: l'esito della scheda, o il timeout.
+    async _ricollegaDalReport(box) {
+        const attesa = new Promise(resolve => setTimeout(() => resolve({
+            esito: "errore",
+            messaggio: "Code CNF-94 Ricollegamento senza risposta dal server",
+            messaggi: []
+        }), this.ATTESA_MASSIMA_RICOLLEGAMENTO));
+        return Promise.race([schedaRef.ricollegaBoxImpaginatoAttendendo(box), attesa]);
+    },
+
+    /// Dopo un Fix, la versione precedente che il confronto ha tenuto sul suo livello entra subito
+    /// fra i box da eliminare, col contrassegno Clone: il report resta fedele al documento.
+    _aggiungiVersionePrecedenteTenuta(codiceGruppo, idRec) {
+        const state = this._confrontoReportState;
+        if (state == null || state.report == null) {
+            return false;
+        }
+        const clone = VersionePrecedente.versionePrecedenteDi(docInLavorazione, codiceGruppo, idRec, Utility.getDnaOfBox);
+        if (clone == null) {
+            return false;
+        }
+        state.report.recordUsciti = state.report.recordUsciti || [];
+        if (state.report.recordUsciti.some(r => r?.versionePrecedente === true && r.inddId === clone.id)) {
+            return false;
+        }
+        const dna = Utility.getDnaOfBox(clone);
+        const pagina = clone.parentPage != null ? String(clone.parentPage.name) : "";
+        const elemento = {
+            ref: clone,
+            refId: clone.id,
+            codice: dna != null ? dna.codice : null,
+            codiceGruppo: codiceGruppo,
+            idRec: idRec,
+            bounds: clone.geometricBounds,
+            pagina: pagina,
+            paginaAttuale: pagina,
+            versionePrecedente: true,
+            match: false,
+            foto: [],
+            stato: 1
+        };
+        state.report.recordUsciti.push(reportIntegritaAvvio.recordVersionePrecedente({ elemento, pagina, elementiPagina: [elemento] }, true));
+        return true;
+    },
+
+    /// Il csv del report riscritto nello stesso file, dallo stato corrente. I20-981 vuole un file
+    /// per report: non se ne crea un altro, si aggiorna quello.
+    async _riscriviCsvDelReport() {
+        const percorso = this._csvDelReportCorrente;
+        const report = this._confrontoReportState?.report;
+        if (!percorso || report == null) {
+            return null;
+        }
+        try {
+            const taglio = percorso.lastIndexOf("/");
+            const cartella = percorso.substring(0, taglio + 1);
+            const nomeFile = percorso.substring(taglio + 1);
+            const testo = this._buildReportConfrontoCsv(report);
+            await this._scriviTestoUtf8(cartella, nomeFile, testo);
+            return percorso;
+        }
+        catch (err) {
+            console.error("Csv del report non riscritto:", err);
+            return null;
         }
     },
 
@@ -4119,6 +4344,10 @@ const ReportIntegrita = {
             const mappa = esiti[0];
             listaScaricata = !usaListaLocale;
 
+            //I20-1124: anche il livello delle versioni precedenti si scansiona, a parte: quei box
+            //non sono impaginati, ma il report deve dire che ci sono e cosa farne.
+            const versioniPrecedenti = confronti.mappaturaVersioniPrecedenti(ReportIntegrita.nomiPagineDelDocumento());
+
             if (mappa == null) {
                 messaggioUtente("Code IDX-84 Mappatura dell'impaginato non riuscita: report annullato.", "error", false, 10);
                 return;
@@ -4145,7 +4374,7 @@ const ReportIntegrita = {
             //5. Il confronto box per box e l'apertura del report.
             showLoading("Inizio confronto box...");
             await Utility.sleep(100);
-            await ReportIntegrita.applicaConfronto(mappa, avviso.lette);
+            await ReportIntegrita.applicaConfronto(mappa, avviso.lette, versioniPrecedenti);
 
             console.log("Report integrità: sequenza completa in " + ((Date.now() - inizio) / 1000).toFixed(1) + " s");
         }
@@ -4273,7 +4502,7 @@ const ReportIntegrita = {
     /// reportConfronti.js per le differenze sui campi osservati dall'agenzia. 359 righe.
     /// I20-1056, lotto 5: letteSegnalazioni e' la lettura dei bollini fatta all'avvio, che da' i
     /// numeri accanto ai record; null se non e' riuscita.
-    async applicaConfronto(mappa, letteSegnalazioni = null) {
+    async applicaConfronto(mappa, letteSegnalazioni = null, versioniPrecedenti = null) {
         console.log(mappa);
         showLoading("Controllo dei box in pagina per ricerca differenze...");
         await Utility.sleep(10);
@@ -4599,6 +4828,10 @@ const ReportIntegrita = {
                             }
                         }
                     }
+
+                    //I20-1124: le versioni precedenti: con un box in pagina sono cloni da eliminare, senza
+                    //sono da riportare in pagina o da eliminare, e stanno fra i modificati.
+                    ReportIntegrita.aggiungiVersioniPrecedenti(reportObj, versioniPrecedenti, mappa);
 
 
                     hideLoading();

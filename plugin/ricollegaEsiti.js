@@ -72,6 +72,43 @@ const RicollegaEsiti = {
         return Array.isArray(codici) ? codici.filter(c => c != null && c !== "").join(", ") : "";
     },
 
+    /// I20-1124: l'esito di una risposta intera di Menabo/ricollegaBox, per chi la attende dal
+    /// Report Integrita' e non apre la scheda: "ricollegato" (gia' impaginato, auto impaginato o
+    /// cambio di forma non fermano il report), "clonazione" (il server chiede di clonare: lo si
+    /// dice e si lascia fare dalla scheda), "errore" con il messaggio da mostrare.
+    esitoDellaRisposta(risposta) {
+        if (risposta == null) {
+            return { esito: "errore", messaggio: "Code SRF-13 Ricollegamento fallito: nessuna risposta", messaggi: [] };
+        }
+        const messaggi = [];
+        const codici = Array.isArray(risposta.codici) ? risposta.codici : [];
+        codici.forEach(elemento => {
+            const avviso = RicollegaEsiti.messaggioPerElemento(elemento);
+            if (avviso != null) {
+                messaggi.push(avviso);
+            }
+        });
+        if (risposta.error != null && risposta.error !== "") {
+            return { esito: "errore", messaggio: "Code SRF-13 Ricollegamento fallito: " + risposta.error, messaggi };
+        }
+        if (codici.length === 0) {
+            return { esito: "errore", messaggio: "Code SRF-13 Ricollegamento fallito: il server non ha risposto per nessun codice", messaggi };
+        }
+        const primo = codici[0];
+        if (primo.error != null && primo.error !== "") {
+            return { esito: "errore", messaggio: "Code SRF-16 Ricollegamento non riuscito: " + primo.error, messaggi };
+        }
+        if (primo.stato === RicollegaEsiti.STATO.richiestaClonazione) {
+            return { esito: "clonazione", messaggio: "Il server chiede di clonare la referenza: aprire la scheda del box e ricollegare da li'", messaggi };
+        }
+        if (primo.stato === RicollegaEsiti.STATO.giaImpaginato ||
+            primo.stato === RicollegaEsiti.STATO.autoImpaginato ||
+            primo.stato === RicollegaEsiti.STATO.cambioDiForma) {
+            return { esito: "ricollegato", messaggio: null, messaggi, idRecSelezionato: risposta.idRecSelezionato != null ? risposta.idRecSelezionato : null };
+        }
+        return { esito: "errore", messaggio: "Code SRF-11 Referenza inesistente nello storico, ricollegamento non possibile", messaggi };
+    },
+
     /// Cosa rappresenta un rettangolo del box, leggendone l'etichetta: la foto primaria, una
     /// secondaria, oppure niente. Restituisce anche il codice della referenza a cui la foto e'
     /// associata, che serve a ritrovarla in tracciato.

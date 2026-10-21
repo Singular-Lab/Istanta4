@@ -18,6 +18,8 @@
 const RicollegaEsiti = require('./ricollegaEsiti');
 const fs = require('fs');
 const NoRenderElementi = require('./noRenderElementi');
+//I20-1124: la versione precedente di un box rifatto, messa da parte sul suo livello.
+const VersionePrecedente = require('./versionePrecedente');
 
 /// I20-1046: gli elementi del box che decidono le regole e non l'operatore: la base (e gli altri
 /// campi base*, a cui il custom del cliente da' lo stile oggetto del formato) e i loghi e gli sfondi
@@ -355,16 +357,9 @@ const confronti = {
             }
 
             if (!box1Rimosso) {
-                box1.move(undefined, [10, -10]);
-                if (docInLavorazione.layers.itemByName("cloneVecchioImpaginato") == null || !docInLavorazione.layers.itemByName("cloneVecchioImpaginato").isValid) {
-                    docInLavorazione.layers.add({ name: "cloneVecchioImpaginato" });
-                    //assicuriamoci che il layer "cloneVecchioImpaginato" sia prima del layer InPagina di modo che sia visualizzato sopra
-                    let inPaginaLayer = docInLavorazione.layers.itemByName("InPagina");
-                    if (inPaginaLayer != null && inPaginaLayer.isValid) {
-                        docInLavorazione.layers.itemByName("cloneVecchioImpaginato").move(LocationOptions.before, inPaginaLayer);
-                    }
-                }
-                box1.itemLayer = docInLavorazione.layers.itemByName("cloneVecchioImpaginato");
+                //I20-1124: la versione precedente va da parte: sopra il nuovo, scostata, al 60%, sul
+                //livello non stampabile. Lo stesso che fa Reimpagina box.
+                VersionePrecedente.mettiDaParte(box1, docInLavorazione);
             }
         } catch (error) {
             console.error(error);
@@ -862,6 +857,39 @@ const confronti = {
 
     /// Legge il documento e ne fa una mappa: quali referenze stanno in quali
     /// box, a quale pagina. Con simplified torna la versione ridotta al necessario.
+    /// I20-1124: la mappa delle versioni precedenti, pagina per pagina, nella stessa forma della
+    /// mappa dell'impaginato ma senza foto e descrizioni: al Report Integrita' serve sapere dove
+    /// stanno e di quale presenza sono. nomiPagine, se c'e', limita alle pagine del report.
+    mappaturaVersioniPrecedenti(nomiPagine = null) {
+        const mappa = {};
+        try {
+            const trovati = VersionePrecedente.gruppiConDnaSulLivello(docInLavorazione, VersionePrecedente.NOME_LIVELLO, Utility.getDnaOfBox, nomiPagine);
+            trovati.forEach(t => {
+                const gruppo = t.gruppo;
+                const dna = t.dna;
+                mappa[t.pagina] = mappa[t.pagina] || [];
+                mappa[t.pagina].push({
+                    ref: gruppo,
+                    refId: gruppo.id,
+                    codice: dna.codice,
+                    codiceGruppo: dna.codice_gruppo,
+                    idRec: dna.idRec != null && dna.idRec !== "" && !isNaN(parseInt(dna.idRec)) ? parseInt(dna.idRec) : null,
+                    bounds: gruppo.geometricBounds,
+                    pagina: t.pagina,
+                    paginaAttuale: t.pagina,
+                    versionePrecedente: true,
+                    match: false,
+                    foto: [],
+                    stato: 1
+                });
+            });
+        }
+        catch (e) {
+            console.error("Code CNF-90 Mappatura delle versioni precedenti non riuscita: " + e);
+        }
+        return mappa;
+    },
+
     async mappaturaImpaginato(pag = null, infoDescrizione = false, simplified = false){
         try{
             let mappa = {};

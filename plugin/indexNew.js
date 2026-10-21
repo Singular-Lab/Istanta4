@@ -64,6 +64,8 @@ const uxp = require('uxp');
 const { storage } = require('uxp');
 const fs = require('fs');
 const fs2 = require('uxp').storage.localFileSystem;
+//I20-1124: la versione precedente di un box rifatto, messa da parte sul suo livello.
+const VersionePrecedente = require('./versionePrecedente');
 const { app, Justification, FitOptions, LocationOptions, File, ColorModel, Folder, ExportFormat, ContentType, SaveOptions, CoordinateSpaces, AnchorPoint, ResizeMethods} = require('indesign');
 //I20-1064: il cliente non si copia piu' in radice. clienteAttivo.json, scritto da
 //monta-cliente.sh, dice quale ipconfig usare, e l'ipconfig quale custom.js d'archivio leggere.
@@ -691,6 +693,48 @@ indesignEvents.addEventListener(indesignEvents.EVENT_NEW_REF_SELECTED, async fun
     }
 
 });
+
+//I20-1124: la versione precedente di un box, sul livello cloneVecchioImpaginato, non apre la
+//scheda: solo il codice e "Riporta in pagina", nella riga dei messaggi del pannello.
+indesignEvents.addEventListener(indesignEvents.EVENT_NEW_VERSIONE_PRECEDENTE_SELECTED, async function (args) {
+    Modali.closeAllModal();
+    schedaRef.setInvalidated(true);
+    schedaRef.svuotaRef();
+    schedaRef.resetRefInterface();
+    $("#refImage").hide();
+    $("#raggruppaImage").hide();
+    $("#grigliaTab").hide();
+
+    var versione = args[0];
+    setNarrow("Versione precedente del box " + versione.codiceGruppo, [{
+        buttonText: "Riporta in pagina",
+        buttonCallback: function () { riportaVersionePrecedenteInPagina(versione.item); }
+    }]);
+});
+
+/// I20-1124: "Riporta in pagina": il box torna su InPagina, dov'era e opaco, e si riseleziona
+/// come una ref normale, cosi' la scheda si apre. Sul server non si registra niente: se la
+/// referenza non risulta impaginata, la scheda offrira' il ricollegamento.
+function riportaVersionePrecedenteInPagina(box) {
+    try {
+        if (box == null || !box.isValid) {
+            messaggioUtente("Code IDX-191 Il box della versione precedente non c'e' piu'", "warning", false, 4);
+            clearNarrow();
+            return;
+        }
+        VersionePrecedente.riportaInPagina(box, docInLavorazione);
+        clearNarrow();
+        //La selezione e' ancora quella: si azzera la memoria degli eventi, cosi' il prossimo giro
+        //la legge come una ref appena selezionata e apre la scheda.
+        indesignEvents.resetLastSelection();
+        app.selection = [box];
+        messaggioUtente("Box riportato in pagina", "success", false, 3);
+    }
+    catch (e) {
+        console.error("Code IDX-192 Riporta in pagina non riuscito: " + e);
+        messaggioUtente("Code IDX-192 Riporta in pagina non riuscito: " + (e && e.message ? e.message : e), "error", false, 6);
+    }
+}
 
 indesignEvents.addEventListener(indesignEvents.EVENT_NEW_MULTIREF_SELECTED, async function(args){    
     Modali.closeAllModal();

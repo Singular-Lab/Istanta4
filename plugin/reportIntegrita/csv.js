@@ -131,6 +131,13 @@ function repartoDelRecord(item) {
     return reparto + " (" + sigla + ")";
 }
 
+/// I20-1124: lo stato di una voce del csv. Una versione precedente di un box (sul livello
+/// cloneVecchioImpaginato) porta il contrassegno "Clone" accanto allo stato, cosi' in Excel si
+/// distingue da un box che va eliminato perche' non e' piu' nel dato.
+function statoVoce(stato, versionePrecedente) {
+    return versionePrecedente === true ? stato + " (Clone)" : stato;
+}
+
 /// I dati che ogni riga del csv prende dal record del tracciato.
 function datiRecordPerCsv(item) {
     const record = item || {};
@@ -374,6 +381,7 @@ function componiCsvConfronto(intestazione, voci) {
 }
 
 module.exports = {
+    statoVoce,
     SEPARATORE_CAMPI,
     SEPARATORE_DESCRIZIONE,
     FINE_RIGA,

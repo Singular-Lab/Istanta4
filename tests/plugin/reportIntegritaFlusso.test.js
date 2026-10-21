@@ -136,7 +136,8 @@ test('il fix senza report non e\' piu\' offerto', () => {
     //recupero delle schede dal server.
     //I20-1014: applicaConfronto e' un membro del report, non piu' una funzione di indexNew.
     //I20-1056, lotto 5: con la lettura dei bollini dell'avvio, per i numeri accanto ai record.
-    assert.match(confronti, /async applicaConfronto\(mappa, letteSegnalazioni = null\) \{/);
+    //I20-1124: con la mappa delle versioni precedenti, a parte.
+    assert.match(confronti, /async applicaConfronto\(mappa, letteSegnalazioni = null, versioniPrecedenti = null\) \{/);
     assert.doesNotMatch(indexNew, /function applicaConfronto\(/);
     assert.doesNotMatch(applicaConfronto, /getSchedeRefsMassivo/);
     assert.doesNotMatch(applicaConfronto, /addBollinoCustom/);
@@ -383,8 +384,8 @@ test('i pulsanti che non facevano nulla non ci sono piu\'', () => {
     //Il piede resta vuoto e nascosto: lo spazio va all'elenco.
     assert.match(confronti, /footer\.style\.display = "none"/);
 
-    //Il fix della singola segnalazione invece resta.
-    assert.match(confronti, /_crIconButton\("Fix", "images\/fix\.png"\)/);
+    //Il fix della singola segnalazione invece resta. I20-1124: e' un Reimpagina, con la sua icona.
+    assert.match(confronti, /_crIconButton\("Reimpagina box", "images\/reimpaginaFix\.png"\)/);
 });
 
 test('le linguette contano quello che i pannelli mostrano', () => {

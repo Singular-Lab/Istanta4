@@ -3,6 +3,8 @@ const XMLHttpRequestClient = require('./XMLHttpRequestClient');
 const {Utility} = require('./utility');
 const { refSelected } = require('./schedaRef');
 const {Logger} = require('./logger');
+//I20-1124: la versione precedente di un box, sul suo livello, non e' una ref da aprire.
+const VersionePrecedente = require('./versionePrecedente');
 
 /// I20-1002: il registro degli eventi di background del Plugin.
 ///
@@ -68,6 +70,7 @@ class InddEvents {
 
     EVENT_NEW_MULTISELECTION = "newMultiSelection";//Nuova selezione di oggetti
     EVENT_NEW_REF_SELECTED = "newRefSelected";//Nuova ref selezionata
+    EVENT_NEW_VERSIONE_PRECEDENTE_SELECTED = "newVersionePrecedenteSelected";//I20-1124: selezionata la versione precedente di un box
     EVENT_NEW_MULTIREF_SELECTED = "newMultiRefSelected";//Nuova ref selezionata
     EVENT_NEW_ARTWORK_MULTIREF_POTENTIAL_SELECTED = "newArtworkMultiRefSelected";//Nuovo possibile artwork
     EVENT_NEW_ARTWORK_SELECTED = "newArtworkSelected";//Nuova artwork selezionata
@@ -320,7 +323,30 @@ class InddEvents {
                                             // }
 
                                             //Verifichiamo se è una ref                                
-                                            if (is_ref) {
+                                            //I20-1124: la versione precedente di un box, sul livello cloneVecchioImpaginato, non
+                                            //apre la scheda: il Plugin mostra solo "Riporta in pagina". L'evento parte una volta
+                                            //per selezione, come per le ref: la vigilanza passa di qui a ogni giro.
+                                            if (is_ref && VersionePrecedente.eVersionePrecedente(el)) {
+                                                let giaSegnalata = me.lastSelectionDetails.length > 0 &&
+                                                    me.lastSelectionDetails[0].versionePrecedente === true &&
+                                                    me.lastSelectionDetails[0].idInDesign == el.id;
+                                                if (!giaSegnalata) {
+                                                    me.lastSelectionDetails = [{
+                                                        versionePrecedente: true,
+                                                        idInDesign: el.id,
+                                                        pag: el.parentPage == null ? -1 : parseInt(el.parentPage.name),
+                                                        pagRef: el.parentPage,
+                                                        item: el,
+                                                        codice: dna.codice,
+                                                        codiceGruppo: dna.codice_gruppo,
+                                                        idRec: dna.idRec,
+                                                        meccanica: dna.box
+                                                    }];
+                                                    me.fireEvent(me.EVENT_NEW_VERSIONE_PRECEDENTE_SELECTED, me.lastSelectionDetails);
+                                                    me.previousSelectionEventTriggered = me.EVENT_NEW_VERSIONE_PRECEDENTE_SELECTED;
+                                                }
+                                            }
+                                            else if (is_ref) {
                                                 let currPag = el.parentPage == null ? -1 : parseInt(el.parentPage.name);
 
                                                 if (me.lastSelectionDetails.length > 0 &&
