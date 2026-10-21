@@ -30,7 +30,9 @@ const MOTORE = ["confrontoBox", "confrontoBoxCompiledFieldPreAnalisi", "mappatur
     //I20-1090: dove sta la differenza della descrizione, per la scelta del box.
     "dovePortaLaDescrizione",
     //Le foto del dato da confrontare, una volta ciascuna, per la pre analisi della scheda.
-    "fotoDelDatoDaConfrontare"
+    "fotoDelDatoDaConfrontare",
+    //Le differenze di una foto collegata nel box: collegamento rotto, file assente, non corrispondente.
+    "segnalazioniFotoCollegata"
 ];
 const DA_INDEXNEW = ["avviaReportIntegrita", "applicaConfronto", "preAnalisiBoxMappato",
     "nomiPagineDelDocumento", "boxDellElementoMappa"];

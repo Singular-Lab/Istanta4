@@ -606,7 +606,9 @@ const confronti = {
                                         nomeFoto: nomeFile,
                                         hash: res.hash,
                                         mismatch: res.mismatch,
-                                        missing: res.missing
+                                        missing: res.missing,
+                                        //Dove punta il box quando il collegamento e' rotto.
+                                        percorsoLink: res.percorsoLink
                                     }
                                 };
                             }
@@ -674,7 +676,8 @@ const confronti = {
 
             //controlliamo se le foto nel box1 sono le stesse di quelle in listFoto
             if (listFoto && listFoto.length > 0) {
-                listFoto.forEach(foto => {
+                //Un for e non un forEach: con il collegamento rotto si attende la lettura dei Links.
+                for (const foto of listFoto) {
                     if (foto.nomeFoto != "" && listFotoBox1.find(f => f.nomeFoto == foto.nomeFoto) == undefined) {
                         //I20-1073: come per i campi, con il nome del file per chiave (la scheda lo traduce nel
                         //codice della referenza, che e' la chiave delle foto in noRender).
@@ -699,14 +702,11 @@ const confronti = {
                         if (checkMD5) {
                             var fotoCorrispondente = listFotoBox1.find(f => f.nomeFoto == foto.nomeFoto);
                             if(fotoCorrispondente != null){
-                                var fotoCorrispondenteHash = fotoCorrispondente && fotoCorrispondente.hash ? fotoCorrispondente.hash.toUpperCase() : null;
-                                var fotoHash = foto.hash ? foto.hash.toUpperCase() : null;
-                                if (fotoCorrispondente.mismatch || fotoHash != fotoCorrispondenteHash) {
-                                    differenze.push({ label: foto.nomeFoto, difference: "foto non corrispondente nel box: " + foto.nomeFoto });
-                                }
-                                if (fotoCorrispondente.missing) {
-                                    differenze.push({ label: foto.nomeFoto, difference: "foto mancante nella cartella di lavorazione: " + foto.nomeFoto });
-                                }
+                                //Con il collegamento rotto si guarda se il file sta nei Links: e' li' che la
+                                //scheda ricollega. Negli altri casi nessuna lettura in piu'.
+                                var percorsoNeiLinks = percorsoLinks + foto.nomeFoto;
+                                var fileNeiLinks = fotoCorrispondente.missing ? await ReperimentoFoto.esisteFile(percorsoNeiLinks) : false;
+                                differenze.push(...confronti.segnalazioniFotoCollegata(foto, fotoCorrispondente, fileNeiLinks, percorsoNeiLinks));
                             }
                         }
                         else {
@@ -719,7 +719,7 @@ const confronti = {
                             }
                         }
                     }
-                });
+                }
                 listFotoBox1.forEach(foto => {
                     let noFoto = false;
                     if (foto == (pluginMiddleware.getCampo("nomeNoFoto") ? pluginMiddleware.getCampo("nomeNoFoto") : "nofoto.png")) {
@@ -1445,6 +1445,35 @@ const confronti = {
         });
         aggiungi(record["Foto.Nome"], record["Foto.Hash"]);
         return lista;
+    },
+    /// Le differenze per una foto del dato che nel box c'e' con lo stesso nome, dall'esito del
+    /// link (getLinkHash) e dalla presenza del file nella cartella Links:
+    /// - collegamento rotto (LINK_MISSING) e file nei Links: una sola differenza, tipo linkRotto,
+    ///   "foto da ricollegare", con il percorso nei Links per il ricollegamento dalla finestra
+    ///   della scheda (i percorsi non si mostrano: all'operatore basta sapere che va ricollegata);
+    /// - collegamento rotto e file assente: foto mancante nella cartella di lavorazione;
+    /// - altrimenti la regola di sempre: link non aggiornato o hash diverso, non corrispondente.
+    /// Prima un collegamento rotto diventava "mancante nella cartella" anche col file nei Links, e
+    /// siccome senza file l'hash e' nullo usciva anche "non corrispondente": due segnalazioni per
+    /// una causa sola, e la prima sbagliata.
+    segnalazioniFotoCollegata(foto, esitoLink, fileNeiLinks, percorsoNeiLinks) {
+        var nome = foto == null || foto.nomeFoto == null ? "" : String(foto.nomeFoto);
+        var esito = esitoLink || {};
+        if (esito.missing) {
+            if (fileNeiLinks) {
+                return [{
+                    label: nome, difference: "foto da ricollegare: " + nome, tipo: "linkRotto", nomeFoto: nome,
+                    percorsoNeiLinks: percorsoNeiLinks == null ? "" : String(percorsoNeiLinks)
+                }];
+            }
+            return [{ label: nome, difference: "foto mancante nella cartella di lavorazione: " + nome }];
+        }
+        var hashBox = esito.hash ? String(esito.hash).toUpperCase() : null;
+        var hashDato = foto != null && foto.hash ? String(foto.hash).toUpperCase() : null;
+        if (esito.mismatch || hashDato != hashBox) {
+            return [{ label: nome, difference: "foto non corrispondente nel box: " + nome }];
+        }
+        return [];
     },
 };
 
