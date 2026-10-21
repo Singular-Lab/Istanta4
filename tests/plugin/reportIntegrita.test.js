@@ -28,7 +28,9 @@ const MOTORE = ["confrontoBox", "confrontoBoxCompiledFieldPreAnalisi", "mappatur
     //I20-1088: i meta dei testi da verificare, per la scheda e per il report.
     "ignoraVersioneMeta", "differenzeDeiMeta", "valoriDelMeta",
     //I20-1090: dove sta la differenza della descrizione, per la scelta del box.
-    "dovePortaLaDescrizione"
+    "dovePortaLaDescrizione",
+    //Le foto del dato da confrontare, una volta ciascuna, per la pre analisi della scheda.
+    "fotoDelDatoDaConfrontare"
 ];
 const DA_INDEXNEW = ["avviaReportIntegrita", "applicaConfronto", "preAnalisiBoxMappato",
     "nomiPagineDelDocumento", "boxDellElementoMappa"];
