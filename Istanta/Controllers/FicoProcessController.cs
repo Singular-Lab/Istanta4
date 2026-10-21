@@ -6349,7 +6349,11 @@ namespace Istanta.Controllers
                                     //Controllo se la sua foto attuale coincide al guidid, altrimenti devo cambiarla
                                     if (guididFoto != foto.guidid)
                                     {
-                                        ArticoliFoto? fotoItemIndicata = this.ctx.ArticoliFotos.FirstOrDefault(f => f.GuidId == foto.guidid);
+                                        //TASK-56428659: la foto si cerca fra quelle di questo articolo. Cercandola in tutto
+                                        //l'archivio si riattivava la riga di un altro articolo con lo stesso guid, e
+                                        //questo restava senza la foto indicata da Correggo.
+                                        ArticoliFoto? fotoItemIndicata = RegistroFotoArticolo.GiaRegistrata(artItem!.ArticoliFotos!, foto.guidid, null, null)
+                                            ?? artItem.ArticoliFotos!.FirstOrDefault(f => !string.IsNullOrWhiteSpace(foto.guidid) && string.Equals(f.GuidId, foto.guidid, StringComparison.OrdinalIgnoreCase));
                                         if (fotoItemIndicata != null)
                                         {
                                             //Cambio solo la data
