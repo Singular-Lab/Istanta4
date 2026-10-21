@@ -721,7 +721,17 @@ namespace Istanta.Controllers
                 nuovaFoto.GuidId = guidOlympo;
                 nuovaFoto.Tipo = (byte)TipoFoto.Foto;
 
-                articolo.ArticoliFotos!.Add(nuovaFoto);
+                // TASK-56428659: Olimpo restituisce il guid esistente a un file gia' noto; se l'articolo
+                // ha gia' quel guid nello stesso ambito si aggiorna quella riga invece di aggiungerne una.
+                var giaRegistrata = RegistroFotoArticolo.GiaRegistrata(articolo.ArticoliFotos!, guidOlympo, areaVal, canaleVal);
+                if (giaRegistrata != null)
+                {
+                    nuovaFoto = RegistroFotoArticolo.Riusa(giaRegistrata, nuovaFoto);
+                }
+                else
+                {
+                    articolo.ArticoliFotos!.Add(nuovaFoto);
+                }
                 await this.ctx.SaveChangesAsync();
 
                 registraAttivitaCaricoFotoArchivio(dato.codice!, dato.file.FileName, guidOlympo);

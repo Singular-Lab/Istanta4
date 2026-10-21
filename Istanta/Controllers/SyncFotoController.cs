@@ -503,28 +503,16 @@ namespace Istanta.Controllers
 
                     if (afItemSearch == null)
                     {
-                        //Se non trovo la foto con il suo nome originale allora la cerco per MD5
-                        afItemSearch = await this.ctx.ArticoliFotos.Where(f => f.Hash == file.md5).FirstOrDefaultAsync();
-
-                        //A questo punto però SE davvero lo trovo qui devo anche fare un'altra verifica, ovvero capire se il nome della foto si riferisce ad un articolo diverso da questo trovato tramite md5
-                        if (afItemSearch != null)
+                        //Se non trovo la foto con il suo nome originale allora la cerco per MD5, ma solo fra
+                        //le foto dell'articolo indicato dal nome. Prima si cercava in tutto l'archivio: se la
+                        //prima riga con quell'MD5 era di un altro articolo, la foto risultava nuova anche se
+                        //l'articolo l'aveva gia', e il sync la registrava un'altra volta (TASK-56428659).
+                        Articoli? artDelNome = await this.ctx.Articolis.Where(art => art.Codice == name).FirstOrDefaultAsync();
+                        if (artDelNome != null)
                         {
-                            artArchivio = await this.ctx.Articolis.Where(art => art.Codice == name).FirstOrDefaultAsync();
-                            //Se il codice scritto nel nome FOTO è un codice esistente su DB quindi si rivolge ad un articolo, va per forza controllato
-                            //Se è lo stesso articolo trovato tramite MD5
-                            if (artArchivio != null)
-                            {
-                                if (afItemSearch.IdArticolo != artArchivio.Id)
-                                {
-                                    //Se il codice dell'articolo non corrisponde all'articolo trovato
-                                    afItemSearch = null;
-                                }
-                            }
-                            else
-                            {
-                                //Non trovo neanche il codice, la ricerca è da invalidare
-                                afItemSearch = null;
-                            }
+                            var fotoDelNome = await this.ctx.ArticoliFotos.Include(i => i.IdArticoloNavigation)
+                                .Where(f => f.IdArticolo == artDelNome.Id).ToListAsync();
+                            afItemSearch = RegistroFotoArticolo.ConMd5(fotoDelNome, file.md5);
                         }
                     }
 
@@ -1313,6 +1301,10 @@ namespace Istanta.Controllers
                                         fotoIstanta.Attiva = true;
                                         fotoIstanta.StatoSelezione = (Byte)StatoSelezioneFoto.Primaria;
 
+                                        //Il guid nuovo puo' essere gia' su un'altra riga dell'articolo nello stesso ambito.
+                                        var fotoStessoGuid = this.ctx.ArticoliFotos.Where(s => s.IdArticolo == fotoIstanta.IdArticolo && s.GuidId == f.Id).ToList();
+                                        this.ctx.ArticoliFotos.RemoveRange(RegistroFotoArticolo.CopieDi(fotoStessoGuid, fotoIstanta));
+
                                         this.ctx.SaveChanges();
 
                                         //registraAttivitaDiSyncFoto(0, fotoIstanta.IdArticoloNavigation.Codice + " ID: "  + idRef, "SyncPacchettoFoto_fotoChanged", tipoOperazione.syncPacchettoFoto);
@@ -1332,7 +1324,19 @@ namespace Istanta.Controllers
                                         fotoIstanta.Hash = f.FileHash;
                                         fotoIstanta.GuidId = f.Id!;
                                         fotoIstanta.Tipo = (Byte)syncDetail.tipo;
-                                        this.ctx.ArticoliFotos.Add(fotoIstanta);
+
+                                        //Olimpo deduplica per MD5 e a un file gia' noto restituisce il guid esistente:
+                                        //se l'articolo ha gia' quel guid nell'ambito generale si aggiorna quella riga.
+                                        var fotoStessoGuid = this.ctx.ArticoliFotos.Where(s => s.IdArticolo == syncDetail.idArticolo && s.GuidId == f.Id).ToList();
+                                        var giaRegistrata = RegistroFotoArticolo.GiaRegistrata(fotoStessoGuid, f.Id, fotoIstanta.Area, fotoIstanta.Canale);
+                                        if (giaRegistrata != null)
+                                        {
+                                            fotoIstanta = RegistroFotoArticolo.Riusa(giaRegistrata, fotoIstanta);
+                                        }
+                                        else
+                                        {
+                                            this.ctx.ArticoliFotos.Add(fotoIstanta);
+                                        }
                                         this.ctx.SaveChanges();
 
                                         //result.error += " -> Registrata la foto " + fotoIstanta.Id;
@@ -1847,6 +1851,8 @@ namespace Istanta.Controllers
                                         _file.canale
                                     );
 
+                                    TogliCopie(articolo, istanzeDaSostituire.Append(artFoto));
+
                                     result = artFoto;
                                 }
                                 else if (_file.uploadMethod == FileInddUploadMethod.Mantieni)
@@ -1884,11 +1890,7 @@ namespace Istanta.Controllers
                                     nuovaFoto.Tipo = (Byte)_file.tipo;
                                     nuovaFoto.GuidId = guidOlympo;
 
-                                    articolo.ArticoliFotos.Add(nuovaFoto);
-
-                                    
-
-                                    result = nuovaFoto;
+                                    result = RegistraFoto(articolo, nuovaFoto);
 
 
                                 }
@@ -1949,6 +1951,8 @@ namespace Istanta.Controllers
                                             artFoto.Area = _file.area!;
                                             artFoto.Canale = _file.canale!;
 
+                                            TogliCopie(articolo, istanzeDaSostituire.Append(artFoto));
+
                                             result = artFoto;
 
                                             //artFoto.DataModifica = DateTime.Now;
@@ -1980,11 +1984,7 @@ namespace Istanta.Controllers
                                         nuovaFoto.Tipo = (Byte)_file.tipo;
                                         nuovaFoto.GuidId = guidOlympo;
 
-                                        articolo.ArticoliFotos.Add(nuovaFoto);
-
-                                   
-
-                                        result = nuovaFoto;
+                                        result = RegistraFoto(articolo, nuovaFoto);
                                     }
 
                                 }
@@ -2005,10 +2005,7 @@ namespace Istanta.Controllers
                                 nuovaFoto.GuidId = guidOlympo;
                                 nuovaFoto.Tipo = (Byte)_file.tipo;
 
-
-                                articolo.ArticoliFotos.Add(nuovaFoto);
-
-                                result = nuovaFoto;
+                                result = RegistraFoto(articolo, nuovaFoto);
                             }
 
                             //await this.RimuoviFotoDaMeta(_file, id_operazione);
@@ -2141,20 +2138,21 @@ namespace Istanta.Controllers
                             nuovaFoto.Tipo = fotoCercata.Tipo;
                             nuovaFoto.GuidId = fotoCercata.GuidId;
 
-                            articolo.ArticoliFotos.Add(nuovaFoto);
-
-                            fotoTarget = nuovaFoto;
+                            //Se l'ambito ha gia' questa foto si riattiva quella, non se ne crea un'altra.
+                            fotoTarget = RegistraFoto(articolo, nuovaFoto);
                         }
                         else
                         {
+                            //Spostare la foto in un ambito che ha gia' lo stesso guid creerebbe una copia:
+                            //in quel caso si riattiva la foto che l'ambito ha gia' e questa resta dov'e'.
+                            var giaNellAmbito = RegistroFotoArticolo.GiaRegistrata(articolo.ArticoliFotos, fotoCercata.GuidId, data.scopeArea, data.scopeCanale, fotoCercata);
+                            fotoTarget = giaNellAmbito ?? fotoCercata;
 
-                            fotoCercata.Attiva = true;
-                            fotoCercata.DataModifica = DateTime.Now;
-                            fotoCercata.Area = data.scopeArea;
-                            fotoCercata.Canale = data.scopeCanale;
-                            fotoCercata.StatoSelezione = (byte)StatoSelezioneFoto.Primaria;
-
-                            fotoTarget = fotoCercata;
+                            fotoTarget.Attiva = true;
+                            fotoTarget.DataModifica = DateTime.Now;
+                            fotoTarget.Area = data.scopeArea;
+                            fotoTarget.Canale = data.scopeCanale;
+                            fotoTarget.StatoSelezione = (byte)StatoSelezioneFoto.Primaria;
                         }
 
                         RimuoviDuplicatiRiassorbiti(
@@ -2206,6 +2204,38 @@ namespace Istanta.Controllers
 
 
             return Ok(result);
+        }
+
+        // TASK-56428659: la foto si registra sull'articolo solo se non c'e' gia' lo stesso guid nello
+        // stesso ambito; altrimenti si aggiorna la riga che c'e'. Vedi RegistroFotoArticolo.
+        ArticoliFoto RegistraFoto(Articoli articolo, ArticoliFoto nuova)
+        {
+            var esistente = RegistroFotoArticolo.GiaRegistrata(articolo.ArticoliFotos!, nuova.GuidId, nuova.Area, nuova.Canale);
+            if (esistente != null)
+            {
+                return RegistroFotoArticolo.Riusa(esistente, nuova);
+            }
+
+            articolo.ArticoliFotos!.Add(nuova);
+            return nuova;
+        }
+
+        // Dopo aver cambiato guid o ambito a una riga, le altre dell'articolo con lo stesso guid nello
+        // stesso ambito sono copie: si tengono le righe toccate e si tolgono le altre.
+        void TogliCopie(Articoli articolo, IEnumerable<ArticoliFoto> tenute)
+        {
+            var daTenere = tenute.ToList();
+            var copie = daTenere
+                .SelectMany(t => RegistroFotoArticolo.CopieDi(articolo.ArticoliFotos!, t))
+                .Where(c => !daTenere.Contains(c))
+                .Distinct()
+                .ToList();
+
+            foreach (var copia in copie)
+            {
+                articolo.ArticoliFotos!.Remove(copia);
+                ctx.ArticoliFotos.Remove(copia);
+            }
         }
 
         bool SameImage(ArticoliFoto a, ArticoliFoto b)
@@ -2270,7 +2300,8 @@ namespace Istanta.Controllers
 
                 Articoli? articolo = this.ctx.Articolis.Include(f => f.ArticoliFotos).Where(f => f.Codice == codiceReferenza).FirstOrDefault();
 
-                var logoGiaAssociato = articolo.ArticoliFotos.Where(f => f.GuidId == guidId).FirstOrDefault();
+                // Il collegamento non ha area ne' canale: e' nell'ambito generale dell'articolo.
+                var logoGiaAssociato = RegistroFotoArticolo.GiaRegistrata(articolo!.ArticoliFotos!, guidId, null, null);
 
                 if(logoGiaAssociato != null)
                 {
