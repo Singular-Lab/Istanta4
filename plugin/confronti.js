@@ -1417,6 +1417,35 @@ const confronti = {
         }
 
     },
+    /// Le foto del dato da confrontare con il box, una volta ciascuna: le secondarie da
+    /// membriGruppoFoto (statoSelezione 2) e la foto della referenza (Foto.Nome), con i loro hash.
+    /// E' la stessa lista che usa l'impaginazione (indexNew, i dati del primario).
+    /// La primaria viaggia dentro membriGruppoFoto insieme alle secondarie, con statoSelezione 1
+    /// (AgenziaLib, getFotoSecondarieDelGruppo): prendere tutti i membri e poi Foto.Nome la metteva
+    /// due volte, e ogni sua segnalazione nella finestra delle differenze usciva doppia. Un nome
+    /// ripetuto si tiene una volta sola: il confronto cerca le foto per nome.
+    fotoDelDatoDaConfrontare(record) {
+        var lista = [];
+        var nomi = {};
+        var aggiungi = function (nomeFoto, hash) {
+            var nome = nomeFoto == null ? "" : String(nomeFoto);
+            if (nome === "" || nomi[nome]) {
+                return;
+            }
+            nomi[nome] = true;
+            lista.push({ nomeFoto: nome, hash: hash });
+        };
+        if (record == null) {
+            return lista;
+        }
+        (Array.isArray(record.membriGruppoFoto) ? record.membriGruppoFoto : []).forEach(function (membro) {
+            if (membro != null && membro.statoSelezione == 2) {
+                aggiungi(membro.nomeFoto, membro.hash);
+            }
+        });
+        aggiungi(record["Foto.Nome"], record["Foto.Hash"]);
+        return lista;
+    },
 };
 
 module.exports = confronti;

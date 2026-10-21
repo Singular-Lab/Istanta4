@@ -6002,16 +6002,9 @@ const schedaRef = {
             }
 
             var rec = primario.recordInTracciato;
-            var listaFoto = [];
-
-            if (rec.membriGruppoFoto != null) {
-                listaFoto = rec.membriGruppoFoto.map(function (membro) {
-                    return { nomeFoto: membro.nomeFoto, hash: membro.hash };
-                });
-            }
-            if (rec["Foto.Nome"] != null && rec["Foto.Nome"] !== "") {
-                listaFoto.push({ nomeFoto: rec["Foto.Nome"], hash: rec["Foto.Hash"] });
-            }
+            //Le secondarie e la foto della referenza, una volta ciascuna: la primaria sta anche
+            //dentro membriGruppoFoto, e prenderla da tutti e due i posti doppiava le sue segnalazioni.
+            var listaFoto = confronti.fotoDelDatoDaConfrontare(rec);
 
             var preAnalisi = await confronti.confrontoBoxCompiledFieldPreAnalisi(
                 box,

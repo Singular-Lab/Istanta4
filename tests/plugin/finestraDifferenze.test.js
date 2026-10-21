@@ -18,6 +18,7 @@ const assert = require("node:assert");
 const { leggiFileDelPlugin } = require("./fileDelPlugin");
 
 const schedaRef = require("../../plugin/schedaRef.js");
+const confronti = require("../../plugin/confronti.js");
 
 test("le differenze si raggruppano per elemento, nell'ordine in cui arrivano", () => {
     const differenze = [
@@ -81,4 +82,68 @@ test("la finestra: riquadri per elemento, impaginazione richiudibile, nel box e 
     const pulsante = scheda.substring(scheda.indexOf("    pulsanteFinestra(etichetta, suggerimento) {"), scheda.indexOf("    pulsanteFinestra(etichetta, suggerimento) {") + 700);
     assert.match(pulsante, /"background-color": "#ffffff"/);
     assert.match(scheda, /var pulsante = me\.pulsanteFinestra\(testi\[azione\]\[0\], testi\[azione\]\[1\]\);/);
+});
+
+/* ---- le foto del dato, una volta ciascuna ---- */
+
+//La primaria viaggia dentro membriGruppoFoto (statoSelezione 1) e sta anche in Foto.Nome: presa da
+//tutti e due i posti, ogni sua segnalazione (non corrispondente, mancante nella cartella) usciva
+//doppia nella finestra.
+test("la foto della primaria si confronta una volta sola, anche se sta fra i membri e come foto della referenza", () => {
+    const record = {
+        "Foto.Nome": "680443_1_AD.psd", "Foto.Hash": "aa",
+        membriGruppoFoto: [{ codRef: "680443", nomeFoto: "680443_1_AD.psd", statoSelezione: 1, hash: "aa" }]
+    };
+    assert.deepStrictEqual(confronti.fotoDelDatoDaConfrontare(record), [{ nomeFoto: "680443_1_AD.psd", hash: "aa" }]);
+});
+
+test("in un gruppo restano le secondarie e la primaria, senza ripetizioni e senza le non selezionate", () => {
+    const record = {
+        "Foto.Nome": "p.psd", "Foto.Hash": "p",
+        membriGruppoFoto: [
+            { nomeFoto: "p.psd", statoSelezione: 1, hash: "p" },
+            { nomeFoto: "s1.psd", statoSelezione: 2, hash: "s1" },
+            { nomeFoto: "s2.psd", statoSelezione: "2", hash: "s2" },
+            { nomeFoto: "n.psd", statoSelezione: 0, hash: "n" },
+            null
+        ]
+    };
+    assert.deepStrictEqual(confronti.fotoDelDatoDaConfrontare(record).map(f => f.nomeFoto), ["s1.psd", "s2.psd", "p.psd"]);
+});
+
+test("senza membri o senza foto della referenza la lista ha solo quello che c'e'", () => {
+    assert.deepStrictEqual(confronti.fotoDelDatoDaConfrontare({ "Foto.Nome": "p.psd", "Foto.Hash": "p" }), [{ nomeFoto: "p.psd", hash: "p" }]);
+    assert.deepStrictEqual(
+        confronti.fotoDelDatoDaConfrontare({ "Foto.Nome": "", membriGruppoFoto: [{ nomeFoto: "s.psd", statoSelezione: 2, hash: "s" }, { nomeFoto: "", statoSelezione: 2 }] }),
+        [{ nomeFoto: "s.psd", hash: "s" }]);
+    assert.deepStrictEqual(confronti.fotoDelDatoDaConfrontare({}), []);
+    assert.deepStrictEqual(confronti.fotoDelDatoDaConfrontare(null), []);
+});
+
+test("la pre analisi della scheda passa al confronto quella lista, e non i membri uno per uno", async () => {
+    const record = {
+        StatoSelezione: 1, compiledFields: [], deletedFields: [], noRenderElementi: null,
+        "Foto.Nome": "680443_1_AD.psd", "Foto.Hash": "aa",
+        membriGruppoFoto: [
+            { nomeFoto: "680443_1_AD.psd", statoSelezione: 1, hash: "aa" },
+            { nomeFoto: "s.psd", statoSelezione: 2, hash: "s" }
+        ]
+    };
+    const ricevute = [];
+    const salvato = global.confronti;
+    global.confronti = {
+        fotoDelDatoDaConfrontare: confronti.fotoDelDatoDaConfrontare,
+        confrontoBoxCompiledFieldPreAnalisi: async (box, campi, eliminati, listaFoto) => {
+            ricevute.push(listaFoto);
+            return { differenze: [], risolteNoRender: [] };
+        },
+        differenzeDeiMeta: () => []
+    };
+    try {
+        await schedaRef.differenzeDatiNelBox({ isValid: true }, [{ recordInTracciato: record }]);
+    }
+    finally {
+        if (salvato === undefined) { delete global.confronti; } else { global.confronti = salvato; }
+    }
+    assert.deepStrictEqual(ricevute, [[{ nomeFoto: "s.psd", hash: "s" }, { nomeFoto: "680443_1_AD.psd", hash: "aa" }]]);
 });
