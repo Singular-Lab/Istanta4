@@ -3637,7 +3637,8 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                             // Aggiungi l'oggetto all'array nel file
                             appendToFile(filePath, data);
 
-                            pagCoinvolta.select();
+                            //Solo se non e' gia' la pagina attiva: la vista non deve saltare.
+                            Utility.attivaPaginaSeDiversa(pagCoinvolta);
 
                             //var boxConteggio = boxConteggioTemplate.duplicate(pagCoinvolta);
                             var wPage = pagCoinvolta.bounds[3] - pagCoinvolta.bounds[1];
@@ -8132,8 +8133,9 @@ async function impaginazioneSingoloIndd(records, pagina, cercaInPaginaPerConfron
             return;
         }
 
-        //facciamo un select della pagina
-        page.select();
+        //La pagina si attiva solo se non e' gia' quella attiva: altrimenti la vista salterebbe al
+        //centro della pagina e l'operatore, ingrandito sul box, dovrebbe ricercarlo.
+        Utility.attivaPaginaSeDiversa(page);
 
         if (originalBox == null){
             //controlliamo se in pagina ci sono box (controlliamo i groups della pagina e se uno di questi ha la label che inizia con "base")
@@ -8206,8 +8208,18 @@ async function impaginazioneSingoloIndd(records, pagina, cercaInPaginaPerConfron
             await schedaRef.ricollegaBoxImpaginato(box.boxAggiunto, true);
         }
         
+        //Il box finale e' quello che resta in pagina per la referenza: di norma quello appena
+        //aggiunto, ma dopo il confronto puo' essere il duplicato del vecchio riempito con i
+        //campi nuovi. E' il box che chi rifa' una referenza deve lasciare selezionato.
+        if (box != null) {
+            box.boxFinale = box.boxAggiunto;
+        }
+
         if (originalBox != null && box != null && cercaInPaginaPerConfronto) {
-            await confronti.confrontoBox(originalBox, box.boxAggiunto);
+            const esitoConfronto = await confronti.confrontoBox(originalBox, box.boxAggiunto);
+            if (esitoConfronto != null && esitoConfronto.boxFinale != null) {
+                box.boxFinale = esitoConfronto.boxFinale;
+            }
         }
         
         if(!massiveOperation){

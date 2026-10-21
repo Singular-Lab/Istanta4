@@ -3186,6 +3186,9 @@ const ReportIntegrita = {
             this._refreshConfrontoReportUi();
             await this._riscriviCsvDelReport();
 
+            //Il box nuovo resta selezionato, come dopo ogni reimpaginazione.
+            Utility.selezionaBox(boxNuovo);
+
             console.log("Fix completato", payload);
 
         } catch (err) {
