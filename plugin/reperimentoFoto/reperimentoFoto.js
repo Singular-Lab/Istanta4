@@ -1268,6 +1268,23 @@ const ReperimentoFoto = {
         }
     },
 
+    /// Se un file c'e' su disco, senza leggerlo: serve a sapere se una foto sta nella cartella
+    /// Links quando il collegamento del box e' rotto. Falso anche quando il percorso non si legge.
+    /// In UXP fs non ha existsSync: si passa dallo storage.
+    async esisteFile(filePath) {
+        try {
+            if (filePath == null || String(filePath) === "") {
+                return false;
+            }
+            const fs = require("uxp").storage.localFileSystem;
+            const entry = await fs.getEntryWithUrl("file://" + filePath);
+            return entry != null && entry.isFile === true;
+        }
+        catch (ex) {
+            return false;
+        }
+    },
+
     /// L'md5 dell'immagine collegata a un riquadro, per sapere se e' ancora quella del server.
     /// Passa da cacheHashFoto, perche' il calcolo su centinaia di file e' il costo dominante del
     /// Report Integrita'.
@@ -1288,8 +1305,18 @@ const ReperimentoFoto = {
             const link = graphic.itemLink;
     
             if (link.status.toString() == "LINK_MISSING") {
-                result.error = "Immagine non presente nella cartella: " + link.status.toString();
+                result.error = "Collegamento rotto: " + link.status.toString();
                 result.missing = true;
+                //Dove punta il box e il nome del file: con il collegamento rotto non si legge
+                //niente, ma la scheda deve dire a chi guarda qual e' il percorso sbagliato.
+                try {
+                    result.percorsoLink = link.filePath;
+                    result.nomeLink = link.name;
+                }
+                catch (exLink) {
+                    result.percorsoLink = null;
+                    result.nomeLink = null;
+                }
                 return result;
             }
             else if (link.status.toString() == "LINK_EMBEDDED") {
