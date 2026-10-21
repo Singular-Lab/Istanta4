@@ -119,7 +119,9 @@ test("tutte le chiamate del revisore guardano la risposta prima di usarla", () =
     for (const chiamata of chiamate) {
         //Il controllo sta nelle prime righe della callback, prima di usare result.
         const corpo = revisore.substring(chiamata.index + chiamata[0].length, chiamata.index + chiamata[0].length + 700);
-        const usaIlMotivo = /Revisore\.mostraErroreDellaChiamata\(result, "[^"]+"\)\) return;/.test(corpo)
+        //I20-1120: anche la forma con il blocco, che prima di fermarsi rimette a posto lo stato della
+        //pagina (la vista Sottogruppi riporta la tendina su "Vedi tutto"): deve comunque fermarsi.
+        const usaIlMotivo = /Revisore\.mostraErroreDellaChiamata\(result, "[^"]+"\)\) (return;|\{[^{}]*?\breturn;\s*\})/.test(corpo)
             || /let _msg = Call\.motivoDellErrore\(result\) \|\| "Salvataggio non riuscito";/.test(corpo);
         assert.ok(usaIlMotivo, chiamata[1] + "/" + chiamata[2] + " non guarda la risposta");
     }

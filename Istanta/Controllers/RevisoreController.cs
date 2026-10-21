@@ -2178,6 +2178,20 @@ out var mismatch);
                 }
 
 
+                //I20-1120: per ogni referenza e gruppo, i sottogruppi di tutti i record caricati (tracciati
+                //ed etichette), con il record che li porta. La riga resta una, con il sottogruppo di un record
+                //solo: la vista Sottogruppi mostra anche gli altri da altriSottogruppi.
+                string key_codice_sottogruppo = Enum.GetName(AddestramentoRuoli.Scatto) + "." + GLOBAL_VARIABLES.keyScattoCodiceSottogruppo;
+                var sottogruppiPerRiga = RevisioneSottogruppi.SottogruppiPerRiga(q_records
+                    .Where(q => q.Dato != null && !q.isGruppo)
+                    .Select(q => new RevisioneSottogruppi.RecordSottogruppo(
+                        Canon(GetDatoValueOrNull(q.Dato, key_codice_ref)!)!,
+                        Canon(GetDatoValueOrNull(q.Dato, key_codice_gruppo)!)!,
+                        GetDatoValueOrNull(q.Dato, key_codice_sottogruppo)?.ToString(),
+                        q.Id,
+                        q.Dato.TryGetValue("idTracciato", out var idTracciatoDato) && int.TryParse(idTracciatoDato?.ToString(), out var idTracciatoRecord) ? idTracciatoRecord : 0,
+                        q.Label)));
+
                 //
                 // 4. Popolo finalList per i SINGOLI.
                 //    La lista resta distinta per CodiceRef + CodiceGruppo,
@@ -2233,6 +2247,14 @@ out var mismatch);
                             }
                         }
                     }
+
+                    //I20-1120: gli altri sottogruppi della referenza in questo gruppo, per la vista Sottogruppi.
+                    itemDaAggiungere.altriSottogruppi = RevisioneSottogruppi.AltriSottogruppi(
+                        sottogruppiPerRiga,
+                        (grp.Key.Item1 ?? "", grp.Key.Item2 ?? ""),
+                        itemDaAggiungere.recordInTracciato != null
+                            ? GetDatoValueOrNull(itemDaAggiungere.recordInTracciato, key_codice_sottogruppo)?.ToString()
+                            : null);
 
                     finalList.Add(itemDaAggiungere);
                 }
@@ -2472,16 +2494,22 @@ out var mismatch);
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
+            //I20-1120: solo i record attivi, come il conteggio della pagina Tracciati (getConteggio).
             var promoTracciatiRecords = await this.ctx2.PromoTracciatiRecords
                 .Include(r => r.IdTracciatoNavigation)
                 .Where(r =>
                     r.IdTracciatoNavigation.IdPromo == idPromo &&
+                    r.Stato == (byte)StatoRecord.Attivo &&
                     codiciSingoli.Contains(r.Codice))
                 .ToListAsync();
 
             var items = await this.ctx.ArticoliDescrizionis
                 .Where(a => sottogruppi.Contains(a.CodiceGruppo!))
                 .ToListAsync();
+
+            //I20-1120: le firme si calcolano passando a ogni sottogruppo solo i record dei suoi codici.
+            //Con tutti i record della promo per ogni sottogruppo la richiesta durava decine di secondi.
+            var firme = RevisioneConteggio.FirmeDeiSottogruppi(promoTracciatiRecords, sottogruppi);
 
             var output = sottogruppi
                 .Select(sg => new DescrizioniSottogruppi
@@ -2490,11 +2518,7 @@ out var mismatch);
                     descrizioni = items
                         .Where(a => string.Equals(a.CodiceGruppo, sg, StringComparison.OrdinalIgnoreCase))
                         .ToList(),
-                    firmaTracciatoSottogruppo = Utility.Main.getFirmaTracciatoGruppoDaRecords(
-                        promoTracciatiRecords,
-                        sg,
-                        true
-                    )
+                    firmaTracciatoSottogruppo = firme[sg]
                 })
                 .ToList();
 
