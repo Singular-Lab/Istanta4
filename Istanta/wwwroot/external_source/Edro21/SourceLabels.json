@@ -5,15 +5,15 @@
       "Codice": "main",
       "Nome": "Lista Origine"
     },
-    {
+{
       "Id": 2,
-      "Codice": "speciale",
-      "Nome": "Speciale"
-    },
-    {
-      "Id": 3,
       "Codice": "tecnica",
       "Nome": "Tecnica"
+    },
+{
+      "Id": 3,
+      "Codice": "extra",
+      "Nome": "Extra"
     }
   ]
 }
