@@ -124,6 +124,7 @@ ed è documentato il meccanismo con cui il server prevale su di lui.
 | [garbageCollector.md](garbageCollector.md) | la rimozione differita degli elementi InDesign |
 | [cambiStrutturali.md](cambiStrutturali.md) | quali cambi strutturali si applicano a una referenza |
 | [altezzaScorrimento.md](altezzaScorrimento.md) | l'altezza vera della lista della Home, perché in UXP la rotella non scorre un contenitore senza altezza (I20-1030) |
+| [vistaAffiancata.md](vistaAffiancata.md) | da 924 px di pannello segnalazioni e Report Integrità stanno in una colonna a destra, e il Plugin resta usabile a sinistra (I20-1121) |
 
 ### Lotto 3 — il motore CSS
 

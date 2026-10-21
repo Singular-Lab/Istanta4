@@ -110,6 +110,8 @@ const AltezzaScorrimento = require('./altezzaScorrimento');
 const Segnalazioni = require('./segnalazioni/segnalazioni');
 const etichettaSegnalazioni = require('./segnalazioni/etichetta');
 const SchermataSegnalazioni = require('./segnalazioni/schermata');
+//I20-1121: la vista affiancata del pannello, comune a segnalazioni e Report Integrita'.
+const VistaAffiancata = require('./vistaAffiancata');
 //I20-1035: i conti della barra orizzontale della lista dei tracciati, gli stessi del Report Integrita'.
 const barraScorrimento = require('./reportIntegrita/barraScorrimento');
 const ficoProcess = require('./ficoProcess');
@@ -10629,7 +10631,9 @@ function onresizeWindow(){
     try{
         setTimeout(function () {
             //I20-1116, lotto 2: prima le larghezze: la vista affiancata restringe #wrapper e le barre fisse.
-            lastPannelloDimension = SchermataSegnalazioni.larghezzaPannello();
+            lastPannelloDimension = VistaAffiancata.larghezzaPannello();
+            //I20-1121: prima il report, che ha la precedenza sulla colonna, poi le segnalazioni.
+            ReportIntegrita.adattaVista();
             SchermataSegnalazioni.adattaVista();
             lastWidthDimension = document.getElementById("wrapper").clientWidth;
             lastHeightDimension = document.getElementById("wrapper").clientHeight;

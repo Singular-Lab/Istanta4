@@ -23,12 +23,16 @@
  * aggiornato insieme all'icona, visibile da ogni sezione
  * del Plugin. Cliccandolo si apre la schermata di tutto il documento, come dal pulsante.
  *
- * I20-1116, lotto 2: la vista affiancata. Con il pannello largo almeno il doppio della sua
- * larghezza minima la schermata non e' un popup ma una colonna fissa a destra, non modale: a
- * sinistra il Plugin resta com'e', alla larghezza minima, e si usa insieme alla colonna. Gli
- * elementi fissi del Plugin che restano sempre a schermo (testata, barre in fondo, messaggi) si
- * confinano a sinistra; le finestre modali restano a tutto pannello. adattaVista, chiamata da
- * onresizeWindow, passa da popup a colonna e ritorno quando il pannello cambia larghezza.
+ * I20-1116, lotto 2: la vista affiancata. Con il pannello largo almeno la soglia la schermata non
+ * e' un popup ma una colonna fissa a destra, non modale: a sinistra il Plugin resta com'e', alla
+ * larghezza minima, e si usa insieme alla colonna. Gli elementi fissi del Plugin che restano sempre
+ * a schermo (testata, barre in fondo, messaggi) si confinano a sinistra; le finestre modali restano
+ * a tutto pannello. adattaVista, chiamata da onresizeWindow, passa da popup a colonna e ritorno
+ * quando il pannello cambia larghezza.
+ *
+ * I20-1121: soglia, misure, confinamento e guscio della colonna sono in vistaAffiancata.js, comuni
+ * con il Report Integrita'; la soglia e' scesa a 924 px. Una colonna alla volta: con quella del
+ * report aperta le segnalazioni si aprono come popup.
  */
 
 const Segnalazioni = require('./segnalazioni');
@@ -37,6 +41,8 @@ const etichettaSegnalazioni = require('./etichetta');
 //descrizione della referenza. Sono moduli puri: si caricano anche sotto Node.
 const reportIntegritaAvvio = require('../reportIntegrita/avvio');
 const reportConfrontoCsv = require('../reportIntegrita/csv');
+//I20-1121: le regole della vista affiancata, comuni con il Report Integrita'.
+const VistaAffiancata = require('../vistaAffiancata');
 
 //I colori della schermata, gli stessi del bollino: rosso gli errori, arancione i warning.
 const COLORE_CSS = { error: "#c62828", warning: "#ef6c00", notifica: "#1565c0" };
@@ -63,18 +69,9 @@ const SchermataSegnalazioni = {
     ID_SEGNALINO: "segnalinoSegnalazioni",
     ID_TESTO_SEGNALINO: "testoSegnalinoSegnalazioni",
 
-    /// I20-1116, lotto 2: la vista affiancata. La larghezza minima del pannello (manifest.json) e'
-    /// quella con cui il Plugin resta a sinistra; dal doppio in su la schermata diventa colonna.
-    LARGHEZZA_SINISTRA: 524,
-    SOGLIA_AFFIANCATA: 1048,
-    /// Il margine del corpo della pagina: gli elementi fissi senza left partono da li'.
-    MARGINE_CORPO: 8,
+    /// I20-1116, lotto 2: la colonna della vista affiancata (regole in vistaAffiancata.js, I20-1121).
     ID_COLONNA: "colonnaSegnalazioni",
     TITOLO: "Segnalazioni di impaginazione",
-
-    /// Gli elementi fissi che restano a schermo, con la larghezza originale, finche' la colonna e'
-    /// aperta: { elemento, larghezza }.
-    _confinati: null,
 
     /// I20-1056, lotto 3: l'ultimo controllo dei bollini del documento, pagina per pagina:
     /// { chiave, pagine: { nome: { segnalazioni, errori, gravita } } }. Solo i numeri: i dati della
@@ -197,7 +194,7 @@ const SchermataSegnalazioni = {
             elenco.data('conteggio', conteggio);
             SchermataSegnalazioni._disegna(elenco, lette, pagine);
             //I20-1116, lotto 2: a pannello largo una colonna a destra invece del popup.
-            if (SchermataSegnalazioni.formaSchermata(SchermataSegnalazioni.larghezzaPannello()) === "colonna") {
+            if (SchermataSegnalazioni.formaSchermata() === "colonna") {
                 SchermataSegnalazioni._apriColonna(elenco);
                 return true;
             }
@@ -224,96 +221,28 @@ const SchermataSegnalazioni = {
         SchermataSegnalazioni.chiudiColonna(false);
     },
 
-    /// I20-1116, lotto 2: la larghezza del pannello. Non quella di #wrapper, che nella vista
-    /// affiancata resta ferma alla larghezza di sinistra.
-    larghezzaPannello() {
-        try {
-            const candidati = [
-                typeof window !== "undefined" ? window.innerWidth : 0,
-                typeof document !== "undefined" && document.documentElement != null ? document.documentElement.clientWidth : 0,
-                typeof document !== "undefined" && document.body != null ? document.body.clientWidth : 0
-            ];
-            const trovata = candidati.find(l => l > 0);
-            return trovata != null ? trovata : 0;
+    /// I20-1116, lotto 2: popup o colonna. I20-1121: la soglia e' quella di vistaAffiancata.js, e con
+    /// un'altra colonna aperta (il Report Integrita') le segnalazioni restano popup: una colonna alla volta.
+    formaSchermata() {
+        if (VistaAffiancata.altraColonnaAperta(SchermataSegnalazioni.ID_COLONNA)) {
+            return "popup";
         }
-        catch (e) {
-            return 0;
-        }
-    },
-
-    /// I20-1116, lotto 2: popup o colonna, dalla larghezza del pannello.
-    formaSchermata(larghezzaPannello) {
-        return larghezzaPannello >= SchermataSegnalazioni.SOGLIA_AFFIANCATA ? "colonna" : "popup";
-    },
-
-    /// I20-1116, lotto 2: dove comincia la colonna: dopo il Plugin di sinistra e il margine del corpo.
-    inizioColonna() {
-        return SchermataSegnalazioni.LARGHEZZA_SINISTRA + SchermataSegnalazioni.MARGINE_CORPO;
-    },
-
-    /// I20-1116, lotto 2: gli elementi fissi sempre a schermo e la larghezza che prendono nella
-    /// vista affiancata. #footer ha 5px di riempimento per lato, che si aggiungono alla larghezza.
-    confinamenti(larghezzaSinistra = SchermataSegnalazioni.LARGHEZZA_SINISTRA) {
-        return [
-            { selettore: "#wrapper", larghezza: larghezzaSinistra },
-            { selettore: "#header", larghezza: larghezzaSinistra },
-            { selettore: "#footerRef", larghezza: larghezzaSinistra },
-            { selettore: "#footer", larghezza: larghezzaSinistra - 10 },
-            { selettore: "#messaggiUtente", larghezza: Math.round(larghezzaSinistra * 0.95) }
-        ];
-    },
-
-    /// I20-1116, lotto 2: confina a sinistra gli elementi fissi, o rimette la larghezza di prima.
-    /// Si tocca solo la larghezza: il resto dello stile puo' cambiare intanto, e deve restare.
-    _confinaPannello(confina) {
-        if (confina) {
-            if (SchermataSegnalazioni._confinati != null) {
-                return;
-            }
-            SchermataSegnalazioni._confinati = [];
-            SchermataSegnalazioni.confinamenti().forEach(voce => {
-                const elemento = document.querySelector(voce.selettore);
-                if (elemento == null) {
-                    return;
-                }
-                SchermataSegnalazioni._confinati.push({ elemento: elemento, larghezza: elemento.style.width });
-                elemento.style.width = voce.larghezza + "px";
-            });
-            return;
-        }
-        (SchermataSegnalazioni._confinati || []).forEach(voce => { voce.elemento.style.width = voce.larghezza; });
-        SchermataSegnalazioni._confinati = null;
+        return VistaAffiancata.forma(VistaAffiancata.larghezzaPannello());
     },
 
     /// I20-1116, lotto 2: la schermata come colonna fissa a destra, non modale: titolo, conteggio,
     /// X e l'elenco che scorre. Sta sotto le finestre modali (popup 9000, conferme), che possono
     /// coprirla finche' sono aperte, e sopra il resto del pannello.
     _apriColonna(elenco) {
-        const colonna = $('<div></div>').attr('id', SchermataSegnalazioni.ID_COLONNA).css({
-            position: 'fixed', top: '0px', bottom: '0px', right: '0px', left: SchermataSegnalazioni.inizioColonna() + 'px',
-            backgroundColor: 'white', borderLeft: '2px solid #333', boxSizing: 'border-box', zIndex: '900',
-            display: 'flex', flexDirection: 'column'
+        //I20-1121: il guscio della colonna e il confinamento a sinistra sono in vistaAffiancata.js.
+        const guscio = VistaAffiancata.creaColonna({
+            id: SchermataSegnalazioni.ID_COLONNA,
+            titolo: SchermataSegnalazioni.TITOLO,
+            accantoAlTitolo: elenco.data('conteggio'),
+            alChiudi: () => SchermataSegnalazioni.chiudiColonna(true)
         });
-        const titolo = $('<div></div>').css({
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center', flex: '0 0 auto',
-            backgroundColor: '#f1f1f1', padding: '5px 8px', boxSizing: 'border-box'
-        });
-        const sinistra = $('<div></div>').css({ display: 'flex', alignItems: 'baseline', flexWrap: 'wrap', gap: '10px', minWidth: '0' });
-        //UXP non applica gap: lo spazio fra titolo e conteggio lo da' il margine.
-        sinistra.append($('<span></span>').text(SchermataSegnalazioni.TITOLO).css({ fontSize: '16px', fontWeight: 'bold', color: 'black', marginRight: '10px' }));
-        if (elenco.data('conteggio') != null) {
-            sinistra.append(elenco.data('conteggio'));
-        }
-        const chiudi = $('<button type="button"></button>').html('&times;')
-            .css({ backgroundColor: 'transparent', border: 'none', fontSize: '18px', cursor: 'pointer' })
-            .on('click', () => SchermataSegnalazioni.chiudiColonna(true));
-        titolo.append(sinistra).append(chiudi);
-        const corpo = $('<div></div>').css({ flex: '1 1 auto', minHeight: '0', overflowY: 'auto', padding: '8px', boxSizing: 'border-box' });
-        corpo.append(elenco);
-        colonna.append(titolo).append(corpo);
-        $("body").append(colonna);
-        SchermataSegnalazioni._confinaPannello(true);
-        SchermataSegnalazioni._allineaSegnalino();
+        guscio.corpo.append(elenco);
+        SchermataSegnalazioni.allineaSegnalino();
     },
 
     /// I20-1116, lotto 2: chiude la colonna e rimette il Plugin a tutta larghezza. conAvviso: come
@@ -323,9 +252,9 @@ const SchermataSegnalazioni = {
         if (!(colonna.length > 0)) {
             return false;
         }
-        colonna.remove();
-        SchermataSegnalazioni._confinaPannello(false);
-        SchermataSegnalazioni._allineaSegnalino();
+        //I20-1121: il Plugin torna a tutta larghezza solo se non resta un'altra colonna aperta.
+        VistaAffiancata.togliColonna(SchermataSegnalazioni.ID_COLONNA);
+        SchermataSegnalazioni.allineaSegnalino();
         if (conAvviso) {
             SchermataSegnalazioni.allaChiusura();
         }
@@ -338,9 +267,9 @@ const SchermataSegnalazioni = {
     /// il popup e' staccato dalla pagina, e non si tocca: si riattacca alla chiusura della scheda.
     adattaVista() {
         //Il segnalino segue il bordo del pannello, anche quando la forma non cambia.
-        SchermataSegnalazioni._allineaSegnalino();
+        SchermataSegnalazioni.allineaSegnalino();
         try {
-            const forma = SchermataSegnalazioni.formaSchermata(SchermataSegnalazioni.larghezzaPannello());
+            const forma = SchermataSegnalazioni.formaSchermata();
             const colonna = $("#" + SchermataSegnalazioni.ID_COLONNA);
             if (colonna.length > 0) {
                 if (forma === "colonna") {
@@ -575,7 +504,7 @@ const SchermataSegnalazioni = {
         }
         $("#" + SchermataSegnalazioni.ID_TESTO_SEGNALINO).text(stato.testo).css({ backgroundColor: stato.colore });
         segnalino.attr('title', stato.suggerimento).css({ display: 'flex' });
-        SchermataSegnalazioni._allineaSegnalino();
+        SchermataSegnalazioni.allineaSegnalino();
     },
 
     /// I20-1116: il segnalino esce dal bordo destro del pannello, come un segnalibro che lo avvolge.
@@ -583,7 +512,7 @@ const SchermataSegnalazioni = {
     /// le misure orizzontali del layout in UXP non tornavano e il testo veniva tagliato. Qui si fissa
     /// solo l'altezza, quella della riga delle linguette, e nella vista affiancata il lato sinistro, cosi'
     /// che finisca contro la colonna. Senza misure resta agganciato al bordo del pannello.
-    _allineaSegnalino() {
+    allineaSegnalino() {
         try {
             const appoggio = document.getElementById("appoggioSegnalino");
             const segnalino = document.getElementById(SchermataSegnalazioni.ID_SEGNALINO);
@@ -595,9 +524,10 @@ const SchermataSegnalazioni = {
                 segnalino.style.top = Math.round(riga.top) + "px";
             }
             const larghezza = segnalino.offsetWidth || 0;
-            if ($("#" + SchermataSegnalazioni.ID_COLONNA).length > 0 && larghezza > 0) {
+            //I20-1121: contro qualunque colonna aperta, delle segnalazioni o del Report Integrita'.
+            if (VistaAffiancata.colonnaAperta() && larghezza > 0) {
                 segnalino.style.right = "auto";
-                segnalino.style.left = Math.round(SchermataSegnalazioni.inizioColonna() - larghezza) + "px";
+                segnalino.style.left = Math.round(VistaAffiancata.inizioColonna() - larghezza) + "px";
             }
             else {
                 segnalino.style.left = "auto";
@@ -1080,7 +1010,7 @@ const SchermataSegnalazioni = {
         //scheda ref si apre a sinistra come per ogni selezione, con tutti i menu, e la colonna resta.
         //Basta che la colonna sia aperta: la schermata e' una sola, quindi il pulsante e' suo.
         //elenco.closest sulla colonna, in UXP, non la riconosceva, e si finiva nella vista controllata.
-        if ($("#" + SchermataSegnalazioni.ID_COLONNA).length > 0) {
+        if (VistaAffiancata.colonnaAperta(SchermataSegnalazioni.ID_COLONNA)) {
             return SchermataSegnalazioni._selezionaBox(box);
         }
 

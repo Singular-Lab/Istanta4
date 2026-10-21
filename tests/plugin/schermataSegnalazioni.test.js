@@ -900,47 +900,31 @@ test("I20-1116: cambiando documento o restando senza, il segnalino si riallinea"
 
 /* ---- I20-1116, lotto 2: la vista affiancata a pannello largo ---- */
 
-test("I20-1116 lotto 2: dal doppio della larghezza minima la schermata e' una colonna, sotto un popup", () => {
-    assert.strictEqual(SchermataSegnalazioni.formaSchermata(524), "popup");
-    assert.strictEqual(SchermataSegnalazioni.formaSchermata(1047), "popup");
-    assert.strictEqual(SchermataSegnalazioni.formaSchermata(1048), "colonna");
-    assert.strictEqual(SchermataSegnalazioni.formaSchermata(1600), "colonna");
-    //Senza misura (0) resta il popup di sempre.
-    assert.strictEqual(SchermataSegnalazioni.formaSchermata(0), "popup");
-    //La colonna comincia dopo il Plugin di sinistra e il margine del corpo.
-    assert.strictEqual(SchermataSegnalazioni.inizioColonna(), 532);
-});
-
-test("I20-1116 lotto 2: a sinistra le barre fisse prendono la larghezza minima del pannello", () => {
-    assert.deepStrictEqual(SchermataSegnalazioni.confinamenti(), [
-        { selettore: "#wrapper", larghezza: 524 },
-        { selettore: "#header", larghezza: 524 },
-        { selettore: "#footerRef", larghezza: 524 },
-        { selettore: "#footer", larghezza: 514 },
-        { selettore: "#messaggiUtente", larghezza: 498 }
-    ]);
-});
-
-test("I20-1116 lotto 2: chiusa la colonna le barre tornano alla larghezza di prima", () => {
-    const elementi = {};
-    SchermataSegnalazioni.confinamenti().forEach(voce => { elementi[voce.selettore] = { style: { width: "100%" } }; });
-    elementi["#messaggiUtente"].style.width = "95%";
-    const prima = global.document;
-    global.document = { querySelector: (sel) => elementi[sel] || null };
+//I20-1121: soglia, misure e confinamento delle barre sono passati in vistaAffiancata.js, comuni
+//al Report Integrita' (vistaAffiancata.test.js). Qui resta la scelta della schermata.
+test("I20-1121: la schermata e' una colonna da 924 px di pannello, ma non accanto a un'altra colonna", () => {
+    const VistaAffiancata = require("../../plugin/vistaAffiancata");
+    const prima = { larghezza: VistaAffiancata.larghezzaPannello, $: global.$, colonne: VistaAffiancata._colonne };
+    let larghezza = 924;
+    let reportAperto = false;
+    VistaAffiancata.larghezzaPannello = () => larghezza;
+    VistaAffiancata._colonne = ["colonnaSegnalazioni", "colonnaReportIntegrita"];
+    global.$ = (sel) => ({ length: sel === "#colonnaReportIntegrita" && reportAperto ? 1 : 0 });
     try {
-        SchermataSegnalazioni._confinaPannello(true);
-        assert.strictEqual(elementi["#header"].style.width, "524px");
-        assert.strictEqual(elementi["#footer"].style.width, "514px");
-        //Una seconda volta non cambia la larghezza da rimettere.
-        SchermataSegnalazioni._confinaPannello(true);
-        SchermataSegnalazioni._confinaPannello(false);
-        assert.strictEqual(elementi["#header"].style.width, "100%");
-        assert.strictEqual(elementi["#wrapper"].style.width, "100%");
-        assert.strictEqual(elementi["#messaggiUtente"].style.width, "95%");
+        assert.strictEqual(SchermataSegnalazioni.formaSchermata(), "colonna");
+        larghezza = 923;
+        assert.strictEqual(SchermataSegnalazioni.formaSchermata(), "popup");
+        //Il report affiancato ha la precedenza: le segnalazioni si aprono come popup.
+        larghezza = 1600;
+        reportAperto = true;
+        assert.strictEqual(SchermataSegnalazioni.formaSchermata(), "popup");
+        reportAperto = false;
+        assert.strictEqual(SchermataSegnalazioni.formaSchermata(), "colonna");
     }
     finally {
-        global.document = prima;
-        SchermataSegnalazioni._confinati = null;
+        VistaAffiancata.larghezzaPannello = prima.larghezza;
+        VistaAffiancata._colonne = prima.colonne;
+        global.$ = prima.$;
     }
 });
 
@@ -1004,20 +988,22 @@ test("I20-1116: se il centraggio non riesce la selezione resta", () => {
 
 test("I20-1116 lotto 2: la colonna si apre a pannello largo, si rilegge e segue il pannello", () => {
     //apri sceglie la forma dalla larghezza del pannello.
-    assert.match(schermataLotto2(), /if \(SchermataSegnalazioni\.formaSchermata\(SchermataSegnalazioni\.larghezzaPannello\(\)\) === "colonna"\) \{\s*SchermataSegnalazioni\._apriColonna\(elenco\);\s*return true;\s*\}/);
+    assert.match(schermataLotto2(), /if \(SchermataSegnalazioni\.formaSchermata\(\) === "colonna"\) \{\s*SchermataSegnalazioni\._apriColonna\(elenco\);\s*return true;\s*\}/);
     //Dopo un controllo da fuori (risoluzione dalla scheda, Reimpagina, documento aperto) la colonna si rilegge.
     assert.match(schermataLotto2(), /controllaPagine\(pagine\) \{[\s\S]*?SchermataSegnalazioni\._leggi\(pagine\);\s*SchermataSegnalazioni\._rileggiColonna\(\);/);
     assert.match(schermataLotto2(), /controllaDocumento\(\) \{\s*SchermataSegnalazioni\._leggi\(null\);\s*SchermataSegnalazioni\._rileggiColonna\(\);/);
     //Chi apre una schermata nuova chiude anche la colonna.
     assert.match(schermataLotto2(), /chiudiAperta\(\) \{[\s\S]*?SchermataSegnalazioni\.chiudiColonna\(false\);\s*\}/);
-    //Fra titolo e conteggio della colonna un margine vero: UXP ignora gap, e si leggevano attaccati.
-    assert.match(schermataLotto2(), /\.text\(SchermataSegnalazioni\.TITOLO\)\.css\(\{[^}]*marginRight: '10px' \}\)/);
+    //I20-1121: il guscio della colonna (titolo, conteggio accanto, X) lo fa vistaAffiancata.js; fra
+    //titolo e conteggio il margine vero sta li' (vistaAffiancata.test.js).
+    assert.match(schermataLotto2(), /VistaAffiancata\.creaColonna\(\{\s*id: SchermataSegnalazioni\.ID_COLONNA,\s*titolo: SchermataSegnalazioni\.TITOLO,\s*accantoAlTitolo: elenco\.data\('conteggio'\),/);
 
     //Il ciclo degli eventi guarda anche la larghezza del pannello; onresizeWindow adatta la vista.
     const eventi = leggiFileDelPlugin("events.js").replace(/\r/g, "");
-    assert.match(eventi, /SchermataSegnalazioni\.larghezzaPannello\(\) != lastPannelloDimension\)\)\{\s*onresizeWindow\(\);/);
+    assert.match(eventi, /VistaAffiancata\.larghezzaPannello\(\) != lastPannelloDimension\)\)\{\s*onresizeWindow\(\);/);
     const indexNew = leggiFileDelPlugin("indexNew.js").replace(/\r/g, "");
-    assert.match(indexNew, /function onresizeWindow\(\)\{\s*try\{\s*setTimeout\(function \(\) \{\s*\/\/I20-1116[^\n]*\n\s*lastPannelloDimension = SchermataSegnalazioni\.larghezzaPannello\(\);\s*SchermataSegnalazioni\.adattaVista\(\);/);
+    //I20-1121: prima il report, che ha la precedenza sulla colonna, poi le segnalazioni.
+    assert.match(indexNew, /function onresizeWindow\(\)\{\s*try\{\s*setTimeout\(function \(\) \{\s*\/\/I20-1116[^\n]*\n\s*lastPannelloDimension = VistaAffiancata\.larghezzaPannello\(\);\s*\/\/I20-1121[^\n]*\n\s*ReportIntegrita\.adattaVista\(\);\s*SchermataSegnalazioni\.adattaVista\(\);/);
 });
 
 function schermataLotto2() {
@@ -1025,32 +1011,41 @@ function schermataLotto2() {
 }
 
 test("I20-1116: il segnalino resta agganciato al bordo, all'altezza delle linguette; nella vista affiancata contro la colonna", () => {
-    const prima = { document: global.document, $: global.$, log: console.log };
+    const VistaAffiancata = require("../../plugin/vistaAffiancata");
+    const prima = { document: global.document, $: global.$, log: console.log, colonne: VistaAffiancata._colonne };
     const segnalino = { style: { right: "0px" }, offsetWidth: 110 };
     let riga = { top: 70, right: 487, height: 27 };
     let colonnaAperta = false;
+    //I20-1121: contro qualunque colonna aperta, anche quella del Report Integrita'.
+    let colonna = "#colonnaSegnalazioni";
+    VistaAffiancata._colonne = ["colonnaSegnalazioni", "colonnaReportIntegrita"];
     global.document = { getElementById: (id) => ({ appoggioSegnalino: { getBoundingClientRect: () => riga }, segnalinoSegnalazioni: segnalino })[id] || null };
-    global.$ = (sel) => ({ length: sel === "#colonnaSegnalazioni" && colonnaAperta ? 1 : 0 });
+    global.$ = (sel) => ({ length: sel === colonna && colonnaAperta ? 1 : 0 });
     console.log = () => {};
     try {
         //Al bordo del pannello, senza calcoli, e all'altezza della riga delle linguette.
-        SchermataSegnalazioni._allineaSegnalino();
+        SchermataSegnalazioni.allineaSegnalino();
         assert.strictEqual(segnalino.style.right, "0px");
         assert.strictEqual(segnalino.style.left, "auto");
         assert.strictEqual(segnalino.style.top, "70px");
         //Vista affiancata: finisce dove comincia la colonna (532).
         colonnaAperta = true;
-        SchermataSegnalazioni._allineaSegnalino();
+        SchermataSegnalazioni.allineaSegnalino();
         assert.strictEqual(segnalino.style.right, "auto");
         assert.strictEqual(segnalino.style.left, "422px");
+        colonna = "#colonnaReportIntegrita";
+        segnalino.style.left = "auto";
+        SchermataSegnalazioni.allineaSegnalino();
+        assert.strictEqual(segnalino.style.left, "422px");
+        colonna = "#colonnaSegnalazioni";
         //Chiusa la colonna torna al bordo.
         colonnaAperta = false;
-        SchermataSegnalazioni._allineaSegnalino();
+        SchermataSegnalazioni.allineaSegnalino();
         assert.strictEqual(segnalino.style.right, "0px");
         assert.strictEqual(segnalino.style.left, "auto");
         //Senza misure l'altezza resta quella di prima, e il segnalino resta al bordo.
         riga = { top: 0, right: 0, height: 0 };
-        SchermataSegnalazioni._allineaSegnalino();
+        SchermataSegnalazioni.allineaSegnalino();
         assert.strictEqual(segnalino.style.top, "70px");
         assert.strictEqual(segnalino.style.right, "0px");
     }
@@ -1058,5 +1053,6 @@ test("I20-1116: il segnalino resta agganciato al bordo, all'altezza delle lingue
         global.document = prima.document;
         global.$ = prima.$;
         console.log = prima.log;
+        VistaAffiancata._colonne = prima.colonne;
     }
 });

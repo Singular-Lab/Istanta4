@@ -50,4 +50,16 @@ Sono esportate perché il test deve poter usare gli stessi numeri del codice, in
   una scheda.
 - `sostituisciRecordNellaLista(...)`, `etichettaSegnalazione(...)`.
 
-**Test:** `node --test tests/plugin/reportIntegritaAvvio.test.js`
+### Seguire il box accanto al report (I20-1121)
+
+- `contoAbbandono(contoPrecedente, sulBox, inPausa)` → `{ conto, ricontrolla }`: il conto delle
+  vigilanze di fila in cui l'operatore non è più sul box trovato con «Trova» nel report affiancato.
+  Come per la scheda dal report (`contoDeselezione`, `VIGILANZE_DESELEZIONE`) ne servono due: una
+  sola potrebbe essere il box che Reimpagina sta rifacendo. Mentre si lavora il conto riparte da zero.
+- `selezioneSulBox(selezione, idBox)` → se fra gli oggetti selezionati c'è il box o qualcosa che ci
+  sta dentro. Si risale da ogni oggetto: dal testo alla sua cornice (`parentTextFrames`), dagli altri
+  al genitore (`parent`), per al più dodici passi. Un oggetto che non risponde non è il box; senza id
+  (il box non c'è più) l'operatore non ci può essere.
+
+**Test:** `node --test tests/plugin/reportIntegritaAvvio.test.js`; le due regole del box seguito in
+`tests/plugin/reportIntegritaColonna.test.js`.

@@ -222,8 +222,11 @@ const pannelli = {
 
     //I20-981: il percorso completo della cartella dei csv vive nel suggerimento del pulsante.
     _aggiornaTitoloCartellaCsv() {
-        const bottone = document.getElementById("cartellaReportConfrontoCsv");
-        if (bottone == null) {
+        //I20-1121: nella colonna del report affiancato il pulsante ha un altro id.
+        const bottoni = ["cartellaReportConfrontoCsv", "cartellaReportConfrontoCsvColonna"]
+            .map(id => document.getElementById(id))
+            .filter(b => b != null);
+        if (bottoni.length === 0) {
             return;
         }
 
@@ -237,8 +240,8 @@ const pannelli = {
 
         //Il testo del pulsante non cambia: cambiarlo spostava tutta la testata a ogni scelta,
         //e una cartella dal nome lungo non ci stava comunque. Il percorso sta nel suggerimento.
-        Tooltip.impostaTooltip(bottone, "Scegli cartella. Attualmente impostata: "
-            + (cartella !== "" ? cartella : "nessuna (configura i percorsi di sistema)"));
+        bottoni.forEach(bottone => Tooltip.impostaTooltip(bottone, "Scegli cartella. Attualmente impostata: "
+            + (cartella !== "" ? cartella : "nessuna (configura i percorsi di sistema)")));
     },
 
     _crDuplicateControl(record, reportKey) {
@@ -426,7 +429,9 @@ const pannelli = {
             current = current.parentElement;
         }
 
-        return document.getElementById("bodyConfrontoReport") || document.getElementById("bodyModal");
+        //I20-1121: affiancato, il report sta nel corpo della colonna.
+        return (this.reportAffiancato() ? document.getElementById(this.ID_CORPO_COLONNA) : null)
+            || document.getElementById("bodyConfrontoReport") || document.getElementById("bodyModal");
     },
 
     _refreshConfrontoReportUi() {
@@ -454,6 +459,9 @@ const pannelli = {
     _crReportListPicker() {
         const picker = document.createElement("sp-picker");
         picker.style.minWidth = "150px";
+        //I20-1121: i controlli nativi di UXP restano sopra a tutto; .hideble li spegne sotto i popup
+        //(anche quelli aperti dalla scheda accanto al report affiancato).
+        picker.classList.add("hideble");
 
         const menu = document.createElement("sp-menu");
         menu.setAttribute("slot", "options");
@@ -944,7 +952,8 @@ const pannelli = {
             });
         }
 
-        btnDeleteAll.addEventListener("click", () => this._eliminaTuttiUsciti(records));
+        //I20-1121: affiancato, gli eventi si fermano finche' l'eliminazione lavora sul documento.
+        btnDeleteAll.addEventListener("click", () => this._conEventiFermi(() => this._eliminaTuttiUsciti(records)));
 
         panel.appendChild(topbar);
         panel.appendChild(content);
@@ -1869,6 +1878,8 @@ const pannelli = {
 
         const pickerLavorazioni = document.createElement("sp-picker");
         pickerLavorazioni.style.minWidth = "220px";
+        //I20-1121: sotto i popup si spegne (.hideble), come gli altri controlli nativi del report.
+        pickerLavorazioni.classList.add("hideble");
         const menuLavorazioni = document.createElement("sp-menu");
         menuLavorazioni.setAttribute("slot", "options");
         pickerLavorazioni.appendChild(menuLavorazioni);
@@ -1968,6 +1979,8 @@ const pannelli = {
     _crPickerPresenza(valore) {
         const picker = document.createElement("sp-picker");
         picker.style.minWidth = "170px";
+        //I20-1121: sotto i popup si spegne (.hideble), come gli altri controlli nativi del report.
+        picker.classList.add("hideble");
         const menu = document.createElement("sp-menu");
         menu.setAttribute("slot", "options");
 
@@ -2000,6 +2013,8 @@ const pannelli = {
 
         const casella = document.createElement("input");
         casella.type = "checkbox";
+        //I20-1121: sotto i popup si spegne (.hideble), come gli altri controlli nativi del report.
+        casella.classList.add("hideble");
         casella.checked = acceso === true;
         casella.addEventListener("change", () => alCambio(casella.checked === true));
 
@@ -2327,6 +2342,8 @@ const pannelli = {
 
         const pickerLibreria = document.createElement("sp-picker");
         pickerLibreria.style.minWidth = "220px";
+        //I20-1121: sotto i popup si spegne (.hideble), come gli altri controlli nativi del report.
+        pickerLibreria.classList.add("hideble");
 
         const menuLibreria = document.createElement("sp-menu");
         menuLibreria.setAttribute("slot", "options");
@@ -2481,7 +2498,8 @@ const pannelli = {
             try {
                 const ok = await this._confirmReportAction("massive", "Impaginare tutti i nuovi elementi in coda al documento?");
                 if (ok) {
-                    await this._impaginaTuttiNuoviInCoda();
+                    //I20-1121: affiancato, gli eventi si fermano finche' si impagina.
+                    await this._conEventiFermi(() => this._impaginaTuttiNuoviInCoda());
                 }
             } catch (err) {
                 console.error("Errore impaginazione massiva nuovi:", err);
@@ -3082,6 +3100,8 @@ const pannelli = {
         const input = document.createElement("input");
         input.type = "text";
         input.maxLength = 3;
+        //I20-1121: sotto i popup si spegne (.hideble), come gli altri controlli nativi del report.
+        input.classList.add("hideble");
         input.placeholder = "Pag";
         input.style.width = "36px";
         input.style.minWidth = "36px";
@@ -3089,7 +3109,8 @@ const pannelli = {
 
         btn.addEventListener("click", async () => {
             try {
-                await this._impaginaNuovoSingolo(rowData, input);
+                //I20-1121: affiancato, gli eventi si fermano finche' si impagina.
+                await this._conEventiFermi(() => this._impaginaNuovoSingolo(rowData, input));
             } catch (err) {
                 console.error("Errore impaginazione nuovo singolo:", rowData, err);
             }
