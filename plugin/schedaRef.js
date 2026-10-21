@@ -2691,7 +2691,7 @@ const schedaRef = {
         }
     },
 
-    applicaReimpaginazione(){
+    async applicaReimpaginazione(){
         var schedaRef = this.schedeRefDati;
         if (schedaRef == null || schedaRef.length == 0) {
             messaggioUtente("Code SRF-1 Scheda ref non trovata", "error");
@@ -2726,7 +2726,10 @@ const schedaRef = {
         }
 
         //I20-1056: rifare un box non apre la schermata delle segnalazioni: restano nel suo bollino.
-        impaginazioneSingoloIndd(schedaRef, pagina, false, null, false, bounds, false, false);
+        var esito = await impaginazioneSingoloIndd(schedaRef, pagina, false, null, false, bounds, false, false);
+        //Il box nuovo resta selezionato: e' quello su cui l'operatore sta lavorando.
+        Utility.selezionaBox(esito != null ? (esito.boxFinale || esito.boxAggiunto) : null);
+        return esito;
     },
 
     mostraSecondaSchermataClonazione(element, idKitLavorazione, selezioneClonazione, allElementGruppo, skipImpaginazione) {
@@ -6185,14 +6188,14 @@ const schedaRef = {
 
         if (esito === esiti.reimpagina) {
             messaggioUtente("Il tipo di box e' cambiato (" + codiceBoxPrecedente + " -> " + codiceBoxNuovo + "): il box viene reimpaginato.", "warning", false, 10);
-            me.applicaReimpaginazione();
+            await me.applicaReimpaginazione();
             return esito;
         }
 
         if (esito === esiti.proponiAggiornamento) {
             var aggiorna = await Modali.confirm("I dati del box non sono piu' allineati alla scheda. Aggiorno il box?");
             if (aggiorna) {
-                me.applicaReimpaginazione();
+                await me.applicaReimpaginazione();
                 return esito;
             }
         }
@@ -6528,7 +6531,10 @@ const schedaRef = {
 
                     if (me.refSelected.item.isValid) {
                         //me.refSelected.item.remove();
-                        await confronti.confrontoBox(me.refSelected.item, res.boxAggiunto);
+                        var esitoConfronto = await confronti.confrontoBox(me.refSelected.item, res.boxAggiunto);
+                        //Il box che resta in pagina si seleziona in ogni caso: il confronto lo faceva solo
+                        //quando sopravviveva il box nuovo, non quando sopravvive il duplicato del vecchio.
+                        Utility.selezionaBox(esitoConfronto != null && esitoConfronto.boxFinale != null ? esitoConfronto.boxFinale : res.boxAggiunto);
                     }
                 }
                 else {

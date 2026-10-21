@@ -108,6 +108,8 @@ const confronti = {
             }
 
             let box1Rimosso = false;
+            //Il box che resta in pagina per la referenza, per chi deve selezionarlo dopo.
+            let boxFinale = null;
 
             if (box1Duplicate.label == box2.label && !forzaReimpaginazione) {
                 //se tutti i campi sono comuni
@@ -337,10 +339,12 @@ const confronti = {
                         }
                     }
 
+                    boxFinale = box1Duplicate;
                     box2.remove();
 
                 }
                 else{
+                    boxFinale = box2;
                     box2.select();
                     box1Duplicate.remove();
                     //box2 = Utility.addBollinoCustom(box2, "Dif", "orange", null, 1, null);
@@ -351,6 +355,7 @@ const confronti = {
             }
             else{
                 //muoviamo il box1 in alto a sinistra di 10 px poi selezioniamo il box 2
+                boxFinale = box2;
                 box2.select();
                 box1Duplicate.remove();
                 //box2 = Utility.addBollinoCustom(box2, "Dif", "orange", null, 1, null);
@@ -361,8 +366,11 @@ const confronti = {
                 //livello non stampabile. Lo stesso che fa Reimpagina box.
                 VersionePrecedente.mettiDaParte(box1, docInLavorazione);
             }
+
+            return { boxFinale: boxFinale };
         } catch (error) {
             console.error(error);
+            return { boxFinale: null };
         }
     },
 

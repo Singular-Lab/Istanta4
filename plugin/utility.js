@@ -1076,6 +1076,43 @@ const Utility=
     /// I20-1022: se l'elemento e' un clone nato da una duplicazione del CssFramework, come la copia
     /// della primaria nei box BIS (foto_secondaria$617632$clone). Le segnalazioni lo ignorano:
     /// e' voluto, e sovrapposto alla foto da cui nasce.
+    /// Attiva una pagina di InDesign solo se non e' gia' quella attiva. Page.select() porta la
+    /// pagina in vista anche quando l'operatore ci sta gia' lavorando, e la vista salta al centro
+    /// della pagina: con lo zoom su un box, il box va ricercato. Se non c'e' una finestra di
+    /// layout da interrogare, la pagina si seleziona come prima.
+    attivaPaginaSeDiversa(pagina) {
+        if (pagina == null) {
+            return false;
+        }
+        try {
+            const finestra = app.activeWindow;
+            const attiva = finestra != null ? finestra.activePage : null;
+            if (attiva != null && attiva.isValid && String(attiva.name) === String(pagina.name)) {
+                return false;
+            }
+        }
+        catch (e) {
+            //senza finestra di layout si seleziona e basta
+        }
+        pagina.select();
+        return true;
+    },
+
+    /// Mette la selezione di InDesign su un box, se c'e' ancora: e' quello che l'operatore si
+    /// aspetta dopo una reimpaginazione, invece di ritrovarsi senza niente selezionato.
+    selezionaBox(box) {
+        try {
+            if (box != null && box.isValid) {
+                app.selection = [box];
+                return true;
+            }
+        }
+        catch (e) {
+            console.error("Code UTL-01 Il box non si e' potuto selezionare: " + e);
+        }
+        return false;
+    },
+
     eUnClone(label) {
         return cssComposizioneBox.eUnClone(label);
     },

@@ -332,7 +332,7 @@ test("azione sul box e Reimpagina box mettono da parte il vecchio allo stesso mo
     assert.match(confronti, /mappaturaVersioniPrecedenti\(nomiPagine = null\) \{/);
 
     const scheda = sorgente("schedaRef.js");
-    const reimpagina = corpoMembro(scheda, "    applicaReimpaginazione(){");
+    const reimpagina = corpoMembro(scheda, "    async applicaReimpaginazione(){");
     assert.match(reimpagina, /var bounds = boxPrecedente\.geometricBounds;/);
     assert.doesNotMatch(reimpagina, /bounds\[0\] - 10/);
     const daParte = reimpagina.indexOf("VersionePrecedente.mettiDaParte(boxPrecedente, docInLavorazione)");
