@@ -342,9 +342,14 @@ for v in FICO_SECRET SESSION_SECRET EPHEMERAL_TOKEN_SECRET \
          SMTP_HOST SMTP_USER SMTP_PASSWORD; do
     valore_richiesto fidelity.env "$v" "obbligatoria, Fidelity non parte senza"
 done
+# Per Zod e' facoltativa e Fidelity parte lo stesso, ma senza le chiamate che
+# Fidelity fa a se stessa non sono firmate e rispondono 401: il contesto di
+# Nuova lavorazione non si carica. Meglio fermarsi qui che scoprirlo in uso.
+valore_richiesto fidelity.env INTERNAL_REQUEST_SECRET \
+    "Fidelity parte, ma il contesto di Nuova lavorazione risponde 401 (openssl rand -hex 32)"
 silenzioso=no
 if [ "$errori" -eq "$errori_prima" ]; then
-    verde "  ok        tutte valorizzate (22 variabili)"
+    verde "  ok        tutte valorizzate (23 variabili)"
 fi
 
 # --------------------------------------------------- coerenza fra le scelte
