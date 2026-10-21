@@ -109,10 +109,11 @@ test("il salvataggio manda la descrizione per intero solo quando lo chiede la fi
     assert.doesNotMatch(scheda, /\$\("#salvaButton"\)\.trigger\(|salva\.trigger\("click"\)/);
 });
 
-test("usa quella del server applica la descrizione del server, rinasconde i controlli nativi e rifa' la finestra", () => {
+test("usa quella del server applica la descrizione del server, mette a riposo le caselle nuove e rifa' la finestra", () => {
     const scheda = leggiFileDelPlugin("schedaRef.js").replace(/\r/g, "");
-    //Il pannello di modifica si ricostruisce con caselle nuove, che in UXP starebbero sopra la finestra.
-    assert.match(scheda, /else if \(azione === "descrizioneServer"\) \{\s*await me\.applicaDescrizioneDaServer\(\);\s*(\/\/[^\n]*\n\s*)*if \(\$\("#popup"\)\.length > 0\) \{\s*Modali\.nascondiHidebleElements\(\);\s*\}\s*if \(typeof dopoAzione === "function"\) \{\s*await dopoAzione\(\);\s*\}\s*\}\s*else if \(azione === "descrizioneBox"\) \{\s*me\.tieniDescrizioneDelBox\(\);\s*\}/);
+    //Il pannello di modifica si ricostruisce con caselle nuove, che in UXP starebbero sopra la finestra:
+    //I20-1123, vanno a riposo subito, senza aspettare il giro.
+    assert.match(scheda, /else if \(azione === "descrizioneServer"\) \{\s*await me\.applicaDescrizioneDaServer\(\);\s*(\/\/[^\n]*\n\s*)*CampiARiposo\.giro\(\);\s*if \(typeof dopoAzione === "function"\) \{\s*await dopoAzione\(\);\s*\}\s*\}\s*else if \(azione === "descrizioneBox"\) \{\s*me\.tieniDescrizioneDelBox\(\);\s*\}/);
     //I20-1090: le etichette dicono cosa succede.
     assert.match(scheda, /descrizioneServer: \["Usa quella del server", /);
     assert.match(scheda, /descrizioneBox: \["Revisiona con valore del box", /);

@@ -20,7 +20,9 @@ const { fileDelPlugin, leggiFileDelPlugin } = require("./fileDelPlugin");
 const CARTELLA_PLUGIN = path.join(__dirname, "..", "..", "plugin");
 
 const USCITI = {
-    Modali: ["isElementVisible", "nascondiHidebleElements", "mostraHidebleElements", "confirm",
+    //I20-1123: isElementVisible, nascondiHidebleElements e mostraHidebleElements non ci sono piu':
+    //i campi stanno a riposo (campiARiposo.test.js).
+    Modali: ["confirm",
         "closeAllModal", "popup", "confirmCustom", "apriModal", "apriModalCustom", "chiudiModalCustom",
         "chiudiModal", "confirmRimozioneRef", "PAROLA_ELIMINAZIONE", "parolaEliminazioneCorretta",
         "riepilogoEliminazione", "confirmParolaEliminazione", "confirmRimozioneRefNonTrovata"],

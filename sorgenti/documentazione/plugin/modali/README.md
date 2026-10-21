@@ -9,15 +9,16 @@ che precedono l'eliminazione di una referenza. Uscito da `utility.js` in I20-101
 
 | file | cosa fa | test |
 |---|---|---|
-| `modali.js` | **le modali**: `apriModal`, `chiudiModal`, `confirm`, `confirmCustom`, `popup`, `closeAllModal`, e gli elementi `.hideble` | `divisioneUtility.test.js`; sul sorgente `norender-elementi` e `reportIntegritaFlusso` |
+| `modali.js` | **le modali**: `apriModal`, `chiudiModal`, `confirm`, `confirmCustom`, `popup`, `closeAllModal` | `divisioneUtility.test.js`; sul sorgente `norender-elementi` e `reportIntegritaFlusso` |
 | `eliminazione.js` | **le conferme dell'eliminazione**: la rimozione dall'impaginato, l'elemento non trovato, la parola da scrivere per cancellare dal tracciato del server | `confermaEliminazione.test.js` |
 
 Le pagine: [modali.md](modali.md), [eliminazione.md](eliminazione.md).
 
 **Un oggetto solo.** `modali.js` mescola `eliminazione.js` nel proprio oggetto con `Object.assign`,
 come flusso e pannelli del [Report Integrità](../reportIntegrita/README.md): da fuori è sempre
-`Modali.X`. Le conferme dell'eliminazione usano le modali — nascondono gli elementi `.hideble` e
-li riaccendono — e separarle in due oggetti non darebbe niente.
+`Modali.X`. Le conferme dell'eliminazione usano le modali, e separarle in due oggetti non darebbe
+niente. Come le modali, aprendosi rimettono a riposo il campo in cui si sta scrivendo
+([campiARiposo](../campiARiposo.md), I20-1123).
 
 ## Come si collega
 

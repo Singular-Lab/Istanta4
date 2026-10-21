@@ -32,14 +32,12 @@ mescolati dentro. Uscito da `utility.js` in I20-1012. Panoramica: [README.md](RE
   **Ha un contratto da conoscere:** rimuove il popup **prima** di chiamare `alChiudi`, e il suo
   ciclo di attesa non finisce da solo.
 
-## Gli elementi .hideble
+## I campi di testo sotto le modali
 
-In UXP i controlli nativi — i picker, i campi `sp-*` — restano disegnati **sopra** qualunque cosa,
-anche sopra l'overlay di una modale. Per questo gli elementi del pannello che danno fastidio hanno
-la classe `.hideble`, e si spengono mentre una modale è aperta:
-
-- `nascondiHidebleElements()` → spegne quelli visibili e li segna con `hidden`;
-- `mostraHidebleElements()` → riaccende solo quelli segnati;
-- `isElementVisible(elem)` → se un elemento si vede davvero, lui e i suoi genitori.
-
-Le usano le conferme, le conferme dell'eliminazione e il calendario di [menu.js](../menu.md).
+In UXP i campi di testo nativi restano disegnati **sopra** qualunque cosa, anche sopra l'overlay di
+una modale. Fino a I20-1123 i campi marcati `.hideble` si spegnevano mentre una modale era aperta
+(`nascondiHidebleElements`, `mostraHidebleElements`, `isElementVisible`, e `dopoLaDomanda` dopo una
+domanda). Da I20-1123 i campi stanno **a riposo** come testo HTML ([campiARiposo](../campiARiposo.md))
+e le modali li coprono come tutto il resto: aprendosi, `confirm`, `confirmCustom`, `popup`,
+`apriModal` e `apriModalCustom` chiamano solo `CampiARiposo.tuttiARiposo()`, che rimette a riposo il
+campo in cui l'operatore sta scrivendo. Alla chiusura non c'è niente da riaccendere.

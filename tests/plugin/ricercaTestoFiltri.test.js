@@ -222,7 +222,7 @@ test("chi cambia i bollini invalida il riepilogo", () => {
 
 test("il campo di testo del filtro cerca alla pausa e non disegna una ricerca superata", () => {
     const sorgente = leggiFileDelPlugin("filtri.js").replace(/\r/g, "");
-    const campo = sorgente.indexOf(".addClass('filtro-valore-hidden hideble')");
+    const campo = sorgente.indexOf(".addClass('filtro-valore-hidden')");
     assert.ok(campo > 0);
     const gestore = sorgente.substring(campo, sorgente.indexOf("$('<button></button>')", campo));
 

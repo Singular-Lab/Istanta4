@@ -4,65 +4,21 @@
 /// file le chiamano Modali.X, come globale dichiarata da indexNew.js; index.html anche dai suoi
 /// pulsanti.
 ///
-/// Qui ci sono anche isElementVisible, nascondiHidebleElements e mostraHidebleElements: mentre una
-/// modale e' aperta gli elementi .hideble del pannello spariscono, perche' in UXP i controlli
-/// nativi restano sopra a qualunque cosa. Le usano le modali e il calendario di menu.js.
+/// I20-1123: i campi di testo nativi di UXP stanno sopra a qualunque cosa, e fino a I20-1123 le
+/// modali li spegnevano uno per uno (.hideble). Ora i campi stanno a riposo come testo HTML
+/// (campiARiposo.js) e le finestre li coprono come tutto il resto: aprendosi, mettono a riposo il
+/// campo in cui l'operatore sta scrivendo, che e' l'unico nativo a schermo.
 ///
 /// Non fa require('indesign'): si carica sotto Node, e i test la chiamano. In InDesign il DOM e'
 /// quello di UXP, e il risultato finale si prova solo in collaudo.
+const CampiARiposo = require('../campiARiposo');
+
 const Modali = {
     /// I20-1085: il livello delle domande all'operatore (confirm, confirmCustom). Sta davanti a ogni
     /// finestra del Plugin - il popup delle differenze (9000), i dialoghi a tutto schermo (fino a
     /// 9999999) - e sotto soltanto i suggerimenti (.jq-tooltip, 2147483647). Prima era 5000, e la
     /// domanda "Solo volantino / Tutto" nasceva dietro la finestra delle differenze.
     LIVELLO_CONFERMA: 2147483000,
-
-    /// I20-1085: dopo la risposta a una domanda i controlli nativi del pannello si riaccendono solo se
-    /// non resta aperto un popup: in UXP starebbero sopra la finestra da cui la domanda e' partita.
-    /// Li riaccende poi la X del popup.
-    dopoLaDomanda() {
-        if ($("#popup").length > 0) {
-            return false;
-        }
-        this.mostraHidebleElements();
-        return true;
-    },
-
-    /// Se un elemento jQuery si vede davvero: lui e tutti i suoi genitori, fino al body. Serve a
-    /// nascondiHidebleElements, che deve ricordarsi solo di quelli che erano visibili.
-    isElementVisible(elem) {
-        try{
-            if (elem[0].localName === document.body.localName || elem.parent() == null) return true; // Se l'elemento è il body, è considerato visibile
-            if (!elem || elem.css("display") === 'none' || elem.css("visibility") === 'none' || elem.css("visibility") === 'hidden') return false; // Controlla se l'elemento è nascosto
-            return this.isElementVisible(elem.parent()); // Ricorsione per controllare i genitori
-        }
-        catch (e) {
-            console.error("Errore durante il controllo della visibilità dell'elemento: ", e);
-            return false; // In caso di errore, consideriamo l'elemento non visibile
-        }
-    },
-
-    /// Nasconde gli elementi .hideble del pannello mentre una modale e' aperta. In UXP i controlli
-    /// nativi (i picker, i campi sp-*) restano disegnati sopra a qualunque cosa, anche sopra
-    /// l'overlay: vanno spenti. Si segnano con hidden, per riaccendere solo quelli spenti qui.
-    nascondiHidebleElements() {
-        let me = this;
-        $(".hideble").each(function() {
-            if (me.isElementVisible($(this))) {
-                $(this).css("visibility","hidden");
-                $(this).attr("hidden", true);
-            }
-        });
-    },
-
-    /// Riaccende gli elementi .hideble spenti da nascondiHidebleElements, e solo quelli.
-    mostraHidebleElements() {
-        $(".hideble[hidden]").each(function () {
-            $(this).css("visibility", "visible");
-            //rimuoviamo la prop nascosta
-            $(this).removeAttr("hidden");                
-        });
-    },
 
     /// Chiede una conferma: Conferma da' true, Annulla false, e un errore vale come Annulla.
     /// message puo' essere un testo (va in un titolo) o un elemento. Attende con delay, la globale
@@ -72,7 +28,7 @@ const Modali = {
         //se il pulsante conferma viene premuto allora la funzione torna true, sennò false
         //la funzione è asincrona
         try{
-            this.nascondiHidebleElements();
+            CampiARiposo.tuttiARiposo();
             var result = null;
             var modal = $('<div id="confirmModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); z-index: ' + Modali.LIVELLO_CONFERMA + '; display: flex; justify-content: center; align-items: center; padding: 10px;"></div>');
             //I20-981: il riquadro si adatta al messaggio invece di avere un'altezza fissa, e
@@ -121,12 +77,10 @@ const Modali = {
             while(result == null){
                 await delay(100);
             }
-            this.dopoLaDomanda();
             return result;
         }
         catch (e) {
             console.error("Errore durante la creazione del confirm: ", e);
-            this.dopoLaDomanda();
             return false; // In caso di errore, consideriamo l'azione annullata
         }
     },
@@ -152,7 +106,7 @@ const Modali = {
     async popup(title, message, taglia = "md", alChiudi = null, contenutoIntestazione = null, accantoAlTitolo = null) {
         try {
             let me = this;
-            me.nascondiHidebleElements();
+            CampiARiposo.tuttiARiposo();
     
             // Dimensioni in base alla taglia
             switch (taglia.toLowerCase()) {
@@ -199,7 +153,6 @@ const Modali = {
             let closeButton = $('<button id="popupCloseButton" style="background-color: transparent; border: none; font-size: 18px; cursor: pointer;">&times;</button>');
     
             closeButton.click(function () {
-                me.mostraHidebleElements();
                 $("#popup").remove();
 
                 //Il popup e' gia' sparito quando si avvisa: chi ascolta puo' riaprirne un
@@ -281,7 +234,7 @@ const Modali = {
         //la funzione è asincrona
     
         var result = null;
-        this.nascondiHidebleElements();
+        CampiARiposo.tuttiARiposo();
         var modal = $('<div id="confirmModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); z-index: ' + Modali.LIVELLO_CONFERMA + '; display: flex; justify-content: center; align-items: center; padding: 10px;"></div>');
         var dialog = $('<div style="width: 92%; max-width: 460px; min-width: 200px; max-height: 88%; background-color: white; display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch; padding: 14px; box-sizing: border-box; border-radius: 6px;"></div>');
         var messaggio = $('<div style="display: block; flex: 1 1 auto; min-height: 0; overflow: auto;"></div>');
@@ -363,8 +316,6 @@ const Modali = {
             await delay(100);
         }
     
-        this.dopoLaDomanda();
-    
         return objRes;
     },
 
@@ -375,6 +326,8 @@ const Modali = {
     apriModal(modalId, titolo, bottoneChiusura = true, idElementiInTestata = [], hideBehind = true, scrollRules = null){
 
         console.log("Apro modale!");
+        //I20-1123: il campo in cui si sta scrivendo non resta nativo sopra la finestra.
+        CampiARiposo.tuttiARiposo();
         //I20-1105: il controllo della X e' della finestra che lo registra, non passa alla successiva.
         this.controlloPrimaDiChiudere = null;
 
@@ -420,6 +373,8 @@ const Modali = {
     apriModalCustom(modalId, titolo, suffissoOverlayModal, bottoneChiusura = true, idElementiInTestata = [], hideBehind = true){
 
         console.log("Apro modale!");
+        //I20-1123: il campo in cui si sta scrivendo non resta nativo sopra la finestra.
+        CampiARiposo.tuttiARiposo();
     
         var dialog = cloneElementWithEvents($("#"+modalId));
         console.log(dialog);

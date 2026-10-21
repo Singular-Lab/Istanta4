@@ -22,5 +22,9 @@
 
 ## Da sapere
 
-**Il calendario si apre come una modale**, e come le modali spegne gli elementi `.hideble` del
-pannello: è per questo che `menu.js` importa [Modali](modali/modali.md).
+**Il calendario si apre come una modale**, sopra i campi di testo a riposo
+([campiARiposo](campiARiposo.md), I20-1123): aprendosi rimette a riposo il campo in cui si sta
+scrivendo. Fino a I20-1123 spegneva gli elementi `.hideble`, e per questo importava Modali. Il campo
+data apre il calendario al clic: il riquadro a riposo mostra il campo vero al passaggio del mouse, e
+il clic lo riceve lui. Anche il menu flottante (`creaFloatingMenu`), aprendosi, rimette a riposo i
+campi di testo nativi, che gli starebbero sopra.

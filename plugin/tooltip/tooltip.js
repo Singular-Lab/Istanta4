@@ -7,6 +7,8 @@
 /// Gli altri file lo chiamano Tooltip.X, come globale dichiarata da indexNew.js. Non fa
 /// require('indesign'): si carica sotto Node, e i test lo chiamano.
 const tooltipPosizione = require('./posizione');
+//I20-1123: il suggerimento che compare rimette a riposo i campi di testo nativi, che gli starebbero sopra.
+const CampiARiposo = require('../campiARiposo');
 
 const Tooltip = {
     //I20-981: i tooltip del plugin.
@@ -134,6 +136,10 @@ const Tooltip = {
             if (elemento == null || !document.body.contains(elemento)) {
                 return;
             }
+
+            //I20-1123: un campo di testo nativo resterebbe sopra il suggerimento: torna a riposo, anche
+            //quello in cui si sta scrivendo. Non il campo da cui parte il suggerimento (il suo title).
+            CampiARiposo.tuttiARiposo(elemento);
 
             const riquadro = this._creaRiquadroTooltip();
             const finestra = this._dimensioniPannello();

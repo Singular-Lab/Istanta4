@@ -422,7 +422,7 @@
           <div id="Tab2" class="tabcontent" style="display: none; width: 100%;">
             <div class="panel" id="EditTracciato">
               <div class="row">
-                <sp-textfield id="codiceEdit" class="hideble" style="width: 100%; color: white;"><sp-label style="color: white;"
+                <sp-textfield id="codiceEdit" style="width: 100%; color: white;"><sp-label style="color: white;"
                     slot="label">Codice</sp-label></sp-textfield>
                 <sp-action-button id="cercaRecordInTracciato" name="cercaTracciato" style="margin-top: 24px;"
                   onclick="cercaRecordInTracciato($('#codiceEdit').val())"><img style="width: 18px;" slot="icon"
@@ -1061,7 +1061,7 @@
       <button id="duplicaPaginaFiltro" onclick="filtriJs.duplicaFiltri(0)">Duplica a:</button> 
       <button id="scambiaFiltro" onclick="filtriJs.scambiaFiltri(1)">Scambia con:</button> 
       <label for="paginaInvioFiltro" style="font-size: small;">Pag:</label>
-      <textarea style="width:20%" class="hideble" id="paginaInvioFiltro"></textarea>
+      <textarea style="width:20%" id="paginaInvioFiltro"></textarea>
     </div>
   </div>
   <img src="images/sbloccaPaginaGrande.png" id="lockIcon" style="height: 100%; cursor:pointer; display: none;" onclick="filtriJs.bloccaSblocca()">

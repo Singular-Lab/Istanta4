@@ -43,6 +43,8 @@ const reportIntegritaAvvio = require('../reportIntegrita/avvio');
 const reportConfrontoCsv = require('../reportIntegrita/csv');
 //I20-1121: le regole della vista affiancata, comuni con il Report Integrita'.
 const VistaAffiancata = require('../vistaAffiancata');
+//I20-1123: riaprendo il popup dopo la scheda, il campo in cui si scriveva torna a riposo.
+const CampiARiposo = require('../campiARiposo');
 
 //I colori della schermata, gli stessi del bollino: rosso gli errori, arancione i warning.
 const COLORE_CSS = { error: "#c62828", warning: "#ef6c00", notifica: "#1565c0" };
@@ -290,7 +292,6 @@ const SchermataSegnalazioni = {
             }
             elenco.detach();
             popup.remove();
-            Modali.mostraHidebleElements();
             SchermataSegnalazioni._apriColonna(elenco);
         }
         catch (e) {
@@ -1058,7 +1059,6 @@ const SchermataSegnalazioni = {
         };
 
         popup.detach();
-        Modali.mostraHidebleElements();
 
         $("#refImage").show();
         SchermataSegnalazioni._creaChiusuraScheda();
@@ -1171,7 +1171,7 @@ const SchermataSegnalazioni = {
         SchermataSegnalazioni._eventiFermi(false);
 
         $("body").append(stato.popup);
-        Modali.nascondiHidebleElements();
+        CampiARiposo.tuttiARiposo();
         SchermataSegnalazioni.riempi(stato.elenco);
         setTimeout(() => SchermataSegnalazioni._evidenziaBox(stato.elenco, stato.idRec), 50);
     },

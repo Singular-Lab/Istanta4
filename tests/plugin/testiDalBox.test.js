@@ -105,7 +105,7 @@ test("il salvataggio porta i testi del box una volta sola, e il server riscritto
     assert.match(salva, /const testiDalBox = Array\.isArray\(this\.testiDalBoxDaSalvare\) \? this\.testiDalBoxDaSalvare : \[\];\s*this\.testiDalBoxDaSalvare = null;/);
     assert.match(scheda, /if \(testiDalBox\.length > 0\) \{\s*req\.testiDalBox = testiDalBox;\s*\}/);
 
-    assert.match(scheda, /else if \(azione === "testoServer"\) \{\s*await me\.applicaCampoDaServer\(diff\);[\s\S]*?Modali\.nascondiHidebleElements\(\);[\s\S]*?await dopoAzione\(\);[\s\S]*?\}\s*else if \(azione === "testoBox"\) \{\s*me\.tieniTestoDelBox\(diff\);\s*\}/);
+    assert.match(scheda, /else if \(azione === "testoServer"\) \{\s*await me\.applicaCampoDaServer\(diff\);[\s\S]*?CampiARiposo\.giro\(\);[\s\S]*?await dopoAzione\(\);[\s\S]*?\}\s*else if \(azione === "testoBox"\) \{\s*me\.tieniTestoDelBox\(diff\);\s*\}/);
     const applica = scheda.substring(scheda.indexOf("    async applicaCampoDaServer(diff) {"), scheda.indexOf("    tieniTestoDelBox(diff) {"));
     assert.match(applica, /TestoTag\.applicaTagStringToInndTextFrame\(campo, campoCompilato\.content, box\.geometricBounds\);/);
     assert.match(applica, /this\.dimenticaSegnalazioni\(\);\s*await this\.selectSchedaRef\(1\);/);

@@ -6,9 +6,10 @@
  * la domanda nasceva dietro la finestra. Ora confirm e confirmCustom stanno a un livello unico,
  * Modali.LIVELLO_CONFERMA, sopra ogni finestra del Plugin e sotto soltanto i suggerimenti.
  *
- * E dopo la risposta i controlli nativi del pannello (gli .hideble, che in UXP stanno sopra a tutto)
- * si riaccendono solo se non resta aperto un popup: altrimenti finirebbero sopra la finestra da cui
- * la domanda e' partita. Li riaccende la X del popup.
+ * I campi di testo del pannello, che in UXP stanno sopra a tutto, fino a I20-1123 si spegnevano
+ * (.hideble) e dopo la risposta si riaccendevano solo se non restava aperto un popup (dopoLaDomanda).
+ * Da I20-1123 stanno a riposo come testo HTML (campiARiposo.js): la domanda li copre senza
+ * spegnerli, e aprendosi rimette a riposo solo il campo in cui l'operatore sta scrivendo.
  *
  * modali.js si carica sotto Node, con jQuery finto.
  *
@@ -69,56 +70,36 @@ test("confirm e confirmCustom usano tutte e due il livello delle domande, e ness
     assert.doesNotMatch(modali, /z-index: 5000/);
 });
 
-/* ---- i controlli del pannello dopo la risposta ---- */
+/* ---- i campi del pannello sotto le domande (I20-1123) ---- */
 
-function jQueryFinto(popupAperti, riaccesi) {
-    return (selettore) => {
-        if (selettore === "#popup") {
-            return { length: popupAperti };
-        }
-        if (selettore === ".hideble[hidden]") {
-            return { each: (fn) => fn.call({ nome: "casella" }) };
-        }
-        //this dentro each: l'elemento da riaccendere.
-        return {
-            css: () => riaccesi.push(selettore && selettore.nome),
-            removeAttr: () => {}
-        };
-    };
-}
-
-function conJQuery(finto, prova) {
-    const salvato = global.$;
-    global.$ = finto;
-    try {
-        return prova();
-    }
-    finally {
-        if (salvato === undefined) { delete global.$; } else { global.$ = salvato; }
-    }
-}
-
-test("dopo la risposta, con la finestra delle differenze ancora aperta, i controlli restano nascosti", () => {
-    const riaccesi = [];
-    conJQuery(jQueryFinto(1, riaccesi), () => {
-        assert.strictEqual(Modali.dopoLaDomanda(), false);
-    });
-    assert.deepStrictEqual(riaccesi, []);
-});
-
-test("dopo la risposta, senza finestre aperte, i controlli si riaccendono come prima", () => {
-    const riaccesi = [];
-    conJQuery(jQueryFinto(0, riaccesi), () => {
-        assert.strictEqual(Modali.dopoLaDomanda(), true);
-    });
-    assert.deepStrictEqual(riaccesi, ["casella"]);
-});
-
-test("confirm e confirmCustom riaccendono i controlli solo passando da dopoLaDomanda", () => {
+test("le domande non spengono e non riaccendono i campi: rimettono a riposo quello in cui si scrive", () => {
     const modali = leggiFileDelPlugin("modali/modali.js").replace(/\r/g, "");
     const conferma = modali.substring(modali.indexOf("    async confirm (message){"), modali.indexOf("    closeAllModal(){"));
-    const personalizzata = modali.substring(modali.indexOf("    async confirmCustom ("));
-    assert.doesNotMatch(conferma, /this\.mostraHidebleElements\(\)/);
-    assert.strictEqual((conferma.match(/this\.dopoLaDomanda\(\);/g) || []).length, 2);
-    assert.match(personalizzata, /while\(!risposto\)\{\s*await delay\(100\);\s*\}\s*this\.dopoLaDomanda\(\);\s*return objRes;/);
+    const personalizzata = modali.substring(modali.indexOf("    async confirmCustom ("), modali.indexOf("    apriModal(modalId"));
+
+    [conferma, personalizzata].forEach(domanda => {
+        assert.match(domanda, /CampiARiposo\.tuttiARiposo\(\);/);
+        assert.doesNotMatch(domanda, /HidebleElements|dopoLaDomanda/);
+    });
+    //Dopo la risposta non c'e' niente da riaccendere: si risponde e basta.
+    assert.match(personalizzata, /while\(!risposto\)\{\s*await delay\(100\);\s*\}\s*return objRes;/);
+    assert.match(conferma, /while\(result == null\)\{\s*await delay\(100\);\s*\}\s*return result;/);
+
+    //Gli strumenti di .hideble non ci sono piu'.
+    ["dopoLaDomanda", "nascondiHidebleElements", "mostraHidebleElements", "isElementVisible"].forEach(nome => {
+        assert.strictEqual(Modali[nome], undefined, nome);
+    });
+});
+
+test("le domande rimettono a riposo il campo in cui si scrive, prima di aprirsi", () => {
+    const CampiARiposo = require("../../plugin/campiARiposo.js");
+    const modali = leggiFileDelPlugin("modali/modali.js").replace(/\r/g, "");
+    //E' lo stesso modulo che il Plugin avvia: le modali lo prendono con require.
+    assert.match(modali, /const CampiARiposo = require\('\.\.\/campiARiposo'\);/);
+    assert.strictEqual(typeof CampiARiposo.tuttiARiposo, "function");
+    //Anche le finestre e il popup.
+    ["    async popup(title", "    apriModal(modalId", "    apriModalCustom(modalId"].forEach(inizio => {
+        const corpo = modali.substring(modali.indexOf(inizio), modali.indexOf("\n    },\n", modali.indexOf(inizio)));
+        assert.match(corpo, /CampiARiposo\.tuttiARiposo\(\);/, inizio);
+    });
 });

@@ -11,6 +11,8 @@ const variantiDescrizione = require('./variantiDescrizione');
 const TestoTag = require('./testoTag');
 //I20-1056, lotto 4: la gravita' delle segnalazioni del bollino, per il segnalino della scheda.
 const etichettaDelBollino = require('./segnalazioni/etichetta');
+//I20-1123: i campi di testo a riposo, sopra cui passano popup e finestre.
+const CampiARiposo = require('./campiARiposo');
 
 /// I20-1002: la scheda della referenza - quello che l'operatore vede e modifica quando
 /// seleziona un box nel documento.
@@ -2076,7 +2078,9 @@ const schedaRef = {
                                             isEditable = pluginMiddleware.isSchemaEditable(nome_schema);
                                         }
 
-                                        var textarea = $('<textarea ' + (isEditable  && refEditabile ? '' : 'readonly') + ' class="hideble" labelCorrispondente="descrizione" currentCharacterStyle="' + nome_schema + '" class="textArea nonCancellareSeVuoto" name="myTextarea" style="height:' + (grandezzeBox != null && grandezzeBox.bigBoxHeight != null && grandezzeBox.bigBoxHeight != "auto" ? grandezzeBox.bigBoxHeight : '50') + 'px; width:' + (grandezzeBox != null && grandezzeBox.bigBoxWidth != null && grandezzeBox.bigBoxWidth != "auto" ? grandezzeBox.bigBoxWidth : '100') + 'px; background-color:white; color:black;"></textarea><br>');
+                                        //I20-1123: il primo class resta, vuoto (era "hideble"): dei due class della casella vale il primo,
+                                        //e il secondo non e' mai valso. Toglierlo del tutto avrebbe acceso il secondo, e cambiato il salvataggio.
+                                        var textarea = $('<textarea ' + (isEditable  && refEditabile ? '' : 'readonly') + ' class="" labelCorrispondente="descrizione" currentCharacterStyle="' + nome_schema + '" class="textArea nonCancellareSeVuoto" name="myTextarea" style="height:' + (grandezzeBox != null && grandezzeBox.bigBoxHeight != null && grandezzeBox.bigBoxHeight != "auto" ? grandezzeBox.bigBoxHeight : '50') + 'px; width:' + (grandezzeBox != null && grandezzeBox.bigBoxWidth != null && grandezzeBox.bigBoxWidth != "auto" ? grandezzeBox.bigBoxWidth : '100') + 'px; background-color:white; color:black;"></textarea><br>');
                                         column.append(label).append(textarea);
                                         row.append(column);
                                         if (row.children().length == (grandezzeBox != null && grandezzeBox.bigBoxPerRow != null && grandezzeBox.bigBoxPerRow != "auto" ? grandezzeBox.bigBoxPerRow : 2)) {
@@ -2094,7 +2098,9 @@ const schedaRef = {
                                 isEditable = pluginMiddleware.isSchemaEditable(currentCharacterStyle);
                             }
 
-                            var textarea = $('<textarea ' + (isEditable && refEditabile ? '' : 'readonly') + ' class="hideble" labelCorrispondente="descrizione" currentCharacterStyle="' + currentCharacterStyle + '" class="textArea nonCancellareSeVuoto' + (stileInMismatch ? ' mismatchInImpaginato' : '') + '" name="myTextarea" style="height: ' + (grandezzeBox != null && grandezzeBox.bigBoxHeight != null && grandezzeBox.bigBoxHeight != "auto" ? grandezzeBox.bigBoxHeight : '50') + 'px; width:' + (grandezzeBox != null && grandezzeBox.bigBoxWidth != null && grandezzeBox.bigBoxWidth != "auto" ? grandezzeBox.bigBoxWidth : '100') + 'px; background-color:white; color:black;' + (stileInMismatch ? ' border: 2px solid gold;' : '') + '"></textarea><br>');
+                            //I20-1123: il primo class resta, vuoto (era "hideble"): dei due class della casella vale il primo,
+                            //e il secondo non e' mai valso. Toglierlo del tutto avrebbe acceso il secondo, e cambiato il salvataggio.
+                            var textarea = $('<textarea ' + (isEditable && refEditabile ? '' : 'readonly') + ' class="" labelCorrispondente="descrizione" currentCharacterStyle="' + currentCharacterStyle + '" class="textArea nonCancellareSeVuoto' + (stileInMismatch ? ' mismatchInImpaginato' : '') + '" name="myTextarea" style="height: ' + (grandezzeBox != null && grandezzeBox.bigBoxHeight != null && grandezzeBox.bigBoxHeight != "auto" ? grandezzeBox.bigBoxHeight : '50') + 'px; width:' + (grandezzeBox != null && grandezzeBox.bigBoxWidth != null && grandezzeBox.bigBoxWidth != "auto" ? grandezzeBox.bigBoxWidth : '100') + 'px; background-color:white; color:black;' + (stileInMismatch ? ' border: 2px solid gold;' : '') + '"></textarea><br>');
                             var column = $('<div class="column" style="margin-right:' + (grandezzeBox != null && grandezzeBox.marginBetweenBigBox != null && grandezzeBox.marginBetweenBigBox != "auto" ? grandezzeBox.marginBetweenBigBox : "10px") + 'px;"></div>').append(label).append(textarea);
                             row.append(column);
 
@@ -2151,7 +2157,9 @@ const schedaRef = {
                                 isEditable = pluginMiddleware.isSchemaEditable(elSchema[1]);
                             }
 
-                            var textarea = $('<textarea ' + (isEditable && refEditabile ? '' : 'readonly') + ' class="hideble" labelCorrispondente="descrizione" currentCharacterStyle="' + nome_schema + '" class="textArea nonCancellareSeVuoto" name="myTextarea" style="height: ' + (grandezzeBox != null && grandezzeBox.bigBoxHeight != null && grandezzeBox.bigBoxHeight != "auto" ? grandezzeBox.bigBoxHeight : '50') + 'px; width:' + (grandezzeBox != null && grandezzeBox.bigBoxWidth != null && grandezzeBox.bigBoxWidth != "auto" ? grandezzeBox.bigBoxWidth : '100') + 'px; background-color:white; color:black;"></textarea><br>');
+                            //I20-1123: il primo class resta, vuoto (era "hideble"): dei due class della casella vale il primo,
+                            //e il secondo non e' mai valso. Toglierlo del tutto avrebbe acceso il secondo, e cambiato il salvataggio.
+                            var textarea = $('<textarea ' + (isEditable && refEditabile ? '' : 'readonly') + ' class="" labelCorrispondente="descrizione" currentCharacterStyle="' + nome_schema + '" class="textArea nonCancellareSeVuoto" name="myTextarea" style="height: ' + (grandezzeBox != null && grandezzeBox.bigBoxHeight != null && grandezzeBox.bigBoxHeight != "auto" ? grandezzeBox.bigBoxHeight : '50') + 'px; width:' + (grandezzeBox != null && grandezzeBox.bigBoxWidth != null && grandezzeBox.bigBoxWidth != "auto" ? grandezzeBox.bigBoxWidth : '100') + 'px; background-color:white; color:black;"></textarea><br>');
                             column.append(label).append(textarea);
                             row.append(column);
                             if (row.children().length == (grandezzeBox != null && grandezzeBox.bigBoxPerRow != null && grandezzeBox.bigBoxPerRow != "auto" ? grandezzeBox.bigBoxPerRow : 2)) {
@@ -5383,11 +5391,10 @@ const schedaRef = {
                     }
                     else if (azione === "descrizioneServer") {
                         await me.applicaDescrizioneDaServer();
-                        //Il pannello di modifica e' stato ricostruito con caselle nuove: in UXP i controlli
-                        //nativi stanno sopra a tutto, e con la finestra ancora aperta vanno rinascosti.
-                        if ($("#popup").length > 0) {
-                            Modali.nascondiHidebleElements();
-                        }
+                        //Il pannello di modifica e' stato ricostruito con caselle nuove: in UXP i campi
+                        //nativi stanno sopra a tutto, e con la finestra ancora aperta vanno messi a riposo
+                        //subito, senza aspettare il giro (I20-1123).
+                        CampiARiposo.giro();
                         if (typeof dopoAzione === "function") {
                             await dopoAzione();
                         }
@@ -5408,9 +5415,7 @@ const schedaRef = {
                         else {
                             //Con il meta il campo compilato e' il meta: e' quello che si riscrive nel box.
                             await me.applicaDescrizioneDaServer();
-                            if ($("#popup").length > 0) {
-                                Modali.nascondiHidebleElements();
-                            }
+                            CampiARiposo.giro();
                         }
                         if (typeof dopoAzione === "function") {
                             await dopoAzione();
@@ -5419,9 +5424,7 @@ const schedaRef = {
                     else if (azione === "testoServer") {
                         await me.applicaCampoDaServer(diff);
                         //Come per la descrizione: il pannello ricostruito non deve finire sopra la finestra.
-                        if ($("#popup").length > 0) {
-                            Modali.nascondiHidebleElements();
-                        }
+                        CampiARiposo.giro();
                         if (typeof dopoAzione === "function") {
                             await dopoAzione();
                         }
@@ -5563,9 +5566,7 @@ const schedaRef = {
                 await this.applicaCampoDaServer({ label: diff.label, difference: "contenuto" });
             }
             //Come per "Scegli quella del server": il pannello ricostruito non deve finire sopra la finestra.
-            if ($("#popup").length > 0) {
-                Modali.nascondiHidebleElements();
-            }
+            CampiARiposo.giro();
         }
         if (typeof dopoAzione === "function") {
             await dopoAzione();
@@ -6577,7 +6578,7 @@ const schedaRef = {
 
     async scegliSostituisciOMantieni(messageHtml) {
         var result = null;
-        Modali.nascondiHidebleElements();
+        CampiARiposo.tuttiARiposo();
 
         var modal = $('<div id="confirmModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); z-index: 5000; display: flex; justify-content: center; align-items: center; padding: 10px;"></div>');
         var dialog = $('<div style="width: 60%; height: 40%; background-color: white; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 10px; box-sizing:border-box;"></div>');
@@ -6623,8 +6624,6 @@ const schedaRef = {
         while (result == null) {
             await Utility.sleep(100);
         }
-
-        Modali.mostraHidebleElements();
 
         return {
             result: result !== 0,
