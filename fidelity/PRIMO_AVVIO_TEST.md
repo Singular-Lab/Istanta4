@@ -8,7 +8,6 @@ Guida per avviare `docker-compose.test.yml` senza errori.
 
 | Servizio | Requisito |
 |----------|-----------|
-| MongoDB  | Deve girare sul host alla porta `27017`. Il container non lo include — si connette via `host.docker.internal`. |
 | Docker   | Engine attivo. |
 
 ---

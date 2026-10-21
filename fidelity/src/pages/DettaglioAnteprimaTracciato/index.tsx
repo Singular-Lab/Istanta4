@@ -1,584 +1,735 @@
+import clsx from "clsx";
 import { AnimatePresence, motion } from "framer-motion";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { ServerCall } from "../../../lib/server_call";
 import { TracciatiResponseDTO } from "../../../server/core/dto";
-import Badge from "../../components/Base/Badge";
 import Button from "../../components/Base/Button";
 import { FormInput } from "../../components/Base/Form";
 import Lucide from "../../components/Base/Lucide";
-import PageHeader from "../../components/Base/PageHeader";
-import { useNotification } from "../../context/NotificationContext";
+import withSessionCheck from "../../components/SessionChecker";
+import { getColor } from "../../utils/colors";
+import type { TemaFoglio } from "./disegnaFoglio";
+import {
+    ALTEZZA_LETTERE,
+    ALTEZZA_RIGA,
+    Cella,
+    colonnaInX,
+    LARGHEZZA_MIN_COLONNA,
+    offsetColonne,
+    Selezione,
+    selezioneSingola,
+    spostaCella,
+    StatisticheSelezione,
+    TOLLERANZA_BORDO,
+} from "./foglio";
+import type { InfoFoglio, LayoutFoglio, MessaggioDalMotore, MessaggioVersoMotore } from "./motoreFoglio";
 
 /* =======================
-   CONFIG VISIVO
+   ANTEPRIMA TRACCIATO A SCHERMO INTERO
+   Fuori dal layout Echo. La griglia e un OffscreenCanvas disegnato nel Web Worker
+   (foglio.worker.ts), che possiede anche i dati: qui restano solo input, scroll e barre.
    ======================= */
-const ROW_HEIGHT = 28;
-const HEADER_HEIGHT = 28;
-const COL_WIDTH = 260;
-const FONT =
-    "11px Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
-const PADDING_X = 8;
-const OVERSCAN_ROWS = 6;
-const OVERSCAN_COLS = 1;
 
-/* =======================
-   TYPES
-   ======================= */
-type SheetPreview = {
-    name: string;
-    rows: (string | number | null)[][];
+type StatoPagina = "caricamento" | "pronto" | "errore";
+
+type InfoSelezione = { indirizzo: string; valore: string; statistiche: StatisticheSelezione };
+
+type Colpo =
+    | { zona: "angolo" }
+    | { zona: "lettera"; c: number; bordo: number }
+    | { zona: "numero"; v: number }
+    | { zona: "cella"; v: number; c: number };
+
+type Trascinamento =
+    | { tipo: "selezione"; zona: "cella" | "lettera" | "numero" }
+    | { tipo: "larghezza"; colonna: number; xIniziale: number; larghezzaIniziale: number };
+
+const INFO_VUOTA: InfoSelezione = {
+    indirizzo: "",
+    valore: "",
+    statistiche: { celle: 0, conteggio: 0, numerici: 0, somma: 0, media: null },
 };
 
-interface LocationState {
-    tracciato?: TracciatiResponseDTO;
-}
+const formatoNumero = new Intl.NumberFormat("it-IT", { maximumFractionDigits: 4 });
 
-/* =======================
-   UTILS
-   ======================= */
-const formatCell = (cell: string | number | null | undefined): string => {
-    if (cell === null || cell === undefined) return "-";
-    const s = String(cell).trim();
-    return s === "" ? "-" : s;
-};
-
-const getFileSize = (blob: any): string => {
-    if (!blob?.data?.length) return "0.00";
+const getFileSize = (blob: any): string | null => {
+    if (!blob?.data?.length) return null;
     return (blob.data.length / (1024 * 1024)).toFixed(2);
 };
 
-const clamp = (n: number, min: number, max: number) =>
-    Math.max(min, Math.min(max, n));
-
-const ellipsize = (
-    ctx: CanvasRenderingContext2D,
-    text: string,
-    maxWidth: number
-) => {
-    if (ctx.measureText(text).width <= maxWidth) return text;
-    const ell = "…";
-    let lo = 0;
-    let hi = text.length;
-    while (lo < hi) {
-        const mid = Math.ceil((lo + hi) / 2);
-        if (ctx.measureText(text.slice(0, mid) + ell).width <= maxWidth) lo = mid;
-        else hi = mid - 1;
-    }
-    return text.slice(0, lo) + ell;
+/**
+ * Colori del tema attivo per la griglia. Il worker non vede le variabili CSS:
+ * li leggiamo qui con getColor, come i grafici, e li mandiamo al motore.
+ */
+const leggiTema = (): TemaFoglio => {
+    const scuro = document.documentElement.classList.contains("dark");
+    return {
+        font: getComputedStyle(document.body).fontFamily || "system-ui, sans-serif",
+        sfondo: scuro ? getColor("darkmode.600") : getColor("white"),
+        testo: scuro ? getColor("slate.300") : getColor("dark"),
+        griglia: scuro ? getColor("darkmode.400") : getColor("slate.200"),
+        intestazione: scuro ? getColor("darkmode.700") : getColor("slate.50"),
+        intestazioneBordo: scuro ? getColor("darkmode.400") : getColor("slate.200"),
+        intestazioneTesto: getColor("slate.500"),
+        intestazioneAttiva: getColor("primary", scuro ? 0.3 : 0.1),
+        intestazioneAttivaTesto: scuro ? getColor("slate.200") : getColor("primary"),
+        rigaBloccata: scuro ? getColor("darkmode.700") : getColor("slate.50"),
+        divisoreBloccato: scuro ? getColor("darkmode.300") : getColor("slate.300"),
+        selezione: getColor("primary", scuro ? 0.25 : 0.08),
+        bordoSelezione: getColor("primary"),
+        ricerca: getColor("warning", 0.18),
+    };
 };
 
-/* =======================
-   COMPONENT
-   ======================= */
+const offscreenSupportato = () =>
+    typeof HTMLCanvasElement !== "undefined" && "transferControlToOffscreen" in HTMLCanvasElement.prototype;
+
+const scriviAppunti = async (testo: string) => {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(testo);
+        return;
+    }
+    // Fallback per contesti non HTTPS
+    const textarea = document.createElement("textarea");
+    textarea.value = testo;
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    document.body.removeChild(textarea);
+};
+
 const DettaglioAnteprimaTracciato: React.FC = () => {
     const location = useLocation();
     const navigate = useNavigate();
-    const params = useParams<{ idTracciato?: string }>();
-    const state = location.state as LocationState | null;
-    const { showNotification } = useNotification();
-    const [tracciato, setTracciato] =
-        useState<TracciatiResponseDTO | null>(state?.tracciato ?? null);
-    const [sheets, setSheets] = useState<SheetPreview[]>([]);
-    const [searchTerm, setSearchTerm] = useState("");
-    const [isLoading, setIsLoading] = useState(!state?.tracciato);
-    const [isParsing, setIsParsing] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const params = useParams<{ idPromo?: string; idTracciato?: string }>();
+    const idTracciato = params.idTracciato;
+    const storico = location.pathname.indexOf("/promozioni/storico/") === 0;
 
-    const [hoveredCell, setHoveredCell] =
-        useState<{ r: number; c: number } | null>(null);
-    const [copiedCell, setCopiedCell] =
-        useState<{ r: number; c: number } | null>(null);
-    const [showCopyFeedback, setShowCopyFeedback] = useState(false);
-    const [copyFeedbackPosition, setCopyFeedbackPosition] = useState({ x: 0, y: 0 });
+    const [tracciato, setTracciato] = useState<TracciatiResponseDTO | null>(
+        (location.state as { tracciato?: TracciatiResponseDTO } | null)?.tracciato ?? null
+    );
+    const [stato, setStato] = useState<StatoPagina>("caricamento");
+    const [errore, setErrore] = useState<string | null>(null);
+    const [fogli, setFogli] = useState<InfoFoglio[]>([]);
+    const [layout, setLayout] = useState<LayoutFoglio | null>(null);
+    const [info, setInfo] = useState<InfoSelezione>(INFO_VUOTA);
+    const [termine, setTermine] = useState("");
+    const [cursore, setCursore] = useState("cell");
+    const [copiate, setCopiate] = useState<number | null>(null);
 
+    const hostRef = useRef<HTMLDivElement>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-    const headerInnerRef = useRef<HTMLDivElement>(null);
-    const rafRef = useRef<number | null>(null);
-    const copyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const ricercaRef = useRef<HTMLInputElement>(null);
+    const workerRef = useRef<Worker | null>(null);
+    const layoutRef = useRef<{ layout: LayoutFoglio; offset: number[] } | null>(null);
+    const selezioneRef = useRef<Selezione | null>(null);
+    const trascinamentoRef = useRef<Trascinamento | null>(null);
+    const richiestaCopiaRef = useRef(0);
+    const timeoutCopiaRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    /* =======================
-       DATA LOAD
-       ======================= */
-    useEffect(() => {
-        if (tracciato) return;
-        const id = params.idTracciato;
-        if (!id) return;
+    const tornaAllaPromo = useCallback(() => {
+        const base = storico ? "/promozioni/storico/dettagli" : "/promozioni/in-corso/dettagli";
+        navigate(params.idPromo ? `${base}/${params.idPromo}` : storico ? "/promozioni/storico" : "/promozioni/in-corso");
+    }, [navigate, params.idPromo, storico]);
 
-        (async () => {
-            try {
-                setIsLoading(true);
-                const res = await ServerCall.get<TracciatiResponseDTO>(
-                    `/tracciati/${id}`
-                );
-                setTracciato(res);
-            } catch (e: any) {
-                setError(e?.message || "Errore caricamento tracciato");
-            } finally {
-                setIsLoading(false);
-            }
-        })();
-    }, [params.idTracciato, tracciato]);
-
-    useEffect(() => {
-        if (!tracciato) return;
-        (async () => {
-            try {
-                setIsParsing(true);
-                const res = await ServerCall.get<{ sheets: SheetPreview[] }>(
-                    `/tracciati/${tracciato.id}/parse`
-                );
-                setSheets(res.sheets);
-            } catch (e: any) {
-                setError(e?.message || "Errore parsing tracciato");
-            } finally {
-                setIsParsing(false);
-            }
-        })();
-    }, [tracciato]);
-
-    const activeSheet = sheets[0] ?? null;
-
-    const { headerRow, rows } = useMemo(() => {
-        if (!activeSheet) return { headerRow: [], rows: [] };
-        const [header, ...body] = activeSheet.rows;
-        if (!searchTerm) return { headerRow: header ?? [], rows: body };
-        const q = searchTerm.toLowerCase();
-        return {
-            headerRow: header ?? [],
-            rows: body.filter(r =>
-                r.some(c => c && String(c).toLowerCase().includes(q))
-            ),
-        };
-    }, [activeSheet, searchTerm]);
-
-    const totalRows = rows.length;
-    const totalCols = headerRow.length;
-    const contentHeight = totalRows * ROW_HEIGHT;
-    const contentWidth = totalCols * COL_WIDTH;
-
-    /* =======================
-       CANVAS RENDER
-       ======================= */
-    const draw = () => {
-        const canvas = canvasRef.current;
-        const scroll = scrollRef.current;
-        if (!canvas || !scroll) return;
-
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return;
-
-        const dpr = window.devicePixelRatio || 1;
-        const w = scroll.clientWidth;
-        const h = scroll.clientHeight;
-
-        canvas.width = w * dpr;
-        canvas.height = h * dpr;
-        canvas.style.width = `${w}px`;
-        canvas.style.height = `${h}px`;
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-        ctx.clearRect(0, 0, w, h);
-        ctx.font = FONT;
-        ctx.textBaseline = "middle";
-
-        const { scrollTop, scrollLeft } = scroll;
-
-        if (headerInnerRef.current) {
-            headerInnerRef.current.style.transform = `translateX(${-scrollLeft}px)`;
-        }
-
-        const startRow = clamp(
-            Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN_ROWS,
-            0,
-            totalRows
-        );
-        const endRow = clamp(
-            Math.ceil((scrollTop + h) / ROW_HEIGHT) + OVERSCAN_ROWS,
-            0,
-            totalRows
-        );
-
-        const startCol = clamp(
-            Math.floor(scrollLeft / COL_WIDTH) - OVERSCAN_COLS,
-            0,
-            totalCols
-        );
-        const endCol = clamp(
-            Math.ceil((scrollLeft + w) / COL_WIDTH) + OVERSCAN_COLS,
-            0,
-            totalCols
-        );
-
-        for (let r = startRow; r < endRow; r++) {
-            const y = r * ROW_HEIGHT - scrollTop;
-
-            ctx.fillStyle = r % 2 === 0 ? "#fff" : "rgba(248,250,252,0.7)";
-            ctx.fillRect(0, y, w, ROW_HEIGHT);
-
-            for (let c = startCol; c < endCol; c++) {
-                const x = c * COL_WIDTH - scrollLeft;
-
-                if (hoveredCell?.r === r && hoveredCell?.c === c) {
-                    ctx.fillStyle = "#e5e7eb"; // slate-200
-                    ctx.fillRect(x, y, COL_WIDTH, ROW_HEIGHT);
-                }
-
-                if (copiedCell?.r === r && copiedCell?.c === c) {
-                    ctx.fillStyle = "#d1fae5"; // emerald-100
-                    ctx.fillRect(x, y, COL_WIDTH, ROW_HEIGHT);
-                }
-
-                ctx.strokeStyle = "#e2e8f0";
-                ctx.strokeRect(x, y, COL_WIDTH, ROW_HEIGHT);
-
-                const raw = formatCell(rows[r]?.[c]);
-                const text = ellipsize(ctx, raw, COL_WIDTH - PADDING_X * 2);
-                ctx.fillStyle = "#334155";
-                ctx.fillText(text, x + PADDING_X, y + ROW_HEIGHT / 2);
-            }
-        }
-    };
-
-    useEffect(() => {
-        const el = scrollRef.current;
-        if (!el) return;
-
-        const onScroll = () => {
-            if (rafRef.current) return;
-            rafRef.current = requestAnimationFrame(() => {
-                rafRef.current = null;
-                draw();
-            });
-        };
-
-        el.addEventListener("scroll", onScroll, { passive: true });
-        draw();
-        return () => el.removeEventListener("scroll", onScroll);
-    }, [rows, headerRow, hoveredCell, copiedCell]);
-
-    /* =======================
-       EVENTS
-       ======================= */
-    const handleMouseMove = (e: React.MouseEvent) => {
-        const scroll = scrollRef.current;
-        if (!scroll) return;
-
-        const rect = scroll.getBoundingClientRect();
-        const x = e.clientX - rect.left + scroll.scrollLeft;
-        const y = e.clientY - rect.top + scroll.scrollTop;
-
-        const r = Math.floor(y / ROW_HEIGHT);
-        const c = Math.floor(x / COL_WIDTH);
-
-        if (r >= 0 && c >= 0 && r < totalRows && c < totalCols) {
-            setHoveredCell({ r, c });
-        } else {
-            setHoveredCell(null);
-        }
-    };
-
-    const handleMouseLeave = () => {
-        setHoveredCell(null);
-    };
-
-    const handleClick = async (e: React.MouseEvent) => {
-        if (!hoveredCell) return;
-        const value = formatCell(rows[hoveredCell.r]?.[hoveredCell.c]);
-        const columnName = formatCell(headerRow[hoveredCell.c]);
-
-        try {
-            // Try modern Clipboard API first (requires HTTPS in production)
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                await navigator.clipboard.writeText(value);
-            } else {
-                // Fallback for older browsers or non-HTTPS contexts
-                const textarea = document.createElement("textarea");
-                textarea.value = value;
-                textarea.style.position = "fixed";
-                textarea.style.left = "-9999px";
-                textarea.style.top = "-9999px";
-                document.body.appendChild(textarea);
-                textarea.select();
-                document.execCommand("copy");
-                document.body.removeChild(textarea);
-            }
-
-            // Show feedback at click position
-            setCopyFeedbackPosition({ x: e.clientX, y: e.clientY });
-            setShowCopyFeedback(true);
-
-            // Highlight copied cell
-            setCopiedCell(hoveredCell);
-
-            // Clear feedback after animation
-            if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
-            copyTimeoutRef.current = setTimeout(() => {
-                setCopiedCell(null);
-                setShowCopyFeedback(false);
-            }, 1200);
-        } catch (err) {
-            showNotification(
-                <div className="flex items-center gap-2 text-danger">
-                    <Lucide icon="CircleAlert" className="w-4 h-4" />
-                    <span>Impossibile copiare il valore</span>
-                </div>
-            );
-        }
-    };
-
-    // Cleanup on unmount
-    useEffect(() => {
-        return () => {
-            if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
-        };
+    const invia = useCallback((messaggio: MessaggioVersoMotore, trasferibili?: Transferable[]) => {
+        workerRef.current?.postMessage(messaggio, trasferibili ?? []);
     }, []);
+
+    const inviaVista = useCallback(() => {
+        const scroll = scrollRef.current;
+        const canvas = hostRef.current?.querySelector("canvas");
+        if (!scroll || !canvas) return;
+        canvas.style.width = `${scroll.clientWidth}px`;
+        canvas.style.height = `${scroll.clientHeight}px`;
+        invia({
+            tipo: "vista",
+            scrollTop: scroll.scrollTop,
+            scrollLeft: scroll.scrollLeft,
+            larghezza: scroll.clientWidth,
+            altezza: scroll.clientHeight,
+            dpr: window.devicePixelRatio || 1,
+        });
+    }, [invia]);
+
+    const carica = useCallback(() => {
+        if (!idTracciato) return;
+        setStato("caricamento");
+        setErrore(null);
+        const url = new URL(`${ServerCall.getUrl()}/tracciati/${idTracciato}/parse`, window.location.href).toString();
+        invia({ tipo: "carica", url });
+    }, [idTracciato, invia]);
+
+    /* =======================
+       WORKER E CANVAS
+       ======================= */
+    useEffect(() => {
+        const host = hostRef.current;
+        if (!host || !idTracciato) return;
+        if (!offscreenSupportato()) {
+            setStato("errore");
+            setErrore("Il browser non supporta l'anteprima del tracciato: aggiornalo all'ultima versione.");
+            return;
+        }
+
+        // Il canvas e creato qui: transferControlToOffscreen si puo chiamare una volta sola per elemento.
+        const canvas = document.createElement("canvas");
+        canvas.className = "absolute top-0 left-0 pointer-events-none";
+        host.prepend(canvas);
+        const offscreen = canvas.transferControlToOffscreen();
+
+        const worker = new Worker(new URL("./foglio.worker.ts", import.meta.url), { type: "module" });
+        workerRef.current = worker;
+
+        worker.onmessage = (evento: MessageEvent<MessaggioDalMotore>) => {
+            const m = evento.data;
+            switch (m.tipo) {
+                case "caricato":
+                    setFogli(m.fogli);
+                    setStato("pronto");
+                    break;
+                case "errore":
+                    setErrore(m.messaggio);
+                    setStato("errore");
+                    break;
+                case "layout": {
+                    const precedente = layoutRef.current?.layout;
+                    layoutRef.current = { layout: m.layout, offset: offsetColonne(m.layout.larghezze) };
+                    setLayout(m.layout);
+                    if (!precedente || precedente.foglio !== m.layout.foglio) {
+                        selezioneRef.current = m.layout.righeVisibili ? selezioneSingola({ v: 0, c: 0 }) : null;
+                        if (scrollRef.current) {
+                            scrollRef.current.scrollTop = 0;
+                            scrollRef.current.scrollLeft = 0;
+                        }
+                    }
+                    break;
+                }
+                case "infoSelezione":
+                    setInfo({ indirizzo: m.indirizzo, valore: m.valore, statistiche: m.statistiche });
+                    break;
+                case "testoCopia":
+                    if (m.richiesta !== richiestaCopiaRef.current || !m.celle) break;
+                    scriviAppunti(m.testo)
+                        .then(() => m.celle, () => -1)
+                        .then(esito => {
+                            setCopiate(esito);
+                            if (timeoutCopiaRef.current) clearTimeout(timeoutCopiaRef.current);
+                            timeoutCopiaRef.current = setTimeout(() => setCopiate(null), 1500);
+                        });
+                    break;
+            }
+        };
+        worker.onerror = () => {
+            setErrore("Errore interno dell'anteprima del tracciato");
+            setStato("errore");
+        };
+
+        // Il tema arriva prima dei dati: le larghezze iniziali si misurano con il font giusto
+        worker.postMessage({ tipo: "tema", tema: leggiTema() } satisfies MessaggioVersoMotore);
+        worker.postMessage({ tipo: "canvas", canvas: offscreen } satisfies MessaggioVersoMotore, [offscreen]);
+        inviaVista();
+        carica();
+
+        const osservatore = new ResizeObserver(() => inviaVista());
+        if (scrollRef.current) osservatore.observe(scrollRef.current);
+        const suDpr = () => inviaVista();
+        window.addEventListener("resize", suDpr);
+
+        return () => {
+            osservatore.disconnect();
+            window.removeEventListener("resize", suDpr);
+            worker.terminate();
+            workerRef.current = null;
+            layoutRef.current = null;
+            canvas.remove();
+            if (timeoutCopiaRef.current) clearTimeout(timeoutCopiaRef.current);
+        };
+    }, [idTracciato, carica, inviaVista]);
+
+    // Dati descrittivi del tracciato (nome, dimensione): non bloccano la griglia.
+    useEffect(() => {
+        if (tracciato || !idTracciato) return;
+        let annullato = false;
+        ServerCall.get<TracciatiResponseDTO>(`/tracciati/${idTracciato}`)
+            .then(res => {
+                if (!annullato) setTracciato(res);
+            })
+            .catch(() => {
+                // Il nome manca ma la griglia resta utilizzabile; gli errori del contenuto arrivano dal worker.
+            });
+        return () => {
+            annullato = true;
+        };
+    }, [idTracciato, tracciato]);
+
+    // Ricerca con un piccolo ritardo per non filtrare a ogni tasto
+    useEffect(() => {
+        if (stato !== "pronto") return;
+        const t = setTimeout(() => invia({ tipo: "cerca", termine }), 180);
+        return () => clearTimeout(t);
+    }, [termine, stato, invia]);
+
+    // Ctrl+F porta alla ricerca del tracciato invece che a quella del browser
+    useEffect(() => {
+        const suTasto = (e: KeyboardEvent) => {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
+                e.preventDefault();
+                ricercaRef.current?.focus();
+                ricercaRef.current?.select();
+            }
+        };
+        window.addEventListener("keydown", suTasto);
+        return () => window.removeEventListener("keydown", suTasto);
+    }, []);
+
+    /* =======================
+       SELEZIONE
+       ======================= */
+    const assicuraVisibile = (cella: Cella) => {
+        const scroll = scrollRef.current;
+        const l = layoutRef.current;
+        if (!scroll || !l) return;
+        const areaW = scroll.clientWidth - l.layout.gutter;
+        const x0 = l.offset[cella.c] ?? 0;
+        const x1 = l.offset[cella.c + 1] ?? x0;
+        if (x0 < scroll.scrollLeft) scroll.scrollLeft = x0;
+        else if (x1 > scroll.scrollLeft + areaW) scroll.scrollLeft = x1 - areaW;
+        if (cella.v === 0) return;
+        const areaH = scroll.clientHeight - ALTEZZA_LETTERE - ALTEZZA_RIGA;
+        const y0 = (cella.v - 1) * ALTEZZA_RIGA;
+        const y1 = y0 + ALTEZZA_RIGA;
+        if (y0 < scroll.scrollTop) scroll.scrollTop = y0;
+        else if (y1 > scroll.scrollTop + areaH) scroll.scrollTop = y1 - areaH;
+    };
+
+    const impostaSelezione = (selezione: Selezione, mostra: Cella = selezione.cursore) => {
+        selezioneRef.current = selezione;
+        invia({ tipo: "selezione", selezione });
+        assicuraVisibile(mostra);
+    };
+
+    const copia = () => {
+        richiestaCopiaRef.current += 1;
+        invia({ tipo: "copia", richiesta: richiestaCopiaRef.current });
+    };
+
+    /** Zona del canvas sotto il puntatore; con `limita` le coordinate fuori griglia vanno sul bordo. */
+    const colpisci = (clientX: number, clientY: number, limita = false): Colpo | null => {
+        const scroll = scrollRef.current;
+        const l = layoutRef.current;
+        if (!scroll || !l) return null;
+        const rect = scroll.getBoundingClientRect();
+        const x = clientX - rect.left;
+        const y = clientY - rect.top;
+        const { gutter, righeVisibili, larghezze } = l.layout;
+        const nColonne = larghezze.length;
+        const totale = l.offset[nColonne] ?? 0;
+        if (!limita && (x > scroll.clientWidth || y > scroll.clientHeight)) return null;
+
+        const xc = x - gutter + scroll.scrollLeft;
+        let c = colonnaInX(l.offset, xc);
+        if (c < 0) c = limita || (xc >= totale && xc - totale <= TOLLERANZA_BORDO) ? (xc < 0 ? 0 : nColonne - 1) : -1;
+
+        if (y < ALTEZZA_LETTERE && !limita) {
+            if (x < gutter) return { zona: "angolo" };
+            let bordo = -1;
+            if (c >= 0 && Math.abs(l.offset[c + 1] - xc) <= TOLLERANZA_BORDO) bordo = c;
+            else if (c > 0 && Math.abs(l.offset[c] - xc) <= TOLLERANZA_BORDO) bordo = c - 1;
+            if (c < 0) return null;
+            return { zona: "lettera", c, bordo };
+        }
+
+        // La riga visiva 0 e bloccata sotto le lettere; le altre scorrono
+        let v =
+            y < ALTEZZA_LETTERE + ALTEZZA_RIGA
+                ? 0
+                : 1 + Math.floor((y - ALTEZZA_LETTERE - ALTEZZA_RIGA + scroll.scrollTop) / ALTEZZA_RIGA);
+        if (v >= righeVisibili) {
+            if (!limita) return null;
+            v = righeVisibili - 1;
+        }
+        if (v < 0) v = 0;
+
+        if (x < gutter && !limita) return { zona: "numero", v };
+        if (c < 0) return null;
+        return { zona: "cella", v, c: Math.max(0, c) };
+    };
+
+    const suMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+        if (e.button !== 0) return;
+        const l = layoutRef.current;
+        const colpo = colpisci(e.clientX, e.clientY);
+        if (!l || !colpo) return;
+        e.preventDefault();
+        scrollRef.current?.focus();
+        const ultimaRiga = l.layout.righeVisibili - 1;
+        const ultimaColonna = l.layout.larghezze.length - 1;
+        if (ultimaRiga < 0 || ultimaColonna < 0) return;
+        const precedente = selezioneRef.current;
+
+        switch (colpo.zona) {
+            case "angolo":
+                impostaSelezione({ ancora: { v: 0, c: 0 }, cursore: { v: ultimaRiga, c: ultimaColonna } }, { v: 0, c: 0 });
+                return;
+            case "lettera":
+                if (colpo.bordo >= 0) {
+                    trascinamentoRef.current = {
+                        tipo: "larghezza",
+                        colonna: colpo.bordo,
+                        xIniziale: e.clientX,
+                        larghezzaIniziale: l.layout.larghezze[colpo.bordo],
+                    };
+                    return;
+                }
+                if (e.shiftKey && precedente) {
+                    impostaSelezione(
+                        { ancora: { v: 0, c: precedente.ancora.c }, cursore: { v: ultimaRiga, c: colpo.c } },
+                        { v: 0, c: colpo.c }
+                    );
+                } else {
+                    impostaSelezione({ ancora: { v: 0, c: colpo.c }, cursore: { v: ultimaRiga, c: colpo.c } }, { v: 0, c: colpo.c });
+                }
+                trascinamentoRef.current = { tipo: "selezione", zona: "lettera" };
+                return;
+            case "numero":
+                if (e.shiftKey && precedente) {
+                    impostaSelezione(
+                        { ancora: { v: precedente.ancora.v, c: 0 }, cursore: { v: colpo.v, c: ultimaColonna } },
+                        { v: colpo.v, c: 0 }
+                    );
+                } else {
+                    impostaSelezione({ ancora: { v: colpo.v, c: 0 }, cursore: { v: colpo.v, c: ultimaColonna } }, { v: colpo.v, c: 0 });
+                }
+                trascinamentoRef.current = { tipo: "selezione", zona: "numero" };
+                return;
+            case "cella": {
+                const cella = { v: colpo.v, c: colpo.c };
+                if (e.shiftKey && precedente) impostaSelezione({ ancora: precedente.ancora, cursore: cella });
+                else impostaSelezione(selezioneSingola(cella));
+                trascinamentoRef.current = { tipo: "selezione", zona: "cella" };
+                return;
+            }
+        }
+    };
+
+    const suDoppioClick = (e: React.MouseEvent<HTMLDivElement>) => {
+        const colpo = colpisci(e.clientX, e.clientY);
+        if (colpo?.zona === "lettera" && colpo.bordo >= 0) invia({ tipo: "adatta", colonna: colpo.bordo });
+    };
+
+    const suMouseMoveLocale = (e: React.MouseEvent<HTMLDivElement>) => {
+        if (trascinamentoRef.current) return;
+        const colpo = colpisci(e.clientX, e.clientY);
+        const nuovo = colpo?.zona === "lettera" && colpo.bordo >= 0 ? "col-resize" : colpo?.zona === "cella" ? "cell" : "default";
+        if (nuovo !== cursore) setCursore(nuovo);
+    };
+
+    // Trascinamento: segue il mouse anche fuori dalla griglia
+    useEffect(() => {
+        const suMove = (e: MouseEvent) => {
+            const t = trascinamentoRef.current;
+            const l = layoutRef.current;
+            const scroll = scrollRef.current;
+            if (!t || !l || !scroll) return;
+            if (t.tipo === "larghezza") {
+                const larghezza = Math.max(LARGHEZZA_MIN_COLONNA, t.larghezzaIniziale + e.clientX - t.xIniziale);
+                invia({ tipo: "larghezza", colonna: t.colonna, larghezza });
+                return;
+            }
+            // Scorrimento automatico vicino ai bordi
+            const rect = scroll.getBoundingClientRect();
+            if (e.clientY > rect.top + scroll.clientHeight - 8) scroll.scrollTop += ALTEZZA_RIGA;
+            else if (e.clientY < rect.top + ALTEZZA_LETTERE + ALTEZZA_RIGA) scroll.scrollTop -= ALTEZZA_RIGA;
+            if (e.clientX > rect.left + scroll.clientWidth - 8) scroll.scrollLeft += 40;
+            else if (e.clientX < rect.left + l.layout.gutter) scroll.scrollLeft -= 40;
+
+            const colpo = colpisci(e.clientX, e.clientY, true);
+            const precedente = selezioneRef.current;
+            if (!colpo || colpo.zona !== "cella" || !precedente) return;
+            const ultimaRiga = l.layout.righeVisibili - 1;
+            const ultimaColonna = l.layout.larghezze.length - 1;
+            const cursoreNuovo =
+                t.zona === "lettera"
+                    ? { v: ultimaRiga, c: colpo.c }
+                    : t.zona === "numero"
+                        ? { v: colpo.v, c: ultimaColonna }
+                        : { v: colpo.v, c: colpo.c };
+            if (cursoreNuovo.v === precedente.cursore.v && cursoreNuovo.c === precedente.cursore.c) return;
+            selezioneRef.current = { ancora: precedente.ancora, cursore: cursoreNuovo };
+            invia({ tipo: "selezione", selezione: selezioneRef.current });
+        };
+        const suUp = () => {
+            trascinamentoRef.current = null;
+        };
+        window.addEventListener("mousemove", suMove);
+        window.addEventListener("mouseup", suUp);
+        return () => {
+            window.removeEventListener("mousemove", suMove);
+            window.removeEventListener("mouseup", suUp);
+        };
+    }, [invia]);
+
+    const suTasto = (e: React.KeyboardEvent<HTMLDivElement>) => {
+        const l = layoutRef.current;
+        const sel = selezioneRef.current;
+        if (!l || !sel) return;
+        const righe = l.layout.righeVisibili;
+        const colonne = l.layout.larghezze.length;
+        const ctrl = e.ctrlKey || e.metaKey;
+        const tasto = e.key;
+
+        if (ctrl && tasto.toLowerCase() === "c") {
+            e.preventDefault();
+            copia();
+            return;
+        }
+        if (ctrl && tasto.toLowerCase() === "a") {
+            e.preventDefault();
+            impostaSelezione({ ancora: { v: 0, c: 0 }, cursore: { v: righe - 1, c: colonne - 1 } }, sel.ancora);
+            return;
+        }
+
+        const pagina = Math.max(1, Math.floor(((scrollRef.current?.clientHeight ?? 0) - ALTEZZA_LETTERE - ALTEZZA_RIGA) / ALTEZZA_RIGA) - 1);
+        let dv = 0;
+        let dc = 0;
+        let aBordo = ctrl;
+        let estendi = e.shiftKey;
+        switch (tasto) {
+            case "ArrowUp": dv = -1; break;
+            case "ArrowDown": dv = 1; break;
+            case "ArrowLeft": dc = -1; break;
+            case "ArrowRight": dc = 1; break;
+            case "Tab": dc = e.shiftKey ? -1 : 1; estendi = false; aBordo = false; break;
+            case "Enter": dv = e.shiftKey ? -1 : 1; estendi = false; aBordo = false; break;
+            case "PageUp": dv = -pagina; aBordo = false; break;
+            case "PageDown": dv = pagina; aBordo = false; break;
+            case "Home":
+                dc = -1;
+                aBordo = true;
+                if (ctrl) dv = -1;
+                break;
+            case "End":
+                dc = 1;
+                aBordo = true;
+                if (ctrl) dv = 1;
+                break;
+            default:
+                return;
+        }
+        e.preventDefault();
+        if (estendi) {
+            const cursoreNuovo = spostaCella(sel.cursore, dv, dc, righe, colonne, aBordo);
+            impostaSelezione({ ancora: sel.ancora, cursore: cursoreNuovo });
+        } else {
+            const cella = spostaCella(sel.ancora, dv, dc, righe, colonne, aBordo);
+            impostaSelezione(selezioneSingola(cella));
+        }
+    };
 
     /* =======================
        RENDER
        ======================= */
+    const contenutoW = layout ? layout.gutter + layout.larghezze.reduce((a, b) => a + b, 0) : 0;
+    const contenutoH = layout && layout.righeVisibili > 0 ? ALTEZZA_LETTERE + layout.righeVisibili * ALTEZZA_RIGA : 0;
+    const risultati = layout && layout.termine.trim() ? Math.max(0, layout.righeVisibili - 1) : null;
+    const nomeTracciato = tracciato?.nome || tracciato?.filename || "Tracciato";
+    const dimensione = getFileSize(tracciato?.blobfile);
+    const foglioAttivo = fogli[layout?.foglio ?? 0];
+    const stat = info.statistiche;
+
     return (
-        <div className="space-y-5">
-            <PageHeader title="Anteprima Tracciato" description="Visualizza un'anteprima dettagliata del tracciato selezionato" />
-
-            {/* Action Bar */}
-            <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="flex justify-between items-center"
-            >
-                <Button size="sm" variant="secondary" onClick={() => navigate(-1)}>
-                    <Lucide icon="ArrowLeft" className="w-4 h-4 mr-2" />
-                    Torna indietro
+        <div className="fixed inset-0 flex flex-col bg-white text-slate-700 dark:bg-darkmode-600 dark:text-slate-300">
+            {/* Barra superiore */}
+            <div className="flex items-center gap-3 px-4 py-2.5 border-b border-slate-200/80 bg-slate-50/60 flex-shrink-0 dark:border-darkmode-400 dark:bg-darkmode-700/40">
+                <Button size="sm" variant="outline-secondary" onClick={tornaAllaPromo} className="flex-shrink-0">
+                    <Lucide icon="ArrowLeft" className="w-4 h-4 mr-1.5" />
+                    Torna alla promo
                 </Button>
-
-                {tracciato && (
-                    <motion.div
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        className="flex items-center gap-3"
-                    >
-                        <Badge variant="info" className="flex items-center gap-1.5">
-                            <Lucide icon="FileSpreadsheet" className="w-3.5 h-3.5" />
-                            {tracciato.nome || tracciato.filename || "Tracciato"}
-                        </Badge>
-                        {tracciato.blobfile && (
-                            <Badge variant="info" className="flex items-center gap-1.5">
-                                <Lucide icon="HardDrive" className="w-3.5 h-3.5" />
-                                {getFileSize(tracciato.blobfile)} MB
-                            </Badge>
+                <div className="h-6 w-px bg-slate-200 dark:bg-darkmode-400" />
+                <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-gradient-to-b from-theme-1 to-theme-2/80">
+                        <Lucide icon="FileSpreadsheet" className="w-4 h-4 text-white" />
+                    </div>
+                    <div className="min-w-0">
+                        <div className="text-sm font-medium truncate text-slate-700 dark:text-slate-200" title={nomeTracciato}>
+                            {nomeTracciato}
+                        </div>
+                        <div className="text-xs text-slate-400 truncate">
+                            Anteprima tracciato
+                            {tracciato?.filename && tracciato.nome && tracciato.nome !== tracciato.filename && ` · ${tracciato.filename}`}
+                            {dimensione && ` · ${dimensione} MB`}
+                        </div>
+                    </div>
+                </div>
+                <div className="ml-auto flex items-center gap-3">
+                    {risultati !== null && (
+                        <span className="text-xs text-slate-500 whitespace-nowrap">
+                            {risultati.toLocaleString("it-IT")} {risultati === 1 ? "riga trovata" : "righe trovate"}
+                        </span>
+                    )}
+                    <div className="relative w-72">
+                        <Lucide
+                            icon="Search"
+                            className="absolute inset-y-0 left-0 z-10 w-4 h-4 my-auto ml-3 stroke-[1.3] text-slate-500"
+                        />
+                        <FormInput
+                            ref={ricercaRef}
+                            formInputSize="sm"
+                            value={termine}
+                            onChange={e => setTermine(e.target.value)}
+                            onKeyDown={e => {
+                                if (e.key === "Escape") {
+                                    setTermine("");
+                                    scrollRef.current?.focus();
+                                } else if (e.key === "Enter") {
+                                    scrollRef.current?.focus();
+                                }
+                            }}
+                            placeholder="Cerca nel tracciato (Ctrl+F)"
+                            disabled={stato !== "pronto"}
+                            className="pl-9 pr-9"
+                        />
+                        {termine && (
+                            <button
+                                type="button"
+                                onClick={() => setTermine("")}
+                                className="absolute inset-y-0 right-0 z-10 my-auto mr-3 text-slate-400 hover:text-slate-600 transition-colors"
+                                title="Cancella ricerca"
+                            >
+                                <Lucide icon="X" className="w-4 h-4" />
+                            </button>
                         )}
-                    </motion.div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Barra della formula */}
+            <div className="flex items-stretch h-9 border-b border-slate-200/80 flex-shrink-0 text-sm dark:border-darkmode-400">
+                <div
+                    className="w-28 flex items-center px-3 border-r border-slate-200/80 font-mono text-xs font-medium text-primary dark:border-darkmode-400 dark:text-slate-200"
+                    title="Cella attiva"
+                >
+                    {info.indirizzo}
+                </div>
+                <div className="w-10 flex items-center justify-center border-r border-slate-200/80 text-slate-400 dark:border-darkmode-400">
+                    <Lucide icon="SquareFunction" className="w-4 h-4" />
+                </div>
+                <input
+                    readOnly
+                    value={info.valore}
+                    className="flex-1 min-w-0 px-3 border-0 bg-transparent text-sm text-slate-700 focus:outline-none focus:ring-0 dark:text-slate-200"
+                    aria-label="Contenuto della cella attiva"
+                />
+            </div>
+
+            {/* Griglia */}
+            <div ref={hostRef} className="relative flex-1 min-h-0 overflow-hidden">
+                <div
+                    ref={scrollRef}
+                    tabIndex={0}
+                    onScroll={inviaVista}
+                    onMouseDown={suMouseDown}
+                    onMouseMove={suMouseMoveLocale}
+                    onDoubleClick={suDoppioClick}
+                    onKeyDown={suTasto}
+                    className="absolute inset-0 overflow-auto outline-none scrollbar-enhanced"
+                    style={{ cursor: cursore }}
+                    role="grid"
+                    aria-label={`Anteprima ${nomeTracciato}`}
+                    aria-rowcount={layout?.righeVisibili ?? 0}
+                    aria-colcount={layout?.larghezze.length ?? 0}
+                >
+                    <div style={{ width: contenutoW, height: contenutoH }} />
+                </div>
+
+                {stato === "caricamento" && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-white/80 dark:bg-darkmode-600/80">
+                        <Lucide icon="Loader" className="w-10 h-10 text-primary animate-spin" />
+                        <p className="text-slate-600 font-medium">Analisi dati in corso...</p>
+                    </div>
                 )}
-            </motion.div>
 
-            <div className="box box--stacked">
-                <div className="p-5 space-y-5">
-                    {isLoading || isParsing ? (
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            className="flex flex-col items-center justify-center py-16 gap-4"
+                {stato === "errore" && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-white dark:bg-darkmode-600">
+                        <div className="rounded-full bg-danger/10 p-4">
+                            <Lucide icon="CircleAlert" className="w-8 h-8 text-danger" />
+                        </div>
+                        <p className="text-danger font-semibold">Impossibile caricare il tracciato</p>
+                        {errore && <p className="text-sm text-slate-500 max-w-lg text-center">{errore}</p>}
+                        <div className="flex gap-2 mt-2">
+                            {offscreenSupportato() && (
+                                <Button size="sm" variant="primary" onClick={carica}>
+                                    <Lucide icon="RefreshCw" className="w-4 h-4 mr-1.5" />
+                                    Riprova
+                                </Button>
+                            )}
+                            <Button size="sm" variant="outline-secondary" onClick={tornaAllaPromo}>
+                                <Lucide icon="ArrowLeft" className="w-4 h-4 mr-1.5" />
+                                Torna alla promo
+                            </Button>
+                        </div>
+                    </div>
+                )}
+
+                {stato === "pronto" && layout && layout.righeFile === 0 && (
+                    <div className="absolute inset-0 flex items-center justify-center text-sm text-slate-400 pointer-events-none">
+                        Il foglio è vuoto
+                    </div>
+                )}
+            </div>
+
+            {/* Schede dei fogli e barra di stato */}
+            <div className="flex items-stretch h-9 border-t border-slate-200/80 bg-slate-50/60 flex-shrink-0 text-xs dark:border-darkmode-400 dark:bg-darkmode-700/40">
+                <div className="flex items-stretch overflow-x-auto min-w-0">
+                    {fogli.map((f, i) => (
+                        <button
+                            key={`${i}-${f.nome}`}
+                            type="button"
+                            onClick={() => invia({ tipo: "foglio", indice: i })}
+                            className={clsx(
+                                "flex items-center gap-1.5 px-4 border-r border-slate-200/80 whitespace-nowrap transition-colors dark:border-darkmode-400",
+                                layout?.foglio === i
+                                    ? "bg-white font-medium text-primary shadow-[inset_0_-2px_0_0_rgb(var(--color-primary))] dark:bg-darkmode-600 dark:text-slate-200"
+                                    : "text-slate-500 hover:bg-slate-100 dark:hover:bg-darkmode-500"
+                            )}
+                            title={`${f.righe.toLocaleString("it-IT")} righe, ${f.colonne} colonne`}
                         >
-                            <div className="relative">
-                                <Lucide
-                                    icon="Loader"
-                                    className="w-10 h-10 text-primary animate-spin"
-                                />
-                            </div>
-                            <p className="text-slate-600 font-medium">
-                                {isLoading ? "Caricamento tracciato..." : "Analisi dati in corso..."}
-                            </p>
-                        </motion.div>
-                    ) : error ? (
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.9 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            className="flex flex-col items-center justify-center py-16 gap-3"
-                        >
-                            <div className="rounded-full bg-danger/10 p-4">
-                                <Lucide icon="CircleAlert" className="w-8 h-8 text-danger" />
-                            </div>
-                            <p className="text-danger font-semibold">{error}</p>
-                        </motion.div>
-                    ) : (
+                            <Lucide icon="Sheet" className="w-3.5 h-3.5" />
+                            {f.nome || `Foglio ${i + 1}`}
+                        </button>
+                    ))}
+                </div>
+                <div className="ml-auto flex items-center gap-4 px-4 text-slate-500 whitespace-nowrap">
+                    <AnimatePresence>
+                        {copiate !== null && (
+                            <motion.span
+                                initial={{ opacity: 0, y: 4 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0 }}
+                                className={clsx("flex items-center gap-1 font-medium", copiate < 0 ? "text-danger" : "text-success")}
+                            >
+                                <Lucide icon={copiate < 0 ? "CircleAlert" : "Check"} className="w-3.5 h-3.5" />
+                                {copiate < 0
+                                    ? "Impossibile copiare negli appunti"
+                                    : `${copiate.toLocaleString("it-IT")} ${copiate === 1 ? "cella copiata" : "celle copiate"}`}
+                            </motion.span>
+                        )}
+                    </AnimatePresence>
+                    {stat.celle > 1 && (
                         <>
-                            {/* Stats Bar */}
-                            <motion.div
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                className="flex items-center justify-between gap-4 p-4 bg-gradient-to-r from-slate-50 to-slate-100/50 rounded-lg border border-slate-200"
-                            >
-                                <div className="flex items-center gap-6">
-                                    <div className="flex items-center gap-2">
-                                        <div className="rounded-full bg-blue-100 p-2">
-                                            <Lucide icon="Table2" className="w-4 h-4 text-blue-600" />
-                                        </div>
-                                        <div>
-                                            <p className="text-xs text-slate-500 font-medium">Righe totali</p>
-                                            <p className="text-lg font-bold text-slate-800">
-                                                {rows.length.toLocaleString()}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div className="h-10 w-px bg-slate-300" />
-                                    <div className="flex items-center gap-2">
-                                        <div className="rounded-full bg-emerald-100 p-2">
-                                            <Lucide icon="Columns3" className="w-4 h-4 text-emerald-600" />
-                                        </div>
-                                        <div>
-                                            <p className="text-xs text-slate-500 font-medium">Colonne</p>
-                                            <p className="text-lg font-bold text-slate-800">{totalCols}</p>
-                                        </div>
-                                    </div>
-                                    {searchTerm && (
-                                        <>
-                                            <div className="h-10 w-px bg-slate-300" />
-                                            <div className="flex items-center gap-2">
-                                                <div className="rounded-full bg-amber-100 p-2">
-                                                    <Lucide icon="Search" className="w-4 h-4 text-amber-600" />
-                                                </div>
-                                                <div>
-                                                    <p className="text-xs text-slate-500 font-medium">Risultati</p>
-                                                    <p className="text-lg font-bold text-slate-800">
-                                                        {rows.length.toLocaleString()}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        </>
-                                    )}
-                                </div>
-
-                                <div className="flex items-center gap-2 text-xs text-slate-500 bg-white px-3 py-2 rounded-md border border-slate-200">
-                                    <Lucide icon="Info" className="w-4 h-4" />
-                                    <span>Clicca su una cella per copiarla</span>
-                                </div>
-                            </motion.div>
-
-                            {/* Search Bar */}
-                            <div className="relative">
-                                <Lucide
-                                    icon="Search"
-                                    className="absolute inset-y-0 left-0 z-10 w-4 h-4 my-auto ml-3 stroke-[1.3] text-slate-500"
-                                />
-                                <FormInput
-                                    placeholder="Cerca nel tracciato..."
-                                    value={searchTerm}
-                                    onChange={e => setSearchTerm(e.target.value)}
-                                    className="pl-9 pr-10"
-                                />
-                                {searchTerm && (
-                                    <button
-                                        onClick={() => setSearchTerm("")}
-                                        className="absolute inset-y-0 right-0 z-10 my-auto mr-3 text-slate-400 hover:text-slate-600 transition-colors"
-                                    >
-                                        <Lucide icon="X" className="w-4 h-4" />
-                                    </button>
-                                )}
-                            </div>
-
-                            {/* Data Grid */}
-                            <motion.div
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: 0.1 }}
-                                className="border overflow-hidden bg-white shadow-sm relative"
-                            >
-                                {/* HEADER */}
-                                <div
-                                    className="sticky top-0 bg-gradient-to-r from-slate-100 to-slate-50 border-b border-slate-300 z-10"
-                                    style={{ height: HEADER_HEIGHT }}
-                                >
-                                    <div className="overflow-hidden h-full">
-                                        <div
-                                            ref={headerInnerRef}
-                                            style={{ width: contentWidth }}
-                                            className="flex"
-                                        >
-                                            {headerRow.map((h, i) => (
-                                                <div
-                                                    key={i}
-                                                    className="border-r border-slate-300 px-2 py-1 text-[11px] font-bold text-slate-700 truncate uppercase tracking-wide"
-                                                    style={{ width: COL_WIDTH }}
-                                                    title={formatCell(h)}
-                                                >
-                                                    {formatCell(h)}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* BODY */}
-                                <div
-                                    className="relative cursor-pointer"
-                                    onMouseMove={handleMouseMove}
-                                    onMouseLeave={handleMouseLeave}
-                                    onClick={handleClick}
-                                >
-                                    <div
-                                        ref={scrollRef}
-                                        className="overflow-auto max-h-[70vh] scrollbar-enhanced"
-                                    >
-                                        <div
-                                            style={{
-                                                width: contentWidth,
-                                                height: contentHeight,
-                                            }}
-                                        />
-                                    </div>
-
-                                    <canvas
-                                        ref={canvasRef}
-                                        className="absolute inset-0 pointer-events-none"
-                                    />
-
-                                    {/* Copy Feedback Popup */}
-                                    <AnimatePresence>
-                                        {showCopyFeedback && (
-                                            <motion.div
-                                                initial={{ scale: 0, opacity: 0 }}
-                                                animate={{ scale: 1, opacity: 1 }}
-                                                exit={{ scale: 0, opacity: 0 }}
-                                                transition={{ duration: 0.15 }}
-                                                className="fixed z-50 pointer-events-none"
-                                                style={{
-                                                    left: copyFeedbackPosition.x,
-                                                    top: copyFeedbackPosition.y,
-                                                    transform: "translate(-50%, -120%)",
-                                                }}
-                                            >
-                                                <div className="bg-emerald-600 text-white px-3 py-1.5 rounded-lg shadow-lg flex items-center gap-2">
-                                                    <Lucide icon="Check" className="w-4 h-4" />
-                                                    <span className="text-sm font-semibold">Copiato!</span>
-                                                </div>
-                                            </motion.div>
-                                        )}
-                                    </AnimatePresence>
-                                </div>
-                            </motion.div>
-
-                            {/* Footer Info */}
-                            <div className="flex items-center justify-between pt-2">
-                                <Badge variant="primary" className="flex items-center gap-1.5">
-                                    <Lucide icon="Rows3" className="w-3.5 h-3.5" />
-                                    {rows.length} {rows.length === 1 ? "riga" : "righe"} visualizzate
-                                </Badge>
-
-                                {hoveredCell && (
-                                    <motion.div
-                                        initial={{ opacity: 0, x: 10 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        exit={{ opacity: 0, x: 10 }}
-                                        className="text-xs text-slate-500 flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-md"
-                                    >
-                                        <Lucide icon="MousePointer2" className="w-3.5 h-3.5" />
-                                        Riga {hoveredCell.r + 1}, Colonna {hoveredCell.c + 1}
-                                    </motion.div>
-                                )}
-                            </div>
+                            {stat.numerici > 0 && stat.media !== null && <span>Media: {formatoNumero.format(stat.media)}</span>}
+                            <span>Conteggio: {stat.conteggio.toLocaleString("it-IT")}</span>
+                            {stat.numerici > 0 && <span>Somma: {formatoNumero.format(stat.somma)}</span>}
                         </>
+                    )}
+                    {foglioAttivo && (
+                        <span className="text-slate-400">
+                            {foglioAttivo.righe.toLocaleString("it-IT")} righe × {foglioAttivo.colonne} colonne
+                        </span>
                     )}
                 </div>
             </div>
@@ -586,4 +737,4 @@ const DettaglioAnteprimaTracciato: React.FC = () => {
     );
 };
 
-export default DettaglioAnteprimaTracciato;
+export default withSessionCheck(DettaglioAnteprimaTracciato);

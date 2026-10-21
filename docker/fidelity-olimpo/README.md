@@ -22,7 +22,7 @@ Cosa non c'è, di proposito:
   come passo successivo, quando questo deployment è verificato.
 - **Istanta e Correggo4**, che sono altri componenti della suite.
 
-PostgreSQL, MongoDB e Redis invece ci sono, e non sono componenti della release:
+PostgreSQL e Redis invece ci sono, e non sono componenti della release:
 il ControlPlane non li conosce e il Runner non li aggiorna. PostgreSQL usa
 l'immagine **PostGIS**, non `postgres` semplice, perché il database di Fidelity
 usa `DataTypes.GEOMETRY`; con l'immagine normale il primo `models:sync`
@@ -43,12 +43,6 @@ arriva ma il browser richiede da solo ogni risorsa in `https` e fallisce con
 `ERR_SSL_PROTOCOL_ERROR`. Con il certificato davanti, gli header di sicurezza
 di Fidelity funzionano come previsto invece di doverli rimuovere.
 
-MongoDB serve a Fidelity per la configurazione di WebPliant. Lo schema Zod
-dichiara `MONGO_URL` opzionale, ma `server/core/models/mongoose.ts` apre la
-connessione al caricamento del modulo: senza, il processo termina prima di
-mettersi in ascolto. Il servizio non pubblica porte e non ha autenticazione,
-perché è raggiungibile solo dalla rete interna del progetto.
-
 Le credenziali stanno in `release.env`, non nei due file d'ambiente delle
 applicazioni: sono la stessa cosa per il container che inizializza il database e
 per chi ci si connette, e tenerle in un posto solo evita che divergano.
@@ -65,8 +59,14 @@ scp -r docker/fidelity-olimpo UTENTE@TARGET:/tmp/
 # sul target
 sudo mkdir -p /opt/company-ai/projects/<progetto>
 cd /opt/company-ai/projects/<progetto>
-sudo /tmp/fidelity-olimpo/install-bundle.sh
+sudo bash /tmp/fidelity-olimpo/install-bundle.sh
 ```
+
+Lo script si lancia con `bash` davanti perché arriva in `/tmp` senza permesso
+di esecuzione: `scp` da Windows non trasferisce il bit `+x`, e su alcune
+distribuzioni `/tmp` è montata `noexec`. Invocato direttamente, `sudo` risponde
+`Permission denied`. Gli script copiati nella directory del progetto ricevono
+invece il `+x` da `install-bundle.sh`.
 
 Su una directory vuota copia tutto e crea i tre file d'ambiente dai rispettivi
 esempi, che vanno poi compilati. Su una macchina già installata aggiorna i file
@@ -233,8 +233,34 @@ volta e poi resta su, anche attraverso le release, perché instrada per nome di
 servizio:
 
 ```bash
-docker compose --env-file release.env -f compose.production.yaml up -d proxy
+sudo docker --config /opt/company-ai/runner/docker-config compose --env-file release.env -f compose.production.yaml up -d proxy
 ```
+
+### Inizializzazione automatica all'avvio
+
+A ogni avvio del container, dopo `models:sync` e prima del server, il compose
+esegue `server/core/scripts/inizializza.ts` (si salta con
+`FIDELITY_INIZIALIZZA=no` in `release.env`). Crea **solo ciò che manca**:
+
+- il provider di accesso `email_password`;
+- l'amministratore da `FIDELITY_ADMIN_*` di `release.env`, solo se
+  l'installazione non ha ancora alcun Superadmin;
+- la GDO con il nome di `CLIENT_ID` (saltata se vuoto o `default`) e il
+  collegamento dell'amministratore in `utenti_gdo`, con sotto-ruolo `ADMIN`;
+- il menu del Superadmin, se il Superadmin non ha voci;
+- i servizi dell'hub: "Istanta 2 GDO Suite" se l'hub è vuoto, e i servizi
+  **gestiti** Istanta e Correggo, uno per tipo di utente, se mancano;
+- infine aggiorna le materialized view.
+
+Il log riporta passo per passo cosa ha creato e cosa ha saltato
+(`docker logs <progetto>-fidelity-1 2>&1 | grep inizializza`); un errore non
+ferma il server. Il server parte senza `FIDELITY_ADMIN_PASSWORD` nell'ambiente.
+
+I servizi gestiti hanno l'indirizzo calcolato da Fidelity, non modificabile
+dalla gestione dell'hub: Istanta da `FICO_BASE_URL` (o `ISTANTA_IP_ADDRESS`) più
+`/LoginController/oauth/landed`, Correggo da `CORREGGO_IP_ADDRESS` più
+`/OAuthLanded.ashx`. Devono essere indirizzi raggiungibili dal browser. Si
+disattivano, non si eliminano.
 
 ### Dopo il primo avvio: `seed-fidelity.sh`
 
@@ -246,8 +272,32 @@ sudo ./seed-fidelity.sh
 ```
 
 Inserisce il provider `email_password`, l'utente amministratore preso da
-`FIDELITY_ADMIN_*` di `release.env` (password cifrata con bcrypt) e le 33 voci di
-menu del Superadmin.
+`FIDELITY_ADMIN_*` di `release.env` (password cifrata con bcrypt), le 33 voci di
+menu del Superadmin e la GDO dell'istanza, con il nome di `CLIENT_ID` di
+`fidelity.env` (saltata se `CLIENT_ID` è vuoto o `default`).
+
+Collega poi l'amministratore a quella GDO in `utenti_gdo`, con il sotto-ruolo
+`ADMIN`: è da lì che il login ricava la GDO della sessione, e senza collegamento
+il Superadmin entra senza GDO operativa. Un amministratore già collegato, anche a
+un'altra GDO, resta com'è. Le installazioni seminate prima di questo passo si
+sistemano rilanciando lo script.
+
+Per ultimo aggiorna le materialized view (`mv_utenti_completi`, aree, canali e
+combinazioni), che Fidelity ha creato all'avvio quando le tabelle erano ancora
+vuote. Se una manca lo script termina con errore: vuol dire che all'avvio uno
+script di `server/core/db/scripts` è fallito, e il log di Fidelity dice quale.
+
+L'amministratore nasce con la chiave privata vuota: al primo passaporto
+Fidelity si registra su Olimpo con `fico-secret` e salva la chiave che Olimpo
+gli restituisce. Le installazioni seminate prima di questa correzione avevano
+una chiave inventata, che Olimpo rifiuta: l'amministratore non riusciva a
+lavorare con Istanta (nuova lavorazione in errore, `INF_001`). Lo script non
+tocca un amministratore già esistente, quindi lì la chiave va svuotata a mano:
+
+```bash
+docker compose --env-file release.env -f compose.production.yaml exec -T postgres \
+  psql -U fidelity -d fidelity -c "update utenti set privatekey_utenti = '' where email_utenti = '<FIDELITY_ADMIN_EMAIL>'"
+```
 
 Non sta in `postgres-init` per una ragione precisa: `auth_providers`, `utenti` e
 `menu_items` le crea Sequelize quando Fidelity parte, quindi durante
@@ -359,20 +409,39 @@ Non esporta redis — sono sessioni e cache — **né i file**: immagini, materi
 volantini stanno nei volumi Docker e vanno salvati a parte. Lo script lo ripete
 in coda, perché è la cosa che si dà per fatta quando non lo è.
 
-Non esporta nemmeno MongoDB, e vale la pena dire perché. I dati che ci stavano
-sono già stati portati in PostgreSQL; nel codice di Fidelity restano tre agganci,
-nessuno dei quali è dato vivo: l'endpoint legacy
-`PUT /api/update_data_fields_translation_map`, il codice della migrazione in
-`PromoController` — che non è registrato su alcuna rotta — e un `await` a livello
-di modulo in `models/mongoose.ts` che apre la connessione al solo caricamento del
-file. È quest'ultimo a rendere il servizio ancora necessario nel compose, non la
-logica applicativa. Finché non viene sciolto, `mongo` resta acceso ma il suo
-contenuto non è la fonte di nulla.
+Sui target installati prima che MongoDB fosse tolto dal compose resta il volume
+`mongo_data`, che nessun servizio monta più. `docker compose up` non lo
+cancella: se ne serve una copia, va fatta prima di rimuoverlo a mano con
+`docker volume rm`.
+
+Restano orfani anche `fidelity_insegne` e `fidelity_materiali`, e si possono
+rimuovere con `docker volume rm` senza copia: non contengono dati da conservare.
+Il primo ospitava i CSS degli stili WebPliant di passaggio, che ora restano in
+memoria; il secondo i materiali caricati in attesa di essere inoltrati a Olimpo,
+che ora transitano da `fidelity_uploads` (`/app/uploads/tmp`).
 
 ### Ripristinare
 
-I passi che seguono **cancellano** i database sul target. Prima conviene un
-`dump-databases.sh`, che è la via di ritorno.
+Il modo normale è `docker/restore-databases.sh` (nella radice di `docker/` del
+repository), che ripristina in un colpo i dump di tutti e due gli stack della
+suite e fa da solo i passi descritti sotto:
+
+```bash
+sudo ./restore-databases.sh /percorso/dei/dump \
+    --fidelity-olimpo  /opt/company-ai/projects/istanta4 \
+    --istanta-correggo /opt/company-ai/projects/istanta-correggo
+```
+
+Nella cartella dei dump vanno `fidelity.dump` e `olimpo.dump` di questo
+`dump-databases.sh` e, se servono, `istanta.dump` e `correggo4.dump` di quello di
+`istanta-correggo`, con i loro `SHA256SUMS`. Lo script verifica impronte e
+leggibilità, chiede di scrivere `RIPRISTINA`, **salva prima i database che sta per
+sostituire** (in `prima-del-ripristino-<data>-<ora>`, accanto ai dump; da lì si
+torna indietro con lo stesso comando), poi ferma le applicazioni, ripristina,
+riallinea i percorsi di Olimpo, svuota Redis e riavvia. `--help` elenca le opzioni.
+
+I passi manuali restano qui come riferimento. **Cancellano** i database sul
+target: prima conviene un `dump-databases.sh`, che è la via di ritorno.
 
 Il formato custom si legge da stdin ma si ripristina meglio da file, quindi si
 copia l'archivio dentro il container:

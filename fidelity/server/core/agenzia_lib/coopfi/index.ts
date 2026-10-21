@@ -10,7 +10,7 @@ import {
     ServiceUnavailableError,
     UnauthorizedError
 } from "../../../../lib/errors";
-import type { AnalisiMomentoTracciato, DataFields, GlobalUserFilter, IndesignPluginExport, IndesignPluginFiltro, KpiCardItem, MenaboDivisioneParams, MenaboLayoutDivisioneSalvata, MenaboRisultato, RisultatoConfrontoMomento, TracciatoFieldChange, TracciatoReport, TracciatoReportCanaleAreaView, TracciatoReportWidget, TracciatoWidgetGroupedTableGroup, TracciatoWidgetGroupedTableRow, TracciatoWidgetLineChart, TracciatoWidgetPriceDiffExtraFields, TracciatoWidgetPriceDiffRow, TracciatoWidgetScoreboard, TracciatoWidgetScoreboardCodiceRow, TracciatoWidgetScoreboardRow, UtentiMeta } from "../../../../lib/types";
+import type { AnalisiMomentoTracciato, DataFields, DimensioneVisibilitaPromo, GlobalUserFilter, IndesignPluginExport, IndesignPluginFiltro, KpiCardItem, MenaboDivisioneParams, MenaboLayoutDivisioneSalvata, MenaboRisultato, RisultatoConfrontoMomento, TracciatoFieldChange, TracciatoReport, TracciatoReportCanaleAreaView, TracciatoReportWidget, TracciatoWidgetGroupedTableGroup, TracciatoWidgetGroupedTableRow, TracciatoWidgetLineChart, TracciatoWidgetPriceDiffExtraFields, TracciatoWidgetPriceDiffRow, TracciatoWidgetScoreboard, TracciatoWidgetScoreboardCodiceRow, TracciatoWidgetScoreboardRow, UtentiMeta } from "../../../../lib/types";
 import config from "../../config/index";
 import type { OidcUserClaims } from "../../interfaces/IOidcService";
 import type { IUserService } from "../../interfaces/IUserService";
@@ -94,6 +94,8 @@ const PREFIX_TO_RUOLO: Record<string, RUOLO_UTENTE_GDO> = {
 };
 const DEFAULT_TOKEN_TTL_SECONDS = 3600;
 const TOKEN_EXPIRY_SAFETY_WINDOW_MS = 30_000;
+// Coopfi API, MS Graph e Olympus: una chiamata appesa non deve bloccare il login
+const EXTERNAL_HTTP_TIMEOUT_MS = 20_000;
 const LINE_CHART_PALETTE = [
     "#0EA5E9",
     "#22C55E",
@@ -169,6 +171,9 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
     }];
     private TEMI_ESCLUSI_DA_FORMAT_PLUS = ["PIU VALORE", "SPENDI PUNTI"];
     public CHIAVE_DEDUP_MENABO = "Scatto.CodiceGruppo";
+
+    /** La lista soci contiene tutti i canali/aree: ogni promo tiene solo i suoi (I20-958). */
+    public visibilitaPromo: DimensioneVisibilitaPromo[] = ["canale", "area"];
 
     /**
      * Campi della referenza mostrati nell'anteprima del menabò, nell'ordine indicato.
@@ -482,7 +487,7 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
         // Campi tracciati: origKey = chiave ISTANTA (usata in TracciatoFieldChange.campo e nelle regole score)
 
 
-        // La chiave effettiva nel record normalizzato dipende dalla config Mongo (data_fields_refs ha
+        // La chiave effettiva nel record normalizzato dipende dalla config (data_fields_refs ha
         // priorità sulla mappa Coopfi): con mappature identità (es. prezzo_promo_kgl → prezzo_promo_kgl)
         // il campo atteso (prezzoPromoKgl) non esiste mai e la variazione non verrebbe rilevata.
         // Si legge quindi con fallback: campo atteso → chiave originale ISTANTA → output mappa Coopfi.
@@ -1434,11 +1439,13 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
                     }
                 });
             }
-            await this.initOlympusPassport(userExist.id);
+            // Chiave appena ottenuta da Olympus; se la richiesta fallisce resta quella gia' salvata.
+            const privateKey = await this.initOlympusPassport(userExist.id)
+                ?? await this.userService.getPrivateKey(userExist.id);
 
             return {
                 id: userExist.id,
-                private_key: userExist.private_key,
+                private_key: privateKey,
                 id_gdo: userExist.id_gdo,
                 email: userExist.email,
                 tipo_utente: userExist.tipo,
@@ -1490,7 +1497,8 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
                     ruoli: haGruppoCheDeveVedereTutto ? [] : this.getRuoliPolicyFromUtenteCoop(
                         utente.meta_utenti?.codice_posizione as string | undefined
                     )
-                })
+                }),
+                signal: AbortSignal.timeout(EXTERNAL_HTTP_TIMEOUT_MS)
             });
 
             if (!response.ok) return undefined;
@@ -1536,7 +1544,7 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
 
             const response = await fetch(
                 `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`,
-                { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body }
+                { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body, signal: AbortSignal.timeout(EXTERNAL_HTTP_TIMEOUT_MS) }
             );
 
             if (!response.ok) return null;
@@ -1561,7 +1569,8 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
             if (!token) return null;
 
             const response = await fetch(`https://graph.microsoft.com/v1.0/users/${oid}/photo/$value`, {
-                headers: { Authorization: `Bearer ${token}` }
+                headers: { Authorization: `Bearer ${token}` },
+                signal: AbortSignal.timeout(EXTERNAL_HTTP_TIMEOUT_MS)
             });
 
             if (!response.ok) return null;
@@ -1915,7 +1924,8 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
                     "Content-Type": "application/x-www-form-urlencoded",
                     "client-key": process.env.AD_CLIENT_KEY
                 },
-                body
+                body,
+                signal: AbortSignal.timeout(EXTERNAL_HTTP_TIMEOUT_MS)
             });
 
             if (!response.ok) {
@@ -2067,11 +2077,8 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
                 "client-key": process.env.AD_CLIENT_KEY ?? ""
             };
 
-            let response: Response;
-            try {
-                response = await fetch(fullUrl, { method: "GET", headers });
-            } catch (networkError) {
-                // Errore di rete (TypeError, ECONNREFUSED, ecc.) — retry con backoff Fibonacci
+            // Errore di rete o timeout (TypeError, ECONNREFUSED, TimeoutError, ecc.) — retry con backoff Fibonacci
+            const attendiDopoErroreRete = async (networkError: unknown) => {
                 if (attempt === maxTransientAttempts) {
                     throw new ServiceUnavailableError({
                         message: "Coopfi API non raggiungibile dopo multipli tentativi",
@@ -2081,6 +2088,13 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
                 }
                 log.warn(`[CoopfiAgenziaLib] Errore di rete (tentativo ${attempt + 1}/${maxTransientAttempts + 1}), retry tra ${fib[attempt]}s`, { url: fullUrl });
                 await new Promise(resolve => setTimeout(resolve, fib[attempt] * 1000));
+            };
+
+            let response: Response;
+            try {
+                response = await fetch(fullUrl, { method: "GET", headers, signal: AbortSignal.timeout(EXTERNAL_HTTP_TIMEOUT_MS) });
+            } catch (networkError) {
+                await attendiDopoErroreRete(networkError);
                 continue;
             }
 
@@ -2088,10 +2102,16 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
             if (response.status === 401) {
                 this.invalidateCachedAccessToken();
                 const refreshedToken = await this.getCoopfiAccessToken(apiBaseUrl);
-                response = await fetch(fullUrl, {
-                    method: "GET",
-                    headers: { ...headers, "Authorization": `Bearer ${refreshedToken}` }
-                });
+                try {
+                    response = await fetch(fullUrl, {
+                        method: "GET",
+                        headers: { ...headers, "Authorization": `Bearer ${refreshedToken}` },
+                        signal: AbortSignal.timeout(EXTERNAL_HTTP_TIMEOUT_MS)
+                    });
+                } catch (networkError) {
+                    await attendiDopoErroreRete(networkError);
+                    continue;
+                }
                 // Se ancora 401 dopo il refresh → errore definitivo, non si può fare altro
                 if (response.status === 401) {
                     await this.throwMappedCoopfiApiError(response, fullUrl);
@@ -2212,11 +2232,11 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
                     const { field: secondaryFieldRaw, esplicito: repartoEsplicito } = resolveSecondaryField(group.sourceKey);
                     // Il criterio secondario (es. reparto) va aggiunto SOLO quando il sottogruppo è
                     // stato trascinato esplicitamente. I gruppi/tema normali restano un unico filtro
-                    // per tema, senza suddivisione per reparto: il tetto è il limite di pagina.
+                    // per tema, senza suddivisione per reparto.
                     const secondaryField = repartoEsplicito && secondaryFieldRaw && secondaryFieldRaw !== primaryField
                         ? secondaryFieldRaw
                         : "";
-                    const seen = new Set<string>();
+                    const perFiltro = new Map<string, IndesignPluginFiltro>();
                     for (const record of group.records) {
                         const primary = normalizeFieldValue(record[primaryField]);
                         if (!primary) continue;
@@ -2230,21 +2250,27 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
                             ? normalizeFieldValue(record[secondaryField])
                             : "";
                         const pairKey = `${criterioTema.valore}\0${secondary}`;
-                        if (seen.has(pairKey)) continue;
-                        seen.add(pairKey);
+                        const esistente = perFiltro.get(pairKey);
+                        if (esistente) {
+                            esistente.limite++;
+                            continue;
+                        }
 
-                        filtri.push({
-                            // Il limite per-filtro serve solo ai sottogruppi trascinati esplicitamente
-                            // (es. FORMAT+ suddiviso per tema). Per i gruppi/tema normali il tetto è
-                            // dato dal limite di pagina (referenzePerPagina), quindi i singoli filtri
-                            // per reparto NON devono ereditare il conteggio della pagina.
-                            limite: repartoEsplicito ? group.recordCount : 0,
+                        const filtro: IndesignPluginFiltro = {
+                            // Le referenze che il menabò mette su questa pagina per questo filtro, sia
+                            // per il tema trascinato intero sia per il sottogruppo (I20-966): con 0 il
+                            // plug-in lo legge «Ill.» e, su una pagina condivisa, si prende anche i
+                            // posti degli altri temi. Contato per filtro, non per gruppo: un FORMAT+
+                            // intero genera un filtro per tema e ognuno ha le sue referenze.
+                            limite: 1,
                             ordine: filtri.length + 1,
                             criteri: [
                                 criterioTema,
                                 ...(secondary ? [{ chiave: secondaryField, operatore: "=" as const, valore: secondary }] : []),
                             ],
-                        });
+                        };
+                        perFiltro.set(pairKey, filtro);
+                        filtri.push(filtro);
                     }
                 }
 

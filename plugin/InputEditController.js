@@ -7,6 +7,15 @@
 /// davvero, invece di risalvare ogni campo a ogni conferma.
 ///
 /// E' una classe: ne nasce una per ogni scheda aperta.
+
+//I20-1084: dal suo modulo, cosi' le decisioni del salvataggio si provano sotto Node. E' lo stesso
+//oggetto che il Plugin usa altrove.
+const TestoTag = require('./testoTag');
+
+//Il marcatore con cui il server sa che una descrizione non e' stata toccata
+//(SpecificitaDescrizione.NonToccato).
+const SpecificitaNonToccato = "<untouched>";
+
 class InputEditController {
     inputCollection = [];
     datasource = {};
@@ -144,7 +153,9 @@ class InputEditController {
 
             me.datasource[labFam].lista.push(el);
 
-            el.on('input', function (event) {
+            //I20-1084: anche change, all'uscita dal campo: se un incolla o un taglia non manda
+            //input, il campo risulta cambiato lo stesso e il pulsante si aggiorna.
+            el.on('input change', function (event) {
                 //console.log("testo cambiato");
 
                 let objFam = me.datasource[labFam];
@@ -188,6 +199,11 @@ class InputEditController {
                 }
 
                 me.checkStato();
+                //I20-1090: chi costruisce la scheda puo' seguire le modifiche (il pulsante del meta
+                //della descrizione sparisce appena un campo cambia).
+                if (typeof me.dopoModifica === "function") {
+                    me.dopoModifica();
+                }
 
             });
             // $(element).on('keydown', me.onKeyDown);
@@ -291,7 +307,9 @@ class InputEditController {
 
         //$("#salvaButton").prop("disabled", !modificato);
         $("#salvaButton").css("display", modificato || azioniStrutturali ? "block" : "none");
-        if (!this.convalidaFirma) {
+        //I20-1090: con la descrizione nei meta la revisione della descrizione non si fa: firma,
+        //mismatch e differenza dall'archivio non chiedono il Salva.
+        if (!this.convalidaFirma && !this.descrizioneNelMeta) {
             messaggioUtente("Convalidare firma", "warning", false, 3);
             //Il pulsante va fatto vedere a prescindere anche se con testo diverso
             //$("#salvaButton").text("Approva descrizione");
@@ -303,11 +321,165 @@ class InputEditController {
 
         }
 
-        if (this.inMismatch)
+        if (this.inMismatch && !this.descrizioneNelMeta)
         {
             $("#salvaButton").css("display", "block");
         }
 
+        //I20-1084: basta il testo di una descrizione diverso dall'archivio, anche se nessun
+        //evento ha detto che e' cambiato. Questa condizione si aggiunge alle altre e non ne
+        //toglie nessuna: dove il pulsante si vedeva, si vede ancora.
+        if (this.descrizioneDiversaDallArchivio())
+        {
+            $("#salvaButton").css("display", "block");
+        }
+
+    }
+
+    /// I20-1084: il testo come lo confronta il controllo di mismatch, senza spazi e a capo.
+    static testoPerConfronto(testo) {
+        return TestoTag.trimDescrizione(testo == null ? "" : String(testo));
+    }
+
+    /// I20-1084: i campi della descrizione, uno per textarea, come li guarda il salvataggio: lo
+    /// stile, la descrizione fondamentale a cui porta (null se nessuna), il testo, se il campo ha
+    /// ricevuto una modifica, e se e' un tratto nascosto.
+    vociDellaDescrizione() {
+        const famiglia = this.datasource != null ? this.datasource["descrizione"] : null;
+        const lista = famiglia != null && Array.isArray(famiglia.lista) ? famiglia.lista : [];
+
+        return lista.map(function (el) {
+            const stile = $(el).attr("currentcharacterstyle");
+            const universale = stile != null ? pluginMiddleware.getNameStileUniversale(stile) : null;
+            return {
+                stile: stile,
+                fondamentale: universale != null ? universale.fondamentale : null,
+                valore: $(el).val(),
+                modificato: $(el).hasClass("textModified"),
+                nascosto: $(el).attr("trattonascosto") == "1"
+            };
+        });
+    }
+
+    /// I20-1084: le descrizioni fondamentali che nel box hanno piu' di un tratto con del testo,
+    /// con gli stili di quei tratti: [{ fondamentale, stili }], vuoto se non ce ne sono. Con due
+    /// tratti per la stessa descrizione non si sa quale mandare al server, e il salvataggio si
+    /// ferma. I tratti vuoti non contano: sono quelli che lo schema aggiunge per gli stili
+    /// mancanti, o quelli che l'operatore ha svuotato spostandone il testo in un altro. Non
+    /// contano nemmeno i nascosti, che l'operatore non vede.
+    static trattiRipetuti(voci) {
+        const perFondamentale = {};
+
+        (voci || []).forEach(function (voce) {
+            if (voce == null || voce.fondamentale == null || voce.nascosto) {
+                return;
+            }
+            if (InputEditController.testoPerConfronto(voce.valore) === "") {
+                return;
+            }
+            if (perFondamentale[voce.fondamentale] == null) {
+                perFondamentale[voce.fondamentale] = [];
+            }
+            if (perFondamentale[voce.fondamentale].indexOf(voce.stile) < 0) {
+                perFondamentale[voce.fondamentale].push(voce.stile);
+            }
+            perFondamentale[voce.fondamentale].quanti = (perFondamentale[voce.fondamentale].quanti || 0) + 1;
+        });
+
+        return Object.keys(perFondamentale)
+            .filter(f => perFondamentale[f].quanti > 1)
+            .sort()
+            .map(f => ({ fondamentale: f, stili: perFondamentale[f].slice() }));
+    }
+
+    /// I20-1084: "DESCRIZIONE_GRAMMATURA, DESCRIZIONE_TIPO", per i messaggi.
+    static nomiDeiTrattiRipetuti(ripetuti) {
+        return (ripetuti || []).map(r => r.stili.join(" / ")).join(", ");
+    }
+
+    /// I20-1084: le descrizioni fondamentali ripetute nei campi di questa scheda.
+    trattiRipetutiDellaDescrizione() {
+        return InputEditController.trattiRipetuti(this.vociDellaDescrizione());
+    }
+
+    /// I20-1084: cosa mandare al server per ciascuna descrizione fondamentale, dal contenuto dei
+    /// campi e non dagli eventi. Un campo uguale all'archivio, a meno di spazi e a capo, parte
+    /// come "<untouched>"; uno diverso parte col suo testo. Con forzato (descrizione ereditata,
+    /// variante nuova, "Scegli quella del box") partono tutti col loro testo, come prima.
+    ///
+    /// Restano alla regola di prima - il testo se il campo e' stato modificato, se la scheda e'
+    /// in mismatch o se forzato, altrimenti "<untouched>" - i tratti nascosti, che l'operatore non
+    /// vede, e le varianti in sola lettura, che mostrano i testi di un'altra variante: confrontarli
+    /// con questo archivio direbbe "cambiato" per niente.
+    ///
+    /// Restituisce { valori: { descrizioneN: testo | "<untouched>" }, cambiati: [descrizioneN],
+    /// ripetuti }: una descrizione senza nessun campo non c'e' fra i valori, e il server la
+    /// lascia com'e'. Una ripetuta nemmeno: con lei il salvataggio non parte.
+    static decidiFondamentali(voci, archivio, opzioni = {}) {
+        const forzato = opzioni.forzato === true;
+        const regolaDiPrima = function (voce) {
+            return voce.modificato || opzioni.inMismatch === true || forzato;
+        };
+        const ripetuti = InputEditController.trattiRipetuti(voci);
+        const valori = {};
+        const cambiati = [];
+
+        ["descrizione1", "descrizione2", "descrizione3", "descrizione4"].forEach(function (fondamentale, indice) {
+            const sue = (voci || []).filter(v => v != null && v.fondamentale === fondamentale);
+            if (sue.length === 0 || ripetuti.some(r => r.fondamentale === fondamentale)) {
+                return;
+            }
+
+            const visibili = sue.filter(v => !v.nascosto);
+
+            if (visibili.length === 0 || opzioni.solaLettura === true) {
+                //L'ultimo campo modificato vince, gli altri non toccano niente: com'era.
+                sue.forEach(function (voce) {
+                    if (regolaDiPrima(voce)) {
+                        valori[fondamentale] = voce.valore;
+                    }
+                    else if (valori[fondamentale] == null) {
+                        valori[fondamentale] = SpecificitaNonToccato;
+                    }
+                });
+                if (valori[fondamentale] !== SpecificitaNonToccato) {
+                    cambiati.push(fondamentale);
+                }
+                return;
+            }
+
+            //Il campo con del testo, se c'e'; se sono tutti vuoti, il primo: la descrizione e'
+            //stata svuotata.
+            const conTesto = visibili.filter(v => InputEditController.testoPerConfronto(v.valore) !== "");
+            const scelta = conTesto.length > 0 ? conTesto[0] : visibili[0];
+            const inArchivio = archivio != null ? archivio[indice] : null;
+            const diverso = InputEditController.testoPerConfronto(scelta.valore) !== InputEditController.testoPerConfronto(inArchivio);
+
+            if (diverso) {
+                cambiati.push(fondamentale);
+            }
+            valori[fondamentale] = diverso || forzato ? scelta.valore : SpecificitaNonToccato;
+        });
+
+        return { valori: valori, cambiati: cambiati, ripetuti: ripetuti };
+    }
+
+    /// I20-1090: un campo della descrizione e' stato cambiato rispetto a com'era nel box.
+    descrizioneModificata() {
+        return this.vociDellaDescrizione().some(v => v.modificato);
+    }
+
+    /// I20-1084: il testo di almeno una descrizione fondamentale e' diverso da quello in archivio,
+    /// oppure una descrizione ha piu' tratti: in tutti e due i casi c'e' da salvare, o da sentirsi
+    /// dire perche' non si puo'. Mai in sola lettura e mai coi tratti nascosti: vedi
+    /// decidiFondamentali. I20-1090: e mai con la descrizione nei meta.
+    descrizioneDiversaDallArchivio() {
+        if (this.solaLettura || this.descrizioneNelMeta) {
+            return false;
+        }
+        const voci = this.vociDellaDescrizione().filter(v => !v.nascosto);
+        const decise = InputEditController.decidiFondamentali(voci, this.descrInArchivio);
+        return decise.cambiati.length > 0 || decise.ripetuti.length > 0;
     }
 
     /// Il cuore della classe: confronta i valori attuali con quelli di partenza e restituisce
@@ -318,7 +490,10 @@ class InputEditController {
         //Funzione che torna al gestore le cose che devono essere cambiate
         let operazioni={
             revisione:{valore:"",valoreInddSoloFondamentali:"",valoreIndd:""},
-            campi_offerta:[]
+            campi_offerta:[],
+            //I20-1084: le descrizioni con piu' tratti nel box. Se non e' vuoto la descrizione non
+            //si puo' mandare: lo decide chi salva.
+            trattiRipetuti:[]
         };
 
         let lastValLettoInDescrizione="";
@@ -326,16 +501,31 @@ class InputEditController {
         for (let key in this.datasource) {
             let objFam = this.datasource[key];
 
+            //I20-1090: con la descrizione nei meta i suoi campi sono in sola lettura e la revisione
+            //non parte; il resto (le Azioni sul box, gli altri campi) si salva come sempre.
+            if (key == "descrizione" && this.descrizioneNelMeta) {
+                continue;
+            }
+
             if (objFam.modificato ||
-                (key=="descrizione" && (!this.convalidaFirma || this.inMismatch || descrizioneEreditata))
+                (key=="descrizione" && (!this.convalidaFirma || this.inMismatch || descrizioneEreditata || this.descrizioneDiversaDallArchivio()))
              ) {
+
+                //I20-1084: le descrizioni fondamentali si decidono tutte insieme, dal contenuto,
+                //invece che campo per campo dall'ultimo modificato.
+                if (key=="descrizione")
+                {
+                    const decise = InputEditController.decidiFondamentali(this.vociDellaDescrizione(), this.descrInArchivio,
+                        { forzato: descrizioneEreditata, inMismatch: this.inMismatch, solaLettura: this.solaLettura });
+                    Object.assign(operazioni.revisione, decise.valori);
+                    operazioni.trattiRipetuti = decise.ripetuti;
+                }
 
                 for(let i=0; i<objFam.lista.length; i++)
                 {
                     let el = objFam.lista[i];
                     let style= $(el).attr("currentcharacterstyle");
                     let hasMismatch = $(el).hasClass("mismatchInImpaginato");
-                    let textModified = $(el).hasClass("textModified");
                     let parag="none";
                     let parag_universale = parag;
                     if (style=="mix")
@@ -398,38 +588,7 @@ class InputEditController {
 
                
                             operazioni.revisione.valoreInddSoloFondamentali += valoreInddUniversale;
-                            if (stile_universale.fondamentale=="descrizione1")
-                            {
-                                if (textModified || this.inMismatch || descrizioneEreditata) {
-                                    operazioni.revisione.descrizione1 = valNetto;
-                                } else if (operazioni.revisione.descrizione1 == null) {
-                                    operazioni.revisione.descrizione1 = "<untouched>";
-                                }
-                            }
-                            else if (stile_universale.fondamentale=="descrizione2")
-                            {
-                                if (textModified || this.inMismatch || descrizioneEreditata) {
-                                    operazioni.revisione.descrizione2 = valNetto;
-                                } else if (operazioni.revisione.descrizione2 == null) {
-                                    operazioni.revisione.descrizione2 = "<untouched>";
-                                }
-                            }
-                            else if (stile_universale.fondamentale=="descrizione3")
-                            {
-                                if (textModified || this.inMismatch || descrizioneEreditata) {
-                                    operazioni.revisione.descrizione3 = valNetto;
-                                } else if (operazioni.revisione.descrizione3 == null) {
-                                    operazioni.revisione.descrizione3 = "<untouched>";
-                                }
-                            }
-                            else if (stile_universale.fondamentale=="descrizione4")
-                            {
-                                if (textModified || this.inMismatch || descrizioneEreditata) {
-                                    operazioni.revisione.descrizione4 = valNetto;
-                                } else if (operazioni.revisione.descrizione4 == null) {
-                                    operazioni.revisione.descrizione4 = "<untouched>";
-                                }
-                            }
+                            //I20-1084: descrizione1-4 le ha gia' decise decidiFondamentali.
 
                         }
 

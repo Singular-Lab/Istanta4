@@ -349,7 +349,7 @@ export class DefaultAgenziaLib implements IAgenziaLib {
 
     return {
       id: user.id,
-      private_key: user.private_key,
+      private_key: await this.userService.getPrivateKey(user.id),
       id_gdo: idGdo,
       email: user.email,
       tipo_utente: tipoUtente as TIPO_UTENTI,

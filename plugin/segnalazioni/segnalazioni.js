@@ -37,13 +37,16 @@ const Segnalazioni = {
     POSIZIONE_BOLLINO: POSIZIONE_BOLLINO,
 
     /// I bollini di segnalazioni dentro un box (di norma uno solo).
+    /// I20-1056: l'elenco si legge una volta: in UXP ogni lettura di allPageItems lo rifa'
+    /// interrogando InDesign, e nella condizione del ciclo lo si rifaceva a ogni giro.
     bolliniDelBox(box) {
-        if (box == null || box.allPageItems == null) {
+        const elementi = box != null ? box.allPageItems : null;
+        if (elementi == null) {
             return [];
         }
         const trovati = [];
-        for (let i = 0; i < box.allPageItems.length; i++) {
-            const elemento = box.allPageItems[i];
+        for (let i = 0; i < elementi.length; i++) {
+            const elemento = elementi[i];
             if (elemento != null && etichettaSegnalazioni.eDiSegnalazioni(elemento.label)) {
                 trovati.push(elemento);
             }
@@ -171,6 +174,26 @@ const Segnalazioni = {
 
         elenco(documento.pages).forEach(pagina => {
             if (pagina == null) {
+                return;
+            }
+            elenco(pagina.groups).forEach(gruppo => Segnalazioni._bolliniNelGruppo(gruppo, pagina.name, 1, risultato));
+        });
+        return risultato;
+    },
+
+    /// I20-1056: come leggiDocumento, ma solo per le pagine con quei nomi. Dopo un'impaginazione
+    /// la schermata guarda solo le pagine impaginate: e' piu' veloce e mostra solo quello che
+    /// riguarda il giro appena fatto. L'ordine e' quello delle pagine nel documento, non quello
+    /// dei nomi ricevuti. Senza nomi non si legge niente.
+    leggiPagine(documento, nomiPagine) {
+        const risultato = [];
+        const nomi = new Set((Array.isArray(nomiPagine) ? nomiPagine : []).map(nome => String(nome)));
+        if (documento == null || documento.pages == null || nomi.size === 0) {
+            return risultato;
+        }
+
+        elenco(documento.pages).forEach(pagina => {
+            if (pagina == null || !nomi.has(String(pagina.name))) {
                 return;
             }
             elenco(pagina.groups).forEach(gruppo => Segnalazioni._bolliniNelGruppo(gruppo, pagina.name, 1, risultato));

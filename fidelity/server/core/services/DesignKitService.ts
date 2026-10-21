@@ -3,7 +3,7 @@ import { Op } from 'sequelize';
 import { MODALITA_TIPO_EXPORT, TIPO_KIT_DESIGN } from '../../../lib/enums';
 import { NotFoundError, wrapDatabaseError } from '../../../lib/errors';
 import { log } from '../logger';
-import { DESIGN_KIT_MONGO, FileItemKit, OggettoTipiDiExport, RaccoglitoreKit } from '../../../lib/types';
+import { DESIGN_KIT, FileItemKit, OggettoTipiDiExport, RaccoglitoreKit } from '../../../lib/types';
 import { AreaResponseDTO, CanaleResponseDTO, FormatiResponseDTO, PuntoVenditaResponseDTO, TipiDiExportResponseDTO } from '../dto';
 import { IDesignKitService } from '../interfaces/IDesignKitService';
 import { Area } from '../models/aree';
@@ -14,7 +14,7 @@ import { PuntoVendita } from '../models/punto_vendita/punti_vendita';
 import { RaccoglitoreKit as RaccoglitoreKitModel } from '../models/raccoglitore_kit';
 import { TipiDiExport } from '../models/tipi_di_export';
 
-function mapToDesignKitMongo(pgKit: any): any {
+function mapToDesignKit(pgKit: any): any {
   return {
     ...pgKit,
     guidId: pgKit.id,
@@ -31,10 +31,10 @@ function mapToDesignKitMongo(pgKit: any): any {
 export class DesignKitService implements IDesignKitService {
   constructor() { }
 
-  async getAllKitDesign(): Promise<DESIGN_KIT_MONGO[]> {
+  async getAllKitDesign(): Promise<DESIGN_KIT[]> {
     try {
       const kitDesign = await DesignKit.findAll({ raw: true });
-      return kitDesign.map(mapToDesignKitMongo) as unknown as DESIGN_KIT_MONGO[];
+      return kitDesign.map(mapToDesignKit) as unknown as DESIGN_KIT[];
     } catch (error) {
       throw wrapDatabaseError(new Error("Errore durante il recupero dei kit design"), {
         message: "Errore durante il recupero dei kit design",
@@ -48,7 +48,7 @@ export class DesignKitService implements IDesignKitService {
   async getAllKitDesignNoManuale(): Promise<any[]> {
     try {
       const kit = await DesignKit.findAll({ where: { tipo: { [Op.ne]: TIPO_KIT_DESIGN.MANUALE } }, raw: true });
-      return kit.map(mapToDesignKitMongo);
+      return kit.map(mapToDesignKit);
     } catch (error) {
       log.error('Impossibile recuperare i kit design non manuali', error instanceof Error ? error : new Error(String(error)));
       throw wrapDatabaseError(new Error("Errore durante il recupero dei kit design"), {
@@ -81,7 +81,7 @@ export class DesignKitService implements IDesignKitService {
       if (!resultCreazioneCombinazioneDesign) {
         return null;
       }
-      return mapToDesignKitMongo(resultCreazioneCombinazioneDesign.get({ plain: true })) as unknown as RaccoglitoreKit;
+      return mapToDesignKit(resultCreazioneCombinazioneDesign.get({ plain: true })) as unknown as RaccoglitoreKit;
     } catch (error) {
       log.error('Impossibile creare la combinazione design', error instanceof Error ? error : new Error(String(error)));
       throw wrapDatabaseError(new Error("Errore durante la creazione della combinazione design"), {
@@ -93,11 +93,11 @@ export class DesignKitService implements IDesignKitService {
     }
   }
 
-  async getAllCombinazioniDesignByIdTemplate(guidIdTemplate: string): Promise<DESIGN_KIT_MONGO[]> {
+  async getAllCombinazioniDesignByIdTemplate(guidIdTemplate: string): Promise<DESIGN_KIT[]> {
     try {
       const combinazioni = await DesignKit.findAll({ where: { id_raccoglitore: guidIdTemplate }, raw: true });
       if (!combinazioni) return [];
-      const mapped = combinazioni.map(mapToDesignKitMongo) as any[];
+      const mapped = combinazioni.map(mapToDesignKit) as any[];
       await Promise.all(mapped.map(async (combinazione) => {
         const area = await Area.findByPk(combinazione.id_area);
         if (area) {
@@ -108,7 +108,7 @@ export class DesignKitService implements IDesignKitService {
           combinazione.nomeCanale = canale.nome_canali;
         }
       }));
-      return mapped as unknown as DESIGN_KIT_MONGO[];
+      return mapped as unknown as DESIGN_KIT[];
     } catch (error: any) {
       throw wrapDatabaseError(new Error("Errore durante il recupero delle combinazioni"), {
         message: "Errore durante il recupero delle combinazioni",
@@ -119,11 +119,11 @@ export class DesignKitService implements IDesignKitService {
     }
   }
 
-  async getCombinazioneDesignById(guidIdCombinazione: string): Promise<DESIGN_KIT_MONGO | null> {
+  async getCombinazioneDesignById(guidIdCombinazione: string): Promise<DESIGN_KIT | null> {
     try {
       const combinazione = await DesignKit.findOne({ where: { id: guidIdCombinazione }, raw: true });
       if (!combinazione) return null;
-      const mapped = mapToDesignKitMongo(combinazione) as any;
+      const mapped = mapToDesignKit(combinazione) as any;
       const area = await Area.findByPk(mapped.id_area);
       if (area) {
         mapped.nomeArea = area.nome_aree;
@@ -132,7 +132,7 @@ export class DesignKitService implements IDesignKitService {
       if (canale) {
         mapped.nomeCanale = canale.nome_canali;
       }
-      return mapped as unknown as DESIGN_KIT_MONGO;
+      return mapped as unknown as DESIGN_KIT;
     } catch (error: any) {
       throw wrapDatabaseError(new Error("Errore durante il recupero delle combinazioni"), {
         message: "Errore durante il recupero delle combinazioni",
@@ -143,7 +143,7 @@ export class DesignKitService implements IDesignKitService {
     }
   }
 
-  async updateCombinazioneDesign(data: DESIGN_KIT_MONGO): Promise<DESIGN_KIT_MONGO> {
+  async updateCombinazioneDesign(data: DESIGN_KIT): Promise<DESIGN_KIT> {
     try {
       const pgData: Record<string, any> = {};
       if (data.guidArea !== undefined) pgData.id_area = data.guidArea;
@@ -176,7 +176,7 @@ export class DesignKitService implements IDesignKitService {
           entityId: data.guidId,
         });
       }
-      return mapToDesignKitMongo(result) as unknown as DESIGN_KIT_MONGO;
+      return mapToDesignKit(result) as unknown as DESIGN_KIT;
     } catch (error) {
       log.error('Impossibile aggiornare la combinazione design', error instanceof Error ? error : new Error(String(error)), { guidId: data.guidId });
       throw wrapDatabaseError(new Error("Errore durante l'aggiornamento della combinazione design"), {
@@ -351,7 +351,7 @@ export class DesignKitService implements IDesignKitService {
         tipi_di_export_in_kit: data.tipiDiExportInKit,
         titolo: data.titolo,
       } as any);
-      return mapToDesignKitMongo(result.get({ plain: true }));
+      return mapToDesignKit(result.get({ plain: true }));
     } catch (error) {
       throw wrapDatabaseError(new Error("Errore durante la creazione delle combinazioni design"), {
         message: "Errore durante la creazione delle combinazioni design",

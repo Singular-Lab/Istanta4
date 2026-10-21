@@ -1,6 +1,7 @@
 import PageHeader from "@/components/Base/PageHeader";
 import { PermissionGate } from "@/components/PermissionGate";
 import { PERMISSIONS } from "@/constants/permissions";
+import { useNotification } from "@/context/NotificationContext";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { useLoaderData, useNavigate, useRevalidator } from "react-router-dom";
@@ -35,6 +36,7 @@ function OrdiniDiStampaUnified() {
 
   const navigate = useNavigate();
   const revalidator = useRevalidator();
+  const { showNotification } = useNotification();
 
   const creaOrdineDiStampa = useMutation({
     mutationKey: ["creaOrdineDiStampa"],
@@ -47,6 +49,9 @@ function OrdiniDiStampaUnified() {
       // Navigate to in-corso view after creation
       navigate('/ods-in-corso');
       revalidator.revalidate();
+    },
+    onError: (error: Error) => {
+      showNotification(error?.message || "Errore durante la creazione dell'ordine di stampa", { variant: 'error' });
     }
   });
 

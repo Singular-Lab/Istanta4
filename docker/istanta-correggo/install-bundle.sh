@@ -6,7 +6,7 @@
 #
 #   # sul target
 #   cd /opt/company-ai/projects/istanta4
-#   sudo /tmp/istanta-correggo/install-bundle.sh
+#   sudo bash /tmp/istanta-correggo/install-bundle.sh
 #
 # Perché esiste: su una macchina nuova si copia tutto insieme e il bundle è
 # coerente per costruzione. Su una macchina già installata, invece, si tende ad
@@ -35,7 +35,7 @@ destinazione="$PWD"
 if [ "$bundle" = "$destinazione" ]; then
     rosso "Origine e destinazione coincidono."
     rosso "Esegui lo script dalla directory del progetto, indicando il bundle:"
-    rosso "  cd /opt/company-ai/projects/<progetto> && sudo /tmp/istanta-correggo/install-bundle.sh"
+    rosso "  cd /opt/company-ai/projects/<progetto> && sudo bash /tmp/istanta-correggo/install-bundle.sh"
     exit 1
 fi
 
@@ -97,6 +97,7 @@ echo "File del bundle"
 copia compose.production.yaml
 copia prepare-target.sh
 copia install-bundle.sh
+copia dump-databases.sh
 copia postgres-init
 copia schemas
 copia proxy-templates
@@ -105,7 +106,8 @@ copia release.env.example
 copia istanta.env.example
 copia correggo4.env.example
 
-chmod +x "$destinazione/prepare-target.sh" "$destinazione/install-bundle.sh" 2>/dev/null
+chmod +x "$destinazione/prepare-target.sh" "$destinazione/install-bundle.sh" \
+    "$destinazione/dump-databases.sh" 2>/dev/null
 
 echo
 echo "File d'ambiente"

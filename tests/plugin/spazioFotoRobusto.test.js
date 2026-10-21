@@ -341,3 +341,37 @@ test("il messaggio CSF-19 e' scritto una volta sola in tutto il Plugin", () => {
     }
     assert.strictEqual(occorrenze, 1);
 });
+
+/* ---- I20-1059: il bollino delle segnalazioni ---- */
+
+//Il bollino che il Plugin disegna in alto a sinistra del box: un ovale con le segnalazioni
+//nell'etichetta (segnalazioni/etichetta.js).
+function bollino() {
+    return elemento('segnalazioni$[{"g":"error","c":"CSF-009","t":"Code CSF-009: ..."}]', [0, 0, 10, 10], { constructorName: "Oval" });
+}
+
+test("I20-1059: il bollino delle segnalazioni non e' un ostacolo, il testo si'", () => {
+    const prezzo = testo("prezzo", [40, 60, 70, 95]);
+    const ostacoli = SistemazioneFoto.getObstacles(box([base(), bollino(), prezzo]));
+    SistemazioneFoto.ripristinaOstacoli(ostacoli);
+
+    assert.deepStrictEqual(ostacoli.map(o => o.label), ["prezzo"]);
+    assert.deepStrictEqual(prezzo.geometricBounds, [40, 60, 70, 95]);
+});
+
+test("I20-1059: con il bollino lo spazio delle foto arriva comunque in cima alla base", () => {
+    const risultato = SistemazioneFoto.getSpazioImpaginazione(box([base(), bollino(), testo("prezzo", [40, 60, 70, 95])]));
+    SistemazioneFoto.ripristinaOstacoli(risultato.obstacles);
+
+    //Senza paddingBox nel custom il margine dalla base e' di 2: lo spazio a sinistra del prezzo
+    //parte da li', non sotto il bollino, e prende tutta l'altezza della base.
+    assert.ok(risultato.candidate.some(c => c.x === 2 && c.y === 2 && c.height === 76),
+        "manca lo spazio a sinistra alto quanto la base: " + JSON.stringify(risultato.candidate));
+});
+
+test("I20-1059: un elemento che ha segnalazioni solo nel nome resta un ostacolo", () => {
+    const campo = elemento("campo_segnalazioni", [0, 0, 10, 10]);
+    const ostacoli = SistemazioneFoto.getObstacles(box([base(), campo]));
+
+    assert.deepStrictEqual(ostacoli.map(o => o.label), ["campo_segnalazioni"]);
+});

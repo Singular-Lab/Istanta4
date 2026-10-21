@@ -3,71 +3,52 @@ import { TIPO_UTENTI } from '../../../lib/enums';
 import { UnauthorizedError } from '../../../lib/errors';
 import { BaseController } from '../base/BaseController';
 import type { IMenuService } from '../interfaces/IMenuService';
-import type { IUserService } from '../interfaces/IUserService';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { permissionGuard } from '../middleware/permissionGuard';
+import { leggiContestoAccesso } from '../accessi/contestoAccesso';
+import { PERMESSI } from '../../../lib/accessi/catalogo';
 import type BadgeService from '../services/BadgeService';
 
 export class MenuController extends BaseController {
   private menuService: IMenuService;
-  private userService: IUserService;
   private badgeService: BadgeService;
 
-  constructor(menuService: IMenuService, userService: IUserService, badgeService: BadgeService) {
+  constructor(menuService: IMenuService, badgeService: BadgeService) {
     super('/api/menu');
     this.menuService = menuService;
-    this.userService = userService;
     this.badgeService = badgeService;
   }
 
   protected setupRoutes(): void {
-    // Tutte le configurazioni menu (admin)
-    this.router.get('/', authMiddleware, permissionGuard('permessi.gestisci'), this.getAllConfigurations.bind(this));
+    const gestione = [authMiddleware, permissionGuard(PERMESSI.SISTEMA.GESTISCI_ACCESSI)];
 
-    // Menu runtime per utente corrente
+    // Menu runtime per utente corrente: solo le pagine che puo' aprire
     this.router.get('/me', authMiddleware, this.getMenuMe.bind(this));
 
-    // Menu per tipo utente (con opzionale ?ruoloGdo=)
-    this.router.get('/:tipoUtente', authMiddleware, permissionGuard('permessi.gestisci'), this.getMenuPerTipoUtente.bind(this));
+    // Menu configurato per tipo utente (con opzionale ?ruoloGdo=<id sotto-ruolo>)
+    this.router.get('/:tipoUtente', ...gestione, this.getMenuPerTipoUtente.bind(this));
+    this.router.put('/:tipoUtente', ...gestione, this.saveMenu.bind(this));
 
-    // Salva menu per tipo utente
-    this.router.put('/:tipoUtente', authMiddleware, permissionGuard('permessi.gestisci'), this.saveMenu.bind(this));
-
-    // Seed da menu.json
-    this.router.post('/seed', authMiddleware, permissionGuard('permessi.gestisci'), this.seedFromJson.bind(this));
+    // Ripristino del menu predefinito del Superadmin (sostituisce l'import da menu.json)
+    this.router.post('/ripristina-predefiniti', ...gestione, this.ripristinaPredefiniti.bind(this));
   }
 
-  private getRuoloGdo(req: Request): string | undefined {
+  private getRuoloGdo(req: Request): string | null {
     const val = req.query.ruoloGdo;
-    return typeof val === 'string' && val.length > 0 ? val : undefined;
-  }
-
-  private async getAllConfigurations(_req: Request, res: Response): Promise<void> {
-    try {
-      const configs = await this.menuService.getAllMenuConfigurations();
-      this.sendResponse(res, 200, configs);
-    } catch (error) {
-      this.handleError(res, error);
-    }
+    return typeof val === 'string' && val.length > 0 ? val : null;
   }
 
   private async getMenuMe(req: Request, res: Response): Promise<void> {
     try {
-      const userId = req.session.id_utente as string | undefined;
-      const tipoUtente = req.session.tipo_utente as TIPO_UTENTI | undefined;
-
-      if (!userId || !tipoUtente) {
+      const contesto = await leggiContestoAccesso(req, res);
+      if (!contesto) {
         throw new UnauthorizedError({
           message: 'Sessione non valida',
         });
       }
 
-      const ruoloGdo = tipoUtente === TIPO_UTENTI.GDO
-        ? await this.userService.resolveGdoRuoloKey(userId)
-        : undefined;
-
-      const menu = await this.menuService.getMenuPerUtente(tipoUtente, ruoloGdo);
-      const badges = await this.badgeService.getBadgesForUser(userId, tipoUtente);
+      const menu = await this.menuService.getMenuDiUtente(contesto);
+      const badges = await this.badgeService.getBadgesForUser(contesto);
 
       const clonedMenu = JSON.parse(JSON.stringify(menu));
 
@@ -106,38 +87,36 @@ export class MenuController extends BaseController {
     }
   }
 
-  private async getMenuPerTipoUtente(req: Request, res: Response): Promise<void> {
+  private async getMenuPerTipoUtente(req: Request<{ tipoUtente: string }>, res: Response): Promise<void> {
     try {
-      const tipoUtente = req.params.tipoUtente;
-      const ruoloGdo = this.getRuoloGdo(req);
-      const items = await this.menuService.getMenuItemsPerUtente(tipoUtente, ruoloGdo);
+      const tipoUtente = req.params.tipoUtente as TIPO_UTENTI;
+      const items = await this.menuService.getMenuItemsPerUtente(tipoUtente, this.getRuoloGdo(req));
       this.sendResponse(res, 200, items);
     } catch (error) {
       this.handleError(res, error);
     }
   }
 
-  private async saveMenu(req: Request, res: Response): Promise<void> {
+  private async saveMenu(req: Request<{ tipoUtente: string }>, res: Response): Promise<void> {
     try {
-      const tipoUtente = req.params.tipoUtente;
-      const ruoloGdo = this.getRuoloGdo(req);
+      const tipoUtente = req.params.tipoUtente as TIPO_UTENTI;
       const { items } = req.body as { items: any[] };
 
       if (!items || !Array.isArray(items)) {
         return this.sendResponse(res, 400, { message: 'Formato menu non valido' });
       }
 
-      await this.menuService.saveMenu(tipoUtente, ruoloGdo || null, items);
+      await this.menuService.saveMenu(tipoUtente, this.getRuoloGdo(req), items);
       this.sendResponse(res, 200, { message: 'Menu aggiornato' });
     } catch (error) {
       this.handleError(res, error);
     }
   }
 
-  private async seedFromJson(_req: Request, res: Response): Promise<void> {
+  private async ripristinaPredefiniti(_req: Request, res: Response): Promise<void> {
     try {
-      await this.menuService.seedMenuDaJson();
-      this.sendResponse(res, 200, { message: 'Seed menu da JSON completato' });
+      const voci = await this.menuService.ripristinaMenuPredefiniti();
+      this.sendResponse(res, 200, { message: 'Menu predefinito del Superadmin ripristinato', voci });
     } catch (error) {
       this.handleError(res, error);
     }

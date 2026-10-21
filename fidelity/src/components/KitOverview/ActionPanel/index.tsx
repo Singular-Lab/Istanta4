@@ -14,7 +14,7 @@ import PubblicatoActions from "./PubblicatoActions";
  * - IN_LAVORAZIONE: Upload actions
  * - IN_REVISIONE: Review actions (publish, reject, rework)
  * - IN_LAVORAZIONE_CON_ERRORI: Error correction actions
- * - PUBBLICATO: Published actions (download, rework)
+ * - PUBBLICATO: Published actions (download)
  */
 const ActionPanel: FC<ActionPanelProps> = ({
   stato,
@@ -82,9 +82,7 @@ const ActionPanel: FC<ActionPanelProps> = ({
         return (
           <PubblicatoActions
             onDownloadZip={onDownloadZip}
-            onRework={onRework}
             isDownloading={isDownloading}
-            isProcessing={isProcessing}
           />
         );
 

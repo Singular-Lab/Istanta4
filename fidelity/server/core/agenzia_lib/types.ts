@@ -1,7 +1,7 @@
 import type { Request } from "express";
 import type { TIPO_UTENTI } from "../../../lib/enums.js";
-import type { AnalisiMomentoTracciato, CompiledField, DataFields, FantasmaDeciso, GlobalUserFilter, IndesignPluginExport, MenaboDivisioneParams, MenaboLayoutDivisioneSalvata, MenaboRisultato, RecordListino, ReferenzeIstanta, RisultatoConfrontoMomento, TracciatoQueryRequest, TracciatoReport, TracciatoReportWidget, UtentiMeta } from "../../../lib/types.js";
-import type { PromoContextValue, ReferenzaStoricoDTO } from "../dto/index.js";
+import type { AnalisiMomentoTracciato, CompiledField, DataFields, DimensioneVisibilitaPromo, FantasmaDeciso, GlobalUserFilter, IndesignPluginExport, MenaboDivisioneParams, MenaboLayoutDivisioneSalvata, MenaboRisultato, RecordListino, ReferenzeIstanta, RisultatoConfrontoMomento, TracciatoQueryRequest, TracciatoReport, TracciatoReportWidget, UtentiMeta } from "../../../lib/types.js";
+import type { PromoContextValue, PuntoVenditaDaImportareDTO, ReferenzaStoricoDTO } from "../dto/index.js";
 import type { OidcUserClaims } from "../interfaces/IOidcService.js";
 
 // ── Tipi di base ──────────────────────────────────────────────────────────────
@@ -290,6 +290,23 @@ export interface StoricoVolantinoAgenzia {
   referenzaPerReport(record: RecordListino): ReferenzaStoricoDTO;
 }
 
+// ── Import dei punti vendita da Excel ─────────────────────────────────────────
+
+/**
+ * Come si legge il file punti vendita di una GDO. Validazione, anteprima e scritture
+ * su Istanta e FP sono di FP e uguali per tutti; la lib dice solo come tradurre le
+ * colonne e la terminologia del cliente.
+ */
+export interface ImportPuntiVenditaAgenzia {
+  /**
+   * Campo di meta che identifica il PV nel sistema della GDO: una riga con la stessa
+   * chiave aggiorna il PV invece di crearne uno nuovo. Senza, i doppioni si scartano.
+   */
+  chiaveMeta?: string;
+  /** Da riga del foglio (intestazione → valore) a PV; una stringa e l'errore della riga. */
+  leggiRiga(riga: Record<string, unknown>): PuntoVenditaDaImportareDTO | string;
+}
+
 // ── Interfaccia AgenziaLib ────────────────────────────────────────────────────
 
 export interface IAgenziaLib {
@@ -366,8 +383,20 @@ export interface IAgenziaLib {
   getGlobalFiltersForUser(utente: { tipo: TIPO_UTENTI; meta?: UtentiMeta }): GlobalUserFilter;
 
   /**
+   * Dimensioni (canale e/o area) che l'operatore sceglie come visibili nella promo,
+   * alla creazione e in modifica. Opzionale: senza, la promo vede tutti i canali e le aree.
+   */
+  visibilitaPromo?: DimensioneVisibilitaPromo[];
+
+  /**
    * Import del volantino da storico. Opzionale: c'e solo se la GDO ha un sistema
    * di storico da cui recuperarlo; senza, il plugin riceve un errore esplicito.
    */
   storicoVolantino?: StoricoVolantinoAgenzia;
+
+  /**
+   * Tracciato del file punti vendita della GDO. Opzionale: senza, FP legge il
+   * tracciato generico (colonne nome, indirizzo, citta, cap, canaleArea).
+   */
+  importPuntiVendita?: ImportPuntiVenditaAgenzia;
 }

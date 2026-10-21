@@ -1,5 +1,7 @@
 import dayjs from 'dayjs';
 import isBetween from 'dayjs/plugin/isBetween';
+import timezone from 'dayjs/plugin/timezone';
+import utc from 'dayjs/plugin/utc';
 import cron from 'node-cron';
 import { Op } from 'sequelize';
 import { Colorize } from '../../../lib/Colorize';
@@ -14,6 +16,12 @@ import { Promo } from '../models/promo';
 import { PluginAnalyticsEvent } from '../models/plugin_analytics_event';
 import { getWhatsappQueueWorker } from '../workers/WhatsappQueueWorker';
 dayjs.extend(isBetween);
+dayjs.extend(utc);
+dayjs.extend(timezone);
+
+// Le date delle promo sono giorni del calendario italiano, qualunque sia il fuso del server
+const FUSO_PROMO = 'Europe/Rome';
+
 export class ChronService implements IChronService {
 
   /**
@@ -68,7 +76,7 @@ export class ChronService implements IChronService {
               continue;
             }
 
-            const result = await this.updateStatoPromo(promo.id, nextState);
+            const result = await this.updateStatoPromo(promo.id, nextState, promo.stato);
             if (result) {
               log.info(
                 Colorize.green(
@@ -76,7 +84,7 @@ export class ChronService implements IChronService {
                 )
               );
             } else {
-              log.warn(Colorize.yellow(`Stato invariato per la promo ${promo.id}.`));
+              log.warn(Colorize.yellow(`Stato invariato per la promo ${promo.id}: non è più ${promo.stato}.`));
             }
           }
         }
@@ -85,7 +93,7 @@ export class ChronService implements IChronService {
         log.error(Colorize.bgRed('Error in startPromoCronJob:'), error);
         // Non rilanciare l'errore per non bloccare il processo del server
       }
-    });
+    }, { timezone: FUSO_PROMO });
     log.info('   -> Job per sincronizzazione stati promo schedulato (ogni 5 minuti).');
   }
 
@@ -114,14 +122,18 @@ export class ChronService implements IChronService {
     }
   }
 
-  async updateStatoPromo(guidId: string, stato: STATO_PROMO): Promise<boolean> {
+  /**
+   * Aggiorna lo stato solo se è ancora quello letto dal job: un cambio avvenuto
+   * nel frattempo (es. eliminazione) non viene sovrascritto.
+   */
+  async updateStatoPromo(guidId: string, stato: STATO_PROMO, statoLetto: STATO_PROMO): Promise<boolean> {
     try {
       const result = await Promo.update(
         { stato: stato },
         {
           where: {
             id_promo: guidId,
-            stato: { [Op.ne]: stato }
+            stato: statoLetto
           }
         }
       );
@@ -135,10 +147,11 @@ export class ChronService implements IChronService {
   }
 
   private determineAutomaticState(promo: PromoResponseDTO): STATO_PROMO | null {
-    const now = dayjs();
-    const validitaDal = promo.validita_dal ? dayjs(promo.validita_dal) : null;
-    const validitaAl = promo.validita_al ? dayjs(promo.validita_al) : null;
-    const dataScadenza = promo.data_scadenza ? dayjs(promo.data_scadenza) : null;
+    // Confronti sul giorno di Roma: alle 23:30 UTC in Italia è già il giorno dopo
+    const now = dayjs().tz(FUSO_PROMO);
+    const validitaDal = promo.validita_dal ? dayjs(promo.validita_dal).tz(FUSO_PROMO) : null;
+    const validitaAl = promo.validita_al ? dayjs(promo.validita_al).tz(FUSO_PROMO) : null;
+    const dataScadenza = promo.data_scadenza ? dayjs(promo.data_scadenza).tz(FUSO_PROMO) : null;
 
     if (validitaAl && now.isAfter(validitaAl, 'day')) {
       return promo.stato !== STATO_PROMO.ARCHIVIATA ? STATO_PROMO.ARCHIVIATA : null;
@@ -200,11 +213,19 @@ export class ChronService implements IChronService {
 
   async getAllPromo(): Promise<PromoResponseDTO[]> {
     try {
+      // ARCHIVIATA non è finale (torna VALIDA se le date vengono spostate): restano fuori
+      // solo quelle già scadute, per cui determineAutomaticState non cambierebbe nulla.
+      // validita_al è NOT NULL (modello Promo), quindi non serve il ramo IS NULL.
+      const inizioOggi = dayjs().tz(FUSO_PROMO).startOf('day').toDate();
       const result = await Promo.findAll({
         where: {
           stato: {
             [Op.ne]: STATO_PROMO.ELIMINATA,
           },
+          [Op.or]: [
+            { stato: { [Op.ne]: STATO_PROMO.ARCHIVIATA } },
+            { validita_al: { [Op.gte]: inizioOggi } },
+          ],
         },
       });
       // adesso facciamo in modo di controllare se la promo presenta dei kit collegati

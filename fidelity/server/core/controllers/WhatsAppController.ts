@@ -1,14 +1,18 @@
 import { Request, Response } from 'express';
-import { HttpStatusCode } from '../../../lib/enums';
+import { QueryTypes } from 'sequelize';
+import { HttpStatusCode, TIPO_UTENTI } from '../../../lib/enums';
 import "../../global.d.ts";
 import { BaseController } from '../base/BaseController';
+import { sequelize } from '../db/SequelizeConnector';
 import { IWhatsAppService } from '../interfaces/IWhatsAppService';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { permissionGuard } from '../middleware/permissionGuard';
 import { AuditLogService } from '../services/AuditLogService';
+import { WhatsappQueueService } from '../services/WhatsappQueueService';
 import { log } from '../logger';
 export class WhatsAppController extends BaseController {
     private whatsAppService: IWhatsAppService;
+    private readonly queueService = new WhatsappQueueService();
 
     constructor(whatsAppService: IWhatsAppService) {
         super('/api/whatsapp');
@@ -26,12 +30,6 @@ export class WhatsAppController extends BaseController {
         this.router.get("/get_current_gdo_whatsapp_for_campaign", authMiddleware, permissionGuard('whatsapp.visualizza_campagne'), this.getCurrentGDOWhatsappForCampaign.bind(this));
         this.router.post("/get_all_utenti_guest_whatsapp_count", authMiddleware, permissionGuard('whatsapp.visualizza_campagne'), this.getAllUtentiGuestWhatsappCount.bind(this));
 
-        // Sending
-        this.router.post("/inviaBroadcastMessaggi", authMiddleware, permissionGuard('whatsapp.invia_campagna'), this.inviaBroadcastMessaggi.bind(this));
-
-        // Public registration (no auth)
-        this.router.post("/registraUtenteWhatsapp", this.registraUtenteWhatsapp.bind(this));
-
         // Templates
         this.router.get('/get_all_gdo_whatsapp', authMiddleware, permissionGuard('whatsapp.gestisci_templates'), this.getAllGDOWhatsapp.bind(this));
         this.router.get("/get_whatsapp_gdo_by_id", authMiddleware, permissionGuard('whatsapp.gestisci_templates'), this.getGDOWhatsappById.bind(this));
@@ -40,12 +38,14 @@ export class WhatsAppController extends BaseController {
         this.router.put("/sync_templates_from_meta", authMiddleware, permissionGuard('whatsapp.gestisci_templates'), this.syncTemplatesFromMeta.bind(this));
         this.router.put("/nuova_versione_locale_template_whatsapp", authMiddleware, permissionGuard('whatsapp.gestisci_templates'), this.salvaInLocaleTemplateWhatsappSuperAdminPayload.bind(this));
         this.router.put("/send_modified_template_to_meta", authMiddleware, permissionGuard('whatsapp.gestisci_templates'), this.sendModifiedTemplateToMeta.bind(this));
+        this.router.delete("/template/:id", authMiddleware, permissionGuard('whatsapp.gestisci_templates'), this.eliminaTemplateWhatsapp.bind(this));
 
         // Presets
         this.router.get("/get_all_presets_template_whatsapp", authMiddleware, permissionGuard('whatsapp.gestisci_presets'), this.getAllPresetsTemplateWhatsapp.bind(this));
         this.router.post("/crea_preset_template_whatsapp", authMiddleware, permissionGuard('whatsapp.gestisci_presets'), this.creaPresetTemplateWhatsapp.bind(this));
         this.router.put("/modifica_preset_template_whatsapp", authMiddleware, permissionGuard('whatsapp.gestisci_presets'), this.modificaPresetTemplateWhatsapp.bind(this));
         this.router.put("/set_default_preset_template_whatsapp", authMiddleware, permissionGuard('whatsapp.gestisci_presets'), this.setDefaultPresetTemplateWhatsapp.bind(this));
+        this.router.delete("/preset/:id", authMiddleware, permissionGuard('whatsapp.gestisci_presets'), this.eliminaPresetTemplateWhatsapp.bind(this));
 
         // Sending
         this.router.post("/invio_di_test_ad_utente", authMiddleware, permissionGuard('whatsapp.invia_campagna'), this.invioDiTestAdUtente.bind(this));
@@ -61,41 +61,6 @@ export class WhatsAppController extends BaseController {
 
         // Retry (sending)
         this.router.post("/campaigns/:bulkId/retry", authMiddleware, permissionGuard('whatsapp.invia_campagna'), this.retryCampaign.bind(this));
-    }
-
-    private async inviaBroadcastMessaggi(req: Request, res: Response): Promise<void> {
-        try {
-            const { msg } = req.body;
-            const result = await this.whatsAppService.inviaBroadcastMessaggi(msg);
-            AuditLogService.getInstance().bulkOperation(req, 'whatsapp', 'broadcast');
-            res.json(result);
-        } catch (error) {
-            res.status(HttpStatusCode.INTERNAL_SERVER_ERROR).json({
-                errore: error instanceof Error ? error.message : "Errore nell'invio dei messaggi"
-            });
-        }
-    }
-
-    private async registraUtenteWhatsapp(req: Request, res: Response): Promise<void> {
-        try {
-            const { email, nome, cognome, password, tipo, residenza, dataDiNascita, gdoScelta, telefono } = req.body;
-            const result = await this.whatsAppService.registraUtenteWhatsapp({
-                email,
-                nome,
-                cognome,
-                password,
-                tipo,
-                residenza,
-                dataDiNascita,
-                gdoScelta,
-                telefono
-            });
-            res.json(result);
-        } catch (error) {
-            res.status(HttpStatusCode.INTERNAL_SERVER_ERROR).json({
-                errore: error instanceof Error ? error.message : "Errore nella registrazione dell'utente"
-            });
-        }
     }
 
     private async getAllUtentiGuestWhatsappCount(req: Request, res: Response): Promise<void> {
@@ -239,6 +204,33 @@ export class WhatsAppController extends BaseController {
             this.handleError(res, error);
         }
     }
+    // null = Superadmin, che gestisce il WhatsApp di tutte le GDO; '' non corrisponde a nessuna GDO
+    private async gdoAmmessa(req: Request): Promise<string | null> {
+        if (req.session.tipo_utente === TIPO_UTENTI.SUPERADMIN) return null;
+        const gdo = await this.whatsAppService.getCurrentGDOWhatsappForCampaign(req.session.id_utente as string);
+        return gdo?.id ?? '';
+    }
+
+    private async eliminaPresetTemplateWhatsapp(req: Request<{ id: string }>, res: Response): Promise<void> {
+        try {
+            await this.whatsAppService.eliminaPresetTemplateWhatsapp(req.params.id, await this.gdoAmmessa(req));
+            AuditLogService.getInstance().configurationChanged(req, 'whatsapp_preset', 'delete', { id_preset: req.params.id });
+            this.sendResponse(res, HttpStatusCode.OK, { success: true });
+        } catch (error: any) {
+            this.handleError(res, error);
+        }
+    }
+
+    private async eliminaTemplateWhatsapp(req: Request<{ id: string }>, res: Response): Promise<void> {
+        try {
+            await this.whatsAppService.eliminaTemplateWhatsapp(req.params.id, await this.gdoAmmessa(req));
+            AuditLogService.getInstance().configurationChanged(req, 'whatsapp_template', 'delete', { id_template: req.params.id });
+            this.sendResponse(res, HttpStatusCode.OK, { success: true });
+        } catch (error: any) {
+            this.handleError(res, error);
+        }
+    }
+
     private async setDefaultPresetTemplateWhatsapp(req: Request, res: Response): Promise<void> {
         try {
             const { id_template, id_preset } = req.body;
@@ -259,8 +251,6 @@ export class WhatsAppController extends BaseController {
                     areaId?: string | null;
                     areaName?: string | null;
                     polygon?: [number, number][][];
-                    minCalls?: number;
-                    lastDays?: number;
                 } | null;
                 templateId: string;
                 titoloCampagna: string;
@@ -274,6 +264,8 @@ export class WhatsAppController extends BaseController {
             if (!titoloCampagna || titoloCampagna.trim() === '') {
                 this.sendResponse(res, HttpStatusCode.BAD_REQUEST, {
                     success: false,
+                    // message e' il campo che il client mostra all'operatore
+                    message: 'Il titolo della campagna è obbligatorio',
                     error: 'Il titolo della campagna è obbligatorio'
                 });
                 return;
@@ -285,6 +277,7 @@ export class WhatsAppController extends BaseController {
             if (!gdo) {
                 this.sendResponse(res, HttpStatusCode.NOT_FOUND, {
                     success: false,
+                    message: 'GDO non trovato per questo utente',
                     error: 'GDO non trovato per questo utente'
                 });
                 return;
@@ -327,16 +320,7 @@ export class WhatsAppController extends BaseController {
                 return;
             }
 
-            // Import WhatsappQueueService
-            const { WhatsappQueueService } = await import('../services/WhatsappQueueService');
-            const queueService = new WhatsappQueueService();
-
-            // Trova tutti i bulkId unici dalla queue per questo GDO
-            // Per ora restituiamo tutti i bulk (in futuro potremmo filtrare per GDO)
-            const { GDOWhatsappQueueJob } = await import('../models/whatsapp/gdo_whatsapp_message_queue');
-            const { sequelize } = await import('../db');
-            const { QueryTypes } = await import('sequelize');
-
+            // Solo i bulk della GDO dell'utente: la GDO di una campagna e' quella del suo template
             const bulks = await sequelize.query(
                 `SELECT DISTINCT
                     q.bulk_id_whatsapp_queue_job as "bulkId",
@@ -344,17 +328,19 @@ export class WhatsAppController extends BaseController {
                     c.titolo_whatsapp_campagna as "titolo",
                     MIN(q.createdat) as "createdAt"
                  FROM gdo_whatsapp_message_queue q
-                 LEFT JOIN gdo_whatsapp_campagne c ON q.campagna_id_whatsapp_queue_job = c.id_whatsapp_campagna
+                 JOIN gdo_whatsapp_campagne c ON q.campagna_id_whatsapp_queue_job = c.id_whatsapp_campagna
+                 JOIN gdo_whatsapp_template t ON c.template_id_whatsapp_campagna = t.id_gdowhatsapptemplate
+                 WHERE t.id_gdo_gdowhatsapptemplate = :idGdo
                  GROUP BY q.bulk_id_whatsapp_queue_job, c.id_whatsapp_campagna, c.titolo_whatsapp_campagna
                  ORDER BY MIN(q.createdat) DESC
                  LIMIT 50`,
-                { type: QueryTypes.SELECT }
+                { type: QueryTypes.SELECT, replacements: { idGdo: gdo.id } }
             ) as Array<{ bulkId: string; campagnaId: string; titolo: string; createdAt: Date }>;
 
             // Per ogni bulk, ottieni lo stato
             const campaigns = await Promise.all(
                 bulks.map(async (bulk) => {
-                    const status = await queueService.getBulkStatus(bulk.bulkId);
+                    const status = await this.queueService.getBulkStatus(bulk.bulkId);
                     return {
                         ...status,
                         campagnaId: bulk.campagnaId,
@@ -374,16 +360,23 @@ export class WhatsAppController extends BaseController {
     }
 
     /**
+     * Le campagne di altre GDO risultano inesistenti (404): i job contengono i telefoni dei clienti
+     */
+    private async verificaBulkDellaGdo(req: Request<{ bulkId: string }>): Promise<string> {
+        const { bulkId } = req.params;
+        const gdo = await this.whatsAppService.getCurrentGDOWhatsappForCampaign(req.session.id_utente as string);
+        await this.queueService.verificaBulkDellaGdo(bulkId, gdo?.id);
+        return bulkId;
+    }
+
+    /**
      * Ottiene lo stato di una campagna specifica
      */
-    private async getCampaignStatus(req: Request, res: Response): Promise<void> {
+    private async getCampaignStatus(req: Request<{ bulkId: string }>, res: Response): Promise<void> {
         try {
-            const { bulkId } = req.params;
+            const bulkId = await this.verificaBulkDellaGdo(req);
 
-            const { WhatsappQueueService } = await import('../services/WhatsappQueueService');
-            const queueService = new WhatsappQueueService();
-
-            const status = await queueService.getBulkStatus(bulkId);
+            const status = await this.queueService.getBulkStatus(bulkId);
 
             this.sendResponse(res, HttpStatusCode.OK, {
                 success: true,
@@ -397,17 +390,14 @@ export class WhatsAppController extends BaseController {
     /**
      * Ottiene i job (messaggi) di una campagna specifica
      */
-    private async getCampaignJobs(req: Request, res: Response): Promise<void> {
+    private async getCampaignJobs(req: Request<{ bulkId: string }>, res: Response): Promise<void> {
         try {
-            const { bulkId } = req.params;
+            const bulkId = await this.verificaBulkDellaGdo(req);
             const limit = req.query.limit ? parseInt(req.query.limit as string) : 100;
             const offset = req.query.offset ? parseInt(req.query.offset as string) : 0;
             const status = req.query.status as string | undefined;
 
-            const { WhatsappQueueService } = await import('../services/WhatsappQueueService');
-            const queueService = new WhatsappQueueService();
-
-            const jobs = await queueService.getBulkJobs(bulkId, {
+            const jobs = await this.queueService.getBulkJobs(bulkId, {
                 limit,
                 offset,
                 status: status as any
@@ -435,16 +425,13 @@ export class WhatsAppController extends BaseController {
     }
 
     /**
-     * Annulla una campagna (mette tutti i job PENDING come FAILED)
+     * Annulla una campagna (mette tutti i job PENDING come CANCELLED)
      */
-    private async cancelCampaign(req: Request, res: Response): Promise<void> {
+    private async cancelCampaign(req: Request<{ bulkId: string }>, res: Response): Promise<void> {
         try {
-            const { bulkId } = req.params;
+            const bulkId = await this.verificaBulkDellaGdo(req);
 
-            const { WhatsappQueueService } = await import('../services/WhatsappQueueService');
-            const queueService = new WhatsappQueueService();
-
-            const cancelled = await queueService.cancelBulk(bulkId);
+            const cancelled = await this.queueService.cancelBulk(bulkId);
             AuditLogService.getInstance().bulkOperation(req, 'whatsapp', 'campaign_cancel');
 
             this.sendResponse(res, HttpStatusCode.OK, {
@@ -460,14 +447,11 @@ export class WhatsAppController extends BaseController {
     /**
      * Riprova i messaggi falliti di una campagna
      */
-    private async retryCampaign(req: Request, res: Response): Promise<void> {
+    private async retryCampaign(req: Request<{ bulkId: string }>, res: Response): Promise<void> {
         try {
-            const { bulkId } = req.params;
+            const bulkId = await this.verificaBulkDellaGdo(req);
 
-            const { WhatsappQueueService } = await import('../services/WhatsappQueueService');
-            const queueService = new WhatsappQueueService();
-
-            const retried = await queueService.retryFailedJobs(bulkId);
+            const retried = await this.queueService.retryFailedJobs(bulkId);
 
             this.sendResponse(res, HttpStatusCode.OK, {
                 success: true,

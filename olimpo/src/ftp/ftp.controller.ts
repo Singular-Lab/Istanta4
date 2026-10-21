@@ -1,5 +1,5 @@
 import { Controller, Post, Req, Res } from '@nestjs/common';
-import { RootFileTree, RUNTIME_KIT_MONGO } from '@server_types/types';
+import { RootFileTree, RUNTIME_KIT } from '@server_types/types';
 import { decryptString } from '@lib/encryption';
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { FtpService, SftpConfig } from './ftp.service';
@@ -20,7 +20,7 @@ export class FtpController {
     @Req() req: FastifyRequest<{
       Body: {
         contratto: RootFileTree | string,
-        kit: RUNTIME_KIT_MONGO | string,
+        kit: RUNTIME_KIT | string,
         socketId?: string,  // Add socketId parameter
         host_ftp?: string,
         user_ftp?: string,
@@ -31,7 +31,7 @@ export class FtpController {
   ) {
     try {
       let contrattoObj: RootFileTree;
-      let kit: RUNTIME_KIT_MONGO;
+      let kit: RUNTIME_KIT;
       const socketId = req.body.socketId;
       const encryptedHostFtp = req.body.host_ftp?.trim();
       const encryptedUserFtp = req.body.user_ftp?.trim();
@@ -89,7 +89,7 @@ export class FtpController {
 
       if (typeof req.body.kit === 'string') {
         const files = req.body.kit;
-        kit = JSON.parse(files) as RUNTIME_KIT_MONGO;
+        kit = JSON.parse(files) as RUNTIME_KIT;
       } else if (typeof req.body.kit === 'object') {
         kit = req.body.kit;
       } else {
@@ -120,15 +120,15 @@ export class FtpController {
     @Res() res: FastifyReply,
     @Req() req: FastifyRequest<{
       Body: {
-        kits: RUNTIME_KIT_MONGO[] | string,
+        kits: RUNTIME_KIT[] | string,
       }
     }>
   ) {
     try {
-      let kits: RUNTIME_KIT_MONGO[];
+      let kits: RUNTIME_KIT[];
 
       if (typeof req.body.kits === 'string') {
-        kits = JSON.parse(req.body.kits) as RUNTIME_KIT_MONGO[];
+        kits = JSON.parse(req.body.kits) as RUNTIME_KIT[];
       } else if (Array.isArray(req.body.kits)) {
         kits = req.body.kits;
       } else {

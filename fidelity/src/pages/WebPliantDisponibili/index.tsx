@@ -138,17 +138,13 @@ const ChannelCard: React.FC<{
         </Badge>
         <div className="my-4 text-center border-t border-dashed w-full flex flex-row justify-center">
           {item.disattivo_mancanza_workspace && (
-            <a
+            <Link
               className="flex text-sm items-center mr-auto text-primary"
-              href="#"
-              onClick={(e) => {
-                e.preventDefault();
-                // TODO: Implement workspace creation logic
-              }}
+              to="/webliant/impostazioni-webpliant"
             >
               <Lucide icon="Download" className="w-4 h-4 stroke-[1.3] mr-1.5" />
               <span>Crea workspace</span>
-            </a>
+            </Link>
           )}
           {/* {item.disattivo_mancanza_referenze && (
                         <a
@@ -246,18 +242,7 @@ function Main() {
         <Lucide icon="FileX2" className="w-10 h-10 mb-2 text-gray-500" />
         <span className="text-gray-500">Nessuna Webpliant disponibile</span>
         <span className="text-gray-400 text-xs">
-          Nessuna pubblicazione di WebPliant disponibile.{" "}
-          <a
-            href="#"
-            className="text-primary underline"
-            onClick={(e) => {
-              e.preventDefault();
-
-
-            }}
-          >
-            Richiedi pubblicazione
-          </a>
+          Nessuna pubblicazione di WebPliant disponibile.
         </span>
       </div>
     </div>

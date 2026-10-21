@@ -134,7 +134,10 @@ class InddEvents {
                     return;
                 }
 
-                if(document.getElementById("wrapper").clientWidth != lastWidthDimension || document.getElementById("wrapper").clientHeight != lastHeightDimension){
+                //I20-1116, lotto 2: anche la larghezza del pannello. Nella vista affiancata #wrapper
+                //resta fermo alla larghezza di sinistra, e allargare o stringere il pannello non si vedrebbe.
+                if(document.getElementById("wrapper").clientWidth != lastWidthDimension || document.getElementById("wrapper").clientHeight != lastHeightDimension
+                    || (typeof VistaAffiancata !== "undefined" && VistaAffiancata.larghezzaPannello() != lastPannelloDimension)){
                     onresizeWindow();
                 }
 
@@ -142,6 +145,14 @@ class InddEvents {
 
                 if (me.isBusy){
                     //console.warn("IsBusy: "+me.isBusy)
+                    return;
+                }
+
+                //I20-1074: con una scheda aperta in vista controllata la selezione non porta altrove.
+                //isBusy da solo non basta: molte funzioni lo rimettono a false e la vigilanza della
+                //scheda lo riafferma ogni 600 ms; in mezzo una deselezione mandava alla home con le
+                //icone nascoste. Deselezionare il box lo gestisce la vigilanza, come la X.
+                if (me.vistaControllataAperta()) {
                     return;
                 }
                 //console.warn("IsBusy: "+me.isBusy)
@@ -912,6 +923,24 @@ class InddEvents {
     setBusy(busy)
     {
         this.isBusy=busy;
+    }
+
+    /// I20-1074: la scheda ref e' aperta in vista controllata, dal Report Integrita' o dalla
+    /// schermata delle segnalazioni: si esce solo dalla sua X (o deselezionando il box).
+    vistaControllataAperta()
+    {
+        try {
+            if (typeof ReportIntegrita !== "undefined" && ReportIntegrita != null && ReportIntegrita.schedaDalReportAperta()) {
+                return true;
+            }
+            if (typeof SchermataSegnalazioni !== "undefined" && SchermataSegnalazioni != null && SchermataSegnalazioni._schedaAperta != null) {
+                return true;
+            }
+        }
+        catch (e) {
+            //senza i moduli non c'e' nessuna vista controllata
+        }
+        return false;
     }
     
     sleep(sleep)

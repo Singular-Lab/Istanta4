@@ -29,8 +29,10 @@
 ## Project setup
 
 ```bash
-$ npm install
+$ yarn install
 ```
+
+Il progetto usa Yarn 4.18.1, versionato in `.yarn/releases`: basta un `yarn` qualsiasi (anche 1.x) per usarlo. Dipendenze e versioni sono fissate da `yarn.lock`.
 
 ## Security configuration
 
@@ -102,32 +104,32 @@ CORS_ORIGINS=https://admin.example.com
 - Attiva `PRIVATE_SESSION_BIND_IP=true` solo se gli utenti entrano da IP stabili; con reti mobili, VPN variabili o proxy aggressivi puo creare logout indesiderati.
 - Non pubblicare mai il file `.env`.
 - Ruota periodicamente `FICO_SECRET`, `PRIVATE_DASHBOARD_SECRET` e `ISTANTA_AUTH_TOKEN`.
-- Per la UI privata usa `npm run build` per la build completa oppure `cd ui && npm run build` se vuoi rigenerare solo la SPA React.
+- Per la UI privata usa `yarn build` per la build completa oppure `cd ui && yarn build` se vuoi rigenerare solo la SPA React (ui/ ha il proprio `yarn.lock`).
 
 ## Compile and run the project
 
 ```bash
 # development
-$ npm run start
+$ yarn start
 
 # watch mode
-$ npm run start:dev
+$ yarn start:dev
 
 # production mode
-$ npm run start:prod
+$ yarn start:prod
 ```
 
 ## Run tests
 
 ```bash
 # unit tests
-$ npm run test
+$ yarn test
 
 # e2e tests
-$ npm run test:e2e
+$ yarn test:e2e
 
 # test coverage
-$ npm run test:cov
+$ yarn test:cov
 ```
 
 ## Resources

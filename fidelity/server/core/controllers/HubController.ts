@@ -25,10 +25,16 @@ import type { IOidcService, OidcUserClaims } from '../interfaces/IOidcService';
 import type { IUserService } from '../interfaces/IUserService';
 import { log } from '../logger';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { authRateLimiter } from '../middleware/rateLimiter';
+import { leggiContestoAccesso } from '../accessi/contestoAccesso';
+import { permissionGuard } from '../middleware/permissionGuard';
+import { PERMESSI } from '../../../lib/accessi/catalogo';
 import type { IAuthProviderRepository } from '../repositories/AuthProviderRepository';
 import { AuditLogService } from '../services/AuditLogService';
 import { buildHubUserContext, type HubUserContext } from '../services/hubRoleUtils';
 import { ServerUtils } from '../utils/ServerUtils';
+import { urlOlimpo } from '../utils/urlOlimpo';
+import { verifyAccessoServizioParams } from '../utils/accessoServizioLink';
 
 function createSingleFileUploadMiddleware(
   upload: ReturnType<typeof uploadHubServiceDocuments.single>
@@ -64,6 +70,10 @@ function deriveAssetTitle(fileName: string): string {
   return normalized || fileName;
 }
 
+/** Istanta e Correggo li gestisce Fidelity: l'inizializzazione li ricreerebbe al deploy successivo. */
+const SERVIZIO_GESTITO_NON_ELIMINABILE =
+  'Servizio gestito da Fidelity: non si può eliminare, disattivalo';
+
 export class HubController extends BaseController {
   constructor(
     private authProviderService: IAuthProviderService,
@@ -88,8 +98,9 @@ export class HubController extends BaseController {
     // OIDC — flusso di autenticazione (pubblici)
     this.router.get('/auth/oidc/authorize/:codice', this.oidcAuthorize.bind(this));
     this.router.get('/auth/oidc/callback', this.oidcCallback.bind(this));
-    //HACK questa è una chiamata creata per TEST
-    this.router.get('/auth/oidc/fake-callback', this.oidcFakeCallback.bind(this));
+    // Accesso di servizio: solo con link firmato (OIDC_FAKE_CALLBACK_SECRET),
+    // generato con `yarn auth:link-servizio <email> [oid]`.
+    this.router.get('/auth/oidc/fake-callback', authRateLimiter, this.oidcFakeCallback.bind(this));
 
     // Autenticato — info utente sessione per la dashboard hub
     this.router.get('/hub-user-info', authMiddleware, this.getHubUserInfo.bind(this));
@@ -100,32 +111,36 @@ export class HubController extends BaseController {
     // Autenticato — servizi per il ruolo dell'utente
     this.router.get('/hub-services', authMiddleware, this.getHubServices.bind(this));
 
+    // Amministrazione dell'hub: permesso di sistema (solo Superadmin)
+    const amministrazione = [authMiddleware, permissionGuard(PERMESSI.SISTEMA.GESTISCI_HUB)];
+
     // Admin — tutti i servizi raggruppati per codice
-    this.router.get('/hub-services/admin', authMiddleware, this.getHubServicesAdmin.bind(this));
-    this.router.post('/hub-services/assets/document', uploadHubServiceDocumentMiddleware, authMiddleware, this.uploadHubServiceDocument.bind(this));
-    this.router.post('/hub-services/assets/video', uploadHubServiceVideoMiddleware, authMiddleware, this.uploadHubServiceVideo.bind(this));
+    this.router.get('/hub-services/admin', ...amministrazione, this.getHubServicesAdmin.bind(this));
+    // Il permesso va verificato prima di multer: un upload rifiutato non deve arrivare su disco.
+    this.router.post('/hub-services/assets/document', ...amministrazione, uploadHubServiceDocumentMiddleware, this.uploadHubServiceDocument.bind(this));
+    this.router.post('/hub-services/assets/video', ...amministrazione, uploadHubServiceVideoMiddleware, this.uploadHubServiceVideo.bind(this));
 
     // Admin CRUD — Auth Providers
-    this.router.post('/auth-providers', authMiddleware, this.createAuthProvider.bind(this));
-    this.router.put('/auth-providers/:id', authMiddleware, this.updateAuthProvider.bind(this));
-    this.router.delete('/auth-providers/:id', authMiddleware, this.deleteAuthProvider.bind(this));
+    this.router.post('/auth-providers', ...amministrazione, this.createAuthProvider.bind(this));
+    this.router.put('/auth-providers/:id', ...amministrazione, this.updateAuthProvider.bind(this));
+    this.router.delete('/auth-providers/:id', ...amministrazione, this.deleteAuthProvider.bind(this));
 
     // Autenticato — news per il ruolo dell'utente
     this.router.get('/hub-news', authMiddleware, this.getHubNews.bind(this));
-    this.router.get('/hub-news/admin', authMiddleware, this.getHubNewsAdmin.bind(this));
+    this.router.get('/hub-news/admin', ...amministrazione, this.getHubNewsAdmin.bind(this));
 
     // Admin CRUD — Hub Services
-    this.router.post('/hub-services', authMiddleware, this.createHubService.bind(this));
-    this.router.post('/hub-services/bulk', authMiddleware, this.bulkCreateHubService.bind(this));
-    this.router.patch('/hub-services/bulk', authMiddleware, this.bulkUpdateHubServices.bind(this));
-    this.router.put('/hub-services/:id', authMiddleware, this.updateHubService.bind(this));
-    this.router.delete('/hub-services/by-code/:codice', authMiddleware, this.deleteHubServiceByCode.bind(this));
-    this.router.delete('/hub-services/:id', authMiddleware, this.deleteHubService.bind(this));
+    this.router.post('/hub-services', ...amministrazione, this.createHubService.bind(this));
+    this.router.post('/hub-services/bulk', ...amministrazione, this.bulkCreateHubService.bind(this));
+    this.router.patch('/hub-services/bulk', ...amministrazione, this.bulkUpdateHubServices.bind(this));
+    this.router.put('/hub-services/:id', ...amministrazione, this.updateHubService.bind(this));
+    this.router.delete('/hub-services/by-code/:codice', ...amministrazione, this.deleteHubServiceByCode.bind(this));
+    this.router.delete('/hub-services/:id', ...amministrazione, this.deleteHubService.bind(this));
 
     // Admin CRUD — Hub News
-    this.router.post('/hub-news', authMiddleware, this.createHubNews.bind(this));
-    this.router.put('/hub-news/:id', authMiddleware, this.updateHubNews.bind(this));
-    this.router.delete('/hub-news/:id', authMiddleware, this.deleteHubNews.bind(this));
+    this.router.post('/hub-news', ...amministrazione, this.createHubNews.bind(this));
+    this.router.put('/hub-news/:id', ...amministrazione, this.updateHubNews.bind(this));
+    this.router.delete('/hub-news/:id', ...amministrazione, this.deleteHubNews.bind(this));
   }
 
   // ─── Auth Providers ─────────────────────────────────────────
@@ -141,10 +156,6 @@ export class HubController extends BaseController {
 
   private async createAuthProvider(req: Request, res: Response): Promise<void> {
     try {
-      if (req.session?.tipo_utente !== TIPO_UTENTI.SUPERADMIN) {
-        this.sendResponse(res, HttpStatusCode.FORBIDDEN, { message: 'Solo Superadmin può creare provider' });
-        return;
-      }
       const provider = await this.authProviderService.createProvider(req.body);
       this.sendResponse(res, HttpStatusCode.CREATED, provider);
     } catch (error) {
@@ -152,12 +163,8 @@ export class HubController extends BaseController {
     }
   }
 
-  private async updateAuthProvider(req: Request, res: Response): Promise<void> {
+  private async updateAuthProvider(req: Request<{ id: string }>, res: Response): Promise<void> {
     try {
-      if (req.session?.tipo_utente !== TIPO_UTENTI.SUPERADMIN) {
-        this.sendResponse(res, HttpStatusCode.FORBIDDEN, { message: 'Solo Superadmin può modificare provider' });
-        return;
-      }
       const provider = await this.authProviderService.updateProvider(req.params.id, req.body);
       if (!provider) {
         this.sendResponse(res, HttpStatusCode.NOT_FOUND, { message: 'Provider non trovato' });
@@ -169,12 +176,8 @@ export class HubController extends BaseController {
     }
   }
 
-  private async deleteAuthProvider(req: Request, res: Response): Promise<void> {
+  private async deleteAuthProvider(req: Request<{ id: string }>, res: Response): Promise<void> {
     try {
-      if (req.session?.tipo_utente !== TIPO_UTENTI.SUPERADMIN) {
-        this.sendResponse(res, HttpStatusCode.FORBIDDEN, { message: 'Solo Superadmin può eliminare provider' });
-        return;
-      }
       const deleted = await this.authProviderService.deleteProvider(req.params.id);
       if (!deleted) {
         this.sendResponse(res, HttpStatusCode.NOT_FOUND, { message: 'Provider non trovato' });
@@ -192,7 +195,7 @@ export class HubController extends BaseController {
    * Step 1: Genera l'authorize URL con PKCE e salva state/nonce/code_verifier in sessione.
    * Il frontend chiama GET /api/auth/oidc/authorize/:codice e riceve l'URL a cui fare redirect.
    */
-  private async oidcAuthorize(req: Request, res: Response): Promise<void> {
+  private async oidcAuthorize(req: Request<{ codice: string }>, res: Response): Promise<void> {
     try {
       const { codice } = req.params;
 
@@ -308,6 +311,8 @@ export class HubController extends BaseController {
       }
 
       const parsed = await this.agenziaLib.parseUtenteOIDC(email, claims);
+      // Un account disattivato o bloccato non apre la sessione: ForbiddenError -> reason=oidc_access_denied
+      await this.userService.verificaAccountAttivo(parsed.id);
 
       // Rigenera la sessione per prevenire session fixation
       await new Promise<void>((resolve, reject) => {
@@ -342,7 +347,7 @@ export class HubController extends BaseController {
       const auditService = AuditLogService.getInstance();
       auditService.loginSuccess(req, parsed.id, parsed.tipo_utente);
 
-      log.info(`[HubController] OIDC login riuscito per ${email} via fake-callback`);
+      log.info(`[HubController] OIDC login riuscito per ${email}`);
 
       // Redirect alla dashboard
       res.redirect('/hub');
@@ -353,14 +358,34 @@ export class HubController extends BaseController {
   }
   private async oidcFakeCallback(req: Request, res: Response): Promise<void> {
     try {
-      const { oid, email } = req.query;
+      const secret = config.OIDC_FAKE_CALLBACK_SECRET;
+      if (!secret) {
+        this.sendResponse(res, HttpStatusCode.NOT_FOUND, { message: 'Risorsa non trovata' });
+        return;
+      }
+
+      // Le risposte 4xx contano per authRateLimiter, i redirect riusciti no.
+      const esito = verifyAccessoServizioParams(req.query, secret);
+      if (esito !== 'valid') {
+        log.warn('[HubController] Accesso di servizio rifiutato', { esito, ip: req.ip });
+        this.sendResponse(res, HttpStatusCode.FORBIDDEN, {
+          message: esito === 'expired' ? 'Link di accesso scaduto' : 'Link di accesso non valido'
+        });
+        return;
+      }
+
+      const email = req.query.email as string;
+      const oid = (req.query.oid as string | undefined) ?? '';
 
       const falseClaims: OidcUserClaims = {
         sub: "",
-        oid: oid as string,
-        email: email as string
+        oid,
+        email
       }
-      const parsed = await this.agenziaLib.parseUtenteOIDC(email as string, falseClaims);
+      const parsed = await this.agenziaLib.parseUtenteOIDC(email, falseClaims);
+      // Un account disattivato o bloccato non apre la sessione: ForbiddenError -> reason=oidc_access_denied
+      if (!this.userService) throw new ForbiddenError({ message: "Verifica dello stato dell'account non disponibile" });
+      await this.userService.verificaAccountAttivo(parsed.id);
 
       // Rigenera la sessione per prevenire session fixation
       await new Promise<void>((resolve, reject) => {
@@ -392,9 +417,9 @@ export class HubController extends BaseController {
 
       // Audit log
       const auditService = AuditLogService.getInstance();
-      auditService.loginSuccess(req, parsed.id, parsed.tipo_utente);
+      auditService.loginSuccess(req, parsed.id, parsed.tipo_utente, 'login_accesso_servizio');
 
-      log.info(`[HubController] OIDC login riuscito per ${email} via fake-callback`);
+      log.warn(`[HubController] Accesso di servizio OIDC per ${email}`);
 
       // Redirect alla dashboard
       res.redirect('/hub');
@@ -473,7 +498,7 @@ export class HubController extends BaseController {
     try {
       const context = await this.resolveHubUserContext(req);
       const services = await this.hubServiceService.getServicesForRole(context);
-      const startPageUrl = await this.resolveStartPage(context.userType, context.ruoloGdoKey);
+      const startPageUrl = await this.resolveStartPage(req);
 
       const resolvedServices = services.map((service) => {
         if (service.tipo_url === 'internal') {
@@ -490,10 +515,6 @@ export class HubController extends BaseController {
 
   private async getHubServicesAdmin(req: Request, res: Response): Promise<void> {
     try {
-      if (req.session?.tipo_utente !== TIPO_UTENTI.SUPERADMIN) {
-        this.sendResponse(res, HttpStatusCode.FORBIDDEN, { message: 'Solo Superadmin può visualizzare tutti i servizi' });
-        return;
-      }
       const grouped = await this.hubServiceService.getAllServicesGrouped();
       this.sendResponse(res, HttpStatusCode.OK, grouped);
     } catch (error) {
@@ -503,10 +524,6 @@ export class HubController extends BaseController {
 
   private async uploadHubServiceDocument(req: Request, res: Response): Promise<void> {
     try {
-      if (req.session?.tipo_utente !== TIPO_UTENTI.SUPERADMIN) {
-        this.sendResponse(res, HttpStatusCode.FORBIDDEN, { message: 'Solo Superadmin può caricare documentazione servizio' });
-        return;
-      }
 
       if (!req.file) {
         this.sendResponse(res, HttpStatusCode.BAD_REQUEST, { message: 'Nessun file caricato' });
@@ -565,9 +582,9 @@ export class HubController extends BaseController {
         size: req.file.size,
         extension: path.extname(req.file.originalname).toLowerCase() || undefined,
         id_olimpo_cloud: olympusId,
-        download_url: `${config.OLYMPUS_IP_ADDRESS}/materiali/getMaterialePDF?id=${olympusId}`,
+        download_url: urlOlimpo('/materiali/getMaterialePDF', { id: olympusId }),
         preview_url: req.file.mimetype === 'application/pdf'
-          ? `${config.OLYMPUS_IP_ADDRESS}/materiali/getThumbnailMaterialePdfs?&id=${olympusId}`
+          ? urlOlimpo('/materiali/getThumbnailMaterialePdfs', { id: olympusId })
           : undefined,
         pages: result.data.content.pagine,
       });
@@ -578,10 +595,6 @@ export class HubController extends BaseController {
 
   private async uploadHubServiceVideo(req: Request, res: Response): Promise<void> {
     try {
-      if (req.session?.tipo_utente !== TIPO_UTENTI.SUPERADMIN) {
-        this.sendResponse(res, HttpStatusCode.FORBIDDEN, { message: 'Solo Superadmin può caricare video servizio' });
-        return;
-      }
 
       if (!req.file) {
         this.sendResponse(res, HttpStatusCode.BAD_REQUEST, { message: 'Nessun file caricato' });
@@ -633,7 +646,7 @@ export class HubController extends BaseController {
         mime_type: req.file.mimetype || 'video/mp4',
         size: req.file.size,
         guid_id: guidId,
-        url: `${config.OLYMPUS_IP_ADDRESS}/materiali/getVideoOnDemand?guidId=${guidId}`,
+        url: urlOlimpo('/materiali/getVideoOnDemand', { guidId }),
       });
     } catch (error) {
       this.handleError(res, error);
@@ -643,21 +656,17 @@ export class HubController extends BaseController {
   /**
    * Risolve la start_page dal menu dell'utente per determinare l'URL di atterraggio
    */
-  private async resolveStartPage(userType: string, ruoloGdo?: string): Promise<string | null> {
+  /** Pagina di atterraggio: la start_page del menu dell'utente, se puo' aprirla, altrimenti la prima voce. */
+  private async resolveStartPage(req: Request): Promise<string | null> {
     try {
       if (!this.menuService) return null;
+      const contesto = await leggiContestoAccesso(req);
+      if (!contesto) return null;
 
-      const menuKey = userType;
-      const ruoloKey = (userType === TIPO_UTENTI.GDO && ruoloGdo) ? ruoloGdo : undefined;
-
-      const menu = await this.menuService.getMenuPerUtente(menuKey, ruoloKey);
-      if (!Array.isArray(menu) || menu.length === 0) return null;
-
-      const paginaDiStart = menu.find((item: any) => typeof item === 'object' && item.start_page);
-      if (paginaDiStart && typeof paginaDiStart === 'object' && 'pathname' in paginaDiStart && paginaDiStart.pathname) {
-        return paginaDiStart.pathname;
-      }
-      return null;
+      const menu = await this.menuService.getMenuDiUtente(contesto);
+      const voci = menu.filter((item): item is Exclude<typeof item, string> => typeof item !== 'string' && !!item.pathname);
+      const iniziale = voci.find(item => item.start_page) ?? voci[0];
+      return iniziale?.pathname ?? null;
     } catch {
       return null;
     }
@@ -665,10 +674,6 @@ export class HubController extends BaseController {
 
   private async createHubService(req: Request, res: Response): Promise<void> {
     try {
-      if (req.session?.tipo_utente !== TIPO_UTENTI.SUPERADMIN) {
-        this.sendResponse(res, HttpStatusCode.FORBIDDEN, { message: 'Solo Superadmin può creare servizi' });
-        return;
-      }
       const service = await this.hubServiceService.createService(req.body);
       this.sendResponse(res, HttpStatusCode.CREATED, service);
     } catch (error) {
@@ -678,10 +683,6 @@ export class HubController extends BaseController {
 
   private async bulkCreateHubService(req: Request, res: Response): Promise<void> {
     try {
-      if (req.session?.tipo_utente !== TIPO_UTENTI.SUPERADMIN) {
-        this.sendResponse(res, HttpStatusCode.FORBIDDEN, { message: 'Solo Superadmin può creare servizi' });
-        return;
-      }
       const services = await this.hubServiceService.bulkCreateService(req.body);
       this.sendResponse(res, HttpStatusCode.CREATED, services);
     } catch (error) {
@@ -691,10 +692,6 @@ export class HubController extends BaseController {
 
   private async bulkUpdateHubServices(req: Request, res: Response): Promise<void> {
     try {
-      if (req.session?.tipo_utente !== TIPO_UTENTI.SUPERADMIN) {
-        this.sendResponse(res, HttpStatusCode.FORBIDDEN, { message: 'Solo Superadmin può modificare servizi' });
-        return;
-      }
       const { ids, patch } = req.body;
       if (!Array.isArray(ids) || ids.length === 0) {
         this.sendResponse(res, HttpStatusCode.BAD_REQUEST, { message: 'ids deve essere un array non vuoto' });
@@ -711,12 +708,8 @@ export class HubController extends BaseController {
     }
   }
 
-  private async updateHubService(req: Request, res: Response): Promise<void> {
+  private async updateHubService(req: Request<{ id: string }>, res: Response): Promise<void> {
     try {
-      if (req.session?.tipo_utente !== TIPO_UTENTI.SUPERADMIN) {
-        this.sendResponse(res, HttpStatusCode.FORBIDDEN, { message: 'Solo Superadmin può modificare servizi' });
-        return;
-      }
       const service = await this.hubServiceService.updateService(req.params.id, req.body);
       if (!service) {
         this.sendResponse(res, HttpStatusCode.NOT_FOUND, { message: 'Servizio non trovato' });
@@ -728,10 +721,10 @@ export class HubController extends BaseController {
     }
   }
 
-  private async deleteHubService(req: Request, res: Response): Promise<void> {
+  private async deleteHubService(req: Request<{ id: string }>, res: Response): Promise<void> {
     try {
-      if (req.session?.tipo_utente !== TIPO_UTENTI.SUPERADMIN) {
-        this.sendResponse(res, HttpStatusCode.FORBIDDEN, { message: 'Solo Superadmin può eliminare servizi' });
+      if (await this.hubServiceService.isServizioGestito(req.params.id)) {
+        this.sendResponse(res, HttpStatusCode.CONFLICT, { message: SERVIZIO_GESTITO_NON_ELIMINABILE });
         return;
       }
       const deleted = await this.hubServiceService.deleteService(req.params.id);
@@ -745,10 +738,10 @@ export class HubController extends BaseController {
     }
   }
 
-  private async deleteHubServiceByCode(req: Request, res: Response): Promise<void> {
+  private async deleteHubServiceByCode(req: Request<{ codice: string }>, res: Response): Promise<void> {
     try {
-      if (req.session?.tipo_utente !== TIPO_UTENTI.SUPERADMIN) {
-        this.sendResponse(res, HttpStatusCode.FORBIDDEN, { message: 'Solo Superadmin può eliminare servizi' });
+      if (await this.hubServiceService.isCodiceGestito(req.params.codice)) {
+        this.sendResponse(res, HttpStatusCode.CONFLICT, { message: SERVIZIO_GESTITO_NON_ELIMINABILE });
         return;
       }
       const count = await this.hubServiceService.deleteServiceByCode(req.params.codice);
@@ -776,10 +769,6 @@ export class HubController extends BaseController {
 
   private async getHubNewsAdmin(req: Request, res: Response): Promise<void> {
     try {
-      if (req.session?.tipo_utente !== TIPO_UTENTI.SUPERADMIN) {
-        this.sendResponse(res, HttpStatusCode.FORBIDDEN, { message: 'Solo Superadmin può visualizzare tutte le news' });
-        return;
-      }
       const news = await this.hubNewsService.getAllNews();
       this.sendResponse(res, HttpStatusCode.OK, news);
     } catch (error) {
@@ -789,10 +778,6 @@ export class HubController extends BaseController {
 
   private async createHubNews(req: Request, res: Response): Promise<void> {
     try {
-      if (req.session?.tipo_utente !== TIPO_UTENTI.SUPERADMIN) {
-        this.sendResponse(res, HttpStatusCode.FORBIDDEN, { message: 'Solo Superadmin può creare news' });
-        return;
-      }
       const news = await this.hubNewsService.createNews(req.body);
       this.sendResponse(res, HttpStatusCode.CREATED, news);
     } catch (error) {
@@ -800,12 +785,8 @@ export class HubController extends BaseController {
     }
   }
 
-  private async updateHubNews(req: Request, res: Response): Promise<void> {
+  private async updateHubNews(req: Request<{ id: string }>, res: Response): Promise<void> {
     try {
-      if (req.session?.tipo_utente !== TIPO_UTENTI.SUPERADMIN) {
-        this.sendResponse(res, HttpStatusCode.FORBIDDEN, { message: 'Solo Superadmin può modificare news' });
-        return;
-      }
       const news = await this.hubNewsService.updateNews(req.params.id, req.body);
       if (!news) {
         this.sendResponse(res, HttpStatusCode.NOT_FOUND, { message: 'News non trovata' });
@@ -817,12 +798,8 @@ export class HubController extends BaseController {
     }
   }
 
-  private async deleteHubNews(req: Request, res: Response): Promise<void> {
+  private async deleteHubNews(req: Request<{ id: string }>, res: Response): Promise<void> {
     try {
-      if (req.session?.tipo_utente !== TIPO_UTENTI.SUPERADMIN) {
-        this.sendResponse(res, HttpStatusCode.FORBIDDEN, { message: 'Solo Superadmin può eliminare news' });
-        return;
-      }
       const deleted = await this.hubNewsService.deleteNews(req.params.id);
       if (!deleted) {
         this.sendResponse(res, HttpStatusCode.NOT_FOUND, { message: 'News non trovata' });

@@ -1,5 +1,6 @@
 /// I20-1002: log su file nella cartella di lavorazione, uno al giorno per tipo.
-/// Il percorso e' la globale percorsoLogs (indexNew.js): questo modulo da solo non gira.
+/// Il percorso e' la cartella dei log, cartellaDeiLog (indexNew.js): questo modulo da solo non
+/// gira. I20-1065: e' logs sotto la cartella del documento; finche' non e' pronta non si scrive.
 /// Riscrive tutto il file a ogni riga: va bene finche' i log restano corti.
 
 const fs = require('fs');
@@ -23,7 +24,11 @@ const Logger=
             let date = new Date();
             let prefixDate =  "log_" + date.getDate() + "-" + (date.getMonth() + 1) + "-" + date.getFullYear();
 
-            let filePath=/*pathLavorazione +*/ percorsoLogs + "["+ type +"]-" + prefixDate +'.log';
+            const cartellaLog = cartellaDeiLog();
+            if (cartellaLog === "") {
+                return false;
+            }
+            let filePath = cartellaLog + "["+ type +"]-" + prefixDate +'.log';
 
             let existingContent="";
             try {

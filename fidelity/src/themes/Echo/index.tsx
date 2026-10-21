@@ -1,11 +1,14 @@
 import "@/assets/css/themes/echo.css";
+import { usePermissionContext } from "@/context/PermissionContext";
+import { PERMISSIONS } from "@/constants/permissions";
 import "@/assets/css/vendors/simplebar.css";
 import logoSVG from "@/assets/images/logo.svg";
+import Button from "@/components/Base/Button";
 import Lucide from "@/components/Base/Lucide";
 import { useAppDispatch, useAppSelector } from "@/stores/hooks";
-import { selectSideMenu } from "@/stores/sideMenuSlice_istanta";
+import { fetchSideMenu, selectSideMenu, selectSideMenuError } from "@/stores/sideMenuSlice_istanta";
 import clsx from "clsx";
-import { createRef, Fragment, startTransition, useEffect, useState } from "react";
+import { createRef, Fragment, startTransition, useContext, useEffect, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { FormattedMenu, nestedMenu } from "./side-menu";
 //@ts-ignore
@@ -21,7 +24,8 @@ import MaintenanceBanner from "@/components/MaintenanceBanner";
 import MaintenanceModal from "@/components/MaintenanceModal";
 import NotificationsPanel from "@/components/NotificationsPanel";
 import QuickSearch from "@/components/QuickSearch";
-import withSessionCheck from "@/components/SessionChecker";
+import AccessoNegato, { DentroLayoutContext } from "@/components/AccessoNegato";
+import withSessionCheck, { AccessoPaginaContext } from "@/components/SessionChecker";
 import SwitchAccount from "@/components/SwitchAccount";
 import { useUser } from "@/context/UserContext.tsx";
 import { SocketProvider } from "@/hooks/useSocket";
@@ -31,6 +35,7 @@ import SimpleBar from "simplebar";
 import { TIPO_UTENTI } from "../../../lib/enums";
 import { ServerCall } from "../../../lib/server_call";
 import { AppLoaderBridge } from "../../components/AppLoaderBridge";
+import GlobalLoadingIndicator from "../../components/GlobalLoadingIndicator";
 
 const findStartPageItem = (
   items: Array<FormattedMenu | string>
@@ -62,6 +67,8 @@ const findStartPageItem = (
 };
 
 function Layout() {
+  const accessoConsentito = useContext(AccessoPaginaContext);
+  const { hasPermission } = usePermissionContext();
 
   const { user } = useUser();
   const dispatch = useAppDispatch();
@@ -120,6 +127,7 @@ function Layout() {
   >([]);
   const [startPage, setStartPage] = useState<FormattedMenu | undefined>(undefined)
   const sideMenuStore = useAppSelector(selectSideMenu);
+  const sideMenuError = useAppSelector(selectSideMenuError);
   const sideMenu = () => nestedMenu(sideMenuStore, location);
   const scrollableRefMenu = createRef<HTMLDivElement>();
   const scrollBar = createRef<HTMLDivElement>()
@@ -280,6 +288,7 @@ function Layout() {
     <SocketProvider>
       <ContextMenu>
         <AppLoaderBridge />
+        <GlobalLoadingIndicator />
         <MaintenanceBanner />
         <div
           style={{ height: "100%" }}
@@ -309,16 +318,14 @@ function Layout() {
                 { hidden: !activeMobileMenu },
               ])}
             >
-              <a
-                href=""
-                onClick={(event) => {
-                  event.preventDefault();
-                  setActiveMobileMenu(false);
-                }}
+              <button
+                type="button"
+                aria-label="Chiudi menu"
+                onClick={() => setActiveMobileMenu(false)}
                 className="mt-5 ml-5"
               >
                 <Lucide icon="X" className="w-8 h-8 text-white" />
-              </a>
+              </button>
             </div>
             <div
               className={clsx([
@@ -363,6 +370,15 @@ function Layout() {
                 ])}
               >
                 <ul className="scrollable">
+                  {/* Dentro la <ul>: SimpleBar sposta i figli del contenitore e React non potrebbe inserirvi nodi */}
+                  {sideMenuError && (
+                    <li role="alert" className="flex flex-col items-center gap-2 mt-5 text-sm text-center text-slate-500">
+                      Impossibile caricare il menu
+                      <Button variant="outline-primary" size="sm" onClick={() => dispatch(fetchSideMenu())}>
+                        Riprova
+                      </Button>
+                    </li>
+                  )}
                   {formattedMenu.map((menu, menuKey) =>
                     typeof menu === "string" ? (
                       <li className="side-menu__divider" key={menuKey}>
@@ -501,24 +517,23 @@ function Layout() {
                 "
                 >
                   <div className="flex items-center gap-1 xl:hidden">
-                    <a
-                      href=""
+                    <button
+                      type="button"
                       onClick={handleMenuToggle}
                       className="p-2 text-white rounded-full hover:bg-white/5"
                       title="Apri/chiudi menu"
+                      aria-label="Apri/chiudi menu"
                     >
                       <Lucide icon="PanelLeftClose" className="w-[18px] h-[18px]" />
-                    </a>
-                    <a
-                      href=""
+                    </button>
+                    <button
+                      type="button"
                       className="p-2 text-white rounded-full hover:bg-white/5"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        setQuickSearch(true);
-                      }}
+                      aria-label="Ricerca veloce"
+                      onClick={() => setQuickSearch(true)}
                     >
                       <Lucide icon="Search" className="w-[18px] h-[18px]" />
-                    </a>
+                    </button>
                   </div>
                   <div className="flex-1 block order-0 float-start min-w-0 px-2">
                     <SmartBreadcrumb light small startPage={startPage?.pathname} />
@@ -558,11 +573,11 @@ function Layout() {
                     >
                       <Lucide icon="Moon" className="w-[18px] h-[18px]" />
                     </a> */}
-                      <a
-                        href=""
+                      <button
+                        type="button"
                         className="p-2 text-white rounded-full hover:bg-white/5"
-                        onClick={(e) => {
-                          e.preventDefault();
+                        aria-label={isFullScreen ? "Esci da schermo intero" : "Schermo intero"}
+                        onClick={() => {
                           if (isFullScreen) {
                             exitFullscreen();
                           } else {
@@ -571,16 +586,14 @@ function Layout() {
                         }}
                       >
                         <Lucide icon={isFullScreen ? "Minimize" : "Expand"} className="w-[18px] h-[18px]" />
-                      </a>
-                      {user?.tipo === TIPO_UTENTI.SUPERADMIN && (
-                        <a
-                          href=""
+                      </button>
+                      {hasPermission(PERMISSIONS.SISTEMA.MANUTENZIONE) && (
+                        <button
+                          type="button"
                           className={`relative p-2 text-white rounded-full hover:bg-white/5 ${avviso.data?.attivo ? "text-amber-300" : ""}`}
-                          onClick={(e) => {
-                            e.preventDefault();
-                            setMaintenanceModal(true);
-                          }}
+                          onClick={() => setMaintenanceModal(true)}
                           title="Avviso manutenzione"
+                          aria-label="Avviso manutenzione"
                         >
                           <Lucide icon="Wrench" className="w-[18px] h-[18px]" />
                           {avviso.data?.attivo && (
@@ -588,15 +601,13 @@ function Layout() {
                               <span className="block w-2 h-2 bg-amber-400 border-2 border-white rounded-full shadow-lg"></span>
                             </div>
                           )}
-                        </a>
+                        </button>
                       )}
-                      <a
-                        href=""
+                      <button
+                        type="button"
                         className="relative p-2 text-white rounded-full hover:bg-white/5"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          setNotificationsPanel(true);
-                        }}
+                        aria-label={hasUnreadAttivita ? "Notifiche, ci sono attività non lette" : "Notifiche"}
+                        onClick={() => setNotificationsPanel(true)}
                       >
                         <Lucide icon="Bell" className="w-[18px] h-[18px]" />
                         {/* Mostra la bubble solo se ci sono attività */}
@@ -609,12 +620,12 @@ function Layout() {
                             <span className="block w-2 h-2 bg-primary border-2 border-white rounded-full shadow-lg"></span>
                           </div>
                         )}
-                      </a>
+                      </button>
                     </div>
                     <Popover className="ml-5">
                       {({ close }) => (
                         <>
-                          <Popover.Button className="overflow-hidden rounded-full w-[36px] h-[36px] border-[3px] border-white/[0.15] image-fit">
+                          <Popover.Button aria-label="Menu utente" className="overflow-hidden rounded-full w-[36px] h-[36px] border-[3px] border-white/[0.15] image-fit">
                             <img
                               alt=""
                               src={user?.meta?.photo ? `data:image/png;base64,${user?.meta?.photo}` : userIcon}
@@ -731,7 +742,7 @@ function Layout() {
           >
             <div className="px-1 sm:px-5 mt-16">
               <div className="mx-1 sm:mx-5">
-                <Outlet />
+                {accessoConsentito ? <Outlet /> : <AccessoNegato />}
               </div>
             </div>
           </div>
@@ -741,4 +752,12 @@ function Layout() {
   );
 }
 
-export default withSessionCheck(Layout);
+// L'accesso negato si mostra al posto della pagina, con il menu ancora disponibile.
+const LayoutConMenu = (props: Record<string, never>) => (
+  <DentroLayoutContext.Provider value={true}>
+    <Layout {...props} />
+  </DentroLayoutContext.Provider>
+);
+(LayoutConMenu as unknown as { mostraAccessoNegatoNelLayout: boolean }).mostraAccessoNegatoNelLayout = true;
+
+export default withSessionCheck(LayoutConMenu);

@@ -4,9 +4,10 @@ import { Op, Transaction } from 'sequelize';
 import { v4 as uuidv4 } from 'uuid';
 import { Colorize } from '../../../lib/Colorize';
 import { EVENTI_WEBHOOK, EXPORT_DI_SISTEMA, STATO_COMBINAZIONI, STATO_LAVORAZIONE_KIT_RUNTIME, STATO_LOG_FILE, TIPO_KIT_DESIGN, TIPO_LAVORAZIONE } from '../../../lib/enums';
-import { BusinessError, DatabaseError, ForbiddenError, NotFoundError, ServiceUnavailableError, wrapDatabaseError, wrapNotFoundError } from '../../../lib/errors';
-import { DESIGN_KIT_MONGO, FileItemKit, FileItemKitLog, ImportStorico, OggettoTipiDiExport, PaylodKitPubblicato, RUNTIME_KIT_MONGO, TipiDiExportAttributes } from '../../../lib/types';
+import { BusinessError, DatabaseError, ExternalApiError, ForbiddenError, isAppError, NotFoundError, ServiceUnavailableError, wrapDatabaseError, wrapNotFoundError } from '../../../lib/errors';
+import { DESIGN_KIT, FileItemKit, FileItemKitLog, ImportStorico, OggettoTipiDiExport, PaylodKitPubblicato, RUNTIME_KIT, TipiDiExportAttributes } from '../../../lib/types';
 import config from '../config';
+import { urlOlimpo, urlOlimpoPubblico } from '../utils/urlOlimpo';
 import { sequelize } from '../db';
 import { IIstantaService } from '../interfaces/IIstantaService';
 import { IKitRuntimeService } from '../interfaces/IKitRuntimeService';
@@ -26,7 +27,7 @@ import { TipiDiExport } from '../models/tipi_di_export';
 import { Utente } from '../models/utenti';
 
 /** Maps a raw PG RuntimeKit (snake_case) to the camelCase shape expected by the client */
-function normalizeRuntimeKitFromPg(raw: any): RUNTIME_KIT_MONGO {
+function normalizeRuntimeKitFromPg(raw: any): RUNTIME_KIT {
   const rawTipi: any[] = raw.tipiDiExportInKit ?? raw.tipi_di_export_in_kit ?? [];
   return {
     ...raw,
@@ -52,7 +53,7 @@ function normalizeRuntimeKitFromPg(raw: any): RUNTIME_KIT_MONGO {
     inizioLavorazione: raw.inizioLavorazione ?? raw.inizio_lavorazione,
     fineLavorazione: raw.fineLavorazione ?? raw.fine_lavorazione,
     files: raw.files ?? raw.files_data ?? [],
-  } as RUNTIME_KIT_MONGO;
+  } as RUNTIME_KIT;
 }
 
 /** Maps a raw PG DesignKit (snake_case) to camelCase shape expected by the client */
@@ -141,10 +142,10 @@ export class KitRuntimeService implements IKitRuntimeService {
           raw: true
         }) as unknown as Promise<any[]>
       ]);
-      const resultCreazioneCombinazioneDesign = _rawDesignKits.map(normalizeDesignKitFromPg) as (DESIGN_KIT_MONGO & { nomeCanale: string, nomeArea: string, lavorazioneStarted: boolean })[];
+      const resultCreazioneCombinazioneDesign = _rawDesignKits.map(normalizeDesignKitFromPg) as (DESIGN_KIT & { nomeCanale: string, nomeArea: string, lavorazioneStarted: boolean })[];
       const getKitRuntime = _rawKitRuntime.map(normalizeRuntimeKitFromPg);
 
-      const runtimeByDesignId = new Map<string, RUNTIME_KIT_MONGO>();
+      const runtimeByDesignId = new Map<string, RUNTIME_KIT>();
       const formatoIds = new Set<string>();
       const tipiExportIds = new Set<string>();
       const runtimeIds: string[] = [];
@@ -320,10 +321,10 @@ export class KitRuntimeService implements IKitRuntimeService {
             const fileWithUrls = {
               ...file,
               url: file.id_olimpo_cloud
-                ? `${config.OLYMPUS_IP_ADDRESS}/materiali/getThumbnailMaterialePdfs?&id=${file.id_olimpo_cloud}`
+                ? urlOlimpo('/materiali/getThumbnailMaterialePdfs', { id: file.id_olimpo_cloud })
                 : file.url,
               url_download: file.id_olimpo_cloud
-                ? `${config.OLYMPUS_IP_ADDRESS}/materiali/getMaterialePDF?id=${file.id_olimpo_cloud}`
+                ? urlOlimpo('/materiali/getMaterialePDF', { id: file.id_olimpo_cloud })
                 : file.url
             };
 
@@ -412,6 +413,7 @@ export class KitRuntimeService implements IKitRuntimeService {
         volantini: volantini
       };
     } catch (error: any) {
+      if (error instanceof ExternalApiError) throw error;
       if (error instanceof NotFoundError) {
         throw error;
       }
@@ -438,9 +440,9 @@ export class KitRuntimeService implements IKitRuntimeService {
         },
         raw: true
       });
-      let kitRuntime = _rawKitRuntime1 ? normalizeRuntimeKitFromPg(_rawKitRuntime1) : null as unknown as RUNTIME_KIT_MONGO;
+      let kitRuntime = _rawKitRuntime1 ? normalizeRuntimeKitFromPg(_rawKitRuntime1) : null as unknown as RUNTIME_KIT;
 
-      let kitDesign: DESIGN_KIT_MONGO | null = null;
+      let kitDesign: DESIGN_KIT | null = null;
 
       if (kitRuntime) {
         // Se troviamo un kit runtime, cerchiamo il design kit corrispondente
@@ -460,7 +462,7 @@ export class KitRuntimeService implements IKitRuntimeService {
             },
             raw: true
           });
-          kitRuntime = _rawKitRuntime2 ? normalizeRuntimeKitFromPg(_rawKitRuntime2) : null as unknown as RUNTIME_KIT_MONGO;
+          kitRuntime = _rawKitRuntime2 ? normalizeRuntimeKitFromPg(_rawKitRuntime2) : null as unknown as RUNTIME_KIT;
         }
       }
 
@@ -603,10 +605,10 @@ export class KitRuntimeService implements IKitRuntimeService {
           ...file,
           log: logEntry,
           url: (file.id_olimpo_cloud && file.id_olimpo_cloud !== '')
-            ? `${config.OLYMPUS_IP_ADDRESS}/materiali/getThumbnailMaterialePdfs?&id=${file.id_olimpo_cloud}`
+            ? urlOlimpo('/materiali/getThumbnailMaterialePdfs', { id: file.id_olimpo_cloud })
             : file.url,
           url_download: (file.id_olimpo_cloud && file.id_olimpo_cloud !== '')
-            ? `${config.OLYMPUS_IP_ADDRESS}/materiali/getMaterialePDF?id=${file.id_olimpo_cloud}`
+            ? urlOlimpo('/materiali/getMaterialePDF', { id: file.id_olimpo_cloud })
             : file.url,
         };
       });
@@ -660,10 +662,10 @@ export class KitRuntimeService implements IKitRuntimeService {
     }
   }
 
-  async getKitRuntimeById(id: string): Promise<RUNTIME_KIT_MONGO> {
+  async getKitRuntimeById(id: string): Promise<RUNTIME_KIT> {
     try {
       const raw = await RuntimeKit.findOne({ where: { id }, raw: true });
-      const resultCreazioneCombinazioneDesign = raw ? normalizeRuntimeKitFromPg(raw) : null as unknown as RUNTIME_KIT_MONGO;
+      const resultCreazioneCombinazioneDesign = raw ? normalizeRuntimeKitFromPg(raw) : null as unknown as RUNTIME_KIT;
 
       // Aggiungi i dati della promozione se presente idPromo
       if (resultCreazioneCombinazioneDesign?.idPromo) {
@@ -717,7 +719,7 @@ export class KitRuntimeService implements IKitRuntimeService {
   }> {
     try {
       const rawKit = await RuntimeKit.findOne({ where: { id }, raw: true });
-      const resultCreazioneCombinazioneDesign = rawKit ? normalizeRuntimeKitFromPg(rawKit) : null as unknown as RUNTIME_KIT_MONGO;
+      const resultCreazioneCombinazioneDesign = rawKit ? normalizeRuntimeKitFromPg(rawKit) : null as unknown as RUNTIME_KIT;
       const area = await Area.findByPk(resultCreazioneCombinazioneDesign.guidArea);
       const canale = await Canale.findByPk(resultCreazioneCombinazioneDesign.guidCanale);
       const formato = await Formati.findByPk(resultCreazioneCombinazioneDesign.guidFormato);
@@ -789,7 +791,7 @@ export class KitRuntimeService implements IKitRuntimeService {
     }
   }
 
-  async getAllKitRuntimeByIdPromo(idPromo: string): Promise<RUNTIME_KIT_MONGO[]> {
+  async getAllKitRuntimeByIdPromo(idPromo: string): Promise<RUNTIME_KIT[]> {
     try {
       const rawKits = await RuntimeKit.findAll({
         where: { id_promo: idPromo },
@@ -830,7 +832,7 @@ export class KitRuntimeService implements IKitRuntimeService {
             ...f,
             isOptional: f.isOptional ?? f.is_optional ?? false,
             url: f.id_olimpo_cloud
-              ? `${config.OLYMPUS_IP_ADDRESS}/materiali/getThumbnailMaterialePdfs?&id=${f.id_olimpo_cloud}`
+              ? urlOlimpo('/materiali/getThumbnailMaterialePdfs', { id: f.id_olimpo_cloud })
               : f.url,
           })) as FileItemKit[];
           item.files = file;
@@ -839,9 +841,10 @@ export class KitRuntimeService implements IKitRuntimeService {
       );
 
       // Remove null values (filtered out kits)
-      return filteredKits.filter((kit): kit is RUNTIME_KIT_MONGO => kit !== null);
+      return filteredKits.filter((kit): kit is RUNTIME_KIT => kit !== null);
     } catch (error: any) {
-      throw wrapDatabaseError(new Error("Errore durante l'aggiornamento delle combinazioni di design"), {
+      // L'errore originale diventa la causa: senza, nei log restava solo il messaggio generico
+      throw wrapDatabaseError(error, {
         message: "Errore durante l'aggiornamento delle combinazioni di design",
         operation: 'find',
         entity: 'RuntimeKit',
@@ -864,10 +867,11 @@ export class KitRuntimeService implements IKitRuntimeService {
     }[],
     tags?: string[]
     tipoLavorazione?: number
-  }) {
+  }, traccia?: Record<string, unknown>) {
     try {
 
       let combinazioni: any[] = [];
+      let formatiDelTipo: number | undefined;
 
       const whereClause: any = {};
       if (data.id) whereClause.id = data.id;
@@ -883,6 +887,7 @@ export class KitRuntimeService implements IKitRuntimeService {
         whereClause.id_formato = {
           [Op.in]: formati.map(f => f.id_formati)
         }
+        formatiDelTipo = formati.length;
       }
       const normalizedTags = (data.tags ?? [])
         .map((tag) => tag?.trim())
@@ -899,6 +904,7 @@ export class KitRuntimeService implements IKitRuntimeService {
       }) as unknown as any[] || [];
 
       if (!combinazioni) return [];
+      const dallaQuery = combinazioni;
 
       // Apply filtro_contesto filter in-memory
       const promoContext = Array.isArray(data.promoContext) ? data.promoContext : [];
@@ -938,7 +944,29 @@ export class KitRuntimeService implements IKitRuntimeService {
         });
       }
 
+      const dopoIlContesto = combinazioni;
       combinazioni = combinazioni.filter((combinazione) => combinazione.stato == STATO_COMBINAZIONI.ATTIVO);
+
+      // Una riga con tutto l'imbuto: quante dalla query, quali escluse e perche, quali restano
+      const etichetta = (c: any) => `${c.titolo ?? 'senza titolo'} (${c.id})`;
+      log.info('Combinazioni design selezionate', {
+        context: 'getKitByPromo',
+        ...traccia,
+        filtri: {
+          id: data.id,
+          idArea: data.idArea,
+          idCanale: data.idCanale,
+          idFormato: data.idFormato,
+          tipoLavorazione: data.tipoLavorazione,
+          formatiDelTipo,
+          tags: normalizedTags.length ? normalizedTags : undefined,
+          promoContext: promoContext.length ? promoContext.map(c => `${c.nome_field}=${c.user_value}`) : undefined,
+        },
+        dallaQuery: dallaQuery.length,
+        esclusePerContesto: dallaQuery.filter(c => !dopoIlContesto.includes(c)).map(etichetta),
+        escluseNonAttive: dopoIlContesto.filter(c => !combinazioni.includes(c)).map(c => `${etichetta(c)} stato=${c.stato}`),
+        selezionate: combinazioni.map(etichetta),
+      });
 
       await Promise.all(combinazioni.map(async (combinazione) => {
         const area = await Area.findByPk(combinazione.id_area);
@@ -973,7 +1001,7 @@ export class KitRuntimeService implements IKitRuntimeService {
       }));
 
     } catch (error: any) {
-      throw wrapDatabaseError(new Error("Errore durante il recupero delle combinazioni"), {
+      throw wrapDatabaseError(error, {
         message: "Errore durante il recupero delle combinazioni",
         operation: 'find',
         entity: 'DesignKit',
@@ -984,7 +1012,7 @@ export class KitRuntimeService implements IKitRuntimeService {
 
   /** ──────────────── Mutations ──────────────── */
 
-  async createKitRunTime(data: RUNTIME_KIT_MONGO) {
+  async createKitRunTime(data: RUNTIME_KIT) {
     try {
       const kit = await RuntimeKit.findOne({
         where: {
@@ -992,7 +1020,7 @@ export class KitRuntimeService implements IKitRuntimeService {
           id_promo: data.idPromo,
         },
         raw: true
-      }) as unknown as RUNTIME_KIT_MONGO;
+      }) as unknown as RUNTIME_KIT;
       if (kit != null) {
         return normalizeRuntimeKitFromPg(kit);
       }
@@ -1031,7 +1059,7 @@ export class KitRuntimeService implements IKitRuntimeService {
       });
       return normalizeRuntimeKitFromPg(result.get({ plain: true }));
     } catch (error: any) {
-      throw wrapDatabaseError(new Error("Errore durante la creazione del runtime kit"), {
+      throw wrapDatabaseError(error, {
         message: "Errore durante la creazione del runtime kit",
         operation: 'insertOne',
         entity: 'RuntimeKit',
@@ -1040,7 +1068,7 @@ export class KitRuntimeService implements IKitRuntimeService {
     }
   }
 
-  async creaKitRuntimeManuale(idPromo: string, kitDesign: DESIGN_KIT_MONGO) {
+  async creaKitRuntimeManuale(idPromo: string, kitDesign: DESIGN_KIT) {
     try {
       const newId = uuidv4();
 
@@ -1091,26 +1119,30 @@ export class KitRuntimeService implements IKitRuntimeService {
     }
   }
 
-  async bulkCreateRuntime(data: (DESIGN_KIT_MONGO & { idPromo: string })[]): Promise<RUNTIME_KIT_MONGO[]> {
+  async bulkCreateRuntime(data: (DESIGN_KIT & { idPromo: string })[], traccia?: Record<string, unknown>): Promise<RUNTIME_KIT[]> {
+    const contestoLog = { context: 'getKitByPromo', ...traccia };
     try {
-      let result: (RUNTIME_KIT_MONGO & { guidIdDesign: string })[] = [];
+      let result: (RUNTIME_KIT & { guidIdDesign: string })[] = [];
+      let creati = 0;
       // Estrai gli ID delle combinazioni dal dato in ingresso
 
       await Promise.all(data.map(async (item) => {
+        const design = { idDesign: item.guidId, titolo: item.titolo, idPromo: item.idPromo };
         const existingCombinations = await RuntimeKit.findAll({
           where: {
             id_design: item.guidId,
             id_promo: item.idPromo
           },
           raw: true
-        }) as unknown as RUNTIME_KIT_MONGO[];
+        }) as unknown as RUNTIME_KIT[];
         if (existingCombinations.length == 0) {
           const raccoglitoreKit = await RaccoglitoreKit.findOne({ where: { id: item.guidIdRaccoglitore }, raw: true });
           if (!raccoglitoreKit) {
+            log.warn('Raccoglitore del design non trovato: runtime non creato', { ...contestoLog, ...design, idRaccoglitore: item.guidIdRaccoglitore });
             throw new NotFoundError({ message: 'Raccoglitore non trovato', entityType: 'raccoglitore_kit', entityId: item.guidIdRaccoglitore });
           }
           const newId = uuidv4();
-          const runtimeKitPromo: RUNTIME_KIT_MONGO & { guidIdDesign: string } = {
+          const runtimeKitPromo: RUNTIME_KIT & { guidIdDesign: string } = {
             ...item,
             guidId: newId,
             filtro: (raccoglitoreKit as any).filtro ? (raccoglitoreKit as any).filtro : [],
@@ -1154,15 +1186,33 @@ export class KitRuntimeService implements IKitRuntimeService {
           };
           await RuntimeKit.create(pgData as any);
           const createdRaw = await RuntimeKit.findByPk(newId, { raw: true });
-          result.push({ ...normalizeRuntimeKitFromPg(createdRaw), guidIdDesign: item.guidId } as RUNTIME_KIT_MONGO & { guidIdDesign: string });
+          result.push({ ...normalizeRuntimeKitFromPg(createdRaw), guidIdDesign: item.guidId } as RUNTIME_KIT & { guidIdDesign: string });
+          creati++;
+          log.info('Runtime creato', {
+            ...contestoLog,
+            ...design,
+            idRuntime: newId,
+            tipo: item.tipo,
+            canale: item.nomeCanale ?? item.guidCanale,
+            area: item.nomeArea ?? item.guidArea,
+            file: pgData.files_data.length,
+          });
         } else {
           result.push(normalizeRuntimeKitFromPg(existingCombinations[0] as any));
+          log.info('Runtime gia esistente per design e promo: restituito quello', {
+            ...contestoLog,
+            ...design,
+            idRuntime: (existingCombinations[0] as any).id,
+            statoLavorazione: (existingCombinations[0] as any).stato_lavorazione,
+            runtimeTrovati: existingCombinations.length,
+          });
         }
       }));
 
+      log.info('Runtime della promo pronti', { ...contestoLog, design: data.length, creati, esistenti: result.length - creati });
       return result;
     } catch (error: any) {
-      throw wrapDatabaseError(new Error("Errore durante la creazione della combinazione di design"), {
+      throw wrapDatabaseError(error, {
         message: "Errore durante la creazione della combinazione di design",
         operation: 'insertMany',
         entity: 'RuntimeKit',
@@ -1215,10 +1265,14 @@ export class KitRuntimeService implements IKitRuntimeService {
       if (result.stato_lavorazione == STATO_LAVORAZIONE_KIT_RUNTIME.ELIMINATO) {
         throw new BusinessError({ message: 'Kit runtime already deleted', rule: 'Kit runtime già eliminato, impossibile eliminare nuovamente' });
       }
+      if (result.stato_lavorazione === STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO) {
+        throw new BusinessError({ message: 'Kit runtime pubblicato, impossibile eliminarlo', rule: 'Kit runtime pubblicato non può essere eliminato' });
+      }
       result.stato_lavorazione = STATO_LAVORAZIONE_KIT_RUNTIME.ELIMINATO;
       await result.save();
       return result.get({ plain: true });
     } catch (error) {
+      if (isAppError(error)) throw error;
       throw wrapDatabaseError(new Error("Errore durante l'eliminazione della lavorazione runtime"), {
         message: "Errore durante l'eliminazione della lavorazione runtime",
         operation: 'deleteOne',
@@ -1247,6 +1301,7 @@ export class KitRuntimeService implements IKitRuntimeService {
         return result.get({ plain: true });
       });
     } catch (error) {
+      if (isAppError(error)) throw error;
       throw wrapDatabaseError(error, {
         message: "Errore durante l'eliminazione del kit runtime",
         operation: 'deleteOne',
@@ -1540,7 +1595,7 @@ export class KitRuntimeService implements IKitRuntimeService {
   ): Promise<any> {
     try {
       return await sequelize.transaction(async (t) => {
-        const kitRuntime = await RuntimeKit.findOne({ where: { id: idLavorazione }, raw: true, transaction: t }) as unknown as RUNTIME_KIT_MONGO;
+        const kitRuntime = await RuntimeKit.findOne({ where: { id: idLavorazione }, raw: true, transaction: t }) as unknown as RUNTIME_KIT;
         if (!kitRuntime) {
           throw wrapNotFoundError(new Error(`Kit runtime con id ${idLavorazione} non trovato`), {
             message: `Kit runtime con id ${idLavorazione} non trovato`,
@@ -1658,18 +1713,26 @@ export class KitRuntimeService implements IKitRuntimeService {
   async pubblicaKitRuntime(idLavorazione: string, req: Request): Promise<any> {
     try {
       const { result, dati } = await sequelize.transaction(async (t) => {
-        await RuntimeKit.update(
-          { stato_lavorazione: STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO, fine_lavorazione: new Date() },
-          { where: { id: idLavorazione }, validate: false, transaction: t }
-        );
-        const result = await RuntimeKit.findOne({ where: { id: idLavorazione }, raw: true, transaction: t }) as unknown as any;
-        if (!result) {
+        // Lock sulla riga: due pubblicazioni concorrenti non devono superare entrambe il controllo di stato
+        const kit = await RuntimeKit.findOne({ where: { id: idLavorazione }, transaction: t, lock: t.LOCK.UPDATE });
+        if (!kit) {
           throw wrapNotFoundError(new Error("Kit runtime non trovato"), {
             message: 'Kit runtime non trovato',
             entityId: idLavorazione,
             entityType: 'RuntimeKit'
           });
         }
+        if (kit.stato_lavorazione === STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO || kit.stato_lavorazione === STATO_LAVORAZIONE_KIT_RUNTIME.ELIMINATO) {
+          throw new BusinessError({
+            message: kit.stato_lavorazione === STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO ? 'Kit runtime già pubblicato' : 'Kit runtime eliminato, impossibile pubblicarlo',
+            rule: 'Si pubblica solo un kit runtime non ancora pubblicato né eliminato'
+          });
+        }
+        await RuntimeKit.update(
+          { stato_lavorazione: STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO, fine_lavorazione: new Date() },
+          { where: { id: idLavorazione }, validate: false, transaction: t }
+        );
+        const result = await RuntimeKit.findOne({ where: { id: idLavorazione }, raw: true, transaction: t }) as unknown as any;
 
         await this.creaLogPubblicazioneFiles(idLavorazione, req.session.id_utente as string, t);
 
@@ -1712,16 +1775,22 @@ export class KitRuntimeService implements IKitRuntimeService {
         return { result, dati };
       });
 
-      await this.webhookService.scatenaEvento({
-        evento: EVENTI_WEBHOOK.KIT_PUBBLICATO,
-        dati: dati,
-        meta: {
-          source: 'Istanta 2 GDO Suite',
-          request_id: result.id
-        }
-      });
+      // La pubblicazione e' gia' committata: un webhook fallito non la annulla
+      try {
+        await this.webhookService.scatenaEvento({
+          evento: EVENTI_WEBHOOK.KIT_PUBBLICATO,
+          dati: dati,
+          meta: {
+            source: 'Istanta 2 GDO Suite',
+            request_id: result.id
+          }
+        });
+      } catch (error) {
+        log.error(`Webhook KIT_PUBBLICATO non inviato per il kit ${idLavorazione}`, error);
+      }
       return result;
     } catch (error) {
+      if (isAppError(error)) throw error;
       throw wrapDatabaseError(new Error("Errore durante la pubblicazione del kit runtime"), {
         message: "Errore durante la pubblicazione del kit runtime",
         operation: 'updateOne',
@@ -1733,7 +1802,7 @@ export class KitRuntimeService implements IKitRuntimeService {
 
   /** ──────────────── Combinations ──────────────── */
 
-  async getAllKitRuntime(): Promise<RUNTIME_KIT_MONGO[]> {
+  async getAllKitRuntime(): Promise<RUNTIME_KIT[]> {
     try {
       const resultCreazioneCombinazioneDesign = await RuntimeKit.findAll({ raw: true }) as unknown as any[];
       return resultCreazioneCombinazioneDesign.map(normalizeRuntimeKitFromPg);
@@ -1747,7 +1816,7 @@ export class KitRuntimeService implements IKitRuntimeService {
     }
   }
 
-  async getAllCombinazioniRuntimeFilters(filters: { idArea?: string; idCanale?: string; idPv?: string; idPromo?: string; idFormato?: string; id?: string; idTipoExport?: string; idLavorazione?: string; idCombinazione?: string; nome?: string }): Promise<RUNTIME_KIT_MONGO[]> {
+  async getAllCombinazioniRuntimeFilters(filters: { idArea?: string; idCanale?: string; idPv?: string; idPromo?: string; idFormato?: string; id?: string; idTipoExport?: string; idLavorazione?: string; idCombinazione?: string; nome?: string }): Promise<RUNTIME_KIT[]> {
     try {
       // Gestione idLavorazione: stringa di ID separati da virgola -> array per Op.in
       const promoIds = filters.idLavorazione ? filters.idLavorazione.split(',').filter(id => id.trim()) : null;
@@ -1845,10 +1914,10 @@ export class KitRuntimeService implements IKitRuntimeService {
           isOptional: file.isOptional ?? file.is_optional ?? false,
           log: logEntry,
           url: (file.id_olimpo_cloud && file.id_olimpo_cloud !== '')
-            ? `${config.OLYMPUS_IP_ADDRESS}/materiali/getThumbnailMaterialePdfs?&id=${file.id_olimpo_cloud}`
+            ? urlOlimpoPubblico(config.CLIENT_URL, '/materiali/getThumbnailMaterialePdfs', { id: file.id_olimpo_cloud })
             : file.url,
           url_download: (file.id_olimpo_cloud && file.id_olimpo_cloud !== '')
-            ? `${config.OLYMPUS_IP_ADDRESS}/materiali/getMaterialePDF?id=${file.id_olimpo_cloud}`
+            ? urlOlimpoPubblico(config.CLIENT_URL, '/materiali/getMaterialePDF', { id: file.id_olimpo_cloud })
             : file.url,
         };
       });
@@ -1929,10 +1998,10 @@ export class KitRuntimeService implements IKitRuntimeService {
           isOptional: file.isOptional ?? file.is_optional ?? false,
           log: logEntry,
           url: (file.id_olimpo_cloud && file.id_olimpo_cloud !== '')
-            ? `${config.OLYMPUS_IP_ADDRESS}/materiali/getThumbnailMaterialePdfs?&id=${file.id_olimpo_cloud}`
+            ? urlOlimpo('/materiali/getThumbnailMaterialePdfs', { id: file.id_olimpo_cloud })
             : file.url,
           url_download: (file.id_olimpo_cloud && file.id_olimpo_cloud !== '')
-            ? `${config.OLYMPUS_IP_ADDRESS}/materiali/getMaterialePDF?id=${file.id_olimpo_cloud}`
+            ? urlOlimpo('/materiali/getMaterialePDF', { id: file.id_olimpo_cloud })
             : file.url,
         };
       });
@@ -2149,13 +2218,13 @@ export class KitRuntimeService implements IKitRuntimeService {
     }
   }
 
-  async getKitManualeDaId(id: string): Promise<DESIGN_KIT_MONGO> {
+  async getKitManualeDaId(id: string): Promise<DESIGN_KIT> {
     try {
       const raw = await DesignKit.findOne({
         where: { id },
         raw: true
       });
-      return normalizeDesignKitFromPg(raw) as unknown as DESIGN_KIT_MONGO;
+      return normalizeDesignKitFromPg(raw) as unknown as DESIGN_KIT;
     } catch (error: any) {
       throw wrapDatabaseError(new Error("Errore durante l'aggiornamento delle combinazioni di design"), {
         message: "Errore durante l'aggiornamento delle combinazioni di design",

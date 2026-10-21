@@ -2,7 +2,7 @@ import { EXPORT_DI_SISTEMA } from '../../../lib/enums';
 import { wrapDatabaseError } from '../../../lib/errors';
 import { FileItemKit, ImportStorico, RecordListino } from '../../../lib/types';
 import type { IAgenziaLib } from '../agenzia_lib/types';
-import config from '../config';
+import { urlFotoOlimpo } from '../utils/urlOlimpo';
 import {
   BoxFuoriListinoDTO,
   FlyerInsightsDTO,
@@ -225,11 +225,11 @@ export class VolantinoService implements IVolantinoService {
             .map((f: any) => typeof f === 'string' ? f : f?.guidId)
             .filter(Boolean)
             .map((f: string) =>
-              f.startsWith('http') ? f : `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${f}&performante=true`
+              urlFotoOlimpo(f, { performante: true })
             );
         }
-        if (mapped.fotoGruppo && typeof mapped.fotoGruppo === 'string' && !mapped.fotoGruppo.startsWith('http')) {
-          mapped.fotoGruppo = `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${mapped.fotoGruppo}&performante=true`;
+        if (mapped.fotoGruppo && typeof mapped.fotoGruppo === 'string') {
+          mapped.fotoGruppo = urlFotoOlimpo(mapped.fotoGruppo, { performante: true });
         }
 
         return mapped as ReferenzaPosizioneDTO;

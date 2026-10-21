@@ -240,27 +240,7 @@ const NamingConvention = forwardRef<NamingConventionRef | undefined, NamingConve
           </div>
         </DndProvider>
       </div>
-
-      {/* Impostazioni Separatore */}
-      <div className="px-4 py-3">
-
-        <h2 className="text-lg font-semibold text-gray-800">Impostazioni</h2>
-        <div className="mt-2">
-          <label className="block text-gray-700 text-sm font-medium mb-1">Separatore</label>
-          <FormInput
-            disabled
-            type="text"
-            value={separator}
-            onChange={(e) => setSeparator(e.target.value)}
-            placeholder="Inserisci un separatore (es. _ - /)"
-            className="text-sm w-full"
-          />
-          <div className='flex items-center bg-yellow-100 border border-yellow-300 rounded px-4 py-2 my-4 text-yellow-800'>
-            <Lucide icon="TriangleAlert" className="w-4 h-4 mr-2" />
-            <span>Non ancora implementato</span>
-          </div>
-        </div>
-      </div>
+      {/* ponytail: separatore nascosto finché non viene salvato con la naming convention (serve una colonna nel modello) */}
     </div>
   );
 });

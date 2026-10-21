@@ -1,160 +1,101 @@
 import { Request, Response } from 'express';
+import { PERMESSI } from '../../../lib/accessi/catalogo';
 import { TIPO_UTENTI } from '../../../lib/enums';
+import { UnauthorizedError } from '../../../lib/errors';
+import { leggiContestoAccesso } from '../accessi/contestoAccesso';
 import { BaseController } from '../base/BaseController';
-import type { IPermessiService } from '../interfaces/IPermessiService';
+import type { AmbitoPermessi, IPermessiService, ModificaPermesso } from '../interfaces/IPermessiService';
 import { authMiddleware } from '../middleware/authMiddleware';
-import { invalidatePermissionCache, permissionGuard } from '../middleware/permissionGuard';
+import { permissionGuard } from '../middleware/permissionGuard';
+
+const testo = (valore: unknown): string | null =>
+  typeof valore === 'string' && valore.length > 0 ? valore : null;
 
 export class PermessiController extends BaseController {
-  private permessiService: IPermessiService;
-
-  constructor(permessiService: IPermessiService) {
+  constructor(private readonly permessiService: IPermessiService) {
     super('/api/permessi');
-    this.permessiService = permessiService;
   }
 
   protected setupRoutes(): void {
-    // Catalogo permessi (tutti gli autenticati)
-    this.router.get('/', authMiddleware, this.getAllPermessi.bind(this));
+    const gestione = [authMiddleware, permissionGuard(PERMESSI.SISTEMA.GESTISCI_ACCESSI)];
 
-    // Permessi effettivi dell'utente loggato (per il frontend)
+    // Permessi effettivi dell'utente collegato (menu, pulsanti, pagine nel client)
     this.router.get('/effettivi', authMiddleware, this.getPermessiEffettivi.bind(this));
 
-    // Permessi per ruolo (solo Superadmin)
-    this.router.get('/ruolo/:tipoUtente', authMiddleware, permissionGuard('permessi.gestisci'), this.getPermessiPerRuolo.bind(this));
-
-    // Permessi con override GDO (solo Superadmin)
-    this.router.get('/ruolo/:tipoUtente/gdo/:idGdo', authMiddleware, permissionGuard('permessi.gestisci'), this.getPermessiConOverride.bind(this));
-
-    // Aggiorna permessi globali per ruolo (solo Superadmin)
-    this.router.put('/ruolo/:tipoUtente', authMiddleware, permissionGuard('permessi.gestisci'), this.setPermessiRuolo.bind(this));
-
-    // Aggiorna override GDO (solo Superadmin)
-    this.router.put('/ruolo/:tipoUtente/gdo/:idGdo', authMiddleware, permissionGuard('permessi.gestisci'), this.setPermessiRuoloGdo.bind(this));
-
-    // Reset override GDO (solo Superadmin)
-    this.router.delete('/ruolo/:tipoUtente/gdo/:idGdo', authMiddleware, permissionGuard('permessi.gestisci'), this.resetOverrideGdo.bind(this));
-
-    // Seed permessi (solo Superadmin - operazione una tantum)
-    this.router.post('/seed', authMiddleware, permissionGuard('permessi.gestisci'), this.seedPermessi.bind(this));
-
-    // Reseed permessi (solo Superadmin - svuota e ricrea tutto il catalogo)
-    this.router.post('/reseed', authMiddleware, permissionGuard('permessi.gestisci'), this.reseedPermessi.bind(this));
+    // Gestione accessi (solo Superadmin: permesso di sistema)
+    this.router.get('/ruoli', ...gestione, this.getRuoli.bind(this));
+    this.router.get('/configurazione', ...gestione, this.getConfigurazione.bind(this));
+    this.router.put('/configurazione', ...gestione, this.salvaConfigurazione.bind(this));
+    this.router.delete('/override', ...gestione, this.ripristinaOverride.bind(this));
+    this.router.get('/confronto', ...gestione, this.getConfronto.bind(this));
   }
 
-  /** Estrae il query param ?ruoloGdo=<uuid> se presente */
-  private getRuoloGdo(req: Request): string | undefined {
-    const val = req.query.ruoloGdo;
-    return typeof val === 'string' && val.length > 0 ? val : undefined;
-  }
-
-  private async getAllPermessi(_req: Request, res: Response): Promise<void> {
-    try {
-      const permessi = await this.permessiService.getAllPermessi();
-      this.sendResponse(res, 200, permessi);
-    } catch (error) {
-      this.handleError(res, error);
-    }
+  private ambitoDa(sorgente: Record<string, unknown>): AmbitoPermessi {
+    return {
+      tipo: testo(sorgente.tipo) as TIPO_UTENTI,
+      idRuoloGdo: testo(sorgente.ruoloGdo),
+      idGdo: testo(sorgente.gdo),
+    };
   }
 
   private async getPermessiEffettivi(req: Request, res: Response): Promise<void> {
     try {
-      const userId = req.session.id_utente as string;
-      const permessi = await this.permessiService.getPermessiUtente(userId);
-      this.sendResponse(res, 200, { permessi });
+      const contesto = await leggiContestoAccesso(req, res);
+      if (!contesto) throw new UnauthorizedError({ message: 'Sessione non valida' });
+      const permessi = await this.permessiService.getPermessiEffettivi(contesto);
+      this.sendResponse(res, 200, { permessi, superadmin: contesto.superadmin });
     } catch (error) {
       this.handleError(res, error);
     }
   }
 
-  private async getPermessiPerRuolo(req: Request, res: Response): Promise<void> {
+  private async getRuoli(_req: Request, res: Response): Promise<void> {
     try {
-      const tipoUtente = req.params.tipoUtente as TIPO_UTENTI;
-      if (!Object.values(TIPO_UTENTI).includes(tipoUtente)) {
-        return this.sendResponse(res, 400, { message: 'Tipo utente non valido' });
+      this.sendResponse(res, 200, await this.permessiService.getRuoliGestibili());
+    } catch (error) {
+      this.handleError(res, error);
+    }
+  }
+
+  private async getConfigurazione(req: Request, res: Response): Promise<void> {
+    try {
+      const ambito = this.ambitoDa(req.query as Record<string, unknown>);
+      this.sendResponse(res, 200, await this.permessiService.getConfigurazione(ambito));
+    } catch (error) {
+      this.handleError(res, error);
+    }
+  }
+
+  private async salvaConfigurazione(req: Request, res: Response): Promise<void> {
+    try {
+      const corpo = (req.body ?? {}) as Record<string, unknown>;
+      const modifiche = corpo.modifiche as ModificaPermesso[] | undefined;
+      if (!Array.isArray(modifiche) || modifiche.some(m => typeof m?.codice !== 'string' || (m.abilitato !== null && typeof m.abilitato !== 'boolean'))) {
+        return this.sendResponse(res, 400, { message: 'Formato delle modifiche non valido' });
       }
-      const idRuoloGdo = this.getRuoloGdo(req);
-      const permessi = await this.permessiService.getPermessiPerRuolo(tipoUtente, idRuoloGdo);
-      this.sendResponse(res, 200, permessi);
+      const configurazione = await this.permessiService.salvaConfigurazione(this.ambitoDa(corpo), modifiche);
+      this.sendResponse(res, 200, configurazione);
     } catch (error) {
       this.handleError(res, error);
     }
   }
 
-  private async getPermessiConOverride(req: Request, res: Response): Promise<void> {
+  private async ripristinaOverride(req: Request, res: Response): Promise<void> {
     try {
-      const tipoUtente = req.params.tipoUtente as TIPO_UTENTI;
-      const idGdo = req.params.idGdo;
-      const idRuoloGdo = this.getRuoloGdo(req);
-      const permessi = await this.permessiService.getPermessiEffettiviConDettagli(tipoUtente, idGdo, idRuoloGdo);
-      this.sendResponse(res, 200, permessi);
-    } catch (error) {
-      this.handleError(res, error);
-    }
-  }
-
-  private async setPermessiRuolo(req: Request, res: Response): Promise<void> {
-    try {
-      const tipoUtente = req.params.tipoUtente as TIPO_UTENTI;
-      const { permessi } = req.body as { permessi: { id_permesso: string; abilitato: boolean }[] };
-
-      if (!permessi || !Array.isArray(permessi)) {
-        return this.sendResponse(res, 400, { message: 'Formato permessi non valido' });
+      const ambito = this.ambitoDa(req.query as Record<string, unknown>);
+      if (!ambito.idGdo) {
+        return this.sendResponse(res, 400, { message: 'Indicare la GDO di cui ripristinare gli override' });
       }
-
-      const idRuoloGdo = this.getRuoloGdo(req);
-      await this.permessiService.setPermessiRuolo(tipoUtente, permessi, idRuoloGdo);
-      this.sendResponse(res, 200, { message: 'Permessi aggiornati' });
+      const rimossi = await this.permessiService.ripristinaOverride({ ...ambito, idGdo: ambito.idGdo });
+      this.sendResponse(res, 200, { rimossi });
     } catch (error) {
       this.handleError(res, error);
     }
   }
 
-  private async setPermessiRuoloGdo(req: Request, res: Response): Promise<void> {
+  private async getConfronto(req: Request, res: Response): Promise<void> {
     try {
-      const tipoUtente = req.params.tipoUtente as TIPO_UTENTI;
-      const idGdo = req.params.idGdo;
-      const { permessi } = req.body as { permessi: { id_permesso: string; abilitato: boolean }[] };
-
-      if (!permessi || !Array.isArray(permessi)) {
-        return this.sendResponse(res, 400, { message: 'Formato permessi non valido' });
-      }
-
-      const idRuoloGdo = this.getRuoloGdo(req);
-      await this.permessiService.setPermessiRuoloGdo(idGdo, tipoUtente, permessi, idRuoloGdo);
-      invalidatePermissionCache(req);
-      this.sendResponse(res, 200, { message: 'Override GDO aggiornati' });
-    } catch (error) {
-      this.handleError(res, error);
-    }
-  }
-
-  private async resetOverrideGdo(req: Request, res: Response): Promise<void> {
-    try {
-      const tipoUtente = req.params.tipoUtente as TIPO_UTENTI;
-      const idGdo = req.params.idGdo;
-      const idRuoloGdo = this.getRuoloGdo(req);
-
-      await this.permessiService.resetOverrideGdo(idGdo, tipoUtente, idRuoloGdo);
-      this.sendResponse(res, 200, { message: 'Override GDO rimossi' });
-    } catch (error) {
-      this.handleError(res, error);
-    }
-  }
-
-  private async seedPermessi(_req: Request, res: Response): Promise<void> {
-    try {
-      await this.permessiService.seedPermessiIniziali();
-      this.sendResponse(res, 200, { message: 'Seed permessi completato' });
-    } catch (error) {
-      this.handleError(res, error);
-    }
-  }
-
-  private async reseedPermessi(_req: Request, res: Response): Promise<void> {
-    try {
-      await this.permessiService.reseedPermessi();
-      this.sendResponse(res, 200, { message: 'Reseed permessi completato. Catalogo aggiornato.' });
+      this.sendResponse(res, 200, await this.permessiService.getConfronto(testo(req.query.gdo)));
     } catch (error) {
       this.handleError(res, error);
     }

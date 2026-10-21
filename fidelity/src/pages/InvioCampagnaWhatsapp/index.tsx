@@ -45,6 +45,7 @@ import EmptyState from '../../components/EmptyState';
 import { PermissionGate } from '@/components/PermissionGate';
 import withSessionCheck from '../../components/SessionChecker';
 import { PERMISSIONS } from '@/constants/permissions';
+import { useNotification } from '@/context/NotificationContext';
 
 dayjs.extend(customParseFormat);
 
@@ -189,7 +190,7 @@ const getStatusConfig = (
             return {
                 label: status ?? 'Sconosciuto',
                 className: 'bg-slate-100 text-slate-500 dark:bg-darkmode-400/40 dark:text-slate-300',
-                icon: 'CircleHelp',
+                icon: 'CircleQuestionMark',
             };
     }
 };
@@ -384,6 +385,7 @@ const InvioCampagnaWhatsapp: FC = () => {
         };
 
     const navigate = useNavigate();
+    const { showNotification } = useNotification();
     // Step gestito da query param ?step=1 / ?step=2
     const [searchParams, setSearchParams] = useSearchParams();
     const [dialogPartenzaCampagna, setDialogPartenzaCampagna] = useState(false);
@@ -393,7 +395,8 @@ const InvioCampagnaWhatsapp: FC = () => {
 
     // --- FILTRI UTENTE (sincronizzati su query string) ---
     const [sessoUtenteGuest, setSessoUtenteGuest] = useState<string>(() => {
-        return decodeURIComponent(searchParams.get('f_sesso') as string) ?? '';
+        // Senza parametro decodeURIComponent(null) darebbe la stringa "null"
+        return decodeURIComponent(searchParams.get('f_sesso') ?? '');
     });
 
     // Intervallo di date (es: "2025-01-01 - 2025-01-31")
@@ -477,8 +480,6 @@ const InvioCampagnaWhatsapp: FC = () => {
         9.1594985, // centro Milano di default
     ]);
     const [callAreaRadiusKm, setCallAreaRadiusKm] = useState(5);
-    const [callMinCalls, setCallMinCalls] = useState(0);
-    const [callLastDays, setCallLastDays] = useState(30);
 
     // Modalità aree amministrative (Comuni / Regioni via Overpass)
     const [comuneSearch, setComuneSearch] = useState('');
@@ -519,8 +520,6 @@ const InvioCampagnaWhatsapp: FC = () => {
                             type: 'circle',
                             center: callAreaCenter,
                             radiusKm: callAreaRadiusKm,
-                            minCalls: callMinCalls,
-                            lastDays: callLastDays,
                         };
                     } else {
                         payload.callFilter = {
@@ -528,8 +527,6 @@ const InvioCampagnaWhatsapp: FC = () => {
                             areaId: selectedComuneId ? String(selectedComuneId) : null,
                             areaName: comuneOptions.find(c => c.id === selectedComuneId)?.name ?? null,
                             polygon: selectedComuneGeometry,
-                            minCalls: callMinCalls,
-                            lastDays: callLastDays,
                         };
                     }
                 }
@@ -558,8 +555,6 @@ const InvioCampagnaWhatsapp: FC = () => {
         callFilterMode,
         callAreaCenter,
         callAreaRadiusKm,
-        callMinCalls,
-        callLastDays,
         selectedComuneId,
         selectedComuneGeometry,
         comuneOptions,
@@ -587,14 +582,18 @@ const InvioCampagnaWhatsapp: FC = () => {
         if (!selectedTemplateData || !idUtente) return;
         try {
             setIsSendingTest(true);
-            await ServerCall.post<{ success: boolean; error?: string }>(
+            const result = await ServerCall.post<{ success: boolean; error?: string }>(
                 '/whatsapp/invio_di_test_ad_utente',
                 {
                     id_utente: idUtente,
                     id_template: selectedTemplateData.id_gdowhatsapptemplate,
                 },
             );
-            console.log('Invio test a:', idUtente, 'template:', selectedTemplateData.id_gdowhatsapptemplate);
+            // Il server può rispondere 200 con success:false (es. errore Meta)
+            if (result?.success === false) throw new Error(result.error);
+            showNotification('Messaggio di test inviato.', { variant: 'success' });
+        } catch (error: any) {
+            showNotification(error?.message || 'Invio del messaggio di test non riuscito.', { variant: 'error' });
         } finally {
             setIsSendingTest(false);
         }
@@ -799,16 +798,12 @@ const InvioCampagnaWhatsapp: FC = () => {
                         type: 'circle' as const,
                         center: callAreaCenter,
                         radiusKm: callAreaRadiusKm,
-                        minCalls: callMinCalls,
-                        lastDays: callLastDays,
                     }
                     : {
                         type: callFilterMode, // 'comuni' | 'regioni'
                         areaId: selectedComuneId ? String(selectedComuneId) : null,
                         areaName: comuneOptions.find(c => c.id === selectedComuneId)?.name ?? null,
                         polygon: selectedComuneGeometry, // <-- POLIGONO COMPLETO
-                        minCalls: callMinCalls,
-                        lastDays: callLastDays,
                     }
                 : null,
             userFilters: {
@@ -899,11 +894,6 @@ const InvioCampagnaWhatsapp: FC = () => {
                             variant="primary"
                             disabled={!titoloCampagna.trim() || isStartingCampaign}
                             onClick={async () => {
-                                if (!titoloCampagna.trim()) {
-                                    alert('Il titolo della campagna è obbligatorio');
-                                    return;
-                                }
-
                                 setIsStartingCampaign(true);
                                 try {
                                     const selectedTemplateData = await templatesWhatsappPromise.then(templates =>
@@ -912,8 +902,9 @@ const InvioCampagnaWhatsapp: FC = () => {
                                     await handleConfirmCampaign(selectedTemplateData);
                                     setDialogPartenzaCampagna(false);
                                     setTitoloCampagna(''); // Reset del campo
-                                } catch (error) {
-                                    console.error('Errore avvio campagna:', error);
+                                } catch (error: any) {
+                                    // Il server spiega il motivo (es. template non approvato o non della GDO)
+                                    showNotification(error?.message || 'Avvio della campagna non riuscito.', { variant: 'error' });
                                 } finally {
                                     setIsStartingCampaign(false);
                                 }
@@ -1417,6 +1408,7 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                             description="Seleziona un template per visualizzarne l'anteprima."
                                                             icon="MonitorX"
                                                             buttonText="Torna Indietro"
+                                                            buttonIcon="ArrowLeft"
                                                             iconColor="w-10 h-10 text-danger"
                                                             onButtonClick={handleBackToSelection}
                                                         />
@@ -1528,57 +1520,6 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                         ) : null}
                                                     </div>
 
-                                                    {/* Motivi di esclusione (mock) */}
-                                                    <div className="border border-dashed rounded-lg p-4">
-                                                        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">
-                                                            Motivi di esclusione
-                                                        </h4>
-                                                        <div className="grid sm:grid-cols-3 gap-3 text-xs">
-                                                            <div className="flex items-start gap-2">
-                                                                <Lucide
-                                                                    icon="BellOff"
-                                                                    className="w-4 h-4 mt-0.5 text-slate-400"
-                                                                />
-                                                                <div>
-                                                                    <p className="font-medium text-slate-700 dark:text-slate-100">
-                                                                        Opt-out marketing
-                                                                    </p>
-                                                                    <p className="text-slate-500">
-                                                                        Utenti che hanno disattivato le comunicazioni promozionali.
-                                                                    </p>
-                                                                </div>
-                                                            </div>
-                                                            <div className="flex items-start gap-2">
-                                                                <Lucide
-                                                                    icon="PhoneOff"
-                                                                    className="w-4 h-4 mt-0.5 text-slate-400"
-                                                                />
-                                                                <div>
-                                                                    <p className="font-medium text-slate-700 dark:text-slate-100">
-                                                                        Numero non valido
-                                                                    </p>
-                                                                    <p className="text-slate-500">
-                                                                        Numeri mancanti o non compatibili con WhatsApp.
-                                                                    </p>
-                                                                </div>
-                                                            </div>
-                                                            <div className="flex items-start gap-2">
-                                                                <Lucide
-                                                                    icon="UserX"
-                                                                    className="w-4 h-4 mt-0.5 text-slate-400"
-                                                                />
-                                                                <div>
-                                                                    <p className="font-medium text-slate-700 dark:text-slate-100">
-                                                                        Regole campagna
-                                                                    </p>
-                                                                    <p className="text-slate-500">
-                                                                        Esclusioni basate su filtri o limiti di frequenza.
-                                                                    </p>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
                                                     {/* FILTRO CAMPI UTENTE (con range date) */}
                                                     <div className="border border-dashed rounded-lg p-4 space-y-4">
                                                         <div className="flex items-center justify-between mb-1">
@@ -1676,7 +1617,7 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                                     Filtro zona chiamate
                                                                 </h4>
                                                                 <p className="text-[11px] text-slate-500">
-                                                                    Escludi contatti in base alla zona e allo storico delle chiamate.
+                                                                    Limita la campagna ai soli contatti della zona selezionata.
                                                                 </p>
                                                             </div>
                                                             <FormCheck>
@@ -1875,14 +1816,14 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                                     ) : (
                                                                         <>
                                                                             <label className="block text-[11px] font-medium uppercase tracking-wide text-slate-500 mb-1">
-                                                                                Comune (admin_level=8)
+                                                                                {callFilterMode === 'regioni' ? 'Regione' : 'Comune'}
                                                                             </label>
                                                                             <div className="flex gap-2 mb-2">
                                                                                 <FormInput
                                                                                     type="text"
                                                                                     value={comuneSearch}
                                                                                     onChange={(e) => setComuneSearch(e.target.value)}
-                                                                                    placeholder="Es. Milano, Torino..."
+                                                                                    placeholder={callFilterMode === 'regioni' ? 'Es. Lombardia, Toscana...' : 'Es. Milano, Torino...'}
                                                                                     className="flex-1"
                                                                                 />
                                                                                 <Button
@@ -1899,7 +1840,7 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                                                 value={selectedComuneId ?? ''}
                                                                                 onChange={(e) => handleSelectComune(e.target.value)}
                                                                             >
-                                                                                <option value="">Seleziona un comune...</option>
+                                                                                <option value="">Seleziona {callFilterMode === 'regioni' ? 'una regione' : 'un comune'}...</option>
                                                                                 {comuneOptions.map((opt) => (
                                                                                     <option key={opt.id} value={opt.id}>
                                                                                         {opt.name}
@@ -1908,50 +1849,22 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                                                 ))}
                                                                             </select>
                                                                             <p className="mt-1 text-[11px] text-slate-500">
-                                                                                Il comune selezionato verrà escluso dalla campagna.
+                                                                                La campagna raggiungerà solo i contatti {callFilterMode === 'regioni' ? 'della regione selezionata' : 'del comune selezionato'}.
                                                                             </p>
                                                                         </>
                                                                     )}
                                                                 </div>
 
                                                                 <div className="space-y-2">
-                                                                    <div>
-                                                                        <label className="block text-[11px] font-medium uppercase tracking-wide text-slate-500 mb-1">
-                                                                            Negli ultimi (giorni)
-                                                                        </label>
-                                                                        <FormInput
-                                                                            type="number"
-                                                                            min={1}
-                                                                            value={callLastDays}
-                                                                            onChange={(e) =>
-                                                                                setCallLastDays(Number(e.target.value) || 1)
-                                                                            }
-                                                                        />
-                                                                    </div>
-
-                                                                    {callFilterMode === 'circle' ? (
-                                                                        <div>
-                                                                            <label className="block text-[11px] font-medium uppercase tracking-wide text-slate-500 mb-1">
-                                                                                Min. chiamate nel periodo
-                                                                            </label>
-                                                                            <FormInput
-                                                                                type="number"
-                                                                                min={0}
-                                                                                value={callMinCalls}
-                                                                                onChange={(e) =>
-                                                                                    setCallMinCalls(Number(e.target.value) || 0)
-                                                                                }
-                                                                            />
-                                                                        </div>
-                                                                    ) : (
+                                                                    {callFilterMode !== 'circle' && (
                                                                         <div className="text-[11px] text-slate-500 mt-4">
-                                                                            Comune selezionato:{' '}
+                                                                            {callFilterMode === 'regioni' ? 'Regione selezionata' : 'Comune selezionato'}:{' '}
                                                                             <span className="font-semibold">
                                                                                 {selectedComuneId
                                                                                     ? comuneOptions.find(
                                                                                         (c) => c.id === selectedComuneId,
                                                                                     )?.name ?? selectedComuneId
-                                                                                    : 'nessuno'}
+                                                                                    : callFilterMode === 'regioni' ? 'nessuna' : 'nessuno'}
                                                                             </span>
                                                                         </div>
                                                                     )}
@@ -1959,13 +1872,11 @@ const InvioCampagnaWhatsapp: FC = () => {
                                                             </div>
 
                                                             <p className="text-[11px] text-slate-500">
-                                                                Quando il filtro è attivo, i contatti{' '}
+                                                                Quando il filtro è attivo, la campagna WhatsApp raggiungerà{' '}
+                                                                <span className="font-semibold">solo</span> i contatti{' '}
                                                                 {callFilterMode === 'circle'
                                                                     ? 'all’interno del cerchio'
-                                                                    : 'nel comune selezionato'}{' '}
-                                                                che rispettano questi criteri verranno{' '}
-                                                                <span className="font-semibold">esclusi</span> dalla campagna
-                                                                WhatsApp.
+                                                                    : callFilterMode === 'regioni' ? 'nella regione selezionata' : 'nel comune selezionato'}.
                                                             </p>
                                                         </div>
                                                     </div>
@@ -1977,7 +1888,7 @@ const InvioCampagnaWhatsapp: FC = () => {
                             </div>
                         </div>
                         {/* Mockup + invio test + conferma */}
-                        <Suspense fallback={<span>Loading...</span>}>
+                        <Suspense fallback={<MessagePreviewSkeleton />}>
                             <Await resolve={templatesWhatsappPromise}>
                                 {(templates: (GDOWhatsappTemplateAttributes & { has_preset: boolean })[]) => {
                                     const selectedTemplateData = templates.find(

@@ -66,7 +66,7 @@ export class ScoreboardController extends BaseController {
         }
     }
 
-    private async getPromoScoreboard(req: Request, res: Response): Promise<void> {
+    private async getPromoScoreboard(req: Request<{ idPromo: string }>, res: Response): Promise<void> {
         try {
             const idPromo = req.params.idPromo;
             if (!ServerUtils.checkIfValueIsValid(idPromo)) {
@@ -84,7 +84,7 @@ export class ScoreboardController extends BaseController {
         }
     }
 
-    private async calcolaPromoScoreboard(req: Request, res: Response): Promise<void> {
+    private async calcolaPromoScoreboard(req: Request<{ idPromo: string }>, res: Response): Promise<void> {
         try {
             const idPromo = req.params.idPromo;
             if (!ServerUtils.checkIfValueIsValid(idPromo)) {

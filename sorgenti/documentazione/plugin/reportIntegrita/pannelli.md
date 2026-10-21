@@ -37,6 +37,11 @@ un'intestazione del report si fanno sempre con loro**, così hanno tutti lo stes
   `PROPRIETA_COLORE_DA_ATTENUARE`, `ATTESA_RIDISEGNO_MS`. In UXP `opacity` non si ridisegna: si
   sfumano i colori, e i conti stanno in [dissolvenza](dissolvenza.md).
 - **Le conferme a tre scelte** — `_confirmTreAzioniReport`, `_confirmConNonChiedere`.
+- **I controlli nativi sopra i popup** (I20-1121) — in UXP picker, caselle e campi restano sopra a
+  tutto. I sei del report hanno la classe `.hideble`, che i popup spengono finché sono aperti: serve
+  soprattutto nel report affiancato, che i popup aperti dalla scheda a sinistra coprono.
+- **Gli eventi accanto al report affiancato** (I20-1121) — «Elimina tutti» e l'impaginazione dei
+  nuovi passano da `_conEventiFermi`, come le azioni delle righe: vedi [flusso.md](flusso.md).
 
 ## I colori
 

@@ -4,7 +4,7 @@ import { Dialog } from '@/components/Base/Headless';
 import LoadingIcon from '@/components/Base/LoadingIcon';
 import Lucide from '@/components/Base/Lucide';
 import EmptyState from '@/components/EmptyState';
-import { LoadingState } from '@/components/MultiStepLoader';
+import { useNotification } from '@/context/NotificationContext';
 import { useMutation } from '@tanstack/react-query';
 import axios from 'axios';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -12,7 +12,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLoaderData, useNavigate, useRevalidator } from 'react-router-dom';
 import { STATO_LAVORAZIONE_KIT_RUNTIME, STATO_ORDINI_STAMPA } from '../../../lib/enums';
 import { ServerCall } from '../../../lib/server_call';
-import { FileItemKit, MergedGroupFile, OrdiniDiStampaAttributes, OrdiniDiStampaInviiAttributes, RUNTIME_KIT_MONGO, VirtualDirectory } from '../../../lib/types';
+import { FileItemKit, MergedGroupFile, OrdiniDiStampaAttributes, OrdiniDiStampaInviiAttributes, RUNTIME_KIT, VirtualDirectory } from '../../../lib/types';
 // Importa il client Socket.IO
 import docThumbnailFallback from '@/assets/images/icons/icon_doc_locandinaA4.png';
 import PageHeader from '@/components/Base/PageHeader';
@@ -23,6 +23,7 @@ import io from 'socket.io-client';
 import type { PromoResponseDTO } from '../../../server/core/dto';
 import DirectoryPicker from '../../components/DirectoryPicker';
 import { PreviewImmaginePdf } from '../../components/PreviewImmaginePdf';
+import { contaSelezionati, selezioneDaInviare } from './selezioneKit';
 
 type GroupingResultFile = {
   id_olimpo_cloud: string;
@@ -177,32 +178,15 @@ const extractGroupingMessage = (value: unknown): string => {
   return payload ? toText(payload.message) : '';
 };
 
-const buildGroupingThumbnailUrl = (id: string): string => {
-  const olympusBaseRaw =
-    toText(import.meta.env.VITE_OLYMPUS_IP_ADDRESS)
-    || toText(import.meta.env.VITE_OLYMPUS_IP_ADDRESS_CORS);
+// Olimpo si raggiunge dal proxy di Fidelity sulla stessa origine (server/core/middleware/olimpoProxy.ts)
+const buildGroupingThumbnailUrl = (id: string): string =>
+  `/olimpo/materiali/getThumbnailMaterialePdfs?id=${encodeURIComponent(id)}&page=1`;
 
-  if (!olympusBaseRaw) {
-    return docThumbnailFallback;
-  }
-
-  const olympusBase = olympusBaseRaw.replace(/\/+$/, '');
-  return `${olympusBase}/materiali/getThumbnailMaterialePdfs?&id=${encodeURIComponent(id)}&page=1`;
-};
-
-const buildGroupingPreviewBaseUrl = (id: string): string => {
-  const olympusBaseRaw =
-    toText(import.meta.env.VITE_OLYMPUS_IP_ADDRESS)
-    || toText(import.meta.env.VITE_OLYMPUS_IP_ADDRESS_CORS);
-
-  if (!olympusBaseRaw) return '';
-
-  const olympusBase = olympusBaseRaw.replace(/\/+$/, '');
-  return `${olympusBase}/materiali/getThumbnailMaterialePdfs?&id=${encodeURIComponent(id)}`;
-};
+const buildGroupingPreviewBaseUrl = (id: string): string =>
+  `/olimpo/materiali/getThumbnailMaterialePdfs?id=${encodeURIComponent(id)}`;
 
 const buildGroupingFilesLookup = (
-  kits: RUNTIME_KIT_MONGO[],
+  kits: RUNTIME_KIT[],
   alreadySentKitIds: Set<string>
 ) => {
   const byId = new Map<string, GroupingResultFile>();
@@ -240,7 +224,7 @@ const buildGroupingFilesLookup = (
 
 const normalizeGroupingResultPayload = (
   input: unknown,
-  kits: RUNTIME_KIT_MONGO[],
+  kits: RUNTIME_KIT[],
   alreadySentKitIds: Set<string>
 ): GroupingResult | null => {
   const payload = unwrapGroupingPayload(input);
@@ -370,7 +354,7 @@ const normalizeGroupingResultPayload = (
 
 const RevisioneOrdiniDiStampa: React.FC = () => {
   const { dettagli, ordine, promo, ordiniInvii } = useLoaderData() as {
-    dettagli: RUNTIME_KIT_MONGO[];
+    dettagli: RUNTIME_KIT[];
     ordine: OrdiniDiStampaAttributes;
     promo: PromoResponseDTO;
     ordiniInvii: OrdiniDiStampaInviiAttributes[]
@@ -383,13 +367,7 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
   const [showDialogInvioFTP, setShowDialogInvioFTP] = useState(false);
   const navigate = useNavigate();
   const r = useRevalidator();
-  const [oggettiMultiStep] = useState<LoadingState[]>([
-    { text: 'In attesa per il download' },
-    { text: 'Download in corso' },
-    { text: 'Download completato' },
-  ]);
-
-  const [currentStep, setCurrentStep] = useState<number>(0);
+  const { showNotification } = useNotification();
   const [statoSbagliato, setStatoSbagliato] = useState<boolean>(false);
 
   // State per la selezione dei kit
@@ -419,8 +397,8 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
   // Connessioni socket per i due backend
   // Aggiorna gli URL con quelli effettivi dei tuoi server
 
-  const [socketExpress, setSocketExpress] = useState<typeof Socket>();
-  const [socketNest, setSocketNest] = useState<typeof Socket>();
+  const [socketExpress, setSocketExpress] = useState<Socket>();
+  const [socketNest, setSocketNest] = useState<Socket>();
 
   // Grouping state
   const [groupingStatus, setGroupingStatus] = useState<'idle' | 'running' | 'completed' | 'failed'>('idle');
@@ -593,7 +571,8 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
 
   useEffect(() => {
     const expressSocket = io((import.meta.env.VITE_WS_URL as string).replace('/api', ''), { withCredentials: true, transports: ['websocket', 'polling'] });
-    const nestSocket = io(import.meta.env.VITE_OLYMPUS_IP_ADDRESS_CORS, { transports: ['websocket', 'polling'] });
+    // Socket di Olimpo attraverso il proxy /olimpo: solo polling, il proxy non inoltra il websocket
+    const nestSocket = io({ path: '/olimpo/socket.io', transports: ['polling'] });
     setSocketExpress(expressSocket);
     setSocketNest(nestSocket);
 
@@ -853,45 +832,19 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
     setSelectedKits(newSelectedKits);
   };
 
-  const getAllKitsSelection = () => {
-    const allKitsSelection: Record<string, boolean> = {};
-    filteredKitDisponibili?.forEach(kit => {
-      allKitsSelection[kit.guidId] = !!selectedKits[kit.guidId];
-    });
-    return allKitsSelection;
-  };
-
-  const selectedKitsCount = Object.values(selectedKits).filter(Boolean).length;
-
-  const handleDownloadSelectedZips = async () => {
-    const selectedKitIds = Object.entries(selectedKits)
-      .filter(([_, isSelected]) => isSelected)
-      .map(([kitId]) => kitId);
-    if (selectedKitIds.length === 0) return;
-    setIsDownloading(true);
-    try {
-      if (selectedKitIds.length === 1) {
-        await handleDownloadZip(selectedKitIds[0]);
-        return;
-      }
-      alert("Funzionalità di download multiplo in sviluppo");
-      setIsDownloading(false);
-    } catch (error) {
-      console.error('Errore durante il download dei file ZIP:', error);
-      setIsDownloading(false);
-    }
-  };
+  const selezioneInvio = selezioneDaInviare(kitDisponibili, selectedKits);
+  const selectedKitsCount = contaSelezionati(selezioneInvio);
 
   const handleDownloadZip = async (idKit: string) => {
+    setIsDownloading(true);
     try {
       const url = ServerCall.getUrl();
-      setCurrentStep(1);
       const response = await axios.get(`${url}/getFileZipDownload?id=${idKit}`, {
         responseType: 'arraybuffer',
         withCredentials: true,
       });
       if (response.status !== 200) {
-        console.error('Errore durante il download del file ZIP');
+        showNotification('Download del file ZIP non riuscito.', { variant: 'error' });
         return;
       }
       const blob = new Blob([response.data]);
@@ -900,15 +853,16 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
       link.href = blobUrl;
       link.download = 'files.zip';
       document.body.appendChild(link);
-      setCurrentStep(2);
       link.click();
-      setIsDownloading(false);
       setTimeout(() => {
         document.body.removeChild(link);
         window.URL.revokeObjectURL(blobUrl);
       }, 1000);
     } catch (error) {
       console.error('Errore durante il download del file ZIP:', error);
+      showNotification('Download del file ZIP non riuscito.', { variant: 'error' });
+    } finally {
+      setIsDownloading(false);
     }
   };
   // Mutation per l'invio dei file alla tipografia (chiamata a /iniziaFTPPopOlimpo)
@@ -929,11 +883,19 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
     },
     onError: error => {
       console.error('Errore durante l\'invio dei file:', error);
-      setFtpErrorMessage("Errore durante l'invio dei file alla tipografia.");
+      // Il server spiega il rifiuto, es. "Invio già in corso per questo ordine"
+      const messaggio = error?.message || "Errore durante l'invio dei file alla tipografia.";
+      setFtpErrorMessage(messaggio);
+      showNotification(messaggio, { variant: 'error' });
       setIsTransferring(false);
     },
     onSuccess: (data: any) => {
       const { socketId } = data;
+      // A fine invio si smette di ascoltare; i socket restano aperti per gli invii successivi
+      const smettiDiAscoltare = () => ['progress', 'error', 'complete'].forEach(evento => {
+        socketExpress?.off(`${socketId}_${evento}`);
+        socketNest?.off(`${socketId}_${evento}`);
+      });
 
       // Ascolta gli eventi dal backend Express
       socketExpress?.on(`${socketId}_progress`, (raw: unknown) => {
@@ -988,15 +950,25 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
       socketExpress?.on(`${socketId}_error`, (raw: unknown) => {
         const decoded = decodeSocketPayload(raw);
         const err = isObjectRecord(decoded) ? decoded : {};
-        setFtpErrorMessage(toText(err.error) || 'Errore durante il trasferimento');
+        const messaggio = toText(err.error) || 'Errore durante il trasferimento';
+        setFtpErrorMessage(messaggio);
         const kit = toText(err.kit);
-        if (kit) setFtpTransferDetail(prev => ({ ...prev, kit }));
+        // Errore di un singolo kit: il server prosegue con gli altri e chiude con _complete
+        if (kit) {
+          setFtpTransferDetail(prev => ({ ...prev, kit }));
+          return;
+        }
+        // Errore generale: l'invio è terminato
         setIsTransferring(false);
+        showNotification(messaggio, { variant: 'error' });
+        smettiDiAscoltare();
       });
       socketExpress?.on(`${socketId}_complete`, (raw: unknown) => {
         const decoded = decodeSocketPayload(raw);
         const msg = isObjectRecord(decoded) ? decoded : {};
         const message = toText(msg.message);
+        // esito false: alcuni kit non inviati, elencati nel messaggio del server
+        const esito = msg.esito !== false;
         const totalFiles = toFiniteNumber(msg.totalFiles);
         const totalKit = toFiniteNumber(msg.totalKit);
         if (totalKit !== null && totalKit > 0) {
@@ -1012,12 +984,17 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
           totalKits: totalKit ?? prev.totalKits,
           message: message || '',
         }));
-        setTransferComplete(true);
+        if (esito) {
+          setTransferComplete(true);
+        } else {
+          setFtpErrorMessage(message || 'Alcuni kit non sono stati inviati');
+        }
         setIsTransferring(false);
-        setTimeout(() => {
-          socketExpress.disconnect();
-          r.revalidate();
-        }, 500);
+        // I kit inviati escono da kitDisponibili alla revalidate, e con loro dal conteggio
+        setSelectAll(false);
+        showNotification(message || 'Processo completato', { variant: esito ? 'success' : 'warning' });
+        smettiDiAscoltare();
+        setTimeout(() => r.revalidate(), 500);
       });
       // Ascolta gli eventi dal backend NestJS
       socketNest?.on(`${socketId}_progress`, (raw: unknown) => {
@@ -1067,37 +1044,13 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
           message: message || prev.message,
         }));
       });
+      // Olimpo segnala errori di singoli file/kit; l'esito finale arriva dal backend Express con _complete
       socketNest?.on(`${socketId}_error`, (raw: unknown) => {
         const decoded = decodeSocketPayload(raw);
         const err = isObjectRecord(decoded) ? decoded : {};
-        setFtpErrorMessage(toText(err.error) || 'Errore durante il trasferimento');
-        setIsTransferring(false);
-      });
-      socketNest?.on(`${socketId}_complete`, (raw: unknown) => {
-        const decoded = decodeSocketPayload(raw);
-        const msg = isObjectRecord(decoded) ? decoded : {};
-        const message = toText(msg.message);
-        const totalFiles = toFiniteNumber(msg.totalFiles);
-        const totalKit = toFiniteNumber(msg.totalKit);
-        if (totalKit !== null && totalKit > 0) {
-          ftpProgressTrackerRef.current = { activeKitIndex: totalKit, totalKits: totalKit };
-        }
-        setProgress(1);
-        setGlobalProgress(1);
-        setFtpProgressMessage(message || 'Processo completato');
-        setFtpTransferDetail(prev => ({
-          ...prev,
-          fase: 'completato',
-          totalFiles: totalFiles ?? prev.totalFiles,
-          totalKits: totalKit ?? prev.totalKits,
-          message: message || '',
-        }));
-        setTransferComplete(true);
-        setIsTransferring(false);
-        socketNest.disconnect();
-        setTimeout(() => {
-          r.revalidate();
-        }, 2000);
+        const file = toText(err.file);
+        const messaggio = toText(err.error) || 'Errore durante il trasferimento';
+        setFtpErrorMessage(file ? `${file}: ${messaggio}` : messaggio);
       });
     },
   });
@@ -1171,7 +1124,7 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
     return problematicFiles.length;
   }, [filteredKitDisponibili]);
   // Funzione per renderizzare gruppi di kit inviati
-  const renderGruppiInvii = (gruppi: { invio: OrdiniDiStampaInviiAttributes; kit: RUNTIME_KIT_MONGO[]; kitTotali: number; }[]) => {
+  const renderGruppiInvii = (gruppi: { invio: OrdiniDiStampaInviiAttributes; kit: RUNTIME_KIT[]; kitTotali: number; }[]) => {
     return gruppi.map((gruppo, index) => (
       <div key={gruppo.invio.id_ordinistampainvii || index} className="border border-slate-200 rounded-lg overflow-hidden shadow-sm">
         {/* Header del gruppo */}
@@ -1350,7 +1303,7 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
   }
 
 
-  const renderDettagli = (dettagli: RUNTIME_KIT_MONGO[]) => {
+  const renderDettagli = (dettagli: RUNTIME_KIT[]) => {
     return dettagli.map((kit) => {
       // Ora questa funzione gestisce solo i kit disponibili (non ancora inviati)
       return (
@@ -1383,6 +1336,8 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
             <div className="flex items-center gap-x-4 mt-4 sm:mt-0 sm:ml-auto">
               <div
                 className={`px-3 py-1 text-xs rounded-full border font-medium ${kit.stato_lavorazione === STATO_LAVORAZIONE_KIT_RUNTIME.IN_LAVORAZIONE
+                  ? 'bg-blue-100/80 text-blue-800 border-blue-200/80'
+                  : kit.stato_lavorazione === STATO_LAVORAZIONE_KIT_RUNTIME.IN_LAVORAZIONE_CON_ERRORI
                   ? 'bg-red-100/80 text-red-800 border-red-200/80'
                   : kit.stato_lavorazione === STATO_LAVORAZIONE_KIT_RUNTIME.IN_REVISIONE
                     ? 'bg-yellow-100/80 text-yellow-800 border-yellow-200/80'
@@ -1391,7 +1346,9 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
                       : 'bg-gray-100/80 text-gray-800 border-gray-200/80'
                   }`}
               >
-                {kit.stato_lavorazione?.replace(/_/g, ' ')}
+                {kit.stato_lavorazione
+                  ? kit.stato_lavorazione.charAt(0) + kit.stato_lavorazione.slice(1).replace(/_/g, ' ').toLowerCase()
+                  : ''}
               </div>
               <div className="cursor-pointer p-1.5 rounded-md hover:bg-slate-100" onClick={() => toggleKitExpansion(kit.guidId)}>
                 <Lucide icon={expandedKits[kit.guidId] ? 'ChevronUp' : 'ChevronDown'} className="w-5 h-5 stroke-[1.5] text-slate-500" />
@@ -1428,7 +1385,7 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
                         <Lucide icon="ExternalLink" className="w-4 h-4 mr-2 stroke-[1.5]" />
                         Mostra tutti i file ({kit.files.length})
                       </Button>
-                      <Button disabled={kit.files?.length === 0} onClick={() => { handleDownloadZip(kit.guidId); setIsDownloading(true); }} variant="outline-primary" className="text-sm">
+                      <Button disabled={kit.files?.length === 0 || isDownloading} onClick={() => handleDownloadZip(kit.guidId)} variant="outline-primary" className="text-sm">
                         <Lucide icon="Download" className="w-4 h-4 mr-2 stroke-[1.5]" />
                         Scarica ZIP
                       </Button>
@@ -1478,7 +1435,7 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
             <Button
               onClick={() => {
                 setShowDialogInvioFTP(false);
-                mutationInvioFileFTP.mutate(getAllKitsSelection());
+                mutationInvioFileFTP.mutate(selezioneInvio);
               }}
               variant="primary"
             >
@@ -2144,7 +2101,7 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
                   </div>
                   <Button
                     onClick={() => setShowDialogInvioFTP(true)}
-                    disabled={!(Object.values(selectedKits).filter(Boolean).length > 0) || isTransferring}
+                    disabled={selectedKitsCount === 0 || isTransferring}
                     variant="primary"
                     className="text-sm min-w-48"
                   >

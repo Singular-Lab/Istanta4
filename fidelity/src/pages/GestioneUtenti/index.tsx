@@ -27,6 +27,8 @@ import { ServerCall } from "../../../lib/server_call";
 import { CanaliInterazioneAttributes } from "../../../lib/types";
 import { GDOResponseDTO, PuntoVenditaResponseDTO, RuoloUtenteGDOResponseDTO, UtenteResponseDTO } from "../../../server/core/dto";
 import { useUser } from "../../context/UserContext";
+import { useNotification } from "../../context/NotificationContext";
+import { statoUtente } from "./statoUtente";
 dayjs.extend(duration);
 const filterSchema = yup.object().shape({
   canaleInterazione: yup.string().required(),
@@ -153,6 +155,7 @@ const GestioneUtenti: React.FC = () => {
     searchTerm?: string;
   }>({});
   const { user } = useUser();
+  const { showNotification } = useNotification();
   const { data: allRuoliGDO } = useFetchAllRuoliGDO();
   const { data: allGDO } = useFetchAllGDO();
   // Funzione per gestire la chiusura del dialog con loading
@@ -361,7 +364,7 @@ const GestioneUtenti: React.FC = () => {
       await ServerCall.delete(`/deleteUser?id=${id}`);
     },
     onSuccess: () => {
-      console.log("Utente eliminato con successo");
+      showNotification("Utente eliminato con successo", { variant: "success" });
       // Se siamo sull'ultima pagina e non ci sono più elementi, vai alla pagina precedente
       const totalPages = dataUtentiPaginated?.data?.total_pages || 1;
       if (currentPage > 1 && currentPage >= totalPages) {
@@ -372,7 +375,7 @@ const GestioneUtenti: React.FC = () => {
       setDeleteDialogOpen(false);
     },
     onError: (error) => {
-      console.error("Errore durante l'eliminazione dell'utente", error);
+      showNotification(error?.message || "Errore durante l'eliminazione dell'utente", { variant: "error" });
       dataUtentiPaginated.refetch();
     }
   });
@@ -421,7 +424,7 @@ const GestioneUtenti: React.FC = () => {
       await ServerCall.post("/register-user", payload);
     },
     onSuccess: () => {
-      console.log("Utente registrato con successo");
+      showNotification("Utente creato con successo", { variant: "success" });
       // Vai alla prima pagina per vedere il nuovo utente
       setCurrentPage(1);
       dataUtentiPaginated.refetch();
@@ -431,8 +434,9 @@ const GestioneUtenti: React.FC = () => {
     onError: (error: any) => {
       if (error.error === "REGISTRATION_RATE_LIMIT_EXCEEDED") {
         setRateLimitDialogOpen(true);
+      } else {
+        showNotification(error?.message || "Errore durante la creazione dell'utente", { variant: "error" });
       }
-      console.error("Errore durante la registrazione dell'utente", error);
       dataUtentiPaginated.refetch();
     }
   });
@@ -457,14 +461,14 @@ const GestioneUtenti: React.FC = () => {
       await ServerCall.put("/updateUser", data);
     },
     onSuccess: () => {
-      console.log("Utente aggiornato con successo");
+      showNotification("Utente aggiornato con successo", { variant: "success" });
       dataUtentiPaginated.refetch();
       setEditDialogOpen(false);
       setSelectedUserForEdit(null);
       resetEdit();
     },
     onError: (error: any) => {
-      console.error("Errore durante l'aggiornamento dell'utente", error);
+      showNotification(error?.message || "Errore durante l'aggiornamento dell'utente", { variant: "error" });
       dataUtentiPaginated.refetch();
     }
   });
@@ -1234,7 +1238,7 @@ const GestioneUtenti: React.FC = () => {
                                 className="flex-1 mt-2">
                                 <option value="">Tutti</option>
                                 <option value="ATTIVO">Attivo</option>
-                                <option value="INATTIVO">Inattivo</option>
+                                <option value="DISATTIVO">Disattivo</option>
                               </FormSelect>
                             </div>
                             <div className="mt-3">
@@ -1460,46 +1464,14 @@ const GestioneUtenti: React.FC = () => {
                         </Table.Td>
                         <Table.Td className="py-4 border-dashed dark:bg-darkmode-600">
                           <div
-                            className={clsx([
-                              "flex items-center justify-center",
-                              {
-                                "text-success": utente.stato === "ATTIVO",
-                                "text-danger": utente.stato === "DISATTIVO",
-                              },
-                            ])}
+                            className={clsx(["flex items-center justify-center", statoUtente(utente.stato).colore])}
                           >
                             <Lucide
-                              icon={(() => {
-                                switch (utente.stato) {
-                                  case STATO_UTENTI.ATTIVO:
-                                    return "CircleCheck";
-                                  case STATO_UTENTI.DISATTIVO:
-                                    return "CircleX";
-                                  case STATO_UTENTI.SOSPESO:
-                                    return "CirclePause";
-                                  case STATO_UTENTI.ELIMINATO:
-                                    return "Trash";
-                                  default:
-                                    return "CircleX"; // Default to a valid icon
-                                }
-                              })()}
+                              icon={statoUtente(utente.stato).icona}
                               className="w-3.5 h-3.5 stroke-[1.7]"
                             />
                             <div className="ml-1.5 whitespace-nowrap">
-                              {(() => {
-                                switch (utente.stato) {
-                                  case STATO_UTENTI.ATTIVO:
-                                    return "Attivo";
-                                  case STATO_UTENTI.DISATTIVO:
-                                    return "Disattivo";
-                                  case STATO_UTENTI.SOSPESO:
-                                    return "Sospeso";
-                                  case STATO_UTENTI.ELIMINATO:
-                                    return "Eliminato";
-                                  default:
-                                    return "Unknown";
-                                }
-                              })()}
+                              {statoUtente(utente.stato).etichetta}
                             </div>
                           </div>
                         </Table.Td>
@@ -1668,44 +1640,12 @@ const GestioneUtenti: React.FC = () => {
                     <div className="grid grid-cols-2 gap-3 text-sm">
                       <div>
                         <span className="text-slate-500">Stato:</span>
-                        <div className={clsx([
-                          "flex items-center mt-1",
-                          {
-                            "text-success": utente.stato === "ATTIVO",
-                            "text-danger": utente.stato === "DISATTIVO",
-                          },
-                        ])}>
+                        <div className={clsx(["flex items-center mt-1", statoUtente(utente.stato).colore])}>
                           <Lucide
-                            icon={(() => {
-                              switch (utente.stato) {
-                                case STATO_UTENTI.ATTIVO:
-                                  return "CircleCheck";
-                                case STATO_UTENTI.DISATTIVO:
-                                  return "CircleX";
-                                case STATO_UTENTI.SOSPESO:
-                                  return "CirclePause";
-                                case STATO_UTENTI.ELIMINATO:
-                                  return "Trash";
-                                default:
-                                  return "CircleX";
-                              }
-                            })()}
+                            icon={statoUtente(utente.stato).icona}
                             className="w-3.5 h-3.5 stroke-[1.7] mr-1"
                           />
-                          {(() => {
-                            switch (utente.stato) {
-                              case STATO_UTENTI.ATTIVO:
-                                return "Attivo";
-                              case STATO_UTENTI.DISATTIVO:
-                                return "Disattivo";
-                              case STATO_UTENTI.SOSPESO:
-                                return "Sospeso";
-                              case STATO_UTENTI.ELIMINATO:
-                                return "Eliminato";
-                              default:
-                                return "Unknown";
-                            }
-                          })()}
+                          {statoUtente(utente.stato).etichetta}
                         </div>
                       </div>
 
@@ -1834,7 +1774,7 @@ const GestioneUtenti: React.FC = () => {
                     "Caricamento..."
                   ) : (
                     <span className="hidden sm:inline">
-                      Mostrando {((currentPage - 1) * pageSize) + 1}-{Math.min(currentPage * pageSize, dataUtentiPaginated?.data?.total || 0)} di {dataUtentiPaginated?.data?.total || 0} utenti
+                      Mostrando {dataUtentiPaginated?.data?.total ? ((currentPage - 1) * pageSize) + 1 : 0}-{Math.min(currentPage * pageSize, dataUtentiPaginated?.data?.total || 0)} di {dataUtentiPaginated?.data?.total || 0} utenti
                     </span>
                   )}
                   <span className="sm:hidden">

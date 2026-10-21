@@ -55,4 +55,7 @@ export interface IHubServiceService {
   bulkUpdateServices(ids: string[], patch: BulkUpdateHubServicePatch): Promise<HubServiceDTO[]>;
   deleteService(id: string): Promise<boolean>;
   deleteServiceByCode(codice: string): Promise<number>;
+  /** Servizi gestiti da Fidelity (Istanta, Correggo): si disattivano, non si eliminano. */
+  isServizioGestito(id: string): Promise<boolean>;
+  isCodiceGestito(codice: string): Promise<boolean>;
 }

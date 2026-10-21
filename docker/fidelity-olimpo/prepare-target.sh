@@ -223,16 +223,25 @@ if verifica_dati FIDELITY_CONFIG_DIR "$UID_APP"; then
 fi
 
 # Le directory di lavoro di Olimpo stanno dentro il volume olimpo_uploads, non
-# sull'host, quindi non si creano con mkdir. Si pre-crea il volume e ci si entra
-# con un container usa e getta: fatto PRIMA del primo `up`, il volume risulta poi
-# non vuoto e Docker non lo semina dall'immagine — che in quel punto contiene
-# solo FTP/, ricreata qui insieme alle altre.
+# sull'host, quindi non si creano con mkdir in una cartella del progetto. Si
+# pre-crea il volume e si lavora nella sua directory sull'host, quella che
+# Docker indica come Mountpoint: lo script gira con sudo, quindi ci arriva senza
+# bisogno di container (ne' di immagini da scaricare). Fatto PRIMA del primo
+# `up`, il volume risulta poi non vuoto e Docker non lo semina dall'immagine —
+# che in quel punto contiene solo FTP/, ricreata qui insieme alle altre.
 #
 # Perché serve: absolute_paths indica a Olimpo dove scrivere (WEB, ARCHIVIO,
 # MATERIALI, VIDEO), ma il codice non crea quelle directory: garantisce solo
 # FTP_ROOT. Senza, il primo salvataggio fallisce.
+#
+# Con Docker rootless o Docker Desktop il Mountpoint non e' una directory
+# dell'host raggiungibile da qui: solo in quel caso si ripiega su un container
+# usa e getta, che pero' richiede un'immagine (busybox) gia' presente o
+# scaricabile.
+readonly CARTELLE_OLIMPO="web archivio materiali video FTP"
+
 prepara_volume_olimpo() {
-    local progetto volume
+    local progetto volume radice cartella
     progetto=$(leggi release.env COMPOSE_PROJECT_NAME)
     volume="${progetto:-istanta4}_olimpo_uploads"
 
@@ -241,13 +250,41 @@ prepara_volume_olimpo() {
         avvisi=$((avvisi + 1))
         return
     fi
-    docker volume create "$volume" >/dev/null 2>&1
-    if docker run --rm -v "$volume:/v" busybox:1.36 sh -c         'mkdir -p /v/web /v/archivio /v/materiali /v/video /v/FTP && chown -R 1000:1000 /v'         >/dev/null 2>&1
+    if ! docker volume create "$volume" >/dev/null 2>&1; then
+        rosso "  errore    non riesco a creare il volume $volume"
+        errori=$((errori + 1))
+        return
+    fi
+
+    radice=$(docker volume inspect "$volume" --format '{{ .Mountpoint }}' 2>/dev/null)
+    if [ -n "$radice" ] && [ -d "$radice" ]; then
+        for cartella in $CARTELLE_OLIMPO; do
+            if ! mkdir -p "$radice/$cartella"; then
+                rosso "  errore    non riesco a creare $radice/$cartella (serve sudo)"
+                errori=$((errori + 1))
+                return
+            fi
+        done
+        if ! chown -R "$UID_APP:$UID_APP" "$radice"; then
+            rosso "  errore    non riesco ad assegnare $radice a $UID_APP (serve sudo)"
+            errori=$((errori + 1))
+            return
+        fi
+        verde "  ok        volume $volume ($CARTELLE_OLIMPO), proprietario $UID_APP"
+        return
+    fi
+
+    # Mountpoint non raggiungibile dall'host: si entra nel volume con un container.
+    # shellcheck disable=SC2086
+    if docker run --rm -v "$volume:/v" busybox:1.36 sh -c \
+        "cd /v && mkdir -p $CARTELLE_OLIMPO && chown -R $UID_APP:$UID_APP /v" >/dev/null 2>&1
     then
-        verde "  ok        volume $volume (web, archivio, materiali, video, FTP)"
+        verde "  ok        volume $volume ($CARTELLE_OLIMPO), con un container"
     else
         rosso "  errore    non riesco a preparare il volume $volume"
-        rosso "            Serve l'immagine busybox: docker pull busybox:1.36"
+        rosso "            La sua directory ($radice) non e' raggiungibile dall'host, e"
+        rosso "            il ripiego con un container richiede l'immagine busybox:"
+        rosso "            docker pull busybox:1.36"
         errori=$((errori + 1))
     fi
 }
@@ -284,7 +321,7 @@ avvisa_dollaro OLIMPO_DB_PASSWORD
 echo
 echo "Variabili obbligatorie di fidelity.env"
 # L'elenco è quello di server/core/config/index.ts, meno le variabili che imposta
-# il compose (DB_POSTGRESQL_*, MONGO_*, NODE_*, WS_PORT, ICONE_INSEGNA_DIR):
+# il compose (DB_POSTGRESQL_*, NODE_*, WS_PORT):
 # quelle in fidelity.env verrebbero comunque ignorate, perché `environment` vince
 # su `env_file`.
 errori_prima=$errori

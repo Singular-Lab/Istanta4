@@ -5,7 +5,6 @@ import { sequelize } from '../db/SequelizeConnector';
 
 /**
  * Modello RuntimeKit per gestione kit di runtime
- * Basato sulla struttura MongoDB fornita dall'utente
  */
 
 export interface RuntimeKitAttributes {

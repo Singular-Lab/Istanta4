@@ -2,6 +2,8 @@
  * DTO per la creazione di un nuovo punto vendita
  */
 export interface CreatePuntoVenditaDTO {
+  /** GUID gia assegnato, quando deve coincidere con quello inviato a Istanta */
+  id?: string;
   nome: string;
   citta: string;
   cap: string;
@@ -14,6 +16,8 @@ export interface CreatePuntoVenditaDTO {
   provincia?: string;
   regione?: string;
   telefono?: string;
+  /** Dati del sistema della GDO, per esempio la chiave con cui l'import riconosce il PV */
+  meta?: Record<string, unknown>;
 }
 
 /**
@@ -51,6 +55,7 @@ export interface PuntoVenditaResponseDTO {
   provincia?: string;
   regione?: string;
   telefono?: string;
+  meta?: Record<string, unknown>;
   createdat?: Date;
   updatedat: Date;
   indirizzo_completo: string;
@@ -58,7 +63,21 @@ export interface PuntoVenditaResponseDTO {
   nome_display: string;
   has_coordinate: boolean;
   sigla_combinazione?: string;
+  id_canale?: string;
+  id_area?: string;
+  nome_canale?: string;
+  nome_area?: string;
   numero_utenti_collegati?: number;
+}
+
+/**
+ * Volantino di una promo valida, da un kit runtime pubblicato della combinazione del punto vendita
+ */
+export interface VolantinoAttivoDTO {
+  id_kit: string;
+  titolo_kit?: string;
+  promo: { id: string; nome: string; validita_dal: Date; validita_al: Date };
+  files: { id: string; nome: string; url: string; url_download: string }[];
 }
 
 /**
@@ -135,6 +154,33 @@ export interface ImportPuntiVenditaDTO {
   skip_duplicates?: boolean;
   update_existing?: boolean;
 }
+
+/**
+ * Una riga del file punti vendita tradotta dalla libreria agenzia nei campi FP.
+ * Canale e area arrivano come sigla della combinazione (canaleArea) oppure come
+ * dicitura della GDO (canale + area), che FP riconduce per codice o per nome.
+ */
+export interface PuntoVenditaDaImportareDTO {
+  nome: string;
+  indirizzo: string;
+  citta: string;
+  cap: string;
+  canaleArea?: string;
+  canale?: string;
+  area?: string;
+  ragioneSociale?: string;
+  provincia?: string;
+  regione?: string;
+  telefono?: string;
+  lat?: number;
+  lon?: number;
+  meta?: Record<string, unknown>;
+}
+
+/** Esito di una riga del file: riga e quella del foglio Excel, dove l'intestazione e la 1. */
+export type EsitoRigaImportPuntoVenditaDTO =
+  | { riga: number; azione: 'scarta'; errore: string; letto?: PuntoVenditaDaImportareDTO }
+  | { riga: number; azione: 'crea' | 'aggiorna'; id?: string; letto: PuntoVenditaDaImportareDTO; dati: CreatePuntoVenditaDTO };
 
 /**
  * DTO per la risposta dell'importazione

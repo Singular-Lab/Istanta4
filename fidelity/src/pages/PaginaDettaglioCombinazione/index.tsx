@@ -14,7 +14,7 @@ import { useEffect, useState } from 'react';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { useLocation } from 'react-router-dom';
 import { ServerCall } from '../../../lib/server_call';
-import { DESIGN_KIT_MONGO, FileItemKit } from '../../../lib/types';
+import { DESIGN_KIT, FileItemKit } from '../../../lib/types';
 // ... eventuali altri import necessari
 
 function Main() {
@@ -83,7 +83,7 @@ function Main() {
 
 
   const updateKit = useMutation({
-    mutationFn: async (data: DESIGN_KIT_MONGO) => {
+    mutationFn: async (data: DESIGN_KIT) => {
       data.files = files;
       const result = await ServerCall.put('/updateCombinazioneDesign', data);
       return result;
@@ -260,7 +260,7 @@ function Main() {
                 </Tab.Panels>
               </Tab.Group>
               <div className="flex justify-end mt-6">
-                <Button type="submit" variant="soft-success">
+                <Button type="submit" variant="soft-success" loading={mutationCreazioneDeclinazioni.isPending} disabled={mutationCreazioneDeclinazioni.isPending}>
                   <Lucide icon="Save" className="w-5 h-5 mr-1" />
                   Salva Declinazioni
                 </Button>

@@ -3,7 +3,8 @@ import { HttpStatusCode, TIPO_UTENTI } from '../../../lib/enums';
 import { BaseController } from '../base/BaseController';
 import { sequelize } from '../db/SequelizeConnector';
 import { authMiddleware } from '../middleware/authMiddleware';
-import { userRoleGuard } from '../middleware/userRoleGuard';
+import { permissionGuard } from '../middleware/permissionGuard';
+import { PERMESSI } from '../../../lib/accessi/catalogo';
 import { getConnectionMonitor } from '../monitoring';
 import { AuditLogService, AuditSeverity } from '../services/AuditLogService';
 import { getIO, isIOInitialized } from '../../ws-server';
@@ -40,7 +41,7 @@ export class SuperadminDashboardController extends BaseController {
         this.router.get(
             '/overview',
             authMiddleware,
-            userRoleGuard([TIPO_UTENTI.SUPERADMIN]),
+            permissionGuard(PERMESSI.SISTEMA.DASHBOARD),
             this.getOverview.bind(this)
         );
     }

@@ -65,7 +65,17 @@ const { storage } = require('uxp');
 const fs = require('fs');
 const fs2 = require('uxp').storage.localFileSystem;
 const { app, Justification, FitOptions, LocationOptions, File, ColorModel, Folder, ExportFormat, ContentType, SaveOptions, CoordinateSpaces, AnchorPoint, ResizeMethods} = require('indesign');
-const customAgenzia = require('./custom');
+//I20-1064: il cliente non si copia piu' in radice. clienteAttivo.json, scritto da
+//monta-cliente.sh, dice quale ipconfig usare, e l'ipconfig quale custom.js d'archivio leggere.
+//Se un anello manca il Plugin non parte e lo dice nel riquadro di avvio.
+const ConfigurazioneCliente = require('./configurazioneCliente');
+const configurazioneCliente = ConfigurazioneCliente.carica(function (percorso) { return require('./' + percorso); });
+if (configurazioneCliente.errore != null) {
+    console.error("I20-1064: " + configurazioneCliente.errore);
+    mostraAvvioPannello(configurazioneCliente.errore, false);
+    throw new Error("I20-1064: " + configurazioneCliente.errore);
+}
+const customAgenzia = configurazioneCliente.customAgenzia;
 const XMLHttpRequestClient = require('./XMLHttpRequestClient');
 const { parse, format } = require('path');
 //I20-1015: lo scaricamento delle foto, ex cmd.js. Lo usano come globale schedaFoto e
@@ -88,7 +98,7 @@ const schedaRef = require('./schedaRef');
 const ReperimentoFoto = require('./reperimentoFoto/reperimentoFoto');
 const schedaArtwork = require('./schedaArtwork');
 const manifesto = require("./manifest.json");
-const ipconfig = require("./ipconfig.json");
+const ipconfig = configurazioneCliente.ipconfig;
 const confronti = require('./confronti');
 //I20-1014: il Report Integrita' ha una cartella sua. events.js e index.html lo usano da qui.
 const ReportIntegrita = require('./reportIntegrita/reportIntegrita');
@@ -100,6 +110,8 @@ const AltezzaScorrimento = require('./altezzaScorrimento');
 const Segnalazioni = require('./segnalazioni/segnalazioni');
 const etichettaSegnalazioni = require('./segnalazioni/etichetta');
 const SchermataSegnalazioni = require('./segnalazioni/schermata');
+//I20-1121: la vista affiancata del pannello, comune a segnalazioni e Report Integrita'.
+const VistaAffiancata = require('./vistaAffiancata');
 //I20-1035: i conti della barra orizzontale della lista dei tracciati, gli stessi del Report Integrita'.
 const barraScorrimento = require('./reportIntegrita/barraScorrimento');
 const ficoProcess = require('./ficoProcess');
@@ -155,16 +167,20 @@ var intervalSpeed=100;
 /// alla radice, che non esiste. Vale null finche' qualcuno non la riassegna.
 var dbMastro = readFile(pathLavorazione + "/dbMastro.json");
 let useCompiledField = true;
-/// I quattro percorsi di lavoro, ognuno col suo gemello defaultPercorso*: i primi si possono
-/// cambiare, i secondi dicono da cosa si riparte.
+/// I due percorsi delle immagini, ognuno col suo gemello defaultPercorso*: i primi si possono
+/// cambiare, i secondi dicono da cosa si riparte. Sono gli unici che sceglie l'operatore.
 let percorsoLinks = "/Links/";
 let percorsoLoghi = "/Links/Loghi/";
-let percorsoLogs = "/Logs/";
-let percorsoEsportazione = "/Export/";
 let defaultPercorsoLinks = "/Links/";
 let defaultPercorsoLoghi = "/Links/Loghi/";
-let defaultPercorsoLogs = "/Logs/";
-let defaultPercorsoEsportazione = "/Export/";
+/// I20-1065: le cartelle che il Plugin crea da solo sotto quella del documento, all'apertura
+/// (preparaCartelleDiSistema): logs ed export, con la barra finale, e la cartella dei dati di
+/// questa postazione, SingularData/<idMacchina>, senza. Vuote finche' non sono pronte.
+/// Al posto di percorsoLogs, percorsoEsportazione e percorsoLavorazioni (I20-1057), che sceglieva
+/// l'operatore.
+var logPath = "";
+var exportPath = "";
+var SingularPath = "";
 
 
 
@@ -194,6 +210,9 @@ var datiRefInEsame = [];
 var cacheLoghi = {};
 let idKitLavorazione=0;
 let segnalazioniBoxImpaginato = [];
+//I20-1104: il box che si sta impaginando, per i messaggi della console: { codiceGruppo, pagina,
+//documento, leggiBox }. Lo imposta impaginaBox e lo legge messaggioUtente; null fuori dall'impaginazione.
+let contestoBoxInImpaginazione = null;
 
 /// Il pezzo di HTML di un bottone dei filtri: icona a sinistra, etichetta a destra.
 /// Non tocca la pagina, restituisce soltanto la stringa.
@@ -306,6 +325,46 @@ function bloccaPerVersioneDisallineata(avviso) {
     $("#istantaDownAlert").css("display", "flex");
 }
 
+/// I20-1066: gli indirizzi di Istanta e Olimpo registrati nella voce della lavorazione contro quelli
+/// dell'ipconfig montato. Uguali: si procede. Una voce di prima, senza indirizzi: riceve quelli
+/// attuali e si procede. Diversi: il Plugin si blocca, come per la versione disallineata, e la
+/// lavorazione non si apre. Se il controllo stesso non riesce non si blocca: lo si dice in console.
+function verificaIndirizziDellaLavorazione() {
+    try {
+        const nomeDocumento = docInLavorazione != null ? docInLavorazione.name : app.activeDocument.name;
+        const voce = Utility.voceLavorazione(pathLavorazione, idMacchina(), nomeDocumento, libroDelDocumentoInLavorazione(nomeDocumento));
+        if (voce == null) {
+            return true;
+        }
+        const attuali = ConfigurazioneCliente.indirizziServer(istantaIp, olimpoIp);
+        const confronto = ConfigurazioneCliente.confrontaIndirizzi(voce.ip, attuali);
+        if (confronto.esito === "uguali") {
+            return true;
+        }
+        if (confronto.esito === "mancanti") {
+            voce.ip = attuali;
+            Utility.salvaVoceLavorazione(pathLavorazione, idMacchina(), voce);
+            return true;
+        }
+        bloccaPerIndirizziDiversi(ConfigurazioneCliente.testoIndirizziDiversi(confronto.diversi));
+        return false;
+    }
+    catch (e) {
+        console.error("Code IDX-178 Indirizzi della lavorazione non verificabili: " + e);
+        return true;
+    }
+}
+
+/// I20-1066: copre il pannello con l'errore a tutta pagina e non lo toglie: col server sbagliato
+/// la lavorazione non si tocca. Come bloccaPerVersioneDisallineata, riusa #istantaDownAlert.
+function bloccaPerIndirizziDiversi(dettaglio) {
+    console.error("Code IDX-179 Il Plugin e' configurato per un altro server - " + dettaglio);
+
+    $("#istantaDownAlert").find("h1").text("Il Plugin è configurato per un altro server");
+    $("#istantaDownAlert").find("h3").text(dettaglio);
+    $("#istantaDownAlert").css("display", "flex");
+}
+
 /// Mette in Links/Loghi le due immagini che il Plugin usa quando una foto manca -
 /// nofoto.png e fotoNoFound.png - copiandole da images/ se non ci sono gia'.
 ///
@@ -373,6 +432,9 @@ function applicaNoRenderAgliElementiDelBox(box, elementiNoRender) {
     if (box == null || elementiNoRender == null || elementiNoRender.length == 0) {
         return;
     }
+    //Contenitori del noRender: un campo marcato nasconde anche il contenitore che l'agenzia gli
+    //dichiara (Coop: txt_sconto nel gruppo box_sconto), anche nei meta salvati prima.
+    elementiNoRender = NoRenderElementi.conContenitori(elementiNoRender, pluginMiddleware.getContenitoriNoRender());
 
     var resiInvisibili = 0;
 
@@ -446,6 +508,8 @@ indesignEvents.addEventListener(indesignEvents.EVENT_NEW_DOCUMENT_SELECTED, asyn
     //}
 
     $("#nomeKitInLavorazione").text("");
+    //I20-1116: il segnalino della testata e l'icona del menabo' erano del documento di prima.
+    SchermataSegnalazioni.aggiornaIcona();
 
     await initDocumentInLavorazione();
     if (docInLavorazione==null)
@@ -480,6 +544,8 @@ indesignEvents.addEventListener(indesignEvents.EVENT_NO_DOCUMENT_OPENED, async f
         docInLavorazione = null;
 
         $("#nomeKitInLavorazione").text("");
+        //I20-1116: senza documento il segnalino della testata non ha niente da contare.
+        SchermataSegnalazioni.aggiornaIcona();
         $("#dialogSelectKit").css("display","none");        
         $("#wrapper").css("display","block");
     }
@@ -1080,6 +1146,10 @@ async function initDocumentInLavorazione()
     var pluginPathTmp = await fs2.getPluginFolder();
     pluginPath = pluginPathTmp.nativePath;
 
+    //I20-1065: logs, export e SingularData prima di leggere la lavorazione: la sua voce, la lista
+    //del kit e i filtri stanno nella cartella dei dati di questa postazione.
+    await preparaCartelleDiSistema(pathLavorazione);
+
 
 
 
@@ -1097,6 +1167,10 @@ async function initDocumentInLavorazione()
         let tipo_lavorazione_corrente = ficoProcess.getTipoLavorazioneCorrente();
         if (idKitLavorazione>0 && res)
         {
+            //I20-1066: la lavorazione e' di questo server? Se no il Plugin si ferma qui, bloccato.
+            if (!verificaIndirizziDellaLavorazione()) {
+                return null;
+            }
 
             customAgenzia.setLavorazione();
             if(tipo_lavorazione_corrente==2)
@@ -1105,7 +1179,6 @@ async function initDocumentInLavorazione()
                 // $("#syncRimaste").hide();
                 // $("#svuotaCodaSync").hide();
                 $("#bOpt2Advanced").hide();
-                $("#bOpt1Advanced").html(getFiltroButtonMarkup('impagina.png', 'Impagina'));
                 $("#opzioniAddizionali").hide();
                 $("#svuotaPagina").hide();
             }
@@ -1116,8 +1189,8 @@ async function initDocumentInLavorazione()
                 $("#bOpt2Advanced").show();
                 $("#opzioniAddizionali").show();
                 $("#svuotaPagina").show();
-                $("#bOpt1Advanced").html(getFiltroButtonMarkup('conteggio.png', 'Conteggio'));
             }
+            setFiltroButtonsDefaultMarkup();
             $("#dialogSelectKit").css("display","none");
             $("#wrapper").css("display","block");
             $("#loginPanel").css("display","none");
@@ -1191,6 +1264,8 @@ async function initDocumentInLavorazione()
                     return;
                 }
                 checkForLoghiCore();
+                //I20-1056, lotto 3: il primo controllo dei bollini del documento, per l'icona del menabo'.
+                SchermataSegnalazioni.controllaDocumento();
             }
             
         }
@@ -1258,7 +1333,11 @@ async function initLibroInLavorazione()
             let nativePath = fullName.nativePath;
             let sep = Utility.getDirSeparator();
             let _pathDelLibro = nativePath.substring(0, nativePath.lastIndexOf(sep) + 1);
-            let lav = readFile(_pathDelLibro + "lavorazioni.json");
+            //I20-1065: le cartelle di sistema del libro, prima di cercarne le lavorazioni
+            await preparaCartelleDiSistema(_pathDelLibro);
+            //I20-1061: ogni file del libro si cerca con voceLavorazione: nel file di questa macchina,
+            //poi in quelli delle altre (da cui viene copiato qui).
+            let lav = [];
             let _count = 0;
 
             let _itemTrovati = [];
@@ -1269,7 +1348,8 @@ async function initLibroInLavorazione()
                     let bcFullname = await bookContent.fullName;
                     let bcNativePath = bcFullname.nativePath;
                     let nomeFile = bcNativePath.substring(bcNativePath.lastIndexOf(sep) + 1);
-                    let cercaInLav = lav.filter(l => l.file == nomeFile);
+                    let voceFile = Utility.voceLavorazione(_pathDelLibro, idMacchina(), nomeFile, book.name);
+                    let cercaInLav = voceFile != null ? [voceFile] : [];
                     if (cercaInLav.length > 0) {
                         //Elenco questo file nel contenuto
                         $("#contanierRiepilogoLibro").append("<div style=\"padding:5px;\">File: " + nomeFile + " - Kit: " + JSON.parse(cercaInLav[0].details.meta).titolo + "</div>");
@@ -1917,6 +1997,22 @@ function scaricaContenutoKit(idKit, noCacheValue = null, callback = null, skipMo
             }
             console.log(objResult);
 
+            //I20-1069: una risposta d'errore non e' una lista. Prima finiva nel file listaKit come se
+            //lo fosse: il tracciato si svuotava e il motivo non lo vedeva nessuno. Ora la lista di prima
+            //resta quella in uso, l'operatore legge il motivo, e chi aspetta la lista lo viene a sapere.
+            if (objResult == null || objResult.esito === false) {
+                var motivo = objResult != null && objResult.error ? objResult.error : "Istanta non ha restituito la lista";
+                if (objResult != null && objResult.dettaglio) {
+                    console.error("Dettaglio dell'errore del server:", objResult.dettaglio);
+                }
+                messaggioUtente("Code IDX-180 Lista del kit non scaricata, resta quella di prima: " + motivo, "error");
+                xhrInProcess = null;
+                if (onErrore != null && typeof onErrore === "function") {
+                    onErrore(motivo);
+                }
+                return;
+            }
+
             //salviamo il risultato in un file json
             //I20-1034: il nome porta davanti canale e area della lavorazione (CN_TO_listaKit302.json).
             var filePath = Utility.percorsoNuovaListaKit(idKit);
@@ -1943,6 +2039,13 @@ function scaricaContenutoKit(idKit, noCacheValue = null, callback = null, skipMo
 
             tracciatoOnlineScaricato = true;
             //scaricaTracciatoLocale(idTracciato);
+
+            //I20-1069: la lista e' arrivata, ma alcuni record non si sono completati (descrizioni, foto,
+            //firma): Istanta dice quali e perche'.
+            if (objResult.warn) {
+                console.warn("Avviso del server sulla lista del kit:", objResult.warn);
+                messaggioUtente("Code IDX-181 Lista del kit scaricata, ma con " + objResult.warn, "warning");
+            }
 
             xhrInProcess = null;
 
@@ -2082,6 +2185,14 @@ async function showLogin()
     }
 
     hideLoading();
+
+    //I20-1112: il login copre il pannello, ma in UXP i campi di testo stanno sopra a tutto: con la
+    //sessione persa e una scheda ref aperta le sue descrizioni restavano disegnate sopra il login.
+    //Il logout manuale nascondeva gia' il pannello e chiudeva le finestre; qui lo fanno tutti i
+    //ritorni al login. Dopo l'accesso il pannello torna come dopo un logout manuale.
+    Modali.closeAllModal();
+    $("#mainContent").hide();
+
     $("#loginPanel").css("display", "flex");
 
 
@@ -2111,16 +2222,25 @@ const bOpt1 = document.getElementById("bOpt1Advanced");
 const bOpt2 = document.getElementById("bOpt2Advanced");
 var lastSelections = [];
 
-/// Rimette i due bottoni grossi al loro aspetto normale: Conteggio a sinistra, Impagina a
-/// destra.
+/// Rimette i due bottoni grossi al loro aspetto normale per il tipo di lavorazione corrente.
+/// Nel volantino: Conteggio a sinistra, Impagina a destra. Nel PoP (tipo 2) il bottone di
+/// destra e' nascosto e quello di sinistra impagina, quindi si chiama Impagina.
 ///
-/// Serve dopo che initDocumentInLavorazione li ha cambiati per una lavorazione di tipo 2,
-/// che di bottoni ne mostra uno solo.
+/// La chiamano initDocumentInLavorazione e la fine di ogni conteggio o impaginazione. Prima
+/// scriveva sempre Conteggio, e nel PoP il bottone cambiava nome dopo ogni impaginazione.
 ///
 /// DA SPOSTARE (task di divisione): in filtri.js con getFiltroButtonMarkup.
 function setFiltroButtonsDefaultMarkup() {
+    let pop = false;
+    try {
+        pop = ficoProcess.getTipoLavorazioneCorrente() == 2;
+    } catch (e) {
+        pop = false;
+    }
     if (bOpt1 != null) {
-        bOpt1.innerHTML = getFiltroButtonMarkup('conteggio.png', 'Conteggio');
+        bOpt1.innerHTML = pop
+            ? getFiltroButtonMarkup('impagina.png', 'Impagina')
+            : getFiltroButtonMarkup('conteggio.png', 'Conteggio');
     }
     if (bOpt2 != null) {
         bOpt2.innerHTML = getFiltroButtonMarkup('impagina.png', 'Impagina');
@@ -2236,8 +2356,15 @@ async function impaginaLibro() {
     let _libroFilePath = await libroInLavorazione.filePath; 
     let _pathLavorazioneLibro = _libroFilePath.nativePath;
     
-    var file = readFile(_pathLavorazioneLibro + "/lavorazioni.json");
-    if (file == null) {
+    //I20-1061: le voci dei file del libro per questa macchina (copiate qui se erano solo altrove)
+    var file = [];
+    for (let k = 0; k < libroInLavorazione.bookContents.length; k++) {
+        let voceDelFile = Utility.voceLavorazione(_pathLavorazioneLibro, idMacchina(), libroInLavorazione.bookContents.item(k).name, libroInLavorazione.name);
+        if (voceDelFile != null) {
+            file.push(voceDelFile);
+        }
+    }
+    if (file.length == 0) {
         messaggioUtente("Code IDX-09 Impaginazione libro: Nessuna lavorazione associata al libro", "Error", false, 5);
         return;
     }
@@ -2449,19 +2576,31 @@ async function impaginaLibroTask(indice)
 
 }
 
-/// Rilegge da disco lo stato del libro: <nomeLibro>_register.json, nella cartella del
-/// libro. Restituisce null se il file non c'e' ancora.
+/// Rilegge da disco lo stato del libro: <nomeLibro>_register.json. Restituisce null se il file
+/// non c'e' ancora.
 ///
 /// E' questo file che rende ripartibili impaginazione ed esportazione: tiene lo stato, la
 /// coda dei documenti e, per ognuno, l'ultima pagina andata a buon fine.
+///
+/// I20-1065: sta nella cartella dei dati di questa postazione (percorsoStatoLibro). Finche' li'
+/// non c'e', si legge quello scritto prima nella cartella del libro, che non si scrive piu': la
+/// prossima registrazione va nel posto nuovo.
 async function leggiStatoLavorazioneLibro()
 {
     let _libroFilePath = await libroInLavorazione.filePath; 
     let _pathLavorazioneLibro = _libroFilePath.nativePath;
-    let filePath=_pathLavorazioneLibro+Utility.getDirSeparator()+libroInLavorazione.name+"_register.json";
-    let file = readFile(filePath);
+    let file = readFile(percorsoStatoLibro(_pathLavorazioneLibro));
+    if (file == null) {
+        file = readFile(_pathLavorazioneLibro+Utility.getDirSeparator()+libroInLavorazione.name+"_register.json");
+    }
 
     return file;
+}
+
+/// I20-1065: dove sta lo stato del libro, nella cartella dei dati di questa postazione sotto
+/// quella del libro.
+function percorsoStatoLibro(cartellaLibro) {
+    return Utility.cartellaDatiMacchina(cartellaLibro, idMacchina()) + "/" + libroInLavorazione.name + "_register.json";
 }
 
 /// Scrive su disco jobImpaginazioneLibro, nello stesso file che legge
@@ -2477,7 +2616,7 @@ async function registraStatoLavorazioneLibro()
 {
     let _libroFilePath = await libroInLavorazione.filePath; 
     let _pathLavorazioneLibro = _libroFilePath.nativePath;
-    let filePath=_pathLavorazioneLibro+Utility.getDirSeparator()+libroInLavorazione.name+"_register.json";
+    let filePath = percorsoStatoLibro(_pathLavorazioneLibro);
 
     let file = readFile(filePath);
     if (file == null)
@@ -2721,6 +2860,60 @@ function grigliaDallaLibreria(libreria, nomeGriglia, suffix, pagina) {
     throw errore;
 }
 
+/// I20-1108: i box impaginati vanno sul livello InPagina, che arriva dal modello del documento.
+/// Se il documento non lo ha, l'impaginazione si fermava con un errore di InDesign: ora il livello
+/// si crea all'avvio dell'impaginazione (in cima, come un livello nuovo di InDesign) e la console
+/// lo dice. Se c'e' gia' si usa quello, senza crearne un secondo e senza spostare niente.
+/// Il livello porta anche le meccaniche: impaginaBox cerca i modelli dei box solo fra i gruppi di
+/// InPagina nelle mastro "meccaniche". Creato vuoto non bastava (prova dell'operatore: ogni box
+/// usciva con "Meccanica non trovata"), quindi ci si spostano le meccaniche delle mastro. Se non ce
+/// ne sono non si crea niente e l'impaginazione si ferma, invece di riempire le pagine di errori.
+/// Restituisce il livello, o null se l'impaginazione non puo' partire (gia' detto all'operatore).
+function assicuraLivelloInPagina(doc) {
+    var livello = doc.layers.itemByName("InPagina");
+    if (livello != null && livello.isValid) {
+        return livello;
+    }
+
+    //Le meccaniche come le cerca impaginaBox: gruppi con etichetta nelle mastro "meccaniche" e
+    //nelle loro declinazioni di agenzia ("meccaniche" + suffisso).
+    var meccaniche = [];
+    for (var i = 0; i < doc.masterSpreads.length; i++) {
+        var mastro = doc.masterSpreads.item(i);
+        if (String(mastro.baseName).toLowerCase().indexOf("meccaniche") !== 0) {
+            continue;
+        }
+        for (var j = 0; j < mastro.groups.length; j++) {
+            var gruppo = mastro.groups.item(j);
+            if (gruppo.label != null && gruppo.label !== "") {
+                meccaniche.push(gruppo);
+            }
+        }
+    }
+    if (meccaniche.length === 0) {
+        messaggioUtente("Code IDX-190 Il documento non ha il livello InPagina e nella pagina mastro meccaniche non ci sono meccaniche: l'impaginazione si ferma, va sistemato il documento", "error");
+        return null;
+    }
+
+    livello = doc.layers.add({ name: "InPagina" });
+    var spostate = 0;
+    var rimaste = [];
+    for (var m = 0; m < meccaniche.length; m++) {
+        try {
+            meccaniche[m].itemLayer = livello;
+            spostate++;
+        }
+        catch (e) {
+            rimaste.push(meccaniche[m].label);
+        }
+    }
+    messaggioUtente("Code IDX-187 Il documento non aveva il livello InPagina: e' stato creato e ci sono state spostate " + spostate + " meccaniche dalla pagina mastro", "warning");
+    if (rimaste.length > 0) {
+        messaggioUtente("Code IDX-189 Queste meccaniche non si sono potute spostare sul livello InPagina (livello bloccato?): " + rimaste.join(", "), "warning");
+    }
+    return livello;
+}
+
 async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, idKitLavorazione, impagina = false, cbkEnd = null, restartFromIndexPoP = 0) {
     var noCacheCheck = !($("#cacheCheckAdvanced").is(":checked"));
 
@@ -2777,13 +2970,28 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
         }
     }
     catch (ex) {
-        messaggioUtente("Errore durante il recupero della libreria: " + ex.message, "Error", false, 5); 
+        messaggioUtente("Errore durante il recupero della libreria: " + ex.message, "Error", false, 5);
         hideLoading();
         cbkEnd?.("error");
         return;
     }
 
-
+    //I20-1108: il livello InPagina serve a impaginare, non al conteggio, che non modifica il documento.
+    if (impagina) {
+        try {
+            if (assicuraLivelloInPagina(docInLavorazione) == null) {
+                hideLoading();
+                cbkEnd?.("error");
+                return;
+            }
+        }
+        catch (ex) {
+            messaggioUtente("Code IDX-188 Impossibile creare il livello InPagina nel documento: " + ex.message, "Error", false, 5);
+            hideLoading();
+            cbkEnd?.("error");
+            return;
+        }
+    }
 
 
     if (tipo_lavorazione_corrente== 1) {
@@ -2850,7 +3058,7 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
             var req = "";
             var filterIndex = 0;
             if (docInLavorazione != null) {
-                var listaRefEscluse = readFile(pathLavorazione + "/listaRefEscluse.json");
+                var listaRefEscluse = readFile(Utility.percorsoDati("listaRefEscluse.json"));
                 var filtriJson = readFile(filtriJs.getNomeFileFiltriJson());
 
                 var pagineRange = "";
@@ -2901,7 +3109,7 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                         continue;
                     }
 
-                    //leggiamo in var listaRefEscluse = readFile(pathLavorazione + "/listaRefEscluse.json");
+                    //leggiamo in var listaRefEscluse = readFile(Utility.percorsoDati("listaRefEscluse.json"));
                     //cerchiamo se la pagina corrente è presente in listaRefEscluse
                     //se c'è prendiamo tutti i codici gruppo degli elementi in listaEscluse e li mettiamo in un array
 
@@ -3306,8 +3514,9 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
 
                 console.log(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>RISULTATO FILTRO CONTEGGIO");
                 console.log(objResult);
-                clearFile(pathLavorazione + "/log.txt");
-                var logFilePath = pathLavorazione + "/log.txt";
+                //I20-1065: nella cartella dei log; se non e' pronta, dove stava prima
+                var logFilePath = (cartellaDeiLog() || pathLavorazione + "/") + "log.txt";
+                clearFile(logFilePath);
                 var logContent = "";
                 var currentDate = new Date();
                 logContent += currentDate.toLocaleDateString() + " alle " + currentDate.toLocaleTimeString() + " operazione di " + (impagina ? "impaginazione" : "conteggio") + " iniziata\n";
@@ -3327,6 +3536,10 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                     }
 
                     if(objResult.error != null && objResult.error != ""){
+                        //I20-1069: error e' il messaggio breve; la traccia completa del server sta in dettaglio.
+                        if (objResult.dettaglio) {
+                            console.error("Dettaglio dell'errore del server:", objResult.dettaglio);
+                        }
                         messaggioUtente("Code IDX-25 Filtro: Errore durante l'elaborazione del filtro: " + objResult.error, "error");
                         logContent += "Code IDX-25 Filtro: Errore durante l'elaborazione del filtro: " + objResult.error + "\n";
                         cbkEnd?.("error");
@@ -3334,6 +3547,12 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                     }
                     else if (objResult.result.length == 0) {
                         messaggioUtente("Code IDX-26 Filtro: Operazione riuscita ma nessun elemento è stato trovato tra i non impaginati con i filtri impostati", "warning");
+                    }
+                    //I20-1069: record della lista che Istanta non ha completato (descrizioni, foto, firma).
+                    if (objResult.warn) {
+                        console.warn("Avviso del server sulla lista del kit:", objResult.warn);
+                        messaggioUtente("Code IDX-182 Filtro: la lista del kit ha " + objResult.warn, "warning");
+                        logContent += "Code IDX-182 Filtro: la lista del kit ha " + objResult.warn + "\n";
                     }
 
                     var boxInGriglia = null;
@@ -3344,7 +3563,7 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                         showLoading("Compilazione del risultato di conteggio");
                         await Utility.sleep(100);
                         //var boxConteggioTemplate = libreria.assets.itemByName("Box Conteggio").placeAsset(docInLavorazione)[0];
-                        var filePath = pathLavorazione + "/listaRefConteggio.json";
+                        var filePath = Utility.percorsoDati("listaRefConteggio.json");
                         clearFile(filePath);
                         logContent += "ripulisco la lista di ref avanzate\n ";
                         let date = new Date().toLocaleString('it-IT')
@@ -3850,9 +4069,9 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                     rimuoviSimboli();
                     stampaSegnalazioni(reportImpaginazioneObj);
                     //I20-1029, lotto 2: se l'impaginazione ha prodotto segnalazioni, la schermata si
-                    //apre da sola.
+                    //apre da sola. I20-1056: solo con le pagine impaginate, e solo se li' ci sono bollini.
                     if (impagina) {
-                        SchermataSegnalazioni.apriSeCiSono(reportImpaginazioneObj);
+                        SchermataSegnalazioni.apriSeCiSono(reportImpaginazioneObj, SchermataSegnalazioni.pagineDelRisultato(objResult));
                     }
 
                     //scriviamo il log
@@ -3881,8 +4100,10 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                 }
             };
 
-            xhrInProcess.onerror = function () {
-                messaggioUtente("Code IDX-30 Filtro: Errore di rete", "error");
+            //I20-1069: prima "Errore di rete" sempre, anche quando il server aveva spiegato il motivo
+            //(gia' mostrato da HRC-01, che questo messaggio copriva).
+            xhrInProcess.onerror = function (motivo) {
+                messaggioUtente("Code IDX-30 Filtro: richiesta non riuscita: " + XMLHttpRequestClient.testoErrore(motivo), "error");
                 hideLoading();
             };
             console.log("Menabo/ImpaginaFromInDesignNew/" + idKitLavorazione + "/" + impagina + "/" + noCacheCheck);
@@ -4089,8 +4310,9 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
             async function impaginaLista(objResult, parsed) {
                 console.log(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>RIUSLTATO FILTRO CONTEGGIO");
                 console.log(objResult);
-                clearFile(pathLavorazione + "/logImpaginazionePop.txt");
-                var logFilePath = pathLavorazione + "/logImpaginazionePop.txt";
+                //I20-1065: nella cartella dei log; se non e' pronta, dove stava prima
+                var logFilePath = (cartellaDeiLog() || pathLavorazione + "/") + "logImpaginazionePop.txt";
+                clearFile(logFilePath);
                 var logContent = "";
                 var currentDate = new Date();
                 logContent += currentDate.toLocaleDateString() + " alle " + currentDate.toLocaleTimeString() + " operazione di impaginazione Pop iniziata\n";
@@ -4109,6 +4331,10 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                         return;
                     }
                     if (objResult.error != null && objResult.error != "") {
+                        //I20-1069: error e' il messaggio breve; la traccia completa del server sta in dettaglio.
+                        if (objResult.dettaglio) {
+                            console.error("Dettaglio dell'errore del server:", objResult.dettaglio);
+                        }
                         messaggioUtente("Code IDX-34 Filtro: Errore durante l'elaborazione del filtro: " + objResult.error, "error");
                         logContent += "Code IDX-34 Filtro: Errore durante l'elaborazione del filtro: " + objResult.error + "\n";
                         cbkEnd?.("error");
@@ -4129,7 +4355,7 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
 
 
                     //Si salva solo per PoP, per VOL è frammentata solitamente
-                    let filePathSaveData = pathLavorazione + "/listaImpaginata" + idKitLavorazione + ".json";
+                    let filePathSaveData = Utility.percorsoDati("listaImpaginata" + idKitLavorazione + ".json");
                     clearFile(filePathSaveData);
                     appendToFile(filePathSaveData, objResult);
 
@@ -4438,7 +4664,8 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                     //alla volta e si chiudono, e la schermata non avrebbe niente da mostrare.
                     if (!(jobImpaginazioneLibro.stato == 1 && jobImpaginazioneLibro.queue.length > 0)) {
                         stampaSegnalazioni(reportImpaginazioneObj);
-                        SchermataSegnalazioni.apriSeCiSono(reportImpaginazioneObj);
+                        //I20-1056: solo con le pagine impaginate in questo giro.
+                        SchermataSegnalazioni.apriSeCiSono(reportImpaginazioneObj, SchermataSegnalazioni.pagineDelRisultato(objResult, restartFromIndexPoP));
                     }
 
                     if (jobImpaginazioneLibro.stato == 2 || jobImpaginazioneLibro.stato == 4) {
@@ -4501,8 +4728,9 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                     }
                 };
     
-                xhrInProcess.onerror = function () {
-                    messaggioUtente("Code IDX-39 Filtro: Errore di rete", "error");
+                //I20-1069: il motivo vero, come IDX-30.
+                xhrInProcess.onerror = function (motivo) {
+                    messaggioUtente("Code IDX-39 Filtro: richiesta non riuscita: " + XMLHttpRequestClient.testoErrore(motivo), "error");
                     hideLoading();
                 };
     
@@ -4511,7 +4739,7 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                 //messaggioUtente("Filtro: Richiesta inviata", "success", true, 0, true);
             }
             else if (restartFromIndexPoP > 0) {
-                let localDbDataset= readFile(pathLavorazione+"/listaImpaginata"+idKitLavorazione+".json");
+                let localDbDataset= readFile(Utility.percorsoDati("listaImpaginata"+idKitLavorazione+".json"));
                 //controlliamo che il file sia un json valido
                 if(localDbDataset == null || localDbDataset == ""){
                     throw "Impossibile leggere il file di impaginazione locale per la ripresa dell'impaginazione.";
@@ -4628,7 +4856,14 @@ async function fixRefImpaginata() {
             //     messaggioUtente("Code IDX-42 fixRef: elemento con etichetta Base non trovata nel box", "error");
             //     return;
             // }
+            //I20-1109: prima i controlli che non toccano il documento, poi la domanda, poi il lavoro.
+            //Prima il box si ridimensionava per prova e gli elementi si spostavano anche con Annulla.
             var dna = null;
+            //Senza selezione app.selection[0] non c'e' e si finiva nell'errore generico IDX-50.
+            if (app.selection == null || app.selection.length == 0) {
+                messaggioUtente("Code IDX-42 fixRef: nessun box selezionato, seleziona il box da sistemare", "error");
+                return;
+            }
             var box = Utility.getBoxFromElementOfBox(app.selection[0]);
             if (box == null) {
                 messaggioUtente("Code IDX-42 fixRef: elemento selezionato non è un box valido", "error");
@@ -4666,6 +4901,18 @@ async function fixRefImpaginata() {
                 }
             }
 
+            //I20-1109: la domanda prima di qualunque modifica: con Annulla il documento resta com'e'.
+            indesignEvents.setBusy(true);
+
+            var confirmRes = await Modali.confirm("Ridimensionare il box alle dimensioni desiderate");
+            if (!confirmRes) {
+                indesignEvents.setBusy(false);
+                return;
+            }
+
+            //Il ridimensionamento di prova e il rifacimento del box richiedono tempo: si vede che si lavora.
+            showLoading("Fix referenza in corso");
+
             //se i bounds sono larghi o alti diversi dagli original (se ci sono)
             if (originalBounds != null) {
                 var widthOriginal = originalBounds[3] - originalBounds[1];
@@ -4686,14 +4933,16 @@ async function fixRefImpaginata() {
             }
 
             //ora la dimensione è corretta, mappiamo
-            for (var j = 0; j < app.selection[0].allPageItems.length; j++) {
-                if (app.selection[0].allPageItems[j].label != "") {
+            //I20-1109: gli elementi del box intero, non della selezione: selezionando un elemento interno
+            //la mappa aveva solo quello, e gli altri risultavano aggiunti illegalmente (IDX-45/46).
+            for (var j = 0; j < box.allPageItems.length; j++) {
+                if (box.allPageItems[j].label != "") {
                     //aggiungiamo in mappa una chiave della label e valore l'item selezionato
-                    map[Utility.parseLabel(app.selection[0].allPageItems[j].label)] = app.selection[0].allPageItems[j].geometricBounds;
+                    map[Utility.parseLabel(box.allPageItems[j].label)] = box.allPageItems[j].geometricBounds;
                 }
                 else {
                     //lo aggiungiamo usando l'id univoco
-                    map[app.selection[0].allPageItems[j].id] = app.selection[0].allPageItems[j].geometricBounds;
+                    map[box.allPageItems[j].id] = box.allPageItems[j].geometricBounds;
                 }
             }
             
@@ -4742,14 +4991,10 @@ async function fixRefImpaginata() {
     
         if (listItemDaFixare.length == 0) {
             messaggioUtente("Code IDX-43 fixRef: Nessuna ref valida selezionata", "error");
+            indesignEvents.setBusy(false);
+            hideLoading();
             return;
         }
-
-
-    
-        indesignEvents.setBusy(true);
-    
-        var confirmRes = await Modali.confirm("Ridimensionare il box alle dimensioni desiderate");
 
 
         for (var a = 0; a < listItemDaFixare.length; a++) {
@@ -4759,6 +5004,7 @@ async function fixRefImpaginata() {
             if (bounds == null) {
                 messaggioUtente("Code IDX-44 fixRef: Impossibile recuperare i bounds del box selezionato", "error");
                 indesignEvents.setBusy(false);
+                hideLoading();
                 return;
             }
 
@@ -4790,6 +5036,7 @@ async function fixRefImpaginata() {
     
         if(!confirmRes){
             indesignEvents.setBusy(false);
+            hideLoading();
 
             return;
         }
@@ -4853,19 +5100,22 @@ async function fixRefImpaginata() {
                 );
 
                 indesignEvents.setBusy(false);
+                hideLoading();
                 return;
             }
         }
         //creiamo il file di report con le segnalazioni
-        
+
         indesignEvents.setBusy(false);
-        
+        hideLoading();
+
         messaggioUtente("Code IDX-49 fixRef: Operazione completata con successo", "success", false, 3);
         
         stampaSegnalazioni(reportObj);
     }
     catch(ex){
         indesignEvents.setBusy(false);
+        hideLoading();
         messaggioUtente("Code IDX-50 fixRef: Errore durante l'elaborazione: " + ex.toString(), "error");
         console.error(ex);
     }
@@ -4996,7 +5246,7 @@ function stampaSegnalazioni(reportImpaginazioneObj = { segnalazioni: [] }) {
     //il colore del messaggio dipende dal typeMessage più grave presente nelle segnalazioni.
     if (reportImpaginazioneObj.segnalazioni.length > 0) {
         var nomeFileReport = "reportSegnalazioni_" + idKitLavorazione + "_" + new Date().getDate() + "_" + new Date().getMonth() + "_" + new Date().getFullYear() + "__" + new Date().getHours() + ":" + new Date().getMinutes() + ":" + new Date().getSeconds() + ".txt";
-        var percorsoFileReport = /*pathLavorazione +*/ percorsoLogs + nomeFileReport;
+        var percorsoFileReport = cartellaDeiLog() + nomeFileReport;
         var reportContent = "Segnalazioni durante l'impaginazione:\n\n";
 
         var typeMessagePiuGrave = "success";
@@ -5216,8 +5466,51 @@ function makeRegexFromFieldName(groupName) {
 
 
 /// IMPAGINAZIONE. Costruisce il singolo box: prende la meccanica dalla libreria, compila i
-/// campi, colloca le foto, applica il CSS. 751 righe.
-async function impaginaBox(meccanica, pagCoinvolta, bounds, itemRef, pathLavorazione, listElementiNonImpaginati, tipoLavorazione, reportImpaginazioneObj, preAnalisi = null, refConfronto = null, docOperazione = docInLavorazione) {
+/// campi, colloca le foto, applica il CSS.
+///
+/// I20-1104: e' l'involucro. Finche' il box si impagina, i messaggi della console sanno da quale
+/// box vengono (contestoBoxInImpaginazione, letto da messaggioUtente): qualunque modulo li scriva,
+/// CssFramework, sistemazione foto, campi, loghi. Il corpo e' impaginaBoxNelContesto; il finally
+/// rimette il contesto di prima per ogni uscita, anche con un errore.
+async function impaginaBox(meccanica, pagCoinvolta, bounds, itemRef, ...altri) {
+    var contestoPrecedente = contestoBoxInImpaginazione;
+    contestoBoxInImpaginazione = contestoDelBox(itemRef, pagCoinvolta, altri[6]);
+    try {
+        return await impaginaBoxNelContesto(meccanica, pagCoinvolta, bounds, itemRef, ...altri);
+    }
+    finally {
+        contestoBoxInImpaginazione = contestoPrecedente;
+    }
+}
+
+/// I20-1104: il contesto dei messaggi di un box che si impagina. leggiBox lo imposta il corpo di
+/// impaginaBox appena ha la sua variabile del box: il box viene rifatto piu' volte (raggruppamenti,
+/// bindRefData, sistemazioni), e cosi' si legge sempre quello di adesso.
+function contestoDelBox(itemRef, pagCoinvolta, docOperazione) {
+    var pagina = null;
+    var documento = null;
+    try {
+        pagina = pagCoinvolta != null ? pagCoinvolta.name : null;
+    }
+    catch (e) {
+        pagina = null;
+    }
+    try {
+        var doc = docOperazione != null ? docOperazione : docInLavorazione;
+        documento = doc != null ? doc.name : null;
+    }
+    catch (e) {
+        documento = null;
+    }
+    return {
+        codiceGruppo: itemRef != null ? itemRef["Scatto.CodiceGruppo"] : null,
+        pagina: pagina,
+        documento: documento,
+        leggiBox: null
+    };
+}
+
+async function impaginaBoxNelContesto(meccanica, pagCoinvolta, bounds, itemRef, pathLavorazione, listElementiNonImpaginati, tipoLavorazione, reportImpaginazioneObj, preAnalisi = null, refConfronto = null, docOperazione = docInLavorazione) {
     try{
         if (preAnalisi != null && preAnalisi.differenze.length == 0) {
             return {
@@ -5228,6 +5521,8 @@ async function impaginaBox(meccanica, pagCoinvolta, bounds, itemRef, pathLavoraz
         }
         var doc = docOperazione;
         var boxImpaginato = null;
+        //I20-1104: da qui i messaggi della console leggono il box di adesso, anche quando viene rifatto.
+        if (contestoBoxInImpaginazione != null) contestoBoxInImpaginazione.leggiBox = function () { return boxImpaginato; };
         //I20-1029: le segnalazioni partono vuote per ogni box. Se il box di prima e' andato in
         //errore prima di chiuderle, non devono passare a questo.
         segnalazioniBoxImpaginato = [];
@@ -6053,6 +6348,8 @@ var currentTimeoutId = null;
 tracciatoVisualizzato = false;
 lastWidthDimension = 0;
 lastHeightDimension = 0;
+//I20-1116, lotto 2: la larghezza del pannello all'ultimo onresizeWindow, per la vista affiancata.
+lastPannelloDimension = 0;
 
 
 
@@ -7622,9 +7919,10 @@ function creaElementoTracciato(obj, isFirst, riepilogoSegnalazioni = {}) {
 /// callback e la funzione e' async: senza, tornerebbe prima che l'impaginazione sia
 /// avvenuta. Se l'attesa scade si avvisa l'operatore.
 ///
-/// Attenzione: res diventa vero solo sul cammino che va a buon fine. Se il server risponde
-/// con un errore l'operatore vede il messaggio dell'errore, ma questa funzione aspetta
-/// comunque i venti secondi e poi aggiunge un timeout che timeout non e'.
+/// I20-1069: l'attesa finisce quando la richiesta e' finita, bene o male (finito). Prima
+/// guardava solo res, che diventa vero solo sul cammino che va a buon fine: dopo un errore
+/// del server l'operatore ne vedeva il messaggio e, venti secondi dopo, un IDX-94 "Timeout"
+/// che timeout non era e lo copriva.
 async function impaginaSingolo(codice, pagina, byPassBloccoGiaImpaginato = false, idRec = null) {
     showLoading("Scaricamento del dato");
     indesignEvents.setBusy(true);
@@ -7636,7 +7934,7 @@ async function impaginaSingolo(codice, pagina, byPassBloccoGiaImpaginato = false
 
     var xhr = new XMLHttpRequestClient();
 
-    var res = false;
+    var finito = false;
     xhr.onload = async (objResult, parsed) => {
         try{
             if (!parsed) {
@@ -7650,12 +7948,24 @@ async function impaginaSingolo(codice, pagina, byPassBloccoGiaImpaginato = false
             console.log(objResult);
             if(!objResult.esito){
                 console.error(objResult.error);
+                //I20-1069: error e' il messaggio breve; la traccia completa del server sta in dettaglio.
+                if (objResult.dettaglio) {
+                    console.error("Dettaglio dell'errore del server:", objResult.dettaglio);
+                }
                 messaggioUtente("Code IDX-90 Impaginazione singolo, errore durante il recupero del dato: " + objResult.error, "error");
                 return;
             }
+            //I20-1069: la scheda del gruppo puo' arrivare con un avviso di getSchedaRef.
+            if (objResult.warn) {
+                console.warn("Avviso del server sull'impaginazione singola:", objResult.warn);
+                messaggioUtente("Code IDX-183 Impaginazione singolo: " + objResult.warn, "warning");
+            }
 
+            //I20-1108: anche il singolo box va sul livello InPagina; se manca si crea, con le meccaniche.
+            if (assicuraLivelloInPagina(docInLavorazione) == null) {
+                return;
+            }
             var box = await impaginazioneSingoloIndd(objResult.records, pagina);
-            res = true;
             if(box == null){
                 messaggioUtente("Code IDX-91 Impaginazione singolo: Fallita impaginazione del box con codice "+codice, "error");
             }
@@ -7666,6 +7976,7 @@ async function impaginaSingolo(codice, pagina, byPassBloccoGiaImpaginato = false
             indesignEvents.setBusy(false);
         }
         finally {
+            finito = true;
             hideLoading();
             indesignEvents.setBusy(false);
         }
@@ -7675,14 +7986,17 @@ async function impaginaSingolo(codice, pagina, byPassBloccoGiaImpaginato = false
         if (xhr.readyState == 4) {
             if (xhr.status == 200) {
             } else {
+                finito = true;
                 hideLoading();
                 indesignEvents.setBusy(false);
             }
         }
     };
 
-    xhr.onerror = function () {
-        messaggioUtente("Code IDX-93 Impaginazione singolo: Errore di rete", "error");
+    //I20-1069: il motivo vero, come IDX-30.
+    xhr.onerror = function (motivo) {
+        finito = true;
+        messaggioUtente("Code IDX-93 Impaginazione singolo: richiesta non riuscita: " + XMLHttpRequestClient.testoErrore(motivo), "error");
         hideLoading();
         indesignEvents.setBusy(false);
     }
@@ -7697,12 +8011,12 @@ async function impaginaSingolo(codice, pagina, byPassBloccoGiaImpaginato = false
     xhr.send("Menabo/impaginaSingolo", formData, "PUT");
 
     var securityCounter = 0;
-    while(!res && securityCounter < 200){
+    while(!finito && securityCounter < 200){
         await Utility.sleep(100);
         securityCounter++;
     }
 
-    if(securityCounter >= 200){
+    if(!finito){
         messaggioUtente("Code IDX-94 Impaginazione singolo: Timeout durante l'impaginazione del singolo", "error");
     }
 }
@@ -7735,7 +8049,7 @@ async function impaginaSingolo(codice, pagina, byPassBloccoGiaImpaginato = false
 /// L'operazione e' idempotente.
 ///
 /// La variabile `found` viene assegnata e mai letta: e' un residuo.
-async function impaginazioneSingoloIndd(records, pagina, cercaInPaginaPerConfronto, mappaPagina, massiveOperation = false, bounds = null, richiederRicollegamento = false) {
+async function impaginazioneSingoloIndd(records, pagina, cercaInPaginaPerConfronto, mappaPagina, massiveOperation = false, bounds = null, richiederRicollegamento = false, apriSegnalazioni = true) {
     try {
         //I20-981: primario, tracciato del primario e foto stanno in datiPrimarioPerConfronto,
         //che usa anche la preanalisi del Report Integrita'.
@@ -7857,7 +8171,16 @@ async function impaginazioneSingoloIndd(records, pagina, cercaInPaginaPerConfron
             rimuoviSimboli();
             //I20-1029, lotto 2: la schermata, se il box ha segnalazioni. Le operazioni massive del
             //Report Integrita' non passano di qui: la aprirebbero a ogni box.
-            SchermataSegnalazioni.apriSeCiSono(reportImpaginazioneObj);
+            //I20-1056: solo quando si impagina un box nuovo, e solo per la sua pagina. Chi rifa' un
+            //box gia' impaginato (Reimpagina, riallineamento, Report Integrita') passa
+            //apriSegnalazioni = false: le segnalazioni restano nel bollino del box.
+            if (apriSegnalazioni) {
+                SchermataSegnalazioni.apriSeCiSono(reportImpaginazioneObj, [String(pagina)]);
+            }
+            else {
+                //I20-1056, lotto 3: niente schermata, ma l'icona del menabo' si aggiorna sulla pagina del box.
+                SchermataSegnalazioni.controllaPagine([String(pagina)]);
+            }
         }
 
         //Ricollegamento, confronto e rimozione dei simboli possono rifare elementi del box,
@@ -7881,14 +8204,12 @@ var cartellaAssenteCheck = false;
 //perche' in UXP le misure su cui :visible si basa non sono affidabili.
 /// I20-1018: la cartella in cui scrivere i log, per messaggioUtente e writeDebugMessageForCrash.
 ///
-/// percorsoLogs parte da "/Logs/", relativo alla lavorazione, e impostaPercorsiDiSistema lo
-/// rende assoluto: da file.pathLogs di lavorazioni.json, o da pathLavorazione + "/Logs/" se
-/// manca. Da li' in poi si usa com'e'; concatenarci davanti pathLavorazione dava un percorso
-/// inesistente. Prima che succeda, pero', si scrive gia': aprendo una lavorazione nuova,
-/// impostaPercorsiDiSistema per foto e loghi scrive nel log prima che tocchi ai log, e in quel
-/// momento il valore relativo va ancora completato. Vuoto vuol dire che la cartella non c'e'.
+/// I20-1065: e' logs sotto la cartella del documento, che il Plugin crea da solo all'apertura
+/// (preparaCartelleDiSistema), con la barra finale. Vuota finche' non e' pronta: in quel momento
+/// i messaggi vanno solo in console, senza dire che la cartella manca (lo direbbe una volta sola,
+/// e poi non lo direbbe piu' quando manca davvero).
 function cartellaDeiLog() {
-    return percorsoLogs === defaultPercorsoLogs ? pathLavorazione + percorsoLogs : percorsoLogs;
+    return logPath || "";
 }
 
 /// I20-981: dove scrivere un messaggio all'operatore.
@@ -7986,6 +8307,167 @@ function nomeMacchina(os = null) {
     return nome;
 }
 
+/// I20-1061: l'identificativo di questa macchina, che da' il nome al suo file delle lavorazioni
+/// (<idMacchina>_Lavorazioni.json). Identifica la macchina e non deve cambiare mai: si genera una
+/// volta sola - il nome della macchina, per riconoscerla a occhio, e 10 caratteri casuali, che la
+/// rendono unica - e da li' in poi si rilegge e basta, anche se il nome della macchina cambia.
+/// Si conserva in un file della macchina, fuori dal Plugin, cosi' resiste a reinstallazioni e
+/// aggiornamenti, e in una copia nel localStorage del Plugin: se il file sparisce si riscrive con
+/// lo stesso identificativo. Uno nuovo nasce solo se mancano tutti e due.
+/// Il file sta direttamente in una cartella che esiste gia' (percorsiFileIdMacchina): UXP non crea
+/// cartelle con fs.mkdirSync, e la prima versione, che ci provava, non scriveva niente. Se nessuna
+/// scrittura riesce l'operatore lo vede (IDX-175): l'identificativo resterebbe solo nel Plugin.
+/// ambiente serve ai test: { fs, os, storage, nome, codice, avvisa }.
+var idMacchinaCache = null;
+var idMacchinaAvvisoDato = false;
+const CHIAVE_ID_MACCHINA = "istanta.idMacchina";
+function idMacchina(ambiente = null) {
+    if (idMacchinaCache != null && ambiente == null) {
+        return idMacchinaCache;
+    }
+    var amb = ambiente;
+    if (amb == null) {
+        var modOs = null;
+        try {
+            modOs = require('os');
+        }
+        catch (e) {
+            modOs = null;
+        }
+        amb = {
+            fs: require('fs'),
+            os: modOs,
+            storage: typeof localStorage !== "undefined" ? localStorage : null,
+            nome: function () { return nomeMacchina(); },
+            codice: function () { return Utility.generateId(10); },
+            avvisa: function (testo) { messaggioUtente(testo, "warning"); }
+        };
+    }
+    var valido = function (id) { return typeof id === "string" && /^[A-Za-z0-9-]+_[A-Za-z0-9]{10}$/.test(id); };
+    var percorsi = percorsiFileIdMacchina(amb.os);
+
+    var id = null;
+    var trovatoIn = null;
+    for (var i = 0; i < percorsi.lettura.length && id == null; i++) {
+        try {
+            var letto = JSON.parse(amb.fs.readFileSync(percorsi.lettura[i], 'utf8')).id;
+            if (valido(letto)) {
+                id = letto;
+                trovatoIn = percorsi.lettura[i];
+            }
+        }
+        catch (e) {
+            //non c'e' o non si legge: si prova il prossimo
+        }
+    }
+    if (id == null) {
+        try {
+            var conservato = amb.storage != null ? amb.storage.getItem(CHIAVE_ID_MACCHINA) : null;
+            if (valido(conservato)) {
+                id = conservato;
+            }
+        }
+        catch (e) {
+            //localStorage non disponibile
+        }
+    }
+    if (id == null) {
+        var nome = String(amb.nome() || "macchina").replace(/[^A-Za-z0-9-]+/g, "-").replace(/^-+|-+$/g, "") || "macchina";
+        id = nome + "_" + amb.codice();
+    }
+
+    //Si scrive se il file non c'era, o se c'era solo nella posizione della prima versione.
+    if (percorsi.scrittura.indexOf(trovatoIn) < 0) {
+        var scritto = false;
+        for (var j = 0; j < percorsi.scrittura.length && !scritto; j++) {
+            try {
+                amb.fs.writeFileSync(percorsi.scrittura[j], JSON.stringify({ id: id }));
+                scritto = true;
+            }
+            catch (e) {
+                console.error("I20-1061: identificativo della macchina non scritto in " + percorsi.scrittura[j] + ": " + e);
+            }
+        }
+        if (!scritto && trovatoIn == null && !idMacchinaAvvisoDato) {
+            idMacchinaAvvisoDato = true;
+            try {
+                amb.avvisa("Code IDX-175 Identificativo della macchina non salvato su disco: resta solo nel plugin (" + id + ")");
+            }
+            catch (e) {
+                //l'avviso non deve fermare la lavorazione
+            }
+        }
+    }
+    try {
+        if (amb.storage != null && amb.storage.getItem(CHIAVE_ID_MACCHINA) !== id) {
+            amb.storage.setItem(CHIAVE_ID_MACCHINA, id);
+        }
+    }
+    catch (e) {
+        //localStorage non disponibile: resta il file
+    }
+
+    if (ambiente == null) {
+        idMacchinaCache = id;
+    }
+    return id;
+}
+
+/// Dove si conserva l'identificativo della macchina. scrittura: file direttamente in cartelle che
+/// esistono gia', in ordine la cartella comune a tutti gli utenti del computer e la home.
+/// lettura: le stesse, poi le posizioni della prima versione di I20-1061 (una sottocartella
+/// Istanta), nel caso li' la scrittura fosse riuscita.
+function percorsiFileIdMacchina(os) {
+    var piattaforma = "";
+    try {
+        piattaforma = os != null ? String(os.platform()) : "";
+    }
+    catch (e) {
+        piattaforma = "";
+    }
+    var home = "";
+    try {
+        home = os != null ? String(os.homedir()).replace(/[\\/]+$/, "") : "";
+    }
+    catch (e) {
+        home = "";
+    }
+    var comune = piattaforma === "darwin" ? "/Users/Shared" : (piattaforma.indexOf("win") === 0 ? "C:/ProgramData" : "");
+
+    var scrittura = [];
+    var primaVersione = [];
+    if (comune !== "") {
+        scrittura.push(comune + "/istanta-idMacchina.json");
+        primaVersione.push(comune + "/Istanta/idMacchina.json");
+    }
+    if (home !== "") {
+        scrittura.push(home + "/.istanta-idMacchina.json");
+        primaVersione.push(home + "/.istanta/idMacchina.json");
+    }
+    return { scrittura: scrittura, lettura: scrittura.concat(primaVersione) };
+}
+
+/// I20-1061: il libro del documento in lavorazione, per cercarne la voce: il .indb nella sua
+/// cartella (Utility.libroDelDocumento), scegliendo fra i libri aperti quello che lo contiene.
+function libroDelDocumentoInLavorazione(nomeFile = null, cartella = null) {
+    try {
+        var nome = nomeFile != null ? nomeFile : (docInLavorazione != null ? docInLavorazione.name : app.activeDocument.name);
+        var libriAperti = [];
+        for (var i = 0; i < app.books.count(); i++) {
+            var libro = app.books.item(i);
+            var files = [];
+            for (var j = 0; j < libro.bookContents.length; j++) {
+                files.push(libro.bookContents.item(j).name);
+            }
+            libriAperti.push({ nome: libro.name, files: files });
+        }
+        return Utility.libroDelDocumento(cartella != null ? cartella : pathLavorazione, nome, libriAperti);
+    }
+    catch (e) {
+        return null;
+    }
+}
+
 /// I20-1033: il canale e l'area di una lavorazione, scritti come li legge l'operatore:
 /// "Canale CN · Area TO". Riceve i dettagli di ficoProcess (oggetti con la sigla, oppure 0
 /// quando mancano) e restituisce null se non ce n'e' nessuno.
@@ -8016,6 +8498,36 @@ function contestoLavorazioneCorrente() {
     }
 }
 
+/// I20-1104: il riferimento al box di un messaggio, dal contesto dell'impaginazione in corso:
+/// { codiceGruppo, idBox, pagina, documento }, oppure null fuori dall'impaginazione. Il box si legge
+/// adesso, perche' durante l'impaginazione viene rifatto e cambia id; la pagina e' quella del box se
+/// si legge, altrimenti quella in cui si impagina. Non fallisce mai: un messaggio non deve perdersi
+/// per colpa del suo contesto.
+function riferimentoBoxDelMessaggio(contesto) {
+    if (contesto == null) {
+        return null;
+    }
+    var riferimento = {
+        codiceGruppo: contesto.codiceGruppo != null ? String(contesto.codiceGruppo) : "",
+        idBox: null,
+        pagina: contesto.pagina,
+        documento: contesto.documento
+    };
+    try {
+        var box = typeof contesto.leggiBox === "function" ? contesto.leggiBox() : null;
+        if (box != null && box.isValid) {
+            riferimento.idBox = box.id;
+            if (box.parentPage != null && box.parentPage.name) {
+                riferimento.pagina = box.parentPage.name;
+            }
+        }
+    }
+    catch (e) {
+        //Il box puo' non esserci ancora o non piu': resta il gruppo, con la pagina dell'impaginazione.
+    }
+    return riferimento;
+}
+
 async function messaggioUtente(msg, style, loading = false, tempo = 0, dontWriteInLogs = false, modal = false) {
     try {
         if (msg == null || msg == "") {
@@ -8028,7 +8540,7 @@ async function messaggioUtente(msg, style, loading = false, tempo = 0, dontWrite
             return n < 10 ? '0' + n : '' + n;
         }
 
-        var logPath = cartellaDeiLog();
+        var cartellaLog = cartellaDeiLog();
 
         var date = new Date();
         var logMessage = {
@@ -8044,11 +8556,17 @@ async function messaggioUtente(msg, style, loading = false, tempo = 0, dontWrite
         if (lavorazioneMessaggio != null) {
             logMessage.lavorazione = lavorazioneMessaggio;
         }
+        //I20-1104: il box da cui viene il messaggio, se nasce mentre se ne impagina uno: per la console
+        //(gruppo, pagina, Trova) e per il file di log.
+        var boxDelMessaggio = riferimentoBoxDelMessaggio(contestoBoxInImpaginazione);
+        if (boxDelMessaggio != null) {
+            logMessage.box = boxDelMessaggio;
+        }
 
         writeFileInConsole(logMessage);
 
-        if (!dontWriteInLogs) {
-            var logFile = logPath + "log_" + date.getDate() + "-" + (date.getMonth() + 1) + "-" + date.getFullYear() + ".txt";
+        if (!dontWriteInLogs && cartellaLog !== "") {
+            var logFile = cartellaLog + "log_" + date.getDate() + "-" + (date.getMonth() + 1) + "-" + date.getFullYear() + ".txt";
             var file = readFile(logFile);
             if (file == null) {
                 try {
@@ -8155,7 +8673,10 @@ function writeDebugMessageForCrash(msg) {
             return n < 10 ? '0' + n : '' + n;
         }
 
-        var logPath = cartellaDeiLog();
+        var cartellaLog = cartellaDeiLog();
+        if (cartellaLog === "") {
+            return;
+        }
 
         var date = new Date();
         var logMessage = {
@@ -8166,7 +8687,7 @@ function writeDebugMessageForCrash(msg) {
         };
 
 
-        var logFile = logPath + "Debuglog_" + date.getDate() + "-" + (date.getMonth() + 1) + "-" + date.getFullYear() + ".txt";
+        var logFile = cartellaLog + "Debuglog_" + date.getDate() + "-" + (date.getMonth() + 1) + "-" + date.getFullYear() + ".txt";
         var file = readFile(logFile);
         if (file == null) {
             try {
@@ -8391,6 +8912,10 @@ function cercaRecordInTracciato(Codice) {
                     }
                     //mi dovrebbe tornare un oggetto con due parametri, esito, error se l'operazione è fallita, sennò mi arriva una menaboRef
                     if (objResult.esito != null && !objResult.esito) {
+                        //I20-1062: la traccia completa del server, per chi guarda la console.
+                        if (objResult.dettaglio) {
+                            console.error("Dettaglio dell'errore del server:", objResult.dettaglio);
+                        }
                         messaggioUtente("Code IDX-107 CercaRecordInTracciato: Errore durante la ricerca su server: " + objResult.error, "error");
                         return;
                     }
@@ -9482,12 +10007,31 @@ function writeFileInConsole(logMessage) {
     if (logMessage.lavorazione) {
         messaggio.append($('<div class="lavorazioneMessaggio" style="font-size: 10px; margin-top: 2px;"></div>').text(logMessage.lavorazione));
     }
+    //I20-1104: il box da cui viene il messaggio, se e' nato impaginandone uno: gruppo e pagina, e Trova
+    //per raggiungerlo. Anche nei log riletti con leggiLog.
+    var testoBox = testoBoxDelMessaggio(logMessage.box);
+    if (testoBox !== "") {
+        var rigaBox = $('<div class="boxMessaggio" style="font-size: 10px; margin-top: 2px;"></div>').text(testoBox + " ");
+        if (logMessage.box.idBox != null) {
+            var riferimentoBox = logMessage.box;
+            //I20-1114: un riquadro col bordo bianco, che si stacca dal testo su ogni colore di messaggio:
+            //la parola sottolineata a 10px si confondeva. Uno span e non un button: in UXP il button
+            //ignora lo stile.
+            rigaBox.append($('<span class="trovaBoxMessaggio" role="button" style="display: inline-block; margin-left: 6px; padding: 1px 8px; border: 1px solid white; border-radius: 4px; font-size: 11px; font-weight: bold; cursor: pointer;">Trova</span>')
+                .on('click', function () {
+                    trovaBoxDelMessaggio(riferimentoBox);
+                }));
+        }
+        messaggio.append(rigaBox);
+    }
     var x = $('<span style="font-size: 10px; cursor: pointer; margin-left:5px;">X</span>');
     var copyButton = $('<img src="images/copyToClipBoard.png" style="height: 10px; margin-left:5px;" msg="' + msg + '">');
     copyButton.msg = msg;
     //I20-1033: chi copia il messaggio si porta dietro anche canale e area.
-    if (logMessage.lavorazione) {
-        copyButton.attr("msg", msg + " [" + logMessage.lavorazione + "]");
+    //I20-1104: e il box da cui viene.
+    var contestoCopia = [logMessage.lavorazione, testoBox].filter(function (t) { return t; }).join(" · ");
+    if (contestoCopia !== "") {
+        copyButton.attr("msg", msg + " [" + contestoCopia + "]");
     }
 
     copyButton.on('click', function () {
@@ -9547,7 +10091,89 @@ function writeFileInConsole(logMessage) {
     else if (style == "error") {
         $("#consoleIcon").css("background-color", "red");
     }
-    //$("#debugLogs").prepend(div); 
+    //$("#debugLogs").prepend(div);
+}
+
+/// I20-1104: "Gruppo X · pag. N" per un messaggio nato impaginando un box, "" per gli altri.
+function testoBoxDelMessaggio(box) {
+    if (box == null || !box.codiceGruppo) {
+        return "";
+    }
+    return "Gruppo " + box.codiceGruppo + (box.pagina ? " · pag. " + box.pagina : "");
+}
+
+/// I20-1104: il box di un messaggio della console nel documento doc. esito: "trovato" (con box),
+/// "altroDocumento" (il messaggio e' nato in un altro documento), "nessunDocumento", "assente" (il box
+/// e' stato rifatto o cancellato: l'id non c'e' piu'). Si cerca per id fra gli elementi di primo
+/// livello e, se serve, fra tutti.
+function cercaBoxDelMessaggio(riferimento, doc) {
+    if (riferimento == null || riferimento.idBox == null) {
+        return { esito: "assente" };
+    }
+    if (doc == null) {
+        return { esito: "nessunDocumento" };
+    }
+    try {
+        if (riferimento.documento && doc.name !== riferimento.documento) {
+            return { esito: "altroDocumento" };
+        }
+    }
+    catch (e) {
+        //Senza il nome del documento si prova comunque a cercare.
+    }
+
+    var box = null;
+    try {
+        box = doc.pageItems.itemByID(riferimento.idBox);
+        if (box == null || !box.isValid) {
+            box = null;
+        }
+    }
+    catch (e) {
+        box = null;
+    }
+    if (box == null) {
+        try {
+            var tutti = doc.allPageItems || [];
+            for (var i = 0; i < tutti.length; i++) {
+                if (tutti[i].id === riferimento.idBox) {
+                    box = tutti[i];
+                    break;
+                }
+            }
+        }
+        catch (e) {
+            box = null;
+        }
+    }
+    return box != null ? { esito: "trovato", box: box } : { esito: "assente" };
+}
+
+/// I20-1104: il Trova della console. Porta al box come la schermata delle segnalazioni (lo seleziona
+/// e mostra la sua pagina), oppure dice perche' non si puo'.
+function trovaBoxDelMessaggio(riferimento) {
+    var doc = null;
+    try {
+        doc = app.documents.length > 0 ? app.activeDocument : null;
+    }
+    catch (e) {
+        doc = null;
+    }
+    var gruppo = riferimento != null ? riferimento.codiceGruppo : "";
+    var trovato = cercaBoxDelMessaggio(riferimento, doc);
+    if (trovato.esito === "trovato") {
+        SchermataSegnalazioni._selezionaBox(trovato.box);
+    }
+    else if (trovato.esito === "altroDocumento") {
+        messaggioUtente("Code IDX-184 Il box del gruppo " + gruppo + " sta nel documento " + riferimento.documento + ": apri quel documento e riprova", "warning", false, 8, true);
+    }
+    else if (trovato.esito === "nessunDocumento") {
+        messaggioUtente("Code IDX-185 Nessun documento aperto in cui cercare il box del gruppo " + gruppo, "warning", false, 8, true);
+    }
+    else {
+        messaggioUtente("Code IDX-186 Il box del gruppo " + gruppo + " non c'e' piu' nel documento: e' stato rifatto o cancellato", "warning", false, 8, true);
+    }
+    return trovato.esito;
 }
 
 /// Svuota la console interna, azzera il contatore dei non letti e rimette l'icona verde.
@@ -9747,34 +10373,58 @@ async function login(username, password, ricordami = false){
     xhr.send("LoginController/login", formData , "POST");
 }
 
-/// Trova i quattro percorsi di sistema - Links, Loghi, Logs, Esportazione - e, se ne manca
-/// uno, apre la finestra che chiede all'operatore di indicarli. Restituisce true solo
-/// quando ci sono tutti.
+/// I20-1065: crea, se mancano, le cartelle logs, export e SingularData/<idMacchina> sotto base (la
+/// cartella del documento, o quella del libro), senza chiedere niente all'operatore, e ne fissa i
+/// percorsi: logPath, exportPath, SingularPath. Va chiamata all'apertura, prima di leggere
+/// qualsiasi file della lavorazione: il file delle lavorazioni, la lista del kit e i filtri stanno
+/// in SingularPath.
+/// Se non ci riesce lo dice all'operatore (IDX-177) e lascia i percorsi vuoti. Restituisce true se
+/// le cartelle sono pronte.
+async function preparaCartelleDiSistema(base) {
+    logPath = "";
+    exportPath = "";
+    SingularPath = "";
+    if (!base) {
+        return false;
+    }
+    try {
+        const cartelle = await Utility.preparaCartelleDiSistema(base, idMacchina(), fs2);
+        logPath = cartelle.logPath;
+        exportPath = cartelle.exportPath;
+        SingularPath = cartelle.SingularPath;
+        //la cartella dei log adesso c'e': se mancasse ancora, va detto di nuovo
+        cartellaAssenteCheck = false;
+        return true;
+    }
+    catch (e) {
+        console.error("Cartelle di sistema non create sotto " + base + ":", e);
+        messaggioUtente("Code IDX-177 Cartelle di sistema (logs, export, SingularData) non create nella cartella del documento: " + e, "error");
+        return false;
+    }
+}
+
+/// Trova i percorsi delle immagini - Links e Loghi - e, se ne manca uno, apre la finestra che
+/// chiede all'operatore di indicarli. Restituisce true solo quando ci sono tutti e due.
+///
+/// I20-1065: sono gli unici che si chiedono. logs, export e SingularData il Plugin li crea da
+/// solo (preparaCartelleDiSistema); la cartella delle lavorazioni di I20-1057 non c'e' piu'.
 ///
 /// Tre tentativi in ordine, per ognuno:
-///   1. quello scritto in lavorazioni.json, ma solo se la cartella esiste davvero: un
+///   1. quello scritto nella voce della lavorazione, ma solo se la cartella esiste davvero: un
 ///      percorso registrato e poi spostato varrebbe come assente;
 ///   2. la cartella prevista sotto la lavorazione (defaultPercorso...), che se c'e' viene
 ///      anche registrata;
 ///   3. niente, e allora si chiede.
-///
-/// scope serve a chiedere solo una parte: linksLoghi sono i percorsi delle immagini,
-/// sistema quelli di log ed esportazione. La finestra pero' e' sempre la stessa e li mostra
-/// tutti e quattro.
 ///
 /// Col libro aperto e nessun documento, i percorsi si cercano a partire dal primo file del
 /// libro: sono gli stessi per tutti.
 ///
 /// DA SPOSTARE (task di divisione): questa e impostaPercorsiDiSistema sono i percorsi di
 /// lavoro, un concetto a se'. Starebbero in un js loro.
-async function checkPercorsi(forceOpenModal = false, scope = 'entrambi') {
+async function checkPercorsi(forceOpenModal = false) {
     
     let _pathLavorazione = pathLavorazione;
     let docName = docInLavorazione!=null?docInLavorazione.name:"";
-    // if (forceOptions != null) {
-    //     _pathLavorazione = forceOptions.pathLavorazione || _pathLavorazione;
-    //     docName = forceOptions.docName || docName;
-    // }
 
     if (_pathLavorazione == "" || docName == "") {
         if (libroInLavorazione!=null)
@@ -9786,10 +10436,10 @@ async function checkPercorsi(forceOpenModal = false, scope = 'entrambi') {
         }
     }
 
-    const filePath = _pathLavorazione + "/lavorazioni.json";
-
-    var lavorazioni = readFile(filePath);
-    var file = lavorazioni?.find(f => f.file == docName);
+    //I20-1061: i percorsi sono di questa macchina, quindi la voce si legge dal suo file
+    //(voceLavorazione ce la copia se era solo nel file di un'altra macchina).
+    const libroDelDoc = docInLavorazione == null && libroInLavorazione != null ? libroInLavorazione.name : libroDelDocumentoInLavorazione(docName, _pathLavorazione);
+    var file = Utility.voceLavorazione(_pathLavorazione, idMacchina(), docName, libroDelDoc);
 
     if (!file) {
         messaggioUtente("Code IDX-143 File lavorazioni.json non trovato", "error");
@@ -9797,14 +10447,12 @@ async function checkPercorsi(forceOpenModal = false, scope = 'entrambi') {
     }
     var percorsoLinksNullo = false;
     var percorsoLoghiNullo = false;
-    var percorsoLogsNullo = false;
-    var percorsoEsportazioneNullo = false;
 
     // --- Imposta variabili globali se valorizzate nel JSON ---
     if (file.pathLinks != null && file.pathLinks !== "") {
         try {
             //proviamo a cercare la cartella per vedere se esiste davvero
-            const folder = await fs2.getEntryWithUrl("file://" + /*_pathLavorazione +*/ file.pathLinks);
+            const folder = await fs2.getEntryWithUrl("file://" + file.pathLinks);
             percorsoLinks = file.pathLinks;
         }
         catch (e) {
@@ -9818,7 +10466,7 @@ async function checkPercorsi(forceOpenModal = false, scope = 'entrambi') {
     if (file.pathLoghi != null && file.pathLoghi !== "") {
         try {
             //proviamo a cercare la cartella per vedere se esiste davvero
-            const folder = await fs2.getEntryWithUrl("file://" + /*_pathLavorazione +*/ file.pathLoghi);
+            const folder = await fs2.getEntryWithUrl("file://" + file.pathLoghi);
             percorsoLoghi = file.pathLoghi;
         }
         catch (e) {
@@ -9829,39 +10477,11 @@ async function checkPercorsi(forceOpenModal = false, scope = 'entrambi') {
         percorsoLoghiNullo = true;
     }
 
-    if (file.pathLogs != null && file.pathLogs !== "") {
-        try {
-            //proviamo a cercare la cartella per vedere se esiste davvero
-            const folder = await fs2.getEntryWithUrl("file://" + /*_pathLavorazione +*/ file.pathLogs);
-            percorsoLogs = file.pathLogs;
-        }
-        catch (e) {
-            percorsoLogsNullo = true;
-        }
-    }
-    else {
-        percorsoLogsNullo = true;
-    }
-
-    if (file.pathEsportazione != null && file.pathEsportazione !== "") {
-        try {
-            //proviamo a cercare la cartella per vedere se esiste davvero
-            const folder = await fs2.getEntryWithUrl("file://" + /*_pathLavorazione +*/ file.pathEsportazione);
-            percorsoEsportazione = file.pathEsportazione;
-        }
-        catch (e) {            
-            percorsoEsportazioneNullo = true;
-        }
-    }
-    else {
-        percorsoEsportazioneNullo = true;
-    }
-
-    //stampiamo i 4 path in console
     console.log("Percorso Links: " + percorsoLinks);
     console.log("Percorso Loghi: " + percorsoLoghi);
-    console.log("Percorso Logs: " + percorsoLogs);
-    console.log("Percorso Esportazione: " + percorsoEsportazione);
+    console.log("Percorso Logs: " + logPath);
+    console.log("Percorso Export: " + exportPath);
+    console.log("Percorso SingularData: " + SingularPath);
 
     //per ogni percorso rimasto nullo cerchiamo se è presente la cartella di default ovvero quella il cui percorso è
     //pathLavorazione + percorsoLoghi ecc ecc
@@ -9869,7 +10489,7 @@ async function checkPercorsi(forceOpenModal = false, scope = 'entrambi') {
         //controlliamo se esiste la cartella pathLavorazione + percorsoLinks
         try {
             const folder = await fs2.getEntryWithUrl("file://" + _pathLavorazione + defaultPercorsoLinks);
-            impostaPercorsiDiSistema(0, _pathLavorazione + defaultPercorsoLinks);
+            await impostaPercorsiDiSistema(0, _pathLavorazione + defaultPercorsoLinks);
         }
         catch (e) {
             percorsoLinks = "";
@@ -9880,7 +10500,7 @@ async function checkPercorsi(forceOpenModal = false, scope = 'entrambi') {
     if (percorsoLoghiNullo) {
         try {
             const folder = await fs2.getEntryWithUrl("file://" + _pathLavorazione + defaultPercorsoLoghi);
-            impostaPercorsiDiSistema(1, _pathLavorazione + defaultPercorsoLoghi);
+            await impostaPercorsiDiSistema(1, _pathLavorazione + defaultPercorsoLoghi);
         }
         catch (e) {
             percorsoLoghi = "";
@@ -9888,87 +10508,33 @@ async function checkPercorsi(forceOpenModal = false, scope = 'entrambi') {
 
         }
     }
-    if (percorsoLogsNullo) {
-        try {
-            const folder = await fs2.getEntryWithUrl("file://" + _pathLavorazione + defaultPercorsoLogs);
-            impostaPercorsiDiSistema(2, _pathLavorazione + defaultPercorsoLogs);
-        }
-        catch (e) {
-            percorsoLogs = "";
-            forceOpenModal = true;
-
-        }
-    }
-    if (percorsoEsportazioneNullo) {
-        try {
-            const folder = await fs2.getEntryWithUrl("file://" + _pathLavorazione + defaultPercorsoEsportazione);
-            impostaPercorsiDiSistema(3, _pathLavorazione + defaultPercorsoEsportazione);
-        }
-        catch (e) {
-            percorsoEsportazione = "";
-            forceOpenModal = true;
-        }
-    }
-
-    var lavorazioni = readFile(filePath);
-    var file = lavorazioni?.find(f => f.file == docName);
-
-    // --- Definisce i campi richiesti in base allo scope ---
-    const requirementsByScope = {
-        linksLoghi: [
-            { key: 'pathLinks', value: percorsoLinks },
-            { key: 'pathLoghi', value: percorsoLoghi },
-        ],
-        sistema: [
-            { key: 'pathLogs', value: percorsoLogs },
-            { key: 'pathEsportazione', value: percorsoEsportazione },
-        ],
-        entrambi: [
-            { key: 'pathLinks', value: percorsoLinks },
-            { key: 'pathLoghi', value: percorsoLoghi },
-            { key: 'pathLogs', value: percorsoLogs },
-            { key: 'pathEsportazione', value: percorsoEsportazione },
-        ],
-    };
-
-    const required = requirementsByScope[scope] || requirementsByScope.entrambi;
 
     // --- Verifica mancanti ---
-    const missing = required.filter(r => r.value == null || r.value === "");
+    const missing = [percorsoLinks, percorsoLoghi].filter(valore => valore == null || valore === "");
     if (missing.length > 0 || forceOpenModal) {
         
         console.log("apro il dialog!");
 
-        // Apri SEMPRE lo stesso dialog anche per links/loghi
         if ($("#overlayModal").css("display") == "none" &&
             $("#overlayModal").find("#dialogPathDiSistema").length == 0) {
             Modali.apriModal(
                 "dialogPathDiSistema",
-                "Seleziona i percorsi di sistema (links, loghi, logs, esportazione)",
+                "Cartelle di sistema",
                 false,
                 [],
                 true
             );
 
             //impostiamo i valori dei path già presenti
-            $("#pathFoto").val(percorsoLinks);
-            $("#pathFoto").text(percorsoLinks);
-            $("#pathLoghi").val(percorsoLoghi);
-            $("#pathLoghi").text(percorsoLoghi);
-            $("#pathLogs").val(percorsoLogs);
-            $("#pathLogs").text(percorsoLogs);
-            $("#pathEsportazione").val(percorsoEsportazione);
-            $("#pathEsportazione").text(percorsoEsportazione);
+            mostraPercorsoNellaFinestra("pathFoto", percorsoLinks);
+            mostraPercorsoNellaFinestra("pathLoghi", percorsoLoghi);
 
-            //Il pulsante di conferma compare solo quando tutti e quattro i percorsi ci sono.
-            //I20-1002: qui la condizione aveva in coda "|| forceOptions != null", ma
-            //forceOptions era un parametro rimosso - restano le tre righe commentate in
-            //cima alla funzione. Era un identificatore inesistente, quindi ReferenceError
-            //ogni volta che mancava un percorso, cioe' proprio nel caso per cui questo
-            //ramo esiste. Nessun chiamante ha mai passato forceOptions, percio' quel
-            //confronto valeva false anche prima: toglierlo non cambia il comportamento.
-            if (percorsoLinks && percorsoLoghi && percorsoLogs && percorsoEsportazione) {
-                $("#confermaPercorsi").show();
+            //Il pulsante di conferma compare solo quando ci sono tutti e due i percorsi.
+            //I20-1002: qui la condizione aveva in coda "|| forceOptions != null", con
+            //forceOptions parametro rimosso: un identificatore inesistente, quindi ReferenceError
+            //ogni volta che mancava un percorso. Nessun chiamante l'ha mai passato.
+            if (percorsoLinks && percorsoLoghi) {
+                $("#overlayModal").find("#confermaPercorsi").show();
             }
         }
 
@@ -10064,6 +10630,11 @@ async function logout(){
 function onresizeWindow(){
     try{
         setTimeout(function () {
+            //I20-1116, lotto 2: prima le larghezze: la vista affiancata restringe #wrapper e le barre fisse.
+            lastPannelloDimension = VistaAffiancata.larghezzaPannello();
+            //I20-1121: prima il report, che ha la precedenza sulla colonna, poi le segnalazioni.
+            ReportIntegrita.adattaVista();
+            SchermataSegnalazioni.adattaVista();
             lastWidthDimension = document.getElementById("wrapper").clientWidth;
             lastHeightDimension = document.getElementById("wrapper").clientHeight;
             footerHeight = document.getElementById("footer").clientHeight;
@@ -10171,8 +10742,22 @@ function onResizeTab1Tracciato(){
 }
 
 
-/// Registra in lavorazioni.json uno dei quattro percorsi di sistema: 0 Links, 1 Loghi,
-/// 2 Logs, 3 Esportazione.
+/// I20-1057: scrive un percorso nella finestra delle cartelle di sistema e segna la riga come
+/// impostata o mancante. Lavora nella finestra aperta (#overlayModal): il template nascosto
+/// ha gli stessi id, e scrivere li' non si vedrebbe.
+function mostraPercorsoNellaFinestra(idCampo, valore) {
+    const testo = valore ? String(valore) : "";
+    const campo = $("#overlayModal").find("#" + idCampo);
+    campo.val(testo);
+    campo.text(testo !== "" ? testo : "Non impostato");
+    const riga = campo.closest(".rigaPercorso");
+    riga.toggleClass("percorsoImpostato", testo !== "");
+    riga.toggleClass("percorsoMancante", testo === "");
+}
+
+/// Registra nella voce della lavorazione uno dei due percorsi delle immagini: 0 Links, 1 Loghi.
+/// I20-1065: logs, export e le lavorazioni (2, 3 e 4 fino a I20-1057) non si scelgono piu':
+/// le crea il Plugin (preparaCartelleDiSistema).
 ///
 /// Col valore passato lo scrive e basta; senza, apre il dialogo di scelta cartella.
 /// checkPercorsi la usa nel primo modo quando trova la cartella prevista, l'operatore nel
@@ -10218,8 +10803,9 @@ async function impostaPercorsiDiSistema(tipo, value = null){
             // }
             // percorso = percorso.replace(_pathLavorazione, ""); //rimuoviamo il pathLavorazione dal percorso
     
-            var filePath = _pathLavorazione + "/lavorazioni.json";
-            let lavorazioni = readFile(filePath);
+            //I20-1061: i percorsi si scrivono solo nel file di questa macchina
+            var filePath = Utility.percorsoFileLavorazioniMacchina(_pathLavorazione, idMacchina());
+            let lavorazioni = Utility.leggiFileLavorazioni(filePath);
     
             _procFiles=[];
             if (docInLavorazione!=null)
@@ -10247,53 +10833,27 @@ async function impostaPercorsiDiSistema(tipo, value = null){
     
                 if (tipo == 0) {
                     percorsoLinks = percorso.endsWith("/") ? percorso : percorso + "/";
-                    $("#pathFoto").val(percorso);
-                    $("#pathFoto").text(percorso);
+                    mostraPercorsoNellaFinestra("pathFoto", percorso);
                     //scriviamo nel file lavorazioni.json il percorso
                     file.pathLinks = percorsoLinks;
                     //scriviamo il file lavorazioni.json
                     messaggioUtente("Percorso per le foto impostato a: " + percorso, "success", false, 0, false, true);
                 } else if (tipo == 1) {
                     percorsoLoghi = percorso.endsWith("/") ? percorso : percorso + "/";
-                    $("#pathLoghi").val(percorso);
-                    $("#pathLoghi").text(percorso);
+                    mostraPercorsoNellaFinestra("pathLoghi", percorso);
                     //scriviamo nel file lavorazioni.json il percorso
                     file.pathLoghi = percorsoLoghi;
                     messaggioUtente("Percorso per i loghi impostato a: " + percorso, "success", false, 0, false, true);
-                } else if (tipo == 2) {
-                    //cartella logs
-                    percorsoLogs = percorso.endsWith("/") ? percorso : percorso + "/";
-                    $("#pathLogs").val(percorso);
-                    $("#pathLogs").text(percorso);
-                    //scriviamo nel file lavorazioni.json il percorso
-                    file.pathLogs = percorsoLogs;
-                    //scriviamo il file lavorazioni.json
-                    messaggioUtente("Percorso per i logs impostato a: " + percorso, "success", false, 0, false, true);
-                } else if (tipo == 3) {
-                    //cartella di esportazione
-                    percorsoEsportazione = percorso.endsWith("/") ? percorso : percorso + "/";
-                    $("#pathEsportazione").val(percorso);
-                    $("#pathEsportazione").text(percorso);
-                    //scriviamo nel file lavorazioni.json il percorso
-                    file.pathEsportazione = percorsoEsportazione;
-                    //scriviamo il file lavorazioni.json            
-                    messaggioUtente("Percorso per l'esportazione impostato a: " + percorso, "success", false, 0, false, true);
                 }
             }
     
             fs.writeFileSync(filePath, JSON.stringify(lavorazioni));        
         }
     
-        //se sia pathFoto che pathLoghi .val sono diversi da "" allora abilitiamo il pulsante di salvataggio
-        // if ((tipo == 0 || tipo == 1) && $("#pathFoto").val() != "" && $("#pathLoghi").val() != "") {
-        //     $("#confermaPercorsi").show();
-        // }
-        // else if((tipo == 2 || tipo == 3) && $("#pathLogs").val() != "" && $("#pathEsportazione").val() != "") {
-        //     $("#confermaPercorsi").show();
-        // }
-    
-        if (value == null && $("#pathFoto").val() != "" && $("#pathLoghi").val() != "" && $("#pathLogs").val() != "" && $("#pathEsportazione").val() != "") {
-            $("#confermaPercorsi").show();
+        //se sia pathFoto che pathLoghi sono impostati abilitiamo il pulsante di conferma
+        const finestraPercorsi = $("#overlayModal");
+        if (value == null && ["pathFoto", "pathLoghi"].every(id => finestraPercorsi.find("#" + id).val() != "")) {
+            finestraPercorsi.find("#confermaPercorsi").show();
         }
 
     }

@@ -16,10 +16,11 @@ import {
   FileItemKit,
   FileItemKitLog,
   FotoGruppoReferenze,
-  RUNTIME_KIT_MONGO,
+  RUNTIME_KIT,
   ReferenzeIstanta
 } from '../../../lib/types';
 import config from '../config';
+import { urlOlimpo } from '../utils/urlOlimpo';
 import type { TipiDiExportResponseDTO } from '../dto';
 import { IAreaService } from '../interfaces/IAreaService';
 import { ICanaleService } from '../interfaces/ICanaleService';
@@ -37,48 +38,14 @@ import { RuntimeKit } from '../models/runtime_kit';
 import type { IPromoRepository } from '../repositories/PromoRepository';
 import { normalizePromoModel } from '../utils/PromoModelUtils';
 import { ServerUtils } from '../utils/ServerUtils';
+import { verificaRisposta } from '../utils/rispostaServizi';
 import { TraduttoreReferenze } from '../utils/Translator';
+import { sostituisciReferenzeKit } from './ReferenzeService';
 
-/**
- * Il modello PG vuole `foto` come array piatto di guidId (stringhe): il plugin manda
- * oggetti { nome, guidId } (il nome serve solo per il retry lato plugin), quindi qui
- * si appiattisce tenendo solo i guidId gia valorizzati — quelli non ancora caricati
- * hanno guidId vuoto e non sono referenziabili in Olimpo, si scartano.
- */
-function appiattisciFoto(foto: ReferenzeIstanta['foto']): string[] {
-  if (!Array.isArray(foto)) return [];
-  return foto
-    .map((f: any) => (typeof f === 'string' ? f : f?.guidId))
-    .filter((guidId: unknown): guidId is string => typeof guidId === 'string' && guidId.length > 0);
-}
-
-/** Converts a ReferenzeIstanta (camelCase) to snake_case for the Referenze PG model */
-function referenzaToSnakeCase(ref: ReferenzeIstanta): any {
-  return {
-    id: ref.id,
-    compiled_fields: ref.compiledFields ?? (ref as any).compiled_fields,
-    deleted_fields: ref.deletedFields ?? (ref as any).deleted_fields,
-    data_fields: ref.dataFields ?? (ref as any).data_fields,
-    foto: appiattisciFoto(ref.foto),
-    meccanica: ref.meccanica,
-    codice_box: ref.codiceBox ?? (ref as any).codice_box,
-    foto_extra: ref.fotoExtra ?? (ref as any).foto_extra,
-    group_elements: ref.groupElements ?? (ref as any).group_elements,
-    id_runtime_kit: ref.guidIdKitRuntime ?? (ref as any).id_runtime_kit,
-    id_promo: ref.idPromo ?? (ref as any).id_promo,
-    pag: ref.pag,
-    x: ref.x,
-    y: ref.y,
-    w: ref.w,
-    h: ref.h,
-    w_page: ref.wPage ?? (ref as any).w_page,
-    h_page: ref.hPage ?? (ref as any).h_page,
-    perc_ingombro: ref.percIngombro ?? (ref as any).perc_ingombro,
-    aspect_ratio: ref.aspectRatio ?? (ref as any).aspect_ratio,
-    createdAt: ref.createdAt ?? new Date(),
-    updatedAt: ref.updatedAt ?? new Date(),
-  };
-}
+// Lo ZIP degli scarti arriva dal client e si decomprime in memoria: limiti contro gli zip bomb
+const MAX_ENTRY_ZIP = 500;
+const MAX_BYTE_ENTRY_ZIP = 50 * 1024 * 1024;
+const MAX_BYTE_TOTALI_ZIP = 200 * 1024 * 1024;
 
 interface MatchedFile {
   originalFile: FileItemKit;
@@ -214,19 +181,37 @@ export class FileManagementService implements IFileManagementService {
   public async processRejectedZip(zipBuffer: Buffer, rejectedFiles: FileItemKit[]): Promise<MatchedFile[]> {
     const bufferStream = Readable.from(zipBuffer);
     const matchedFiles: MatchedFile[] = [];
+    const nomiElaborati = new Set<string>();
+    let numeroEntry = 0;
+    let byteTotali = 0;
 
     //@ts-ignore
     const unzipped = bufferStream.pipe(unzipper.Parse({ forceStream: true }));
     //@ts-ignore
     for await (const entry of unzipped) {
+      if (++numeroEntry > MAX_ENTRY_ZIP) {
+        throw new BadRequestError({ message: `Lo ZIP contiene più di ${MAX_ENTRY_ZIP} file.` });
+      }
       const filePath = entry.path;
       const fileName = path.basename(filePath);
 
-      const originalFile = rejectedFiles.find(rf => rf.nome === fileName);
+      // Uno stesso nome ripetuto nello ZIP (es. in cartelle diverse) si elabora una volta sola
+      const originalFile = nomiElaborati.has(fileName) ? undefined : rejectedFiles.find(rf => rf.nome === fileName);
 
       if (originalFile) {
-        const chunks: any[] = [];
+        nomiElaborati.add(fileName);
+        const chunks: Buffer[] = [];
+        let byteEntry = 0;
+        // Le dimensioni dichiarate nello ZIP non sono affidabili: si contano i byte letti
         for await (const chunk of entry) {
+          byteEntry += chunk.length;
+          byteTotali += chunk.length;
+          if (byteEntry > MAX_BYTE_ENTRY_ZIP) {
+            throw new BadRequestError({ message: `Il file ${fileName} nello ZIP supera i ${MAX_BYTE_ENTRY_ZIP / 1024 / 1024} MB.` });
+          }
+          if (byteTotali > MAX_BYTE_TOTALI_ZIP) {
+            throw new BadRequestError({ message: `Il contenuto dello ZIP supera i ${MAX_BYTE_TOTALI_ZIP / 1024 / 1024} MB.` });
+          }
           chunks.push(chunk);
         }
         const fileContent = Buffer.concat(chunks);
@@ -275,8 +260,8 @@ export class FileManagementService implements IFileManagementService {
         return {
           id: f.id_olimpo_cloud ?? '',
           nome: f.nome,
-          url: `${config.OLYMPUS_IP_ADDRESS}/materiali/getThumbnailMaterialePdfs?&id=${f.id_olimpo_cloud}`,
-          url_download: `${config.OLYMPUS_IP_ADDRESS}/materiali/getMaterialePDF?id=${f.id_olimpo_cloud}`,
+          url: urlOlimpo('/materiali/getThumbnailMaterialePdfs', { id: f.id_olimpo_cloud }),
+          url_download: urlOlimpo('/materiali/getMaterialePDF', { id: f.id_olimpo_cloud }),
           id_olimpo_cloud: f.id_olimpo_cloud,
           direttive: f.direttive,
           nome_originale: f.nome_originale,
@@ -342,8 +327,8 @@ export class FileManagementService implements IFileManagementService {
           id: f.id_olimpo_cloud ?? '',
           nome: f.nome,
           nome_originale: f.nome_originale,
-          url: `${config.OLYMPUS_IP_ADDRESS}/materiali/getThumbnailMaterialePdfs?&id=${f.id_olimpo_cloud}`,
-          url_download: `${config.OLYMPUS_IP_ADDRESS}/materiali/getMaterialePDF?id=${f.id_olimpo_cloud}`,
+          url: urlOlimpo('/materiali/getThumbnailMaterialePdfs', { id: f.id_olimpo_cloud }),
+          url_download: urlOlimpo('/materiali/getMaterialePDF', { id: f.id_olimpo_cloud }),
           id_olimpo_cloud: f.id_olimpo_cloud,
           direttive: f.direttive,
           isOptional: f.isOptional,
@@ -481,8 +466,8 @@ export class FileManagementService implements IFileManagementService {
           id: f.id_olimpo_cloud ?? '',
           nome: f.nome,
           nome_originale: f.nome_originale,
-          url: `${config.OLYMPUS_IP_ADDRESS}/materiali/getThumbnailMaterialePdfs?&id=${f.id_olimpo_cloud}`,
-          url_download: `${config.OLYMPUS_IP_ADDRESS}/materiali/getMaterialePDF?id=${f.id_olimpo_cloud}`,
+          url: urlOlimpo('/materiali/getThumbnailMaterialePdfs', { id: f.id_olimpo_cloud }),
+          url_download: urlOlimpo('/materiali/getMaterialePDF', { id: f.id_olimpo_cloud }),
           id_olimpo_cloud: f.id_olimpo_cloud,
           direttive: f.direttive,
           pages: f.pages,
@@ -576,59 +561,6 @@ export class FileManagementService implements IFileManagementService {
     }
   }
 
-  async getKitRunTimeById(id: string, get_files: boolean = true): Promise<any> {
-    try {
-      let kit = await this.kitRuntimeService.getKitRuntimeById(id);
-      if (!kit) {
-        throw wrapNotFoundError(new Error("Kit non trovato"), {
-          message: "Kit non trovato",
-          entityType: "KitRuntime",
-          entityId: id
-        });
-      }
-
-      if (!get_files) {
-        return kit;
-      }
-
-      let files = await this.kitRuntimeService.getFilesRuntimeByIdKitRuntime(id);
-      if (!files) {
-        throw wrapNotFoundError(new Error("Kit senza file"), {
-          message: "Kit senza file",
-          entityType: "KitRuntime",
-          entityId: id
-        });
-      }
-
-      const filesArray = await Promise.all(files.map(async (f: FileItemKit) => {
-        return {
-          id: f.id_olimpo_cloud ?? '',
-          nome: f.nome,
-          url: `${config.OLYMPUS_IP_ADDRESS}/materiali/getThumbnailMaterialePdfs?&id=${f.id_olimpo_cloud}`,
-          url_download: `${config.OLYMPUS_IP_ADDRESS}/materiali/getMaterialePDF?id=${f.id_olimpo_cloud}`,
-          id_olimpo_cloud: f.id_olimpo_cloud,
-          direttive: f.direttive,
-          nome_originale: f.nome_originale,
-          isOptional: f.isOptional,
-          tipo_export: f.tipo_export,
-          id_runtime: f.id_runtime,
-          meta_olimpo_cloud: f.meta_olimpo_cloud,
-          tipo_export_codice: f.tipo_export_codice,
-        };
-      }));
-
-      kit.files = filesArray;
-      return kit;
-    } catch (error) {
-      throw wrapDatabaseError(new Error("Errore durante il recupero del kit runtime"), {
-        message: "Errore durante il recupero del kit runtime",
-        operation: 'get',
-        entity: 'KitRuntime',
-        details: { error }
-      });
-    }
-  }
-
   async getProprietaMetaFilesRuntime(idKitRuntime: string): Promise<string[]> {
     try {
       const resultCreazioneCombinazioneDesign = await FilesRuntime.findAll({
@@ -659,7 +591,7 @@ export class FileManagementService implements IFileManagementService {
       if (!codice) {
         codice = EXPORT_DI_SISTEMA.VOL;
       }
-      const combinazioni = await RuntimeKit.findAll({ raw: true }) as unknown as RUNTIME_KIT_MONGO[];
+      const combinazioni = await RuntimeKit.findAll({ raw: true }) as unknown as RUNTIME_KIT[];
       if (!combinazioni) {
         return [];
       }
@@ -714,8 +646,8 @@ export class FileManagementService implements IFileManagementService {
               tipo_export: file.tipo_export,
               codice_tipiexport: exportType.codice,
               idPromo: combinazione.idPromo,
-              url: `${config.OLYMPUS_IP_ADDRESS}/materiali/getThumbnailMaterialePdfs?&id=${file.id_olimpo_cloud}`,
-              url_download: `${config.OLYMPUS_IP_ADDRESS}/materiali/getMaterialePDF?id=${file.id_olimpo_cloud}`
+              url: urlOlimpo('/materiali/getThumbnailMaterialePdfs', { id: file.id_olimpo_cloud }),
+              url_download: urlOlimpo('/materiali/getMaterialePDF', { id: file.id_olimpo_cloud })
             });
             files.push(fileEntry);
           }
@@ -747,7 +679,7 @@ export class FileManagementService implements IFileManagementService {
       const combinazioni = await RuntimeKit.findAll({
         where: whereClause,
         raw: true
-      }) as unknown as RUNTIME_KIT_MONGO[];
+      }) as unknown as RUNTIME_KIT[];
 
       if (combinazioni.length === 0) {
         return [];
@@ -809,8 +741,8 @@ export class FileManagementService implements IFileManagementService {
               tipo_export: file.tipo_export,
               codice_tipiexport: exportType.codice,
               idPromo: combinazione.idPromo,
-              url: `${config.OLYMPUS_IP_ADDRESS}/materiali/getThumbnailMaterialePdfs?&id=${file.id_olimpo_cloud}`,
-              url_download: `${config.OLYMPUS_IP_ADDRESS}/materiali/getMaterialePDF?id=${file.id_olimpo_cloud}`
+              url: urlOlimpo('/materiali/getThumbnailMaterialePdfs', { id: file.id_olimpo_cloud }),
+              url_download: urlOlimpo('/materiali/getMaterialePDF', { id: file.id_olimpo_cloud })
             });
             files.push(fileEntry);
           }
@@ -863,21 +795,9 @@ export class FileManagementService implements IFileManagementService {
   async uploadMateriale(file: Express.Multer.File, data: any, req: ExpressRequest): Promise<any> {
     try {
       const { guidKitRuntime, tipoExport, nomeFile, meta } = data;
-      const dir = path.resolve(process.cwd(), "server/core/public/uploads/materiali_POP/");
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir);
-      }
-
-      const fileResolve = nomeFile;
-      const newFilePath = path.resolve(dir, fileResolve);
-
-      if (file.mimetype === 'application/json') {
-        await fs.promises.rename(file.path, newFilePath);
-      } else {
-        const fileBuffer = await fs.promises.readFile(file.path);
-        const uint = new Uint8Array(fileBuffer);
-        await fs.promises.writeFile(newFilePath, uint);
-      }
+      // nomeFile arriva dal client ed e' solo il nome logico verso Olimpo e DB: su disco si legge
+      // il temporaneo di multer (nome univoco), cosi due upload con lo stesso nome non si sovrascrivono.
+      const fileResolve = path.basename(String(nomeFile));
 
       const file_extension = path.extname(file.originalname);
       const tipoDiExportModel = await this.tipoExportService.getTipoExportById(tipoExport);
@@ -893,11 +813,11 @@ export class FileManagementService implements IFileManagementService {
 
       if (file_extension === ".pdf" && codiceExport !== "WEB") {
         const formData = new FormData();
-        const fileBuffer = fs.readFileSync(newFilePath);
-        const fileBlob = new Blob([fileBuffer], { type: 'application/pdf' });
+        const fileBuffer = await fs.promises.readFile(file.path);
+        const fileBlob = new Blob([new Uint8Array(fileBuffer)], { type: 'application/pdf' });
         const hash = crypto.createHash('md5').update(fileBuffer).digest('hex');
 
-        formData.append("file", fileBlob, path.basename(newFilePath));
+        formData.append("file", fileBlob, fileResolve);
         formData.append("json_meta_materiale", JSON.stringify({
           Id: "",
           FileHash: hash,
@@ -916,7 +836,8 @@ export class FileManagementService implements IFileManagementService {
         }>(
           `${config.OLYMPUS_IP_ADDRESS}/materiali/uploadMateriale`,
           formData,
-          { headers: { "Authorization": req.headers.authorization as string } }
+          // Senza timeout un Olimpo bloccato tiene aperta la richiesta (e il temporaneo) all'infinito
+          { headers: { "Authorization": req.headers.authorization as string }, timeout: 120_000 }
         );
 
         if (!result.data.esito) {
@@ -995,8 +916,6 @@ export class FileManagementService implements IFileManagementService {
           newFile = files[index];
         }
 
-        await fs.promises.rm(newFilePath);
-
         if (isNewFile) {
           await this.kitRuntimeService.insertNewFileRuntime(newFile);
         } else {
@@ -1014,8 +933,7 @@ export class FileManagementService implements IFileManagementService {
         }
         await this.kitRuntimeService.insertNewFileRuntimeLog(log);
       } else if ((file_extension === ".json" || file_extension === ".webpliant") && codiceExport === "WEB") {
-        const fileBuffer = fs.readFileSync(newFilePath);
-        const fileString = fileBuffer.toString();
+        const fileString = await fs.promises.readFile(file.path, 'utf8');
         const fileJson: ReferenzeIstanta[] = JSON.parse(fileString);
 
         let kit = await this.kitRuntimeService.getKitRuntimeById(guidKitRuntime);
@@ -1032,8 +950,7 @@ export class FileManagementService implements IFileManagementService {
           referenza.guidIdKitRuntime = guidKitRuntime;
         }));
 
-        await this.bulkEliminateReferenze(guidKitRuntime);
-        const result = await this.bulkCreateReferenze(fileJson);
+        const result = await sostituisciReferenzeKit(guidKitRuntime, fileJson);
         const log: FileItemKitLog = {
           id: uuidv4(),
           guid_kit_runtime: guidKitRuntime,
@@ -1044,10 +961,8 @@ export class FileManagementService implements IFileManagementService {
           stato: STATO_LOG_FILE.IN_ATTESA
         }
         await this.kitRuntimeService.insertNewFileRuntimeLog(log);
-        await fs.promises.rm(newFilePath);
         return result;
       } else {
-        await fs.promises.unlink(newFilePath);
         throw wrapDatabaseError(new Error("Tipo di file non supportato o tipo di export errato per il tipo di file"), {
           message: "Tipo di file non supportato o tipo di export errato per il tipo di file",
           operation: 'upload',
@@ -1069,6 +984,10 @@ export class FileManagementService implements IFileManagementService {
           details: { error }
         });
       }
+    } finally {
+      // Il temporaneo di multer non serve piu, comunque sia andata; un errore di pulizia non cambia l'esito
+      await fs.promises.rm(file.path, { force: true })
+        .catch((errore) => log.warn('Temporaneo di uploadMateriale non rimosso', { path: file.path, errore }));
     }
   }
 
@@ -1274,7 +1193,8 @@ export class FileManagementService implements IFileManagementService {
         Id: "",
         FileHash: hash,
         FileName: file.originalname,
-        JsonMeta: {
+        // Il materiale sostituito conserva il meta del file del kit (es. i dataFields usati nei filtri)
+        JsonMeta: fileToReplace.meta_olimpo_cloud ?? {
           direttive: "",
           isOptional: false,
         }
@@ -1293,17 +1213,27 @@ export class FileManagementService implements IFileManagementService {
       );
       const olimpusResponse = olimpusResponseAxios.data;
 
-      if (!olimpusResponse || !olimpusResponse.esito || !olimpusResponse.content.id) {
+      if (!olimpusResponse?.esito || !olimpusResponse.content?.id) {
         throw new ExternalApiError({
           message: 'Errore durante il caricamento del nuovo file su Olimpus.',
-          details: { error: olimpusResponse.error }
+          service: 'OLYMPUS',
+          endpoint: '/materiali/uploadMateriale',
+          details: { error: olimpusResponse?.error }
         });
       }
 
+      // Il file del kit deve puntare al nuovo materiale, non solo il log
+      await FilesRuntime.update(
+        { id_olimpo_cloud: olimpusResponse.content.id },
+        { where: { id: idFile } }
+      );
+
+      // Il log e' legato al nome del file nel kit, non al nome del file caricato in sostituzione
+      const nomeFileKit = fileToReplace.nome ?? file.originalname;
       const lastLog = await FilesRuntimeLog.findOne({
         where: {
           id_kit_runtime: fileToReplace.id_runtime,
-          nome_file: file.originalname
+          nome_file: nomeFileKit
         },
         order: [['versione', 'DESC']],
         raw: true
@@ -1314,7 +1244,7 @@ export class FileManagementService implements IFileManagementService {
       const log: FileItemKitLog = {
         id: uuidv4(),
         guid_kit_runtime: fileToReplace.id_runtime as string,
-        nome_file: file.originalname,
+        nome_file: nomeFileKit,
         data_registrazione: new Date(),
         versione: newVersion,
         logs: [
@@ -1346,7 +1276,7 @@ export class FileManagementService implements IFileManagementService {
     }
   }
 
-  async uploadForzatoImmaginiOlimpo(file: Express.Multer.File, guidId: string): Promise<any> {
+  async uploadForzatoImmaginiOlimpo(file: Express.Multer.File, guidId: string, req: ExpressRequest): Promise<any> {
     try {
       if (!file) {
         throw wrapNotFoundError(new Error("Nessun file caricato"), {
@@ -1361,19 +1291,16 @@ export class FileManagementService implements IFileManagementService {
       formData.append('file', blob, file.originalname);
       formData.append('id', guidId);
 
-      const result = await axios.post(
+      // Credenziali Olimpo dal passaporto dell'utente in sessione, non da dati del client
+      const result = await ServerUtils.sendToFicoApiAxiosUpload<any>(
+        req,
         `${config.OLYMPUS_IP_ADDRESS}/foto/updateFotoPathWeb`,
-        formData,
-        {
-          headers: {
-            Authorization: guidId,
-          },
-        }
+        formData
       );
 
-      if (!result.data.esito) {
+      if (!result.data?.esito) {
         throw wrapApiError(new Error("Errore durante il caricamento dell'immagine"), {
-          message: result.data.error,
+          message: result.data?.error,
           service: 'OLYMPUS',
           endpoint: '/foto/updateFotoPathWeb'
         });
@@ -1398,7 +1325,7 @@ export class FileManagementService implements IFileManagementService {
     }
   }
 
-  async updateImmagineReferenza(file: Express.Multer.File, data: any): Promise<any> {
+  async updateImmagineReferenza(file: Express.Multer.File, data: any, req: ExpressRequest): Promise<any> {
     try {
       const { guidId, guidIdReferenza } = data;
       if (!file) {
@@ -1415,19 +1342,16 @@ export class FileManagementService implements IFileManagementService {
       formData.append('file', blob, file.originalname);
       formData.append('id', guidId);
 
-      const result = await axios.post(
+      // Il client non manda credenziali: si usa il passaporto Olimpo dell'utente in sessione
+      const result = await ServerUtils.sendToFicoApiAxiosUpload<any>(
+        req,
         `${config.OLYMPUS_IP_ADDRESS}/foto/updateFotoPathWeb`,
-        formData,
-        {
-          headers: {
-            Authorization: data.private_key,
-          },
-        }
+        formData
       );
 
-      if (!result.data.esito) {
+      if (!result.data?.esito) {
         throw wrapApiError(new Error("Errore durante il caricamento dell'immagine"), {
-          message: result.data.error,
+          message: result.data?.error,
           service: 'OLYMPUS',
           endpoint: '/foto/updateFotoPathWeb'
         });
@@ -1475,7 +1399,7 @@ export class FileManagementService implements IFileManagementService {
     }
   }
 
-  async updateImmagineGruppoReferenza(file: Express.Multer.File, data: any): Promise<any> {
+  async updateImmagineGruppoReferenza(file: Express.Multer.File, data: any, req: ExpressRequest): Promise<any> {
     try {
       const { guidId, idArea, idCanale } = data;
       if (!file) {
@@ -1492,19 +1416,16 @@ export class FileManagementService implements IFileManagementService {
       formData.append('file', blob, file.originalname);
       formData.append('id', "");
 
-      const result = await axios.post(
+      // Il client non manda credenziali: si usa il passaporto Olimpo dell'utente in sessione
+      const result = await ServerUtils.sendToFicoApiAxiosUpload<any>(
+        req,
         `${config.OLYMPUS_IP_ADDRESS}/foto/updateFotoPathWeb`,
-        formData,
-        {
-          headers: {
-            Authorization: data.private_key,
-          },
-        }
+        formData
       );
 
-      if (!result.data.esito) {
+      if (!result.data?.esito) {
         throw wrapApiError(new Error("Errore durante il caricamento dell'immagine"), {
-          message: result.data.error,
+          message: result.data?.error,
           service: 'OLYMPUS',
           endpoint: '/foto/updateFotoPathWeb'
         });
@@ -1519,10 +1440,12 @@ export class FileManagementService implements IFileManagementService {
           entityId: guidId
         });
       }
+      // getReferenzaById restituisce la riga PG grezza: i campi sono in data_fields
+      const codiceReferenza = (getRef as any).data_fields?.codice_referenza ?? getRef.dataFields?.codice_referenza;
 
       let findFotoGruppoAlreadyExist = await ReferenzeGruppo.findOne({
         where: {
-          codice_referenza: getRef.dataFields?.codice_referenza,
+          codice_referenza: codiceReferenza,
           id_area: idArea,
           id_canale: idCanale
         },
@@ -1532,7 +1455,7 @@ export class FileManagementService implements IFileManagementService {
       if (!findFotoGruppoAlreadyExist) {
         findFotoGruppoAlreadyExist = await ReferenzeGruppo.findOne({
           where: {
-            codice_referenza: getRef.dataFields?.codice_referenza,
+            codice_referenza: codiceReferenza,
             [Op.or]: [
               { id_area: null },
               { id_area: "" },
@@ -1551,11 +1474,12 @@ export class FileManagementService implements IFileManagementService {
           ...(idCanale !== "" && { id_canale: idCanale }),
         };
 
-        const resultUpdate = await ReferenzeGruppo.update(newFotoGruppo, {
-          where: { codice_referenza: getRef.dataFields?.codice_referenza }
+        // Solo la riga trovata: per codice si toccherebbero le foto di tutte le aree e i canali
+        const [righeAggiornate] = await ReferenzeGruppo.update(newFotoGruppo, {
+          where: { id: findFotoGruppoAlreadyExist.id }
         });
 
-        if (!resultUpdate) {
+        if (righeAggiornate === 0) {
           throw wrapDatabaseError(new Error("Errore durante l'aggiornamento della referenza"), {
             message: "Errore durante l'aggiornamento della referenza",
             operation: 'update',
@@ -1579,7 +1503,7 @@ export class FileManagementService implements IFileManagementService {
       } else {
         const newFotoGruppo: any = {
           guid_id_olympo: guidIdFoto,
-          codice_referenza: getRef.dataFields?.codice_referenza as string,
+          codice_referenza: codiceReferenza as string,
           id: uuidv4(),
           id_area: idArea,
           id_canale: idCanale,
@@ -1637,14 +1561,9 @@ export class FileManagementService implements IFileManagementService {
     req: ExpressRequest,
   ): Promise<any> {
     try {
-      const dir = path.resolve(process.cwd(), 'server/core/public/uploads/materiali_POP/');
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir);
+      if (!file) {
+        throw new BadRequestError({ message: "File del materiale mancante" });
       }
-      // Create uploads directory if it doesn't exist
-
-      // Save file with new name
-      const newFilePath = path.resolve(dir, nomeFile);
       const fileExtension = path.extname(file.originalname).toLowerCase();
 
       // Get export type
@@ -1659,20 +1578,19 @@ export class FileManagementService implements IFileManagementService {
       const codiceExport = tipoDiExportModel.codice;
 
       if (this.isPdfForStandardExport(fileExtension, codiceExport)) {
-        return await this.handlePdfUpload(file, nomeFile, meta, guidKitRuntime, tipoExport, tipoDiExportModel, newFilePath, req);
+        return await this.handlePdfUpload(file, nomeFile, meta, guidKitRuntime, tipoExport, tipoDiExportModel, req);
       }
       else if (this.isVolFile(fileExtension, codiceExport)) {
         return await this.handleVOLUpload(file, meta, guidKitRuntime, tipoExport, tipoDiExportModel, req)
       }
       else if (this.isWebpliantFile(fileExtension, codiceExport)) {
-        return await this.handleWebpliantUpload(file, nomeFile, guidKitRuntime, newFilePath);
+        return await this.handleWebpliantUpload(file, nomeFile, guidKitRuntime);
       }
       else if (this.isCorreggoPackFile(fileExtension, codiceExport)) {
         return await this.handleCorreggoPackUpload(file, nomeFile, meta, guidKitRuntime, tipoExport, tipoDiExportModel, req);
       }
       else {
-        await fs.promises.unlink(newFilePath);
-        throw wrapAppError(new Error("Tipo di file non supportato o tipo di export errato per il tipo di file"), {
+        throw new BadRequestError({
           message: `Tipo di file '${fileExtension}' non supportato per il codice export '${codiceExport}'`,
         });
       }
@@ -1694,8 +1612,10 @@ export class FileManagementService implements IFileManagementService {
         details: { error }
       });
     } finally {
-      if (fs.existsSync(file.path)) {
-        await fs.promises.unlink(file.path)
+      // force: un temporaneo gia' spostato o rimosso non deve coprire l'errore vero.
+      // Senza file (richiesta incompleta) non c'e' nulla da rimuovere.
+      if (file?.path) {
+        await fs.promises.rm(file.path, { force: true });
       }
     }
   }
@@ -1905,7 +1825,6 @@ export class FileManagementService implements IFileManagementService {
     guidKitRuntime: string,
     tipoExport: string,
     tipoDiExportModel: TipiDiExportResponseDTO,
-    newFilePath: string,
     req: ExpressRequest
   ): Promise<any> {
     if (!this.isValidReferenzeIstantaMeta(meta)) {
@@ -1929,8 +1848,7 @@ export class FileManagementService implements IFileManagementService {
   private async handleWebpliantUpload(
     file: Express.Multer.File,
     nomeFile: string,
-    guidKitRuntime: string,
-    newFilePath: string
+    guidKitRuntime: string
   ): Promise<any> {
     const fileBuffer = await fs.promises.readFile(file.path);
     const fileString = fileBuffer.toString();
@@ -1950,8 +1868,7 @@ export class FileManagementService implements IFileManagementService {
       referenza.guidIdKitRuntime = guidKitRuntime;
     }));
 
-    await this.bulkEliminateReferenze(guidKitRuntime);
-    const result = await this.bulkCreateReferenze(fileJson);
+    const result = await sostituisciReferenzeKit(guidKitRuntime, fileJson);
     await fs.promises.unlink(file.path);
 
     return result;
@@ -2006,21 +1923,18 @@ export class FileManagementService implements IFileManagementService {
       correggoFormData.append('file', new Blob([packBuffer]), packFileName);
 
       const endpoint = `${config.CORREGGO_IP_ADDRESS}/UploadVolFromFP.ashx`;
-      const resultCorreggo = await ServerUtils.sendToFICOApi<{ result: string; errorDetails: string }>(
-        req,
-        endpoint,
-        'POST',
-        correggoFormData,
-        { Authorization: req.headers.authorization as string }
+      verificaRisposta(
+        await ServerUtils.sendToFICOApi<{ result: string; errorDetails: string }>(
+          req,
+          endpoint,
+          'POST',
+          correggoFormData,
+          { Authorization: req.headers.authorization as string }
+        ),
+        'CORREGGO',
+        '/UploadVolFromFP.ashx',
+        (d) => d?.result === 'ok'
       );
-
-      if (resultCorreggo.data.result !== 'ok') {
-        throw wrapExternalError(new Error("Errore invio file a Correggo"), {
-          message: 'Errore invio file a Correggo',
-          httpStatus: resultCorreggo.status,
-          details: { error: resultCorreggo.data.errorDetails }
-        });
-      }
 
       await fs.promises.unlink(file.path);
 
@@ -2090,6 +2004,7 @@ export class FileManagementService implements IFileManagementService {
       };
 
     } catch (error) {
+      if (error instanceof ExternalApiError) throw error;
       throw wrapAppError(new Error("Errore gestione upload Correggo"), {
         message: 'Errore gestione upload Correggo',
         details: { error },
@@ -2121,7 +2036,7 @@ export class FileManagementService implements IFileManagementService {
       } catch (error: any) {
         throw error;
       }
-      const nomeFile = file.filename;
+      const nomeFile = file.originalname; // su disco il file ha un nome univoco, questo e' il nome logico
       const fileBuffer = await fs.promises.readFile(file.path);
       const hash = crypto.createHash('md5').update(fileBuffer).digest('hex');
 
@@ -2275,6 +2190,8 @@ export class FileManagementService implements IFileManagementService {
           aspect_ratio: (ref as any).aspectRatio,
         });
       }
+      await sostituisciReferenzeKit(guidKitRuntime, referenze);
+      // Il webhook annuncia referenze gia salvate: parte solo dopo la sostituzione riuscita
       if (runtimekitPg.tipiDiExportInKit && runtimekitPg.tipiDiExportInKit.some((tipo: any) =>
         tipo.useWebhook && (tipo.webhookEvents === EVENTI_WEBHOOK.KIT_MATERIALE_ARRIVATO || tipo.webhookEvents === 'all'))) {
         try {
@@ -2294,8 +2211,6 @@ export class FileManagementService implements IFileManagementService {
           console.error("Errore durante l'invio del webhook:", webhookError);
         }
       }
-      await this.bulkEliminateReferenze(guidKitRuntime);
-      await this.bulkCreateReferenze(referenze);
       //FINE
       await fs.promises.unlink(file.path);
       if (!fileCercatoPerNome) {
@@ -2355,35 +2270,6 @@ export class FileManagementService implements IFileManagementService {
       throw wrapDatabaseError(new Error("Errore durante l'aggiornamento della referenza"), {
         message: "Errore durante l'aggiornamento della referenza",
         operation: 'updateOne',
-        entity: 'ReferenzeIstanta',
-        details: { error }
-      });
-    }
-  }
-
-  private async bulkCreateReferenze(refs: ReferenzeIstanta[]): Promise<any> {
-    try {
-      const pgRefs = refs.map(referenzaToSnakeCase);
-      const result = await Referenze.bulkCreate(pgRefs);
-      return result;
-    } catch (error: any) {
-      throw wrapDatabaseError(new Error("Errore durante la creazione bulk delle referenze"), {
-        message: "Errore durante la creazione bulk delle referenze",
-        operation: 'insertMany',
-        entity: 'ReferenzeIstanta',
-        details: { error }
-      });
-    }
-  }
-
-  private async bulkEliminateReferenze(guidKitRuntime: string): Promise<any> {
-    try {
-      const result = await Referenze.destroy({ where: { id_runtime_kit: guidKitRuntime } });
-      return result;
-    } catch (error: any) {
-      throw wrapDatabaseError(new Error("Errore durante l'eliminazione delle referenze"), {
-        message: "Errore durante l'eliminazione delle referenze",
-        operation: 'deleteMany',
         entity: 'ReferenzeIstanta',
         details: { error }
       });

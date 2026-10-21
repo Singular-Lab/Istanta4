@@ -18,6 +18,7 @@ class PuntoVendita extends Model<PuntiVenditaAttributes, PuntiVenditaCreationAtt
   declare provincia_puntivendita?: string;
   declare regione_puntivendita?: string;
   declare telefono_puntivendita?: string | undefined;
+  declare meta_puntivendita?: Record<string, unknown> | null;
   declare createdat?: Date;
   declare updatedat: Date;
 
@@ -59,27 +60,6 @@ class PuntoVendita extends Model<PuntiVenditaAttributes, PuntiVenditaCreationAtt
     return await PuntoVendita.findAll({
       where: { id_gdo_puntivendita: idGDO },
       order: [['citta_puntivendita', 'ASC'], ['nome_puntivendita', 'ASC']]
-    });
-  }
-
-  public static async findNearby(lat: number, lon: number, radiusKm: number = 10): Promise<PuntoVendita[]> {
-    // Query per trovare punti vendita nel raggio specificato
-    const query = `
-            SELECT *,
-                   (6371 * acos(cos(radians(?)) * cos(radians(lat_puntivendita)) *
-                    cos(radians(lon_puntivendita) - radians(?)) +
-                    sin(radians(?)) * sin(radians(lat_puntivendita))) AS distance
-            FROM punti_vendita
-            WHERE lat_puntivendita IS NOT NULL
-              AND lon_puntivendita IS NOT NULL
-            HAVING distance <= ?
-            ORDER BY distance
-        `;
-
-    return await sequelize.query(query, {
-      replacements: [lat, lon, lat, radiusKm],
-      model: PuntoVendita,
-      mapToModel: true
     });
   }
 
@@ -194,6 +174,11 @@ PuntoVendita.init({
       is: /^[\+]?[0-9\s\-\(\)]{8,20}$/
     },
     field: 'telefono_puntivendita'
+  },
+  meta_puntivendita: {
+    type: DataTypes.JSONB,
+    allowNull: true,
+    field: 'meta_puntivendita'
   }
 }, {
   sequelize,

@@ -124,7 +124,8 @@ test('ogni passo del report ha un esito dichiarato', () => {
 
     //Qualunque cosa accada, loading e busy non restano accesi per sbaglio.
     assert.match(avvio, /finally \{[\s\S]*hideLoading\(\)/);
-    assert.match(avvio, /if \(!ReportIntegrita\.reportIntegritaAperto\(\)\) \{[\s\S]*?setBusy\(false\)/);
+    //I20-1121: il report affiancato non tiene il busy (reportIntegritaColonna.test.js).
+    assert.match(avvio, /if \(!ReportIntegrita\.reportIntegritaAperto\(\) \|\| ReportIntegrita\.reportAffiancato\(\)\) \{[\s\S]*?setBusy\(false\)/);
 });
 
 test('il fix senza report non e\' piu\' offerto', () => {
@@ -134,7 +135,8 @@ test('il fix senza report non e\' piu\' offerto', () => {
     //Con lui sono spariti i due rami che il report non usava: i bollini in pagina e il
     //recupero delle schede dal server.
     //I20-1014: applicaConfronto e' un membro del report, non piu' una funzione di indexNew.
-    assert.match(confronti, /async applicaConfronto\(mappa\) \{/);
+    //I20-1056, lotto 5: con la lettura dei bollini dell'avvio, per i numeri accanto ai record.
+    assert.match(confronti, /async applicaConfronto\(mappa, letteSegnalazioni = null\) \{/);
     assert.doesNotMatch(indexNew, /function applicaConfronto\(/);
     assert.doesNotMatch(applicaConfronto, /getSchedeRefsMassivo/);
     assert.doesNotMatch(applicaConfronto, /addBollinoCustom/);
@@ -162,7 +164,7 @@ test('la preanalisi usa il box che la mappa ha gia\' in mano', () => {
 });
 
 test('impaginazioneSingoloIndd impagina e non fa altro', () => {
-    assert.match(indexNew, /async function impaginazioneSingoloIndd\(records, pagina, cercaInPaginaPerConfronto, mappaPagina, massiveOperation = false, bounds = null, richiederRicollegamento = false\) \{/);
+    assert.match(indexNew, /async function impaginazioneSingoloIndd\(records, pagina, cercaInPaginaPerConfronto, mappaPagina, massiveOperation = false, bounds = null, richiederRicollegamento = false, apriSegnalazioni = true\) \{/);
 
     //I parametri morti non devono tornare da nessuna parte: chi li passasse per posizione
     //finirebbe per impaginare con i bounds sbagliati.
@@ -207,18 +209,21 @@ test('il report si chiude quando cambia il documento, senza chiedere', () => {
 });
 
 test('l\'hash di una foto si ricalcola solo se la foto e\' cambiata', () => {
+    //I20-1070: il calcolo con la cache sta in hashDelFile, che getLinkHash chiama sul file del link.
     const getLinkHash = corpoFunzione(utility, 'async getLinkHash(rectangle) {');
+    const hashDelFile = corpoFunzione(utility, 'async hashDelFile(filePath) {');
+    assert.match(getLinkHash, /result\.hash = await ReperimentoFoto\.hashDelFile\(filePath\);/);
 
-    const posCache = getLinkHash.indexOf('cacheHashFoto.ottieni(chiaveCache)');
-    const posLettura = getLinkHash.indexOf('fileEntry.read(');
-    const posMemorizza = getLinkHash.indexOf('cacheHashFoto.memorizza(');
+    const posCache = hashDelFile.indexOf('cacheHashFoto.ottieni(chiaveCache)');
+    const posLettura = hashDelFile.indexOf('fileEntry.read(');
+    const posMemorizza = hashDelFile.indexOf('cacheHashFoto.memorizza(');
 
-    assert.ok(posCache > 0, 'getLinkHash non consulta la cache');
+    assert.ok(posCache > 0, 'hashDelFile non consulta la cache');
     assert.ok(posCache < posLettura, 'il file si legge solo se la cache non risponde');
     assert.ok(posMemorizza > posLettura);
 
     //La chiave porta dentro l'impronta del file: percorso e metadati.
-    assert.match(getLinkHash, /cacheHashFoto\.chiave\(filePath, await fileEntry\.getMetadata\(\)\)/);
+    assert.match(hashDelFile, /cacheHashFoto\.chiave\(filePath, await fileEntry\.getMetadata\(\)\)/);
     //Lo stato del link non si mette in cache: si rilegge sempre.
     assert.match(getLinkHash, /if \(link\.status\.toString\(\) == "LINK_OUT_OF_DATE"\)/);
 });
@@ -481,7 +486,8 @@ test('"Elimina tutti" elimina davvero, e chiede prima', () => {
     assert.strictEqual((elimina.match(/_saveCurrentReportAndWhitelist\(\)/g) || []).length, 1);
 
     //E il pulsante ci e' collegato, senza piu' il TODO.
-    assert.match(confronti, /btnDeleteAll\.addEventListener\("click", \(\) => this\._eliminaTuttiUsciti\(records\)\)/);
+    //I20-1121: con il report affiancato gli eventi si fermano finche' l'eliminazione lavora.
+    assert.match(confronti, /btnDeleteAll\.addEventListener\("click", \(\) => this\._conEventiFermi\(\(\) => this\._eliminaTuttiUsciti\(records\)\)\)/);
     assert.ok(!senzaCommenti(confronti).includes('TODO: Elimina tutti'));
 });
 
@@ -529,9 +535,12 @@ test('le differenze di confronto diventano segnalazioni della referenza', () => 
 test('nella riga le due cose restano separate, e il Fix vale solo per l\'integrita\'', () => {
     const pannello = corpoFunzione(confronti, '_buildPanelCambiati(records) {');
 
-    assert.match(pannello, /const segnalazioniIntegrita = tutteLeDifferenze\.filter\(d => d\?\.origine !== "confronto"\)/);
+    //I20-1088: i meta dei testi da verificare sono una terza cosa, fuori dalle segnalazioni di integrita'.
+    assert.match(pannello, /const segnalazioniIntegrita = tutteLeDifferenze\.filter\(d => d\?\.origine !== "confronto" && d\?\.origine !== "meta"\)/);
     assert.match(pannello, /const differenzeConfronto = tutteLeDifferenze\.filter\(d => d\?\.origine === "confronto"\)/);
+    assert.match(pannello, /const differenzeMeta = tutteLeDifferenze\.filter\(d => d\?\.origine === "meta"\)/);
     assert.match(pannello, /this\._crRiquadroConfronto\(differenzeConfronto\)/);
+    assert.match(pannello, /this\._crRiquadroMeta\(differenzeMeta\)/);
 
     //Il Fix rifa' il box: senza segnalazioni di integrita' non c'e' niente da rifare.
     assert.match(pannello, /if \(segnalazioniIntegrita\.length > 0\) \{\s*\n\s*actions\.appendChild\(btnFix\);/);
@@ -905,17 +914,21 @@ test('una segnalazione che se ne va lo fa vedere', () => {
 
     //Alla chiusura della scheda si vede andare via quello che e' stato risolto, e solo dopo lo
     //stato cambia.
+    //I20-1121: l'applicazione del piano sta in _applicaPianoRicontrollo, che usa anche il box seguito
+    //accanto al report affiancato.
     const chiudi = corpoFunzione(confronti, '_chiudiSchedaDalReport() {');
-    assert.match(chiudi, /this\._riapriReportDopoScheda\(\)[\s\S]*await this\._mostraSegnalazioniRisolte\(piano\)[\s\S]*piano\.applica\(\)/);
+    assert.match(chiudi, /this\._riapriReportDopoScheda\(\)[\s\S]*await this\._applicaPianoRicontrollo\(piano\)/);
+    const applica = corpoFunzione(confronti, '_applicaPianoRicontrollo(piano) {');
+    assert.match(applica, /await this\._mostraSegnalazioniRisolte\(piano\)[\s\S]*piano\.applica\(\)/);
 });
 
-test('dalla scheda aperta dal report non si rifa la struttura del gruppo', () => {
-    //Le azioni strutturali della schermata di edit non si offrono a chi e' venuto a sistemare
-    //una segnalazione. La scheda normale resta com'e'.
+test('le azioni sul box ci sono anche nella scheda aperta dal report', () => {
+    //I20-1083: prima non si offrivano a chi era venuto a sistemare una segnalazione. Ora ci sono
+    //anche li', ma l'azione cambia il dato senza reimpaginare (azioniInVistaControllata.test.js).
     assert.strictEqual(schedaRef.mostraAzioniStrutturaliInEdit(), true);
 
     schedaRef.apertaDalReport = true;
-    assert.strictEqual(schedaRef.mostraAzioniStrutturaliInEdit(), false);
+    assert.strictEqual(schedaRef.mostraAzioniStrutturaliInEdit(), true);
     schedaRef.apertaDalReport = false;
 
     const sorgenteScheda = sorgente('schedaRef.js');
@@ -1028,7 +1041,8 @@ test('il record ricontrollato resta dove stava', () => {
     assert.match(categoria, /this\._sameReportRecord\(item, target\)/);
 
     //E la vista si traccia: il dato puo' essere giusto e la vista no.
-    const chiudi = corpoFunzione(confronti, '_chiudiSchedaDalReport() {');
+    //I20-1121: dopo la chiusura della scheda il piano lo applica _applicaPianoRicontrollo.
+    const chiudi = corpoFunzione(confronti, '_applicaPianoRicontrollo(piano) {');
     assert.match(chiudi, /this\._tracciaScheda\("chiusura:vista", this\._descriviRigaDelRecord\(piano\.record\)\)/);
 
     //Il ridisegno riparte dall'alto: una riga al suo posto ma fuori dallo schermo sembra

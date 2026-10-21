@@ -8,7 +8,10 @@ export default defineConfig({
     setupFiles: ['./server/__tests__/setup.ts'],
     include: [
       'server/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}',
-      'server/__tests__/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'
+      'lib/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}',
+      // Client: i .test.ts girano in node; i .test.tsx dichiarano in testa
+      // `// @vitest-environment jsdom` (vitest 4 non ha environmentMatchGlobs)
+      'src/**/*.test.{ts,tsx}'
     ],
     exclude: [
       'node_modules',
@@ -30,7 +33,8 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@server': resolve(__dirname, './server')
+      '@server': resolve(__dirname, './server'),
+      '@': resolve(__dirname, './src')
     }
   }
 }) 

@@ -98,6 +98,8 @@ export class AuditLogService {
   private readonly BUFFER_SIZE = 100;
   private readonly FLUSH_INTERVAL = 30000; // 30 secondi
   private repository: IAuditLogRepository | null = null;
+  // Scritture su DB avviate e non ancora concluse: forceFlush le attende
+  private scrittureInCorso = new Set<Promise<void>>();
 
   private readonly SENSITIVE_IP_DETAIL_KEYS = new Set([
     'ip',
@@ -342,7 +344,8 @@ export class AuditLogService {
 
       switch (event.severity) {
         case AuditSeverity.CRITICAL:
-          log.error(logMessage, new Error('Critical audit event'), logData);
+          // Nessun Error fittizio: il suo stack indicava solo flushBuffer e allungava la riga
+          log.error(logMessage, undefined, logData);
           break;
         case AuditSeverity.HIGH:
           log.warn(logMessage, logData);
@@ -358,20 +361,23 @@ export class AuditLogService {
     // Persistenza su DB (fire-and-forget, non blocca)
     if (this.repository) {
       const rows = events.map(e => this.mapEventToDbRow(e));
-      this.repository.bulkInsert(rows).catch(err => {
-        log.error('AuditLogService: errore persistenza DB', err instanceof Error ? err : new Error(String(err)));
-      });
+      const scrittura: Promise<void> = this.repository.bulkInsert(rows)
+        .catch(err => {
+          log.error('AuditLogService: errore persistenza DB', err instanceof Error ? err : new Error(String(err)));
+        })
+        .finally(() => this.scrittureInCorso.delete(scrittura));
+      this.scrittureInCorso.add(scrittura);
     }
   }
 
   // ─── Convenience methods esistenti ─────────────────────────────────
 
-  public loginSuccess(req: Request, userId: string, userType: TIPO_UTENTI): void {
+  public loginSuccess(req: Request, userId: string, userType: TIPO_UTENTI, action = 'login'): void {
     this.logEvent(AuditEventType.LOGIN_SUCCESS, {
       req,
       userId,
       userType,
-      action: 'login',
+      action,
       result: 'SUCCESS'
     });
   }
@@ -777,10 +783,12 @@ export class AuditLogService {
   }
 
   /**
-   * Forza il flush del buffer (utile per shutdown graceful)
+   * Forza il flush del buffer e si risolve a scritture su DB concluse, comprese quelle
+   * gia' avviate (shutdown graceful). Non rigetta: gli errori di persistenza sono loggati.
    */
-  public forceFlush(): void {
+  public async forceFlush(): Promise<void> {
     this.flushBuffer();
+    await Promise.all(this.scrittureInCorso);
   }
 
   /**

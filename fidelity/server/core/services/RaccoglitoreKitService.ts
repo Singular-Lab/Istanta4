@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { Colorize } from '../../../lib/Colorize';
 import { STATO_COMBINAZIONI, TIPO_KIT_DESIGN } from '../../../lib/enums';
 import { ExternalApiError, NotFoundError, wrapDatabaseError } from '../../../lib/errors';
-import { DESIGN_KIT_MONGO, Declinazione, FileItemKit, OggettoTipiDiExport, RaccoglitoreKit } from '../../../lib/types';
+import { DESIGN_KIT, Declinazione, FileItemKit, OggettoTipiDiExport, RaccoglitoreKit } from '../../../lib/types';
 import config from '../config';
 import { sequelize } from '../db/SequelizeConnector';
 import { FormatiResponseDTO } from '../dto';
@@ -18,9 +18,10 @@ import { Formati } from '../models/formati';
 import { PuntoVendita } from '../models/punto_vendita/punti_vendita';
 import { RaccoglitoreKit as RaccoglitoreKitModel } from '../models/raccoglitore_kit';
 import { ServerUtils } from '../utils/ServerUtils';
+import { verificaRisposta } from '../utils/rispostaServizi';
 
 /** Maps a raw DesignKit PG row (singular id_area/id_canale) to camelCase shape */
-function mapPgKitToMongo(pgKit: any): any {
+function mapPgKitToDesignKit(pgKit: any): any {
   return {
     ...pgKit,
     guidId: pgKit.id,
@@ -35,7 +36,7 @@ function mapPgKitToMongo(pgKit: any): any {
 }
 
 /** Maps a raw RaccoglitoreKit PG row to the RaccoglitoreKit client shape */
-function mapPgRaccoglitoreKitToMongo(pgKit: any): RaccoglitoreKit {
+function mapPgRaccoglitoreKit(pgKit: any): RaccoglitoreKit {
   return {
     ...pgKit,
     guidId: pgKit.id,
@@ -60,28 +61,28 @@ function mapPgRaccoglitoreKitToMongo(pgKit: any): RaccoglitoreKit {
   };
 }
 
-function mapMongoKitToPg(mongoKit: any): any {
+function mapDesignKitToPg(designKit: any): any {
   return {
-    id: mongoKit.guidId,
-    id_area: mongoKit.guidArea,
-    id_canale: mongoKit.guidCanale,
-    id_formato: mongoKit.guidFormato,
-    id_raccoglitore: mongoKit.guidIdRaccoglitore,
-    tipi_di_export_in_kit: (mongoKit.tipiDiExportInKit || []).map((t: any) => ({
+    id: designKit.guidId,
+    id_area: designKit.guidArea,
+    id_canale: designKit.guidCanale,
+    id_formato: designKit.guidFormato,
+    id_raccoglitore: designKit.guidIdRaccoglitore,
+    tipi_di_export_in_kit: (designKit.tipiDiExportInKit || []).map((t: any) => ({
       tipo_di_export_guid_id: t.tipoDiExportGuidID,
       filtro: t.filtro ?? [],
       use_webhook: t.useWebhook,
       webhook_events: t.webhookEvents,
     })),
-    quantita_copie: mongoKit.quantitaCopie,
-    filtro_contesto: mongoKit.filtroContesto,
-    titolo: mongoKit.titolo,
-    tipo: mongoKit.tipo,
-    stato: mongoKit.stato,
-    tags: mongoKit.tags ?? [],
-    declinazioni: mongoKit.declinazioni,
-    filtro: mongoKit.filtri ?? mongoKit.filtro,
-    files: mongoKit.files,
+    quantita_copie: designKit.quantitaCopie,
+    filtro_contesto: designKit.filtroContesto,
+    titolo: designKit.titolo,
+    tipo: designKit.tipo,
+    stato: designKit.stato,
+    tags: designKit.tags ?? [],
+    declinazioni: designKit.declinazioni,
+    filtro: designKit.filtri ?? designKit.filtro,
+    files: designKit.files,
   };
 }
 
@@ -91,7 +92,7 @@ export class RaccoglitoreKitService implements IRaccoglitoreKitService {
   async getRaccoglitoreKitById(id: string): Promise<RaccoglitoreKit | null> {
     try {
       const result = await RaccoglitoreKitModel.findOne({ where: { id }, raw: true });
-      return result ? mapPgRaccoglitoreKitToMongo(result) : null;
+      return result ? mapPgRaccoglitoreKit(result) : null;
     } catch (error) {
       throw wrapDatabaseError(new Error("Errore durante il recupero del raccoglitore"), {
         message: "Errore durante il recupero del raccoglitore",
@@ -132,7 +133,7 @@ export class RaccoglitoreKitService implements IRaccoglitoreKitService {
     files?: FileItemKit[];
   }): Promise<any> {
     try {
-      let arrayCombinazioniDesign: DESIGN_KIT_MONGO[] = [];
+      let arrayCombinazioniDesign: DESIGN_KIT[] = [];
       const getAllCombinazioni = await this.getAllCombinazioniDesignByIdTemplate(data.id);
       const areePromises = data.guidAree.map(async (area) => {
         if (area == undefined) {
@@ -380,20 +381,17 @@ export class RaccoglitoreKitService implements IRaccoglitoreKitService {
 
   async getFiltroContestoDaIstanta(req: Request): Promise<any[]> {
     try {
-      const result = await ServerUtils.sendToFICOApi<{ schemi: any[], esito: boolean, error: string }>(
-        req,
-        `${config.ISTANTA_IP_ADDRESS}/FicoProcess/getSchemasContext`,
-        'GET',
-        undefined
+      const data = verificaRisposta<{ schemi: any[], esito: boolean, error: string }>(
+        await ServerUtils.sendToFICOApi<{ schemi: any[], esito: boolean, error: string }>(
+          req,
+          `${config.ISTANTA_IP_ADDRESS}/FicoProcess/getSchemasContext`,
+          'GET',
+          undefined
+        ),
+        'ISTANTA',
+        '/FicoProcess/getSchemasContext'
       );
-      if (!result.data.esito) {
-        throw new ExternalApiError({
-          message: result.data.error || 'Errore API Istanta per filtri contesto',
-          service: 'Istanta',
-          endpoint: '/FicoProcess/getSchemasContext',
-        });
-      }
-      return result.data.schemi;
+      return data.schemi;
     } catch (error) {
       if (error instanceof ExternalApiError) throw error;
       throw wrapDatabaseError(error, {
@@ -409,20 +407,17 @@ export class RaccoglitoreKitService implements IRaccoglitoreKitService {
 
   async getAllDeclinazioniKitDaIstanta(req: Request): Promise<any> {
     try {
-      const result = await ServerUtils.sendToFICOApi<{ content: any[], esito: boolean, error: string }>(
-        req,
-        `${config.ISTANTA_IP_ADDRESS}/FicoProcess/getAllDeclinazioniKit`,
-        'GET',
-        undefined
+      const data = verificaRisposta<{ content: any[], esito: boolean, error: string }>(
+        await ServerUtils.sendToFICOApi<{ content: any[], esito: boolean, error: string }>(
+          req,
+          `${config.ISTANTA_IP_ADDRESS}/FicoProcess/getAllDeclinazioniKit`,
+          'GET',
+          undefined
+        ),
+        'ISTANTA',
+        '/FicoProcess/getAllDeclinazioniKit'
       );
-      if (!result.data.esito) {
-        throw new ExternalApiError({
-          message: result.data.error || 'Errore API Istanta per declinazioni kit',
-          service: 'Istanta',
-          endpoint: '/FicoProcess/getAllDeclinazioniKit',
-        });
-      }
-      return result.data.content;
+      return data.content;
     } catch (error) {
       if (error instanceof ExternalApiError) throw error;
       throw wrapDatabaseError(error, {
@@ -477,11 +472,11 @@ export class RaccoglitoreKitService implements IRaccoglitoreKitService {
 
   // --- Private helpers ---
 
-  private async getAllCombinazioniDesignByIdTemplate(guidIdTemplate: string): Promise<DESIGN_KIT_MONGO[]> {
+  private async getAllCombinazioniDesignByIdTemplate(guidIdTemplate: string): Promise<DESIGN_KIT[]> {
     try {
       const combinazioni = await DesignKit.findAll({ where: { id_raccoglitore: guidIdTemplate }, raw: true });
       if (!combinazioni) return [];
-      const mapped = combinazioni.map(mapPgKitToMongo) as any[];
+      const mapped = combinazioni.map(mapPgKitToDesignKit) as any[];
       await Promise.all(mapped.map(async (combinazione) => {
         const area = await Area.findByPk(combinazione.id_area);
         if (area) {
@@ -492,7 +487,7 @@ export class RaccoglitoreKitService implements IRaccoglitoreKitService {
           combinazione.nomeCanale = canale.nome_canali;
         }
       }));
-      return mapped as unknown as DESIGN_KIT_MONGO[];
+      return mapped as unknown as DESIGN_KIT[];
     } catch (error: any) {
       throw wrapDatabaseError(error, {
         message: "Errore durante il recupero delle combinazioni",
@@ -535,6 +530,7 @@ export class RaccoglitoreKitService implements IRaccoglitoreKitService {
         titolo: data.titolo,
         filtro: data.filtro ?? [],
         declinazioni: data.declinazioni ?? [],
+        filtro_contesto: d.filtroContesto ?? [],
         tipi_di_export_in_kit: (data.tipiDiExportInKit || []).map((t: OggettoTipiDiExport) => ({
           tipo_di_export_guid_id: t.tipoDiExportGuidID,
           filtro: t.filtro ?? [],
@@ -551,7 +547,7 @@ export class RaccoglitoreKitService implements IRaccoglitoreKitService {
         files: d.files ?? [],
       } as any);
       return resultCreazioneCombinazioneDesign
-        ? mapPgRaccoglitoreKitToMongo(resultCreazioneCombinazioneDesign.get({ plain: true }))
+        ? mapPgRaccoglitoreKit(resultCreazioneCombinazioneDesign.get({ plain: true }))
         : null;
     } catch (error: any) {
       throw wrapDatabaseError(error, {
@@ -620,10 +616,10 @@ export class RaccoglitoreKitService implements IRaccoglitoreKitService {
 
   async createBulkCombinazioneDesign(data: { guidArea: string; guidCanale: string; guidFormato: string; tipiDiExportInKit: OggettoTipiDiExport[]; quantitaCopie: number; titolo: string; }[]): Promise<any> {
     try {
-      const pgData = data.map(d => mapMongoKitToPg(d));
+      const pgData = data.map(d => mapDesignKitToPg(d));
       const created = await DesignKit.bulkCreate(pgData as any);
       if (!created) return null;
-      return created.map(c => mapPgKitToMongo(c.get({ plain: true })));
+      return created.map(c => mapPgKitToDesignKit(c.get({ plain: true })));
     } catch (error: any) {
       throw wrapDatabaseError(new Error("Errore durante la creazione della combinazione di design"), {
         message: "Errore durante la creazione della combinazione di design",
@@ -634,18 +630,18 @@ export class RaccoglitoreKitService implements IRaccoglitoreKitService {
     }
   }
 
-  private async updateCombinazioniDesign(id: string, data: DESIGN_KIT_MONGO[]) {
+  private async updateCombinazioniDesign(id: string, data: DESIGN_KIT[]) {
     try {
       // Recupera le combinazioni esistenti dal database
       const existingPg = await DesignKit.findAll({ where: { id_raccoglitore: id }, raw: true });
-      const existingCombinations = existingPg.map(mapPgKitToMongo) as unknown as DESIGN_KIT_MONGO[];
+      const existingCombinations = existingPg.map(mapPgKitToDesignKit) as unknown as DESIGN_KIT[];
 
       // Mappa per tenere traccia delle combinazioni esistenti
       const existingMap = new Map(existingCombinations?.map(comb => [comb.guidId, comb]));
       const map = new Map(existingCombinations?.map(comb => [comb.guidId, comb]));
       // Array per le nuove combinazioni e quelle da aggiornare
-      const toUpdate: DESIGN_KIT_MONGO[] = [];
-      const toCreate: DESIGN_KIT_MONGO[] = [];
+      const toUpdate: DESIGN_KIT[] = [];
+      const toCreate: DESIGN_KIT[] = [];
 
       // Controlla le combinazioni fornite
       for (const comb of data) {
@@ -684,7 +680,7 @@ export class RaccoglitoreKitService implements IRaccoglitoreKitService {
         try {
           if (!_.isEqual(mapFiles, combFiles)) {
             log.info("Files diversi, aggiorno tutto");
-            const pgUpdateData = mapMongoKitToPg(comb);
+            const pgUpdateData = mapDesignKitToPg(comb);
             delete pgUpdateData.id; // non aggiornare il PK
             const [modifiedCount] = await DesignKit.update(pgUpdateData, { where: { id: comb.guidId } });
             log.info(`Risultato aggiornamento: modificati ${modifiedCount} documenti`);
@@ -697,7 +693,7 @@ export class RaccoglitoreKitService implements IRaccoglitoreKitService {
             }
           } else {
             log.info("Files uguali, non aggiorno i files");
-            const pgUpdateData = mapMongoKitToPg(comb);
+            const pgUpdateData = mapDesignKitToPg(comb);
             delete pgUpdateData.id;
             delete pgUpdateData.files;
             const [modifiedCount] = await DesignKit.update(pgUpdateData, { where: { id: comb.guidId } });
@@ -710,7 +706,7 @@ export class RaccoglitoreKitService implements IRaccoglitoreKitService {
 
       // Crea nuove combinazioni
       if (toCreate.length > 0) {
-        const pgToCreate = toCreate.map(mapMongoKitToPg);
+        const pgToCreate = toCreate.map(mapDesignKitToPg);
         await DesignKit.bulkCreate(pgToCreate as any);
       }
 

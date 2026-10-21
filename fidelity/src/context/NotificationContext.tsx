@@ -1,4 +1,5 @@
 import Lucide from "@/components/Base/Lucide";
+import { registraNotifica } from "@/utils/erroriServizi";
 import React, { createContext, ReactNode, useCallback, useContext, useEffect, useRef, useState } from "react";
 
 type AnimationType = 'slide' | 'fade' | 'scale';
@@ -68,6 +69,8 @@ function Toast({ toast, onRemove }: { toast: ToastItem; onRemove: (id: string) =
     return (
         <div
             ref={ref}
+            // Gli errori interrompono subito lo screen reader, gli altri toast restano "polite" dal contenitore
+            role={toast.variant === 'error' ? 'alert' : undefined}
             className={`bg-white rounded-md p-4 shadow-lg ${getVariantStyles(toast.variant)}`}
             style={{
                 pointerEvents: 'auto',
@@ -80,7 +83,7 @@ function Toast({ toast, onRemove }: { toast: ToastItem; onRemove: (id: string) =
                 <button
                     className="text-gray-500 hover:text-gray-700 absolute -top-2 -right-2"
                     onClick={handleRemove}
-                    aria-label="Close notification"
+                    aria-label="Chiudi notifica"
                 >
                     <Lucide icon="X" className="w-4 h-4" />
                 </button>
@@ -135,6 +138,12 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         setToasts(prev => [...prev, newToast]);
     }, []);
 
+    // Rende showNotification disponibile ai gestori globali di React Query (errori Istanta/Correggo)
+    useEffect(() => {
+        registraNotifica(showNotification);
+        return () => registraNotifica(null);
+    }, [showNotification]);
+
     const getPositionStyles = (position: string) => {
         switch (position) {
             case 'top-left':
@@ -163,7 +172,9 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
             {positions.map(position => (
                 <div
                     key={position}
-                    className={`fixed ${getPositionStyles(position)} z-50 flex flex-col gap-2`}
+                    role="status"
+                    aria-live="polite"
+                    className={`fixed ${getPositionStyles(position)} z-[100000] flex flex-col gap-2`}
                     style={{ pointerEvents: 'none' }}
                 >
                     {toasts

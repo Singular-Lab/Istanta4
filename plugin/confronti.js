@@ -31,6 +31,15 @@ function elementoDecisoDalleRegole(etichetta) {
     return e.indexOf("base") == 0 || e.indexOf("foto_extra$") == 0 || e.indexOf("sfondo$") == 0;
 }
 
+/// Contenitori del noRender dichiarati dall'agenzia (pluginMiddleware.getContenitoriNoRender):
+/// {campo: contenitore}, vuoto se non ce ne sono. Per Coop txt_sconto sta nel gruppo box_sconto.
+function contenitoriNoRenderDellAgenzia() {
+    return typeof pluginMiddleware !== "undefined" && pluginMiddleware != null
+        && typeof pluginMiddleware.getContenitoriNoRender === "function"
+        ? pluginMiddleware.getContenitoriNoRender()
+        : {};
+}
+
 const confronti = {
     /// Guarda un box impaginato e dice cosa non corrisponde piu' al dato del
     /// server: e' il confronto vero, quello da cui nascono le segnalazioni.
@@ -370,6 +379,9 @@ const confronti = {
     async confrontoBoxCompiledFieldPreAnalisi(box1, compiledFields, deletedFields, listFoto, fotoExtra, fotoExtraAuto, checkMD5 = true, elementiNoRender = null, itemRef = null) { //mode 0 -> cambio strutturale, mode 1 -> confrontoMassivo
         let differenze = [];
         let errors = [];
+        //I20-1073: gli elementi assenti dal box che l'operatore ha messo in noRender. Non sono
+        //differenze da risolvere, ma la scheda li mostra come risolti, annullabili.
+        let risolteNoRender = [];
         let me = this;
         try {
             //compiled fields è un array di oggetti con le proprietà label, content, labelName e paragraphName
@@ -387,7 +399,17 @@ const confronti = {
             // - differenze: un array di label dei campi che hanno differenze (sia se hanno valori diversi o stili diversi, sia se nel box sono presenti ma appaiono anche nei deletedFields)
             // - errors: un array di stringhe con gli errori riscontrati durante la pre analisi
 
+            //I20-1081: il box e' del tipo che il dato dice? E' la differenza piu' grave, e va per prima.
+            let boxDiverso = confronti.differenzaCodiceBox(box1.label, itemRef);
+            if (boxDiverso != null) {
+                differenze.push(boxDiverso);
+            }
+
             let box1campi = box1.allPageItems.filter(campo => campo.isValid);
+            //Contenitori del noRender: un campo in noRender vale anche per il suo contenitore dichiarato
+            //dall'agenzia (Coop: txt_sconto nel gruppo box_sconto), anche nei meta salvati prima.
+            const contenitori = contenitoriNoRenderDellAgenzia();
+            elementiNoRender = NoRenderElementi.conContenitori(elementiNoRender, contenitori);
             //var base =  Utility.getFieldByLabel("base", box1);
             let listFotoBox1 = [];
             let listFotoExtraBox1 = [];
@@ -402,9 +424,27 @@ const confronti = {
                     //se il campo compilato non è presente nel box1 allora lo aggiungiamo alle differenze
                     var labelCampo = Utility.parseLabel(compiledField.labelName);
                     var classificatoCampo = NoRenderElementi.classificaLabel(labelCampo);
+                    //Contenitori del noRender: se manca anche il contenitore l'operatore ha tolto il gruppo
+                    //intero, e l'assenza e' del contenitore; una sola anche se piu' campi stanno li' dentro.
+                    var contenitoreAssente = NoRenderElementi.contenitoreAssente(classificatoCampo, contenitori,
+                        etichetta => box1campi.some(campo => campo.isValid && Utility.parseLabel(campo.label) == etichetta));
+                    if (contenitoreAssente !== "") {
+                        if (differenze.concat(risolteNoRender).some(d => d != null && d.tipoElemento === NoRenderElementi.TIPO.campo && d.chiave === contenitoreAssente)) {
+                            return;
+                        }
+                        labelCampo = contenitoreAssente;
+                        classificatoCampo = NoRenderElementi.classificaLabel(contenitoreAssente);
+                    }
                     //Un elemento in noRender che non c'e' piu' e' un'assenza voluta: non si segnala.
+                    //I20-1073: l'assenza porta tipo e chiave dell'elemento, cosi' la scheda puo' metterlo
+                    //in noRender; quella gia' voluta va fra le risolte.
+                    var assenzaCampo = { label: labelCampo, difference: "non presente", tipo: "mancante",
+                        tipoElemento: classificatoCampo.tipo, chiave: classificatoCampo.chiave };
                     if (NoRenderElementi.daSegnalareComeMancante(elementiNoRender, classificatoCampo.tipo, classificatoCampo.chiave)) {
-                        differenze.push({ label: labelCampo, difference: "non presente" });
+                        differenze.push(assenzaCampo);
+                    }
+                    else {
+                        risolteNoRender.push(assenzaCampo);
                     }
                     return;
                 }
@@ -416,7 +456,9 @@ const confronti = {
                         let contentBox1 = campoBox1.contents.replace(/<br\s*\/?>|\s+|\n/gi, '');
                         let contentCompiled = compiledField.content.replace(/<br\s*\/?>|\s+|\n/gi, '');
                         if (contentBox1 != contentCompiled) {
-                            differenze.push({ label: Utility.parseLabel(compiledField.labelName), difference: "contenuto" });
+                            //I20-1071: i due valori, leggibili, per chi guarda la differenza.
+                            differenze.push({ label: Utility.parseLabel(compiledField.labelName), difference: "contenuto",
+                                valoreLocale: confronti.testoLeggibile(campoBox1.contents), valoreServer: confronti.testoLeggibile(compiledField.content) });
                         }
                     }
                     //controlliamo lo stile di paragrafo/carattere
@@ -426,7 +468,9 @@ const confronti = {
                         var stile = TestoTag.parseStile(compiledField.paragraphName, true);
 
                         if (campoBox1.paragraphs.length > 0 && (stile != null && stile.isValid ? stile.name : compiledField.paragraphName) != campoBox1.paragraphs.item(0).appliedParagraphStyle.name) {
-                            differenze.push({ label: Utility.parseLabel(compiledField.labelName), difference: "paragrafo" });
+                            //I20-1071: i due stili, quello nel box e quello atteso.
+                            differenze.push({ label: Utility.parseLabel(compiledField.labelName), difference: "paragrafo",
+                                valoreLocale: campoBox1.paragraphs.item(0).appliedParagraphStyle.name, valoreServer: (stile != null && stile.isValid ? stile.name : compiledField.paragraphName) });
                         }
                     }
                     else {
@@ -528,7 +572,9 @@ const confronti = {
                         stringaConfronto = stringaConfronto.replace(emptyTagRegex, '');
 
                         if (stringaRicomposta != stringaConfronto) {
-                            differenze.push({ label: compiledField.labelName, difference: "contenuto" });
+                            //I20-1071: i due valori, leggibili: il testo del campo e il dato senza i suoi tag.
+                            differenze.push({ label: compiledField.labelName, difference: "contenuto",
+                                valoreLocale: confronti.testoLeggibile(campoBox1.contents), valoreServer: confronti.testoLeggibile(compiledField.content) });
                         }
                     }
                 }
@@ -579,10 +625,18 @@ const confronti = {
                         if (campo.graphics.length > 0) {
                             let fullPath = campo.graphics.item(0).itemLink.filePath;
                             let nomeFile = fullPath.split("/").pop();
+                            //I20-1068: con il nome del file si tiene la sigla della label
+                            //(foto_extra$<sigla>$tipo_<n>): serve a riconoscere la stessa foto
+                            //extra con l'immagine cambiata.
+                            let classificato = NoRenderElementi.classificaLabel(campo.label, pluginMiddleware.getCampo("nomeFotoPrimaria"), pluginMiddleware.getCampo("nomeFotoSecondaria"));
 
                             return {
                                 tipo: "extra",
-                                data: nomeFile
+                                data: nomeFile,
+                                sigla: classificato != null ? classificato.chiave : "",
+                                //I20-1070: tipo e tipo_N della label, per chi vuole tenere la foto nel dato.
+                                tipoElemento: classificato != null ? classificato.tipo : null,
+                                tipoFoto: NoRenderElementi.tipoFotoDellaLabel(campo.label)
                             };
                         }
                     }
@@ -599,6 +653,11 @@ const confronti = {
             listFotoExtraBox1 = risultati
                 .filter(x => x?.tipo === "extra")
                 .map(x => x.data);
+
+            //I20-1068: le stesse foto extra del box, con la sigla accanto al nome del file.
+            let extraNelBox = risultati
+                .filter(x => x?.tipo === "extra")
+                .map(x => ({ nome: x.data, sigla: x.sigla, tipoElemento: x.tipoElemento, tipoFoto: x.tipoFoto }));
 
             //controlliamo se nel box1 sono presenti i campi eliminati dai deletedFields
             deletedFields.forEach(deletedField => {
@@ -617,8 +676,15 @@ const confronti = {
             if (listFoto && listFoto.length > 0) {
                 listFoto.forEach(foto => {
                     if (foto.nomeFoto != "" && listFotoBox1.find(f => f.nomeFoto == foto.nomeFoto) == undefined) {
+                        //I20-1073: come per i campi, con il nome del file per chiave (la scheda lo traduce nel
+                        //codice della referenza, che e' la chiave delle foto in noRender).
+                        var assenzaFoto = { label: foto.nomeFoto, difference: "foto mancante nel box: " + foto.nomeFoto, tipo: "mancante",
+                            tipoElemento: NoRenderElementi.TIPO_FOTO, chiave: foto.nomeFoto };
                         if (NoRenderElementi.daSegnalareComeMancante(elementiNoRender, NoRenderElementi.TIPO_FOTO, foto.nomeFoto)) {
-                            differenze.push({ label: foto.nomeFoto, difference: "foto mancante nel box: " + foto.nomeFoto });
+                            differenze.push(assenzaFoto);
+                        }
+                        else {
+                            risolteNoRender.push(assenzaFoto);
                         }
                         //controlliamo se la foto c'è nella cartella di lavorazione
                         var path = /*pathLavorazione +*/ percorsoLinks + foto.nomeFoto;
@@ -673,9 +739,18 @@ const confronti = {
                         if (!foto.attiva) {
                             return;
                         }
+                        //I20-1068: stessa sigla nel box ma immagine diversa: una segnalazione sola, non
+                        //una mancante e una in piu'.
+                        var cambiata = confronti.fotoExtraConImmagineCambiata(foto, listFotoExtraBox1, extraNelBox, "foto extra");
+                        if (cambiata != null) {
+                            differenze.push(cambiata.differenza);
+                            listFotoExtraBox1 = listFotoExtraBox1.filter(f => f != cambiata.nomeNelBox);
+                            return;
+                        }
                         var tipoExtra = foto.tipo == 3 ? NoRenderElementi.TIPO.logo : NoRenderElementi.TIPO.fotoExtra;
                         if (NoRenderElementi.daSegnalareComeMancante(elementiNoRender, tipoExtra, foto.sigla)) {
-                            differenze.push({ label: foto.nome, difference: "foto extra mancante nel box: " + foto.nome });
+                            differenze.push({ label: foto.nome, difference: "foto extra mancante nel box: " + foto.nome,
+                                tipo: "extraMancante", famiglia: "extra", sigla: foto.sigla, tipoElemento: tipoExtra, nome: foto.nome });
                         }
                     }
                     else {
@@ -701,7 +776,8 @@ const confronti = {
                         let campoBox1 = box1campi.find(campo => campo.isValid && Utility.parseLabel(campo.label).includes(foto.sigla));
                         if (campoBox1 == undefined) {
                             if (!foto.escluso) {
-                                differenze.push({ label: foto.sigla, difference: "foto extraAuto mancante nel box: " + foto.sigla });
+                                differenze.push({ label: foto.sigla, difference: "foto extraAuto mancante nel box: " + foto.sigla,
+                                    tipo: "extraMancante", famiglia: "extraAuto", sigla: foto.sigla, tipoElemento: confronti.tipoElementoExtra(foto), nome: foto.nome });
                             }
                         }
                         else {
@@ -722,7 +798,17 @@ const confronti = {
                         }
                         else {
                             if (fotoCorrispondente == undefined) {
-                                differenze.push({ label: foto.nome, difference: "foto extraAuto mancante nel box: " + foto.nome });
+                                //I20-1068: e' il caso della issue: il logo ha la stessa sigla ma l'immagine
+                                //e' cambiata. Prima uscivano "mancante" e "in piu'" insieme.
+                                var cambiata = confronti.fotoExtraConImmagineCambiata(foto, listFotoExtraBox1, extraNelBox, "foto extraAuto");
+                                if (cambiata != null) {
+                                    differenze.push(cambiata.differenza);
+                                    listFotoExtraBox1 = listFotoExtraBox1.filter(f => f != cambiata.nomeNelBox);
+                                }
+                                else {
+                                    differenze.push({ label: foto.nome, difference: "foto extraAuto mancante nel box: " + foto.nome,
+                                        tipo: "extraMancante", famiglia: "extraAuto", sigla: foto.sigla, tipoElemento: confronti.tipoElementoExtra(foto), nome: foto.nome });
+                                }
                             }
                             else {
                                 //togliamo la foto dalla lista
@@ -735,7 +821,11 @@ const confronti = {
 
             //scorriamo listFotoExtraBox1, sono tutti elementi che non ci dovrebbero essere
             listFotoExtraBox1.forEach(foto => {
-                differenze.push({ label: foto, difference: "foto extra in più nel box originale: " + foto });
+                //I20-1070: con sigla e tipo della label l'operatore puo' tenerla solo per questa lavorazione.
+                let nelBox = extraNelBox.find(e => e.nome == foto);
+                differenze.push({ label: foto, difference: "foto extra in più nel box originale: " + foto,
+                    tipo: "extraInPiu", sigla: nelBox != null ? nelBox.sigla : "", tipoElemento: nelBox != null ? nelBox.tipoElemento : null,
+                    tipoFoto: nelBox != null ? nelBox.tipoFoto : 0, nome: foto });
             });
 
             //I20-968, caso opposto: l'elemento e' in noRender ma nel documento qualcuno lo ha
@@ -765,7 +855,8 @@ const confronti = {
 
         return {
             differenze: differenze,
-            errors: errors
+            errors: errors,
+            risolteNoRender: risolteNoRender
         };
     },
 
@@ -1037,6 +1128,259 @@ const confronti = {
         }
 
         return lista;
+    },
+
+    /// I20-1068: una foto extra che il server vuole nel box e che per nome di file non c'e'. Se nel
+    /// box c'e' un elemento con la stessa sigla - la label e' foto_extra$<sigla>$tipo_<n> - e un
+    /// file diverso, non sono due foto, una mancante e una in piu': e' la stessa foto con
+    /// l'immagine cambiata, e la segnalazione e' una sola, con i due nomi.
+    ///
+    /// foto e' la voce del server ({ nome, sigla }), nomiNelBox i file del box non ancora
+    /// spiegati da un'altra foto, extraNelBox [{ nome, sigla }] di tutte le foto extra del box,
+    /// prefisso il nome della famiglia nel testo ("foto extra", "foto extraAuto").
+    /// Torna null se nel box non c'e' nessun elemento con quella sigla, altrimenti
+    /// { differenza, nomeNelBox }: nomeNelBox e' il file del box da non contare piu' fra quelli
+    /// in piu'. Non guarda InDesign: si prova sotto Node.
+    fotoExtraConImmagineCambiata(foto, nomiNelBox, extraNelBox, prefisso) {
+        var sigla = foto != null && foto.sigla != null ? String(foto.sigla) : "";
+        if (sigla === "" || !Array.isArray(extraNelBox)) {
+            return null;
+        }
+        var nomi = Array.isArray(nomiNelBox) ? nomiNelBox : [];
+        var stessaSigla = extraNelBox.find(e => e != null && String(e.sigla == null ? "" : e.sigla) === sigla &&
+            e.nome != foto.nome && nomi.includes(e.nome));
+        if (stessaSigla == null) {
+            return null;
+        }
+
+        return {
+            nomeNelBox: stessaSigla.nome,
+            differenza: {
+                label: sigla,
+                difference: prefisso + " con immagine diversa da quella del server: nel box " + stessaSigla.nome + ", sul server " + foto.nome,
+                //I20-1070: quello che serve alla finestra delle differenze per tenere l'immagine
+                //del box o ricollegare quella del server.
+                tipo: "immagineExtraCambiata",
+                famiglia: prefisso === "foto extraAuto" ? "extraAuto" : "extra",
+                sigla: sigla,
+                tipoElemento: confronti.tipoElementoExtra(foto),
+                nomeNelBox: stessaSigla.nome,
+                nomeServer: foto.nome
+            }
+        };
+    },
+
+    /// I20-1070: il tipo di elemento del box di una foto extra del dato: tipo 3 (TipoFoto.Logo)
+    /// e' un logo, il resto una foto extra. E' lo stesso tipo di noRender e del meta.
+    tipoElementoExtra(foto) {
+        return foto != null && foto.tipo == 3 ? NoRenderElementi.TIPO.logo : NoRenderElementi.TIPO.fotoExtra;
+    },
+
+    /* ---------- I20-1081: il tipo di box diverso da quello del dato ---------- */
+
+    /// Il codice del box che il dato chiede: codiceBox o, se vuoto, la combinazione assegnata, come
+    /// fa l'impaginazione quando sceglie il box modello. "" se il dato non lo dice.
+    codiceBoxAtteso(record) {
+        if (record == null) {
+            return "";
+        }
+        const codice = record.codiceBox != null ? String(record.codiceBox).trim() : "";
+        if (codice !== "") {
+            return codice;
+        }
+        return record.combinazioneAssegnata != null ? String(record.combinazioneAssegnata).trim() : "";
+    },
+
+    /// La differenza fra il box impaginato, che ha per label il codice del box modello da cui e'
+    /// nato, e il box che il dato chiede. null se coincidono o se uno dei due codici manca: senza
+    /// codice non si segnala a indovinare. Non ha scelte: si risolve reimpaginando con il dato.
+    differenzaCodiceBox(labelDelBox, record) {
+        const nelBox = labelDelBox != null ? String(labelDelBox).trim() : "";
+        const atteso = confronti.codiceBoxAtteso(record);
+        if (nelBox === "" || atteso === "" || nelBox === atteso) {
+            return null;
+        }
+        return { label: "Tipo di box", difference: "diverso fra box e dato", tipo: "codiceBox",
+            valoreLocale: nelBox, valoreServer: atteso };
+    },
+
+    /// Le differenze gravi, da mostrare in evidenza: per ora il tipo di box diverso dal dato.
+    eDifferenzaGrave(diff) {
+        return diff != null && diff.tipo === "codiceBox";
+    },
+
+    /// I20-1071: il testo di un campo compilato come lo legge una persona: senza i tag di stile
+    /// (<A.DES_descr_nome_SC>...</A.DES_descr_nome_SC>), senza i tratti _$Hidden che nel box non
+    /// ci sono, con <br>, i ritorni a capo e i caratteri di controllo di InDesign come spazio, e
+    /// gli spazi compattati. Vale anche per il contenuto di un campo InDesign, che tag non ne ha.
+    testoLeggibile(testo) {
+        if (testo == null) {
+            return "";
+        }
+        let leggibile = String(testo);
+        leggibile = leggibile.replace(/<([^>]*_\$Hidden)>[\s\S]*?<\/\1>/g, "");
+        leggibile = leggibile.replace(/<br\s*\/?>/gi, " ");
+        //Un tag di chiusura diventa uno spazio: due tratti di stile uno dietro l'altro non si incollano.
+        leggibile = leggibile.replace(/<\/[^>]+>/g, " ");
+        leggibile = leggibile.replace(/<[^>]+>/g, "");
+        leggibile = leggibile.replace(/[\u0000-\u001f\u2028\u2029]/g, " ");
+        return leggibile.replace(/\s+/g, " ").trim();
+    },
+
+    /// I20-1071: i due valori di una differenza, pronti per la riga: null se la differenza non
+    /// li porta (non presente, eliminato, foto). Oltre massimo caratteri il testo si abbrevia con
+    /// i puntini, e l'intero va nel suggerimento.
+    valoriDifferenza(diff, massimo = 120) {
+        if (diff == null || (diff.valoreLocale == null && diff.valoreServer == null)) {
+            return null;
+        }
+        const prepara = function (valore) {
+            const intero = valore == null ? "" : String(valore);
+            const abbreviato = intero.length > massimo;
+            return {
+                intero: intero,
+                breve: abbreviato ? intero.substring(0, massimo - 1).replace(/\s+$/, "") + "…" : intero,
+                abbreviato: abbreviato
+            };
+        };
+        return { locale: prepara(diff.valoreLocale), server: prepara(diff.valoreServer) };
+    },
+
+    /// I20-1088: se il cliente non vuole che un meta dei testi si segnali per la sola versione del
+    /// record cambiata (ignoraVersioneMeta nella configurazione del plugin). Fuori da InDesign, o
+    /// senza middleware, la versione si controlla.
+    ignoraVersioneMeta() {
+        return typeof pluginMiddleware !== "undefined" && pluginMiddleware != null
+            && typeof pluginMiddleware.getIgnoraVersioneMeta === "function"
+            && pluginMiddleware.getIgnoraVersioneMeta() === true;
+    },
+
+    /// I20-1088: i meta dei testi del box da verificare, come differenze della finestra della scheda
+    /// e del Report Integrita' (origine "meta"). Il server li restituisce col record, sotto
+    /// testiDalBox: il testo del meta, il valore originale e la versione registrati, il contenuto
+    /// che il server compone ora e la versione attuale del record. Un meta e' da verificare se il
+    /// server compone altro rispetto al valore originale, o se il record ha cambiato versione (la
+    /// lista ricaricata, anche con lo stesso valore). La versione non conta se il cliente la ignora
+    /// o se il meta non l'ha registrata (i meta di prima). Il meta intanto continua a valere: e'
+    /// l'operatore a decidere se e' decaduto.
+    differenzeDeiMeta(record, ignoraVersione = confronti.ignoraVersioneMeta()) {
+        const stati = record != null && Array.isArray(record.testiDalBox) ? record.testiDalBox : [];
+        const differenze = [];
+        stati.forEach(function (stato) {
+            if (stato == null || stato.label == null || String(stato.label) === "" || stato.allineato === true) {
+                return;
+            }
+            const originale = stato.contenutoServer == null ? "" : String(stato.contenutoServer);
+            const attuale = stato.contenutoServerAttuale == null ? "" : String(stato.contenutoServerAttuale);
+            const valoreCambiato = originale !== attuale;
+            const versioneCambiata = ignoraVersione !== true && stato.versione != null && stato.versioneAttuale != null
+                && Number(stato.versione) !== Number(stato.versioneAttuale);
+            if (!valoreCambiato && !versioneCambiata) {
+                return;
+            }
+            //La label come quella delle altre differenze del campo (senza la chiave dopo il $),
+            //cosi' nella finestra il meta sta nel riquadro del suo campo; il campo intero va al server.
+            const campo = String(stato.label);
+            const label = typeof Utility !== "undefined" && Utility != null && typeof Utility.parseLabel === "function"
+                ? Utility.parseLabel(campo)
+                : campo.split("$")[0];
+            differenze.push({
+                label: label,
+                campo: campo,
+                difference: valoreCambiato
+                    ? "meta da verificare: il server compone un testo diverso da quello di quando si e' tenuto il box"
+                    : "meta da verificare: la lista e' stata ricaricata (versione " + stato.versione + ", ora " + stato.versioneAttuale + ")",
+                tipo: "metaDaVerificare",
+                origine: "meta",
+                motivo: valoreCambiato ? "valore" : "versione",
+                contenutoMeta: stato.contenuto == null ? "" : String(stato.contenuto),
+                contenutoServer: originale,
+                contenutoServerAttuale: attuale
+            });
+        });
+        return differenze;
+    },
+
+    /// I20-1088: i tre valori di un meta da verificare, leggibili e abbreviati come in
+    /// valoriDifferenza: il testo del meta, il valore originale e quello che il server compone ora.
+    /// Elenco vuoto se la differenza non e' un meta.
+    valoriDelMeta(diff, massimo = 120) {
+        if (diff == null || diff.tipo !== "metaDaVerificare") {
+            return [];
+        }
+        return [
+            ["Nel meta", diff.contenutoMeta],
+            ["Originale", diff.contenutoServer],
+            ["Sul server", diff.contenutoServerAttuale]
+        ].map(function (coppia) {
+            const intero = confronti.testoLeggibile(coppia[1]);
+            const abbreviato = intero.length > massimo;
+            return {
+                etichetta: coppia[0],
+                intero: intero,
+                breve: abbreviato ? intero.substring(0, massimo - 1).replace(/\s+$/, "") + "…" : intero,
+                abbreviato: abbreviato
+            };
+        });
+    },
+
+    /// I20-1090: dove sta la differenza fra la descrizione del box e quella del server: nelle
+    /// quattro descrizioni fondamentali, negli altri tratti (gli stili che non sono fondamentali,
+    /// come le bruciature di Coop), o in entrambi. trattiBox come li legge TestoTag.trattiDiStileDelCampo
+    /// ({ nome, nomeCompleto, contenuto }), trattiServer come TestoTag.parseContent ({ stile, content });
+    /// fondamentaleDi(stile) dice a quale descrizione porta uno stile ("descrizione1".."descrizione4")
+    /// o null. Gli stili si confrontano senza gruppo, i testi senza spazi, a capo e <br>, e i tratti
+    /// nascosti del server non contano: nel box non ci sono.
+    dovePortaLaDescrizione(trattiBox, trattiServer, fondamentaleDi) {
+        const senzaGruppo = function (stile) {
+            const testo = stile == null ? "" : String(stile);
+            const punto = testo.lastIndexOf(".");
+            return punto >= 0 ? testo.substring(punto + 1) : testo;
+        };
+        const pulito = function (testo) {
+            return String(testo == null ? "" : testo)
+                .replace(/<br\s*\/?>/gi, "")
+                .replace(/[\u2018\u2019]/g, "'")
+                .replace(/[\s\u0000-\u001f\u2028\u2029]/g, "");
+        };
+        const fondamentale = function (stile) {
+            const trovata = typeof fondamentaleDi === "function" ? fondamentaleDi(stile) : null;
+            return trovata == null || trovata === "" ? null : String(trovata);
+        };
+        const riassumi = function (tratti) {
+            const fondamentali = {};
+            const altri = [];
+            tratti.forEach(function (tratto) {
+                const testo = pulito(tratto.testo);
+                if (testo === "") {
+                    return;
+                }
+                const quale = fondamentale(tratto.stile);
+                if (quale != null) {
+                    fondamentali[quale] = (fondamentali[quale] || "") + testo;
+                }
+                else {
+                    altri.push(tratto.stile + ":" + testo);
+                }
+            });
+            return { fondamentali: fondamentali, altri: altri.join("|") };
+        };
+
+        const box = riassumi((trattiBox || []).filter(t => t != null).map(function (t) {
+            return { stile: senzaGruppo(t.nomeCompleto != null && t.nomeCompleto !== "" ? t.nomeCompleto : t.nome), testo: t.contenuto };
+        }));
+        const server = riassumi((trattiServer || []).filter(t => t != null && !String(t.stile || "").endsWith("_$Hidden")).map(function (t) {
+            return { stile: senzaGruppo(t.stile), testo: t.content };
+        }));
+
+        const quali = new Set(Object.keys(box.fondamentali).concat(Object.keys(server.fondamentali)));
+        let fondamentaliDiverse = false;
+        quali.forEach(function (quale) {
+            if ((box.fondamentali[quale] || "") !== (server.fondamentali[quale] || "")) {
+                fondamentaliDiverse = true;
+            }
+        });
+        return { fondamentali: fondamentaliDiverse, altri: box.altri !== server.altri };
     },
 
     decodeSpecialCharacters(text) {

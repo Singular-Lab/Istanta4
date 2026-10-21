@@ -41,6 +41,8 @@ namespace Istanta.Controllers
         private readonly string path_external_lib = "";
         private readonly string path_external_source = "";
         private readonly IOptions<FicoConfig> _fico_conf;
+        // I20-1106 (Lotto 2): serve a costruire il MenaboController che etichetta i record della pulizia.
+        private readonly IOptions<PathExternal> _external_lib;
         private readonly IDbContextFactory<edro21_dbContext> _dbContextFactory;
 
         private readonly IDbContextFactory<Edro21_DbContext2> _dbContextFactory2;
@@ -59,6 +61,7 @@ namespace Istanta.Controllers
             path_external_lib = external_lib.Value.pathLib;
             path_external_source = external_lib.Value.pathSource;
             _fico_conf = ficoConf;
+            _external_lib = external_lib;
         }
 
         public IActionResult Index()
@@ -1608,9 +1611,19 @@ namespace Istanta.Controllers
 
             if (request != null)
             {
-                SingletonConfiguration.DbConfronto.SetJsonSource(request.jsoncode);
+                // I20-1106 (Lotto 2): la stessa azione salva anche le regole della pulizia liste,
+                // che l'editor manda con il suo origin. Il file si rilegge dal disco a ogni report,
+                // quindi non c'e' un singleton da aggiornare.
+                if (request.origin == "SourcePuliziaListe")
+                {
+                    bRes = new ExternalSourceClass(this.path_external_source).getPuliziaListe().SetJsonSource(request.jsoncode);
+                }
+                else
+                {
+                    SingletonConfiguration.DbConfronto.SetJsonSource(request.jsoncode);
 
-                bRes.Esito = true;
+                    bRes.Esito = true;
+                }
             }
             else
             {
@@ -1623,6 +1636,425 @@ namespace Istanta.Controllers
         }
 
         #endregion
+
+        #region Pulizia liste (I20-1106, Lotto 2)
+
+        // L'azione non puo' chiamarsi PuliziaListe: farebbe ombra alla classe Models.PuliziaListe
+        // usata qui sotto. La route resta /Confronti/PuliziaListe.
+        [HttpGet]
+        [Route("Confronti/PuliziaListe")]
+        public IActionResult PaginaPuliziaListe()
+        {
+            return View("PuliziaListe");
+        }
+
+        /// <summary>Le liste Excel caricate per la promo, con la label letta dal contratto dell'attivita' di importazione.</summary>
+        [HttpGet]
+        [Route("Confronti/listeDellaPromo/{idPromo}")]
+        public async Task<IActionResult> listeDellaPromo(int idPromo)
+        {
+            var risposta = new ListeDellaPromoRisposta();
+            try
+            {
+                var importazioni = await this.ctx2.PromoImportazionis
+                    .Where(i => i.IdPromo == idPromo && i.IdAttivita.HasValue)
+                    .OrderByDescending(i => i.DataCaricamento)
+                    .ToListAsync();
+                var idAttivita = importazioni.Select(i => i.IdAttivita!.Value).ToList();
+                var attivita = idAttivita.Count == 0
+                    ? new List<Attivitum>()
+                    : await this.ctx.Attivita.Where(a => idAttivita.Contains(a.Id)).ToListAsync();
+                var perId = attivita.ToDictionary(a => a.Id);
+
+                foreach (var importazione in importazioni)
+                {
+                    if (!perId.TryGetValue(importazione.IdAttivita!.Value, out var att))
+                    {
+                        continue;
+                    }
+                    risposta.liste.Add(new ListaDellaPromo
+                    {
+                        idImportazione = importazione.Id,
+                        idAttivita = att.Id,
+                        nomeFile = importazione.NomeFile,
+                        dataCaricamento = importazione.DataCaricamento,
+                        label = LabelDellAttivita(att)
+                    });
+                }
+                risposta.esito = true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Liste della promo {IdPromo} non lette", idPromo);
+                risposta.error = ex.Message;
+            }
+            return Ok(risposta);
+        }
+
+        /// <summary>
+        /// Il report: i record della promo con la label della lista scelta che un tipo delle regole
+        /// del cliente riconosce e il cui codice non e' piu' nella lista. La lista si rilegge con la
+        /// stessa lettura dell'importazione; le etichette con il motore di Istanta; chi e' impaginato
+        /// si vede ma non si puo' eliminare.
+        /// </summary>
+        [HttpPut]
+        [Route("Confronti/puliziaListeReport")]
+        public async Task<IActionResult> puliziaListeReport([FromBody] RichiestaReportPulizia req)
+        {
+            var report = new ReportPulizia();
+            try
+            {
+                if (req == null)
+                {
+                    throw new Exception("parametro_null");
+                }
+                var promo = await this.ctx2.Promos.FirstOrDefaultAsync(p => p.Id == req.idPromo)
+                    ?? throw new Exception("promo_non_trovata");
+                var (importazione, attivita, pacchetto, richiesta, label) = await ListaScelta(promo, req.idImportazione);
+
+                // 1. I codici della lista scelta, riletta come all'importazione.
+                string sorgente = this.path_to_import + attivita.Id + System.IO.Path.DirectorySeparatorChar + pacchetto.filename;
+                Int32.TryParse(pacchetto.getFieldByKey("idAddestramento"), out int idAddestramento);
+                ImportResult letta = leggiDatoExcel(importazione, sorgente, label, pacchetto, richiesta.context, idAddestramento);
+                if (!string.IsNullOrEmpty(letta.errors))
+                {
+                    throw new Exception("Lettura della lista non riuscita: " + letta.errors);
+                }
+                var codici = PuliziaListe.CodiciPerCombinazione(letta.liste);
+
+                // 2. I record della promo con quella label, tutte le versioni, nel canale e nell'area scelti se indicati.
+                var records = PuliziaListe.FiltraPerCanaleArea(await RecordDellaPromoConLabel(promo, label), req.guidCanale, req.guidArea);
+
+                // 3. I tipi di record del cliente, riletti dal file.
+                var tipi = new ExternalSourceClass(this.path_external_source).getPuliziaListe().source;
+
+                // 4. Le etichette, con il motore di Istanta.
+                var daValutare = DaValutare(records);
+                Etichetta(daValutare);
+
+                // 5. Chi non si puo' eliminare.
+                var impaginati = await ImpaginatiDellaPromo(promo, records);
+
+                report = PuliziaListe.ComponiReport(importazione.NomeFile, label, tipi, daValutare, codici, impaginati);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Report della pulizia liste non riuscito");
+                report.esito = false;
+                report.error = ex.Message;
+            }
+            return Ok(report);
+        }
+
+        /// <summary>
+        /// Elimina dal tracciato i record scelti, meno quelli che risultano impaginati adesso, dopo
+        /// un backup di tutti i record dei tracciati della promo. Tutto in una transazione.
+        /// </summary>
+        [HttpPut]
+        [Route("Confronti/puliziaListeElimina")]
+        public async Task<IActionResult> puliziaListeElimina([FromBody] RichiestaEliminazionePulizia req)
+        {
+            var risposta = new EliminazionePuliziaRisposta();
+            try
+            {
+                if (req == null || req.ids == null)
+                {
+                    throw new Exception("parametro_null");
+                }
+                var promo = await this.ctx2.Promos.FirstOrDefaultAsync(p => p.Id == req.idPromo)
+                    ?? throw new Exception("promo_non_trovata");
+                var importazione = await this.ctx2.PromoImportazionis.FirstOrDefaultAsync(i => i.Id == req.idImportazione && i.IdPromo == promo.Id)
+                    ?? throw new Exception("lista_non_trovata");
+                string label = string.Empty;
+                if (importazione.IdAttivita.HasValue)
+                {
+                    var attivita = await this.ctx.Attivita.FirstOrDefaultAsync(a => a.Id == importazione.IdAttivita.Value);
+                    if (attivita != null)
+                    {
+                        label = LabelDellAttivita(attivita);
+                    }
+                }
+
+                using var tx = await this.ctx2.Database.BeginTransactionAsync();
+
+                // Tutti i record dei tracciati della promo: il backup li salva tutti, l'eliminazione ne toglie alcuni.
+                var records = await this.ctx2.PromoTracciatiRecords
+                    .Where(r => r.IdTracciatoNavigation.IdPromo == promo.Id)
+                    .ToListAsync();
+                var richiesti = records.Where(r => req.ids.Contains(r.Id)).ToList();
+                var impaginati = await ImpaginatiDellaPromo(promo, richiesti);
+                var piano = PuliziaListe.PianificaEliminazione(req.ids, records, impaginati);
+
+                var backup = BackupPromo.CreaTracciati(promo.Id, PuliziaListe.OrigineBackup(importazione.NomeFile, label), records, DateTime.Now);
+                this.ctx2.PromoBackups.Add(backup);
+
+                var perId = records.ToDictionary(r => r.Id);
+                this.ctx2.PromoTracciatiRecords.RemoveRange(piano.daEliminare.Select(id => perId[id]));
+                await this.ctx2.SaveChangesAsync();
+                await tx.CommitAsync();
+
+                risposta.eliminati = piano.daEliminare.Count;
+                risposta.saltati = piano.saltati;
+                risposta.idBackup = backup.Id;
+                risposta.esito = true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Eliminazione della pulizia liste non riuscita");
+                risposta.error = ex.Message;
+            }
+            return Ok(risposta);
+        }
+
+        /// <summary>La lista scelta con la sua attivita' di importazione, il pacchetto e la label; si ferma se manca qualcosa.</summary>
+        private async Task<(PromoImportazioni importazione, Attivitum attivita, InputFormTracciato pacchetto, OperationRequest richiesta, string label)> ListaScelta(Promo promo, int idImportazione)
+        {
+            var importazione = await this.ctx2.PromoImportazionis.FirstOrDefaultAsync(i => i.Id == idImportazione && i.IdPromo == promo.Id)
+                ?? throw new Exception("lista_non_trovata");
+            if (!importazione.IdAttivita.HasValue)
+            {
+                throw new Exception("lista_senza_attivita");
+            }
+            var attivita = await this.ctx.Attivita.FirstOrDefaultAsync(a => a.Id == importazione.IdAttivita.Value)
+                ?? throw new Exception("attivita_importazione_non_trovata");
+            var (richiesta, pacchetto) = PacchettoDellAttivita(attivita);
+            if (richiesta == null || pacchetto == null)
+            {
+                throw new Exception("contratto_attivita_illeggibile");
+            }
+            string label = LabelDellAttivita(attivita);
+            if (string.IsNullOrWhiteSpace(label))
+            {
+                throw new Exception("lista_senza_label");
+            }
+            return (importazione, attivita, pacchetto, richiesta, label);
+        }
+
+        /// <summary>Il contratto dell'attivita' di importazione: la richiesta e il pacchetto (filename, idLabel, idAddestramento).</summary>
+        private static (OperationRequest? richiesta, InputFormTracciato? pacchetto) PacchettoDellAttivita(Attivitum attivita)
+        {
+            try
+            {
+                var richiesta = JsonConvert.DeserializeObject<OperationRequest>(attivita.Contract);
+                if (richiesta?.Packet == null)
+                {
+                    return (richiesta, null);
+                }
+                var pacchetto = JsonConvert.DeserializeObject<InputFormTracciato>(richiesta.Packet.ToString()!);
+                return (richiesta, pacchetto);
+            }
+            catch
+            {
+                return (null, null);
+            }
+        }
+
+        private static string LabelDellAttivita(Attivitum attivita)
+        {
+            var (_, pacchetto) = PacchettoDellAttivita(attivita);
+            try
+            {
+                return pacchetto?.getFieldByKey("idLabel") ?? string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private async Task<List<PromoTracciatiRecord>> RecordDellaPromoConLabel(Promo promo, string label)
+        {
+            return await this.ctx2.PromoTracciatiRecords
+                .Include(r => r.IdTracciatoNavigation)
+                .Where(r => r.IdTracciatoNavigation.IdPromo == promo.Id && r.Label == label)
+                .AsNoTracking()
+                .ToListAsync();
+        }
+
+        private static List<RecordDaValutare> DaValutare(List<PromoTracciatiRecord> records)
+        {
+            return records.Select(r => new RecordDaValutare
+            {
+                record = r,
+                dato = PuliziaListe.LeggiDato(r.Dato),
+                tracciato = r.IdTracciatoNavigation?.Sigla ?? string.Empty,
+                chiaveCanale = PuliziaListe.ChiaveCanale(r.IdTracciatoNavigation),
+                chiaveArea = PuliziaListe.ChiaveArea(r.IdTracciatoNavigation),
+                canale = NomeSicuro(() => r.IdTracciatoNavigation?.Canale, r.IdTracciatoNavigation?.guidCanale),
+                area = NomeSicuro(() => r.IdTracciatoNavigation?.Area, r.IdTracciatoNavigation?.guidArea)
+            }).ToList();
+        }
+
+        /// <summary>Canale e Area del tracciato si risolvono dall'ACPV; se non e' caricato, resta il guid.</summary>
+        private static string NomeSicuro(Func<string?> nome, string? ripiego)
+        {
+            try
+            {
+                return nome() ?? ripiego ?? string.Empty;
+            }
+            catch
+            {
+                return ripiego ?? string.Empty;
+            }
+        }
+
+        /// <summary>I canali e le aree dei tracciati della promo, per restringere la pulizia.</summary>
+        [HttpGet]
+        [Route("Confronti/canaliAreeDellaPromo/{idPromo}")]
+        public async Task<IActionResult> canaliAreeDellaPromo(int idPromo)
+        {
+            var risposta = new CanaliAreeRisposta();
+            try
+            {
+                var tracciati = await this.ctx2.PromoTracciatis.Where(t => t.IdPromo == idPromo).ToListAsync();
+                // La chiave e' il guid se c'e', altrimenti il nome: l'importazione scrive sempre i nomi
+                // e i guid solo quando la lista li porta.
+                risposta.canali = tracciati
+                    .Select(t => new { chiave = PuliziaListe.ChiaveCanale(t), tracciato = t })
+                    .Where(x => x.chiave.Length > 0)
+                    .GroupBy(x => x.chiave, StringComparer.OrdinalIgnoreCase)
+                    .Select(g => new VoceAcpv { guid = g.Key, nome = NomeSicuro(() => g.First().tracciato.Canale, g.Key) })
+                    .OrderBy(v => v.nome, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                risposta.aree = tracciati
+                    .Select(t => new { chiave = PuliziaListe.ChiaveArea(t), tracciato = t })
+                    .Where(x => x.chiave.Length > 0)
+                    .GroupBy(x => x.chiave, StringComparer.OrdinalIgnoreCase)
+                    .Select(g => new VoceAcpv { guid = g.Key, nome = NomeSicuro(() => g.First().tracciato.Area, g.Key) })
+                    .OrderBy(v => v.nome, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                risposta.esito = true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Canali e aree della promo {IdPromo} non letti", idPromo);
+                risposta.error = ex.Message;
+            }
+            return Ok(risposta);
+        }
+
+        /// <summary>
+        /// Le etichette dei record con il motore di Istanta. Se l'etichettatura non riesce, il
+        /// report esce senza etichette: le regole sui campi valgono lo stesso, e il log lo dice.
+        /// </summary>
+        private void Etichetta(List<RecordDaValutare> daValutare)
+        {
+            if (daValutare.Count == 0)
+            {
+                return;
+            }
+            try
+            {
+                var menabo = new MenaboController(null, this._config, this._external_lib, null, null, null, null, this._fico_conf, this._dbContextFactory, this._dbContextFactory2);
+                var articoli = daValutare.Select(d => new ArticoloInRevisione
+                {
+                    idRec = d.record.Id,
+                    recordInTracciato = PuliziaListe.DatoPerEtichettatura(d.dato),
+                    label = d.record.Label,
+                    Versione = d.record.Versione,
+                    promoTracciati = d.record.IdTracciatoNavigation
+                }).ToList();
+
+                menabo.Etichettatura(articoli);
+
+                for (int i = 0; i < articoli.Count; i++)
+                {
+                    daValutare[i].etichette = articoli[i].allEtichette ?? new List<string>();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Etichettatura non riuscita nella pulizia liste: il report prosegue senza etichette");
+            }
+        }
+
+        /// <summary>Chi, fra i record dati, non si puo' eliminare e perche' (PuliziaListe.Impaginati).</summary>
+        private async Task<Dictionary<long, Impaginazione>> ImpaginatiDellaPromo(Promo promo, List<PromoTracciatiRecord> records)
+        {
+            string guid = promo.guidID ?? string.Empty;
+            var lavorazioni = await this.ctx2.PromoLavorazionis.Where(l => l.GuidPromo == guid).Select(l => new { l.Id, l.GuidFormato, l.Meta }).ToListAsync();
+            var idLavorazioni = lavorazioni.Select(l => l.Id).ToList();
+
+            // Come ogni lavorazione si presenta nell'avviso: tipo (PoP o Volantino) e codice dal
+            // formato del kit, titolo dal Meta.
+            var formati = SingletonConfiguration.DBFORMATI?.source ?? new List<Formato>();
+            var descrizioni = lavorazioni.ToDictionary(
+                l => l.Id,
+                l =>
+                {
+                    var formato = formati.FirstOrDefault(f => f.guidID == l.GuidFormato);
+                    return PuliziaListe.DescriviLavorazione(
+                        formato == null ? (TipoLavorazione?)null : formato.tipo,
+                        formato?.codice,
+                        LavorazioniDellaPromo.TitoloDalMeta(l.Meta, l.Id),
+                        l.Id);
+                });
+
+            var righe = idLavorazioni.Count == 0
+                ? new List<PromoLavorazioniRecord>()
+                : await this.ctx2.PromoLavorazioniRecords.Where(r => idLavorazioni.Contains(r.IdLavorazione)).AsNoTracking().ToListAsync();
+
+            var idPrimari = righe.Select(r => r.IdRecordTracciato).Distinct().ToList();
+            var labelDeiPrimari = idPrimari.Count == 0
+                ? new Dictionary<long, string?>()
+                : (await this.ctx2.PromoTracciatiRecords.Where(r => idPrimari.Contains(r.Id)).Select(r => new { r.Id, r.Label }).ToListAsync())
+                    .ToDictionary(x => x.Id, x => x.Label);
+
+            var idRecords = records.Select(r => r.Id).ToList();
+            var nelMenabo = idRecords.Count == 0
+                ? new List<long>()
+                : await this.ctx2.MenaboRefs.Where(m => m.IdRecord != null && idRecords.Contains(m.IdRecord.Value)).Select(m => m.IdRecord!.Value).Distinct().ToListAsync();
+
+            return PuliziaListe.Impaginati(records, righe, labelDeiPrimari, nelMenabo, descrizioni);
+        }
+
+        #endregion
+    }
+
+    public class RichiestaReportPulizia
+    {
+        public int idPromo { get; set; }
+        public int idImportazione { get; set; }
+        /// <summary>Facoltativi: vuoti o assenti vuol dire tutti.</summary>
+        public string? guidCanale { get; set; }
+        public string? guidArea { get; set; }
+    }
+
+    public class VoceAcpv
+    {
+        public string guid { get; set; } = string.Empty;
+        public string nome { get; set; } = string.Empty;
+    }
+
+    public class CanaliAreeRisposta
+    {
+        public bool esito { get; set; }
+        public string error { get; set; } = string.Empty;
+        public List<VoceAcpv> canali { get; set; } = new List<VoceAcpv>();
+        public List<VoceAcpv> aree { get; set; } = new List<VoceAcpv>();
+    }
+
+    public class RichiestaEliminazionePulizia
+    {
+        public int idPromo { get; set; }
+        public int idImportazione { get; set; }
+        public List<long> ids { get; set; } = new List<long>();
+    }
+
+    public class ListaDellaPromo
+    {
+        public int idImportazione { get; set; }
+        public long idAttivita { get; set; }
+        public string nomeFile { get; set; } = string.Empty;
+        public DateTime dataCaricamento { get; set; }
+        public string label { get; set; } = string.Empty;
+    }
+
+    public class ListeDellaPromoRisposta
+    {
+        public bool esito { get; set; }
+        public string error { get; set; } = string.Empty;
+        public List<ListaDellaPromo> liste { get; set; } = new List<ListaDellaPromo>();
     }
 
 }

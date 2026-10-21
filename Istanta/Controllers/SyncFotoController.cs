@@ -274,7 +274,7 @@ namespace Istanta.Controllers
                                             {
                                                 filename = onlyName,
                                                 queryFilename = "",// (onlyName.IndexOf('_') > 0) ? onlyName.Substring(1, onlyName.IndexOf('_') - 1) : "",
-                                                md5 = Crypto.GetMD5HashFromFile(System.IO.File.ReadAllBytes(fsName)),
+                                                md5 = Crypto.GetMD5HashFromPath(fsName),
                                                 stato = StatoSyncFile.Scanned,
                                                 id = 0,
                                                 zipDirOrigin = zipFilePkgName
@@ -316,7 +316,7 @@ namespace Istanta.Controllers
                             {
                                 filename = fullname,
                                 queryFilename = onlyName,//(onlyName.IndexOf('_') > 0) ? onlyName.Substring(1, onlyName.IndexOf('_') - 1) : "",
-                                md5 = Crypto.GetMD5HashFromFile(System.IO.File.ReadAllBytes(entry)),
+                                md5 = Crypto.GetMD5HashFromPath(entry),
                                 stato = StatoSyncFile.Scanned,
                                 id = 0,
                                 zipDirOrigin = zipFilePkgName
@@ -1003,6 +1003,24 @@ namespace Istanta.Controllers
             return Ok(result);
         }
 
+        /// Codice dell'errore con cui downloadPacchettoFoto risponde 410: la pagina lo traduce nel
+        /// messaggio di pacchetto scaduto (syncfoto.js, messaggioDownloadNonRiuscito).
+        public const string CodicePacchettoScaduto = "pacchetto_scaduto";
+
+        /// Vero quando almeno uno dei file richiesti non c'e' piu' nella cartella delle estrazioni,
+        /// cioe' quando la pulizia notturna ha gia' eliminato il pacchetto da cui proveniva.
+        /// Il percorso e' costruito come lo costruisce downloadPacchettoFoto.
+        public static bool PacchettoScaduto(string cartellaEstrazioni, IEnumerable<SyncFile>? files)
+        {
+            if (files == null)
+            {
+                return false;
+            }
+
+            return files.Any(sf => !System.IO.File.Exists(
+                Path.Combine(cartellaEstrazioni + System.IO.Path.DirectorySeparatorChar + sf.zipDirOrigin, sf.filename)));
+        }
+
         [DisableRequestSizeLimit]
         [HttpPut]
         [Route("SyncFoto/downloadPacchettoFoto")]
@@ -1050,6 +1068,14 @@ namespace Istanta.Controllers
 
                 //}
 
+                // La pulizia notturna elimina i pacchetti dopo il periodo di conservazione: se manca
+                // anche un solo file il pacchetto e' scaduto, e si dice questo invece di creare uno
+                // zip incompleto.
+                if (PacchettoScaduto(this.extract_sync_path, request.files))
+                {
+                    return StatusCode(StatusCodes.Status410Gone, new { error = CodicePacchettoScaduto });
+                }
+
                 zipName += $"{statoMatched}.zip";
                 path = Path.Combine(this.extract_sync_path, zipName);
 
@@ -1084,7 +1110,7 @@ namespace Istanta.Controllers
                 return BadRequest(ex.ToString());
             }   
 
-            Thread.Sleep(1000);
+            await Task.Delay(1000);
 
             System.IO.FileInfo fInfo = new FileInfo(path);
             string destPath = Path.Combine(this._exportPath.Value.path, fInfo.Name);
@@ -1236,20 +1262,17 @@ namespace Istanta.Controllers
 
                 //msg.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
-                byte[] arrBytes = System.IO.File.ReadAllBytes(tempFile);
-
-                var form = new MultipartFormDataContent();
-
-                var fileContent = new ByteArrayContent(arrBytes);
-                fileContent.Headers.ContentType = MediaTypeHeaderValue.Parse("multipart/form-data");
-
-                form.Add(fileContent, "file", Path.GetFileName(tempFile));
-
-                string jsString = JsonConvert.SerializeObject(olympoJson);
-                var contentJson = new StringContent(jsString, Encoding.UTF8, "application/json");
-                form.Add(contentJson, "json_meta_foto");
-
-                var response = await httpClient.PostAsync(uri, form);
+                // Lo zip parte dal disco in streaming: caricarlo intero con ReadAllBytes (centinaia di MB
+                // di foto) saturava la memoria e i GC fermavano tutte le richieste finche' il sync non finiva.
+                // Il form chiude lo stream appena Olimpo risponde, prima di cancellare il file temporaneo.
+                HttpResponseMessage response;
+                using (var form = PacchettoFotoPerOlimpo(
+                           new FileStream(tempFile, FileMode.Open, FileAccess.Read, FileShare.Read, 81920,
+                                          FileOptions.Asynchronous | FileOptions.SequentialScan),
+                           Path.GetFileName(tempFile), JsonConvert.SerializeObject(olympoJson)))
+                {
+                    response = await httpClient.PostAsync(uri, form);
+                }
 
                 //result.error="Olympus response " + response.IsSuccessStatusCode;
 
@@ -1401,7 +1424,7 @@ namespace Istanta.Controllers
                             throw new Exception("Errore eliminazione file temporaneo. Timeout!");
                         }
 
-                        Thread.Sleep(1000);
+                        await Task.Delay(1000);
                     }
                 }
 
@@ -1414,6 +1437,137 @@ namespace Istanta.Controllers
             }
 
             return Ok(result);
+        }
+
+        /// <summary>
+        /// La richiesta di SyncPacchettoFoto verso {Olimpo}/foto/uploadPacchettoFoto: lo zip nel campo
+        /// "file" e i metadati nel campo "json_meta_foto". Prende lo zip come stream, cosi' non passa
+        /// mai intero dalla memoria; lo stream appartiene al form e si chiude con lui.
+        /// Intestazioni e nomi dei campi sono quelli che Olimpo riceve da sempre.
+        /// </summary>
+        public static MultipartFormDataContent PacchettoFotoPerOlimpo(Stream zip, string nomeZip, string jsonMetaFoto)
+        {
+            var form = new MultipartFormDataContent();
+
+            var fileContent = new StreamContent(zip);
+            fileContent.Headers.ContentType = MediaTypeHeaderValue.Parse("multipart/form-data");
+            form.Add(fileContent, "file", nomeZip);
+
+            form.Add(new StringContent(jsonMetaFoto, Encoding.UTF8, "application/json"), "json_meta_foto");
+            return form;
+        }
+
+        /// Le foto extra di una ref che la sincronizzazione del Plugin scarica nella cartella Loghi,
+        /// da cui l'impaginazione le piazza. Solo quelle con un file proprio: un puntatore rimanda a
+        /// un logo dell'archivio Loghi/Bolli, che arriva con getPacchettoLoghiBolliAsContract. Anche
+        /// le disattivate: l'operatore le riattiva dal Plugin senza rifare la sincronizzazione.
+        /// Tipo dice al Plugin che e' una foto extra; le foto del prodotto restano senza.
+        public static List<FileOlympoSync> FotoExtraDaScaricare(IEnumerable<LogoBollo_ExtraNoAuto>? fotoExtra)
+        {
+            if (fotoExtra == null)
+            {
+                return new List<FileOlympoSync>();
+            }
+
+            return fotoExtra
+                .Where(f => f != null && !f.puntatore && !string.IsNullOrEmpty(f.guidId) && f.tipo != (Byte)TipoFoto.Foto)
+                .Select(f => new FileOlympoSync
+                {
+                    Id = f.guidId,
+                    FileName = f.nome,
+                    IdRef = f.id.ToString(),
+                    Tipo = (TipoFoto)f.tipo
+                }).ToList();
+        }
+
+        /// Le foto extra di una ref come le mette nel record FicoProcess.impacchettaInfoRecord: quelle
+        /// che non sono foto del prodotto, tranne quelle riservate a un altro canale o a un'altra area.
+        public static List<LogoBollo_ExtraNoAuto> FotoExtraDellaRef(IEnumerable<ArticoliFoto>? foto, string? area, string? canale)
+        {
+            if (foto == null)
+            {
+                return new List<LogoBollo_ExtraNoAuto>();
+            }
+
+            return foto
+                .Where(f => f.Tipo.HasValue && f.Tipo != (Byte)TipoFoto.Foto)
+                .Where(f => f.Canale == null || f.Canale == canale)
+                .Where(f => f.Area == null || f.Area == area)
+                .Select(f => new LogoBollo_ExtraNoAuto
+                {
+                    id = f.Id,
+                    nome = f.NomeReale,
+                    area = f.Area,
+                    canale = f.Canale,
+                    guidId = f.GuidId,
+                    tipo = f.Tipo!.Value,
+                    attiva = f.Attiva ?? false,
+                    puntatore = f.Puntatore
+                }).ToList();
+        }
+
+        /// Foto.Extra di un record del kit: una lista nel record appena costruito, un JArray o una
+        /// stringa JSON quando il record e' passato da una serializzazione.
+        public static List<LogoBollo_ExtraNoAuto>? LeggiFotoExtra(object? valore)
+        {
+            if (valore is List<LogoBollo_ExtraNoAuto> lista)
+            {
+                return lista;
+            }
+            if (valore is JArray array)
+            {
+                return array.ToObject<List<LogoBollo_ExtraNoAuto>>();
+            }
+            if (valore is string testo && testo != "")
+            {
+                return JsonConvert.DeserializeObject<List<LogoBollo_ExtraNoAuto>>(testo);
+            }
+            return null;
+        }
+
+        /// Le foto extra da scaricare di tutti i record di un kit, quelle che l'impaginazione piazza
+        /// dalla cartella Loghi. Le usano il pacchetto completo e la sync loghi della lavorazione.
+        public static List<FileOlympoSync> FotoExtraDeiRecord(IEnumerable<ArticoloInKit>? records)
+        {
+            var richieste = new List<FileOlympoSync>();
+            if (records == null)
+            {
+                return richieste;
+            }
+
+            string k_foto_extra = Enum.GetName(AddestramentoRuoli.Foto) + "." + GLOBAL_VARIABLES.keyFotoExtra;
+            foreach (var record in records)
+            {
+                if (record?.recordInTracciato != null && record.recordInTracciato.TryGetValue(k_foto_extra, out var fotoExtra))
+                {
+                    richieste.AddRange(FotoExtraDaScaricare(LeggiFotoExtra(fotoExtra)));
+                }
+            }
+            return richieste;
+        }
+
+        /// Olimpo risponde con hash e dimensione ma il tipo non lo conosce: lo rimettiamo dalle
+        /// richieste, per id e nome del file. Le foto del prodotto restano senza tipo.
+        public static List<FileOlympoSync> ConTipoDelleRichieste(List<FileOlympoSync>? risposta, IEnumerable<FileOlympoSync> richieste)
+        {
+            if (risposta == null)
+            {
+                return new List<FileOlympoSync>();
+            }
+
+            var tipi = richieste
+                .Where(r => r.Tipo != 0 && r.Id != null)
+                .GroupBy(r => (r.Id!, r.FileName ?? ""))
+                .ToDictionary(g => g.Key, g => g.First().Tipo);
+
+            foreach (var voce in risposta)
+            {
+                if (voce.Id != null && tipi.TryGetValue((voce.Id, voce.FileName ?? ""), out var tipo))
+                {
+                    voce.Tipo = tipo;
+                }
+            }
+            return risposta;
         }
 
         [HttpGet]
@@ -1525,7 +1679,8 @@ namespace Istanta.Controllers
 
                 if (_file.idLavorazione != 0)
                 {
-                    PromoLavorazioniRecord? plrItem = this.ctx2.PromoLavorazioniRecords.Include(i1 => i1.IdPromoTracciatiRecordNavigation).Where(plr => plr.IdLavorazione == _file.idLavorazione && plr.CodiceGruppo!.Contains(_file.codice)).FirstOrDefault();
+                    //I20-1088: la riga dell'impaginazione del box, non la prima che contiene il codice.
+                    PromoLavorazioniRecord? plrItem = RecordDellaLavorazione.Trova(this.ctx2, this.ctx2.PromoLavorazioniRecords.Include(i1 => i1.IdPromoTracciatiRecordNavigation).Where(plr => plr.IdLavorazione == _file.idLavorazione && plr.CodiceGruppo!.Contains(_file.codice)), _file.idRec, _file.codice);
 
                     if (plrItem == null)
                         throw new Exception($"Nessun elemento trovato con ID Record Tracciato {_file.idRec} trovato, Codice {_file.codice} non disponibile");
@@ -1919,7 +2074,8 @@ namespace Istanta.Controllers
 
                 if (data.idLavorazione != 0)
                 {
-                    PromoLavorazioniRecord? plrItem = this.ctx2.PromoLavorazioniRecords.Include(i1 => i1.IdPromoTracciatiRecordNavigation).Where(plr => plr.IdLavorazione == data.idLavorazione && plr.CodiceGruppo!.Contains(data.Codice)).FirstOrDefault();
+                    //I20-1088: la riga dell'impaginazione del box, non la prima che contiene il codice.
+                    PromoLavorazioniRecord? plrItem = RecordDellaLavorazione.Trova(this.ctx2, this.ctx2.PromoLavorazioniRecords.Include(i1 => i1.IdPromoTracciatiRecordNavigation).Where(plr => plr.IdLavorazione == data.idLavorazione && plr.CodiceGruppo!.Contains(data.Codice)), data.idRec, data.Codice);
 
                     if (plrItem == null)
                         throw new Exception($"Nessun elemento trovato con Codice {data.Codice}");
@@ -2162,7 +2318,8 @@ namespace Istanta.Controllers
 
                 if (idLavorazione != 0)
                 {
-                    PromoLavorazioniRecord? plrItem = this.ctx2.PromoLavorazioniRecords.Include(i1 => i1.IdPromoTracciatiRecordNavigation).Where(plr => plr.IdLavorazione == idLavorazione && plr.CodiceGruppo!.Contains(codice)).FirstOrDefault();
+                    //I20-1088: la riga dell'impaginazione del box, non la prima che contiene il codice.
+                    PromoLavorazioniRecord? plrItem = RecordDellaLavorazione.Trova(this.ctx2, this.ctx2.PromoLavorazioniRecords.Include(i1 => i1.IdPromoTracciatiRecordNavigation).Where(plr => plr.IdLavorazione == idLavorazione && plr.CodiceGruppo!.Contains(codice)), idRec, codice);
 
                     if (plrItem == null)
                         throw new Exception($"Nessun elemento trovato con ID Record Tracciato {idRec} trovato, Codice {codice} non disponibile");
@@ -2245,7 +2402,8 @@ namespace Istanta.Controllers
 
                 if(dato.tipo == TipoFoto.Foto)
                 {
-                    PromoLavorazioniRecord? plrItem = this.ctx2.PromoLavorazioniRecords.Include(i1 => i1.IdPromoTracciatiRecordNavigation).Where(plr => plr.IdLavorazione == dato.idLavorazione && plr.CodiceGruppo == dato.codice).FirstOrDefault();
+                    //I20-1088: la riga dell'impaginazione del box, non la prima del codice gruppo.
+                    PromoLavorazioniRecord? plrItem = RecordDellaLavorazione.Trova(this.ctx2, this.ctx2.PromoLavorazioniRecords.Include(i1 => i1.IdPromoTracciatiRecordNavigation).Where(plr => plr.IdLavorazione == dato.idLavorazione && plr.CodiceGruppo == dato.codice), dato.idRec, dato.codice);
 
                     if (plrItem == null)
                         throw new Exception($"Nessun elemento trovato, Codice {dato.codice} non disponibile");
@@ -2477,6 +2635,9 @@ namespace Istanta.Controllers
                     }
                 }
 
+                //Le foto extra dei record del kit, quelle che l'impaginazione piazza dalla cartella Loghi.
+                fotoRichieste.AddRange(FotoExtraDeiRecord(result.records));
+
                 List<FileOlympoSync> fotoNoValide = fotoRichieste.Where(f => f.Id == "").ToList();
                 fotoRichieste = fotoRichieste.Where(f => f.Id != null && f.Id != "").ToList();
                 //int skip = (pagina - 1) * elementiPagine;
@@ -2509,7 +2670,7 @@ namespace Istanta.Controllers
                     var dataOlympo = JsonConvert.DeserializeObject<List<FileOlympoSync>>(responseBody);
 
                     //Console.WriteLine($"RRisposta di OLYMPO {dataOlympo.Count}");
-                    return Ok(dataOlympo);
+                    return Ok(ConTipoDelleRichieste(dataOlympo, fotoRichieste));
                     ////Console.WriteLine(responseBody);
                 }
                 else
@@ -2598,6 +2759,9 @@ namespace Istanta.Controllers
                 {
                     //ATTENZIONE: se si entra qui significa che questa ref NON ha foto, questo deve essre gesitto da plugin NON più con una foto fittizia fatta di cod.psd con un NOFOTO.
                 }
+
+                //Le foto extra della ref, per la cartella Loghi da cui l'impaginazione le piazza.
+                fotoRichieste.AddRange(FotoExtraDaScaricare(FotoExtraDellaRef(art.ArticoliFotos, area, canale)));
             }
 
             fotoRichieste = fotoRichieste.Where(f => f.Id != null && f.Id != "").ToList();
@@ -2615,7 +2779,7 @@ namespace Istanta.Controllers
                 var dataOlympo = JsonConvert.DeserializeObject<List<FileOlympoSync>>(responseBody);
 
                 Console.WriteLine($"RRisposta di OLYMPO {dataOlympo.Count}");
-                result.lista = dataOlympo;
+                result.lista = ConTipoDelleRichieste(dataOlympo, fotoRichieste);
                 return Ok(result);
             }
             else
@@ -2695,7 +2859,10 @@ namespace Istanta.Controllers
 
         [HttpGet]
         [Route("SyncFoto/getPacchettoLoghiBolliAsContract")]
-        public async Task<IActionResult> getPacchettoLoghiBolliAsContract()
+        //id_lavorazione, facoltativo: con la lavorazione aperta nel Plugin la sync loghi porta anche le
+        //foto extra delle sue ref, che l'impaginazione piazza dalla cartella Loghi. Senza, come
+        //nell'elenco dei loghi della scheda, resta il solo archivio Loghi/Bolli.
+        public async Task<IActionResult> getPacchettoLoghiBolliAsContract(int id_lavorazione = 0)
         {
 
             if (ficoController == null)
@@ -2716,6 +2883,11 @@ namespace Istanta.Controllers
 
             }
 
+            if (id_lavorazione > 0)
+            {
+                fotoRichieste.AddRange(await FotoExtraDellaLavorazione(id_lavorazione));
+            }
+
             //var resSync = ph.generaPacchettoFoto(dictionarySupporto, altaPathObject);
             //using var httpClient = new HttpClient();
             string uri = olympusServerUrl + "/foto/getInfoMassivo";
@@ -2727,7 +2899,7 @@ namespace Istanta.Controllers
             if (response.IsSuccessStatusCode)
             {
                 var responseBody = await response.Content.ReadAsStringAsync();
-                var dataOlympo = JsonConvert.DeserializeObject<List<FileOlympoSync>>(responseBody);
+                var dataOlympo = ConTipoDelleRichieste(JsonConvert.DeserializeObject<List<FileOlympoSync>>(responseBody), fotoRichieste);
 
                 foreach (var item in dataOlympo)
                 {
@@ -2747,6 +2919,25 @@ namespace Istanta.Controllers
                 return Ok(response.StatusCode);
             }
 
+        }
+
+        /// Le foto extra delle ref di una lavorazione, per la sync loghi. Il kit si legge con la cache:
+        /// la sync loghi parte a ogni impaginazione massiva, e di solito il Plugin il kit l'ha appena
+        /// chiesto. Se non si legge, la sync loghi porta comunque l'archivio: niente foto extra.
+        private async Task<List<FileOlympoSync>> FotoExtraDellaLavorazione(int id_lavorazione)
+        {
+            try
+            {
+                ficoController.HttpContextInRent = HttpContext;
+                var promise = await ficoController.processaKit(id_lavorazione, FicoCombinazioneKitReadMode.Advanced);
+                var kit = (promise as OkObjectResult)?.Value as ArticoloInRevisioneKitResult;
+                return FotoExtraDeiRecord(kit?.records);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Foto extra della lavorazione {IdLavorazione} non lette per la sync loghi", id_lavorazione);
+                return new List<FileOlympoSync>();
+            }
         }
 
         [HttpGet]

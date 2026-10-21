@@ -167,8 +167,8 @@ ha. Il 14/09 la radice aveva una guardia `if (infoEsempio != null)` che `edro21/
 aveva, e una copia futura dall'archivio avrebbe reintrodotto un `TypeError`. **Quando correggi il
 file nella radice, porta la correzione anche nell'archivio del cliente**, o la perderai al prossimo
 cambio — e adesso che la radice non è più in git, la perderesti per davvero, senza modo di
-recuperarla. Per questo `monta-cliente.sh` si rifiuta di sovrascrivere una radice che differisce
-dall'archivio, finché non gli si passa `--forza`.
+recuperarla. È il problema che il I20-997 ha tolto al front-end e il I20-1064 al plugin: oggi
+nessuno dei due legge più una copia in radice.
 
 ### 4. I contesti FICO — `ficoContexts/<Cliente>/`
 
@@ -177,11 +177,24 @@ documentazione.
 
 ### 5. Il plugin InDesign — `plugin/Agenzie/<Cliente>/custom.js`
 
-Il plugin ripete **esattamente lo schema del front-end**: un solo file in radice, caricato da
-`indexNew.js:6` con `require('./custom')`, e le cartelle `plugin/Agenzie/<Cliente>/` come archivio,
-che nessuno legge mai. Anche qui la prima riga del file dice chi è montato (`//EDRO21`,
-`//Coop.fi`, …), anche qui la copia la fa `./monta-cliente.sh`, e anche qui `plugin/custom.js` non
-è in git dal 15/09/2026.
+Dal I20-1064 il plugin **non usa più una copia in radice**: legge direttamente l'archivio del
+cliente, come fa il server con `agenzia.js` dal I20-997. La scelta passa per tre file, tutti
+relativi a `plugin/`:
+
+```
+clienteAttivo.json              { "ipconfig": "Agenzie/Edro21/ipconfig.json" }
+Agenzie/Edro21/ipconfig.json    gli indirizzi, più "custom": "Agenzie/Edro21/custom.js"
+Agenzie/Edro21/custom.js        la logica del cliente, in git
+```
+
+`clienteAttivo.json` è per il plugin quello che `launchSettings.json` è per Istanta: lo scrive
+`./monta-cliente.sh` e non sta in git. Lo segue `configurazioneCliente.js`, che `indexNew.js`
+chiama all'avvio: se un anello manca il plugin **non parte** e il riquadro di avvio dice quale. Le
+correzioni a un cliente si fanno nel suo `custom.js` d'archivio, che è in git: non c'è più una copia
+da riallineare. Perché l'archivio si carichi dalla sua cartella, i suoi `require` relativi partono
+da `../../` (per esempio `require('../../utility')`).
+
+La prima riga del file dice ancora di chi è (`//EDRO21`, `//Coop.fi`, …).
 
 Attenzione a una differenza di grafia, che è una trappola quando si copia a mano: il cliente si
 chiama `Coopfi` in `AgenziaLib` e in `plugin/Agenzie/`, ma la sua cartella javascript si chiama
@@ -191,10 +204,11 @@ Come si riconosce un `custom.js` di generazione recente: **ha `callCustom: false
 vecchie ce l'hanno a `true` o non ce l'hanno affatto. Al 15/09/2026 solo la radice e
 `Agenzie/Edro21/` erano aggiornate; gli altri cinque archivi sono di generazione precedente.
 
-Il plugin ha poi una sua configurazione locale, `plugin/ipconfig.json`, con gli indirizzi di
-Istanta e di Olimpo e l'interruttore `testMode`. **Non è in git** (`.gitignore`:
-`**/ipconfig*.json`) e va procurato a parte: senza, il `require` della riga 19 di `indexNew.js`
-fallisce e il plugin non si carica affatto.
+Gli indirizzi di Istanta e di Olimpo e l'interruttore `testMode` stanno nell'ipconfig del
+cliente, `plugin/Agenzie/<Cliente>/ipconfig.json`. **Non è in git** (`.gitignore`:
+`**/ipconfig*.json`): se manca, `monta-cliente.sh` lo crea dal modello neutro
+`plugin/Agenzie/ipconfig.template.json`, che invece è in git, e gli indirizzi vanno scritti a mano.
+Il vecchio `plugin/ipconfig.json` in radice non è più letto.
 
 ---
 
@@ -209,22 +223,30 @@ un `git pull` cambierebbe il cliente sotto i piedi a chi sta lavorando.
 | `Istanta/appsettings.<cliente>.json` | database, servizi, le tre righe del cliente | a mano, o dal responsabile del cliente |
 | `Istanta/Properties/launchSettings.json` | `ISTANTA_CLIENTE` per Visual Studio | generato da `monta-cliente.sh` dal modello `launchSettings.template.json` |
 | `Istanta/wwwroot/js/agenzia.js` | il front-end del cliente | copiato da `monta-cliente.sh` da `js/<cliente>/` |
-| `plugin/custom.js` | la logica InDesign del cliente | copiato da `monta-cliente.sh` da `plugin/Agenzie/<Cliente>/` |
+| `plugin/clienteAttivo.json` | quale ipconfig, e quindi quale cliente, usa il plugin | scritto da `monta-cliente.sh` (I20-1064) |
 
-Più `plugin/ipconfig.json`, che non sceglie il cliente ma gli indirizzi, e vale la stessa regola.
+Più `plugin/Agenzie/<Cliente>/ipconfig.json`, che ha gli indirizzi della macchina e vale la stessa
+regola: lo crea `monta-cliente.sh` dal modello `ipconfig.template.json`, gli indirizzi si scrivono a
+mano. `plugin/custom.js` non c'è più: il plugin legge l'archivio.
 
 **Le fonti restano tutte in git**: gli archivi per cliente e il modello del profilo di avvio. Quello
 che non passa è solo la *scelta*.
 
 ```bash
-./monta-cliente.sh Edro21           # monta i file del cliente e scrive ISTANTA_CLIENTE
-./monta-cliente.sh Edro21 --forza   # sovrascrive anche una radice divergente dall'archivio
+./monta-cliente.sh Edro21           # monta il cliente e scrive ISTANTA_CLIENTE
 ```
 
-Lo script si ferma da solo in due casi: se un file in radice differisce dal suo archivio (per non
-cancellare una correzione che lì non è recuperabile, non essendo più in git), e se il montaggio è
-fallito, nel qual caso **non** tocca `launchSettings.json` — perché una macchina con il server su un
-cliente e i file di un altro è la situazione più difficile da diagnosticare.
+Lo script si ferma da solo se il montaggio del plugin non riesce — manca l'archivio, o l'ipconfig
+del cliente non ha la voce `custom` — e in quel caso **non** tocca `launchSettings.json`, perché una
+macchina con il server su un cliente e i file di un altro è la situazione più difficile da
+diagnosticare. Non cancella mai i vecchi `plugin/custom.js` e `plugin/ipconfig.json` in radice:
+avvisa che non servono più e, se `custom.js` differisce dall'archivio, che le correzioni vanno
+riportate lì prima di cancellarlo.
+
+> **I20-1064, sulle postazioni già montate.** Dopo l'aggiornamento il plugin non parte finché non si
+> rilancia `./monta-cliente.sh <Cliente>`. Gli indirizzi del vecchio `plugin/ipconfig.json` vanno
+> copiati a mano nel nuovo `plugin/Agenzie/<Cliente>/ipconfig.json`: lo script non può sapere di
+> quale cliente fossero.
 
 > **Quando questo cambiamento arriva sulle altre macchine.** Al primo `git pull` che contiene la
 > rimozione dal tracciamento, git **cancella** `js/agenzia.js`, `plugin/custom.js` e
@@ -279,7 +301,8 @@ ma i punti da toccare sono tutti e soli questi:
    **compilali**. La fascia gialla ti dirà quali mancano, ma non può dirti se il contenuto è giusto.
 4. `ficoContexts/NuovoCliente/`.
 5. `plugin/Agenzie/NuovoCliente/custom.js` — se il cliente usa il plugin InDesign. Parti da
-   `Agenzie/Edro21/custom.js`, che è l'unico archivio di generazione recente.
+   `Agenzie/Edro21/custom.js`, che è l'unico archivio di generazione recente, e lascia i `require`
+   relativi che partono da `../../`. L'ipconfig del cliente lo crea `monta-cliente.sh` dal modello.
 6. `Istanta/appsettings.nuovocliente.json` — `fico/nomeCliente`, `external_paths/pathSource`,
    `fico/contextsPath`, e la stringa di connessione al database di quel cliente. Il nome del file
    deve corrispondere a quello che si mette in `ISTANTA_CLIENTE`.

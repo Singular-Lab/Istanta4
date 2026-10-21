@@ -14,8 +14,13 @@ vi.mock('../middlewares', () => ({
   applyMiddlewares: vi.fn(),
   applyErrorHandler: vi.fn()
 }));
+// Sessione anonima: nessun utente autenticato.
 vi.mock('../session', () => ({
-  sessionMiddleware: (_req: any, _res: any, next: any) => next()
+  sessionMiddleware: (req: any, _res: any, next: any) => {
+    req.session = {};
+    next();
+  },
+  calculateSessionTimeout: () => 60 * 60 * 1000
 }));
 vi.mock('../logger', () => ({
   httpLogger: (_req: any, _res: any, next: any) => next(),
@@ -56,5 +61,17 @@ describe('GET /api/health/db', () => {
       metrics: { activeConnections: 2 },
       averages: { queryMs: 12 }
     });
+  });
+});
+
+describe('GET /api/health/db/queries', () => {
+  it('senza login risponde 401 e non espone le query', async () => {
+    monitoringMock.getQueryProfiler.mockClear();
+
+    const app = await createHttpApp();
+    const res = await request(app).get('/api/health/db/queries');
+
+    expect(res.status).toBe(401);
+    expect(monitoringMock.getQueryProfiler).not.toHaveBeenCalled();
   });
 });

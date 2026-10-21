@@ -20,8 +20,15 @@ import { PromoResponseDTO } from "../../../server/core/dto";
 import EmptyState from "../../components/EmptyState";
 import PermissionGate from "../../components/PermissionGate";
 
+// Istanta non elimina definitivamente una promo con importazioni, tracciati o lavorazioni (I20-1052)
+const RIFIUTI_ELIMINAZIONE_DEFINITIVA = [
+  "importazioni_esistenti_per_questa_promo",
+  "tracciati_esistenti_per_questa_promo",
+  "lavorazioni_esistenti_per_questa_promo",
+];
+
 function Main() {
-  const [showDialogEliminazione, setShowDialogEliminazione] = useState<{ show: boolean; idPromo: string; stato?: string; isDeletable?: boolean; numero_kit_collegati?: number }>();
+  const [showDialogEliminazione, setShowDialogEliminazione] = useState<{ show: boolean; idPromo: string; stato?: string; isDeletable?: boolean; numero_kit_collegati?: number; motivoRifiuto?: string }>();
   const [loadingEliminazione, setLoadingEliminazione] = useState(false);
   const { showNotification } = useNotification();
   const navigate = useNavigate();
@@ -56,7 +63,7 @@ function Main() {
       }
 
       if (result) {
-        if (stato === "IN_LAVORAZIONE") {
+        if (stato !== STATO_PROMO.ELIMINATA) {
           if (isDeletable) {
             showNotification(
               <div className="flex flex-row items-center">
@@ -78,8 +85,7 @@ function Main() {
               </div>
             );
           }
-        }
-        if (stato === "ELIMINATA") {
+        } else {
           showNotification(
             <div className="flex flex-row items-center">
               <Lucide icon="Check" className="text-success w-10 h-10" />
@@ -102,8 +108,14 @@ function Main() {
       setShowDialogEliminazione({ show: false, idPromo: "", numero_kit_collegati: 0 });
       data.refetch();
     },
-    onError(error: CustomError) {
+    onError(error: CustomError, variables) {
       console.log(error);
+      // Istanta rifiuta l'eliminazione definitiva: la modale resta aperta e propone quella non definitiva
+      if (variables.isDeletable && RIFIUTI_ELIMINAZIONE_DEFINITIVA.includes(error?.details?.codice as string)) {
+        setLoadingEliminazione(false);
+        setShowDialogEliminazione((prev) => prev && { ...prev, isDeletable: false, motivoRifiuto: error.message });
+        return;
+      }
       if (error.httpStatus == 403) {
         showNotification(
           <div className="flex flex-row items-center">
@@ -120,7 +132,7 @@ function Main() {
             <Lucide icon="CircleX" className="text-danger w-10 h-10" />
             <div className="ml-4 mr-4">
               <div className="font-bold">Errore durante l&apos;eliminazione</div>
-              <div className="text-sm text-slate-500">Si è verificato un errore. Riprova o contatta il supporto.</div>
+              <div className="text-sm text-slate-500">{error?.message || "Si è verificato un errore. Riprova o contatta il supporto."}</div>
             </div>
           </div>
         );
@@ -441,7 +453,7 @@ function Main() {
                 <Dialog.Description>
                   <div className="text-center py-4">
                     <Lucide icon="TriangleAlert" className="w-16 h-16 mx-auto text-danger mb-4" />
-                    <p className="text-slate-600">
+                    <div className="text-slate-600">
                       {showDialogEliminazione?.isDeletable ? (
                         <>
                           <span className="font-semibold text-danger">ATTENZIONE:</span> Stai per eliminare definitivamente questa lavorazione. <br />
@@ -462,24 +474,29 @@ function Main() {
                         </>
                       ) : (
                         <>
+                          {showDialogEliminazione?.motivoRifiuto && (
+                            <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-danger">
+                              <span className="font-semibold">Eliminazione definitiva non possibile.</span> {showDialogEliminazione.motivoRifiuto}
+                            </div>
+                          )}
                           Sei sicuro di voler eliminare questa lavorazione? <br />
                           <span className="text-slate-500">La lavorazione verrà spostata nella sezione "Eliminate" e potrà essere ripristinata.</span>
-                          {showDialogEliminazione?.numero_kit_collegati && showDialogEliminazione.numero_kit_collegati > 0 && (
+                          {(showDialogEliminazione?.numero_kit_collegati ?? 0) > 0 && (
                             <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
                               <div className="flex items-center gap-2">
                                 <Lucide icon="Package" className="w-4 h-4 text-amber-600" />
                                 <span className="font-medium text-amber-800">
-                                  {showDialogEliminazione.numero_kit_collegati} kit collegati
+                                  {showDialogEliminazione?.numero_kit_collegati} kit collegati
                                 </span>
                               </div>
                               <p className="text-sm text-amber-700 mt-1">
-                                Questa lavorazione ha {showDialogEliminazione.numero_kit_collegati} kit associati che potrebbero essere influenzati dall'eliminazione.
+                                Questa lavorazione ha {showDialogEliminazione?.numero_kit_collegati} kit associati che potrebbero essere influenzati dall'eliminazione.
                               </p>
                             </div>
                           )}
                         </>
                       )}
-                    </p>
+                    </div>
                   </div>
                 </Dialog.Description>
                 <Dialog.Footer className="px-5 py-3 text-right border-t border-slate-200/60 dark:border-darkmode-400">
@@ -689,6 +706,15 @@ function Main() {
                     <Lucide icon="Loader" className="w-10 h-10 text-primary animate-spin" />
                     <div className="mt-3 text-slate-500">Caricamento in corso...</div>
                   </div>
+                ) : data.isError ? (
+                  <EmptyState
+                    icon="CircleX"
+                    iconColor="text-danger"
+                    title="Lavorazioni non caricate"
+                    description={data.error?.message || "Impossibile caricare le lavorazioni in corso."}
+                    buttonText="Riprova"
+                    onButtonClick={() => data.refetch()}
+                  />
                 ) : filteredData.length === 0 ? (
                   <EmptyState
                     icon="CircleAlert"

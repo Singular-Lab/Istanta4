@@ -5,6 +5,7 @@ import Button from "../../components/Base/Button";
 import { FormInput, FormLabel, FormSelect, FormTextarea } from "../../components/Base/Form";
 import PageHeader from "../../components/Base/PageHeader";
 import withSessionCheck from "../../components/SessionChecker";
+import { useNotification } from "../../context/NotificationContext";
 
 /**
  * Tipologia allineata alla definizione proposta per json_meta_gdowhatsapptemplate
@@ -163,6 +164,7 @@ const Card: React.FC<{ title: string; right?: React.ReactNode; children: React.R
 const CreaTemplatesWhatsappSuperAdmin: React.FC<{ onSubmit?: (payload: json_meta_gdowhatsapptemplate) => Promise<void> | void }> = ({ onSubmit }) => {
     const [form, setForm] = useState<FormState>(initial);
     const [errors, setErrors] = useState<Record<string, string>>({});
+    const { showNotification } = useNotification();
 
     const bodyPlaceholders = useMemo(() => extractPlaceholders(form.bodyText), [form.bodyText]);
     const needBodyExamples = bodyPlaceholders.length > 0;
@@ -307,9 +309,9 @@ const CreaTemplatesWhatsappSuperAdmin: React.FC<{ onSubmit?: (payload: json_meta
         const payload = buildPayload();
         try {
             await onSubmit?.(payload);
-            alert("Template pronto per l'invio a Meta.");
+            showNotification("Template pronto per l'invio a Meta.", { variant: "success" });
         } catch (err: any) {
-            alert("Errore durante il salvataggio/submit del template.");
+            showNotification("Errore durante il salvataggio/submit del template.", { variant: "error" });
             console.error(err);
         }
     }

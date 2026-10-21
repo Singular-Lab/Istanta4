@@ -2,7 +2,7 @@
 import { CATEGORIA_ATTIVITA, HttpStatusCode, STATO_LAVORAZIONE_KIT_RUNTIME, STATO_ORDINI_STAMPA, TIPO_ATTIVITA } from '../../../lib/enums';
 import { NotFoundError } from '../../../lib/errors';
 import { log } from '../logger';
-import { OrdiniDiStampaAttributes, RUNTIME_KIT_MONGO } from '../../../lib/types';
+import { OrdiniDiStampaAttributes, RUNTIME_KIT } from '../../../lib/types';
 import { BaseController } from '../base/BaseController';
 import { IGdoService } from '../interfaces/IGdoService';
 import { IKitRuntimeService } from '../interfaces/IKitRuntimeService';
@@ -117,6 +117,9 @@ export class OrdiniDiStampaController extends BaseController {
       const { idOrdineDiStampa, kitIds } = req.body as { idOrdineDiStampa: string; kitIds: Record<string, boolean> };
       const socketId = `ftp_progress_${idOrdineDiStampa}_${Date.now()}`;
 
+      // Prima della risposta: un secondo avvio dello stesso ordine viene rifiutato subito
+      const statoPrecedente = await this.ordiniStampaService.prenotaInvio(idOrdineDiStampa);
+
       AuditLogService.getInstance().bulkOperation(req, 'ordine_stampa', 'ftp_start', { ordineId: idOrdineDiStampa });
       res.status(HttpStatusCode.OK).json({
         esito: true,
@@ -128,7 +131,8 @@ export class OrdiniDiStampaController extends BaseController {
         req,
         idOrdineDiStampa,
         kitIds,
-        socketId
+        socketId,
+        statoPrecedente
       });
     } catch (error: any) {
       this.handleError(res, error);
@@ -167,7 +171,7 @@ export class OrdiniDiStampaController extends BaseController {
         });
       }
       const idPromo = ordine.id_promo_ordinistampa;
-      let kitRuntimePromo = await this.kitRuntimeService.getAllKitRuntimeByIdPromo(idPromo) as RUNTIME_KIT_MONGO[];
+      let kitRuntimePromo = await this.kitRuntimeService.getAllKitRuntimeByIdPromo(idPromo) as RUNTIME_KIT[];
       kitRuntimePromo = kitRuntimePromo.filter(kit => kit.stato_lavorazione === STATO_LAVORAZIONE_KIT_RUNTIME.PUBBLICATO);
       const kitFiltered = await Promise.all(kitRuntimePromo.map(async (kit) => {
         const tipiExportKit = kit.tipiDiExportInKit;
@@ -399,7 +403,7 @@ export class OrdiniDiStampaController extends BaseController {
     }
   }
 
-  private async deleteMergedGroup(req: Request, res: Response): Promise<void> {
+  private async deleteMergedGroup(req: Request<{ mergedFileId: string }>, res: Response): Promise<void> {
     try {
       const { mergedFileId } = req.params;
       const idOrdineDiStampa = req.query.idOrdineDiStampa as string;

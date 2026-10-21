@@ -199,6 +199,26 @@ test("dal documento si leggono le segnalazioni pagina per pagina, con il box che
     assert.deepStrictEqual(Segnalazioni.leggiDocumento(null), []);
 });
 
+test("I20-1056: si leggono le sole pagine impaginate, nell'ordine del documento", () => {
+    const collezione = (elementi) => ({ length: elementi.length, item: (i) => elementi[i] });
+    const conBollino = (nome, testo) => ({ label: nome, ovals: collezione([{ label: etichetta.scrivi([{ g: "error", c: null, t: testo }]) }]), groups: collezione([]) });
+    const documento = {
+        pages: collezione([
+            { name: "3", groups: collezione([conBollino("BOX1", "pagina 3")]) },
+            { name: "10", groups: collezione([conBollino("BOX2", "pagina 10")]) },
+            { name: "11", groups: collezione([conBollino("BOX3", "pagina 11")]) }
+        ])
+    };
+
+    //I nomi arrivano nell'ordine dell'impaginazione; le letture escono in quello delle pagine.
+    assert.deepStrictEqual(Segnalazioni.leggiPagine(documento, ["11", 10]).map(l => [l.pagina, l.voci[0].t]), [["10", "pagina 10"], ["11", "pagina 11"]]);
+    //La pagina 3 ha un bollino ma non e' stata impaginata: non c'e'.
+    assert.deepStrictEqual(Segnalazioni.leggiPagine(documento, ["12"]), []);
+    assert.deepStrictEqual(Segnalazioni.leggiPagine(documento, []), []);
+    assert.deepStrictEqual(Segnalazioni.leggiPagine(documento, null), []);
+    assert.deepStrictEqual(Segnalazioni.leggiPagine(null, ["3"]), []);
+});
+
 test("la lettura del documento non scorre tutti gli elementi delle pagine", () => {
     //Misurato in console: 6339 ms scorrendo tutti gli elementi, 90 ms con i soli ovali dei gruppi.
     const corpo = leggiFileDelPlugin("segnalazioni/segnalazioni.js").replace(/\r/g, "");

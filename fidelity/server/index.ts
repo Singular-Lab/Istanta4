@@ -6,6 +6,8 @@ import cluster from 'cluster';
 import { startClusterIfNeeded } from './core/cluster';
 import config from './core/config';
 import { log } from './core/logger';
+import { sincronizzaSchemaAllAvvio } from './core/db/SequelizeConnector';
+import { preparaAccessiAllAvvio } from './core/accessi/migrazioneAccessi';
 import { createActualServer } from './core/server';
 import { startWSServer } from './ws-server';
 
@@ -15,6 +17,10 @@ async function main() {
       cluster.schedulingPolicy = cluster.SCHED_RR;
 
       if (cluster.isPrimary) {
+        // Una volta sola e prima dei worker: niente ALTER concorrenti, i worker partono con lo schema aggiornato
+        await sincronizzaSchemaAllAvvio();
+        // Catalogo permessi e migrazione degli accessi: una volta sola, prima dei worker
+        await preparaAccessiAllAvvio();
         log.info('Master process: avvio WebSocket server...');
         await startWSServer();
         log.info('Master process: WebSocket server pronto, fork dei worker HTTP...');
@@ -29,6 +35,8 @@ async function main() {
 
     } else {
       log.info('Modalità development: avvio single-process...');
+      await sincronizzaSchemaAllAvvio();
+      await preparaAccessiAllAvvio();
       await startWSServer();
       await createActualServer();
     }

@@ -116,6 +116,10 @@ export interface HubServiceDTO {
   ordine: number;
   tipo_utente: string;
   ruolo_gdo?: string | null;
+  /** Servizio che Fidelity gestisce da se' (Istanta, Correggo): indirizzo calcolato, non eliminabile. */
+  gestito?: 'istanta' | 'correggo';
+  /** Servizio gestito senza indirizzo pubblico configurato: non compare agli utenti. */
+  url_non_configurato?: boolean;
   redirect_page?: string;
   documents: HubServiceDocumentAsset[];
   videos: HubServiceVideoAsset[];
@@ -360,7 +364,7 @@ export type UtenteAttributes = {
   geom_utenti?: any;
   createdat?: Date;
   updatedat?: Date;
-  meta_utenti?: UtentiMeta;
+  meta_utenti?: UtentiMeta | null;
 };
 
 
@@ -429,6 +433,33 @@ export type AnalisiMomentoTracciato = {
   records: DataFields[];
 };
 
+/** Dimensioni della visibilita che un cliente puo scegliere sulla promo. */
+export type DimensioneVisibilitaPromo = 'canale' | 'area';
+
+/**
+ * Canali e aree visibili nella promo. Il risultato dei momenti tiene solo questi;
+ * una lista vuota non filtra quella dimensione.
+ */
+export type VisibilitaPromo = {
+  canali: string[];
+  aree: string[];
+};
+
+/** Dati della promo che restano in FP (non vanno a Istanta). Si estende per chiave. */
+export type PromoMeta = {
+  visibilita?: VisibilitaPromo;
+};
+
+/** Disallineamento fra il risultato di un momento e la visibilita della promo (GUID). */
+export type AvvisoVisibilitaMomento = {
+  /** Presenti nel risultato ma non visibili nella promo: il momento va ricalcolato. */
+  canaliFuori: string[];
+  areeFuori: string[];
+  /** Scelti come visibili ma assenti dal risultato. */
+  canaliMancanti: string[];
+  areeMancanti: string[];
+};
+
 /** Tracciato arricchito con i delta restituiti da Istanta `/FicoProcess/analisiConfronto` */
 export type ConfrontoTracciato = AnalisiMomentoTracciato & {
   uscenti?: number;
@@ -485,6 +516,8 @@ export interface TracciatiMomentoResponseDTO {
   snapshot: boolean;
   risultato?: AnalisiMomentoTracciato[] | null;
   hasRisultato: boolean;
+  /** Presente solo se la promo ha canali/aree visibili scelti e il risultato non vi corrisponde. */
+  avvisoVisibilita?: AvvisoVisibilitaMomento | null;
   createdat?: string;
   updatedat?: string;
 };
@@ -566,7 +599,10 @@ export type PermessoRuoloGdoAttributes = {
 export type MenuItemAttributes = {
   id_menu_item?: string;
   tipo_utente: TIPO_UTENTI;
+  /** @deprecated chiave testuale "GDO_<NOME>": si usa id_ruolo_utente_gdo. */
   ruolo_gdo?: string | null;
+  /** Sotto-ruolo GDO del menu (null = menu base del tipo). */
+  id_ruolo_utente_gdo?: string | null;
   titolo: string;
   tipo: string;
   icona?: string | null;
@@ -596,6 +632,7 @@ export type PuntiVenditaAttributes = {
   provincia_puntivendita?: string; // Nuovo campo opzionale
   regione_puntivendita?: string; // Nuovo campo opzionale
   telefono_puntivendita?: string; // Nuovo campo opzionale aggiunto
+  meta_puntivendita?: Record<string, unknown> | null; // Dati del sistema della GDO, es. la chiave dell'import
   createdat?: Date;
   updatedat?: Date;
   idCanale_puntiVendita?: string; // Nuovo campo opzionale
@@ -662,6 +699,8 @@ export interface GDOWhatsappQueueJobAttributes {
 
   run_at_whatsapp_queue_job: Date;
   last_error_whatsapp_queue_job?: string | null;
+  // Id del messaggio restituito da Meta: prova che l'invio e' avvenuto
+  wamid_whatsapp_queue_job?: string | null;
 
   createdat?: Date;
   updatedat?: Date;
@@ -988,10 +1027,8 @@ export type RaccoglitoreKit = {
   files?: FileItemKit[];
 }
 
-export interface RaccoglitoreKitMongo extends RaccoglitoreKit, Document { }
 
-
-export type RUNTIME_KIT_MONGO = {
+export type RUNTIME_KIT = {
   _id?: string;
   guidId: string;
   guidArea: string;
@@ -1021,7 +1058,7 @@ export type RUNTIME_KIT_MONGO = {
   updatedAt?: Date;
   createdAt?: Date;
 }
-export type DESIGN_KIT_MONGO = {
+export type DESIGN_KIT = {
   _id?: string;
   guidId: string;
   guidArea: string;
@@ -1196,23 +1233,6 @@ export type Declinazione = {
 }
 
 
-export enum NOMI_MONGODB {
-  combinazioni_design = "combinazioni_design",
-  combinazioni_runtime = "combinazioni_runtime",
-  promo_collection = "promo_collection",
-  raccoglitori_kit = "raccoglitori_kit",
-  ricette_ai_prima_versione = "ricette_ai_prima_versione",
-  workspaces_webpliant = "workspaces_webpliant",
-  config_webpliant = "config_webpliant",
-  files_runtime = "files_runtime",
-  files_runtime_log = "files_runtime_log",
-  referenze_webpliant = "referenze_webpliant",
-  contenuti_aggiuntivi_referenza = "contenuti_aggiuntivi_referenza",
-  referenze_gruppo = "referenze_gruppo",
-  config = "config",
-  approfondimento_vino = "approfondimento_vino"
-}
-
 export type OggettoTipiDiExport = {
   tipoDiExportGuidID: string;
   filtro?: Filtro[] | null;
@@ -1262,7 +1282,7 @@ export type CompiledField = {
   // PostgreSQL / DB format (snake_case)
   paragraph_name?: string;
   label_name?: string;
-  // ISTANTA / MongoDB format (camelCase) — used in the material arrival flow
+  // ISTANTA format (camelCase) — used in the material arrival flow
   paragraphName?: string;
   labelName?: string;
   content?: any;

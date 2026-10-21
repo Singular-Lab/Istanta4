@@ -1,7 +1,6 @@
 import { Request, Response } from 'express';
 import 'express-session';
 import { Optional } from 'sequelize';
-import { encryptString } from '../../../lib/encryption';
 import { CATEGORIA_ATTIVITA, HttpStatusCode, STATO_UTENTI, TIPO_ATTIVITA, TIPO_UTENTI } from '../../../lib/enums';
 import { ApplicationError, BadRequestError, UnauthorizedError } from '../../../lib/errors';
 import { GlobalUserFilter, UtenteAttributes } from '../../../lib/types';
@@ -14,9 +13,11 @@ import { log } from '../logger';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { csrfTokenEndpoint, csrfTokenGenerator } from '../middleware/csrfProtection';
 import { permissionGuard } from '../middleware/permissionGuard';
-import { authRateLimiter, registrationRateLimiter } from '../middleware/rateLimiter';
+import { authEmailRateLimiter, authRateLimiter, registrationRateLimiter } from '../middleware/rateLimiter';
 import { AuditLogService } from '../services/AuditLogService';
-import { MenuCacheService } from '../services/MenuCacheService';
+import { leggiContestoAccesso } from '../accessi/contestoAccesso';
+import { RisolutoreAccessi } from '../accessi/RisolutoreAccessi';
+import { normalizzaPercorso } from '../../../lib/accessi/pagine';
 import { calculateSessionTimeout } from '../session';
 import { ServerUtils } from '../utils/ServerUtils';
 
@@ -121,13 +122,12 @@ export class UserController extends BaseController {
     this.router.post('/export_users', authMiddleware, permissionGuard('utenti.esporta'), this.exportUsers.bind(this));
     this.router.post('/dev/hash-password', this.hashPasswordLocalOnly.bind(this));
     // Authentication routes
-    this.router.post('/login_user', authRateLimiter, this.loginUser.bind(this));
-    this.router.post('/check_login_for_multiple_users', authRateLimiter, this.checkLoginForMultipleUsers.bind(this));
+    this.router.post('/login_user', authRateLimiter, authEmailRateLimiter, this.loginUser.bind(this));
+    this.router.post('/check_login_for_multiple_users', authRateLimiter, authEmailRateLimiter, this.checkLoginForMultipleUsers.bind(this));
     this.router.get('/logout-user', authMiddleware, this.logoutUser.bind(this));
     this.router.post('/register-user', registrationRateLimiter, authMiddleware, permissionGuard('utenti.crea'), this.registerUser.bind(this));
 
     // User management routes
-    this.router.get('/user_menu', authMiddleware, this.user_menu.bind(this));
     this.router.get('/getAllUtentiOperatori', authMiddleware, permissionGuard('utenti.visualizza'), this.getAllUtentiOperatori.bind(this));
     this.router.get('/get_all_utenti', authMiddleware, permissionGuard('utenti.visualizza'), this.get_all_utenti.bind(this));
     this.router.get("/get_all_utenti_paginated", authMiddleware, permissionGuard('utenti.visualizza'), this.get_all_utenti_paginated.bind(this));
@@ -150,9 +150,9 @@ export class UserController extends BaseController {
     this.router.get("/autentica_utente_ad", this.autenticaUtenteAD.bind(this));
 
 
-    this.router.put("/return_json", this.returnJson.bind(this));
     this.router.put('/update_profile', authMiddleware, this.updateProfile.bind(this));
     this.router.put('/update_password', authMiddleware, this.updatePasswordSelf.bind(this));
+    this.router.post('/utente/disattiva-account', authMiddleware, this.disattivaAccountSelf.bind(this));
 
     // Global filters
     this.router.get('/utenti/me/global-filters', authMiddleware, this.getGlobalFilters.bind(this));
@@ -286,6 +286,26 @@ export class UserController extends BaseController {
     }
   }
 
+  // Agisce sempre sull'utente della sessione, mai su un id ricevuto nel body
+  private async disattivaAccountSelf(req: Request, res: Response): Promise<void> {
+    try {
+      const userId = req.session.id_utente as string;
+      if (!userId) {
+        throw new UnauthorizedError({ message: 'Utente non autorizzato' });
+      }
+
+      await this.userService.disattivaAccount(userId, req.body?.password);
+      AuditLogService.getInstance().userUpdated(req, userId, { stato: STATO_UTENTI.DISATTIVO, motivo: 'disattivazione dal profilo' });
+
+      req.session.destroy(() => {
+        res.clearCookie('sid_fidelity_promo');
+        res.status(HttpStatusCode.OK).json({ success: true, message: 'Account disattivato' });
+      });
+    } catch (error) {
+      this.handleError(res, error as Error);
+    }
+  }
+
   private async hashPasswordLocalOnly(req: Request, res: Response): Promise<void> {
     try {
       if (!isLocalDevelopmentRequest(req)) {
@@ -373,88 +393,46 @@ export class UserController extends BaseController {
     }
   }
 
+  /**
+   * Il client chiede se puo' aprire una pagina: decide il catalogo delle pagine
+   * (lib/accessi/pagine.ts) con i permessi effettivi, gli stessi di menu e azioni.
+   */
   private async checkPolicy(req: Request, res: Response): Promise<Response> {
+    const negato = { is_authenticated: false, can_go_to_page: false, utente: null } as UserPolicyResponse;
     try {
-      let response = {} as UserPolicyResponse;
       const rp = req.query.rp;
-
-      if (!rp) {
-        response = {
-          is_authenticated: false,
-          can_go_to_page: false,
-          utente: null
-        };
-        return res.status(400).json(response);
+      if (typeof rp !== 'string' || rp.length === 0) {
+        return res.status(400).json(negato);
       }
 
-      const userId = req.session.id_utente;
-      const tipoUtente = req.session.tipo_utente as TIPO_UTENTI;
-
-      if (!userId || !tipoUtente) {
-        response = {
-          is_authenticated: false,
-          can_go_to_page: false,
-          utente: null
-        };
-        return res.status(HttpStatusCode.UNAUTHORIZED).json(response);
+      const contesto = await leggiContestoAccesso(req, res);
+      if (!contesto) {
+        return res.status(HttpStatusCode.UNAUTHORIZED).json(negato);
       }
 
-      // Usa il MenuCacheService per verificare l'accesso
-      const menuCacheService = MenuCacheService.getInstance();
-      const cleanRequestedPage = (rp as string).split('?')[0];
-
-      // Normalizza il path
-      const normalizedPage = cleanRequestedPage.startsWith('/') ? cleanRequestedPage : `/${cleanRequestedPage}`;
-
-      const hasAccess = await menuCacheService.hasPageAccess(userId, tipoUtente, normalizedPage);
-      const user = await this.userService.getUserById(userId);
+      const pagina = normalizzaPercorso(rp);
+      const hasAccess = await RisolutoreAccessi.get().puoAprire(contesto, pagina);
+      const user = await this.userService.getUserById(contesto.idUtente);
       const sanitizedUser = user ? { ...user } as Partial<UtenteResponseDTO> : null;
       if (sanitizedUser) {
-        delete sanitizedUser.private_key;
         delete sanitizedUser.outsider;
       }
 
-      response = {
+      if (!hasAccess) {
+        log.warn('Page access denied', { userId: contesto.idUtente, tipoUtente: contesto.tipo, rp: pagina, ip: req.ip });
+      }
+
+      return res.status(HttpStatusCode.OK).json({
         is_authenticated: true,
         can_go_to_page: hasAccess,
         utente: sanitizedUser
-      };
-      if (cleanRequestedPage === "profilo-utente"
-        || cleanRequestedPage === "display/files"
-        || cleanRequestedPage === "storico-volantini"
-        || cleanRequestedPage === "hub/todos"
-        || cleanRequestedPage === "auth"
-      ) {
-        return res.status(HttpStatusCode.OK).json({ ...response, can_go_to_page: true });
-      }
-      if (!hasAccess) {
-        log.warn('Page access denied', {
-          userId,
-          tipoUtente,
-          rp: normalizedPage,
-          ip: req.ip
-        });
-      } else {
-        log.debug('Page access granted', {
-          userId,
-          tipoUtente,
-          rp: normalizedPage
-        });
-      }
-
-      return res.status(HttpStatusCode.OK).json(response);
+      } as UserPolicyResponse);
     } catch (error) {
       log.error('Error in checkPolicy', error instanceof Error ? error : new Error(String(error)), {
         rp: req.query.rp,
         userId: req.session.id_utente
       });
-
-      const errorResponse = {
-        is_authenticated: false,
-        can_go_to_page: false,
-        utente: null
-      };
-      return res.status(HttpStatusCode.INTERNAL_SERVER_ERROR).json(errorResponse);
+      return res.status(HttpStatusCode.INTERNAL_SERVER_ERROR).json(negato);
     }
   }
 
@@ -512,6 +490,9 @@ export class UserController extends BaseController {
         return;
       }
 
+      // La chiave serve alla sessione ma non e' piu' nel DTO dell'utente.
+      const privateKey = await this.userService.getPrivateKey(result.user.id);
+
       // Rigenera la sessione per prevenire session fixation
       req.session.regenerate((err) => {
         if (err) {
@@ -526,7 +507,7 @@ export class UserController extends BaseController {
 
         // Imposta i dati della nuova sessione
         req.session.id_utente = result.user!.id;
-        req.session.private_key = result.user!.private_key;
+        req.session.private_key = privateKey;
         req.session.id_gdo = result.user!.id_gdo;
         req.session.email = result.user!.email;
         req.session.tipo_utente = selectedUserType ? selectedUserType as TIPO_UTENTI : result.user!.tipo;
@@ -653,93 +634,6 @@ export class UserController extends BaseController {
     }
   }
 
-  private async user_menu(req: Request, res: Response): Promise<void> {
-    try {
-      const tipoUtente = req.session.tipo_utente as TIPO_UTENTI;
-      const userId = req.session.id_utente as string;
-
-      if (!userId || !tipoUtente) {
-        throw new UnauthorizedError({
-          message: 'Sessione non valida'
-        });
-      }
-
-      // Menu runtime da UserService (fonte DB con fallback di servizio)
-      const menu = await this.userService.user_menu(userId, tipoUtente);
-
-      // Calcola i badges permission-aware tramite BadgeService
-      // Import dinamico per evitare dipendenze circolari e caricare le dipendenze reali
-      const { BadgeService } = await import('../services/BadgeService');
-      const { PromoService } = await import('../services/PromoService');
-      const { OrdiniStampaService } = await import('../services/OrdiniStampaService');
-
-      // Costruisci istanze dei servizi necessari passandogli le dipendenze minime
-      // Qui assumiamo che PromoService e OrdiniStampaService non richiedano argomenti nel costruttore
-      // (se servono dipendenze, il servizio può essere modificato in futuro per essere risolvibile dal container)
-      // @ts-ignore
-      // const promoService = new PromoService(undefined, undefined, undefined, undefined, undefined);
-      // // @ts-ignore
-      // const ordiniService = new OrdiniStampaService(undefined, undefined);
-
-
-      const badges = await this.badgeService.getBadgesForUser(userId, tipoUtente);
-
-      log.info('Menu retrieved successfully', {
-        userId,
-        tipoUtente,
-        menuItemsCount: Array.isArray(menu) ? menu.length : Object.keys(menu).length,
-        badges: Object.keys(badges).length
-      });
-
-      // Deep clone the menu so we don't mutate cache or original structure
-      const clonedMenu = JSON.parse(JSON.stringify(menu));
-
-      // Helper: inject badge into matching menu items (by pathname or title)
-      const injectBadges = (items: any[]) => {
-        if (!Array.isArray(items)) return;
-        for (const item of items) {
-          if (typeof item === 'string') continue; // separator
-
-          const keyByPath = item.pathname && badges[item.pathname];
-          const keyByTitle = item.title && badges[item.title];
-
-          if (keyByPath) {
-            // attach numeric badge directly as `badge` key
-            // Keeping shape minimal: { count, variant? }
-            // @ts-ignore
-            item.badge = { ...keyByPath };
-          } else if (keyByTitle) {
-            // @ts-ignore
-            item.badge = { ...keyByTitle };
-          }
-
-          if (item.subMenu && Array.isArray(item.subMenu)) {
-            injectBadges(item.subMenu);
-          }
-        }
-      };
-
-      if (Array.isArray(clonedMenu)) {
-        injectBadges(clonedMenu as any[]);
-      } else if (clonedMenu && typeof clonedMenu === 'object') {
-        // GDO special structure: object with keys containing arrays
-        Object.keys(clonedMenu).forEach(k => {
-          const val = (clonedMenu as any)[k];
-          if (Array.isArray(val)) injectBadges(val);
-        });
-      }
-
-      // Return the menu as before (same structure), now possibly enriched with `badge` fields
-      res.status(HttpStatusCode.OK).json(clonedMenu);
-    } catch (error) {
-      log.error('Error retrieving user menu', error instanceof Error ? error : new Error(String(error)), {
-        userId: req.session.id_utente,
-        tipoUtente: req.session.tipo_utente
-      });
-      this.handleError(res, error as Error);
-    }
-  }
-
   private async getAllUtentiOperatori(req: Request, res: Response): Promise<void> {
     try {
       const users = await this.userService.getAllUtentiOperatori(req.session.id_utente as string);
@@ -777,7 +671,10 @@ export class UserController extends BaseController {
       // Recupera i dati utente PRIMA della cancellazione per la notifica
       const userInfo = await this.userService.getUserById(id as string);
 
-      const result = await this.userService.deleteUser(id as string, req.session.tipo_utente as TIPO_UTENTI);
+      const result = await this.userService.deleteUser(id as string, {
+        tipo: req.session.tipo_utente as TIPO_UTENTI,
+        idGdo: ((req.session as any).id_gdo as string | undefined) ?? null,
+      });
       AuditLogService.getInstance().userDeleted(req, id as string);
 
       if (result && req.session.id_utente) {
@@ -991,29 +888,6 @@ export class UserController extends BaseController {
       res.status(HttpStatusCode.OK).json(result);
     } catch (error) {
       console.error('Error in autenticaUtenteAD:', error);
-      this.handleError(res, error as Error);
-    }
-  }
-
-  private async returnJson(req: Request, res: Response): Promise<void> {
-    try {
-      // Ensure data is a string before passing to crypto
-      const data = req.body.data;
-      let text: string;
-
-      if (typeof data === 'string') {
-        text = data;
-      } else if (data && typeof data === 'object') {
-        text = JSON.stringify(data);
-      } else {
-        throw new BadRequestError({ message: 'Il campo data deve essere una stringa o un oggetto serializzabile', details: { field: 'data' } });
-      }
-
-      const secret = process.env.FICO_SECRET || '';
-      const encryptedData = encryptString(text, secret);
-      res.status(HttpStatusCode.OK).json(encryptedData);
-    } catch (error) {
-      console.error('Error in returnJson:', error);
       this.handleError(res, error as Error);
     }
   }

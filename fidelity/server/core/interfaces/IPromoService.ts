@@ -1,6 +1,6 @@
 import { Request as ExpressRequest } from 'express';
 import { STATO_PROMO } from '../../../lib/enums';
-import { DataWebPliant, IndesignPluginExport, MenaboLayoutDivisioneSalvata, MenaboLayoutSalvato, NuovaPromoPerDashboard, SaveMenaboLayoutRequest } from '../../../lib/types';
+import { DataWebPliant, DimensioneVisibilitaPromo, IndesignPluginExport, MenaboLayoutDivisioneSalvata, MenaboLayoutSalvato, NuovaPromoPerDashboard, SaveMenaboLayoutRequest } from '../../../lib/types';
 import { CreatePromoDTO, PromoResponseDTO, UpdatePromoDTO } from '../dto';
 export interface IPromoService {
   // Basic CRUD operations
@@ -10,6 +10,8 @@ export interface IPromoService {
   deletePromo(id: string): Promise<boolean>;
   getAllPromo(): Promise<PromoResponseDTO[]>;
   getCurrentPromoCount(): Promise<number>;
+  contaPromoSenzaOrdineDiStampa(): Promise<number>;
+  getPromoSenzaOrdineDiStampa(): Promise<PromoResponseDTO[]>;
   getAllPromoStorico(): Promise<PromoResponseDTO[]>;
   getAllPromoTimeline(): Promise<PromoResponseDTO[]>;
 
@@ -24,8 +26,10 @@ export interface IPromoService {
     dataDiInizio: string,
     dataDiFine: string,
     offsetVisibilita: number,
-    context: any
+    context: any,
+    meta?: unknown
   }, idGDO: string, req: ExpressRequest): Promise<PromoResponseDTO>;
+  getVisibilitaOpzioni(): DimensioneVisibilitaPromo[];
   getContestoPerNuovaLavorazione(req: ExpressRequest): Promise<any>;
   get_contesto_per_importazione(req: ExpressRequest): Promise<any>;
   creaInizioLavorazione(data: CreatePromoDTO): Promise<PromoResponseDTO>;
@@ -66,7 +70,6 @@ export interface IPromoService {
     data_inizio_promo_corrente: string;
     data_fine_promo_corrente: string;
   }[]>;
-  testNotifica(req: ExpressRequest): Promise<void>;
   getPromoByNome(nome: string): Promise<PromoResponseDTO>
   getDatoPerMenabo(idPromo: string, canale?: string): Promise<any>;
   getMenaboLayout(idPromo: string): Promise<MenaboLayoutSalvato | null>;

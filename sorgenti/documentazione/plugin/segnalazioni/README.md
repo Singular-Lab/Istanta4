@@ -110,6 +110,25 @@ aperto. La barra verticale che si intravede a destra è quella della griglia del
 dal lotto 2 passa da `stampaSegnalazioni` come il Volantino (file `.txt` e messaggio), fuori dal
 giro di un libro.
 
+## La vista affiancata (I20-1116, I20-1121)
+
+Col pannello largo almeno **924 px** la schermata non è un popup: è una **colonna fissa a destra**, non
+modale, e a sinistra il Plugin resta usabile, largo 524 px. Soglia, misure e guscio della colonna sono
+in [vistaAffiancata](../vistaAffiancata.md), comuni al Report Integrità; fino a I20-1121 stavano qui,
+con la soglia a 1048 px.
+
+- `formaSchermata()` sceglie la forma dalla larghezza del pannello, ma è **popup se è aperta un'altra
+  colonna**: una alla volta, e il **Report Integrità affiancato ha la precedenza** (aprendosi chiude
+  questa colonna).
+- `adattaVista()`, chiamata da `onresizeWindow` dopo quella del report, sposta l'elenco com'è fra
+  popup e colonna quando il pannello cambia larghezza.
+- **Vai al box** dalla colonna seleziona il box e centra la vista, **senza vista controllata**: la
+  scheda si apre a sinistra con tutti i suoi menu.
+- Il **segnalino** col numero delle segnalazioni sta sulla riga delle linguette, agganciato al bordo
+  del pannello; con una colonna aperta, qualunque sia, al bordo della colonna (`allineaSegnalino`).
+
+**Test:** `tests/plugin/schermataSegnalazioni.test.js` e `tests/plugin/vistaAffiancata.test.js`.
+
 ## Il badge di pagina del tracciato (lotto 3)
 
 Nella Home il pallino col numero di pagina di una referenza impaginata prende il colore della

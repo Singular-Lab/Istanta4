@@ -17,9 +17,27 @@ class XMLHttpRequestClient
     descrizione = null;
     url = null;
 
-    constructor() 
+    constructor()
     {
         this.xhr = new XMLHttpRequest();
+    }
+
+    /// I20-1069: il perche' di una richiesta fallita, in parole per l'operatore, da quello che
+    /// onerror riceve: il motivo scritto dal server, uno stato HTTP, "timeout", oppure 0 quando
+    /// Istanta non ha risposto affatto. Prima chi gestiva onerror diceva sempre "Errore di rete",
+    /// anche quando il server aveva spiegato il motivo, e copriva il messaggio HRC-01.
+    static testoErrore(motivo)
+    {
+        if (motivo == null || motivo === "" || motivo === 0 || motivo === "0") {
+            return "Istanta non risponde (errore di rete)";
+        }
+        if (motivo === "timeout") {
+            return "Istanta non ha risposto in tempo (timeout)";
+        }
+        if (typeof motivo === "number") {
+            return "Istanta ha risposto con lo stato " + motivo;
+        }
+        return String(motivo);
     }
 
     onload()
@@ -122,9 +140,12 @@ class XMLHttpRequestClient
                     catch{
                     }
                 }
-                console.warn('Code HRC-01: Request failed.  Returned status of ' + _xhr.status + (response != null && response.error != null ? (" - " + response.error) : ""));
-                messaggioUtente("Code HRC-01: Errore durante la comunicazione col server ("+url+"): " + _xhr.status + (response != null && response.error != null ? (" - " + response.error) : ""), "error");
-                me.onerror((response != null && response.error != null ? response.error : _xhr.status));
+                //I20-1062: il motivo puo' stare in error, detail o message, secondo chi ha risposto
+                //(i 500 del revisore usano error, ProblemDetails di ASP.NET detail). Prima si leggeva solo error.
+                var motivo = response != null ? (response.error ?? response.detail ?? response.message ?? null) : null;
+                console.warn('Code HRC-01: Request failed.  Returned status of ' + _xhr.status + (motivo != null ? (" - " + motivo) : ""));
+                messaggioUtente("Code HRC-01: Errore durante la comunicazione col server ("+url+"): " + _xhr.status + (motivo != null ? (" - " + motivo) : ""), "error");
+                me.onerror((motivo != null ? motivo : _xhr.status));
             }
         }
 

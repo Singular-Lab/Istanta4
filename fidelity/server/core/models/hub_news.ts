@@ -62,11 +62,12 @@ HubNews.init(
       allowNull: false,
       comment: 'Corpo della news (supporta HTML)',
     },
+    // Categoria visuale della news. Senza comment: su una colonna ENUM l'ALTER
+    // di Sequelize genera SQL non valido.
     tipo: {
       type: DataTypes.ENUM('info', 'warning', 'success', 'update'),
       allowNull: false,
       defaultValue: 'info',
-      comment: 'Categoria visuale della news',
     },
     icona: {
       type: DataTypes.TEXT,

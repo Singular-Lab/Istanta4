@@ -299,6 +299,20 @@ test("stato diverso da 200: messaggio HRC-01 e onerror", () => {
     assert.match(messaggi[0].testo, /^Code HRC-01/);
 });
 
+//I20-1062: il motivo di una risposta non-200 puo' stare in detail o message, non solo in error.
+test("stato diverso da 200: il motivo si legge anche da detail e da message", () => {
+    for (const [corpo, atteso] of [[{ detail: "formato mancante" }, "formato mancante"], [{ message: "sessione scaduta" }, "sessione scaduta"],
+        [{ error: "primo", detail: "secondo" }, "primo"]]) {
+        messaggi = [];
+        const { client, visti } = clientOsservato();
+        client.send("Menabo/x", null, "GET");
+        ultimaRichiesta().rispondi(500, JSON.stringify(corpo));
+
+        assert.deepStrictEqual(visti.onerror, [atteso]);
+        assert.match(messaggi[0].testo, new RegExp("^Code HRC-01: .*: 500 - " + atteso + "$"));
+    }
+});
+
 test("il timeout arriva a onerror", () => {
     const { client, visti } = clientOsservato();
     client.timeout = 5000;

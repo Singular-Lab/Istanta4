@@ -7,9 +7,9 @@ export interface IFileManagementService {
   uploadMateriale(file: Express.Multer.File, data: any, req: Request): Promise<any>;
   uploadKitManuali(idPromo: string, idKit: string, files: Express.Multer.File[], metadata: any, req: Request): Promise<any>;
   replaceFileKitRuntime(idFile: string, file: Express.Multer.File, req: Request): Promise<any>;
-  uploadForzatoImmaginiOlimpo(file: Express.Multer.File, guidId: string): Promise<any>;
-  updateImmagineReferenza(file: Express.Multer.File, data: any): Promise<any>;
-  updateImmagineGruppoReferenza(file: Express.Multer.File, data: any): Promise<any>;
+  uploadForzatoImmaginiOlimpo(file: Express.Multer.File, guidId: string, req: Request): Promise<any>;
+  updateImmagineReferenza(file: Express.Multer.File, data: any, req: Request): Promise<any>;
+  updateImmagineGruppoReferenza(file: Express.Multer.File, data: any, req: Request): Promise<any>;
 
   /** Download */
   downloadFilesAsZip(files: any[]): Promise<Buffer>;
@@ -38,7 +38,6 @@ export interface IFileManagementService {
     idCombinazione?: string;
     nome?: string;
   }, metadataFilter?: { field: string; value: string }): Promise<any>;
-  getKitRunTimeById(id: string, get_files?: boolean): Promise<any>;
   getProprietaMetaFilesRuntime(idKitRuntime: string): Promise<string[]>;
   getAllCombinazioniRuntimePDF(codice?: string): Promise<any[]>;
   getAllCombinazioniRuntimePDFWebPliant(idArea: string, idCanale: string, idsKitDesign: string[], idsTipiDiExport: string[]): Promise<any[]>;

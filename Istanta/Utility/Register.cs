@@ -26,8 +26,15 @@ namespace Istanta.Utility
             //this.ctx = new edro21_dbContext(conn_string);
         }
 
+        /// I20-1069: perche' l'ultima addOperazione non ha salvato tutto (l'operazione o i meta del
+        /// record della lavorazione), oppure null. addOperazione restituisce l'Id dell'operazione,
+        /// che c'e' anche quando sono i meta a non essersi salvati: chi deve sapere se la decisione
+        /// e' stata registrata guarda qui.
+        public string? Errore { get; private set; }
+
         public long addOperazione(RegistroOperazioni operazione, bool confirmed, string session, DateTime registerDate)
         {
+            Errore = null;
             try
             {
                 if (session == null || session.ToLower() == "no session")
@@ -117,6 +124,16 @@ namespace Istanta.Utility
                             List<RevisioneNoRenderFromIndd>? elementiNoRender = MetaPromoLavorazioni.leggiElementiNoRender(operazione.FormData!);
                             storeField!.noRender = MetaPromoLavorazioni.normalizzaElementiNoRender(elementiNoRender);
                         }
+                        else if (operazione.TipoOperazione == (Byte)tipoOperazione.updateExtraLavorazione)
+                        {
+                            //I20-1070: una decisione su una foto extra per volta, registrata o tolta.
+                            MetaPromoLavorazioni.applicaExtraLavorazione(storeField!, MetaPromoLavorazioni.leggiRichiestaExtraLavorazione(operazione.FormData!));
+                        }
+                        else if (operazione.TipoOperazione == (Byte)tipoOperazione.updateTestiDalBox)
+                        {
+                            //I20-1088: i meta dei testi del box aggiornati al server o tolti, tutti insieme.
+                            MetaPromoLavorazioni.modificaTestiDalBox(storeField!, MetaPromoLavorazioni.leggiRichiestaTestiDalBox(operazione.FormData!));
+                        }
                         else if (operazione.TipoOperazione == (Byte)tipoOperazione.rimuoviMetaFoto)
                         {
                             RevisioneFotoFromIndd? upFotoField = JsonConvert.DeserializeObject<RevisioneFotoFromIndd>(operazione.FormData!);
@@ -133,12 +150,17 @@ namespace Istanta.Utility
                     else
                     {
                         //Non dovremmo mai e poi mai trovarci qui. Salterebbe il controllo almeno due chiamate prima di questa
+                        //I20-1069: ma se succede la decisione non e' salvata, e chi chiama deve saperlo.
+                        Errore = $"il record {operazione.idPromoLavorazioniRecord.Value} della lavorazione non esiste: la decisione non e' stata salvata.";
                     }
                 }
             }
             catch (Exception ex)
             {
                 Console.WriteLine("Errore durante l'aggiunta dell'operazione: " + ex.ToString());
+                //I20-1069: prima l'errore restava in console, e chi chiamava, visto l'Id dell'operazione
+                //gia' salvata, credeva che anche i meta lo fossero.
+                Errore = "salvataggio dell'operazione: " + DescrizioneErrori.Motivo(ex);
             }
 
 

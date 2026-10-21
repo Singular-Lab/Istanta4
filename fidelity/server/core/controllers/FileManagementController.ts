@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { Request, Response } from 'express';
 import 'express-session';
+import fs from 'fs';
 import multer from 'multer';
 import { v4 as uuidv4 } from "uuid";
 import { Colorize } from '../../../lib/Colorize';
@@ -16,7 +17,7 @@ import {
 } from '../config/multerConfig';
 import { IFileManagementService } from '../interfaces/IFileManagementService';
 import { log } from '../logger';
-import { authMiddleware } from '../middleware/authMiddleware';
+import { authMiddleware, integrationAuthMiddleware } from '../middleware/authMiddleware';
 import { permissionGuard } from '../middleware/permissionGuard';
 import { Tracciati } from '../models';
 
@@ -27,6 +28,7 @@ import { getService } from '../../core/di/container';
 import { TYPES } from '../../core/di/types';
 import { IPromoService } from '../interfaces/IPromoService'; // <-- Add this import if not present
 import { ServerUtils } from '../utils/ServerUtils';
+import { verificaRisposta } from '../utils/rispostaServizi';
 
 export class FileManagementController extends BaseController {
   private promoService: IPromoService;
@@ -43,9 +45,12 @@ export class FileManagementController extends BaseController {
   }
 
   protected setupRoutes(): void {
-    // Upload routes (with multer middleware)
+    // Upload routes. Autenticazione e permesso vengono verificati PRIMA di multer:
+    // una richiesta rifiutata non deve scrivere nulla su disco ne' occupare memoria.
     this.router.post(
       '/invioMaterialeAdFP',
+      integrationAuthMiddleware,
+      permissionGuard('file.upload_materiale'),
       (req, res, next) => {
         uploadMaterialiPubblicazioni.single('file')(req, res, (err) => {
           if (err instanceof multer.MulterError) {
@@ -56,18 +61,17 @@ export class FileManagementController extends BaseController {
           next();
         });
       },
-      authMiddleware,
       this.invioMaterialeAdFP.bind(this)
     );
 
-    this.router.post('/uploadTracciato/:idPromo', uploadTracciati.single('file'), authMiddleware, permissionGuard('file.upload_tracciato'), this.uploadTracciato.bind(this));
-    this.router.post('/uploadMateriale', uploadMaterialiPubblicazioni.single('file'), authMiddleware, permissionGuard('file.upload_materiale'), this.uploadMateriale.bind(this));
-    this.router.post('/uploadKitManuali/:idPromo/:idKit', uploadMaterialiPubblicazioni.array('file'), authMiddleware, permissionGuard('file.upload_kit_manuali'), this.uploadKitManuali.bind(this));
-    this.router.post('/replaceFileKitRuntime/:idFile', uploadForzatoImmaginiOlimpo.single('file'), authMiddleware, permissionGuard('file.sostituisci'), this.replaceFileKitRuntime.bind(this));
-    this.router.post('/uploadForzatoImmaginiOlimpo', uploadForzatoImmaginiOlimpo.single('file'), authMiddleware, permissionGuard('file.upload_olympus'), this.uploadForzatoImmaginiOlimpo.bind(this));
-    this.router.post('/updateImmagineReferenza', uploadForzatoImmaginiOlimpo.single('file'), authMiddleware, permissionGuard('file.aggiorna_immagine_referenza'), this.updateImmagineReferenza.bind(this));
-    this.router.post('/updateImmagineGruppoReferenza', uploadForzatoImmaginiOlimpo.single('file'), authMiddleware, permissionGuard('file.aggiorna_immagine_referenza'), this.updateImmagineGruppoReferenza.bind(this));
-    this.router.post('/process-rejected-zip', processZipInMemory.single('file'), authMiddleware, permissionGuard('file.upload_materiale'), this.processRejectedZip.bind(this));
+    this.router.post('/uploadTracciato/:idPromo', authMiddleware, permissionGuard('file.upload_tracciato'), uploadTracciati.single('file'), this.uploadTracciato.bind(this));
+    this.router.post('/uploadMateriale', authMiddleware, permissionGuard('file.upload_materiale'), uploadMaterialiPubblicazioni.single('file'), this.uploadMateriale.bind(this));
+    this.router.post('/uploadKitManuali/:idPromo/:idKit', authMiddleware, permissionGuard('file.upload_kit_manuali'), uploadMaterialiPubblicazioni.array('file'), this.uploadKitManuali.bind(this));
+    this.router.post('/replaceFileKitRuntime/:idFile', authMiddleware, permissionGuard('file.sostituisci'), uploadForzatoImmaginiOlimpo.single('file'), this.replaceFileKitRuntime.bind(this));
+    this.router.post('/uploadForzatoImmaginiOlimpo', authMiddleware, permissionGuard('file.upload_olympus'), uploadForzatoImmaginiOlimpo.single('file'), this.uploadForzatoImmaginiOlimpo.bind(this));
+    this.router.post('/updateImmagineReferenza', authMiddleware, permissionGuard('file.aggiorna_immagine_referenza'), uploadForzatoImmaginiOlimpo.single('file'), this.updateImmagineReferenza.bind(this));
+    this.router.post('/updateImmagineGruppoReferenza', authMiddleware, permissionGuard('file.aggiorna_immagine_referenza'), uploadForzatoImmaginiOlimpo.single('file'), this.updateImmagineGruppoReferenza.bind(this));
+    this.router.post('/process-rejected-zip', authMiddleware, permissionGuard('file.upload_materiale'), processZipInMemory.single('file'), this.processRejectedZip.bind(this));
 
     // File listing and retrieval
     this.router.get('/getAllFiles', authMiddleware, permissionGuard('file.download'), this.getAllFiles.bind(this));
@@ -98,7 +102,7 @@ export class FileManagementController extends BaseController {
     }
   }
 
-  private async uploadTracciato(req: Request, res: Response): Promise<void> {
+  private async uploadTracciato(req: Request<{ idPromo: string }>, res: Response): Promise<void> {
     try {
       log.info(Colorize.bgYellow("==== INIZIO uploadTracciato ====")); log.info(Colorize.bgYellow("==== INIZIO uploadTracciato ===="));
       log.info(Colorize.yellow(`Request params: ${JSON.stringify(req.params)}`));
@@ -222,61 +226,8 @@ export class FileManagementController extends BaseController {
       log.info("Status chiamata istanta: " + result.status);
       log.info("-------------------");
 
-      // GESTIONE CASO PARTICOLARE: errore di login/no_login da Istanta
-      if (
-        result?.data &&
-        typeof result.data === "object" &&
-        result.data.error &&
-        typeof result.data.error === "string" &&
-        result.data.error.startsWith("no_login")
-      ) {
-        log.error(Colorize.bgRed("Errore di autenticazione Istanta: " + result.data.error));
-        this.sendResponse(res, HttpStatusCode.UNAUTHORIZED, {
-          message: "Errore autenticazione Istanta",
-          error: result.data.error
-        });
-        return;
-      }
-
-      // GESTIONE CASO: result.data può essere stringa o oggetto
-      if (
-        typeof result.data === "string" &&
-        result.data.includes("no_login")
-      ) {
-        log.error(Colorize.bgRed("Errore di autenticazione Istanta (stringa): " + result.data));
-        this.sendResponse(res, HttpStatusCode.UNAUTHORIZED, {
-          message: "Errore autenticazione Istanta",
-          error: result.data
-        });
-        return;
-      }
-
-      // GESTIONE CASO: result.data.esito === false
-      if (
-        result.data &&
-        typeof result.data === "object" &&
-        result.data.esito === false
-      ) {
-        log.error(Colorize.bgRed("Errore durante la chiamata all'API di Istanta: " + result.data.error));
-        this.sendResponse(res, HttpStatusCode.INTERNAL_SERVER_ERROR, {
-          message: "Errore durante la chiamata all'API di Istanta",
-          error: result.data.error
-        });
-        return;
-      }
-
-      // GESTIONE CASO: result.data non oggetto, non stringa, o struttura inattesa
-      if (
-        !result.data ||
-        (typeof result.data !== "object" && typeof result.data !== "string")
-      ) {
-        log.error(Colorize.bgRed("Risposta inattesa da Istanta: " + JSON.stringify(result.data)));
-        this.sendResponse(res, HttpStatusCode.INTERNAL_SERVER_ERROR, {
-          message: "Risposta inattesa da Istanta",
-          error: result.data
-        });
-        return;
-      }
+      // Istanta risponde 200 anche quando rifiuta il tracciato: vale solo esito true
+      verificaRisposta(result, 'ISTANTA', '/FicoProcess/uploadTracciato', (d) => d?.esito === true);
 
       // Salvataggio tracciato nel database
       log.info(Colorize.bgGreen("Salvataggio tracciato nel database"));
@@ -335,11 +286,18 @@ export class FileManagementController extends BaseController {
     }
   }
 
-  private async uploadKitManuali(req: Request, res: Response): Promise<void> {
+  private async uploadKitManuali(req: Request<{ idPromo: string; idKit: string }>, res: Response): Promise<void> {
     try {
       const { idPromo, idKit } = req.params;
       const files = req.files as Express.Multer.File[];
-      const metadata = JSON.parse(req.body.metadata);
+      let metadata;
+      try {
+        metadata = JSON.parse(req.body.metadata);
+      } catch {
+        // Il service non viene chiamato: i temporanei caricati da multer vanno rimossi qui
+        await Promise.all((files ?? []).map(f => fs.promises.rm(f.path, { force: true })));
+        throw new BadRequestError({ message: 'Metadati dei file non validi' });
+      }
       const result = await this.fileManagementService.uploadKitManuali(idPromo, idKit, files, metadata, req);
       this.sendResponse(res, HttpStatusCode.CREATED, result);
     } catch (error) {
@@ -347,7 +305,7 @@ export class FileManagementController extends BaseController {
     }
   }
 
-  private async replaceFileKitRuntime(req: Request, res: Response): Promise<void> {
+  private async replaceFileKitRuntime(req: Request<{ idFile: string }>, res: Response): Promise<void> {
     try {
       const { idFile } = req.params;
       if (!req.file) {
@@ -366,7 +324,7 @@ export class FileManagementController extends BaseController {
         this.sendResponse(res, HttpStatusCode.BAD_REQUEST, { message: 'No file uploaded' });
         return;
       }
-      const result = await this.fileManagementService.uploadForzatoImmaginiOlimpo(req.file, req.body.guidId);
+      const result = await this.fileManagementService.uploadForzatoImmaginiOlimpo(req.file, req.body.guidId, req);
       this.sendResponse(res, HttpStatusCode.OK, result);
     } catch (error) {
       this.handleError(res, error as Error);
@@ -379,7 +337,7 @@ export class FileManagementController extends BaseController {
         this.sendResponse(res, HttpStatusCode.BAD_REQUEST, { message: 'No file uploaded' });
         return;
       }
-      const result = await this.fileManagementService.updateImmagineReferenza(req.file, req.body);
+      const result = await this.fileManagementService.updateImmagineReferenza(req.file, req.body, req);
       this.sendResponse(res, HttpStatusCode.OK, result);
     } catch (error) {
       this.handleError(res, error as Error);
@@ -392,7 +350,7 @@ export class FileManagementController extends BaseController {
         this.sendResponse(res, HttpStatusCode.BAD_REQUEST, { message: 'No file uploaded' });
         return;
       }
-      const result = await this.fileManagementService.updateImmagineGruppoReferenza(req.file, req.body);
+      const result = await this.fileManagementService.updateImmagineGruppoReferenza(req.file, req.body, req);
       this.sendResponse(res, HttpStatusCode.OK, result);
     } catch (error) {
       this.handleError(res, error as Error);

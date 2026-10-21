@@ -151,6 +151,8 @@ const pannelli = {
         bottone.css("cursor", "pointer");
         bottone.css("padding", "0px 10px");
         bottone.css("font-size", "14px");
+        //I20-1087: la X non si restringe mai: con un codice lungo cede solo il codice.
+        bottone.css("flex", "0 0 auto");
         bottone.on("click", () => this._chiudiSchedaDalReport());
 
         testata.append(bottone);
@@ -220,8 +222,11 @@ const pannelli = {
 
     //I20-981: il percorso completo della cartella dei csv vive nel suggerimento del pulsante.
     _aggiornaTitoloCartellaCsv() {
-        const bottone = document.getElementById("cartellaReportConfrontoCsv");
-        if (bottone == null) {
+        //I20-1121: nella colonna del report affiancato il pulsante ha un altro id.
+        const bottoni = ["cartellaReportConfrontoCsv", "cartellaReportConfrontoCsvColonna"]
+            .map(id => document.getElementById(id))
+            .filter(b => b != null);
+        if (bottoni.length === 0) {
             return;
         }
 
@@ -235,8 +240,8 @@ const pannelli = {
 
         //Il testo del pulsante non cambia: cambiarlo spostava tutta la testata a ogni scelta,
         //e una cartella dal nome lungo non ci stava comunque. Il percorso sta nel suggerimento.
-        Tooltip.impostaTooltip(bottone, "Scegli cartella. Attualmente impostata: "
-            + (cartella !== "" ? cartella : "nessuna (configura i percorsi di sistema)"));
+        bottoni.forEach(bottone => Tooltip.impostaTooltip(bottone, "Scegli cartella. Attualmente impostata: "
+            + (cartella !== "" ? cartella : "nessuna (configura i percorsi di sistema)")));
     },
 
     _crDuplicateControl(record, reportKey) {
@@ -424,7 +429,9 @@ const pannelli = {
             current = current.parentElement;
         }
 
-        return document.getElementById("bodyConfrontoReport") || document.getElementById("bodyModal");
+        //I20-1121: affiancato, il report sta nel corpo della colonna.
+        return (this.reportAffiancato() ? document.getElementById(this.ID_CORPO_COLONNA) : null)
+            || document.getElementById("bodyConfrontoReport") || document.getElementById("bodyModal");
     },
 
     _refreshConfrontoReportUi() {
@@ -452,6 +459,9 @@ const pannelli = {
     _crReportListPicker() {
         const picker = document.createElement("sp-picker");
         picker.style.minWidth = "150px";
+        //I20-1121: i controlli nativi di UXP restano sopra a tutto; .hideble li spegne sotto i popup
+        //(anche quelli aperti dalla scheda accanto al report affiancato).
+        picker.classList.add("hideble");
 
         const menu = document.createElement("sp-menu");
         menu.setAttribute("slot", "options");
@@ -697,8 +707,11 @@ const pannelli = {
                     //che non tocca il box ma puo' cambiare la pagina in cui va. Si vedono
                     //separate perche' chiedono all'operatore due decisioni diverse.
                     const tutteLeDifferenze = Array.isArray(item?.preAnalisi?.differenze) ? item.preAnalisi.differenze : [];
-                    const segnalazioniIntegrita = tutteLeDifferenze.filter(d => d?.origine !== "confronto");
+                    //I20-1088: i meta dei testi da verificare sono una terza cosa: non chiedono il Fix,
+                    //si risolvono aprendo la scheda con Trova.
+                    const segnalazioniIntegrita = tutteLeDifferenze.filter(d => d?.origine !== "confronto" && d?.origine !== "meta");
                     const differenzeConfronto = tutteLeDifferenze.filter(d => d?.origine === "confronto");
+                    const differenzeMeta = tutteLeDifferenze.filter(d => d?.origine === "meta");
 
                     const differenze = segnalazioniIntegrita;
                     if (tutteLeDifferenze.length === 0) {
@@ -724,6 +737,8 @@ const pannelli = {
                             else {
                                 diffRow.textContent = diff?.difference || "-";
                             }
+                            //I20-1071: sotto una differenza di contenuto, il valore nel box e quello del dato.
+                            this.aggiungiValoriDifferenzaNelReport(diffRow, diff);
                             //La chiave della segnalazione resta attaccata alla riga: serve per
                             //far vedere quale se ne sta andando dopo un ricontrollo.
                             diffRow.dataset.segnalazioneKey = this._getSegnalazioneKey(diff);
@@ -733,12 +748,19 @@ const pannelli = {
                             diffRow.style.wordBreak = "break-word";
                             diffRow.style.overflowWrap = "anywhere";
                             diffRow.style.minWidth = "0";
+                            //I20-1081: il box di un tipo diverso da quello del dato e' grave: in rosso,
+                            //col segnale davanti e il modo di risolverlo.
+                            this._evidenziaDifferenzaGrave(diffRow, diff);
                             diffList.appendChild(diffRow);
                         });
                     }
 
                     if (differenzeConfronto.length > 0) {
                         diffList.appendChild(this._crRiquadroConfronto(differenzeConfronto));
+                    }
+
+                    if (differenzeMeta.length > 0) {
+                        diffList.appendChild(this._crRiquadroMeta(differenzeMeta));
                     }
 
                     if (item?._hasWhitelistOtherSegnalazioni) {
@@ -753,7 +775,7 @@ const pannelli = {
                     }
 
                     const duplicateControl = this._crDuplicateControl(item, "recordCambiati");
-                    left.appendChild(codice);
+                    left.appendChild(this._conSegnalazioniImpaginazione(codice, item));
                     if (duplicateControl) {
                         left.appendChild(duplicateControl);
                     }
@@ -879,7 +901,7 @@ const pannelli = {
                     left.style.minWidth = "0";
                     left.style.gap = "4px";
 
-                    left.appendChild(codice);
+                    left.appendChild(this._conSegnalazioniImpaginazione(codice, item));
 
                     const duplicateControl = this._crDuplicateControl(item, "recordUsciti");
                     if (duplicateControl) {
@@ -930,7 +952,8 @@ const pannelli = {
             });
         }
 
-        btnDeleteAll.addEventListener("click", () => this._eliminaTuttiUsciti(records));
+        //I20-1121: affiancato, gli eventi si fermano finche' l'eliminazione lavora sul documento.
+        btnDeleteAll.addEventListener("click", () => this._conEventiFermi(() => this._eliminaTuttiUsciti(records)));
 
         panel.appendChild(topbar);
         panel.appendChild(content);
@@ -1534,6 +1557,45 @@ const pannelli = {
         return elemento;
     },
 
+    /// I20-1056, lotto 5: il codice del record con accanto, se il box ne ha, il numero delle sue
+    /// segnalazioni di impaginazione irrisolte, colorato come l'icona del menabo' (rosso con almeno
+    /// un errore, arancione con soli avvisi); il suggerimento le elenca. Senza segnalazioni torna
+    /// il codice cosi' com'e', e la riga resta quella di prima.
+    _conSegnalazioniImpaginazione(codice, record) {
+        const riepilogo = record?.segnalazioniImpaginazione ?? record?._fullReportRecord?.segnalazioniImpaginazione;
+        if (riepilogo == null || !(riepilogo.segnalazioni > 0)) {
+            return codice;
+        }
+
+        const riga = document.createElement("div");
+        riga.style.display = "flex";
+        riga.style.alignItems = "center";
+        riga.style.gap = "6px";
+        riga.style.minWidth = "0";
+
+        codice.style.flex = "0 1 auto";
+        riga.appendChild(codice);
+
+        const numero = document.createElement("span");
+        numero.textContent = String(riepilogo.segnalazioni);
+        numero.style.display = "inline-block";
+        numero.style.flexShrink = "0";
+        numero.style.minWidth = "16px";
+        numero.style.height = "16px";
+        numero.style.padding = "0 4px";
+        numero.style.borderRadius = "8px";
+        numero.style.color = "white";
+        numero.style.fontSize = "10px";
+        numero.style.fontWeight = "bold";
+        numero.style.lineHeight = "16px";
+        numero.style.textAlign = "center";
+        numero.style.backgroundColor = SchermataSegnalazioni.coloreCss(riepilogo.gravita);
+        Tooltip.impostaTooltip(numero, SchermataSegnalazioni.testoSegnalazioniDelRecord(riepilogo, this.traduzioniLabelSegnalazioni()));
+        riga.appendChild(numero);
+
+        return riga;
+    },
+
     copiaCodiceGruppo(codiceGruppo) {
         const testo = String(codiceGruppo == null ? "" : codiceGruppo);
         if (testo === "") {
@@ -1565,6 +1627,59 @@ const pannelli = {
     //I20-981: il riquadro che raccoglie le differenze sui campi osservati dentro una riga.
     //Sta staccato dalle segnalazioni di integrita' e porta il colore dei confronti, cosi' si
     //capisce a colpo d'occhio che parla di un'altra cosa.
+    /// I20-1071: sotto una differenza di contenuto o di paragrafo del box, il valore nel box e
+    /// quello del dato, leggibili; un valore lungo e' abbreviato con i puntini e l'intero sta nel
+    /// suggerimento. Stessa resa della finestra delle differenze della scheda ref.
+    aggiungiValoriDifferenzaNelReport(riga, diff) {
+        const valori = confronti.valoriDifferenza(diff);
+        if (valori == null) {
+            return;
+        }
+        [["nel box", valori.locale], ["sul server", valori.server]].forEach(coppia => {
+            const r = document.createElement("div");
+            r.className = "valoreDifferenza";
+            r.style.paddingLeft = "8px";
+            r.style.fontSize = "11px";
+            r.style.whiteSpace = "normal";
+            r.style.overflowWrap = "anywhere";
+            r.style.minWidth = "0";
+            const etichetta = document.createElement("span");
+            etichetta.textContent = coppia[0] + ": ";
+            etichetta.style.opacity = "0.7";
+            const valore = document.createElement("span");
+            valore.textContent = coppia[1].breve === "" ? "(vuoto)" : coppia[1].breve;
+            if (coppia[1].abbreviato) {
+                Tooltip.impostaTooltip(valore, coppia[1].intero);
+            }
+            r.appendChild(etichetta);
+            r.appendChild(valore);
+            riga.appendChild(r);
+        });
+    },
+
+    /// I20-1081: una differenza grave (confronti.eDifferenzaGrave: il box di un tipo diverso da quello
+    /// del dato) nella riga del report: fondo rosso chiaro, bordo e testo rossi, il segnale davanti e
+    /// sotto il modo di risolverla. Le altre righe restano come sono.
+    _evidenziaDifferenzaGrave(riga, diff) {
+        if (riga == null || !confronti.eDifferenzaGrave(diff)) {
+            return false;
+        }
+        riga.style.backgroundColor = "#fdecea";
+        riga.style.border = "1px solid #b21d1d";
+        riga.style.borderLeft = "5px solid #b21d1d";
+        riga.style.borderRadius = "3px";
+        riga.style.padding = "4px 6px";
+        riga.style.margin = "2px 0";
+        riga.style.color = "#b21d1d";
+        riga.style.fontWeight = "700";
+        riga.insertBefore(document.createTextNode("⚠ "), riga.firstChild);
+        const comeRisolvere = document.createElement("div");
+        comeRisolvere.textContent = "Il box non e' del tipo che il dato chiede: usa Fix per rifarlo con il dato.";
+        comeRisolvere.style.fontSize = "11px";
+        riga.appendChild(comeRisolvere);
+        return true;
+    },
+
     _crRiquadroConfronto(differenze) {
         const riquadro = document.createElement("div");
         riquadro.style.marginTop = "6px";
@@ -1598,6 +1713,65 @@ const pannelli = {
             campo.style.fontWeight = "600";
             riga.appendChild(campo);
             riga.appendChild(document.createTextNode(": " + (differenza?.difference || "")));
+
+            riquadro.appendChild(riga);
+        });
+
+        return riquadro;
+    },
+
+    /// I20-1088: i meta dei testi da verificare di un record, in un riquadro loro: per ognuno il
+    /// campo, il motivo e i tre valori (nel meta, originale, sul server). Nessuna azione: si
+    /// risolvono dalla finestra delle differenze della scheda, che si apre con Trova.
+    _crRiquadroMeta(differenze) {
+        const riquadro = document.createElement("div");
+        riquadro.style.marginTop = "6px";
+        riquadro.style.padding = "4px 6px";
+        riquadro.style.borderLeft = "3px solid #1565c0";
+        riquadro.style.backgroundColor = "#eef3fb";
+        riquadro.style.borderRadius = "3px";
+        riquadro.style.minWidth = "0";
+
+        const titolo = document.createElement("div");
+        titolo.textContent = "Meta da verificare";
+        titolo.style.fontSize = "10px";
+        titolo.style.fontWeight = "700";
+        titolo.style.letterSpacing = "0.3px";
+        titolo.style.textTransform = "uppercase";
+        titolo.style.color = "#1565c0";
+        titolo.style.marginBottom = "2px";
+        Tooltip.impostaTooltip(titolo, "Testi tenuti dal box per questa lavorazione che il server ha cambiato: apri la scheda con Trova per aggiornarli o usare quelli del server");
+        riquadro.appendChild(titolo);
+
+        (differenze || []).forEach(differenza => {
+            const riga = document.createElement("div");
+            riga.style.fontSize = "11px";
+            riga.style.lineHeight = "1.3";
+            riga.style.whiteSpace = "normal";
+            riga.style.overflowWrap = "anywhere";
+            riga.style.minWidth = "0";
+
+            const campo = document.createElement("span");
+            campo.textContent = differenza?.label || "";
+            campo.style.fontWeight = "600";
+            riga.appendChild(campo);
+            riga.appendChild(document.createTextNode(": " + (differenza?.difference || "")));
+
+            confronti.valoriDelMeta(differenza).forEach(valore => {
+                const r = document.createElement("div");
+                r.style.paddingLeft = "8px";
+                const etichetta = document.createElement("span");
+                etichetta.textContent = valore.etichetta + ": ";
+                etichetta.style.fontWeight = "700";
+                const testo = document.createElement("span");
+                testo.textContent = valore.breve === "" ? "(vuoto)" : valore.breve;
+                if (valore.abbreviato) {
+                    Tooltip.impostaTooltip(testo, valore.intero);
+                }
+                r.appendChild(etichetta);
+                r.appendChild(testo);
+                riga.appendChild(r);
+            });
 
             riquadro.appendChild(riga);
         });
@@ -1704,6 +1878,8 @@ const pannelli = {
 
         const pickerLavorazioni = document.createElement("sp-picker");
         pickerLavorazioni.style.minWidth = "220px";
+        //I20-1121: sotto i popup si spegne (.hideble), come gli altri controlli nativi del report.
+        pickerLavorazioni.classList.add("hideble");
         const menuLavorazioni = document.createElement("sp-menu");
         menuLavorazioni.setAttribute("slot", "options");
         pickerLavorazioni.appendChild(menuLavorazioni);
@@ -1803,6 +1979,8 @@ const pannelli = {
     _crPickerPresenza(valore) {
         const picker = document.createElement("sp-picker");
         picker.style.minWidth = "170px";
+        //I20-1121: sotto i popup si spegne (.hideble), come gli altri controlli nativi del report.
+        picker.classList.add("hideble");
         const menu = document.createElement("sp-menu");
         menu.setAttribute("slot", "options");
 
@@ -1835,6 +2013,8 @@ const pannelli = {
 
         const casella = document.createElement("input");
         casella.type = "checkbox";
+        //I20-1121: sotto i popup si spegne (.hideble), come gli altri controlli nativi del report.
+        casella.classList.add("hideble");
         casella.checked = acceso === true;
         casella.addEventListener("change", () => alCambio(casella.checked === true));
 
@@ -2162,6 +2342,8 @@ const pannelli = {
 
         const pickerLibreria = document.createElement("sp-picker");
         pickerLibreria.style.minWidth = "220px";
+        //I20-1121: sotto i popup si spegne (.hideble), come gli altri controlli nativi del report.
+        pickerLibreria.classList.add("hideble");
 
         const menuLibreria = document.createElement("sp-menu");
         menuLibreria.setAttribute("slot", "options");
@@ -2316,7 +2498,8 @@ const pannelli = {
             try {
                 const ok = await this._confirmReportAction("massive", "Impaginare tutti i nuovi elementi in coda al documento?");
                 if (ok) {
-                    await this._impaginaTuttiNuoviInCoda();
+                    //I20-1121: affiancato, gli eventi si fermano finche' si impagina.
+                    await this._conEventiFermi(() => this._impaginaTuttiNuoviInCoda());
                 }
             } catch (err) {
                 console.error("Errore impaginazione massiva nuovi:", err);
@@ -2917,6 +3100,8 @@ const pannelli = {
         const input = document.createElement("input");
         input.type = "text";
         input.maxLength = 3;
+        //I20-1121: sotto i popup si spegne (.hideble), come gli altri controlli nativi del report.
+        input.classList.add("hideble");
         input.placeholder = "Pag";
         input.style.width = "36px";
         input.style.minWidth = "36px";
@@ -2924,7 +3109,8 @@ const pannelli = {
 
         btn.addEventListener("click", async () => {
             try {
-                await this._impaginaNuovoSingolo(rowData, input);
+                //I20-1121: affiancato, gli eventi si fermano finche' si impagina.
+                await this._conEventiFermi(() => this._impaginaNuovoSingolo(rowData, input));
             } catch (err) {
                 console.error("Errore impaginazione nuovo singolo:", rowData, err);
             }

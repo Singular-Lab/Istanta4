@@ -55,10 +55,9 @@ export interface UtenteResponseDTO {
   stato: STATO_UTENTI;
   sesso?: UTENTE_GENERE;
   telefono?: string;
-  private_key?: string;
   createdat?: Date;
   updatedat: Date;
-  meta?: UtentiMeta;
+  meta?: UtentiMeta | null;
   nome_completo?: string;
   eta?: number;
   is_attivo?: boolean;
@@ -181,7 +180,6 @@ export function toUtenteResponseDTO(utente: UtenteAttributes): UtenteResponseDTO
     stato: utente.stato_utenti || STATO_UTENTI.ATTIVO,
     sesso: utente.sesso_utenti,
     telefono: utente.telefono_utenti,
-    private_key: utente.privatekey_utenti,
     createdat: utente.createdat,
     updatedat: utente.updatedat || new Date(),
     meta: utente.meta_utenti,

@@ -120,7 +120,18 @@ const schedaArtwork = {
             this.getSchedaRef(cod, (error, schedaRef) => {
                 if (error) {
                     console.error("Code ATW-2 Errore durante la richiesta:", error);
-                    messaggioUtente("Code ATW-2 Errore durante la richiesta", "error");
+                    var motivo = typeof error === "string" ? error : (error && error.message ? error.message : "");
+                    messaggioUtente("Code ATW-2 Errore durante la richiesta" + (motivo ? ": " + motivo : ""), "error");
+                    hideLoading();
+                    return;
+                }
+                //I20-1062: prima la risposta si usava senza guardare l'esito, e un errore del server
+                //diventava un TypeError su records[0], poi ATW-3 senza il motivo vero.
+                if (schedaRef == null || schedaRef.esito === false || schedaRef.records == null || schedaRef.records.length == 0) {
+                    if (schedaRef != null && schedaRef.dettaglio) {
+                        console.error("Dettaglio dell'errore del server:", schedaRef.dettaglio);
+                    }
+                    messaggioUtente("Code ATW-14 Gruppo " + cod + ": " + (schedaRef != null && schedaRef.error ? schedaRef.error : "il server non ha restituito record"), "error");
                     hideLoading();
                     return;
                 }

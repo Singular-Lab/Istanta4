@@ -2,31 +2,29 @@ import axios from 'axios';
 import CleanCSS from 'clean-css';
 import { Request, Response } from 'express';
 import 'express-session';
-import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import util from 'util';
 import { v4 as uuidv4 } from 'uuid';
 import { HttpStatusCode, TIPO_UTENTI } from '../../../lib/enums';
-import { BadRequestError, ForbiddenError } from '../../../lib/errors';
+import { BadRequestError, ExternalApiError, ForbiddenError } from '../../../lib/errors';
 import { AvvisoManutenzione, Dashboard, RegoleMenabo } from '../../../lib/types';
 import { emitToClients } from '../../ws-server';
 import { BaseController } from '../base/BaseController';
 import config from '../config';
 import {
   FILE_SIZE_LIMITS,
-  createDiskStorage,
   createMimeFilter,
-  createUpload,
-  ensureUploadDir
+  createUpload
 } from '../config/multerConfig';
 import { IConfigService } from '../interfaces/IConfigService';
 import { log } from '../logger';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { jsonGrande } from '../middleware/jsonGrande';
 import { permissionGuard } from '../middleware/permissionGuard';
-import { userRoleGuard } from '../middleware/userRoleGuard';
+import { PERMESSI } from '../../../lib/accessi/catalogo';
 import { AuditLogService } from '../services/AuditLogService';
 import { ServerUtils } from '../utils/ServerUtils';
+import { isUrlOlimpo, urlOlimpo } from '../utils/urlOlimpo';
 
 // Mapping for modalita tipi di export
 const modalitaTipiDiExportReverseMapping: { [key: string]: string } = {
@@ -35,11 +33,9 @@ const modalitaTipiDiExportReverseMapping: { [key: string]: string } = {
 };
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const nomeDirInsegna = config.ICONE_INSEGNA_DIR as string;
-ensureUploadDir(nomeDirInsegna);
 
+// Il CSS viene minificato e salvato nella configurazione: resta in memoria, mai su disco
 const uploadCss = createUpload({
-  storage: createDiskStorage(nomeDirInsegna, (_req, file) => `${Date.now()}-${file.originalname}`),
   fileSize: FILE_SIZE_LIMITS.MEDIUM,
   fileFilter: createMimeFilter(['text/css'], 'Formato file non valido. Solo CSS accettato.')
 });
@@ -53,17 +49,17 @@ export class ConfigController extends BaseController {
     this.router.get('/getStiliToText', this.getStiliToText.bind(this));
     this.router.get('/get_config', this.get_config.bind(this));
     this.router.post('/saveConfig', authMiddleware, permissionGuard('impostazioni.modifica_generali'), this.saveConfig.bind(this));
-    this.router.post('/caricaStiliInConfig', uploadCss.single('file'), authMiddleware, permissionGuard('impostazioni.modifica_generali'), this.caricaStiliInConfig.bind(this));
+    this.router.post('/caricaStiliInConfig', authMiddleware, permissionGuard('impostazioni.modifica_generali'), uploadCss.single('file'), this.caricaStiliInConfig.bind(this));
     this.router.get('/getConfigWebPliantFromVolantino', this.getConfigWebPliantFromVolantino.bind(this));
     this.router.get('/getColorGDO', this.getColorGDO.bind(this));
-    this.router.post('/saveWebpliantConfig', authMiddleware, permissionGuard('impostazioni.modifica_generali'), this.saveWebpliantConfig.bind(this));
-    this.router.post('/saveDashBoardConfig', userRoleGuard([TIPO_UTENTI.SUPERADMIN]), authMiddleware, this.saveDashBoardConfig.bind(this));
+    this.router.post('/saveWebpliantConfig', authMiddleware, permissionGuard('impostazioni.modifica_generali'), jsonGrande, this.saveWebpliantConfig.bind(this));
+    this.router.post('/saveDashBoardConfig', authMiddleware, permissionGuard(PERMESSI.SISTEMA.CONFIGURAZIONE), this.saveDashBoardConfig.bind(this));
     this.router.get('/getDashBoardConfig', authMiddleware, this.getDashBoardConfig.bind(this));
     this.router.get('/getPluginRegistry', authMiddleware, permissionGuard('api.gestisci_plugin'), this.getPluginRegistry.bind(this));
     this.router.get('/getFlyerInsightsConfig', this.getFlyerInsightsConfig.bind(this));
     this.router.get('/avviso-manutenzione', authMiddleware, this.getAvvisoManutenzione.bind(this));
-    this.router.post('/avviso-manutenzione', authMiddleware, userRoleGuard([TIPO_UTENTI.SUPERADMIN]), this.saveAvvisoManutenzione.bind(this));
-    this.router.delete('/avviso-manutenzione', authMiddleware, userRoleGuard([TIPO_UTENTI.SUPERADMIN]), this.deleteAvvisoManutenzione.bind(this));
+    this.router.post('/avviso-manutenzione', authMiddleware, permissionGuard(PERMESSI.SISTEMA.MANUTENZIONE), this.saveAvvisoManutenzione.bind(this));
+    this.router.delete('/avviso-manutenzione', authMiddleware, permissionGuard(PERMESSI.SISTEMA.MANUTENZIONE), this.deleteAvvisoManutenzione.bind(this));
     this.router.get('/regole-menabo', authMiddleware, this.getRegoleMenabo.bind(this));
     this.router.post('/regole-menabo', authMiddleware, permissionGuard('impostazioni.modifica_generali'), this.saveRegoleMenabo.bind(this));
     this.router.delete('/regole-menabo', authMiddleware, permissionGuard('impostazioni.modifica_generali'), this.deleteRegoleMenabo.bind(this));
@@ -90,23 +86,6 @@ export class ConfigController extends BaseController {
   }
   private async saveDashBoardConfig(req: Request, res: Response): Promise<void> {
     try {
-      // Verifica che solo il super admin possa salvare il layout
-      const tipoUtente = req.session.tipo_utente;
-      if (tipoUtente !== TIPO_UTENTI.SUPERADMIN) {
-        log.warn('Tentativo di salvataggio dashboard da utente non autorizzato', {
-          userId: req.session.id_utente,
-          tipoUtente,
-          ip: req.ip
-        });
-        throw new ForbiddenError({
-          message: 'Solo il super amministratore può modificare il layout della dashboard',
-          details: {
-            requiredRole: TIPO_UTENTI.SUPERADMIN,
-            currentRole: tipoUtente
-          }
-        });
-      }
-
       // Leggi il ruolo target dal body (quale dashboard si sta salvando)
       const { dashboard, role } = req.body as { dashboard: Dashboard; role: TIPO_UTENTI };
 
@@ -133,15 +112,12 @@ export class ConfigController extends BaseController {
         });
       }
       if (file.mimetype !== "text/css") {
-        await util.promisify(fs.unlink)(file.path);
         throw new BadRequestError({
           message: "Formato file non valido"
         });
       }
-      const fileContent = await util.promisify(fs.readFile)(file.path, 'utf8');
-      const minified = ServerUtils.minifyCSS(fileContent);
-      const result = await this.configService.caricaStiliInConfig(id, minified);
-      await util.promisify(fs.unlink)(file.path);
+      const minified = ServerUtils.minifyCSS(file.buffer.toString('utf8'));
+      await this.configService.caricaStiliInConfig(id, minified);
       res.status(HttpStatusCode.OK).json({ message: "File elaborato e cancellato con successo" });
     } catch (error: any) {
       this.handleError(res, error);
@@ -190,8 +166,22 @@ export class ConfigController extends BaseController {
       }
       const regexBase64 = /^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)?$/;
 
+      // Un esito negativo di Olympus interrompe il salvataggio: la config non deve puntare a immagini mai caricate
+      const verificaEsitoOlympus = (risposta: { esito: boolean, error: string }) => {
+        if (!risposta.esito) {
+          // Il testo grezzo di Olympus resta nella cause (log), non nel messaggio al client
+          throw new ExternalApiError({
+            message: "Olympus non ha caricato l'immagine della configurazione Webpliant",
+            service: 'OLYMPUS',
+            endpoint: '/foto/updateFotoPathWeb',
+            cause: new Error(risposta.error || 'esito false')
+          });
+        }
+      };
+
       for (const logo of configWebpliant.webpliant.logo_header) {
-        if (regexBase64.test(logo.base64) && !logo.url) {
+        // La regex accetta anche la stringa vuota: senza contenuto non si carica nulla
+        if (logo.base64 && regexBase64.test(logo.base64) && !logo.url) {
           const formData = new FormData();
           const bufferIconaHeader = Buffer.from(logo.base64, 'base64');
           const blobIcona = new Blob([bufferIconaHeader], { type: 'image/png' });
@@ -202,15 +192,12 @@ export class ConfigController extends BaseController {
             formData,
             { headers: { Authorization: req.session.private_key } }
           );
-          if (result.data.esito) {
-            logo.url = `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${result.data.guidId}`;
-          } else {
-            log.error(result.data.error);
-          }
+          verificaEsitoOlympus(result.data);
+          logo.url = urlOlimpo('/foto/getThumbNailOnDemand', { guidId: result.data.guidId });
         }
       }
 
-      if (regexBase64.test(configWebpliant.webpliant.icona_pagina)) {
+      if (configWebpliant.webpliant.icona_pagina && regexBase64.test(configWebpliant.webpliant.icona_pagina)) {
         const formData = new FormData();
         const bufferIconaFavicon = Buffer.from(configWebpliant.webpliant.icona_pagina, 'base64');
         const blobIcona = new Blob([bufferIconaFavicon], { type: 'image/x-icon' });
@@ -221,13 +208,11 @@ export class ConfigController extends BaseController {
           formData,
           { headers: { Authorization: req.session.private_key } }
         );
-        if (result.data.esito) {
-          configWebpliant.webpliant.icona_pagina = result.data.guidId;
-        } else {
-          log.error(result.data.error);
-        }
-      } else if (configWebpliant.webpliant.icona_pagina.startsWith("http")) {
-        const url = new URL(configWebpliant.webpliant.icona_pagina);
+        verificaEsitoOlympus(result.data);
+        configWebpliant.webpliant.icona_pagina = result.data.guidId;
+      } else if (isUrlOlimpo(configWebpliant.webpliant.icona_pagina)) {
+        // Il frontend rimanda l'URL ricevuto da get_config (assoluto o /olimpo/...): si salva il GUID
+        const url = new URL(configWebpliant.webpliant.icona_pagina, 'http://fidelity.invalid');
         configWebpliant.webpliant.icona_pagina = url.searchParams.get("guidId") || "";
       }
 

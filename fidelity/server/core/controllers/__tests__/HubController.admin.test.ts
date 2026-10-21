@@ -6,7 +6,24 @@ import { TIPO_UTENTI } from '../../../../lib/enums';
 vi.mock('../../middleware/authMiddleware', () => ({
   authMiddleware: (_req: any, _res: any, next: any) => next(),
 }));
+// Permessi dalla sessione: il Superadmin ha i permessi di sistema, gli altri no.
+vi.mock('../../accessi/contestoAccesso', () => ({
+  leggiContestoAccesso: async (req: any) => ({
+    idUtente: req.session.id_utente,
+    tipo: req.session.tipo_utente,
+    idGdo: null,
+    idRuoloGdo: null,
+    superadmin: req.session.tipo_utente === 'Superadmin',
+  }),
+}));
+vi.mock('../../accessi/RisolutoreAccessi', () => ({
+  RisolutoreAccessi: { get: () => ({ puo: async (contesto: any) => contesto.superadmin }) },
+}));
+vi.mock('../../services/AuditLogService', () => ({
+  AuditLogService: { getInstance: () => ({ accessDenied: vi.fn() }) },
+}));
 
+import { errorHandler } from '../../middleware/errorHandler';
 import { HubController } from '../HubController';
 
 function createApp(sessionOverrides: Record<string, unknown> = {}, hubNewsOverrides: Record<string, any> = {}) {
@@ -58,6 +75,7 @@ function createApp(sessionOverrides: Record<string, unknown> = {}, hubNewsOverri
   );
 
   controller.registerRoutes(app);
+  app.use(errorHandler({ includeStackTrace: false, logger: () => undefined }));
 
   return { app, hubNewsService };
 }
@@ -77,7 +95,7 @@ describe('HubController admin news routes', () => {
     });
   });
 
-  it('rejects non-superadmin users from the admin news archive', async () => {
+  it('rejects users without the hub system permission from the admin news archive', async () => {
     const { app, hubNewsService } = createApp({
       tipo_utente: TIPO_UTENTI.GDO,
     });
@@ -86,6 +104,5 @@ describe('HubController admin news routes', () => {
 
     expect(res.status).toBe(403);
     expect(hubNewsService.getAllNews).not.toHaveBeenCalled();
-    expect(res.body).toEqual({ message: 'Solo Superadmin può visualizzare tutte le news' });
   });
 });

@@ -122,6 +122,10 @@
                             <ul class="dropdown-menu" style="width:300px;">
                                 <li><a class="dropdown-item" href="~/Confronti">Esegui</a></li>
                                 <li><a class="nav-link text-dark" asp-area="" asp-controller="Confronti" asp-action="Settings">Parametri Confronto</a></li>
+                                @* I20-1106: backup e ripristino dei record di una promo. *@
+                                <li><a class="dropdown-item" href="~/PromoBackup">Backup promo</a></li>
+                                @* I20-1106 (Lotto 2): i record che le regole del cliente riconoscono e che una lista non ha piu'. *@
+                                <li><a class="dropdown-item" href="~/Confronti/PuliziaListe">Pulizia liste</a></li>
                             </ul>
                         </div>
                         <myhr></myhr>

@@ -1,6 +1,7 @@
 ﻿using Istanta.Models;
 using IstantaLib;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -24,7 +25,7 @@ namespace Istanta.MiddleWare
     {
 
         private RequestDelegate _next;
-        private string[] pagine = { "", "/" ,"/Tracciati", "/Confronti", "/SyncFoto","/Archivio", "/Aree", "/MenaboSettings", "/Etichette", "/DeclinazioniMeccaniche", "/FrameworkCss", "/TaskManager", "/AllineamentiBox" };
+        private string[] pagine = { "", "/" ,"/Tracciati", "/Confronti", "/SyncFoto","/Archivio", "/Aree", "/MenaboSettings", "/Etichette", "/DeclinazioniMeccaniche", "/FrameworkCss", "/TaskManager", "/AllineamentiBox", "/PromoBackup", "/Confronti/PuliziaListe" };
         private edro21_dbContext ctx;
         private readonly string olUrl;
         private readonly OlympusUserPolicyRequest[] olympusUserPolycy;
@@ -49,7 +50,13 @@ namespace Istanta.MiddleWare
 
         public async Task Invoke(HttpContext context)
         {
-            
+            // La sessione sta su Redis: senza LoadAsync il primo Session.GetString (GetSession, qui e nei
+            // controller) la legge in modo sincrono e tiene fermo un thread del pool ad aspettare Redis.
+            // Con il pool gia' occupato da un'operazione pesante (il SYNC FOTO) ogni richiesta di ogni
+            // utente restava appesa li', e Istanta sembrava ferma finche' l'operazione non finiva.
+            // Caricata qui in asincrono, le letture successive avvengono in memoria. Se Redis non
+            // risponde la sessione risulta non disponibile, come prima ("no session").
+            await CaricaSessioneAsync(context);
 
             var req = context.Request;
             //Console.WriteLine($"nuova chiamata " + req.Path);
@@ -249,6 +256,27 @@ namespace Istanta.MiddleWare
             }
 
 
+        }
+
+        /// <summary>
+        /// Carica la sessione dallo store distribuito in asincrono, prima che qualcuno la legga.
+        /// Senza sessione configurata non fa nulla; un errore dello store lascia la sessione non
+        /// disponibile, come la lettura sincrona di prima (GetSession risponde "no session").
+        /// </summary>
+        public static async Task CaricaSessioneAsync(HttpContext context)
+        {
+            var sessione = context.Features.Get<ISessionFeature>()?.Session;
+            if (sessione == null)
+                return;
+
+            try
+            {
+                await sessione.LoadAsync(context.RequestAborted);
+            }
+            catch (Exception) when (!context.RequestAborted.IsCancellationRequested)
+            {
+                // stesso esito della lettura sincrona fallita: sessione non disponibile
+            }
         }
 
     }

@@ -9,6 +9,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ServerCall } from '../../../../lib/server_call';
 import { ApprofondimentoVino, ReferenzeIstanta } from '../../../../lib/types';
+import { urlFoto } from '@/utils/helper';
 
 
 const ModificaApprofondimentoVini: React.FC = () => {
@@ -328,7 +329,7 @@ const ModificaApprofondimentoVini: React.FC = () => {
           <div className="flex items-center gap-4">
             {dataReferenza?.foto?.[0] ? (
               <img
-                src={dataReferenza.foto[0]}
+                src={urlFoto(dataReferenza.foto)[0]}
                 alt={formValues.nome || 'Vino'}
                 className="object-contain w-32 h-32 rounded-lg border border-slate-200 shadow-sm"
               />

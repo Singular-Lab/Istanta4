@@ -46,6 +46,8 @@ namespace Istanta.Models_2
         public virtual DbSet<PromoLavorazioni> PromoLavorazionis { get; set; } = null!;
         public virtual DbSet<PromoLavorazioniRecord> PromoLavorazioniRecords { get; set; } = null!;
         //public virtual DbSet<PromoLavorazioniRecordRegister> PromoLavorazioniRecordRegisters { get; set; } = null!;
+        // I20-1106: i backup dei record di una promo, tabella creata dalla migration PromoBackup.
+        public virtual DbSet<PromoBackup> PromoBackups { get; set; } = null!;
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
@@ -609,6 +611,47 @@ namespace Istanta.Models_2
 
             //});
 
+            // I20-1106 (Lotto 1): i backup dei record di una promo. Il contenuto e' il json delle
+            // righe salvate (Models/BackupPromo.cs); l'elenco legge le altre colonne senza caricarlo.
+            // La chiave esterna e' in cascata: l'eliminazione definitiva di una promo, che Istanta
+            // concede solo a una promo senza importazioni, tracciati e lavorazioni, non deve restare
+            // bloccata da un backup. Promo non ha la collezione inversa di proposito: anche il primo
+            // contesto (Models/edro21_dbContext.cs) mappa Promo, e da una collezione scoprirebbe
+            // PromoBackup per convenzione, come tabella fantasma senza migration.
+            modelBuilder.Entity<PromoBackup>(entity =>
+            {
+                entity.ToTable("promo_backup");
+
+                entity.Property(e => e.Id).HasColumnName("id");
+
+                entity.Property(e => e.IdPromo).HasColumnName("id_promo");
+
+                entity.Property(e => e.Tipo)
+                    .HasColumnName("tipo")
+                    .HasComment("1-record dei tracciati 2-record delle lavorazioni");
+
+                entity.Property(e => e.DataBackup)
+                    .HasColumnType("timestamp without time zone")
+                    .HasColumnName("data_backup");
+
+                entity.Property(e => e.Origine)
+                    .HasMaxLength(200)
+                    .HasColumnName("origine");
+
+                entity.Property(e => e.Conteggio).HasColumnName("conteggio");
+
+                entity.Property(e => e.Contenuto)
+                    .HasColumnType("text")
+                    .HasColumnName("contenuto");
+
+                entity.HasIndex(e => e.IdPromo);
+
+                entity.HasOne(d => d.IdPromoNavigation)
+                    .WithMany()
+                    .HasForeignKey(d => d.IdPromo)
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .HasConstraintName("FK_promo_backup_promo");
+            });
 
             OnModelCreatingPartial(modelBuilder);
         }

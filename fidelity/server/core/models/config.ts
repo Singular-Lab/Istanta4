@@ -4,7 +4,6 @@ import { RegoleMenabo } from '../../../lib/types';
 
 /**
  * Modello Config per gestione configurazioni del sistema
- * Basato sulla struttura MongoDB fornita dall'utente
  */
 
 export interface ConfigAttributes {

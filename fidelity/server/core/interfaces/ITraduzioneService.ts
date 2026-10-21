@@ -1,5 +1,3 @@
-import { TraduzioniAttributes } from '../../../lib/types';
-
 export interface ITraduzioneService {
-    getTraduzioni(language: string, namespace: string): Promise<any>;
+    getTraduzioni(language: string, namespace: string): Promise<Record<string, unknown>>;
 } 

@@ -15,6 +15,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ServerCall } from "../../../../lib/server_call";
 import { ApprofondimentoVino, ReferenzeIstanta } from "../../../../lib/types";
+import { urlFoto } from "@/utils/helper";
 
 function GestioneApprofondimentoVini() {
   const navigate = useNavigate();
@@ -529,7 +530,7 @@ function GestioneApprofondimentoVini() {
                     <Table.Td>
                       {vino.foto && vino.foto.length > 0 ? (
                         <img
-                          src={vino.foto[0]}
+                          src={urlFoto(vino.foto)[0]}
                           alt="Foto vino"
                           className="w-12 h-12 object-contain rounded-lg shadow-sm border border-slate-200"
                           onError={(e) => {

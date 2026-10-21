@@ -1,5 +1,5 @@
 import { Request } from 'express';
-import { DESIGN_KIT_MONGO, FileItemKit, FileItemKitLog, ImportStorico, RUNTIME_KIT_MONGO } from '../../../lib/types';
+import { DESIGN_KIT, FileItemKit, FileItemKitLog, ImportStorico, RUNTIME_KIT } from '../../../lib/types';
 
 export interface IKitRuntimeService {
   /** Retrieval */
@@ -16,21 +16,21 @@ export interface IKitRuntimeService {
   }>;
   getKitPerGestioneLavorazione(idPromo: string, idKit: string, req: Request): Promise<any>;
   getFilesPerGestioneLavorazione(idKit: string, req: Request): Promise<any>;
-  getKitRuntimeById(id: string): Promise<RUNTIME_KIT_MONGO>;
+  getKitRuntimeById(id: string): Promise<RUNTIME_KIT>;
   getKitRuntimeByIdPerWebhook(id: string): Promise<any>;
-  getAllKitRuntimeByIdPromo(idPromo: string): Promise<RUNTIME_KIT_MONGO[]>;
+  getAllKitRuntimeByIdPromo(idPromo: string): Promise<RUNTIME_KIT[]>;
   getAllKitByAreaCanalePV(data: {
     idArea?: string; idCanale?: string; idPv?: string;
     idPromo?: string; idFormato?: string; id?: string;
     promoContext?: { nome_field: string; user_value: string; }[];
     tags?: string[];
     tipoLavorazione?:number
-  }): Promise<any>;
+  }, traccia?: Record<string, unknown>): Promise<any>;
 
   /** Mutations */
-  createKitRunTime(data: RUNTIME_KIT_MONGO): Promise<any>;
+  createKitRunTime(data: RUNTIME_KIT): Promise<any>;
   creaKitRuntimeManuale(idPromo: string, data: any): Promise<any>;
-  bulkCreateRuntime(data: (DESIGN_KIT_MONGO & { idPromo: string })[]): Promise<RUNTIME_KIT_MONGO[]>;
+  bulkCreateRuntime(data: (DESIGN_KIT & { idPromo: string })[], traccia?: Record<string, unknown>): Promise<RUNTIME_KIT[]>;
   mettiInStatoDiEliminazione(id: string): Promise<any>;
   eliminaKitRuntime(id: string): Promise<any>;
   eliminaFileKitRuntime(id: string): Promise<any>;
@@ -43,8 +43,8 @@ export interface IKitRuntimeService {
   pubblicaKitRuntime(idLavorazione: string, req: Request): Promise<any>;
 
   /** Combinations */
-  getAllKitRuntime(): Promise<RUNTIME_KIT_MONGO[]>;
-  getAllCombinazioniRuntimeFilters(filters: any): Promise<RUNTIME_KIT_MONGO[]>;
+  getAllKitRuntime(): Promise<RUNTIME_KIT[]>;
+  getAllCombinazioniRuntimeFilters(filters: any): Promise<RUNTIME_KIT[]>;
   cambioStatoCombinazione(guidId: string, stato: "ATTIVO" | "DISATTIVO"): Promise<any>;
 
   /** File Runtime */

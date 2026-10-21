@@ -2,7 +2,8 @@ import { Dialog } from "@/components/Base/Headless";
 import { SessionWarningModal } from "@/components/SessionWarningModal";
 import { useUser } from "@/context/UserContext";
 import { useSessionKeepAlive } from "@/hooks/useSessionKeepAlive";
-import React, { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import React, { createContext, useCallback, useEffect, useRef, useState } from "react";
+import AccessoNegato from "../AccessoNegato";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { HttpStatusCode } from '../../../lib/enums';
@@ -13,20 +14,28 @@ import Button from "../Base/Button";
 import Lucide from "../Base/Lucide";
 // Callback globale per intercettare errori 401
 
-//@ts-ignore
-import lottieAnimation from "@/assets/animations/animazione_loading_session.lottie?url";
-
-const DotLottieReact = lazy(() =>
-  import("@lottiefiles/dotlottie-react").then((m) => ({ default: m.DotLottieReact }))
-);
-
 import { UtenteResponseDTO } from "../../../server/core/dto/UtenteDTO.ts";
+/**
+ * False quando la pagina corrente non è consentita: il layout principale (che
+ * dichiara `mostraAccessoNegatoNelLayout`) mostra allora l'accesso negato al
+ * posto della pagina, lasciando visibile il menu.
+ */
+export const AccessoPaginaContext = createContext(true);
+
+const mostraAccessoNegatoNelLayout = (componente: unknown): boolean =>
+  !!(componente as { mostraAccessoNegatoNelLayout?: boolean } | null)?.mostraAccessoNegatoNelLayout;
+
 // Singleton per gestire lo stato globale delle chiamate
 class SessionCheckManager {
   private static instance: SessionCheckManager;
   private sessionCheckInProgress = false;
   private menuFetchInProgress = false;
   private sessionCacheTime = 30000; // 30 secondi di cache
+  /**
+   * True dopo la prima sessione verificata in questa scheda; torna false solo ricaricando.
+   * Chi perde la sessione mentre e dentro vede il dialog; chi entra gia senza va dritto al login.
+   */
+  sessioneGiaAttiva = false;
   private cachedSessionData: {
     sessionResponse?: { is_authenticated: boolean; utente: UtenteResponseDTO };
     policyResponse?: { is_authenticated: boolean; can_go_to_page: boolean; utente: UtenteResponseDTO };
@@ -262,6 +271,10 @@ const SessionCheckWrapper: React.FC<SessionCheckWrapperProps> = ({ WrappedCompon
     setIsAuthenticated(sessionResp.is_authenticated);
     setCanGoToPage(policyResp.can_go_to_page);
 
+    if (sessionResp.is_authenticated) {
+      sessionManager.current.sessioneGiaAttiva = true;
+    }
+
     // Gestione utente
     if (sessionResp.is_authenticated && sessionResp.utente) {
       setUser(sessionResp.utente);
@@ -422,8 +435,23 @@ const SessionCheckWrapper: React.FC<SessionCheckWrapperProps> = ({ WrappedCompon
     navigate(`/login?reason=${loginReason}`, { replace: true });
   }, [navigate, setUser, isIstantaRequired]);
 
+  // Entrato senza sessione (riapertura dopo ore, link diretto): dritto al login, senza
+  // dialog e senza avvisare le altre schede, che se erano dentro mostrano il proprio.
+  const entratoSenzaSessione = is_authenticated === false && !sessionManager.current.sessioneGiaAttiva;
+  useEffect(() => {
+    if (!entratoSenzaSessione) return;
+    ServerCall.resetSessionExpiredFlag();
+    const istantaRichiesto = isIstantaRequired || localStorage.getItem('istanta_login_required') === '1';
+    localStorage.removeItem('istanta_login_required');
+    navigate(istantaRichiesto ? '/login?reason=istanta_required' : '/login', { replace: true });
+  }, [entratoSenzaSessione, isIstantaRequired, navigate]);
+
   // Rendering condizionale - ora tutti gli hooks sono stati chiamati
-  // Dialogo sessione scaduta
+  if (entratoSenzaSessione) {
+    return null;
+  }
+
+  // Dialogo sessione scaduta: la sessione era attiva in questa scheda ed e stata persa
   if (is_authenticated === false) {
     return (
       <>
@@ -462,18 +490,15 @@ const SessionCheckWrapper: React.FC<SessionCheckWrapperProps> = ({ WrappedCompon
     );
   }
 
-  // Schermata accesso negato
-  if (is_authenticated === true && can_go_to_page === false) {
-    return (
-      <>
-
-        <PaginaPermessiNonValidi onClose={handleLoginRedirect} />
-      </>
-    );
+  // Accesso negato: il layout principale resta visibile e mostra l'avviso al posto della
+  // pagina; le altre pagine mostrano l'avviso. La sessione resta aperta.
+  const negato = is_authenticated === true && can_go_to_page === false;
+  if (negato && !mostraAccessoNegatoNelLayout(WrappedComponent)) {
+    return <AccessoNegato />;
   }
 
   // Render principale quando autenticato e autorizzato
-  if (is_authenticated === true && can_go_to_page === true) {
+  if (is_authenticated === true && (can_go_to_page === true || negato)) {
     return (
       <>
 
@@ -484,7 +509,9 @@ const SessionCheckWrapper: React.FC<SessionCheckWrapperProps> = ({ WrappedCompon
           userType={sessionResponse?.utente?.tipo || null}
         />
 
-        <WrappedComponent {...otherProps} />
+        <AccessoPaginaContext.Provider value={!negato}>
+          <WrappedComponent {...otherProps} />
+        </AccessoPaginaContext.Provider>
       </>
     );
   }
@@ -533,55 +560,3 @@ export const withSessionCheckOptimized = <P extends object = {}>(
 export default withSessionCheck;
 
 // Componente di loading separato
-
-
-
-// Access denied component ottimizzata
-const PaginaPermessiNonValidi: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  const [animationError, setAnimationError] = useState(false);
-
-  const options = {
-    animationData: lottieAnimation,
-    loop: true,
-    autoplay: true,
-  };
-
-
-  // Se vuoi reagire ad errori, puoi rilevare errori del JSON o simili
-  // Ma nota: l’hook non fornisce onError nativamente — puoi gestire fallback tu.
-
-  return (
-    <div className="fixed inset-0 flex items-center justify-center bg-[#03045e] bg-opacity-90 backdrop-blur-md z-[100000]">
-      <div className="text-center flex flex-col items-center">
-        <Lucide
-          icon="TriangleAlert"
-          className="w-20 h-20 text-warning animate-pulse"
-        />
-        <h1 className="mt-6 text-white text-2xl font-bold">
-          Accesso Negato
-        </h1>
-        <p className="mt-2 text-gray-300 text-sm max-w-sm">
-          Non hai i permessi per accedere a questa pagina. Se pensi che questo sia un errore, contatta l’amministratore o effettua nuovamente il login.
-        </p>
-        <Button
-          type="button"
-          variant="primary"
-          onClick={onClose}
-          className="mt-6 px-6 py-2 bg-white text-[#03045e] font-semibold rounded-full hover:bg-gray-100"
-        >
-          Torna al Login
-        </Button>
-        <div className="mt-10">
-          <Suspense fallback={null}>
-            <DotLottieReact
-              autoplay
-              loop
-              src={lottieAnimation}
-              style={{ height: '150px', width: '150px' }}
-            />
-          </Suspense>
-        </div>
-      </div>
-    </div>
-  );
-};

@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import 'express-session';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { v4 as uuidv4 } from 'uuid';
 import { CATEGORIA_ATTIVITA, EXPORT_DI_SISTEMA, HttpStatusCode, STATO_LOG_FILE, TIPO_ATTIVITA } from '../../../lib/enums';
 import { ApplicationError, BadRequestError, UnauthorizedError } from '../../../lib/errors';
@@ -10,8 +11,12 @@ import { IKitRuntimeService } from '../interfaces/IKitRuntimeService';
 import { IServiceFacade } from '../interfaces/IServiceFacade';
 import { ServerUtils } from '../utils/ServerUtils';
 
-
-
+// Confronto a tempo costante: gli hash hanno sempre la stessa lunghezza,
+// quindi non trapela nemmeno quanto e' lungo il segreto.
+function isValidCorreggoAuthorization(authorization: string | undefined): boolean {
+  const digest = (value: string) => createHash('sha256').update(value).digest();
+  return timingSafeEqual(digest(authorization ?? ''), digest(`Bearer ${config.FICO_SECRET}`));
+}
 
 export class CorreggoController extends BaseController {
   constructor(
@@ -27,12 +32,9 @@ export class CorreggoController extends BaseController {
 
   private async notificaRisultatoPubblicazioneSuCorreggo(req: Request, res: Response): Promise<void> {
     try {
-      const confrontoSecrete = req.headers["authorization"] === "Bearer " + config.FICO_SECRET;
-      if (!confrontoSecrete) {
-        throw new UnauthorizedError({
-          message: "Secret non valida",
-          details: { secret: req.headers["authorization"] }
-        });
+      if (!isValidCorreggoAuthorization(req.headers["authorization"])) {
+        // L'header ricevuto non va mai rimandato indietro ne' loggato.
+        throw new UnauthorizedError({ message: "Secret non valida" });
       }
       const { guidIdKitRuntime, id_vol, error, versione } = req.body as {
         guidIdKitRuntime: string;

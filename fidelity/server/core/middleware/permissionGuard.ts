@@ -1,68 +1,51 @@
 import { NextFunction, Request, Response } from 'express';
-import { TIPO_UTENTI } from '../../../lib/enums';
+import type { CodicePermesso } from '../../../lib/accessi/catalogo';
 import { ForbiddenError } from '../../../lib/errors/application/ForbiddenError';
 import { UnauthorizedError } from '../../../lib/errors/application/UnauthorizedError';
 import { InfrastructureError } from '../../../lib/errors/InfrastructureError';
 import { ErrorCodes } from '../../../lib/errors/ErrorCodes';
+import { leggiContestoAccesso } from '../accessi/contestoAccesso';
+import { RisolutoreAccessi } from '../accessi/RisolutoreAccessi';
 import { log } from '../logger';
-import { PermessiRepository } from '../repositories/PermessiRepository';
 import { AuditLogService } from '../services/AuditLogService';
-import { PermessiService } from '../services/PermessiService';
-
-// Singleton lazy-initialized service
-let _permessiService: PermessiService | null = null;
-function getPermessiService(): PermessiService {
-  if (!_permessiService) {
-    _permessiService = new PermessiService(new PermessiRepository());
-  }
-  return _permessiService;
-}
 
 /**
- * Middleware per verificare che l'utente abbia un permesso specifico.
- * Superadmin ha sempre bypass.
- * I permessi vengono cachati nella sessione per evitare query ripetute.
+ * Middleware che richiede un permesso del catalogo (lib/accessi/catalogo.ts).
  *
- * @param codicePermesso - Es. "promo.elimina", "kit.pubblica"
+ * I permessi effettivi vengono dal RisolutoreAccessi, lo stesso usato da menu e
+ * controllo pagine; il Superadmin li ha tutti, compresi quelli di sistema.
+ * Le modifiche ai permessi valgono dalla richiesta successiva (versione nel DB).
+ *
+ * @param codicePermesso - Es. "promo.elimina", "sistema.gestisci_accessi"
  */
-export const permissionGuard = (codicePermesso: string) => {
+export const permissionGuard = (codicePermesso: CodicePermesso) => {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const tipoUtente = req.session.tipo_utente;
-      const userId = req.session.id_utente;
+      // Chiamate di servizio gia' autenticate da authMiddleware (bearer di integrazione
+      // o richiesta interna firmata): non hanno sessione ne' ruolo da controllare.
+      if (res.locals.authVia === 'bearer' || res.locals.authVia === 'internal') {
+        return next();
+      }
 
-      if (!userId || !tipoUtente) {
+      const contesto = await leggiContestoAccesso(req, res);
+      if (!contesto) {
         return next(new UnauthorizedError({
           message: 'Non autenticato'
         }));
       }
 
-      // Superadmin bypass
-      if (tipoUtente === TIPO_UTENTI.SUPERADMIN) {
+      if (await RisolutoreAccessi.get().puo(contesto, codicePermesso)) {
         return next();
       }
 
-      // Controlla cache nella sessione
-      let permessiCache = (req.session as any).permessi_cache as string[] | undefined;
-
-      if (!permessiCache) {
-        const service = getPermessiService();
-        permessiCache = await service.getPermessiUtente(userId);
-        (req.session as any).permessi_cache = permessiCache;
-      }
-
-      if (!permessiCache.includes(codicePermesso)) {
-        log.warn(`Permesso negato: ${codicePermesso} per utente ${userId} (${tipoUtente})`);
-        AuditLogService.getInstance().accessDenied(req, codicePermesso || req.path, 'permission_denied');
-        return next(new ForbiddenError({
-          message: 'Permesso negato',
-          resource: req.path,
-          action: codicePermesso,
-          details: { codicePermesso, tipoUtente }
-        }));
-      }
-
-      next();
+      log.warn(`Permesso negato: ${codicePermesso} per utente ${contesto.idUtente} (${contesto.tipo})`);
+      AuditLogService.getInstance().accessDenied(req, codicePermesso || req.path, 'permission_denied');
+      return next(new ForbiddenError({
+        message: 'Permesso negato',
+        resource: req.path,
+        action: codicePermesso,
+        details: { codicePermesso, tipoUtente: contesto.tipo }
+      }));
     } catch (error) {
       log.error('Errore nel permissionGuard:', error);
       return next(new InfrastructureError({
@@ -74,12 +57,4 @@ export const permissionGuard = (codicePermesso: string) => {
       }));
     }
   };
-};
-
-/**
- * Middleware per invalidare la cache dei permessi nella sessione.
- * Da chiamare quando i permessi vengono aggiornati.
- */
-export const invalidatePermissionCache = (req: Request) => {
-  delete (req.session as any).permessi_cache;
 };

@@ -8,6 +8,8 @@ const SistemazioneFoto = require('./sistemazioneFoto/sistemazioneFoto');
 const cssRegoleConflitti = require('./cssFramework/regoleConflitti');
 //I20-1026: le sovrastrutture, le condizioni sulla ref e sulla forma del box, la regola disattiva.
 const sovrastrutture = require('./cssFramework/sovrastrutture');
+//I20-1102: il piano dei gruppi di allineamento a slot.
+const cssSlot = require('./cssFramework/slot');
 const FotoPlacer = require('./reperimentoFoto/fotoPlacer');
 
 const CssFramework =
@@ -75,7 +77,7 @@ const CssFramework =
                     try
                     {
                         var allineamentiDB = objResult;
-                        fs.writeFileSync(pathLavorazione + "/allineamenti.json", JSON.stringify(allineamentiDB));
+                        fs.writeFileSync(Utility.percorsoDati("allineamenti.json"), JSON.stringify(allineamentiDB));
                         callback(null, allineamentiDB); // Passiamo `null` come primo argomento per indicare che non c'è errore
                     }catch(e){
                         //I20-1002: qui il console.error era commentato. Se la copia di riserva in
@@ -391,7 +393,7 @@ const CssFramework =
                 return esito;
             }
 
-            var file = readFile(pathLavorazione + "/allineamenti.json");
+            var file = readFile(Utility.percorsoDati("allineamenti.json"));
             if (!file || !Array.isArray(file.modificheCssPerKit)) {
                 return esito;
             }
@@ -1795,7 +1797,7 @@ const CssFramework =
                         console.log(file);
                     }
                     if (err) {
-                        file = readFile(pathLavorazione + "/allineamenti.json");
+                        file = readFile(Utility.percorsoDati("allineamenti.json"));
                         if (!file) {
                             console.error("Non è stato possibile leggere il file di allineamenti in locale. Operazione annullata.");
                             return;
@@ -1957,7 +1959,7 @@ const CssFramework =
                 return result;
             }
             else{
-                var file = readFile(pathLavorazione + "/allineamenti.json");
+                var file = readFile(Utility.percorsoDati("allineamenti.json"));
                 if (!file) {
                     console.error("Non è stato possibile leggere il file di allineamenti in locale. Operazione annullata.");
                     return {
@@ -2215,38 +2217,27 @@ const CssFramework =
 
     /// Riporta dentro la griglia un elemento che ne esce da un lato. Una casella di testo prova
     /// prima a stringersi fino al limite; se cosi' andrebbe in overflow, o non le resterebbe
-    /// spazio, torna com'era e si sposta. Lo spostamento aggiorna la mappa del box, sullo stesso
-    /// asse, perche' le regole che seguono la leggono. Torna true se l'elemento e' stato spostato
-    /// di piu' di 1 mm: e' la soglia sotto la quale non si segnala.
+    /// spazio, torna com'era e si sposta. Un gruppo prova prima a stringere, con la stessa regola,
+    /// le sue caselle di testo che escono da quel lato: se cosi' rientra, non si sposta. Lo
+    /// spostamento aggiorna la mappa del box, sullo stesso asse, perche' le regole che seguono la
+    /// leggono. Torna true se l'elemento e' stato spostato di piu' di 1 mm: e' la soglia sotto la
+    /// quale non si segnala.
     riportaLatoInGriglia(box, pageItem, boxInGrigliaBounds, lato, mappaBoxOriginale) {
         var limite = boxInGrigliaBounds[lato.indice];
-        var fuori = lato.minimo
-            ? pageItem.geometricBounds[lato.indice] < limite - 0.05
-            : pageItem.geometricBounds[lato.indice] > limite + 0.05;
-        if (!fuori) {
+        if (!this.fuoriDalLato(pageItem, limite, lato)) {
             return false;
         }
 
         if (this.isTextFrame(pageItem)) {
-            var originalBounds = pageItem.geometricBounds;
-            var ridotti = originalBounds.slice();
-            ridotti[lato.indice] = lato.minimo
-                ? Math.max(originalBounds[lato.indice], limite)
-                : Math.min(originalBounds[lato.indice], limite);
-            //quello che resta fra il lato ridotto e quello opposto
-            var spazio = lato.minimo
-                ? originalBounds[lato.opposto] - ridotti[lato.indice]
-                : ridotti[lato.indice] - originalBounds[lato.opposto];
-            var cantReduce = !(spazio > 0);
-            if (!cantReduce) {
-                pageItem.geometricBounds = ridotti;
-            }
-
             //ridotto senza overflow: resta cosi', nessuno spostamento
-            if (!pageItem.properties.overflows && !cantReduce) {
+            if (this.stringiTestoAlLimite(pageItem, limite, lato)) {
                 return false;
             }
-            pageItem.geometricBounds = originalBounds;
+        }
+        //Un gruppo, per esempio il prezzo con l'info pack: le caselle che si sono strette restano
+        //strette anche se non basta, perche' accorciano lo spostamento senza overflow.
+        else if (this.stringiTestiDelGruppo(pageItem, limite, lato) && !this.fuoriDalLato(pageItem, limite, lato)) {
+            return false;
         }
 
         var etichetta = pageItem.label != "" ? Utility.parseLabel(pageItem.label) : "senza etichetta";
@@ -2276,6 +2267,109 @@ const CssFramework =
             this.annotaSpostamentoGriglia(box, pageItem, lato.direzione);
         }
         return oltreSoglia;
+    },
+
+    /// Se l'elemento esce dal lato della griglia, oltre la tolleranza di 0,05 mm.
+    fuoriDalLato(pageItem, limite, lato) {
+        return lato.minimo
+            ? pageItem.geometricBounds[lato.indice] < limite - 0.05
+            : pageItem.geometricBounds[lato.indice] > limite + 0.05;
+    },
+
+    /// Stringe una casella di testo fino al limite del lato da cui esce. Resta stretta solo se il
+    /// testo non va in overflow e le resta spazio fra il lato ridotto e quello opposto. Se fino al
+    /// limite il testo non ci sta, sui lati sinistro e destro la casella si stringe almeno fino a
+    /// dove finisce il suo testo (bordoDelTesto), sempre senza overflow: chi la contiene si spostera'
+    /// solo del resto. Altrimenti torna com'era. Torna true solo se e' arrivata al limite. Il corpo
+    /// del testo non cambia.
+    stringiTestoAlLimite(casella, limite, lato) {
+        var originalBounds = casella.geometricBounds;
+        if (this.stringiLatoFinoA(casella, originalBounds, lato, limite)) {
+            return true;
+        }
+
+        //Nel PoP Coop "al kg" a corpo 50 e' largo 43 mm in una casella di 59: fino al bordo del box
+        //ne restavano 34, e la casella tornava com'era con tutti i suoi 16 mm vuoti.
+        var bordo = this.bordoDelTesto(casella, lato);
+        if (bordo != null) {
+            this.stringiLatoFinoA(casella, originalBounds, lato, bordo);
+        }
+        return false;
+    },
+
+    /// Porta il lato della casella a valore, solo verso l'interno. Resta cosi' se le resta spazio
+    /// fra il lato ridotto e quello opposto e il testo non va in overflow; altrimenti la casella torna
+    /// ai bounds originali. Torna true se e' rimasta ridotta.
+    stringiLatoFinoA(casella, originalBounds, lato, valore) {
+        var ridotti = originalBounds.slice();
+        ridotti[lato.indice] = lato.minimo
+            ? Math.max(originalBounds[lato.indice], valore)
+            : Math.min(originalBounds[lato.indice], valore);
+        if (ridotti[lato.indice] == originalBounds[lato.indice]) {
+            return false;
+        }
+        //quello che resta fra il lato ridotto e quello opposto
+        var spazio = lato.minimo
+            ? originalBounds[lato.opposto] - ridotti[lato.indice]
+            : ridotti[lato.indice] - originalBounds[lato.opposto];
+        if (!(spazio > 0)) {
+            return false;
+        }
+
+        casella.geometricBounds = ridotti;
+        if (!casella.properties.overflows) {
+            return true;
+        }
+        casella.geometricBounds = originalBounds;
+        return false;
+    },
+
+    /// Dove finisce il testo di una casella sul lato sinistro o destro, dalle sue righe come in
+    /// getRealBounds, con il margine interno e mezzo millimetro di respiro. null sui lati alto e
+    /// basso, o se le righe non si leggono.
+    bordoDelTesto(casella, lato) {
+        if (lato.verticale) {
+            return null;
+        }
+        try {
+            var righe = casella.lines.everyItem().getElements();
+            if (!righe || righe.length == 0) {
+                return null;
+            }
+            var inset = casella.textFramePreferences.insetSpacing;
+            var insetSinistro = Number(inset[1] != null ? inset[1] : inset) || 0;
+            var insetDestro = Number(inset[3] != null ? inset[3] : inset) || 0;
+            var respiro = 0.5;
+            if (lato.minimo) {
+                return Math.min(...righe.map(r => r.horizontalOffset)) - insetSinistro - respiro;
+            }
+            return Math.max(...righe.map(r => r.endHorizontalOffset)) + insetDestro + respiro;
+        } catch (e) {
+            return null;
+        }
+    },
+
+    /// Le caselle di testo visibili di un gruppo, anche in gruppi annidati, che escono dal lato si
+    /// stringono fino al limite con stringiTestoAlLimite. Il gruppo del prezzo usciva dal box per
+    /// l'info pack, la cui casella era quasi vuota, e veniva spostato e rimpicciolito (CSF-009),
+    /// con il prezzo in overset. Torna true se almeno una casella e' rimasta stretta.
+    stringiTestiDelGruppo(gruppo, limite, lato) {
+        var figli = gruppo.allPageItems;
+        if (!figli || !(figli.length > 0)) {
+            return false;
+        }
+
+        var stretta = false;
+        for (var i = 0; i < figli.length; i++) {
+            var figlio = figli[i];
+            if (figlio.visible === false || !this.isTextFrame(figlio) || !this.fuoriDalLato(figlio, limite, lato)) {
+                continue;
+            }
+            if (this.stringiTestoAlLimite(figlio, limite, lato)) {
+                stretta = true;
+            }
+        }
+        return stretta;
     },
 
     /// Chi e' uscito dai bordi del box rientra. Su una casella di testo prova PRIMA a
@@ -2373,26 +2467,20 @@ const CssFramework =
         }
     },
 
-    /// Allontana gli elementi dalla traccia del bordo della base, di uno spessore piu' la
-    /// distanza configurata. Se la base non c'e' o non e' valida non fa niente.
-    fixCollisioneTracciaBase(box, gruppoElementi, evitaTracciaImpostazioni, lati = null) {
-        var useTextBounds = false;
-        var distance = 0;
-        if (evitaTracciaImpostazioni && evitaTracciaImpostazioni.useTextBounds != null) {
-            useTextBounds = evitaTracciaImpostazioni.useTextBounds;
-        }
-        if (evitaTracciaImpostazioni && evitaTracciaImpostazioni.distance != null && !isNaN(evitaTracciaImpostazioni.distance)) {
-            distance = evitaTracciaImpostazioni.distance;
-        }
-
-        var base = Utility.getFieldByLabel("base", box);
+    /// I20-1058: quanto la traccia del bordo entra nella base, in millimetri. InDesign misura lo
+    /// spessore in punti e geometricBounds sta sul tracciato: una traccia interna entra di tutto
+    /// lo spessore, una al centro della meta', una esterna per niente; se l'allineamento non si
+    /// legge, prudenti, della meta'. Senza base valida o senza traccia vale 0.
+    /// E' il bordo che evitano i gruppi di allineamento (fixCollisioneTracciaBase) e da cui parte
+    /// lo spazio per le foto (sistemazioneFoto.calcolaSpazioLibero).
+    insetTracciaBase(base) {
         if (base == null || !base.isValid) {
-            return;
+            return 0;
         }
 
-        var stroke = base.strokeWeight;
-        if (stroke == null || stroke <= 0) {
-            return;
+        var stroke = Number(base.strokeWeight);
+        if (!isFinite(stroke) || stroke <= 0) {
+            return 0;
         }
 
         var inset = 0;
@@ -2416,11 +2504,27 @@ const CssFramework =
             inset = stroke / 2;
         }
 
+        return inset * 0.352777778; // convertiamo da punti a mm (1pt = 0.352777778 mm)
+    },
+
+    /// Allontana gli elementi dalla traccia del bordo della base, di uno spessore piu' la
+    /// distanza configurata. Se la base non c'e' o non e' valida non fa niente.
+    fixCollisioneTracciaBase(box, gruppoElementi, evitaTracciaImpostazioni, lati = null) {
+        var useTextBounds = false;
+        var distance = 0;
+        if (evitaTracciaImpostazioni && evitaTracciaImpostazioni.useTextBounds != null) {
+            useTextBounds = evitaTracciaImpostazioni.useTextBounds;
+        }
+        if (evitaTracciaImpostazioni && evitaTracciaImpostazioni.distance != null && !isNaN(evitaTracciaImpostazioni.distance)) {
+            distance = evitaTracciaImpostazioni.distance;
+        }
+
+        var base = Utility.getFieldByLabel("base", box);
+        //I20-1058: quanto la traccia entra nella base lo dice insetTracciaBase, come al fix foto.
+        var inset = this.insetTracciaBase(base);
         if (inset <= 0) {
             return;
         }
-
-        inset = inset * 0.352777778; // convertiamo da punti a mm (1pt = 0.352777778 mm)
 
         //I20-1054: gli elementi del gruppo, con i bounds su cui si misura la traccia
         var elementiGruppo = [];
@@ -2541,41 +2645,11 @@ const CssFramework =
 
     fixCollisioneTracciaBaseSingolo(box, singolo, useTextBounds = false, distance = 0) {
         var base = Utility.getFieldByLabel("base", box);
-        if (base == null || !base.isValid) {
-            return;
-        }
-
-        var stroke = base.strokeWeight;
-        if (stroke == null || stroke <= 0) {
-            return;
-        }
-
-        var inset = 0;
-        try {
-            switch (base.strokeAlignment.toString()) {
-                case "INSIDE_ALIGNMENT":
-                    inset = stroke;
-                    break;
-                case "CENTER_ALIGNMENT":
-                    inset = stroke / 2;
-                    break;
-                case "OUTSIDE_ALIGNMENT":
-                    inset = 0;
-                    break;
-                default:
-                    inset = stroke / 2;
-                    break;
-            }
-        } catch (e) {
-            // fallback prudente: in caso di valore non leggibile
-            inset = stroke / 2;
-        }
-
+        //I20-1058: quanto la traccia entra nella base lo dice insetTracciaBase, come al fix foto.
+        var inset = this.insetTracciaBase(base);
         if (inset <= 0) {
             return;
         }
-
-        inset = inset * 0.352777778; // convertiamo da punti a mm (1pt = 0.352777778 mm)
 
         var bounds = useTextBounds ? this.getRealBounds(singolo) : singolo.geometricBounds; // [top, left, bottom, right]
 
@@ -3415,6 +3489,52 @@ const CssFramework =
 
     },
 
+    /// I20-1113: il gruppo di una regola con bloccoUnico, nella forma che restituisce
+    /// AllineamentoInternoGruppo: un livello solo con tutti gli elementi presenti e non eliminati,
+    /// nelle posizioni in cui si trovano, e il loro ingombro. Niente ricomposizione per livelli:
+    /// ancore e agganci spostano ogni elemento del livello della stessa quantita', quindi la
+    /// disposizione che hanno dato le regole precedenti (la colonna dei prezzi di un box, per
+    /// esempio) resta com'e'. Un elemento preso da piu' etichette conta una volta. Senza elementi,
+    /// nessun livello: la regola non sposta niente, come un gruppo a livelli vuoto.
+    gruppoInBlocco(gruppoElementi) {
+        var elementi = [];
+        var visti = [];
+        for (var i = 0; i < (gruppoElementi || []).length; i++) {
+            var el = gruppoElementi[i];
+            if (el == null || el.eliminato || el.item == null || visti.indexOf(el.item) >= 0) {
+                continue;
+            }
+            visti.push(el.item);
+            var b = el.item.geometricBounds;
+            elementi.push({
+                item: el.item,
+                label: Utility.parseLabel(el.label),
+                bounds: [b[0], b[1], b[2], b[3]],
+                eliminato: false
+            });
+        }
+
+        if (elementi.length === 0) {
+            return [];
+        }
+
+        return [{
+            bounds: [
+                Math.min(...elementi.map(e => e.bounds[0])),
+                Math.min(...elementi.map(e => e.bounds[1])),
+                Math.max(...elementi.map(e => e.bounds[2])),
+                Math.max(...elementi.map(e => e.bounds[3]))
+            ],
+            elementi: elementi,
+            elementiEliminati: [],
+            elementiOrdinati: [],
+            livelloEliminato: false,
+            InternalAnchor: this.enumInternalAnchor(0),
+            InternalSpacing: 0,
+            allineaATextBounds: false
+        }];
+    },
+
     /// Se una regola si applica a questo box: elementi che devono esserci, elementi che non
     /// devono esserci, contatti fra etichette e le altre condizioni descritte qui sotto.
     checkCondition(mappaBoxOriginale, itemRef, condizione, box) {
@@ -3983,7 +4103,7 @@ const CssFramework =
                         console.log(file);
                     }
                     if (err) {
-                        file = readFile(pathLavorazione + "/allineamenti.json");
+                        file = readFile(Utility.percorsoDati("allineamenti.json"));
                         if (!file) {
                             console.error("Non è stato possibile leggere il file di allineamenti in locale. Operazione annullata.");
                             return box;
@@ -4094,7 +4214,7 @@ const CssFramework =
                 });
             }
             else{
-                var file = readFile(pathLavorazione + "/allineamenti.json");
+                var file = readFile(Utility.percorsoDati("allineamenti.json"));
                 if (!file) {
                     console.error("Non è stato possibile leggere il file di allineamenti in locale. Operazione annullata.");
                     return;
@@ -4436,16 +4556,30 @@ const CssFramework =
                 isItemLinkGruppo = false;
             }
 
-            let listGruppoAllineamento = this.AllineamentoInternoGruppo(
-                box,
-                allineamentoSingolo.nomeGruppo,
-                gruppoElementi, // Create a deep copy to avoid modifying the original structure
-                JSON.parse(JSON.stringify(allineamentoSingolo.ordinamentoLivelli)),
-                allineamentoSingolo.letturaLivelli,
-                allineamentoSingolo.spacingLivelli,
-                mappaBoxOriginale, // Create a deep copy to avoid modifying the original structure
-                itemRef
-            );
+            //I20-1102: un gruppo a slot mette i suoi elementi nei riquadri del modello. Se il box non
+            //ne ha nessuno, il gruppo prosegue come gruppo a livelli, con le sue ancore.
+            if (allineamentoSingolo.slot != null && this.allineaASlot(box, allineamentoSingolo, gruppoElementi, mappaBoxOriginale, itemRef)) {
+                if (allineamentoSingolo.finalFit && allineamentoSingolo.finalFit.length > 0) {
+                    this.finalFit(mappaBoxOriginale, allineamentoSingolo.finalFit);
+                }
+                box = this.fixOverflowFromBox(boundsBoxImpaginato, box, mappaBoxOriginale);
+                continue;
+            }
+
+            //I20-1113: con bloccoUnico gli elementi non si ricompongono per livelli: restano dove sono e
+            //ancore, agganci ed evita traccia li spostano tutti insieme, come un blocco solo.
+            let listGruppoAllineamento = allineamentoSingolo.bloccoUnico === true
+                ? this.gruppoInBlocco(gruppoElementi)
+                : this.AllineamentoInternoGruppo(
+                    box,
+                    allineamentoSingolo.nomeGruppo,
+                    gruppoElementi, // Create a deep copy to avoid modifying the original structure
+                    JSON.parse(JSON.stringify(allineamentoSingolo.ordinamentoLivelli)),
+                    allineamentoSingolo.letturaLivelli,
+                    allineamentoSingolo.spacingLivelli,
+                    mappaBoxOriginale, // Create a deep copy to avoid modifying the original structure
+                    itemRef
+                );
             let allineamentiRiusciti = {
                 x: false,
                 y: false
@@ -4476,6 +4610,98 @@ const CssFramework =
         }
 
         return box;
+    },
+
+    /// I20-1102: esegue un gruppo a slot (cssFramework/slot.js). Gli elementi presenti e visibili del
+    /// gruppo, nell'ordine dei suoi livelli, vanno nei riquadri delle cornici presenti nel box, nel
+    /// loro ordine: centro su centro, e con la misura del riquadro in modalita' posizioneEDimensione.
+    /// Quelli in piu' vanno in alto a destra nel box, e il bollino lo dice. Poi i riquadri da
+    /// rimuovere si tolgono, pieni o vuoti. Falso, senza toccare niente, se il box non ha nessuna
+    /// delle cornici: allora il gruppo si allinea a livelli, come senza slot.
+    allineaASlot(box, allineamento, gruppoElementi, mappaBoxOriginale, itemRef) {
+        const slot = allineamento.slot;
+        const cornici = (Array.isArray(slot.cornici) ? slot.cornici : [])
+            .map(nome => ({ nome: nome, voce: mappaBoxOriginale[nome] }))
+            .filter(c => c.voce != null && !c.voce.eliminato && c.voce.item != null && c.voce.item.isValid)
+            .map(c => ({ nome: c.nome, bounds: c.voce.item.geometricBounds }));
+        if (cornici.length === 0) {
+            return false;
+        }
+
+        //I livelli con condizioni non vere non contano, come in AllineamentoInternoGruppo.
+        const livelli = (allineamento.ordinamentoLivelli || []).filter(livello =>
+            !(livello.listSetCondizioni && livello.listSetCondizioni.length > 0) ||
+            this.checkAllConditions(mappaBoxOriginale, itemRef, livello.listSetCondizioni, box));
+        const nomiCornici = new Set(cornici.map(c => c.nome));
+        const presenti = [];
+        (gruppoElementi || []).forEach(voce => {
+            if (voce == null || voce.eliminato || voce.item == null || !voce.item.isValid || voce.item.visible === false) {
+                return;
+            }
+            const chiave = Utility.parseLabel(voce.label);
+            if (nomiCornici.has(chiave) || presenti.some(p => p.chiave === chiave)) {
+                return;
+            }
+            presenti.push({ chiave: chiave, voce: voce, bounds: voce.item.geometricBounds });
+        });
+        const elementi = cssSlot.elementiInOrdine(livelli, presenti, (etichetta, chiave) => this.makeRegexFromGroupName(etichetta).test(chiave));
+
+        //Le eccezioni del gruppo: alcuni elementi vanno nello slot con modalita' e allineamento
+        //orizzontale propri, sotto le loro condizioni (box, formato del kit...). Vale la prima valida.
+        elementi.forEach(elemento => {
+            const eccezione = cssSlot.eccezioneDi(slot.eccezioni, elemento.chiave,
+                (etichetta, chiave) => this.makeRegexFromGroupName(etichetta).test(chiave),
+                listSetCondizioni => this.checkAllConditions(mappaBoxOriginale, itemRef, listSetCondizioni, box));
+            if (eccezione != null) {
+                elemento.modalita = eccezione.modalita || slot.modalita;
+                elemento.allineamentoOrizzontale = eccezione.allineamentoOrizzontale || "";
+            }
+        });
+
+        const piano = cssSlot.pianifica(cornici, elementi, slot.modalita, box.geometricBounds);
+        const daElemento = new Map(elementi.map(e => [e.chiave, e.voce]));
+        const piazza = (chiave, bounds, ridimensiona) => {
+            const voce = daElemento.get(chiave);
+            try {
+                if (ridimensiona) {
+                    voce.item.geometricBounds = bounds;
+                }
+                else {
+                    const attuali = voce.item.geometricBounds;
+                    voce.item.move(undefined, [bounds[1] - attuali[1], bounds[0] - attuali[0]]);
+                }
+                voce.bounds = cssSlot.boundsRelativi(voce.item.geometricBounds, box.geometricBounds);
+            }
+            catch (e) {
+                console.error("Code CSF-25 Elemento " + chiave + " non piazzato nel gruppo a slot " + allineamento.nomeGruppo + ": " + e);
+            }
+        };
+        const modalitaPerElemento = new Map(elementi.map(e => [e.chiave, cssSlot.modalitaDi(e, slot.modalita)]));
+        piano.assegnati.forEach(a => piazza(a.chiave, a.bounds, modalitaPerElemento.get(a.chiave) === cssSlot.MODALITA_POSIZIONE_E_DIMENSIONE));
+        piano.inEccesso.forEach(a => piazza(a.chiave, a.bounds, false));
+
+        if (piano.inEccesso.length > 0) {
+            addSegnalazione("Code CSF-24 Gruppo " + allineamento.nomeGruppo + ": " + elementi.length + " elementi per " + cornici.length + " slot, "
+                + piano.inEccesso.map(e => e.chiave).join(", ") + " in alto a destra nel box", "warning", 2, true, ["CSF-24", "orange"], "slot_in_eccesso_" + allineamento.nomeGruppo);
+        }
+
+        //I riquadri si tolgono tutti, anche quelli rimasti vuoti.
+        cssSlot.corniciDaRimuovere(slot).forEach(etichetta => {
+            const regex = this.makeRegexFromGroupName(etichetta);
+            for (var key in mappaBoxOriginale) {
+                const voce = mappaBoxOriginale[key];
+                if (regex.test(key) && voce != null && !voce.eliminato && voce.item != null && voce.item.isValid) {
+                    try {
+                        voce.item.remove();
+                    }
+                    catch (e) {
+                        console.error("Code CSF-25 Riquadro " + key + " del gruppo a slot " + allineamento.nomeGruppo + " non rimosso: " + e);
+                    }
+                }
+            }
+        });
+        this.updateMap(mappaBoxOriginale);
+        return true;
     },
 
     /// Fa seguire un gruppo a un altro. La struttura dell'ancora e' descritta qui sotto: per

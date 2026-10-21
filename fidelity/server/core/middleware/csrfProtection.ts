@@ -45,10 +45,14 @@ function generateCSRFToken(secret: string, tokenLength: number): string {
 }
 
 function setCSRFCookie(res: Response, config: CSRFOptions, token: string): void {
+  const production = process.env.NODE_ENV === 'production';
+  // Come il cookie di sessione (session.ts): su https il plugin InDesign chiama FP da un altro
+  // sito, e un cookie Strict non tornerebbe indietro ("Token CSRF non valido").
+  const altroSito = production && !!process.env.CLIENT_URL?.startsWith('https');
   res.cookie(config.cookieName, token, {
     httpOnly: false,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
+    secure: production,
+    sameSite: altroSito ? 'none' : 'strict',
     maxAge: config.maxAge
   });
 }

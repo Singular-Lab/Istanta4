@@ -266,6 +266,7 @@ const TestoTag = {
                 if (overflowDirectionCustom) {
                     overflowDirection.vertical = overflowDirectionCustom.vertical;
                     overflowDirection.horizontal = overflowDirectionCustom.horizontal;
+                    overflowDirection.ancoraOrizzontale = overflowDirectionCustom.ancoraOrizzontale || "";
                 }
             }
 
@@ -294,10 +295,20 @@ const TestoTag = {
             tf.contents = built.fullText;
     
             // applica stili ai range
+            //Uno stile di carattere che nel documento non c'e' non si salta in silenzio: il tratto
+            //prenderebbe la formattazione che il riquadro aveva prima (il segnaposto del modello), e la
+            //descrizione uscirebbe con gli stili spostati senza che nessuno se ne accorga. Prende lo
+            //stile nessuno, e il box riceve una segnalazione con i nomi degli stili mancanti.
+            let stiliMancanti = [];
             for (let i = 0; i < built.segments.length; i++) {
                 let seg = built.segments[i];
                 let st = this.parseStile(seg.styleName, false);
-                if (!st) continue;
+                if (!st) {
+                    if (stiliMancanti.indexOf(seg.styleName) < 0) {
+                        stiliMancanti.push(seg.styleName);
+                    }
+                    st = nessCharStyle;
+                }
     
                 try {
                     // characters.itemByRange accetta indici inclusivi
@@ -309,6 +320,12 @@ const TestoTag = {
                 } catch (e) {
                     // ignora errori sui range
                 }
+            }
+
+            if (stiliMancanti.length > 0 && typeof addSegnalazione === "function") {
+                let campo = String(tf.label || "").split("$")[0];
+                addSegnalazione("Code TTG-01 Stili di carattere non trovati nel documento: " + stiliMancanti.join(", ") + (campo !== "" ? " (campo " + campo + ")" : ""),
+                    "warning", 2, true, ["TTG-01", "orange"], "stili_mancanti_" + campo);
             }
 
             // if(built.segments.length==0 && invalidareStileDiCarattere){
@@ -377,6 +394,14 @@ const TestoTag = {
                 //ripristino larghezza originale
                 tf.geometricBounds = [tf.geometricBounds[0], tfBounds[1], tf.geometricBounds[2], tfBounds[3]];
             }
+            else {
+                //Il campo e' cresciuto in orizzontale: se la configurazione lo aggancia a un bordo, quel
+                //bordo resta dov'era nel modello (boundsOrizzontaliDopoOverflow).
+                let orizzontali = this.boundsOrizzontaliDopoOverflow(tfBounds, tf.geometricBounds, overflowDirection.ancoraOrizzontale);
+                if (orizzontali != null) {
+                    tf.geometricBounds = [tf.geometricBounds[0], orizzontali[0], tf.geometricBounds[2], orizzontali[1]];
+                }
+            }
 
             //occupiamoci di eventuali sforamenti dai bounds del box
 
@@ -419,6 +444,21 @@ const TestoTag = {
             return false;
         }
         
+    },
+
+    /// I bordi orizzontali [sinistra, destra] di un campo cresciuto in larghezza, secondo l'aggancio
+    /// della configurazione (campiSoggettiAOverflow, w): "right" tiene il bordo sinistro del modello e
+    /// cresce verso destra, "left" tiene il bordo destro e cresce verso sinistra. Senza aggancio null:
+    /// il campo resta dove l'ha lasciato l'adattamento al contenuto, come prima.
+    boundsOrizzontaliDopoOverflow(boundsOriginali, boundsNuovi, ancora) {
+        let larghezza = boundsNuovi[3] - boundsNuovi[1];
+        if (ancora === "right") {
+            return [boundsOriginali[1], boundsOriginali[1] + larghezza];
+        }
+        if (ancora === "left") {
+            return [boundsOriginali[3] - larghezza, boundsOriginali[3]];
+        }
+        return null;
     },
 
     /// Da che parte puo' crescere un campo quando il testo non ci sta, secondo la sua etichetta: la
@@ -661,6 +701,21 @@ const TestoTag = {
         return risultato;
     },
 
+    /// I20-1090: i tratti di un campo come testo con i tag, nella forma del campo compilato:
+    /// <Gruppo.Nome>testo</Gruppo.Nome>. Il nome completo dello stile, col gruppo, e' quello che
+    /// applicaTagStringToInndTextFrame sa ritrovare nel documento; un tratto senza stile resta testo.
+    stringaConTagDeiTratti(tratti) {
+        return (tratti || []).map(function (tratto) {
+            if (tratto == null) {
+                return '';
+            }
+            const contenuto = tratto.contenuto == null ? '' : String(tratto.contenuto);
+            const nome = tratto.nomeCompleto != null && String(tratto.nomeCompleto) !== '' ? String(tratto.nomeCompleto)
+                : (tratto.nome != null ? String(tratto.nome) : '');
+            return nome === '' ? contenuto : '<' + nome + '>' + contenuto + '</' + nome + '>';
+        }).join('');
+    },
+
     /// Gli stili nell'ordine in cui compaiono, uno stile ripetuto piu' avanti compare di nuovo.
     /// E' la lista con cui si riconosce lo schema della descrizione.
     stiliInOrdine(tratti) {
@@ -730,16 +785,19 @@ const TestoTag = {
     /// Lo stile di paragrafo o di carattere del documento, dato il nome. "Nome" lo cerca in
     /// radice, "Gruppo.Nome" dentro il gruppo. null se non c'e'.
     parseStile(stile, paragraph = false) {
+        //Uno stile che nel documento non c'e': InDesign restituisce comunque un oggetto, non valido
+        //ma non nullo, e chi lo usava come trovato lo assegnava a vuoto. Se lo dice non valido, null.
+        const valido = trovato => (trovato != null && trovato.isValid === false ? null : trovato);
         //I20-1012: locale. Prima era scritta senza dichiararla, e finiva fra le globali.
         let stileSplitted = stile.split(".");
         //se stileSplitted.length > 1
 
         if(stileSplitted.length == 1){
             if(paragraph){
-                return docInLavorazione.paragraphStyles.item(stileSplitted[0]);
+                return valido(docInLavorazione.paragraphStyles.item(stileSplitted[0]));
             }
             else{
-                return docInLavorazione.characterStyles.item(stileSplitted[0]);
+                return valido(docInLavorazione.characterStyles.item(stileSplitted[0]));
             }
         }
 
@@ -750,7 +808,7 @@ const TestoTag = {
                     for (var $s = 0; $s < docInLavorazione.paragraphStyleGroups.length; $s++) {
                         var gStyle = docInLavorazione.paragraphStyleGroups.item($s);
                         if (gStyle.name == stileSplitted[0])
-                            return docInLavorazione.paragraphStyleGroups.item($s).paragraphStyles.item(stileSplitted[1]);
+                            return valido(docInLavorazione.paragraphStyleGroups.item($s).paragraphStyles.item(stileSplitted[1]));
                     }
                // }  
             }
@@ -762,7 +820,7 @@ const TestoTag = {
                     for (var $s = 0; $s < docInLavorazione.characterStyleGroups.length; $s++) {
                         var gStyle = docInLavorazione.characterStyleGroups.item($s);
                         if (gStyle.name == stileSplitted[0])
-                            return docInLavorazione.characterStyleGroups.item($s).characterStyles.item(stileSplitted[1]);
+                            return valido(docInLavorazione.characterStyleGroups.item($s).characterStyles.item(stileSplitted[1]));
                     }
                 //}  
             }

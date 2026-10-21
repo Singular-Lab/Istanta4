@@ -51,7 +51,8 @@ AuthProvider.init(
     codice: {
       type: DataTypes.STRING(50),
       allowNull: false,
-      unique: true,
+      // Unicità dall'indice idx_auth_provider_codice: un unique sulla colonna
+      // fa fallire l'ALTER di Sequelize.
       comment: 'Codice univoco del provider (email_password, entra_id, google, ecc.)',
     },
     nome: {
@@ -70,10 +71,11 @@ AuthProvider.init(
       defaultValue: 'Key',
       comment: 'Nome icona Lucide oppure stringa base64 (data:image/...)',
     },
+    // Tipo di autenticazione del provider. Senza comment: su una colonna ENUM
+    // l'ALTER di Sequelize genera SQL non valido.
     tipo: {
       type: DataTypes.ENUM('internal', 'oidc', 'saml', 'custom'),
       allowNull: false,
-      comment: 'Tipo di autenticazione del provider',
     },
     ordine: {
       type: DataTypes.INTEGER,

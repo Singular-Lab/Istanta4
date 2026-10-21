@@ -5,6 +5,8 @@ import {
 } from "react-router-dom";
 
 
+import { RouteErrorFallback } from "@/components/AppErrorFallback";
+import ErrorPage from "@/components/ErrorPage";
 import NotFoundPage from "@/components/NotFoundPage";
 
 type LoaderFunctionsModule = typeof import("./loaderFunctions");
@@ -28,13 +30,11 @@ const funzioneCaricamentoDettagliOrdiniDiStampa = createLazyLoader("funzioneCari
 const funzioneCaricamentoDettagliTemplateWhatsappAdmin = createLazyLoader("funzioneCaricamentoDettagliTemplateWhatsappAdmin");
 const funzioneCaricamentoEditWorkspace = createLazyLoader("funzioneCaricamentoEditWorkspace");
 const funzioneCaricamentoGestioneApi = createLazyLoader("funzioneCaricamentoGestioneApi");
-const funzioneCaricamentoGestionePagineSingular = createLazyLoader("funzioneCaricamentoGestionePagineSingular");
 const funzioneCaricamentoGestioneSetupWhatsappSuperAdmin = createLazyLoader("funzioneCaricamentoGestioneSetupWhatsappSuperAdmin");
 const funzioneCaricamentoGestioneTemplatesWhatsappAdmin = createLazyLoader("funzioneCaricamentoGestioneTemplatesWhatsappAdmin");
 const funzioneCaricamentoGestioneWhatsappSuperAdmin = createLazyLoader("funzioneCaricamentoGestioneWhatsappSuperAdmin");
 const funzioneCaricamentoImpostazioniTipografia = createLazyLoader("funzioneCaricamentoImpostazioniTipografia");
 const funzioneCaricamentoInvioCampagnaWhatsapp = createLazyLoader("funzioneCaricamentoInvioCampagnaWhatsapp");
-const funzioneCaricamentoKitPop = createLazyLoader("funzioneCaricamentoKitPop");
 const funzioneCaricamentoMaterialiAttivi = createLazyLoader("funzioneCaricamentoMaterialiAttivi");
 const funzioneCaricamentoMaterialiInCorso = createLazyLoader("funzioneCaricamentoMaterialiInCorso");
 const funzioneCaricamentoMaterialiPromo = createLazyLoader("funzioneCaricamentoMaterialiPromo");
@@ -105,6 +105,21 @@ const routes: RouteObject[] = [
       return { Component: MenaboPromoPage };
     },
   },
+  // Anteprima tracciato full-screen: fuori dal layout Echo, griglia stile Excel.
+  {
+    path: "/promozioni/in-corso/dettagli/:idPromo/anteprima-tracciato/:idTracciato",
+    lazy: async () => {
+      const { default: DettaglioAnteprimaTracciato } = await import("@/pages/DettaglioAnteprimaTracciato");
+      return { Component: DettaglioAnteprimaTracciato };
+    },
+  },
+  {
+    path: "/promozioni/storico/dettagli/:idPromo/anteprima-tracciato/:idTracciato",
+    lazy: async () => {
+      const { default: DettaglioAnteprimaTracciato } = await import("@/pages/DettaglioAnteprimaTracciato");
+      return { Component: DettaglioAnteprimaTracciato };
+    },
+  },
 
   // INDEX: redirect con loader (niente <Navigate/>)
   {
@@ -121,14 +136,26 @@ const routes: RouteObject[] = [
         Component: Layout,
       };
     },
-    children: [
+    // Route senza path che avvolge le pagine: l'errore di loader/render compare nell'Outlet di Echo,
+    // con il menu visibile. Gli errori del layout stesso risalgono al fallback impostato in fondo.
+    children: [{
+      errorElement: <ErrorPage />,
+      children: [
       {
         path: "barcode-reader",
         lazy: async () => {
-          const { default: BarCodeReaderComponent } = await import(
-            "@/pages/BarCodeReader"
-          );
-          return { Component: BarCodeReaderComponent };
+          const [{ default: BarCodeReaderComponent }, { GestioneReferenzeProvider }] = await Promise.all([
+            import("@/pages/BarCodeReader"),
+            import("@/context/GestioneReferenzeContext"),
+          ]);
+          // Fuori da WebPliant manca il provider che BoxRef usa per mostrare la referenza scansionata
+          return {
+            Component: () => (
+              <GestioneReferenzeProvider>
+                <BarCodeReaderComponent />
+              </GestioneReferenzeProvider>
+            ),
+          };
         },
       },
       {
@@ -299,16 +326,9 @@ const routes: RouteObject[] = [
         },
       },
       {
+        // La vecchia panoramica lavorava su dati finti: tutto ciò che mostrava è nelle pagine in corso e storico
         path: "promozioni",
-        lazy: async () => {
-          const { default: Promozioni } = await import(
-            "@/pages/Promozioni"
-          );
-          return {
-            Component: Promozioni,
-            // loader: funzioneLavorazioniInCorso,
-          };
-        },
+        loader: () => redirect("/promozioni/in-corso"),
       },
       {
         path: "report/tracciati",
@@ -420,14 +440,13 @@ const routes: RouteObject[] = [
         },
       },
       {
+        // Il kit POP usa la stessa pagina dei kit: DettaglioKit gestisce anche il POP
         path: "promozioni/in-corso/dettagli/:idPromo/pop/:idKit",
         lazy: async () => {
-          const { default: KitPopDettaglio } = await import(
-            "@/pages/KitPopDettaglio"
-          );
+          const { default: DettaglioKit } = await import("@/pages/DettaglioKit");
           return {
-            Component: KitPopDettaglio,
-            loader: funzioneCaricamentoKitPop,
+            Component: DettaglioKit,
+            loader: funzioneDettagliKit,
           };
         },
       },
@@ -444,18 +463,6 @@ const routes: RouteObject[] = [
         },
       },
       {
-        path: "promozioni/in-corso/dettagli/:idPromo/anteprima-tracciato/:idTracciato",
-        lazy: async () => {
-          const { default: DettaglioAnteprimaTracciato } = await import(
-            "@/pages/DettaglioAnteprimaTracciato"
-          );
-          return {
-            Component: DettaglioAnteprimaTracciato,
-            loader: funzioneDettagliLavorazioniInCorso,
-          };
-        },
-      },
-      {
         path: "promozioni/storico",
         lazy: async () => {
           const { default: StoricoLavorazioni } = await import(
@@ -464,18 +471,6 @@ const routes: RouteObject[] = [
           return {
             Component: StoricoLavorazioni,
             loader: funzioneCaricamentoStoricoLavorazioni,
-          };
-        },
-      },
-      {
-        path: "promozioni/storico/dettagli/:idPromo/anteprima-tracciato/:idTracciato",
-        lazy: async () => {
-          const { default: DettaglioAnteprimaTracciato } = await import(
-            "@/pages/DettaglioAnteprimaTracciato"
-          );
-          return {
-            Component: DettaglioAnteprimaTracciato,
-            loader: funzioneDettagliLavorazioniInCorso,
           };
         },
       },
@@ -588,18 +583,6 @@ const routes: RouteObject[] = [
           return { Component: PaginaDettaglioCombinazione };
         },
       },
-      // {
-      //   path: "gestione-pagine-singular",
-      //   lazy: async () => {
-      //     const { default: GestionePagineSingular } = await import(
-      //       "@/pages/GestionePagineSingular"
-      //     );
-      //     return {
-      //       Component: GestionePagineSingular,
-      //       loader: funzioneCaricamentoGestionePagineSingular,
-      //     };
-      //   },
-      // },
       {
         path: "webliant/impostazioni-webpliant",
         lazy: async () => {
@@ -947,15 +930,6 @@ const routes: RouteObject[] = [
         },
       },
       {
-        path: "whatsapp/business-chat",
-        lazy: async () => {
-          const { default: BusinessChatWhatsapp } = await import(
-            "@/pages/BusinessChatWhatsapp"
-          );
-          return { Component: BusinessChatWhatsapp };
-        },
-      },
-      {
         path: "whatsapp/gestione-whatsapp-superadmin",
         lazy: async () => {
           const { default: GestioneWhatsappSuperAdmin } = await import(
@@ -1044,6 +1018,7 @@ const routes: RouteObject[] = [
         errorElement: <NotFoundPage />,
       },
     ],
+    }],
   },
 
   // NODO /webpliant con error boundary e catch-all locale
@@ -1133,13 +1108,6 @@ const routes: RouteObject[] = [
     },
   },
   {
-    path: "/landing-page",
-    lazy: async () => {
-      const { default: LandingPage } = await import("@/pages/LandingPage");
-      return { Component: LandingPage };
-    },
-  },
-  {
     path: "login",
     lazy: async () => {
       const { default: HubLogin } = await import("@/pages/HubLogin");
@@ -1167,22 +1135,6 @@ const routes: RouteObject[] = [
       return { Component: ResetPassword };
     },
   },
-  {
-    path: "register",
-    lazy: async () => {
-      const { default: Register } = await import("@/pages/Register");
-      return { Component: Register };
-    },
-  },
-  {
-    path: "whatsapp/confirm-opt-in/:ctx",
-    lazy: async () => {
-      const { default: ConfirmOptIn } = await import(
-        "@/pages/ConfirmOptInWhatsapp"
-      );
-      return { Component: ConfirmOptIn, loader: async () => null };
-    }
-  },
   // {
   //   path: "*",
   //   loader: throw404,
@@ -1190,6 +1142,9 @@ const routes: RouteObject[] = [
   // },
 ];
 
-// routes = addErrorElementToRoutes(routes);
+// Route di primo livello (pubbliche e layout Echo): fallback che non chiama /menu/me
+routes.forEach((route) => {
+  route.errorElement ??= <RouteErrorFallback />;
+});
 
 export default routes;

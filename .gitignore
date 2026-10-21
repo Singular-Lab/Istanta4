@@ -77,6 +77,9 @@ ACCESSI.txt
 ADMINER.txt
 appsettings*.json
 **/ipconfig*.json
+# I20-1064: il modello neutro da cui monta-cliente.sh crea l'ipconfig di un cliente. Non ha
+# indirizzi, quindi sta in git; gli ipconfig veri, plugin/Agenzie/<Cliente>/ipconfig.json, no.
+!plugin/Agenzie/ipconfig.template.json
 *.env
 *.pre-*
 *.prima-*
@@ -98,9 +101,12 @@ credentials.local.*
 *.cer
 
 # Il cliente montato su QUESTA macchina: non passa da git.
-# Ogni postazione monta un cliente diverso, quindi questo file cambierebbe a ogni
-# cambio cliente sporcando i diff di tutti. La fonte restano gli archivi, che sono
-# in git: plugin/Agenzie/<Cliente>/custom.js. Lo copia in radice ./monta-cliente.sh.
+# I20-1064: il Plugin non usa piu' una copia in radice. plugin/clienteAttivo.json, scritto da
+# ./monta-cliente.sh, indica l'ipconfig del cliente, e l'ipconfig il suo custom.js d'archivio,
+# plugin/Agenzie/<Cliente>/custom.js, che e' in git e si modifica direttamente.
+# plugin/custom.js resta ignorato: una vecchia copia rimasta su una postazione non deve finire
+# in un commit.
+plugin/clienteAttivo.json
 # I20-997: Istanta/wwwroot/js/agenzia.js non esiste piu'. Lo script del front-end
 # lo serve il server leggendo Istanta/ScriptAgenzia/<cliente>/agenzia.js, quindi
 # non c'e' piu' nessuna copia in radice da ignorare.

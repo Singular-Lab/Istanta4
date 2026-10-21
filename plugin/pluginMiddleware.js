@@ -268,7 +268,8 @@ const pluginMiddleware = {
         }
 
         const overflowInstructions = me.customPluginDB?.campiSoggettiAOverflow || [];
-        const overflowInstruction = overflowInstructions.find(c => Utility.parseLabel(c.label) == Utility.parseLabel(field.label));
+        const tipoLavorazione = me.tipoLavorazioneCorrente();
+        const overflowInstruction = overflowInstructions.find(c => Utility.parseLabel(c.label) == Utility.parseLabel(field.label) && me.voceDiOverflowValida(c, tipoLavorazione));
 
         if (overflowInstruction == null) {
             return null;
@@ -385,17 +386,44 @@ const pluginMiddleware = {
 
         const overflowInstructions = me.customPluginDB?.campiSoggettiAOverflow || [];
         const labelTf = Utility.parseLabel(tf.label);
+        const tipoLavorazione = me.tipoLavorazioneCorrente();
 
-        const found = overflowInstructions.find(o => Utility.parseLabel(o.label) === labelTf);
+        const found = overflowInstructions.find(o => Utility.parseLabel(o.label) === labelTf && me.voceDiOverflowValida(o, tipoLavorazione));
 
         if (found) {
+            //ancoraOrizzontale: "right" il campo cresce a destra dal suo bordo sinistro, "left" il
+            //contrario; vuota, l'orizzontale non e' agganciata (TestoTag).
             return {
                 vertical: !!found.h,
-                horizontal: !!found.w
+                horizontal: !!found.w,
+                ancoraOrizzontale: found.w || ""
             };
         }
 
         return me.getDefaultOverflowDirection();
+    },
+
+    /// Una voce di campiSoggettiAOverflow vale nella lavorazione corrente se non ha tipiLavorazione,
+    /// o se tra i suoi tipi (1 volantino, 2 PoP) c'e' quello corrente. Con il tipo sconosciuto vale
+    /// solo una voce senza tipi.
+    voceDiOverflowValida(voce, tipoLavorazione) {
+        const tipi = voce != null && Array.isArray(voce.tipiLavorazione) ? voce.tipiLavorazione : [];
+        if (tipi.length === 0) {
+            return true;
+        }
+        return tipoLavorazione != null && tipi.some(t => Number(t) === Number(tipoLavorazione));
+    },
+
+    /// Il tipo della lavorazione aperta (1 volantino, 2 PoP), o null se non si conosce.
+    tipoLavorazioneCorrente() {
+        try {
+            return typeof ficoProcess !== "undefined" && ficoProcess != null && typeof ficoProcess.getTipoLavorazioneCorrente === "function"
+                ? ficoProcess.getTipoLavorazioneCorrente()
+                : null;
+        }
+        catch (e) {
+            return null;
+        }
     },
 
     getDefaultOverflowDirection() {
@@ -615,6 +643,62 @@ const pluginMiddleware = {
         }
 
         return null;
+    },
+
+    /// I20-1082: se le decisioni sulle foto extra prese solo per una lavorazione volantino chiedono se
+    /// valgono solo per il volantino o anche per i POP (Coop). La chiave sta nella configurazione del
+    /// cliente sul server: se arriva si legge, altrimenti si ignora (falso). Niente ripiego su custom.js.
+    getChiediAmbitoDecisioniLavorazione() {
+        let me = this;
+
+        if (me.callCustom) {
+            if (typeof customAgenzia !== "undefined" && customAgenzia != null && typeof customAgenzia.chiediAmbitoDecisioniLavorazione === "boolean") {
+                return customAgenzia.chiediAmbitoDecisioniLavorazione;
+            }
+            return false;
+        }
+
+        const valore = me.customPluginDB?.chiediAmbitoDecisioniLavorazione;
+        return typeof valore === "boolean" ? valore : false;
+    },
+
+    /// Contenitori del noRender: per ogni campo, il contenitore del box che va nascosto con lui e che
+    /// la segnalazione indica quando manca insieme al campo (Coop: txt_sconto -> box_sconto). La
+    /// chiave sta nella configurazione del cliente sul server, come chiediAmbitoDecisioniLavorazione;
+    /// senza, o se non e' una mappa di testi, nessun contenitore.
+    getContenitoriNoRender() {
+        let me = this;
+
+        const valore = me.callCustom
+            ? (typeof customAgenzia !== "undefined" && customAgenzia != null ? customAgenzia.contenitoriNoRender : null)
+            : me.customPluginDB?.contenitoriNoRender;
+        const contenitori = {};
+        if (valore == null || typeof valore !== "object" || Array.isArray(valore)) {
+            return contenitori;
+        }
+        Object.keys(valore).forEach(campo => {
+            if (campo !== "" && typeof valore[campo] === "string" && valore[campo] !== "") {
+                contenitori[campo] = valore[campo];
+            }
+        });
+        return contenitori;
+    },
+
+    /// I20-1088: se un meta dei testi del box non si segnala da verificare per la sola versione del
+    /// record cambiata (la lista ricaricata con lo stesso valore). Come chiediAmbitoDecisioniLavorazione:
+    /// la chiave sta nella configurazione del cliente sul server, e senza vale falso (si controlla).
+    getIgnoraVersioneMeta() {
+        let me = this;
+
+        if (me.callCustom) {
+            if (typeof customAgenzia !== "undefined" && customAgenzia != null && typeof customAgenzia.ignoraVersioneMeta === "boolean") {
+                return customAgenzia.ignoraVersioneMeta;
+            }
+            return false;
+        }
+
+        const valore = me.customPluginDB?.ignoraVersioneMeta;
+        return typeof valore === "boolean" ? valore : false;
     },
 
     /// NOTA DI DISEGNO (I20-1002): questa e setBolloFOTONOFOUND hanno la forma a due rami come

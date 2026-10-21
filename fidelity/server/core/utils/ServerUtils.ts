@@ -166,7 +166,6 @@ class ServerUtils {
                     publicKey: string,
                     privateKey: string
                 }
-                log.info(Colorize.bgGreen(content));
                 if (content.esito) {
                     if (content.privateKey &&
                         content.privateKey !== utente.privatekey_utenti &&
@@ -174,7 +173,6 @@ class ServerUtils {
                         content.privateKey !== null) {
                         utente.privatekey_utenti = content.privateKey;
                         await utente.save({});
-                        log.info(Colorize.bgGreen(utente.privatekey_utenti));
                     }
                     // Salva il jar aggiornato dopo la chiamata, solo se è una sessione esterna
                     if (req.session.isExternalAuth) {
@@ -196,10 +194,11 @@ class ServerUtils {
      * @param {HttpMethod} method - The HTTP method to use for the request.
      * @param {any} data - The data to send in the body of the request.
      * @param {Record<string, string>} [customHeaders] - Optional additional headers to send with the request.
+     * @param {number} [timeoutMs] - Timeout di questa chiamata; senza, FICO_API_TIMEOUT_MS o 10 minuti.
      * @returns {Promise<ApiResponse<T>>} - A promise that resolves to the API response.
      * @throws Will throw an error if the request fails or the response is not ok.
      */
-    static async sendToFICOApi<T>(req: Request, url: string, method: HttpMethod | string, data: any, customHeaders?: Record<string, string>): Promise<ApiResponse<T>> {
+    static async sendToFICOApi<T>(req: Request, url: string, method: HttpMethod | string, data: any, customHeaders?: Record<string, string>, timeoutMs?: number): Promise<ApiResponse<T>> {
         const jar = await this.getRequestCookieJar(req);
 
         const fetchWithCookies = fetchCookie(fetch, jar);
@@ -230,7 +229,9 @@ class ServerUtils {
             const options: RequestInit = {
                 method: method,
                 headers: headers,
-                body: method !== 'GET' && method !== 'HEAD' ? (data instanceof FormData ? data : JSON.stringify(data)) : undefined
+                body: method !== 'GET' && method !== 'HEAD' ? (data instanceof FormData ? data : JSON.stringify(data)) : undefined,
+                // Default alto: Istanta/Olimpo possono fare trasferimenti FTP lunghi. Il timeout finisce nel catch (status 0)
+                signal: AbortSignal.timeout(timeoutMs ?? (Number(process.env.FICO_API_TIMEOUT_MS) || 600_000))
             };
             //console.log(Colorize.bgBlue(url));
             // Usa il fetch con il cookie jar isolato.
@@ -252,7 +253,15 @@ class ServerUtils {
             // Handle text/JSON responses
             const responseText = await response.text();
             if (!response.ok) {
-                throw new Error(responseText || 'Errore durante la comunicazione con l\'altra API');
+                // Stato reale e corpo interpretato: Istanta motiva gli errori nel JSON (es. 401 no_login)
+                let corpoErrore: any = null;
+                try { corpoErrore = responseText ? JSON.parse(responseText) : null; } catch { /* corpo non JSON */ }
+                return {
+                    data: corpoErrore,
+                    status: response.status,
+                    statusText: responseText || response.statusText,
+                    headers: response.headers as any
+                };
             }
 
             // Try to parse as JSON, but handle PDF content gracefully
@@ -285,9 +294,10 @@ class ServerUtils {
             if (typeof error == "string") {
                 error = JSON.parse(error);
             }
+            // Nessuna risposta HTTP (rete, passaporto Olimpo): status 0, il motivo in statusText
             return {
                 data: null as any,
-                status: error.code || 500,
+                status: 0,
                 statusText: error.message,
             } as ApiResponse<T>;
         }
@@ -328,7 +338,6 @@ class ServerUtils {
         try {
             // Ottieni il token usando la funzione esistente
             const publicKey = await this.getPassportFromOlympo(req);
-            log.info(Colorize.bgGreen(publicKey));
 
             if (publicKey === "") {
                 throw this.createErrorObject("Chiave pubblica non fornita", HttpStatusCode.BAD_REQUEST, { data });
@@ -364,10 +373,10 @@ class ServerUtils {
         } catch (error: any) {
             log.error(Colorize.bgRed(error.message));
 
-            // Gestione errori Axios
+            // Gestione errori Axios: il corpo di Istanta (es. { esito, error }) va conservato
             if (error.response) {
                 return {
-                    data: null as any,
+                    data: (error.response.data ?? null) as any,
                     status: error.response.status,
                     statusText: error.response.statusText || error.message,
                 } as ApiResponse<T>;
@@ -384,7 +393,7 @@ class ServerUtils {
 
             return {
                 data: null as any,
-                status: error.code || error.status || 500,
+                status: 0, // nessuna risposta HTTP, come in sendToFICOApi
                 statusText: error.message || 'Errore durante la comunicazione con l\'API',
             } as ApiResponse<T>;
         }
@@ -438,7 +447,6 @@ class ServerUtils {
         try {
             // Ottieni il token usando la funzione esistente
             const publicKey = await this.getPassportFromOlympo(req);
-            log.info(Colorize.bgGreen(publicKey));
 
             if (publicKey === "") {
                 throw this.createErrorObject("Chiave privata non fornita", HttpStatusCode.BAD_REQUEST, { url, data, customHeaders });
@@ -505,7 +513,7 @@ class ServerUtils {
 
             return {
                 data: null as any,
-                status: error.code || error.status || 500,
+                status: 0, // nessuna risposta HTTP, come in sendToFICOApi
                 statusText: error.message || 'Errore durante la comunicazione con l\'API',
             } as ApiResponse<T>;
         }

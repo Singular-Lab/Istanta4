@@ -1,9 +1,7 @@
-import * as dotenv from 'dotenv';
 import { Sequelize } from 'sequelize';
 import { Colorize } from '../../../lib/Colorize';
 import config from '../config/index';
 import { log } from '../logger';
-dotenv.config();
 
 const parsePositiveInt = (value: string | undefined, fallback: number): number => {
   const parsedValue = Number.parseInt(value ?? '', 10);
@@ -97,6 +95,32 @@ export const initializeDatabase = async (autoSync: boolean = DEFAULT_AUTO_SYNC) 
   } catch (error) {
     log.error("Unable to connect to PostgreSQL", { error });
     throw error;
+  }
+};
+
+/**
+ * Allinea lo schema del DB ai modelli all'avvio del server, come `yarn models:sync`: con PM2
+ * nessun altro lo esegue e colonne o valori di enum nuovi mancherebbero. Va chiamata una sola
+ * volta, prima di avviare i worker. DB_SYNC_ON_START=false la disattiva.
+ * Un DB irraggiungibile blocca l'avvio; il fallimento di singoli modelli no, ma resta nei log.
+ */
+export const sincronizzaSchemaAllAvvio = async (): Promise<void> => {
+  if (process.env.DB_SYNC_ON_START === 'false') {
+    log.info("Sync dello schema all'avvio disattivato (DB_SYNC_ON_START=false)");
+    return;
+  }
+
+  await sequelize.authenticate();
+  const { modelliManager } = await import('../models');
+  const risultati = await modelliManager.sincronizzaTuttiIModelli({ alter: true, force: false, logging: false });
+
+  const falliti = risultati.filter((r) => !r.successo);
+  if (falliti.length > 0) {
+    log.error(`Schema del DB non allineato: sync fallito per ${falliti.length} modelli`, null, {
+      modelli: falliti.map((r) => `${r.modello}: ${r.errore ?? 'errore sconosciuto'}`)
+    });
+  } else {
+    log.info(`Schema del DB allineato ai modelli (${risultati.length} modelli)`);
   }
 };
 

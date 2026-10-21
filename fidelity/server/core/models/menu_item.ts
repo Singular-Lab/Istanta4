@@ -9,6 +9,7 @@ class MenuItemClass extends Model<MenuItemAttributes, MenuItemCreationAttributes
   declare id_menu_item: string;
   declare tipo_utente: TIPO_UTENTI;
   declare ruolo_gdo?: string | null;
+  declare id_ruolo_utente_gdo?: string | null;
   declare titolo: string;
   declare tipo: string;
   declare icona?: string | null;
@@ -32,8 +33,13 @@ const MenuItem = sequelize.define<MenuItemClass>("menu_items", {
     type: DataTypes.ENUM(...Object.values(TIPO_UTENTI)),
     allowNull: false,
   },
+  // Chiave testuale storica ("GDO_ADMIN"): resta per compatibilità, le letture usano id_ruolo_utente_gdo.
   ruolo_gdo: {
     type: DataTypes.STRING(100),
+    allowNull: true,
+  },
+  id_ruolo_utente_gdo: {
+    type: DataTypes.UUID,
     allowNull: true,
   },
   titolo: {
@@ -91,6 +97,10 @@ const MenuItem = sequelize.define<MenuItemClass>("menu_items", {
     {
       fields: ['tipo_utente', 'ruolo_gdo', 'ordinamento'],
       name: 'menu_items_order',
+    },
+    {
+      fields: ['tipo_utente', 'id_ruolo_utente_gdo', 'ordinamento'],
+      name: 'menu_items_ruolo_order',
     },
   ],
 });

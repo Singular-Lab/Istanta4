@@ -12,6 +12,7 @@ interface EmptyStateProps {
   description: string;
   buttonText?: string;
   onButtonClick?: () => void;
+  buttonIcon?: keyof typeof icons;
   className?: string;
   iconColor?: string;
 }
@@ -22,6 +23,7 @@ const EmptyState: React.FC<EmptyStateProps> = ({
   description,
   buttonText,
   onButtonClick,
+  buttonIcon = "RefreshCw",
   className = "",
   iconColor = "text-primary",
 }) => {
@@ -46,7 +48,7 @@ const EmptyState: React.FC<EmptyStateProps> = ({
           className={styleEmptyState["empty-state__button"]}
         >
           <Lucide
-            icon="RefreshCw"
+            icon={buttonIcon}
             className={styleEmptyState["empty-state__button-icon"]}
           />
           {buttonText}

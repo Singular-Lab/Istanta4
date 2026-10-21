@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import pino from 'pino';
 import pinoHttp from 'pino-http';
+import pretty from 'pino-pretty';
 import config from '../config';
 
 const isProd = config.NODE_ENV === 'production';
@@ -11,8 +12,11 @@ const MAX_STACK_LENGTH = 1200;
 type LogContext = Record<string, unknown> & { context?: string };
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
+// I console.log con Colorize portano i codici colore dentro il testo
+const CODICI_ANSI = /\x1b\[[0-9;]*m/g;
+
 function toSingleLine(value: string): string {
-  return value.replace(/\r?\n+/g, ' | ').replace(/\s+/g, ' ').trim();
+  return value.replace(CODICI_ANSI, '').replace(/\r?\n+/g, ' | ').replace(/\s+/g, ' ').trim();
 }
 
 function normalizeMessage(msg: string): string {
@@ -96,16 +100,37 @@ function normalizeContext(ctx?: LogContext, fallbackContext = DEFAULT_CONTEXT): 
   });
 }
 
-const transport = pino.transport({
-  target: 'pino-pretty',
-  options: {
-    colorize: !isProd,
-    translateTime: 'SYS:yyyy-mm-dd HH:MM:ss.l',
-    levelFirst: true,
-    singleLine: true,
-    ignore: 'hostname',
-    messageFormat: '[{service}] {if context}[{context}] {end}{msg}',
-  }
+// Gia scritti in testa alla riga da pino-pretty, o sempre uguali: non si ripetono fra i campi
+const CAMPI_DI_RIGA = new Set(['level', 'time', 'pid', 'hostname', 'service', 'context']);
+
+function formattaValore(valore: unknown): string {
+  if (typeof valore === 'string') return valore === '' || /[\s"=]/.test(valore) ? JSON.stringify(valore) : valore;
+  if (valore !== null && typeof valore === 'object') return JSON.stringify(valore);
+  return String(valore);
+}
+
+/**
+ * "[contesto] messaggio · chiave=valore …" al posto del JSON in coda alla riga.
+ * Il contesto predefinito (Application) e il servizio non dicono niente e non si scrivono.
+ */
+export function formattaRiga(riga: Record<string, unknown>, messageKey = 'msg'): string {
+  const contesto = typeof riga.context === 'string' && riga.context !== DEFAULT_CONTEXT ? `[${riga.context}] ` : '';
+  const campi = Object.entries(riga)
+    .filter(([chiave, valore]) => chiave !== messageKey && !CAMPI_DI_RIGA.has(chiave) && valore !== undefined)
+    .map(([chiave, valore]) => `${chiave}=${formattaValore(valore)}`);
+  const messaggio = String(riga[messageKey] ?? '').replace(CODICI_ANSI, '');
+  return `${contesto}${messaggio}${campi.length ? ` · ${campi.join(' ')}` : ''}`;
+}
+
+// pino-pretty nel processo, non in un worker: solo cosi accetta una funzione per formattare la riga.
+// ponytail: la formattazione gira nel processo principale; trasporto con un modulo dedicato se il volume di log cresce molto
+const destinazione = pretty({
+  colorize: !isProd,
+  translateTime: 'SYS:yyyy-mm-dd HH:MM:ss.l',
+  levelFirst: true,
+  ignore: 'pid,hostname',
+  hideObject: true,
+  messageFormat: (riga, messageKey) => formattaRiga(riga as Record<string, unknown>, messageKey),
 });
 
 const logger = pino(
@@ -116,7 +141,7 @@ const logger = pino(
     },
     timestamp: pino.stdTimeFunctions.isoTime,
   },
-  transport
+  destinazione
 );
 
 let isConsoleBridgeInstalled = false;

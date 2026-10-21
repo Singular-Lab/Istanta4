@@ -8,8 +8,10 @@ import { FormInput, FormLabel, FormSelect, FormTextarea, InputGroup } from '../.
 import LoadingIcon from '../../components/Base/LoadingIcon';
 import Lucide from '../../components/Base/Lucide';
 import PageHeader from '../../components/Base/PageHeader';
+import { useNotification } from '../../context/NotificationContext';
 
 const GestioneSetupWhatsappSuperAdmin: React.FC = () => {
+    const { showNotification } = useNotification();
     const { dettagliGDO, templateOptions: loaderTemplateOptions } = useLoaderData<{
         dettagliGDO: {
             id: string;
@@ -56,7 +58,7 @@ const GestioneSetupWhatsappSuperAdmin: React.FC = () => {
 
     const handleSyncTemplates = async () => {
         if (!dettagliGDO?.id && !dettagliGDO?.id_gdo) {
-            alert("ID GDO non disponibile: impossibile sincronizzare.");
+            showNotification("ID GDO non disponibile: impossibile sincronizzare.", { variant: 'warning' });
             return;
         }
         try {
@@ -77,7 +79,7 @@ const GestioneSetupWhatsappSuperAdmin: React.FC = () => {
     return (
         <Fragment>
             <PageHeader
-                title={`Gestione Whatsapp per ${dettagliGDO?.nome}`}
+                title={"Gestione Whatsapp" + (dettagliGDO?.nome ? ` per ${dettagliGDO.nome}` : "")}
                 description="Gestisci il setup per il cliente"
             />
 

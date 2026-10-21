@@ -88,11 +88,12 @@ HubService.init(
       allowNull: false,
       comment: 'URL destinazione del servizio',
     },
+    // Tipo di redirect (internal = React Router, external = nuova finestra).
+    // Senza comment: su una colonna ENUM l'ALTER di Sequelize genera SQL non valido.
     tipo_url: {
       type: DataTypes.ENUM('internal', 'external', 'external_fico'),
       allowNull: false,
       defaultValue: 'internal',
-      comment: 'Tipo di redirect (internal = React Router, external = nuova finestra)',
     },
     attivo: {
       type: DataTypes.BOOLEAN,

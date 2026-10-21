@@ -1,5 +1,5 @@
 import { STATO_PROMO } from '../../../lib/enums';
-import type { ContextLavorazione } from '../../../lib/types';
+import type { ContextLavorazione, PromoMeta } from '../../../lib/types';
 
 export type PromoContextValue = string | number | boolean | null | Array<string | number | boolean>;
 
@@ -34,6 +34,8 @@ export interface UpdatePromoDTO {
   offset_visibilita?: number;
   stato?: STATO_PROMO;
   context?: PromoContextItem[];
+  /** Si aggiornano solo le chiavi presenti; una chiave a null si rimuove. */
+  meta?: PromoMeta;
   gdo?: string;
 }
 
@@ -50,6 +52,7 @@ export interface PromoResponseDTO {
   offset_visibilita: number;
   stato: STATO_PROMO;
   context: PromoContextItem[];
+  meta?: PromoMeta;
   gdo: string;
   is_deletable?: boolean;
   numero_kit_collegati?: number;

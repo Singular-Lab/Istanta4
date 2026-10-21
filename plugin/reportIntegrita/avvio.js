@@ -332,8 +332,112 @@ function etichettaSegnalazione(label, traduzioni) {
     return traduzione + " (" + nome + ")";
 }
 
+//I20-1074: le vigilanze di fila con la selezione vuota dopo cui la scheda aperta in vista
+//controllata si chiude come con la X. Una sola potrebbe essere il box che Reimpagina sta rifacendo,
+//che per un momento non e' selezionato.
+const VIGILANZE_DESELEZIONE = 2;
+
+/// I20-1074: il conto delle vigilanze di fila in cui nulla e' selezionato, e se e' ora di chiudere
+/// la scheda in vista controllata come con la X. Mentre la scheda lavora o si riaggancia a un box
+/// rifatto non si conta: il conto riparte da zero.
+function contoDeselezione(contoPrecedente, quantiSelezionati, inPausa) {
+    if (inPausa) {
+        return { conto: 0, chiudi: false };
+    }
+    const conto = quantiSelezionati > 0 ? 0 : (contoPrecedente > 0 ? contoPrecedente : 0) + 1;
+    return { conto: conto, chiudi: conto >= VIGILANZE_DESELEZIONE };
+}
+
+/// I20-1121: con il report affiancato, "Trova" seleziona il box senza vista controllata. Il conto
+/// delle vigilanze di fila in cui l'operatore non e' piu' sul box (selezione altrove o vuota), e se
+/// e' ora di ricontrollare la riga. Come per la scheda dal report bastano due vigilanze: una sola
+/// potrebbe essere il box che Reimpagina sta rifacendo. Mentre si lavora il conto riparte da zero.
+function contoAbbandono(contoPrecedente, sulBox, inPausa) {
+    if (inPausa) {
+        return { conto: 0, ricontrolla: false };
+    }
+    const conto = sulBox ? 0 : (contoPrecedente > 0 ? contoPrecedente : 0) + 1;
+    return { conto: conto, ricontrolla: conto >= VIGILANZE_DESELEZIONE };
+}
+
+/// I20-1121: se l'operatore e' ancora sul box seguito: fra gli oggetti selezionati c'e' il box o
+/// qualcosa che ci sta dentro (una cornice del gruppo, il testo in una sua cornice). Si risale da
+/// ogni oggetto al gruppo che lo contiene: dal testo alla sua cornice (parentTextFrames), dagli
+/// altri al genitore (parent). Senza id del box (il box non c'e' piu') l'operatore non ci puo' essere.
+function selezioneSulBox(selezione, idBox, passiMassimi = 12) {
+    if (idBox == null || selezione == null || !(selezione.length > 0)) {
+        return false;
+    }
+
+    for (let i = 0; i < selezione.length; i++) {
+        let elemento = selezione[i];
+        for (let passo = 0; passo < passiMassimi && elemento != null; passo++) {
+            let id = null;
+            try {
+                id = elemento.id;
+            }
+            catch (err) {
+                id = null;
+            }
+            if (id != null && id == idBox) {
+                return true;
+            }
+
+            let cornici = null;
+            try {
+                cornici = elemento.parentTextFrames;
+            }
+            catch (err) {
+                cornici = null;
+            }
+
+            try {
+                elemento = cornici != null && cornici.length > 0 ? cornici[0] : elemento.parent;
+            }
+            catch (err) {
+                elemento = null;
+            }
+        }
+    }
+
+    return false;
+}
+
+/// I20-1067: il gruppo che il server restituisce dalla sincronizzazione del report e' gia' un box del
+/// documento? La mappa e' quella della costruzione del report: { pagina: [{ codiceGruppo, idRec }] }.
+/// Si guarda il codice gruppo del primario (o del primo record) e, se tutti e due lo hanno, l'idRec.
+/// Un box gia' nel documento il server lo ha appena registrato: rifarlo non serve, e con una
+/// differenza diventava un box nuovo sfalsato su quello vecchio.
+function gruppoGiaNellaMappa(records, mappa) {
+    if (!Array.isArray(records) || records.length === 0 || mappa == null || typeof mappa !== "object") {
+        return false;
+    }
+    const primario = records.find(r => r != null && r.recordInTracciato != null && r.recordInTracciato.StatoSelezione == 1)
+        || records.find(r => r != null && r.recordInTracciato != null);
+    if (primario == null) {
+        return false;
+    }
+    const codice = primario.recordInTracciato["Scatto.CodiceGruppo"] != null ? String(primario.recordInTracciato["Scatto.CodiceGruppo"]) : "";
+    if (codice === "") {
+        return false;
+    }
+    const idRec = parseInt(primario.idRec);
+    return Object.keys(mappa).some(pagina => (Array.isArray(mappa[pagina]) ? mappa[pagina] : []).some(gruppo => {
+        if (gruppo == null || gruppo.codiceGruppo == null || String(gruppo.codiceGruppo) !== codice) {
+            return false;
+        }
+        const idRecMappa = parseInt(gruppo.idRec);
+        return !(idRec > 0 && idRecMappa > 0) || idRec === idRecMappa;
+    }));
+}
+
 module.exports = {
+    gruppoGiaNellaMappa,
     MINUTI_LISTA_RECENTE,
+    VIGILANZE_DESELEZIONE,
+    contoDeselezione,
+    contoAbbandono,
+    selezioneSulBox,
     ORE_REPORT_DA_CHIEDERE,
     ORE_REPORT_VECCHIO,
     leggiDataItaliana,

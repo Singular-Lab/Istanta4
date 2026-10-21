@@ -220,6 +220,20 @@
     padding: 4px 8px;
     border-radius: 4px;
 }
+  /* I20-1057: la finestra delle cartelle di sistema (dialogPathDiSistema). Ogni riga ha un
+     bordo a sinistra verde quando il percorso c'e', rosso quando manca. */
+  .finestraPercorsi { padding: 4px 8px; }
+  .introPercorsi { margin: 0 0 12px 0; color: #444444; font-size: 12px; }
+  .rigaPercorso { border: 1px solid #d0d0d0; border-left-width: 4px; border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; background-color: #fafafa; }
+  .rigaPercorso.percorsoImpostato { border-left-color: #2e9e5b; }
+  .rigaPercorso.percorsoMancante { border-left-color: #d64545; }
+  .testaRigaPercorso { display: flex; align-items: baseline; margin-bottom: 6px; }
+  .titoloPercorso { font-weight: bold; font-size: 13px; color: #222222; margin-right: 8px; }
+  .notaPercorso { font-size: 11px; color: #777777; }
+  .corpoRigaPercorso { display: flex; align-items: center; }
+  .valorePercorso { flex: 1; min-height: 16px; margin-right: 8px; padding: 6px 8px; background-color: #eeeeee; border-radius: 4px; font-size: 11px; color: #333333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; user-select: none; }
+  .rigaPercorso.percorsoMancante .valorePercorso { color: #b03030; font-style: italic; }
+  .piedePercorsi { display: flex; justify-content: flex-end; padding: 8px; }
 </style>
 <header>
 
@@ -304,6 +318,21 @@
               onclick="jsIndexControls.changeImage($(this)), jsIndexControls.changeSubMenu('Tab12', true)">
             <img id="artworkTab" src="images/header_artwork_button.png" active="false" subTab="Tab9" style="cursor:pointer; padding-left: 2px;  display: none;"
               onclick="jsIndexControls.changeImage($(this)), jsIndexControls.changeSubMenu('Tab9', true)">
+          </div>
+        </div>
+        <!--I20-1116: il segnalino delle segnalazioni di impaginazione, in fondo alla riga delle linguette e
+            centrato con loro, visibile da ogni sezione perche' la testata e' fissa (segnalazioni/schermata.js,
+            aggiornaIcona). L'appoggio e' largo zero e alto quanto la riga: la riga non si allunga, e la
+            testata, fissa sopra uno spazio di altezza fissa (#spazioHeader), non copre il contenuto.
+            Il segnalibro esce dal bordo destro del pannello e lo avvolge: arrotondato a sinistra, dritto a
+            destra con una piega scura sul bordo. E' fisso con right 0: lo aggancia al bordo del pannello il
+            motore grafico, come la colonna della vista affiancata; le misure del layout, in UXP, non tornavano
+            e il testo veniva tagliato. _allineaSegnalino lo mette all'altezza della riga e, nella vista
+            affiancata, contro la colonna. Una coda a rondine fatta coi bordi, in UXP, non si vedeva.-->
+        <div id="appoggioSegnalino" style="position: relative; width: 0px; margin-left: auto; align-self: stretch;">
+          <div id="segnalinoSegnalazioni" style="display: none; position: fixed; right: 0px; height: 27px; align-items: center; cursor: pointer;"
+            onclick="SchermataSegnalazioni.apriDalSegnalino()">
+            <span id="testoSegnalinoSegnalazioni" style="padding: 0 10px 0 9px; border-right: 3px solid rgba(0, 0, 0, 0.35); border-radius: 8px 0 0 8px; color: white; font-size: 10px; font-weight: bold; line-height: 16px; white-space: nowrap; background-color: #c62828;"></span>
           </div>
         </div>
       </div>
@@ -534,17 +563,20 @@
             </div>
           </div> -->
           <div id="filtriTab" style="width: 100%; display: none; overflow:hidden " class="tabcontent">
-            <div class="row" id="comandiInterfacciaAdvanced" style="width: 100%; display: flex; justify-content:start; height: 10%;">
-              <sp-action-button id="bOpt1Advanced" name="bOpt1Advanced" style="font-size: 12px; margin:1px;"
+            <!-- I20-1056, lotto 3: i pulsanti non si restringono e il loro testo non va a capo; la casella
+                 della cache prende lo spazio che resta e, se serve, si accorcia. -->
+            <div class="row" id="comandiInterfacciaAdvanced" style="width: 100%; display: flex; align-items: center; justify-content:start; height: 10%; min-height: 36px;">
+              <sp-action-button id="bOpt1Advanced" name="bOpt1Advanced" style="font-size: 12px; margin:1px; flex-shrink: 0; white-space: nowrap;"
                 onclick="conteggia();"><span style="display:flex;align-items:center;gap:6px;"><img src="images/conteggio.png" style="width:16px;height:16px;object-fit:contain;"><span>Conteggio</span></span></sp-action-button>
-              <sp-action-button id="bOpt2Advanced" name="bOpt2" style="font-size: 12px; margin:1px;"><span style="display:flex;align-items:center;gap:6px;"><img src="images/impagina.png" style="width:16px;height:16px;object-fit:contain;"><span>Impagina</span></span></sp-action-button>
+              <sp-action-button id="bOpt2Advanced" name="bOpt2" style="font-size: 12px; margin:1px; flex-shrink: 0; white-space: nowrap;"><span style="display:flex;align-items:center;gap:6px;"><img src="images/impagina.png" style="width:16px;height:16px;object-fit:contain;"><span>Impagina</span></span></sp-action-button>
               <!-- I20-1029: le segnalazioni di impaginazione del documento, con Risolvi (segnalazioni/schermata.js). -->
-              <sp-action-button id="segnalazioniImpaginazioneButton" name="segnalazioniImpaginazione" style="font-size: 12px; margin:1px;"
-                onclick="SchermataSegnalazioni.apri()"><span>Segnalazioni</span></sp-action-button>
+              <!-- I20-1056, lotto 3: l'icona numerata con le segnalazioni irrisolte all'ultimo controllo. -->
+              <sp-action-button id="segnalazioniImpaginazioneButton" name="segnalazioniImpaginazione" style="font-size: 12px; margin:1px; flex-shrink: 0; white-space: nowrap;"
+                onclick="SchermataSegnalazioni.apri()"><span>Segnalazioni</span><span id="iconaSegnalazioniImpaginazione" style="display: none; margin-left: 6px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; color: white; font-size: 10px; font-weight: bold; line-height: 16px; text-align: center; background-color: #c62828;"></span></sp-action-button>
               
               <!-- I20-1028: spuntata di default. E' l'unica delle due caselle che il codice legge (noCacheCheck in indexNew.js). -->
-              <div style="width: 100%; align-items: center; display: flex;">
-                <input type="checkbox" id="cacheCheckAdvanced" checked> <label style="color: white;">Utilizza cache se disponibile</label>
+              <div style="flex: 1 1 auto; min-width: 0; margin-left: 6px; align-items: center; display: flex; overflow: hidden;">
+                <input type="checkbox" id="cacheCheckAdvanced" checked> <label style="color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Utilizza cache se disponibile</label>
               </div>
             </div>
             <div id="filtriBody" style="height: 90%; overflow: hidden;">
@@ -761,7 +793,8 @@
           <div class="row" id="messaggiUtenteModal" style="position: fixed; width:76%; align-self: self-start; z-index: 9999;">
           </div>
           <h2 id="modalTitle" style="margin: 0; display: block;">Titolo</h2>
-          <button id="closeModal" onclick="Modali.chiudiModal()" style="height: 25px;cursor: pointer;">&times;</button>
+          <!-- I20-1105: la X chiede conferma se la finestra ha registrato un controllo (modifiche non salvate). -->
+          <button id="closeModal" onclick="Modali.chiudiModalDallaX()" style="height: 25px;cursor: pointer;">&times;</button>
         </div>
     
         <!-- Body -->
@@ -1175,79 +1208,37 @@
   </div>
 </div>
 
-<!-- <div id="dialogPathLinksLoghi" myname="dialogPathLinksLoghi"
-  style="overflow: auto; display: none; height: 100%; width: 100%;">
-  <div style="height: 90%;">
-    <div class="container" id="bodyPaths">
-      <div style="display: block;">
-    
-
-        <div style="margin-bottom: 1rem; margin-top: 1 rem;">
-          <button onclick="impostaPercorsiDiSistema(0)">Imposta percorso foto</button>
-          <div id="pathFoto"
-            style="margin-top: 0.5rem; padding: 0.4rem 0.6rem; background-color: #e0e0e0; border-radius: 4px; user-select: none; height: 2rem;">
-          </div>
-        </div>
-    
-
-        <div>
-          <button onclick="impostaPercorsiDiSistema(1)">Imposta percorso loghi</button>
-          <div id="pathLoghi"
-            style="margin-top: 0.5rem; padding: 0.4rem 0.6rem; background-color: #e0e0e0; border-radius: 4px; user-select: none; height: 2rem;">
-          </div>
-        </div>
-      </div>
-    </div>
-    
-  </div>
-  <div>
-    <button codice="" id="confermaPercorsi" style="display: none;"
-      onclick="indesignEvents.checkStatus(indesignEvents.checkStatusResonse); Modali.chiudiModal()">Conferma</button>
-  </div>
-</div> -->
-
+<!-- I20-1057: le cartelle di sistema. Ogni riga dice a cosa serve la cartella, mostra il
+     percorso scelto e ha il pulsante per sceglierlo; mostraPercorsoNellaFinestra (indexNew.js) la
+     segna impostata o mancante. Gli id dei percorsi sono quelli che usa indexNew.js.
+     I20-1065: si chiedono solo Links e Loghi; logs, export e SingularData il plugin le crea da
+     solo sotto la cartella del documento (preparaCartelleDiSistema). -->
 <div id="dialogPathDiSistema" myname="dialogPathDiSistema"
   style="overflow: auto; display: none; height: 100%; width: 100%;">
-  <div style="height: 90%;">
-    <div class="container" id="bodyPaths">
-      <div style="display: block;">
-    
-        <!-- Riga 1: Foto -->
-        <div style="margin-bottom: 1rem; margin-top: 1 rem;">
-          <button onclick="impostaPercorsiDiSistema(2)">Imposta percorso per i log di sistema</button>
-          <div id="pathLogs"
-            style="margin-top: 0.5rem; padding: 0.4rem 0.6rem; background-color: #e0e0e0; border-radius: 4px; user-select: none; height: 2rem;">
-          </div>
-        </div>
-    
-        <!-- Riga 2: Loghi -->
-        <div>
-          <button onclick="impostaPercorsiDiSistema(3)">Imposta percorso per le esportazioni</button>
-          <div id="pathEsportazione"
-            style="margin-top: 0.5rem; padding: 0.4rem 0.6rem; background-color: #e0e0e0; border-radius: 4px; user-select: none; height: 2rem;">
-          </div>
-        </div>
-
-        <!-- Riga 1: Foto -->
-        <div style="margin-bottom: 1rem; margin-top: 1 rem;">
-          <button onclick="impostaPercorsiDiSistema(0)">Imposta percorso foto</button>
-          <div id="pathFoto"
-            style="margin-top: 0.5rem; padding: 0.4rem 0.6rem; background-color: #e0e0e0; border-radius: 4px; user-select: none; height: 2rem;">
-          </div>
-        </div>
-    
-        <!-- Riga 2: Loghi -->
-        <div>
-          <button onclick="impostaPercorsiDiSistema(1)">Imposta percorso loghi</button>
-          <div id="pathLoghi"
-            style="margin-top: 0.5rem; padding: 0.4rem 0.6rem; background-color: #e0e0e0; border-radius: 4px; user-select: none; height: 2rem;">
-          </div>
-        </div>
+  <div class="finestraPercorsi">
+    <p class="introPercorsi">Indica le cartelle delle foto e dei loghi per questo documento. Quelle che hanno il nome previsto sotto la cartella del documento vengono associate da sole; le cartelle logs, export e SingularData il plugin le crea da solo.</p>
+    <div class="rigaPercorso percorsoMancante">
+      <div class="testaRigaPercorso">
+        <span class="titoloPercorso">Links</span>
+        <span class="notaPercorso">le foto dei prodotti</span>
+      </div>
+      <div class="corpoRigaPercorso">
+        <div id="pathFoto" class="valorePercorso"></div>
+        <button class="sceltaPercorso" onclick="impostaPercorsiDiSistema(0)">Scegli...</button>
       </div>
     </div>
-    
+    <div class="rigaPercorso percorsoMancante">
+      <div class="testaRigaPercorso">
+        <span class="titoloPercorso">Loghi</span>
+        <span class="notaPercorso">loghi e bolli</span>
+      </div>
+      <div class="corpoRigaPercorso">
+        <div id="pathLoghi" class="valorePercorso"></div>
+        <button class="sceltaPercorso" onclick="impostaPercorsiDiSistema(1)">Scegli...</button>
+      </div>
+    </div>
   </div>
-  <div>
+  <div class="piedePercorsi">
     <button codice="" id="confermaPercorsi" style="display: none;"
       onclick="indesignEvents.checkStatus(indesignEvents.checkStatusResonse); Modali.chiudiModal()">Conferma</button>
   </div>
@@ -1299,16 +1290,23 @@
   </div>
 </div>
 
+<!-- I20-1105: scorre solo la lista. Prima la lista aveva overflow: scroll (barra sempre presente) e,
+     con il piede, sforava la finestra, che scorreva a sua volta: due barre. La finestra non scorre,
+     e l'altezza in pixel della lista la fissa schedaRef.apriModalNoRender (AltezzaScorrimento). -->
 <div id="dialogNoRender" myname="dialogNoRender"
-  style="overflow: none; display: none; height: 100%; width: 100%;">
-  <div style="height: 90%; overflow: scroll;">
+  style="overflow: hidden; display: none; height: 100%; width: 100%;">
+  <div id="listaNoRender" style="overflow-y: auto;">
     <div class="container" id="bodyNoRender">
 
     </div>
   </div>
-  <div style="display: flex;">
-    <button id="salvaNoRender" style="display: block;"
-      onclick="schedaRef.salvaNoRender();">Salva</button>
+  <!-- I20-1105: il salvataggio non si vedeva. Verde pieno e a pillola, a destra: diverso per colore e
+       forma dai pulsanti grigi degli elementi e dal blu e dal rosso delle conferme. E' un riquadro
+       cliccabile e non un button: in UXP il button ignora il colore di sfondo e restava grigio. -->
+  <div style="display: flex; justify-content: flex-end; padding-top: 8px;">
+    <div id="salvaNoRender" role="button"
+      style="display: flex; align-items: center; justify-content: center; min-width: 150px; height: 32px; padding: 0 18px; background-color: #28a745; color: white; border-radius: 16px; font-weight: bold; font-size: 13px; cursor: pointer;"
+      onclick="schedaRef.salvaNoRender();">Salva modifiche</div>
   </div>
 </div>
 

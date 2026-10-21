@@ -105,8 +105,17 @@
             Call.do("Tracciati", "GetTracciatiPromo/" + idPromo, "GET", null, ME, function (result, sender) {
                 console.log("Risultato di GetTracciatiPromo");
                 console.log(result);
+                //I20-1069: un errore si dice, invece di finire nella lista dei tracciati.
+                if (Revisore.mostraErroreDellaChiamata(result, "Tracciati della promo non caricati")) return;
                 if (typeof result !== 'string') {
                     ME.listTracciati = ME.listTracciati.concat(result);
+
+                    //I20-1119: l'ordine per canale e area si fa sulla sigla dei tracciati, prima di creare
+                    //le voci. Il testo delle voci porta anche il contesto del tracciato, e lo schema
+                    //dell'agenzia riconosce solo la sigla: prima si riordinavano le voci per testo.
+                    if (sender.agenzia.applicaSchemaDiOrdinamentoTracciati != null) {
+                        ME.listTracciati = sender.agenzia.applicaSchemaDiOrdinamentoTracciati(ME.listTracciati, "sigla");
+                    }
 
                     var selectElement = $("#CmbTracciato");
 
@@ -114,41 +123,9 @@
                     ME.listTracciati.forEach(function (item) {
                         var optionElement = $("<option>")
                             .val(item.id)
-                            .text(item.sigla);
+                            .text(Revisore.etichettaTracciato(item));
                         selectElement.append(optionElement);
                     });
-
-                    //if (sender.agenzia.ordinaListaSelezioneTracciato != null) {
-                    //    sender.agenzia.ordinaListaSelezioneTracciato();
-                    //}
-
-                    if (sender.agenzia.applicaSchemaDiOrdinamentoTracciati != null) {
-                        const $select = $("#CmbTracciato");
-                        const $options = $select.find("option");
-                        const $firstOption = $options.filter('[value="0"]');
-
-                        let _list = [];
-                        $("#CmbTracciato").find("option").each(function () {
-                            let _lab = $(this)[0].label;
-                            if (_lab != "Tutti i tracciati") {
-                                _list.push(_lab);
-                            }
-                        });
-
-                        _list = sender.agenzia.applicaSchemaDiOrdinamentoTracciati(_list, "");
-
-
-                        let _optionsOrdered = [];
-                        for (let i = 0; i < _list.length; i++) {
-                            _optionsOrdered.push($("#CmbTracciato").find("option").filter(function () { return $(this).text() == _list[i]; }));
-                        }
-
-                        // Svuota e reinserisce le option
-                        $select.empty();
-                        if ($firstOption.length>0) $select.append($firstOption);
-                        $select.append(_optionsOrdered);
-
-                    }
 
                 }
                 else {
@@ -159,6 +136,8 @@
         else {
             if (idTracciati.length >= 1) {
                 Call.do("Tracciati", "GetTracciatiPromoByIdTracc/" + idTracciati[0], "GET", null, ME, function (result, sender) {
+                    //I20-1069: un errore si dice, invece di finire nella lista dei tracciati.
+                    if (Revisore.mostraErroreDellaChiamata(result, "Tracciati della promo non caricati")) return;
                     if (typeof result !== 'string') {
                         ME.listTracciati = ME.listTracciati.concat(result);
 
@@ -168,7 +147,7 @@
                         ME.listTracciati.forEach(function (item) {
                             var optionElement = $("<option>")
                                 .val(item.id)
-                                .text(item.sigla);
+                                .text(Revisore.etichettaTracciato(item));
                             selectElement.append(optionElement);
                         });
                         selectElement.val(idTracciati);
@@ -334,6 +313,9 @@
         Call.do("Revisore", "getListaRevisione2", "POST", obj, this, function (result, sender) {
             console.log("....getListaRevisione -> RESULT");
             console.log(result);
+            //I20-1069: prima error non si leggeva: una risposta d'errore dava un TypeError su result.data e lo
+            //spinner restava acceso. Ora si dice il motivo, il caricamento si spegne, e una lista parziale non arriva.
+            if (Revisore.mostraErroreDellaChiamata(result, "Lista del revisore non caricata")) return;
 
             if (sender.agenzia.applyFilterToList != null) {
                 result.data = sender.agenzia.applyFilterToList(result.data);
@@ -482,6 +464,13 @@
                 mostraFirma = this.agenzia.mostraFirmaTracciato();
             }
             let htmlItem = renderRecordRevisione("template", dataItem, this.agenzia, me.List, this.olimpoIp, false, null, null, revInstance.modalitaSottogruppi, mostraFirma);
+            //I20-1092: un elemento che non si puo' disegnare (per esempio un gruppo di cui non arriva
+            //nessuna ref) si salta, con l'errore in console: prima fermava il caricamento dell'intera
+            //pagina, e il revisore non si apriva piu'.
+            if (!Revisore.elementoDisegnabile(htmlItem)) {
+                console.error(Revisore.testoElementoNonDisegnabile(dataItem, revInstance.modalitaSottogruppi));
+                continue;
+            }
             if (this.agenzia.compilaBoxConInformazioniCustom != null) {
                 this.agenzia.compilaBoxConInformazioniCustom(htmlItem, dataItem);
             }
@@ -971,7 +960,9 @@
             console.log(result);
             // Se il server ha fallito, adesso lo dice: prima tornava 200 con [] e non si capiva niente.
             if (result == null || !Array.isArray(result)) {
-                let _msg = (result && result.error) ? result.error : "Salvataggio non riuscito";
+                //I20-1069: il motivo vero. Su un errore HTTP result.error e' il testo di stato di jQuery ("error"),
+                //e il motivo del server sta in result.message: Call.motivoDellErrore li distingue.
+                let _msg = Call.motivoDellErrore(result) || "Salvataggio non riuscito";
                 console.error("Salvataggio fallito:", result);
                 if (typeof mostraMessaggio === "function") mostraMessaggio(_msg, "danger");
                 else alert("Salvataggio non riuscito: " + _msg);
@@ -1005,10 +996,11 @@
 
                 let obj = null;
                 if (cod.includes(",")) {
-                    obj = sender.List.filter(r => r.isGruppo && r.recordInTracciato != null && r.recordInTracciato[keyScattoCodiceGruppo] == cod);
+                    //I20-1120: anche la lista messa da parte, cosi' tornando all'altra vista non resta vecchia.
+                    obj = Revisore.righeDelleDueListe(sender).filter(r => r.isGruppo && r.recordInTracciato != null && r.recordInTracciato[keyScattoCodiceGruppo] == cod);
                 }
                 else {
-                    obj = sender.List.filter(r => !r.isGruppo && r.recordInTracciato != null && r.recordInTracciato[keyRefCodice] == cod);
+                    obj = Revisore.righeDelleDueListe(sender).filter(r => !r.isGruppo && r.recordInTracciato != null && r.recordInTracciato[keyRefCodice] == cod);
                 }
                 console.log(obj);
                 console.log("item");
@@ -1658,15 +1650,8 @@
                             || item2.recordInTracciato[keyScattoCodiceGruppo] == null))
                             && codice != "") {
                         }
-                        else if ((item2.recordInTracciato[keyDescr1] != null && !item2.recordInTracciato[keyDescr1].toLowerCase().includes(nome.toLowerCase()) || item2.recordInTracciato[keyDescr1] == null) && nome != "") {
-                        }
-                        else if ((item2.recordInTracciato[keyDescr2] != null && !item2.recordInTracciato[keyDescr2].toLowerCase().includes(brand.toLowerCase()) || item2.recordInTracciato[keyDescr2] == null) && brand != "") {
-                        }
-                        else if ((item2.recordInTracciato[keyDescr3] != null && !item2.recordInTracciato[keyDescr3].toLowerCase().includes(tipo_gusto.toLowerCase()) || item2.recordInTracciato[keyDescr3] == null) && tipo_gusto != "") {
-                        }
-                        else if ((item2.recordInTracciato[keyDescr4] != null && !item2.recordInTracciato[keyDescr4].toLowerCase().includes(grammatura.toLowerCase()) || item2.recordInTracciato[keyDescr4] == null) && grammatura != "") {
-                        }
-                        else if ((item2.recordInTracciato.Segmento != null && !item2.recordInTracciato.Referenza.Segmento.toLowerCase().includes(segmento.toLowerCase()) || item2.recordInTracciato.Referenza == null || item2.recordInTracciato.Referenza.Segmento == null) && segmento != "") {
+                        //I20-1111: revisione e tracciato, e il segmento dove sta davvero (vedi corrispondeAiCampiDellaRicerca).
+                        else if (!Revisore.corrispondeAiCampiDellaRicerca(item2, nome, brand, tipo_gusto, grammatura, segmento)) {
                         }
                         else if (item2.recordInTracciato[keyRefCodice] != null || (codice == "" && nome == "" && brand == "" && tipo_gusto == "" && grammatura == "" && segmento == "")) {
                             gruppoValido = true;
@@ -1687,15 +1672,8 @@
                                     || item.recordInTracciato[keyScattoCodiceGruppo] == null))
                             && codice != "") {
                         }
-                        else if ((item.recordInTracciato[keyDescr1] != null && !item.recordInTracciato[keyDescr1].toLowerCase().includes(nome.toLowerCase()) || item.recordInTracciato[keyDescr1] == null) && nome != "") {
-                        }
-                        else if ((item.recordInTracciato[keyDescr2] != null && !item.recordInTracciato[keyDescr2].toLowerCase().includes(brand.toLowerCase()) || item.recordInTracciato[keyDescr2] == null) && brand != "") {
-                        }
-                        else if ((item.recordInTracciato[keyDescr3] != null && !item.recordInTracciato[keyDescr3].toLowerCase().includes(tipo_gusto.toLowerCase()) || item.recordInTracciato[keyDescr3] == null) && tipo_gusto != "") {
-                        }
-                        else if ((item.recordInTracciato[keyDescr4] != null && !item.recordInTracciato[keyDescr4].toLowerCase().includes(grammatura.toLowerCase()) || item.recordInTracciato[keyDescr4] == null) && grammatura != "") {
-                        }
-                        else if ((item.recordInTracciato.Segmento != null && !item.recordInTracciato.Referenza.Segmento.toLowerCase().includes(segmento.toLowerCase()) || item.recordInTracciato.Referenza == null || item.recordInTracciato.Referenza.Segmento == null) && segmento != "") {
+                        //I20-1111: revisione e tracciato, e il segmento dove sta davvero (vedi corrispondeAiCampiDellaRicerca).
+                        else if (!Revisore.corrispondeAiCampiDellaRicerca(item, nome, brand, tipo_gusto, grammatura, segmento)) {
                         }
                         else if (item.recordInTracciato[keyRefCodice] != null || (codice == "" && nome == "" && brand == "" && tipo_gusto == "" && grammatura == "" && segmento == "")) {
                             ListRicerca.push(item);
@@ -1714,15 +1692,8 @@
                                 || item.recordInTracciato[keyScattoCodiceGruppo] == null))
                         && codice != "") {
                     }
-                    else if ((item.recordInTracciato[keyDescr1] != null && !item.recordInTracciato[keyDescr1].toLowerCase().includes(nome.toLowerCase()) || item.recordInTracciato[keyDescr1] == null) && nome != "") {
-                    }
-                    else if ((item.recordInTracciato[keyDescr2] != null && !item.recordInTracciato[keyDescr2].toLowerCase().includes(brand.toLowerCase()) || item.recordInTracciato[keyDescr2] == null) && brand != "") {
-                    }
-                    else if ((item.recordInTracciato[keyDescr3] != null && !item.recordInTracciato[keyDescr3].toLowerCase().includes(tipo_gusto.toLowerCase()) || item.recordInTracciato[keyDescr3] == null) && tipo_gusto != "") {
-                    }
-                    else if ((item.recordInTracciato[keyDescr4] != null && !item.recordInTracciato[keyDescr4].toLowerCase().includes(grammatura.toLowerCase()) || item.recordInTracciato[keyDescr4] == null) && grammatura != "") {
-                    }
-                    else if ((item.recordInTracciato.Segmento != null && !item.recordInTracciato.Referenza.Segmento.toLowerCase().includes(segmento.toLowerCase()) || item.recordInTracciato.Referenza == null || item.recordInTracciato.Referenza.Segmento == null) && segmento != "") {
+                    //I20-1111: revisione e tracciato, e il segmento dove sta davvero (vedi corrispondeAiCampiDellaRicerca).
+                    else if (!Revisore.corrispondeAiCampiDellaRicerca(item, nome, brand, tipo_gusto, grammatura, segmento)) {
                     }
                     else if (item.recordInTracciato[keyRefCodice] != null || (codice == "" && nome == "" && brand == "" && tipo_gusto == "" && grammatura == "" && segmento == "")) {
                         ListRicerca.push(item);
@@ -1775,9 +1746,10 @@
                                     }
                                 }
 
+                                //I20-1111: si guarda l'articolo del gruppo (item2), come per il nome: prima si leggeva il gruppo.
                                 if (!childIgnorato && brand != "") {
-                                    if (item.recordRevisionato.descrizione2 != null) {
-                                        if (!item.recordRevisionato.descrizione2.toLowerCase().includes(brand.toLowerCase())) {
+                                    if (item2.recordRevisionato.descrizione2 != null) {
+                                        if (!item2.recordRevisionato.descrizione2.toLowerCase().includes(brand.toLowerCase())) {
                                             childIgnorato = true;
                                         }
                                     }
@@ -1787,8 +1759,8 @@
                                 }
 
                                 if (!childIgnorato && tipo_gusto != "") {
-                                    if (item.recordRevisionato.descrizione3 != null) {
-                                        if (!item.recordRevisionato.descrizione3.toLowerCase().includes(tipo_gusto.toLowerCase())) {
+                                    if (item2.recordRevisionato.descrizione3 != null) {
+                                        if (!item2.recordRevisionato.descrizione3.toLowerCase().includes(tipo_gusto.toLowerCase())) {
                                             childIgnorato = true;
                                         }
                                     }
@@ -1798,8 +1770,8 @@
                                 }
 
                                 if (!childIgnorato && grammatura != "") {
-                                    if (item.recordRevisionato.descrizione4 != null) {
-                                        if (!item.recordRevisionato.descrizione4.toLowerCase().includes(grammatura.toLowerCase())) {
+                                    if (item2.recordRevisionato.descrizione4 != null) {
+                                        if (!item2.recordRevisionato.descrizione4.toLowerCase().includes(grammatura.toLowerCase())) {
                                             childIgnorato = true;
                                         }
                                     }
@@ -1809,8 +1781,8 @@
                                 }
 
                                 if (!childIgnorato && segmento != "") {
-                                    if (item.recordRevisionato.idArticoloNavigation != null && item.recordRevisionato.idArticoloNavigation.segmento != null) {
-                                        if (!item.recordRevisionato.idArticoloNavigation.segmento.toLowerCase().includes(segmento.toLowerCase())) {
+                                    if (item2.recordRevisionato.idArticoloNavigation != null && item2.recordRevisionato.idArticoloNavigation.segmento != null) {
+                                        if (!item2.recordRevisionato.idArticoloNavigation.segmento.toLowerCase().includes(segmento.toLowerCase())) {
                                             childIgnorato = true;
                                         }
                                     }
@@ -2479,9 +2451,13 @@
         if (add) {
             Call.do("Revisore", "AggiungiASottogruppo/" + idRec + "/" + idRecPilota + "/" + IdTracciato + "/" + propaga, "GET", null, ME, function (result, sender) {
                 console.log(result);
+                //I20-1069: prima un errore spegneva il caricamento senza dire niente.
+                if (Revisore.mostraErroreDellaChiamata(result, "Aggiunta al sottogruppo non riuscita")) return;
                 if (result.error == null || result.error == "") {
+                    //I20-1120: tutte le righe del record, nelle due liste; prima un record assente dalla
+                    //lista visibile (un'altra etichetta) faceva un TypeError.
                     result.idRecDaModificare.forEach(function (item) {
-                        ME.List.find(f => f.idRec == item).recordInTracciato[keyScattoCodiceSottogruppo] = result.codiceSottogruppo;
+                        Revisore.righeConIdRec(ME, item).forEach(r => r.recordInTracciato[keyScattoCodiceSottogruppo] = result.codiceSottogruppo);
                     });
                     ME.sostituisciSottogruppoButton();
 
@@ -2520,16 +2496,21 @@
         else {
             Call.do("Revisore", "RimuoviDaSottogruppo/" + idRec + "/" + idRecPilota + "/" + IdTracciato + "/" + propaga, "GET", null, ME, function (result, sender) {
                 console.log(result);
+                //I20-1069: prima un errore spegneva il caricamento senza dire niente.
+                if (Revisore.mostraErroreDellaChiamata(result, "Rimozione dal sottogruppo non riuscita")) return;
                 if (result.error == null || result.error == "") {
 
-                    delete ME.List.find(f => f.idRec == idRec).recordInTracciato[keyScattoCodiceSottogruppo];
+                    //I20-1120: tutte le righe del record, nelle due liste, senza TypeError se manca.
+                    Revisore.righeConIdRec(ME, idRec).forEach(r => { delete r.recordInTracciato[keyScattoCodiceSottogruppo]; });
                     result.idRecDaModificare.forEach(function (item) {
-                        if (result.codiceSottogruppo != "") {
-                            ME.List.find(f => f.idRec == item).recordInTracciato[keyScattoCodiceSottogruppo] = result.codiceSottogruppo;
-                        }
-                        else {
-                            delete ME.List.find(f => f.idRec == item).recordInTracciato[keyScattoCodiceSottogruppo];
-                        }
+                        Revisore.righeConIdRec(ME, item).forEach(r => {
+                            if (result.codiceSottogruppo != "") {
+                                r.recordInTracciato[keyScattoCodiceSottogruppo] = result.codiceSottogruppo;
+                            }
+                            else {
+                                delete r.recordInTracciato[keyScattoCodiceSottogruppo];
+                            }
+                        });
                     });
                     ME.sostituisciSottogruppoButton();
                     if (result.tracciatiNonModificati.length > 0) {
@@ -2728,6 +2709,214 @@
                 }
             }
         });
+    }
+
+    /// I20-1111: un record risponde alla ricerca se ogni campo compilato del filtro e' contenuto, senza
+    /// badare alle maiuscole, in quello che l'operatore legge o in quello che arriva dal tracciato.
+    /// Prima Nome, Brand, Tipo-Gusto e Grammatura si cercavano solo nella descrizione grezza del
+    /// tracciato (colonna sinistra) mentre l'operatore scrive quella revisionata (colonna destra), e un
+    /// tracciato senza Descrizione3/4 non trovava mai niente; il segmento si leggeva da
+    /// recordInTracciato.Referenza.Segmento, che non esiste: le chiavi sono piatte. I campi vuoti non filtrano.
+    static corrispondeAiCampiDellaRicerca(record, nome, brand, tipoGusto, grammatura, segmento) {
+        const tracciato = (record && record.recordInTracciato) || {};
+        const revisione = (record && record.recordRevisionato) || {};
+        //Le chiavi stanno in utility.js, che sotto Node non c'e'.
+        const descr1 = typeof keyDescr1 !== "undefined" ? keyDescr1 : "Descrizioni.Descrizione1";
+        const descr2 = typeof keyDescr2 !== "undefined" ? keyDescr2 : "Descrizioni.Descrizione2";
+        const descr3 = typeof keyDescr3 !== "undefined" ? keyDescr3 : "Descrizioni.Descrizione3";
+        const descr4 = typeof keyDescr4 !== "undefined" ? keyDescr4 : "Descrizioni.Descrizione4";
+        const contiene = function (cercato, valori) {
+            if (cercato == null || String(cercato) === "") {
+                return true;
+            }
+            const ago = String(cercato).toLowerCase();
+            return valori.some(function (valore) { return valore != null && String(valore).toLowerCase().includes(ago); });
+        };
+        const segmentoArchivio = revisione.idArticoloNavigation != null ? revisione.idArticoloNavigation.segmento : null;
+
+        return contiene(nome, [revisione.descrizione1, tracciato[descr1]])
+            && contiene(brand, [revisione.descrizione2, tracciato[descr2]])
+            && contiene(tipoGusto, [revisione.descrizione3, tracciato[descr3]])
+            && contiene(grammatura, [revisione.descrizione4, tracciato[descr4]])
+            && contiene(segmento, [tracciato["segmento"], tracciato["Referenza.Segmento"], segmentoArchivio]);
+    }
+
+    /// I20-1120: le chiavi del dato usate dalla vista Sottogruppi. Nella pagina sono le costanti di
+    /// utility.js; sotto Node, nei test, non ci sono e valgono queste.
+    static chiaviSottogruppi(chiavi) {
+        const c = chiavi || {};
+        return {
+            gruppo: c.gruppo || (typeof keyScattoCodiceGruppo !== "undefined" ? keyScattoCodiceGruppo : "Scatto.CodiceGruppo"),
+            sottogruppo: c.sottogruppo || (typeof keyScattoCodiceSottogruppo !== "undefined" ? keyScattoCodiceSottogruppo : "Scatto.CodiceSottogruppo"),
+            firma: c.firma || (typeof keyTracciatoFirma !== "undefined" ? keyTracciatoFirma : "Tracciato.Firma"),
+            ref: c.ref || (typeof keyRefCodice !== "undefined" ? keyRefCodice : "Referenza.Codice")
+        };
+    }
+
+    /// I20-1120: la lista visibile e quella messa da parte (List e ListSottogruppi), senza doppioni:
+    /// le righe passano da una all'altra cambiando vista, e un aggiornamento deve trovarle in tutte e due.
+    static righeDelleDueListe(revisore) {
+        const tutte = ((revisore && revisore.List) || []).concat((revisore && revisore.ListSottogruppi) || []);
+        return tutte.filter((r, i) => r != null && tutte.indexOf(r) === i);
+    }
+
+    /// I20-1120: le righe di un record, nelle due liste: la riga e le sue copie per sottogruppo.
+    static righeConIdRec(revisore, idRec) {
+        return Revisore.righeDelleDueListe(revisore).filter(r => r.idRec == idRec && r.recordInTracciato != null);
+    }
+
+    /// I20-1120: la copia di una riga per un altro sottogruppo della stessa referenza (altriSottogruppi,
+    /// dal server). Prende sottogruppo, record, tracciato ed etichetta del record che porta quel
+    /// sottogruppo, cosi' le azioni lavorano sul record giusto; il resto, compresa la revisione, resta
+    /// quello della riga, e lo stato di revisione e' lo stesso della vista normale. La riga non cambia.
+    static copiaPerSottogruppo(item, altro, chiavi) {
+        const k = Revisore.chiaviSottogruppi(chiavi);
+        const copia = Object.assign({}, item);
+        copia.recordInTracciato = Object.assign({}, item.recordInTracciato);
+        copia.recordInTracciato[k.sottogruppo] = altro.codiceSottogruppo;
+        copia.recordInTracciato.idRec = altro.idRec;
+        copia.recordInTracciato.idTracciato = altro.idTracciato;
+        copia.idRec = altro.idRec;
+        if (altro.label != null) {
+            copia.label = altro.label;
+            copia.recordInTracciato.label = altro.label;
+        }
+        copia.altriSottogruppi = null;
+        copia.copiaSottogruppo = true;
+        return copia;
+    }
+
+    /// I20-1120: le righe della vista Sottogruppi: le righe singole che portano un sottogruppo, e una
+    /// copia per ciascuno dei loro altri sottogruppi. Le righe di gruppo restano fuori.
+    static righeDeiSottogruppi(list, chiavi) {
+        const k = Revisore.chiaviSottogruppi(chiavi);
+        const righe = [];
+        (Array.isArray(list) ? list : []).forEach(item => {
+            if (item == null || item.isGruppo || item.recordInTracciato == null) {
+                return;
+            }
+            if (item.recordInTracciato[k.sottogruppo] != null) {
+                righe.push(item);
+            }
+            (Array.isArray(item.altriSottogruppi) ? item.altriSottogruppi : []).forEach(altro => {
+                if (altro != null && altro.codiceSottogruppo != null && altro.codiceSottogruppo !== "") {
+                    righe.push(Revisore.copiaPerSottogruppo(item, altro, k));
+                }
+            });
+        });
+        return righe;
+    }
+
+    /// I20-1120: la revisione nazionale di un sottogruppo, come la sceglie il conteggio della pagina
+    /// Tracciati e come si fa gia' per i gruppi: prima la Custom, poi la standard.
+    static descrizioneNazionaleSottogruppo(descrizioni) {
+        const nazionali = (Array.isArray(descrizioni) ? descrizioni : []).filter(f => f != null && f.area == null && f.canale == null);
+        return nazionali.find(f => f.custom != null) || nazionali.find(f => f.custom == null) || null;
+    }
+
+    /// I20-1120: la lista della vista Sottogruppi, dalle righe (righeDeiSottogruppi) e dalle descrizioni
+    /// arrivate dal server: per ogni sottogruppo l'intestazione e poi i suoi membri del gruppo d'origine,
+    /// una volta per referenza, ordinati per gruppo d'origine come prima.
+    static costruisciListaSottogruppi(righe, risposta, chiavi) {
+        const k = Revisore.chiaviSottogruppi(chiavi);
+        const elencoRighe = Array.isArray(righe) ? righe : [];
+        const gruppoDOrigine = new Map();
+        elencoRighe.forEach(r => {
+            const sg = r.recordInTracciato[k.sottogruppo];
+            if (!gruppoDOrigine.has(sg)) {
+                gruppoDOrigine.set(sg, r.recordInTracciato[k.gruppo]);
+            }
+        });
+
+        const voci = (Array.isArray(risposta) ? risposta : []).slice().sort((a, b) =>
+            String(gruppoDOrigine.get(a.codiceSottogruppo) || "").localeCompare(String(gruppoDOrigine.get(b.codiceSottogruppo) || "")));
+
+        const lista = [];
+        voci.forEach(voce => {
+            const sg = voce.codiceSottogruppo;
+            const descrizioni = Array.isArray(voce.descrizioni) ? voce.descrizioni : [];
+            const intestazione = {
+                hasFoto: 0,
+                idRec: 0,
+                inxOrd: 999999,
+                isGruppo: true,
+                isObsoleto: false,
+                label: null,
+                recordImpaginato: null,
+                recordInTracciato: {},
+                recordRevisionato: Revisore.descrizioneNazionaleSottogruppo(descrizioni),
+                recordRevisionatiRegionali: descrizioni.filter(f => f != null && !(f.area == null && f.canale == null)),
+                statoSelezione: 0
+            };
+            intestazione.recordInTracciato[k.gruppo] = sg;
+            intestazione.recordInTracciato[k.sottogruppo] = sg;
+            intestazione.recordInTracciato[k.firma] = voce.firmaTracciatoSottogruppo;
+            intestazione.recordInTracciato.metaKeyInMismatch = [];
+            intestazione.recordInTracciato.gruppoOriginaleAppartenenza = gruppoDOrigine.get(sg);
+            lista.push(intestazione);
+
+            const refGiaMesse = new Set();
+            elencoRighe
+                .filter(r => r.recordInTracciato[k.sottogruppo] === sg && r.recordInTracciato[k.gruppo] === gruppoDOrigine.get(sg))
+                .forEach(r => {
+                    const ref = r.recordInTracciato[k.ref];
+                    if (!refGiaMesse.has(ref)) {
+                        refGiaMesse.add(ref);
+                        lista.push(r);
+                    }
+                });
+        });
+        return lista;
+    }
+
+    /// I20-1119: la voce di un tracciato nella lista "Seleziona Tracciato": la sigla e il contesto del
+    /// tracciato, "SCTO · tema: MC". Una promo puo' avere piu' tracciati con la stessa sigla, distinti
+    /// dal contesto, e con la sola sigla sembravano doppioni. La regola sta in ordinamentoTracciati.js,
+    /// condivisa con la pagina Tracciati; se non c'e' resta la sigla.
+    static etichettaTracciato(tracciato) {
+        if (typeof ordinamentoTracciati !== "undefined" && ordinamentoTracciati != null && typeof ordinamentoTracciati.etichetta === "function") {
+            return ordinamentoTracciati.etichetta(tracciato);
+        }
+        return tracciato != null && tracciato.sigla != null ? String(tracciato.sigla) : "";
+    }
+
+    /// I20-1069: se la risposta di una chiamata a Istanta non e' andata bene, lo dice all'operatore con il
+    /// motivo (Call.motivoDellErrore), spegne il caricamento e restituisce true: il chiamante si ferma.
+    /// Prima le callback usavano la risposta senza guardarla: un errore diventava un TypeError con lo
+    /// spinner acceso, o la sola parola "error".
+    static mostraErroreDellaChiamata(result, cosa) {
+        const motivo = Call.motivoDellErrore(result);
+        if (motivo == null) {
+            return false;
+        }
+        console.error(cosa + ":", motivo, result);
+        if (typeof mostraMessaggio === "function") {
+            mostraMessaggio(cosa + ": " + motivo, "danger");
+        }
+        else {
+            alert(cosa + ": " + motivo);
+        }
+        if (typeof hideLoading === "function") {
+            hideLoading();
+        }
+        return true;
+    }
+
+    /// I20-1092: un elemento della lista si puo' disegnare se renderRecordRevisione ha restituito un
+    /// elemento jQuery. Un gruppo di cui non si trova nessuna ref restituisce undefined, e passarlo a
+    /// compilaBoxConInformazioniCustom fermava il caricamento dell'intera pagina.
+    static elementoDisegnabile(htmlItem) {
+        return htmlItem != null && typeof htmlItem.find === "function";
+    }
+
+    /// I20-1092: l'errore in console per un elemento saltato: cosa e', con quale codice, e perche'.
+    static testoElementoNonDisegnabile(dataItem, modalitaSottogruppi = false) {
+        const rec = dataItem != null && dataItem.recordInTracciato != null ? dataItem.recordInTracciato : {};
+        const chiaveGruppo = modalitaSottogruppi ? "Scatto.CodiceSottogruppo" : "Scatto.CodiceGruppo";
+        const codice = dataItem != null && dataItem.isGruppo ? rec[chiaveGruppo] : rec["Referenza.Codice"];
+        return "Code REV-01 Revisore: elemento non disegnabile, saltato - " + (dataItem != null && dataItem.isGruppo ? "gruppo " : "ref ") +
+            (codice != null && String(codice) !== "" ? codice : "(senza codice)") +
+            (dataItem != null && dataItem.isGruppo ? ": nella lista non c'e' nessuna sua ref" : ": record senza dati del tracciato");
     }
 
     /// I20-982: i campi di un record come vanno mostrati nella colonna di sinistra: vale il
@@ -3037,9 +3226,13 @@
         this.modalitaSottogruppi = senderVal;
         if (senderVal) {
             if (this.ListSottogruppi.length == 0) {
+                //I20-1120: le righe della vista: quelle che portano un sottogruppo e, per gli altri
+                //sottogruppi della stessa referenza nei record caricati (altri tracciati o etichette),
+                //una copia ciascuno. Prima si guardava solo il sottogruppo della riga, uno per referenza.
+                const righe = Revisore.righeDeiSottogruppi(this.List);
                 let listaSottogruppi = [];
-                this.List.forEach(function (item) {
-                    if (!item.isGruppo && item.recordInTracciato[keyScattoCodiceSottogruppo] != null && !listaSottogruppi.includes(item.recordInTracciato[keyScattoCodiceSottogruppo])) {
+                righe.forEach(function (item) {
+                    if (!listaSottogruppi.includes(item.recordInTracciato[keyScattoCodiceSottogruppo])) {
                         listaSottogruppi.push(item.recordInTracciato[keyScattoCodiceSottogruppo]);
                     }
                 });
@@ -3049,80 +3242,27 @@
                 }
                 let idPromo = parseInt($("#Promo").val());
 
+                //I20-1120: la lettura dei sottogruppi puo' durare: si mostra il caricamento e la tendina
+                //della modalita' resta ferma finche' non arriva la risposta. Senza, la pagina restava sulla
+                //lista di prima (vuota, se non c'era niente da revisionare) e cambiando modalita' nel
+                //frattempo si scambiavano le liste con quella dei sottogruppi ancora vuota.
+                showLoading();
+                $("#filtraPerGruppiOSingoli").prop("disabled", true);
+
                 Call.do("Revisore", "getArticoliDescrizioniSottogruppi/" + idPromo, "PUT", codiciList, this, function (result, sender) {
                     console.log(result);
-                    result.sort(function (a, b) {
-                        var codiceGruppoA = me.List.find(f => !f.isGruppo && f.recordInTracciato[keyScattoCodiceSottogruppo] != null && f.recordInTracciato[keyScattoCodiceSottogruppo] == a.codiceSottogruppo).recordInTracciato[keyScattoCodiceGruppo];
-                        var codiceGruppoB = me.List.find(f => !f.isGruppo && f.recordInTracciato[keyScattoCodiceSottogruppo] != null && f.recordInTracciato[keyScattoCodiceSottogruppo] == b.codiceSottogruppo).recordInTracciato[keyScattoCodiceGruppo];
-
-                        // Utilizza localeCompare per ordinare le stringhe
-                        return codiceGruppoA.localeCompare(codiceGruppoB);
-                    });
-                    let thisGruppoOriginaleAppartenenza = "";
-
-                    for (let i = 0; i < result.length; i++) {
-                        let codiceSottGruppo = result[i].codiceSottogruppo;
-                        let naz = result[i].descrizioni.find(f => f.area == null && f.canale == null);
-                        let regionali = result[i].descrizioni.filter(f => !(f.area == null && f.canale == null));
-                        let sottogruppoItem = {
-                            hasFoto: 0,
-                            idRec: 0,
-                            inxOrd: 999999,
-                            isGruppo: true,
-                            isObsoleto: false,
-                            label: null,
-                            recordImpaginato: null,
-                            recordInTracciato: {},
-                            recordRevisionato: naz,
-                            recordRevisionatiRegionali: regionali,
-                            statoSelezione: 0
-                        };
-
-                        //sottogruppoItem.recordRevisionato = item;
-                        sottogruppoItem.recordInTracciato[keyScattoCodiceGruppo] = codiceSottGruppo;
-                        sottogruppoItem.recordInTracciato[keyScattoCodiceSottogruppo] = codiceSottGruppo;
-                        sottogruppoItem.recordInTracciato[keyTracciatoFirma] = result[i].firmaTracciatoSottogruppo;
-                        sottogruppoItem.recordInTracciato.metaKeyInMismatch = [];
-
-                        // Trova il gruppo originale di appartenenza
-                        sottogruppoItem.recordInTracciato.gruppoOriginaleAppartenenza = me.List.find(f => !f.isGruppo && f.recordInTracciato[keyScattoCodiceSottogruppo] != null && f.recordInTracciato[keyScattoCodiceSottogruppo] == codiceSottGruppo).recordInTracciato[keyScattoCodiceGruppo];
-
-                        let groupItems = me.List.filter(f => f.recordInTracciato[keyScattoCodiceSottogruppo] != null && f.recordInTracciato[keyScattoCodiceSottogruppo] == codiceSottGruppo && !f.isGruppo);
-
-                        me.ListSottogruppi = me.ListSottogruppi.concat(groupItems);
-                        me.ListSottogruppi.push(sottogruppoItem);
+                    $("#filtraPerGruppiOSingoli").prop("disabled", false);
+                    //I20-1069: un errore si dice, invece di un TypeError su result.sort.
+                    if (Revisore.mostraErroreDellaChiamata(result, "Descrizioni dei sottogruppi non caricate")) {
+                        //I20-1120: la modalita' sottogruppi non e' partita: la tendina torna coerente.
+                        me.modalitaSottogruppi = false;
+                        $("#filtraPerGruppiOSingoli").val("tutti");
+                        return;
                     }
-
-
-                    let listaOrdinata = [];
-
-                    let gruppi = me.ListSottogruppi.filter(item => item.isGruppo);
-                    me.gruppidebug = gruppi;
-                    var debugQuantitaRegistrata = 0;
-                    gruppi.forEach(gruppo => {
-                        listaOrdinata.push(gruppo);
-
-                        let figli = me.ListSottogruppi
-                            .filter(item =>
-                                !item.isGruppo &&
-                                item.recordInTracciato[keyScattoCodiceGruppo] === gruppo.recordInTracciato.gruppoOriginaleAppartenenza &&
-                                item.recordInTracciato[keyScattoCodiceSottogruppo] === gruppo.recordInTracciato[keyScattoCodiceGruppo]
-                            )
-                            .sort((a, b) => {
-                                let codiceA = a.recordInTracciato[keyScattoCodiceSottogruppo] || '';
-                                let codiceB = b.recordInTracciato[keyScattoCodiceSottogruppo] || '';
-                                return codiceA.localeCompare(codiceB);
-                            });
-
-                        listaOrdinata = listaOrdinata.concat(figli);
-                        console.log(listaOrdinata.filter(f => f.isGruppo == false && f.recordInTracciato[keyRefCodice] == 1572263))
-
-                        if (listaOrdinata.filter(f => f.isGruppo == false && f.recordInTracciato[keyRefCodice] == 3088643).length > debugQuantitaRegistrata) {
-                            debugQuantitaRegistrata++;
-                        }
-                    });
-
-                    me.ListSottogruppi = listaOrdinata;
+                    //I20-1120: intestazioni e membri dalle righe con le copie (costruisciListaSottogruppi).
+                    //Prima si cercava ogni sottogruppo in me.List, che ha un sottogruppo per referenza: un
+                    //sottogruppo che esisteva solo negli altri record faceva saltare la costruzione.
+                    me.ListSottogruppi = Revisore.costruisciListaSottogruppi(righe, result);
 
                     let tmpList = [];
                     tmpList = tmpList.concat(me.List);
@@ -3199,6 +3339,8 @@
         // Eseguiamo la chiamata al controller Revisore sul metodo "checkLastModifica" con POST
         Call.do("Revisore", "checkLastModifica", "POST", data, this, function (result, sender) {
             console.log(result);
+            //I20-1069: un errore si dice, invece di aprire la finestra delle operazioni vuota.
+            if (Revisore.mostraErroreDellaChiamata(result, "Ultime modifiche non caricate")) return;
             hideLoading();
             sender.mostraOperazioniModal(result);
         });
@@ -3407,6 +3549,8 @@
             showLoading();
             Call.do("Revisore", "elimina/" + IdTracciato + "/0/0", "PUT", { coda: [obj] }, ME, function (result, sender) {
                 console.log(result);
+                //I20-1069: su un errore HTTP prima l'avviso diceva solo "error".
+                if (Revisore.mostraErroreDellaChiamata(result, "Errore durante l'eliminazione")) return;
                 //creo il messaggio
                 if (!result.esito) {
                     console.log(result.error);
@@ -3637,6 +3781,8 @@
         let isGruppo = codice.includes(",");
         Call.do("Revisore", "salvaCampoInDatoTracciato/" + IdTracciato + "/" + idPromo, "PUT", { stringhe : valori }, this, function (result, sender) {
             console.log(result);
+            //I20-1069: prima il campo si aggiornava nella pagina anche se il salvataggio era fallito.
+            if (Revisore.mostraErroreDellaChiamata(result, "Campo non salvato")) return;
             var records = sender.List.filter(f => !f.isGruppo && (isGruppo ? f.recordInTracciato[keyScattoCodiceGruppo] == codice : f.recordInTracciato[keyRefCodice] == codice));
 
             records.forEach(item => {

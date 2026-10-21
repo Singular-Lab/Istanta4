@@ -1,8 +1,7 @@
 import { Request } from "express";
 import { Op } from 'sequelize';
-import { HttpStatusCode, OperationStatus, operationStatusReverseMapping } from "../../../lib/enums";
+import { OperationStatus, operationStatusReverseMapping } from "../../../lib/enums";
 import { BadRequestError, DatabaseError, ExternalApiError, NotFoundError } from "../../../lib/errors";
-import { ServiceUnavailableError } from "../../../lib/errors/infrastructure/ServiceUnavailableError";
 import { FileItemKit } from "../../../lib/types";
 import config from "../config";
 import { IIstantaService } from "../interfaces/IIstantaService";
@@ -11,25 +10,19 @@ import { Tracciati } from "../models";
 import { FilesRuntime } from "../models/files_runtime";
 import { RuntimeKit } from "../models/runtime_kit";
 import { ServerUtils } from "../utils/ServerUtils";
+import { esitoIstanta, verificaRisposta } from "../utils/rispostaServizi";
 
 
 export class IstantaService implements IIstantaService {
 
   async getStatusImportazione(guidId: string, req: Request): Promise<any> {
-    const resultCallApi = await ServerUtils.sendToFICOApi<{
-      stato: OperationStatus;
-      error: string;
-      esito: boolean;
-    }>(req, `${config.ISTANTA_IP_ADDRESS}/FicoProcess/getStatoImportazione/${guidId}`, "GET", {});
-    //console.log(resultCallApi);
-    if (resultCallApi.status != HttpStatusCode.OK) {
-      throw new ServiceUnavailableError({
-        message: "Errore durante il recupero dello stato dell'importazione",
-        service: "Istanta",
-        details: { guidId, response: resultCallApi }
-      });
-    }
-    if (resultCallApi.data.stato === OperationStatus.Scartata) {
+    type StatoImportazione = { stato: OperationStatus; error: string; esito: boolean };
+    const data = verificaRisposta<StatoImportazione>(
+      await ServerUtils.sendToFICOApi<StatoImportazione>(req, `${config.ISTANTA_IP_ADDRESS}/FicoProcess/getStatoImportazione/${guidId}`, "GET", {}),
+      'ISTANTA',
+      '/FicoProcess/getStatoImportazione'
+    );
+    if (data.stato === OperationStatus.Scartata) {
       const updateTracciato = await Tracciati.findOne({
         where: { id_tracciati: guidId }
       })
@@ -38,7 +31,7 @@ export class IstantaService implements IIstantaService {
         await updateTracciato.save();
       }
     }
-    if (resultCallApi.data.stato === OperationStatus.Terminata) {
+    if (data.stato === OperationStatus.Terminata) {
       const updateTracciato = await Tracciati.findOne({
         where: { id_tracciati: guidId }
       })
@@ -48,8 +41,8 @@ export class IstantaService implements IIstantaService {
       }
     }
     const datoDaRitornareCorretto = {
-      ...resultCallApi.data,
-      stato: operationStatusReverseMapping[resultCallApi.data.stato],
+      ...data,
+      stato: operationStatusReverseMapping[data.stato],
     }
     return datoDaRitornareCorretto;
   }
@@ -63,7 +56,7 @@ export class IstantaService implements IIstantaService {
       traccia: any[];
     }>;
   }> {
-    const resultCallApi = await ServerUtils.sendToFICOApi<{
+    type Combinazioni = {
       esito: boolean;
       error: string;
       lista: Array<{
@@ -71,26 +64,23 @@ export class IstantaService implements IIstantaService {
         guidIdCanale: string;
         tracciatoContext: any[];
       }>;
-    }>(
-      req,
-      `${config.ISTANTA_IP_ADDRESS}/FicoProcess/getCombinazioniLavorazioneByPromo/${promoId}`,
-      "GET",
-      {}
+    };
+    const data = verificaRisposta<Combinazioni>(
+      await ServerUtils.sendToFICOApi<Combinazioni>(
+        req,
+        `${config.ISTANTA_IP_ADDRESS}/FicoProcess/getCombinazioniLavorazioneByPromo/${promoId}`,
+        "GET",
+        {}
+      ),
+      'ISTANTA',
+      '/FicoProcess/getCombinazioniLavorazioneByPromo',
+      // Una promo senza tracciati torna esito false con lista vuota e nessun errore: non e un fallimento
+      (d) => esitoIstanta(d) || (Array.isArray(d?.lista) && !d?.error)
     );
-    if (resultCallApi.status !== HttpStatusCode.OK) {
-      throw new ServiceUnavailableError({
-        message: "Errore durante il recupero delle combinazioni da istanta",
-        service: "Istanta",
-        details: {
-          promoId,
-          response: resultCallApi
-        }
-      });
-    }
     // Map the response to match the expected interface
     return {
-      ...resultCallApi.data,
-      lista: resultCallApi.data.lista.map(item => ({
+      ...data,
+      lista: data.lista.map(item => ({
         ...item,
         traccia: item.tracciatoContext
       }))
@@ -138,24 +128,21 @@ export class IstantaService implements IIstantaService {
         }) as unknown as FileItemKit[];
 
         const formattedFiles = await Promise.all(files.map(async file => {
-          const fileBuffer = await ServerUtils.sendToFICOApi<{ content: Buffer, esito: boolean, error: string }>(
-            req,
-            `${config.ISTANTA_IP_ADDRESS}/FicoProcess/getMaterialeRuntime/${file.id}`,
-            'GET',
-            undefined
+          const fileBuffer = verificaRisposta<{ content: Buffer, esito: boolean, error: string }>(
+            await ServerUtils.sendToFICOApi<{ content: Buffer, esito: boolean, error: string }>(
+              req,
+              `${config.ISTANTA_IP_ADDRESS}/FicoProcess/getMaterialeRuntime/${file.id}`,
+              'GET',
+              undefined
+            ),
+            'ISTANTA',
+            '/FicoProcess/getMaterialeRuntime'
           );
-          if (!fileBuffer.data.esito) {
-            throw new ExternalApiError({
-              message: fileBuffer.data.error,
-              service: 'ISTANTA',
-              endpoint: '/FicoProcess/getMaterialeRuntime'
-            });
-          }
           return {
             guiIdRegistro: file.id,
             nomeFileOrigine: file.nome,
             versione: 1,
-            file: fileBuffer.data.content
+            file: fileBuffer.content
           };
         }));
 
@@ -202,24 +189,21 @@ export class IstantaService implements IIstantaService {
         const files = filesByKit.get(kit.id) ?? [];
 
         const formattedFiles = await Promise.all(files.map(async file => {
-          const fileBuffer = await ServerUtils.sendToFICOApi<{ content: Buffer, esito: boolean, error: string }>(
-            req,
-            `${config.ISTANTA_IP_ADDRESS}/FicoProcess/getMaterialeRuntime/${file.id}`,
-            'GET',
-            undefined
+          const fileBuffer = verificaRisposta<{ content: Buffer, esito: boolean, error: string }>(
+            await ServerUtils.sendToFICOApi<{ content: Buffer, esito: boolean, error: string }>(
+              req,
+              `${config.ISTANTA_IP_ADDRESS}/FicoProcess/getMaterialeRuntime/${file.id}`,
+              'GET',
+              undefined
+            ),
+            'ISTANTA',
+            '/FicoProcess/getMaterialeRuntime'
           );
-          if (!fileBuffer.data.esito) {
-            throw new ExternalApiError({
-              message: fileBuffer.data.error,
-              service: 'ISTANTA',
-              endpoint: '/FicoProcess/getMaterialeRuntime'
-            });
-          }
           return {
             guiIdRegistro: file.id,
             nomeFileOrigine: file.nome,
             versione: 1,
-            file: fileBuffer.data.content
+            file: fileBuffer.content
           };
         }));
 
@@ -237,6 +221,7 @@ export class IstantaService implements IIstantaService {
       };
 
     } catch (error) {
+      if (error instanceof ExternalApiError) throw error;
       log.error('Errore durante il download dei kit per tipo di export', error instanceof Error ? error : new Error(String(error)), { data });
       throw new DatabaseError({
         message: "Errore durante il download dei kit per tipo di export",

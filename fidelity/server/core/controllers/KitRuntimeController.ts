@@ -3,14 +3,32 @@ import 'express-session';
 import _ from "lodash";
 import { v4 as uuidv4 } from "uuid";
 import { CATEGORIA_ATTIVITA, HttpStatusCode, STATO_LAVORAZIONE_KIT_RUNTIME, STATO_PROMO, TIPO_ATTIVITA } from '../../../lib/enums';
-import { DESIGN_KIT_MONGO } from '../../../lib/types';
+import { DESIGN_KIT } from '../../../lib/types';
 import { BaseController } from '../base/BaseController';
 import { IDesignKitService } from '../interfaces/IDesignKitService';
 import { IKitRuntimeService } from '../interfaces/IKitRuntimeService';
-import { authMiddleware } from '../middleware/authMiddleware';
+import { log } from '../logger';
+import { authMiddleware, integrationAuthMiddleware } from '../middleware/authMiddleware';
 import { permissionGuard } from '../middleware/permissionGuard';
 import { Promo } from '../models/promo';
 import { ServerUtils } from '../utils/ServerUtils';
+
+/** I dati del design che dicono cosa si sta avviando, senza scrivere nel log tutto l'oggetto. */
+const riassuntoDesign = (design: DESIGN_KIT) => ({
+  idDesign: design.guidId,
+  titolo: design.titolo,
+  tipo: design.tipo,
+  stato: design.stato,
+  canale: design.nomeCanale,
+  area: design.nomeArea,
+  idCanale: design.guidCanale,
+  idArea: design.guidArea,
+  idFormato: design.guidFormato,
+  idRaccoglitore: design.guidIdRaccoglitore,
+  tipiExport: design.tipiDiExportInKit?.length ?? 0,
+  filtriContesto: design.filtroContesto?.length ?? 0,
+});
+
 export class KitRuntimeController extends BaseController {
 
   constructor(
@@ -28,7 +46,7 @@ export class KitRuntimeController extends BaseController {
     // From ImpostazioniController
     this.router.get('/getAllKitPerGestioneLavorazione/:idPromo', authMiddleware, permissionGuard('kit_runtime.visualizza'), this.getAllKitPerGestioneLavorazione.bind(this));
     this.router.get('/get_kit_per_gestione_lavorazione/:idPromo/:idKit', authMiddleware, permissionGuard('kit_runtime.visualizza'), this.getKitPerGestioneLavorazione.bind(this));
-    this.router.put('/getKitByPromo', authMiddleware, this.getKitByPromo.bind(this));
+    this.router.put('/getKitByPromo', integrationAuthMiddleware, permissionGuard('kit_runtime.crea'), this.getKitByPromo.bind(this));
     this.router.delete('/mettiInStatoDiEliminazione/:id', authMiddleware, permissionGuard('kit_runtime.elimina'), this.mettiInStatoDiEliminazione.bind(this));
     this.router.delete('/eliminaKitRuntime/:id', authMiddleware, permissionGuard('kit_runtime.elimina'), this.eliminaKitRuntime.bind(this));
     this.router.delete('/eliminaFileKitRuntime/:id', authMiddleware, permissionGuard('kit_runtime.elimina_file'), this.eliminaFileKitRuntime.bind(this));
@@ -46,13 +64,13 @@ export class KitRuntimeController extends BaseController {
     this.router.get('/getKitRunTimeById', authMiddleware, permissionGuard('kit_runtime.visualizza'), this.getKitRunTimeById.bind(this));
     this.router.get('/getKitRunTimeFilesPaginated', authMiddleware, permissionGuard('kit_runtime.visualizza'), this.getKitRunTimeFilesPaginated.bind(this));
     //NOTE: questa funzione viene chiamata dall'esterno non mettere il controllo.
-    this.router.delete('/clearAllFilesKitRuntime/:idKitRuntime/:guidIdExport', authMiddleware, this.clearAllFilesKitRuntime.bind(this));
+    this.router.delete('/clearAllFilesKitRuntime/:idKitRuntime/:guidIdExport', integrationAuthMiddleware, permissionGuard('kit_runtime.elimina_file'), this.clearAllFilesKitRuntime.bind(this));
     this.router.get('/getFilesPerGestioneLavorazione/:idKit', authMiddleware, permissionGuard('kit_runtime.visualizza'), this.getFilesPerGestioneLavorazione.bind(this));
   }
 
   // === Handlers from ImpostazioniController ===
 
-  private async getAllKitPerGestioneLavorazione(req: Request, res: Response): Promise<void> {
+  private async getAllKitPerGestioneLavorazione(req: Request<{ idPromo: string }>, res: Response): Promise<void> {
     try {
       const idPromo = req.params.idPromo;
       const result = await this.kitRuntimeService.getAllKitPerGestioneLavorazione(idPromo, req);
@@ -62,7 +80,7 @@ export class KitRuntimeController extends BaseController {
     }
   }
 
-  private async getKitPerGestioneLavorazione(req: Request, res: Response): Promise<void> {
+  private async getKitPerGestioneLavorazione(req: Request<{ idPromo: string; idKit: string }>, res: Response): Promise<void> {
     try {
       const idPromo = req.params.idPromo;
       const idKit = req.params.idKit;
@@ -74,38 +92,68 @@ export class KitRuntimeController extends BaseController {
   }
 
   private async getKitByPromo(req: Request, res: Response): Promise<void> {
+    const inizio = Date.now();
+    // Tutte le righe di una chiamata hanno la stessa richiesta: si filtrano insieme
+    const traccia = { context: 'getKitByPromo', richiesta: String((req as any).id ?? uuidv4()).slice(0, 8) };
+    const durata = () => ({ durataMs: Date.now() - inizio });
+    // se id esiste allora vuol dire che l'id è conosciuto e quindi devo fare la query
+    const data = (req.body ?? {}) as {
+      id: string,
+      idPromo?: string
+      idCanale?: string
+      idArea?: string
+      idPV?: string
+      lettura: boolean
+      idFormato?: string
+      tags?: string[]
+      promoContext?: {
+        nome_field: string;
+        user_value: string;
+      }[],
+      tipoLavorazione?: number
+    }
+    const parametri = {
+      lettura: data.lettura,
+      id: data.id,
+      idPromo: data.idPromo,
+      idCanale: data.idCanale,
+      idArea: data.idArea,
+      idPV: data.idPV,
+      idFormato: data.idFormato,
+      tipoLavorazione: data.tipoLavorazione,
+      tags: data.tags,
+      promoContext: data.promoContext?.map(c => `${c.nome_field}=${c.user_value}`),
+    };
     try {
-      // se id esiste allora vuol dire che l'id è conosciuto e quindi devo fare la query
-      const data = req.body as {
-        id: string,
-        idPromo?: string
-        idCanale?: string
-        idArea?: string
-        idPV?: string
-        lettura: boolean
-        idFormato?: string
-        tags?: string[]
-        promoContext?: {
-          nome_field: string;
-          user_value: string;
-        }[],
-        tipoLavorazione?: number
-      }
+      log.info('Richiesta ricevuta', {
+        ...traccia,
+        ramo: data.id != undefined ? 'design' : 'combinazioni',
+        autenticazione: res.locals.authVia ?? 'sessione',
+        utente: req.session?.id_utente,
+        tipoUtente: req.session?.tipo_utente,
+        ...parametri,
+      });
       if (data.id != undefined) {
-        const resultDesignKit = await this.designKitService.getCombinazioneDesignById(data.id) as DESIGN_KIT_MONGO
+        const resultDesignKit = await this.designKitService.getCombinazioneDesignById(data.id) as DESIGN_KIT
         if (resultDesignKit == undefined) {
+          log.warn('Design non trovato: risposta 404', { ...traccia, id: data.id, ...durata() });
           res.status(HttpStatusCode.NOT_FOUND).json({ esito: false, content: null, error: "Kit runtime non trovato" });
           return;
         }
+        log.info('Design trovato', { ...traccia, ...riassuntoDesign(resultDesignKit) });
         if (data.lettura == false) {
           if (data.idPromo == undefined) {
+            log.warn('idPromo mancante: risposta 400', { ...traccia, ...durata() });
             res.status(HttpStatusCode.BAD_REQUEST).json({ esito: false, content: null, error: "Id promo mancante" });
             return;
           }
           const kitPerPromo = await this.kitRuntimeService.getAllKitRuntimeByIdPromo(data.idPromo)
+          // getAllKitRuntimeByIdPromo conta solo i runtime con formato di tipo lavorazione 2
+          log.info('Runtime gia presenti nella promo', { ...traccia, idPromo: data.idPromo, runtime: kitPerPromo.length });
+          const guidIdNuovo = uuidv4();
           const resultInizioLavorazionePerIstanta = await this.kitRuntimeService.createKitRunTime({
             ...resultDesignKit,
-            guidId: uuidv4(),
+            guidId: guidIdNuovo,
             idPromo: data.idPromo as string,
             guidIdDesign: resultDesignKit.guidId,
             stato_lavorazione: STATO_LAVORAZIONE_KIT_RUNTIME.IN_LAVORAZIONE,
@@ -114,6 +162,15 @@ export class KitRuntimeController extends BaseController {
             createdAt: new Date(),
             updatedAt: new Date()
           });
+          // createKitRunTime restituisce il runtime gia esistente per design e promo, se c'e
+          log.info(resultInizioLavorazionePerIstanta.guidId === guidIdNuovo ? 'Runtime creato' : 'Runtime gia esistente per design e promo: restituito quello', {
+            ...traccia,
+            idRuntime: resultInizioLavorazionePerIstanta.guidId,
+            idDesign: resultDesignKit.guidId,
+            idPromo: data.idPromo,
+            statoLavorazione: resultInizioLavorazionePerIstanta.stato_lavorazione,
+          });
+          log.info('Attivita di creazione registrata', { ...traccia, autore: req.session.id_utente ?? 'sistema' });
           if (req.session.id_utente != undefined) {
             ServerUtils.CREA_ATTIVITA(
               req.session.id_utente as string,
@@ -158,21 +215,27 @@ export class KitRuntimeController extends BaseController {
                 }
               }
             );
+            log.info('Primo runtime della promo: promo passata a IN_LAVORAZIONE', { ...traccia, idPromo: data.idPromo });
           }
+          log.info('Risposta inviata', { ...traccia, esito: 'runtime', runtime: 1, ...durata() });
           res.status(HttpStatusCode.OK).json({ esito: true, content: [resultInizioLavorazionePerIstanta], error: "" });
           return;
         } else {
+          log.info('Sola lettura: restituito il design', { ...traccia, ...durata() });
           res.status(HttpStatusCode.OK).json({ esito: true, content: [resultDesignKit], error: "" });
           return;
         }
       }
       const dataPerQuery = _.omit(data, ["lettura"]);
-      const result = await this.kitRuntimeService.getAllKitByAreaCanalePV(dataPerQuery);
+      const result = await this.kitRuntimeService.getAllKitByAreaCanalePV(dataPerQuery, traccia);
       if (data.lettura == false) {
+        if (data.idPromo == undefined) {
+          log.warn('idPromo mancante: i runtime vengono cercati e creati senza promo', traccia);
+        }
         for (let singleKit of result) {
           singleKit.idPromo = data.idPromo;
         }
-        const resultInizioLavorazionePerIstanta = await this.kitRuntimeService.bulkCreateRuntime(result.map((singleKit: DESIGN_KIT_MONGO) => ({ ...singleKit, idPromo: data.idPromo })) as (DESIGN_KIT_MONGO & { idPromo: string; })[])
+        const resultInizioLavorazionePerIstanta = await this.kitRuntimeService.bulkCreateRuntime(result.map((singleKit: DESIGN_KIT) => ({ ...singleKit, idPromo: data.idPromo })) as (DESIGN_KIT & { idPromo: string; })[], traccia)
 
         if (req.session.id_utente) {
           await ServerUtils.CREA_ATTIVITA(
@@ -185,14 +248,20 @@ export class KitRuntimeController extends BaseController {
               nome_kit: result[0]?.titolo || result[0]?.nome || 'Kit manuale',
             }
           );
+          log.info('Attivita di creazione registrata', { ...traccia, autore: req.session.id_utente });
+        } else {
+          log.info('Attivita di creazione non registrata: chiamata senza utente', traccia);
         }
 
+        log.info('Risposta inviata', { ...traccia, esito: 'runtime', runtime: resultInizioLavorazionePerIstanta.length, ...durata() });
         res.status(HttpStatusCode.OK).json({ esito: true, content: resultInizioLavorazionePerIstanta, error: "" });
         return;
       } else {
+        log.info('Sola lettura: restituite le combinazioni', { ...traccia, combinazioni: result.length, ...durata() });
         res.status(HttpStatusCode.OK).json({ error: "", esito: true, content: result });
       }
     } catch (error: any) {
+      log.error('Richiesta fallita', error, { ...traccia, ...parametri, ...durata() });
       this.handleError(res, error);
     }
   }
@@ -200,7 +269,7 @@ export class KitRuntimeController extends BaseController {
 
 
 
-  private async mettiInStatoDiEliminazione(req: Request, res: Response): Promise<void> {
+  private async mettiInStatoDiEliminazione(req: Request<{ id: string }>, res: Response): Promise<void> {
     try {
       const id = req.params.id;
       const result = await this.kitRuntimeService.mettiInStatoDiEliminazione(id);
@@ -210,7 +279,7 @@ export class KitRuntimeController extends BaseController {
     }
   }
 
-  private async eliminaKitRuntime(req: Request, res: Response): Promise<void> {
+  private async eliminaKitRuntime(req: Request<{ id: string }>, res: Response): Promise<void> {
     try {
       const id = req.params.id;
       const result = await this.kitRuntimeService.eliminaKitRuntime(id);
@@ -220,7 +289,7 @@ export class KitRuntimeController extends BaseController {
     }
   }
 
-  private async eliminaFileKitRuntime(req: Request, res: Response): Promise<void> {
+  private async eliminaFileKitRuntime(req: Request<{ id: string }>, res: Response): Promise<void> {
     try {
       const idFile = req.params.id;
       const result = await this.kitRuntimeService.eliminaFileKitRuntime(idFile);
@@ -301,7 +370,7 @@ export class KitRuntimeController extends BaseController {
 
   // === Handlers from PromoController ===
 
-  private async getKitRuntimeByPromo(req: Request, res: Response): Promise<void> {
+  private async getKitRuntimeByPromo(req: Request<{ idPromo: string }>, res: Response): Promise<void> {
     try {
       const idPromo = req.params.idPromo;
       const allKitRuntime = await this.kitRuntimeService.getAllKitRuntimeByIdPromo(idPromo);
@@ -314,7 +383,7 @@ export class KitRuntimeController extends BaseController {
     }
   }
 
-  private async getAllKitRuntimeByPromo(req: Request, res: Response): Promise<void> {
+  private async getAllKitRuntimeByPromo(req: Request<{ idPromo: string }>, res: Response): Promise<void> {
     try {
       const idPromo = req.params.idPromo;
       const allKitRuntime = await this.kitRuntimeService.getAllKitRuntimeByIdPromo(idPromo);
@@ -364,7 +433,7 @@ export class KitRuntimeController extends BaseController {
     }
   }
 
-  private async clearAllFilesKitRuntime(req: Request, res: Response): Promise<void> {
+  private async clearAllFilesKitRuntime(req: Request<{ idKitRuntime: string; guidIdExport: string }>, res: Response): Promise<void> {
     try {
       const { idKitRuntime, guidIdExport } = req.params;
       await this.kitRuntimeService.clearAllFilesKitRuntime(idKitRuntime, guidIdExport)
@@ -374,7 +443,7 @@ export class KitRuntimeController extends BaseController {
     }
   }
 
-  private async getFilesPerGestioneLavorazione(req: Request, res: Response): Promise<void> {
+  private async getFilesPerGestioneLavorazione(req: Request<{ idKit: string }>, res: Response): Promise<void> {
     try {
       const idKit = req.params.idKit;
       const result = await this.kitRuntimeService.getFilesPerGestioneLavorazione(idKit, req);

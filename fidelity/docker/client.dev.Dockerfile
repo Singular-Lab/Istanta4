@@ -2,15 +2,17 @@ FROM node:26-slim
 
 WORKDIR /app
 
-# Copia i package.json di tutti i workspace prima di npm install (cache layer)
-COPY package*.json ./
-COPY src/package*.json src/
-COPY server/package*.json server/
+# Manifest, lockfile e Yarn versionato prima del sorgente (cache layer).
+# Yarn si invoca dal binario in .yarn/releases: l'immagine non deve averlo.
+COPY package.json yarn.lock .yarnrc.yml ./
+COPY .yarn/releases .yarn/releases
+COPY src/package.json src/
+COPY server/package.json server/
 
-RUN npm install --install-strategy=hoisted
+RUN node .yarn/releases/yarn-4.18.1.cjs install --immutable
 
 COPY . .
 
 EXPOSE 3009
 
-CMD ["npm", "run", "dev:client", "--", "--host", "0.0.0.0"]
+CMD ["node", ".yarn/releases/yarn-4.18.1.cjs", "dev:client", "--host", "0.0.0.0"]

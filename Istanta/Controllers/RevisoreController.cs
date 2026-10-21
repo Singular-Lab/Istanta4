@@ -211,6 +211,16 @@ namespace Istanta.Controllers
             return result;
         }
 
+        /// <summary>
+        /// I20-1092: la chiave con cui la lista del revisore tiene una ref singola una volta sola:
+        /// ref, gruppo, area e canale. Senza il gruppo una ref in due gruppi della stessa area e canale
+        /// restava solo nel primo, e l'altro gruppo compariva senza le sue ref.
+        /// </summary>
+        public static string ChiaveSingoloRevisione(string codice, string codiceGruppo, string? area, string? canale)
+        {
+            return $"{codice}|{codiceGruppo}|{area}_{canale}";
+        }
+
         [HttpPost]
         [Route("Revisore/getConteggio")]
         public async Task<IActionResult> getConteggioListaRevisione(RevisoreRequest req)
@@ -1190,6 +1200,8 @@ out var mismatch);
             Console.WriteLine("Richiesta getListaRevisione2 ricevuta");
 
             RevisoreResult result = new RevisoreResult();
+            //I20-1069: la traccia di un errore interno (la selezione automatica), che il catch passa al posto della propria.
+            string? dettaglioInterno = null;
 
             Stopwatch sw = new Stopwatch();
 
@@ -1218,13 +1230,13 @@ out var mismatch);
                         PromoTracciati? PromoTracciato = this.ctx2.PromoTracciatis.Where(f => f.Id == req.IdTracciatiPartenza[0]).FirstOrDefault();
                         if (PromoTracciato == null)
                         {
-                            throw new Exception("Tracciato non trovato nel database");
+                            throw new ErroreIstanta("lettura del tracciato", $"il tracciato {req.IdTracciatiPartenza[0]} non esiste.");
                         }
                         idPromo = PromoTracciato.IdPromo;
                     }
                     else
                     {
-                        throw new Exception("Nessun tracciato inviato");
+                        throw new ErroreIstanta("lettura del tracciato", "la richiesta non indica ne' la promo ne' un tracciato.");
                     }
                 }
                 else
@@ -1256,8 +1268,12 @@ out var mismatch);
                 var areaCanaleMap = new Dictionary<long, (string Area, string Canale, long IdTracciato)>();
                 var q_records = new List<q_records_per_getListaRevisione>();
 
+                //I20-1069: una promo che non c'e' dava un NullReferenceException senza dati.
+                if (imp == null)
+                    throw new ErroreIstanta("lettura della promo", $"la promo {idPromo} non esiste.");
+
                 // Estrazione iniziale
-                foreach (PromoTracciati tracciato in imp!.PromoTracciatis
+                foreach (PromoTracciati tracciato in imp.PromoTracciatis
                     .Where(f => req.IdTracciatiRichiesti.Contains(f.Id) || req.IdTracciatiRichiesti[0] == 0))
                 {
                     foreach (var record in tracciato.PromoTracciatiRecords
@@ -1284,7 +1300,8 @@ out var mismatch);
 
                 foreach (var record in promoRecords)
                 {
-                    var datoSingolo = Utility.Main.getJsonObject(record.Dato!)!;
+                    var datoSingolo = Utility.Main.getJsonObject(record.Dato!)
+                        ?? throw new ErroreIstanta("lettura del tracciato", $"il Dato del record {record.Id} non si legge.");
                     datoSingolo["idRec"] = record.Id.ToString();
                     datoSingolo["label"] = record.Label!;
                     datoSingolo["idTracciato"] = record.IdTracciato;
@@ -1381,8 +1398,9 @@ out var mismatch);
                 //Dictionary<string, ArticoloInRevisione> dictCache = new Dictionary<string, ArticoloInRevisione>();
                 List<string> codesCache = new List<string>();
                 //int debug_count_gruppi = 0;
-                List<string> q_records_codici = q_records.Select(s => s.Dato[key_codice_ref].ToString()!).ToList();
-                List<string> q_records_codiciGruppi = q_records.Select(s => s.Dato[key_codice_gruppo].ToString()!).ToList();
+                //I20-1069: un record senza codice o senza gruppo dice quale, invece di un KeyNotFoundException.
+                List<string> q_records_codici = q_records.Select(s => RecordTracciato.Richiesto(s.Dato, key_codice_ref, "lettura del tracciato", $"il record {s.Id}").ToString()!).ToList();
+                List<string> q_records_codiciGruppi = q_records.Select(s => RecordTracciato.Richiesto(s.Dato, key_codice_gruppo, "lettura del tracciato", $"il record {s.Id}").ToString()!).ToList();
 
 
                 List<Articoli> arts = await this.ctx.Articolis.Include(i => i.ArticoliDescrizionis).Include(i => i.ArticoliFotos).AsSplitQuery().Where(r => q_records_codici.Contains(r.Codice)).ToListAsync();
@@ -1416,7 +1434,12 @@ out var mismatch);
                     }
                     
 
-                    string codSingoloCache = $"{cod}|{qItem.Area}_{qItem.Canale}";
+                    //I20-1092: la ref singola si tiene una volta per gruppo, area e canale. Con la sola
+                    //coppia ref/area-canale una ref che stava in due gruppi nella stessa area e canale
+                    //entrava solo col primo, e il secondo gruppo arrivava al revisore senza le sue ref
+                    //(il revisore di Edro21 non si apriva piu'). I conteggi non cambiano: contano i
+                    //codici distinti (getConteggio, e nel client creaEAggiornaRevisioniCounter).
+                    string codSingoloCache = ChiaveSingoloRevisione(cod, cod_gruppo, qItem.Area, qItem.Canale);
                     string codGruppoCache = $"{cod_gruppo}|{qItem.Area}_{qItem.Canale}";
 
                     if (cod == "4525536")
@@ -1520,9 +1543,9 @@ out var mismatch);
         );
                 if (!selezioneResult.Esito)
                 {
-                    throw new InvalidOperationException(
-                        $"Errore durante l'autoselezione: {selezioneResult.error}"
-                    );
+                    //I20-1069: il motivo del Selezionatore e' gia' breve; la sua traccia va in dettaglio.
+                    dettaglioInterno = selezioneResult.dettaglio;
+                    throw new ErroreIstanta("selezione automatica di primarie e secondarie", selezioneResult.error);
                 }
 
                 var dopoSelezione = result.Data
@@ -1596,7 +1619,8 @@ out var mismatch);
                     }
 
 
-                    string codSingoloCache = $"{cod}|{qItem.Area}_{qItem.Canale}";
+                    //I20-1092: la stessa chiave del primo passaggio (qui non serve, ma non deve dire altro).
+                    string codSingoloCache = ChiaveSingoloRevisione(cod, cod_gruppo, qItem.Area, qItem.Canale);
                     string codGruppoCache = $"{cod_gruppo}|{qItem.Area}_{qItem.Canale}";
 
                     //Poi formo il gruppo
@@ -2154,6 +2178,20 @@ out var mismatch);
                 }
 
 
+                //I20-1120: per ogni referenza e gruppo, i sottogruppi di tutti i record caricati (tracciati
+                //ed etichette), con il record che li porta. La riga resta una, con il sottogruppo di un record
+                //solo: la vista Sottogruppi mostra anche gli altri da altriSottogruppi.
+                string key_codice_sottogruppo = Enum.GetName(AddestramentoRuoli.Scatto) + "." + GLOBAL_VARIABLES.keyScattoCodiceSottogruppo;
+                var sottogruppiPerRiga = RevisioneSottogruppi.SottogruppiPerRiga(q_records
+                    .Where(q => q.Dato != null && !q.isGruppo)
+                    .Select(q => new RevisioneSottogruppi.RecordSottogruppo(
+                        Canon(GetDatoValueOrNull(q.Dato, key_codice_ref)!)!,
+                        Canon(GetDatoValueOrNull(q.Dato, key_codice_gruppo)!)!,
+                        GetDatoValueOrNull(q.Dato, key_codice_sottogruppo)?.ToString(),
+                        q.Id,
+                        q.Dato.TryGetValue("idTracciato", out var idTracciatoDato) && int.TryParse(idTracciatoDato?.ToString(), out var idTracciatoRecord) ? idTracciatoRecord : 0,
+                        q.Label)));
+
                 //
                 // 4. Popolo finalList per i SINGOLI.
                 //    La lista resta distinta per CodiceRef + CodiceGruppo,
@@ -2209,6 +2247,14 @@ out var mismatch);
                             }
                         }
                     }
+
+                    //I20-1120: gli altri sottogruppi della referenza in questo gruppo, per la vista Sottogruppi.
+                    itemDaAggiungere.altriSottogruppi = RevisioneSottogruppi.AltriSottogruppi(
+                        sottogruppiPerRiga,
+                        (grp.Key.Item1 ?? "", grp.Key.Item2 ?? ""),
+                        itemDaAggiungere.recordInTracciato != null
+                            ? GetDatoValueOrNull(itemDaAggiungere.recordInTracciato, key_codice_sottogruppo)?.ToString()
+                            : null);
 
                     finalList.Add(itemDaAggiungere);
                 }
@@ -2342,7 +2388,9 @@ out var mismatch);
                                                             // execLibFunction lega per NOME, non per posizione.
 
 
-                tracciatoRevisione = (icItem.execLibFunction($"AgenziaLib.{this._fico_conf.Value.nomeCliente}.specificaInOutVol", objParams) as List<q_records_per_getListaRevisione>);
+                //I20-1069: senza specificaInOutVol in AgenziaLib prima un "Value cannot be null" qui sotto.
+                tracciatoRevisione = (icItem.execLibFunctionRichiesta($"AgenziaLib.{this._fico_conf.Value.nomeCliente}.specificaInOutVol", objParams) as List<q_records_per_getListaRevisione>)
+                    ?? throw new ErroreIstanta("ingressi e uscite del volantino", "specificaInOutVol di AgenziaLib non ha restituito la lista.");
 
                 //Aggoirno Meta.keyACComuni su result.Data.recordInTraciato
                 //foreach (var item in result.Data)
@@ -2384,8 +2432,12 @@ out var mismatch);
             }
             catch (Exception ex)
             {
-                result.Error = ex.ToString();
-                Console.WriteLine($"Errore in getListaRevisione: {ex.ToString()}");
+                //I20-1069: prima la lista restava quella parziale, con l'intera traccia in Error, e il revisore
+                //web non la leggeva. Ora niente lista parziale, il motivo breve e la traccia in Dettaglio.
+                Console.WriteLine($"Errore in getListaRevisione (promo {req?.IdPromo}): {ex.ToString()}");
+                result.Data = new List<ArticoloInRevisione>();
+                result.Error = DescrizioneErrori.Breve("getListaRevisione2", ex);
+                result.Dettaglio = dettaglioInterno ?? DescrizioneErrori.Dettaglio(ex);
             }
 
             return Ok(result);
@@ -2442,16 +2494,22 @@ out var mismatch);
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
+            //I20-1120: solo i record attivi, come il conteggio della pagina Tracciati (getConteggio).
             var promoTracciatiRecords = await this.ctx2.PromoTracciatiRecords
                 .Include(r => r.IdTracciatoNavigation)
                 .Where(r =>
                     r.IdTracciatoNavigation.IdPromo == idPromo &&
+                    r.Stato == (byte)StatoRecord.Attivo &&
                     codiciSingoli.Contains(r.Codice))
                 .ToListAsync();
 
             var items = await this.ctx.ArticoliDescrizionis
                 .Where(a => sottogruppi.Contains(a.CodiceGruppo!))
                 .ToListAsync();
+
+            //I20-1120: le firme si calcolano passando a ogni sottogruppo solo i record dei suoi codici.
+            //Con tutti i record della promo per ogni sottogruppo la richiesta durava decine di secondi.
+            var firme = RevisioneConteggio.FirmeDeiSottogruppi(promoTracciatiRecords, sottogruppi);
 
             var output = sottogruppi
                 .Select(sg => new DescrizioniSottogruppi
@@ -2460,11 +2518,7 @@ out var mismatch);
                     descrizioni = items
                         .Where(a => string.Equals(a.CodiceGruppo, sg, StringComparison.OrdinalIgnoreCase))
                         .ToList(),
-                    firmaTracciatoSottogruppo = Utility.Main.getFirmaTracciatoGruppoDaRecords(
-                        promoTracciatiRecords,
-                        sg,
-                        true
-                    )
+                    firmaTracciatoSottogruppo = firme[sg]
                 })
                 .ToList();
 
@@ -2479,17 +2533,22 @@ out var mismatch);
             IstantaController icCtrl = new IstantaController(this._config.GetConnectionString("IstandaConnectionDb")!, this.path_external_lib, this.path_external_source, this._dbContextFactory);
 
             var session = SessionIstantaObject.GetSession(HttpContext);
-            if (session.ToLower() == "no session" || session == null || session == "")
+            //I20-1069: la sessione si legge una volta sola; prima int.Parse dentro il ciclo, e "no session" come messaggio.
+            if (string.IsNullOrEmpty(session) || !int.TryParse(session, out int autore))
             {
                 result.Esito = false;
-                result.error = "no session";
+                result.error = ErroreIstanta.SessioneScaduta().Message;
                 return Ok(result);
             }
             List<ArticoliDescrizioni> descrItemList = new List<ArticoliDescrizioni>();
             Exception? erroreDuranteIlSalvataggio = null;   // se il ciclo fallisce, l'errore deve arrivare al chiamante
+            //I20-1069: quante revisioni sono gia' salvate e su quale ci si e' fermati. Prima, dopo un errore, il
+            //ciclo continuava e salvava le altre, e la risposta diceva solo l'ultimo errore.
+            int revisioniSalvate = 0;
+            string? fermaSu = null;
             foreach (RevisioneAction act in acts.coda)
             {
-                
+
 
                 try
                 {
@@ -2527,9 +2586,8 @@ out var mismatch);
                             var promo = this.ctx2.Promos.Include(f => f.PromoTracciatis).ThenInclude(f => f.PromoTracciatiRecords).Where(f => f.Id == acts.idPromo).FirstOrDefault();
                             if (promo == null)
                             {
-                                result.Esito = false;
-                                result.error = "Nessuna promo con trovata con ID: " + acts.idPromo;
-                                return Ok(result);
+                                //I20-1069: passa dal catch del ciclo, che dice quante revisioni erano gia' salvate.
+                                throw new ErroreIstanta("lettura della promo", $"la promo {acts.idPromo} non esiste.");
                             }
 
                             foreach (var trac in promo.PromoTracciatis)
@@ -2619,7 +2677,8 @@ out var mismatch);
                             Dictionary<string, object> _pass = new Dictionary<string, object>();
 
                             _pass["wrap"] = wrap;
-                            string resultJson = icCtrl.execLibFunction(
+                            //I20-1069: obbligatorio. Se manca nella dll lo si dice; prima diventava "elemento non trovato durante l'estrazione del garante".
+                            string resultJson = icCtrl.execLibFunctionRichiesta(
                                 $"AgenziaLib.{this._fico_conf.Value.nomeCliente}.GetMetaPerRevisioneDaGruppiMultipli",
                                 _pass
                             ) as string;
@@ -2637,7 +2696,7 @@ out var mismatch);
                             }
                             else
                             {
-                                throw new Exception("Elemento con codice " + act.Codice + " non trovato durante l'estrazione del garante");
+                                throw new ErroreIstanta("estrazione del garante", $"la libreria del cliente non ha restituito il garante della ref {act.Codice}.");
                             }
                         }
                         //I20-983: e senza record non si entra nemmeno qui, che partirebbe dal
@@ -2753,6 +2812,8 @@ out var mismatch);
 
 
                         this.ctx.SaveChanges();
+                        //I20-1069: da qui la revisione e' salvata; se dopo qualcosa si ferma, l'errore la conta.
+                        revisioniSalvate++;
 
                         descrItemList.Add(descrItem);
                     }
@@ -2854,7 +2915,8 @@ out var mismatch);
                             Dictionary<string, object> _pass = new Dictionary<string, object>();
 
                             _pass["wrap"] = wrap;
-                            string resultJson = icCtrl.execLibFunction(
+                            //I20-1069: obbligatorio. Se manca nella dll lo si dice; prima diventava "elemento non trovato durante l'estrazione del garante".
+                            string resultJson = icCtrl.execLibFunctionRichiesta(
                                 $"AgenziaLib.{this._fico_conf.Value.nomeCliente}.GetMetaPerRevisioneDaGruppiMultipli",
                                 _pass
                             ) as string;
@@ -2871,7 +2933,7 @@ out var mismatch);
                             }
                             else
                             {
-                                throw new Exception("Gruppo con codice " + act.CodiceGruppo + " non trovato durante l'estrazione del garante");
+                                throw new ErroreIstanta("estrazione del garante", $"la libreria del cliente non ha restituito il garante del gruppo {act.CodiceGruppo}.");
                             }
                         }
                         //I20-983: come sopra, senza record non c'e' un primo elemento da cui partire.
@@ -3035,6 +3097,8 @@ out var mismatch);
 
 
                         this.ctx.SaveChanges();
+                        //I20-1069: da qui la revisione e' salvata; se dopo qualcosa si ferma, l'errore la conta.
+                        revisioniSalvate++;
 
                         descrItemList.Add(descrItem);
                         //return Ok(descrItem);
@@ -3052,7 +3116,7 @@ out var mismatch);
                         nuovaOperazione.Canale = actCanale != null ? actCanale : "";
                         //nuovaOperazione.Canale = act.canaleRichiesto ? act.Canale : "";
                         nuovaOperazione.Stato = (byte)statoOperazioni.risolta;
-                        nuovaOperazione.Autore = int.Parse(session);
+                        nuovaOperazione.Autore = autore;
                         var data = DateTime.Now;
                         nuovaOperazione.TipoOperazione = (byte)tipoOperazione.revisione;
                         nuovaOperazione.IdTracciato = idTracciato;
@@ -3071,6 +3135,9 @@ out var mismatch);
                         nuovaOperazione.FormData = JsonConvert.SerializeObject(revReg);
                         nuovaOperazione.Url = sender == senderOperazione.indd ? "Revisore/SincronizzaModificheIndd" : "Revisore/salva";
                         register.addOperazione(nuovaOperazione, true, session, DateTime.Now);
+                        //I20-1069: prima un errore della registrazione restava in console.
+                        if (register.Errore != null)
+                            throw new ErroreIstanta("registrazione della revisione", register.Errore);
                     }
                     else
                     {
@@ -3079,19 +3146,39 @@ out var mismatch);
                 }
                 catch (Exception ex)
                 {
-                    result.error = ex.ToString();
+                    //I20-1069: ci si ferma qui. Prima il ciclo continuava, salvava le revisioni successive e
+                    //poteva salvare con loro anche le modifiche lasciate a meta' da questa: si scartano.
+                    Console.WriteLine($"Errore in Revisore/salva (revisione {act.Codice}{act.CodiceGruppo}, salvate {revisioniSalvate} su {acts.coda.Count}): " + ex.ToString());
                     erroreDuranteIlSalvataggio = ex;
-                }    
+                    fermaSu = !string.IsNullOrEmpty(act.Codice) ? act.Codice : act.CodiceGruppo;
+                    this.ctx.ChangeTracker.Clear();
+                    this.ctx2.ChangeTracker.Clear();
+                    break;
+                }
             }
             if (erroreDuranteIlSalvataggio != null)
             {
                 // Prima questo errore finiva in result.error, che non veniva mai restituito:
                 // il chiamante riceveva 200 con una lista vuota e non sapeva che era fallito.
-                var _radice = erroreDuranteIlSalvataggio;
-                while (_radice.InnerException != null) _radice = _radice.InnerException;
-                return StatusCode(500, new { error = _radice.Message, tipo = _radice.GetType().Name });
+                //I20-1069: il motivo breve (passo, o tipo e riga) con quante revisioni sono salvate e dove ci si
+                //e' fermati; la traccia in dettaglio. tipo resta, per chi lo leggeva.
+                var _radice = DescrizioneErrori.Radice(erroreDuranteIlSalvataggio);
+                return StatusCode(500, new
+                {
+                    error = TestoSalvataggioInterrotto(revisioniSalvate, acts.coda.Count, fermaSu, erroreDuranteIlSalvataggio),
+                    dettaglio = DescrizioneErrori.Dettaglio(erroreDuranteIlSalvataggio),
+                    tipo = _radice.GetType().Name
+                });
             }
             return Ok(descrItemList);
+        }
+
+        /// I20-1069: l'errore del salvataggio del revisore: quante revisioni della coda sono gia' salvate,
+        /// su quale codice ci si e' fermati, e perche'. Il conteggio va per primo: il messaggio breve si
+        /// taglia in coda, e che il salvataggio sia parziale l'operatore deve saperlo comunque.
+        public static string TestoSalvataggioInterrotto(int salvate, int totale, string? fermaSu, Exception ex)
+        {
+            return $"Salvate {salvate} revisioni su {totale}, ferma su {fermaSu}. {DescrizioneErrori.Breve("salva", ex)}";
         }
 
 
@@ -3818,6 +3905,9 @@ out var mismatch);
         {
            
             BoolResult result = new BoolResult();
+            //I20-1084: il salvataggio lascia traccia nel log, all'ingresso, all'esito e sull'errore.
+            //Dei testi solo lo stato e la lunghezza.
+            string riassunto = "richiesta non leggibile (" + (reqStr?.Length ?? 0) + " caratteri)";
             
             try
             {
@@ -3825,6 +3915,8 @@ out var mismatch);
                 //Console.WriteLine("RevisioneFromInddRequest RICEVUTO: " + reqStr);
 
                 RevisioneFromInddRequest? req = JsonConvert.DeserializeObject<RevisioneFromInddRequest>(reqStr);
+                riassunto = Utility.SalvataggioRefDaIndd.Riassunto(req);
+                _logger.LogInformation("salvaRefFromIndd: {Richiesta}", riassunto);
 
                 PromoLavorazioniRecord plrItem = this.ctx2.PromoLavorazioniRecords.Include(inc=>inc.IdPromoTracciatiRecordNavigation).FirstOrDefault(f => f.IdLavorazione == req!.idLavorazione && f.CodiceGruppo == req.codice_gruppo)!;
                 string kyeFirma = Enum.GetName(AddestramentoRuoli.Tracciato) + "." + GLOBAL_VARIABLES.keyTracciatoFirma;
@@ -4076,6 +4168,22 @@ out var mismatch);
                 }
                 
 
+                //I20-1077: i campi di testo per cui l'operatore ha scelto il testo del box. I campi
+                //offerta qui sotto si registrano soltanto come attivita': il testo scelto va nel meta
+                //della lavorazione, da dove la lista e la scheda lo rimettono nei campi compilati.
+                //I20-1088: nella riga dell'impaginazione del box (idRec), con la versione attuale del
+                //suo record: e' da li' che il Plugin capira' se la lista e' stata ricaricata.
+                if (req.testiDalBox != null && req.testiDalBox.Count > 0)
+                {
+                    PromoLavorazioniRecord rigaDeiTesti = RecordDellaLavorazione.Trova(this.ctx2, req.idLavorazione, req.codice_gruppo, req.idRec);
+                    byte? versione = RecordDellaLavorazione.VersioneDelRecord(this.ctx2, req.idRec > 0 ? req.idRec : rigaDeiTesti.IdRecordTracciato);
+                    RevisioneMetaPromoLavorazioni metaTesti = (rigaDeiTesti.Meta != null ? MetaPromoLavorazioni.leggi(rigaDeiTesti.Meta) : null)
+                        ?? new RevisioneMetaPromoLavorazioni();
+                    MetaPromoLavorazioni.applicaTestiDalBox(metaTesti, req.testiDalBox, versione);
+                    rigaDeiTesti.Meta = JsonConvert.SerializeObject(metaTesti);
+                    this.ctx2.SaveChanges();
+                }
+
                 for (int i = 0; i < req.campi_offerta!.Count; i++)
                 {
                     RevisioneCampiOffertaFromIndd revField = req.campi_offerta[i];
@@ -4091,11 +4199,14 @@ out var mismatch);
 
 
                 result.Esito = true;
+                _logger.LogInformation("salvaRefFromIndd riuscito: {Richiesta}, descrizione {Descrizione}",
+                    riassunto, req.revisione!.valore != "" ? "salvata" : "non revisionata");
 
             }
             catch(Exception ex)
             {
                 //Console.WriteLine(ex.ToString());
+                _logger.LogError(ex, "salvaRefFromIndd fallito: {Richiesta}", riassunto);
                 result.error = ex.ToString();
             }
 

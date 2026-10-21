@@ -14,11 +14,13 @@ export interface IOrdiniStampaService {
     deleteOrdineStampa(id: string): Promise<boolean>;
 
     getAllOrdiniDiStampaInCorso(): Promise<OrdiniDiStampaResponseDTO[]>;
+    prenotaInvio(idOrdineDiStampa: string): Promise<STATO_ORDINI_STAMPA>;
     processFTPPopOlimpo(params: {
         req: Request;
         idOrdineDiStampa: string;
         kitIds: Record<string, boolean>;
         socketId: string;
+        statoPrecedente: STATO_ORDINI_STAMPA;
     }): Promise<void>;
     getAllOrdiniDiStampaFiniti(): Promise<(OrdiniDiStampaResponseDTO & { nomePromo: string })[]>;
     creaOrdineDiStampa(data: OrdiniDiStampaAttributes): Promise<any>;

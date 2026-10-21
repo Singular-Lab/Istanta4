@@ -2,14 +2,18 @@
 FROM node:22-bookworm-slim AS build
 
 WORKDIR /app
-COPY package.json ./
-RUN npm install --legacy-peer-deps --no-audit --no-fund
+# Yarn si invoca dal binario versionato in .yarn/releases: l'immagine non deve
+# avere ne' Yarn ne' Corepack. Aggiornando Yarn va aggiornato anche questo nome.
+COPY package.json yarn.lock .yarnrc.yml ./
+COPY .yarn/releases ./.yarn/releases
+RUN node .yarn/releases/yarn-4.18.1.cjs install --immutable
 
-COPY ui/package.json ./ui/
-RUN npm --prefix ui install --legacy-peer-deps --no-audit --no-fund
+# ui/ e' un progetto a parte con il proprio yarn.lock (eredita .yarnrc.yml).
+COPY ui/package.json ui/yarn.lock ./ui/
+RUN cd ui && node ../.yarn/releases/yarn-4.18.1.cjs install --immutable
 
 COPY . .
-RUN npm run build
+RUN node .yarn/releases/yarn-4.18.1.cjs build
 
 FROM node:22-bookworm-slim AS runtime
 
@@ -28,9 +32,11 @@ RUN apt-get update \
         python3-pil \
     && rm -rf /var/lib/apt/lists/*
 
-COPY package.json ./
-RUN npm install --omit=dev --legacy-peer-deps --no-audit --no-fund \
-    && npm cache clean --force
+# Solo le dipendenze di produzione, alle versioni del lockfile.
+COPY package.json yarn.lock .yarnrc.yml ./
+COPY .yarn/releases ./.yarn/releases
+RUN node .yarn/releases/yarn-4.18.1.cjs workspaces focus --production \
+    && node .yarn/releases/yarn-4.18.1.cjs cache clean --all
 
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/private-ui ./private-ui

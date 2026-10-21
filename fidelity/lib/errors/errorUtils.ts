@@ -34,6 +34,28 @@ export function serializeError(error: unknown): Record<string, unknown> {
   return { message: String(error) };
 }
 
+export const GENERIC_ERROR_MESSAGE = 'Si è verificato un errore imprevisto';
+
+/**
+ * Toglie da un errore serializzato i testi interni prima di inviarlo al client.
+ * In produzione la causa e lo stack non vengono mai esposti e, per un errore non
+ * applicativo (Sequelize, librerie, bug), nemmeno messaggio e dettagli originali:
+ * restano nei log. Fuori dalla produzione il payload resta completo.
+ */
+export function redactErrorForClient(serialized: Record<string, unknown>, isApplicationError: boolean): Record<string, unknown> {
+  if (process.env.NODE_ENV !== 'production') {
+    return serialized;
+  }
+
+  delete serialized.cause;
+  delete serialized.stack;
+  if (!isApplicationError) {
+    serialized.message = GENERIC_ERROR_MESSAGE;
+    delete serialized.details;
+  }
+  return serialized;
+}
+
 /**
  * Wrappa errori esterni (es. da librerie o API) in un InfrastructureError
  */

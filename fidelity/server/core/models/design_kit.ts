@@ -4,7 +4,6 @@ import { sequelize } from '../db/SequelizeConnector';
 
 /**
  * Modello DesignKit per gestione kit di design
- * Basato sulla struttura MongoDB fornita dall'utente
  */
 
 export interface DesignKitAttributes {

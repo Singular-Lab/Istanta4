@@ -14,6 +14,7 @@ import {
   UnauthorizedError,
   ValidationError
 } from './errors';
+import { condividiInVolo } from './richiesteInVolo';
 
 /**
  * Interfaccia per gli errori che arrivano dal server
@@ -583,10 +584,10 @@ class ServerCall {
       this.onUnauthorizedCallback(istantaRequired);
     } else {
       // 5. FALLBACK: redirect diretto se nessun HOC attivo
-      // Questo accade solo in pagine senza withSessionCheck
+      // Succede solo prima che una pagina protetta sia mai comparsa (dopo, l'HOC lascia una
+      // callback vuota): l'utente sta entrando senza sessione, login pulito senza avviso.
       if (typeof window !== 'undefined' && window.location) {
-        const reason = istantaRequired ? 'istanta_required' : 'session_expired';
-        window.location.href = `/login?reason=${reason}`;
+        window.location.href = istantaRequired ? '/login?reason=istanta_required' : '/login';
       }
     }
   }
@@ -1263,7 +1264,20 @@ class ServerCall {
     }
   }
 
-  public static post = async <T>(url: string, data: object | FormData, isFileUpload = false, customHeaders?: Record<string, string>): Promise<T> => {
+  /**
+   * POST JSON identiche mentre la prima e ancora in corso (doppio click su un pulsante
+   * di creazione) partono una volta sola e ricevono la stessa risposta. Gli upload
+   * FormData restano esclusi: non si confrontano e hanno gia il loro blocco.
+   */
+  public static post = <T>(url: string, data: object | FormData, isFileUpload = false, customHeaders?: Record<string, string>): Promise<T> =>
+    data instanceof FormData
+      ? this.inviaPost<T>(url, data, customHeaders)
+      : condividiInVolo(
+        `POST ${url} ${JSON.stringify(data)} ${JSON.stringify(customHeaders ?? {})}`,
+        () => this.inviaPost<T>(url, data, customHeaders)
+      );
+
+  private static inviaPost = async <T>(url: string, data: object | FormData, customHeaders?: Record<string, string>): Promise<T> => {
     await this.ensureCSRFToken();
 
     const headers = new Headers();
@@ -1866,55 +1880,6 @@ class ServerCall {
     };
   }
   /**
-   * Utility per gestire automaticamente i retry per errori retryable
-   */
-  public static async withRetry<T>(
-    operation: () => Promise<T>,
-    maxRetries: number = 3,
-    delayMs: number = 1000
-  ): Promise<T> {
-    let lastError: CustomError;
-
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        return await operation();
-      } catch (error: any) {
-        lastError = error instanceof CustomError ? error : this.handleGenericError(error);
-
-        // Se non è retryable o è l'ultimo tentativo, rilancia l'errore
-        if (!lastError.canRetry() || attempt === maxRetries) {
-          throw lastError;
-        }
-
-        // Aspetta prima del prossimo tentativo
-        await new Promise(resolve => setTimeout(resolve, delayMs * attempt));
-      }
-    }
-
-    throw lastError!;
-  }
-
-  /**
-   * Utility per gestire errori con callback personalizzati
-   */
-  public static async withErrorHandling<T>(
-    operation: () => Promise<T>,
-    errorHandler?: (error: CustomError) => void
-  ): Promise<T> {
-    try {
-      return await operation();
-    } catch (error: any) {
-      const customError = error instanceof CustomError ? error : this.handleGenericError(error);
-
-      if (errorHandler) {
-        errorHandler(customError);
-      }
-
-      throw customError;
-    }
-  }
-
-  /**
    * Utility per verificare se un errore è di autenticazione
    */
   public static isAuthenticationError(error: CustomError): boolean {
@@ -2014,67 +1979,6 @@ class ServerCall {
     }
 
     return customError.getPreciseErrorData();
-  }
-
-  /**
-   * Esempio di utilizzo dei dati di errore precisi
-   * Questo metodo mostra come gestire gli errori e accedere ai dati specifici
-   */
-  public static async exampleUsage(): Promise<void> {
-    try {
-      // Esempio di chiamata che potrebbe fallire
-      await this.get('/api/users/123');
-    } catch (error: any) {
-      // Ottieni i dati di errore precisi
-      const errorData = this.handleErrorWithPreciseData(error);
-
-      // Ora puoi accedere direttamente ai dati specifici dell'errore
-      console.log('Nome errore:', errorData.name);
-      console.log('Messaggio:', errorData.message);
-      console.log('Codice:', errorData.code);
-      console.log('Status HTTP:', errorData.httpStatus);
-      console.log('Tipo client:', errorData.clientType);
-      console.log('È retryable:', errorData.isRetryable);
-      console.log('Messaggio utente:', errorData.userMessage);
-      console.log('Azione richiesta:', errorData.actionRequired);
-      console.log('Dettagli:', errorData.details);
-      console.log('Timestamp:', errorData.timestamp);
-
-      // Gestione specifica per tipo di errore
-      switch (errorData.clientType) {
-        case ClientErrorType.AUTHENTICATION:
-          console.log('Reindirizza al login');
-          break;
-        case ClientErrorType.AUTHORIZATION:
-          console.log('Mostra messaggio di permessi insufficienti');
-          break;
-        case ClientErrorType.VALIDATION:
-          console.log('Mostra errori di validazione nei campi');
-          break;
-        case ClientErrorType.RATE_LIMIT:
-          console.log('Mostra messaggio di rate limiting');
-          const retryAfter = errorData.details?.retryAfter as number;
-          if (retryAfter) {
-            console.log(`Riprova tra ${retryAfter} secondi`);
-          }
-          break;
-        case ClientErrorType.NETWORK:
-          console.log('Gestisci errore di rete');
-          break;
-        default:
-          console.log('Gestisci come errore generico');
-      }
-
-      // Esempio di utilizzo dei dati per l'UI
-      if (errorData.isRetryable) {
-        console.log('Puoi riprovare questa operazione');
-      }
-
-      // Esempio di logging per debugging
-      if (errorData.stack) {
-        console.error('Stack trace:', errorData.stack);
-      }
-    }
   }
 }
 

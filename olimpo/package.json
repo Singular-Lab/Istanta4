@@ -6,9 +6,9 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
-    "build": "npm run build:ui && nest build",
-    "build:ui": "cd ui && npm install && npm run build",
-    "dev:ui": "cd ui && npm run dev",
+    "build": "yarn build:ui && nest build",
+    "build:ui": "cd ui && yarn install --immutable && yarn build",
+    "dev:ui": "cd ui && yarn dev",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",
@@ -94,7 +94,7 @@
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.1.3"
   },
-  "overrides": {
+  "resolutions": {
     "fastify": "5.8.4",
     "path-to-regexp": "8.4.1",
     "picomatch": "4.0.4",
@@ -122,5 +122,6 @@
     ],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node"
-  }
+  },
+  "packageManager": "yarn@4.18.1"
 }

@@ -56,6 +56,277 @@ namespace AgenziaLib
     public class Coopfi : IAgenzia
     {
         List<Dictionary<string, object>> lista_tracciato;
+
+        /// <summary>
+        /// I20-1096: nelle linee da 10 referenze in su ogni referenza esce come cartello linea, e i cartelli
+        /// sono tutti uguali (la descrizione di gruppo con LINEA davanti): ne escono al piu' Massimo per
+        /// gruppo. Conta solo il numero, non quali referenze li generano. Il conteggio e' per codice
+        /// gruppo, anche se le referenze della linea non sono consecutive nella lista.
+        /// </summary>
+        public sealed class CartelliDellaLinea
+        {
+            public const int Massimo = 10;
+            private readonly Dictionary<string, int> usciti = new Dictionary<string, int>();
+
+            /// <summary>True se la linea ha gia' fatto uscire i suoi cartelli e la referenza va saltata.</summary>
+            public bool Salta(string codiceGruppo)
+            {
+                string chiave = codiceGruppo ?? "";
+                usciti.TryGetValue(chiave, out int giaUsciti);
+                if (giaUsciti >= Massimo)
+                    return true;
+                usciti[chiave] = giaUsciti + 1;
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// I20-1093: conta le referenze di un gruppo nell'esportazione PoP, per farne uscire al piu' tante
+        /// quanti sono i codici del gruppo. Il conteggio riparte a ogni cambio di gruppo: prima continuava
+        /// da quello del gruppo precedente e, con due gruppi consecutivi, una referenza del secondo restava
+        /// senza il suo cartello.
+        /// </summary>
+        public sealed class ContatoreDelGruppo
+        {
+            private string gruppoCorrente = null;
+            private int contate = 0;
+
+            /// <summary>True se la referenza va saltata: il gruppo ha gia' fatto uscire tutte le sue referenze.</summary>
+            public bool Salta(string codiceGruppo)
+            {
+                if (codiceGruppo != gruppoCorrente)
+                {
+                    gruppoCorrente = codiceGruppo;
+                    contate = 0;
+                }
+
+                int numeroElementi = (codiceGruppo ?? "")
+                    .Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
+                    .Length;
+                if (numeroElementi == contate)
+                {
+                    contate = 0;
+                    return true;
+                }
+                contate++;
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// I20-1095: negli A7 del PoP Coop non c'e' foto prodotto, per scelta del marketing Coop: ne' la
+        /// foto della primaria ne' le secondarie del gruppo. Loghi e bollini restano. La regola sta qui e
+        /// non nel modello grafico, cosi' e' scritta in un punto solo. Negli altri formati non fa niente.
+        /// </summary>
+        public static void togliFotoProdottoSeA7(Dictionary<string, object> record, string formato)
+        {
+            if (record == null || formato != "A7")
+                return;
+            record[GLOBAL_VARIABLES_FICO.keyFotoNome] = "";
+            record[GLOBAL_VARIABLES_FICO.keyMembriGruppoFoto] = new List<FotoElementoGruppo>();
+        }
+
+        /// <summary>
+        /// I20-1098: se il cartello singolo di una referenza in gruppo usa la descrizione di gruppo. Solo nelle
+        /// linee da 10 referenze in su, i cui cartelli linea sono tutti uguali; negli altri gruppi il singolo
+        /// usa la descrizione della propria referenza, anche con prezzi e pesi tutti uguali (prima prendeva
+        /// quella di gruppo e mostrava tutti i gusti). Il cartello di gruppo non passa da qui e resta con
+        /// tutti i gusti.
+        /// I20-1099: anche nei gruppi con "vari"/"varie" a prezzo unico, i cui cartelli sono tutti uguali.
+        /// </summary>
+        public static bool singoloConDescrizioneDiGruppo(bool inGruppo, bool haDescrizioneDiGruppo, bool lineaDa10InSu, bool gustiVariAPrezzoUnico = false)
+        {
+            return inGruppo && haDescrizioneDiGruppo && (lineaDa10InSu || gustiVariAPrezzoUnico);
+        }
+
+        /// <summary>
+        /// I20-1099: se una delle descrizioni contiene "vari" o "varie" come parola a se', senza distinguere
+        /// maiuscole e minuscole: "varieta'" o "variegato" no. I separatori di riga delle descrizioni ($br,
+        /// &lt;br&gt;) valgono come spazi.
+        /// </summary>
+        public static bool descrizioneConGustiVari(params string[] descrizioni)
+        {
+            if (descrizioni == null)
+                return false;
+            foreach (string descrizione in descrizioni)
+            {
+                if (string.IsNullOrEmpty(descrizione))
+                    continue;
+                string testo = System.Text.RegularExpressions.Regex.Replace(descrizione, @"<br\s*/?>|\$br", " ", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                if (System.Text.RegularExpressions.Regex.IsMatch(testo, @"(?<!\p{L})varie?(?!\p{L})", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant))
+                    return true;
+            }
+            return false;
+        }
+
+        /// <summary>I20-1099: descrizioneConGustiVari sulle quattro descrizioni della descrizione di gruppo.</summary>
+        public static bool descrizioneDiGruppoConGustiVari(Dictionary<string, object> descrizioneDiGruppo)
+        {
+            if (descrizioneDiGruppo == null)
+                return false;
+            return descrizioneConGustiVari(new[] { GLOBAL_VARIABLES.keyDescr1, GLOBAL_VARIABLES.keyDescr2, GLOBAL_VARIABLES.keyDescr3, GLOBAL_VARIABLES.keyDescr4 }
+                .Select(chiave => descrizioneDiGruppo.TryGetValue(chiave, out object valore) ? valore?.ToString() : null)
+                .ToArray());
+        }
+
+        /// <summary>
+        /// DEPRECATO (I20-1100): decisione dell'ufficio marketing Coop del 13/10/2026. Nel PoP non escono mai
+        /// il logo "prodotto in Toscana" (logo_toscana1) ne' il logo bio (logo_bio), che il prodotto sia nel
+        /// volantino o no. Il codice che li inseriva in esportaPoP resta, spento da qui: non e' un bug, non
+        /// riattivarlo senza una nuova decisione del marketing Coop. Il volantino non cambia. La colonna
+        /// logo_toscana1 continua invece a togliere lo sconto piccolo in area A (colonnaToscanaValorizzata).
+        /// </summary>
+        public static readonly bool LoghiToscanaEBioNelPoP = false;
+
+        /// <summary>
+        /// I20-1100: se la colonna logo_toscana1 e' valorizzata, con "x" o "X". Prima la regola dello sconto
+        /// piccolo riconosceva solo la "X" maiuscola.
+        /// </summary>
+        public static bool colonnaToscanaValorizzata(object valore)
+        {
+            return string.Equals(valore?.ToString()?.Trim(), "x", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Lo stile della descrizione del cartello di gruppo nel PoP, per un gruppo marcato linea. Gli stili
+        /// _LINEA esistono solo per BOX_LINEA, i cui singoli sotto le 10 referenze escono come BOX_STD (il box
+        /// vero e' quello del record), e per BOX_doppio_SCONTO_LINEA, il cui stile ha gia' _LINEA: il suffisso
+        /// va una volta sola. Gli altri box che con IS_LINEA restano tali (esclusiva soci, SpendiPunti, doppio
+        /// sconto, Jolly, Sprint) tengono il proprio stile, come nel volantino.
+        /// </summary>
+        public static string stileDescrizioneCartelloDiLinea(string stile, string boxDelGruppo)
+        {
+            bool boxDiLinea = boxDelGruppo == "BOX_LINEA" || boxDelGruppo == "BOX_doppio_SCONTO_LINEA";
+            if (!boxDiLinea || stile.EndsWith("_LINEA"))
+                return stile;
+            return stile + "_LINEA";
+        }
+
+        /// <summary>
+        /// Le referenze che non escono nel PoP. In ogni formato: tema jolly o extra tripla, e i Jolly
+        /// evidenziati, che nascono dal tema VENDITE PROPOSITIVE e "jolly" nel tema non ce l'hanno. Il tema
+        /// sprint negli A3: negli A7 esce con il cartello Sprint (boxSprintNegliA7). Nell'A3 verticale anche i
+        /// Superprezzi ortofrutta (BOX_SuperprezziOF): prima vi uscivano come BOX_STD, ora non escono affatto.
+        /// tema e' gia' in minuscolo.
+        /// </summary>
+        public static bool esclusaDalPoP(string tema, string codiceBox, string formato)
+        {
+            return tema.Contains("jolly") || (tema.Contains("sprint") && formato != "A7") || tema.Replace(" ", "").Contains("extripla")
+                || codiceBox == "BOX_JOLLY_EVIDENZIATO"
+                || (formato == "A3_VERTICALI" && codiceBox == "BOX_SuperprezziOF");
+        }
+
+        /// <summary>
+        /// Il box di una referenza negli A7 del PoP: con "sprint" nel tema e' BOX_SPRINT, qualunque box le
+        /// abbiano dato le regole di assegnazione. Negli altri formati, e senza sprint nel tema, resta il suo.
+        /// tema e' gia' in minuscolo.
+        /// </summary>
+        public static string boxSprintNegliA7(string tema, string formato, string codiceBox)
+        {
+            return formato == "A7" && tema.Contains("sprint") ? "BOX_SPRINT" : codiceBox;
+        }
+
+        /// <summary>
+        /// La dicitura dei bollini del cartello Sprint negli A7, in txt_punti_sprint: "1 BOLLINO" con un solo
+        /// bollino, "3 BOLLINI" con piu' bollini.
+        /// </summary>
+        public static string scrittaBolliniSprint(int bollini)
+        {
+            return bollini == 1 ? "1 BOLLINO" : $"{bollini} BOLLINI";
+        }
+
+        /// <summary>
+        /// Stile e dicitura dello sconto del BOX_LINEA nel PoP, per i cartelli della linea e per il cartello di
+        /// gruppo. Negli A7 lo stile e' SCONTO_LINEA_STOPPER e la dicitura ha il meno, "-30%"; negli altri
+        /// formati SCONTO_LINEA con la sola percentuale, come prima.
+        /// </summary>
+        public static (string stile, string dicitura) scontoDellaLineaNelPoP(decimal sconto, string formato)
+        {
+            if (formato == "A7")
+                return ("SCONTO_LINEA_STOPPER", $"-{(int)sconto}%");
+            return ("SCONTO_LINEA", $"{(int)sconto}%");
+        }
+
+        /// <summary>
+        /// Se sul cartello PoP compare lo sconto piccolo: area A, sconto sopra lo 0 e sotto il 25%, senza
+        /// colonna Toscana e senza tema eccezionale, la stessa condizione con cui esportaPoP mette
+        /// sconto_piccolo. Solo allora il prezzo dello STD ha lo stile
+        /// PREZZO_STD_SCONTO_PICCOLO; prima lo prendeva con qualunque sconto sotto il 25%, anche zero e in
+        /// ogni area.
+        /// </summary>
+        public static bool scontoPiccoloNelPoP(string siglaArea, decimal sconto, bool specialeToscana, bool eventoEccezionale)
+        {
+            return siglaArea == "A" && !specialeToscana && !eventoEccezionale && sconto > 0 && sconto < 25;
+        }
+
+        /// <summary>
+        /// I gruppi del PoP i cui cartelli singoli sono per intero il cartello di gruppo, in tutti i formati:
+        /// settore 58 con reparto 02, 03, 04, 05, 06 o 08, settore 56 con reparto 03 o 04. I codici si
+        /// confrontano come numeri ("3" e "03" sono lo stesso reparto); senza codici la regola non vale.
+        /// </summary>
+        public static bool singoliComeIlGruppo(object codiceSettore, object codiceReparto)
+        {
+            if (!int.TryParse(codiceSettore?.ToString()?.Trim(), out int settore) || !int.TryParse(codiceReparto?.ToString()?.Trim(), out int reparto))
+                return false;
+            if (settore == 58)
+                return reparto == 2 || reparto == 3 || reparto == 4 || reparto == 5 || reparto == 6 || reparto == 8;
+            if (settore == 56)
+                return reparto == 3 || reparto == 4;
+            return false;
+        }
+
+        /// <summary>
+        /// Quello che un cartello singolo prende per intero dal cartello di gruppo: i campi compilati e quelli
+        /// tolti (descrizione, prezzi, sconti, mastro...), il box e i loghi. Resta del singolo solo l'identita'
+        /// (codice referenza, gruppo, nome del file) e la sua anagrafica grezza.
+        /// </summary>
+        public static readonly string[] chiaviDelCartelloDiGruppo = { "compiledFields", "deletedFields", "codiceBox", GLOBAL_VARIABLES.keyFotoExtraAuto, "Foto.Extra",
+            GLOBAL_VARIABLES_FICO.keyFotoNome, GLOBAL_VARIABLES_FICO.keyMembriGruppoFoto };
+
+        /// <summary>
+        /// Il cartello singolo di una referenza in gruppo che usa la propria descrizione ha solo la propria
+        /// foto: per il cartello di gruppo, che nasce copiando il record, ogni membro aveva ereditato la foto
+        /// della primaria e l'elenco di tutte le foto del gruppo. membriGruppoFoto diventa un elenco nuovo con
+        /// la sola foto propria, come primaria (da li' il Plugin legge anche il suo noRender); senza foto,
+        /// vuoto. L'elenco del gruppo, condiviso fra i membri, non si tocca.
+        /// </summary>
+        public static void fotoDelSingolo(Dictionary<string, object> record, string fotoPropria)
+        {
+            if (record == null)
+                return;
+            string foto = fotoPropria ?? "";
+            record[GLOBAL_VARIABLES_FICO.keyFotoNome] = foto;
+            var membri = new List<FotoElementoGruppo>();
+            if (foto != "")
+            {
+                membri.Add(new FotoElementoGruppo()
+                {
+                    codRef = record.TryGetValue(GLOBAL_VARIABLES_FICO.keyRefCodice, out object codice) ? codice?.ToString() : "",
+                    nomeFoto = foto,
+                    statoSelezione = 1,
+                    hash = record.TryGetValue(GLOBAL_VARIABLES_FICO.keyFotoHash, out object hash) ? hash?.ToString() : ""
+                });
+            }
+            record[GLOBAL_VARIABLES_FICO.keyMembriGruppoFoto] = membri;
+        }
+
+        /// <summary>
+        /// Il cartello singolo diventa per intero il cartello di gruppo (singoliComeIlGruppo). Una chiave che il
+        /// cartello di gruppo non ha si toglie anche dal singolo, cosi' non restano dati misti. I valori si
+        /// copiano, il singolo non condivide liste col gruppo.
+        /// </summary>
+        public static void ripetiIlCartelloDiGruppo(Dictionary<string, object> singolo, Dictionary<string, object> cartelloDiGruppo)
+        {
+            foreach (string chiave in chiaviDelCartelloDiGruppo)
+            {
+                if (!cartelloDiGruppo.TryGetValue(chiave, out object valore))
+                {
+                    singolo.Remove(chiave);
+                    continue;
+                }
+                singolo[chiave] = valore == null || valore is string ? valore : JsonConvert.DeserializeObject(JsonConvert.SerializeObject(valore), valore.GetType());
+            }
+        }
         //Settori/reparti No FOOD
         private readonly string[] settori_no_food = new string[] { "62", "64", "66", "68" };
         private readonly string[] reparti_no_food = new string[] { "01", "02", "03", "04", "05", "06", "07", "09", "11", "12" };
@@ -306,6 +577,8 @@ namespace AgenziaLib
             result.liste[0].Records = new List<ArticoloInKit>();
             result.liste[0].errors = "";// = new List<Dictionary<string, object>>();
             List<string> _cacheSottogruppi = new List<string>();
+            //I cartelli di gruppo gia' creati, per i gruppi i cui singoli li ripetono per intero (singoliComeIlGruppo).
+            Dictionary<string, Dictionary<string, object>> _cartelliDiGruppo = new Dictionary<string, Dictionary<string, object>>();
             try
             {
                 //requestParams = formRequest;
@@ -371,7 +644,10 @@ namespace AgenziaLib
 
                 //lettura del tracciato
                 int counter = 0;
-                int contaRefGruppo = 0;
+                //I20-1093: le referenze di ogni gruppo, contate dall'inizio del gruppo.
+                ContatoreDelGruppo contatoreDelGruppo = new ContatoreDelGruppo();
+                //I20-1096: i cartelli gia' usciti per ogni linea da 10 referenze in su.
+                CartelliDellaLinea cartelliDellaLinea = new CartelliDellaLinea();
 
                 string curr_group_processed = "";
                 string curr_fotoPgroup_processed = "";
@@ -451,7 +727,7 @@ namespace AgenziaLib
 
                     if (formatoKit == "A3_ORIZZONTALI")
                     {
-                        if (tema.Contains("jolly") || tema.Contains("sprint") || tema.Replace(" ", "").Contains("extripla"))
+                        if (esclusaDalPoP(tema, recItem[key_codiceBox].ToString(), formatoKit))
                         {
                             //Console.WriteLine("Intercettato!");
                             continue;
@@ -459,14 +735,14 @@ namespace AgenziaLib
                     }
                     else if (formatoKit == "A3_VERTICALI")
                     {
-                        if (tema.Contains("jolly") || tema.Contains("sprint") || tema.Replace(" ", "").Contains("extripla"))
+                        if (esclusaDalPoP(tema, recItem[key_codiceBox].ToString(), formatoKit))
                         {
                             continue;
                         }
                     }
                     else if (formatoKit == "A7")
                     {
-                        if (tema.Contains("jolly") || tema.Contains("sprint") || tema.Replace(" ", "").Contains("extripla"))
+                        if (esclusaDalPoP(tema, recItem[key_codiceBox].ToString(), formatoKit))
                         {
                             continue;
                         }
@@ -476,7 +752,9 @@ namespace AgenziaLib
                         continue;
                     }
 
-
+                    //Negli A7 il tema sprint esce con il cartello Sprint. Prima del gruppo, perche' il cartello di
+                    //gruppo nasce copiando questo record.
+                    recItem[key_codiceBox] = boxSprintNegliA7(tema, formatoKit, recItem[key_codiceBox].ToString());
 
                     var gruppo = tracciato.Where(t => t.recordInTracciato[GLOBAL_VARIABLES_FICO.keyCodiceGruppo].ToString() == codice_gruppo);
 
@@ -491,6 +769,10 @@ namespace AgenziaLib
 
                     var listaDelGruppo = new List<ArticoloInKit>();
 
+                    //La foto propria della referenza, prima che il membro di un gruppo erediti quella della primaria
+                    //per il cartello di gruppo: il singolo con la propria descrizione la riavra' (fotoDelSingolo).
+                    string fotoPropriaDelSingolo = recItem.TryGetValue(GLOBAL_VARIABLES_FICO.keyFotoNome, out object fotoPropria) ? fotoPropria?.ToString() ?? "" : "";
+
                     //gestione delle tipologie di gruppo
                     if (codice_referenza != codice_gruppo)//codice_gruppo.Contains(",") && recItem.ContainsKey(GLOBAL_VARIABLES.keyXMLDescrizioneGruppo))
                     {
@@ -500,18 +782,11 @@ namespace AgenziaLib
                         pesiDiversiInGruppo = listaDelGruppo.GroupBy(g => g.recordInTracciato[GLOBAL_VARIABLES_FICO.keyDescrPeso].ToDecimal()).Count() > 1;
 
                         //Console.WriteLine($">>>>>>>>>>>>>>>Analisi Gruppo: Prezzi diversi: {prezziDiversiInGruppo.ToString()} =>>>> Peso Diverso = {pesiDiversiInGruppo.ToString()}");
-                        //conto i numero di elementi nel gruppo
-                        int numeroElementi = codice_gruppo
-                            .Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
-                            .Length;
-
-                        if (numeroElementi == contaRefGruppo)
+                        //I20-1093: al piu' tante referenze quanti sono i codici del gruppo; il conteggio
+                        //riparte a ogni cambio di gruppo.
+                        if (contatoreDelGruppo.Salta(codice_gruppo))
                         {
-                            contaRefGruppo = 0;
                             continue;
-                        } else
-                        {
-                            contaRefGruppo++;
                         }
 
                         if (curr_group_processed != codice_gruppo)
@@ -544,8 +819,19 @@ namespace AgenziaLib
                         }
                     }
 
+                    //I20-1095: negli A7 nessuna foto prodotto. Prima della creazione del sottogruppo, che
+                    //copia questo record.
+                    togliFotoProdottoSeA7(recItem, formatoKit);
+
 
                     bool gruppoDeveUscireConISingoliConDescrizioneGruppo = (codice_referenza != codice_gruppo && prezziDiversiInGruppo == false && pesiDiversiInGruppo == false);
+
+                    //I20-1099: un gruppo con "vari"/"varie" nella descrizione di gruppo e tutte le referenze allo
+                    //stesso prezzo esce con un cartello per referenza, tutti con la descrizione di gruppo, e senza
+                    //il cartello di gruppo. Con prezzi diversi restano i cartelli singoli.
+                    bool gruppoConGustiVari = codice_referenza != codice_gruppo && !prezziDiversiInGruppo
+                        && recItem.ContainsKey(GLOBAL_VARIABLES.keyXMLDescrizioneGruppo)
+                        && descrizioneDiGruppoConGustiVari(recItem[GLOBAL_VARIABLES.keyXMLDescrizioneGruppo] as Dictionary<string, object>);
 
                     if (gruppoDeveUscireConISingoliConDescrizioneGruppo && recItem.ContainsKey(GLOBAL_VARIABLES.keyXMLDescrizioneGruppo))//codice_referenza != codice_gruppo && prezziDiversiInGruppo==false && pesiDiversiInGruppo==false )//codice_gruppo.Contains(",") && recItem.ContainsKey(GLOBAL_VARIABLES.keyXMLDescrizioneGruppo))
                     {
@@ -617,6 +903,13 @@ namespace AgenziaLib
 #warning Trovare una soluzione piu brillante se possibile. Questa forzatura non è mai molto bella
                             codiceBox = "BOX_STD";
                         }
+                    }
+
+                    //I20-1096: nelle linee da 10 referenze in su al piu' 10 cartelli linea per gruppo, tutti
+                    //uguali: le referenze oltre il decimo non escono.
+                    if (isLineaMaggioreUguale10 && cartelliDellaLinea.Salta(codice_gruppo))
+                    {
+                        continue;
                     }
 
 
@@ -764,6 +1057,12 @@ namespace AgenziaLib
 
                     foreach (string s in loghiFlagInTracciato)
                     {
+                        //DEPRECATO (I20-1100): logo_toscana1 non esce mai nel PoP, decisione dell'ufficio marketing
+                        //Coop del 13/10/2026 (LoghiToscanaEBioNelPoP). L'eccezione "dedicato toscana" qui sotto resta
+                        //senza effetto.
+                        if (s == "logo_toscana1" && !LoghiToscanaEBioNelPoP)
+                            continue;
+
                         if (recItem.ContainsKey(s))
                         {
                             string valLogo = recItem[s].ToString().ToLower();
@@ -902,9 +1201,12 @@ namespace AgenziaLib
 
                     }
 
-                    if (descr2.ContainsWord(new string[] { "bio" }) ||
+                    //DEPRECATO (I20-1100): logo_bio non esce mai nel PoP, decisione dell'ufficio marketing Coop del
+                    //13/10/2026 (LoghiToscanaEBioNelPoP). Il riconoscimento della parola "bio" resta, spento.
+                    if (LoghiToscanaEBioNelPoP && (
+                        descr2.ContainsWord(new string[] { "bio" }) ||
                         descr3.ContainsWord(new string[] { "bio" }) ||
-                        descr1.ContainsWord(new string[] { "bio" }))
+                        descr1.ContainsWord(new string[] { "bio" })))
 
                     {
                         //Ulteriore controllo per capire se bio è parte di una parola più grande
@@ -967,13 +1269,14 @@ namespace AgenziaLib
                     if (codiceBox == "BOX_SpendiPunti")
                         stile_sconto_speciale = "SCONTO_SPENDIPUNTI";
                     if (codiceBox == "BOX_ESCLUSIVA_SOCI")
-                        stile_sconto_speciale = "SCONTO_SOCI_DOPPIA";
+                        stile_sconto_speciale = "SCONTO_SOCI_ESCLUSIVA";
 
 
                     //variazioni stile_prezzo_promo_kgl
                     if (codiceBox == "BOX_ESCLUSIVA_SOCI")
                     {
-                        stile_prezzo_promo_kgl = "PREZZO_PROMO_KGL_SOCI_DOPPIA";
+                        //Nel PoP l'esclusiva soci ha i suoi stili: sconto e prezzo di paragrafo, prezzo al kg di carattere.
+                        stile_prezzo_promo_kgl = "PREZZO_PROMO_KGL_SOCI_ESCLUSIVA";
                     }
 
                     // stili info Pack
@@ -1294,7 +1597,8 @@ namespace AgenziaLib
                         {
 
 
-                            bool speciale_toscana = (recItem["logo_toscana1"].ToString() == "X");
+                            //I20-1100: "x" o "X"; vale anche se il logo Toscana non si stampa piu'.
+                            bool speciale_toscana = colonnaToscanaValorizzata(recItem["logo_toscana1"]);
                             bool contiene_evento_eccezionale = contieneUnTemaSpecialeEccezionale(tema.ToUpper());
                             //Console.WriteLine($"Regola x sconto: valore {sconto} spec tosc {speciale_toscana} spec evento ecez {contiene_evento_eccezionale} - tema: {tema}  codice box {codiceBox}");
 
@@ -1333,7 +1637,8 @@ namespace AgenziaLib
                                 recItem["colore_sconto_speciale"] = _codifica.ToUpper();
 
                             }
-                            if (sconto < 25)
+                            //Lo stile dello sconto piccolo solo se lo sconto piccolo c'e' davvero.
+                            if (scontoPiccoloNelPoP(siglaAreaKit, sconto, speciale_toscana, contiene_evento_eccezionale))
                             {
                                 stile_prezzo_promo = "PREZZO_STD_SCONTO_PICCOLO";
                                 interprete.assignCompiledField("prezzo_promo", stile_prezzo_promo, $"€ {prezzo_promo}");
@@ -1384,7 +1689,8 @@ namespace AgenziaLib
                         {
 
 
-                            bool speciale_toscana = (recItem["logo_toscana1"].ToString() == "X");
+                            //I20-1100: "x" o "X"; vale anche se il logo Toscana non si stampa piu'.
+                            bool speciale_toscana = colonnaToscanaValorizzata(recItem["logo_toscana1"]);
                             bool contiene_evento_eccezionale = contieneUnTemaSpecialeEccezionale(tema.ToUpper());
                             //Console.WriteLine($"Regola x sconto: valore {sconto} spec tosc {speciale_toscana} spec evento ecez {contiene_evento_eccezionale} - tema: {tema}  codice box {codiceBox}");
 
@@ -1418,11 +1724,7 @@ namespace AgenziaLib
                                 recItem["colore_sconto_speciale"] = _codifica.ToUpper();
 
                             }
-                            if (sconto < 25)
-                            {
-                                stile_prezzo_promo = "PREZZO_STD_SCONTO_PICCOLO";
-                                interprete.assignCompiledField("prezzo_promo", stile_prezzo_promo, $"€ {prezzo_promo}");
-                            }
+                            //Nel 1+1 lo sconto piccolo viene sempre tolto (piu' sotto): il prezzo resta PREZZO_PROMO.
 
                         }
 
@@ -1438,16 +1740,14 @@ namespace AgenziaLib
 
                         interprete.removeCompiledField("txt_punti_jolly");
 
-                        stileDescr1 += "_SP";
-                        stileDescr2 += "_SP";
-                        stileDescr3 += "_SP";
-                        stileDescr4 += "_SP";
-
+                        //Il PoP non ha gli stili Superprezzi (_SP): la descrizione usa gli stili normali e il
+                        //prezzo al kg lo stile del riquadro. Con gli stili _SP, che nel documento PoP non ci
+                        //sono, la descrizione usciva con gli stili spostati. Il volantino li tiene.
 
                         //caso1
                         if (prezzo_promo != prezzo_promo_kgl)
                             //specialDescr_superprezziOF = $" - € {MathExt.DecimalRoundToString(prezzo_promo_kgl)}{(prezzo_info_pack_VAL != "" ? " " : "")}{(prezzo_info_pack_VAL == "al kg" ? "a conf." : "al kg")}";
-                            interprete.assignCompiledField("prezzo_promo_kgl", "PREZZO_PROMO_KGL_SP", MathExt.DecimalRoundToString(prezzo_promo_kgl));
+                            interprete.assignCompiledField("prezzo_promo_kgl", "", MathExt.DecimalRoundToString(prezzo_promo_kgl));
 
                         if (prezzo_promo_kgl < prezzo_promo)
                             prezzo_promo = prezzo_promo_kgl;//Veicolamento
@@ -1478,9 +1778,8 @@ namespace AgenziaLib
                             recItem["colore_sconto_speciale"] = _codifica.ToUpper();
 
                         }
-                        //string sconto_str = $"-{(int)sconto}%";
-                        string sconto_str = $"{(int)sconto}%";
-                        interprete.assignCompiledField("txt_sconto", "SCONTO_LINEA", sconto_str);
+                        var scontoLinea = scontoDellaLineaNelPoP(sconto, formatoKit);
+                        interprete.assignCompiledField("txt_sconto", scontoLinea.stile, scontoLinea.dicitura);
                     }
                     else if (codiceBox == "BOX_JOLLY")
                     {
@@ -1505,20 +1804,35 @@ namespace AgenziaLib
                         int n_bonus;
                         Int32.TryParse(recItem["N_BonusCartacei"].ToString(), out n_bonus);
 
-                        //interprete.assignCompiledField("txt_punti_sprint", "", $"<{stile_punti_sprint}>+{n_bonus}</{stile_punti_sprint}>");
-                        interprete.assignCompiledField("txt_punti_sprint", stile_punti_sprint, $"+{n_bonus}");
+                        if (formatoKit == "A7")
+                        {
+                            //Negli A7 la dicitura sta tutta in txt_punti_sprint, "1 BOLLINO" o "3 BOLLINI": il campo
+                            //bollino non serve. La descrizione ha i suoi stili _SPRINT.
+                            interprete.assignCompiledField("txt_punti_sprint", stile_punti_sprint, scrittaBolliniSprint(n_bonus));
+                            interprete.removeCompiledField("bollino");
 
-                        string scritta_bollino = "bollino";
-                        if (n_bonus > 1)
-                            scritta_bollino = "bollini";
+                            stileDescr1 += "_SPRINT";
+                            stileDescr2 += "_SPRINT";
+                            stileDescr3 += "_SPRINT";
+                            stileDescr4 += "_SPRINT";
+                        }
+                        else
+                        {
+                            //interprete.assignCompiledField("txt_punti_sprint", "", $"<{stile_punti_sprint}>+{n_bonus}</{stile_punti_sprint}>");
+                            interprete.assignCompiledField("txt_punti_sprint", stile_punti_sprint, $"+{n_bonus}");
 
-                        interprete.assignCompiledField("bollino", "", $"<{stile_bollino_sprint}>{scritta_bollino}</{stile_bollino_sprint}>");
+                            string scritta_bollino = "bollino";
+                            if (n_bonus > 1)
+                                scritta_bollino = "bollini";
+
+                            interprete.assignCompiledField("bollino", "", $"<{stile_bollino_sprint}>{scritta_bollino}</{stile_bollino_sprint}>");
 
 
-                        stileDescr1 += "_JOLLY";
-                        stileDescr2 += "_JOLLY";
-                        stileDescr3 += "_JOLLY";
-                        stileDescr4 += "_JOLLY";
+                            stileDescr1 += "_JOLLY";
+                            stileDescr2 += "_JOLLY";
+                            stileDescr3 += "_JOLLY";
+                            stileDescr4 += "_JOLLY";
+                        }
                     }
                     else if (codiceBox == "BOX_SpendiPunti")
                     {
@@ -1713,9 +2027,7 @@ namespace AgenziaLib
                     }
                     else if (codiceBox == "BOX_ESCLUSIVA_SOCI")
                     {
-                        stile_prezzo_promo = "PREZZO_PROMO_SOCI_DOPPIA";
-                        if (siglaAreaKit.StartsWith("A"))
-                            stile_prezzo_promo = "PREZZO_PROMO_ESCLUSIVA_SOCI";
+                        stile_prezzo_promo = "PREZZO_PROMO_SOCI_ESCLUSIVA";
 
 
                         stileDescr1 += "_SPENDIPUNTI";
@@ -1793,6 +2105,8 @@ namespace AgenziaLib
                         interprete.assignCompiledField(GLOBAL_VARIABLES_FICO.compiledFieldKeyMastro, "", "ma-PiùValoreAlSocio");
                     } else if (codiceBox == "BOX_JOLLY") {
                         interprete.assignCompiledField(GLOBAL_VARIABLES_FICO.compiledFieldKeyMastro, "", "ma-Jolly");
+                    } else if (codiceBox == "BOX_SPRINT" && formatoKit == "A7") {
+                        interprete.assignCompiledField(GLOBAL_VARIABLES_FICO.compiledFieldKeyMastro, "", "ma-Sprint");
                     } else {
                         interprete.assignCompiledField(GLOBAL_VARIABLES_FICO.compiledFieldKeyMastro, "", "ma-Offerta");
                     }
@@ -1844,8 +2158,12 @@ namespace AgenziaLib
 
 
 
-                    if (codice_referenza != codice_gruppo && recItem.ContainsKey(GLOBAL_VARIABLES.keyXMLDescrizioneGruppo) && ((prezziDiversiInGruppo == false && pesiDiversiInGruppo == false) || isLineaMaggioreUguale10))//codice_gruppo.Contains(",") && recItem.ContainsKey(GLOBAL_VARIABLES.keyXMLDescrizioneGruppo))
+                    //I20-1098: il singolo usa la propria descrizione; quella di gruppo solo nelle linee da 10 in su.
+                    //I20-1099: e nei gruppi con "vari"/"varie" a prezzo unico.
+                    bool singoloConLaPropriaDescrizione = true;
+                    if (singoloConDescrizioneDiGruppo(codice_referenza != codice_gruppo, recItem.ContainsKey(GLOBAL_VARIABLES.keyXMLDescrizioneGruppo), isLineaMaggioreUguale10, gruppoConGustiVari))
                     {
+                        singoloConLaPropriaDescrizione = false;
 
                         Descrizione1 = (recItem[GLOBAL_VARIABLES.keyXMLDescrizioneGruppo] as Dictionary<string, object>)[GLOBAL_VARIABLES.keyDescr1].ToString();
                         Descrizione2 = (recItem[GLOBAL_VARIABLES.keyXMLDescrizioneGruppo] as Dictionary<string, object>)[GLOBAL_VARIABLES.keyDescr2].ToString();
@@ -2003,7 +2321,8 @@ namespace AgenziaLib
                     bool BOXLINEA_xSingoliBOXSTD = recItem[key_codiceBox].ToString() == "BOX_LINEA" && codiceBox != "BOX_LINEA";
 
                     bool eludi = false;
-                    if (!eludi && codice_gruppo != codice_referenza && !isLineaMaggioreUguale10) // (recItem.ContainsKey(keySottogruppo))
+                    //I20-1099: i gruppi con "vari"/"varie" a prezzo unico non hanno il cartello di gruppo.
+                    if (!eludi && codice_gruppo != codice_referenza && !isLineaMaggioreUguale10 && !gruppoConGustiVari) // (recItem.ContainsKey(keySottogruppo))
                     {
                         //Console.WriteLine($"Creazione sottogruppo ### {recItem[key_codiceBox].ToString()} ---- {codice_referenza} ---- {codiceBox}");
 
@@ -2103,10 +2422,15 @@ namespace AgenziaLib
                             var interpreteSottogruppo = interprete.Clone();
 
                             if (is_linea) {
-                                descrizione = $"<{stileDescr1}_LINEA>{Descrizione1}</{stileDescr1}_LINEA>";
-                                descrizione += $"<{stileDescr2}_LINEA>{Descrizione2}</{stileDescr2}_LINEA>";
-                                descrizione += $"<{stileDescr4}_LINEA>{Descrizione4}</{stileDescr4}_LINEA>";
-                                descrizione += $"<{stileDescr3}_LINEA>{Descrizione3}</{stileDescr3}_LINEA>";
+                                string boxDelGruppo = recItem[key_codiceBox].ToString();
+                                string stileLinea1 = stileDescrizioneCartelloDiLinea(stileDescr1, boxDelGruppo);
+                                string stileLinea2 = stileDescrizioneCartelloDiLinea(stileDescr2, boxDelGruppo);
+                                string stileLinea3 = stileDescrizioneCartelloDiLinea(stileDescr3, boxDelGruppo);
+                                string stileLinea4 = stileDescrizioneCartelloDiLinea(stileDescr4, boxDelGruppo);
+                                descrizione = $"<{stileLinea1}>{Descrizione1}</{stileLinea1}>";
+                                descrizione += $"<{stileLinea2}>{Descrizione2}</{stileLinea2}>";
+                                descrizione += $"<{stileLinea4}>{Descrizione4}</{stileLinea4}>";
+                                descrizione += $"<{stileLinea3}>{Descrizione3}</{stileLinea3}>";
                             } else
                             {
                                 descrizione = $"<{stileDescr1}>{Descrizione1}</{stileDescr1}>";
@@ -2147,8 +2471,8 @@ namespace AgenziaLib
                                 //Console.WriteLine("Assegno lo sconto");
                                 //L'unico altro parametro che devo assegnare è il txt_sconto.
                                 //Il box linea non ne ha altri
-                                string sconto_str = $"{(int)sconto}%";
-                                interpreteSottogruppo.assignCompiledField("txt_sconto", "SCONTO_LINEA", sconto_str);
+                                var scontoLinea = scontoDellaLineaNelPoP(sconto, formatoKit);
+                                interpreteSottogruppo.assignCompiledField("txt_sconto", scontoLinea.stile, scontoLinea.dicitura);
                                 interpreteSottogruppo.assignCompiledField(GLOBAL_VARIABLES_FICO.compiledFieldKeyMastro, "", "ma-Linea");
                             }
 
@@ -2160,6 +2484,10 @@ namespace AgenziaLib
                             #endregion
 
                             #region validazione logo_toscana1 per il gruppo
+
+                            //DEPRECATO (I20-1100): con logo_toscana1 spento nel PoP (LoghiToscanaEBioNelPoP) il logo non e'
+                            //mai fra i loghi del gruppo e questa validazione resta senza effetto. Decisione dell'ufficio
+                            //marketing Coop del 13/10/2026.
 
                             //Per questo logo TUTTI i singoli del gruppo devono rispettare i requisiti altrimenti non puo uscire il logo
                             if (listaDelGruppo.Count > 1)
@@ -2248,6 +2576,7 @@ namespace AgenziaLib
                             //FINE CODIFICA DEL NOME
 
                             _cacheSottogruppi.Add(codice_gruppo);
+                            _cartelliDiGruppo[codice_gruppo] = artInKit.sottogruppo;
 
                         }
                         else if (inCache)
@@ -2265,6 +2594,23 @@ namespace AgenziaLib
                     {
                         //Adesso posso cambiarlo davvero
                         recItem[GLOBAL_VARIABLES.codiceBox] = "BOX_STD";
+                    }
+
+                    //Il singolo di un gruppo con la propria descrizione ha solo la propria foto. Dopo la creazione del
+                    //cartello di gruppo, che tiene le foto del gruppo; negli A7 resta senza foto.
+                    if (codice_referenza != codice_gruppo && singoloConLaPropriaDescrizione)
+                    {
+                        fotoDelSingolo(recItem, fotoPropriaDelSingolo);
+                        togliFotoProdottoSeA7(recItem, formatoKit);
+                    }
+
+                    //Nei gruppi di singoliComeIlGruppo il singolo e' per intero il cartello di gruppo, anche il primo
+                    //membro da cui il cartello e' nato. Dopo tutte le altre regole, cosi' niente lo cambia piu'.
+                    if (codice_referenza != codice_gruppo
+                        && singoliComeIlGruppo(recItem.GetValueOrDefault("codice_settore"), recItem.GetValueOrDefault("codice_reparto"))
+                        && _cartelliDiGruppo.TryGetValue(codice_gruppo, out Dictionary<string, object> cartelloDiGruppo))
+                    {
+                        ripetiIlCartelloDiGruppo(recItem, cartelloDiGruppo);
                     }
 
 
@@ -4058,17 +4404,22 @@ namespace AgenziaLib
                     //HttpClient hCli = new HttpClient();
                     //hCli.DefaultRequestHeaders.Add("Authorization", "Bearer " + pubKey);
 
-                    var contentParam = new StringContent(JsonConvert.SerializeObject(suggerimentiRequest), Encoding.UTF8, "application/json");
-                    string url = "https://istantabusiness.it/api/gdo/get_descrizioni_byArrayEan.php";
-                    var response = httpClient.PostAsync(url, contentParam);
-                    //var response = await hCli.PutAsync(url, content);
 
-                    if (response.Result.IsSuccessStatusCode)
+                    try
                     {
+                        var contentParam = new StringContent(JsonConvert.SerializeObject(suggerimentiRequest), Encoding.UTF8, "application/json");
+                        string url = "https://istantabusiness.it/api/gdo/get_descrizioni_byArrayEan.php";
+                        var response = httpClient.PostAsync(url, contentParam);
+                        //var response = await hCli.PutAsync(url, content);
 
-                        var contentResponse = response.Result.Content.ReadAsStringAsync().Result;
-                        archivioSuggerimenti = JsonConvert.DeserializeObject<ISTBusinessSuggerimentiResponse>(contentResponse);
+                        if (response.Result.IsSuccessStatusCode)
+                        {
+
+                            var contentResponse = response.Result.Content.ReadAsStringAsync().Result;
+                            archivioSuggerimenti = JsonConvert.DeserializeObject<ISTBusinessSuggerimentiResponse>(contentResponse);
+                        }
                     }
+                    catch{}
                 }
 
 

@@ -15,6 +15,7 @@ import {
 } from './core/services/DeviceSocketService.js';
 import ephemeralTokenService from './core/services/EphemeralTokenService.js';
 import { PluginAnalyticsGatewayService } from './core/services/PluginAnalyticsGatewayService.js';
+import { ROOM_AUTENTICATI, stanzeClient } from './core/utils/socketRooms';
 
 let io: IOServer | null = null;
 let isInitializing = false;
@@ -144,9 +145,9 @@ function convertToBuffer(data: any): Buffer {
   return Buffer.from(stringData);
 }
 
-function emitBuffer(io: IOServer, event: string, data: any): void {
+function emitBuffer(io: IOServer, event: string, data: any, room: string = ROOM_AUTENTICATI): void {
   const buffer = convertToBuffer(data);
-  io.emit(event, buffer);
+  io.to(room).emit(event, buffer);
 }
 
 export function startWSServer(): Promise<void> {
@@ -250,6 +251,14 @@ export function startWSServer(): Promise<void> {
 
         } else {
           // === CLIENT UI NORMALE ===
+          // Solo con una sessione valida: un socket anonimo riceverebbe le notifiche di tutti.
+          const stanze = stanzeClient(getSocketSession(socket));
+          if (!stanze) {
+            log.debug(`WS client ${socket.id} senza sessione: disconnesso`);
+            socket.disconnect(true);
+            return;
+          }
+          socket.join(stanze);
 
           socket.on('pv:subscribe', (payload: PVSubscribePayload) => {
             deviceSocketService.subscribeToPV(socket, payload);
@@ -257,10 +266,6 @@ export function startWSServer(): Promise<void> {
 
           socket.on('pv:unsubscribe', (payload: PVSubscribePayload) => {
             deviceSocketService.unsubscribeFromPV(socket, payload);
-          });
-
-          socket.on('notification', data => {
-            emitBuffer(io!, 'notification', data);
           });
 
           // === MENABO PRESENCE ===
@@ -349,17 +354,6 @@ export function startWSServer(): Promise<void> {
             log.debug(`Menabò: ${kicker.userName} ha rimosso ${targetSession.userName} da ${kickedDivisionId}`);
           });
 
-          socket.onAny((eventName, ...args) => {
-            const handledEvents = [
-              'disconnect', 'notification', 'pv:subscribe', 'pv:unsubscribe',
-              'menabo:page:join', 'menabo:page:leave', 'menabo:join', 'menabo:leave', 'menabo:kick',
-            ];
-            if (!handledEvents.includes(eventName)) {
-              log.debug(`WS evento ricevuto: ${eventName} da ${socket.id}`);
-              emitBuffer(io!, eventName, args.length === 1 ? args[0] : args);
-            }
-          });
-
           socket.on('disconnect', reason => {
             cleanupMenaboSession(socket, io!, menaboSessions);
             log.debug(`WS client ${socket.id} disconnesso: ${reason}`);
@@ -416,7 +410,7 @@ export function startWSServer(): Promise<void> {
         cluster.on('message', (worker, message) => {
           if (message.type === 'socket_emit' && io) {
             log.debug(`Master: evento IPC ricevuto dal worker ${worker.process.pid}`, { event: message.event });
-            emitBuffer(io!, message.event, message.data);
+            emitBuffer(io!, message.event, message.data, message.room);
           }
 
           if (message.type === 'analytics_metrics_request') {
@@ -480,20 +474,24 @@ export function startWSServer(): Promise<void> {
   });
 }
 
-export function emitToClients(event: string, data: any): void {
+/**
+ * Emette un evento ai client della room indicata: per default i soli utenti
+ * autenticati, mai le connessioni anonime ne' i dispositivi punto vendita.
+ */
+export function emitToClients(event: string, data: any, room: string = ROOM_AUTENTICATI): void {
   if (cluster.isWorker && (config.NODE_ENV === 'production' || config.NODE_ENV === 'test')) {
-    process.send?.({ type: 'socket_emit', event, data });
+    process.send?.({ type: 'socket_emit', event, data, room });
     log.debug(`Worker ${process.pid}: evento inviato al master via IPC`, { event });
   } else if (io) {
-    emitBuffer(io, event, data);
+    emitBuffer(io, event, data, room);
     log.debug('Evento WebSocket emesso direttamente', { event });
   } else {
     log.warn('Impossibile emettere evento WebSocket: Socket.IO non disponibile', { event });
   }
 }
 
-export function emitBufferToClients(event: string, data: any): void {
-  emitToClients(event, data);
+export function emitBufferToClients(event: string, data: any, room?: string): void {
+  emitToClients(event, data, room);
 }
 
 export function getIO(): IOServer {

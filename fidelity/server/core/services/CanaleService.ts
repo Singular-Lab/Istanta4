@@ -9,6 +9,7 @@ import { log } from '../logger';
 import type { ICanaleRepository } from '../repositories/CanaleRepository';
 import { CanaleRepository } from '../repositories/CanaleRepository';
 import { ServerUtils } from '../utils/ServerUtils';
+import { verificaRisposta } from '../utils/rispostaServizi';
 
 export class CanaleService implements ICanaleService {
   constructor(
@@ -159,21 +160,16 @@ export class CanaleService implements ICanaleService {
   async deleteCanale(guidID: string, req?: Request): Promise<boolean> {
     try {
       if (req) {
-        const result = await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
-          req,
-          config.ISTANTA_IP_ADDRESS + '/ACPV/eliminaCanale/' + guidID,
-          'DELETE',
-          undefined
+        verificaRisposta(
+          await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
+            req,
+            config.ISTANTA_IP_ADDRESS + '/ACPV/eliminaCanale/' + guidID,
+            'DELETE',
+            undefined
+          ),
+          'ISTANTA',
+          '/ACPV/eliminaCanale'
         );
-
-        if (!result.data.esito && result.data.error !== "") {
-          throw new ExternalApiError({
-            message: `Error deleting channel in FICO: ${result.data.error}`,
-            service: 'FICO',
-            endpoint: '/ACPV/eliminaCanale',
-            details: { guidID }
-          });
-        }
       }
 
       const deleted = await this.canaleRepository.delete(guidID);

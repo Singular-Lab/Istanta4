@@ -5,7 +5,7 @@ import Litepicker from '@/components/Base/Litepicker';
 import Lucide from '@/components/Base/Lucide';
 import withSessionCheck from "@/components/SessionChecker";
 import React, { useEffect, useState } from 'react';
-import { Link, useLoaderData } from 'react-router-dom';
+import { useLoaderData } from 'react-router-dom';
 
 const TuttiIVolantini: React.FC = () => {
     const [daterange, setDaterange] = useState("");
@@ -179,10 +179,12 @@ const TuttiIVolantini: React.FC = () => {
                                 </div>
                                 <div className="pt-5">
                                     <div className="flex justify-center items-center">
-                                        <Link
+                                        {/* Link HTML e non di react-router: l'URL va al proxy /olimpo, non a una rotta della SPA */}
+                                        <a
                                             className="flex justify-center items-center text-primary"
-                                            to={file.url_download}
+                                            href={file.url_download}
                                             target="_blank"
+                                            rel="noopener noreferrer"
                                             download
                                         >
                                             <Lucide
@@ -190,7 +192,7 @@ const TuttiIVolantini: React.FC = () => {
                                                 className="w-4 h-4 stroke-[1.3] mr-1.5"
                                             />{" "}
                                             Scarica PDF
-                                        </Link>
+                                        </a>
                                     </div>
                                 </div>
                             </div>

@@ -236,6 +236,10 @@ function membro(sorgente, nome) {
 const UtilityFinta = {
     parseLabel(label) {
         return label.indexOf("foto_extra") === 0 ? label : label.split("$")[0];
+    },
+    //I20-1065: le regole si leggono dalla cartella dei dati della postazione; readFile qui e' finto.
+    percorsoDati(nome) {
+        return "/lavorazione/SingularData/mac/" + nome;
     }
 };
 

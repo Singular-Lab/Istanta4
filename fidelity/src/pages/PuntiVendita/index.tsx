@@ -5,6 +5,7 @@ import LoadingIcon from "@/components/Base/LoadingIcon";
 import Lucide from "@/components/Base/Lucide";
 import PageHeader from "@/components/Base/PageHeader";
 import Pagination from "@/components/Base/Pagination";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import { PermissionGate } from "@/components/PermissionGate";
 import Table from "@/components/Base/Table";
 import withSessionCheck from "@/components/SessionChecker";
@@ -13,20 +14,20 @@ import { useNotification } from "@/context/NotificationContext";
 import {
   useFetchAllCombinazioneForGDO,
   useFetchPuntiVenditaFromIdGDO,
-  useFetchPuntiVenditaPaginated,
 } from "@/query/query";
 import { yupResolver } from "@hookform/resolvers/yup";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import L from "leaflet";
+import clsx from "clsx";
 import "leaflet/dist/leaflet.css";
-import { useEffect, useMemo, useRef, useState } from "react";
+import _ from "lodash";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
-import { MapContainer, Marker, Popup, TileLayer } from "react-leaflet";
+import { CircleMarker, MapContainer, Popup, TileLayer, useMap } from "react-leaflet";
 import { useNavigate } from "react-router-dom";
-import * as XLSX from "xlsx";
 import * as yup from "yup";
 import { ServerCall } from "../../../lib/server_call";
-import { PuntoVenditaResponseDTO } from "../../../server/core/dto";
+import { EsitoRigaImportPuntoVenditaDTO, ImportPuntiVenditaResponseDTO, PuntoVenditaResponseDTO } from "../../../server/core/dto";
+import { canaleArea, codiciGdo, contaPer, filtraPuntiVendita, indirizzoCompleto } from "../../utils/puntoVendita";
 // Tipi per le risposte aggiornate del server
 interface ServerResponse<T> {
   esito: boolean;
@@ -48,29 +49,28 @@ const schema = yup.object().shape({
     .string()
     .required("Il cap è obbligatorio")
     .matches(/^[0-9]{5}$/, "Il CAP deve essere di 5 cifre"),
+  // Facoltativi come nel modello: un PV importato spesso non ha coordinate o telefono
   lat: yup
     .number()
+    .transform((valore, originale) => (originale === "" || originale === null ? undefined : valore))
     .typeError("La latitudine deve essere un numero")
-    .required("La latitudine è obbligatoria"),
+    .optional(),
   lon: yup
     .number()
+    .transform((valore, originale) => (originale === "" || originale === null ? undefined : valore))
     .typeError("La longitudine deve essere un numero")
-    .required("La longitudine è obbligatoria"),
-  ragioneSociale: yup.string().required("La ragione sociale è obbligatoria"),
-  provincia: yup.string().required("La provincia è obbligatoria"),
-  regione: yup.string().required("La regione è obbligatoria"),
-  telefono: yup.string().required("Il telefono è obbligatorio"),
+    .optional(),
+  ragioneSociale: yup.string(),
+  provincia: yup.string(),
+  regione: yup.string(),
+  telefono: yup.string(),
 });
 
-const normalizeText = (value: string) =>
-  value
-    ? value
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/\s+/g, " ")
-      .toLowerCase()
-      .trim()
-    : "";
+/** Coordinata del form: vuota resta assente (null), non diventa 0. */
+const coordinataDaForm = (valore: unknown) => {
+  const numero = typeof valore === "number" ? valore : parseFloat(String(valore ?? ""));
+  return Number.isFinite(numero) ? numero : null;
+};
 
 const hasValidCoordinates = (pv: PuntoVenditaResponseDTO) =>
   pv.has_coordinate &&
@@ -78,29 +78,31 @@ const hasValidCoordinates = (pv: PuntoVenditaResponseDTO) =>
   Number.isFinite(pv.coordinate.lat) &&
   Number.isFinite(pv.coordinate.lon);
 
-const createMarkerIcon = (className: string, size: number) =>
-  L.divIcon({
-    className,
-    html: `<span></span>`,
-    iconSize: [size, size],
-    iconAnchor: [size / 2, size / 2],
-  });
+// Un colore per canale, stabile anche filtrando (Tableau 10 senza il grigio)
+const PALETTE_CANALI = ["#4E79A7", "#F28E2B", "#E15759", "#76B7B2", "#59A14F", "#EDC948", "#B07AA1", "#FF9DA7", "#9C755F"];
+const COLORE_SENZA_CANALE = "#94A3B8";
 
-const defaultStoreMarker = createMarkerIcon("pv-marker", 12);
-const highlightStoreMarker = createMarkerIcon("pv-marker pv-marker--highlight", 18);
-const dimmedStoreMarker = createMarkerIcon("pv-marker pv-marker--dimmed", 10);
+/** Inquadra i punti mostrati ogni volta che cambiano ricerca o filtri. */
+function AdattaVista({ punti }: { punti: [number, number][] }) {
+  const map = useMap();
+  useEffect(() => {
+    if (punti.length > 0) map.fitBounds(punti, { padding: [32, 32], maxZoom: 15 });
+  }, [map, punti]);
+  return null;
+}
 
 interface MapPuntiVenditaProps {
   puntiVendita: PuntoVenditaResponseDTO[];
-  highlightedIds?: Set<string>;
-  filtersActive?: boolean;
+  coloreCanale: (pv: PuntoVenditaResponseDTO) => string;
+  onDettagli: (pv: PuntoVenditaResponseDTO) => void;
 }
-const resolvePuntoVenditaId = (pv: PuntoVenditaResponseDTO) =>
-  pv.id ?? (pv as any).guidID ?? (pv as any).guidid ?? `${pv.nome ?? "pv"}-${pv.cap ?? ""}`;
 
-function MapPuntiVendita({ puntiVendita, highlightedIds, filtersActive = false }: MapPuntiVenditaProps) {
-  const validPoints = puntiVendita.filter(hasValidCoordinates);
-  const shouldDimOthers = Boolean(filtersActive && highlightedIds && highlightedIds.size > 0);
+function MapPuntiVendita({ puntiVendita, coloreCanale, onDettagli }: MapPuntiVenditaProps) {
+  const posizionati = useMemo(() => puntiVendita.filter(hasValidCoordinates), [puntiVendita]);
+  const punti = useMemo(
+    () => posizionati.map(pv => [pv.coordinate.lat, pv.coordinate.lon] as [number, number]),
+    [posizionati]
+  );
 
   return (
     <MapContainer
@@ -108,43 +110,73 @@ function MapPuntiVendita({ puntiVendita, highlightedIds, filtersActive = false }
       zoom={6}
       preferCanvas
       scrollWheelZoom={false}
-      doubleClickZoom={false}
-      dragging
-      zoomControl={true}
-      attributionControl={false}
       className="absolute inset-0 rounded-md"
     >
-      {/* CartoDB Positron */}
       <TileLayer
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        attribution="&copy; OpenStreetMap contributors"
+        url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        maxZoom={19}
       />
-
-      {/* Marker */}
-      {validPoints.map(pv => (
-        <Marker
-          key={resolvePuntoVenditaId(pv)}
-          position={[pv.coordinate!.lat, pv.coordinate!.lon]}
-          icon={(() => {
-            const pointId = resolvePuntoVenditaId(pv);
-            const isHighlighted = highlightedIds?.has(pointId);
-            if (isHighlighted) return highlightStoreMarker;
-            if (shouldDimOthers) return dimmedStoreMarker;
-            return defaultStoreMarker;
-          })()}
+      <AdattaVista punti={punti} />
+      {posizionati.map(pv => (
+        <CircleMarker
+          key={pv.id}
+          center={[pv.coordinate.lat, pv.coordinate.lon]}
+          radius={7}
+          pathOptions={{ color: "#FFFFFF", weight: 2, fillColor: coloreCanale(pv), fillOpacity: 0.9 }}
         >
           <Popup>
             <div className="text-sm">
-              <div className="font-semibold">{pv.nome_display}</div>
-              <div>{pv.indirizzo_completo}</div>
-              <div>
-                {pv.cap} {pv.citta}
-              </div>
+              <div className="font-semibold">{pv.nome}</div>
+              <div>{indirizzoCompleto(pv)}</div>
+              <div className="text-slate-500">{canaleArea(pv)}</div>
+              <button type="button" className="mt-2 text-primary underline" onClick={() => onDettagli(pv)}>
+                Dettagli
+              </button>
             </div>
           </Popup>
-        </Marker>
+        </CircleMarker>
       ))}
     </MapContainer>
+  );
+}
+
+interface FiltroChipProps {
+  etichetta: string;
+  tutti: string;
+  voci: { id: string; nome: string; totale: number }[];
+  attivo: string;
+  onScegli: (id: string) => void;
+  colore?: (id: string) => string;
+}
+
+/** Una riga di chip: "Tutti" e una voce per canale o area, ciascuna col numero di punti vendita. */
+function FiltroChip({ etichetta, tutti, voci, attivo, onScegli, colore }: FiltroChipProps) {
+  const chip = (id: string, testo: string, totale: number) => (
+    <button
+      key={id || "tutti"}
+      type="button"
+      aria-pressed={attivo === id}
+      onClick={() => onScegli(id)}
+      className={clsx(
+        "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition-colors",
+        attivo === id
+          ? "border-primary bg-primary/10 font-medium text-primary"
+          : "border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-darkmode-400 dark:text-slate-300 dark:hover:bg-darkmode-400"
+      )}
+    >
+      {id && colore && <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: colore(id) }} />}
+      {testo}
+      <span className="text-slate-400">{totale}</span>
+    </button>
+  );
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="w-16 text-xs uppercase text-slate-500">{etichetta}</span>
+      {chip("", tutti, voci.reduce((somma, v) => somma + v.totale, 0))}
+      {voci.map(v => chip(v.id, v.nome, v.totale))}
+    </div>
   );
 }
 
@@ -155,6 +187,7 @@ function Main() {
   const formRef = useRef<HTMLFormElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { showNotification } = useNotification();
+  const [pvDaEliminare, setPvDaEliminare] = useState<PuntoVenditaResponseDTO | null>(null);
   const navigate = useNavigate()
   const {
     register,
@@ -182,80 +215,70 @@ function Main() {
     return () => clearTimeout(handler);
   }, [searchTerm]);
 
+  const [filtroCanale, setFiltroCanale] = useState("");
+  const [filtroArea, setFiltroArea] = useState("");
+
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, pageSize]);
+  }, [debouncedSearch, pageSize, filtroCanale, filtroArea]);
 
   /* --------------------------------------------------
    * QUERY
    * ------------------------------------------------*/
   const queryClient = useQueryClient();
   const combinazioniDisponibili = useFetchAllCombinazioneForGDO();
-  const puntiVenditaMapQuery = useFetchPuntiVenditaFromIdGDO();
-  const puntiVenditaMap = puntiVenditaMapQuery.data ?? [];
-  const hasMappablePoints = puntiVenditaMap.some(
-    pv =>
-      pv.has_coordinate &&
-      pv.coordinate &&
-      Number.isFinite(pv.coordinate.lat) &&
-      Number.isFinite(pv.coordinate.lon)
+  // Combinazioni per nome nella tendina del form, raggruppate per canale
+  const combinazioniPerCanale = useMemo(
+    () => Object.entries(_.groupBy(
+      _.sortBy(combinazioniDisponibili.data ?? [], ["nome_canale", "nome_area"]),
+      c => c.nome_canale ?? c.sigla_combinazione
+    )),
+    [combinazioniDisponibili.data]
   );
-  const isMapLoading = puntiVenditaMapQuery.isLoading;
-  const filtersActive = Boolean(debouncedSearch.trim());
+  const puntiVenditaQuery = useFetchPuntiVenditaFromIdGDO();
+  const tuttiPuntiVendita = useMemo(() => puntiVenditaQuery.data ?? [], [puntiVenditaQuery.data]);
+  const hasMappablePoints = tuttiPuntiVendita.some(hasValidCoordinates);
 
-  const puntiVenditaQueryParams = useMemo(() => {
-    const normalizedSearch = debouncedSearch.trim();
-    return {
-      page,
-      pageSize,
-      search: normalizedSearch ? normalizedSearch : undefined,
-    };
-  }, [page, pageSize, debouncedSearch]);
+  // ponytail: ricerca, filtri e pagine nel browser sull'elenco completo, già scaricato per la mappa;
+  // regge qualche migliaio di PV, oltre si torna a /getAllPVFromIdGDO_paginated con i filtri lato server
+  const filtrati = useMemo(
+    () => filtraPuntiVendita(tuttiPuntiVendita, { testo: debouncedSearch, idCanale: filtroCanale, idArea: filtroArea }),
+    [tuttiPuntiVendita, debouncedSearch, filtroCanale, filtroArea]
+  );
+  // Ogni dimensione conta i PV rispettando gli altri filtri, non il proprio
+  const perCanale = useMemo(
+    () => contaPer(filtraPuntiVendita(tuttiPuntiVendita, { testo: debouncedSearch, idArea: filtroArea }), "canale"),
+    [tuttiPuntiVendita, debouncedSearch, filtroArea]
+  );
+  const perArea = useMemo(
+    () => contaPer(filtraPuntiVendita(tuttiPuntiVendita, { testo: debouncedSearch, idCanale: filtroCanale }), "area"),
+    [tuttiPuntiVendita, debouncedSearch, filtroCanale]
+  );
+  const coloriCanale = useMemo(
+    () => new Map(contaPer(tuttiPuntiVendita, "canale").map((c, i) => [c.id, PALETTE_CANALI[i % PALETTE_CANALI.length]])),
+    [tuttiPuntiVendita]
+  );
+  const coloreCanale = useCallback(
+    (pv: PuntoVenditaResponseDTO) => coloriCanale.get(pv.id_canale ?? "") ?? COLORE_SENZA_CANALE,
+    [coloriCanale]
+  );
+  const senzaCoordinate = filtrati.filter(pv => !hasValidCoordinates(pv)).length;
 
-  const puntiVenditaPaginatedQuery =
-    useFetchPuntiVenditaPaginated(puntiVenditaQueryParams);
-  const paginatedData = puntiVenditaPaginatedQuery.data;
-  const puntiVendita = paginatedData?.punti_vendita ?? [];
-  const highlightedMapIds = useMemo(() => {
-    if (!filtersActive || !puntiVendita.length) {
-      return undefined;
-    }
-    return puntiVendita.reduce<Set<string>>((acc, pv) => {
-      const pointId = resolvePuntoVenditaId(pv);
-      if (pointId) {
-        acc.add(pointId);
-      }
-      return acc;
-    }, new Set());
-  }, [puntiVendita, filtersActive]);
-  const totalItems = paginatedData?.total ?? 0;
-  const totalPages = paginatedData?.total_pages ?? 0;
-  const pageLimit = paginatedData?.limit ?? pageSize;
-  const isTableLoading = puntiVenditaPaginatedQuery.isLoading;
-  const isTableFetching = puntiVenditaPaginatedQuery.isFetching;
+  const totalItems = filtrati.length;
+  const totalPages = Math.ceil(totalItems / pageSize);
+  const puntiVendita = filtrati.slice((page - 1) * pageSize, page * pageSize);
+  // La colonna dei codici GDO serve solo alle GDO che li hanno (es. id ANACAN di CONAD CNO)
+  const mostraCodiciGdo = puntiVendita.some(pv => codiciGdo(pv.meta).length > 0);
+  const isLoading = puntiVenditaQuery.isLoading;
+  const isTableFetching = puntiVenditaQuery.isFetching;
   const pageSizeOptions = [10, 25, 50];
 
+  // Dopo un'eliminazione l'ultima pagina può sparire
   useEffect(() => {
-    if (!paginatedData) {
-      return;
-    }
+    if (totalPages > 0 && page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
-    const metaTotalPages = paginatedData.total_pages ?? 0;
-    const metaTotalItems = paginatedData.total ?? 0;
-
-    if (metaTotalPages === 0 && metaTotalItems === 0) {
-      if (page !== 1) {
-        setPage(1);
-      }
-      return;
-    }
-
-    if (metaTotalPages > 0 && page > metaTotalPages) {
-      setPage(metaTotalPages);
-    }
-  }, [paginatedData, page]);
-
-  const showingFrom = totalItems === 0 ? 0 : (page - 1) * pageLimit + 1;
+  const showingFrom = totalItems === 0 ? 0 : (page - 1) * pageSize + 1;
   const showingTo = totalItems === 0 ? 0 : showingFrom + puntiVendita.length - 1;
   const baseIndex = showingFrom === 0 ? 0 : showingFrom - 1;
   const paginationRange = useMemo<(number | string)[]>(() => {
@@ -292,7 +315,6 @@ function Main() {
 
   const invalidatePuntiVendita = () => {
     queryClient.invalidateQueries({ queryKey: ["dataPuntiVendita"] });
-    queryClient.invalidateQueries({ queryKey: ["dataPuntiVenditaPaginated"] });
   };
 
   /* --------------------------------------------------
@@ -304,9 +326,17 @@ function Main() {
   const [currentPuntoVendita, setCurrentPuntoVendita] =
     useState<PuntoVenditaResponseDTO | null>(null);
   const [isExcelImportDialogOpen, setIsExcelImportDialogOpen] = useState(false);
-  const [excelData, setExcelData] = useState<any[]>([]);
-  const [validationResults, setValidationResults] = useState<any[]>([]);
+  const [fileImport, setFileImport] = useState<File | null>(null);
+  const [anteprimaImport, setAnteprimaImport] = useState<EsitoRigaImportPuntoVenditaDTO[]>([]);
+  const [esitoImport, setEsitoImport] = useState<ImportPuntiVenditaResponseDTO | null>(null);
   const didSetDefaultCanaleRef = useRef(false);
+
+  const chiudiImport = () => {
+    setIsExcelImportDialogOpen(false);
+    setFileImport(null);
+    setAnteprimaImport([]);
+    setEsitoImport(null);
+  };
 
   /* --------------------------------------------------
    * FIX LOOP INFINITO:
@@ -349,8 +379,8 @@ function Main() {
         ...data,
         guidID: "",
         guidIDCombinazione: data.canaleArea,
-        lat: parseFloat(data.lat) || 0,
-        lon: parseFloat(data.lon) || 0,
+        lat: coordinataDaForm(data.lat),
+        lon: coordinataDaForm(data.lon),
       };
       return await ServerCall.put<ServerResponse<PuntoVenditaResponseDTO>>("/ACPV/salvaPV", payload);
     },
@@ -367,7 +397,7 @@ function Main() {
     },
     onError: (e: any) =>
       showNotification(
-        e?.response?.data?.message ||
+        e?.message ||
         "Errore durante la creazione del punto vendita",
         { variant: "error" }
       ),
@@ -377,8 +407,9 @@ function Main() {
     mutationFn: async (data: any) => {
       const payload = {
         ...data,
-        lat: parseFloat(data.lat) || 0,
-        lon: parseFloat(data.lon) || 0,
+        guidIDCombinazione: data.canaleArea,
+        lat: coordinataDaForm(data.lat),
+        lon: coordinataDaForm(data.lon),
       };
       return await ServerCall.put<ServerResponse<PuntoVenditaResponseDTO>>("/ACPV/modificaPV", payload);
     },
@@ -395,7 +426,7 @@ function Main() {
     },
     onError: (e: any) =>
       showNotification(
-        e?.response?.data?.message ||
+        e?.message ||
         "Errore durante la modifica del punto vendita",
         { variant: "error" }
       ),
@@ -404,23 +435,53 @@ function Main() {
   const mutationDelete = useMutation({
     mutationFn: async (id: string) =>
       await ServerCall.delete(`/ACPV/eliminaPV/${id}`),
-    onSuccess: () => invalidatePuntiVendita(),
+    onSuccess: () => {
+      invalidatePuntiVendita();
+      setPvDaEliminare(null);
+      showNotification("Punto vendita eliminato", { variant: "success" });
+    },
+    onError: (e) =>
+      showNotification(
+        e?.message ||
+        "Errore durante l'eliminazione del punto vendita",
+        { variant: "error" }
+      ),
+  });
+
+  // Il server legge il file col tracciato della GDO: con anteprima dice solo cosa farebbe di ogni riga
+  const inviaFileImport = <T,>(file: File, anteprima: boolean) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return ServerCall.post<T>(`/ACPV/importaPV${anteprima ? "?anteprima=true" : ""}`, formData, true);
+  };
+
+  const mutationAnteprimaImport = useMutation({
+    mutationFn: (file: File) => inviaFileImport<{ righe: EsitoRigaImportPuntoVenditaDTO[] }>(file, true),
+    onSuccess: (data) => setAnteprimaImport(data.righe),
+    onError: (e: any) => {
+      setFileImport(null);
+      showNotification(e?.message || "Errore durante la lettura del file Excel", {
+        variant: "error",
+      });
+    },
   });
 
   const mutationBulkImport = useMutation({
-    mutationFn: async (list: any[]) =>
-      await ServerCall.post("/ACPV/importaPV", { puntiVendita: list }),
-    onSuccess: () => {
+    mutationFn: (file: File) => inviaFileImport<ImportPuntiVenditaResponseDTO>(file, false),
+    onSuccess: (esito) => {
       invalidatePuntiVendita();
-      setIsExcelImportDialogOpen(false);
-      setExcelData([]);
-      setValidationResults([]);
-      showNotification("Importazione completata con successo", {
-        variant: "success",
-      });
+      const riepilogo = `${esito.total_imported} creati, ${esito.total_updated} aggiornati, ${esito.total_skipped} scartati`;
+      if (esito.errors.length === 0) {
+        chiudiImport();
+        showNotification(`Importazione completata: ${riepilogo}`, { variant: "success" });
+        return;
+      }
+      // Restano visibili le righe non importate, comprese quelle rifiutate da Istanta
+      setEsitoImport(esito);
+      showNotification(`Importazione completata con righe non importate: ${riepilogo}`, { variant: "warning" });
     },
-    onError: () =>
-      showNotification("Errore durante l'importazione dei punti vendita", {
+    onError: (e: any) =>
+      showNotification(e?.message || "Errore durante l'importazione dei punti vendita", {
         variant: "error",
       }),
   });
@@ -428,7 +489,6 @@ function Main() {
   /* --------------------------------------------------
    * HANDLERS CRUD
    * ------------------------------------------------*/
-  const handleDelete = (id: string) => mutationDelete.mutate(id);
 
   const handleModify = (pv: PuntoVenditaResponseDTO) => {
     setIsEditMode(true);
@@ -439,8 +499,9 @@ function Main() {
       indirizzo: pv.indirizzo,
       cap: pv.cap,
       canaleArea: pv.id_combinazione_canale_area,
-      lat: pv.lat,
-      lon: pv.lon,
+      // Il DTO porta le coordinate in coordinate, a 0,0 quando mancano
+      lat: pv.has_coordinate ? pv.coordinate?.lat : undefined,
+      lon: pv.has_coordinate ? pv.coordinate?.lon : undefined,
       provincia: pv.provincia,
       regione: pv.regione,
       telefono: pv.telefono,
@@ -455,8 +516,8 @@ function Main() {
       citta: "",
       indirizzo: "",
       cap: "",
-      lat: 0,
-      lon: 0,
+      lat: undefined,
+      lon: undefined,
       provincia: "",
       regione: "",
       telefono: "",
@@ -485,71 +546,15 @@ function Main() {
    * ------------------------------------------------*/
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = ""; // per poter riscegliere lo stesso file dopo averlo corretto
     if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = ev => {
-      try {
-        const wb = XLSX.read(ev.target?.result, { type: "binary" });
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        const json = XLSX.utils.sheet_to_json(ws);
-        setExcelData(json);
-        validateExcelData(json as any[]);
-      } catch {
-        showNotification("Errore durante la lettura del file Excel", {
-          variant: "error",
-        });
-      }
-    };
-    reader.readAsBinaryString(file);
+    setFileImport(file);
+    setAnteprimaImport([]);
+    setEsitoImport(null);
+    mutationAnteprimaImport.mutate(file);
   };
 
-  const validateExcelData = (rows: any[]) => {
-    const results = rows.map((row, idx) => {
-      const errs: string[] = [];
-      if (!row.nome) errs.push("Nome mancante");
-      if (!row.citta) errs.push("Città mancante");
-      if (!row.indirizzo) errs.push("Indirizzo mancante");
-      if (!row.cap) errs.push("CAP mancante");
-      if (!row.canaleArea) errs.push("Canale/Area mancante");
-      const validCA = combinazioniDisponibili.data?.some(
-        c => c.sigla_combinazione === row.canaleArea || c.id === row.canaleArea
-      );
-      if (row.canaleArea && !validCA) errs.push("Canale/Area non valido");
-      if (row.cap && !/^[0-9]{5}$/.test(row.cap.toString()))
-        errs.push("Formato CAP non valido");
-      return { row: idx + 1, data: row, isValid: errs.length === 0, errors: errs };
-    });
-    setValidationResults(results);
-  };
-
-  const prepareDataForImport = () =>
-    validationResults
-      .filter(r => r.isValid)
-      .map(r => {
-        const comb = combinazioniDisponibili.data?.find(
-          c => c.sigla_combinazione === r.data.canaleArea || c.id === r.data.canaleArea
-        );
-        return {
-          nome: r.data.nome,
-          indirizzo: r.data.indirizzo,
-          guidID: "",
-          guidIDCombinazione: comb?.id || "",
-          citta: r.data.citta,
-          cap: r.data.cap.toString(),
-          lat: 0,
-          lon: 0,
-        };
-      });
-
-  const importValidData = () => {
-    const list = prepareDataForImport();
-    if (!list.length) {
-      showNotification("Nessun dato valido da importare", { variant: "warning" });
-      return;
-    }
-    mutationBulkImport.mutate(list);
-  };
+  const righeImportabili = anteprimaImport.filter(r => r.azione !== "scarta").length;
 
   const openFileSelector = () => fileInputRef.current?.click();
 
@@ -559,6 +564,15 @@ function Main() {
    * ------------------------------------------------*/
   return (
     <>
+      <ConfirmDialog
+        open={!!pvDaEliminare}
+        title="Eliminare il punto vendita?"
+        description={<>Il punto vendita <strong>{pvDaEliminare?.nome}</strong> verrà eliminato.</>}
+        confirmLabel="Elimina"
+        loading={mutationDelete.isPending}
+        onClose={() => setPvDaEliminare(null)}
+        onConfirm={() => pvDaEliminare && mutationDelete.mutate(pvDaEliminare.id as string)}
+      />
       {/* Dialog creazione/modifica punto vendita */}
       <Dialog
         size="lg"
@@ -635,10 +649,14 @@ function Main() {
                   className={errors.canaleArea ? "border-danger" : ""}
                 >
                   <option value="">Seleziona</option>
-                  {combinazioniDisponibili.data?.map(c => (
-                    <option key={c.id} value={c.id}>
-                      {c.sigla_combinazione}
-                    </option>
+                  {combinazioniPerCanale.map(([canale, combinazioni]) => (
+                    <optgroup key={canale} label={canale}>
+                      {combinazioni.map(c => (
+                        <option key={c.id} value={c.id}>
+                          {c.nome_area ? `${c.nome_area} (${c.sigla_combinazione})` : c.sigla_combinazione}
+                        </option>
+                      ))}
+                    </optgroup>
                   ))}
                 </FormSelect>
                 {errors.canaleArea && (
@@ -763,7 +781,7 @@ function Main() {
       <Dialog
         size="xl"
         open={isExcelImportDialogOpen}
-        onClose={() => setIsExcelImportDialogOpen(false)}
+        onClose={chiudiImport}
       >
         <Dialog.Panel>
           <Dialog.Title>
@@ -785,22 +803,42 @@ function Main() {
                   variant="outline-secondary"
                   className="w-full"
                   onClick={openFileSelector}
+                  disabled={mutationAnteprimaImport.isPending || mutationBulkImport.isPending}
                 >
-                  <Lucide
-                    icon="Upload"
-                    className="stroke-[1.3] w-4 h-4 mr-2"
-                  />
-                  Seleziona file Excel
+                  {mutationAnteprimaImport.isPending ? (
+                    <LoadingIcon icon="oval" className="w-4 h-4 mr-2" />
+                  ) : (
+                    <Lucide
+                      icon="Upload"
+                      className="stroke-[1.3] w-4 h-4 mr-2"
+                    />
+                  )}
+                  {fileImport ? fileImport.name : "Seleziona file Excel"}
                 </Button>
                 <div className="mt-2 text-xs text-gray-500">
-                  Formato richiesto: colonne "nome", "citta", "indirizzo", "cap", "canaleArea"
+                  Il file viene letto con il tracciato previsto per la tua GDO.
                 </div>
               </div>
 
-              {excelData.length > 0 && (
+              {esitoImport && (
                 <div className="col-span-12 mt-4">
                   <h3 className="text-sm font-medium mb-2">
-                    Validazione dati ({excelData.length} record)
+                    {esitoImport.total_imported} creati, {esitoImport.total_updated} aggiornati, {esitoImport.total_skipped} non importati
+                  </h3>
+                  <ul className="max-h-64 overflow-y-auto border rounded p-3 text-xs text-danger">
+                    {esitoImport.errors.map(e => (
+                      <li key={e.row}>
+                        Riga {e.row}: {e.error}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {!esitoImport && anteprimaImport.length > 0 && (
+                <div className="col-span-12 mt-4">
+                  <h3 className="text-sm font-medium mb-2">
+                    Anteprima ({anteprimaImport.length} righe)
                   </h3>
                   <div className="max-h-64 overflow-y-auto border rounded">
                     <Table>
@@ -812,49 +850,49 @@ function Main() {
                           <Table.Th>Indirizzo</Table.Th>
                           <Table.Th>Cap</Table.Th>
                           <Table.Th>Canale/Area</Table.Th>
-                          <Table.Th>Stato</Table.Th>
+                          <Table.Th>Esito</Table.Th>
                         </Table.Tr>
                       </Table.Thead>
                       <Table.Tbody>
-                        {validationResults.map(r => (
+                        {anteprimaImport.map(r => (
                           <Table.Tr
-                            key={r.row}
+                            key={r.riga}
                             className={
-                              !r.isValid ? "bg-danger/5 dark:bg-danger/10" : ""
+                              r.azione === "scarta" ? "bg-danger/5 dark:bg-danger/10" : ""
                             }
                           >
-                            <Table.Td>{r.row}</Table.Td>
-                            <Table.Td>{r.data.nome || "-"}</Table.Td>
-                            <Table.Td>{r.data.citta || "-"}</Table.Td>
-                            <Table.Td>{r.data.indirizzo || "-"}</Table.Td>
-                            <Table.Td>{r.data.cap || "-"}</Table.Td>
-                            <Table.Td>{r.data.canaleArea || "-"}</Table.Td>
+                            <Table.Td>{r.riga}</Table.Td>
+                            <Table.Td>{r.letto?.nome || "-"}</Table.Td>
+                            <Table.Td>{r.letto?.citta || "-"}</Table.Td>
+                            <Table.Td>{r.letto?.indirizzo || "-"}</Table.Td>
+                            <Table.Td>{r.letto?.cap || "-"}</Table.Td>
                             <Table.Td>
-                              {r.isValid ? (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 text-[11px] font-semibold rounded-full bg-success/10 text-success border border-success/20">
-                                  <Lucide
-                                    icon="CircleCheck"
-                                    className="w-3.5 h-3.5"
-                                  />
-                                  Valido
-                                </span>
-                              ) : (
+                              {r.letto?.canaleArea ||
+                                [r.letto?.canale, r.letto?.area].filter(Boolean).join(" / ") ||
+                                "-"}
+                            </Table.Td>
+                            <Table.Td>
+                              {r.azione === "scarta" ? (
                                 <div>
                                   <span className="inline-flex items-center gap-1 px-2.5 py-0.5 text-[11px] font-semibold rounded-full bg-danger/10 text-danger border border-danger/20">
                                     <Lucide
                                       icon="CircleAlert"
                                       className="w-3.5 h-3.5"
                                     />
-                                    Errori
+                                    Scartata
                                   </span>
-                                  <ul className="text-xs ml-5 mt-1 text-danger">
-                                    {r.errors.map((e: string, i: number) => (
-                                      <li key={i} className="list-disc">
-                                        {e}
-                                      </li>
-                                    ))}
-                                  </ul>
+                                  <div className="text-xs mt-1 text-danger">
+                                    {r.errore}
+                                  </div>
                                 </div>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 text-[11px] font-semibold rounded-full bg-success/10 text-success border border-success/20">
+                                  <Lucide
+                                    icon="CircleCheck"
+                                    className="w-3.5 h-3.5"
+                                  />
+                                  {r.azione === "crea" ? "Nuovo" : "Aggiorna"}
+                                </span>
                               )}
                             </Table.Td>
                           </Table.Tr>
@@ -863,9 +901,7 @@ function Main() {
                     </Table>
                   </div>
                   <div className="mt-4 text-sm">
-                    Record validi:{" "}
-                    {validationResults.filter(r => r.isValid).length} /{" "}
-                    {validationResults.length}
+                    Righe importabili: {righeImportabili} / {anteprimaImport.length}
                   </div>
                 </div>
               )}
@@ -875,22 +911,23 @@ function Main() {
             <Button
               variant="outline-danger"
               className="w-20 mr-1"
-              onClick={() => setIsExcelImportDialogOpen(false)}
+              onClick={chiudiImport}
             >
-              Annulla
+              {esitoImport ? "Chiudi" : "Annulla"}
             </Button>
-            <Button
-              variant="primary"
-              className="w-auto"
-              onClick={importValidData}
-              disabled={
-                excelData.length === 0 ||
-                validationResults.filter(r => r.isValid).length === 0
-              }
-            >
-              Importa {validationResults.filter(r => r.isValid).length} record
-              validi
-            </Button>
+            {!esitoImport && (
+              <Button
+                variant="primary"
+                className="w-auto"
+                onClick={() => fileImport && mutationBulkImport.mutate(fileImport)}
+                disabled={!fileImport || righeImportabili === 0 || mutationBulkImport.isPending}
+              >
+                {mutationBulkImport.isPending && (
+                  <LoadingIcon icon="oval" className="w-4 h-4 mr-2" />
+                )}
+                Importa {righeImportabili} righe
+              </Button>
+            )}
           </Dialog.Footer>
         </Dialog.Panel>
       </Dialog>
@@ -904,9 +941,9 @@ function Main() {
           />
           <div className="mt-3.5">
             <div className="flex flex-col box box--stacked">
-              <div className="relative h-[400px] w-full p-4">
+              <div className="relative h-[440px] w-full p-4">
                 <div className="relative h-full w-full overflow-hidden rounded-2xl border border-slate-200/80 bg-white dark:border-darkmode-500 dark:bg-darkmode-600">
-                  {isMapLoading && (
+                  {isLoading && (
                     <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 px-6 text-center bg-white/80 dark:bg-darkmode-600/80 backdrop-blur-sm">
                       <LoadingIcon icon="tail-spin" color="#1d4ed8" className="w-10 h-10" />
                       <div className="text-sm font-medium text-slate-700 dark:text-slate-200">
@@ -918,15 +955,30 @@ function Main() {
                     </div>
                   )}
 
-                  {!isMapLoading && hasMappablePoints && (
+                  {puntiVenditaQuery.isError && (
+                    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 px-6 text-center">
+                      <Lucide icon="TriangleAlert" className="w-8 h-8 text-danger" />
+                      <p className="text-sm font-medium text-slate-600 dark:text-slate-200">
+                        Punti vendita non caricati
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        {(puntiVenditaQuery.error as Error)?.message || "Errore durante il recupero dei punti vendita"}
+                      </p>
+                      <Button variant="outline-secondary" size="sm" onClick={() => puntiVenditaQuery.refetch()}>
+                        Riprova
+                      </Button>
+                    </div>
+                  )}
+
+                  {!isLoading && hasMappablePoints && (
                     <MapPuntiVendita
-                      puntiVendita={puntiVenditaMap}
-                      highlightedIds={highlightedMapIds}
-                      filtersActive={filtersActive}
+                      puntiVendita={filtrati}
+                      coloreCanale={coloreCanale}
+                      onDettagli={pv => navigate(`/punti-vendita/${pv.id}`)}
                     />
                   )}
 
-                  {!isMapLoading && !hasMappablePoints && (
+                  {!isLoading && !puntiVenditaQuery.isError && !hasMappablePoints && (
                     <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 px-6 text-center">
                       <Lucide icon="MapPin" className="w-8 h-8 text-slate-400" />
                       <p className="text-sm font-medium text-slate-600 dark:text-slate-200">
@@ -939,6 +991,33 @@ function Main() {
                   )}
                 </div>
               </div>
+              {tuttiPuntiVendita.length > 0 && (
+                <div className="flex flex-col gap-3 px-5 pb-5">
+                  <FiltroChip
+                    etichetta="Canale"
+                    tutti="Tutti"
+                    voci={perCanale}
+                    attivo={filtroCanale}
+                    onScegli={setFiltroCanale}
+                    colore={id => coloriCanale.get(id) ?? COLORE_SENZA_CANALE}
+                  />
+                  <FiltroChip
+                    etichetta="Area"
+                    tutti="Tutte"
+                    voci={perArea}
+                    attivo={filtroArea}
+                    onScegli={setFiltroArea}
+                  />
+                  {senzaCoordinate > 0 && (
+                    <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                      <Lucide icon="MapPinOff" className="w-3.5 h-3.5" />
+                      {senzaCoordinate === 1
+                        ? "1 punto vendita filtrato non ha coordinate e non compare sulla mappa."
+                        : `${senzaCoordinate} punti vendita filtrati non hanno coordinate e non compaiono sulla mappa.`}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
           <div className="mt-3.5">
@@ -991,17 +1070,19 @@ function Main() {
                   </div>
                 </div>
                 <div className="flex flex-col sm:flex-row gap-x-3 gap-y-2 sm:ml-auto">
-                  <Button
-                    variant="outline-secondary"
-                    className="w-full sm:w-auto"
-                    onClick={() => setIsExcelImportDialogOpen(true)}
-                  >
-                    <Lucide
-                      icon="FileSpreadsheet"
-                      className="stroke-[1.3] w-4 h-4 mr-2"
-                    />{" "}
-                    Importa Excel
-                  </Button>
+                  <PermissionGate permission={PERMISSIONS.GDO.GESTISCI_PUNTI_VENDITA} mode="disable">
+                    <Button
+                      variant="outline-secondary"
+                      className="w-full sm:w-auto"
+                      onClick={() => setIsExcelImportDialogOpen(true)}
+                    >
+                      <Lucide
+                        icon="FileSpreadsheet"
+                        className="stroke-[1.3] w-4 h-4 mr-2"
+                      />{" "}
+                      Importa Excel
+                    </Button>
+                  </PermissionGate>
                   <PermissionGate permission={PERMISSIONS.GDO.GESTISCI_PUNTI_VENDITA} mode="disable">
                     <Button
                       variant="outline-secondary"
@@ -1027,15 +1108,15 @@ function Main() {
                             <Table.Tr>
                               <Table.Th>#</Table.Th>
                               <Table.Th>Nome</Table.Th>
-                              <Table.Th>Città</Table.Th>
                               <Table.Th>Indirizzo</Table.Th>
-                              <Table.Th>Cap</Table.Th>
-                              <Table.Th>Canale/Area</Table.Th>
+                              <Table.Th>Canale</Table.Th>
+                              <Table.Th>Area</Table.Th>
+                              {mostraCodiciGdo && <Table.Th>Codice GDO</Table.Th>}
                               <Table.Th className="text-center">Azioni</Table.Th>
                             </Table.Tr>
                           </Table.Thead>
                           <Table.Tbody>
-                            {isTableLoading ? (
+                            {isLoading ? (
                               <Table.Tr>
                                 <Table.Td colSpan={12}>
                                   <div className="flex flex-col items-center justify-center py-10 text-center">
@@ -1049,11 +1130,17 @@ function Main() {
                                   </div>
                                 </Table.Td>
                               </Table.Tr>
+                            ) : puntiVenditaQuery.isError ? (
+                              <Table.Tr>
+                                <Table.Td colSpan={12} className="text-center text-danger">
+                                  Punti vendita non caricati: {(puntiVenditaQuery.error as Error)?.message || "errore durante il recupero"}
+                                </Table.Td>
+                              </Table.Tr>
                             ) : puntiVendita.length === 0 ? (
                               <Table.Tr>
                                 <Table.Td colSpan={12} className="text-center text-slate-500 dark:text-slate-400">
-                                  {debouncedSearch.trim()
-                                    ? "Nessun punto vendita corrisponde alla ricerca"
+                                  {debouncedSearch.trim() || filtroCanale || filtroArea
+                                    ? "Nessun punto vendita corrisponde alla ricerca o ai filtri"
                                     : "Nessun punto vendita disponibile"}
                                 </Table.Td>
                               </Table.Tr>
@@ -1061,11 +1148,29 @@ function Main() {
                               puntiVendita.map((pv, idx) => (
                                 <Table.Tr key={pv.id}>
                                   <Table.Td>{baseIndex + idx + 1}</Table.Td>
-                                  <Table.Td>{pv.nome}</Table.Td>
-                                  <Table.Td>{pv.citta}</Table.Td>
-                                  <Table.Td>{pv.indirizzo}</Table.Td>
-                                  <Table.Td>{pv.cap}</Table.Td>
-                                  <Table.Td>{pv.sigla_combinazione ?? "-"}</Table.Td>
+                                  <Table.Td>
+                                    <div className="font-medium">{pv.nome}</div>
+                                    {pv.ragionesociale && (
+                                      <div className="text-xs text-slate-500">{pv.ragionesociale}</div>
+                                    )}
+                                  </Table.Td>
+                                  <Table.Td>{indirizzoCompleto(pv)}</Table.Td>
+                                  <Table.Td>
+                                    <span className="inline-flex items-center gap-1.5">
+                                      <span className="h-2.5 w-2.5 flex-none rounded-full" style={{ backgroundColor: coloreCanale(pv) }} />
+                                      {pv.nome_canale || "-"}
+                                    </span>
+                                  </Table.Td>
+                                  <Table.Td>{pv.nome_area || "-"}</Table.Td>
+                                  {mostraCodiciGdo && (
+                                    <Table.Td>
+                                      {codiciGdo(pv.meta).map(c => (
+                                        <div key={c.etichetta} className="text-xs">
+                                          <span className="text-slate-500">{c.etichetta}:</span> {c.valore}
+                                        </div>
+                                      ))}
+                                    </Table.Td>
+                                  )}
                                   <Table.Td className="flex justify-center">
                                     <div className="flex gap-2">
                                       <Button
@@ -1079,7 +1184,7 @@ function Main() {
                                         <Button
                                           variant="outline-danger"
                                           size="sm"
-                                          onClick={() => handleDelete(pv.id as string)}
+                                          onClick={() => setPvDaEliminare(pv)}
                                         >
                                           Elimina
                                         </Button>
@@ -1107,7 +1212,7 @@ function Main() {
               </div>
               <div className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
                 <div className="text-sm text-slate-500">
-                  {isTableLoading ? (
+                  {isLoading ? (
                     "Caricamento dei punti vendita..."
                   ) : totalItems > 0 ? (
                     <>

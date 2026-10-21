@@ -8,10 +8,10 @@ Olimpo è un servizio NestJS con UI associata e strumenti nativi per PDF e immag
 
 ## Verifica
 
-- Installa le dipendenze in modo riproducibile con `npm ci` quando il lockfile è disponibile e coerente; considera separatamente le dipendenze della cartella `ui`.
+- Installa le dipendenze in modo riproducibile con `yarn install --immutable`; la cartella `ui` è un progetto Yarn separato con il proprio `yarn.lock`, da installare a parte (`cd ui && yarn install --immutable`).
 - Esegui i test mirati con Jest e aggiungi i test unitari come `*.spec.ts` nelle convenzioni esistenti.
-- Per una modifica ordinaria esegui almeno `npm test -- --runInBand` e `npm run build`.
-- Esegui `npm run test:e2e` quando cambiano endpoint o integrazioni coperte dalla configurazione e2e.
+- Per una modifica ordinaria esegui almeno `yarn test --runInBand` e `yarn build`.
+- Esegui `yarn test:e2e` quando cambiano endpoint o integrazioni coperte dalla configurazione e2e.
 - Per modifiche a startup, dipendenze native, elaborazione PDF/immagini o packaging, valida dalla root `docker build -f olimpo/Dockerfile olimpo`.
 
 Non usare storage, FTP, database o credenziali reali nei test. Usa fixture temporanee e verifica esplicitamente la pulizia delle risorse create.

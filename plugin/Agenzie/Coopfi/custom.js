@@ -1,10 +1,10 @@
 //Coop.fi
 const fs = require('fs');
 const { app, FitOptions, LocationOptions, Justification, VerticalJustification, NestedStyleDelimiters, CornerOptions } = require('indesign');
-const { FotoPlacer, Utility } = require('./utility');
-const GarbageCollector = require('./garbageCollector');
-const ficoProcess = require('./ficoProcess');
-const CssFramework = require('./CssFramework');
+const { FotoPlacer, Utility } = require('../../utility');
+const GarbageCollector = require('../../garbageCollector');
+const ficoProcess = require('../../ficoProcess');
+const CssFramework = require('../../CssFramework');
 
 const customAgenzia={
     usaSottogruppi: false,
@@ -58,8 +58,9 @@ const customAgenzia={
     },
 
     setLavorazione(){
-        var filePath = pathLavorazione + "/lavorazioni.json";
-        let lavorazioni = readFile(filePath);
+        //I20-1061: la voce di questa macchina (copiata qui se era solo nel file di un'altra)
+        var voceDiQuestaMacchina = Utility.voceLavorazione(pathLavorazione, idMacchina(), app.activeDocument.name, libroDelDocumentoInLavorazione(app.activeDocument.name));
+        let lavorazioni = voceDiQuestaMacchina != null ? [voceDiQuestaMacchina] : [];
         //lavorazione è una lista di oggetti noi dobbiamo trovare qullo con la chiave file = al nome del file aperto di indesign
         var lavorazione = lavorazioni.find(lavorazione => lavorazione.file == app.activeDocument.name);
         if(lavorazione == null){

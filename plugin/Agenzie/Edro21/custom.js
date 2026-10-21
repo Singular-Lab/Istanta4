@@ -1,7 +1,7 @@
 //EDRO21
 const { app, FitOptions, LocationOptions, Justification, VerticalJustification, NestedStyleDelimiters, CornerOptions, StrokeAlignment } = require('indesign');
 //I20-1026: il riconoscimento del formato Parmigiano e' lo stesso delle regole del framework CSS.
-const sovrastrutture = require('./cssFramework/sovrastrutture');
+const sovrastrutture = require('../../cssFramework/sovrastrutture');
 
 const customAgenzia={
 
@@ -92,8 +92,9 @@ const customAgenzia={
 
     //TODO: da deprecare
     setLavorazione(){
-        var filePath = pathLavorazione + "/lavorazioni.json";
-        let lavorazioni = readFile(filePath);
+        //I20-1061: la voce di questa macchina (copiata qui se era solo nel file di un'altra)
+        var voceDiQuestaMacchina = Utility.voceLavorazione(pathLavorazione, idMacchina(), docInLavorazione.name, libroDelDocumentoInLavorazione(docInLavorazione.name));
+        let lavorazioni = voceDiQuestaMacchina != null ? [voceDiQuestaMacchina] : [];
         //lavorazione è una lista di oggetti noi dobbiamo trovare qullo con la chiave file = al nome del file aperto di indesign
         var lavorazione = lavorazioni.find(lavorazione => lavorazione.file == docInLavorazione.name);
         if(lavorazione == null){

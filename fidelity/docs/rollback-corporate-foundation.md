@@ -42,7 +42,6 @@ docs/rollback-corporate-foundation.md
 
 | File | Modifica |
 |------|----------|
-| `server/core/config/index.ts` | `MONGO_URL` e `MONGO_DB_NAME` resi opzionali |
 | `server/core/server.ts` | Aggiunti import e mount di `healthRouter`, `metricsRouter`, `metricsMiddleware` |
 | `package.json` | Aggiunti script `dev:docker`, `docker:dev:down`, `docker:dev:logs` |
 | `server/package.json` | Aggiunte dipendenze `bullmq`, `ioredis`, `prom-client` |

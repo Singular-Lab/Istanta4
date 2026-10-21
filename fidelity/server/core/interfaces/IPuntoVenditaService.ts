@@ -3,9 +3,11 @@ import {
   CreateDispositivoPuntoVenditaDTO,
   DispositivoPuntoVenditaResponseDTO,
   PuntiVenditaPaginatedResponseDTO,
-  UpdateDispositivoPuntoVenditaDTO
+  UpdateDispositivoPuntoVenditaDTO,
+  VolantinoAttivoDTO
 } from '../dto/PuntoVenditaDTO';
 import { DispositivoMetadata } from '../models/punto_vendita/dispositivi_punto_vendita';
+import type { ContestoImportPuntiVendita } from '../services/importPuntiVendita';
 import type { PuntoVenditaTextInput } from '../utils/puntoVenditaNormalization';
 
 export interface IPuntoVenditaService {
@@ -15,6 +17,7 @@ export interface IPuntoVenditaService {
   createPuntoVendita(data: Partial<PuntoVenditaResponseDTO>): Promise<PuntoVenditaResponseDTO>;
   updatePuntoVendita(id: string, data: Partial<PuntoVenditaResponseDTO>): Promise<PuntoVenditaResponseDTO | null>;
   deletePuntoVendita(id: string): Promise<boolean>;
+  getContestoImport(idGdo: string): Promise<ContestoImportPuntiVendita>;
 
   // Dispositivi punto vendita
   getAllDispositiviPuntoVendita(id_pv: string): Promise<DispositivoPuntoVenditaResponseDTO[]>;
@@ -74,5 +77,7 @@ export interface IPuntoVenditaService {
     hasCoordinate?: boolean;
     idCombinazioneCanaleArea?: string;
   }): Promise<PuntiVenditaPaginatedResponseDTO>;
+
+  getVolantiniAttivi(idPv: string): Promise<VolantinoAttivoDTO[]>;
 
 }

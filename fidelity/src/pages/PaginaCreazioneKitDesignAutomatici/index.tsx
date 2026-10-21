@@ -4,6 +4,7 @@ import FilterBaseForm from '@/components/Base/FormFiltriDesign';
 import { Dialog } from '@/components/Base/Headless';
 import Lucide from '@/components/Base/Lucide';
 import { useNotification } from '@/context/NotificationContext';
+import { normalizzaFiltroContesto } from '@/utils/filtroContesto';
 import { useFetchAddestramenti, useFetchAllDeclinazioni, useFetchDatiPerCreazioneKitsDesign, useFetchFiltroContestoById } from '@/query/query';
 import { yupResolver } from '@hookform/resolvers/yup';
 import { useMutation } from '@tanstack/react-query';
@@ -107,7 +108,7 @@ export default function PaginaCreazioneKitDesignAutomatici() {
   });
 
   // Field array for declinazioni (step 2)
-  const { fields, append, remove } = useFieldArray<any>({
+  const { fields, append, remove } = useFieldArray({
     control,
     name: 'declinazioni',
   });
@@ -122,6 +123,9 @@ export default function PaginaCreazioneKitDesignAutomatici() {
       tipiDiExportInKit: OggettoTipiDiExport[];
       quantitaCopie: number;
       tipo: string;
+      filtri: any[];
+      filtroContesto: WizardForm['filtroContesto'];
+      declinazioni: WizardForm['declinazioni'];
     }) => ServerCall.put('/creaCombinazioniDesign', data),
     mutationKey: ['creaCombinazione'],
     onSuccess: (data: any) => {
@@ -160,6 +164,10 @@ export default function PaginaCreazioneKitDesignAutomatici() {
       })),
       quantitaCopie: data.quantita,
       tipo: TIPO_KIT_DESIGN.AUTOMATICO,
+      // Impostazioni degli step 2-4: stessa forma che salva la pagina della combinazione
+      filtri: data.filtri ?? [],
+      filtroContesto: normalizzaFiltroContesto(data.filtroContesto),
+      declinazioni: data.declinazioni ?? [],
     });
   };
 
@@ -312,7 +320,7 @@ export default function PaginaCreazioneKitDesignAutomatici() {
               <span>
                 Esiste già un template con questa combinazione!
                 <br />
-                Sovrascrivi il template esistente oppure cambia i dati.
+                Cambia i dati per creare una nuova combinazione.
               </span>
             </div>
           </Dialog.Description>
@@ -320,9 +328,6 @@ export default function PaginaCreazioneKitDesignAutomatici() {
             <div className="flex justify-end gap-3">
               <Button variant="secondary" onClick={() => setShowDialogTemplateEsisteGia(false)}>
                 Cambia valori
-              </Button>
-              <Button variant="danger" onClick={() => setShowDialogTemplateEsisteGia(false)}>
-                Sovrascrivi
               </Button>
             </div>
           </Dialog.Footer>

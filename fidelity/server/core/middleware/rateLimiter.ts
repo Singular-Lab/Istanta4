@@ -1,19 +1,11 @@
 import { NextFunction, Request, Response } from 'express';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
-import slowDown from 'express-slow-down';
 import { RateLimitError } from '../../../lib/errors/application/RateLimitError';
 import { sendAppError } from '../../../lib/errors/errorUtils';
 import { getRedisClient } from '../../src/shared/cache/redis.client';
 import { log } from '../logger';
 import { AuditLogService } from '../services/AuditLogService';
 import { RedisRateLimitStore } from './RedisRateLimitStore';
-
-function isRedisClientReady(redis: unknown): boolean {
-  if (!redis || typeof redis !== 'object') return false;
-
-  const client = redis as { isReady?: boolean };
-  return client.isReady === true;
-}
 
 type RateLimitOptions = Omit<NonNullable<Parameters<typeof rateLimit>[0]>, 'store'>;
 type StoreMode = 'redis' | 'memory';
@@ -28,9 +20,10 @@ function createBootstrapRateLimiter(prefix: string, options: RateLimitOptions) {
   let lastMode: StoreMode | null = null;
 
   const getRedisLimiter = (): ReturnType<typeof rateLimit> | null => {
+    // getRedisClient restituisce il client solo quando la connessione e' 'ready'.
     const redis = getRedisClient();
 
-    if (!isRedisClientReady(redis)) {
+    if (!redis) {
       return null;
     }
 
@@ -74,6 +67,24 @@ function generateIPKey(req: Request): string {
   return ipKeyGenerator(req.ip || '');
 }
 
+function authLimitExceeded(req: Request, res: Response) {
+  const auditService = AuditLogService.getInstance();
+  auditService.rateLimitExceeded(req, 'auth');
+  auditService.loginFailed(req, req.body?.email || 'unknown', 'Rate limit exceeded');
+
+  log.warn(`Rate limit exceeded for IP: ${req.ip}`, {
+    ip: req.ip,
+    userAgent: req.get('User-Agent'),
+    path: req.path
+  });
+
+  sendAppError(res, new RateLimitError({
+    message: 'Troppi tentativi di login. Riprova tra 15 minuti.',
+    limitType: 'auth',
+    retryAfter: 15 * 60
+  }));
+}
+
 /**
  * Rate limiter per le operazioni di autenticazione
  * Limita severamente i tentativi di login per prevenire attacchi brute force
@@ -81,39 +92,28 @@ function generateIPKey(req: Request): string {
 export const authRateLimiter = createBootstrapRateLimiter('rl:auth:', {
   windowMs: 15 * 60 * 1000, // 15 minuti
   max: 5, // massimo 5 tentativi per IP in 15 minuti
-  message: {
-    error: 'Troppi tentativi di login',
-    message: 'Hai superato il limite di tentativi di login. Riprova tra 15 minuti.',
-    retryAfter: 15 * 60 * 1000
-  },
   standardHeaders: true, // Ritorna rate limit info negli headers `RateLimit-*`
   legacyHeaders: false, // Disabilita gli headers `X-RateLimit-*`
   skipSuccessfulRequests: true, // Non conta le richieste di login riuscite
   skipFailedRequests: false, // Conta le richieste fallite
-  keyGenerator: (req: Request) => {
-    // Usa l'helper generateIPKey per gestire correttamente IPv6
-    const ipKey = generateIPKey(req);
-    // Aggiungi User-Agent per una chiave più specifica
-    return `${ipKey}-${req.get('User-Agent') || 'unknown'}`;
-  },
-  // Personalizza il messaggio di errore
-  handler: (req: Request, res: Response) => {
-    const auditService = AuditLogService.getInstance();
-    auditService.rateLimitExceeded(req, 'auth');
-    auditService.loginFailed(req, req.body?.email || 'unknown', 'Rate limit exceeded');
+  // Solo l'IP: con lo User-Agent nella chiave bastava cambiarlo per azzerare il conteggio.
+  keyGenerator: generateIPKey,
+  handler: authLimitExceeded
+});
 
-    log.warn(`Rate limit exceeded for IP: ${req.ip}`, {
-      ip: req.ip,
-      userAgent: req.get('User-Agent'),
-      path: req.path
-    });
-
-    sendAppError(res, new RateLimitError({
-      message: 'Troppi tentativi di login. Riprova tra 15 minuti.',
-      limitType: 'auth',
-      retryAfter: 15 * 60
-    }));
-  }
+/**
+ * Secondo limite sul login, per email: cambiando IP non si moltiplicano
+ * i tentativi sullo stesso account.
+ */
+export const authEmailRateLimiter = createBootstrapRateLimiter('rl:auth-email:', {
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  skip: (req: Request) => typeof req.body?.email !== 'string',
+  keyGenerator: (req: Request) => `email:${String(req.body.email).trim().toLowerCase()}`,
+  handler: authLimitExceeded
 });
 
 /**
@@ -146,18 +146,6 @@ export const apiRateLimiter = createBootstrapRateLimiter('rl:api:', {
       retryAfter: 60
     }));
   }
-});
-
-/**
- * Slow down middleware per rallentare le richieste successive
- * Utile per operazioni costose come registrazioni o reset password
- */
-export const slowDownMiddleware = slowDown({
-  windowMs: 15 * 60 * 1000, // 15 minuti
-  delayAfter: 2, // Inizia a rallentare dopo 2 richieste
-  delayMs: () => 500, // Incrementa il delay di 500ms per ogni richiesta
-  maxDelayMs: 20000, // Massimo 20 secondi di delay
-  keyGenerator: generateIPKey,
 });
 
 /**
@@ -219,33 +207,3 @@ export const passwordResetRateLimiter = createBootstrapRateLimiter('rl:pwd-reset
     }));
   }
 });
-
-/**
- * Crea un rate limiter personalizzato
- */
-export const createCustomRateLimiter = (options: {
-  windowMs: number;
-  max: number;
-  message: string;
-  keyGenerator?: (req: Request) => string;
-}) => {
-  return rateLimit({
-    windowMs: options.windowMs,
-    max: options.max,
-    message: {
-      error: 'Rate limit exceeded',
-      message: options.message,
-      retryAfter: options.windowMs
-    },
-    standardHeaders: true,
-    legacyHeaders: false,
-    keyGenerator: options.keyGenerator || generateIPKey,
-    handler: (req: Request, res: Response) => {
-      sendAppError(res, new RateLimitError({
-        message: options.message,
-        limitType: 'custom',
-        retryAfter: Math.floor(options.windowMs / 1000)
-      }));
-    }
-  });
-};

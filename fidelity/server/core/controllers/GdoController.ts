@@ -8,6 +8,7 @@ import { IWebPliantService } from '../interfaces/IWebPliantService';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { permissionGuard } from '../middleware/permissionGuard';
 import { GDO } from '../models';
+import { motivoSvgNonValido } from '../utils/validaSvg';
 
 export class GdoController extends BaseController {
   constructor(
@@ -60,12 +61,11 @@ export class GdoController extends BaseController {
             return;
           }
 
-          // sicurezza minima: verifica contenuto
-          // const svgString = buffer.toString('utf-8');
-          // if (!svgString.startsWith('<svg') || /<script/i.test(svgString)) {
-          //   this.sendResponse(res, HttpStatusCode.BAD_REQUEST, { message: 'SVG non valido' });
-          //   return;
-          // }
+          const motivo = motivoSvgNonValido(buffer.toString('utf-8'));
+          if (motivo) {
+            this.sendResponse(res, HttpStatusCode.BAD_REQUEST, { message: `SVG non valido: ${motivo}` });
+            return;
+          }
 
           const gdo = await GDO.findByPk(idGDO);
           if (!gdo) {
@@ -110,6 +110,10 @@ export class GdoController extends BaseController {
       res.setHeader('Cache-Control', 'private, max-age=3600');
       res.setHeader('Content-Disposition', 'inline');
       res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      // L'SVG caricato puo' contenere script: aperto direttamente nel browser non deve
+      // eseguire nulla. Dentro <img> gli script non girano comunque.
+      res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
+      res.setHeader('X-Content-Type-Options', 'nosniff');
       res.status(HttpStatusCode.OK).send(gdo.icona_gdo);
 
     } catch (error: any) {
@@ -145,7 +149,7 @@ export class GdoController extends BaseController {
   }
 
 
-  private async getGDOById(req: Request, res: Response): Promise<void> {
+  private async getGDOById(req: Request<{ id: string }>, res: Response): Promise<void> {
     try {
       const gdo = await this.gdoService.getGDOById(req.params.id);
       if (!gdo) {

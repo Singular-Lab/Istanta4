@@ -14,7 +14,6 @@ import localeData from 'dayjs/plugin/localeData';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import timezone from 'dayjs/plugin/timezone';
 import utc from 'dayjs/plugin/utc';
-import dotenv from 'dotenv';
 import express from 'express';
 import http from 'node:http';
 import path, { dirname } from 'node:path';
@@ -32,6 +31,9 @@ dayjs.locale('it');
 import config from './config/index';
 import { sequelize } from './db/SequelizeConnector';
 import { httpLogger, log } from './logger';
+import { authMiddleware } from './middleware/authMiddleware';
+import { creaProxyOlimpo } from './middleware/olimpoProxy';
+import { permissionGuard } from './middleware/permissionGuard';
 import { applyErrorHandler, applyMiddlewares } from './middlewares';
 import {
   getConnectionMonitor,
@@ -40,9 +42,12 @@ import {
   initializeQueryProfiler
 } from './monitoring';
 import { applyRoutes } from './routes';
+import { AuditLogService } from './services/AuditLogService';
 import { initializeBackgroundServices } from './services/startup';
 import { sessionMiddleware } from './session';
 import { asyncHandler } from './utils/asyncHandler';
+import { PREFISSO_PROXY_OLIMPO } from './utils/urlOlimpo';
+import { getWhatsappQueueWorker } from './workers/WhatsappQueueWorker';
 import healthRouter from '../src/app/http/health.routes.js';
 import metricsRouter from '../src/app/http/metrics.routes.js';
 import { metricsMiddleware } from '../src/shared/observability/metrics.js';
@@ -52,10 +57,6 @@ import { closeRedisClient, initializeRedisClient } from '../src/shared/cache/red
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname_current = dirname(__filename);
-
-dotenv.config({
-  path: path.resolve(__dirname_current, '../.env'), // .env una cartella sopra server/
-});
 
 const projectRoot = path.resolve(__dirname_current, '../../'); // server/core/ -> server/ -> projectRoot/
 log.debug('Project root resolved', { context: 'Bootstrap', projectRoot });
@@ -67,6 +68,10 @@ const isStaging = process.env.NODE_ENV === "test";
 
 export async function createHttpApp() {
   const app = express();
+
+  // ⓪ Letture dei materiali Olimpo per il browser: prima della sessione e dei body
+  // parser, cosi' le richieste arrivano a Olimpo intatte e senza creare sessioni
+  app.use(PREFISSO_PROXY_OLIMPO, creaProxyOlimpo(config.OLYMPUS_IP_ADDRESS));
 
   // ① Sessione + middleware di base
   app.use(sessionMiddleware);
@@ -99,7 +104,8 @@ export async function createHttpApp() {
     });
   }));
 
-  app.get('/api/health/db/queries', asyncHandler(async (req, res) => {
+  // Espone SQL e struttura delle query: riservato agli amministratori.
+  app.get('/api/health/db/queries', authMiddleware, permissionGuard('impostazioni.modifica_generali'), asyncHandler(async (req, res) => {
     const profiler = getQueryProfiler();
     if (!profiler) {
       res.status(503).json({ status: 'error', message: 'Query profiler non inizializzato' });
@@ -116,18 +122,6 @@ export async function createHttpApp() {
 
   // ② API
   await applyRoutes(app);
-
-  // ③-A Servizi statici specifici (precedentemente in static.ts)
-  const insegneDir = config.ICONE_INSEGNA_DIR as string;
-  if (insegneDir) { // Aggiungo un controllo per sicurezza
-    app.use("/insegne", express.static(insegneDir));
-    log.info(`Servizio statico per /insegne configurato da ${insegneDir}`);
-  }
-  // Path.resolve() qui darà server/core. projectRoot è server/../.. -> root del progetto.
-  // Quindi src/assets/images deve essere relativo a projectRoot
-  const srcAssetsImagesPath = path.resolve(projectRoot, 'src/assets/images');
-  app.use('/src/assets/images', express.static(srcAssetsImagesPath));
-  log.info(`Servizio statico per /src/assets/images configurato da ${srcAssetsImagesPath}`);
 
   // ③-B Client app handling:
   // - production: serve built assets from dist/client
@@ -215,17 +209,31 @@ export async function createActualServer() {
     });
   });
   // Gestione dei segnali di terminazione
+  let inChiusura = false;
   const handleShutdown = (signal: string) => {
+    // Il segnale può arrivare sia da PM2 sia inoltrato dal primary: si chiude una volta sola
+    if (inChiusura) return;
+    inChiusura = true;
     log.info(`Ricevuto segnale ${signal}, avvio spegnimento controllato...`);
 
     getConnectionMonitor()?.stopMonitoring();
     getQueryProfiler()?.stopProfiling();
 
+    // Nessun nuovo invio WhatsApp durante lo spegnimento
+    const whatsappWorker = getWhatsappQueueWorker();
+    if (whatsappWorker.isActive()) whatsappWorker.stop();
+
+    // Audit in memoria scritto subito, nel caso la chiusura HTTP si blocchi...
+    const audit = AuditLogService.getInstance();
+    void audit.forceFlush();
+
     // Chiudi il server HTTP in modo pulito
     httpServer.close(() => {
       log.info('Server HTTP chiuso con successo');
 
-      closeRedisClient()
+      // ...e di nuovo a richieste concluse, attendendo le scritture su DB
+      audit.forceFlush()
+        .then(() => closeRedisClient())
         .catch(() => undefined)
         .finally(() => {
           log.info('Terminazione processo completata');

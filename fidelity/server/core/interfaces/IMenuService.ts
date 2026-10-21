@@ -1,14 +1,17 @@
 import { TIPO_UTENTI } from '../../../lib/enums';
 import { MenuElement } from '../../../lib/types';
+import type { ContestoAccesso } from '../accessi/contestoAccesso';
 
 export interface MenuItemDTO {
   id_menu_item?: string;
   tipo_utente: TIPO_UTENTI;
-  ruolo_gdo?: string | null;
+  /** Sotto-ruolo GDO del menu (null = menu base del tipo). */
+  id_ruolo_utente_gdo?: string | null;
   titolo: string;
   tipo: 'separator' | 'item';
   icona?: string | null;
   pathname?: string | null;
+  /** Permesso richiesto dalla pagina: ricavato dal catalogo delle pagine, in sola lettura. */
   codice_permesso?: string | null;
   disabilitato?: boolean;
   start_page?: boolean;
@@ -18,10 +21,12 @@ export interface MenuItemDTO {
 }
 
 export interface IMenuService {
-  getMenuPerUtente(tipoUtente: string, ruoloGdo?: string): Promise<MenuElement[]>;
-  getMenuItemsPerUtente(tipoUtente: string, ruoloGdo?: string): Promise<MenuItemDTO[]>;
-  getAllMenuConfigurations(): Promise<Record<string, MenuItemDTO[]>>;
-  saveMenu(tipoUtente: string, ruoloGdo: string | null, items: MenuItemDTO[]): Promise<void>;
-  invalidateCache(tipoUtente?: string, ruoloGdo?: string): void;
-  seedMenuDaJson(): Promise<void>;
+  /** Menu configurato per tipo e sotto-ruolo, senza filtri (per la gestione). */
+  getMenuConfigurato(tipoUtente: TIPO_UTENTI, idRuoloGdo?: string | null): Promise<MenuElement[]>;
+  /** Menu dell'utente: solo le voci delle pagine che può aprire. */
+  getMenuDiUtente(contesto: ContestoAccesso): Promise<MenuElement[]>;
+  getMenuItemsPerUtente(tipoUtente: TIPO_UTENTI, idRuoloGdo?: string | null): Promise<MenuItemDTO[]>;
+  saveMenu(tipoUtente: TIPO_UTENTI, idRuoloGdo: string | null, items: MenuItemDTO[]): Promise<void>;
+  /** Riporta il solo menu del Superadmin a quello predefinito; restituisce il numero di voci. */
+  ripristinaMenuPredefiniti(): Promise<number>;
 }

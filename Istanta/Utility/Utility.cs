@@ -492,10 +492,14 @@ namespace Istanta.Utility
             if (corrispondenza != null)
                 return corrispondenza;
 
-            var possibileCorrispondenza = lavorazioniRec
-                .FirstOrDefault(f => f.CodiceGruppo == codiceGruppo);
+            //I20-1104: tutte le righe del codice gruppo, non solo la prima. Lo stesso gruppo impaginato
+            //con due label (main e soci) ha due righe: guardando solo la prima, il secondario di una
+            //label restava in lista mentre il suo primario era escluso, e il raggruppamento si fermava.
+            var righeDelGruppo = lavorazioniRec
+                .Where(f => f.CodiceGruppo == codiceGruppo)
+                .ToList();
 
-            if (possibileCorrispondenza == null)
+            if (righeDelGruppo.Count == 0)
                 return null;
 
             var elementoIdRecIndicato = articoliInKit
@@ -515,10 +519,7 @@ namespace Istanta.Utility
                     f.label == label)
                 .ToList();
 
-            if (elementiGruppo.Any(f => f.IdRec == possibileCorrispondenza.IdRecordTracciato))
-                return possibileCorrispondenza;
-
-            return null;
+            return righeDelGruppo.FirstOrDefault(r => elementiGruppo.Any(f => f.IdRec == r.IdRecordTracciato));
         }
 
     }
@@ -876,7 +877,8 @@ namespace Istanta.Utility
 
 
                 //string resultExternal = icCtrl.execLibFunction($"AgenziaLib.{this._fico_conf.Value.nomeCliente}.ordinaLista", _pass).ToString();
-                string resultExternal = icCtrl.execLibFunction($"AgenziaLib.{nomeCliente}.ordinaLista", _pass).ToString()!;
+                //I20-1069: senza ordinaLista in AgenziaLib prima un "Value cannot be null" qui sotto; ora si dice quale metodo manca.
+                string resultExternal = icCtrl.execLibFunctionRichiesta($"AgenziaLib.{nomeCliente}.ordinaLista", _pass).ToString()!;
                 list = JsonConvert.DeserializeObject<List<Dictionary<string, object>>>(resultExternal)!;
                 list = list.OrderBy(d => (Int64)d[GLOBAL_VARIABLES.keyIndiceOrdinamento]).ToList();
             }
@@ -1107,7 +1109,7 @@ namespace Istanta.Utility
                 _pass["gruppo"] = _listone;
                 _pass["ghost"] = elementiGhost;
 
-                List<List<Dictionary<string, object>>> resultExtDict = icCtrl.execLibFunction(funcAutoSelezione, _pass) as List<List<Dictionary<string, object>>>; ;
+                List<List<Dictionary<string, object>>> resultExtDict = icCtrl.execLibFunctionRichiesta(funcAutoSelezione, _pass) as List<List<Dictionary<string, object>>>; ;
 
                 foreach (var el in resultExtDict)
                 {
@@ -1232,7 +1234,7 @@ namespace Istanta.Utility
                 _pass["gruppo"] = _listone;// group.Select(g => g.dato).ToList();
                 _pass["ghost"] = elementiGhost;
 
-                List<List<Dictionary<string, object>>> resultExtDict = icCtrl.execLibFunction(funcAutoSelezione, _pass) as List<List<Dictionary<string, object>>>; ;
+                List<List<Dictionary<string, object>>> resultExtDict = icCtrl.execLibFunctionRichiesta(funcAutoSelezione, _pass) as List<List<Dictionary<string, object>>>; ;
 
                 Console.WriteLine($"SELEZIONE AUTO STEP4: {sw.ElapsedMilliseconds} ms");
 
@@ -1296,7 +1298,9 @@ namespace Istanta.Utility
             catch (Exception er)
             {
                 result.Esito = false;
-                result.error = er.Message;
+                //I20-1069: il motivo con tipo e riga (o il passo), invece del solo messaggio; la traccia in dettaglio.
+                result.error = DescrizioneErrori.Motivo(er);
+                result.dettaglio = DescrizioneErrori.Dettaglio(er);
                 return result;
             }
         }
@@ -1368,7 +1372,7 @@ namespace Istanta.Utility
                         _pass["gruppo"] = group.Select(g=>g.dato).ToList();
                         _pass["ghost"] = elementiGhost;
 
-                        string resultExternal = icCtrl.execLibFunction(funcAutoSelezione, _pass).ToString()!;
+                        string resultExternal = icCtrl.execLibFunctionRichiesta(funcAutoSelezione, _pass).ToString()!;
                         List<Dictionary<string, object>> resultExtDict = JsonConvert.DeserializeObject<List<Dictionary<string, object>>>(resultExternal)!;
                         foreach (var el in resultExtDict)
                         {
@@ -1388,7 +1392,9 @@ namespace Istanta.Utility
             catch (Exception er)
             {
                 result.Esito = false;
-                result.error = er.Message;
+                //I20-1069: il motivo con tipo e riga (o il passo), invece del solo messaggio; la traccia in dettaglio.
+                result.error = DescrizioneErrori.Motivo(er);
+                result.dettaglio = DescrizioneErrori.Dettaglio(er);
                 return result;
             }
         }

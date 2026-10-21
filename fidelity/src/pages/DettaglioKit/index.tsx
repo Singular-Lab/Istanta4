@@ -6,7 +6,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useLoaderData, useParams } from "react-router-dom";
 import { EXPORT_DI_SISTEMA, STATO_LAVORAZIONE_KIT_RUNTIME, TIPO_KIT_DESIGN, TIPO_LAVORAZIONE } from "../../../lib/enums";
 import { ServerCall } from "../../../lib/server_call";
-import { FileItemKit, RUNTIME_KIT_MONGO } from "../../../lib/types";
+import { FileItemKit, RUNTIME_KIT } from "../../../lib/types";
 import { KitProvider, KitType, useKit } from "./context/KitContext";
 import useKitLogic from "./hooks/useKitLogic";
 
@@ -92,7 +92,11 @@ const DettaglioKitContent: React.FC<{
     : { text: "Automatico", icon: "Zap", className: "bg-blue-100 text-blue-700 border border-blue-200" };
 
   // Handlers for actions
-  const handleStartRevision = () => setDialogOpenAvvioRevisione(true);
+  // Con file rifiutati si caricano prima i file corretti, poi parte la revisione
+  const handleStartRevision = () =>
+    stato === STATO_LAVORAZIONE_KIT_RUNTIME.IN_LAVORAZIONE_CON_ERRORI
+      ? setDialogOpenRevisioneConErrori(true)
+      : setDialogOpenAvvioRevisione(true);
   const handlePublish = () => setDialogOpenPubblicaKitRuntime(true);
   const handleRejectAndRework = () => setDialogOpenRiportaInLavorazione(true);
   const handleDelete = () => setDialogOpenEliminaLavorazione(true);
@@ -201,14 +205,14 @@ const DettaglioKitContent: React.FC<{
         setDialogOpen={setDialogOpenRevisioneConErrori}
         lavorazione={kit as any}
         filesRejected={state.rejected}
-        mutationRiportaInLavorazione={mutationRiportaInLavorazione as any}
+        mutationAvvioRevisione={mutationAvvioRevisione as any}
         stagedFiles={state.staged}
       />
 
       {/* Main Content */}
       {!lavorazioneStarted ? (
         <KitPreStartView
-          lavorazione={kit as RUNTIME_KIT_MONGO}
+          lavorazione={kit as RUNTIME_KIT}
           exportTypes={exportTypes}
           tipiDiExportInKit={kit.tipiDiExportInKit || []}
           isManuale={isManuale}
@@ -218,7 +222,7 @@ const DettaglioKitContent: React.FC<{
         />
       ) : (
         <KitOverviewLayout
-          lavorazione={kit as RUNTIME_KIT_MONGO}
+          lavorazione={kit as RUNTIME_KIT}
           filesData={filesData}
           isLoadingFiles={isLoadingFiles}
           exportTypes={exportTypes}

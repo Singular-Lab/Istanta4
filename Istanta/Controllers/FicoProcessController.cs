@@ -48,6 +48,13 @@ namespace Istanta.Controllers
         public List<ArticoliDescrizioni> archivio_descr_gruppo = new List<ArticoliDescrizioni>();
         public TipoLavorazione tipoLavorazione { get; set; }
         public string? error;
+        //I20-1069: in error il messaggio breve, qui la traccia completa.
+        public string? dettaglio;
+        //I20-1069: l'eccezione da cui viene error, per chi la rilancia senza perderne tipo e riga.
+        public Exception? eccezione;
+        //I20-1069: i record che non si sono completati (descrizioni, foto, firma), uno per riga:
+        //la lista arriva lo stesso, e il Plugin li mostra come avviso.
+        public List<string> avvisi = new List<string>();
     }
 
     class LoghiBolliPerCorreggo
@@ -2045,6 +2052,25 @@ namespace Istanta.Controllers
             return Ok(result);
         }
 
+        /// I20-1069: l'avviso per l'operatore sui record della lista che non si sono completati. Il
+        /// Plugin ne mostra circa 200 caratteri: i primi tre per esteso, gli altri contati; l'elenco
+        /// intero sta nel log di Istanta.
+        public static string AvvisoRecordNonCompletati(IReadOnlyCollection<string> avvisi)
+        {
+            const int mostrati = 3;
+            string elenco = string.Join("; ", avvisi.Take(mostrati));
+            string altri = avvisi.Count > mostrati ? $"; e altri {avvisi.Count - mostrati} (elenco completo nel log di Istanta)" : "";
+            return $"{avvisi.Count} record della lista non completati (senza descrizioni, foto o firma): {elenco}{altri}";
+        }
+
+        /// I20-1069: la riga d'avviso di un record che impacchettaInfoRecord non ha completato: quale
+        /// record, di quale gruppo, e perche'.
+        public static string AvvisoRecordNonCompletato(object? idRec, string? codice, string? codiceGruppo, Exception ex)
+        {
+            string gruppo = !string.IsNullOrEmpty(codiceGruppo) && codiceGruppo != codice ? $" gruppo {codiceGruppo}" : "";
+            return $"ref {codice}{gruppo} (record {idRec}): {DescrizioneErrori.Motivo(ex)}";
+        }
+
         //Chiamata effettuata da diverse parti per effettuare il processo di un kit
         [HttpGet]
         [Route("FicoProcess/processaKit/{id}/{mode}/{noCache}")]//{guidId}/{guidRaccoglitore}/{guidPromo}/{guidArea}/{guidCanale}/{guidFormato}")]
@@ -2098,13 +2124,20 @@ namespace Istanta.Controllers
                         //w.GuidCanale == guidCanale &&
                         //w.GuidArea == guidArea).ToList();
 
-                        IstantaLib.Utility.Logger.Log($"Guid promo {plItem!.GuidPromo}");
+                        //I20-1069: lavorazione, promo e kit mancanti davano un NullReferenceException senza dati.
+                        if (plItem == null)
+                            throw new ErroreIstanta("lettura della lavorazione", $"la lavorazione {id} non esiste.");
+
+                        IstantaLib.Utility.Logger.Log($"Guid promo {plItem.GuidPromo}");
 
                         Promo? promo = this.ctx2.Promos.Where(w => w.guidID == plItem.GuidPromo).FirstOrDefault();
+                        if (promo == null)
+                            throw new ErroreIstanta("lettura della promo", $"la promo {plItem.GuidPromo} della lavorazione {id} non esiste.");
 
                         //Console.WriteLine($"Step 2_2");
 
-                        List<FicoContextField> promoContext = JsonConvert.DeserializeObject<List<FicoContextField>>(promo!.Context!)!;
+                        List<FicoContextField> promoContext = (promo.Context == null ? null : JsonConvert.DeserializeObject<List<FicoContextField>>(promo.Context))
+                            ?? throw new ErroreIstanta("lettura della promo", $"la promo {plItem.GuidPromo} della lavorazione {id} non ha il contesto.");
 
                         FicoCombinazioniKitResponse resultFP = new FicoCombinazioniKitResponse();
 
@@ -2112,7 +2145,8 @@ namespace Istanta.Controllers
                         //Console.WriteLine($"Step 3");
 
                         //FicoCombinazioneKit kit = JsonConvert.DeserializeObject<FicoCombinazioneKit>(plItem.Meta);
-                        FicoRuntimeKit? kit = JsonConvert.DeserializeObject<FicoRuntimeKit>(plItem.Meta!);
+                        FicoRuntimeKit? kit = (string.IsNullOrWhiteSpace(plItem.Meta) ? null : JsonConvert.DeserializeObject<FicoRuntimeKit>(plItem.Meta))
+                            ?? throw new ErroreIstanta("lettura della lavorazione", $"la lavorazione {id} non ha il Meta del kit, o non si legge.");
 
                         if (guidIdTipiDiExport != "")
                         {
@@ -2146,7 +2180,7 @@ namespace Istanta.Controllers
                         });
 
                         if (punteggioTracciati.Count() <= 0)
-                            throw new Exception("no tracciati found");
+                            throw new ErroreIstanta("scelta dei tracciati", $"la promo {plItem.GuidPromo} non ha tracciati per l'area, il canale e il PV del kit della lavorazione {id}.");
 
                         //Console.WriteLine($"Step 4");
 
@@ -2192,7 +2226,7 @@ namespace Istanta.Controllers
                         if (maxVal < 0)
                         {
                             IstantaLib.Utility.Logger.Log($"Nessun vincitore");
-                            throw new Exception("Nessun punteggio valido");
+                            throw new ErroreIstanta("scelta dei tracciati", $"nessun tracciato della promo {plItem.GuidPromo} corrisponde al filtro di contesto del kit della lavorazione {id}.");
                             //Nessun vincitore
                             ////si passa oltre
                             //Console.WriteLine("Nessun vincitore!");
@@ -2229,7 +2263,9 @@ namespace Istanta.Controllers
 
                                 if (kitResult.error != null && kitResult.error != "")
                                 {
+                                    //I20-1069: kitResult.error e' gia' il messaggio breve; la traccia sta in dettaglio.
                                     result.error = kitResult.error;
+                                    result.dettaglio = kitResult.dettaglio;
                                     error_report += $"{result.error}\n";
                                     this._cache.Remove(kitCacheId);
                                 }
@@ -2240,6 +2276,11 @@ namespace Istanta.Controllers
 
                                     result.records.AddRange(kitResult.records);
 
+                                    //I20-1069: i record che non si sono completati arrivano con la lista, e il Plugin lo dice.
+                                    if (kitResult.avvisi.Count > 0)
+                                    {
+                                        result.warn = AvvisoRecordNonCompletati(kitResult.avvisi);
+                                    }
 
                                     result.esito = true;
                                 }
@@ -2247,12 +2288,14 @@ namespace Istanta.Controllers
                             }
                             catch (Exception exProKit)
                             {
-                                error_report += $"{exProKit.ToString()}\n";
+                                Console.WriteLine($"Errore in processaKit (lavorazione {id}): " + exProKit.ToString());
+                                error_report += DescrizioneErrori.Breve("processaKit", exProKit) + "\n";
+                                result.dettaglio = DescrizioneErrori.Dettaglio(exProKit);
                             }
                         }
 
 
-                        result.error = error_report;
+                        result.error = error_report.TrimEnd('\n');
 
                         //Console.WriteLine($"Step error report {error_report}");
 
@@ -2265,9 +2308,11 @@ namespace Istanta.Controllers
                     }
                     catch (Exception ex)
                     {
-                        //Console.WriteLine($"Step error {ex.ToString()}");
+                        //I20-1069: messaggio breve per chi chiama, traccia completa nel log e in dettaglio.
+                        Console.WriteLine($"Errore in processaKit (lavorazione {id}): " + ex.ToString());
 
-                        result.error = "processaKit -> " + ex.ToString();
+                        result.error = DescrizioneErrori.Breve("processaKit", ex);
+                        result.dettaglio = DescrizioneErrori.Dettaglio(ex);
                         result.esito = false;
                         return Ok(result);
                     }
@@ -2681,11 +2726,16 @@ namespace Istanta.Controllers
 
                 List<FicoContextField> promoContext = (pItem.Context == null ? new List<FicoContextField>() : JsonConvert.DeserializeObject<List<FicoContextField>>(pItem.Context))!;
 
-                Formato? objFormato = Utility.SingletonConfiguration.DBFORMATI!.source.Where(w => w.guidID == kit.guidFormato).FirstOrDefault();
-                resultGlobale.tipoLavorazione = objFormato!.tipo;
+                //I20-1069: un formato assente da SourceFormati.json dava un NullReferenceException qui sotto.
+                Formato objFormato = Formati.Trova(kit.guidFormato, $"kit della lavorazione {idLavorazione}");
+                resultGlobale.tipoLavorazione = objFormato.tipo;
                 //IstantaController icItem = new IstantaController(this.connString, this.extarnalLibPath, this.extarnalSourcePath);
                 string error_report = "";
 
+
+                //I20-1103: le righe dei volantini della stessa promo, area e canale, da cui il POP eredita i
+                //meta. Si leggono una volta sola, al primo tracciato che le chiede.
+                List<MetaDelVolantino>? volantinoDellaPromo = null;
 
                 foreach (PromoTracciati tracciato in tracciati)
                 {
@@ -2701,12 +2751,19 @@ namespace Istanta.Controllers
 
                     if (resultPreparazione.error != null && resultPreparazione.error != "")
                     {
-                        throw new Exception(resultPreparazione.error);
+                        //I20-1069: prima la traccia diventava il messaggio di una nuova eccezione, e il
+                        //Plugin la riceveva avvolta due o tre volte. Ora si dice il passo, con l'originale dentro.
+                        if (resultPreparazione.eccezione != null)
+                        {
+                            throw new ErroreIstanta($"impacchettamento del tracciato {tracciato.Id}", DescrizioneErrori.Motivo(resultPreparazione.eccezione), resultPreparazione.eccezione);
+                        }
+                        throw new ErroreIstanta($"impacchettamento del tracciato {tracciato.Id}", resultPreparazione.error);
                     }
 
-                    ////Console.WriteLine($"Impacchettamento records. Ci sono errori? {resultPreparazione.error}");
-                    ///
-                    var recTest = resultPreparazione.records.FirstOrDefault(r => r.recordInTracciato[keyCodiceRef].ToString() == "881763");
+                    resultGlobale.avvisi.AddRange(resultPreparazione.avvisi);
+
+                    //I20-1069: qui c'era un residuo di debug (la ricerca del codice 881763) che lanciava
+                    //KeyNotFoundException su qualunque record senza codice.
 
                     //Adesso è il momento di selezionare in base al FILTRO del kit
                     List<ArticoloInKit> recordsFiltrati = new List<ArticoloInKit>();
@@ -2767,10 +2824,18 @@ namespace Istanta.Controllers
 
                         Dictionary<string, bool> noRenderPerRef = new Dictionary<string, bool>();
                         Dictionary<string, List<RevisioneNoRenderFromIndd>> noRenderElementiPerGruppo = new Dictionary<string, List<RevisioneNoRenderFromIndd>>();
+                        Dictionary<string, List<RevisioneExtraLavorazioneFromIndd>> extraLavorazionePerGruppo = new Dictionary<string, List<RevisioneExtraLavorazioneFromIndd>>();
+                        Dictionary<string, List<TestoDalBox>> testiDalBoxPerGruppo = new Dictionary<string, List<TestoDalBox>>();
+                        Dictionary<string, PromoLavorazioniRecord> righeDeiTesti = new Dictionary<string, PromoLavorazioniRecord>();
+
+                        //I20-1103: il POP eredita i meta dal volantino della stessa promo, area e canale.
+                        List<MetaDelVolantino>? volantinoDelPop = null;
+                        if (mode == FicoCombinazioneKitReadMode.Advanced && objFormato.tipo == TipoLavorazione.PoP)
+                            volantinoDelPop = volantinoDellaPromo ??= metaDeiVolantiniDellaPromo(idLavorazione);
 
                         if (mode == FicoCombinazioneKitReadMode.Advanced)
                         {
-                            var listeModificate = updateDatiFromMetaPromoLavorazioni(recordsFiltrati, idLavorazione, kit/*, confronto*/, noRenderPerRef, noRenderElementiPerGruppo);
+                            var listeModificate = updateDatiFromMetaPromoLavorazioni(recordsFiltrati, idLavorazione, kit/*, confronto*/, noRenderPerRef, noRenderElementiPerGruppo, extraLavorazionePerGruppo, testiDalBoxPerGruppo, righeDeiTesti, volantinoDelPop);
                             recordsFiltrati = listeModificate;
                         }
 
@@ -2781,10 +2846,27 @@ namespace Istanta.Controllers
 
                         if (resultAgenzia.errors != "")
                         {
-                            error_report += resultAgenzia.errors;
+                            //I20-1069: si dice quale passo e quale tracciato; il testo intero di AgenziaLib va nel log e in dettaglio.
+                            Console.WriteLine($"Errore di {agenziaFunc} (lavorazione {idLavorazione}, tracciato {tracciato.Id}): " + resultAgenzia.errors);
+                            error_report += $"processaKit, esportazione di agenzia ({agenziaFunc}) del tracciato {tracciato.Id}: {DescrizioneErrori.PrimaRiga(resultAgenzia.errors)}\n";
+                            resultGlobale.dettaglio = (resultGlobale.dettaglio != null ? resultGlobale.dettaglio + "\n" : "") + resultAgenzia.errors;
                         }
                         else
                         {
+                            //I20-1103: i meta che le impaginazioni del POP ereditano dal volantino, legati ai
+                            //record come sono dopo l'export, prima di applicare noRender, foto extra e testi.
+                            //I20-1082: il POP non decide: le foto extra le ha solo dal volantino.
+                            HashSet<string>? testiEreditati = null;
+                            Dictionary<string, List<TestoDalBox>>? descrizioniDeiCartelli = null;
+                            if (volantinoDelPop != null)
+                            {
+                                var recordsDelPop = resultAgenzia.liste.SelectMany(l => l.Records).ToList();
+                                var metaDelPop = metaDelVolantinoPerIlPop(recordsDelPop, volantinoDelPop);
+                                //La descrizione di un gruppo del volantino va al solo cartello di gruppo.
+                                descrizioniDeiCartelli = descrizioneDelGruppoAlSoloCartello(recordsDelPop, metaDelPop);
+                                testiEreditati = sostituisciConIMetaDelVolantino(metaDelPop, noRenderPerRef, noRenderElementiPerGruppo, extraLavorazionePerGruppo, testiDalBoxPerGruppo, righeDeiTesti);
+                            }
+
                             foreach (var itemLista in resultAgenzia.liste)
                             {
                                 //membriGruppoFoto esiste solo dopo l'export di agenzia: e' qui che
@@ -2798,10 +2880,11 @@ namespace Istanta.Controllers
                             {
                                 if (itemLista.recordInTracciato.ContainsKey(keyFotoExtraAuto) && (itemLista.recordInTracciato[keyFotoExtraAuto] as List<LogoBollo>)!.Count > 0)
                                 {
-                                    string codRef = itemLista.recordInTracciato[keyCodiceRef].ToString();
+                                    string codRef = RecordTracciato.Richiesto(itemLista.recordInTracciato, keyCodiceRef, "foto escluse", $"il record {itemLista.IdRec}").ToString()!;
 
-                                    var fotoEscluse = this.ctx.Articolis.Include(f => f.FotoEscluses).Where(f => f.Codice == codRef).FirstOrDefault()!.FotoEscluses;
-                                    if (fotoEscluse!.Count > 0)
+                                    //I20-1069: una ref che non e' fra gli Articoli non ha foto escluse; prima dava NullReferenceException.
+                                    var fotoEscluse = this.ctx.Articolis.Include(f => f.FotoEscluses).Where(f => f.Codice == codRef).FirstOrDefault()?.FotoEscluses;
+                                    if (fotoEscluse != null && fotoEscluse.Count > 0)
                                     {
 
                                         foreach (var logoBollo in (itemLista.recordInTracciato[keyFotoExtraAuto] as List<LogoBollo>)!)
@@ -2816,6 +2899,18 @@ namespace Istanta.Controllers
                                     }
                                 }
                             }
+
+                            //I20-1070: le foto extra decise dall'operatore per questa lavorazione.
+                            applicaExtraDellaLavorazione(resultGlobale.records, extraLavorazionePerGruppo);
+                            //I20-1077: i testi del box scelti dall'operatore, nei campi compilati.
+                            //I20-1088: con il loro stato; quelli che il server compone ormai da se'
+                            //si tolgono qui, scaricando la lista.
+                            var testiAllineati = applicaTestiDalBox(resultGlobale.records, testiDalBoxPerGruppo, versioniDeiRecordConTesti(resultGlobale.records, testiDalBoxPerGruppo));
+                            applicaDescrizioniAiCartelliDiGruppo(resultGlobale.records, descrizioniDeiCartelli);
+                            //I20-1103: quelli ereditati dal volantino nel POP si applicano e basta, e non hanno
+                            //una riga di questa lavorazione da cui toglierli.
+                            togliStatoDeiTestiEreditati(resultGlobale.records, testiEreditati);
+                            togliTestiDalBoxAllineati(testiAllineati, righeDeiTesti);
                         }
 
                         if (resultGlobale.tipoLavorazione == TipoLavorazione.PoP)
@@ -2828,7 +2923,7 @@ namespace Istanta.Controllers
                                     List<ArticoloInKit> recordsFiltratiExport = new List<ArticoloInKit>();
                                     foreach (var itemLista in resultGlobale.records)
                                     {
-                                        List<ArticoloInKitExportName> _artExpNames = (itemLista.recordInTracciato[GLOBAL_VARIABLES_FICO.keyFicoNames] as List<ArticoloInKitExportName>)!;
+                                        List<ArticoloInKitExportName> _artExpNames = (RecordTracciato.Richiesto(itemLista.recordInTracciato, GLOBAL_VARIABLES_FICO.keyFicoNames, "filtro dei tipi di export", $"il record {itemLista.IdRec}") as List<ArticoloInKitExportName>)!;
 
                                         ArticoloInKitExportName? expArtInKit = _artExpNames.FirstOrDefault(n => n.guidIdTipoExport == expInKit.tipoDiExportGuidID);
 
@@ -2843,7 +2938,7 @@ namespace Istanta.Controllers
 
                                         if (itemLista.sottogruppo != null)
                                         {
-                                            List<ArticoloInKitExportName> _artExpNamesSott = (itemLista.recordInTracciato[GLOBAL_VARIABLES_FICO.keyFicoNames] as List<ArticoloInKitExportName>)!;
+                                            List<ArticoloInKitExportName> _artExpNamesSott = (RecordTracciato.Richiesto(itemLista.recordInTracciato, GLOBAL_VARIABLES_FICO.keyFicoNames, "filtro dei tipi di export", $"il record {itemLista.IdRec}") as List<ArticoloInKitExportName>)!;
 
                                             ArticoloInKitExportName? expArtInKitSott = _artExpNamesSott.FirstOrDefault(n => n.guidIdTipoExport == expInKit.tipoDiExportGuidID);
 
@@ -2876,13 +2971,18 @@ namespace Istanta.Controllers
 
                 resultGlobale.archivio_descr_gruppo = archivio_descr_gruppo;
                 resultGlobale.archivio_refs = archivio_refs;
-                resultGlobale.error = error_report;
+                resultGlobale.error = error_report.TrimEnd('\n');
 
                 return resultGlobale;
             }
             catch (Exception ex)
             {
-                resultGlobale.error = ex.ToString();
+                //I20-1069: messaggio breve con passo e motivo, traccia in dettaglio. Prima tutta la traccia
+                //finiva in error, e processaKit la passava cosi' al Plugin.
+                Console.WriteLine($"Errore in processaKit (lavorazione {idLavorazione}): " + ex.ToString());
+                resultGlobale.error = DescrizioneErrori.Breve("processaKit", ex);
+                resultGlobale.dettaglio = DescrizioneErrori.Dettaglio(ex);
+                resultGlobale.eccezione = ex;
                 return resultGlobale;
             }
         }
@@ -3006,7 +3106,9 @@ namespace Istanta.Controllers
                 var tRecordsJson = tRecordsDb
                     .Select(t =>
                     {
-                        var recordInTracciato = Utility.Main.getJsonObject(t.Dato!);
+                        //I20-1069: un Dato vuoto dava un NullReferenceException senza dire quale record.
+                        var recordInTracciato = Utility.Main.getJsonObject(t.Dato!)
+                            ?? throw new ErroreIstanta("lettura del tracciato", $"il Dato del record {t.Id} del tracciato {tItem.Id} non si legge.");
 
                         recordInTracciato[GLOBAL_VARIABLES.keyRefIdRec] = t.Id;
 
@@ -3070,8 +3172,10 @@ namespace Istanta.Controllers
 
 
 
-                            string? _cod = rec.recordInTracciato![k_cod].ToString();
-                            string? _codGruppo = rec.recordInTracciato[k_codgruppo].ToString();
+                            //I20-1069: un campo mancante dice di quale record e di quale tracciato.
+                            string diQualeRecord = $"il record {rec.idRec} del tracciato {tItem.Id}";
+                            string? _cod = RecordTracciato.Richiesto(rec.recordInTracciato, k_cod, "lettura del tracciato", diQualeRecord).ToString();
+                            string? _codGruppo = RecordTracciato.Richiesto(rec.recordInTracciato, k_codgruppo, "lettura del tracciato", diQualeRecord).ToString();
 
                             //Controllo se è già stato scaricato nel processo massivo di preparazione tracciati
                             //if (_cod == "6050479")
@@ -3183,7 +3287,7 @@ namespace Istanta.Controllers
                             }
 
                             //Preparazione del singolo
-                            Articoli? artItem = archivio_refs.Where(a => a.Codice == rec.recordInTracciato[k_cod].ToString()).FirstOrDefault();
+                            Articoli? artItem = archivio_refs.Where(a => a.Codice == _cod).FirstOrDefault();
                             //Articoli? artItem =            .Where(a => a.Codice == rec.recordInTracciato[k_cod].ToString()).FirstOrDefault();
 
                             //Console.WriteLine("Impacchetto record " + artItem.Codice);
@@ -3210,10 +3314,14 @@ namespace Istanta.Controllers
                             }
                             catch (Exception ex)
                             {
-                                //Console.WriteLine(ex.ToString());
-                                ex.ToString();
+                                //I20-1069: prima l'errore si ignorava e il break lasciava senza descrizioni,
+                                //foto e firma tutti i record successivi del tracciato, senza dirlo. Ora resta
+                                //incompleto solo questo record, come prima con la firma vuota, gli altri si
+                                //completano, e l'avviso arriva al Plugin con la lista.
+                                string avviso = AvvisoRecordNonCompletato(rec.idRec, _cod, _codGruppo, ex);
+                                Console.WriteLine($"Record non completato nel tracciato {tItem.Id}: {avviso}\n{ex}");
+                                result.avvisi.Add(avviso);
                                 rec.recordInTracciato![keyFirmaRevisione] = "";
-                                break;
                             }
                             //Duplico il record per ogni declinazione
                             //Lo faccio qui MA ovviamente è da valutare a chi livello è bene che entri
@@ -3374,7 +3482,9 @@ namespace Istanta.Controllers
                         var okResult = selezioneAutomaticaResult as BoolResult;
                         if (okResult.Esito == false)
                         {
-                            throw new Exception("Fallimento durante la selezione automatica di primarie/secondarie: " + okResult.error);
+                            //I20-1069: di okResult.error, spesso un ex.ToString() di AgenziaLib, si dice la prima riga; il resto va nel log.
+                            Console.WriteLine($"Selezione automatica non riuscita nel tracciato {tItem.Id}: {okResult.error}");
+                            throw new ErroreIstanta("selezione automatica di primarie e secondarie", $"tracciato {tItem.Id}: {DescrizioneErrori.PrimaRiga(okResult.error)}");
                         }
                     }
 
@@ -3395,13 +3505,18 @@ namespace Istanta.Controllers
                         label = s.label
                     }).ToList(),
                     archivio_descr_gruppo = archivio_descr_gruppo,
-                    archivio_refs = archivio_refs
+                    archivio_refs = archivio_refs,
+                    //I20-1069: gli avvisi dei record non completati, raccolti qui sopra nel risultato di prima.
+                    avvisi = result.avvisi
                 };
             }
             catch (Exception ex)
             {
-                //Console.WriteLine(ex.ToString());
-                result.error = ex.ToString();
+                //I20-1069: chi chiama rilancia l'eccezione dentro il suo passo, senza perderne tipo e riga.
+                Console.WriteLine($"Errore nell'impacchettamento del tracciato {tItem.Id}: " + ex.ToString());
+                result.error = DescrizioneErrori.Motivo(ex);
+                result.dettaglio = DescrizioneErrori.Dettaglio(ex);
+                result.eccezione = ex;
             }
 
             return result;
@@ -3427,7 +3542,8 @@ namespace Istanta.Controllers
             string k_multiplex = Enum.GetName(AddestramentoRuoli.Scatto) + "." + GLOBAL_VARIABLES.keyScattoCodiceGruppoMultiplex;
             string k_cod = Enum.GetName(AddestramentoRuoli.Referenza) + "." + GLOBAL_VARIABLES.keyRefCodice;
 
-            string? _cod = rec.recordInTracciato![k_cod].ToString();
+            //I20-1069: un campo mancante dice di quale record.
+            string? _cod = RecordTracciato.Richiesto(rec.recordInTracciato, k_cod, "lettura del record", $"il record {rec.idRec}").ToString();
 
             if (_cod == "2617525")
                 "break".ToString();
@@ -3518,7 +3634,8 @@ namespace Istanta.Controllers
                     canale = s.Canale,
                     guidId = s.GuidId,
                     tipo = s.Tipo!.Value,
-                    attiva = s.Attiva!.Value,
+                    //I20-1062: Attiva vuoto nel database dava un InvalidOperationException senza dire quale foto.
+                    attiva = s.Attiva ?? throw new ErroreIstanta("foto dell'articolo", $"la foto {s.NomeReale} (id {s.Id}) dell'articolo {artItem.Codice} ha Attiva vuoto nel database."),
                     statoSelezione = (s.StatoSelezione.HasValue ? s.StatoSelezione.Value : (Byte)StatoSelezioneFoto.NonSelezionata),
                     puntatore = s.Puntatore
                 }).ToList();
@@ -3562,7 +3679,7 @@ namespace Istanta.Controllers
             //Controllo se è parte di un gruppo
             //Per procedere anche con le selezioni
 
-            string? _codGruppo = rec.recordInTracciato[k_codgruppo].ToString();
+            string? _codGruppo = RecordTracciato.Richiesto(rec.recordInTracciato, k_codgruppo, "lettura del record", $"il record {rec.idRec} (ref {_cod})").ToString();
 
 
             if (_cod != _codGruppo)
@@ -4132,13 +4249,31 @@ namespace Istanta.Controllers
             TracciatoResultKit result = new TracciatoResultKit();
 
 
+            //I20-1062: il risultato non e' mai piu' null. Se il formato non e' ne' PoP ne' Volantino
+            //agenziaFunc e' vuoto, e se il cliente non ha il metodo execLibFunction restituisce "":
+            //in tutti e due i casi il cast dava null e il chiamante si rompeva su result.errors con
+            //un NullReferenceException. Ora errors dice quale metodo, di quale cliente.
+            string metodo = $"AgenziaLib.{this.ficoConf.Value.nomeCliente}.{agenziaFunc}";
             try
             {
-                result = (icItem.execLibFunction($"AgenziaLib.{this.ficoConf.Value.nomeCliente}.{agenziaFunc}", objParams) as TracciatoResultKit)!;
+                if (string.IsNullOrEmpty(agenziaFunc))
+                {
+                    result.errors = $"nessuna esportazione di agenzia per il formato {kit.guidFormato}: non e' ne' PoP ne' Volantino.";
+                }
+                else
+                {
+                    result = icItem.execLibFunction(metodo, objParams) as TracciatoResultKit
+                        ?? new TracciatoResultKit() { errors = $"{metodo} non esiste in AgenziaLib.dll, o non restituisce un TracciatoResultKit." };
+                }
             }
             catch (Exception ex)
             {
-                result.errors = ex.ToString();
+                //Le eccezioni della dll arrivano dentro una TargetInvocationException: il messaggio
+                //utile e' in quella interna. La traccia completa resta nel log.
+                Console.WriteLine($"Errore in {metodo}: " + ex.ToString());
+                Exception radice = DescrizioneErrori.Radice(ex);
+                string? punto = DescrizioneErrori.PuntoNelCodice(radice);
+                result = new TracciatoResultKit() { errors = $"{metodo}: {radice.GetType().Name}" + (punto != null ? $" in {punto}" : "") + $" - {radice.Message}" };
             }
 
             return result;
@@ -4151,6 +4286,40 @@ namespace Istanta.Controllers
         private static string chiaveNoRenderFoto(string? codiceGruppo, string? codRef)
         {
             return (codiceGruppo ?? "") + "|" + (codRef ?? "");
+        }
+
+        /// <summary>
+        /// I20-1088: la chiave con cui i meta letti dalla riga della lavorazione si ritrovano sui record
+        /// dopo l'export di agenzia. I meta sono dell'impaginazione, non del codice gruppo: lo stesso
+        /// gruppo impaginato due volte (idRec diversi) ha meta distinti. Un record senza idRec resta
+        /// sul solo codice gruppo.
+        /// </summary>
+        public static string chiaveDellImpaginazione(string? codiceGruppo, long idRec)
+        {
+            return idRec > 0 ? (codiceGruppo ?? "") + "#" + idRec : (codiceGruppo ?? "");
+        }
+
+        /// <summary>
+        /// I20-1089: annota nel record una primaria/secondaria ("selezione") o una foto ("foto") che un
+        /// meta cambia, con il valore del dato e quello del meta: il Plugin le mostra fra i meta del box.
+        /// Se il meta non cambia niente non si annota; la stessa referenza annotata di nuovo sostituisce
+        /// la voce di prima.
+        /// </summary>
+        public static void annotaSostituzioneFoto(Dictionary<string, object>? record, string tipo, string? codRef, object? originale, object? modificato, bool ereditata)
+        {
+            if (record == null)
+                return;
+            var prima = originale?.ToString();
+            var dopo = modificato?.ToString();
+            if (prima == dopo)
+                return;
+
+            var sostituzioni = record.TryGetValue(GLOBAL_VARIABLES.keyMetaFoto, out var valore) && valore is List<SostituzioneFotoDaMeta> lista
+                ? lista
+                : new List<SostituzioneFotoDaMeta>();
+            sostituzioni.RemoveAll(st => st.tipo == tipo && st.codRef == codRef);
+            sostituzioni.Add(new SostituzioneFotoDaMeta { tipo = tipo, codRef = codRef, originale = prima, modificato = dopo, ereditata = ereditata });
+            record[GLOBAL_VARIABLES.keyMetaFoto] = sostituzioni;
         }
 
         /// <summary>
@@ -4181,7 +4350,7 @@ namespace Istanta.Controllers
 
                 foreach (var membro in membri)
                 {
-                    if (noRenderPerRef.TryGetValue(chiaveNoRenderFoto(codGruppo, membro.codRef), out var noRender))
+                    if (noRenderPerRef.TryGetValue(chiaveNoRenderFoto(chiaveDellImpaginazione(codGruppo, record.IdRec), membro.codRef), out var noRender))
                     {
                         membro.noRender = noRender;
                     }
@@ -4227,14 +4396,532 @@ namespace Istanta.Controllers
                 if (codGruppo == null)
                     continue;
 
-                if (elementiPerGruppo.TryGetValue(codGruppo, out var elementi) && elementi.Count > 0)
+                if (elementiPerGruppo.TryGetValue(chiaveDellImpaginazione(codGruppo, record.IdRec), out var elementi) && elementi.Count > 0)
                 {
                     record.recordInTracciato[GLOBAL_VARIABLES.keyNoRenderElementi] = elementi;
                 }
             }
         }
 
-        public List<ArticoloInKit> updateDatiFromMetaPromoLavorazioni(List<ArticoloInKit> artInkit, int idLavorazione, FicoRuntimeKit kit/*, bool confronto = false*/, Dictionary<string, bool>? noRenderPerRef = null, Dictionary<string, List<RevisioneNoRenderFromIndd>>? noRenderElementiPerGruppo = null)
+        /// <summary>
+        /// I20-1077: mette nei campi compilati dei record (e del loro sottogruppo) i testi del box
+        /// scelti dall'operatore per questa lavorazione (MetaPromoLavorazioni.applicaTestiDalBoxAiCampi).
+        /// Si chiama dopo l'export di agenzia, che e' quando i campi compilati esistono.
+        /// I20-1088: i testi sono dell'impaginazione (chiaveDellImpaginazione). Accanto ai campi, sotto
+        /// testiDalBox, lo stato di ogni meta con la versione attuale del record (versioni, per idRec),
+        /// da cui il Plugin capisce se segnalarlo. I meta che il server compone gia' non si
+        /// restituiscono: tornano, per chiave, i campi da togliere dalla riga della lavorazione.
+        /// </summary>
+        public static Dictionary<string, HashSet<string>> applicaTestiDalBox(List<ArticoloInKit>? records, Dictionary<string, List<TestoDalBox>>? perGruppo, Dictionary<long, byte>? versioni = null)
+        {
+            var allineati = new Dictionary<string, HashSet<string>>();
+            if (records == null || perGruppo == null || perGruppo.Count == 0)
+                return allineati;
+
+            var keyCodGruppo = Enum.GetName(AddestramentoRuoli.Scatto) + "." + GLOBAL_VARIABLES.keyScattoCodiceGruppo;
+
+            foreach (var record in records)
+            {
+                if (record?.recordInTracciato == null)
+                    continue;
+
+                record.recordInTracciato.TryGetValue(keyCodGruppo, out var codGruppoObj);
+                var codGruppo = codGruppoObj?.ToString();
+                if (codGruppo == null)
+                    continue;
+                var chiave = chiaveDellImpaginazione(codGruppo, record.IdRec);
+                if (!perGruppo.TryGetValue(chiave, out var testi) || testi == null || testi.Count == 0)
+                    continue;
+
+                byte? versioneAttuale = null;
+                if (versioni != null && versioni.TryGetValue(record.IdRec, out var versione))
+                    versioneAttuale = versione;
+
+                var stati = applicaTestiDalBoxAiCampiDi(record.recordInTracciato, testi, versioneAttuale);
+                if (record.sottogruppo != null)
+                    stati.AddRange(applicaTestiDalBoxAiCampiDi(record.sottogruppo, testi, versioneAttuale));
+
+                //Un meta e' superato solo se il server compone il suo testo dovunque il campo c'e'.
+                foreach (var label in stati.Where(st => st.allineato).Select(st => st.label!).Distinct(StringComparer.OrdinalIgnoreCase))
+                {
+                    if (stati.Any(st => !st.allineato && string.Equals(st.label, label, StringComparison.OrdinalIgnoreCase)))
+                        continue;
+                    if (!allineati.TryGetValue(chiave, out var labels))
+                        allineati[chiave] = labels = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    labels.Add(label);
+                }
+            }
+            return allineati;
+        }
+
+        //I campi compilati di un record possono arrivare come lista, come JArray o come testo:
+        //si portano a lista, si rimettono nel record e si cambiano li'. Lo stato dei meta non
+        //superati va nel record, sotto testiDalBox.
+        private static List<StatoTestoDalBox> applicaTestiDalBoxAiCampiDi(Dictionary<string, object> dati, List<TestoDalBox> testi, byte? versioneAttuale)
+        {
+            if (!dati.TryGetValue(GLOBAL_VARIABLES.keyCompiledFields, out var valore) || valore == null)
+                return new List<StatoTestoDalBox>();
+
+            List<CompiledField>? campi = valore as List<CompiledField>;
+            if (campi == null)
+            {
+                if (valore is JArray elenco)
+                    campi = elenco.ToObject<List<CompiledField>>();
+                else if (valore is string testo)
+                    campi = JsonConvert.DeserializeObject<List<CompiledField>>(testo);
+                if (campi == null)
+                    return new List<StatoTestoDalBox>();
+                dati[GLOBAL_VARIABLES.keyCompiledFields] = campi;
+            }
+
+            var stati = MetaPromoLavorazioni.applicaTestiDalBoxAiCampi(campi, testi, versioneAttuale);
+            var daSegnalare = stati.Where(st => !st.allineato).ToList();
+            if (daSegnalare.Count > 0)
+                dati[GLOBAL_VARIABLES.keyTestiDalBox] = daSegnalare;
+            else
+                dati.Remove(GLOBAL_VARIABLES.keyTestiDalBox);
+            return stati;
+        }
+
+        /// <summary>
+        /// I20-1088: la versione attuale dei record del tracciato, per idRec. Si legge solo per i
+        /// record dei gruppi con meta di testo: senza, nessuna query.
+        /// </summary>
+        public Dictionary<long, byte> versioniDeiRecordConTesti(List<ArticoloInKit>? records, Dictionary<string, List<TestoDalBox>>? perGruppo)
+        {
+            if (records == null || perGruppo == null || perGruppo.Count == 0)
+                return new Dictionary<long, byte>();
+
+            var keyCodGruppo = Enum.GetName(AddestramentoRuoli.Scatto) + "." + GLOBAL_VARIABLES.keyScattoCodiceGruppo;
+            var ids = records
+                .Where(r => r?.recordInTracciato != null && r.IdRec > 0)
+                .Where(r => r.recordInTracciato.TryGetValue(keyCodGruppo, out var cg) && perGruppo.ContainsKey(chiaveDellImpaginazione(cg?.ToString(), r.IdRec)))
+                .Select(r => r.IdRec)
+                .Distinct()
+                .ToList();
+            if (ids.Count == 0)
+                return new Dictionary<long, byte>();
+
+            return this.ctx2.PromoTracciatiRecords.AsNoTracking()
+                .Where(r => ids.Contains(r.Id))
+                .Select(r => new { r.Id, r.Versione })
+                .ToList()
+                .ToDictionary(r => r.Id, r => r.Versione);
+        }
+
+        /// <summary>
+        /// I20-1088: toglie dalle righe della lavorazione i meta dei testi che il server compone ormai
+        /// da se': si fa scaricando la lista, una sola scrittura e solo se c'e' qualcosa da togliere.
+        /// </summary>
+        public void togliTestiDalBoxAllineati(Dictionary<string, HashSet<string>>? allineati, Dictionary<string, PromoLavorazioniRecord>? righe)
+        {
+            if (allineati == null || allineati.Count == 0 || righe == null)
+                return;
+
+            bool cambiato = false;
+            foreach (var voce in allineati)
+            {
+                if (!righe.TryGetValue(voce.Key, out var riga) || riga?.Meta == null)
+                    continue;
+                var meta = MetaPromoLavorazioni.leggi(riga.Meta);
+                if (meta == null || MetaPromoLavorazioni.togliTestiDalBox(meta, voce.Value) == 0)
+                    continue;
+                riga.Meta = JsonConvert.SerializeObject(meta);
+                cambiato = true;
+                IstantaLib.Utility.Logger.Log($"I20-1088 meta dei testi superati tolti da {voce.Key}: {string.Join(", ", voce.Value)}");
+            }
+            if (cambiato)
+                this.ctx2.SaveChanges();
+        }
+
+        /// <summary>
+        /// I20-1070: applica ai record le foto extra decise dall'operatore per questa lavorazione.
+        /// Si chiama dopo l'export di agenzia, che e' quando Foto.ExtraAuto esiste. Sovrascrivi
+        /// cambia il nome della foto con quella sigla; Aggiungi mette in Foto.ExtraAuto una voce che
+        /// il dato non ha; Escludi la segna esclusa (ExtraAuto) o non attiva (Extra). Le decisioni
+        /// restano nel record sotto extraLavorazione, cosi' il Plugin le mostra e le puo' togliere.
+        /// </summary>
+        public static void applicaExtraDellaLavorazione(List<ArticoloInKit>? records, Dictionary<string, List<RevisioneExtraLavorazioneFromIndd>>? perGruppo)
+        {
+            if (records == null || perGruppo == null || perGruppo.Count == 0)
+                return;
+
+            var keyCodGruppo = Enum.GetName(AddestramentoRuoli.Scatto) + "." + GLOBAL_VARIABLES.keyScattoCodiceGruppo;
+            var keyExtraAuto = Enum.GetName(AddestramentoRuoli.Foto) + "." + GLOBAL_VARIABLES.keyFotoExtraAuto;
+            var keyExtra = Enum.GetName(AddestramentoRuoli.Foto) + "." + GLOBAL_VARIABLES.keyFotoExtra;
+
+            foreach (var record in records)
+            {
+                if (record?.recordInTracciato == null)
+                    continue;
+
+                record.recordInTracciato.TryGetValue(keyCodGruppo, out var codGruppoObj);
+                var codGruppo = codGruppoObj?.ToString();
+                if (codGruppo == null || !perGruppo.TryGetValue(chiaveDellImpaginazione(codGruppo, record.IdRec), out var voci) || voci == null || voci.Count == 0)
+                    continue;
+
+                var automatiche = listaTipizzata<LogoBollo>(record.recordInTracciato, keyExtraAuto);
+                var manuali = listaTipizzata<LogoBollo_ExtraNoAuto>(record.recordInTracciato, keyExtra);
+
+                foreach (var voce in voci)
+                {
+                    if (string.IsNullOrWhiteSpace(voce.sigla))
+                        continue;
+
+                    switch (voce.azione)
+                    {
+                        case AzioneExtraLavorazione.Sovrascrivi:
+                            if (string.IsNullOrWhiteSpace(voce.nome))
+                                break;
+                            foreach (var logo in automatiche.Where(l => l.sigla == voce.sigla))
+                                logo.nome = voce.nome;
+                            foreach (var extra in manuali.Where(e => stessaExtraManuale(e, voce.sigla)))
+                                extra.nome = voce.nome;
+                            break;
+
+                        case AzioneExtraLavorazione.Aggiungi:
+                            if (string.IsNullOrWhiteSpace(voce.nome) || automatiche.Any(l => l.sigla == voce.sigla))
+                                break;
+                            automatiche.Add(new LogoBollo
+                            {
+                                id = "",
+                                nome = voce.nome,
+                                guidId = "",
+                                sigla = voce.sigla,
+                                dataModifica = "",
+                                tipo = voce.tipoFoto > 0 ? (TipoFoto)voce.tipoFoto : (voce.tipo == TipoElementoBox.Logo ? TipoFoto.Logo : TipoFoto.Foto),
+                                escluso = false
+                            });
+                            record.recordInTracciato[keyExtraAuto] = automatiche;
+                            break;
+
+                        case AzioneExtraLavorazione.Escludi:
+                            foreach (var logo in automatiche.Where(l => l.sigla == voce.sigla))
+                                logo.escluso = true;
+                            foreach (var extra in manuali.Where(e => stessaExtraManuale(e, voce.sigla)))
+                                extra.attiva = false;
+                            break;
+                    }
+                }
+
+                record.recordInTracciato[GLOBAL_VARIABLES.keyExtraLavorazione] = voci;
+            }
+        }
+
+        /// <summary>
+        /// I20-1082: la foto extra manuale di una decisione. La chiave e' la sigla; le extra caricate a
+        /// mano non ne hanno, e per loro la chiave e' il nome del file, come nella label del box.
+        /// </summary>
+        public static bool stessaExtraManuale(LogoBollo_ExtraNoAuto? extra, string? chiave)
+        {
+            if (extra == null || string.IsNullOrWhiteSpace(chiave))
+                return false;
+            if (!string.IsNullOrWhiteSpace(extra.sigla))
+                return extra.sigla == chiave;
+            return extra.nome == chiave;
+        }
+
+        /// <summary>
+        /// I20-1082, I20-1103: una riga di una lavorazione volantino con i suoi meta, come la legge un
+        /// POP della stessa promo, area e canale. Meta e' null se la riga non ne ha.
+        /// </summary>
+        public class MetaDelVolantino
+        {
+            public int IdLavorazione { get; set; }
+            public string? Codice { get; set; }
+            public string? CodiceGruppo { get; set; }
+            public long IdRecordTracciato { get; set; }
+            public RevisioneMetaPromoLavorazioni? Meta { get; set; }
+        }
+
+        private static IEnumerable<string> codiciDelGruppo(string? codiceGruppo) =>
+            (codiceGruppo ?? "").Split(',').Select(c => c.Trim()).Where(c => c != "");
+
+        /// <summary>
+        /// I20-1103: il corrispettivo nel volantino di un'impaginazione del POP, o null se il volantino
+        /// della promo non ha la referenza. Il codice gruppo del POP puo' essere diverso da quello del
+        /// volantino (sottogruppi): le righe si legano per codice della referenza, che deve stare fra i
+        /// codici del gruppo del volantino. Le righe arrivano dal volantino piu' recente: vale il primo
+        /// volantino che ha la referenza, e in quello la riga dello stesso record (lo stesso gruppo
+        /// impaginato due volte), altrimenti la piu' recente. La riga vale anche senza meta: il POP
+        /// allora non eredita niente.
+        /// </summary>
+        public static MetaDelVolantino? corrispettivoNelVolantino(IEnumerable<string>? codici, IEnumerable<long>? idRec, List<MetaDelVolantino>? volantino)
+        {
+            if (codici == null || volantino == null || volantino.Count == 0)
+                return null;
+            var cercati = new HashSet<string>(codici.Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c.Trim()));
+            if (cercati.Count == 0)
+                return null;
+
+            var candidati = volantino
+                .Where(v => v != null && codiciDelGruppo(v.CodiceGruppo).Append(v.Codice?.Trim() ?? "").Any(c => cercati.Contains(c)))
+                .ToList();
+            if (candidati.Count == 0)
+                return null;
+
+            var delVolantino = candidati.Where(v => v.IdLavorazione == candidati[0].IdLavorazione).ToList();
+            var records = new HashSet<long>(idRec ?? Enumerable.Empty<long>());
+            return delVolantino.FirstOrDefault(v => records.Contains(v.IdRecordTracciato)) ?? delVolantino[0];
+        }
+
+        /// <summary>
+        /// I20-1103: i meta che il POP eredita dal corrispettivo: tutti, tranne le decisioni sulle foto
+        /// extra prese solo per il volantino (I20-1082). Mai null; vuoto se il corrispettivo non ha meta.
+        /// </summary>
+        public static RevisioneMetaPromoLavorazioni metaPerIlPop(RevisioneMetaPromoLavorazioni? meta)
+        {
+            if (meta == null)
+                return new RevisioneMetaPromoLavorazioni();
+            var perTutto = meta.extraLavorazione?.Where(v => v != null && v.ambito == AmbitoDecisioneLavorazione.Tutto).ToList();
+            return new RevisioneMetaPromoLavorazioni
+            {
+                campiOfferta = meta.campiOfferta,
+                foto = meta.foto,
+                ps = meta.ps,
+                noRender = meta.noRender,
+                extraLavorazione = perTutto != null && perTutto.Count > 0 ? perTutto : null,
+                testiDalBox = meta.testiDalBox
+            };
+        }
+
+        /// <summary>
+        /// I20-1082, I20-1103: i meta che le impaginazioni del POP ereditano dal volantino, per chiave
+        /// dell'impaginazione (chiaveDellImpaginazione) dei record come sono dopo l'export di agenzia.
+        /// Una chiave c'e' quando il corrispettivo esiste, anche se i suoi meta sono vuoti: i meta del
+        /// corrispettivo prendono il posto di quelli del POP.
+        /// </summary>
+        public static Dictionary<string, RevisioneMetaPromoLavorazioni> metaDelVolantinoPerIlPop(List<ArticoloInKit>? recordsPop, List<MetaDelVolantino>? volantino)
+        {
+            var perChiave = new Dictionary<string, RevisioneMetaPromoLavorazioni>();
+            if (recordsPop == null || volantino == null || volantino.Count == 0)
+                return perChiave;
+
+            var keyCodGruppo = Enum.GetName(AddestramentoRuoli.Scatto) + "." + GLOBAL_VARIABLES.keyScattoCodiceGruppo;
+            var keyRefCodice = Enum.GetName(AddestramentoRuoli.Referenza) + "." + GLOBAL_VARIABLES.keyRefCodice;
+
+            foreach (var record in recordsPop)
+            {
+                if (record?.recordInTracciato == null)
+                    continue;
+                record.recordInTracciato.TryGetValue(keyCodGruppo, out var codGruppoObj);
+                var codGruppo = codGruppoObj?.ToString();
+                if (string.IsNullOrWhiteSpace(codGruppo))
+                    continue;
+                var chiave = chiaveDellImpaginazione(codGruppo, record.IdRec);
+                if (perChiave.ContainsKey(chiave))
+                    continue;
+
+                var codici = codiciDelGruppo(codGruppo).ToList();
+                if (record.recordInTracciato.TryGetValue(keyRefCodice, out var codiceObj) && !string.IsNullOrWhiteSpace(codiceObj?.ToString()))
+                    codici.Add(codiceObj!.ToString()!.Trim());
+
+                var corrispettivo = corrispettivoNelVolantino(codici, new[] { record.IdRec }, volantino);
+                if (corrispettivo != null)
+                    perChiave[chiave] = metaPerIlPop(corrispettivo.Meta);
+            }
+            return perChiave;
+        }
+
+        /// <summary>
+        /// I20-1103: mette i meta ereditati dal volantino al posto di quelli del POP, per ogni
+        /// impaginazione che ha il corrispettivo: foto extra, noRender, testi. Le foto extra il POP le
+        /// ha solo dal volantino (I20-1082), anche senza corrispettivo. I testi ereditati tornano fra
+        /// le chiavi da applicare soltanto: nel POP non si segnalano e dal volantino non si tolgono.
+        /// Primarie/secondarie e foto si applicano prima dell'export (updateDatiFromMetaPromoLavorazioni).
+        /// </summary>
+        public static HashSet<string> sostituisciConIMetaDelVolantino(Dictionary<string, RevisioneMetaPromoLavorazioni>? perChiave,
+            Dictionary<string, bool>? noRenderPerRef, Dictionary<string, List<RevisioneNoRenderFromIndd>>? noRenderElementiPerGruppo,
+            Dictionary<string, List<RevisioneExtraLavorazioneFromIndd>>? extraLavorazionePerGruppo, Dictionary<string, List<TestoDalBox>>? testiDalBoxPerGruppo,
+            Dictionary<string, PromoLavorazioniRecord>? righeDeiTesti = null)
+        {
+            var testiEreditati = new HashSet<string>();
+            extraLavorazionePerGruppo?.Clear();
+            if (perChiave == null)
+                return testiEreditati;
+
+            foreach (var voce in perChiave)
+            {
+                var chiave = voce.Key;
+                var meta = voce.Value;
+
+                noRenderElementiPerGruppo?.Remove(chiave);
+                if (noRenderPerRef != null)
+                {
+                    foreach (var foto in noRenderPerRef.Keys.Where(k => k.StartsWith(chiaveNoRenderFoto(chiave, ""), StringComparison.Ordinal)).ToList())
+                        noRenderPerRef.Remove(foto);
+                }
+                if (meta.noRender != null && meta.noRender.Count > 0)
+                {
+                    if (noRenderElementiPerGruppo != null)
+                        noRenderElementiPerGruppo[chiave] = meta.noRender;
+                    raccogliNoRenderDelleFoto(chiave, meta.noRender, noRenderPerRef);
+                }
+
+                if (meta.extraLavorazione != null && meta.extraLavorazione.Count > 0 && extraLavorazionePerGruppo != null)
+                    extraLavorazionePerGruppo[chiave] = meta.extraLavorazione;
+
+                testiDalBoxPerGruppo?.Remove(chiave);
+                righeDeiTesti?.Remove(chiave);
+                if (meta.testiDalBox != null && meta.testiDalBox.Count > 0 && testiDalBoxPerGruppo != null)
+                {
+                    testiDalBoxPerGruppo[chiave] = meta.testiDalBox;
+                    testiEreditati.Add(chiave);
+                }
+            }
+            return testiEreditati;
+        }
+
+        /// <summary>
+        /// I20-1103: nel POP i testi ereditati dal volantino stanno nei campi compilati e basta: il record
+        /// (e il suo sottogruppo) non ne riporta lo stato sotto testiDalBox, cosi' il Plugin non li
+        /// segnala da verificare. Si verificano e si risolvono nel volantino.
+        /// </summary>
+        /// <summary>
+        /// Il meta della descrizione che un gruppo del volantino passa al POP vale solo per il cartello di
+        /// gruppo (il sottogruppo), non per i cartelli singoli delle sue referenze, che hanno la propria
+        /// descrizione. Toglie la descrizione dai testi ereditati dai singoli di un gruppo (codice gruppo
+        /// con piu' codici), con liste nuove, senza toccare quelle condivise con le altre righe del
+        /// volantino, e restituisce, per chiave dell'impaginazione, quella da dare al cartello di gruppo
+        /// del record che lo porta. Le referenze singole tengono la descrizione: sono il proprio cartello.
+        /// Le linee da 10 in su e i gruppi "vari" non hanno cartello di gruppo: per loro non passa.
+        /// </summary>
+        public static Dictionary<string, List<TestoDalBox>> descrizioneDelGruppoAlSoloCartello(List<ArticoloInKit>? recordsPop, Dictionary<string, RevisioneMetaPromoLavorazioni>? perChiave)
+        {
+            var perIlCartello = new Dictionary<string, List<TestoDalBox>>();
+            if (recordsPop == null || perChiave == null || perChiave.Count == 0)
+                return perIlCartello;
+
+            var keyCodGruppo = Enum.GetName(AddestramentoRuoli.Scatto) + "." + GLOBAL_VARIABLES.keyScattoCodiceGruppo;
+            static bool eDescrizione(TestoDalBox? testo) =>
+                testo != null && string.Equals((testo.label ?? "").Split('$')[0], "descrizione", StringComparison.OrdinalIgnoreCase);
+
+            foreach (var record in recordsPop)
+            {
+                if (record?.recordInTracciato == null)
+                    continue;
+                record.recordInTracciato.TryGetValue(keyCodGruppo, out var codGruppoObj);
+                var codGruppo = codGruppoObj?.ToString();
+                if (string.IsNullOrWhiteSpace(codGruppo) || codiciDelGruppo(codGruppo).Count() < 2)
+                    continue;
+                var chiave = chiaveDellImpaginazione(codGruppo, record.IdRec);
+                if (!perChiave.TryGetValue(chiave, out var meta) || meta?.testiDalBox == null)
+                    continue;
+
+                var descrizione = meta.testiDalBox.Where(eDescrizione).ToList();
+                if (descrizione.Count == 0)
+                    continue;
+                var altri = meta.testiDalBox.Where(t => !eDescrizione(t)).ToList();
+                meta.testiDalBox = altri.Count > 0 ? altri : null;
+                if (record.sottogruppo != null)
+                    perIlCartello[chiave] = descrizione;
+            }
+            return perIlCartello;
+        }
+
+        /// <summary>
+        /// La descrizione ereditata da un gruppo del volantino, nel solo cartello di gruppo (il sottogruppo)
+        /// del record che lo porta (descrizioneDelGruppoAlSoloCartello). Come gli altri testi ereditati si
+        /// applica e basta: il cartello non ne riporta lo stato.
+        /// </summary>
+        public static void applicaDescrizioniAiCartelliDiGruppo(List<ArticoloInKit>? records, Dictionary<string, List<TestoDalBox>>? perIlCartello)
+        {
+            if (records == null || perIlCartello == null || perIlCartello.Count == 0)
+                return;
+
+            var keyCodGruppo = Enum.GetName(AddestramentoRuoli.Scatto) + "." + GLOBAL_VARIABLES.keyScattoCodiceGruppo;
+            foreach (var record in records)
+            {
+                if (record?.recordInTracciato == null || record.sottogruppo == null)
+                    continue;
+                record.recordInTracciato.TryGetValue(keyCodGruppo, out var codGruppoObj);
+                if (!perIlCartello.TryGetValue(chiaveDellImpaginazione(codGruppoObj?.ToString(), record.IdRec), out var testi) || testi == null || testi.Count == 0)
+                    continue;
+                applicaTestiDalBoxAiCampiDi(record.sottogruppo, testi, null);
+                record.sottogruppo.Remove(GLOBAL_VARIABLES.keyTestiDalBox);
+            }
+        }
+
+        public static void togliStatoDeiTestiEreditati(List<ArticoloInKit>? records, ISet<string>? testiEreditati)
+        {
+            if (records == null || testiEreditati == null || testiEreditati.Count == 0)
+                return;
+
+            var keyCodGruppo = Enum.GetName(AddestramentoRuoli.Scatto) + "." + GLOBAL_VARIABLES.keyScattoCodiceGruppo;
+            foreach (var record in records)
+            {
+                if (record?.recordInTracciato == null)
+                    continue;
+                record.recordInTracciato.TryGetValue(keyCodGruppo, out var codGruppoObj);
+                if (!testiEreditati.Contains(chiaveDellImpaginazione(codGruppoObj?.ToString(), record.IdRec)))
+                    continue;
+                record.recordInTracciato.Remove(GLOBAL_VARIABLES.keyTestiDalBox);
+                record.sottogruppo?.Remove(GLOBAL_VARIABLES.keyTestiDalBox);
+            }
+        }
+
+        /// <summary>
+        /// I20-1082, I20-1103: le righe delle lavorazioni volantino con la stessa promo, area e canale
+        /// di questa, dal volantino piu' recente e in ognuno dalla riga piu' recente, comprese quelle
+        /// senza meta. Vuoto se la lavorazione non si trova o non ha promo.
+        /// </summary>
+        public List<MetaDelVolantino> metaDeiVolantiniDellaPromo(int idLavorazione)
+        {
+            var lavorazione = this.ctx2.PromoLavorazionis.FirstOrDefault(l => l.Id == idLavorazione);
+            if (lavorazione == null || string.IsNullOrWhiteSpace(lavorazione.GuidPromo))
+                return new List<MetaDelVolantino>();
+
+            var volantini = this.ctx2.PromoLavorazionis
+                .Where(l => l.Id != idLavorazione && l.GuidPromo == lavorazione.GuidPromo && l.GuidArea == lavorazione.GuidArea && l.GuidCanale == lavorazione.GuidCanale)
+                .ToList()
+                .Where(l => Formati.CercaTipo(!string.IsNullOrWhiteSpace(l.GuidFormato) ? l.GuidFormato : Utility.Main.getFicoRuntimeKit(l.Meta)?.guidFormato) == TipoLavorazione.Volantino)
+                .OrderByDescending(l => l.RegisterDate)
+                .Select(l => l.Id)
+                .ToList();
+            if (volantini.Count == 0)
+                return new List<MetaDelVolantino>();
+
+            return this.ctx2.PromoLavorazioniRecords.AsNoTracking()
+                .Where(r => volantini.Contains(r.IdLavorazione))
+                .ToList()
+                .OrderBy(r => volantini.IndexOf(r.IdLavorazione))
+                .ThenByDescending(r => r.RegisterDate)
+                .Select(r => new MetaDelVolantino
+                {
+                    IdLavorazione = r.IdLavorazione,
+                    Codice = r.Codice,
+                    CodiceGruppo = r.CodiceGruppo,
+                    IdRecordTracciato = r.IdRecordTracciato,
+                    Meta = r.Meta != null ? MetaPromoLavorazioni.leggi(r.Meta) : null
+                })
+                .ToList();
+        }
+
+        /// <summary>
+        /// La lista sotto una chiave del record, com'e' dopo l'export di agenzia (tipizzata) o come
+        /// torna da una cache (JArray o testo JSON): in questi due casi la si riscrive tipizzata, cosi'
+        /// le modifiche restano. Senza chiave, una lista vuota non legata al record.
+        /// </summary>
+        private static List<T> listaTipizzata<T>(Dictionary<string, object> record, string chiave)
+        {
+            if (!record.TryGetValue(chiave, out var valore) || valore == null)
+                return new List<T>();
+            if (valore is List<T> lista)
+                return lista;
+
+            List<T>? letta = null;
+            if (valore is JArray array)
+                letta = array.ToObject<List<T>>();
+            else if (valore is string testo && testo.TrimStart().StartsWith("["))
+                letta = JsonConvert.DeserializeObject<List<T>>(testo);
+
+            if (letta == null)
+                return new List<T>();
+            record[chiave] = letta;
+            return letta;
+        }
+
+        public List<ArticoloInKit> updateDatiFromMetaPromoLavorazioni(List<ArticoloInKit> artInkit, int idLavorazione, FicoRuntimeKit kit/*, bool confronto = false*/, Dictionary<string, bool>? noRenderPerRef = null, Dictionary<string, List<RevisioneNoRenderFromIndd>>? noRenderElementiPerGruppo = null, Dictionary<string, List<RevisioneExtraLavorazioneFromIndd>>? extraLavorazionePerGruppo = null, Dictionary<string, List<TestoDalBox>>? testiDalBoxPerGruppo = null, Dictionary<string, PromoLavorazioniRecord>? righeDeiTesti = null, List<MetaDelVolantino>? volantinoDelPop = null)
         {
             var keyCodGruppo = Enum.GetName(AddestramentoRuoli.Scatto) + "." + GLOBAL_VARIABLES.keyScattoCodiceGruppo;
             var keyRefCodice = Enum.GetName(AddestramentoRuoli.Referenza) + "." + GLOBAL_VARIABLES.keyRefCodice;
@@ -4245,7 +4932,7 @@ namespace Istanta.Controllers
             var kitGrouped = artInkit
                 .GroupBy(f => new
                 {
-                    CodiceGruppo = f.recordInTracciato[keyCodGruppo].ToString(),
+                    CodiceGruppo = RecordTracciato.Richiesto(f.recordInTracciato, keyCodGruppo, "dati dalle lavorazioni passate", $"il record {f.IdRec}").ToString(),
                     Label = f.label
                 });
 
@@ -4260,7 +4947,11 @@ namespace Istanta.Controllers
             {
                 bool _debug = (group.Key.CodiceGruppo == "3150596,3150599,3150600,4831132,4831135");
 
-                var promoLavorazione = ctx2.PromoLavorazioniRecords.Where(f => f.CodiceGruppo! == group.Key.CodiceGruppo && idLavorazione == f.IdLavorazione).FirstOrDefault();
+                //I20-1088: la riga di questa impaginazione, non la prima del codice gruppo: lo stesso
+                //gruppo impaginato due volte ha meta distinti.
+                var righeDelGruppo = ctx2.PromoLavorazioniRecords.Where(f => f.CodiceGruppo! == group.Key.CodiceGruppo && idLavorazione == f.IdLavorazione).ToList();
+                var promoLavorazione = RecordDellaLavorazione.PerLaLettura(righeDelGruppo, group.Select(i => i.IdRec));
+                var chiaviDelGruppo = group.Select(i => chiaveDellImpaginazione(group.Key.CodiceGruppo, i.IdRec)).Distinct().ToList();
                 if (_debug)
                     Console.WriteLine($"Promo lavorazione di {idLavorazione} = {(promoLavorazione != null)}");
                 if (promoLavorazione == null)
@@ -4280,7 +4971,22 @@ namespace Istanta.Controllers
                 }
 
                 RevisioneMetaPromoLavorazioni storeField = new RevisioneMetaPromoLavorazioni();
-                if (promoLavorazione != null && promoLavorazione.Meta != null)
+                //I20-1077: i testi del box valgono solo dal meta di questa lavorazione, non dal passato.
+                bool metaDiQuestaLavorazione = promoLavorazione != null && promoLavorazione.Meta != null;
+                //I20-1103: nel POP i meta vengono dal corrispettivo nel volantino della stessa promo, area
+                //e canale, se c'e', anche vuoti: non dai meta del POP ne' dal passato.
+                var corrispettivo = volantinoDelPop != null
+                    ? corrispettivoNelVolantino(codiciDelGruppo(group.Key.CodiceGruppo).Concat(group.Select(i => i.recordInTracciato.TryGetValue(keyRefCodice, out var c) ? c?.ToString() ?? "" : "")), group.Select(i => i.IdRec), volantinoDelPop)
+                    : null;
+                if (corrispettivo != null)
+                {
+                    //Qui le primarie/secondarie e le foto, che decidono l'export di agenzia. noRender, foto
+                    //extra e testi si legano dopo l'export (sostituisciConIMetaDelVolantino).
+                    var ereditati = metaPerIlPop(corrispettivo.Meta);
+                    storeField = new RevisioneMetaPromoLavorazioni { ps = ereditati.ps, foto = ereditati.foto };
+                    metaDiQuestaLavorazione = false;
+                }
+                else if (promoLavorazione != null && promoLavorazione.Meta != null)
                 {
                     //storeField = JsonConvert.DeserializeObject<List<RevisioneCampiOffertaFromIndd>>(plrItem.Meta);
                     storeField = MetaPromoLavorazioni.leggi(promoLavorazione.Meta)!;
@@ -4302,9 +5008,12 @@ namespace Istanta.Controllers
                     //SingletonConfiguration.DBFORMATI.source.FirstOrDefault(f => f.guidID == Utility.Main.getFicoRuntimeKit(p.IdPromoLavorazioniNavigation!.Meta).guidFormato).tipo == TipoLavorazione.Volantino);
                     
                     
+                    //I20-1062: una lavorazione passata il cui formato non e' piu' in SourceFormati.json non
+                    //si puo' dire Volantino, e si salta: prima dava NullReferenceException e fermava la scheda.
                     List<PromoLavorazioniRecord?> plrInACList = _listPassato.OrderByDescending(o => o.RegisterDate).Where(p =>
+                    p.IdPromoLavorazioniNavigation != null &&
                     p.IdPromoLavorazioniNavigation.GuidArea == kit.guidArea && p.IdPromoLavorazioniNavigation.GuidCanale == kit.guidCanale &&
-                    SingletonConfiguration.DBFORMATI.source.FirstOrDefault(f => f.guidID == Utility.Main.getFicoRuntimeKit(p.IdPromoLavorazioniNavigation!.Meta).guidFormato).tipo == TipoLavorazione.Volantino).ToList();
+                    Formati.CercaTipo(Utility.Main.getFicoRuntimeKit(p.IdPromoLavorazioniNavigation.Meta)?.guidFormato) == TipoLavorazione.Volantino).ToList();
 
 
                     if (plrInACList.Count > 0)
@@ -4338,16 +5047,8 @@ namespace Istanta.Controllers
 
                                 //Prendo la foto e anche per le P/S da questo
                                 RevisioneMetaPromoLavorazioni recPassato = MetaPromoLavorazioni.leggi(plrInAC.Meta)!;
-                                //Gli elementi in noRender sono del box, non della singola ref: si
-                                //ereditano una volta sola per codice gruppo.
-                                if (recPassato.noRender != null && recPassato.noRender.Count > 0)
-                                {
-                                    if (noRenderElementiPerGruppo != null)
-                                    {
-                                        noRenderElementiPerGruppo[group.Key.CodiceGruppo] = recPassato.noRender;
-                                    }
-                                    raccogliNoRenderDelleFoto(group.Key.CodiceGruppo, recPassato.noRender, noRenderPerRef);
-                                }
+                                //I20-1103: il noRender non si eredita dal passato: vale nella lavorazione
+                                //in cui e' stato messo, e nei POP che lo prendono dal loro volantino.
                                 foreach (var item in group)
                                 {
                                     if (recPassato.ps != null && recPassato.ps.Count > 0)
@@ -4355,16 +5056,20 @@ namespace Istanta.Controllers
                                         var psItem = recPassato.ps.FirstOrDefault(f => f.codRef == item.recordInTracciato[keyRefCodice].ToString());
                                         if (psItem != null)
                                         {
+                                            item.recordInTracciato.TryGetValue(keyStatoSelezione, out var statoDelDato);
+                                            annotaSostituzioneFoto(item.recordInTracciato, "selezione", psItem.codRef, statoDelDato, (int)psItem.stato, true);
                                             item.recordInTracciato[keyStatoSelezione] = (int)psItem.stato;
                                         }
                                     }
 
-                                    var fotoScelta = recPassato.foto!.FirstOrDefault(f => f.codRef == item.recordInTracciato[keyRefCodice].ToString() && f.tipo == TipoFoto.Foto);
+                                    var fotoScelta = recPassato.foto?.FirstOrDefault(f => f.codRef == item.recordInTracciato[keyRefCodice].ToString() && f.tipo == TipoFoto.Foto);
                                     if (fotoScelta != null)
                                     {
                                         var artFotoItem = this.ctx.ArticoliFotos.Include(f => f.IdArticoloNavigation).FirstOrDefault(f => f.IdArticoloNavigation.Codice == fotoScelta.codRef && f.NomeReale == fotoScelta.nomeFoto);
                                         if (artFotoItem != null)
                                         {
+                                            item.recordInTracciato.TryGetValue(Enum.GetName(AddestramentoRuoli.Foto) + "." + GLOBAL_VARIABLES.keyFotoNome, out var fotoDelDato);
+                                            annotaSostituzioneFoto(item.recordInTracciato, "foto", fotoScelta.codRef, fotoDelDato, artFotoItem.NomeReale, true);
                                             item.recordInTracciato[Enum.GetName(AddestramentoRuoli.Foto) + "." + GLOBAL_VARIABLES.keyFotoGuidId] = artFotoItem.GuidId;
                                             item.recordInTracciato[Enum.GetName(AddestramentoRuoli.Foto) + "." + GLOBAL_VARIABLES.keyFotoNome] = artFotoItem.NomeReale;
                                             item.recordInTracciato[Enum.GetName(AddestramentoRuoli.Foto) + "." + GLOBAL_VARIABLES.keyFotoIsMeta] = true;
@@ -4412,11 +5117,34 @@ namespace Istanta.Controllers
 
                 if (storeField.noRender != null && storeField.noRender.Count > 0)
                 {
-                    if (noRenderElementiPerGruppo != null)
+                    foreach (var chiave in chiaviDelGruppo)
                     {
-                        noRenderElementiPerGruppo[group.Key.CodiceGruppo] = storeField.noRender;
+                        if (noRenderElementiPerGruppo != null)
+                        {
+                            noRenderElementiPerGruppo[chiave] = storeField.noRender;
+                        }
+                        raccogliNoRenderDelleFoto(chiave, storeField.noRender, noRenderPerRef);
                     }
-                    raccogliNoRenderDelleFoto(group.Key.CodiceGruppo, storeField.noRender, noRenderPerRef);
+                }
+
+                //I20-1070: le foto extra decise per questa lavorazione. Solo dal meta di questa
+                //lavorazione, non dal passato: un file del box di allora potrebbe non stare nella
+                //cartella Loghi di adesso.
+                if (storeField.extraLavorazione != null && storeField.extraLavorazione.Count > 0 && extraLavorazionePerGruppo != null)
+                {
+                    foreach (var chiave in chiaviDelGruppo)
+                        extraLavorazionePerGruppo[chiave] = storeField.extraLavorazione;
+                }
+
+                //I20-1077: i campi di testo per cui l'operatore ha scelto il testo del box.
+                if (metaDiQuestaLavorazione && storeField.testiDalBox != null && storeField.testiDalBox.Count > 0 && testiDalBoxPerGruppo != null)
+                {
+                    foreach (var chiave in chiaviDelGruppo)
+                    {
+                        testiDalBoxPerGruppo[chiave] = storeField.testiDalBox;
+                        if (righeDeiTesti != null)
+                            righeDeiTesti[chiave] = promoLavorazione!;
+                    }
                 }
 
                 foreach (var item in group)
@@ -4426,6 +5154,9 @@ namespace Istanta.Controllers
                         var fieldGiaEsistente = storeField.ps!.FirstOrDefault(s => s.codRef == item.recordInTracciato[keyRefCodice].ToString());
                         if (fieldGiaEsistente != null)
                         {
+                            //I20-1089: il cambio si annota, per mostrarlo fra i meta del box.
+                            item.recordInTracciato.TryGetValue(keyStatoSelezione, out var statoDelDato);
+                            annotaSostituzioneFoto(item.recordInTracciato, "selezione", fieldGiaEsistente.codRef, statoDelDato, (int)fieldGiaEsistente.stato, false);
                             item.recordInTracciato[keyStatoSelezione] = (int)fieldGiaEsistente.stato;
                         }
                     }
@@ -4437,6 +5168,8 @@ namespace Istanta.Controllers
                             var artFotoItem = this.ctx.ArticoliFotos.Include(f => f.IdArticoloNavigation).FirstOrDefault(f => f.IdArticoloNavigation.Codice == fotoScelta.codRef && f.NomeReale == fotoScelta.nomeFoto);
                             if (artFotoItem != null)
                             {
+                                item.recordInTracciato.TryGetValue(Enum.GetName(AddestramentoRuoli.Foto) + "." + GLOBAL_VARIABLES.keyFotoNome, out var fotoDelDato);
+                                annotaSostituzioneFoto(item.recordInTracciato, "foto", fotoScelta.codRef, fotoDelDato, artFotoItem.NomeReale, false);
                                 item.recordInTracciato[Enum.GetName(AddestramentoRuoli.Foto) + "." + GLOBAL_VARIABLES.keyFotoGuidId] = artFotoItem.GuidId;
                                 item.recordInTracciato[Enum.GetName(AddestramentoRuoli.Foto) + "." + GLOBAL_VARIABLES.keyFotoNome] = artFotoItem.NomeReale;
                                 item.recordInTracciato[Enum.GetName(AddestramentoRuoli.Foto) + "." + GLOBAL_VARIABLES.keyFotoIsMeta] = true;

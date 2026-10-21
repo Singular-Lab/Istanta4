@@ -23,6 +23,7 @@ import { ServerCall } from "../../../lib/server_call";
 import { FileItemKit } from "../../../lib/types";
 import Skeleton from "../../components/Base/Skeleton";
 import withSessionCheck from "../../components/SessionChecker";
+import { usePromoName } from "@/hooks/usePromoName";
 
 export interface MaterialiDocumentaleLoaderData {
   title: string;
@@ -174,6 +175,8 @@ const MaterialiDocumentale: React.FC = () => {
 
   // Build base filters based on route
   const basePromoFilter = useMemo<RoutePromoFilterConfig>(() => {
+    // Promo aperta dal suo dettaglio: i materiali si vedono in qualunque stato sia
+    if (isPromoPreselected) return {};
     const today = new Date().toISOString().split('T')[0];
 
     switch (loaderData.filterType) {
@@ -203,7 +206,7 @@ const MaterialiDocumentale: React.FC = () => {
       default:
         return {};
     }
-  }, [loaderData.filterType]);
+  }, [loaderData.filterType, isPromoPreselected]);
 
   const singleRouteState = basePromoFilter.stati?.length === 1 ? basePromoFilter.stati[0] : undefined;
   const singleExcludedState = basePromoFilter.excludeStati?.length === 1 ? basePromoFilter.excludeStati[0] : undefined;
@@ -243,6 +246,7 @@ const MaterialiDocumentale: React.FC = () => {
 
   // Get promo IDs for file filtering
   const promoIds = useMemo(() => {
+    if (isPromoPreselected) return [preselectedPromoId];
     if (!promoOptions.length) return [];
     let promos = promoOptions;
 
@@ -251,7 +255,7 @@ const MaterialiDocumentale: React.FC = () => {
     }
 
     return promos.map(p => p.id);
-  }, [promoOptions, filters.idPromo]);
+  }, [promoOptions, filters.idPromo, isPromoPreselected, preselectedPromoId]);
 
   // Costruisce il filtro metadata: semplice coppia campo/valore
   const metadataFilter = useMemo(() => {
@@ -445,11 +449,12 @@ const MaterialiDocumentale: React.FC = () => {
   }, [filters, basePromoFilter, selectedMetadataKey, selectedMetadataValue, isPromoPreselected]);
 
   // Trova il nome della promo selezionata (per header quando preselezionata)
+  const { data: preselectedPromoName } = usePromoName({ promoId: preselectedPromoId, enabled: isPromoPreselected });
   const selectedPromoName = useMemo(() => {
     if (!filters.idPromo) return null;
     const promo = promoOptions.find(p => p.id === filters.idPromo);
-    return promo?.nome ?? null;
-  }, [filters.idPromo, promoOptions]);
+    return promo?.nome ?? preselectedPromoName ?? null;
+  }, [filters.idPromo, promoOptions, preselectedPromoName]);
 
   return (
     <div className="grid grid-cols-12 gap-y-10 gap-x-6">

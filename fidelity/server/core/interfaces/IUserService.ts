@@ -22,9 +22,11 @@ export interface IUserService {
   getUserById(id: string): Promise<UtenteResponseDTO | null>;
   updateUser(id: string, data: UpdateUtenteDTO): Promise<UtenteResponseDTO | null>;
   updateProfile(userId: string, data: UpdateUtenteDTO): Promise<UtenteResponseDTO | null>;
-  deleteUser(id: string, tipoUtente: string): Promise<boolean>;
+  deleteUser(id: string, chiamante: { tipo: TIPO_UTENTI; idGdo: string | null }): Promise<boolean>;
   getAllUsers(): Promise<UtenteResponseDTO[]>;
   getUserByEmail(email: string): Promise<UtenteResponseDTO | null>;
+  /** Hash della password attuale ('' se l'utente non ne ha una), null se l'utente non esiste. */
+  getPasswordHashByEmail(email: string): Promise<string | null>;
 
   // Authentication
   login(email: string, password: string, selectedUserType?: TIPO_UTENTI): Promise<{ success: boolean; user?: UtenteResponseDTO; message?: string }>;
@@ -32,12 +34,13 @@ export interface IUserService {
   register(userData: UtenteCreationAttributes): Promise<UtenteResponseDTO>;
   updatePassword(userId: string, newPassword: string): Promise<boolean>;
   verifyAndUpdatePassword(userId: string, currentPassword: string, newPassword: string): Promise<boolean>;
+  disattivaAccount(userId: string, password: string): Promise<void>;
+  verificaAccountAttivo(userId: string): Promise<void>;
 
   // User operations
   getAllUtentiOperatori(userId: string): Promise<UtenteResponseDTO[]>;
   get_all_utenti(userId: string): Promise<UtenteResponseDTO[]>;
   get_all_account(userId: string): Promise<any[]>;
-  user_menu(userId: string, tipoUtente: TIPO_UTENTI): Promise<any>;
   resolveGdoRuoloKey(userId: string): Promise<string | undefined>;
 
   // WebPliant operations
@@ -82,10 +85,8 @@ export interface IUserService {
     sesso?: string;
     meta?: UtentiMeta;
   }, currentUserId: string): Promise<UtenteAttributes>;
-  getUtentiWhatsappAttivi(): Promise<any[]>;
-  checkUserByPhone(phone: string): Promise<any>;
-  registerUserWithChannels(utenteData: UtenteCreationAttributes, utenteGDO: any, utenteCanaliInterazioni: UtentiCanaliInterazioneAttributes): Promise<any>;
   autenticaUtenteFico(req: Request): Promise<any>;
+  getPrivateKey(idUtente: string): Promise<string | undefined>;
   autenticaUtenteAD(req: Request): Promise<any>;
 
   // User association updates

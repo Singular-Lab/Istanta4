@@ -17,7 +17,8 @@ interface UploadErroriDialogProps {
     lavorazione: LavorazioneType;
     filesRejected: FileItemKit[];
     rejectionReasons?: Record<string, string>;
-    mutationRiportaInLavorazione: ReturnType<typeof useMutation>;
+    // Dopo la sostituzione il kit va in revisione con i file corretti
+    mutationAvvioRevisione: ReturnType<typeof useMutation>;
     stagedFiles?: StagedFile[];
 }
 
@@ -26,7 +27,7 @@ const UploadErroriDialog = ({
     setDialogOpen,
     lavorazione,
     filesRejected,
-    mutationRiportaInLavorazione,
+    mutationAvvioRevisione,
     stagedFiles = [],
 }: UploadErroriDialogProps) => {
     const [isProcessing, setIsProcessing] = useState(false);
@@ -64,10 +65,10 @@ const UploadErroriDialog = ({
                 }
 
                 if (successCount > 0) {
-                    await mutationRiportaInLavorazione.mutateAsync({});
+                    await mutationAvvioRevisione.mutateAsync(undefined);
                 }
             } else {
-                await mutationRiportaInLavorazione.mutateAsync({});
+                await mutationAvvioRevisione.mutateAsync(undefined);
             }
             setDialogOpen(false);
             revalidator.revalidate();
@@ -102,7 +103,7 @@ const UploadErroriDialog = ({
                                 <h3 className="font-medium text-warning">File con Errori da Correggere</h3>
                             </div>
                             <p className="text-sm text-slate-600 mb-3">
-                                Carica i file corretti per sostituire quelli rifiutati. Dopo l'upload, il kit verrà automaticamente riportato in lavorazione.
+                                Carica i file corretti per sostituire quelli rifiutati. Dopo l'upload, il kit verrà mandato in revisione.
                             </p>
                         </div>
 
@@ -159,7 +160,7 @@ const UploadErroriDialog = ({
                                 </div>
                                 <p className="text-sm text-slate-600">
                                     Hai {stagedFiles.length} file pronti per il caricamento. 
-                                    Dopo aver completato l'upload, il kit verrà automaticamente riportato in lavorazione per una nuova revisione.
+                                    Dopo aver completato l'upload, il kit verrà mandato in revisione.
                                 </p>
                             </div>
                         )}
@@ -186,7 +187,7 @@ const UploadErroriDialog = ({
                         ) : (
                             <>
                                 <Lucide icon="Send" className="w-4 h-4 mr-2" />
-                                {totalFilesReady ? 'Carica e Riporta in Lavorazione' : 'Riporta in Lavorazione'}
+                                {totalFilesReady ? 'Carica e manda in revisione' : 'Manda in revisione'}
                                 ({stagedFiles.length})
                             </>
                         )}

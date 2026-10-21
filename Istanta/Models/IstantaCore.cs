@@ -94,6 +94,15 @@ namespace Istanta.Models
         //Elementi del box (campi, loghi, foto extra) che il Plugin deve impaginare ma non rendere visibili.
         //Le foto primarie/secondarie non passano di qui: viaggiano dentro membriGruppoFoto.
         public static readonly string keyNoRenderElementi = "noRenderElementi";
+        //I20-1070: le foto extra decise dall'operatore per questa sola lavorazione: immagine del box al
+        //posto di quella del server, foto extra in piu' tenuta, foto extra esclusa.
+        public static readonly string keyExtraLavorazione = "extraLavorazione";
+        //I20-1088: i meta dei testi del box di questa impaginazione, con il valore originale e la
+        //versione registrati e quelli attuali del server (StatoTestoDalBox): il Plugin li segnala da verificare.
+        public static readonly string keyTestiDalBox = "testiDalBox";
+        //I20-1089: le primarie/secondarie e le foto che i meta hanno cambiato in questo record, con il
+        //valore del dato e quello del meta (SostituzioneFotoDaMeta): il Plugin le mostra fra i meta del box.
+        public static readonly string keyMetaFoto = "metaFoto";
 
 
         //Con queste combinazioni di chiave, si chiede al core di recuperare la descrizione dall'archivio per far uscire le ref indicate con questo attributo
@@ -260,6 +269,9 @@ namespace Istanta.Models
         public string[]? loghiKeyWordsToSearch { get; set; }
         public string[]? bolliniKeyWordsToSearch { get; set; }
         public string ipUploadGate { get; set; } = String.Empty;
+        // Pulizia notturna di extractPath (PuliziaEstrazioniService). Facoltativi: senza, alle 3 e un mese.
+        public int? oraPuliziaEstrazioni { get; set; }
+        public int? mesiConservazioneEstrazioni { get; set; }
 
     }
 
@@ -866,6 +878,8 @@ namespace Istanta.Models
         public bool Esito { get; set; }
         public ErrorCodes errorCode { get; set; } = ErrorCodes.None;
         public string error { get; set; } = String.Empty;
+        //I20-1069: in error il messaggio breve per l'operatore, qui la traccia completa per la console.
+        public string? dettaglio { get; set; }
     }
 
     public class PromoLavorazioniResult
@@ -940,6 +954,16 @@ namespace Istanta.Models
         //continuano a comportarsi come prima.
         public string? area { get; set; }
         public string? canale { get; set; }
+        /// <summary>
+        /// I20-1077: i campi di testo per cui l'operatore, dalla finestra delle differenze del Plugin,
+        /// ha scelto il testo del box. Si registrano nel meta della lavorazione (testiDalBox).
+        /// </summary>
+        public List<TestoDalBox>? testiDalBox { get; set; }
+        /// <summary>
+        /// I20-1088: il record del box da cui si salva (DNA del box). Decide la riga della lavorazione
+        /// in cui vanno i testiDalBox e la loro versione. 0 per i client che non lo mandano.
+        /// </summary>
+        public long idRec { get; set; } = 0;
 
     }
 
@@ -985,6 +1009,263 @@ namespace Istanta.Models
         public static List<RevisioneNoRenderFromIndd>? normalizzaElementiNoRender(List<RevisioneNoRenderFromIndd>? elementi)
         {
             return (elementi != null && elementi.Count > 0) ? elementi : null;
+        }
+
+        public static RichiestaExtraLavorazione? leggiRichiestaExtraLavorazione(string richiesta)
+        {
+            return Newtonsoft.Json.JsonConvert.DeserializeObject<RichiestaExtraLavorazione>(richiesta, settings);
+        }
+
+        /// <summary>
+        /// I20-1070: cosa non va in una richiesta, o null se e' buona. Sovrascrivi e Aggiungi vogliono
+        /// il nome del file del box; togliere una decisione vuole solo sigla e tipo.
+        /// </summary>
+        public static string? erroreDellaRichiestaExtraLavorazione(RichiestaExtraLavorazione? richiesta)
+        {
+            if (richiesta?.voce == null)
+            {
+                return "manca la voce della foto extra.";
+            }
+            var voce = richiesta.voce;
+            if (string.IsNullOrWhiteSpace(voce.sigla))
+            {
+                return "manca la sigla della foto extra.";
+            }
+            if (voce.tipo != TipoElementoBox.Logo && voce.tipo != TipoElementoBox.FotoExtra)
+            {
+                return $"il tipo {voce.tipo} non e' una foto extra.";
+            }
+            if (richiesta.rimuovi)
+            {
+                return null;
+            }
+            if (!Enum.IsDefined(typeof(AzioneExtraLavorazione), voce.azione))
+            {
+                return $"l'azione {(int)voce.azione} non esiste.";
+            }
+            if (voce.azione != AzioneExtraLavorazione.Escludi && string.IsNullOrWhiteSpace(voce.nome))
+            {
+                return $"per {voce.azione} serve il nome del file nel box.";
+            }
+            if (!Enum.IsDefined(typeof(AmbitoDecisioneLavorazione), voce.ambito))
+            {
+                return $"l'ambito {(int)voce.ambito} non esiste.";
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// I20-1077: registra nel meta i testi del box scelti dall'operatore. Una voce per campo
+        /// (labelName, senza distinguere maiuscole): una scelta nuova sullo stesso campo sostituisce
+        /// la precedente. Le voci senza campo o senza testo si ignorano.
+        /// I20-1088: con la versione del record da cui l'operatore ha scelto, se si conosce.
+        /// </summary>
+        public static void applicaTestiDalBox(RevisioneMetaPromoLavorazioni meta, List<TestoDalBox>? testi, byte? versione = null)
+        {
+            if (meta == null || testi == null)
+            {
+                return;
+            }
+
+            foreach (var testo in testi)
+            {
+                if (testo == null || string.IsNullOrWhiteSpace(testo.label) || testo.contenuto == null)
+                {
+                    continue;
+                }
+                if (versione.HasValue)
+                {
+                    testo.versione = versione;
+                }
+                meta.testiDalBox ??= new List<TestoDalBox>();
+                meta.testiDalBox.RemoveAll(t => string.Equals(t.label, testo.label, StringComparison.OrdinalIgnoreCase));
+                meta.testiDalBox.Add(testo);
+            }
+        }
+
+        /// <summary>
+        /// I20-1077: mette nei campi compilati di un record i testi del box scelti dall'operatore.
+        /// I20-1088: il testo vale finche' il meta esiste, anche se il server compone ormai altro: e'
+        /// l'operatore a decidere se il meta e' decaduto. Per ogni meta con il suo campo restituisce lo
+        /// stato, con il contenuto che il server componeva prima del meta e la versione attuale del
+        /// record, da cui il Plugin capisce se segnalarlo. Allineato se il server compone gia' il
+        /// testo del meta: il meta non serve piu'.
+        /// </summary>
+        public static List<StatoTestoDalBox> applicaTestiDalBoxAiCampi(List<CompiledField>? campi, List<TestoDalBox>? testi, byte? versioneAttuale = null)
+        {
+            var stati = new List<StatoTestoDalBox>();
+            if (campi == null || testi == null)
+            {
+                return stati;
+            }
+
+            foreach (var testo in testi)
+            {
+                if (testo == null || string.IsNullOrWhiteSpace(testo.label) || testo.contenuto == null)
+                {
+                    continue;
+                }
+                StatoTestoDalBox? stato = null;
+                foreach (var campo in campi)
+                {
+                    if (campo == null || !string.Equals(campo.labelName, testo.label, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+                    stato ??= new StatoTestoDalBox
+                    {
+                        label = testo.label,
+                        contenuto = testo.contenuto,
+                        contenutoServer = testo.contenutoServer,
+                        versione = testo.versione,
+                        contenutoServerAttuale = campo.content,
+                        versioneAttuale = versioneAttuale,
+                        allineato = campo.content == testo.contenuto
+                    };
+                    campo.content = testo.contenuto;
+                }
+                if (stato != null)
+                {
+                    stati.Add(stato);
+                }
+            }
+            return stati;
+        }
+
+        /// <summary>
+        /// I20-1088: toglie dal meta i testi di questi campi. Senza testi la chiave sparisce.
+        /// Restituisce quanti ne ha tolti.
+        /// </summary>
+        public static int togliTestiDalBox(RevisioneMetaPromoLavorazioni meta, IEnumerable<string?>? labels)
+        {
+            if (meta?.testiDalBox == null || labels == null)
+            {
+                return 0;
+            }
+            int tolti = 0;
+            foreach (var label in labels)
+            {
+                if (string.IsNullOrWhiteSpace(label))
+                {
+                    continue;
+                }
+                tolti += meta.testiDalBox.RemoveAll(t => string.Equals(t.label, label, StringComparison.OrdinalIgnoreCase));
+            }
+            if (meta.testiDalBox.Count == 0)
+            {
+                meta.testiDalBox = null;
+            }
+            return tolti;
+        }
+
+        public static RichiestaTestiDalBox? leggiRichiestaTestiDalBox(string richiesta)
+        {
+            return Newtonsoft.Json.JsonConvert.DeserializeObject<RichiestaTestiDalBox>(richiesta, settings);
+        }
+
+        /// <summary>
+        /// I20-1088: cosa non va in una richiesta sui meta dei testi, o null se e' buona. Ogni voce
+        /// vuole il campo e un'azione; Aggiorna vuole anche il contenuto attuale del server.
+        /// </summary>
+        public static string? erroreDellaRichiestaTestiDalBox(RichiestaTestiDalBox? richiesta)
+        {
+            if (richiesta?.voci == null || richiesta.voci.Count == 0)
+            {
+                return "manca il meta da cambiare.";
+            }
+            foreach (var voce in richiesta.voci)
+            {
+                if (voce == null || string.IsNullOrWhiteSpace(voce.label))
+                {
+                    return "manca il campo del meta.";
+                }
+                if (!Enum.IsDefined(typeof(AzioneTestoDalBox), voce.azione))
+                {
+                    return $"l'azione {(int)voce.azione} non esiste.";
+                }
+                if (voce.azione == AzioneTestoDalBox.Aggiorna && voce.contenutoServer == null)
+                {
+                    return $"per aggiornare il meta di {voce.label} serve il contenuto attuale del server.";
+                }
+                if (voce.azione == AzioneTestoDalBox.Crea && (voce.contenuto == null || voce.contenutoServer == null))
+                {
+                    return $"per creare il meta di {voce.label} servono il testo e il contenuto attuale del server.";
+                }
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// I20-1088: Aggiorna tiene il testo del meta e gli da' come valore originale il contenuto
+        /// attuale del server, con la versione della voce; Rimuovi toglie il meta. Un campo senza meta
+        /// non si tocca. I20-1089: Crea registra un meta nuovo (sostituisce quello del campo, se c'e').
+        /// Restituisce quanti meta ha cambiato.
+        /// </summary>
+        public static int modificaTestiDalBox(RevisioneMetaPromoLavorazioni meta, RichiestaTestiDalBox? richiesta)
+        {
+            if (meta == null || richiesta?.voci == null)
+            {
+                return 0;
+            }
+            int cambiati = 0;
+            foreach (var voce in richiesta.voci)
+            {
+                if (voce == null || string.IsNullOrWhiteSpace(voce.label))
+                {
+                    continue;
+                }
+                if (voce.azione == AzioneTestoDalBox.Rimuovi)
+                {
+                    cambiati += togliTestiDalBox(meta, new[] { voce.label });
+                    continue;
+                }
+                if (voce.azione == AzioneTestoDalBox.Crea)
+                {
+                    if (voce.contenuto == null)
+                    {
+                        continue;
+                    }
+                    applicaTestiDalBox(meta, new List<TestoDalBox> { new TestoDalBox { label = voce.label, contenuto = voce.contenuto, contenutoServer = voce.contenutoServer, versione = voce.versione } });
+                    cambiati++;
+                    continue;
+                }
+                if (voce.azione != AzioneTestoDalBox.Aggiorna || voce.contenutoServer == null || meta.testiDalBox == null)
+                {
+                    continue;
+                }
+                foreach (var testo in meta.testiDalBox.Where(t => string.Equals(t.label, voce.label, StringComparison.OrdinalIgnoreCase)))
+                {
+                    testo.contenutoServer = voce.contenutoServer;
+                    testo.versione = voce.versione;
+                    cambiati++;
+                }
+            }
+            return cambiati;
+        }
+
+        /// <summary>
+        /// I20-1070: registra o toglie nel meta la decisione su una foto extra. Una voce per sigla e
+        /// tipo: una decisione nuova sulla stessa foto sostituisce la precedente. Senza voci la
+        /// chiave sparisce, come per noRender.
+        /// </summary>
+        public static void applicaExtraLavorazione(RevisioneMetaPromoLavorazioni meta, RichiestaExtraLavorazione? richiesta)
+        {
+            if (meta == null || richiesta?.voce == null || string.IsNullOrWhiteSpace(richiesta.voce.sigla))
+            {
+                return;
+            }
+
+            var voce = richiesta.voce;
+            meta.extraLavorazione ??= new List<RevisioneExtraLavorazioneFromIndd>();
+            meta.extraLavorazione.RemoveAll(v => v.tipo == voce.tipo && v.sigla == voce.sigla);
+            if (!richiesta.rimuovi)
+            {
+                meta.extraLavorazione.Add(voce);
+            }
+            if (meta.extraLavorazione.Count == 0)
+            {
+                meta.extraLavorazione = null;
+            }
         }
 
         /// <summary>
@@ -1073,6 +1354,92 @@ namespace Istanta.Models
         /// Le foto primarie/secondarie non stanno qui, hanno la loro opzione dentro ps.
         /// </summary>
         public List<RevisioneNoRenderFromIndd>? noRender { get; set; }
+        /// <summary>
+        /// I20-1070: le foto extra decise dall'operatore per questa sola lavorazione. Una voce per
+        /// sigla e tipo; togliere la decisione toglie la voce. Non si eredita dalle lavorazioni
+        /// passate: una lavorazione nuova riparte dal dato del server.
+        /// </summary>
+        public List<RevisioneExtraLavorazioneFromIndd>? extraLavorazione { get; set; }
+        /// <summary>
+        /// I20-1077: i campi di testo per cui l'operatore ha scelto il testo del box invece di quello
+        /// composto dal server. Una voce per campo. Non si eredita dalle lavorazioni passate.
+        /// </summary>
+        public List<TestoDalBox>? testiDalBox { get; set; }
+    }
+
+    /// <summary>
+    /// I20-1077: un campo di testo per cui l'operatore, dalla finestra delle differenze del Plugin,
+    /// ha scelto il testo del box. Vale per questa impaginazione della lavorazione.
+    /// I20-1088: vale finche' il meta esiste. Se il server compone ormai un contenuto diverso dal
+    /// valore originale, o il record ha cambiato versione, il Plugin lo segnala da verificare.
+    /// </summary>
+    public class TestoDalBox
+    {
+        /// <summary>Il labelName del campo compilato.</summary>
+        public string? label { get; set; }
+        /// <summary>Il testo del box, nella forma del campo compilato.</summary>
+        public string? contenuto { get; set; }
+        /// <summary>Il valore originale: il contenuto che il server componeva quando l'operatore ha scelto.</summary>
+        public string? contenutoServer { get; set; }
+        /// <summary>I20-1088: la versione del record quando l'operatore ha scelto. Null per i meta di prima.</summary>
+        public byte? versione { get; set; }
+    }
+
+    /// <summary>
+    /// I20-1088: un meta di testo come il server lo restituisce con il record (chiave testiDalBox):
+    /// quello che e' registrato e quello che il server compone ora, prima di applicare il meta.
+    /// </summary>
+    public class StatoTestoDalBox
+    {
+        public string? label { get; set; }
+        public string? contenuto { get; set; }
+        public string? contenutoServer { get; set; }
+        public byte? versione { get; set; }
+        public string? contenutoServerAttuale { get; set; }
+        public byte? versioneAttuale { get; set; }
+        /// <summary>Il server compone gia' il testo del meta: il meta non serve piu'.</summary>
+        public bool allineato { get; set; }
+    }
+
+    /// <summary>I20-1088: cosa fare di un meta di testo.</summary>
+    public enum AzioneTestoDalBox
+    {
+        Aggiorna = 1,
+        Rimuovi = 2,
+        //I20-1089: un meta nuovo, dall'interfaccia dei meta del Plugin.
+        Crea = 3
+    }
+
+    public class VoceRichiestaTestoDalBox
+    {
+        public string? label { get; set; }
+        public AzioneTestoDalBox azione { get; set; }
+        /// <summary>Per Crea: il testo del meta, nella forma del campo compilato.</summary>
+        public string? contenuto { get; set; }
+        /// <summary>Per Aggiorna e Crea: il contenuto attuale del server, che diventa il valore originale.</summary>
+        public string? contenutoServer { get; set; }
+        /// <summary>Per Aggiorna e Crea: la versione attuale del record, la mette il server.</summary>
+        public byte? versione { get; set; }
+    }
+
+    /// <summary>
+    /// I20-1089: una primaria/secondaria o una foto che un meta della lavorazione ha cambiato in un
+    /// record: tipo "selezione" (StatoSelezioneFoto come numero) o "foto" (nome del file). Ereditata
+    /// se viene dal meta di una lavorazione passata.
+    /// </summary>
+    public class SostituzioneFotoDaMeta
+    {
+        public string? tipo { get; set; }
+        public string? codRef { get; set; }
+        public string? originale { get; set; }
+        public string? modificato { get; set; }
+        public bool ereditata { get; set; }
+    }
+
+    /// <summary>I20-1088: le modifiche ai meta dei testi di un'impaginazione, tutte in una chiamata.</summary>
+    public class RichiestaTestiDalBox
+    {
+        public List<VoceRichiestaTestoDalBox>? voci { get; set; }
     }
 
     /// <summary>
@@ -1106,6 +1473,60 @@ namespace Istanta.Models
         public string? chiave { get; set; }
         /// <summary>Nome leggibile mostrato dal Plugin: nome del logo, nome della foto.</summary>
         public string? nome { get; set; }
+    }
+
+    /// <summary>
+    /// I20-1070: cosa l'operatore ha deciso per una foto extra, in questa sola lavorazione.
+    /// </summary>
+    public enum AzioneExtraLavorazione
+    {
+        /// <summary>Stessa sigla, immagine del box al posto di quella del server.</summary>
+        Sovrascrivi = 1,
+        /// <summary>Una foto extra che sta nel box senza corrispondenza nel dato, tenuta solo qui.</summary>
+        Aggiungi = 2,
+        /// <summary>Una foto extra che il dato vuole e che in questa lavorazione non si vuole.</summary>
+        Escludi = 3
+    }
+
+    /// <summary>
+    /// I20-1070: una foto extra decisa dall'operatore per questa lavorazione. La foto si riconosce
+    /// da tipo (logo o foto extra) e sigla, la chiave della label nel box.
+    /// </summary>
+    public class RevisioneExtraLavorazioneFromIndd
+    {
+        public TipoElementoBox tipo { get; set; }
+        public string? sigla { get; set; }
+        public AzioneExtraLavorazione azione { get; set; }
+        /// <summary>Il file del box (Sovrascrivi, Aggiungi).</summary>
+        public string? nome { get; set; }
+        /// <summary>Il nome che il dato dava quando l'operatore ha deciso: il Plugin lo mostra accanto alla decisione.</summary>
+        public string? nomeServer { get; set; }
+        /// <summary>Il tipo_N della label del box (Aggiungi): e' il TipoFoto della voce che si crea.</summary>
+        public int tipoFoto { get; set; }
+        /// <summary>I20-1082: per chi vale la decisione presa in un volantino: anche per i POP della stessa
+        /// promo, area e canale (Tutto, anche per le decisioni registrate prima) o solo per il volantino.</summary>
+        public AmbitoDecisioneLavorazione ambito { get; set; } = AmbitoDecisioneLavorazione.Tutto;
+    }
+
+    /// <summary>
+    /// I20-1082: dove vale una decisione per la lavorazione presa in un volantino. Il POP non decide:
+    /// riceve le decisioni Tutto del volantino della stessa promo, area e canale.
+    /// </summary>
+    public enum AmbitoDecisioneLavorazione
+    {
+        /// <summary>Volantino e POP. E' anche il valore delle decisioni registrate prima di I20-1082.</summary>
+        Tutto = 0,
+        /// <summary>Solo il volantino in cui e' stata presa.</summary>
+        SoloVolantino = 1
+    }
+
+    /// <summary>
+    /// I20-1070: la richiesta del Plugin, una decisione da registrare o da togliere.
+    /// </summary>
+    public class RichiestaExtraLavorazione
+    {
+        public bool rimuovi { get; set; } = false;
+        public RevisioneExtraLavorazioneFromIndd? voce { get; set; }
     }
 
     //Legato al campo LABEL della rappresentazione grafica
@@ -1190,9 +1611,26 @@ namespace Istanta.Models
         public string Xlsx { get; set; } = "";
     }
 
+    /// <summary>
+    /// I20-1120: un sottogruppo che la stessa referenza, nello stesso gruppo, ha in un altro record
+    /// caricato dal revisore (un altro tracciato o un'altra etichetta), con il record che lo porta.
+    /// La riga del revisore e' una sola per referenza e gruppo e porta il sottogruppo di un record
+    /// solo: la vista Sottogruppi usa questo elenco per mostrare anche gli altri.
+    /// </summary>
+    public class SottogruppoDellaRiga
+    {
+        public string CodiceSottogruppo { get; set; } = "";
+        public long IdRec { get; set; }
+        public int IdTracciato { get; set; }
+        public string? Label { get; set; }
+    }
+
     public class ArticoloInRevisione
     {
         public Int64? idRec;
+        //I20-1120: gli altri sottogruppi della referenza nei record caricati, per la sola vista
+        //Sottogruppi del revisore. Null quando non ce ne sono: le viste normali non lo leggono.
+        public List<SottogruppoDellaRiga>? altriSottogruppi;
         public Dictionary<string, object>? recordInTracciato;
         public ArticoliDescrizioni? recordRevisionato;
         public List<RevisioneRegionale>? recordRevisionatiRegionali;
@@ -1285,6 +1723,9 @@ namespace Istanta.Models
         public Int64 IdRecInLavorazione { get; set; }
         public TipoLavorazione tipoLavorazione { get; set; }
         public string? error { get; set; }
+        //I20-1062: la traccia completa dell'errore. In error c'e' il messaggio breve per
+        //l'operatore; questa il Plugin la scrive nei log senza mostrarla.
+        public string? dettaglio { get; set; }
         public string? warn { get; set; }
         public bool esito { get; set; }
         public int errorCode { get; set; }
@@ -1309,6 +1750,8 @@ namespace Istanta.Models
         public List<ArticoloInRevisione> Data { get; set; } = new List<ArticoloInRevisione>();
         public List<ArticoloInRevisione> ArticoliObsoleti { get; set; } = new List<ArticoloInRevisione>();
         public string? Error { get; set; }
+        //I20-1069: in Error il messaggio breve per l'operatore, qui la traccia completa per la console.
+        public string? Dettaglio { get; set; }
     }
 
     public class DescrizioniSottogruppi { 
@@ -1751,6 +2194,11 @@ namespace Istanta.Models
         public TipoLavorazione tipoLavorazione { get; set; }
         public List<ResponseImpagination>? Result { get; set; }
         public string? error;
+        //I20-1069: in error il messaggio breve per l'operatore, qui la traccia completa che il Plugin
+        //scrive in console senza mostrarla.
+        public string? dettaglio;
+        //I20-1069: l'avviso di processaKit sui record della lista non completati.
+        public string? warn;
     }
 
     public class FileIndd
@@ -1807,6 +2255,8 @@ namespace Istanta.Models
         public bool validaSoloPerLavorazione { get; set; }
         public int idLavorazione { get; set; }
         public bool propaga { get; set; }
+        //I20-1088: il record del box, per trovare la riga della lavorazione dei meta. 0 se il client non lo manda.
+        public long idRec { get; set; } = 0;
 
 
         public void Normalize()
@@ -1858,6 +2308,8 @@ namespace Istanta.Models
         public int idRecSelezionato = 0;
         public int idLavorazione { get; set; }
         public string error;
+        //I20-1069: in error il messaggio breve per l'operatore, qui la traccia completa per la console.
+        public string? dettaglio;
     }
     public class RicollegamentoBoxItem
     {
@@ -1976,6 +2428,11 @@ namespace Istanta.Models
     {
         public bool esito = true;
         public string error = "";
+        //I20-1069: la traccia completa dell'errore, e quanti record su quanti erano gia' salvati:
+        //si salva record per record, e un errore a meta' lascia il dato modificato in parte.
+        public string? dettaglio;
+        public int salvati;
+        public int totale;
         //public Dictionary<string, object> refItem = new Dictionary<string, object>();
     }
 
@@ -1984,6 +2441,9 @@ namespace Istanta.Models
         public bool esito = true;
 
         public string error = "";
+
+        //I20-1069: in error il messaggio breve per l'operatore, qui la traccia completa per la console.
+        public string? dettaglio;
 
         public Dictionary<string, object> item = new Dictionary<string, object>();
     }
@@ -2572,7 +3032,11 @@ namespace Istanta.Models
         cambioPagina = 11,
         rimuoviMetaFoto = 12,
         login=13,
-        updateNoRender = 14
+        updateNoRender = 14,
+        //I20-1070: una decisione su una foto extra per questa sola lavorazione, registrata o tolta.
+        updateExtraLavorazione = 15,
+        //I20-1088: i meta dei testi del box aggiornati o tolti.
+        updateTestiDalBox = 16
     }
 
     public enum senderOperazione
@@ -2673,6 +3137,19 @@ namespace Istanta.Models
                 //return BitConverter.ToString(md5.ComputeHash(byteArray)).Replace("-", string.Empty);
 
             }
+        }
+        /// <summary>
+        /// MD5 di un file letto in streaming, senza caricarlo in memoria: stessa stringa di
+        /// GetMD5HashFromFile (esadecimale maiuscolo, senza trattini), che e' quella confrontata
+        /// con articoli_foto.hash e con la deduplicazione di Olimpo. Le foto grezze del SYNC FOTO
+        /// lette con File.ReadAllBytes finivano tutte nel Large Object Heap e i GC che ne
+        /// seguivano fermavano l'intero processo.
+        /// </summary>
+        public static string GetMD5HashFromPath(string path)
+        {
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read,
+                                              1024 * 1024, FileOptions.SequentialScan);
+            return Convert.ToHexString(MD5.HashData(stream));
         }
         public static string EncryptString(string Message, string Passphrase)
         {

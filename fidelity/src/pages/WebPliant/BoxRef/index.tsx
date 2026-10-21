@@ -20,6 +20,8 @@ import {
   ReferenzeIstanta,
   StileBoxReferenza,
 } from "../../../../lib/types";
+import { urlFoto } from "@/utils/helper";
+import Lucide from "@/components/Base/Lucide";
 import { useGestioneReferenze } from "@/context/GestioneReferenzeContext";
 import { motion } from "framer-motion";
 import parse from "html-react-parser";
@@ -336,7 +338,7 @@ const BoxRef: React.FC<BoxReferenzeProps> = ({
 
   const handleAddToCart = async () => {
     try {
-      await saveReferenza(referenza.dataFields, referenza.foto);
+      await saveReferenza(referenza.dataFields, urlFoto(referenza.foto));
 
       // Animazione di aggiunta al carrello
       const button = buttonRef.current;
@@ -606,7 +608,7 @@ const BoxRef: React.FC<BoxReferenzeProps> = ({
           <div className={styleBox.contentWrapper}>
             <div className={styleBox.innerContent}>
               <div className={styleWp["wp-flip_container_ref"]}>
-                <img loading="lazy" src={referenza.foto[0]} alt={referenza.dataFields.descrizione_uno?.toString()} />
+                <img loading="lazy" src={urlFoto(referenza.foto)[0]} alt={referenza.dataFields.descrizione_uno?.toString()} />
                 {state.miniContent}
               </div>
               {referenza.contenutiAggiuntivi?.map((ca) => (
@@ -618,12 +620,7 @@ const BoxRef: React.FC<BoxReferenzeProps> = ({
                       src={ca.contenuto.logo == "custom" ? ca.contenuto.logoUrl : ca.contenuto.logo}
                     />
                   ) : (
-                    <img
-                      alt={"Logo piu dettagli"}
-                      loading="lazy"
-                      width={50}
-                      src={"../../../../images/custom/ico_more_details.png"}
-                    />
+                    <Lucide icon="Info" className="w-12 h-12" aria-label="Logo piu dettagli" />
                   )}
                   {parse(ca.contenuto.descrizione)}
                 </div>
@@ -644,7 +641,7 @@ const BoxRef: React.FC<BoxReferenzeProps> = ({
 
                           // Genera cuoricini
                           generateHearts(button);
-                          await saveReferenza(group, referenza.foto);
+                          await saveReferenza(group, urlFoto(referenza.foto));
                           // Manteniamo anche l'animazione originale
                           if (buttonRef.current) {
                             buttonRef.current.classList.add(styleBox.addingToCart);

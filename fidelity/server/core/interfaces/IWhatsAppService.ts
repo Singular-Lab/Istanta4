@@ -2,19 +2,7 @@ import type { GDOWhatsappTemplateAttributes } from "../../../lib/types";
 import type { GDOResponseDTO } from "../dto/GDODTO";
 
 export interface IWhatsAppService {
-    inviaBroadcastMessaggi(msg: string): Promise<{ successo: boolean; errore?: string }>;
     getCurrentGDOWhatsappForCampaign(id_utente: string): Promise<GDOResponseDTO | null>;
-    registraUtenteWhatsapp(data: {
-        email: string;
-        nome: string;
-        cognome: string;
-        password: string;
-        tipo: string;
-        residenza: string;
-        dataDiNascita: Date;
-        gdoScelta: string;
-        telefono: string;
-    }): Promise<{ successo: boolean; errore?: string }>;
     //TODO attenzione da questo metodo scaturira poi la gestione multi-gdo da SUPERADMIN
     getAllGDOWhatsapp(): Promise<{
         id: string;
@@ -51,6 +39,8 @@ export interface IWhatsAppService {
     creaPresetTemplateWhatsapp(id_template: string, nome_preset: string, contenuto_preset: any): Promise<{ success: boolean; newPresetId?: string; error?: string }>;
     modificaPresetTemplateWhatsapp(id_preset: string, nome_preset: string, contenuto_preset: any): Promise<{ success: boolean; error?: string }>;
     setDefaultPresetTemplateWhatsapp(id_preset: string): Promise<{ success: boolean; error?: string }>;
+    eliminaPresetTemplateWhatsapp(id_preset: string, idGdoAmmessa: string | null): Promise<void>;
+    eliminaTemplateWhatsapp(id_template: string, idGdoAmmessa: string | null): Promise<void>;
     getAllUtentiGuestWhatsappCount(idGdo: string,
         filtri: {
             sesso?: string;
@@ -63,9 +53,6 @@ export interface IWhatsAppService {
                 areaId?: string | null;
                 areaName?: string | null;
                 polygon?: [number, number][][];
-                // Comuni a entrambi
-                minCalls?: number;
-                lastDays?: number;
             };
             dateRange?: string | null; // "YYYY-MM-DD - YYYY-MM-DD"
         }): Promise<{
@@ -87,8 +74,6 @@ export interface IWhatsAppService {
             areaId?: string | null;
             areaName?: string | null;
             polygon?: [number, number][][];
-            minCalls?: number;
-            lastDays?: number;
         } | null,
         userFilters: {
             sesso?: string | null;

@@ -19,7 +19,7 @@ import {
   isDataUriIcon,
   toIsoString,
 } from "../utils";
-import ConfirmDialog from "./ConfirmDialog";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import NewsFormDialog from "./NewsFormDialog";
 
 const buildNotificationContent = (icon: string, title: string, message: string, colorClass: string) => (

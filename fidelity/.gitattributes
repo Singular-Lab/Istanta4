@@ -4,3 +4,6 @@
 # Shell script e entrypoint Docker: forzare LF (mai CRLF) — su Linux CRLF causa errori di parsing
 *.sh text eol=lf
 docker/**/*.sh text eol=lf
+
+# Binario di Yarn versionato: nessuna conversione dei fine riga.
+.yarn/releases/** binary

@@ -6,11 +6,12 @@ import { Op, QueryTypes, type WhereOptions } from 'sequelize';
 import { v4 as uuidv4 } from 'uuid';
 import { Colorize } from '../../../lib/Colorize';
 import { STATO_LAVORAZIONE_KIT_RUNTIME, STATO_PROMO, TIPO_CONTEXT, TIPO_KIT_DESIGN } from '../../../lib/enums';
-import { BadRequestError, DatabaseError, NotFoundError, wrapApiError, wrapDatabaseError, wrapNotFoundError } from '../../../lib/errors';
+import { BadRequestError, DatabaseError, ExternalApiError, NotFoundError, wrapApiError, wrapDatabaseError, wrapNotFoundError } from '../../../lib/errors';
 import {
   AnalisiMomentoTracciato,
   DataFields,
   DataWebPliant,
+  DimensioneVisibilitaPromo,
   IndesignPluginExport,
   KitStatusDesign,
   KitStatusRunTime,
@@ -18,9 +19,7 @@ import {
   MenaboLayoutSalvato,
   NuovaPromoPerDashboard,
   SaveMenaboLayoutRequest,
-  SystemNotification,
 } from '../../../lib/types';
-import { emitToClients } from '../../ws-server';
 import type { IAgenziaLib } from '../agenzia_lib/types';
 import config from '../config';
 import { sequelize } from '../db';
@@ -34,16 +33,25 @@ import { Area } from '../models/aree';
 import { Canale } from '../models/canali';
 import { DesignKit } from '../models/design_kit';
 import { FilesRuntime } from '../models/files_runtime';
-import { PromoAttributes } from '../models/promo';
+import { OrdiniDiStampa } from '../models/ordini_di_stampa';
+import { Promo, PromoAttributes } from '../models/promo';
 import { Referenze } from '../models/referenze';
 import { RuntimeKit } from '../models/runtime_kit';
+import { Tracciati } from '../models/tracciati';
 import { TracciatiMomento } from '../models/tracciati_momento';
-import { Utente } from '../models/utenti';
 import type { IPromoRepository } from '../repositories/PromoRepository';
-import { normalizePromoModel } from '../utils/PromoModelUtils';
+import { isStessaPromo, normalizePromoModel } from '../utils/PromoModelUtils';
 import { ServerUtils } from '../utils/ServerUtils';
+import { verificaRisposta } from '../utils/rispostaServizi';
+import { normalizzaMeta } from './visibilitaPromoUtils';
 dayjs.extend(isBetween);
 
+
+// Istanta rifiuta l'eliminazione definitiva di una promo con importazioni, tracciati o
+// lavorazioni (I20-1052): niente kit e niente tracciati, altrimenti solo eliminazione non definitiva
+async function eliminabileDefinitivamente(idPromo: string, kitCollegati: number): Promise<boolean> {
+  return kitCollegati === 0 && (await Tracciati.count({ where: { id_promo_tracciati: idPromo } })) === 0;
+}
 
 export class PromoService implements IPromoService {
   constructor(
@@ -165,6 +173,31 @@ export class PromoService implements IPromoService {
     }
   }
 
+  // Promo proponibili per un nuovo ordine di stampa: in corso, non eliminate, ancora senza ordine.
+  // ponytail: legge id e stato di tutte le promo; con tabelle grandi passare a un NOT EXISTS in SQL
+  private async idPromoSenzaOrdineDiStampa(): Promise<Set<string>> {
+    const statiEsclusi = [STATO_PROMO.VALIDA, STATO_PROMO.VALIDA_CON_ERRORI, STATO_PROMO.ARCHIVIATA, STATO_PROMO.ELIMINATA];
+    const [promo, ordini] = await Promise.all([
+      Promo.findAll({ attributes: ['id_promo', 'stato'], raw: true }),
+      OrdiniDiStampa.findAll({ attributes: ['id_promo_ordinistampa'], raw: true }),
+    ]);
+    const conOrdine = new Set(ordini.map((o) => o.id_promo_ordinistampa));
+    return new Set(
+      promo.filter((p) => !statiEsclusi.includes(p.stato) && !conOrdine.has(p.id_promo)).map((p) => p.id_promo)
+    );
+  }
+
+  async contaPromoSenzaOrdineDiStampa(): Promise<number> {
+    return (await this.idPromoSenzaOrdineDiStampa()).size;
+  }
+
+  async getPromoSenzaOrdineDiStampa(): Promise<PromoResponseDTO[]> {
+    const [ids, promo] = await Promise.all([this.idPromoSenzaOrdineDiStampa(), this.getAllPromo()]);
+    return promo
+      .filter((p) => ids.has(p.id))
+      .sort((a, b) => new Date(b.data_registrazione ?? 0).getTime() - new Date(a.data_registrazione ?? 0).getTime());
+  }
+
   async getCurrentPromoCount(): Promise<number> {
     try {
       const resultCount = await this.promoRepository.countByStatoNotIn([STATO_PROMO.VALIDA, STATO_PROMO.VALIDA_CON_ERRORI, STATO_PROMO.ARCHIVIATA]);
@@ -274,12 +307,38 @@ export class PromoService implements IPromoService {
     dataDiInizio: string,
     dataDiFine: string,
     offsetVisibilita: number,
-    context: any
+    context: any,
+    meta?: unknown
   }, idGDO: string, req: ExpressRequest): Promise<PromoResponseDTO> {
     const scadenza = dayjs(data.dataDiScadenza, "DD/MM/YYYY");
     const inizioValidita = dayjs(data.dataDiInizio, "DD/MM/YYYY");
     if (scadenza.isValid() && inizioValidita.isValid() && !scadenza.isBefore(inizioValidita)) {
       throw new BadRequestError({ message: 'La data di scadenza deve essere precedente alla data di inizio validità' });
+    }
+
+    // La stessa promo caricata due volte si blocca prima di Istanta, che la registrerebbe.
+    // ponytail: controlla e poi inserisce, due richieste nello stesso istante passano
+    // entrambe; per chiuderlo serve un indice univoco, possibile solo senza duplicati storici
+    if (inizioValidita.isValid()) {
+      const nuova = {
+        nome_promo: data.titolo,
+        validita_dal: inizioValidita.toDate(),
+        validita_al: dayjs(data.dataDiFine, "DD/MM/YYYY").toDate(),
+      };
+      const stessoInizio = await this.promoRepository.findAllWithOptions({
+        where: {
+          validita_dal: {
+            [Op.gte]: inizioValidita.startOf('day').toDate(),
+            [Op.lt]: inizioValidita.add(1, 'day').startOf('day').toDate(),
+          },
+          // Una promo eliminata non blocca: si elimina e si ricrea (I20-1052)
+          stato: { [Op.ne]: STATO_PROMO.ELIMINATA },
+        },
+        attributes: ['nome_promo', 'validita_dal', 'validita_al'],
+      });
+      if (stessoInizio.some((p) => isStessaPromo(normalizePromoModel(p), nuova))) {
+        throw new BadRequestError({ message: 'Esiste già una promo con lo stesso nome e le stesse date' });
+      }
     }
 
     const promo: any = {
@@ -297,20 +356,16 @@ export class PromoService implements IPromoService {
       updatedAt: new Date()
     };
 
-    const chiamataIstantaResult = await ServerUtils.sendToFICOApi<{ esito: boolean }>(
-      req,
-      config.ISTANTA_IP_ADDRESS + "/FicoProcess/inizioNuovaLavorazione",
-      "PUT",
-      promo
+    verificaRisposta(
+      await ServerUtils.sendToFICOApi<{ esito: boolean, error?: string }>(
+        req,
+        config.ISTANTA_IP_ADDRESS + "/FicoProcess/inizioNuovaLavorazione",
+        "PUT",
+        promo
+      ),
+      'ISTANTA',
+      '/FicoProcess/inizioNuovaLavorazione'
     );
-
-    if (!chiamataIstantaResult.data.esito) {
-      throw wrapApiError(new Error("Errore durante la chiamata all'API di Istanta"), {
-        message: "Errore durante la chiamata all'API di Istanta",
-        service: 'ISTANTA',
-        endpoint: '/FicoProcess/inizioNuovaLavorazione'
-      });
-    }
     const obj: PromoAttributes = {
       id_promo: promo.guid_id,
       gdo: promo.GDO,
@@ -321,6 +376,8 @@ export class PromoService implements IPromoService {
       data_scadenza: promo.dataScadenza as Date,
       stato: promo.stato as STATO_PROMO,
       context: promo.context as object,
+      // Solo FP: meta non va a Istanta
+      meta: normalizzaMeta(data.meta, {}, this.getVisibilitaOpzioni()),
       offset_visibilita: promo.offsetVisibilita,
       createdat: promo.createdAt as Date,
       updatedat: promo.updatedAt as Date
@@ -345,6 +402,7 @@ export class PromoService implements IPromoService {
       offset_visibilita: result.offset_visibilita,
       stato: result.stato,
       context: result.context as PromoContextItem[],
+      meta: result.meta ?? {},
       gdo: result.gdo,
       is_active: dayjs().isBetween(dayjs(result.validita_dal), dayjs(result.validita_al), null, '[]'),
       is_expired: dayjs().isAfter(dayjs(result.validita_al)),
@@ -354,24 +412,25 @@ export class PromoService implements IPromoService {
     return objToReturn;
   }
 
+  /** Dimensioni che il cliente puo scegliere come visibili nella promo; vuoto = nessuna scelta. */
+  getVisibilitaOpzioni(): DimensioneVisibilitaPromo[] {
+    return this.agenziaLib.visibilitaPromo ?? [];
+  }
+
   async getContestoPerNuovaLavorazione(req: ExpressRequest): Promise<any> {
     try {
-      const result = await ServerUtils.sendToFICOApi<{ content: string, esito: boolean, error: string }>(
-        req,
-        config.ISTANTA_IP_ADDRESS + "/FicoProcess/getFormContext/" + TIPO_CONTEXT.NUOVA_LAVORAZIONE,
-        "GET",
-        undefined
+      const data = verificaRisposta<{ content: string, esito: boolean, error: string }>(
+        await ServerUtils.sendToFICOApi<{ content: string, esito: boolean, error: string }>(
+          req,
+          config.ISTANTA_IP_ADDRESS + "/FicoProcess/getFormContext/" + TIPO_CONTEXT.NUOVA_LAVORAZIONE,
+          "GET",
+          undefined
+        ),
+        'ISTANTA',
+        '/FicoProcess/getFormContext'
       );
 
-      if (!result.data.esito) {
-        throw wrapApiError(new Error("Errore durante la chiamata all'API di Istanta"), {
-          message: "Errore durante la chiamata all'API di Istanta",
-          service: 'ISTANTA',
-          endpoint: '/FicoProcess/getFormContext/' + TIPO_CONTEXT.NUOVA_LAVORAZIONE
-        });
-      }
-
-      let context = JSON.parse(result.data.content) as any[];
+      let context = JSON.parse(data.content) as any[];
 
       // Esegui le chiamate in parallelo ma con un intervallo di 200ms tra ciascuna per evitare overload
       const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -436,25 +495,21 @@ export class PromoService implements IPromoService {
                   delete c.chiamata_runtime;
                 }
               } else {
-                const resultChiamataRuntime = await ServerUtils.sendToFICOApi<{ content: string, esito: boolean, error: string }>(
-                  req,
-                  c.chiamata_runtime.url,
-                  c.chiamata_runtime.metodo,
-                  c.chiamata_runtime.body,
+                const resultChiamataRuntime = verificaRisposta<{ content: string, esito: boolean, error: string }>(
+                  await ServerUtils.sendToFICOApi<{ content: string, esito: boolean, error: string }>(
+                    req,
+                    c.chiamata_runtime.url,
+                    c.chiamata_runtime.metodo,
+                    c.chiamata_runtime.body,
+                  ),
+                  'ISTANTA',
+                  'chiamata_runtime del contesto'
                 );
 
-                if (!resultChiamataRuntime.data.esito) {
-                  throw wrapApiError(new Error("Errore durante la chiamata all'API di Istanta"), {
-                    message: "Errore durante la chiamata all'API di Istanta",
-                    service: 'ISTANTA',
-                    endpoint: c.chiamata_runtime.url
-                  });
-                }
-
-                if (typeof resultChiamataRuntime.data.content === "string") {
-                  c.valore = JSON.parse(resultChiamataRuntime.data.content);
+                if (typeof resultChiamataRuntime.content === "string") {
+                  c.valore = JSON.parse(resultChiamataRuntime.content);
                 } else {
-                  c.valore = resultChiamataRuntime.data.content;
+                  c.valore = resultChiamataRuntime.content;
                 }
 
                 if (c.chiamata_runtime) {
@@ -472,6 +527,7 @@ export class PromoService implements IPromoService {
 
       return context;
     } catch (error) {
+      if (error instanceof ExternalApiError) throw error;
       throw wrapDatabaseError(new Error("Errore durante il recupero del contesto per nuova lavorazione"), {
         message: "Errore durante il recupero del contesto per nuova lavorazione",
         operation: 'get',
@@ -485,16 +541,20 @@ export class PromoService implements IPromoService {
   async get_contesto_per_importazione(req: ExpressRequest): Promise<any> {
     try {
       console.log(Colorize.bgBlue(config.ISTANTA_IP_ADDRESS))
-      const result = await ServerUtils.sendToFICOApi<{
-        content: string, esito: boolean, error: string | null
-      }>(
-        req,
-        config.ISTANTA_IP_ADDRESS + '/FicoProcess/getFormContext/' + TIPO_CONTEXT.IMPORTA_LAVORAZIONE,
-        "GET",
-        undefined
+      const result = verificaRisposta<{ content: string, esito: boolean, error: string | null }>(
+        await ServerUtils.sendToFICOApi<{
+          content: string, esito: boolean, error: string | null
+        }>(
+          req,
+          config.ISTANTA_IP_ADDRESS + '/FicoProcess/getFormContext/' + TIPO_CONTEXT.IMPORTA_LAVORAZIONE,
+          "GET",
+          undefined
+        ),
+        'ISTANTA',
+        '/FicoProcess/getFormContext'
       );
 
-      const resultDefinitivo = await ServerUtils.sendToFICOApi<{
+      type SourceFields = {
         list: {
           content: { titolo: string; valore: string }[],
           idField: string,
@@ -505,15 +565,20 @@ export class PromoService implements IPromoService {
           error: string | null
           nullable: boolean
         }[], esito: boolean, error: string | null
-      }>(
-        req,
-        //NOTE abbiamo cambiato la dicitura aggiungendo l'ultimo parametro che è lo scope.
-        //`${config.ISTANTA_IP_ADDRESS}/FicoProcess/getSourceFields/${req.query.guidId}/importInLavorazione`,
-        `${config.ISTANTA_IP_ADDRESS}/FicoProcess/getSourceFields/${req.query.guidId}`,
-        "GET",
-        undefined
+      };
+      const resultDefinitivo = verificaRisposta<SourceFields>(
+        await ServerUtils.sendToFICOApi<SourceFields>(
+          req,
+          //NOTE abbiamo cambiato la dicitura aggiungendo l'ultimo parametro che è lo scope.
+          //`${config.ISTANTA_IP_ADDRESS}/FicoProcess/getSourceFields/${req.query.guidId}/importInLavorazione`,
+          `${config.ISTANTA_IP_ADDRESS}/FicoProcess/getSourceFields/${req.query.guidId}`,
+          "GET",
+          undefined
+        ),
+        'ISTANTA',
+        '/FicoProcess/getSourceFields'
       );
-      const context = JSON.parse(result.data.content)
+      const context = JSON.parse(result.content)
       for (const c of context) {
         if (c.chiamata_runtime !== undefined && c.chiamata_runtime !== false) {
           try {
@@ -572,25 +637,21 @@ export class PromoService implements IPromoService {
                 delete c.chiamata_runtime;
               }
             } else {
-              const resultChiamataRuntime = await ServerUtils.sendToFICOApi<{ content: string, esito: boolean, error: string }>(
-                req,
-                c.chiamata_runtime.url,
-                c.chiamata_runtime.metodo,
-                c.chiamata_runtime.body,
+              const resultChiamataRuntime = verificaRisposta<{ content: string, esito: boolean, error: string }>(
+                await ServerUtils.sendToFICOApi<{ content: string, esito: boolean, error: string }>(
+                  req,
+                  c.chiamata_runtime.url,
+                  c.chiamata_runtime.metodo,
+                  c.chiamata_runtime.body,
+                ),
+                'ISTANTA',
+                'chiamata_runtime del contesto'
               );
 
-              if (!resultChiamataRuntime.data.esito) {
-                throw wrapApiError(new Error("Errore durante la chiamata all'API di Istanta"), {
-                  message: "Errore durante la chiamata all'API di Istanta",
-                  service: 'ISTANTA',
-                  endpoint: c.chiamata_runtime.url
-                });
-              }
-
-              if (typeof resultChiamataRuntime.data.content === "string") {
-                c.valore = JSON.parse(resultChiamataRuntime.data.content);
+              if (typeof resultChiamataRuntime.content === "string") {
+                c.valore = JSON.parse(resultChiamataRuntime.content);
               } else {
-                c.valore = resultChiamataRuntime.data.content;
+                c.valore = resultChiamataRuntime.content;
               }
 
               if (c.chiamata_runtime) {
@@ -598,6 +659,7 @@ export class PromoService implements IPromoService {
               }
             }
           } catch (error) {
+            if (error instanceof ExternalApiError) throw error;
             throw wrapDatabaseError(new Error("Errore durante l'esecuzione della chiamata runtime"), {
               message: "Errore durante l'esecuzione della chiamata runtime",
               operation: 'get',
@@ -611,7 +673,7 @@ export class PromoService implements IPromoService {
           }
         }
       }
-      let contextCiclato = resultDefinitivo.data.list.map(cDef => {
+      let contextCiclato = resultDefinitivo.list.map(cDef => {
         if (!cDef.visible) {
           return null;
         }
@@ -632,6 +694,7 @@ export class PromoService implements IPromoService {
       // let contextResult = [resultAddestramenti.data.content, resultContextPromo.data.content, context]
       return contextCorretto;
     } catch (error) {
+      if (error instanceof ExternalApiError) throw error;
       throw wrapDatabaseError(new Error("Errore durante il recupero del contesto per importazione"), {
         message: "Errore durante il recupero del contesto per importazione",
         operation: 'get',
@@ -659,7 +722,7 @@ export class PromoService implements IPromoService {
         where: { id_promo: promo.id_promo },
         raw: true
       });
-      const isDeletable = kitCollegati.length === 0;
+      const isDeletable = await eliminabileDefinitivamente(promo.id_promo, kitCollegati.length);
       const objToReturn: PromoResponseDTO = {
         id: promo.id_promo,
         nome: promo.nome_promo,
@@ -703,7 +766,7 @@ export class PromoService implements IPromoService {
           where: { id_promo: promoData.id_promo },
           raw: true
         });
-        const isDeletable = kitCollegati.length === 0;
+        const isDeletable = await eliminabileDefinitivamente(promoData.id_promo, kitCollegati.length);
         return {
           id: promoData.id_promo,
           nome: promoData.nome_promo,
@@ -857,7 +920,7 @@ export class PromoService implements IPromoService {
           where: { id_promo: promoData.id_promo },
           raw: true
         });
-        const isDeletable = kitCollegati.length === 0;
+        const isDeletable = await eliminabileDefinitivamente(promoData.id_promo, kitCollegati.length);
 
         return {
           id: promoData.id_promo,
@@ -917,7 +980,7 @@ export class PromoService implements IPromoService {
           where: { id_promo: p.id_promo },
           raw: true
         });
-        const isDeletable = kitCollegati.length === 0;
+        const isDeletable = await eliminabileDefinitivamente(p.id_promo, kitCollegati.length);
         return {
           id: p.id_promo,
           nome: p.nome_promo,
@@ -1156,6 +1219,7 @@ export class PromoService implements IPromoService {
         offset_visibilita: promoValues.offset_visibilita,
         stato: promoValues.stato,
         context: promoValues.context,
+        meta: promoValues.meta ?? {},
         gdo: promoValues.gdo,
         is_active: dayjs().isBetween(dayjs(promoValues.validita_dal), dayjs(promoValues.validita_al), null, '[]'),
         is_expired: dayjs().isAfter(dayjs(promoValues.validita_al)),
@@ -1309,9 +1373,11 @@ export class PromoService implements IPromoService {
         validita_al: data.validita_al ? dayjs(data.validita_al).toDate() : promoValues.validita_al,
         data_scadenza: data.data_scadenza ? dayjs(data.data_scadenza).toDate() : promoValues.data_scadenza,
         offset_visibilita: data.offset_visibilita ?? promoValues.offset_visibilita,
-        stato: data.stato ?? promoValues.stato,
+        // Stato e gdo non si cambiano dalla modifica: lo stato segue il ciclo di lavorazione, la gdo e' fissata alla creazione
+        stato: promoValues.stato,
         context: data.context ?? promoValues.context,
-        gdo: data.gdo ?? promoValues.gdo
+        meta: normalizzaMeta(data.meta, promoValues.meta, this.getVisibilitaOpzioni()),
+        gdo: promoValues.gdo
       };
       const updatedPromo = await this.promoRepository.update(
         id,
@@ -1514,28 +1580,5 @@ export class PromoService implements IPromoService {
 
   async generateIndesignPluginJson(layout: MenaboLayoutDivisioneSalvata): Promise<IndesignPluginExport> {
     return this.agenziaLib.buildIndesignPluginJson(layout);
-  }
-
-  async testNotifica(req: ExpressRequest): Promise<void> {
-    try {
-      log.info('Tentativo di invio notifica di test...');
-      const utente = req.session.id_utente;
-      const utenteModel = await Utente.findByPk(utente);
-      if (!utenteModel) {
-        throw new NotFoundError({ message: `Utente con id ${utente} non trovato.`, entityType: 'Utente' });
-      }
-      const notifica: SystemNotification = {
-        titolo: 'Notifica di Prova',
-        messaggio: `una notifica di prova inviata dal server! ${utenteModel.nome_utenti} ${utenteModel.cognome_utenti}`,
-        tipo: 'success'
-      };
-
-      emitToClients('notifica', notifica);
-
-      log.info('Notifica di test inviata con successo');
-    } catch (error) {
-      log.error('Errore durante l\'invio della notifica di test:', error);
-      throw error;
-    }
   }
 }

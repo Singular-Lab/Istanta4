@@ -6,6 +6,8 @@ import Lucide from '@/components/Base/Lucide';
 import { useNotification } from '@/context/NotificationContext';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { voceDi } from '../../../lib/accessi/catalogo';
+import { paginaPer } from '../../../lib/accessi/pagine';
 import { TIPO_UTENTI } from '../../../lib/enums';
 import { ServerCall } from '../../../lib/server_call';
 
@@ -30,12 +32,26 @@ interface RuoloGdoOption {
   ruolo: string;
 }
 
-interface PermessoCatalogo {
-  id_permesso: string;
-  codice: string;
-  nome: string;
-  categoria: string;
-}
+/** Permesso che la pagina richiede, dal catalogo condiviso: si legge, non si sceglie. */
+const PermessoDellaPagina = ({ pathname, piccolo }: { pathname?: string | null; piccolo?: boolean }) => {
+  const pagina = pathname ? paginaPer(pathname) : undefined;
+  const testo = !pathname
+    ? '—'
+    : !pagina
+      ? 'Pagina non censita'
+      : pagina.permesso === null
+        ? 'Tutti gli autenticati'
+        : voceDi(pagina.permesso)?.nome ?? pagina.permesso;
+  return (
+    <span
+      title={pagina?.permesso ?? undefined}
+      className={`inline-flex max-w-full items-center gap-1 truncate rounded-md px-2 py-1 ${piccolo ? 'text-[11px]' : 'text-xs'} ${pathname && !pagina ? 'bg-warning/10 text-warning' : 'bg-slate-100 text-slate-600 dark:bg-darkmode-400 dark:text-slate-300'}`}
+    >
+      <Lucide icon={pagina?.permesso ? 'Lock' : 'LockOpen'} className="h-3 w-3 flex-shrink-0" />
+      <span className="truncate">{testo}</span>
+    </span>
+  );
+};
 
 const TIPI_UTENTE_MENU = [
   TIPO_UTENTI.SUPERADMIN,
@@ -112,7 +128,6 @@ interface MenuItemRowProps {
   isLast: boolean;
   isExpanded: boolean;
   selectedTipo: string;
-  permessiOptions: PermessoCatalogo[];
   onUpdate: (index: number, updates: Partial<MenuItemDTO>) => void;
   onMove: (index: number, dir: -1 | 1) => void;
   onRemove: (index: number) => void;
@@ -129,7 +144,6 @@ const MenuItemRow = memo(function MenuItemRow({
   isLast,
   isExpanded,
   selectedTipo,
-  permessiOptions,
   onUpdate,
   onMove,
   onRemove,
@@ -208,8 +222,9 @@ const MenuItemRow = memo(function MenuItemRow({
 
             {/* Fields */}
             <div className="flex-1 grid grid-cols-12 gap-2 items-center">
+              {/* Sotto xl i campi stanno su due righe: titolo, icona e percorso; poi permesso e interruttori */}
               {/* Title */}
-              <div className="col-span-3">
+              <div className="col-span-6 xl:col-span-3">
                 <FormInput
                   type="text"
                   value={item.titolo}
@@ -220,7 +235,7 @@ const MenuItemRow = memo(function MenuItemRow({
               </div>
 
               {/* Icon — text input: the preview square updates live as you type */}
-              <div className="col-span-2">
+              <div className="col-span-3 xl:col-span-2">
                 <FormInput
                   type="text"
                   value={item.icona || ''}
@@ -231,7 +246,7 @@ const MenuItemRow = memo(function MenuItemRow({
               </div>
 
               {/* Pathname */}
-              <div className="col-span-2">
+              <div className="col-span-3 xl:col-span-2">
                 <FormInput
                   type="text"
                   value={item.pathname || ''}
@@ -242,21 +257,12 @@ const MenuItemRow = memo(function MenuItemRow({
               </div>
 
               {/* Codice permesso */}
-              <div className="col-span-2">
-                <FormSelect
-                  value={item.codice_permesso || ''}
-                  onChange={(e) => onUpdate(index, { codice_permesso: e.target.value || null })}
-                  className="!py-1.5 !text-sm"
-                >
-                  <option value="">-- Permesso --</option>
-                  {permessiOptions.map(p => (
-                    <option key={p.codice} value={p.codice}>{p.codice}</option>
-                  ))}
-                </FormSelect>
+              <div className="col-span-7 min-w-0 xl:col-span-2">
+                <PermessoDellaPagina pathname={item.pathname} />
               </div>
 
               {/* Toggles */}
-              <div className="col-span-3 flex items-center gap-3">
+              <div className="col-span-5 flex items-center justify-end gap-3 xl:col-span-3 xl:justify-start">
                 <label className="flex items-center gap-1.5 text-xs text-slate-500">
                   <FormSwitch className="!m-0">
                     <FormSwitch.Input
@@ -359,7 +365,7 @@ const MenuItemRow = memo(function MenuItemRow({
 
                   {/* Sub fields */}
                   <div className="flex-1 grid grid-cols-12 gap-2 items-center">
-                    <div className="col-span-3">
+                    <div className="col-span-6 xl:col-span-3">
                       <FormInput
                         type="text"
                         value={sub.titolo}
@@ -368,7 +374,7 @@ const MenuItemRow = memo(function MenuItemRow({
                         className="!py-1 !text-xs"
                       />
                     </div>
-                    <div className="col-span-2">
+                    <div className="col-span-3 xl:col-span-2">
                       <FormInput
                         type="text"
                         value={sub.icona || ''}
@@ -377,7 +383,7 @@ const MenuItemRow = memo(function MenuItemRow({
                         className="!py-1 !text-xs"
                       />
                     </div>
-                    <div className="col-span-3">
+                    <div className="col-span-3 xl:col-span-3">
                       <FormInput
                         type="text"
                         value={sub.pathname || ''}
@@ -386,19 +392,10 @@ const MenuItemRow = memo(function MenuItemRow({
                         className="!py-1 !text-xs font-mono"
                       />
                     </div>
-                    <div className="col-span-2">
-                      <FormSelect
-                        value={sub.codice_permesso || ''}
-                        onChange={(e) => onUpdateSubItem(index, subIdx, { codice_permesso: e.target.value || null })}
-                        className="!py-1 !text-xs"
-                      >
-                        <option value="">-- Permesso --</option>
-                        {permessiOptions.map(p => (
-                          <option key={p.codice} value={p.codice}>{p.codice}</option>
-                        ))}
-                      </FormSelect>
+                    <div className="col-span-8 min-w-0 xl:col-span-2">
+                      <PermessoDellaPagina pathname={sub.pathname} piccolo />
                     </div>
-                    <div className="col-span-2 flex items-center">
+                    <div className="col-span-4 flex items-center justify-end xl:col-span-2 xl:justify-start">
                       <label className="flex items-center gap-1 text-xs text-slate-500">
                         <FormSwitch className="!m-0">
                           <FormSwitch.Input
@@ -437,8 +434,8 @@ export default function MenuTab() {
   const [selectedRuoloGdo, setSelectedRuoloGdo] = useState<string>('');
   const [items, setItems] = useState<MenuItemDTO[]>([]);
   const [isDirty, setIsDirty] = useState(false);
-  const [showSeedDialog, setShowSeedDialog] = useState(false);
   const [showPasteDialog, setShowPasteDialog] = useState(false);
+  const [showSeedDialog, setShowSeedDialog] = useState(false);
   const [expandedSubMenus, setExpandedSubMenus] = useState<Record<number, boolean>>({});
   const [clipboard, setClipboard] = useState<{ items: MenuItemDTO[]; label: string } | null>(null);
 
@@ -458,12 +455,6 @@ export default function MenuTab() {
     queryFn: () => ServerCall.get<MenuItemDTO[]>(`/menu/${selectedTipo}${ruoloGdoParam}`),
   });
 
-  // Fetch permessi catalog for codice_permesso dropdown
-  const { data: permessiCatalogo } = useQuery<PermessoCatalogo[]>({
-    queryKey: ['permessi-catalogo'],
-    queryFn: () => ServerCall.get<PermessoCatalogo[]>('/permessi'),
-  });
-
   // Sync fetched data to local state
   useEffect(() => {
     if (menuData) {
@@ -478,14 +469,6 @@ export default function MenuTab() {
     setIsDirty(false);
     setExpandedSubMenus({});
   }, [selectedTipo, selectedRuoloGdo]);
-
-  // Permission options (only PAGINA category, memoized)
-  const permessiOptions = useMemo(() => {
-    if (!permessiCatalogo) return [];
-    return permessiCatalogo
-      .filter(p => p.categoria === 'PAGINA')
-      .sort((a, b) => a.codice.localeCompare(b.codice));
-  }, [permessiCatalogo]);
 
   // Save mutation
   const saveMutation = useMutation({
@@ -507,15 +490,15 @@ export default function MenuTab() {
     },
   });
 
-  // Seed mutation
+  // Ripristino del menu predefinito del Superadmin (solo le sue voci; gli altri menu restano)
   const seedMutation = useMutation({
-    mutationFn: () => ServerCall.post('/menu/seed', {}),
+    mutationFn: () => ServerCall.post('/menu/ripristina-predefiniti', {}),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['menu-items'] });
-      showNotification('Menu importato da JSON con successo', { variant: 'success' });
+      showNotification('Menu predefinito del Superadmin ripristinato', { variant: 'success' });
     },
     onError: () => {
-      showNotification("Errore durante l'importazione del menu", { variant: 'error' });
+      showNotification('Errore durante il ripristino del menu: il menu è rimasto invariato', { variant: 'error' });
     },
   });
 
@@ -614,11 +597,11 @@ export default function MenuTab() {
 
   const handleCopy = useCallback(() => {
     const label = selectedRuoloGdo
-      ? `${TIPO_LABELS[selectedTipo]} / ${selectedRuoloGdo.replace('GDO_', '').replace(/_/g, ' ')}`
+      ? `${TIPO_LABELS[selectedTipo]} / ${(ruoliGdo?.find(r => r.id === selectedRuoloGdo)?.ruolo ?? '').replace(/_/g, ' ')}`
       : TIPO_LABELS[selectedTipo];
     setClipboard({ items: JSON.parse(JSON.stringify(items)), label });
     showNotification(`Menu copiato: ${label}`, { variant: 'success' });
-  }, [items, selectedTipo, selectedRuoloGdo, showNotification]);
+  }, [items, selectedTipo, selectedRuoloGdo, ruoliGdo, showNotification]);
 
   const handlePaste = useCallback(() => {
     if (!clipboard) return;
@@ -667,7 +650,7 @@ export default function MenuTab() {
               >
                 <option value="">-- Base (tutti) --</option>
                 {ruoliGdo.map(r => (
-                  <option key={r.id} value={`GDO_${r.ruolo}`}>
+                  <option key={r.id} value={r.id}>
                     {r.ruolo.replace(/_/g, ' ')}
                   </option>
                 ))}
@@ -735,15 +718,17 @@ export default function MenuTab() {
                   </span>
                 </Button>
               )}
-              <Button
-                variant="outline-secondary"
-                size="sm"
-                onClick={() => setShowSeedDialog(true)}
-                disabled={seedMutation.isPending}
-              >
-                <Lucide icon="Download" className="w-4 h-4 mr-1.5" />
-                {seedMutation.isPending ? 'Importando...' : 'Importa da JSON'}
-              </Button>
+              {selectedTipo === TIPO_UTENTI.SUPERADMIN && (
+                <Button
+                  variant="outline-secondary"
+                  size="sm"
+                  onClick={() => setShowSeedDialog(true)}
+                  disabled={seedMutation.isPending}
+                >
+                  <Lucide icon="RotateCcw" className="w-4 h-4 mr-1.5" />
+                  {seedMutation.isPending ? 'Ripristino...' : 'Ripristina menu predefiniti'}
+                </Button>
+              )}
               <Button
                 variant="primary"
                 size="sm"
@@ -777,7 +762,6 @@ export default function MenuTab() {
                   isLast={index === items.length - 1}
                   isExpanded={expandedSubMenus[index] ?? false}
                   selectedTipo={selectedTipo}
-                  permessiOptions={permessiOptions}
                   onUpdate={updateItem}
                   onMove={moveItem}
                   onRemove={removeItem}
@@ -829,7 +813,7 @@ export default function MenuTab() {
         </div>
       )}
 
-      {/* Dialog conferma Seed */}
+      {/* Dialog conferma ripristino del menu predefinito */}
       <Dialog
         open={showSeedDialog}
         onClose={() => setShowSeedDialog(false)}
@@ -837,7 +821,7 @@ export default function MenuTab() {
       >
         <Dialog.Panel>
           <Dialog.Title>
-            <h2 className="mr-auto text-base font-medium">Importa Menu da JSON</h2>
+            <h2 className="mr-auto text-base font-medium">Ripristina menu predefiniti</h2>
           </Dialog.Title>
           <Dialog.Description className="space-y-4">
             <div className="p-4 border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800/30 rounded-lg">
@@ -846,13 +830,13 @@ export default function MenuTab() {
                 Attenzione
               </div>
               <p className="text-sm text-amber-800 dark:text-amber-200">
-                Questa operazione importera la configurazione dal file <code className="bg-amber-100 px-1 rounded">menu.json</code> nel database.
+                Il menu del Superadmin tornerà quello con cui nasce l'installazione.
               </p>
             </div>
             <ul className="list-disc list-inside text-sm text-slate-600 dark:text-slate-400 space-y-1">
-              <li>Tutti i menu esistenti nel database verranno sovrascritti</li>
-              <li>I menu verranno caricati per tutti i tipi utente</li>
-              <li>I codici permesso verranno mappati automaticamente</li>
+              <li>Le voci aggiunte, tolte o spostate nel menu del Superadmin andranno perse</li>
+              <li>I menu degli altri tipi di utente non cambiano</li>
+              <li>Se il ripristino non riesce, il menu resta quello attuale</li>
             </ul>
           </Dialog.Description>
           <Dialog.Footer className="flex justify-end gap-2">
@@ -869,8 +853,8 @@ export default function MenuTab() {
                 seedMutation.mutate();
               }}
             >
-              <Lucide icon="Download" className="w-4 h-4 mr-1.5" />
-              Importa Menu
+              <Lucide icon="RotateCcw" className="w-4 h-4 mr-1.5" />
+              Ripristina
             </Button>
           </Dialog.Footer>
         </Dialog.Panel>

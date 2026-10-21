@@ -27,6 +27,9 @@ const GlobalLoadingIndicator: React.FC = () => {
         }
     }, [isVisible, isWebpliantRoute, showLoader, hideLoader]);
 
+    // Montato nel layout Echo: se si naviga fuori (es. /login) l'overlay non deve restare acceso
+    useEffect(() => hideLoader, [hideLoader]);
+
     if (!isVisible) return null;
 
     return null;

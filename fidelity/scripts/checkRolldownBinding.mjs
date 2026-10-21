@@ -114,9 +114,9 @@ try {
     "",
     "Suggested clean reinstall flow (important for shared Windows/WSL workspaces):",
     "1) Close any running dev/build process.",
-    "2) Remove node_modules and package-lock.json.",
-    "3) Reinstall dependencies from the runtime where you execute Node (Windows shell or WSL shell).",
-    "4) Re-run: npm run check:rolldown-binding"
+    "2) Remove node_modules (keep yarn.lock: it already lists the bindings of every platform).",
+    "3) Run yarn install from the runtime where you execute Node (Windows shell or WSL shell).",
+    "4) Re-run: yarn check:rolldown-binding"
   )
 
   const output = lines.join("\n")

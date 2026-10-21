@@ -219,6 +219,17 @@ class Promo {
 
                     }
                     recHtml.find("#labNomeArea").html(trItem.canale + "/" + trItem.area + ctxDetail);
+                    //I20-1119: il contesto del tracciato, per esempio il tema. Una promo puo' avere piu'
+                    //tracciati con lo stesso canale e area, e solo il contesto li distingue: sopra c'e'
+                    //quello della promo, uguale per tutti.
+                    if (typeof ordinamentoTracciati !== "undefined") {
+                        const campiTracciato = ordinamentoTracciati.campiDelContesto(trItem.context);
+                        if (campiTracciato.length > 0) {
+                            recHtml.find("#labNomeArea").append("<br>").append($("<span></span>")
+                                .text(campiTracciato.join(", "))
+                                .attr("style", "font-size:11px; font-weight:bold; background-color:#b5cedf; padding:5px; border-radius:10px;"));
+                        }
+                    }
                     
                     recHtml.find("#labNomeEsportazione").text(metaTr.NomeEsportazione);
                     recHtml.find("#aRev").attr("href", "Revisore?id_promo=" + 0 + "&id_tracciati=" + trItem.id);
@@ -887,8 +898,10 @@ class Promo {
 
         let me = this;
 
+        // Il report si chiede al controller: sta in path_to_import, che in Docker e' /data/imported_files/
+        // e non sotto wwwroot, quindi come file statico rispondeva 404.
         let rndVersion = Math.floor(Math.random() * 999999);
-        $.getJSON('imported_files/' + id_attivita + '/Report.json?v' + rndVersion, function (data) {
+        $.getJSON("/" + getWebAppRootFolder() + 'Tracciati/reportAttivita/' + id_attivita + '?v' + rndVersion, function (data) {
             console.log(data);
 
             me.repordDbCache = data;
@@ -1103,6 +1116,9 @@ class Promo {
 
             $("#ReportAttivita").modal("show");
             hideLoading();
+        }).fail(function (xhr) {
+            hideLoading();
+            alert(xhr.status === 404 ? "Report non disponibile per questa attività." : "Impossibile leggere il report dell'attività.");
         });
     }
 

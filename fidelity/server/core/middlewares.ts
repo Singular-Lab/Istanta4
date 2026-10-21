@@ -10,10 +10,10 @@ import config from './config';
 import { applyCors } from './cors';
 import { log } from './logger';
 import { errorHandler } from './middleware/errorHandler';
+import { jsonGlobale } from './middleware/jsonGrande';
 import { apiRateLimiter } from './middleware/rateLimiter';
 import { csrfProtection } from './middleware/csrfProtection';
 import { applySecurityMiddlewares } from './middleware/securityMiddleware';
-import { sessionMiddleware } from './session';
 
 // Estendi la sessione per TypeScript
 declare module 'express-session' {
@@ -28,7 +28,6 @@ declare module 'express-session' {
     lastIP?: string;
     lastUserAgent?: string;
     lastActivity?: Date;
-    permessi_cache?: string[];
   }
 }
 
@@ -55,18 +54,19 @@ export function applyMiddlewares(app: Express) {
   // Middleware di compressione
   app.use(compressionMiddleware);
 
-  // Middleware per parsing delle richieste
+  // Middleware per parsing delle richieste.
+  // La sessione e' montata in server.ts prima di questi middleware.
   app.use(cookieParser());
-  app.use(sessionMiddleware);
 
   // Timeout dinamico delle sessioni
   // app.use(dynamicSessionTimeout);
 
   // Generatore token CSRF per tutte le richieste
 
-  app.use(express.json({ limit: '200mb' })); // Ridotto per sicurezza
-  app.use(express.raw({ limit: '200mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+  // Il body viene letto prima dell'autenticazione: limiti bassi. Le route con media
+  // in base64 hanno il proprio parser, montato dopo i controlli (vedi jsonGrande).
+  app.use(jsonGlobale);
+  app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
   app.use((req: Request, res: Response, next: NextFunction) => {
     const mutatingMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);

@@ -313,6 +313,8 @@ export enum STATO_CANALI_INTERAZIONE {
 export enum STATO_ORDINI_STAMPA {
   ERRORE = "ERRORE",
   IN_REVISIONE = "IN_REVISIONE",
+  // Invio FTP in corso: blocca un secondo avvio dello stesso ordine
+  IN_INVIO = "IN_INVIO",
   REVISIONATO = "REVISIONATO",
   FINITO = "FINITO",
 }
@@ -471,6 +473,8 @@ export enum GDOWhatsappQueueJobStatus {
   PROCESSING = 'PROCESSING',
   SUCCESS = 'SUCCESS',
   FAILED = 'FAILED',
+  // Annullato dall'operatore: "riprova" non lo ripropone
+  CANCELLED = 'CANCELLED',
 }
 
 export enum CATEGORIA_PERMESSO {

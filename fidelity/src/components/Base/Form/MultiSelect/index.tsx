@@ -89,7 +89,7 @@ export default function MultiSelect({
         value={selected}
         multiple={multiple}
         // Questa funzione si attiva ogni volta che l’utente seleziona/deseleziona
-        onChange={(newValue: Option | Option[] | { id: string | number; name: string }[] | null[] | null) => {
+        onChange={(newValue) => {
           const normalized = (newValue ?? (multiple ? [] : null)) as Option[] | Option | null;
           setSelected(normalized);
           onChangefunc?.(normalized);

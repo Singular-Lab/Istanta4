@@ -38,12 +38,16 @@ if [ ! -f release.env ]; then
     exit 1
 fi
 
-# Legge una variabile da release.env senza eseguire il file: contiene password, e
-# un `source` eseguirebbe anche quello che ci fosse dentro per errore.
+# Legge una variabile da un file env senza eseguirlo: contiene password, e un
+# `source` eseguirebbe anche quello che ci fosse dentro per errore.
+#   leggi NOME           da release.env
+#   leggi NOME FILE      da un altro file (correggo4.env); se il file non c'e', vuoto
 # Unica funzione che gira in una subshell, e infatti si limita a stampare: ogni
 # verifica avviene nella shell principale, dove i contatori esistono davvero.
 leggi() {
-    sed -n "s/^$1=//p" release.env | tail -n 1 | tr -d '\r' \
+    local file="${2:-release.env}"
+    [ -f "$file" ] || return 0
+    sed -n "s/^$1=//p" "$file" | tail -n 1 | tr -d '\r' \
         | sed -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'\$/\1/"
 }
 
@@ -220,16 +224,169 @@ verifica_dati ISTANTA_DATA_DIR "$UID_APP"
 verifica_sottodirectory ISTANTA_DATA_DIR  "dataprotection-keys" "$UID_APP"
 # Campioni di addestramento scritti da BackgroundCodeService.
 verifica_sottodirectory ISTANTA_DATA_DIR  "ai_models"           "$UID_APP"
+# I percorsi di istanta.env sotto /data (jpg_path_foto, path_to_export,
+# path_to_import, sync_options__extractPath). Istanta ci scrive file senza mai
+# creare la directory di base: se manca, caricamenti, esportazioni e sync foto
+# falliscono con DirectoryNotFoundException.
+verifica_sottodirectory ISTANTA_DATA_DIR  "jpg"                 "$UID_APP"
+verifica_sottodirectory ISTANTA_DATA_DIR  "exported_files"      "$UID_APP"
+verifica_sottodirectory ISTANTA_DATA_DIR  "imported_files"      "$UID_APP"
+verifica_sottodirectory ISTANTA_DATA_DIR  "estrazioni"          "$UID_APP"
 verifica_dati CORREGGO_DATA_DIR "$UID_APP"
 verifica_sottodirectory CORREGGO_DATA_DIR "volantini"           "$UID_APP"
 # Ci scrive il Runner installando AgenziaLib.dll, e Istanta la legge in sola
 # lettura: può restare di root, basta che esista.
 verifica_dati ISTANTA_EXTERNAL_LIB_DIR
 
+# Il cliente: il nome e il suo file appsettings, che il compose monta in /app.
+# Program.cs pretende il file quando ISTANTA_CLIENTE e' impostata, e un bind mount
+# su un file che non esiste diventa una directory vuota: Istanta non partirebbe.
+verifica_cliente() {
+    local cliente file immagine cartelle
+
+    cliente=$(leggi ISTANTA_CLIENTE)
+    if [ -z "$cliente" ]; then
+        rosso "  manca     ISTANTA_CLIENTE non è valorizzata in release.env"
+        rosso "            Il nome del cliente in minuscolo, es. famila: sceglie"
+        rosso "            appsettings.<cliente>.json e lo script di agenzia."
+        errori=$((errori + 1))
+    else
+        # Stessa regola di ScriptAgenzia.NomeAccettabile: lettere, cifre, - e _.
+        case "$cliente" in
+            *[!A-Za-z0-9_-]*)
+                rosso "  non valido ISTANTA_CLIENTE = $cliente (solo lettere, cifre, - e _)"
+                errori=$((errori + 1))
+                cliente="" ;;
+            *)  verde "  ok        ISTANTA_CLIENTE = $cliente" ;;
+        esac
+    fi
+
+    file=$(leggi ISTANTA_CLIENT_CONFIG)
+    if [ -z "$file" ]; then
+        rosso "  manca     ISTANTA_CLIENT_CONFIG non è valorizzata in release.env"
+        errori=$((errori + 1))
+    else
+        case "$file" in
+            /*) ;;
+            *)  rosso "  relativo  ISTANTA_CLIENT_CONFIG = $file (serve un percorso assoluto)"
+                errori=$((errori + 1))
+                file="" ;;
+        esac
+    fi
+
+    if [ -n "$file" ]; then
+        if [ -d "$file" ]; then
+            rosso "  directory $file è una directory, non un file."
+            rosso "            Succede quando si distribuisce prima di averlo creato: Docker"
+            rosso "            crea una directory al posto del file mancante. Rimuovila"
+            rosso "            (sudo rmdir \"$file\") e metti il file del cliente."
+            errori=$((errori + 1))
+        elif [ ! -f "$file" ]; then
+            rosso "  assente   $file"
+            rosso "            Crealo con le impostazioni proprie del cliente; anche solo {}"
+            rosso "            va bene, perché la configurazione completa è in istanta.env."
+            errori=$((errori + 1))
+        else
+            # Un JSON rotto ferma l'avvio di Istanta: meglio saperlo qui.
+            if command -v python3 >/dev/null 2>&1; then
+                if python3 -c 'import json, sys; json.load(open(sys.argv[1], encoding="utf-8-sig"))' "$file" 2>/dev/null; then
+                    verde "  ok        $file (JSON valido)"
+                else
+                    rosso "  rotto     $file non è JSON valido: Istanta non partirebbe"
+                    errori=$((errori + 1))
+                fi
+            elif command -v jq >/dev/null 2>&1; then
+                if jq empty "$file" >/dev/null 2>&1; then
+                    verde "  ok        $file (JSON valido)"
+                else
+                    rosso "  rotto     $file non è JSON valido: Istanta non partirebbe"
+                    errori=$((errori + 1))
+                fi
+            else
+                giallo "  da fare   $file: né python3 né jq per verificare che sia JSON valido"
+                avvisi=$((avvisi + 1))
+            fi
+            # Puo' contenere segreti: leggibile da Istanta (gruppo 1654), non da altri.
+            if chown "root:$UID_APP" "$file" && chmod 640 "$file"; then
+                verde "  ok        $file (root:$UID_APP, 640)"
+            else
+                rosso "  errore    non riesco ad assegnare $file a root:$UID_APP (serve sudo)"
+                errori=$((errori + 1))
+            fi
+        fi
+    fi
+
+    # Lo script di agenzia sta nell'immagine, in /app/ScriptAgenzia/<cliente>.
+    # Si controlla solo se l'immagine c'e' gia': alla prima installazione la
+    # scarica il Runner, e il controllo si rifa' alla release successiva.
+    [ -n "$cliente" ] || return
+    immagine=$(leggi ISTANTA_IMAGE)
+    if [ -z "$immagine" ] || ! docker image inspect "$immagine" >/dev/null 2>&1; then
+        giallo "  da fare   script di agenzia per $cliente: immagine di Istanta non ancora sul"
+        giallo "            target, si potra' verificare dopo la prima distribuzione."
+        avvisi=$((avvisi + 1))
+        return
+    fi
+    cartelle=$(docker run --rm --entrypoint ls "$immagine" /app/ScriptAgenzia 2>/dev/null)
+    # La cartella si cerca senza distinguere maiuscole e minuscole, come fa
+    # ScriptAgenzia.TrovaCartella: le storiche si chiamano "Maiora", "craiOvest".
+    if printf '%s\n' "$cartelle" | grep -qixF -- "$cliente"; then
+        verde "  ok        script di agenzia per $cliente presente nell'immagine"
+    else
+        giallo "  manca     nessuna cartella ScriptAgenzia per $cliente nell'immagine:"
+        giallo "            /Agenzia/script.js risponderà 500. Presenti: $(printf '%s' "$cartelle" | tr '\n' ' ')"
+        avvisi=$((avvisi + 1))
+    fi
+}
+
+echo
+echo "Cliente"
+verifica_cliente
+
 echo
 echo "Facoltativo"
 verifica_facoltativa PROXY_CERT_DIR \
   "Serve solo al proxy HTTPS: dentro ci vanno fullchain.pem e privkey.pem. Finché è vuota, usa le porte in chiaro."
+
+# Pulizia notturna delle estrazioni di sync foto (PuliziaEstrazioniService).
+# Facoltative: senza, Istanta usa i default e lo si dice soltanto. Un valore
+# presente ma non numerico invece è un errore: .NET non riuscirebbe a leggerlo
+# e Istanta non partirebbe. Un valore fuori intervallo sarebbe ignorato in
+# silenzio a favore del default, e anche questo va detto prima.
+#   verifica_intero_facoltativo NOME MIN MAX "default"
+verifica_intero_facoltativo() {
+    local nome="$1" min="$2" max="$3" predefinito="$4" valore
+    valore=$(leggi "$nome" istanta.env)
+
+    if [ -z "$valore" ]; then
+        giallo "  assente   $nome: si usa il default, $predefinito"
+        avvisi=$((avvisi + 1))
+        return
+    fi
+    case "$valore" in
+        *[!0-9]*) ;;
+        *)
+            if [ "$valore" -ge "$min" ] && [ "$valore" -le "$max" ]; then
+                verde "  ok        $nome = $valore"
+                return
+            fi
+            ;;
+    esac
+    rosso "  non valido $nome = $valore (serve un intero fra $min e $max)"
+    errori=$((errori + 1))
+}
+
+echo
+echo "istanta.env (pulizia delle estrazioni di sync foto)"
+if [ ! -f istanta.env ]; then
+    rosso "  assente   istanta.env: copialo da istanta.env.example e compilalo"
+    errori=$((errori + 1))
+else
+    verifica_intero_facoltativo sync_options__mesiConservazioneEstrazioni 1 120 \
+        "i pacchetti vengono eliminati dopo 1 mese"
+    verifica_intero_facoltativo sync_options__oraPuliziaEstrazioni 0 23 \
+        "la pulizia gira alle 3 di notte"
+fi
 
 echo
 echo "Valori che il compose pretende"
@@ -246,6 +403,42 @@ pwd_admin=$(leggi ADMIN_PASSWORD)
 if [ -n "$pwd_admin" ] && [ "${#pwd_admin}" -gt 50 ]; then
     rosso "  lunga     ADMIN_PASSWORD supera i 50 caratteri, limite della colonna utenti.password di Istanta"
     errori=$((errori + 1))
+fi
+
+# Correggo4 parte anche senza queste chiavi, ma senza non si entra da Fidelity,
+# l'Edit avanzato non trova foto e loghi e le policy dei Category restano spente:
+# un'installazione che "funziona" solo in apparenza.
+echo
+echo "correggo4.env (collegamento con Fidelity, Olimpo e Istanta)"
+if [ ! -f correggo4.env ]; then
+    rosso "  assente   correggo4.env: copialo da correggo4.env.example e compilalo"
+    errori=$((errori + 1))
+else
+    for v in Fico__OlimpoUrl Fico__IstantaUrl; do
+        u=$(leggi "$v" correggo4.env)
+        case "$u" in
+            http://*|https://*) verde "  ok        $v = $u" ;;
+            "") rosso "  manca     $v in correggo4.env"; errori=$((errori + 1)) ;;
+            *)  rosso "  non URL   $v = $u (serve http:// o https://)"; errori=$((errori + 1)) ;;
+        esac
+    done
+    if [ -n "$(leggi Fico__Secret correggo4.env)" ]; then
+        verde "  ok        Fico__Secret"
+    else
+        rosso "  manca     Fico__Secret in correggo4.env — lo stesso FICO_SECRET di Fidelity e Olimpo"
+        errori=$((errori + 1))
+    fi
+    if [ -n "$(leggi Fico__SecretKey correggo4.env)" ]; then
+        giallo "  superata  Fico__SecretKey non è più letta: il segreto è solo Fico__Secret"
+        avvisi=$((avvisi + 1))
+    fi
+    gdo=$(leggi Fico__NomeGdo correggo4.env)
+    if [ -n "$gdo" ]; then
+        verde "  ok        Fico__NomeGdo = $gdo"
+    else
+        giallo "  vuota     Fico__NomeGdo: nessuna policy dei Category (giusto per i clienti diversi da CoopFi)"
+        avvisi=$((avvisi + 1))
+    fi
 fi
 
 echo

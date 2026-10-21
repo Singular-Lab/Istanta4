@@ -62,6 +62,14 @@ var NoRenderElementi = (function () {
         return { tipo: TIPO.campo, chiave: testo.split("$")[0] };
     }
 
+    /// I20-1070: il tipo_N della label di una foto extra (foto_extra$<sigla>$tipo_<n>): e' il
+    /// TipoFoto di IstantaLib, 3 per i loghi. 0 se la label non lo porta.
+    function tipoFotoDellaLabel(label) {
+        var parti = pulisci(label).split("$");
+        var n = parseInt(pulisci(parti[2]).replace("tipo_", ""), 10);
+        return isNaN(n) ? 0 : n;
+    }
+
     /// Nome mostrato nel modal: per i loghi nome e sigla, per le immagini il nome della foto.
     function descriviElemento(elemento) {
         if (elemento == null) {
@@ -344,6 +352,45 @@ var NoRenderElementi = (function () {
         return stato;
     }
 
+    /// I20-1105: la fotografia del noRender di tutti gli elementi della schermata, per tipo e
+    /// chiave. Si prende all'apertura e dopo ogni salvataggio riuscito: confrontandola con la
+    /// lista di adesso si sa se ci sono modifiche non salvate.
+    function statoDiRendering(lista) {
+        var stato = {};
+        var elementi = lista || [];
+
+        for (var i = 0; i < elementi.length; i++) {
+            var elemento = elementi[i];
+            if (elemento == null || elemento.chiave == null) {
+                continue;
+            }
+            stato[elemento.tipo + "|" + elemento.chiave] = elemento.noRender === true;
+        }
+
+        return stato;
+    }
+
+    /// I20-1105: quanti elementi hanno un noRender diverso dalla fotografia salvata. Un elemento
+    /// cambiato e poi rimesso com'era non conta: non c'e' niente da perdere.
+    function modificheNonSalvate(lista, statoSalvato) {
+        var adesso = statoDiRendering(lista);
+        var salvato = statoSalvato || {};
+        var diverse = 0;
+
+        for (var chiave in adesso) {
+            if (!Object.prototype.hasOwnProperty.call(adesso, chiave)) {
+                continue;
+            }
+            //Un elemento che la fotografia non conosce conta come visibile: e' cosi' che si salva.
+            var prima = Object.prototype.hasOwnProperty.call(salvato, chiave) ? salvato[chiave] : false;
+            if (adesso[chiave] !== prima) {
+                diverse++;
+            }
+        }
+
+        return diverse;
+    }
+
     /// Quante foto restano da mostrare nel box.
     function fotoAncoraVisibili(lista) {
         var stato = statoDelleFoto(lista);
@@ -384,10 +431,95 @@ var NoRenderElementi = (function () {
         return fotoCambiate(statoPrima, statoDelleFoto(listaDopo)) && fotoAncoraVisibili(listaDopo) > 0;
     }
 
+    /// I20-1073: l'elemento noRender di un'assenza segnalata dalla preanalisi (tipo "mancante": un
+    /// campo, un'etichetta o una foto del gruppo che nel box non c'e'), da mettere in noRender o da
+    /// togliere. Campi ed etichette hanno gia' tipo e chiave; la foto arriva col nome del file, e in
+    /// noRender si salva col codice della referenza: lo si trova fra i membri del gruppo. null se non
+    /// e' un'assenza o se la foto non e' di nessun membro.
+    function elementoDaAssenza(assenza, membriGruppoFoto) {
+        if (assenza == null || assenza.tipo !== "mancante" || pulisci(assenza.chiave) === "") {
+            return null;
+        }
+        if (assenza.tipoElemento === TIPO_FOTO) {
+            var membro = (membriGruppoFoto || []).find(m => m != null && pulisci(m.nomeFoto) === pulisci(assenza.chiave));
+            if (membro == null || pulisci(membro.codRef) === "") {
+                return null;
+            }
+            return { tipo: TIPO_FOTO, chiave: pulisci(membro.codRef), nome: pulisci(membro.nomeFoto) };
+        }
+        if (assenza.tipoElemento !== TIPO.campo && assenza.tipoElemento !== TIPO.etichetta) {
+            return null;
+        }
+        return { tipo: assenza.tipoElemento, chiave: pulisci(assenza.chiave), nome: pulisci(assenza.label) };
+    }
+
+    /// I20-1073: la lista noRender da salvare con elemento in piu', o in meno. Il server sostituisce
+    /// la lista intera, quindi si parte sempre da quella che c'e' e si cambia un elemento solo.
+    function conElemento(elementiMarcati, elemento) {
+        var lista = senzaElemento(elementiMarcati, elemento);
+        if (elemento != null) {
+            lista.push({ tipo: elemento.tipo, chiave: pulisci(elemento.chiave), nome: pulisci(elemento.nome) });
+        }
+        return lista;
+    }
+
+    function senzaElemento(elementiMarcati, elemento) {
+        return (elementiMarcati || [])
+            .filter(e => e != null && !stessoElemento(e, elemento))
+            .map(e => ({ tipo: e.tipo, chiave: pulisci(e.chiave), nome: pulisci(e.nome) }));
+    }
+
+    /// Contenitori del noRender: il contenitore che l'agenzia dichiara per un campo
+    /// (contenitoriNoRender del SourceCustomPlugin; per Coop txt_sconto sta nel gruppo box_sconto),
+    /// o "" se non ne ha.
+    function contenitoreDi(chiave, contenitori) {
+        if (contenitori == null || typeof contenitori !== "object") {
+            return "";
+        }
+        var valore = contenitori[pulisci(chiave)];
+        return typeof valore === "string" ? valore : "";
+    }
+
+    /// La lista noRender con, per ogni campo marcato, anche il suo contenitore: nascondere il testo
+    /// di uno sconto lasciando il gruppo che lo disegna darebbe uno sconto senza numero. Vale anche
+    /// per i meta salvati prima, con il solo campo. Senza contenitori la lista resta quella.
+    function conContenitori(elementiMarcati, contenitori) {
+        var lista = (elementiMarcati || []).filter(e => e != null);
+        var aggiunti = [];
+        lista.forEach(function (elemento) {
+            if (elemento.tipo !== TIPO.campo) {
+                return;
+            }
+            var contenitore = contenitoreDi(elemento.chiave, contenitori);
+            if (contenitore === "" || inNoRender(lista, TIPO.campo, contenitore) || inNoRender(aggiunti, TIPO.campo, contenitore)) {
+                return;
+            }
+            aggiunti.push({ tipo: TIPO.campo, chiave: contenitore, nome: contenitore });
+        });
+        return aggiunti.length > 0 ? lista.concat(aggiunti) : lista;
+    }
+
+    /// Il contenitore di un campo assente quando manca anche lui: l'operatore ha tolto il gruppo
+    /// intero, e l'assenza da segnalare (e da mettere in noRender) e' quella del contenitore.
+    /// elemento e' il campo classificato (tipo e chiave); presenteNelBox(etichetta) dice se il box ha
+    /// un elemento con quella label. "" se il campo non ha contenitore o se il contenitore c'e':
+    /// allora manca davvero solo il campo.
+    function contenitoreAssente(elemento, contenitori, presenteNelBox) {
+        if (elemento == null || elemento.tipo !== TIPO.campo) {
+            return "";
+        }
+        var contenitore = contenitoreDi(elemento.chiave, contenitori);
+        if (contenitore === "" || (typeof presenteNelBox === "function" && presenteNelBox(contenitore))) {
+            return "";
+        }
+        return contenitore;
+    }
+
     return {
         TIPO: TIPO,
         TIPO_FOTO: TIPO_FOTO,
         classificaLabel: classificaLabel,
+        tipoFotoDellaLabel: tipoFotoDellaLabel,
         descriviElemento: descriviElemento,
         componiLista: componiLista,
         elementiDaSalvare: elementiDaSalvare,
@@ -402,9 +534,17 @@ var NoRenderElementi = (function () {
         daSegnalareComeRiattivato: daSegnalareComeRiattivato,
         segnalazioneElementoRiattivato: segnalazioneElementoRiattivato,
         statoDelleFoto: statoDelleFoto,
+        statoDiRendering: statoDiRendering,
+        modificheNonSalvate: modificheNonSalvate,
         fotoAncoraVisibili: fotoAncoraVisibili,
         fotoCambiate: fotoCambiate,
-        proporreFixFoto: proporreFixFoto
+        proporreFixFoto: proporreFixFoto,
+        elementoDaAssenza: elementoDaAssenza,
+        conElemento: conElemento,
+        senzaElemento: senzaElemento,
+        contenitoreDi: contenitoreDi,
+        conContenitori: conContenitori,
+        contenitoreAssente: contenitoreAssente
     };
 })();
 

@@ -23,6 +23,13 @@
       "files": [
         "jquery.validate.min.js"
       ]
+    },
+    {
+      "library": "jszip@3.10.1",
+      "destination": "wwwroot/lib/jszip/dist/",
+      "files": [
+        "jszip.min.js"
+      ]
     }
   ]
 }

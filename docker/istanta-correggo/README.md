@@ -44,8 +44,14 @@ scp -r docker/istanta-correggo UTENTE@TARGET:/tmp/
 # sul target
 sudo mkdir -p /opt/company-ai/projects/<progetto>
 cd /opt/company-ai/projects/<progetto>
-sudo /tmp/istanta-correggo/install-bundle.sh
+sudo bash /tmp/istanta-correggo/install-bundle.sh
 ```
+
+Lo script si lancia con `bash` davanti perché arriva in `/tmp` senza permesso
+di esecuzione: `scp` da Windows non trasferisce il bit `+x`, e su alcune
+distribuzioni `/tmp` è montata `noexec`. Invocato direttamente, `sudo` risponde
+`Permission denied`. Gli script copiati nella directory del progetto ricevono
+invece il `+x` da `install-bundle.sh`.
 
 Su una directory vuota copia tutto e crea i tre file d'ambiente dai rispettivi
 esempi, che vanno poi compilati. Su una macchina già installata aggiorna i file
@@ -73,9 +79,8 @@ riavviati: i mount e le variabili si fissano alla creazione.
 
 ## 1. Gli schemi
 
-Nessuna delle due applicazioni crea il proprio schema all'avvio — non ci sono
-migrazioni EF applicate a runtime. Gli schemi sono **già in questa cartella** e
-vengono applicati al primo avvio di PostgreSQL:
+Nessuna delle due applicazioni crea il proprio schema all'avvio. Gli schemi sono
+**già in questa cartella** e vengono applicati al primo avvio di PostgreSQL:
 
 ```
 schemas/istanta/01-istanta.sql   -> database di Istanta,   applicato come utente istanta
@@ -83,8 +88,18 @@ schemas/correggo4/01-schema.sql  -> database di Correggo4, applicato come utente
 ```
 
 Risultato verificato: **25 tabelle** per Istanta, 21 per Correggo4, e le 25
-corrispondono esattamente a quelle che i contesti EF mappano — nessuna in più,
-nessuna in meno.
+corrispondono esattamente a quelle della Baseline dei contesti EF — nessuna in
+più, nessuna in meno.
+
+Da I20-1106 Istanta applica da sola, **all'avvio**, le migration EF pendenti dei
+suoi due contesti (`Migrazioni.ApplicaAllAvvio` in `Program.cs`; si spegne con
+`Migrazioni__ApplicaAllAvvio=false` in `istanta.env`). Il primo avvio su un
+database appena creato dal bundle applica quindi `EanA300ContractA5000` e
+`PromoBackup`; su un database che esiste già applica solo quelle che mancano
+nelle sue tabelle `__EFMigrationsHistory_ctx1` e `__EFMigrationsHistory_ctx2`.
+Per questo `01-istanta.sql` resta lo schema della Baseline e **non va esteso a
+mano** con le tabelle o le colonne che arrivano con una migration: all'avvio la
+migration le troverebbe già create e Istanta si fermerebbe.
 
 ### `01-istanta.sql` è generato, non copiato
 
@@ -111,10 +126,11 @@ Esclusa anche `promo_lavorazioni_records_register`: il codice non la usa più �
 compare solo come entità e come collezione di navigazione, in nessuna query — e
 nei file sorgente esisteva comunque solo col vecchio nome PascalCase.
 
-**Va rigenerato** se cambiano i `ToTable` dei contesti o i due file sorgente.
-L'alternativa strutturale, che elimina il problema alla radice, è generare il
-DDL direttamente dai contesti con `dotnet ef dbcontext script`: uno schema così
-non può divergere dal codice.
+**Va rigenerato** solo se cambia la Baseline dei contesti o i due file sorgente:
+le modifiche successive viaggiano con la loro migration, che Istanta applica
+all'avvio. L'alternativa strutturale, che elimina il problema alla radice, è
+generare il DDL direttamente dai contesti con `dotnet ef dbcontext script`: uno
+schema così non può divergere dal codice.
 
 ## 2. Catalogo ControlPlane
 
@@ -181,11 +197,27 @@ nemmeno dopo aver sistemato il percorso, perché gli script di
 
 ### La configurazione di Istanta vive tutta in `istanta.env`
 
-Non c'è nessun `appsettings.json` da montare, e non è una semplificazione: in
-`.gitignore` `appsettings*.json` è escluso — restano solo i `.template.json` —
+In `.gitignore` `appsettings*.json` è escluso — restano solo i `.template.json` —
 quindi la CI costruisce da un clone pulito e **l'immagine non contiene alcun
 appsettings.json**. Il container parte senza valori di default, e ogni chiave
 che serve va dichiarata come variabile d'ambiente.
+
+C'è un'unica eccezione, il file del cliente. `ISTANTA_CLIENTE` in `release.env`
+dice quale cliente è montato su questa installazione: `Program.cs` carica allora
+`appsettings.<cliente>.json` e si ferma se manca, e `/Agenzia/script.js` serve lo
+script di `ScriptAgenzia/<cliente>`. Il file lo prepari tu, sull'host, e il
+compose lo monta in `/app` dal percorso `ISTANTA_CLIENT_CONFIG`. Può contenere
+solo le chiavi proprie del cliente, o anche soltanto `{}`: le variabili
+d'ambiente, `istanta.env` compreso, vincono comunque sul file.
+
+```bash
+echo '{}' | sudo tee /opt/company-ai/projects/istanta4/appsettings.cliente.json
+```
+
+Va creato **prima** di distribuire: un bind mount su un file che non esiste
+diventa una directory vuota, e Istanta non parte. `prepare-target.sh` controlla
+nome, file, JSON e permessi, e — quando l'immagine è già sul target — che in
+`ScriptAgenzia` ci sia la cartella del cliente.
 
 `istanta.env.example` contiene l'intera configurazione del modello
 `Istanta/appsettings.famila.template.json` già tradotta, con la convenzione .NET:
@@ -269,6 +301,13 @@ Quei tre percorsi sono quindi bind mount sotto `ISTANTA_DATA_DIR` e
 primo avvio. Restano volumi nominati soltanto `istanta_external_source` e
 `istanta_logs` — che l'immagine semina con contenuto già di proprietà di `app` —
 più `postgres_data` e `redis_data`, di immagini che si arrangiano da sole.
+
+`prepare-target.sh` crea sotto `ISTANTA_DATA_DIR` anche `jpg`, `exported_files`,
+`imported_files` ed `estrazioni`, i percorsi che `istanta.env` mette su `/data`.
+Non sono montati a parte, ma Istanta vi scrive file senza creare la directory di
+base, e se manca l'operazione fallisce con `DirectoryNotFoundException`. Se in
+`istanta.env` si cambia uno di quei percorsi, la directory nuova va creata a mano
+con proprietario 1654.
 
 `ai_models` in particolare esiste perché `BackgroundCodeService` vi scrive i
 campioni di addestramento usando `AppContext.BaseDirectory`, percorso nel codice
@@ -386,7 +425,7 @@ selettivo del Runner non lo tocca.
 
 ```bash
 cd /opt/company-ai/projects/istanta-correggo
-docker compose --env-file release.env -f compose.production.yaml up -d proxy
+sudo docker --config /opt/company-ai/runner/docker-config compose --env-file release.env -f compose.production.yaml up -d prox
 ```
 
 Le verifiche che contano:
@@ -440,3 +479,46 @@ un'applicazione dall'interno si usa bash, che c'è.
 ```bash
 docker exec istanta-correggo-istanta-1 bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080 && echo porta aperta'
 ```
+
+## 6. Trasportare i dati da un'altra macchina
+
+Serve per portare su questo target il contenuto di un'altra installazione, per
+esempio per riprodurre in locale un caso reale della produzione.
+
+### Salvare
+
+```bash
+cd /opt/company-ai/projects/istanta-correggo
+sudo ./dump-databases.sh                     # in ./backup/<data>-<ora>/
+sudo ./dump-databases.sh /mnt/nas/istanta    # altrove
+```
+
+Esporta `istanta` e `correggo4` in formato custom (`istanta.dump`,
+`correggo4.dump`), con `SHA256SUMS` e `MANIFEST`. Non tocca niente: le
+applicazioni possono restare in funzione. **Non** salva i file: volantini di
+Correggo4, `external_source` e dati di Istanta stanno nei volumi e nelle cartelle
+dell'host.
+
+### Ripristinare
+
+Con `docker/restore-databases.sh`, lo stesso che ripristina Fidelity e Olimpo:
+
+```bash
+sudo ./restore-databases.sh /percorso/dei/dump \
+    --istanta-correggo /opt/company-ai/projects/istanta-correggo \
+    --fidelity-olimpo  /opt/company-ai/projects/istanta4      # se ci sono anche quei dump
+```
+
+Verifica impronte e leggibilità dei dump, chiede di scrivere `RIPRISTINA`, salva
+prima i database che sta per sostituire (`prima-del-ripristino-<data>-<ora>`,
+accanto ai dump), ferma `istanta` e `correggo4`, ricrea ogni database con il suo
+proprietario, ripristina `correggo4` connesso come `correggo4` (non da
+superutente, altrimenti le tabelle non sarebbero sue), svuota Redis e riavvia.
+`--help` elenca le opzioni; `--pg-istanta-correggo <container>` sostituisce la
+cartella del bundle quando database e ruoli sono quelli predefiniti.
+
+Dopo il ripristino gli `external_source` di Istanta restano quelli del target: si
+riallineano da Settings, sono file portabili.
+
+Il comportamento dello script è coperto da `docker/tests/test-restore-databases.sh`,
+che lavora solo su container usa e getta.

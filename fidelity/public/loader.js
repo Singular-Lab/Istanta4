@@ -15,17 +15,14 @@
    */
   const NO_LOADER_ROUTES = [
     "/login",
-    "/register",
     "/recupero-password",
     "/reset-password",
     "/auth",
-    "/landing-page",
     "/webpliant",
     "/display",
     "/embed",
     "/preview",
     "/public",
-    "/whatsapp/confirm-opt-in",
   ];
 
   const path = window.location.pathname;

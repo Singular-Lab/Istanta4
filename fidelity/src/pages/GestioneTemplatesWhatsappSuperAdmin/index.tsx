@@ -1,6 +1,7 @@
 import React, { Fragment, useEffect, useMemo, useState } from "react";
 import { useLoaderData, useNavigate, useRevalidator } from "react-router-dom";
 import { STATO_GDO_WHATSAPP_TEMPLATE } from "../../../lib/enums";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import { PermissionGate } from "@/components/PermissionGate";
 import withSessionCheck from "@/components/SessionChecker";
 import { PERMISSIONS } from "@/constants/permissions";
@@ -11,6 +12,7 @@ import Button from "../../components/Base/Button";
 import PageHeader from "../../components/Base/PageHeader";
 import Table from "../../components/Base/Table";
 import EmptyState from "../../components/EmptyState";
+import { useNotification } from "../../context/NotificationContext";
 
 // Utils
 function toTitle(str: string): string {
@@ -116,6 +118,7 @@ const writeFiltersToURL = (f: Filters) => {
 };
 
 const GestioneTemplatesWhatsappSuperAdmin: React.FC = () => {
+    const { showNotification } = useNotification();
     const [filters, setFilters] = useState<Filters>(() => readFiltersFromURL());
     const debouncedFilters = useDebounced(filters, 300);
 
@@ -128,6 +131,23 @@ const GestioneTemplatesWhatsappSuperAdmin: React.FC = () => {
     const { revalidate } = useRevalidator();
 
     const [syncing, setSyncing] = useState(false);
+    const [templateDaEliminare, setTemplateDaEliminare] = useState<GDOWhatsappTemplateAttributes | null>(null);
+    const [eliminazioneInCorso, setEliminazioneInCorso] = useState(false);
+
+    const eliminaTemplate = async () => {
+        if (!templateDaEliminare) return;
+        setEliminazioneInCorso(true);
+        try {
+            await ServerCall.delete(`/whatsapp/template/${templateDaEliminare.id_gdowhatsapptemplate}`);
+            showNotification("Template eliminato", { variant: "success" });
+            setTemplateDaEliminare(null);
+            revalidate();
+        } catch (error: unknown) {
+            showNotification(error instanceof Error ? error.message : "Errore durante l'eliminazione del template", { variant: "error" });
+        } finally {
+            setEliminazioneInCorso(false);
+        }
+    };
 
     const templatesCount = templatesWhatsapp?.length ?? 0;
 
@@ -169,7 +189,7 @@ const GestioneTemplatesWhatsappSuperAdmin: React.FC = () => {
 
     const syncFromMeta = async () => {
         if (!dettagliGDO?.id && !dettagliGDO?.id_gdo) {
-            alert("ID GDO non disponibile: impossibile sincronizzare.");
+            showNotification("ID GDO non disponibile: impossibile sincronizzare.", { variant: "warning" });
             return;
         }
 
@@ -180,7 +200,7 @@ const GestioneTemplatesWhatsappSuperAdmin: React.FC = () => {
             revalidate();
         } catch (err: any) {
             console.error("Sync da Meta fallito", err);
-            alert(`Errore durante la sincronizzazione: ${err?.message || err}`);
+            showNotification(`Errore durante la sincronizzazione: ${err?.message || err}`, { variant: "error" });
         } finally {
             setSyncing(false);
         }
@@ -190,8 +210,27 @@ const GestioneTemplatesWhatsappSuperAdmin: React.FC = () => {
         (t) => t.stato_meta_gdowhatsapptemplate === STATO_GDO_WHATSAPP_TEMPLATE.CREATED_BUT_NOT_SYNCED
     );
 
+    // Un template già inviato a Meta viene eliminato anche lì, e Meta non permette di riusare il nome per un po'
+    const giaSuMeta = !!(templateDaEliminare?.json_meta_gdowhatsapptemplate as { id?: string } | undefined)?.id;
+
     return (
         <Fragment>
+            <ConfirmDialog
+                open={!!templateDaEliminare}
+                title="Eliminare il template?"
+                description={
+                    <>
+                        Il template <strong>{templateDaEliminare?.nome_template_gdowhatsapptemplate}</strong> verrà eliminato
+                        {giaSuMeta
+                            ? " anche su Meta, per questa lingua. Le campagne già inviate restano consultabili; Meta non permette di riusare subito lo stesso nome."
+                            : " insieme ai suoi preset."}
+                    </>
+                }
+                confirmLabel="Elimina"
+                loading={eliminazioneInCorso}
+                onClose={() => setTemplateDaEliminare(null)}
+                onConfirm={eliminaTemplate}
+            />
             <div className="space-y-6">
                 {/* HEADER */}
                 <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
@@ -320,8 +359,9 @@ const GestioneTemplatesWhatsappSuperAdmin: React.FC = () => {
                                                                 size="sm"
                                                                 variant="soft-danger"
                                                                 onClick={() => {
+                                                                    // ponytail: niente pagina di dettaglio; la nuova versione mostra il template da correggere
                                                                     navigate(
-                                                                        "dettaglio?id=" +
+                                                                        "nuova-versione?id=" +
                                                                         template.id_gdowhatsapptemplate
                                                                     );
                                                                 }}
@@ -378,16 +418,12 @@ const GestioneTemplatesWhatsappSuperAdmin: React.FC = () => {
                                                                     </Button>
                                                                 </>
                                                             )}
-                                                        <PermissionGate permission={PERMISSIONS.WHATSAPP.GESTISCI_TEMPLATES}>
+                                                        <PermissionGate permission={PERMISSIONS.WHATSAPP.GESTISCI_TEMPLATES} mode="disable">
                                                             <Button
                                                                 size="sm"
-                                                                variant="soft-danger"
-                                                                onClick={() =>
-                                                                    template.id_gdowhatsapptemplate &&
-                                                                    alert(
-                                                                        `Elimina template con ID: ${template.id_gdowhatsapptemplate}`
-                                                                    )
-                                                                }
+                                                                variant="outline-danger"
+                                                                title="Elimina"
+                                                                onClick={() => setTemplateDaEliminare(template)}
                                                                 className="text-xs py-1.5 px-3 shadow-sm"
                                                             >
                                                                 Elimina
@@ -419,6 +455,7 @@ const GestioneTemplatesWhatsappSuperAdmin: React.FC = () => {
                                 icon="CircleAlert"
                                 iconColor="text-danger"
                                 buttonText="Torna indietro"
+                                buttonIcon="ArrowLeft"
                                 onButtonClick={() => {
                                     navigate("/whatsapp/gestione-whatsapp-superadmin", { replace: true });
                                 }}

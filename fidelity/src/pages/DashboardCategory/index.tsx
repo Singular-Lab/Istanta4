@@ -790,7 +790,7 @@ const DashboardCategory: React.FC = () => {
                                     </div>
                                 </div>
                                 {activeCanaleArea && (
-                                    <div className="p-5">
+                                    <div className="p-5 overflow-x-auto">
                                         <div className="min-w-[640px]">
                                             <Chart type="line" data={canaleAreaChartData as any} options={canaleAreaChartOptions as any} height={320} />
                                         </div>

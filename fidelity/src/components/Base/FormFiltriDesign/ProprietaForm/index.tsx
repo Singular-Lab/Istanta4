@@ -1,4 +1,4 @@
-import { Control, UseFormRegister, FieldErrors, useFieldArray,Controller } from "react-hook-form";
+import { Control, FieldValues, UseFormRegister, FieldErrors, useFieldArray,Controller } from "react-hook-form";
 import Card from "../../Card";
 import Button from "../../Button";
 import Lucide from "../../Lucide";
@@ -15,8 +15,8 @@ interface FormValues {
     declinazioni: Declinazione[];
 }
 
-interface ProprietaFormProps {
-    control: Control<FormValues>;
+interface ProprietaFormProps<T extends FieldValues> {
+    control: Control<T>;
     register: UseFormRegister<FormValues>;
     errors: FieldErrors<FormValues>;
     declinazioneIndex: number;
@@ -28,7 +28,9 @@ interface ProprietaFormProps {
     }[] | undefined;    
 }
 
-const ProprietaForm = ({ control, register, errors, declinazioneIndex, data }: ProprietaFormProps) => {
+const ProprietaForm = <T extends FieldValues>({ control: controlForm, register, errors, declinazioneIndex, data }: ProprietaFormProps<T>) => {
+    // react-hook-form: Control<T> non e' assegnabile a Control<FormValues>; il form del chiamante contiene le declinazioni
+    const control: Control<FormValues> = controlForm as Control<any>;
     const { fields, append, remove } = useFieldArray({
         control,
         name: `declinazioni.${declinazioneIndex}.proprieta`,

@@ -3,6 +3,7 @@ import Button from "@/components/Base/Button";
 import withSessionCheck from "@/components/SessionChecker";
 import { FormCheck, FormInput, FormLabel, FormSelect } from "@/components/Base/Form";
 import Lucide from "@/components/Base/Lucide";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
 import type { Map as LeafletMap } from "leaflet";
@@ -16,10 +17,11 @@ import { ServerCall } from "../../../lib/server_call";
 import type { CreateDisplayContextDTO, DisplayContextResponseDTO, DispositivoPuntoVenditaResponseDTO, PuntoVenditaResponseDTO } from "../../../server/core/dto";
 import { Dialog, Menu } from "../../components/Base/Headless";
 import { usePVDeviceStatus } from "../../hooks/usePVDeviceStatus";
+import { canaleArea, codiciGdo, indirizzoCompleto } from "../../utils/puntoVendita";
 import { operatorOptions } from "../../pages/GestioneApi/constants";
 import type { FilterCondition } from "../../pages/GestioneApi/types";
 import { createEmptyFilterCondition, createEmptyFilterGroup, formatFiltersForApi } from "../../pages/GestioneApi/utils/filterHelpers";
-import { useFetchDisplayContextsByPuntoVendita, useFetchDispositiviPuntoVendita, useFetchFilesFieldValues, useFetchFilesMetadataFields } from "../../query/query";
+import { useFetchDisplayContextsByPuntoVendita, useFetchDispositiviPuntoVendita, useFetchFilesFieldValues, useFetchFilesMetadataFields, useFetchVolantiniAttiviPuntoVendita } from "../../query/query";
 
 // Componente per input valore filtro con caricamento dinamico
 interface ContextFilterValueInputProps {
@@ -61,6 +63,68 @@ const ContextFilterValueInput: React.FC<ContextFilterValueInputProps> = ({
   );
 };
 
+const formattaData = (data: Date | string) =>
+  new Date(data).toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Europe/Rome" });
+
+/** Volantini delle promo valide, dai kit pubblicati con la stessa area e lo stesso canale del punto vendita. */
+const VolantiniAttivi: React.FC<{ idPv: string; canaleArea: string }> = ({ idPv, canaleArea }) => {
+  const { data: volantini = [], isLoading, isError, error, refetch } = useFetchVolantiniAttiviPuntoVendita(idPv);
+
+  return (
+    <div className="flex flex-col p-5 box box--stacked">
+      <div className="flex items-center gap-3 pb-5 mb-5 border-b border-dashed border-slate-300/70">
+        <h2>Volantini attivi</h2>
+        <span className="ml-auto text-xs text-slate-500">{canaleArea}</span>
+      </div>
+      {isLoading ? (
+        <div className="flex items-center gap-2 text-sm text-slate-500">
+          <Lucide icon="Loader" className="w-4 h-4 animate-spin" /> Caricamento volantini...
+        </div>
+      ) : isError ? (
+        <div className="flex flex-col items-start gap-2 text-sm">
+          <span className="text-danger">
+            Volantini non caricati: {(error as Error)?.message || "errore durante il recupero"}
+          </span>
+          <Button variant="outline-secondary" size="sm" onClick={() => refetch()}>
+            Riprova
+          </Button>
+        </div>
+      ) : volantini.length === 0 ? (
+        <div className="flex flex-col items-center gap-2 py-6 text-center text-slate-500">
+          <Lucide icon="FileSearch" className="w-8 h-8 text-slate-400" />
+          <span className="text-sm">Nessun volantino attivo per questo canale e quest'area</span>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-6">
+          {volantini.map(v => (
+            <div key={v.id_kit}>
+              <div className="flex flex-wrap items-baseline gap-x-2 mb-3">
+                <span className="font-medium">{v.promo.nome}</span>
+                <span className="text-xs text-slate-500">
+                  dal {formattaData(v.promo.validita_dal)} al {formattaData(v.promo.validita_al)}
+                </span>
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 2xl:grid-cols-3">
+                {v.files.map(f => (
+                  <div key={f.id} className="overflow-hidden rounded-lg border border-slate-200/70 dark:border-darkmode-400">
+                    <img src={f.url} alt={f.nome} loading="lazy" className="h-40 w-full object-cover object-top bg-slate-50" />
+                    <div className="flex items-center gap-2 p-3">
+                      <span className="truncate text-sm" title={f.nome}>{f.nome}</span>
+                      <a href={f.url_download} download className="ml-auto flex flex-none items-center text-sm text-primary">
+                        <Lucide icon="Download" className="w-4 h-4 mr-1 stroke-[1.3]" /> PDF
+                      </a>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const GestionePuntoVendita: React.FC = () => {
   const { puntoVendita } = useLoaderData() as {
     puntoVendita: PuntoVenditaResponseDTO;
@@ -77,34 +141,26 @@ const GestionePuntoVendita: React.FC = () => {
   const {
     nome,
     nome_display,
-    indirizzo,
-    indirizzo_completo,
     citta,
     provincia,
     regione,
-    cap,
     ragionesociale,
     telefono,
-    sigla_combinazione,
     has_coordinate,
     coordinate,
     numero_utenti_collegati,
+    meta,
   } = puntoVendita;
 
   const displayName = nome_display || nome;
 
-  const displayIndirizzoCompleto =
-    indirizzo_completo ||
-    [
-      indirizzo,
-      cap && citta ? `${cap} ${citta}` : citta || cap,
-      provincia ? `(${provincia})` : "",
-      regione,
-    ]
-      .filter(Boolean)
-      .join(" - ");
+  const displayIndirizzoCompleto = [indirizzoCompleto(puntoVendita), regione].filter(Boolean).join(" - ");
 
   const displayLocationShort = [citta, provincia, regione].filter(Boolean).join(", ");
+
+  const displayCanaleArea = canaleArea(puntoVendita);
+
+  const codici = codiciGdo(meta);
 
   const parseCoordinate = (value?: number | string | null) => {
     if (typeof value === "number") return Number.isFinite(value) ? value : null;
@@ -115,21 +171,12 @@ const GestionePuntoVendita: React.FC = () => {
     return null;
   };
 
-  const lat = parseCoordinate(coordinate?.lat);
-  const lon = parseCoordinate(coordinate?.lon);
+  // Senza coordinate il DTO porta 0,0: niente mappa, invece di una mappa centrata in mare
+  const lat = has_coordinate ? parseCoordinate(coordinate?.lat) : null;
+  const lon = has_coordinate ? parseCoordinate(coordinate?.lon) : null;
+  const posizione: [number, number] | null = lat !== null && lon !== null ? [lat, lon] : null;
 
-  const mapCenter: [number, number] =
-    lat !== null && lon !== null ? [lat, lon] : [41.8719, 12.5674];
-
-  const mapZoom = 21;
-
-  const formatCoordinateValue = (value?: number | string) => {
-    const numericValue = typeof value === "number" ? value : Number(value);
-    if (Number.isFinite(numericValue)) {
-      return numericValue.toFixed(4);
-    }
-    return "N/D";
-  };
+  const mapZoom = 17;
 
   // ============================================================
   // DISPOSITIVI - DATI REALI DA API
@@ -258,24 +305,45 @@ const GestionePuntoVendita: React.FC = () => {
     }
   }, [puntoVendita.id, queryClient]);
 
-  const handleDeleteDevice = useCallback(async (device: DispositivoPuntoVenditaResponseDTO) => {
-    if (!confirm(`Eliminare il dispositivo "${device.nome}"?`)) return;
+  // Conferma delle azioni distruttive (elimina dispositivo/contesto, rigenera token)
+  const [conferma, setConferma] = useState<{ title: string; description: string; confirmLabel: string; azione: () => Promise<unknown> } | null>(null);
+  const [confermaLoading, setConfermaLoading] = useState(false);
+
+  const eseguiConferma = async () => {
+    if (!conferma) return;
+    setConfermaLoading(true);
     try {
-      await ServerCall.delete(`/dispositivi/${device.id}`);
-      queryClient.invalidateQueries({ queryKey: ['dispositivi-pv', puntoVendita.id] });
+      await conferma.azione();
     } catch (error) {
-      console.error("Errore nell'eliminazione del dispositivo:", error);
+      console.error("Errore nell'azione confermata:", error);
+    } finally {
+      setConfermaLoading(false);
+      setConferma(null);
     }
+  };
+
+  const handleDeleteDevice = useCallback((device: DispositivoPuntoVenditaResponseDTO) => {
+    setConferma({
+      title: "Eliminare il dispositivo?",
+      description: `Il dispositivo "${device.nome}" verrà eliminato e il suo URL display smetterà di funzionare.`,
+      confirmLabel: "Elimina dispositivo",
+      azione: async () => {
+        await ServerCall.delete(`/dispositivi/${device.id}`);
+        queryClient.invalidateQueries({ queryKey: ['dispositivi-pv', puntoVendita.id] });
+      },
+    });
   }, [puntoVendita.id, queryClient]);
 
-  const handleRegenerateToken = useCallback(async (device: DispositivoPuntoVenditaResponseDTO) => {
-    if (!confirm(`Rigenerare il token per "${device.nome}"? Il vecchio URL non funzionerà più.`)) return;
-    try {
-      await ServerCall.post(`/dispositivi/${device.id}/regenerate-token`, {});
-      queryClient.invalidateQueries({ queryKey: ['dispositivi-pv', puntoVendita.id] });
-    } catch (error) {
-      console.error("Errore nella rigenerazione del token:", error);
-    }
+  const handleRegenerateToken = useCallback((device: DispositivoPuntoVenditaResponseDTO) => {
+    setConferma({
+      title: "Rigenerare il token?",
+      description: `Verrà generato un nuovo token per "${device.nome}": il vecchio URL display non funzionerà più e andrà aggiornato sul dispositivo.`,
+      confirmLabel: "Rigenera token",
+      azione: async () => {
+        await ServerCall.post(`/dispositivi/${device.id}/regenerate-token`, {});
+        queryClient.invalidateQueries({ queryKey: ['dispositivi-pv', puntoVendita.id] });
+      },
+    });
   }, [puntoVendita.id, queryClient]);
 
   // ============================================================
@@ -543,19 +611,21 @@ const GestionePuntoVendita: React.FC = () => {
                 </span>
               </div>
 
-              {/* Sigla combinazione / coordinate */}
+              {/* Canale e area */}
               <div className="flex items-center text-slate-500">
                 <Lucide icon="Signal" className="w-3.5 h-3.5 mr-1.5 stroke-[1.3]" />
-                <span className="text-[0.85rem]">
-                  {sigla_combinazione
-                    ? `Combinazione: ${sigla_combinazione}`
-                    : has_coordinate && coordinate
-                      ? `Lat: ${formatCoordinateValue(coordinate?.lat)}, Lon: ${formatCoordinateValue(
-                        coordinate?.lon
-                      )}`
-                      : "Configurazione non impostata"}
-                </span>
+                <span className="text-[0.85rem]">{displayCanaleArea}</span>
               </div>
+
+              {/* Codici del sistema della GDO (es. id ANACAN) */}
+              {codici.map(c => (
+                <div key={c.etichetta} className="flex items-center text-slate-500">
+                  <Lucide icon="Hash" className="w-3.5 h-3.5 mr-1.5 stroke-[1.3]" />
+                  <span className="text-[0.85rem]">
+                    {c.etichetta}: {c.valore}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -571,6 +641,8 @@ const GestionePuntoVendita: React.FC = () => {
           {/* COLONNA SINISTRA */}
           <div className="col-span-12 xl:col-span-8">
             <div className="flex flex-col gap-y-7">
+              <VolantiniAttivi idPv={puntoVendita.id} canaleArea={displayCanaleArea} />
+
               {/* Activity Feed */}
               <div className="flex flex-col h-full p-5 box box--stacked">
                 <div className="pb-5 mb-5 border-b border-dashed border-slate-300/70">
@@ -1072,11 +1144,12 @@ const GestionePuntoVendita: React.FC = () => {
                                 </Menu.Item>
                                 <Menu.Item
                                   className="text-danger"
-                                  onClick={() => {
-                                    if (confirm(`Eliminare il contesto "${ctx.nome}"?`)) {
-                                      deleteContextMutation.mutate(ctx.id);
-                                    }
-                                  }}
+                                  onClick={() => setConferma({
+                                    title: "Eliminare il contesto?",
+                                    description: `Il contesto "${ctx.nome}" verrà eliminato e i dispositivi che lo usano resteranno senza contesto assegnato.`,
+                                    confirmLabel: "Elimina contesto",
+                                    azione: () => deleteContextMutation.mutateAsync(ctx.id),
+                                  })}
                                 >
                                   <Lucide icon="Trash2" className="w-4 h-4 mr-2" /> Elimina
                                 </Menu.Item>
@@ -1131,58 +1204,53 @@ const GestionePuntoVendita: React.FC = () => {
 
                   <div className="flex flex-col gap-8">
                     {/* MAPPA */}
-                    <div className="relative w-full h-[220px] rounded-md overflow-hidden">
-                      <MapContainer
-                        center={mapCenter}
-                        zoom={mapZoom}
-                        preferCanvas
-                        scrollWheelZoom={false}
-                        doubleClickZoom={false}
-                        dragging={false}
-                        touchZoom={false}
-                        keyboard={false}
-                        zoomControl={false}
-                        attributionControl={false}
-                        className="absolute inset-0"
-                      >
-                        {typeof coordinate?.lat === "number" &&
-                          typeof coordinate?.lon === "number" && (
-                            <Marker
-                              position={[coordinate.lat, coordinate.lon]}
-                              icon={storeMarker}
-                            />
-                          )}
-                        <TileLayer
-                          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                          attribution="&copy; OpenStreetMap contributors"
-                        />
-                        {/* <TileLayer
-                          url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png"
-                          attribution="&copy; OpenTopoMap contributors"
-                        /> */}
-
-
-                      </MapContainer>
-                    </div>
+                    {posizione ? (
+                      <div className="relative w-full h-[220px] rounded-md overflow-hidden">
+                        <MapContainer
+                          center={posizione}
+                          zoom={mapZoom}
+                          preferCanvas
+                          scrollWheelZoom={false}
+                          doubleClickZoom={false}
+                          dragging={false}
+                          touchZoom={false}
+                          keyboard={false}
+                          zoomControl={false}
+                          className="absolute inset-0"
+                        >
+                          <Marker position={posizione} icon={storeMarker} />
+                          <TileLayer
+                            url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+                            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                            maxZoom={19}
+                          />
+                        </MapContainer>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center gap-2 h-[120px] rounded-md border border-dashed border-slate-300/70 text-center">
+                        <Lucide icon="MapPin" className="w-6 h-6 text-slate-400" />
+                        <span className="text-xs text-slate-500">Coordinate non disponibili</span>
+                      </div>
+                    )}
 
                     {/* DATI GENERALI */}
                     <div className="flex flex-col gap-3.5">
                       <div className="flex items-center">
                         <Lucide
-                          icon="Clipboard"
+                          icon="Briefcase"
                           className="w-4 h-4 mr-2 stroke-[1.3] text-slate-500"
                         />
                         <span className="text-[0.9rem]">
                           Ragione Sociale:
                           <span className="ml-1 font-medium">
-                            {ragionesociale || "Non specificato"}
+                            {ragionesociale || "Non specificata"}
                           </span>
                         </span>
                       </div>
 
                       <div className="flex items-center">
                         <Lucide
-                          icon="Calendar"
+                          icon="MapPin"
                           className="w-4 h-4 mr-2 stroke-[1.3] text-slate-500"
                         />
                         <span className="text-[0.9rem]">
@@ -1195,28 +1263,36 @@ const GestionePuntoVendita: React.FC = () => {
 
                       <div className="flex items-center">
                         <Lucide
-                          icon="Clock"
-                          className="w-4 h-4 mr-2 stroke-[1.3] text-slate-500"
-                        />
-                        <span className="text-[0.9rem] mr-1">Manager:</span>
-                        <span className="text-xs font-medium rounded-md px-1.5 py-px bg-success/10 border border-success/10 text-success">
-                          N.D.
-                        </span>
-                      </div>
-
-                      <div className="flex items-center">
-                        <Lucide
-                          icon="Map"
+                          icon="Signal"
                           className="w-4 h-4 mr-2 stroke-[1.3] text-slate-500"
                         />
                         <span className="text-[0.9rem]">
-                          Posizione:
-                          <span className="ml-1 font-medium">
-                            {sigla_combinazione || displayLocationShort || "Non definita"}
-                          </span>
+                          Canale / Area:
+                          <span className="ml-1 font-medium">{displayCanaleArea}</span>
                         </span>
                       </div>
                     </div>
+
+                    {/* DATI DEL SISTEMA DELLA GDO */}
+                    {codici.length > 0 && (
+                      <div>
+                        <div className="text-xs uppercase text-slate-500">Dati GDO</div>
+                        <div className="mt-3 flex flex-col gap-2">
+                          {codici.map(c => (
+                            <div key={c.etichetta} className="flex items-center">
+                              <Lucide
+                                icon="Hash"
+                                className="w-4 h-4 mr-2 stroke-[1.3] text-slate-500"
+                              />
+                              <span className="text-[0.9rem]">
+                                {c.etichetta}:
+                                <span className="ml-1 font-medium">{c.valore}</span>
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     {/* RECAPITI */}
                     <div>
@@ -1225,7 +1301,7 @@ const GestionePuntoVendita: React.FC = () => {
                       <div className="mt-3">
                         <div className="flex items-center">
                           <Lucide
-                            icon="Calendar"
+                            icon="Phone"
                             className="w-4 h-4 mr-2 stroke-[1.3] text-slate-500"
                           />
                           <span className="text-[0.9rem]">
@@ -1249,7 +1325,7 @@ const GestionePuntoVendita: React.FC = () => {
                     <div>
                       <div className="flex items-center">
                         <Lucide
-                          icon="Clock"
+                          icon="Users"
                           className="w-4 h-4 mr-2 stroke-[1.3] text-slate-500"
                         />
                         <span className="text-[0.9rem] mr-1">Dipendenti collegati:</span>
@@ -1669,6 +1745,16 @@ const GestionePuntoVendita: React.FC = () => {
           </Dialog.Footer>
         </Dialog.Panel>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!conferma}
+        title={conferma?.title ?? ""}
+        description={conferma?.description ?? ""}
+        confirmLabel={conferma?.confirmLabel}
+        loading={confermaLoading}
+        onClose={() => !confermaLoading && setConferma(null)}
+        onConfirm={eseguiConferma}
+      />
     </div>
   );
 };

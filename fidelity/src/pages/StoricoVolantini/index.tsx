@@ -108,7 +108,7 @@ const StatCompactCard: FC<StatCompactCardProps> = ({
 
 // Componente KitCard (uguale a Dashboard3)
 const KitCard: FC<{ kit: KitVolantino; showValidita?: boolean }> = ({ kit, showValidita }) => {
-    const canAccessPromo = usePermission(PERMISSIONS.PAGINA.LAVORAZIONI_IN_CORSO);
+    const canAccessPromo = usePermission(PERMISSIONS.PROMO.VISUALIZZA);
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
     const [isDownloading, setIsDownloading] = useState(false);
     const file = kit.files?.[0];

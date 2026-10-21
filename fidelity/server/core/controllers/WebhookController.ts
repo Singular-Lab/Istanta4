@@ -96,7 +96,7 @@ export class WebhookController extends BaseController {
     }
   }
 
-  private async ottieniWebhook(req: Request, res: Response): Promise<void> {
+  private async ottieniWebhook(req: Request<{ webhookId: string }>, res: Response): Promise<void> {
     try {
       const { webhookId } = req.params;
       const webhook = await this.webhookService.ottieniWebhook(webhookId);
@@ -118,7 +118,7 @@ export class WebhookController extends BaseController {
     }
   }
 
-  private async aggiornaWebhook(req: Request, res: Response): Promise<void> {
+  private async aggiornaWebhook(req: Request<{ webhookId: string }>, res: Response): Promise<void> {
     try {
       const { webhookId } = req.params;
       const updateData = req.body;
@@ -137,7 +137,7 @@ export class WebhookController extends BaseController {
     }
   }
 
-  private async eliminaWebhook(req: Request, res: Response): Promise<void> {
+  private async eliminaWebhook(req: Request<{ webhookId: string }>, res: Response): Promise<void> {
     try {
       const { webhookId } = req.params;
       const success = await this.webhookService.eliminaWebhook(webhookId);
@@ -200,7 +200,7 @@ export class WebhookController extends BaseController {
     }
   }
 
-  private async testaWebhook(req: Request, res: Response): Promise<void> {
+  private async testaWebhook(req: Request<{ webhookId: string }>, res: Response): Promise<void> {
     try {
       const { webhookId } = req.params;
       const testData = req.body;
@@ -216,7 +216,7 @@ export class WebhookController extends BaseController {
     }
   }
 
-  private async ottieniStatisticheWebhook(req: Request, res: Response): Promise<void> {
+  private async ottieniStatisticheWebhook(req: Request<{ webhookId: string }>, res: Response): Promise<void> {
     try {
       const { webhookId } = req.params;
       const stats = await this.webhookService.ottieniStatisticheWebhook(webhookId);

@@ -218,7 +218,7 @@ function useKitLogic({ kit }: UseKitLogicProps) {
       showNotification(
         <div className="flex items-center gap-2">
           <Lucide icon="X" className="w-4 h-4 text-danger" />
-          <span>{error?.cause?.message}</span>
+          <span>{error?.message || error?.cause?.message || "Errore durante la rilavorazione del kit"}</span>
         </div>,
         { variant: "error" }
       );

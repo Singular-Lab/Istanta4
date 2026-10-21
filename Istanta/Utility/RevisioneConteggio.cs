@@ -1,4 +1,5 @@
 ﻿using Istanta.Models;
+using Istanta.Models_2;
 
 namespace Istanta.Utility
 {
@@ -56,6 +57,60 @@ namespace Istanta.Utility
 
             return nazionali.FirstOrDefault(f => f.Custom != null)
                 ?? nazionali.FirstOrDefault(f => f.Custom == null);
+        }
+
+        /// I20-1120: la firma del tracciato di ogni sottogruppo, per la vista Sottogruppi del revisore
+        /// (Revisore/getArticoliDescrizioniSottogruppi). A ogni sottogruppo si passano solo i record dei
+        /// suoi codici, nell'ordine in cui arrivano: per un sottogruppo getFirmaTracciatoGruppoDaRecords
+        /// scarta comunque gli altri, quindi la firma e' la stessa. Prima riceveva tutti i record della
+        /// promo e ne leggeva il dato per ogni sottogruppo: sottogruppi per record, 43 s su una promo
+        /// vera, con la pagina che sembrava vuota.
+        public static Dictionary<string, string> FirmeDeiSottogruppi(
+            IEnumerable<PromoTracciatiRecord>? records,
+            IEnumerable<string>? sottogruppi)
+        {
+            var elenco = (records ?? Enumerable.Empty<PromoTracciatiRecord>()).ToList();
+
+            //Per codice, senza leggere il dato: le posizioni servono a tenere l'ordine originale.
+            var posizioniPerCodice = new Dictionary<string, List<int>>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < elenco.Count; i++)
+            {
+                var codice = elenco[i]?.Codice;
+                if (string.IsNullOrWhiteSpace(codice))
+                {
+                    continue;
+                }
+                if (!posizioniPerCodice.TryGetValue(codice, out var posizioni))
+                {
+                    posizioni = new List<int>();
+                    posizioniPerCodice[codice] = posizioni;
+                }
+                posizioni.Add(i);
+            }
+
+            var firme = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var sottogruppo in sottogruppi ?? Enumerable.Empty<string>())
+            {
+                if (string.IsNullOrWhiteSpace(sottogruppo) || firme.ContainsKey(sottogruppo))
+                {
+                    continue;
+                }
+
+                var codici = sottogruppo
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .Distinct(StringComparer.OrdinalIgnoreCase);
+
+                var recordsDelSottogruppo = codici
+                    .SelectMany(c => posizioniPerCodice.TryGetValue(c, out var posizioni) ? posizioni : Enumerable.Empty<int>())
+                    .Distinct()
+                    .OrderBy(i => i)
+                    .Select(i => elenco[i])
+                    .ToList();
+
+                firme[sottogruppo] = Main.getFirmaTracciatoGruppoDaRecords(recordsDelSottogruppo, sottogruppo, true);
+            }
+
+            return firme;
         }
 
         private static List<ArticoliDescrizioni> SoloNazionali(IEnumerable<ArticoliDescrizioni>? descrizioni)

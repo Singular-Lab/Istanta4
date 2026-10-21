@@ -962,6 +962,21 @@ namespace IstantaLib
         //public List<AgenziaCustomPlugin_RegoleIstruzioni> schemiDescrizioni { get; set; }//Gli schemi descrizioni servono per definire regole di composizione dinamica delle descrizioni in fase di revisione, in questo modo è possibile per le agenzie definire logiche di composizione delle descrizioni diverse a seconda delle esigenze
         public AgenziaCustomPlugin_StileUniversale[] listaStiliUniversali { get; set; }
 
+        /// I20-1082: se le decisioni sulle foto extra prese solo per una lavorazione volantino chiedono
+        /// all'operatore se valgono solo per il volantino o anche per i POP della stessa promo, area e
+        /// canale (Coop). Falso: non si chiede e valgono per tutto.
+        public bool chiediAmbitoDecisioniLavorazione { get; set; } = false;
+
+        /// I20-1088: se il Plugin, per i meta dei testi del box, non deve segnalare da verificare il
+        /// meta registrato con una versione del record diversa da quella attuale (la lista ricaricata
+        /// con lo stesso valore). Falso: la versione si controlla. Il valore originale si controlla sempre.
+        public bool ignoraVersioneMeta { get; set; } = false;
+
+        /// Contenitori del noRender: per un campo, il gruppo del box che va nascosto con lui quando il
+        /// campo e' in noRender, e che la segnalazione del Plugin indica quando manca insieme al campo
+        /// (Coop: txt_sconto -> box_sconto). Vuoto: nessun contenitore.
+        public Dictionary<string, string> contenitoriNoRender { get; set; } = new Dictionary<string, string>();
+
         public AgenziaCustomPlugin_GrandezzaBoxRevisione grandezzeBox { get; set; }//Definisce la grandezza dei box di revisione, in questo modo è possibile per le agenzie gestire la visualizzazione a piacimento
         
         public bool abilitaDescrizioniRegionali { get; set; }
@@ -1101,6 +1116,9 @@ namespace IstantaLib
 
         public decimal amountH { get; set; } = 3; // quanto espande top/bottom
         public decimal amountW { get; set; } = 3; // quanto espande left/right
+
+        // I tipi di lavorazione in cui la voce vale (1 volantino, 2 PoP); vuota vale per tutti.
+        public List<int> tipiLavorazione { get; set; } = new List<int>();
     }
 
     public class AgenziaCustomPlugin_SchemaDescrizioni

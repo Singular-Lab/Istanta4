@@ -485,11 +485,21 @@ function Main() {
                     <Lucide icon="Loader" className="w-10 h-10 text-primary animate-spin" />
                     <div className="mt-3 text-slate-500">Caricamento in corso...</div>
                   </div>
+                ) : data.isError ? (
+                  <EmptyState
+                    icon="CircleX"
+                    iconColor="text-danger"
+                    title="Storico non caricato"
+                    description={data.error?.message || "Impossibile caricare lo storico delle lavorazioni."}
+                    buttonText="Riprova"
+                    onButtonClick={() => data.refetch()}
+                    className="py-10 px-5"
+                  />
                 ) : filteredData.length === 0 ? (
                   <EmptyState
                     icon="Archive"
                     title="Nessuna lavorazione"
-                    description={filter.value != undefined ? "Non ci sono lavorazioni nello storico che corrispondono ai filtri selezionati" : "Non ci sono lavorazioni nello storico."}
+                    description={filter.value ? "Non ci sono lavorazioni nello storico che corrispondono ai filtri selezionati" : "Non ci sono lavorazioni nello storico."}
                     className="py-10 px-5"
                   />
                 ) : (

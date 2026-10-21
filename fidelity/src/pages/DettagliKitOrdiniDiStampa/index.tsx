@@ -17,7 +17,7 @@ import type { Socket } from 'socket.io-client';
 import io from 'socket.io-client';
 import { ItemDisposition } from '../../../lib/enums';
 import { ServerCall } from '../../../lib/server_call';
-import { FileItemKit, RUNTIME_KIT_MONGO } from '../../../lib/types';
+import { FileItemKit, RUNTIME_KIT } from '../../../lib/types';
 
 const PROPERTY_LABELS: Record<string, string> = {
   nome: 'Nome file',
@@ -51,7 +51,7 @@ type SelectedFileEntry = {
 
 const DettagliKitOrdiniDiStampa: React.FC = () => {
   const { kit, proprieta, idKit } = useLoaderData() as {
-    kit: RUNTIME_KIT_MONGO;
+    kit: RUNTIME_KIT;
     proprieta: {
       data: string[];
       success: boolean;
@@ -86,8 +86,7 @@ const DettagliKitOrdiniDiStampa: React.FC = () => {
   const [mergedOutputName, setMergedOutputName] = useState<string>('');
   const [mergedDownloadUrl, setMergedDownloadUrl] = useState<string | null>(null);
   const [mergedDownloadName, setMergedDownloadName] = useState<string>('file-unito.pdf');
-  const isPdfEqualityCheckAvailable = import.meta.env.VITE_ENABLE_PDF_EQUALITY_WS === 'true'
-    && Boolean(import.meta.env.VITE_OLYMPUS_IP_ADDRESS_CORS);
+  const isPdfEqualityCheckAvailable = import.meta.env.VITE_ENABLE_PDF_EQUALITY_WS === 'true';
   const pdfEqualityUnavailableMessage = 'Raggruppamento/controllo file uguali non disponibile su questo servizio: WebSocket Olimpo non attivo.';
 
   // Debounce search (400ms)
@@ -206,7 +205,7 @@ const DettagliKitOrdiniDiStampa: React.FC = () => {
       case 'IN_REVISIONE':
         return 'bg-pending/10 text-pending border-pending/20';
       case 'IN_LAVORAZIONE':
-        return 'bg-danger/10 text-danger border-danger/20';
+        return 'bg-info/10 text-info border-info/20';
       case 'PUBBLICATO':
       case 'ACCETTATO':
         return 'bg-success/10 text-success border-success/20';
@@ -304,7 +303,8 @@ const DettagliKitOrdiniDiStampa: React.FC = () => {
 
       if (!response) return;
 
-      const contentType = response.headers['content-type'] || file.mime || 'application/pdf';
+      const headerContentType = response.headers['content-type'];
+      const contentType = (typeof headerContentType === 'string' && headerContentType) || file.mime || 'application/pdf';
       const blob = new Blob([response.data], { type: contentType });
       const blobUrl = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -442,7 +442,8 @@ const DettagliKitOrdiniDiStampa: React.FC = () => {
         responseType: 'arraybuffer',
         withCredentials: true,
       });
-      const contentType = response.headers['content-type'] || 'application/pdf';
+      const headerContentType = response.headers['content-type'];
+      const contentType = (typeof headerContentType === 'string' && headerContentType) || 'application/pdf';
       const blob = new Blob([response.data], { type: contentType });
       const blobUrl = window.URL.createObjectURL(blob);
       const link = document.createElement('a');

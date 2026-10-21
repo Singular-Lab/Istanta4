@@ -13,6 +13,7 @@ import { FC, Fragment, useEffect, useState } from 'react';
 import { useLoaderData, useParams, useRevalidator } from 'react-router-dom';
 import { ServerCall } from '../../../../lib/server_call';
 import { FotoRicetta, ReferenzeIstanta, Ricette, STATO_RICETTA, TIPO_RICETTA } from '../../../../lib/types';
+import { urlFoto } from '@/utils/helper';
 
 interface ModificaRicetteProps {
   ricetta?: Ricette;
@@ -598,7 +599,7 @@ const ModificaRicette: FC<ModificaRicetteProps> = () => {
                             <div className="flex items-center mt-1">
                               {ref.foto && (
                                 <img
-                                  src={ref.foto[0]}
+                                  src={urlFoto(ref.foto)[0]}
                                   alt="Referenza"
                                   className="w-8 h-8 rounded mr-2 object-cover"
                                 />
@@ -760,7 +761,7 @@ const ModificaRicette: FC<ModificaRicetteProps> = () => {
                           <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
                             {typeof vinoCode !== 'string' && (
                               <img
-                                src={vinoCode.foto[0]}
+                                src={urlFoto(vinoCode.foto)[0]}
                                 alt={vinoCode.approfondimento.nome}
                                 className="w-full h-full object-cover"
                               />

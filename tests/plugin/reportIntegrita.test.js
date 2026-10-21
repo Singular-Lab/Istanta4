@@ -16,7 +16,20 @@ const Module = require("node:module");
 const { fileDelPlugin, leggiFileDelPlugin } = require("./fileDelPlugin");
 
 const MOTORE = ["confrontoBox", "confrontoBoxCompiledFieldPreAnalisi", "mappaturaImpaginato",
-    "semplificazioneMappaImpaginato", "decodeSpecialCharacters"];
+    "semplificazioneMappaImpaginato", "decodeSpecialCharacters",
+    //I20-1068: la decisione sul logo con l'immagine cambiata, membro puro del motore.
+    "fotoExtraConImmagineCambiata",
+    //I20-1070: il tipo di elemento di una foto extra del dato, per le decisioni della scheda.
+    "tipoElementoExtra",
+    //I20-1071: i valori leggibili di una differenza di contenuto, per la scheda e per il report.
+    "testoLeggibile", "valoriDifferenza",
+    //I20-1081: il tipo di box diverso da quello del dato, la differenza grave.
+    "codiceBoxAtteso", "differenzaCodiceBox", "eDifferenzaGrave",
+    //I20-1088: i meta dei testi da verificare, per la scheda e per il report.
+    "ignoraVersioneMeta", "differenzeDeiMeta", "valoriDelMeta",
+    //I20-1090: dove sta la differenza della descrizione, per la scelta del box.
+    "dovePortaLaDescrizione"
+];
 const DA_INDEXNEW = ["avviaReportIntegrita", "applicaConfronto", "preAnalisiBoxMappato",
     "nomiPagineDelDocumento", "boxDellElementoMappa"];
 const FILE_DEL_REPORT = ["reportIntegrita/reportIntegrita.js", "reportIntegrita/pannelli.js"];
@@ -89,7 +102,7 @@ function nomiNudi(nomi) {
 
 /* ---- le due meta' ---- */
 
-test("confronti.js e' rimasto il motore: cinque membri, nessuno del report", () => {
+test("confronti.js e' rimasto il motore: nove membri, nessuno del report", () => {
     const { confronti } = caricaConStub();
     assert.deepStrictEqual(Object.keys(confronti).sort(), [...MOTORE].sort());
 });
@@ -188,7 +201,9 @@ test("events guarda a intervalli, ma a decidere la chiusura e' il report", () =>
 test("il nome del file del report e' scritto in un posto solo", () => {
     let occorrenze = 0;
     for (const relativo of fileDelPlugin()) {
-        occorrenze += (senzaCommenti(leggiFileDelPlugin(relativo)).match(/["']\/reportIntegrita_["']/g) || []).length;
+        //I20-1065: il nome sta in utility.js (nomeFileReportIntegrita), senza la barra: la cartella
+        //la mette percorsoDati.
+        occorrenze += (senzaCommenti(leggiFileDelPlugin(relativo)).match(/["']\/?reportIntegrita_["']/g) || []).length;
     }
     assert.strictEqual(occorrenze, 1);
     assert.doesNotMatch(leggiFileDelPlugin("reportIntegrita/reportIntegrita.js"), /_getReportIntegritaFilePath/);

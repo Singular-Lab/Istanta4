@@ -1532,9 +1532,16 @@ const schedaFoto = {
                     }
                     console.log("Risposta");
                     if (!objResult2.esito) {
+                        //I20-1069: error e' il messaggio breve; la traccia completa del server sta in dettaglio.
+                        if (objResult2.dettaglio) {
+                            console.error("Dettaglio dell'errore del server:", objResult2.dettaglio);
+                        }
                         messaggioUtente("Code SRF-39 Edit P/S: Errore durante il salvataggio delle modifiche: " + objResult2.error, "error");
                         return;
                     }
+                    //I20-1069: la conferma solo con le primarie e secondarie registrate. Prima stava in
+                    //onreadystatechange e compariva per ogni risposta 200, anche con il salvataggio fallito.
+                    messaggioUtente("Edit P/S: Richiesta completata con successo", "success", false, 5);
 
                     try {
                         //aggiorniamo il dato in schedaRef
@@ -1629,17 +1636,11 @@ const schedaFoto = {
                 };
 
                 xhr.onreadystatechange = function () {
-                    if (xhr.readyState == 4) {
-                        if (xhr.status == 200) {
-                            messaggioUtente("Edit P/S: Richiesta completata con successo", "success", false, 5);
-                        } else {
-                            //messaggioUtente("Edit P/S: Errore durante la richiesta: " + xhr.status, "error");
-                        }
-                    }
                 };
 
-                xhr.onerror = function () {
-                    //messaggioUtente("Edit P/S: Errore di rete", "error");
+                //I20-1069: prima non diceva niente, e restava "Richiesta inviata".
+                xhr.onerror = function (motivo) {
+                    messaggioUtente("Code SRF-124 Edit P/S: richiesta non riuscita: " + XMLHttpRequestClient.testoErrore(motivo), "error");
                 };
 
                 xhr.send("Menabo/modificaPrimarieSecondarie" + "/" + 0, formData, "PUT");
@@ -1653,6 +1654,202 @@ const schedaFoto = {
         }
     },
 
+    /// I20-1072: la decisione per questa lavorazione presa su una foto extra, o null. tipoFoto e' il
+    /// tipo della foto (3 = logo): nel meta il tipo di elemento e' Logo per 3, FotoExtra per il resto.
+    decisioneExtraDellaFoto(decisioni, sigla, tipoFoto) {
+        if (!Array.isArray(decisioni) || sigla == null || String(sigla) === "") {
+            return null;
+        }
+        var tipoElemento = tipoFoto == 3 ? NoRenderElementi.TIPO.logo : NoRenderElementi.TIPO.fotoExtra;
+        return decisioni.find(v => v != null && String(v.sigla) === String(sigla) && v.tipo == tipoElemento) || null;
+    },
+
+    /// I20-1082: il pezzo che dice "solo volantino" accanto a una decisione, o "". 1 e'
+    /// AmbitoDecisioneLavorazione.SoloVolantino (schedaRef.AMBITO_DECISIONE).
+    testoAmbitoDecisione(voce) {
+        return voce != null && voce.ambito === 1 ? " (solo volantino)" : "";
+    },
+
+    /// I20-1072: l'etichetta corta della decisione, accanto al nome della foto.
+    etichettaDecisioneExtra(voce) {
+        if (voce == null) {
+            return "";
+        }
+        //I20-1082: e, se vale solo per il volantino, lo dice.
+        var ambito = this.testoAmbitoDecisione(voce);
+        if (voce.azione === 1) {
+            return "immagine del box per questa lavorazione" + ambito;
+        }
+        if (voce.azione === 2) {
+            return "solo per questa lavorazione" + ambito;
+        }
+        if (voce.azione === 3) {
+            return "esclusa per questa lavorazione" + ambito;
+        }
+        return "decisa per questa lavorazione" + ambito;
+    },
+
+    /// I20-1072: l'etichetta della decisione come elemento della riga.
+    segnoDecisioneExtra(voce) {
+        var segno = $('<span class="decisioneExtraLavorazione"></span>').text(this.etichettaDecisioneExtra(voce));
+        segno.css({ "font-size": "11px", "color": "#8be28b", "font-style": "italic", "margin-left": "8px" });
+        return segno;
+    },
+
+    /// I20-1072: il Togli di una riga della scheda foto extra: toglie la decisione (la scheda si
+    /// riscarica, come dalla finestra delle differenze), ridisegna il pannello e aggiorna
+    /// segnalazioni e segnalino.
+    pulsanteTogliDecisioneExtra(voce, box) {
+        var me = this;
+        var togli = $('<button class="togliDecisioneExtra" style="color:lightgreen">Togli</button>');
+        Tooltip.impostaTooltip(togli[0], "Toglie la decisione presa per questa lavorazione: la foto torna come la vuole il dato");
+        togli.on('click', async function () {
+            togli.prop("disabled", true);
+            try {
+                await me.togliExtraLavorazione(voce, async function () {
+                    me.FotoExtraPanel(box);
+                    me.memorizzaSegnalazioni(await me.differenzeDatiNelBox(box, me.schedeRefDati));
+                    me.aggiornaPulsanteSegnalazioni();
+                });
+            }
+            finally {
+                togli.prop("disabled", false);
+            }
+        });
+        return togli;
+    },
+
+    /* ---------- I20-1082: le decisioni per la lavorazione dalla scheda foto extra ---------- */
+
+    /// Il tipo di elemento del meta per un tipo di foto: 3 e' un logo, il resto una foto extra.
+    tipoElementoDellaFoto(tipoFoto) {
+        return parseInt(tipoFoto) == 3 ? NoRenderElementi.TIPO.logo : NoRenderElementi.TIPO.fotoExtra;
+    },
+
+    /// La richiesta per escludere una foto extra solo per questa lavorazione: la stessa decisione di
+    /// "escludiLavorazione" della finestra delle differenze. Null senza una chiave.
+    richiestaEscludiSoloQui(elemento, tipoFoto) {
+        var chiave = this.chiaveExtra(elemento);
+        if (chiave === "") {
+            return null;
+        }
+        return {
+            rimuovi: false,
+            voce: { tipo: this.tipoElementoDellaFoto(tipoFoto), sigla: chiave, azione: this.AZIONE_EXTRA.escludi, nome: null, nomeServer: elemento.nome || null, tipoFoto: parseInt(tipoFoto) || 0 }
+        };
+    },
+
+    /// La richiesta per tenere un file solo per questa lavorazione (Link o Carica): la stessa
+    /// decisione di "tieniLavorazione". La chiave e' il nome del file, come nella label del box.
+    richiestaAggiungiSoloQui(nomeFile, tipoFoto) {
+        if (nomeFile == null || String(nomeFile) === "") {
+            return null;
+        }
+        return {
+            rimuovi: false,
+            voce: { tipo: this.tipoElementoDellaFoto(tipoFoto), sigla: String(nomeFile), azione: this.AZIONE_EXTRA.aggiungi, nome: String(nomeFile), nomeServer: null, tipoFoto: parseInt(tipoFoto) || 0 }
+        };
+    },
+
+    AMBITO_AZIONE_EXTRA: { tutte: "tutte", lavorazione: "lavorazione" },
+
+    /// Link e Aggiungi chiedono prima per chi valgono: per tutte le lavorazioni (l'anagrafica
+    /// dell'articolo, come sempre) o solo per questa. Null se l'operatore annulla.
+    async sceltaAmbitoAzioneExtra() {
+        var risposta = await Modali.confirmCustom("Per quali lavorazioni vale?",
+            "Per tutte le lavorazioni", this.AMBITO_AZIONE_EXTRA.tutte,
+            "Solo per questa lavorazione", this.AMBITO_AZIONE_EXTRA.lavorazione);
+        return risposta != null && risposta.result ? risposta.hiddenVal : null;
+    },
+
+    /// Registra una decisione presa dalla scheda foto extra: il server la mette nel meta della
+    /// lavorazione; solo dopo si cambia il box (sulBox), si riflette nei record in memoria, si
+    /// ridisegna il pannello e si rifanno segnalazioni e segnalino. Torna true se e' andata.
+    async registraDecisioneExtraDallaScheda(richiesta, box, sulBox = null) {
+        if (richiesta == null) {
+            messaggioUtente("Code SRF-112 Foto extra senza una chiave: la decisione per questa lavorazione non si puo' registrare", "error", false, 5);
+            return false;
+        }
+        //I20-1082: per Coop, prima per chi vale: solo il volantino o anche i POP.
+        var ambito = await this.chiediAmbitoDecisione();
+        if (ambito == null) {
+            return false;
+        }
+        richiesta.voce.ambito = ambito;
+        var registrata = await this.salvaExtraLavorazione(richiesta);
+        if (!registrata) {
+            return false;
+        }
+        if (typeof sulBox === "function") {
+            var boxNuovo = sulBox();
+            if (boxNuovo != null) {
+                box = boxNuovo;
+            }
+        }
+        this.applicaExtraLavorazioneAiRecord(this.schedeRefDati, richiesta.voce);
+        messaggioUtente("Foto extra " + richiesta.voce.sigla + ": decisione registrata per questa lavorazione", "success", false, 5);
+        this.FotoExtraPanel(box);
+        this.memorizzaSegnalazioni(await this.differenzeDatiNelBox(box, this.schedeRefDati));
+        this.aggiornaPulsanteSegnalazioni();
+        return true;
+    },
+
+    /// Il pulsante "Escludi solo qui" di una riga: esclude la foto solo per questa lavorazione e la
+    /// toglie dal box. Escludi/Includi e la casella restano quelli dell'articolo.
+    pulsanteEscludiSoloQui(elemento, tipoFoto, box) {
+        var me = this;
+        var pulsante = $('<button class="escludiSoloQui" style="color:orange">Escludi solo qui</button>');
+        Tooltip.impostaTooltip(pulsante[0], "Esclude la foto solo per questa lavorazione: nelle altre resta come la vuole il dato");
+        pulsante.on('click', async function () {
+            pulsante.prop("disabled", true);
+            try {
+                var richiesta = me.richiestaEscludiSoloQui(elemento, tipoFoto);
+                await me.registraDecisioneExtraDallaScheda(richiesta, box, function () {
+                    var chiave = richiesta.voce.sigla;
+                    for (var i = 0; i < box.allPageItems.length; i++) {
+                        if (box.allPageItems[i].label == "foto_extra$" + chiave + "$tipo_" + parseInt(tipoFoto)) {
+                            box.allPageItems[i].remove();
+                            break;
+                        }
+                    }
+                    return null;
+                });
+            }
+            finally {
+                pulsante.prop("disabled", false);
+            }
+        });
+        return pulsante;
+    },
+
+    /// "Aggiungi" solo per questa lavorazione: il file scelto va nella cartella Loghi e nel box, e si
+    /// registra come decisione della lavorazione. All'anagrafica e a Olimpo non arriva niente.
+    async caricaExtraSoloPerLavorazione(tipo, box) {
+        var me = this;
+        var tipoFoto = parseInt(tipo);
+        var fd = await selectFile();
+        if (fd == null) {
+            return false;
+        }
+        for (var i = 0; i < box.allPageItems.length; i++) {
+            if (box.allPageItems[i].label == "foto_extra$" + fd.nomeFile + "$tipo_" + tipoFoto) {
+                messaggioUtente("Code SRF-67 L'immagine è già presente nel box", "warning", false, 5);
+                return false;
+            }
+        }
+        try {
+            await ReperimentoFoto.scriviFileInCartella(fd.file, percorsoLoghi, fd.nomeFile);
+        }
+        catch (e) {
+            messaggioUtente("Code SRF-113 Non sono riuscito a scrivere " + fd.nomeFile + " nella cartella Loghi: " + e, "error", false, 6);
+            return false;
+        }
+        var primario = (this.schedeRefDati || []).find(f => f.recordInTracciato.StatoSelezione == 1);
+        return await this.registraDecisioneExtraDallaScheda(this.richiestaAggiungiSoloQui(fd.nomeFile, tipoFoto), box, function () {
+            return me.impaginaFotoExtra(fd.nomeFile, tipoFoto, box, pathLavorazione, primario != null ? primario.recordInTracciato : null, fd.nomeFile);
+        });
+    },
+
     FotoExtraPanel(box) {
         let me = this;
         var schedaRef = this.schedeRefDati;
@@ -1664,6 +1861,8 @@ const schedaFoto = {
             messaggioUtente("Code SRF-47 Nessun elemento primario trovato", "error");
             return;
         }
+        //I20-1072: le foto extra decise per questa lavorazione (I20-1070), dal record.
+        var decisioni = Array.isArray(primario.recordInTracciato.extraLavorazione) ? primario.recordInTracciato.extraLavorazione : [];
         var extra = primario.recordInTracciato["Foto.Extra"];
         if (extra != null) {
             for (var $i = 0; $i < this.tipiFotoExtra.length; $i++) {
@@ -1699,6 +1898,13 @@ const schedaFoto = {
 
                 //creiamo un checkbox da mettere prima del testo basato sul valore di elemento.attiva
                 var checkbox = $('<input type="checkbox" class="checkboxExtra" ' + (elemento.attiva ? "checked" : "") + '>');
+                //I20-1072: con una decisione per questa lavorazione la casella resta ferma: attivare o
+                //disattivare vale per l'articolo, e prima va tolta la decisione.
+                var decisioneManuale = me.decisioneExtraDellaFoto(decisioni, me.chiaveExtra(elemento), elemento.tipo);
+                if (decisioneManuale != null) {
+                    checkbox.prop("disabled", true);
+                    Tooltip.impostaTooltip(checkbox[0], "Decisa per questa lavorazione: togli la decisione per cambiarla");
+                }
                 checkbox.on('change', function () {
                     var sigla = $(this).parent().attr("sigla");
                     if (sigla == "")
@@ -1729,6 +1935,14 @@ const schedaFoto = {
                 });
                 row.append(impaginaButton);
 
+                if (decisioneManuale != null) {
+                    row.append(me.segnoDecisioneExtra(decisioneManuale));
+                    row.append(me.pulsanteTogliDecisioneExtra(decisioneManuale, box));
+                }
+                //I20-1082: senza decisione, anche da qui si esclude solo per questa lavorazione.
+                else if (elemento.attiva) {
+                    row.append(me.pulsanteEscludiSoloQui(elemento, elemento.tipo, box));
+                }
 
                 //centriamo verticalmente il testo
                 row.css("display", "flex");
@@ -1755,15 +1969,31 @@ const schedaFoto = {
                 var button = $('<button id="aggiungiButton" style="color:lightgreen">Aggiungi ' + this.tipiFotoExtra.find(f => f.val == panel.attr("val")).nome + '</button>');
                 //al button aggiungiamo un attr tipo con il valore del panel
                 button.attr("tipo", panel.attr("val"));
-                button.on('click', function () {
+                button.on('click', async function () {
+                    var tipoPanel = $(this).attr("tipo");
+                    //I20-1082: prima per chi vale; solo per questa lavorazione non tocca l'anagrafica.
+                    var ambito = await me.sceltaAmbitoAzioneExtra();
+                    if (ambito == null) {
+                        return;
+                    }
+                    if (ambito === me.AMBITO_AZIONE_EXTRA.lavorazione) {
+                        await me.caricaExtraSoloPerLavorazione(tipoPanel, me.refSelected.item);
+                        return;
+                    }
                     //chiamiamo la funzione updateImmagine passando il codice gruppo dell'elemento selezionato e il tipo
-                    me.updateImmagine(primario.recordInTracciato["Scatto.CodiceGruppo"], $(this).attr("tipo"), null, null);
+                    me.updateImmagine(primario.recordInTracciato["Scatto.CodiceGruppo"], tipoPanel, null, null);
                 });
                 panel.append(button);
                 var buttonLink = $('<button id="linkButton" style="color:lightgreen">Link ' + this.tipiFotoExtra.find(f => f.val == panel.attr("val")).nome + ' con immagine a sistema</button>');
                 buttonLink.attr("tipo", panel.attr("val"));
-                buttonLink.on('click', function () {
-                    me.linkLogoBollo($(this).attr("tipo"));
+                buttonLink.on('click', async function () {
+                    var tipoPanel = $(this).attr("tipo");
+                    //I20-1082: prima per chi vale.
+                    var ambito = await me.sceltaAmbitoAzioneExtra();
+                    if (ambito == null) {
+                        return;
+                    }
+                    me.linkLogoBollo(tipoPanel, ambito === me.AMBITO_AZIONE_EXTRA.lavorazione);
                 });
                 panel.append(buttonLink);
                 
@@ -1795,14 +2025,30 @@ const schedaFoto = {
                 var row = $('<div class="row align-items-center" sigla="' + elemento.sigla + '" nomeFoto="' + elemento.nome + '" escluso="' + elemento.escluso + '" tipo="' + elemento.tipo + '" style="margin-bottom:10px"></div>');
                 var text = $('<span>' + elemento.nome + '</span>');
                 text.css({ "font-size": "12px", "color": "white" });
-                var button = $('<button id="aggiungiButton" style="color:lightgreen">' + (elemento.escluso ? "Includi" : "Escludi") + '</button>');
+                //I20-1072: una foto decisa per questa lavorazione si segna, e al posto di Escludi/Includi
+                //(che valgono per l'articolo, e su di lei non hanno senso) ha il Togli della decisione.
+                var decisione = me.decisioneExtraDellaFoto(decisioni, elemento.sigla, elemento.tipo);
+                var button;
+                if (decisione != null) {
+                    button = me.pulsanteTogliDecisioneExtra(decisione, box);
+                }
+                else {
+                    button = $('<button id="aggiungiButton" style="color:lightgreen">' + (elemento.escluso ? "Includi" : "Escludi") + '</button>');
 
-                button.on('click', function () {
-                    //passiamo ad escludiFotoExtraAuto l'id, il val del panel, il nome della foto e il box corrispondente alla current selection
-                    me.escludiIncludiFotoExtraAuto($(this).parent().attr("nomeFoto"), $(this).parent().attr("escluso"), box, $(this).parent(), $(this).parent().attr("tipo"), $(this).parent().attr("sigla"));
-                });
+                    button.on('click', function () {
+                        //passiamo ad escludiFotoExtraAuto l'id, il val del panel, il nome della foto e il box corrispondente alla current selection
+                        me.escludiIncludiFotoExtraAuto($(this).parent().attr("nomeFoto"), $(this).parent().attr("escluso"), box, $(this).parent(), $(this).parent().attr("tipo"), $(this).parent().attr("sigla"));
+                    });
+                }
                 row.append(button);
+                //I20-1082: un'extra auto inclusa si puo' escludere anche solo per questa lavorazione.
+                if (decisione == null && !elemento.escluso) {
+                    row.append(me.pulsanteEscludiSoloQui(elemento, elemento.tipo, box));
+                }
                 row.append(text);
+                if (decisione != null) {
+                    row.append(me.segnoDecisioneExtra(decisione));
+                }
                 row.css("display", "flex");
                 row.css("align-items", "center");
                 panelExtraAuto.append(row);
@@ -2100,6 +2346,8 @@ const schedaFoto = {
             formData.append("validaSoloPerLavorazione", validaSoloPerLavorazione ? "true" : "false");
             formData.append("idLavorazione", idKitLavorazione);
             formData.append("propaga", propaga ? "true" : "false");
+            //I20-1088: il record del box, perche' il meta della foto vada nella riga di questa impaginazione.
+            formData.append("idRec", me.idRecDelBoxAperto());
 
 
             return await new Promise((resolve) => {
@@ -2172,7 +2420,7 @@ const schedaFoto = {
         }
     },
 
-    async linkLogoBollo(tipo) {
+    async linkLogoBollo(tipo, soloPerLavorazione = false) {
         let me = this;
         var box = this.refSelected.item;
 
@@ -2322,6 +2570,16 @@ const schedaFoto = {
 
                     // QUI POI PROSEGUIRÀ LA LOGICA SUCCESSIVA
                     console.log("Logo trovato e aggiornato:", logoData);
+
+                    //I20-1082: solo per questa lavorazione il logo non si collega all'anagrafica: si
+                    //registra come decisione della lavorazione e si mette nel box.
+                    if (soloPerLavorazione) {
+                        Modali.closeAllModal();
+                        await me.registraDecisioneExtraDallaScheda(me.richiestaAggiungiSoloQui(logoData.fileName, tipo), box, function () {
+                            return me.impaginaFotoExtra(logoData.fileName, parseInt(tipo), box, pathLavorazione, primario.recordInTracciato, logoData.fileName);
+                        });
+                        return;
+                    }
 
                     var xhr = new XMLHttpRequestClient();
                     xhr.onload = async (objResult, parsed) => {
@@ -2744,6 +3002,8 @@ const schedaFoto = {
         formData.append("tipo", tipo);
         formData.append("idLavorazione", idKitLavorazione);
         formData.append("guidId", idFoto);
+        //I20-1088: il record del box, perche' il meta vada tolto dalla riga di questa impaginazione.
+        formData.append("idRec", me.idRecDelBoxAperto());
 
         var xhr = new XMLHttpRequestClient();
         xhr.onload = (objResult, parsed) => {

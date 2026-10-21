@@ -120,6 +120,8 @@ const ODSInCorsoSection: React.FC<ODSInCorsoSectionProps> = ({ ordini, searchQue
     switch (status) {
       case STATO_ORDINI_STAMPA.IN_REVISIONE:
         return 'In Revisione';
+      case STATO_ORDINI_STAMPA.IN_INVIO:
+        return 'In invio';
       case STATO_ORDINI_STAMPA.FINITO:
         return 'Completato';
       case STATO_ORDINI_STAMPA.REVISIONATO:
@@ -145,8 +147,6 @@ const ODSInCorsoSection: React.FC<ODSInCorsoSectionProps> = ({ ordini, searchQue
   const getUrgencyBadge = (daysInWaiting: number) => {
     if (daysInWaiting > 180) {
       return { text: `Da ${Math.floor(daysInWaiting / 30)} mesi`, icon: 'TriangleAlert' };
-    } else if (daysInWaiting > 60) {
-      return { text: `Da ${daysInWaiting} giorni`, icon: 'Clock' };
     } else if (daysInWaiting > 30) {
       return { text: `Da ${daysInWaiting} giorni`, icon: 'Clock' };
     }
@@ -308,7 +308,6 @@ const ODSInCorsoSection: React.FC<ODSInCorsoSectionProps> = ({ ordini, searchQue
               {filteredOrdini && filteredOrdini.length > 0 ? (
                 filteredOrdini.map((ordine, index) => {
                   const urgencyBadge = getUrgencyBadge(ordine.daysInWaiting);
-                  const isUrgent = ordine.daysInWaiting > 60;
 
                   return (
                     <Table.Tr
@@ -340,7 +339,7 @@ const ODSInCorsoSection: React.FC<ODSInCorsoSectionProps> = ({ ordini, searchQue
                           <span className="text-base font-semibold text-slate-900">{ordine.daysInWaiting}</span>
                           <span className="text-sm text-slate-600">giorni</span>
                           {urgencyBadge && (
-                            <div className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-slate-700 bg-slate-100 rounded border border-slate-300">
+                            <div className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-danger bg-danger/10 rounded border border-danger/20">
                               <Lucide icon={urgencyBadge.icon as any} className="w-3 h-3" />
                               {urgencyBadge.text}
                             </div>

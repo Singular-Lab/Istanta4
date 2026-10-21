@@ -4,7 +4,7 @@ import { Op, type WhereOptions } from 'sequelize';
 import { v4 as uuidv4 } from 'uuid';
 import { Colorize } from '../../../lib/Colorize';
 import { FieldType } from '../../../lib/enums';
-import { DatabaseError, ExternalApiError, NotFoundError, wrapApiError, wrapDatabaseError, wrapNotFoundError } from '../../../lib/errors';
+import { DatabaseError, ExternalApiError, NotFoundError, wrapDatabaseError, wrapNotFoundError } from '../../../lib/errors';
 import {
   ContenutoAggiuntivoReferenza,
   FilterCondition,
@@ -14,6 +14,8 @@ import {
   ReferenzeIstanta
 } from '../../../lib/types';
 import config from '../config';
+import { guidDaRiferimentoOlimpo, urlFotoOlimpo, urlOlimpo } from '../utils/urlOlimpo';
+import { sequelize } from '../db/SequelizeConnector';
 import { IReferenzeService } from '../interfaces/IReferenzeService';
 import { IWebPliantService } from '../interfaces/IWebPliantService';
 import { log } from '../logger';
@@ -26,6 +28,7 @@ import { WorkspaceWebpliant } from '../models/workspace_webpliant';
 import type { IPromoRepository } from '../repositories/PromoRepository';
 import { normalizePromoModel } from '../utils/PromoModelUtils';
 import { ServerUtils } from '../utils/ServerUtils';
+import { verificaRisposta } from '../utils/rispostaServizi';
 
 /**
  * Il modello PG vuole `foto` come array piatto di guidId (stringhe): il plugin manda
@@ -69,6 +72,28 @@ function referenzaToSnakeCase(ref: ReferenzeIstanta): any {
 }
 
 /**
+ * Sostituisce le referenze di un kit runtime con un nuovo insieme (spec referenze-webpliant,
+ * "Sostituzione per runtime"). Cancellazione e inserimento stanno in una sola transazione:
+ * se l'inserimento fallisce il kit resta con le referenze di prima, non vuoto.
+ * Esportata anche fuori dalla classe perche FileManagementService non ha il service iniettato.
+ */
+export async function sostituisciReferenzeKit(idKitRuntime: string, referenze: ReferenzeIstanta[]): Promise<any> {
+  try {
+    return await sequelize.transaction(async (transaction) => {
+      await Referenze.destroy({ where: { id_runtime_kit: idKitRuntime }, transaction });
+      return Referenze.bulkCreate(referenze.map(referenzaToSnakeCase), { transaction });
+    });
+  } catch (error) {
+    throw wrapDatabaseError(error, {
+      message: "Errore durante la sostituzione delle referenze del kit",
+      operation: 'replace',
+      entity: 'ReferenzeIstanta',
+      details: { idKitRuntime }
+    });
+  }
+}
+
+/**
  * ReferenzeServicePg - Autonomous service for referenze operations
  *
  * Handles all referenze-related business logic including:
@@ -105,6 +130,20 @@ function normalizeReferenzaFromPg(raw: any): ReferenzeIstanta {
     fotoSingolaForzata: raw.fotoSingolaForzata ?? raw.foto_singola_forzata,
     // keep foto as-is (already transformed before calling this function, or left for the caller)
   } as ReferenzeIstanta;
+}
+
+/** Riporta a GUID le foto e le foto extra che arrivano come URL Olimpo. */
+export function riferimentiOlimpoComeGuid<T extends object>(data: T): T {
+  const guid = (v: unknown) => (typeof v === 'string' ? guidDaRiferimentoOlimpo(v) : v);
+  const conGuid = (f: any) => (f && typeof f === 'object' && 'guidId' in f ? { ...f, guidId: guid(f.guidId) } : f);
+  const copia: any = { ...data };
+  if (Array.isArray(copia.foto)) {
+    copia.foto = copia.foto.map((f: unknown) => (typeof f === 'string' ? guid(f) : conGuid(f)));
+  }
+  for (const campo of ['foto_extra', 'fotoExtra']) {
+    if (Array.isArray(copia[campo])) copia[campo] = copia[campo].map(conGuid);
+  }
+  return copia;
 }
 
 export class ReferenzeService implements IReferenzeService {
@@ -179,9 +218,7 @@ export class ReferenzeService implements IReferenzeService {
           ? result.foto
               .map((f: any) => typeof f === "string" ? f : f?.guidId)
               .filter(Boolean)
-              .map((guidId: string) =>
-                `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${guidId}`
-              )
+              .map((riferimento: string) => urlFotoOlimpo(riferimento))
           : [];
       }
 
@@ -198,7 +235,9 @@ export class ReferenzeService implements IReferenzeService {
 
   async updateReferenzaWebpliant(data: ReferenzeIstanta): Promise<any> {
     try {
-      const result = await Referenze.update(data as any, { where: { id: data.id } });
+      // Il frontend rimanda le foto cosi' come le ha ricevute, gia' trasformate in URL:
+      // nel DB vanno i GUID, da cui gli URL si ricostruiscono a ogni lettura
+      const result = await Referenze.update(riferimentiOlimpoComeGuid(data) as any, { where: { id: data.id } });
       return result;
     } catch (error) {
       throw wrapDatabaseError(new Error("Errore durante l'aggiornamento della referenza"), {
@@ -227,33 +266,8 @@ export class ReferenzeService implements IReferenzeService {
     }
   }
 
-  async bulkCreateReferenze(refs: ReferenzeIstanta[]): Promise<any> {
-    try {
-      const pgRefs = refs.map(referenzaToSnakeCase);
-      const result = await Referenze.bulkCreate(pgRefs);
-      return result;
-    } catch (error: any) {
-      throw wrapDatabaseError(new Error("Errore durante la creazione della referenza"), {
-        message: "Errore durante la creazione della referenza",
-        operation: 'insertMany',
-        entity: 'ReferenzeIstanta',
-        details: { error }
-      });
-    }
-  }
-
-  async bulkEliminateReferenzeFromGuidIdKitRuntime(idKitRuntime: string): Promise<any> {
-    try {
-      const result = await Referenze.destroy({ where: { id_runtime_kit: idKitRuntime } });
-      return result;
-    } catch (error) {
-      throw wrapDatabaseError(new Error("Errore durante l'eliminazione delle referenze"), {
-        message: "Errore durante l'eliminazione delle referenze",
-        operation: 'deleteMany',
-        entity: 'ReferenzeIstanta',
-        details: { error }
-      });
-    }
+  async sostituisciReferenzeKit(idKitRuntime: string, referenze: ReferenzeIstanta[]): Promise<any> {
+    return sostituisciReferenzeKit(idKitRuntime, referenze);
   }
 
   // ─── Ricerca ───────────────────────────────────────────────────────
@@ -286,7 +300,7 @@ export class ReferenzeService implements IReferenzeService {
             ref.foto = ref.foto
               ?.map((f: any) => typeof f === "string" ? f : f?.guidId)
               .filter(Boolean)
-              .map((guidId: string) => `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${guidId}&performante=true`) || [];
+              .map((riferimento: string) => urlFotoOlimpo(riferimento, { performante: true })) || [];
             let refGruppo = refsGruppo.find(r => r.codice_referenza === (ref as any).data_fields?.codice_referenza && r.id_area === data.idArea && r.id_canale === data.idCanale);
             if (!refGruppo) {
               refGruppo = refsGruppo.find(r => r.codice_referenza === (ref as any).data_fields?.codice_referenza && r.id_area === undefined && r.id_canale === undefined);
@@ -300,10 +314,10 @@ export class ReferenzeService implements IReferenzeService {
             if (!refGruppo) {
               refGruppo = refsGruppo.find(r => r.codice_referenza === (ref as any).data_fields?.codice_referenza);
             }
-            ref.fotoGruppo = refGruppo ? `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${refGruppo.guid_id_olympo}&performante=true` : undefined;
+            ref.fotoGruppo = refGruppo ? urlOlimpo('/foto/getThumbNailOnDemand', { guidId: refGruppo.guid_id_olympo, performante: true }) : undefined;
             (ref as any).foto_extra = (ref as any).foto_extra?.map((f: LoghiReferenza) => ({
               ...f,
-              guidId: `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${f.guidId}&performante=true`
+              guidId: urlFotoOlimpo(f.guidId, { performante: true })
             })) || [];
             return ref;
           })
@@ -528,14 +542,12 @@ export class ReferenzeService implements IReferenzeService {
           ? raw.foto
               .map((f: any) => typeof f === "string" ? f : f?.guidId)
               .filter(Boolean)
-              .map((guidId: string) =>
-                `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${guidId}&performante=true`
-              )
+              .map((riferimento: string) => urlFotoOlimpo(riferimento, { performante: true }))
           : [];
         const fotoExtraTransformed = Array.isArray(raw.foto_extra)
           ? raw.foto_extra.map((f: any) => ({
               ...f,
-              guidId: `${config.OLYMPUS_IP_ADDRESS}/foto/getThumbNailOnDemand?guidId=${f.guid_id ?? f.guidId}&performante=true`,
+              guidId: urlFotoOlimpo(f.guid_id ?? f.guidId, { performante: true }),
               sigla: f.sigla,
               tipo: f.tipo,
             }))
@@ -566,7 +578,7 @@ export class ReferenzeService implements IReferenzeService {
 
   async getAllLoghiDaReferenze(req: ExpressRequest): Promise<LoghiReferenza[]> {
     try {
-      const resultDaIstantaPerLoghi = await ServerUtils.sendToFICOApi<{
+      type LoghiBolli = {
         esito: boolean,
         content: {
           id: string;
@@ -577,14 +589,19 @@ export class ReferenzeService implements IReferenzeService {
           tipo: number;
           escluso: boolean;
         }[];
-      }>(
-        req,
-        config.ISTANTA_IP_ADDRESS + "/FicoProcess/getLoghiBolli",
-        "GET",
-        {},
+      };
+      const data = verificaRisposta<LoghiBolli>(
+        await ServerUtils.sendToFICOApi<LoghiBolli>(
+          req,
+          config.ISTANTA_IP_ADDRESS + "/FicoProcess/getLoghiBolli",
+          "GET",
+          {},
+        ),
+        'ISTANTA',
+        '/FicoProcess/getLoghiBolli'
       );
 
-      if (!resultDaIstantaPerLoghi || !resultDaIstantaPerLoghi.data) {
+      if (data.content.length === 0) {
         throw wrapNotFoundError(new Error("Nessun logo trovato"), {
           message: "Nessun logo trovato",
           entityType: "LoghiReferenza",
@@ -592,21 +609,14 @@ export class ReferenzeService implements IReferenzeService {
         });
       }
 
-      if (resultDaIstantaPerLoghi.data.content.length === 0) {
-        throw wrapNotFoundError(new Error("Nessun logo trovato"), {
-          message: "Nessun logo trovato",
-          entityType: "LoghiReferenza",
-          entityId: ""
-        });
-      }
-
-      return resultDaIstantaPerLoghi.data.content.map(r => ({
-        guidId: config.OLYMPUS_IP_ADDRESS + "/foto/getThumbNailOnDemand?guidId=" + r.guidId,
+      return data.content.map(r => ({
+        guidId: urlOlimpo('/foto/getThumbNailOnDemand', { guidId: r.guidId }),
         sigla: r.sigla,
         tipo: r.tipo,
       }));
 
     } catch (error) {
+      if (error instanceof ExternalApiError) throw error;
       console.error('Errore durante il recupero dei loghi:', error);
       if (error instanceof NotFoundError) {
         throw error;
@@ -842,33 +852,27 @@ export class ReferenzeService implements IReferenzeService {
 
   async getAddestramentiDaIstanta(req: ExpressRequest): Promise<any[]> {
     try {
-      const result = await ServerUtils.sendToFICOApi
-        <{
-          content: {
-            nome: string, id: number, fields: {
-              idAddestramento: number,
-              idCampo: number,
-              indice: number,
-              nomeColonna: string,
-              nomeColonnaOriginale: string,
-              nomeVisualizzato: string
-            }[]
-          }[], esito: boolean, error: string
-        }>
-        (req, `${config.ISTANTA_IP_ADDRESS}/FicoProcess/getAddestramenti/true`, 'GET', undefined);
-      if (!result.data.esito) {
-        throw wrapApiError(new Error(result.data.error), {
-          message: result.data.error,
-          service: 'ISTANTA',
-          endpoint: '/FicoProcess/getAllAddestramenti'
-        });
-      }
-      return result.data.content;
+      type Addestramenti = {
+        content: {
+          nome: string, id: number, fields: {
+            idAddestramento: number,
+            idCampo: number,
+            indice: number,
+            nomeColonna: string,
+            nomeColonnaOriginale: string,
+            nomeVisualizzato: string
+          }[]
+        }[], esito: boolean, error: string
+      };
+      const data = verificaRisposta<Addestramenti>(
+        await ServerUtils.sendToFICOApi<Addestramenti>(req, `${config.ISTANTA_IP_ADDRESS}/FicoProcess/getAddestramenti/true`, 'GET', undefined),
+        'ISTANTA',
+        '/FicoProcess/getAddestramenti'
+      );
+      return data.content;
     } catch (error) {
+      if (error instanceof ExternalApiError) throw error;
       console.error(Colorize.bgRed('Errore durante il recupero degli addestramenti:'), error);
-      if (error instanceof ExternalApiError) {
-        throw error;
-      }
       throw wrapDatabaseError(new Error("Errore durante il recupero degli addestramenti"), {
         message: "Errore durante il recupero degli addestramenti",
         operation: 'sendToFICOApi',
@@ -893,8 +897,7 @@ export class ReferenzeService implements IReferenzeService {
   }
 
   // ─── In-Memory Filter Helpers (private) ───────────────────────────
-  // These replace the MongoDB aggregation pipeline filters, applying them
-  // in JavaScript after fetching data from PostgreSQL.
+  // Applied in JavaScript after fetching data from PostgreSQL.
 
   private applyFiltersNew(referenze: ReferenzeIstanta[], filters: Array<FilterCondition[]>): ReferenzeIstanta[] {
     if (!filters || filters.length === 0) return referenze;
@@ -915,7 +918,7 @@ export class ReferenzeService implements IReferenzeService {
   private applyContestoFilters(referenze: ReferenzeIstanta[], filters: FilterConditionContesto[]): ReferenzeIstanta[] {
     if (!filters || filters.length === 0) return referenze;
 
-    // Group filters by field name (same as MongoDB groupedFilters logic)
+    // Group filters by field name
     const groupedFilters = filters.reduce((accumulator: any, filter: FilterConditionContesto) => {
       const fieldName = filter.nome_field.toLowerCase().trim();
       if (!accumulator[fieldName]) {

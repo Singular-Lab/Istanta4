@@ -7,6 +7,7 @@ import { INamingConventionService } from '../interfaces/INamingConventionService
 import { authMiddleware } from '../middleware/authMiddleware';
 import { permissionGuard } from '../middleware/permissionGuard';
 import { ServerUtils } from '../utils/ServerUtils';
+import { verificaRisposta } from '../utils/rispostaServizi';
 
 export class NamingConventionController extends BaseController {
 
@@ -60,20 +61,16 @@ export class NamingConventionController extends BaseController {
   private async deleteNamingConvention(req: Request, res: Response): Promise<void> {
     try {
       const idNamingConvention = req.params.id;
-      const resultChiamataIstanta = await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
-        req,
-        `${config.ISTANTA_IP_ADDRESS}/FicoProcess/eliminaNamingConvention/${idNamingConvention}`,
-        'PUT',
-        undefined
+      verificaRisposta(
+        await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
+          req,
+          `${config.ISTANTA_IP_ADDRESS}/FicoProcess/eliminaNamingConvention/${idNamingConvention}`,
+          'PUT',
+          undefined
+        ),
+        'ISTANTA',
+        '/FicoProcess/eliminaNamingConvention'
       );
-      if (resultChiamataIstanta.data.error != "") {
-        res.status(HttpStatusCode.INTERNAL_SERVER_ERROR).json({ message: "Errore durante l'eliminazione della naming convention in istanta", error: resultChiamataIstanta.data.error });
-        return;
-      }
-      if (resultChiamataIstanta.data.esito == false) {
-        res.status(HttpStatusCode.INTERNAL_SERVER_ERROR).json({ message: "Errore durante l'eliminazione della naming convention in istanta", error: resultChiamataIstanta.data.error });
-        return;
-      }
       const result = await this.namingConventionService.deleteNamingConvention(idNamingConvention as string);
       res.status(HttpStatusCode.OK).json(result);
     } catch (error: any) {

@@ -14,7 +14,6 @@ declare namespace NodeJS {
         JWT_EXPIRES_IN: string;
         ISTANTA_IP_ADDRESS: string;
         OLYMPUS_IP_ADDRESS: string;
-        MONGODB_URI: string;
         INTERNAL_REQUEST_SECRET?: string;
         INTERNAL_REQUEST_WINDOW_MS?: string;
     }
@@ -32,7 +31,6 @@ declare module 'express-session' {
         lastIP?: string;
         lastUserAgent?: string;
         lastActivity?: Date;
-        permessi_cache?: string[];
         // OIDC flow state
         oidc_state?: string;
         oidc_nonce?: string;

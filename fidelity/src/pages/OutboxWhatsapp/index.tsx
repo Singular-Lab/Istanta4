@@ -14,7 +14,9 @@ import LoadingIcon from '../../components/Base/LoadingIcon';
 import Lucide from '../../components/Base/Lucide';
 import PageHeader from '../../components/Base/PageHeader';
 import Table from '../../components/Base/Table';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import EmptyState from '../../components/EmptyState';
+import { useNotification } from '../../context/NotificationContext';
 import withSessionCheck from '../../components/SessionChecker';
 import { useSocket } from '../../hooks/useSocket';
 
@@ -29,6 +31,7 @@ interface BulkStatus {
     total: number;
     success: number;
     failed: number;
+    cancelled?: number;
     pending: number;
     processed: number;
     percentuale: number;
@@ -47,7 +50,7 @@ interface JobStatus {
     total: number;
     telefono: string;
     attempts: number;
-    status: 'PENDING' | 'PROCESSING' | 'SUCCESS' | 'FAILED';
+    status: 'PENDING' | 'PROCESSING' | 'SUCCESS' | 'FAILED' | 'CANCELLED';
     error?: string;
 }
 
@@ -117,6 +120,12 @@ const getJobStatusConfig = (status: JobStatus['status']) => {
                 label: 'Fallito',
                 color: 'error',
                 icon: 'CircleX' as const,
+            };
+        case 'CANCELLED':
+            return {
+                label: 'Annullato',
+                color: 'secondary',
+                icon: 'Ban' as const,
             };
         default:
             return {
@@ -219,7 +228,8 @@ const CampaignCard: React.FC<{
     const statusConfig = getStatusConfig(bulk.status);
     const isActive = bulk.status === 'RUNNING' || bulk.status === 'PENDING';
 
-    const processed = bulk.processed ?? bulk.success + bulk.failed;
+    const cancelled = bulk.cancelled ?? 0;
+    const processed = bulk.processed ?? bulk.success + bulk.failed + cancelled;
     const subtitle =
         bulk.createdAt != null
             ? `Creata ${dayjs(bulk.createdAt).fromNow()} • ${processed}/${bulk.total} processati`
@@ -295,7 +305,7 @@ const CampaignCard: React.FC<{
             </div>
 
             {/* Stats + progress */}
-            <div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-5 items-center">
+            <div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-6 items-center">
                 <div className="text-center md:text-left">
                     <div className="text-xs uppercase tracking-wide text-slate-400">Totali</div>
                     <div className="text-lg font-semibold text-slate-800 dark:text-slate-100">
@@ -309,6 +319,10 @@ const CampaignCard: React.FC<{
                 <div className="text-center md:text-left">
                     <div className="text-xs uppercase tracking-wide text-slate-400">Falliti</div>
                     <div className="text-lg font-semibold text-danger">{bulk.failed}</div>
+                </div>
+                <div className="text-center md:text-left">
+                    <div className="text-xs uppercase tracking-wide text-slate-400">Annullati</div>
+                    <div className="text-lg font-semibold text-slate-500">{cancelled}</div>
                 </div>
                 <div className="text-center md:text-left">
                     <div className="text-xs uppercase tracking-wide text-slate-400">In coda</div>
@@ -431,7 +445,8 @@ const JobDetailsModal: React.FC<{
                                                                         statusConfig.color === 'primary' &&
                                                                         'text-primary animate-spin',
                                                                         statusConfig.color === 'warning' && 'text-warning',
-                                                                        statusConfig.color === 'error' && 'text-danger'
+                                                                        statusConfig.color === 'error' && 'text-danger',
+                                                                        statusConfig.color === 'secondary' && 'text-slate-500'
                                                                     )}
                                                                 />
                                                                 <span className="text-xs">{statusConfig.label}</span>
@@ -474,6 +489,10 @@ const OutboxWhatsapp: React.FC = () => {
     const [campaigns, setCampaigns] = useState<BulkStatus[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedBulkId, setSelectedBulkId] = useState<string | null>(null);
+    const { showNotification } = useNotification();
+    // Campagna in attesa di conferma per annullamento o reinvio
+    const [azioneCampagna, setAzioneCampagna] = useState<{ tipo: 'cancel' | 'retry'; bulk: BulkStatus } | null>(null);
+    const [azioneInCorso, setAzioneInCorso] = useState(false);
 
     // Fetch initial campaigns
     const fetchCampaigns = async () => {
@@ -555,29 +574,22 @@ const OutboxWhatsapp: React.FC = () => {
     }, [socket]);
 
     const handleCancel = async (bulkId: string) => {
-        if (!confirm('Sei sicuro di voler annullare questa campagna?')) return;
-
         try {
             const response: any = await ServerCall.post(
                 `/whatsapp/campaigns/${bulkId}/cancel`,
                 {}
             );
+            // Ricarica: i messaggi annullati e lo stato reale della campagna arrivano dal server
             if (response?.success) {
-                setCampaigns(prev =>
-                    prev.map(c =>
-                        c.bulkId === bulkId ? { ...c, status: 'FAILED' as const } : c
-                    )
-                );
+                fetchCampaigns();
             }
         } catch (error) {
             console.error('Errore annullamento campagna:', error);
-            alert("Errore durante l'annullamento della campagna");
+            showNotification("Errore durante l'annullamento della campagna", { variant: 'error' });
         }
     };
 
     const handleRetry = async (bulkId: string) => {
-        if (!confirm('Vuoi riprovare ad inviare i messaggi falliti?')) return;
-
         try {
             const response: any = await ServerCall.post(
                 `/whatsapp/campaigns/${bulkId}/retry`,
@@ -588,8 +600,17 @@ const OutboxWhatsapp: React.FC = () => {
             }
         } catch (error) {
             console.error('Errore retry campagna:', error);
-            alert('Errore durante il retry della campagna');
+            showNotification('Errore durante il reinvio dei messaggi falliti', { variant: 'error' });
         }
+    };
+
+    const eseguiAzioneCampagna = async () => {
+        if (!azioneCampagna) return;
+        setAzioneInCorso(true);
+        const { tipo, bulk } = azioneCampagna;
+        await (tipo === 'cancel' ? handleCancel(bulk.bulkId) : handleRetry(bulk.bulkId));
+        setAzioneInCorso(false);
+        setAzioneCampagna(null);
     };
 
     return (
@@ -675,6 +696,7 @@ const OutboxWhatsapp: React.FC = () => {
                         title="Nessuna campagna"
                         description="Non hai ancora inviato campagne WhatsApp. Inizia creando la tua prima campagna."
                         buttonText="Crea campagna"
+                        buttonIcon="Plus"
                         onButtonClick={() => navigate('/whatsapp/invio-campagna-whatsapp?step=1')}
                     />
                 ) : (
@@ -685,8 +707,8 @@ const OutboxWhatsapp: React.FC = () => {
                                     key={campaign.bulkId}
                                     bulk={campaign}
                                     onViewDetails={() => setSelectedBulkId(campaign.bulkId)}
-                                    onCancel={() => handleCancel(campaign.bulkId)}
-                                    onRetry={() => handleRetry(campaign.bulkId)}
+                                    onCancel={() => setAzioneCampagna({ tipo: 'cancel', bulk: campaign })}
+                                    onRetry={() => setAzioneCampagna({ tipo: 'retry', bulk: campaign })}
                                 />
                             ))}
                         </AnimatePresence>
@@ -699,6 +721,20 @@ const OutboxWhatsapp: React.FC = () => {
                 isOpen={selectedBulkId !== null}
                 onClose={() => setSelectedBulkId(null)}
                 bulkId={selectedBulkId || ''}
+            />
+
+            <ConfirmDialog
+                open={!!azioneCampagna}
+                title={azioneCampagna?.tipo === 'retry' ? 'Reinviare i messaggi falliti?' : 'Annullare la campagna?'}
+                subtitle={azioneCampagna?.tipo === 'retry' ? 'I messaggi tornano in coda' : undefined}
+                description={azioneCampagna?.tipo === 'retry'
+                    ? `I ${azioneCampagna.bulk.failed} messaggi falliti della campagna "${azioneCampagna.bulk.titolo || azioneCampagna.bulk.bulkId}" verranno rimessi in coda per un nuovo invio.`
+                    : `I ${azioneCampagna?.bulk.pending ?? 0} messaggi ancora in coda della campagna "${azioneCampagna?.bulk.titolo || azioneCampagna?.bulk.bulkId || ''}" non verranno inviati. I messaggi già inviati non vengono toccati.`}
+                confirmLabel={azioneCampagna?.tipo === 'retry' ? 'Reinvia' : 'Annulla campagna'}
+                confirmVariant={azioneCampagna?.tipo === 'retry' ? 'primary' : 'danger'}
+                loading={azioneInCorso}
+                onClose={() => !azioneInCorso && setAzioneCampagna(null)}
+                onConfirm={eseguiAzioneCampagna}
             />
         </div>
     );

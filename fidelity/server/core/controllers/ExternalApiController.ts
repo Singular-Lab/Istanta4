@@ -137,6 +137,7 @@ export class ExternalApiController extends BaseController {
     );
     this.router.post("/sync_json_plugin",
       authMiddleware,
+      permissionGuard('api.gestisci_plugin'),
       (req, res, next) => {
         (uploadMaterialiPubblicazioni.single('file') as any)(req, res, (err: any) => {
           if (err instanceof multer.MulterError) {
@@ -151,6 +152,7 @@ export class ExternalApiController extends BaseController {
     )
     this.router.post("/plugin/punti-vendita",
       authMiddleware,
+      permissionGuard('api.gestisci_plugin'),
       this.getPluginPuntiVendita.bind(this)
     );
     // Route per gestione interazione plugin
@@ -312,12 +314,12 @@ export class ExternalApiController extends BaseController {
 
       const formData = new FormData();
       const filePath = req.file.path;
-      const fileResolve = payload.fileName || req.file.filename;
+      const fileResolve = payload.fileName || req.file.originalname;
       const fileBuffer = fs.readFileSync(filePath);
       const fileBlob = new Blob([fileBuffer], { type: 'application/pdf' });
       const hash = crypto.createHash('md5').update(fileBuffer).digest('hex');
 
-      formData.append("file", fileBlob, path.basename(req.file.filename));
+      formData.append("file", fileBlob, path.basename(req.file.originalname));
       formData.append("json_meta_materiale", JSON.stringify({
         Id: "",
         FileHash: hash,
@@ -548,8 +550,7 @@ export class ExternalApiController extends BaseController {
 
       // Un sync descrive lo stato completo del kit: sostituisce le referenze precedenti
       // invece di accodarle, cosi un re-sync non duplica ne lascia dati vecchi (es. guidId rotti).
-      await referenzeService.bulkEliminateReferenzeFromGuidIdKitRuntime(payload.kitGuidId);
-      await referenzeService.bulkCreateReferenze(datoReferenze.concat(referenzeFantasma))
+      await referenzeService.sostituisciReferenzeKit(payload.kitGuidId, datoReferenze.concat(referenzeFantasma));
 
       /*
         Da qui la lavorazione e "recuperata dallo storico": l'esito sta sul kit e le
@@ -1504,7 +1505,7 @@ export class ExternalApiController extends BaseController {
   /**
    * Aggiorna un filter template esistente
    */
-  private async updateFilterTemplate(req: Request, res: Response): Promise<void> {
+  private async updateFilterTemplate(req: Request<{ id: string }>, res: Response): Promise<void> {
     try {
       const { id } = req.params;
       const {
@@ -1578,7 +1579,7 @@ export class ExternalApiController extends BaseController {
   /**
    * Elimina un filter template
    */
-  private async deleteFilterTemplate(req: Request, res: Response): Promise<void> {
+  private async deleteFilterTemplate(req: Request<{ id: string }>, res: Response): Promise<void> {
     try {
       const { id } = req.params;
       const gdoId = req.session.id_gdo as string;
@@ -1618,7 +1619,7 @@ export class ExternalApiController extends BaseController {
   /**
    * Recupera un filter template per ID
    */
-  private async getFilterTemplateById(req: Request, res: Response): Promise<void> {
+  private async getFilterTemplateById(req: Request<{ id: string }>, res: Response): Promise<void> {
     try {
       const { id } = req.params;
       const gdoId = req.session.id_gdo as string;
@@ -1652,7 +1653,7 @@ export class ExternalApiController extends BaseController {
    * Questo endpoint è pubblico (via ephemeral token o API key) e cerca il template
    * solo per slug, dato che gli slug sono già unici per GDO
    */
-  private async getFilterTemplateBySlug(req: Request, res: Response): Promise<void> {
+  private async getFilterTemplateBySlug(req: Request<{ slug: string }>, res: Response): Promise<void> {
     try {
       const { slug } = req.params;
       const versionParam = req.query.version;
@@ -1703,7 +1704,7 @@ export class ExternalApiController extends BaseController {
     }
   }
 
-  private async getFilterTemplateVersionHistory(req: Request, res: Response): Promise<void> {
+  private async getFilterTemplateVersionHistory(req: Request<{ slug: string }>, res: Response): Promise<void> {
     try {
       const { slug } = req.params;
       const gdoId = req.session.id_gdo as string;
@@ -1732,7 +1733,7 @@ export class ExternalApiController extends BaseController {
     }
   }
 
-  private async restoreFilterTemplateVersion(req: Request, res: Response): Promise<void> {
+  private async restoreFilterTemplateVersion(req: Request<{ slug: string }>, res: Response): Promise<void> {
     try {
       const { slug } = req.params;
       const { target_version } = req.body;

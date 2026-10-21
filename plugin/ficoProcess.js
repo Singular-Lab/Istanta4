@@ -42,11 +42,15 @@ const FicoProcess=
         //VAriabile globale
         idKitLavorazione = 0;
 
-        var file = readFile(pathLavorazione + "/lavorazioni.json");
+        //I20-1061: la voce si cerca nel file di questa macchina, poi in quelli delle altre; se c'e'
+        //solo altrove viene copiata qui, e la lavorazione si carica senza passare dalla ricerca kit.
+        //Resta sincrona fino a idKitLavorazione: initDocumentInLavorazione non aspetta questa funzione.
+        let voceLavorazione = Utility.voceLavorazione(pathLavorazione, idMacchina(), app.activeDocument.name, libroDelDocumentoInLavorazione(app.activeDocument.name));
+        let file = voceLavorazione != null ? [voceLavorazione] : [];
         
         if(file != null){
             //console.log(file);
-            let refFileLavorazione = file.filter(f=>f.file == app.activeDocument.name);
+            let refFileLavorazione = file;
             //console.log(resFileValorazione);
             if (refFileLavorazione.length >= 1)
             {
@@ -545,9 +549,43 @@ const FicoProcess=
     //     xhr.send("FicoProcess/getTipiDiExport", null, "GET");
     // },
 
+    /// I20-1115: le promo del menu "Seleziona Kit" dalla piu' recente, secondo la data in cui sono
+    /// state create in Istanta (dataRegistrazione); a parita' prima quella creata dopo (id piu' alto),
+    /// e in fondo quelle senza data. getPromoAperte le restituisce senza ordine e il menu le mostrava
+    /// cosi', le piu' vecchie in alto: per le ultime bisognava scorrere. Si ordina qui e non sul server
+    /// perche' lo stesso elenco serve alla pagina web delle promo. Si lavora su una copia.
+    ordinaPromoPerKit: function (lista) {
+        if (!Array.isArray(lista)) {
+            return [];
+        }
+        var tempo = function (promo) {
+            var t = promo != null && promo.dataRegistrazione != null ? Date.parse(promo.dataRegistrazione) : NaN;
+            return isNaN(t) ? null : t;
+        };
+        return lista.slice().sort(function (a, b) {
+            var ta = tempo(a);
+            var tb = tempo(b);
+            if (ta !== tb) {
+                if (ta == null) {
+                    return 1;
+                }
+                if (tb == null) {
+                    return -1;
+                }
+                return tb - ta;
+            }
+            return ((b && b.id) || 0) - ((a && a.id) || 0);
+        });
+    },
+
     refreshPromo: async function () {
         try {
             let objResult = await this.requestFicoData("Tracciati/getPromoAperte");
+
+            //I20-1115: le ultime create in alto. Una risposta che non e' un elenco resta com'era.
+            if (Array.isArray(objResult)) {
+                objResult = this.ordinaPromoPerKit(objResult);
+            }
 
             this.listaPromoAperte = objResult;
 
@@ -828,22 +866,15 @@ const FicoProcess=
             if (itemsInSearch.length>0)
             {
                 //Devo salvare il kit sul file
-                var filePath = pathLavorazione + "/lavorazioni.json";
+                //I20-1061: solo nel file di questa macchina; i percorsi si riprendono dalle sue voci,
+                //perche' sono assoluti e valgono solo qui.
+                var filePath = Utility.percorsoFileLavorazioniMacchina(pathLavorazione, idMacchina());
                 //leggiamo il file di lavorazione e guardiamo se ha almeno un elemento, se lo ha proviamo a leggere il suo pathLinks e pathLoghi
-                let file = readFile(filePath);
-                if (file == null)
-                {
-                    //errore, il file dovrebbe esistere
-                    //messaggioUtente("Errore: File lavorazioni.json non trovato", "error");
-                    //return;
-                    appendToFile(filePath, "");
-                    file== readFile(filePath);
-                }
+                let file = Utility.leggiFileLavorazioni(filePath);
                 //controlliamo se il file è vuoto
+                //I20-1065: solo Links e Loghi; logs, export e i dati li crea il Plugin
                 let pathLinks = "";
                 let pathLoghi = "";
-                let pathLogs = "";
-                let pathEsportazione = "";
                 if (file.length>0){
                     let item = file[0];
                     if (item.pathLinks!=null && item.pathLinks!="")
@@ -854,32 +885,16 @@ const FicoProcess=
                     {
                         pathLoghi = item.pathLoghi;
                     }
-                    if (item.pathLogs!=null && item.pathLogs!="")
-                    {
-                        pathLogs = item.pathLogs;
-                    }
-                    if (item.pathEsportazione!=null && item.pathEsportazione!="")
-                    {
-                        pathEsportazione = item.pathEsportazione;
-                    }
                 }
 
-                //facciamo prima un controllo se nel file esiste già un elemento con questo file
-                let existingItems = file.find(f=>f.file==app.activeDocument.name);
-                if (existingItems != null){
-                    existingItems.file = app.activeDocument.name;
-                    existingItems.id = itemsInSearch[0].id;
-                    existingItems.details = itemsInSearch[0];
-                    existingItems.pathLinks = pathLinks;
-                    existingItems.pathLoghi = pathLoghi;
-                    existingItems.pathLogs = pathLogs;
-                    existingItems.pathEsportazione = pathEsportazione;
-                    //riscriviamo il file
-                    fs.writeFileSync(filePath, JSON.stringify(file));
+                //La voce del documento si aggiorna se c'e' gia', altrimenti si aggiunge
+                //I20-1066: con gli indirizzi del server dell'ipconfig montato: all'apertura si confrontano.
+                let voce = {file:app.activeDocument.name, id:itemsInSearch[0].id, pathLinks:pathLinks, pathLoghi:pathLoghi, details:itemsInSearch[0], ip:ConfigurazioneCliente.indirizziServer(istantaIp, olimpoIp)};
+                let libro = libroDelDocumentoInLavorazione(app.activeDocument.name, pathLavorazione);
+                if (libro) {
+                    voce.libro = libro;
                 }
-                else{
-                    appendToFile(filePath, {file:app.activeDocument.name, id:itemsInSearch[0].id, pathLinks:pathLinks, pathLoghi:pathLoghi, pathLogs:pathLogs, pathEsportazione:pathEsportazione ,details:itemsInSearch[0]});
-                }
+                Utility.salvaVoceLavorazione(pathLavorazione, idMacchina(), voce);
                 
     
                 initDocumentInLavorazione();
@@ -897,8 +912,14 @@ const FicoProcess=
                 {
                     let lavorazioneItem = objResult.records[0];
                     //Scrivo il file di lavorazione o lo aggiungo al file di lavorazione
-                    var filePath = pathLavorazione + "/lavorazioni.json";
-                    appendToFile(filePath, {file:app.activeDocument.name, id:lavorazioneItem.id,details:lavorazioneItem});
+                    //I20-1061: nel file di questa macchina
+                    //I20-1066: con gli indirizzi del server dell'ipconfig montato.
+                    let voce = {file:app.activeDocument.name, id:lavorazioneItem.id,details:lavorazioneItem, ip:ConfigurazioneCliente.indirizziServer(istantaIp, olimpoIp)};
+                    let libro = libroDelDocumentoInLavorazione(app.activeDocument.name, pathLavorazione);
+                    if (libro) {
+                        voce.libro = libro;
+                    }
+                    Utility.salvaVoceLavorazione(pathLavorazione, idMacchina(), voce);
     
                     //Adesso posso procedere con il processare il kit
                     initDocumentInLavorazione();
@@ -1035,21 +1056,14 @@ const FicoProcess=
 
             if (itemsInSearch.length > 0) {
                 //Devo salvare il kit sul file
-                var filePath = _pathLavorazione + "/lavorazioni.json";
+                //I20-1061: solo nel file di questa macchina
+                var filePath = Utility.percorsoFileLavorazioniMacchina(_pathLavorazione, idMacchina());
                 //leggiamo il file di lavorazione e guardiamo se ha almeno un elemento, se lo ha proviamo a leggere il suo pathLinks e pathLoghi
-                let file = readFile(filePath);
-                if (file == null) {
-                    //errore, il file dovrebbe esistere
-                    //messaggioUtente("Errore: File lavorazioni.json non trovato", "error");
-                    //return;
-                    appendToFile(filePath);
-                    file == readFile(filePath);
-                }
+                let file = Utility.leggiFileLavorazioni(filePath);
                 //controlliamo se il file è vuoto
+                //I20-1065: solo Links e Loghi; logs, export e i dati li crea il Plugin
                 let pathLinks = "";
                 let pathLoghi = "";
-                let pathLogs = "";
-                let pathEsportazione = "";
                 if (file!=null && file.length > 0) 
                 {
                     let item = file[0];
@@ -1059,33 +1073,19 @@ const FicoProcess=
                     if (item.pathLoghi != null && item.pathLoghi != "") {
                         pathLoghi = item.pathLoghi;
                     }
-                    if (item.pathLogs != null && item.pathLogs != "") {
-                        pathLogs = item.pathLogs;
-                    }
-                    if (item.pathEsportazione != null && item.pathEsportazione != "") {
-                        pathEsportazione = item.pathEsportazione;
-                    }
                 }
 
 
 
                 //facciamo prima un controllo se nel file esiste già un elemento con questo file
 
-                let existingItems = file!=null?file.find(f => f.file == nomeFile):null;
-                if (existingItems != null) {
-                    existingItems.file = nomeFile;
-                    existingItems.id = itemsInSearch[0].id;
-                    existingItems.details = itemsInSearch[0];
-                    existingItems.pathLinks = pathLinks;
-                    existingItems.pathLoghi = pathLoghi;
-                    existingItems.pathLogs = pathLogs;
-                    existingItems.pathEsportazione = pathEsportazione;
-                    //riscriviamo il file
-                    fs.writeFileSync(filePath, JSON.stringify(file));
+                //I20-1066: con gli indirizzi del server dell'ipconfig montato.
+                let voce = { file: nomeFile, id: itemsInSearch[0].id, pathLinks: pathLinks, pathLoghi: pathLoghi, details: itemsInSearch[0], ip: ConfigurazioneCliente.indirizziServer(istantaIp, olimpoIp) };
+                let libro = libroDelDocumentoInLavorazione(nomeFile, _pathLavorazione);
+                if (libro) {
+                    voce.libro = libro;
                 }
-                else {
-                    appendToFile(filePath, { file: nomeFile, id: itemsInSearch[0].id, pathLinks: pathLinks, pathLoghi: pathLoghi, pathLogs: pathLogs, pathEsportazione: pathEsportazione, details: itemsInSearch[0] });
-                }
+                Utility.salvaVoceLavorazione(_pathLavorazione, idMacchina(), voce);
 
                 return this.lavoraKitMassivo_Queue(indice + 1);
             }
@@ -1106,8 +1106,14 @@ const FicoProcess=
                 if (objResult.esito && objResult.records.length > 0) {
                     let lavorazioneItem = objResult.records[0];
                     //Scrivo il file di lavorazione o lo aggiungo al file di lavorazione
-                    var filePath = _pathLavorazione + "/lavorazioni.json";
-                    appendToFile(filePath, { file: nomeFile, id: lavorazioneItem.id, details: lavorazioneItem });
+                    //I20-1061: nel file di questa macchina
+                    //I20-1066: con gli indirizzi del server dell'ipconfig montato.
+                    let voce = { file: nomeFile, id: lavorazioneItem.id, details: lavorazioneItem, ip: ConfigurazioneCliente.indirizziServer(istantaIp, olimpoIp) };
+                    let libro = libroDelDocumentoInLavorazione(nomeFile, _pathLavorazione);
+                    if (libro) {
+                        voce.libro = libro;
+                    }
+                    Utility.salvaVoceLavorazione(_pathLavorazione, idMacchina(), voce);
 
                     return me.lavoraKitMassivo_Queue(indice + 1);
                 }
@@ -1391,18 +1397,18 @@ const FicoProcess=
                         //Esporta tutto in unico OPDF
                         //app.activeDocument.asynchronousExportFile(ExportFormat.PDF_TYPE, pathLavorazione + "/" + fileName, false, templateObj);
                         app.pdfExportPreferences.pageRange = "";
-                        app.activeDocument.exportFile(ExportFormat.PDF_TYPE, /*pathLavorazione +*/ percorsoEsportazione + fileName, false, templateObj);
+                        app.activeDocument.exportFile(ExportFormat.PDF_TYPE, exportPath + fileName, false, templateObj);
 
                         //recuperiamo l'ultima pagina di indesign
                         let lastPage = app.activeDocument.pages.item(-1);
-                        job.push({ fileName: /*pathLavorazione +*/ percorsoEsportazione + fileName, fileOnlyName: fileName, meta: me.listaElementiMateriali, page: lastPage.name });
+                        job.push({ fileName: exportPath + fileName, fileOnlyName: fileName, meta: me.listaElementiMateriali, page: lastPage.name });
                     }
                     else {
                         //Esportas pagina per pagina
                         //Solitamente è un PoP - Ma ci torneremo sopra proabilmente
                         let pagine = app.activeDocument.pages;
 
-                        let localDbDataset = readFile(pathLavorazione + "/listaImpaginata" + idKitLavorazione + ".json")[0].result;
+                        let localDbDataset = readFile(Utility.percorsoDati("listaImpaginata" + idKitLavorazione + ".json"))[0].result;
                         let listaLineareRef = [];
                         for (let r = 0; r < localDbDataset.length; r++) {
                             listaLineareRef = listaLineareRef.concat(localDbDataset[r].listaRef);
@@ -1490,7 +1496,7 @@ const FicoProcess=
                             app.pdfExportPreferences.pageRange = pagItem.name;
 
                             try {
-                                let file_name = /*pathLavorazione +*/ percorsoEsportazione + fileName;
+                                let file_name = exportPath + fileName;
                                 app.activeDocument.exportFile(ExportFormat.PDF_TYPE, file_name, false, templateObj);
                                 console.log("Stream creato!");
 
@@ -1510,8 +1516,8 @@ const FicoProcess=
 
                                             let nuovoNomeFile = fileNameDeclinazione.replace("{{pag}}", pagItem.name);
                                             nuovoNomeFile = nuovoNomeFile.replace("{{contatore}}", contatore);
-                                            Utility.duplicaFile(/*pathLavorazione +*/ percorsoEsportazione + fileName, /*pathLavorazione +*/ percorsoEsportazione + nuovoNomeFile);
-                                            job.push({ fileName: /*pathLavorazione +*/ percorsoEsportazione + nuovoNomeFile, fileOnlyName: nuovoNomeFile, meta: objMeta, page: pagItem.name, objItem: objItem });
+                                            Utility.duplicaFile(exportPath + fileName, exportPath + nuovoNomeFile);
+                                            job.push({ fileName: exportPath + nuovoNomeFile, fileOnlyName: nuovoNomeFile, meta: objMeta, page: pagItem.name, objItem: objItem });
                                         }
                                     }
                                 }
@@ -1740,7 +1746,9 @@ const FicoProcess=
             };
     
     
-            var file = readFile(pathLavorazione + "/lavorazioni.json");
+            //I20-1061: la voce del documento per questa macchina (copiata qui se era solo altrove)
+            var voceLavorazioneExport = Utility.voceLavorazione(pathLavorazione, idMacchina(), app.activeDocument.name, libroDelDocumentoInLavorazione(app.activeDocument.name));
+            var file = voceLavorazioneExport != null ? [voceLavorazioneExport] : null;
             if(file == null){
                 hideLoading();
                 messaggioUtente("Code FIP-14 Errore: File lavorazioni.json non trovato", "error");
@@ -2109,7 +2117,9 @@ const FicoProcess=
                     };
 
 
-                    var file = readFile(pathLavorazione + "/lavorazioni.json");
+                    //I20-1061: la voce del documento per questa macchina (copiata qui se era solo altrove)
+                    var voceLavorazioneExport = Utility.voceLavorazione(pathLavorazione, idMacchina(), app.activeDocument.name, libroDelDocumentoInLavorazione(app.activeDocument.name));
+                    var file = voceLavorazioneExport != null ? [voceLavorazioneExport] : null;
                     if(file == null){
                         hideLoading();
                         messaggioUtente("Errore: File lavorazioni.json non trovato", "error");
@@ -2140,8 +2150,8 @@ const FicoProcess=
 
                     let templateObj = app.pdfExportPresets.itemByName(tipoExportObj.codice);
                     app.pdfExportPreferences.pageRange = "";
-                    app.activeDocument.exportFile(ExportFormat.PDF_TYPE, /*pathLavorazione +*/ percorsoEsportazione + fileName, false, templateObj);
-                    const fileBuffer = fs.readFileSync(/*pathLavorazione +*/ percorsoEsportazione + fileName);
+                    app.activeDocument.exportFile(ExportFormat.PDF_TYPE, exportPath + fileName, false, templateObj);
+                    const fileBuffer = fs.readFileSync(exportPath + fileName);
 
                     fd.append("file", fileBuffer);
 

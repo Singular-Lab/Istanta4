@@ -5,12 +5,18 @@
 # Perche esiste: Istanta serve N clienti con un solo codice, e la scelta del
 # cliente vive in file che su ogni postazione sono diversi. Quei file NON sono
 # in git (vedi .gitignore), altrimenti il cliente montato da uno comparirebbe
-# nei diff di tutti. Le fonti sono gli archivi, quelli si che stanno in git:
+# nei diff di tutti.
 #
-#   plugin/Agenzie/<Cliente>/custom.js          ->  plugin/custom.js
+# I20-1064: il plugin non usa piu' una copia di custom.js in radice. Lo script
+# scrive plugin/clienteAttivo.json, che indica l'ipconfig del cliente:
 #
-# A runtime il plugin fa require('./custom'), quindi per lui la copia in radice
-# serve ancora.
+#   plugin/clienteAttivo.json         { "ipconfig": "Agenzie/<Cliente>/ipconfig.json" }
+#   plugin/Agenzie/<Cliente>/ipconfig.json   indirizzi + "custom": "Agenzie/<Cliente>/custom.js"
+#
+# e il plugin legge direttamente plugin/Agenzie/<Cliente>/custom.js, che e' in
+# git: le correzioni si fanno li', non ci sono piu' copie da riallineare. Se
+# l'ipconfig del cliente non c'e', lo crea da plugin/Agenzie/ipconfig.template.json
+# e gli indirizzi vanno scritti a mano.
 #
 # I20-997: il front-end web NON passa piu' di qui. Lo script di agenzia lo serve
 # il server, che legge Istanta/ScriptAgenzia/<cliente>/agenzia.js in base a
@@ -19,16 +25,15 @@
 #
 # Uso:
 #   ./monta-cliente.sh Edro21
-#   ./monta-cliente.sh Edro21 --forza     (sovrascrive anche se la radice e' diversa dall'archivio)
 #
 set -euo pipefail
 cd "$(dirname "$0")"
 
 CLIENTE=""
-FORZA=0
 for a in "$@"; do
     case "$a" in
-        --forza|-f) FORZA=1 ;;
+        # I20-1064: --forza serviva a sovrascrivere plugin/custom.js, che non si copia piu'.
+        --forza|-f) echo "--forza non serve piu': il plugin non copia niente in radice (I20-1064)." ;;
         -*)         CLIENTE="" ;;
         *)          CLIENTE="$a" ;;
     esac
@@ -45,7 +50,7 @@ case "$CLIENTE" in
     Famila) PLG=Famila ;;
     Gross)  PLG=""     ;;
     *)
-        echo "Uso: $0 <Cliente> [--forza]"
+        echo "Uso: $0 <Cliente>"
         echo "Clienti: Edro21 Coopfi Famila Gross"
         exit 1
         ;;
@@ -53,38 +58,60 @@ esac
 
 SUFFISSO=$(echo "$CLIENTE" | tr 'A-Z' 'a-z')
 
-# Copia un file d'archivio in radice.
-# Se la radice esiste ed e' DIVERSA dall'archivio si ferma: quasi sempre vuol
-# dire che la radice ha ricevuto una correzione che nessuno ha riportato
-# nell'archivio, e sovrascriverla la perderebbe per sempre (la radice non e'
-# in git, quindi non si recupera). Con --forza si sovrascrive lo stesso.
-monta() {
-    local archivio="$1" radice="$2"
-    if [ ! -f "$archivio" ]; then
-        echo "  MANCA l'archivio $archivio"
+# I20-1064: il plugin del cliente. Non si copia niente: si controlla l'archivio,
+# si crea l'ipconfig dal modello se manca e si scrive plugin/clienteAttivo.json.
+# I file in radice di prima, plugin/custom.js e plugin/ipconfig.json, non si
+# toccano: possono contenere correzioni o indirizzi che non stanno altrove, e
+# cancellarli li perderebbe. Si dice solo che non servono piu'.
+monta_plugin() {
+    local cartella="plugin/Agenzie/$1"
+    local custom="$cartella/custom.js"
+    local ipconfig="$cartella/ipconfig.json"
+    local modello="plugin/Agenzie/ipconfig.template.json"
+    local puntatore="plugin/clienteAttivo.json"
+
+    if [ ! -f "$custom" ]; then
+        echo "  MANCA l'archivio $custom"
         return 1
     fi
-    if [ -f "$radice" ] && ! cmp -s "$archivio" "$radice"; then
-        if [ "$FORZA" -eq 0 ]; then
-            echo "  FERMO: $radice e' diverso da $archivio."
-            echo "         Se la radice ha correzioni, riportale prima nell'archivio:"
-            echo "         cp $radice $archivio"
-            echo "         Altrimenti rilancia con --forza."
+
+    if [ ! -f "$ipconfig" ]; then
+        if [ ! -f "$modello" ]; then
+            echo "  MANCA $modello, non posso creare $ipconfig"
             return 1
         fi
-        echo "  sovrascrivo $radice (era diverso)"
+        sed "s/__CLIENTE__/$1/" "$modello" > "$ipconfig"
+        echo "  ok $ipconfig creato dal modello: SCRIVI GLI INDIRIZZI prima di avviare il plugin"
+    elif ! grep -q '"custom"[[:space:]]*:' "$ipconfig"; then
+        echo "  FERMO: $ipconfig non ha la voce \"custom\"."
+        echo "         Aggiungi \"custom\": \"Agenzie/$1/custom.js\", come in $modello."
+        return 1
     fi
-    cp "$archivio" "$radice"
-    echo "  ok $radice  <-  $archivio"
+
+    printf '{ "ipconfig": "Agenzie/%s/ipconfig.json" }\n' "$1" > "$puntatore"
+    echo "  ok $puntatore  ->  Agenzie/$1/ipconfig.json"
+
+    if [ -f "plugin/custom.js" ]; then
+        if cmp -s "plugin/custom.js" "$custom"; then
+            echo "  plugin/custom.js non e' piu' usato ed e' uguale all'archivio: puoi cancellarlo."
+        else
+            echo "  ATTENZIONE: plugin/custom.js non e' piu' usato ed e' DIVERSO da $custom."
+            echo "              Se contiene correzioni, riportale nell'archivio del suo cliente; poi cancellalo."
+        fi
+    fi
+    if [ -f "plugin/ipconfig.json" ]; then
+        echo "  plugin/ipconfig.json non e' piu' usato: se i suoi indirizzi sono di $CLIENTE"
+        echo "  e non li hai ancora riportati in $ipconfig, copiali li'; poi cancellalo."
+    fi
 }
 
 echo "Monto $CLIENTE"
 esito=0
 
 if [ -n "$PLG" ]; then
-    monta "plugin/Agenzie/$PLG/custom.js" "plugin/custom.js" || esito=1
+    monta_plugin "$PLG" || esito=1
 else
-    echo "  $CLIENTE non ha un archivio nel plugin: plugin/custom.js lasciato com'e'"
+    echo "  $CLIENTE non ha un archivio nel plugin: plugin/clienteAttivo.json lasciato com'e'"
 fi
 
 # Il profilo di avvio di Visual Studio. Contiene ISTANTA_CLIENTE, che e' la
@@ -123,7 +150,7 @@ fi
 # che contengono indirizzi e password: si controlla solo che ci siano.
 echo
 echo "Da controllare a mano:"
-for f in "Istanta/appsettings.$SUFFISSO.json" "plugin/ipconfig.json"; do
+for f in "Istanta/appsettings.$SUFFISSO.json" ${PLG:+"plugin/Agenzie/$PLG/ipconfig.json"}; do
     [ -f "$f" ] && echo "  c'e'    $f" || echo "  MANCA   $f"
 done
 for d in "Istanta/wwwroot/external_source/$CLIENTE" "Istanta/wwwroot/ficoContexts/$CLIENTE"; do

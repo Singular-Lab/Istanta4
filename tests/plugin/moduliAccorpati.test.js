@@ -33,13 +33,14 @@ function senzaCommenti(testo) {
         .split("\n").filter(riga => !/^\s*\/\//.test(riga)).join("\n");
 }
 
-//I file che possono fare require: il core e le agenzie, che si montano in radice.
+//I file che possono fare require: il core e le agenzie. I20-1064: le agenzie non si copiano piu'
+//in radice, il Plugin le carica dalla loro cartella: i loro require si risolvono da li'.
 function fileConRequire() {
     const agenzie = fs.readdirSync(path.join(CARTELLA_PLUGIN, "Agenzie"))
         .map(nome => "Agenzie/" + nome + "/custom.js")
         .filter(relativo => fs.existsSync(path.join(CARTELLA_PLUGIN, relativo)));
     return fileDelPlugin().map(relativo => ({ relativo, cartella: path.dirname(relativo) }))
-        .concat(agenzie.map(relativo => ({ relativo, cartella: "." })));
+        .concat(agenzie.map(relativo => ({ relativo, cartella: path.dirname(relativo) })));
 }
 
 test("i vecchi file non ci sono piu', e i nuovi si'", () => {
@@ -50,10 +51,11 @@ test("i vecchi file non ci sono piu', e i nuovi si'", () => {
 });
 
 //I file che il Plugin richiede ma che il repository non contiene, per disegno: in CI non ci sono.
-//custom.js e' l'agenzia, montata in radice da monta-cliente.sh; ipconfig.json e' la
-//configurazione della macchina. Accanto a ciascuno, la riga del .gitignore che lo tiene fuori.
+//I20-1064: clienteAttivo.json, scritto da monta-cliente.sh, indica il cliente della postazione;
+//gli ipconfig dei clienti hanno gli indirizzi della macchina. Accanto a ciascuno, la riga del
+//.gitignore che lo tiene fuori.
 const NON_VERSIONATI = {
-    "custom.js": "plugin/custom.js",
+    "clienteAttivo.json": "plugin/clienteAttivo.json",
     "ipconfig.json": "**/ipconfig*.json"
 };
 

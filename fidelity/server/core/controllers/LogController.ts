@@ -4,7 +4,8 @@ import { authMiddleware } from '../middleware/authMiddleware';
 import { BaseController } from '../base/BaseController';
 import { LogService, LogSearchParams } from '../services/LogService';
 import fs from 'fs';
-import { userRoleGuard } from '../middleware/userRoleGuard';
+import { permissionGuard } from '../middleware/permissionGuard';
+import { PERMESSI } from '../../../lib/accessi/catalogo';
 
 export class LogController extends BaseController {
     private logService: LogService;
@@ -15,7 +16,7 @@ export class LogController extends BaseController {
     }
 
     protected setupRoutes(): void {
-        const guard = [authMiddleware, userRoleGuard([TIPO_UTENTI.SUPERADMIN])];
+        const guard = [authMiddleware, permissionGuard(PERMESSI.SISTEMA.LOG)];
 
         this.router.get(`/list`, ...guard, this.getLogFiles.bind(this));
         this.router.get(`/audit`, ...guard, this.getAuditInfo.bind(this));
@@ -83,7 +84,7 @@ export class LogController extends BaseController {
         }
     }
 
-    private getLogContent(req: Request, res: Response) {
+    private getLogContent(req: Request<{ filename: string }>, res: Response) {
         try {
             const filename = req.params.filename;
             const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
@@ -206,7 +207,7 @@ export class LogController extends BaseController {
         }
     }
 
-    private clearLog(req: Request, res: Response) {
+    private clearLog(req: Request<{ filename: string }>, res: Response) {
         try {
             const filename = req.params.filename;
             const userId = req.session?.id_utente;

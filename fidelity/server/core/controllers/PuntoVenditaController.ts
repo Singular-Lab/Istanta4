@@ -1,17 +1,62 @@
 import { Request, Response } from 'express';
-import { HttpStatusCode } from '../../../lib/enums';
-import { PuntiVenditaAttributes } from '../../../lib/types';
+import { randomUUID } from 'node:crypto';
+import { HttpStatusCode, TIPO_UTENTI } from '../../../lib/enums';
+import { ExternalApiError } from '../../../lib/errors';
+import type { IAgenziaLib } from '../agenzia_lib/types';
 import { BaseController } from '../base/BaseController';
 import config from '../config';
+import { uploadSpreadsheet } from '../config/multerConfig';
+import type { CreatePuntoVenditaDTO, ImportPuntiVenditaResponseDTO } from '../dto';
 import { IGdoService } from '../interfaces/IGdoService';
 import { IPuntoVenditaService } from '../interfaces/IPuntoVenditaService';
+import { gdoOperativaPerRichiesta } from '../accessi/contestoAccesso';
 import { log } from '../logger';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { permissionGuard } from '../middleware/permissionGuard';
+import { importPuntiVenditaGenerico, leggiFoglio, preparaImportPuntiVendita } from '../services/importPuntiVendita';
 import { ServerUtils } from '../utils/ServerUtils';
+import { verificaRisposta } from '../utils/rispostaServizi';
+
+/** Il body del form Punti Vendita (salvaPV e modificaPV), e delle chiamate interne. */
+type FormPuntoVendita = {
+  guidID?: string;
+  idGDO?: string;
+  guidIDCombinazione: string;
+  nome: string;
+  indirizzo: string;
+  citta: string;
+  cap: string;
+  lat?: number | null;
+  lon?: number | null;
+  ragioneSociale?: string;
+  provincia?: string;
+  regione?: string;
+  telefono?: string;
+};
+
+// Un campo lasciato vuoto non si scrive: il modello rifiuterebbe provincia o telefono vuoti
+const testo = (valore?: string) => valore?.trim() || undefined;
+const coordinata = (valore: unknown) => (typeof valore === 'number' && Number.isFinite(valore) ? valore : undefined);
+
+function datiDaForm(body: FormPuntoVendita, idGdo: string): CreatePuntoVenditaDTO {
+  return {
+    nome: body.nome,
+    indirizzo: body.indirizzo,
+    citta: body.citta,
+    cap: body.cap,
+    id_combinazione_canale_area: body.guidIDCombinazione,
+    id_gdo: idGdo,
+    ragionesociale: testo(body.ragioneSociale),
+    provincia: testo(body.provincia),
+    regione: testo(body.regione),
+    telefono: testo(body.telefono),
+    lat: coordinata(body.lat),
+    lon: coordinata(body.lon),
+  };
+}
 
 export class PuntoVenditaController extends BaseController {
-  constructor(private puntoVenditaService: IPuntoVenditaService, private gdoService: IGdoService) {
+  constructor(private puntoVenditaService: IPuntoVenditaService, private gdoService: IGdoService, private agenziaLib: IAgenziaLib) {
     super('/api');
   }
 
@@ -20,13 +65,15 @@ export class PuntoVenditaController extends BaseController {
   }
 
   public initializeRoutes(): void {
-    this.router.put('/ACPV/salvaPV', authMiddleware, permissionGuard('gdo.gestisci_punti_vendita'), this.salvaPV.bind(this));
+    this.router.put('/ACPV/salvaPV', authMiddleware, permissionGuard('gdo.gestisci_punti_vendita'), this.salvaPuntoVendita.bind(this));
     this.router.delete('/ACPV/eliminaPV/:guidID', authMiddleware, permissionGuard('gdo.gestisci_punti_vendita'), this.eliminaPV.bind(this));
-    this.router.put('/ACPV/modificaPV', authMiddleware, permissionGuard('gdo.gestisci_punti_vendita'), this.modificaPV.bind(this));
+    this.router.put('/ACPV/modificaPV', authMiddleware, permissionGuard('gdo.gestisci_punti_vendita'), this.salvaPuntoVendita.bind(this));
+    this.router.post('/ACPV/importaPV', authMiddleware, permissionGuard('gdo.gestisci_punti_vendita'), uploadSpreadsheet.single('file'), this.importaPV.bind(this));
     this.router.get('/getAllPVFromIdGDO', authMiddleware, permissionGuard('gdo.gestisci_punti_vendita'), this.getAllPVFromIdGDO.bind(this));
     this.router.get('/getAllPVFromIdGDO_paginated', authMiddleware, permissionGuard('gdo.gestisci_punti_vendita'), this.getAllPVFromIdGDOPaginated.bind(this));
     this.router.get('/getAllPV', authMiddleware, permissionGuard('gdo.gestisci_punti_vendita'), this.getAllPV.bind(this));
     this.router.get("/get_pv_by_id", authMiddleware, permissionGuard('gdo.gestisci_punti_vendita'), this.getPvById.bind(this))
+    this.router.get("/punti-vendita/:id/volantini-attivi", authMiddleware, permissionGuard('gdo.gestisci_punti_vendita'), this.getVolantiniAttivi.bind(this))
     this.router.get("/get_all_punti_lat_lon_pv", authMiddleware, permissionGuard('gdo.gestisci_punti_vendita'), this.getAllPuntiLatLonPV.bind(this))
 
     // DISPOSITIVI PUNTO VENDITA
@@ -64,7 +111,7 @@ export class PuntoVenditaController extends BaseController {
     }
   }
 
-  private async getSingoloDispositivoPuntoVendita(req: Request, res: Response): Promise<void> {
+  private async getSingoloDispositivoPuntoVendita(req: Request<{ id: string }>, res: Response): Promise<void> {
     try {
       const id = req.params.id;
       const dispositivo = await this.puntoVenditaService.getDispositivoById(id);
@@ -108,7 +155,7 @@ export class PuntoVenditaController extends BaseController {
     }
   }
 
-  private async updateDispositivo(req: Request, res: Response): Promise<void> {
+  private async updateDispositivo(req: Request<{ id: string }>, res: Response): Promise<void> {
     try {
       const id = req.params.id;
       const result = await this.puntoVenditaService.updateDispositivo(id, req.body);
@@ -126,7 +173,7 @@ export class PuntoVenditaController extends BaseController {
     }
   }
 
-  private async deleteDispositivo(req: Request, res: Response): Promise<void> {
+  private async deleteDispositivo(req: Request<{ id: string }>, res: Response): Promise<void> {
     try {
       const id = req.params.id;
       const deleted = await this.puntoVenditaService.deleteDispositivo(id);
@@ -144,7 +191,7 @@ export class PuntoVenditaController extends BaseController {
     }
   }
 
-  private async regenerateToken(req: Request, res: Response): Promise<void> {
+  private async regenerateToken(req: Request<{ id: string }>, res: Response): Promise<void> {
     try {
       const id = req.params.id;
       const newToken = await this.puntoVenditaService.regenerateDeviceToken(id);
@@ -184,135 +231,82 @@ export class PuntoVenditaController extends BaseController {
     }
   }
 
-  private async salvaPV(req: Request, res: Response): Promise<void> {
+  /**
+   * Crea (guidID vuoto) o modifica un PV dal form: salvaPV e modificaPV fanno la stessa cosa.
+   * Dall'interfaccia scrive prima su Istanta e poi in FP con lo stesso GUID; una chiamata
+   * interna (header Authorization) scrive solo in FP.
+   */
+  private async salvaPuntoVendita(req: Request, res: Response): Promise<void> {
     try {
-      log.info('salvaPV - Start', {
-        body: req.body,
-        sessionUser: req.session.id_utente
-      });
-
-      const data = req.body as {
-        nome: string,
-        idGDO: string,
-        indirizzo: string,
-        guidID: string,
-        guidIDCombinazione: string,
-        citta: string,
-        cap: string,
-        lat: number,
-        lon: number,
-        ragioneSociale: string,
-        provincia: string,
-        regione: string,
-        telefono: string,
-      };
-
-      log.info('salvaPV - Extracted data', {
-        nome: data.nome,
-        idGDO: data.idGDO,
-        guidID: data.guidID
-      });
-
-      if (!ServerUtils.checkIfValueIsValid(data.idGDO)) {
-        log.info('salvaPV - No idGDO provided, fetching from current user');
-        const gdo = await this.gdoService.getGDOByUtenteId(req.session.id_utente as string);
-        if (gdo) {
-          data.idGDO = gdo.id as string;
-          log.info('salvaPV - Using GDO from current user', { idGDO: data.idGDO });
-        } else {
-          log.warn('salvaPV - No GDO found for current user');
-        }
-      }
-
-      // Controlla se la richiesta non è interna
-      if (req.headers['authorization']) {
-        log.info('salvaPV - Processing internal request with authorization');
-        const puntoVenditaData: Partial<PuntiVenditaAttributes> = {
-          id_puntivendita: data.guidID,
-          nome_puntivendita: data.nome,
-          indirizzo_puntivendita: data.indirizzo,
-          id_combinazione_canale_area_puntivendita: data.guidIDCombinazione,
-          citta_puntivendita: data.citta,
-          cap_puntivendita: data.cap,
-          lat_puntivendita: data.lat,
-          lon_puntivendita: data.lon,
-          id_gdo_puntivendita: data.idGDO
-        };
-
-        // Determina se è una creazione o un aggiornamento
-        const isUpdate = data.guidID && data.guidID !== '';
-        const resultPuntoVendita = isUpdate
-          ? await this.puntoVenditaService.updatePuntoVendita(data.guidID, puntoVenditaData)
-          : await this.puntoVenditaService.createPuntoVendita(puntoVenditaData);
-
-        const statusCode = isUpdate ? HttpStatusCode.OK : HttpStatusCode.CREATED;
-        const message = isUpdate ? 'Punto vendita aggiornato con successo' : 'Punto vendita creato con successo';
-
-        log.info(`salvaPV - PuntoVendita ${isUpdate ? 'updated' : 'created'} successfully`, { id: data.guidID });
-        this.sendResponse(res, statusCode, {
-          esito: true,
-          error: "",
-          message,
-          isUpdate,
-          data: resultPuntoVendita
-        });
+      const body = req.body as FormPuntoVendita;
+      const interna = Boolean(req.headers['authorization']);
+      const idGdo = await this.gdoDellaRichiesta(req, body.idGDO, interna);
+      if (!idGdo) {
+        this.sendResponse(res, HttpStatusCode.BAD_REQUEST, { message: 'GDO non specificata' });
         return;
       }
 
-      log.info('salvaPV - Sending request to FICO API');
-      const result = await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
-        req,
-        config.ISTANTA_IP_ADDRESS + '/ACPV/salvaPV',
-        'PUT',
-        data
-      );
+      const isUpdate = Boolean(body.guidID);
+      const id = body.guidID || randomUUID();
+      const dati = datiDaForm(body, idGdo);
+      const data = interna
+        ? await this.scriviInFp(id, dati, isUpdate)
+        : await this.salvaSuIstantaEFp(req, id, dati, isUpdate);
 
-      if (!result.data.esito && result.data.error != "") {
-        log.error('salvaPV - Error from FICO API', { error: result.data.error });
-        this.sendResponse(res, HttpStatusCode.INTERNAL_SERVER_ERROR, {
-          message: "Errore durante l'inserimento del punto vendita",
-          error: result.data.error
-        });
-        return;
-      }
-
-      log.info('salvaPV - FICO API request successful, creating PuntoVendita locally');
-      const puntoVenditaData: Partial<PuntiVenditaAttributes> = {
-        id_puntivendita: data.guidID,
-        nome_puntivendita: data.nome,
-        indirizzo_puntivendita: data.indirizzo,
-        id_combinazione_canale_area_puntivendita: data.guidIDCombinazione,
-        citta_puntivendita: data.citta,
-        cap_puntivendita: data.cap,
-        lat_puntivendita: data.lat,
-        lon_puntivendita: data.lon,
-        id_gdo_puntivendita: data.idGDO
-      };
-      // Determina se è una creazione o un aggiornamento
-      const isUpdate = data.guidID && data.guidID !== '';
-      const resultPuntoVendita = isUpdate
-        ? await this.puntoVenditaService.updatePuntoVendita(data.guidID, puntoVenditaData)
-        : await this.puntoVenditaService.createPuntoVendita(puntoVenditaData);
-
-      const statusCode = isUpdate ? HttpStatusCode.OK : HttpStatusCode.CREATED;
-      const message = isUpdate ? 'Punto vendita aggiornato con successo' : 'Punto vendita creato con successo';
-
-      log.info(`salvaPV - PuntoVendita ${isUpdate ? 'updated' : 'created'} successfully`, { id: data.guidID });
-      this.sendResponse(res, statusCode, {
-        ...resultPuntoVendita,
-        message,
-        isUpdate
+      log.info(`salvaPuntoVendita - punto vendita ${isUpdate ? 'aggiornato' : 'creato'}`, { id, idGdo, interna });
+      this.sendResponse(res, isUpdate ? HttpStatusCode.OK : HttpStatusCode.CREATED, {
+        esito: true,
+        error: '',
+        message: isUpdate ? 'Punto vendita aggiornato con successo' : 'Punto vendita creato con successo',
+        isUpdate,
+        data,
       });
-    } catch (error: any) {
-      log.error('salvaPV - Error', { error });
+    } catch (error) {
+      if (error instanceof ExternalApiError) return this.handleError(res, error);
+      log.error('salvaPuntoVendita - Error', { error });
       this.sendResponse(res, HttpStatusCode.INTERNAL_SERVER_ERROR, {
-        message: "Errore durante l'inserimento del punto vendita",
-        error: error
+        message: 'Errore durante il salvataggio del punto vendita',
       });
     }
   }
 
-  private async eliminaPV(req: Request, res: Response): Promise<void> {
+  /** GDO su cui si opera: quella della sessione; Superadmin e Agenzia possono indicarne un'altra (ruoli-permessi). */
+  private async gdoDellaRichiesta(req: Request, indicata: string | undefined, interna: boolean): Promise<string | undefined> {
+    const tipo = req.session.tipo_utente;
+    if (indicata && (interna || tipo === TIPO_UTENTI.SUPERADMIN || tipo === TIPO_UTENTI.AGENZIA)) return indicata;
+    return (await this.gdoService.getGDOByUtenteId(req.session.id_utente as string))?.id;
+  }
+
+  /**
+   * Istanta crea o aggiorna per guidID (non lo genera: un GUID vuoto farebbe coincidere
+   * tutti i PV nuovi), poi FP con lo stesso GUID. Se Istanta rifiuta, FP non viene toccato.
+   */
+  private async salvaSuIstantaEFp(req: Request, id: string, dati: CreatePuntoVenditaDTO, aggiorna: boolean) {
+    verificaRisposta(
+      await ServerUtils.sendToFICOApi(req, config.ISTANTA_IP_ADDRESS + '/ACPV/salvaPV', 'PUT', {
+        guidID: id,
+        nome: dati.nome,
+        indirizzo: dati.indirizzo,
+        citta: dati.citta,
+        cap: dati.cap,
+        lat: dati.lat ?? 0,
+        lon: dati.lon ?? 0,
+        guidIDCombinazione: dati.id_combinazione_canale_area,
+        idGDO: dati.id_gdo,
+      }),
+      'ISTANTA',
+      '/ACPV/salvaPV'
+    );
+    return this.scriviInFp(id, dati, aggiorna);
+  }
+
+  /** Aggiorna il PV o, se in FP non c'e ancora, lo crea con quel GUID: come fa Istanta. */
+  private async scriviInFp(id: string, dati: CreatePuntoVenditaDTO, aggiorna: boolean) {
+    const aggiornato = aggiorna ? await this.puntoVenditaService.updatePuntoVendita(id, dati) : null;
+    return aggiornato ?? this.puntoVenditaService.createPuntoVendita({ ...dati, id });
+  }
+
+  private async eliminaPV(req: Request<{ guidID: string }>, res: Response): Promise<void> {
     try {
       const guidID = req.params.guidID;
 
@@ -333,24 +327,21 @@ export class PuntoVenditaController extends BaseController {
         }
       }
 
-      const result = await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
-        req,
-        config.ISTANTA_IP_ADDRESS + '/ACPV/eliminaPV/' + guidID,
-        'DELETE',
-        undefined
+      verificaRisposta(
+        await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
+          req,
+          config.ISTANTA_IP_ADDRESS + '/ACPV/eliminaPV/' + guidID,
+          'DELETE',
+          undefined
+        ),
+        'ISTANTA',
+        '/ACPV/eliminaPV'
       );
-
-      if (!result.data.esito && result.data.error != "") {
-        this.sendResponse(res, HttpStatusCode.INTERNAL_SERVER_ERROR, {
-          message: "Errore durante l'eliminazione del punto vendita",
-          error: result.data.error
-        });
-        return;
-      }
 
       const resultPuntoVenditaEliminato = await this.puntoVenditaService.deletePuntoVendita(guidID);
       this.sendResponse(res, HttpStatusCode.OK, resultPuntoVenditaEliminato);
     } catch (error: any) {
+      if (error instanceof ExternalApiError) return this.handleError(res, error);
       error = JSON.stringify(error);
       this.sendResponse(res, HttpStatusCode.INTERNAL_SERVER_ERROR, {
         message: "Errore durante l'eliminazione del punto vendita"
@@ -358,68 +349,57 @@ export class PuntoVenditaController extends BaseController {
     }
   }
 
-  private async modificaPV(req: Request, res: Response): Promise<void> {
+  /**
+   * Import dei PV da Excel col tracciato della libreria agenzia (o quello generico).
+   * Con ?anteprima=true dice cosa farebbe di ogni riga senza scrivere; altrimenti scrive
+   * riga per riga, prima su Istanta e poi in FP, con lo stesso GUID nei due sistemi.
+   */
+  private async importaPV(req: Request, res: Response): Promise<void> {
     try {
-      const data = req.body as {
-        nome: string,
-        indirizzo: string,
-        guidID: string,
-        guidIDCombinazione: string,
-        citta: string,
-        cap: string,
-        lat: number,
-        lon: number,
-        idGDO: string
-      };
-
-      const gdo = await this.gdoService.getGDOByUtenteId(req.session.id_utente as string);
-      if (gdo) {
-        data.idGDO = gdo.id as string;
+      if (!req.file) {
+        this.sendResponse(res, HttpStatusCode.BAD_REQUEST, { message: 'Nessun file caricato' });
+        return;
       }
-
-      const puntoVenditaModificato: PuntiVenditaAttributes = {
-        id_puntivendita: data.guidID,
-        nome_puntivendita: data.nome,
-        indirizzo_puntivendita: data.indirizzo,
-        id_combinazione_canale_area_puntivendita: data.guidIDCombinazione,
-        citta_puntivendita: data.citta,
-        cap_puntivendita: data.cap,
-        lat_puntivendita: data.lat,
-        lon_puntivendita: data.lon,
-        id_gdo_puntivendita: data.idGDO
-      }
-
-      if (req.headers['authorization']) {
-        const resultPuntoVenditaModificato = await this.puntoVenditaService.updatePuntoVendita(data.guidID, puntoVenditaModificato);
-        this.sendResponse(res, HttpStatusCode.OK, {
-          esito: true,
-          error: ""
-        });
+      // La GDO e sempre quella della sessione, mai una indicata nella richiesta
+      const idGdo = await this.gdoDellaRichiesta(req, undefined, false);
+      if (!idGdo) {
+        this.sendResponse(res, HttpStatusCode.BAD_REQUEST, { message: 'GDO non specificata' });
         return;
       }
 
-      const result = await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
-        req,
-        config.ISTANTA_IP_ADDRESS + '/ACPV/modificaPV',
-        'PUT',
-        data
+      const esiti = preparaImportPuntiVendita(
+        leggiFoglio(req.file.buffer),
+        this.agenziaLib.importPuntiVendita ?? importPuntiVenditaGenerico,
+        await this.puntoVenditaService.getContestoImport(idGdo),
+        idGdo
       );
-
-      if (!result.data.esito && result.data.error != "") {
-        this.sendResponse(res, HttpStatusCode.INTERNAL_SERVER_ERROR, {
-          message: "Errore durante la modifica del punto vendita",
-          error: result.data.error
-        });
+      if (req.query.anteprima === 'true') {
+        this.sendResponse(res, HttpStatusCode.OK, { righe: esiti });
         return;
       }
 
-      const resultPuntoVenditaModificato = await this.puntoVenditaService.updatePuntoVendita(data.guidID, puntoVenditaModificato);
-      this.sendResponse(res, HttpStatusCode.OK, resultPuntoVenditaModificato);
-    } catch (error: any) {
-      this.sendResponse(res, HttpStatusCode.INTERNAL_SERVER_ERROR, {
-        message: "Errore durante la modifica del punto vendita",
-        error: error
-      });
+      const risultato: ImportPuntiVenditaResponseDTO = { total_imported: 0, total_updated: 0, total_skipped: 0, errors: [] };
+      // ponytail: una chiamata a Istanta per riga, in sequenza; job asincrono se i file diventano di migliaia di righe
+      for (const esito of esiti) {
+        if (esito.azione === 'scarta') {
+          risultato.total_skipped++;
+          risultato.errors.push({ row: esito.riga, error: esito.errore });
+          continue;
+        }
+        try {
+          await this.salvaSuIstantaEFp(req, esito.id ?? randomUUID(), esito.dati, Boolean(esito.id));
+          if (esito.id) risultato.total_updated++;
+          else risultato.total_imported++;
+        } catch (error) {
+          log.error('importaPV - riga non importata', { riga: esito.riga, error });
+          risultato.total_skipped++;
+          risultato.errors.push({ row: esito.riga, error: error instanceof Error ? error.message : String(error) });
+        }
+      }
+      log.info('importaPV - completato', { idGdo, ...risultato, errors: risultato.errors.length });
+      this.sendResponse(res, HttpStatusCode.OK, risultato);
+    } catch (error) {
+      this.handleError(res, error);
     }
   }
 
@@ -487,9 +467,11 @@ export class PuntoVenditaController extends BaseController {
 
   private async getAllPV(req: Request, res: Response): Promise<void> {
     try {
-      let idGDO = req.query.IdGDO as string;
-      if (idGDO == undefined) {
-        idGDO = req.session.id_gdo!
+      // Superadmin e Agenzia scelgono la GDO; per gli altri vale quella della sessione (ruoli-permessi)
+      const idGDO = await gdoOperativaPerRichiesta(req, res, req.query.IdGDO);
+      if (!idGDO) {
+        this.sendResponse(res, HttpStatusCode.BAD_REQUEST, { message: 'GDO non specificata' });
+        return;
       }
       const result = await this.puntoVenditaService.getAllPuntiVenditaFromIdGDO(idGDO);
       this.sendResponse(res, HttpStatusCode.OK, result);
@@ -509,6 +491,15 @@ export class PuntoVenditaController extends BaseController {
       this.sendResponse(res, HttpStatusCode.INTERNAL_SERVER_ERROR, {
         message: "Errore durante il recupero del punto vendita"
       })
+    }
+  }
+
+  private async getVolantiniAttivi(req: Request<{ id: string }>, res: Response): Promise<void> {
+    try {
+      const result = await this.puntoVenditaService.getVolantiniAttivi(req.params.id);
+      this.sendResponse(res, HttpStatusCode.OK, result);
+    } catch (error) {
+      this.handleError(res, error);
     }
   }
   private async getAllPuntiLatLonPV(req: Request, res: Response): Promise<void> {

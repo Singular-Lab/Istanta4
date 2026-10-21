@@ -820,6 +820,9 @@ class SyncFoto {
                     });
 
 
+            }, function (err) {
+                hideLoading();
+                alert(SyncFoto.messaggioDownloadNonRiuscito(err));
             });
         }
         else {
@@ -1115,8 +1118,7 @@ class SyncFoto {
             
         }, function (err) {
 
-            console.error("Trovato errore: " + err.message.error);
-            alert(err.message.error);
+            alert(SyncFoto.messaggioRicercaRegistroNonRiuscita(err));
             hideLoading();
         });
     }
@@ -1220,9 +1222,50 @@ class SyncFoto {
                 hideLoading();
             }
 
+        }, function (err) {
+            hideLoading();
+            alert(SyncFoto.messaggioDownloadNonRiuscito(err));
         });
 
 
     }
 
+    /// Il messaggio per un download dal registro che il server non ha preparato. La pulizia
+    /// notturna elimina i pacchetti dopo il periodo di conservazione: in quel caso il server
+    /// risponde "pacchetto_scaduto", ed e' una cosa normale, non un guasto. Gli altri errori non
+    /// mostrano all'utente i dettagli tecnici, che restano nella console.
+    static messaggioDownloadNonRiuscito(err) {
+        if (err && err.message === "pacchetto_scaduto") {
+            return "Questo pacchetto è scaduto e non si può più scaricare: le foto delle sincronizzazioni " +
+                "restano disponibili per un periodo limitato dopo la scansione, poi vengono eliminate.";
+        }
+        console.error("Download del pacchetto non riuscito", err);
+        return "Non è stato possibile preparare il pacchetto da scaricare. Riprova più tardi.";
+    }
+
+    /// Il messaggio per una ricerca nel registro rifiutata. Call.do mette in err.message il codice
+    /// che SyncFoto/ricercaNelRegistro scrive in error: prima si leggeva err.message.error, una
+    /// proprieta' di una stringa, e l'utente vedeva "undefined". Un errore imprevisto porta con se'
+    /// lo stack trace del server, che resta nella console.
+    static messaggioRicercaRegistroNonRiuscita(err) {
+        var codice = err ? err.message : undefined;
+        if (codice === "not_more_40") {
+            return "Si possono cercare al massimo 40 giorni alla volta: restringi l'intervallo di date.";
+        }
+        if (codice === "a_maggiore_di_da") {
+            return "La data finale è precedente a quella iniziale: correggi l'intervallo.";
+        }
+        if (codice === "Date not valid") {
+            return "Indica sia la data di inizio sia quella di fine.";
+        }
+        console.error("Ricerca nel registro non riuscita", err);
+        return "Non è stato possibile cercare nel registro. Riprova più tardi.";
+    }
+
+}
+
+//Pulizia estrazioni: in Node si esporta per i test (tests/istanta-web). Nella pagina module
+//non esiste e questa riga non fa nulla.
+if (typeof module !== "undefined" && module.exports) {
+    module.exports = SyncFoto;
 }

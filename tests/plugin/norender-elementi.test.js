@@ -732,3 +732,42 @@ test("il fix foto salta le foto invisibili", () => {
     assert.ok(salto > raccolta && salto < etichetta,
         "la foto invisibile va saltata prima ancora di guardarne l'etichetta");
 });
+
+/* ---- I20-1105: le modifiche non salvate della schermata ---- */
+
+function elementoNoRender(tipo, chiave, noRender) {
+    return { tipo: tipo, chiave: chiave, nome: chiave, noRender: noRender };
+}
+
+test("senza cambiamenti dall'ultima fotografia non ci sono modifiche da perdere", () => {
+    const lista = [elementoNoRender("foto", "6322946", false), elementoNoRender("campo", "prezzo", true)];
+    const salvato = NoRenderElementi.statoDiRendering(lista);
+    assert.strictEqual(NoRenderElementi.modificheNonSalvate(lista, salvato), 0);
+});
+
+test("un elemento cambiato conta, e lo stesso elemento rimesso com'era non conta piu'", () => {
+    const lista = [elementoNoRender("foto", "6322946", false), elementoNoRender("campo", "prezzo", true)];
+    const salvato = NoRenderElementi.statoDiRendering(lista);
+
+    lista[0].noRender = true;
+    assert.strictEqual(NoRenderElementi.modificheNonSalvate(lista, salvato), 1);
+    lista[1].noRender = false;
+    assert.strictEqual(NoRenderElementi.modificheNonSalvate(lista, salvato), 2);
+
+    lista[0].noRender = false;
+    lista[1].noRender = true;
+    assert.strictEqual(NoRenderElementi.modificheNonSalvate(lista, salvato), 0);
+});
+
+test("tipo e chiave insieme distinguono gli elementi, anche con la stessa chiave", () => {
+    const lista = [elementoNoRender("foto", "A", false), elementoNoRender("logo", "A", false)];
+    const salvato = NoRenderElementi.statoDiRendering(lista);
+    lista[1].noRender = true;
+    assert.strictEqual(NoRenderElementi.modificheNonSalvate(lista, salvato), 1);
+});
+
+test("senza fotografia un elemento conta solo se e' nascosto, come si salverebbe", () => {
+    const lista = [elementoNoRender("foto", "6322946", false), elementoNoRender("campo", "prezzo", true)];
+    assert.strictEqual(NoRenderElementi.modificheNonSalvate(lista, null), 1);
+    assert.strictEqual(NoRenderElementi.modificheNonSalvate(null, null), 0);
+});

@@ -153,8 +153,9 @@
                 }
 
 
-                htmlItem.find("#CodPrimario").val(elementoGruppo.recordInTracciato.PrimarioGruppo);
-                htmlItem.find("#CodSecondari").val(elementoGruppo.recordInTracciato.SecondariGruppo);
+                //I20-1092: nella modalita' sottogruppi si arriva qui anche senza un elemento del gruppo.
+                htmlItem.find("#CodPrimario").val(elementoGruppo != null ? elementoGruppo.recordInTracciato.PrimarioGruppo : "");
+                htmlItem.find("#CodSecondari").val(elementoGruppo != null ? elementoGruppo.recordInTracciato.SecondariGruppo : "");
 
                 //rowMismatchStatoSelezione
                 if (primario) {

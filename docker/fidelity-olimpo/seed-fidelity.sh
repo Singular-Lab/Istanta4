@@ -14,8 +14,9 @@
 # lasciarle creare all'applicazione e riempirle dopo.
 #
 # Lo script è idempotente: rilanciarlo non duplica nulla e non tocca quello che
-# c'è già. Le tre parti sono indipendenti, quindi si può rilanciare anche solo
-# per aggiungere le voci di menu introdotte da una versione nuova.
+# c'è già. Si può rilanciare anche solo per aggiungere le voci di menu introdotte
+# da una versione nuova, o per collegare alla GDO un amministratore seminato
+# prima che lo script lo facesse.
 set -uo pipefail
 
 rosso()  { printf '\033[31m%s\033[0m\n' "$*"; }
@@ -24,8 +25,11 @@ verde()  { printf '\033[32m%s\033[0m\n' "$*"; }
 
 [ -f release.env ] || { rosso "release.env non trovato: esegui lo script dalla directory del progetto."; exit 1; }
 
+# leggi NOME [file]: il valore di NOME nel file indicato, release.env se non e' detto.
 leggi() {
-    sed -n "s/^$1=//p" release.env | tail -n 1 | tr -d '\r' \
+    local file="${2:-release.env}"
+    [ -f "$file" ] || return 0
+    sed -n "s/^$1=//p" "$file" | tail -n 1 | tr -d '\r' \
         | sed -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'\$/\1/"
 }
 
@@ -36,6 +40,8 @@ admin_email=$(leggi FIDELITY_ADMIN_EMAIL)
 admin_password=$(leggi FIDELITY_ADMIN_PASSWORD)
 admin_nome=$(leggi FIDELITY_ADMIN_NOME);       admin_nome="${admin_nome:-Amministratore}"
 admin_cognome=$(leggi FIDELITY_ADMIN_COGNOME); admin_cognome="${admin_cognome:-Sistema}"
+# La GDO dell'istanza: lo stesso CLIENT_ID con cui Fidelity sceglie le logiche di agenzia_lib.
+client_id=$(leggi CLIENT_ID fidelity.env)
 
 postgres_c="${progetto}-postgres-1"
 fidelity_c="${progetto}-fidelity-1"
@@ -55,12 +61,13 @@ done
 
 psql_fidelity() { docker exec -i "$postgres_c" psql -v ON_ERROR_STOP=1 -U "$db_user" -d "$db_name" "$@"; }
 
-# Le tre tabelle devono già esserci: se mancano, Fidelity non è mai arrivata a
-# sincronizzare i modelli e riempirle non avrebbe senso.
+# Le tabelle devono già esserci: se mancano, Fidelity non è mai arrivata a
+# sincronizzare i modelli e riempirle non avrebbe senso. ruolo_utente_gdo la
+# riempie Fidelity stessa all'avvio, con i sotto-ruoli GDO.
 echo
 echo "Tabelle attese"
 mancanti=0
-for t in auth_providers utenti menu_items; do
+for t in auth_providers utenti menu_items gdo utenti_gdo ruolo_utente_gdo; do
     if [ "$(psql_fidelity -tAc "select to_regclass('public.$t') is not null")" = t ]; then
         verde "  ok        $t"
     else
@@ -108,6 +115,11 @@ verde "  ok        auth_providers (email_password)"
 
 # 2. Primo utente. Si confronta sull'email invece di usare ON CONFLICT, perché
 #    non dipende dall'esistenza di un indice univoco su quella colonna.
+#    La chiave privata nasce vuota: al primo passaporto Fidelity si presenta a
+#    Olimpo con fico-secret, Olimpo registra l'utente e restituisce la chiave
+#    privata vera, che Fidelity salva. Una chiave inventata qui (era un UUID
+#    casuale) Olimpo non la conosce: rifiuta ogni passaporto e Istanta riceve
+#    un'identita' vuota, per cui l'amministratore non puo' lavorare con Istanta.
 psql_fidelity \
     -v email="$admin_email" \
     -v pwd_hash="$hash" \
@@ -118,7 +130,7 @@ INSERT INTO utenti
      stato_utenti, tipo_utenti, privatekey_utenti, outsider_utenti,
      createdat, updatedat)
 SELECT gen_random_uuid(), :'nome', :'cognome', :'email', :'pwd_hash',
-       'ATTIVO', 'Superadmin', gen_random_uuid()::text, false, NOW(), NOW()
+       'ATTIVO', 'Superadmin', '', false, NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM utenti WHERE email_utenti = :'email');
 SQL
 verde "  ok        utenti ($admin_email, Superadmin)"
@@ -168,12 +180,88 @@ ON CONFLICT (id_menu_item) DO NOTHING;
 SQL
 verde "  ok        menu_items (33 voci del Superadmin)"
 
+# 4. GDO dell'istanza, con il nome di CLIENT_ID (fidelity.env). Senza CLIENT_ID,
+#    o con "default", l'istanza non ha un cliente e non c'e' nulla da inserire.
+#    Il confronto sul nome ignora le maiuscole: rilanciare non la duplica.
+if [ -z "$client_id" ] || [ "$(printf '%s' "$client_id" | tr '[:upper:]' '[:lower:]')" = default ]; then
+    giallo "  saltato   gdo (CLIENT_ID in fidelity.env vuoto o 'default')"
+    giallo "  saltato   utenti_gdo (nessuna GDO a cui collegare l'amministratore)"
+else
+    psql_fidelity -v nome="$client_id" <<'SQL' >/dev/null
+INSERT INTO gdo (id_gdo, nome_gdo, createdat, updatedat)
+SELECT gen_random_uuid(), :'nome', NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM gdo WHERE lower(nome_gdo) = lower(:'nome'));
+SQL
+    verde "  ok        gdo ($client_id)"
+
+    # 5. Collegamento dell'amministratore alla GDO dell'istanza, con il
+    #    sotto-ruolo ADMIN. Al login Fidelity prende la GDO della sessione da
+    #    utenti_gdo: senza questa riga il Superadmin entra senza GDO operativa.
+    #    utenti_gdo ammette una sola GDO per utente: se l'amministratore e' gia'
+    #    collegato, anche a un'altra GDO, il collegamento resta com'e'.
+    psql_fidelity -v nome="$client_id" -v email="$admin_email" <<'SQL' >/dev/null
+INSERT INTO utenti_gdo
+    (id_utentegdo, id_utente_utentegdo, id_gdo_utentegdo, id_ruolo_utente_gdo,
+     createdat, updatedat)
+SELECT gen_random_uuid(), u.id_utenti, g.id_gdo,
+       (SELECT r.id_ruolo_utente_gdo FROM ruolo_utente_gdo r
+         WHERE r.ruolo_ruolo_utente_gdo = 'ADMIN' LIMIT 1),
+       NOW(), NOW()
+FROM utenti u
+JOIN gdo g ON lower(g.nome_gdo) = lower(:'nome')
+WHERE u.email_utenti = :'email'
+  AND NOT EXISTS (SELECT 1 FROM utenti_gdo ug WHERE ug.id_utente_utentegdo = u.id_utenti);
+SQL
+    gdo_admin=$(psql_fidelity -tA -v email="$admin_email" <<'SQL'
+SELECT g.nome_gdo
+FROM utenti u
+JOIN utenti_gdo ug ON ug.id_utente_utentegdo = u.id_utenti
+JOIN gdo g ON g.id_gdo = ug.id_gdo_utentegdo
+WHERE u.email_utenti = :'email';
+SQL
+)
+    gdo_admin_min=$(printf '%s' "$gdo_admin" | tr '[:upper:]' '[:lower:]')
+    client_id_min=$(printf '%s' "$client_id" | tr '[:upper:]' '[:lower:]')
+    if [ "$gdo_admin_min" = "$client_id_min" ]; then
+        verde "  ok        utenti_gdo ($admin_email -> $client_id)"
+    else
+        giallo "  invariato utenti_gdo: $admin_email e' gia' collegato alla GDO '$gdo_admin'"
+    fi
+fi
+
+# 6. Materialized view. Fidelity le ricrea a ogni avvio dagli script di
+#    server/core/db/scripts, quando le tabelle seminate qui erano ancora vuote:
+#    senza un refresh la gestione utenti non mostrerebbe l'amministratore.
+echo
+echo "Materialized view"
+viste_mancanti=0
+for v in mv_utenti_completi mv_aree_ottimizzata mv_canali_ottimizzata mv_combinazioni_ottimizzata; do
+    if [ "$(psql_fidelity -tAc "select to_regclass('public.$v') is not null")" != t ]; then
+        rosso "  assente   $v"
+        viste_mancanti=$((viste_mancanti + 1))
+    elif psql_fidelity -c "REFRESH MATERIALIZED VIEW public.$v" >/dev/null; then
+        verde "  ok        $v"
+    else
+        rosso "  errore    refresh di $v non riuscito"
+        viste_mancanti=$((viste_mancanti + 1))
+    fi
+done
+
 echo
 echo "Situazione"
 psql_fidelity -c "select
     (select count(*) from auth_providers where attivo) as provider_attivi,
     (select count(*) from utenti)                     as utenti,
+    (select count(*) from gdo)                        as gdo,
+    (select count(*) from utenti_gdo)                 as utenti_gdo,
     (select count(*) from menu_items)                 as voci_menu;"
+
+if [ "$viste_mancanti" -gt 0 ]; then
+    echo
+    rosso "Fidelity non ha creato tutte le materialized view: la gestione utenti, aree e canali non funzionera'."
+    echo "Controlla l'avvio: docker logs $fidelity_c 2>&1 | grep -i 'errore script'"
+    exit 1
+fi
 
 echo
 verde "Fatto. Entra con $admin_email e la password che hai messo in release.env."

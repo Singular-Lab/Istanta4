@@ -47,6 +47,9 @@ function Main() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [newEmailAddress, setNewEmailAddress] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [passwordDisattivazione, setPasswordDisattivazione] = useState("");
+  const [confermaDisattivazione, setConfermaDisattivazione] = useState(false);
+  const [disattivazioneInCorso, setDisattivazioneInCorso] = useState(false);
   const { user, setUser } = useUser();
   const { showNotification } = useNotification();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -99,7 +102,6 @@ function Main() {
         tipo_utenti: user?.tipo as TIPO_UTENTI,
         stato_utenti: user?.stato as STATO_UTENTI,
         sesso_utenti: gender as UTENTE_GENERE,
-        privatekey_utenti: user?.private_key,
         nome_utenti: name,
         cognome_utenti: surname,
         email_utenti: email,
@@ -185,6 +187,18 @@ function Main() {
     }
   };
 
+  const handleDisattivaAccount = async () => {
+    setDisattivazioneInCorso(true);
+    try {
+      await ServerCall.post('/utente/disattiva-account', { password: passwordDisattivazione });
+      // Le sessioni sono già chiuse dal server: ricarico da zero per svuotare lo stato dell'app
+      window.location.assign('/login');
+    } catch (err: unknown) {
+      showNotification(err instanceof Error ? err.message : "Errore durante la disattivazione dell'account", { variant: 'error' });
+      setDisattivazioneInCorso(false);
+    }
+  };
+
   const handleEmailChange = async () => {
     if (!newEmailAddress || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmailAddress)) {
       showNotification('Inserisci un indirizzo email valido', { variant: 'error' });
@@ -219,18 +233,6 @@ function Main() {
       <div className="col-span-12">
         <div className="flex flex-col md:h-10 gap-y-3 md:items-center md:flex-row">
           <PageHeader title="Impostazioni Account" />
-          <div className="flex flex-col sm:flex-row gap-x-3 gap-y-2 md:ml-auto">
-            <Button
-              variant="primary"
-              className="group-[.mode--light]:!bg-white/[0.12] group-[.mode--light]:!text-slate-200 group-[.mode--light]:!border-transparent"
-            >
-              <Lucide
-                icon="ExternalLink"
-                className="stroke-[1.3] w-4 h-4 mr-3"
-              />{" "}
-              Vai al Mio Profilo
-            </Button>
-          </div>
         </div>
         {error && (
           <Alert variant="danger" className="mt-4">
@@ -436,7 +438,7 @@ function Main() {
                     className="flex items-center text-slate-500"
                   >
                     Chi può vedere la tua foto del profilo?
-                    <Tippy as="div" content="Low" className="ml-1.5">
+                    <Tippy as="div" content="Scegli chi può vedere la tua foto del profilo" className="ml-1.5">
                       <Lucide
                         icon="Info"
                         className="w-3.5 h-3.5 text-slate-500 stroke-[1.3]"
@@ -1360,38 +1362,43 @@ function Main() {
                   <Alert variant="outline-warning" className="flex items-start">
                     <Lucide icon="AlertTriangle" className="w-6 h-6 mr-2 mt-0.5 shrink-0" />
                     <div>
-                      Gli account con autenticazione esterna (OIDC) non possono essere eliminati da questo pannello. Contatta l'amministratore del sistema per procedere.
+                      Gli account con autenticazione esterna (OIDC) non possono essere disattivati da questo pannello. Contatta l'amministratore del sistema per procedere.
                     </div>
                   </Alert>
                 ) : (
                   <>
-                    <div>
-                      <div className="leading-relaxed">
-                        Avviando il processo di eliminazione dell'account, perderai l'accesso a tutti i servizi della piattaforma e i tuoi dati personali verranno rimossi definitivamente. Hai una finestra di 10 giorni per annullare la richiesta se necessario.
-                      </div>
-                      <FormCheck className="mt-5">
-                        <FormCheck.Input
-                          id="checkbox-switch-1"
-                          type="checkbox"
-                          value=""
-                        />
-                        <FormCheck.Label htmlFor="checkbox-switch-1">
-                          Confermo di voler eliminare il mio account.
-                        </FormCheck.Label>
-                      </FormCheck>
+                    <div className="leading-relaxed">
+                      Disattivando l'account perderai l'accesso a Fidelity e verranno chiuse tutte le tue sessioni aperte. I tuoi dati restano conservati: per riattivare l'account contatta l'amministratore.
                     </div>
-                    <div className="flex flex-col-reverse gap-3 pt-5 mt-6 border-t border-dashed md:flex-row md:justify-end border-slate-300/70">
-                      <Button
-                        variant="outline-secondary"
-                        className="w-full px-4 md:w-auto"
-                      >
-                        Maggiori Informazioni
-                      </Button>
+                    <div className="mt-5">
+                      <FormLabel htmlFor="password-disattivazione">Password attuale</FormLabel>
+                      <FormInput
+                        id="password-disattivazione"
+                        type="password"
+                        autoComplete="current-password"
+                        value={passwordDisattivazione}
+                        onChange={(e) => setPasswordDisattivazione(e.target.value)}
+                      />
+                    </div>
+                    <FormCheck className="mt-4">
+                      <FormCheck.Input
+                        id="conferma-disattivazione"
+                        type="checkbox"
+                        checked={confermaDisattivazione}
+                        onChange={(e) => setConfermaDisattivazione(e.target.checked)}
+                      />
+                      <FormCheck.Label htmlFor="conferma-disattivazione">
+                        Confermo di voler disattivare il mio account.
+                      </FormCheck.Label>
+                    </FormCheck>
+                    <div className="flex justify-end pt-5 mt-6 border-t border-dashed border-slate-300/70">
                       <Button
                         variant="outline-danger"
                         className="w-full px-4 border-danger/50 bg-danger/5 md:w-auto"
+                        onClick={handleDisattivaAccount}
+                        disabled={!confermaDisattivazione || !passwordDisattivazione || disattivazioneInCorso}
                       >
-                        Elimina Account
+                        {disattivazioneInCorso ? "Disattivazione in corso..." : "Disattiva account"}
                       </Button>
                     </div>
                   </>

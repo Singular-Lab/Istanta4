@@ -4,7 +4,8 @@ import { ContextMenuProvider } from "@/context/ContextMenuContext";
 import { NotificationProvider } from "@/context/NotificationContext";
 import { WebpliantParamsProvider } from "@/stores/webpliantParamsStore";
 import { getCurrentEnvironment, updateFavicon } from "@/utils/environmentFavicon";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { isErroreServizio, notificaErroreServizio } from "@/utils/erroriServizi";
+import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import dayjs from "dayjs";
 import 'dayjs/locale/it';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
@@ -72,12 +73,19 @@ const AppWrapper = ({ children }: { children: React.ReactNode }) => {
 
 // Configurazione QueryClient ottimizzata
 const queryClient = new QueryClient({
+  // Errori di Istanta/Correggo: toast globale per le query e per le mutation senza onError proprio
+  queryCache: new QueryCache({ onError: notificaErroreServizio }),
+  mutationCache: new MutationCache({
+    onError: (error, _variables, _context, mutation) => {
+      if (!mutation.options.onError) notificaErroreServizio(error);
+    }
+  }),
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: false,
       retry: (failureCount, error: any) => {
-        // Non ritentare per errori client (400-499)
-        if (error?.response?.status >= 400 && error?.response?.status < 500) {
+        // Non ritentare per errori client (400-499) né per le risposte definitive di Istanta/Correggo
+        if ((error?.httpStatus >= 400 && error?.httpStatus < 500) || isErroreServizio(error)) {
           return false;
         }
         return failureCount < 2; // Max 2 tentativi
