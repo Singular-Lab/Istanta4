@@ -1611,9 +1611,26 @@ namespace Istanta.Models
         public string Xlsx { get; set; } = "";
     }
 
+    /// <summary>
+    /// I20-1120: un sottogruppo che la stessa referenza, nello stesso gruppo, ha in un altro record
+    /// caricato dal revisore (un altro tracciato o un'altra etichetta), con il record che lo porta.
+    /// La riga del revisore e' una sola per referenza e gruppo e porta il sottogruppo di un record
+    /// solo: la vista Sottogruppi usa questo elenco per mostrare anche gli altri.
+    /// </summary>
+    public class SottogruppoDellaRiga
+    {
+        public string CodiceSottogruppo { get; set; } = "";
+        public long IdRec { get; set; }
+        public int IdTracciato { get; set; }
+        public string? Label { get; set; }
+    }
+
     public class ArticoloInRevisione
     {
         public Int64? idRec;
+        //I20-1120: gli altri sottogruppi della referenza nei record caricati, per la sola vista
+        //Sottogruppi del revisore. Null quando non ce ne sono: le viste normali non lo leggono.
+        public List<SottogruppoDellaRiga>? altriSottogruppi;
         public Dictionary<string, object>? recordInTracciato;
         public ArticoliDescrizioni? recordRevisionato;
         public List<RevisioneRegionale>? recordRevisionatiRegionali;

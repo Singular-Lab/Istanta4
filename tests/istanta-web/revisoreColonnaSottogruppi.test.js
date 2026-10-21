@@ -211,3 +211,30 @@ test('l\'adattamento avviene dopo che la scheda e\' nella pagina', () => {
     assert.ok(primoAppend > 0 && primoAppend < primoAdattamento,
         'prima dell\'inserimento nella pagina l\'altezza del contenuto non e\' misurabile');
 });
+
+/* ---- I20-1120: la lettura dei sottogruppi si vede e non si interrompe ---- */
+
+function attivaSottogruppi() {
+    const revisore = sorgente('Istanta/wwwroot/js/revisore.js').replace(/\r/g, '');
+    const inizio = revisore.indexOf('    attivaModalitàVisualizzazioneSottogruppi(senderVal) {');
+    return revisore.substring(inizio, revisore.indexOf('\n    }\n', inizio));
+}
+
+test('prima di chiedere i sottogruppi compare il caricamento e la tendina della modalita\' si ferma', () => {
+    const metodo = attivaSottogruppi();
+    const chiamata = metodo.indexOf('Call.do("Revisore", "getArticoliDescrizioniSottogruppi/"');
+    assert.ok(chiamata > 0);
+    const prima = metodo.substring(0, chiamata);
+    assert.match(prima, /showLoading\(\);\s*\$\("#filtraPerGruppiOSingoli"\)\.prop\("disabled", true\);\s*$/);
+});
+
+test('alla risposta la tendina torna utilizzabile, anche se la lettura e\' fallita', () => {
+    const metodo = attivaSottogruppi();
+    const risposta = metodo.substring(metodo.indexOf('Call.do("Revisore", "getArticoliDescrizioniSottogruppi/"'));
+    //La tendina si sblocca prima di guardare l'esito: vale per la risposta buona e per l'errore.
+    const sblocco = risposta.indexOf('$("#filtraPerGruppiOSingoli").prop("disabled", false);');
+    const esito = risposta.indexOf('Revisore.mostraErroreDellaChiamata(result, "Descrizioni dei sottogruppi non caricate")');
+    assert.ok(sblocco > 0 && sblocco < esito);
+    //Se la lettura e' fallita la modalita' sottogruppi non e' partita e la tendina lo dice.
+    assert.match(risposta, /mostraErroreDellaChiamata\(result, "Descrizioni dei sottogruppi non caricate"\)\) \{\s*\/\/[^\n]*\n\s*me\.modalitaSottogruppi = false;\s*\$\("#filtraPerGruppiOSingoli"\)\.val\("tutti"\);\s*return;\s*\}/);
+});

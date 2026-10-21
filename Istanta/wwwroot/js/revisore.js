@@ -996,10 +996,11 @@
 
                 let obj = null;
                 if (cod.includes(",")) {
-                    obj = sender.List.filter(r => r.isGruppo && r.recordInTracciato != null && r.recordInTracciato[keyScattoCodiceGruppo] == cod);
+                    //I20-1120: anche la lista messa da parte, cosi' tornando all'altra vista non resta vecchia.
+                    obj = Revisore.righeDelleDueListe(sender).filter(r => r.isGruppo && r.recordInTracciato != null && r.recordInTracciato[keyScattoCodiceGruppo] == cod);
                 }
                 else {
-                    obj = sender.List.filter(r => !r.isGruppo && r.recordInTracciato != null && r.recordInTracciato[keyRefCodice] == cod);
+                    obj = Revisore.righeDelleDueListe(sender).filter(r => !r.isGruppo && r.recordInTracciato != null && r.recordInTracciato[keyRefCodice] == cod);
                 }
                 console.log(obj);
                 console.log("item");
@@ -2453,8 +2454,10 @@
                 //I20-1069: prima un errore spegneva il caricamento senza dire niente.
                 if (Revisore.mostraErroreDellaChiamata(result, "Aggiunta al sottogruppo non riuscita")) return;
                 if (result.error == null || result.error == "") {
+                    //I20-1120: tutte le righe del record, nelle due liste; prima un record assente dalla
+                    //lista visibile (un'altra etichetta) faceva un TypeError.
                     result.idRecDaModificare.forEach(function (item) {
-                        ME.List.find(f => f.idRec == item).recordInTracciato[keyScattoCodiceSottogruppo] = result.codiceSottogruppo;
+                        Revisore.righeConIdRec(ME, item).forEach(r => r.recordInTracciato[keyScattoCodiceSottogruppo] = result.codiceSottogruppo);
                     });
                     ME.sostituisciSottogruppoButton();
 
@@ -2497,14 +2500,17 @@
                 if (Revisore.mostraErroreDellaChiamata(result, "Rimozione dal sottogruppo non riuscita")) return;
                 if (result.error == null || result.error == "") {
 
-                    delete ME.List.find(f => f.idRec == idRec).recordInTracciato[keyScattoCodiceSottogruppo];
+                    //I20-1120: tutte le righe del record, nelle due liste, senza TypeError se manca.
+                    Revisore.righeConIdRec(ME, idRec).forEach(r => { delete r.recordInTracciato[keyScattoCodiceSottogruppo]; });
                     result.idRecDaModificare.forEach(function (item) {
-                        if (result.codiceSottogruppo != "") {
-                            ME.List.find(f => f.idRec == item).recordInTracciato[keyScattoCodiceSottogruppo] = result.codiceSottogruppo;
-                        }
-                        else {
-                            delete ME.List.find(f => f.idRec == item).recordInTracciato[keyScattoCodiceSottogruppo];
-                        }
+                        Revisore.righeConIdRec(ME, item).forEach(r => {
+                            if (result.codiceSottogruppo != "") {
+                                r.recordInTracciato[keyScattoCodiceSottogruppo] = result.codiceSottogruppo;
+                            }
+                            else {
+                                delete r.recordInTracciato[keyScattoCodiceSottogruppo];
+                            }
+                        });
                     });
                     ME.sostituisciSottogruppoButton();
                     if (result.tracciatiNonModificati.length > 0) {
@@ -2733,6 +2739,134 @@
             && contiene(tipoGusto, [revisione.descrizione3, tracciato[descr3]])
             && contiene(grammatura, [revisione.descrizione4, tracciato[descr4]])
             && contiene(segmento, [tracciato["segmento"], tracciato["Referenza.Segmento"], segmentoArchivio]);
+    }
+
+    /// I20-1120: le chiavi del dato usate dalla vista Sottogruppi. Nella pagina sono le costanti di
+    /// utility.js; sotto Node, nei test, non ci sono e valgono queste.
+    static chiaviSottogruppi(chiavi) {
+        const c = chiavi || {};
+        return {
+            gruppo: c.gruppo || (typeof keyScattoCodiceGruppo !== "undefined" ? keyScattoCodiceGruppo : "Scatto.CodiceGruppo"),
+            sottogruppo: c.sottogruppo || (typeof keyScattoCodiceSottogruppo !== "undefined" ? keyScattoCodiceSottogruppo : "Scatto.CodiceSottogruppo"),
+            firma: c.firma || (typeof keyTracciatoFirma !== "undefined" ? keyTracciatoFirma : "Tracciato.Firma"),
+            ref: c.ref || (typeof keyRefCodice !== "undefined" ? keyRefCodice : "Referenza.Codice")
+        };
+    }
+
+    /// I20-1120: la lista visibile e quella messa da parte (List e ListSottogruppi), senza doppioni:
+    /// le righe passano da una all'altra cambiando vista, e un aggiornamento deve trovarle in tutte e due.
+    static righeDelleDueListe(revisore) {
+        const tutte = ((revisore && revisore.List) || []).concat((revisore && revisore.ListSottogruppi) || []);
+        return tutte.filter((r, i) => r != null && tutte.indexOf(r) === i);
+    }
+
+    /// I20-1120: le righe di un record, nelle due liste: la riga e le sue copie per sottogruppo.
+    static righeConIdRec(revisore, idRec) {
+        return Revisore.righeDelleDueListe(revisore).filter(r => r.idRec == idRec && r.recordInTracciato != null);
+    }
+
+    /// I20-1120: la copia di una riga per un altro sottogruppo della stessa referenza (altriSottogruppi,
+    /// dal server). Prende sottogruppo, record, tracciato ed etichetta del record che porta quel
+    /// sottogruppo, cosi' le azioni lavorano sul record giusto; il resto, compresa la revisione, resta
+    /// quello della riga, e lo stato di revisione e' lo stesso della vista normale. La riga non cambia.
+    static copiaPerSottogruppo(item, altro, chiavi) {
+        const k = Revisore.chiaviSottogruppi(chiavi);
+        const copia = Object.assign({}, item);
+        copia.recordInTracciato = Object.assign({}, item.recordInTracciato);
+        copia.recordInTracciato[k.sottogruppo] = altro.codiceSottogruppo;
+        copia.recordInTracciato.idRec = altro.idRec;
+        copia.recordInTracciato.idTracciato = altro.idTracciato;
+        copia.idRec = altro.idRec;
+        if (altro.label != null) {
+            copia.label = altro.label;
+            copia.recordInTracciato.label = altro.label;
+        }
+        copia.altriSottogruppi = null;
+        copia.copiaSottogruppo = true;
+        return copia;
+    }
+
+    /// I20-1120: le righe della vista Sottogruppi: le righe singole che portano un sottogruppo, e una
+    /// copia per ciascuno dei loro altri sottogruppi. Le righe di gruppo restano fuori.
+    static righeDeiSottogruppi(list, chiavi) {
+        const k = Revisore.chiaviSottogruppi(chiavi);
+        const righe = [];
+        (Array.isArray(list) ? list : []).forEach(item => {
+            if (item == null || item.isGruppo || item.recordInTracciato == null) {
+                return;
+            }
+            if (item.recordInTracciato[k.sottogruppo] != null) {
+                righe.push(item);
+            }
+            (Array.isArray(item.altriSottogruppi) ? item.altriSottogruppi : []).forEach(altro => {
+                if (altro != null && altro.codiceSottogruppo != null && altro.codiceSottogruppo !== "") {
+                    righe.push(Revisore.copiaPerSottogruppo(item, altro, k));
+                }
+            });
+        });
+        return righe;
+    }
+
+    /// I20-1120: la revisione nazionale di un sottogruppo, come la sceglie il conteggio della pagina
+    /// Tracciati e come si fa gia' per i gruppi: prima la Custom, poi la standard.
+    static descrizioneNazionaleSottogruppo(descrizioni) {
+        const nazionali = (Array.isArray(descrizioni) ? descrizioni : []).filter(f => f != null && f.area == null && f.canale == null);
+        return nazionali.find(f => f.custom != null) || nazionali.find(f => f.custom == null) || null;
+    }
+
+    /// I20-1120: la lista della vista Sottogruppi, dalle righe (righeDeiSottogruppi) e dalle descrizioni
+    /// arrivate dal server: per ogni sottogruppo l'intestazione e poi i suoi membri del gruppo d'origine,
+    /// una volta per referenza, ordinati per gruppo d'origine come prima.
+    static costruisciListaSottogruppi(righe, risposta, chiavi) {
+        const k = Revisore.chiaviSottogruppi(chiavi);
+        const elencoRighe = Array.isArray(righe) ? righe : [];
+        const gruppoDOrigine = new Map();
+        elencoRighe.forEach(r => {
+            const sg = r.recordInTracciato[k.sottogruppo];
+            if (!gruppoDOrigine.has(sg)) {
+                gruppoDOrigine.set(sg, r.recordInTracciato[k.gruppo]);
+            }
+        });
+
+        const voci = (Array.isArray(risposta) ? risposta : []).slice().sort((a, b) =>
+            String(gruppoDOrigine.get(a.codiceSottogruppo) || "").localeCompare(String(gruppoDOrigine.get(b.codiceSottogruppo) || "")));
+
+        const lista = [];
+        voci.forEach(voce => {
+            const sg = voce.codiceSottogruppo;
+            const descrizioni = Array.isArray(voce.descrizioni) ? voce.descrizioni : [];
+            const intestazione = {
+                hasFoto: 0,
+                idRec: 0,
+                inxOrd: 999999,
+                isGruppo: true,
+                isObsoleto: false,
+                label: null,
+                recordImpaginato: null,
+                recordInTracciato: {},
+                recordRevisionato: Revisore.descrizioneNazionaleSottogruppo(descrizioni),
+                recordRevisionatiRegionali: descrizioni.filter(f => f != null && !(f.area == null && f.canale == null)),
+                statoSelezione: 0
+            };
+            intestazione.recordInTracciato[k.gruppo] = sg;
+            intestazione.recordInTracciato[k.sottogruppo] = sg;
+            intestazione.recordInTracciato[k.firma] = voce.firmaTracciatoSottogruppo;
+            intestazione.recordInTracciato.metaKeyInMismatch = [];
+            intestazione.recordInTracciato.gruppoOriginaleAppartenenza = gruppoDOrigine.get(sg);
+            lista.push(intestazione);
+
+            const refGiaMesse = new Set();
+            elencoRighe
+                .filter(r => r.recordInTracciato[k.sottogruppo] === sg && r.recordInTracciato[k.gruppo] === gruppoDOrigine.get(sg))
+                .forEach(r => {
+                    const ref = r.recordInTracciato[k.ref];
+                    if (!refGiaMesse.has(ref)) {
+                        refGiaMesse.add(ref);
+                        lista.push(r);
+                    }
+                });
+        });
+        return lista;
     }
 
     /// I20-1119: la voce di un tracciato nella lista "Seleziona Tracciato": la sigla e il contesto del
@@ -3092,9 +3226,13 @@
         this.modalitaSottogruppi = senderVal;
         if (senderVal) {
             if (this.ListSottogruppi.length == 0) {
+                //I20-1120: le righe della vista: quelle che portano un sottogruppo e, per gli altri
+                //sottogruppi della stessa referenza nei record caricati (altri tracciati o etichette),
+                //una copia ciascuno. Prima si guardava solo il sottogruppo della riga, uno per referenza.
+                const righe = Revisore.righeDeiSottogruppi(this.List);
                 let listaSottogruppi = [];
-                this.List.forEach(function (item) {
-                    if (!item.isGruppo && item.recordInTracciato[keyScattoCodiceSottogruppo] != null && !listaSottogruppi.includes(item.recordInTracciato[keyScattoCodiceSottogruppo])) {
+                righe.forEach(function (item) {
+                    if (!listaSottogruppi.includes(item.recordInTracciato[keyScattoCodiceSottogruppo])) {
                         listaSottogruppi.push(item.recordInTracciato[keyScattoCodiceSottogruppo]);
                     }
                 });
@@ -3104,82 +3242,27 @@
                 }
                 let idPromo = parseInt($("#Promo").val());
 
+                //I20-1120: la lettura dei sottogruppi puo' durare: si mostra il caricamento e la tendina
+                //della modalita' resta ferma finche' non arriva la risposta. Senza, la pagina restava sulla
+                //lista di prima (vuota, se non c'era niente da revisionare) e cambiando modalita' nel
+                //frattempo si scambiavano le liste con quella dei sottogruppi ancora vuota.
+                showLoading();
+                $("#filtraPerGruppiOSingoli").prop("disabled", true);
+
                 Call.do("Revisore", "getArticoliDescrizioniSottogruppi/" + idPromo, "PUT", codiciList, this, function (result, sender) {
                     console.log(result);
+                    $("#filtraPerGruppiOSingoli").prop("disabled", false);
                     //I20-1069: un errore si dice, invece di un TypeError su result.sort.
-                    if (Revisore.mostraErroreDellaChiamata(result, "Descrizioni dei sottogruppi non caricate")) return;
-                    result.sort(function (a, b) {
-                        var codiceGruppoA = me.List.find(f => !f.isGruppo && f.recordInTracciato[keyScattoCodiceSottogruppo] != null && f.recordInTracciato[keyScattoCodiceSottogruppo] == a.codiceSottogruppo).recordInTracciato[keyScattoCodiceGruppo];
-                        var codiceGruppoB = me.List.find(f => !f.isGruppo && f.recordInTracciato[keyScattoCodiceSottogruppo] != null && f.recordInTracciato[keyScattoCodiceSottogruppo] == b.codiceSottogruppo).recordInTracciato[keyScattoCodiceGruppo];
-
-                        // Utilizza localeCompare per ordinare le stringhe
-                        return codiceGruppoA.localeCompare(codiceGruppoB);
-                    });
-                    let thisGruppoOriginaleAppartenenza = "";
-
-                    for (let i = 0; i < result.length; i++) {
-                        let codiceSottGruppo = result[i].codiceSottogruppo;
-                        let naz = result[i].descrizioni.find(f => f.area == null && f.canale == null);
-                        let regionali = result[i].descrizioni.filter(f => !(f.area == null && f.canale == null));
-                        let sottogruppoItem = {
-                            hasFoto: 0,
-                            idRec: 0,
-                            inxOrd: 999999,
-                            isGruppo: true,
-                            isObsoleto: false,
-                            label: null,
-                            recordImpaginato: null,
-                            recordInTracciato: {},
-                            recordRevisionato: naz,
-                            recordRevisionatiRegionali: regionali,
-                            statoSelezione: 0
-                        };
-
-                        //sottogruppoItem.recordRevisionato = item;
-                        sottogruppoItem.recordInTracciato[keyScattoCodiceGruppo] = codiceSottGruppo;
-                        sottogruppoItem.recordInTracciato[keyScattoCodiceSottogruppo] = codiceSottGruppo;
-                        sottogruppoItem.recordInTracciato[keyTracciatoFirma] = result[i].firmaTracciatoSottogruppo;
-                        sottogruppoItem.recordInTracciato.metaKeyInMismatch = [];
-
-                        // Trova il gruppo originale di appartenenza
-                        sottogruppoItem.recordInTracciato.gruppoOriginaleAppartenenza = me.List.find(f => !f.isGruppo && f.recordInTracciato[keyScattoCodiceSottogruppo] != null && f.recordInTracciato[keyScattoCodiceSottogruppo] == codiceSottGruppo).recordInTracciato[keyScattoCodiceGruppo];
-
-                        let groupItems = me.List.filter(f => f.recordInTracciato[keyScattoCodiceSottogruppo] != null && f.recordInTracciato[keyScattoCodiceSottogruppo] == codiceSottGruppo && !f.isGruppo);
-
-                        me.ListSottogruppi = me.ListSottogruppi.concat(groupItems);
-                        me.ListSottogruppi.push(sottogruppoItem);
+                    if (Revisore.mostraErroreDellaChiamata(result, "Descrizioni dei sottogruppi non caricate")) {
+                        //I20-1120: la modalita' sottogruppi non e' partita: la tendina torna coerente.
+                        me.modalitaSottogruppi = false;
+                        $("#filtraPerGruppiOSingoli").val("tutti");
+                        return;
                     }
-
-
-                    let listaOrdinata = [];
-
-                    let gruppi = me.ListSottogruppi.filter(item => item.isGruppo);
-                    me.gruppidebug = gruppi;
-                    var debugQuantitaRegistrata = 0;
-                    gruppi.forEach(gruppo => {
-                        listaOrdinata.push(gruppo);
-
-                        let figli = me.ListSottogruppi
-                            .filter(item =>
-                                !item.isGruppo &&
-                                item.recordInTracciato[keyScattoCodiceGruppo] === gruppo.recordInTracciato.gruppoOriginaleAppartenenza &&
-                                item.recordInTracciato[keyScattoCodiceSottogruppo] === gruppo.recordInTracciato[keyScattoCodiceGruppo]
-                            )
-                            .sort((a, b) => {
-                                let codiceA = a.recordInTracciato[keyScattoCodiceSottogruppo] || '';
-                                let codiceB = b.recordInTracciato[keyScattoCodiceSottogruppo] || '';
-                                return codiceA.localeCompare(codiceB);
-                            });
-
-                        listaOrdinata = listaOrdinata.concat(figli);
-                        console.log(listaOrdinata.filter(f => f.isGruppo == false && f.recordInTracciato[keyRefCodice] == 1572263))
-
-                        if (listaOrdinata.filter(f => f.isGruppo == false && f.recordInTracciato[keyRefCodice] == 3088643).length > debugQuantitaRegistrata) {
-                            debugQuantitaRegistrata++;
-                        }
-                    });
-
-                    me.ListSottogruppi = listaOrdinata;
+                    //I20-1120: intestazioni e membri dalle righe con le copie (costruisciListaSottogruppi).
+                    //Prima si cercava ogni sottogruppo in me.List, che ha un sottogruppo per referenza: un
+                    //sottogruppo che esisteva solo negli altri record faceva saltare la costruzione.
+                    me.ListSottogruppi = Revisore.costruisciListaSottogruppi(righe, result);
 
                     let tmpList = [];
                     tmpList = tmpList.concat(me.List);
