@@ -693,6 +693,9 @@ const pannelli = {
                     left.style.gap = "4px";
 
                     const codice = this._crCodiceGruppo(item.codiceGruppo);
+                    if (item?.versionePrecedente === true) {
+                        codice.appendChild(this._crContrassegnoClone());
+                    }
 
                     const diffList = document.createElement("div");
                     diffList.style.display = "flex";
@@ -793,7 +796,8 @@ const pannelli = {
                     actions.style.alignSelf = "flex-start";
                     actions.style.gap = "6px";
 
-                    const btnFix = this._crIconButton("Fix", "images/fix.png");
+                    //I20-1124: il Fix e' un Reimpagina, con la sua icona.
+                    const btnFix = this._crIconButton("Reimpagina box", "images/reimpaginaFix.png");
                     const btnResolve = this._crIconButton("Risolvi segnalazione", "images/risolviSegnalazioni.png");
                     const btnWhitelist = this._confrontoReportState?.activeList === "whitelist"
                         ? this._crIconButton("Ripristina segnalazione", "images/rimuoviWhitelist.png")
@@ -813,18 +817,33 @@ const pannelli = {
                     btnFind.addEventListener("click", (ev) => this._onConfrontoAction(ev, "find"));
                     btnInfo.addEventListener("click", (ev) => this._onConfrontoAction(ev, "info"));
 
-                    if (this._confrontoReportState?.activeList !== "whitelist") {
-                        //Il Fix rifa' il box a partire dal dato: con sole differenze sui campi
-                        //osservati in pagina non c'e' niente da rifare, e offrirlo sarebbe un
-                        //invito a rimettere mano a un box che va bene com'e'.
-                        if (segnalazioniIntegrita.length > 0) {
-                            actions.appendChild(btnFix);
-                        }
-                        actions.appendChild(btnResolve);
+                    if (item?.versionePrecedente === true) {
+                        //I20-1124: la versione precedente di un box senza box in pagina ha tre sole azioni:
+                        //Trova (seleziona e basta), Torna in pagina, Elimina.
+                        const btnTorna = this._crIconButton("Torna in pagina", "images/ImpaginaRef.png");
+                        const btnEliminaVersione = this._crIconButton("Elimina", "images/icon_small_cestino.png");
+                        btnTorna.dataset.payloadId = payloadId;
+                        btnEliminaVersione.dataset.payloadId = payloadId;
+                        btnTorna.addEventListener("click", (ev) => this._onConfrontoAction(ev, "tornaInPagina"));
+                        btnEliminaVersione.addEventListener("click", (ev) => this._onConfrontoAction(ev, "delete"));
+                        actions.appendChild(btnFind);
+                        actions.appendChild(btnTorna);
+                        actions.appendChild(btnEliminaVersione);
                     }
-                    actions.appendChild(btnWhitelist);
-                    actions.appendChild(btnFind);
-                    actions.appendChild(btnInfo);
+                    else {
+                        if (this._confrontoReportState?.activeList !== "whitelist") {
+                            //Il Fix rifa' il box a partire dal dato: con sole differenze sui campi
+                            //osservati in pagina non c'e' niente da rifare, e offrirlo sarebbe un
+                            //invito a rimettere mano a un box che va bene com'e'.
+                            if (segnalazioniIntegrita.length > 0) {
+                                actions.appendChild(btnFix);
+                            }
+                            actions.appendChild(btnResolve);
+                        }
+                        actions.appendChild(btnWhitelist);
+                        actions.appendChild(btnFind);
+                        actions.appendChild(btnInfo);
+                    }
 
                     row.appendChild(left);
                     row.appendChild(actions);
@@ -893,6 +912,10 @@ const pannelli = {
 
                     const codice = this._crCodiceGruppo(item.codiceGruppo);
                     codice.style.flex = "1 1 auto";
+                    if (item?.versionePrecedente === true) {
+                        //I20-1124: un clone, da non confondere con un box uscito dal dato.
+                        codice.appendChild(this._crContrassegnoClone());
+                    }
 
                     const left = document.createElement("div");
                     left.style.display = "flex";
@@ -937,13 +960,21 @@ const pannelli = {
                     btnWhitelist.addEventListener("click", (ev) => this._onConfrontoAction(ev, this._confrontoReportState?.activeList === "whitelist" ? "restoreWhitelist" : "whitelist"));
                     btnInfo.addEventListener("click", (ev) => this._onConfrontoAction(ev, "info"));
 
-                    if (this._confrontoReportState?.activeList !== "whitelist") {
+                    if (item?.versionePrecedente === true) {
+                        //I20-1124: un clone si elimina, si trova o si guarda: niente whitelist ne' "risolvi".
                         actions.appendChild(btnDelete);
-                        actions.appendChild(btnResolve);
+                        actions.appendChild(btnFind);
+                        actions.appendChild(btnInfo);
                     }
-                    actions.appendChild(btnWhitelist);
-                    actions.appendChild(btnFind);
-                    actions.appendChild(btnInfo);
+                    else {
+                        if (this._confrontoReportState?.activeList !== "whitelist") {
+                            actions.appendChild(btnDelete);
+                            actions.appendChild(btnResolve);
+                        }
+                        actions.appendChild(btnWhitelist);
+                        actions.appendChild(btnFind);
+                        actions.appendChild(btnInfo);
+                    }
 
                     row.appendChild(left);
                     row.appendChild(actions);
@@ -1533,6 +1564,23 @@ const pannelli = {
     //I20-981: il codice gruppo si copia con un clic.
     //Un codice gruppo e' l'elenco dei membri separati da virgola: copiato cosi' com'e' si
     //incolla nella ricerca del revisore, che e' il motivo per cui serve.
+    /// I20-1124: il contrassegno "Clone" accanto al codice di una versione precedente.
+    _crContrassegnoClone() {
+        const contrassegno = document.createElement("span");
+        contrassegno.textContent = "Clone";
+        Tooltip.impostaTooltip(contrassegno, "Versione precedente del box, sul livello cloneVecchioImpaginato");
+        contrassegno.style.marginLeft = "6px";
+        contrassegno.style.padding = "1px 6px";
+        contrassegno.style.fontSize = "10px";
+        contrassegno.style.fontWeight = "600";
+        contrassegno.style.borderRadius = "8px";
+        contrassegno.style.border = "1px solid #b07a00";
+        contrassegno.style.color = "#8a4b00";
+        contrassegno.style.backgroundColor = "#fff4e0";
+        contrassegno.style.verticalAlign = "middle";
+        return contrassegno;
+    },
+
     _crCodiceGruppo(codiceGruppo) {
         const testo = String(codiceGruppo == null ? "" : codiceGruppo);
 

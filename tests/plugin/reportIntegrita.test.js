@@ -32,7 +32,9 @@ const MOTORE = ["confrontoBox", "confrontoBoxCompiledFieldPreAnalisi", "mappatur
     //Le foto del dato da confrontare, una volta ciascuna, per la pre analisi della scheda.
     "fotoDelDatoDaConfrontare",
     //Le differenze di una foto collegata nel box: collegamento rotto, file assente, non corrispondente.
-    "segnalazioniFotoCollegata"
+    "segnalazioniFotoCollegata",
+    //I20-1124: la mappa delle versioni precedenti dei box, per il Report Integrita'.
+    "mappaturaVersioniPrecedenti"
 ];
 const DA_INDEXNEW = ["avviaReportIntegrita", "applicaConfronto", "preAnalisiBoxMappato",
     "nomiPagineDelDocumento", "boxDellElementoMappa"];

@@ -431,8 +431,78 @@ function gruppoGiaNellaMappa(records, mappa) {
     }));
 }
 
+//I20-1124: le versioni precedenti dei box - quelle che un'azione sul box o Reimpagina box hanno
+//messo da parte sul livello cloneVecchioImpaginato - nel Report Integrita'. Chi ha ancora il
+//suo box su InPagina, in qualunque pagina, e' un clone da eliminare; chi non ce l'ha e' una
+//versione da riportare in pagina o da eliminare, e sta fra i modificati.
+
+/// La chiave di una presenza: codice gruppo e idRec, vuoto compreso.
+function chiavePresenza(codiceGruppo, idRec) {
+    return String(codiceGruppo == null ? "" : codiceGruppo) + "|" + (idRec == null || idRec === "" ? "" : String(idRec));
+}
+
+/// Divide le versioni precedenti (mappa per pagina, come quella dell'impaginato) fra chi ha un
+/// corrispettivo nella mappa di InPagina e chi no. Ogni voce porta l'elemento, la sua pagina e
+/// gli elementi della stessa pagina, come li vuole il record del report.
+function classificaVersioniPrecedenti(mappaVersioni, mappa) {
+    const inPagina = new Set();
+    Object.keys(mappa || {}).forEach(pagina => {
+        (mappa[pagina] || []).forEach(el => {
+            if (el != null) {
+                inPagina.add(chiavePresenza(el.codiceGruppo, el.idRec));
+            }
+        });
+    });
+
+    const daEliminare = [];
+    const daRiportare = [];
+    Object.keys(mappaVersioni || {}).forEach(pagina => {
+        (mappaVersioni[pagina] || []).forEach(el => {
+            if (el == null) {
+                return;
+            }
+            const voce = { elemento: el, pagina: String(pagina), elementiPagina: mappaVersioni[pagina] };
+            (inPagina.has(chiavePresenza(el.codiceGruppo, el.idRec)) ? daEliminare : daRiportare).push(voce);
+        });
+    });
+
+    return { daEliminare, daRiportare };
+}
+
+/// La segnalazione con cui una versione precedente senza box in pagina sta fra i modificati.
+const DIFFERENZA_VERSIONE_PRECEDENTE = {
+    label: "Versione precedente",
+    difference: "versione precedente senza un box in pagina: da riportare in pagina o da eliminare"
+};
+
+/// Il record del report per una versione precedente: fra i box da eliminare (conCorrispettivo)
+/// o fra i modificati, con la segnalazione che dice cosa farne. versionePrecedente a true e' il
+/// contrassegno "Clone" dei pannelli e del csv.
+function recordVersionePrecedente(voce, conCorrispettivo) {
+    const el = voce.elemento;
+    return {
+        elementoMappa: el,
+        inddId: el.refId != null ? el.refId : null,
+        codiceGruppo: el.codiceGruppo,
+        schedaRef: null,
+        preAnalisi: conCorrispettivo ? null : { differenze: [Object.assign({}, DIFFERENZA_VERSIONE_PRECEDENTE)], errors: [] },
+        numeroPagina: voce.pagina,
+        elementoPaginaMappa: voce.elementiPagina,
+        versionePrecedente: true
+    };
+}
+
+function eRecordVersionePrecedente(record) {
+    return record != null && record.versionePrecedente === true;
+}
+
 module.exports = {
     gruppoGiaNellaMappa,
+    chiavePresenza,
+    classificaVersioniPrecedenti,
+    DIFFERENZA_VERSIONE_PRECEDENTE,
+    recordVersionePrecedente,
+    eRecordVersionePrecedente,
     MINUTI_LISTA_RECENTE,
     VIGILANZE_DESELEZIONE,
     contoDeselezione,

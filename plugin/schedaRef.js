@@ -5,6 +5,8 @@ const NoRenderElementi = require('./noRenderElementi');
 //I20-1105: l'altezza in pixel della lista noRender, l'unico modo perche' in UXP scorra davvero.
 const AltezzaScorrimento = require('./altezzaScorrimento');
 const RicollegaEsiti = require('./ricollegaEsiti');
+//I20-1124: la versione precedente di un box rifatto, messa da parte sul suo livello.
+const VersionePrecedente = require('./versionePrecedente');
 const variantiDescrizione = require('./variantiDescrizione');
 //I20-1007: i tratti di stile stanno in testoTag.js. La scheda lo importa, perche' sotto Node
 //la globale di indexNew non c'e'.
@@ -837,61 +839,17 @@ const schedaRef = {
                     hideLoading();
                     messaggioUtente("Code SRF-126 Ricollegamento: richiesta non riuscita: " + XMLHttpRequestClient.testoErrore(motivo), "error");
                 };
-                //creiamo un formData con codiceGruppo e il nome della pagina a cui si trova il box
-                var canaleObj = ficoProcess.getCanaleLavorazioneCorrente();
-                var canale = canaleObj != null ? canaleObj.sigla : "";
-                var areaObj = ficoProcess.getAreaLavorazioneCorrente();
-                var area = areaObj != null ? areaObj.sigla : "";
-
-                var idRec = (dna!=null && dna.idRec != null && dna.idRec !== "" && !isNaN(parseInt(dna.idRec))) ? parseInt(dna.idRec) : 0;
-                // if (box != null && box.isValid) {
-                //     try {
-                //         var dna = Utility.getDnaOfBox(box);
-                //         if (dna != null && dna.idRec != null && dna.idRec !== "" && !isNaN(parseInt(dna.idRec))) {
-                //             idRec = parseInt(dna.idRec);
-                //         }
-                //     }
-                //     catch (e) {
-                //         console.warn("Impossibile recuperare idRec durante ricollegaBox, uso 0", e);
-                //     }
-                // }
-                
-
-                //I20-986: un box appoggiato fuori dalla pagina non ha una pagina, e chiederne il
-                //nome faceva fallire tutto con l'errore generico, che non dice cosa fare. Si
-                //riconosce il caso e lo si dice.
-                var nomePagina = "1";
-                if (box != null) {
-                    var paginaDelBox = null;
-                    try { paginaDelBox = box.parentPage; } catch (e) { paginaDelBox = null; }
-
-                    if (paginaDelBox == null) {
-                        indesignEvents.setBusy(false);
-                        hideLoading();
-                        messaggioUtente("Code SRF-18 Il box non si trova su una pagina del documento: spostalo nella pagina in cui deve stare e riprova il ricollegamento.", "error");
-                        console.error("Code SRF-18 Box fuori pagina durante il ricollegamento del codice " + codiceGruppo);
-                        return;
-                    }
-
-                    nomePagina = paginaDelBox.name;
+                //I20-1124: la richiesta la compone richiestaDiRicollegamento, che serve anche al
+                //Report Integrita' (ricollegaBoxImpaginatoAttendendo).
+                var richiesta = this.richiestaDiRicollegamento(box, dna, codiceGruppo);
+                if (richiesta.errore != null) {
+                    indesignEvents.setBusy(false);
+                    hideLoading();
+                    messaggioUtente(richiesta.errore, "error");
+                    console.error("Code SRF-18 Box fuori pagina durante il ricollegamento del codice " + codiceGruppo);
+                    return;
                 }
-
-                var formData = new FormData();
-                var request = {
-                    idLavorazione: idKitLavorazione,
-                    canaleDiPartenza: canale,
-                    areaDiPartenza: area,
-                    rangePagine: nomePagina,
-                    elementoDaRicollegare: {
-                        codiceGruppo: codiceGruppo,
-                        idRec: idRec,
-                        pag: nomePagina,
-                        forzaloAllaPaginaIndicata: true,
-                    }
-                }
-
-                formData.append("stringRequest", JSON.stringify(request));
-                xhr.send("Menabo/ricollegaBox", formData, "PUT");
+                xhr.send("Menabo/ricollegaBox", richiesta.formData, "PUT");
 
             }
 
@@ -902,6 +860,91 @@ const schedaRef = {
             console.error("Code SRF-15 Si è verificato un errore durante il ricollegamento del box: " + e);
             messaggioUtente("Code SRF-15 Si è verificato un errore generico durante il ricollegamento del box: " + e.message, "error");
         }
+    },
+
+    /// I20-1124: la richiesta di Menabo/ricollegaBox per un box: canale e area della lavorazione,
+    /// la pagina del box, codice gruppo e idRec. Un box fuori pagina (I20-986) da' un errore da
+    /// dire, non una richiesta.
+    richiestaDiRicollegamento(box, dna, codiceGruppo) {
+        var canaleObj = ficoProcess.getCanaleLavorazioneCorrente();
+        var canale = canaleObj != null ? canaleObj.sigla : "";
+        var areaObj = ficoProcess.getAreaLavorazioneCorrente();
+        var area = areaObj != null ? areaObj.sigla : "";
+
+        var idRec = (dna != null && dna.idRec != null && dna.idRec !== "" && !isNaN(parseInt(dna.idRec))) ? parseInt(dna.idRec) : 0;
+
+        //I20-986: un box appoggiato fuori dalla pagina non ha una pagina, e chiederne il
+        //nome faceva fallire tutto con l'errore generico, che non dice cosa fare. Si
+        //riconosce il caso e lo si dice.
+        var nomePagina = "1";
+        if (box != null) {
+            var paginaDelBox = null;
+            try { paginaDelBox = box.parentPage; } catch (e) { paginaDelBox = null; }
+
+            if (paginaDelBox == null) {
+                return { errore: "Code SRF-18 Il box non si trova su una pagina del documento: spostalo nella pagina in cui deve stare e riprova il ricollegamento." };
+            }
+
+            nomePagina = paginaDelBox.name;
+        }
+
+        var formData = new FormData();
+        var request = {
+            idLavorazione: idKitLavorazione,
+            canaleDiPartenza: canale,
+            areaDiPartenza: area,
+            rangePagine: nomePagina,
+            elementoDaRicollegare: {
+                codiceGruppo: codiceGruppo,
+                idRec: idRec,
+                pag: nomePagina,
+                forzaloAllaPaginaIndicata: true,
+            }
+        }
+
+        formData.append("stringRequest", JSON.stringify(request));
+        return { formData: formData, request: request };
+    },
+
+    /// I20-1124: il ricollegamento come lo attende il Report Integrita' quando riporta in pagina
+    /// una versione precedente: senza conferma, senza scheda e senza caricamento, e con l'esito
+    /// restituito a chi chiama (RicollegaEsiti.esitoDellaRisposta). ricollegaBoxImpaginato invece
+    /// manda la richiesta e torna subito, e l'esito lo mette nella scheda.
+    ricollegaBoxImpaginatoAttendendo(box) {
+        var me = this;
+        return new Promise(function (resolve) {
+            try {
+                var dna = box != null && box.isValid ? Utility.getDnaOfBox(box) : null;
+                if (dna == null) {
+                    resolve({ esito: "errore", messaggio: "Code SRF-08 Impossibile ricollegare il box: dna non leggibile", messaggi: [] });
+                    return;
+                }
+                var richiesta = me.richiestaDiRicollegamento(box, dna, dna.codice_gruppo);
+                if (richiesta.errore != null) {
+                    resolve({ esito: "errore", messaggio: richiesta.errore, messaggi: [] });
+                    return;
+                }
+                var xhr = new XMLHttpRequestClient();
+                xhr.onload = function (objResult, parsed) {
+                    try {
+                        if (!parsed) {
+                            objResult = JSON.parse(objResult);
+                        }
+                        resolve(RicollegaEsiti.esitoDellaRisposta(objResult));
+                    }
+                    catch (e) {
+                        resolve({ esito: "errore", messaggio: "Code SRF-14 Errore durante il parsing della risposta: " + e, messaggi: [] });
+                    }
+                };
+                xhr.onerror = function (motivo) {
+                    resolve({ esito: "errore", messaggio: "Code SRF-126 Ricollegamento: richiesta non riuscita: " + XMLHttpRequestClient.testoErrore(motivo), messaggi: [] });
+                };
+                xhr.send("Menabo/ricollegaBox", richiesta.formData, "PUT");
+            }
+            catch (e) {
+                resolve({ esito: "errore", messaggio: "Code SRF-15 Si è verificato un errore generico durante il ricollegamento del box: " + (e && e.message ? e.message : e), messaggi: [] });
+            }
+        });
     },
 
     gestisciRichiestaClonazione(element, idKitLavorazione, allElementGruppo, skipImpaginazione) {
@@ -2648,20 +2691,30 @@ const schedaRef = {
             return;
         }
 
-        var bounds = this.refSelected.item.geometricBounds;
-        //offsettiamoli di 10 punti per evitare problemi di margini troppo stretti
-        bounds = [bounds[0] - 10, bounds[1] + 10, bounds[2] - 10, bounds[3] + 10];
-
+        var boxPrecedente = this.refSelected.item;
+        //I20-1124: il box nuovo esce nella posizione del box di prima; e' il box di prima che va da
+        //parte, scostato di dieci punti, al 60%, sul livello cloneVecchioImpaginato. Prima era il
+        //contrario: il nuovo usciva scostato e il vecchio restava al suo posto su InPagina, dove
+        //la mappa dell'impaginato lo contava due volte.
+        var bounds = boxPrecedente.geometricBounds;
 
         var pagina = null;
         try {
-            pagina = this.refSelected.item.parentPage.name;
+            pagina = boxPrecedente.parentPage.name;
         } catch { }
 
         if (pagina == null || pagina === "") {
             messaggioUtente("Code SRF-22 Impossibile recuperare la pagina di destinazione.", "error");
             console.error("Code SRF-22 Impossibile recuperare la pagina di destinazione.");
             return;
+        }
+
+        try {
+            VersionePrecedente.mettiDaParte(boxPrecedente, docInLavorazione);
+        }
+        catch (e) {
+            console.error("Code SRF-131 La versione precedente del box non e' stata messa da parte: " + e);
+            messaggioUtente("Code SRF-131 La versione precedente del box non e' stata messa da parte: " + (e && e.message ? e.message : e), "warning", false, 6);
         }
 
         //I20-1056: rifare un box non apre la schermata delle segnalazioni: restano nel suo bollino.

@@ -738,7 +738,7 @@ test("l'avviso delle segnalazioni viene prima di tutto, anche della domanda Riap
     assert.match(avvio, /if \(avviso\.azione === "vai"\) \{\s*await ReportIntegrita\.vaiASegnalazioniDalReport\(avviso\.lette\);\s*return;\s*\}\s*if \(avviso\.azione !== "procedi"\) \{\s*return;\s*\}/);
     //Riapri e report nuovo usano la stessa lettura per i numeri.
     assert.match(avvio, /ReportIntegrita\.assegnaSegnalazioniAlReport\(reportLocale\.report, avviso\.lette\);\s*ReportIntegrita\.compilaReportConfronto\(reportLocale\.report,/);
-    assert.match(avvio, /await ReportIntegrita\.applicaConfronto\(mappa, avviso\.lette\);/);
+    assert.match(avvio, /await ReportIntegrita\.applicaConfronto\(mappa, avviso\.lette, versioniPrecedenti\);/);
     assert.match(flussoReport, /ReportIntegrita\.assegnaSegnalazioniAlReport\(reportObj, letteSegnalazioni\);\s*ReportIntegrita\.compilaReportConfronto\(reportObj\);/);
 });
 
