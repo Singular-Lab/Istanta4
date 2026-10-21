@@ -96,8 +96,10 @@ codici e poi i puntini (`codiciAbbreviati`: «6771109, 5062150, …»); tutti ne
   lì i documenti si impaginano uno alla volta e si chiudono, e la schermata non avrebbe niente da
   mostrare. Per decisione dell'operatore il libro resta col solo messaggio di prima.
 
-**I controlli del pannello restano sotto la schermata.** Il popup nasconde i controlli nativi
-`.hideble` che trova, perché in UXP restano sopra a tutto. In collaudo, a fine Volantino, le caselle
+**I controlli del pannello restano sotto la schermata.** Da I20-1123 i campi di testo stanno a
+riposo come testo HTML ([campiARiposo](../campiARiposo.md)) e il popup li copre come tutto il resto.
+Prima il popup nascondeva i controlli nativi `.hideble` che trovava, perché in UXP restano sopra a
+tutto, e questa è la storia di quel rimedio. In collaudo, a fine Volantino, le caselle
 Ordine del Menabò comparivano sopra la schermata (in console: 30 caselle, 0 nascoste; dal pulsante
 3 nascoste, le sole visibili). Una traccia dei ridisegni del Menabò ha mostrato che arrivavano tutti
 prima del popup: a riaccendere le caselle era `hideLoading()`, chiamato dopo l'apertura (nel `finally`

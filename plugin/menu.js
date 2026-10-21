@@ -4,10 +4,10 @@
 /// setPickerWidthHack aggirano due limiti dei picker di UXP; registerDateMenuPicker e' il
 /// calendario dei campi data, da solo 378 righe.
 ///
-/// Gli altri file lo chiamano Menu.X, come globale dichiarata da indexNew.js. Mentre il calendario
-/// e' aperto nasconde gli elementi .hideble come fanno le modali, e per questo importa Modali.
+/// Gli altri file lo chiamano Menu.X, come globale dichiarata da indexNew.js. Aprendo il calendario
+/// il campo in cui si sta scrivendo torna a riposo (I20-1123), come fanno le modali.
 /// Non fa require('indesign'): si carica sotto Node.
-const Modali = require('./modali/modali');
+const CampiARiposo = require('./campiARiposo');
 
 const Menu = {
     /// Seleziona in un picker di UXP (sp-picker) la voce con quel valore, o la prima se non c'e'.
@@ -86,6 +86,8 @@ const Menu = {
         const onClose = options.onClose || null;
 
         Menu.chiudiFloatingMenu();
+        //I20-1123: un campo di testo nativo resterebbe sopra il menu.
+        CampiARiposo.tuttiARiposo();
 
         const floatingMenu = $("<div></div>")
             .addClass("utility-floating-menu")
@@ -128,7 +130,7 @@ const Menu = {
 
     /// Trasforma ogni <date-menu-picker> sotto rootNode (o in tutta la pagina) in un campo data con
     /// il suo calendario. Il campo non si scrive a mano: si sceglie dal calendario, che si apre come
-    /// una modale e percio' nasconde gli elementi .hideble. Da fuori si legge value, e si ascolta
+    /// una modale sopra i campi a riposo (I20-1123). Da fuori si legge value, e si ascolta
     /// date-change.
     registerDateMenuPicker(rootNode = null) {
         const toInputDate = (date) => {
@@ -158,14 +160,8 @@ const Menu = {
             const daysRowWidth = (dayCellSize * 7) + (dayGap * 6);
             const selectedDate = parseInputDate(currentValue) || new Date();
             let visibleDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
-            let hiddenBehind = false;
 
-            try {
-                Modali.nascondiHidebleElements();
-                hiddenBehind = true;
-            } catch (e) {
-                console.warn('Impossibile nascondere elementi hideble per date picker:', e);
-            }
+            CampiARiposo.tuttiARiposo();
 
             const overlay = document.createElement('div');
             overlay.style.position = 'fixed';
@@ -238,11 +234,6 @@ const Menu = {
             const closeModal = () => {
                 if (overlay.parentNode) {
                     overlay.parentNode.removeChild(overlay);
-                }
-
-                if (hiddenBehind) {
-                    Modali.mostraHidebleElements();
-                    hiddenBehind = false;
                 }
             };
 
@@ -394,7 +385,6 @@ const Menu = {
 
                 const inputDate = document.createElement('input');
                 inputDate.id = elementId + '_value';
-                inputDate.classList.add('hideble');
                 inputDate.type = 'text';
                 inputDate.placeholder = 'GG/MM/AAAA';
                 inputDate.value = toInputDate(new Date());

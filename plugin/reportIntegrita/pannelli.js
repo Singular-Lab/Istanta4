@@ -17,11 +17,13 @@ const reportConfronti = require('./sezioneConfronti');
 //I20-1007: le due parti pure dell'interfaccia del report, qui accanto.
 const barraScorrimento = require('./barraScorrimento');
 const dissolvenza = require('./dissolvenza');
+//I20-1123: aprendo una conferma il campo in cui si sta scrivendo torna a riposo.
+const CampiARiposo = require('../campiARiposo');
 
 const pannelli = {
     async _confirmTreAzioniReport(message, actions) {
         let result = null;
-        Modali.nascondiHidebleElements();
+        CampiARiposo.tuttiARiposo();
 
         const modal = $('<div id="confirmModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); z-index: 5000; display: flex; justify-content: center; align-items: center; padding: 10px;"></div>');
         //I20-981: tre pulsanti da novanta pixel non stavano in un riquadro largo il 60% del
@@ -54,7 +56,6 @@ const pannelli = {
             await Utility.sleep(100);
         }
 
-        Modali.mostraHidebleElements();
         return result;
     },
 
@@ -459,9 +460,6 @@ const pannelli = {
     _crReportListPicker() {
         const picker = document.createElement("sp-picker");
         picker.style.minWidth = "150px";
-        //I20-1121: i controlli nativi di UXP restano sopra a tutto; .hideble li spegne sotto i popup
-        //(anche quelli aperti dalla scheda accanto al report affiancato).
-        picker.classList.add("hideble");
 
         const menu = document.createElement("sp-menu");
         menu.setAttribute("slot", "options");
@@ -508,6 +506,8 @@ const pannelli = {
 
     _apriOverlayInfoReport(titolo) {
         $("#confrontoInfoOverlay").remove();
+        //I20-1123: un campo di testo nativo resterebbe sopra il riquadro delle informazioni.
+        CampiARiposo.tuttiARiposo();
 
         //I20-981: questo era l'unico overlay del plugin che usava "inset: 0" per occupare lo
         //schermo; gli altri dieci scrivono top, left, width e height per esteso. Senza quelle
@@ -588,7 +588,7 @@ const pannelli = {
     async _confirmConNonChiedere(message) {
         let result = null;
         let dontAsk = false;
-        Modali.nascondiHidebleElements();
+        CampiARiposo.tuttiARiposo();
 
         const modal = $('<div id="confirmModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); z-index: 5000; display: flex; justify-content: center; align-items: center; padding: 10px;"></div>');
         const dialog = $('<div style="width: 92%; max-width: 460px; min-width: 200px; max-height: 88%; background-color: white; display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch; padding: 14px; box-sizing: border-box; border-radius: 6px;"></div>');
@@ -625,7 +625,6 @@ const pannelli = {
             await Utility.sleep(100);
         }
 
-        Modali.mostraHidebleElements();
         return { result, dontAsk };
     },
 
@@ -1926,8 +1925,6 @@ const pannelli = {
 
         const pickerLavorazioni = document.createElement("sp-picker");
         pickerLavorazioni.style.minWidth = "220px";
-        //I20-1121: sotto i popup si spegne (.hideble), come gli altri controlli nativi del report.
-        pickerLavorazioni.classList.add("hideble");
         const menuLavorazioni = document.createElement("sp-menu");
         menuLavorazioni.setAttribute("slot", "options");
         pickerLavorazioni.appendChild(menuLavorazioni);
@@ -2027,8 +2024,6 @@ const pannelli = {
     _crPickerPresenza(valore) {
         const picker = document.createElement("sp-picker");
         picker.style.minWidth = "170px";
-        //I20-1121: sotto i popup si spegne (.hideble), come gli altri controlli nativi del report.
-        picker.classList.add("hideble");
         const menu = document.createElement("sp-menu");
         menu.setAttribute("slot", "options");
 
@@ -2061,8 +2056,6 @@ const pannelli = {
 
         const casella = document.createElement("input");
         casella.type = "checkbox";
-        //I20-1121: sotto i popup si spegne (.hideble), come gli altri controlli nativi del report.
-        casella.classList.add("hideble");
         casella.checked = acceso === true;
         casella.addEventListener("change", () => alCambio(casella.checked === true));
 
@@ -2390,8 +2383,6 @@ const pannelli = {
 
         const pickerLibreria = document.createElement("sp-picker");
         pickerLibreria.style.minWidth = "220px";
-        //I20-1121: sotto i popup si spegne (.hideble), come gli altri controlli nativi del report.
-        pickerLibreria.classList.add("hideble");
 
         const menuLibreria = document.createElement("sp-menu");
         menuLibreria.setAttribute("slot", "options");
@@ -3148,8 +3139,6 @@ const pannelli = {
         const input = document.createElement("input");
         input.type = "text";
         input.maxLength = 3;
-        //I20-1121: sotto i popup si spegne (.hideble), come gli altri controlli nativi del report.
-        input.classList.add("hideble");
         input.placeholder = "Pag";
         input.style.width = "36px";
         input.style.minWidth = "36px";

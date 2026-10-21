@@ -9,6 +9,8 @@
 /// questo file mentre si carica, e un require in testa leggerebbe un oggetto ancora vuoto. Vale
 /// anche dentro le callback, dove this non e' l'oggetto.
 function modali() { return require('./modali'); }
+//I20-1123: aprendo una conferma il campo in cui si sta scrivendo torna a riposo.
+const CampiARiposo = require('../campiARiposo');
 
 const Eliminazione = {
     /// La conferma della rimozione di una o piu' referenze impaginate. Restituisce
@@ -16,7 +18,7 @@ const Eliminazione = {
     /// alzata si passa dalla seconda conferma, quella con la parola (I20-1013).
     async confirmRimozioneRef(codiciGruppo) {
         try {
-            modali().nascondiHidebleElements();
+            CampiARiposo.tuttiARiposo();
 
             var result = null;
 
@@ -200,14 +202,10 @@ const Eliminazione = {
                 await delay(100);
             }
 
-            modali().mostraHidebleElements();
-
             return result;
         }
         catch (e) {
             console.error("Errore durante la creazione del confirm rimozione ref:", e);
-            modali().mostraHidebleElements();
-
             return {
                 confermato: false,
                 eliminaDaTracciato: false,
@@ -258,7 +256,7 @@ const Eliminazione = {
                 return false;
             }
 
-            modali().nascondiHidebleElements();
+            CampiARiposo.tuttiARiposo();
 
             var modal = $(`
             <div id="confirmEliminaModal" style="
@@ -390,14 +388,11 @@ const Eliminazione = {
                 await delay(100);
             }
 
-            modali().mostraHidebleElements();
-
             return esito === true;
         }
         catch (e) {
             console.error("Errore durante la conferma con la parola ELIMINA:", e);
             $("#confirmEliminaModal").remove();
-            modali().mostraHidebleElements();
             return false;
         }
     },
@@ -407,7 +402,7 @@ const Eliminazione = {
     /// (Rimuovi dal server). true vuol dire rimuovere.
     async confirmRimozioneRefNonTrovata(datiRef) {
         try {
-            modali().nascondiHidebleElements();
+            CampiARiposo.tuttiARiposo();
 
             var result = null;
             var codice = datiRef != null && datiRef.codice != null ? datiRef.codice.toString() : "";
@@ -591,13 +586,10 @@ const Eliminazione = {
                 await delay(100);
             }
 
-            modali().mostraHidebleElements();
-
             return result;
         }
         catch (e) {
             console.error("Errore durante la creazione del confirm rimozione ref non trovata:", e);
-            modali().mostraHidebleElements();
             return false;
         }
     },

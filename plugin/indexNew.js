@@ -114,6 +114,8 @@ const etichettaSegnalazioni = require('./segnalazioni/etichetta');
 const SchermataSegnalazioni = require('./segnalazioni/schermata');
 //I20-1121: la vista affiancata del pannello, comune a segnalazioni e Report Integrita'.
 const VistaAffiancata = require('./vistaAffiancata');
+//I20-1123: i campi di testo a riposo, perche' in UXP i campi nativi stanno sopra a tutto.
+const CampiARiposo = require('./campiARiposo');
 //I20-1035: i conti della barra orizzontale della lista dei tracciati, gli stessi del Report Integrita'.
 const barraScorrimento = require('./reportIntegrita/barraScorrimento');
 const ficoProcess = require('./ficoProcess');
@@ -142,6 +144,8 @@ Menu.registerDateMenuPicker();
 //I20-981: da qui in poi ogni elemento con un title mostra il suo suggerimento.
 //In UXP l'attributo da solo non fa nulla: il riquadro lo disegna il plugin.
 Tooltip.abilitaTooltipGlobali();
+//I20-1123: da qui i campi di testo stanno a riposo finche' l'operatore non ci clicca.
+CampiARiposo.avvia();
 showLoading("Inizializzazione...");
 
 
@@ -4078,9 +4082,9 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                     };
 
                     //I20-1029, lotto 2: si aspetta il ridisegno del Menabo' prima di aprire la schermata
-                    //delle segnalazioni nel finally: il popup nasconde i controlli nativi (.hideble) che
-                    //trova, e le caselle Ordine create dopo gli resterebbero sopra. Un errore del ridisegno
-                    //resta in console, come quando non si aspettava, e non diventa un errore del filtro.
+                    //delle segnalazioni nel finally, cosi' le caselle Ordine sono gia' a riposo (I20-1123)
+                    //quando il popup si apre. Un errore del ridisegno resta in console, come quando non si
+                    //aspettava, e non diventa un errore del filtro.
                     await filtriJs.visualizzaHomePageFiltri().catch(e => console.error("Ridisegno del Menabo' non riuscito:", e));
 
                     //riattiviamo i bottoni bOpt1 e bOpt2 e rimettiamo il testo originale
@@ -6917,8 +6921,8 @@ function kitPromoCmb_changed()
 /// Copre il pannello con la schermata di attesa, col testo passato o con "Caricamento in
 /// corso...".
 ///
-/// Nasconde anche gli elementi marcati hideable: sono quelli che in UXP si disegnano sopra
-/// qualunque cosa - le tendine di sistema - e resterebbero visibili sopra l'attesa.
+/// I20-1123: il campo in cui si sta scrivendo torna a riposo, perche' in UXP un campo nativo
+/// resterebbe visibile sopra l'attesa; gli altri sono gia' a riposo e l'attesa li copre.
 function showLoading(msg)//Facoltativo
 {
 
@@ -6936,22 +6940,15 @@ function showLoading(msg)//Facoltativo
         //ma tre chiamanti passano una variabile che puo' essere nulla.
         $("#loadingPanel").find("h1").text("Caricamento in corso...");
     }
-    Modali.nascondiHidebleElements();
+    CampiARiposo.tuttiARiposo();
 
 }
 
-/// Toglie la schermata di attesa e rimette gli elementi hideable. L'opposto esatto di
-/// showLoading, tranne quando un popup e' aperto.
-///
-/// I20-1029, lotto 2: con un popup aperto gli elementi restano nascosti, li riaccende lui
-/// quando si chiude. La schermata delle segnalazioni si apre a fine impaginazione, prima
-/// di questa chiamata: riaccenderli qui rimetteva le caselle Ordine del Menabo' sopra il
-/// popup (in UXP i controlli nativi restano sopra a tutto).
+/// Toglie la schermata di attesa. I20-1123: non c'e' piu' niente da riaccendere, i campi
+/// stanno a riposo e nessuno li ha spenti (fino a I20-1123 qui si riaccendevano gli elementi
+/// .hideble, salvo con un popup aperto: I20-1029, lotto 2).
 function hideLoading() {
     $("#loadingPanel").hide();
-    if ($("#popup").length === 0) {
-        Modali.mostraHidebleElements();
-    }
 }
 
 /// Svuota le quattro liste del tracciato e toglie la riga con la data di scaricamento.
@@ -9185,7 +9182,7 @@ function selezionatoTracciatoEdit(idTracciato) {
                 div.append(label);
                 var value = dato[key];
                 if (typeof value == "string") {
-                    var textArea = $('<textarea class="hideble" style="width: 70%; color: white;" value="' + value + '" key="' + key + '">' + value + '</textarea>');
+                    var textArea = $('<textarea style="width: 70%; color: white;" value="' + value + '" key="' + key + '">' + value + '</textarea>');
                     div.append(textArea);
                 }
                 else if (typeof value == "number") {
@@ -9204,7 +9201,7 @@ function selezionatoTracciatoEdit(idTracciato) {
                 div.append(label);
                 var value = dato[key];
                 if (typeof value == "string") {
-                    var textArea = $('<textarea class="hideble" style="width: 70%; color: white;" value="' + value + '" key="' + key + '">' + value + '</textarea>');
+                    var textArea = $('<textarea style="width: 70%; color: white;" value="' + value + '" key="' + key + '">' + value + '</textarea>');
                     div.append(textArea);
                 }
                 else if (typeof value == "number") {
@@ -9274,7 +9271,7 @@ function selezionatoTracciatoEdit(idTracciato) {
     //             div.append(label);
     //             var value = record[0][key];
     //             if (typeof value == "string") {
-    //                 var textArea = $('<textarea class="hideble" style="width: 70%; color: white;" value="' + value + '" key="' + key + '">' + value + '</textarea>');
+    //                 var textArea = $('<textarea style="width: 70%; color: white;" value="' + value + '" key="' + key + '">' + value + '</textarea>');
     //                 div.append(textArea);
     //             }
     //             else if (typeof value == "number") {
@@ -9293,7 +9290,7 @@ function selezionatoTracciatoEdit(idTracciato) {
     //             div.append(label);
     //             var value = record[0][key];
     //             if (typeof value == "string") {
-    //                 var textArea = $('<textarea class="hideble" style="width: 70%; color: white;" value="' + value + '" key="' + key + '">' + value + '</textarea>');
+    //                 var textArea = $('<textarea style="width: 70%; color: white;" value="' + value + '" key="' + key + '">' + value + '</textarea>');
     //                 div.append(textArea);
     //             }
     //             else if (typeof value == "number") {

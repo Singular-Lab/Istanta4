@@ -443,15 +443,18 @@ test("a fine Volantino la schermata si apre a Menabo' ridisegnato, o le caselle 
     assert.doesNotMatch(indexNew, /^\s*filtriJs\.visualizzaHomePageFiltri\(\);/m);
 });
 
-test("togliere la schermata di attesa non riaccende i controlli nascosti da un popup aperto", () => {
+test("togliere la schermata di attesa non riaccende niente sopra un popup aperto", () => {
     const indexNew = leggiFileDelPlugin("indexNew.js").replace(/\r/g, "");
     const hideLoading = indexNew.substring(indexNew.indexOf("function hideLoading() {"));
     const corpo = hideLoading.substring(0, hideLoading.indexOf("\n}\n"));
 
     //Volantino e PoP chiamano hideLoading nel finally dopo aver aperto la schermata, la singola
-    //lo chiama chi l'ha lanciata: senza la guardia le caselle Ordine tornavano sopra il popup.
-    assert.match(corpo, /if \(\$\("#popup"\)\.length === 0\) \{\s*Modali\.mostraHidebleElements\(\);\s*\}/);
-    assert.strictEqual((corpo.match(/mostraHidebleElements/g) || []).length, 1);
+    //lo chiama chi l'ha lanciata: in I20-1029 le caselle Ordine tornavano sopra il popup perche'
+    //hideLoading le riaccendeva. Da I20-1123 le caselle stanno a riposo e nessuno le spegne:
+    //hideLoading toglie l'attesa e basta.
+    assert.match(corpo, /^function hideLoading\(\) \{\s*\$\("#loadingPanel"\)\.hide\(\);\s*$/);
+    const showLoading = indexNew.substring(indexNew.indexOf("function showLoading(msg)"), indexNew.indexOf("function hideLoading() {"));
+    assert.match(showLoading, /CampiARiposo\.tuttiARiposo\(\);/);
 });
 
 /* ---- lotto 3: il badge di pagina del tracciato ---- */

@@ -19,7 +19,9 @@
   vecchio `title`** su `data-tooltip`: InDesign un suggerimento suo per `title` lo mostrerebbe, e
   sarebbe il doppione di questo.
 - `_mostraTooltip(elemento, testo)` → mette il riquadro dove dice [posizione.js](posizione.md),
-  dopo `RITARDO_TOOLTIP` (350 ms).
+  dopo `RITARDO_TOOLTIP` (350 ms). Da I20-1123 prima rimette a riposo i campi di testo nativi
+  ([campiARiposo](../campiARiposo.md)), anche quello in cui si sta scrivendo, che altrimenti
+  starebbero sopra il riquadro; non il campo da cui parte il suggerimento (il suo `title`).
 - `nascondiTooltip()` → nasconde il riquadro e annulla quello in attesa.
 - `_creaRiquadroTooltip()` → il riquadro unico, `#tooltipGlobale`, creato la prima volta.
 - `_dimensioniPannello()` → le misure del pannello, da `#wrapper`: in UXP `window.innerWidth` non

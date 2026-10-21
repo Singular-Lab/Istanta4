@@ -623,7 +623,6 @@ const filtri = {
                             .attr('type', 'text')
                             .attr('pagina', pagine[i].name)
                             .addClass('inputOrdineFiltro')
-                            .addClass('hideble')
                             .attr('value', (paginaFiltri.ordine != null && paginaFiltri.ordine != 999 ? paginaFiltri.ordine : 
                                 (paginaFiltri.filtri.length == 0 || paginaFiltri.blocco ? '999' : incrementalOrder)
                             ))
@@ -1173,7 +1172,6 @@ const filtri = {
                     .append(
                         $('<input ' + (filtro == null ? '' : 'disabled') + '></input>')
                             .attr('type', 'number')
-                            .addClass('hideble')
                             .val(filtro == null ? 0 : filtro.limite)
                             .css({ width: '80px', marginRight: '10px', color: 'lightblue' }))
                     //aggiungiamo un pulsante di + che fa addCriterio(newFiltroDiv)
@@ -1787,7 +1785,7 @@ const filtri = {
                 //appendiamo un hidden che conterrà il val della chiave selezionata
                 .append(
                     $('<textarea></textarea>')
-                        .addClass('filtro-chiave-hidden hideble')
+                        .addClass('filtro-chiave-hidden')
                         .attr('title', 'Scrivi il parametro di ricerca') // Tooltip aggiunto
                         .val('')
                         .css({ width: (isTracciato?'200px':'30%'), height:'30px', marginRight: '10px', caretColor: 'black', display: 'none' , color: 'lightblue' }) // Nascondiamo la textarea
@@ -1898,7 +1896,7 @@ const filtri = {
                 )
                 .append(
                     $('<textarea></textarea>')
-                        .addClass('filtro-valore-hidden hideble')
+                        .addClass('filtro-valore-hidden')
                         .attr('title', 'Scrivi il valore da cercare') // Tooltip aggiunto
                         .val('')
                         .css({ width: (isTracciato?'200px':'30%'), height:'30px', marginRight: '10px' ,display: 'none', color: 'lightblue' }) // Nascondiamo il campo di testo

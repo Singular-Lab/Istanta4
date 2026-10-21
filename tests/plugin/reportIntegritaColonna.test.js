@@ -468,8 +468,8 @@ test("le azioni del report e i pulsanti che lavorano sul documento fermano gli e
     assert.match(pannelli, /this\._conEventiFermi\(\(\) => this\._eliminaTuttiUsciti\(records\)\)/);
     assert.match(pannelli, /await this\._conEventiFermi\(\(\) => this\._impaginaTuttiNuoviInCoda\(\)\)/);
     assert.match(pannelli, /await this\._conEventiFermi\(\(\) => this\._impaginaNuovoSingolo\(rowData, input\)\)/);
-    //I controlli nativi del report si spengono sotto i popup, che nella vista affiancata li coprono.
-    assert.strictEqual((pannelli.match(/\.classList\.add\("hideble"\)/g) || []).length, 6);
+    //I20-1123: i controlli del report non si spengono piu' a mano: i campi di testo stanno a riposo.
+    assert.doesNotMatch(pannelli, /hideble/);
 });
 
 test("un report nuovo prende il posto di quello affiancato, e affiancato non tiene il busy", () => {
