@@ -68,6 +68,42 @@ millisecondi se la scheda è stata chiusa, e alla chiusura
 rileggendo la scheda dal server, invece di rifare tutto. Le regole di cosa resta da segnalare stanno
 in [avvio](avvio.md). Ogni passo lascia una riga in `logs/schedaDalReport.log` (`_tracciaScheda`).
 
+## Il report affiancato (I20-1121)
+
+Con il pannello largo almeno 924 px ([vistaAffiancata](../vistaAffiancata.md)) il report non è una
+finestra che copre il Plugin: `compilaReportConfronto` lo mette in una **colonna a destra**
+(`_apriColonnaReport`), e a sinistra il Plugin resta com'è, **con gli eventi accesi**. Sotto la soglia
+resta la finestra di sempre, che li ferma finché è aperta. La forma la decide la larghezza
+(`reportAffiancato()` dice quale c'è); allargando o stringendo il pannello con il report aperto,
+**`adattaVista()`** lo ridisegna nell'altra forma (lo chiama `onresizeWindow`, prima delle
+segnalazioni).
+
+- **Una colonna alla volta, e il report ha la precedenza**: aprendosi a colonna chiude quella delle
+  segnalazioni, che mentre il report è affiancato si aprono come popup.
+- **«Trova» non apre la vista controllata.** Seleziona il box e centra la vista
+  (`_seguiBoxDalReport`): la scheda si apre a sinistra come per qualunque box selezionato, con tutti i
+  suoi menu, e il report resta aperto. Il box è **seguito** (`_boxSeguito`): ogni
+  `INTERVALLO_VIGILANZA_SCHEDA` `_vigilaBoxSeguito` guarda se l'operatore è ancora sul box o dentro
+  (`selezioneSulBox` di [avvio](avvio.md)).
+- **La riga si ricontrolla** (`_ricontrollaBoxSeguito`, con lo stesso
+  `_ricontrollaReferenzaDopoScheda` della scheda dal report, e `_applicaPianoRicontrollo`) quando:
+  l'operatore **lascia il box** per due vigilanze di fila (`contoAbbandono`); preme **Trova su
+  un'altra riga**; preme **«Ricontrolla box»** in testata (compare solo con un box seguito); il
+  pannello si **stringe sotto la soglia** (prima di tornare popup). Il report non si riapre: si
+  aggiorna la riga.
+- Lasciato il box, `EVENT_NO_REF_SELECTED` invalida la scheda del pannello: la rilettura passa a
+  `getSchedaRef` `ignoraInvalidazione = true`, altrimenti risponderebbe «scheda non più valida».
+- **Le azioni che lavorano sul documento fermano gli eventi finché lavorano** (`_conEventiFermi`):
+  quelle delle righe (`_onConfrontoAction`), «Elimina tutti», l'impaginazione dei nuovi. Se intanto
+  il pannello ha cambiato forma, il report si adatta alla fine (`_adattaDopoAzione`).
+- La **X** della colonna fa la stessa domanda di quella del popup. `chiudiReportIntegrita` toglie la
+  colonna invece della finestra, non tocca gli eventi e smette di seguire il box **senza**
+  ricontrollarlo. Un report nuovo avviato dal menu chiude prima quello affiancato.
+- Nella colonna la testata ha **id suoi** (`pulsantiTestataConfrontoColonna`,
+  `scaricaReportConfrontoCsvColonna`, `cartellaReportConfrontoCsvColonna`, corpo
+  `bodyConfrontoReportColonna`): le copie della testata del popup restano nel documento anche a
+  finestra chiusa, e `getElementById` troverebbe quelle.
+
 **`ATTESA_MASSIMA_RILETTURA_SCHEDA` esiste per una ragione precisa:** la rilettura passa da
 `schedaRef.getSchedaRef`, che non offre modo di essere fermata, quindi la risposta tardiva si lascia
 cadere, ma l'operatore non deve restare fermo ad aspettarla.
@@ -92,7 +128,9 @@ documento no — si impaginano uno alla volta (`_impaginaNuovoSingolo`) o tutti 
 |---|---|---|
 | `ATTESA_MASSIMA_RILETTURA_SCHEDA` | 20000 | oltre questa attesa si smette di aspettare la rilettura della scheda |
 | `FILE_TRACCIATO_SCHEDA` | `/logs/schedaDalReport.log` | |
-| `INTERVALLO_VIGILANZA_SCHEDA` | 600 | ogni quanto si controlla se la scheda aperta dal report è stata chiusa |
+| `INTERVALLO_VIGILANZA_SCHEDA` | 600 | ogni quanto si controlla se la scheda aperta dal report è stata chiusa, o (I20-1121) se l'operatore ha lasciato il box seguito |
+| `ID_COLONNA` | `colonnaReportIntegrita` | la colonna del report affiancato (I20-1121) |
+| `ID_CORPO_COLONNA`, `ID_AZIONI_COLONNA`, `ID_RICONTROLLA_BOX` | | il corpo, la testata e «Ricontrolla box» della colonna |
 
 Quelle dell'interfaccia — `COLORI_STATO`, `PASSO_SCORRIMENTO`, `PROPRIETA_COLORE_DA_ATTENUARE`,
 `ATTESA_RIDISEGNO_MS` — sono in [pannelli.md](pannelli.md).

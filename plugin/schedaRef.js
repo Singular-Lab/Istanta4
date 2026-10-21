@@ -560,7 +560,9 @@ const schedaRef = {
         }
     },
 
-    getSchedaRef(codiceGruppo, callback, idRec = 0) {
+    //I20-1121: ignoraInvalidazione serve al ricontrollo del report affiancato, che rilegge la scheda
+    //quando l'operatore ha gia' lasciato il box (e la scheda del pannello e' stata invalidata).
+    getSchedaRef(codiceGruppo, callback, idRec = 0, ignoraInvalidazione = false) {
         let me = this;
 
         var xhr = new XMLHttpRequestClient();
@@ -568,7 +570,7 @@ const schedaRef = {
         xhr.onload = async (objResult, parsed) => {
             try {
 
-                if (me.isInvalidated) {
+                if (me.isInvalidated && !ignoraInvalidazione) {
                     console.warn("La scheda ref non è più valida");
                     callback("La scheda ref non è più valida", null);
                     return;

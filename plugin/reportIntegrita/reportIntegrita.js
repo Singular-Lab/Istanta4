@@ -41,6 +41,8 @@ const reportConfronti = require('./sezioneConfronti');
 //questo require il confronto finiva in un ReferenceError (IDX-41) proprio prima di mostrare il
 //report. E' lo stesso file di reperimentoFoto.js, quindi lo stesso oggetto e gli stessi contatori.
 const cacheHashFoto = require('../reperimentoFoto/cacheHash');
+//I20-1121: soglia, misure e guscio della colonna a destra, condivisi con le segnalazioni.
+const VistaAffiancata = require('../vistaAffiancata');
 
 const ReportIntegrita = {
     /// Cerca le referenze finite su una pagina diversa da quella prevista.
@@ -585,18 +587,31 @@ const ReportIntegrita = {
             this._terminaSchedaDalReport();
         }
 
+        //I20-1121: nella forma a colonna il box portato sotto gli occhi da Trova non si ricontrolla:
+        //il report a cui il ricontrollo servirebbe se ne sta andando.
+        this._smettiDiSeguireBox();
+
+        const forma = this._formaReport;
         this._reportIntegritaAperto = false;
         this._documentoDelReport = "";
+        this._formaReport = null;
 
         try {
             $("#confrontoInfoOverlay").remove();
-            Modali.chiudiModal();
+            if (forma === "colonna") {
+                this._chiudiColonnaReport();
+            }
+            else {
+                Modali.chiudiModal();
+            }
         }
         catch (err) {
             console.error("Errore durante la chiusura del report integrità:", err);
         }
 
-        if (typeof indesignEvents !== "undefined" && indesignEvents?.setBusy) {
+        //Affiancato il report non tiene il busy (a sinistra si lavora), e non lo toglie a chi lo
+        //tiene adesso.
+        if (forma !== "colonna" && typeof indesignEvents !== "undefined" && indesignEvents?.setBusy) {
             indesignEvents.setBusy(false);
         }
 
@@ -605,6 +620,364 @@ const ReportIntegrita = {
         }
 
         return true;
+    },
+
+    //I20-1121: la vista affiancata del report. Con il pannello largo almeno VistaAffiancata.SOGLIA il
+    //report non copre piu' il Plugin: e' una colonna fissa a destra, e a sinistra il Plugin resta
+    //com'e', con gli eventi accesi. "Trova" allora porta sul box senza vista controllata: la scheda si
+    //apre a sinistra come per qualunque box selezionato, con tutti i suoi menu, e il report resta
+    //aperto. La riga si ricontrolla quando l'operatore lascia il box (due vigilanze), preme Trova su
+    //un'altra riga, preme "Ricontrolla box" o il pannello si stringe sotto la soglia. Una colonna alla
+    //volta, e il report ha la precedenza: le segnalazioni affiancate si chiudono, e mentre il report
+    //e' affiancato si aprono come popup.
+    ID_COLONNA: "colonnaReportIntegrita",
+
+    ID_CORPO_COLONNA: "bodyConfrontoReportColonna",
+
+    ID_AZIONI_COLONNA: "pulsantiTestataConfrontoColonna",
+
+    ID_RICONTROLLA_BOX: "ricontrollaBoxReport",
+
+    /// "popup" o "colonna" mentre il report e' aperto, null da chiuso.
+    _formaReport: null,
+
+    /// Il box su cui Trova ha portato l'operatore nella forma a colonna, finche' la sua riga non si
+    /// ricontrolla: { payloadId, payload, record, box, codiceGruppo, idRec, timer, vigilanzeFuori }.
+    _boxSeguito: null,
+
+    /// Il pannello ha cambiato forma mentre un'azione del report lavorava: si adatta alla fine.
+    _adattaDopoAzione: false,
+
+    reportAffiancato() {
+        return this.reportIntegritaAperto() && this._formaReport === "colonna";
+    },
+
+    /// Il report nella colonna. Il guscio lo fa VistaAffiancata; qui il corpo e le azioni in testata
+    /// (i pulsanti del csv li mette compilaReportConfronto, come nella testata del popup). Se la
+    /// colonna c'e' gia' si riusa: il ridisegno del report passa di qui ad ogni azione.
+    _apriColonnaReport() {
+        if (VistaAffiancata.colonnaAperta(this.ID_COLONNA) && document.getElementById(this.ID_CORPO_COLONNA) != null) {
+            this._formaReport = "colonna";
+            return;
+        }
+
+        //Una colonna alla volta: le segnalazioni affiancate lasciano il posto al report.
+        if (typeof SchermataSegnalazioni !== "undefined" && SchermataSegnalazioni != null) {
+            SchermataSegnalazioni.chiudiColonna(true);
+        }
+
+        //Dal popup: la finestra si chiude e gli eventi ripartono, perche' accanto al report si
+        //lavora sul documento e la scheda segue la selezione.
+        if (this._formaReport === "popup") {
+            $("#confrontoInfoOverlay").remove();
+            Modali.chiudiModal();
+            if (typeof indesignEvents !== "undefined" && indesignEvents?.setBusy) {
+                indesignEvents.setBusy(false);
+            }
+        }
+
+        const ricontrolla = document.createElement("button");
+        ricontrolla.id = this.ID_RICONTROLLA_BOX;
+        ricontrolla.type = "button";
+        ricontrolla.textContent = "Ricontrolla box";
+        ricontrolla.style.height = "25px";
+        ricontrolla.style.cursor = "pointer";
+        ricontrolla.style.marginRight = "8px";
+        ricontrolla.style.display = "none";
+        Tooltip.impostaTooltip(ricontrolla, "Ricontrolla adesso la riga del box trovato, senza lasciarlo");
+        ricontrolla.onclick = () => this._ricontrollaBoxSeguito("pulsante");
+
+        const azioni = document.createElement("div");
+        azioni.id = this.ID_AZIONI_COLONNA;
+        azioni.style.display = "flex";
+        azioni.style.alignItems = "center";
+        azioni.appendChild(ricontrolla);
+
+        const guscio = VistaAffiancata.creaColonna({
+            id: this.ID_COLONNA,
+            titolo: "Report Confronto",
+            azioni: [azioni],
+            scorre: false,
+            alChiudi: async () => {
+                //La stessa domanda della X del popup (index.html).
+                if (await Modali.confirm('Sicuro di voler interrompere il processo di controllo integrità?')) {
+                    this.chiudiReportIntegrita();
+                }
+            }
+        });
+
+        guscio.corpo.append($('<div></div>').attr('id', this.ID_CORPO_COLONNA)
+            .css({ flex: '1 1 auto', minHeight: '0', display: 'flex', flexDirection: 'column' }));
+
+        this._formaReport = "colonna";
+        this._allineaSegnalino();
+    },
+
+    _chiudiColonnaReport() {
+        VistaAffiancata.togliColonna(this.ID_COLONNA);
+        this._allineaSegnalino();
+    },
+
+    /// Il segnalino delle segnalazioni si aggancia al bordo della colonna aperta, qualunque sia.
+    _allineaSegnalino() {
+        try {
+            if (typeof SchermataSegnalazioni !== "undefined" && SchermataSegnalazioni != null) {
+                SchermataSegnalazioni.allineaSegnalino();
+            }
+        }
+        catch (err) {
+            //il segnalino resta dov'e'
+        }
+    },
+
+    /// Il pannello ha cambiato larghezza (onresizeWindow): il report aperto prende la forma che gli
+    /// spetta. Con la scheda in vista controllata (Trova dal popup) non si tocca: torna alla X. Mentre
+    /// un'azione lavora si aspetta che finisca. Passando a popup, la riga del box seguito si
+    /// ricontrolla prima: nel popup non c'e' un box da seguire.
+    async adattaVista() {
+        try {
+            if (!this.reportIntegritaAperto() || this._schedaDalReport != null) {
+                return;
+            }
+
+            const forma = VistaAffiancata.forma(VistaAffiancata.larghezzaPannello());
+            if (forma === this._formaReport) {
+                return;
+            }
+
+            if (this.azioneReportInCorso()) {
+                this._adattaDopoAzione = true;
+                return;
+            }
+
+            if (forma === "popup" && this._boxSeguito != null) {
+                await this._ricontrollaBoxSeguito("pannello stretto");
+                if (!this.reportIntegritaAperto()
+                    || VistaAffiancata.forma(VistaAffiancata.larghezzaPannello()) === this._formaReport) {
+                    return;
+                }
+            }
+
+            this._saveCurrentReportAndWhitelist();
+            this._refreshConfrontoReportUi();
+        }
+        catch (err) {
+            console.error("Code CNF-87 Report non adattato alla larghezza del pannello:", err);
+        }
+    },
+
+    /// Le azioni che lavorano sul documento, nella forma a colonna, fermano gli eventi finche'
+    /// lavorano: nel popup li ferma gia' il report aperto. Alla fine, se intanto il pannello ha
+    /// cambiato forma, il report si adatta.
+    async _conEventiFermi(lavoro) {
+        const affiancato = this.reportAffiancato();
+        if (affiancato && typeof indesignEvents !== "undefined" && indesignEvents?.setBusy) {
+            indesignEvents.setBusy(true);
+        }
+
+        try {
+            return await lavoro();
+        }
+        finally {
+            if (affiancato && typeof indesignEvents !== "undefined" && indesignEvents?.setBusy) {
+                indesignEvents.setBusy(false);
+            }
+            this._adattaSeRimandato();
+        }
+    },
+
+    /// Se il pannello ha cambiato forma mentre un'azione lavorava, il report si adatta adesso.
+    /// Il controllo lo fa adattaVista, appena l'azione ha liberato l'interruttore.
+    _adattaSeRimandato() {
+        if (this._adattaDopoAzione) {
+            this._adattaDopoAzione = false;
+            setTimeout(() => this.adattaVista(), 0);
+        }
+    },
+
+    /// Trova nella forma a colonna: la riga del box seguito fin qui si ricontrolla, poi si porta
+    /// l'operatore sul nuovo box. Niente vista controllata: la selezione fa aprire la scheda a
+    /// sinistra come sempre, appena gli eventi ripartono.
+    async _seguiBoxDalReport(payloadId, payload) {
+        const record = payload?.record?._fullReportRecord || payload?.record;
+
+        if (this._boxSeguito != null) {
+            const categoriaPrima = this._categoriaDelRecord(record);
+            await this._ricontrollaBoxSeguito("altro trova");
+            //Il ricontrollo puo' aver tolto dal report proprio questa riga: allora non c'e' piu'
+            //niente da trovare.
+            if (categoriaPrima != null && this._categoriaDelRecord(record) == null) {
+                return;
+            }
+        }
+
+        const box = this._findElemento(payload);
+        if (box == null) {
+            return;
+        }
+
+        try {
+            if (typeof SchermataSegnalazioni !== "undefined" && SchermataSegnalazioni != null) {
+                SchermataSegnalazioni.centraSullaSelezione(app.activeWindow);
+            }
+        }
+        catch (err) {
+            //la vista resta dov'e'
+        }
+
+        const dna = Utility.getDnaOfBox(box);
+        if (dna == null) {
+            //Si seleziona soltanto: senza dna la scheda non si rilegge, e la riga non si ricontrolla.
+            messaggioUtente("Code CNF-88 Il box non ha un dna leggibile: la riga non si potra' ricontrollare", "warning", false, 5);
+            return;
+        }
+
+        this._boxSeguito = {
+            payloadId,
+            payload,
+            record,
+            box,
+            codiceGruppo: dna.codice_gruppo,
+            idRec: dna.idRec,
+            timer: null,
+            vigilanzeFuori: 0
+        };
+
+        this._tracciaScheda("seguito:inizio", {
+            record: this._descriviRecord(record),
+            box: this._descriviBox(box),
+            dna: { codice: dna.codice, codiceGruppo: dna.codice_gruppo, idRec: dna.idRec }
+        });
+
+        this._mostraRicontrollaBox(true);
+        this._boxSeguito.timer = setInterval(() => this._vigilaBoxSeguito(), this.INTERVALLO_VIGILANZA_SCHEDA);
+    },
+
+    _mostraRicontrollaBox(visibile) {
+        const pulsante = document.getElementById(this.ID_RICONTROLLA_BOX);
+        if (pulsante != null) {
+            pulsante.style.display = visibile ? "" : "none";
+        }
+    },
+
+    /// Smette di seguire il box, senza ricontrollare. Restituisce lo stato che si seguiva.
+    _smettiDiSeguireBox() {
+        const stato = this._boxSeguito;
+        this._boxSeguito = null;
+        if (stato != null && stato.timer != null) {
+            clearInterval(stato.timer);
+        }
+        this._mostraRicontrollaBox(false);
+        return stato;
+    },
+
+    /// Ad ogni vigilanza: l'operatore e' ancora sul box (o dentro)? Due vigilanze di fila fuori, e la
+    /// riga si ricontrolla (reportIntegritaAvvio.contoAbbandono). Mentre il report o la scheda
+    /// lavorano, o c'e' una vista controllata aperta, non si conta.
+    _vigilaBoxSeguito() {
+        const stato = this._boxSeguito;
+        if (stato == null || stato.ricontrolloInCorso) {
+            return;
+        }
+
+        let inPausa = this.azioneReportInCorso() || (typeof schedaRef !== "undefined" && schedaRef?.isBusy === true);
+        try {
+            if (typeof indesignEvents !== "undefined" && indesignEvents?.vistaControllataAperta?.()) {
+                inPausa = true;
+            }
+        }
+        catch (err) {
+            //senza eventi non c'e' vista controllata
+        }
+
+        let sulBox = true;
+        if (!inPausa) {
+            //La selezione dice solo se l'operatore e' ancora sul box: il box lo tiene il report.
+            try {
+                sulBox = reportIntegritaAvvio.selezioneSulBox(app.selection, this._idDelBoxSeguito(stato));
+            }
+            catch (err) {
+                //Una selezione che non si legge non dice che l'operatore se n'e' andato.
+                return;
+            }
+        }
+
+        const esito = reportIntegritaAvvio.contoAbbandono(stato.vigilanzeFuori, sulBox, inPausa);
+        stato.vigilanzeFuori = esito.conto;
+        if (esito.ricontrolla) {
+            this._tracciaScheda("seguito:abbandono", { box: this._descriviBox(stato.box) });
+            this._ricontrollaBoxSeguito("box lasciato");
+        }
+    },
+
+    /// L'id del box seguito. Reimpagina e cambi strutturali lo rifanno: allora lo si ritrova per
+    /// codice gruppo, come fa il riaggancio della scheda dal report. null se non c'e' piu'.
+    _idDelBoxSeguito(stato) {
+        try {
+            if (!schedaRef.serveRiaggancioDalReport(stato.box)) {
+                return stato.box.id;
+            }
+        }
+        catch (err) {
+            //si ritrova sotto
+        }
+
+        const box = this._resolveBoxByCodiceGruppo(stato.record);
+        if (box == null) {
+            return null;
+        }
+        stato.box = box;
+        try {
+            return box.id;
+        }
+        catch (err) {
+            return null;
+        }
+    },
+
+    /// Il ricontrollo della riga del box seguito: lo stesso della chiusura della scheda dal report
+    /// (_ricontrollaReferenzaDopoScheda), ma il report e' rimasto aperto e non si riapre.
+    async _ricontrollaBoxSeguito(motivo) {
+        const stato = this._smettiDiSeguireBox();
+        if (stato == null || !this.reportIntegritaAperto()) {
+            return;
+        }
+        stato.ricontrolloInCorso = true;
+
+        const giaInCorso = this.azioneReportInCorso();
+        this._azioneReportInCorso = true;
+        showLoading("Aggiorno la referenza nel report...");
+
+        this._tracciaScheda("seguito:ricontrollo", {
+            motivo,
+            box: this._descriviBox(stato.box),
+            record: this._descriviRecord(stato.record)
+        });
+
+        try {
+            let piano = null;
+            try {
+                piano = await this._ricontrollaReferenzaDopoScheda(stato);
+            }
+            catch (err) {
+                console.error("Ricontrollo della referenza non riuscito:", err);
+                this._tracciaScheda("seguito:eccezione", { errore: String(err), stack: err?.stack || null });
+                messaggioUtente("Code CNF-89 Ricontrollo della referenza non riuscito: il report resta com'era", "error", false, 6);
+            }
+
+            hideLoading();
+
+            if (piano != null && this.reportIntegritaAperto()) {
+                await this._applicaPianoRicontrollo(piano);
+            }
+        }
+        finally {
+            hideLoading();
+            if (!giaInCorso) {
+                this._azioneReportInCorso = false;
+                this._adattaSeRimandato();
+            }
+        }
     },
 
 
@@ -728,6 +1101,12 @@ const ReportIntegrita = {
     /// al posto del report.
     async _apriSchedaDalReport(payloadId, payload) {
         if (this._schedaDalReport != null) {
+            return;
+        }
+
+        //I20-1121: accanto al report non c'e' vista controllata: si segue il box.
+        if (this.reportAffiancato()) {
+            await this._seguiBoxDalReport(payloadId, payload);
             return;
         }
 
@@ -964,6 +1343,18 @@ const ReportIntegrita = {
         this._azioneReportInCorso = true;
 
         try {
+            await this._applicaPianoRicontrollo(piano);
+        }
+        finally {
+            this._azioneReportInCorso = false;
+        }
+    },
+
+    /// Il piano del ricontrollo di una referenza, applicato al report aperto: si vede andare via
+    /// quello che e' stato risolto, e solo dopo lo stato cambia. I20-1121: lo usano la chiusura
+    /// della scheda dal report e il ricontrollo del box seguito accanto al report.
+    async _applicaPianoRicontrollo(piano) {
+        try {
             await this._mostraSegnalazioniRisolte(piano);
             const prima = this._dimensioniReport();
             piano.applica();
@@ -987,9 +1378,6 @@ const ReportIntegrita = {
         catch (err) {
             console.error("Aggiornamento del report dopo la scheda non riuscito:", err);
             this._tracciaScheda("chiusura:eccezioneApplicazione", { errore: String(err), stack: err?.stack || null });
-        }
-        finally {
-            this._azioneReportInCorso = false;
         }
     },
 
@@ -1430,7 +1818,7 @@ const ReportIntegrita = {
                     }
 
                     rispondi(risultato.records || null);
-                }, idRec);
+                }, idRec, true);
             }
             catch (err) {
                 console.error("Rilettura della scheda non partita:", err);
@@ -1475,11 +1863,28 @@ const ReportIntegrita = {
 
         this.salvaWhitelistIntegritaLocale(this._confrontoReportState.whitelist);
 
-        if (typeof indesignEvents !== "undefined" && indesignEvents?.setBusy) {
-            indesignEvents.setBusy(true);
-        }
+        //I20-1121: da VistaAffiancata.SOGLIA px di pannello il report e' una colonna a destra, non
+        //modale, e non ferma gli eventi; sotto, la finestra di sempre, che li ferma finche' e' aperta.
+        //Gli id della testata nella colonna sono altri: le copie della testata del popup restano nel
+        //documento anche a finestra chiusa, e getElementById troverebbe quelle.
+        const affiancato = VistaAffiancata.forma(VistaAffiancata.larghezzaPannello()) === "colonna";
 
-        Modali.apriModal("dialogConfrontoReport", "Report Confronto", false, ["pulsantiTestataConfronto"]);
+        if (affiancato) {
+            this._apriColonnaReport();
+        }
+        else {
+            if (this._formaReport === "colonna") {
+                this._smettiDiSeguireBox();
+                this._chiudiColonnaReport();
+            }
+
+            if (typeof indesignEvents !== "undefined" && indesignEvents?.setBusy) {
+                indesignEvents.setBusy(true);
+            }
+
+            Modali.apriModal("dialogConfrontoReport", "Report Confronto", false, ["pulsantiTestataConfronto"]);
+            this._formaReport = "popup";
+        }
 
         //Il documento su cui questo report vale: se l'operatore ne apre un altro, il report
         //si chiude da solo (il controllo sta in events.js).
@@ -1488,12 +1893,13 @@ const ReportIntegrita = {
             ? (indesignEvents.lastActiveDocument || "")
             : "";
 
-        const headerActions = document.getElementById("pulsantiTestataConfronto");
+        const headerActions = document.getElementById(affiancato ? this.ID_AZIONI_COLONNA : "pulsantiTestataConfronto");
         if (headerActions) {
-            let btnScaricaCsv = document.getElementById("scaricaReportConfrontoCsv");
+            const idScaricaCsv = affiancato ? "scaricaReportConfrontoCsvColonna" : "scaricaReportConfrontoCsv";
+            let btnScaricaCsv = document.getElementById(idScaricaCsv);
             if (!btnScaricaCsv) {
                 btnScaricaCsv = document.createElement("button");
-                btnScaricaCsv.id = "scaricaReportConfrontoCsv";
+                btnScaricaCsv.id = idScaricaCsv;
                 btnScaricaCsv.type = "button";
                 btnScaricaCsv.textContent = "Scarica CSV";
                 Tooltip.impostaTooltip(btnScaricaCsv, "Scarica il report confronto in formato CSV");
@@ -1501,7 +1907,7 @@ const ReportIntegrita = {
                 btnScaricaCsv.style.cursor = "pointer";
                 btnScaricaCsv.style.marginRight = "8px";
 
-                const closeButton = document.getElementById("closeModalConfronto");
+                const closeButton = affiancato ? null : document.getElementById("closeModalConfronto");
                 if (closeButton) {
                     headerActions.insertBefore(btnScaricaCsv, closeButton);
                 } else {
@@ -1514,10 +1920,11 @@ const ReportIntegrita = {
 
             //I20-981: il pulsantino accanto cambia la cartella dei csv. Il title dice dove
             //stanno andando adesso, cosi' non serve aprire il selettore per saperlo.
-            let btnCartellaCsv = document.getElementById("cartellaReportConfrontoCsv");
+            const idCartellaCsv = affiancato ? "cartellaReportConfrontoCsvColonna" : "cartellaReportConfrontoCsv";
+            let btnCartellaCsv = document.getElementById(idCartellaCsv);
             if (!btnCartellaCsv) {
                 btnCartellaCsv = document.createElement("button");
-                btnCartellaCsv.id = "cartellaReportConfrontoCsv";
+                btnCartellaCsv.id = idCartellaCsv;
                 btnCartellaCsv.type = "button";
                 btnCartellaCsv.textContent = "...";
                 btnCartellaCsv.style.height = "25px";
@@ -1533,7 +1940,7 @@ const ReportIntegrita = {
             this._aggiornaTitoloCartellaCsv();
         }
 
-        const body = document.getElementById("bodyConfrontoReport");
+        const body = document.getElementById(affiancato ? this.ID_CORPO_COLONNA : "bodyConfrontoReport");
         if (!body) {
             console.error("Elemento #bodyConfrontoReport non trovato");
             return;
@@ -2255,7 +2662,8 @@ const ReportIntegrita = {
         this._azioneReportInCorso = true;
 
         try {
-            await this._eseguiAzioneConfronto(action, payloadId, payload);
+            //I20-1121: accanto al report gli eventi sono accesi; l'azione li ferma finche' lavora.
+            await this._conEventiFermi(() => this._eseguiAzioneConfronto(action, payloadId, payload));
         }
         finally {
             this._azioneReportInCorso = false;
@@ -3626,6 +4034,12 @@ const ReportIntegrita = {
         const inizio = Date.now();
         let listaScaricata = false;
 
+        //I20-1121: affiancato, il report lascia il menu a portata di mano. Un report nuovo prende il
+        //posto di quello aperto, e mentre si prepara il vecchio non deve restare sotto le mani.
+        if (ReportIntegrita.reportAffiancato()) {
+            ReportIntegrita.chiudiReportIntegrita();
+        }
+
         try {
             //0. I20-1056, lotto 5: prima di tutto, anche di riaprire un report, le segnalazioni di
             //impaginazione rimaste nel documento. Si rilegge il documento: l'ultimo controllo in
@@ -3742,8 +4156,9 @@ const ReportIntegrita = {
         finally {
             hideLoading();
 
-            //Il report aperto tiene il busy per se': lo libera la sua chiusura.
-            if (!ReportIntegrita.reportIntegritaAperto()) {
+            //Il report aperto tiene il busy per se': lo libera la sua chiusura. I20-1121: affiancato
+            //no, a sinistra si lavora.
+            if (!ReportIntegrita.reportIntegritaAperto() || ReportIntegrita.reportAffiancato()) {
                 indesignEvents.setBusy(false);
             }
 

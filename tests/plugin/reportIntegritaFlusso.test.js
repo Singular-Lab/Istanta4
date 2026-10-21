@@ -124,7 +124,8 @@ test('ogni passo del report ha un esito dichiarato', () => {
 
     //Qualunque cosa accada, loading e busy non restano accesi per sbaglio.
     assert.match(avvio, /finally \{[\s\S]*hideLoading\(\)/);
-    assert.match(avvio, /if \(!ReportIntegrita\.reportIntegritaAperto\(\)\) \{[\s\S]*?setBusy\(false\)/);
+    //I20-1121: il report affiancato non tiene il busy (reportIntegritaColonna.test.js).
+    assert.match(avvio, /if \(!ReportIntegrita\.reportIntegritaAperto\(\) \|\| ReportIntegrita\.reportAffiancato\(\)\) \{[\s\S]*?setBusy\(false\)/);
 });
 
 test('il fix senza report non e\' piu\' offerto', () => {
@@ -485,7 +486,8 @@ test('"Elimina tutti" elimina davvero, e chiede prima', () => {
     assert.strictEqual((elimina.match(/_saveCurrentReportAndWhitelist\(\)/g) || []).length, 1);
 
     //E il pulsante ci e' collegato, senza piu' il TODO.
-    assert.match(confronti, /btnDeleteAll\.addEventListener\("click", \(\) => this\._eliminaTuttiUsciti\(records\)\)/);
+    //I20-1121: con il report affiancato gli eventi si fermano finche' l'eliminazione lavora.
+    assert.match(confronti, /btnDeleteAll\.addEventListener\("click", \(\) => this\._conEventiFermi\(\(\) => this\._eliminaTuttiUsciti\(records\)\)\)/);
     assert.ok(!senzaCommenti(confronti).includes('TODO: Elimina tutti'));
 });
 
@@ -912,8 +914,12 @@ test('una segnalazione che se ne va lo fa vedere', () => {
 
     //Alla chiusura della scheda si vede andare via quello che e' stato risolto, e solo dopo lo
     //stato cambia.
+    //I20-1121: l'applicazione del piano sta in _applicaPianoRicontrollo, che usa anche il box seguito
+    //accanto al report affiancato.
     const chiudi = corpoFunzione(confronti, '_chiudiSchedaDalReport() {');
-    assert.match(chiudi, /this\._riapriReportDopoScheda\(\)[\s\S]*await this\._mostraSegnalazioniRisolte\(piano\)[\s\S]*piano\.applica\(\)/);
+    assert.match(chiudi, /this\._riapriReportDopoScheda\(\)[\s\S]*await this\._applicaPianoRicontrollo\(piano\)/);
+    const applica = corpoFunzione(confronti, '_applicaPianoRicontrollo(piano) {');
+    assert.match(applica, /await this\._mostraSegnalazioniRisolte\(piano\)[\s\S]*piano\.applica\(\)/);
 });
 
 test('le azioni sul box ci sono anche nella scheda aperta dal report', () => {
@@ -1035,7 +1041,8 @@ test('il record ricontrollato resta dove stava', () => {
     assert.match(categoria, /this\._sameReportRecord\(item, target\)/);
 
     //E la vista si traccia: il dato puo' essere giusto e la vista no.
-    const chiudi = corpoFunzione(confronti, '_chiudiSchedaDalReport() {');
+    //I20-1121: dopo la chiusura della scheda il piano lo applica _applicaPianoRicontrollo.
+    const chiudi = corpoFunzione(confronti, '_applicaPianoRicontrollo(piano) {');
     assert.match(chiudi, /this\._tracciaScheda\("chiusura:vista", this\._descriviRigaDelRecord\(piano\.record\)\)/);
 
     //Il ridisegno riparte dall'alto: una riga al suo posto ma fuori dallo schermo sembra
