@@ -254,3 +254,39 @@ test('fuori dalla sezione Scelte di Benessere le due azioni restano come prima',
         assert.strictEqual(offerta('Rimuovi format SDB', conSezione('BENESSERE')), true, String(sezione));
     }
 });
+
+/* ---- I20-1127: Forza a sconto linea in Edro21 ---- */
+
+test('Forza a sconto linea si offre solo con le meccaniche % MM ALL e % FID ALL non ancora forzate', () => {
+    //La condizione guarda il nome tradotto della meccanica, come esportaVolantino in AgenziaLib.
+    for (const meccanica of ['PERCENTO_MM_ALL', 'PERCENTO_FID_ALL', 'PERCENTO_MM_ALL_boxetto']) {
+        assert.strictEqual(offerta('Forza a sconto linea', { meccanica_tradotta: meccanica }), true, meccanica);
+        assert.strictEqual(offerta('Forza a sconto linea', { meccanica_tradotta: meccanica, sconto_linea_forzato: 'false' }), true, meccanica);
+        //Gia' forzata, come testo o come booleano: non si offre di nuovo.
+        assert.strictEqual(offerta('Forza a sconto linea', { meccanica_tradotta: meccanica, sconto_linea_forzato: 'true' }), false, meccanica);
+        assert.strictEqual(offerta('Forza a sconto linea', { meccanica_tradotta: meccanica, sconto_linea_forzato: true }), false, meccanica);
+    }
+    for (const meccanica of ['PERCENTO_MM', 'PERCENTO_FID', 'NM_MM', '50al50Fid', '', undefined]) {
+        const record = meccanica === undefined ? {} : { meccanica_tradotta: meccanica };
+        assert.strictEqual(offerta('Forza a sconto linea', record), false, String(meccanica));
+    }
+});
+
+test('Rimuovi forzatura sconto linea si offre solo alla ref forzata', () => {
+    assert.strictEqual(offerta('Rimuovi forzatura sconto linea', { meccanica_tradotta: 'PERCENTO_MM_ALL', sconto_linea_forzato: 'true' }), true);
+    assert.strictEqual(offerta('Rimuovi forzatura sconto linea', { sconto_linea_forzato: true }), true);
+    assert.strictEqual(offerta('Rimuovi forzatura sconto linea', { meccanica_tradotta: 'PERCENTO_MM_ALL', sconto_linea_forzato: 'false' }), false);
+    assert.strictEqual(offerta('Rimuovi forzatura sconto linea', { meccanica_tradotta: 'PERCENTO_MM_ALL' }), false);
+});
+
+test('le due azioni scrivono sconto_linea_forzato, per tutto il gruppo', () => {
+    const forza = azioneEdro21('Forza a sconto linea');
+    const rimuovi = azioneEdro21('Rimuovi forzatura sconto linea');
+
+    assert.strictEqual(cambiStrutturali._resolveIstruzioneValue(forza.istruzioni[0], {}), 'true');
+    assert.strictEqual(forza.istruzioni[0].field, 'sconto_linea_forzato');
+    assert.strictEqual(cambiStrutturali._resolveIstruzioneValue(rimuovi.istruzioni[0], { sconto_linea_forzato: 'true' }), 'false');
+    assert.strictEqual(rimuovi.istruzioni[0].field, 'sconto_linea_forzato');
+    assert.deepStrictEqual(forza.opzioniValide, ['tutto']);
+    assert.deepStrictEqual(rimuovi.opzioniValide, ['tutto']);
+});
