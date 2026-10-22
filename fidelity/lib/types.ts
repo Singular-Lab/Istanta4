@@ -1,5 +1,6 @@
 
 import { CATEGORIA_ATTIVITA, EVENTI_WEBHOOK, FieldType, InteractionType, MODALITA_TIPO_EXPORT, PRIORITA_ATTIVITA, STATO_CANALI_INTERAZIONE, STATO_COMBINAZIONI, STATO_LAVORAZIONE_KIT_RUNTIME, STATO_LOG_FILE, STATO_ORDINI_STAMPA, STATO_PROMO, STATO_UTENTI, STATO_WEBHOOK, TIPI_CANALI_INTERAZIONE, TIPO_ATTIVITA, TIPO_COMANDO_CONTRATTO_TIPOGRAFIA, TIPO_KIT_DESIGN, TIPO_PAGINA, TIPO_UTENTI, UTENTE_GENERE, type CATEGORIA_TEMPLATE_WHATSAPP, type GDOWhatsappQueueJobStatus, type PROVIDER_WHATSAPP, type STATO_GDO_WHATSAPP_NUMBER, type STATO_GDO_WHATSAPP_TEMPLATE } from "../lib/enums";
+import type { OrdinamentoMerceologico } from "./ordinamentoMerceologico";
 
 // ===========================
 // SISTEMA NOTIFICHE
@@ -489,6 +490,8 @@ export interface RisultatoConfrontoMomento {
     nomeMomento: string;
     tracciati: ConfrontoTracciato[];
   };
+  /** Ordinamento merceologico del cliente da Istanta; assente o vuoto: referenze nell'ordine ricevuto. */
+  ordinamentoMerceologico?: OrdinamentoMerceologico;
 }
 
 export type AnalisiMomentoResponse = {

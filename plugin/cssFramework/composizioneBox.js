@@ -304,10 +304,58 @@ const cssComposizioneBox = {
     },
 
     /*
+     * Il riferimento estremo di uno spostamento con piu' riferimenti.
+     *
+     * InDesign mette l'elemento subito dietro (o subito davanti) al riferimento indicato: con
+     * piu' riferimenti conta il piu' arretrato (o il piu' avanzato), che non e' detto sia
+     * l'ultimo elencato. Qui non si sa in che verso InDesign numera gli oggetti di un gruppo,
+     * e non lo si presume: l'elemento e' gia' stato spostato rispetto al primo riferimento,
+     * quindi il confronto fra il suo indice e quello del primo riferimento dice in che verso
+     * cresce l'indice nella direzione dello spostamento. Il riferimento estremo e' quello
+     * piu' avanti in quel verso.
+     *
+     * indiceElemento: indice dell'elemento nel gruppo, dopo lo spostamento rispetto al primo riferimento.
+     * riferimenti: [{ etichetta, indice }], nell'ordine dell'operazione; il primo e' quello gia' usato.
+     * Restituisce il riferimento estremo, oppure null quando non si puo' stabilire: in quel caso
+     * chi chiama ripiega su uno spostamento per ogni riferimento.
+     */
+    riferimentoEstremo(indiceElemento, riferimenti) {
+        if (!Array.isArray(riferimenti) || riferimenti.length === 0) {
+            return null;
+        }
+        if (riferimenti.length === 1) {
+            return riferimenti[0];
+        }
+
+        const primo = riferimenti[0];
+        if (!Number.isInteger(indiceElemento) || !Number.isInteger(primo.indice) || indiceElemento === primo.indice) {
+            return null;
+        }
+
+        //L'elemento sta accanto al primo riferimento, dal lato verso cui e' stato mandato:
+        //se il suo indice e' maggiore, l'indice cresce in quel verso.
+        const indiceCresceNelVerso = indiceElemento > primo.indice;
+
+        let estremo = null;
+        for (const riferimento of riferimenti) {
+            if (riferimento == null || !Number.isInteger(riferimento.indice)) {
+                return null;
+            }
+            if (estremo == null || (indiceCresceNelVerso ? riferimento.indice > estremo.indice : riferimento.indice < estremo.indice)) {
+                estremo = riferimento;
+            }
+        }
+        return estremo;
+    },
+
+    /*
      * Piano dell'ordine di sovrapposizione.
      *
      * Ogni regola sposta le etichette indicate dietro o davanti a un insieme di riferimento.
-     * Le etichette senza riferimento vanno in fondo o in cima al box.
+     * Le etichette senza riferimento vanno in fondo o in cima al box. Le regole si applicano
+     * nell'ordine in cui sono scritte: una regola puo' contare sulla posizione prodotta da
+     * quella prima, per esempio prima le ombre dietro alle foto, poi le parentesi dietro a
+     * foto e ombre.
      */
     pianificaOrdineZ(regole, elementi, corrisponde) {
         const operazioni = [];

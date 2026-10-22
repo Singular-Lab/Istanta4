@@ -872,22 +872,10 @@ indesignEvents.addEventListener(indesignEvents.EVENT_NEW_REF_FIELD_SELECTED, asy
         (pluginMiddleware.getCampo("nomeFotoSecondaria") !== null ? args[0].label.startsWith(pluginMiddleware.getCampo("nomeFotoSecondaria")) : args[0].label.toLowerCase().startsWith("foto_secondaria"))) {
         var buttons = [{
             buttonText: "Seleziona tutte le foto",
+            //I20-1130: le foto del box e, con loro, gli elementi che l'agenzia dichiara connessi
+            //alle foto (Edro21: le ombre). La selezione sta in sistemazioneFoto.
             buttonCallback: function () {
-                // risaliamo di parent fino a trovare la spread
-                let currentElement = args[0];
-                while (currentElement.parent != null && currentElement.parent.constructorName != "Spread") {
-                    currentElement = currentElement.parent;
-                }
-
-                //abbiamo trovato il box, cerchiamo tutti i box che iniziano con "immagine" o "foto_secondaria"
-                let allImageBoxes = currentElement.allPageItems.filter(item => item.label != null && ((pluginMiddleware.getCampo("nomeFotoPrimaria") !== null ? item.label.startsWith(pluginMiddleware.getCampo("nomeFotoPrimaria")) : item.label.toLowerCase().startsWith("immagine")) ||
-                    (pluginMiddleware.getCampo("nomeFotoSecondaria") !== null ? item.label.startsWith(pluginMiddleware.getCampo("nomeFotoSecondaria")) : item.label.toLowerCase().startsWith("foto_secondaria"))));
-                if (allImageBoxes.length > 0) {
-                    app.selection = allImageBoxes;
-                }
-                else {
-                    console.error("Non sono riuscito a trovare immagini nel box");
-                }
+                SistemazioneFoto.selezionaTutteLeFoto(args[0]);
             }
         },
         {

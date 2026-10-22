@@ -128,6 +128,8 @@ namespace Edro21Context
         public static string keyCombinazioneAssegnata = "combinazioneAssegnata";
         public static string keyCodiceBox = "codiceBox";
         public static string keyRepartoForzato = "reparto_forzato";
+        //I20-1127: la forzatura a sconto linea, scritta dall'azione sul box (ScontoLineaEdro21).
+        public static string keyScontoLineaForzato = "sconto_linea_forzato";
         public static readonly string keyXMLDescrizioneGruppo = "descrizione_gruppo";
         public static readonly string keyACComuni = "ACComuni";
         public static readonly string keyDataEstrazione = "data_estrazione";
@@ -317,6 +319,63 @@ namespace AgenziaLib
         public static string SenzaPunteggiatura(string parola)
         {
             return parola == null ? null : parola.TrimEnd(Punteggiatura);
+        }
+    }
+
+    /// I20-1127: la resa "sconto linea" delle meccaniche % MM ALL e % FID ALL (nomi tradotti
+    /// PERCENTO_MM_ALL e PERCENTO_FID_ALL): niente prezzo barrato ne' prezzo offerta, solo lo sconto.
+    /// Esce da sola per il reparto 9, cura persona, senza prezzo offerta; l'operatore la forza con
+    /// l'azione sul box "Forza a sconto linea", che scrive sconto_linea_forzato nel record. Fuori dal
+    /// reparto EXTRA la ref forzata esce anche senza l'esempio nella descrizione, che li' e' revisionata.
+    /// La regola sta qui, e non solo nel ramo dell'export, perche' si possa provare da sola.
+    public static class ScontoLineaEdro21
+    {
+        public const string ChiaveForzato = "sconto_linea_forzato";
+        public const int RepartoCuraPersona = 9;
+        public const string SiglaRepartoExtra = "EX";
+
+        /// Se il record porta la forzatura: true come booleano o come testo, in qualunque maiuscola.
+        public static bool Forzato(IDictionary<string, object>? record)
+        {
+            if (record == null || !record.TryGetValue(ChiaveForzato, out var valore) || valore == null)
+            {
+                return false;
+            }
+            if (valore is bool booleano)
+            {
+                return booleano;
+            }
+            return string.Equals((valore.ToString() ?? "").Trim(), "true", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// Se la meccanica tradotta e' una delle due ALL, anche con un suffisso.
+        public static bool MeccanicaAll(string? meccanicaTradotta)
+        {
+            var meccanica = meccanicaTradotta ?? "";
+            return meccanica.IndexOf("PERCENTO_MM_ALL", StringComparison.Ordinal) >= 0 ||
+                   meccanica.IndexOf("PERCENTO_FID_ALL", StringComparison.Ordinal) >= 0;
+        }
+
+        /// Se il box esce senza prezzo barrato e prezzo offerta: meccanica ALL e, come sempre, cura
+        /// persona senza prezzo offerta, oppure la forzatura dell'operatore.
+        public static bool SenzaPrezzi(string? meccanicaTradotta, string? numeroReparto, string? prezzoOfferta, bool forzato)
+        {
+            if (!MeccanicaAll(meccanicaTradotta))
+            {
+                return false;
+            }
+            if (forzato)
+            {
+                return true;
+            }
+            return int.TryParse((numeroReparto ?? "").Trim(), out var reparto) && reparto == RepartoCuraPersona &&
+                   string.IsNullOrEmpty(prezzoOfferta);
+        }
+
+        /// Se la descrizione esce senza esempio: ref forzata di un reparto diverso da EXTRA.
+        public static bool EsempioEscluso(bool forzato, string? siglaReparto)
+        {
+            return forzato && !string.Equals((siglaReparto ?? "").Trim(), SiglaRepartoExtra, StringComparison.OrdinalIgnoreCase);
         }
     }
 
@@ -4150,7 +4209,9 @@ namespace AgenziaLib
 
                             if (meccanica_tradotta.IndexOf("PERCENTO_MM_ALL") >= 0 || meccanica_tradotta.IndexOf("PERCENTO_FID_ALL") >= 0)
                             {
-                                if (int.Parse(recItem["numero_reparto"].ToString()) == 9 && recItem["prezzo_offerta"].ToString() == "")
+                                //I20-1127: cura persona senza prezzo offerta come sempre, oppure la forzatura
+                                //dell'azione "Forza a sconto linea" (ScontoLineaEdro21): solo lo sconto, senza prezzi.
+                                if (ScontoLineaEdro21.SenzaPrezzi(meccanica_tradotta, recItem["numero_reparto"].ToString(), recItem["prezzo_offerta"].ToString(), ScontoLineaEdro21.Forzato(recItem)))
                                 {
                                     interprete.removeCompiledField("prezzo_offerta_gruppo");
                                     interprete.removeCompiledField("campo_offerta");
@@ -4383,6 +4444,14 @@ namespace AgenziaLib
                             nota_esempio.Contains("esempio") && !nota_esempio.Contains("EVIDENZIATO ESEMPIO MA NON NECESSARIO".ToLower()))
                         {
                             desEsempio = true;
+                        }
+
+                        //I20-1127: la ref forzata a sconto linea, fuori dal reparto EXTRA, esce senza esempio:
+                        //la sua descrizione e' revisionata e cambia insieme al box. Per EXTRA resta com'e'.
+                        if (ScontoLineaEdro21.EsempioEscluso(ScontoLineaEdro21.Forzato(recItem),
+                            recItem.ContainsKey(GLOBAL_VARIABLES.keySiglaReparto) ? recItem[GLOBAL_VARIABLES.keySiglaReparto]?.ToString() : null))
+                        {
+                            desEsempio = false;
                         }
 
                         bool isTakeway = recItem.ContainsKey("isTakeAway");
@@ -14079,6 +14148,9 @@ Descrizione3.EndsWith("\r\n");
             public const string Distintivita = "distintivita";
             public const string AllEtichette = "allEtichette";
             public const string Sezione = "sezione";
+            //I20-1127
+            public const string MeccanicaTradotta = "meccanica_tradotta";
+            public const string ScontoLineaForzato = ScontoLineaEdro21.ChiaveForzato;
         }
 
         public List<CambioStrutturale> GetCambioStrutturalePath()
@@ -14088,7 +14160,9 @@ Descrizione3.EndsWith("\r\n");
                 BuildForzaFormatSdb(),
                 BuildRimuoviFormatSdb(),
                 BuildForzaFormatIstituzionale(),
-                BuildForzaFormatNelCorpoDelVolantino()
+                BuildForzaFormatNelCorpoDelVolantino(),
+                BuildForzaScontoLinea(),
+                BuildRimuoviForzaturaScontoLinea()
             };
         }
 
@@ -14172,6 +14246,93 @@ Descrizione3.EndsWith("\r\n");
                                 Value = "benessere"
                             },
                             RegolaFuoriSezioneSceltaDiBenessere()
+                        }
+                    }
+                }
+            };
+        }
+
+        /// I20-1127: Forza a sconto linea vale per le sole meccaniche % MM ALL e % FID ALL (nomi tradotti
+        /// PERCENTO_MM_ALL e PERCENTO_FID_ALL) non ancora forzate: due blocchi in alternativa, uno per
+        /// meccanica. Scrive sconto_linea_forzato, che esportaVolantino legge (ScontoLineaEdro21). La
+        /// stessa regola e' nel SourceCustomPlugin di Edro21, l'elenco che il Plugin usa davvero.
+        private static CambioStrutturale BuildForzaScontoLinea()
+        {
+            return new CambioStrutturale
+            {
+                Id = 9,
+                Titolo = "Forza a sconto linea",
+                Istruzioni = new List<IstruzioneCambio>
+                {
+                    new IstruzioneCambio
+                    {
+                        Field = Campi.ScontoLineaForzato,
+                        Operazione = TipoOperazione.Set,
+                        Valore = "true"
+                    }
+                },
+                Condizione = new List<BloccoRegole>
+                {
+                    BloccoMeccanicaAllNonForzata(1, "PERCENTO_MM_ALL"),
+                    BloccoMeccanicaAllNonForzata(2, "PERCENTO_FID_ALL")
+                }
+            };
+        }
+
+        private static BloccoRegole BloccoMeccanicaAllNonForzata(int id, string meccanicaTradotta)
+        {
+            return new BloccoRegole
+            {
+                Id = id,
+                Deepness = 0,
+                Regole = new List<RegolaCondizione>
+                {
+                    new RegolaCondizione
+                    {
+                        Campo = Campi.MeccanicaTradotta,
+                        Operatore = OperatoreCondizione.Contains,
+                        Value = meccanicaTradotta
+                    },
+                    new RegolaCondizione
+                    {
+                        Campo = Campi.ScontoLineaForzato,
+                        Operatore = OperatoreCondizione.NotEquals,
+                        Value = "true"
+                    }
+                }
+            };
+        }
+
+        /// I20-1127: l'inversa, per la sola ref gia' forzata.
+        private static CambioStrutturale BuildRimuoviForzaturaScontoLinea()
+        {
+            return new CambioStrutturale
+            {
+                Id = 10,
+                Titolo = "Rimuovi forzatura sconto linea",
+                Istruzioni = new List<IstruzioneCambio>
+                {
+                    new IstruzioneCambio
+                    {
+                        Field = Campi.ScontoLineaForzato,
+                        Operazione = TipoOperazione.Set,
+                        Valore = "false"
+                    }
+                },
+                Condizione = new List<BloccoRegole>
+                {
+                    new BloccoRegole
+                    {
+                        Id = 1,
+                        Deepness = 0,
+                        Regole = new List<RegolaCondizione>
+                        {
+                            new RegolaCondizione
+                            {
+                                Campo = Campi.ScontoLineaForzato,
+                                Operatore = OperatoreCondizione.Equals,
+                                Value = "true"
+                            }
                         }
                     }
                 }

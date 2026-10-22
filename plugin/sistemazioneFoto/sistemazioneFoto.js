@@ -4,10 +4,11 @@
 /// ostacoli, i rettangoli liberi - e fixFoto(box, candidate, obstacles) ci fa stare le foto
 /// senza che si sovrappongano, scegliendo lo spazio con sceltaSpazio.
 ///
-/// Il concetto sta in questa cartella, in tre file:
+/// Il concetto sta in questa cartella, in quattro file:
 ///   sistemazioneFoto.js  questo: legge e scrive il documento, quindi sotto Node non si carica
 ///   spazioLibero.js      il calcolo dei rettangoli liberi, puro e verificato dai test
 ///   sceltaSpazio.js      quale rettangolo vince, puro e verificato dai test
+///   selezioneFoto.js     I20-1130: cosa prende "Seleziona tutte le foto", puro e verificato dai test
 ///
 /// Prima stava dentro CssFramework.js, mescolato a ridimensionamenti, allineamenti e
 /// segnalazioni conflitti. CssFramework tiene ancora getSpazioImpaginazione, fixFoto e
@@ -25,6 +26,7 @@
 const { FitOptions, ClippingPathType } = require('indesign');
 const spazioLibero = require('./spazioLibero');
 const sceltaSpazio = require('./sceltaSpazio');
+const selezioneFoto = require('./selezioneFoto');
 const etichettaSegnalazioni = require('../segnalazioni/etichetta');
 
 /// CssFramework, chiesto quando serve: vedi l'intestazione.
@@ -1181,6 +1183,32 @@ const SistemazioneFoto = {
             return { bounds: conPadding(riquadro), origine: "riquadro" };
         }
         return { bounds: [NaN, NaN, NaN, NaN], origine: "nessuna" };
+    },
+
+    /// I20-1130: "Seleziona tutte le foto" dal pannello, premuto con una foto del box selezionata.
+    /// Mette nella selezione di InDesign le foto del box e, con loro, gli elementi che il plugin
+    /// di agenzia dichiara connessi alle foto (Edro21: le ombre sy_ombra*), cosi' spostando le
+    /// foto si spostano anche loro. La decisione e' di selezioneFoto; qui si risale al box e si
+    /// imposta la selezione. Senza foto nel box non si seleziona niente, nemmeno le ombre da
+    /// sole, e si logga l'errore. Torna true se ha selezionato.
+    selezionaTutteLeFoto(elemento) {
+        // risaliamo di parent fino a trovare la spread
+        var box = elemento;
+        while (box.parent != null && box.parent.constructorName != "Spread") {
+            box = box.parent;
+        }
+
+        var scelta = selezioneFoto.daSelezionare(box.allPageItems, {
+            nomeFotoPrimaria: pluginMiddleware.getCampo("nomeFotoPrimaria"),
+            nomeFotoSecondaria: pluginMiddleware.getCampo("nomeFotoSecondaria"),
+            elementiConnessi: pluginMiddleware.getElementiConnessiAlleFoto()
+        });
+        if (scelta.foto.length === 0) {
+            console.error("Non sono riuscito a trovare immagini nel box");
+            return false;
+        }
+        app.selection = scelta.foto.concat(scelta.connessi);
+        return true;
     },
 };
 

@@ -15,6 +15,7 @@ import { authMiddleware } from '../middleware/authMiddleware';
 import { permissionGuard } from '../middleware/permissionGuard';
 
 import { AuditLogService } from '../services/AuditLogService';
+import { OrdinamentoMerceologicoService } from '../services/OrdinamentoMerceologicoService';
 import { esitoIstanta, verificaRisposta } from '../utils/rispostaServizi';
 import { ServerUtils } from '../utils/ServerUtils';
 
@@ -34,7 +35,8 @@ export class PromoController extends BaseController {
   constructor(
     private promoService: IPromoService,
     private impostazioniService: IImpostazioniService,
-    private gdoService: IGdoService
+    private gdoService: IGdoService,
+    private ordinamentoMerceologicoService: OrdinamentoMerceologicoService = new OrdinamentoMerceologicoService()
   ) {
     super('/api');
   }
@@ -78,6 +80,7 @@ export class PromoController extends BaseController {
       permissionGuard("promo.elimina"),
       this.deleteLavorazione.bind(this)
     );
+    this.router.get('/ordinamento-merceologico', authMiddleware, permissionGuard('promo.visualizza'), this.getOrdinamentoMerceologico.bind(this));
     this.router.get("/promo/menabo", authMiddleware, this.getDatoPerMenabo.bind(this))
     this.router.get('/promo/:idPromo/menabo-layout', authMiddleware, this.getMenaboLayout.bind(this));
     this.router.put('/promo/:idPromo/menabo-layout', authMiddleware, permissionGuard('promo.modifica'), this.saveMenaboLayout.bind(this));
@@ -415,7 +418,16 @@ export class PromoController extends BaseController {
     try {
       const idPromo = req.query.idPromo as string;
       const canale = typeof req.query.canale === 'string' ? req.query.canale : undefined;
-      const result = await this.promoService.getDatoPerMenabo(idPromo, canale);
+      const result = await this.promoService.getDatoPerMenabo(idPromo, canale, req);
+      this.sendResponse(res, HttpStatusCode.OK, result);
+    } catch (error) {
+      this.handleError(res, error as Error);
+    }
+  }
+
+  private async getOrdinamentoMerceologico(req: ExpressRequest, res: Response): Promise<void> {
+    try {
+      const result = await this.ordinamentoMerceologicoService.getOrdinamento(req);
       this.sendResponse(res, HttpStatusCode.OK, result);
     } catch (error) {
       this.handleError(res, error as Error);

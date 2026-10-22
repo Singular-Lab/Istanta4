@@ -2,6 +2,7 @@
 import { createRequire } from 'module';
 import { Colorize } from "../../../../lib/Colorize";
 import { RUOLO_UTENTE_GDO, STATO_UTENTI, TIPO_UTENTI } from "../../../../lib/enums";
+import { haOrdinamentoMerceologico, ordinaPerMerceologia } from "../../../../lib/ordinamentoMerceologico";
 import {
     BadRequestError,
     ForbiddenError,
@@ -483,6 +484,7 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
         secondarioRecords: DataFields[],
         labelPrimario: string,
         labelSecondario: string,
+        ordineMerceologico = false,
     ): import('../../../../lib/types').TracciatoReportWidget[] {
         // Campi tracciati: origKey = chiave ISTANTA (usata in TracciatoFieldChange.campo e nelle regole score)
 
@@ -823,9 +825,9 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
                 rows.push(makeGroupedRow(r));
                 groupMap.set(repartoKey, rows);
             }
-            return Array.from(groupMap.entries())
-                .map(([reparto, rows]) => ({ reparto, rows }))
-                .sort((a, b) => a.reparto.localeCompare(b.reparto));
+            const groups = Array.from(groupMap.entries()).map(([reparto, rows]) => ({ reparto, rows }));
+            // Con l'ordine merceologico i record arrivano già ordinati: i reparti seguono la loro prima referenza
+            return ordineMerceologico ? groups : groups.sort((a, b) => a.reparto.localeCompare(b.reparto));
         };
 
         const { primMap: primarioComparisonMap, secMap: secondarioComparisonMap } = buildComparisonMaps(primarioRecords, secondarioRecords);
@@ -861,6 +863,9 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
         const lookupRecords = [...data.primario.tracciati, ...data.secondario.tracciati]
             .flatMap((t) => t.records);
         const normalize = await createCoopfiNormalizer({ lookupRecords });
+        const ordineMerceologico = haOrdinamentoMerceologico(data.ordinamentoMerceologico);
+        // Sui record grezzi di Istanta, prima della normalizzazione che rinomina i campi
+        const ordina = (records: DataFields[]): DataFields[] => ordinaPerMerceologia(records, data.ordinamentoMerceologico);
 
         // ── Viste per canale/area (unico livello di aggregazione) ────────────
         const allKeys = new Set<string>();
@@ -872,22 +877,22 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
             const sepIdx = key.indexOf('::');
             const guidCanale = key.slice(0, sepIdx);
             const guidArea = key.slice(sepIdx + 2);
-            const primarioRecords = data.primario.tracciati
+            const primarioRecords = ordina(data.primario.tracciati
                 .filter(t => t.guidCanale === guidCanale && t.guidArea === guidArea)
-                .flatMap(t => t.records)
+                .flatMap(t => t.records))
                 .map(r => normalize(r));
-            const secondarioRecords = data.secondario.tracciati
+            const secondarioRecords = ordina(data.secondario.tracciati
                 .filter(t => t.guidCanale === guidCanale && t.guidArea === guidArea)
-                .flatMap(t => t.records)
+                .flatMap(t => t.records))
                 .map(r => normalize(r));
-            const widgets = this.buildWidgets(primarioRecords, secondarioRecords, data.primario.nomeMomento, data.secondario.nomeMomento);
+            const widgets = this.buildWidgets(primarioRecords, secondarioRecords, data.primario.nomeMomento, data.secondario.nomeMomento, ordineMerceologico);
             // Variante PDF: i temi esclusi vengono tolti dai record, non dai widget, così anche
             // KPI e dettaglio per reparto sono coerenti con le liste mostrate.
             const primarioRecordsPdf = this.filtraRecordPerPdf(primarioRecords);
             const secondarioRecordsPdf = this.filtraRecordPerPdf(secondarioRecords);
             const modificato = primarioRecordsPdf !== primarioRecords || secondarioRecordsPdf !== secondarioRecords;
             const widgetsPdf = modificato
-                ? this.buildWidgets(primarioRecordsPdf, secondarioRecordsPdf, data.primario.nomeMomento, data.secondario.nomeMomento)
+                ? this.buildWidgets(primarioRecordsPdf, secondarioRecordsPdf, data.primario.nomeMomento, data.secondario.nomeMomento, ordineMerceologico)
                 : widgets;
             return {
                 guidCanale,

@@ -922,6 +922,26 @@ test("I20-1116: il segnalino sta in fondo alla riga delle linguette, centrato co
     assert.match(intestazione, /id="segnalinoSegnalazioni"/);
 });
 
+//Lo z-index nello stile in linea di un elemento di index.html; senza z-index vale 0.
+function zIndexInIndex(html, id) {
+    const inizio = html.indexOf('id="' + id + '"');
+    assert.ok(inizio >= 0, "manca #" + id);
+    const stile = html.substring(inizio).match(/style="([^"]*)"/);
+    const z = stile ? stile[1].match(/z-index:\s*(\d+)/) : null;
+    return z ? Number(z[1]) : 0;
+}
+
+test("I20-1128: il riquadro dei messaggi sta sopra il segnalino, ma sotto finestre e caricamenti", () => {
+    const html = leggiFileDelPlugin("index.html").replace(/\r/g, "");
+    const messaggi = zIndexInIndex(html, "messaggiUtente");
+    //Entrambi fissi nella testata: senza z-index vinceva il segnalino, che viene dopo nel documento.
+    assert.ok(messaggi > zIndexInIndex(html, "segnalinoSegnalazioni"));
+    //Non sale sopra cio' che prima lo copriva.
+    for (const id of ["narrow", "loginPanel", "overlayModal", "loadingPanel", "istantaDownAlert"]) {
+        assert.ok(messaggi < zIndexInIndex(html, id), "#messaggiUtente sopra #" + id);
+    }
+});
+
 test("I20-1116: cambiando documento o restando senza, il segnalino si riallinea", () => {
     const indexNew = leggiFileDelPlugin("indexNew.js").replace(/\r/g, "");
     assert.match(indexNew, /docInLavorazione = args\[0\];[\s\S]{0,400}\$\("#nomeKitInLavorazione"\)\.text\(""\);\s*\/\/I20-1116[^\n]*\n\s*SchermataSegnalazioni\.aggiornaIcona\(\);\s*await initDocumentInLavorazione\(\);/);
