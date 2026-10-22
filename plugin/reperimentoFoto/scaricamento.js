@@ -19,6 +19,45 @@ const scaricamentoFoto = {
     //l'intera cartella di destinazione.
     SOGLIA_LETTURA_MIRATA: 25,
 
+    /// I20-1125: se un pezzo che Olimpo ha restituito e' davvero il pezzo chiesto. Olimpo manda il
+    /// file con 200 (intero) o 206 (un pezzo); quando non trova il percorso risponde con un errore
+    /// JSON di poche decine di byte ({"error":"Error getting path for id ...","status":500}), e prima
+    /// quell'errore finiva nel file .psd, completato di zeri fino alla misura attesa: 121 loghi su 121
+    /// di una lavorazione nuova, e InDesign non li impaginava. Restituisce null se il pezzo va bene,
+    /// altrimenti il motivo.
+    problemaDelPezzo(stato, byteRicevuti, byteAttesi) {
+        if (stato !== 200 && stato !== 206) {
+            return "Olimpo ha risposto " + stato;
+        }
+        if (byteRicevuti !== byteAttesi) {
+            return "Olimpo ha mandato " + byteRicevuti + " byte invece di " + byteAttesi;
+        }
+        return null;
+    },
+
+    /// I20-1125: il testo di una risposta d'errore di Olimpo, per dire all'operatore cosa e' successo.
+    /// Solo l'inizio, e solo se e' testo: un pezzo di file binario non si mostra.
+    testoDellaRisposta(byteArray, massimo = 200) {
+        try {
+            const inizio = byteArray.subarray(0, Math.min(byteArray.length, massimo));
+            const testo = new TextDecoder("utf-8").decode(inizio).replace(/\u0000/g, "").trim();
+            return /^[\x20-\x7E\u00A0-\u024F\s]*$/.test(testo) ? testo : "";
+        }
+        catch (err) {
+            return "";
+        }
+    },
+
+    /// I20-1125: l'avviso all'operatore sui file che Olimpo non ha restituito. null se non ce ne sono.
+    avvisoNonScaricati(nonScaricati) {
+        if (!Array.isArray(nonScaricati) || nonScaricati.length === 0) {
+            return null;
+        }
+        const primo = nonScaricati[0];
+        return "Code SCF-01 " + nonScaricati.length + " file non scaricati da Olimpo e non scritti nella cartella"
+            + " (il primo: " + primo.nome + ": " + primo.motivo + "). Controlla l'indirizzo di Olimpo e l'archivio.";
+    },
+
     /// Scarica nella cartella Links le immagini che non ci sono gia'.
     /// Lo chiamano indexNew, per il cambio foto della scheda e per la sincronizzazione massiva.
     async downloadImages(listImagesRequired, objProcess, cartella, idOperazione)
@@ -116,6 +155,8 @@ const scaricamentoFoto = {
             });
         }
         var fileNames = [];
+        //I20-1125: i file che Olimpo non ha restituito, per dirlo all'operatore alla fine.
+        const nonScaricati = [];
         let limit=15000000;
         if (objProcess != null && objProcess.onTotalCount != null) {
             await objProcess.onTotalCount(idsObj.length);
@@ -179,6 +220,8 @@ const scaricamentoFoto = {
     
             const byteArrayTotal = new Uint8Array(size);
             let bytesChunks=[];
+            //I20-1125: il motivo per cui questo file non si scrive, se un pezzo non e' arrivato giusto.
+            let problema = null;
             console.log("------------"+ item.filename +" (" + size + ")-------------");
             
             for (var i=0; i<chunks.length; i++)
@@ -211,14 +254,35 @@ const scaricamentoFoto = {
                     const byteArray = new Uint8Array(arrayBuffer);
                     
                     //console.log(byteArray);
+
+                    //I20-1125: un errore di Olimpo non e' un pezzo del file.
+                    const motivo = scaricamentoFoto.problemaDelPezzo(response.status, byteArray.length, s);
+                    if (motivo != null) {
+                        const risposta = scaricamentoFoto.testoDellaRisposta(byteArray);
+                        problema = motivo + (risposta !== "" ? ": " + risposta : "");
+                        console.error("Code SCF-02 " + item.filename + ": " + problema);
+                        break;
+                    }
                     
                     bytesChunks.push(byteArray);
                 }
                 catch (err)
                 {
                     console.error('Errore durante il download del file:', err);
+                    //I20-1125: un pezzo mancante lascerebbe nel file un buco di zeri.
+                    problema = "scaricamento interrotto: " + (err && err.message ? err.message : err);
+                    break;
                 }
                 
+            }
+
+            //I20-1125: il file si scrive solo se e' arrivato tutto; quello che c'era resta com'era.
+            if (problema != null) {
+                nonScaricati.push({ nome: item.filename, motivo: problema });
+                if (objProcess != null && objProcess.onProgress != null) {
+                    await objProcess.onProgress($va + 1, null);
+                }
+                continue;
             }
     
             //Scrivi i byte su disco usando UXP FileSystem
@@ -252,6 +316,12 @@ const scaricamentoFoto = {
             }
         }
     
+        //I20-1125: prima si scriveva l'errore nel file e non si diceva niente.
+        const avviso = scaricamentoFoto.avvisoNonScaricati(nonScaricati);
+        if (avviso != null && typeof messaggioUtente === "function") {
+            messaggioUtente(avviso, "error", false, 15);
+        }
+
         if(objProcess != null && objProcess.onComplete != null)
         {
             await objProcess.onComplete("Operazione completata");

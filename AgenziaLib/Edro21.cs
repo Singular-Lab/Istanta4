@@ -304,6 +304,22 @@ namespace AgenziaLib
         }
     }
 
+    /// I20-1125: il logo attributo italiano (quello con la bandiera) porta sotto la bandiera la parola
+    /// che comincia con "italian" e quella che la precede, prese dalla descrizione e tagliate al primo
+    /// spazio o a capo. Le descrizioni ora hanno le virgole ("prodotto italiano, categoria I, ..."),
+    /// e la virgola restava attaccata: il logo usciva "PRODOTTO ITALIANO,". Le due parole si
+    /// prendono senza la punteggiatura che le segue nella descrizione.
+    public static class LogoAttributoItalianoEdro21
+    {
+        /// La punteggiatura che nella descrizione segue la parola e nel logo non va.
+        public static readonly char[] Punteggiatura = { ',', ';', '.', ':' };
+
+        public static string SenzaPunteggiatura(string parola)
+        {
+            return parola == null ? null : parola.TrimEnd(Punteggiatura);
+        }
+    }
+
     internal class Edro21 : IAgenzia
     {
 
@@ -11634,12 +11650,14 @@ Descrizione3.EndsWith("\r\n");
                         }
 
 
+                        //I20-1125: le due parole del logo senza la punteggiatura della descrizione:
+                        //con "prodotto italiano, categoria I" il logo usciva "PRODOTTO ITALIANO,".
                         if (el.Count <= 0)
                             logo_attributo_it = "???";
                         else
-                            logo_attributo_it = el.LastOrDefault();
+                            logo_attributo_it = LogoAttributoItalianoEdro21.SenzaPunteggiatura(el.LastOrDefault());
 
-                        logo_attributo_it += "<br>" + italian;
+                        logo_attributo_it += "<br>" + LogoAttributoItalianoEdro21.SenzaPunteggiatura(italian);
                         //logo_attributo_it = str_analisi.Replace(Environment.NewLine, "")+"<br>"+italian;
                     }
                     else if (brand.Contains("prodotto in italia") || gusto.Contains("prodotto in italia") || desc1.Contains("prodotto in italia"))

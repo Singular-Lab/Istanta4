@@ -176,6 +176,19 @@ leggeva mai il numero dei mesi e scriveva sigle `PARMIGIANO_mesiNN` che nella so
 Ne usciva solo `sfondo_parmigiano`, che ora è **disattivato** — commentato, non tolto — perché lo
 stile di oggetto della base (`base_P_Parmigiano`, `base_A_Parmigiano` per SC) dovrebbe sostituirlo.
 
+## Edro21: il logo attributo italiano (I20-1125)
+
+Per una ref Conad del volantino con una parola che comincia con «italian» nel brand, nel gusto o
+nella descrizione1, `getLoghiEBolliNew` assegna il logo `logo_attributo_it` (quello con la bandiera) e
+ne compone il testo: la parola che precede «italian…», un `<br>` e la parola «italian…», tagliata al
+primo spazio o a capo. Il Plugin (`Agenzie/Edro21/custom.js`) lo scrive nel logo com'è.
+
+Con le descrizioni che hanno le virgole («prodotto italiano, categoria I, calibro 24/26») la virgola
+restava attaccata e il logo usciva «PRODOTTO ITALIANO,». Da I20-1125 le due parole passano da
+`LogoAttributoItalianoEdro21.SenzaPunteggiatura`, in `Edro21.cs`, che toglie virgola, punto e virgola,
+punto e due punti in fondo alla parola; si prova in
+`tests/Istanta.Suite.Tests/LogoAttributoItalianoEdro21Tests.cs`.
+
 ## Modificare AgenziaLib: la procedura
 
 1. Modifica il `.cs` del cliente.
