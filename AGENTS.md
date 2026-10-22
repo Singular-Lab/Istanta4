@@ -8,6 +8,8 @@ Le regole seguenti sono obbligatorie per ogni richiesta che possa comportare mod
 
 Le richieste di analisi di una riunione registrata (una trascrizione `TRJ-…` o una riunione `MTG-…`) non modificano il repository e seguono il §15, non il protocollo dei task.
 
+Le richieste di report o di analisi dei rischi di una release (`REL-…` o una versione) non modificano il repository e seguono il §17, non il protocollo dei task.
+
 ## 1. Verifica del Company Control Plane
 
 Prima di esaminare o modificare qualsiasi file:
@@ -235,3 +237,18 @@ Un task, che corregga un bug, aggiunga una funzionalità o ne migliori una, può
 Proponi solo comportamenti osservabili da un utente o da un sistema esterno, mai dettagli d'implementazione. La proposta non modifica le specifiche ufficiali e non condiziona il task, che prosegue e si conclude come sempre: il Control Plane la raccoglie nella change del task, la segnala come divario da revisionare, e solo la revisione umana nel Control Plane la integra nelle specifiche. Non modificare tu i file delle specifiche.
 
 Gli strumenti del Control Plane ti forniscono solo le specifiche ufficiali. Le change proposal ancora aperte (`changes/`) non sono decise: non trattarle come specifiche e non applicarle tu. Si applicano e si archiviano nel Control Plane, dopo la revisione umana.
+
+## 17. Report di release
+
+Si applica quando l'utente chiede il report di una release o l'analisi dei rischi prima della produzione, per esempio "Fai il report della release REL-…" o "Analizza i rischi della 4.2.0".
+
+Non apre un task: niente `company_prepare_task`, niente branch, nessun file del repository modificato né committato. Resta valida la verifica del server MCP del §1, con gli strumenti di questa sezione al posto di `company_prepare_task`.
+
+1. Trova la release. Con un id `REL-…` usalo direttamente; con una versione, o con "l'ultima release", chiama `company_list_releases` con `projectId` `istanta4` e scegli quella che corrisponde. Se l'indicazione è ambigua, elenca le candidate all'utente e chiedigli quale intende.
+2. Leggi il contesto con `company_get_release_context` e segui il suo campo `instructions`: contiene la struttura del report. Il perimetro sono tutte le release dopo l'ultima distribuita in produzione, con tutti i loro task.
+3. Approfondisci sul repository in sola lettura: `git fetch`, poi il diff fra `productionBaseline.sourceCommitSha` e `sourceCommitSha` e i merge commit dei task. Usa le matrici del §5 per i componenti coinvolti. Dove un'informazione manca, scrivilo nel report invece di supporla.
+4. Scrivi il PDF in italiano in una cartella temporanea fuori dal repository. Se per produrre il PDF manca uno strumento, chiedi all'utente prima di installarlo.
+5. Registra il report con `company_upload_release_report`: giudizio, sintesi, rischi e test consigliati, con gli stessi codici e titoli del PDF. Carica subito il PDF con il comando `uploadCommand` restituito. Se il Control Plane rifiuta il riepilogo o il file, correggi tutti i problemi elencati e riprova.
+6. Riporta all'utente il giudizio, i rischi principali, i test bloccanti e il link `releaseUrl`. Non riportare il token di caricamento.
+
+Il report è informativo: non blocca né autorizza la distribuzione, che resta un'azione dell'operatore.
