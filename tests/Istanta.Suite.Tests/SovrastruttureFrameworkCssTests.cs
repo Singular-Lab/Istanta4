@@ -139,6 +139,29 @@ public class SovrastruttureFrameworkCssTests
                 Assert.Equal(new[] { "*Parmigiano_payoff*" }, prezzi.followAnchor.Single().nomiGruppiSeguiti);
                 var caratteristiche = Assert.Single(parmigiano.operazioni.allineamenti, a => a.nomeGruppo == "Parmigiano_Caratteristiche_SX_TOP");
                 Assert.Null(caratteristiche.bloccoUnico);
+
+                // I20-1131: nel box largo le caratteristiche in alto a sinistra, alte al massimo il 45%
+                // del box e in proporzione. Altezza, forma e fit devono arrivare al Plugin.
+                var largo = Assert.Single(parmigiano.operazioni.allineamenti, a => a.nomeGruppo == "Parmigiano_Caratteristiche_SX_TOP_Largo");
+                Assert.Equal(new[] { "largo" }, largo.listSetCondizioni.Single().setCondizioni.Single().formaBoxCondition.Single().forme);
+                // PROPORTIONALLY, poi FRAME_TO_CONTENT: il logo non si deforma.
+                Assert.Equal(new[] { 2, 0 }, largo.finalFit.Single().fit.Select(f => (int)f));
+                Assert.Equal(2, parmigiano.operazioni.postRidimensionamenti.Count);
+                var altezza = Assert.Single(parmigiano.operazioni.postRidimensionamenti, p => p.nomeGruppo == "Parmigiano_Caratteristiche_Largo");
+                var ridimensionamento = Assert.Single(altezza.ridimensionamenti!);
+                Assert.Equal("45%", ridimensionamento.setHeight);
+                Assert.Null(ridimensionamento.setWidth);
+                Assert.Equal(new[] { "largo" }, ridimensionamento.listSetCondizioni.Single().setCondizioni.Single().formaBoxCondition.Single().forme);
+
+                // Il testo orizzontale va a capo a sinistra della colonna dei prezzi: larghezza e altezza
+                // sono espressioni del Plugin e devono arrivare intatte, con il FRAME_TO_CONTENT finale.
+                var testo = Assert.Single(parmigiano.operazioni.postRidimensionamenti, p => p.nomeGruppo == "Parmigiano_Testo_Largo");
+                Assert.Equal(new[] { "*parmigiano_testo_2mod_orizzontale*" }, testo.gruppoEtichette);
+                var larghezzaTesto = Assert.Single(testo.ridimensionamenti!);
+                Assert.Equal("100%-descrizione[presente]-9", larghezzaTesto.setWidth);
+                Assert.Equal("50%", larghezzaTesto.setHeight);
+                Assert.Equal(new[] { "largo" }, larghezzaTesto.listSetCondizioni.Single().setCondizioni.Single().formaBoxCondition.Single().forme);
+                Assert.Equal(new[] { 0 }, testo.finalFit.Single().fit.Select(f => (int)f));
             }
         }
     }

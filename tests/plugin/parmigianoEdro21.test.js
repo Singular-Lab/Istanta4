@@ -186,10 +186,94 @@ test("il gruppo del bollo prende ogni bollo dei mesi e nessun altro logo", () =>
     }
 });
 
-test("i loghi non hanno un post ridimensionamento: restano alla misura di impaginazione", () => {
+function postRidimensionamento(k, nome) {
+    const trovato = sovrastrutturaParmigiano(k).operazioni.postRidimensionamenti.find(p => p.nomeGruppo === nome);
+    assert.ok(trovato, nome);
+    return trovato;
+}
+
+test("i loghi restano alla misura di impaginazione, tranne caratteristiche e testo orizzontale nel box largo", () => {
+    //I20-1131: nel box largo le caratteristiche in alto a sinistra arrivavano sul payoff e il testo
+    //orizzontale sotto i prezzi. Due post ridimensionamenti, uno per ciascuno: payoff, testo verticale
+    //e bollo dei mesi restano alla misura di impaginazione.
     for (const k of kitVolantino) {
-        assert.deepStrictEqual(sovrastrutturaParmigiano(k).operazioni.postRidimensionamenti, []);
+        const post = sovrastrutturaParmigiano(k).operazioni.postRidimensionamenti;
+        assert.deepStrictEqual(post.map(p => p.nomeGruppo).sort(), ["Parmigiano_Caratteristiche_Largo", "Parmigiano_Testo_Largo"]);
+        for (const p of post) {
+            for (const sigla of [SIGLA.payoff, SIGLA.verticale]) {
+                assert.ok(!p.gruppoEtichette.some(e => regex(e).test(label(sigla))), p.nomeGruppo + " " + sigla);
+            }
+            assert.ok(!p.gruppoEtichette.some(e => regex(e).test(label("Parmigiano_24M"))), p.nomeGruppo);
+        }
+
+        const altezza = postRidimensionamento(k, "Parmigiano_Caratteristiche_Largo");
+        assert.ok(altezza.gruppoEtichette.every(e => regex(e).test(label(SIGLA.caratteristiche))));
+        assert.ok(!altezza.gruppoEtichette.some(e => regex(e).test(label(SIGLA.orizzontale))));
+        assert.strictEqual(altezza.ridimensionamenti.length, 1);
+        const r = altezza.ridimensionamenti[0];
+        assert.strictEqual(r.setHeight, "45%");
+        assert.strictEqual(r.setWidth, null);
+        assert.strictEqual(r.instructionX, null);
+        assert.strictEqual(r.instructionY, null);
+        soloForme({ nomeGruppo: altezza.nomeGruppo, listSetCondizioni: r.listSetCondizioni }, ["largo"]);
+        //Il motore applica il fit finale di un post ridimensionamento senza guardare le condizioni:
+        //qui non ce n'e', la proporzione la ripristina l'allineamento del box largo.
+        assert.deepStrictEqual(altezza.finalFit, []);
     }
+});
+
+test("box orizzontale: il testo va a capo nello spazio a sinistra dei prezzi, con il corpo invariato", () => {
+    //I20-1131: il testo orizzontale e' un TextFrame; largo quanto il box meno la colonna dei prezzi (la
+    //descrizione e' larga quanto la colonna) e 9 mm di margini, alto abbastanza da non andare in
+    //overflow, poi il riquadro si stringe sul testo. Il fit senza condizioni tocca solo lui, che
+    //c'e' solo nei box larghi.
+    for (const k of kitVolantino) {
+        const testo = postRidimensionamento(k, "Parmigiano_Testo_Largo");
+        assert.ok(testo.gruppoEtichette.length > 0);
+        assert.ok(testo.gruppoEtichette.every(e => regex(e).test(label(SIGLA.orizzontale))));
+        assert.ok(!testo.gruppoEtichette.some(e => regex(e).test(label(SIGLA.caratteristiche))));
+        assert.strictEqual(testo.ridimensionamenti.length, 1);
+        const r = testo.ridimensionamenti[0];
+        assert.strictEqual(r.setWidth, "100%-descrizione[presente]-9");
+        assert.strictEqual(r.setHeight, "50%");
+        assert.strictEqual(r.instructionX, null);
+        assert.strictEqual(r.instructionY, null);
+        soloForme({ nomeGruppo: testo.nomeGruppo, listSetCondizioni: r.listSetCondizioni }, ["largo"]);
+        //FRAME_TO_CONTENT: niente fit proporzionale, che su un riquadro di testo non fa niente.
+        assert.strictEqual(testo.finalFit.length, 1);
+        assert.ok(testo.finalFit[0].nomiElementi.every(e => regex(e).test(label(SIGLA.orizzontale))));
+        assert.deepStrictEqual(testo.finalFit[0].fit, [0]);
+    }
+});
+
+test("nel motore la larghezza del testo orizzontale lascia libera la colonna dei prezzi", () => {
+    //Le misure della prova in InDesign (I20-1131): box [27, 291.5, 81.3, 400], descrizione larga 32 mm,
+    //testo che parte da 294.3, riga al kg da 364.
+    const Module = require("node:module");
+    const caricaOriginale = Module._load;
+    Module._load = function (richiesta) {
+        return richiesta === "indesign" ? {} : caricaOriginale.apply(this, arguments);
+    };
+    let CssFramework;
+    try {
+        CssFramework = require("../../plugin/CssFramework.js");
+    }
+    finally {
+        Module._load = caricaOriginale;
+    }
+
+    const espressione = postRidimensionamento(kitVolantino[0], "Parmigiano_Testo_Largo").ridimensionamenti[0].setWidth;
+    const box = { geometricBounds: [27, 291.5, 81.3, 400] };
+    const descrizione = { bounds: [27, 366.2, 48.8, 398.2], eliminato: false };
+
+    const larghezza = CssFramework.calcolaValoreDimensione(espressione, "width", { descrizione }, box);
+    assert.ok(Math.abs(larghezza - 67.5) < 0.001, String(larghezza));
+    assert.ok(294.3 + larghezza < 364, "il testo finisce a " + (294.3 + larghezza));
+
+    //Senza descrizione il termine non conta: resta il box meno i margini.
+    assert.ok(Math.abs(CssFramework.calcolaValoreDimensione(espressione, "width", {}, box) - 99.5) < 0.001);
+    const eliminata = { bounds: descrizione.bounds, eliminato: true };
+    assert.ok(Math.abs(CssFramework.calcolaValoreDimensione(espressione, "width", { descrizione: eliminata }, box) - 99.5) < 0.001);
 });
 
 test("payoff e testi seguono il fondo del box al ridimensionamento, senza cambiare misura", () => {
@@ -244,18 +328,25 @@ test("il custom di Edro21 applica base_A_Parmigiano per SC e base_P_Parmigiano p
     assert.ok(custom.indexOf("base_P_Parmigiano") > custom.indexOf("base_P_VersoNatura"));
 });
 
-test("payoff e testi fanno da ostacolo al fix foto di Edro21", () => {
+//Gli elementi che il fix foto di Edro21 tratta da ostacolo, come li scrive il custom.
+function ostacoliFixFoto() {
     const custom = leggi("plugin/Agenzie/Edro21/custom.js");
     const eccezioni = custom.substring(custom.indexOf("exceptionElementsToIgnoreFixFoto:"), custom.indexOf("calcoloDistanziamentoFoto"));
-    for (const sigla of [SIGLA.payoff, SIGLA.verticale, SIGLA.orizzontale]) {
-        assert.ok([...eccezioni.matchAll(/"([^"]+)"/g)].some(m => regex(m[1]).test(label(sigla))), sigla);
+    return [...eccezioni.matchAll(/"([^"]+)"/g)].map(m => m[1]);
+}
+
+test("payoff, testi e caratteristiche fanno da ostacolo al fix foto di Edro21", () => {
+    //I20-1131: le caratteristiche in alto a sinistra del box largo finivano sotto la foto.
+    const ostacoli = ostacoliFixFoto();
+    for (const sigla of [SIGLA.payoff, SIGLA.verticale, SIGLA.orizzontale, SIGLA.caratteristiche]) {
+        assert.ok(ostacoli.some(o => regex(o).test(label(sigla))), sigla);
     }
 });
 
 /* ---- il collaudo: la descrizione e i loghi ---- */
 
 //Il fix foto di Edro21 spostava la descrizione in basso a sinistra, addosso al payoff.
-function descrizioneTraLoghi() {
+function descrizioneTraLoghi(ostacoli = ["*Parmigiano_payoff*", "*parmigiano_testo_2mod_*", "*Logo_SDB*"]) {
     const custom = leggi("plugin/Agenzie/Edro21/custom.js");
     const inizio = custom.indexOf("    descrizioneTraLoghi(box, descrizione) {");
     assert.ok(inizio > 0);
@@ -271,7 +362,7 @@ function descrizioneTraLoghi() {
     };
     const UtilityFinta = { parseLabel: l => (l.indexOf("foto_extra") === 0 ? l : l.split("$")[0]) };
     const oggetto = new Function("CssFramework", "Utility",
-        "return { exceptionElementsToIgnoreFixFoto: [\"*Parmigiano_payoff*\", \"*parmigiano_testo_2mod_*\", \"*Logo_SDB*\"],\n"
+        "return { exceptionElementsToIgnoreFixFoto: " + JSON.stringify(ostacoli) + ",\n"
         + custom.substring(inizio + 4, fine + 1) + "};")(CssFrameworkFinto, UtilityFinta);
     return oggetto;
 }
@@ -286,6 +377,18 @@ test("la descrizione che tocca il payoff con il testo e' in conflitto", () => {
     const payoff = { label: label(SIGLA.payoff), visible: true, geometricBounds: [80, 10, 95, 50] };
 
     assert.strictEqual(custom.descrizioneTraLoghi(boxCon(descrizione, [payoff]), descrizione), true);
+});
+
+test("la descrizione che tocca le caratteristiche con il testo e' in conflitto, con gli ostacoli veri del custom", () => {
+    //I20-1131: le caratteristiche in alto a sinistra fanno da ostacolo anche per la descrizione.
+    const custom = descrizioneTraLoghi(ostacoliFixFoto());
+    const descrizione = { label: "descrizione", visible: true, geometricBounds: [0, 20, 30, 80], testo: [0, 20, 20, 60] };
+    const caratteristiche = { label: label(SIGLA.caratteristiche), visible: true, geometricBounds: [1, 1, 40, 30] };
+    assert.strictEqual(custom.descrizioneTraLoghi(boxCon(descrizione, [caratteristiche]), descrizione), true);
+
+    //Il testo sta a destra delle caratteristiche: niente conflitto.
+    const lontana = { label: "descrizione", visible: true, geometricBounds: [0, 20, 30, 80], testo: [0, 40, 20, 80] };
+    assert.strictEqual(custom.descrizioneTraLoghi(boxCon(lontana, [caratteristiche]), lontana), false);
 });
 
 test("conta il testo, non il riquadro; e un logo nascosto o che non fa da ostacolo non conta", () => {
@@ -340,36 +443,93 @@ test("i gruppi principali evitano la traccia della base in tutti i box dei kit v
 
 //I20-1113: la produzione ha chiesto, per il box verticale, le caratteristiche in alto a sinistra fuori
 //dalla traccia e i prezzi all'altezza del payoff. Due regole della sovrastruttura, solo per la forma alta,
-//dopo tutte le altre (ordine 999999): le caratteristiche restano anche nei Loghi_DX, per i box larghi.
+//dopo tutte le altre (ordine 999999).
+//I20-1131: per il box largo una regola sua, con le caratteristiche in proporzione; restano anche il
+//livello 6 dei Loghi_DX, l'ultimo: spostate, non lasciano buchi tra gli altri loghi.
 const ORDINE_DOPO_LE_ALTRE = 1000000;
 
-function soloFormaAlta(gruppo) {
+function soloForme(gruppo, forme) {
     const insiemi = gruppo.listSetCondizioni || [];
     assert.strictEqual(insiemi.length, 1, gruppo.nomeGruppo);
     const condizioni = insiemi[0].setCondizioni;
     assert.strictEqual(condizioni.length, 1, gruppo.nomeGruppo);
-    assert.deepStrictEqual(condizioni[0].formaBoxCondition, [{ forme: ["alto"], rapporto: 1.6 }], gruppo.nomeGruppo);
+    assert.deepStrictEqual(condizioni[0].formaBoxCondition, [{ forme, rapporto: 1.6 }], gruppo.nomeGruppo);
+}
+
+function soloFormaAlta(gruppo) {
+    soloForme(gruppo, ["alto"]);
+}
+
+//Le caratteristiche in alto a sinistra, fuori dalla traccia, dopo i Loghi_DX.
+function caratteristicheInAltoASinistra(gruppo) {
+    assert.strictEqual(gruppo.ordine, ORDINE_DOPO_LE_ALTRE);
+    assert.ok(gruppo.gruppoEtichette.every(e => regex(e).test(label(SIGLA.caratteristiche))));
+    const ancora = gruppo.staticAnchor[0];
+    //x: lato sinistro; y: lato alto. A 1 mm, come Loghi_DX dall'altra parte.
+    assert.strictEqual(ancora.xAnchor.allineaAlLato, 0);
+    assert.strictEqual(ancora.xAnchor.allineaLato, 0);
+    assert.strictEqual(ancora.yAnchor.allineaAlLato, 0);
+    assert.strictEqual(ancora.yAnchor.allineaLato, 0);
+    assert.strictEqual(ancora.xAnchor.distance, "1");
+    assert.strictEqual(ancora.yAnchor.distance, "1");
+    assert.strictEqual(gruppo.evitaTracciaAllineamento.evitaTracciaBase, true);
+    assert.notStrictEqual(gruppo.bloccoUnico, true);
+}
+
+//Le regole della sovrastruttura con una condizione di forma che valgono per un box di quelle misure.
+function regolePerForma(k, larghezza, altezza) {
+    const bounds = [0, 0, altezza, larghezza];
+    const operazioni = sovrastrutturaParmigiano(k).operazioni;
+    const vale = insiemi => insiemi.some(set => set.setCondizioni.every(c =>
+        sovrastrutture.formaBoxConditionVera(bounds, c.formaBoxCondition)));
+    const allineamenti = operazioni.allineamenti
+        .filter(a => (a.listSetCondizioni || []).length > 0 && vale(a.listSetCondizioni))
+        .map(a => a.nomeGruppo);
+    const post = operazioni.postRidimensionamenti
+        .filter(p => p.ridimensionamenti.some(r => vale(r.listSetCondizioni || [])))
+        .map(p => p.nomeGruppo);
+    return allineamenti.concat(post).sort();
 }
 
 test("box verticale: le caratteristiche in alto a sinistra, fuori dalla traccia, dopo i Loghi_DX", () => {
     for (const k of kitVolantino) {
         const gruppo = allineamento(k, "Parmigiano_Caratteristiche_SX_TOP");
         soloFormaAlta(gruppo);
-        assert.strictEqual(gruppo.ordine, ORDINE_DOPO_LE_ALTRE);
-
-        assert.ok(gruppo.gruppoEtichette.every(e => regex(e).test(label(SIGLA.caratteristiche))));
-        const ancora = gruppo.staticAnchor[0];
-        //x: lato sinistro; y: lato alto. A 1 mm, come Loghi_DX dall'altra parte.
-        assert.strictEqual(ancora.xAnchor.allineaAlLato, 0);
-        assert.strictEqual(ancora.xAnchor.allineaLato, 0);
-        assert.strictEqual(ancora.yAnchor.allineaAlLato, 0);
-        assert.strictEqual(ancora.yAnchor.allineaLato, 0);
-        assert.strictEqual(ancora.xAnchor.distance, "1");
-        assert.strictEqual(ancora.yAnchor.distance, "1");
-        assert.strictEqual(gruppo.evitaTracciaAllineamento.evitaTracciaBase, true);
+        caratteristicheInAltoASinistra(gruppo);
         assert.ok(gruppo.finalFit.some(f => f.nomiElementi.some(e => regex(e).test(label(SIGLA.caratteristiche)))));
-        assert.notStrictEqual(gruppo.bloccoUnico, true);
     }
+});
+
+test("box orizzontale: le caratteristiche in alto a sinistra, fuori dalla traccia, in proporzione", () => {
+    for (const k of kitVolantino) {
+        const gruppo = allineamento(k, "Parmigiano_Caratteristiche_SX_TOP_Largo");
+        soloForme(gruppo, ["largo"]);
+        caratteristicheInAltoASinistra(gruppo);
+        //PROPORTIONALLY e poi FRAME_TO_CONTENT: dopo l'altezza al 45% il logo si riduce senza deformarsi
+        //e il riquadro lo stringe. CONTENT_TO_FRAME, quello del verticale, lo stirerebbe.
+        assert.strictEqual(gruppo.finalFit.length, 1);
+        assert.ok(gruppo.finalFit[0].nomiElementi.every(e => regex(e).test(label(SIGLA.caratteristiche))));
+        assert.deepStrictEqual(gruppo.finalFit[0].fit, [2, 0]);
+    }
+});
+
+test("ogni forma ha le sue regole: caratteristiche e prezzi nel verticale, caratteristiche nell'orizzontale", () => {
+    for (const k of kitVolantino) {
+        assert.deepStrictEqual(regolePerForma(k, 100, 160), ["Parmigiano_Caratteristiche_SX_TOP", "Parmigiano_Prezzi_Payoff"]);
+        assert.deepStrictEqual(regolePerForma(k, 160, 100), ["Parmigiano_Caratteristiche_Largo", "Parmigiano_Caratteristiche_SX_TOP_Largo", "Parmigiano_Testo_Largo"]);
+        assert.deepStrictEqual(regolePerForma(k, 100, 100), []);
+    }
+});
+
+test("nel box orizzontale le caratteristiche al 45% lasciano posto a payoff e testo", () => {
+    //Le misure della prova in InDesign (I20-1131, box da 54,3 mm): payoff 12,9 mm, testo orizzontale
+    //5,8 mm su 82 mm di larghezza, che a 67,5 mm va a capo su circa una riga in piu' (7,7 mm); sopra il
+    //payoff 1 mm di spazio fra i livelli e 1 mm dal bordo, sopra e sotto.
+    const altezzaBox = 54.3;
+    const altezza = postRidimensionamento(kitVolantino[0], "Parmigiano_Caratteristiche_Largo").ridimensionamenti[0].setHeight;
+    const caratteristiche = altezzaBox * parseFloat(altezza) / 100;
+    const sinistra = 1 + caratteristiche + 1 + 12.9 + 1 + 7.7 + 1;
+    assert.ok(sinistra <= altezzaBox, sinistra + " mm su " + altezzaBox);
 });
 
 test("box verticale: la colonna dei prezzi sale intera finche' il suo fondo e' sul fondo del payoff", () => {

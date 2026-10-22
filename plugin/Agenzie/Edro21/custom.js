@@ -24,8 +24,9 @@ const customAgenzia={
         "*parafarmacia*","*conad_vn*","*conad_11P*","*essentiae*","*PetFr*","*petfrplus*","*conad_baby*","*Friend-of-the-Sea*",
         "*Marinou*","*Carne_Chianina*","*Logo_filiera*","*Logo_BDP*","*Logo_SDB*",
         //I20-1026: payoff e testi del Parmigiano stanno in basso a sinistra, dove la foto non deve
-        //finire. Le caratteristiche no: stanno con il DOP, che non fa da ostacolo.
-        "*Parmigiano_payoff*","*parmigiano_testo_2mod_*",], //se un elemento è sia in ignoreElementsFixFoto che in exceptionElementsToIgnoreFixFoto non viene ignorato. Serve perchè si può fare cose come ignora loghi e specificare solo il logo che fa eccezione
+        //finire. I20-1131: anche le caratteristiche, che nei box alti e larghi stanno in alto a
+        //sinistra; nel box standard sono spente.
+        "*Parmigiano_payoff*","*parmigiano_testo_2mod_*","*Parmigiano_caratteristiche*",], //se un elemento è sia in ignoreElementsFixFoto che in exceptionElementsToIgnoreFixFoto non viene ignorato. Serve perchè si può fare cose come ignora loghi e specificare solo il logo che fa eccezione
     
     calcoloDistanziamentoFoto: [ //il ratio è calcolato Y/X
         {
