@@ -1,6 +1,6 @@
 import { DataTypes, Model, Optional } from 'sequelize';
 import { sequelize } from '../db/SequelizeConnector';
-import { RegoleMenabo } from '../../../lib/types';
+import { Funzionalita, RegoleMenabo } from '../../../lib/types';
 
 /**
  * Modello Config per gestione configurazioni del sistema
@@ -8,6 +8,8 @@ import { RegoleMenabo } from '../../../lib/types';
 
 export interface ConfigAttributes {
   id: string;
+  id_gdo_config?: string | null;
+  funzionalita?: Funzionalita | null;
   maintenance_alert?: any;
   regole_menabo?: RegoleMenabo;
   webpliant: {
@@ -186,6 +188,8 @@ class Config extends Model<ConfigAttributes, ConfigCreationAttributes> implement
   declare dashboards_by_role?: any;
   declare maintenance_alert?: any;
   declare regole_menabo?: RegoleMenabo;
+  declare id_gdo_config?: string | null;
+  declare funzionalita?: Funzionalita | null;
   declare createdAt: Date;
   declare updatedAt: Date;
 }
@@ -336,6 +340,17 @@ const ConfigDefine = sequelize.define<Config>("config", {
     type: DataTypes.JSONB,
     allowNull: true
   },
+  // GDO a cui appartiene la configurazione. Piu' righe possono puntare alla stessa
+  // GDO: vale la piu' vecchia (vedi ConfigService)
+  id_gdo_config: {
+    type: DataTypes.UUID,
+    allowNull: true
+  },
+  // { momenti, menabo }: null finche' la migrazione all'avvio non la valorizza
+  funzionalita: {
+    type: DataTypes.JSONB,
+    allowNull: true
+  },
   createdAt: {
     type: DataTypes.DATE,
     allowNull: false,
@@ -374,6 +389,9 @@ const ConfigDefine = sequelize.define<Config>("config", {
     },
     {
       fields: ['updatedAt']
+    },
+    {
+      fields: ['id_gdo_config']
     }
   ],
   validate: {

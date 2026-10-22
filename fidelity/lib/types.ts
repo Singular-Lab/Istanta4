@@ -200,6 +200,15 @@ export interface Config {
   dashboardsByRole?: DashboardsByRole;
   maintenanceAlert?: AvvisoManutenzione;
   regoleMenabo?: RegoleMenabo;
+  // GDO a cui appartiene la configurazione (colonna id_gdo_config)
+  idGdo?: string | null;
+  funzionalita?: Funzionalita | null;
+}
+
+// Funzioni opzionali che ogni GDO attiva dalle Impostazioni di produzione
+export interface Funzionalita {
+  momenti: boolean;
+  menabo: boolean;
 }
 
 // Dashboard per singolo ruolo

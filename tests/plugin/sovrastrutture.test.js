@@ -559,13 +559,16 @@ test("al fix con il bordo alto spostato, gli elementi si misurano dall'angolo de
     //Descrizione e payoff seguono il fondo, che non si e' mosso: restano dove erano.
     assert.deepStrictEqual(arrotonda(descrizione.geometricBounds), [254.46, 109, 279.46, 141]);
     assert.deepStrictEqual(arrotonda(payoff.geometricBounds), [288.13, 76.75, 301, 102.91]);
-    //L'etichetta in alto con lo spostamento uscirebbe dalla cella: rientra sul bordo alto.
-    assert.deepStrictEqual(arrotonda(etichetta.geometricBounds), [223.6, 75.75, 233.6, 90]);
-    //Niente sopra la cella: fixOverflowFromBox non avra' nulla da spostare.
+    //L'etichetta in alto segue lo spostamento intero e sporge dalla cella di 82.40: qui non
+    //rientra piu' elemento per elemento (nel BOX7 di Edro21 la descrizione rientrava e il BIS,
+    //nello stesso gruppo, no). La riporta dentro fixOverflowFromBox subito dopo, con il suo gruppo.
+    assert.deepStrictEqual(arrotonda(etichetta.geometricBounds), [141.2, 75.75, 151.2, 90]);
     for (const el of box.allPageItems) {
-        assert.ok(el.geometricBounds[0] >= cella[0] - 0.001 && el.geometricBounds[2] <= cella[2] + 0.001, el.label);
+        if (el !== etichetta) {
+            assert.ok(el.geometricBounds[0] >= cella[0] - 0.001 && el.geometricBounds[2] <= cella[2] + 0.001, el.label);
+        }
     }
-    //La mappa dice le stesse posizioni, misurate dall'angolo della cella: anche per chi e' rientrato.
+    //La mappa dice le stesse posizioni, misurate dall'angolo della cella: anche per chi sporge.
     for (const [el, chiave] of [[base, "base"], [foto, "immagine"], [descrizione, "descrizione"], [payoff, payoff.label], [etichetta, "etichetta_alta"]]) {
         const rel = mappa[chiave].bounds;
         assert.deepStrictEqual(arrotonda([cella[0] + rel[0], cella[1] + rel[1], cella[0] + rel[2], cella[1] + rel[3]]), arrotonda(el.geometricBounds), chiave);
@@ -585,6 +588,26 @@ test("con l'angolo invariato il ridimensionamento da' le posizioni di sempre", (
     assert.deepStrictEqual(arrotonda(base.geometricBounds), [141.2, 75.75, 219.6, 141]);
     //Spostamento lineare di -82.40, come faceva il move di prima.
     assert.deepStrictEqual(arrotonda(descrizione.geometricBounds), [172.06, 109, 197.06, 141]);
+});
+
+test("chi sporge dalla cella rientra subito dopo il ridimensionamento, con i gruppi di allineamento del box, prima che la mappa si ricostruisca", () => {
+    //Un box deformato da un elemento che sporge sposterebbe l'origine delle misure della mappa:
+    //il rientro sta fra il ridimensionamento e creaMappaturaBoxOriginale, nei due rami.
+    const sorgente = leggi("CssFramework.js");
+    const inizio = sorgente.indexOf("async applicaRidimensionamentoCss(");
+    const corpo = sorgente.substring(inizio, sorgente.indexOf("\n    applicaAllineamentoCss(", inizio));
+    const ridimensionamenti = [...corpo.matchAll(/me\.applicaRidimensionamento\(box, boxInGrigliaBounds, mappaBoxOriginale, itemRef, DB, DBDef\);/g)].map(m => m.index);
+    const rientri = [...corpo.matchAll(/box = me\.fixOverflowFromBox\(boxInGrigliaBounds, box, mappaBoxOriginale, me\.gruppiDiAllineamentoDelBox\(box, mappaBoxOriginale, itemRef, DB, DBDef\), false\);/g)].map(m => m.index);
+    const mappe = [...corpo.matchAll(/mappaBoxOriginale = me\.creaMappaturaBoxOriginale\(box, prefissiDerivati\);\n\s*if ?\(garbageKey ?!= ?null\)/g)].map(m => m.index);
+    assert.strictEqual(ridimensionamenti.length, 2);
+    assert.strictEqual(rientri.length, 2);
+    assert.strictEqual(mappe.length, 2);
+    for (let ramo = 0; ramo < 2; ramo++) {
+        assert.ok(ridimensionamenti[ramo] < rientri[ramo] && rientri[ramo] < mappe[ramo], "ramo " + ramo);
+    }
+    //Il ridimensionamento non riporta piu' dentro nessuno da solo.
+    const ridimensionamento = membro(sorgente, "applicaRidimensionamento");
+    assert.doesNotMatch(ridimensionamento, /rientroY|rientroX/);
 });
 
 test("all'impaginazione i loghi disattivati non si piazzano, e il piazzamento e' quello di FotoPlacer", () => {

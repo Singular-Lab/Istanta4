@@ -207,7 +207,7 @@ test("un riquadro che manca si salta; senza nessun riquadro il gruppo non tocca 
 test("nel ciclo degli allineamenti il gruppo a slot viene prima dei livelli, con il suo fit finale", () => {
     const css = sorgente("plugin/CssFramework.js");
     assert.match(css, /const cssSlot = require\('\.\/cssFramework\/slot'\);/);
-    assert.match(css, /if \(allineamentoSingolo\.slot != null && this\.allineaASlot\(box, allineamentoSingolo, gruppoElementi, mappaBoxOriginale, itemRef\)\) \{\s*if \(allineamentoSingolo\.finalFit && allineamentoSingolo\.finalFit\.length > 0\) \{\s*this\.finalFit\(mappaBoxOriginale, allineamentoSingolo\.finalFit\);\s*\}\s*box = this\.fixOverflowFromBox\(boundsBoxImpaginato, box, mappaBoxOriginale\);\s*continue;\s*\}\s*(\/\/[^\n]*\n\s*)*let listGruppoAllineamento = allineamentoSingolo\.bloccoUnico === true\s*\?\s*this\.gruppoInBlocco\(gruppoElementi\)\s*:\s*this\.AllineamentoInternoGruppo\(/);
+    assert.match(css, /if \(allineamentoSingolo\.slot != null && this\.allineaASlot\(box, allineamentoSingolo, gruppoElementi, mappaBoxOriginale, itemRef\)\) \{\s*if \(allineamentoSingolo\.finalFit && allineamentoSingolo\.finalFit\.length > 0\) \{\s*this\.finalFit\(mappaBoxOriginale, allineamentoSingolo\.finalFit\);\s*\}\s*box = this\.fixOverflowFromBox\(boundsBoxImpaginato, box, mappaBoxOriginale, \[allineamentoSingolo\]\);\s*continue;\s*\}\s*(\/\/[^\n]*\n\s*)*let listGruppoAllineamento = allineamentoSingolo\.bloccoUnico === true\s*\?\s*this\.gruppoInBlocco\(gruppoElementi\)\s*:\s*this\.AllineamentoInternoGruppo\(/);
     //I20-1113: dopo lo slot, il gruppo si ricompone per livelli oppure, con bloccoUnico, resta un blocco solo.
 });
 

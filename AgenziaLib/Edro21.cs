@@ -289,6 +289,21 @@ namespace AgenziaLib
         }
     }
 
+    /// I box bis di Edro21 (BOX7, meccaniche NM) non hanno il riquadro sconto_effettivo_grande: il
+    /// campo compilato non va fornito al Plugin, che altrimenti lo cerca nel box e lo segnala come
+    /// mancante a ogni apertura della scheda e in ogni Report Integrita'. La regola sta qui, e non
+    /// solo nel ramo dell'export, perche' si possa provare da sola.
+    public static class BoxBisEdro21
+    {
+        public const string CodiceBoxBis = "BOX7";
+
+        /// Se il box prevede il riquadro sconto_effettivo_grande: tutti tranne il box bis.
+        public static bool PrevedeScontoEffettivoGrande(string? codiceBox)
+        {
+            return !string.Equals((codiceBox ?? "").Trim(), CodiceBoxBis, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
     /// I20-1125: il logo attributo italiano (quello con la bandiera) porta sotto la bandiera la parola
     /// che comincia con "italian" e quella che la precede, prese dalla descrizione e tagliate al primo
     /// spazio o a capo. Le descrizioni ora hanno le virgole ("prodotto italiano, categoria I, ..."),
@@ -3007,8 +3022,13 @@ namespace AgenziaLib
                             var paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta_KgL_sconto", codiceBox, canale);
                             interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_KgL_sconto);
 
-                            paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "sconto_effettivo_grande", codiceBox, canale);
-                            interprete.assignCompiledField("sconto_effettivo_grande", paragraphName, sconto_effettivo_grande);
+                            //Il box bis non ha sconto_effettivo_grande (BoxBisEdro21): fornirlo faceva segnalare
+                            //al Plugin un campo mancante che nel box non deve esserci.
+                            if (BoxBisEdro21.PrevedeScontoEffettivoGrande(codiceBox))
+                            {
+                                paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "sconto_effettivo_grande", codiceBox, canale);
+                                interprete.assignCompiledField("sconto_effettivo_grande", paragraphName, sconto_effettivo_grande);
+                            }
 
                             if (prezzoOfferta != null && prezzoOfferta != "")
                             {
