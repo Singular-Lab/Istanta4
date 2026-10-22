@@ -131,6 +131,43 @@ con la soglia a 1048 px.
 
 **Test:** `tests/plugin/schermataSegnalazioni.test.js` e `tests/plugin/vistaAffiancata.test.js`.
 
+## Disattivare le segnalazioni per la lavorazione (I20-1126)
+
+In cima alla schermata, popup o colonna, c'è **«Disattiva segnalazioni»**. La domanda
+(`chiediDisattivazione`, con `Modali.confirmCustom`, che sta sopra la schermata) offre tre scelte:
+
+- **Disattiva**;
+- **Risolvi tutto e disattiva**: prima `risolviTuttoIlDocumento`, che toglie il bollino da ogni box
+  del documento (`Segnalazioni.risolviTutte`), poi disattiva;
+- **Annulla**.
+
+Con le segnalazioni disattivate:
+
+- i bollini già nel documento **si nascondono, non si tolgono** (`Segnalazioni.mostraBolliniDelDocumento`,
+  chiamata da `impostaDisattivate`): ogni bollino, nuovo o vecchio, ha `visible` a `false`, quindi non
+  si vede nelle pagine né nel PDF. Riattivando, `visible` torna `true` e ricompaiono. Un bollino che
+  non si lascia nascondere è in console con `SGN-14`, e non ferma gli altri;
+- l'impaginazione **non scrive bollini** (`finalizzaSegnalazioni` di `indexNew.js`); il report del giro,
+  il `.txt` nei log e il messaggio di fine impaginazione, restano;
+- la schermata **non si apre da sola** (`apriSeCiSono`) e il Report Integrità non avvisa delle
+  segnalazioni prima di partire;
+- il segnalino è **grigio**, «Segnalazioni disattivate»;
+- la schermata aperta a mano è **«pulita»** (`_disegna`): solo la barra con «Segnalazioni disattivate
+  per questa lavorazione» e **«Riattiva segnalazioni»**, niente elenco per pagina e box e niente
+  conteggio accanto al titolo. I bollini nascosti restano nel documento: riattivate, la schermata
+  li rimostra.
+
+La scelta vale **per la lavorazione**: sta nella sua voce di `lavorazioni.json`, campo
+`segnalazioniDisattivate` (`impostaDisattivate`, con `Utility.voceLavorazione` e
+`salvaVoceLavorazione`). Riattivare scrive `false`, non toglie il campo: `salvaVoceLavorazione`
+unisce la voce a quella del file con `Object.assign`, e un campo tolto lì resterebbe `true`. La
+scelta resta dopo la chiusura del Plugin, per quel documento e su quella
+macchina. `disattivate()` la tiene in memoria per documento, perché la chiede ogni box impaginato.
+
+**Il segnalino senza segnalazioni** (I20-1126) resta visibile, **verde**, «Nessuna segnalazione», e al
+clic apre la schermata. Si nasconde solo senza un controllo del documento (nessun documento, o un
+altro): `riepilogoControllo` lo dice con `controllato`.
+
 ## Il badge di pagina del tracciato (lotto 3)
 
 Nella Home il pallino col numero di pagina di una referenza impaginata prende il colore della

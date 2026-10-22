@@ -155,6 +155,31 @@ const Segnalazioni = {
         return Segnalazioni.togliDalBox(box);
     },
 
+    /// I20-1126: nasconde (visibili false) o mostra i bollini di segnalazioni del documento, nuovi
+    /// e vecchi, senza toglierli: con le segnalazioni disattivate non si vedono nelle pagine, e
+    /// riattivandole ricompaiono. Un bollino sta sia nel suo box sia, con allPageItems, nel gruppo
+    /// che lo contiene: si conta una volta. Restituisce quanti bollini ha toccato.
+    mostraBolliniDelDocumento(documento, visibili) {
+        const toccati = new Set();
+        Segnalazioni.leggiDocumento(documento).forEach(lettura => {
+            Segnalazioni.bolliniDelBox(lettura.box)
+                .concat(Segnalazioni.bolliniVecchiDelBox(lettura.box).map(vecchio => vecchio.ovale))
+                .forEach(bollino => {
+                    if (toccati.has(bollino)) {
+                        return;
+                    }
+                    try {
+                        bollino.visible = visibili === true;
+                        toccati.add(bollino);
+                    }
+                    catch (e) {
+                        console.warn("Code SGN-14 Bollino di segnalazioni non " + (visibili === true ? "mostrato" : "nascosto") + ":", e);
+                    }
+                });
+        });
+        return toccati.size;
+    },
+
     /// Tutte le segnalazioni del documento, una voce per bollino: la pagina, il box che lo
     /// contiene e le segnalazioni. La usa la schermata delle segnalazioni (schermata.js).
     ///

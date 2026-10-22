@@ -112,8 +112,10 @@ test("nessuno costruisce piu' a mano il percorso di lavorazioni.json", () => {
     //custom.js per cliente.
     //I20-1066: piu' una lettura e una scrittura in indexNew, in verificaIndirizziDellaLavorazione (la voce
     //si confronta con gli indirizzi dell'ipconfig, e una voce di prima riceve quelli attuali).
-    assert.strictEqual(conta(/Utility\.voceLavorazione\(/g), 10);
-    assert.strictEqual(conta(/Utility\.salvaVoceLavorazione\(/g), 5);
+    //I20-1126: piu' una lettura e una scrittura in segnalazioni/schermata.js, la scelta di disattivare
+    //le segnalazioni della lavorazione (segnalazioniDisattivate).
+    assert.strictEqual(conta(/Utility\.voceLavorazione\(/g), 11);
+    assert.strictEqual(conta(/Utility\.salvaVoceLavorazione\(/g), 6);
 });
 
 test("ficoProcess non perde il file nuovo e riprende solo i percorsi di Links e Loghi", () => {

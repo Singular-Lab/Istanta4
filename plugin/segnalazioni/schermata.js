@@ -33,6 +33,12 @@
  * I20-1121: soglia, misure, confinamento e guscio della colonna sono in vistaAffiancata.js, comuni
  * con il Report Integrita'; la soglia e' scesa a 924 px. Una colonna alla volta: con quella del
  * report aperta le segnalazioni si aprono come popup.
+ *
+ * I20-1126: le segnalazioni si possono disattivare per la lavorazione, dalla schermata ("Disattiva",
+ * "Risolvi tutto e disattiva", "Annulla"), e riattivare da li'. Disattivate, l'impaginazione non
+ * scrive bollini (finalizzaSegnalazioni di indexNew), la schermata non si apre da sola e il Report
+ * Integrita' non avvisa; il segnalino e' grigio. La scelta sta nella voce della lavorazione, in
+ * lavorazioni.json (Utility.voceLavorazione). Senza segnalazioni il segnalino e' verde.
  */
 
 const Segnalazioni = require('./segnalazioni');
@@ -48,6 +54,10 @@ const CampiARiposo = require('../campiARiposo');
 
 //I colori della schermata, gli stessi del bollino: rosso gli errori, arancione i warning.
 const COLORE_CSS = { error: "#c62828", warning: "#ef6c00", notifica: "#1565c0" };
+
+//I20-1126: il segnalino senza segnalazioni e con le segnalazioni disattivate.
+const COLORE_NESSUNA = "#2e7d32";
+const COLORE_DISATTIVATE = "#9e9e9e";
 
 const SchermataSegnalazioni = {
 
@@ -70,6 +80,14 @@ const SchermataSegnalazioni = {
     /// I20-1116: il segnalino della testata, in fondo alla riga delle linguette, e il suo testo.
     ID_SEGNALINO: "segnalinoSegnalazioni",
     ID_TESTO_SEGNALINO: "testoSegnalinoSegnalazioni",
+
+    /// I20-1126: il campo della voce della lavorazione (lavorazioni.json) che dice se le segnalazioni
+    /// sono disattivate.
+    CAMPO_DISATTIVATE: "segnalazioniDisattivate",
+
+    /// I20-1126: l'ultima lettura del campo, per documento: finalizzaSegnalazioni lo chiede a ogni box,
+    /// e il file delle lavorazioni non si rilegge ogni volta. { documento, valore }.
+    _disattivateInMemoria: null,
 
     /// I20-1116, lotto 2: la colonna della vista affiancata (regole in vistaAffiancata.js, I20-1121).
     ID_COLONNA: "colonnaSegnalazioni",
@@ -354,6 +372,10 @@ const SchermataSegnalazioni = {
     /// di pagina. Senza pagine non si apre. Il report del giro resta il parametro di prima: le sue
     /// segnalazioni sono gia' nei bollini.
     apriSeCiSono(reportImpaginazioneObj, pagine = null) {
+        //I20-1126: con le segnalazioni disattivate la schermata non si apre da sola.
+        if (SchermataSegnalazioni.disattivate()) {
+            return Promise.resolve(false);
+        }
         const nomi = Array.isArray(pagine) ? pagine.filter(nome => nome != null && String(nome) !== "") : [];
         if (nomi.length === 0) {
             return Promise.resolve(false);
@@ -426,11 +448,14 @@ const SchermataSegnalazioni = {
     /// I20-1056, lotto 3: quante segnalazioni irrisolte all'ultimo controllo del documento, quanti
     /// errori e la gravita' peggiore. Zero se il controllo e' di un altro documento.
     riepilogoControllo(chiaveDocumento) {
-        const riepilogo = { segnalazioni: 0, errori: 0, gravita: null };
+        //I20-1126: controllato dice se i numeri vengono da un controllo di questo documento: senza,
+        //lo zero non vuol dire "nessuna segnalazione", e il segnalino verde mentirebbe.
+        const riepilogo = { segnalazioni: 0, errori: 0, gravita: null, controllato: false };
         const controllo = SchermataSegnalazioni._ultimoControllo;
-        if (controllo == null || controllo.chiave !== chiaveDocumento) {
+        if (controllo == null || chiaveDocumento == null || controllo.chiave !== chiaveDocumento) {
             return riepilogo;
         }
+        riepilogo.controllato = true;
         Object.keys(controllo.pagine).forEach(nome => {
             const pagina = controllo.pagine[nome];
             riepilogo.segnalazioni += pagina.segnalazioni;
@@ -455,10 +480,28 @@ const SchermataSegnalazioni = {
     },
 
     /// I20-1116: come mostrare il segnalino della testata dal riepilogo dell'ultimo controllo:
-    /// { visibile, testo, colore, suggerimento }. Senza segnalazioni non si vede.
-    statoSegnalino(riepilogo) {
-        if (riepilogo == null || !(riepilogo.segnalazioni > 0)) {
+    /// { visibile, testo, colore, suggerimento }. I20-1126: senza un controllo del documento (nessun
+    /// documento, o un altro) non si vede; con le segnalazioni disattivate e' grigio; senza
+    /// segnalazioni e' verde, "Nessuna segnalazione". Al clic apre comunque la schermata.
+    statoSegnalino(riepilogo, disattivate = false) {
+        if (riepilogo == null || riepilogo.controllato === false) {
             return { visibile: false, testo: "", colore: null, suggerimento: "" };
+        }
+        if (disattivate === true) {
+            return {
+                visibile: true,
+                testo: "Segnalazioni disattivate",
+                colore: COLORE_DISATTIVATE,
+                suggerimento: "Segnalazioni disattivate per questa lavorazione: clicca per aprire la schermata e riattivarle"
+            };
+        }
+        if (!(riepilogo.segnalazioni > 0)) {
+            return {
+                visibile: true,
+                testo: "Nessuna segnalazione",
+                colore: COLORE_NESSUNA,
+                suggerimento: "Nessuna segnalazione all'ultimo controllo: clicca per aprire le segnalazioni"
+            };
         }
         return {
             visibile: true,
@@ -498,7 +541,7 @@ const SchermataSegnalazioni = {
         if (segnalino.length === 0) {
             return;
         }
-        const stato = SchermataSegnalazioni.statoSegnalino(riepilogo);
+        const stato = SchermataSegnalazioni.statoSegnalino(riepilogo, SchermataSegnalazioni.disattivate());
         if (!stato.visibile) {
             segnalino.attr('title', "").css({ display: 'none' });
             return;
@@ -567,10 +610,19 @@ const SchermataSegnalazioni = {
     _disegna(elenco, lette, pagine) {
         elenco.empty();
 
+        //I20-1126: in cima, disattivare o riattivare le segnalazioni della lavorazione.
+        elenco.append(SchermataSegnalazioni._barraDisattivazione(elenco));
+
         //I20-1056, lotto 2: il conteggio e' accanto al titolo del popup, e si aggiorna a ogni giro.
+        //I20-1126: con le segnalazioni disattivate la schermata e' "pulita": solo la barra con
+        //"Riattiva", niente conteggio e niente elenco. I bollini nel documento restano dove sono.
+        const disattivate = SchermataSegnalazioni.disattivate();
         const conteggio = elenco.data('conteggio');
         if (conteggio != null) {
-            conteggio.text(SchermataSegnalazioni.testoConteggio(lette));
+            conteggio.text(disattivate ? "" : SchermataSegnalazioni.testoConteggio(lette));
+        }
+        if (disattivate) {
+            return;
         }
 
         const perPagina = SchermataSegnalazioni.perPagina(lette);
@@ -595,6 +647,153 @@ const SchermataSegnalazioni = {
                 }));
             pagina.box.forEach(lettura => elenco.append(SchermataSegnalazioni._bloccoBox(lettura, elenco, contesto)));
         });
+    },
+
+    /// I20-1126: la barra in cima all'elenco: "Disattiva segnalazioni", o "Riattiva segnalazioni" se
+    /// sono disattivate.
+    _barraDisattivazione(elenco) {
+        const barra = $('<div></div>').css({ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', padding: '4px 8px', marginBottom: '6px' });
+        if (SchermataSegnalazioni.disattivate()) {
+            barra.append($('<span></span>').text("Segnalazioni disattivate per questa lavorazione").css({ color: '#555', marginRight: '8px' }));
+            barra.append($('<button type="button"></button>').text("Riattiva segnalazioni").on('click', () => {
+                if (SchermataSegnalazioni.impostaDisattivate(false)) {
+                    SchermataSegnalazioni.riempi(elenco);
+                }
+            }));
+        }
+        else {
+            barra.append($('<button type="button"></button>').text("Disattiva segnalazioni").on('click', () => {
+                SchermataSegnalazioni.chiediDisattivazione(elenco);
+            }));
+        }
+        return barra;
+    },
+
+    /// I20-1126: le tre scelte: "Disattiva", "Risolvi tutto e disattiva" (prima toglie tutti i bollini
+    /// del documento), "Annulla". La domanda sta sopra la schermata (Modali.LIVELLO_CONFERMA).
+    /// Restituisce la scelta: "disattiva", "risolvi" o null.
+    async chiediDisattivazione(elenco = null) {
+        const risposta = await Modali.confirmCustom(
+            "Disattivare le segnalazioni per questa lavorazione? Durante l'impaginazione non si scriveranno bollini nei box e questa finestra non si aprirà da sola. Si riattivano da qui.",
+            "Disattiva", "disattiva", "Risolvi tutto e disattiva", "risolvi");
+        if (risposta == null || !risposta.result) {
+            return null;
+        }
+        if (risposta.hiddenVal === "risolvi") {
+            SchermataSegnalazioni.risolviTuttoIlDocumento();
+        }
+        if (!SchermataSegnalazioni.impostaDisattivate(true)) {
+            return null;
+        }
+        if (elenco != null) {
+            SchermataSegnalazioni.riempi(elenco);
+        }
+        SchermataSegnalazioni.allaChiusura();
+        return risposta.hiddenVal;
+    },
+
+    /// I20-1126: "Risolvi tutto": ogni box del documento resta senza bollino. Restituisce quanti box.
+    risolviTuttoIlDocumento() {
+        let risolti = 0;
+        try {
+            const lette = Segnalazioni.leggiDocumento(SchermataSegnalazioni._documento());
+            (Array.isArray(lette) ? lette : []).forEach(lettura => {
+                try {
+                    Segnalazioni.risolviTutte(lettura.box);
+                    risolti++;
+                }
+                catch (e) {
+                    console.error("Code SGN-09 Bollino non tolto:", e);
+                }
+            });
+        }
+        catch (e) {
+            console.error("Code SGN-10 Segnalazioni del documento non risolte:", e);
+        }
+        return risolti;
+    },
+
+    /// I20-1126: la voce della lavorazione del documento aperto, su questa macchina; null senza
+    /// lavorazione. Usa le globali di indexNew (pathLavorazione, idMacchina,
+    /// libroDelDocumentoInLavorazione).
+    _voceDellaLavorazione() {
+        try {
+            const documento = SchermataSegnalazioni._documento();
+            if (documento == null || typeof pathLavorazione === "undefined" || !pathLavorazione) {
+                return null;
+            }
+            const nome = documento.name;
+            const libro = typeof libroDelDocumentoInLavorazione === "function" ? libroDelDocumentoInLavorazione(nome) : null;
+            return Utility.voceLavorazione(pathLavorazione, idMacchina(), nome, libro);
+        }
+        catch (e) {
+            console.error("Code SGN-11 Voce della lavorazione non letta:", e);
+            return null;
+        }
+    },
+
+    /// I20-1126: se la voce dice che le segnalazioni sono disattivate.
+    disattivateNellaVoce(voce) {
+        return voce != null && voce[SchermataSegnalazioni.CAMPO_DISATTIVATE] === true;
+    },
+
+    /// I20-1126: se le segnalazioni sono disattivate per la lavorazione del documento aperto. La
+    /// lettura si tiene per documento: la chiede ogni box impaginato.
+    disattivate() {
+        try {
+            const documento = SchermataSegnalazioni._documento();
+            const chiave = documento != null ? documento.name : null;
+            if (chiave == null) {
+                return false;
+            }
+            const inMemoria = SchermataSegnalazioni._disattivateInMemoria;
+            if (inMemoria != null && inMemoria.documento === chiave) {
+                return inMemoria.valore;
+            }
+            const valore = SchermataSegnalazioni.disattivateNellaVoce(SchermataSegnalazioni._voceDellaLavorazione());
+            SchermataSegnalazioni._disattivateInMemoria = { documento: chiave, valore: valore };
+            return valore;
+        }
+        catch (e) {
+            return false;
+        }
+    },
+
+    /// I20-1126: disattiva o riattiva le segnalazioni della lavorazione, nella sua voce. false se la
+    /// lavorazione non c'e' o il file non si scrive: la scelta non e' stata salvata.
+    impostaDisattivate(disattivate) {
+        const voce = SchermataSegnalazioni._voceDellaLavorazione();
+        if (voce == null) {
+            messaggioUtente("Code SGN-12 Nessuna lavorazione per questo documento: le segnalazioni restano come sono", "warning", false, 6);
+            return false;
+        }
+        try {
+            if (disattivate === true) {
+                voce[SchermataSegnalazioni.CAMPO_DISATTIVATE] = true;
+            }
+            else {
+                //Si scrive false, non si toglie il campo: salvaVoceLavorazione unisce la voce a quella
+                //del file (Object.assign), e un campo tolto li' resterebbe true.
+                voce[SchermataSegnalazioni.CAMPO_DISATTIVATE] = false;
+            }
+            Utility.salvaVoceLavorazione(pathLavorazione, idMacchina(), voce);
+        }
+        catch (e) {
+            console.error("Code SGN-13 Voce della lavorazione non salvata:", e);
+            messaggioUtente("Code SGN-13 La scelta sulle segnalazioni non e' stata salvata", "error", false, 6);
+            return false;
+        }
+        //I20-1126: i bollini gia' nel documento si nascondono disattivando, senza toglierli, e
+        //ricompaiono riattivando. Dopo "Risolvi tutto" non ce n'e' piu' nessuno da nascondere.
+        try {
+            Segnalazioni.mostraBolliniDelDocumento(SchermataSegnalazioni._documento(), disattivate !== true);
+        }
+        catch (e) {
+            console.error("Code SGN-15 Bollini del documento non " + (disattivate === true ? "nascosti" : "mostrati") + ":", e);
+        }
+        SchermataSegnalazioni._disattivateInMemoria = null;
+        SchermataSegnalazioni.aggiornaIcona();
+        return true;
     },
 
     /// I20-1056, lotto 2: il testo del conteggio accanto al titolo.

@@ -350,6 +350,47 @@ test("dal documento i bollini vecchi si leggono con i nuovi, una voce per box, n
     assert.deepStrictEqual(lette.map(l => [l.box.label, l.voci.map(v => v.c)]), [["BOX12", ["CSF-009", "CSF-013"]], ["BOX1", ["CSF-013"]]]);
 });
 
+test("I20-1126: disattivando i bollini si nascondono, nuovi e vecchi, e riattivando ricompaiono; la grafica non si tocca", () => {
+    const nuovo = { label: etichetta.scrivi([{ g: "error", c: "CSF-009", t: "oltre" }]) };
+    const vecchio = ovaleVecchio("CSF-013" + SUFFISSO, "Yellow");
+    const logo = { label: "logo", textFrames: collezioneDi([]), fillColor: { name: "Red" } };
+    //Il bollino di un box dentro un altro gruppo sta anche fra gli elementi del gruppo esterno.
+    const bollinoInterno = { label: etichetta.scrivi([{ g: "warning", t: "dentro" }]) };
+    const interno = gruppoFinto([bollinoInterno]);
+    const box = gruppoFinto([nuovo, vecchio, logo], [bollinoInterno]);
+    box.groups = collezioneDi([interno]);
+    const documento = { pages: collezioneDi([{ name: "1", groups: collezioneDi([box]) }]) };
+
+    assert.strictEqual(Segnalazioni.mostraBolliniDelDocumento(documento, false), 3);
+    assert.deepStrictEqual([nuovo.visible, vecchio.visible, bollinoInterno.visible, logo.visible], [false, false, false, undefined]);
+    //Nascosti, non tolti: restano nel documento e si rileggono.
+    assert.ok(!nuovo.rimosso && !vecchio.rimosso && !bollinoInterno.rimosso);
+    assert.strictEqual(Segnalazioni.leggiDocumento(documento).length, 2);
+
+    assert.strictEqual(Segnalazioni.mostraBolliniDelDocumento(documento, true), 3);
+    assert.deepStrictEqual([nuovo.visible, vecchio.visible, bollinoInterno.visible, logo.visible], [true, true, true, undefined]);
+
+    assert.strictEqual(Segnalazioni.mostraBolliniDelDocumento(null, false), 0);
+});
+
+test("I20-1126: un bollino che non si nasconde non ferma gli altri", () => {
+    const rotto = { label: etichetta.scrivi([{ g: "error", t: "x" }]) };
+    Object.defineProperty(rotto, "visible", { set() { throw new Error("oggetto non valido"); } });
+    const buono = { label: etichetta.scrivi([{ g: "warning", t: "y" }]) };
+    const documento = { pages: collezioneDi([{ name: "2", groups: collezioneDi([gruppoFinto([rotto]), gruppoFinto([buono])]) }]) };
+    const avvisi = [];
+    const warn = console.warn;
+    console.warn = (testo) => avvisi.push(testo);
+    try {
+        assert.strictEqual(Segnalazioni.mostraBolliniDelDocumento(documento, false), 1);
+    }
+    finally {
+        console.warn = warn;
+    }
+    assert.strictEqual(buono.visible, false);
+    assert.match(avvisi[0], /^Code SGN-14 Bollino di segnalazioni non nascosto/);
+});
+
 test("nella schermata le segnalazioni vecchie si riconoscono", () => {
     const schermata = leggiFileDelPlugin("segnalazioni/schermata.js").replace(/\r/g, "");
 
