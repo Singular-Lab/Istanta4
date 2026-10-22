@@ -1,5 +1,6 @@
 import { Worker } from 'worker_threads';
 import * as path from 'path';
+import { EsitoConversione } from '@lib/illustrator';
 
 
 
@@ -9,7 +10,7 @@ function runConversionTask(task: {
   nome_archivio_file_finale: string;
   nome_web_file_finale: string;
   unique_name: string;
-}): Promise<string> {
+}): Promise<EsitoConversione> {
   return new Promise((resolve, reject) => {
     const myPath = path.resolve(__dirname, 'conversionWorker.js');
     const worker = new Worker(myPath, {

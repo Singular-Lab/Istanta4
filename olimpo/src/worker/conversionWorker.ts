@@ -11,7 +11,7 @@ import ConversionService from '@lib/ConversionService';
       unique_name,
     } = workerData;
 
-    const result = await ConversionService.conversioneFile(
+    const result = await ConversionService.conversioneFileConEsito(
       path_file_dello_zip_completo,
       nome_archivio_file_finale,
       nome_web_file_finale,
