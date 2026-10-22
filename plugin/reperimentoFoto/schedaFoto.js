@@ -1087,6 +1087,24 @@ const schedaFoto = {
         }
     },
 
+    /// I20-1132: dopo che updateFoto ha rigruppato il box, la scheda e la selezione di InDesign
+    /// seguono il gruppo nuovo, e il ciclo di controllo lo accetta come selezione corrente: cosi' il
+    /// riscaricamento della scheda e la reimpaginazione lavorano sul box che c'e', e al rilascio
+    /// del ciclo non parte una riapertura della scheda. Con un box non valido non fa niente.
+    seguiBoxRicostruito(box) {
+        if (box == null || !box.isValid) {
+            return false;
+        }
+        if (this.refSelected != null) {
+            this.refSelected.item = box;
+        }
+        Utility.selezionaBox(box);
+        if (typeof indesignEvents !== "undefined" && indesignEvents != null && typeof indesignEvents.accettaSelezione === "function") {
+            indesignEvents.accettaSelezione([box.id]);
+        }
+        return true;
+    },
+
     /// La schermata di primarie e secondarie.
     async EditFotoPrimarieSecondarie(box) {
         var messageDelivered = false;
@@ -1521,118 +1539,131 @@ const schedaFoto = {
 
                 const xhr = new XMLHttpRequestClient();
                 xhr.onload = async (objResult2, parsed) => {
-                    if (!parsed) {
-                        try {
-                            objResult2 = JSON.parse(objResult2);
-                        }
-                        catch (e) {
-                            messaggioUtente("Code SRF-38 Edit P/S: Errore generico durante il salvataggio delle modifiche: " + e, "error");
-                            return;
-                        }
-                    }
-                    console.log("Risposta");
-                    if (!objResult2.esito) {
-                        //I20-1069: error e' il messaggio breve; la traccia completa del server sta in dettaglio.
-                        if (objResult2.dettaglio) {
-                            console.error("Dettaglio dell'errore del server:", objResult2.dettaglio);
-                        }
-                        messaggioUtente("Code SRF-39 Edit P/S: Errore durante il salvataggio delle modifiche: " + objResult2.error, "error");
-                        return;
-                    }
-                    //I20-1069: la conferma solo con le primarie e secondarie registrate. Prima stava in
-                    //onreadystatechange e compariva per ogni risposta 200, anche con il salvataggio fallito.
-                    messaggioUtente("Edit P/S: Richiesta completata con successo", "success", false, 5);
-
+                    //I20-1132: tutto il salvataggio con il ciclo di controllo della selezione sospeso.
+                    //Sostituendo le foto, updateFoto rigruppa il box: il gruppo di prima sparisce e il ciclo
+                    //vedeva "nessuna ref selezionata", invalidava la scheda e il riscaricamento (SRF-47) non
+                    //partiva: niente confronto, niente proposta di reimpaginazione.
+                    indesignEvents.setBusy(true);
                     try {
-                        //aggiorniamo il dato in schedaRef
-                        var primaria = null;
-                        var secondarie = [];
-                        for (var i = 0; i < schedaRef.length; i++) {
-                            var objItem = schedaRef[i].recordInTracciato;
-                            var cod = objItem["Referenza.Codice"];
-                            var item = listaSingoli.find(function (element) {
-                                return element.Codice == cod;
-                            });
-
-                            if (item != null && objToSend.ps.find(f => f.codRef == cod) != null) {
-                                //cerchiamo in listfotoimpaginate l'elemento con l'immagine uguale a objItem["Foto.Nome"]
-                                objItem.StatoSelezione = item.StatoSelezione;
-                                //La scelta sul rendering si legge dove vive davvero, non dal
-                                //payload P/S, che non la porta piu'.
-                                var noRenderSalvato = noRenderDiCodice(cod);
-                                //teniamo allineato il dato locale: la schermata viene ridisegnata da qui
-                                var membroLocale = membriGruppoFoto.find(m => m.codRef == cod);
-                                if (membroLocale != null) {
-                                    membroLocale.noRender = noRenderSalvato;
-                                }
-                                var fotoFound = listFotoImpaginate.find(f => f.imgName == objItem["Foto.Nome"])
-                                let imgRectangle = fotoFound != null ? fotoFound.rectangle : null;
-                                //box = me.placeFoto(objItem.StatoSelezione != 3 ? objItem["Foto.Nome"] : null, box, imgRectangle, objItem["Referenza.Codice"], objItem.StatoSelezione);
-                                let result = FotoPlacer.updateFoto(objItem.StatoSelezione != 3 ? objItem["Foto.Nome"] : null, box, imgRectangle, objItem["Referenza.Codice"], objItem.StatoSelezione, noRenderSalvato);
-                                box = result.box;
-                                imgRectangle = result.fotoRectangle;
-                                if(objItem.StatoSelezione == 1){
-                                    primaria = imgRectangle;
-                                }
-                                else if(objItem.StatoSelezione == 2){
-                                    secondarie.push(imgRectangle);
-                                }
+                        if (!parsed) {
+                            try {
+                                objResult2 = JSON.parse(objResult2);
+                            }
+                            catch (e) {
+                                messaggioUtente("Code SRF-38 Edit P/S: Errore generico durante il salvataggio delle modifiche: " + e, "error");
+                                return;
                             }
                         }
-
-                        if(secondarie.length > 0){
-                            //guardiamo qual'è la secondaria che appare prima in gerarchia del box
-                            var firstSecondaria = null;
-                            for (var i = 0; i < box.allPageItems.length; i++) {
-                                var item = box.allPageItems[i];
-                                //se l'item ha lo stesso id di uno degli imgRectangle delle secondarie allora è la firstSecondaria
-                                if (secondarie.find(s => s != null && s.id == item.id) != null) {
-                                    firstSecondaria = item;
-                                    break;
-                                }
+                        console.log("Risposta");
+                        if (!objResult2.esito) {
+                            //I20-1069: error e' il messaggio breve; la traccia completa del server sta in dettaglio.
+                            if (objResult2.dettaglio) {
+                                console.error("Dettaglio dell'errore del server:", objResult2.dettaglio);
                             }
-    
-                            primaria.bringToFront(firstSecondaria);
-                        }
-
-                    }
-                    catch (ex) {
-                        console.error(ex);
-                    }
-
-                    //La scheda sul server puo' essere cambiata insieme alle primarie e secondarie:
-                    //la si riscarica sempre, ed e' dal dato fresco che si capisce se il box in
-                    //pagina e' ancora allineato. Prima si riscaricava solo su richiesta di agenzia.
-                    showLoading("Aggiornamento della scheda in corso...");
-                    var schedaRicaricata = await me.ricaricaDatiScheda(codice_gruppo, idRec);
-                    hideLoading();
-
-                    if (avvisoCambioPrimario !== "") {
-                        messaggioUtente(avvisoCambioPrimario, "warning", false, 15);
-                    }
-
-                    if (schedaRicaricata) {
-                        var esitoAllineamento = await me.allineaBoxDopoSalvataggioPS(box, codiceBoxPrecedente);
-                        if (esitoAllineamento !== me.ESITI_ALLINEAMENTO_BOX.nessuno) {
-                            //Il box e' stato rifatto: il fix foto e il refresh della lista
-                            //lavorerebbero su un box che non c'e' piu'.
+                            messaggioUtente("Code SRF-39 Edit P/S: Errore durante il salvataggio delle modifiche: " + objResult2.error, "error");
                             return;
                         }
+                        //I20-1069: la conferma solo con le primarie e secondarie registrate. Prima stava in
+                        //onreadystatechange e compariva per ogni risposta 200, anche con il salvataggio fallito.
+                        messaggioUtente("Edit P/S: Richiesta completata con successo", "success", false, 5);
+
+                        try {
+                            //aggiorniamo il dato in schedaRef
+                            var primaria = null;
+                            var secondarie = [];
+                            for (var i = 0; i < schedaRef.length; i++) {
+                                var objItem = schedaRef[i].recordInTracciato;
+                                var cod = objItem["Referenza.Codice"];
+                                var item = listaSingoli.find(function (element) {
+                                    return element.Codice == cod;
+                                });
+
+                                if (item != null && objToSend.ps.find(f => f.codRef == cod) != null) {
+                                    //cerchiamo in listfotoimpaginate l'elemento con l'immagine uguale a objItem["Foto.Nome"]
+                                    objItem.StatoSelezione = item.StatoSelezione;
+                                    //La scelta sul rendering si legge dove vive davvero, non dal
+                                    //payload P/S, che non la porta piu'.
+                                    var noRenderSalvato = noRenderDiCodice(cod);
+                                    //teniamo allineato il dato locale: la schermata viene ridisegnata da qui
+                                    var membroLocale = membriGruppoFoto.find(m => m.codRef == cod);
+                                    if (membroLocale != null) {
+                                        membroLocale.noRender = noRenderSalvato;
+                                    }
+                                    var fotoFound = listFotoImpaginate.find(f => f.imgName == objItem["Foto.Nome"])
+                                    let imgRectangle = fotoFound != null ? fotoFound.rectangle : null;
+                                    //box = me.placeFoto(objItem.StatoSelezione != 3 ? objItem["Foto.Nome"] : null, box, imgRectangle, objItem["Referenza.Codice"], objItem.StatoSelezione);
+                                    let result = FotoPlacer.updateFoto(objItem.StatoSelezione != 3 ? objItem["Foto.Nome"] : null, box, imgRectangle, objItem["Referenza.Codice"], objItem.StatoSelezione, noRenderSalvato);
+                                    box = result.box;
+                                    imgRectangle = result.fotoRectangle;
+                                    if(objItem.StatoSelezione == 1){
+                                        primaria = imgRectangle;
+                                    }
+                                    else if(objItem.StatoSelezione == 2){
+                                        secondarie.push(imgRectangle);
+                                    }
+                                }
+                            }
+
+                            if(secondarie.length > 0){
+                                //guardiamo qual'è la secondaria che appare prima in gerarchia del box
+                                var firstSecondaria = null;
+                                for (var i = 0; i < box.allPageItems.length; i++) {
+                                    var item = box.allPageItems[i];
+                                    //se l'item ha lo stesso id di uno degli imgRectangle delle secondarie allora è la firstSecondaria
+                                    if (secondarie.find(s => s != null && s.id == item.id) != null) {
+                                        firstSecondaria = item;
+                                        break;
+                                    }
+                                }
+    
+                                primaria.bringToFront(firstSecondaria);
+                            }
+
+                        }
+                        catch (ex) {
+                            console.error(ex);
+                        }
+
+                        //I20-1132: la scheda e la selezione seguono il box ricostruito dalle foto.
+                        me.seguiBoxRicostruito(box);
+
+                        //La scheda sul server puo' essere cambiata insieme alle primarie e secondarie:
+                        //la si riscarica sempre, ed e' dal dato fresco che si capisce se il box in
+                        //pagina e' ancora allineato. Prima si riscaricava solo su richiesta di agenzia.
+                        showLoading("Aggiornamento della scheda in corso...");
+                        var schedaRicaricata = await me.ricaricaDatiScheda(codice_gruppo, idRec);
+                        hideLoading();
+
+                        if (avvisoCambioPrimario !== "") {
+                            messaggioUtente(avvisoCambioPrimario, "warning", false, 15);
+                        }
+
+                        if (schedaRicaricata) {
+                            var esitoAllineamento = await me.allineaBoxDopoSalvataggioPS(box, codiceBoxPrecedente);
+                            if (esitoAllineamento !== me.ESITI_ALLINEAMENTO_BOX.nessuno) {
+                                //Il box e' stato rifatto: il fix foto e il refresh della lista
+                                //lavorerebbero su un box che non c'e' piu'.
+                                return;
+                            }
+                        }
+
+                        //Il fix foto viene dopo: una reimpaginazione rifa' il box e butterebbe via
+                        //il fix appena applicato, oltre a chiedere due conferme per un lavoro solo.
+                        let res = await Modali.confirm("Modifiche salvate. Applicare il Fix Foto automatico?");
+                        if (res) {
+                            //applichiamo il fix foto automatico, che consiste nel posizionare tutte le foto primarie e secondarie al posto giusto in base alla meccanica
+                            var obs = SistemazioneFoto.getSpazioImpaginazione(box);
+                            SistemazioneFoto.fixFoto(box, obs.candidate, obs.obstacles);
+                            messaggioUtente("Fix Foto automatico applicato", "success", false, 3);
+                        }
+
+
+                        //Questa funzione fa un refresh della schermata lista PRIMARIE/SECONDARIE
+                        await me.EditFotoPrimarieSecondarie(box);  //serve, non è un loop
                     }
-
-                    //Il fix foto viene dopo: una reimpaginazione rifa' il box e butterebbe via
-                    //il fix appena applicato, oltre a chiedere due conferme per un lavoro solo.
-                    let res = await Modali.confirm("Modifiche salvate. Applicare il Fix Foto automatico?");
-                    if (res) {
-                        //applichiamo il fix foto automatico, che consiste nel posizionare tutte le foto primarie e secondarie al posto giusto in base alla meccanica
-                        var obs = SistemazioneFoto.getSpazioImpaginazione(box);
-                        SistemazioneFoto.fixFoto(box, obs.candidate, obs.obstacles);
-                        messaggioUtente("Fix Foto automatico applicato", "success", false, 3);
+                    finally {
+                        indesignEvents.setBusy(false);
                     }
-
-
-                    //Questa funzione fa un refresh della schermata lista PRIMARIE/SECONDARIE
-                    await me.EditFotoPrimarieSecondarie(box);  //serve, non è un loop
                 };
 
                 xhr.onreadystatechange = function () {

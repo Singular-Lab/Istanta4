@@ -379,6 +379,101 @@ namespace AgenziaLib
         }
     }
 
+    /// I20-1132: gli scatti con confezioni. Un gruppo accosta a un codice radice (codice_vv 1, il pezzo
+    /// singolo) la sua confezione (vv2, vv3). Quando la primaria del gruppo e' una confezione il box
+    /// mostra foto e prezzi della confezione, ma la descrizione viene da descrizione_gruppo, che porta
+    /// la grammatura del pezzo singolo. Qui, prima di comporre i box, la Descrizione4 di
+    /// descrizione_gruppo di ogni membro diventa quella della primaria - gia' revisionata sulla singola,
+    /// se lo e' - e ogni membro porta in grammatura_da_confezione il codice della primaria. Cosi' box,
+    /// scheda ref e segnalazioni vedono lo stesso dato. Il Plugin ne fa una regola di sola lettura nel
+    /// SourceCustomPlugin di Edro21: il core non sa di confezioni. Descrizione1-3, peso e unita' restano
+    /// del gruppo. Vale per ogni area; con la primaria pezzo singolo non cambia niente.
+    public static class GrammaturaConfezioneEdro21
+    {
+        public const string ChiaveMarcatore = "grammatura_da_confezione";
+        public const string ChiaveDescrizioneGruppo = "descrizione_gruppo";
+        public const string ChiaveDescrizione4 = "Descrizioni.Descrizione4";
+        public const string ChiaveCodiceVv = "codice_vv";
+        public const string ChiaveStatoSelezione = "StatoSelezione";
+
+        /// Se il record e' una confezione: codice_vv diverso da 1. Senza codice_vv vale il codice che
+        /// finisce in vv2 o vv3, come GetPriority.
+        public static bool EConfezione(IDictionary<string, object>? record)
+        {
+            if (record == null)
+            {
+                return false;
+            }
+            var vv = Testo(record, ChiaveCodiceVv);
+            if (vv != "")
+            {
+                return vv != "1";
+            }
+            var codice = Testo(record, GLOBAL_VARIABLES.keyRefCodice);
+            return codice.EndsWith("vv2", StringComparison.OrdinalIgnoreCase) || codice.EndsWith("vv3", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// Se il record e' la primaria del suo gruppo: StatoSelezione 1.
+        public static bool EPrimaria(IDictionary<string, object>? record)
+        {
+            return record != null && Testo(record, ChiaveStatoSelezione) == "1";
+        }
+
+        /// Applica la regola ai record di un kit: per ogni gruppo (codice gruppo con la virgola) la cui
+        /// primaria e' una confezione, la Descrizione4 di descrizione_gruppo di ogni membro diventa
+        /// quella della primaria e il membro porta il marcatore. Negli altri gruppi, e nei singoli, il
+        /// marcatore se c'era viene tolto. Torna quanti gruppi ha cambiato.
+        public static int Applica(IEnumerable<IDictionary<string, object>>? records)
+        {
+            if (records == null)
+            {
+                return 0;
+            }
+
+            int applicati = 0;
+            foreach (var gruppo in records.Where(r => r != null).GroupBy(r => Testo(r, GLOBAL_VARIABLES.keyScattoCodiceGruppo)))
+            {
+                var membri = gruppo.ToList();
+                var primaria = membri.FirstOrDefault(EPrimaria);
+                if (!gruppo.Key.Contains(",") || primaria == null || !EConfezione(primaria))
+                {
+                    foreach (var membro in membri)
+                    {
+                        membro.Remove(ChiaveMarcatore);
+                    }
+                    continue;
+                }
+
+                string grammatura = Testo(primaria, ChiaveDescrizione4);
+                string codicePrimaria = Testo(primaria, GLOBAL_VARIABLES.keyRefCodice);
+                bool cambiato = false;
+                foreach (var membro in membri)
+                {
+                    if (membro.TryGetValue(ChiaveDescrizioneGruppo, out var dg) && dg is IDictionary<string, object> descrizioneGruppo)
+                    {
+                        descrizioneGruppo[ChiaveDescrizione4] = grammatura;
+                        membro[ChiaveMarcatore] = codicePrimaria;
+                        cambiato = true;
+                    }
+                    else
+                    {
+                        membro.Remove(ChiaveMarcatore);
+                    }
+                }
+                if (cambiato)
+                {
+                    applicati++;
+                }
+            }
+            return applicati;
+        }
+
+        private static string Testo(IDictionary<string, object> record, string chiave)
+        {
+            return record.TryGetValue(chiave, out var valore) && valore != null ? (valore.ToString() ?? "").Trim() : "";
+        }
+    }
+
     internal class Edro21 : IAgenzia
     {
 
@@ -1983,7 +2078,11 @@ namespace AgenziaLib
             try
             {
                 //requestParams = formRequest;
-                lista_tracciato = tracciato.Select(s => s.recordInTracciato).ToList();
+                lista_tracciato = tracciato.Select(s => s.recordInTracciato).ToList();
+                //I20-1132: con la primaria confezione la grammatura e' la sua, nel dato di gruppo che
+                //compone il box e che il Plugin rilegge. Prima di tutto il resto, cosi' nessuno vede
+                //quella del pezzo singolo.
+                GrammaturaConfezioneEdro21.Applica(lista_tracciato);
 
                 string tipo_materiale = "vol";
                 Byte tipo_volantino = 1;

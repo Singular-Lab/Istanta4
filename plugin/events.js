@@ -661,6 +661,22 @@ class InddEvents {
         this.lastInvalidSelectionID=[];
     }
 
+    /// I20-1132: prende per buona una selezione fatta dal Plugin, come gia' validata: gli id degli
+    /// oggetti, nell'ordine in cui il ciclo li confronta. Serve quando un'operazione rifa' il box
+    /// sotto al ciclo e lo riseleziona: senza, al primo giro il ciclo lo vedrebbe come una selezione
+    /// nuova e riaprirebbe la scheda. Senza id validi non cambia niente.
+    accettaSelezione(ids){
+        if (!Array.isArray(ids) || ids.length === 0 || ids.some(id => id == null)) {
+            return false;
+        }
+        const ordinati = ids.slice().sort();
+        this.lastSelectionID = ordinati;
+        this.lastSelectionIDValidated = ordinati.slice();
+        this.lastInvalidSelectionID = [];
+        this.timestampInizioSelezione = Date.now();
+        return true;
+    }
+
     checkStatusResonse(conn, login, me, params) {
         //console.log("checkStatusResonse " + conn + " - " + login);
         //console.log(this);
