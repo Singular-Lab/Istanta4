@@ -5222,14 +5222,25 @@ const CssFramework =
                             continue;
                         }
 
-                        //Dietro a tutti i riferimenti, o davanti a tutti: si applica a ciascuno,
-                        //l'ultimo spostamento e' quello che soddisfa anche i precedenti.
-                        for (var k = 0; k < riferimenti.length; k++) {
-                            if (operazione.posizione === "davanti") {
-                                elemento.item.bringToFront(riferimenti[k].item);
+                        //Dietro a tutti i riferimenti, o davanti a tutti. InDesign mette l'elemento
+                        //subito dietro (o davanti) al riferimento indicato: con piu' riferimenti conta
+                        //il piu' arretrato (o il piu' avanzato), non l'ultimo elencato. Nel BOX41 di
+                        //Edro21 le parentesi, mandate dietro alle foto dopo le ombre, finivano fra la
+                        //foto e la sua ombra. Il primo spostamento rivela il verso dell'indice nel
+                        //gruppo; da li' si sceglie il riferimento estremo e si fa lo spostamento finale.
+                        me.spostaRispettoA(elemento.item, riferimenti[0].item, operazione.posizione);
+
+                        var estremo = me.riferimentoEstremoNelGruppo(elemento, riferimenti);
+                        if (estremo != null) {
+                            if (estremo.etichetta !== riferimenti[0].etichetta) {
+                                me.spostaRispettoA(elemento.item, estremo.item, operazione.posizione);
                             }
-                            else {
-                                elemento.item.sendToBack(riferimenti[k].item);
+                        }
+                        else {
+                            //Verso dell'indice non leggibile: uno spostamento per ogni riferimento,
+                            //l'ultimo e' quello che resta.
+                            for (var k = 1; k < riferimenti.length; k++) {
+                                me.spostaRispettoA(elemento.item, riferimenti[k].item, operazione.posizione);
                             }
                         }
                     }
@@ -5245,6 +5256,45 @@ const CssFramework =
         }
 
         return box;
+    },
+
+    /// Manda un elemento subito dietro, o subito davanti, a un riferimento.
+    spostaRispettoA(item, riferimento, posizione) {
+        if (posizione === "davanti") {
+            item.bringToFront(riferimento);
+        }
+        else {
+            item.sendToBack(riferimento);
+        }
+    },
+
+    /// Il riferimento piu' arretrato (o avanzato) fra quelli di un'operazione di ordine Z,
+    /// da chiamare dopo lo spostamento rispetto al primo. Serve che elemento e riferimenti
+    /// stiano nello stesso gruppo, altrimenti gli indici non si confrontano: null, e chi
+    /// chiama ripiega sugli spostamenti uno per uno.
+    riferimentoEstremoNelGruppo(elemento, riferimenti) {
+        try {
+            if (riferimenti.length < 2) {
+                return riferimenti[0] || null;
+            }
+            var genitore = elemento.item.parent;
+            if (genitore == null || genitore.id == null) {
+                return null;
+            }
+            var conIndice = [];
+            for (var k = 0; k < riferimenti.length; k++) {
+                var itemRif = riferimenti[k].item;
+                if (itemRif.parent == null || itemRif.parent.id !== genitore.id) {
+                    return null;
+                }
+                conIndice.push({ etichetta: riferimenti[k].etichetta, indice: itemRif.index, item: itemRif });
+            }
+            return cssComposizioneBox.riferimentoEstremo(elemento.item.index, conIndice);
+        }
+        catch (e) {
+            console.error("Code CSF-14: verso dell'ordine Z non leggibile per " + elemento.etichetta + ": " + e);
+            return null;
+        }
     },
 
     /*

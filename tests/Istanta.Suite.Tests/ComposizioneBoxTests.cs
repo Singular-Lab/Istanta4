@@ -96,12 +96,14 @@ public class ComposizioneBoxTests
     }
 
     /// <summary>
-    /// La regola scritta per il BOX41 di Edro21 deve essere leggibile dal modello:
+    /// Le regole scritte per il BOX41 di Edro21 devono essere leggibili dal modello:
     /// se il file e il modello divergono, il Plugin non applicherebbe nulla e in pagina
     /// le ombre resterebbero sopra alle foto, senza alcun errore visibile.
+    /// Le parentesi B&amp;F stanno dietro a foto e ombre in tutti i kit del volantino:
+    /// I20-1046 le aveva lasciate davanti nel kit SS/CN/CY, e non era quello voluto.
     /// </summary>
     [Fact]
-    public void Il_box41_di_Edro21_porta_la_duplicazione_dell_ombra_e_l_ordine_dietro_le_foto()
+    public void Il_box41_di_Edro21_porta_la_duplicazione_dell_ombra_e_le_parentesi_dietro_a_foto_e_ombre()
     {
         var percorso = TrovaSorgenteEdro21();
         var root = JsonConvert.DeserializeObject<DbFrameworkCss>(File.ReadAllText(percorso));
@@ -122,21 +124,22 @@ public class ComposizioneBoxTests
             Assert.Equal("bersaglio", duplicazione.adattaAlBersaglio!.larghezza);
             Assert.Equal("centroSuLatoBasso", duplicazione.adattaAlBersaglio.ancoraY);
 
-            var ordine = Assert.Single(box.ordiniZ);
-            Assert.Equal("dietro", ordine.posizione);
-            Assert.Contains("sy_ombra*", ordine.etichette);
-            Assert.Contains("immagine*", ordine.rispettoA);
+            //Due regole, in quest'ordine: prima ogni ombra dietro alla sua foto, poi le parentesi
+            //dietro a foto e ombre. L'ordine conta: la seconda conta sulla posizione prodotta
+            //dalla prima.
+            Assert.Equal(2, box.ordiniZ.Count);
+            Assert.All(box.ordiniZ, o => Assert.Equal("dietro", o.posizione));
 
-            //I20-1046: le parentesi stanno dietro le foto solo nel kit SC. Nel kit SS/CN/CY stanno
-            //davanti: e' una scelta voluta, fatta dall'editor del server e confermata dall'operatore.
-            if (kit.kit.canaliValidi.Contains("SC"))
-            {
-                Assert.Contains("parentesi_BeF", ordine.etichette);
-            }
-            else
-            {
-                Assert.DoesNotContain("parentesi_BeF", ordine.etichette);
-            }
+            var ombre = box.ordiniZ[0];
+            Assert.Equal(new[] { "sy_ombra*" }, ombre.etichette);
+            Assert.Contains("immagine*", ombre.rispettoA);
+            Assert.Contains("foto_secondaria*", ombre.rispettoA);
+
+            var parentesi = box.ordiniZ[1];
+            Assert.Equal(new[] { "parentesi_BeF" }, parentesi.etichette);
+            Assert.Contains("immagine*", parentesi.rispettoA);
+            Assert.Contains("foto_secondaria*", parentesi.rispettoA);
+            Assert.Contains("sy_ombra*", parentesi.rispettoA);
         }
     }
 

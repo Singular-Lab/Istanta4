@@ -224,6 +224,102 @@ test('senza riferimenti l\'elemento va in fondo al box e lo si vede dal piano', 
     assert.deepStrictEqual(operazioni, [{ etichetta: 'parentesi_BeF', posizione: 'dietro', riferimenti: [] }]);
 });
 
+//Parentesi B&F del BOX41: dietro a foto e ombre, in tutti i kit del volantino. Le regole
+//vanno in sequenza, prima le ombre sotto le foto, poi le parentesi sotto tutto.
+const regoleBox41 = [
+    { etichette: ['sy_ombra*'], posizione: 'dietro', rispettoA: ['immagine*', 'foto_secondaria*'] },
+    { etichette: ['parentesi_BeF'], posizione: 'dietro', rispettoA: ['immagine*', 'foto_secondaria*', 'sy_ombra*'] }
+];
+
+test('BOX41 con una foto: prima l\'ombra dietro alla foto, poi le parentesi dietro a foto e ombra', () => {
+    const copiaOmbra = { etichetta: 'sy_ombra$3150596', bounds: [47, 20, 53, 60] };
+
+    const operazioni = cssComposizioneBox.pianificaOrdineZ(regoleBox41, [parentesi, foto, copiaOmbra], corrisponde);
+
+    assert.deepStrictEqual(operazioni, [
+        { etichetta: 'sy_ombra$3150596', posizione: 'dietro', riferimenti: ['immagine$3150596'] },
+        { etichetta: 'parentesi_BeF', posizione: 'dietro', riferimenti: ['immagine$3150596', 'sy_ombra$3150596'] }
+    ]);
+});
+
+test('BOX41 con foto primaria e secondaria: ogni ombra dietro alla sua foto, le parentesi dietro a tutte', () => {
+    const ombraPrimaria = { etichetta: 'sy_ombra$3150596', bounds: [47, 20, 53, 60] };
+    const ombraSecondaria = { etichetta: 'sy_ombra$3150599', bounds: [27, 70, 33, 90] };
+
+    const operazioni = cssComposizioneBox.pianificaOrdineZ(regoleBox41, [parentesi, foto, fotoSecondaria, ombraPrimaria, ombraSecondaria], corrisponde);
+
+    assert.deepStrictEqual(operazioni.map(o => o.etichetta), ['sy_ombra$3150596', 'sy_ombra$3150599', 'parentesi_BeF']);
+    assert.deepStrictEqual(operazioni[0].riferimenti, ['immagine$3150596', 'foto_secondaria$3150599']);
+    assert.deepStrictEqual(operazioni[2].riferimenti, ['immagine$3150596', 'foto_secondaria$3150599', 'sy_ombra$3150596', 'sy_ombra$3150599']);
+});
+
+test('le regole del BOX41 nel SourceFrameworkCss di Edro21 mandano le parentesi dietro a foto e ombre in ogni kit', () => {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const sorgente = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'Istanta', 'wwwroot', 'external_source', 'Edro21', 'SourceFrameworkCss.json'), 'utf8'));
+    const kitConBox41 = sorgente.dbRidimensionamentiAllineamenti.modificheCssPerKit
+        .filter(kit => kit.operazioniPerBox.some(op => op.nomiBox.includes('BOX41')));
+    assert.strictEqual(kitConBox41.length, 2);
+
+    const ombraPrimaria = { etichetta: 'sy_ombra$3150596', bounds: [47, 20, 53, 60] };
+    const ombraSecondaria = { etichetta: 'sy_ombra$3150599', bounds: [27, 70, 33, 90] };
+    for (const kit of kitConBox41) {
+        const regole = kit.operazioniPerBox.find(op => op.nomiBox.includes('BOX41')).ordiniZ;
+
+        const operazioni = cssComposizioneBox.pianificaOrdineZ(regole, [parentesi, foto, fotoSecondaria, ombraPrimaria, ombraSecondaria], corrisponde);
+
+        const ultima = operazioni[operazioni.length - 1];
+        assert.strictEqual(ultima.etichetta, 'parentesi_BeF', kit.kit.canaliValidi.join());
+        assert.strictEqual(ultima.posizione, 'dietro');
+        assert.deepStrictEqual(ultima.riferimenti.slice().sort(), ['foto_secondaria$3150599', 'immagine$3150596', 'sy_ombra$3150596', 'sy_ombra$3150599']);
+        assert.ok(operazioni.slice(0, -1).every(o => o.etichetta.startsWith('sy_ombra') && o.posizione === 'dietro'));
+    }
+});
+
+//Riferimento estremo: l'elemento e' appena stato mandato accanto al primo riferimento, dal lato
+//dello spostamento; il confronto degli indici dice in che verso cresce l'indice da quel lato.
+test('se l\'indice cresce verso il lato dello spostamento, l\'estremo e\' il riferimento con l\'indice piu\' alto', () => {
+    const riferimenti = [{ etichetta: 'immagine$1', indice: 2 }, { etichetta: 'foto_secondaria$2', indice: 1 }, { etichetta: 'sy_ombra$1', indice: 5 }];
+
+    const estremo = cssComposizioneBox.riferimentoEstremo(3, riferimenti);
+
+    assert.strictEqual(estremo.etichetta, 'sy_ombra$1');
+});
+
+test('se l\'indice decresce verso il lato dello spostamento, l\'estremo e\' il riferimento con l\'indice piu\' basso', () => {
+    const riferimenti = [{ etichetta: 'immagine$1', indice: 4 }, { etichetta: 'sy_ombra$1', indice: 1 }, { etichetta: 'foto_secondaria$2', indice: 6 }];
+
+    const estremo = cssComposizioneBox.riferimentoEstremo(3, riferimenti);
+
+    assert.strictEqual(estremo.etichetta, 'sy_ombra$1');
+});
+
+test('con un solo riferimento l\'estremo e\' quello, senza leggere gli indici', () => {
+    const estremo = cssComposizioneBox.riferimentoEstremo(undefined, [{ etichetta: 'immagine$1' }]);
+
+    assert.strictEqual(estremo.etichetta, 'immagine$1');
+});
+
+test('senza un verso leggibile non si sceglie nessun estremo', () => {
+    const riferimenti = [{ etichetta: 'immagine$1', indice: 3 }, { etichetta: 'sy_ombra$1', indice: 5 }];
+
+    assert.strictEqual(cssComposizioneBox.riferimentoEstremo(3, riferimenti), null, 'stesso indice del primo riferimento');
+    assert.strictEqual(cssComposizioneBox.riferimentoEstremo(undefined, riferimenti), null, 'indice dell\'elemento assente');
+    assert.strictEqual(cssComposizioneBox.riferimentoEstremo(4, [{ etichetta: 'immagine$1', indice: 3 }, { etichetta: 'sy_ombra$1' }]), null, 'indice di un riferimento assente');
+    assert.strictEqual(cssComposizioneBox.riferimentoEstremo(4, []), null, 'nessun riferimento');
+});
+
+test('l\'esecutore sposta rispetto al primo riferimento, poi rispetto all\'estremo letto dal gruppo', () => {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const framework = fs.readFileSync(path.join(__dirname, '..', '..', 'plugin', 'CssFramework.js'), 'utf8');
+
+    assert.match(framework, /me\.spostaRispettoA\(elemento\.item, riferimenti\[0\]\.item, operazione\.posizione\);\s*var estremo = me\.riferimentoEstremoNelGruppo\(elemento, riferimenti\);/);
+    assert.match(framework, /if \(estremo\.etichetta !== riferimenti\[0\]\.etichetta\) \{\s*me\.spostaRispettoA\(elemento\.item, estremo\.item, operazione\.posizione\);/);
+    assert.match(framework, /return cssComposizioneBox\.riferimentoEstremo\(elemento\.item\.index, conIndice\);/);
+    assert.match(framework, /for \(var k = 1; k < riferimenti\.length; k\+\+\) \{\s*me\.spostaRispettoA\(elemento\.item, riferimenti\[k\]\.item, operazione\.posizione\);/);
+});
+
 test('il piano porta con se\' il fit del contenuto: il riquadro allargato non allarga il grafico', () => {
     const regole = [{
         etichettaSorgente: 'sy_ombra',
