@@ -987,6 +987,7 @@ namespace IstantaLib
         
         public string nomeFotoPrimaria { get; set; }//Label che riceve la foto primaria nel box
         public string nomeFotoSecondaria { get; set; }//Label che riceve la foto secondaria nel box
+        public List<string> elementiConnessiAlleFoto { get; set; } = new List<string>();//I20-1130: etichette (con * come jolly) degli elementi del box che "Seleziona tutte le foto" del Plugin prende insieme alle foto, per esempio le ombre sy_ombra*
         public string fotoNotFound { get; set; }//Nome del file che contiene info FOTO NOT FOUND su disco
         public string nomeNoFoto { get; set; }//Nome del file che contiene info NESSUNA FOTO PER QUESTA REF
         public string[] listCampiConfrontoBypass { get; set; }//Campi che non vengono tenuti in considerazione nel check delle differenze nel confronto
