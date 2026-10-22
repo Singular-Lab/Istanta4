@@ -326,7 +326,10 @@
             
           </div>
         </div>
-        <div class="row" id="messaggiUtente" style="position: fixed; width:95%; align-self: self-start;">
+        <!--I20-1128: il riquadro dei messaggi sta sopra il segnalino delle segnalazioni, fisso come lui e piu'
+            avanti nel documento: senza z-index il segnalino copriva la fine del messaggio e la X. Il valore e'
+            basso apposta: resta sotto #narrow, il login, le finestre e i caricamenti, come prima.-->
+        <div class="row" id="messaggiUtente" style="position: fixed; width:95%; align-self: self-start; z-index: 10;">
         </div>
       </div>
       <!-- Qui inserisco il tab -->
