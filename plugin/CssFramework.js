@@ -896,26 +896,16 @@ const CssFramework =
                     //I20-1026: le posizioni si misurano dall'angolo in alto a sinistra della CELLA
                     //(boxInGrigliaBounds), non da quello del gruppo. All'impaginazione coincidono; al
                     //fix no, se l'operatore ha mosso il bordo alto o quello sinistro: misurando dal
-                    //gruppo la base finiva sopra la cella, gli spostamenti lineari si fermavano sul
-                    //bordo mentre la mappa registrava lo spostamento intero, e gli allineamenti
-                    //lavoravano su posizioni false. La mappa ha gia' sommato lo spostamento, quindi
-                    //l'elemento va dove dice la mappa; se uscisse dalla cella rientra, e la mappa con lui,
-                    //cosi' le due non divergono.
+                    //gruppo la base finiva sopra la cella e gli allineamenti lavoravano su posizioni
+                    //false. La mappa ha gia' sommato lo spostamento, quindi l'elemento va dove dice la mappa.
+                    //Chi cosi' sporge dalla cella NON rientra qui, elemento per elemento: nel BOX7 di
+                    //Edro21 la descrizione rientrava e il BIS, nello stesso gruppo InDesign, no, e
+                    //finiva dentro la sua cornice. Rientra subito dopo, in applicaRidimensionamentoCss,
+                    //con fixOverflowFromBox: stringe le caselle e muove gli elementi di primo livello,
+                    //un gruppo intero, prima che la mappa si ricostruisca dal box.
                     var relativi = mappaBoxOriginale[Utility.parseLabel(item.label)].bounds;
 
                     if(ridY != null){
-                        if (ridY == "spostamento_lineare" || ridY == "spostamento_lineare_centrato") {
-                            var hCella = boxInGrigliaBounds[2] - boxInGrigliaBounds[0];
-                            var rientroY = 0;
-                            if (relativi[0] < 0) {
-                                rientroY = -relativi[0];
-                            }
-                            if (relativi[2] + rientroY > hCella) {
-                                rientroY = hCella - relativi[2];
-                            }
-                            relativi[0] += rientroY;
-                            relativi[2] += rientroY;
-                        }
                         item.geometricBounds = [
                             boxInGrigliaBounds[0] + relativi[0],
                             item.geometricBounds[1],
@@ -925,18 +915,6 @@ const CssFramework =
                     }
 
                     if (ridX != null) {
-                        if (ridX == "spostamento_lineare" || ridX == "spostamento_lineare_centrato") {
-                            var wCella = boxInGrigliaBounds[3] - boxInGrigliaBounds[1];
-                            var rientroX = 0;
-                            if (relativi[1] < 0) {
-                                rientroX = -relativi[1];
-                            }
-                            if (relativi[3] + rientroX > wCella) {
-                                rientroX = wCella - relativi[3];
-                            }
-                            relativi[1] += rientroX;
-                            relativi[3] += rientroX;
-                        }
                         item.geometricBounds = [
                             item.geometricBounds[0],
                             boxInGrigliaBounds[1] + relativi[1],
@@ -1908,6 +1886,9 @@ const CssFramework =
                     if (modalitaOperazioni != 2){
                         mappaBoxOriginale = me.creaMappaturaBoxOriginale(box, prefissiDerivati);
                         me.applicaRidimensionamento(box, boxInGrigliaBounds, mappaBoxOriginale, itemRef, DB, DBDef);
+                        //Chi sporge dalla cella rientra ora, solo spostandosi, con i gruppi di allineamento del box, prima che
+                        //la mappa si ricostruisca dal box: un box deformato sposterebbe l'origine delle misure.
+                        box = me.fixOverflowFromBox(boxInGrigliaBounds, box, mappaBoxOriginale, me.gruppiDiAllineamentoDelBox(box, mappaBoxOriginale, itemRef, DB, DBDef), false);
     
                         if (modalitaOperazioni == 1) {
                             result = {
@@ -2064,6 +2045,9 @@ const CssFramework =
                 if (modalitaOperazioni != 2) {
                     mappaBoxOriginale = me.creaMappaturaBoxOriginale(box, prefissiDerivati);
                     me.applicaRidimensionamento(box, boxInGrigliaBounds, mappaBoxOriginale, itemRef, DB, DBDef);
+                    //Chi sporge dalla cella rientra ora, solo spostandosi, con i gruppi di allineamento del box, prima che
+                    //la mappa si ricostruisca dal box: un box deformato sposterebbe l'origine delle misure.
+                    box = me.fixOverflowFromBox(boxInGrigliaBounds, box, mappaBoxOriginale, me.gruppiDiAllineamentoDelBox(box, mappaBoxOriginale, itemRef, DB, DBDef), false);
                     if (modalitaOperazioni == 1) {
                         result = {
                             esito: true,
@@ -2216,19 +2200,24 @@ const CssFramework =
     ],
 
     /// Riporta dentro la griglia un elemento che ne esce da un lato. Una casella di testo prova
-    /// prima a stringersi fino al limite; se cosi' andrebbe in overflow, o non le resterebbe
-    /// spazio, torna com'era e si sposta. Un gruppo prova prima a stringere, con la stessa regola,
-    /// le sue caselle di testo che escono da quel lato: se cosi' rientra, non si sposta. Lo
-    /// spostamento aggiorna la mappa del box, sullo stesso asse, perche' le regole che seguono la
-    /// leggono. Torna true se l'elemento e' stato spostato di piu' di 1 mm: e' la soglia sotto la
-    /// quale non si segnala.
-    riportaLatoInGriglia(box, pageItem, boxInGrigliaBounds, lato, mappaBoxOriginale) {
+    /// prima a stringersi fino al limite; se cosi' andrebbe in overflow, sui lati alto e basso si
+    /// stringe di quanto puo', poi si sposta del resto. Un gruppo prova prima a stringere, con la
+    /// stessa regola, le sue caselle di testo che escono da quel lato: se cosi' rientra, non si
+    /// sposta. Con l'elemento si sposta il suo gruppo di allineamento, se intero resta dentro la
+    /// griglia (elementiDaSpostareConIlResponsabile). Lo spostamento aggiorna la mappa del box,
+    /// sullo stesso asse, perche' le regole che seguono la leggono. Con stringiCaselle false si
+    /// passa subito allo spostamento, senza toccare le caselle. Torna true se l'elemento e'
+    /// stato spostato di piu' di 1 mm: e' la soglia sotto la quale non si segnala.
+    riportaLatoInGriglia(box, pageItem, boxInGrigliaBounds, lato, mappaBoxOriginale, gruppiAllineamento = null, stringiCaselle = true) {
         var limite = boxInGrigliaBounds[lato.indice];
         if (!this.fuoriDalLato(pageItem, limite, lato)) {
             return false;
         }
 
-        if (this.isTextFrame(pageItem)) {
+        if (!stringiCaselle) {
+            //dopo il ridimensionamento: solo spostamenti, lo stringimento lo decidono gli allineamenti
+        }
+        else if (this.isTextFrame(pageItem)) {
             //ridotto senza overflow: resta cosi', nessuno spostamento
             if (this.stringiTestoAlLimite(pageItem, limite, lato)) {
                 return false;
@@ -2245,21 +2234,10 @@ const CssFramework =
 
         var movimento = limite - pageItem.geometricBounds[lato.indice];
         var oltreSoglia = Math.abs(movimento) > 1;
-        pageItem.move(undefined, lato.verticale ? [0, movimento] : [movimento, 0]);
-
-        //se la mappaBox e' presente aggiorniamo i bounds dell'elemento sull'asse dello spostamento
-        if (mappaBoxOriginale) {
-            var item = mappaBoxOriginale[Utility.parseLabel(pageItem.label)];
-            if (item) {
-                if (lato.verticale) {
-                    item.bounds[0] += movimento;
-                    item.bounds[2] += movimento;
-                }
-                else {
-                    item.bounds[1] += movimento;
-                    item.bounds[3] += movimento;
-                }
-            }
+        var daSpostare = this.elementiDaSpostareConIlResponsabile(box, pageItem, boxInGrigliaBounds, lato, movimento, gruppiAllineamento);
+        for (var s = 0; s < daSpostare.length; s++) {
+            daSpostare[s].move(undefined, lato.verticale ? [0, movimento] : [movimento, 0]);
+            this.aggiornaMappaDopoSpostamento(mappaBoxOriginale, daSpostare[s], lato, movimento);
         }
 
         //I20-1042: non si segnala qui, si annota: lo decide il controllo di fine box.
@@ -2267,6 +2245,108 @@ const CssFramework =
             this.annotaSpostamentoGriglia(box, pageItem, lato.direzione);
         }
         return oltreSoglia;
+    },
+
+    /// Chi si sposta insieme al responsabile che sporge. Se il responsabile sta in uno dei gruppi
+    /// di allineamento dati e l'insieme degli elementi presenti del gruppo, spostato della stessa
+    /// misura, resta dentro la griglia sul lato opposto, si spostano tutti: il gruppo conserva la
+    /// sua disposizione. Se uscirebbe dall'altro lato, o nessun gruppo lo nomina, si sposta il solo
+    /// responsabile: l'ancora del gruppo resta ferma e chi rientra non diventa l'ancora. Prima di
+    /// questa regola un gruppo spostato intero usciva dal lato opposto. Il calcolo e' sui soli
+    /// bounds, senza muovere niente.
+    elementiDaSpostareConIlResponsabile(box, responsabile, boxInGrigliaBounds, lato, movimento, gruppiAllineamento) {
+        var gruppo = this.gruppoDiAllineamentoDellElemento(box, responsabile, gruppiAllineamento);
+        if (gruppo == null || gruppo.elementi.length < 2) {
+            return [responsabile];
+        }
+
+        var etichetta = responsabile.label != "" ? Utility.parseLabel(responsabile.label) : "senza etichetta";
+        var estremo = null;
+        for (var i = 0; i < gruppo.elementi.length; i++) {
+            var bordo = gruppo.elementi[i].geometricBounds[lato.opposto];
+            if (estremo == null || (lato.minimo ? bordo > estremo : bordo < estremo)) {
+                estremo = bordo;
+            }
+        }
+        var limiteOpposto = boxInGrigliaBounds[lato.opposto];
+        var restaDentro = lato.minimo
+            ? estremo + movimento <= limiteOpposto + 0.05
+            : estremo + movimento >= limiteOpposto - 0.05;
+        if (!restaDentro) {
+            console.warn("Il gruppo di allineamento " + gruppo.nome + " spostato intero uscirebbe dal lato opposto: si sposta il solo " + etichetta + ".");
+            return [responsabile];
+        }
+        console.warn("Con " + etichetta + " si sposta intero il gruppo di allineamento " + gruppo.nome + ", " + gruppo.elementi.length + " elementi.");
+        return gruppo.elementi;
+    },
+
+    /// Il primo gruppo di allineamento che nomina l'elemento, con i suoi elementi presenti e
+    /// visibili fra quelli di primo livello del box, l'elemento compreso. null se nessuno lo nomina.
+    gruppoDiAllineamentoDellElemento(box, elemento, gruppiAllineamento) {
+        if (!gruppiAllineamento || gruppiAllineamento.length == 0 || !elemento.label) {
+            return null;
+        }
+        var etichetta = Utility.parseLabel(elemento.label);
+        var nomina = (gruppo, nome) => gruppo != null && Array.isArray(gruppo.gruppoEtichette) &&
+            gruppo.gruppoEtichette.some(e => this.makeRegexFromGroupName(e).test(nome));
+        var gruppo = gruppiAllineamento.find(g => nomina(g, etichetta));
+        if (!gruppo) {
+            return null;
+        }
+
+        var elementi = [];
+        for (var i = 0; i < box.pageItems.length; i++) {
+            var candidato = box.pageItems.item(i);
+            if (candidato.visible === false || !candidato.label) {
+                continue;
+            }
+            var stesso = candidato === elemento || (candidato.id != null && candidato.id == elemento.id);
+            if (stesso || nomina(gruppo, Utility.parseLabel(candidato.label))) {
+                elementi.push(candidato);
+            }
+        }
+        return { nome: gruppo.nomeGruppo, elementi: elementi };
+    },
+
+    /// Dopo uno spostamento la mappa del box dice la posizione nuova sull'asse mosso: la voce
+    /// dell'elemento e, se e' un gruppo InDesign, quelle dei suoi figli, che prima restavano
+    /// indietro. Una voce si aggiorna una volta sola anche se due elementi la condividono.
+    aggiornaMappaDopoSpostamento(mappaBoxOriginale, elemento, lato, movimento) {
+        if (!mappaBoxOriginale) {
+            return;
+        }
+        var elementi = [elemento];
+        try {
+            if (elemento.allPageItems && elemento.allPageItems.length > 0) {
+                for (var i = 0; i < elemento.allPageItems.length; i++) {
+                    elementi.push(elemento.allPageItems[i]);
+                }
+            }
+        } catch (e) {
+            //un elemento senza figli leggibili: si aggiorna lui solo
+        }
+
+        var voci = [];
+        for (var j = 0; j < elementi.length; j++) {
+            var label = elementi[j] ? elementi[j].label : null;
+            if (!label) {
+                continue;
+            }
+            var voce = mappaBoxOriginale[label] || mappaBoxOriginale[Utility.parseLabel(label)];
+            if (voce && voce.bounds && voci.indexOf(voce) < 0) {
+                voci.push(voce);
+            }
+        }
+        for (var k = 0; k < voci.length; k++) {
+            if (lato.verticale) {
+                voci[k].bounds[0] += movimento;
+                voci[k].bounds[2] += movimento;
+            }
+            else {
+                voci[k].bounds[1] += movimento;
+                voci[k].bounds[3] += movimento;
+            }
+        }
     },
 
     /// Se l'elemento esce dal lato della griglia, oltre la tolleranza di 0,05 mm.
@@ -2278,8 +2358,9 @@ const CssFramework =
 
     /// Stringe una casella di testo fino al limite del lato da cui esce. Resta stretta solo se il
     /// testo non va in overflow e le resta spazio fra il lato ridotto e quello opposto. Se fino al
-    /// limite il testo non ci sta, sui lati sinistro e destro la casella si stringe almeno fino a
-    /// dove finisce il suo testo (bordoDelTesto), sempre senza overflow: chi la contiene si spostera'
+    /// limite il testo non ci sta, sui lati alto e basso la casella si stringe di quanto puo' senza
+    /// overflow (stringiLatoAlMassimo), sui lati sinistro e destro fino a dove finisce il suo testo
+    /// (bordoDelTesto), che non cambia gli a capo, sempre senza overflow: chi la contiene si spostera'
     /// solo del resto. Altrimenti torna com'era. Torna true solo se e' arrivata al limite. Il corpo
     /// del testo non cambia.
     stringiTestoAlLimite(casella, limite, lato) {
@@ -2320,8 +2401,44 @@ const CssFramework =
         if (!casella.properties.overflows) {
             return true;
         }
+        //Sui lati alto e basso vale anche una riduzione parziale, la massima senza overflow: chi
+        //contiene la casella si spostera' solo del resto.
+        if (lato.verticale && this.stringiLatoAlMassimo(casella, originalBounds, lato, ridotti[lato.indice])) {
+            return false;
+        }
         casella.geometricBounds = originalBounds;
         return false;
+    },
+
+    /// Fra il lato com'era (senza overflow) e il valore fino a cui non ci sta (in overflow) cerca
+    /// per bisezione, otto passi al massimo e un quarto di millimetro di tolleranza, la riduzione
+    /// piu' grande che lascia il testo senza overflow, e la tiene. Torna false, con la casella
+    /// com'era, se nessuna riduzione ci sta.
+    stringiLatoAlMassimo(casella, originalBounds, lato, valoreInOverflow) {
+        var dentro = originalBounds[lato.indice];
+        var fuori = valoreInOverflow;
+        var migliore = null;
+        for (var passo = 0; passo < 8 && Math.abs(dentro - fuori) > 0.25; passo++) {
+            var mezzo = (dentro + fuori) / 2;
+            var prova = originalBounds.slice();
+            prova[lato.indice] = mezzo;
+            casella.geometricBounds = prova;
+            if (casella.properties.overflows) {
+                fuori = mezzo;
+            }
+            else {
+                dentro = mezzo;
+                migliore = mezzo;
+            }
+        }
+        if (migliore == null) {
+            casella.geometricBounds = originalBounds;
+            return false;
+        }
+        var finali = originalBounds.slice();
+        finali[lato.indice] = migliore;
+        casella.geometricBounds = finali;
+        return true;
     },
 
     /// Dove finisce il testo di una casella sul lato sinistro o destro, dalle sue righe come in
@@ -2373,8 +2490,14 @@ const CssFramework =
     },
 
     /// Chi e' uscito dai bordi del box rientra. Su una casella di testo prova PRIMA a
-    /// stringerla, e solo se andrebbe in overflow la sposta.
-    fixOverflowFromBox(boxInGrigliaBounds, box, mappaBoxOriginale = null){
+    /// stringerla, e solo se andrebbe in overflow la sposta. gruppiAllineamento sono i gruppi di
+    /// allineamento con cui chi sporge puo' trascinare i compagni: dopo un allineamento il gruppo
+    /// appena composto, dopo il ridimensionamento i gruppi del box; senza, si sposta il solo
+    /// elemento di primo livello, un gruppo InDesign intero. Con stringiCaselle false non si stringe
+    /// nessuna casella: e' il rientro dopo il ridimensionamento, che viene prima degli allineamenti
+    /// e non sa ancora quanto spazio avra' ogni campo. Al collaudo una descrizione veniva ridotta
+    /// benche', composta la colonna, ci sarebbe stata.
+    fixOverflowFromBox(boxInGrigliaBounds, box, mappaBoxOriginale = null, gruppiAllineamento = null, stringiCaselle = true){
         //controlliamo per ogni pageItem di box se esce dai bounds di boxInGrigliaBounds
         //se esce lo riportiamo dentro
         var segnalazioneDescrizione = false;
@@ -2390,7 +2513,7 @@ const CssFramework =
             //I20-1042: i quattro lati facevano la stessa cosa in quattro copie, e due copie su
             //quattro aggiornavano la mappa sull'asse sbagliato. Ora e' un lato alla volta.
             for (var l = 0; l < this.latiGriglia.length; l++) {
-                if (this.riportaLatoInGriglia(box, pageItem, boxInGrigliaBounds, this.latiGriglia[l], mappaBoxOriginale)) {
+                if (this.riportaLatoInGriglia(box, pageItem, boxInGrigliaBounds, this.latiGriglia[l], mappaBoxOriginale, gruppiAllineamento, stringiCaselle)) {
                     moved = true;
                 }
             }
@@ -4332,12 +4455,13 @@ const CssFramework =
         return box;
     },
 
-    /// Cerca le regole di allineamento del box per meccanica, con la gerarchia a due livelli
-    /// - cliente prima, default poi - e le applica gruppo per gruppo.
-    allineamenti(box, boundsBoxImpaginato, mappaBoxOriginale, itemRef, DBallineamenti, DBDefault) {
-        //leggiamo la label del box per capire che meccanica è
-        //cerchiamo nel DB l'elemento la cui variabile nomiBox contiene la meccanica
-
+    /// I gruppi di allineamento che valgono per questo box, nell'ordine di applicazione, con la
+    /// gerarchia a quattro livelli: kit e box, kit e default, default e box, default e default. Un
+    /// gruppo di un livello generico si salta se uno piu' specifico con lo stesso nome vale per il
+    /// box, senza condizioni o con condizioni vere; un gruppo con condizioni false si salta.
+    /// Era il preambolo di allineamenti; da qui lo legge anche il rientro nella cella dopo il
+    /// ridimensionamento, per spostare un gruppo intero. null se il box non ha regole ne' un default.
+    gruppiDiAllineamentoDelBox(box, mappaBoxOriginale, itemRef, DBallineamenti, DBDefault) {
         var meccanica = box.label;
         var elementAllineamento = DBallineamenti ? DBallineamenti.find(el => el.nomiBox.includes(meccanica)) : null;
         var elementAllineamentoDefault = DBallineamenti ? DBallineamenti.find(el => el.nomiBox.length == 0) : null;
@@ -4345,8 +4469,7 @@ const CssFramework =
         var elementDefaultAllineamentoDefault = DBDefault ? DBDefault.find(el => el.nomiBox.length == 0) : null;
 
         if (!elementAllineamento && !elementAllineamentoDefault) {
-            console.error("Non è stato trovato nessun allineamento per la meccanica " + meccanica + " e l'allineamento di default non è definito");
-            return box;
+            return null;
         }
 
         var listAllineamenti = [];
@@ -4530,6 +4653,27 @@ const CssFramework =
 
         //ordiniamo la listAllineamenti usando .ordine come chiave
         listAllineamenti.sort((a, b) => a.ordine - b.ordine);
+        return listAllineamenti;
+    },
+
+    /// Cerca le regole di allineamento del box per meccanica, con la gerarchia a due livelli
+    /// - cliente prima, default poi - e le applica gruppo per gruppo.
+    allineamenti(box, boundsBoxImpaginato, mappaBoxOriginale, itemRef, DBallineamenti, DBDefault) {
+        //leggiamo la label del box per capire che meccanica è
+        //cerchiamo nel DB l'elemento la cui variabile nomiBox contiene la meccanica
+
+        var meccanica = box.label;
+        var elementAllineamento = DBallineamenti ? DBallineamenti.find(el => el.nomiBox.includes(meccanica)) : null;
+        var elementAllineamentoDefault = DBallineamenti ? DBallineamenti.find(el => el.nomiBox.length == 0) : null;
+        var elementDefaultAllineamento = DBDefault ? DBDefault.find(el => el.nomiBox.includes(meccanica)) : null;
+        var elementDefaultAllineamentoDefault = DBDefault ? DBDefault.find(el => el.nomiBox.length == 0) : null;
+
+        if (!elementAllineamento && !elementAllineamentoDefault) {
+            console.error("Non è stato trovato nessun allineamento per la meccanica " + meccanica + " e l'allineamento di default non è definito");
+            return box;
+        }
+
+        var listAllineamenti = this.gruppiDiAllineamentoDelBox(box, mappaBoxOriginale, itemRef, DBallineamenti, DBDefault) || [];
 
         for (var i = 0; i < listAllineamenti.length; i++) {
             var allineamentoSingolo = listAllineamenti[i];
@@ -4562,7 +4706,7 @@ const CssFramework =
                 if (allineamentoSingolo.finalFit && allineamentoSingolo.finalFit.length > 0) {
                     this.finalFit(mappaBoxOriginale, allineamentoSingolo.finalFit);
                 }
-                box = this.fixOverflowFromBox(boundsBoxImpaginato, box, mappaBoxOriginale);
+                box = this.fixOverflowFromBox(boundsBoxImpaginato, box, mappaBoxOriginale, [allineamentoSingolo]);
                 continue;
             }
 
@@ -4605,7 +4749,7 @@ const CssFramework =
                 this.fixCollisioneTracciaBase(box, listGruppoAllineamento, allineamentoSingolo.evitaTracciaAllineamento, latiTracciaBase);
             }
 
-            box = this.fixOverflowFromBox(boundsBoxImpaginato, box, mappaBoxOriginale);
+            box = this.fixOverflowFromBox(boundsBoxImpaginato, box, mappaBoxOriginale, [allineamentoSingolo]);
 
         }
 

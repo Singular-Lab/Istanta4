@@ -312,7 +312,7 @@ test("una casella che non entra fino al bordo si stringe fino alla fine del test
     assert.ok(segnalazioni.some(s => /CSF-008: Elemento gruppo_prezzo nel box BOX_STD spostato verso sinistra/.test(s.testo)));
 });
 
-test("sui lati alto e basso la casella non si stringe fino alla fine del testo", () => {
+test("sui lati alto e basso la casella si stringe di quanto il testo consente e il gruppo si sposta del resto", () => {
     azzera();
     const infoPack = casella("prezzo_info_pack", [395, 273.17, 420, 300], 20);
     Object.defineProperty(infoPack, "properties", { get: () => ({ parentStory: {}, textFramePreferences: {}, contents: "testo", overflows: infoPack.geometricBounds[2] - infoPack.geometricBounds[0] < 20 }) });
@@ -320,9 +320,11 @@ test("sui lati alto e basso la casella non si stringe fino alla fine del testo",
 
     CssFramework.fixOverflowFromBox(BOX_PREZZO, b);
 
-    //Esce di 10 mm dal fondo: stretta fino a 410 andrebbe in overflow, quindi torna alta 25 e il gruppo sale di 10.
-    assert.ok(Math.abs(infoPack.geometricBounds[0] - 385) < 1e-9);
+    //Esce di 10 mm dal fondo: stretta fino a 410 andrebbe in overflow, ma alta 20 ci sta ancora.
+    //Si stringe di 5, fino a 415, e il gruppo sale solo dei 5 che restano.
+    assert.ok(Math.abs(infoPack.geometricBounds[0] - 390) < 1e-9);
     assert.ok(Math.abs(infoPack.geometricBounds[2] - 410) < 1e-9);
+    assert.strictEqual(infoPack.properties.overflows, false);
 });
 
 test("la casella stretta resta stretta anche se non basta: lo spostamento si accorcia", () => {
@@ -396,6 +398,178 @@ for (const lato of LATI) {
         assert.deepStrictEqual(mappa.logo.bounds, attesi);
     });
 }
+
+/* ---- la riduzione parziale sui lati alto e basso ---- */
+
+//Una casella di testo che va in overflow se e' piu' bassa di altezzaTesto: e' cosi' che InDesign
+//la vede dopo che il bordo alto o basso e' cambiato.
+function casellaAlta(label, bounds, altezzaTesto) {
+    const c = elemento(label, bounds, { overflows: false });
+    Object.defineProperty(c, "properties", {
+        get() {
+            const b = c.geometricBounds;
+            return { parentStory: {}, textFramePreferences: {}, contents: "testo", overflows: b[2] - b[0] < altezzaTesto };
+        }
+    });
+    return c;
+}
+
+test("dal lato alto una casella si stringe di quanto il testo consente e scende del resto", () => {
+    azzera();
+    //Alta 23 con il testo che ne occupa 15, sporge di 9.25 dal bordo alto.
+    const descrizione = casellaAlta("descrizione", [-9.25, 50, 13.75, 80], 15);
+    const b = box("BOX1", [descrizione]);
+
+    CssFramework.fixOverflowFromBox(GRIGLIA, b);
+
+    //Il bordo alto scende fin dove il testo resta senza overflow, con un quarto di millimetro di
+    //tolleranza; la casella si sposta solo del resto e finisce sul bordo.
+    assert.ok(Math.abs(descrizione.geometricBounds[0]) < 1e-9);
+    const altezza = descrizione.geometricBounds[2] - descrizione.geometricBounds[0];
+    assert.ok(altezza >= 15 && altezza < 15.25, "altezza " + altezza);
+    assert.strictEqual(descrizione.properties.overflows, false);
+});
+
+test("se nessuna riduzione ci sta la casella torna com'era e si sposta tutta", () => {
+    azzera();
+    const descrizione = casellaAlta("descrizione", [-9.25, 50, 13.75, 80], 23);
+    const b = box("BOX1", [descrizione]);
+
+    CssFramework.fixOverflowFromBox(GRIGLIA, b);
+
+    assert.deepStrictEqual(descrizione.geometricBounds, [0, 50, 23, 80]);
+});
+
+test("dopo il ridimensionamento le caselle non si stringono: si spostano intere, anche dentro un gruppo", () => {
+    azzera();
+    //La stessa descrizione che potrebbe stringersi di 8: con stringiCaselle false conserva i suoi
+    //23 e scende di tutti i 9.25. Al collaudo veniva ridotta benche', composta la colonna, ci
+    //sarebbe stata: quanto spazio ha un campo lo sanno solo gli allineamenti.
+    const descrizione = casellaAlta("descrizione", [-9.25, 50, 13.75, 80], 15);
+    const bis = elemento("BIS", [13.75, 70, 19.25, 80]);
+    const b = box("BOX7", [gruppo("gruppo_descrizione_BIS", [descrizione, bis])]);
+
+    CssFramework.fixOverflowFromBox(GRIGLIA, b, null, null, false);
+
+    assert.deepStrictEqual(descrizione.geometricBounds, [0, 50, 23, 80]);
+    assert.deepStrictEqual(bis.geometricBounds, [23, 70, 28.5, 80]);
+});
+
+/* ---- chi si sposta con il responsabile: il gruppo di allineamento ---- */
+
+function mappaDi(elementi) {
+    const mappa = {};
+    for (const el of elementi) {
+        mappa[Utility.parseLabel(el.label)] = { item: el, label: Utility.parseLabel(el.label), bounds: el.geometricBounds, eliminato: false };
+    }
+    return mappa;
+}
+
+const LOGHI = [{ nomeGruppo: "Loghi", gruppoEtichette: ["logo*"] }];
+
+test("con il responsabile si sposta intero il gruppo di allineamento, se resta dentro la griglia", () => {
+    azzera();
+    const logo1 = elemento("logo_bio", [-3, 10, 7, 30]);
+    const logo2 = elemento("logo_igp", [10, 10, 20, 30]);
+    const prezzo = elemento("prezzo", [80, 10, 95, 30]);
+    const b = box("BOX1", [logo1, logo2, prezzo]);
+    const mappa = mappaDi([logo1, logo2, prezzo]);
+
+    CssFramework.fixOverflowFromBox(GRIGLIA, b, mappa, LOGHI);
+    CssFramework.controllaSpostamentiGrigliaPendenti(b);
+
+    //I due loghi scendono di 3 insieme, nella stessa disposizione; il prezzo non e' del gruppo.
+    assert.deepStrictEqual(logo1.geometricBounds, [0, 10, 10, 30]);
+    assert.deepStrictEqual(logo2.geometricBounds, [13, 10, 23, 30]);
+    assert.deepStrictEqual(prezzo.geometricBounds, [80, 10, 95, 30]);
+    //La mappa segue tutti e due.
+    assert.deepStrictEqual(mappa.logo_bio.bounds, [0, 10, 10, 30]);
+    assert.deepStrictEqual(mappa.logo_igp.bounds, [13, 10, 23, 30]);
+    assert.deepStrictEqual(mappa.prezzo.bounds, [80, 10, 95, 30]);
+    //Si segnala il solo responsabile.
+    assert.strictEqual(segnalazioni.filter(s => /CSF-008/.test(s.testo)).length, 1);
+    assert.ok(segnalazioni.some(s => /Elemento logo_bio nel box BOX1 spostato verso il basso/.test(s.testo)));
+});
+
+test("se il gruppo intero uscirebbe dal lato opposto si sposta il solo responsabile e l'ancora resta ferma", () => {
+    azzera();
+    const logo1 = elemento("logo_bio", [-3, 10, 7, 30]);
+    const logo2 = elemento("logo_igp", [92, 10, 100, 30]);
+    const b = box("BOX1", [logo1, logo2]);
+    const mappa = mappaDi([logo1, logo2]);
+
+    CssFramework.fixOverflowFromBox(GRIGLIA, b, mappa, LOGHI);
+
+    assert.deepStrictEqual(logo1.geometricBounds, [0, 10, 10, 30]);
+    assert.deepStrictEqual(logo2.geometricBounds, [92, 10, 100, 30]);
+    assert.deepStrictEqual(mappa.logo_igp.bounds, [92, 10, 100, 30]);
+});
+
+test("un gruppo di allineamento con il solo responsabile, o che non lo nomina, non cambia niente", () => {
+    azzera();
+    const logo1 = elemento("logo_bio", [-3, 10, 7, 30]);
+    const prezzo = elemento("prezzo", [10, 10, 20, 30]);
+    const b = box("BOX1", [logo1, prezzo]);
+
+    CssFramework.fixOverflowFromBox(GRIGLIA, b, null, [{ nomeGruppo: "Prezzi", gruppoEtichette: ["prezzo"] }, { nomeGruppo: "Loghi", gruppoEtichette: ["logo_bio"] }]);
+
+    assert.deepStrictEqual(logo1.geometricBounds, [0, 10, 10, 30]);
+    assert.deepStrictEqual(prezzo.geometricBounds, [10, 10, 20, 30]);
+});
+
+test("il BOX7 di Edro21: il gruppo InDesign scende intero, con il BIS sotto la descrizione, e Campi_DX resta fermo", () => {
+    azzera();
+    //I numeri del collaudo del 22 ottobre 2026, dopo lo spostamento lineare di -12: il gruppo
+    //sporge dal bordo alto della cella di 9.25, la descrizione non si puo' stringere (il testo la
+    //riempie), il campo sconto di Campi_DX sta gia' sul fondo della cella.
+    const cella = [29, 10, 87, 73.67];
+    const descrizione = casellaAlta("descrizione", [19.75, 41.67, 42.75, 73.67], 23);
+    const bis = elemento("BIS", [42.75, 62.07, 48.25, 72.07]);
+    const gruppoDescrizione = gruppo("gruppo_descrizione_BIS", [descrizione, bis]);
+    const mMM = elemento("M_MM", [57.69, 41.67, 62.7, 73.67]);
+    const sconto = elemento("campo_offerta_KgL_sconto", [82.7, 41.67, 87, 73.67]);
+    const b = box("BOX7", [gruppoDescrizione, mMM, sconto]);
+    const mappa = mappaDi([gruppoDescrizione, descrizione, bis, mMM, sconto]);
+    const campiDX = [{ nomeGruppo: "Campi_DX", gruppoEtichette: ["gruppo_descrizione_BIS", "prezzo_offerta_gruppo", "campo_offerta_KgL_sconto", "LBL_Titolari", "M_MM", "PezzConf_NM"] }];
+
+    CssFramework.fixOverflowFromBox(cella, b, mappa, campiDX);
+
+    //Campi_DX intero uscirebbe dal fondo: scende il solo gruppo, descrizione e BIS insieme.
+    assert.deepStrictEqual(descrizione.geometricBounds, [29, 41.67, 52, 73.67]);
+    assert.deepStrictEqual(bis.geometricBounds, [52, 62.07, 57.5, 72.07]);
+    assert.deepStrictEqual(mMM.geometricBounds, [57.69, 41.67, 62.7, 73.67]);
+    assert.deepStrictEqual(sconto.geometricBounds, [82.7, 41.67, 87, 73.67]);
+    //La mappa segue il gruppo e i suoi figli, non gli altri.
+    assert.deepStrictEqual(mappa.gruppo_descrizione_BIS.bounds, [29, 41.67, 57.5, 73.67]);
+    assert.deepStrictEqual(mappa.descrizione.bounds, [29, 41.67, 52, 73.67]);
+    assert.deepStrictEqual(mappa.BIS.bounds, [52, 62.07, 57.5, 72.07]);
+    assert.deepStrictEqual(mappa.M_MM.bounds, [57.69, 41.67, 62.7, 73.67]);
+});
+
+/* ---- i gruppi di allineamento del box ---- */
+
+test("i gruppi del box vengono dalla gerarchia: quello del kit scavalca l'omonimo di default, l'ordine decide", () => {
+    const DB = [
+        { nomiBox: ["BOX7"], allineamenti: [{ nomeGruppo: "Campi_DX", ordine: 5, gruppoEtichette: ["gruppo_descrizione_BIS", "M_MM"], listSetCondizioni: null }] },
+        { nomiBox: [], allineamenti: [
+            { nomeGruppo: "Campi_DX", ordine: 1, gruppoEtichette: ["descrizione"], listSetCondizioni: null },
+            { nomeGruppo: "Loghi", ordine: 2, gruppoEtichette: ["logo*"], listSetCondizioni: null }
+        ] }
+    ];
+    const gruppi = CssFramework.gruppiDiAllineamentoDelBox({ label: "BOX7" }, {}, {}, DB, null);
+    assert.deepStrictEqual(gruppi.map(g => g.nomeGruppo + ":" + g.gruppoEtichette.join(",")), ["Loghi:logo*", "Campi_DX:gruppo_descrizione_BIS,M_MM"]);
+    //Senza regole per il box ne' un default non c'e' niente da spostare insieme.
+    assert.strictEqual(CssFramework.gruppiDiAllineamentoDelBox({ label: "BOX9" }, {}, {}, [{ nomiBox: ["BOX7"], allineamenti: [] }], null), null);
+});
+
+test("allineamenti usa la stessa selezione e passa al rientro il gruppo appena composto", () => {
+    const sorgente = leggiFileDelPlugin("CssFramework.js").replace(/\r\n/g, "\n");
+    const inizio = sorgente.indexOf("\n    allineamenti(");
+    const corpo = sorgente.substring(inizio, sorgente.indexOf("\n    },\n", inizio));
+    assert.match(corpo, /var listAllineamenti = this\.gruppiDiAllineamentoDelBox\(box, mappaBoxOriginale, itemRef, DBallineamenti, DBDefault\) \|\| \[\];/);
+    assert.strictEqual((corpo.match(/this\.fixOverflowFromBox\(boundsBoxImpaginato, box, mappaBoxOriginale, \[allineamentoSingolo\]\);/g) || []).length, 2);
+    assert.doesNotMatch(corpo, /listAllineamenti\.push/);
+});
 
 /* ---- dove si chiama ---- */
 
