@@ -4,6 +4,7 @@ import * as path from "path";
 import * as sharp from 'sharp';
 import { promisify } from "util";
 import { Colorize } from "./colorize";
+import { convertiIllustrator, DipendenzeIllustrator, EsitoConversione } from "./illustrator";
 
 const execPromise = promisify(exec);
 
@@ -82,7 +83,52 @@ async function getColorSpace(filePath: string): Promise<string> {
     throw new Error(`Errore ottenendo il colorspace: ${error}`);
   }
 }
+function esitoCompletato(nomeFile: string): EsitoConversione {
+  return {
+    nomeFile,
+    stato: 'completed',
+    motivo: null,
+    formato: null,
+    pagine: null,
+    colorspaceOriginale: null,
+    colorspaceDettaglio: null,
+    colorspaceAnteprima: null,
+  };
+}
+
 class ConversionService {
+  /**
+   * Come conversioneFile, ma restituisce l'esito completo invece di lanciare
+   * un'eccezione quando l'anteprima di un .ai non si puo' generare.
+   * Per i .ai con contenuto PDF o PostScript (o non riconosciuto) lo stato dice
+   * se l'anteprima e' pronta, il motivo se non lo e', e lo spazio colore del
+   * documento originale separato da quello dell'anteprima.
+   * Per tutti gli altri formati il comportamento e' quello di conversioneFile:
+   * esito completed oppure eccezione.
+   */
+  static async conversioneFileConEsito(
+    path_file_dello_zip_completo: string,
+    nome_archivio_file_finale: string,
+    nome_web_file_finale: string,
+    unique_name: string,
+    dipendenzeIllustrator: Partial<DipendenzeIllustrator> = {}
+  ): Promise<EsitoConversione> {
+    const ext = path.extname(nome_archivio_file_finale);
+    if (ext.toLowerCase() === ".ai" && fs.statSync(nome_archivio_file_finale).size > 0
+      && detectRealFileType(nome_archivio_file_finale) === 'unknown') {
+      const base = (p: string) => p.slice(0, p.length - ext.length);
+      return convertiIllustrator({
+        originale: nome_archivio_file_finale,
+        outputPng: base(nome_web_file_finale) + ".png",
+        outputWebp: base(nome_web_file_finale) + ".webp",
+        nomeAnteprima: base(unique_name) + ".png",
+      }, dipendenzeIllustrator);
+    }
+    const nomeFile = await ConversionService.conversioneFile(
+      path_file_dello_zip_completo, nome_archivio_file_finale, nome_web_file_finale, unique_name);
+    return esitoCompletato(nomeFile);
+  }
+
   /**
    * Esegue la conversione del file in base all'estensione e al colorspace rilevato.
    *
@@ -126,6 +172,17 @@ class ConversionService {
             const webpBuf = await sharp(outputPng).webp().toBuffer();
             await fs.promises.writeFile(outputWebp, webpBuf);
             return unique_name.replace(ext, ".png");
+          }
+
+          // .ai con contenuto PDF/PostScript o non riconosciuto: niente ImageMagick
+          // (la sua policy blocca PDF e PS), se ne occupa il modulo illustrator.
+          if (ext.toLowerCase() === ".ai" && realType === 'unknown') {
+            const esito = await ConversionService.conversioneFileConEsito(
+              path_file_dello_zip_completo, nome_archivio_file_finale, nome_web_file_finale, unique_name);
+            if (esito.nomeFile === null) {
+              throw new Error(`Anteprima .ai non disponibile (${esito.stato}: ${esito.motivo})`);
+            }
+            return esito.nomeFile;
           }
 
           // 1. Try sharp/libvips — let libvips handle colorspace automatically

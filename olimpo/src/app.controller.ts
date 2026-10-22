@@ -3,6 +3,7 @@ import { MultipartFile } from '@fastify/multipart';
 import { Colorize } from '@lib/colorize';
 import ConversionService from '@lib/ConversionService';
 import { percorsoFileTemporaneo } from '@lib/fileTemporanei';
+import { EsitoConversione } from '@lib/illustrator';
 import {
   Body,
   Controller,
@@ -102,6 +103,8 @@ export class OlimpoController {
 
       // Array per raccogliere le conversioni da eseguire in parallelo
       const conversionPromises: Promise<unknown>[] = [];
+      // Esito della conversione per nome file, aggiunto alla risposta.
+      const conversioni: Record<string, ReturnType<typeof esitoPerRisposta>> = {};
 
       for (const file_dello_zip of files) {
         //NOTE: Qui va controllata la lista di file NON accettati.
@@ -156,16 +159,15 @@ export class OlimpoController {
           // NOTE: nel array va la catena *già gestita*, altrimenti il rejection del
           // task grezzo (e quello della pulizia) resta senza handler e fa cadere il processo.
           const conversionHandled = conversionTask
-            .then((nome_file_convertito) => {
-              if (nome_file_convertito === null) {
-                throw new Error('Errore durante la conversione del file');
+            .then(async (esito) => {
+              conversioni[file_dello_zip] = esitoPerRisposta(esito);
+              if (esito.stato === 'invalid_file') {
+                // File non valido: niente record e niente copia in archivio.
+                await fs.promises.rm(nome_archivio_file_finale, { force: true });
+                throw new Error(`File non valido: ${esito.motivo}`);
               }
-              // Aggiorna i dati da salvare sul database
-              foto_finale.file_name_web = nome_file_convertito;
-              foto_finale.file_name_web_performante = nome_file_convertito.replace(
-                path.extname(nome_file_convertito),
-                '.webp'
-              );
+              // Aggiorna i dati da salvare sul database (senza anteprima se non disponibile)
+              Object.assign(foto_finale, nomiFileWeb(esito));
               meta_foto.filter((meta) => meta.FileHash.toUpperCase() === md5_file_dello_zip.toUpperCase()).forEach((meta) => {
                 meta.Id = foto_finale.id;
               });
@@ -195,7 +197,7 @@ export class OlimpoController {
 
       // Attendi tutte le conversioni in parallelo
       await Promise.all(conversionPromises);
-      return res.status(200).send({ lista: meta_foto, error: '' });
+      return res.status(200).send({ lista: meta_foto, error: '', conversioni });
     } catch (error) {
       console.log(error);
       res.status(500).send({ lista: [], error: 'Internal server error' });
@@ -246,6 +248,7 @@ export class OlimpoController {
 
     const nome_archivio_file_finale = path.join(path_archivio_db.path, nome_nuovo_uuid_file);
     const nome_web_file_finale = path.join(path_web_db.path, nome_nuovo_uuid_file);
+    let conversione: ReturnType<typeof esitoPerRisposta> | undefined;
 
     try {
       if (isAcceptedFileOrFileExtension(nome_nuovo_uuid_file) === false) {
@@ -306,11 +309,17 @@ export class OlimpoController {
           console.log(Colorize.bgGreen('Record creato in DB per file .idms'), foto_finale);
           meta_foto.Id = foto_finale.id;
         } else {
-          console.log(Colorize.bgCyan('Chiamo ConversionService.conversioneFile...'));
-          const nome_file_convertito = await ConversionService.conversioneFile(path_file, nome_archivio_file_finale, nome_web_file_finale, nome_nuovo_uuid_file);
-          console.log(Colorize.bgCyan('Conversione completata, nome file convertito:'), nome_file_convertito);
-          foto_finale.file_name_web = nome_file_convertito;
-          foto_finale.file_name_web_performante = nome_file_convertito.replace(path.extname(nome_file_convertito), '.webp');
+          console.log(Colorize.bgCyan('Chiamo ConversionService.conversioneFileConEsito...'));
+          const esito = await ConversionService.conversioneFileConEsito(path_file, nome_archivio_file_finale, nome_web_file_finale, nome_nuovo_uuid_file);
+          console.log(Colorize.bgCyan('Conversione terminata:'), esito.stato, esito.motivo ?? '', esito.nomeFile ?? '');
+          conversione = esitoPerRisposta(esito);
+          if (esito.stato === 'invalid_file') {
+            // File non valido: niente record e niente copia in archivio.
+            await fs.promises.rm(nome_archivio_file_finale, { force: true });
+            return res.status(422).send({ record: meta_foto, error: `File non valido: ${esito.motivo}`, conversione });
+          }
+          // Valido ma senza anteprima: l'originale resta in archivio e il record viene creato.
+          Object.assign(foto_finale, nomiFileWeb(esito));
           await this.olimpoService.creaFotoRecord(foto_finale);
           console.log(Colorize.bgGreen('Record creato in DB per file convertito'), foto_finale);
           meta_foto.Id = foto_finale.id;
@@ -328,7 +337,7 @@ export class OlimpoController {
         console.log(Colorize.bgYellow(`Il file ${file.fieldname} non è presente nel database e non corrisponde alla lista`));
       }
       console.log(Colorize.bgCyan('Fine chiamata uploadSingoloFileFotoInArchivio, restituisco meta_foto:'), meta_foto);
-      return res.status(200).send({ record: meta_foto, error: '' });
+      return res.status(200).send({ record: meta_foto, error: '', ...(conversione ? { conversione } : {}) });
 
     } catch (error) {
       console.error(Colorize.bgRed('Errore durante la chiamata uploadSingoloFileFotoInArchivio:'), error);
@@ -410,12 +419,17 @@ export class OlimpoController {
       }
       else if (!esiste_in_db) {
         await this.smistamentoFile(path_file, nome_archivio_file_finale);
-        const nome_file_convertito = await ConversionService.conversioneFile(path_file, nome_archivio_file_finale, nome_web_file_finale, nome_nuovo_uuid_file);
-        foto_finale.file_name_web = nome_file_convertito;
-        foto_finale.file_name_web_performante = nome_file_convertito.replace(path.extname(nome_file_convertito), '.webp');
+        const esito = await ConversionService.conversioneFileConEsito(path_file, nome_archivio_file_finale, nome_web_file_finale, nome_nuovo_uuid_file);
+        const conversione = esitoPerRisposta(esito);
+        if (esito.stato === 'invalid_file') {
+          await fs.promises.rm(nome_archivio_file_finale, { force: true });
+          res.status(422).send({ record: {}, error: `File non valido: ${esito.motivo}`, conversione });
+          return;
+        }
+        Object.assign(foto_finale, nomiFileWeb(esito));
         const foto = await this.olimpoService.creaFotoRecord(foto_finale);
         console.log(Colorize.bgGreen(`Il file ${file.filename} non è presente nel database ma corrisponde alla lista, quindi verrà processato`));
-        res.send({ record: { guidId: foto.id }, error: '' });
+        res.send({ record: { guidId: foto.id }, error: '', conversione });
       }
 
     } catch (error) {
@@ -734,7 +748,7 @@ export class OlimpoController {
       }
 
       // Leggi l'immagine dal percorso
-      if (fs.existsSync(pathFoto)) {
+      if (esisteFileAnteprima(pathFoto)) {
         console.log(Colorize.bgMagenta(`Il file esiste nel percorso: ${pathFoto}`));
         let buffer = fs.readFileSync(pathFoto);
         let format = path.extname(pathFoto).replace(".", "");
@@ -864,7 +878,7 @@ export class OlimpoController {
       console.log(Colorize.bgMagenta(`Percorso della foto ottenuto: ${pathFoto}`));
 
       // Leggi l'immagine dal percorso
-      if (fs.existsSync(pathFoto)) {
+      if (esisteFileAnteprima(pathFoto)) {
         console.log(Colorize.bgMagenta(`Il file esiste nel percorso: ${pathFoto}`));
         const buffer = fs.readFileSync(pathFoto);
 
@@ -1543,6 +1557,38 @@ export const isAcceptedPhotoFile = (fileName: string): boolean => {
  * Restituisce true se l’estensione NON è nella lista nera e non è DS_Store / resource fork
  * (meno sicura della whitelist, ma utile se vuoi solo estendere il tuo controllo iniziale).
  */
+/**
+ * Esito della conversione da aggiungere alla risposta di upload. Campo nuovo e
+ * facoltativo: i client esistenti continuano a leggere record.Id ed error.
+ */
+export const esitoPerRisposta = (esito: EsitoConversione) => ({
+  stato: esito.stato,
+  motivo: esito.motivo,
+  formato: esito.formato,
+  pagine: esito.pagine,
+  colorspaceOriginale: esito.colorspaceOriginale,
+  colorspaceDettaglio: esito.colorspaceDettaglio,
+  colorspaceAnteprima: esito.colorspaceAnteprima,
+});
+
+/** Nomi dei file web da salvare sul record: vuoti quando l'anteprima non c'e'. */
+export const nomiFileWeb = (esito: EsitoConversione): { file_name_web: string; file_name_web_performante: string } => {
+  if (esito.nomeFile === null) return { file_name_web: '', file_name_web_performante: '' };
+  return {
+    file_name_web: esito.nomeFile,
+    file_name_web_performante: esito.nomeFile.replace(path.extname(esito.nomeFile), '.webp'),
+  };
+};
+
+/** La GET di una foto senza anteprima non deve trattare la cartella web come file. */
+export const esisteFileAnteprima = (pathFoto: string): boolean => {
+  try {
+    return fs.statSync(pathFoto).isFile();
+  } catch {
+    return false;
+  }
+};
+
 export const isAcceptedFileOrFileExtension = (fileName: string): boolean => {
   const base = path.basename(fileName);
   const ext = path.extname(base).toLowerCase();

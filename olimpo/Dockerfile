@@ -22,6 +22,8 @@ ENV NODE_ENV=production \
 WORKDIR /app
 
 # Olimpo invokes these tools while processing PDF and image assets.
+# .ai: poppler-utils (pdfinfo, pdftocairo, pdftotext), ghostscript (PostScript
+# legacy) e python3-pikepdf; la policy di ImageMagick resta quella di default.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ghostscript \
@@ -29,6 +31,7 @@ RUN apt-get update \
         inkscape \
         poppler-utils \
         python3 \
+        python3-pikepdf \
         python3-pil \
     && rm -rf /var/lib/apt/lists/*
 
@@ -41,6 +44,8 @@ RUN node .yarn/releases/yarn-4.18.1.cjs workspaces focus --production \
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/private-ui ./private-ui
 COPY ICC ./ICC
+# Analisi dello spazio colore dei .ai/PDF (pikepdf), letta da dist/lib/illustrator.js.
+COPY scripts ./scripts
 COPY nofoto.jpg Metadata.json contratto.json ./
 
 RUN mkdir -p /app/uploads/FTP \
