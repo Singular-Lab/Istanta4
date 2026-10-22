@@ -1,9 +1,9 @@
 import { FlyerInsights, FlyerInsightsConfig } from "@/types/flyerInsights";
-import { useMutation, useQueries, useQuery } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Colorize } from "../../lib/Colorize";
 import { TIPO_ATTIVITA } from "../../lib/enums";
 import { ServerCall } from "../../lib/server_call";
-import type { AvvisoManutenzione, Config, DESIGN_KIT, DimensioneVisibilitaPromo, FileItemKit, FormatiAttributes, GlobalUserFilter, HubNewsAdminDTO, HubServiceDTO, MenaboLayoutSalvato, MenaboRisultato, PuntiVenditaAttributes, RUNTIME_KIT, RaccoglitoreKit, RegoleMenabo, ReportOptionDTO, Ricette, SaveMenaboLayoutRequest, TimelinePromoItem, TipiDiExportAttributes, TracciatoQueryRequest, TracciatoQueryResult, TracciatoReport, TracciatiMomentoResponseDTO } from "../../lib/types";
+import type { AvvisoManutenzione, Config, DESIGN_KIT, DimensioneVisibilitaPromo, FileItemKit, FormatiAttributes, Funzionalita, GlobalUserFilter, HubNewsAdminDTO, HubServiceDTO, MenaboLayoutSalvato, MenaboRisultato, PuntiVenditaAttributes, RUNTIME_KIT, RaccoglitoreKit, RegoleMenabo, ReportOptionDTO, Ricette, SaveMenaboLayoutRequest, TimelinePromoItem, TipiDiExportAttributes, TracciatoQueryRequest, TracciatoQueryResult, TracciatoReport, TracciatiMomentoResponseDTO } from "../../lib/types";
 import type { AuditLogPaginatedResponse, AuditLogSummary } from "../../lib/auditTypes";
 import type { AreaResponseDTO, CanaleResponseDTO, CombinazioneCanaleAreaResponseDTO, CreateFilterTemplateDTO, DisplayContextResponseDTO, DispositivoPuntoVenditaResponseDTO, FilterConditionDTO, FilterTemplateDTO, FormatiResponseDTO, GDOResponseDTO, PromoResponseDTO, PuntoVenditaResponseDTO, RuoloUtenteGDOResponseDTO, TipiDiExportResponseDTO, UpdateFilterTemplateDTO, VolantinoAttivoDTO } from "../../server/core/dto";
 
@@ -1040,6 +1040,22 @@ export const useDeleteRegoleMenabo = () =>
   useMutation({
     mutationFn: () => ServerCall.delete("/regole-menabo"),
   });
+
+// Funzioni opzionali (momenti, menabò) della GDO operativa dell'utente
+export const useFetchFunzionalita = () =>
+  useQuery({
+    queryKey: ['funzionalita'],
+    queryFn: () => ServerCall.get<Funzionalita>("/funzionalita"),
+    staleTime: 1000 * 60 * 5,
+  });
+
+export const useSaveFunzionalita = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (funzionalita: Funzionalita) => ServerCall.put<Funzionalita>("/funzionalita", funzionalita),
+    onSuccess: (salvate) => queryClient.setQueryData(['funzionalita'], salvate),
+  });
+};
 
 export const useFetchMenaboLayout = (idPromo: string | undefined) =>
   useQuery({

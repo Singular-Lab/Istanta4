@@ -7,8 +7,9 @@ import { fileURLToPath } from 'url';
 import { v4 as uuidv4 } from 'uuid';
 import { HttpStatusCode, TIPO_UTENTI } from '../../../lib/enums';
 import { BadRequestError, ExternalApiError, ForbiddenError } from '../../../lib/errors';
-import { AvvisoManutenzione, Dashboard, RegoleMenabo } from '../../../lib/types';
+import { AvvisoManutenzione, Dashboard, Funzionalita, RegoleMenabo } from '../../../lib/types';
 import { emitToClients } from '../../ws-server';
+import { gdoOperativaPerRichiesta } from '../accessi/contestoAccesso';
 import { BaseController } from '../base/BaseController';
 import config from '../config';
 import {
@@ -63,6 +64,9 @@ export class ConfigController extends BaseController {
     this.router.get('/regole-menabo', authMiddleware, this.getRegoleMenabo.bind(this));
     this.router.post('/regole-menabo', authMiddleware, permissionGuard('impostazioni.modifica_generali'), this.saveRegoleMenabo.bind(this));
     this.router.delete('/regole-menabo', authMiddleware, permissionGuard('impostazioni.modifica_generali'), this.deleteRegoleMenabo.bind(this));
+    // Funzioni opzionali della GDO operativa: Superadmin e Agenzia possono indicarne un'altra con ?gdo=
+    this.router.get('/funzionalita', authMiddleware, this.getFunzionalita.bind(this));
+    this.router.put('/funzionalita', authMiddleware, permissionGuard('impostazioni.modifica_generali'), this.saveFunzionalita.bind(this));
   }
 
   private async get_config(req: Request, res: Response): Promise<void> {
@@ -305,6 +309,34 @@ export class ConfigController extends BaseController {
       await this.configService.saveRegoleMenabo(regole);
       AuditLogService.getInstance().configurationChanged(req, 'regole_menabo', 'set');
       this.sendResponse(res, HttpStatusCode.OK, { message: "Regole menabò salvate" });
+    } catch (error: any) {
+      this.handleError(res, error);
+    }
+  }
+
+  private async getFunzionalita(req: Request, res: Response): Promise<void> {
+    try {
+      const idGdo = await gdoOperativaPerRichiesta(req, res, req.query.gdo);
+      const funzionalita = await this.configService.getFunzionalita(idGdo);
+      this.sendResponse(res, HttpStatusCode.OK, funzionalita);
+    } catch (error: any) {
+      this.handleError(res, error);
+    }
+  }
+
+  private async saveFunzionalita(req: Request, res: Response): Promise<void> {
+    try {
+      const { momenti, menabo, gdo } = (req.body ?? {}) as Partial<Funzionalita> & { gdo?: string };
+      if (typeof momenti !== 'boolean' || typeof menabo !== 'boolean') {
+        throw new BadRequestError({ message: 'momenti e menabo devono essere true o false' });
+      }
+      const idGdo = await gdoOperativaPerRichiesta(req, res, gdo);
+      if (!idGdo) {
+        throw new BadRequestError({ message: 'Nessuna GDO su cui salvare le funzionalità' });
+      }
+      const funzionalita = await this.configService.saveFunzionalita(idGdo, { momenti, menabo });
+      AuditLogService.getInstance().configurationChanged(req, 'funzionalita', 'set', { idGdo, ...funzionalita });
+      this.sendResponse(res, HttpStatusCode.OK, funzionalita);
     } catch (error: any) {
       this.handleError(res, error);
     }

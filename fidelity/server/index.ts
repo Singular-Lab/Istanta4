@@ -8,6 +8,7 @@ import config from './core/config';
 import { log } from './core/logger';
 import { sincronizzaSchemaAllAvvio } from './core/db/SequelizeConnector';
 import { preparaAccessiAllAvvio } from './core/accessi/migrazioneAccessi';
+import { preparaConfigAllAvvio } from './core/inizializzazione/migrazioneConfig';
 import { createActualServer } from './core/server';
 import { startWSServer } from './ws-server';
 
@@ -21,6 +22,9 @@ async function main() {
         await sincronizzaSchemaAllAvvio();
         // Catalogo permessi e migrazione degli accessi: una volta sola, prima dei worker
         await preparaAccessiAllAvvio();
+      await preparaConfigAllAvvio();
+        // Configurazione collegata alla GDO del cliente e funzionalita' iniziali, prima dei worker
+        await preparaConfigAllAvvio();
         log.info('Master process: avvio WebSocket server...');
         await startWSServer();
         log.info('Master process: WebSocket server pronto, fork dei worker HTTP...');

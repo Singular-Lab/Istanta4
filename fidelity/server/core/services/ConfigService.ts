@@ -4,17 +4,18 @@ import { fileURLToPath } from 'url';
 import { v4 as uuidv4 } from 'uuid';
 import { TIPO_UTENTI } from "../../../lib/enums";
 import { NotFoundError, wrapDatabaseError } from "../../../lib/errors";
-import { AvvisoManutenzione, Config, ConfigWebpliant, Dashboard, RegoleMenabo } from "../../../lib/types";
+import { AvvisoManutenzione, Config, ConfigWebpliant, Dashboard, Funzionalita, RegoleMenabo } from "../../../lib/types";
 import { urlFotoOlimpo } from "../utils/urlOlimpo";
 import { IConfigService } from "../interfaces/IConfigService";
 import { Config as ConfigModel } from "../models/config";
 import { log } from '../logger/index.js';
+import { funzionalitaDa, idGdoCliente, trovaConfigDiGdo, trovaConfigInstallazione, trovaConfigPerGdo } from './configPerGdo';
 
 
 export class ConfigService implements IConfigService {
   async getDashBoardConfig(role: TIPO_UTENTI): Promise<Dashboard> {
     try {
-      const configDoc = await ConfigModel.findOne({ raw: true }) as any;
+      const configDoc = await trovaConfigInstallazione({ raw: true }) as any;
 
       // Se non esiste nessun documento di configurazione, ritorna dashboard vuota
       if (!configDoc) {
@@ -81,17 +82,18 @@ export class ConfigService implements IConfigService {
   async saveDashBoardConfig(dashboard: Dashboard, role: TIPO_UTENTI): Promise<any> {
     try {
       // In PG, dashboards_by_role è un campo JSONB: fetch-merge-update
-      const current = await ConfigModel.findOne({ raw: true }) as any;
+      const current = await trovaConfigInstallazione({ raw: true }) as any;
       if (current) {
         const updatedDashboardsByRole = { ...(current.dashboards_by_role || {}), [role]: dashboard };
         await ConfigModel.update(
           { dashboards_by_role: updatedDashboardsByRole },
           { where: { id: current.id } }
         );
-        return ConfigModel.findOne({ raw: true });
+        return trovaConfigInstallazione({ raw: true });
       } else {
         return ConfigModel.create({
           id: uuidv4(),
+          id_gdo_config: await idGdoCliente(),
           dashboards_by_role: { [role]: dashboard },
           webpliant: {}
         } as any);
@@ -107,7 +109,7 @@ export class ConfigService implements IConfigService {
 
   async get_config(): Promise<Config> {
     try {
-      const configWebpliant = await ConfigModel.findOne({ raw: true }) as any as Config;
+      const configWebpliant = await trovaConfigInstallazione({ raw: true }) as any as Config;
       if (configWebpliant.webpliant.icona_pagina != undefined) {
         const regexBase64 = /^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)?$/;
         if (!regexBase64.test(configWebpliant.webpliant.icona_pagina)) {
@@ -131,12 +133,12 @@ export class ConfigService implements IConfigService {
 
   async saveConfig(configData: Config): Promise<Config> {
     try {
-      const current = await ConfigModel.findOne();
+      const current = await trovaConfigInstallazione();
       if (current) {
         await current.update(configData as any);
         return current.get({ plain: true }) as any as Config;
       } else {
-        const created = await ConfigModel.create({ id: uuidv4(), ...(configData as any) });
+        const created = await ConfigModel.create({ id: uuidv4(), id_gdo_config: await idGdoCliente(), ...(configData as any) });
         return created.get({ plain: true }) as any as Config;
       }
     } catch (error: any) {
@@ -175,7 +177,7 @@ export class ConfigService implements IConfigService {
 
   async getConfigWebPliantFromVolantino(): Promise<ConfigWebpliant> {
     try {
-      const configWebpliant = await ConfigModel.findOne({ raw: true }) as any as Config;
+      const configWebpliant = await trovaConfigInstallazione({ raw: true }) as any as Config;
       const regexBase64 = /^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)?$/;
       if (!regexBase64.test(configWebpliant.webpliant.icona_pagina)) {
         const url = urlFotoOlimpo(configWebpliant.webpliant.icona_pagina);
@@ -193,7 +195,7 @@ export class ConfigService implements IConfigService {
 
   async getStiliToText(): Promise<string> {
     try {
-      const configDoc = await ConfigModel.findOne({ raw: true }) as any;
+      const configDoc = await trovaConfigInstallazione({ raw: true }) as any;
       if (configDoc == undefined) {
         return "";
       } else {
@@ -210,7 +212,7 @@ export class ConfigService implements IConfigService {
 
   async getColoreDaStile(): Promise<string> {
     try {
-      const configDoc = await ConfigModel.findOne({ raw: true }) as any;
+      const configDoc = await trovaConfigInstallazione({ raw: true }) as any;
       if (configDoc == undefined) {
         return "";
       } else {
@@ -265,7 +267,7 @@ export class ConfigService implements IConfigService {
 
   async getAvvisoManutenzione(): Promise<AvvisoManutenzione | null> {
     try {
-      const configDoc = await ConfigModel.findOne({ raw: true }) as any;
+      const configDoc = await trovaConfigInstallazione({ raw: true }) as any;
       return configDoc?.maintenance_alert ?? null;
     } catch (error: any) {
       throw wrapDatabaseError(error, {
@@ -278,7 +280,7 @@ export class ConfigService implements IConfigService {
 
   async saveAvvisoManutenzione(avviso: AvvisoManutenzione | null): Promise<void> {
     try {
-      const current = await ConfigModel.findOne();
+      const current = await trovaConfigInstallazione();
       if (current) {
         await current.update({ maintenance_alert: avviso } as any);
       }
@@ -293,7 +295,7 @@ export class ConfigService implements IConfigService {
 
   async getRegoleMenabo(): Promise<RegoleMenabo | null> {
     try {
-      const configDoc = await ConfigModel.findOne({ raw: true }) as any;
+      const configDoc = await trovaConfigInstallazione({ raw: true }) as any;
       return configDoc?.regole_menabo ?? null;
     } catch (error: any) {
       throw wrapDatabaseError(error, {
@@ -306,13 +308,46 @@ export class ConfigService implements IConfigService {
 
   async saveRegoleMenabo(regole: RegoleMenabo | null): Promise<void> {
     try {
-      const current = await ConfigModel.findOne();
+      const current = await trovaConfigInstallazione();
       if (current) {
         await current.update({ regole_menabo: regole } as any);
       }
     } catch (error: any) {
       throw wrapDatabaseError(error, {
         message: "Errore durante il salvataggio delle regole menabò",
+        operation: 'update',
+        entity: 'Config',
+      });
+    }
+  }
+
+  async getFunzionalita(idGdo: string | null): Promise<Funzionalita> {
+    try {
+      return funzionalitaDa(await trovaConfigPerGdo(idGdo, { raw: true }));
+    } catch (error: any) {
+      throw wrapDatabaseError(error, {
+        message: "Errore durante il recupero delle funzionalità",
+        operation: 'findOne',
+        entity: 'Config',
+      });
+    }
+  }
+
+  async saveFunzionalita(idGdo: string, funzionalita: Funzionalita): Promise<Funzionalita> {
+    const valore = funzionalitaDa({ funzionalita });
+    try {
+      const propria = await trovaConfigDiGdo(idGdo);
+      if (propria) {
+        await propria.update({ funzionalita: valore });
+      } else {
+        // La GDO non ha ancora una configurazione propria: ne nasce una con le sole funzionalità,
+        // il resto (WebPliant, regole menabò, dashboard) resta quello dell'installazione
+        await ConfigModel.create({ id: uuidv4(), id_gdo_config: idGdo, funzionalita: valore, webpliant: {} } as any);
+      }
+      return valore;
+    } catch (error: any) {
+      throw wrapDatabaseError(error, {
+        message: "Errore durante il salvataggio delle funzionalità",
         operation: 'update',
         entity: 'Config',
       });
