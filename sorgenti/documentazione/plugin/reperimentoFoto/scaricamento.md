@@ -20,6 +20,17 @@ nome**, invece di elencare l'intera cartella. Su una cartella Links con migliaia
 elencare tutto per scaricarne una sola — il caso tipico del cambio foto dalla scheda referenza —
 costava moltissimo.
 
+**Un errore di Olimpo non diventa un file (I20-1125).** Olimpo manda ogni pezzo con 200 (file
+intero) o 206 (un pezzo). Quando non sa risolvere l'id risponde con un errore JSON di poche decine di
+byte, `{"error":"Error getting path for id …","status":500}`, e prima quell'errore finiva nel `.psd`,
+completato di zeri fino alla misura attesa: in una lavorazione nuova 121 loghi su 121, che InDesign non
+impaginava, senza un messaggio. Ora ogni pezzo deve avere lo stato giusto e i byte chiesti
+(`problemaDelPezzo`); se uno non va, o la rete si interrompe, quel file **non si scrive** e quello che
+c'era resta com'era. Alla fine l'operatore riceve `Code SCF-01` con il numero di file non scaricati e il
+primo motivo, compreso il testo dell'errore di Olimpo; ogni file mancato lascia `Code SCF-02` in
+console. La causa trovata in I20-1125 era di configurazione: Istanta caricava i loghi su un Olimpo e il
+Plugin li chiedeva a un altro (l'indirizzo vecchio rimasto nell'ipconfig dopo lo spostamento del server).
+
 ## Variabili
 
 | nome | valore | cos'è |
@@ -31,6 +42,11 @@ costava moltissimo.
 - `downloadImages(listImagesRequired, objProcess, cartella, idOperazione)` → il cuore del file.
   Lo chiamano [ReperimentoFoto](operazioni.md) per la foto singola e per la sincronizzazione massiva.
   `objProcess.onProgress` riceve l'avanzamento.
+- `problemaDelPezzo(stato, byteRicevuti, byteAttesi)` → `null` se il pezzo è quello chiesto (200 o
+  206, e i byte attesi), altrimenti il motivo (I20-1125).
+- `testoDellaRisposta(byteArray, massimo)` → l'inizio di una risposta d'errore, se è testo; vuoto se
+  è un pezzo di file binario.
+- `avvisoNonScaricati(nonScaricati)` → l'avviso `Code SCF-01` per l'operatore, o `null`.
 - `md5ArrayBuffer(arrayBuffer)` → l'md5 di un file letto in memoria. Lo usano anche `getLinkHash`
   e la [parte foto della scheda](schedaFoto.md) per sapere se una foto locale è ancora quella del
   server.
