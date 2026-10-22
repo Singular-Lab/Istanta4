@@ -5296,7 +5296,9 @@ function finalizzaSegnalazioni(reportImpaginazioneObj = { segnalazioni: [] }, co
     //segnalazioni nell'etichetta. Prima ne disegnava una sola, la prima con applicaBollino, con il
     //testo mandato apposta in overflow, e le altre si perdevano. Senza segnalazioni il bollino
     //non si tocca: questa funzione arriva due volte per box, e la seconda con la lista vuota.
-    if (boxImpaginato != null && segnalazioni.length > 0) {
+    //I20-1126: con le segnalazioni disattivate per la lavorazione il bollino non si scrive; il
+    //report del giro (il .txt e il messaggio di fine impaginazione) resta.
+    if (boxImpaginato != null && segnalazioni.length > 0 && !SchermataSegnalazioni.disattivate()) {
         boxImpaginato = Segnalazioni.applicaAlBox(boxImpaginato, segnalazioni.map(s => etichettaSegnalazioni.daSegnalazione(s)));
     }
 

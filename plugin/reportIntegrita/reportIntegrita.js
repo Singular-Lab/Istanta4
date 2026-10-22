@@ -4430,6 +4430,11 @@ const ReportIntegrita = {
             return { azione: "procedi", lette: null };
         }
 
+        //I20-1126: con le segnalazioni disattivate per la lavorazione non si avvisa: il report parte.
+        if (SchermataSegnalazioni.disattivate()) {
+            return { azione: "procedi", lette };
+        }
+
         const testo = SchermataSegnalazioni.testoAvvisoReport(lette);
         if (testo === "") {
             return { azione: "procedi", lette };
