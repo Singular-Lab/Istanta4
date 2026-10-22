@@ -684,6 +684,24 @@ const pluginMiddleware = {
         return contenitori;
     },
 
+    /// I20-1130: gli elementi del box connessi alle foto, che "Seleziona tutte le foto" prende
+    /// insieme a loro (Edro21: le ombre, sy_ombra*). Nomi di etichetta, con l'asterisco come jolly.
+    /// La chiave sta nella configurazione del cliente sul server, come contenitoriNoRender; senza,
+    /// o se non e' una lista, nessun elemento.
+    getElementiConnessiAlleFoto() {
+        let me = this;
+
+        const valore = me.callCustom
+            ? (typeof customAgenzia !== "undefined" && customAgenzia != null ? customAgenzia.elementiConnessiAlleFoto : null)
+            : me.customPluginDB?.elementiConnessiAlleFoto;
+        if (!Array.isArray(valore)) {
+            return [];
+        }
+        return valore
+            .filter(nome => typeof nome === "string" && nome.trim() !== "")
+            .map(nome => nome.trim());
+    },
+
     /// I20-1088: se un meta dei testi del box non si segnala da verificare per la sola versione del
     /// record cambiata (la lista ricaricata con lo stesso valore). Come chiediAmbitoDecisioniLavorazione:
     /// la chiave sta nella configurazione del cliente sul server, e senza vale falso (si controlla).
