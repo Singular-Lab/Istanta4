@@ -243,6 +243,13 @@ jobs:
         working-directory: olimpo
         run: yarn install --immutable
 
+      # I test dei file .ai usano i convertitori reali, come nell'immagine Docker.
+      - name: Install Olimpo native tools
+        if: steps.changes.outputs.olimpo == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ghostscript poppler-utils python3-pikepdf
+
       - name: Test Olimpo
         if: steps.changes.outputs.olimpo == 'true'
         working-directory: olimpo
