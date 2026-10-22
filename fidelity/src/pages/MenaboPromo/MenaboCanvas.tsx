@@ -14,6 +14,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ServerCall } from "../../../lib/server_call";
 import type { MenaboLayoutDivisioneSalvata, MenaboLayoutSalvato, RegoleMenabo } from "../../../lib/types";
 import { useUser } from "../../context/UserContext";
+import { pagineDelGruppo, referenzeDellaPagina } from "./menaboSelezione";
 // ── Document dimensions (A4 in points at 72 dpi) ──────────────────────────
 const DOC_W = 595;
 const DOC_H = 842;
@@ -318,6 +319,8 @@ export default function MenaboCanvas({
     const [pageCount, setPageCount] = useState(0);
     const [items, setItems] = useState<PlacedItem[]>([]);
     const [selectedId, setSelectedId] = useState<string | null>(null);
+    // Pagina della porzione cliccata: l'anteprima mostra solo le referenze del gruppo su quella pagina
+    const [selectedPageIndex, setSelectedPageIndex] = useState<number | null>(null);
     const [zoom, setZoom] = useState(0.82);
     // true dopo il primo zoom manuale: da lì lo zoom non segue più il fit automatico
     const [isZoomManual, setIsZoomManual] = useState(false);
@@ -686,15 +689,11 @@ export default function MenaboCanvas({
         () => items.find(item => item.id === selectedId) ?? null,
         [items, selectedId],
     );
-    const selectedGroupItems = useMemo(() => {
-        if (!selectedItem) return [];
-        return items
-            .filter(item => item.groupId === selectedItem.groupId)
-            .sort((a, b) => a.pageIndex - b.pageIndex);
-    }, [items, selectedItem]);
     const selectedPreviewItems = useMemo(
-        () => selectedGroupItems.flatMap(item => item.records.map(getRecordPreview)),
-        [selectedGroupItems],
+        () => selectedItem
+            ? referenzeDellaPagina(paginated, selectedItem.groupId, selectedPageIndex).map(getRecordPreview)
+            : [],
+        [paginated, selectedItem, selectedPageIndex],
     );
 
     const copyCodiciTimeoutRef = useRef<number | null>(null);
@@ -724,21 +723,16 @@ export default function MenaboCanvas({
     }, [selectedPreviewItems]);
     const selectedGroupPagesLabel = useMemo(() => {
         if (!selectedItem) return "—";
-        const pages = Array.from(
-            new Set(
-                paginated
-                    .flatMap(pageItems => pageItems)
-                    .filter(item => item.groupId === selectedItem.groupId)
-                    .map(item => item.pageIndex + 1),
-            ),
-        ).sort((a, b) => a - b);
+        const pages = pagineDelGruppo(paginated, selectedItem.groupId);
 
         if (pages.length === 0) return String(selectedItem.pageIndex + 1);
         if (pages.length === 1) return String(pages[0]);
 
         const isContinuous = pages.every((page, index) => index === 0 || page === pages[index - 1] + 1);
-        return isContinuous ? `${pages[0]}-${pages[pages.length - 1]}` : pages.join(", ");
-    }, [paginated, selectedItem]);
+        const groupPages = isContinuous ? `${pages[0]}-${pages[pages.length - 1]}` : pages.join(", ");
+        const selectedPage = selectedPageIndex === null ? null : selectedPageIndex + 1;
+        return selectedPage !== null && pages.includes(selectedPage) ? `${selectedPage} di ${groupPages}` : groupPages;
+    }, [paginated, selectedItem, selectedPageIndex]);
     const selectedColor = selectedItem
         ? PALETTE[selectedItem.colorIdx % PALETTE.length]
         : PALETTE[0];
@@ -1742,7 +1736,8 @@ export default function MenaboCanvas({
 
                                                                 return pageItems.map(item => {
                                                                     const color = PALETTE[item.colorIdx % PALETTE.length];
-                                                                    const isSelected = selectedId === item.id;
+                                                                    const isSelectedGroup = selectedId === item.id;
+                                                                    const isSelected = isSelectedGroup && (selectedPageIndex === null || selectedPageIndex === item.pageIndex);
                                                                     const referenceCount = item.records.length;
                                                                     const itemH = Math.max(48 * scale, (referenceCount / denominator) * itemBodyH);
 
@@ -1752,7 +1747,10 @@ export default function MenaboCanvas({
                                                                                 <div
                                                                                     onClick={e => {
                                                                                         e.stopPropagation();
-                                                                                        if (!isLocked) setSelectedId(item.id);
+                                                                                        if (!isLocked) {
+                                                                                            setSelectedId(item.id);
+                                                                                            setSelectedPageIndex(item.pageIndex);
+                                                                                        }
                                                                                     }}
                                                                                     style={{
                                                                                         display: "flex",
@@ -1762,7 +1760,7 @@ export default function MenaboCanvas({
                                                                                         width: "100%",
                                                                                         height: itemH,
                                                                                         padding: `${9 * scale}px ${10 * scale}px ${9 * scale}px ${12 * scale}px`,
-                                                                                        border: `${(isSelected ? 1.4 : 1) * scale}px solid ${hexToRgba(color, isSelected ? 0.62 : 0.28)}`,
+                                                                                        border: `${(isSelected ? 1.4 : 1) * scale}px solid ${hexToRgba(color, isSelected ? 0.62 : isSelectedGroup ? 0.45 : 0.28)}`,
                                                                                         borderRadius: 6 * scale,
                                                                                         background: `linear-gradient(90deg, ${hexToRgba(color, 0.12)} 0 ${4 * scale}px, rgba(255,255,255,0.96) ${4 * scale}px 100%)`,
                                                                                         boxShadow: isSelected
@@ -1865,7 +1863,10 @@ export default function MenaboCanvas({
                                                                             {!isLocked && (
                                                                                 <ContextMenuContent className="z-[999999] bg-white text-slate-700 border border-slate-200 shadow-xl">
                                                                                     <ContextMenuItem
-                                                                                        onClick={() => setSelectedId(item.id)}
+                                                                                        onClick={() => {
+                                                                                            setSelectedId(item.id);
+                                                                                            setSelectedPageIndex(item.pageIndex);
+                                                                                        }}
                                                                                     >
                                                                                         <Lucide icon="MousePointer2" className="h-3.5 w-3.5" />
                                                                                         Seleziona
@@ -2146,7 +2147,7 @@ export default function MenaboCanvas({
                                     </div>
                                 </div>
                                 <div className="rounded border border-slate-200/80 bg-slate-50 px-2.5 py-2 dark:border-darkmode-400 dark:bg-darkmode-700/40">
-                                    <div className="text-slate-400">Pagine</div>
+                                    <div className="text-slate-400">Pagina</div>
                                     <div className="mt-0.5 font-semibold tabular-nums text-slate-700 dark:text-slate-100">
                                         {selectedGroupPagesLabel}
                                     </div>
