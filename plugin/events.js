@@ -75,6 +75,7 @@ class InddEvents {
     EVENT_NEW_ARTWORK_MULTIREF_POTENTIAL_SELECTED = "newArtworkMultiRefSelected";//Nuovo possibile artwork
     EVENT_NEW_ARTWORK_SELECTED = "newArtworkSelected";//Nuova artwork selezionata
     EVENT_NEW_GRIGLIA_SELECTED = "newGrigliaSelected";//Nuova griglia selezionata
+    EVENT_NEW_BOX_GRIGLIA_SELECTED = "newBoxGrigliaSelected";//TASK-13f15b99: selezionati soltanto box della griglia: [griglia, box]
     
     EVENT_NO_REF_SELECTED = "noRefSelected";//Nessuna ref selezionata
     EVENT_NEW_REF_FIELD_SELECTED = "newRefFieldSelected";//Nuovo campo ref selezionato
@@ -304,6 +305,12 @@ class InddEvents {
                                             me.fireEvent(me.EVENT_NEW_GRIGLIA_SELECTED, [el]);
                                             me.previousSelectionEventTriggered = me.EVENT_NEW_GRIGLIA_SELECTED;
                                         }
+                                        //TASK-13f15b99: un box della griglia non e' una selezione sconosciuta: la
+                                        //schermata Griglia resta aperta e la sua riga si evidenzia (indexNew).
+                                        else if (me.eBoxDiGriglia(el)) {
+                                            me.fireEvent(me.EVENT_NEW_BOX_GRIGLIA_SELECTED, [el.parent, [el]]);
+                                            me.previousSelectionEventTriggered = me.EVENT_NEW_BOX_GRIGLIA_SELECTED;
+                                        }
                                         else if (el.constructor.name == "Group") {
 
                                             //Analisi dell'elemento base
@@ -441,72 +448,81 @@ class InddEvents {
                                         
                                         me.lastSelectionID = newIDSelection;
 
-                                        let isMultiRefs = true;
-                                        me.lastSelectionDetails = [];
-                                        let refInvalidCounted = 0;
-                                        var potentialArtwork = null;
-                                        for (let t = 0; t < app.selection.length; t++) {
-                                            let potentialRef = app.selection[t];
-                                            if (potentialRef.isInvalid){
-                                                console.error("Element isInvalid");
-                                                return;
-                                            }
+                                        //TASK-13f15b99: piu' box della griglia e nient'altro: non e' una multiselezione
+                                        //sconosciuta, e' la griglia (vedi la selezione singola).
+                                        let grigliaDeiBox = me.grigliaDeiBoxSelezionati(app.selection);
+                                        if (grigliaDeiBox != null) {
+                                            me.fireEvent(me.EVENT_NEW_BOX_GRIGLIA_SELECTED, [grigliaDeiBox, Array.from(app.selection)]);
+                                            me.previousSelectionEventTriggered = me.EVENT_NEW_BOX_GRIGLIA_SELECTED;
+                                        }
+                                        else {
+                                            let isMultiRefs = true;
+                                            me.lastSelectionDetails = [];
+                                            let refInvalidCounted = 0;
+                                            var potentialArtwork = null;
+                                            for (let t = 0; t < app.selection.length; t++) {
+                                                let potentialRef = app.selection[t];
+                                                if (potentialRef.isInvalid){
+                                                    console.error("Element isInvalid");
+                                                    return;
+                                                }
 
                                             
-                                            if (potentialRef.constructor.name != "Group") {
-                                                refInvalidCounted++;
-                                                if(refInvalidCounted > 1){
-                                                    break;
-                                                }
-                                                potentialArtwork = potentialRef;
-                                                isMultiRefs = false;
-                                            }
-                                            else{
-                                                let dna=Utility.getDnaOfBox(potentialRef);
-                                                if (dna==null)
-                                                {
-                                                    isMultiRefs=false;
+                                                if (potentialRef.constructor.name != "Group") {
                                                     refInvalidCounted++;
-                                                    potentialArtwork = potentialRef;
-
                                                     if(refInvalidCounted > 1){
                                                         break;
                                                     }
+                                                    potentialArtwork = potentialRef;
+                                                    isMultiRefs = false;
                                                 }
-                                                else
-                                                {
-                                                    let pagNumber = potentialRef.parentPage == null ? -1 : parseInt(potentialRef.parentPage.name);
+                                                else{
+                                                    let dna=Utility.getDnaOfBox(potentialRef);
+                                                    if (dna==null)
+                                                    {
+                                                        isMultiRefs=false;
+                                                        refInvalidCounted++;
+                                                        potentialArtwork = potentialRef;
+
+                                                        if(refInvalidCounted > 1){
+                                                            break;
+                                                        }
+                                                    }
+                                                    else
+                                                    {
+                                                        let pagNumber = potentialRef.parentPage == null ? -1 : parseInt(potentialRef.parentPage.name);
     
-                                                    me.lastSelectionDetails.push({
-                                                        pag: pagNumber,
-                                                        pagRef: potentialRef.parentPage,
-                                                        item: potentialRef,
-                                                        codice: dna.codice,
-                                                        codiceGruppo: dna.codice_gruppo,
-                                                        meccanica: dna.box
-                                                    });
+                                                        me.lastSelectionDetails.push({
+                                                            pag: pagNumber,
+                                                            pagRef: potentialRef.parentPage,
+                                                            item: potentialRef,
+                                                            codice: dna.codice,
+                                                            codiceGruppo: dna.codice_gruppo,
+                                                            meccanica: dna.box
+                                                        });
+                                                    }
                                                 }
+
+
                                             }
 
+                                            if (isMultiRefs) 
+                                            {
+                                                me.lastValidRefsSelection.dataSelezione = Date.now();
+                                                me.lastValidRefsSelection.refs = me.lastSelectionDetails;
 
-                                        }
-
-                                        if (isMultiRefs) 
-                                        {
-                                            me.lastValidRefsSelection.dataSelezione = Date.now();
-                                            me.lastValidRefsSelection.refs = me.lastSelectionDetails;
-
-                                            me.fireEvent(me.EVENT_NEW_MULTIREF_SELECTED, me.lastSelectionDetails);
-                                            me.previousSelectionEventTriggered = me.EVENT_NEW_MULTIREF_SELECTED;
-                                        }
-                                        else if(refInvalidCounted == 1){
-                                            me.fireEvent(me.EVENT_NEW_ARTWORK_MULTIREF_POTENTIAL_SELECTED, [me.lastSelectionDetails, potentialArtwork]);
-                                            me.previousSelectionEventTriggered = me.EVENT_NEW_ARTWORK_MULTIREF_POTENTIAL_SELECTED;
-                                        }
-                                        else
-                                        {
-                                            me.fireEvent(me.EVENT_NEW_MULTISELECTION, app.selection);
-                                            me.previousSelectionEventTriggered = me.EVENT_NEW_MULTISELECTION;
+                                                me.fireEvent(me.EVENT_NEW_MULTIREF_SELECTED, me.lastSelectionDetails);
+                                                me.previousSelectionEventTriggered = me.EVENT_NEW_MULTIREF_SELECTED;
+                                            }
+                                            else if(refInvalidCounted == 1){
+                                                me.fireEvent(me.EVENT_NEW_ARTWORK_MULTIREF_POTENTIAL_SELECTED, [me.lastSelectionDetails, potentialArtwork]);
+                                                me.previousSelectionEventTriggered = me.EVENT_NEW_ARTWORK_MULTIREF_POTENTIAL_SELECTED;
+                                            }
+                                            else
+                                            {
+                                                me.fireEvent(me.EVENT_NEW_MULTISELECTION, app.selection);
+                                                me.previousSelectionEventTriggered = me.EVENT_NEW_MULTISELECTION;
+                                            }
                                         }
                                     }
                                 }
@@ -704,6 +720,43 @@ class InddEvents {
     async test() {
         let res = await app.activeWindow;
         console.log(res.activePage.name);
+    }
+
+    /// TASK-13f15b99: un box della griglia e' un gruppo con etichetta "box_N" dentro il gruppo
+    /// della griglia (etichetta "griglia..."). E' la stessa regola di griglia.js (mappaturaGriglia).
+    eBoxDiGriglia(item) {
+        try {
+            if (item == null || item.constructor.name != "Group" || typeof item.label != "string" ||
+                !item.label.toLowerCase().startsWith("box")) {
+                return false;
+            }
+            const genitore = item.parent;
+            return genitore != null && typeof genitore.label == "string" && genitore.label.toLowerCase().startsWith("griglia");
+        }
+        catch (e) {
+            return false;
+        }
+    }
+
+    /// Se la selezione e' fatta soltanto di box della griglia torna la griglia che li contiene,
+    /// quella del primo; altrimenti null. Una selezione vuota non e' di box.
+    grigliaDeiBoxSelezionati(selezione) {
+        let items = [];
+        try {
+            items = Array.from(selezione);
+        }
+        catch (e) {
+            return null;
+        }
+        if (items.length == 0) {
+            return null;
+        }
+        for (let i = 0; i < items.length; i++) {
+            if (!this.eBoxDiGriglia(items[i])) {
+                return null;
+            }
+        }
+        return items[0].parent;
     }
 
     /// Da una selezione grezza di InDesign capisce cosa ha selezionato l'operatore DAVVERO:

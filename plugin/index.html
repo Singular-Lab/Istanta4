@@ -234,6 +234,35 @@
   .valorePercorso { flex: 1; min-height: 16px; margin-right: 8px; padding: 6px 8px; background-color: #eeeeee; border-radius: 4px; font-size: 11px; color: #333333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; user-select: none; }
   .rigaPercorso.percorsoMancante .valorePercorso { color: #b03030; font-style: italic; }
   .piedePercorsi { display: flex; justify-content: flex-end; padding: 8px; }
+  /* TASK-13f15b99: la schermata Griglia. Sezioni di opzioni e righe a scheda degli elenchi (griglia.js). */
+  .grigliaSezione { border: 1px solid #4a4a4a; border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; background-color: #2b2b2b; }
+  .grigliaSezioneTitolo { font-size: 11px; font-weight: bold; letter-spacing: 0.5px; text-transform: uppercase; color: #9bd0ff; margin-bottom: 6px; }
+  .grigliaSezioneCorpo { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .grigliaSezioneCorpo sp-slider { flex: 1 1 160px; min-width: 140px; }
+  .grigliaSezioneCorpo sp-action-button { font-size: 12px; flex: 0 0 auto; white-space: nowrap; }
+  .grigliaModalita { display: flex; align-items: center; gap: 6px; margin-left: auto; color: #cfcfcf; font-size: 11px; white-space: nowrap; }
+  .grigliaElenco { display: flex; flex-direction: column; }
+  .grigliaRiga { display: flex; align-items: center; gap: 8px; padding: 5px 8px; margin-bottom: 4px; border-radius: 6px; border: 1px solid transparent; border-left: 4px solid #8a8a8a; background-color: #2f2f2f; color: white; min-height: 30px; box-sizing: border-box; }
+  .grigliaRiga.pari { background-color: #383838; }
+  .grigliaRiga:hover { background-color: #444444; }
+  .grigliaRiga.piena { border-left-color: #4caf50; }
+  .grigliaRiga.vuota { border-left-color: #8a8a8a; color: #bdbdbd; }
+  .grigliaRiga.bloccata { border-left-color: #e53935; }
+  .grigliaRiga.ingombroSpeciale { border-left-color: #fb8c00; }
+  .grigliaRiga.esclusa { border-left-color: #e53935; }
+  .grigliaRiga.avanzata { border-left-color: #fb8c00; }
+  .grigliaRiga.selezionata { border-color: #42a5f5; background-color: #1f3a52; }
+  .grigliaNumero { flex: 0 0 auto; min-width: 22px; height: 22px; border-radius: 11px; background-color: #4a4a4a; color: white; font-size: 11px; font-weight: bold; display: flex; align-items: center; justify-content: center; padding: 0 5px; box-sizing: border-box; }
+  .grigliaRiga.selezionata .grigliaNumero { background-color: #42a5f5; }
+  .grigliaTesto { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+  .grigliaTitolo { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .grigliaSottotitolo { font-size: 10px; color: #a0a0a0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .grigliaStato { flex: 0 0 auto; font-size: 10px; padding: 1px 6px; border-radius: 8px; border: 1px solid #666666; color: #cfcfcf; white-space: nowrap; }
+  .grigliaRiga.bloccata .grigliaStato { border-color: #e53935; color: #ff8a80; }
+  .grigliaAzioni { flex: 0 0 auto; display: flex; align-items: center; gap: 2px; }
+  .grigliaAzioni img { width: 18px; height: 18px; padding: 3px; border-radius: 4px; cursor: pointer; object-fit: contain; box-sizing: content-box; }
+  .grigliaAzioni img:hover { background-color: #5a5a5a; }
+  .grigliaVuoto { font-size: 12px; color: #bdbdbd; padding: 6px 8px; margin-bottom: 4px; }
 </style>
 <header>
 
@@ -718,31 +747,34 @@
         <!-- tabGriglia -->
         <div style="margin: 0px; padding: 0px; width: 100%; display: none;">
           <div id="TabGriglia" style="width: 100%; display: none;" class="tabcontent">
-            <sp-label size="l" slot="label">Opzioni Griglia</sp-label>
-            <div class="row" id="comandiGriglia" style="width: 100%; display: flex; margin-bottom:6px;">
-              <sp-slider id="sliderTrasparenzaGriglia" variant="filled" fill-offset="left" min="0" max="100" value="50"
-                style="width: 25%;" onchange="grigliaJs.setOpacityGriglia($(this).val(), $('#TabGriglia').data('griglia'))">
-                <sp-label slot="label">Trasparenza Griglia</sp-label>
-              </sp-slider>
-              <sp-action-button style="font-size: 12px; margin:1px;" id="ricalcaGriglia"
-                onclick="grigliaJs.svuotaConteggio($('#TabGriglia').data('griglia'))">Svuota conteggio</sp-action-button>
+            <!-- TASK-13f15b99: due sezioni compatte, Griglia e Ricalco, e sotto l'elenco dei box a righe (griglia.js). -->
+            <div class="grigliaSezione">
+              <div class="grigliaSezioneTitolo">Griglia</div>
+              <div class="grigliaSezioneCorpo" id="comandiGriglia">
+                <sp-slider id="sliderTrasparenzaGriglia" variant="filled" fill-offset="left" min="0" max="100" value="50"
+                  onchange="grigliaJs.setOpacityGriglia($(this).val(), $('#TabGriglia').data('griglia'))">
+                  <sp-label slot="label">Trasparenza</sp-label>
+                </sp-slider>
+                <sp-action-button id="svuotaConteggioGriglia"
+                  onclick="grigliaJs.svuotaConteggio($('#TabGriglia').data('griglia'))">Svuota conteggio</sp-action-button>
+              </div>
             </div>
-            <sp-label size="l" slot="label">Opzioni ricalco</sp-label>
-            <div class="row" id="comandiGriglia" style="width: 100%; display: flex; margin-bottom:6px;">
-              <sp-action-button style="font-size: 12px; margin:1px;" id="ricalcaGriglia"
-                onclick="grigliaJs.ricalcaConteggio($('#TabGriglia').data('griglia'))">Conteggio ricalco</sp-action-button>
-              <sp-action-button style="font-size: 12px; margin:1px;" id="ricalcaGriglia"
-                onclick="grigliaJs.ricalca($('#TabGriglia').data('griglia'))">Ricalco</sp-action-button>
-              <div style="display: flex; flex-direction: column; align-items: center;">
-                <sp-label size="m" slot="label" style="margin-bottom: -10px;">Modalità</sp-label>
-                <div style="display: flex; align-items: center;">
-                  <sp-label size="s" style="margin-right: 5px;">Magnetico</sp-label>
+            <div class="grigliaSezione">
+              <div class="grigliaSezioneTitolo">Ricalco</div>
+              <div class="grigliaSezioneCorpo" id="comandiRicalco">
+                <sp-action-button id="conteggioRicalcoGriglia"
+                  onclick="grigliaJs.ricalcaConteggio($('#TabGriglia').data('griglia'))">Conteggio ricalco</sp-action-button>
+                <sp-action-button id="ricalcaGriglia"
+                  onclick="grigliaJs.ricalca($('#TabGriglia').data('griglia'))">Ricalco</sp-action-button>
+                <div class="grigliaModalita">
+                  <span>Magnetico</span>
                   <sp-switch id="toggleMode"></sp-switch>
-                  <sp-label size="s" style="margin-left: 5px;">Sequenziale</sp-label>
+                  <span>Sequenziale</span>
                 </div>
               </div>
             </div>
-            <div class="panel" id="GrigliaEdit" style="margin-top: 15px;">
+            <div class="grigliaSezioneTitolo">Box della griglia</div>
+            <div class="grigliaElenco" id="GrigliaEdit">
             </div>
           </div>
         </div>

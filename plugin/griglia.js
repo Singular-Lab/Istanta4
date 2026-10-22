@@ -8,6 +8,15 @@ const InddEvents = require('./events');
 ///
 /// Questo file non ricorda quasi niente fra una chiamata e l'altra: la memoria sta nel documento,
 /// nelle label dei riquadri, nel formato codice_associato$CODICE$IDREC.
+///
+/// TASK-13f15b99: il pannello che accompagna la griglia e' un elenco di righe a scheda, una per
+/// box (compilaGriglia, _rigaBox) e una per referenza esclusa o avanzata (mostraElementiAvanzati,
+/// _rigaElemento): numero, stato a colore, testo abbreviato con il testo intero nel suggerimento,
+/// e le azioni come icone uniformi (_iconaAzione). Ogni box ha Seleziona, che lo porta nella
+/// selezione di InDesign da solo o insieme agli altri box della griglia gia' selezionati
+/// (selezionaBoxInGriglia, selezioneConBox); le righe dei box selezionati si evidenziano
+/// (evidenziaBoxSelezionati), anche quando la selezione la fa l'operatore nel documento, perche'
+/// events.js la riconosce e indexNew la riporta qui invece di chiudere la schermata.
 const griglia = {
     /// Riempie i riquadri della griglia con le referenze. GRD-01 se la griglia non e' valida.
     async compilaGriglia(griglia, mappaGriglia = null) {
@@ -55,14 +64,31 @@ const griglia = {
             mappaGriglia.sort((a, b) => parseInt(a.box.label.split("_")[1]) - parseInt(b.box.label.split("_")[1]));
             for (let i = 0; i < mappaGriglia.length; i++) {
                 let gruppo = mappaGriglia[i];
-                var row = $('<div class="row align-items-center" style="margin-bottom:10px"></div>'); // Crea una nuova riga
-                var text = $('<span>Box ' + (i + 1) + ': ' + (gruppo.infoPresenti ? gruppo.info.substring(0, 25).replace(/\n/g, " ") + "..." : "") + '</span>'); // Crea il testo
-                text.css({ "font-size": "12px", "color": (i % 2 == 0 ? "white" : "lightgreen"), "width": "80%" });
-                row.append(text); // Aggiunge il testo alla riga
-                var iconBar = $('<div class="icon-bar" style="display: flex; gap: 10px;"></div>');
+                //TASK-13f15b99: la riga a scheda con numero, stato e testo; le azioni vanno in iconBar.
+                var row = me._rigaBox(i + 1, gruppo);
+                //La barra delle azioni si tiene per riferimento e si appende in coda: una ricerca con
+                //find su una riga non ancora nel documento, nel DOM di UXP, non trova niente.
+                var iconBar = me._barraAzioni();
+                row.append(iconBar);
+
+                //Seleziona: il box entra nella selezione di InDesign, da solo o insieme agli altri box
+                //della griglia gia' selezionati (selezionaBoxInGriglia). Vale anche per un box vuoto.
+                var selezionaIcon = me._iconaAzione("images/selezionaBox.png", "Seleziona in InDesign");
+                selezionaIcon.addClass("grigliaSeleziona");
+                selezionaIcon.on('click', function () {
+                    //Interruttore: sulla riga evidenziata l'azione e' Deseleziona. Icona e suggerimento li
+                    //tiene allineati allo stato della riga evidenziaBoxSelezionati.
+                    if ($(this).closest(".grigliaRiga").hasClass("selezionata")) {
+                        me.deselezionaBoxInGriglia(gruppo.box, griglia);
+                    }
+                    else {
+                        me.selezionaBoxInGriglia(gruppo.box);
+                    }
+                });
+                iconBar.append(selezionaIcon);
 
                 // Icona punto rosso o punto rosso spento
-                var puntoRossoIcon = $('<img title="Blocca box" src="' + (gruppo.bloccato ? "images/boxBloccato.png" : "images/boxSbloccato.png") + '" alt="punto_rosso" style="cursor: pointer; height: 15px; margin-right:5px;">');
+                var puntoRossoIcon = me._iconaAzione(gruppo.bloccato ? "images/boxBloccato.png" : "images/boxSbloccato.png", "Blocca box");
                 puntoRossoIcon.on('click', function () {
                     //se il gruppo è pieno
                     if (!gruppo.infoPresenti || gruppo.bloccato) {
@@ -146,7 +172,7 @@ const griglia = {
                 if (!gruppo.infoPresenti) {
 
                     // Icona includi
-                    var includiIcon = $('<img title="Includi elemento" src="images/includi.png" alt="includi" style="cursor: pointer; height: 15px; margin-right:5px;">');
+                    var includiIcon = me._iconaAzione("images/includi.png", "Includi elemento");
                     includiIcon.on('click', function () {
                         //ci recuperiamo da listaRefConteggio la pagina pageName, leggiamo il suo codice filtro e prendiamo tutte le pagine (inclusa se stessa) con lo stesso codice filtro
                         //facciamo un array con i nomi delle pagine e lo passiamo a modalSelezioneElementoIncludiEscludi
@@ -175,7 +201,7 @@ const griglia = {
                     iconBar.append(includiIcon);
                 } else if (gruppo.infoPresenti) {
                     // Icona lock/unlock
-                    var lockIcon = $('<img title="Ferma ref conteggiata" src="' + (gruppo.lock ? "images/locked.png" : "images/unlocked.png") + '" alt="lock" style="cursor: pointer; height: 15px; margin-right:5px;">');
+                    var lockIcon = me._iconaAzione(gruppo.lock ? "images/locked.png" : "images/unlocked.png", "Ferma ref conteggiata");
                     lockIcon.on('click', function () {
                         var lockElement = me.getChildBoxByLabel(gruppo.box, "lock");
                         lockElement.visible = !lockElement.visible;
@@ -184,7 +210,7 @@ const griglia = {
                     iconBar.append(lockIcon);
 
                     // Icona escludi
-                    var escludiIcon = $('<img title="Escludi elemento" src="images/escludi.png" alt="escludi" style="cursor: pointer; height: 15px; margin-right:5px;">');
+                    var escludiIcon = me._iconaAzione("images/escludi.png", "Escludi elemento");
                     escludiIcon.on('click', async function () {
                         var res = await Modali.confirmCustom("Escludere l'elemento da tutte le pagine associate al filtro o solo dalla pagina corrente?", "Pagina "+pageName, 1, "Pagine filtro", 2);
                         if (res.result) {
@@ -228,7 +254,7 @@ const griglia = {
                     iconBar.append(escludiIcon);
 
                     // Icona includiEscludi
-                    var includiEscludiIcon = $('<img title="Scambia elemento con elemento escluso" src="images/includiEscludi.png" alt="includiEscludi" style="cursor: pointer; height: 15px; margin-right:5px;">');
+                    var includiEscludiIcon = me._iconaAzione("images/includiEscludi.png", "Scambia elemento con elemento escluso");
                     includiEscludiIcon.on('click', async function () {
                         var res = await Modali.confirmCustom("Escludere l'elemento da tutte le pagine associate al filtro o solo dalla pagina corrente?", "Pagina "+pageName, 1, "Pagine filtro", 2);
                         if (res.result) {
@@ -275,7 +301,7 @@ const griglia = {
                 }
 
                 // Icona swap
-                var swapIcon = $('<img title="Scambia elementi in griglia" src="images/swap.png" alt="swap" style="cursor: pointer; height: 15px; margin-right:5px;">');
+                var swapIcon = me._iconaAzione("images/swap.png", "Scambia elementi in griglia");
                 swapIcon.on('click', function () {
                     me.swap(gruppo, mappaGriglia, griglia, pageName);
                 });
@@ -285,13 +311,10 @@ const griglia = {
                     iconBar.append(me.creaPulsanteInfoIspezioneDatoDaGruppo(pageName, gruppo));
                 }
 
-                row.append(iconBar); // Aggiunge la barra delle icone alla riga
-
-                $("#GrigliaEdit").append(row); // Aggiunge la riga a #GrigliaEdit
-                if (i < mappaGriglia.length - 1) {
-                    $("#GrigliaEdit").append('<hr>');
-                }
+                $("#GrigliaEdit").append(row);
             }
+            //Le righe dei box che sono gia' nella selezione di InDesign.
+            me.evidenziaBoxSelezionati(null);
         }
         catch (e) {
             console.error(e);
@@ -302,6 +325,188 @@ const griglia = {
                 hideLoading();
             }
         }
+    },
+
+    /* ---- TASK-13f15b99: la selezione dei box e le righe del pannello ---- */
+
+    /// La selezione che risulta premendo Seleziona su un box. Se quella corrente e' fatta soltanto
+    /// di box della griglia, il box si aggiunge, senza doppioni: una selezione multipla. Altrimenti,
+    /// vuota o con dentro qualcos'altro, il box la sostituisce. Pura: decide, non seleziona; eBox
+    /// dice se un elemento e' un box della griglia.
+    selezioneConBox(selezioneCorrente, box, eBox) {
+        var attuale = Array.isArray(selezioneCorrente) ? selezioneCorrente.filter(el => el != null) : [];
+        var soloBox = attuale.length > 0 && attuale.every(el => eBox(el));
+        if (!soloBox) {
+            return [box];
+        }
+        var giaDentro = attuale.some(el => el === box || (el.id != null && box.id != null && el.id == box.id));
+        return giaDentro ? attuale : attuale.concat([box]);
+    },
+
+    /// Seleziona: porta il box nella selezione di InDesign con la regola di selezioneConBox e
+    /// evidenzia subito le righe. Il ciclo degli eventi, riconoscendo una selezione di soli box
+    /// della griglia, tiene aperta la schermata (events.js, EVENT_NEW_BOX_GRIGLIA_SELECTED).
+    selezionaBoxInGriglia(box) {
+        try {
+            if (box == null || !box.isValid) {
+                messaggioUtente("Code GRD-41 Il box della griglia non esiste piu': ricalcolare la griglia.", "warning");
+                return false;
+            }
+            var corrente = [];
+            try {
+                corrente = Array.from(app.selection);
+            } catch (e) {
+                corrente = [];
+            }
+            var nuova = this.selezioneConBox(corrente, box, el => indesignEvents.eBoxDiGriglia(el));
+            app.selection = nuova;
+            this.evidenziaBoxSelezionati(nuova);
+            return true;
+        }
+        catch (e) {
+            console.error(e);
+            messaggioUtente("Code GRD-42 Il box della griglia non si e' potuto selezionare.", "error");
+            return false;
+        }
+    },
+
+    /// La selezione senza il box, tolto per identita' o per id. Pura: vuota se il box era l'unico.
+    selezioneSenzaBox(selezioneCorrente, box) {
+        var attuale = Array.isArray(selezioneCorrente) ? selezioneCorrente.filter(el => el != null) : [];
+        return attuale.filter(el => !(el === box || (el.id != null && box != null && box.id != null && el.id == box.id)));
+    },
+
+    /// Deseleziona: toglie il box dalla selezione di InDesign. Se non resta niente seleziona la
+    /// griglia stessa: una selezione vuota, per il ciclo degli eventi, e' l'uscita dalla griglia e
+    /// chiuderebbe la schermata. Lo scambio dei box fa lo stesso a fine operazione.
+    deselezionaBoxInGriglia(box, griglia) {
+        try {
+            var corrente = [];
+            try {
+                corrente = Array.from(app.selection);
+            } catch (e) {
+                corrente = [];
+            }
+            var rimasta = this.selezioneSenzaBox(corrente, box);
+            if (rimasta.length == 0) {
+                app.selection = griglia != null && griglia.isValid ? [griglia] : null;
+                this.evidenziaBoxSelezionati([]);
+                return true;
+            }
+            app.selection = rimasta;
+            this.evidenziaBoxSelezionati(rimasta);
+            return true;
+        }
+        catch (e) {
+            console.error(e);
+            messaggioUtente("Code GRD-43 Il box della griglia non si e' potuto deselezionare.", "error");
+            return false;
+        }
+    },
+
+    /// Evidenzia nell'elenco le righe dei box selezionati in InDesign, e spegne le altre; sulla
+    /// riga evidenziata l'icona diventa Deseleziona. Senza argomento legge la selezione corrente.
+    evidenziaBoxSelezionati(boxSelezionati) {
+        var me = this;
+        var selezione = boxSelezionati;
+        if (selezione == null) {
+            try {
+                selezione = Array.from(app.selection);
+            } catch (e) {
+                selezione = [];
+            }
+        }
+        var ids = {};
+        for (var i = 0; i < selezione.length; i++) {
+            try {
+                if (selezione[i] != null && selezione[i].id != null) {
+                    ids[String(selezione[i].id)] = true;
+                }
+            } catch (e) {
+                //un elemento non piu' valido non si evidenzia
+            }
+        }
+        $("#GrigliaEdit .grigliaRiga").each(function () {
+            var riga = $(this);
+            var selezionata = ids[String(riga.attr("data-box-id"))] === true;
+            riga.toggleClass("selezionata", selezionata);
+            var icona = riga.find(".grigliaSeleziona");
+            if (icona.length > 0) {
+                icona.attr("src", selezionata ? "images/deselezionaBox.png" : "images/selezionaBox.png");
+                me._impostaSuggerimento(icona, selezionata ? "Deseleziona in InDesign" : "Seleziona in InDesign");
+            }
+        });
+    },
+
+    /// La riga a scheda di un box dell'elenco: numero, stato (colore del bordo e etichetta), testo
+    /// abbreviato con il testo intero nel suggerimento, codice associato in piccolo, e la barra
+    /// delle azioni la aggiunge chi chiama (_barraAzioni). data-box-id serve all'evidenza.
+    _rigaBox(numero, gruppo) {
+        var stato = gruppo.bloccato ? "bloccata" : (gruppo.infoPresenti ? "piena" : "vuota");
+        var classi = "grigliaRiga " + stato + (gruppo.ingombroSpeciale ? " ingombroSpeciale" : "") + (numero % 2 == 0 ? " pari" : "");
+        var testoIntero = gruppo.infoPresenti ? String(gruppo.info).replace(/\s+/g, " ").trim() : "";
+        var titolo = gruppo.infoPresenti ? testoIntero : "Box vuoto";
+        var sottotitolo = gruppo.codiceAssociato != null && gruppo.codiceAssociato != "" ? String(gruppo.codiceAssociato) : "";
+        var etichettaStato = gruppo.bloccato ? "Bloccato" : (gruppo.infoPresenti ? "" : "Vuoto");
+        var riga = this._rigaElenco(numero, classi, titolo, sottotitolo, etichettaStato, testoIntero);
+        riga.attr("data-box-id", gruppo.box != null ? String(gruppo.box.id) : "");
+        return riga;
+    },
+
+    /// La riga di una referenza negli elenchi delle escluse e delle avanzate: stesso formato.
+    _rigaElemento(numero, descrizione, codiceGruppo, classe) {
+        var testo = descrizione != null ? String(descrizione).replace(/\s+/g, " ").trim() : "";
+        var classi = "grigliaRiga " + classe + (numero % 2 == 0 ? " pari" : "");
+        return this._rigaElenco(numero, classi, testo, codiceGruppo != null ? String(codiceGruppo) : "", "", testo);
+    },
+
+    _rigaElenco(numero, classi, titolo, sottotitolo, etichettaStato, suggerimento) {
+        var riga = $('<div></div>').attr("class", classi);
+        riga.append($('<span class="grigliaNumero"></span>').text(String(numero)));
+        var testo = $('<div class="grigliaTesto"></div>');
+        testo.append($('<span class="grigliaTitolo"></span>').text(titolo));
+        if (sottotitolo != "") {
+            testo.append($('<span class="grigliaSottotitolo"></span>').text(sottotitolo));
+        }
+        if (suggerimento != null && suggerimento != "") {
+            this._impostaSuggerimento(testo, suggerimento);
+        }
+        riga.append(testo);
+        if (etichettaStato != "") {
+            riga.append($('<span class="grigliaStato"></span>').text(etichettaStato));
+        }
+        return riga;
+    },
+
+    /// La barra delle azioni di una riga (.grigliaAzioni): chi costruisce la riga la crea, la
+    /// riempie e la appende in coda. Non si cerca con find nella riga staccata dal documento.
+    _barraAzioni() {
+        return $('<div class="grigliaAzioni"></div>');
+    },
+
+    /// Un'icona della barra delle azioni: misura e suggerimento uniformi (stili in index.html).
+    _iconaAzione(src, suggerimento) {
+        var icona = $('<img>').attr("src", src).attr("alt", suggerimento);
+        this._impostaSuggerimento(icona, suggerimento);
+        return icona;
+    },
+
+    /// Il suggerimento si scrive come attributo (tooltip.js): la proprieta' .title in UXP non lo crea.
+    _impostaSuggerimento(elemento, testo) {
+        if (typeof Tooltip !== "undefined" && Tooltip != null) {
+            Tooltip.impostaTooltip(elemento.get(0), testo);
+        }
+        else {
+            elemento.attr("title", testo);
+        }
+    },
+
+    _titoloSezione(testo) {
+        return $('<div class="grigliaSezioneTitolo"></div>').text(testo);
+    },
+
+    _rigaVuota(testo) {
+        return $('<div class="grigliaVuoto"></div>').text(testo);
     },
 
     /// Legge cosa c'e' nei riquadri e ne fa una mappa.
@@ -394,7 +599,11 @@ const griglia = {
     },
 
     creaPulsanteInfoIspezioneDato(recordInTracciato, dimensione = 20) {
-        var infoIcon = $('<img title="Ispeziona dato" src="images/info.png" alt="info" style="cursor: pointer; width: ' + dimensione + 'px; height: ' + dimensione + 'px; margin-right:5px;">');
+        var infoIcon = this._iconaAzione("images/info.png", "Ispeziona dato");
+        //Fuori dalle righe del pannello la misura la decide chi chiama; dentro vale quella delle righe.
+        if (dimensione != null) {
+            infoIcon.css({ "width": dimensione + "px", "height": dimensione + "px" });
+        }
         infoIcon.on('click', function (e) {
             e.preventDefault();
             e.stopPropagation();
@@ -412,7 +621,7 @@ const griglia = {
 
     creaPulsanteInfoIspezioneDatoDaGruppo(pagName, gruppo) {
         let me = this;
-        var infoIcon = $('<img title="Ispeziona dato" src="images/info.png" alt="info" style="cursor: pointer; width: 15px; height: 15px; margin-right:5px;">');
+        var infoIcon = this._iconaAzione("images/info.png", "Ispeziona dato");
         infoIcon.on('click', function (e) {
             e.preventDefault();
             e.stopPropagation();
@@ -504,12 +713,8 @@ const griglia = {
         let me = this;
         //analogamente a quanto fatto sotto facciamo lo stesso per gli elementi esclusi inserendoli in #mostraAvanzate
         $("#mostraAvanzate").empty();
-        var row = $('<div class="row align-items-center" style="margin-bottom:10px"></div>');
-        var text = $('<span>Elementi esclusi dalla pagina ' + pagName + '</span>');
-        text.css({ "font-size": "18px", "color": "red" });
-        row.append(text);
-        $("#mostraAvanzate").append(row);
-        $("#mostraAvanzate").append('<br>');
+        //TASK-13f15b99: titoli di sezione e righe come nell'elenco dei box.
+        $("#mostraAvanzate").append(me._titoloSezione("Elementi esclusi dalla pagina " + pagName));
         var obj = readFile(Utility.percorsoDati("listaRefEscluse.json"));
         if (obj != null) {
             let pagCercata = obj.find(f => f.Pag == pagName);
@@ -520,31 +725,14 @@ const griglia = {
                 if (lista != null && lista.length > 0) {
                     for (var i = 0; i < lista.length; i++) {
                         let item = lista[i];
-                        var row = $('<div class="row align-items-center" style="margin-bottom:10px"></div>'); // Crea una nuova riga
-                        var codiceGruppo = item["Scatto.CodiceGruppo"];
-                        //facciamo un controllo per non farlo apparire troppo lungo
-                        if (codiceGruppo.length > 20) {
-                            codiceGruppo = codiceGruppo.substring(0, 20) + "...";
-                        }
-                        var descrizione = item["Descrizioni.Descrizione1"];
-                        if (descrizione.length > 30) {
-                            descrizione = descrizione.substring(0, 30) + "...";
-                        }
+                        var row = me._rigaElemento(i + 1, item["Descrizioni.Descrizione1"], item["Scatto.CodiceGruppo"], "esclusa");
+                        var colIcons = me._barraAzioni();
+                        row.append(colIcons);
 
-                        // Prima colonna: testo
-                        var colText = $('<div class="col" style="width: 80%;"></div>');
-                        var text = $('<span>(' + codiceGruppo + ') ' + descrizione + '</span>'); // Crea il testo
-                        text.css({ "font-size": "12px", "color": (i % 2 == 0 ? "white" : "lightgreen"), "width": "100%" });
-                        colText.append(text);
-                        row.append(colText);
-
-                        // Seconda colonna: icone
-                        var colIcons = $('<div class="col" style="width: 20%; display: flex; justify-content: flex-end; gap: 5px;"></div>');
-
-                        colIcons.append(me.creaPulsanteInfoIspezioneDato(item));
+                        colIcons.append(me.creaPulsanteInfoIspezioneDato(item, null));
 
                         // Icona xrossa.png
-                        var xrossaIcon = $('<img title="Riabilita elemento da pagina corrente" src="images/xrossa.png" alt="xrossa" style="cursor: pointer; width: 20px; height: 20px; margin-right:5px;">');
+                        var xrossaIcon = me._iconaAzione("images/xrossa.png", "Riabilita elemento da pagina corrente");
                         xrossaIcon.on('click', function () {
                             console.log("xrossa clicked for codiceGruppo:", item["Scatto.CodiceGruppo"]);
                             me.rimuoviDaEsclusi(makeCodiceFiltroFromItemRef(item), pagName);
@@ -552,60 +740,30 @@ const griglia = {
                         colIcons.append(xrossaIcon);
 
                         // Icona rimuoviDaTuttePagine.png
-                        var rimuoviIcon = $('<img title="Riabilita elemento da tutte le pagine" src="images/rimuoviDaTuttePagine.png" alt="rimuoviDaTuttePagine" style="cursor: pointer; width: 20px; height: 20px; margin-right:5px;">');
+                        var rimuoviIcon = me._iconaAzione("images/rimuoviDaTuttePagine.png", "Riabilita elemento da tutte le pagine");
                         rimuoviIcon.on('click', function () {
                             console.log("rimuoviDaTuttePagine clicked for codiceGruppo:", item["Scatto.CodiceGruppo"]);
                             me.rimuoviDaEsclusi(makeCodiceFiltroFromItemRef(item), pagName, true);
                         });
                         colIcons.append(rimuoviIcon);
 
-                        row.append(colIcons);
-
-                        $("#mostraAvanzate").append(row); // Aggiunge la riga a #bodyElementiAvanzati
-                        if (i < lista.length - 1) {
-                            //facciamo una piccola spaziatura, il br è troppo grande
-                            $("#mostraAvanzate").append('<div style="height: 5px;"></div>');
-                        }
+                        $("#mostraAvanzate").append(row);
                     }
                 }
                 else {
-                    var row = $('<div class="row align-items-center" style="margin-bottom:10px"></div>');
-                    var text = $('<span>Nessun elemento escluso</span>');
-                    text.css({ "font-size": "12px", "color": "white" });
-                    row.append(text);
-                    $("#mostraAvanzate").append(row);
+                    $("#mostraAvanzate").append(me._rigaVuota("Nessun elemento escluso"));
                 }
             }
             else {
-                //scriviamo file non trovato
-                var row = $('<div class="row align-items-center" style="margin-bottom:10px"></div>');
-                var text = $('<span>Nessun elemento escluso</span>');
-                text.css({ "font-size": "12px", "color": "white" });
-                row.append(text);
-                $("#mostraAvanzate").append(row);
+                $("#mostraAvanzate").append(me._rigaVuota("Nessun elemento escluso"));
             }
         }
         else {
-            //scriviamo file non trovato
-            var row = $('<div class="row align-items-center" style="margin-bottom:10px"></div>');
-            var text = $('<span>Nessun elemento escluso</span>');
-            text.css({ "font-size": "12px", "color": "white" });
-            row.append(text);
-            $("#mostraAvanzate").append(row);
+            $("#mostraAvanzate").append(me._rigaVuota("Nessun elemento escluso"));
         }
 
-        $("#mostraAvanzate").append('<br>');
-        $("#mostraAvanzate").append('<hr>');
-        $("#mostraAvanzate").append('<br>');
-
-
-        //inseriamo un titolo in #mostraAvanzate 'Elementi avanzati alla pagina ' + pagName
-        var row = $('<div class="row align-items-center" style="margin-bottom:10px"></div>');
-        var text = $('<span>Elementi avanzati alla pagina ' + pagName + '</span>');
-        text.css({ "font-size": "18px", "color": "orange" });
-        row.append(text);
-        $("#mostraAvanzate").append(row);
-        $("#mostraAvanzate").append('<br>');
+        $("#mostraAvanzate").append('<div style="height: 10px;"></div>');
+        $("#mostraAvanzate").append(me._titoloSezione("Elementi avanzati alla pagina " + pagName));
 
         var obj = readFile(Utility.percorsoDati("listaRefConteggio.json"));
         console.log(obj);
@@ -613,11 +771,7 @@ const griglia = {
         if (obj != null) {
             let pagCercata = obj.find(f => f.Pag == pagName);
             if (pagCercata == null) {
-                var row = $('<div class="row align-items-center" style="margin-bottom:10px"></div>');
-                var text = $('<span>Nessun elemento avanzato alla pagina ' + pagName + '</span>');
-                text.css({ "font-size": "12px", "color": "white" });
-                row.append(text);
-                $("#mostraAvanzate").append(row);
+                $("#mostraAvanzate").append(me._rigaVuota("Nessun elemento avanzato alla pagina " + pagName));
                 return;
             }
             //cerchiamo tutto il gruppo filtri, ovvere le pagine con lo stesso codiceFiltro
@@ -643,67 +797,33 @@ const griglia = {
             //per ogni elemento della lista, creiamo un div con il contenuto di Scatto.CodiceGruppo, Descrizioni.Descrizione1, e il più basso e il più alto tra i prezzi_promo contenuti nel Dato dei vari ElementiGruppo
             for (var i = 0; i < lista.length; i++) {
                 let item = lista[i];
-                var row = $('<div class="row align-items-center" style="margin-bottom:10px"></div>'); // Crea una nuova riga
-                // var prezzoPromoMin = 999999999;
-                // var prezzoPromoMax = 0;
-                // for (var j = 0; j < item["ElementiGruppo"].length; j++) {
-                //     var dato = item["ElementiGruppo"][j]["Dato"];
-                //     if (dato["prezzo_promo"] < prezzoPromoMin) {
-                //         prezzoPromoMin = dato["prezzo_promo"];
-                //     }
-                //     if (dato["prezzo_promo"] > prezzoPromoMax) {
-                //         prezzoPromoMax = dato["prezzo_promo"];
-                //     }
-                // }
-                //aggiungiamo accanto al testo un bottone per copiare il codice gruppo  
-                var codice = item["Scatto.CodiceGruppo"];
-                if (codice.length > 30) {
-                    codice = codice.substring(0, 20) + "...";
-                }
-                var text = $('<span>(' + codice + ') ' + item["Descrizioni.Descrizione1"] + "</span>"); // Crea il testo
-                text.css({ "font-size": "12px", "color": (i % 2 == 0 ? "white" : "lightgreen"), "width": "80%" });
-                row.append(text); // Aggiunge il testo alla riga
+                var row = me._rigaElemento(i + 1, item["Descrizioni.Descrizione1"], item["Scatto.CodiceGruppo"], "avanzata");
+                var azioni = me._barraAzioni();
+                row.append(azioni);
 
-                var copyButton = $('<button codiceGruppo="' + item["Scatto.CodiceGruppo"] + '">Copia</button>');
-                copyButton.codice = item["Scatto.CodiceGruppo"];
-
+                //Copia il codice gruppo negli appunti; per un secondo l'icona diventa la spunta.
+                var copyButton = me._iconaAzione("images/copyToClipBoard.png", "Copia il codice gruppo");
+                copyButton.attr("codiceGruppo", item["Scatto.CodiceGruppo"]);
                 copyButton.on('click', function () {
-                    navigator.clipboard.writeText(String($(this).attr("codiceGruppo") || "")); //item["Scatto.CodiceGruppo"]
-                    $(this).attr("src", "images/check.png");
+                    var icona = $(this);
+                    navigator.clipboard.writeText(String($(this).attr("codiceGruppo") || ""));
+                    icona.attr("src", "images/check.png");
                     setTimeout(function () {
-                        copyButton.attr("src", "images/copyToClipBoard.png");
+                        icona.attr("src", "images/copyToClipBoard.png");
                     }, 1000);
                 });
-                row.append(copyButton); // Aggiunge il pulsante alla riga
+                azioni.append(copyButton);
+                azioni.append(me.creaPulsanteInfoIspezioneDato(item, null));
 
-                row.append(me.creaPulsanteInfoIspezioneDato(item));
-
-                $("#mostraAvanzate").append(row); // Aggiunge la riga a #bodyElementiAvanzati
-                if (i < lista.length - 1) {
-                    //$("#mostraAvanzate").append('<hr>');
-                    $("#mostraAvanzate").append('<div style="height: 5px;"></div>');
-                }
-            }
-
-            //se mostra avanzate è vuoto, scriviamo "nessun elemento avanzato con la stessa formattazione di prima"
-            if (lista.length == 0) {
-                var row = $('<div class="row align-items-center" style="margin-bottom:10px"></div>');
-                var text = $('<span>Nessun elemento avanzato</span>');
-                text.css({ "font-size": "12px", "color": "white" });
-                row.append(text);
                 $("#mostraAvanzate").append(row);
             }
-            //$("#mostraAvanzate").show();
 
-
+            if (lista.length == 0) {
+                $("#mostraAvanzate").append(me._rigaVuota("Nessun elemento avanzato"));
+            }
         }
         else {
-            //scriviamo file non trovato
-            var row = $('<div class="row align-items-center" style="margin-bottom:10px"></div>');
-            var text = $('<span>File non trovato</span>');
-            text.css({ "font-size": "12px", "color": "white" });
-            row.append(text);
-            $("#mostraAvanzate").append(row);
+            $("#mostraAvanzate").append(me._rigaVuota("File di conteggio non trovato"));
         }
     },
 

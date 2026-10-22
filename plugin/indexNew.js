@@ -777,10 +777,15 @@ indesignEvents.addEventListener(indesignEvents.EVENT_NEW_ARTWORK_SELECTED, async
     clearNarrow();
 });
 
-indesignEvents.addEventListener(indesignEvents.EVENT_NEW_GRIGLIA_SELECTED, async function(args){    
+indesignEvents.addEventListener(indesignEvents.EVENT_NEW_GRIGLIA_SELECTED, async function(args){
+    apriSchermataGriglia(args[0]);
+});
+
+/// Apre la schermata Griglia su una griglia: l'elenco dei box, le referenze escluse e avanzate
+/// della pagina, le opzioni. Era il corpo del gestore di EVENT_NEW_GRIGLIA_SELECTED.
+function apriSchermataGriglia(griglia) {
     Modali.closeAllModal();
 
-    console.log(args);
     schedaRef.svuotaRef();
     schedaRef.resetRefInterface();
     $("#refImage").hide();
@@ -788,19 +793,38 @@ indesignEvents.addEventListener(indesignEvents.EVENT_NEW_GRIGLIA_SELECTED, async
 
     $("#grigliaTab").show();
     onresizeWindow();
-    var pagArgs = args[0].parentPage.name;
-    //setMenaboInterface(1);
+    var pagArgs = griglia.parentPage.name;
     grigliaJs.mostraElementiAvanzati(pagArgs);
-    grigliaJs.compilaGriglia(args[0]);
-    //assegnamo al pulsante #ricalcaGriglia un riferimento all'oggetto args[0]
-    $("#TabGriglia").data("griglia", args[0]);
-    $("#sliderTrasparenzaGriglia").val(args[0].transparencySettings.blendingSettings.opacity);
+    grigliaJs.compilaGriglia(griglia);
+    //la griglia resta a disposizione dei comandi del pannello (TabGriglia)
+    $("#TabGriglia").data("griglia", griglia);
+    $("#sliderTrasparenzaGriglia").val(griglia.transparencySettings.blendingSettings.opacity);
     jsIndexControls.changeSubMenu($("#grigliaTab").attr("subTab"));
     jsIndexControls.changeImage($("#grigliaTab"));
-    //scriviamo i data del pulsante
 
     clearNarrow();
+}
 
+/// TASK-13f15b99: una selezione fatta di soli box della griglia - dal pulsante Seleziona del
+/// pannello o con il mouse nel documento - non e' una selezione sconosciuta: la schermata
+/// Griglia resta aperta e le righe dei box selezionati si evidenziano. Se la schermata non e'
+/// aperta su questa griglia, si apre come per la selezione della griglia.
+indesignEvents.addEventListener(indesignEvents.EVENT_NEW_BOX_GRIGLIA_SELECTED, async function (args) {
+    var griglia = args[0];
+    var boxSelezionati = args[1];
+    var aperta = $("#TabGriglia").data("griglia");
+    var stessaGriglia = false;
+    try {
+        stessaGriglia = aperta != null && aperta.isValid && griglia != null && aperta.id == griglia.id &&
+            $("#grigliaTab").css("display") != "none";
+    }
+    catch (e) {
+        stessaGriglia = false;
+    }
+    if (!stessaGriglia) {
+        apriSchermataGriglia(griglia);
+    }
+    grigliaJs.evidenziaBoxSelezionati(boxSelezionati);
 });
 
 indesignEvents.addEventListener(indesignEvents.EVENT_NO_REF_SELECTED, async function(args){    
