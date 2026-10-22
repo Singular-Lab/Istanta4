@@ -5,6 +5,7 @@ import { createHmac } from 'node:crypto';
 import { Op, QueryTypes, type WhereOptions } from 'sequelize';
 import { v4 as uuidv4 } from 'uuid';
 import { Colorize } from '../../../lib/Colorize';
+import { ordinaPerMerceologia } from '../../../lib/ordinamentoMerceologico';
 import { STATO_LAVORAZIONE_KIT_RUNTIME, STATO_PROMO, TIPO_CONTEXT, TIPO_KIT_DESIGN } from '../../../lib/enums';
 import { BadRequestError, DatabaseError, ExternalApiError, NotFoundError, wrapApiError, wrapDatabaseError, wrapNotFoundError } from '../../../lib/errors';
 import {
@@ -43,6 +44,7 @@ import type { IPromoRepository } from '../repositories/PromoRepository';
 import { isStessaPromo, normalizePromoModel } from '../utils/PromoModelUtils';
 import { ServerUtils } from '../utils/ServerUtils';
 import { verificaRisposta } from '../utils/rispostaServizi';
+import { OrdinamentoMerceologicoService } from './OrdinamentoMerceologicoService';
 import { normalizzaMeta } from './visibilitaPromoUtils';
 dayjs.extend(isBetween);
 
@@ -59,7 +61,8 @@ export class PromoService implements IPromoService {
     private istantaService: IIstantaService,
     private promoRepository: IPromoRepository,
     private agenziaLib: IAgenziaLib,
-    private configService: IConfigService
+    private configService: IConfigService,
+    private ordinamentoMerceologicoService: OrdinamentoMerceologicoService = new OrdinamentoMerceologicoService()
   ) { }
 
   private normalizeInternalOriginalUrl(url: string): string {
@@ -1490,7 +1493,7 @@ export class PromoService implements IPromoService {
     }
   }
 
-  async getDatoPerMenabo(idPromo: string, canale?: string): Promise<any> {
+  async getDatoPerMenabo(idPromo: string, canale?: string, req?: ExpressRequest): Promise<any> {
     try {
       const promo = await this.promoRepository.findById(idPromo);
       if (!promo) {
@@ -1524,6 +1527,13 @@ export class PromoService implements IPromoService {
           entityType: "TracciatiMomento",
           entityId: idPromo
         });
+      }
+      // Ordine merceologico prima di raggruppare: lo ereditano gruppi, sottogruppi e pagine del menabò
+      if (req) {
+        const ordinamento = await this.ordinamentoMerceologicoService.getOrdinamento(req);
+        for (const tracciato of risultati) {
+          tracciato.records = ordinaPerMerceologia(tracciato.records, ordinamento);
+        }
       }
       const regoleMenabo = await this.configService.getRegoleMenabo();
       const tipoDivisione = regoleMenabo?.tipoDivisione ?? 'canale';

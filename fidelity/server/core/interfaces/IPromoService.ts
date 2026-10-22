@@ -71,7 +71,7 @@ export interface IPromoService {
     data_fine_promo_corrente: string;
   }[]>;
   getPromoByNome(nome: string): Promise<PromoResponseDTO>
-  getDatoPerMenabo(idPromo: string, canale?: string): Promise<any>;
+  getDatoPerMenabo(idPromo: string, canale?: string, req?: ExpressRequest): Promise<any>;
   getMenaboLayout(idPromo: string): Promise<MenaboLayoutSalvato | null>;
   saveMenaboLayout(idPromo: string, payload: SaveMenaboLayoutRequest): Promise<MenaboLayoutSalvato>;
   generateMenaboExcel(layout: MenaboLayoutDivisioneSalvata): Promise<Buffer>;

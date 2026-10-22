@@ -5964,6 +5964,73 @@ namespace Istanta.Controllers
         }
         #endregion
 
+        #region Ordinamento merceologico
+
+        // Espone a Fidelity l'ordinamento merceologico del cliente (SourceOrdinamentoLista.json),
+        // lo stesso che Ordinamento.ordinaRecordsTracciato applica ai record del tracciato.
+        [HttpGet]
+        [Route("FicoProcess/getOrdinamentoMerceologico")]
+        public async Task<IActionResult> getOrdinamentoMerceologico()
+        {
+            FicoOrdinamentoMerceologicoResult bRes = new FicoOrdinamentoMerceologicoResult();
+
+            FICOAccessLevel acLevel = await getAccesslevel();
+
+            if (acLevel == FICOAccessLevel.noSession)
+            {
+                bRes.error = "no_login";
+                bRes.esito = false;
+                return Unauthorized(bRes);
+            }
+
+            try
+            {
+                bRes = CostruisciOrdinamentoMerceologico(exClass.getClassificazioneUniversale());
+            }
+            catch (Exception ex)
+            {
+                bRes.error = ex.Message;
+                bRes.esito = false;
+                return BadRequest(bRes);
+            }
+
+            return Ok(bRes);
+        }
+
+        // Solo l'ordinamento universale si puo' applicare fuori da Istanta: quello non universale
+        // e' delegato a AgenziaLib.<cliente>.ordinaLista, quindi in quel caso non si espongono voci.
+        public static FicoOrdinamentoMerceologicoResult CostruisciOrdinamentoMerceologico(JsonDbClassificazioneUniversale? db)
+        {
+            FicoOrdinamentoMerceologicoResult res = new FicoOrdinamentoMerceologicoResult();
+            res.esito = true;
+
+            if (db == null || !db.universale || db.bindings == null)
+            {
+                return res;
+            }
+
+            res.universale = true;
+            res.campi.area = db.bindings.area?.campoMeta ?? "";
+            res.campi.settore = db.bindings.settore?.campoMeta ?? "";
+            res.campi.reparto = db.bindings.reparto?.campoMeta ?? "";
+            res.campi.categoria = db.bindings.categoria?.campoMeta ?? "";
+            res.voci = (db.lista ?? new List<ClassificazioneUniversale>())
+                .Where(v => v != null && v.orderIndex >= 0)
+                .OrderBy(v => v.orderIndex)
+                .Select(v => new OrdinamentoMerceologicoVoce
+                {
+                    area = v.area ?? "",
+                    settore = v.settore ?? "",
+                    reparto = v.reparto ?? "",
+                    categoria = v.categoria ?? "",
+                    orderIndex = v.orderIndex,
+                })
+                .ToList();
+
+            return res;
+        }
+        #endregion
+
         #region Landing URL Auth
         [HttpPut]
         [Route("FicoProcess/getAuthUrlSchedaPromoLavorazioneToFP")]

@@ -517,6 +517,34 @@ namespace Istanta.Models
         public string? error;
     }
 
+    // Risposta di FicoProcess/getOrdinamentoMerceologico. "campi" indica, per ogni livello,
+    // la chiave del record del tracciato da confrontare (vuota se il livello non si usa).
+    public class FicoOrdinamentoMerceologicoResult
+    {
+        public bool universale;
+        public OrdinamentoMerceologicoCampi campi = new OrdinamentoMerceologicoCampi();
+        public List<OrdinamentoMerceologicoVoce> voci = new List<OrdinamentoMerceologicoVoce>();
+        public bool esito;
+        public string? error;
+    }
+
+    public class OrdinamentoMerceologicoCampi
+    {
+        public string area = "";
+        public string settore = "";
+        public string reparto = "";
+        public string categoria = "";
+    }
+
+    public class OrdinamentoMerceologicoVoce
+    {
+        public string area = "";
+        public string settore = "";
+        public string reparto = "";
+        public string categoria = "";
+        public int orderIndex;
+    }
+
     public class FicoTipiDiExportResult
     {
         public List<TipoDiExport>? content;

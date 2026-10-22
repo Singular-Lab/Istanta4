@@ -6,6 +6,7 @@ import { BadRequestError, DatabaseError, ExternalApiError, NotFoundError } from 
 import { TracciatiAttributes, type AnalisiMomentoResponse, type AnalisiMomentoTracciato, type CategoryScoreboardTimeline, type DataFields, type MomentoSelectorQuery, type PromoFilterQuery, type ReportOptionDTO, type RisultatoConfrontoMomento, type SavedPromoScoreboard, type SavedReportConfronto, type SavedReportConfrontoSummary, type TipoSchema, type TracciatiMomentoConfrontoResponseDTO, type TracciatiMomentoResponseDTO, type TracciatiSchemaConfronto, type TracciatiSchemaItem, type TracciatiSchemaResponseDTO, type TracciatoQueryPromoResult, type TracciatoQueryRequest, type TracciatoQueryResult, type TracciatoReport, type TracciatoWidgetScoreAudit, type TracciatoWidgetScoreboardCodiceRow, type TracciatoWidgetScoreboardRow } from '../../../lib/types';
 import type { CellaConfronto, IAgenziaLib, MatricePromo, PromoScoreboardInput, StoriaDelCampo } from "../agenzia_lib/types.js";
 import config from '../config';
+import { OrdinamentoMerceologicoService } from './OrdinamentoMerceologicoService';
 import { sequelize } from '../db/SequelizeConnector';
 import { CreateTracciatiDTO, TracciatiResponseDTO, UpdateTracciatiDTO } from '../dto';
 import { ITracciatoService } from '../interfaces/ITracciatoService';
@@ -83,7 +84,8 @@ export class TracciatoService implements ITracciatoService {
     private readonly agenziaLib?: IAgenziaLib,
     private readonly reportRepository: ITracciatiReportRepository = new TracciatiReportRepository(),
     private readonly momentoRepository: ITracciatiMomentoRepository = new TracciatiMomentoRepository(),
-    private readonly schemaRepository: ITracciatiSchemaRepository = new TracciatiSchemaRepository()
+    private readonly schemaRepository: ITracciatiSchemaRepository = new TracciatiSchemaRepository(),
+    private readonly ordinamentoMerceologicoService: OrdinamentoMerceologicoService = new OrdinamentoMerceologicoService()
   ) { }
 
   // ─── Static scoring engine ─────────────────────────────────────────────────
@@ -1418,6 +1420,7 @@ export class TracciatoService implements ITracciatoService {
         nomeMomento: secondario.nome,
         tracciati: this.mergeConfrontoTracciati(secondarioTracciati, secondarioObj.tracciati),
       },
+      ordinamentoMerceologico: await this.ordinamentoMerceologicoService.getOrdinamento(req),
     } as RisultatoConfrontoMomento;
 
     const report = await this.agenziaLib.elaboraDatoPerAgenzia(risultatoConfronto);
