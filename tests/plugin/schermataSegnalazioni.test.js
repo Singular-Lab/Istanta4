@@ -238,7 +238,11 @@ test("la schermata legge il documento e offre vai al box, risolvi e risolvi tutt
 test("risolvi tutte chiede conferma dentro il popup, non con Modali.confirm che starebbe sotto", () => {
     assert.match(schermata, /\.text\("Sicuro\? "\)/);
     assert.match(schermata, /\.text\("Sì"\)\.on\('click', \(\) => \{\s*Segnalazioni\.risolviTutte\(box\);\s*alCambio\(\);/);
-    assert.doesNotMatch(schermata, /Modali\.confirm/);
+    assert.doesNotMatch(schermata, /Modali\.confirm\(/);
+    //I20-1126: l'unica domanda di Modali e' quella per disattivare le segnalazioni: confirmCustom sta
+    //sopra la schermata (Modali.LIVELLO_CONFERMA, I20-1085).
+    assert.strictEqual((schermata.match(/Modali\.confirmCustom\(/g) || []).length, 1);
+    assert.match(schermata, /async chiediDisattivazione\(elenco = null\) \{\s*const risposta = await Modali\.confirmCustom\(/);
 });
 
 test("vai al box porta alla pagina e seleziona il box, come il Report Integrita'", () => {
@@ -324,7 +328,8 @@ test("il conteggio accanto al titolo dice segnalazioni e box", () => {
     assert.strictEqual(SchermataSegnalazioni.testoConteggio([{ voci: [{}] }]), "1 segnalazione in 1 box");
     assert.strictEqual(SchermataSegnalazioni.testoConteggio([]), "");
     //E si aggiorna a ogni ridisegno, cioe' dopo ogni Risolvi.
-    assert.match(schermata, /const conteggio = elenco\.data\('conteggio'\);\s*if \(conteggio != null\) \{\s*conteggio\.text\(SchermataSegnalazioni\.testoConteggio\(lette\)\);/);
+    //I20-1126: con le segnalazioni disattivate il conteggio resta vuoto (provato con _disegna piu' sotto).
+    assert.match(schermata, /const conteggio = elenco\.data\('conteggio'\);\s*if \(conteggio != null\) \{\s*conteggio\.text\(disattivate \? "" : SchermataSegnalazioni\.testoConteggio\(lette\)\);/);
 });
 
 test("il codice gruppo si copia intero, come testo", async () => {
@@ -550,15 +555,15 @@ test("l'ultimo controllo tiene i numeri pagina per pagina", () => {
 
     //Tutto il documento: un errore in pagina 3, due warning in pagina 5.
     SchermataSegnalazioni.registraControllo("id:1", [lettura("3", "error"), lettura("5", "warning"), lettura("5", "warning")]);
-    assert.deepStrictEqual(SchermataSegnalazioni.riepilogoControllo("id:1"), { segnalazioni: 3, errori: 1, gravita: "error" });
+    assert.deepStrictEqual(SchermataSegnalazioni.riepilogoControllo("id:1"), { segnalazioni: 3, errori: 1, gravita: "error", controllato: true });
 
     //Si rifa' la pagina 5 e i warning spariscono: solo quella pagina cambia, a zero.
     SchermataSegnalazioni.registraControllo("id:1", [], ["5"]);
-    assert.deepStrictEqual(SchermataSegnalazioni.riepilogoControllo("id:1"), { segnalazioni: 1, errori: 1, gravita: "error" });
+    assert.deepStrictEqual(SchermataSegnalazioni.riepilogoControllo("id:1"), { segnalazioni: 1, errori: 1, gravita: "error", controllato: true });
 
     //Si risolve l'errore in pagina 3.
     SchermataSegnalazioni.registraControllo("id:1", [], ["3"]);
-    assert.deepStrictEqual(SchermataSegnalazioni.riepilogoControllo("id:1"), { segnalazioni: 0, errori: 0, gravita: null });
+    assert.deepStrictEqual(SchermataSegnalazioni.riepilogoControllo("id:1"), { segnalazioni: 0, errori: 0, gravita: null, controllato: true });
 
     //Una pagina con soli warning: arancione.
     SchermataSegnalazioni.registraControllo("id:1", [lettura("7", "warning")], ["7"]);
@@ -569,13 +574,15 @@ test("una lettura completa sostituisce tutto, e un altro documento riparte da ze
     SchermataSegnalazioni._ultimoControllo = null;
     SchermataSegnalazioni.registraControllo("id:1", [lettura("3", "error"), lettura("4", "warning")]);
     SchermataSegnalazioni.registraControllo("id:1", [lettura("9", "warning")]);
-    assert.deepStrictEqual(SchermataSegnalazioni.riepilogoControllo("id:1"), { segnalazioni: 1, errori: 0, gravita: "warning" });
+    assert.deepStrictEqual(SchermataSegnalazioni.riepilogoControllo("id:1"), { segnalazioni: 1, errori: 0, gravita: "warning", controllato: true });
 
-    //Il controllo e' di un altro documento: per questo non c'e' niente.
-    assert.deepStrictEqual(SchermataSegnalazioni.riepilogoControllo("id:2"), { segnalazioni: 0, errori: 0, gravita: null });
+    //Il controllo e' di un altro documento: per questo non c'e' niente, e non e' controllato.
+    assert.deepStrictEqual(SchermataSegnalazioni.riepilogoControllo("id:2"), { segnalazioni: 0, errori: 0, gravita: null, controllato: false });
     SchermataSegnalazioni.registraControllo("id:2", [lettura("1", "error")], ["1"]);
-    assert.deepStrictEqual(SchermataSegnalazioni.riepilogoControllo("id:2"), { segnalazioni: 1, errori: 1, gravita: "error" });
-    assert.deepStrictEqual(SchermataSegnalazioni.riepilogoControllo("id:1"), { segnalazioni: 0, errori: 0, gravita: null });
+    assert.deepStrictEqual(SchermataSegnalazioni.riepilogoControllo("id:2"), { segnalazioni: 1, errori: 1, gravita: "error", controllato: true });
+    assert.deepStrictEqual(SchermataSegnalazioni.riepilogoControllo("id:1"), { segnalazioni: 0, errori: 0, gravita: null, controllato: false });
+    //Senza documento non c'e' controllo.
+    assert.strictEqual(SchermataSegnalazioni.riepilogoControllo(null).controllato, false);
     SchermataSegnalazioni._ultimoControllo = null;
 });
 
@@ -821,12 +828,30 @@ test("I20-1116: il segnalino dice quante segnalazioni, col colore della piu' gra
     assert.strictEqual(soloWarning.colore, "#ef6c00");
 });
 
-test("I20-1116: senza segnalazioni il segnalino non si vede", () => {
-    assert.strictEqual(SchermataSegnalazioni.statoSegnalino({ segnalazioni: 0, errori: 0, gravita: null }).visibile, false);
+test("I20-1126: senza segnalazioni il segnalino e' verde, \"Nessuna segnalazione\"; senza controllo non si vede", () => {
+    const nessuna = SchermataSegnalazioni.statoSegnalino({ segnalazioni: 0, errori: 0, gravita: null, controllato: true });
+    assert.strictEqual(nessuna.visibile, true);
+    assert.strictEqual(nessuna.testo, "Nessuna segnalazione");
+    assert.strictEqual(nessuna.colore, "#2e7d32");
+    assert.match(nessuna.suggerimento, /clicca per aprire le segnalazioni/);
+    //Nessun documento, o un documento non ancora controllato: lo zero non dice niente.
+    assert.strictEqual(SchermataSegnalazioni.statoSegnalino({ segnalazioni: 0, errori: 0, gravita: null, controllato: false }).visibile, false);
     assert.strictEqual(SchermataSegnalazioni.statoSegnalino(null).visibile, false);
 });
 
-test("I20-1116: l'icona del menabo' e il segnalino si aggiornano insieme, e spariscono insieme", () => {
+test("I20-1126: con le segnalazioni disattivate il segnalino e' grigio, anche se ce ne sono", () => {
+    [0, 3].forEach(quante => {
+        const stato = SchermataSegnalazioni.statoSegnalino({ segnalazioni: quante, errori: 0, gravita: quante > 0 ? "warning" : null, controllato: true }, true);
+        assert.strictEqual(stato.visibile, true);
+        assert.strictEqual(stato.testo, "Segnalazioni disattivate");
+        assert.strictEqual(stato.colore, "#9e9e9e");
+        assert.match(stato.suggerimento, /riattivarle/);
+    });
+    //Senza controllo resta nascosto comunque.
+    assert.strictEqual(SchermataSegnalazioni.statoSegnalino({ segnalazioni: 0, controllato: false }, true).visibile, false);
+});
+
+test("I20-1116: l'icona del menabo' e il segnalino si aggiornano insieme; senza segnalazioni l'icona sparisce e il segnalino diventa verde", () => {
     conTestata({ id: 7 }, (el) => {
         SchermataSegnalazioni.registraControllo("id:7", [lettura("3", "error"), lettura("5", "warning")]);
         SchermataSegnalazioni.aggiornaIcona();
@@ -835,10 +860,12 @@ test("I20-1116: l'icona del menabo' e il segnalino si aggiornano insieme, e spar
         assert.strictEqual(el["#testoSegnalinoSegnalazioni"].stile.backgroundColor, "#c62828");
         assert.strictEqual(el["#iconaSegnalazioniImpaginazione"].testo, "2");
 
-        //Tutto risolto: le pagine rilette a zero.
+        //Tutto risolto: le pagine rilette a zero. I20-1126: il segnalino resta, verde; l'icona sparisce.
         SchermataSegnalazioni.registraControllo("id:7", [], ["3", "5"]);
         SchermataSegnalazioni.aggiornaIcona();
-        assert.strictEqual(el["#segnalinoSegnalazioni"].stile.display, "none");
+        assert.strictEqual(el["#segnalinoSegnalazioni"].stile.display, "flex");
+        assert.strictEqual(el["#testoSegnalinoSegnalazioni"].testo, "Nessuna segnalazione");
+        assert.strictEqual(el["#testoSegnalinoSegnalazioni"].stile.backgroundColor, "#2e7d32");
         assert.strictEqual(el["#iconaSegnalazioniImpaginazione"].stile.display, "none");
     });
 });
@@ -1058,4 +1085,254 @@ test("I20-1116: il segnalino resta agganciato al bordo, all'altezza delle lingue
         console.log = prima.log;
         VistaAffiancata._colonne = prima.colonne;
     }
+});
+
+/* ---- I20-1126: disattivare le segnalazioni per la lavorazione ---- */
+
+/// Le globali di indexNew per la voce della lavorazione, finte: una voce sola, in memoria.
+function conLavorazione(voceIniziale, fn) {
+    const salvate = [];
+    const messaggi = [];
+    const prima = {
+        docInLavorazione: global.docInLavorazione, pathLavorazione: global.pathLavorazione, idMacchina: global.idMacchina,
+        libroDelDocumentoInLavorazione: global.libroDelDocumentoInLavorazione, Utility: global.Utility,
+        messaggioUtente: global.messaggioUtente, $: global.$
+    };
+    //La voce sta "nel file" come testo: ogni lettura ne da' una copia, e il salvataggio la unisce a
+    //quella del file con Object.assign, come Utility.voceLavorazione e salvaVoceLavorazione veri.
+    let nelFile = voceIniziale == null ? null : JSON.stringify(voceIniziale);
+    const voce = () => nelFile == null ? null : JSON.parse(nelFile);
+    global.docInLavorazione = { name: "VOL_P2623.indd", id: 9 };
+    global.pathLavorazione = "/lavorazioni/";
+    global.idMacchina = () => "sm2_test";
+    global.libroDelDocumentoInLavorazione = () => null;
+    global.Utility = {
+        voceLavorazione: () => voce(),
+        salvaVoceLavorazione: (base, macchina, v) => {
+            salvate.push(JSON.parse(JSON.stringify(v)));
+            const salvata = Object.assign(voce() || {}, v);
+            nelFile = JSON.stringify(salvata);
+            return salvata;
+        }
+    };
+    global.messaggioUtente = (testo) => messaggi.push(testo);
+    global.$ = () => ({ length: 0 });
+    SchermataSegnalazioni._disattivateInMemoria = null;
+    const ripristina = () => {
+        Object.keys(prima).forEach(k => { if (prima[k] === undefined) { delete global[k]; } else { global[k] = prima[k]; } });
+        SchermataSegnalazioni._disattivateInMemoria = null;
+    };
+    let esito;
+    try {
+        esito = fn({ salvate, messaggi, voce });
+    }
+    catch (e) {
+        ripristina();
+        throw e;
+    }
+    //Una prova asincrona: le globali si rimettono quando ha finito, non al primo await.
+    if (esito != null && typeof esito.then === "function") {
+        return esito.finally(ripristina);
+    }
+    ripristina();
+    return esito;
+}
+
+test("I20-1126: la scelta sta nella voce della lavorazione, e si legge da li'", () => {
+    assert.strictEqual(SchermataSegnalazioni.disattivateNellaVoce(null), false);
+    assert.strictEqual(SchermataSegnalazioni.disattivateNellaVoce({ file: "a.indd" }), false);
+    assert.strictEqual(SchermataSegnalazioni.disattivateNellaVoce({ file: "a.indd", segnalazioniDisattivate: true }), true);
+
+    conLavorazione({ file: "VOL_P2623.indd", id: 3227 }, (lav) => {
+        assert.strictEqual(SchermataSegnalazioni.disattivate(), false);
+
+        assert.strictEqual(SchermataSegnalazioni.impostaDisattivate(true), true);
+        assert.deepStrictEqual(lav.salvate, [{ file: "VOL_P2623.indd", id: 3227, segnalazioniDisattivate: true }]);
+        assert.strictEqual(SchermataSegnalazioni.disattivate(), true);
+
+        //Riattivare scrive false: un campo tolto, unito alla voce del file, resterebbe true.
+        assert.strictEqual(SchermataSegnalazioni.impostaDisattivate(false), true);
+        assert.deepStrictEqual(lav.salvate[1], { file: "VOL_P2623.indd", id: 3227, segnalazioniDisattivate: false });
+        assert.deepStrictEqual(lav.voce(), { file: "VOL_P2623.indd", id: 3227, segnalazioniDisattivate: false });
+        assert.strictEqual(SchermataSegnalazioni.disattivate(), false);
+    });
+
+    //Una voce rimasta con true dal primo giro di I20-1126 si riattiva lo stesso.
+    conLavorazione({ file: "VOL_P2623.indd", id: 3227, segnalazioniDisattivate: true }, (lav) => {
+        assert.strictEqual(SchermataSegnalazioni.disattivate(), true);
+        assert.strictEqual(SchermataSegnalazioni.impostaDisattivate(false), true);
+        assert.strictEqual(lav.voce().segnalazioniDisattivate, false);
+        assert.strictEqual(SchermataSegnalazioni.disattivate(), false);
+    });
+});
+
+test("I20-1126: disattivare nasconde i bollini del documento, riattivare li mostra; senza lavorazione non si toccano", () => {
+    const prima = Segnalazioni.mostraBolliniDelDocumento;
+    const chiamate = [];
+    Segnalazioni.mostraBolliniDelDocumento = (documento, visibili) => { chiamate.push([documento.name, visibili]); return 1; };
+    try {
+        conLavorazione({ file: "VOL_P2623.indd" }, () => {
+            assert.strictEqual(SchermataSegnalazioni.impostaDisattivate(true), true);
+            assert.strictEqual(SchermataSegnalazioni.impostaDisattivate(false), true);
+        });
+        assert.deepStrictEqual(chiamate, [["VOL_P2623.indd", false], ["VOL_P2623.indd", true]]);
+
+        conLavorazione(null, () => {
+            assert.strictEqual(SchermataSegnalazioni.impostaDisattivate(true), false);
+        });
+        assert.strictEqual(chiamate.length, 2);
+    }
+    finally {
+        Segnalazioni.mostraBolliniDelDocumento = prima;
+    }
+});
+
+test("I20-1126: senza lavorazione non si disattiva niente, e l'operatore lo sa", () => {
+    conLavorazione(null, (lav) => {
+        assert.strictEqual(SchermataSegnalazioni.impostaDisattivate(true), false);
+        assert.deepStrictEqual(lav.salvate, []);
+        assert.match(lav.messaggi[0], /Code SGN-12/);
+        assert.strictEqual(SchermataSegnalazioni.disattivate(), false);
+    });
+});
+
+test("I20-1126: disattivate, la schermata non si apre da sola a fine impaginazione", async () => {
+    const apri = SchermataSegnalazioni.apri;
+    const aperture = [];
+    SchermataSegnalazioni.apri = (opzioni) => { aperture.push(opzioni); return Promise.resolve(true); };
+    try {
+        await conLavorazione({ file: "VOL_P2623.indd", segnalazioniDisattivate: true }, async () => {
+            assert.strictEqual(await SchermataSegnalazioni.apriSeCiSono({ segnalazioni: [] }, ["11"]), false);
+        });
+        assert.deepStrictEqual(aperture, []);
+        await conLavorazione({ file: "VOL_P2623.indd" }, async () => {
+            assert.strictEqual(await SchermataSegnalazioni.apriSeCiSono({ segnalazioni: [] }, ["11"]), true);
+        });
+        assert.strictEqual(aperture.length, 1);
+    }
+    finally {
+        SchermataSegnalazioni.apri = apri;
+    }
+});
+
+test("I20-1126: le tre scelte: Disattiva, Risolvi tutto e disattiva, Annulla", async () => {
+    const prima = { Modali: global.Modali, risolvi: SchermataSegnalazioni.risolviTuttoIlDocumento, allaChiusura: SchermataSegnalazioni.allaChiusura };
+    const domande = [];
+    let risposta = null;
+    let risolti = 0;
+    global.Modali = { confirmCustom: async (...argomenti) => { domande.push(argomenti); return risposta; } };
+    SchermataSegnalazioni.risolviTuttoIlDocumento = () => { risolti++; return 4; };
+    SchermataSegnalazioni.allaChiusura = () => {};
+    try {
+        await conLavorazione({ file: "VOL_P2623.indd" }, async (lav) => {
+            //Le tre scelte, in quest'ordine (Annulla la aggiunge confirmCustom per ultima).
+            risposta = { result: false, hiddenVal: null };
+            assert.strictEqual(await SchermataSegnalazioni.chiediDisattivazione(), null);
+            assert.deepStrictEqual(domande[0].slice(1), ["Disattiva", "disattiva", "Risolvi tutto e disattiva", "risolvi"]);
+            assert.strictEqual(risolti, 0);
+            assert.deepStrictEqual(lav.salvate, []);
+
+            risposta = { result: true, hiddenVal: "disattiva" };
+            assert.strictEqual(await SchermataSegnalazioni.chiediDisattivazione(), "disattiva");
+            assert.strictEqual(risolti, 0);
+            assert.strictEqual(lav.voce().segnalazioniDisattivate, true);
+        });
+        await conLavorazione({ file: "VOL_P2623.indd" }, async (lav) => {
+            risposta = { result: true, hiddenVal: "risolvi" };
+            assert.strictEqual(await SchermataSegnalazioni.chiediDisattivazione(), "risolvi");
+            assert.strictEqual(risolti, 1);
+            assert.strictEqual(lav.voce().segnalazioniDisattivate, true);
+        });
+    }
+    finally {
+        global.Modali = prima.Modali;
+        SchermataSegnalazioni.risolviTuttoIlDocumento = prima.risolvi;
+        SchermataSegnalazioni.allaChiusura = prima.allaChiusura;
+    }
+});
+
+/// Un elemento jQuery finto, quanto basta a _disegna: tiene figli, testo e dati.
+function elementoFinto(html = "") {
+    const el = {
+        html, figli: [], testo: "", dati: {},
+        css() { return el; }, attr() { return el; }, on() { return el; },
+        text(t) { if (t === undefined) { return el.testo; } el.testo = t; return el; },
+        append(figlio) { el.figli.push(figlio); return el; },
+        empty() { el.figli = []; return el; },
+        data(chiave, valore) { if (valore === undefined) { return el.dati[chiave]; } el.dati[chiave] = valore; return el; }
+    };
+    return el;
+}
+
+test("I20-1126: disattivate, la schermata mostra solo la barra con Riattiva; riattivate, torna l'elenco", () => {
+    const prima = { blocco: SchermataSegnalazioni._bloccoBox, traduzioni: SchermataSegnalazioni._traduzioni, records: SchermataSegnalazioni._recordsDellaLavorazione };
+    SchermataSegnalazioni._bloccoBox = (lettura) => elementoFinto("box " + lettura.box.nome);
+    SchermataSegnalazioni._traduzioni = () => ({});
+    SchermataSegnalazioni._recordsDellaLavorazione = () => [];
+    //Il documento ha ancora i suoi bollini: disattivare non li toglie.
+    const lette = [{ pagina: "3", box: { nome: "A" }, voci: [{}] }, { pagina: "5", box: { nome: "B" }, voci: [{}, {}] }];
+    const disegna = () => {
+        const elenco = elementoFinto();
+        const conteggio = elementoFinto();
+        elenco.data('conteggio', conteggio);
+        SchermataSegnalazioni._disegna(elenco, lette, null);
+        return { elenco, conteggio };
+    };
+    const testi = (el) => [el.testo].concat(el.figli.flatMap(testi)).filter(t => t !== "");
+    try {
+        conLavorazione({ file: "VOL_P2623.indd", segnalazioniDisattivate: true }, () => {
+            global.$ = (html) => elementoFinto(html);
+            const { elenco, conteggio } = disegna();
+            assert.strictEqual(elenco.figli.length, 1);
+            assert.deepStrictEqual(testi(elenco.figli[0]), ["Segnalazioni disattivate per questa lavorazione", "Riattiva segnalazioni"]);
+            assert.strictEqual(conteggio.testo, "");
+        });
+        conLavorazione({ file: "VOL_P2623.indd", segnalazioniDisattivate: false }, () => {
+            global.$ = (html) => elementoFinto(html);
+            const { elenco, conteggio } = disegna();
+            assert.deepStrictEqual(testi(elenco.figli[0]), ["Disattiva segnalazioni"]);
+            assert.deepStrictEqual(elenco.figli.slice(1).map(f => f.testo || f.html), ["Pagina 3", "box A", "Pagina 5", "box B"]);
+            assert.strictEqual(conteggio.testo, "3 segnalazioni in 2 box");
+        });
+    }
+    finally {
+        SchermataSegnalazioni._bloccoBox = prima.blocco;
+        SchermataSegnalazioni._traduzioni = prima.traduzioni;
+        SchermataSegnalazioni._recordsDellaLavorazione = prima.records;
+    }
+});
+
+test("I20-1126: Risolvi tutto toglie il bollino da ogni box del documento", () => {
+    const prima = { leggi: Segnalazioni.leggiDocumento, risolvi: Segnalazioni.risolviTutte, err: console.error };
+    const tolti = [];
+    const boxA = { nome: "A" }, boxB = { nome: "B" }, boxRotto = { nome: "rotto" };
+    Segnalazioni.leggiDocumento = () => [{ pagina: "3", box: boxA, voci: [] }, { pagina: "5", box: boxB, voci: [] }, { pagina: "6", box: boxRotto, voci: [] }];
+    Segnalazioni.risolviTutte = (box) => { if (box === boxRotto) { throw new Error("box tolto"); } tolti.push(box.nome); };
+    console.error = () => {};
+    try {
+        assert.strictEqual(SchermataSegnalazioni.risolviTuttoIlDocumento(), 2);
+        assert.deepStrictEqual(tolti, ["A", "B"]);
+    }
+    finally {
+        Segnalazioni.leggiDocumento = prima.leggi;
+        Segnalazioni.risolviTutte = prima.risolvi;
+        console.error = prima.err;
+    }
+});
+
+test("I20-1126: disattivate, l'impaginazione non scrive bollini e il Report Integrita' non avvisa", () => {
+    const indexNew = leggiFileDelPlugin("indexNew.js").replace(/\r/g, "");
+    const inizio = indexNew.indexOf("function finalizzaSegnalazioni(");
+    const corpo = indexNew.substring(inizio, indexNew.indexOf("\n}\n", inizio));
+    assert.match(corpo, /if \(boxImpaginato != null && segnalazioni\.length > 0 && !SchermataSegnalazioni\.disattivate\(\)\) \{\s*boxImpaginato = Segnalazioni\.applicaAlBox\(/);
+    //Il report del giro resta: le segnalazioni si contano lo stesso.
+    assert.match(corpo, /reportImpaginazioneObj\.segnalazioni\.push\(/);
+
+    const report = leggiFileDelPlugin("reportIntegrita/reportIntegrita.js").replace(/\r/g, "");
+    const avviso = report.substring(report.indexOf("async avvisoSegnalazioniPrimaDelReport("), report.indexOf("async vaiASegnalazioniDalReport("));
+    assert.match(avviso, /if \(SchermataSegnalazioni\.disattivate\(\)\) \{\s*return \{ azione: "procedi", lette \};\s*\}\s*const testo = SchermataSegnalazioni\.testoAvvisoReport\(lette\);/);
+
+    //E la schermata offre sempre, in cima, di disattivarle o riattivarle.
+    const schermata = leggiFileDelPlugin("segnalazioni/schermata.js").replace(/\r/g, "");
+    assert.match(schermata, /elenco\.empty\(\);\s*\/\/I20-1126[^\n]*\n\s*elenco\.append\(SchermataSegnalazioni\._barraDisattivazione\(elenco\)\);/);
 });
