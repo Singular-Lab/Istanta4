@@ -6,6 +6,7 @@ import Button from "@/components/Base/Button";
 import GestioneSchemi from "@/pages/LavorazioniInCorso/DettagliLavorazioneInCorso/GestioneSchemi";
 import PanelCombinazioni from "@/pages/ImpostazioniDiProduzione/PanelCombinazioni";
 import PanelFormati from "@/pages/ImpostazioniDiProduzione/PanelFormati";
+import PanelFunzionalita from "@/pages/ImpostazioniDiProduzione/PanelFunzionalita";
 import PanelMenabo from "@/pages/ImpostazioniDiProduzione/PanelMenabo";
 import PanelNamingConvention from "@/pages/ImpostazioniDiProduzione/PanelNamingConvention";
 import PanelTipiExport from "@/pages/ImpostazioniDiProduzione/PanelTipiExport";
@@ -863,6 +864,15 @@ function Main() {
             </div>
           </div>
           <GestioneSchemi />
+        </div>
+
+        {/* Funzionalità della GDO */}
+        <div className="col-span-1 lg:col-span-2 p-5 box box--stacked">
+          <div className="flex items-center gap-3 pb-4 mb-4 border-b border-slate-200/80">
+            <Lucide icon="ToggleRight" className="w-5 h-5 text-primary" />
+            <h2 className="text-lg font-semibold text-slate-800">Funzionalità</h2>
+          </div>
+          <PanelFunzionalita />
         </div>
 
         {/* Menabò */}

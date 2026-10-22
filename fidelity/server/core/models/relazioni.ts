@@ -10,6 +10,7 @@ import { AttivitaUtente } from './attivita_utente';
 import { Canale } from './canali';
 import { CanaleInterazione } from './canali_interazione';
 import { CombinazioneCanaleArea } from './combinazioni_canali_aree';
+import { Config } from './config';
 import { DesignKit } from './design_kit';
 import { FilesRuntime } from './files_runtime';
 import { FilesRuntimeLog } from './files_runtime_log';
@@ -122,6 +123,27 @@ export function configuraRelazioni(): void {
     });
 
     log.info(Colorize.green('✅ Relazioni Utenti-GDO configurate'));
+
+    // ========================================
+    // RELAZIONI CONFIG
+    // ========================================
+
+    // Config -> GDO (belongsTo): la configurazione appartiene a una GDO.
+    // Eliminata la GDO, la riga resta senza GDO: non si perde la configurazione WebPliant
+    Config.belongsTo(GDO, {
+      foreignKey: 'id_gdo_config',
+      as: 'gdo',
+      onDelete: 'SET NULL',
+      onUpdate: 'CASCADE'
+    });
+
+    // GDO -> Config (hasMany)
+    GDO.hasMany(Config, {
+      foreignKey: 'id_gdo_config',
+      as: 'configurazioni',
+      onDelete: 'SET NULL',
+      onUpdate: 'CASCADE'
+    });
 
     // ========================================
     // RELAZIONI PUNTI VENDITA

@@ -16,7 +16,7 @@ import { IGdoService } from '../interfaces/IGdoService';
 import { ITipoExportService } from '../interfaces/ITipoExportService';
 import { IWebPliantService } from '../interfaces/IWebPliantService';
 import { log } from '../logger';
-import { Config } from '../models/config';
+import { trovaConfigInstallazione } from './configPerGdo';
 import { PromoAttributes } from '../models/promo';
 import { Referenze } from '../models/referenze';
 import { RuntimeKit } from '../models/runtime_kit';
@@ -699,7 +699,7 @@ export class WebPliantService implements IWebPliantService {
 
   async get_field_options_filtri(): Promise<any> {
     try {
-      const result = await Config.findOne({ raw: true }) as any;
+      const result = await trovaConfigInstallazione({ raw: true }) as any;
       if (!result) {
         throw new NotFoundError({
           message: "Nessun risultato trovato",

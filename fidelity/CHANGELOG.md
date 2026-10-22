@@ -1,3 +1,12 @@
+## [2.18.002] - 2026-10-22
+
+### Modificato
+- **Gestione momenti e Gestisci Menabò attivabili per GDO, senza build**: le sezioni del dettaglio lavorazione in corso non leggono più `VITE_MOMENTI_ATTIVI`/`VITE_MENABO_ATTIVO` da `import.meta.env` (valori fissati nel bundle alla build in CI, quindi spenti per tutti nell'immagine comune). Ora vengono da `GET /api/funzionalita`, che legge la configurazione della GDO operativa dell'utente, con ripiego su quella dell'installazione. Si impostano dal nuovo pannello "Funzionalità" delle Impostazioni di produzione (`PUT /api/funzionalita`, permesso `impostazioni.modifica_generali`).
+- **Configurazione collegata alla GDO**: la tabella `config` ha le colonne `id_gdo_config` (FK verso `gdo`, `SET NULL` se la GDO viene eliminata) e `funzionalita` (JSONB `{ momenti, menabo }`). Le letture che prima facevano `findOne()` senza filtro passano da `configPerGdo.trovaConfigInstallazione()`, che sceglie in modo stabile la riga della GDO di `CLIENT_ID`, poi quella senza GDO, poi la più vecchia: con più righe il WebPliant pubblico non può leggere la configurazione di un'altra GDO.
+
+### Aggiunto
+- **Passaggio automatico al modello per GDO** (`inizializzazione/migrazioneConfig.ts`, all'avvio del server prima dei worker, come `preparaAccessiAllAvvio`): collega alla GDO di `CLIENT_ID` tutte le righe `config` senza GDO e, solo dove `funzionalita` è vuota, la valorizza da `VITE_MOMENTI_ATTIVI`/`VITE_MENABO_ATTIVO` di `fidelity.env`. Le installazioni che avevano già impostato le variabili ritrovano le sezioni accese senza interventi; da lì in poi vale il pannello. Idempotente, con advisory lock; un errore finisce nel log e non ferma l'avvio.
+
 ## [2.18.001] - 2026-10-01
 
 ### Aggiunto

@@ -1,5 +1,5 @@
 import { TIPO_UTENTI } from "../../../lib/enums";
-import { AvvisoManutenzione, Config, ConfigWebpliant, Dashboard, RegoleMenabo } from "../../../lib/types";
+import { AvvisoManutenzione, Config, ConfigWebpliant, Dashboard, Funzionalita, RegoleMenabo } from "../../../lib/types";
 
 export interface IConfigService {
     getStiliToText(): Promise<string>;
@@ -17,4 +17,6 @@ export interface IConfigService {
     saveAvvisoManutenzione(avviso: AvvisoManutenzione | null): Promise<void>;
     getRegoleMenabo(): Promise<RegoleMenabo | null>;
     saveRegoleMenabo(regole: RegoleMenabo | null): Promise<void>;
+    getFunzionalita(idGdo: string | null): Promise<Funzionalita>;
+    saveFunzionalita(idGdo: string, funzionalita: Funzionalita): Promise<Funzionalita>;
 } 

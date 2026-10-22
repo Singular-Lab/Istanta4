@@ -29,7 +29,7 @@ import { IFileManagementService } from '../interfaces/IFileManagementService';
 import type { IKitRuntimeService } from '../interfaces/IKitRuntimeService';
 import type { ITipoExportService } from '../interfaces/ITipoExportService';
 import type { IWebhookService } from '../interfaces/IWebhookService';
-import { Config } from '../models/config';
+import { trovaConfigInstallazione } from './configPerGdo';
 import { FilesRuntime } from '../models/files_runtime';
 import { FilesRuntimeLog, type FilesRuntimeLogAttributes } from '../models/files_runtime_log';
 import { Referenze } from '../models/referenze';
@@ -308,7 +308,7 @@ export class FileManagementService implements IFileManagementService {
       const correggoTipoExport = (await this.tipoExportService.getAllTipiExport()).find((t) => t.codice === EXPORT_DI_SISTEMA.CORREGGO);
       allKit = allKit.filter((kit) => kit.tipo === TIPO_KIT_DESIGN.AUTOMATICO);
 
-      const configApp = await Config.findOne({ raw: true });
+      const configApp = await trovaConfigInstallazione({ raw: true });
       const data_fields_files = configApp?.webpliant?.data_fields_files || [];
 
       const promoMap = new Map<string, { id: string; nome: string; validita_dal: any; validita_al: any; stato: string; kits: { id: string; nome: string; files: any[] }[] }>();
@@ -447,7 +447,7 @@ export class FileManagementService implements IFileManagementService {
       const correggoTipoExport = (await this.tipoExportService.getAllTipiExport()).find((t) => t.codice === EXPORT_DI_SISTEMA.CORREGGO);
       allKit = allKit.filter((kit) => kit.tipo === TIPO_KIT_DESIGN.MANUALE);
 
-      const configApp = await Config.findOne({ raw: true });
+      const configApp = await trovaConfigInstallazione({ raw: true });
       const data_fields_files = configApp?.webpliant?.data_fields_files || [];
 
       const promoMap = new Map<string, { id: string; nome: string; validita_dal: any; validita_al: any; stato: string; kits: { id: string; nome: string; files: any[] }[] }>();

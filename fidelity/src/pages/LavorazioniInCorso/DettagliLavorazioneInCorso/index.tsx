@@ -42,7 +42,7 @@ import PermissionGate from "../../../components/PermissionGate";
 import { withSessionCheckOptimized } from "../../../components/SessionChecker";
 import { usePermissionContext } from '../../../context/PermissionContext';
 import { useUser } from "../../../context/UserContext";
-import { useContestoPerNuovaLavorazione } from "../../../query/query";
+import { useContestoPerNuovaLavorazione, useFetchFunzionalita } from "../../../query/query";
 import GestioneMomenti from "./GestioneMomenti";
 import TracciatoCard from "./TracciatoCard";
 import { formattaData, formattaDataOra } from "@/utils/dataPromo";
@@ -380,9 +380,6 @@ const ErroreAsync: React.FC<{ children: (messaggio: string) => React.ReactNode }
   return <>{children(error?.message || "")}</>;
 };
 
-const showMomenti = import.meta.env.VITE_MOMENTI_ATTIVI === 'true';
-const showMenabo = import.meta.env.VITE_MENABO_ATTIVO === 'true';
-
 type OrdineTracciati = "recenti" | "meno_recenti" | "nome_az" | "nome_za";
 
 const ORDINI_TRACCIATI: Array<{ valore: OrdineTracciati; etichetta: string }> = [
@@ -414,6 +411,10 @@ function Main() {
   const location = useLocation();
   const navigate = useNavigate();
   const { hasPermission } = usePermissionContext();
+  // Momenti e menabò si attivano per GDO dalle Impostazioni di produzione: finché la risposta non arriva restano nascosti
+  const funzionalitaQuery = useFetchFunzionalita();
+  const showMomenti = funzionalitaQuery.data?.momenti === true;
+  const showMenabo = funzionalitaQuery.data?.menabo === true;
   const [idPromo, setIdPromo] = useState<string | null>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [isUploading, setIsUploading] = useState(false);
