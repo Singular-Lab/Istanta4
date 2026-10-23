@@ -222,4 +222,26 @@ describe("importPuntiVenditaConadCno: file Elenco Muri", () => {
 
     expect(esito).toMatchObject({ azione: "scarta", errore: "Insegna esclusa dall'import: Bistrot" });
   });
+
+  it("canale e area si riconoscono solo dal codice, mai dal nome", () => {
+    expect(importPuntiVenditaConadCno.canaleEAreaPerCodice).toBe(true);
+    // Un canale il cui nome e il codice di un altro: la riga TuDay deve andare sul canale con codice tuday
+    const conNomeAmbiguo: ContestoImportPuntiVendita = {
+      ...contesto,
+      canali: [{ id: "trappola", codice: "XX", nome: "tuday" }, ...contesto.canali],
+      combinazioni: [{ id: "xx_to", idCanale: "trappola", idArea: "to", sigla: "XX_TO" }, ...contesto.combinazioni],
+    };
+    const righe = righeDaImportare(file([muroAttivo({ Insegna: "TuDay Conad" })], []), importPuntiVenditaConadCno);
+    const [esito] = preparaImportPuntiVendita(righe, importPuntiVenditaConadCno, conNomeAmbiguo, "g1", 70);
+
+    expect(esito).toMatchObject({ azione: "crea", dati: { id_combinazione_canale_area: "td_to" } });
+  });
+
+  it("un'area scritta per nome nel file non si riconosce", () => {
+    const soloNome: ContestoImportPuntiVendita = { ...contesto, aree: [{ id: "to", codice: "T1", nome: "TO" }, contesto.aree[1]] };
+    const righe = righeDaImportare(file([muroAttivo()], []), importPuntiVenditaConadCno);
+    const [esito] = preparaImportPuntiVendita(righe, importPuntiVenditaConadCno, soloNome, "g1", 70);
+
+    expect(esito).toMatchObject({ azione: "scarta", errore: "Area non riconosciuta: TO" });
+  });
 });

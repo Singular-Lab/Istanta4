@@ -309,6 +309,11 @@ export interface ImportPuntiVenditaAgenzia {
    */
   chiaveMetaRiserva?: string;
   /**
+   * Canale e area letti dal file si riconoscono solo dal codice, mai dal nome
+   * (un nome uguale al codice di un'altra voce porterebbe alla voce sbagliata).
+   */
+  canaleEAreaPerCodice?: boolean;
+  /**
    * Righe da importare a partire da tutti i fogli del file (nome del foglio → righe con
    * l'intestazione in riga 1). Senza, FP importa le righe del primo foglio.
    */

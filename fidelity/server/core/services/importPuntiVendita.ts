@@ -96,7 +96,8 @@ export function preparaImportPuntiVendita(
   const chiaveDi = (meta?: Record<string, unknown>) => valoreMeta(chiaveMeta, meta);
   const riservaDi = (meta?: Record<string, unknown>) => valoreMeta(chiaveMetaRiserva, meta);
   const doppione = (pv: { nome: string; indirizzo: string; cap: string }) => [n(pv.nome), n(pv.indirizzo), n(pv.cap)].join('|');
-  const trova = (voci: Voce[], valore = '') => (n(valore) ? voci.find(v => n(v.codice) === n(valore) || n(v.nome) === n(valore)) : undefined);
+  const trova = (voci: Voce[], valore = '') =>
+    n(valore) ? voci.find(v => n(v.codice) === n(valore) || (!importer.canaleEAreaPerCodice && n(v.nome) === n(valore))) : undefined;
 
   const perChiave = new Map(contesto.esistenti.filter(pv => chiaveDi(pv.meta)).map(pv => [chiaveDi(pv.meta), pv]));
   const perRiserva = new Map(contesto.esistenti.filter(pv => riservaDi(pv.meta)).map(pv => [riservaDi(pv.meta), pv]));

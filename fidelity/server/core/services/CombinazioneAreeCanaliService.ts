@@ -62,6 +62,8 @@ export class CombinazioneAreeCanaliService implements ICombinazioneAreeCanaliSer
     id_area?: string;
     nome_canale?: string;
     nome_area?: string;
+    codice_canale?: string;
+    codice_area?: string;
   }[]> {
     try {
       const combinazioni = await this.combinazioneRepository.findByGdoId(idGDO);
@@ -91,6 +93,8 @@ export class CombinazioneAreeCanaliService implements ICombinazioneAreeCanaliSer
           id_area: combinazione.id_area_combinazione_canale_area ?? undefined,
           nome_canale: canale?.nome_canali,
           nome_area: area?.nome_aree,
+          codice_canale: canale?.codice_canali,
+          codice_area: area?.codice_aree,
         };
       });
     } catch (error) {

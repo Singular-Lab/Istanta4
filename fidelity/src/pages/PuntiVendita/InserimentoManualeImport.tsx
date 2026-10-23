@@ -161,7 +161,9 @@ export function InserimentoManualeImport({
                 ))}
               </ul>
               <div className="mt-1 text-xs text-slate-500">
-                Nel file: {[riga.letto.meta?.insegna, riga.letto.regione, riga.letto.provincia].filter(Boolean).join(" / ")}
+                Nel file: {[riga.letto.meta?.insegna, riga.letto.canale && `canale ${riga.letto.canale}`, riga.letto.area && `area ${riga.letto.area}`, riga.letto.regione, riga.letto.provincia]
+                  .filter(Boolean)
+                  .join(" / ")}
               </div>
             </div>
 
@@ -171,7 +173,7 @@ export function InserimentoManualeImport({
                 <option value="">Scegli il canale</option>
                 {canali.map(c => (
                   <option key={c.id} value={c.id}>
-                    {c.nome}
+                    {c.codice}
                   </option>
                 ))}
               </FormSelect>
@@ -182,7 +184,7 @@ export function InserimentoManualeImport({
                 <option value="">Scegli l'area</option>
                 {aree.map(a => (
                   <option key={a.id} value={a.id}>
-                    {a.nome}
+                    {a.codice}
                   </option>
                 ))}
               </FormSelect>

@@ -584,6 +584,8 @@ export const useFetchAllCombinazioneForGDO = () => {
       id_area?: string;
       nome_canale?: string;
       nome_area?: string;
+      codice_canale?: string;
+      codice_area?: string;
     }[]>("/all_combinazion_for_gdo"),
   });
 };

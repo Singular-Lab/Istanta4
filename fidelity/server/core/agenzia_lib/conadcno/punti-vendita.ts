@@ -147,6 +147,7 @@ function leggiFileConadCno(fogli: Record<string, Record<string, unknown>[]>): Re
 export const importPuntiVenditaConadCno: ImportPuntiVenditaAgenzia = {
   chiaveMeta: "id_anacan",
   chiaveMetaRiserva: "id_muro",
+  canaleEAreaPerCodice: true,
   leggiFile: leggiFileConadCno,
   leggiRiga: riga => {
     const valore = (campo: keyof typeof COLONNE) => cella(riga, ...COLONNE[campo]);

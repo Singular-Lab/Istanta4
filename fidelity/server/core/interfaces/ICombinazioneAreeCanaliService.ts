@@ -19,6 +19,8 @@ export interface ICombinazioneAreeCanaliService {
     id_area?: string;
     nome_canale?: string;
     nome_area?: string;
+    codice_canale?: string;
+    codice_area?: string;
   }[]>;
   deleteCombinazione(guidID: string): Promise<boolean>;
 

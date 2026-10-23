@@ -84,18 +84,20 @@ export interface CombinazioneDisponibile {
   id_area?: string;
   nome_canale?: string;
   nome_area?: string;
+  codice_canale?: string;
+  codice_area?: string;
 }
 
-/** Canali e aree che compaiono nelle combinazioni della GDO, ordinati per nome. */
+/** Canali e aree che compaiono nelle combinazioni della GDO, per codice (non per nome), ordinati. */
 export function canaliEAree(combinazioni: CombinazioneDisponibile[]) {
   const canali = new Map<string, string>();
   const aree = new Map<string, string>();
   for (const c of combinazioni) {
-    canali.set(c.id_canale, c.nome_canale ?? c.sigla_combinazione);
-    if (c.id_area) aree.set(c.id_area, c.nome_area ?? c.sigla_combinazione);
+    canali.set(c.id_canale, c.codice_canale ?? c.sigla_combinazione);
+    if (c.id_area) aree.set(c.id_area, c.codice_area ?? c.sigla_combinazione);
   }
   const ordina = (voci: Map<string, string>) =>
-    [...voci].map(([id, nome]) => ({ id, nome })).sort((a, b) => a.nome.localeCompare(b.nome));
+    [...voci].map(([id, codice]) => ({ id, codice })).sort((a, b) => a.codice.localeCompare(b.codice));
   return { canali: ordina(canali), aree: ordina(aree) };
 }
 

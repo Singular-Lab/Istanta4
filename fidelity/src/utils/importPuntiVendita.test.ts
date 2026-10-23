@@ -104,9 +104,9 @@ describe("riepilogo dell'import", () => {
 });
 
 const combinazioni = [
-  { id: "k1", sigla_combinazione: "CY_TO", id_canale: "cy", id_area: "to", nome_canale: "City", nome_area: "Toscana" },
-  { id: "k2", sigla_combinazione: "TD_LI", id_canale: "td", id_area: "li", nome_canale: "TuDay", nome_area: "Liguria" },
-  { id: "k3", sigla_combinazione: "CY_LI", id_canale: "cy", id_area: "li", nome_canale: "City", nome_area: "Liguria" },
+  { id: "k1", sigla_combinazione: "cy_TO", id_canale: "cy", id_area: "to", nome_canale: "City", nome_area: "Toscana", codice_canale: "cy", codice_area: "TO" },
+  { id: "k2", sigla_combinazione: "tuday_LI", id_canale: "td", id_area: "li", nome_canale: "TuDay", nome_area: "Liguria", codice_canale: "tuday", codice_area: "LI" },
+  { id: "k3", sigla_combinazione: "cy_LI", id_canale: "cy", id_area: "li", nome_canale: "City", nome_area: "Liguria", codice_canale: "cy", codice_area: "LI" },
 ];
 
 const modulo = (campi: Partial<DatiInserimentoManuale> = {}): DatiInserimentoManuale => ({
@@ -123,10 +123,10 @@ const modulo = (campi: Partial<DatiInserimentoManuale> = {}): DatiInserimentoMan
 });
 
 describe("inserimento manuale", () => {
-  it("canali e aree si ricavano dalle combinazioni, senza doppioni e ordinati per nome", () => {
+  it("canali e aree si ricavano dalle combinazioni per codice, non per nome, senza doppioni e ordinati", () => {
     expect(canaliEAree(combinazioni)).toEqual({
-      canali: [{ id: "cy", nome: "City" }, { id: "td", nome: "TuDay" }],
-      aree: [{ id: "li", nome: "Liguria" }, { id: "to", nome: "Toscana" }],
+      canali: [{ id: "cy", codice: "cy" }, { id: "td", codice: "tuday" }],
+      aree: [{ id: "li", codice: "LI" }, { id: "to", codice: "TO" }],
     });
   });
 
