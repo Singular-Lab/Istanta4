@@ -9,7 +9,7 @@ import { log } from '../logger';
 import type { ICanaleRepository } from '../repositories/CanaleRepository';
 import { CanaleRepository } from '../repositories/CanaleRepository';
 import { ServerUtils } from '../utils/ServerUtils';
-import { verificaRisposta } from '../utils/rispostaServizi';
+import { scriviSuIstanta } from '../utils/istanta';
 
 export class CanaleService implements ICanaleService {
   constructor(
@@ -160,16 +160,7 @@ export class CanaleService implements ICanaleService {
   async deleteCanale(guidID: string, req?: Request): Promise<boolean> {
     try {
       if (req) {
-        verificaRisposta(
-          await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
-            req,
-            config.ISTANTA_IP_ADDRESS + '/ACPV/eliminaCanale/' + guidID,
-            'DELETE',
-            undefined
-          ),
-          'ISTANTA',
-          '/ACPV/eliminaCanale'
-        );
+        await scriviSuIstanta(req, '/ACPV/eliminaCanale/' + guidID, 'DELETE', undefined);
       }
 
       const deleted = await this.canaleRepository.delete(guidID);

@@ -11,7 +11,7 @@ import { permissionGuard } from '../middleware/permissionGuard';
 import { GDO } from '../models/gdo';
 import { UtentiGDO } from '../models/utenti_gdo';
 import { ServerUtils } from '../utils/ServerUtils';
-import { verificaRisposta } from '../utils/rispostaServizi';
+import { scriviSuIstanta } from '../utils/istanta';
 
 export class CanaleController extends BaseController {
   constructor(private canaleService: ICanaleService) {
@@ -110,16 +110,7 @@ export class CanaleController extends BaseController {
         sigla: data.sigla,
         nome: data.nome
       }
-      verificaRisposta(
-        await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
-          req,
-          config.ISTANTA_IP_ADDRESS + '/ACPV/salvaCanale',
-          'PUT',
-          dataPerIstanta
-        ),
-        'ISTANTA',
-        '/ACPV/salvaCanale'
-      );
+      await scriviSuIstanta(req, '/ACPV/salvaCanale', 'PUT', dataPerIstanta);
 
       const canale = await this.canaleService.createCanale(data);
       if (!canale) {

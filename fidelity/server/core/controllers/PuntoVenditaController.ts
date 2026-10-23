@@ -4,18 +4,22 @@ import { HttpStatusCode, TIPO_UTENTI } from '../../../lib/enums';
 import { ExternalApiError } from '../../../lib/errors';
 import type { IAgenziaLib } from '../agenzia_lib/types';
 import { BaseController } from '../base/BaseController';
-import config from '../config';
 import { uploadSpreadsheet } from '../config/multerConfig';
-import type { CreatePuntoVenditaDTO, ImportPuntiVenditaResponseDTO } from '../dto';
+import { sequelize } from '../db/SequelizeConnector';
+import type { CreatePuntoVenditaDTO, IndirizzoTrovatoDTO, StatoImportPuntiVenditaDTO } from '../dto';
 import { IGdoService } from '../interfaces/IGdoService';
 import { IPuntoVenditaService } from '../interfaces/IPuntoVenditaService';
 import { gdoOperativaPerRichiesta } from '../accessi/contestoAccesso';
 import { log } from '../logger';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { permissionGuard } from '../middleware/permissionGuard';
-import { importPuntiVenditaGenerico, leggiFoglio, preparaImportPuntiVendita } from '../services/importPuntiVendita';
+import { DecisioneNonApplicabile, eventoImportPuntiVendita, GestoreImportPuntiVendita, importPuntiVenditaJobs } from '../services/ImportPuntiVenditaJob';
+import { importPuntiVenditaGenerico, preparaImportPuntiVendita, righeDaImportare } from '../services/importPuntiVendita';
 import { ServerUtils } from '../utils/ServerUtils';
-import { verificaRisposta } from '../utils/rispostaServizi';
+import { roomUtente } from '../utils/socketRooms';
+import { emitToClients } from '../../ws-server';
+import { cercaIndirizzi } from '../utils/geocodifica';
+import { scriviSuIstanta } from '../utils/istanta';
 
 /** Il body del form Punti Vendita (salvaPV e modificaPV), e delle chiamate interne. */
 type FormPuntoVendita = {
@@ -55,8 +59,27 @@ function datiDaForm(body: FormPuntoVendita, idGdo: string): CreatePuntoVenditaDT
   };
 }
 
+/** Dopo un import la view delle combinazioni conta i nuovi PV; se non riesce i PV restano comunque. */
+async function aggiornaVistaCombinazioni(): Promise<void> {
+  try {
+    await sequelize.query('SELECT refresh_mv_combinazioni()');
+  } catch (error) {
+    log.warn('Punti vendita importati, ma aggiornamento della view combinazioni non riuscito', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
 export class PuntoVenditaController extends BaseController {
-  constructor(private puntoVenditaService: IPuntoVenditaService, private gdoService: IGdoService, private agenziaLib: IAgenziaLib) {
+  constructor(
+    private puntoVenditaService: IPuntoVenditaService,
+    private gdoService: IGdoService,
+    private agenziaLib: IAgenziaLib,
+    private importJobs: GestoreImportPuntiVendita = importPuntiVenditaJobs,
+    private emetti: (evento: string, dati: unknown, room: string) => void = emitToClients,
+    private aggiornaVista: () => Promise<void> = aggiornaVistaCombinazioni,
+    private cerca: (query: string) => Promise<IndirizzoTrovatoDTO[]> = cercaIndirizzi
+  ) {
     super('/api');
   }
 
@@ -69,6 +92,10 @@ export class PuntoVenditaController extends BaseController {
     this.router.delete('/ACPV/eliminaPV/:guidID', authMiddleware, permissionGuard('gdo.gestisci_punti_vendita'), this.eliminaPV.bind(this));
     this.router.put('/ACPV/modificaPV', authMiddleware, permissionGuard('gdo.gestisci_punti_vendita'), this.salvaPuntoVendita.bind(this));
     this.router.post('/ACPV/importaPV', authMiddleware, permissionGuard('gdo.gestisci_punti_vendita'), uploadSpreadsheet.single('file'), this.importaPV.bind(this));
+    this.router.get('/ACPV/importaPV/stato', authMiddleware, permissionGuard('gdo.gestisci_punti_vendita'), this.statoImportPV.bind(this));
+    this.router.post('/ACPV/importaPV/:jobId/annulla', authMiddleware, permissionGuard('gdo.gestisci_punti_vendita'), this.annullaImportPV.bind(this));
+    this.router.post('/ACPV/importaPV/:jobId/decisione', authMiddleware, permissionGuard('gdo.gestisci_punti_vendita'), this.decisioneImportPV.bind(this));
+    this.router.get('/ACPV/geocodifica/cerca', authMiddleware, permissionGuard('gdo.gestisci_punti_vendita'), this.cercaIndirizzo.bind(this));
     this.router.get('/getAllPVFromIdGDO', authMiddleware, permissionGuard('gdo.gestisci_punti_vendita'), this.getAllPVFromIdGDO.bind(this));
     this.router.get('/getAllPVFromIdGDO_paginated', authMiddleware, permissionGuard('gdo.gestisci_punti_vendita'), this.getAllPVFromIdGDOPaginated.bind(this));
     this.router.get('/getAllPV', authMiddleware, permissionGuard('gdo.gestisci_punti_vendita'), this.getAllPV.bind(this));
@@ -251,7 +278,7 @@ export class PuntoVenditaController extends BaseController {
       const dati = datiDaForm(body, idGdo);
       const data = interna
         ? await this.scriviInFp(id, dati, isUpdate)
-        : await this.salvaSuIstantaEFp(req, id, dati, isUpdate);
+        : (await this.salvaSuIstantaEFp(req, id, dati, isUpdate)).data;
 
       log.info(`salvaPuntoVendita - punto vendita ${isUpdate ? 'aggiornato' : 'creato'}`, { id, idGdo, interna });
       this.sendResponse(res, isUpdate ? HttpStatusCode.OK : HttpStatusCode.CREATED, {
@@ -279,25 +306,22 @@ export class PuntoVenditaController extends BaseController {
 
   /**
    * Istanta crea o aggiorna per guidID (non lo genera: un GUID vuoto farebbe coincidere
-   * tutti i PV nuovi), poi FP con lo stesso GUID. Se Istanta rifiuta, FP non viene toccato.
+   * tutti i PV nuovi), poi FP con lo stesso GUID. Se Istanta rifiuta, FP non viene toccato;
+   * in development, se Istanta non risponde, il PV resta solo in FP (sincronizzato false).
    */
   private async salvaSuIstantaEFp(req: Request, id: string, dati: CreatePuntoVenditaDTO, aggiorna: boolean) {
-    verificaRisposta(
-      await ServerUtils.sendToFICOApi(req, config.ISTANTA_IP_ADDRESS + '/ACPV/salvaPV', 'PUT', {
-        guidID: id,
-        nome: dati.nome,
-        indirizzo: dati.indirizzo,
-        citta: dati.citta,
-        cap: dati.cap,
-        lat: dati.lat ?? 0,
-        lon: dati.lon ?? 0,
-        guidIDCombinazione: dati.id_combinazione_canale_area,
-        idGDO: dati.id_gdo,
-      }),
-      'ISTANTA',
-      '/ACPV/salvaPV'
-    );
-    return this.scriviInFp(id, dati, aggiorna);
+    const { sincronizzato } = await scriviSuIstanta(req, '/ACPV/salvaPV', 'PUT', {
+      guidID: id,
+      nome: dati.nome,
+      indirizzo: dati.indirizzo,
+      citta: dati.citta,
+      cap: dati.cap,
+      lat: dati.lat ?? 0,
+      lon: dati.lon ?? 0,
+      guidIDCombinazione: dati.id_combinazione_canale_area,
+      idGDO: dati.id_gdo,
+    });
+    return { data: await this.scriviInFp(id, dati, aggiorna), sincronizzato };
   }
 
   /** Aggiorna il PV o, se in FP non c'e ancora, lo crea con quel GUID: come fa Istanta. */
@@ -327,16 +351,7 @@ export class PuntoVenditaController extends BaseController {
         }
       }
 
-      verificaRisposta(
-        await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
-          req,
-          config.ISTANTA_IP_ADDRESS + '/ACPV/eliminaPV/' + guidID,
-          'DELETE',
-          undefined
-        ),
-        'ISTANTA',
-        '/ACPV/eliminaPV'
-      );
+      await scriviSuIstanta(req, '/ACPV/eliminaPV/' + guidID, 'DELETE', undefined);
 
       const resultPuntoVenditaEliminato = await this.puntoVenditaService.deletePuntoVendita(guidID);
       this.sendResponse(res, HttpStatusCode.OK, resultPuntoVenditaEliminato);
@@ -351,8 +366,10 @@ export class PuntoVenditaController extends BaseController {
 
   /**
    * Import dei PV da Excel col tracciato della libreria agenzia (o quello generico).
-   * Con ?anteprima=true dice cosa farebbe di ogni riga senza scrivere; altrimenti scrive
-   * riga per riga, prima su Istanta e poi in FP, con lo stesso GUID nei due sistemi.
+   * Con ?anteprima=true dice cosa farebbe di ogni riga, con il punteggio di affidabilita,
+   * senza scrivere. Altrimenti avvia l'import in background e risponde subito con il jobId:
+   * l'avanzamento arriva via socket (importPV_<jobId>_progress/_complete) all'utente che l'ha avviato.
+   * Sulla riga ambigua l'import si ferma (stato in_attesa) finche l'utente non la decide.
    */
   private async importaPV(req: Request, res: Response): Promise<void> {
     try {
@@ -367,9 +384,10 @@ export class PuntoVenditaController extends BaseController {
         return;
       }
 
+      const importer = this.agenziaLib.importPuntiVendita ?? importPuntiVenditaGenerico;
       const esiti = preparaImportPuntiVendita(
-        leggiFoglio(req.file.buffer),
-        this.agenziaLib.importPuntiVendita ?? importPuntiVenditaGenerico,
+        righeDaImportare(req.file.buffer, importer),
+        importer,
         await this.puntoVenditaService.getContestoImport(idGdo),
         idGdo
       );
@@ -378,28 +396,112 @@ export class PuntoVenditaController extends BaseController {
         return;
       }
 
-      const risultato: ImportPuntiVenditaResponseDTO = { total_imported: 0, total_updated: 0, total_skipped: 0, errors: [] };
-      // ponytail: una chiamata a Istanta per riga, in sequenza; job asincrono se i file diventano di migliaia di righe
-      for (const esito of esiti) {
-        if (esito.azione === 'scarta') {
-          risultato.total_skipped++;
-          risultato.errors.push({ row: esito.riga, error: esito.errore });
-          continue;
-        }
-        try {
-          await this.salvaSuIstantaEFp(req, esito.id ?? randomUUID(), esito.dati, Boolean(esito.id));
-          if (esito.id) risultato.total_updated++;
-          else risultato.total_imported++;
-        } catch (error) {
-          log.error('importaPV - riga non importata', { riga: esito.riga, error });
-          risultato.total_skipped++;
-          risultato.errors.push({ row: esito.riga, error: error instanceof Error ? error.message : String(error) });
-        }
+      const inCorso = this.importJobs.inCorso(idGdo);
+      if (inCorso) {
+        this.sendResponse(res, HttpStatusCode.CONFLICT, { message: 'Un import dei punti vendita e gia in corso', stato: inCorso });
+        return;
       }
-      log.info('importaPV - completato', { idGdo, ...risultato, errors: risultato.errors.length });
-      this.sendResponse(res, HttpStatusCode.OK, risultato);
+      const idUtente = req.session.id_utente as string;
+      const { stato } = this.importJobs.avvia(idGdo, idUtente, esiti, {
+        scrivi: async esito => ({
+          sincronizzato: (await this.salvaSuIstantaEFp(req, esito.id ?? randomUUID(), esito.dati, Boolean(esito.id))).sincronizzato,
+        }),
+        notifica: (evento, statoJob) => this.emetti(eventoImportPuntiVendita(statoJob.jobId, evento), statoJob, roomUtente(idUtente)),
+        alTermine: () => this.aggiornaVista(),
+      });
+      log.info('importaPV - avviato', { idGdo, jobId: stato.jobId, righe: esiti.length });
+      this.sendResponse(res, HttpStatusCode.ACCEPTED, { jobId: stato.jobId, stato });
     } catch (error) {
       this.handleError(res, error);
+    }
+  }
+
+  /** Stato di un import (?jobId=) o, senza jobId, quello in corso sulla GDO o l'ultimo dell'utente. */
+  private async statoImportPV(req: Request, res: Response): Promise<void> {
+    try {
+      const idUtente = req.session.id_utente as string;
+      const jobId = typeof req.query.jobId === 'string' ? req.query.jobId : undefined;
+      let stato: StatoImportPuntiVenditaDTO | undefined;
+      if (jobId) {
+        stato = this.importJobs.stato(jobId, idUtente);
+      } else {
+        const idGdo = await this.gdoDellaRichiesta(req, undefined, false);
+        stato = (idGdo && this.importJobs.inCorso(idGdo)) || this.importJobs.ultimo(idUtente);
+      }
+      this.sendResponse(res, HttpStatusCode.OK, { stato: stato ?? null });
+    } catch (error) {
+      this.handleError(res, error);
+    }
+  }
+
+  /** Ferma l'import dopo la riga in corso: le righe gia scritte restano, le altre non si elaborano. */
+  private async annullaImportPV(req: Request<{ jobId: string }>, res: Response): Promise<void> {
+    try {
+      const stato = this.importJobs.annulla(req.params.jobId, req.session.id_utente as string);
+      if (!stato) {
+        this.sendResponse(res, HttpStatusCode.NOT_FOUND, { message: 'Import non trovato' });
+        return;
+      }
+      log.info('importaPV - annullamento richiesto', { jobId: req.params.jobId });
+      this.sendResponse(res, HttpStatusCode.OK, { stato });
+    } catch (error) {
+      this.handleError(res, error);
+    }
+  }
+
+  /**
+   * Decisione dell'utente sulla riga su cui l'import e fermo: inserirla con i dati confermati
+   * nel modale (prima su Istanta e poi in FP, con le chiavi del cliente lette dal file nei meta),
+   * oppure scartarla. Poi l'import riprende. Se Istanta rifiuta, la riga resta in attesa.
+   */
+  private async decisioneImportPV(req: Request<{ jobId: string }>, res: Response): Promise<void> {
+    try {
+      const idUtente = req.session.id_utente as string;
+      const body = (req.body ?? {}) as { azione?: string } & Partial<FormPuntoVendita>;
+      const stato = this.importJobs.stato(req.params.jobId, idUtente);
+      const riga = stato?.rigaInAttesa;
+      if (!stato) {
+        this.sendResponse(res, HttpStatusCode.NOT_FOUND, { message: 'Import non trovato' });
+        return;
+      }
+      if (body.azione === 'scarta') {
+        this.sendResponse(res, HttpStatusCode.OK, { stato: await this.importJobs.decidi(req.params.jobId, idUtente, { azione: 'scarta' }) });
+        return;
+      }
+      if (body.azione !== 'inserisci' || !riga) {
+        this.sendResponse(res, HttpStatusCode.BAD_REQUEST, { message: !riga ? "L'import non e in attesa di una decisione" : 'Azione non valida' });
+        return;
+      }
+      if (!body.guidIDCombinazione || !body.nome || !body.indirizzo || !body.citta || !/^\d{5}$/.test(body.cap ?? '')) {
+        this.sendResponse(res, HttpStatusCode.BAD_REQUEST, { message: 'Completare nome, indirizzo, citta, CAP, canale e area del punto vendita' });
+        return;
+      }
+      const dati: CreatePuntoVenditaDTO = { ...datiDaForm(body as FormPuntoVendita, riga.dati.id_gdo), meta: riga.dati.meta };
+      const nuovo = await this.importJobs.decidi(req.params.jobId, idUtente, { azione: 'inserisci', dati });
+      this.sendResponse(res, HttpStatusCode.OK, { stato: nuovo });
+    } catch (error) {
+      if (error instanceof DecisioneNonApplicabile) {
+        this.sendResponse(res, HttpStatusCode.CONFLICT, { message: error.message });
+        return;
+      }
+      if (error instanceof ExternalApiError) return this.handleError(res, error);
+      log.error('decisioneImportPV - Error', { error });
+      this.sendResponse(res, HttpStatusCode.INTERNAL_SERVER_ERROR, { message: "Errore durante l'inserimento del punto vendita" });
+    }
+  }
+
+  /** Indirizzi trovati da Nominatim per la ricerca ?q=, per confermare quello giusto sulla mappa. */
+  private async cercaIndirizzo(req: Request, res: Response): Promise<void> {
+    const query = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+    if (query.length < 3) {
+      this.sendResponse(res, HttpStatusCode.BAD_REQUEST, { message: "Indicare l'indirizzo da cercare" });
+      return;
+    }
+    try {
+      this.sendResponse(res, HttpStatusCode.OK, { risultati: await this.cerca(query) });
+    } catch (error) {
+      log.warn('cercaIndirizzo - Nominatim non disponibile', { error: error instanceof Error ? error.message : String(error) });
+      this.sendResponse(res, HttpStatusCode.SERVICE_UNAVAILABLE, { message: 'Ricerca indirizzi non disponibile, riprova tra poco' });
     }
   }
 

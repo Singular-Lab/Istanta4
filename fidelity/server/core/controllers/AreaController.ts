@@ -14,7 +14,7 @@ import { authMiddleware } from '../middleware/authMiddleware';
 import { permissionGuard } from '../middleware/permissionGuard';
 import { UtentiGDO } from '../models/utenti_gdo';
 import { ServerUtils } from '../utils/ServerUtils';
-import { verificaRisposta } from '../utils/rispostaServizi';
+import { scriviSuIstanta } from '../utils/istanta';
 export class AreaController extends BaseController {
   constructor(private areaService: IAreaService, private gdoService: IGdoService) {
     super('/api');
@@ -113,16 +113,7 @@ export class AreaController extends BaseController {
         sigla: data.codice,
         nome: data.nome
       }
-      verificaRisposta(
-        await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
-          req,
-          config.ISTANTA_IP_ADDRESS + '/ACPV/salvaArea',
-          'PUT',
-          dataPerIstanta
-        ),
-        'ISTANTA',
-        '/ACPV/salvaArea'
-      );
+      await scriviSuIstanta(req, '/ACPV/salvaArea', 'PUT', dataPerIstanta);
 
       const area = await this.areaService.createArea(data);
       if (!area) {
@@ -166,16 +157,7 @@ export class AreaController extends BaseController {
         }
       }
 
-      verificaRisposta(
-        await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
-          req,
-          config.ISTANTA_IP_ADDRESS + '/ACPV/eliminaArea/' + guidID,
-          'DELETE',
-          undefined
-        ),
-        'ISTANTA',
-        '/ACPV/eliminaArea'
-      );
+      await scriviSuIstanta(req, '/ACPV/eliminaArea/' + guidID, 'DELETE', undefined);
 
       const result = await this.areaService.deleteArea(guidID);
       res.status(HttpStatusCode.OK).json(result);

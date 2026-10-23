@@ -8,7 +8,7 @@ import { authMiddleware } from '../middleware/authMiddleware';
 import { permissionGuard } from '../middleware/permissionGuard';
 import { UtentiGDO } from '../models/utenti_gdo';
 import { ServerUtils } from '../utils/ServerUtils';
-import { verificaRisposta } from '../utils/rispostaServizi';
+import { scriviSuIstanta } from '../utils/istanta';
 export class CombinazioneAreeCanaliController extends BaseController {
   protected setupRoutes(): void {
     this.initializeRoutes();
@@ -88,16 +88,7 @@ export class CombinazioneAreeCanaliController extends BaseController {
         return;
       }
 
-      verificaRisposta(
-        await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
-          req,
-          config.ISTANTA_IP_ADDRESS + '/ACPV/setCombinazione',
-          'PUT',
-          dataPerIstanta
-        ),
-        'ISTANTA',
-        '/ACPV/setCombinazione'
-      );
+      await scriviSuIstanta(req, '/ACPV/setCombinazione', 'PUT', dataPerIstanta);
 
       const resultCombinazione = await this.combinazioneService.createCombinazione(data);
 
@@ -121,16 +112,7 @@ export class CombinazioneAreeCanaliController extends BaseController {
     try {
       const { guidID } = req.params;
 
-      verificaRisposta(
-        await ServerUtils.sendToFICOApi<{ esito: boolean, error: string }>(
-          req,
-          config.ISTANTA_IP_ADDRESS + `/ACPV/eliminaCombinazione/${guidID}`,
-          'DELETE',
-          undefined
-        ),
-        'ISTANTA',
-        '/ACPV/eliminaCombinazione'
-      );
+      await scriviSuIstanta(req, `/ACPV/eliminaCombinazione/${guidID}`, 'DELETE', undefined);
 
       const success = await this.combinazioneService.deleteCombinazione(guidID);
       if (success) {

@@ -1,5 +1,5 @@
 import Lucide from "@/components/Base/Lucide";
-import { registraNotifica } from "@/utils/erroriServizi";
+import { ascoltaDissincronia, registraNotifica } from "@/utils/erroriServizi";
 import React, { createContext, ReactNode, useCallback, useContext, useEffect, useRef, useState } from "react";
 
 type AnimationType = 'slide' | 'fade' | 'scale';
@@ -143,6 +143,9 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         registraNotifica(showNotification);
         return () => registraNotifica(null);
     }, [showNotification]);
+
+    // In development Istanta puo non rispondere: il server salva solo in FP e qui lo si dice
+    useEffect(() => ascoltaDissincronia(), []);
 
     const getPositionStyles = (position: string) => {
         switch (position) {

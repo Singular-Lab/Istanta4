@@ -76,6 +76,7 @@ export function applyCors(app: Express) {
       'RateLimit-Limit',
       'RateLimit-Remaining',
       'RateLimit-Reset',
+      'X-Istanta-Dissincronia',
     ],
     allowedHeaders: [
       'Content-Type',

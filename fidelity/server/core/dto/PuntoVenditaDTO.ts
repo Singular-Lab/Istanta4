@@ -175,12 +175,91 @@ export interface PuntoVenditaDaImportareDTO {
   lat?: number;
   lon?: number;
   meta?: Record<string, unknown>;
+  /** Dubbi della libreria agenzia sul dato letto: ognuno toglie punti all'affidabilita della riga. */
+  avvisi?: AvvisoImportPuntoVenditaDTO[];
 }
 
-/** Esito di una riga del file: riga e quella del foglio Excel, dove l'intestazione e la 1. */
+/** Un motivo per cui il dato di una riga e meno affidabile, e quanti punti (su 100) toglie. */
+export interface AvvisoImportPuntoVenditaDTO {
+  motivo: string;
+  penalita: number;
+}
+
+/** Dati di un PV letto dal file; la combinazione canale/area manca se la riga va decisa in revisione. */
+export type DatiPuntoVenditaImportatoDTO = Omit<CreatePuntoVenditaDTO, 'id_combinazione_canale_area'> & {
+  id_combinazione_canale_area?: string;
+};
+
+/**
+ * Esito di una riga del file: riga e quella del foglio Excel, dove l'intestazione e la 1.
+ * Le righe con punteggio di affidabilita sotto la soglia non si importano: vanno in revisione.
+ */
 export type EsitoRigaImportPuntoVenditaDTO =
   | { riga: number; azione: 'scarta'; errore: string; letto?: PuntoVenditaDaImportareDTO }
-  | { riga: number; azione: 'crea' | 'aggiorna'; id?: string; letto: PuntoVenditaDaImportareDTO; dati: CreatePuntoVenditaDTO };
+  | {
+      riga: number;
+      azione: 'crea' | 'aggiorna';
+      id?: string;
+      letto: PuntoVenditaDaImportareDTO;
+      dati: CreatePuntoVenditaDTO;
+      punteggio: number;
+      motivi: string[];
+    }
+  | {
+      riga: number;
+      azione: 'revisiona';
+      id?: string;
+      letto: PuntoVenditaDaImportareDTO;
+      dati: DatiPuntoVenditaImportatoDTO;
+      punteggio: number;
+      motivi: string[];
+      chiave: string;
+      /** Canale e area riconosciuti dal file, da proporre all'utente (se ci sono). */
+      idCanale?: string;
+      idArea?: string;
+    };
+
+/** Riga che l'import non sa decidere da solo: aspetta che l'utente la inserisca a mano o la scarti. */
+export type RigaInAttesaImportDTO = Extract<EsitoRigaImportPuntoVenditaDTO, { azione: 'revisiona' }>;
+
+/** Avanzamento di un import di punti vendita in background, inviato via socket all'utente che l'ha avviato. */
+export interface StatoImportPuntiVenditaDTO {
+  jobId: string;
+  /** in_attesa: l'import e fermo su rigaInAttesa finche l'utente non decide. */
+  stato: 'in_corso' | 'in_attesa' | 'completato' | 'annullato' | 'errore';
+  totale: number;
+  elaborate: number;
+  creati: number;
+  aggiornati: number;
+  scartati: number;
+  /** PV scritti dall'utente con l'inserimento manuale (contati anche in creati o aggiornati). */
+  inseritiAMano: number;
+  /** PV salvati solo in FP perche Istanta non rispondeva (solo in development). */
+  soloFp: number;
+  /** Righe non elaborate perche l'import e stato annullato prima di arrivarci. */
+  nonElaborate: number;
+  errori: Array<{ row: number; error: string }>;
+  rigaInAttesa?: RigaInAttesaImportDTO;
+  avviatoIl: string;
+  terminatoIl?: string;
+}
+
+/** Decisione dell'utente sulla riga in attesa: dati confermati dal modale, oppure scarto. */
+export type DecisioneImportPuntoVenditaDTO =
+  | { azione: 'inserisci'; dati: CreatePuntoVenditaDTO }
+  | { azione: 'scarta' };
+
+/** Un risultato della ricerca indirizzo (Nominatim), gia scomposto nei campi del PV. */
+export interface IndirizzoTrovatoDTO {
+  etichetta: string;
+  lat: number;
+  lon: number;
+  indirizzo: string;
+  cap?: string;
+  citta?: string;
+  provincia?: string;
+  regione?: string;
+}
 
 /**
  * DTO per la risposta dell'importazione
