@@ -59,6 +59,7 @@ const contesto: ContestoImportPuntiVendita = {
     { id: "cy_to", idCanale: "cy", idArea: "to", sigla: "CY_TO" },
     { id: "pt_em", idCanale: "pt", idArea: "em", sigla: "PT_EM" },
     { id: "td_to", idCanale: "td", idArea: "to", sigla: "TD_TO" },
+    { id: "pt_to", idCanale: "pt", idArea: "to", sigla: "PT_TO" },
   ],
   esistenti: [],
 };
@@ -100,6 +101,7 @@ describe("importPuntiVenditaConadCno: lettura della riga", () => {
     ["Margherita", "B - Margherita", "margherita"],
     ["Spazio Conad", "I - Iper", "sc"],
     ["SuperStore", "S - Superstore", "ss"],
+    ["Pet Store Conad", "J - Pet Store Conad", "PT"],
   ])("insegna %s → canale %s", (insegna, tipo, canale) => {
     expect(leggi({ Insegna: insegna, "Tipo Pdv": tipo })).toMatchObject({ canale, avvisi: [] });
   });
@@ -111,7 +113,7 @@ describe("importPuntiVenditaConadCno: lettura della riga", () => {
     }
   );
 
-  it.each(["Pet Store Conad", "Parafarmacia", "Ingrosso", "Sapori & Dintorni", "Non definita", "Euronics"])(
+  it.each(["Parafarmacia", "Ingrosso", "Sapori & Dintorni", "Non definita", "Euronics"])(
     "l'insegna %s si inserisce a mano: canale da scegliere, punteggio a zero",
     insegna => {
       expect(leggi({ Insegna: insegna })).toMatchObject({
@@ -208,12 +210,31 @@ describe("importPuntiVenditaConadCno: file Elenco Muri", () => {
     expect((esito as any).idArea).toBeUndefined();
   });
 
-  it("un Pet Store in Toscana va all'inserimento manuale con l'area gia proposta", () => {
-    const righe = righeDaImportare(file([muroAttivo({ Insegna: "Pet Store Conad", "Tipo Pdv": "J - Pet Store Conad" })], []), importPuntiVenditaConadCno);
+  it("un Pet Store in Toscana si importa in automatico sulla combinazione del canale PT", () => {
+    const righe = righeDaImportare(
+      file([muroAttivo({ Insegna: "Pet Store Conad", "Tipo Pdv": "J - Pet Store Conad" })], [[5001, 60001, "LUCCA", "1 - Toscana", "J - Pet Store Conad"]]),
+      importPuntiVenditaConadCno
+    );
     const [esito] = preparaImportPuntiVendita(righe, importPuntiVenditaConadCno, contesto, "g1", 70);
 
-    expect(esito).toMatchObject({ azione: "revisiona", idArea: "to" });
-    expect((esito as any).idCanale).toBeUndefined();
+    expect(esito).toMatchObject({ azione: "crea", punteggio: 100, dati: { id_combinazione_canale_area: "pt_to", meta: { id_anacan: "5001" } } });
+  });
+
+  it("un Pet Store in Lombardia va all'inserimento manuale con il canale PT gia proposto", () => {
+    const righe = righeDaImportare(
+      file([muroAttivo({ Insegna: "Pet Store Conad", "Tipo Pdv": "J - Pet Store Conad", Regione: "Lombardia", Prov: "Mantova" })], []),
+      importPuntiVenditaConadCno
+    );
+    const [esito] = preparaImportPuntiVendita(righe, importPuntiVenditaConadCno, contesto, "g1", 70);
+
+    expect(esito).toMatchObject({ azione: "revisiona", idCanale: "pt" });
+    expect((esito as any).idArea).toBeUndefined();
+  });
+
+  it("un Pet Store con un tipo punto vendita diverso da J abbassa l'affidabilita", () => {
+    expect(leggi({ Insegna: "Pet Store Conad", "Tipo Pdv": "A - Supermercati" }).avvisi).toEqual([
+      { motivo: "Insegna Pet Store Conad ma tipo punto vendita A - Supermercati", penalita: 15 },
+    ]);
   });
 
   it("le insegne escluse non arrivano nemmeno all'inserimento manuale", () => {

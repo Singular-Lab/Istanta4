@@ -44,10 +44,11 @@ const INSEGNE: Record<string, string> = {
   "Margherita": "margherita",
   "Spazio Conad": "sc",
   "SuperStore": "ss",
+  "Pet Store Conad": "PT",
 };
 
 /** Lettera del "Tipo Pdv" che ci si aspetta per ogni canale: se non coincide, il dato e dubbio. */
-const TIPO_PDV_ATTESO: Record<string, string> = { cn: "A", tuday: "L", cy: "L", margherita: "B", sc: "I", ss: "S" };
+const TIPO_PDV_ATTESO: Record<string, string> = { cn: "A", tuday: "L", cy: "L", margherita: "B", sc: "I", ss: "S", PT: "J" };
 
 /** Regione del file → codice dell'area in FP. */
 const REGIONI: Record<string, string> = {
