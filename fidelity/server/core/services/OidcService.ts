@@ -7,6 +7,7 @@ import { ErrorCodes } from '../../../lib/errors/ErrorCodes';
 import type { AuthProvider } from '../models/auth_provider';
 import type { IOidcService, OidcTokenResponse, OidcUserClaims, OidcAuthorizeParams } from '../interfaces/IOidcService';
 import { log } from '../logger';
+import { configServerInChiaro } from './authProviders/configurazioneProvider';
 
 type JWKSFunction = ReturnType<typeof createRemoteJWKSet>;
 
@@ -60,7 +61,8 @@ export class OidcService implements IOidcService {
     code: string,
     code_verifier: string,
   ): Promise<OidcTokenResponse> {
-    const serverConfig = provider.config_server as Record<string, string> | null;
+    // client_secret puo' essere cifrato a riposo: qui serve in chiaro.
+    const serverConfig = configServerInChiaro(provider) as Record<string, string>;
     const clientConfig = provider.config_client as Record<string, string> | null;
 
     if (!serverConfig?.token_url || !serverConfig?.client_secret) {

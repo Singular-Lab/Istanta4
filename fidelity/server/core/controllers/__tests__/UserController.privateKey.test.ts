@@ -16,6 +16,14 @@ vi.mock('../../services/AuditLogService', () => ({
   AuditLogService: { getInstance: () => ({ loginSuccess: vi.fn(), loginFailed: vi.fn() }) },
 }));
 
+// Il login con le credenziali verifica che il metodo email e password sia attivo:
+// qui lo e', come in un'installazione appena inizializzata, senza leggere il DB.
+vi.mock('../../repositories/AuthProviderRepository', () => ({
+  AuthProviderRepository: class {
+    findByCode = async () => ({ codice: 'email_password', attivo: true });
+  },
+}));
+
 import { toUtenteResponseDTO } from '../../dto/UtenteDTO';
 import { UserService } from '../../services/UserService';
 import { sequelize } from '../../db/SequelizeConnector';

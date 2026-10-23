@@ -143,26 +143,33 @@ export class MenuService implements IMenuService {
     };
   }
 
+  /**
+   * Pagine di sistema aggiunte al menu del Superadmin se mancano, sotto 'GESTIONE INTERNA':
+   * il seed MENU_SUPERADMIN non cambia e un menu gia' personalizzato le riceve comunque.
+   */
+  private static readonly VOCI_SISTEMA: MenuItemType[] = [
+    { icon: 'LayoutDashboard', pathname: '/gestione-hub', title: 'Gestione Hub', subMenu: [] },
+    { icon: 'KeyRound', pathname: '/gestione-metodi-accesso', title: 'Metodi di accesso', subMenu: [] },
+  ];
+
   private ensureHubManagementEntry(menu: MenuElement[], tipoUtente: string): MenuElement[] {
     if (tipoUtente !== TIPO_UTENTI.SUPERADMIN || !Array.isArray(menu)) {
       return menu;
     }
 
-    const pathname = '/gestione-hub';
+    return MenuService.VOCI_SISTEMA.reduce((attuale, voce) => this.aggiungiVoceSistema(attuale, voce), menu);
+  }
+
+  private aggiungiVoceSistema(menu: MenuElement[], voce: MenuItemType): MenuElement[] {
     const alreadyPresent = menu.some(
-      (item) => typeof item !== 'string' && item.pathname === pathname
+      (item) => typeof item !== 'string' && item.pathname === voce.pathname
     );
     if (alreadyPresent) {
       return menu;
     }
 
     const nextMenu = [...menu];
-    const hubItem: MenuItemType = {
-      icon: 'LayoutDashboard',
-      pathname,
-      title: 'Gestione Hub',
-      subMenu: [],
-    };
+    const hubItem: MenuItemType = { ...voce, subMenu: [] };
 
     const gestioneInternaIndex = nextMenu.findIndex((item) => item === 'GESTIONE INTERNA');
     if (gestioneInternaIndex >= 0) {

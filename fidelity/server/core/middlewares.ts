@@ -12,7 +12,7 @@ import { log } from './logger';
 import { errorHandler } from './middleware/errorHandler';
 import { jsonGlobale } from './middleware/jsonGrande';
 import { apiRateLimiter } from './middleware/rateLimiter';
-import { csrfProtection } from './middleware/csrfProtection';
+import { csrfProtection, PREFISSO_ACS_SAML } from './middleware/csrfProtection';
 import { applySecurityMiddlewares } from './middleware/securityMiddleware';
 
 // Estendi la sessione per TypeScript
@@ -75,6 +75,10 @@ export function applyMiddlewares(app: Express) {
     }
 
     if (req.path.startsWith('/api/external')) {
+      return next();
+    }
+
+    if (req.path.startsWith(PREFISSO_ACS_SAML)) {
       return next();
     }
 

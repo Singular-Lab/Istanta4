@@ -6,8 +6,10 @@ interface SessionExpiredBannerProps {
   onDismiss: () => void;
 }
 
-const SessionExpiredBanner: React.FC<SessionExpiredBannerProps> = ({ reason, onDismiss }) => {
-  if (!reason) return null;
+const SessionExpiredBanner: React.FC<SessionExpiredBannerProps> = ({ reason: reasonRicevuto, onDismiss }) => {
+  if (!reasonRicevuto) return null;
+  // Gli esiti dell'accesso SAML hanno gli stessi casi di quello OIDC
+  const reason = reasonRicevuto.startsWith("saml_") ? `oidc_${reasonRicevuto.slice("saml_".length)}` : reasonRicevuto;
 
   if (reason === "session_expired") {
     return (
