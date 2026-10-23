@@ -908,9 +908,12 @@ const ReperimentoFoto = {
                             }
 
                             //scorriamo i secondari che non sono stati controllati per il ricollegamento foto
+                            //I20-1134: solo quelli che il server ha messo fra le foto del gruppo: nelle
+                            //meccaniche BIS e 1+1 di Edro21 una sola secondaria, anche se la lista ne ha di piu'.
                             if (advancedMode) {
-                                for (let j = 0; j < secondari.length; j++) {
-                                    let corrispondente = secondari[j];
+                                let secondariDelBox = RicollegaEsiti.secondariDaRicollegare(secondari, primario);
+                                for (let j = 0; j < secondariDelBox.length; j++) {
+                                    let corrispondente = secondariDelBox[j];
                                     if (corrispondente.checkedForRicollegamentoFoto == null || corrispondente.checkedForRicollegamentoFoto == false) {
                                         //se non è stato controllato, allora lo aggiungiamo alla lista dei file da ricollegare
                                         listaFotoDaRicollegare.push({

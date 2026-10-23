@@ -306,6 +306,45 @@ namespace AgenziaLib
         }
     }
 
+    /// I20-1134: nelle meccaniche NM di Edro21 (BIS nei canali SS, CN e CY, 1+1 nel canale SC) il box
+    /// mostra al massimo due foto, la primaria e una secondaria. Il gruppo puo' averne selezionate di
+    /// piu' (il San Benedetto della issue ne aveva tre): delle secondarie si tiene la prima, nell'ordine
+    /// della lista. Si toglie da membriGruppoFoto, la lista che impaginazione, confronti e Report
+    /// Integrita' leggono, e non dalla selezione, che resta com'e' per Edit P/S e per gli altri export.
+    public static class FotoMeccanicaBisEdro21
+    {
+        public const int SecondarieMassime = 1;
+
+        /// Le meccaniche BIS e 1+1: le combinazioni NM_ (NM_MM, NM_MIX_MM, NM_FID, NM_MIX_FID), come
+        /// le riconosce il resto dell'export.
+        public static bool EMeccanicaBis(string? combinazioneAssegnata)
+        {
+            return (combinazioneAssegnata ?? "").IndexOf("NM_", StringComparison.Ordinal) >= 0;
+        }
+
+        /// Le foto del gruppo per il box: per le meccaniche BIS e 1+1 la primaria e la prima secondaria,
+        /// per le altre tutte, nello stesso ordine.
+        public static List<FotoElementoGruppo> Limita(List<FotoElementoGruppo> membri, string? combinazioneAssegnata)
+        {
+            if (membri == null || !EMeccanicaBis(combinazioneAssegnata))
+                return membri;
+
+            var tenute = new List<FotoElementoGruppo>();
+            int secondarie = 0;
+            foreach (var membro in membri)
+            {
+                if (membro != null && membro.statoSelezione == 2)
+                {
+                    if (secondarie >= SecondarieMassime)
+                        continue;
+                    secondarie++;
+                }
+                tenute.Add(membro);
+            }
+            return tenute;
+        }
+    }
+
     /// I20-1125: il logo attributo italiano (quello con la bandiera) porta sotto la bandiera la parola
     /// che comincia con "italian" e quella che la precede, prese dalla descrizione e tagliate al primo
     /// spazio o a capo. Le descrizioni ora hanno le virgole ("prodotto italiano, categoria I, ..."),
@@ -2387,7 +2426,9 @@ namespace AgenziaLib
                     List<Dictionary<string, object>> myGroupFiltered = myGroup.Where(r => filtroConfezione(recItem, r, myGroup)).ToList();
 
                     //Imposto le foto secondarie del gruppo
-                    List<FotoElementoGruppo> membriGruppoFoto = RefsHelper.getFotoSecondarieDelGruppo(myGroupFiltered);
+                    //I20-1134: nelle meccaniche BIS e 1+1 al massimo una secondaria, oltre alla primaria.
+                    List<FotoElementoGruppo> membriGruppoFoto = FotoMeccanicaBisEdro21.Limita(
+                        RefsHelper.getFotoSecondarieDelGruppo(myGroupFiltered), recItem[key_combinazioneAssegnata]?.ToString());
                     recItem[GLOBAL_VARIABLES_FICO.keyMembriGruppoFoto] = membriGruppoFoto;
 
                     #region nuova implementazione
