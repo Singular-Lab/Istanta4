@@ -284,3 +284,39 @@ test('i due rami della mappatura usano la stessa regola', () => {
     assert.ok((js.match(/codiceFoto: riconosciuta\.codiceFoto/g) || []).length === 2,
         'tutte e due registrano il codice della foto');
 });
+
+/* ---- I20-1134: le secondarie del ricollegamento avanzato ---- */
+
+//Il ricollegamento avanzato rimetteva nel box ogni secondaria della lista, anche quelle che il server
+//aveva tolto dalle foto del gruppo: nel BIS di Edro21 tornava la terza foto.
+const record = (codice, stato) => ({ recordInTracciato: { "Referenza.Codice": codice, StatoSelezione: stato } });
+const membro = (codRef, statoSelezione) => ({ codRef: codRef, nomeFoto: codRef + ".psd", statoSelezione: statoSelezione, hash: "h" + codRef });
+
+test("si ricreano solo le secondarie che il server ha messo fra le foto del gruppo", () => {
+    const secondari = [record("101", 2), record("102", 2)];
+    const primario = record("100", 1);
+    primario.recordInTracciato.membriGruppoFoto = [membro("100", 1), membro("101", 2)];
+
+    assert.deepStrictEqual(RicollegaEsiti.secondariDaRicollegare(secondari, primario).map(s => s.recordInTracciato["Referenza.Codice"]), ["101"]);
+});
+
+test("senza la lista delle foto del gruppo valgono tutte le secondarie, come prima", () => {
+    const secondari = [record("101", 2), record("102", 2)];
+    assert.strictEqual(RicollegaEsiti.secondariDaRicollegare(secondari, record("100", 1)).length, 2);
+    assert.strictEqual(RicollegaEsiti.secondariDaRicollegare(secondari, null).length, 2);
+    assert.deepStrictEqual(RicollegaEsiti.secondariDaRicollegare(null, record("100", 1)), []);
+});
+
+test("la lista si legge dal sottogruppo quando la porta lui, come nell'impaginazione", () => {
+    const secondari = [record("101", 2), record("102", 2)];
+    const primario = record("100", 1);
+    primario.recordInTracciato.membriGruppoFoto = [membro("101", 2), membro("102", 2)];
+    primario.sottogruppo = { membriGruppoFoto: [membro("100", 1), membro("102", 2)] };
+
+    assert.deepStrictEqual(RicollegaEsiti.secondariDaRicollegare(secondari, primario).map(s => s.recordInTracciato["Referenza.Codice"]), ["102"]);
+});
+
+test("il ricollegamento avanzato scorre le secondarie filtrate, non quelle della lista", () => {
+    const js = sorgente("plugin/indexNew.js").replace(/\r/g, "");
+    assert.match(js, /if \(advancedMode\) \{\n\s*let secondariDelBox = RicollegaEsiti\.secondariDaRicollegare\(secondari, primario\);\n\s*for \(let j = 0; j < secondariDelBox\.length; j\+\+\) \{\n\s*let corrispondente = secondariDelBox\[j\];/);
+});

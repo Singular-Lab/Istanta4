@@ -208,6 +208,29 @@ const RicollegaEsiti = {
         return "Code IDX-163 La foto secondaria del codice " + (codice !== "" ? codice : "non indicato") +
             " nel gruppo " + codiceGruppo + " non corrisponde piu' a nessuna referenza in tracciato: " +
             "va tolta o aggiornata a mano, oppure si usi la modalità avanzata.";
+    },
+
+    /// I20-1134: le secondarie che il ricollegamento avanzato puo' rimettere nel box, cioe' quelle che
+    /// il server ha messo fra le foto del gruppo del primario (membriGruppoFoto, statoSelezione 2).
+    /// Nelle meccaniche BIS e 1+1 di Edro21 il server ne tiene una sola, e le altre selezionate nella
+    /// lista non vanno ricreate. Il gruppo si legge dove lo legge l'impaginazione: il sottogruppo, se
+    /// porta la lista, altrimenti il record. Senza la lista (dati scaricati prima) valgono tutte.
+    secondariDaRicollegare(secondari, primario) {
+        const elenco = Array.isArray(secondari) ? secondari : [];
+        if (primario == null) {
+            return elenco;
+        }
+        const sottogruppo = primario.sottogruppo;
+        const tracciato = sottogruppo != null && Array.isArray(sottogruppo.membriGruppoFoto) ? sottogruppo : primario.recordInTracciato;
+        const membri = tracciato != null && Array.isArray(tracciato.membriGruppoFoto) ? tracciato.membriGruppoFoto : null;
+        if (membri == null) {
+            return elenco;
+        }
+        const codici = membri
+            .filter(m => m != null && m.statoSelezione == 2)
+            .map(m => String(m.codRef));
+        return elenco.filter(s => s != null && s.recordInTracciato != null
+            && codici.indexOf(String(s.recordInTracciato["Referenza.Codice"])) >= 0);
     }
 };
 
