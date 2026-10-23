@@ -732,6 +732,8 @@ export class PuntoVenditaService implements IPuntoVenditaService {
         indirizzo: pv.indirizzo_puntivendita,
         cap: pv.cap_puntivendita,
         meta: pv.meta_puntivendita ?? undefined,
+        lat: toNumberOrNull(pv.lat_puntivendita) ?? undefined,
+        lon: toNumberOrNull(pv.lon_puntivendita) ?? undefined,
       })),
     };
   }

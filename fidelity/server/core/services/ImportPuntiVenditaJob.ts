@@ -7,6 +7,7 @@ import type {
   StatoImportPuntiVenditaDTO,
 } from '../dto';
 import { log } from '../logger';
+import { coordinateValide } from './importPuntiVendita';
 
 type EsitoDaScrivere = Extract<EsitoRigaImportPuntoVenditaDTO, { azione: 'crea' | 'aggiorna' }>;
 
@@ -17,6 +18,11 @@ export interface OperazioniImportPuntiVendita {
    * `sincronizzato: false` se e rimasto solo in FP (Istanta non raggiungibile in development).
    */
   scrivi(esito: EsitoDaScrivere): Promise<{ sincronizzato: boolean } | void>;
+  /**
+   * Coordinate dell'indirizzo del PV (Nominatim), per le righe automatiche che non le hanno;
+   * undefined se l'indirizzo non si trova. Le chiamate sono distanziate dalla coda di geocodifica.
+   */
+  geocodifica?(dati: CreatePuntoVenditaDTO): Promise<{ lat: number; lon: number } | undefined>;
   /** Invia l'avanzamento all'utente che ha avviato l'import. */
   notifica(evento: 'progress' | 'complete', stato: StatoImportPuntiVenditaDTO): void;
   /** Al termine (anche se annullato), se almeno un PV e stato scritto. */
@@ -33,10 +39,22 @@ interface Job {
   riprendi?: () => void;
   /** Una decisione alla volta: un doppio clic non scrive due volte la stessa riga. */
   decisioneInCorso: boolean;
+  /** Errori di Nominatim consecutivi: un successo o un indirizzo non trovato li azzera. */
+  erroriNominatimDiFila: number;
 }
 
 /** Evento socket di un import: importPV_<jobId>_progress e importPV_<jobId>_complete. */
 export const eventoImportPuntiVendita = (jobId: string, tipo: 'progress' | 'complete') => `importPV_${jobId}_${tipo}`;
+
+/** Dopo tanti errori di fila Nominatim e giu o ci blocca: l'import si ferma invece di proseguire senza coordinate. */
+export const MAX_ERRORI_NOMINATIM_DI_FILA = 5;
+
+/** Import fermato perche Nominatim non risponde: la riga indicata non e stata scritta. */
+export class NominatimNonRisponde extends Error {
+  constructor(readonly riga: number, motivo: string) {
+    super(`Import fermato: Nominatim non risponde (${MAX_ERRORI_NOMINATIM_DI_FILA} errori di fila). Ultimo errore: ${motivo}`);
+  }
+}
 
 /** Errore di una decisione che non si puo applicare (import non in attesa, riga gia decisa). */
 export class DecisioneNonApplicabile extends Error {}
@@ -73,11 +91,14 @@ export class GestoreImportPuntiVendita {
       scartati: 0,
       inseritiAMano: 0,
       soloFp: 0,
+      geolocalizzati: 0,
+      senzaCoordinate: 0,
+      erroriNominatim: 0,
       nonElaborate: esiti.length,
       errori: [],
       avviatoIl: new Date().toISOString(),
     };
-    const job: Job = { stato, idGdo, idUtente, annullato: false, operazioni, decisioneInCorso: false };
+    const job: Job = { stato, idGdo, idUtente, annullato: false, operazioni, decisioneInCorso: false, erroriNominatimDiFila: 0 };
     this.jobs.set(stato.jobId, job);
     return { stato: copia(stato), fine: this.esegui(job, esiti) };
   }
@@ -98,8 +119,10 @@ export class GestoreImportPuntiVendita {
           await this.attendiDecisione(job, esito);
           if (job.annullato) break;
         } else {
+          // Fuori dal try della riga: Nominatim che non risponde ferma l'import, non solo la riga
+          const conCoordinate = await this.conCoordinate(job, esito);
           try {
-            await this.scrivi(job, esito);
+            await this.scrivi(job, conCoordinate);
           } catch (e) {
             log.error('importPV - riga non importata', { riga: esito.riga, error: e });
             stato.scartati++;
@@ -114,7 +137,7 @@ export class GestoreImportPuntiVendita {
     } catch (e) {
       log.error('importPV - job interrotto', { jobId: stato.jobId, error: e });
       stato.stato = 'errore';
-      errore(0, e);
+      errore(e instanceof NominatimNonRisponde ? e.riga : 0, e);
     }
     stato.rigaInAttesa = undefined;
     stato.terminatoIl = new Date().toISOString();
@@ -125,6 +148,33 @@ export class GestoreImportPuntiVendita {
     operazioni.notifica('complete', copia(stato));
     setTimeout(() => this.jobs.delete(stato.jobId), CONSERVAZIONE_JOB_MS).unref?.();
     return copia(stato);
+  }
+
+  /** Riga automatica senza coordinate: le chiede a Nominatim; se non le trova si importa senza. */
+  private async conCoordinate(job: Job, esito: EsitoDaScrivere): Promise<EsitoDaScrivere> {
+    const { geocodifica } = job.operazioni;
+    if (!geocodifica || coordinateValide(esito.dati.lat, esito.dati.lon)) return esito;
+    let trovate: { lat: number; lon: number } | undefined;
+    try {
+      trovate = await geocodifica(esito.dati);
+    } catch (e) {
+      const motivo = e instanceof Error ? e.message : String(e);
+      log.error('importPV - Nominatim in errore', { jobId: job.stato.jobId, riga: esito.riga, motivo });
+      job.stato.erroriNominatim++;
+      job.stato.ultimoErroreNominatim = motivo;
+      if (++job.erroriNominatimDiFila >= MAX_ERRORI_NOMINATIM_DI_FILA) throw new NominatimNonRisponde(esito.riga, motivo);
+      job.stato.senzaCoordinate++;
+      job.stato.errori.push({ row: esito.riga, error: `${motivo}: importato senza coordinate` });
+      return esito;
+    }
+    job.erroriNominatimDiFila = 0;
+    if (trovate) {
+      job.stato.geolocalizzati++;
+      return { ...esito, dati: { ...esito.dati, lat: trovate.lat, lon: trovate.lon } };
+    }
+    job.stato.senzaCoordinate++;
+    job.stato.errori.push({ row: esito.riga, error: 'Indirizzo non trovato da Nominatim: importato senza coordinate' });
+    return esito;
   }
 
   private async scrivi(job: Job, esito: EsitoDaScrivere) {

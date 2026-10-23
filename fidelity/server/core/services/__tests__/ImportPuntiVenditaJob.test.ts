@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { CreatePuntoVenditaDTO, EsitoRigaImportPuntoVenditaDTO, StatoImportPuntiVenditaDTO } from '../../dto';
-import { DecisioneNonApplicabile, eventoImportPuntiVendita, GestoreImportPuntiVendita, type OperazioniImportPuntiVendita } from '../ImportPuntiVenditaJob';
+import { DecisioneNonApplicabile, eventoImportPuntiVendita, MAX_ERRORI_NOMINATIM_DI_FILA, GestoreImportPuntiVendita, type OperazioniImportPuntiVendita } from '../ImportPuntiVenditaJob';
 
 vi.mock('../../logger', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -223,5 +223,99 @@ describe('GestoreImportPuntiVendita', () => {
   it('gli eventi socket portano il jobId', () => {
     expect(eventoImportPuntiVendita('j1', 'progress')).toBe('importPV_j1_progress');
     expect(eventoImportPuntiVendita('j1', 'complete')).toBe('importPV_j1_complete');
+  });
+
+  it('geolocalizza con Nominatim le righe automatiche senza coordinate prima di scriverle', async () => {
+    const gestore = new GestoreImportPuntiVendita();
+    const geocodifica = vi.fn(async () => ({ lat: 43.84, lon: 10.5 }));
+    const { op } = operazioni({ geocodifica });
+
+    const finale = await gestore.avvia('g1', 'u1', [crea(2)], op).fine;
+
+    expect(geocodifica).toHaveBeenCalledWith(expect.objectContaining({ nome: 'PV 2', cap: '55100' }));
+    expect(op.scrivi).toHaveBeenCalledWith(expect.objectContaining({ dati: expect.objectContaining({ lat: 43.84, lon: 10.5 }) }));
+    expect(finale).toMatchObject({ creati: 1, geolocalizzati: 1, senzaCoordinate: 0 });
+  });
+
+  it('indirizzo non trovato o Nominatim in errore: il PV si importa senza coordinate e il motivo e visibile', async () => {
+    const gestore = new GestoreImportPuntiVendita();
+    const geocodifica = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('Nominatim non disponibile (HTTP 429)'));
+    const { op, eventi } = operazioni({ geocodifica });
+
+    const finale = await gestore.avvia('g1', 'u1', [crea(2), crea(3)], op).fine;
+
+    expect(op.scrivi).toHaveBeenCalledTimes(2);
+    expect((op.scrivi.mock.calls[0] as any)[0].dati.lat).toBeUndefined();
+    expect(finale).toMatchObject({
+      stato: 'completato', creati: 2, geolocalizzati: 0, senzaCoordinate: 2, erroriNominatim: 1,
+      ultimoErroreNominatim: 'Nominatim non disponibile (HTTP 429)',
+    });
+    expect(finale.errori).toEqual([
+      { row: 2, error: 'Indirizzo non trovato da Nominatim: importato senza coordinate' },
+      { row: 3, error: 'Nominatim non disponibile (HTTP 429): importato senza coordinate' },
+    ]);
+    // L'errore si vede gia durante l'import, non solo alla fine
+    expect(eventi.find(e => e.evento === 'progress' && e.stato.erroriNominatim === 1)).toBeDefined();
+  });
+
+  it(`dopo ${MAX_ERRORI_NOMINATIM_DI_FILA} errori di fila l'import si ferma: le righe gia scritte restano`, async () => {
+    const gestore = new GestoreImportPuntiVendita();
+    const geocodifica = vi.fn()
+      .mockResolvedValueOnce({ lat: 1, lon: 2 })
+      .mockRejectedValue(new Error('Nominatim non raggiungibile: fetch failed'));
+    const { op, eventi } = operazioni({ geocodifica });
+    const righe = Array.from({ length: 8 }, (_, i) => crea(i + 2));
+
+    const finale = await gestore.avvia('g1', 'u1', righe, op).fine;
+
+    // Riga 2 geolocalizzata, righe 3-6 senza coordinate, alla riga 7 (quinto errore) si ferma
+    expect(op.scrivi.mock.calls.map(([e]: any) => e.riga)).toEqual([2, 3, 4, 5, 6]);
+    expect(finale).toMatchObject({ stato: 'errore', creati: 5, erroriNominatim: 5, elaborate: 5, nonElaborate: 3 });
+    expect(finale.errori.at(-1)).toEqual({
+      row: 7,
+      error: 'Import fermato: Nominatim non risponde (5 errori di fila). Ultimo errore: Nominatim non raggiungibile: fetch failed',
+    });
+    expect(eventi.at(-1)).toMatchObject({ evento: 'complete', stato: { stato: 'errore' } });
+  });
+
+  it('un indirizzo trovato o non trovato azzera gli errori di fila', async () => {
+    const gestore = new GestoreImportPuntiVendita();
+    const errore = new Error('Nominatim non disponibile (HTTP 503)');
+    const geocodifica = vi.fn()
+      .mockRejectedValueOnce(errore).mockRejectedValueOnce(errore).mockRejectedValueOnce(errore).mockRejectedValueOnce(errore)
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(errore).mockRejectedValueOnce(errore);
+    const { op } = operazioni({ geocodifica });
+
+    const finale = await gestore.avvia('g1', 'u1', Array.from({ length: 7 }, (_, i) => crea(i + 2)), op).fine;
+
+    expect(finale).toMatchObject({ stato: 'completato', creati: 7, erroriNominatim: 6, senzaCoordinate: 7 });
+  });
+
+  it('le righe con coordinate valide non interrogano Nominatim, 0,0 si', async () => {
+    const gestore = new GestoreImportPuntiVendita();
+    const geocodifica = vi.fn(async () => ({ lat: 1, lon: 2 }));
+    const { op } = operazioni({ geocodifica });
+    const conCoordinate = { ...(crea(2) as any), dati: { ...dati('A'), lat: 43.8, lon: 10.5 } };
+    const aZero = { ...(crea(3) as any), dati: { ...dati('B'), lat: 0, lon: 0 } };
+
+    await gestore.avvia('g1', 'u1', [conCoordinate, aZero], op).fine;
+
+    expect(geocodifica).toHaveBeenCalledOnce();
+    expect(geocodifica).toHaveBeenCalledWith(expect.objectContaining({ nome: 'B' }));
+  });
+
+  it('la riga inserita a mano usa le coordinate confermate, senza nuova ricerca', async () => {
+    const gestore = new GestoreImportPuntiVendita();
+    const geocodifica = vi.fn(async () => ({ lat: 1, lon: 2 }));
+    const { op } = operazioni({ geocodifica });
+    const { stato, fine } = gestore.avvia('g1', 'u1', [revisiona(2)], op);
+    await inAttesaSu(gestore, stato.jobId, 2);
+
+    await gestore.decidi(stato.jobId, 'u1', { azione: 'inserisci', dati: { ...dati('X'), lat: 45.1, lon: 10.8 } });
+    await fine;
+
+    expect(geocodifica).not.toHaveBeenCalled();
+    expect(op.scrivi).toHaveBeenCalledWith(expect.objectContaining({ dati: expect.objectContaining({ lat: 45.1 }) }));
   });
 });

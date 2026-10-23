@@ -886,10 +886,20 @@ function Main() {
                     <div>Aggiornati: <strong>{statoImport.aggiornati}</strong></div>
                     <div>Scartati: <strong>{statoImport.scartati}</strong></div>
                     <div>Inseriti a mano: <strong>{statoImport.inseritiAMano}</strong></div>
-                    {statoImport.stato === "annullato" && (
+                    <div>Geolocalizzati: <strong>{statoImport.geolocalizzati}</strong></div>
+                    <div>Senza coordinate: <strong>{statoImport.senzaCoordinate}</strong></div>
+                    {(statoImport.stato === "annullato" || statoImport.stato === "errore") && (
                       <div>Non elaborati: <strong>{statoImport.nonElaborate}</strong></div>
                     )}
                   </div>
+                  {statoImport.erroriNominatim > 0 && (
+                    <div className="mt-3 rounded border border-danger/30 bg-danger/5 p-2 text-xs text-danger flex items-start">
+                      <Lucide icon="CircleAlert" className="w-4 h-4 mr-1 shrink-0" />
+                      <span>
+                        Nominatim in errore ({statoImport.erroriNominatim} righe senza coordinate): {statoImport.ultimoErroreNominatim}
+                      </span>
+                    </div>
+                  )}
                   {statoImport.soloFp > 0 && (
                     <div className="mt-3 text-xs text-warning flex items-center">
                       <Lucide icon="TriangleAlert" className="w-4 h-4 mr-1" />

@@ -8,6 +8,7 @@ import {
   leggiFoglio,
   preparaImportPuntiVendita,
   righeDaImportare,
+  coordinateValide,
   sogliaAffidabilitaImport,
 } from '../importPuntiVendita';
 
@@ -274,5 +275,32 @@ describe('lettura di piu fogli', () => {
     expect(visti).toEqual(['Primo', 'Secondo']);
     expect(righe.map(r => r.nome)).toEqual(['B']);
     expect(righeDaImportare(buffer, importPuntiVenditaGenerico).map(r => r.nome)).toEqual(['A']);
+  });
+});
+
+describe('coordinate dei punti vendita gia presenti', () => {
+  const lucca = { id: 'pv1', nome: 'Conad Lucca', indirizzo: 'Via Roma 1', cap: '55100', meta: { id_anacan: '7' }, lat: 43.84, lon: 10.5 };
+  const rigaConChiave = (campi: Record<string, unknown> = {}) => ({ ...riga({ canale: 'CC', area: 'TO', anacan: '7' }), ...campi });
+
+  it('a parita di indirizzo l\'aggiornamento conserva le coordinate esistenti', () => {
+    const [esito] = prepara([rigaConChiave()], [lucca], conChiave);
+
+    expect(esito).toMatchObject({ azione: 'aggiorna', id: 'pv1', dati: { lat: 43.84, lon: 10.5 } });
+  });
+
+  it('con l\'indirizzo cambiato le coordinate non si ereditano: vanno ricercate', () => {
+    const [esito] = prepara([rigaConChiave({ indirizzo: 'Via Nuova 7' })], [lucca], conChiave);
+
+    expect(esito).toMatchObject({ azione: 'aggiorna' });
+    expect((esito as any).dati.lat).toBeUndefined();
+  });
+
+  it('0,0 non sono coordinate', () => {
+    const [esito] = prepara([rigaConChiave()], [{ ...lucca, lat: 0, lon: 0 }], conChiave);
+
+    expect((esito as any).dati.lat).toBeUndefined();
+    expect(coordinateValide(0, 0)).toBe(false);
+    expect(coordinateValide(43.8, 10.5)).toBe(true);
+    expect(coordinateValide(undefined, 10.5)).toBe(false);
   });
 });

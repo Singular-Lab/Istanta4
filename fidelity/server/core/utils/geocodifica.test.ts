@@ -11,6 +11,10 @@ describe('geocodifica', () => {
     vi.unstubAllGlobals();
   });
 
+  it('l\'intervallo tra le richieste e di 1,2 secondi', () => {
+    expect(INTERVALLO_MS).toBe(1200);
+  });
+
   it('distanzia le richieste a Nominatim di almeno un secondo, anche se partono insieme', async () => {
     vi.useFakeTimers();
     const partenze: number[] = [];
@@ -71,7 +75,17 @@ describe('geocodifica', () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 503 })));
 
     const ricerca = cercaIndirizzi('Via Roma 1 Pisa');
-    const verifica = expect(ricerca).rejects.toThrow('503');
+    const verifica = expect(ricerca).rejects.toThrow('Nominatim non disponibile (HTTP 503)');
+    await vi.runAllTimersAsync();
+    await verifica;
+  });
+
+  it('cercaIndirizzi segnala con il motivo Nominatim irraggiungibile', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('fetch failed'); }));
+
+    const ricerca = cercaIndirizzi('Via Roma 1 Pisa');
+    const verifica = expect(ricerca).rejects.toThrow('Nominatim non raggiungibile: fetch failed');
     await vi.runAllTimersAsync();
     await verifica;
   });

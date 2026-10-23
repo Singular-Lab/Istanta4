@@ -165,6 +165,30 @@ describe('POST /api/ACPV/importaPV', () => {
   });
 });
 
+describe('coordinate da Nominatim', () => {
+  it('ogni PV importato in automatico viene geolocalizzato e Istanta riceve le stesse coordinate di FP', async () => {
+    const { app, istanta, cerca, puntoVenditaService, fineImport } = createApp([OK, OK]);
+
+    await request(app).post('/api/ACPV/importaPV').attach('file', fileGenerico, 'pv.xlsx');
+    const finale = await fineImport();
+
+    expect(cerca).toHaveBeenCalledWith('Via Roma 1, 55100 Lucca', 1);
+    expect(istanta.mock.calls[0][3]).toMatchObject({ lat: 45.15, lon: 10.79 });
+    expect(puntoVenditaService.createPuntoVendita).toHaveBeenCalledWith(expect.objectContaining({ lat: 45.15, lon: 10.79 }));
+    expect(finale).toMatchObject({ creati: 2, geolocalizzati: 2, senzaCoordinate: 0 });
+  });
+
+  it('indirizzo non trovato: il PV si importa senza coordinate, non a 0 in FP', async () => {
+    const { app, cerca, puntoVenditaService, fineImport } = createApp([OK, OK]);
+    cerca.mockResolvedValue([]);
+
+    await request(app).post('/api/ACPV/importaPV').attach('file', fileGenerico, 'pv.xlsx');
+
+    expect(await fineImport()).toMatchObject({ creati: 2, senzaCoordinate: 2 });
+    expect(puntoVenditaService.createPuntoVendita.mock.calls[0][0].lat).toBeUndefined();
+  });
+});
+
 describe('import in background: stato e annullamento', () => {
   it('un secondo import mentre il primo e in corso risponde 409 con lo stato', async () => {
     const { app, istanta } = createApp([]);
@@ -324,12 +348,14 @@ describe('GET /api/ACPV/geocodifica/cerca', () => {
     expect(cerca).toHaveBeenCalledWith('Via Grayson 20, 46100, Mantova');
   });
 
-  it('ricerca vuota 400, Nominatim non disponibile 503', async () => {
+  it('ricerca vuota 400, Nominatim non disponibile 503 con il motivo', async () => {
     const { app, cerca } = createApp([]);
-    cerca.mockRejectedValueOnce(new Error('Nominatim ha risposto 503'));
+    cerca.mockRejectedValueOnce(new Error('Nominatim non disponibile (HTTP 429)'));
 
     expect((await request(app).get('/api/ACPV/geocodifica/cerca').query({ q: ' ' })).status).toBe(400);
-    expect((await request(app).get('/api/ACPV/geocodifica/cerca').query({ q: 'Via Roma 1' })).status).toBe(503);
+    const res = await request(app).get('/api/ACPV/geocodifica/cerca').query({ q: 'Via Roma 1' });
+    expect(res.status).toBe(503);
+    expect(res.body.message).toBe('Nominatim non disponibile (HTTP 429)');
   });
 });
 
