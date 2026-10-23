@@ -1,5 +1,6 @@
 import Lucide from "@/components/Base/Lucide";
 import type { ReactNode } from "react";
+import { EVENTO_DISSINCRONIA } from "../../lib/dissincronia";
 
 type Notifica = (content: ReactNode, options?: { variant?: 'success' | 'error' | 'warning' | 'info'; duration?: number }) => void;
 type ErroreServizio = { code?: string; message?: string; details?: { service?: string } };
@@ -34,4 +35,31 @@ export const notificaErroreServizio = (error: unknown) => {
         </div>,
         { variant: 'error', duration: 8000 }
     );
+};
+
+// Un'eliminazione multipla produce un evento per riga: basta un avviso ogni tanto
+export const INTERVALLO_AVVISO_DISSINCRONIA_MS = 5000;
+
+/**
+ * Ascolta gli avvisi di dissincronia (in development, Istanta non raggiungibile: salvato solo
+ * in FP) e li mostra come toast di avviso, non d'errore. Restituisce la funzione che smette di ascoltare.
+ */
+export const ascoltaDissincronia = (bersaglio: EventTarget = window, adesso: () => number = Date.now) => {
+    let ultimo = -Infinity;
+    const avvisa = () => {
+        if (!notifica || adesso() - ultimo < INTERVALLO_AVVISO_DISSINCRONIA_MS) return;
+        ultimo = adesso();
+        notifica(
+            <div className="flex flex-row items-center">
+                <Lucide icon="TriangleAlert" className="text-warning w-8 h-8" />
+                <div className="ml-4 mr-4">
+                    <div className="font-bold">Istanta non raggiungibile</div>
+                    <div className="mt-1 text-slate-500">Salvato solo in FP: Istanta e FP non sono allineati.</div>
+                </div>
+            </div>,
+            { variant: 'warning', duration: 8000 }
+        );
+    };
+    bersaglio.addEventListener(EVENTO_DISSINCRONIA, avvisa);
+    return () => bersaglio.removeEventListener(EVENTO_DISSINCRONIA, avvisa);
 };

@@ -52,6 +52,8 @@ describe('permessi sulle route che modificano dati', () => {
     ['creazione di un contesto display', 'post', '/api/display-contexts', 'gdo.gestisci_punti_vendita'],
     ['download dei kit per tipo di export', 'post', '/api/downloadKitsByTipoDiExport', 'file.download'],
     ['import dei punti vendita da Excel', 'post', '/api/ACPV/importaPV', 'gdo.gestisci_punti_vendita'],
+    ['annullamento dell\'import dei punti vendita', 'post', '/api/ACPV/importaPV/j1/annulla', 'gdo.gestisci_punti_vendita'],
+    ['decisione sulla riga dell\'import in attesa', 'post', '/api/ACPV/importaPV/j1/decisione', 'gdo.gestisci_punti_vendita'],
   ];
 
   it.each(casi)('%s richiede il permesso giusto', async (_nome, metodo, url, permesso) => {

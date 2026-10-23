@@ -7,6 +7,8 @@ import {
   importPuntiVenditaGenerico,
   leggiFoglio,
   preparaImportPuntiVendita,
+  righeDaImportare,
+  sogliaAffidabilitaImport,
 } from '../importPuntiVendita';
 
 // Spec import-punti-vendita (proposte in change task-c89f3697)
@@ -150,5 +152,127 @@ describe('lettura del file', () => {
 
     expect(esiti.map(e => e.riga)).toEqual([2, 4]);
     expect(esiti[0]).toMatchObject({ azione: 'crea', dati: { cap: '00100' } });
+  });
+});
+
+/** Come conChiave, con il codice Muro come chiave di riserva e i dubbi letti dal file. */
+const conRiserva: ImportPuntiVenditaAgenzia = {
+  chiaveMeta: 'id_anacan',
+  chiaveMetaRiserva: 'id_muro',
+  leggiRiga: r => ({
+    nome: cella(r, 'nome'), indirizzo: cella(r, 'indirizzo'), citta: cella(r, 'citta'), cap: cella(r, 'cap'),
+    canale: cella(r, 'canale'), area: cella(r, 'area'),
+    meta: { ...(cella(r, 'anacan') ? { id_anacan: cella(r, 'anacan') } : {}), id_muro: cella(r, 'muro') },
+    avvisi: cella(r, 'penalita') ? [{ motivo: 'dubbio', penalita: Number(cella(r, 'penalita')) }] : [],
+  }),
+};
+const rigaConRiserva = (campi: Record<string, unknown> = {}) => rigaConChiave({ muro: '66027', ...campi });
+const preparaConRiserva = (righe: Record<string, unknown>[], esistenti: ContestoImportPuntiVendita['esistenti'] = []) =>
+  preparaImportPuntiVendita(righe, conRiserva, contesto(esistenti), 'g1', 70);
+
+describe('chiave di riserva del cliente', () => {
+  it('primo import senza chiave principale: crea il PV con la chiave di riserva nei meta', () => {
+    const [esito] = preparaConRiserva([rigaConRiserva({ anacan: '' })]);
+
+    expect(esito).toMatchObject({ azione: 'crea', dati: { meta: { id_muro: '66027' } } });
+    expect((esito as any).dati.meta.id_anacan).toBeUndefined();
+  });
+
+  it('riga senza chiave principale riconosciuta dalla chiave di riserva: aggiorna il PV esistente', () => {
+    const esistente = { id: 'pv1', nome: 'Conad Lucca', indirizzo: 'Via Vecchia 3', cap: '55100', meta: { id_muro: '66027' } };
+
+    const [esito] = preparaConRiserva([rigaConRiserva({ anacan: '' })], [esistente]);
+
+    expect(esito).toMatchObject({ azione: 'aggiorna', id: 'pv1', dati: { indirizzo: 'Via Roma 1' } });
+  });
+
+  it('il PV conosciuto solo dalla chiave di riserva riceve la chiave principale', () => {
+    const esistente = { id: 'pv1', nome: 'Conad Lucca', indirizzo: 'Via Roma 1', cap: '55100', meta: { id_muro: '66027' } };
+
+    const [esito] = preparaConRiserva([rigaConRiserva()], [esistente]);
+
+    expect(esito).toMatchObject({ azione: 'aggiorna', id: 'pv1', dati: { meta: { id_anacan: '1234', id_muro: '66027' } } });
+  });
+
+  it('senza ne chiave principale ne di riserva la riga si scarta', () => {
+    expect(preparaConRiserva([rigaConRiserva({ anacan: '', muro: '' })])[0]).toMatchObject({ azione: 'scarta', errore: 'id_anacan mancante' });
+  });
+
+  it('la stessa chiave di riserva ripetuta nel file si scarta', () => {
+    const esiti = preparaConRiserva([rigaConRiserva({ anacan: '' }), rigaConRiserva({ anacan: '', nome: 'Altro' })]);
+
+    expect(esiti.map(e => (e.azione === 'scarta' ? e.errore : e.azione))).toEqual(['crea', 'id_muro 66027 ripetuto nel file']);
+  });
+});
+
+describe('punteggio di affidabilita', () => {
+  it('una riga senza dubbi ha punteggio 100 e si importa', () => {
+    expect(preparaConRiserva([rigaConRiserva()])[0]).toMatchObject({ azione: 'crea', punteggio: 100, motivi: [] });
+  });
+
+  it('i dubbi della libreria e la chiave di riserva tolgono punti', () => {
+    const [esito] = preparaConRiserva([rigaConRiserva({ anacan: '', penalita: '5' })]);
+
+    expect(esito).toMatchObject({ azione: 'crea', punteggio: 75, motivi: ['dubbio', 'id_anacan mancante: riconosciuto da id_muro 66027'] });
+  });
+
+  it('sotto soglia la riga non si importa: va in revisione con punteggio e motivi', () => {
+    const [esito] = preparaConRiserva([rigaConRiserva({ penalita: '35' })]);
+
+    expect(esito).toMatchObject({ azione: 'revisiona', punteggio: 65, motivi: ['dubbio'], chiave: '1234', dati: { id_combinazione_canale_area: 'comb1' } });
+  });
+
+  it('una riga gia sotto soglia senza canale o area riconosciuti va in revisione invece di scartarsi', () => {
+    const [esito] = preparaConRiserva([rigaConRiserva({ area: '', penalita: '100' })]);
+
+    expect(esito).toMatchObject({ azione: 'revisiona', punteggio: 0 });
+    expect((esito as any).dati.id_combinazione_canale_area).toBeUndefined();
+  });
+
+  it('una riga sopra soglia con un\'area non riconosciuta resta scartata', () => {
+    expect(preparaConRiserva([rigaConRiserva({ area: 'Marte' })])[0]).toMatchObject({ azione: 'scarta', errore: 'Area non riconosciuta: Marte' });
+  });
+
+  it('il PV esistente in revisione porta il suo id, per aggiornarlo e non duplicarlo', () => {
+    const esistente = { id: 'pv1', nome: 'Conad Lucca', indirizzo: 'Via Roma 1', cap: '55100', meta: { id_anacan: '1234' } };
+
+    expect(preparaConRiserva([rigaConRiserva({ penalita: '50' })], [esistente])[0]).toMatchObject({ azione: 'revisiona', id: 'pv1' });
+  });
+
+  it('la soglia si configura con PV_IMPORT_SOGLIA_AFFIDABILITA, altrimenti vale 70', () => {
+    const prima = process.env.PV_IMPORT_SOGLIA_AFFIDABILITA;
+    try {
+      delete process.env.PV_IMPORT_SOGLIA_AFFIDABILITA;
+      expect(sogliaAffidabilitaImport()).toBe(70);
+      process.env.PV_IMPORT_SOGLIA_AFFIDABILITA = '50';
+      expect(sogliaAffidabilitaImport()).toBe(50);
+      process.env.PV_IMPORT_SOGLIA_AFFIDABILITA = 'abc';
+      expect(sogliaAffidabilitaImport()).toBe(70);
+    } finally {
+      if (prima === undefined) delete process.env.PV_IMPORT_SOGLIA_AFFIDABILITA;
+      else process.env.PV_IMPORT_SOGLIA_AFFIDABILITA = prima;
+    }
+  });
+});
+
+describe('lettura di piu fogli', () => {
+  it('se la libreria legge il file, riceve tutti i fogli per nome', () => {
+    const cartella = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(cartella, XLSX.utils.aoa_to_sheet([['nome'], ['A']]), 'Primo');
+    XLSX.utils.book_append_sheet(cartella, XLSX.utils.aoa_to_sheet([['nome'], ['B']]), 'Secondo');
+    const buffer = XLSX.write(cartella, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+    const visti: string[] = [];
+
+    const righe = righeDaImportare(buffer, {
+      leggiFile: fogli => {
+        visti.push(...Object.keys(fogli));
+        return fogli.Secondo;
+      },
+      leggiRiga: () => 'non usata',
+    });
+
+    expect(visti).toEqual(['Primo', 'Secondo']);
+    expect(righe.map(r => r.nome)).toEqual(['B']);
+    expect(righeDaImportare(buffer, importPuntiVenditaGenerico).map(r => r.nome)).toEqual(['A']);
   });
 });

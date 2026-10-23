@@ -15,6 +15,7 @@ import {
   ValidationError
 } from './errors';
 import { condividiInVolo } from './richiesteInVolo';
+import { segnalaDissincronia } from './dissincronia';
 
 /**
  * Interfaccia per gli errori che arrivano dal server
@@ -683,7 +684,17 @@ class ServerCall {
     return message.includes('csrf');
   }
 
+  /** Le scritture passano tutte da qui: si controlla anche l'avviso di dissincronia con Istanta. */
   private static async withCsrfRetry(
+    request: () => Promise<Response>,
+    applyFreshToken: () => void
+  ): Promise<Response> {
+    const response = await this.withCsrfRetryInterno(request, applyFreshToken);
+    segnalaDissincronia(response);
+    return response;
+  }
+
+  private static async withCsrfRetryInterno(
     request: () => Promise<Response>,
     applyFreshToken: () => void
   ): Promise<Response> {

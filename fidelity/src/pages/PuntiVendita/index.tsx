@@ -26,8 +26,11 @@ import { CircleMarker, MapContainer, Popup, TileLayer, useMap } from "react-leaf
 import { useNavigate } from "react-router-dom";
 import * as yup from "yup";
 import { ServerCall } from "../../../lib/server_call";
-import { EsitoRigaImportPuntoVenditaDTO, ImportPuntiVenditaResponseDTO, PuntoVenditaResponseDTO } from "../../../server/core/dto";
-import { canaleArea, codiciGdo, contaPer, filtraPuntiVendita, indirizzoCompleto } from "../../utils/puntoVendita";
+import { EsitoRigaImportPuntoVenditaDTO, PuntoVenditaResponseDTO, StatoImportPuntiVenditaDTO } from "../../../server/core/dto";
+import { BADGE_PUNTEGGIO, classePunteggio, percentualeImport, riepilogoAnteprima, testoRiepilogoImport } from "../../utils/importPuntiVendita";
+import { canaleArea, codiciGdo, contaPer, filtraPuntiVendita, indirizzoCompleto, valoriFormPuntoVendita } from "../../utils/puntoVendita";
+import { InserimentoManualeImport } from "./InserimentoManualeImport";
+import { useImportPuntiVendita } from "./useImportPuntiVendita";
 // Tipi per le risposte aggiornate del server
 interface ServerResponse<T> {
   esito: boolean;
@@ -328,14 +331,38 @@ function Main() {
   const [isExcelImportDialogOpen, setIsExcelImportDialogOpen] = useState(false);
   const [fileImport, setFileImport] = useState<File | null>(null);
   const [anteprimaImport, setAnteprimaImport] = useState<EsitoRigaImportPuntoVenditaDTO[]>([]);
-  const [esitoImport, setEsitoImport] = useState<ImportPuntiVenditaResponseDTO | null>(null);
+  // Il modale della riga in attesa si apre da solo; "Più tardi" lo nasconde fino alla riga successiva
+  const [rigaRidotta, setRigaRidotta] = useState<number | null>(null);
   const didSetDefaultCanaleRef = useRef(false);
+
+  // L'import gira in background: l'avanzamento arriva via socket, anche dopo aver ricaricato la pagina
+  const alTermineImport = useCallback((stato: StatoImportPuntiVenditaDTO) => {
+    queryClient.invalidateQueries({ queryKey: ["dataPuntiVendita"] });
+    const riepilogo = testoRiepilogoImport(stato);
+    if (stato.stato === "annullato") showNotification(`Importazione annullata: ${riepilogo}`, { variant: "warning" });
+    else if (stato.stato === "errore") showNotification(`Importazione interrotta per un errore: ${riepilogo}`, { variant: "error" });
+    else showNotification(`Importazione completata: ${riepilogo}`, { variant: stato.errori.length ? "warning" : "success" });
+  }, [queryClient, showNotification]);
+  const importJob = useImportPuntiVendita(alTermineImport);
+  const statoImport = importJob.stato;
+  const rigaInAttesa = statoImport?.stato === "in_attesa" ? statoImport.rigaInAttesa : undefined;
+  const combinazioniOrdinate = useMemo(
+    () => _.sortBy(combinazioniDisponibili.data ?? [], ["nome_canale", "nome_area"]),
+    [combinazioniDisponibili.data]
+  );
+
+  // Un import in corso trovato riaprendo la pagina si mostra subito
+  useEffect(() => {
+    if (importJob.inCorso) setIsExcelImportDialogOpen(true);
+  }, [importJob.inCorso]);
 
   const chiudiImport = () => {
     setIsExcelImportDialogOpen(false);
+    // Chiudere la finestra non ferma l'import: si riapre col pulsante e si vede l'avanzamento
+    if (importJob.inCorso) return;
     setFileImport(null);
     setAnteprimaImport([]);
-    setEsitoImport(null);
+    importJob.azzera();
   };
 
   /* --------------------------------------------------
@@ -466,25 +493,22 @@ function Main() {
     },
   });
 
-  const mutationBulkImport = useMutation({
-    mutationFn: (file: File) => inviaFileImport<ImportPuntiVenditaResponseDTO>(file, false),
-    onSuccess: (esito) => {
-      invalidatePuntiVendita();
-      const riepilogo = `${esito.total_imported} creati, ${esito.total_updated} aggiornati, ${esito.total_skipped} scartati`;
-      if (esito.errors.length === 0) {
-        chiudiImport();
-        showNotification(`Importazione completata: ${riepilogo}`, { variant: "success" });
-        return;
-      }
-      // Restano visibili le righe non importate, comprese quelle rifiutate da Istanta
-      setEsitoImport(esito);
-      showNotification(`Importazione completata con righe non importate: ${riepilogo}`, { variant: "warning" });
-    },
-    onError: (e: any) =>
-      showNotification(e?.message || "Errore durante l'importazione dei punti vendita", {
-        variant: "error",
-      }),
-  });
+  const avviaImport = async () => {
+    if (!fileImport) return;
+    try {
+      await importJob.avvia(fileImport);
+    } catch (e: any) {
+      showNotification(e?.message || "Errore durante l'importazione dei punti vendita", { variant: "error" });
+    }
+  };
+
+  const annullaImport = async () => {
+    try {
+      await importJob.annulla();
+    } catch (e: any) {
+      showNotification(e?.message || "Impossibile annullare l'importazione", { variant: "error" });
+    }
+  };
 
   /* --------------------------------------------------
    * HANDLERS CRUD
@@ -493,20 +517,7 @@ function Main() {
   const handleModify = (pv: PuntoVenditaResponseDTO) => {
     setIsEditMode(true);
     setCurrentPuntoVendita(pv);
-    reset({
-      nome: pv.nome,
-      citta: pv.citta,
-      indirizzo: pv.indirizzo,
-      cap: pv.cap,
-      canaleArea: pv.id_combinazione_canale_area,
-      // Il DTO porta le coordinate in coordinate, a 0,0 quando mancano
-      lat: pv.has_coordinate ? pv.coordinate?.lat : undefined,
-      lon: pv.has_coordinate ? pv.coordinate?.lon : undefined,
-      provincia: pv.provincia,
-      regione: pv.regione,
-      telefono: pv.telefono,
-      ragioneSociale: pv.ragionesociale,
-    });
+    reset(valoriFormPuntoVendita(pv));
     setIsPuntoVenditaDialogOpen(true);
   };
 
@@ -550,11 +561,12 @@ function Main() {
     if (!file) return;
     setFileImport(file);
     setAnteprimaImport([]);
-    setEsitoImport(null);
+    importJob.azzera();
     mutationAnteprimaImport.mutate(file);
   };
 
-  const righeImportabili = anteprimaImport.filter(r => r.azione !== "scarta").length;
+  const conteggiAnteprima = riepilogoAnteprima(anteprimaImport);
+  const righeDaElaborare = conteggiAnteprima.importabili + conteggiAnteprima.daInserireAMano;
 
   const openFileSelector = () => fileInputRef.current?.click();
 
@@ -777,6 +789,20 @@ function Main() {
         </Dialog.Panel>
       </Dialog>
 
+      {rigaInAttesa && rigaRidotta !== rigaInAttesa.riga && (
+        <InserimentoManualeImport
+          riga={rigaInAttesa}
+          combinazioni={combinazioniOrdinate}
+          onDecidi={async decisione => {
+            await importJob.decidi(decisione);
+            queryClient.invalidateQueries({ queryKey: ["dataPuntiVendita"] });
+          }}
+          onAnnullaImport={annullaImport}
+          onRiduci={() => setRigaRidotta(rigaInAttesa.riga)}
+          annullamentoInCorso={importJob.annullamentoInCorso}
+        />
+      )}
+
       {/* Dialog importazione Excel */}
       <Dialog
         size="xl"
@@ -803,7 +829,7 @@ function Main() {
                   variant="outline-secondary"
                   className="w-full"
                   onClick={openFileSelector}
-                  disabled={mutationAnteprimaImport.isPending || mutationBulkImport.isPending}
+                  disabled={mutationAnteprimaImport.isPending || importJob.inCorso || importJob.avvioInCorso}
                 >
                   {mutationAnteprimaImport.isPending ? (
                     <LoadingIcon icon="oval" className="w-4 h-4 mr-2" />
@@ -820,22 +846,79 @@ function Main() {
                 </div>
               </div>
 
-              {esitoImport && (
+              {statoImport && (
                 <div className="col-span-12 mt-4">
-                  <h3 className="text-sm font-medium mb-2">
-                    {esitoImport.total_imported} creati, {esitoImport.total_updated} aggiornati, {esitoImport.total_skipped} non importati
-                  </h3>
-                  <ul className="max-h-64 overflow-y-auto border rounded p-3 text-xs text-danger">
-                    {esitoImport.errors.map(e => (
-                      <li key={e.row}>
-                        Riga {e.row}: {e.error}
-                      </li>
-                    ))}
-                  </ul>
+                  <div className="flex items-center justify-between text-sm font-medium mb-2">
+                    <span>
+                      {importJob.inCorso
+                        ? importJob.annullamentoInCorso
+                          ? "Annullamento in corso…"
+                          : statoImport.stato === "in_attesa"
+                            ? "Importazione in pausa"
+                            : "Importazione in corso…"
+                        : statoImport.stato === "annullato"
+                          ? "Importazione annullata"
+                          : statoImport.stato === "errore"
+                            ? "Importazione interrotta"
+                            : "Importazione completata"}
+                    </span>
+                    <span>
+                      {statoImport.elaborate} / {statoImport.totale} righe
+                    </span>
+                  </div>
+                  <div
+                    className="h-2 w-full rounded-full bg-slate-200 dark:bg-darkmode-400 overflow-hidden"
+                    role="progressbar"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={percentualeImport(statoImport)}
+                  >
+                    <div
+                      className={clsx(
+                        "h-full transition-all",
+                        statoImport.stato === "annullato" || statoImport.stato === "errore" ? "bg-warning" : "bg-primary"
+                      )}
+                      style={{ width: `${percentualeImport(statoImport)}%` }}
+                    />
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
+                    <div>Creati: <strong>{statoImport.creati}</strong></div>
+                    <div>Aggiornati: <strong>{statoImport.aggiornati}</strong></div>
+                    <div>Scartati: <strong>{statoImport.scartati}</strong></div>
+                    <div>Inseriti a mano: <strong>{statoImport.inseritiAMano}</strong></div>
+                    {statoImport.stato === "annullato" && (
+                      <div>Non elaborati: <strong>{statoImport.nonElaborate}</strong></div>
+                    )}
+                  </div>
+                  {statoImport.soloFp > 0 && (
+                    <div className="mt-3 text-xs text-warning flex items-center">
+                      <Lucide icon="TriangleAlert" className="w-4 h-4 mr-1" />
+                      {statoImport.soloFp} punti vendita salvati solo in FP: Istanta non era raggiungibile, i due sistemi non sono allineati
+                    </div>
+                  )}
+                  {rigaInAttesa && (
+                    <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                      <span className="text-warning">In pausa sulla riga {rigaInAttesa.riga}: serve il tuo inserimento manuale.</span>
+                      {rigaRidotta === rigaInAttesa.riga && (
+                        <Button variant="outline-warning" size="sm" onClick={() => setRigaRidotta(null)}>
+                          Apri la riga in attesa
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                  {!importJob.inCorso && statoImport.errori.length > 0 && (
+                    <ul className="mt-3 max-h-64 overflow-y-auto border rounded p-3 text-xs text-danger">
+                      {statoImport.errori.map((e, i) => (
+                        <li key={`${e.row}-${i}`}>
+                          Riga {e.row}: {e.error}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               )}
 
-              {!esitoImport && anteprimaImport.length > 0 && (
+              {!statoImport && anteprimaImport.length > 0 && (
                 <div className="col-span-12 mt-4">
                   <h3 className="text-sm font-medium mb-2">
                     Anteprima ({anteprimaImport.length} righe)
@@ -850,6 +933,7 @@ function Main() {
                           <Table.Th>Indirizzo</Table.Th>
                           <Table.Th>Cap</Table.Th>
                           <Table.Th>Canale/Area</Table.Th>
+                          <Table.Th>Affidabilità</Table.Th>
                           <Table.Th>Esito</Table.Th>
                         </Table.Tr>
                       </Table.Thead>
@@ -857,9 +941,10 @@ function Main() {
                         {anteprimaImport.map(r => (
                           <Table.Tr
                             key={r.riga}
-                            className={
-                              r.azione === "scarta" ? "bg-danger/5 dark:bg-danger/10" : ""
-                            }
+                            className={clsx(
+                              r.azione === "scarta" && "bg-danger/5 dark:bg-danger/10",
+                              r.azione === "revisiona" && "bg-warning/5 dark:bg-warning/10"
+                            )}
                           >
                             <Table.Td>{r.riga}</Table.Td>
                             <Table.Td>{r.letto?.nome || "-"}</Table.Td>
@@ -870,6 +955,25 @@ function Main() {
                               {r.letto?.canaleArea ||
                                 [r.letto?.canale, r.letto?.area].filter(Boolean).join(" / ") ||
                                 "-"}
+                            </Table.Td>
+                            <Table.Td>
+                              {r.azione === "scarta" ? (
+                                "-"
+                              ) : (
+                                <div>
+                                  <span
+                                    className={clsx(
+                                      "px-2 py-0.5 text-[11px] font-semibold rounded-full border",
+                                      BADGE_PUNTEGGIO[classePunteggio(r.punteggio)]
+                                    )}
+                                  >
+                                    {r.punteggio}
+                                  </span>
+                                  {r.motivi.length > 0 && (
+                                    <div className="text-[11px] mt-1 text-slate-500">{r.motivi.join(" · ")}</div>
+                                  )}
+                                </div>
+                              )}
                             </Table.Td>
                             <Table.Td>
                               {r.azione === "scarta" ? (
@@ -885,6 +989,11 @@ function Main() {
                                     {r.errore}
                                   </div>
                                 </div>
+                              ) : r.azione === "revisiona" ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 text-[11px] font-semibold rounded-full bg-warning/10 text-warning border border-warning/20">
+                                  <Lucide icon="ClipboardCheck" className="w-3.5 h-3.5" />
+                                  Da inserire a mano
+                                </span>
                               ) : (
                                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 text-[11px] font-semibold rounded-full bg-success/10 text-success border border-success/20">
                                   <Lucide
@@ -901,32 +1010,51 @@ function Main() {
                     </Table>
                   </div>
                   <div className="mt-4 text-sm">
-                    Righe importabili: {righeImportabili} / {anteprimaImport.length}
+                    Importabili: {conteggiAnteprima.importabili} · Da inserire a mano: {conteggiAnteprima.daInserireAMano} ·
+                    Scartate: {conteggiAnteprima.scartate} (su {anteprimaImport.length} righe)
                   </div>
                 </div>
               )}
             </div>
           </Dialog.Description>
           <Dialog.Footer>
-            <Button
-              variant="outline-danger"
-              className="w-20 mr-1"
-              onClick={chiudiImport}
-            >
-              {esitoImport ? "Chiudi" : "Annulla"}
-            </Button>
-            {!esitoImport && (
-              <Button
-                variant="primary"
-                className="w-auto"
-                onClick={() => fileImport && mutationBulkImport.mutate(fileImport)}
-                disabled={!fileImport || righeImportabili === 0 || mutationBulkImport.isPending}
-              >
-                {mutationBulkImport.isPending && (
-                  <LoadingIcon icon="oval" className="w-4 h-4 mr-2" />
+            {importJob.inCorso ? (
+              <>
+                <Button variant="outline-secondary" className="mr-1" onClick={chiudiImport}>
+                  Nascondi
+                </Button>
+                <Button
+                  variant="danger"
+                  onClick={annullaImport}
+                  disabled={importJob.annullamentoInCorso}
+                >
+                  {importJob.annullamentoInCorso && <LoadingIcon icon="oval" className="w-4 h-4 mr-2" />}
+                  Annulla importazione
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  variant="outline-danger"
+                  className="w-20 mr-1"
+                  onClick={chiudiImport}
+                >
+                  {statoImport ? "Chiudi" : "Annulla"}
+                </Button>
+                {!statoImport && (
+                  <Button
+                    variant="primary"
+                    className="w-auto"
+                    onClick={avviaImport}
+                    disabled={!fileImport || righeDaElaborare === 0 || importJob.avvioInCorso}
+                  >
+                    {importJob.avvioInCorso && (
+                      <LoadingIcon icon="oval" className="w-4 h-4 mr-2" />
+                    )}
+                    Importa {righeDaElaborare} righe
+                  </Button>
                 )}
-                Importa {righeImportabili} righe
-              </Button>
+              </>
             )}
           </Dialog.Footer>
         </Dialog.Panel>
@@ -1080,7 +1208,7 @@ function Main() {
                         icon="FileSpreadsheet"
                         className="stroke-[1.3] w-4 h-4 mr-2"
                       />{" "}
-                      Importa Excel
+                      {importJob.inCorso ? `Import in corso (${percentualeImport(importJob.stato!)}%)` : "Importa Excel"}
                     </Button>
                   </PermissionGate>
                   <PermissionGate permission={PERMISSIONS.GDO.GESTISCI_PUNTI_VENDITA} mode="disable">

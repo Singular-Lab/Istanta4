@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canaleArea, codiciGdo, contaPer, filtraPuntiVendita, indirizzoCompleto } from "./puntoVendita";
+import { canaleArea, codiciGdo, contaPer, filtraPuntiVendita, indirizzoCompleto, valoriFormPuntoVendita } from "./puntoVendita";
 
 describe("codiciGdo", () => {
   it("rende leggibili i codici del sistema della GDO e salta quelli vuoti", () => {
@@ -73,5 +73,26 @@ describe("contaPer", () => {
 
   it("salta i punti vendita senza la dimensione", () => {
     expect(contaPer([{ id_canale: undefined }], "canale")).toEqual([]);
+  });
+});
+
+describe("valoriFormPuntoVendita", () => {
+  it("i campi facoltativi a null diventano vuoti: il form non blocca il salvataggio con 'regione cannot be null'", () => {
+    const valori = valoriFormPuntoVendita({
+      nome: "Conad Lucca", citta: "Lucca", indirizzo: "Via Roma 1", cap: "55100", id_combinazione_canale_area: "k1",
+      has_coordinate: false, coordinate: { lat: 0, lon: 0 },
+      provincia: null, regione: null, telefono: null, ragionesociale: null,
+    } as any);
+
+    expect(valori).toMatchObject({ provincia: "", regione: "", telefono: "", ragioneSociale: "", lat: undefined, lon: undefined });
+  });
+
+  it("conserva i valori presenti e le coordinate", () => {
+    const valori = valoriFormPuntoVendita({
+      nome: "Conad Lucca", citta: "Lucca", indirizzo: "Via Roma 1", cap: "55100", id_combinazione_canale_area: "k1",
+      has_coordinate: true, coordinate: { lat: 43.8, lon: 10.5 }, provincia: "LU", regione: "Toscana", telefono: "0583 1", ragionesociale: "Srl",
+    } as any);
+
+    expect(valori).toMatchObject({ canaleArea: "k1", provincia: "LU", regione: "Toscana", ragioneSociale: "Srl", lat: 43.8, lon: 10.5 });
   });
 });

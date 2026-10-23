@@ -303,6 +303,16 @@ export interface ImportPuntiVenditaAgenzia {
    * chiave aggiorna il PV invece di crearne uno nuovo. Senza, i doppioni si scartano.
    */
   chiaveMeta?: string;
+  /**
+   * Campo di meta usato quando la riga non ha la chiave principale (per CONAD CNO il
+   * codice Muro quando manca l'id ANACAN). Se dichiarato, la riga lo porta sempre nei meta.
+   */
+  chiaveMetaRiserva?: string;
+  /**
+   * Righe da importare a partire da tutti i fogli del file (nome del foglio → righe con
+   * l'intestazione in riga 1). Senza, FP importa le righe del primo foglio.
+   */
+  leggiFile?(fogli: Record<string, Record<string, unknown>[]>): Record<string, unknown>[];
   /** Da riga del foglio (intestazione → valore) a PV; una stringa e l'errore della riga. */
   leggiRiga(riga: Record<string, unknown>): PuntoVenditaDaImportareDTO | string;
 }

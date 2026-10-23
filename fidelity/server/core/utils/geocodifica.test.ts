@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { geocodifica, INTERVALLO_MS } from './geocodifica';
+import { cercaIndirizzi, geocodifica, INTERVALLO_MS } from './geocodifica';
 
 vi.mock('../logger', () => ({ log: { warn: vi.fn() } }));
 
@@ -37,5 +37,42 @@ describe('geocodifica', () => {
     await vi.runAllTimersAsync();
 
     expect(await risultati).toEqual([{}, { lat: 1, lon: 2 }]);
+  });
+
+  it('cercaIndirizzi scompone i risultati nei campi del punto vendita e passa dalla stessa coda', async () => {
+    vi.useFakeTimers();
+    const partenze: number[] = [];
+    const url: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (indirizzo: string) => {
+      partenze.push(Date.now());
+      url.push(indirizzo);
+      return new Response(JSON.stringify([
+        {
+          lat: '43.84', lon: '10.50', display_name: 'Via Fillungo 12, Lucca',
+          address: { road: 'Via Fillungo', house_number: '12', postcode: '55100', city: 'Lucca', state: 'Toscana', 'ISO3166-2-lvl6': 'IT-LU' },
+        },
+        { lat: 'x', lon: 'y' },
+      ]));
+    }));
+
+    const risultati = Promise.all([geocodifica('Via Roma 10, Pisa'), cercaIndirizzi('Via Fillungo 12 Lucca')]);
+    await vi.runAllTimersAsync();
+
+    expect((await risultati)[1]).toEqual([{
+      etichetta: 'Via Fillungo 12, Lucca', lat: 43.84, lon: 10.5, indirizzo: 'Via Fillungo 12',
+      cap: '55100', citta: 'Lucca', provincia: 'LU', regione: 'Toscana',
+    }]);
+    expect(url[1]).toContain('countrycodes=it');
+    expect(partenze[1] - partenze[0]).toBeGreaterThanOrEqual(INTERVALLO_MS);
+  });
+
+  it('cercaIndirizzi segnala Nominatim che non risponde', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 503 })));
+
+    const ricerca = cercaIndirizzi('Via Roma 1 Pisa');
+    const verifica = expect(ricerca).rejects.toThrow('503');
+    await vi.runAllTimersAsync();
+    await verifica;
   });
 });

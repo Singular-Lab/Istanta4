@@ -1,3 +1,4 @@
+import type { IndirizzoTrovatoDTO } from '../dto';
 import { log } from '../logger';
 
 /**
@@ -16,14 +17,62 @@ let ultimaChiamata = 0;
 
 /** Coordinate dell'indirizzo, oppure {} se Nominatim non lo trova, sbaglia o non risponde in tempo. */
 export function geocodifica(query: string): Promise<{ lat?: number; lon?: number }> {
+  return inCoda(() => chiamaNominatim(query));
+}
+
+/** Mette la chiamata in coda dietro le altre, distanziata di INTERVALLO_MS dalla precedente. */
+function inCoda<T>(chiamata: () => Promise<T>): Promise<T> {
   const turno = coda.then(async () => {
     const attesa = ultimaChiamata + INTERVALLO_MS - Date.now();
     if (attesa > 0) await new Promise((resolve) => setTimeout(resolve, attesa));
     ultimaChiamata = Date.now();
-    return chiamaNominatim(query);
+    return chiamata();
   });
   coda = turno.catch(() => undefined);
   return turno;
+}
+
+type RisultatoNominatim = {
+  lat?: string;
+  lon?: string;
+  display_name?: string;
+  address?: Record<string, string | undefined>;
+};
+
+// Sigle delle province nel campo ISO3166-2-lvl6 di Nominatim (es. IT-LU)
+const siglaProvincia = (iso?: string) => (iso?.startsWith('IT-') ? iso.slice(3) : undefined);
+
+/** Risultato di Nominatim scomposto nei campi del punto vendita. */
+function indirizzoTrovato(r: RisultatoNominatim): IndirizzoTrovatoDTO | undefined {
+  const lat = Number(r.lat);
+  const lon = Number(r.lon);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return undefined;
+  const a = r.address ?? {};
+  const via = a.road ?? a.pedestrian ?? a.square ?? a.hamlet ?? '';
+  return {
+    etichetta: r.display_name ?? via,
+    lat,
+    lon,
+    indirizzo: [via, a.house_number].filter(Boolean).join(' '),
+    cap: a.postcode,
+    citta: a.city ?? a.town ?? a.village ?? a.municipality,
+    provincia: siglaProvincia(a['ISO3166-2-lvl6']),
+    regione: a.state,
+  };
+}
+
+/**
+ * Indirizzi italiani che corrispondono alla ricerca, per far scegliere all'utente quello giusto
+ * sulla mappa. Passa dalla stessa coda di geocodifica; se Nominatim non risponde lancia un errore.
+ */
+export function cercaIndirizzi(query: string, limite = 5): Promise<IndirizzoTrovatoDTO[]> {
+  return inCoda(async () => {
+    const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&countrycodes=it&limit=${limite}&q=${encodeURIComponent(query)}`;
+    const response = await fetch(url, { headers: { 'User-Agent': 'fidelity-promotion/2.18' }, signal: AbortSignal.timeout(TIMEOUT_MS) });
+    if (!response.ok) throw new Error(`Nominatim ha risposto ${response.status}`);
+    const risultati = (await response.json()) as RisultatoNominatim[];
+    return risultati.map(indirizzoTrovato).filter((r): r is IndirizzoTrovatoDTO => Boolean(r));
+  });
 }
 
 async function chiamaNominatim(query: string): Promise<{ lat?: number; lon?: number }> {

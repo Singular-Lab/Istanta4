@@ -1,6 +1,7 @@
 import express from 'express';
 import request from 'supertest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import config from '../../config';
 import { ServerUtils } from '../../utils/ServerUtils';
 import { AreaController } from '../AreaController';
 
@@ -33,8 +34,11 @@ function createApp(rispostaIstanta: { data: unknown; status: number; statusText?
 
 const area = { id: 'a1', id_gdo: 'g1', codice: 'TO', nome: 'Toscana' };
 
+const ambienteOriginale = config.NODE_ENV;
+
 afterEach(() => {
   vi.restoreAllMocks();
+  config.NODE_ENV = ambienteOriginale;
 });
 
 describe('PUT /api/ACPV/salvaArea', () => {
@@ -77,5 +81,41 @@ describe('DELETE /api/ACPV/eliminaArea/:guidID', () => {
     expect(res.status).toBe(502);
     expect(res.body.message).toBe("Istanta non ha riconosciuto l'utente");
     expect(areaService.deleteArea).not.toHaveBeenCalled();
+  });
+});
+
+describe('development con Istanta non raggiungibile', () => {
+  const NESSUNA_RISPOSTA = { data: null, status: 0, statusText: 'fetch failed' };
+
+  it('l\'area si salva in FP e la risposta segnala la dissincronia', async () => {
+    config.NODE_ENV = 'development';
+    const { app, areaService } = createApp(NESSUNA_RISPOSTA);
+
+    const res = await request(app).put('/api/ACPV/salvaArea').send(area);
+
+    expect(res.status).toBe(200);
+    expect(areaService.createArea).toHaveBeenCalledOnce();
+    expect(res.headers['x-istanta-dissincronia']).toBe('/ACPV/salvaArea');
+  });
+
+  it('l\'area si elimina in FP e la risposta segnala la dissincronia', async () => {
+    config.NODE_ENV = 'development';
+    const { app, areaService } = createApp(NESSUNA_RISPOSTA);
+
+    const res = await request(app).delete('/api/ACPV/eliminaArea/a1');
+
+    expect(areaService.deleteArea).toHaveBeenCalledWith('a1');
+    expect(res.headers['x-istanta-dissincronia']).toBe('/ACPV/eliminaArea');
+  });
+
+  it('in produzione resta l\'errore e l\'area non si salva', async () => {
+    config.NODE_ENV = 'production';
+    const { app, areaService } = createApp(NESSUNA_RISPOSTA);
+
+    const res = await request(app).put('/api/ACPV/salvaArea').send(area);
+
+    expect(res.status).toBe(502);
+    expect(areaService.createArea).not.toHaveBeenCalled();
+    expect(res.headers['x-istanta-dissincronia']).toBeUndefined();
   });
 });

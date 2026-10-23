@@ -49,3 +49,23 @@ export const contaPer = (
   }
   return [...conteggi.values()].sort((a, b) => a.nome.localeCompare(b.nome));
 };
+
+/**
+ * Valori del form di modifica di un PV. I campi facoltativi che il DB ha a null diventano
+ * stringhe vuote: lo schema yup (string, non nullable) altrimenti blocca il salvataggio
+ * con "regione cannot be null".
+ */
+export const valoriFormPuntoVendita = (pv: PuntoVenditaResponseDTO) => ({
+  nome: pv.nome ?? "",
+  citta: pv.citta ?? "",
+  indirizzo: pv.indirizzo ?? "",
+  cap: pv.cap ?? "",
+  canaleArea: pv.id_combinazione_canale_area ?? "",
+  // Il DTO porta le coordinate in coordinate, a 0,0 quando mancano
+  lat: pv.has_coordinate ? pv.coordinate?.lat : undefined,
+  lon: pv.has_coordinate ? pv.coordinate?.lon : undefined,
+  provincia: pv.provincia ?? "",
+  regione: pv.regione ?? "",
+  telefono: pv.telefono ?? "",
+  ragioneSociale: pv.ragionesociale ?? "",
+});
