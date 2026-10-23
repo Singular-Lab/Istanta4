@@ -3,7 +3,7 @@ import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/rea
 import { Colorize } from "../../lib/Colorize";
 import { TIPO_ATTIVITA } from "../../lib/enums";
 import { ServerCall } from "../../lib/server_call";
-import type { AvvisoManutenzione, Config, DESIGN_KIT, DimensioneVisibilitaPromo, FileItemKit, FormatiAttributes, Funzionalita, GlobalUserFilter, HubNewsAdminDTO, HubServiceDTO, MenaboLayoutSalvato, MenaboRisultato, PuntiVenditaAttributes, RUNTIME_KIT, RaccoglitoreKit, RegoleMenabo, ReportOptionDTO, Ricette, SaveMenaboLayoutRequest, TimelinePromoItem, TipiDiExportAttributes, TracciatoQueryRequest, TracciatoQueryResult, TracciatoReport, TracciatiMomentoResponseDTO } from "../../lib/types";
+import type { AuthProviderAdminDTO, AvvisoManutenzione, Config, DESIGN_KIT, DimensioneVisibilitaPromo, FileItemKit, FormatiAttributes, Funzionalita, GlobalUserFilter, HubNewsAdminDTO, HubServiceDTO, MenaboLayoutSalvato, MenaboRisultato, PuntiVenditaAttributes, RUNTIME_KIT, RaccoglitoreKit, RegoleMenabo, ReportOptionDTO, Ricette, SaveMenaboLayoutRequest, TimelinePromoItem, TipiDiExportAttributes, TracciatoQueryRequest, TracciatoQueryResult, TracciatoReport, TracciatiMomentoResponseDTO } from "../../lib/types";
 import type { AuditLogPaginatedResponse, AuditLogSummary } from "../../lib/auditTypes";
 import type { AreaResponseDTO, CanaleResponseDTO, CombinazioneCanaleAreaResponseDTO, CreateFilterTemplateDTO, DisplayContextResponseDTO, DispositivoPuntoVenditaResponseDTO, FilterConditionDTO, FilterTemplateDTO, FormatiResponseDTO, GDOResponseDTO, PromoResponseDTO, PuntoVenditaResponseDTO, RuoloUtenteGDOResponseDTO, TipiDiExportResponseDTO, UpdateFilterTemplateDTO, VolantinoAttivoDTO } from "../../server/core/dto";
 
@@ -309,6 +309,17 @@ export const useFetchHubServicesAdmin = (enabled = true) => {
   return useQuery({
     queryKey: HUB_QUERY_KEYS.servicesAdmin,
     queryFn: () => ServerCall.get<Record<string, HubServiceDTO[]>>('/hub-services/admin'),
+    enabled,
+  });
+};
+
+export const METODI_ACCESSO_QUERY_KEY = ['authProvidersAdmin'] as const;
+
+/** Tutti i metodi di accesso, compresi i disattivati: solo per la gestione del Superadmin. */
+export const useFetchAuthProvidersAdmin = (enabled = true) => {
+  return useQuery({
+    queryKey: METODI_ACCESSO_QUERY_KEY,
+    queryFn: () => ServerCall.get<AuthProviderAdminDTO[]>('/auth-providers/admin'),
     enabled,
   });
 };

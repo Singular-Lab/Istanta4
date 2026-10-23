@@ -173,6 +173,8 @@ import { AuthProviderService } from "../services/AuthProviderService";
 import { HubNewsService } from "../services/HubNewsService";
 import { HubServiceService } from "../services/HubServiceService";
 import { OidcService } from "../services/OidcService";
+import { SamlService } from "../services/SamlService";
+import type { ISamlService } from "../interfaces/ISamlService";
 
 // Agenzia Lib
 import { loadAgenziaLib } from "../agenzia_lib/loader";
@@ -449,7 +451,8 @@ function bindServices() {
   // Hub - Auth Providers & Services
   container.bind<IAuthProviderService>(TYPES.AuthProviderService).toDynamicValue(
     (context) => new AuthProviderService(
-      context.get<IAuthProviderRepository>(TYPES.AuthProviderRepository)
+      context.get<IAuthProviderRepository>(TYPES.AuthProviderRepository),
+      context.get<ISamlService>(TYPES.SamlService)
     )
   );
   container.bind<IHubServiceService>(TYPES.HubServiceService).toDynamicValue(
@@ -465,6 +468,10 @@ function bindServices() {
   container.bind<IOidcService>(TYPES.OidcService).toDynamicValue(
     () => new OidcService()
   );
+  // Singleton: tiene in memoria le richieste SAML in attesa di risposta
+  container.bind<ISamlService>(TYPES.SamlService).toDynamicValue(
+    () => new SamlService()
+  ).inSingletonScope();
 
   // Audit Log — singleton con repository iniettato
   container.bind(TYPES.AuditLogService).toDynamicValue(

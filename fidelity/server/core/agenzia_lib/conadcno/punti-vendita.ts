@@ -1,6 +1,6 @@
+import type { AvvisoImportPuntoVenditaDTO } from "../../dto/PuntoVenditaDTO.js";
 import { cella, numero } from "../../services/importPuntiVendita.js";
 import { normalizePuntoVenditaText } from "../../utils/puntoVenditaNormalization.js";
-import type { AvvisoImportPuntoVenditaDTO } from "../../dto/PuntoVenditaDTO.js";
 import type { ImportPuntiVenditaAgenzia } from "../types.js";
 
 /*
@@ -34,7 +34,7 @@ const COLONNE = {
 };
 
 /** Insegne che non si importano affatto. */
-const INSEGNE_ESCLUSE = ["E_Commerce", "No insegna - altri", "Bistrot", "Distributore", "Ottica", "Bar"];
+const INSEGNE_ESCLUSE = ["E_Commerce", "No insegna - altri", "Bistrot", "Distributore", "Ottica", "Bar", "Parafarmacia"];
 
 /** Insegna CONAD CNO → codice del canale in FP (il confronto ignora le maiuscole). */
 const INSEGNE: Record<string, string> = {

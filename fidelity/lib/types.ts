@@ -76,6 +76,59 @@ export interface AuthProviderDTO {
   };
 }
 
+/** Stato di un segreto di un metodo di accesso: il valore non lascia mai il server. */
+export type StatoSegretoProvider = 'cifrato' | 'in_chiaro' | 'assente';
+
+/**
+ * Metodo di accesso come lo vede la gestione del Superadmin: config_server senza
+ * i segreti, al loro posto lo stato in `segreti`.
+ */
+export interface AuthProviderAdminDTO {
+  id: string;
+  codice: string;
+  nome: string;
+  descrizione: string | null;
+  icona: string;
+  tipo: AuthProviderDTO['tipo'];
+  ordine: number;
+  attivo: boolean;
+  config_client: Record<string, unknown>;
+  config_server: Record<string, unknown>;
+  ruoli_ammessi: string[] | null;
+  segreti: Record<string, StatoSegretoProvider>;
+  updatedAt?: string;
+}
+
+/** Dati inviati dalla gestione per creare o modificare un metodo di accesso. */
+export interface AuthProviderInput {
+  codice?: string;
+  nome?: string;
+  descrizione?: string | null;
+  icona?: string;
+  tipo?: AuthProviderDTO['tipo'];
+  ordine?: number;
+  attivo?: boolean;
+  config_client?: Record<string, unknown> | null;
+  /** Un segreto vuoto o assente lascia quello salvato. */
+  config_server?: Record<string, unknown> | null;
+  ruoli_ammessi?: string[] | null;
+  /** Segreti da cancellare esplicitamente (es. ['sp_private_key']). */
+  segreti_da_rimuovere?: string[];
+}
+
+export interface EsitoVerificaProvider {
+  controllo: string;
+  esito: 'ok' | 'errore' | 'avviso';
+  dettaglio: string;
+}
+
+export interface EsitoMigrazioneSegreti {
+  modalita: 'cifra' | 'decifra';
+  simulazione: boolean;
+  provider: Array<{ codice: string; campi: string[] }>;
+  totaleCampi: number;
+}
+
 export interface HubServiceDocumentAsset {
   id: string;
   title: string;

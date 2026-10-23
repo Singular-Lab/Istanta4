@@ -106,14 +106,14 @@ describe("importPuntiVenditaConadCno: lettura della riga", () => {
     expect(leggi({ Insegna: insegna, "Tipo Pdv": tipo })).toMatchObject({ canale, avvisi: [] });
   });
 
-  it.each(["E_Commerce", "No insegna  - altri", "Bistrot", "Distributore", "Ottica", "Bar"])(
+  it.each(["E_Commerce", "No insegna  - altri", "Bistrot", "Distributore", "Ottica", "Bar", "Parafarmacia"])(
     "l'insegna %s non e un punto vendita da importare",
     insegna => {
       expect(importPuntiVenditaConadCno.leggiRiga(muroAttivo({ Insegna: insegna }))).toBe(`Insegna esclusa dall'import: ${insegna}`);
     }
   );
 
-  it.each(["Parafarmacia", "Ingrosso", "Sapori & Dintorni", "Non definita", "Euronics"])(
+  it.each(["Ingrosso", "Sapori & Dintorni", "Non definita", "Euronics"])(
     "l'insegna %s si inserisce a mano: canale da scegliere, punteggio a zero",
     insegna => {
       expect(leggi({ Insegna: insegna })).toMatchObject({

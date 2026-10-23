@@ -92,9 +92,11 @@ import type { IAuthProviderRepository } from './repositories/AuthProviderReposit
 import type { IHubServiceService } from './interfaces/IHubServiceService';
 import type { IHubNewsService } from './interfaces/IHubNewsService';
 import type { IOidcService } from './interfaces/IOidcService';
+import type { ISamlService } from './interfaces/ISamlService';
 import { MenuController } from './controllers/MenuController';
 import { AuditLogController } from './controllers/AuditLogController';
 import { HubController } from './controllers/HubController';
+import { MetodiAccessoController } from './controllers/MetodiAccessoController';
 import type { IAgenziaLib } from './agenzia_lib/types';
 
 // Factory per creare i controller
@@ -147,6 +149,7 @@ export async function createControllers(): Promise<IController[]> {
   const authProviderService = container.get<IAuthProviderService>(TYPES.AuthProviderService);
   const authProviderRepository = container.get<IAuthProviderRepository>(TYPES.AuthProviderRepository);
   const oidcService = container.get<IOidcService>(TYPES.OidcService);
+  const samlService = container.get<ISamlService>(TYPES.SamlService);
   const hubServiceService = container.get<IHubServiceService>(TYPES.HubServiceService);
   const hubNewsService = container.get<IHubNewsService>(TYPES.HubNewsService);
   const agenziaLib = container.get<IAgenziaLib>(TYPES.AgenziaLib);
@@ -198,6 +201,7 @@ export async function createControllers(): Promise<IController[]> {
     new PermessiController(permessiService),
     new MenuController(menuService, badgeService),
     new AuditLogController(),
+    new MetodiAccessoController(authProviderService, samlService, authProviderRepository, userService, agenziaLib),
     new HubController(authProviderService, hubServiceService, hubNewsService, menuService, userService, oidcService, authProviderRepository, agenziaLib),
   ];
 

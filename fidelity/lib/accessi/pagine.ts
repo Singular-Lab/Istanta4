@@ -94,6 +94,7 @@ export const PAGINE: DefinizionePagina[] = [
   // Sistema
   { percorso: '/gestione-permessi', permesso: P.SISTEMA.GESTISCI_ACCESSI },
   { percorso: '/gestione-hub', permesso: P.SISTEMA.GESTISCI_HUB },
+  { percorso: '/gestione-metodi-accesso', permesso: P.SISTEMA.GESTISCI_METODI_ACCESSO },
   { percorso: '/superadmin/dashboard', permesso: P.SISTEMA.DASHBOARD },
 ];
 
