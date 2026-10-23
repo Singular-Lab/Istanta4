@@ -52,7 +52,9 @@ export function testoRiepilogoImport(stato: StatoImportPuntiVenditaDTO): string 
     `${stato.scartati} scartati`,
   ];
   if (stato.inseritiAMano) parti.push(`${stato.inseritiAMano} inseriti a mano`);
-  if (stato.stato === "annullato") parti.push(`${stato.nonElaborate} non elaborati`);
+  if (stato.stato === "annullato" || stato.stato === "errore") parti.push(`${stato.nonElaborate} non elaborati`);
+  if (stato.senzaCoordinate) parti.push(`${stato.senzaCoordinate} senza coordinate`);
+  if (stato.erroriNominatim) parti.push(`${stato.erroriNominatim} errori di Nominatim`);
   if (stato.soloFp) parti.push(`${stato.soloFp} salvati solo in FP (Istanta non raggiungibile)`);
   return parti.join(", ");
 }

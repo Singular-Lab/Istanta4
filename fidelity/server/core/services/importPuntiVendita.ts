@@ -13,8 +13,12 @@ export interface ContestoImportPuntiVendita {
   canali: Voce[];
   aree: Voce[];
   combinazioni: Array<{ id: string; idCanale: string; idArea: string; sigla: string }>;
-  esistenti: Array<{ id: string; nome: string; indirizzo: string; cap: string; meta?: Record<string, unknown> }>;
+  esistenti: Array<{ id: string; nome: string; indirizzo: string; cap: string; meta?: Record<string, unknown>; lat?: number; lon?: number }>;
 }
+
+/** Coordinate utilizzabili: 0,0 e il valore che Istanta scrive quando mancano, non un punto in Italia. */
+export const coordinateValide = (lat?: number | null, lon?: number | null): boolean =>
+  typeof lat === 'number' && typeof lon === 'number' && Number.isFinite(lat) && Number.isFinite(lon) && !(lat === 0 && lon === 0);
 
 /** Righe di ogni foglio del file (nome del foglio → righe), con l'intestazione sulla prima riga. */
 export function leggiFogli(file: Buffer): Record<string, RigaFile[]> {
@@ -194,6 +198,14 @@ export function preparaImportPuntiVendita(
       avvisi.push({ motivo: 'Punto vendita esistente riconosciuto da nome, indirizzo e CAP', penalita: PENALITA_RICONOSCIUTO_PER_NOME });
     }
     const punteggio = Math.max(0, 100 - avvisi.reduce((somma, a) => somma + a.penalita, 0));
+    // Un PV gia geolocalizzato allo stesso indirizzo tiene le sue coordinate: niente nuova ricerca
+    // su Nominatim, e Istanta non le riceve azzerate
+    const senzaCoordinateNelFile = !Number.isFinite(letto.lat) || !Number.isFinite(letto.lon);
+    const coordinateEsistenti =
+      senzaCoordinateNelFile && esistente && coordinateValide(esistente.lat, esistente.lon) &&
+      n(esistente.indirizzo) === n(indirizzo) && n(esistente.cap) === n(cap)
+        ? { lat: esistente.lat, lon: esistente.lon }
+        : { lat: letto.lat, lon: letto.lon };
     const motivi = avvisi.map(a => a.motivo);
 
     const dati: DatiPuntoVenditaImportatoDTO = {
@@ -207,8 +219,8 @@ export function preparaImportPuntiVendita(
       provincia,
       regione: letto.regione?.trim() || undefined,
       telefono,
-      lat: letto.lat,
-      lon: letto.lon,
+      lat: coordinateEsistenti.lat,
+      lon: coordinateEsistenti.lon,
       meta: letto.meta && { ...esistente?.meta, ...letto.meta },
     };
     if (punteggio < soglia || !idCombinazione) {

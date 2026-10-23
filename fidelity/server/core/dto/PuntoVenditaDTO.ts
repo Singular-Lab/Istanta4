@@ -236,6 +236,14 @@ export interface StatoImportPuntiVenditaDTO {
   inseritiAMano: number;
   /** PV salvati solo in FP perche Istanta non rispondeva (solo in development). */
   soloFp: number;
+  /** PV importati automaticamente a cui Nominatim ha dato le coordinate. */
+  geolocalizzati: number;
+  /** PV importati senza coordinate: Nominatim non ha trovato l'indirizzo o non ha risposto. */
+  senzaCoordinate: number;
+  /** Ricerche fallite perche Nominatim era in errore (HTTP, timeout, rete), contate anche in senzaCoordinate. */
+  erroriNominatim: number;
+  /** Motivo dell'ultimo errore di Nominatim, da mostrare durante l'import. */
+  ultimoErroreNominatim?: string;
   /** Righe non elaborate perche l'import e stato annullato prima di arrivarci. */
   nonElaborate: number;
   errori: Array<{ row: number; error: string }>;

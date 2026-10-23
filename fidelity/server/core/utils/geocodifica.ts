@@ -7,7 +7,7 @@ import { log } from '../logger';
  * anche quando arrivano da sync concorrenti. Il timeout evita che un Nominatim lento
  * tenga ferma la sincronizzazione del plugin.
  */
-export const INTERVALLO_MS = 1100;
+export const INTERVALLO_MS = 1200;
 const TIMEOUT_MS = 5000;
 
 // ponytail: coda in memoria, vale perche il server gira in un solo processo (ecosystem.config.cjs:
@@ -68,8 +68,14 @@ function indirizzoTrovato(r: RisultatoNominatim): IndirizzoTrovatoDTO | undefine
 export function cercaIndirizzi(query: string, limite = 5): Promise<IndirizzoTrovatoDTO[]> {
   return inCoda(async () => {
     const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&countrycodes=it&limit=${limite}&q=${encodeURIComponent(query)}`;
-    const response = await fetch(url, { headers: { 'User-Agent': 'fidelity-promotion/2.18' }, signal: AbortSignal.timeout(TIMEOUT_MS) });
-    if (!response.ok) throw new Error(`Nominatim ha risposto ${response.status}`);
+    let response: Response;
+    try {
+      response = await fetch(url, { headers: { 'User-Agent': 'fidelity-promotion/2.18' }, signal: AbortSignal.timeout(TIMEOUT_MS) });
+    } catch (error) {
+      // Rete, DNS o timeout: il motivo arriva a chi importa o cerca, non solo nel log
+      throw new Error(`Nominatim non raggiungibile: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    if (!response.ok) throw new Error(`Nominatim non disponibile (HTTP ${response.status})`);
     const risultati = (await response.json()) as RisultatoNominatim[];
     return risultati.map(indirizzoTrovato).filter((r): r is IndirizzoTrovatoDTO => Boolean(r));
   });

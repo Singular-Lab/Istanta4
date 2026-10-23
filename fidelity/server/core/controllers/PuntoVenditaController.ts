@@ -59,6 +59,10 @@ function datiDaForm(body: FormPuntoVendita, idGdo: string): CreatePuntoVenditaDT
   };
 }
 
+/** Ricerca Nominatim di un PV importato: via e civico, CAP e citta, provincia. */
+const queryIndirizzo = (dati: Pick<CreatePuntoVenditaDTO, 'indirizzo' | 'cap' | 'citta' | 'provincia'>) =>
+  [dati.indirizzo, [dati.cap, dati.citta].filter(Boolean).join(' '), dati.provincia].filter(Boolean).join(', ');
+
 /** Dopo un import la view delle combinazioni conta i nuovi PV; se non riesce i PV restano comunque. */
 async function aggiornaVistaCombinazioni(): Promise<void> {
   try {
@@ -78,7 +82,7 @@ export class PuntoVenditaController extends BaseController {
     private importJobs: GestoreImportPuntiVendita = importPuntiVenditaJobs,
     private emetti: (evento: string, dati: unknown, room: string) => void = emitToClients,
     private aggiornaVista: () => Promise<void> = aggiornaVistaCombinazioni,
-    private cerca: (query: string) => Promise<IndirizzoTrovatoDTO[]> = cercaIndirizzi
+    private cerca: (query: string, limite?: number) => Promise<IndirizzoTrovatoDTO[]> = cercaIndirizzi
   ) {
     super('/api');
   }
@@ -406,6 +410,10 @@ export class PuntoVenditaController extends BaseController {
         scrivi: async esito => ({
           sincronizzato: (await this.salvaSuIstantaEFp(req, esito.id ?? randomUUID(), esito.dati, Boolean(esito.id))).sincronizzato,
         }),
+        geocodifica: async dati => {
+          const [trovato] = await this.cerca(queryIndirizzo(dati), 1);
+          return trovato && { lat: trovato.lat, lon: trovato.lon };
+        },
         notifica: (evento, statoJob) => this.emetti(eventoImportPuntiVendita(statoJob.jobId, evento), statoJob, roomUtente(idUtente)),
         alTermine: () => this.aggiornaVista(),
       });
@@ -501,7 +509,9 @@ export class PuntoVenditaController extends BaseController {
       this.sendResponse(res, HttpStatusCode.OK, { risultati: await this.cerca(query) });
     } catch (error) {
       log.warn('cercaIndirizzo - Nominatim non disponibile', { error: error instanceof Error ? error.message : String(error) });
-      this.sendResponse(res, HttpStatusCode.SERVICE_UNAVAILABLE, { message: 'Ricerca indirizzi non disponibile, riprova tra poco' });
+      this.sendResponse(res, HttpStatusCode.SERVICE_UNAVAILABLE, {
+        message: error instanceof Error ? error.message : 'Nominatim non disponibile, riprova tra poco',
+      });
     }
   }
 

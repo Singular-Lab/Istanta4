@@ -28,6 +28,9 @@ const stato = (campi: Partial<StatoImportPuntiVenditaDTO> = {}): StatoImportPunt
   scartati: 1,
   inseritiAMano: 0,
   soloFp: 0,
+  geolocalizzati: 0,
+  senzaCoordinate: 0,
+  erroriNominatim: 0,
   nonElaborate: 0,
   errori: [],
   avviatoIl: "2026-10-23T10:00:00.000Z",
@@ -87,6 +90,16 @@ describe("riepilogo dell'import", () => {
   it("un import annullato riporta anche le righe non elaborate", () => {
     expect(testoRiepilogoImport(stato())).toBe("5 creati, 2 aggiornati, 1 scartati");
     expect(testoRiepilogoImport(stato({ stato: "annullato", nonElaborate: 4 }))).toContain("4 non elaborati");
+  });
+
+  it("riporta i PV rimasti senza coordinate e gli errori di Nominatim", () => {
+    expect(testoRiepilogoImport(stato({ senzaCoordinate: 4, erroriNominatim: 3 }))).toBe(
+      "5 creati, 2 aggiornati, 1 scartati, 4 senza coordinate, 3 errori di Nominatim"
+    );
+  });
+
+  it("un import fermato per errore riporta le righe non elaborate", () => {
+    expect(testoRiepilogoImport(stato({ stato: "errore", nonElaborate: 590 }))).toContain("590 non elaborati");
   });
 
   it("riporta gli inserimenti a mano e i PV rimasti solo in FP", () => {
