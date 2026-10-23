@@ -2326,6 +2326,10 @@ namespace Istanta.Models
         public LogoBollo? item { get; set; }
         public bool esito { get; set; }
         public string error { get; set; } = "";
+        // Facoltativi: valorizzati solo quando il file supera il limite (LimiteLoghiBolli), cosi'
+        // il client riconosce il caso senza leggere il testo del messaggio.
+        public string? codice { get; set; }
+        public long? limiteByte { get; set; }
     }
 
 

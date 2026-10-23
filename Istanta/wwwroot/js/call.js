@@ -124,10 +124,23 @@
             error: function (data) {
 
                 console.log("error : " + JSON.stringify(data));
-                callback({ info: data, error: "uknown" });
+                callback(Call.rispostaDiErroreUpload(data));
             },
         });
 
+    }
+
+    /// Quello che doWithUpload passa al chiamante su un errore HTTP. Se il server ha risposto con un
+    /// JSON che ha un error (per esempio il 413 di LoghiBolli/salva con codice FILE_TROPPO_GRANDE),
+    /// passa quello, con info accanto: il chiamante legge esito, error e codice come in una risposta
+    /// 200. Altrimenti resta { info, error: "uknown" } come sempre, che i chiamanti gia' riconoscono.
+    static rispostaDiErroreUpload(data) {
+        let json = data != null ? data.responseJSON : null;
+        if (json != null && typeof json === "object" && !Array.isArray(json)
+            && typeof json.error === "string" && json.error.trim() !== "") {
+            return Object.assign({}, json, { info: data });
+        }
+        return { info: data, error: "uknown" };
     }
 
     static doWithLargePayload(controller, address, method, params, sender, callback) {
