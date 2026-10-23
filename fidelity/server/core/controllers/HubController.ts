@@ -4,15 +4,7 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import { encryptString } from '../../../lib/encryption';
 import { HttpStatusCode, TIPO_UTENTI } from '../../../lib/enums';
-import {
-  ExternalApiError,
-  ForbiddenError,
-  isAppError,
-  NotFoundError,
-  RateLimitError,
-  ServiceUnavailableError,
-  UnauthorizedError,
-} from '../../../lib/errors';
+import { ExternalApiError, ForbiddenError } from '../../../lib/errors';
 import type { IAgenziaLib } from '../agenzia_lib/types';
 import { BaseController } from '../base/BaseController';
 import config from '../config';
@@ -27,6 +19,8 @@ import { log } from '../logger';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { authRateLimiter } from '../middleware/rateLimiter';
 import { leggiContestoAccesso } from '../accessi/contestoAccesso';
+import { apriSessioneEsterna, redirectErroreAccessoEsterno } from '../accessi/sessioneEsterna';
+import { motivoRifiutoAccesso } from '../services/authProviders/configurazioneProvider';
 import { permissionGuard } from '../middleware/permissionGuard';
 import { PERMESSI } from '../../../lib/accessi/catalogo';
 import type { IAuthProviderRepository } from '../repositories/AuthProviderRepository';
@@ -120,10 +114,7 @@ export class HubController extends BaseController {
     this.router.post('/hub-services/assets/document', ...amministrazione, uploadHubServiceDocumentMiddleware, this.uploadHubServiceDocument.bind(this));
     this.router.post('/hub-services/assets/video', ...amministrazione, uploadHubServiceVideoMiddleware, this.uploadHubServiceVideo.bind(this));
 
-    // Admin CRUD — Auth Providers
-    this.router.post('/auth-providers', ...amministrazione, this.createAuthProvider.bind(this));
-    this.router.put('/auth-providers/:id', ...amministrazione, this.updateAuthProvider.bind(this));
-    this.router.delete('/auth-providers/:id', ...amministrazione, this.deleteAuthProvider.bind(this));
+    // La gestione dei metodi di accesso e' in MetodiAccessoController.
 
     // Autenticato — news per il ruolo dell'utente
     this.router.get('/hub-news', authMiddleware, this.getHubNews.bind(this));
@@ -149,41 +140,6 @@ export class HubController extends BaseController {
     try {
       const providers = await this.authProviderService.getActiveProviders();
       this.sendResponse(res, HttpStatusCode.OK, providers);
-    } catch (error) {
-      this.handleError(res, error);
-    }
-  }
-
-  private async createAuthProvider(req: Request, res: Response): Promise<void> {
-    try {
-      const provider = await this.authProviderService.createProvider(req.body);
-      this.sendResponse(res, HttpStatusCode.CREATED, provider);
-    } catch (error) {
-      this.handleError(res, error);
-    }
-  }
-
-  private async updateAuthProvider(req: Request<{ id: string }>, res: Response): Promise<void> {
-    try {
-      const provider = await this.authProviderService.updateProvider(req.params.id, req.body);
-      if (!provider) {
-        this.sendResponse(res, HttpStatusCode.NOT_FOUND, { message: 'Provider non trovato' });
-        return;
-      }
-      this.sendResponse(res, HttpStatusCode.OK, provider);
-    } catch (error) {
-      this.handleError(res, error);
-    }
-  }
-
-  private async deleteAuthProvider(req: Request<{ id: string }>, res: Response): Promise<void> {
-    try {
-      const deleted = await this.authProviderService.deleteProvider(req.params.id);
-      if (!deleted) {
-        this.sendResponse(res, HttpStatusCode.NOT_FOUND, { message: 'Provider non trovato' });
-        return;
-      }
-      this.sendResponse(res, HttpStatusCode.OK, { message: 'Provider eliminato' });
     } catch (error) {
       this.handleError(res, error);
     }
@@ -311,41 +267,13 @@ export class HubController extends BaseController {
       }
 
       const parsed = await this.agenziaLib.parseUtenteOIDC(email, claims);
+      // Domini e tipi utente ammessi dal metodo di accesso
+      const rifiuto = motivoRifiutoAccesso(provider, email, parsed.tipo_utente);
+      if (rifiuto) throw new ForbiddenError({ message: rifiuto });
       // Un account disattivato o bloccato non apre la sessione: ForbiddenError -> reason=oidc_access_denied
       await this.userService.verificaAccountAttivo(parsed.id);
 
-      // Rigenera la sessione per prevenire session fixation
-      await new Promise<void>((resolve, reject) => {
-        req.session.regenerate((err) => err ? reject(err) : resolve());
-      });
-
-      // Imposta i dati della nuova sessione dal risultato di AgenziaLib
-      req.session.id_utente = parsed.id;
-      req.session.private_key = parsed.private_key;
-      req.session.id_gdo = parsed.id_gdo;
-      req.session.email = parsed.email;
-      req.session.tipo_utente = parsed.tipo_utente;
-      req.session.codice_posizione = parsed.codice_posizione;
-      req.session.isExternalAuth = true;
-
-      // Security tracking
-      req.session.lastActivity = new Date();
-      req.session.lastIP = req.ip;
-      req.session.lastUserAgent = req.get('user-agent');
-
-      // Pulisci i dati OIDC dalla sessione
-      req.session.oidc_state = undefined;
-      req.session.oidc_nonce = undefined;
-      req.session.oidc_code_verifier = undefined;
-      req.session.oidc_provider_code = undefined;
-
-      await new Promise<void>((resolve, reject) => {
-        req.session.save((err) => err ? reject(err) : resolve());
-      });
-
-      // Audit log
-      const auditService = AuditLogService.getInstance();
-      auditService.loginSuccess(req, parsed.id, parsed.tipo_utente);
+      await apriSessioneEsterna(req, parsed);
 
       log.info(`[HubController] OIDC login riuscito per ${email}`);
 
@@ -431,47 +359,8 @@ export class HubController extends BaseController {
 
   // ─── OIDC Error Mapping ────────────────────────────────────
 
-  /**
-   * Mappa un errore lanciato da `parseUtenteOIDC` (o dal flusso OIDC) in un URL
-   * di redirect verso `/login` con `reason` e `message` appropriati, così che
-   * l'interfaccia possa mostrare messaggi distinti per ogni casistica.
-   *
-   * Reason codes:
-   * - `oidc_user_not_found`       → utente non trovato/non censito
-   * - `oidc_access_denied`        → accesso negato (Forbidden/Unauthorized)
-   * - `oidc_service_unavailable`  → servizio esterno non disponibile
-   * - `oidc_rate_limited`         → rate limit superato
-   * - `oidc_external_error`       → errore generico API esterna
-   * - `oidc_error`                → fallback generico
-   */
   private oidcErrorRedirect(error: unknown): string {
-    const base = '/login';
-
-    if (error instanceof NotFoundError) {
-      return `${base}?reason=oidc_user_not_found&message=${encodeURIComponent(error.message)}`;
-    }
-
-    if (error instanceof ForbiddenError || error instanceof UnauthorizedError) {
-      return `${base}?reason=oidc_access_denied&message=${encodeURIComponent(error.message)}`;
-    }
-
-    if (error instanceof ServiceUnavailableError) {
-      return `${base}?reason=oidc_service_unavailable&message=${encodeURIComponent(error.message)}`;
-    }
-
-    if (error instanceof RateLimitError) {
-      return `${base}?reason=oidc_rate_limited&message=${encodeURIComponent(error.message)}`;
-    }
-
-    if (error instanceof ExternalApiError) {
-      return `${base}?reason=oidc_external_error&message=${encodeURIComponent(error.message)}`;
-    }
-
-    if (isAppError(error)) {
-      return `${base}?reason=oidc_error&message=${encodeURIComponent(error.message)}`;
-    }
-
-    return `${base}?reason=oidc_error&message=${encodeURIComponent('Errore durante autenticazione')}`;
+    return redirectErroreAccessoEsterno(error, 'oidc');
   }
 
   // ─── Hub User Info ─────────────────────────────────────────

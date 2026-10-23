@@ -247,10 +247,13 @@ export const csrfTokenEndpoint = (req: Request, res: Response) => {
 /**
  * Utility per verificare se una richiesta ha bisogno di protezione CSRF
  */
+/** Risposta SAML dell'IdP (ACS): POST da un altro sito, la protegge la firma verificata. */
+export const PREFISSO_ACS_SAML = '/api/auth/saml/acs/';
+
 export function requiresCSRFProtection(method: string, path: string): boolean {
   const safeMethods = ['GET', 'HEAD', 'OPTIONS'];
   const publicPaths = ['/api/csrf-token', '/api/health'];
-  const publicPathPrefixes = ['/api/external'];
+  const publicPathPrefixes = ['/api/external', PREFISSO_ACS_SAML];
 
   return !safeMethods.includes(method)
     && !publicPaths.includes(path)

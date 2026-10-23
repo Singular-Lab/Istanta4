@@ -178,6 +178,7 @@ export const TYPES = {
   AuthProviderService: Symbol.for('AuthProviderService'),
   AuthProviderRepository: Symbol.for('AuthProviderRepository'),
   OidcService: Symbol.for('OidcService'),
+  SamlService: Symbol.for('SamlService'),
   HubServiceService: Symbol.for('HubServiceService'),
   HubServiceRepository: Symbol.for('HubServiceRepository'),
   HubNewsService: Symbol.for('HubNewsService'),

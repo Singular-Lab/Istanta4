@@ -127,6 +127,7 @@ export const PERMESSI = {
   SISTEMA: {
     GESTISCI_ACCESSI: 'sistema.gestisci_accessi',
     GESTISCI_HUB: 'sistema.gestisci_hub',
+    GESTISCI_METODI_ACCESSO: 'sistema.gestisci_metodi_accesso',
     GESTISCI_WHATSAPP: 'sistema.gestisci_whatsapp',
     DASHBOARD: 'sistema.dashboard',
     LOG: 'sistema.log',
@@ -390,6 +391,7 @@ export const AREE: DefinizioneArea[] = [
     azioni: [
       { codice: P.SISTEMA.GESTISCI_ACCESSI, nome: 'Gestire gli accessi', descrizione: 'Permessi dei ruoli, override delle GDO e menu.' },
       { codice: P.SISTEMA.GESTISCI_HUB, nome: 'Gestire l\'hub', descrizione: 'Servizi e news dell\'hub.' },
+      { codice: P.SISTEMA.GESTISCI_METODI_ACCESSO, nome: 'Gestire i metodi di accesso', descrizione: 'Metodi di login (email e password, OIDC, SAML) e i loro segreti.' },
       { codice: P.SISTEMA.GESTISCI_WHATSAPP, nome: 'Gestire la piattaforma WhatsApp', descrizione: 'Configurazione WhatsApp di tutte le GDO.' },
       { codice: P.SISTEMA.DASHBOARD, nome: 'Dashboard di piattaforma', descrizione: 'Dashboard del Superadmin.' },
       { codice: P.SISTEMA.LOG, nome: 'Log dell\'applicazione', descrizione: 'Consultare i log.' },

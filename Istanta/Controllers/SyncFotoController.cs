@@ -3051,6 +3051,17 @@ namespace Istanta.Controllers
 
         }
 
+        /// I20-1136: il salvataggio della vista Source della pagina Loghi e bolli, come
+        /// ACPV/salvaSourceJsonCode per Aree/Canali. L'archivio in memoria cambia subito, e con lui
+        /// la sincronizzazione dei loghi del Plugin; un sorgente non valido non tocca niente.
+        [HttpPut]
+        [Route("LoghiBolli/salvaSourceJsonCode")]
+        public IActionResult salvaSourceJsonCodeLoghiBolli([FromBody] SourceJsonRequest request)
+        {
+            BoolResult bRes = Utility.SingletonConfiguration.DBLOGHIBOLLI!.SetJsonSource(request.jsoncode);
+            return Ok(bRes);
+        }
+
         [HttpGet]
         [Route("LoghiBolli/getBySigla/{codice}")]
         public async Task<IActionResult> getLogoBolloBySigla(string codice)

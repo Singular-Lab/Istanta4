@@ -31,6 +31,8 @@
     "deps-check": "depcheck --ignores=\"@types/*\"",
     "ci": "yarn type-check && yarn type-check:server && yarn lint && yarn security-check && yarn build",
     "auth:link-servizio": "tsx server/core/scripts/generaLinkAccessoServizio.ts",
+    "auth:segreti": "tsx server/core/scripts/cifraSegretiProvider.ts",
+    "auth:segreti:dry-run": "tsx server/core/scripts/cifraSegretiProvider.ts --dry-run",
     "models:sync": "tsx server/core/scripts/initializeModels.ts sync",
     "inizializza": "tsx server/core/scripts/inizializza.ts",
     "models:sync:force": "tsx server/core/scripts/initializeModels.ts sync --force",

@@ -9,10 +9,12 @@ interface IconInputProps {
   value: string;
   name?: string;
   helperText?: string;
+  /** false: niente riquadro di anteprima, quando la pagina ne mostra gia' uno suo. */
+  mostraAnteprima?: boolean;
   onChange: (value: string) => void;
 }
 
-const IconInput = ({ label, value, name, helperText, onChange }: IconInputProps) => {
+const IconInput = ({ label, value, name, helperText, mostraAnteprima = true, onChange }: IconInputProps) => {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const hasImage = isDataUriIcon(value);
 
@@ -58,21 +60,23 @@ const IconInput = ({ label, value, name, helperText, onChange }: IconInputProps)
         )}
       </div>
 
-      <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/80 p-4">
-        <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Preview</div>
-        <div className="mt-3 flex items-center gap-3">
-          <div className="w-14 h-14 rounded-xl border border-slate-200 bg-white flex items-center justify-center overflow-hidden">
-            {hasImage ? (
-              <img src={value} alt="" className="w-full h-full object-contain" />
-            ) : (
-              <Lucide icon={value || "Box"} className="w-6 h-6 text-slate-700" />
-            )}
-          </div>
-          <div className="text-sm text-slate-600">
-            {hasImage ? "Immagine caricata" : value || "Nessuna icona selezionata"}
+      {mostraAnteprima && (
+        <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/80 p-4">
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Preview</div>
+          <div className="mt-3 flex items-center gap-3">
+            <div className="w-14 h-14 rounded-xl border border-slate-200 bg-white flex items-center justify-center overflow-hidden">
+              {hasImage ? (
+                <img src={value} alt="" className="w-full h-full object-contain" />
+              ) : (
+                <Lucide icon={value || "Box"} className="w-6 h-6 text-slate-700" />
+              )}
+            </div>
+            <div className="text-sm text-slate-600">
+              {hasImage ? "Immagine caricata" : value || "Nessuna icona selezionata"}
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

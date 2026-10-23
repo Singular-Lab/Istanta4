@@ -177,6 +177,15 @@ const routes: RouteObject[] = [
         },
       },
       {
+        path: "gestione-metodi-accesso",
+        lazy: async () => {
+          const { default: GestioneMetodiAccesso } = await import(
+            "@/pages/GestioneMetodiAccesso"
+          );
+          return { Component: GestioneMetodiAccesso };
+        },
+      },
+      {
         path: "promozioni/nuova",
         lazy: async () => {
           const { default: NuovaLavorazione } = await import(

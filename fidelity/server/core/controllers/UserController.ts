@@ -13,6 +13,8 @@ import { log } from '../logger';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { csrfTokenEndpoint, csrfTokenGenerator } from '../middleware/csrfProtection';
 import { permissionGuard } from '../middleware/permissionGuard';
+import { metodoAccessoAttivo } from '../middleware/metodoAccessoAttivo';
+import { CODICE_EMAIL_PASSWORD } from '../services/authProviders/configurazioneProvider';
 import { authEmailRateLimiter, authRateLimiter, registrationRateLimiter } from '../middleware/rateLimiter';
 import { AuditLogService } from '../services/AuditLogService';
 import { leggiContestoAccesso } from '../accessi/contestoAccesso';
@@ -122,8 +124,10 @@ export class UserController extends BaseController {
     this.router.post('/export_users', authMiddleware, permissionGuard('utenti.esporta'), this.exportUsers.bind(this));
     this.router.post('/dev/hash-password', this.hashPasswordLocalOnly.bind(this));
     // Authentication routes
-    this.router.post('/login_user', authRateLimiter, authEmailRateLimiter, this.loginUser.bind(this));
-    this.router.post('/check_login_for_multiple_users', authRateLimiter, authEmailRateLimiter, this.checkLoginForMultipleUsers.bind(this));
+    // Con il metodo email e password disattivato dalla gestione dei metodi di accesso le credenziali non aprono la sessione
+    const emailPasswordAttivo = metodoAccessoAttivo(CODICE_EMAIL_PASSWORD);
+    this.router.post('/login_user', authRateLimiter, authEmailRateLimiter, emailPasswordAttivo, this.loginUser.bind(this));
+    this.router.post('/check_login_for_multiple_users', authRateLimiter, authEmailRateLimiter, emailPasswordAttivo, this.checkLoginForMultipleUsers.bind(this));
     this.router.get('/logout-user', authMiddleware, this.logoutUser.bind(this));
     this.router.post('/register-user', registrationRateLimiter, authMiddleware, permissionGuard('utenti.crea'), this.registerUser.bind(this));
 

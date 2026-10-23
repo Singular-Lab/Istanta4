@@ -2289,6 +2289,53 @@ namespace Istanta.Models
 
             return true;
         }
+
+        /// <summary>
+        /// I20-1136: l'archivio loghi e bolli dal sorgente, come per Aree/Canali: la pagina Loghi e
+        /// bolli manda il JSON intero scritto nella vista Source. Sostituisce l'elenco di questo
+        /// oggetto, che e' quello in memoria letto anche dalla sincronizzazione dei loghi del Plugin,
+        /// e riscrive il file. Un JSON non valido, o senza l'elenco source, non tocca niente: un
+        /// archivio vuoto per errore toglierebbe tutti i loghi dalla sincronizzazione.
+        /// </summary>
+        public BoolResult SetJsonSource(string jsonStr)
+        {
+            BoolResult br = new BoolResult();
+            DbLoghiBolli? db;
+            try
+            {
+                db = JsonConvert.DeserializeObject<DbLoghiBolli>(jsonStr ?? "");
+            }
+            catch (Exception ex)
+            {
+                br.Esito = false;
+                br.error = "Il sorgente non e' un JSON valido: " + ex.Message;
+                return br;
+            }
+
+            if (db == null || db.source == null || !JObject.Parse(jsonStr!).ContainsKey("source"))
+            {
+                br.Esito = false;
+                br.error = "Il sorgente non contiene l'elenco dei loghi e bolli (source).";
+                return br;
+            }
+
+            List<LogoBollo> precedente = this.source;
+            try
+            {
+                this.source = db.source;
+                this.SaveChanges();
+            }
+            catch (Exception ex)
+            {
+                this.source = precedente;
+                br.Esito = false;
+                br.error = ex.ToString();
+                return br;
+            }
+
+            br.Esito = true;
+            return br;
+        }
     }
 
     public class InputFotoSync

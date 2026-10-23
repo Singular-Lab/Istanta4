@@ -203,11 +203,11 @@ const HubLogin: React.FC = () => {
       });
     } else if (provider.tipo === 'custom' && provider.config_client?.redirect_uri) {
       window.location.href = provider.config_client.redirect_uri;
-    } else if (provider.tipo === 'oidc') {
+    } else if (provider.tipo === 'oidc' || provider.tipo === 'saml') {
       try {
         setOidcLoading(provider.codice);
         setGeneralError(null);
-        const response = await ServerCall.get<{ authorize_url: string }>(`/auth/oidc/authorize/${provider.codice}`);
+        const response = await ServerCall.get<{ authorize_url: string }>(`/auth/${provider.tipo}/authorize/${provider.codice}`);
         if (response?.authorize_url) {
           window.location.href = response.authorize_url;
         } else {
@@ -215,7 +215,7 @@ const HubLogin: React.FC = () => {
           setOidcLoading(null);
         }
       } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : "Errore durante l'avvio dell'autenticazione OIDC";
+        const message = err instanceof Error ? err.message : "Errore durante l'avvio dell'autenticazione esterna";
         setGeneralError(message);
         setOidcLoading(null);
       }
