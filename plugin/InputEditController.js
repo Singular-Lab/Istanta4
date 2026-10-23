@@ -25,11 +25,17 @@ class InputEditController {
     inMismatch=false;
     //I20-993: le varianti che non comandano si guardano e non si toccano.
     solaLettura = false;
+    //I20-1132: le descrizioni fondamentali che l'agenzia dichiara in sola lettura per il record
+    //(pluginMiddleware.getDescrizioniInSolaLettura): partono come non toccate, anche se il testo
+    //del box e' diverso dall'archivio, e i loro tratti ripetuti non fermano il salvataggio.
+    fondamentaliInSolaLettura = [];
 
-    constructor(container, convalidaFirma, descrInArchivio, compiledFields = null) {
+    constructor(container, convalidaFirma, descrInArchivio, compiledFields = null, fondamentaliInSolaLettura = []) {
         this.myContainer = container;//.find('input');
         this.convalidaFirma = convalidaFirma;   
         this.descrInArchivio = descrInArchivio;
+        //I20-1132: prima di leggere i campi, perche' checkStato le usa subito.
+        this.fondamentaliInSolaLettura = Array.isArray(fondamentaliInSolaLettura) ? fondamentaliInSolaLettura : [];
 
         if(compiledFields!=null){
             let matchFieldData = compiledFields.find(f => Utility.parseLabel(f.labelName) == "descrizione");
@@ -420,11 +426,17 @@ class InputEditController {
         const regolaDiPrima = function (voce) {
             return voce.modificato || opzioni.inMismatch === true || forzato;
         };
-        const ripetuti = InputEditController.trattiRipetuti(voci);
+        //I20-1132: le fondamentali in sola lettura non si mandano e non contano fra i ripetuti.
+        const nonToccare = Array.isArray(opzioni.nonToccare) ? opzioni.nonToccare : [];
+        const ripetuti = InputEditController.trattiRipetuti(voci).filter(r => !nonToccare.includes(r.fondamentale));
         const valori = {};
         const cambiati = [];
 
         ["descrizione1", "descrizione2", "descrizione3", "descrizione4"].forEach(function (fondamentale, indice) {
+            if (nonToccare.includes(fondamentale)) {
+                valori[fondamentale] = SpecificitaNonToccato;
+                return;
+            }
             const sue = (voci || []).filter(v => v != null && v.fondamentale === fondamentale);
             if (sue.length === 0 || ripetuti.some(r => r.fondamentale === fondamentale)) {
                 return;
@@ -478,7 +490,7 @@ class InputEditController {
             return false;
         }
         const voci = this.vociDellaDescrizione().filter(v => !v.nascosto);
-        const decise = InputEditController.decidiFondamentali(voci, this.descrInArchivio);
+        const decise = InputEditController.decidiFondamentali(voci, this.descrInArchivio, { nonToccare: this.fondamentaliInSolaLettura });
         return decise.cambiati.length > 0 || decise.ripetuti.length > 0;
     }
 
@@ -516,7 +528,7 @@ class InputEditController {
                 if (key=="descrizione")
                 {
                     const decise = InputEditController.decidiFondamentali(this.vociDellaDescrizione(), this.descrInArchivio,
-                        { forzato: descrizioneEreditata, inMismatch: this.inMismatch, solaLettura: this.solaLettura });
+                        { forzato: descrizioneEreditata, inMismatch: this.inMismatch, solaLettura: this.solaLettura, nonToccare: this.fondamentaliInSolaLettura });
                     Object.assign(operazioni.revisione, decise.valori);
                     operazioni.trattiRipetuti = decise.ripetuti;
                 }

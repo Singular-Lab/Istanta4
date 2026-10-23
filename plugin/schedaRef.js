@@ -1356,6 +1356,11 @@ const schedaRef = {
         }
         var refEditabile = pluginMiddleware.getEditabilitaSchedaRef != null ? pluginMiddleware.getEditabilitaSchedaRef(primario.recordInTracciato) : true;
 
+        //I20-1132: le descrizioni fondamentali che l'agenzia dichiara in sola lettura per questo
+        //record, con la nota: la casella nasce readonly e il salvataggio non le manda.
+        var descrizioniInSolaLettura = pluginMiddleware.getDescrizioniInSolaLettura != null ? (pluginMiddleware.getDescrizioniInSolaLettura(primario.recordInTracciato) || []) : [];
+        me.noteSolaLetturaDaMostrare = [];
+
         let convalidaFirmaRevisione = !this.richiedeConvalidaFirma(primario, refEditabile);
 
         this.resetInitSchedaRef();
@@ -2120,11 +2125,17 @@ const schedaRef = {
                                         if (pluginMiddleware.isSchemaEditable != null) {
                                             isEditable = pluginMiddleware.isSchemaEditable(nome_schema);
                                         }
+                                        //I20-1132: fondamentale in sola lettura per regola dell'agenzia.
+                                        var notaSolaLettura = me.notaDescrizioneInSolaLettura(descrizioniInSolaLettura, nome_schema);
+                                        if (notaSolaLettura != null) {
+                                            isEditable = false;
+                                        }
 
                                         //I20-1123: il primo class resta, vuoto (era "hideble"): dei due class della casella vale il primo,
                                         //e il secondo non e' mai valso. Toglierlo del tutto avrebbe acceso il secondo, e cambiato il salvataggio.
                                         var textarea = $('<textarea ' + (isEditable  && refEditabile ? '' : 'readonly') + ' class="" labelCorrispondente="descrizione" currentCharacterStyle="' + nome_schema + '" class="textArea nonCancellareSeVuoto" name="myTextarea" style="height:' + (grandezzeBox != null && grandezzeBox.bigBoxHeight != null && grandezzeBox.bigBoxHeight != "auto" ? grandezzeBox.bigBoxHeight : '50') + 'px; width:' + (grandezzeBox != null && grandezzeBox.bigBoxWidth != null && grandezzeBox.bigBoxWidth != "auto" ? grandezzeBox.bigBoxWidth : '100') + 'px; background-color:white; color:black;"></textarea><br>');
                                         column.append(label).append(textarea);
+                                        me.segnaCasellaInSolaLettura(textarea, notaSolaLettura);
                                         row.append(column);
                                         if (row.children().length == (grandezzeBox != null && grandezzeBox.bigBoxPerRow != null && grandezzeBox.bigBoxPerRow != "auto" ? grandezzeBox.bigBoxPerRow : 2)) {
                                             $("#editReferenza").append(row);
@@ -2140,11 +2151,17 @@ const schedaRef = {
                             if (pluginMiddleware.isSchemaEditable != null) {
                                 isEditable = pluginMiddleware.isSchemaEditable(currentCharacterStyle);
                             }
+                            //I20-1132: fondamentale in sola lettura per regola dell'agenzia.
+                            var notaSolaLettura = me.notaDescrizioneInSolaLettura(descrizioniInSolaLettura, currentCharacterStyle);
+                            if (notaSolaLettura != null) {
+                                isEditable = false;
+                            }
 
                             //I20-1123: il primo class resta, vuoto (era "hideble"): dei due class della casella vale il primo,
                             //e il secondo non e' mai valso. Toglierlo del tutto avrebbe acceso il secondo, e cambiato il salvataggio.
                             var textarea = $('<textarea ' + (isEditable && refEditabile ? '' : 'readonly') + ' class="" labelCorrispondente="descrizione" currentCharacterStyle="' + currentCharacterStyle + '" class="textArea nonCancellareSeVuoto' + (stileInMismatch ? ' mismatchInImpaginato' : '') + '" name="myTextarea" style="height: ' + (grandezzeBox != null && grandezzeBox.bigBoxHeight != null && grandezzeBox.bigBoxHeight != "auto" ? grandezzeBox.bigBoxHeight : '50') + 'px; width:' + (grandezzeBox != null && grandezzeBox.bigBoxWidth != null && grandezzeBox.bigBoxWidth != "auto" ? grandezzeBox.bigBoxWidth : '100') + 'px; background-color:white; color:black;' + (stileInMismatch ? ' border: 2px solid gold;' : '') + '"></textarea><br>');
                             var column = $('<div class="column" style="margin-right:' + (grandezzeBox != null && grandezzeBox.marginBetweenBigBox != null && grandezzeBox.marginBetweenBigBox != "auto" ? grandezzeBox.marginBetweenBigBox : "10px") + 'px;"></div>').append(label).append(textarea);
+                            me.segnaCasellaInSolaLettura(textarea, notaSolaLettura);
                             row.append(column);
 
                             //Il testo del tratto: quello che si vede e quello che serve al
@@ -2199,11 +2216,17 @@ const schedaRef = {
                             if (pluginMiddleware.isSchemaEditable != null) {
                                 isEditable = pluginMiddleware.isSchemaEditable(elSchema[1]);
                             }
+                            //I20-1132: fondamentale in sola lettura per regola dell'agenzia.
+                            var notaSolaLettura = me.notaDescrizioneInSolaLettura(descrizioniInSolaLettura, elSchema[1]);
+                            if (notaSolaLettura != null) {
+                                isEditable = false;
+                            }
 
                             //I20-1123: il primo class resta, vuoto (era "hideble"): dei due class della casella vale il primo,
                             //e il secondo non e' mai valso. Toglierlo del tutto avrebbe acceso il secondo, e cambiato il salvataggio.
                             var textarea = $('<textarea ' + (isEditable && refEditabile ? '' : 'readonly') + ' class="" labelCorrispondente="descrizione" currentCharacterStyle="' + nome_schema + '" class="textArea nonCancellareSeVuoto" name="myTextarea" style="height: ' + (grandezzeBox != null && grandezzeBox.bigBoxHeight != null && grandezzeBox.bigBoxHeight != "auto" ? grandezzeBox.bigBoxHeight : '50') + 'px; width:' + (grandezzeBox != null && grandezzeBox.bigBoxWidth != null && grandezzeBox.bigBoxWidth != "auto" ? grandezzeBox.bigBoxWidth : '100') + 'px; background-color:white; color:black;"></textarea><br>');
                             column.append(label).append(textarea);
+                            me.segnaCasellaInSolaLettura(textarea, notaSolaLettura);
                             row.append(column);
                             if (row.children().length == (grandezzeBox != null && grandezzeBox.bigBoxPerRow != null && grandezzeBox.bigBoxPerRow != "auto" ? grandezzeBox.bigBoxPerRow : 2)) {
                                 $("#editReferenza").append(row);
@@ -2234,6 +2257,8 @@ const schedaRef = {
                     if (row.children().length > 0) {
                         $("#editReferenza").append(row);
                     }
+                    //I20-1132: le note delle caselle in sola lettura, su una riga sotto i campi.
+                    me.mostraNoteSolaLettura();
                     var button = $('<sp-action-button id="salvaButton" style="color:lightgreen; margin-right:10px;">Salva modifiche</sp-action-button>');
                     button.on('click', function () {
                         me.salvaModifiche(schedaRef, codice, box, meccanica, page);
@@ -2520,7 +2545,8 @@ const schedaRef = {
 
                 let compiledFields = primario.recordInTracciato.compiledFields;
 
-                me.editRefFieldController = new InputEditController($("#editReferenza"), convalidaFirmaRevisione, [descr1InArchivio, descr2InArchivio, descr3InArchivio, descr4InArchivio, descrIndd], compiledFields);
+                //I20-1132: le fondamentali in sola lettura partono come non toccate, anche se il box differisce.
+                me.editRefFieldController = new InputEditController($("#editReferenza"), convalidaFirmaRevisione, [descr1InArchivio, descr2InArchivio, descr3InArchivio, descr4InArchivio, descrIndd], compiledFields, descrizioniInSolaLettura.map(function (d) { return d.fondamentale; }));
                 //I20-1090: la descrizione nei meta (sola lettura, niente revisione) e i suoi pulsanti.
                 me.applicaStatoMetaDescrizione();
                 //writeDebugMessageForCrash("Fine try descrizioni regionali e canale");
@@ -4394,6 +4420,74 @@ const schedaRef = {
         }
 
         return (differenze || []).length > 0 ? esiti.proponiAggiornamento : esiti.nessuno;
+    },
+
+    /*
+     * I20-1132: la voce di sola lettura a cui porta uno stile della descrizione, null se lo stile non
+     * porta a una fondamentale dichiarata in sola lettura dall'agenzia per il record. descrizioni:
+     * [{ fondamentale, nota }] dal middleware; lo stile si traduce in fondamentale con lo stile
+     * universale.
+     */
+    notaDescrizioneInSolaLettura(descrizioni, stile) {
+        var universale = stile != null && pluginMiddleware.getNameStileUniversale != null ? pluginMiddleware.getNameStileUniversale(stile) : null;
+        return schedaRef.descrizioneInSolaLettura(descrizioni, universale != null ? universale.fondamentale : null);
+    },
+
+    /// La voce di sola lettura di una fondamentale, { fondamentale, nota }, o null se non c'e'. Pura.
+    descrizioneInSolaLettura(descrizioni, fondamentale) {
+        if (!Array.isArray(descrizioni) || typeof fondamentale !== "string" || fondamentale === "") {
+            return null;
+        }
+        var voce = descrizioni.find(function (d) { return d != null && d.fondamentale === fondamentale; });
+        if (voce == null) {
+            return null;
+        }
+        return { fondamentale: voce.fondamentale, nota: typeof voce.nota === "string" ? voce.nota : "" };
+    },
+
+    /// I20-1132: una casella in sola lettura per regola dell'agenzia: resta readonly, si attenua come
+    /// quelle con il meta della descrizione, e la sua nota va da parte per la riga sotto i campi
+    /// (mostraNoteSolaLettura). Dentro la colonna la nota la faceva piu' alta delle altre e la riga,
+    /// allineata in basso, si sfalsava. Una nota per fondamentale. Senza voce non fa niente.
+    segnaCasellaInSolaLettura(textarea, voce) {
+        if (voce == null) {
+            return false;
+        }
+        if (textarea != null && typeof textarea.css === "function") {
+            textarea.css("opacity", "0.6");
+        }
+        if (!Array.isArray(this.noteSolaLetturaDaMostrare)) {
+            this.noteSolaLetturaDaMostrare = [];
+        }
+        if (voce.nota !== "" && !this.noteSolaLetturaDaMostrare.some(function (n) { return n.fondamentale === voce.fondamentale; })) {
+            this.noteSolaLetturaDaMostrare.push({ fondamentale: voce.fondamentale, nota: voce.nota });
+        }
+        return true;
+    },
+
+    /// La riga delle note sotto i campi della descrizione, con il margine laterale delle colonne.
+    /// Niente se non ci sono note. Si ridisegna a ogni apertura della schermata.
+    mostraNoteSolaLettura() {
+        var note = Array.isArray(this.noteSolaLetturaDaMostrare) ? this.noteSolaLetturaDaMostrare : [];
+        $("#noteDescrizioniSolaLettura").remove();
+        if (note.length === 0) {
+            return false;
+        }
+        var contenitore = $('<div id="noteDescrizioniSolaLettura" style="margin: 2px 8px 6px 8px;"></div>');
+        note.forEach(function (voce) {
+            contenitore.append(schedaRef.elementoNotaSolaLettura(voce));
+        });
+        $("#editReferenza").append(contenitore);
+        return true;
+    },
+
+    /// Una riga di nota, piccola e grigia. Senza testo, un elemento vuoto che non si vede.
+    elementoNotaSolaLettura(voce) {
+        var nota = $('<div class="notaSolaLettura" style="font-size: 11px; color: #c8c8c8; margin-top: 2px;"></div>');
+        if (voce != null && voce.nota !== "") {
+            nota.text(voce.nota);
+        }
+        return nota;
     },
 
     //Il codice del box della scheda, letto dal primario o, in mancanza, dal primo record.

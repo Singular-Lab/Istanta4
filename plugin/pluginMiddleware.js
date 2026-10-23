@@ -505,6 +505,42 @@ const pluginMiddleware = {
         return null;
     },
 
+    /// I20-1132: le descrizioni fondamentali che per questo record vanno in sola lettura nella scheda
+    /// ref, con la nota da mostrare: [{ fondamentale, nota }]. Il plugin di agenzia le dichiara in
+    /// descrizioniInSolaLettura, ognuna con la sua regola sul record e una nota con i segnaposto
+    /// {campo}; qui restano quelle la cui regola vale, una per fondamentale. Una voce senza regole
+    /// vale sempre. Il core non sa perche' una descrizione sia in sola lettura: per Edro21 e' la
+    /// grammatura presa dalla confezione primaria, grammatura_da_confezione nel record.
+    getDescrizioniInSolaLettura(itemRef) {
+        let me = this;
+
+        if (me.callCustom) {
+            if (typeof customAgenzia !== "undefined" && typeof customAgenzia.getDescrizioniInSolaLettura === "function") {
+                return customAgenzia.getDescrizioniInSolaLettura(itemRef) || [];
+            }
+            return [];
+        }
+
+        const regole = me.customPluginDB?.descrizioniInSolaLettura;
+        if (!Array.isArray(regole)) {
+            return [];
+        }
+
+        const valide = [];
+        for (const regola of regole) {
+            if (regola == null || typeof regola.fondamentale !== "string" || regola.fondamentale === "") {
+                continue;
+            }
+            if (valide.some(v => v.fondamentale === regola.fondamentale)) {
+                continue;
+            }
+            if (me.valutaBlocchiRegole(itemRef, regola.setRegole)) {
+                valide.push({ fondamentale: regola.fondamentale, nota: me.replacePlaceholders(regola.nota, itemRef) });
+            }
+        }
+        return valide;
+    },
+
     getSuffissoLavorazione(listaRefImpaginate) {
         let me = this;
 

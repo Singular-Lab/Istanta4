@@ -1043,6 +1043,10 @@ namespace IstantaLib
         /// Vuoto: nessun avviso, e resta il solo comportamento core.
         public List<AgenziaCustomPlugin_AvvisoCambioPrimario> avvisiCambioPrimario { get; set; } = new List<AgenziaCustomPlugin_AvvisoCambioPrimario>();
 
+        /// I20-1132: le descrizioni fondamentali che la scheda ref del Plugin mostra in sola lettura
+        /// quando una regola vale per il record, con la nota da mostrare. Vuoto: tutte modificabili.
+        public List<AgenziaCustomPlugin_DescrizioneInSolaLettura> descrizioniInSolaLettura { get; set; } = new List<AgenziaCustomPlugin_DescrizioneInSolaLettura>();
+
         /// I20-981: i campi che l'agenzia tiene d'occhio nella sezione Confronti del Report
         /// Integrita'. Non cambiano l'aspetto del box, quindi l'analisi di integrita' non li
         /// guarda, ma l'operatore li usa per decidere a che pagina va la referenza: se
@@ -1243,6 +1247,21 @@ namespace IstantaLib
     {
         /// Testo mostrato all'operatore, in stile avviso. Vuoto: nessun avviso.
         public string messaggio { get; set; } = "";
+
+        public List<BloccoRegole> setRegole { get; set; } = new List<BloccoRegole>();
+    }
+
+    /// I20-1132: una descrizione fondamentale che la scheda ref mostra in sola lettura quando la
+    /// regola vale per il record. Il meccanismo e' del core; all'agenzia restano la descrizione, la
+    /// regola e la nota. In Edro21: la grammatura (descrizione4) quando il record porta
+    /// grammatura_da_confezione, cioe' quando la primaria del gruppo e' una confezione.
+    public class AgenziaCustomPlugin_DescrizioneInSolaLettura
+    {
+        /// descrizione1, descrizione2, descrizione3 o descrizione4.
+        public string fondamentale { get; set; } = "";
+
+        /// Nota sotto la casella, con i segnaposto {campo} risolti sul record. Vuota: nessuna nota.
+        public string nota { get; set; } = "";
 
         public List<BloccoRegole> setRegole { get; set; } = new List<BloccoRegole>();
     }
