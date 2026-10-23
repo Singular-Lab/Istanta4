@@ -2,6 +2,7 @@
 using DocumentFormat.OpenXml.Spreadsheet;
 using DocumentFormat.OpenXml.Wordprocessing;
 using Istanta.Antlr;
+using Istanta.Handlers;
 using Istanta.Models;
 using Istanta.Models_2;
 using Istanta.Utility;
@@ -3136,6 +3137,7 @@ namespace Istanta.Controllers
 
         [HttpPost]
         [Route("LoghiBolli/salva")]
+        [LimiteLoghiBolli]
         public async Task<IActionResult> salvaLogoBollo([FromForm] InputLogoBollo obj)
         {
 
@@ -3158,6 +3160,14 @@ namespace Istanta.Controllers
                 {
                     result.error = erroreValidazione;
                     return Ok(result);
+                }
+
+                // Il file oltre il limite si ferma qui, prima di Olimpo e del Source, con il codice
+                // che il client riconosce. Le richieste molto piu' grandi non arrivano nemmeno:
+                // le respinge con 413 il filtro LimiteLoghiBolli.
+                if (obj.file != null && LimiteLoghiBolli.Supera(obj.file.Length))
+                {
+                    return Ok(LimiteLoghiBolli.Rifiuto(LimiteLoghiBolli.Messaggio(obj.file.FileName, obj.file.Length)));
                 }
 
                 if (obj.Id != null && obj.Id != "")

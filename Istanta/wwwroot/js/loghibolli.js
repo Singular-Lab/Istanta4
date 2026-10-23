@@ -202,16 +202,29 @@
         return errori;
     }
 
+    // Il limite di un logo, bollo o sfondo: 50 MB. Deve restare uguale a
+    // LimiteLoghiBolli.DimensioneMassimaFileByte del server, che lo controlla comunque.
+    static DIMENSIONE_MASSIMA_BYTE = 50 * 1024 * 1024;
+
+    // Il peso in MB con un decimale e la virgola, come lo scrive il server: 63,2 MB.
+    static inMegabyte(byte) {
+        return (byte / (1024 * 1024)).toFixed(1).replace(".", ",") + " MB";
+    }
+
     // Controlla il solo file. Separata dal resto perche' serve in due momenti:
     // appena l'utente sceglie l'immagine, e di nuovo prima di inviarla.
     // NON si controlla il formato: qui si accetta qualunque tipo di file, e se non
-    // va bene sara' Olimpo a rifiutarlo, con il suo messaggio. Si ferma solo il file
-    // vuoto, che non e' una questione di formato ma di caricamento andato storto.
+    // va bene sara' Olimpo a rifiutarlo, con il suo messaggio. Si fermano il file
+    // vuoto, che e' un caricamento andato storto, e quello oltre il limite, che il
+    // server rifiuterebbe dopo averlo ricevuto tutto.
     validaFile(file) {
         let errori = [];
 
         if (file.size === 0)
             errori.push("Il file \"" + file.name + "\" e' vuoto.");
+        else if (file.size > LoghiBolli.DIMENSIONE_MASSIMA_BYTE)
+            errori.push("Il file \"" + file.name + "\" pesa " + LoghiBolli.inMegabyte(file.size) +
+                ": il limite per loghi e bolli e' " + (LoghiBolli.DIMENSIONE_MASSIMA_BYTE / (1024 * 1024)) + " MB.");
 
         return errori;
     }
