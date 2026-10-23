@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AuthProviderAdminDTO } from "../../../lib/types";
 import {
   contaSegretiInChiaro,
@@ -74,12 +74,25 @@ describe("form dei metodi di accesso", () => {
     expect(dividiCertificati("AAA\n\nBBB")).toEqual(["AAA", "BBB"]);
   });
 
-  it("propone gli indirizzi di ritorno sulle API di Fidelity", () => {
-    const indirizzi = indirizziSuggeriti("adfs");
+  describe("indirizzi di ritorno sulle API di Fidelity", () => {
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
 
-    // Indirizzi assoluti anche con VITE_API_URL relativo (/api), come nelle installazioni
-    expect(indirizzi.samlAcs).toMatch(/^https?:\/\/[^/]+\/.*\/auth\/saml\/acs\/adfs$/);
-    expect(indirizzi.oidcRedirect).toMatch(/^https?:\/\/[^/]+\/.*\/auth\/oidc\/callback$/);
+    it("con VITE_API_URL relativo (/api), come nelle installazioni, li rende assoluti sull'origine della pagina", () => {
+      vi.stubEnv("VITE_API_URL", "/api");
+
+      const indirizzi = indirizziSuggeriti("adfs");
+
+      expect(indirizzi.samlAcs).toBe(`${window.location.origin}/api/auth/saml/acs/adfs`);
+      expect(indirizzi.oidcRedirect).toBe(`${window.location.origin}/api/auth/oidc/callback`);
+    });
+
+    it("con VITE_API_URL assoluto usa quell'indirizzo", () => {
+      vi.stubEnv("VITE_API_URL", "http://fidelity.example.test");
+
+      expect(indirizziSuggeriti("adfs").samlAcs).toBe("http://fidelity.example.test/auth/saml/acs/adfs");
+    });
   });
 });
 
@@ -102,14 +115,14 @@ describe("ricerca e filtri", () => {
 
   it("cerca per nome o codice senza distinguere maiuscole", () => {
     expect(codici(filtraMetodi(tutti, "adfs", "tutti"))).toEqual(["adfs"]);
-    expect(codici(filtraMetodi(tutti, "ENTRA", "tutti"))).toEqual(["entra_id"]);
+    expect(codici(filtraMetodi(tutti, "ENTRA", "tutti"))).toEqual([ENTRA.codice]);
   });
 
   it("filtra per stato e per tipo", () => {
     expect(codici(filtraMetodi(tutti, "", "disattivi"))).toEqual(["adfs"]);
-    expect(codici(filtraMetodi(tutti, "", "attivi"))).toEqual(["email_password", "entra_id"]);
-    expect(codici(filtraMetodi(tutti, "", "oidc"))).toEqual(["entra_id"]);
-    expect(codici(filtraMetodi(tutti, "", "altri"))).toEqual(["email_password"]);
+    expect(codici(filtraMetodi(tutti, "", "attivi"))).toEqual([INTERNO.codice, ENTRA.codice]);
+    expect(codici(filtraMetodi(tutti, "", "oidc"))).toEqual([ENTRA.codice]);
+    expect(codici(filtraMetodi(tutti, "", "altri"))).toEqual([INTERNO.codice]);
   });
 
   it("restituisce un elenco vuoto quando nulla corrisponde", () => {
