@@ -131,6 +131,7 @@ describe("importPuntiVenditaConadCno: lettura della riga", () => {
     expect(leggi({ Regione: "Emilia-Romagna" }).area).toBe("EM");
     expect(leggi({ Regione: "Valle d Aosta" }).area).toBe("AO");
     expect(leggi({ Regione: "3 - Sardegna" }).area).toBe("SA");
+    expect(leggi({ Regione: "Veneto", Prov: "Rovigo" })).toMatchObject({ area: "VE", provincia: "RO", avvisi: [] });
   });
 
   it("La Spezia resta in Liguria e Massa Carrara in Toscana", () => {
@@ -202,7 +203,7 @@ describe("importPuntiVenditaConadCno: file Elenco Muri", () => {
   });
 
   it("un supermercato senza area va all'inserimento manuale, con il canale riconosciuto gia proposto", () => {
-    const righe = righeDaImportare(file([muroAttivo({ Regione: "Veneto", Prov: "Rovigo", Insegna: "TuDay Conad" })], []), importPuntiVenditaConadCno);
+    const righe = righeDaImportare(file([muroAttivo({ Regione: "Lombardia", Prov: "Mantova", Insegna: "TuDay Conad" })], []), importPuntiVenditaConadCno);
     const [esito] = preparaImportPuntiVendita(righe, importPuntiVenditaConadCno, contesto, "g1", 70);
 
     expect(esito).toMatchObject({ azione: "revisiona", punteggio: 0, chiave: "60001", idCanale: "td" });

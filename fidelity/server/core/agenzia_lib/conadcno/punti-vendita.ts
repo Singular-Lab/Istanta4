@@ -61,6 +61,7 @@ const REGIONI: Record<string, string> = {
   "Valle d'Aosta": "AO",
   // Nel file la regione compare anche senza apostrofo
   "Valle d Aosta": "AO",
+  "Veneto": "VE",
 };
 
 /** Provincia per esteso → sigla, comprese le denominazioni soppresse ancora presenti nei dati. */
