@@ -108,7 +108,7 @@ function utilityCon(d) {
         "_cartelleFileLavorazioni(", "_vociDellaCartella(", "cartellaDatiMacchina(", "percorsoFileLavorazioniMacchina(",
         "fileLavorazioniAltri(", "leggiFileLavorazioni(", "_voceNellElenco(", "nomeFileReportIntegrita(", "nomeFileWhitelistIntegrita(",
         "fileDiLavoro(", "copiaFileDiLavoro(",
-        "voceLavorazione(", "salvaVoceLavorazione(", "libroDelDocumento("].map(corpoMembro);
+        "esisteLavorazione(", "voceLavorazione(", "salvaVoceLavorazione(", "libroDelDocumento("].map(corpoMembro);
     const fabbrica = new Function("require", "const Utility = ({\n" + costanti() + ",\n" + membri.join(",\n") + "\n});\nreturn Utility;");
     return fabbrica((nome) => {
         assert.strictEqual(nome, "fs");
@@ -284,6 +284,61 @@ test("senza la cartella della postazione la voce si trova lo stesso, e la copia 
     finally {
         console.error = errori;
     }
+    assert.deepStrictEqual(d.scritture, []);
+});
+
+/* ---- I20-1133: c'e' una lavorazione? ---- */
+
+//Le cartelle di sistema si creano all'apertura solo se il documento ha gia' una lavorazione: la
+//domanda si fa a esisteLavorazione, che guarda dove guarda voceLavorazione ma non scrive mai.
+
+test("un documento senza lavorazione: nessuna voce, e su un disco senza cartelle non si scrive niente", () => {
+    //Un .indd qualunque, in una cartella che non ha ne' SingularData ne' file delle lavorazioni.
+    const d = disco({ "/doc": ["Volantino.indd", "Links"] });
+    assert.strictEqual(utilityCon(d).esisteLavorazione("/doc", ID, "Volantino.indd"), false);
+    assert.deepStrictEqual(d.scritture, []);
+
+    //Ci sono lavorazioni, ma di altri documenti.
+    const altri = disco(conDati({ "/doc": ["lavorazioni.json"], "/doc/SingularData": [ALTRA_ID], [MIA]: ["lavorazioni.json"], [ALTRA]: ["lavorazioni.json"] }), {
+        [MIO]: JSON.stringify([{ file: "A.indd", id: 1, details: kit(1, "A") }]),
+        [ALTRA + "/lavorazioni.json"]: JSON.stringify([{ file: "B.indd", id: 2, details: kit(2, "B") }]),
+        "/doc/lavorazioni.json": "non e' json"
+    });
+    assert.strictEqual(utilityCon(altri).esisteLavorazione("/doc", ID, "Z.indd"), false);
+    assert.deepStrictEqual(altri.scritture, []);
+});
+
+test("la lavorazione c'e' se la voce e' in questa postazione, in un'altra o nei file di prima, e non si copia niente", () => {
+    const mia = disco(conDati({ [MIA]: ["lavorazioni.json"] }), {
+        [MIO]: JSON.stringify([{ file: "A.indd", id: 1, details: kit(1, "mio") }])
+    });
+    assert.strictEqual(utilityCon(mia).esisteLavorazione("/doc", ID, "A.indd"), true);
+
+    const altra = disco(conDati({ "/doc/SingularData": [ALTRA_ID], [ALTRA]: ["lavorazioni.json", "listaKit7.json"] }), {
+        [ALTRA + "/lavorazioni.json"]: JSON.stringify([{ file: "A.indd", id: 7, details: kit(7, "Kit A") }])
+    });
+    assert.strictEqual(utilityCon(altra).esisteLavorazione("/doc", ID, "A.indd"), true);
+    assert.deepStrictEqual(altra.scritture, []);
+
+    //Prima di I20-1065, senza SingularData: il documento ha la sua lavorazione anche se le cartelle non ci sono.
+    const diPrima = disco({ "/doc": [".lavorazioni", "listaKit3.json"], "/doc/.lavorazioni": [ALTRO_DI_PRIMA] }, {
+        ["/doc/.lavorazioni/" + ALTRO_DI_PRIMA]: JSON.stringify([{ file: "B.indd", id: 3, details: kit(3, "Kit B") }])
+    });
+    assert.strictEqual(utilityCon(diPrima).esisteLavorazione("/doc", ID, "B.indd"), true);
+    assert.deepStrictEqual(diPrima.scritture, []);
+});
+
+test("in un libro la lavorazione c'e' con la voce del libro o con quella col solo nome del file", () => {
+    const d = disco(conDati({ [MIA]: ["lavorazioni.json"] }), {
+        [MIO]: JSON.stringify([
+            { file: "A.indd", id: 2, details: kit(2, "libro 1"), libro: "Volantino.indb" },
+            { file: "C.indd", id: 4, details: kit(4, "senza libro") }
+        ])
+    });
+    const u = utilityCon(d);
+    assert.strictEqual(u.esisteLavorazione("/doc", ID, "A.indd", "Volantino.indb"), true);
+    assert.strictEqual(u.esisteLavorazione("/doc", ID, "C.indd", "Volantino.indb"), true);
+    assert.strictEqual(u.esisteLavorazione("/doc", ID, "B.indd", "Volantino.indb"), false);
     assert.deepStrictEqual(d.scritture, []);
 });
 

@@ -1208,7 +1208,14 @@ async function initDocumentInLavorazione()
 
     //I20-1065: logs, export e SingularData prima di leggere la lavorazione: la sua voce, la lista
     //del kit e i filtri stanno nella cartella dei dati di questa postazione.
-    await preparaCartelleDiSistema(pathLavorazione);
+    //I20-1133: solo se il documento ha gia' una lavorazione. Un .indd qualunque non deve trovarsi le
+    //cartelle: le crea lavoraKit quando si inizia o si continua un kit. Intanto i percorsi del
+    //documento aperto prima si azzerano.
+    azzeraCartelleDiSistema();
+    const nomeDocumento = docInLavorazione.name;
+    if (Utility.esisteLavorazione(pathLavorazione, idMacchina(), nomeDocumento, libroDelDocumentoInLavorazione(nomeDocumento))) {
+        await preparaCartelleDiSistema(pathLavorazione);
+    }
 
 
 
@@ -1393,8 +1400,10 @@ async function initLibroInLavorazione()
             let nativePath = fullName.nativePath;
             let sep = Utility.getDirSeparator();
             let _pathDelLibro = nativePath.substring(0, nativePath.lastIndexOf(sep) + 1);
-            //I20-1065: le cartelle di sistema del libro, prima di cercarne le lavorazioni
-            await preparaCartelleDiSistema(_pathDelLibro);
+            //I20-1065: le cartelle di sistema del libro, prima di leggerne le lavorazioni.
+            //I20-1133: solo se almeno un file del libro ne ha una, appena lo si trova.
+            azzeraCartelleDiSistema();
+            let cartellePronte = false;
             //I20-1061: ogni file del libro si cerca con voceLavorazione: nel file di questa macchina,
             //poi in quelli delle altre (da cui viene copiato qui).
             let lav = [];
@@ -1408,6 +1417,10 @@ async function initLibroInLavorazione()
                     let bcFullname = await bookContent.fullName;
                     let bcNativePath = bcFullname.nativePath;
                     let nomeFile = bcNativePath.substring(bcNativePath.lastIndexOf(sep) + 1);
+                    if (!cartellePronte && Utility.esisteLavorazione(_pathDelLibro, idMacchina(), nomeFile, book.name)) {
+                        await preparaCartelleDiSistema(_pathDelLibro);
+                        cartellePronte = true;
+                    }
                     let voceFile = Utility.voceLavorazione(_pathDelLibro, idMacchina(), nomeFile, book.name);
                     let cercaInLav = voceFile != null ? [voceFile] : [];
                     if (cercaInLav.length > 0) {
@@ -10440,6 +10453,15 @@ async function login(username, password, ricordami = false){
     xhr.send("LoginController/login", formData , "POST");
 }
 
+/// I20-1133: i percorsi delle cartelle di sistema tornano vuoti, senza creare niente: un documento
+/// senza lavorazione non ha cartelle, e non deve usare quelle del documento aperto prima. Le letture
+/// ricadono sulla cartella che sara' (Utility.cartellaDati), i log restano in console.
+function azzeraCartelleDiSistema() {
+    logPath = "";
+    exportPath = "";
+    SingularPath = "";
+}
+
 /// I20-1065: crea, se mancano, le cartelle logs, export e SingularData/<idMacchina> sotto base (la
 /// cartella del documento, o quella del libro), senza chiedere niente all'operatore, e ne fissa i
 /// percorsi: logPath, exportPath, SingularPath. Va chiamata all'apertura, prima di leggere
@@ -10448,9 +10470,7 @@ async function login(username, password, ricordami = false){
 /// Se non ci riesce lo dice all'operatore (IDX-177) e lascia i percorsi vuoti. Restituisce true se
 /// le cartelle sono pronte.
 async function preparaCartelleDiSistema(base) {
-    logPath = "";
-    exportPath = "";
-    SingularPath = "";
+    azzeraCartelleDiSistema();
     if (!base) {
         return false;
     }
