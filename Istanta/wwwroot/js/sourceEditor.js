@@ -62,7 +62,9 @@
         
     }
 
-    save(scope)
+    //I20-1136: alTermine, facoltativo, riceve l'esito del salvataggio ({ esito, error }) per chi lo
+    //deve mostrare o ricaricare la pagina. Senza, tutto resta come prima: l'esito va in console.
+    save(scope, alTermine = null)
     {
         const model = this.editorInstance.getModel();
         let markers = monaco.editor.getModelMarkers({ resource: model.uri });
@@ -90,13 +92,20 @@
                     }
 
                     hideLoading();
+
+                    if (typeof alTermine === "function") {
+                        alTermine(result);
+                    }
                 }
             );
             //
         }
         else
         {
-
+            //I20-1136: con errori nell'editor non si salva, e chi aspetta l'esito lo deve sapere.
+            if (typeof alTermine === "function") {
+                alTermine({ esito: false, error: "Il sorgente contiene errori: correggili prima di salvare." });
+            }
         }
 
     }
