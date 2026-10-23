@@ -694,6 +694,19 @@ const Utility=
         return copiati;
     },
 
+    /// I20-1133: se il documento ha gia' una lavorazione, senza scrivere niente. La voce si cerca dove
+    /// la cerca voceLavorazione - il file di questa postazione, poi quelli delle altre e quelli di
+    /// prima - ma qui non si copia: serve a decidere se creare le cartelle di sistema all'apertura, e
+    /// un .indd senza lavorazione non deve trovarsi logs, export e SingularData.
+    esisteLavorazione(base, idMacchina, nomeFile, nomeLibro = null) {
+        const mie = Utility.leggiFileLavorazioni(Utility.percorsoFileLavorazioniMacchina(base, idMacchina));
+        if (Utility._voceNellElenco(mie, nomeFile, nomeLibro) != null) {
+            return true;
+        }
+        return Utility.fileLavorazioniAltri(base, idMacchina)
+            .some(sorgente => Utility._voceNellElenco(Utility.leggiFileLavorazioni(sorgente.percorso), nomeFile, nomeLibro) != null);
+    },
+
     /// I20-1061: la voce della lavorazione di un documento, per questa macchina.
     /// Si cerca nel file della postazione, poi negli altri (fileLavorazioniAltri). Se c'e' solo
     /// altrove, se ne copiano nel file della postazione i riferimenti - file, id, dettagli e libro -

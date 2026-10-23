@@ -856,7 +856,7 @@ const FicoProcess=
     
     },
     /// Apre un kit in lavorazione: da qui in poi il Plugin ha una lavorazione corrente.
-    lavoraKit:function(idKit, idLavorazioneLocale)
+    lavoraKit:async function(idKit, idLavorazioneLocale)
     {
         if (idLavorazioneLocale>0)
         {
@@ -894,6 +894,11 @@ const FicoProcess=
                 if (libro) {
                     voce.libro = libro;
                 }
+                //I20-1133: le cartelle di sistema nascono qui, quando si continua un kit. Se non si
+                //creano lo dice IDX-177, e la voce non si scrive.
+                if (!(await preparaCartelleDiSistema(pathLavorazione))) {
+                    return;
+                }
                 Utility.salvaVoceLavorazione(pathLavorazione, idMacchina(), voce);
                 
     
@@ -906,7 +911,7 @@ const FicoProcess=
     
             //Inizio la lavorazione
             const xhr = new XMLHttpRequestClient();
-            xhr.onload = (objResult, parsed) => {
+            xhr.onload = async (objResult, parsed) => {
                 console.log(objResult);
                 if (objResult.esito && objResult.records.length>0)
                 {
@@ -918,6 +923,10 @@ const FicoProcess=
                     let libro = libroDelDocumentoInLavorazione(app.activeDocument.name, pathLavorazione);
                     if (libro) {
                         voce.libro = libro;
+                    }
+                    //I20-1133: le cartelle di sistema nascono qui, quando si inizia un kit.
+                    if (!(await preparaCartelleDiSistema(pathLavorazione))) {
+                        return;
                     }
                     Utility.salvaVoceLavorazione(pathLavorazione, idMacchina(), voce);
     
@@ -1012,6 +1021,11 @@ const FicoProcess=
             }
 
 
+            //I20-1133: le cartelle di sistema dei file del kit massivo nascono qui, prima di scriverne
+            //le lavorazioni, una volta per cartella. Una cartella che non si crea si dice con FIP-18,
+            //come IDX-177 all'apertura.
+            await this.preparaCartelleKitMassivo();
+
             let result = this.lavoraKitMassivo_Queue(0);
             if (result)
             {
@@ -1031,6 +1045,27 @@ const FicoProcess=
 
        
         
+    },
+    /// I20-1133: le cartelle di sistema di ogni cartella dei file del kit massivo, senza toccare i
+    /// percorsi del documento aperto. Restituisce le cartelle preparate.
+    preparaCartelleKitMassivo:async function()
+    {
+        let sep = Utility.getDirSeparator();
+        let cartelle = [...new Set((this.cacheKitSearchResult || [])
+            .filter(f => f != null && f.fullName)
+            .map(f => f.fullName.substring(0, f.fullName.lastIndexOf(sep))))];
+        let pronte = [];
+        for (let cartella of cartelle) {
+            try {
+                await Utility.preparaCartelleDiSistema(cartella, idMacchina());
+                pronte.push(cartella);
+            }
+            catch (e) {
+                console.error("Code FIP-18 Cartelle di sistema non create in " + cartella + ": " + e);
+                messaggioUtente("Code FIP-18 Cartelle di sistema (logs, export, SingularData) non create in " + cartella + ": " + e, "error");
+            }
+        }
+        return pronte;
     },
     lavoraKitMassivo_Queue:function(indice)
     {

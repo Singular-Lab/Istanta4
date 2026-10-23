@@ -131,16 +131,84 @@ function corpoFunzione(intestazione) {
     return indice.substring(inizio, indice.indexOf("\n}\n", inizio) + 2);
 }
 
-test("le cartelle si preparano all'apertura, prima di leggere la lavorazione", () => {
+test("all'apertura le cartelle si preparano solo se il documento ha gia' una lavorazione, prima di leggerla", () => {
+    //I20-1133: un .indd qualunque, senza lavorazione, non deve trovarsi logs, export e SingularData. I
+    //percorsi del documento aperto prima si azzerano comunque.
     const documento = corpoFunzione("async function initDocumentInLavorazione()");
+    const azzera = documento.indexOf("azzeraCartelleDiSistema();");
+    assert.ok(azzera > documento.indexOf("pathLavorazione = f.nativePath;"));
+    assert.match(documento, /const nomeDocumento = docInLavorazione\.name;\n\s*if \(Utility\.esisteLavorazione\(pathLavorazione, idMacchina\(\), nomeDocumento, libroDelDocumentoInLavorazione\(nomeDocumento\)\)\) \{\n\s*await preparaCartelleDiSistema\(pathLavorazione\);\n\s*\}/);
+    assert.strictEqual((documento.match(/preparaCartelleDiSistema\(/g) || []).length, 1);
     const prepara = documento.indexOf("await preparaCartelleDiSistema(pathLavorazione);");
-    assert.ok(prepara > documento.indexOf("pathLavorazione = f.nativePath;"));
+    assert.ok(prepara > azzera);
+    //Prima di checklavorazioneSelezionata, che puo' copiare la voce da un'altra postazione.
     assert.ok(prepara < documento.indexOf("ficoProcess.checklavorazioneSelezionata()"));
     assert.ok(prepara < documento.indexOf("leggiContenutoKit(idKitLavorazione);"));
 
+    //Il libro: al primo file che ha una lavorazione, prima di leggerne (e copiarne) la voce.
     const libro = corpoFunzione("async function initLibroInLavorazione()");
-    const preparaLibro = libro.indexOf("await preparaCartelleDiSistema(_pathDelLibro);");
-    assert.ok(preparaLibro > 0 && preparaLibro < libro.indexOf("Utility.voceLavorazione(_pathDelLibro,"));
+    assert.ok(libro.indexOf("azzeraCartelleDiSistema();") > 0);
+    assert.match(libro, /if \(!cartellePronte && Utility\.esisteLavorazione\(_pathDelLibro, idMacchina\(\), nomeFile, book\.name\)\) \{\n\s*await preparaCartelleDiSistema\(_pathDelLibro\);\n\s*cartellePronte = true;\n\s*\}\n\s*let voceFile = Utility\.voceLavorazione\(_pathDelLibro,/);
+    assert.strictEqual((libro.match(/preparaCartelleDiSistema\(/g) || []).length, 1);
+});
+
+test("azzerare le cartelle svuota i tre percorsi senza creare niente, e preparare comincia da li'", () => {
+    const azzera = corpoFunzione("function azzeraCartelleDiSistema()");
+    assert.match(azzera, /\{\n\s*logPath = "";\n\s*exportPath = "";\n\s*SingularPath = "";\n\}/);
+    assert.match(corpoFunzione("async function preparaCartelleDiSistema(base)"), /\{\n\s*azzeraCartelleDiSistema\(\);\n/);
+});
+
+/* ---- ficoProcess.js: iniziare o continuare un kit ---- */
+
+const fico = leggiFileDelPlugin("ficoProcess.js").replace(/\r/g, "");
+
+function corpoMetodo(intestazione) {
+    const inizio = fico.indexOf("    " + intestazione);
+    assert.notStrictEqual(inizio, -1, intestazione + " non trovato");
+    return fico.substring(inizio, fico.indexOf("\n    },\n", inizio) + "\n    }".length);
+}
+
+test("iniziando o continuando un kit le cartelle si preparano prima di scrivere la voce", () => {
+    //I20-1133: e' qui che nascono, per un documento che non le aveva.
+    const lavoraKit = corpoMetodo("lavoraKit:async function(idKit, idLavorazioneLocale)");
+    const passi = lavoraKit.match(/if \(!\(await preparaCartelleDiSistema\(pathLavorazione\)\)\) \{\n\s*return;\n\s*\}\n\s*Utility\.salvaVoceLavorazione\(pathLavorazione, idMacchina\(\), voce\);/g) || [];
+    assert.strictEqual(passi.length, 2, "continua e inizia");
+    assert.strictEqual((lavoraKit.match(/Utility\.salvaVoceLavorazione\(/g) || []).length, 2);
+    //La risposta di iniziaLavorazione aspetta le cartelle.
+    assert.match(lavoraKit, /xhr\.onload = async \(objResult, parsed\) =>/);
+
+    //Il kit massivo: prima delle voci, le cartelle di tutti i file.
+    const massivo = fico.substring(fico.indexOf("    lavoraKitMassivo:async function()"), fico.indexOf("    preparaCartelleKitMassivo:async function()"));
+    const preparaMassivo = massivo.indexOf("await this.preparaCartelleKitMassivo();");
+    assert.ok(preparaMassivo > 0);
+    assert.ok(preparaMassivo < massivo.indexOf("let result = this.lavoraKitMassivo_Queue(0);"));
+});
+
+test("kit massivo: le cartelle una volta per cartella dei file, e una che non si crea si dice con FIP-18", async () => {
+    const metodo = corpoMetodo("preparaCartelleKitMassivo:async function()");
+    const corpo = metodo.substring(metodo.indexOf("{"));
+    const preparate = [];
+    const messaggi = [];
+    const UtilityFinta = {
+        getDirSeparator: () => "/",
+        preparaCartelleDiSistema: async (cartella, id) => {
+            if (cartella === "/rotta") {
+                throw new Error("permesso negato");
+            }
+            preparate.push([cartella, id]);
+        }
+    };
+    const prepara = new Function("Utility", "idMacchina", "messaggioUtente", "console", "return async function () " + corpo + ";")(
+        UtilityFinta, () => ID, (m) => messaggi.push(m), { error: () => {} });
+
+    const pronte = await prepara.call({
+        cacheKitSearchResult: [{ fullName: "/a/uno.indd" }, { fullName: "/a/due.indd" }, { fullName: "/rotta/tre.indd" }, { fullName: "/b/quattro.indd" }, null]
+    });
+
+    assert.deepStrictEqual(preparate, [["/a", ID], ["/b", ID]]);
+    assert.deepStrictEqual(pronte, ["/a", "/b"]);
+    assert.strictEqual(messaggi.length, 1);
+    assert.match(messaggi[0], /^Code FIP-18 .*\/rotta/);
 });
 
 test("preparate le cartelle se ne fissano i percorsi; se non si creano lo si dice con IDX-177", () => {
