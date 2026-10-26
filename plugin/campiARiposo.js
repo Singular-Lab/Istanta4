@@ -34,7 +34,8 @@
  * #747474. Il campo nativo disegna il bordo del suo stile (il giallo della descrizione in mismatch) e
  * dentro il suo bordo grigio: il riquadro e' a due livelli, fuori il bordo dello stile, dentro il
  * grigio con margine, interlinea e testo. Margine e interlinea si scrivono alla nascita del riquadro:
- * cambiarli dopo non si vede.
+ * cambiarli dopo non si vede. Il campo nativo mostra tutti gli spazi, anche iniziali e ripetuti: il
+ * riquadro li tiene (pre-wrap nelle caselle, pre nei campi di una riga), o il testo si sposta (I20-1139).
  *
  * Usa le globali document e setInterval. Non fa require('indesign'): si carica sotto Node, e i test
  * ne provano le regole e il giro con un documento finto.
@@ -373,7 +374,9 @@ const CampiARiposo = {
         const interno = stato.interno;
         stile.cursor = disattivo ? "default" : "text";
         interno.style.color = disattivo || mostrato.segnaposto ? CampiARiposo.TESTO_SPENTO : (campo.style.color || CampiARiposo.TESTO_NATIVO);
-        interno.style.whiteSpace = String(campo.tagName).toLowerCase() === "textarea" ? "normal" : "nowrap";
+        //Gli spazi come nel campo nativo, anche iniziali e ripetuti: con "normal" e "nowrap" il riquadro
+        //li perdeva, e il testo si spostava al passaggio del mouse (I20-1139: " OSELLA", 3px a destra).
+        interno.style.whiteSpace = String(campo.tagName).toLowerCase() === "textarea" ? "pre-wrap" : "pre";
 
         while (interno.firstChild) {
             interno.removeChild(interno.firstChild);

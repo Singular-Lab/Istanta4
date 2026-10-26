@@ -243,7 +243,8 @@ test("senza misure di stile il riquadro prende quelle del campo, e i colori del 
     assert.strictEqual(interno.style.borderBottom, "1px solid #8e8e8e");
     assert.strictEqual(interno.style.border, "1px solid #747474");
     //Un input e' una riga sola, a meta' altezza come nel campo nativo: interlinea = interno, bordi esclusi.
-    assert.strictEqual(interno.style.whiteSpace, "nowrap");
+    //"pre" e non "nowrap": non va a capo e tiene gli spazi (I20-1139).
+    assert.strictEqual(interno.style.whiteSpace, "pre");
     assert.strictEqual(interno.style.lineHeight, "18px");
 });
 
@@ -590,4 +591,62 @@ test("una casella dei cambi strutturali sotto la sua etichetta resta nativa e fe
     //Il mouse che ci passa sopra non cambia niente: non c'e' riquadro da scambiare.
     assert.strictEqual(CampiARiposo.mostra(casella), false);
     assert.strictEqual(casella.style.position, undefined);
+});
+
+/* ---- I20-1139: gli spazi del testo come nel campo nativo ---- */
+
+//La descrizione " OSELLA" (valore letto in console con l'operatore il 26/10/2026) a riposo stava 3px
+//piu' a sinistra che nel campo vero: il riquadro, con white-space normal, perdeva lo spazio iniziale.
+//Il campo nativo mostra tutti gli spazi; il riquadro li tiene con pre-wrap (caselle) e pre (una riga).
+
+test("una descrizione che comincia con uno spazio lo tiene anche a riposo", () => {
+    nuovoDocumento();
+    const osella = campo("textarea", { valore: " OSELLA", stile: { width: "200px", height: "50px", backgroundColor: "white", color: "black" } });
+    CampiARiposo.giro();
+
+    const interno = internoDi(riquadroDi(osella));
+    assert.strictEqual(interno.style.whiteSpace, "pre-wrap", "tiene gli spazi e va a capo come la casella");
+    assert.strictEqual(testoDi(riquadroDi(osella)), " OSELLA");
+    //Il margine misurato in I20-1123 non cambia: lo spostamento era lo spazio, non il margine.
+    assert.strictEqual(interno.style.padding, "0px 5px");
+});
+
+test("spazi ripetuti e a capo restano quelli del campo", () => {
+    nuovoDocumento();
+    const grammatura = campo("textarea", { valore: "\n90 g" });
+    const doppi = campo("textarea", { valore: "prodotto  italiano \nCategoria I" });
+    CampiARiposo.giro();
+
+    assert.strictEqual(testoDi(riquadroDi(grammatura)), "\n90 g");
+    assert.strictEqual(testoDi(riquadroDi(doppi)), "prodotto  italiano \nCategoria I");
+    assert.strictEqual(internoDi(riquadroDi(doppi)).style.whiteSpace, "pre-wrap");
+});
+
+test("un campo di una riga tiene lo spazio iniziale e non va a capo", () => {
+    nuovoDocumento();
+    const riga = campo("input", { larghezza: 120, altezza: 22, attributi: { type: "text" }, valore: "  12" });
+    CampiARiposo.giro();
+
+    assert.strictEqual(internoDi(riquadroDi(riga)).style.whiteSpace, "pre");
+    assert.strictEqual(testoDi(riquadroDi(riga)), "  12");
+});
+
+test("un valore scritto da codice con lo spazio, e quello scritto dall'operatore, si vedono con lo spazio", () => {
+    nuovoDocumento();
+    const casella = campo("textarea", { valore: "OSELLA" });
+    CampiARiposo.giro();
+    const riquadro = riquadroDi(casella);
+    assert.strictEqual(testoDi(riquadro), "OSELLA");
+
+    casella.value = " OSELLA";
+    CampiARiposo.giro();
+    assert.strictEqual(testoDi(riquadro), " OSELLA");
+    assert.strictEqual(internoDi(riquadro).style.whiteSpace, "pre-wrap");
+
+    //L'operatore ci passa sopra, scrive due spazi in fondo ed esce: il riquadro torna con quelli.
+    CampiARiposo.mostra(casella);
+    casella.value = " OSELLA  ";
+    CampiARiposo.aRiposo(casella);
+    assert.strictEqual(testoDi(riquadro), " OSELLA  ");
+    assert.strictEqual(internoDi(riquadro).style.whiteSpace, "pre-wrap");
 });

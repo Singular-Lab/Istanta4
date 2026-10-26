@@ -50,6 +50,11 @@ nativo lo ignora), e il campo occupa **45 px** con uno stile da 40. Il campo nat
 utili da codice (`scrollHeight` è sempre 0). Margine e interlinea si scrivono **alla nascita** del
 riquadro: cambiati dopo, a schermo non si vedeva differenza.
 
+Il campo nativo mostra **tutti gli spazi**, anche quelli iniziali e ripetuti. Il riquadro li tiene
+con `white-space: pre-wrap` nelle caselle e `pre` nei campi di una riga: con `normal` e `nowrap` li
+perdeva, e il testo si spostava al passaggio del mouse (I20-1139: la descrizione `" OSELLA"`, 3 px a
+destra nel campo vero, misurati sugli screenshot).
+
 ## Come funziona
 
 - **Il giro.** Ogni `INTERVALLO_MS` (250 ms) e, se UXP ha `MutationObserver`, appena la pagina
