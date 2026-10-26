@@ -498,3 +498,73 @@ test("la tendina del tracciato ha Con segnalazioni, e il tracciato la usa con e 
     //L'idRec e' quello del recordInTracciato, come per il badge di pagina.
     assert.match(indexNew, /function idRecDelRecordDelTracciato\(record\) \{\s*return getIdRecFromItemRef\(record != null \? record\.recordInTracciato : null\);\s*\}/);
 });
+
+/* ---- I20-1142: le referenze risolte escono dal tracciato con segnalazioni ---- */
+
+//Il corpo di togliRigheSenzaSegnalazioni, eseguito con un jQuery finto: la tendina e le righe del tracciato.
+function togliRigheSenzaSegnalazioni() {
+    const sorgente = leggiFileDelPlugin("indexNew.js").replace(/\r/g, "");
+    const inizio = sorgente.indexOf("function togliRigheSenzaSegnalazioni(riepilogo) {");
+    assert.notStrictEqual(inizio, -1, "togliRigheSenzaSegnalazioni non trovata in indexNew.js");
+    const fine = sorgente.indexOf("\n}\n", inizio);
+    return new Function("$", "riepilogo", sorgente.substring(sorgente.indexOf("{", inizio) + 1, fine));
+}
+
+/// Il tracciato finto: righe con il badge e il suo idRec, e la tendina col filtro scelto.
+function tracciatoFinto(filtro, idRecDelleRighe) {
+    const righe = idRecDelleRighe.map((idRec, i) => ({ idRec, stile: i === 0 ? { "margin-top": "30px" } : {}, tolta: false }));
+    const $ = (selettore) => {
+        if (selettore === "#areaFiltriEffettiva") {
+            return { find: () => ({ val: () => filtro }) };
+        }
+        if (selettore === "#ElementiTracciato .elemento-tracciato") {
+            const presenti = righe.filter(r => !r.tolta);
+            return {
+                each(fn) { presenti.forEach(r => fn.call(r)); },
+                first: () => ({ css(nome, valore) { if (presenti.length > 0) { presenti[0].stile[nome] = valore; } } })
+            };
+        }
+        //$(this) su una riga
+        return {
+            find: () => ({ attr: () => selettore.idRec == null ? undefined : String(selettore.idRec) }),
+            remove: () => { selettore.tolta = true; }
+        };
+    };
+    return { $, righe };
+}
+
+test("Con segnalazioni: alla chiusura della schermata escono le righe senza piu' segnalazioni", () => {
+    const { $, righe } = tracciatoFinto("con_segnalazioni", [4409, 4410, 4411, 4412]);
+    //Risolte 4409 e 4411: restano 4410 (errore) e 4412 (warning).
+    const tolte = togliRigheSenzaSegnalazioni()($, RIEPILOGO_TRACCIATO);
+
+    assert.strictEqual(tolte, 2);
+    assert.deepStrictEqual(righe.filter(r => !r.tolta).map(r => r.idRec), [4410, 4412]);
+    //La nuova prima riga riprende il margine in alto.
+    assert.strictEqual(righe.find(r => r.idRec === 4410).stile["margin-top"], "30px");
+});
+
+test("Con segnalazioni: tutte risolte, il tracciato si svuota", () => {
+    const { $, righe } = tracciatoFinto("con_segnalazioni", [4410, 4412]);
+
+    assert.strictEqual(togliRigheSenzaSegnalazioni()($, {}), 2);
+    assert.ok(righe.every(r => r.tolta));
+});
+
+test("con gli altri filtri le righe restano, anche senza segnalazioni", () => {
+    for (const filtro of ["all", "impaginati", "da_impaginare"]) {
+        const { $, righe } = tracciatoFinto(filtro, [4409, 4410]);
+        assert.strictEqual(togliRigheSenzaSegnalazioni()($, RIEPILOGO_TRACCIATO), 0, filtro);
+        assert.ok(righe.every(r => !r.tolta), filtro);
+    }
+});
+
+test("alla chiusura della schermata si ricolorano i badge e poi escono le righe risolte", () => {
+    const indexNew = leggiFileDelPlugin("indexNew.js").replace(/\r/g, "");
+    const inizio = indexNew.indexOf("function aggiornaBadgeSegnalazioniTracciato() {");
+    const corpo = indexNew.substring(inizio, indexNew.indexOf("\n}\n", inizio));
+
+    const colora = corpo.indexOf("coloraBadgeTracciato($(this), riepilogo[$(this).attr(\"idRec\")]);");
+    const togli = corpo.indexOf("togliRigheSenzaSegnalazioni(riepilogo);");
+    assert.ok(colora > 0 && togli > colora, "prima i badge, poi le righe, con lo stesso riepilogo");
+});

@@ -188,8 +188,9 @@ segnalazioni resta **blu**. Passandoci sopra: «2 segnalazioni di impaginazione 
   a Vedi tutto, Impaginati e Da impaginare. `Segnalazioni.recordConSegnalazioni(records, riepilogo,
   idRecDi)` tiene, nell'ordine dato, i record che hanno voci nel riepilogo: gli stessi dei pallini
   colorati. Con una ricerca si parte dalla lista di «Vedi tutto», quindi i criteri valgono.
-  Risolvendo una segnalazione la riga sparisce al ridisegno successivo del tracciato, non
-  alla chiusura della schermata.
+  Dal I20-1142, alla chiusura della schermata, `togliRigheSenzaSegnalazioni` (in `indexNew.js`,
+  chiamata da `aggiornaBadgeSegnalazioniTracciato`) toglie le righe risolte senza ridisegnare il
+  tracciato. Le segnalazioni risolte dalla scheda ref arrivano al ridisegno successivo.
 
 Il dettaglio dal lato del tracciato sta in
 [indexNew, 04](../indexNew/04-tracciato-messaggi-e-il-resto.md).
